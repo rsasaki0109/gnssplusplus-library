@@ -98,6 +98,7 @@ void RTKProcessor::reset() {
 bool RTKProcessor::initializeFilter(const ObservationData& rover_obs,
                                   const ObservationData& base_obs,
                                   const NavigationData& nav) {
+    (void)base_obs;
     // Simple initialization - use SPP solution as initial position
     auto spp_solution = spp_processor_.processEpoch(rover_obs, nav);
     if (!spp_solution.isValid()) {
@@ -139,6 +140,9 @@ void RTKProcessor::predictState(double dt) {
 bool RTKProcessor::updateFilter(const ObservationData& rover_obs,
                               const ObservationData& base_obs,
                               const NavigationData& nav) {
+    (void)rover_obs;
+    (void)base_obs;
+    (void)nav;
     // Simplified update - would implement full Kalman filter update here
     return true;
 }
@@ -147,6 +151,7 @@ std::vector<RTKProcessor::DoubleDifference> RTKProcessor::formDoubleDifferences(
     const ObservationData& rover_obs,
     const ObservationData& base_obs,
     const NavigationData& nav) {
+    (void)nav;
     
     std::vector<DoubleDifference> double_diffs;
     
@@ -187,8 +192,31 @@ std::vector<RTKProcessor::DoubleDifference> RTKProcessor::formDoubleDifferences(
 }
 
 bool RTKProcessor::resolveAmbiguities() {
-    // Simplified ambiguity resolution
-    return false; // Would implement LAMBDA method here
+    if (!filter_initialized_ || filter_state_.state.size() < 6) {
+        return false;
+    }
+    
+    // Extract ambiguity states (after position and velocity states)
+    int n_ambiguities = filter_state_.state.size() - 6;
+    if (n_ambiguities <= 0) {
+        return false;
+    }
+    
+    VectorXd float_ambiguities = filter_state_.state.tail(n_ambiguities);
+    MatrixXd ambiguity_cov = filter_state_.covariance.bottomRightCorner(n_ambiguities, n_ambiguities);
+    
+    double success_rate = 0.0;
+    VectorXd fixed_ambiguities;
+    
+    bool success = lambdaMethod(float_ambiguities, ambiguity_cov, fixed_ambiguities, success_rate);
+    
+    if (success && success_rate > rtk_config_.ambiguity_ratio_threshold) {
+        // Update state with fixed ambiguities
+        filter_state_.state.tail(n_ambiguities) = fixed_ambiguities;
+        return true;
+    }
+    
+    return false;
 }
 
 PositionSolution RTKProcessor::generateSolution(const GNSSTime& time,
@@ -216,6 +244,148 @@ void RTKProcessor::updateStatistics(SolutionStatus status) const {
     } else if (status == SolutionStatus::FLOAT) {
         const_cast<size_t&>(float_solutions_)++;
     }
+}
+
+bool RTKProcessor::lambdaMethod(const VectorXd& float_ambiguities,
+                               const MatrixXd& covariance_matrix,
+                               VectorXd& fixed_ambiguities,
+                               double& success_rate) {
+    int n = float_ambiguities.size();
+    if (n == 0 || covariance_matrix.rows() != n || covariance_matrix.cols() != n) {
+        return false;
+    }
+    
+    // Decorrelation using Z-transformation
+    MatrixXd Z, L;
+    VectorXd D;
+    zTransformation(covariance_matrix, Z, L, D);
+    
+    // Decorrelated ambiguities
+    VectorXd decorrelated_ambiguities = Z.transpose() * float_ambiguities;
+    
+    // Integer least squares search
+    VectorXd fixed_decorrelated;
+    double chi2_best, chi2_second;
+    
+    if (!integerLeastSquares(decorrelated_ambiguities, L, D, fixed_decorrelated, chi2_best)) {
+        return false;
+    }
+    
+    // Search for second best candidate for ratio test
+    VectorXd temp_fixed;
+    double temp_chi2;
+    (void)temp_fixed;
+    (void)temp_chi2;
+    chi2_second = chi2_best + 1000.0; // Default value
+    
+    // Simplified search for second best candidate
+    for (int i = 0; i < n; ++i) {
+        VectorXd candidate = fixed_decorrelated;
+        candidate(i) += (candidate(i) > decorrelated_ambiguities(i)) ? -1.0 : 1.0;
+        
+        VectorXd diff = candidate - decorrelated_ambiguities;
+        double chi2 = diff.transpose() * L.inverse().transpose() * D.asDiagonal().inverse() * L.inverse() * diff;
+        
+        if (chi2 < chi2_second && chi2 > chi2_best) {
+            chi2_second = chi2;
+        }
+    }
+    
+    // Ratio test validation
+    if (!validateAmbiguityResolution(chi2_best, chi2_second)) {
+        return false;
+    }
+    
+    // Transform back to original space
+    fixed_ambiguities = Z * fixed_decorrelated;
+    success_rate = chi2_second / chi2_best;
+    
+    return true;
+}
+
+void RTKProcessor::zTransformation(const MatrixXd& Q, MatrixXd& Z, MatrixXd& L, VectorXd& D) {
+    int n = Q.rows();
+    Z = MatrixXd::Identity(n, n);
+    L = MatrixXd::Zero(n, n);
+    D = VectorXd::Zero(n);
+    
+    MatrixXd Q_work = Q;
+    
+    // LDL decomposition
+    for (int i = 0; i < n; ++i) {
+        D(i) = Q_work(i, i);
+        L(i, i) = 1.0;
+        
+        for (int j = i + 1; j < n; ++j) {
+            L(j, i) = Q_work(j, i) / D(i);
+        }
+        
+        for (int j = i + 1; j < n; ++j) {
+            for (int k = j; k < n; ++k) {
+                Q_work(k, j) -= L(k, i) * L(j, i) * D(i);
+            }
+        }
+    }
+    
+    // Decorrelation using Z-transformation (simplified version)
+    for (int i = n - 1; i >= 1; --i) {
+        for (int j = i - 1; j >= 0; --j) {
+            double mu = std::round(L(i, j));
+            if (std::abs(mu) > 0.5) {
+                // Apply Z-transformation
+                for (int k = 0; k < n; ++k) {
+                    Z(k, j) -= mu * Z(k, i);
+                }
+                
+                // Update L matrix
+                L(i, j) -= mu;
+                for (int k = 0; k <= j; ++k) {
+                    L(j, k) -= mu * L(i, k);
+                }
+            }
+        }
+    }
+}
+
+bool RTKProcessor::integerLeastSquares(const VectorXd& a, const MatrixXd& L, const VectorXd& D,
+                                     VectorXd& fixed_a, double& chi2) {
+    int n = a.size();
+    fixed_a = VectorXd::Zero(n);
+    
+    // Simplified integer search (nearest neighbor rounding)
+    VectorXd rounded = a;
+    for (int i = 0; i < n; ++i) {
+        rounded(i) = std::round(a(i));
+    }
+    
+    // Adjustment using backward substitution
+    for (int i = n - 1; i >= 0; --i) {
+        double sum = 0.0;
+        for (int j = i + 1; j < n; ++j) {
+            sum += L(j, i) * fixed_a(j);
+        }
+        fixed_a(i) = std::round(a(i) - sum);
+    }
+    
+    // Calculate chi-square statistic
+    VectorXd diff = fixed_a - a;
+    chi2 = 0.0;
+    
+    for (int i = 0; i < n; ++i) {
+        double temp = diff(i);
+        for (int j = 0; j < i; ++j) {
+            temp -= L(i, j) * diff(j);
+        }
+        chi2 += temp * temp / D(i);
+    }
+    
+    return true;
+}
+
+bool RTKProcessor::validateAmbiguityResolution(double chi2_1, double chi2_2) {
+    // Ratio test
+    double ratio = chi2_2 / chi2_1;
+    return ratio > rtk_config_.ambiguity_ratio_threshold;
 }
 
 } // namespace libgnss

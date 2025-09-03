@@ -36,6 +36,7 @@ public:
         AmbiguityResolutionMode ar_mode = AmbiguityResolutionMode::CONTINUOUS;
         
         double ratio_threshold = 3.0;              ///< Ratio test threshold for ambiguity validation
+        double ambiguity_ratio_threshold = 3.0;    ///< LAMBDA method ratio threshold
         double validation_threshold = 0.15;       ///< Chi-square test threshold
         int min_satellites_for_ar = 5;            ///< Minimum satellites for ambiguity resolution
         int min_lock_count = 5;                   ///< Minimum lock count for ambiguity candidate
@@ -180,9 +181,51 @@ private:
                         const ObservationData& base_obs);
     
     /**
-     * @brief Resolve integer ambiguities
+     * @brief Resolve integer ambiguities using LAMBDA method
      */
     bool resolveAmbiguities();
+    
+    /**
+     * @brief LAMBDA method for integer ambiguity resolution
+     * @param float_ambiguities Float ambiguity estimates
+     * @param covariance_matrix Covariance matrix of float ambiguities
+     * @param fixed_ambiguities Output fixed integer ambiguities
+     * @param success_rate Success rate of ambiguity resolution
+     * @return true if ambiguity resolution successful
+     */
+    bool lambdaMethod(const VectorXd& float_ambiguities,
+                     const MatrixXd& covariance_matrix,
+                     VectorXd& fixed_ambiguities,
+                     double& success_rate);
+    
+    /**
+     * @brief Z-transformation for decorrelation
+     * @param Q Covariance matrix
+     * @param Z Output Z-transformation matrix
+     * @param L Output lower triangular matrix
+     * @param D Output diagonal matrix
+     */
+    void zTransformation(const MatrixXd& Q, MatrixXd& Z, MatrixXd& L, VectorXd& D);
+    
+    /**
+     * @brief Integer least squares search
+     * @param a Float ambiguities in decorrelated space
+     * @param L Lower triangular matrix
+     * @param D Diagonal matrix
+     * @param fixed_a Output fixed ambiguities
+     * @param chi2 Chi-square test statistic
+     * @return true if search successful
+     */
+    bool integerLeastSquares(const VectorXd& a, const MatrixXd& L, const VectorXd& D,
+                           VectorXd& fixed_a, double& chi2);
+    
+    /**
+     * @brief Validate ambiguity resolution using ratio test
+     * @param chi2_1 Chi-square of best candidate
+     * @param chi2_2 Chi-square of second best candidate
+     * @return true if validation passed
+     */
+    bool validateAmbiguityResolution(double chi2_1, double chi2_2);
     
     /**
      * @brief LAMBDA method for ambiguity resolution
