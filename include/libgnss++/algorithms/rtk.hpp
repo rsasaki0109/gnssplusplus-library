@@ -6,6 +6,7 @@
 #include "../core/solution.hpp"
 #include "spp.hpp"
 #include <Eigen/Dense>
+#include <mutex>
 
 namespace libgnss {
 

@@ -5,6 +5,7 @@
 #include "../core/navigation.hpp"
 #include "../core/solution.hpp"
 #include <Eigen/Dense>
+#include <mutex>
 
 namespace libgnss {
 

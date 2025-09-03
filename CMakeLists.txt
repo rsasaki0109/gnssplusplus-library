@@ -35,19 +35,32 @@ include_directories(
     ${EIGEN3_INCLUDE_DIR}
 )
 
-# Header-only library
-add_library(libgnss++ INTERFACE)
-target_include_directories(libgnss++ INTERFACE
+# Create source file list
+set(LIBGNSS_SOURCES
+    src/gnss.cpp
+    src/core/solution.cpp
+    src/core/navigation.cpp
+    src/core/types.cpp
+    src/core/observation.cpp
+    src/algorithms/spp.cpp
+    src/algorithms/rtk.cpp
+    src/algorithms/ppp.cpp
+    src/io/rinex.cpp
+)
+
+# Static library
+add_library(libgnss++ STATIC ${LIBGNSS_SOURCES})
+target_include_directories(libgnss++ PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
-target_compile_features(libgnss++ INTERFACE cxx_std_17)
+target_compile_features(libgnss++ PUBLIC cxx_std_17)
 
 # Link Eigen3
-target_link_libraries(libgnss++ INTERFACE Eigen3::Eigen)
+target_link_libraries(libgnss++ PUBLIC Eigen3::Eigen)
 
 if(OpenMP_CXX_FOUND)
-    target_link_libraries(libgnss++ INTERFACE OpenMP::OpenMP_CXX)
+    target_link_libraries(libgnss++ PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
 # Add subdirectories
