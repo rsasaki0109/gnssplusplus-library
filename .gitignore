@@ -1,1 +1,18 @@
+# Data
+data/
+
+# Build artifacts
+bin/
 build/
+*.a
+*.o
+
+# Data and result files
+*.log
+*.png
+results/
+plots/
+
+# Python cache
+__pycache__/
+*.pyc

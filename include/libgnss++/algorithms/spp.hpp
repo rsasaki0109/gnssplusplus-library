@@ -67,9 +67,9 @@ private:
     
     // Statistics
     mutable std::mutex stats_mutex_;
-    size_t total_epochs_processed_ = 0;
-    size_t successful_solutions_ = 0;
-    double total_processing_time_ms_ = 0.0;
+    mutable size_t total_epochs_processed_ = 0;
+    mutable size_t successful_solutions_ = 0;
+    mutable double total_processing_time_ms_ = 0.0;
     
     /**
      * @brief Solve position using weighted least squares

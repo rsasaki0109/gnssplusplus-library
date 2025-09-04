@@ -11,6 +11,7 @@ namespace libgnss {
  * @brief GNSS system identifiers
  */
 enum class GNSSSystem : uint8_t {
+    UNKNOWN = 0x00,
     GPS     = 0x01,
     GLONASS = 0x02,
     Galileo = 0x04,
@@ -119,6 +120,26 @@ struct GNSSTime {
     double operator-(const GNSSTime& other) const {
         return (week - other.week) * 604800.0 + (tow - other.tow);
     }
+
+    GNSSTime operator-(double seconds) const {
+        double new_tow = tow - seconds;
+        int new_week = week;
+        while (new_tow < 0.0) {
+            new_tow += 604800.0;
+            new_week--;
+        }
+        return GNSSTime(new_week, new_tow);
+    }
+
+    GNSSTime operator+(double seconds) const {
+        double new_tow = tow + seconds;
+        int new_week = week;
+        while (new_tow >= 604800.0) {
+            new_tow -= 604800.0;
+            new_week++;
+        }
+        return GNSSTime(new_week, new_tow);
+    }
     
     bool operator<(const GNSSTime& other) const {
         return week < other.week || (week == other.week && tow < other.tow);
@@ -126,6 +147,22 @@ struct GNSSTime {
     
     bool operator==(const GNSSTime& other) const {
         return week == other.week && std::abs(tow - other.tow) < 1e-6;
+    }
+
+    bool operator!=(const GNSSTime& other) const {
+        return !(*this == other);
+    }
+
+    bool operator<=(const GNSSTime& other) const {
+        return (*this < other) || (*this == other);
+    }
+
+    bool operator>(const GNSSTime& other) const {
+        return !(*this <= other);
+    }
+
+    bool operator>=(const GNSSTime& other) const {
+        return !(*this < other);
     }
 };
 
