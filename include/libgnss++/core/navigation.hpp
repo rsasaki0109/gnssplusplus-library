@@ -11,6 +11,11 @@ namespace libgnss {
  * @brief Satellite ephemeris data
  */
 struct Ephemeris {
+    Ephemeris() : satellite(), toe(), toc(), sqrt_a(0), e(0), i0(0), omega0(0), omega(0), m0(0),
+                  delta_n(0), idot(0), omega_dot(0), cuc(0), cus(0), crc(0), crs(0),
+                  cic(0), cis(0), af0(0), af1(0), af2(0), tgd(0), week(0), health(0),
+                  ura(0), iodc(0), iode(0), valid(false) {}
+
     SatelliteId satellite;
     GNSSTime toe;           ///< Time of ephemeris
     GNSSTime toc;           ///< Time of clock
@@ -130,7 +135,8 @@ public:
     std::map<SatelliteId, std::vector<Ephemeris>> ephemeris_data;
     IonosphereModel ionosphere_model;
     TroposphereModel troposphere_model;
-    
+
+    NavigationData();
     /**
      * @brief Add ephemeris data
      */

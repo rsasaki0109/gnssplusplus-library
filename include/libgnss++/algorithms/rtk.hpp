@@ -98,6 +98,15 @@ public:
      */
     const RTKConfig& getRTKConfig() const { return rtk_config_; }
 
+public:
+    /**
+     * @brief Public access to LAMBDA method for testing
+     */
+    bool lambdaMethod(const VectorXd& float_ambiguities,
+                     const MatrixXd& covariance_matrix,
+                     VectorXd& fixed_ambiguities,
+                     double& success_rate);
+
 private:
     RTKConfig rtk_config_;
     SPPProcessor spp_processor_;  ///< Fallback SPP processor
@@ -185,18 +194,6 @@ private:
      */
     bool resolveAmbiguities();
     
-    /**
-     * @brief LAMBDA method for integer ambiguity resolution
-     * @param float_ambiguities Float ambiguity estimates
-     * @param covariance_matrix Covariance matrix of float ambiguities
-     * @param fixed_ambiguities Output fixed integer ambiguities
-     * @param success_rate Success rate of ambiguity resolution
-     * @return true if ambiguity resolution successful
-     */
-    bool lambdaMethod(const VectorXd& float_ambiguities,
-                     const MatrixXd& covariance_matrix,
-                     VectorXd& fixed_ambiguities,
-                     double& success_rate);
     
     /**
      * @brief Z-transformation for decorrelation

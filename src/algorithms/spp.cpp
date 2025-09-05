@@ -1,5 +1,7 @@
 #include <libgnss++/algorithms/spp.hpp>
 #include <stdexcept>
+#include <chrono>
+#include <cmath>
 
 namespace libgnss {
 
@@ -81,91 +83,120 @@ PositionSolution SPPProcessor::solvePosition(const std::vector<Observation>& val
     solution.time = time;
     solution.status = SolutionStatus::SPP;
     solution.num_satellites = valid_obs.size();
-    
+
     // Initialize position if needed
     if (estimated_position_.norm() < 1000.0) {
         initializePosition(valid_obs, nav, time);
     }
-    
+
     // Iterative least squares solution
     Vector3d position = estimated_position_;
     double clock_bias = receiver_clock_bias_;
     
+    // Initial satellite state calculation
+    auto sat_states = calculateSatelliteStates(valid_obs, nav, time);
+
+    const double OMEGA_E = 7.2921151467e-5; // WGS84 Earth rotation rate (rad/s)
+    const double SPEED_OF_LIGHT = 299792458.0; // m/s
+
     for (int iter = 0; iter < spp_config_.max_iterations; ++iter) {
-        // Calculate satellite states
-        auto sat_states = calculateSatelliteStates(valid_obs, nav, time);
-        
-        // Form measurement equations
         std::vector<Vector3d> sat_positions;
-        VectorXd observations(valid_obs.size());
-        VectorXd predicted(valid_obs.size());
-        
-        for (size_t i = 0; i < valid_obs.size(); ++i) {
-            const auto& obs = valid_obs[i];
-            const auto& sat_state = sat_states.at(obs.satellite);
-            
-            if (!sat_state.valid) continue;
-            
-            sat_positions.push_back(sat_state.position);
-            observations(i) = obs.pseudorange;
-            predicted(i) = calculatePredictedRange(position, sat_state.position, 
-                                                 clock_bias, sat_state.clock_bias);
+        std::vector<double> obs_values;
+        std::vector<double> pred_values;
+
+        for (const auto& obs : valid_obs) {
+            auto it = sat_states.find(obs.satellite);
+            if (it == sat_states.end() || !it->second.valid) continue;
+
+            auto& sat_state = it->second;
+
+            // Re-calculate travel time and satellite position for accuracy
+            double travel_time = (sat_state.position - position).norm() / SPEED_OF_LIGHT;
+            GNSSTime tx_time = time - travel_time;
+
+            nav.calculateSatelliteState(obs.satellite, tx_time, 
+                                        sat_state.position, sat_state.velocity, 
+                                        sat_state.clock_bias, sat_state.clock_drift);
+
+            // Sagnac effect correction
+            Vector3d corrected_sat_pos = sat_state.position;
+            double angle = OMEGA_E * travel_time;
+            Matrix3d R;
+            R << std::cos(angle), -std::sin(angle), 0,
+                std::sin(angle), std::cos(angle), 0,
+                0, 0, 1;
+            corrected_sat_pos = R * corrected_sat_pos;
+
+            sat_positions.push_back(corrected_sat_pos);
+            obs_values.push_back(obs.pseudorange);
+            pred_values.push_back(calculatePredictedRange(position, corrected_sat_pos, 
+                                                        clock_bias, sat_state.clock_bias));
         }
-        
+
+        if (sat_positions.size() < 4) {
+            solution.status = SolutionStatus::NONE;
+            return solution;
+        }
+
+        // Convert to Eigen vectors
+        VectorXd observations = Eigen::Map<VectorXd>(obs_values.data(), obs_values.size());
+        VectorXd predicted = Eigen::Map<VectorXd>(pred_values.data(), pred_values.size());
+
         // Calculate geometry matrix
         MatrixXd H = calculateGeometryMatrix(position, sat_positions);
-        
+
         // Calculate residuals
         VectorXd residuals = observations - predicted;
-        
+
         // Check convergence
         if (residuals.norm() < spp_config_.position_convergence_threshold) {
+            solution.iterations = iter + 1;
             break;
         }
-        
+
         // Least squares update
         MatrixXd HTH = H.transpose() * H;
         if (HTH.determinant() < 1e-12) {
             solution.status = SolutionStatus::NONE;
             return solution;
         }
-        
+
         VectorXd dx = HTH.inverse() * H.transpose() * residuals;
-        
+
         position += dx.head<3>();
         clock_bias += dx(3);
-        
-        solution.iterations = iter + 1;
+
+        if (iter == spp_config_.max_iterations - 1) {
+            solution.iterations = spp_config_.max_iterations;
+        }
     }
-    
+
     // Update solution
     solution.position_ecef = position;
     solution.receiver_clock_bias = clock_bias;
-    solution.residual_rms = 0.0; // Would calculate actual RMS
     
-    // Calculate DOP values
-    std::vector<Vector3d> sat_positions;
-    for (size_t i = 0; i < valid_obs.size(); ++i) {
-        auto sat_states = calculateSatelliteStates(valid_obs, nav, time);
-        const auto& sat_state = sat_states.at(valid_obs[i].satellite);
-        if (sat_state.valid) {
-            sat_positions.push_back(sat_state.position);
+    // Recalculate sat positions for DOP
+    std::vector<Vector3d> final_sat_positions;
+    for(const auto& obs : valid_obs) {
+        auto it = sat_states.find(obs.satellite);
+        if (it != sat_states.end() && it->second.valid) {
+            final_sat_positions.push_back(it->second.position);
         }
     }
-    
-    if (sat_positions.size() >= 4) {
-        MatrixXd H = calculateGeometryMatrix(position, sat_positions);
+
+    if (final_sat_positions.size() >= 4) {
+        MatrixXd H = calculateGeometryMatrix(position, final_sat_positions);
         calculateDOP(H, solution);
     }
-    
+
     // Store satellites used
     for (const auto& obs : valid_obs) {
         solution.satellites_used.push_back(obs.satellite);
     }
-    
+
     estimated_position_ = position;
     receiver_clock_bias_ = clock_bias;
-    
+
     return solution;
 }
 
@@ -173,15 +204,20 @@ std::vector<Observation> SPPProcessor::validateObservations(const ObservationDat
                                                           const NavigationData& nav,
                                                           const GNSSTime& time) const {
     std::vector<Observation> valid_obs;
-    
+    const double SPEED_OF_LIGHT = 299792458.0; // m/s
+
     for (const auto& observation : obs.observations) {
-        // Check if ephemeris is available
-        if (!nav.hasEphemeris(observation.satellite, time)) {
+        // Check observation validity first
+        if (!observation.valid || observation.pseudorange <= 0.0) {
             continue;
         }
-        
-        // Check observation validity
-        if (!observation.valid || observation.pseudorange <= 0.0) {
+
+        // Estimate transmission time to check for ephemeris validity
+        double travel_time = observation.pseudorange / SPEED_OF_LIGHT;
+        GNSSTime tx_time = time - travel_time;
+
+        // Check if ephemeris is available at the estimated transmission time
+        if (!nav.hasEphemeris(observation.satellite, tx_time)) {
             continue;
         }
         
@@ -202,6 +238,9 @@ bool SPPProcessor::initializePosition(const std::vector<Observation>& observatio
     // Simple initialization - use first satellite position as rough estimate
     if (!observations.empty()) {
         auto sat_states = calculateSatelliteStates(observations, nav, time);
+
+        const double OMEGA_E = 7.2921151467e-5; // WGS84 Earth rotation rate (rad/s)
+        const double SPEED_OF_LIGHT = 299792458.0; // m/s
         if (!sat_states.empty()) {
             estimated_position_ = sat_states.begin()->second.position;
             estimated_position_ *= 0.9; // Move closer to Earth center
@@ -218,9 +257,15 @@ std::map<SatelliteId, SPPProcessor::SatelliteState> SPPProcessor::calculateSatel
     
     std::map<SatelliteId, SatelliteState> states;
     
+    const double SPEED_OF_LIGHT = 299792458.0; // m/s
     for (const auto& obs : observations) {
         SatelliteState state;
-        state.valid = nav.calculateSatelliteState(obs.satellite, time,
+
+        // Estimate signal travel time and calculate transmission time
+        double travel_time = obs.pseudorange / SPEED_OF_LIGHT;
+        GNSSTime tx_time = time - travel_time;
+
+        state.valid = nav.calculateSatelliteState(obs.satellite, tx_time,
                                                 state.position, state.velocity,
                                                 state.clock_bias, state.clock_drift);
         states[obs.satellite] = state;
@@ -234,7 +279,8 @@ double SPPProcessor::calculatePredictedRange(const Vector3d& receiver_pos,
                                            double receiver_clock_bias,
                                            double satellite_clock_bias) const {
     double geometric_range = (satellite_pos - receiver_pos).norm();
-    double clock_correction = (receiver_clock_bias - satellite_clock_bias) * constants::SPEED_OF_LIGHT;
+    const double SPEED_OF_LIGHT = 299792458.0; // m/s
+    double clock_correction = (receiver_clock_bias - satellite_clock_bias) * SPEED_OF_LIGHT;
     return geometric_range + clock_correction;
 }
 
@@ -265,10 +311,10 @@ void SPPProcessor::calculateDOP(const MatrixXd& geometry_matrix, PositionSolutio
 
 void SPPProcessor::updateStatistics(double processing_time_ms, bool success) const {
     std::lock_guard<std::mutex> lock(stats_mutex_);
-    const_cast<size_t&>(total_epochs_processed_)++;
-    const_cast<double&>(total_processing_time_ms_) += processing_time_ms;
+    total_epochs_processed_++;
+    total_processing_time_ms_ += processing_time_ms;
     if (success) {
-        const_cast<size_t&>(successful_solutions_)++;
+        successful_solutions_++;
     }
 }
 
@@ -289,8 +335,8 @@ double calculateAzimuth(const Vector3d& receiver_pos, const Vector3d& satellite_
 
 GeodeticCoord ecefToGeodetic(const Vector3d& ecef_pos) {
     // WGS84 ellipsoid parameters
-    const double a = constants::WGS84_A;
-    const double e2 = constants::WGS84_E2;
+    const double a = 6378137.0;        // WGS84 semi-major axis (m)
+    const double e2 = 0.00669437999014; // WGS84 first eccentricity squared
     
     double x = ecef_pos(0);
     double y = ecef_pos(1);
@@ -314,8 +360,8 @@ GeodeticCoord ecefToGeodetic(const Vector3d& ecef_pos) {
 }
 
 Vector3d geodeticToEcef(const GeodeticCoord& geodetic_pos) {
-    const double a = constants::WGS84_A;
-    const double e2 = constants::WGS84_E2;
+    const double a = 6378137.0;        // WGS84 semi-major axis (m)
+    const double e2 = 0.00669437999014; // WGS84 first eccentricity squared
     
     double lat = geodetic_pos.latitude;
     double lon = geodetic_pos.longitude;
