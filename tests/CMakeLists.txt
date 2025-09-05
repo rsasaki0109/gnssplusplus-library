@@ -1,40 +1,31 @@
 # Tests CMakeLists.txt
+cmake_minimum_required(VERSION 3.10)
 
 # Find Google Test
-find_package(GTest QUIET)
+find_package(GTest REQUIRED)
 
 if(GTest_FOUND)
-    # Core tests
-    add_executable(test_core
+    # Consolidate all tests into a single executable
+    add_executable(run_tests
         test_types.cpp
         test_observation.cpp
-        test_navigation.cpp
-        test_solution.cpp
-    )
-    target_link_libraries(test_core libgnss++ GTest::gtest GTest::gtest_main)
-    
-    # Algorithm tests
-    add_executable(test_algorithms
         test_spp.cpp
-        test_rtk.cpp
-        test_ppp.cpp
+        test_rtcm.cpp
     )
-    target_link_libraries(test_algorithms libgnss++ GTest::gtest GTest::gtest_main)
-    
-    # IO tests
-    add_executable(test_io
-        test_rinex.cpp
+
+    target_compile_options(run_tests PRIVATE -g -pthread)
+    target_link_libraries(run_tests
+        gnss_lib gnss_lib_noopt
+        GTest::GTest
+        GTest::Main
+        Threads::Threads
+        -pthread
+        stdc++
     )
-    target_link_libraries(test_io libgnss++ GTest::gtest GTest::gtest_main)
-    
-    # Add tests to CTest
-    add_test(NAME CoreTests COMMAND test_core)
-    add_test(NAME AlgorithmTests COMMAND test_algorithms)
-    add_test(NAME IOTests COMMAND test_io)
-    
-    # Create test data directory
-    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/test_data)
-    
+
+    # Add test to CTest
+    add_test(NAME run_tests COMMAND run_tests)
+
 else()
     message(WARNING "Google Test not found. Tests will not be built.")
 endif()

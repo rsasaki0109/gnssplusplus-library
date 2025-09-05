@@ -46,7 +46,8 @@ protected:
     
     void createTestNavigation() {
         // Create simplified ephemeris data for test satellites
-        for (int prn = 1; prn <= 12; ++prn) {
+        std::vector<int> prns_to_create = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 20};
+        for (int prn : prns_to_create) {
             Ephemeris eph;
             eph.satellite = SatelliteId(GNSSSystem::GPS, prn);
             eph.toe = GNSSTime(2000, 345600.0);
@@ -62,7 +63,7 @@ protected:
             eph.m0 = prn * 0.3;   // mean anomaly (rad)
             eph.delta_n = 0.0;
             eph.idot = 0.0;
-            eph.omega_dot = -7.2921159e-5;  // Earth rotation rate
+            eph.omega_dot = 0.0;
             
             // Clock parameters
             eph.af0 = 1e-6;  // clock bias

@@ -67,6 +67,14 @@ cmake ..
 make -j$(nproc)
 ```
 
+## Running Tests
+
+From the `build` directory, run the following command:
+
+```bash
+./tests/run_tests
+```
+
 ## Requirements
 
 - C++17 compatible compiler (GCC 7+, Clang 6+, MSVC 2019+)

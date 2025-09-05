@@ -14,35 +14,53 @@ bool Ephemeris::calculateSatelliteState(const GNSSTime& time,
     // In real implementation, would use full Kepler orbit calculation
     
     double dt = time - toe;
+    if (dt > 302400.0) {
+        dt -= 604800.0;
+    } else if (dt < -302400.0) {
+        dt += 604800.0;
+    }
     
     // Mean motion
-    double n0 = std::sqrt(constants::WGS84_A * constants::WGS84_A * constants::WGS84_A / (sqrt_a * sqrt_a * sqrt_a * sqrt_a));
+    const double GM = 3.986005e14;      // WGS84 gravitational parameter (m^3/s^2) - per IS-GPS-200
+    double a = sqrt_a * sqrt_a; // Semi-major axis
+    double n0 = std::sqrt(GM / (a * a * a));
     double n = n0 + delta_n;
     
     // Mean anomaly
     double M = m0 + n * dt;
     
-    // Eccentric anomaly (simplified)
-    double E = M + e * std::sin(M);
+    // Eccentric anomaly (iterative solution for Kepler's equation)
+    double E = M;
+    for (int i = 0; i < 10; ++i) {
+        double E_old = E;
+        E = M + e * std::sin(E_old);
+        if (std::abs(E - E_old) < 1e-12) {
+            break;
+        }
+    }
     
     // True anomaly
     double nu = std::atan2(std::sqrt(1 - e*e) * std::sin(E), std::cos(E) - e);
     
-    // Argument of latitude
-    double u = omega + nu;
-    
-    // Radius
-    double r = sqrt_a * sqrt_a * (1 - e * std::cos(E));
-    
+    // Second harmonic perturbations
+    double sin2u = std::sin(2.0 * (omega + nu));
+    double cos2u = std::cos(2.0 * (omega + nu));
+    double du = cus * sin2u + cuc * cos2u; // argument of latitude correction
+    double dr = crs * sin2u + crc * cos2u; // radius correction
+    double di = cis * sin2u + cic * cos2u; // inclination correction
+
+    // Corrected argument of latitude, radius, and inclination
+    double u = omega + nu + du;
+    double r = a * (1.0 - e * std::cos(E)) + dr;
+    double i = i0 + idot * dt + di;
+
     // Position in orbital plane
     double x_orb = r * std::cos(u);
     double y_orb = r * std::sin(u);
+    const double OMEGA_E = 7.2921150e-5;    // WGS84 Earth rotation rate (rad/s) - per IS-GPS-200
+    double Omega = omega0 + (omega_dot - OMEGA_E) * dt - OMEGA_E * toe.tow;
     
-    // Inclination and longitude of ascending node
-    double i = i0 + idot * dt;
-    double Omega = omega0 + (omega_dot - 7.2921159e-5) * dt;
-    
-    // Earth-fixed coordinates
+    // ECEF coordinates
     pos(0) = x_orb * std::cos(Omega) - y_orb * std::cos(i) * std::sin(Omega);
     pos(1) = x_orb * std::sin(Omega) + y_orb * std::cos(i) * std::cos(Omega);
     pos(2) = y_orb * std::sin(i);
@@ -53,6 +71,11 @@ bool Ephemeris::calculateSatelliteState(const GNSSTime& time,
     // Clock correction
     double dt_clock = time - toc;
     clock_bias = af0 + af1 * dt_clock + af2 * dt_clock * dt_clock;
+
+    // Relativistic correction
+    const double F = -4.442807633e-10; // s/m^(1/2)
+    clock_bias += F * e * sqrt_a * std::sin(E);
+
     clock_drift = af1 + 2.0 * af2 * dt_clock;
     
     return true;
@@ -176,6 +199,10 @@ std::vector<SatelliteId> NavigationData::getAvailableSatellites(const GNSSTime& 
     }
     
     return satellites;
+}
+
+NavigationData::NavigationData() {
+    clear();
 }
 
 void NavigationData::clear() {

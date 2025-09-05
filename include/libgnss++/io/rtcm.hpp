@@ -13,6 +13,7 @@ namespace io {
  * @brief RTCM message types
  */
 enum class RTCMMessageType : uint16_t {
+    RTCM_UNKNOWN = 0,
     // RTCM 3.x messages
     RTCM_1001 = 1001,  ///< L1-only GPS RTK observables
     RTCM_1002 = 1002,  ///< Extended L1-only GPS RTK observables
@@ -51,15 +52,15 @@ enum class RTCMMessageType : uint16_t {
  * @brief RTCM message structure
  */
 struct RTCMMessage {
-    RTCMMessageType type;
-    uint16_t length;
     std::vector<uint8_t> data;
-    uint32_t crc;
+    RTCMMessageType type = RTCMMessageType::RTCM_UNKNOWN;
+    uint16_t length = 0; // Payload length
+    uint32_t crc = 0;
     bool valid = false;
-    
+
     RTCMMessage() = default;
     RTCMMessage(RTCMMessageType msg_type, const std::vector<uint8_t>& msg_data)
-        : type(msg_type), length(msg_data.size()), data(msg_data) {}
+        : data(msg_data), type(msg_type), length(msg_data.size()) {}
 };
 
 /**
@@ -69,6 +70,11 @@ class RTCMProcessor {
 public:
     RTCMProcessor() = default;
     ~RTCMProcessor() = default;
+
+    /**
+     * @brief Clear internal state like reference position
+     */
+    void clear();
     
     /**
      * @brief Decode RTCM data stream
@@ -78,16 +84,6 @@ public:
      */
     std::vector<RTCMMessage> decode(const uint8_t* buffer, size_t size);
     
-    /**
-     * @brief Decode single RTCM message
-     * @param message RTCM message to decode
-     * @param obs_data Output observation data (for observation messages)
-     * @param nav_data Output navigation data (for ephemeris messages)
-     * @return true if successfully decoded
-     */
-    bool decodeMessage(const RTCMMessage& message,
-                      ObservationData* obs_data = nullptr,
-                      NavigationData* nav_data = nullptr);
     
     /**
      * @brief Encode observation data to RTCM
@@ -151,14 +147,12 @@ private:
     // Internal decoding functions
     bool decodeObservationMessage(const RTCMMessage& message, ObservationData& obs_data);
     bool decodeEphemerisMessage(const RTCMMessage& message, NavigationData& nav_data);
-    bool decodeStationMessage(const RTCMMessage& message);
     
     // CRC calculation
     uint32_t calculateCRC24(const uint8_t* data, size_t length);
-    bool verifyCRC(const RTCMMessage& message);
     
     // Bit manipulation utilities
-    uint32_t getBits(const uint8_t* data, int pos, int len);
+    int64_t getBits(const uint8_t* data, size_t data_size, int bit_pos, int num_bits);
     void setBits(uint8_t* data, int pos, int len, uint32_t value);
     
     // Message parsing utilities
@@ -243,6 +237,11 @@ namespace rtcm_utils {
      * @brief Check if message type is ephemeris message
      */
     bool isEphemerisMessage(RTCMMessageType type);
+
+    /**
+     * @brief Check if message type is station message
+     */
+    bool isStationMessage(RTCMMessageType type);
     
     /**
      * @brief Get GNSS system from message type
