@@ -1,45 +1,111 @@
-cmake_minimum_required(VERSION 3.10)
-project(gnss_lib CXX)
+cmake_minimum_required(VERSION 3.24)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Find necessary packages
-find_package(Eigen3 REQUIRED)
-
-# List source files for the main library
-set(GNSS_SOURCES
-    src/gnss.cpp
-    src/io/rinex.cpp
-    src/io/rtcm.cpp
-    src/core/solution.cpp
-    src/core/types.cpp
-    src/algorithms/ppp.cpp
+project(
+    rtklib2
+    VERSION 0.1.0
+    DESCRIPTION "Modern GNSS positioning engine"
+    LANGUAGES CXX
 )
 
-# List problematic files for the no-optimization library
-set(GNSS_SOURCES_NO_OPTIMIZATION
-    src/algorithms/rtk.cpp
-    src/algorithms/spp.cpp
-    src/core/navigation.cpp
-    src/core/observation.cpp
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+option(RTKLIB2_BUILD_TESTS "Build rtklib2 tests" ON)
+option(RTKLIB2_BUILD_EXAMPLES "Build rtklib2 examples" ON)
+option(RTKLIB2_ENABLE_WARNINGS "Enable compiler warnings" ON)
+
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
+    message(FATAL_ERROR "In-source builds are not supported. Please use a separate build directory.")
+endif()
+
+set(RTKLIB2_SOURCES
+    src/rtklib2/api/library.cpp
+    src/rtklib2/common/version.cpp
+    src/rtklib2/core/system_context.cpp
+    src/rtklib2/io/data_stream.cpp
+    src/rtklib2/pipeline/pipeline.cpp
+    src/rtklib2/services/service_registry.cpp
+    src/rtklib2/telemetry/logger.cpp
 )
 
-# Create the main library
-add_library(gnss_lib STATIC ${GNSS_SOURCES})
-target_include_directories(gnss_lib PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${EIGEN3_INCLUDE_DIR}
+add_library(rtklib2 STATIC ${RTKLIB2_SOURCES})
+
+target_sources(
+    rtklib2
+    PUBLIC
+        FILE_SET public_headers
+        TYPE HEADERS
+        BASE_DIRS include
+        FILES
+            include/rtklib2/api/rtklib2.hpp
+            include/rtklib2/common/version.hpp
+            include/rtklib2/core/system_context.hpp
+            include/rtklib2/io/data_stream.hpp
+            include/rtklib2/pipeline/pipeline.hpp
+            include/rtklib2/services/service_registry.hpp
+            include/rtklib2/telemetry/logger.hpp
 )
 
-# Create the no-optimization library
-add_library(gnss_lib_noopt STATIC ${GNSS_SOURCES_NO_OPTIMIZATION})
-target_compile_options(gnss_lib_noopt PRIVATE -O0)
-target_include_directories(gnss_lib_noopt PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${EIGEN3_INCLUDE_DIR}
+target_include_directories(
+    rtklib2
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
 )
 
-# Add subdirectories
-add_subdirectory(examples)
-add_subdirectory(tests)
+target_compile_features(rtklib2 PUBLIC cxx_std_20)
+
+if(RTKLIB2_ENABLE_WARNINGS)
+    if(MSVC)
+        target_compile_options(rtklib2 PRIVATE /W4 /permissive- /external:W1)
+    else()
+        target_compile_options(rtklib2 PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion)
+    endif()
+endif()
+
+include(GNUInstallDirs)
+
+install(
+    TARGETS rtklib2
+    EXPORT rtklib2Targets
+    FILE_SET public_headers
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(
+    EXPORT rtklib2Targets
+    NAMESPACE rtklib2::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rtklib2
+)
+
+include(CMakePackageConfigHelpers)
+
+configure_package_config_file(
+    cmake/rtklib2Config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/rtklib2Config.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rtklib2
+)
+
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/rtklib2ConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/rtklib2Config.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/rtklib2ConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rtklib2
+)
+
+if(RTKLIB2_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
+
+if(RTKLIB2_BUILD_TESTS)
+    include(CTest)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
