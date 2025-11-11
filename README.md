@@ -1,95 +1,78 @@
-# LibGNSS++ - Next-Generation GNSS Processing Library
+## Repository Layout
 
-A modern, high-performance C++ library for GNSS positioning and navigation, designed to democratize GNSS development.
-
-## Overview
-
-LibGNSS++ is a next-generation open-source GNSS processing library that aims to provide:
-
-- **Multi-constellation support**: GPS, GLONASS, Galileo, BeiDou, QZSS
-- **Advanced algorithms**: Modern RTK, PPP, and hybrid positioning
-- **High performance**: Optimized C++17/20 implementation
-- **Modular design**: Extensible architecture for research and development
-- **Easy integration**: Clean API and comprehensive documentation
-
-## Features
-
-### Core Capabilities
-- Real-time and post-processing positioning
-- Single Point Positioning (SPP)
-- Real-Time Kinematic (RTK) positioning
-- Precise Point Positioning (PPP)
-- Multi-frequency, multi-constellation processing
-- Ionospheric and tropospheric modeling
-- Ambiguity resolution algorithms
-
-### Modern Architecture
-- Header-only template library for performance
-- Plugin-based architecture for algorithms
-- Thread-safe design for multi-threaded applications
-- Memory-efficient data structures
-- SIMD optimizations where applicable
-
-### Supported Data Formats
-- RINEX 2.x/3.x observation and navigation files
-- RTCM 2.x/3.x real-time correction streams
-- UBX, NMEA, and other receiver formats
-- SP3 precise orbit files
-- ANTEX antenna models
-
-## Quick Start
-
-```cpp
-#include <libgnss++/gnss.hpp>
-
-int main() {
-    // Initialize GNSS processor
-    libgnss::GNSSProcessor processor;
-    
-    // Load configuration
-    processor.loadConfig("config.yaml");
-    
-    // Process RINEX observation file
-    auto solution = processor.processFile("observation.obs", "navigation.nav");
-    
-    // Output results
-    solution.writeToFile("solution.pos");
-    
-    return 0;
-}
+```
+legacy/v1/          # Previous gnss++ implementation retained for reference
+include/rtklib2/    # Public headers for the new core
+src/rtklib2/        # Library implementation
+tests/              # Unit & integration tests (ctest)
+docs/               # Architecture notes, ADRs, specifications
+cmake/              # Packaging helpers and toolchain snippets
+scripts/            # Utilities and data processing aides
 ```
 
-## Building
+## Getting Started
 
 ```bash
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
+git clone git@github.com:rsasaki0109/gnssplusplus-library.git
+cd gnssplusplus-library
+git checkout v2
+
+cmake -S . -B build -DRTKLIB2_BUILD_TESTS=ON -DRTKLIB2_BUILD_EXAMPLES=OFF
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
-## Running Tests
+### CMake Options
 
-From the `build` directory, run the following command:
+| Option | Default | Description |
+| --- | --- | --- |
+| `RTKLIB2_BUILD_TESTS` | `ON` | Build the sanity and future unit/integration tests |
+| `RTKLIB2_BUILD_EXAMPLES` | `ON` | Build example applications once available |
+| `RTKLIB2_ENABLE_WARNINGS` | `ON` | Enable strict compiler warnings |
 
-```bash
-./tests/run_tests
-```
+The project targets **C++20** and requires **CMake 3.24+**. On GNU/Clang
+toolchains we recommend enabling LTO and sanitizers through presets (coming
+soon) for development builds.
 
-## Requirements
+## Documentation
 
-- C++17 compatible compiler (GCC 7+, Clang 6+, MSVC 2019+)
-- CMake 3.15+
-- Eigen3 (for linear algebra)
-- Optional: OpenMP (for parallelization)
+- Architecture overview: `docs/architecture/overview.md`
+- Decision log (ADR): `docs/adr/`
+- Roadmap & milestones: `docs/roadmap.md`
 
-## License
-
-MIT License - see LICENSE file for details.
+Documentation will evolve as modules transition from skeletons to fully fledged
+implementations. Contributions that improve or extend the docs are highly
+encouraged.
 
 ## Contributing
 
-We welcome contributions! Please see CONTRIBUTING.md for guidelines.
+1. Fork the repository and create a feature branch off `v2`.
+2. Follow the coding style enforced by `clang-format` (configuration coming
+   soon) and document public APIs.
+3. Ensure `cmake --build build` and `ctest` pass locally.
+4. Submit a pull request describing the motivation, design, and testing.
 
-## Acknowledgments
+Please see `CONTRIBUTING.md` for additional guidelines. Bug reports and feature
+requests are welcome via GitHub issues.
 
-Inspired by RTKLIB and the need for a modern, accessible GNSS processing platform.
+## License
+
+MIT License – see `LICENSE` for details. RTKLIB v2 builds upon the heritage of
+the original RTKLIB project by T. Takasu and the community; attribution is
+maintained within the legacy code retained under `legacy/v1`.
+# RTKLIB v2
+
+A modernized, modular GNSS positioning framework that re-imagines the original
+RTKLIB codebase with contemporary C++20, clean architecture, and first-class
+developer experience.
+
+## Project Goals
+
+- **Composable architecture** – clearly defined module boundaries for ingestion,
+  solvers, services, and telemetry.
+- **Real-time readiness** – asynchronous pipelines, deterministic scheduling,
+  and observability hooks baked in.
+- **Extensibility** – plugin-friendly abstractions for new constellations,
+  correction sources, and estimation algorithms.
+- **Polyglot access** – C++ API first, with Python bindings and gRPC/REST
+  gateways on the roadmap.
