@@ -18,14 +18,24 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     message(FATAL_ERROR "In-source builds are not supported. Please use a separate build directory.")
 endif()
 
+find_package(Eigen3 3.3 CONFIG REQUIRED)
+
 set(RTKLIB2_SOURCES
     src/rtklib2/api/library.cpp
     src/rtklib2/common/version.cpp
     src/rtklib2/core/system_context.cpp
     src/rtklib2/io/data_stream.cpp
+    src/rtklib2/io/rinex_reader.cpp
     src/rtklib2/pipeline/pipeline.cpp
     src/rtklib2/services/service_registry.cpp
     src/rtklib2/telemetry/logger.cpp
+    src/rtklib2/solvers/spp/spp_solver.cpp
+    legacy/v1/src/algorithms/spp.cpp
+    legacy/v1/src/io/rinex.cpp
+    legacy/v1/src/core/navigation.cpp
+    legacy/v1/src/core/observation.cpp
+    legacy/v1/src/core/solution.cpp
+    legacy/v1/src/core/types.cpp
 )
 
 add_library(rtklib2 STATIC ${RTKLIB2_SOURCES})
@@ -41,9 +51,12 @@ target_sources(
             include/rtklib2/common/version.hpp
             include/rtklib2/core/system_context.hpp
             include/rtklib2/io/data_stream.hpp
+            include/rtklib2/io/rinex_reader.hpp
             include/rtklib2/pipeline/pipeline.hpp
             include/rtklib2/services/service_registry.hpp
             include/rtklib2/telemetry/logger.hpp
+            include/rtklib2/solvers/spp/spp_solver.hpp
+            include/rtklib2/solvers/spp/spp_types.hpp
 )
 
 target_include_directories(
@@ -51,6 +64,8 @@ target_include_directories(
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/legacy/v1/include
 )
 
 target_compile_features(rtklib2 PUBLIC cxx_std_20)
@@ -62,6 +77,9 @@ if(RTKLIB2_ENABLE_WARNINGS)
         target_compile_options(rtklib2 PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion)
     endif()
 endif()
+
+target_link_libraries(rtklib2
+    PUBLIC Eigen3::Eigen)
 
 include(GNUInstallDirs)
 
