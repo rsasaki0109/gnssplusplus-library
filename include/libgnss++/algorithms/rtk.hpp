@@ -174,6 +174,8 @@ private:
         SignalType signal;
         double pseudorange_dd = 0.0;
         double carrier_phase_dd = 0.0;
+        double geometric_range = 0.0;
+        Vector3d unit_vector = Vector3d::Zero();
         double variance = 0.0;
         bool valid = false;
     };

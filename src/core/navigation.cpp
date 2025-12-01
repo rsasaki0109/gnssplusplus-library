@@ -84,7 +84,7 @@ bool Ephemeris::calculateSatelliteState(const GNSSTime& time,
 bool Ephemeris::isValid(const GNSSTime& time) const {
     if (!valid) return false;
     double age = std::abs(time - toe);
-    return age < 7200.0; // 2 hours
+    return age <= 7200.0; // 2 hours (inclusive)
 }
 
 double Ephemeris::getAge(const GNSSTime& time) const {
