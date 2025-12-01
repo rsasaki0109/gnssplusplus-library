@@ -29,6 +29,7 @@ struct Ephemeris {
     double m0;              ///< Mean anomaly at reference time
     double delta_n;         ///< Mean motion difference
     double idot;            ///< Rate of inclination angle
+    double i_dot;           ///< Rate of inclination angle (alias)
     double omega_dot;       ///< Rate of right ascension
     
     // Perturbations
@@ -43,6 +44,8 @@ struct Ephemeris {
     // Status and accuracy
     uint16_t week;          ///< GPS week number
     uint8_t health;         ///< Satellite health
+    double sv_health;       ///< Satellite health (double format)
+    double sv_accuracy;     ///< Satellite accuracy
     uint8_t ura;            ///< User range accuracy index
     uint16_t iodc;          ///< Issue of data clock
     uint16_t iode;          ///< Issue of data ephemeris
