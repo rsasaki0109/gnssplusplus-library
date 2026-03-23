@@ -148,6 +148,8 @@ private:
     // Last validated fixed position (for position reset in next epoch)
     Vector3d last_fixed_position_ = Vector3d::Zero();
     bool has_last_fixed_position_ = false;
+    Vector3d last_solution_position_ = Vector3d::Zero();
+    bool has_last_solution_position_ = false;
 
     // Consecutive fix tracking for holdamb
     int consecutive_fix_count_ = 0;
@@ -195,6 +197,7 @@ private:
 
     // Current epoch satellite data (cached for use across functions)
     std::map<SatelliteId, SatelliteData> current_sat_data_;
+    std::map<SatelliteId, double> gf_l1l2_history_;
 
     /**
      * Collect all satellite data for an epoch (L1+L2 for rover and base)
@@ -256,6 +259,7 @@ private:
     PositionSolution generateSolution(const GNSSTime& time,
                                     SolutionStatus status,
                                     int num_satellites);
+    void rememberSolution(const PositionSolution& solution);
 
     void updateStatistics(SolutionStatus status) const;
 
