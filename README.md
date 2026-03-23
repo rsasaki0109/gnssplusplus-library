@@ -22,6 +22,10 @@ Tested on 3 open datasets with GPS L1+L2 dual-frequency observations.
 
 Open driving dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) (2018-12-19, Trimble rover/base, ~170 m baseline). RTKLIB was run in GPS-only L1+L2 kinematic forward mode with continuous AR to match libgnss++'s current GPS-only support.
 
+![UrbanNav Odaiba benchmark scorecard](docs/driving_odaiba_scorecard.png)
+
+Current Odaiba snapshot: libgnss++ leads on matched epochs, fix rate, p95 horizontal error, and max horizontal error, while RTKLIB keeps a 4 mm advantage on the median horizontal error.
+
 ![Urban driving comparison on UrbanNav Tokyo Odaiba](docs/driving_odaiba_comparison.png)
 
 **Highlights:**

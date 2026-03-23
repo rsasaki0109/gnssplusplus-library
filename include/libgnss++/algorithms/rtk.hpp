@@ -150,6 +150,8 @@ private:
     bool has_last_fixed_position_ = false;
     Vector3d last_solution_position_ = Vector3d::Zero();
     bool has_last_solution_position_ = false;
+    Vector3d last_trusted_position_ = Vector3d::Zero();
+    bool has_last_trusted_position_ = false;
 
     // Consecutive fix tracking for holdamb
     int consecutive_fix_count_ = 0;
@@ -163,6 +165,8 @@ private:
     // Epoch tracking
     GNSSTime last_epoch_time_;
     bool has_last_epoch_ = false;
+    GNSSTime last_trusted_time_;
+    bool has_last_trusted_time_ = false;
 
     // Statistics
     mutable std::mutex stats_mutex_;
