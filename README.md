@@ -14,6 +14,10 @@ Tested on 3 open datasets with GPS L1+L2 dual-frequency observations.
 
 \* RTKLIB の long static 結果は RINEX header 概略位置と比較すると高さ方向に 2.2m のオフセットがあり、libgnss++ の方が概略位置に近い結果 (16cm) を示す場合がある。
 
+### Kinematic Result Comparison
+
+![Kinematic RTK: libgnss++ vs RTKLIB](docs/kinematic_comparison.png)
+
 **Highlights:**
 - Instant first fix (epoch 1) on all datasets
 - Kinematic fix rate exceeds RTKLIB (100% vs 98.3%)
