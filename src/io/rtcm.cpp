@@ -214,7 +214,9 @@ std::string getMessageTypeName(RTCMMessageType type) {
 
 bool isObservationMessage(RTCMMessageType type) {
     auto type_val = static_cast<uint16_t>(type);
-    return (type_val >= 1001 && type_val <= 1012) || (type_val >= 1074 && type_val <= 1127);
+    return (type_val >= 1001 && type_val <= 1004) ||
+           (type_val >= 1009 && type_val <= 1012) ||
+           (type_val >= 1074 && type_val <= 1127);
 }
 
 bool isEphemerisMessage(RTCMMessageType type) {

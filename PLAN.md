@@ -59,7 +59,8 @@ libgnss++/
 
 ### テスト
 
-- **単体テスト**: `./build/tests/run_tests` (24/27 pass)
+- **単体テスト**: `./build/tests/run_tests` (30/30 pass)
+- **CTest**: `ctest --test-dir build --output-on-failure` (registered, green)
 - **回帰テスト**: `bash tests/run_regression.sh` (3データセット, 4 checks, ALL PASS)
 - **CI**: GitHub Actions (Ubuntu gcc/clang + macOS clang, green)
 
@@ -131,6 +132,13 @@ libgnss++/
 - README.md 更新 (RTKLIB 比較テーブル + 画像)
 - CLAUDE.md 作成
 - **東京お台場 車載走行データ取得** (UrbanNav, 6.5km 走行, RINEX 3)
+
+### Session 12: テスト基盤強化
+- **CTest 有効化** (`enable_testing()` + `ctest --test-dir build`)
+- **SPP 単体テスト刷新** (bundled RINEX 実データベースに変更)
+- **RTK public API smoke test 追加** (kinematic dataset, valid/fixed solution 確認)
+- **RTCM テスト整理** (invalid CRC rejection + message family classification)
+- **RTCM utility 修正** (`isObservationMessage()` が station message を誤分類していた問題を修正)
 
 ---
 
@@ -227,7 +235,7 @@ processRTKEpoch()
 2. **broadcast ephemeris only** — 精密暦未対応
 3. **NMF 未実装** — 1/cos(z) mapping (短基線では影響微小)
 4. **urban canyon** — 高層ビル環境では multipath で Fix 困難
-5. **単体テスト不足** — RTK 系のテストは regression test のみ
+5. **単体テスト不足** — RTK 系の詳細診断テストは未整備 (public API smoke test は追加済み)
 6. **SPP 精度** — 自前実装 ~1.3m (RTKLIB ~0.5m) — 長基線で影響
 
 ### データセット
