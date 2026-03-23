@@ -429,17 +429,17 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
     // Kinematic mode: reset position with large variance
     Vector3d rover_pos;
     double var_pos = 900.0;  // RTKLIB VAR_POS = SQR(30)
-    if (has_last_solution_position_) {
+    auto spp = spp_processor_.processEpoch(rover_obs, nav);
+    if (spp.isValid()) {
+        rover_pos = spp.position_ecef;
+    } else if (has_last_fixed_position_) {
+        rover_pos = last_fixed_position_;
+    } else if (rover_obs.receiver_position.norm() > 1e6) {
+        rover_pos = rover_obs.receiver_position;
+    } else if (has_last_solution_position_) {
         rover_pos = last_solution_position_;
     } else {
-        auto spp = spp_processor_.processEpoch(rover_obs, nav);
-        if (spp.isValid()) {
-            rover_pos = spp.position_ecef;
-        } else if (rover_obs.receiver_position.norm() > 1e6) {
-            rover_pos = rover_obs.receiver_position;
-        } else {
-            rover_pos = base_position_;
-        }
+        rover_pos = base_position_;
     }
     Vector3d baseline = rover_pos - base_position_;
 
@@ -471,8 +471,10 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             return spp;
         }
 
+        auto current_spp = spp_processor_.processEpoch(rover_obs, nav);
+
         auto fallback_spp = [&]() {
-            auto spp = spp_processor_.processEpoch(rover_obs, nav);
+            auto spp = current_spp;
             if (spp.isValid() && has_last_solution_position_ && has_last_epoch_) {
                 double dt = rover_obs.time - last_epoch_time_;
                 if (!std::isfinite(dt) || dt < 0.5) dt = 1.0;
@@ -489,6 +491,17 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             rememberSolution(spp);
             consecutive_fix_count_ = 0;
             return spp;
+        };
+
+        auto finitePosition = [](const PositionSolution& sol) {
+            return sol.position_ecef.allFinite();
+        };
+
+        auto deviatesTooFarFromSPP = [&](const PositionSolution& sol, double threshold_m) {
+            if (!current_spp.isValid() || !finitePosition(sol) || !current_spp.position_ecef.allFinite()) {
+                return false;
+            }
+            return (sol.position_ecef - current_spp.position_ecef).norm() > threshold_m;
         };
 
         if (!filter_initialized_) {
@@ -532,6 +545,14 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             const bool saved_has_last_solution_time = has_last_epoch_;
             solution = generateSolution(rover_obs.time, SolutionStatus::FLOAT, n_sats);
 
+            if (!finitePosition(solution) || deviatesTooFarFromSPP(solution, 150.0)) {
+                last_solution_position_ = saved_last_solution_position;
+                has_last_solution_position_ = saved_has_last_solution;
+                last_epoch_time_ = saved_last_solution_time;
+                has_last_epoch_ = saved_has_last_solution_time;
+                return fallback_spp();
+            }
+
             if (saved_has_last_solution && saved_has_last_solution_time) {
                 double dt = rover_obs.time - saved_last_solution_time;
                 if (!std::isfinite(dt) || dt < 0.5) dt = 1.0;
@@ -554,6 +575,16 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                     filter_state_.state.head<3>() = fixed_baseline_;
                     solution = generateSolution(rover_obs.time, SolutionStatus::FIXED, n_sats);
                     filter_state_.state.head<3>() = saved_baseline;
+                    if (!finitePosition(solution) || deviatesTooFarFromSPP(solution, 150.0)) {
+                        has_fixed_solution_ = false;
+                        last_solution_position_ = saved_last_solution_position;
+                        has_last_solution_position_ = saved_has_last_solution;
+                        last_epoch_time_ = saved_last_solution_time;
+                        has_last_epoch_ = saved_has_last_solution_time;
+                        updateStatistics(SolutionStatus::SPP);
+                        consecutive_fix_count_ = 0;
+                        return fallback_spp();
+                    }
                     updateStatistics(SolutionStatus::FIXED);
                     consecutive_fix_count_++;
 
