@@ -18,6 +18,12 @@ Tested on 3 open datasets with GPS L1+L2 dual-frequency observations.
 
 ![Kinematic RTK: libgnss++ vs RTKLIB](docs/kinematic_comparison.png)
 
+### Urban Driving Result Comparison
+
+Open driving dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) (2018-12-19, Trimble rover/base, ~170 m baseline). RTKLIB was run in GPS-only L1+L2 kinematic forward mode with continuous AR to match libgnss++'s current GPS-only support.
+
+![Urban driving comparison on UrbanNav Tokyo Odaiba](docs/driving_odaiba_comparison.png)
+
 **Highlights:**
 - Instant first fix (epoch 1) on all datasets
 - Kinematic fix rate exceeds RTKLIB (100% vs 98.3%)
@@ -116,6 +122,9 @@ python3 tools/plot_rtk.py output/rtk_solution.pos
 
 # Compare with RTKLIB
 python3 tools/compare_rtklib.py output/rtk_solution.pos rtklib.pos
+
+# Regenerate the UrbanNav Odaiba comparison image
+bash scripts/run_odaiba_comparison.sh /path/to/rnx2rtkp
 ```
 
 ## Test Data
@@ -126,6 +135,7 @@ python3 tools/compare_rtklib.py output/rtk_solution.pos rtklib.pos
 | `data/rover_static.obs` | Static 3.3 km baseline | Sample |
 | `data/rover_kinematic.obs` | Kinematic 1.2 km | [geofis/ppk](https://github.com/geofis/ppk) |
 | `data/short_baseline/` | Static 36 m (Tsukuba IGS) | BKG GNSS Data Center |
+| `data/driving/` | Urban driving 6.5 km (Tokyo Odaiba) | [UrbanNavDataset](https://github.com/IPNL-POLYU/UrbanNavDataset) |
 
 ## Algorithm Overview
 

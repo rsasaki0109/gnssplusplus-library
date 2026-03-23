@@ -10,10 +10,14 @@ if(GTest_FOUND)
         test_types.cpp
         test_observation.cpp
         test_spp.cpp
+        test_rtk_smoke.cpp
         test_rtcm.cpp
     )
 
     target_compile_options(run_tests PRIVATE -g -pthread)
+    target_compile_definitions(run_tests PRIVATE
+        GNSSPP_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    )
     target_link_libraries(run_tests
         gnss_lib gnss_lib_noopt
         GTest::GTest
