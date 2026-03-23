@@ -32,3 +32,10 @@ python3 "${SCRIPT_DIR}/generate_driving_comparison.py" \
     --reference-csv "${ROOT_DIR}/data/driving/Tokyo_Data/Odaiba/reference.csv" \
     --output "${ROOT_DIR}/docs/driving_odaiba_comparison.png" \
     --title "Urban Driving Comparison: libgnss++ vs RTKLIB on UrbanNav Odaiba"
+
+python3 "${SCRIPT_DIR}/generate_odaiba_scorecard.py" \
+    --lib-pos "${ROOT_DIR}/output/rtk_solution.pos" \
+    --rtklib-pos "${ROOT_DIR}/output/driving_rtklib_rtk.pos" \
+    --reference-csv "${ROOT_DIR}/data/driving/Tokyo_Data/Odaiba/reference.csv" \
+    --output "${ROOT_DIR}/docs/driving_odaiba_scorecard.png" \
+    --title "UrbanNav Tokyo Odaiba"

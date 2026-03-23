@@ -50,8 +50,10 @@ void RTKProcessor::reset() {
     has_fixed_solution_ = false;
     has_last_fixed_position_ = false;
     has_last_solution_position_ = false;
+    has_last_trusted_position_ = false;
     has_ref_satellite_ = false;
     has_last_epoch_ = false;
+    has_last_trusted_time_ = false;
     current_sat_data_.clear();
     gf_l1l2_history_.clear();
     consecutive_fix_count_ = 0;
@@ -475,6 +477,15 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
 
         auto fallback_spp = [&]() {
             auto spp = current_spp;
+            if (spp.isValid() && has_last_trusted_position_ && has_last_trusted_time_) {
+                const double trusted_jump =
+                    (spp.position_ecef - last_trusted_position_).norm();
+                if (spp.num_satellites <= 5 && trusted_jump > 25.0) {
+                    spp = PositionSolution{};
+                    spp.time = rover_obs.time;
+                    spp.status = SolutionStatus::NONE;
+                }
+            }
             if (spp.isValid() && has_last_solution_position_ && has_last_epoch_) {
                 double dt = rover_obs.time - last_epoch_time_;
                 if (!std::isfinite(dt) || dt < 0.5) dt = 1.0;
@@ -543,14 +554,39 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             const bool saved_has_last_solution = has_last_solution_position_;
             const GNSSTime saved_last_solution_time = last_epoch_time_;
             const bool saved_has_last_solution_time = has_last_epoch_;
+            const Vector3d saved_last_trusted_position = last_trusted_position_;
+            const bool saved_has_last_trusted = has_last_trusted_position_;
+            const GNSSTime saved_last_trusted_time = last_trusted_time_;
+            const bool saved_has_last_trusted_time = has_last_trusted_time_;
             solution = generateSolution(rover_obs.time, SolutionStatus::FLOAT, n_sats);
+            const PositionSolution float_solution = solution;
 
             if (!finitePosition(solution) || deviatesTooFarFromSPP(solution, 150.0)) {
                 last_solution_position_ = saved_last_solution_position;
                 has_last_solution_position_ = saved_has_last_solution;
                 last_epoch_time_ = saved_last_solution_time;
                 has_last_epoch_ = saved_has_last_solution_time;
+                last_trusted_position_ = saved_last_trusted_position;
+                has_last_trusted_position_ = saved_has_last_trusted;
+                last_trusted_time_ = saved_last_trusted_time;
+                has_last_trusted_time_ = saved_has_last_trusted_time;
                 return fallback_spp();
+            }
+
+            if (n_sats <= 4 && has_last_trusted_position_ && has_last_trusted_time_) {
+                const double trusted_jump =
+                    (solution.position_ecef - saved_last_trusted_position).norm();
+                if (trusted_jump > 25.0) {
+                    last_solution_position_ = saved_last_solution_position;
+                    has_last_solution_position_ = saved_has_last_solution;
+                    last_epoch_time_ = saved_last_solution_time;
+                    has_last_epoch_ = saved_has_last_solution_time;
+                    last_trusted_position_ = saved_last_trusted_position;
+                    has_last_trusted_position_ = saved_has_last_trusted;
+                    last_trusted_time_ = saved_last_trusted_time;
+                    has_last_trusted_time_ = saved_has_last_trusted_time;
+                    return fallback_spp();
+                }
             }
 
             if (saved_has_last_solution && saved_has_last_solution_time) {
@@ -575,15 +611,20 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                     filter_state_.state.head<3>() = fixed_baseline_;
                     solution = generateSolution(rover_obs.time, SolutionStatus::FIXED, n_sats);
                     filter_state_.state.head<3>() = saved_baseline;
-                    if (!finitePosition(solution) || deviatesTooFarFromSPP(solution, 150.0)) {
+                    const double fixed_float_jump =
+                        (solution.position_ecef - float_solution.position_ecef).norm();
+                    if (!finitePosition(solution) ||
+                        deviatesTooFarFromSPP(solution, 150.0) ||
+                        (n_sats <= 5 && fixed_float_jump > 30.0)) {
                         has_fixed_solution_ = false;
-                        last_solution_position_ = saved_last_solution_position;
-                        has_last_solution_position_ = saved_has_last_solution;
-                        last_epoch_time_ = saved_last_solution_time;
-                        has_last_epoch_ = saved_has_last_solution_time;
-                        updateStatistics(SolutionStatus::SPP);
+                        last_trusted_position_ = saved_last_trusted_position;
+                        has_last_trusted_position_ = saved_has_last_trusted;
+                        last_trusted_time_ = saved_last_trusted_time;
+                        has_last_trusted_time_ = saved_has_last_trusted_time;
+                        rememberSolution(float_solution);
+                        updateStatistics(SolutionStatus::FLOAT);
                         consecutive_fix_count_ = 0;
-                        return fallback_spp();
+                        return float_solution;
                     }
                     updateStatistics(SolutionStatus::FIXED);
                     consecutive_fix_count_++;
@@ -1465,6 +1506,13 @@ void RTKProcessor::rememberSolution(const PositionSolution& solution) {
     has_last_solution_position_ = true;
     last_epoch_time_ = solution.time;
     has_last_epoch_ = true;
+    if (solution.status == SolutionStatus::FIXED ||
+        (solution.status == SolutionStatus::FLOAT && solution.num_satellites >= 5)) {
+        last_trusted_position_ = solution.position_ecef;
+        has_last_trusted_position_ = true;
+        last_trusted_time_ = solution.time;
+        has_last_trusted_time_ = true;
+    }
 }
 
 void RTKProcessor::updateStatistics(SolutionStatus status) const {
