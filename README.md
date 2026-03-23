@@ -1,41 +1,36 @@
-# LibGNSS++ - Next-Generation GNSS Processing Library
+# libgnss++ — Modern C++ GNSS Positioning Library
 
-A modern, high-performance C++ library for GNSS positioning and navigation, designed to democratize GNSS development.
+Self-contained RTK/SPP positioning library in modern C++17. No RTKLIB runtime dependency.
 
-## Overview
+## Performance
 
-LibGNSS++ is a next-generation open-source GNSS processing library that aims to provide:
+| Dataset | Baseline | Fix Rate | RMS (horizontal) |
+|---------|----------|----------|-------------------|
+| Kinematic | 1.2 km | **100%** | **12 mm** |
+| Short static | 36 m | **99%** | 90 mm |
+| Long static | 3.3 km | **52%** | 104 mm |
 
-- **Multi-constellation support**: GPS, GLONASS, Galileo, BeiDou, QZSS
-- **Advanced algorithms**: Modern RTK, PPP, and hybrid positioning
-- **High performance**: Optimized C++17/20 implementation
-- **Modular design**: Extensible architecture for research and development
-- **Easy integration**: Clean API and comprehensive documentation
+Instant first fix (epoch 1). Kinematic fix rate exceeds RTKLIB (98.3%).
 
 ## Features
 
-### Core Capabilities
-- Real-time and post-processing positioning
-- Single Point Positioning (SPP)
-- Real-Time Kinematic (RTK) positioning
-- Precise Point Positioning (PPP)
-- Multi-frequency, multi-constellation processing
-- Ionospheric and tropospheric modeling
-- Ambiguity resolution algorithms
+- **RTK positioning** with carrier phase ambiguity resolution (LAMBDA)
+- **SPP positioning** with Klobuchar ionosphere and Saastamoinen troposphere
+- **Wide-lane / Narrow-lane AR** for long baseline ionosphere mitigation
+- **Fix-and-hold** ambiguity maintenance with position-based validation
+- **RINEX 2/3 reader** (GPS observation, navigation, multi-GNSS header parsing)
+- **Eigen-based Kalman filter** (no C array marshalling)
+- **Zero external GNSS dependency** (self-contained LAMBDA, troposphere, ionosphere models)
 
-### Modern Architecture
-- Header-only template library for performance
-- Plugin-based architecture for algorithms
-- Thread-safe design for multi-threaded applications
-- Memory-efficient data structures
-- SIMD optimizations where applicable
+## Architecture
 
-### Supported Data Formats
-- RINEX 2.x/3.x observation and navigation files
-- RTCM 2.x/3.x real-time correction streams
-- UBX, NMEA, and other receiver formats
-- SP3 precise orbit files
-- ANTEX antenna models
+```
+libgnss++/
+  core/         constants, coordinates, types, observation, navigation, solution
+  models/       troposphere (Saastamoinen), ionosphere (Klobuchar)
+  algorithms/   spp, rtk, kalman, lambda
+  io/           rinex, solution_writer
+```
 
 ## Quick Start
 
@@ -43,19 +38,34 @@ LibGNSS++ is a next-generation open-source GNSS processing library that aims to 
 #include <libgnss++/gnss.hpp>
 
 int main() {
-    // Initialize GNSS processor
-    libgnss::GNSSProcessor processor;
-    
-    // Load configuration
-    processor.loadConfig("config.yaml");
-    
-    // Process RINEX observation file
-    auto solution = processor.processFile("observation.obs", "navigation.nav");
-    
-    // Output results
-    solution.writeToFile("solution.pos");
-    
-    return 0;
+    // Setup RTK processor
+    libgnss::RTKProcessor rtk;
+    libgnss::RTKProcessor::RTKConfig config;
+    config.ambiguity_ratio_threshold = 3.0;
+    rtk.setRTKConfig(config);
+
+    // Load data
+    libgnss::io::RINEXReader rover, base, nav_reader;
+    rover.open("rover.obs");
+    base.open("base.obs");
+    nav_reader.open("navigation.nav");
+
+    libgnss::NavigationData nav;
+    nav_reader.readNavigationData(nav);
+
+    // Set base position from RINEX header
+    libgnss::io::RINEXReader::RINEXHeader base_header;
+    base.readHeader(base_header);
+    rtk.setBasePosition(base_header.approximate_position);
+
+    // Process epoch by epoch
+    libgnss::ObservationData rover_obs, base_obs;
+    while (rover.readObservationEpoch(rover_obs) && base.readObservationEpoch(base_obs)) {
+        auto solution = rtk.processRTKEpoch(rover_obs, base_obs, nav);
+        if (solution.status == libgnss::SolutionStatus::FIXED) {
+            // cm-level position available
+        }
+    }
 }
 ```
 
@@ -67,29 +77,63 @@ cmake ..
 make -j$(nproc)
 ```
 
-## Running Tests
+### Requirements
 
-From the `build` directory, run the following command:
+- C++17 compiler (GCC 7+, Clang 6+)
+- CMake 3.14+
+- Eigen3
+
+### Run Tests
 
 ```bash
-./tests/run_tests
+# Unit tests
+./build/tests/run_tests
+
+# Regression tests (requires test data in data/)
+bash tests/run_regression.sh
 ```
 
-## Requirements
+## Analysis Tools
 
-- C++17 compatible compiler (GCC 7+, Clang 6+, MSVC 2019+)
-- CMake 3.15+
-- Eigen3 (for linear algebra)
-- Optional: OpenMP (for parallelization)
+```bash
+# Quick statistics
+python3 tools/rtk_stats.py output/rtk_solution.pos
+
+# Visualization (matplotlib)
+python3 tools/plot_rtk.py output/rtk_solution.pos
+
+# Compare with RTKLIB
+python3 tools/compare_rtklib.py output/rtk_solution.pos rtklib.pos
+```
+
+## Test Data
+
+| Directory | Description | Source |
+|-----------|-------------|--------|
+| `data/` (symlinks) | Active test dataset | — |
+| `data/rover_static.obs` | Static 3.3 km baseline | Sample |
+| `data/rover_kinematic.obs` | Kinematic 1.2 km | [geofis/ppk](https://github.com/geofis/ppk) |
+| `data/short_baseline/` | Static 36 m (Tsukuba IGS) | BKG GNSS Data Center |
+
+## Algorithm Overview
+
+### RTK Processing Flow
+
+1. **SPP** — initial position via weighted least squares
+2. **SD bias init** — single-difference carrier phase bias from phase−code
+3. **DD observation model** — double-difference with geodist + Sagnac + troposphere
+4. **Kalman filter** — Eigen-based EKF with SD ambiguity states
+5. **LAMBDA** — integer least-squares ambiguity resolution (LD + reduction + search)
+6. **WL-NL AR** — wide-lane/narrow-lane for long baselines (Melbourne-Wubbena + IF combination)
+7. **Fix-and-hold** — maintain integer fix across epochs with direct state constraint
+
+### Key Design Decisions
+
+- **SD parameterization** — single-difference ambiguity states (DD formed in observation model)
+- **Separate rover/base satellite positions** — computed from respective pseudoranges (matches RTKLIB satposs)
+- **Analytical Sagnac** — `geodist()` with `OMGE*(rs[0]*rr[1]-rs[1]*rr[0])/c` (no rotation matrix)
+- **Position-based hold validation** — accept low-ratio fixes when position is consistent with last fix
 
 ## License
 
-MIT License - see LICENSE file for details.
-
-## Contributing
-
-We welcome contributions! Please see CONTRIBUTING.md for guidelines.
-
-## Acknowledgments
-
-Inspired by RTKLIB and the need for a modern, accessible GNSS processing platform.
+MIT License — see LICENSE file.

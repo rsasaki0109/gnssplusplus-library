@@ -1,18 +1,38 @@
-# Data
-data/
-
 # Build artifacts
-bin/
 build/
+build_local/
+bin/
 *.a
 *.o
 
-# Data and result files
+# Data (large RINEX files)
+data/
+
+# Output
+output/
+
+# Temporary files
 *.log
+*.txt
+!CMakeLists.txt
+lambda_debug.txt
+lambda2.txt
+lambda3.txt
+rtklib_diag.txt
+test_rinex_read
+test_rinex_read.cpp
+
+# Generated
 *.png
-results/
-plots/
+*.html
+*.kml
+*.pos
 
 # Python cache
 __pycache__/
 *.pyc
+
+# IDE
+.vscode/
+.idea/
+*.swp

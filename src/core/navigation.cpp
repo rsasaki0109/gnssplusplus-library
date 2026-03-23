@@ -3,88 +3,141 @@
 
 namespace libgnss {
 
+namespace {
+
+constexpr double kGpsWeekSeconds = 604800.0;
+constexpr double kHalfGpsWeekSeconds = 302400.0;
+constexpr double kEarthRotationRate = 7.2921151467e-5;
+constexpr double kEarthMu = 3.986005e14;
+constexpr double kRelativityF = -4.442807633e-10;
+constexpr double kWgs84A = 6378137.0;
+constexpr double kWgs84E2 = 6.69437999014e-3;
+
+double normalizeGpsTime(double dt) {
+    while (dt > kHalfGpsWeekSeconds) {
+        dt -= kGpsWeekSeconds;
+    }
+    while (dt < -kHalfGpsWeekSeconds) {
+        dt += kGpsWeekSeconds;
+    }
+    return dt;
+}
+
+double solveKepler(double mean_anomaly, double eccentricity) {
+    double E = mean_anomaly;
+    for (int i = 0; i < 30; ++i) {  // RTKLIB: MAX_ITER_KEPLER=30
+        double Ek = E;
+        E -= (E - eccentricity * std::sin(E) - mean_anomaly) / (1.0 - eccentricity * std::cos(E));
+        if (std::abs(E - Ek) < 1e-14) break;  // RTKLIB: RTOL_KEPLER=1e-14
+    }
+    return E;
+}
+
+bool computeBroadcastState(const Ephemeris& eph,
+                           const GNSSTime& time,
+                           Vector3d& pos,
+                           double& clock_bias,
+                           double& clock_drift) {
+    if (!eph.valid || eph.sqrt_a <= 0.0) {
+        return false;
+    }
+
+    const double a = eph.sqrt_a * eph.sqrt_a;
+    const double tk = normalizeGpsTime(time - eph.toe);
+    const double tc = normalizeGpsTime(time - eph.toc);
+
+    const double n0 = std::sqrt(kEarthMu / (a * a * a));
+    const double n = n0 + eph.delta_n;
+    const double mean_anomaly = eph.m0 + n * tk;
+    const double eccentric_anomaly = solveKepler(mean_anomaly, eph.e);
+
+    const double sin_e = std::sin(eccentric_anomaly);
+    const double cos_e = std::cos(eccentric_anomaly);
+    const double sqrt_one_minus_e2 = std::sqrt(1.0 - eph.e * eph.e);
+    const double true_anomaly = std::atan2(sqrt_one_minus_e2 * sin_e, cos_e - eph.e);
+    const double phi = true_anomaly + eph.omega;
+
+    const double two_phi = 2.0 * phi;
+    const double du = eph.cus * std::sin(two_phi) + eph.cuc * std::cos(two_phi);
+    const double dr = eph.crs * std::sin(two_phi) + eph.crc * std::cos(two_phi);
+    const double di = eph.cis * std::sin(two_phi) + eph.cic * std::cos(two_phi);
+
+    const double u = phi + du;
+    const double r = a * (1.0 - eph.e * cos_e) + dr;
+    const double inclination = eph.i0 + eph.idot * tk + di;
+    const double omega = eph.omega0 + (eph.omega_dot - kEarthRotationRate) * tk
+        - kEarthRotationRate * eph.toe.tow;
+
+    const double x_orb = r * std::cos(u);
+    const double y_orb = r * std::sin(u);
+
+    const double cos_omega = std::cos(omega);
+    const double sin_omega = std::sin(omega);
+    const double cos_i = std::cos(inclination);
+    const double sin_i = std::sin(inclination);
+
+    pos(0) = x_orb * cos_omega - y_orb * cos_i * sin_omega;
+    pos(1) = x_orb * sin_omega + y_orb * cos_i * cos_omega;
+    pos(2) = y_orb * sin_i;
+
+    clock_bias = eph.af0 + eph.af1 * tc + eph.af2 * tc * tc;
+    clock_bias += kRelativityF * eph.e * eph.sqrt_a * sin_e;
+    // TGD NOT applied here — it's applied in SPP only (DD cancels TGD)
+    // clock_bias -= eph.tgd;
+    clock_drift = eph.af1 + 2.0 * eph.af2 * tc;
+    return true;
+}
+
+void ecefToGeodetic(const Vector3d& ecef, double& lat, double& lon, double& h) {
+    lon = std::atan2(ecef(1), ecef(0));
+    const double p = std::sqrt(ecef(0) * ecef(0) + ecef(1) * ecef(1));
+    lat = std::atan2(ecef(2), p * (1.0 - kWgs84E2));
+
+    for (int i = 0; i < 8; ++i) {
+        const double sin_lat = std::sin(lat);
+        const double n = kWgs84A / std::sqrt(1.0 - kWgs84E2 * sin_lat * sin_lat);
+        h = p / std::cos(lat) - n;
+        lat = std::atan2(ecef(2), p * (1.0 - kWgs84E2 * n / (n + h)));
+    }
+
+    const double sin_lat = std::sin(lat);
+    const double n = kWgs84A / std::sqrt(1.0 - kWgs84E2 * sin_lat * sin_lat);
+    h = p / std::cos(lat) - n;
+}
+
+} // namespace
+
 bool Ephemeris::calculateSatelliteState(const GNSSTime& time,
                                        Vector3d& pos,
                                        Vector3d& vel,
                                        double& clock_bias,
                                        double& clock_drift) const {
-    if (!valid) return false;
-    
-    // Simplified satellite position calculation
-    // In real implementation, would use full Kepler orbit calculation
-    
-    double dt = time - toe;
-    if (dt > 302400.0) {
-        dt -= 604800.0;
-    } else if (dt < -302400.0) {
-        dt += 604800.0;
+    if (!computeBroadcastState(*this, time, pos, clock_bias, clock_drift)) {
+        return false;
     }
-    
-    // Mean motion
-    const double GM = 3.986005e14;      // WGS84 gravitational parameter (m^3/s^2) - per IS-GPS-200
-    double a = sqrt_a * sqrt_a; // Semi-major axis
-    double n0 = std::sqrt(GM / (a * a * a));
-    double n = n0 + delta_n;
-    
-    // Mean anomaly
-    double M = m0 + n * dt;
-    
-    // Eccentric anomaly (iterative solution for Kepler's equation)
-    double E = M;
-    for (int i = 0; i < 10; ++i) {
-        double E_old = E;
-        E = M + e * std::sin(E_old);
-        if (std::abs(E - E_old) < 1e-12) {
-            break;
-        }
+
+    Vector3d pos_forward;
+    Vector3d pos_backward;
+    double clk_forward = 0.0;
+    double clk_backward = 0.0;
+    double drift_dummy = 0.0;
+    const double dt = 0.5;
+
+    if (computeBroadcastState(*this, time + dt, pos_forward, clk_forward, drift_dummy) &&
+        computeBroadcastState(*this, time - dt, pos_backward, clk_backward, drift_dummy)) {
+        vel = (pos_forward - pos_backward) / (2.0 * dt);
+        clock_drift = (clk_forward - clk_backward) / (2.0 * dt);
+    } else {
+        vel.setZero();
     }
-    
-    // True anomaly
-    double nu = std::atan2(std::sqrt(1 - e*e) * std::sin(E), std::cos(E) - e);
-    
-    // Second harmonic perturbations
-    double sin2u = std::sin(2.0 * (omega + nu));
-    double cos2u = std::cos(2.0 * (omega + nu));
-    double du = cus * sin2u + cuc * cos2u; // argument of latitude correction
-    double dr = crs * sin2u + crc * cos2u; // radius correction
-    double di = cis * sin2u + cic * cos2u; // inclination correction
 
-    // Corrected argument of latitude, radius, and inclination
-    double u = omega + nu + du;
-    double r = a * (1.0 - e * std::cos(E)) + dr;
-    double i = i0 + idot * dt + di;
-
-    // Position in orbital plane
-    double x_orb = r * std::cos(u);
-    double y_orb = r * std::sin(u);
-    const double OMEGA_E = 7.2921150e-5;    // WGS84 Earth rotation rate (rad/s) - per IS-GPS-200
-    double Omega = omega0 + (omega_dot - OMEGA_E) * dt - OMEGA_E * toe.tow;
-    
-    // ECEF coordinates
-    pos(0) = x_orb * std::cos(Omega) - y_orb * std::cos(i) * std::sin(Omega);
-    pos(1) = x_orb * std::sin(Omega) + y_orb * std::cos(i) * std::cos(Omega);
-    pos(2) = y_orb * std::sin(i);
-    
-    // Simplified velocity (would be more complex in real implementation)
-    vel.setZero();
-    
-    // Clock correction
-    double dt_clock = time - toc;
-    clock_bias = af0 + af1 * dt_clock + af2 * dt_clock * dt_clock;
-
-    // Relativistic correction
-    const double F = -4.442807633e-10; // s/m^(1/2)
-    clock_bias += F * e * sqrt_a * std::sin(E);
-
-    clock_drift = af1 + 2.0 * af2 * dt_clock;
-    
     return true;
 }
 
 bool Ephemeris::isValid(const GNSSTime& time) const {
     if (!valid) return false;
     double age = std::abs(time - toe);
-    return age <= 7200.0; // 2 hours (inclusive)
+    return age <= 14400.0; // 4 hours (RTKLIB MAXDTOE=7200 but relaxed for sparse nav data)
 }
 
 double Ephemeris::getAge(const GNSSTime& time) const {
@@ -165,15 +218,21 @@ NavigationData::SatelliteGeometry NavigationData::calculateGeometry(
     Vector3d los = satellite_pos - receiver_pos;
     geom.distance = los.norm();
     
-    // Convert to local coordinates for elevation/azimuth
-    Vector3d up = receiver_pos.normalized();
-    Vector3d east = Vector3d(-receiver_pos(1), receiver_pos(0), 0.0).normalized();
-    Vector3d north = up.cross(east);
-    
-    Vector3d los_local;
-    los_local(0) = los.dot(east);
-    los_local(1) = los.dot(north);
-    los_local(2) = los.dot(up);
+    double lat = 0.0;
+    double lon = 0.0;
+    double height = 0.0;
+    ecefToGeodetic(receiver_pos, lat, lon, height);
+
+    const double sin_lat = std::sin(lat);
+    const double cos_lat = std::cos(lat);
+    const double sin_lon = std::sin(lon);
+    const double cos_lon = std::cos(lon);
+
+    Vector3d east(-sin_lon, cos_lon, 0.0);
+    Vector3d north(-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat);
+    Vector3d up(cos_lat * cos_lon, cos_lat * sin_lon, sin_lat);
+
+    Vector3d los_local(los.dot(east), los.dot(north), los.dot(up));
     
     geom.elevation = std::atan2(los_local(2), std::sqrt(los_local(0)*los_local(0) + los_local(1)*los_local(1)));
     geom.azimuth = std::atan2(los_local(0), los_local(1));

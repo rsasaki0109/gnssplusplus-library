@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(gnss_lib CXX)
+project(gnss_lib C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,10 +17,11 @@ set(GNSS_SOURCES
     src/algorithms/ppp.cpp
 )
 
-# List problematic files for the no-optimization library
+# List source files for the no-optimization library
 set(GNSS_SOURCES_NO_OPTIMIZATION
     src/algorithms/rtk.cpp
     src/algorithms/spp.cpp
+    src/algorithms/lambda.cpp
     src/core/navigation.cpp
     src/core/observation.cpp
 )
