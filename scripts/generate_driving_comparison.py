@@ -191,6 +191,7 @@ def match_to_reference(
                 status=epoch.status,
             )
         )
+    matched.sort(key=lambda epoch: epoch.tow)
     return matched
 
 
@@ -226,6 +227,85 @@ def cdf_xy(matched: list[MatchedEpoch]) -> tuple[np.ndarray, np.ndarray]:
     return horiz, pct
 
 
+def matched_segments(
+    matched: list[MatchedEpoch],
+    max_gap_s: float,
+) -> list[np.ndarray]:
+    if not matched:
+        return []
+
+    segments: list[np.ndarray] = []
+    start = 0
+    for idx in range(1, len(matched) + 1):
+        split = idx == len(matched)
+        if not split:
+            split = (matched[idx].tow - matched[idx - 1].tow) > max_gap_s
+        if split:
+            segment = matched[start:idx]
+            if len(segment) >= 2:
+                segments.append(
+                    np.array([[epoch.east_m, epoch.north_m] for epoch in segment])
+                )
+            start = idx
+    return segments
+
+
+def plot_solver_trajectory(
+    ax: plt.Axes,
+    matched: list[MatchedEpoch],
+    color: str,
+    label: str,
+    fixed_status: int,
+    max_gap_s: float,
+) -> None:
+    segments = matched_segments(matched, max_gap_s)
+    line_labeled = False
+    for segment in segments:
+        ax.plot(
+            segment[:, 0],
+            segment[:, 1],
+            color=color,
+            linewidth=1.2,
+            alpha=0.8,
+            label=label if not line_labeled else None,
+        )
+        line_labeled = True
+
+    non_fixed = np.array(
+        [
+            [epoch.east_m, epoch.north_m]
+            for epoch in matched
+            if epoch.status != fixed_status
+        ]
+    )
+    fixed = np.array(
+        [
+            [epoch.east_m, epoch.north_m]
+            for epoch in matched
+            if epoch.status == fixed_status
+        ]
+    )
+
+    if len(non_fixed):
+        ax.scatter(
+            non_fixed[:, 0],
+            non_fixed[:, 1],
+            s=8,
+            color=color,
+            alpha=0.20,
+            linewidths=0.0,
+        )
+    if len(fixed):
+        ax.scatter(
+            fixed[:, 0],
+            fixed[:, 1],
+            s=10,
+            color=color,
+            alpha=0.85,
+            label=f"{label} fixed",
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--lib-pos", type=Path, required=True)
@@ -240,10 +320,9 @@ def main() -> None:
     lib_epochs = read_libgnss_pos(args.lib_pos)
     rtklib_epochs = read_rtklib_pos(args.rtklib_pos)
     origin = reference[0]
+    max_gap_s = 2.0
 
     ref_enu = trajectory_enu(reference, origin)
-    lib_enu = trajectory_enu(lib_epochs, origin)
-    rtklib_enu = trajectory_enu(rtklib_epochs, origin)
     lib_matched = match_to_reference(lib_epochs, reference, args.match_tolerance)
     rtklib_matched = match_to_reference(rtklib_epochs, reference, args.match_tolerance)
 
@@ -254,18 +333,23 @@ def main() -> None:
 
     ax = axes[0, 0]
     ax.plot(ref_enu[:, 0], ref_enu[:, 1], color="black", linewidth=2.0, label="Ground truth")
-    if len(rtklib_enu):
-        ax.plot(rtklib_enu[:, 0], rtklib_enu[:, 1], color="#1f77b4", linewidth=1.4, alpha=0.9, label="RTKLIB")
-    if len(lib_enu):
-        ax.plot(lib_enu[:, 0], lib_enu[:, 1], color="#d97706", linewidth=1.4, alpha=0.85, label="libgnss++")
-
-    rtklib_fixed = np.array([[epoch.east_m, epoch.north_m] for epoch in rtklib_matched if epoch.status == 1])
-    lib_fixed = np.array([[epoch.east_m, epoch.north_m] for epoch in lib_matched if epoch.status == 4])
-    if len(rtklib_fixed):
-        ax.scatter(rtklib_fixed[:, 0], rtklib_fixed[:, 1], s=8, color="#1f77b4", alpha=0.8, label="RTKLIB fixed")
-    if len(lib_fixed):
-        ax.scatter(lib_fixed[:, 0], lib_fixed[:, 1], s=8, color="#d97706", alpha=0.8, label="libgnss++ fixed")
-    ax.set_title("Trajectory Overlay")
+    plot_solver_trajectory(
+        ax,
+        rtklib_matched,
+        color="#1f77b4",
+        label="RTKLIB matched",
+        fixed_status=1,
+        max_gap_s=max_gap_s,
+    )
+    plot_solver_trajectory(
+        ax,
+        lib_matched,
+        color="#d97706",
+        label="libgnss++ matched",
+        fixed_status=4,
+        max_gap_s=max_gap_s,
+    )
+    ax.set_title("Trajectory Overlay (matched epochs only)")
     ax.set_xlabel("East (m)")
     ax.set_ylabel("North (m)")
     ax.grid(alpha=0.3)
@@ -317,6 +401,8 @@ def main() -> None:
             "",
             "RTKLIB config:",
             "  GPS-only, L1+L2, kinematic, continuous AR",
+            "",
+            f"Trajectory panel: matched epochs only, gaps > {max_gap_s:.0f}s are not connected",
         ]
     )
     ax.text(0.0, 1.0, text, va="top", ha="left", family="monospace", fontsize=10.5)
