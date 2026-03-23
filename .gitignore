@@ -22,8 +22,9 @@ rtklib_diag.txt
 test_rinex_read
 test_rinex_read.cpp
 
-# Generated
+# Generated (except docs/)
 *.png
+!docs/*.png
 *.html
 *.kml
 *.pos
