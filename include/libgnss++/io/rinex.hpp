@@ -50,6 +50,8 @@ public:
         Vector3d approximate_position;
         Vector3d antenna_delta;
         std::vector<std::string> observation_types;
+        // RINEX 3: per-system observation types (key = system char, e.g. "G", "R", "E")
+        std::map<char, std::vector<std::string>> system_obs_types;
         double interval = 0.0;
         GNSSTime first_obs;
         GNSSTime last_obs;

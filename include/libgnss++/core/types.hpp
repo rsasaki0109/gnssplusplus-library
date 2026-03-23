@@ -4,6 +4,7 @@
 #include <string>
 #include <chrono>
 #include <Eigen/Dense>
+#include <libgnss++/core/constants.hpp>
 
 namespace libgnss {
 
@@ -233,17 +234,7 @@ struct ECEFCoord {
     void fromVector(const Vector3d& v) { x = v(0); y = v(1); z = v(2); }
 };
 
-/**
- * @brief Constants
- */
-namespace constants {
-    constexpr double SPEED_OF_LIGHT = 299792458.0;     ///< Speed of light in m/s
-    constexpr double GPS_L1_FREQ = 1575.42e6;          ///< GPS L1 frequency in Hz
-    constexpr double GPS_L2_FREQ = 1227.60e6;          ///< GPS L2 frequency in Hz
-    constexpr double GPS_L5_FREQ = 1176.45e6;          ///< GPS L5 frequency in Hz
-    constexpr double WGS84_A = 6378137.0;              ///< WGS84 semi-major axis
-    constexpr double WGS84_F = 1.0/298.257223563;      ///< WGS84 flattening
-    constexpr double WGS84_E2 = 2*WGS84_F - WGS84_F*WGS84_F; ///< WGS84 eccentricity squared
-}
+// Physical constants are defined in <libgnss++/core/constants.hpp>.
+// The constants:: namespace is already available via that include.
 
 } // namespace libgnss
