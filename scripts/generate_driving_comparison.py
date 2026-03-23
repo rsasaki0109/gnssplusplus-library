@@ -21,6 +21,31 @@ GPS_EPOCH = dt.datetime(1980, 1, 6)
 WGS84_A = 6378137.0
 WGS84_E2 = 6.69437999014e-3
 
+SOLVER_LINE_COLORS = {
+    "RTKLIB": "#2563eb",
+    "libgnss++": "#d97706",
+}
+
+SOLVER_MARKERS = {
+    "RTKLIB": "s",
+    "libgnss++": "o",
+}
+
+STATUS_STYLES = {
+    "RTKLIB": {
+        1: ("FIXED", "#16a34a"),
+        2: ("FLOAT", "#f59e0b"),
+        4: ("DGPS", "#0ea5e9"),
+        5: ("SINGLE", "#dc2626"),
+    },
+    "libgnss++": {
+        4: ("FIXED", "#16a34a"),
+        3: ("FLOAT", "#f59e0b"),
+        2: ("DGPS", "#0ea5e9"),
+        1: ("SPP", "#dc2626"),
+    },
+}
+
 
 @dataclass(frozen=True)
 class ReferenceEpoch:
@@ -47,11 +72,22 @@ class SolutionEpoch:
 @dataclass(frozen=True)
 class MatchedEpoch:
     tow: float
+    traj_east_m: float
+    traj_north_m: float
+    traj_up_m: float
     east_m: float
     north_m: float
     up_m: float
     horiz_error_m: float
     status: int
+
+
+@dataclass(frozen=True)
+class PairedEpoch:
+    tow: float
+    lib_epoch: MatchedEpoch
+    rtklib_epoch: MatchedEpoch
+    gap_m: float
 
 
 def llh_to_ecef(lat_deg: float, lon_deg: float, height_m: float) -> np.ndarray:
@@ -61,12 +97,12 @@ def llh_to_ecef(lat_deg: float, lon_deg: float, height_m: float) -> np.ndarray:
     cos_lat = math.cos(lat)
     sin_lon = math.sin(lon)
     cos_lon = math.cos(lon)
-    N = WGS84_A / math.sqrt(1.0 - WGS84_E2 * sin_lat * sin_lat)
+    n = WGS84_A / math.sqrt(1.0 - WGS84_E2 * sin_lat * sin_lat)
     return np.array(
         [
-            (N + height_m) * cos_lat * cos_lon,
-            (N + height_m) * cos_lat * sin_lon,
-            (N * (1.0 - WGS84_E2) + height_m) * sin_lat,
+            (n + height_m) * cos_lat * cos_lon,
+            (n + height_m) * cos_lat * sin_lon,
+            (n * (1.0 - WGS84_E2) + height_m) * sin_lat,
         ]
     )
 
@@ -92,7 +128,7 @@ def read_reference_csv(path: Path) -> list[ReferenceEpoch]:
     rows: list[ReferenceEpoch] = []
     with path.open(newline="") as handle:
         reader = csv.reader(handle)
-        next(reader)  # header
+        next(reader)
         for row in reader:
             tow = float(row[0])
             week = int(row[1])
@@ -180,10 +216,14 @@ def match_to_reference(
         ref = min(candidates, key=lambda item: abs(item.tow - epoch.tow))
         if ref.week != epoch.week or abs(ref.tow - epoch.tow) > tolerance_s:
             continue
+        traj_enu = ecef_to_enu(epoch.ecef - reference[0].ecef, reference[0].lat_deg, reference[0].lon_deg)
         enu = ecef_to_enu(epoch.ecef - ref.ecef, ref.lat_deg, ref.lon_deg)
         matched.append(
             MatchedEpoch(
                 tow=epoch.tow,
+                traj_east_m=float(traj_enu[0]),
+                traj_north_m=float(traj_enu[1]),
+                traj_up_m=float(traj_enu[2]),
                 east_m=float(enu[0]),
                 north_m=float(enu[1]),
                 up_m=float(enu[2]),
@@ -211,6 +251,8 @@ def summarize(matched: list[MatchedEpoch], fixed_status: int, label: str) -> dic
     if not matched:
         raise SystemExit(f"No epochs matched reference.csv for {label}")
     horiz = np.array([epoch.horiz_error_m for epoch in matched])
+    up_signed = np.array([epoch.up_m for epoch in matched])
+    up_abs = np.abs(up_signed)
     fix_count = sum(epoch.status == fixed_status for epoch in matched)
     return {
         "epochs": len(matched),
@@ -218,6 +260,9 @@ def summarize(matched: list[MatchedEpoch], fixed_status: int, label: str) -> dic
         "median_h_m": float(np.median(horiz)),
         "p95_h_m": float(np.percentile(horiz, 95)),
         "max_h_m": float(np.max(horiz)),
+        "median_abs_up_m": float(np.median(up_abs)),
+        "p95_abs_up_m": float(np.percentile(up_abs, 95)),
+        "mean_up_m": float(np.mean(up_signed)),
     }
 
 
@@ -244,66 +289,129 @@ def matched_segments(
             segment = matched[start:idx]
             if len(segment) >= 2:
                 segments.append(
-                    np.array([[epoch.east_m, epoch.north_m] for epoch in segment])
+                    np.array([[epoch.traj_east_m, epoch.traj_north_m] for epoch in segment])
                 )
             start = idx
     return segments
 
 
+def status_style(solver: str, status: int) -> tuple[str, str]:
+    return STATUS_STYLES.get(solver, {}).get(status, (f"status {status}", "#64748b"))
+
+
+def pair_epochs(
+    lib_matched: list[MatchedEpoch],
+    rtklib_matched: list[MatchedEpoch],
+    tolerance_s: float,
+) -> list[PairedEpoch]:
+    rt_tows = [epoch.tow for epoch in rtklib_matched]
+    pairs: list[PairedEpoch] = []
+    for lib_epoch in lib_matched:
+        idx = bisect.bisect_left(rt_tows, lib_epoch.tow)
+        candidates = [
+            rtklib_matched[j]
+            for j in (idx - 1, idx, idx + 1)
+            if 0 <= j < len(rtklib_matched)
+        ]
+        if not candidates:
+            continue
+        rt_epoch = min(candidates, key=lambda item: abs(item.tow - lib_epoch.tow))
+        if abs(rt_epoch.tow - lib_epoch.tow) > tolerance_s:
+            continue
+        pairs.append(
+            PairedEpoch(
+                tow=lib_epoch.tow,
+                lib_epoch=lib_epoch,
+                rtklib_epoch=rt_epoch,
+                gap_m=rt_epoch.horiz_error_m - lib_epoch.horiz_error_m,
+            )
+        )
+    return pairs
+
+
+def select_zoom_window(
+    lib_matched: list[MatchedEpoch],
+    rtklib_matched: list[MatchedEpoch],
+    tolerance_s: float,
+) -> tuple[float, float, PairedEpoch]:
+    pairs = pair_epochs(lib_matched, rtklib_matched, tolerance_s)
+    if not pairs:
+        raise SystemExit("No overlapping libgnss++ / RTKLIB epochs for zoom selection")
+
+    def score(pair: PairedEpoch) -> float:
+        bonus = 0.0
+        if pair.lib_epoch.status == 4 and pair.rtklib_epoch.status != 1:
+            bonus += 12.0
+        elif pair.lib_epoch.status in (3, 4) and pair.rtklib_epoch.status == 5:
+            bonus += 6.0
+        return pair.gap_m + bonus
+
+    selected = max(pairs, key=score)
+    half_window_s = 3.0
+    return selected.tow - half_window_s, selected.tow + half_window_s, selected
+
+
+def filter_window(epochs: list[MatchedEpoch], start_tow: float, end_tow: float) -> list[MatchedEpoch]:
+    return [epoch for epoch in epochs if start_tow <= epoch.tow <= end_tow]
+
+
+def reference_window(reference: list[ReferenceEpoch], start_tow: float, end_tow: float) -> list[ReferenceEpoch]:
+    return [epoch for epoch in reference if start_tow <= epoch.tow <= end_tow]
+
+
 def plot_solver_trajectory(
     ax: plt.Axes,
     matched: list[MatchedEpoch],
-    color: str,
-    label: str,
-    fixed_status: int,
+    solver: str,
     max_gap_s: float,
+    point_size: float,
+    show_status_legend: bool = False,
 ) -> None:
+    line_color = SOLVER_LINE_COLORS[solver]
+    marker = SOLVER_MARKERS[solver]
     segments = matched_segments(matched, max_gap_s)
-    line_labeled = False
     for segment in segments:
         ax.plot(
             segment[:, 0],
             segment[:, 1],
-            color=color,
-            linewidth=1.2,
-            alpha=0.8,
-            label=label if not line_labeled else None,
+            color=line_color,
+            linewidth=1.2 if point_size < 20 else 1.5,
+            alpha=0.35 if point_size < 20 else 0.45,
+            zorder=1,
         )
-        line_labeled = True
 
-    non_fixed = np.array(
-        [
-            [epoch.east_m, epoch.north_m]
-            for epoch in matched
-            if epoch.status != fixed_status
-        ]
-    )
-    fixed = np.array(
-        [
-            [epoch.east_m, epoch.north_m]
-            for epoch in matched
-            if epoch.status == fixed_status
-        ]
-    )
+    seen_statuses: set[int] = set()
+    for status in sorted({epoch.status for epoch in matched}):
+        points = np.array(
+            [
+                [epoch.traj_east_m, epoch.traj_north_m]
+                for epoch in matched
+                if epoch.status == status
+            ]
+        )
+        if not len(points):
+            continue
+        status_name, status_color = status_style(solver, status)
+        label = None
+        if show_status_legend and status not in seen_statuses:
+            label = f"{solver} {status_name}"
+            seen_statuses.add(status)
+        ax.scatter(
+            points[:, 0],
+            points[:, 1],
+            s=point_size,
+            marker=marker,
+            facecolor=status_color,
+            edgecolor="white",
+            linewidth=0.25 if point_size < 20 else 0.45,
+            alpha=0.90 if "FIXED" in status_name else 0.72,
+            label=label,
+            zorder=3 if "FIXED" in status_name else 2,
+        )
 
-    if len(non_fixed):
-        ax.scatter(
-            non_fixed[:, 0],
-            non_fixed[:, 1],
-            s=8,
-            color=color,
-            alpha=0.20,
-            linewidths=0.0,
-        )
-    if len(fixed):
-        ax.scatter(
-            fixed[:, 0],
-            fixed[:, 1],
-            s=10,
-            color=color,
-            alpha=0.85,
-            label=f"{label} fixed",
-        )
+
+def solver_proxy_label(solver: str) -> str:
+    return f"{solver} track"
 
 
 def main() -> None:
@@ -325,31 +433,29 @@ def main() -> None:
     ref_enu = trajectory_enu(reference, origin)
     lib_matched = match_to_reference(lib_epochs, reference, args.match_tolerance)
     rtklib_matched = match_to_reference(rtklib_epochs, reference, args.match_tolerance)
+    zoom_start, zoom_end, zoom_pair = select_zoom_window(
+        lib_matched,
+        rtklib_matched,
+        tolerance_s=args.match_tolerance,
+    )
+
+    ref_zoom = reference_window(reference, zoom_start, zoom_end)
+    ref_zoom_enu = trajectory_enu(ref_zoom, origin)
+    lib_zoom = filter_window(lib_matched, zoom_start, zoom_end)
+    rtklib_zoom = filter_window(rtklib_matched, zoom_start, zoom_end)
 
     lib_summary = summarize(lib_matched, fixed_status=4, label="libgnss++")
     rtklib_summary = summarize(rtklib_matched, fixed_status=1, label="RTKLIB")
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10.5))
 
     ax = axes[0, 0]
     ax.plot(ref_enu[:, 0], ref_enu[:, 1], color="black", linewidth=2.0, label="Ground truth")
-    plot_solver_trajectory(
-        ax,
-        rtklib_matched,
-        color="#1f77b4",
-        label="RTKLIB matched",
-        fixed_status=1,
-        max_gap_s=max_gap_s,
-    )
-    plot_solver_trajectory(
-        ax,
-        lib_matched,
-        color="#d97706",
-        label="libgnss++ matched",
-        fixed_status=4,
-        max_gap_s=max_gap_s,
-    )
-    ax.set_title("Trajectory Overlay (matched epochs only)")
+    ax.plot([], [], color=SOLVER_LINE_COLORS["RTKLIB"], linewidth=1.5, label=solver_proxy_label("RTKLIB"))
+    ax.plot([], [], color=SOLVER_LINE_COLORS["libgnss++"], linewidth=1.5, label=solver_proxy_label("libgnss++"))
+    plot_solver_trajectory(ax, rtklib_matched, "RTKLIB", max_gap_s=max_gap_s, point_size=8)
+    plot_solver_trajectory(ax, lib_matched, "libgnss++", max_gap_s=max_gap_s, point_size=8)
+    ax.set_title("Trajectory Overlay (status-colored matched epochs)")
     ax.set_xlabel("East (m)")
     ax.set_ylabel("North (m)")
     ax.grid(alpha=0.3)
@@ -357,30 +463,47 @@ def main() -> None:
     ax.legend(loc="best", fontsize=9)
 
     ax = axes[0, 1]
-    lib_t = np.array([epoch.tow for epoch in lib_matched])
-    rtklib_t = np.array([epoch.tow for epoch in rtklib_matched])
-    lib_h = np.array([epoch.horiz_error_m for epoch in lib_matched])
-    rtklib_h = np.array([epoch.horiz_error_m for epoch in rtklib_matched])
-    ax.semilogy((rtklib_t - rtklib_t[0]) / 60.0, rtklib_h, color="#1f77b4", linewidth=1.1, label="RTKLIB")
-    ax.semilogy((lib_t - lib_t[0]) / 60.0, lib_h, color="#d97706", linewidth=1.1, label="libgnss++")
-    ax.set_title("Horizontal Error vs Ground Truth")
-    ax.set_xlabel("Time from start (min)")
-    ax.set_ylabel("Horizontal error (m, log scale)")
+    if len(ref_zoom_enu):
+        ax.plot(ref_zoom_enu[:, 0], ref_zoom_enu[:, 1], color="black", linewidth=2.0, label="Ground truth")
+    plot_solver_trajectory(
+        ax,
+        rtklib_zoom,
+        "RTKLIB",
+        max_gap_s=max_gap_s,
+        point_size=40,
+        show_status_legend=True,
+    )
+    plot_solver_trajectory(
+        ax,
+        lib_zoom,
+        "libgnss++",
+        max_gap_s=max_gap_s,
+        point_size=40,
+        show_status_legend=True,
+    )
+    all_zoom_points = np.vstack(
+        [
+            ref_zoom_enu[:, :2] if len(ref_zoom_enu) else np.empty((0, 2)),
+            np.array([[epoch.traj_east_m, epoch.traj_north_m] for epoch in lib_zoom]) if lib_zoom else np.empty((0, 2)),
+            np.array([[epoch.traj_east_m, epoch.traj_north_m] for epoch in rtklib_zoom]) if rtklib_zoom else np.empty((0, 2)),
+        ]
+    )
+    xmin, ymin = np.min(all_zoom_points, axis=0)
+    xmax, ymax = np.max(all_zoom_points, axis=0)
+    pad = 10.0
+    ax.set_xlim(float(xmin - pad), float(xmax + pad))
+    ax.set_ylim(float(ymin - pad), float(ymax + pad))
+    ax.set_title(
+        "Zoom: RTKLIB weak / libgnss++ stable\n"
+        f"tow {zoom_start:.1f}-{zoom_end:.1f}s, lib={zoom_pair.lib_epoch.horiz_error_m:.1f}m, RTKLIB={zoom_pair.rtklib_epoch.horiz_error_m:.1f}m"
+    )
+    ax.set_xlabel("East (m)")
+    ax.set_ylabel("North (m)")
     ax.grid(alpha=0.3)
-    ax.legend(loc="upper right")
+    ax.axis("equal")
+    ax.legend(loc="best", fontsize=8, ncol=2)
 
-    ax = axes[1, 0]
-    rtklib_x, rtklib_pct = cdf_xy(rtklib_matched)
-    lib_x, lib_pct = cdf_xy(lib_matched)
-    ax.semilogx(rtklib_x, rtklib_pct, color="#1f77b4", linewidth=1.4, label="RTKLIB")
-    ax.semilogx(lib_x, lib_pct, color="#d97706", linewidth=1.4, label="libgnss++")
-    ax.set_title("Horizontal Error CDF")
-    ax.set_xlabel("Horizontal error (m, log scale)")
-    ax.set_ylabel("CDF (%)")
-    ax.grid(alpha=0.3)
-    ax.legend(loc="lower right")
-
-    ax = axes[1, 1]
+    ax = axes[0, 2]
     ax.axis("off")
     text = "\n".join(
         [
@@ -389,23 +512,63 @@ def main() -> None:
             "",
             f"libgnss++  matched={lib_summary['epochs']}",
             f"  fix rate={lib_summary['fix_rate_pct']:.1f}%",
-            f"  median h={lib_summary['median_h_m']:.2f} m",
+            f"  median h={lib_summary['median_h_m']:.3f} m",
             f"  p95 h={lib_summary['p95_h_m']:.2f} m",
-            f"  max h={lib_summary['max_h_m']:.1f} m",
+            f"  p95 |up|={lib_summary['p95_abs_up_m']:.2f} m",
+            f"  mean up={lib_summary['mean_up_m']:+.2f} m",
             "",
             f"RTKLIB     matched={rtklib_summary['epochs']}",
             f"  fix rate={rtklib_summary['fix_rate_pct']:.1f}%",
-            f"  median h={rtklib_summary['median_h_m']:.2f} m",
+            f"  median h={rtklib_summary['median_h_m']:.3f} m",
             f"  p95 h={rtklib_summary['p95_h_m']:.2f} m",
-            f"  max h={rtklib_summary['max_h_m']:.1f} m",
+            f"  p95 |up|={rtklib_summary['p95_abs_up_m']:.2f} m",
+            f"  mean up={rtklib_summary['mean_up_m']:+.2f} m",
+            "",
+            "Status colors:",
+            "  green=FIXED, amber=FLOAT, red=SPP/SINGLE",
+            "Markers: circle=libgnss++, square=RTKLIB",
             "",
             "RTKLIB config:",
             "  GPS-only, L1+L2, kinematic, continuous AR",
-            "",
-            f"Trajectory panel: matched epochs only, gaps > {max_gap_s:.0f}s are not connected",
         ]
     )
-    ax.text(0.0, 1.0, text, va="top", ha="left", family="monospace", fontsize=10.5)
+    ax.text(0.0, 1.0, text, va="top", ha="left", family="monospace", fontsize=10.2)
+
+    ax = axes[1, 0]
+    lib_t = np.array([epoch.tow for epoch in lib_matched])
+    rtklib_t = np.array([epoch.tow for epoch in rtklib_matched])
+    lib_h = np.array([epoch.horiz_error_m for epoch in lib_matched])
+    rtklib_h = np.array([epoch.horiz_error_m for epoch in rtklib_matched])
+    ax.semilogy((rtklib_t - rtklib_t[0]) / 60.0, rtklib_h, color=SOLVER_LINE_COLORS["RTKLIB"], linewidth=1.1, label="RTKLIB")
+    ax.semilogy((lib_t - lib_t[0]) / 60.0, lib_h, color=SOLVER_LINE_COLORS["libgnss++"], linewidth=1.1, label="libgnss++")
+    ax.set_title("Horizontal Error vs Ground Truth")
+    ax.set_xlabel("Time from start (min)")
+    ax.set_ylabel("Horizontal error (m, log scale)")
+    ax.grid(alpha=0.3)
+    ax.legend(loc="upper right")
+
+    ax = axes[1, 1]
+    lib_up = np.array([epoch.up_m for epoch in lib_matched])
+    rtklib_up = np.array([epoch.up_m for epoch in rtklib_matched])
+    ax.plot((rtklib_t - rtklib_t[0]) / 60.0, rtklib_up, color=SOLVER_LINE_COLORS["RTKLIB"], linewidth=1.0, label="RTKLIB")
+    ax.plot((lib_t - lib_t[0]) / 60.0, lib_up, color=SOLVER_LINE_COLORS["libgnss++"], linewidth=1.0, label="libgnss++")
+    ax.axhline(0.0, color="#475569", linewidth=0.9, linestyle="--", alpha=0.8)
+    ax.set_title("Signed Vertical Error vs Ground Truth")
+    ax.set_xlabel("Time from start (min)")
+    ax.set_ylabel("Up error (m)")
+    ax.grid(alpha=0.3)
+    ax.legend(loc="upper right")
+
+    ax = axes[1, 2]
+    rtklib_x, rtklib_pct = cdf_xy(rtklib_matched)
+    lib_x, lib_pct = cdf_xy(lib_matched)
+    ax.semilogx(rtklib_x, rtklib_pct, color=SOLVER_LINE_COLORS["RTKLIB"], linewidth=1.4, label="RTKLIB")
+    ax.semilogx(lib_x, lib_pct, color=SOLVER_LINE_COLORS["libgnss++"], linewidth=1.4, label="libgnss++")
+    ax.set_title("Horizontal Error CDF")
+    ax.set_xlabel("Horizontal error (m, log scale)")
+    ax.set_ylabel("CDF (%)")
+    ax.grid(alpha=0.3)
+    ax.legend(loc="lower right")
 
     fig.suptitle(args.title, fontsize=16)
     fig.tight_layout()

@@ -17,7 +17,11 @@ ln -sf Tokyo_Data/Odaiba/base_trimble.obs base.obs
 ln -sf Tokyo_Data/Odaiba/base.nav navigation.nav
 
 cd "${ROOT_DIR}"
-./build/examples/rtk_positioning data/driving
+./build/apps/gnss_solve \
+    --data-dir data/driving \
+    --out output/rtk_solution.pos \
+    --kml output/rtk_solution.kml \
+    --mode kinematic
 
 "${RTKLIB_BIN}" \
     -k "${SCRIPT_DIR}/rtklib_odaiba.conf" \

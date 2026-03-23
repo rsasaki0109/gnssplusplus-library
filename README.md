@@ -99,6 +99,33 @@ cmake ..
 make -j$(nproc)
 ```
 
+## Command-Line Tools
+
+`libgnss++` now ships with a post-processing CLI named `gnss_solve`. It fills the same role as RTKLIB's RINEX batch solver, but keeps a project-native name instead of mirroring RTKLIB's command names.
+
+```bash
+./build/apps/gnss_solve \
+  --data-dir data/driving \
+  --out output/rtk_solution.pos \
+  --kml output/rtk_solution.kml \
+  --mode kinematic
+```
+
+You can also point it at explicit files and override solver knobs:
+
+```bash
+./build/apps/gnss_solve \
+  --rover data/driving/rover.obs \
+  --base data/driving/base.obs \
+  --nav data/driving/navigation.nav \
+  --out output/custom_solution.pos \
+  --format llh \
+  --ratio 3.0 \
+  --min-ar-sats 5 \
+  --elevation-mask-deg 15 \
+  --base-ecef -3962108.7 3381309.5 3668678.8
+```
+
 ### Requirements
 
 - C++17 compiler (GCC 7+, Clang 6+)
@@ -118,6 +145,9 @@ bash tests/run_regression.sh
 ## Analysis Tools
 
 ```bash
+# Generate a libgnss++ RTK solution from RINEX
+./build/apps/gnss_solve --data-dir data/driving --out output/rtk_solution.pos
+
 # Quick statistics
 python3 tools/rtk_stats.py output/rtk_solution.pos
 

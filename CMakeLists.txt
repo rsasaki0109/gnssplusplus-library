@@ -44,4 +44,5 @@ target_link_libraries(gnss_lib_noopt PUBLIC Eigen3::Eigen)
 
 # Add subdirectories
 add_subdirectory(examples)
+add_subdirectory(apps)
 add_subdirectory(tests)
