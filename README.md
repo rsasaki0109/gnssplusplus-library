@@ -2,15 +2,23 @@
 
 Self-contained RTK/SPP positioning library in modern C++17. No RTKLIB runtime dependency.
 
-## Performance
+## Performance vs RTKLIB
 
-| Dataset | Baseline | Fix Rate | RMS (horizontal) |
-|---------|----------|----------|-------------------|
-| Kinematic | 1.2 km | **100%** | **12 mm** |
-| Short static | 36 m | **99%** | 90 mm |
-| Long static | 3.3 km | **52%** | 104 mm |
+Tested on 3 open datasets with GPS L1+L2 dual-frequency observations.
 
-Instant first fix (epoch 1). Kinematic fix rate exceeds RTKLIB (98.3%).
+| Dataset | Baseline | libgnss++ Fix Rate | RTKLIB Fix Rate | libgnss++ RMS (h) | RTKLIB RMS (h) |
+|---------|----------|--------------------|-----------------|--------------------|-----------------|
+| **Kinematic** | 1.2 km | **100%** | 98.3% | **12 mm** | 8 mm |
+| **Short static** | 36 m | **99%** | 100% | 90 mm | — |
+| **Long static** | 3.3 km | 52% | 60.8% | 104 mm | 14 mm* |
+
+\* RTKLIB の long static 結果は RINEX header 概略位置と比較すると高さ方向に 2.2m のオフセットがあり、libgnss++ の方が概略位置に近い結果 (16cm) を示す場合がある。
+
+**Highlights:**
+- Instant first fix (epoch 1) on all datasets
+- Kinematic fix rate exceeds RTKLIB (100% vs 98.3%)
+- Zero external GNSS library dependency (RTKLIB not required at runtime)
+- Wide-lane/Narrow-lane AR enables long baseline ambiguity resolution
 
 ## Features
 
