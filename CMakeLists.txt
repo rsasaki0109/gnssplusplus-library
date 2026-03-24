@@ -3,6 +3,7 @@ project(gnss_lib C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+include(CTest)
 
 # Find necessary packages
 find_package(Eigen3 REQUIRED)
