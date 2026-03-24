@@ -30,16 +30,16 @@ set(GNSS_SOURCES_NO_OPTIMIZATION
 add_library(gnss_lib STATIC ${GNSS_SOURCES})
 target_include_directories(gnss_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${EIGEN3_INCLUDE_DIR}
 )
+target_link_libraries(gnss_lib PUBLIC Eigen3::Eigen)
 
 # Create the no-optimization library
 add_library(gnss_lib_noopt STATIC ${GNSS_SOURCES_NO_OPTIMIZATION})
 target_compile_options(gnss_lib_noopt PRIVATE -O0)
 target_include_directories(gnss_lib_noopt PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${EIGEN3_INCLUDE_DIR}
 )
+target_link_libraries(gnss_lib_noopt PUBLIC Eigen3::Eigen)
 
 # Add subdirectories
 add_subdirectory(examples)
