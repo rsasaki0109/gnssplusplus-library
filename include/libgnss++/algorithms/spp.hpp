@@ -77,14 +77,21 @@ private:
     PositionSolution solvePosition(const std::vector<Observation>& valid_obs,
                                  const NavigationData& nav,
                                  const GNSSTime& time);
-    
+
+    /**
+     * @brief Native weighted least-squares solver with atmospheric corrections
+     */
+    PositionSolution solvePositionLS(const std::vector<Observation>& valid_obs,
+                                    const NavigationData& nav,
+                                    const GNSSTime& time);
+
     /**
      * @brief Calculate predicted pseudorange
      */
     double calculatePredictedRange(const Vector3d& receiver_pos,
                                  const Vector3d& satellite_pos,
-                                 double receiver_clock_bias,
-                                 double satellite_clock_bias) const;
+                                 double receiver_clock_bias_m,
+                                 double satellite_clock_bias_s) const;
     
     /**
      * @brief Calculate geometry matrix (design matrix)

@@ -119,13 +119,79 @@ bool RINEXReader::readNavigationData(NavigationData& nav_data) {
 
     nav_data.clear();
 
-    // Skip header if not already done
+    // Skip header if not already done, but parse version info and iono params
     std::string line;
     bool header_found = false;
     while (readLine(line)) {
         if (line.find("END OF HEADER") != std::string::npos) {
             header_found = true;
             break;
+        }
+        // Parse header lines to get version info
+        if (line.length() >= 60) {
+            std::string label = line.substr(60);
+            if (label.find("RINEX VERSION") != std::string::npos) {
+                header_.version = std::stod(line.substr(0, 9));
+            }
+            // Parse Klobuchar ionosphere parameters (RINEX 2: ION ALPHA / ION BETA)
+            else if (label.find("ION ALPHA") != std::string::npos) {
+                // Format: 4 values in D-format, 12 chars each starting at col 2
+                auto parseDval = [](const std::string& s) -> double {
+                    std::string v = s;
+                    v.erase(0, v.find_first_not_of(' '));
+                    v.erase(v.find_last_not_of(' ') + 1);
+                    if (v.empty()) return 0.0;
+                    auto dp = v.find('D'); if (dp != std::string::npos) v[dp] = 'E';
+                    dp = v.find('d'); if (dp != std::string::npos) v[dp] = 'E';
+                    try { return std::stod(v); } catch (...) { return 0.0; }
+                };
+                nav_data.ionosphere_model.alpha[0] = parseDval(line.substr(2, 12));
+                nav_data.ionosphere_model.alpha[1] = parseDval(line.substr(14, 12));
+                nav_data.ionosphere_model.alpha[2] = parseDval(line.substr(26, 12));
+                nav_data.ionosphere_model.alpha[3] = parseDval(line.substr(38, 12));
+                nav_data.ionosphere_model.valid = true;
+            }
+            else if (label.find("ION BETA") != std::string::npos) {
+                auto parseDval = [](const std::string& s) -> double {
+                    std::string v = s;
+                    v.erase(0, v.find_first_not_of(' '));
+                    v.erase(v.find_last_not_of(' ') + 1);
+                    if (v.empty()) return 0.0;
+                    auto dp = v.find('D'); if (dp != std::string::npos) v[dp] = 'E';
+                    dp = v.find('d'); if (dp != std::string::npos) v[dp] = 'E';
+                    try { return std::stod(v); } catch (...) { return 0.0; }
+                };
+                nav_data.ionosphere_model.beta[0] = parseDval(line.substr(2, 12));
+                nav_data.ionosphere_model.beta[1] = parseDval(line.substr(14, 12));
+                nav_data.ionosphere_model.beta[2] = parseDval(line.substr(26, 12));
+                nav_data.ionosphere_model.beta[3] = parseDval(line.substr(38, 12));
+            }
+            // Parse IONOSPHERIC CORR (RINEX 3: GPSA / GPSB)
+            else if (label.find("IONOSPHERIC CORR") != std::string::npos) {
+                auto parseDval = [](const std::string& s) -> double {
+                    std::string v = s;
+                    v.erase(0, v.find_first_not_of(' '));
+                    v.erase(v.find_last_not_of(' ') + 1);
+                    if (v.empty()) return 0.0;
+                    auto dp = v.find('D'); if (dp != std::string::npos) v[dp] = 'E';
+                    dp = v.find('d'); if (dp != std::string::npos) v[dp] = 'E';
+                    try { return std::stod(v); } catch (...) { return 0.0; }
+                };
+                std::string corr_type = line.substr(0, 4);
+                corr_type.erase(corr_type.find_last_not_of(' ') + 1);
+                if (corr_type == "GPSA") {
+                    nav_data.ionosphere_model.alpha[0] = parseDval(line.substr(5, 12));
+                    nav_data.ionosphere_model.alpha[1] = parseDval(line.substr(17, 12));
+                    nav_data.ionosphere_model.alpha[2] = parseDval(line.substr(29, 12));
+                    nav_data.ionosphere_model.alpha[3] = parseDval(line.substr(41, 12));
+                    nav_data.ionosphere_model.valid = true;
+                } else if (corr_type == "GPSB") {
+                    nav_data.ionosphere_model.beta[0] = parseDval(line.substr(5, 12));
+                    nav_data.ionosphere_model.beta[1] = parseDval(line.substr(17, 12));
+                    nav_data.ionosphere_model.beta[2] = parseDval(line.substr(29, 12));
+                    nav_data.ionosphere_model.beta[3] = parseDval(line.substr(41, 12));
+                }
+            }
         }
     }
 
@@ -136,30 +202,82 @@ bool RINEXReader::readNavigationData(NavigationData& nav_data) {
     std::vector<std::string> eph_lines;
     int eph_detected = 0;
     int eph_parsed = 0;
+    int eph_skipped_non_gps = 0;
+    bool skipping_non_gps = false;
+    int skip_lines_remaining = 0;
+
+    // Detect RINEX version for navigation file format differences
+    bool is_rinex3 = (header_.version >= 3.0);
 
     try {
         while (readLine(line)) {
-            // Skip very short lines but allow shorter navigation data lines (last line of ephemeris can be short)
+            // Skip very short lines but allow shorter navigation data lines
             if (line.length() < 19) continue;
 
+            // If we're skipping a non-GPS satellite's record, count down lines
+            if (skipping_non_gps) {
+                skip_lines_remaining--;
+                if (skip_lines_remaining <= 0) {
+                    skipping_non_gps = false;
+                }
+                continue;
+            }
+
             // Check if this is start of new ephemeris
-            // Ephemeris records start with "PRN YY MM DD..." where:
-            // - PRN is 1-2 digits (" 1", "11")
-            // - YY is 2-digit year at position 3-4
-            // Data lines start with spaces and numbers but not this pattern
             bool is_new_ephemeris = false;
-            if (line.length() >= 5) {
-                // Check if positions 3-4 look like a year (digits)
+            bool is_gps = true;
+
+            if (is_rinex3 && line.length() >= 5) {
+                // RINEX 3: first char is system identifier (G, R, E, C, J, S)
+                // followed by 2-digit PRN, then 4-digit year
+                char sys_char = line[0];
+                bool is_sys_char = (sys_char == 'G' || sys_char == 'R' || sys_char == 'E' ||
+                                    sys_char == 'C' || sys_char == 'J' || sys_char == 'S');
+                if (is_sys_char) {
+                    // Check that chars 1-2 are PRN digits
+                    bool has_prn = (std::isdigit(line[1]) || line[1] == ' ') &&
+                                   std::isdigit(line[2]);
+                    if (has_prn) {
+                        is_new_ephemeris = true;
+                        is_gps = (sys_char == 'G');
+                    }
+                }
+            } else if (!is_rinex3 && line.length() >= 5) {
+                // RINEX 2: PRN at pos 0-1, year at pos 3-4
                 bool has_year = std::isdigit(line[3]) && std::isdigit(line[4]);
-                // Check if starts with PRN format
-                bool has_prn = (line[0] == ' ' && std::isdigit(line[1])) ||  // Single digit
-                               (std::isdigit(line[0]) && std::isdigit(line[1]));  // Double digit
+                bool has_prn = (line[0] == ' ' && std::isdigit(line[1])) ||
+                               (std::isdigit(line[0]) && std::isdigit(line[1]));
                 is_new_ephemeris = has_prn && has_year;
             }
 
             if (is_new_ephemeris) {
                 eph_detected++;
-                // Process previous ephemeris if exists
+
+                if (!is_gps) {
+                    // Skip non-GPS: process any pending GPS ephemeris first
+                    if (!eph_lines.empty()) {
+                        Ephemeris eph;
+                        if (parseNavigationMessage(eph_lines, eph)) {
+                            nav_data.addEphemeris(eph);
+                            eph_parsed++;
+                        }
+                        eph_lines.clear();
+                    }
+                    // Skip the continuation lines of this non-GPS record
+                    // GLONASS (R) and SBAS (S): 3 continuation lines (4 total)
+                    // Galileo (E), BeiDou (C), QZSS (J): 7 continuation lines (8 total)
+                    skipping_non_gps = true;
+                    char skip_sys = line[0];
+                    if (skip_sys == 'R' || skip_sys == 'S') {
+                        skip_lines_remaining = 3;
+                    } else {
+                        skip_lines_remaining = 7;
+                    }
+                    eph_skipped_non_gps++;
+                    continue;
+                }
+
+                // Process previous GPS ephemeris if exists
                 if (!eph_lines.empty()) {
                     Ephemeris eph;
                     if (parseNavigationMessage(eph_lines, eph)) {
@@ -170,7 +288,9 @@ bool RINEXReader::readNavigationData(NavigationData& nav_data) {
                 }
             }
 
-            eph_lines.push_back(line);
+            if (!skipping_non_gps) {
+                eph_lines.push_back(line);
+            }
         }
 
         // Process last ephemeris
@@ -182,7 +302,6 @@ bool RINEXReader::readNavigationData(NavigationData& nav_data) {
             }
         }
 
-        std::cerr << "DEBUG: Detected " << eph_detected << " ephemeris records, parsed " << eph_parsed << std::endl;
     } catch (const std::invalid_argument& e) {
         std::cerr << "Navigation data parsing error (invalid_argument): " << e.what() << std::endl;
         std::cerr << "Line number: " << current_line_ << std::endl;
@@ -230,7 +349,7 @@ bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) 
         header.approximate_position(2) = std::stod(line.substr(28, 14));
     }
     else if (label.find("# / TYPES OF OBSERV") != std::string::npos) {
-        // Parse number of observation types
+        // RINEX 2: Parse number of observation types
         int num_types = std::stoi(line.substr(0, 6));
 
         // Parse observation types (starting at position 10, 6 characters each)
@@ -243,6 +362,34 @@ bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) 
                 if (!obs_type.empty()) {
                     header.observation_types.push_back(obs_type);
                 }
+            }
+        }
+    }
+    else if (label.find("SYS / # / OBS TYPES") != std::string::npos) {
+        // RINEX 3: Per-system observation types
+        // Format: "G    4 C1C L1C C2X L2X" (system char at pos 0, count at pos 3-6, types at pos 7+)
+        char sys_char = line[0];
+        if (sys_char != ' ') {
+            // First line for this system
+            int num_types = std::stoi(line.substr(3, 3));
+            std::vector<std::string> types;
+            // Parse types from this line (up to 13 per line, 4 chars each starting at pos 7)
+            for (int i = 0; i < num_types && i < 13; ++i) {
+                size_t pos = 7 + i * 4;
+                if (pos + 3 <= line.length()) {
+                    std::string obs_type = line.substr(pos, 3);
+                    obs_type.erase(0, obs_type.find_first_not_of(' '));
+                    obs_type.erase(obs_type.find_last_not_of(' ') + 1);
+                    if (!obs_type.empty()) {
+                        types.push_back(obs_type);
+                    }
+                }
+            }
+            header.system_obs_types[sys_char] = types;
+
+            // Also populate the generic observation_types with GPS types for backward compat
+            if (sys_char == 'G') {
+                header.observation_types = types;
             }
         }
     }
@@ -485,33 +632,223 @@ bool RINEXReader::parseObservationEpochV2(const std::string& line, ObservationDa
     return true;
 }
 
-bool RINEXReader::parseObservationEpochV3(const std::string& line, ObservationData& obs_data) {
-    // Simplified RINEX 3.x parsing
-    return parseObservationEpochV2(line, obs_data);
+bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, ObservationData& obs_data) {
+    // RINEX 3.x epoch line format:
+    // "> YYYY MM DD HH MM SS.SSSSSSS  flag  num_sats"
+    // Pos: 0=>, 2-5=year, 6-9=month, etc.
+    if (epoch_line.length() < 35 || epoch_line[0] != '>') return false;
+
+    try {
+        int year = std::stoi(epoch_line.substr(2, 4));
+        int month = std::stoi(epoch_line.substr(7, 2));
+        int day = std::stoi(epoch_line.substr(10, 2));
+        int hour = std::stoi(epoch_line.substr(13, 2));
+        int minute = std::stoi(epoch_line.substr(16, 2));
+        double second = std::stod(epoch_line.substr(18, 13));
+
+        // Convert to GPS time
+        auto days_from_civil = [](int y, unsigned m, unsigned d) -> int {
+            y -= m <= 2;
+            const int era = (y >= 0 ? y : y - 399) / 400;
+            const unsigned yoe = static_cast<unsigned>(y - era * 400);
+            const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+            const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+            return era * 146097 + static_cast<int>(doe) - 719468;
+        };
+
+        const int gps_epoch_days = days_from_civil(1980, 1, 6);
+        const int current_days = days_from_civil(year, static_cast<unsigned>(month), static_cast<unsigned>(day));
+        const int days_since_gps = current_days - gps_epoch_days;
+        const int gps_week = days_since_gps / 7;
+        const int day_of_week = days_since_gps % 7;
+        const double tow = day_of_week * 86400.0 + hour * 3600.0 + minute * 60.0 + second;
+
+        obs_data.time = GNSSTime(gps_week, tow);
+
+        // Parse epoch flag and number of satellites
+        std::string flag_str = epoch_line.substr(31, 2);
+        flag_str.erase(0, flag_str.find_first_not_of(' '));
+        // int epoch_flag = flag_str.empty() ? 0 : std::stoi(flag_str);
+
+        std::string num_sats_str = epoch_line.substr(33, 3);
+        num_sats_str.erase(0, num_sats_str.find_first_not_of(' '));
+        int num_sats = num_sats_str.empty() ? 0 : std::stoi(num_sats_str);
+
+        // Get GPS observation types from header
+        std::vector<std::string> gps_obs_types;
+        auto it = header_.system_obs_types.find('G');
+        if (it != header_.system_obs_types.end()) {
+            gps_obs_types = it->second;
+        } else {
+            // Fall back to generic observation_types
+            gps_obs_types = header_.observation_types;
+        }
+        int num_obs_types = gps_obs_types.size();
+        if (num_obs_types == 0) num_obs_types = 4;  // Default
+
+        // Read each satellite line
+        for (int s = 0; s < num_sats; ++s) {
+            std::string sat_line;
+            if (!readLine(sat_line)) break;
+            if (sat_line.length() < 3) continue;
+
+            // Parse system char and PRN
+            char sys_char = sat_line[0];
+            std::string prn_str = sat_line.substr(1, 2);
+            prn_str.erase(0, prn_str.find_first_not_of(' '));
+            if (prn_str.empty()) continue;
+            int prn = std::stoi(prn_str);
+
+            // Only process GPS satellites
+            if (sys_char != 'G') continue;
+
+            SatelliteId sat(GNSSSystem::GPS, prn);
+
+            // Parse observation values
+            // Each observation occupies 16 characters starting at position 3
+            // Format: 14.3f + LLI(1) + SS(1) = 16 chars per observation
+            std::vector<double> obs_values(num_obs_types, 0.0);
+            std::vector<int> lli_flags(num_obs_types, 0);
+            std::vector<int> signal_strength(num_obs_types, 0);
+
+            for (int i = 0; i < num_obs_types; ++i) {
+                size_t col_start = 3 + i * 16;
+                if (col_start + 14 > sat_line.length()) continue;
+
+                std::string obs_str = sat_line.substr(col_start, 14);
+                obs_str.erase(0, obs_str.find_first_not_of(' '));
+                obs_str.erase(obs_str.find_last_not_of(' ') + 1);
+
+                if (!obs_str.empty()) {
+                    try {
+                        obs_values[i] = std::stod(obs_str);
+                    } catch (...) {
+                        obs_values[i] = 0.0;
+                    }
+                }
+
+                // Parse LLI flag (position col_start + 14)
+                if (col_start + 14 < sat_line.length() && sat_line[col_start + 14] != ' ') {
+                    lli_flags[i] = sat_line[col_start + 14] - '0';
+                }
+
+                // Parse signal strength (position col_start + 15)
+                if (col_start + 15 < sat_line.length() && sat_line[col_start + 15] != ' ') {
+                    signal_strength[i] = sat_line[col_start + 15] - '0';
+                }
+            }
+
+            // Map RINEX 3 observation types to L1 and L2 observations
+            Observation obs_l1;
+            obs_l1.satellite = sat;
+            obs_l1.signal = SignalType::GPS_L1CA;
+            obs_l1.valid = true;
+            bool has_l1_data = false;
+
+            Observation obs_l2;
+            obs_l2.satellite = sat;
+            obs_l2.signal = SignalType::GPS_L2C;
+            obs_l2.valid = true;
+            bool has_l2_data = false;
+
+            for (size_t i = 0; i < gps_obs_types.size() && i < obs_values.size(); ++i) {
+                if (obs_values[i] == 0.0) continue;
+
+                const std::string& obs_type = gps_obs_types[i];
+
+                // RINEX 3 observation type codes:
+                // C1C, C1P, C1W = pseudorange L1
+                // L1C, L1P, L1W = carrier phase L1
+                // C2X, C2W, C2C = pseudorange L2
+                // L2X, L2W, L2C = carrier phase L2
+                // Also support RINEX 2 types (L1, C1, L2, P2)
+                if (obs_type == "C1C" || obs_type == "C1P" || obs_type == "C1W" ||
+                    obs_type == "C1" || obs_type == "P1") {
+                    obs_l1.pseudorange = obs_values[i];
+                    obs_l1.has_pseudorange = true;
+                    obs_l1.signal_strength = signal_strength[i];
+                    has_l1_data = true;
+                } else if (obs_type == "L1C" || obs_type == "L1P" || obs_type == "L1W" ||
+                           obs_type == "L1") {
+                    obs_l1.carrier_phase = obs_values[i];
+                    obs_l1.has_carrier_phase = true;
+                    obs_l1.lli = lli_flags[i];
+                    obs_l1.loss_of_lock = (lli_flags[i] & 0x01) != 0;
+                    has_l1_data = true;
+                } else if (obs_type == "C2X" || obs_type == "C2W" || obs_type == "C2C" ||
+                           obs_type == "C2" || obs_type == "P2") {
+                    obs_l2.pseudorange = obs_values[i];
+                    obs_l2.has_pseudorange = true;
+                    obs_l2.signal_strength = signal_strength[i];
+                    has_l2_data = true;
+                } else if (obs_type == "L2X" || obs_type == "L2W" || obs_type == "L2C" ||
+                           obs_type == "L2") {
+                    obs_l2.carrier_phase = obs_values[i];
+                    obs_l2.has_carrier_phase = true;
+                    obs_l2.lli = lli_flags[i];
+                    obs_l2.loss_of_lock = (lli_flags[i] & 0x01) != 0;
+                    has_l2_data = true;
+                }
+            }
+
+            if (has_l1_data) {
+                obs_data.addObservation(obs_l1);
+            }
+            if (has_l2_data) {
+                obs_data.addObservation(obs_l2);
+            }
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "RINEX 3 observation epoch parsing error: " << e.what() << std::endl;
+        return false;
+    }
+
+    return true;
 }
 
 bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, Ephemeris& eph) {
     if (lines.size() < 8) {
-        static int debug_count = 0;
-        if (debug_count++ < 2) {
-            std::cerr << "DEBUG: Skipping ephemeris with " << lines.size() << " lines (need 8)" << std::endl;
-        }
         return false;  // Need 8 lines for GPS ephemeris
     }
 
     const std::string& first_line = lines[0];
     if (first_line.length() < 3) return false;
 
+    // Determine if this is RINEX 3 format (first char is a letter)
+    bool is_v3 = std::isalpha(first_line[0]);
+
+    // Column offsets differ between RINEX 2 and 3
+    // RINEX 2: PRN(2) + time(19) starting at col 3, data at cols 3,22,41,60
+    // RINEX 3: PRN(3) + time(20) starting at col 3, data at cols 4,23,42,61 for continuation
+    //          First line: af0 at 23, af1 at 42, af2 at 61
+    int c0, c1, c2, c3;  // Column starts for 4 values per continuation line
+    int af0_col, af1_col, af2_col;  // Column starts for first line clock params
+    if (is_v3) {
+        c0 = 4; c1 = 23; c2 = 42; c3 = 61;
+        af0_col = 23; af1_col = 42; af2_col = 61;
+    } else {
+        c0 = 3; c1 = 22; c2 = 41; c3 = 60;
+        af0_col = 22; af1_col = 41; af2_col = 60;
+    }
+
     try {
-        // Parse satellite ID - RINEX 2.x navigation format: "sPRN YY MM DD ..."
-        std::string sat_id_str = first_line.substr(0, 3);
-        sat_id_str.erase(0, sat_id_str.find_first_not_of(' '));
-        size_t space_pos = sat_id_str.find(' ');
-        if (space_pos != std::string::npos) {
-            sat_id_str = sat_id_str.substr(0, space_pos);
+        // Parse satellite ID
+        if (is_v3) {
+            // RINEX 3: "G27", "E04", etc.
+            char sys_char = first_line[0];
+            if (sys_char != 'G') return false;  // Only GPS
+            std::string prn_str = first_line.substr(1, 2);
+            prn_str.erase(0, prn_str.find_first_not_of(' '));
+            if (prn_str.empty()) return false;
+            eph.satellite = SatelliteId(GNSSSystem::GPS, std::stoi(prn_str));
+        } else {
+            // RINEX 2: " 27" or "27"
+            std::string sat_id_str = first_line.substr(0, 2);
+            sat_id_str.erase(0, sat_id_str.find_first_not_of(' '));
+            if (sat_id_str.empty()) return false;
+            eph.satellite = SatelliteId(GNSSSystem::GPS, std::stoi(sat_id_str));
         }
-        if (sat_id_str.empty()) return false;
-        eph.satellite = SatelliteId(GNSSSystem::GPS, std::stoi(sat_id_str));
 
         // Helper lambda to parse D-formatted scientific notation
         auto parseD = [](const std::string& line, size_t start, size_t len) -> double {
@@ -532,71 +869,67 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
         };
 
         // Line 0: PRN, Epoch, af0, af1, af2
-        eph.af0 = parseD(first_line, 22, 19);  // Clock bias
-        eph.af1 = parseD(first_line, 41, 19);  // Clock drift
-        eph.af2 = parseD(first_line, 60, 19);  // Clock drift rate
+        if (is_v3) {
+            // RINEX 3: time string at pos 3-22 (20 chars: " YYYY MM DD HH MM SS")
+            eph.toc = parseTime(first_line.substr(3, 20), header_.version);
+        } else {
+            eph.toc = parseTime(first_line.substr(3, 19), header_.version);
+        }
+        eph.af0 = parseD(first_line, af0_col, 19);  // Clock bias
+        eph.af1 = parseD(first_line, af1_col, 19);  // Clock drift
+        eph.af2 = parseD(first_line, af2_col, 19);  // Clock drift rate
 
         // Line 1: IODE, Crs, delta_n, M0
-        double iode = parseD(lines[1], 3, 19);
-        eph.crs = parseD(lines[1], 22, 19);
-        eph.delta_n = parseD(lines[1], 41, 19);
-        eph.m0 = parseD(lines[1], 60, 19);
+        double iode = parseD(lines[1], c0, 19);
+        eph.crs = parseD(lines[1], c1, 19);
+        eph.delta_n = parseD(lines[1], c2, 19);
+        eph.m0 = parseD(lines[1], c3, 19);
 
         // Line 2: Cuc, e, Cus, sqrt(A)
-        eph.cuc = parseD(lines[2], 3, 19);
-        eph.e = parseD(lines[2], 22, 19);
-        eph.cus = parseD(lines[2], 41, 19);
-        eph.sqrt_a = parseD(lines[2], 60, 19);
+        eph.cuc = parseD(lines[2], c0, 19);
+        eph.e = parseD(lines[2], c1, 19);
+        eph.cus = parseD(lines[2], c2, 19);
+        eph.sqrt_a = parseD(lines[2], c3, 19);
 
         // Line 3: Toe, Cic, OMEGA0, Cis
-        double toe_seconds = parseD(lines[3], 3, 19);
+        double toe_seconds = parseD(lines[3], c0, 19);
 
-        // Debug line 3 parsing
-        static int line3_debug = 0;
-        if (line3_debug < 2) {
-            std::cerr << "DEBUG Line3: '" << lines[3] << "'" << std::endl;
-            std::cerr << "DEBUG Line3: toe_seconds=" << toe_seconds << std::endl;
-            line3_debug++;
-        }
-
-        eph.cic = parseD(lines[3], 22, 19);
-        eph.omega0 = parseD(lines[3], 41, 19);
-        eph.cis = parseD(lines[3], 60, 19);
+        eph.cic = parseD(lines[3], c1, 19);
+        eph.omega0 = parseD(lines[3], c2, 19);
+        eph.cis = parseD(lines[3], c3, 19);
 
         // Line 4: i0, Crc, omega, OMEGA_DOT
-        eph.i0 = parseD(lines[4], 3, 19);
-        eph.crc = parseD(lines[4], 22, 19);
-        eph.omega = parseD(lines[4], 41, 19);
-        eph.omega_dot = parseD(lines[4], 60, 19);
+        eph.i0 = parseD(lines[4], c0, 19);
+        eph.crc = parseD(lines[4], c1, 19);
+        eph.omega = parseD(lines[4], c2, 19);
+        eph.omega_dot = parseD(lines[4], c3, 19);
 
         // Line 5: IDOT, L2 codes, GPS week, L2 P flag
-        eph.i_dot = parseD(lines[5], 3, 19);
-        double l2_codes = parseD(lines[5], 22, 19);
-        double gps_week = parseD(lines[5], 41, 19);
-        double l2_flag = parseD(lines[5], 60, 19);
+        eph.i_dot = parseD(lines[5], c0, 19);
+        eph.idot = eph.i_dot;
+        double l2_codes = parseD(lines[5], c1, 19);
+        double gps_week = parseD(lines[5], c2, 19);
+        double l2_flag = parseD(lines[5], c3, 19);
 
         // Line 6: SV accuracy, SV health, TGD, IODC
-        eph.sv_accuracy = parseD(lines[6], 3, 19);
-        eph.sv_health = parseD(lines[6], 22, 19);
-        eph.tgd = parseD(lines[6], 41, 19);
-        double iodc = parseD(lines[6], 60, 19);
+        eph.sv_accuracy = parseD(lines[6], c0, 19);
+        eph.sv_health = parseD(lines[6], c1, 19);
+        eph.tgd = parseD(lines[6], c2, 19);
+        double iodc = parseD(lines[6], c3, 19);
 
         // Line 7: Transmission time, fit interval
-        double transmission_time = parseD(lines[7], 3, 19);
+        double transmission_time = parseD(lines[7], c0, 19);
+
+        // Suppress unused variable warnings
+        (void)l2_codes;
+        (void)l2_flag;
+        (void)transmission_time;
 
         // Set times
         int week = static_cast<int>(gps_week);
 
-        // Debug: print first few ephemeris TOE
-        static int eph_count = 0;
-        if (eph_count < 3) {
-            std::cerr << "DEBUG: Ephemeris " << eph_count << " - PRN=" << eph.satellite.prn
-                      << ", week=" << week << ", toe=" << toe_seconds << std::endl;
-            eph_count++;
-        }
-
         eph.toe = GNSSTime(week, toe_seconds);
-        eph.toc = eph.toe;  // Simplified: use toe as toc
+        eph.week = static_cast<uint16_t>(week);
 
         eph.valid = true;
         eph.iode = static_cast<int>(iode);
@@ -611,10 +944,40 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
 }
 
 GNSSTime RINEXReader::parseTime(const std::string& time_str, double version) {
-    // Simplified time parsing
-    (void)time_str;
     (void)version;
-    return GNSSTime(2000, 345600.0);
+
+    std::istringstream iss(time_str);
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    int hour = 0;
+    int minute = 0;
+    double second = 0.0;
+    iss >> year >> month >> day >> hour >> minute >> second;
+
+    if (year < 80) {
+        year += 2000;
+    } else if (year < 100) {
+        year += 1900;
+    }
+
+    auto days_from_civil = [](int y, unsigned m, unsigned d) -> int {
+        y -= m <= 2;
+        const int era = (y >= 0 ? y : y - 399) / 400;
+        const unsigned yoe = static_cast<unsigned>(y - era * 400);
+        const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+        const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        return era * 146097 + static_cast<int>(doe) - 719468;
+    };
+
+    const int gps_epoch_days = days_from_civil(1980, 1, 6);
+    const int current_days = days_from_civil(year, static_cast<unsigned>(month), static_cast<unsigned>(day));
+    const int days_since_gps = current_days - gps_epoch_days;
+    const int week = days_since_gps / 7;
+    const int day_of_week = days_since_gps % 7;
+    const double tow = day_of_week * 86400.0 + hour * 3600.0 + minute * 60.0 + second;
+
+    return GNSSTime(week, tow);
 }
 
 SatelliteId RINEXReader::parseSatelliteId(const std::string& sat_str, double version) {
