@@ -7,18 +7,12 @@ posファイルを読み込み、以下のプロットを生成する:
   b. Fix/Float/SPPステータスタイムライン
   c. 水平(EN)散布図
   d. 高さ時系列
-
-使い方:
-  python3 tools/plot_rtk.py output/rtk_solution.pos [rtklib.pos]
 """
 
 import sys
 import os
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
+from datetime import datetime
 import math
 
 
@@ -107,16 +101,28 @@ def read_rtklib_pos(filepath):
             if not line or line.startswith("%"):
                 continue
             cols = line.split()
-            if len(cols) < 6:
-                continue
             try:
-                week = int(cols[0])
-                tow = float(cols[1])
-                lat = float(cols[2])
-                lon = float(cols[3])
-                hgt = float(cols[4])
-                q = int(cols[5])
-                nsat = int(cols[6]) if len(cols) > 6 else 0
+                if len(cols) >= 7 and "/" in cols[0] and ":" in cols[1]:
+                    dt = datetime.strptime(f"{cols[0]} {cols[1]}", "%Y/%m/%d %H:%M:%S.%f")
+                    gps_epoch = datetime(1980, 1, 6)
+                    delta = dt - gps_epoch
+                    week = delta.days // 7
+                    tow = (delta.days % 7) * 86400 + delta.seconds + delta.microseconds / 1e6
+                    lat = float(cols[2])
+                    lon = float(cols[3])
+                    hgt = float(cols[4])
+                    q = int(cols[5])
+                    nsat = int(cols[6]) if len(cols) > 6 else 0
+                elif len(cols) >= 6:
+                    week = int(cols[0])
+                    tow = float(cols[1])
+                    lat = float(cols[2])
+                    lon = float(cols[3])
+                    hgt = float(cols[4])
+                    q = int(cols[5])
+                    nsat = int(cols[6]) if len(cols) > 6 else 0
+                else:
+                    continue
                 status = RTKLIB_STATUS_MAP.get(q, 1)
                 epochs.append({
                     "week": week, "tow": tow,
@@ -172,6 +178,11 @@ def compute_enu(epochs, ref_lat=None, ref_lon=None, ref_hgt=None):
 
 def plot_single(epochs, title_prefix, out_png):
     """単一posファイルのプロット"""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
     if not epochs:
         print("エポックが0件です。プロットをスキップします。")
         return
@@ -245,14 +256,14 @@ def plot_single(epochs, title_prefix, out_png):
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.savefig(out_png, dpi=150)
     print(f"プロット保存: {out_png}")
-    try:
-        plt.show()
-    except Exception:
-        pass
 
 
 def plot_comparison(epochs1, epochs2, label1, label2, out_png):
     """2つのposファイルの比較プロット"""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
     if not epochs1 or not epochs2:
         print("比較データが不足しています。")
         return
@@ -299,10 +310,6 @@ def plot_comparison(epochs1, epochs2, label1, label2, out_png):
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.savefig(out_png, dpi=150)
     print(f"比較プロット保存: {out_png}")
-    try:
-        plt.show()
-    except Exception:
-        pass
 
 
 # ---------------------------------------------------------------------------
@@ -310,9 +317,10 @@ def plot_comparison(epochs1, epochs2, label1, label2, out_png):
 # ---------------------------------------------------------------------------
 
 def main():
-    if len(sys.argv) < 2:
-        print("使い方: python3 tools/plot_rtk.py <pos_file> [rtklib_pos_file]")
-        sys.exit(1)
+    program = os.environ.get("GNSS_CLI_NAME", os.path.basename(sys.argv[0]))
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print(f"使い方: {program} <pos_file> [rtklib_pos_file]")
+        sys.exit(0 if len(sys.argv) >= 2 else 1)
 
     pos_file = sys.argv[1]
     rtklib_file = sys.argv[2] if len(sys.argv) > 2 else None
