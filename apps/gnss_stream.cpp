@@ -1,15 +1,28 @@
 #include <libgnss++/io/rtcm.hpp>
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdint>
+#include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <string>
 
+#ifndef _WIN32
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <termios.h>
+#include <unistd.h>
+#endif
+
 namespace {
 
 constexpr uint8_t kRTCMPreamble = 0xD3;
+constexpr int kDefaultSerialBaud = 115200;
 
 uint32_t crc24q(const uint8_t* data, size_t length) {
     static const uint32_t table[256] = {
@@ -57,9 +70,9 @@ uint32_t crc24q(const uint8_t* data, size_t length) {
 
 void printUsage(const char* argv0) {
     std::cerr
-        << "Usage: " << argv0 << " --input <path|ntrip://...|serial://...> [options]\n"
+        << "Usage: " << argv0 << " --input <path|ntrip://...|serial://...|tcp://host:port> [options]\n"
         << "Options:\n"
-        << "  --output <file>           Relay decoded RTCM frames to a binary file\n"
+        << "  --output <file|serial://...|tcp://host:port> Relay decoded RTCM frames to a binary file, serial sink, or TCP sink\n"
         << "  --limit <count>           Stop after this many messages (0 = until EOF)\n"
         << "  --decode-observations     Print decoded observation epoch summaries\n"
         << "  --decode-navigation       Print decoded navigation message summaries\n"
@@ -67,20 +80,257 @@ void printUsage(const char* argv0) {
         << "  --help                    Show this help text\n";
 }
 
-void writeFrame(std::ofstream& output, const libgnss::io::RTCMMessage& message) {
-    const uint16_t payload_length = static_cast<uint16_t>(message.data.size());
-    std::string frame;
-    frame.resize(3 + payload_length + 3);
-    frame[0] = static_cast<char>(kRTCMPreamble);
-    frame[1] = static_cast<char>((payload_length >> 8) & 0x03U);
-    frame[2] = static_cast<char>(payload_length & 0xFFU);
-    std::copy(message.data.begin(), message.data.end(), frame.begin() + 3);
-    const uint32_t crc = crc24q(reinterpret_cast<const uint8_t*>(frame.data()), 3 + payload_length);
-    frame[3 + payload_length] = static_cast<char>((crc >> 16) & 0xFFU);
-    frame[4 + payload_length] = static_cast<char>((crc >> 8) & 0xFFU);
-    frame[5 + payload_length] = static_cast<char>(crc & 0xFFU);
-    output.write(frame.data(), static_cast<std::streamsize>(frame.size()));
+std::string resolveSerialPath(const std::string& path) {
+    constexpr const char* kPrefix = "serial://";
+    if (path.rfind(kPrefix, 0) != 0) {
+        return path;
+    }
+
+    std::string value = path.substr(std::char_traits<char>::length(kPrefix));
+    const size_t query_pos = value.find('?');
+    if (query_pos != std::string::npos) {
+        value.resize(query_pos);
+    }
+    if (!value.empty() && value.front() != '/') {
+        return value;
+    }
+    while (value.size() > 1 && value[0] == '/' && value[1] == '/') {
+        value.erase(value.begin());
+    }
+    return value;
 }
+
+int parseSerialBaud(const std::string& path) {
+    constexpr const char* kQuery = "?baud=";
+    const size_t query_pos = path.find(kQuery);
+    if (query_pos == std::string::npos) {
+        return kDefaultSerialBaud;
+    }
+    const std::string baud_text =
+        path.substr(query_pos + std::char_traits<char>::length(kQuery));
+    return baud_text.empty() ? kDefaultSerialBaud : std::stoi(baud_text);
+}
+
+bool isTcpPath(const std::string& path) {
+    return path.rfind("tcp://", 0) == 0;
+}
+
+struct TcpEndpoint {
+    std::string host;
+    std::string port;
+};
+
+TcpEndpoint parseTcpEndpoint(const std::string& path) {
+    constexpr const char* kPrefix = "tcp://";
+    if (path.rfind(kPrefix, 0) != 0) {
+        throw std::invalid_argument("TCP sink must start with tcp://");
+    }
+
+    const std::string target = path.substr(std::char_traits<char>::length(kPrefix));
+    const size_t colon_pos = target.rfind(':');
+    if (colon_pos == std::string::npos || colon_pos == 0 || colon_pos + 1 >= target.size()) {
+        throw std::invalid_argument("TCP sink must be tcp://host:port");
+    }
+
+    TcpEndpoint endpoint;
+    endpoint.host = target.substr(0, colon_pos);
+    endpoint.port = target.substr(colon_pos + 1);
+    return endpoint;
+}
+
+#ifndef _WIN32
+speed_t baudRateConstant(int baud) {
+    switch (baud) {
+        case 9600: return B9600;
+        case 19200: return B19200;
+        case 38400: return B38400;
+        case 57600: return B57600;
+        case 115200: return B115200;
+        case 230400: return B230400;
+        default:
+            throw std::invalid_argument("unsupported serial baud rate");
+    }
+}
+
+bool configureSerialPort(int fd, int baud) {
+    termios tio{};
+    if (tcgetattr(fd, &tio) != 0) {
+        return false;
+    }
+    cfmakeraw(&tio);
+    const speed_t speed = baudRateConstant(baud);
+    cfsetispeed(&tio, speed);
+    cfsetospeed(&tio, speed);
+    tio.c_cflag |= (CLOCAL | CREAD);
+    tio.c_cflag &= ~CSTOPB;
+    tio.c_cflag &= ~CRTSCTS;
+    tio.c_cc[VMIN] = 1;
+    tio.c_cc[VTIME] = 0;
+    return tcsetattr(fd, TCSANOW, &tio) == 0;
+}
+
+int connectTcpSocket(const std::string& path) {
+    const auto endpoint = parseTcpEndpoint(path);
+
+    addrinfo hints{};
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    addrinfo* result = nullptr;
+    if (getaddrinfo(endpoint.host.c_str(), endpoint.port.c_str(), &hints, &result) != 0) {
+        return -1;
+    }
+
+    int fd = -1;
+    for (addrinfo* cursor = result; cursor != nullptr; cursor = cursor->ai_next) {
+        fd = ::socket(cursor->ai_family, cursor->ai_socktype, cursor->ai_protocol);
+        if (fd < 0) {
+            continue;
+        }
+        if (::connect(fd, cursor->ai_addr, cursor->ai_addrlen) == 0) {
+            break;
+        }
+        ::close(fd);
+        fd = -1;
+    }
+
+    freeaddrinfo(result);
+    return fd;
+}
+#endif
+
+struct RelaySink {
+    std::ofstream file;
+#ifndef _WIN32
+    int serial_fd = -1;
+    int tcp_fd = -1;
+#endif
+
+    bool open(const std::string& output_path) {
+        close();
+
+        if (isTcpPath(output_path)) {
+#ifndef _WIN32
+            tcp_fd = connectTcpSocket(output_path);
+            return tcp_fd >= 0;
+#else
+            (void)output_path;
+            return false;
+#endif
+        }
+
+        std::error_code ec;
+        const std::string serial_path = resolveSerialPath(output_path);
+        const auto status = std::filesystem::status(serial_path, ec);
+        const bool wants_serial =
+            output_path.rfind("serial://", 0) == 0 ||
+            (!ec && std::filesystem::is_character_file(status));
+
+        if (!wants_serial) {
+            file.open(output_path, std::ios::binary);
+            return file.is_open();
+        }
+
+#ifndef _WIN32
+        const int fd = ::open(serial_path.c_str(), O_WRONLY | O_NOCTTY);
+        if (fd < 0) {
+            return false;
+        }
+        if (!configureSerialPort(fd, parseSerialBaud(output_path))) {
+            ::close(fd);
+            return false;
+        }
+        serial_fd = fd;
+        return true;
+#else
+        (void)output_path;
+        return false;
+#endif
+    }
+
+    void close() {
+        if (file.is_open()) {
+            file.close();
+        }
+#ifndef _WIN32
+        if (serial_fd >= 0) {
+            ::close(serial_fd);
+            serial_fd = -1;
+        }
+        if (tcp_fd >= 0) {
+            ::close(tcp_fd);
+            tcp_fd = -1;
+        }
+#endif
+    }
+
+    bool isOpen() const {
+        if (file.is_open()) {
+            return true;
+        }
+#ifndef _WIN32
+        if (serial_fd >= 0) {
+            return true;
+        }
+        if (tcp_fd >= 0) {
+            return true;
+        }
+#endif
+        return false;
+    }
+
+    bool write(const libgnss::io::RTCMMessage& message) {
+        const uint16_t payload_length = static_cast<uint16_t>(message.data.size());
+        std::string frame;
+        frame.resize(3 + payload_length + 3);
+        frame[0] = static_cast<char>(kRTCMPreamble);
+        frame[1] = static_cast<char>((payload_length >> 8) & 0x03U);
+        frame[2] = static_cast<char>(payload_length & 0xFFU);
+        std::copy(message.data.begin(), message.data.end(), frame.begin() + 3);
+        const uint32_t crc =
+            crc24q(reinterpret_cast<const uint8_t*>(frame.data()), 3 + payload_length);
+        frame[3 + payload_length] = static_cast<char>((crc >> 16) & 0xFFU);
+        frame[4 + payload_length] = static_cast<char>((crc >> 8) & 0xFFU);
+        frame[5 + payload_length] = static_cast<char>(crc & 0xFFU);
+
+        if (file.is_open()) {
+            file.write(frame.data(), static_cast<std::streamsize>(frame.size()));
+            return static_cast<bool>(file);
+        }
+#ifndef _WIN32
+        if (serial_fd >= 0) {
+            const char* data = frame.data();
+            size_t remaining = frame.size();
+            while (remaining > 0) {
+                const ssize_t count = ::write(serial_fd, data, remaining);
+                if (count < 0) {
+                    return false;
+                }
+                remaining -= static_cast<size_t>(count);
+                data += count;
+            }
+            return true;
+        }
+        if (tcp_fd >= 0) {
+            const char* data = frame.data();
+            size_t remaining = frame.size();
+            while (remaining > 0) {
+                const ssize_t count = ::send(tcp_fd, data, remaining, 0);
+                if (count < 0) {
+                    if (errno == EINTR) {
+                        continue;
+                    }
+                    return false;
+                }
+                remaining -= static_cast<size_t>(count);
+                data += count;
+            }
+            return true;
+        }
+#endif
+        return false;
+    }
+};
 
 }  // namespace
 
@@ -128,11 +378,10 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::ofstream output_stream;
+    RelaySink output_sink;
     if (!output_path.empty()) {
-        output_stream.open(output_path, std::ios::binary);
-        if (!output_stream.is_open()) {
-            std::cerr << "Error: failed to open output file: " << output_path << "\n";
+        if (!output_sink.open(output_path)) {
+            std::cerr << "Error: failed to open output sink: " << output_path << "\n";
             return 1;
         }
     }
@@ -142,8 +391,11 @@ int main(int argc, char** argv) {
     libgnss::io::RTCMMessage message;
     while ((limit == 0 || message_count < limit) && reader.readMessage(message)) {
         ++message_count;
-        if (output_stream.is_open()) {
-            writeFrame(output_stream, message);
+        if (output_sink.isOpen() && !output_sink.write(message)) {
+            std::cerr << "Error: failed to relay RTCM frame to output sink\n";
+            output_sink.close();
+            reader.close();
+            return 1;
         }
 
         if (!quiet) {
@@ -171,9 +423,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (output_stream.is_open()) {
-        output_stream.close();
-    }
+    output_sink.close();
     reader.close();
 
     const auto stats = reader.getStats();

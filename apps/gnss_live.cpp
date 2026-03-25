@@ -532,7 +532,7 @@ std::string outputFormatString(libgnss::io::SolutionWriter::Format format) {
 
 void printUsage(const char* argv0) {
     std::cout
-        << "Usage: " << argv0 << " (--rover-rtcm <path|ntrip://...> | --rover-ubx <file|serial://...|/dev/tty...>) --base-rtcm <path|ntrip://...|serial://...> [options]\n"
+        << "Usage: " << argv0 << " (--rover-rtcm <path|ntrip://...|tcp://host:port> | --rover-ubx <file|serial://...|/dev/tty...>) --base-rtcm <path|ntrip://...|serial://...|tcp://host:port> [options]\n"
         << "Options:\n"
         << "  --rover-ubx <path>         Rover UBX stream from file or serial device\n"
         << "  --rover-ubx-baud <baud>    Rover serial baud rate for UBX device input (default: 115200)\n"

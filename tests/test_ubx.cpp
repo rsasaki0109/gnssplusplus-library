@@ -120,6 +120,37 @@ std::vector<uint8_t> buildMixedRawxMessage() {
     });
 }
 
+std::vector<uint8_t> buildSfrbxMessage(uint8_t gnss_id,
+                                       uint8_t sv_id,
+                                       uint8_t frequency_id,
+                                       uint8_t channel,
+                                       const std::vector<uint32_t>& words) {
+    std::vector<uint8_t> payload = {
+        0x02,  // version
+        static_cast<uint8_t>(words.size()),
+        channel,
+        0x00,  // reserved
+        gnss_id,
+        sv_id,
+        0x00,  // reserved
+        frequency_id,
+    };
+    for (const uint32_t word : words) {
+        appendLittleEndian<uint32_t>(payload, word);
+    }
+    return buildUBXMessage(0x02, 0x13, payload);
+}
+
+std::vector<uint8_t> buildGpsSfrbxMessage() {
+    return buildSfrbxMessage(0x00, 0x0C, 0x00, 0x01,
+                             {0x8B0000AAU, 0x00000500U, 0xCAFEBABEU});
+}
+
+std::vector<uint8_t> buildBeiDouGeoSfrbxMessage() {
+    return buildSfrbxMessage(0x03, 0x03, 0x00, 0x01,
+                             {0x00001000U, 0x00028000U, 0x00000000U});
+}
+
 }  // namespace
 
 TEST(UBXDecoderTest, RejectsMessageWithInvalidChecksum) {
@@ -233,14 +264,66 @@ TEST(UBXDecoderTest, DecodesMixedGnssRawxObservationEpoch) {
     EXPECT_NEAR(glonass->doppler, 125.0, 1e-3);
 }
 
+TEST(UBXDecoderTest, DecodesSfrbxMessage) {
+    io::UBXDecoder decoder;
+    const auto sfrbx_message = buildGpsSfrbxMessage();
+
+    const auto decoded = decoder.decode(sfrbx_message.data(), sfrbx_message.size());
+    ASSERT_EQ(decoded.size(), 1U);
+
+    io::UBXSfrbx sfrbx;
+    ASSERT_TRUE(decoder.decodeSfrbx(decoded.front(), sfrbx));
+    EXPECT_EQ(sfrbx.system, GNSSSystem::GPS);
+    EXPECT_EQ(sfrbx.sv_id, 12);
+    EXPECT_EQ(sfrbx.channel, 1);
+    EXPECT_EQ(sfrbx.frequency_id, 0);
+    ASSERT_EQ(sfrbx.words.size(), 3U);
+    EXPECT_EQ(sfrbx.words[0], 0x8B0000AAU);
+    EXPECT_EQ(sfrbx.words[1], 0x00000500U);
+    EXPECT_EQ(sfrbx.words[2], 0xCAFEBABEU);
+}
+
 TEST(UBXUtilsTest, MapsMessageNamesAndSignals) {
     EXPECT_EQ(io::ubx_utils::getMessageName(0x01, 0x07), "UBX-NAV-PVT");
     EXPECT_EQ(io::ubx_utils::getMessageName(0x02, 0x15), "UBX-RXM-RAWX");
+    EXPECT_EQ(io::ubx_utils::getMessageName(0x02, 0x13), "UBX-RXM-SFRBX");
 
     SignalType signal_type = SignalType::GPS_L1CA;
     EXPECT_TRUE(io::ubx_utils::getSignalType(0, 6, signal_type));
     EXPECT_EQ(signal_type, SignalType::GPS_L5);
     EXPECT_EQ(io::ubx_utils::getSystemFromGnssId(2), GNSSSystem::Galileo);
+}
+
+TEST(UBXUtilsTest, DecodesSfrbxFrameInfoAcrossConstellations) {
+    io::UBXDecoder decoder;
+    io::UBXSfrbx gps_sfrbx;
+    io::UBXSfrbx bds_geo_sfrbx;
+
+    const auto gps_message = buildGpsSfrbxMessage();
+    const auto gps_messages = decoder.decode(gps_message.data(), gps_message.size());
+    ASSERT_EQ(gps_messages.size(), 1U);
+    ASSERT_TRUE(decoder.decodeSfrbx(gps_messages.front(), gps_sfrbx));
+
+    const auto bds_geo_message = buildBeiDouGeoSfrbxMessage();
+    const auto bds_messages = decoder.decode(bds_geo_message.data(), bds_geo_message.size());
+    ASSERT_EQ(bds_messages.size(), 1U);
+    ASSERT_TRUE(decoder.decodeSfrbx(bds_messages.front(), bds_geo_sfrbx));
+
+    io::UBXSfrbxFrameInfo frame_info;
+    ASSERT_TRUE(io::ubx_utils::decodeSfrbxFrameInfo(gps_sfrbx, frame_info));
+    EXPECT_TRUE(frame_info.valid);
+    EXPECT_EQ(frame_info.kind, io::UBXSfrbxFrameInfo::Kind::GPS_LNAV);
+    EXPECT_EQ(frame_info.frame_id, 5);
+    EXPECT_FALSE(frame_info.has_page_id);
+    EXPECT_STREQ(io::ubx_utils::getSfrbxFrameKindName(frame_info.kind), "GPS_LNAV");
+
+    ASSERT_TRUE(io::ubx_utils::decodeSfrbxFrameInfo(bds_geo_sfrbx, frame_info));
+    EXPECT_TRUE(frame_info.valid);
+    EXPECT_EQ(frame_info.kind, io::UBXSfrbxFrameInfo::Kind::BDS_D2);
+    EXPECT_EQ(frame_info.frame_id, 1);
+    EXPECT_TRUE(frame_info.has_page_id);
+    EXPECT_EQ(frame_info.page_id, 10);
+    EXPECT_STREQ(io::ubx_utils::getSfrbxFrameKindName(frame_info.kind), "BDS_D2");
 }
 
 TEST(UBXStreamDecoderTest, StreamsChunkedNavPvtAndRawxMessages) {
@@ -291,4 +374,26 @@ TEST(UBXStreamDecoderTest, StreamsMixedGnssRawxMessage) {
     EXPECT_EQ(events.front().observation.getNumSatellites(), 5U);
     EXPECT_TRUE(events.front().observation.hasObservation(
         SatelliteId(GNSSSystem::BeiDou, 19), SignalType::BDS_B1I));
+}
+
+TEST(UBXStreamDecoderTest, StreamsSfrbxMessage) {
+    io::UBXStreamDecoder decoder;
+    const auto sfrbx = buildGpsSfrbxMessage();
+
+    std::vector<io::UBXStreamDecoder::Event> events;
+    EXPECT_TRUE(decoder.pushBytes(sfrbx.data(), sfrbx.size(), events));
+    ASSERT_EQ(events.size(), 1U);
+    EXPECT_TRUE(events.front().has_message);
+    EXPECT_FALSE(events.front().has_nav_pvt);
+    EXPECT_FALSE(events.front().has_observation);
+    EXPECT_TRUE(events.front().has_sfrbx);
+    EXPECT_EQ(events.front().message.message_class, 0x02);
+    EXPECT_EQ(events.front().message.message_id, 0x13);
+    EXPECT_EQ(events.front().sfrbx.system, GNSSSystem::GPS);
+    EXPECT_EQ(events.front().sfrbx.sv_id, 12);
+    ASSERT_EQ(events.front().sfrbx.words.size(), 3U);
+    io::UBXSfrbxFrameInfo frame_info;
+    ASSERT_TRUE(io::ubx_utils::decodeSfrbxFrameInfo(events.front().sfrbx, frame_info));
+    EXPECT_EQ(frame_info.kind, io::UBXSfrbxFrameInfo::Kind::GPS_LNAV);
+    EXPECT_EQ(frame_info.frame_id, 5);
 }

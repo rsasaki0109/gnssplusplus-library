@@ -12,6 +12,8 @@
 #include <string>
 
 #ifndef _WIN32
+#include <netdb.h>
+#include <sys/socket.h>
 #include <cerrno>
 #include <fcntl.h>
 #include <termios.h>
@@ -584,6 +586,33 @@ int parseSerialBaud(const std::string& source) {
     return std::stoi(baud_text);
 }
 
+struct TcpEndpoint {
+    std::string host;
+    std::string port;
+};
+
+bool isTcpSource(const std::string& source) {
+    return source.rfind("tcp://", 0) == 0;
+}
+
+TcpEndpoint parseTcpEndpoint(const std::string& source) {
+    constexpr const char* kPrefix = "tcp://";
+    if (source.rfind(kPrefix, 0) != 0) {
+        throw std::invalid_argument("TCP source must start with tcp://");
+    }
+
+    const std::string authority = source.substr(std::char_traits<char>::length(kPrefix));
+    const size_t colon_pos = authority.rfind(':');
+    if (colon_pos == std::string::npos || colon_pos == 0 || colon_pos + 1 >= authority.size()) {
+        throw std::invalid_argument("TCP source must be tcp://host:port");
+    }
+
+    TcpEndpoint endpoint;
+    endpoint.host = authority.substr(0, colon_pos);
+    endpoint.port = authority.substr(colon_pos + 1);
+    return endpoint;
+}
+
 #ifndef _WIN32
 speed_t baudRateConstant(int baud) {
     switch (baud) {
@@ -613,6 +642,35 @@ bool configureSerialPort(int fd, int baud) {
     tio.c_cc[VMIN] = 1;
     tio.c_cc[VTIME] = 0;
     return tcsetattr(fd, TCSANOW, &tio) == 0;
+}
+
+int connectTcpSocket(const std::string& source) {
+    const auto endpoint = parseTcpEndpoint(source);
+
+    addrinfo hints{};
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    addrinfo* result = nullptr;
+    if (::getaddrinfo(endpoint.host.c_str(), endpoint.port.c_str(), &hints, &result) != 0) {
+        return -1;
+    }
+
+    int fd = -1;
+    for (addrinfo* address = result; address != nullptr; address = address->ai_next) {
+        fd = ::socket(address->ai_family, address->ai_socktype, address->ai_protocol);
+        if (fd < 0) {
+            continue;
+        }
+        if (::connect(fd, address->ai_addr, address->ai_addrlen) == 0) {
+            break;
+        }
+        ::close(fd);
+        fd = -1;
+    }
+
+    ::freeaddrinfo(result);
+    return fd;
 }
 #endif
 
@@ -2849,6 +2907,9 @@ bool RTCMReader::open(const std::string& source) {
         source.rfind("https://", 0) == 0) {
         return readFromNetwork(source);
     }
+    if (isTcpSource(source)) {
+        return readFromTcp(source);
+    }
     if (source.rfind("serial://", 0) == 0) {
         return readFromSerial(source);
     }
@@ -2870,6 +2931,10 @@ void RTCMReader::close() {
     if (serial_fd_ >= 0) {
         ::close(serial_fd_);
         serial_fd_ = -1;
+    }
+    if (tcp_fd_ >= 0) {
+        ::close(tcp_fd_);
+        tcp_fd_ = -1;
     }
 #endif
     buffer_.clear();
@@ -2918,7 +2983,13 @@ bool RTCMReader::readMessage(RTCMMessage& message) {
         return false;
     };
 
-    if (serial_fd_ < 0) {
+    const int stream_fd =
+#ifndef _WIN32
+        (serial_fd_ >= 0 ? serial_fd_ : tcp_fd_);
+#else
+        -1;
+#endif
+    if (stream_fd < 0) {
         return tryDecodeBufferedMessage();
     }
 
@@ -2934,7 +3005,7 @@ bool RTCMReader::readMessage(RTCMMessage& message) {
             buffer_pos_ = 0;
         }
 
-        const ssize_t count = ::read(serial_fd_, chunk.data(), chunk.size());
+        const ssize_t count = ::read(stream_fd, chunk.data(), chunk.size());
         if (count < 0) {
             if (errno == EINTR) {
                 continue;
@@ -2996,6 +3067,25 @@ bool RTCMReader::readFromSerial(const std::string& source) {
     serial_fd_ = fd;
     is_open_ = true;
     return true;
+#else
+    (void)source;
+    return false;
+#endif
+}
+
+bool RTCMReader::readFromTcp(const std::string& source) {
+#ifndef _WIN32
+    try {
+        const int fd = connectTcpSocket(source);
+        if (fd < 0) {
+            return false;
+        }
+        tcp_fd_ = fd;
+        is_open_ = true;
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
 #else
     (void)source;
     return false;

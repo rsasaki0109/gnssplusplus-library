@@ -156,6 +156,10 @@ GNSSTime bdtToGpst(const GNSSTime& time) {
     return time + 14.0;
 }
 
+GNSSTime gpstToBdt(const GNSSTime& time) {
+    return time - 14.0;
+}
+
 GNSSTime bdtWeekTowToGpst(int week, double tow) {
     static constexpr int kBdtWeekOffset = 1356;
     return GNSSTime(week + kBdtWeekOffset, tow) + 14.0;
@@ -1327,7 +1331,7 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
                 eph.toe = GNSSTime(week, toe_seconds);
                 eph.week = static_cast<uint16_t>(week);
                 eph.tgd_secondary = delay_2_or_iodc;
-                eph.iodc = 0;
+                eph.iodc = static_cast<int>(iode);
                 break;
             case GNSSSystem::QZSS:
             case GNSSSystem::GPS:
@@ -1520,10 +1524,6 @@ bool RINEXWriter::writeNavigationMessage(const Ephemeris& eph) {
         return false;
     }
 
-    if (eph.satellite.system == GNSSSystem::BeiDou) {
-        return false;
-    }
-
     if (eph.satellite.system == GNSSSystem::GLONASS) {
         int year = 0;
         int month = 0;
@@ -1572,8 +1572,17 @@ bool RINEXWriter::writeNavigationMessage(const Ephemeris& eph) {
         return true;
     }
 
+    const bool is_beidou = eph.satellite.system == GNSSSystem::BeiDou;
+    const bool is_galileo = eph.satellite.system == GNSSSystem::Galileo;
+    const GNSSTime toc_time = is_beidou ? gpstToBdt(eph.toc) : eph.toc;
+    const double week_field = static_cast<double>(eph.week);
+    const double line6_col4 =
+        (is_beidou || is_galileo) ? eph.tgd_secondary : static_cast<double>(eph.iodc);
+    const double line7_col1 = is_beidou ? gpstToBdt(eph.tof).tow : eph.tof.tow;
+    const double line7_col2 = is_beidou ? static_cast<double>(eph.iodc) : 0.0;
+
     file_ << formatSatelliteId(eph.satellite, header_.version)
-          << formatTime(eph.toc, header_.version)
+          << formatTime(toc_time, header_.version)
           << formatRinexFloat(eph.af0)
           << formatRinexFloat(eph.af1)
           << formatRinexFloat(eph.af2)
@@ -1610,7 +1619,7 @@ bool RINEXWriter::writeNavigationMessage(const Ephemeris& eph) {
     file_ << "    "
           << formatRinexFloat(eph.idot)
           << formatRinexFloat(0.0)
-          << formatRinexFloat(eph.week)
+          << formatRinexFloat(week_field)
           << formatRinexFloat(0.0)
           << "\n";
 
@@ -1618,12 +1627,12 @@ bool RINEXWriter::writeNavigationMessage(const Ephemeris& eph) {
           << formatRinexFloat(eph.sv_accuracy)
           << formatRinexFloat(eph.sv_health)
           << formatRinexFloat(eph.tgd)
-          << formatRinexFloat(eph.iodc)
+          << formatRinexFloat(line6_col4)
           << "\n";
 
     file_ << "    "
-          << formatRinexFloat(eph.tof.tow)
-          << formatRinexFloat(0.0)
+          << formatRinexFloat(line7_col1)
+          << formatRinexFloat(line7_col2)
           << formatRinexFloat(0.0)
           << formatRinexFloat(0.0)
           << "\n";
