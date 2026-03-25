@@ -5,10 +5,18 @@
 #include <chrono>
 #include <cmath>
 #include <ctime>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <limits>
 #include <string>
+
+#ifndef _WIN32
+#include <cerrno>
+#include <fcntl.h>
+#include <termios.h>
+#include <unistd.h>
+#endif
 
 namespace libgnss {
 namespace io {
@@ -39,6 +47,7 @@ constexpr double kPow2Neg55 = 2.77555756156289135106e-17;
 constexpr uint16_t kMinimumExpandedGpsWeek = 1560;
 constexpr double kSecondsPerDay = 86400.0;
 constexpr double kHalfDaySeconds = 43200.0;
+constexpr int kDefaultSerialBaud = 115200;
 constexpr double kUraMetersTable[16] = {
     2.4,   3.4,   4.85,   6.85,
     9.65,  13.65, 24.0,   48.0,
@@ -541,6 +550,71 @@ bool decodeGlonassMsmExtendedInfo(uint8_t info, int& frequency_channel) {
     }
     return false;
 }
+
+std::string resolveSerialPath(const std::string& source) {
+    constexpr const char* kPrefix = "serial://";
+    if (source.rfind(kPrefix, 0) != 0) {
+        return source;
+    }
+
+    std::string path = source.substr(std::char_traits<char>::length(kPrefix));
+    const size_t query_pos = path.find('?');
+    if (query_pos != std::string::npos) {
+        path.resize(query_pos);
+    }
+    if (!path.empty() && path.front() != '/') {
+        return path;
+    }
+    while (path.size() > 1 && path[0] == '/' && path[1] == '/') {
+        path.erase(path.begin());
+    }
+    return path;
+}
+
+int parseSerialBaud(const std::string& source) {
+    constexpr const char* kQuery = "?baud=";
+    const size_t query_pos = source.find(kQuery);
+    if (query_pos == std::string::npos) {
+        return kDefaultSerialBaud;
+    }
+    const std::string baud_text = source.substr(query_pos + std::char_traits<char>::length(kQuery));
+    if (baud_text.empty()) {
+        return kDefaultSerialBaud;
+    }
+    return std::stoi(baud_text);
+}
+
+#ifndef _WIN32
+speed_t baudRateConstant(int baud) {
+    switch (baud) {
+        case 9600: return B9600;
+        case 19200: return B19200;
+        case 38400: return B38400;
+        case 57600: return B57600;
+        case 115200: return B115200;
+        case 230400: return B230400;
+        default:
+            throw std::invalid_argument("unsupported serial baud rate");
+    }
+}
+
+bool configureSerialPort(int fd, int baud) {
+    termios tio{};
+    if (tcgetattr(fd, &tio) != 0) {
+        return false;
+    }
+    cfmakeraw(&tio);
+    const speed_t speed = baudRateConstant(baud);
+    cfsetispeed(&tio, speed);
+    cfsetospeed(&tio, speed);
+    tio.c_cflag |= (CLOCAL | CREAD);
+    tio.c_cflag &= ~CSTOPB;
+    tio.c_cflag &= ~CRTSCTS;
+    tio.c_cc[VMIN] = 1;
+    tio.c_cc[VTIME] = 0;
+    return tcsetattr(fd, TCSANOW, &tio) == 0;
+}
+#endif
 
 uint32_t fixedFrequencyMsmEpochMs(RTCMMessageType message_type, const GNSSTime& time) {
     if (message_type == RTCMMessageType::RTCM_1124 ||
@@ -2775,6 +2849,14 @@ bool RTCMReader::open(const std::string& source) {
         source.rfind("https://", 0) == 0) {
         return readFromNetwork(source);
     }
+    if (source.rfind("serial://", 0) == 0) {
+        return readFromSerial(source);
+    }
+    std::error_code ec;
+    const auto status = std::filesystem::status(source, ec);
+    if (!ec && std::filesystem::is_character_file(status)) {
+        return readFromSerial(source);
+    }
     return readFromFile(source);
 }
 
@@ -2784,6 +2866,12 @@ void RTCMReader::close() {
         delete ntrip_client_;
         ntrip_client_ = nullptr;
     }
+#ifndef _WIN32
+    if (serial_fd_ >= 0) {
+        ::close(serial_fd_);
+        serial_fd_ = -1;
+    }
+#endif
     buffer_.clear();
     buffer_pos_ = 0;
     is_open_ = false;
@@ -2800,34 +2888,67 @@ bool RTCMReader::readMessage(RTCMMessage& message) {
         return ntrip_client_->readMessage(message);
     }
 
-    while (buffer_pos_ < buffer_.size()) {
-        if (buffer_[buffer_pos_] != kRTCMPreamble) {
+    auto tryDecodeBufferedMessage = [&]() -> bool {
+        while (buffer_pos_ < buffer_.size()) {
+            if (buffer_[buffer_pos_] != kRTCMPreamble) {
+                ++buffer_pos_;
+                continue;
+            }
+
+            if (buffer_pos_ + 5 > buffer_.size()) {
+                return false;
+            }
+
+            const uint16_t payload_length =
+                static_cast<uint16_t>(((buffer_[buffer_pos_ + 1] & 0x03U) << 8) | buffer_[buffer_pos_ + 2]);
+            const size_t total_length = 3U + payload_length + 3U;
+            if (buffer_pos_ + total_length > buffer_.size()) {
+                return false;
+            }
+
+            auto decoded = processor_.decode(buffer_.data() + buffer_pos_, total_length);
+            if (!decoded.empty()) {
+                message = std::move(decoded.front());
+                buffer_pos_ += total_length;
+                return true;
+            }
+
             ++buffer_pos_;
-            continue;
         }
+        return false;
+    };
 
-        if (buffer_pos_ + 5 > buffer_.size()) {
-            return false;
-        }
+    if (serial_fd_ < 0) {
+        return tryDecodeBufferedMessage();
+    }
 
-        const uint16_t payload_length =
-            static_cast<uint16_t>(((buffer_[buffer_pos_ + 1] & 0x03U) << 8) | buffer_[buffer_pos_ + 2]);
-        const size_t total_length = 3U + payload_length + 3U;
-        if (buffer_pos_ + total_length > buffer_.size()) {
-            return false;
-        }
-
-        auto decoded = processor_.decode(buffer_.data() + buffer_pos_, total_length);
-        if (!decoded.empty()) {
-            message = std::move(decoded.front());
-            buffer_pos_ += total_length;
+#ifndef _WIN32
+    std::vector<uint8_t> chunk(4096);
+    while (true) {
+        if (tryDecodeBufferedMessage()) {
             return true;
         }
 
-        ++buffer_pos_;
-    }
+        if (buffer_pos_ > 0) {
+            buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(buffer_pos_));
+            buffer_pos_ = 0;
+        }
 
+        const ssize_t count = ::read(serial_fd_, chunk.data(), chunk.size());
+        if (count < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return false;
+        }
+        if (count == 0) {
+            return tryDecodeBufferedMessage();
+        }
+        buffer_.insert(buffer_.end(), chunk.begin(), chunk.begin() + count);
+    }
+#else
     return false;
+#endif
 }
 
 bool RTCMReader::readFromFile(const std::string& filename) {
@@ -2852,6 +2973,33 @@ bool RTCMReader::readFromNetwork(const std::string& url) {
 
     is_open_ = true;
     return true;
+}
+
+bool RTCMReader::readFromSerial(const std::string& source) {
+#ifndef _WIN32
+    const std::string path = resolveSerialPath(source);
+    const int baud = parseSerialBaud(source);
+    const int fd = ::open(path.c_str(), O_RDONLY | O_NOCTTY);
+    if (fd < 0) {
+        return false;
+    }
+    try {
+        if (!configureSerialPort(fd, baud)) {
+            ::close(fd);
+            return false;
+        }
+    } catch (const std::exception&) {
+        ::close(fd);
+        return false;
+    }
+
+    serial_fd_ = fd;
+    is_open_ = true;
+    return true;
+#else
+    (void)source;
+    return false;
+#endif
 }
 
 RTCMProcessor::RTCMStats RTCMReader::getStats() const {

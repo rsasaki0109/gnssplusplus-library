@@ -181,10 +181,12 @@ libgnss++/
 
 ### Phase 4: リアルタイム対応 (優先度: 中)
 
-- [ ] NTRIP client (RTCM 受信)
-- [ ] RTCM 3 decoder (MSM messages)
-- [ ] リアルタイム KF update
-- [ ] serial port receiver interface (u-blox UBX)
+- [x] NTRIP client (RTCM 受信)
+- [x] RTCM 3 decoder (MSM4/5/6/7, 1003/1004, 1019/1020)
+- [x] serial port receiver interface (u-blox UBX rover + RTCM serial ingest)
+- [x] リアルタイム KF update の基本導線
+  - `gnss live` / `gnss rcv` / `gnss stream` の live path は動作確認済み
+  - rover UBX file/serial, base RTCM file/NTRIP/serial を回帰で固定
 
 ### Phase 5: PPP (優先度: 低)
 

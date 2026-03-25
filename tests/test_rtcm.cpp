@@ -12,7 +12,9 @@
 
 #ifndef _WIN32
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netinet/in.h>
+#include <stdlib.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #endif
@@ -315,16 +317,16 @@ Ephemeris makeGpsEphemeris() {
 
 Ephemeris makeGlonassEphemeris() {
     const GNSSTime now = currentGpsTime();
-    const double current_utc_tow = now.tow - static_cast<double>(currentLeapSeconds());
-    const double current_utc_day_start = std::floor(current_utc_tow / 86400.0) * 86400.0;
-    const double current_utc_day_start_gpst =
-        current_utc_day_start + static_cast<double>(currentLeapSeconds());
+    const double leap_seconds = static_cast<double>(currentLeapSeconds());
+    const double current_utc_tow = now.tow - leap_seconds;
+    const double toe_utc_tow = std::floor(current_utc_tow / 900.0) * 900.0;
 
     Ephemeris eph;
     eph.satellite = SatelliteId(GNSSSystem::GLONASS, 7);
     eph.week = static_cast<uint16_t>(now.week);
-    eph.toe = GNSSTime(now.week, current_utc_day_start_gpst + 9.0 * 3600.0);
-    eph.tof = GNSSTime(now.week, current_utc_day_start_gpst + 9.0 * 3600.0 + 30.0 * 60.0);
+    // Keep toe/tof close to "now" so RTCM 1020 day alignment stays stable across UTC midnight.
+    eph.toe = GNSSTime(now.week, toe_utc_tow + leap_seconds);
+    eph.tof = eph.toe + 1800.0;
     eph.toc = eph.toe;
     eph.toes = eph.toe.tow;
     eph.glonass_position = Vector3d(19123456.5, -12345678.0, 21765432.5);
@@ -420,6 +422,25 @@ private:
     uint16_t port_ = 0;
     std::thread worker_;
 };
+
+struct PseudoTerminal {
+    int master_fd = -1;
+    std::string slave_path;
+};
+
+PseudoTerminal openPseudoTerminal() {
+    PseudoTerminal pty;
+    pty.master_fd = posix_openpt(O_RDWR | O_NOCTTY);
+    EXPECT_GE(pty.master_fd, 0);
+    EXPECT_EQ(grantpt(pty.master_fd), 0);
+    EXPECT_EQ(unlockpt(pty.master_fd), 0);
+    char* name = ptsname(pty.master_fd);
+    EXPECT_NE(name, nullptr);
+    if (name != nullptr) {
+        pty.slave_path = name;
+    }
+    return pty;
+}
 #endif
 
 }  // namespace
@@ -1631,6 +1652,36 @@ TEST(RTCMReaderTest, ReadsMessagesFromNetworkViaNtrip) {
     io::RTCMMessage message;
     ASSERT_TRUE(reader.readMessage(message));
     EXPECT_EQ(message.type, io::RTCMMessageType::RTCM_1005);
+    const auto stats = reader.getStats();
+    EXPECT_EQ(stats.valid_messages, 1U);
+}
+
+TEST(RTCMReaderTest, ReadsMessagesFromSerialDevice) {
+    const auto frame = buildRtcm1005(12.0, 24.0, 36.0);
+    PseudoTerminal pty = openPseudoTerminal();
+    ASSERT_GE(pty.master_fd, 0);
+    ASSERT_FALSE(pty.slave_path.empty());
+
+    std::thread writer([master_fd = pty.master_fd, frame]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        const ssize_t written =
+            ::write(master_fd, frame.data(), static_cast<ssize_t>(frame.size()));
+        EXPECT_EQ(written, static_cast<ssize_t>(frame.size()));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        ::close(master_fd);
+    });
+
+    io::RTCMReader reader;
+    const bool opened = reader.open("serial://" + pty.slave_path + "?baud=115200");
+
+    io::RTCMMessage message;
+    const bool read_ok = opened && reader.readMessage(message);
+    writer.join();
+
+    ASSERT_TRUE(opened);
+    ASSERT_TRUE(read_ok);
+    EXPECT_EQ(message.type, io::RTCMMessageType::RTCM_1005);
+    EXPECT_FALSE(reader.readMessage(message));
     const auto stats = reader.getStats();
     EXPECT_EQ(stats.valid_messages, 1U);
 }

@@ -80,5 +80,30 @@ bool getSignalType(uint8_t gnss_id, uint8_t sig_id, SignalType& signal_type);
 
 }  // namespace ubx_utils
 
+class UBXStreamDecoder {
+public:
+    struct Event {
+        bool has_message = false;
+        UBXMessage message;
+        bool has_nav_pvt = false;
+        UBXNavPVT nav_pvt;
+        bool has_observation = false;
+        ObservationData observation;
+    };
+
+    UBXStreamDecoder() = default;
+    ~UBXStreamDecoder() = default;
+
+    void clear();
+    bool pushBytes(const uint8_t* data, size_t size, std::vector<Event>& events);
+
+    const UBXDecoder& getDecoder() const { return decoder_; }
+    UBXDecoder::UBXStats getStats() const { return decoder_.getStats(); }
+
+private:
+    UBXDecoder decoder_;
+    std::vector<uint8_t> buffer_;
+};
+
 }  // namespace io
 }  // namespace libgnss

@@ -130,8 +130,8 @@ The `./apps/gnss_*` launchers remain as Unix convenience wrappers, but they are 
 | `gnss solve` | Batch RTK post-processing from RINEX rover/base/nav |
 | `gnss rinex-info` | Inspect RINEX headers and optionally count epochs / ephemerides |
 | `gnss stream` | Read RTCM from file or NTRIP, print message summaries, and relay frames |
-| `gnss ubx-info` | Inspect UBX NAV/RAWX logs and optionally export RAWX epochs to RINEX |
-| `gnss convert` | Convert RTCM or UBX input into simple RINEX observation/navigation files |
+| `gnss ubx-info` | Inspect UBX NAV/RAWX logs or serial streams and optionally export RAWX epochs to RINEX |
+| `gnss convert` | Convert RTCM, NTRIP, or UBX file/serial input into simple RINEX observation/navigation files |
 | `gnss replay` | Replay rover/base data from RINEX, UBX, or RTCM through the RTK solver |
 | `gnss stats` | Text summary for `.pos` results |
 | `gnss plot` | Time-series and ENU plots for one or two `.pos` files |
@@ -171,11 +171,15 @@ python3 apps/gnss.py solve \
 
 ```bash
 python3 apps/gnss.py stream --input correction.rtcm3 --output relay.rtcm3 --limit 100
+python3 apps/gnss.py stream --input serial:///dev/ttyUSB1?baud=115200 --limit 10
 python3 apps/gnss.py stream --input ntrip://user:pass@caster.example.com:2101/MOUNT --decode-observations --limit 10
 python3 apps/gnss.py ubx-info --input logs/session.ubx --decode-nav --decode-observations --obs-rinex-out output/session.obs
+python3 apps/gnss.py ubx-info --input serial:///dev/ttyACM0?baud=115200 --decode-observations --limit 10
 python3 apps/gnss.py convert --format ubx --input logs/session.ubx --obs-out output/session.obs
+python3 apps/gnss.py convert --format ubx --input serial:///dev/ttyACM0?baud=115200 --obs-out output/stream.obs --limit 10
 python3 apps/gnss.py convert --format rtcm --input correction.rtcm3 --obs-out output/correction.obs --nav-out output/correction.nav
 python3 apps/gnss.py replay --rover-rinex data/rover_kinematic.obs --base-rinex data/base_kinematic.obs --nav-rinex data/navigation_kinematic.nav --out output/replay.pos
+python3 apps/gnss.py live --rover-ubx serial:///dev/ttyACM0 --rover-ubx-baud 115200 --base-rtcm correction.rtcm3 --nav-rinex data/driving/navigation.nav --out output/live.pos
 python3 apps/gnss.py rcv start --config configs/live.example.conf --status-out output/receiver_status.json --log-out output/receiver.log
 python3 apps/gnss.py rcv status --status-out output/receiver_status.json --wait-seconds 5
 python3 apps/gnss.py rcv restart --config configs/live.example.conf --status-out output/receiver_status.json --wait-seconds 1
@@ -193,7 +197,7 @@ python3 apps/gnss.py odaiba-benchmark --rtklib-bin /path/to/rnx2rtkp
 python3 apps/gnss.py odaiba-scan --glonass-ar autocal --window-size 1000 --step 1000 --output-csv output/odaiba_window_scan.csv
 ```
 
-`gnss stream` now covers the low-level RTCM/NTRIP ingest and relay path, `gnss convert` covers the first practical `convbin`-style export path for RTCM/UBX logs, `gnss replay` provides an offline rover/base replay solver path, `gnss live` covers dual-RTCM rover/base solving with inline station/nav metadata recovery, short-gap base interpolation, and short hold-last-base operation for real-time correction lag, and `gnss rcv` adds an `rtkrcv`-style config-file wrapper with foreground `run` plus `start/restart/status/stop` control backed by JSON status snapshots and waitable status polling. `scripts/run_odaiba_comparison.sh` remains as a compatibility wrapper, but it now delegates to `gnss odaiba-benchmark`.
+`gnss stream` now covers the low-level RTCM ingest and relay path from file, NTRIP, or serial sources, `gnss convert` covers the first practical `convbin`-style export path for RTCM/UBX logs, `gnss replay` provides an offline rover/base replay solver path, `gnss live` covers RTCM or UBX rover input against RTCM base corrections with inline station/nav metadata recovery, short-gap base interpolation, and short hold-last-base operation for real-time correction lag, and `gnss rcv` adds an `rtkrcv`-style config-file wrapper with foreground `run` plus `start/restart/status/stop` control backed by JSON status snapshots and waitable status polling. `scripts/run_odaiba_comparison.sh` remains as a compatibility wrapper, but it now delegates to `gnss odaiba-benchmark`.
 
 ### Requirements
 

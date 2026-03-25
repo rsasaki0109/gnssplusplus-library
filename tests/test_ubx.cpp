@@ -59,33 +59,65 @@ std::vector<uint8_t> buildNavPvtMessage() {
     return buildUBXMessage(0x01, 0x07, payload);
 }
 
-std::vector<uint8_t> buildRawxMessage() {
+struct RawxMeasurement {
+    double pseudorange = 0.0;
+    double carrier_phase = 0.0;
+    float doppler = 0.0f;
+    uint8_t gnss_id = 0;
+    uint8_t sv_id = 0;
+    uint8_t sig_id = 0;
+    uint16_t locktime = 500;
+    uint8_t cno = 45;
+    uint8_t trk_stat = 0x03;
+};
+
+std::vector<uint8_t> buildRawxMessage(const std::vector<RawxMeasurement>& measurements,
+                                      double tow = 345600.125,
+                                      uint16_t week = 2200) {
     std::vector<uint8_t> payload;
-    appendLittleEndian<double>(payload, 345600.125);
-    appendLittleEndian<uint16_t>(payload, 2200);
+    appendLittleEndian<double>(payload, tow);
+    appendLittleEndian<uint16_t>(payload, week);
     payload.push_back(18);
-    payload.push_back(1);
+    payload.push_back(static_cast<uint8_t>(measurements.size()));
     payload.push_back(0x01);
     payload.push_back(0x01);
     payload.push_back(0x00);
     payload.push_back(0x00);
 
-    appendLittleEndian<double>(payload, 20200000.25);
-    appendLittleEndian<double>(payload, 110000.5);
-    appendLittleEndian<float>(payload, -1234.5f);
-    payload.push_back(0);
-    payload.push_back(12);
-    payload.push_back(0);
-    payload.push_back(0);
-    appendLittleEndian<uint16_t>(payload, 500);
-    payload.push_back(45);
-    payload.push_back(0);
-    payload.push_back(0);
-    payload.push_back(0);
-    payload.push_back(0x03);
-    payload.push_back(0);
+    for (const auto& measurement : measurements) {
+        appendLittleEndian<double>(payload, measurement.pseudorange);
+        appendLittleEndian<double>(payload, measurement.carrier_phase);
+        appendLittleEndian<float>(payload, measurement.doppler);
+        payload.push_back(measurement.gnss_id);
+        payload.push_back(measurement.sv_id);
+        payload.push_back(measurement.sig_id);
+        payload.push_back(0);
+        appendLittleEndian<uint16_t>(payload, measurement.locktime);
+        payload.push_back(measurement.cno);
+        payload.push_back(0);
+        payload.push_back(0);
+        payload.push_back(0);
+        payload.push_back(measurement.trk_stat);
+        payload.push_back(0);
+    }
 
     return buildUBXMessage(0x02, 0x15, payload);
+}
+
+std::vector<uint8_t> buildRawxMessage() {
+    return buildRawxMessage({RawxMeasurement{
+        20200000.25, 110000.5, -1234.5f, 0, 12, 0, 500, 45, 0x03
+    }});
+}
+
+std::vector<uint8_t> buildMixedRawxMessage() {
+    return buildRawxMessage({
+        RawxMeasurement{20200000.25, 110000.5, -1234.5f, 0, 12, 0, 500, 45, 0x03},
+        RawxMeasurement{21400000.75, 120000.25, -432.5f, 2, 5, 0, 480, 42, 0x03},
+        RawxMeasurement{22300000.50, 130000.75, 125.0f, 6, 7, 2, 460, 41, 0x03},
+        RawxMeasurement{23400000.00, 140000.125, -55.0f, 3, 19, 0, 440, 40, 0x03},
+        RawxMeasurement{24500000.25, 150000.875, 8.0f, 5, 3, 0, 420, 39, 0x03},
+    });
 }
 
 }  // namespace
@@ -173,6 +205,34 @@ TEST(UBXDecoderTest, AppliesLastNavPositionToRawxEpoch) {
     EXPECT_GT(positioned_obs.receiver_position.norm(), 1000.0);
 }
 
+TEST(UBXDecoderTest, DecodesMixedGnssRawxObservationEpoch) {
+    io::UBXDecoder decoder;
+    const auto rawx_message = buildMixedRawxMessage();
+
+    const auto decoded = decoder.decode(rawx_message.data(), rawx_message.size());
+    ASSERT_EQ(decoded.size(), 1U);
+
+    ObservationData obs_data;
+    ASSERT_TRUE(decoder.decodeRawx(decoded.front(), obs_data));
+    ASSERT_EQ(obs_data.observations.size(), 5U);
+
+    EXPECT_TRUE(obs_data.hasObservation(SatelliteId(GNSSSystem::GPS, 12), SignalType::GPS_L1CA));
+    EXPECT_TRUE(obs_data.hasObservation(SatelliteId(GNSSSystem::Galileo, 5), SignalType::GAL_E1));
+    EXPECT_TRUE(obs_data.hasObservation(SatelliteId(GNSSSystem::GLONASS, 7), SignalType::GLO_L2CA));
+    EXPECT_TRUE(obs_data.hasObservation(SatelliteId(GNSSSystem::BeiDou, 19), SignalType::BDS_B1I));
+    EXPECT_TRUE(obs_data.hasObservation(SatelliteId(GNSSSystem::QZSS, 3), SignalType::QZS_L1CA));
+
+    const Observation* galileo =
+        obs_data.getObservation(SatelliteId(GNSSSystem::Galileo, 5), SignalType::GAL_E1);
+    ASSERT_NE(galileo, nullptr);
+    EXPECT_NEAR(galileo->pseudorange, 21400000.75, 1e-6);
+
+    const Observation* glonass =
+        obs_data.getObservation(SatelliteId(GNSSSystem::GLONASS, 7), SignalType::GLO_L2CA);
+    ASSERT_NE(glonass, nullptr);
+    EXPECT_NEAR(glonass->doppler, 125.0, 1e-3);
+}
+
 TEST(UBXUtilsTest, MapsMessageNamesAndSignals) {
     EXPECT_EQ(io::ubx_utils::getMessageName(0x01, 0x07), "UBX-NAV-PVT");
     EXPECT_EQ(io::ubx_utils::getMessageName(0x02, 0x15), "UBX-RXM-RAWX");
@@ -181,4 +241,54 @@ TEST(UBXUtilsTest, MapsMessageNamesAndSignals) {
     EXPECT_TRUE(io::ubx_utils::getSignalType(0, 6, signal_type));
     EXPECT_EQ(signal_type, SignalType::GPS_L5);
     EXPECT_EQ(io::ubx_utils::getSystemFromGnssId(2), GNSSSystem::Galileo);
+}
+
+TEST(UBXStreamDecoderTest, StreamsChunkedNavPvtAndRawxMessages) {
+    io::UBXStreamDecoder decoder;
+    const auto nav = buildNavPvtMessage();
+    const auto rawx = buildRawxMessage();
+
+    std::vector<uint8_t> combined;
+    combined.insert(combined.end(), nav.begin(), nav.end());
+    combined.insert(combined.end(), rawx.begin(), rawx.end());
+
+    std::vector<io::UBXStreamDecoder::Event> events;
+    EXPECT_FALSE(decoder.pushBytes(combined.data(), 5, events));
+    EXPECT_TRUE(events.empty());
+
+    EXPECT_TRUE(decoder.pushBytes(combined.data() + 5, nav.size() - 5, events));
+    ASSERT_EQ(events.size(), 1U);
+    EXPECT_TRUE(events.front().has_message);
+    EXPECT_TRUE(events.front().has_nav_pvt);
+    EXPECT_FALSE(events.front().has_observation);
+    EXPECT_EQ(events.front().message.message_class, 0x01);
+    EXPECT_EQ(events.front().message.message_id, 0x07);
+    EXPECT_EQ(events.front().nav_pvt.fix_type, 3);
+
+    EXPECT_TRUE(decoder.pushBytes(rawx.data(), rawx.size(), events));
+    ASSERT_EQ(events.size(), 1U);
+    EXPECT_TRUE(events.front().has_message);
+    EXPECT_FALSE(events.front().has_nav_pvt);
+    EXPECT_TRUE(events.front().has_observation);
+    EXPECT_EQ(events.front().message.message_class, 0x02);
+    EXPECT_EQ(events.front().message.message_id, 0x15);
+    ASSERT_EQ(events.front().observation.time.week, 2200);
+    ASSERT_EQ(events.front().observation.observations.size(), 1U);
+    EXPECT_GT(events.front().observation.receiver_position.norm(), 1000.0);
+}
+
+TEST(UBXStreamDecoderTest, StreamsMixedGnssRawxMessage) {
+    io::UBXStreamDecoder decoder;
+    const auto rawx = buildMixedRawxMessage();
+
+    std::vector<io::UBXStreamDecoder::Event> events;
+    EXPECT_TRUE(decoder.pushBytes(rawx.data(), rawx.size(), events));
+    ASSERT_EQ(events.size(), 1U);
+    EXPECT_TRUE(events.front().has_message);
+    EXPECT_TRUE(events.front().has_observation);
+    EXPECT_EQ(events.front().message.message_class, 0x02);
+    EXPECT_EQ(events.front().message.message_id, 0x15);
+    EXPECT_EQ(events.front().observation.getNumSatellites(), 5U);
+    EXPECT_TRUE(events.front().observation.hasObservation(
+        SatelliteId(GNSSSystem::BeiDou, 19), SignalType::BDS_B1I));
 }

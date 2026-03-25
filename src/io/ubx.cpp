@@ -30,6 +30,16 @@ SignalType defaultSignalType(GNSSSystem system) {
     }
 }
 
+bool validateUbxChecksum(const uint8_t* data, size_t payload_length, uint8_t ck_a, uint8_t ck_b) {
+    uint8_t computed_a = 0;
+    uint8_t computed_b = 0;
+    for (size_t i = 0; i < payload_length; ++i) {
+        computed_a = static_cast<uint8_t>(computed_a + data[i]);
+        computed_b = static_cast<uint8_t>(computed_b + computed_a);
+    }
+    return computed_a == ck_a && computed_b == ck_b;
+}
+
 }  // namespace
 
 void UBXDecoder::clear() {
@@ -205,13 +215,7 @@ uint16_t UBXDecoder::messageKey(uint8_t message_class, uint8_t message_id) {
 }
 
 bool UBXDecoder::validateChecksum(const uint8_t* data, size_t payload_length, uint8_t ck_a, uint8_t ck_b) {
-    uint8_t computed_a = 0;
-    uint8_t computed_b = 0;
-    for (size_t i = 0; i < payload_length; ++i) {
-        computed_a = static_cast<uint8_t>(computed_a + data[i]);
-        computed_b = static_cast<uint8_t>(computed_b + computed_a);
-    }
-    return computed_a == ck_a && computed_b == ck_b;
+    return validateUbxChecksum(data, payload_length, ck_a, ck_b);
 }
 
 namespace ubx_utils {
@@ -299,6 +303,68 @@ bool getSignalType(uint8_t gnss_id, uint8_t sig_id, SignalType& signal_type) {
 }
 
 }  // namespace ubx_utils
+
+void UBXStreamDecoder::clear() {
+    decoder_.clear();
+    buffer_.clear();
+}
+
+bool UBXStreamDecoder::pushBytes(const uint8_t* data,
+                                 size_t size,
+                                 std::vector<UBXStreamDecoder::Event>& events) {
+    if (data != nullptr && size != 0) {
+        buffer_.insert(buffer_.end(), data, data + size);
+    }
+    events.clear();
+
+    while (!buffer_.empty()) {
+        size_t sync_index = 0;
+        while (sync_index + 1 < buffer_.size() &&
+               (buffer_[sync_index] != kUBXSync1 || buffer_[sync_index + 1] != kUBXSync2)) {
+            ++sync_index;
+        }
+
+        if (sync_index + 1 >= buffer_.size()) {
+            const bool keep_sync_prefix = buffer_.back() == kUBXSync1;
+            buffer_.assign(keep_sync_prefix ? 1U : 0U, kUBXSync1);
+            return !events.empty();
+        }
+        if (sync_index > 0) {
+            buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(sync_index));
+        }
+        if (buffer_.size() < 8U) {
+            break;
+        }
+
+        const uint16_t payload_length = readLittleEndian<uint16_t>(buffer_.data() + 4);
+        const size_t total_length = 6U + static_cast<size_t>(payload_length) + 2U;
+        if (buffer_.size() < total_length) {
+            break;
+        }
+
+        const uint8_t ck_a = buffer_[6U + payload_length];
+        const uint8_t ck_b = buffer_[7U + payload_length];
+        if (!validateUbxChecksum(buffer_.data() + 2, 4U + payload_length, ck_a, ck_b)) {
+            const auto ignored = decoder_.decode(buffer_.data(), total_length);
+            (void)ignored;
+            buffer_.erase(buffer_.begin());
+            continue;
+        }
+
+        const auto decoded = decoder_.decode(buffer_.data(), total_length);
+        if (!decoded.empty()) {
+            const auto& message = decoded.front();
+            Event event;
+            event.has_message = true;
+            event.message = message;
+            event.has_nav_pvt = decoder_.decodeNavPVT(message, event.nav_pvt);
+            event.has_observation = decoder_.decodeRawx(message, event.observation);
+            events.push_back(std::move(event));
+        }
+        buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(total_length));
+    }
+    return !events.empty();
+}
 
 }  // namespace io
 }  // namespace libgnss
