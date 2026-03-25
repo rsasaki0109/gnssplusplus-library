@@ -9,9 +9,13 @@ import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
+
+if os.name != "nt":
+    import pty
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -135,20 +139,38 @@ def build_nav_pvt_message() -> bytes:
     return build_ubx_message(0x01, 0x07, payload)
 
 
-def build_rawx_message() -> bytes:
+def build_rawx_message(measurements=None) -> bytes:
+    if measurements is None:
+        measurements = [
+            (20200000.25, 110000.5, -1234.5, 0, 12, 0, 500, 45, 0x03),
+        ]
+
     payload = bytearray()
     payload.extend(struct.pack("<d", 345600.125))
     payload.extend(struct.pack("<H", 2200))
-    payload.extend(bytes([18, 1, 0x01, 0x01, 0x00, 0x00]))
+    payload.extend(bytes([18, len(measurements), 0x01, 0x01, 0x00, 0x00]))
 
-    payload.extend(struct.pack("<d", 20200000.25))
-    payload.extend(struct.pack("<d", 110000.5))
-    payload.extend(struct.pack("<f", -1234.5))
-    payload.extend(bytes([0, 12, 0, 0]))
-    payload.extend(struct.pack("<H", 500))
-    payload.extend(bytes([45, 0, 0, 0, 0x03, 0]))
+    for pseudorange, carrier_phase, doppler, gnss_id, sv_id, sig_id, locktime, cno, trk_stat in measurements:
+        payload.extend(struct.pack("<d", pseudorange))
+        payload.extend(struct.pack("<d", carrier_phase))
+        payload.extend(struct.pack("<f", doppler))
+        payload.extend(bytes([gnss_id, sv_id, sig_id, 0]))
+        payload.extend(struct.pack("<H", locktime))
+        payload.extend(bytes([cno, 0, 0, 0, trk_stat, 0]))
 
     return build_ubx_message(0x02, 0x15, payload)
+
+
+def build_mixed_rawx_message() -> bytes:
+    return build_rawx_message(
+        [
+            (20200000.25, 110000.5, -1234.5, 0, 12, 0, 500, 45, 0x03),
+            (21400000.75, 120000.25, -432.5, 2, 5, 0, 480, 42, 0x03),
+            (22300000.50, 130000.75, 125.0, 6, 7, 2, 460, 41, 0x03),
+            (23400000.00, 140000.125, -55.0, 3, 19, 0, 440, 40, 0x03),
+            (24500000.25, 150000.875, 8.0, 5, 3, 0, 420, 39, 0x03),
+        ]
+    )
 
 
 class CLIToolsTest(unittest.TestCase):
@@ -187,12 +209,45 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("summary: messages=1", result.stdout)
             self.assertEqual(output_path.read_bytes(), frame)
 
+    @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
+    def test_stream_reads_rtcm_frame_from_serial_device(self) -> None:
+        master_fd, slave_fd = pty.openpty()
+        try:
+            slave_path = os.ttyname(slave_fd)
+        finally:
+            os.close(slave_fd)
+
+        frame = build_rtcm1005(14.0, 28.0, 42.0)
+
+        def writer() -> None:
+            time.sleep(0.05)
+            os.write(master_fd, frame)
+            time.sleep(0.1)
+            os.close(master_fd)
+
+        thread = threading.Thread(target=writer)
+        thread.start()
+        try:
+            result = self.run_gnss(
+                "stream",
+                "--input",
+                f"serial://{slave_path}?baud=115200",
+                "--limit",
+                "1",
+            )
+        finally:
+            thread.join()
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("Reference Station ARP", result.stdout)
+        self.assertIn("summary: messages=1", result.stdout)
+
     def test_ubx_info_decodes_and_exports_rawx(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ubx_test_") as temp_dir:
             temp_root = Path(temp_dir)
             input_path = temp_root / "session.ubx"
             output_path = temp_root / "session.obs"
-            input_path.write_bytes(build_nav_pvt_message() + build_rawx_message())
+            input_path.write_bytes(build_nav_pvt_message() + build_mixed_rawx_message())
 
             result = self.run_gnss(
                 "ubx-info",
@@ -215,13 +270,17 @@ class CLIToolsTest(unittest.TestCase):
             exported = output_path.read_text(encoding="ascii")
             self.assertIn("RINEX VERSION / TYPE", exported)
             self.assertIn("G12", exported)
+            self.assertIn("E05", exported)
+            self.assertIn("R07", exported)
+            self.assertIn("C19", exported)
+            self.assertIn("J03", exported)
 
     def test_convert_converts_ubx_into_observation_rinex(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_convert_test_") as temp_dir:
             temp_root = Path(temp_dir)
             input_path = temp_root / "session.ubx"
             output_path = temp_root / "converted.obs"
-            input_path.write_bytes(build_nav_pvt_message() + build_rawx_message())
+            input_path.write_bytes(build_nav_pvt_message() + build_mixed_rawx_message())
 
             result = self.run_gnss(
                 "convert",
@@ -241,6 +300,99 @@ class CLIToolsTest(unittest.TestCase):
             exported = output_path.read_text(encoding="ascii")
             self.assertIn("RINEX VERSION / TYPE", exported)
             self.assertIn("G12", exported)
+            self.assertIn("E05", exported)
+            self.assertIn("R07", exported)
+            self.assertIn("C19", exported)
+            self.assertIn("J03", exported)
+
+    @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
+    def test_ubx_info_reads_mixed_rawx_from_serial_device(self) -> None:
+        master_fd, slave_fd = pty.openpty()
+        try:
+            slave_path = os.ttyname(slave_fd)
+        finally:
+            os.close(slave_fd)
+
+        payload = build_nav_pvt_message() + build_mixed_rawx_message()
+
+        def writer() -> None:
+            time.sleep(0.05)
+            os.write(master_fd, payload)
+            time.sleep(0.1)
+            os.close(master_fd)
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ubx_serial_test_") as temp_dir:
+            output_path = Path(temp_dir) / "serial.obs"
+            thread = threading.Thread(target=writer)
+            thread.start()
+            try:
+                result = self.run_gnss(
+                    "ubx-info",
+                    "--input",
+                    f"serial://{slave_path}?baud=115200",
+                    "--decode-observations",
+                    "--obs-rinex-out",
+                    str(output_path),
+                    "--limit",
+                    "2",
+                )
+            finally:
+                thread.join()
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("UBX-RXM-RAWX", result.stdout)
+            self.assertIn("summary: processed_messages=2", result.stdout)
+            exported = output_path.read_text(encoding="ascii")
+            self.assertIn("G12", exported)
+            self.assertIn("E05", exported)
+            self.assertIn("R07", exported)
+            self.assertIn("C19", exported)
+            self.assertIn("J03", exported)
+
+    @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
+    def test_convert_reads_mixed_rawx_from_serial_device(self) -> None:
+        master_fd, slave_fd = pty.openpty()
+        try:
+            slave_path = os.ttyname(slave_fd)
+        finally:
+            os.close(slave_fd)
+
+        payload = build_nav_pvt_message() + build_mixed_rawx_message()
+
+        def writer() -> None:
+            time.sleep(0.05)
+            os.write(master_fd, payload)
+            time.sleep(0.1)
+            os.close(master_fd)
+
+        with tempfile.TemporaryDirectory(prefix="gnss_convert_serial_test_") as temp_dir:
+            output_path = Path(temp_dir) / "serial_converted.obs"
+            thread = threading.Thread(target=writer)
+            thread.start()
+            try:
+                result = self.run_gnss(
+                    "convert",
+                    "--format",
+                    "ubx",
+                    "--input",
+                    f"serial://{slave_path}?baud=115200",
+                    "--obs-out",
+                    str(output_path),
+                    "--limit",
+                    "2",
+                    "--quiet",
+                )
+            finally:
+                thread.join()
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("summary: processed_messages=2", result.stdout)
+            exported = output_path.read_text(encoding="ascii")
+            self.assertIn("G12", exported)
+            self.assertIn("E05", exported)
+            self.assertIn("R07", exported)
+            self.assertIn("C19", exported)
+            self.assertIn("J03", exported)
 
     def test_replay_solves_bundled_rinex_sequence(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_replay_test_") as temp_dir:
@@ -279,6 +431,7 @@ class CLIToolsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn("Usage:", result.stdout)
         self.assertIn("--rover-rtcm", result.stdout)
+        self.assertIn("--rover-ubx", result.stdout)
         self.assertIn("--base-hold-seconds", result.stdout)
 
     def test_rcv_dry_run_and_status_snapshot(self) -> None:
@@ -334,6 +487,33 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(status["state"], "failed")
             self.assertIn("command", status)
             self.assertEqual(status["returncode"], run_result.returncode)
+
+    def test_rcv_dry_run_accepts_rover_ubx_config(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_rcv_ubx_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            config_path = temp_root / "receiver.conf"
+            output_path = temp_root / "receiver.pos"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "rover_ubx=serial:///dev/ttyACM0",
+                        "rover_ubx_baud=230400",
+                        f"base_rtcm={temp_root / 'base.rtcm3'}",
+                        f"out={output_path}",
+                        "max_epochs=1",
+                        "quiet=true",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            dry_run = self.run_gnss("rcv", "--config", str(config_path), "--dry-run")
+            self.assertEqual(dry_run.returncode, 0, msg=dry_run.stderr)
+            resolved = json.loads(dry_run.stdout)
+            self.assertEqual(resolved["config"]["rover_ubx"], "serial:///dev/ttyACM0")
+            self.assertIn("--rover-ubx", resolved["command"])
+            self.assertIn("--rover-ubx-baud", resolved["command"])
 
     def test_rcv_start_and_status_report_failed_background_run(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_rcv_start_test_") as temp_dir:

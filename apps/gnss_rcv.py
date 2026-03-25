@@ -24,6 +24,8 @@ TRUE_VALUES = {"1", "true", "yes", "on"}
 
 ALLOWED_KEYS = {
     "rover_rtcm",
+    "rover_ubx",
+    "rover_ubx_baud",
     "base_rtcm",
     "nav_rinex",
     "out",
@@ -121,11 +123,20 @@ def build_live_command(config: dict[str, str]) -> list[str]:
             raise ValueError(f"missing required config key `{key}`")
         return value
 
-    command = [
-        binary,
-        "--rover-rtcm", require("rover_rtcm"),
-        "--base-rtcm", require("base_rtcm"),
-    ]
+    rover_rtcm = config.get("rover_rtcm", "").strip()
+    rover_ubx = config.get("rover_ubx", "").strip()
+    if bool(rover_rtcm) == bool(rover_ubx):
+        raise ValueError("choose exactly one of `rover_rtcm` or `rover_ubx`")
+
+    command = [binary]
+    if rover_rtcm:
+        command.extend(["--rover-rtcm", rover_rtcm])
+    else:
+        command.extend(["--rover-ubx", rover_ubx])
+        if value := config.get("rover_ubx_baud"):
+            command.extend(["--rover-ubx-baud", value])
+
+    command.extend(["--base-rtcm", require("base_rtcm")])
 
     if value := config.get("nav_rinex"):
         command.extend(["--nav-rinex", value])

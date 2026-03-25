@@ -28,17 +28,17 @@ COMMANDS = {
     "stream": {
         "kind": "binary",
         "target": "gnss_stream",
-        "summary": "Read and relay RTCM from a file or NTRIP source with optional decode summaries.",
+        "summary": "Read and relay RTCM from file, NTRIP, or serial sources with optional decode summaries.",
     },
     "ubx-info": {
         "kind": "binary",
         "target": "gnss_ubx_info",
-        "summary": "Inspect UBX NAV/RAWX logs and optionally export RAWX epochs to RINEX.",
+        "summary": "Inspect UBX NAV/RAWX files or serial streams and optionally export RAWX epochs to RINEX.",
     },
     "convert": {
         "kind": "binary",
         "target": "gnss_convert",
-        "summary": "Convert RTCM or UBX input into simple RINEX observation/navigation files.",
+        "summary": "Convert RTCM, NTRIP, or UBX file/serial input into simple RINEX observation/navigation files.",
     },
     "replay": {
         "kind": "binary",
@@ -48,7 +48,7 @@ COMMANDS = {
     "live": {
         "kind": "binary",
         "target": "gnss_live",
-        "summary": "Continuously solve dual RTCM rover/base streams into a live RTK solution file.",
+        "summary": "Continuously solve RTCM or UBX rover input against RTCM base corrections into a live RTK solution file.",
     },
     "rcv": {
         "kind": "python",
@@ -123,7 +123,9 @@ def usage() -> str:
             "  python3 apps/gnss.py solve --data-dir data/driving --out output/rtk_solution.pos",
             "  python3 apps/gnss.py stream --input ntrip://user:pass@caster:2101/MOUNT --limit 10",
             "  python3 apps/gnss.py ubx-info --input logs/session.ubx --decode-observations",
+            "  python3 apps/gnss.py ubx-info --input serial:///dev/ttyACM0?baud=115200 --limit 10",
             "  python3 apps/gnss.py convert --format ubx --input logs/session.ubx --obs-out output/session.obs",
+            "  python3 apps/gnss.py convert --format ubx --input serial:///dev/ttyACM0?baud=115200 --obs-out output/stream.obs --limit 10",
             "  python3 apps/gnss.py replay --rover-rinex data/rover_kinematic.obs --base-rinex data/base_kinematic.obs --nav-rinex data/navigation_kinematic.nav --out output/replay.pos",
             "  python3 apps/gnss.py live --rover-rtcm rover.rtcm3 --base-rtcm base.rtcm3 --nav-rinex nav.rnx",
             "  python3 apps/gnss.py rcv start --config configs/live.conf --status-out output/receiver_status.json",

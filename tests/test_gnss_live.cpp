@@ -8,10 +8,17 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
+
+#ifndef _WIN32
+#include <fcntl.h>
+#include <stdlib.h>
+#include <unistd.h>
+#endif
 
 using namespace libgnss;
 
@@ -92,6 +99,149 @@ void setUnsignedBits(std::vector<uint8_t>& data, int pos, int len, uint64_t valu
 void setSignedBits(std::vector<uint8_t>& data, int pos, int len, int64_t value) {
     const uint64_t masked = static_cast<uint64_t>(value) & ((1ULL << len) - 1ULL);
     setUnsignedBits(data, pos, len, masked);
+}
+
+template <typename T>
+void appendLittleEndian(std::vector<uint8_t>& buffer, T value) {
+    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(&value);
+    buffer.insert(buffer.end(), ptr, ptr + sizeof(T));
+}
+
+std::vector<uint8_t> buildUbxMessage(uint8_t message_class,
+                                     uint8_t message_id,
+                                     const std::vector<uint8_t>& payload) {
+    std::vector<uint8_t> message = {0xB5, 0x62, message_class, message_id};
+    appendLittleEndian<uint16_t>(message, static_cast<uint16_t>(payload.size()));
+    message.insert(message.end(), payload.begin(), payload.end());
+
+    uint8_t ck_a = 0;
+    uint8_t ck_b = 0;
+    for (size_t i = 2; i < message.size(); ++i) {
+        ck_a = static_cast<uint8_t>(ck_a + message[i]);
+        ck_b = static_cast<uint8_t>(ck_b + ck_a);
+    }
+    message.push_back(ck_a);
+    message.push_back(ck_b);
+    return message;
+}
+
+bool ubxSignalIds(const Observation& obs, uint8_t& gnss_id, uint8_t& sig_id) {
+    switch (obs.signal) {
+        case SignalType::GPS_L1CA:
+            gnss_id = 0;
+            sig_id = 0;
+            return true;
+        case SignalType::GPS_L2C:
+            gnss_id = 0;
+            sig_id = 3;
+            return true;
+        case SignalType::GPS_L5:
+            gnss_id = 0;
+            sig_id = 6;
+            return true;
+        case SignalType::GAL_E1:
+            gnss_id = 2;
+            sig_id = 0;
+            return true;
+        case SignalType::GAL_E5A:
+            gnss_id = 2;
+            sig_id = 3;
+            return true;
+        case SignalType::GAL_E5B:
+            gnss_id = 2;
+            sig_id = 5;
+            return true;
+        case SignalType::BDS_B1I:
+            gnss_id = 3;
+            sig_id = 0;
+            return true;
+        case SignalType::BDS_B2I:
+            gnss_id = 3;
+            sig_id = 2;
+            return true;
+        case SignalType::BDS_B1C:
+            gnss_id = 3;
+            sig_id = 5;
+            return true;
+        case SignalType::BDS_B2A:
+            gnss_id = 3;
+            sig_id = 7;
+            return true;
+        case SignalType::QZS_L1CA:
+            gnss_id = 5;
+            sig_id = 0;
+            return true;
+        case SignalType::QZS_L2C:
+            gnss_id = 5;
+            sig_id = 4;
+            return true;
+        case SignalType::QZS_L5:
+            gnss_id = 5;
+            sig_id = 8;
+            return true;
+        case SignalType::GLO_L1CA:
+            gnss_id = 6;
+            sig_id = 0;
+            return true;
+        case SignalType::GLO_L2CA:
+            gnss_id = 6;
+            sig_id = 2;
+            return true;
+        default:
+            return false;
+    }
+}
+
+std::vector<uint8_t> buildUbxRawxMessage(const ObservationData& epoch) {
+    std::vector<const Observation*> usable;
+    for (const auto& obs : epoch.observations) {
+        uint8_t gnss_id = 0;
+        uint8_t sig_id = 0;
+        if (!ubxSignalIds(obs, gnss_id, sig_id)) {
+            continue;
+        }
+        if (!obs.has_pseudorange && !obs.has_carrier_phase) {
+            continue;
+        }
+        usable.push_back(&obs);
+    }
+
+    std::vector<uint8_t> payload;
+    appendLittleEndian<double>(payload, epoch.time.tow);
+    appendLittleEndian<uint16_t>(payload, static_cast<uint16_t>(epoch.time.week));
+    payload.push_back(18);
+    payload.push_back(static_cast<uint8_t>(usable.size()));
+    payload.push_back(0x01);
+    payload.push_back(0x01);
+    payload.push_back(0x00);
+    payload.push_back(0x00);
+
+    for (const Observation* obs_ptr : usable) {
+        const auto& obs = *obs_ptr;
+        uint8_t gnss_id = 0;
+        uint8_t sig_id = 0;
+        const bool mapped = ubxSignalIds(obs, gnss_id, sig_id);
+        EXPECT_TRUE(mapped);
+        appendLittleEndian<double>(payload, obs.has_pseudorange ? obs.pseudorange : 0.0);
+        appendLittleEndian<double>(payload, obs.has_carrier_phase ? obs.carrier_phase : 0.0);
+        appendLittleEndian<float>(payload, static_cast<float>(obs.has_doppler ? obs.doppler : 0.0));
+        payload.push_back(gnss_id);
+        payload.push_back(static_cast<uint8_t>(obs.satellite.prn));
+        payload.push_back(sig_id);
+        payload.push_back(0);
+        appendLittleEndian<uint16_t>(payload, 500);
+        payload.push_back(static_cast<uint8_t>(obs.signal_strength > 0 ? obs.signal_strength : 45));
+        payload.push_back(0);
+        payload.push_back(0);
+        payload.push_back(0);
+        uint8_t trk_stat = 0;
+        if (obs.has_pseudorange) trk_stat |= 0x01U;
+        if (obs.has_carrier_phase) trk_stat |= 0x02U;
+        payload.push_back(trk_stat);
+        payload.push_back(0);
+    }
+
+    return buildUbxMessage(0x02, 0x15, payload);
 }
 
 std::vector<uint8_t> buildRtcm1005(double x_m, double y_m, double z_m) {
@@ -201,6 +351,27 @@ std::string readTextFile(const std::filesystem::path& path) {
     buffer << input.rdbuf();
     return buffer.str();
 }
+
+#ifndef _WIN32
+struct PseudoTerminal {
+    int master_fd = -1;
+    std::string slave_path;
+};
+
+PseudoTerminal openPseudoTerminal() {
+    PseudoTerminal pty;
+    pty.master_fd = posix_openpt(O_RDWR | O_NOCTTY);
+    EXPECT_GE(pty.master_fd, 0);
+    EXPECT_EQ(grantpt(pty.master_fd), 0);
+    EXPECT_EQ(unlockpt(pty.master_fd), 0);
+    char* name = ptsname(pty.master_fd);
+    EXPECT_NE(name, nullptr);
+    if (name != nullptr) {
+        pty.slave_path = name;
+    }
+    return pty;
+}
+#endif
 
 std::filesystem::path makeUniqueTempDir(const std::string& prefix) {
     namespace fs = std::filesystem;
@@ -421,3 +592,245 @@ TEST(GNSSLiveTest, HoldsRecentBaseEpochWhenFutureBaseHasNotArrivedYet) {
 
     fs::remove_all(temp_dir);
 }
+
+TEST(GNSSLiveTest, SolvesAgainstBaseRtcmWithRoverUbxFile) {
+    namespace fs = std::filesystem;
+
+    const fs::path source_dir = GNSSPP_SOURCE_DIR;
+    const fs::path binary_dir = GNSSPP_BINARY_DIR;
+    const fs::path live_binary = binary_dir / "apps" / "gnss_live";
+    ASSERT_TRUE(fs::exists(live_binary));
+
+    io::RINEXReader::RINEXHeader base_header;
+    const auto base_epochs =
+        loadBaseEpochs(source_dir / "data" / "driving" / "base.obs", base_header, 1);
+    ASSERT_EQ(base_epochs.size(), 1U);
+    ASSERT_GE(base_epochs[0].getNumSatellites(), 4U);
+
+    const ObservationData rover_epoch =
+        findEpochAtTime(source_dir / "data" / "driving" / "rover.obs", base_epochs[0].time);
+    ASSERT_FALSE(rover_epoch.isEmpty());
+    ASSERT_GE(rover_epoch.getNumSatellites(), 4U);
+
+    const NavigationData nav =
+        loadNavigation(source_dir / "data" / "driving" / "navigation.nav");
+
+    io::RTCMProcessor encoder;
+    std::set<SatelliteId> satellites;
+    for (const auto& obs : base_epochs[0].observations) satellites.insert(obs.satellite);
+    for (const auto& obs : rover_epoch.observations) satellites.insert(obs.satellite);
+
+    std::vector<std::vector<uint8_t>> base_frames;
+    base_frames.push_back(buildRtcm1005(base_header.approximate_position.x(),
+                                        base_header.approximate_position.y(),
+                                        base_header.approximate_position.z()));
+
+    size_t nav_frames = 0;
+    for (const auto& satellite : satellites) {
+        const Ephemeris* eph = nav.getEphemeris(satellite, rover_epoch.time);
+        if (eph == nullptr || satellite.system != GNSSSystem::GPS) {
+            continue;
+        }
+        const auto message = encoder.encodeEphemeris(*eph);
+        ASSERT_TRUE(message.valid);
+        base_frames.push_back(buildRtcmFrame(message));
+        ++nav_frames;
+    }
+    ASSERT_GE(nav_frames, 4U);
+
+    const auto base_message =
+        encoder.encodeObservations(base_epochs[0], io::RTCMMessageType::RTCM_1004);
+    ASSERT_TRUE(base_message.valid);
+    base_frames.push_back(buildRtcmFrame(base_message));
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_ubx_test");
+    const fs::path rover_path = temp_dir / "rover.ubx";
+    const fs::path base_path = temp_dir / "base.rtcm3";
+    const fs::path out_path = temp_dir / "live.pos";
+    const fs::path log_path = temp_dir / "live.log";
+
+    writeBinaryFile(base_path, base_frames);
+    writeBinaryFile(rover_path, {buildUbxRawxMessage(rover_epoch)});
+
+    const std::string run_command =
+        "\"" + live_binary.string() + "\" --rover-ubx \"" + rover_path.string() +
+        "\" --base-rtcm \"" + base_path.string() +
+        "\" --nav-rinex \"" + (source_dir / "data" / "driving" / "navigation.nav").string() +
+        "\" --out \"" + out_path.string() +
+        "\" --max-epochs 1 --quiet > \"" + log_path.string() + "\" 2>&1";
+    const int run_rc = std::system(run_command.c_str());
+    ASSERT_EQ(run_rc, 0) << readTextFile(log_path);
+
+    const std::string log = readTextFile(log_path);
+    EXPECT_NE(log.find("rover_source=ubx"), std::string::npos) << log;
+    EXPECT_NE(log.find("written_solutions=1"), std::string::npos) << log;
+    ASSERT_TRUE(fs::exists(out_path));
+
+    fs::remove_all(temp_dir);
+}
+
+#ifndef _WIN32
+TEST(GNSSLiveTest, SolvesAgainstBaseRtcmWithRoverUbxSerialDevice) {
+    namespace fs = std::filesystem;
+
+    const fs::path source_dir = GNSSPP_SOURCE_DIR;
+    const fs::path binary_dir = GNSSPP_BINARY_DIR;
+    const fs::path live_binary = binary_dir / "apps" / "gnss_live";
+    ASSERT_TRUE(fs::exists(live_binary));
+
+    io::RINEXReader::RINEXHeader base_header;
+    const auto base_epochs =
+        loadBaseEpochs(source_dir / "data" / "driving" / "base.obs", base_header, 1);
+    ASSERT_EQ(base_epochs.size(), 1U);
+
+    const ObservationData rover_epoch =
+        findEpochAtTime(source_dir / "data" / "driving" / "rover.obs", base_epochs[0].time);
+    ASSERT_FALSE(rover_epoch.isEmpty());
+
+    const NavigationData nav =
+        loadNavigation(source_dir / "data" / "driving" / "navigation.nav");
+
+    io::RTCMProcessor encoder;
+    std::set<SatelliteId> satellites;
+    for (const auto& obs : base_epochs[0].observations) satellites.insert(obs.satellite);
+    for (const auto& obs : rover_epoch.observations) satellites.insert(obs.satellite);
+
+    std::vector<std::vector<uint8_t>> base_frames;
+    base_frames.push_back(buildRtcm1005(base_header.approximate_position.x(),
+                                        base_header.approximate_position.y(),
+                                        base_header.approximate_position.z()));
+    for (const auto& satellite : satellites) {
+        const Ephemeris* eph = nav.getEphemeris(satellite, rover_epoch.time);
+        if (eph == nullptr || satellite.system != GNSSSystem::GPS) {
+            continue;
+        }
+        const auto message = encoder.encodeEphemeris(*eph);
+        ASSERT_TRUE(message.valid);
+        base_frames.push_back(buildRtcmFrame(message));
+    }
+    const auto base_message =
+        encoder.encodeObservations(base_epochs[0], io::RTCMMessageType::RTCM_1004);
+    ASSERT_TRUE(base_message.valid);
+    base_frames.push_back(buildRtcmFrame(base_message));
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_serial_test");
+    const fs::path base_path = temp_dir / "base.rtcm3";
+    const fs::path out_path = temp_dir / "live.pos";
+    const fs::path log_path = temp_dir / "live.log";
+    writeBinaryFile(base_path, base_frames);
+
+    PseudoTerminal pty = openPseudoTerminal();
+    ASSERT_GE(pty.master_fd, 0);
+    ASSERT_FALSE(pty.slave_path.empty());
+
+    const std::vector<uint8_t> rover_ubx = buildUbxRawxMessage(rover_epoch);
+    std::thread writer([master_fd = pty.master_fd, rover_ubx]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        const ssize_t written = ::write(master_fd, rover_ubx.data(), static_cast<ssize_t>(rover_ubx.size()));
+        EXPECT_EQ(written, static_cast<ssize_t>(rover_ubx.size()));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        ::close(master_fd);
+    });
+
+    const std::string run_command =
+        "\"" + live_binary.string() + "\" --rover-ubx \"" + pty.slave_path +
+        "\" --rover-ubx-baud 115200 --base-rtcm \"" + base_path.string() +
+        "\" --nav-rinex \"" + (source_dir / "data" / "driving" / "navigation.nav").string() +
+        "\" --out \"" + out_path.string() +
+        "\" --max-epochs 1 --quiet > \"" + log_path.string() + "\" 2>&1";
+    const int run_rc = std::system(run_command.c_str());
+    writer.join();
+    ASSERT_EQ(run_rc, 0) << readTextFile(log_path);
+
+    const std::string log = readTextFile(log_path);
+    EXPECT_NE(log.find("rover_source=ubx"), std::string::npos) << log;
+    EXPECT_NE(log.find("written_solutions=1"), std::string::npos) << log;
+    ASSERT_TRUE(fs::exists(out_path));
+
+    fs::remove_all(temp_dir);
+}
+
+TEST(GNSSLiveTest, SolvesAgainstBaseRtcmSerialDeviceWithRoverUbxFile) {
+    namespace fs = std::filesystem;
+
+    const fs::path source_dir = GNSSPP_SOURCE_DIR;
+    const fs::path binary_dir = GNSSPP_BINARY_DIR;
+    const fs::path live_binary = binary_dir / "apps" / "gnss_live";
+    ASSERT_TRUE(fs::exists(live_binary));
+
+    io::RINEXReader::RINEXHeader base_header;
+    const auto base_epochs =
+        loadBaseEpochs(source_dir / "data" / "driving" / "base.obs", base_header, 1);
+    ASSERT_EQ(base_epochs.size(), 1U);
+    ASSERT_GE(base_epochs[0].getNumSatellites(), 4U);
+
+    const ObservationData rover_epoch =
+        findEpochAtTime(source_dir / "data" / "driving" / "rover.obs", base_epochs[0].time);
+    ASSERT_FALSE(rover_epoch.isEmpty());
+    ASSERT_GE(rover_epoch.getNumSatellites(), 4U);
+
+    const NavigationData nav =
+        loadNavigation(source_dir / "data" / "driving" / "navigation.nav");
+
+    io::RTCMProcessor encoder;
+    std::set<SatelliteId> satellites;
+    for (const auto& obs : base_epochs[0].observations) satellites.insert(obs.satellite);
+    for (const auto& obs : rover_epoch.observations) satellites.insert(obs.satellite);
+
+    std::vector<std::vector<uint8_t>> base_frames;
+    base_frames.push_back(buildRtcm1005(base_header.approximate_position.x(),
+                                        base_header.approximate_position.y(),
+                                        base_header.approximate_position.z()));
+    for (const auto& satellite : satellites) {
+        const Ephemeris* eph = nav.getEphemeris(satellite, rover_epoch.time);
+        if (eph == nullptr || satellite.system != GNSSSystem::GPS) {
+            continue;
+        }
+        const auto message = encoder.encodeEphemeris(*eph);
+        ASSERT_TRUE(message.valid);
+        base_frames.push_back(buildRtcmFrame(message));
+    }
+    const auto base_message =
+        encoder.encodeObservations(base_epochs[0], io::RTCMMessageType::RTCM_1004);
+    ASSERT_TRUE(base_message.valid);
+    base_frames.push_back(buildRtcmFrame(base_message));
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_base_serial_test");
+    const fs::path rover_path = temp_dir / "rover.ubx";
+    const fs::path out_path = temp_dir / "live.pos";
+    const fs::path log_path = temp_dir / "live.log";
+    writeBinaryFile(rover_path, {buildUbxRawxMessage(rover_epoch)});
+
+    PseudoTerminal pty = openPseudoTerminal();
+    ASSERT_GE(pty.master_fd, 0);
+    ASSERT_FALSE(pty.slave_path.empty());
+
+    std::thread writer([master_fd = pty.master_fd, base_frames]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        for (const auto& frame : base_frames) {
+            const ssize_t written =
+                ::write(master_fd, frame.data(), static_cast<ssize_t>(frame.size()));
+            EXPECT_EQ(written, static_cast<ssize_t>(frame.size()));
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        ::close(master_fd);
+    });
+
+    const std::string run_command =
+        "\"" + live_binary.string() + "\" --rover-ubx \"" + rover_path.string() +
+        "\" --base-rtcm \"serial://" + pty.slave_path + "?baud=115200\"" +
+        " --nav-rinex \"" + (source_dir / "data" / "driving" / "navigation.nav").string() +
+        "\" --out \"" + out_path.string() +
+        "\" --max-epochs 1 --quiet > \"" + log_path.string() + "\" 2>&1";
+    const int run_rc = std::system(run_command.c_str());
+    writer.join();
+    ASSERT_EQ(run_rc, 0) << readTextFile(log_path);
+
+    const std::string log = readTextFile(log_path);
+    EXPECT_NE(log.find("rover_source=ubx"), std::string::npos) << log;
+    EXPECT_NE(log.find("written_solutions=1"), std::string::npos) << log;
+    ASSERT_TRUE(fs::exists(out_path));
+
+    fs::remove_all(temp_dir);
+}
+#endif

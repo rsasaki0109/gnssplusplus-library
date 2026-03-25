@@ -57,7 +57,7 @@ uint32_t crc24q(const uint8_t* data, size_t length) {
 
 void printUsage(const char* argv0) {
     std::cerr
-        << "Usage: " << argv0 << " --input <path|ntrip://...> [options]\n"
+        << "Usage: " << argv0 << " --input <path|ntrip://...|serial://...> [options]\n"
         << "Options:\n"
         << "  --output <file>           Relay decoded RTCM frames to a binary file\n"
         << "  --limit <count>           Stop after this many messages (0 = until EOF)\n"

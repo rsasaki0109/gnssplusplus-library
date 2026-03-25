@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -17,7 +18,15 @@
 #include <libgnss++/io/rtcm.hpp>
 #include <libgnss++/io/rtcm_stream.hpp>
 #include <libgnss++/io/solution_writer.hpp>
+#include <libgnss++/io/ubx.hpp>
 #include <libgnss++/models/troposphere.hpp>
+
+#ifndef _WIN32
+#include <cerrno>
+#include <fcntl.h>
+#include <termios.h>
+#include <unistd.h>
+#endif
 
 namespace {
 
@@ -33,6 +42,7 @@ enum class GlonassARChoice {
 
 struct LiveConfig {
     std::string rover_rtcm_path;
+    std::string rover_ubx_path;
     std::string base_rtcm_path;
     std::string nav_rinex_path;
     std::string output_pos_path = "output/live_solution.pos";
@@ -52,6 +62,7 @@ struct LiveConfig {
     bool enable_glonass = true;
     bool enable_beidou = true;
     GlonassARChoice glonass_ar = GlonassARChoice::OFF;
+    int rover_ubx_baud = 115200;
 };
 
 struct SourceState {
@@ -59,6 +70,22 @@ struct SourceState {
     libgnss::io::RTCMStreamDecoder decoder;
     size_t messages_read = 0;
     size_t message_limit = 0;
+    bool eof = false;
+};
+
+enum class RoverInputKind {
+    RTCM,
+    UBX
+};
+
+struct RoverUbxSource {
+    libgnss::io::UBXStreamDecoder decoder;
+    std::ifstream file;
+#ifndef _WIN32
+    int serial_fd = -1;
+#endif
+    size_t bytes_read = 0;
+    bool serial = false;
     bool eof = false;
 };
 
@@ -505,8 +532,10 @@ std::string outputFormatString(libgnss::io::SolutionWriter::Format format) {
 
 void printUsage(const char* argv0) {
     std::cout
-        << "Usage: " << argv0 << " --rover-rtcm <path|ntrip://...> --base-rtcm <path|ntrip://...> [options]\n"
+        << "Usage: " << argv0 << " (--rover-rtcm <path|ntrip://...> | --rover-ubx <file|serial://...|/dev/tty...>) --base-rtcm <path|ntrip://...|serial://...> [options]\n"
         << "Options:\n"
+        << "  --rover-ubx <path>         Rover UBX stream from file or serial device\n"
+        << "  --rover-ubx-baud <baud>    Rover serial baud rate for UBX device input (default: 115200)\n"
         << "  --nav-rinex <file>         Supplemental broadcast navigation RINEX\n"
         << "  --out <file>               Output solution file (default: output/live_solution.pos)\n"
         << "  --format <pos|llh|xyz>     Output format (default: pos)\n"
@@ -556,6 +585,10 @@ LiveConfig parseArguments(int argc, char** argv) {
             std::exit(0);
         } else if (arg == "--rover-rtcm" && i + 1 < argc) {
             config.rover_rtcm_path = argv[++i];
+        } else if (arg == "--rover-ubx" && i + 1 < argc) {
+            config.rover_ubx_path = argv[++i];
+        } else if (arg == "--rover-ubx-baud" && i + 1 < argc) {
+            config.rover_ubx_baud = std::stoi(argv[++i]);
         } else if (arg == "--base-rtcm" && i + 1 < argc) {
             config.base_rtcm_path = argv[++i];
         } else if (arg == "--nav-rinex" && i + 1 < argc) {
@@ -599,8 +632,13 @@ LiveConfig parseArguments(int argc, char** argv) {
         }
     }
 
-    if (config.rover_rtcm_path.empty() || config.base_rtcm_path.empty()) {
-        argumentError("both --rover-rtcm and --base-rtcm are required", argv[0]);
+    const bool has_rover_rtcm = !config.rover_rtcm_path.empty();
+    const bool has_rover_ubx = !config.rover_ubx_path.empty();
+    if (has_rover_rtcm == has_rover_ubx) {
+        argumentError("choose exactly one of --rover-rtcm or --rover-ubx", argv[0]);
+    }
+    if (config.base_rtcm_path.empty()) {
+        argumentError("--base-rtcm is required", argv[0]);
     }
     if (config.max_epochs == 0) {
         argumentError("--max-epochs must be != 0", argv[0]);
@@ -610,6 +648,9 @@ LiveConfig parseArguments(int argc, char** argv) {
     }
     if (config.base_hold_seconds < 0.0) {
         argumentError("--base-hold-seconds must be >= 0", argv[0]);
+    }
+    if (config.rover_ubx_baud <= 0) {
+        argumentError("--rover-ubx-baud must be > 0", argv[0]);
     }
     return config;
 }
@@ -640,6 +681,100 @@ bool openSource(const std::string& path, size_t message_limit, SourceState& sour
     return source.reader.open(path);
 }
 
+std::string resolveSerialPath(const std::string& path) {
+    constexpr const char* kPrefix = "serial://";
+    if (path.rfind(kPrefix, 0) == 0) {
+        std::string value = path.substr(std::char_traits<char>::length(kPrefix));
+        if (!value.empty() && value.front() != '/') {
+            return value;
+        }
+        if (value.size() >= 2 && value[0] == '/' && value[1] != '/') {
+            return value;
+        }
+        while (value.size() > 1 && value[0] == '/' && value[1] == '/') {
+            value.erase(value.begin());
+        }
+        return value;
+    }
+    return path;
+}
+
+#ifndef _WIN32
+speed_t baudRateConstant(int baud) {
+    switch (baud) {
+        case 9600: return B9600;
+        case 19200: return B19200;
+        case 38400: return B38400;
+        case 57600: return B57600;
+        case 115200: return B115200;
+        case 230400: return B230400;
+        default:
+            throw std::invalid_argument("unsupported serial baud rate");
+    }
+}
+
+void configureSerialPort(int fd, int baud) {
+    termios tio{};
+    if (tcgetattr(fd, &tio) != 0) {
+        throw std::runtime_error("failed to read serial port attributes");
+    }
+    cfmakeraw(&tio);
+    const speed_t speed = baudRateConstant(baud);
+    cfsetispeed(&tio, speed);
+    cfsetospeed(&tio, speed);
+    tio.c_cflag |= (CLOCAL | CREAD);
+    tio.c_cflag &= ~CSTOPB;
+    tio.c_cflag &= ~CRTSCTS;
+    tio.c_cc[VMIN] = 1;
+    tio.c_cc[VTIME] = 0;
+    if (tcsetattr(fd, TCSANOW, &tio) != 0) {
+        throw std::runtime_error("failed to configure serial port");
+    }
+}
+#endif
+
+bool openRoverUbxSource(const std::string& path, int baud, RoverUbxSource& source) {
+    source.decoder.clear();
+    source.bytes_read = 0;
+    source.eof = false;
+    source.serial = false;
+    source.file = std::ifstream();
+#ifndef _WIN32
+    if (source.serial_fd >= 0) {
+        ::close(source.serial_fd);
+        source.serial_fd = -1;
+    }
+#endif
+
+    const std::string resolved_path = resolveSerialPath(path);
+    std::error_code ec;
+    const auto status = std::filesystem::status(resolved_path, ec);
+    const bool is_regular_file = !ec && std::filesystem::is_regular_file(status);
+    if (is_regular_file) {
+        source.file.open(resolved_path, std::ios::binary);
+        return source.file.is_open();
+    }
+
+#ifndef _WIN32
+    const int fd = ::open(resolved_path.c_str(), O_RDONLY | O_NOCTTY);
+    if (fd < 0) {
+        return false;
+    }
+    try {
+        configureSerialPort(fd, baud);
+    } catch (...) {
+        ::close(fd);
+        throw;
+    }
+    source.serial = true;
+    source.serial_fd = fd;
+    return true;
+#else
+    (void)baud;
+    return false;
+#endif
+}
+
 bool readNextObservation(SourceState& source,
                          libgnss::ObservationData& obs,
                          std::vector<libgnss::io::RTCMStreamDecoder::Event>& events) {
@@ -666,17 +801,76 @@ bool readNextObservation(SourceState& source,
     return false;
 }
 
+bool readNextUbxObservation(RoverUbxSource& source,
+                            libgnss::ObservationData& obs,
+                            std::vector<libgnss::io::UBXStreamDecoder::Event>& events) {
+    events.clear();
+    std::vector<uint8_t> chunk(4096);
+
+    while (true) {
+        size_t bytes_read = 0;
+        if (source.serial) {
+#ifndef _WIN32
+            const ssize_t count = ::read(source.serial_fd, chunk.data(), chunk.size());
+            if (count < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                source.eof = true;
+                return false;
+            }
+            if (count == 0) {
+                source.eof = true;
+                return false;
+            }
+            bytes_read = static_cast<size_t>(count);
+#else
+            source.eof = true;
+            return false;
+#endif
+        } else {
+            source.file.read(reinterpret_cast<char*>(chunk.data()), static_cast<std::streamsize>(chunk.size()));
+            bytes_read = static_cast<size_t>(source.file.gcount());
+            if (bytes_read == 0) {
+                source.eof = true;
+                return false;
+            }
+        }
+
+        source.bytes_read += bytes_read;
+        std::vector<libgnss::io::UBXStreamDecoder::Event> chunk_events;
+        source.decoder.pushBytes(chunk.data(), bytes_read, chunk_events);
+        events.insert(events.end(), chunk_events.begin(), chunk_events.end());
+        for (const auto& event : chunk_events) {
+            if (event.has_observation) {
+                obs = event.observation;
+                return true;
+            }
+        }
+    }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     try {
         const LiveConfig config = parseArguments(argc, argv);
+        const RoverInputKind rover_input_kind =
+            config.rover_ubx_path.empty() ? RoverInputKind::RTCM : RoverInputKind::UBX;
 
-        SourceState rover_source;
+        SourceState rover_rtcm_source;
+        RoverUbxSource rover_ubx_source;
         SourceState base_source;
-        if (!openSource(config.rover_rtcm_path, config.rover_message_limit, rover_source)) {
-            std::cerr << "Error: failed to open rover RTCM source\n";
-            return 1;
+        if (rover_input_kind == RoverInputKind::RTCM) {
+            if (!openSource(config.rover_rtcm_path, config.rover_message_limit, rover_rtcm_source)) {
+                std::cerr << "Error: failed to open rover RTCM source\n";
+                return 1;
+            }
+        } else {
+            if (!openRoverUbxSource(config.rover_ubx_path, config.rover_ubx_baud, rover_ubx_source)) {
+                std::cerr << "Error: failed to open rover UBX source\n";
+                return 1;
+            }
         }
         if (!openSource(config.base_rtcm_path, config.base_message_limit, base_source)) {
             std::cerr << "Error: failed to open base RTCM source\n";
@@ -724,8 +918,11 @@ int main(int argc, char** argv) {
         libgnss::ObservationData base_obs;
         std::vector<libgnss::io::RTCMStreamDecoder::Event> rover_events;
         std::vector<libgnss::io::RTCMStreamDecoder::Event> base_events;
+        std::vector<libgnss::io::UBXStreamDecoder::Event> rover_ubx_events;
 
-        bool rover_ok = readNextObservation(rover_source, rover_obs, rover_events);
+        bool rover_ok = rover_input_kind == RoverInputKind::RTCM
+            ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
+            : readNextUbxObservation(rover_ubx_source, rover_obs, rover_ubx_events);
         bool base_ok = readNextObservation(base_source, base_obs, base_events);
 
         size_t aligned_epochs = 0;
@@ -762,7 +959,7 @@ int main(int argc, char** argv) {
             }
         };
 
-        if (rover_ok) {
+        if (rover_ok && rover_input_kind == RoverInputKind::RTCM) {
             applyEvents(rover_events);
         }
         if (base_ok) {
@@ -866,9 +1063,13 @@ int main(int argc, char** argv) {
                               << "\n";
                 }
                 ++skipped_rover_epochs;
-                rover_ok = readNextObservation(rover_source, rover_obs, rover_events);
-                if (rover_ok) {
+                rover_ok = rover_input_kind == RoverInputKind::RTCM
+                    ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
+                    : readNextUbxObservation(rover_ubx_source, rover_obs, rover_ubx_events);
+                if (rover_ok && rover_input_kind == RoverInputKind::RTCM) {
                     applyEvents(rover_events);
+                    normalizeObservationWeek(rover_obs);
+                } else if (rover_ok) {
                     normalizeObservationWeek(rover_obs);
                 }
                 continue;
@@ -876,9 +1077,13 @@ int main(int argc, char** argv) {
 
             ++aligned_epochs;
             if (!have_base_position || nav_data.ephemeris_data.empty()) {
-                rover_ok = readNextObservation(rover_source, rover_obs, rover_events);
-                if (rover_ok) {
+                rover_ok = rover_input_kind == RoverInputKind::RTCM
+                    ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
+                    : readNextUbxObservation(rover_ubx_source, rover_obs, rover_ubx_events);
+                if (rover_ok && rover_input_kind == RoverInputKind::RTCM) {
                     applyEvents(rover_events);
+                    normalizeObservationWeek(rover_obs);
+                } else if (rover_ok) {
                     normalizeObservationWeek(rover_obs);
                 }
                 continue;
@@ -900,20 +1105,47 @@ int main(int argc, char** argv) {
                               << " sats=" << solution.num_satellites
                               << " ratio=" << std::setprecision(2) << solution.ratio << "\n";
                 }
+                if (config.max_epochs >= 0 && solved_epochs >= config.max_epochs) {
+                    break;
+                }
             }
 
-            rover_ok = readNextObservation(rover_source, rover_obs, rover_events);
-            if (rover_ok) {
+            rover_ok = rover_input_kind == RoverInputKind::RTCM
+                ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
+                : readNextUbxObservation(rover_ubx_source, rover_obs, rover_ubx_events);
+            if (rover_ok && rover_input_kind == RoverInputKind::RTCM) {
                 applyEvents(rover_events);
+                normalizeObservationWeek(rover_obs);
+            } else if (rover_ok) {
                 normalizeObservationWeek(rover_obs);
             }
         }
 
         writer.close();
-        rover_source.reader.close();
+        if (rover_input_kind == RoverInputKind::RTCM) {
+            rover_rtcm_source.reader.close();
+        } else {
+#ifndef _WIN32
+            if (rover_ubx_source.serial_fd >= 0) {
+                ::close(rover_ubx_source.serial_fd);
+                rover_ubx_source.serial_fd = -1;
+            }
+#endif
+            if (rover_ubx_source.file.is_open()) {
+                rover_ubx_source.file.close();
+            }
+        }
         base_source.reader.close();
 
-        std::cout << "summary: rover_messages=" << rover_source.messages_read
+        const size_t rover_messages =
+            rover_input_kind == RoverInputKind::RTCM
+                ? rover_rtcm_source.messages_read
+                : rover_ubx_source.decoder.getStats().valid_messages;
+        const std::string rover_source_label =
+            rover_input_kind == RoverInputKind::RTCM ? "rtcm" : "ubx";
+
+        std::cout << "summary: rover_source=" << rover_source_label
+                  << " rover_messages=" << rover_messages
                   << " base_messages=" << base_source.messages_read
                   << " aligned_epochs=" << aligned_epochs
                   << " exact_base_epochs=" << exact_base_epochs
