@@ -10,10 +10,9 @@ import bisect
 import csv
 import datetime as dt
 import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
-
-import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -31,18 +30,27 @@ SOLVER_MARKERS = {
     "libgnss++": "o",
 }
 
+STATUS_ORDER = ("FIXED", "FLOAT", "DGPS", "SPP")
+
 STATUS_STYLES = {
+    "FIXED": "#2ecc71",
+    "FLOAT": "#f39c12",
+    "DGPS": "#3498db",
+    "SPP": "#e74c3c",
+}
+
+STATUS_MAPS = {
     "RTKLIB": {
-        1: ("FIXED", "#16a34a"),
-        2: ("FLOAT", "#f59e0b"),
-        4: ("DGPS", "#0ea5e9"),
-        5: ("SINGLE", "#dc2626"),
+        1: "FIXED",
+        2: "FLOAT",
+        4: "DGPS",
+        5: "SPP",
     },
     "libgnss++": {
-        4: ("FIXED", "#16a34a"),
-        3: ("FLOAT", "#f59e0b"),
-        2: ("DGPS", "#0ea5e9"),
-        1: ("SPP", "#dc2626"),
+        4: "FIXED",
+        3: "FLOAT",
+        2: "DGPS",
+        1: "SPP",
     },
 }
 
@@ -296,7 +304,8 @@ def matched_segments(
 
 
 def status_style(solver: str, status: int) -> tuple[str, str]:
-    return STATUS_STYLES.get(solver, {}).get(status, (f"status {status}", "#64748b"))
+    status_name = STATUS_MAPS.get(solver, {}).get(status, f"status {status}")
+    return status_name, STATUS_STYLES.get(status_name, "#64748b")
 
 
 def pair_epochs(
@@ -304,29 +313,45 @@ def pair_epochs(
     rtklib_matched: list[MatchedEpoch],
     tolerance_s: float,
 ) -> list[PairedEpoch]:
-    rt_tows = [epoch.tow for epoch in rtklib_matched]
     pairs: list[PairedEpoch] = []
-    for lib_epoch in lib_matched:
-        idx = bisect.bisect_left(rt_tows, lib_epoch.tow)
-        candidates = [
-            rtklib_matched[j]
-            for j in (idx - 1, idx, idx + 1)
-            if 0 <= j < len(rtklib_matched)
-        ]
-        if not candidates:
-            continue
-        rt_epoch = min(candidates, key=lambda item: abs(item.tow - lib_epoch.tow))
-        if abs(rt_epoch.tow - lib_epoch.tow) > tolerance_s:
-            continue
-        pairs.append(
-            PairedEpoch(
-                tow=lib_epoch.tow,
-                lib_epoch=lib_epoch,
-                rtklib_epoch=rt_epoch,
-                gap_m=rt_epoch.horiz_error_m - lib_epoch.horiz_error_m,
+    lib_idx = 0
+    rt_idx = 0
+    while lib_idx < len(lib_matched) and rt_idx < len(rtklib_matched):
+        lib_epoch = lib_matched[lib_idx]
+        rt_epoch = rtklib_matched[rt_idx]
+        dt = lib_epoch.tow - rt_epoch.tow
+        if abs(dt) <= tolerance_s:
+            pairs.append(
+                PairedEpoch(
+                    tow=lib_epoch.tow,
+                    lib_epoch=lib_epoch,
+                    rtklib_epoch=rt_epoch,
+                    gap_m=rt_epoch.horiz_error_m - lib_epoch.horiz_error_m,
+                )
             )
-        )
+            lib_idx += 1
+            rt_idx += 1
+            continue
+        if dt < 0.0:
+            lib_idx += 1
+        else:
+            rt_idx += 1
     return pairs
+
+
+def summarize_common_epochs(
+    pairs: list[PairedEpoch],
+    lib_fixed_status: int,
+    rtklib_fixed_status: int,
+) -> tuple[dict[str, float], dict[str, float]]:
+    if not pairs:
+        raise SystemExit("No common libgnss++ / RTKLIB epochs for apples-to-apples summary")
+    lib_common = [pair.lib_epoch for pair in pairs]
+    rtklib_common = [pair.rtklib_epoch for pair in pairs]
+    return (
+        summarize(lib_common, fixed_status=lib_fixed_status, label="libgnss++ common epochs"),
+        summarize(rtklib_common, fixed_status=rtklib_fixed_status, label="RTKLIB common epochs"),
+    )
 
 
 def select_zoom_window(
@@ -365,7 +390,6 @@ def plot_solver_trajectory(
     solver: str,
     max_gap_s: float,
     point_size: float,
-    show_status_legend: bool = False,
 ) -> None:
     line_color = SOLVER_LINE_COLORS[solver]
     marker = SOLVER_MARKERS[solver]
@@ -375,13 +399,17 @@ def plot_solver_trajectory(
             segment[:, 0],
             segment[:, 1],
             color=line_color,
-            linewidth=1.2 if point_size < 20 else 1.5,
-            alpha=0.35 if point_size < 20 else 0.45,
+            linewidth=0.9 if point_size < 20 else 1.15,
+            alpha=0.15 if point_size < 20 else 0.20,
             zorder=1,
         )
 
-    seen_statuses: set[int] = set()
-    for status in sorted({epoch.status for epoch in matched}):
+    status_rank = {name: idx for idx, name in enumerate(STATUS_ORDER)}
+    ordered_statuses = sorted(
+        {epoch.status for epoch in matched},
+        key=lambda value: status_rank.get(status_style(solver, value)[0], len(STATUS_ORDER)),
+    )
+    for status in ordered_statuses:
         points = np.array(
             [
                 [epoch.traj_east_m, epoch.traj_north_m]
@@ -392,21 +420,16 @@ def plot_solver_trajectory(
         if not len(points):
             continue
         status_name, status_color = status_style(solver, status)
-        label = None
-        if show_status_legend and status not in seen_statuses:
-            label = f"{solver} {status_name}"
-            seen_statuses.add(status)
         ax.scatter(
             points[:, 0],
             points[:, 1],
-            s=point_size,
+            s=point_size if status_name != "FIXED" else point_size * 1.15,
             marker=marker,
             facecolor=status_color,
             edgecolor="white",
             linewidth=0.25 if point_size < 20 else 0.45,
-            alpha=0.90 if "FIXED" in status_name else 0.72,
-            label=label,
-            zorder=3 if "FIXED" in status_name else 2,
+            alpha=0.95 if status_name == "FIXED" else 0.86,
+            zorder=5 if status_name == "FIXED" else 4,
         )
 
 
@@ -414,8 +437,57 @@ def solver_proxy_label(solver: str) -> str:
     return f"{solver} track"
 
 
+def build_status_legend_handles() -> list[object]:
+    from matplotlib.lines import Line2D
+
+    handles: list[object] = []
+    for status_name in STATUS_ORDER:
+        handles.append(
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                linestyle="None",
+                markersize=8,
+                markerfacecolor=STATUS_STYLES[status_name],
+                markeredgecolor="white",
+                markeredgewidth=0.5,
+                label=status_name,
+            )
+        )
+    return handles
+
+
+def build_solver_legend_handles() -> list[object]:
+    from matplotlib.lines import Line2D
+
+    return [
+        Line2D([0], [0], color="black", linewidth=2.0, label="Ground truth"),
+        Line2D(
+            [0],
+            [0],
+            color=SOLVER_LINE_COLORS["RTKLIB"],
+            marker=SOLVER_MARKERS["RTKLIB"],
+            markersize=6,
+            linewidth=1.2,
+            alpha=0.7,
+            label="RTKLIB",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color=SOLVER_LINE_COLORS["libgnss++"],
+            marker=SOLVER_MARKERS["libgnss++"],
+            markersize=6,
+            linewidth=1.2,
+            alpha=0.7,
+            label="libgnss++",
+        ),
+    ]
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
     parser.add_argument("--lib-pos", type=Path, required=True)
     parser.add_argument("--rtklib-pos", type=Path, required=True)
     parser.add_argument("--reference-csv", type=Path, required=True)
@@ -423,6 +495,9 @@ def main() -> None:
     parser.add_argument("--title", default="Urban Driving RTK Comparison")
     parser.add_argument("--match-tolerance", type=float, default=0.15)
     args = parser.parse_args()
+
+    global plt
+    import matplotlib.pyplot as plt
 
     reference = read_reference_csv(args.reference_csv)
     lib_epochs = read_libgnss_pos(args.lib_pos)
@@ -433,6 +508,7 @@ def main() -> None:
     ref_enu = trajectory_enu(reference, origin)
     lib_matched = match_to_reference(lib_epochs, reference, args.match_tolerance)
     rtklib_matched = match_to_reference(rtklib_epochs, reference, args.match_tolerance)
+    common_pairs = pair_epochs(lib_matched, rtklib_matched, tolerance_s=args.match_tolerance)
     zoom_start, zoom_end, zoom_pair = select_zoom_window(
         lib_matched,
         rtklib_matched,
@@ -446,21 +522,26 @@ def main() -> None:
 
     lib_summary = summarize(lib_matched, fixed_status=4, label="libgnss++")
     rtklib_summary = summarize(rtklib_matched, fixed_status=1, label="RTKLIB")
+    lib_common_summary, rtklib_common_summary = summarize_common_epochs(
+        common_pairs,
+        lib_fixed_status=4,
+        rtklib_fixed_status=1,
+    )
 
     fig, axes = plt.subplots(2, 3, figsize=(18, 10.5))
 
     ax = axes[0, 0]
     ax.plot(ref_enu[:, 0], ref_enu[:, 1], color="black", linewidth=2.0, label="Ground truth")
-    ax.plot([], [], color=SOLVER_LINE_COLORS["RTKLIB"], linewidth=1.5, label=solver_proxy_label("RTKLIB"))
-    ax.plot([], [], color=SOLVER_LINE_COLORS["libgnss++"], linewidth=1.5, label=solver_proxy_label("libgnss++"))
-    plot_solver_trajectory(ax, rtklib_matched, "RTKLIB", max_gap_s=max_gap_s, point_size=8)
-    plot_solver_trajectory(ax, lib_matched, "libgnss++", max_gap_s=max_gap_s, point_size=8)
-    ax.set_title("Trajectory Overlay (status-colored matched epochs)")
+    plot_solver_trajectory(ax, rtklib_matched, "RTKLIB", max_gap_s=max_gap_s, point_size=12)
+    plot_solver_trajectory(ax, lib_matched, "libgnss++", max_gap_s=max_gap_s, point_size=12)
+    ax.set_title("Trajectory Overlay (RTKLIB-style status colors)")
     ax.set_xlabel("East (m)")
     ax.set_ylabel("North (m)")
     ax.grid(alpha=0.3)
     ax.axis("equal")
-    ax.legend(loc="best", fontsize=9)
+    solver_legend = ax.legend(handles=build_solver_legend_handles(), loc="upper right", fontsize=8.5)
+    ax.add_artist(solver_legend)
+    ax.legend(handles=build_status_legend_handles(), loc="lower right", fontsize=8.5, ncol=2)
 
     ax = axes[0, 1]
     if len(ref_zoom_enu):
@@ -471,7 +552,6 @@ def main() -> None:
         "RTKLIB",
         max_gap_s=max_gap_s,
         point_size=40,
-        show_status_legend=True,
     )
     plot_solver_trajectory(
         ax,
@@ -479,7 +559,6 @@ def main() -> None:
         "libgnss++",
         max_gap_s=max_gap_s,
         point_size=40,
-        show_status_legend=True,
     )
     all_zoom_points = np.vstack(
         [
@@ -501,7 +580,9 @@ def main() -> None:
     ax.set_ylabel("North (m)")
     ax.grid(alpha=0.3)
     ax.axis("equal")
-    ax.legend(loc="best", fontsize=8, ncol=2)
+    solver_legend = ax.legend(handles=build_solver_legend_handles(), loc="upper right", fontsize=7.8)
+    ax.add_artist(solver_legend)
+    ax.legend(handles=build_status_legend_handles(), loc="lower right", fontsize=7.8, ncol=2)
 
     ax = axes[0, 2]
     ax.axis("off")
@@ -510,26 +591,33 @@ def main() -> None:
             "Dataset: UrbanNav Tokyo Odaiba (open)",
             "Ground truth: reference.csv (Applanix POS LV620)",
             "",
-            f"libgnss++  matched={lib_summary['epochs']}",
+            "All matched epochs:",
+            f"  libgnss++ matched={lib_summary['epochs']}",
             f"  fix rate={lib_summary['fix_rate_pct']:.1f}%",
             f"  median h={lib_summary['median_h_m']:.3f} m",
             f"  p95 h={lib_summary['p95_h_m']:.2f} m",
             f"  p95 |up|={lib_summary['p95_abs_up_m']:.2f} m",
             f"  mean up={lib_summary['mean_up_m']:+.2f} m",
             "",
-            f"RTKLIB     matched={rtklib_summary['epochs']}",
+            f"  RTKLIB    matched={rtklib_summary['epochs']}",
             f"  fix rate={rtklib_summary['fix_rate_pct']:.1f}%",
             f"  median h={rtklib_summary['median_h_m']:.3f} m",
             f"  p95 h={rtklib_summary['p95_h_m']:.2f} m",
             f"  p95 |up|={rtklib_summary['p95_abs_up_m']:.2f} m",
             f"  mean up={rtklib_summary['mean_up_m']:+.2f} m",
             "",
+            f"Common epochs only: {int(lib_common_summary['epochs'])}",
+            f"  libgnss++ median h={lib_common_summary['median_h_m']:.3f} m",
+            f"  RTKLIB    median h={rtklib_common_summary['median_h_m']:.3f} m",
+            f"  libgnss++ median |up|={lib_common_summary['median_abs_up_m']:.3f} m",
+            f"  RTKLIB    median |up|={rtklib_common_summary['median_abs_up_m']:.3f} m",
+            "",
             "Status colors:",
-            "  green=FIXED, amber=FLOAT, red=SPP/SINGLE",
+            "  green=FIXED, orange=FLOAT, blue=DGPS, red=SPP/SINGLE",
             "Markers: circle=libgnss++, square=RTKLIB",
             "",
-            "RTKLIB config:",
-            "  GPS-only, L1+L2, kinematic, continuous AR",
+            "Comparison scope:",
+            "  checked-in Odaiba libgnss++ vs RTKLIB .pos artifacts",
         ]
     )
     ax.text(0.0, 1.0, text, va="top", ha="left", family="monospace", fontsize=10.2)

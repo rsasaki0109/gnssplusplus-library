@@ -9,9 +9,18 @@ constexpr double kGpsWeekSeconds = 604800.0;
 constexpr double kHalfGpsWeekSeconds = 302400.0;
 constexpr double kEarthRotationRate = 7.2921151467e-5;
 constexpr double kEarthMu = 3.986005e14;
+constexpr double kGlonassEarthMu = 3.9860044e14;
+constexpr double kGlonassJ2 = 1.0826257e-3;
+constexpr double kGlonassEarthRadius = 6378136.0;
+constexpr double kGlonassEarthRotationRate = 7.292115e-5;
+constexpr double kGlonassIntegrationStep = 60.0;
+constexpr double kBeiDouEarthRotationRate = 7.292115e-5;
+constexpr double kBeiDouEarthMu = 3.986004418e14;
 constexpr double kRelativityF = -4.442807633e-10;
 constexpr double kWgs84A = 6378137.0;
 constexpr double kWgs84E2 = 6.69437999014e-3;
+constexpr double kBeiDouGeoSin5Deg = -0.0871557427476582;
+constexpr double kBeiDouGeoCos5Deg = 0.9961946980917456;
 
 double normalizeGpsTime(double dt) {
     while (dt > kHalfGpsWeekSeconds) {
@@ -45,8 +54,11 @@ bool computeBroadcastState(const Ephemeris& eph,
     const double a = eph.sqrt_a * eph.sqrt_a;
     const double tk = normalizeGpsTime(time - eph.toe);
     const double tc = normalizeGpsTime(time - eph.toc);
+    const bool is_beidou = eph.satellite.system == GNSSSystem::BeiDou;
+    const double earth_mu = is_beidou ? kBeiDouEarthMu : kEarthMu;
+    const double earth_rotation = is_beidou ? kBeiDouEarthRotationRate : kEarthRotationRate;
 
-    const double n0 = std::sqrt(kEarthMu / (a * a * a));
+    const double n0 = std::sqrt(earth_mu / (a * a * a));
     const double n = n0 + eph.delta_n;
     const double mean_anomaly = eph.m0 + n * tk;
     const double eccentric_anomaly = solveKepler(mean_anomaly, eph.e);
@@ -65,8 +77,9 @@ bool computeBroadcastState(const Ephemeris& eph,
     const double u = phi + du;
     const double r = a * (1.0 - eph.e * cos_e) + dr;
     const double inclination = eph.i0 + eph.idot * tk + di;
-    const double omega = eph.omega0 + (eph.omega_dot - kEarthRotationRate) * tk
-        - kEarthRotationRate * eph.toe.tow;
+    const double toe_seconds = eph.toes != 0.0 ? eph.toes : eph.toe.tow;
+    const double omega = eph.omega0 + (eph.omega_dot - earth_rotation) * tk
+        - earth_rotation * toe_seconds;
 
     const double x_orb = r * std::cos(u);
     const double y_orb = r * std::sin(u);
@@ -76,15 +89,99 @@ bool computeBroadcastState(const Ephemeris& eph,
     const double cos_i = std::cos(inclination);
     const double sin_i = std::sin(inclination);
 
-    pos(0) = x_orb * cos_omega - y_orb * cos_i * sin_omega;
-    pos(1) = x_orb * sin_omega + y_orb * cos_i * cos_omega;
-    pos(2) = y_orb * sin_i;
+    if (is_beidou && eph.satellite.prn <= 5) {
+        const double xg = x_orb * cos_omega - y_orb * cos_i * sin_omega;
+        const double yg = x_orb * sin_omega + y_orb * cos_i * cos_omega;
+        const double zg = y_orb * sin_i;
+        const double sin_rot = std::sin(earth_rotation * tk);
+        const double cos_rot = std::cos(earth_rotation * tk);
+        pos(0) = xg * cos_rot + yg * sin_rot * kBeiDouGeoCos5Deg +
+                 zg * sin_rot * kBeiDouGeoSin5Deg;
+        pos(1) = -xg * sin_rot + yg * cos_rot * kBeiDouGeoCos5Deg +
+                 zg * cos_rot * kBeiDouGeoSin5Deg;
+        pos(2) = -yg * kBeiDouGeoSin5Deg + zg * kBeiDouGeoCos5Deg;
+    } else {
+        pos(0) = x_orb * cos_omega - y_orb * cos_i * sin_omega;
+        pos(1) = x_orb * sin_omega + y_orb * cos_i * cos_omega;
+        pos(2) = y_orb * sin_i;
+    }
 
     clock_bias = eph.af0 + eph.af1 * tc + eph.af2 * tc * tc;
     clock_bias += kRelativityF * eph.e * eph.sqrt_a * sin_e;
     // TGD NOT applied here — it's applied in SPP only (DD cancels TGD)
     // clock_bias -= eph.tgd;
     clock_drift = eph.af1 + 2.0 * eph.af2 * tc;
+    return true;
+}
+
+void computeGlonassDynamics(const double* state, double* derivative, const Vector3d& acceleration) {
+    const double r2 = state[0] * state[0] + state[1] * state[1] + state[2] * state[2];
+    if (r2 <= 0.0) {
+        for (int i = 0; i < 6; ++i) derivative[i] = 0.0;
+        return;
+    }
+
+    const double r3 = r2 * std::sqrt(r2);
+    const double omg2 = kGlonassEarthRotationRate * kGlonassEarthRotationRate;
+    const double a = 1.5 * kGlonassJ2 * kGlonassEarthMu *
+                     (kGlonassEarthRadius * kGlonassEarthRadius) / (r2 * r3);
+    const double b = 5.0 * state[2] * state[2] / r2;
+    const double c = -kGlonassEarthMu / r3 - a * (1.0 - b);
+
+    derivative[0] = state[3];
+    derivative[1] = state[4];
+    derivative[2] = state[5];
+    derivative[3] = (c + omg2) * state[0] + 2.0 * kGlonassEarthRotationRate * state[4] + acceleration(0);
+    derivative[4] = (c + omg2) * state[1] - 2.0 * kGlonassEarthRotationRate * state[3] + acceleration(1);
+    derivative[5] = (c - 2.0 * a) * state[2] + acceleration(2);
+}
+
+void propagateGlonassOrbit(double dt, double* state, const Vector3d& acceleration) {
+    double k1[6], k2[6], k3[6], k4[6], work[6];
+
+    computeGlonassDynamics(state, k1, acceleration);
+    for (int i = 0; i < 6; ++i) work[i] = state[i] + k1[i] * dt / 2.0;
+    computeGlonassDynamics(work, k2, acceleration);
+    for (int i = 0; i < 6; ++i) work[i] = state[i] + k2[i] * dt / 2.0;
+    computeGlonassDynamics(work, k3, acceleration);
+    for (int i = 0; i < 6; ++i) work[i] = state[i] + k3[i] * dt;
+    computeGlonassDynamics(work, k4, acceleration);
+
+    for (int i = 0; i < 6; ++i) {
+        state[i] += (k1[i] + 2.0 * k2[i] + 2.0 * k3[i] + k4[i]) * dt / 6.0;
+    }
+}
+
+bool computeGlonassState(const Ephemeris& eph,
+                         const GNSSTime& time,
+                         Vector3d& pos,
+                         Vector3d& vel,
+                         double& clock_bias,
+                         double& clock_drift) {
+    if (!eph.valid) {
+        return false;
+    }
+
+    double state[6] = {
+        eph.glonass_position(0), eph.glonass_position(1), eph.glonass_position(2),
+        eph.glonass_velocity(0), eph.glonass_velocity(1), eph.glonass_velocity(2),
+    };
+
+    double t = time - eph.toe;
+    clock_bias = -eph.glonass_taun + eph.glonass_gamn * t;
+    clock_drift = eph.glonass_gamn;
+
+    for (double step = t < 0.0 ? -kGlonassIntegrationStep : kGlonassIntegrationStep;
+         std::abs(t) > 1e-9;
+         t -= step) {
+        if (std::abs(t) < kGlonassIntegrationStep) {
+            step = t;
+        }
+        propagateGlonassOrbit(step, state, eph.glonass_acceleration);
+    }
+
+    pos = Vector3d(state[0], state[1], state[2]);
+    vel = Vector3d(state[3], state[4], state[5]);
     return true;
 }
 
@@ -112,6 +209,10 @@ bool Ephemeris::calculateSatelliteState(const GNSSTime& time,
                                        Vector3d& vel,
                                        double& clock_bias,
                                        double& clock_drift) const {
+    if (satellite.system == GNSSSystem::GLONASS) {
+        return computeGlonassState(*this, time, pos, vel, clock_bias, clock_drift);
+    }
+
     if (!computeBroadcastState(*this, time, pos, clock_bias, clock_drift)) {
         return false;
     }
@@ -136,6 +237,9 @@ bool Ephemeris::calculateSatelliteState(const GNSSTime& time,
 
 bool Ephemeris::isValid(const GNSSTime& time) const {
     if (!valid) return false;
+    if (satellite.system == GNSSSystem::GLONASS) {
+        return std::abs(time - toe) <= 1800.0;
+    }
     double age = std::abs(time - toe);
     return age <= 14400.0; // 4 hours (RTKLIB MAXDTOE=7200 but relaxed for sparse nav data)
 }

@@ -34,7 +34,13 @@ public:
             INSTANTANEOUS = 2,
             PARTIAL = 3
         };
+        enum class GlonassARMode {
+            OFF = 0,
+            ON = 1,
+            AUTOCAL = 2
+        };
         AmbiguityResolutionMode ar_mode = AmbiguityResolutionMode::CONTINUOUS;
+        GlonassARMode glonass_ar_mode = GlonassARMode::OFF;
 
         double ratio_threshold = 3.0;
         double ambiguity_ratio_threshold = 3.0;
@@ -74,6 +80,12 @@ public:
 
         // Elevation mask
         double elevation_mask = 15.0 * M_PI / 180.0;  // 15 degrees (RTKLIB default)
+
+        // Incremental multi-GNSS rollout switches.
+        bool enable_glonass = true;
+        bool enable_beidou = true;
+        double glonass_icb_l1_m_per_mhz = 0.0;
+        double glonass_icb_l2_m_per_mhz = 0.0;
     };
 
     RTKProcessor();
@@ -96,7 +108,7 @@ public:
         base_position_known_ = true;
     }
 
-    void setRTKConfig(const RTKConfig& config) { rtk_config_ = config; }
+    void setRTKConfig(const RTKConfig& config);
     const RTKConfig& getRTKConfig() const { return rtk_config_; }
 
 public:
@@ -105,6 +117,8 @@ public:
                      VectorXd& fixed_ambiguities,
                      double& success_rate);
 
+    static int ambiguityStateIndex(const SatelliteId& sat, int freq) { return IB(sat, freq); }
+
 private:
     RTKConfig rtk_config_;
     SPPProcessor spp_processor_;
@@ -112,14 +126,42 @@ private:
     Vector3d base_position_;
     bool base_position_known_ = false;
 
-    // RTKLIB-style fixed-size state: [pos(3), N1(MAXSAT), N2(MAXSAT)]
-    // PRN-indexed slots: IB(prn, freq) = BASE_STATES + freq*MAXSAT + (prn-1)
-    // Unused slots: x=0, P=0 → RTKLIB filter() skips them automatically
+    // Fixed-size state: [pos(3), glo_hw_bias(2), N1(MAXSAT), N2(MAXSAT)]
+    // Satellite slots are system-aware so G01/E01/Q01 do not collide.
     static constexpr int BASE_STATES = 3;
-    static constexpr int MAXSAT = 40;  // max GPS PRN
-    static constexpr int NX = BASE_STATES + MAXSAT * 2;  // total state size
+    static constexpr int GLO_HWBIAS_STATES = 2;
+    static constexpr int SATS_PER_SYSTEM = 64;
+    static constexpr int SUPPORTED_SYSTEM_BLOCKS = 6;
+    static constexpr int MAXSAT = SATS_PER_SYSTEM * SUPPORTED_SYSTEM_BLOCKS;
+    static constexpr int REAL_STATES = BASE_STATES + GLO_HWBIAS_STATES;
+    static constexpr int NX = REAL_STATES + MAXSAT * 2;  // total state size
 
-    static int IB(int prn, int freq) { return BASE_STATES + freq * MAXSAT + (prn - 1); }
+    static int systemSlotBase(GNSSSystem system) {
+        switch (system) {
+            case GNSSSystem::GPS: return 0 * SATS_PER_SYSTEM;
+            case GNSSSystem::GLONASS: return 1 * SATS_PER_SYSTEM;
+            case GNSSSystem::Galileo: return 2 * SATS_PER_SYSTEM;
+            case GNSSSystem::BeiDou: return 3 * SATS_PER_SYSTEM;
+            case GNSSSystem::QZSS: return 4 * SATS_PER_SYSTEM;
+            case GNSSSystem::NavIC: return 5 * SATS_PER_SYSTEM;
+            default: return 0;
+        }
+    }
+
+    static int satelliteSlot(const SatelliteId& sat) {
+        int prn = sat.prn;
+        if (prn < 1) prn = 1;
+        if (prn > SATS_PER_SYSTEM) prn = SATS_PER_SYSTEM;
+        return systemSlotBase(sat.system) + (prn - 1);
+    }
+
+    static int IL(int freq) {
+        return BASE_STATES + freq;
+    }
+
+    static int IB(const SatelliteId& sat, int freq) {
+        return REAL_STATES + freq * MAXSAT + satelliteSlot(sat);
+    }
 
     struct RTKState {
         VectorXd state;
@@ -157,10 +199,18 @@ private:
     int consecutive_fix_count_ = 0;
 
     // Last fix data for holdamb
-    struct DDPair { int ref_idx; int sat_idx; SatelliteId sat; int freq; };
+    struct DDPair {
+        SatelliteId ref_sat;
+        int ref_idx;
+        int sat_idx;
+        SatelliteId sat;
+        int freq;
+    };
     std::vector<DDPair> last_dd_pairs_;
     std::vector<int> last_best_subset_;
     VectorXd last_dd_fixed_;
+    double last_ar_ratio_ = 0.0;
+    int last_num_fixed_ambiguities_ = 0;
 
     // Epoch tracking
     GNSSTime last_epoch_time_;
@@ -177,6 +227,12 @@ private:
     // Satellite data for current epoch
     struct SatelliteData {
         SatelliteId satellite;
+        SignalType l1_signal = SignalType::GPS_L1CA;
+        SignalType l2_signal = SignalType::GPS_L2C;
+        double l1_wavelength = 0.0;
+        double l2_wavelength = 0.0;
+        double l1_frequency_hz = 0.0;
+        double l2_frequency_hz = 0.0;
         // L1
         double rover_l1_phase = 0.0;  // cycles
         double rover_l1_code = 0.0;   // meters
@@ -259,6 +315,7 @@ private:
      * Resolve ambiguities: SD->DD transform + LAMBDA (RTKLIB resamb_LAMBDA)
      */
     bool resolveAmbiguities();
+    bool resolveAmbiguities(std::vector<DDPair> dd_pairs);
 
     PositionSolution generateSolution(const GNSSTime& time,
                                     SolutionStatus status,
@@ -294,6 +351,14 @@ private:
     int getOrCreateN1Index(const SatelliteId& sat, double initial_value);
     int getOrCreateN2Index(const SatelliteId& sat, double initial_value);
 
+    bool selectSystemReferenceSatellite(const std::map<SatelliteId, SatelliteData>& sat_data,
+                                        GNSSSystem system,
+                                        int min_lock_count,
+                                        SatelliteId& ref_sat) const;
+    std::vector<DDPair> buildDoubleDifferencePairs(
+        const std::map<SatelliteId, SatelliteData>& sat_data,
+        int min_lock_count) const;
+
     /**
      * Expand state vector to accommodate new states
      */
@@ -303,6 +368,8 @@ private:
      * Remove satellite from state
      */
     void removeSatelliteFromState(const SatelliteId& sat);
+    void syncSPPConfig();
+    void updateGlonassHardwareBias(double dt);
 
     /**
      * RTKLIB varerr: SD measurement error variance

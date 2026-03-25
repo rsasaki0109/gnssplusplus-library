@@ -10,11 +10,211 @@
 
 namespace libgnss {
 
-// Convenience aliases for wavelengths and IFLC coefficients from constants.hpp
-static constexpr double LAMBDA_L1 = constants::GPS_L1_WAVELENGTH;
-static constexpr double LAMBDA_L2 = constants::GPS_L2_WAVELENGTH;
-static constexpr double IFLC_C1   = constants::IFLC_C1;
-static constexpr double IFLC_C2   = constants::IFLC_C2;
+namespace {
+
+constexpr GNSSSystem kRTKSupportedSystems[] = {
+    GNSSSystem::GPS,
+    GNSSSystem::GLONASS,
+    GNSSSystem::Galileo,
+    GNSSSystem::BeiDou,
+    GNSSSystem::QZSS,
+};
+
+constexpr double kGlonassHWBiasInitialVariance = 1.0;  // (m/MHz)^2
+constexpr double kGlonassHWBiasProcessNoise = 1e-12;   // (m/MHz)^2 / s
+
+bool isAmbiguityResolutionSystem(const RTKProcessor::RTKConfig& config, GNSSSystem system) {
+    return system == GNSSSystem::GPS ||
+           (system == GNSSSystem::GLONASS &&
+            config.glonass_ar_mode != RTKProcessor::RTKConfig::GlonassARMode::OFF) ||
+           system == GNSSSystem::Galileo ||
+           system == GNSSSystem::BeiDou ||
+           system == GNSSSystem::QZSS;
+}
+
+bool usesHoldAmbiguitySystem(const RTKProcessor::RTKConfig& config, GNSSSystem system) {
+    return isAmbiguityResolutionSystem(config, system);
+}
+
+bool requiresMatchedCarrierWavelength(const RTKProcessor::RTKConfig& config, GNSSSystem system) {
+    return !(system == GNSSSystem::GLONASS &&
+             config.glonass_ar_mode != RTKProcessor::RTKConfig::GlonassARMode::OFF);
+}
+
+bool usesGlonassAutocal(const RTKProcessor::RTKConfig& config) {
+    return config.enable_glonass &&
+           config.glonass_ar_mode == RTKProcessor::RTKConfig::GlonassARMode::AUTOCAL;
+}
+
+bool isBeiDouGeoSatellite(const SatelliteId& sat) {
+    if (sat.system != GNSSSystem::BeiDou) {
+        return false;
+    }
+    return (sat.prn >= 1 && sat.prn <= 5) || (sat.prn >= 59 && sat.prn <= 63);
+}
+
+bool isUsableRTKSatellite(const SatelliteId& sat) {
+    // Start with MEO/IGSO BeiDou support. GEO still needs tighter handling.
+    return !isBeiDouGeoSatellite(sat);
+}
+
+bool isEnabledRTKSystem(const RTKProcessor::RTKConfig& config, GNSSSystem system) {
+    if (system == GNSSSystem::GLONASS) {
+        return config.enable_glonass;
+    }
+    if (system == GNSSSystem::BeiDou) {
+        return config.enable_beidou;
+    }
+    return true;
+}
+
+bool isPrimaryRTKSignal(GNSSSystem system, SignalType signal) {
+    switch (system) {
+        case GNSSSystem::GPS:
+            return signal == SignalType::GPS_L1CA;
+        case GNSSSystem::GLONASS:
+            return signal == SignalType::GLO_L1CA || signal == SignalType::GLO_L1P;
+        case GNSSSystem::Galileo:
+            return signal == SignalType::GAL_E1;
+        case GNSSSystem::BeiDou:
+            return signal == SignalType::BDS_B1I || signal == SignalType::BDS_B1C;
+        case GNSSSystem::QZSS:
+            return signal == SignalType::QZS_L1CA;
+        default:
+            return false;
+    }
+}
+
+bool isSecondaryRTKSignal(GNSSSystem system, SignalType signal) {
+    switch (system) {
+        case GNSSSystem::GPS:
+            return signal == SignalType::GPS_L2C;
+        case GNSSSystem::GLONASS:
+            return signal == SignalType::GLO_L2CA || signal == SignalType::GLO_L2P;
+        case GNSSSystem::Galileo:
+            return signal == SignalType::GAL_E5A;
+        case GNSSSystem::BeiDou:
+            return signal == SignalType::BDS_B3I ||
+                   signal == SignalType::BDS_B2I ||
+                   signal == SignalType::BDS_B2A;
+        case GNSSSystem::QZSS:
+            return signal == SignalType::QZS_L2C;
+        default:
+            return false;
+    }
+}
+
+double signalFrequencyHz(SignalType signal, const Ephemeris* eph = nullptr) {
+    switch (signal) {
+        case SignalType::GPS_L1CA:
+        case SignalType::QZS_L1CA:
+            return constants::GPS_L1_FREQ;
+        case SignalType::GPS_L2C:
+        case SignalType::QZS_L2C:
+            return constants::GPS_L2_FREQ;
+        case SignalType::GPS_L5:
+        case SignalType::QZS_L5:
+            return constants::GPS_L5_FREQ;
+        case SignalType::GLO_L1CA:
+        case SignalType::GLO_L1P:
+            if (eph && eph->satellite.system == GNSSSystem::GLONASS) {
+                return constants::GLO_L1_BASE_FREQ +
+                       eph->glonass_frequency_channel * constants::GLO_L1_STEP_FREQ;
+            }
+            return constants::GLO_L1_BASE_FREQ;
+        case SignalType::GLO_L2CA:
+        case SignalType::GLO_L2P:
+            if (eph && eph->satellite.system == GNSSSystem::GLONASS) {
+                return constants::GLO_L2_BASE_FREQ +
+                       eph->glonass_frequency_channel * constants::GLO_L2_STEP_FREQ;
+            }
+            return constants::GLO_L2_BASE_FREQ;
+        case SignalType::GAL_E1:
+            return constants::GAL_E1_FREQ;
+        case SignalType::GAL_E5A:
+            return constants::GAL_E5A_FREQ;
+        case SignalType::GAL_E5B:
+            return constants::GAL_E5B_FREQ;
+        case SignalType::GAL_E6:
+            return constants::GAL_E6_FREQ;
+        case SignalType::BDS_B1I:
+            return constants::BDS_B1I_FREQ;
+        case SignalType::BDS_B2I:
+            return constants::BDS_B2I_FREQ;
+        case SignalType::BDS_B3I:
+            return constants::BDS_B3I_FREQ;
+        case SignalType::BDS_B1C:
+            return constants::BDS_B1C_FREQ;
+        case SignalType::BDS_B2A:
+            return constants::BDS_B2A_FREQ;
+        default:
+            return 0.0;
+    }
+}
+
+double signalWavelengthM(SignalType signal, const Ephemeris* eph = nullptr) {
+    const double frequency = signalFrequencyHz(signal, eph);
+    if (frequency <= 0.0) {
+        return 0.0;
+    }
+    return constants::SPEED_OF_LIGHT / frequency;
+}
+
+double ionoFreeCoeff1(double f1, double f2) {
+    const double denom = f1 * f1 - f2 * f2;
+    return std::abs(denom) > 0.0 ? (f1 * f1) / denom : 0.0;
+}
+
+double ionoFreeCoeff2(double f1, double f2) {
+    const double denom = f1 * f1 - f2 * f2;
+    return std::abs(denom) > 0.0 ? -(f2 * f2) / denom : 0.0;
+}
+
+double wideLaneWavelength(double f1, double f2) {
+    const double denom = f1 - f2;
+    return std::abs(denom) > 0.0 ? constants::SPEED_OF_LIGHT / denom : 0.0;
+}
+
+double narrowLaneWavelength(double f1, double f2) {
+    const double c1 = ionoFreeCoeff1(f1, f2);
+    const double c2 = ionoFreeCoeff2(f1, f2);
+    if (c1 == 0.0 && c2 == 0.0) {
+        return 0.0;
+    }
+    return c1 * (constants::SPEED_OF_LIGHT / f1) + c2 * (constants::SPEED_OF_LIGHT / f2);
+}
+
+double glonassInterChannelBiasMeters(const RTKProcessor::RTKConfig& config,
+                                     GNSSSystem ref_system,
+                                     GNSSSystem sat_system,
+                                     double ref_frequency_hz,
+                                     double sat_frequency_hz,
+                                     int freq) {
+    if (ref_system != GNSSSystem::GLONASS || sat_system != GNSSSystem::GLONASS) {
+        return 0.0;
+    }
+    if (ref_frequency_hz <= 0.0 || sat_frequency_hz <= 0.0) {
+        return 0.0;
+    }
+    const double df_mhz = (ref_frequency_hz - sat_frequency_hz) / 1e6;
+    const double slope = (freq == 0) ? config.glonass_icb_l1_m_per_mhz
+                                     : config.glonass_icb_l2_m_per_mhz;
+    return slope * df_mhz;
+}
+
+SPPProcessor::SPPConfig makeRTKSppConfig(const RTKProcessor::RTKConfig& rtk_config) {
+    SPPProcessor::SPPConfig config;
+    config.use_multi_constellation = true;
+    config.enable_glonass = rtk_config.enable_glonass;
+    config.enable_beidou = rtk_config.enable_beidou;
+    return config;
+}
+
+SPPProcessor makeRTKSppProcessor(const RTKProcessor::RTKConfig& rtk_config) {
+    return SPPProcessor(makeRTKSppConfig(rtk_config));
+}
+
+}  // namespace
 
 // Delegate to extracted modules
 static inline double tropModel(const Vector3d& pos_ecef, double elevation) {
@@ -26,11 +226,22 @@ static inline double geodist_range(const Vector3d& rs, const Vector3d& rr) {
     return geodist(rs, rr);
 }
 
-RTKProcessor::RTKProcessor() : spp_processor_() { filter_initialized_ = false; }
-RTKProcessor::RTKProcessor(const RTKConfig& rtk_config) : rtk_config_(rtk_config), spp_processor_() { filter_initialized_ = false; }
+RTKProcessor::RTKProcessor() : spp_processor_(makeRTKSppProcessor(rtk_config_)) { filter_initialized_ = false; }
+RTKProcessor::RTKProcessor(const RTKConfig& rtk_config)
+    : rtk_config_(rtk_config), spp_processor_(makeRTKSppProcessor(rtk_config_)) { filter_initialized_ = false; }
+
+void RTKProcessor::setRTKConfig(const RTKConfig& config) {
+    rtk_config_ = config;
+    syncSPPConfig();
+}
+
+void RTKProcessor::syncSPPConfig() {
+    spp_processor_.setSPPConfig(makeRTKSppConfig(rtk_config_));
+}
 
 bool RTKProcessor::initialize(const ProcessorConfig& config) {
     config_ = config;
+    syncSPPConfig();
     spp_processor_.initialize(config);
     reset();
     return true;
@@ -43,7 +254,7 @@ PositionSolution RTKProcessor::processEpoch(const ObservationData& rover_obs, co
 void RTKProcessor::reset() {
     filter_initialized_ = false;
     filter_state_ = RTKState{};
-    filter_state_.next_state_idx = BASE_STATES;
+    filter_state_.next_state_idx = REAL_STATES;
     ambiguity_states_.clear();
     lock_count_l1_.clear();
     lock_count_l2_.clear();
@@ -57,6 +268,8 @@ void RTKProcessor::reset() {
     current_sat_data_.clear();
     gf_l1l2_history_.clear();
     consecutive_fix_count_ = 0;
+    last_ar_ratio_ = 0.0;
+    last_num_fixed_ambiguities_ = 0;
     std::lock_guard<std::mutex> lock(stats_mutex_);
     total_epochs_processed_ = 0;
     fixed_solutions_ = 0;
@@ -104,7 +317,7 @@ void RTKProcessor::expandState(int new_size) {
 }
 
 int RTKProcessor::getOrCreateN1Index(const SatelliteId& sat, double initial_value) {
-    int idx = IB(sat.prn, 0);
+    int idx = IB(sat, 0);
     if (filter_state_.state(idx) != 0.0) {
         filter_state_.n1_indices[sat] = idx;
         return idx;
@@ -120,7 +333,7 @@ int RTKProcessor::getOrCreateN1Index(const SatelliteId& sat, double initial_valu
 }
 
 int RTKProcessor::getOrCreateN2Index(const SatelliteId& sat, double initial_value) {
-    int idx = IB(sat.prn, 1);
+    int idx = IB(sat, 1);
     if (filter_state_.state(idx) != 0.0) {
         filter_state_.n2_indices[sat] = idx;
         return idx;
@@ -166,12 +379,28 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
     std::map<SatelliteId, SatelliteData> result;
     std::map<SatelliteId, const Observation*> rover_l1, rover_l2, base_l1, base_l2;
     for (const auto& obs : rover_obs.observations) {
-        if (obs.signal == SignalType::GPS_L1CA && obs.has_carrier_phase && obs.has_pseudorange) rover_l1[obs.satellite] = &obs;
-        if (obs.signal == SignalType::GPS_L2C && obs.has_carrier_phase && obs.has_pseudorange) rover_l2[obs.satellite] = &obs;
+        if (!isEnabledRTKSystem(rtk_config_, obs.satellite.system)) continue;
+        if (!isUsableRTKSatellite(obs.satellite)) continue;
+        if (isPrimaryRTKSignal(obs.satellite.system, obs.signal) &&
+            obs.has_carrier_phase && obs.has_pseudorange) {
+            rover_l1[obs.satellite] = &obs;
+        }
+        if (isSecondaryRTKSignal(obs.satellite.system, obs.signal) &&
+            obs.has_carrier_phase && obs.has_pseudorange) {
+            rover_l2[obs.satellite] = &obs;
+        }
     }
     for (const auto& obs : base_obs.observations) {
-        if (obs.signal == SignalType::GPS_L1CA && obs.has_carrier_phase && obs.has_pseudorange) base_l1[obs.satellite] = &obs;
-        if (obs.signal == SignalType::GPS_L2C && obs.has_carrier_phase && obs.has_pseudorange) base_l2[obs.satellite] = &obs;
+        if (!isEnabledRTKSystem(rtk_config_, obs.satellite.system)) continue;
+        if (!isUsableRTKSatellite(obs.satellite)) continue;
+        if (isPrimaryRTKSignal(obs.satellite.system, obs.signal) &&
+            obs.has_carrier_phase && obs.has_pseudorange) {
+            base_l1[obs.satellite] = &obs;
+        }
+        if (isSecondaryRTKSignal(obs.satellite.system, obs.signal) &&
+            obs.has_carrier_phase && obs.has_pseudorange) {
+            base_l2[obs.satellite] = &obs;
+        }
     }
     Vector3d rover_pos_for_clk = rover_obs.receiver_position;
     if (filter_initialized_ && filter_state_.state.size() >= 3) {
@@ -206,8 +435,6 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         if (!nav.calculateSatelliteState(sat, t_refined, sat_pos, sat_vel, clk, clk_drift)) continue;
         // Use unrotated sat_pos; Sagnac is handled analytically by geodist_range
         Vector3d corrected_sat_pos = sat_pos;
-
-        // Compute base satellite position from base pseudorange travel time
         Vector3d base_sat_pos = sat_pos;
         {
             double base_pr = b_it->second->pseudorange;
@@ -221,7 +448,6 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
                 }
             }
         }
-
         SatelliteData sd; sd.satellite = sat; sd.sat_pos = corrected_sat_pos;
         sd.sat_pos_base = base_sat_pos; sd.has_ephemeris = true;
         auto geom = nav.calculateGeometry(rover_pos_for_clk, corrected_sat_pos);
@@ -229,14 +455,23 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         auto base_geom = nav.calculateGeometry(base_position_, base_sat_pos);
         sd.base_elevation = base_geom.elevation;
         if (sd.elevation < rtk_config_.elevation_mask) continue;
+        const Ephemeris* eph = nav.getEphemeris(sat, t_refined);
+        sd.l1_signal = r_obs->signal;
+        sd.l1_frequency_hz = signalFrequencyHz(sd.l1_signal, eph);
+        sd.l1_wavelength = signalWavelengthM(sd.l1_signal, eph);
+        if (sd.l1_wavelength <= 0.0) continue;
         sd.rover_l1_phase = r_obs->carrier_phase; sd.rover_l1_code = r_obs->pseudorange;
         sd.base_l1_phase = b_it->second->carrier_phase; sd.base_l1_code = b_it->second->pseudorange;
         sd.has_l1 = true; sd.l1_lli = r_obs->lli | b_it->second->lli;
         auto r_l2 = rover_l2.find(sat); auto b_l2 = base_l2.find(sat);
         if (r_l2 != rover_l2.end() && b_l2 != base_l2.end()) {
+            sd.l2_signal = r_l2->second->signal;
+            sd.l2_frequency_hz = signalFrequencyHz(sd.l2_signal, eph);
+            sd.l2_wavelength = signalWavelengthM(sd.l2_signal, eph);
             sd.rover_l2_phase = r_l2->second->carrier_phase; sd.rover_l2_code = r_l2->second->pseudorange;
             sd.base_l2_phase = b_l2->second->carrier_phase; sd.base_l2_code = b_l2->second->pseudorange;
-            sd.has_l2 = true; sd.l2_lli = r_l2->second->lli | b_l2->second->lli;
+            sd.has_l2 = sd.l2_wavelength > 0.0;
+            sd.l2_lli = r_l2->second->lli | b_l2->second->lli;
         }
         result[sat] = sd;
     }
@@ -270,6 +505,109 @@ void RTKProcessor::handleReferenceSatelliteChange(const SatelliteId& new_ref,
     has_ref_satellite_ = true;
 }
 
+bool RTKProcessor::selectSystemReferenceSatellite(
+    const std::map<SatelliteId, SatelliteData>& sat_data,
+    GNSSSystem system,
+    int min_lock_count,
+    SatelliteId& ref_sat) const {
+    SatelliteId best_dual;
+    SatelliteId best_l1;
+    double best_dual_el = -1.0;
+    double best_l1_el = -1.0;
+
+    auto has_required_lock = [&](const SatelliteId& sat, int freq) {
+        if (min_lock_count <= 0) return true;
+        const auto& lock_counts = (freq == 0) ? lock_count_l1_ : lock_count_l2_;
+        auto it = lock_counts.find(sat);
+        return it != lock_counts.end() && it->second >= min_lock_count;
+    };
+
+    for (const auto& [sat, sd] : sat_data) {
+        if (sat.system != system || !sd.has_l1) continue;
+        auto n1_it = filter_state_.n1_indices.find(sat);
+        if (n1_it == filter_state_.n1_indices.end() || filter_state_.state(n1_it->second) == 0.0) continue;
+        if (!has_required_lock(sat, 0)) continue;
+
+        if (sd.elevation > best_l1_el) {
+            best_l1_el = sd.elevation;
+            best_l1 = sat;
+        }
+
+        auto n2_it = filter_state_.n2_indices.find(sat);
+        if (!sd.has_l2 || n2_it == filter_state_.n2_indices.end()) continue;
+        if (filter_state_.state(n2_it->second) == 0.0) continue;
+        if (!has_required_lock(sat, 1)) continue;
+        if (sd.elevation > best_dual_el) {
+            best_dual_el = sd.elevation;
+            best_dual = sat;
+        }
+    }
+
+    if (best_dual_el >= 0.0) {
+        ref_sat = best_dual;
+        return true;
+    }
+    if (best_l1_el >= 0.0) {
+        ref_sat = best_l1;
+        return true;
+    }
+    return false;
+}
+
+std::vector<RTKProcessor::DDPair> RTKProcessor::buildDoubleDifferencePairs(
+    const std::map<SatelliteId, SatelliteData>& sat_data,
+    int min_lock_count) const {
+    std::vector<DDPair> dd_pairs;
+
+    for (GNSSSystem system : kRTKSupportedSystems) {
+        if (!isEnabledRTKSystem(rtk_config_, system)) continue;
+        SatelliteId ref_sat;
+        if (!selectSystemReferenceSatellite(sat_data, system, min_lock_count, ref_sat)) continue;
+
+        const auto ref_sd_it = sat_data.find(ref_sat);
+        if (ref_sd_it == sat_data.end()) continue;
+        const auto& ref_sd = ref_sd_it->second;
+
+        auto ref_n1_it = filter_state_.n1_indices.find(ref_sat);
+        if (ref_n1_it != filter_state_.n1_indices.end() && ref_sd.has_l1) {
+            for (const auto& [sat, sd] : sat_data) {
+                if (sat.system != system || sat == ref_sat || !sd.has_l1) continue;
+                if (requiresMatchedCarrierWavelength(rtk_config_, system) &&
+                    std::abs(sd.l1_wavelength - ref_sd.l1_wavelength) > 1e-6) {
+                    continue;
+                }
+                auto n1_it = filter_state_.n1_indices.find(sat);
+                if (n1_it == filter_state_.n1_indices.end() || filter_state_.state(n1_it->second) == 0.0) continue;
+                if (min_lock_count > 0) {
+                    auto lock_it = lock_count_l1_.find(sat);
+                    if (lock_it == lock_count_l1_.end() || lock_it->second < min_lock_count) continue;
+                }
+                dd_pairs.push_back({ref_sat, ref_n1_it->second, n1_it->second, sat, 0});
+            }
+        }
+
+        auto ref_n2_it = filter_state_.n2_indices.find(ref_sat);
+        if (ref_n2_it != filter_state_.n2_indices.end() && ref_sd.has_l2) {
+            for (const auto& [sat, sd] : sat_data) {
+                if (sat.system != system || sat == ref_sat || !sd.has_l2) continue;
+                if (requiresMatchedCarrierWavelength(rtk_config_, system) &&
+                    std::abs(sd.l2_wavelength - ref_sd.l2_wavelength) > 1e-6) {
+                    continue;
+                }
+                auto n2_it = filter_state_.n2_indices.find(sat);
+                if (n2_it == filter_state_.n2_indices.end() || filter_state_.state(n2_it->second) == 0.0) continue;
+                if (min_lock_count > 0) {
+                    auto lock_it = lock_count_l2_.find(sat);
+                    if (lock_it == lock_count_l2_.end() || lock_it->second < min_lock_count) continue;
+                }
+                dd_pairs.push_back({ref_sat, ref_n2_it->second, n2_it->second, sat, 1});
+            }
+        }
+    }
+
+    return dd_pairs;
+}
+
 // ============================================================
 // Filter initialization
 // ============================================================
@@ -280,7 +618,7 @@ bool RTKProcessor::initializeFilter(const ObservationData& rover_obs,
     filter_state_.covariance = MatrixXd::Zero(NX, NX);
     filter_state_.n1_indices.clear();
     filter_state_.n2_indices.clear();
-    filter_state_.next_state_idx = BASE_STATES;
+    filter_state_.next_state_idx = REAL_STATES;
 
     auto spp = spp_processor_.processEpoch(rover_obs, nav);
     Vector3d rover_pos;
@@ -298,6 +636,33 @@ bool RTKProcessor::initializeFilter(const ObservationData& rover_obs,
 
     filter_initialized_ = true;
     return true;
+}
+
+void RTKProcessor::updateGlonassHardwareBias(double dt) {
+    if (!usesGlonassAutocal(rtk_config_)) {
+        return;
+    }
+    if (!std::isfinite(dt) || dt <= 0.0) {
+        dt = 1.0;
+    }
+
+    const double initial_values[GLO_HWBIAS_STATES] = {
+        rtk_config_.glonass_icb_l1_m_per_mhz,
+        rtk_config_.glonass_icb_l2_m_per_mhz,
+    };
+    for (int freq = 0; freq < GLO_HWBIAS_STATES; ++freq) {
+        const int idx = IL(freq);
+        if (filter_state_.state(idx) == 0.0 || filter_state_.covariance(idx, idx) <= 0.0) {
+            filter_state_.state(idx) = initial_values[freq];
+            for (int j = 0; j < NX; ++j) {
+                filter_state_.covariance(idx, j) = 0.0;
+                filter_state_.covariance(j, idx) = 0.0;
+            }
+            filter_state_.covariance(idx, idx) = kGlonassHWBiasInitialVariance;
+        } else {
+            filter_state_.covariance(idx, idx) += kGlonassHWBiasProcessNoise * dt;
+        }
+    }
 }
 
 // ============================================================
@@ -318,9 +683,9 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
     std::set<SatelliteId> gf_slips;
     if (rtk_config_.enable_cycle_slip_detection) {
         for (const auto& [sat, sd] : sat_data) {
-            if (!sd.has_l1 || !sd.has_l2) continue;
-            double gf = (sd.rover_l1_phase - sd.base_l1_phase) * LAMBDA_L1 -
-                        (sd.rover_l2_phase - sd.base_l2_phase) * LAMBDA_L2;
+            if (!sd.has_l1 || !sd.has_l2 || sd.l1_wavelength <= 0.0 || sd.l2_wavelength <= 0.0) continue;
+            double gf = (sd.rover_l1_phase - sd.base_l1_phase) * sd.l1_wavelength -
+                        (sd.rover_l2_phase - sd.base_l2_phase) * sd.l2_wavelength;
             auto prev_it = gf_l1l2_history_.find(sat);
             if (prev_it != gf_l1l2_history_.end() &&
                 std::abs(gf - prev_it->second) > rtk_config_.cycle_slip_threshold) {
@@ -331,7 +696,6 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
     }
 
     for (int freq = 0; freq < 2; ++freq) {
-        double wl = (freq == 0) ? LAMBDA_L1 : LAMBDA_L2;
         auto& indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
         auto& lock_counts = (freq == 0) ? lock_count_l1_ : lock_count_l2_;
 
@@ -354,48 +718,50 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
             }
         }
 
-        // Compute SD biases and offset correction (RTKLIB udbias)
-        std::map<SatelliteId, double> bias;
-        double offset = 0.0;
-        int offset_count = 0;
+        for (GNSSSystem system : kRTKSupportedSystems) {
+            if (!isEnabledRTKSystem(rtk_config_, system)) continue;
+            std::map<SatelliteId, double> bias;
+            double offset = 0.0;
+            int offset_count = 0;
 
-        for (const auto& [sat, sd] : sat_data) {
-            bool has_freq = (freq == 0) ? sd.has_l1 : sd.has_l2;
-            if (!has_freq) continue;
-            double cp, pr;
-            if (freq == 0) {
-                cp = sd.rover_l1_phase - sd.base_l1_phase;
-                pr = sd.rover_l1_code - sd.base_l1_code;
-            } else {
-                cp = sd.rover_l2_phase - sd.base_l2_phase;
-                pr = sd.rover_l2_code - sd.base_l2_code;
-            }
-            double b = cp - pr / wl;
-            bias[sat] = b;
-            auto idx_it = indices.find(sat);
-            if (idx_it != indices.end() && filter_state_.state(idx_it->second) != 0.0) {
-                offset += b - filter_state_.state(idx_it->second);
-                offset_count++;
-            }
-        }
-
-        // Apply offset correction (preserves DD values)
-        if (offset_count > 0) {
-            double avg_offset = offset / offset_count;
-            for (auto& [sat, idx] : indices) {
-                if (filter_state_.state(idx) != 0.0) {
-                    filter_state_.state(idx) += avg_offset;
+            for (const auto& [sat, sd] : sat_data) {
+                if (sat.system != system) continue;
+                bool has_freq = (freq == 0) ? sd.has_l1 : sd.has_l2;
+                const double wavelength = (freq == 0) ? sd.l1_wavelength : sd.l2_wavelength;
+                if (!has_freq || wavelength <= 0.0) continue;
+                double cp, pr;
+                if (freq == 0) {
+                    cp = sd.rover_l1_phase - sd.base_l1_phase;
+                    pr = sd.rover_l1_code - sd.base_l1_code;
+                } else {
+                    cp = sd.rover_l2_phase - sd.base_l2_phase;
+                    pr = sd.rover_l2_code - sd.base_l2_code;
+                }
+                double b = cp - pr / wavelength;
+                bias[sat] = b;
+                auto idx_it = indices.find(sat);
+                if (idx_it != indices.end() && filter_state_.state(idx_it->second) != 0.0) {
+                    offset += b - filter_state_.state(idx_it->second);
+                    offset_count++;
                 }
             }
-        }
 
-        // Initialize new satellites
-        for (const auto& [sat, b] : bias) {
-            auto idx_it = indices.find(sat);
-            if (idx_it != indices.end() && filter_state_.state(idx_it->second) != 0.0) continue;
-            if (freq == 0) getOrCreateN1Index(sat, b);
-            else getOrCreateN2Index(sat, b);
-            lock_counts[sat] = 0;
+            if (offset_count > 0) {
+                double avg_offset = offset / offset_count;
+                for (auto& [sat, idx] : indices) {
+                    if (sat.system == system && filter_state_.state(idx) != 0.0) {
+                        filter_state_.state(idx) += avg_offset;
+                    }
+                }
+            }
+
+            for (const auto& [sat, b] : bias) {
+                auto idx_it = indices.find(sat);
+                if (idx_it != indices.end() && filter_state_.state(idx_it->second) != 0.0) continue;
+                if (freq == 0) getOrCreateN1Index(sat, b);
+                else getOrCreateN2Index(sat, b);
+                lock_counts[sat] = 0;
+            }
         }
 
         // Add process noise
@@ -474,8 +840,9 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
         }
 
         auto current_spp = spp_processor_.processEpoch(rover_obs, nav);
-
         auto fallback_spp = [&]() {
+            last_ar_ratio_ = 0.0;
+            last_num_fixed_ambiguities_ = 0;
             auto spp = current_spp;
             if (spp.isValid() && has_last_trusted_position_ && has_last_trusted_time_) {
                 const double trusted_jump =
@@ -532,6 +899,12 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             return fallback_spp();
         }
 
+        double state_dt = 1.0;
+        if (has_last_epoch_) {
+            state_dt = rover_obs.time - last_epoch_time_;
+        }
+        updateGlonassHardwareBias(state_dt);
+
         SatelliteId new_ref = selectReferenceSatellite(sat_data);
         handleReferenceSatelliteChange(new_ref, sat_data);
         current_sat_data_ = sat_data;
@@ -540,8 +913,16 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
         // Iterative KF update
         bool filter_ok = false;
         for (int iter = 0; iter < rtk_config_.kf_iterations; ++iter) {
+            const Vector3d baseline_before_iter = filter_state_.state.head<3>();
             filter_ok = updateFilter(sat_data);
             if (!filter_ok) break;
+            if (iter >= 1) {
+                const double baseline_step =
+                    (filter_state_.state.head<3>() - baseline_before_iter).norm();
+                if (baseline_step < 1e-3) {
+                    break;
+                }
+            }
         }
 
         if (filter_ok) {
@@ -558,6 +939,8 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             const bool saved_has_last_trusted = has_last_trusted_position_;
             const GNSSTime saved_last_trusted_time = last_trusted_time_;
             const bool saved_has_last_trusted_time = has_last_trusted_time_;
+            last_ar_ratio_ = 0.0;
+            last_num_fixed_ambiguities_ = 0;
             solution = generateSolution(rover_obs.time, SolutionStatus::FLOAT, n_sats);
             const PositionSolution float_solution = solution;
 
@@ -589,6 +972,29 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                 }
             }
 
+            if (saved_has_last_trusted && saved_has_last_trusted_time) {
+                double dt = rover_obs.time - saved_last_trusted_time;
+                if (!std::isfinite(dt) || dt < 0.5) {
+                    dt = 1.0;
+                }
+                if (dt <= 3.0) {
+                    const double trusted_jump =
+                        (solution.position_ecef - saved_last_trusted_position).norm();
+                    const double max_trusted_jump = std::max(8.0, 12.0 * dt);
+                    if (trusted_jump > max_trusted_jump) {
+                        last_solution_position_ = saved_last_solution_position;
+                        has_last_solution_position_ = saved_has_last_solution;
+                        last_epoch_time_ = saved_last_solution_time;
+                        has_last_epoch_ = saved_has_last_solution_time;
+                        last_trusted_position_ = saved_last_trusted_position;
+                        has_last_trusted_position_ = saved_has_last_trusted;
+                        last_trusted_time_ = saved_last_trusted_time;
+                        has_last_trusted_time_ = saved_has_last_trusted_time;
+                        return fallback_spp();
+                    }
+                }
+            }
+
             if (saved_has_last_solution && saved_has_last_solution_time) {
                 double dt = rover_obs.time - saved_last_solution_time;
                 if (!std::isfinite(dt) || dt < 0.5) dt = 1.0;
@@ -605,7 +1011,120 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             }
 
             has_fixed_solution_ = false;
-            if (resolveAmbiguities() && has_fixed_solution_) {
+            struct ARCandidate {
+                bool valid = false;
+                Vector3d baseline = Vector3d::Zero();
+                double ratio = 0.0;
+                int num_fixed_ambiguities = 0;
+                std::vector<DDPair> dd_pairs;
+                std::vector<int> best_subset;
+                VectorXd dd_fixed;
+            };
+
+            auto capture_candidate = [&]() {
+                ARCandidate candidate;
+                if (!has_fixed_solution_) {
+                    return candidate;
+                }
+                candidate.valid = true;
+                candidate.baseline = fixed_baseline_;
+                candidate.ratio = last_ar_ratio_;
+                candidate.num_fixed_ambiguities = last_num_fixed_ambiguities_;
+                candidate.dd_pairs = last_dd_pairs_;
+                candidate.best_subset = last_best_subset_;
+                candidate.dd_fixed = last_dd_fixed_;
+                return candidate;
+            };
+
+            auto restore_candidate = [&](const ARCandidate& candidate) {
+                has_fixed_solution_ = candidate.valid;
+                fixed_baseline_ = candidate.baseline;
+                last_ar_ratio_ = candidate.ratio;
+                last_num_fixed_ambiguities_ = candidate.num_fixed_ambiguities;
+                last_dd_pairs_ = candidate.dd_pairs;
+                last_best_subset_ = candidate.best_subset;
+                last_dd_fixed_ = candidate.dd_fixed;
+            };
+
+            const int min_lock = std::max(1, rtk_config_.min_lock_count);
+            auto build_pairs_for_mode = [&](RTKConfig::GlonassARMode mode) {
+                const auto saved_mode = rtk_config_.glonass_ar_mode;
+                rtk_config_.glonass_ar_mode = mode;
+                auto dd_pairs = buildDoubleDifferencePairs(sat_data, min_lock);
+                rtk_config_.glonass_ar_mode = saved_mode;
+                return dd_pairs;
+            };
+
+            auto try_ar_mode = [&](RTKConfig::GlonassARMode mode,
+                                   const std::vector<DDPair>* prebuilt_pairs) {
+                const auto saved_mode = rtk_config_.glonass_ar_mode;
+                rtk_config_.glonass_ar_mode = mode;
+                has_fixed_solution_ = false;
+                last_ar_ratio_ = 0.0;
+                last_num_fixed_ambiguities_ = 0;
+                const bool resolved =
+                    (prebuilt_pairs ? resolveAmbiguities(*prebuilt_pairs) : resolveAmbiguities()) &&
+                    has_fixed_solution_;
+                ARCandidate candidate;
+                if (resolved) {
+                    candidate = capture_candidate();
+                }
+                rtk_config_.glonass_ar_mode = saved_mode;
+                return candidate;
+            };
+
+            bool have_fix_candidate = false;
+            if (rtk_config_.glonass_ar_mode == RTKConfig::GlonassARMode::AUTOCAL) {
+                const auto preview_pairs =
+                    build_pairs_for_mode(RTKConfig::GlonassARMode::AUTOCAL);
+                const int glonass_pair_count = static_cast<int>(std::count_if(
+                    preview_pairs.begin(), preview_pairs.end(), [](const DDPair& pair) {
+                        return pair.ref_sat.system == GNSSSystem::GLONASS;
+                    }));
+
+                const auto autocal_candidate =
+                    glonass_pair_count > 0
+                        ? try_ar_mode(RTKConfig::GlonassARMode::AUTOCAL, &preview_pairs)
+                        : ARCandidate{};
+                const bool confident_autocal =
+                    autocal_candidate.valid &&
+                    autocal_candidate.ratio >= rtk_config_.ambiguity_ratio_threshold + 0.4 &&
+                    autocal_candidate.num_fixed_ambiguities >=
+                        std::max(4, rtk_config_.min_satellites_for_ar - 1);
+                std::vector<DDPair> classic_pairs;
+                const auto classic_candidate = [&]() {
+                    if (glonass_pair_count != 0 && confident_autocal) {
+                        return ARCandidate{};
+                    }
+                    if (glonass_pair_count == 0) {
+                        return try_ar_mode(RTKConfig::GlonassARMode::OFF, &preview_pairs);
+                    }
+                    classic_pairs = build_pairs_for_mode(RTKConfig::GlonassARMode::OFF);
+                    return try_ar_mode(RTKConfig::GlonassARMode::OFF, &classic_pairs);
+                }();
+                ARCandidate chosen;
+                if (autocal_candidate.valid && classic_candidate.valid) {
+                    chosen = (autocal_candidate.ratio + 1e-6 >= classic_candidate.ratio)
+                                 ? autocal_candidate
+                                 : classic_candidate;
+                } else if (autocal_candidate.valid) {
+                    chosen = autocal_candidate;
+                } else if (classic_candidate.valid) {
+                    chosen = classic_candidate;
+                }
+                if (chosen.valid) {
+                    restore_candidate(chosen);
+                    have_fix_candidate = true;
+                } else {
+                    has_fixed_solution_ = false;
+                    last_ar_ratio_ = 0.0;
+                    last_num_fixed_ambiguities_ = 0;
+                }
+            } else if (resolveAmbiguities() && has_fixed_solution_) {
+                have_fix_candidate = true;
+            }
+
+            if (have_fix_candidate && has_fixed_solution_) {
                 if (validateFixedSolution(sat_data)) {
                     Vector3d saved_baseline = filter_state_.state.head<3>();
                     filter_state_.state.head<3>() = fixed_baseline_;
@@ -613,9 +1132,21 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                     filter_state_.state.head<3>() = saved_baseline;
                     const double fixed_float_jump =
                         (solution.position_ecef - float_solution.position_ecef).norm();
+                    double fixed_trusted_jump = 0.0;
+                    double max_fixed_trusted_jump = 0.0;
+                    bool exceeds_trusted_jump = false;
+                    if (saved_has_last_trusted && saved_has_last_trusted_time) {
+                        double dt = rover_obs.time - saved_last_trusted_time;
+                        if (!std::isfinite(dt) || dt < 0.5) dt = 1.0;
+                        fixed_trusted_jump =
+                            (solution.position_ecef - saved_last_trusted_position).norm();
+                        max_fixed_trusted_jump = std::max(20.0, 25.0 * dt);
+                        exceeds_trusted_jump = fixed_trusted_jump > max_fixed_trusted_jump;
+                    }
                     if (!finitePosition(solution) ||
                         deviatesTooFarFromSPP(solution, 150.0) ||
-                        (n_sats <= 5 && fixed_float_jump > 30.0)) {
+                        fixed_float_jump > 20.0 ||
+                        exceeds_trusted_jump) {
                         has_fixed_solution_ = false;
                         last_trusted_position_ = saved_last_trusted_position;
                         has_last_trusted_position_ = saved_has_last_trusted;
@@ -666,14 +1197,6 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
 
     if (sat_data.size() < 4) return false;
 
-    SatelliteId ref_sat = current_ref_satellite_;
-    auto ref_it = sat_data.find(ref_sat);
-    if (ref_it == sat_data.end()) return false;
-    const auto& ref_sd = ref_it->second;
-
-    auto ref_n1_it = filter_state_.n1_indices.find(ref_sat);
-    if (ref_n1_it == filter_state_.n1_indices.end()) return false;
-
     int n_states = filter_state_.state.size();
     int max_obs = 4 * sat_data.size();
     MatrixXd H = MatrixXd::Zero(max_obs, n_states);
@@ -683,96 +1206,117 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
 
     Vector3d rover_pos = base_position_ + filter_state_.state.head<3>();
 
-    double rr_ref = geodist_range(ref_sd.sat_pos, rover_pos) + tropModel(rover_pos, ref_sd.elevation);
-    double br_ref = geodist_range(ref_sd.sat_pos_base, base_position_) + tropModel(base_position_, ref_sd.base_elevation);
-    Vector3d los_ref = (ref_sd.sat_pos - rover_pos).normalized();
-
     int oi = 0;
+    for (GNSSSystem system : kRTKSupportedSystems) {
+        if (!isEnabledRTKSystem(rtk_config_, system)) continue;
+        SatelliteId ref_sat;
+        if (!selectSystemReferenceSatellite(sat_data, system, 0, ref_sat)) continue;
 
-    // L1 phase DDs
-    int block_count = 0;
-        for (const auto& [sat, sd] : sat_data) {
-            if (sat == ref_sat || !sd.has_l1) continue;
-            auto n1_it = filter_state_.n1_indices.find(sat);
-            if (n1_it == filter_state_.n1_indices.end()) continue;
-            double rr = geodist_range(sd.sat_pos, rover_pos) + tropModel(rover_pos, sd.elevation);
-            double br = geodist_range(sd.sat_pos_base, base_position_) + tropModel(base_position_, sd.base_elevation);
-            double geom_dd = (rr_ref - br_ref) - (rr - br);
-            Vector3d dd_los = -los_ref + (sd.sat_pos - rover_pos).normalized();
-            double phase_dd = (ref_sd.rover_l1_phase - ref_sd.base_l1_phase) - (sd.rover_l1_phase - sd.base_l1_phase);
-            double amb_term = LAMBDA_L1 * filter_state_.state(ref_n1_it->second)
-                            - LAMBDA_L1 * filter_state_.state(n1_it->second);
-            z(oi) = phase_dd * LAMBDA_L1 - geom_dd - amb_term;
-            H(oi, 0) = dd_los(0); H(oi, 1) = dd_los(1); H(oi, 2) = dd_los(2);
-            H(oi, ref_n1_it->second) = LAMBDA_L1;
-            H(oi, n1_it->second) = -LAMBDA_L1;
-            Ri_vec.push_back(varerr(ref_sd.elevation, true));
-            Rj_vec.push_back(varerr(sd.elevation, true));
-            oi++; block_count++;
-        }
-        nb_vec.push_back(block_count);
+        auto ref_it = sat_data.find(ref_sat);
+        if (ref_it == sat_data.end()) continue;
+        const auto& ref_sd = ref_it->second;
+        const double rr_ref = geodist_range(ref_sd.sat_pos, rover_pos) +
+                              tropModel(rover_pos, ref_sd.elevation);
+        const double br_ref = geodist_range(ref_sd.sat_pos_base, base_position_) +
+                              tropModel(base_position_, ref_sd.base_elevation);
+        const Vector3d los_ref = (ref_sd.sat_pos - rover_pos).normalized();
 
-        // L2 phase DDs
-        auto ref_n2_it = filter_state_.n2_indices.find(ref_sat);
-        block_count = 0;
-        if (ref_sd.has_l2 && ref_n2_it != filter_state_.n2_indices.end()) {
-            for (const auto& [sat, sd] : sat_data) {
-                if (sat == ref_sat || !sd.has_l2) continue;
-                auto n2_it = filter_state_.n2_indices.find(sat);
-                if (n2_it == filter_state_.n2_indices.end()) continue;
-                double rr = geodist_range(sd.sat_pos, rover_pos) + tropModel(rover_pos, sd.elevation);
-                double br = geodist_range(sd.sat_pos_base, base_position_) + tropModel(base_position_, sd.base_elevation);
-                double geom_dd = (rr_ref - br_ref) - (rr - br);
-                Vector3d dd_los = -los_ref + (sd.sat_pos - rover_pos).normalized();
-                double phase_dd = (ref_sd.rover_l2_phase - ref_sd.base_l2_phase) - (sd.rover_l2_phase - sd.base_l2_phase);
-                z(oi) = phase_dd * LAMBDA_L2 - geom_dd
-                        - LAMBDA_L2 * filter_state_.state(ref_n2_it->second)
-                        + LAMBDA_L2 * filter_state_.state(n2_it->second);
-                H(oi, 0) = dd_los(0); H(oi, 1) = dd_los(1); H(oi, 2) = dd_los(2);
-                H(oi, ref_n2_it->second) = LAMBDA_L2;
-                H(oi, n2_it->second) = -LAMBDA_L2;
-                Ri_vec.push_back(varerr(ref_sd.elevation, true));
-                Rj_vec.push_back(varerr(sd.elevation, true));
-                oi++; block_count++;
+        auto append_block = [&](int freq, bool is_phase) {
+            const bool ref_has_freq = (freq == 0) ? ref_sd.has_l1 : ref_sd.has_l2;
+            if (!ref_has_freq) {
+                nb_vec.push_back(0);
+                return;
             }
-        }
-        nb_vec.push_back(block_count);
 
-        // L1 code DDs
-        block_count = 0;
-        for (const auto& [sat, sd] : sat_data) {
-            if (sat == ref_sat || !sd.has_l1) continue;
-            double rr = geodist_range(sd.sat_pos, rover_pos) + tropModel(rover_pos, sd.elevation);
-            double br = geodist_range(sd.sat_pos_base, base_position_) + tropModel(base_position_, sd.base_elevation);
-            double geom_dd = (rr_ref - br_ref) - (rr - br);
-            Vector3d dd_los = -los_ref + (sd.sat_pos - rover_pos).normalized();
-            double code_dd = (ref_sd.rover_l1_code - ref_sd.base_l1_code) - (sd.rover_l1_code - sd.base_l1_code);
-            z(oi) = code_dd - geom_dd;
-            H(oi, 0) = dd_los(0); H(oi, 1) = dd_los(1); H(oi, 2) = dd_los(2);
-            Ri_vec.push_back(varerr(ref_sd.elevation, false));
-            Rj_vec.push_back(varerr(sd.elevation, false));
-            oi++; block_count++;
-        }
-        nb_vec.push_back(block_count);
-
-        // L2 code DDs
-        block_count = 0;
-        if (ref_sd.has_l2) {
-            for (const auto& [sat, sd] : sat_data) {
-                if (sat == ref_sat || !sd.has_l2) continue;
-                double rr = geodist_range(sd.sat_pos, rover_pos) + tropModel(rover_pos, sd.elevation);
-                double br = geodist_range(sd.sat_pos_base, base_position_) + tropModel(base_position_, sd.base_elevation);
-                double geom_dd = (rr_ref - br_ref) - (rr - br);
-                Vector3d dd_los = -los_ref + (sd.sat_pos - rover_pos).normalized();
-                double code_dd = (ref_sd.rover_l2_code - ref_sd.base_l2_code) - (sd.rover_l2_code - sd.base_l2_code);
-                z(oi) = code_dd - geom_dd;
-                H(oi, 0) = dd_los(0); H(oi, 1) = dd_los(1); H(oi, 2) = dd_los(2);
-                Ri_vec.push_back(varerr(ref_sd.elevation, false));
-                Rj_vec.push_back(varerr(sd.elevation, false));
-                oi++; block_count++;
+            const auto& ref_indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
+            auto ref_state_it = ref_indices.find(ref_sat);
+            if (ref_state_it == ref_indices.end()) {
+                nb_vec.push_back(0);
+                return;
             }
-        }
-        nb_vec.push_back(block_count);
+
+            const double ref_wavelength = (freq == 0) ? ref_sd.l1_wavelength : ref_sd.l2_wavelength;
+            if (ref_wavelength <= 0.0) {
+                nb_vec.push_back(0);
+                return;
+            }
+
+            int block_count = 0;
+            for (const auto& [sat, sd] : sat_data) {
+                if (sat.system != system || sat == ref_sat) continue;
+                const bool sat_has_freq = (freq == 0) ? sd.has_l1 : sd.has_l2;
+                if (!sat_has_freq) continue;
+                const auto& sat_indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
+                auto sat_state_it = sat_indices.find(sat);
+                if (sat_state_it == sat_indices.end()) continue;
+
+                const double sat_wavelength = (freq == 0) ? sd.l1_wavelength : sd.l2_wavelength;
+                if (sat_wavelength <= 0.0) continue;
+
+                const double rr = geodist_range(sd.sat_pos, rover_pos) + tropModel(rover_pos, sd.elevation);
+                const double br = geodist_range(sd.sat_pos_base, base_position_) +
+                                  tropModel(base_position_, sd.base_elevation);
+                const double geom_dd = (rr_ref - br_ref) - (rr - br);
+                const Vector3d dd_los = -los_ref + (sd.sat_pos - rover_pos).normalized();
+
+                if (is_phase) {
+                    const double ref_phase = (freq == 0) ? ref_sd.rover_l1_phase - ref_sd.base_l1_phase
+                                                         : ref_sd.rover_l2_phase - ref_sd.base_l2_phase;
+                    const double sat_phase = (freq == 0) ? sd.rover_l1_phase - sd.base_l1_phase
+                                                         : sd.rover_l2_phase - sd.base_l2_phase;
+                    const double glonass_icb =
+                        glonassInterChannelBiasMeters(
+                            rtk_config_,
+                            ref_sd.satellite.system,
+                            sd.satellite.system,
+                            (freq == 0) ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz,
+                            (freq == 0) ? sd.l1_frequency_hz : sd.l2_frequency_hz,
+                            freq);
+                    const bool autocal_glonass =
+                        usesGlonassAutocal(rtk_config_) &&
+                        ref_sd.satellite.system == GNSSSystem::GLONASS &&
+                        sd.satellite.system == GNSSSystem::GLONASS &&
+                        freq < GLO_HWBIAS_STATES;
+                    const double df_mhz =
+                        autocal_glonass
+                            ? (((freq == 0) ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz) -
+                               ((freq == 0) ? sd.l1_frequency_hz : sd.l2_frequency_hz)) / 1e6
+                            : 0.0;
+                    const double amb_term =
+                        ref_wavelength * filter_state_.state(ref_state_it->second) -
+                        sat_wavelength * filter_state_.state(sat_state_it->second);
+                    z(oi) = ref_phase * ref_wavelength - sat_phase * sat_wavelength -
+                            geom_dd - amb_term - glonass_icb;
+                    if (autocal_glonass) {
+                        z(oi) -= df_mhz * filter_state_.state(IL(freq));
+                        H(oi, IL(freq)) = df_mhz;
+                    }
+                    H(oi, ref_state_it->second) = ref_wavelength;
+                    H(oi, sat_state_it->second) = -sat_wavelength;
+                } else {
+                    const double ref_code = (freq == 0) ? ref_sd.rover_l1_code - ref_sd.base_l1_code
+                                                        : ref_sd.rover_l2_code - ref_sd.base_l2_code;
+                    const double sat_code = (freq == 0) ? sd.rover_l1_code - sd.base_l1_code
+                                                        : sd.rover_l2_code - sd.base_l2_code;
+                    z(oi) = (ref_code - sat_code) - geom_dd;
+                }
+
+                H(oi, 0) = dd_los(0);
+                H(oi, 1) = dd_los(1);
+                H(oi, 2) = dd_los(2);
+                Ri_vec.push_back(varerr(ref_sd.elevation, is_phase));
+                Rj_vec.push_back(varerr(sd.elevation, is_phase));
+                oi++;
+                block_count++;
+            }
+            nb_vec.push_back(block_count);
+        };
+
+        append_block(0, true);
+        append_block(1, true);
+        append_block(0, false);
+        append_block(1, false);
+    }
 
     if (oi < 6) return false;
 
@@ -817,66 +1361,28 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
 // Resolve ambiguities: SD->DD transform + LAMBDA
 // ============================================================
 bool RTKProcessor::resolveAmbiguities() {
-    if (!filter_initialized_ || !has_ref_satellite_) return false;
+    if (!filter_initialized_) return false;
 
-    SatelliteId ref_sat = current_ref_satellite_;
     const auto& sat_data = current_sat_data_;
-    if (sat_data.find(ref_sat) == sat_data.end()) return false;
+
+    const int min_lock = std::max(1, rtk_config_.min_lock_count);
+    return resolveAmbiguities(buildDoubleDifferencePairs(sat_data, min_lock));
+}
+
+bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
+    if (!filter_initialized_) return false;
+
+    const auto& sat_data = current_sat_data_;
 
     int nx = filter_state_.state.size();
-    int na = BASE_STATES;
+    const int na = usesGlonassAutocal(rtk_config_) ? REAL_STATES : BASE_STATES;
 
-    bool use_iflc = (rtk_config_.ionoopt == RTKConfig::IonoOpt::IFLC);
-
-    // Build DD pairs (L1 + L2)
-    std::vector<DDPair> dd_pairs;
-
-    int nfreq_ar = 2;
-
-    for (int freq = 0; freq < nfreq_ar; ++freq) {
-        const auto& indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
-        const auto& lock_counts = (freq == 0) ? lock_count_l1_ : lock_count_l2_;
-        const int min_lock = std::max(1, rtk_config_.min_lock_count);
-
-        int ref_idx = -1;
-        SatelliteId lambda_ref = current_ref_satellite_;
-
-        auto choose_reference = [&](const SatelliteId& sat) -> bool {
-            auto idx_it = indices.find(sat);
-            if (idx_it == indices.end()) return false;
-            if (filter_state_.state(idx_it->second) == 0.0) return false;
-            auto lock_it = lock_counts.find(sat);
-            if (lock_it == lock_counts.end() || lock_it->second < min_lock) return false;
-            if (sat_data.find(sat) == sat_data.end()) return false;
-            ref_idx = idx_it->second;
-            lambda_ref = sat;
-            return true;
-        };
-
-        if (!choose_reference(current_ref_satellite_)) {
-            double best_el = -1.0;
-            for (const auto& [sat, state_idx] : indices) {
-                if (filter_state_.state(state_idx) == 0.0) continue;
-                auto lock_it = lock_counts.find(sat);
-                if (lock_it == lock_counts.end() || lock_it->second < min_lock) continue;
-                auto sat_it = sat_data.find(sat);
-                if (sat_it == sat_data.end()) continue;
-                if (sat_it->second.elevation <= best_el) continue;
-                best_el = sat_it->second.elevation;
-                ref_idx = state_idx;
-                lambda_ref = sat;
-            }
-        }
-        if (ref_idx < 0) continue;
-
-        for (const auto& [sat, state_idx] : indices) {
-            if (sat == lambda_ref) continue;
-            if (filter_state_.state(state_idx) == 0.0) continue;
-            auto lock_it = lock_counts.find(sat);
-            if (lock_it == lock_counts.end() || lock_it->second < min_lock) continue;
-            dd_pairs.push_back({ref_idx, state_idx, sat, freq});
-        }
-    }
+    dd_pairs.erase(
+        std::remove_if(dd_pairs.begin(), dd_pairs.end(),
+                       [&](const DDPair& pair) {
+                           return !isAmbiguityResolutionSystem(rtk_config_, pair.ref_sat.system);
+                       }),
+        dd_pairs.end());
 
     int nb = dd_pairs.size();
     if (nb < 4) return false;
@@ -961,7 +1467,7 @@ bool RTKProcessor::resolveAmbiguities() {
 
     // Try full set first
     VectorXd dd_fixed;
-    double ratio;
+    double ratio = 0.0;
     bool fixed = false;
 
     // Use lower ratio threshold when holdamb is active (more confidence in solution)
@@ -978,30 +1484,34 @@ bool RTKProcessor::resolveAmbiguities() {
 
                 // WL-NL cross-validation: verify LAMBDA integers match WL-NL
                 if (fixed && rtk_config_.ionoopt == RTKConfig::IonoOpt::IFLC) {
-                    static constexpr double F1v = constants::GPS_L1_FREQ;
-                    static constexpr double F2v = constants::GPS_L2_FREQ;
-                    static constexpr double Cv = constants::SPEED_OF_LIGHT;
-                    static constexpr double LAM_WLv = Cv / (F1v - F2v);
                     int mismatch = 0, checked = 0;
                     for (int i = 0; i < nb; ++i) {
-                        if (dd_pairs[i].freq != 0) continue;
+                        if (dd_pairs[i].freq != 0 || dd_pairs[i].ref_sat.system == GNSSSystem::GLONASS) continue;
                         int l2p = -1;
                         for (int j = 0; j < nb; ++j)
-                            if (dd_pairs[j].freq == 1 && dd_pairs[j].sat == dd_pairs[i].sat) { l2p = j; break; }
+                            if (dd_pairs[j].freq == 1 &&
+                                dd_pairs[j].sat == dd_pairs[i].sat &&
+                                dd_pairs[j].ref_sat == dd_pairs[i].ref_sat) { l2p = j; break; }
                         if (l2p < 0) continue;
                         // LAMBDA N_wl vs MW N_wl
                         double lambda_nwl = dd_fixed(i) - dd_fixed(l2p);
 
-                        SatelliteId ref_id;
-                        for (const auto& [s, idx] : filter_state_.n1_indices)
-                            if (idx == dd_pairs[i].ref_idx) { ref_id = s; break; }
-                        auto rit = sat_data.find(ref_id), sit = sat_data.find(dd_pairs[i].sat);
+                        auto rit = sat_data.find(dd_pairs[i].ref_sat);
+                        auto sit = sat_data.find(dd_pairs[i].sat);
                         if (rit == sat_data.end() || sit == sat_data.end()) continue;
                         if (!rit->second.has_l2 || !sit->second.has_l2) continue;
+                        const double f1 = rit->second.l1_frequency_hz;
+                        const double f2 = rit->second.l2_frequency_hz;
+                        const double lam_wl = wideLaneWavelength(f1, f2);
+                        const double c1 = ionoFreeCoeff1(f1, f2);
+                        const double c2 = ionoFreeCoeff2(f1, f2);
+                        const double lam_nl = narrowLaneWavelength(f1, f2);
+                        if (lam_wl <= 0.0 || lam_nl <= 0.0) continue;
                         auto mw_sd = [&](const SatelliteData& d) {
                             return (d.rover_l1_phase - d.base_l1_phase) - (d.rover_l2_phase - d.base_l2_phase)
-                                 - (F1v*(d.rover_l1_code - d.base_l1_code) + F2v*(d.rover_l2_code - d.base_l2_code))
-                                   / ((F1v+F2v) * LAM_WLv);
+                                 - (f1 * (d.rover_l1_code - d.base_l1_code) +
+                                    f2 * (d.rover_l2_code - d.base_l2_code))
+                                   / ((f1 + f2) * lam_wl);
                         };
                         double dd_mw = mw_sd(rit->second) - mw_sd(sit->second);
                         double mw_nwl = std::round(dd_mw);
@@ -1010,11 +1520,9 @@ bool RTKProcessor::resolveAmbiguities() {
                             // Check WL consistency
                             if (std::abs(lambda_nwl - mw_nwl) > 0.5) mismatch++;
                             // Also check NL: use IF to derive expected N2
-                            static constexpr double C1v = F1v*F1v/(F1v*F1v-F2v*F2v);
-                            static constexpr double C2v = -(F2v*F2v)/(F1v*F1v-F2v*F2v);
-                            static constexpr double LNL = C1v*(Cv/F1v) + C2v*(Cv/F2v);
-                            double if_val = C1v * LAMBDA_L1 * dd_float(i) + C2v * LAMBDA_L2 * dd_float(l2p);
-                            double n2_if = (if_val - C1v * LAMBDA_L1 * mw_nwl) / LNL;
+                            double if_val = c1 * rit->second.l1_wavelength * dd_float(i) +
+                                            c2 * rit->second.l2_wavelength * dd_float(l2p);
+                            double n2_if = (if_val - c1 * rit->second.l1_wavelength * mw_nwl) / lam_nl;
                             double n2_lambda = dd_fixed(l2p);
                             // If IF-derived N2 differs from LAMBDA N2, it's wrong
                             if (std::abs(n2_if - n2_lambda) > 0.5) mismatch++;
@@ -1032,46 +1540,46 @@ bool RTKProcessor::resolveAmbiguities() {
     // WL-NL fallback: when LAMBDA fails on long baseline, try WL-NL AR
     if (!fixed && rtk_config_.ionoopt == RTKConfig::IonoOpt::IFLC && max_var < 1.0) {
         // Only attempt when KF has converged (max_var < 1 = several epochs in)
-        static constexpr double F1 = constants::GPS_L1_FREQ;
-        static constexpr double F2 = constants::GPS_L2_FREQ;
-        static constexpr double CC = constants::SPEED_OF_LIGHT;
-        static constexpr double LAM_WL = CC / (F1 - F2);
-        static constexpr double C1_IF = F1*F1 / (F1*F1 - F2*F2);
-        static constexpr double C2_IF = -(F2*F2) / (F1*F1 - F2*F2);
-        static constexpr double LAM_NL = C1_IF * (CC/F1) + C2_IF * (CC/F2);
-
         VectorXd wlnl_fixed = dd_float;
         int wl_ok = 0, wl_total = 0;
 
         for (int i = 0; i < nb; ++i) {
-            if (dd_pairs[i].freq != 0) continue;
+            if (dd_pairs[i].freq != 0 || dd_pairs[i].ref_sat.system == GNSSSystem::GLONASS) continue;
             wl_total++;
             int l2p = -1;
             for (int j = 0; j < nb; ++j)
-                if (dd_pairs[j].freq == 1 && dd_pairs[j].sat == dd_pairs[i].sat) { l2p = j; break; }
+                if (dd_pairs[j].freq == 1 &&
+                    dd_pairs[j].sat == dd_pairs[i].sat &&
+                    dd_pairs[j].ref_sat == dd_pairs[i].ref_sat) { l2p = j; break; }
             if (l2p < 0) continue;
 
-            // Find ref satellite
-            SatelliteId ref_id;
-            for (const auto& [s, idx] : filter_state_.n1_indices)
-                if (idx == dd_pairs[i].ref_idx) { ref_id = s; break; }
-            auto rit = sat_data.find(ref_id), sit = sat_data.find(dd_pairs[i].sat);
+            auto rit = sat_data.find(dd_pairs[i].ref_sat);
+            auto sit = sat_data.find(dd_pairs[i].sat);
             if (rit == sat_data.end() || sit == sat_data.end()) continue;
             if (!rit->second.has_l2 || !sit->second.has_l2) continue;
+            const double f1 = rit->second.l1_frequency_hz;
+            const double f2 = rit->second.l2_frequency_hz;
+            const double lam_wl = wideLaneWavelength(f1, f2);
+            const double c1_if = ionoFreeCoeff1(f1, f2);
+            const double c2_if = ionoFreeCoeff2(f1, f2);
+            const double lam_nl = narrowLaneWavelength(f1, f2);
+            if (lam_wl <= 0.0 || lam_nl <= 0.0) continue;
 
             // MW wide-lane
             auto mw_sd = [&](const SatelliteData& d) {
                 return (d.rover_l1_phase - d.base_l1_phase) - (d.rover_l2_phase - d.base_l2_phase)
-                     - (F1*(d.rover_l1_code - d.base_l1_code) + F2*(d.rover_l2_code - d.base_l2_code))
-                       / ((F1+F2) * LAM_WL);
+                     - (f1 * (d.rover_l1_code - d.base_l1_code) +
+                        f2 * (d.rover_l2_code - d.base_l2_code))
+                       / ((f1 + f2) * lam_wl);
             };
             double dd_mw = mw_sd(rit->second) - mw_sd(sit->second);
             double nw = std::round(dd_mw);
             if (std::abs(dd_mw - nw) > 0.25) continue;
 
             // IF → NL
-            double if_dd = C1_IF * LAMBDA_L1 * dd_float(i) + C2_IF * LAMBDA_L2 * dd_float(l2p);
-            double n2f = (if_dd - C1_IF * LAMBDA_L1 * nw) / LAM_NL;
+            double if_dd = c1_if * rit->second.l1_wavelength * dd_float(i) +
+                           c2_if * rit->second.l2_wavelength * dd_float(l2p);
+            double n2f = (if_dd - c1_if * rit->second.l1_wavelength * nw) / lam_nl;
             double n2 = std::round(n2f);
             if (std::abs(n2f - n2) > 0.25) continue;
 
@@ -1119,57 +1627,142 @@ bool RTKProcessor::resolveAmbiguities() {
     std::vector<int> best_subset;
     for (int i = 0; i < nb; ++i) best_subset.push_back(i);
 
-    if (!fixed && nb > 4) {
-        double best_ratio = ratio;
-        VectorXd best_fixed = dd_fixed;
+    const bool search_preferred_subsets =
+        !fixed || ratio < effective_ratio_threshold + 0.5;
+    const bool search_drop_subsets =
+        !fixed || ratio < effective_ratio_threshold + 0.8 || max_var > 0.20;
+
+    if (nb > 4 && (search_preferred_subsets || search_drop_subsets)) {
+        const VectorXd full_dd_float = dd_float;
+        const MatrixXd full_Qb = Qb;
+        const MatrixXd full_Qab = Qab;
+        double best_ratio = fixed ? ratio : 0.0;
         std::vector<int> current_subset = best_subset;
+        VectorXd best_dd_float = full_dd_float;
+        MatrixXd best_Qb = full_Qb;
+        MatrixXd best_Qab = full_Qab;
+        VectorXd best_dd_fixed = dd_fixed;
+        bool best_fixed = fixed;
 
-        for (int drop = 0; drop < std::min(nb - 4, 6); ++drop) {
-            int worst = -1;
-            double worst_var = -1;
-            for (int idx : current_subset) {
-                if (Qb(idx, idx) > worst_var) { worst_var = Qb(idx, idx); worst = idx; }
-            }
-            if (worst < 0) break;
+        auto adopt_subset = [&](const std::vector<int>& subset,
+                                const VectorXd& sub_float,
+                                const MatrixXd& sub_Qb,
+                                const MatrixXd& sub_Qab,
+                                const VectorXd& sub_fixed,
+                                double sub_ratio) {
+            best_subset = subset;
+            best_dd_float = sub_float;
+            best_Qb = sub_Qb;
+            best_Qab = sub_Qab;
+            best_dd_fixed = sub_fixed;
+            best_ratio = sub_ratio;
+            best_fixed = true;
+        };
 
-            std::vector<int> subset;
-            for (int idx : current_subset) {
-                if (idx != worst) subset.push_back(idx);
+        auto try_subset = [&](const std::vector<int>& subset) {
+            const int ns = subset.size();
+            if (ns < 4) {
+                return false;
             }
-            int ns = subset.size();
-            if (ns < 4) break;
 
             VectorXd sub_float(ns);
             MatrixXd sub_Qb(ns, ns);
             MatrixXd sub_Qab(na, ns);
             for (int i = 0; i < ns; ++i) {
-                sub_float(i) = dd_float(subset[i]);
-                for (int j = 0; j < ns; ++j)
-                    sub_Qb(i, j) = Qb(subset[i], subset[j]);
-                for (int j = 0; j < na; ++j)
-                    sub_Qab(j, i) = Qab(j, subset[i]);
+                sub_float(i) = full_dd_float(subset[i]);
+                for (int j = 0; j < ns; ++j) {
+                    sub_Qb(i, j) = full_Qb(subset[i], subset[j]);
+                }
+                for (int j = 0; j < na; ++j) {
+                    sub_Qab(j, i) = full_Qab(j, subset[i]);
+                }
             }
             sub_Qb = (sub_Qb + sub_Qb.transpose()) / 2.0;
 
             VectorXd sub_fixed;
-            double sub_ratio;
-            if (lambdaMethod(sub_float, sub_Qb, sub_fixed, sub_ratio)) {
-                if (sub_ratio > best_ratio) {
-                    best_ratio = sub_ratio;
-                    best_fixed = sub_fixed;
-                    best_subset = subset;
-                    Qab = sub_Qab;
-                    Qb = sub_Qb;
-                    dd_float = sub_float;
+            double sub_ratio = 0.0;
+            if (!lambdaMethod(sub_float, sub_Qb, sub_fixed, sub_ratio)) {
+                return false;
+            }
+            if (sub_ratio < effective_ratio_threshold) {
+                return false;
+            }
+
+            if (!best_fixed || sub_ratio > best_ratio + 1e-6) {
+                adopt_subset(subset, sub_float, sub_Qb, sub_Qab, sub_fixed, sub_ratio);
+                return true;
+            }
+            return false;
+        };
+
+        auto build_subset_excluding = [&](std::initializer_list<GNSSSystem> excluded) {
+            std::vector<int> subset;
+            for (int i = 0; i < nb; ++i) {
+                bool keep = true;
+                for (GNSSSystem system : excluded) {
+                    if (dd_pairs[i].ref_sat.system == system) {
+                        keep = false;
+                        break;
+                    }
                 }
-                if (sub_ratio >= effective_ratio_threshold) {
-                    fixed = true;
-                    dd_fixed = sub_fixed;
-                    ratio = sub_ratio;
-                    break;
+                if (keep) {
+                    subset.push_back(i);
                 }
             }
-            current_subset = subset;
+            return subset;
+        };
+
+        const std::vector<std::vector<int>> preferred_subsets = {
+            build_subset_excluding({GNSSSystem::GLONASS, GNSSSystem::BeiDou}),
+            build_subset_excluding({GNSSSystem::GLONASS}),
+            build_subset_excluding({GNSSSystem::BeiDou}),
+        };
+        const bool compare_preferred_subsets =
+            usesGlonassAutocal(rtk_config_) ||
+            std::any_of(dd_pairs.begin(), dd_pairs.end(), [](const DDPair& pair) {
+                return pair.ref_sat.system == GNSSSystem::GLONASS ||
+                       pair.ref_sat.system == GNSSSystem::BeiDou;
+            });
+        if (compare_preferred_subsets && search_preferred_subsets) {
+            for (const auto& subset : preferred_subsets) {
+                if (subset.size() < 4 || subset.size() >= static_cast<size_t>(nb)) {
+                    continue;
+                }
+                try_subset(subset);
+            }
+        }
+
+        if (search_drop_subsets) {
+            for (int drop = 0; drop < std::min(nb - 4, 6); ++drop) {
+                int worst = -1;
+                double worst_var = -1;
+                for (int idx : current_subset) {
+                    if (full_Qb(idx, idx) > worst_var) { worst_var = full_Qb(idx, idx); worst = idx; }
+                }
+                if (worst < 0) break;
+
+                std::vector<int> subset;
+                for (int idx : current_subset) {
+                    if (idx != worst) subset.push_back(idx);
+                }
+                if (subset.size() < 4) break;
+
+                try_subset(subset);
+                current_subset = subset;
+            }
+        }
+
+        if (best_fixed) {
+            fixed = true;
+            dd_fixed = best_dd_fixed;
+            ratio = best_ratio;
+            Qab = best_Qab;
+            Qb = best_Qb;
+            dd_float = best_dd_float;
+        } else if (!fixed && best_subset.size() < static_cast<size_t>(nb)) {
+            Qab = best_Qab;
+            Qb = best_Qb;
+            dd_float = best_dd_float;
         }
     }
 
@@ -1184,6 +1777,8 @@ bool RTKProcessor::resolveAmbiguities() {
     VectorXd xa = y.head(na) - Qab * Qb_inv_db;
     fixed_baseline_ = xa.head<3>();
     has_fixed_solution_ = true;
+    last_ar_ratio_ = ratio;
+    last_num_fixed_ambiguities_ = dd_fixed.size();
 
     // Store fix info for hold and validation
     last_dd_pairs_ = dd_pairs;
@@ -1227,31 +1822,18 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
     // the fix is likely corrupted by ionosphere
     if (rtk_config_.ionoopt == RTKConfig::IonoOpt::IFLC &&
         last_dd_fixed_.size() > 0 && last_dd_pairs_.size() > 0) {
-
-        static constexpr double LAMBDA_WL_M = constants::SPEED_OF_LIGHT /
-            (constants::GPS_L1_FREQ - constants::GPS_L2_FREQ);  // ~0.862m
-        double f1 = constants::GPS_L1_FREQ;
-        double f2 = constants::GPS_L2_FREQ;
-
         // Build map: satellite -> (fixed_DD_N1, fixed_DD_N2)
         // from last_dd_pairs_ and last_dd_fixed_
-        std::map<SatelliteId, double> fixed_dd_n1, fixed_dd_n2;
-        SatelliteId lambda_ref_l1, lambda_ref_l2;
+        std::map<SatelliteId, std::pair<SatelliteId, double>> fixed_dd_n1;
+        std::map<SatelliteId, std::pair<SatelliteId, double>> fixed_dd_n2;
         for (int i = 0; i < (int)last_best_subset_.size(); ++i) {
             int dd_idx = last_best_subset_[i];
             if (dd_idx >= (int)last_dd_pairs_.size()) continue;
             const auto& pair = last_dd_pairs_[dd_idx];
             if (pair.freq == 0) {
-                fixed_dd_n1[pair.sat] = last_dd_fixed_(i);
-                // Identify L1 ref from the ref_idx
-                for (const auto& [sat, idx] : filter_state_.n1_indices) {
-                    if (idx == pair.ref_idx) lambda_ref_l1 = sat;
-                }
+                fixed_dd_n1[pair.sat] = {pair.ref_sat, last_dd_fixed_(i)};
             } else if (pair.freq == 1) {
-                fixed_dd_n2[pair.sat] = last_dd_fixed_(i);
-                for (const auto& [sat, idx] : filter_state_.n2_indices) {
-                    if (idx == pair.ref_idx) lambda_ref_l2 = sat;
-                }
+                fixed_dd_n2[pair.sat] = {pair.ref_sat, last_dd_fixed_(i)};
             }
         }
 
@@ -1260,34 +1842,40 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         // Compare with Melbourne-Wubbena DD_MW from observations
         int bad_wl_count = 0;
         int checked_count = 0;
-        for (const auto& [sat, dd_n1] : fixed_dd_n1) {
+        for (const auto& [sat, l1_entry] : fixed_dd_n1) {
             auto n2_it = fixed_dd_n2.find(sat);
             if (n2_it == fixed_dd_n2.end()) continue;
-            double dd_n2 = n2_it->second;
+            if (!(n2_it->second.first == l1_entry.first)) continue;
+            double dd_n1 = l1_entry.second;
+            double dd_n2 = n2_it->second.second;
             double fixed_wl = dd_n1 - dd_n2;  // should be integer
 
             // Compute DD Melbourne-Wubbena from observations
             auto sat_it = sat_data.find(sat);
-            auto ref_it = sat_data.find(lambda_ref_l1);
+            auto ref_it = sat_data.find(l1_entry.first);
             if (sat_it == sat_data.end() || ref_it == sat_data.end()) continue;
             if (!sat_it->second.has_l2 || !ref_it->second.has_l2) continue;
 
             const auto& ref_sd = ref_it->second;
             const auto& sd = sat_it->second;
+            const double f1 = ref_sd.l1_frequency_hz;
+            const double f2 = ref_sd.l2_frequency_hz;
+            const double lambda_wl_m = wideLaneWavelength(f1, f2);
+            if (lambda_wl_m <= 0.0) continue;
 
             double ref_L1_sd = ref_sd.rover_l1_phase - ref_sd.base_l1_phase;
             double ref_L2_sd = ref_sd.rover_l2_phase - ref_sd.base_l2_phase;
             double ref_P1_sd = ref_sd.rover_l1_code - ref_sd.base_l1_code;
             double ref_P2_sd = ref_sd.rover_l2_code - ref_sd.base_l2_code;
             double ref_MW = (ref_L1_sd - ref_L2_sd)
-                          - (f1 * ref_P1_sd + f2 * ref_P2_sd) / (LAMBDA_WL_M * (f1 + f2));
+                          - (f1 * ref_P1_sd + f2 * ref_P2_sd) / (lambda_wl_m * (f1 + f2));
 
             double sat_L1_sd = sd.rover_l1_phase - sd.base_l1_phase;
             double sat_L2_sd = sd.rover_l2_phase - sd.base_l2_phase;
             double sat_P1_sd = sd.rover_l1_code - sd.base_l1_code;
             double sat_P2_sd = sd.rover_l2_code - sd.base_l2_code;
             double sat_MW = (sat_L1_sd - sat_L2_sd)
-                          - (f1 * sat_P1_sd + f2 * sat_P2_sd) / (LAMBDA_WL_M * (f1 + f2));
+                          - (f1 * sat_P1_sd + f2 * sat_P2_sd) / (lambda_wl_m * (f1 + f2));
 
             double dd_MW = ref_MW - sat_MW;
             double mw_int = std::round(dd_MW);
@@ -1327,6 +1915,7 @@ void RTKProcessor::applyHoldAmbiguity() {
     for (int i = 0; i < (int)last_best_subset_.size(); ++i) {
         int dd_idx = last_best_subset_[i];
         if (dd_idx >= (int)last_dd_pairs_.size()) continue;
+        if (!usesHoldAmbiguitySystem(rtk_config_, last_dd_pairs_[dd_idx].ref_sat.system)) continue;
         int ri = last_dd_pairs_[dd_idx].ref_idx;
         int si = last_dd_pairs_[dd_idx].sat_idx;
         if (ri >= n || si >= n) continue;
@@ -1357,38 +1946,15 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
     if (last_dd_fixed_.size() == 0 || !has_last_fixed_position_) return false;
 
     int nx = filter_state_.state.size();
-    int na = BASE_STATES;
+    const int na = usesGlonassAutocal(rtk_config_) ? REAL_STATES : BASE_STATES;
 
-    // Rebuild DD pairs using same logic as resolveAmbiguities
-    SatelliteId ref_sat = current_ref_satellite_;
-    if (sat_data.find(ref_sat) == sat_data.end()) return false;
-
-    std::vector<DDPair> dd_pairs;
-    for (int freq = 0; freq < 2; ++freq) {
-        const auto& indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
-        const auto& lock_counts = (freq == 0) ? lock_count_l1_ : lock_count_l2_;
-
-        int ref_idx = -1;
-        SatelliteId lambda_ref;
-        for (const auto& [sat, state_idx] : indices) {
-            if (filter_state_.state(state_idx) == 0.0) continue;
-            auto lock_it = lock_counts.find(sat);
-            if (lock_it == lock_counts.end() || lock_it->second <= 0) continue;
-            if (sat_data.find(sat) == sat_data.end()) continue;
-            lambda_ref = sat;
-            ref_idx = state_idx;
-            break;
-        }
-        if (ref_idx < 0) continue;
-
-        for (const auto& [sat, state_idx] : indices) {
-            if (sat == lambda_ref) continue;
-            if (filter_state_.state(state_idx) == 0.0) continue;
-            auto lock_it = lock_counts.find(sat);
-            if (lock_it == lock_counts.end() || lock_it->second <= 0) continue;
-            dd_pairs.push_back({ref_idx, state_idx, sat, freq});
-        }
-    }
+    std::vector<DDPair> dd_pairs = buildDoubleDifferencePairs(sat_data, 1);
+    dd_pairs.erase(
+        std::remove_if(dd_pairs.begin(), dd_pairs.end(),
+                       [&](const DDPair& pair) {
+                           return !usesHoldAmbiguitySystem(rtk_config_, pair.ref_sat.system);
+                       }),
+        dd_pairs.end());
 
     int nb = dd_pairs.size();
     if (nb < 4) return false;
@@ -1402,8 +1968,9 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
         for (int j = 0; j < (int)last_best_subset_.size(); ++j) {
             int dd_idx = last_best_subset_[j];
             if (dd_idx >= (int)last_dd_pairs_.size()) continue;
-            if (dd_pairs[i].ref_idx == last_dd_pairs_[dd_idx].ref_idx &&
-                dd_pairs[i].sat_idx == last_dd_pairs_[dd_idx].sat_idx) {
+            if (dd_pairs[i].ref_sat == last_dd_pairs_[dd_idx].ref_sat &&
+                dd_pairs[i].sat == last_dd_pairs_[dd_idx].sat &&
+                dd_pairs[i].freq == last_dd_pairs_[dd_idx].freq) {
                 dd_fixed(i) = last_dd_fixed_(j);
                 found = true;
                 matched++;
@@ -1460,6 +2027,8 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
     // Accept hold fix
     fixed_baseline_ = xa.head<3>();
     has_fixed_solution_ = true;
+    last_ar_ratio_ = std::max(last_ar_ratio_, rtk_config_.ambiguity_ratio_threshold);
+    last_num_fixed_ambiguities_ = matched;
     last_dd_pairs_ = dd_pairs;
     // Rebuild best_subset as all indices
     last_best_subset_.clear();
@@ -1496,6 +2065,8 @@ PositionSolution RTKProcessor::generateSolution(const GNSSTime& time, SolutionSt
     solution.position_covariance = Matrix3d::Identity() * 0.01;
     solution.pdop = 2.0; solution.hdop = 1.5; solution.vdop = 2.5;
     if (filter_state_.state.size() >= 3) solution.baseline_length = filter_state_.state.head<3>().norm();
+    solution.ratio = last_ar_ratio_;
+    solution.num_fixed_ambiguities = last_num_fixed_ambiguities_;
     rememberSolution(solution);
     return solution;
 }
@@ -1506,8 +2077,23 @@ void RTKProcessor::rememberSolution(const PositionSolution& solution) {
     has_last_solution_position_ = true;
     last_epoch_time_ = solution.time;
     has_last_epoch_ = true;
-    if (solution.status == SolutionStatus::FIXED ||
-        (solution.status == SolutionStatus::FLOAT && solution.num_satellites >= 5)) {
+    bool refresh_trusted = solution.status == SolutionStatus::FIXED;
+    if (!refresh_trusted &&
+        solution.status == SolutionStatus::FLOAT &&
+        solution.num_satellites >= 5) {
+        if (!has_last_trusted_position_ || !has_last_trusted_time_) {
+            refresh_trusted = true;
+        } else {
+            double dt = solution.time - last_trusted_time_;
+            if (!std::isfinite(dt) || dt < 0.5) {
+                dt = 1.0;
+            }
+            const double trusted_jump =
+                (solution.position_ecef - last_trusted_position_).norm();
+            refresh_trusted = trusted_jump <= std::max(3.0, 6.0 * dt);
+        }
+    }
+    if (refresh_trusted) {
         last_trusted_position_ = solution.position_ecef;
         has_last_trusted_position_ = true;
         last_trusted_time_ = solution.time;
@@ -1528,7 +2114,7 @@ void RTKProcessor::updateStatistics(SolutionStatus status) const {
 bool RTKProcessor::lambdaMethod(const VectorXd& float_ambiguities, const MatrixXd& covariance,
     VectorXd& fixed_ambiguities, double& success_rate) {
     int n = float_ambiguities.size();
-    if (n == 0 || n > 40) return false;
+    if (n == 0 || n > MAXSAT * 2) return false;
 
     // Regularize covariance to ensure positive-definiteness for LAMBDA
     MatrixXd Q_reg = covariance;

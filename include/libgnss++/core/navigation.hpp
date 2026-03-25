@@ -11,14 +11,18 @@ namespace libgnss {
  * @brief Satellite ephemeris data
  */
 struct Ephemeris {
-    Ephemeris() : satellite(), toe(), toc(), sqrt_a(0), e(0), i0(0), omega0(0), omega(0), m0(0),
+    Ephemeris() : satellite(), toe(), toc(), tof(), toes(0), sqrt_a(0), e(0), i0(0), omega0(0), omega(0), m0(0),
                   delta_n(0), idot(0), omega_dot(0), cuc(0), cus(0), crc(0), crs(0),
-                  cic(0), cis(0), af0(0), af1(0), af2(0), tgd(0), week(0), health(0),
+                  cic(0), cis(0), af0(0), af1(0), af2(0), tgd(0), tgd_secondary(0),
+                  glonass_taun(0), glonass_gamn(0), glonass_frequency_channel(0),
+                  week(0), health(0),
                   ura(0), iodc(0), iode(0), valid(false) {}
 
     SatelliteId satellite;
     GNSSTime toe;           ///< Time of ephemeris
     GNSSTime toc;           ///< Time of clock
+    GNSSTime tof;           ///< Time of frame / transmission
+    double toes;            ///< Raw broadcast toe seconds within system week
     
     // Orbital elements
     double sqrt_a;          ///< Square root of semi-major axis
@@ -39,7 +43,17 @@ struct Ephemeris {
     
     // Clock parameters
     double af0, af1, af2;   ///< Clock bias, drift, drift rate
-    double tgd;             ///< Group delay
+    double tgd;             ///< Primary group delay / bias parameter
+    double tgd_secondary;   ///< Secondary group delay / bias parameter
+    double glonass_taun;    ///< GLONASS -tau_n clock bias term
+    double glonass_gamn;    ///< GLONASS gamma_n relative frequency bias
+
+    // GLONASS state vector broadcast parameters
+    Vector3d glonass_position = Vector3d::Zero();
+    Vector3d glonass_velocity = Vector3d::Zero();
+    Vector3d glonass_acceleration = Vector3d::Zero();
+    int glonass_frequency_channel = 0;
+    int glonass_age = 0;
     
     // Status and accuracy
     uint16_t week;          ///< GPS week number

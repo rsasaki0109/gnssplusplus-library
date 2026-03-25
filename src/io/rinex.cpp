@@ -1,11 +1,352 @@
 #include <libgnss++/io/rinex.hpp>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
 #include <iostream>
+#include <cmath>
 
 namespace libgnss {
 namespace io {
+
+namespace {
+
+GNSSSystem systemFromRinexChar(char sys_char) {
+    switch (sys_char) {
+        case 'G': return GNSSSystem::GPS;
+        case 'R': return GNSSSystem::GLONASS;
+        case 'E': return GNSSSystem::Galileo;
+        case 'C': return GNSSSystem::BeiDou;
+        case 'J': return GNSSSystem::QZSS;
+        case 'S': return GNSSSystem::SBAS;
+        case 'I': return GNSSSystem::NavIC;
+        default: return GNSSSystem::UNKNOWN;
+    }
+}
+
+bool supportsBroadcastNavigationSystem(char sys_char) {
+    return sys_char == 'G' || sys_char == 'R' || sys_char == 'E' || sys_char == 'C' || sys_char == 'J';
+}
+
+int leapSecondsForDate(int year, int month, int day) {
+    struct LeapEntry { int year; int month; int day; int leap_seconds; };
+    static constexpr LeapEntry kLeapTable[] = {
+        {1981, 7, 1, 1},  {1982, 7, 1, 2},  {1983, 7, 1, 3},  {1985, 7, 1, 4},
+        {1988, 1, 1, 5},  {1990, 1, 1, 6},  {1991, 1, 1, 7},  {1992, 7, 1, 8},
+        {1993, 7, 1, 9},  {1994, 7, 1, 10}, {1996, 1, 1, 11}, {1997, 7, 1, 12},
+        {1999, 1, 1, 13}, {2006, 1, 1, 14}, {2009, 1, 1, 15}, {2012, 7, 1, 16},
+        {2015, 7, 1, 17}, {2017, 1, 1, 18},
+    };
+
+    int leap_seconds = 0;
+    for (const auto& entry : kLeapTable) {
+        if (year > entry.year ||
+            (year == entry.year && (month > entry.month ||
+             (month == entry.month && day >= entry.day)))) {
+            leap_seconds = entry.leap_seconds;
+        }
+    }
+    return leap_seconds;
+}
+
+void parseCalendarFields(const std::string& time_field,
+                         int& year,
+                         int& month,
+                         int& day,
+                         int& hour,
+                         int& minute,
+                         double& second) {
+    std::istringstream iss(time_field);
+    iss >> year >> month >> day >> hour >> minute >> second;
+    if (year < 80) {
+        year += 2000;
+    } else if (year < 100) {
+        year += 1900;
+    }
+}
+
+GNSSTime normalizeWeekTow(int week, double tow) {
+    while (tow < 0.0) {
+        tow += constants::SECONDS_PER_WEEK;
+        week--;
+    }
+    while (tow >= constants::SECONDS_PER_WEEK) {
+        tow -= constants::SECONDS_PER_WEEK;
+        week++;
+    }
+    return GNSSTime(week, tow);
+}
+
+GNSSTime utcToGpst(const GNSSTime& utc_time, int year, int month, int day) {
+    return utc_time + static_cast<double>(leapSecondsForDate(year, month, day));
+}
+
+GNSSTime adjustDay(const GNSSTime& time, const GNSSTime& reference) {
+    const double diff = time - reference;
+    if (diff < -43200.0) return time + 86400.0;
+    if (diff > 43200.0) return time - 86400.0;
+    return time;
+}
+
+SignalType primarySignalForSystem(GNSSSystem system) {
+    switch (system) {
+        case GNSSSystem::GPS: return SignalType::GPS_L1CA;
+        case GNSSSystem::GLONASS: return SignalType::GLO_L1CA;
+        case GNSSSystem::Galileo: return SignalType::GAL_E1;
+        case GNSSSystem::BeiDou: return SignalType::BDS_B1I;
+        case GNSSSystem::QZSS: return SignalType::QZS_L1CA;
+        case GNSSSystem::NavIC: return SignalType::GPS_L5;
+        default: return SignalType::GPS_L1CA;
+    }
+}
+
+SignalType secondarySignalForSystem(GNSSSystem system) {
+    switch (system) {
+        case GNSSSystem::GPS: return SignalType::GPS_L2C;
+        case GNSSSystem::GLONASS: return SignalType::GLO_L2CA;
+        case GNSSSystem::Galileo: return SignalType::GAL_E5A;
+        case GNSSSystem::BeiDou: return SignalType::BDS_B2I;
+        case GNSSSystem::QZSS: return SignalType::QZS_L2C;
+        case GNSSSystem::NavIC: return SignalType::GPS_L5;
+        default: return SignalType::GPS_L2C;
+    }
+}
+
+SignalType signalForBand(GNSSSystem system, int band, bool primary) {
+    switch (system) {
+        case GNSSSystem::GPS:
+            if (band == 1) return SignalType::GPS_L1CA;
+            if (band == 2) return SignalType::GPS_L2C;
+            if (band == 5) return SignalType::GPS_L5;
+            break;
+        case GNSSSystem::GLONASS:
+            if (band == 1) return SignalType::GLO_L1CA;
+            if (band == 2) return SignalType::GLO_L2CA;
+            if (band == 3) return SignalType::GLO_L2P;
+            break;
+        case GNSSSystem::Galileo:
+            if (band == 1) return SignalType::GAL_E1;
+            if (band == 5) return SignalType::GAL_E5A;
+            if (band == 6) return SignalType::GAL_E6;
+            if (band == 7 || band == 8) return SignalType::GAL_E5B;
+            break;
+        case GNSSSystem::BeiDou:
+            if (band == 1) return SignalType::BDS_B1I;
+            if (band == 2) return SignalType::BDS_B1I;
+            if (band == 5) return SignalType::BDS_B2A;
+            if (band == 6) return SignalType::BDS_B3I;
+            if (band == 7) return SignalType::BDS_B2I;
+            if (band == 8) return SignalType::BDS_B2A;
+            break;
+        case GNSSSystem::QZSS:
+            if (band == 1) return SignalType::QZS_L1CA;
+            if (band == 2) return SignalType::QZS_L2C;
+            if (band == 5) return SignalType::QZS_L5;
+            break;
+        case GNSSSystem::NavIC:
+            if (band == 5) return SignalType::GPS_L5;
+            break;
+        default:
+            break;
+    }
+    return primary ? primarySignalForSystem(system) : secondarySignalForSystem(system);
+}
+
+GNSSTime bdtToGpst(const GNSSTime& time) {
+    return time + 14.0;
+}
+
+GNSSTime bdtWeekTowToGpst(int week, double tow) {
+    static constexpr int kBdtWeekOffset = 1356;
+    return GNSSTime(week + kBdtWeekOffset, tow) + 14.0;
+}
+
+int rinexBand(const std::string& obs_type) {
+    if (obs_type.size() < 2 || !std::isdigit(obs_type[1])) {
+        return -1;
+    }
+    return obs_type[1] - '0';
+}
+
+bool isPrimaryBand(GNSSSystem system, int band) {
+    switch (system) {
+        case GNSSSystem::GPS:
+        case GNSSSystem::GLONASS:
+        case GNSSSystem::Galileo:
+        case GNSSSystem::BeiDou:
+        case GNSSSystem::QZSS:
+            return band == 1;
+        case GNSSSystem::NavIC:
+            return band == 5;
+        default:
+            return false;
+    }
+}
+
+bool isSecondaryBand(GNSSSystem system, int band) {
+    switch (system) {
+        case GNSSSystem::GPS: return band == 2 || band == 5;
+        case GNSSSystem::GLONASS: return band == 2 || band == 3;
+        case GNSSSystem::Galileo: return band == 5 || band == 6 || band == 7 || band == 8;
+        case GNSSSystem::BeiDou: return band == 2 || band == 5 || band == 6 || band == 7 || band == 8;
+        case GNSSSystem::QZSS: return band == 2 || band == 5 || band == 6;
+        case GNSSSystem::NavIC: return false;
+        default: return false;
+    }
+}
+
+int bandPriority(GNSSSystem system, int band, bool primary) {
+    if (primary) {
+        return isPrimaryBand(system, band) ? 0 : 100;
+    }
+
+    switch (system) {
+        case GNSSSystem::GPS:
+            if (band == 2) return 0;
+            if (band == 5) return 1;
+            return 100;
+        case GNSSSystem::GLONASS:
+            if (band == 2) return 0;
+            if (band == 3) return 1;
+            return 100;
+        case GNSSSystem::Galileo:
+            if (band == 5) return 0;
+            if (band == 7) return 1;
+            if (band == 8) return 2;
+            if (band == 6) return 3;
+            return 100;
+        case GNSSSystem::BeiDou:
+            if (band == 7) return 0;
+            if (band == 6) return 1;
+            if (band == 2) return 2;
+            if (band == 5) return 3;
+            if (band == 8) return 4;
+            return 100;
+        case GNSSSystem::QZSS:
+            if (band == 2) return 0;
+            if (band == 5) return 1;
+            if (band == 6) return 2;
+            return 100;
+        default:
+            return 100;
+    }
+}
+
+bool isCodeObservationType(const std::string& obs_type) {
+    return !obs_type.empty() && (obs_type[0] == 'C' || obs_type[0] == 'P');
+}
+
+bool isCarrierObservationType(const std::string& obs_type) {
+    return !obs_type.empty() && obs_type[0] == 'L';
+}
+
+bool isDopplerObservationType(const std::string& obs_type) {
+    return !obs_type.empty() && obs_type[0] == 'D';
+}
+
+bool isSnrObservationType(const std::string& obs_type) {
+    return !obs_type.empty() && obs_type[0] == 'S';
+}
+
+char rinexCharForSystem(GNSSSystem system) {
+    switch (system) {
+        case GNSSSystem::GPS: return 'G';
+        case GNSSSystem::GLONASS: return 'R';
+        case GNSSSystem::Galileo: return 'E';
+        case GNSSSystem::BeiDou: return 'C';
+        case GNSSSystem::QZSS: return 'J';
+        case GNSSSystem::SBAS: return 'S';
+        case GNSSSystem::NavIC: return 'I';
+        default: return 'G';
+    }
+}
+
+void gpstToCalendar(const GNSSTime& time,
+                    int& year,
+                    int& month,
+                    int& day,
+                    int& hour,
+                    int& minute,
+                    double& second) {
+    const int total_days = time.week * 7 + static_cast<int>(std::floor(time.tow / 86400.0));
+    const double seconds_of_day = time.tow - std::floor(time.tow / 86400.0) * 86400.0;
+
+    // GPS epoch 1980-01-06 maps to civil day index 3657 relative to 1970-01-01.
+    int z = total_days + 3657;
+    z += 719468;
+    const int era = (z >= 0 ? z : z - 146096) / 146097;
+    const unsigned doe = static_cast<unsigned>(z - era * 146097);
+    const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    int y = static_cast<int>(yoe) + era * 400;
+    const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    const unsigned mp = (5 * doy + 2) / 153;
+    const unsigned d = doy - (153 * mp + 2) / 5 + 1;
+    const unsigned m = mp + (mp < 10 ? 3 : -9);
+    y += (m <= 2);
+
+    year = y;
+    month = static_cast<int>(m);
+    day = static_cast<int>(d);
+    hour = static_cast<int>(seconds_of_day / 3600.0);
+    minute = static_cast<int>((seconds_of_day - hour * 3600.0) / 60.0);
+    second = seconds_of_day - hour * 3600.0 - minute * 60.0;
+}
+
+void gpstToUtcCalendar(const GNSSTime& time,
+                       int& year,
+                       int& month,
+                       int& day,
+                       int& hour,
+                       int& minute,
+                       double& second) {
+    int gps_year = 0;
+    int gps_month = 0;
+    int gps_day = 0;
+    int gps_hour = 0;
+    int gps_minute = 0;
+    double gps_second = 0.0;
+    gpstToCalendar(time, gps_year, gps_month, gps_day, gps_hour, gps_minute, gps_second);
+    const int leap_seconds = leapSecondsForDate(gps_year, gps_month, gps_day);
+    gpstToCalendar(time - static_cast<double>(leap_seconds), year, month, day, hour, minute, second);
+}
+
+std::string formatRinexFloat(double value) {
+    std::ostringstream oss;
+    oss << std::uppercase << std::scientific << std::setw(19) << std::setprecision(12) << value;
+    std::string formatted = oss.str();
+    std::replace(formatted.begin(), formatted.end(), 'E', 'D');
+    return formatted;
+}
+
+void assignObservationField(Observation& obs,
+                            const std::string& obs_type,
+                            double value,
+                            int lli,
+                            int signal_strength) {
+    if (isCodeObservationType(obs_type)) {
+        obs.pseudorange = value;
+        obs.has_pseudorange = true;
+    } else if (isCarrierObservationType(obs_type)) {
+        obs.carrier_phase = value;
+        obs.has_carrier_phase = true;
+        obs.lli = static_cast<uint8_t>(lli);
+        obs.loss_of_lock = (lli & 0x01) != 0;
+    } else if (isDopplerObservationType(obs_type)) {
+        obs.doppler = value;
+        obs.has_doppler = true;
+    } else if (isSnrObservationType(obs_type)) {
+        obs.snr = value;
+    }
+
+    if (signal_strength > 0) {
+        obs.signal_strength = signal_strength;
+        if (obs.snr == 0.0) {
+            obs.snr = static_cast<double>(signal_strength);
+        }
+    }
+}
+
+}  // namespace
 
 bool RINEXReader::open(const std::string& filename) {
     file_.open(filename);
@@ -253,7 +594,7 @@ bool RINEXReader::readNavigationData(NavigationData& nav_data) {
             if (is_new_ephemeris) {
                 eph_detected++;
 
-                if (!is_gps) {
+                if (is_rinex3 && !supportsBroadcastNavigationSystem(line[0])) {
                     // Skip non-GPS: process any pending GPS ephemeris first
                     if (!eph_lines.empty()) {
                         Ephemeris eph;
@@ -576,56 +917,53 @@ bool RINEXReader::parseObservationEpochV2(const std::string& line, ObservationDa
             }
         }
 
-        // Create combined observations for each signal
-        // Group L1/C1 together and L2/P2 together
-        Observation obs_l1;
-        obs_l1.satellite = sat;
-        obs_l1.signal = SignalType::GPS_L1CA;
-        obs_l1.valid = true;
-        bool has_l1_data = false;
+        Observation obs_primary;
+        obs_primary.satellite = sat;
+        obs_primary.signal = primarySignalForSystem(sat.system);
+        obs_primary.valid = true;
+        bool has_primary_data = false;
+        int primary_priority = 100;
+        int primary_band = -1;
 
-        Observation obs_l2;
-        obs_l2.satellite = sat;
-        obs_l2.signal = SignalType::GPS_L2C;
-        obs_l2.valid = true;
-        bool has_l2_data = false;
+        Observation obs_secondary;
+        obs_secondary.satellite = sat;
+        obs_secondary.signal = secondarySignalForSystem(sat.system);
+        obs_secondary.valid = true;
+        bool has_secondary_data = false;
+        int secondary_priority = 100;
+        int secondary_band = -1;
 
         for (size_t i = 0; i < header_.observation_types.size() && i < obs_values.size(); ++i) {
             if (obs_values[i] == 0.0) continue;
 
             const std::string& obs_type = header_.observation_types[i];
 
-            if (obs_type == "L1") {
-                obs_l1.carrier_phase = obs_values[i];
-                obs_l1.has_carrier_phase = true;
-                obs_l1.lli = lli_flags[i];
-                obs_l1.loss_of_lock = (lli_flags[i] & 0x01) != 0;
-                has_l1_data = true;
-            } else if (obs_type == "C1" || obs_type == "P1") {
-                obs_l1.pseudorange = obs_values[i];
-                obs_l1.has_pseudorange = true;
-                obs_l1.signal_strength = signal_strength[i];
-                has_l1_data = true;
-            } else if (obs_type == "L2") {
-                obs_l2.carrier_phase = obs_values[i];
-                obs_l2.has_carrier_phase = true;
-                obs_l2.lli = lli_flags[i];
-                obs_l2.loss_of_lock = (lli_flags[i] & 0x01) != 0;
-                has_l2_data = true;
-            } else if (obs_type == "P2" || obs_type == "C2") {
-                obs_l2.pseudorange = obs_values[i];
-                obs_l2.has_pseudorange = true;
-                obs_l2.signal_strength = signal_strength[i];
-                has_l2_data = true;
+            const int band = rinexBand(obs_type);
+            const int primary_candidate = bandPriority(sat.system, band, true);
+            const int secondary_candidate = bandPriority(sat.system, band, false);
+            if (primary_candidate < 100 &&
+                (primary_candidate < primary_priority || band == primary_band)) {
+                obs_primary.signal = signalForBand(sat.system, band, true);
+                assignObservationField(obs_primary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
+                has_primary_data = true;
+                primary_priority = primary_candidate;
+                primary_band = band;
+            } else if (secondary_candidate < 100 &&
+                       (secondary_candidate < secondary_priority || band == secondary_band)) {
+                obs_secondary.signal = signalForBand(sat.system, band, false);
+                assignObservationField(obs_secondary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
+                has_secondary_data = true;
+                secondary_priority = secondary_candidate;
+                secondary_band = band;
             }
         }
 
         // Add observations if they have data
-        if (has_l1_data) {
-            obs_data.addObservation(obs_l1);
+        if (has_primary_data) {
+            obs_data.addObservation(obs_primary);
         }
-        if (has_l2_data) {
-            obs_data.addObservation(obs_l2);
+        if (has_secondary_data) {
+            obs_data.addObservation(obs_secondary);
         }
     }
 
@@ -674,18 +1012,6 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
         num_sats_str.erase(0, num_sats_str.find_first_not_of(' '));
         int num_sats = num_sats_str.empty() ? 0 : std::stoi(num_sats_str);
 
-        // Get GPS observation types from header
-        std::vector<std::string> gps_obs_types;
-        auto it = header_.system_obs_types.find('G');
-        if (it != header_.system_obs_types.end()) {
-            gps_obs_types = it->second;
-        } else {
-            // Fall back to generic observation_types
-            gps_obs_types = header_.observation_types;
-        }
-        int num_obs_types = gps_obs_types.size();
-        if (num_obs_types == 0) num_obs_types = 4;  // Default
-
         // Read each satellite line
         for (int s = 0; s < num_sats; ++s) {
             std::string sat_line;
@@ -699,10 +1025,16 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
             if (prn_str.empty()) continue;
             int prn = std::stoi(prn_str);
 
-            // Only process GPS satellites
-            if (sys_char != 'G') continue;
+            const GNSSSystem system = systemFromRinexChar(sys_char);
+            if (system == GNSSSystem::UNKNOWN) continue;
 
-            SatelliteId sat(GNSSSystem::GPS, prn);
+            auto sys_it = header_.system_obs_types.find(sys_char);
+            const std::vector<std::string>& obs_types =
+                (sys_it != header_.system_obs_types.end()) ? sys_it->second : header_.observation_types;
+            int num_obs_types = static_cast<int>(obs_types.size());
+            if (num_obs_types == 0) num_obs_types = 4;
+
+            SatelliteId sat(system, prn);
 
             // Parse observation values
             // Each observation occupies 16 characters starting at position 3
@@ -738,64 +1070,51 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
                 }
             }
 
-            // Map RINEX 3 observation types to L1 and L2 observations
-            Observation obs_l1;
-            obs_l1.satellite = sat;
-            obs_l1.signal = SignalType::GPS_L1CA;
-            obs_l1.valid = true;
-            bool has_l1_data = false;
+            Observation obs_primary;
+            obs_primary.satellite = sat;
+            obs_primary.signal = primarySignalForSystem(system);
+            obs_primary.valid = true;
+            bool has_primary_data = false;
+            int primary_priority = 100;
+            int primary_band = -1;
 
-            Observation obs_l2;
-            obs_l2.satellite = sat;
-            obs_l2.signal = SignalType::GPS_L2C;
-            obs_l2.valid = true;
-            bool has_l2_data = false;
+            Observation obs_secondary;
+            obs_secondary.satellite = sat;
+            obs_secondary.signal = secondarySignalForSystem(system);
+            obs_secondary.valid = true;
+            bool has_secondary_data = false;
+            int secondary_priority = 100;
+            int secondary_band = -1;
 
-            for (size_t i = 0; i < gps_obs_types.size() && i < obs_values.size(); ++i) {
+            for (size_t i = 0; i < obs_types.size() && i < obs_values.size(); ++i) {
                 if (obs_values[i] == 0.0) continue;
 
-                const std::string& obs_type = gps_obs_types[i];
-
-                // RINEX 3 observation type codes:
-                // C1C, C1P, C1W = pseudorange L1
-                // L1C, L1P, L1W = carrier phase L1
-                // C2X, C2W, C2C = pseudorange L2
-                // L2X, L2W, L2C = carrier phase L2
-                // Also support RINEX 2 types (L1, C1, L2, P2)
-                if (obs_type == "C1C" || obs_type == "C1P" || obs_type == "C1W" ||
-                    obs_type == "C1" || obs_type == "P1") {
-                    obs_l1.pseudorange = obs_values[i];
-                    obs_l1.has_pseudorange = true;
-                    obs_l1.signal_strength = signal_strength[i];
-                    has_l1_data = true;
-                } else if (obs_type == "L1C" || obs_type == "L1P" || obs_type == "L1W" ||
-                           obs_type == "L1") {
-                    obs_l1.carrier_phase = obs_values[i];
-                    obs_l1.has_carrier_phase = true;
-                    obs_l1.lli = lli_flags[i];
-                    obs_l1.loss_of_lock = (lli_flags[i] & 0x01) != 0;
-                    has_l1_data = true;
-                } else if (obs_type == "C2X" || obs_type == "C2W" || obs_type == "C2C" ||
-                           obs_type == "C2" || obs_type == "P2") {
-                    obs_l2.pseudorange = obs_values[i];
-                    obs_l2.has_pseudorange = true;
-                    obs_l2.signal_strength = signal_strength[i];
-                    has_l2_data = true;
-                } else if (obs_type == "L2X" || obs_type == "L2W" || obs_type == "L2C" ||
-                           obs_type == "L2") {
-                    obs_l2.carrier_phase = obs_values[i];
-                    obs_l2.has_carrier_phase = true;
-                    obs_l2.lli = lli_flags[i];
-                    obs_l2.loss_of_lock = (lli_flags[i] & 0x01) != 0;
-                    has_l2_data = true;
+                const std::string& obs_type = obs_types[i];
+                const int band = rinexBand(obs_type);
+                const int primary_candidate = bandPriority(system, band, true);
+                const int secondary_candidate = bandPriority(system, band, false);
+            if (primary_candidate < 100 &&
+                (primary_candidate < primary_priority || band == primary_band)) {
+                    obs_primary.signal = signalForBand(system, band, true);
+                    assignObservationField(obs_primary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
+                    has_primary_data = true;
+                    primary_priority = primary_candidate;
+                    primary_band = band;
+                } else if (secondary_candidate < 100 &&
+                           (secondary_candidate < secondary_priority || band == secondary_band)) {
+                    obs_secondary.signal = signalForBand(system, band, false);
+                    assignObservationField(obs_secondary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
+                    has_secondary_data = true;
+                    secondary_priority = secondary_candidate;
+                    secondary_band = band;
                 }
             }
 
-            if (has_l1_data) {
-                obs_data.addObservation(obs_l1);
+            if (has_primary_data) {
+                obs_data.addObservation(obs_primary);
             }
-            if (has_l2_data) {
-                obs_data.addObservation(obs_l2);
+            if (has_secondary_data) {
+                obs_data.addObservation(obs_secondary);
             }
         }
 
@@ -808,10 +1127,9 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
 }
 
 bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, Ephemeris& eph) {
-    if (lines.size() < 8) {
-        return false;  // Need 8 lines for GPS ephemeris
+    if (lines.empty()) {
+        return false;
     }
-
     const std::string& first_line = lines[0];
     if (first_line.length() < 3) return false;
 
@@ -837,11 +1155,11 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
         if (is_v3) {
             // RINEX 3: "G27", "E04", etc.
             char sys_char = first_line[0];
-            if (sys_char != 'G') return false;  // Only GPS
+            if (!supportsBroadcastNavigationSystem(sys_char)) return false;
             std::string prn_str = first_line.substr(1, 2);
             prn_str.erase(0, prn_str.find_first_not_of(' '));
             if (prn_str.empty()) return false;
-            eph.satellite = SatelliteId(GNSSSystem::GPS, std::stoi(prn_str));
+            eph.satellite = SatelliteId(systemFromRinexChar(sys_char), std::stoi(prn_str));
         } else {
             // RINEX 2: " 27" or "27"
             std::string sat_id_str = first_line.substr(0, 2);
@@ -868,12 +1186,72 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
             }
         };
 
+        if (is_v3 && first_line[0] == 'R') {
+            if (lines.size() < 4) {
+                return false;
+            }
+
+            const std::string time_field = first_line.substr(3, 20);
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            int hour = 0;
+            int minute = 0;
+            double second = 0.0;
+            parseCalendarFields(time_field, year, month, day, hour, minute, second);
+
+            const GNSSTime toc_utc_raw = parseTime(time_field, header_.version);
+            const double rounded_tow = std::floor((toc_utc_raw.tow + 450.0) / 900.0) * 900.0;
+            const GNSSTime toc_utc = normalizeWeekTow(toc_utc_raw.week, rounded_tow);
+            const int day_of_week = static_cast<int>(std::floor(toc_utc_raw.tow / 86400.0));
+            const double tod_utc = std::fmod(parseD(first_line, af2_col, 19), 86400.0);
+            const GNSSTime tof_utc = adjustDay(
+                normalizeWeekTow(toc_utc.week, tod_utc + day_of_week * 86400.0),
+                toc_utc);
+
+            eph.toe = utcToGpst(toc_utc, year, month, day);
+            eph.toc = eph.toe;
+            eph.tof = utcToGpst(tof_utc, year, month, day);
+            eph.week = static_cast<uint16_t>(eph.toe.week);
+            eph.iode = static_cast<uint16_t>(std::fmod(toc_utc_raw.tow + 10800.0, 86400.0) / 900.0 + 0.5);
+            eph.glonass_taun = -parseD(first_line, af0_col, 19);
+            eph.glonass_gamn = parseD(first_line, af1_col, 19);
+
+            eph.glonass_position = Vector3d(
+                parseD(lines[1], c0, 19) * 1e3,
+                parseD(lines[2], c0, 19) * 1e3,
+                parseD(lines[3], c0, 19) * 1e3);
+            eph.glonass_velocity = Vector3d(
+                parseD(lines[1], c1, 19) * 1e3,
+                parseD(lines[2], c1, 19) * 1e3,
+                parseD(lines[3], c1, 19) * 1e3);
+            eph.glonass_acceleration = Vector3d(
+                parseD(lines[1], c2, 19) * 1e3,
+                parseD(lines[2], c2, 19) * 1e3,
+                parseD(lines[3], c2, 19) * 1e3);
+            eph.health = static_cast<uint8_t>(std::max(0.0, parseD(lines[1], c3, 19)));
+            eph.glonass_frequency_channel = static_cast<int>(parseD(lines[2], c3, 19));
+            if (eph.glonass_frequency_channel > 128) {
+                eph.glonass_frequency_channel -= 256;
+            }
+            eph.glonass_age = static_cast<int>(parseD(lines[3], c3, 19));
+            eph.valid = true;
+            return true;
+        }
+
+        if (lines.size() < 8) {
+            return false;  // Need 8 lines for Kepler broadcast ephemeris
+        }
+
         // Line 0: PRN, Epoch, af0, af1, af2
         if (is_v3) {
             // RINEX 3: time string at pos 3-22 (20 chars: " YYYY MM DD HH MM SS")
             eph.toc = parseTime(first_line.substr(3, 20), header_.version);
         } else {
             eph.toc = parseTime(first_line.substr(3, 19), header_.version);
+        }
+        if (eph.satellite.system == GNSSSystem::BeiDou) {
+            eph.toc = bdtToGpst(eph.toc);
         }
         eph.af0 = parseD(first_line, af0_col, 19);  // Clock bias
         eph.af1 = parseD(first_line, af1_col, 19);  // Clock drift
@@ -893,6 +1271,7 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
 
         // Line 3: Toe, Cic, OMEGA0, Cis
         double toe_seconds = parseD(lines[3], c0, 19);
+        eph.toes = toe_seconds;
 
         eph.cic = parseD(lines[3], c1, 19);
         eph.omega0 = parseD(lines[3], c2, 19);
@@ -904,36 +1283,60 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
         eph.omega = parseD(lines[4], c2, 19);
         eph.omega_dot = parseD(lines[4], c3, 19);
 
-        // Line 5: IDOT, L2 codes, GPS week, L2 P flag
+        // Line 5: IDOT, system-specific codes, week, system-specific flag
         eph.i_dot = parseD(lines[5], c0, 19);
         eph.idot = eph.i_dot;
-        double l2_codes = parseD(lines[5], c1, 19);
-        double gps_week = parseD(lines[5], c2, 19);
-        double l2_flag = parseD(lines[5], c3, 19);
+        double system_codes = parseD(lines[5], c1, 19);
+        double system_week = parseD(lines[5], c2, 19);
+        double system_flag = parseD(lines[5], c3, 19);
 
-        // Line 6: SV accuracy, SV health, TGD, IODC
-        eph.sv_accuracy = parseD(lines[6], c0, 19);
-        eph.sv_health = parseD(lines[6], c1, 19);
-        eph.tgd = parseD(lines[6], c2, 19);
-        double iodc = parseD(lines[6], c3, 19);
+        // Line 6: SV accuracy, SV health, TGD/BGD1, system-specific value
+        double sv_accuracy = parseD(lines[6], c0, 19);
+        double sv_health = parseD(lines[6], c1, 19);
+        double delay_1 = parseD(lines[6], c2, 19);
+        double delay_2_or_iodc = parseD(lines[6], c3, 19);
 
-        // Line 7: Transmission time, fit interval
+        // Line 7: Transmission time, fit interval/AODC
         double transmission_time = parseD(lines[7], c0, 19);
+        double fit_interval_or_aodc = parseD(lines[7], c1, 19);
 
         // Suppress unused variable warnings
-        (void)l2_codes;
-        (void)l2_flag;
+        (void)system_codes;
+        (void)system_flag;
         (void)transmission_time;
 
         // Set times
-        int week = static_cast<int>(gps_week);
+        int week = static_cast<int>(system_week);
 
-        eph.toe = GNSSTime(week, toe_seconds);
-        eph.week = static_cast<uint16_t>(week);
-
+        eph.sv_accuracy = sv_accuracy;
+        eph.sv_health = sv_health;
+        eph.health = static_cast<uint8_t>(std::max(0.0, sv_health));
+        eph.tgd = delay_1;
+        eph.tgd_secondary = 0.0;
         eph.valid = true;
         eph.iode = static_cast<int>(iode);
-        eph.iodc = static_cast<int>(iodc);
+
+        switch (eph.satellite.system) {
+            case GNSSSystem::BeiDou:
+                eph.toe = bdtWeekTowToGpst(week, toe_seconds);
+                eph.week = static_cast<uint16_t>(week);
+                eph.tgd_secondary = delay_2_or_iodc;
+                eph.iodc = static_cast<int>(fit_interval_or_aodc);
+                break;
+            case GNSSSystem::Galileo:
+                eph.toe = GNSSTime(week, toe_seconds);
+                eph.week = static_cast<uint16_t>(week);
+                eph.tgd_secondary = delay_2_or_iodc;
+                eph.iodc = 0;
+                break;
+            case GNSSSystem::QZSS:
+            case GNSSSystem::GPS:
+            default:
+                eph.toe = GNSSTime(week, toe_seconds);
+                eph.week = static_cast<uint16_t>(week);
+                eph.iodc = static_cast<int>(delay_2_or_iodc);
+                break;
+        }
 
     } catch (const std::exception& e) {
         std::cerr << "Error parsing ephemeris: " << e.what() << std::endl;
@@ -981,17 +1384,26 @@ GNSSTime RINEXReader::parseTime(const std::string& time_str, double version) {
 }
 
 SatelliteId RINEXReader::parseSatelliteId(const std::string& sat_str, double version) {
-    // Simplified satellite ID parsing
     (void)version;
-    if (sat_str.length() >= 2) {
-        std::string prn_str = sat_str.substr(0, 2);
+    if (sat_str.empty()) {
+        return SatelliteId(GNSSSystem::GPS, 1);
+    }
+
+    size_t prn_start = 0;
+    GNSSSystem system = GNSSSystem::GPS;
+    if (std::isalpha(sat_str[0])) {
+        system = systemFromRinexChar(sat_str[0]);
+        prn_start = 1;
+    }
+
+    if (sat_str.length() >= prn_start + 2) {
+        std::string prn_str = sat_str.substr(prn_start, 2);
         prn_str.erase(0, prn_str.find_first_not_of(' '));
         if (!prn_str.empty()) {
-            int prn = std::stoi(prn_str);
-            return SatelliteId(GNSSSystem::GPS, prn);
+            return SatelliteId(system, std::stoi(prn_str));
         }
     }
-    return SatelliteId(GNSSSystem::GPS, 1);
+    return SatelliteId(system, 1);
 }
 
 bool RINEXReader::readLine(std::string& line) {
@@ -1020,7 +1432,11 @@ bool RINEXWriter::writeHeader(const RINEXReader::RINEXHeader& header) {
     
     // Write RINEX header
     file_ << std::fixed << std::setprecision(2) << header.version;
-    file_ << "           OBSERVATION DATA    ";
+    if (header.file_type == RINEXReader::FileType::NAVIGATION) {
+        file_ << "           NAVIGATION DATA     ";
+    } else {
+        file_ << "           OBSERVATION DATA    ";
+    }
     file_ << header.satellite_system << "                   RINEX VERSION / TYPE\n";
     
     file_ << "LibGNSS++           User                ";
@@ -1045,6 +1461,173 @@ bool RINEXWriter::writeObservationEpoch(const ObservationData& obs_data) {
         file_ << std::fixed << std::setprecision(3) << obs.pseudorange << "\n";
     }
     
+    return true;
+}
+
+bool RINEXWriter::createNavigationFile(const std::string& filename, const RINEXReader::RINEXHeader& header) {
+    file_.open(filename);
+    if (!file_.is_open()) {
+        return false;
+    }
+
+    header_ = header;
+    return writeHeader(header);
+}
+
+std::string RINEXWriter::formatTime(const GNSSTime& time, double version) {
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    int hour = 0;
+    int minute = 0;
+    double second = 0.0;
+    gpstToCalendar(time, year, month, day, hour, minute, second);
+
+    std::ostringstream oss;
+    if (version >= 3.0) {
+        oss << ' '
+            << std::setw(4) << year
+            << std::setw(3) << month
+            << std::setw(3) << day
+            << std::setw(3) << hour
+            << std::setw(3) << minute
+            << std::setw(3) << static_cast<int>(std::floor(second + 0.5));
+    } else {
+        oss << ' '
+            << std::setw(2) << (year % 100)
+            << std::setw(3) << month
+            << std::setw(3) << day
+            << std::setw(3) << hour
+            << std::setw(3) << minute
+            << std::setw(5) << std::fixed << std::setprecision(1) << second;
+    }
+    return oss.str();
+}
+
+std::string RINEXWriter::formatSatelliteId(const SatelliteId& sat, double version) {
+    std::ostringstream oss;
+    if (version >= 3.0) {
+        oss << rinexCharForSystem(sat.system)
+            << std::setw(2) << std::setfill('0') << static_cast<int>(sat.prn);
+        return oss.str();
+    }
+    oss << std::setw(2) << std::setfill(' ') << static_cast<int>(sat.prn);
+    return oss.str();
+}
+
+bool RINEXWriter::writeNavigationMessage(const Ephemeris& eph) {
+    if (!file_.is_open()) {
+        return false;
+    }
+
+    if (eph.satellite.system == GNSSSystem::BeiDou) {
+        return false;
+    }
+
+    if (eph.satellite.system == GNSSSystem::GLONASS) {
+        int year = 0;
+        int month = 0;
+        int day = 0;
+        int hour = 0;
+        int minute = 0;
+        double second = 0.0;
+        gpstToUtcCalendar(eph.toc, year, month, day, hour, minute, second);
+
+        const double tof_seconds = std::fmod((eph.tof - static_cast<double>(
+            leapSecondsForDate(year, month, day))).tow, 86400.0);
+
+        file_ << formatSatelliteId(eph.satellite, header_.version)
+              << ' '
+              << std::setw(4) << year
+              << std::setw(3) << month
+              << std::setw(3) << day
+              << std::setw(3) << hour
+              << std::setw(3) << minute
+              << std::setw(3) << static_cast<int>(std::floor(second + 0.5))
+              << formatRinexFloat(-eph.glonass_taun)
+              << formatRinexFloat(eph.glonass_gamn)
+              << formatRinexFloat(tof_seconds)
+              << "\n";
+
+        file_ << "    "
+              << formatRinexFloat(eph.glonass_position.x() * 1e-3)
+              << formatRinexFloat(eph.glonass_velocity.x() * 1e-3)
+              << formatRinexFloat(eph.glonass_acceleration.x() * 1e-3)
+              << formatRinexFloat(eph.health)
+              << "\n";
+
+        file_ << "    "
+              << formatRinexFloat(eph.glonass_position.y() * 1e-3)
+              << formatRinexFloat(eph.glonass_velocity.y() * 1e-3)
+              << formatRinexFloat(eph.glonass_acceleration.y() * 1e-3)
+              << formatRinexFloat(eph.glonass_frequency_channel)
+              << "\n";
+
+        file_ << "    "
+              << formatRinexFloat(eph.glonass_position.z() * 1e-3)
+              << formatRinexFloat(eph.glonass_velocity.z() * 1e-3)
+              << formatRinexFloat(eph.glonass_acceleration.z() * 1e-3)
+              << formatRinexFloat(eph.glonass_age)
+              << "\n";
+        return true;
+    }
+
+    file_ << formatSatelliteId(eph.satellite, header_.version)
+          << formatTime(eph.toc, header_.version)
+          << formatRinexFloat(eph.af0)
+          << formatRinexFloat(eph.af1)
+          << formatRinexFloat(eph.af2)
+          << "\n";
+
+    file_ << "    "
+          << formatRinexFloat(eph.iode)
+          << formatRinexFloat(eph.crs)
+          << formatRinexFloat(eph.delta_n)
+          << formatRinexFloat(eph.m0)
+          << "\n";
+
+    file_ << "    "
+          << formatRinexFloat(eph.cuc)
+          << formatRinexFloat(eph.e)
+          << formatRinexFloat(eph.cus)
+          << formatRinexFloat(eph.sqrt_a)
+          << "\n";
+
+    file_ << "    "
+          << formatRinexFloat(eph.toes)
+          << formatRinexFloat(eph.cic)
+          << formatRinexFloat(eph.omega0)
+          << formatRinexFloat(eph.cis)
+          << "\n";
+
+    file_ << "    "
+          << formatRinexFloat(eph.i0)
+          << formatRinexFloat(eph.crc)
+          << formatRinexFloat(eph.omega)
+          << formatRinexFloat(eph.omega_dot)
+          << "\n";
+
+    file_ << "    "
+          << formatRinexFloat(eph.idot)
+          << formatRinexFloat(0.0)
+          << formatRinexFloat(eph.week)
+          << formatRinexFloat(0.0)
+          << "\n";
+
+    file_ << "    "
+          << formatRinexFloat(eph.sv_accuracy)
+          << formatRinexFloat(eph.sv_health)
+          << formatRinexFloat(eph.tgd)
+          << formatRinexFloat(eph.iodc)
+          << "\n";
+
+    file_ << "    "
+          << formatRinexFloat(eph.tof.tow)
+          << formatRinexFloat(0.0)
+          << formatRinexFloat(0.0)
+          << formatRinexFloat(0.0)
+          << "\n";
+
     return true;
 }
 

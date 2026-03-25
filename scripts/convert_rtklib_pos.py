@@ -1,106 +1,100 @@
 #!/usr/bin/env python3
-"""
-Convert RTKLIB POS format to standard POS format for visualization
-"""
+"""Convert raw RTKLIB POS output into libgnss++ POS format."""
 
-import sys
-import os
+from __future__ import annotations
+
+import argparse
 from datetime import datetime
+import math
+import os
+from pathlib import Path
 
-def convert_rtklib_pos(input_file, output_file):
-    """Convert RTKLIB POS format to standard RINEX POS format"""
-    
-    with open(input_file, 'r') as infile, open(output_file, 'w') as outfile:
-        # Write header
-        outfile.write("% POS file converted from RTKLIB format\n")
-        outfile.write("% Format: GPST latitude(deg) longitude(deg) height(m) Q ns sdn sde sdu sdne sdeu sdun age ratio\n")
-        outfile.write("%\n")
-        outfile.write("% Q: 1=FIXED, 2=FLOAT, 5=SPP\n")
-        outfile.write("% ns: number of satellites\n")
-        outfile.write("% sdn,sde,sdu: standard deviation (m)\n")
-        outfile.write("% sdne,sdeu,sdun: correlation\n")
-        outfile.write("% age: age of differential (s)\n")
-        outfile.write("% ratio: ambiguity ratio\n")
-        outfile.write("%\n")
-        
-        line_count = 0
+
+WGS84_A = 6378137.0
+WGS84_F = 1.0 / 298.257223563
+WGS84_E2 = 2 * WGS84_F - WGS84_F * WGS84_F
+GPS_EPOCH = datetime(1980, 1, 6)
+STATUS_MAP = {1: 4, 2: 3, 4: 2, 5: 1}
+
+
+def llh_to_ecef(lat_deg: float, lon_deg: float, height_m: float) -> tuple[float, float, float]:
+    lat = math.radians(lat_deg)
+    lon = math.radians(lon_deg)
+    sin_lat = math.sin(lat)
+    cos_lat = math.cos(lat)
+    n = WGS84_A / math.sqrt(1.0 - WGS84_E2 * sin_lat * sin_lat)
+    x = (n + height_m) * cos_lat * math.cos(lon)
+    y = (n + height_m) * cos_lat * math.sin(lon)
+    z = (n * (1.0 - WGS84_E2) + height_m) * sin_lat
+    return x, y, z
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
+    parser.add_argument("input_rtklib_pos", type=Path, help="Input RTKLIB .pos file")
+    parser.add_argument("output_pos", type=Path, help="Output libgnss++ .pos file")
+    return parser.parse_args()
+
+
+def parse_gpst(date_token: str, time_token: str) -> tuple[int, float]:
+    stamp = datetime.strptime(f"{date_token} {time_token}", "%Y/%m/%d %H:%M:%S.%f")
+    delta = stamp - GPS_EPOCH
+    week = delta.days // 7
+    tow = (delta.days % 7) * 86400 + delta.seconds + delta.microseconds / 1e6
+    return week, tow
+
+
+def convert_rtklib_pos(input_file: Path, output_file: Path) -> int:
+    line_count = 0
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with input_file.open("r", encoding="utf-8") as infile, output_file.open("w", encoding="utf-8") as outfile:
+        outfile.write("% LibGNSS++ Position Solution\n")
+        outfile.write("% Converted from RTKLIB POS format\n")
+        outfile.write("% Columns: GPS_Week GPS_TOW X(m) Y(m) Z(m) Lat(deg) Lon(deg) Height(m) Status Satellites PDOP\n")
+
         for line in infile:
             line = line.strip()
-            if not line or line.startswith('%'):
+            if not line or line.startswith("%"):
                 continue
-                
+
             parts = line.split()
             if len(parts) < 7:
                 continue
-                
+
             try:
-                # Parse RTKLIB format: YYYY/MM/DD HH:MM:SS.sss lat lon height Q ns ratio
-                date_str = parts[0]  # YYYY/MM/DD
-                time_str = parts[1]  # HH:MM:SS.sss
+                week, tow = parse_gpst(parts[0], parts[1])
                 lat = float(parts[2])
                 lon = float(parts[3])
                 height = float(parts[4])
-                q = int(parts[5])
-                ns = int(parts[6])
-                ratio = float(parts[7]) if len(parts) > 7 else 0.0
-                
-                # Convert datetime to GPS time (approximate)
-                dt = datetime.strptime(f"{date_str} {time_str}", "%Y/%m/%d %H:%M:%S.%f")
-                
-                # GPS epoch: January 6, 1980
-                gps_epoch = datetime(1980, 1, 6)
-                delta = dt - gps_epoch
-                
-                # Approximate GPS week and TOW
-                gps_week = int(delta.days / 7)
-                gps_tow = (delta.days % 7) * 86400 + delta.seconds + delta.microseconds / 1e6
-                
-                # Standard deviations based on quality
-                if q == 1:  # FIXED
-                    std_dev = 0.02  # 2cm
-                elif q == 2:  # FLOAT
-                    std_dev = 0.1   # 10cm
-                else:  # SPP
-                    std_dev = 3.0   # 3m
-                
-                # Write in standard POS format
-                outfile.write(f"{gps_week} {gps_tow:.3f} ")
-                outfile.write(f"{lat:.9f} {lon:.9f} ")
-                outfile.write(f"{height:.4f} ")
-                outfile.write(f"{q} {ns} ")
-                outfile.write(f"{std_dev:.4f} {std_dev:.4f} {std_dev*1.5:.4f} ")
-                outfile.write("0.0000 0.0000 0.0000 ")
-                outfile.write(f"0.0 {ratio:.1f}\n")
-                
+                rtklib_q = int(parts[5])
+                satellites = int(parts[6])
+                x, y, z = llh_to_ecef(lat, lon, height)
+                status = STATUS_MAP.get(rtklib_q, 1)
+                outfile.write(
+                    f"{week} {tow:.3f} "
+                    f"{x:.4f} {y:.4f} {z:.4f} "
+                    f"{lat:.9f} {lon:.9f} {height:.4f} "
+                    f"{status} {satellites} 0.0\n"
+                )
                 line_count += 1
-                
-            except (ValueError, IndexError) as e:
+            except (ValueError, IndexError):
                 print(f"Warning: Skipping invalid line: {line}")
-                continue
-        
-        print(f"Converted {line_count} position solutions")
 
-def main():
-    if len(sys.argv) != 3:
-        print("Usage: python3 convert_rtklib_pos.py <input_rtklib_pos> <output_pos>")
+    return line_count
+
+
+def main() -> int:
+    args = parse_args()
+    if not args.input_rtklib_pos.exists():
+        print(f"Error: Input file not found: {args.input_rtklib_pos}")
         return 1
-    
-    input_file = sys.argv[1]
-    output_file = sys.argv[2]
-    
-    if not os.path.exists(input_file):
-        print(f"Error: Input file {input_file} not found")
-        return 1
-    
-    print(f"Converting RTKLIB POS file: {input_file}")
-    print(f"Output file: {output_file}")
-    
-    convert_rtklib_pos(input_file, output_file)
-    
-    print(f"✓ Conversion completed!")
-    print(f"Use: python3 visualize_pos.py {output_file}")
-    
+
+    print(f"Converting RTKLIB POS file: {args.input_rtklib_pos}")
+    print(f"Output file: {args.output_pos}")
+    converted = convert_rtklib_pos(args.input_rtklib_pos, args.output_pos)
+    print(f"Converted {converted} position solutions")
     return 0
 
-if __name__ == '__main__':
-    exit(main())
+
+if __name__ == "__main__":
+    raise SystemExit(main())

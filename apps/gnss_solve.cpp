@@ -22,6 +22,9 @@ namespace {
 
 constexpr double kExactTimeToleranceSeconds = 1e-6;
 constexpr double kDefaultFloatVsSppGuardMeters = 30.0;
+constexpr double kDefaultNonFixedJumpGuardMeters = 8.0;
+constexpr double kDefaultVerticalStepGuardMeters = 1.0;
+constexpr int kReacquireFixedCount = 5;
 
 enum class ModeChoice {
     AUTO,
@@ -33,6 +36,12 @@ enum class IonoChoice {
     AUTO,
     OFF,
     IFLC
+};
+
+enum class GlonassARChoice {
+    OFF,
+    ON,
+    AUTOCAL
 };
 
 struct SolveConfig {
@@ -54,7 +63,14 @@ struct SolveConfig {
     double ratio_threshold = 3.0;
     int min_satellites_for_ar = 5;
     double elevation_mask_deg = 15.0;
+    bool enable_glonass = true;
+    bool enable_beidou = true;
+    GlonassARChoice glonass_ar = GlonassARChoice::OFF;
+    double glonass_icb_l1_m_per_mhz = 0.0;
+    double glonass_icb_l2_m_per_mhz = 0.0;
+    int skip_epochs = 0;
     int max_epochs = -1;
+    bool enable_kinematic_post_filter = true;
 };
 
 double timeDiffSeconds(const libgnss::GNSSTime& a, const libgnss::GNSSTime& b) {
@@ -81,16 +97,70 @@ std::map<ObservationKey, const libgnss::Observation*> indexObservations(
     return indexed;
 }
 
-double signalWavelength(libgnss::SignalType signal) {
+double signalFrequencyHz(const libgnss::SatelliteId& satellite,
+                         libgnss::SignalType signal,
+                         const libgnss::GNSSTime& time,
+                         const libgnss::NavigationData& nav) {
+    const libgnss::Ephemeris* eph = nav.getEphemeris(satellite, time);
     switch (signal) {
         case libgnss::SignalType::GPS_L1CA:
-            return libgnss::constants::GPS_L1_WAVELENGTH;
+        case libgnss::SignalType::QZS_L1CA:
+            return libgnss::constants::GPS_L1_FREQ;
         case libgnss::SignalType::GPS_L2C:
-            return libgnss::constants::GPS_L2_WAVELENGTH;
+        case libgnss::SignalType::QZS_L2C:
+            return libgnss::constants::GPS_L2_FREQ;
+        case libgnss::SignalType::GPS_L5:
+        case libgnss::SignalType::QZS_L5:
+            return libgnss::constants::GPS_L5_FREQ;
+        case libgnss::SignalType::GLO_L1CA:
+        case libgnss::SignalType::GLO_L1P:
+            if (eph && eph->satellite.system == libgnss::GNSSSystem::GLONASS) {
+                return libgnss::constants::GLO_L1_BASE_FREQ +
+                    eph->glonass_frequency_channel * libgnss::constants::GLO_L1_STEP_FREQ;
+            }
+            return libgnss::constants::GLO_L1_BASE_FREQ;
+        case libgnss::SignalType::GLO_L2CA:
+        case libgnss::SignalType::GLO_L2P:
+            if (eph && eph->satellite.system == libgnss::GNSSSystem::GLONASS) {
+                return libgnss::constants::GLO_L2_BASE_FREQ +
+                    eph->glonass_frequency_channel * libgnss::constants::GLO_L2_STEP_FREQ;
+            }
+            return libgnss::constants::GLO_L2_BASE_FREQ;
+        case libgnss::SignalType::GAL_E1:
+            return libgnss::constants::GAL_E1_FREQ;
+        case libgnss::SignalType::GAL_E5A:
+            return libgnss::constants::GAL_E5A_FREQ;
+        case libgnss::SignalType::GAL_E5B:
+            return libgnss::constants::GAL_E5B_FREQ;
+        case libgnss::SignalType::GAL_E6:
+            return libgnss::constants::GAL_E6_FREQ;
+        case libgnss::SignalType::BDS_B1I:
+            return libgnss::constants::BDS_B1I_FREQ;
+        case libgnss::SignalType::BDS_B2I:
+            return libgnss::constants::BDS_B2I_FREQ;
+        case libgnss::SignalType::BDS_B3I:
+            return libgnss::constants::BDS_B3I_FREQ;
+        case libgnss::SignalType::BDS_B1C:
+            return libgnss::constants::BDS_B1C_FREQ;
+        case libgnss::SignalType::BDS_B2A:
+            return libgnss::constants::BDS_B2A_FREQ;
         default:
             return 0.0;
     }
 }
+
+double signalWavelength(const libgnss::SatelliteId& satellite,
+                        libgnss::SignalType signal,
+                        const libgnss::GNSSTime& time,
+                        const libgnss::NavigationData& nav) {
+    const double frequency = signalFrequencyHz(satellite, signal, time, nav);
+    if (frequency <= 0.0) {
+        return 0.0;
+    }
+    return libgnss::constants::SPEED_OF_LIGHT / frequency;
+}
+
+double signalWavelength(libgnss::SignalType signal) = delete;
 
 bool calculateModeledBaseRange(const libgnss::SatelliteId& satellite,
                                const libgnss::GNSSTime& time,
@@ -158,7 +228,7 @@ bool interpolateBaseEpoch(const libgnss::ObservationData& before,
 
         const auto& obs_before = *obs_before_ptr;
         const auto& obs_after = *after_it->second;
-        const double wavelength = signalWavelength(key.signal);
+        const double wavelength = signalWavelength(key.satellite, key.signal, target_time, nav);
         if (wavelength <= 0.0 || !obs_before.has_pseudorange || !obs_after.has_pseudorange) {
             continue;
         }
@@ -239,6 +309,18 @@ std::string ionoChoiceString(IonoChoice iono) {
     return "unknown";
 }
 
+std::string glonassARChoiceString(GlonassARChoice choice) {
+    switch (choice) {
+        case GlonassARChoice::OFF:
+            return "off";
+        case GlonassARChoice::ON:
+            return "on";
+        case GlonassARChoice::AUTOCAL:
+            return "autocal";
+    }
+    return "off";
+}
+
 std::string outputFormatString(libgnss::io::SolutionWriter::Format format) {
     switch (format) {
         case libgnss::io::SolutionWriter::Format::POS:
@@ -268,9 +350,16 @@ void printUsage(const char* program_name) {
         << "  --ratio <value>            Ambiguity ratio threshold (default: 3.0)\n"
         << "  --min-ar-sats <n>          Minimum satellites for AR (default: 5)\n"
         << "  --elevation-mask-deg <v>   Elevation mask in degrees (default: 15)\n"
+        << "  --no-glonass               Disable GLONASS in RTK carrier processing\n"
+        << "  --no-beidou                Disable BeiDou in RTK carrier processing\n"
+        << "  --glonass-ar <off|on|autocal> GLONASS ambiguity resolution mode (default: off)\n"
+        << "  --glonass-icb-l1 <m/MHz>   GLONASS L1 inter-channel bias slope (default: 0)\n"
+        << "  --glonass-icb-l2 <m/MHz>   GLONASS L2 inter-channel bias slope (default: 0)\n"
         << "  --max-baseline-m <v>       Max baseline length in meters (default: 20000)\n"
         << "  --base-ecef <x> <y> <z>    Override base ECEF position in meters\n"
+        << "  --skip-epochs <n>          Skip the first n rover epochs before solving\n"
         << "  --max-epochs <n>           Stop after n rover epochs\n"
+        << "  --no-kinematic-post-filter Disable the kinematic output post-filter\n"
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
         << "  --verbose                  Print per-epoch progress summary\n"
         << "  -h, --help                 Show this help\n";
@@ -294,6 +383,13 @@ IonoChoice parseIonoChoice(const std::string& value, const char* program_name) {
     if (value == "off") return IonoChoice::OFF;
     if (value == "iflc") return IonoChoice::IFLC;
     argumentError("unsupported --iono value: " + value, program_name);
+}
+
+GlonassARChoice parseGlonassARChoice(const std::string& value, const char* program_name) {
+    if (value == "off") return GlonassARChoice::OFF;
+    if (value == "on") return GlonassARChoice::ON;
+    if (value == "autocal") return GlonassARChoice::AUTOCAL;
+    argumentError("unsupported --glonass-ar value: " + value, program_name);
 }
 
 libgnss::io::SolutionWriter::Format parseOutputFormat(const std::string& value,
@@ -341,14 +437,28 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.min_satellites_for_ar = std::stoi(argv[++i]);
         } else if (arg == "--elevation-mask-deg" && i + 1 < argc) {
             config.elevation_mask_deg = std::stod(argv[++i]);
+        } else if (arg == "--no-glonass") {
+            config.enable_glonass = false;
+        } else if (arg == "--no-beidou") {
+            config.enable_beidou = false;
+        } else if (arg == "--glonass-ar" && i + 1 < argc) {
+            config.glonass_ar = parseGlonassARChoice(argv[++i], argv[0]);
+        } else if (arg == "--glonass-icb-l1" && i + 1 < argc) {
+            config.glonass_icb_l1_m_per_mhz = std::stod(argv[++i]);
+        } else if (arg == "--glonass-icb-l2" && i + 1 < argc) {
+            config.glonass_icb_l2_m_per_mhz = std::stod(argv[++i]);
         } else if (arg == "--max-baseline-m" && i + 1 < argc) {
             config.max_baseline_length_m = std::stod(argv[++i]);
         } else if (arg == "--base-ecef" && i + 3 < argc) {
             config.base_position_ecef =
                 Eigen::Vector3d(std::stod(argv[++i]), std::stod(argv[++i]), std::stod(argv[++i]));
             config.base_position_override = true;
+        } else if (arg == "--skip-epochs" && i + 1 < argc) {
+            config.skip_epochs = std::stoi(argv[++i]);
         } else if (arg == "--max-epochs" && i + 1 < argc) {
             config.max_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--no-kinematic-post-filter") {
+            config.enable_kinematic_post_filter = false;
         } else if (arg == "--no-base-interp") {
             config.enable_base_interpolation = false;
         } else if (arg == "--verbose") {
@@ -375,6 +485,9 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.max_baseline_length_m <= 0.0) {
         argumentError("--max-baseline-m must be > 0", argv[0]);
+    }
+    if (config.skip_epochs < 0) {
+        argumentError("--skip-epochs must be >= 0", argv[0]);
     }
 
     return config;
@@ -465,7 +578,22 @@ int main(int argc, char* argv[]) {
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;
         rtk_config.position_mode = resolvePositionMode(config);
         rtk_config.ionoopt = resolveIonoOpt(config, rtk_config.position_mode);
+        rtk_config.enable_glonass = config.enable_glonass;
+        rtk_config.enable_beidou = config.enable_beidou;
+        rtk_config.glonass_ar_mode =
+            config.glonass_ar == GlonassARChoice::AUTOCAL
+                ? libgnss::RTKProcessor::RTKConfig::GlonassARMode::AUTOCAL
+                : (config.glonass_ar == GlonassARChoice::ON
+                       ? libgnss::RTKProcessor::RTKConfig::GlonassARMode::ON
+                       : libgnss::RTKProcessor::RTKConfig::GlonassARMode::OFF);
+        rtk_config.glonass_icb_l1_m_per_mhz = config.glonass_icb_l1_m_per_mhz;
+        rtk_config.glonass_icb_l2_m_per_mhz = config.glonass_icb_l2_m_per_mhz;
         rtk_processor.setRTKConfig(rtk_config);
+        libgnss::SPPProcessor::SPPConfig spp_config;
+        spp_config.use_multi_constellation = true;
+        spp_config.enable_glonass = config.enable_glonass;
+        spp_config.enable_beidou = config.enable_beidou;
+        spp_processor.setSPPConfig(spp_config);
 
         std::cout << "libgnss++ post-process solver" << std::endl;
         std::cout << "  rover: " << config.rover_obs_path << std::endl;
@@ -480,6 +608,13 @@ int main(int argc, char* argv[]) {
                   << " (requested " << modeChoiceString(config.mode) << ")" << std::endl;
         std::cout << "  iono: " << ionoOptString(rtk_config.ionoopt)
                   << " (requested " << ionoChoiceString(config.iono) << ")" << std::endl;
+        std::cout << "  carrier constellations: GLONASS "
+                  << (rtk_config.enable_glonass ? "on" : "off")
+                  << ", BeiDou " << (rtk_config.enable_beidou ? "on" : "off") << std::endl;
+        std::cout << "  GLONASS AR: " << glonassARChoiceString(config.glonass_ar)
+                  << " (L1 ICB " << config.glonass_icb_l1_m_per_mhz
+                  << " m/MHz, L2 ICB " << config.glonass_icb_l2_m_per_mhz << " m/MHz)"
+                  << std::endl;
         std::cout << "  base interpolation: "
                   << (config.enable_base_interpolation ? "enabled" : "disabled") << std::endl;
 
@@ -520,6 +655,15 @@ int main(int argc, char* argv[]) {
         Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
         if (config.base_position_override) {
             base_position = config.base_position_ecef;
+            if (base_header.approximate_position.norm() > 0.0) {
+                const double override_delta =
+                    (config.base_position_ecef - base_header.approximate_position).norm();
+                if (override_delta > 1000.0) {
+                    std::cerr << "Warning: --base-ecef differs from RINEX header by "
+                              << override_delta << " m; this may severely degrade RTK alignment."
+                              << std::endl;
+                }
+            }
         } else if (base_header.approximate_position.norm() > 0.0) {
             base_position = base_header.approximate_position;
         } else {
@@ -551,12 +695,28 @@ int main(int argc, char* argv[]) {
             rover_obs.receiver_position = base_position + Eigen::Vector3d(3000.0, 0.0, 0.0);
         }
 
+        int skipped_initial_epochs = 0;
+        while (rover_ok && skipped_initial_epochs < config.skip_epochs) {
+            const Eigen::Vector3d saved_rover_pos = rover_obs.receiver_position;
+            rover_ok = rover_reader.readObservationEpoch(rover_obs);
+            if (rover_ok) {
+                rover_obs.receiver_position = saved_rover_pos;
+            }
+            skipped_initial_epochs++;
+        }
+        if (!rover_ok) {
+            std::cerr << "Error: skip-epochs exhausted the rover observation stream" << std::endl;
+            return 1;
+        }
+
         int processed_rover_epochs = 0;
         int valid_solution_count = 0;
         int fixed_solution_count = 0;
         int exact_base_epochs = 0;
         int interpolated_base_epochs = 0;
         int skipped_rover_epochs = 0;
+        libgnss::PositionSolution last_fixed_output;
+        bool have_last_fixed_output = false;
 
         while (rover_ok) {
             if (config.max_epochs > 0 && processed_rover_epochs >= config.max_epochs) {
@@ -611,13 +771,71 @@ int main(int argc, char* argv[]) {
             }
 
             auto pos_solution = rtk_processor.processRTKEpoch(rover_obs, aligned_base_obs, nav_data);
+            const libgnss::PositionSolution* last_output = solution.getLastSolution();
+            const bool have_last_output = last_output != nullptr && last_output->isValid();
+            const auto jump_from_last_output = [&](const libgnss::PositionSolution& candidate) {
+                if (!have_last_output || !candidate.isValid()) {
+                    return std::numeric_limits<double>::infinity();
+                }
+                return (candidate.position_ecef - last_output->position_ecef).norm();
+            };
+            const auto max_nonfixed_jump = [&]() {
+                if (!have_last_output) {
+                    return kDefaultNonFixedJumpGuardMeters;
+                }
+                double dt = pos_solution.time - last_output->time;
+                if (!std::isfinite(dt) || dt <= 0.0) {
+                    dt = 1.0;
+                }
+                return std::max(kDefaultNonFixedJumpGuardMeters, 25.0 * dt);
+            };
             if (used_interpolated_base && pos_solution.status == libgnss::SolutionStatus::FLOAT) {
                 auto spp_solution = spp_processor.processEpoch(rover_obs, nav_data);
                 if (spp_solution.isValid()) {
                     const double float_vs_spp = (pos_solution.position_ecef - spp_solution.position_ecef).norm();
-                    if (!std::isfinite(float_vs_spp) || float_vs_spp > kDefaultFloatVsSppGuardMeters) {
+                    if (std::isfinite(float_vs_spp) && float_vs_spp > kDefaultFloatVsSppGuardMeters) {
                         spp_solution.status = libgnss::SolutionStatus::SPP;
-                        pos_solution = spp_solution;
+                        const double float_jump = jump_from_last_output(pos_solution);
+                        const double spp_jump = jump_from_last_output(spp_solution);
+                        const double jump_guard = max_nonfixed_jump();
+                        const bool spp_is_plausible =
+                            std::isfinite(spp_jump) &&
+                            spp_jump <= jump_guard &&
+                            (!std::isfinite(float_jump) || spp_jump + 3.0 < float_jump);
+                        if (spp_is_plausible) {
+                            pos_solution = spp_solution;
+                        }
+                    }
+                }
+            }
+
+            if (pos_solution.isValid() &&
+                pos_solution.status != libgnss::SolutionStatus::FIXED) {
+                const double candidate_jump = jump_from_last_output(pos_solution);
+                if (std::isfinite(candidate_jump) && candidate_jump > max_nonfixed_jump()) {
+                    pos_solution = libgnss::PositionSolution{};
+                    pos_solution.time = rover_obs.time;
+                    pos_solution.status = libgnss::SolutionStatus::NONE;
+                }
+            }
+
+            if (pos_solution.isValid() &&
+                pos_solution.status != libgnss::SolutionStatus::FIXED &&
+                have_last_fixed_output) {
+                double dt_since_fixed = pos_solution.time - last_fixed_output.time;
+                if (std::isfinite(dt_since_fixed) && dt_since_fixed > 0.0 && dt_since_fixed <= 5.0) {
+                    const double drift_from_fixed =
+                        (pos_solution.position_ecef - last_fixed_output.position_ecef).norm();
+                    const double height_from_fixed = std::abs(
+                        pos_solution.position_geodetic.height -
+                        last_fixed_output.position_geodetic.height);
+                    const double max_fixed_drift = std::max(12.0, 15.0 * dt_since_fixed);
+                    const double max_height_drift = std::max(6.0, 3.0 * dt_since_fixed);
+                    if (drift_from_fixed > max_fixed_drift ||
+                        height_from_fixed > max_height_drift) {
+                        pos_solution = libgnss::PositionSolution{};
+                        pos_solution.time = rover_obs.time;
+                        pos_solution.status = libgnss::SolutionStatus::NONE;
                     }
                 }
             }
@@ -627,6 +845,8 @@ int main(int argc, char* argv[]) {
                 valid_solution_count++;
                 if (pos_solution.isFixed()) {
                     fixed_solution_count++;
+                    last_fixed_output = pos_solution;
+                    have_last_fixed_output = true;
                 }
 
                 if (config.verbose && (valid_solution_count <= 5 || valid_solution_count % 100 == 0)) {
@@ -642,13 +862,70 @@ int main(int argc, char* argv[]) {
             const Eigen::Vector3d saved_rover_pos = rover_obs.receiver_position;
             rover_ok = rover_reader.readObservationEpoch(rover_obs);
             if (rover_ok) {
-                if (pos_solution.isFixed() || pos_solution.status == libgnss::SolutionStatus::SPP) {
+                const bool trusted_spp_seed =
+                    pos_solution.status == libgnss::SolutionStatus::SPP &&
+                    pos_solution.num_satellites >= 7;
+                if (pos_solution.isFixed() || trusted_spp_seed) {
                     rover_obs.receiver_position = pos_solution.position_ecef;
                 } else {
                     rover_obs.receiver_position = saved_rover_pos;
                 }
             }
             processed_rover_epochs++;
+        }
+
+        if (config.enable_kinematic_post_filter &&
+            rtk_config.position_mode == libgnss::RTKProcessor::RTKConfig::PositionMode::KINEMATIC &&
+            !solution.isEmpty()) {
+            libgnss::Solution filtered_solution;
+            filtered_solution.solutions.reserve(solution.solutions.size());
+            bool suppress_until_fix_recovery = false;
+            int recovery_fixed_streak = 0;
+            bool have_kept_fixed = false;
+            const libgnss::PositionSolution* last_kept = nullptr;
+            for (const auto& epoch_solution : solution.solutions) {
+                if (!epoch_solution.isValid()) {
+                    continue;
+                }
+                if (suppress_until_fix_recovery) {
+                    if (epoch_solution.isFixed()) {
+                        recovery_fixed_streak++;
+                        if (recovery_fixed_streak >= kReacquireFixedCount) {
+                            filtered_solution.addSolution(epoch_solution);
+                            last_kept = &filtered_solution.solutions.back();
+                            suppress_until_fix_recovery = false;
+                            recovery_fixed_streak = 0;
+                        }
+                    } else {
+                        recovery_fixed_streak = 0;
+                    }
+                    continue;
+                }
+
+                if (last_kept != nullptr && have_kept_fixed) {
+                    double dt = epoch_solution.time - last_kept->time;
+                    if (!std::isfinite(dt) || dt <= 0.0) {
+                        dt = 1.0;
+                    }
+                    const double height_step = std::abs(
+                        epoch_solution.position_geodetic.height -
+                        last_kept->position_geodetic.height);
+                    const double max_height_step =
+                        std::max(kDefaultVerticalStepGuardMeters, 4.0 * dt);
+                    if (height_step > max_height_step) {
+                        suppress_until_fix_recovery = true;
+                        recovery_fixed_streak = epoch_solution.isFixed() ? 1 : 0;
+                        continue;
+                    }
+                }
+
+                filtered_solution.addSolution(epoch_solution);
+                last_kept = &filtered_solution.solutions.back();
+                if (epoch_solution.isFixed()) {
+                    have_kept_fixed = true;
+                }
+            }
+            solution = std::move(filtered_solution);
         }
 
         if (solution.isEmpty()) {
@@ -678,12 +955,20 @@ int main(int argc, char* argv[]) {
         std::cout << "  fixed solutions: " << stats.fixed_solutions << std::endl;
         std::cout << "  fix rate: " << std::fixed << std::setprecision(2)
                   << stats.fix_rate * 100.0 << "%" << std::endl;
-        std::cout << "  RMS horizontal (self-consistency): " << stats.rms_horizontal << " m" << std::endl;
-        std::cout << "  RMS vertical (self-consistency): " << stats.rms_vertical << " m" << std::endl;
+        if (rtk_config.position_mode == libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC) {
+            std::cout << "  RMS horizontal (self-consistency): "
+                      << stats.rms_horizontal << " m" << std::endl;
+            std::cout << "  RMS vertical (self-consistency): "
+                      << stats.rms_vertical << " m" << std::endl;
+        } else {
+            std::cout << "  self-consistency metrics: omitted in kinematic mode; "
+                      << "use reference-based comparison for accuracy." << std::endl;
+        }
         std::cout << "  exact base epochs: " << exact_base_epochs << std::endl;
         std::cout << "  interpolated base epochs: " << interpolated_base_epochs << std::endl;
         std::cout << "  skipped rover epochs: " << skipped_rover_epochs << std::endl;
-        if (rover_header.approximate_position.norm() > 0.0 && mean_count > 0) {
+        if (rtk_config.position_mode == libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
+            rover_header.approximate_position.norm() > 0.0 && mean_count > 0) {
             std::cout << "  header vs mean diff: "
                       << (mean_pos - rover_header.approximate_position).norm() << " m" << std::endl;
         }

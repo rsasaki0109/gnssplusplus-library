@@ -6,17 +6,17 @@ Generate a promotion-friendly scorecard for the UrbanNav Tokyo Odaiba benchmark.
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
-
-import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch
 
 from generate_driving_comparison import (
     match_to_reference,
+    pair_epochs,
     read_libgnss_pos,
     read_reference_csv,
     read_rtklib_pos,
     summarize,
+    summarize_common_epochs,
 )
 
 
@@ -44,6 +44,20 @@ def format_delta_lower(lib_value: float, rtklib_value: float, unit: str) -> str:
     if unit == "mm":
         return f"{delta:+.1f} mm"
     return f"{delta:+.2f} {unit}"
+
+
+def ratio_text(numerator: float, denominator: float) -> str:
+    if denominator <= 0.0:
+        if numerator <= 0.0:
+            return "1.0x"
+        return "inf"
+    return f"{numerator / denominator:.1f}x"
+
+
+def improvement_text(lib_value: float, rtklib_value: float) -> str:
+    if rtklib_value <= 0.0:
+        return "n/a"
+    return f"{100.0 * (1.0 - lib_value / rtklib_value):.0f}%"
 
 
 def add_card(ax, x: float, y: float, w: float, h: float, title: str, headline: str,
@@ -92,7 +106,7 @@ def add_card(ax, x: float, y: float, w: float, h: float, title: str, headline: s
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
     parser.add_argument("--lib-pos", type=Path, required=True)
     parser.add_argument("--rtklib-pos", type=Path, required=True)
     parser.add_argument("--reference-csv", type=Path, required=True)
@@ -100,6 +114,10 @@ def main() -> None:
     parser.add_argument("--title", default="UrbanNav Tokyo Odaiba")
     parser.add_argument("--match-tolerance", type=float, default=0.15)
     args = parser.parse_args()
+
+    global plt, FancyBboxPatch
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import FancyBboxPatch
 
     reference = read_reference_csv(args.reference_csv)
     lib_matched = match_to_reference(
@@ -115,23 +133,54 @@ def main() -> None:
 
     lib_summary = summarize(lib_matched, fixed_status=4, label="libgnss++")
     rtklib_summary = summarize(rtklib_matched, fixed_status=1, label="RTKLIB")
+    common_pairs = pair_epochs(lib_matched, rtklib_matched, args.match_tolerance)
+    lib_common_summary, rtklib_common_summary = summarize_common_epochs(
+        common_pairs,
+        lib_fixed_status=4,
+        rtklib_fixed_status=1,
+    )
 
     wins = 0
     if lib_summary["epochs"] > rtklib_summary["epochs"]:
         wins += 1
     if lib_summary["fix_rate_pct"] > rtklib_summary["fix_rate_pct"]:
         wins += 1
-    if lib_summary["median_h_m"] < rtklib_summary["median_h_m"]:
+    if lib_common_summary["median_h_m"] < rtklib_common_summary["median_h_m"]:
         wins += 1
-    if lib_summary["p95_h_m"] < rtklib_summary["p95_h_m"]:
+    if lib_common_summary["median_abs_up_m"] < rtklib_common_summary["median_abs_up_m"]:
         wins += 1
-    if lib_summary["max_h_m"] < rtklib_summary["max_h_m"]:
+    if lib_common_summary["p95_h_m"] < rtklib_common_summary["p95_h_m"]:
         wins += 1
 
-    median_gap_mm = (lib_summary["median_h_m"] - rtklib_summary["median_h_m"]) * 1000.0
-    fix_ratio = lib_summary["fix_rate_pct"] / rtklib_summary["fix_rate_pct"]
-    p95_improvement = 100.0 * (1.0 - lib_summary["p95_h_m"] / rtklib_summary["p95_h_m"])
-    max_improvement = 100.0 * (1.0 - lib_summary["max_h_m"] / rtklib_summary["max_h_m"])
+    median_gap_mm = (
+        lib_common_summary["median_h_m"] - rtklib_common_summary["median_h_m"]
+    ) * 1000.0
+    median_up_gap_mm = (
+        lib_common_summary["median_abs_up_m"] - rtklib_common_summary["median_abs_up_m"]
+    ) * 1000.0
+    fix_ratio = ratio_text(lib_summary["fix_rate_pct"], rtklib_summary["fix_rate_pct"])
+    common_median_winner = (
+        "libgnss++"
+        if lib_common_summary["median_h_m"] < rtklib_common_summary["median_h_m"]
+        else "RTKLIB"
+    )
+    common_up_winner = (
+        "libgnss++"
+        if lib_common_summary["median_abs_up_m"] < rtklib_common_summary["median_abs_up_m"]
+        else "RTKLIB"
+    )
+    common_p95_winner = (
+        "libgnss++"
+        if lib_common_summary["p95_h_m"] < rtklib_common_summary["p95_h_m"]
+        else "RTKLIB"
+    )
+    p95_improvement = (
+        improvement_text(lib_common_summary["p95_h_m"], rtklib_common_summary["p95_h_m"])
+        if common_p95_winner == "libgnss++"
+        else improvement_text(rtklib_common_summary["p95_h_m"], lib_common_summary["p95_h_m"])
+    )
+    median_badge_fg = WIN_COLOR if common_median_winner == "libgnss++" else LOSS_COLOR
+    median_badge_bg = "#e7f6ec" if common_median_winner == "libgnss++" else "#fff1dd"
 
     fig = plt.figure(figsize=(14, 8), facecolor=FIG_BG)
     ax = fig.add_axes([0, 0, 1, 1])
@@ -175,15 +224,15 @@ def main() -> None:
         0.08,
         boxstyle="round,pad=0.01,rounding_size=0.03",
         linewidth=0.0,
-        facecolor="#fff1dd",
+        facecolor=median_badge_bg,
     )
     ax.add_patch(badge2)
     ax.text(
         0.42,
         0.72,
-        f"Median: RTKLIB {median_gap_mm:+.1f} mm",
+        f"Common median h: {common_median_winner} {abs(median_gap_mm):.1f} mm",
         fontsize=16,
-        color=LOSS_COLOR,
+        color=median_badge_fg,
         weight="bold",
         ha="center",
         va="center",
@@ -199,10 +248,10 @@ def main() -> None:
         facecolor=CARD_BG,
     )
     ax.add_patch(summary_box)
-    ax.text(0.61, 0.79, "Where libgnss++ leads", fontsize=14, color=MUTED_COLOR, weight="bold")
+    ax.text(0.61, 0.79, "All matched + common-epoch view", fontsize=14, color=MUTED_COLOR, weight="bold")
     ax.text(0.61, 0.73, f"Coverage: {lib_summary['epochs']} vs {rtklib_summary['epochs']} matched epochs", fontsize=14, color=TEXT_COLOR)
-    ax.text(0.61, 0.68, f"Fix rate: {lib_summary['fix_rate_pct']:.1f}% vs {rtklib_summary['fix_rate_pct']:.1f}% ({fix_ratio:.1f}x)", fontsize=14, color=TEXT_COLOR)
-    ax.text(0.61, 0.63, f"Tail error: p95 {lib_summary['p95_h_m']:.1f} m, max {lib_summary['max_h_m']:.1f} m", fontsize=14, color=TEXT_COLOR)
+    ax.text(0.61, 0.68, f"Fix rate: {lib_summary['fix_rate_pct']:.1f}% vs {rtklib_summary['fix_rate_pct']:.1f}% ({fix_ratio})", fontsize=14, color=TEXT_COLOR)
+    ax.text(0.61, 0.63, f"Common epochs: {int(lib_common_summary['epochs'])}, median h {lib_common_summary['median_h_m']:.3f} m vs {rtklib_common_summary['median_h_m']:.3f} m", fontsize=13.2, color=TEXT_COLOR)
 
     add_card(
         ax, 0.05, 0.42, 0.26, 0.18,
@@ -215,42 +264,42 @@ def main() -> None:
         ax, 0.35, 0.42, 0.26, 0.18,
         "Fix Rate",
         f"{lib_summary['fix_rate_pct']:.1f}% vs {rtklib_summary['fix_rate_pct']:.1f}%",
-        f"libgnss++ is {fix_ratio:.1f}x higher on this run",
+        f"libgnss++ is {fix_ratio} higher on this run",
         "libgnss++",
     )
     add_card(
         ax, 0.65, 0.42, 0.26, 0.18,
-        "Median H Error",
-        f"{lib_summary['median_h_m']:.3f} m vs {rtklib_summary['median_h_m']:.3f} m",
-        f"RTKLIB still leads by {abs(median_gap_mm):.1f} mm",
-        "RTKLIB",
+        "Common Median H",
+        f"{lib_common_summary['median_h_m']:.3f} m vs {rtklib_common_summary['median_h_m']:.3f} m",
+        f"{common_median_winner} leads by {abs(median_gap_mm):.1f} mm on equal epochs",
+        common_median_winner,
     )
     add_card(
         ax, 0.20, 0.18, 0.26, 0.18,
-        "P95 H Error",
-        f"{lib_summary['p95_h_m']:.2f} m vs {rtklib_summary['p95_h_m']:.2f} m",
-        f"libgnss++ cuts the 95th percentile by {p95_improvement:.0f}%",
-        "libgnss++",
+        "Common Median |Up|",
+        f"{lib_common_summary['median_abs_up_m']:.3f} m vs {rtklib_common_summary['median_abs_up_m']:.3f} m",
+        f"{common_up_winner} is {abs(median_up_gap_mm):.1f} mm lower on equal epochs",
+        common_up_winner,
     )
     add_card(
         ax, 0.50, 0.18, 0.26, 0.18,
-        "Max H Error",
-        f"{lib_summary['max_h_m']:.2f} m vs {rtklib_summary['max_h_m']:.2f} m",
-        f"libgnss++ reduces the worst-case error by {max_improvement:.0f}%",
-        "libgnss++",
+        "Common P95 H",
+        f"{lib_common_summary['p95_h_m']:.2f} m vs {rtklib_common_summary['p95_h_m']:.2f} m",
+        f"{common_p95_winner} wins by {p95_improvement} on equal epochs",
+        common_p95_winner,
     )
 
     ax.text(
         0.05,
         0.08,
-        "Setup: GPS-only L1+L2, forward kinematic RTK, matched against UrbanNav reference.csv ground truth.",
+        "Setup: checked-in Odaiba libgnss++ and RTKLIB .pos artifacts, matched against UrbanNav reference.csv ground truth.",
         fontsize=11,
         color=MUTED_COLOR,
     )
     ax.text(
         0.05,
         0.045,
-        "Takeaway: near-parity median, but clearly stronger coverage and tighter tail behavior on the open Odaiba driving dataset.",
+        "Takeaway: on common epochs libgnss++ is near-parity in median and better in vertical median plus tail, while keeping broader coverage overall.",
         fontsize=12.5,
         color=TEXT_COLOR,
         weight="bold",
@@ -261,6 +310,8 @@ def main() -> None:
     print(f"Saved: {args.output}")
     print(f"libgnss++: {lib_summary}")
     print(f"RTKLIB: {rtklib_summary}")
+    print(f"libgnss++ common: {lib_common_summary}")
+    print(f"RTKLIB common: {rtklib_common_summary}")
 
 
 if __name__ == "__main__":

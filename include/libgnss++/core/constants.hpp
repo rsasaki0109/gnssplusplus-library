@@ -29,10 +29,32 @@ constexpr double OMEGA_E = 7.2921151467e-5;
 constexpr double GPS_L1_FREQ = 1575.42e6;     ///< GPS L1 frequency (Hz)
 constexpr double GPS_L2_FREQ = 1227.60e6;     ///< GPS L2 frequency (Hz)
 constexpr double GPS_L5_FREQ = 1176.45e6;     ///< GPS L5 frequency (Hz)
+constexpr double GLO_L1_BASE_FREQ = 1602.0e6; ///< GLONASS L1 base frequency (Hz)
+constexpr double GLO_L1_STEP_FREQ = 0.5625e6; ///< GLONASS L1 frequency channel step (Hz)
+constexpr double GLO_L2_BASE_FREQ = 1246.0e6; ///< GLONASS L2 base frequency (Hz)
+constexpr double GLO_L2_STEP_FREQ = 0.4375e6; ///< GLONASS L2 frequency channel step (Hz)
+constexpr double GAL_E1_FREQ = 1575.42e6;     ///< Galileo E1 frequency (Hz)
+constexpr double GAL_E5A_FREQ = 1176.45e6;    ///< Galileo E5a frequency (Hz)
+constexpr double GAL_E5B_FREQ = 1207.14e6;    ///< Galileo E5b frequency (Hz)
+constexpr double GAL_E6_FREQ = 1278.75e6;     ///< Galileo E6 frequency (Hz)
+constexpr double BDS_B1I_FREQ = 1561.098e6;   ///< BeiDou B1I frequency (Hz)
+constexpr double BDS_B2I_FREQ = 1207.14e6;    ///< BeiDou B2I frequency (Hz)
+constexpr double BDS_B3I_FREQ = 1268.52e6;    ///< BeiDou B3I frequency (Hz)
+constexpr double BDS_B1C_FREQ = 1575.42e6;    ///< BeiDou B1C frequency (Hz)
+constexpr double BDS_B2A_FREQ = 1176.45e6;    ///< BeiDou B2a frequency (Hz)
 
 constexpr double GPS_L1_WAVELENGTH = SPEED_OF_LIGHT / GPS_L1_FREQ;  ///< ~0.1903 m
 constexpr double GPS_L2_WAVELENGTH = SPEED_OF_LIGHT / GPS_L2_FREQ;  ///< ~0.2442 m
 constexpr double GPS_L5_WAVELENGTH = SPEED_OF_LIGHT / GPS_L5_FREQ;  ///< ~0.2548 m
+constexpr double GAL_E1_WAVELENGTH = SPEED_OF_LIGHT / GAL_E1_FREQ;  ///< ~0.1903 m
+constexpr double GAL_E5A_WAVELENGTH = SPEED_OF_LIGHT / GAL_E5A_FREQ;///< ~0.2548 m
+constexpr double GAL_E5B_WAVELENGTH = SPEED_OF_LIGHT / GAL_E5B_FREQ;///< ~0.2483 m
+constexpr double GAL_E6_WAVELENGTH = SPEED_OF_LIGHT / GAL_E6_FREQ;  ///< ~0.2344 m
+constexpr double BDS_B1I_WAVELENGTH = SPEED_OF_LIGHT / BDS_B1I_FREQ;///< ~0.1920 m
+constexpr double BDS_B2I_WAVELENGTH = SPEED_OF_LIGHT / BDS_B2I_FREQ;///< ~0.2483 m
+constexpr double BDS_B3I_WAVELENGTH = SPEED_OF_LIGHT / BDS_B3I_FREQ;///< ~0.2363 m
+constexpr double BDS_B1C_WAVELENGTH = SPEED_OF_LIGHT / BDS_B1C_FREQ;///< ~0.1903 m
+constexpr double BDS_B2A_WAVELENGTH = SPEED_OF_LIGHT / BDS_B2A_FREQ;///< ~0.2548 m
 
 // ---------------------------------------------------------------------------
 // WGS-84 ellipsoid parameters

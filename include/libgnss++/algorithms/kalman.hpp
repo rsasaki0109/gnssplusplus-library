@@ -87,6 +87,10 @@ inline int kalmanFilter(VectorXd& x, MatrixXd& P,
     MatrixXd IKH = MatrixXd::Identity(k, k) - K * H_;
     MatrixXd Pp = IKH * P_;
 
+    // Only the active block changed. Symmetrize that block before write-back
+    // instead of re-symmetrizing the full covariance matrix every update.
+    Pp = (Pp + Pp.transpose()) * 0.5;
+
     // Write back to full state
     for (int i = 0; i < k; ++i) {
         x(ix[i]) = xp(i);
@@ -94,9 +98,6 @@ inline int kalmanFilter(VectorXd& x, MatrixXd& P,
             P(ix[i], ix[j]) = Pp(i, j);
         }
     }
-
-    // Symmetrize P
-    P = (P + P.transpose()) * 0.5;
 
     return 0;
 }

@@ -7,12 +7,16 @@ include(CTest)
 
 # Find necessary packages
 find_package(Eigen3 REQUIRED)
+find_package(Threads REQUIRED)
 
 # List source files for the main library
 set(GNSS_SOURCES
     src/gnss.cpp
+    src/io/ntrip.cpp
     src/io/rinex.cpp
     src/io/rtcm.cpp
+    src/io/rtcm_stream.cpp
+    src/io/ubx.cpp
     src/core/solution.cpp
     src/core/types.cpp
     src/algorithms/ppp.cpp

@@ -35,6 +35,8 @@ public:
         
         // Clock modeling
         bool model_intersystem_bias = true;           ///< Model inter-system clock biases
+        bool enable_beidou = true;                    ///< Enable BeiDou SPP support
+        bool enable_glonass = true;                   ///< Enable GLONASS SPP support
     };
     
     SPPProcessor();

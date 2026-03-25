@@ -3,9 +3,6 @@
 RTK測位 簡易統計ツール (テキスト出力のみ、matplotlib不要)
 
 posファイルを読み込み、統計情報を表示する。
-
-使い方:
-  python3 tools/rtk_stats.py output/rtk_solution.pos
 """
 
 import sys
@@ -104,9 +101,10 @@ def percentile(values, p):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("使い方: python3 tools/rtk_stats.py <pos_file>")
-        sys.exit(1)
+    program = os.environ.get("GNSS_CLI_NAME", os.path.basename(sys.argv[0]))
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print(f"使い方: {program} <pos_file>")
+        sys.exit(0 if len(sys.argv) >= 2 else 1)
 
     filepath = sys.argv[1]
     if not os.path.isfile(filepath):
