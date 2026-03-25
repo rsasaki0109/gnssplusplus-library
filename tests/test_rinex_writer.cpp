@@ -63,6 +63,82 @@ Ephemeris makeGlonassEphemeris() {
     return eph;
 }
 
+Ephemeris makeBeiDouEphemeris() {
+    Ephemeris eph;
+    eph.satellite = SatelliteId(GNSSSystem::BeiDou, 12);
+    eph.week = 844;
+    eph.toc = GNSSTime(2200, 345614.0);
+    eph.toe = GNSSTime(2200, 345614.0);
+    eph.tof = GNSSTime(2200, 345584.0);
+    eph.toes = 345600.0;
+    eph.af0 = 2.5e-4;
+    eph.af1 = -4.0e-12;
+    eph.af2 = 0.0;
+    eph.iode = 17;
+    eph.iodc = 9;
+    eph.crs = 64.0;
+    eph.delta_n = 5.2e-9;
+    eph.m0 = 0.24;
+    eph.cuc = 1.5e-6;
+    eph.e = 0.012;
+    eph.cus = -1.8e-6;
+    eph.sqrt_a = 5282.6256;
+    eph.cic = 2.5e-8;
+    eph.omega0 = 1.25;
+    eph.cis = -3.2e-8;
+    eph.i0 = 0.97;
+    eph.crc = 180.0;
+    eph.omega = 0.61;
+    eph.omega_dot = -7.5e-9;
+    eph.idot = 9.0e-11;
+    eph.i_dot = eph.idot;
+    eph.sv_accuracy = 3.0;
+    eph.sv_health = 0.0;
+    eph.health = 0;
+    eph.tgd = -1.2e-8;
+    eph.tgd_secondary = 2.3e-8;
+    eph.valid = true;
+    return eph;
+}
+
+Ephemeris makeGalileoEphemeris() {
+    Ephemeris eph;
+    eph.satellite = SatelliteId(GNSSSystem::Galileo, 5);
+    eph.week = 2200;
+    eph.toc = GNSSTime(2200, 345600.0);
+    eph.toe = GNSSTime(2200, 345600.0);
+    eph.tof = GNSSTime(2200, 345570.0);
+    eph.toes = 345600.0;
+    eph.af0 = 1.7e-4;
+    eph.af1 = -3.0e-12;
+    eph.af2 = 0.0;
+    eph.iode = 44;
+    eph.iodc = 44;
+    eph.crs = 120.0;
+    eph.delta_n = 3.5e-9;
+    eph.m0 = 0.37;
+    eph.cuc = 1.0e-6;
+    eph.e = 0.015;
+    eph.cus = -1.5e-6;
+    eph.sqrt_a = 5440.588203;
+    eph.cic = 2.4e-8;
+    eph.omega0 = 1.9;
+    eph.cis = -3.1e-8;
+    eph.i0 = 0.98;
+    eph.crc = 210.0;
+    eph.omega = 0.73;
+    eph.omega_dot = -5.9e-9;
+    eph.idot = 8.0e-11;
+    eph.i_dot = eph.idot;
+    eph.sv_accuracy = 3.0;
+    eph.sv_health = 0.0;
+    eph.health = 0;
+    eph.tgd = -4.5e-9;
+    eph.tgd_secondary = 1.1e-8;
+    eph.valid = true;
+    return eph;
+}
+
 }  // namespace
 
 TEST(RINEXWriterTest, WritesGpsNavigationMessageReadableByReader) {
@@ -152,7 +228,7 @@ TEST(RINEXWriterTest, WritesGlonassNavigationMessageReadableByReader) {
     std::filesystem::remove(temp_path);
 }
 
-TEST(RINEXWriterTest, RejectsUnsupportedBeiDouNavigationWrite) {
+TEST(RINEXWriterTest, WritesBeiDouNavigationMessageReadableByReader) {
     const auto temp_path = std::filesystem::temp_directory_path() / "libgnss_rinex_writer_test_bds.nav";
     std::filesystem::remove(temp_path);
 
@@ -163,11 +239,78 @@ TEST(RINEXWriterTest, RejectsUnsupportedBeiDouNavigationWrite) {
     header.satellite_system = "M";
     ASSERT_TRUE(writer.createNavigationFile(temp_path.string(), header));
 
-    Ephemeris bds;
-    bds.satellite = SatelliteId(GNSSSystem::BeiDou, 12);
-    bds.valid = true;
-    EXPECT_FALSE(writer.writeNavigationMessage(bds));
+    const Ephemeris expected = makeBeiDouEphemeris();
+    ASSERT_TRUE(writer.writeNavigationMessage(expected));
 
     writer.close();
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+
+    NavigationData nav_data;
+    ASSERT_TRUE(reader.readNavigationData(nav_data));
+    const auto it = nav_data.ephemeris_data.find(expected.satellite);
+    ASSERT_NE(it, nav_data.ephemeris_data.end());
+    ASSERT_EQ(it->second.size(), 1U);
+
+    const auto& actual = it->second.front();
+    EXPECT_EQ(actual.satellite.system, GNSSSystem::BeiDou);
+    EXPECT_EQ(actual.satellite.prn, expected.satellite.prn);
+    EXPECT_EQ(actual.week, expected.week);
+    EXPECT_NEAR(actual.toe.tow, expected.toe.tow, 1e-3);
+    EXPECT_NEAR(actual.toes, expected.toes, 1e-6);
+    EXPECT_NEAR(actual.af0, expected.af0, 1e-12);
+    EXPECT_NEAR(actual.af1, expected.af1, 1e-18);
+    EXPECT_NEAR(actual.sqrt_a, expected.sqrt_a, 1e-9);
+    EXPECT_NEAR(actual.omega0, expected.omega0, 1e-12);
+    EXPECT_NEAR(actual.i0, expected.i0, 1e-12);
+    EXPECT_NEAR(actual.tgd, expected.tgd, 1e-18);
+    EXPECT_NEAR(actual.tgd_secondary, expected.tgd_secondary, 1e-18);
+    EXPECT_EQ(actual.iodc, expected.iodc);
+
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXWriterTest, WritesGalileoNavigationMessageReadableByReader) {
+    const auto temp_path = std::filesystem::temp_directory_path() / "libgnss_rinex_writer_test_gal.nav";
+    std::filesystem::remove(temp_path);
+
+    io::RINEXWriter writer;
+    io::RINEXReader::RINEXHeader header;
+    header.version = 3.04;
+    header.file_type = io::RINEXReader::FileType::NAVIGATION;
+    header.satellite_system = "M";
+    ASSERT_TRUE(writer.createNavigationFile(temp_path.string(), header));
+
+    const Ephemeris expected = makeGalileoEphemeris();
+    ASSERT_TRUE(writer.writeNavigationMessage(expected));
+    writer.close();
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+
+    NavigationData nav_data;
+    ASSERT_TRUE(reader.readNavigationData(nav_data));
+    const auto it = nav_data.ephemeris_data.find(expected.satellite);
+    ASSERT_NE(it, nav_data.ephemeris_data.end());
+    ASSERT_EQ(it->second.size(), 1U);
+
+    const auto& actual = it->second.front();
+    EXPECT_EQ(actual.satellite.system, GNSSSystem::Galileo);
+    EXPECT_EQ(actual.satellite.prn, expected.satellite.prn);
+    EXPECT_EQ(actual.week, expected.week);
+    EXPECT_NEAR(actual.toe.tow, expected.toe.tow, 1e-3);
+    EXPECT_NEAR(actual.toes, expected.toes, 1e-6);
+    EXPECT_NEAR(actual.af0, expected.af0, 1e-12);
+    EXPECT_NEAR(actual.af1, expected.af1, 1e-18);
+    EXPECT_NEAR(actual.sqrt_a, expected.sqrt_a, 1e-9);
+    EXPECT_NEAR(actual.omega0, expected.omega0, 1e-12);
+    EXPECT_NEAR(actual.i0, expected.i0, 1e-12);
+    EXPECT_NEAR(actual.tgd, expected.tgd, 1e-18);
+    EXPECT_NEAR(actual.tgd_secondary, expected.tgd_secondary, 1e-18);
+    EXPECT_EQ(actual.iodc, expected.iodc);
+
+    reader.close();
     std::filesystem::remove(temp_path);
 }

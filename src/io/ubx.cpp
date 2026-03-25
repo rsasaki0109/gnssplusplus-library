@@ -1,5 +1,7 @@
 #include <libgnss++/io/ubx.hpp>
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 
@@ -38,6 +40,41 @@ bool validateUbxChecksum(const uint8_t* data, size_t payload_length, uint8_t ck_
         computed_b = static_cast<uint8_t>(computed_b + computed_a);
     }
     return computed_a == ck_a && computed_b == ck_b;
+}
+
+uint32_t readBitsMsbFirst(const uint8_t* data, size_t data_size, int bit_pos, int num_bits) {
+    if (data == nullptr || data_size == 0 || num_bits <= 0) {
+        return 0;
+    }
+
+    uint32_t value = 0;
+    for (int index = 0; index < num_bits; ++index) {
+        const int absolute_bit = bit_pos + index;
+        const size_t byte_index = static_cast<size_t>(absolute_bit / 8);
+        if (byte_index >= data_size) {
+            value <<= (num_bits - index);
+            break;
+        }
+        const int bit_index = 7 - (absolute_bit % 8);
+        value = static_cast<uint32_t>((value << 1) |
+                                      ((data[byte_index] >> bit_index) & 0x01U));
+    }
+    return value;
+}
+
+std::vector<uint8_t> rawWordsToBigEndianBytes(const std::vector<uint32_t>& words,
+                                              size_t max_words) {
+    const size_t count = std::min(words.size(), max_words);
+    std::vector<uint8_t> bytes;
+    bytes.reserve(count * 4U);
+    for (size_t index = 0; index < count; ++index) {
+        const uint32_t word = words[index];
+        bytes.push_back(static_cast<uint8_t>((word >> 24) & 0xFFU));
+        bytes.push_back(static_cast<uint8_t>((word >> 16) & 0xFFU));
+        bytes.push_back(static_cast<uint8_t>((word >> 8) & 0xFFU));
+        bytes.push_back(static_cast<uint8_t>(word & 0xFFU));
+    }
+    return bytes;
 }
 
 }  // namespace
@@ -210,6 +247,35 @@ bool UBXDecoder::decodeRawx(const UBXMessage& message, ObservationData& obs_data
     return !obs_data.isEmpty();
 }
 
+bool UBXDecoder::decodeSfrbx(const UBXMessage& message, UBXSfrbx& sfrbx) {
+    if (message.message_class != static_cast<uint8_t>(UBXMessageClass::RXM) ||
+        message.message_id != 0x13 || message.payload.size() < 8) {
+        return false;
+    }
+
+    const auto& payload = message.payload;
+    const uint8_t num_words = payload[1];
+    const size_t expected_length = 8U + static_cast<size_t>(num_words) * 4U;
+    if (payload.size() < expected_length) {
+        return false;
+    }
+
+    sfrbx = UBXSfrbx{};
+    sfrbx.version = payload[0];
+    sfrbx.channel = payload[2];
+    sfrbx.system = ubx_utils::getSystemFromGnssId(payload[4]);
+    sfrbx.sv_id = payload[5];
+    sfrbx.frequency_id = payload[7];
+    sfrbx.words.reserve(num_words);
+
+    for (uint8_t index = 0; index < num_words; ++index) {
+        const size_t offset = 8U + static_cast<size_t>(index) * 4U;
+        sfrbx.words.push_back(readLittleEndian<uint32_t>(payload.data() + offset));
+    }
+
+    return sfrbx.system != GNSSSystem::UNKNOWN && sfrbx.sv_id != 0 && !sfrbx.words.empty();
+}
+
 uint16_t UBXDecoder::messageKey(uint8_t message_class, uint8_t message_id) {
     return static_cast<uint16_t>((static_cast<uint16_t>(message_class) << 8) | message_id);
 }
@@ -302,6 +368,117 @@ bool getSignalType(uint8_t gnss_id, uint8_t sig_id, SignalType& signal_type) {
     }
 }
 
+bool decodeSfrbxFrameInfo(const UBXSfrbx& sfrbx, UBXSfrbxFrameInfo& frame_info) {
+    frame_info = UBXSfrbxFrameInfo{};
+
+    switch (sfrbx.system) {
+        case GNSSSystem::GPS:
+        case GNSSSystem::QZSS: {
+            if (sfrbx.words.size() < 2) {
+                return false;
+            }
+            const uint32_t word2 = sfrbx.words[1] >> 6;
+            const int subframe_id = static_cast<int>((word2 >> 2) & 0x07U);
+            if (subframe_id < 1 || subframe_id > 5) {
+                return false;
+            }
+            frame_info.kind = sfrbx.system == GNSSSystem::GPS
+                                  ? UBXSfrbxFrameInfo::Kind::GPS_LNAV
+                                  : UBXSfrbxFrameInfo::Kind::QZSS_LNAV;
+            frame_info.frame_id = subframe_id;
+            frame_info.valid = true;
+            return true;
+        }
+
+        case GNSSSystem::BeiDou: {
+            if (sfrbx.words.empty()) {
+                return false;
+            }
+            const uint32_t word1 = sfrbx.words[0] & 0x3FFFFFFFU;
+            const int subframe_id = static_cast<int>((word1 >> 12) & 0x07U);
+            if (subframe_id < 1 || subframe_id > 5) {
+                return false;
+            }
+            frame_info.frame_id = subframe_id;
+            if (sfrbx.sv_id > 5) {
+                frame_info.kind = UBXSfrbxFrameInfo::Kind::BDS_D1;
+                frame_info.valid = true;
+                return true;
+            }
+            frame_info.kind = UBXSfrbxFrameInfo::Kind::BDS_D2;
+            if (subframe_id != 1 || sfrbx.words.size() < 2) {
+                return false;
+            }
+            const uint32_t word2 = sfrbx.words[1] & 0x3FFFFFFFU;
+            const int page_id = static_cast<int>((word2 >> 14) & 0x0FU);
+            if (page_id < 1 || page_id > 10) {
+                return false;
+            }
+            frame_info.page_id = page_id;
+            frame_info.has_page_id = true;
+            frame_info.valid = true;
+            return true;
+        }
+
+        case GNSSSystem::Galileo: {
+            if (sfrbx.words.size() < 8) {
+                return false;
+            }
+            const auto bytes = rawWordsToBigEndianBytes(sfrbx.words, 8);
+            const int part1 = static_cast<int>(readBitsMsbFirst(bytes.data(), 16U, 0, 1));
+            const int page1 = static_cast<int>(readBitsMsbFirst(bytes.data(), 16U, 1, 1));
+            const int part2 = static_cast<int>(readBitsMsbFirst(bytes.data() + 16, 16U, 0, 1));
+            const int page2 = static_cast<int>(readBitsMsbFirst(bytes.data() + 16, 16U, 1, 1));
+            const int word_type = static_cast<int>(readBitsMsbFirst(bytes.data(), bytes.size(), 2, 6));
+            if (page1 == 1 || page2 == 1 || part1 != 0 || part2 != 1 || word_type <= 0) {
+                return false;
+            }
+            frame_info.kind = UBXSfrbxFrameInfo::Kind::GAL_INAV;
+            frame_info.frame_id = word_type;
+            frame_info.valid = true;
+            return true;
+        }
+
+        case GNSSSystem::GLONASS: {
+            if (sfrbx.words.size() < 4) {
+                return false;
+            }
+            const auto bytes = rawWordsToBigEndianBytes(sfrbx.words, 4);
+            const int string_number =
+                static_cast<int>(readBitsMsbFirst(bytes.data(), bytes.size(), 1, 4));
+            if (string_number < 1 || string_number > 15) {
+                return false;
+            }
+            frame_info.kind = UBXSfrbxFrameInfo::Kind::GLO_NAV;
+            frame_info.frame_id = string_number;
+            frame_info.valid = true;
+            return true;
+        }
+
+        case GNSSSystem::SBAS: {
+            frame_info.kind = UBXSfrbxFrameInfo::Kind::SBAS;
+            frame_info.valid = !sfrbx.words.empty();
+            return frame_info.valid;
+        }
+
+        default:
+            return false;
+    }
+}
+
+const char* getSfrbxFrameKindName(UBXSfrbxFrameInfo::Kind kind) {
+    switch (kind) {
+        case UBXSfrbxFrameInfo::Kind::GPS_LNAV: return "GPS_LNAV";
+        case UBXSfrbxFrameInfo::Kind::QZSS_LNAV: return "QZSS_LNAV";
+        case UBXSfrbxFrameInfo::Kind::GAL_INAV: return "GAL_INAV";
+        case UBXSfrbxFrameInfo::Kind::BDS_D1: return "BDS_D1";
+        case UBXSfrbxFrameInfo::Kind::BDS_D2: return "BDS_D2";
+        case UBXSfrbxFrameInfo::Kind::GLO_NAV: return "GLO_NAV";
+        case UBXSfrbxFrameInfo::Kind::SBAS: return "SBAS";
+        default: return "UNKNOWN";
+    }
+}
+
 }  // namespace ubx_utils
 
 void UBXStreamDecoder::clear() {
@@ -359,6 +536,7 @@ bool UBXStreamDecoder::pushBytes(const uint8_t* data,
             event.message = message;
             event.has_nav_pvt = decoder_.decodeNavPVT(message, event.nav_pvt);
             event.has_observation = decoder_.decodeRawx(message, event.observation);
+            event.has_sfrbx = decoder_.decodeSfrbx(message, event.sfrbx);
             events.push_back(std::move(event));
         }
         buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(total_length));

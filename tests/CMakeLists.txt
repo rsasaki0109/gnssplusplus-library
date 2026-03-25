@@ -12,6 +12,7 @@ if(GTest_FOUND)
         test_observation.cpp
         test_gnss_live.cpp
         test_rinex_writer.cpp
+        test_rtk_legacy.cpp
         test_spp.cpp
         test_rtk_smoke.cpp
         test_ntrip.cpp

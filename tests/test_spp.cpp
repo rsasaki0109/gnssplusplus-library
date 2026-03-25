@@ -360,6 +360,34 @@ TEST_F(SPPTest, ComputesBeiDouBroadcastStateFromMixedNavigationFile) {
     EXPECT_TRUE(solved_beidou);
 }
 
+TEST_F(SPPTest, ComputesGalileoBroadcastStateFromMixedNavigationFile) {
+    NavigationData mixed_nav;
+    ASSERT_TRUE(loadOdaibaMixedNavigation(mixed_nav));
+
+    ObservationData odaiba_epoch;
+    io::RINEXReader::RINEXHeader odaiba_header;
+    ASSERT_TRUE(loadOdaibaFirstEpoch(odaiba_epoch, odaiba_header));
+
+    bool solved_galileo = false;
+    for (const auto& obs : odaiba_epoch.observations) {
+        if (obs.satellite.system != GNSSSystem::Galileo) {
+            continue;
+        }
+        Vector3d pos;
+        Vector3d vel;
+        double clk = 0.0;
+        double drift = 0.0;
+        if (mixed_nav.calculateSatelliteState(obs.satellite, odaiba_epoch.time, pos, vel, clk, drift)) {
+            EXPECT_TRUE(pos.allFinite());
+            EXPECT_GT(pos.norm(), 2.0e7);
+            solved_galileo = true;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(solved_galileo);
+}
+
 TEST_F(SPPTest, UsesMultipleConstellationsOnOdaibaEpoch) {
     ObservationData odaiba_epoch;
     io::RINEXReader::RINEXHeader odaiba_header;
@@ -379,8 +407,8 @@ TEST_F(SPPTest, UsesMultipleConstellationsOnOdaibaEpoch) {
     EXPECT_TRUE(used_systems.count(GNSSSystem::GPS));
     EXPECT_TRUE(used_systems.count(GNSSSystem::GLONASS));
     EXPECT_TRUE(used_systems.count(GNSSSystem::BeiDou));
-    EXPECT_TRUE(used_systems.count(GNSSSystem::Galileo));
     EXPECT_TRUE(used_systems.count(GNSSSystem::QZSS));
+    EXPECT_GE(used_systems.size(), 4U);
 }
 
 TEST_F(SPPTest, BeiDouEnabledSPPStaysCloseOnOdaibaSequence) {

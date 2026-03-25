@@ -2146,20 +2146,231 @@ bool RTKProcessor::updateFilter(const ObservationData&, const ObservationData&, 
 
 // Legacy stubs
 std::vector<RTKProcessor::DoubleDifference> RTKProcessor::formDoubleDifferences(
-    const ObservationData&, const ObservationData&, const NavigationData&) { return {}; }
+    const ObservationData& rover_obs, const ObservationData& base_obs, const NavigationData& nav) {
+    if (!base_position_known_) {
+        if (base_obs.receiver_position.norm() > 1e6) {
+            const_cast<RTKProcessor*>(this)->setBasePosition(base_obs.receiver_position);
+        } else {
+            return {};
+        }
+    }
+
+    if (!filter_initialized_) {
+        if (!const_cast<RTKProcessor*>(this)->initializeFilter(rover_obs, base_obs, nav)) {
+            return {};
+        }
+    }
+
+    const auto sat_data =
+        const_cast<RTKProcessor*>(this)->collectSatelliteData(rover_obs, base_obs, nav);
+    if (sat_data.size() < 4) {
+        return {};
+    }
+
+    const_cast<RTKProcessor*>(this)->current_sat_data_ = sat_data;
+    const_cast<RTKProcessor*>(this)->updateBias(sat_data);
+
+    std::vector<DoubleDifference> measurements;
+    const auto dd_pairs = buildDoubleDifferencePairs(sat_data, 0);
+    if (dd_pairs.empty()) {
+        return measurements;
+    }
+
+    const Vector3d rover_pos = base_position_ + filter_state_.state.head<3>();
+    for (const auto& pair : dd_pairs) {
+        const auto ref_it = sat_data.find(pair.ref_sat);
+        const auto sat_it = sat_data.find(pair.sat);
+        if (ref_it == sat_data.end() || sat_it == sat_data.end()) {
+            continue;
+        }
+
+        const auto& ref_sd = ref_it->second;
+        const auto& sd = sat_it->second;
+        const bool use_l1 = pair.freq == 0;
+        if ((use_l1 && (!ref_sd.has_l1 || !sd.has_l1)) ||
+            (!use_l1 && (!ref_sd.has_l2 || !sd.has_l2))) {
+            continue;
+        }
+
+        const double ref_code = use_l1 ? ref_sd.rover_l1_code - ref_sd.base_l1_code
+                                       : ref_sd.rover_l2_code - ref_sd.base_l2_code;
+        const double sat_code = use_l1 ? sd.rover_l1_code - sd.base_l1_code
+                                       : sd.rover_l2_code - sd.base_l2_code;
+        const double ref_phase = use_l1 ? ref_sd.rover_l1_phase - ref_sd.base_l1_phase
+                                        : ref_sd.rover_l2_phase - ref_sd.base_l2_phase;
+        const double sat_phase = use_l1 ? sd.rover_l1_phase - sd.base_l1_phase
+                                        : sd.rover_l2_phase - sd.base_l2_phase;
+
+        const double rr_ref =
+            geodist_range(ref_sd.sat_pos, rover_pos) + tropModel(rover_pos, ref_sd.elevation);
+        const double br_ref = geodist_range(ref_sd.sat_pos_base, base_position_) +
+                              tropModel(base_position_, ref_sd.base_elevation);
+        const double rr =
+            geodist_range(sd.sat_pos, rover_pos) + tropModel(rover_pos, sd.elevation);
+        const double br = geodist_range(sd.sat_pos_base, base_position_) +
+                          tropModel(base_position_, sd.base_elevation);
+
+        DoubleDifference measurement;
+        measurement.reference_satellite = pair.ref_sat;
+        measurement.satellite = pair.sat;
+        measurement.signal = use_l1 ? sd.l1_signal : sd.l2_signal;
+        measurement.pseudorange_dd = ref_code - sat_code;
+        measurement.carrier_phase_dd = ref_phase - sat_phase;
+        measurement.geometric_range = (rr_ref - br_ref) - (rr - br);
+        measurement.unit_vector =
+            -(ref_sd.sat_pos - rover_pos).normalized() + (sd.sat_pos - rover_pos).normalized();
+        measurement.elevation = std::min(ref_sd.elevation, sd.elevation);
+        measurement.variance = varerr(measurement.elevation, true);
+        measurement.valid = true;
+        measurements.push_back(std::move(measurement));
+    }
+
+    return measurements;
+}
 void RTKProcessor::detectCycleSlips(const ObservationData&, const ObservationData&) {}
-bool RTKProcessor::resolveAmbiguities(int) { return false; }
-RTKProcessor::LAMBDAResult RTKProcessor::solveLAMBDA(const VectorXd&, const MatrixXd&) { return {}; }
-bool RTKProcessor::validateAmbiguityResolution(const VectorXd&, const VectorXd&, const MatrixXd&, double) { return false; }
+bool RTKProcessor::resolveAmbiguities(int) { return resolveAmbiguities(); }
+RTKProcessor::LAMBDAResult RTKProcessor::solveLAMBDA(const VectorXd& float_ambiguities,
+                                                     const MatrixXd& ambiguity_covariance) {
+    LAMBDAResult result;
+    result.success = lambdaMethod(float_ambiguities, ambiguity_covariance,
+                                  result.fixed_ambiguities, result.ratio);
+    return result;
+}
+bool RTKProcessor::validateAmbiguityResolution(const VectorXd& fixed_ambiguities,
+                                               const VectorXd& float_ambiguities,
+                                               const MatrixXd& covariance,
+                                               double ratio) {
+    if (fixed_ambiguities.size() == 0 || fixed_ambiguities.size() != float_ambiguities.size()) {
+        return false;
+    }
+    if (covariance.rows() != covariance.cols() ||
+        covariance.rows() != fixed_ambiguities.size()) {
+        return false;
+    }
+    if (!std::isfinite(ratio) || ratio < rtk_config_.ambiguity_ratio_threshold) {
+        return false;
+    }
+
+    for (int i = 0; i < fixed_ambiguities.size(); ++i) {
+        if (!std::isfinite(fixed_ambiguities(i)) || !std::isfinite(float_ambiguities(i))) {
+            return false;
+        }
+        if (std::abs(fixed_ambiguities(i) - std::round(fixed_ambiguities(i))) > 1e-6) {
+            return false;
+        }
+    }
+
+    MatrixXd Q = (covariance + covariance.transpose()) * 0.5;
+    for (int i = 0; i < Q.rows(); ++i) {
+        if (!std::isfinite(Q(i, i)) || Q(i, i) <= 0.0) {
+            return false;
+        }
+    }
+    Eigen::LDLT<MatrixXd> solver(Q);
+    if (solver.info() != Eigen::Success) {
+        return false;
+    }
+    const VectorXd diff = float_ambiguities - fixed_ambiguities;
+    const double norm = diff.transpose() * solver.solve(diff);
+    return std::isfinite(norm) && norm >= 0.0;
+}
 void RTKProcessor::updateAmbiguityStates(const std::vector<DoubleDifference>&) {}
-Vector3d RTKProcessor::calculateBaseline() const { return Vector3d::Zero(); }
-VectorXd RTKProcessor::calculateResiduals(const std::vector<DoubleDifference>&, const Vector3d&) const { return VectorXd::Zero(1); }
-MatrixXd RTKProcessor::formMeasurementMatrix(const std::vector<DoubleDifference>&, const NavigationData&, const GNSSTime&) const { return MatrixXd::Zero(1,1); }
-MatrixXd RTKProcessor::calculateMeasurementWeights(const std::vector<DoubleDifference>&) const { return MatrixXd::Identity(1,1); }
-bool RTKProcessor::hasSufficientSatellites(const std::vector<DoubleDifference>&) const { return false; }
+Vector3d RTKProcessor::calculateBaseline() const {
+    if (!filter_initialized_ || filter_state_.state.size() < 3) {
+        return Vector3d::Zero();
+    }
+    return filter_state_.state.head<3>();
+}
+VectorXd RTKProcessor::calculateResiduals(const std::vector<DoubleDifference>& measurements,
+                                          const Vector3d& baseline) const {
+    VectorXd residuals = VectorXd::Zero(static_cast<int>(measurements.size()));
+    for (int i = 0; i < static_cast<int>(measurements.size()); ++i) {
+        const auto& measurement = measurements[i];
+        const double observed =
+            std::abs(measurement.pseudorange_dd) > 0.0 ? measurement.pseudorange_dd
+                                                       : measurement.carrier_phase_dd;
+        const double predicted =
+            measurement.geometric_range + measurement.unit_vector.dot(baseline);
+        residuals(i) = observed - predicted;
+    }
+    return residuals;
+}
+MatrixXd RTKProcessor::formMeasurementMatrix(const std::vector<DoubleDifference>& measurements,
+                                             const NavigationData&,
+                                             const GNSSTime&) const {
+    MatrixXd H = MatrixXd::Zero(static_cast<int>(measurements.size()), 3);
+    for (int i = 0; i < static_cast<int>(measurements.size()); ++i) {
+        H.row(i) = measurements[i].unit_vector.transpose();
+    }
+    return H;
+}
+MatrixXd RTKProcessor::calculateMeasurementWeights(
+    const std::vector<DoubleDifference>& measurements) const {
+    MatrixXd W = MatrixXd::Zero(static_cast<int>(measurements.size()),
+                                static_cast<int>(measurements.size()));
+    for (int i = 0; i < static_cast<int>(measurements.size()); ++i) {
+        const double variance = std::max(measurements[i].variance, 1e-6);
+        W(i, i) = 1.0 / variance;
+    }
+    return W;
+}
+bool RTKProcessor::hasSufficientSatellites(
+    const std::vector<DoubleDifference>& measurements) const {
+    std::set<SatelliteId> satellites;
+    for (const auto& measurement : measurements) {
+        satellites.insert(measurement.reference_satellite);
+        satellites.insert(measurement.satellite);
+    }
+    return satellites.size() >= 4;
+}
 void RTKProcessor::resetAmbiguity(const SatelliteId&, SignalType) {}
-bool RTKProcessor::applyFixedAmbiguities(const VectorXd&, const VectorXd&, const std::map<SatelliteId, SatelliteData>&) { return false; }
-void RTKProcessor::solvePositionWithAmbiguities(const std::map<SatelliteId, SatelliteData>&) {}
-bool RTKProcessor::trySingleEpochAR(const std::map<SatelliteId, SatelliteData>&) { return false; }
+bool RTKProcessor::applyFixedAmbiguities(const VectorXd& fixed_n1,
+                                         const VectorXd& fixed_n2,
+                                         const std::map<SatelliteId, SatelliteData>& sat_data) {
+    if (!filter_initialized_) {
+        return false;
+    }
+
+    std::vector<SatelliteId> satellites;
+    for (const auto& [sat, sd] : sat_data) {
+        if (sd.has_l1 || sd.has_l2) {
+            satellites.push_back(sat);
+        }
+    }
+    std::sort(satellites.begin(), satellites.end());
+
+    int n1_applied = 0;
+    int n2_applied = 0;
+    for (const auto& sat : satellites) {
+        if (n1_applied < fixed_n1.size()) {
+            auto it = filter_state_.n1_indices.find(sat);
+            if (it != filter_state_.n1_indices.end()) {
+                filter_state_.state(it->second) = fixed_n1(n1_applied++);
+            }
+        }
+        if (n2_applied < fixed_n2.size()) {
+            auto it = filter_state_.n2_indices.find(sat);
+            if (it != filter_state_.n2_indices.end()) {
+                filter_state_.state(it->second) = fixed_n2(n2_applied++);
+            }
+        }
+    }
+    return n1_applied == fixed_n1.size() && n2_applied == fixed_n2.size();
+}
+void RTKProcessor::solvePositionWithAmbiguities(const std::map<SatelliteId, SatelliteData>&) {
+    if (has_fixed_solution_ && filter_initialized_ && filter_state_.state.size() >= 3) {
+        filter_state_.state.head<3>() = fixed_baseline_;
+    }
+}
+bool RTKProcessor::trySingleEpochAR(const std::map<SatelliteId, SatelliteData>& sat_data) {
+    if (!filter_initialized_) {
+        return false;
+    }
+    current_sat_data_ = sat_data;
+    if (!resolveAmbiguities(buildDoubleDifferencePairs(sat_data, 0))) {
+        return false;
+    }
+    return has_fixed_solution_ && validateFixedSolution(sat_data);
+}
 
 } // namespace libgnss

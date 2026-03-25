@@ -423,6 +423,81 @@ private:
     std::thread worker_;
 };
 
+class LocalTcpServer {
+public:
+    explicit LocalTcpServer(std::vector<uint8_t> payload)
+        : payload_(std::move(payload)) {
+        server_fd_ = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (server_fd_ < 0) {
+            return;
+        }
+
+        int reuse = 1;
+        ::setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+
+        sockaddr_in address{};
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        address.sin_port = 0;
+        if (::bind(server_fd_, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0) {
+            ::close(server_fd_);
+            server_fd_ = -1;
+            return;
+        }
+        if (::listen(server_fd_, 1) != 0) {
+            ::close(server_fd_);
+            server_fd_ = -1;
+            return;
+        }
+
+        socklen_t address_size = sizeof(address);
+        if (::getsockname(server_fd_, reinterpret_cast<sockaddr*>(&address), &address_size) != 0) {
+            ::close(server_fd_);
+            server_fd_ = -1;
+            return;
+        }
+        port_ = ntohs(address.sin_port);
+        worker_ = std::thread([this]() { serveOneClient(); });
+    }
+
+    ~LocalTcpServer() {
+        if (server_fd_ >= 0) {
+            ::shutdown(server_fd_, SHUT_RDWR);
+            ::close(server_fd_);
+            server_fd_ = -1;
+        }
+        if (worker_.joinable()) {
+            worker_.join();
+        }
+    }
+
+    bool isReady() const { return server_fd_ >= 0 && port_ != 0; }
+    uint16_t port() const { return port_; }
+
+private:
+    void serveOneClient() {
+        sockaddr_in client_address{};
+        socklen_t client_size = sizeof(client_address);
+        const int client_fd =
+            ::accept(server_fd_, reinterpret_cast<sockaddr*>(&client_address), &client_size);
+        if (client_fd < 0) {
+            return;
+        }
+
+        (void)::send(client_fd,
+                     reinterpret_cast<const char*>(payload_.data()),
+                     static_cast<int>(payload_.size()),
+                     0);
+        ::shutdown(client_fd, SHUT_RDWR);
+        ::close(client_fd);
+    }
+
+    std::vector<uint8_t> payload_;
+    int server_fd_ = -1;
+    uint16_t port_ = 0;
+    std::thread worker_;
+};
+
 struct PseudoTerminal {
     int master_fd = -1;
     std::string slave_path;
@@ -1648,6 +1723,21 @@ TEST(RTCMReaderTest, ReadsMessagesFromNetworkViaNtrip) {
 
     io::RTCMReader reader;
     ASSERT_TRUE(reader.open("ntrip://127.0.0.1:" + std::to_string(server.port()) + "/MOUNT1"));
+
+    io::RTCMMessage message;
+    ASSERT_TRUE(reader.readMessage(message));
+    EXPECT_EQ(message.type, io::RTCMMessageType::RTCM_1005);
+    const auto stats = reader.getStats();
+    EXPECT_EQ(stats.valid_messages, 1U);
+}
+
+TEST(RTCMReaderTest, ReadsMessagesFromRawTcpSocket) {
+    const auto frame = buildRtcm1005(11.5, 23.0, 34.5);
+    LocalTcpServer server(frame);
+    ASSERT_TRUE(server.isReady());
+
+    io::RTCMReader reader;
+    ASSERT_TRUE(reader.open("tcp://127.0.0.1:" + std::to_string(server.port())));
 
     io::RTCMMessage message;
     ASSERT_TRUE(reader.readMessage(message));

@@ -29,7 +29,7 @@ void printUsage(const char* argv0) {
         << "Usage: " << argv0 << " --input <file.ubx|serial://...|/dev/tty...> [options]\n"
         << "Options:\n"
         << "  --limit <count>           Stop after this many decoded UBX messages (0 = all)\n"
-        << "  --decode-nav             Print decoded NAV-PVT summaries\n"
+        << "  --decode-nav             Print decoded NAV-PVT and RXM-SFRBX summaries\n"
         << "  --decode-observations    Print decoded RXM-RAWX summaries\n"
         << "  --obs-rinex-out <file>   Export decoded RAWX epochs to a simple RINEX observation file\n"
         << "  --quiet                  Suppress per-message type lines\n"
@@ -269,6 +269,7 @@ int main(int argc, char** argv) {
     bool obs_writer_open = false;
     size_t processed_messages = 0;
     size_t nav_pvt_count = 0;
+    size_t sfrbx_count = 0;
     size_t rawx_count = 0;
     size_t exported_obs_epochs = 0;
     std::vector<libgnss::io::UBXStreamDecoder::Event> events;
@@ -307,6 +308,38 @@ int main(int argc, char** argv) {
                               << " height_m=" << std::setprecision(3)
                               << event.nav_pvt.position_geodetic.height << "\n";
                 }
+                continue;
+            }
+
+            if (decode_nav && event.has_sfrbx) {
+                ++sfrbx_count;
+                libgnss::io::UBXSfrbxFrameInfo frame_info;
+                const bool has_frame_info =
+                    libgnss::io::ubx_utils::decodeSfrbxFrameInfo(event.sfrbx, frame_info);
+                std::cout << "  subframe: system=";
+                switch (event.sfrbx.system) {
+                    case libgnss::GNSSSystem::GPS: std::cout << "GPS"; break;
+                    case libgnss::GNSSSystem::GLONASS: std::cout << "GLONASS"; break;
+                    case libgnss::GNSSSystem::Galileo: std::cout << "Galileo"; break;
+                    case libgnss::GNSSSystem::BeiDou: std::cout << "BeiDou"; break;
+                    case libgnss::GNSSSystem::QZSS: std::cout << "QZSS"; break;
+                    case libgnss::GNSSSystem::NavIC: std::cout << "NavIC"; break;
+                    default: std::cout << "UNKNOWN"; break;
+                }
+                std::cout << " sv=" << static_cast<int>(event.sfrbx.sv_id)
+                          << " words=" << event.sfrbx.words.size()
+                          << " kind="
+                          << libgnss::io::ubx_utils::getSfrbxFrameKindName(frame_info.kind);
+                if (has_frame_info) {
+                    std::cout << " frame_id=" << frame_info.frame_id;
+                    if (frame_info.has_page_id) {
+                        std::cout << " page_id=" << frame_info.page_id;
+                    }
+                }
+                std::cout
+                          << " freq_id=" << static_cast<int>(event.sfrbx.frequency_id)
+                          << " channel=" << static_cast<int>(event.sfrbx.channel)
+                          << "\n";
                 continue;
             }
 
@@ -354,6 +387,7 @@ int main(int argc, char** argv) {
               << " valid_messages=" << stats.valid_messages
               << " checksum_errors=" << stats.checksum_errors
               << " nav_pvt=" << nav_pvt_count
+              << " sfrbx=" << sfrbx_count
               << " rawx=" << rawx_count
               << " exported_obs_epochs=" << exported_obs_epochs << "\n";
     return 0;
