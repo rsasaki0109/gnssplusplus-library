@@ -230,10 +230,12 @@ private:
     std::vector<uint8_t> buffer_;
     size_t buffer_pos_ = 0;
     NTRIPClient* ntrip_client_ = nullptr;
+    int serial_fd_ = -1;
     
     // Stream-specific implementations would go here
     bool readFromFile(const std::string& filename);
     bool readFromNetwork(const std::string& url);
+    bool readFromSerial(const std::string& source);
 };
 
 /**
