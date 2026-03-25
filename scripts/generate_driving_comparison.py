@@ -521,12 +521,76 @@ def status_breakdown_text(matched: list[MatchedEpoch], solver: str, fixed_status
     )
 
 
+def default_panel_output(main_output: Path, suffix: str) -> Path:
+    return main_output.with_name(f"{main_output.stem}_{suffix}{main_output.suffix}")
+
+
+def add_panel_number(ax: plt.Axes, number: int) -> None:
+    ax.text(
+        0.01,
+        1.02,
+        f"({number})",
+        transform=ax.transAxes,
+        ha="left",
+        va="bottom",
+        fontsize=13,
+        fontweight="bold",
+        color="#0f172a",
+    )
+
+
+def save_solver_2d_figure(
+    output_path: Path,
+    title: str,
+    solver: str,
+    matched: list[MatchedEpoch],
+    ref_enu: np.ndarray,
+    x_limits: tuple[float, float],
+    y_limits: tuple[float, float],
+    fixed_status: int,
+    panel_number: int,
+    max_gap_s: float,
+) -> None:
+    global plt
+    fig, ax = plt.subplots(figsize=(8.8, 7.6))
+    ax.plot(ref_enu[:, 0], ref_enu[:, 1], color="black", linewidth=2.0, label="Ground truth")
+    plot_solver_trajectory(ax, matched, solver, max_gap_s=max_gap_s, point_size=18)
+    ax.set_title(title)
+    ax.set_xlabel("East (m)")
+    ax.set_ylabel("North (m)")
+    ax.grid(alpha=0.3)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlim(*x_limits)
+    ax.set_ylim(*y_limits)
+    add_panel_number(ax, panel_number)
+    solver_legend = ax.legend(handles=build_solver_legend_handles(), loc="upper right", fontsize=8.5)
+    ax.add_artist(solver_legend)
+    ax.legend(handles=build_status_legend_handles(), loc="lower right", fontsize=8.5, ncol=2)
+    ax.text(
+        0.02,
+        0.98,
+        status_breakdown_text(matched, solver, fixed_status=fixed_status),
+        transform=ax.transAxes,
+        va="top",
+        ha="left",
+        family="monospace",
+        fontsize=9.0,
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.82),
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
     parser.add_argument("--lib-pos", type=Path, required=True)
     parser.add_argument("--rtklib-pos", type=Path, required=True)
     parser.add_argument("--reference-csv", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--rtklib-2d-output", type=Path)
+    parser.add_argument("--lib-2d-output", type=Path)
     parser.add_argument("--title", default="Urban Driving RTK Comparison")
     parser.add_argument("--match-tolerance", type=float, default=0.15)
     args = parser.parse_args()
@@ -591,6 +655,7 @@ def main() -> None:
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlim(full_xmin, full_xmax)
     ax.set_ylim(full_ymin, full_ymax)
+    add_panel_number(ax, 1)
     ax.text(
         0.02,
         0.98,
@@ -613,6 +678,7 @@ def main() -> None:
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlim(full_xmin, full_xmax)
     ax.set_ylim(full_ymin, full_ymax)
+    add_panel_number(ax, 2)
     ax.text(
         0.02,
         0.98,
@@ -662,12 +728,14 @@ def main() -> None:
     ax.set_ylabel("North (m)")
     ax.grid(alpha=0.3)
     ax.set_aspect("equal", adjustable="box")
+    add_panel_number(ax, 3)
     solver_legend = ax.legend(handles=build_solver_legend_handles(), loc="upper right", fontsize=7.8)
     ax.add_artist(solver_legend)
     ax.legend(handles=build_status_legend_handles(), loc="lower right", fontsize=7.8, ncol=2)
 
     ax = ax_text
     ax.axis("off")
+    add_panel_number(ax, 4)
     text = "\n".join(
         [
             "Dataset: UrbanNav Tokyo Odaiba (open)",
@@ -715,6 +783,7 @@ def main() -> None:
     ax.set_xlabel("Time from start (min)")
     ax.set_ylabel("Horizontal error (m, log scale)")
     ax.grid(alpha=0.3)
+    add_panel_number(ax, 5)
     ax.legend(loc="upper right")
 
     ax = ax_up
@@ -727,6 +796,7 @@ def main() -> None:
     ax.set_xlabel("Time from start (min)")
     ax.set_ylabel("Up error (m)")
     ax.grid(alpha=0.3)
+    add_panel_number(ax, 6)
     ax.legend(loc="upper right")
 
     ax = ax_cdf
@@ -738,12 +808,41 @@ def main() -> None:
     ax.set_xlabel("Horizontal error (m, log scale)")
     ax.set_ylabel("CDF (%)")
     ax.grid(alpha=0.3)
+    add_panel_number(ax, 7)
     ax.legend(loc="lower right")
 
     fig.suptitle(args.title, fontsize=16)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.output, dpi=180, bbox_inches="tight")
+    rtklib_2d_output = args.rtklib_2d_output or default_panel_output(args.output, "rtklib_2d")
+    lib_2d_output = args.lib_2d_output or default_panel_output(args.output, "libgnss_2d")
+    save_solver_2d_figure(
+        rtklib_2d_output,
+        "RTKLIB 2D Trajectory",
+        "RTKLIB",
+        rtklib_matched,
+        ref_enu,
+        (full_xmin, full_xmax),
+        (full_ymin, full_ymax),
+        fixed_status=1,
+        panel_number=1,
+        max_gap_s=max_gap_s,
+    )
+    save_solver_2d_figure(
+        lib_2d_output,
+        "libgnss++ 2D Trajectory",
+        "libgnss++",
+        lib_matched,
+        ref_enu,
+        (full_xmin, full_xmax),
+        (full_ymin, full_ymax),
+        fixed_status=4,
+        panel_number=2,
+        max_gap_s=max_gap_s,
+    )
     print(f"Saved: {args.output}")
+    print(f"Saved: {rtklib_2d_output}")
+    print(f"Saved: {lib_2d_output}")
     print(f"libgnss++: {lib_summary}")
     print(f"RTKLIB: {rtklib_summary}")
 
