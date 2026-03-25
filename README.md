@@ -20,11 +20,11 @@ Tested on 3 open datasets with GPS L1+L2 dual-frequency observations.
 
 ### Urban Driving Result Comparison
 
-Open driving dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) (2018-12-19, Trimble rover/base, ~170 m baseline). RTKLIB was run in GPS-only L1+L2 kinematic forward mode with continuous AR to match libgnss++'s current GPS-only support.
+Open driving dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) (2018-12-19, Trimble rover/base, ~170 m baseline). The checked-in benchmark artifacts compare the current libgnss++ Odaiba pipeline against a checked-in RTKLIB forward-kinematic baseline on the same open dataset.
 
 ![UrbanNav Odaiba benchmark scorecard](docs/driving_odaiba_scorecard.png)
 
-Current Odaiba snapshot: libgnss++ leads on matched epochs, fix rate, p95 horizontal error, and max horizontal error, while RTKLIB keeps a 4 mm advantage on the median horizontal error.
+Current Odaiba snapshot: on all matched epochs, libgnss++ leads on matched-epoch count, fix rate, p95 horizontal error, and max horizontal error. On common epochs only, the horizontal median is within 27 mm of RTKLIB and the vertical median is slightly better for libgnss++.
 
 ![Urban driving comparison on UrbanNav Tokyo Odaiba](docs/driving_odaiba_comparison.png)
 
@@ -101,10 +101,53 @@ make -j$(nproc)
 
 ## Command-Line Tools
 
-`libgnss++` now ships with a post-processing CLI named `gnss_solve`. It fills the same role as RTKLIB's RINEX batch solver, but keeps a project-native name instead of mirroring RTKLIB's command names.
+`libgnss++` ships with a small command suite built around project-native names instead of copying RTKLIB app names.
+
+For cross-platform usage, the canonical entry point is the Python dispatcher:
 
 ```bash
-./build/apps/gnss_solve \
+python3 apps/gnss.py <command> ...
+```
+
+On Windows, the same interface is intended to be:
+
+```powershell
+py apps\gnss.py <command> ...
+```
+
+or:
+
+```powershell
+apps\gnss.cmd <command> ...
+```
+
+The `./apps/gnss_*` launchers remain as Unix convenience wrappers, but they are not the long-term portable interface.
+
+### Core commands
+
+| Command | Purpose |
+|---------|---------|
+| `gnss solve` | Batch RTK post-processing from RINEX rover/base/nav |
+| `gnss rinex-info` | Inspect RINEX headers and optionally count epochs / ephemerides |
+| `gnss stream` | Read RTCM from file or NTRIP, print message summaries, and relay frames |
+| `gnss ubx-info` | Inspect UBX NAV/RAWX logs and optionally export RAWX epochs to RINEX |
+| `gnss convert` | Convert RTCM or UBX input into simple RINEX observation/navigation files |
+| `gnss replay` | Replay rover/base data from RINEX, UBX, or RTCM through the RTK solver |
+| `gnss stats` | Text summary for `.pos` results |
+| `gnss plot` | Time-series and ENU plots for one or two `.pos` files |
+| `gnss compare` | Compare libgnss++ output against RTKLIB output |
+| `gnss trackplot` | 2D trajectory comparison with status colors |
+| `gnss rtklib2pos` | Convert raw RTKLIB `.pos` into libgnss++ `.pos` format |
+| `gnss pos2kml` | Convert libgnss++ or raw RTKLIB `.pos` into KML |
+| `gnss driving-compare` | Build the README comparison figure from solution files |
+| `gnss scorecard` | Build the Odaiba scorecard image |
+| `gnss odaiba-benchmark` | Run the full Odaiba benchmark pipeline end-to-end |
+| `gnss odaiba-scan` | Scan Odaiba in fixed epoch windows and dump per-window metrics |
+
+`gnss_compare`, `gnss_plot`, `gnss_trackplot`, and `gnss_pos2kml` accept raw RTKLIB `.pos` output directly.
+
+```bash
+python3 apps/gnss.py solve \
   --data-dir data/driving \
   --out output/rtk_solution.pos \
   --kml output/rtk_solution.kml \
@@ -114,7 +157,7 @@ make -j$(nproc)
 You can also point it at explicit files and override solver knobs:
 
 ```bash
-./build/apps/gnss_solve \
+python3 apps/gnss.py solve \
   --rover data/driving/rover.obs \
   --base data/driving/base.obs \
   --nav data/driving/navigation.nav \
@@ -125,6 +168,32 @@ You can also point it at explicit files and override solver knobs:
   --elevation-mask-deg 15 \
   --base-ecef -3962108.7 3381309.5 3668678.8
 ```
+
+```bash
+python3 apps/gnss.py stream --input correction.rtcm3 --output relay.rtcm3 --limit 100
+python3 apps/gnss.py stream --input ntrip://user:pass@caster.example.com:2101/MOUNT --decode-observations --limit 10
+python3 apps/gnss.py ubx-info --input logs/session.ubx --decode-nav --decode-observations --obs-rinex-out output/session.obs
+python3 apps/gnss.py convert --format ubx --input logs/session.ubx --obs-out output/session.obs
+python3 apps/gnss.py convert --format rtcm --input correction.rtcm3 --obs-out output/correction.obs --nav-out output/correction.nav
+python3 apps/gnss.py replay --rover-rinex data/rover_kinematic.obs --base-rinex data/base_kinematic.obs --nav-rinex data/navigation_kinematic.nav --out output/replay.pos
+python3 apps/gnss.py rcv start --config configs/live.example.conf --status-out output/receiver_status.json --log-out output/receiver.log
+python3 apps/gnss.py rcv status --status-out output/receiver_status.json --wait-seconds 5
+python3 apps/gnss.py rcv restart --config configs/live.example.conf --status-out output/receiver_status.json --wait-seconds 1
+python3 apps/gnss.py rcv stop --status-out output/receiver_status.json
+python3 apps/gnss.py rinex-info --count-records data/driving/rover.obs
+python3 apps/gnss.py stats output/rtk_solution.pos
+python3 apps/gnss.py compare output/rtk_solution.pos output/driving_rtklib_rtk.pos
+python3 apps/gnss.py plot output/rtk_solution.pos output/driving_rtklib_rtk.pos
+python3 apps/gnss.py trackplot output/rtk_solution.pos output/driving_rtklib_rtk.pos
+python3 apps/gnss.py rtklib2pos output/driving_rtklib_rtk.pos output/driving_rtklib_converted.pos
+python3 apps/gnss.py pos2kml output/driving_rtklib_rtk.pos output/driving_rtklib_rtk.kml --status non-spp
+python3 apps/gnss.py driving-compare --lib-pos output/rtk_solution.pos --rtklib-pos output/driving_rtklib_rtk.pos --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv --output docs/driving_odaiba_comparison.png
+python3 apps/gnss.py scorecard --lib-pos output/rtk_solution.pos --rtklib-pos output/driving_rtklib_rtk.pos --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv --output docs/driving_odaiba_scorecard.png
+python3 apps/gnss.py odaiba-benchmark --rtklib-bin /path/to/rnx2rtkp
+python3 apps/gnss.py odaiba-scan --glonass-ar autocal --window-size 1000 --step 1000 --output-csv output/odaiba_window_scan.csv
+```
+
+`gnss stream` now covers the low-level RTCM/NTRIP ingest and relay path, `gnss convert` covers the first practical `convbin`-style export path for RTCM/UBX logs, `gnss replay` provides an offline rover/base replay solver path, `gnss live` covers dual-RTCM rover/base solving with inline station/nav metadata recovery, short-gap base interpolation, and short hold-last-base operation for real-time correction lag, and `gnss rcv` adds an `rtkrcv`-style config-file wrapper with foreground `run` plus `start/restart/status/stop` control backed by JSON status snapshots and waitable status polling. `scripts/run_odaiba_comparison.sh` remains as a compatibility wrapper, but it now delegates to `gnss odaiba-benchmark`.
 
 ### Requirements
 
@@ -146,19 +215,48 @@ bash tests/run_regression.sh
 
 ```bash
 # Generate a libgnss++ RTK solution from RINEX
-./build/apps/gnss_solve --data-dir data/driving --out output/rtk_solution.pos
+python3 apps/gnss.py solve --data-dir data/driving --out output/rtk_solution.pos
+
+# Inspect and relay RTCM
+python3 apps/gnss.py stream --input correction.rtcm3 --output relay.rtcm3 --limit 100
+
+# Inspect UBX and export RAWX to a simple RINEX observation file
+python3 apps/gnss.py ubx-info --input logs/session.ubx --decode-nav --decode-observations --obs-rinex-out output/session.obs
+
+# Convert RTCM or UBX into simple RINEX files
+python3 apps/gnss.py convert --format ubx --input logs/session.ubx --obs-out output/session.obs
+python3 apps/gnss.py convert --format rtcm --input correction.rtcm3 --obs-out output/correction.obs --nav-out output/correction.nav
+
+# Replay rover/base observations through the RTK solver
+python3 apps/gnss.py replay --rover-rinex data/rover_kinematic.obs --base-rinex data/base_kinematic.obs --nav-rinex data/navigation_kinematic.nav --out output/replay.pos
 
 # Quick statistics
-python3 tools/rtk_stats.py output/rtk_solution.pos
+python3 apps/gnss.py stats output/rtk_solution.pos
 
 # Visualization (matplotlib)
-python3 tools/plot_rtk.py output/rtk_solution.pos
+python3 apps/gnss.py plot output/rtk_solution.pos
 
 # Compare with RTKLIB
-python3 tools/compare_rtklib.py output/rtk_solution.pos rtklib.pos
+python3 apps/gnss.py compare output/rtk_solution.pos output/driving_rtklib_rtk.pos
+
+# 2D trajectory plot
+python3 apps/gnss.py trackplot output/rtk_solution.pos output/driving_rtklib_rtk.pos
+
+# Convert raw RTKLIB output into libgnss++ POS format
+python3 apps/gnss.py rtklib2pos output/driving_rtklib_rtk.pos output/driving_rtklib_converted.pos
+
+# Convert POS to KML
+python3 apps/gnss.py pos2kml output/rtk_solution.pos output/rtk_solution_from_pos.kml
+
+# Regenerate README comparison assets directly
+python3 apps/gnss.py driving-compare --lib-pos output/rtk_solution.pos --rtklib-pos output/driving_rtklib_rtk.pos --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv --output docs/driving_odaiba_comparison.png
+python3 apps/gnss.py scorecard --lib-pos output/rtk_solution.pos --rtklib-pos output/driving_rtklib_rtk.pos --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv --output docs/driving_odaiba_scorecard.png
 
 # Regenerate the UrbanNav Odaiba comparison image
-bash scripts/run_odaiba_comparison.sh /path/to/rnx2rtkp
+python3 apps/gnss.py odaiba-benchmark --rtklib-bin /path/to/rnx2rtkp
+
+# Scan Odaiba by window to find weak multi-GNSS segments
+python3 apps/gnss.py odaiba-scan --glonass-ar autocal --window-size 1000 --step 1000 --output-csv output/odaiba_window_scan.csv
 ```
 
 ## Test Data

@@ -34,7 +34,10 @@
 
 // I/O
 #include "io/rinex.hpp"
+#include "io/ntrip.hpp"
 #include "io/rtcm.hpp"
+#include "io/rtcm_stream.hpp"
+#include "io/ubx.hpp"
 #include "io/solution_writer.hpp"
 
 namespace libgnss {

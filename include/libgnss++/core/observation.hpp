@@ -30,6 +30,8 @@ struct Observation {
     bool valid = true;              ///< Observation validity flag
     bool loss_of_lock = false;      ///< Loss of lock flag
     int signal_strength = 0;        ///< Signal strength (0-9)
+    bool has_glonass_frequency_channel = false; ///< GLONASS FCN available
+    int glonass_frequency_channel = 0;          ///< GLONASS frequency channel (-7..+6)
     
     // Corrections
     double ionosphere_delay = 0.0;  ///< Ionospheric delay correction

@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """2D trajectory comparison: libgnss++ vs RTKLIB with status color coding."""
 import sys
+import os
 import math
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+from datetime import datetime
 import numpy as np
 
 def read_ours(path):
@@ -29,10 +27,19 @@ def read_rtklib(path):
         for line in f:
             if line.startswith('%'): continue
             p = line.split()
-            if len(p) < 6: continue
-            tow = float(p[1])
-            lat, lon, h = float(p[2]), float(p[3]), float(p[4])
-            q = int(p[5])
+            if len(p) >= 7 and "/" in p[0] and ":" in p[1]:
+                dt = datetime.strptime(f"{p[0]} {p[1]}", "%Y/%m/%d %H:%M:%S.%f")
+                gps_epoch = datetime(1980, 1, 6)
+                delta = dt - gps_epoch
+                tow = (delta.days % 7) * 86400 + delta.seconds + delta.microseconds / 1e6
+                lat, lon, h = float(p[2]), float(p[3]), float(p[4])
+                q = int(p[5])
+            elif len(p) >= 6:
+                tow = float(p[1])
+                lat, lon, h = float(p[2]), float(p[3]), float(p[4])
+                q = int(p[5])
+            else:
+                continue
             # Map RTKLIB Q to our status: 1->4(fix), 2->3(float), 4->2(dgps), 5->1(spp)
             status_map = {1: 4, 2: 3, 4: 2, 5: 1}
             status = status_map.get(q, 1)
@@ -61,9 +68,15 @@ def plot_trajectory(ax, enu, label, alpha=1.0, marker='o', size=8):
                    marker=marker, edgecolors='none', zorder=status)
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python3 plot_trajectory.py <ours.pos> [rtklib.pos] [output.png]")
-        sys.exit(1)
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+
+    program = os.environ.get('GNSS_CLI_NAME', os.path.basename(sys.argv[0]))
+    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
+        print(f"Usage: {program} <ours.pos> [rtklib.pos] [output.png]")
+        sys.exit(0 if len(sys.argv) >= 2 else 1)
 
     ours_path = sys.argv[1]
     rtklib_path = sys.argv[2] if len(sys.argv) > 2 else None

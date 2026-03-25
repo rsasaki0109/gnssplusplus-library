@@ -9,6 +9,8 @@
 namespace libgnss {
 namespace io {
 
+class NTRIPClient;
+
 /**
  * @brief RTCM message types
  */
@@ -133,6 +135,30 @@ public:
     };
     
     RTCMStats getStats() const { return stats_; }
+
+    /**
+     * @brief Decode an RTCM observation payload into ObservationData
+     */
+    bool decodeObservationData(const RTCMMessage& message, ObservationData& obs_data);
+
+    /**
+     * @brief Decode an RTCM ephemeris payload into NavigationData
+     */
+    bool decodeNavigationData(const RTCMMessage& message, NavigationData& nav_data);
+
+    /**
+     * @brief Cache GLONASS frequency channel for later MSM decoding
+     */
+    void setGlonassFrequencyChannel(const SatelliteId& sat, int channel) {
+        glonass_frequency_channels_[sat] = channel;
+    }
+
+    /**
+     * @brief Check whether a GLONASS frequency channel is cached
+     */
+    bool hasGlonassFrequencyChannel(const SatelliteId& sat) const {
+        return glonass_frequency_channels_.find(sat) != glonass_frequency_channels_.end();
+    }
     
     /**
      * @brief Reset statistics
@@ -143,6 +169,7 @@ private:
     Vector3d reference_position_;
     bool has_reference_position_ = false;
     RTCMStats stats_;
+    std::map<SatelliteId, int> glonass_frequency_channels_;
     
     // Internal decoding functions
     bool decodeObservationMessage(const RTCMMessage& message, ObservationData& obs_data);
@@ -166,7 +193,7 @@ private:
 class RTCMReader {
 public:
     RTCMReader() = default;
-    ~RTCMReader() = default;
+    ~RTCMReader();
     
     /**
      * @brief Open RTCM stream (file or network)
@@ -195,13 +222,14 @@ public:
     /**
      * @brief Get stream statistics
      */
-    RTCMProcessor::RTCMStats getStats() const { return processor_.getStats(); }
+    RTCMProcessor::RTCMStats getStats() const;
 
 private:
     RTCMProcessor processor_;
     bool is_open_ = false;
     std::vector<uint8_t> buffer_;
     size_t buffer_pos_ = 0;
+    NTRIPClient* ntrip_client_ = nullptr;
     
     // Stream-specific implementations would go here
     bool readFromFile(const std::string& filename);

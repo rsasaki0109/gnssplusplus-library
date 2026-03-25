@@ -17,29 +17,4 @@ ln -sf Tokyo_Data/Odaiba/base_trimble.obs base.obs
 ln -sf Tokyo_Data/Odaiba/base.nav navigation.nav
 
 cd "${ROOT_DIR}"
-./build/apps/gnss_solve \
-    --data-dir data/driving \
-    --out output/rtk_solution.pos \
-    --kml output/rtk_solution.kml \
-    --mode kinematic
-
-"${RTKLIB_BIN}" \
-    -k "${SCRIPT_DIR}/rtklib_odaiba.conf" \
-    -o "${ROOT_DIR}/output/driving_rtklib_rtk.pos" \
-    "${ROOT_DIR}/data/driving/rover.obs" \
-    "${ROOT_DIR}/data/driving/base.obs" \
-    "${ROOT_DIR}/data/driving/navigation.nav"
-
-python3 "${SCRIPT_DIR}/generate_driving_comparison.py" \
-    --lib-pos "${ROOT_DIR}/output/rtk_solution.pos" \
-    --rtklib-pos "${ROOT_DIR}/output/driving_rtklib_rtk.pos" \
-    --reference-csv "${ROOT_DIR}/data/driving/Tokyo_Data/Odaiba/reference.csv" \
-    --output "${ROOT_DIR}/docs/driving_odaiba_comparison.png" \
-    --title "Urban Driving Comparison: libgnss++ vs RTKLIB on UrbanNav Odaiba"
-
-python3 "${SCRIPT_DIR}/generate_odaiba_scorecard.py" \
-    --lib-pos "${ROOT_DIR}/output/rtk_solution.pos" \
-    --rtklib-pos "${ROOT_DIR}/output/driving_rtklib_rtk.pos" \
-    --reference-csv "${ROOT_DIR}/data/driving/Tokyo_Data/Odaiba/reference.csv" \
-    --output "${ROOT_DIR}/docs/driving_odaiba_scorecard.png" \
-    --title "UrbanNav Tokyo Odaiba"
+python3 "${ROOT_DIR}/apps/gnss.py" odaiba-benchmark --rtklib-bin "${RTKLIB_BIN}"

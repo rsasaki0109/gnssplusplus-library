@@ -3,18 +3,13 @@
 RTKLIB比較ツール
 
 LibGNSS++とRTKLIBの測位結果を比較し、統計情報と比較プロットを生成する。
-
-使い方:
-  python3 tools/compare_rtklib.py output/rtk_solution.pos rtklib.pos
 """
 
 import sys
 import os
 import math
+from datetime import datetime
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 
 # ---------------------------------------------------------------------------
@@ -85,15 +80,33 @@ def read_rtklib_pos(filepath):
             if not line or line.startswith("%"):
                 continue
             cols = line.split()
-            if len(cols) < 6:
-                continue
             try:
-                q = int(cols[5])
+                if len(cols) >= 7 and "/" in cols[0] and ":" in cols[1]:
+                    dt = datetime.strptime(f"{cols[0]} {cols[1]}", "%Y/%m/%d %H:%M:%S.%f")
+                    gps_epoch = datetime(1980, 1, 6)
+                    delta = dt - gps_epoch
+                    week = delta.days // 7
+                    tow = (delta.days % 7) * 86400 + delta.seconds + delta.microseconds / 1e6
+                    lat = float(cols[2])
+                    lon = float(cols[3])
+                    hgt = float(cols[4])
+                    q = int(cols[5])
+                    nsat = int(cols[6]) if len(cols) > 6 else 0
+                elif len(cols) >= 6:
+                    week = int(cols[0])
+                    tow = float(cols[1])
+                    lat = float(cols[2])
+                    lon = float(cols[3])
+                    hgt = float(cols[4])
+                    q = int(cols[5])
+                    nsat = int(cols[6]) if len(cols) > 6 else 0
+                else:
+                    continue
                 epochs.append({
-                    "week": int(cols[0]), "tow": float(cols[1]),
-                    "lat": float(cols[2]), "lon": float(cols[3]), "hgt": float(cols[4]),
+                    "week": week, "tow": tow,
+                    "lat": lat, "lon": lon, "hgt": hgt,
                     "status": RTKLIB_STATUS_MAP.get(q, 1),
-                    "nsat": int(cols[6]) if len(cols) > 6 else 0,
+                    "nsat": nsat,
                 })
             except (ValueError, IndexError):
                 continue
@@ -207,6 +220,12 @@ def epoch_by_epoch_diff(epochs1, epochs2, ref_lat, ref_lon, ref_hgt):
 # ---------------------------------------------------------------------------
 
 def plot_comparison(epochs1, epochs2, ref_lat, ref_lon, ref_hgt, out_png):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    if not epochs1 or not epochs2:
+        raise ValueError("both solution files must contain at least one epoch")
     tow1, e1, n1, u1, st1 = compute_enu(epochs1, ref_lat, ref_lon, ref_hgt)
     tow2, e2, n2, u2, st2 = compute_enu(epochs2, ref_lat, ref_lon, ref_hgt)
 
@@ -278,10 +297,6 @@ def plot_comparison(epochs1, epochs2, ref_lat, ref_lon, ref_hgt, out_png):
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.savefig(out_png, dpi=150)
     print(f"比較プロット保存: {out_png}")
-    try:
-        plt.show()
-    except Exception:
-        pass
 
 
 # ---------------------------------------------------------------------------
@@ -289,9 +304,10 @@ def plot_comparison(epochs1, epochs2, ref_lat, ref_lon, ref_hgt, out_png):
 # ---------------------------------------------------------------------------
 
 def main():
-    if len(sys.argv) < 3:
-        print("使い方: python3 tools/compare_rtklib.py <libgnss_pos> <rtklib_pos>")
-        sys.exit(1)
+    program = os.environ.get("GNSS_CLI_NAME", os.path.basename(sys.argv[0]))
+    if len(sys.argv) < 3 or sys.argv[1] in ("-h", "--help"):
+        print(f"使い方: {program} <libgnss_pos> <rtklib_pos>")
+        sys.exit(0 if len(sys.argv) >= 2 else 1)
 
     file1, file2 = sys.argv[1], sys.argv[2]
 

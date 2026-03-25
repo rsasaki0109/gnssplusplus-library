@@ -3,8 +3,10 @@
 #include <libgnss++/io/rinex.hpp>
 
 #include <memory>
+#include <cmath>
 #include <string>
 #include <vector>
+#include <set>
 
 using namespace libgnss;
 
@@ -50,6 +52,32 @@ protected:
         }
         if (obs_header_.approximate_position.norm() > 0.0) {
             obs_data_.receiver_position = obs_header_.approximate_position;
+        }
+        return true;
+    }
+
+    bool loadOdaibaMixedNavigation(NavigationData& nav_data) const {
+        io::RINEXReader nav_reader;
+        if (!nav_reader.open(sourcePath("data/driving/Tokyo_Data/Odaiba/base.nav"))) {
+            return false;
+        }
+        return nav_reader.readNavigationData(nav_data);
+    }
+
+    bool loadOdaibaFirstEpoch(ObservationData& obs_data,
+                              io::RINEXReader::RINEXHeader& header) const {
+        io::RINEXReader obs_reader;
+        if (!obs_reader.open(sourcePath("data/driving/Tokyo_Data/Odaiba/rover_trimble.obs"))) {
+            return false;
+        }
+        if (!obs_reader.readHeader(header)) {
+            return false;
+        }
+        if (!obs_reader.readObservationEpoch(obs_data)) {
+            return false;
+        }
+        if (header.approximate_position.norm() > 0.0) {
+            obs_data.receiver_position = header.approximate_position;
         }
         return true;
     }
@@ -227,4 +255,173 @@ TEST_F(SPPTest, UtilityFunctions) {
     EXPECT_NEAR(ecef_back(0), receiver_pos(0), 1.0);
     EXPECT_NEAR(ecef_back(1), receiver_pos(1), 1.0);
     EXPECT_NEAR(ecef_back(2), receiver_pos(2), 1.0);
+}
+
+TEST_F(SPPTest, ReadsMixedConstellationObservationEpochsFromOdaiba) {
+    ObservationData odaiba_epoch;
+    io::RINEXReader::RINEXHeader odaiba_header;
+    ASSERT_TRUE(loadOdaibaFirstEpoch(odaiba_epoch, odaiba_header));
+
+    std::set<GNSSSystem> systems;
+    for (const auto& obs : odaiba_epoch.observations) {
+        systems.insert(obs.satellite.system);
+    }
+
+    EXPECT_TRUE(systems.count(GNSSSystem::GPS));
+    EXPECT_TRUE(systems.count(GNSSSystem::BeiDou));
+    EXPECT_TRUE(systems.count(GNSSSystem::Galileo));
+    EXPECT_TRUE(systems.count(GNSSSystem::QZSS));
+}
+
+TEST_F(SPPTest, ReadsNonGpsBroadcastEphemerisFromMixedNavigationFile) {
+    NavigationData mixed_nav;
+    ASSERT_TRUE(loadOdaibaMixedNavigation(mixed_nav));
+
+    bool has_beidou = false;
+    bool has_galileo = false;
+    bool has_glonass = false;
+    bool has_qzss = false;
+    bool has_beidou_secondary_delay = false;
+    for (const auto& [sat, ephs] : mixed_nav.ephemeris_data) {
+        has_beidou = has_beidou || sat.system == GNSSSystem::BeiDou;
+        has_galileo = has_galileo || sat.system == GNSSSystem::Galileo;
+        has_glonass = has_glonass || sat.system == GNSSSystem::GLONASS;
+        has_qzss = has_qzss || sat.system == GNSSSystem::QZSS;
+        if (sat.system == GNSSSystem::BeiDou) {
+            for (const auto& eph : ephs) {
+                if (std::abs(eph.tgd_secondary) > 0.0) {
+                    has_beidou_secondary_delay = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    EXPECT_TRUE(has_beidou);
+    EXPECT_TRUE(has_galileo);
+    EXPECT_TRUE(has_glonass);
+    EXPECT_TRUE(has_qzss);
+    EXPECT_TRUE(has_beidou_secondary_delay);
+}
+
+TEST_F(SPPTest, ComputesGlonassBroadcastStateFromMixedNavigationFile) {
+    NavigationData mixed_nav;
+    ASSERT_TRUE(loadOdaibaMixedNavigation(mixed_nav));
+
+    ObservationData odaiba_epoch;
+    io::RINEXReader::RINEXHeader odaiba_header;
+    ASSERT_TRUE(loadOdaibaFirstEpoch(odaiba_epoch, odaiba_header));
+
+    bool solved_glonass = false;
+    for (const auto& obs : odaiba_epoch.observations) {
+        if (obs.satellite.system != GNSSSystem::GLONASS) {
+            continue;
+        }
+        Vector3d pos;
+        Vector3d vel;
+        double clk = 0.0;
+        double drift = 0.0;
+        if (mixed_nav.calculateSatelliteState(obs.satellite, odaiba_epoch.time, pos, vel, clk, drift)) {
+            EXPECT_TRUE(pos.allFinite());
+            EXPECT_GT(pos.norm(), 1.5e7);
+            solved_glonass = true;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(solved_glonass);
+}
+
+TEST_F(SPPTest, ComputesBeiDouBroadcastStateFromMixedNavigationFile) {
+    NavigationData mixed_nav;
+    ASSERT_TRUE(loadOdaibaMixedNavigation(mixed_nav));
+
+    ObservationData odaiba_epoch;
+    io::RINEXReader::RINEXHeader odaiba_header;
+    ASSERT_TRUE(loadOdaibaFirstEpoch(odaiba_epoch, odaiba_header));
+
+    bool solved_beidou = false;
+    for (const auto& obs : odaiba_epoch.observations) {
+        if (obs.satellite.system != GNSSSystem::BeiDou) {
+            continue;
+        }
+        Vector3d pos;
+        Vector3d vel;
+        double clk = 0.0;
+        double drift = 0.0;
+        if (mixed_nav.calculateSatelliteState(obs.satellite, odaiba_epoch.time, pos, vel, clk, drift)) {
+            EXPECT_TRUE(pos.allFinite());
+            EXPECT_GT(pos.norm(), 2.0e7);
+            solved_beidou = true;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(solved_beidou);
+}
+
+TEST_F(SPPTest, UsesMultipleConstellationsOnOdaibaEpoch) {
+    ObservationData odaiba_epoch;
+    io::RINEXReader::RINEXHeader odaiba_header;
+    NavigationData mixed_nav;
+    ASSERT_TRUE(loadOdaibaFirstEpoch(odaiba_epoch, odaiba_header));
+    ASSERT_TRUE(loadOdaibaMixedNavigation(mixed_nav));
+
+    spp_processor_->reset();
+    ASSERT_TRUE(spp_processor_->initialize(processor_config_));
+    const auto solution = spp_processor_->processEpoch(odaiba_epoch, mixed_nav);
+
+    ASSERT_TRUE(solution.isValid());
+    std::set<GNSSSystem> used_systems;
+    for (const auto& sat : solution.satellites_used) {
+        used_systems.insert(sat.system);
+    }
+    EXPECT_TRUE(used_systems.count(GNSSSystem::GPS));
+    EXPECT_TRUE(used_systems.count(GNSSSystem::GLONASS));
+    EXPECT_TRUE(used_systems.count(GNSSSystem::BeiDou));
+    EXPECT_TRUE(used_systems.count(GNSSSystem::Galileo));
+    EXPECT_TRUE(used_systems.count(GNSSSystem::QZSS));
+}
+
+TEST_F(SPPTest, BeiDouEnabledSPPStaysCloseOnOdaibaSequence) {
+    NavigationData mixed_nav;
+    ASSERT_TRUE(loadOdaibaMixedNavigation(mixed_nav));
+
+    io::RINEXReader obs_reader;
+    ASSERT_TRUE(obs_reader.open(sourcePath("data/driving/Tokyo_Data/Odaiba/rover_trimble.obs")));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(obs_reader.readHeader(header));
+
+    SPPProcessor::SPPConfig baseline_config;
+    baseline_config.enable_beidou = false;
+    SPPProcessor baseline_processor(baseline_config);
+    ASSERT_TRUE(baseline_processor.initialize(processor_config_));
+
+    SPPProcessor beidou_processor;
+    ASSERT_TRUE(beidou_processor.initialize(processor_config_));
+
+    ObservationData epoch;
+    int count = 0;
+    int beidou_improves_sat_count = 0;
+    while (count < 20 && obs_reader.readObservationEpoch(epoch)) {
+        if (header.approximate_position.norm() > 0.0) {
+            epoch.receiver_position = header.approximate_position;
+        }
+
+        const auto baseline = baseline_processor.processEpoch(epoch, mixed_nav);
+        const auto beidou = beidou_processor.processEpoch(epoch, mixed_nav);
+        ASSERT_TRUE(baseline.isValid()) << count;
+        ASSERT_TRUE(beidou.isValid()) << count;
+
+        const double position_delta = (baseline.position_ecef - beidou.position_ecef).norm();
+        EXPECT_LT(position_delta, 3.0) << count;
+        EXPECT_GE(beidou.num_satellites, baseline.num_satellites) << count;
+        if (beidou.num_satellites > baseline.num_satellites) {
+            beidou_improves_sat_count++;
+        }
+        count++;
+    }
+
+    EXPECT_EQ(count, 20);
+    EXPECT_GT(beidou_improves_sat_count, 0);
 }
