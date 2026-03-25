@@ -486,6 +486,41 @@ def build_solver_legend_handles() -> list[object]:
     ]
 
 
+def matched_xy(matched: list[MatchedEpoch]) -> np.ndarray:
+    if not matched:
+        return np.empty((0, 2))
+    return np.array([[epoch.traj_east_m, epoch.traj_north_m] for epoch in matched])
+
+
+def padded_xy_limits(*point_sets: np.ndarray, min_pad: float = 8.0) -> tuple[float, float, float, float]:
+    valid_sets = [points for points in point_sets if len(points)]
+    if not valid_sets:
+        return -1.0, 1.0, -1.0, 1.0
+    all_points = np.vstack(valid_sets)
+    xmin, ymin = np.min(all_points, axis=0)
+    xmax, ymax = np.max(all_points, axis=0)
+    span = max(float(xmax - xmin), float(ymax - ymin), 1.0)
+    pad = max(min_pad, span * 0.04)
+    return float(xmin - pad), float(xmax + pad), float(ymin - pad), float(ymax + pad)
+
+
+def status_breakdown_text(matched: list[MatchedEpoch], solver: str, fixed_status: int) -> str:
+    counts = {name: 0 for name in STATUS_ORDER}
+    for epoch in matched:
+        status_name, _ = status_style(solver, epoch.status)
+        counts[status_name] = counts.get(status_name, 0) + 1
+    return "\n".join(
+        [
+            f"matched={len(matched)}",
+            f"fix={100.0 * sum(epoch.status == fixed_status for epoch in matched) / max(len(matched), 1):.1f}%",
+            f"FIXED {counts.get('FIXED', 0)}",
+            f"FLOAT {counts.get('FLOAT', 0)}",
+            f"DGPS  {counts.get('DGPS', 0)}",
+            f"SPP   {counts.get('SPP', 0)}",
+        ]
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
     parser.add_argument("--lib-pos", type=Path, required=True)
@@ -528,22 +563,69 @@ def main() -> None:
         rtklib_fixed_status=1,
     )
 
-    fig, axes = plt.subplots(2, 3, figsize=(18, 10.5))
+    fig = plt.figure(figsize=(19, 12.6))
+    grid = fig.add_gridspec(3, 4, height_ratios=[1.0, 0.95, 0.82], hspace=0.34, wspace=0.28)
 
-    ax = axes[0, 0]
-    ax.plot(ref_enu[:, 0], ref_enu[:, 1], color="black", linewidth=2.0, label="Ground truth")
-    plot_solver_trajectory(ax, rtklib_matched, "RTKLIB", max_gap_s=max_gap_s, point_size=12)
-    plot_solver_trajectory(ax, lib_matched, "libgnss++", max_gap_s=max_gap_s, point_size=12)
-    ax.set_title("Trajectory Overlay (RTKLIB-style status colors)")
+    ax_rtk = fig.add_subplot(grid[0, 0:2])
+    ax_lib = fig.add_subplot(grid[0, 2:4])
+    ax_zoom = fig.add_subplot(grid[1, 0:2])
+    ax_text = fig.add_subplot(grid[1, 2:4])
+    ax_h = fig.add_subplot(grid[2, 0])
+    ax_up = fig.add_subplot(grid[2, 1])
+    ax_cdf = fig.add_subplot(grid[2, 2:4])
+
+    full_xmin, full_xmax, full_ymin, full_ymax = padded_xy_limits(
+        ref_enu[:, :2],
+        matched_xy(rtklib_matched),
+        matched_xy(lib_matched),
+        min_pad=12.0,
+    )
+
+    ax = ax_rtk
+    ax.plot(ref_enu[:, 0], ref_enu[:, 1], color="black", linewidth=2.0)
+    plot_solver_trajectory(ax, rtklib_matched, "RTKLIB", max_gap_s=max_gap_s, point_size=14)
+    ax.set_title("RTKLIB 2D Trajectory")
     ax.set_xlabel("East (m)")
     ax.set_ylabel("North (m)")
     ax.grid(alpha=0.3)
-    ax.axis("equal")
-    solver_legend = ax.legend(handles=build_solver_legend_handles(), loc="upper right", fontsize=8.5)
-    ax.add_artist(solver_legend)
-    ax.legend(handles=build_status_legend_handles(), loc="lower right", fontsize=8.5, ncol=2)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlim(full_xmin, full_xmax)
+    ax.set_ylim(full_ymin, full_ymax)
+    ax.text(
+        0.02,
+        0.98,
+        status_breakdown_text(rtklib_matched, "RTKLIB", fixed_status=1),
+        transform=ax.transAxes,
+        va="top",
+        ha="left",
+        family="monospace",
+        fontsize=8.8,
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.82),
+    )
 
-    ax = axes[0, 1]
+    ax = ax_lib
+    ax.plot(ref_enu[:, 0], ref_enu[:, 1], color="black", linewidth=2.0)
+    plot_solver_trajectory(ax, lib_matched, "libgnss++", max_gap_s=max_gap_s, point_size=14)
+    ax.set_title("libgnss++ 2D Trajectory")
+    ax.set_xlabel("East (m)")
+    ax.set_ylabel("North (m)")
+    ax.grid(alpha=0.3)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlim(full_xmin, full_xmax)
+    ax.set_ylim(full_ymin, full_ymax)
+    ax.text(
+        0.02,
+        0.98,
+        status_breakdown_text(lib_matched, "libgnss++", fixed_status=4),
+        transform=ax.transAxes,
+        va="top",
+        ha="left",
+        family="monospace",
+        fontsize=8.8,
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.82),
+    )
+
+    ax = ax_zoom
     if len(ref_zoom_enu):
         ax.plot(ref_zoom_enu[:, 0], ref_zoom_enu[:, 1], color="black", linewidth=2.0, label="Ground truth")
     plot_solver_trajectory(
@@ -579,12 +661,12 @@ def main() -> None:
     ax.set_xlabel("East (m)")
     ax.set_ylabel("North (m)")
     ax.grid(alpha=0.3)
-    ax.axis("equal")
+    ax.set_aspect("equal", adjustable="box")
     solver_legend = ax.legend(handles=build_solver_legend_handles(), loc="upper right", fontsize=7.8)
     ax.add_artist(solver_legend)
     ax.legend(handles=build_status_legend_handles(), loc="lower right", fontsize=7.8, ncol=2)
 
-    ax = axes[0, 2]
+    ax = ax_text
     ax.axis("off")
     text = "\n".join(
         [
@@ -622,7 +704,7 @@ def main() -> None:
     )
     ax.text(0.0, 1.0, text, va="top", ha="left", family="monospace", fontsize=10.2)
 
-    ax = axes[1, 0]
+    ax = ax_h
     lib_t = np.array([epoch.tow for epoch in lib_matched])
     rtklib_t = np.array([epoch.tow for epoch in rtklib_matched])
     lib_h = np.array([epoch.horiz_error_m for epoch in lib_matched])
@@ -635,7 +717,7 @@ def main() -> None:
     ax.grid(alpha=0.3)
     ax.legend(loc="upper right")
 
-    ax = axes[1, 1]
+    ax = ax_up
     lib_up = np.array([epoch.up_m for epoch in lib_matched])
     rtklib_up = np.array([epoch.up_m for epoch in rtklib_matched])
     ax.plot((rtklib_t - rtklib_t[0]) / 60.0, rtklib_up, color=SOLVER_LINE_COLORS["RTKLIB"], linewidth=1.0, label="RTKLIB")
@@ -647,7 +729,7 @@ def main() -> None:
     ax.grid(alpha=0.3)
     ax.legend(loc="upper right")
 
-    ax = axes[1, 2]
+    ax = ax_cdf
     rtklib_x, rtklib_pct = cdf_xy(rtklib_matched)
     lib_x, lib_pct = cdf_xy(lib_matched)
     ax.semilogx(rtklib_x, rtklib_pct, color=SOLVER_LINE_COLORS["RTKLIB"], linewidth=1.4, label="RTKLIB")
@@ -659,7 +741,6 @@ def main() -> None:
     ax.legend(loc="lower right")
 
     fig.suptitle(args.title, fontsize=16)
-    fig.tight_layout()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.output, dpi=180, bbox_inches="tight")
     print(f"Saved: {args.output}")
