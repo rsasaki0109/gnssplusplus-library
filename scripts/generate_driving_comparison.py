@@ -627,16 +627,23 @@ def main() -> None:
         rtklib_fixed_status=1,
     )
 
-    fig = plt.figure(figsize=(19, 12.6))
-    grid = fig.add_gridspec(3, 4, height_ratios=[1.0, 0.95, 0.82], hspace=0.34, wspace=0.28)
+    fig = plt.figure(figsize=(18.4, 11.2))
+    grid = fig.add_gridspec(
+        3,
+        3,
+        width_ratios=[1.0, 1.0, 1.12],
+        height_ratios=[0.96, 0.98, 0.82],
+        hspace=0.34,
+        wspace=0.26,
+    )
 
-    ax_rtk = fig.add_subplot(grid[0, 0:2])
-    ax_lib = fig.add_subplot(grid[0, 2:4])
+    ax_rtk = fig.add_subplot(grid[0, 0])
+    ax_lib = fig.add_subplot(grid[0, 1])
+    ax_text = fig.add_subplot(grid[0:2, 2])
     ax_zoom = fig.add_subplot(grid[1, 0:2])
-    ax_text = fig.add_subplot(grid[1, 2:4])
     ax_h = fig.add_subplot(grid[2, 0])
     ax_up = fig.add_subplot(grid[2, 1])
-    ax_cdf = fig.add_subplot(grid[2, 2:4])
+    ax_cdf = fig.add_subplot(grid[2, 2])
 
     full_xmin, full_xmax, full_ymin, full_ymax = padded_xy_limits(
         ref_enu[:, :2],
@@ -648,48 +655,24 @@ def main() -> None:
     ax = ax_rtk
     ax.plot(ref_enu[:, 0], ref_enu[:, 1], color="black", linewidth=2.0)
     plot_solver_trajectory(ax, rtklib_matched, "RTKLIB", max_gap_s=max_gap_s, point_size=14)
-    ax.set_title("RTKLIB 2D Trajectory")
+    ax.set_title("(1) RTKLIB 2D Trajectory")
     ax.set_xlabel("East (m)")
     ax.set_ylabel("North (m)")
     ax.grid(alpha=0.3)
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlim(full_xmin, full_xmax)
     ax.set_ylim(full_ymin, full_ymax)
-    add_panel_number(ax, 1)
-    ax.text(
-        0.02,
-        0.98,
-        status_breakdown_text(rtklib_matched, "RTKLIB", fixed_status=1),
-        transform=ax.transAxes,
-        va="top",
-        ha="left",
-        family="monospace",
-        fontsize=8.8,
-        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.82),
-    )
 
     ax = ax_lib
     ax.plot(ref_enu[:, 0], ref_enu[:, 1], color="black", linewidth=2.0)
     plot_solver_trajectory(ax, lib_matched, "libgnss++", max_gap_s=max_gap_s, point_size=14)
-    ax.set_title("libgnss++ 2D Trajectory")
+    ax.set_title("(2) libgnss++ 2D Trajectory")
     ax.set_xlabel("East (m)")
     ax.set_ylabel("North (m)")
     ax.grid(alpha=0.3)
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlim(full_xmin, full_xmax)
     ax.set_ylim(full_ymin, full_ymax)
-    add_panel_number(ax, 2)
-    ax.text(
-        0.02,
-        0.98,
-        status_breakdown_text(lib_matched, "libgnss++", fixed_status=4),
-        transform=ax.transAxes,
-        va="top",
-        ha="left",
-        family="monospace",
-        fontsize=8.8,
-        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.82),
-    )
 
     ax = ax_zoom
     if len(ref_zoom_enu):
@@ -721,23 +704,23 @@ def main() -> None:
     ax.set_xlim(float(xmin - pad), float(xmax + pad))
     ax.set_ylim(float(ymin - pad), float(ymax + pad))
     ax.set_title(
-        "Zoom: RTKLIB weak / libgnss++ stable\n"
+        "(3) Zoom: RTKLIB weak / libgnss++ stable\n"
         f"tow {zoom_start:.1f}-{zoom_end:.1f}s, lib={zoom_pair.lib_epoch.horiz_error_m:.1f}m, RTKLIB={zoom_pair.rtklib_epoch.horiz_error_m:.1f}m"
     )
     ax.set_xlabel("East (m)")
     ax.set_ylabel("North (m)")
     ax.grid(alpha=0.3)
     ax.set_aspect("equal", adjustable="box")
-    add_panel_number(ax, 3)
     solver_legend = ax.legend(handles=build_solver_legend_handles(), loc="upper right", fontsize=7.8)
     ax.add_artist(solver_legend)
     ax.legend(handles=build_status_legend_handles(), loc="lower right", fontsize=7.8, ncol=2)
 
     ax = ax_text
     ax.axis("off")
-    add_panel_number(ax, 4)
     text = "\n".join(
         [
+            "(4) Benchmark Summary",
+            "",
             "Dataset: UrbanNav Tokyo Odaiba (open)",
             "Ground truth: reference.csv (Applanix POS LV620)",
             "",
@@ -762,6 +745,18 @@ def main() -> None:
             f"  libgnss++ median |up|={lib_common_summary['median_abs_up_m']:.3f} m",
             f"  RTKLIB    median |up|={rtklib_common_summary['median_abs_up_m']:.3f} m",
             "",
+            "Status breakdown:",
+            "  RTKLIB",
+            f"    FIXED {sum(epoch.status == 1 for epoch in rtklib_matched)}",
+            f"    FLOAT {sum(epoch.status == 2 for epoch in rtklib_matched)}",
+            f"    DGPS  {sum(epoch.status == 4 for epoch in rtklib_matched)}",
+            f"    SPP   {sum(epoch.status == 5 for epoch in rtklib_matched)}",
+            "  libgnss++",
+            f"    FIXED {sum(epoch.status == 4 for epoch in lib_matched)}",
+            f"    FLOAT {sum(epoch.status == 3 for epoch in lib_matched)}",
+            f"    DGPS  {sum(epoch.status == 2 for epoch in lib_matched)}",
+            f"    SPP   {sum(epoch.status == 1 for epoch in lib_matched)}",
+            "",
             "Status colors:",
             "  green=FIXED, orange=FLOAT, blue=DGPS, red=SPP/SINGLE",
             "Markers: circle=libgnss++, square=RTKLIB",
@@ -779,11 +774,10 @@ def main() -> None:
     rtklib_h = np.array([epoch.horiz_error_m for epoch in rtklib_matched])
     ax.semilogy((rtklib_t - rtklib_t[0]) / 60.0, rtklib_h, color=SOLVER_LINE_COLORS["RTKLIB"], linewidth=1.1, label="RTKLIB")
     ax.semilogy((lib_t - lib_t[0]) / 60.0, lib_h, color=SOLVER_LINE_COLORS["libgnss++"], linewidth=1.1, label="libgnss++")
-    ax.set_title("Horizontal Error vs Ground Truth")
+    ax.set_title("(5) Horizontal Error vs Ground Truth")
     ax.set_xlabel("Time from start (min)")
     ax.set_ylabel("Horizontal error (m, log scale)")
     ax.grid(alpha=0.3)
-    add_panel_number(ax, 5)
     ax.legend(loc="upper right")
 
     ax = ax_up
@@ -792,11 +786,10 @@ def main() -> None:
     ax.plot((rtklib_t - rtklib_t[0]) / 60.0, rtklib_up, color=SOLVER_LINE_COLORS["RTKLIB"], linewidth=1.0, label="RTKLIB")
     ax.plot((lib_t - lib_t[0]) / 60.0, lib_up, color=SOLVER_LINE_COLORS["libgnss++"], linewidth=1.0, label="libgnss++")
     ax.axhline(0.0, color="#475569", linewidth=0.9, linestyle="--", alpha=0.8)
-    ax.set_title("Signed Vertical Error vs Ground Truth")
+    ax.set_title("(6) Signed Vertical Error vs Ground Truth")
     ax.set_xlabel("Time from start (min)")
     ax.set_ylabel("Up error (m)")
     ax.grid(alpha=0.3)
-    add_panel_number(ax, 6)
     ax.legend(loc="upper right")
 
     ax = ax_cdf
@@ -804,11 +797,10 @@ def main() -> None:
     lib_x, lib_pct = cdf_xy(lib_matched)
     ax.semilogx(rtklib_x, rtklib_pct, color=SOLVER_LINE_COLORS["RTKLIB"], linewidth=1.4, label="RTKLIB")
     ax.semilogx(lib_x, lib_pct, color=SOLVER_LINE_COLORS["libgnss++"], linewidth=1.4, label="libgnss++")
-    ax.set_title("Horizontal Error CDF")
+    ax.set_title("(7) Horizontal Error CDF")
     ax.set_xlabel("Horizontal error (m, log scale)")
     ax.set_ylabel("CDF (%)")
     ax.grid(alpha=0.3)
-    add_panel_number(ax, 7)
     ax.legend(loc="lower right")
 
     fig.suptitle(args.title, fontsize=16)
