@@ -23,7 +23,6 @@ TEXT = "#14213d"
 MUTED = "#5f6c7b"
 LIB = "#c56a1a"
 RTKLIB = "#2563eb"
-WIN = "#18794e"
 PANEL = "#fffaf2"
 
 
@@ -39,28 +38,6 @@ def load_image(path: Path) -> object | None:
     from PIL import Image
 
     return Image.open(path).convert("RGB")
-
-
-def draw_metric(ax, title: str, lib_value: str, rtklib_value: str, kicker: str, lib_better: bool) -> None:
-    from matplotlib.patches import FancyBboxPatch
-
-    ax.set_axis_off()
-    patch = FancyBboxPatch(
-        (0, 0),
-        1,
-        1,
-        boxstyle="round,pad=0.012,rounding_size=0.035",
-        linewidth=1.2,
-        edgecolor=WIN if lib_better else RTKLIB,
-        facecolor=PANEL,
-    )
-    ax.add_patch(patch)
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.text(0.05, 0.76, title, fontsize=12, color=MUTED, weight="bold", va="center")
-    ax.text(0.05, 0.46, lib_value, fontsize=20, color=LIB, weight="bold", va="center")
-    ax.text(0.62, 0.46, rtklib_value, fontsize=20, color=RTKLIB, weight="bold", va="center", ha="right")
-    ax.text(0.05, 0.16, kicker, fontsize=11, color=MUTED, va="center")
 
 
 def draw_image_panel(ax, title: str, image: object | None, edge_color: str) -> None:
@@ -124,7 +101,7 @@ def main() -> None:
     lib_img = load_image(lib_2d_path)
 
     fig = plt.figure(figsize=(12, 6.3), dpi=100, facecolor=BG)
-    grid = fig.add_gridspec(3, 2, height_ratios=[0.34, 1.08, 0.48], hspace=0.16, wspace=0.10)
+    grid = fig.add_gridspec(3, 2, height_ratios=[0.30, 1.16, 0.16], hspace=0.12, wspace=0.10)
 
     ax_head = fig.add_subplot(grid[0, :])
     ax_head.set_axis_off()
@@ -145,38 +122,29 @@ def main() -> None:
     ax_lib = fig.add_subplot(grid[1, 1])
     draw_image_panel(ax_lib, "libgnss++ 2D trajectory", lib_img, LIB)
 
-    metric_grid = grid[2, :].subgridspec(1, 4, wspace=0.12)
-    draw_metric(
-        fig.add_subplot(metric_grid[0, 0]),
-        "Matched epochs",
-        f"{int(lib_summary['epochs']):,}",
-        f"{int(rtklib_summary['epochs']):,}",
-        "libgnss++ keeps more of the drive",
-        True,
+    ax_footer = fig.add_subplot(grid[2, :])
+    ax_footer.set_axis_off()
+    ax_footer.text(
+        0.00,
+        0.60,
+        (
+            f"Matched epochs {int(lib_summary['epochs']):,} vs {int(rtklib_summary['epochs']):,}   "
+            f"|   Fix rate {lib_summary['fix_rate_pct']:.1f}% vs {rtklib_summary['fix_rate_pct']:.1f}%   "
+            f"|   Common median H {lib_common_summary['median_h_m']:.3f} m vs {rtklib_common_summary['median_h_m']:.3f} m   "
+            f"|   Common p95 H {lib_common_summary['p95_h_m']:.2f} m vs {rtklib_common_summary['p95_h_m']:.2f} m"
+        ),
+        fontsize=11.2,
+        color=TEXT,
+        weight="bold",
+        va="center",
     )
-    draw_metric(
-        fig.add_subplot(metric_grid[0, 1]),
-        "Fix rate",
-        f"{lib_summary['fix_rate_pct']:.1f}%",
-        f"{rtklib_summary['fix_rate_pct']:.1f}%",
-        "all matched epochs",
-        lib_summary["fix_rate_pct"] >= rtklib_summary["fix_rate_pct"],
-    )
-    draw_metric(
-        fig.add_subplot(metric_grid[0, 2]),
-        "Common median H",
-        f"{lib_common_summary['median_h_m']:.3f} m",
-        f"{rtklib_common_summary['median_h_m']:.3f} m",
-        "near parity on equal epochs",
-        lib_common_summary["median_h_m"] <= rtklib_common_summary["median_h_m"],
-    )
-    draw_metric(
-        fig.add_subplot(metric_grid[0, 3]),
-        "Common p95 H",
-        f"{lib_common_summary['p95_h_m']:.2f} m",
-        f"{rtklib_common_summary['p95_h_m']:.2f} m",
-        "tail error matters in urban motion",
-        lib_common_summary["p95_h_m"] <= rtklib_common_summary["p95_h_m"],
+    ax_footer.text(
+        0.00,
+        0.10,
+        "Open dataset: UrbanNav Tokyo Odaiba. Full comparison and summary JSON are checked into this repo.",
+        fontsize=10.5,
+        color=MUTED,
+        va="center",
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

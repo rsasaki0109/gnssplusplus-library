@@ -28,9 +28,9 @@ Current checked-in Odaiba snapshot:
 |---|---|
 | ![RTKLIB 2D trajectory](docs/driving_odaiba_comparison_rtklib_2d.png) | ![libgnss++ 2D trajectory](docs/driving_odaiba_comparison_libgnss_2d.png) |
 
-Additional checked-in artifacts:
-- [Detailed scorecard](docs/driving_odaiba_scorecard.png)
+More detail:
 - [Full comparison figure](docs/driving_odaiba_comparison.png)
+- [Detailed scorecard](docs/driving_odaiba_scorecard.png)
 - [Summary JSON](output/odaiba_summary.json)
 
 ## Benchmark Snapshot
