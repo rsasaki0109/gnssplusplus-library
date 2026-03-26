@@ -109,6 +109,12 @@ def parse_args() -> argparse.Namespace:
         help="Output path for the scorecard figure.",
     )
     parser.add_argument(
+        "--social-card-png",
+        type=Path,
+        default=ROOT_DIR / "docs/driving_odaiba_social_card.png",
+        help="Output path for the social-card figure.",
+    )
+    parser.add_argument(
         "--comparison-title",
         default="Urban Driving Comparison: libgnss++ vs RTKLIB on UrbanNav Odaiba",
         help="Title for the comparison figure.",
@@ -117,6 +123,11 @@ def parse_args() -> argparse.Namespace:
         "--scorecard-title",
         default="UrbanNav Tokyo Odaiba",
         help="Title for the scorecard figure.",
+    )
+    parser.add_argument(
+        "--social-card-title",
+        default="UrbanNav Tokyo Odaiba",
+        help="Title for the social-card figure.",
     )
     parser.add_argument(
         "--summary-json",
@@ -262,6 +273,7 @@ def write_summary_json(args: argparse.Namespace) -> dict[str, object]:
         "malib_pos": str(args.malib_pos) if args.malib_pos.exists() else None,
         "comparison_png": str(args.comparison_png),
         "scorecard_png": str(args.scorecard_png),
+        "social_card_png": str(args.social_card_png),
         "common_epoch_pairs": len(pairs),
         "rtklib_common_epoch_pairs": len(pairs),
         "malib_common_epoch_pairs": len(malib_pairs) if malib_summary is not None else None,
@@ -621,6 +633,23 @@ def main() -> int:
         ]
     )
 
+    run_command(
+        [
+            *gnss_command,
+            "social-card",
+            "--lib-pos",
+            str(args.lib_pos),
+            "--rtklib-pos",
+            str(args.rtklib_pos),
+            "--reference-csv",
+            str(args.reference_csv),
+            "--output",
+            str(args.social_card_png),
+            "--title",
+            args.social_card_title,
+        ]
+    )
+
     summary = write_summary_json(args)
     enforce_summary_requirements(summary, args)
 
@@ -631,6 +660,7 @@ def main() -> int:
         print(f"  MALIB: {args.malib_pos}")
     print(f"  comparison: {args.comparison_png}")
     print(f"  scorecard: {args.scorecard_png}")
+    print(f"  social card: {args.social_card_png}")
     print(f"  summary: {args.summary_json}")
     return 0
 

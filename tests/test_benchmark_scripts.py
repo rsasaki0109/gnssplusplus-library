@@ -28,6 +28,7 @@ import gnss_ppp_static_signoff as ppp_static_signoff  # noqa: E402
 import gnss_short_baseline_signoff as short_signoff  # noqa: E402
 import generate_driving_comparison as comparison  # noqa: E402
 import generate_odaiba_scorecard as scorecard  # noqa: E402
+import generate_odaiba_social_card as social_card  # noqa: E402
 
 
 class ScorecardHelpersTest(unittest.TestCase):
@@ -267,6 +268,57 @@ class ScorecardRenderTest(unittest.TestCase):
             self.assertTrue(output_png.exists())
             self.assertGreater(output_png.stat().st_size, 0)
 
+    def test_social_card_main_renders_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_social_card_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            reference_csv = temp_root / "reference.csv"
+            lib_pos = temp_root / "lib.pos"
+            rtklib_pos = temp_root / "rtklib.pos"
+            output_png = temp_root / "social_card.png"
+
+            rows = [
+                (2000, 0.0, 35.0000000, 139.0000000, 10.0),
+                (2000, 1.0, 35.0000100, 139.0000100, 10.2),
+                (2000, 2.0, 35.0000200, 139.0000200, 10.4),
+            ]
+            self.write_reference_csv(reference_csv, rows)
+            self.write_lib_pos(
+                lib_pos,
+                [
+                    (2000, 0.0, 35.0000000, 139.0000000, 10.0, 4),
+                    (2000, 1.0, 35.0000102, 139.0000102, 10.3, 4),
+                    (2000, 2.0, 35.0000201, 139.0000201, 10.5, 4),
+                ],
+            )
+            self.write_rtklib_pos(
+                rtklib_pos,
+                [
+                    (2000, 0.0, 35.0000000, 139.0000000, 10.0, 1),
+                    (2000, 1.0, 35.0000100, 139.0000100, 10.2, 1),
+                    (2000, 2.0, 35.0000200, 139.0000200, 10.4, 1),
+                ],
+            )
+
+            argv = [
+                "generate_odaiba_social_card.py",
+                "--lib-pos",
+                str(lib_pos),
+                "--rtklib-pos",
+                str(rtklib_pos),
+                "--reference-csv",
+                str(reference_csv),
+                "--output",
+                str(output_png),
+                "--title",
+                "Synthetic Odaiba",
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    social_card.main()
+
+            self.assertTrue(output_png.exists())
+            self.assertGreater(output_png.stat().st_size, 0)
+
 
 class SegmentedBenchmarkTest(unittest.TestCase):
     def write_reference_csv(self, path: Path, tows: list[float]) -> None:
@@ -356,6 +408,7 @@ class SegmentedBenchmarkTest(unittest.TestCase):
             "malib_pos": temp_root / "malib.pos",
             "comparison_png": temp_root / "comparison.png",
             "scorecard_png": temp_root / "scorecard.png",
+            "social_card_png": temp_root / "social_card.png",
             "summary_json": temp_root / "summary.json",
         }
         for key, path in paths.items():
@@ -367,6 +420,7 @@ class SegmentedBenchmarkTest(unittest.TestCase):
             **paths,
             "comparison_title": "Comparison",
             "scorecard_title": "Scorecard",
+            "social_card_title": "Social Card",
             "require_all_epochs_min": 0,
             "require_common_epoch_pairs_min": 0,
             "require_lib_all_p95_h_max": None,
@@ -436,10 +490,11 @@ class SegmentedBenchmarkTest(unittest.TestCase):
             segmented.assert_called_once()
             summary_writer.assert_called_once_with(args)
             summary_checks.assert_called_once_with(summary_writer.return_value, args)
-            self.assertEqual(len(commands), 3)
+            self.assertEqual(len(commands), 4)
             self.assertEqual(commands[0][0], str(args.rtklib_bin))
             self.assertEqual(commands[1][2], "driving-compare")
             self.assertEqual(commands[2][2], "scorecard")
+            self.assertEqual(commands[3][2], "social-card")
 
     def test_write_summary_json_exports_all_and_common_epoch_metrics(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_benchmark_summary_") as temp_dir:
@@ -525,12 +580,13 @@ class SegmentedBenchmarkTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             summary_writer.assert_called_once_with(args)
             summary_checks.assert_called_once_with(summary_writer.return_value, args)
-            self.assertEqual(len(commands), 5)
+            self.assertEqual(len(commands), 6)
             self.assertEqual(commands[0][2], "solve")
             self.assertEqual(commands[1][0], str(args.rtklib_bin))
             self.assertEqual(commands[2][0], str(args.malib_bin))
             self.assertEqual(commands[3][2], "driving-compare")
             self.assertEqual(commands[4][2], "scorecard")
+            self.assertEqual(commands[5][2], "social-card")
 
     def test_enforce_summary_requirements_passes_and_fails(self) -> None:
         payload = {
