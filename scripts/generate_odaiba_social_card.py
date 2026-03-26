@@ -15,6 +15,8 @@ from generate_driving_comparison import (
     read_libgnss_pos,
     read_reference_csv,
     read_rtklib_pos,
+    STATUS_ORDER,
+    STATUS_STYLES,
     trajectory_enu,
 )
 
@@ -25,6 +27,32 @@ MUTED = "#5f6c7b"
 LIB = "#c56a1a"
 RTKLIB = "#2563eb"
 PANEL = "#fffaf2"
+
+
+def draw_status_legend(ax) -> None:
+    legend_x = 0.71
+    label_x = legend_x + 0.022
+    top_y = 0.63
+    row_gap = 0.23
+    col_gap = 0.12
+
+    ax.text(legend_x, 0.94, "Status legend", fontsize=11.0, color=MUTED, weight="bold", va="top")
+
+    for index, status_name in enumerate(STATUS_ORDER):
+        row = index // 2
+        col = index % 2
+        x = legend_x + col * col_gap
+        y = top_y - row * row_gap
+        ax.scatter(
+            [x],
+            [y],
+            s=54,
+            color=STATUS_STYLES[status_name],
+            edgecolors="white",
+            linewidths=0.7,
+            zorder=3,
+        )
+        ax.text(label_x + col * col_gap, y, status_name, fontsize=11, color=TEXT, va="center")
 
 
 def draw_trajectory_panel(ax, title: str, reference_xy, matched, solver: str, edge_color: str, limits) -> None:
@@ -85,8 +113,11 @@ def main() -> None:
 
     ax_head = fig.add_subplot(grid[0, :])
     ax_head.set_axis_off()
+    ax_head.set_xlim(0, 1)
+    ax_head.set_ylim(0, 1)
     ax_head.text(0.0, 0.80, args.title, fontsize=15, color=MUTED, weight="bold")
     ax_head.text(0.0, 0.42, "libgnss++ vs RTKLIB", fontsize=29, color=TEXT, weight="bold")
+    draw_status_legend(ax_head)
 
     ax_rtk = fig.add_subplot(grid[1, 0])
     draw_trajectory_panel(ax_rtk, "RTKLIB 2D trajectory", ref_xy, rtklib_matched, "RTKLIB", RTKLIB, limits)
