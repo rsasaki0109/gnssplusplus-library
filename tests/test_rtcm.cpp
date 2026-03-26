@@ -131,6 +131,133 @@ std::vector<uint8_t> buildRtcmFrame(const io::RTCMMessage& message) {
     return frame;
 }
 
+std::vector<uint8_t> buildGpsSsrCombined1060Frame() {
+    constexpr int total_bits = 68 + 205;
+    std::vector<uint8_t> payload((total_bits + 7) / 8, 0);
+    int bit = 0;
+    setUnsignedBits(payload, bit, 12, 1060); bit += 12;
+    setUnsignedBits(payload, bit, 20, 345600); bit += 20;
+    setUnsignedBits(payload, bit, 4, 2); bit += 4;   // update interval = 5 s
+    setUnsignedBits(payload, bit, 1, 0); bit += 1;   // sync
+    setUnsignedBits(payload, bit, 1, 1); bit += 1;   // ref datum
+    setUnsignedBits(payload, bit, 4, 7); bit += 4;   // iod
+    setUnsignedBits(payload, bit, 16, 21); bit += 16; // provider
+    setUnsignedBits(payload, bit, 4, 3); bit += 4;   // solution id
+    setUnsignedBits(payload, bit, 6, 1); bit += 6;   // nsat
+
+    setUnsignedBits(payload, bit, 6, 7); bit += 6;   // G07
+    setUnsignedBits(payload, bit, 8, 12); bit += 8;  // iode
+    setSignedBits(payload, bit, 22, 1234); bit += 22;   // 0.1234 m
+    setSignedBits(payload, bit, 20, -200); bit += 20;   // -0.0800 m
+    setSignedBits(payload, bit, 20, 300); bit += 20;    // 0.1200 m
+    setSignedBits(payload, bit, 21, 123); bit += 21;    // 0.000123 m/s
+    setSignedBits(payload, bit, 19, -114); bit += 19;   // -0.000456 m/s
+    setSignedBits(payload, bit, 19, 57); bit += 19;     // 0.000228 m/s
+    setSignedBits(payload, bit, 22, -2500); bit += 22;  // -0.2500 m
+    setSignedBits(payload, bit, 21, 1234); bit += 21;   // 0.001234 m/s
+    setSignedBits(payload, bit, 27, -200); bit += 27;   // -0.000004 m/s^2
+
+    io::RTCMMessage message(io::RTCMMessageType::RTCM_1060, payload);
+    message.valid = true;
+    return buildRtcmFrame(message);
+}
+
+std::vector<uint8_t> buildGlonassSsrCombined1066Frame() {
+    constexpr int total_bits = 65 + 204;
+    std::vector<uint8_t> payload((total_bits + 7) / 8, 0);
+    int bit = 0;
+    setUnsignedBits(payload, bit, 12, 1066); bit += 12;
+    setUnsignedBits(payload, bit, 17, 43210); bit += 17; // GLONASS TOD
+    setUnsignedBits(payload, bit, 4, 5); bit += 4;       // update interval = 30 s
+    setUnsignedBits(payload, bit, 1, 0); bit += 1;       // sync
+    setUnsignedBits(payload, bit, 1, 0); bit += 1;       // ref datum
+    setUnsignedBits(payload, bit, 4, 9); bit += 4;       // iod
+    setUnsignedBits(payload, bit, 16, 8); bit += 16;     // provider
+    setUnsignedBits(payload, bit, 4, 1); bit += 4;       // solution id
+    setUnsignedBits(payload, bit, 6, 1); bit += 6;       // nsat
+
+    setUnsignedBits(payload, bit, 5, 8); bit += 5;       // R08
+    setUnsignedBits(payload, bit, 8, 44); bit += 8;      // iode
+    setSignedBits(payload, bit, 22, -800); bit += 22;    // -0.0800 m
+    setSignedBits(payload, bit, 20, 175); bit += 20;     // 0.0700 m
+    setSignedBits(payload, bit, 20, -250); bit += 20;    // -0.1000 m
+    setSignedBits(payload, bit, 21, -90); bit += 21;     // -0.000090 m/s
+    setSignedBits(payload, bit, 19, 80); bit += 19;      // 0.000320 m/s
+    setSignedBits(payload, bit, 19, -40); bit += 19;     // -0.000160 m/s
+    setSignedBits(payload, bit, 22, 1800); bit += 22;    // 0.1800 m
+    setSignedBits(payload, bit, 21, -220); bit += 21;    // -0.000220 m/s
+    setSignedBits(payload, bit, 27, 150); bit += 27;     // 0.000003 m/s^2
+
+    io::RTCMMessage message(io::RTCMMessageType::RTCM_1066, payload);
+    message.valid = true;
+    return buildRtcmFrame(message);
+}
+
+std::vector<uint8_t> buildGpsSsrCodeBias1059Frame() {
+    constexpr int total_bits = 67 + 6 + 5 + 19;
+    std::vector<uint8_t> payload((total_bits + 7) / 8, 0);
+    int bit = 0;
+    setUnsignedBits(payload, bit, 12, 1059); bit += 12;
+    setUnsignedBits(payload, bit, 20, 345600); bit += 20;
+    setUnsignedBits(payload, bit, 4, 2); bit += 4;
+    setUnsignedBits(payload, bit, 1, 0); bit += 1;
+    setUnsignedBits(payload, bit, 4, 7); bit += 4;
+    setUnsignedBits(payload, bit, 16, 21); bit += 16;
+    setUnsignedBits(payload, bit, 4, 3); bit += 4;
+    setUnsignedBits(payload, bit, 6, 1); bit += 6;
+
+    setUnsignedBits(payload, bit, 6, 7); bit += 6;
+    setUnsignedBits(payload, bit, 5, 1); bit += 5;
+    setUnsignedBits(payload, bit, 5, 3); bit += 5;
+    setSignedBits(payload, bit, 14, -12); bit += 14; // -0.12 m
+
+    io::RTCMMessage message(io::RTCMMessageType::RTCM_1059, payload);
+    message.valid = true;
+    return buildRtcmFrame(message);
+}
+
+std::vector<uint8_t> buildGpsSsrUra1061Frame() {
+    constexpr int total_bits = 67 + 6 + 6;
+    std::vector<uint8_t> payload((total_bits + 7) / 8, 0);
+    int bit = 0;
+    setUnsignedBits(payload, bit, 12, 1061); bit += 12;
+    setUnsignedBits(payload, bit, 20, 345600); bit += 20;
+    setUnsignedBits(payload, bit, 4, 2); bit += 4;
+    setUnsignedBits(payload, bit, 1, 0); bit += 1;
+    setUnsignedBits(payload, bit, 4, 7); bit += 4;
+    setUnsignedBits(payload, bit, 16, 21); bit += 16;
+    setUnsignedBits(payload, bit, 4, 3); bit += 4;
+    setUnsignedBits(payload, bit, 6, 1); bit += 6;
+
+    setUnsignedBits(payload, bit, 6, 7); bit += 6;
+    setUnsignedBits(payload, bit, 6, 9); bit += 6;
+
+    io::RTCMMessage message(io::RTCMMessageType::RTCM_1061, payload);
+    message.valid = true;
+    return buildRtcmFrame(message);
+}
+
+std::vector<uint8_t> buildGpsSsrHighRateClock1062Frame() {
+    constexpr int total_bits = 67 + 6 + 22;
+    std::vector<uint8_t> payload((total_bits + 7) / 8, 0);
+    int bit = 0;
+    setUnsignedBits(payload, bit, 12, 1062); bit += 12;
+    setUnsignedBits(payload, bit, 20, 345600); bit += 20;
+    setUnsignedBits(payload, bit, 4, 2); bit += 4;
+    setUnsignedBits(payload, bit, 1, 0); bit += 1;
+    setUnsignedBits(payload, bit, 4, 7); bit += 4;
+    setUnsignedBits(payload, bit, 16, 21); bit += 16;
+    setUnsignedBits(payload, bit, 4, 3); bit += 4;
+    setUnsignedBits(payload, bit, 6, 1); bit += 6;
+
+    setUnsignedBits(payload, bit, 6, 7); bit += 6;
+    setSignedBits(payload, bit, 22, 250); bit += 22; // 0.0250 m
+
+    io::RTCMMessage message(io::RTCMMessageType::RTCM_1062, payload);
+    message.valid = true;
+    return buildRtcmFrame(message);
+}
+
 double wavelengthForSignal(SignalType signal) {
     switch (signal) {
         case SignalType::GPS_L1CA:
@@ -1694,6 +1821,130 @@ TEST_F(RTCMProcessorTest, DecodesGlonass1020FrameIntoNavigationData) {
     EXPECT_NEAR(decoded_clk_drift, input_clk_drift, 1.0e-12);
 }
 
+TEST_F(RTCMProcessorTest, DecodesGps1060CombinedSsrCorrections) {
+    const auto frame = buildGpsSsrCombined1060Frame();
+
+    const auto decoded_messages = processor.decode(frame.data(), frame.size());
+    ASSERT_EQ(decoded_messages.size(), 1U);
+    EXPECT_EQ(decoded_messages.front().type, io::RTCMMessageType::RTCM_1060);
+
+    std::vector<io::RTCMSSRCorrection> corrections;
+    ASSERT_TRUE(processor.decodeSSRCorrections(decoded_messages.front(), corrections));
+    ASSERT_EQ(corrections.size(), 1U);
+
+    const auto& correction = corrections.front();
+    EXPECT_EQ(correction.satellite.system, GNSSSystem::GPS);
+    EXPECT_EQ(correction.satellite.prn, 7);
+    EXPECT_DOUBLE_EQ(correction.update_interval_seconds, 5.0);
+    EXPECT_EQ(correction.issue_of_data, 7);
+    EXPECT_EQ(correction.provider_id, 21);
+    EXPECT_EQ(correction.solution_id, 3);
+    EXPECT_TRUE(correction.reference_datum);
+    EXPECT_EQ(correction.iode, 12);
+    EXPECT_TRUE(correction.has_orbit);
+    EXPECT_TRUE(correction.has_clock);
+    EXPECT_NEAR(correction.time.tow, 345600.0, 1e-6);
+    EXPECT_NEAR(correction.orbit_delta_rac_m.x(), 0.1234, 1e-6);
+    EXPECT_NEAR(correction.orbit_delta_rac_m.y(), -0.0800, 1e-6);
+    EXPECT_NEAR(correction.orbit_delta_rac_m.z(), 0.1200, 1e-6);
+    EXPECT_NEAR(correction.orbit_rate_rac_mps.x(), 0.000123, 1e-9);
+    EXPECT_NEAR(correction.orbit_rate_rac_mps.y(), -0.000456, 1e-9);
+    EXPECT_NEAR(correction.orbit_rate_rac_mps.z(), 0.000228, 1e-9);
+    EXPECT_NEAR(correction.clock_delta_poly.x(), -0.2500, 1e-6);
+    EXPECT_NEAR(correction.clock_delta_poly.y(), 0.001234, 1e-9);
+    EXPECT_NEAR(correction.clock_delta_poly.z(), -0.000004, 1e-10);
+}
+
+TEST_F(RTCMProcessorTest, DecodesGlonass1066CombinedSsrCorrections) {
+    const auto frame = buildGlonassSsrCombined1066Frame();
+
+    const auto decoded_messages = processor.decode(frame.data(), frame.size());
+    ASSERT_EQ(decoded_messages.size(), 1U);
+    EXPECT_EQ(decoded_messages.front().type, io::RTCMMessageType::RTCM_1066);
+
+    std::vector<io::RTCMSSRCorrection> corrections;
+    ASSERT_TRUE(processor.decodeSSRCorrections(decoded_messages.front(), corrections));
+    ASSERT_EQ(corrections.size(), 1U);
+
+    const auto& correction = corrections.front();
+    EXPECT_EQ(correction.satellite.system, GNSSSystem::GLONASS);
+    EXPECT_EQ(correction.satellite.prn, 8);
+    EXPECT_DOUBLE_EQ(correction.update_interval_seconds, 30.0);
+    EXPECT_EQ(correction.issue_of_data, 9);
+    EXPECT_EQ(correction.provider_id, 8);
+    EXPECT_EQ(correction.solution_id, 1);
+    EXPECT_FALSE(correction.reference_datum);
+    EXPECT_EQ(correction.iode, 44);
+    EXPECT_TRUE(correction.has_orbit);
+    EXPECT_TRUE(correction.has_clock);
+    EXPECT_NEAR(std::fmod(correction.time.tow + 86400.0, 86400.0), 32428.0, 1.0);
+    EXPECT_NEAR(correction.orbit_delta_rac_m.x(), -0.0800, 1e-6);
+    EXPECT_NEAR(correction.orbit_delta_rac_m.y(), 0.0700, 1e-6);
+    EXPECT_NEAR(correction.orbit_delta_rac_m.z(), -0.1000, 1e-6);
+    EXPECT_NEAR(correction.orbit_rate_rac_mps.x(), -0.000090, 1e-9);
+    EXPECT_NEAR(correction.orbit_rate_rac_mps.y(), 0.000320, 1e-9);
+    EXPECT_NEAR(correction.orbit_rate_rac_mps.z(), -0.000160, 1e-9);
+    EXPECT_NEAR(correction.clock_delta_poly.x(), 0.1800, 1e-6);
+    EXPECT_NEAR(correction.clock_delta_poly.y(), -0.000220, 1e-9);
+    EXPECT_NEAR(correction.clock_delta_poly.z(), 0.000003, 1e-10);
+}
+
+TEST_F(RTCMProcessorTest, DecodesGps1059CodeBiasCorrections) {
+    const auto frame = buildGpsSsrCodeBias1059Frame();
+
+    const auto decoded_messages = processor.decode(frame.data(), frame.size());
+    ASSERT_EQ(decoded_messages.size(), 1U);
+    EXPECT_EQ(decoded_messages.front().type, io::RTCMMessageType::RTCM_1059);
+
+    std::vector<io::RTCMSSRCorrection> corrections;
+    ASSERT_TRUE(processor.decodeSSRCorrections(decoded_messages.front(), corrections));
+    ASSERT_EQ(corrections.size(), 1U);
+
+    const auto& correction = corrections.front();
+    EXPECT_EQ(correction.satellite.system, GNSSSystem::GPS);
+    EXPECT_EQ(correction.satellite.prn, 7);
+    EXPECT_TRUE(correction.has_code_bias);
+    ASSERT_EQ(correction.code_bias_m.size(), 1U);
+    EXPECT_NEAR(correction.code_bias_m.at(3), -0.12, 1e-9);
+}
+
+TEST_F(RTCMProcessorTest, DecodesGps1061UraCorrections) {
+    const auto frame = buildGpsSsrUra1061Frame();
+
+    const auto decoded_messages = processor.decode(frame.data(), frame.size());
+    ASSERT_EQ(decoded_messages.size(), 1U);
+    EXPECT_EQ(decoded_messages.front().type, io::RTCMMessageType::RTCM_1061);
+
+    std::vector<io::RTCMSSRCorrection> corrections;
+    ASSERT_TRUE(processor.decodeSSRCorrections(decoded_messages.front(), corrections));
+    ASSERT_EQ(corrections.size(), 1U);
+
+    const auto& correction = corrections.front();
+    EXPECT_EQ(correction.satellite.system, GNSSSystem::GPS);
+    EXPECT_EQ(correction.satellite.prn, 7);
+    EXPECT_TRUE(correction.has_ura);
+    EXPECT_EQ(correction.ura_index, 9);
+    EXPECT_NEAR(correction.ura_sigma_m, 0.00275, 1e-12);
+}
+
+TEST_F(RTCMProcessorTest, DecodesGps1062HighRateClockCorrections) {
+    const auto frame = buildGpsSsrHighRateClock1062Frame();
+
+    const auto decoded_messages = processor.decode(frame.data(), frame.size());
+    ASSERT_EQ(decoded_messages.size(), 1U);
+    EXPECT_EQ(decoded_messages.front().type, io::RTCMMessageType::RTCM_1062);
+
+    std::vector<io::RTCMSSRCorrection> corrections;
+    ASSERT_TRUE(processor.decodeSSRCorrections(decoded_messages.front(), corrections));
+    ASSERT_EQ(corrections.size(), 1U);
+
+    const auto& correction = corrections.front();
+    EXPECT_EQ(correction.satellite.system, GNSSSystem::GPS);
+    EXPECT_EQ(correction.satellite.prn, 7);
+    EXPECT_TRUE(correction.has_high_rate_clock);
+    EXPECT_NEAR(correction.high_rate_clock_m, 0.0250, 1e-9);
+}
+
 TEST(RTCMReaderTest, ReadsMessagesFromFile) {
     const auto frame = buildRtcm1005(10.0, 20.0, 30.0);
     const std::filesystem::path temp_path =
@@ -1781,19 +2032,39 @@ TEST(RTCMUtilsTest, ClassifiesMessageFamilies) {
     EXPECT_TRUE(io::rtcm_utils::isStationMessage(io::RTCMMessageType::RTCM_1005));
     EXPECT_TRUE(io::rtcm_utils::isObservationMessage(io::RTCMMessageType::RTCM_1074));
     EXPECT_TRUE(io::rtcm_utils::isEphemerisMessage(io::RTCMMessageType::RTCM_1019));
+    EXPECT_TRUE(io::rtcm_utils::isSSRMessage(io::RTCMMessageType::RTCM_1057));
+    EXPECT_TRUE(io::rtcm_utils::isSSRMessage(io::RTCMMessageType::RTCM_1059));
+    EXPECT_TRUE(io::rtcm_utils::isSSRMessage(io::RTCMMessageType::RTCM_1061));
+    EXPECT_TRUE(io::rtcm_utils::isSSRMessage(io::RTCMMessageType::RTCM_1062));
     EXPECT_FALSE(io::rtcm_utils::isObservationMessage(io::RTCMMessageType::RTCM_1005));
 }
 
 TEST(RTCMUtilsTest, ReportsNamesAndSystems) {
     EXPECT_EQ(io::rtcm_utils::getMessageTypeName(io::RTCMMessageType::RTCM_1005),
               "Reference Station ARP");
+    EXPECT_EQ(io::rtcm_utils::getMessageTypeName(io::RTCMMessageType::RTCM_1060),
+              "GPS SSR Combined Orbit/Clock Correction");
+    EXPECT_EQ(io::rtcm_utils::getMessageTypeName(io::RTCMMessageType::RTCM_1059),
+              "GPS SSR Code Bias");
+    EXPECT_EQ(io::rtcm_utils::getMessageTypeName(io::RTCMMessageType::RTCM_1061),
+              "GPS SSR URA");
+    EXPECT_EQ(io::rtcm_utils::getMessageTypeName(io::RTCMMessageType::RTCM_1062),
+              "GPS SSR High-Rate Clock Correction");
     EXPECT_EQ(io::rtcm_utils::getSystemFromMessageType(io::RTCMMessageType::RTCM_1077),
               GNSSSystem::GPS);
+    EXPECT_EQ(io::rtcm_utils::getSystemFromMessageType(io::RTCMMessageType::RTCM_1059),
+              GNSSSystem::GPS);
+    EXPECT_EQ(io::rtcm_utils::getSystemFromMessageType(io::RTCMMessageType::RTCM_1066),
+              GNSSSystem::GLONASS);
     EXPECT_EQ(io::rtcm_utils::getSystemFromMessageType(io::RTCMMessageType::RTCM_1087),
               GNSSSystem::GLONASS);
     EXPECT_EQ(io::rtcm_utils::getSystemFromMessageType(io::RTCMMessageType::RTCM_1097),
               GNSSSystem::Galileo);
+    EXPECT_EQ(io::rtcm_utils::getSystemFromMessageType(io::RTCMMessageType::RTCM_1243),
+              GNSSSystem::Galileo);
     EXPECT_EQ(io::rtcm_utils::getSystemFromMessageType(io::RTCMMessageType::RTCM_1127),
+              GNSSSystem::BeiDou);
+    EXPECT_EQ(io::rtcm_utils::getSystemFromMessageType(io::RTCMMessageType::RTCM_1261),
               GNSSSystem::BeiDou);
 }
 

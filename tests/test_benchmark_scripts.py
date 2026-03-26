@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import sys
 import tempfile
@@ -21,6 +22,10 @@ sys.path.insert(0, str(APPS_DIR))
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import gnss_odaiba_benchmark as benchmark  # noqa: E402
+import gnss_clas_ppp as clas_ppp  # noqa: E402
+import gnss_ppp_kinematic_signoff as ppp_kinematic_signoff  # noqa: E402
+import gnss_ppp_static_signoff as ppp_static_signoff  # noqa: E402
+import gnss_short_baseline_signoff as short_signoff  # noqa: E402
 import generate_driving_comparison as comparison  # noqa: E402
 import generate_odaiba_scorecard as scorecard  # noqa: E402
 
@@ -34,6 +39,86 @@ class ScorecardHelpersTest(unittest.TestCase):
     def test_improvement_text_handles_zero_baseline(self) -> None:
         self.assertEqual(scorecard.improvement_text(1.0, 0.0), "n/a")
         self.assertEqual(scorecard.improvement_text(1.0, 4.0), "75%")
+
+
+class ClasCompactHelpersTest(unittest.TestCase):
+    def test_expand_compact_ssr_text_merges_high_rate_clock_and_system_tokens(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_compact_") as temp_dir:
+            output_csv = Path(temp_dir) / "expanded.csv"
+            payload = clas_ppp.expand_compact_ssr_text(
+                "\n".join(
+                    [
+                        "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m",
+                        "2200,345600.0,G,3,0.1,0.2,0.3,0.4,0.05",
+                        "2200,345600.0,QZSS,3,0.0,0.0,0.0,0.1",
+                    ]
+                ),
+                output_csv,
+            )
+
+            self.assertEqual(payload["rows_written"], 2)
+            self.assertEqual(payload["systems"], ["G", "J"])
+            lines = output_csv.read_text(encoding="ascii").splitlines()
+            self.assertEqual(lines[0], "# week,tow,sat,dx,dy,dz,dclock_m")
+            self.assertIn("2200,345600.000,G03,0.100000,0.200000,0.300000,0.450000", lines[1])
+            self.assertIn("2200,345600.000,J03,0.000000,0.000000,0.000000,0.100000", lines[2])
+
+    def test_expand_compact_ssr_text_preserves_optional_ura_code_and_phase_bias_tokens(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_compact_meta_") as temp_dir:
+            output_csv = Path(temp_dir) / "expanded.csv"
+            clas_ppp.expand_compact_ssr_text(
+                "\n".join(
+                    [
+                        "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m,ura_sigma_m=<m>,cbias:<id>=<m>,pbias:<id>=<m>",
+                        "2200,345600.0,G,3,0.1,0.2,0.3,0.4,0.05,ura_sigma_m=0.002750,cbias:2=-0.120000,pbias:2=0.015000",
+                    ]
+                ),
+                output_csv,
+            )
+
+            lines = output_csv.read_text(encoding="ascii").splitlines()
+            self.assertEqual(lines[0], "# week,tow,sat,dx,dy,dz,dclock_m")
+            self.assertEqual(
+                lines[1],
+                "2200,345600.000,G03,0.100000,0.200000,0.300000,0.450000,ura_sigma_m=0.002750,cbias:2=-0.120000,pbias:2=0.015000",
+            )
+
+    def test_expand_compact_ssr_text_preserves_atmos_metadata_tokens(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_compact_atmos_") as temp_dir:
+            output_csv = Path(temp_dir) / "expanded.csv"
+            clas_ppp.expand_compact_ssr_text(
+                "\n".join(
+                    [
+                        "# week,tow,system,prn,dx,dy,dz,dclock_m,atmos_<name>=<value>",
+                        "2200,345600.0,G,3,0.1,0.2,0.3,0.4,atmos_network_id=1,atmos_trop_avail=3,atmos_stec_avail=3",
+                    ]
+                ),
+                output_csv,
+            )
+
+            lines = output_csv.read_text(encoding="ascii").splitlines()
+            self.assertEqual(
+                lines[1],
+                "2200,345600.000,G03,0.100000,0.200000,0.300000,0.400000,atmos_network_id=1,atmos_trop_avail=3,atmos_stec_avail=3",
+            )
+
+    def test_parse_ppp_summary_counts_extracts_atmospheric_lines(self) -> None:
+        parsed = clas_ppp._parse_ppp_summary_counts(
+            "\n".join(
+                [
+                    "PPP summary:",
+                    "  valid solutions: 4",
+                    "  atmospheric trop corrections: 12",
+                    "  atmospheric trop meters: 5.500000",
+                    "  atmospheric ionosphere corrections: 8",
+                    "  atmospheric ionosphere meters: 3.250000",
+                ]
+            )
+        )
+        self.assertEqual(parsed["ppp_atmospheric_trop_corrections"], 12)
+        self.assertEqual(parsed["ppp_atmospheric_ionosphere_corrections"], 8)
+        self.assertAlmostEqual(float(parsed["ppp_atmospheric_trop_meters"]), 5.5)
+        self.assertAlmostEqual(float(parsed["ppp_atmospheric_ionosphere_meters"]), 3.25)
 
 
 class DrivingComparisonHelpersTest(unittest.TestCase):
@@ -263,18 +348,30 @@ class SegmentedBenchmarkTest(unittest.TestCase):
             "reference_csv": temp_root / "reference.csv",
             "rtklib_config": temp_root / "rtklib.conf",
             "rtklib_bin": temp_root / "rnx2rtkp",
+            "malib_config": temp_root / "malib.conf",
+            "malib_bin": None,
             "lib_pos": temp_root / "lib.pos",
             "lib_kml": temp_root / "lib.kml",
             "rtklib_pos": temp_root / "rtklib.pos",
+            "malib_pos": temp_root / "malib.pos",
             "comparison_png": temp_root / "comparison.png",
             "scorecard_png": temp_root / "scorecard.png",
+            "summary_json": temp_root / "summary.json",
         }
-        for path in paths.values():
-            path.write_text("synthetic\n", encoding="ascii")
+        for key, path in paths.items():
+            if isinstance(path, Path):
+                if key == "malib_pos":
+                    continue
+                path.write_text("synthetic\n", encoding="ascii")
         defaults: dict[str, object] = {
             **paths,
             "comparison_title": "Comparison",
             "scorecard_title": "Scorecard",
+            "require_all_epochs_min": 0,
+            "require_common_epoch_pairs_min": 0,
+            "require_lib_all_p95_h_max": None,
+            "require_lib_common_median_h_max": None,
+            "require_lib_common_p95_h_max": None,
             "mode": "kinematic",
             "glonass_ar": "autocal",
             "skip_epochs": 0,
@@ -326,17 +423,544 @@ class SegmentedBenchmarkTest(unittest.TestCase):
             commands: list[list[str]] = []
             with mock.patch.object(benchmark, "parse_args", return_value=args):
                 with mock.patch.object(benchmark, "run_segmented_lib_solve") as segmented:
-                    with mock.patch.object(
-                        benchmark, "run_command", side_effect=commands.append
-                    ):
-                        exit_code = benchmark.main()
+                    with mock.patch.object(benchmark, "write_summary_json") as summary_writer:
+                        with mock.patch.object(
+                            benchmark, "enforce_summary_requirements"
+                        ) as summary_checks:
+                            with mock.patch.object(
+                                benchmark, "run_command", side_effect=commands.append
+                            ):
+                                exit_code = benchmark.main()
 
             self.assertEqual(exit_code, 0)
             segmented.assert_called_once()
+            summary_writer.assert_called_once_with(args)
+            summary_checks.assert_called_once_with(summary_writer.return_value, args)
             self.assertEqual(len(commands), 3)
             self.assertEqual(commands[0][0], str(args.rtklib_bin))
             self.assertEqual(commands[1][2], "driving-compare")
             self.assertEqual(commands[2][2], "scorecard")
+
+    def test_write_summary_json_exports_all_and_common_epoch_metrics(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_benchmark_summary_") as temp_dir:
+            temp_root = Path(temp_dir)
+            reference_csv = temp_root / "custom_reference.csv"
+            lib_pos = temp_root / "custom_lib.pos"
+            rtklib_pos = temp_root / "custom_rtklib.pos"
+            malib_pos = temp_root / "custom_malib.pos"
+            summary_json = temp_root / "custom_summary.json"
+
+            rows = [
+                (2000, 0.0, 35.0, 139.0, 10.0),
+                (2000, 1.0, 35.00001, 139.00001, 10.1),
+                (2000, 2.0, 35.00002, 139.00002, 10.2),
+            ]
+            ScorecardRenderTest().write_reference_csv(reference_csv, rows)
+            ScorecardRenderTest().write_lib_pos(
+                lib_pos,
+                [
+                    (2000, 0.0, 35.0, 139.0, 10.0, 4),
+                    (2000, 1.0, 35.0000101, 139.0000101, 10.15, 3),
+                    (2000, 2.0, 35.0000202, 139.0000202, 10.25, 4),
+                ],
+            )
+            ScorecardRenderTest().write_rtklib_pos(
+                rtklib_pos,
+                [
+                    (2000, 0.0, 35.0, 139.0, 10.0, 1),
+                    (2000, 1.0, 35.0000102, 139.0000102, 10.12, 2),
+                    (2000, 2.0, 35.0000203, 139.0000203, 10.22, 1),
+                ],
+            )
+            ScorecardRenderTest().write_rtklib_pos(
+                malib_pos,
+                [
+                    (2000, 0.0, 35.0, 139.0, 10.0, 1),
+                    (2000, 1.0, 35.0000100, 139.0000100, 10.10, 1),
+                    (2000, 2.0, 35.0000201, 139.0000201, 10.20, 2),
+                ],
+            )
+
+            args = self.make_benchmark_args(
+                temp_root,
+                reference_csv=reference_csv,
+                lib_pos=lib_pos,
+                rtklib_pos=rtklib_pos,
+                malib_pos=malib_pos,
+                summary_json=summary_json,
+            )
+
+            returned_payload = benchmark.write_summary_json(args)
+
+            payload = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(payload["dataset"], "UrbanNav Tokyo Odaiba")
+            self.assertEqual(payload["common_epoch_pairs"], 3)
+            self.assertEqual(payload["libgnss_all_epochs"]["epochs"], 3)
+            self.assertEqual(payload["rtklib_all_epochs"]["epochs"], 3)
+            self.assertEqual(payload["malib_all_epochs"]["epochs"], 3)
+            self.assertIn("median_h_m", payload["libgnss_common_epochs"])
+            self.assertIn("p95_h_m", payload["rtklib_common_epochs"])
+            self.assertIn("median_h_m", payload["malib_common_epochs"])
+            self.assertEqual(payload["malib_common_epoch_pairs"], 3)
+            self.assertEqual(payload, returned_payload)
+
+    def test_main_full_run_invokes_optional_malib_pipeline(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_benchmark_malib_") as temp_dir:
+            temp_root = Path(temp_dir)
+            malib_bin = temp_root / "malib_rnx2rtkp"
+            malib_bin.write_text("synthetic\n", encoding="ascii")
+            args = self.make_benchmark_args(temp_root, malib_bin=malib_bin)
+
+            commands: list[list[str]] = []
+            with mock.patch.object(benchmark, "parse_args", return_value=args):
+                with mock.patch.object(benchmark, "write_summary_json") as summary_writer:
+                    with mock.patch.object(
+                        benchmark, "enforce_summary_requirements"
+                    ) as summary_checks:
+                        with mock.patch.object(
+                            benchmark, "run_command", side_effect=commands.append
+                        ):
+                            exit_code = benchmark.main()
+
+            self.assertEqual(exit_code, 0)
+            summary_writer.assert_called_once_with(args)
+            summary_checks.assert_called_once_with(summary_writer.return_value, args)
+            self.assertEqual(len(commands), 5)
+            self.assertEqual(commands[0][2], "solve")
+            self.assertEqual(commands[1][0], str(args.rtklib_bin))
+            self.assertEqual(commands[2][0], str(args.malib_bin))
+            self.assertEqual(commands[3][2], "driving-compare")
+            self.assertEqual(commands[4][2], "scorecard")
+
+    def test_enforce_summary_requirements_passes_and_fails(self) -> None:
+        payload = {
+            "common_epoch_pairs": 8123,
+            "libgnss_all_epochs": {"epochs": 11637, "p95_h_m": 7.583936},
+            "libgnss_common_epochs": {"median_h_m": 0.733387, "p95_h_m": 5.941091},
+        }
+        passing_args = argparse.Namespace(
+            require_all_epochs_min=11000,
+            require_common_epoch_pairs_min=8000,
+            require_lib_all_p95_h_max=8.0,
+            require_lib_common_median_h_max=0.8,
+            require_lib_common_p95_h_max=6.5,
+        )
+        benchmark.enforce_summary_requirements(payload, passing_args)
+
+        failing_args = argparse.Namespace(
+            require_all_epochs_min=12000,
+            require_common_epoch_pairs_min=9000,
+            require_lib_all_p95_h_max=7.0,
+            require_lib_common_median_h_max=0.7,
+            require_lib_common_p95_h_max=5.0,
+        )
+        with self.assertRaises(SystemExit) as context:
+            benchmark.enforce_summary_requirements(payload, failing_args)
+
+        message = str(context.exception)
+        self.assertIn("all-epoch matched count", message)
+        self.assertIn("common epoch pairs", message)
+        self.assertIn("all-epoch p95_h", message)
+        self.assertIn("common-epoch median_h", message)
+        self.assertIn("common-epoch p95_h", message)
+
+
+class ShortBaselineSignoffTest(unittest.TestCase):
+    def write_rinex_header(self, path: Path, position: tuple[float, float, float]) -> None:
+        with path.open("w", encoding="ascii") as handle:
+            handle.write("     3.02           OBSERVATION DATA    M                   RINEX VERSION / TYPE\n")
+            handle.write(
+                f"{position[0]:14.4f}{position[1]:14.4f}{position[2]:14.4f}"
+                "                  APPROX POSITION XYZ\n"
+            )
+            handle.write("                                                            END OF HEADER\n")
+
+    def write_pos(
+        self,
+        path: Path,
+        records: list[tuple[int, float, tuple[float, float, float], int, int]],
+    ) -> None:
+        with path.open("w", encoding="ascii") as handle:
+            handle.write("% synthetic short-baseline signoff\n")
+            for week, tow, position, status, satellites in records:
+                handle.write(
+                    f"{week} {tow:.1f} {position[0]:.4f} {position[1]:.4f} {position[2]:.4f} "
+                    f"35.0 139.0 10.0 {status} {satellites} 1.0\n"
+                )
+
+    def test_build_summary_payload_and_requirements(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_short_signoff_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover = temp_root / "rover.rnx"
+            base = temp_root / "base.rnx"
+            nav = temp_root / "nav.rnx"
+            out = temp_root / "solution.pos"
+            summary_json = temp_root / "summary.json"
+            rover_position = (-3957184.1109, 3310231.7255, 3737703.9594)
+            base_position = (-3957199.2400, 3310199.6680, 3737711.7080)
+
+            self.write_rinex_header(rover, rover_position)
+            self.write_rinex_header(base, base_position)
+            nav.write_text("synthetic\n", encoding="ascii")
+            self.write_pos(
+                out,
+                [
+                    (2000, 0.0, rover_position, 4, 15),
+                    (2000, 1.0, (-3957184.0109, 3310231.7255, 3737703.9594), 4, 14),
+                    (2000, 2.0, (-3957184.2109, 3310231.7255, 3737703.9594), 3, 14),
+                ],
+            )
+
+            args = argparse.Namespace(
+                rover=rover,
+                base=base,
+                nav=nav,
+                out=out,
+                summary_json=summary_json,
+                require_fix_rate_min=60.0,
+                require_mean_error_max=0.2,
+                require_max_error_max=0.25,
+                require_mean_sats_min=14.0,
+            )
+
+            payload = short_signoff.build_summary_payload(args)
+
+            self.assertEqual(payload["dataset"], "Tsukuba short_baseline")
+            self.assertEqual(payload["epochs"], 3)
+            self.assertEqual(payload["fixed_epochs"], 2)
+            self.assertAlmostEqual(payload["fix_rate_pct"], 66.666667, places=5)
+            self.assertAlmostEqual(payload["mean_position_error_m"], 0.066667, places=6)
+            self.assertAlmostEqual(payload["max_position_error_m"], 0.1, places=6)
+            self.assertAlmostEqual(payload["mean_satellites"], 14.333333, places=5)
+            self.assertTrue(summary_json.exists())
+
+            short_signoff.enforce_summary_requirements(payload, args)
+
+            failing_args = argparse.Namespace(
+                require_fix_rate_min=90.0,
+                require_mean_error_max=0.05,
+                require_max_error_max=0.05,
+                require_mean_sats_min=15.0,
+            )
+            with self.assertRaises(SystemExit) as context:
+                short_signoff.enforce_summary_requirements(payload, failing_args)
+
+            message = str(context.exception)
+            self.assertIn("fix rate", message)
+            self.assertIn("mean position error", message)
+            self.assertIn("max position error", message)
+        self.assertIn("mean satellites", message)
+
+
+class PPPStaticSignoffTest(unittest.TestCase):
+    def write_rinex_header(self, path: Path, position: tuple[float, float, float]) -> None:
+        with path.open("w", encoding="ascii") as handle:
+            handle.write("     2.10           OBSERVATION DATA    G                   RINEX VERSION / TYPE\n")
+            handle.write(
+                f"{position[0]:14.4f}{position[1]:14.4f}{position[2]:14.4f}"
+                "                  APPROX POSITION XYZ\n"
+            )
+            handle.write("                                                            END OF HEADER\n")
+
+    def write_pos(
+        self,
+        path: Path,
+        records: list[tuple[int, float, tuple[float, float, float], int, int]],
+    ) -> None:
+        with path.open("w", encoding="ascii") as handle:
+            handle.write("% synthetic ppp static signoff\n")
+            for week, tow, position, status, satellites in records:
+                handle.write(
+                    f"{week} {tow:.1f} {position[0]:.4f} {position[1]:.4f} {position[2]:.4f} "
+                    f"35.0 139.0 10.0 {status} {satellites} 1.0\n"
+                )
+
+    def test_build_summary_payload_and_requirements(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_static_signoff_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs = temp_root / "rover.obs"
+            nav = temp_root / "nav.rnx"
+            out = temp_root / "solution.pos"
+            summary_json = temp_root / "summary.json"
+            rover_position = (-3978242.4348, 3382841.1715, 3649902.7667)
+
+            self.write_rinex_header(obs, rover_position)
+            nav.write_text("synthetic nav\n", encoding="ascii")
+            self.write_pos(
+                out,
+                [
+                    (1316, 518400.0, rover_position, 5, 9),
+                    (1316, 518430.0, (-3978243.2000, 3382840.6000, 3649902.4000), 5, 8),
+                    (1316, 518460.0, (-3978243.7000, 3382840.2000, 3649902.1000), 1, 9),
+                ],
+            )
+
+            args = argparse.Namespace(
+                obs=obs,
+                nav=nav,
+                sp3=None,
+                clk=None,
+                enable_ar=False,
+                ar_ratio_threshold=3.0,
+                generate_products=False,
+                out=out,
+                summary_json=summary_json,
+                require_valid_epochs_min=3,
+                require_mean_error_max=2.0,
+                require_max_error_max=2.5,
+                require_mean_sats_min=8.0,
+                require_ppp_solution_rate_min=60.0,
+                require_ppp_fixed_epochs_min=None,
+                malib_pos=None,
+            )
+
+            payload = ppp_static_signoff.build_summary_payload(args)
+            ppp_static_signoff.enforce_summary_requirements(payload, args)
+
+            self.assertEqual(payload["dataset"], "sample static PPP")
+            self.assertEqual(payload["epochs"], 3)
+            self.assertEqual(payload["ppp_float_epochs"], 2)
+            self.assertEqual(payload["ppp_fixed_epochs"], 0)
+            self.assertEqual(payload["fallback_epochs"], 1)
+            self.assertGreaterEqual(payload["ppp_solution_rate_pct"], 60.0)
+            self.assertLessEqual(payload["mean_position_error_m"], 2.0)
+            self.assertLessEqual(payload["max_position_error_m"], 2.5)
+            self.assertGreaterEqual(payload["mean_satellites"], 8.0)
+
+            failing_args = argparse.Namespace(
+                require_valid_epochs_min=4,
+                require_mean_error_max=0.1,
+                require_max_error_max=0.2,
+                require_mean_sats_min=10.0,
+                require_ppp_solution_rate_min=90.0,
+                require_ppp_fixed_epochs_min=1,
+            )
+            with self.assertRaises(SystemExit) as context:
+                ppp_static_signoff.enforce_summary_requirements(payload, failing_args)
+
+            message = str(context.exception)
+            self.assertIn("valid epochs", message)
+            self.assertIn("mean position error", message)
+            self.assertIn("max position error", message)
+            self.assertIn("mean satellites", message)
+            self.assertIn("PPP solution rate", message)
+            self.assertIn("PPP fixed epochs", message)
+
+    def test_build_summary_payload_with_malib_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_static_signoff_malib_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs = temp_root / "rover.obs"
+            nav = temp_root / "nav.rnx"
+            out = temp_root / "solution.pos"
+            malib_pos = temp_root / "malib.pos"
+            summary_json = temp_root / "summary.json"
+            rover_position = (-3978242.4348, 3382841.1715, 3649902.7667)
+
+            self.write_rinex_header(obs, rover_position)
+            nav.write_text("synthetic nav\n", encoding="ascii")
+            self.write_pos(
+                out,
+                [
+                    (1316, 518400.0, rover_position, 5, 9),
+                    (1316, 518430.0, rover_position, 5, 8),
+                ],
+            )
+            malib_pos.write_text(
+                "\n".join(
+                    [
+                        "% synthetic malib xyz",
+                        "2005/04/02 00:00:00.000 -3978242.4348 3382841.1715 3649902.7667 6 8",
+                        "2005/04/02 00:00:30.000 -3978243.4348 3382841.1715 3649902.7667 6 7",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            args = argparse.Namespace(
+                obs=obs,
+                nav=nav,
+                sp3=None,
+                clk=None,
+                enable_ar=False,
+                ar_ratio_threshold=3.0,
+                generate_products=False,
+                out=out,
+                malib_pos=malib_pos,
+                summary_json=summary_json,
+                require_valid_epochs_min=None,
+                require_mean_error_max=None,
+                require_max_error_max=None,
+                require_mean_sats_min=None,
+                require_ppp_solution_rate_min=None,
+                require_ppp_fixed_epochs_min=None,
+            )
+
+            payload = ppp_static_signoff.build_summary_payload(args)
+            self.assertEqual(payload["malib_epochs"], 2)
+            self.assertAlmostEqual(payload["malib_mean_position_error_m"], 0.5)
+            self.assertIn("libgnss_minus_malib_mean_error_m", payload)
+
+
+class PPPKinematicSignoffTest(unittest.TestCase):
+    def write_pos(
+        self,
+        path: Path,
+        records: list[tuple[int, float, tuple[float, float, float], int, int]],
+    ) -> None:
+        with path.open("w", encoding="ascii") as handle:
+            handle.write("% synthetic ppp kinematic signoff\n")
+            for week, tow, position, status, satellites in records:
+                handle.write(
+                    f"{week} {tow:.1f} {position[0]:.4f} {position[1]:.4f} {position[2]:.4f} "
+                    f"35.0 139.0 10.0 {status} {satellites} 1.0\n"
+                )
+
+    def test_build_summary_payload_and_requirements(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_kinematic_signoff_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs = temp_root / "rover.obs"
+            base = temp_root / "base.obs"
+            nav = temp_root / "nav.rnx"
+            out = temp_root / "ppp_solution.pos"
+            reference_pos = temp_root / "reference.pos"
+            summary_json = temp_root / "summary.json"
+
+            obs.write_text("synthetic obs\n", encoding="ascii")
+            base.write_text("synthetic base\n", encoding="ascii")
+            nav.write_text("synthetic nav\n", encoding="ascii")
+            self.write_pos(
+                out,
+                [
+                    (1316, 518400.0, (-3978242.0, 3382841.0, 3649903.0), 5, 20),
+                    (1316, 518430.0, (-3978248.0, 3382839.0, 3649900.0), 5, 21),
+                    (1316, 518460.0, (-3978255.0, 3382834.0, 3649898.0), 1, 19),
+                ],
+            )
+            self.write_pos(
+                reference_pos,
+                [
+                    (1316, 518400.0, (-3978240.0, 3382840.0, 3649902.0), 4, 20),
+                    (1316, 518430.0, (-3978244.0, 3382840.0, 3649900.0), 4, 21),
+                    (1316, 518460.0, (-3978250.0, 3382835.0, 3649897.0), 3, 19),
+                ],
+            )
+
+            args = argparse.Namespace(
+                obs=obs,
+                base=base,
+                nav=nav,
+                out=out,
+                reference_pos=reference_pos,
+                summary_json=summary_json,
+                require_common_epoch_pairs_min=3,
+                require_reference_fix_rate_min=60.0,
+                require_mean_error_max=6.0,
+                require_p95_error_max=8.0,
+                require_max_error_max=8.0,
+                require_mean_sats_min=19.0,
+                require_ppp_solution_rate_min=60.0,
+                malib_pos=None,
+            )
+
+            payload = ppp_kinematic_signoff.build_summary_payload(args)
+            ppp_kinematic_signoff.enforce_summary_requirements(payload, args)
+
+            self.assertEqual(payload["dataset"], "sample kinematic PPP")
+            self.assertEqual(payload["epochs"], 3)
+            self.assertEqual(payload["common_epoch_pairs"], 3)
+            self.assertEqual(payload["ppp_float_epochs"], 2)
+            self.assertEqual(payload["ppp_fixed_epochs"], 0)
+            self.assertEqual(payload["fallback_epochs"], 1)
+            self.assertGreaterEqual(payload["reference_fix_rate_pct"], 60.0)
+            self.assertLessEqual(payload["mean_position_error_m"], 6.0)
+            self.assertLessEqual(payload["p95_position_error_m"], 8.0)
+            self.assertLessEqual(payload["max_position_error_m"], 8.0)
+            self.assertGreaterEqual(payload["mean_satellites"], 19.0)
+            self.assertGreaterEqual(payload["ppp_solution_rate_pct"], 60.0)
+
+            failing_args = argparse.Namespace(
+                require_common_epoch_pairs_min=4,
+                require_reference_fix_rate_min=90.0,
+                require_mean_error_max=1.0,
+                require_p95_error_max=2.0,
+                require_max_error_max=3.0,
+                require_mean_sats_min=25.0,
+                require_ppp_solution_rate_min=90.0,
+            )
+            with self.assertRaises(SystemExit) as context:
+                ppp_kinematic_signoff.enforce_summary_requirements(payload, failing_args)
+
+            message = str(context.exception)
+            self.assertIn("common epoch pairs", message)
+            self.assertIn("reference fix rate", message)
+            self.assertIn("mean position error", message)
+            self.assertIn("p95 position error", message)
+            self.assertIn("max position error", message)
+            self.assertIn("mean satellites", message)
+            self.assertIn("PPP solution rate", message)
+
+    def test_build_summary_payload_with_malib_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_kinematic_signoff_malib_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs = temp_root / "rover.obs"
+            base = temp_root / "base.obs"
+            nav = temp_root / "nav.rnx"
+            out = temp_root / "ppp_solution.pos"
+            reference_pos = temp_root / "reference.pos"
+            malib_pos = temp_root / "malib.pos"
+            summary_json = temp_root / "summary.json"
+
+            obs.write_text("synthetic obs\n", encoding="ascii")
+            base.write_text("synthetic base\n", encoding="ascii")
+            nav.write_text("synthetic nav\n", encoding="ascii")
+            self.write_pos(
+                out,
+                [
+                    (1316, 518400.0, (-3978242.0, 3382841.0, 3649903.0), 5, 20),
+                    (1316, 518430.0, (-3978248.0, 3382839.0, 3649900.0), 5, 21),
+                ],
+            )
+            self.write_pos(
+                reference_pos,
+                [
+                    (1316, 518400.0, (-3978240.0, 3382840.0, 3649902.0), 4, 20),
+                    (1316, 518430.0, (-3978244.0, 3382840.0, 3649900.0), 4, 21),
+                ],
+            )
+            malib_pos.write_text(
+                "\n".join(
+                    [
+                        "% synthetic malib xyz",
+                        "2005/04/02 00:00:00.000 -3978240.5000 3382840.0000 3649902.0000 6 7",
+                        "2005/04/02 00:00:30.000 -3978244.5000 3382840.0000 3649900.0000 6 6",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            args = argparse.Namespace(
+                obs=obs,
+                base=base,
+                nav=nav,
+                out=out,
+                reference_pos=reference_pos,
+                malib_pos=malib_pos,
+                summary_json=summary_json,
+                require_common_epoch_pairs_min=None,
+                require_reference_fix_rate_min=None,
+                require_mean_error_max=None,
+                require_p95_error_max=None,
+                require_max_error_max=None,
+                require_mean_sats_min=None,
+                require_ppp_solution_rate_min=None,
+            )
+
+            payload = ppp_kinematic_signoff.build_summary_payload(args)
+            self.assertEqual(payload["malib_common_epoch_pairs"], 2)
+            self.assertAlmostEqual(payload["malib_mean_position_error_m"], 0.5)
+            self.assertIn("libgnss_minus_malib_p95_error_m", payload)
 
 
 if __name__ == "__main__":

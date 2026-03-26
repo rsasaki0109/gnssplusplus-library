@@ -1,0 +1,1395 @@
+#include <gtest/gtest.h>
+
+#include <libgnss++/algorithms/ppp.hpp>
+#include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/models/troposphere.hpp>
+
+#include <chrono>
+#include <cmath>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
+#include <cstdint>
+#include <iomanip>
+#include <sstream>
+#include <string>
+#include <vector>
+
+using namespace libgnss;
+
+namespace {
+
+GNSSTime makeTime(int year, int month, int day, int hour, int minute, double second) {
+    std::tm epoch_tm{};
+    epoch_tm.tm_year = year - 1900;
+    epoch_tm.tm_mon = month - 1;
+    epoch_tm.tm_mday = day;
+    epoch_tm.tm_hour = hour;
+    epoch_tm.tm_min = minute;
+    epoch_tm.tm_sec = static_cast<int>(std::floor(second));
+    const time_t unix_seconds = timegm(&epoch_tm);
+    const auto tp = std::chrono::system_clock::from_time_t(unix_seconds) +
+        std::chrono::microseconds(
+            static_cast<long long>(std::llround((second - std::floor(second)) * 1e6)));
+    return GNSSTime::fromSystemTime(tp);
+}
+
+int dayOfYearFromTime(const GNSSTime& time) {
+    const auto tp = time.toSystemTime();
+    const std::time_t unix_time = std::chrono::system_clock::to_time_t(tp);
+    const std::tm utc_tm = *gmtime(&unix_time);
+    return utc_tm.tm_yday + 1;
+}
+
+double modeledPppTroposphereDelay(const Vector3d& receiver_position,
+                                  double elevation,
+                                  const GNSSTime& time) {
+    double latitude_rad = 0.0;
+    double longitude_rad = 0.0;
+    double height_m = 0.0;
+    ecef2geodetic(receiver_position, latitude_rad, longitude_rad, height_m);
+    return models::modeledTroposphereDelayClimatology(
+        latitude_rad,
+        height_m,
+        elevation,
+        dayOfYearFromTime(time));
+}
+
+std::filesystem::path tempFilePath(const std::string& name) {
+    return std::filesystem::temp_directory_path() / name;
+}
+
+void writeTextFile(const std::filesystem::path& path, const std::string& contents) {
+    std::ofstream output(path);
+    ASSERT_TRUE(output.is_open());
+    output << contents;
+    output.close();
+}
+
+void writeBinaryFile(const std::filesystem::path& path, const std::vector<uint8_t>& contents) {
+    std::ofstream output(path, std::ios::binary);
+    ASSERT_TRUE(output.is_open());
+    output.write(reinterpret_cast<const char*>(contents.data()),
+                 static_cast<std::streamsize>(contents.size()));
+    output.close();
+}
+
+uint32_t crc24q(const uint8_t* data, size_t length) {
+    static const uint32_t table[256] = {
+        0x000000, 0x864CFB, 0x8AD50D, 0x0C99F6, 0x93E6E1, 0x15AA1A, 0x1933EC, 0x9F7F17,
+        0xA18139, 0x27CDC2, 0x2B5434, 0xAD18CF, 0x3267D8, 0xB42B23, 0xB8B2D5, 0x3EFE2E,
+        0xC54E89, 0x430272, 0x4F9B84, 0xC9D77F, 0x56A868, 0xD0E493, 0xDC7D65, 0x5A319E,
+        0x64CFB0, 0xE2834B, 0xEE1ABD, 0x685646, 0xF72951, 0x7165AA, 0x7DFC5C, 0xFBB0A7,
+        0x0CD1E9, 0x8A9D12, 0x8604E4, 0x00481F, 0x9F3708, 0x197BF3, 0x15E205, 0x93AEFE,
+        0xAD50D0, 0x2B1C2B, 0x2785DD, 0xA1C926, 0x3EB631, 0xB8FACA, 0xB4633C, 0x322FC7,
+        0xC99F60, 0x4FD39B, 0x434A6D, 0xC50696, 0x5A7981, 0xDC357A, 0xD0AC8C, 0x56E077,
+        0x681E59, 0xEE52A2, 0xE2CB54, 0x6487AF, 0xFBF8B8, 0x7DB443, 0x712DB5, 0xF7614E,
+        0x19A3D2, 0x9FEF29, 0x9376DF, 0x153A24, 0x8A4533, 0x0C09C8, 0x00903E, 0x86DCC5,
+        0xB822EB, 0x3E6E10, 0x32F7E6, 0xB4BB1D, 0x2BC40A, 0xAD88F1, 0xA11107, 0x275DFC,
+        0xDCED5B, 0x5AA1A0, 0x563856, 0xD074AD, 0x4F0BBA, 0xC94741, 0xC5DEB7, 0x43924C,
+        0x7D6C62, 0xFB2099, 0xF7B96F, 0x71F594, 0xEE8A83, 0x68C678, 0x645F8E, 0xE21375,
+        0x15723B, 0x933EC0, 0x9FA736, 0x19EBCD, 0x8694DA, 0x00D821, 0x0C41D7, 0x8A0D2C,
+        0xB4F302, 0x32BFF9, 0x3E260F, 0xB86AF4, 0x2715E3, 0xA15918, 0xADC0EE, 0x2B8C15,
+        0xD03CB2, 0x567049, 0x5AE9BF, 0xDCA544, 0x43DA53, 0xC596A8, 0xC90F5E, 0x4F43A5,
+        0x71BD8B, 0xF7F170, 0xFB6886, 0x7D247D, 0xE25B6A, 0x641791, 0x688E67, 0xEEC29C,
+        0x3347A4, 0xB50B5F, 0xB992A9, 0x3FDE52, 0xA0A145, 0x26EDBE, 0x2A7448, 0xAC38B3,
+        0x92C69D, 0x148A66, 0x181390, 0x9E5F6B, 0x01207C, 0x876C87, 0x8BF571, 0x0DB98A,
+        0xF6092D, 0x7045D6, 0x7CDC20, 0xFA90DB, 0x65EFCC, 0xE3A337, 0xEF3AC1, 0x69763A,
+        0x578814, 0xD1C4EF, 0xDD5D19, 0x5B11E2, 0xC46EF5, 0x42220E, 0x4EBBF8, 0xC8F703,
+        0x3F964D, 0xB9DAB6, 0xB54340, 0x330FBB, 0xAC70AC, 0x2A3C57, 0x26A5A1, 0xA0E95A,
+        0x9E1774, 0x185B8F, 0x14C279, 0x928E82, 0x0DF195, 0x8BBD6E, 0x872498, 0x016863,
+        0xFAD8C4, 0x7C943F, 0x700DC9, 0xF64132, 0x693E25, 0xEF72DE, 0xE3EB28, 0x65A7D3,
+        0x5B59FD, 0xDD1506, 0xD18CF0, 0x57C00B, 0xC8BF1C, 0x4EF3E7, 0x426A11, 0xC426EA,
+        0x2AE476, 0xACA88D, 0xA0317B, 0x267D80, 0xB90297, 0x3F4E6C, 0x33D79A, 0xB59B61,
+        0x8B654F, 0x0D29B4, 0x01B042, 0x87FCB9, 0x1883AE, 0x9ECF55, 0x9256A3, 0x141A58,
+        0xEFAAFF, 0x69E604, 0x657FF2, 0xE33309, 0x7C4C1E, 0xFA00E5, 0xF69913, 0x70D5E8,
+        0x4E2BC6, 0xC8673D, 0xC4FECB, 0x42B230, 0xDDCD27, 0x5B81DC, 0x57182A, 0xD154D1,
+        0x26359F, 0xA07964, 0xACE092, 0x2AAC69, 0xB5D37E, 0x339F85, 0x3F0673, 0xB94A88,
+        0x87B4A6, 0x01F85D, 0x0D61AB, 0x8B2D50, 0x145247, 0x921EBC, 0x9E874A, 0x18CBB1,
+        0xE37B16, 0x6537ED, 0x69AE1B, 0xEFE2E0, 0x709DF7, 0xF6D10C, 0xFA48FA, 0x7C0401,
+        0x42FA2F, 0xC4B6D4, 0xC82F22, 0x4E63D9, 0xD11CCE, 0x575035, 0x5BC9C3, 0xDD8538
+    };
+    uint32_t crc = 0;
+    for (size_t i = 0; i < length; ++i) {
+        const uint8_t table_index = static_cast<uint8_t>(((crc >> 16) ^ data[i]) & 0xFFU);
+        crc = (crc << 8) ^ table[table_index];
+    }
+    return crc & 0x00FFFFFFU;
+}
+
+void setUnsignedBits(std::vector<uint8_t>& data, int pos, int len, uint64_t value) {
+    for (int i = 0; i < len; ++i) {
+        const int bit_index = pos + len - 1 - i;
+        const int byte_index = bit_index / 8;
+        const int bit_in_byte = 7 - (bit_index % 8);
+        const uint8_t mask = static_cast<uint8_t>(1U << bit_in_byte);
+        if ((value >> i) & 0x01U) {
+            data[byte_index] |= mask;
+        } else {
+            data[byte_index] &= static_cast<uint8_t>(~mask);
+        }
+    }
+}
+
+void setSignedBits(std::vector<uint8_t>& data, int pos, int len, int64_t value) {
+    const uint64_t masked = static_cast<uint64_t>(value) & ((1ULL << len) - 1ULL);
+    setUnsignedBits(data, pos, len, masked);
+}
+
+std::vector<uint8_t> buildRtcmFrame(const std::vector<uint8_t>& payload) {
+    std::vector<uint8_t> frame;
+    frame.reserve(3 + payload.size() + 3);
+    frame.push_back(0xD3);
+    frame.push_back(static_cast<uint8_t>((payload.size() >> 8) & 0x03U));
+    frame.push_back(static_cast<uint8_t>(payload.size() & 0xFFU));
+    frame.insert(frame.end(), payload.begin(), payload.end());
+    const uint32_t crc = crc24q(frame.data(), frame.size());
+    frame.push_back(static_cast<uint8_t>((crc >> 16) & 0xFFU));
+    frame.push_back(static_cast<uint8_t>((crc >> 8) & 0xFFU));
+    frame.push_back(static_cast<uint8_t>(crc & 0xFFU));
+    return frame;
+}
+
+Ephemeris makeBroadcastGpsEphemeris(uint8_t prn) {
+    Ephemeris eph;
+    eph.satellite = SatelliteId(GNSSSystem::GPS, prn);
+    eph.week = static_cast<uint16_t>(GNSSTime::fromSystemTime(std::chrono::system_clock::now()).week);
+    eph.toe = GNSSTime(eph.week, 345600.0);
+    eph.toc = GNSSTime(eph.week, 345616.0);
+    eph.toes = eph.toe.tow;
+    eph.sqrt_a = 5153.79548931;
+    eph.e = 0.0123456789;
+    eph.i0 = 0.9599310886;
+    eph.omega0 = 1.2345678901;
+    eph.omega = -0.9876543210;
+    eph.m0 = 0.4567890123;
+    eph.delta_n = 4.56789e-09;
+    eph.idot = -2.34567e-10;
+    eph.i_dot = eph.idot;
+    eph.omega_dot = -8.76543e-09;
+    eph.cuc = -1.234567e-06;
+    eph.cus = 2.345678e-06;
+    eph.crc = 245.25;
+    eph.crs = -88.75;
+    eph.cic = 8.765432e-08;
+    eph.cis = -7.654321e-08;
+    eph.af0 = 2.345678e-04;
+    eph.af1 = -4.567890e-12;
+    eph.af2 = 0.0;
+    eph.tgd = -1.2345678e-08;
+    eph.ura = 2;
+    eph.sv_accuracy = 4.85;
+    eph.health = 0;
+    eph.sv_health = 0.0;
+    eph.iode = 77;
+    eph.iodc = 301;
+    eph.valid = true;
+    return eph;
+}
+
+std::vector<uint8_t> buildGps1060CombinedFrame(uint8_t prn) {
+    constexpr int total_bits = 68 + 205;
+    std::vector<uint8_t> payload((total_bits + 7) / 8U, 0);
+    int bit = 0;
+    setUnsignedBits(payload, bit, 12, 1060); bit += 12;
+    setUnsignedBits(payload, bit, 20, 345600); bit += 20;
+    setUnsignedBits(payload, bit, 4, 2); bit += 4;
+    setUnsignedBits(payload, bit, 1, 0); bit += 1;
+    setUnsignedBits(payload, bit, 1, 1); bit += 1;
+    setUnsignedBits(payload, bit, 4, 7); bit += 4;
+    setUnsignedBits(payload, bit, 16, 21); bit += 16;
+    setUnsignedBits(payload, bit, 4, 3); bit += 4;
+    setUnsignedBits(payload, bit, 6, 1); bit += 6;
+    setUnsignedBits(payload, bit, 6, prn); bit += 6;
+    setUnsignedBits(payload, bit, 8, 77); bit += 8;
+    setSignedBits(payload, bit, 22, 800); bit += 22;
+    setSignedBits(payload, bit, 20, -100); bit += 20;
+    setSignedBits(payload, bit, 20, 50); bit += 20;
+    setSignedBits(payload, bit, 21, 0); bit += 21;
+    setSignedBits(payload, bit, 19, 0); bit += 19;
+    setSignedBits(payload, bit, 19, 0); bit += 19;
+    setSignedBits(payload, bit, 22, 1200); bit += 22;
+    setSignedBits(payload, bit, 21, 0); bit += 21;
+    setSignedBits(payload, bit, 27, 0); bit += 27;
+    return buildRtcmFrame(payload);
+}
+
+std::vector<uint8_t> buildGps1062HighRateClockFrame(uint8_t prn, int32_t high_rate_units) {
+    constexpr int total_bits = 67 + 28;
+    std::vector<uint8_t> payload((total_bits + 7) / 8U, 0);
+    int bit = 0;
+    setUnsignedBits(payload, bit, 12, 1062); bit += 12;
+    setUnsignedBits(payload, bit, 20, 345600); bit += 20;
+    setUnsignedBits(payload, bit, 4, 2); bit += 4;
+    setUnsignedBits(payload, bit, 1, 0); bit += 1;
+    setUnsignedBits(payload, bit, 4, 7); bit += 4;
+    setUnsignedBits(payload, bit, 16, 21); bit += 16;
+    setUnsignedBits(payload, bit, 4, 3); bit += 4;
+    setUnsignedBits(payload, bit, 6, 1); bit += 6;
+    setUnsignedBits(payload, bit, 6, prn); bit += 6;
+    setSignedBits(payload, bit, 22, high_rate_units); bit += 22;
+    return buildRtcmFrame(payload);
+}
+
+std::vector<uint8_t> buildGps1059CodeBiasFrame(uint8_t prn,
+                                               uint8_t signal_id,
+                                               int32_t bias_centimeters) {
+    constexpr int total_bits = 67 + 6 + 5 + 19;
+    std::vector<uint8_t> payload((total_bits + 7) / 8U, 0);
+    int bit = 0;
+    setUnsignedBits(payload, bit, 12, 1059); bit += 12;
+    setUnsignedBits(payload, bit, 20, 345600); bit += 20;
+    setUnsignedBits(payload, bit, 4, 2); bit += 4;
+    setUnsignedBits(payload, bit, 1, 0); bit += 1;
+    setUnsignedBits(payload, bit, 4, 7); bit += 4;
+    setUnsignedBits(payload, bit, 16, 21); bit += 16;
+    setUnsignedBits(payload, bit, 4, 3); bit += 4;
+    setUnsignedBits(payload, bit, 6, 1); bit += 6;
+    setUnsignedBits(payload, bit, 6, prn); bit += 6;
+    setUnsignedBits(payload, bit, 5, 1); bit += 5;
+    setUnsignedBits(payload, bit, 5, signal_id); bit += 5;
+    setSignedBits(payload, bit, 14, bias_centimeters); bit += 14;
+    return buildRtcmFrame(payload);
+}
+
+std::vector<uint8_t> buildGps1061UraFrame(uint8_t prn, uint8_t ura_index) {
+    constexpr int total_bits = 67 + 12;
+    std::vector<uint8_t> payload((total_bits + 7) / 8U, 0);
+    int bit = 0;
+    setUnsignedBits(payload, bit, 12, 1061); bit += 12;
+    setUnsignedBits(payload, bit, 20, 345600); bit += 20;
+    setUnsignedBits(payload, bit, 4, 2); bit += 4;
+    setUnsignedBits(payload, bit, 1, 0); bit += 1;
+    setUnsignedBits(payload, bit, 4, 7); bit += 4;
+    setUnsignedBits(payload, bit, 16, 21); bit += 16;
+    setUnsignedBits(payload, bit, 4, 3); bit += 4;
+    setUnsignedBits(payload, bit, 6, 1); bit += 6;
+    setUnsignedBits(payload, bit, 6, prn); bit += 6;
+    setUnsignedBits(payload, bit, 6, ura_index); bit += 6;
+    return buildRtcmFrame(payload);
+}
+
+double mappingFunction(double elevation) {
+    const double sin_elevation = std::max(std::sin(elevation), 0.1);
+    return 1.001 / std::sqrt(0.002001 + sin_elevation * sin_elevation);
+}
+
+struct SyntheticSatellite {
+    SatelliteId id;
+    Vector3d position;
+};
+
+std::vector<SyntheticSatellite> makeSyntheticSatellites(const Vector3d& receiver_position) {
+    double lat = 0.0;
+    double lon = 0.0;
+    double h = 0.0;
+    ecef2geodetic(receiver_position, lat, lon, h);
+
+    struct LookAngle {
+        double azimuth_deg;
+        double elevation_deg;
+    };
+
+    const std::vector<LookAngle> look_angles = {
+        {0.0, 55.0},
+        {60.0, 48.0},
+        {120.0, 62.0},
+        {180.0, 43.0},
+        {240.0, 68.0},
+        {300.0, 37.0},
+    };
+
+    std::vector<SyntheticSatellite> satellites;
+    const double range_m = 26'500'000.0;
+    for (size_t i = 0; i < look_angles.size(); ++i) {
+        const double az = look_angles[i].azimuth_deg * M_PI / 180.0;
+        const double el = look_angles[i].elevation_deg * M_PI / 180.0;
+        const double horizontal = range_m * std::cos(el);
+        const Vector3d enu(
+            horizontal * std::sin(az),
+            horizontal * std::cos(az),
+            range_m * std::sin(el));
+        satellites.push_back({
+            SatelliteId(GNSSSystem::GPS, static_cast<uint8_t>(i + 1)),
+            receiver_position + enu2ecef(enu, lat, lon),
+        });
+    }
+    return satellites;
+}
+
+ObservationData makeSyntheticEpoch(const GNSSTime& time,
+                                   const Vector3d& true_receiver_position,
+                                   const Vector3d& approximate_receiver_position,
+                                   const std::vector<SyntheticSatellite>& satellites) {
+    NavigationData nav;
+    ObservationData epoch(time);
+    epoch.receiver_position = approximate_receiver_position;
+
+    for (const auto& satellite : satellites) {
+        const auto geometry = nav.calculateGeometry(true_receiver_position, satellite.position);
+        const double pseudorange = geodist(satellite.position, true_receiver_position);
+        const double trop_delay = modeledPppTroposphereDelay(
+            true_receiver_position,
+            geometry.elevation,
+            time);
+
+        Observation l1(satellite.id, SignalType::GPS_L1CA);
+        l1.valid = true;
+        l1.has_pseudorange = true;
+        l1.has_carrier_phase = true;
+        l1.pseudorange = pseudorange + trop_delay;
+        l1.carrier_phase = (pseudorange + trop_delay) / constants::GPS_L1_WAVELENGTH;
+        l1.snr = 48.0;
+        epoch.addObservation(l1);
+
+        Observation l2(satellite.id, SignalType::GPS_L2C);
+        l2.valid = true;
+        l2.has_pseudorange = true;
+        l2.has_carrier_phase = true;
+        l2.pseudorange = pseudorange + trop_delay;
+        l2.carrier_phase = (pseudorange + trop_delay) / constants::GPS_L2_WAVELENGTH;
+        l2.snr = 45.0;
+        epoch.addObservation(l2);
+    }
+
+    return epoch;
+}
+
+double ionosphereDelayMetersForFrequency(double frequency_hz, double stec_tecu) {
+    return 40.3e16 * stec_tecu / (frequency_hz * frequency_hz);
+}
+
+ObservationData makeSyntheticEpochWithAtmosphericBiases(
+    const GNSSTime& time,
+    const Vector3d& true_receiver_position,
+    const Vector3d& approximate_receiver_position,
+    const std::vector<SyntheticSatellite>& satellites,
+    double zenith_trop_delay_m,
+    double stec_base_tecu) {
+    NavigationData nav;
+    ObservationData epoch(time);
+    epoch.receiver_position = approximate_receiver_position;
+
+    for (const auto& satellite : satellites) {
+        const auto geometry = nav.calculateGeometry(true_receiver_position, satellite.position);
+        const double range_m = geodist(satellite.position, true_receiver_position);
+        const double trop_delay_m =
+            modeledPppTroposphereDelay(true_receiver_position, geometry.elevation, time) +
+            zenith_trop_delay_m * mappingFunction(geometry.elevation);
+        const double stec_tecu = stec_base_tecu + 0.5 * static_cast<double>(satellite.id.prn);
+        const double l1_iono_m =
+            ionosphereDelayMetersForFrequency(constants::GPS_L1_FREQ, stec_tecu);
+        const double l2_iono_m =
+            ionosphereDelayMetersForFrequency(constants::GPS_L2_FREQ, stec_tecu);
+
+        Observation l1(satellite.id, SignalType::GPS_L1CA);
+        l1.valid = true;
+        l1.has_pseudorange = true;
+        l1.has_carrier_phase = true;
+        l1.pseudorange = range_m + trop_delay_m + l1_iono_m;
+        l1.carrier_phase = (range_m + trop_delay_m - l1_iono_m) / constants::GPS_L1_WAVELENGTH;
+        l1.snr = 48.0;
+        epoch.addObservation(l1);
+
+        Observation l2(satellite.id, SignalType::GPS_L2C);
+        l2.valid = true;
+        l2.has_pseudorange = true;
+        l2.has_carrier_phase = true;
+        l2.pseudorange = range_m + trop_delay_m + l2_iono_m;
+        l2.carrier_phase = (range_m + trop_delay_m - l2_iono_m) / constants::GPS_L2_WAVELENGTH;
+        l2.snr = 45.0;
+        epoch.addObservation(l2);
+    }
+
+    return epoch;
+}
+
+std::string buildAtmosphericSsrText(const std::vector<SyntheticSatellite>& satellites,
+                                    const Vector3d& true_receiver_position,
+                                    const GNSSTime& time,
+                                    double zenith_trop_delay_m,
+                                    double stec_base_tecu) {
+    NavigationData nav;
+    std::ostringstream text;
+    text << "# week,tow,sat,dx,dy,dz,dclock_m[,atmos_<name>=<value>...]\n";
+    for (const auto& satellite : satellites) {
+        const auto geometry = nav.calculateGeometry(true_receiver_position, satellite.position);
+        const double trop_delay_m = zenith_trop_delay_m * mappingFunction(geometry.elevation);
+        const double stec_tecu = stec_base_tecu + 0.5 * static_cast<double>(satellite.id.prn);
+        text << time.week << "," << time.tow << "," << satellite.id.toString()
+             << ",0.0,0.0,0.0,0.0"
+             << ",atmos_trop_t00_m=" << std::fixed << std::setprecision(6) << trop_delay_m
+             << ",atmos_stec_c00_tecu:" << satellite.id.toString() << "="
+             << std::fixed << std::setprecision(6) << stec_tecu << "\n";
+    }
+    return text.str();
+}
+
+std::string buildSp3Text(const std::vector<SyntheticSatellite>& satellites,
+                         const GNSSTime& first_time,
+                         const GNSSTime& second_time) {
+    auto toCalendar = [](const GNSSTime& time) {
+        const auto tp = time.toSystemTime();
+        const std::time_t unix_time = std::chrono::system_clock::to_time_t(tp);
+        std::tm utc_tm = *gmtime(&unix_time);
+        const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(
+            tp.time_since_epoch()).count() % 1'000'000;
+        char buffer[64];
+        std::snprintf(
+            buffer,
+            sizeof(buffer),
+            "*  %04d %02d %02d %02d %02d %011.8f\n",
+            utc_tm.tm_year + 1900,
+            utc_tm.tm_mon + 1,
+            utc_tm.tm_mday,
+            utc_tm.tm_hour,
+            utc_tm.tm_min,
+            static_cast<double>(utc_tm.tm_sec) + static_cast<double>(micros) * 1e-6);
+        return std::string(buffer);
+    };
+
+    std::string text;
+    text += toCalendar(first_time);
+    for (const auto& satellite : satellites) {
+        char line[160];
+        std::snprintf(
+            line,
+            sizeof(line),
+            "P%s %14.6f %14.6f %14.6f %14.6f\n",
+            satellite.id.toString().c_str(),
+            satellite.position.x() / 1000.0,
+            satellite.position.y() / 1000.0,
+            satellite.position.z() / 1000.0,
+            0.0);
+        text += line;
+    }
+    text += toCalendar(second_time);
+    for (const auto& satellite : satellites) {
+        char line[160];
+        std::snprintf(
+            line,
+            sizeof(line),
+            "P%s %14.6f %14.6f %14.6f %14.6f\n",
+            satellite.id.toString().c_str(),
+            satellite.position.x() / 1000.0,
+            satellite.position.y() / 1000.0,
+            satellite.position.z() / 1000.0,
+            0.0);
+        text += line;
+    }
+    return text;
+}
+
+std::string buildClockText(const std::vector<SyntheticSatellite>& satellites,
+                           const GNSSTime& first_time,
+                           const GNSSTime& second_time) {
+    auto toCalendarFields = [](const GNSSTime& time) {
+        const auto tp = time.toSystemTime();
+        const std::time_t unix_time = std::chrono::system_clock::to_time_t(tp);
+        std::tm utc_tm = *gmtime(&unix_time);
+        const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(
+            tp.time_since_epoch()).count() % 1'000'000;
+        char buffer[64];
+        std::snprintf(
+            buffer,
+            sizeof(buffer),
+            "%04d %02d %02d %02d %02d %011.8f",
+            utc_tm.tm_year + 1900,
+            utc_tm.tm_mon + 1,
+            utc_tm.tm_mday,
+            utc_tm.tm_hour,
+            utc_tm.tm_min,
+            static_cast<double>(utc_tm.tm_sec) + static_cast<double>(micros) * 1e-6);
+        return std::string(buffer);
+    };
+
+    std::string text = "     3.00           C                   RINEX VERSION / TYPE\n";
+    text += "END OF HEADER\n";
+    const std::array<GNSSTime, 2> epochs = {first_time, second_time};
+    for (const auto& epoch : epochs) {
+        for (const auto& satellite : satellites) {
+            text += "AS " + satellite.id.toString() + " " + toCalendarFields(epoch) +
+                "  2  0.000000000000E+00  1.000000000000E-12\n";
+        }
+    }
+    return text;
+}
+
+std::string buildSimpleReceiverAntexText(const std::string& antenna_type,
+                                         double l1_north_mm,
+                                         double l1_east_mm,
+                                         double l1_up_mm,
+                                         double l2_north_mm,
+                                         double l2_east_mm,
+                                         double l2_up_mm) {
+    std::ostringstream text;
+    text << std::left << std::setw(60) << "     1.4            M                                       "
+         << "ANTEX VERSION / SYST\n";
+    text << std::left << std::setw(60) << ""
+         << "START OF ANTENNA\n";
+    std::ostringstream type_line;
+    type_line << std::left << std::setw(20) << antenna_type << std::setw(20) << "NONE";
+    text << std::left << std::setw(60) << type_line.str()
+         << "TYPE / SERIAL NO\n";
+    text << std::left << std::setw(60) << "     2"
+         << "# OF FREQUENCIES\n";
+    text << std::left << std::setw(60) << "   G01"
+         << "START OF FREQUENCY\n";
+    {
+        std::ostringstream offsets;
+        offsets << std::fixed << std::setprecision(1)
+                << std::setw(10) << l1_north_mm
+                << std::setw(10) << l1_east_mm
+                << std::setw(10) << l1_up_mm;
+        text << std::left << std::setw(60) << offsets.str()
+             << "NORTH / EAST / UP\n";
+    }
+    text << std::left << std::setw(60) << ""
+         << "END OF FREQUENCY\n";
+    text << std::left << std::setw(60) << "   G02"
+         << "START OF FREQUENCY\n";
+    {
+        std::ostringstream offsets;
+        offsets << std::fixed << std::setprecision(1)
+                << std::setw(10) << l2_north_mm
+                << std::setw(10) << l2_east_mm
+                << std::setw(10) << l2_up_mm;
+        text << std::left << std::setw(60) << offsets.str()
+             << "NORTH / EAST / UP\n";
+    }
+    text << std::left << std::setw(60) << ""
+         << "END OF FREQUENCY\n";
+    text << std::left << std::setw(60) << ""
+         << "END OF ANTENNA\n";
+    return text.str();
+}
+
+std::string buildSimpleBlqText(const std::string& station_name,
+                               double up_amplitude_m,
+                               double west_amplitude_m,
+                               double south_amplitude_m) {
+    auto rowText = [](double first_value) {
+        std::ostringstream row;
+        row << std::fixed << std::setprecision(6) << std::setw(10) << first_value;
+        for (int i = 1; i < 11; ++i) {
+            row << std::setw(10) << 0.0;
+        }
+        return row.str();
+    };
+
+    std::ostringstream text;
+    text << "$$ Synthetic BLQ coefficients\n";
+    text << station_name << "\n";
+    text << rowText(up_amplitude_m) << "\n";
+    text << rowText(west_amplitude_m) << "\n";
+    text << rowText(south_amplitude_m) << "\n";
+    text << rowText(0.0) << "\n";
+    text << rowText(0.0) << "\n";
+    text << rowText(0.0) << "\n";
+    return text.str();
+}
+
+}  // namespace
+
+TEST(PPPTest, NiellHydrostaticMappingTracksHeightAndSeason) {
+    constexpr double latitude_rad = 45.0 * M_PI / 180.0;
+    constexpr double elevation_rad = 10.0 * M_PI / 180.0;
+    const double low_height_mapping =
+        models::niellHydrostaticMapping(latitude_rad, 0.0, elevation_rad, 15);
+    const double high_height_mapping =
+        models::niellHydrostaticMapping(latitude_rad, 2500.0, elevation_rad, 15);
+    const double summer_mapping =
+        models::niellHydrostaticMapping(latitude_rad, 0.0, elevation_rad, 200);
+    const double wet_mapping = models::niellWetMapping(latitude_rad, elevation_rad);
+    const double legacy_mapping =
+        1.001 / std::sqrt(0.002001 + std::pow(std::sin(elevation_rad), 2));
+
+    EXPECT_GT(low_height_mapping, 1.0);
+    EXPECT_GT(wet_mapping, 1.0);
+    EXPECT_GT(high_height_mapping, low_height_mapping);
+    EXPECT_GT(std::abs(low_height_mapping - summer_mapping), 1e-4);
+    EXPECT_LT(low_height_mapping, legacy_mapping);
+}
+
+TEST(PPPTest, ZenithTroposphereClimatologyTracksLatitudeSeasonAndHeight) {
+    constexpr double tropical_lat_rad = 15.0 * M_PI / 180.0;
+    constexpr double mid_lat_rad = 45.0 * M_PI / 180.0;
+    constexpr double polar_lat_rad = 75.0 * M_PI / 180.0;
+
+    const auto tropical =
+        models::estimateZenithTroposphereClimatology(tropical_lat_rad, 0.0, 30);
+    const auto mid_winter =
+        models::estimateZenithTroposphereClimatology(mid_lat_rad, 0.0, 20);
+    const auto mid_summer =
+        models::estimateZenithTroposphereClimatology(mid_lat_rad, 0.0, 200);
+    const auto mountain =
+        models::estimateZenithTroposphereClimatology(mid_lat_rad, 2500.0, 20);
+    const auto polar =
+        models::estimateZenithTroposphereClimatology(polar_lat_rad, 0.0, 20);
+
+    EXPECT_GT(tropical.totalDelayMeters(), 2.0);
+    EXPECT_GT(tropical.wet_delay_m, polar.wet_delay_m);
+    EXPECT_GT(mid_winter.totalDelayMeters(), mountain.totalDelayMeters());
+    EXPECT_GT(std::abs(mid_winter.wet_delay_m - mid_summer.wet_delay_m), 0.01);
+    EXPECT_GT(mid_winter.hydrostatic_delay_m, 2.0);
+    EXPECT_GT(mid_winter.temperature_k, mountain.temperature_k);
+}
+
+TEST(PPPTest, ModeledTroposphereDelayClimatologyUsesSeparateHydroAndWetMappings) {
+    constexpr double latitude_rad = 35.0 * M_PI / 180.0;
+    constexpr double height_m = 420.0;
+    constexpr int day_of_year = 84;
+    constexpr double low_elevation = 12.0 * M_PI / 180.0;
+    constexpr double high_elevation = 68.0 * M_PI / 180.0;
+
+    const auto zenith =
+        models::estimateZenithTroposphereClimatology(latitude_rad, height_m, day_of_year);
+    const double low_delay = models::modeledTroposphereDelayClimatology(
+        latitude_rad, height_m, low_elevation, day_of_year);
+    const double high_delay = models::modeledTroposphereDelayClimatology(
+        latitude_rad, height_m, high_elevation, day_of_year);
+
+    const double low_hydro_mapping =
+        models::niellHydrostaticMapping(latitude_rad, height_m, low_elevation, day_of_year);
+    const double low_wet_mapping = models::niellWetMapping(latitude_rad, low_elevation);
+    const double blended_low_delay =
+        0.5 * (low_hydro_mapping + low_wet_mapping) * zenith.totalDelayMeters();
+
+    EXPECT_GT(low_delay, high_delay);
+    EXPECT_GT(low_delay, zenith.totalDelayMeters());
+    EXPECT_NEAR(
+        low_delay,
+        zenith.hydrostatic_delay_m * low_hydro_mapping +
+            zenith.wet_delay_m * low_wet_mapping,
+        1e-9);
+    EXPECT_GT(std::abs(low_delay - blended_low_delay), 1e-3);
+}
+
+TEST(PPPTest, SolidEarthTidesChangeSyntheticPrecisePppSolutionWithoutBreakingIt) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_tides_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_tides_test.clk");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(8.0, -5.0, 3.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 6, 0, 0.0);
+    const GNSSTime last_precise_time = first_time + 600.0;
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, last_precise_time));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, last_precise_time));
+
+    PPPProcessor::PPPConfig base_config;
+    base_config.use_precise_orbits = true;
+    base_config.use_precise_clocks = true;
+    base_config.orbit_file_path = sp3_path.string();
+    base_config.clock_file_path = clk_path.string();
+    base_config.convergence_min_epochs = 5;
+    base_config.convergence_threshold_horizontal = 0.2;
+    base_config.estimate_troposphere = false;
+    base_config.enable_ambiguity_resolution = false;
+    base_config.kinematic_mode = false;
+    base_config.apply_ocean_loading = false;
+
+    PPPProcessor::PPPConfig tides_on_config = base_config;
+    tides_on_config.apply_solid_earth_tides = true;
+    PPPProcessor::PPPConfig tides_off_config = base_config;
+    tides_off_config.apply_solid_earth_tides = false;
+
+    PPPProcessor tides_on_processor(tides_on_config);
+    PPPProcessor tides_off_processor(tides_off_config);
+
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(tides_on_processor.initialize(processor_config));
+    ASSERT_TRUE(tides_off_processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    PositionSolution tides_on_solution;
+    PositionSolution tides_off_solution;
+    for (int i = 0; i < 8; ++i) {
+        const ObservationData epoch = makeSyntheticEpoch(
+            first_time + 30.0 * static_cast<double>(i),
+            true_receiver_position,
+            approximate_receiver_position,
+            satellites);
+        tides_on_solution = tides_on_processor.processEpoch(epoch, nav_data);
+        tides_off_solution = tides_off_processor.processEpoch(epoch, nav_data);
+    }
+
+    ASSERT_TRUE(tides_on_solution.isValid());
+    ASSERT_TRUE(tides_off_solution.isValid());
+    EXPECT_LT((tides_on_solution.position_ecef - true_receiver_position).norm(), 1.0);
+    EXPECT_LT((tides_off_solution.position_ecef - true_receiver_position).norm(), 1.0);
+
+    const double position_delta_m =
+        (tides_on_solution.position_ecef - tides_off_solution.position_ecef).norm();
+    EXPECT_GT(position_delta_m, 1e-4);
+    EXPECT_LT(position_delta_m, 0.5);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+}
+
+TEST(PPPTest, ReceiverAntexPcoChangesSyntheticPrecisePppSolutionWithoutBreakingIt) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_antex_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_antex_test.clk");
+    const auto antex_path = tempFilePath("libgnss_ppp_antex_test.atx");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(antex_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(8.0, -5.0, 3.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 7, 0, 0.0);
+    const GNSSTime last_precise_time = first_time + 600.0;
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, last_precise_time));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, last_precise_time));
+    writeTextFile(
+        antex_path,
+        buildSimpleReceiverAntexText("TEST_ANTENNA", 2.0, -1.0, 80.0, 4.0, -2.0, 110.0));
+
+    PPPProcessor::PPPConfig base_config;
+    base_config.use_precise_orbits = true;
+    base_config.use_precise_clocks = true;
+    base_config.orbit_file_path = sp3_path.string();
+    base_config.clock_file_path = clk_path.string();
+    base_config.convergence_min_epochs = 5;
+    base_config.convergence_threshold_horizontal = 0.2;
+    base_config.estimate_troposphere = false;
+    base_config.enable_ambiguity_resolution = false;
+    base_config.kinematic_mode = false;
+
+    PPPProcessor::PPPConfig plain_config = base_config;
+    PPPProcessor::PPPConfig antex_config = base_config;
+    antex_config.antex_file_path = antex_path.string();
+    antex_config.receiver_antenna_type = "TEST_ANTENNA";
+    antex_config.receiver_antenna_delta_enu = Vector3d(0.02, -0.01, 0.25);
+
+    PPPProcessor plain_processor(plain_config);
+    PPPProcessor antex_processor(antex_config);
+
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(plain_processor.initialize(processor_config));
+    ASSERT_TRUE(antex_processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    PositionSolution plain_solution;
+    PositionSolution antex_solution;
+    for (int i = 0; i < 8; ++i) {
+        const ObservationData epoch = makeSyntheticEpoch(
+            first_time + 30.0 * static_cast<double>(i),
+            true_receiver_position,
+            approximate_receiver_position,
+            satellites);
+        plain_solution = plain_processor.processEpoch(epoch, nav_data);
+        antex_solution = antex_processor.processEpoch(epoch, nav_data);
+    }
+
+    ASSERT_TRUE(plain_solution.isValid());
+    ASSERT_TRUE(antex_solution.isValid());
+    EXPECT_LT((plain_solution.position_ecef - true_receiver_position).norm(), 1.0);
+    EXPECT_LT((antex_solution.position_ecef - true_receiver_position).norm(), 1.0);
+    const double position_delta_m =
+        (plain_solution.position_ecef - antex_solution.position_ecef).norm();
+    EXPECT_GT(position_delta_m, 1e-4);
+    EXPECT_LT(position_delta_m, 1.0);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(antex_path);
+}
+
+TEST(PPPTest, OceanLoadingCoefficientsChangeSyntheticPrecisePppSolutionWithoutBreakingIt) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_blq_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_blq_test.clk");
+    const auto blq_path = tempFilePath("libgnss_ppp_blq_test.blq");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(blq_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(8.0, -5.0, 3.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 8, 0, 0.0);
+    const GNSSTime last_precise_time = first_time + 600.0;
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, last_precise_time));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, last_precise_time));
+    writeTextFile(blq_path, buildSimpleBlqText("TESTMARK", 0.008, 0.003, 0.002));
+
+    PPPProcessor::PPPConfig base_config;
+    base_config.use_precise_orbits = true;
+    base_config.use_precise_clocks = true;
+    base_config.orbit_file_path = sp3_path.string();
+    base_config.clock_file_path = clk_path.string();
+    base_config.convergence_min_epochs = 5;
+    base_config.convergence_threshold_horizontal = 0.2;
+    base_config.estimate_troposphere = false;
+    base_config.enable_ambiguity_resolution = false;
+    base_config.kinematic_mode = false;
+    base_config.apply_solid_earth_tides = false;
+    base_config.apply_ocean_loading = false;
+
+    PPPProcessor::PPPConfig blq_config = base_config;
+    blq_config.apply_ocean_loading = true;
+    blq_config.ocean_loading_file_path = blq_path.string();
+    blq_config.ocean_loading_station_name = "TESTMARK";
+
+    PPPProcessor base_processor(base_config);
+    PPPProcessor blq_processor(blq_config);
+
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(base_processor.initialize(processor_config));
+    ASSERT_TRUE(blq_processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    PositionSolution base_solution;
+    PositionSolution blq_solution;
+    for (int i = 0; i < 8; ++i) {
+        const ObservationData epoch = makeSyntheticEpoch(
+            first_time + 30.0 * static_cast<double>(i),
+            true_receiver_position,
+            approximate_receiver_position,
+            satellites);
+        base_solution = base_processor.processEpoch(epoch, nav_data);
+        blq_solution = blq_processor.processEpoch(epoch, nav_data);
+    }
+
+    ASSERT_TRUE(base_solution.isValid());
+    ASSERT_TRUE(blq_solution.isValid());
+    EXPECT_LT((base_solution.position_ecef - true_receiver_position).norm(), 1.0);
+    EXPECT_LT((blq_solution.position_ecef - true_receiver_position).norm(), 1.0);
+    const double position_delta_m =
+        (base_solution.position_ecef - blq_solution.position_ecef).norm();
+    EXPECT_GT(position_delta_m, 1e-5);
+    EXPECT_LT(position_delta_m, 0.5);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(blq_path);
+}
+
+TEST(PPPTest, PreciseProductsLoadSp3AndClockAndInterpolateMidpoint) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_precise_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_precise_test.clk");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+
+    const std::string sp3_text =
+        "*  2026 03 26 00 00 00.00000000\n"
+        "PG01   20200.000000   14000.000000   21700.000000       123.000000\n"
+        "*  2026 03 26 00 15 00.00000000\n"
+        "PG01   20201.500000   14001.500000   21701.500000       223.000000\n";
+    const std::string clk_text =
+        "     3.00           C                   RINEX VERSION / TYPE\n"
+        "END OF HEADER\n"
+        "AS G01 2026 03 26 00 00 00.00000000  2  1.230000000000E-04  1.000000000000E-12\n"
+        "AS G01 2026 03 26 00 15 00.00000000  2  2.230000000000E-04  1.000000000000E-12\n";
+
+    writeTextFile(sp3_path, sp3_text);
+    writeTextFile(clk_path, clk_text);
+
+    PreciseProducts precise_products;
+    ASSERT_TRUE(precise_products.loadSP3File(sp3_path.string()));
+    ASSERT_TRUE(precise_products.loadClockFile(clk_path.string()));
+
+    Vector3d position = Vector3d::Zero();
+    Vector3d velocity = Vector3d::Zero();
+    double clock_bias = 0.0;
+    double clock_drift = 0.0;
+    const GNSSTime midpoint = makeTime(2026, 3, 26, 0, 7, 30.0);
+    ASSERT_TRUE(precise_products.interpolateOrbitClock(
+        SatelliteId(GNSSSystem::GPS, 1), midpoint, position, velocity, clock_bias, clock_drift));
+
+    EXPECT_NEAR(position.x(), 20'200'750.0, 1e-3);
+    EXPECT_NEAR(position.y(), 14'000'750.0, 1e-3);
+    EXPECT_NEAR(position.z(), 21'700'750.0, 1e-3);
+    EXPECT_NEAR(clock_bias, 1.73e-4, 1e-12);
+    EXPECT_NEAR(velocity.norm(), std::sqrt(3.0) * (1500.0 / 900.0), 1e-6);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+}
+
+TEST(PPPTest, SSRProductsLoadCsvAndInterpolateMidpoint) {
+    const auto ssr_path = tempFilePath("libgnss_ppp_ssr_test.csv");
+    std::filesystem::remove(ssr_path);
+
+    const std::string ssr_text =
+        "# week,tow,sat,dx,dy,dz,dclock_m\n"
+        "2414,345600.0,G01,1.0,-2.0,3.0,4.0\n"
+        "2414,345660.0,G01,3.0,-4.0,5.0,8.0\n";
+    writeTextFile(ssr_path, ssr_text);
+
+    SSRProducts ssr_products;
+    ASSERT_TRUE(ssr_products.loadCSVFile(ssr_path.string()));
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    ASSERT_TRUE(ssr_products.interpolateCorrection(
+        SatelliteId(GNSSSystem::GPS, 1),
+        GNSSTime(2414, 345630.0),
+        orbit_correction,
+        clock_correction_m));
+
+    EXPECT_NEAR(orbit_correction.x(), 2.0, 1e-9);
+    EXPECT_NEAR(orbit_correction.y(), -3.0, 1e-9);
+    EXPECT_NEAR(orbit_correction.z(), 4.0, 1e-9);
+    EXPECT_NEAR(clock_correction_m, 6.0, 1e-9);
+
+    std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens) {
+    const auto ssr_path = tempFilePath("libgnss_ppp_ssr_optional_tokens_test.csv");
+    std::filesystem::remove(ssr_path);
+
+    const std::string ssr_text =
+        "# week,tow,sat,dx,dy,dz,dclock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,atmos_<name>=<value>...]\n"
+        "2414,345600.0,G01,1.0,-2.0,3.0,4.0,ura_sigma_m=0.002750,cbias:2=-0.120000,cbias:8=0.050000,pbias:2=0.015000,atmos_network_id=1,atmos_trop_quality=9\n";
+    writeTextFile(ssr_path, ssr_text);
+
+    SSRProducts ssr_products;
+    ASSERT_TRUE(ssr_products.loadCSVFile(ssr_path.string()));
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    double ura_sigma_m = 0.0;
+    std::map<uint8_t, double> code_bias_m;
+    std::map<uint8_t, double> phase_bias_m;
+    std::map<std::string, std::string> atmos_tokens;
+    ASSERT_TRUE(ssr_products.interpolateCorrection(
+        SatelliteId(GNSSSystem::GPS, 1),
+        GNSSTime(2414, 345600.0),
+        orbit_correction,
+        clock_correction_m,
+        &ura_sigma_m,
+        &code_bias_m,
+        &phase_bias_m,
+        &atmos_tokens));
+
+    EXPECT_NEAR(ura_sigma_m, 0.00275, 1e-12);
+    ASSERT_EQ(code_bias_m.size(), 2U);
+    EXPECT_NEAR(code_bias_m.at(2U), -0.12, 1e-12);
+    EXPECT_NEAR(code_bias_m.at(8U), 0.05, 1e-12);
+    ASSERT_EQ(phase_bias_m.size(), 1U);
+    EXPECT_NEAR(phase_bias_m.at(2U), 0.015, 1e-12);
+    ASSERT_EQ(atmos_tokens.size(), 2U);
+    EXPECT_EQ(atmos_tokens.at("atmos_network_id"), "1");
+    EXPECT_EQ(atmos_tokens.at("atmos_trop_quality"), "9");
+
+    std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, ProcessorLoadsRtcmSsrCorrectionsFromFile) {
+    const auto rtcm_path = tempFilePath("libgnss_ppp_ssr_rtcm_test.rtcm3");
+    std::filesystem::remove(rtcm_path);
+
+    NavigationData nav_data;
+    nav_data.addEphemeris(makeBroadcastGpsEphemeris(1));
+    writeBinaryFile(rtcm_path, buildGps1060CombinedFrame(1));
+
+    PPPProcessor processor;
+    ASSERT_TRUE(processor.loadRTCMSSRProducts(rtcm_path.string(), nav_data, 1.0));
+    EXPECT_TRUE(processor.hasLoadedSSRProducts());
+
+    std::filesystem::remove(rtcm_path);
+}
+
+TEST(PPPTest, ProcessorAppliesRtcmSsrHighRateClockFromFile) {
+    const auto rtcm_path = tempFilePath("libgnss_ppp_ssr_rtcm_high_rate_test.rtcm3");
+    std::filesystem::remove(rtcm_path);
+
+    NavigationData nav_data;
+    const Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(eph);
+
+    std::vector<uint8_t> frames = buildGps1060CombinedFrame(1);
+    const auto high_rate_frame = buildGps1062HighRateClockFrame(1, 2500);  // 0.25 m
+    frames.insert(frames.end(), high_rate_frame.begin(), high_rate_frame.end());
+    writeBinaryFile(rtcm_path, frames);
+
+    PPPProcessor processor;
+    ASSERT_TRUE(processor.loadRTCMSSRProducts(rtcm_path.string(), nav_data, 1.0));
+    EXPECT_TRUE(processor.hasLoadedSSRProducts());
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    double ura_sigma_m = 0.0;
+    ASSERT_TRUE(processor.interpolateLoadedSSRCorrection(
+        SatelliteId(GNSSSystem::GPS, 1),
+        GNSSTime(eph.toe.week, 345600.0),
+        orbit_correction,
+        clock_correction_m,
+        &ura_sigma_m));
+    EXPECT_NEAR(clock_correction_m, 0.12 + 0.25, 1e-6);
+    EXPECT_DOUBLE_EQ(ura_sigma_m, 0.0);
+
+    std::filesystem::remove(rtcm_path);
+}
+
+TEST(PPPTest, ProcessorLoadsRtcmSsrUraFromFile) {
+    const auto rtcm_path = tempFilePath("libgnss_ppp_ssr_rtcm_ura_test.rtcm3");
+    std::filesystem::remove(rtcm_path);
+
+    NavigationData nav_data;
+    const Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(eph);
+
+    std::vector<uint8_t> frames = buildGps1060CombinedFrame(1);
+    const auto ura_frame = buildGps1061UraFrame(1, 5);
+    frames.insert(frames.end(), ura_frame.begin(), ura_frame.end());
+    writeBinaryFile(rtcm_path, frames);
+
+    PPPProcessor processor;
+    ASSERT_TRUE(processor.loadRTCMSSRProducts(rtcm_path.string(), nav_data, 1.0));
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    double ura_sigma_m = 0.0;
+    ASSERT_TRUE(processor.interpolateLoadedSSRCorrection(
+        SatelliteId(GNSSSystem::GPS, 1),
+        GNSSTime(eph.toe.week, 345600.0),
+        orbit_correction,
+        clock_correction_m,
+        &ura_sigma_m));
+    EXPECT_NEAR(clock_correction_m, 0.12, 1e-6);
+    EXPECT_NEAR(ura_sigma_m, 0.00125, 1e-9);
+
+    std::filesystem::remove(rtcm_path);
+}
+
+TEST(PPPTest, ProcessorLoadsRtcmSsrCodeBiasFromFile) {
+    const auto rtcm_path = tempFilePath("libgnss_ppp_ssr_rtcm_code_bias_test.rtcm3");
+    std::filesystem::remove(rtcm_path);
+
+    NavigationData nav_data;
+    const Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(eph);
+
+    std::vector<uint8_t> frames = buildGps1060CombinedFrame(1);
+    const auto code_bias_frame = buildGps1059CodeBiasFrame(1, 2, -12);  // -0.12 m on GPS L1 C/A
+    frames.insert(frames.end(), code_bias_frame.begin(), code_bias_frame.end());
+    writeBinaryFile(rtcm_path, frames);
+
+    PPPProcessor processor;
+    ASSERT_TRUE(processor.loadRTCMSSRProducts(rtcm_path.string(), nav_data, 1.0));
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    double ura_sigma_m = 0.0;
+    std::map<uint8_t, double> code_bias_m;
+    ASSERT_TRUE(processor.interpolateLoadedSSRCorrection(
+        SatelliteId(GNSSSystem::GPS, 1),
+        GNSSTime(eph.toe.week, 345600.0),
+        orbit_correction,
+        clock_correction_m,
+        &ura_sigma_m,
+        &code_bias_m));
+    ASSERT_EQ(code_bias_m.size(), 1U);
+    ASSERT_TRUE(code_bias_m.find(2U) != code_bias_m.end());
+    EXPECT_NEAR(code_bias_m.at(2U), -0.12, 1e-9);
+    EXPECT_DOUBLE_EQ(ura_sigma_m, 0.0);
+
+    std::filesystem::remove(rtcm_path);
+}
+
+TEST(PPPTest, ProcessorProducesConvergedFloatSolutionWithSyntheticPreciseProducts) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_processor_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_processor_test.clk");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+
+    const Vector3d true_receiver_position = geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position = true_receiver_position + Vector3d(8.0, -5.0, 3.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 1, 0, 0.0);
+    const GNSSTime last_precise_time = first_time + 600.0;
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, last_precise_time));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, last_precise_time));
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_precise_orbits = true;
+    ppp_config.use_precise_clocks = true;
+    ppp_config.orbit_file_path = sp3_path.string();
+    ppp_config.clock_file_path = clk_path.string();
+    ppp_config.convergence_min_epochs = 5;
+    ppp_config.convergence_threshold_horizontal = 0.2;
+    ppp_config.estimate_troposphere = false;
+    ppp_config.enable_ambiguity_resolution = false;
+    ppp_config.kinematic_mode = false;
+
+    PPPProcessor processor(ppp_config);
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    PositionSolution last_solution;
+    for (int i = 0; i < 8; ++i) {
+        const ObservationData epoch = makeSyntheticEpoch(
+            first_time + 30.0 * static_cast<double>(i),
+            true_receiver_position,
+            approximate_receiver_position,
+            satellites);
+        last_solution = processor.processEpoch(epoch, nav_data);
+        ASSERT_TRUE(last_solution.isValid());
+        EXPECT_EQ(last_solution.status, SolutionStatus::PPP_FLOAT);
+        EXPECT_GE(last_solution.num_satellites, 6);
+    }
+
+    EXPECT_LT((last_solution.position_ecef - true_receiver_position).norm(), 1.0);
+    EXPECT_LT(last_solution.residual_rms, 0.2);
+
+    const auto stats = processor.getStats();
+    EXPECT_EQ(stats.total_epochs, 8U);
+    EXPECT_EQ(stats.valid_solutions, 8U);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+}
+
+TEST(PPPTest, ProcessorAppliesAtmosphericCorrectionsFromSampledSSRWithPreciseProducts) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_atmos_processor_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_atmos_processor_test.clk");
+    const auto ssr_path = tempFilePath("libgnss_ppp_atmos_processor_test.csv");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(ssr_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(15.0, -10.0, 6.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 3, 0, 0.0);
+    const GNSSTime last_precise_time = first_time + 600.0;
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, last_precise_time));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, last_precise_time));
+    writeTextFile(
+        ssr_path,
+        buildAtmosphericSsrText(satellites, true_receiver_position, first_time, 2.3, 12.0));
+
+    PPPProcessor::PPPConfig base_config;
+    base_config.use_precise_orbits = true;
+    base_config.use_precise_clocks = true;
+    base_config.orbit_file_path = sp3_path.string();
+    base_config.clock_file_path = clk_path.string();
+    base_config.use_ionosphere_free = false;
+    base_config.estimate_troposphere = false;
+    base_config.enable_ambiguity_resolution = false;
+    base_config.convergence_min_epochs = 1;
+    base_config.kinematic_mode = false;
+
+    PPPProcessor corrected_processor(base_config);
+    PPPProcessor::PPPConfig atmos_config = base_config;
+    atmos_config.use_ssr_corrections = true;
+    atmos_config.ssr_file_path = ssr_path.string();
+    PPPProcessor atmos_processor(atmos_config);
+
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(corrected_processor.initialize(processor_config));
+    ASSERT_TRUE(atmos_processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    PositionSolution baseline_solution;
+    PositionSolution corrected_solution;
+    for (int i = 0; i < 3; ++i) {
+        const ObservationData epoch = makeSyntheticEpochWithAtmosphericBiases(
+            first_time + 30.0 * static_cast<double>(i),
+            true_receiver_position,
+            approximate_receiver_position,
+            satellites,
+            2.3,
+            12.0);
+        baseline_solution = corrected_processor.processEpoch(epoch, nav_data);
+        corrected_solution = atmos_processor.processEpoch(epoch, nav_data);
+    }
+
+    ASSERT_TRUE(baseline_solution.isValid());
+    ASSERT_TRUE(corrected_solution.isValid());
+    EXPECT_GT(atmos_processor.getLastAppliedAtmosphericTroposphereCorrections(), 0);
+    EXPECT_GT(atmos_processor.getLastAppliedAtmosphericIonosphereCorrections(), 0);
+    EXPECT_GT(atmos_processor.getLastAppliedAtmosphericTroposphereMeters(), 0.0);
+    EXPECT_GT(atmos_processor.getLastAppliedAtmosphericIonosphereMeters(), 0.0);
+    EXPECT_LT(corrected_solution.residual_rms, baseline_solution.residual_rms);
+    EXPECT_LT(
+        (corrected_solution.position_ecef - true_receiver_position).norm(),
+        (baseline_solution.position_ecef - true_receiver_position).norm());
+    EXPECT_LT(corrected_solution.residual_rms, 3.0);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, ProcessorUsesModeledTroposphereWhenZenithStateIsDisabled) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_modeled_trop_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_modeled_trop_test.clk");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(10.0, -7.0, 5.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 4, 0, 0.0);
+    const GNSSTime last_precise_time = first_time + 600.0;
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, last_precise_time));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, last_precise_time));
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_precise_orbits = true;
+    ppp_config.use_precise_clocks = true;
+    ppp_config.orbit_file_path = sp3_path.string();
+    ppp_config.clock_file_path = clk_path.string();
+    ppp_config.use_ionosphere_free = true;
+    ppp_config.estimate_troposphere = false;
+    ppp_config.enable_ambiguity_resolution = false;
+    ppp_config.convergence_min_epochs = 1;
+    ppp_config.kinematic_mode = false;
+
+    PPPProcessor processor(ppp_config);
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    PositionSolution solution;
+    for (int i = 0; i < 8; ++i) {
+        const ObservationData epoch = makeSyntheticEpochWithAtmosphericBiases(
+            first_time + 30.0 * static_cast<double>(i),
+            true_receiver_position,
+            approximate_receiver_position,
+            satellites,
+            2.3,
+            0.0);
+        solution = processor.processEpoch(epoch, nav_data);
+    }
+
+    ASSERT_TRUE(solution.isValid());
+    EXPECT_LT(solution.residual_rms, 1.0);
+    EXPECT_LT(
+        (solution.position_ecef - true_receiver_position).norm(),
+        (approximate_receiver_position - true_receiver_position).norm());
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+}
+
+TEST(PPPTest, ProcessorFixesSyntheticAmbiguitiesWithPreciseProducts) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_ar_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_ar_test.clk");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+
+    const Vector3d true_receiver_position = geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position = true_receiver_position + Vector3d(8.0, -5.0, 3.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 2, 0, 0.0);
+    const GNSSTime last_precise_time = first_time + 600.0;
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, last_precise_time));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, last_precise_time));
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_precise_orbits = true;
+    ppp_config.use_precise_clocks = true;
+    ppp_config.orbit_file_path = sp3_path.string();
+    ppp_config.clock_file_path = clk_path.string();
+    ppp_config.convergence_min_epochs = 4;
+    ppp_config.convergence_threshold_horizontal = 0.2;
+    ppp_config.estimate_troposphere = false;
+    ppp_config.enable_ambiguity_resolution = true;
+    ppp_config.ar_ratio_threshold = 2.0;
+    ppp_config.kinematic_mode = false;
+
+    PPPProcessor processor(ppp_config);
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    PositionSolution last_solution;
+    bool saw_fixed_solution = false;
+    int best_fixed_ambiguities = 0;
+    double best_ratio = 0.0;
+    for (int i = 0; i < 8; ++i) {
+        const ObservationData epoch = makeSyntheticEpoch(
+            first_time + 30.0 * static_cast<double>(i),
+            true_receiver_position,
+            approximate_receiver_position,
+            satellites);
+        last_solution = processor.processEpoch(epoch, nav_data);
+        ASSERT_TRUE(last_solution.isValid());
+        if (last_solution.status == SolutionStatus::PPP_FIXED) {
+            saw_fixed_solution = true;
+            best_fixed_ambiguities =
+                std::max(best_fixed_ambiguities, last_solution.num_fixed_ambiguities);
+            best_ratio = std::max(best_ratio, last_solution.ratio);
+        }
+    }
+
+    EXPECT_LT((last_solution.position_ecef - true_receiver_position).norm(), 1.0);
+    EXPECT_GE(last_solution.ratio, 0.0);
+    EXPECT_GE(last_solution.num_fixed_ambiguities, 0);
+    if (saw_fixed_solution) {
+        EXPECT_GE(best_fixed_ambiguities, 1);
+        EXPECT_GT(best_ratio, 2.0);
+    }
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+}

@@ -3,6 +3,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <string>
 #include "types.hpp"
 
 namespace libgnss {
@@ -313,6 +314,57 @@ public:
     /**
      * @brief Clear all data
      */
+    void clear();
+};
+
+/**
+ * @brief SSR orbit/clock correction sample
+ */
+struct SSROrbitClockCorrection {
+    SatelliteId satellite;
+    GNSSTime time;
+
+    Vector3d orbit_correction_ecef = Vector3d::Zero();   ///< Orbit delta in ECEF meters
+    double clock_correction_m = 0.0;                     ///< Clock delta in meters
+    double ura_sigma_m = 0.0;                            ///< SSR URA sigma in meters
+    std::map<uint8_t, double> code_bias_m;               ///< SSR code biases keyed by RTCM signal id
+    std::map<uint8_t, double> phase_bias_m;              ///< SSR phase biases keyed by RTCM signal id
+    std::map<std::string, std::string> atmos_tokens;     ///< Optional atmospheric metadata tokens
+
+    bool orbit_valid = false;
+    bool clock_valid = false;
+    bool ura_valid = false;
+    bool code_bias_valid = false;
+    bool phase_bias_valid = false;
+    bool atmos_valid = false;
+};
+
+/**
+ * @brief Minimal SSR correction manager
+ *
+ * This stores orbit/clock corrections keyed by satellite and epoch and can
+ * linearly interpolate them. The current loader accepts a simple CSV format:
+ * `week,tow,sat,dx,dy,dz,dclock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,atmos_<name>=<value>...]`
+ */
+class SSRProducts {
+public:
+    std::map<SatelliteId, std::vector<SSROrbitClockCorrection>> orbit_clock_corrections;
+
+    void addCorrection(const SSROrbitClockCorrection& correction);
+
+    bool interpolateCorrection(const SatelliteId& sat,
+                               const GNSSTime& time,
+                               Vector3d& orbit_correction_ecef,
+                               double& clock_correction_m,
+                               double* ura_sigma_m = nullptr,
+                               std::map<uint8_t, double>* code_bias_m = nullptr,
+                               std::map<uint8_t, double>* phase_bias_m = nullptr,
+                               std::map<std::string, std::string>* atmos_tokens = nullptr) const;
+
+    bool loadCSVFile(const std::string& filename);
+
+    bool hasData(const SatelliteId& sat, const GNSSTime& time) const;
+
     void clear();
 };
 

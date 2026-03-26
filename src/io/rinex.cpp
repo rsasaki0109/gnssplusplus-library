@@ -165,6 +165,15 @@ GNSSTime bdtWeekTowToGpst(int week, double tow) {
     return GNSSTime(week + kBdtWeekOffset, tow) + 14.0;
 }
 
+std::string trimCopy(const std::string& text) {
+    const size_t first = text.find_first_not_of(' ');
+    if (first == std::string::npos) {
+        return "";
+    }
+    const size_t last = text.find_last_not_of(' ');
+    return text.substr(first, last - first + 1);
+}
+
 int rinexBand(const std::string& obs_type) {
     if (obs_type.size() < 2 || !std::isdigit(obs_type[1])) {
         return -1;
@@ -688,10 +697,20 @@ bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) 
     else if (label.find("MARKER NAME") != std::string::npos) {
         header.marker_name = line.substr(0, 60);
     }
+    else if (label.find("ANT # / TYPE") != std::string::npos) {
+        header.antenna_number = trimCopy(line.substr(0, 20));
+        header.antenna_type = trimCopy(line.substr(20, 20));
+    }
     else if (label.find("APPROX POSITION XYZ") != std::string::npos) {
         header.approximate_position(0) = std::stod(line.substr(0, 14));
         header.approximate_position(1) = std::stod(line.substr(14, 14));
         header.approximate_position(2) = std::stod(line.substr(28, 14));
+    }
+    else if (label.find("ANTENNA: DELTA H/E/N") != std::string::npos) {
+        const double height = std::stod(line.substr(0, 14));
+        const double east = std::stod(line.substr(14, 14));
+        const double north = std::stod(line.substr(28, 14));
+        header.antenna_delta = Vector3d(east, north, height);
     }
     else if (label.find("# / TYPES OF OBSERV") != std::string::npos) {
         // RINEX 2: Parse number of observation types

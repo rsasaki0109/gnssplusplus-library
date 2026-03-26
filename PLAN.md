@@ -5,7 +5,7 @@
 RTKLIB 相当の GNSS 測位ライブラリを Modern C++17 + Eigen でゼロから構築。
 RTK コア（Kalman filter, LAMBDA, 対流圏/電離圏モデル, 座標変換）は **全て自前実装** で RTKLIB ランタイム依存ゼロを達成。
 
-## 現在の到達点 (2026-03-24)
+## 現在の到達点 (2026-03-26)
 
 ### 性能
 
@@ -37,8 +37,11 @@ libgnss++/
 │   ├── kalman.hpp           Eigen Kalman Filter (active state skip)
 │   └── lambda.hpp/cpp       LAMBDA (LD分解 + reduction + 整数探索)
 ├── io/
-│   ├── rinex.hpp/cpp        RINEX 2/3 reader (obs + nav + iono params)
-│   ├── rtcm.hpp             RTCM (stub)
+│   ├── rinex.hpp/cpp        RINEX 2/3 reader/writer (obs + nav + iono params)
+│   ├── rtcm.hpp/cpp         RTCM 3 reader/writer (1003/1004, 1019/1020, MSM4/5/6/7)
+│   ├── ubx.hpp/cpp          UBX NAV-PVT / RXM-RAWX / RXM-SFRBX + streaming decoder
+│   ├── ntrip.hpp/cpp        NTRIP client
+│   ├── rtcm_stream.hpp/cpp  RTCM stream context (week/station metadata)
 │   └── solution_writer.hpp  POS/LLH/XYZ 出力
 └── gnss.hpp                 メインヘッダー
 ```
@@ -59,10 +62,32 @@ libgnss++/
 
 ### テスト
 
-- **単体テスト**: `./build/tests/run_tests` (30/30 pass)
-- **CTest**: `ctest --test-dir build --output-on-failure` (registered, green)
-- **回帰テスト**: `bash tests/run_regression.sh` (3データセット, 4 checks, ALL PASS)
+- **GTest / CTest**: `ctest --test-dir build --output-on-failure` (green)
+- **CLI 回帰**: `tests/test_cli_tools.py` (`stream / convert / replay / live / rcv / solve`)
+- **Benchmark / 描画回帰**: `tests/test_benchmark_scripts.py`
+- **live I/O 回帰**: `RTCM/NTRIP/serial/TCP`, `UBX file/serial`, `receiver reload`
 - **CI**: GitHub Actions (Ubuntu gcc/clang + macOS clang, green)
+
+### ツールチェイン到達点
+
+- `gnss solve`: RINEX rover/base/nav からのオフライン RTK 後処理
+- `gnss spp`: RINEX rover/nav からのオフライン SPP 後処理
+- `gnss stream`: RTCM を `file / NTRIP / serial / TCP` で受信し、`file / serial / TCP` へ relay
+- `gnss nav-products`: observation epoch + broadcast nav から minimal `SP3/CLK` を生成
+- `gnss ubx-info`: `NAV-PVT / RXM-RAWX / RXM-SFRBX` の inspect と streaming decode
+- `gnss nmea-info`: `NMEA GGA/RMC` の file/serial inspect
+- `gnss novatel-info`: `NovAtel ASCII/Binary BESTPOS/BESTVEL` の file/serial inspect
+- `gnss sbp-info`: Swift Binary Protocol `GPS_TIME / POS_LLH / VEL_NED` の file/serial inspect
+- `gnss sbf-info`: Septentrio SBF `PVTGeodetic / LBandTrackerStatus / P2PPStatus` の file/serial inspect
+- `gnss trimble-info`: Trimble GSOF `Type 1/2/8` GENOUT packet の file/serial inspect
+- `gnss skytraq-info`: SkyTraq binary `0xDC/0xDD/0xE5/0x83/0x84` の file/serial inspect
+- `gnss binex-info`: BINEX `0x00/0x01/0x7F` metadata/navigation/prototyping record の file/serial inspect
+- `gnss qzss-l6-info`: direct QZSS L6 250-byte frame の header/data-part inspect、subframe CSV export、subtype `10` service-info packet assembly/export、Compact SSR subtype `1/2/3/4/5/6/7/8/9/11/12` message/correction export
+- `gnss convert`: `UBX / RTCM -> RINEX obs/nav`, `SFRBX -> CSV`
+- `gnss replay`: file replay による live-like RTK 実行
+- `gnss live`: rover `RTCM / UBX` + base `RTCM` の live solver
+- `gnss rcv`: config ベースの `run/start/restart/reload/status/stop/console`
+- `UBX -> nav RINEX`: `GPS / QZSS / Galileo / GLONASS / BeiDou`
 
 ### 解析ツール
 
@@ -146,63 +171,141 @@ libgnss++/
 
 ### Phase 1: 移動体データ検証 (優先度: 高)
 
-**目標**: 東京お台場 車載走行データでの RTK fix + 軌跡画像を README に掲載
+**目標**: Odaiba moving benchmark を README と回帰で維持する
 
-- [ ] お台場データ (RINEX 3, multi-GNSS) でのテスト
-  - Rover: Trimble NETR9, 10Hz, GPS+GLO+GAL+BDS+QZSS
-  - Base: Trimble NETR9 (近傍 ~170m)
-  - RTKLIB: 7% fix (urban canyon で困難)
-- [ ] fix 軌跡 vs RTKLIB 軌跡の 2D 比較画像生成
-- [ ] ground truth (NovAtel SPAN-CPT) との精度比較
-- [ ] README に画像追加
+- [x] お台場データ (RINEX 3, multi-GNSS) での solver/benchmark 導線
+- [x] RTKLIB 比較画像, scorecard, 単独 2D 図の生成
+- [x] ground truth (UrbanNav reference.csv) ベースの比較
+- [x] common-epoch / all-epoch の pass 条件を benchmark command に固定
+  - `gnss odaiba-benchmark --require-*` で sign-off threshold を明示できる
+- [x] multi-GNSS RTK の Odaiba full-dataset sign-off 条件を固定
+  - `output/odaiba_summary.json` に all/common epoch 指標を記録
+- [x] optional MALIB comparison path を benchmark summary に追加
+  - `--malib-bin` / `--malib-pos` 指定時は `output/odaiba_summary.json` に MALIB 指標も記録
 
 ### Phase 2: multi-GNSS 対応 (優先度: 高)
 
-**目標**: GPS 以外の衛星系を使えるようにする
+**目標**: GPS-only 前提を外し、system-aware RTK を既定経路にする
 
-- [ ] GLONASS 対応
-  - FDMA frequency handling (衛星毎に異なる周波数)
-  - inter-system bias estimation
-- [ ] Galileo 対応
-  - E1/E5a dual frequency
-  - Galileo ephemeris parsing
-- [ ] BeiDou 対応 (B1/B3)
-- [ ] multi-GNSS DD (system 毎の ref satellite)
+- [x] GLONASS 対応
+  - FDMA frequency handling
+  - inter-system bias / GLONASS AR mode
+- [x] Galileo 対応
+  - broadcast nav / SPP / RTK ingest path
+- [x] BeiDou 対応
+  - BDS nav, SPP path, RTK ingest path
+- [x] multi-GNSS DD (system 毎の ref satellite, ambiguity slot 分離)
+- [x] short_baseline mixed-GNSS sign-off command
+  - `gnss short-baseline-signoff` で static sign-off summary と threshold check を出力
+- [x] Odaiba 以外の mixed-GNSS dataset で通し sign-off
+  - `gnss rtk-kinematic-signoff` で bundled mixed-GNSS DR sample の sign-off summary と threshold check を出力
 
 ### Phase 3: 精度・堅牢性改善 (優先度: 中)
 
-- [ ] NMF (Niell Mapping Function) 自前実装 (現在は 1/cos(z))
-- [ ] Saastamoinen wet delay 改善 (GPT モデル)
-- [ ] cycle slip detection 改善 (geometry-free, MW)
-- [ ] 電離圏推定 (IONOOPT_EST) — DD iono state を KF に追加
-- [ ] 精密暦 (SP3) 対応
-- [ ] アンテナ位相中心補正 (ANTEX)
-- [ ] 潮汐補正
+- [x] NMF (Niell Mapping Function) 自前実装
+- [x] Saastamoinen wet delay 改善 (GPT モデル)
+  - [x] latitude/season/height zenith wet climatology seed
+  - [x] `estimate_troposphere=false` PPP observation model に climatology-based modeled delay を適用
+  - [x] full GPT-style hydrostatic/wet slant delay model
+- [x] cycle slip detection 改善 (geometry-free, MW)
+- [x] 電離圏推定 (IONOOPT_EST) — DD iono state を KF に追加
+  - [x] `RTKConfig::IonoOpt::EST` を state vector / DD observation model / `gnss solve --iono est` に追加
+  - [x] `EST` mode では float KF path を優先し、bundled kinematic/CLI 回帰で valid solution を固定
+- [x] 精密暦 (SP3) 対応
+- [x] アンテナ位相中心補正 (ANTEX)
+  - receiver ANTEX (`--antex`) を PPP geometry に適用
+- [x] 潮汐補正
+  - [x] solid Earth tide の近似 geophysical correction を PPP path に適用
+  - [x] station coefficient 前提の ocean loading (`--blq`) を PPP path に適用
 
 ### Phase 4: リアルタイム対応 (優先度: 中)
 
 - [x] NTRIP client (RTCM 受信)
 - [x] RTCM 3 decoder (MSM4/5/6/7, 1003/1004, 1019/1020)
 - [x] serial port receiver interface (u-blox UBX rover + RTCM serial ingest)
+- [x] raw TCP / serial / file relay sink/source
 - [x] リアルタイム KF update の基本導線
   - `gnss live` / `gnss rcv` / `gnss stream` の live path は動作確認済み
   - rover UBX file/serial, base RTCM file/NTRIP/serial を回帰で固定
+- [x] receiver control (`run/start/restart/reload/status/stop/console`)
+- [x] 長時間運用向けの receiver state / monitoring 拡張
+  - JSON status, waitable polling, restart countdown, log tail, summary metrics
+- [x] UBX/RTCM 以外の raw decoder coverage 拡張
+  - [x] `gnss nmea-info` (`GGA/RMC`)
+  - [x] `gnss novatel-info` (ASCII/Binary `BESTPOS/BESTVEL`)
+  - [x] `gnss sbp-info` (Swift SBP `GPS_TIME/POS_LLH/VEL_NED`)
+  - [x] `gnss sbf-info` (Septentrio SBF `PVTGeodetic/LBandTrackerStatus/P2PPStatus`)
+  - [x] `gnss trimble-info` (Trimble GSOF `Type 1/2/8`)
+  - [x] `gnss qzss-l6-info` (direct QZSS L6 frame/subframe + Compact SSR export)
+  - [x] NMEA GGA/RMC inspect path (`gnss nmea-info`)
+  - [x] first proprietary raw family (`gnss novatel-info`, ASCII/Binary)
+  - [x] additional proprietary raw family (`gnss sbp-info`, Swift Binary Protocol)
+  - [x] additional proprietary raw family (`gnss sbf-info`, Septentrio SBF PVT/L-band/P2PP)
+  - [x] additional proprietary raw family (`gnss trimble-info`, Trimble GSOF Type 1/2/8)
 
 ### Phase 5: PPP (優先度: 低)
 
-- [ ] PPP-static
-- [ ] PPP-kinematic
-- [ ] PPP-AR (ambiguity resolution)
-- [ ] CLAS/MADOCA 対応
+- 参考: [JAXA-SNU/MALIB](https://github.com/JAXA-SNU/MALIB)
+  - RTKLIB fork ベースの MADOCA-PPP / PPP-AR / L6E 対応実装。Phase 5 の外部リファレンスとして扱う。
+- 参考: [Swift Navigation libsbp navigation docs](https://swift-nav.github.io/libsbp/c/build/docs/html/group__navigation.html)
+  - `GPS_TIME / POS_LLH / VEL_NED` の official message layout。`gnss sbp-info` 実装時の protocol reference。
+- 参考: [Septentrio AsteRx SB3 Pro+ Reference Guide](https://www.septentrio.com/system/files/support/asterx_sb3_pro_firmware_v4.10.1_reference_guide.pdf)
+  - `PVTGeodetic / LBandTrackerStatus / P2PPStatus` の official SBF block layout。`gnss sbf-info` 実装時の protocol reference。
+- 参考: [Trimble R780 GSOF Messages Overview](https://help.fieldsystems.trimble.com/r780/gsof-messages-overview.htm)
+  - `Type 1/2/8` の official GSOF record index。`gnss trimble-info` 実装時の protocol reference。
+- 参考: [QZSS L6 Signal Interface Specification IS-QZSS-L6-004](https://qzss.go.jp/en/technical/download/pdf/ps-is-qzss/is-qzss-l6-004.pdf)
+  - direct QZSS L6 250-byte frame の official header/data-part structure。`gnss qzss-l6-info` 実装時の protocol reference。
+- 参考: [QZSS-Strategy-Office/claslib](https://github.com/QZSS-Strategy-Office/claslib)
+  - official CLAS reference implementation。`data/clas_grid.def` はこの `clas_grid.def` を mirror したもので、direct QZSS L6 subtype `12` の nearest-grid atmospheric application に使う。
+- [x] precise products loader / interpolation (`SP3` + `CLK`)
+- [x] PPP float core groundwork
+  - precise orbit/clock fallback
+  - ionosphere-free dual-frequency observation path
+  - pseudorange PPP Kalman update
+  - synthetic regression tests in `tests/test_ppp.cpp`
+- [x] public PPP batch CLI groundwork (`gnss ppp`)
+- [x] broadcast-nav to precise-product bridge (`gnss nav-products`)
+  - real observation epochs + broadcast nav から minimal `SP3/CLK` を生成
+- [x] PPP-static sign-off
+  - bundled `data/rover_static.obs` + `data/navigation_static.nav`
+  - `gnss ppp-static-signoff` emits summary JSON and threshold checks
+- [x] PPP mode split (`static` / `kinematic`)
+- [x] PPP-kinematic sign-off
+  - bundled `data/rover_kinematic.obs` + `data/base_kinematic.obs` + `data/navigation_kinematic.nav`
+  - `gnss ppp-kinematic-signoff` emits summary JSON and threshold checks against an RTK reference trajectory
+- [x] PPP-AR (ambiguity resolution)
+  - [x] synthetic precise-products fixed path + regression
+  - [x] real-data precise-path regression (`gnss nav-products` + `gnss ppp --enable-ar`, static sample, `fallback=0`)
+  - [x] real-data PPP-AR slice regression (`20 epoch` static sample slice, generated `SP3/CLK`, `PPP fixed solutions > 0`, `fallback=0`)
+  - [x] real-data PPP-AR full-run regression (`gnss ppp-static-signoff --enable-ar --generate-products --ar-ratio-threshold 1.5`, bundled `120 epoch` static sample, `PPP fixed epochs >= 1`, `fallback=0`)
+  - [x] real-data PPP-AR sign-off (`gnss ppp-static-signoff --enable-ar --generate-products --ar-ratio-threshold 1.5`, bundled `120 epoch` static sample, `mean <= 5.0 m`, `max <= 6.0 m`, `PPP fixed epochs >= 1`, `fallback=0`)
+- [x] CLAS/MADOCA 対応
+  - [x] minimal SSR orbit/clock correction manager (`SSRProducts`, CSV loader, `gnss ppp --ssr`)
+  - [x] minimal RTCM SSR 1/2/4 decoder (`RTCMProcessor::decodeSSRCorrections()` for GPS/GLONASS/Galileo/QZSS/BeiDou)
+  - [x] RTCM SSR file -> sampled PPP correction application (`gnss ppp --ssr-rtcm`)
+  - [x] RTCM SSR code-bias/URA/high-rate clock decoder
+  - [x] RTCM SSR sampled high-rate clock application (`gnss ppp --ssr-rtcm`)
+  - [x] RTCM SSR URA application in PPP weighting
+  - [x] RTCM SSR code-bias application in PPP pseudorange model
+  - [x] RTCM SSR transport path into PPP (`--ssr-rtcm` via file / NTRIP / TCP / serial)
+  - [x] CLAS/MADOCA transport and application path (`gnss clas-ppp --profile clas|madoca` over RTCM-carried SSR)
+  - [x] compact sampled CLAS/MADOCA transport path (`gnss clas-ppp --compact-ssr`)
+  - [x] direct QZSS L6 frame/subframe inspect/export (`gnss qzss-l6-info`)
+  - [x] raw QZSS L6 subtype `1/2/3/4/5/6/7/8/9/11/12` -> sampled Compact SSR correction path (`gnss qzss-l6-info`, `gnss clas-ppp --qzss-l6`)
+  - [x] raw QZSS L6 subtype `10` service information packet assembly/export (`gnss qzss-l6-info`)
+  - [x] sampled SSR atmospheric metadata application in PPP (official CLAS grid based nearest-grid trop/STEC path)
 
 ### Phase 6: パッケージング (優先度: 低)
 
-- [ ] CMake install target
-- [ ] pkg-config support
-- [ ] Python bindings (pybind11)
-- [ ] ROS2 node
-- [ ] Debian package
-- [ ] API ドキュメント (Doxygen)
+- [x] CMake install target
+- [x] pkg-config support
+- [x] Python bindings (pybind11)
+  - `RINEX header` / observation epoch summary / `.pos solution` inspection
+  - file-based `SPP / PPP / RTK` solve helpers
+- [x] ROS2 node
+  - optional `gnss_solution_node` playback publisher for `.pos -> NavSatFix/PoseStamped/Path/status/satellite-count`
+- [x] Debian package
+- [x] API ドキュメント (Doxygen)
 
 ---
 
@@ -233,12 +336,10 @@ processRTKEpoch()
 
 ### 既知の制限
 
-1. **GPS only** — multi-GNSS 未対応
-2. **broadcast ephemeris only** — 精密暦未対応
-3. **NMF 未実装** — 1/cos(z) mapping (短基線では影響微小)
-4. **urban canyon** — 高層ビル環境では multipath で Fix 困難
-5. **単体テスト不足** — RTK 系の詳細診断テストは未整備 (public API smoke test は追加済み)
-6. **SPP 精度** — 自前実装 ~1.3m (RTKLIB ~0.5m) — 長基線で影響
+1. **PPP/CLAS scope is still bounded** — current sampled CLAS/MADOCA path covers RTCM SSR plus direct raw QZSS L6 subtype `1/2/3/4/5/6/7/8/9/10/11/12`, but it still stops at the sampled correction application model rather than a full external CLAS reference-stack reimplementation
+2. **raw decoder coverage is broad but curated** — `UBX/RTCM/NMEA/NovAtel ASCII/Binary/Swift SBP/Septentrio SBF/Trimble GSOF/SkyTraq/BINEX/QZSS L6` は対応済みだが、RTKLIB `convbin` の全 vendor matrix を網羅する方針ではない
+3. **Python bindings are file-oriented** — current `libgnsspp` package now exposes inspection plus file-based `SPP/PPP/RTK` solve helpers, but live stream / receiver-control APIs areまだ expose していない
+4. **ROS2 integration is playback-oriented** — current node publishes `.pos` playback as `NavSatFix/PoseStamped/Path/status/satellite-count`; it is intentionally lighter than a full in-node live receiver stack
 
 ### データセット
 
@@ -253,4 +354,4 @@ processRTKEpoch()
 
 ---
 
-*最終更新: 2026-03-24*
+*最終更新: 2026-03-27*

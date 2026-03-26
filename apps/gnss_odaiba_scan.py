@@ -12,6 +12,8 @@ import sys
 import tempfile
 import time
 
+from gnss_runtime import resolve_gnss_command
+
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = ROOT_DIR / "scripts"
@@ -114,7 +116,7 @@ def filter_window_by_tow(matched: list, tow_start: float, tow_end: float) -> lis
 
 
 def run_window(
-    dispatcher: Path,
+    gnss_command: list[str],
     rover: Path,
     base: Path,
     nav: Path,
@@ -125,8 +127,7 @@ def run_window(
     out_path: Path,
 ) -> tuple[float, str]:
     command = [
-        sys.executable,
-        str(dispatcher),
+        *gnss_command,
         "solve",
         "--rover",
         str(rover),
@@ -154,9 +155,8 @@ def run_window(
 
 def main() -> int:
     args = parse_args()
-    dispatcher = ROOT_DIR / "apps/gnss.py"
+    gnss_command = resolve_gnss_command(ROOT_DIR)
 
-    ensure_exists(dispatcher, "dispatcher")
     ensure_exists(args.rover, "rover observation file")
     ensure_exists(args.base, "base observation file")
     ensure_exists(args.nav, "navigation file")
@@ -187,7 +187,7 @@ def main() -> int:
         for skip_epochs in range(args.start_epoch, args.end_epoch, args.step):
             out_path = temp_root / f"scan_{skip_epochs:06d}.pos"
             elapsed_s, stdout = run_window(
-                dispatcher,
+                gnss_command,
                 args.rover,
                 args.base,
                 args.nav,

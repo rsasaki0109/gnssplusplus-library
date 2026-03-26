@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import binascii
 import json
 import socket
 import struct
@@ -14,6 +15,7 @@ import threading
 import time
 import unittest
 import math
+import zlib
 from pathlib import Path
 
 if os.name != "nt":
@@ -22,6 +24,11 @@ if os.name != "nt":
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DISPATCHER = ROOT_DIR / "apps" / "gnss.py"
+SCRIPTS_DIR = ROOT_DIR / "scripts"
+
+sys.path.insert(0, str(SCRIPTS_DIR))
+
+import generate_driving_comparison as driving_comparison  # noqa: E402
 
 
 def crc24q(data: bytes) -> int:
@@ -133,6 +140,123 @@ def build_rtcm1005(x_m: float, y_m: float, z_m: float) -> bytes:
     return bytes(frame)
 
 
+def build_rtcm1060(prn: int, tow_seconds: int) -> bytes:
+    total_bits = 68 + 205
+    payload = bytearray((total_bits + 7) // 8)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 1060)
+    bit += 12
+    set_unsigned_bits(payload, bit, 20, tow_seconds)
+    bit += 20
+    set_unsigned_bits(payload, bit, 4, 2)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 1, 1)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, 7)
+    bit += 4
+    set_unsigned_bits(payload, bit, 16, 21)
+    bit += 16
+    set_unsigned_bits(payload, bit, 4, 3)
+    bit += 4
+    set_unsigned_bits(payload, bit, 6, 1)
+    bit += 6
+    set_unsigned_bits(payload, bit, 6, prn)
+    bit += 6
+    set_unsigned_bits(payload, bit, 8, 0)
+    bit += 8
+    set_signed_bits(payload, bit, 22, 0)
+    bit += 22
+    set_signed_bits(payload, bit, 20, 0)
+    bit += 20
+    set_signed_bits(payload, bit, 20, 0)
+    bit += 20
+    set_signed_bits(payload, bit, 21, 0)
+    bit += 21
+    set_signed_bits(payload, bit, 19, 0)
+    bit += 19
+    set_signed_bits(payload, bit, 19, 0)
+    bit += 19
+    set_signed_bits(payload, bit, 22, 0)
+    bit += 22
+    set_signed_bits(payload, bit, 21, 0)
+    bit += 21
+    set_signed_bits(payload, bit, 27, 0)
+
+    frame = bytearray([0xD3, 0x00, len(payload)])
+    frame.extend(payload)
+    crc = crc24q(frame)
+    frame.extend(((crc >> 16) & 0xFF, (crc >> 8) & 0xFF, crc & 0xFF))
+    return bytes(frame)
+
+
+def build_rtcm1062(prn: int, tow_seconds: int, high_rate_units: int = 2500) -> bytes:
+    total_bits = 67 + 28
+    payload = bytearray((total_bits + 7) // 8)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 1062)
+    bit += 12
+    set_unsigned_bits(payload, bit, 20, tow_seconds)
+    bit += 20
+    set_unsigned_bits(payload, bit, 4, 2)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, 7)
+    bit += 4
+    set_unsigned_bits(payload, bit, 16, 21)
+    bit += 16
+    set_unsigned_bits(payload, bit, 4, 3)
+    bit += 4
+    set_unsigned_bits(payload, bit, 6, 1)
+    bit += 6
+    set_unsigned_bits(payload, bit, 6, prn)
+    bit += 6
+    set_signed_bits(payload, bit, 22, high_rate_units)
+
+    frame = bytearray([0xD3, 0x00, len(payload)])
+    frame.extend(payload)
+    crc = crc24q(frame)
+    frame.extend(((crc >> 16) & 0xFF, (crc >> 8) & 0xFF, crc & 0xFF))
+    return bytes(frame)
+
+
+def build_rtcm1059(prn: int, tow_seconds: int, signal_id: int = 2, bias_centimeters: int = -12) -> bytes:
+    total_bits = 67 + 6 + 5 + 19
+    payload = bytearray((total_bits + 7) // 8)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 1059)
+    bit += 12
+    set_unsigned_bits(payload, bit, 20, tow_seconds)
+    bit += 20
+    set_unsigned_bits(payload, bit, 4, 2)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, 7)
+    bit += 4
+    set_unsigned_bits(payload, bit, 16, 21)
+    bit += 16
+    set_unsigned_bits(payload, bit, 4, 3)
+    bit += 4
+    set_unsigned_bits(payload, bit, 6, 1)
+    bit += 6
+    set_unsigned_bits(payload, bit, 6, prn)
+    bit += 6
+    set_unsigned_bits(payload, bit, 5, 1)
+    bit += 5
+    set_unsigned_bits(payload, bit, 5, signal_id)
+    bit += 5
+    set_signed_bits(payload, bit, 14, bias_centimeters)
+
+    frame = bytearray([0xD3, 0x00, len(payload)])
+    frame.extend(payload)
+    crc = crc24q(frame)
+    frame.extend(((crc >> 16) & 0xFF, (crc >> 8) & 0xFF, crc & 0xFF))
+    return bytes(frame)
+
+
 def build_ubx_message(message_class: int, message_id: int, payload: bytes) -> bytes:
     message = bytearray([0xB5, 0x62, message_class, message_id])
     message.extend(struct.pack("<H", len(payload)))
@@ -144,6 +268,32 @@ def build_ubx_message(message_class: int, message_id: int, payload: bytes) -> by
         ck_b = (ck_b + ck_a) & 0xFF
     message.extend((ck_a, ck_b))
     return bytes(message)
+
+
+def checksum8(data: bytes) -> int:
+    value = 0
+    for byte in data:
+        value ^= byte
+    return value & 0xFF
+
+
+def build_binex_frame(record_id: int, payload: bytes) -> bytes:
+    if len(payload) >= 128:
+        raise ValueError("test BINEX helper only supports short payloads")
+    checksum_input = bytes((record_id, len(payload))) + payload
+    return bytes((0xE2, record_id, len(payload))) + payload + bytes((checksum8(checksum_input),))
+
+
+def build_binex_metadata_frame() -> bytes:
+    return build_binex_frame(0x00, bytes((0x08,)) + b"TSKB")
+
+
+def build_binex_nav_frame() -> bytes:
+    return build_binex_frame(0x01, bytes((0x06, 199)) + b"\xAA\x55\x00\x01")
+
+
+def build_binex_proto_frame() -> bytes:
+    return build_binex_frame(0x7F, bytes((0x05,)) + b"\x10\x20\x30\x40")
 
 
 def build_nav_pvt_message() -> bytes:
@@ -211,6 +361,842 @@ def build_sfrbx_message() -> bytes:
     payload.extend(struct.pack("<I", 0x00000500))
     payload.extend(struct.pack("<I", 0xCAFEBABE))
     return build_ubx_message(0x02, 0x13, payload)
+
+
+def build_nmea_sentence(body: str) -> str:
+    checksum = 0
+    for character in body:
+        checksum ^= ord(character)
+    return f"${body}*{checksum:02X}\r\n"
+
+
+def build_nmea_gga_sentence() -> str:
+    return build_nmea_sentence(
+        "GPGGA,123519,4807.038,N,01131.000,E,4,12,0.8,545.4,M,46.9,M,,"
+    )
+
+
+def build_nmea_rmc_sentence() -> str:
+    return build_nmea_sentence(
+        "GPRMC,123520,A,4807.038,N,01131.000,E,5.5,84.4,230394,,,A"
+    )
+
+
+def build_novatel_ascii_record(header: str, body: str) -> str:
+    content = f"{header};{body}"
+    checksum = zlib.crc32(content.encode("ascii")) & 0xFFFFFFFF
+    return f"#{content}*{checksum:08X}\r\n"
+
+
+def build_novatel_bestpos_record() -> str:
+    header = "BESTPOSA,COM1,0,0.0,FINESTEERING,2200,345600.000,02000000,0000,0000"
+    body = "SOL_COMPUTED,NARROW_INT,35.1234567,139.7654321,45.600,0.000,WGS84,0.010,0.020,0.030,\"\",0.0,0.0,18,18,18,18,00,00,00,00"
+    return build_novatel_ascii_record(header, body)
+
+
+def build_novatel_bestvel_record() -> str:
+    header = "BESTVELA,COM1,0,0.0,FINESTEERING,2200,345600.000,02000000,0000,0000"
+    body = "SOL_COMPUTED,DOPPLER_VELOCITY,0,0,5.500,84.400"
+    return build_novatel_ascii_record(header, body)
+
+
+def build_novatel_binary_frame(message_id: int, gps_week: int, gps_tow_ms: int, body: bytes) -> bytes:
+    header = bytearray([0xAA, 0x44, 0x12, 0x1C])
+    header.extend(struct.pack("<H", message_id))
+    header.extend(struct.pack("<B", 0))
+    header.extend(struct.pack("<B", 0))
+    header.extend(struct.pack("<H", len(body)))
+    header.extend(struct.pack("<H", 0))
+    header.extend(struct.pack("<B", 0))
+    header.extend(struct.pack("<B", 0))
+    header.extend(struct.pack("<H", gps_week))
+    header.extend(struct.pack("<I", gps_tow_ms))
+    header.extend(struct.pack("<I", 0))
+    header.extend(struct.pack("<H", 0))
+    header.extend(struct.pack("<H", 0))
+    frame = bytes(header) + body
+    crc = zlib.crc32(frame) & 0xFFFFFFFF
+    return frame + struct.pack("<I", crc)
+
+
+def build_novatel_bestpos_binary_record() -> bytes:
+    body = bytearray()
+    body.extend(struct.pack("<I", 0))   # SOL_COMPUTED
+    body.extend(struct.pack("<I", 50))  # NARROW_INT
+    body.extend(struct.pack("<d", 35.1234567))
+    body.extend(struct.pack("<d", 139.7654321))
+    body.extend(struct.pack("<d", 45.6))
+    body.extend(struct.pack("<f", 0.0))
+    body.extend(struct.pack("<I", 61))
+    body.extend(struct.pack("<f", 0.01))
+    body.extend(struct.pack("<f", 0.02))
+    body.extend(struct.pack("<f", 0.03))
+    body.extend(b"0000")
+    body.extend(struct.pack("<f", 0.0))
+    body.extend(struct.pack("<f", 0.0))
+    body.extend(bytes([18, 18, 18, 18, 0, 0, 0, 0]))
+    return build_novatel_binary_frame(42, 2200, 345600000, bytes(body))
+
+
+def build_novatel_bestvel_binary_record() -> bytes:
+    body = bytearray()
+    body.extend(struct.pack("<I", 0))   # SOL_COMPUTED
+    body.extend(struct.pack("<I", 74))  # DOPPLER_VELOCITY
+    body.extend(struct.pack("<f", 0.0))
+    body.extend(struct.pack("<f", 0.0))
+    body.extend(struct.pack("<d", 5.5))
+    body.extend(struct.pack("<d", 84.4))
+    body.extend(struct.pack("<d", 0.2))
+    body.extend(struct.pack("<f", 0.0))
+    return build_novatel_binary_frame(99, 2200, 345600000, bytes(body))
+
+
+def build_sbp_frame(message_type: int, sender_id: int, payload: bytes) -> bytes:
+    header = struct.pack("<HHB", message_type, sender_id, len(payload))
+    crc = binascii.crc_hqx(header + payload, 0) & 0xFFFF
+    return bytes([0x55]) + header + payload + struct.pack("<H", crc)
+
+
+def build_sbp_gps_time_frame() -> bytes:
+    payload = struct.pack("<IHiB", 345600123, 2200, -250, 0x01)
+    return build_sbp_frame(0x0102, 66, payload)
+
+
+def build_sbp_pos_llh_frame() -> bytes:
+    payload = struct.pack(
+        "<IdddHHBB",
+        345600123,
+        35.1234567,
+        139.7654321,
+        42.1,
+        25,
+        40,
+        18,
+        0x04,
+    )
+    return build_sbp_frame(0x020A, 66, payload)
+
+
+def build_sbp_vel_ned_frame() -> bytes:
+    payload = struct.pack(
+        "<IiiiHHBB",
+        345600123,
+        1250,
+        -500,
+        125,
+        50,
+        75,
+        18,
+        0x04,
+    )
+    return build_sbp_frame(0x020E, 66, payload)
+
+
+def build_sbf_frame(block_number: int, revision: int, payload: bytes) -> bytes:
+    raw_id = (revision << 13) | (block_number & 0x1FFF)
+    padded_payload = payload
+    padding = (-((8 + len(payload)) % 4)) % 4
+    if padding:
+        padded_payload += bytes(padding)
+    length = 8 + len(padded_payload)
+    body = struct.pack("<HH", raw_id, length) + padded_payload
+    crc = binascii.crc_hqx(body, 0) & 0xFFFF
+    return b"$@" + struct.pack("<H", crc) + body
+
+
+def build_sbf_pvt_geodetic_frame() -> bytes:
+    payload = bytearray()
+    payload.extend(struct.pack("<IH", 345600123, 2200))
+    payload.extend(struct.pack("<BB", 10, 0))
+    payload.extend(struct.pack("<ddd", math.radians(35.1234567), math.radians(139.7654321), 42.1))
+    payload.extend(struct.pack("<f", 38.4))
+    payload.extend(struct.pack("<f", 1.25))
+    payload.extend(struct.pack("<f", -0.50))
+    payload.extend(struct.pack("<f", 0.125))
+    payload.extend(struct.pack("<f", 84.4))
+    payload.extend(struct.pack("<d", 0.0))
+    payload.extend(struct.pack("<f", 0.0))
+    payload.extend(struct.pack("<BBBB", 0, 0, 18, 0))
+    payload.extend(struct.pack("<HH", 65535, 0))
+    payload.extend(struct.pack("<I", 0))
+    payload.extend(struct.pack("<BB", 0, 0))
+    payload.extend(struct.pack("<H", 0))
+    payload.extend(struct.pack("<H", 0))
+    payload.extend(struct.pack("<H", 25))
+    payload.extend(struct.pack("<H", 40))
+    payload.extend(struct.pack("<B", 0))
+    return build_sbf_frame(4007, 2, bytes(payload))
+
+
+def build_sbf_lband_tracker_frame() -> bytes:
+    payload = bytearray()
+    payload.extend(struct.pack("<IHBB", 345600123, 2200, 1, 24))
+    payload.extend(
+        struct.pack(
+            "<IHHfHhbBBBHBx",
+            1545260000,
+            1200,
+            42,
+            1.25,
+            4567,
+            -123,
+            -8,
+            0,
+            3,
+            108,
+            3600,
+            1,
+        )
+    )
+    return build_sbf_frame(4201, 3, bytes(payload))
+
+
+def build_sbf_p2pp_status_frame() -> bytes:
+    payload = struct.pack("<IHBBBBBB", 345600123, 2200, 1, 4, 1, 2, 2 << 1, 1)
+    return build_sbf_frame(4238, 0, payload)
+
+
+QZSS_L6_FRAME_BYTES = 250
+QZSS_L6_HEADER_BITS = 49
+QZSS_L6_DATA_PART_BITS = 1695
+QZSS_L6_SUBFRAME_BITS = QZSS_L6_DATA_PART_BITS * 5
+
+
+def build_qzss_l6_frame(
+    *,
+    prn: int = 199,
+    facility_id: int = 0,
+    subframe_start: bool = True,
+    alert: bool = False,
+    data_part: bytes = b"CLAS-L6-PAYLOAD",
+) -> bytes:
+    frame = bytearray(QZSS_L6_FRAME_BYTES)
+    set_unsigned_bits(frame, 0, 32, 0x1ACFFC1D)
+    set_unsigned_bits(frame, 32, 8, prn)
+    message_type_id = (0b101 << 5) | ((facility_id & 0x3) << 3) | (0 << 1) | (1 if subframe_start else 0)
+    set_unsigned_bits(frame, 40, 8, message_type_id)
+    set_unsigned_bits(frame, 48, 1, 1 if alert else 0)
+    for byte_index, value in enumerate(data_part):
+        absolute_bit = QZSS_L6_HEADER_BITS + byte_index * 8
+        if absolute_bit + 8 > QZSS_L6_HEADER_BITS + QZSS_L6_DATA_PART_BITS:
+            break
+        set_unsigned_bits(frame, absolute_bit, 8, value)
+    return bytes(frame)
+
+
+def copy_bits(
+    source: bytes | bytearray,
+    source_bit_offset: int,
+    target: bytearray,
+    target_bit_offset: int,
+    bit_length: int,
+) -> None:
+    for bit_index in range(bit_length):
+        value = read_unsigned_bits(source, source_bit_offset + bit_index, 1)
+        set_unsigned_bits(target, target_bit_offset + bit_index, 1, value)
+
+
+def encode_cssr_satellite_mask(prn: int, prn_base: int = 1) -> int:
+    return 1 << (39 - (prn - prn_base))
+
+
+def build_qzss_cssr_mask_message(
+    *,
+    tow: int,
+    iod: int,
+    prn: int = 3,
+    sync: bool = True,
+    sigmask: int = 0x8000,
+) -> tuple[bytes, int]:
+    payload = bytearray(32)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 4073)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 1)
+    bit += 4
+    set_unsigned_bits(payload, bit, 20, tow)
+    bit += 20
+    set_unsigned_bits(payload, bit, 4, 0)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1 if sync else 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, iod)
+    bit += 4
+    set_unsigned_bits(payload, bit, 4, 1)
+    bit += 4
+    set_unsigned_bits(payload, bit, 4, 0)
+    bit += 4
+    set_unsigned_bits(payload, bit, 40, encode_cssr_satellite_mask(prn))
+    bit += 40
+    set_unsigned_bits(payload, bit, 16, sigmask)
+    bit += 16
+    set_unsigned_bits(payload, bit, 1, 1)
+    bit += 1
+    set_unsigned_bits(payload, bit, 1, 1)
+    bit += 1
+    return bytes(payload), bit
+
+
+def build_qzss_cssr_combined_message(
+    *,
+    tow_delta: int,
+    iod: int,
+    prn: int = 3,
+    sync: bool = False,
+    network_id: int = 1,
+    dx: float = 0.0,
+    dy: float = 0.0,
+    dz: float = 0.0,
+    dclock_m: float = 0.025,
+) -> tuple[bytes, int]:
+    del prn
+    payload = bytearray(32)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 4073)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 11)
+    bit += 4
+    set_unsigned_bits(payload, bit, 12, tow_delta)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 0)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1 if sync else 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, iod)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1)
+    bit += 1
+    set_unsigned_bits(payload, bit, 1, 1)
+    bit += 1
+    set_unsigned_bits(payload, bit, 1, 1)
+    bit += 1
+    set_unsigned_bits(payload, bit, 5, network_id)
+    bit += 5
+    set_unsigned_bits(payload, bit, 1, 1)
+    bit += 1
+    set_unsigned_bits(payload, bit, 8, 12)
+    bit += 8
+    set_signed_bits(payload, bit, 15, round(dx / 0.0016))
+    bit += 15
+    set_signed_bits(payload, bit, 13, round(dy / 0.0064))
+    bit += 13
+    set_signed_bits(payload, bit, 13, round(dz / 0.0064))
+    bit += 13
+    set_signed_bits(payload, bit, 15, round(dclock_m / 0.0016))
+    bit += 15
+    return bytes(payload), bit
+
+
+def build_qzss_cssr_orbit_message(
+    *,
+    tow_delta: int,
+    iod: int,
+    dx: float = 0.0,
+    dy: float = 0.0,
+    dz: float = 0.0,
+    sync: bool = True,
+) -> tuple[bytes, int]:
+    payload = bytearray(32)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 4073)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 2)
+    bit += 4
+    set_unsigned_bits(payload, bit, 12, tow_delta)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 0)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1 if sync else 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, iod)
+    bit += 4
+    set_unsigned_bits(payload, bit, 8, 12)
+    bit += 8
+    set_signed_bits(payload, bit, 15, round(dx / 0.0016))
+    bit += 15
+    set_signed_bits(payload, bit, 13, round(dy / 0.0064))
+    bit += 13
+    set_signed_bits(payload, bit, 13, round(dz / 0.0064))
+    bit += 13
+    return bytes(payload), bit
+
+
+def build_qzss_cssr_clock_message(
+    *,
+    tow_delta: int,
+    iod: int,
+    dclock_m: float = 0.025,
+    sync: bool = False,
+) -> tuple[bytes, int]:
+    payload = bytearray(32)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 4073)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 3)
+    bit += 4
+    set_unsigned_bits(payload, bit, 12, tow_delta)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 0)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1 if sync else 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, iod)
+    bit += 4
+    set_signed_bits(payload, bit, 15, round(dclock_m / 0.0016))
+    bit += 15
+    return bytes(payload), bit
+
+
+def build_qzss_cssr_code_bias_message(
+    *,
+    tow_delta: int,
+    iod: int,
+    bias_m: float = -0.12,
+    sync: bool = True,
+) -> tuple[bytes, int]:
+    payload = bytearray(32)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 4073)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 4)
+    bit += 4
+    set_unsigned_bits(payload, bit, 12, tow_delta)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 0)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1 if sync else 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, iod)
+    bit += 4
+    set_signed_bits(payload, bit, 11, round(bias_m / 0.02))
+    bit += 11
+    return bytes(payload), bit
+
+
+def build_qzss_cssr_phase_bias_message(
+    *,
+    tow_delta: int,
+    iod: int,
+    phase_bias_m: float = 0.015,
+    sync: bool = True,
+) -> tuple[bytes, int]:
+    payload = bytearray(40)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 4073)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 5)
+    bit += 4
+    set_unsigned_bits(payload, bit, 12, tow_delta)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 0)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1 if sync else 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, iod)
+    bit += 4
+    set_signed_bits(payload, bit, 15, round(phase_bias_m / 0.001))
+    bit += 15
+    set_unsigned_bits(payload, bit, 2, 0)
+    bit += 2
+    return bytes(payload), bit
+
+
+def build_qzss_cssr_code_phase_bias_message(
+    *,
+    tow_delta: int,
+    iod: int,
+    code_bias_m: float = -0.12,
+    phase_bias_m: float = 0.015,
+    sync: bool = True,
+    network_bias: bool = False,
+) -> tuple[bytes, int]:
+    payload = bytearray(40)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 4073)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 6)
+    bit += 4
+    set_unsigned_bits(payload, bit, 12, tow_delta)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 0)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1 if sync else 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, iod)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1)
+    bit += 1
+    set_unsigned_bits(payload, bit, 1, 1)
+    bit += 1
+    set_unsigned_bits(payload, bit, 1, 1 if network_bias else 0)
+    bit += 1
+    if network_bias:
+        set_unsigned_bits(payload, bit, 5, 1)
+        bit += 5
+        set_unsigned_bits(payload, bit, 1, 1)
+        bit += 1
+    set_signed_bits(payload, bit, 11, round(code_bias_m / 0.02))
+    bit += 11
+    set_signed_bits(payload, bit, 15, round(phase_bias_m / 0.001))
+    bit += 15
+    set_unsigned_bits(payload, bit, 2, 0)
+    bit += 2
+    return bytes(payload), bit
+
+
+def build_qzss_cssr_ura_message(
+    *,
+    tow_delta: int,
+    iod: int,
+    ura_index: int = 9,
+    sync: bool = False,
+) -> tuple[bytes, int]:
+    payload = bytearray(32)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 4073)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 7)
+    bit += 4
+    set_unsigned_bits(payload, bit, 12, tow_delta)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 0)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1 if sync else 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, iod)
+    bit += 4
+    set_unsigned_bits(payload, bit, 6, ura_index)
+    bit += 6
+    return bytes(payload), bit
+
+
+def build_qzss_cssr_atmos_message(
+    *,
+    tow_delta: int,
+    iod: int,
+    sync: bool = False,
+    network_id: int = 1,
+    trop_avail: int = 3,
+    stec_avail: int = 3,
+    grid_count: int = 1,
+    selected_satellites: int = 1,
+    trop_quality: int = 0,
+    trop_type: int = 0,
+    trop_t00_m: float = 0.0,
+    trop_t01_m_per_deg: float = 0.0,
+    trop_t10_m_per_deg: float = 0.0,
+    trop_t11_m_per_deg2: float = 0.0,
+    trop_residual_size: int = 0,
+    trop_offset_m: float = 0.0,
+    trop_residuals_m: tuple[float, ...] | None = None,
+    stec_quality: int = 0,
+    stec_type: int = 0,
+    stec_c00_tecu: float = 0.0,
+    stec_c01_tecu_per_deg: float = 0.0,
+    stec_c10_tecu_per_deg: float = 0.0,
+    stec_c11_tecu_per_deg2: float = 0.0,
+    stec_c02_tecu_per_deg2: float = 0.0,
+    stec_c20_tecu_per_deg2: float = 0.0,
+    stec_residual_size: int = 0,
+    stec_residuals_tecu: tuple[float, ...] | None = None,
+) -> tuple[bytes, int]:
+    payload = bytearray(256)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 4073)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 12)
+    bit += 4
+    set_unsigned_bits(payload, bit, 12, tow_delta)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 0)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1 if sync else 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, iod)
+    bit += 4
+
+    set_unsigned_bits(payload, bit, 2, trop_avail)
+    bit += 2
+    set_unsigned_bits(payload, bit, 2, stec_avail)
+    bit += 2
+    set_unsigned_bits(payload, bit, 5, network_id)
+    bit += 5
+    set_unsigned_bits(payload, bit, 6, grid_count)
+    bit += 6
+
+    if trop_avail != 0:
+        set_unsigned_bits(payload, bit, 6, trop_quality)
+        bit += 6
+    if (trop_avail & 0x01) != 0:
+        set_unsigned_bits(payload, bit, 2, trop_type)
+        bit += 2
+        set_signed_bits(payload, bit, 9, round(trop_t00_m / 0.004))
+        bit += 9
+        if trop_type > 0:
+            set_signed_bits(payload, bit, 7, round(trop_t01_m_per_deg / 0.002))
+            bit += 7
+            set_signed_bits(payload, bit, 7, round(trop_t10_m_per_deg / 0.002))
+            bit += 7
+        if trop_type > 1:
+            set_signed_bits(payload, bit, 7, round(trop_t11_m_per_deg2 / 0.001))
+            bit += 7
+    if (trop_avail & 0x02) != 0:
+        residuals_m = trop_residuals_m if trop_residuals_m is not None else tuple(0.0 for _ in range(grid_count))
+        set_unsigned_bits(payload, bit, 1, trop_residual_size)
+        bit += 1
+        set_unsigned_bits(payload, bit, 4, round(trop_offset_m / 0.02))
+        bit += 4
+        trop_bits = 6 if trop_residual_size == 0 else 8
+        for grid_index in range(grid_count):
+            residual_m = residuals_m[grid_index] if grid_index < len(residuals_m) else 0.0
+            set_signed_bits(payload, bit, trop_bits, round(residual_m / 0.004))
+            bit += trop_bits
+
+    if stec_avail != 0:
+        for _ in range(selected_satellites):
+            set_unsigned_bits(payload, bit, 1, 1)
+            bit += 1
+        if selected_satellites == 0:
+            set_unsigned_bits(payload, bit, 1, 0)
+            bit += 1
+        for _ in range(selected_satellites):
+            set_unsigned_bits(payload, bit, 6, stec_quality)
+            bit += 6
+            if (stec_avail & 0x01) != 0:
+                set_unsigned_bits(payload, bit, 2, stec_type)
+                bit += 2
+                set_signed_bits(payload, bit, 14, round(stec_c00_tecu / 0.05))
+                bit += 14
+                if stec_type > 0:
+                    set_signed_bits(payload, bit, 12, round(stec_c01_tecu_per_deg / 0.02))
+                    bit += 12
+                    set_signed_bits(payload, bit, 12, round(stec_c10_tecu_per_deg / 0.02))
+                    bit += 12
+                if stec_type > 1:
+                    set_signed_bits(payload, bit, 10, round(stec_c11_tecu_per_deg2 / 0.02))
+                    bit += 10
+                if stec_type > 2:
+                    set_signed_bits(payload, bit, 8, round(stec_c02_tecu_per_deg2 / 0.005))
+                    bit += 8
+                    set_signed_bits(payload, bit, 8, round(stec_c20_tecu_per_deg2 / 0.005))
+                    bit += 8
+            if (stec_avail & 0x02) != 0:
+                residuals_tecu = (
+                    stec_residuals_tecu
+                    if stec_residuals_tecu is not None
+                    else tuple(0.0 for _ in range(grid_count))
+                )
+                set_unsigned_bits(payload, bit, 2, stec_residual_size)
+                bit += 2
+                stec_bits = (4, 4, 5, 7)[stec_residual_size]
+                stec_scale = (0.04, 0.12, 0.16, 0.24)[stec_residual_size]
+                for _ in range(grid_count):
+                    residual_tecu = residuals_tecu[_] if _ < len(residuals_tecu) else 0.0
+                    set_signed_bits(payload, bit, stec_bits, round(residual_tecu / stec_scale))
+                    bit += stec_bits
+    return bytes(payload), bit
+
+
+def build_qzss_cssr_gridded_message(
+    *,
+    tow_delta: int,
+    iod: int,
+    sync: bool = True,
+    network_id: int = 1,
+    trop_type: int = 1,
+    stec_residual_range: int = 0,
+    selected_satellites: int = 1,
+    trop_quality: int = 0,
+    grid_count: int = 1,
+    trop_hs_residuals_m: tuple[float, ...] | None = None,
+    trop_wet_residuals_m: tuple[float, ...] | None = None,
+    stec_residuals_tecu: tuple[float, ...] | None = None,
+) -> tuple[bytes, int]:
+    payload = bytearray(256)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 4073)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 9)
+    bit += 4
+    set_unsigned_bits(payload, bit, 12, tow_delta)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 0)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1 if sync else 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, iod)
+    bit += 4
+
+    set_unsigned_bits(payload, bit, 2, trop_type)
+    bit += 2
+    set_unsigned_bits(payload, bit, 1, stec_residual_range)
+    bit += 1
+    set_unsigned_bits(payload, bit, 5, network_id)
+    bit += 5
+    for _ in range(selected_satellites):
+        set_unsigned_bits(payload, bit, 1, 1)
+        bit += 1
+    if selected_satellites == 0:
+        set_unsigned_bits(payload, bit, 1, 0)
+        bit += 1
+    set_unsigned_bits(payload, bit, 6, trop_quality)
+    bit += 6
+    set_unsigned_bits(payload, bit, 6, grid_count)
+    bit += 6
+
+    hs_residuals = (
+        trop_hs_residuals_m if trop_hs_residuals_m is not None else tuple(0.0 for _ in range(grid_count))
+    )
+    wet_residuals = (
+        trop_wet_residuals_m if trop_wet_residuals_m is not None else tuple(0.0 for _ in range(grid_count))
+    )
+    stec_values = (
+        stec_residuals_tecu if stec_residuals_tecu is not None else tuple(0.0 for _ in range(grid_count))
+    )
+    stec_bits = 7 if stec_residual_range == 0 else 16
+    for grid_index in range(grid_count):
+        hs_value = hs_residuals[grid_index] if grid_index < len(hs_residuals) else 0.0
+        wet_value = wet_residuals[grid_index] if grid_index < len(wet_residuals) else 0.0
+        set_signed_bits(payload, bit, 9, round(hs_value / 0.004))
+        bit += 9
+        set_signed_bits(payload, bit, 8, round(wet_value / 0.004))
+        bit += 8
+        for _ in range(selected_satellites):
+            stec_value = stec_values[grid_index] if grid_index < len(stec_values) else 0.0
+            set_signed_bits(payload, bit, stec_bits, round(stec_value / 0.04))
+            bit += stec_bits
+    return bytes(payload), bit
+
+
+def build_qzss_cssr_stec_message(
+    *,
+    tow_delta: int,
+    iod: int,
+    sync: bool = True,
+    network_id: int = 1,
+    selected_satellites: int = 1,
+    stec_quality: int = 0,
+    stec_type: int = 0,
+    stec_c00_tecu: float = 0.0,
+    stec_c01_tecu_per_deg: float = 0.0,
+    stec_c10_tecu_per_deg: float = 0.0,
+    stec_c11_tecu_per_deg2: float = 0.0,
+    stec_c02_tecu_per_deg2: float = 0.0,
+    stec_c20_tecu_per_deg2: float = 0.0,
+) -> tuple[bytes, int]:
+    payload = bytearray(128)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 4073)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 8)
+    bit += 4
+    set_unsigned_bits(payload, bit, 12, tow_delta)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 0)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1 if sync else 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 4, iod)
+    bit += 4
+    set_unsigned_bits(payload, bit, 2, stec_type)
+    bit += 2
+    set_unsigned_bits(payload, bit, 5, network_id)
+    bit += 5
+    for _ in range(selected_satellites):
+        set_unsigned_bits(payload, bit, 1, 1)
+        bit += 1
+    if selected_satellites == 0:
+        set_unsigned_bits(payload, bit, 1, 0)
+        bit += 1
+    for _ in range(selected_satellites):
+        set_unsigned_bits(payload, bit, 6, stec_quality)
+        bit += 6
+        set_signed_bits(payload, bit, 14, round(stec_c00_tecu / 0.05))
+        bit += 14
+        if stec_type > 0:
+            set_signed_bits(payload, bit, 12, round(stec_c01_tecu_per_deg / 0.02))
+            bit += 12
+            set_signed_bits(payload, bit, 12, round(stec_c10_tecu_per_deg / 0.02))
+            bit += 12
+        if stec_type > 1:
+            set_signed_bits(payload, bit, 10, round(stec_c11_tecu_per_deg2 / 0.02))
+            bit += 10
+        if stec_type > 2:
+            set_signed_bits(payload, bit, 8, round(stec_c02_tecu_per_deg2 / 0.005))
+            bit += 8
+            set_signed_bits(payload, bit, 8, round(stec_c20_tecu_per_deg2 / 0.005))
+            bit += 8
+    return bytes(payload), bit
+
+
+def build_qzss_cssr_service_info_message(
+    *,
+    sync: bool,
+    info_counter: int,
+    payload_bytes: bytes,
+) -> tuple[bytes, int]:
+    if len(payload_bytes) % 5 != 0 or not payload_bytes:
+        raise ValueError("service info payload must be a non-empty multiple of 5 bytes")
+    data_size = len(payload_bytes) // 5 - 1
+    payload = bytearray(32)
+    bit = 0
+    set_unsigned_bits(payload, bit, 12, 4073)
+    bit += 12
+    set_unsigned_bits(payload, bit, 4, 10)
+    bit += 4
+    set_unsigned_bits(payload, bit, 1, 1 if sync else 0)
+    bit += 1
+    set_unsigned_bits(payload, bit, 3, info_counter)
+    bit += 3
+    set_unsigned_bits(payload, bit, 2, data_size)
+    bit += 2
+    for value in payload_bytes:
+        set_unsigned_bits(payload, bit, 8, value)
+        bit += 8
+    return bytes(payload), bit
+
+
+def build_qzss_l6_subframe_stream(
+    messages: list[tuple[bytes, int]],
+    *,
+    prn: int = 199,
+    facility_id: int = 0,
+) -> bytes:
+    subframe_bits = bytearray((QZSS_L6_SUBFRAME_BITS + 7) // 8)
+    bit_offset = 0
+    for payload, payload_bits in messages:
+        copy_bits(payload, 0, subframe_bits, bit_offset, payload_bits)
+        bit_offset += payload_bits
+    frames = []
+    for frame_index in range(5):
+        frame = bytearray(
+            build_qzss_l6_frame(
+                prn=prn,
+                facility_id=facility_id,
+                subframe_start=frame_index == 0,
+                data_part=b"",
+            )
+        )
+        copy_bits(
+            subframe_bits,
+            frame_index * QZSS_L6_DATA_PART_BITS,
+            frame,
+            QZSS_L6_HEADER_BITS,
+            QZSS_L6_DATA_PART_BITS,
+        )
+        frames.append(bytes(frame))
+    return b"".join(frames)
+
+
+def build_single_grid_residuals(
+    grid_count: int,
+    selected_index: int,
+    selected_value: float,
+) -> tuple[float, ...]:
+    residuals = [0.0] * grid_count
+    if 0 <= selected_index < grid_count:
+        residuals[selected_index] = selected_value
+    return tuple(residuals)
 
 
 def build_gps_lnav_sfrbx_message(subframe_id: int, sv_id: int = 12, week: int = 2200) -> bytes:
@@ -700,10 +1686,784 @@ def build_galileo_inav_sfrbx_message(
     return build_ubx_message(0x02, 0x13, payload)
 
 
+def build_gsof_record(record_type: int, payload: bytes) -> bytes:
+    if len(payload) > 255:
+        raise ValueError("GSOF record payload too long")
+    return bytes([record_type, len(payload)]) + payload
+
+
+def build_gsof_time_record(
+    *,
+    gps_week: int = 2200,
+    gps_tow_ms: int = 345600123,
+    sv_used: int = 18,
+    position_flags_1: int = 0x21,
+    position_flags_2: int = 0x04,
+    init_count: int = 7,
+) -> bytes:
+    return build_gsof_record(
+        1,
+        struct.pack(">IHBBBB", gps_tow_ms, gps_week, sv_used, position_flags_1, position_flags_2, init_count),
+    )
+
+
+def build_gsof_llh_record(
+    *,
+    latitude_deg: float = 35.1234567,
+    longitude_deg: float = 139.9876543,
+    height_m: float = 42.1,
+) -> bytes:
+    return build_gsof_record(
+        2,
+        struct.pack(">ddd", math.radians(latitude_deg), math.radians(longitude_deg), height_m),
+    )
+
+
+def build_gsof_velocity_record(
+    *,
+    flags: int = 0x03,
+    horizontal_speed_mps: float = 1.25,
+    heading_deg: float = 90.0,
+    vertical_speed_mps: float = -0.125,
+    local_heading_deg: float | None = 91.5,
+) -> bytes:
+    payload = struct.pack(
+        ">Bfff",
+        flags,
+        horizontal_speed_mps,
+        math.radians(heading_deg),
+        vertical_speed_mps,
+    )
+    if local_heading_deg is not None:
+        payload += struct.pack(">f", math.radians(local_heading_deg))
+    return build_gsof_record(8, payload)
+
+
+def build_gsof_genout_packet(
+    records: list[bytes],
+    *,
+    transmission_number: int = 1,
+    page_index: int = 0,
+    max_page_index: int = 0,
+) -> bytes:
+    data = bytes([transmission_number & 0xFF, page_index & 0xFF, max_page_index & 0xFF]) + b"".join(records)
+    if len(data) > 255:
+        raise ValueError("GSOF packet data too long")
+    frame = bytearray([0x02, 0x00, 0x40, len(data)])
+    frame.extend(data)
+    frame.append(sum(frame[1:]) & 0xFF)
+    frame.append(0x03)
+    return bytes(frame)
+
+
+def build_skytraq_frame(message_id: int, body: bytes) -> bytes:
+    payload = bytes([message_id]) + body
+    checksum = 0
+    for value in payload:
+        checksum ^= value
+    return b"\xA0\xA1" + len(payload).to_bytes(2, "big") + payload + bytes([checksum & 0xFF, 0x0D, 0x0A])
+
+
+def build_skytraq_epoch_message(*, iod: int = 7, week: int = 2200, tow_ms: int = 345600123) -> bytes:
+    return build_skytraq_frame(
+        0xDC,
+        bytes([iod]) + week.to_bytes(2, "big") + tow_ms.to_bytes(4, "big"),
+    )
+
+
+def build_skytraq_raw_message(*, iod: int = 7, nsat: int = 12) -> bytes:
+    return build_skytraq_frame(0xDD, bytes([iod, nsat]))
+
+
+def build_skytraq_rawx_message(
+    *,
+    version: int = 1,
+    iod: int = 7,
+    week: int = 2200,
+    tow_ms: int = 345600123,
+    period_ms: int = 1000,
+    nsat: int = 14,
+) -> bytes:
+    return build_skytraq_frame(
+        0xE5,
+        (
+            bytes([version, iod])
+            + week.to_bytes(2, "big")
+            + tow_ms.to_bytes(4, "big")
+            + period_ms.to_bytes(2, "big")
+            + b"\x00\x00"
+            + bytes([nsat])
+        ),
+    )
+
+
+def build_skytraq_ack_message(message_id: int = 0x1E) -> bytes:
+    return build_skytraq_frame(0x83, bytes([message_id]))
+
+
+def build_skytraq_nack_message(message_id: int = 0x09) -> bytes:
+    return build_skytraq_frame(0x84, bytes([message_id]))
+
+
+def geodetic_to_ecef(latitude_rad: float, longitude_rad: float, height_m: float) -> tuple[float, float, float]:
+    a = 6378137.0
+    e2 = 0.00669437999014
+    sin_lat = math.sin(latitude_rad)
+    cos_lat = math.cos(latitude_rad)
+    n = a / math.sqrt(1.0 - e2 * sin_lat * sin_lat)
+    return (
+        (n + height_m) * cos_lat * math.cos(longitude_rad),
+        (n + height_m) * cos_lat * math.sin(longitude_rad),
+        (n * (1.0 - e2) + height_m) * sin_lat,
+    )
+
+
+def enu_to_ecef(enu: tuple[float, float, float], latitude_rad: float, longitude_rad: float) -> tuple[float, float, float]:
+    east, north, up = enu
+    sin_lat = math.sin(latitude_rad)
+    cos_lat = math.cos(latitude_rad)
+    sin_lon = math.sin(longitude_rad)
+    cos_lon = math.cos(longitude_rad)
+    return (
+        -sin_lon * east - sin_lat * cos_lon * north + cos_lat * cos_lon * up,
+        cos_lon * east - sin_lat * sin_lon * north + cos_lat * sin_lon * up,
+        cos_lat * north + sin_lat * up,
+    )
+
+
+def geodist(satellite_position: tuple[float, float, float], receiver_position: tuple[float, float, float]) -> float:
+    dx = satellite_position[0] - receiver_position[0]
+    dy = satellite_position[1] - receiver_position[1]
+    dz = satellite_position[2] - receiver_position[2]
+    distance = math.sqrt(dx * dx + dy * dy + dz * dz)
+    return distance + 7.2921151467e-5 * (
+        satellite_position[0] * receiver_position[1] - satellite_position[1] * receiver_position[0]
+    ) / 299792458.0
+
+
+def interpolate_niell_coefficient(abs_lat_deg: float, coefficients: tuple[float, ...]) -> float:
+    latitude_grid_deg = (15.0, 30.0, 45.0, 60.0, 75.0)
+    if abs_lat_deg <= latitude_grid_deg[0]:
+        return coefficients[0]
+    if abs_lat_deg >= latitude_grid_deg[-1]:
+        return coefficients[-1]
+    for index in range(len(latitude_grid_deg) - 1):
+        if abs_lat_deg <= latitude_grid_deg[index + 1]:
+            span = latitude_grid_deg[index + 1] - latitude_grid_deg[index]
+            weight = (abs_lat_deg - latitude_grid_deg[index]) / span
+            return coefficients[index] * (1.0 - weight) + coefficients[index + 1] * weight
+    return coefficients[-1]
+
+
+def niell_mapping_continued_fraction(sin_elevation: float, a: float, b: float, c: float) -> float:
+    numerator = 1.0 + a / (1.0 + b / (1.0 + c))
+    denominator = sin_elevation + a / (sin_elevation + b / (sin_elevation + c))
+    return numerator / denominator
+
+
+def estimate_zenith_troposphere_climatology(
+    latitude_rad: float,
+    height_m: float,
+    day_of_year: int,
+) -> tuple[float, float, float, float, float]:
+    mean_pressure_hpa = (1013.25, 1017.25, 1015.75, 1011.75, 1013.00)
+    amp_pressure_hpa = (0.0, -3.75, -2.25, -1.75, -0.50)
+    mean_temperature_k = (299.65, 294.15, 283.15, 272.15, 263.65)
+    amp_temperature_k = (0.0, 7.00, 11.00, 15.00, 14.50)
+    mean_water_vapor_hpa = (26.31, 21.79, 11.66, 6.78, 4.11)
+    amp_water_vapor_hpa = (0.0, 8.85, 7.24, 5.36, 3.39)
+    mean_beta = (6.30e-3, 6.05e-3, 5.58e-3, 5.39e-3, 4.53e-3)
+    amp_beta = (0.0, 0.25e-3, 0.32e-3, 0.81e-3, 0.62e-3)
+    mean_lambda = (2.77, 3.15, 2.57, 1.81, 1.55)
+    amp_lambda = (0.0, 0.33, 0.46, 0.74, 0.30)
+    gravity = 9.80665
+    gas_constant_dry = 287.054
+
+    abs_lat_deg = max(0.0, min(abs(latitude_rad) * 180.0 / math.pi, 90.0))
+    seasonal_phase = math.cos(
+        2.0 * math.pi * (float(day_of_year) - 28.0) / 365.25 +
+        (math.pi if latitude_rad < 0.0 else 0.0)
+    )
+
+    def seasonal(mean_values: tuple[float, ...], amplitude_values: tuple[float, ...]) -> float:
+        return (
+            interpolate_niell_coefficient(abs_lat_deg, mean_values) -
+            interpolate_niell_coefficient(abs_lat_deg, amplitude_values) * seasonal_phase
+        )
+
+    pressure0_hpa = seasonal(mean_pressure_hpa, amp_pressure_hpa)
+    temperature0_k = seasonal(mean_temperature_k, amp_temperature_k)
+    water_vapor0_hpa = seasonal(mean_water_vapor_hpa, amp_water_vapor_hpa)
+    beta = seasonal(mean_beta, amp_beta)
+    lam = seasonal(mean_lambda, amp_lambda)
+
+    clamped_height_m = max(height_m, 0.0)
+    temperature_scale = max(1.0 - beta * clamped_height_m / temperature0_k, 1e-3)
+    exponent = gravity / (gas_constant_dry * beta)
+
+    pressure_hpa = pressure0_hpa * math.pow(temperature_scale, exponent)
+    temperature_k = temperature0_k - beta * clamped_height_m
+    water_vapor_pressure_hpa = water_vapor0_hpa * math.pow(
+        temperature_scale,
+        exponent * (lam + 1.0) - 1.0,
+    )
+    hydrostatic_delay_m = 0.0022768 * pressure_hpa / (
+        1.0 - 0.00266 * math.cos(2.0 * latitude_rad) - 0.00028 * clamped_height_m * 1e-3
+    )
+    wet_delay_m = 0.002277 * (1255.0 / temperature_k + 0.05) * water_vapor_pressure_hpa
+    return (
+        hydrostatic_delay_m,
+        wet_delay_m,
+        pressure_hpa,
+        temperature_k,
+        water_vapor_pressure_hpa,
+    )
+
+
+def modeled_ppp_trop_delay(
+    latitude_rad: float,
+    height_m: float,
+    elevation_rad: float,
+    day_of_year: int,
+) -> float:
+    mean_a = (1.2769934e-3, 1.2683230e-3, 1.2465397e-3, 1.2196049e-3, 1.2045996e-3)
+    mean_b = (2.9153695e-3, 2.9152299e-3, 2.9288445e-3, 2.9022565e-3, 2.9024912e-3)
+    mean_c = (62.610505e-3, 62.837393e-3, 63.721774e-3, 63.824265e-3, 64.258455e-3)
+    amp_a = (0.0, 1.2709626e-5, 2.6523662e-5, 3.4000452e-5, 4.1202191e-5)
+    amp_b = (0.0, 2.1414979e-5, 3.0160779e-5, 7.2562722e-5, 11.723375e-5)
+    amp_c = (0.0, 9.0128400e-5, 4.3497037e-5, 84.795348e-5, 170.37206e-5)
+    wet_a = (5.8021897e-4, 5.6794847e-4, 5.8118019e-4, 5.9727542e-4, 6.1641693e-4)
+    wet_b = (1.4275268e-3, 1.5138625e-3, 1.4572752e-3, 1.5007428e-3, 1.7599082e-3)
+    wet_c = (4.3472961e-2, 4.6729510e-2, 4.3908931e-2, 4.4626982e-2, 5.4736038e-2)
+    height_a = 2.53e-5
+    height_b = 5.49e-3
+    height_c = 1.14e-3
+
+    abs_lat_deg = max(0.0, min(abs(latitude_rad) * 180.0 / math.pi, 90.0))
+    seasonal_phase = math.cos(
+        2.0 * math.pi * (float(day_of_year) - 28.0) / 365.25 +
+        (math.pi if latitude_rad < 0.0 else 0.0)
+    )
+    sin_elevation = max(math.sin(elevation_rad), 0.05)
+
+    hydro_a = interpolate_niell_coefficient(abs_lat_deg, mean_a) - (
+        interpolate_niell_coefficient(abs_lat_deg, amp_a) * seasonal_phase
+    )
+    hydro_b = interpolate_niell_coefficient(abs_lat_deg, mean_b) - (
+        interpolate_niell_coefficient(abs_lat_deg, amp_b) * seasonal_phase
+    )
+    hydro_c = interpolate_niell_coefficient(abs_lat_deg, mean_c) - (
+        interpolate_niell_coefficient(abs_lat_deg, amp_c) * seasonal_phase
+    )
+    hydro_mapping = niell_mapping_continued_fraction(sin_elevation, hydro_a, hydro_b, hydro_c)
+    height_km = max(height_m, 0.0) * 1e-3
+    if height_km > 0.0:
+        hydro_mapping += (
+            1.0 / sin_elevation -
+            niell_mapping_continued_fraction(sin_elevation, height_a, height_b, height_c)
+        ) * height_km
+
+    wet_mapping = niell_mapping_continued_fraction(
+        sin_elevation,
+        interpolate_niell_coefficient(abs_lat_deg, wet_a),
+        interpolate_niell_coefficient(abs_lat_deg, wet_b),
+        interpolate_niell_coefficient(abs_lat_deg, wet_c),
+    )
+    (
+        hydrostatic_delay_m,
+        wet_delay_m,
+        _pressure_hpa,
+        _temperature_k,
+        _water_vapor_pressure_hpa,
+    ) = estimate_zenith_troposphere_climatology(latitude_rad, height_m, day_of_year)
+    return hydro_mapping * hydrostatic_delay_m + wet_mapping * wet_delay_m
+
+
+def format_rinex_header_line(content: str, label: str) -> str:
+    return f"{content:<60}{label}\n"
+
+
+def build_synthetic_receiver_antex_text(antenna_type: str = "TEST-ANT") -> str:
+    return "".join(
+        (
+            format_rinex_header_line("     1.4            M                                       ", "ANTEX VERSION / SYST"),
+            format_rinex_header_line("", "START OF ANTENNA"),
+            format_rinex_header_line(f"{antenna_type:<20}{'':<20}", "TYPE / SERIAL NO"),
+            format_rinex_header_line("   G01", "START OF FREQUENCY"),
+            format_rinex_header_line(f"{15.0:10.1f}{-20.0:10.1f}{120.0:10.1f}", "NORTH / EAST / UP"),
+            format_rinex_header_line("", "END OF FREQUENCY"),
+            format_rinex_header_line("   G02", "START OF FREQUENCY"),
+            format_rinex_header_line(f"{10.0:10.1f}{-15.0:10.1f}{105.0:10.1f}", "NORTH / EAST / UP"),
+            format_rinex_header_line("", "END OF FREQUENCY"),
+            format_rinex_header_line("", "END OF ANTENNA"),
+            format_rinex_header_line("", "END OF FILE"),
+        )
+    )
+
+
+def build_synthetic_blq_text(
+    station_name: str = "TESTMARK",
+    up_amplitude_m: float = 0.008,
+    west_amplitude_m: float = 0.003,
+    south_amplitude_m: float = 0.002,
+) -> str:
+    def row_text(first_value: float) -> str:
+        return "".join(f"{value:10.6f}" for value in [first_value] + [0.0] * 10)
+
+    return "\n".join(
+        [
+            "$$ Synthetic BLQ coefficients",
+            station_name,
+            row_text(up_amplitude_m),
+            row_text(west_amplitude_m),
+            row_text(south_amplitude_m),
+            row_text(0.0),
+            row_text(0.0),
+            row_text(0.0),
+            "",
+        ]
+    )
+
+
+def build_synthetic_ppp_inputs(
+    temp_root: Path,
+    *,
+    include_antenna_header: bool = False,
+) -> tuple[Path, Path, Path, tuple[float, float, float]]:
+    latitude = math.radians(35.0)
+    longitude = math.radians(139.0)
+    true_position = geodetic_to_ecef(latitude, longitude, 45.0)
+    approx_position = (
+        true_position[0] + 8.0,
+        true_position[1] - 5.0,
+        true_position[2] + 3.0,
+    )
+
+    look_angles = [
+        (0.0, 55.0),
+        (60.0, 48.0),
+        (120.0, 62.0),
+        (180.0, 43.0),
+        (240.0, 68.0),
+        (300.0, 37.0),
+    ]
+    satellites: list[tuple[int, tuple[float, float, float]]] = []
+    range_m = 26_500_000.0
+    for index, (azimuth_deg, elevation_deg) in enumerate(look_angles, start=1):
+        azimuth = math.radians(azimuth_deg)
+        elevation = math.radians(elevation_deg)
+        horizontal = range_m * math.cos(elevation)
+        enu = (
+            horizontal * math.sin(azimuth),
+            horizontal * math.cos(azimuth),
+            range_m * math.sin(elevation),
+        )
+        ecef_delta = enu_to_ecef(enu, latitude, longitude)
+        satellites.append(
+            (
+                index,
+                (
+                    true_position[0] + ecef_delta[0],
+                    true_position[1] + ecef_delta[1],
+                    true_position[2] + ecef_delta[2],
+                ),
+            )
+        )
+
+    obs_path = temp_root / "synthetic_ppp.obs"
+    sp3_path = temp_root / "synthetic_ppp.sp3"
+    clk_path = temp_root / "synthetic_ppp.clk"
+
+    epoch_times = []
+    for epoch_index in range(8):
+        total_seconds = 30.0 * epoch_index
+        minute = int(total_seconds // 60.0)
+        second = total_seconds - minute * 60.0
+        epoch_times.append(
+            f"> 2026 03 26 01 {minute:02d} {second:010.7f}  0{len(satellites):3d}\n"
+        )
+    obs_lines = [
+        format_rinex_header_line("     3.04           O                   M", "RINEX VERSION / TYPE"),
+        format_rinex_header_line("libgnss++           tests               20260326 010000 UTC", "PGM / RUN BY / DATE"),
+        format_rinex_header_line("TESTMARK", "MARKER NAME"),
+        format_rinex_header_line(
+            f"{approx_position[0]:14.4f}{approx_position[1]:14.4f}{approx_position[2]:14.4f}",
+            "APPROX POSITION XYZ",
+        ),
+    ]
+    if include_antenna_header:
+        obs_lines.extend(
+            [
+                format_rinex_header_line(f"{'12345':<20}{'TEST-ANT':<20}", "ANT # / TYPE"),
+                format_rinex_header_line(
+                    f"{1.2340:14.4f}{0.1230:14.4f}{-0.4560:14.4f}",
+                    "ANTENNA: DELTA H/E/N",
+                ),
+            ]
+        )
+    obs_lines.extend(
+        [
+        format_rinex_header_line(f"G  {4:3d} C1C L1C C2W L2W", "SYS / # / OBS TYPES"),
+        format_rinex_header_line("", "END OF HEADER"),
+        ]
+    )
+    for epoch_line in epoch_times:
+        obs_lines.append(epoch_line)
+        for prn, satellite_position in satellites:
+            dx = satellite_position[0] - true_position[0]
+            dy = satellite_position[1] - true_position[1]
+            dz = satellite_position[2] - true_position[2]
+            east, north, up = (
+                -math.sin(longitude) * dx + math.cos(longitude) * dy,
+                -math.sin(latitude) * math.cos(longitude) * dx
+                - math.sin(latitude) * math.sin(longitude) * dy
+                + math.cos(latitude) * dz,
+                math.cos(latitude) * math.cos(longitude) * dx
+                + math.cos(latitude) * math.sin(longitude) * dy
+                + math.sin(latitude) * dz,
+            )
+            elevation = math.atan2(up, math.hypot(east, north))
+            trop_delay = modeled_ppp_trop_delay(latitude, 45.0, elevation, 85)
+            pseudorange = geodist(satellite_position, true_position)
+            l1_cycles = (pseudorange + trop_delay) / (299792458.0 / 1575.42e6)
+            l2_cycles = (pseudorange + trop_delay) / (299792458.0 / 1227.60e6)
+            obs_lines.append(
+                f"G{prn:02d}"
+                f"{pseudorange + trop_delay:14.3f}  "
+                f"{l1_cycles:14.3f}  "
+                f"{pseudorange + trop_delay:14.3f}  "
+                f"{l2_cycles:14.3f}  \n"
+            )
+    obs_path.write_text("".join(obs_lines), encoding="ascii")
+
+    sp3_lines = [
+        "*  2026 03 26 01 00 00.00000000\n",
+    ]
+    for prn, satellite_position in satellites:
+        sp3_lines.append(
+            f"PG{prn:02d} {satellite_position[0] / 1000.0:14.6f} {satellite_position[1] / 1000.0:14.6f} "
+            f"{satellite_position[2] / 1000.0:14.6f} {0.0:14.6f}\n"
+        )
+    sp3_lines.append("*  2026 03 26 01 10 00.00000000\n")
+    for prn, satellite_position in satellites:
+        sp3_lines.append(
+            f"PG{prn:02d} {satellite_position[0] / 1000.0:14.6f} {satellite_position[1] / 1000.0:14.6f} "
+            f"{satellite_position[2] / 1000.0:14.6f} {0.0:14.6f}\n"
+        )
+    sp3_path.write_text("".join(sp3_lines), encoding="ascii")
+
+    clk_lines = [
+        "     3.00           C                   RINEX VERSION / TYPE\n",
+        "END OF HEADER\n",
+    ]
+    for timestamp in ("2026 03 26 01 00 00.00000000", "2026 03 26 01 10 00.00000000"):
+        for prn, _ in satellites:
+            clk_lines.append(
+                f"AS G{prn:02d} {timestamp}  2  0.000000000000E+00  1.000000000000E-12\n"
+            )
+    clk_path.write_text("".join(clk_lines), encoding="ascii")
+
+    return obs_path, sp3_path, clk_path, true_position
+
+
+def build_synthetic_ppp_inputs_with_cycle_slip(
+    temp_root: Path,
+) -> tuple[Path, Path, Path, tuple[float, float, float]]:
+    obs_path, sp3_path, clk_path, true_position = build_synthetic_ppp_inputs(temp_root)
+    lines = obs_path.read_text(encoding="ascii").splitlines(keepends=True)
+    patched_lines: list[str] = []
+    epoch_index = -1
+    for line in lines:
+        if line.startswith(">"):
+            epoch_index += 1
+            patched_lines.append(line)
+            continue
+        if line.startswith("G01") and epoch_index >= 2:
+            fields = line.split()
+            l2_cycles = float(fields[4]) + 20.0
+            patched_lines.append(
+                f"{fields[0]}"
+                f"{float(fields[1]):14.3f}  "
+                f"{float(fields[2]):14.3f}  "
+                f"{float(fields[3]):14.3f}  "
+                f"{l2_cycles:14.3f}  \n"
+            )
+            continue
+        patched_lines.append(line)
+    obs_path.write_text("".join(patched_lines), encoding="ascii")
+    return obs_path, sp3_path, clk_path, true_position
+
+
+def build_synthetic_ppp_inputs_with_atmos(
+    temp_root: Path,
+) -> tuple[Path, Path, Path, Path, tuple[float, float, float]]:
+    latitude = math.radians(35.0)
+    longitude = math.radians(139.0)
+    true_position = geodetic_to_ecef(latitude, longitude, 45.0)
+    approx_position = (
+        true_position[0] + 15.0,
+        true_position[1] - 10.0,
+        true_position[2] + 6.0,
+    )
+
+    look_angles = [
+        (0.0, 55.0),
+        (60.0, 48.0),
+        (120.0, 62.0),
+        (180.0, 43.0),
+        (240.0, 68.0),
+        (300.0, 37.0),
+    ]
+    satellites: list[tuple[int, tuple[float, float, float], float]] = []
+    range_m = 26_500_000.0
+    for index, (azimuth_deg, elevation_deg) in enumerate(look_angles, start=1):
+        azimuth = math.radians(azimuth_deg)
+        elevation = math.radians(elevation_deg)
+        horizontal = range_m * math.cos(elevation)
+        enu = (
+            horizontal * math.sin(azimuth),
+            horizontal * math.cos(azimuth),
+            range_m * math.sin(elevation),
+        )
+        ecef_delta = enu_to_ecef(enu, latitude, longitude)
+        satellites.append(
+            (
+                index,
+                (
+                    true_position[0] + ecef_delta[0],
+                    true_position[1] + ecef_delta[1],
+                    true_position[2] + ecef_delta[2],
+                ),
+                elevation,
+            )
+        )
+
+    obs_path = temp_root / "synthetic_ppp_atmos.obs"
+    sp3_path = temp_root / "synthetic_ppp_atmos.sp3"
+    clk_path = temp_root / "synthetic_ppp_atmos.clk"
+    ssr_path = temp_root / "synthetic_ppp_atmos.csv"
+
+    epoch_times = []
+    for epoch_index in range(4):
+        total_seconds = 30.0 * epoch_index
+        minute = int(total_seconds // 60.0)
+        second = total_seconds - minute * 60.0
+        epoch_times.append(
+            f"> 2026 03 26 03 {minute:02d} {second:010.7f}  0{len(satellites):3d}\n"
+        )
+    obs_lines = [
+        format_rinex_header_line("     3.04           O                   M", "RINEX VERSION / TYPE"),
+        format_rinex_header_line("libgnss++           tests               20260326 030000 UTC", "PGM / RUN BY / DATE"),
+        format_rinex_header_line(
+            f"{approx_position[0]:14.4f}{approx_position[1]:14.4f}{approx_position[2]:14.4f}",
+            "APPROX POSITION XYZ",
+        ),
+        format_rinex_header_line(f"G  {4:3d} C1C L1C C2W L2W", "SYS / # / OBS TYPES"),
+        format_rinex_header_line("", "END OF HEADER"),
+    ]
+    ssr_lines = ["# week,tow,sat,dx,dy,dz,dclock_m[,atmos_<name>=<value>...]\n"]
+    base_week = 2411
+    base_tow = 356400.0
+    for epoch_index, epoch_line in enumerate(epoch_times):
+        obs_lines.append(epoch_line)
+        tow = base_tow + 30.0 * epoch_index
+        for prn, satellite_position, elevation in satellites:
+            trop_delay = modeled_ppp_trop_delay(latitude, 45.0, elevation, 85) + 2.3 * (
+                1.001 / math.sqrt(0.002001 + max(math.sin(elevation), 0.1) ** 2)
+            )
+            stec_tecu = 12.0 + 0.5 * prn
+            iono_l1 = 40.3e16 * stec_tecu / (1575.42e6 ** 2)
+            iono_l2 = 40.3e16 * stec_tecu / (1227.60e6 ** 2)
+            pseudorange = geodist(satellite_position, true_position)
+            l1_m = pseudorange + trop_delay - iono_l1
+            l2_m = pseudorange + trop_delay - iono_l2
+            obs_lines.append(
+                f"G{prn:02d}"
+                f"{pseudorange + trop_delay + iono_l1:14.3f}  "
+                f"{l1_m / (299792458.0 / 1575.42e6):14.3f}  "
+                f"{pseudorange + trop_delay + iono_l2:14.3f}  "
+                f"{l2_m / (299792458.0 / 1227.60e6):14.3f}  \n"
+            )
+            ssr_lines.append(
+                f"{base_week},{tow:.1f},G{prn:02d},0.0,0.0,0.0,0.0,"
+                f"atmos_trop_t00_m={2.3 * (1.001 / math.sqrt(0.002001 + max(math.sin(elevation), 0.1) ** 2)):.6f},"
+                f"atmos_stec_c00_tecu:G{prn:02d}={stec_tecu:.6f}\n"
+            )
+    obs_path.write_text("".join(obs_lines), encoding="ascii")
+    sp3_lines = [
+        "*  2026 03 26 03 00 00.00000000\n",
+    ]
+    for prn, satellite_position, _ in satellites:
+        sp3_lines.append(
+            f"PG{prn:02d} {satellite_position[0] / 1000.0:14.6f} {satellite_position[1] / 1000.0:14.6f} "
+            f"{satellite_position[2] / 1000.0:14.6f} {0.0:14.6f}\n"
+        )
+    sp3_lines.append("*  2026 03 26 03 10 00.00000000\n")
+    for prn, satellite_position, _ in satellites:
+        sp3_lines.append(
+            f"PG{prn:02d} {satellite_position[0] / 1000.0:14.6f} {satellite_position[1] / 1000.0:14.6f} "
+            f"{satellite_position[2] / 1000.0:14.6f} {0.0:14.6f}\n"
+        )
+    sp3_path.write_text("".join(sp3_lines), encoding="ascii")
+
+    clk_lines = [
+        "     3.00           C                   RINEX VERSION / TYPE\n",
+        "END OF HEADER\n",
+    ]
+    for timestamp in ("2026 03 26 03 00 00.00000000", "2026 03 26 03 10 00.00000000"):
+        for prn, _, _ in satellites:
+            clk_lines.append(
+                f"AS G{prn:02d} {timestamp}  2  0.000000000000E+00  1.000000000000E-12\n"
+            )
+    clk_path.write_text("".join(clk_lines), encoding="ascii")
+    ssr_path.write_text("".join(ssr_lines), encoding="ascii")
+    return obs_path, sp3_path, clk_path, ssr_path, true_position
+
+
+def build_synthetic_ppp_inputs_with_grid_polynomial_atmos(
+    temp_root: Path,
+) -> tuple[Path, Path, Path, Path, tuple[float, float, float]]:
+    latitude = math.radians(35.0)
+    longitude = math.radians(139.0)
+    true_position = geodetic_to_ecef(latitude, longitude, 45.0)
+    approx_position = (
+        true_position[0] + 15.0,
+        true_position[1] - 10.0,
+        true_position[2] + 6.0,
+    )
+
+    # CLAS network 7 grid no. 11 from the official clas_grid.def.
+    dlat_deg = 35.0 - 34.77
+    dlon_deg = 139.0 - 139.37
+
+    look_angles = [
+        (0.0, 55.0),
+        (60.0, 48.0),
+        (120.0, 62.0),
+        (180.0, 43.0),
+        (240.0, 68.0),
+        (300.0, 37.0),
+    ]
+    satellites: list[tuple[int, tuple[float, float, float], float]] = []
+    range_m = 26_500_000.0
+    for index, (azimuth_deg, elevation_deg) in enumerate(look_angles, start=1):
+        azimuth = math.radians(azimuth_deg)
+        elevation = math.radians(elevation_deg)
+        horizontal = range_m * math.cos(elevation)
+        enu = (
+            horizontal * math.sin(azimuth),
+            horizontal * math.cos(azimuth),
+            range_m * math.sin(elevation),
+        )
+        ecef_delta = enu_to_ecef(enu, latitude, longitude)
+        satellites.append(
+            (
+                index,
+                (
+                    true_position[0] + ecef_delta[0],
+                    true_position[1] + ecef_delta[1],
+                    true_position[2] + ecef_delta[2],
+                ),
+                elevation,
+            )
+        )
+
+    obs_path = temp_root / "synthetic_ppp_grid_poly.obs"
+    sp3_path = temp_root / "synthetic_ppp_grid_poly.sp3"
+    clk_path = temp_root / "synthetic_ppp_grid_poly.clk"
+    ssr_path = temp_root / "synthetic_ppp_grid_poly.csv"
+
+    epoch_times = []
+    for epoch_index in range(4):
+        total_seconds = 30.0 * epoch_index
+        minute = int(total_seconds // 60.0)
+        second = total_seconds - minute * 60.0
+        epoch_times.append(
+            f"> 2026 03 26 03 {minute:02d} {second:010.7f}  0{len(satellites):3d}\n"
+        )
+    obs_lines = [
+        format_rinex_header_line("     3.04           O                   M", "RINEX VERSION / TYPE"),
+        format_rinex_header_line("libgnss++           tests               20260326 030000 UTC", "PGM / RUN BY / DATE"),
+        format_rinex_header_line(
+            f"{approx_position[0]:14.4f}{approx_position[1]:14.4f}{approx_position[2]:14.4f}",
+            "APPROX POSITION XYZ",
+        ),
+        format_rinex_header_line(f"G  {4:3d} C1C L1C C2W L2W", "SYS / # / OBS TYPES"),
+        format_rinex_header_line("", "END OF HEADER"),
+    ]
+    ssr_lines = ["# week,tow,sat,dx,dy,dz,dclock_m[,atmos_<name>=<value>...]\n"]
+    base_week = 2411
+    base_tow = 356400.0
+    stec_c01 = 40.0
+    for epoch_index, epoch_line in enumerate(epoch_times):
+        obs_lines.append(epoch_line)
+        tow = base_tow + 30.0 * epoch_index
+        for prn, satellite_position, elevation in satellites:
+            trop_residual = 2.3 * (1.001 / math.sqrt(0.002001 + max(math.sin(elevation), 0.1) ** 2))
+            trop_delay = modeled_ppp_trop_delay(latitude, 45.0, elevation, 85) + trop_residual
+            stec_tecu = 12.0 + 0.5 * prn
+            stec_c10 = (stec_tecu - stec_c01 * dlat_deg) / dlon_deg
+            iono_l1 = 40.3e16 * stec_tecu / (1575.42e6 ** 2)
+            iono_l2 = 40.3e16 * stec_tecu / (1227.60e6 ** 2)
+            pseudorange = geodist(satellite_position, true_position)
+            l1_m = pseudorange + trop_delay - iono_l1
+            l2_m = pseudorange + trop_delay - iono_l2
+            obs_lines.append(
+                f"G{prn:02d}"
+                f"{pseudorange + trop_delay + iono_l1:14.3f}  "
+                f"{l1_m / (299792458.0 / 1575.42e6):14.3f}  "
+                f"{pseudorange + trop_delay + iono_l2:14.3f}  "
+                f"{l2_m / (299792458.0 / 1227.60e6):14.3f}  \n"
+            )
+            ssr_lines.append(
+                f"{base_week},{tow:.1f},G{prn:02d},0.0,0.0,0.0,0.0,"
+                f"atmos_network_id=7,atmos_grid_count=22,"
+                f"atmos_trop_t00_m={trop_residual:.6f},"
+                f"atmos_stec_type:G{prn:02d}=1,"
+                f"atmos_stec_c01_tecu_per_deg:G{prn:02d}={stec_c01:.6f},"
+                f"atmos_stec_c10_tecu_per_deg:G{prn:02d}={stec_c10:.6f}\n"
+            )
+    obs_path.write_text("".join(obs_lines), encoding="ascii")
+    sp3_lines = [
+        "*  2026 03 26 03 00 00.00000000\n",
+    ]
+    for prn, satellite_position, _ in satellites:
+        sp3_lines.append(
+            f"PG{prn:02d} {satellite_position[0] / 1000.0:14.6f} {satellite_position[1] / 1000.0:14.6f} "
+            f"{satellite_position[2] / 1000.0:14.6f} {0.0:14.6f}\n"
+        )
+    sp3_lines.append("*  2026 03 26 03 10 00.00000000\n")
+    for prn, satellite_position, _ in satellites:
+        sp3_lines.append(
+            f"PG{prn:02d} {satellite_position[0] / 1000.0:14.6f} {satellite_position[1] / 1000.0:14.6f} "
+            f"{satellite_position[2] / 1000.0:14.6f} {0.0:14.6f}\n"
+        )
+    sp3_path.write_text("".join(sp3_lines), encoding="ascii")
+
+    clk_lines = [
+        "     3.00           C                   RINEX VERSION / TYPE\n",
+        "END OF HEADER\n",
+    ]
+    for timestamp in ("2026 03 26 03 00 00.00000000", "2026 03 26 03 10 00.00000000"):
+        for prn, _, _ in satellites:
+            clk_lines.append(
+                f"AS G{prn:02d} {timestamp}  2  0.000000000000E+00  1.000000000000E-12\n"
+            )
+    clk_path.write_text("".join(clk_lines), encoding="ascii")
+    ssr_path.write_text("".join(ssr_lines), encoding="ascii")
+    return obs_path, sp3_path, clk_path, ssr_path, true_position
+
+
 class CLIToolsTest(unittest.TestCase):
-    def run_gnss(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def run_gnss(
+        self,
+        *args: str,
+        extra_env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
+        if extra_env is not None:
+            env.update(extra_env)
         return subprocess.run(
             [sys.executable, str(DISPATCHER), *args],
             cwd=ROOT_DIR,
@@ -712,6 +2472,280 @@ class CLIToolsTest(unittest.TestCase):
             capture_output=True,
             check=False,
         )
+
+    def read_pos_records(self, path: Path) -> list[dict[str, float | int]]:
+        records: list[dict[str, float | int]] = []
+        for line in path.read_text(encoding="ascii").splitlines():
+            if not line or line.startswith("%"):
+                continue
+            parts = line.split()
+            records.append(
+                {
+                    "tow": float(parts[1]),
+                    "x": float(parts[2]),
+                    "y": float(parts[3]),
+                    "z": float(parts[4]),
+                    "status": int(parts[8]),
+                    "satellites": int(parts[9]),
+                }
+            )
+        return records
+
+    def test_ppp_cli_processes_synthetic_precise_products(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, true_position = build_synthetic_ppp_inputs(temp_root)
+            out_path = temp_root / "ppp_solution.pos"
+
+            result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(out_path),
+                "--max-epochs",
+                "8",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("PPP summary:", result.stdout)
+            self.assertIn("PPP float solutions: 8", result.stdout)
+            self.assertIn("PPP fixed solutions: 0", result.stdout)
+            self.assertIn("fallback solutions: 0", result.stdout)
+            self.assertIn("mode: static", result.stdout)
+
+            records = self.read_pos_records(out_path)
+            self.assertEqual(len(records), 8)
+            self.assertTrue(all(record["status"] == 5 for record in records))
+            self.assertTrue(all(record["satellites"] >= 6 for record in records))
+
+            last_record = records[-1]
+            error = math.sqrt(
+                (last_record["x"] - true_position[0]) ** 2
+                + (last_record["y"] - true_position[1]) ** 2
+                + (last_record["z"] - true_position[2]) ** 2
+            )
+            self.assertLess(error, 1.0)
+
+    def test_ppp_cli_supports_receiver_antex_offsets(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_antex_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, true_position = build_synthetic_ppp_inputs(
+                temp_root,
+                include_antenna_header=True,
+            )
+            antex_path = temp_root / "receiver.atx"
+            antex_path.write_text(build_synthetic_receiver_antex_text(), encoding="ascii")
+            base_out_path = temp_root / "ppp_base.pos"
+            antex_out_path = temp_root / "ppp_antex.pos"
+
+            base_result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(base_out_path),
+                "--max-epochs",
+                "8",
+            )
+            antex_result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--antex",
+                str(antex_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(antex_out_path),
+                "--max-epochs",
+                "8",
+            )
+
+            self.assertEqual(base_result.returncode, 0, msg=base_result.stderr)
+            self.assertEqual(antex_result.returncode, 0, msg=antex_result.stderr)
+            self.assertIn("PPP float solutions: 8", antex_result.stdout)
+
+            base_records = self.read_pos_records(base_out_path)
+            antex_records = self.read_pos_records(antex_out_path)
+            self.assertEqual(len(base_records), 8)
+            self.assertEqual(len(antex_records), 8)
+            self.assertTrue(all(record["status"] == 5 for record in base_records))
+            self.assertTrue(all(record["status"] == 5 for record in antex_records))
+
+            base_last = base_records[-1]
+            antex_last = antex_records[-1]
+            base_error = math.sqrt(
+                (base_last["x"] - true_position[0]) ** 2
+                + (base_last["y"] - true_position[1]) ** 2
+                + (base_last["z"] - true_position[2]) ** 2
+            )
+            antex_error = math.sqrt(
+                (antex_last["x"] - true_position[0]) ** 2
+                + (antex_last["y"] - true_position[1]) ** 2
+                + (antex_last["z"] - true_position[2]) ** 2
+            )
+            solution_delta = math.sqrt(
+                (antex_last["x"] - base_last["x"]) ** 2
+                + (antex_last["y"] - base_last["y"]) ** 2
+                + (antex_last["z"] - base_last["z"]) ** 2
+            )
+
+            self.assertLess(base_error, 1.5)
+            self.assertLess(antex_error, 1.5)
+            self.assertGreater(solution_delta, 1e-4)
+            self.assertLess(solution_delta, 1.0)
+
+    def test_ppp_cli_supports_ocean_loading_coefficients(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_blq_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, true_position = build_synthetic_ppp_inputs(temp_root)
+            blq_path = temp_root / "site.blq"
+            blq_path.write_text(build_synthetic_blq_text(), encoding="ascii")
+            base_out_path = temp_root / "ppp_base.pos"
+            blq_out_path = temp_root / "ppp_blq.pos"
+
+            base_result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(base_out_path),
+                "--max-epochs",
+                "8",
+            )
+            blq_result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--blq",
+                str(blq_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(blq_out_path),
+                "--max-epochs",
+                "8",
+            )
+
+            self.assertEqual(base_result.returncode, 0, msg=base_result.stderr)
+            self.assertEqual(blq_result.returncode, 0, msg=blq_result.stderr)
+            base_records = self.read_pos_records(base_out_path)
+            blq_records = self.read_pos_records(blq_out_path)
+            self.assertEqual(len(base_records), 8)
+            self.assertEqual(len(blq_records), 8)
+
+            base_last = base_records[-1]
+            blq_last = blq_records[-1]
+            base_error = math.sqrt(
+                (base_last["x"] - true_position[0]) ** 2
+                + (base_last["y"] - true_position[1]) ** 2
+                + (base_last["z"] - true_position[2]) ** 2
+            )
+            blq_error = math.sqrt(
+                (blq_last["x"] - true_position[0]) ** 2
+                + (blq_last["y"] - true_position[1]) ** 2
+                + (blq_last["z"] - true_position[2]) ** 2
+            )
+            solution_delta = math.sqrt(
+                (blq_last["x"] - base_last["x"]) ** 2
+                + (blq_last["y"] - base_last["y"]) ** 2
+                + (blq_last["z"] - base_last["z"]) ** 2
+            )
+
+            self.assertLess(base_error, 1.5)
+            self.assertLess(blq_error, 1.5)
+            self.assertGreater(solution_delta, 1e-5)
+            self.assertLess(solution_delta, 0.5)
+
+    def test_ppp_cli_supports_kinematic_mode(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_kinematic_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, _ = build_synthetic_ppp_inputs(temp_root)
+            out_path = temp_root / "ppp_kinematic_solution.pos"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(out_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("mode: kinematic", result.stdout)
+            self.assertIn("PPP float solutions: 4", result.stdout)
+            records = self.read_pos_records(out_path)
+            self.assertEqual(len(records), 4)
+            self.assertTrue(all(record["status"] == 5 for record in records))
+
+    def test_ppp_cli_can_enable_ambiguity_resolution(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_ar_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, _ = build_synthetic_ppp_inputs(temp_root)
+            out_path = temp_root / "ppp_ar_solution.pos"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--enable-ar",
+                "--convergence-min-epochs",
+                "4",
+                "--ar-ratio-threshold",
+                "2.0",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(out_path),
+                "--max-epochs",
+                "8",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("ambiguity resolution: on", result.stdout)
+            self.assertIn("PPP fixed solutions:", result.stdout)
+            records = self.read_pos_records(out_path)
+            self.assertEqual(len(records), 8)
+            self.assertTrue(all(record["status"] in (5, 6) for record in records))
 
     def test_stream_relays_rtcm_frames(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_stream_test_") as temp_dir:
@@ -967,15 +3001,2645 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("C19", exported)
             self.assertIn("J03", exported)
 
+    def test_nmea_info_decodes_gga_and_rmc_from_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_nmea_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session.nmea"
+            input_path.write_text(
+                build_nmea_gga_sentence() + build_nmea_rmc_sentence(),
+                encoding="ascii",
+            )
+
+            result = self.run_gnss(
+                "nmea-info",
+                "--input",
+                str(input_path),
+                "--decode-gga",
+                "--decode-rmc",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("gga: time=123519", result.stdout)
+            self.assertIn("quality=4", result.stdout)
+            self.assertIn("rmc: time=123520", result.stdout)
+            self.assertIn("status=A", result.stdout)
+            self.assertIn(
+                "summary: sentences=2 valid=2 gga=1 rmc=1 valid_positions=2 checksum_errors=0",
+                result.stdout,
+            )
+
+    def test_novatel_info_decodes_bestpos_and_bestvel_from_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_novatel_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session.log"
+            input_path.write_text(
+                build_novatel_bestpos_record() + build_novatel_bestvel_record(),
+                encoding="ascii",
+            )
+
+            result = self.run_gnss(
+                "novatel-info",
+                "--input",
+                str(input_path),
+                "--decode-bestpos",
+                "--decode-bestvel",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("bestpos: week=2200 tow=345600.000", result.stdout)
+            self.assertIn("type=NARROW_INT", result.stdout)
+            self.assertIn("bestvel: week=2200 tow=345600.000", result.stdout)
+            self.assertIn("speed_mps=5.500", result.stdout)
+            self.assertIn(
+                "summary: records=2 valid=2 bestpos=1 bestvel=1 valid_positions=1 checksum_errors=0",
+                result.stdout,
+            )
+
+    def test_novatel_info_decodes_binary_bestpos_and_bestvel_from_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_novatel_binary_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session.bin"
+            input_path.write_bytes(
+                build_novatel_bestpos_binary_record() + build_novatel_bestvel_binary_record()
+            )
+
+            result = self.run_gnss(
+                "novatel-info",
+                "--input",
+                str(input_path),
+                "--decode-bestpos",
+                "--decode-bestvel",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("bestpos: week=2200 tow=345600.000", result.stdout)
+            self.assertIn("type=NARROW_INT", result.stdout)
+            self.assertIn("bestvel: week=2200 tow=345600.000", result.stdout)
+            self.assertIn("type=DOPPLER_VELOCITY", result.stdout)
+            self.assertIn(
+                "summary: records=2 valid=2 bestpos=1 bestvel=1 valid_positions=1 checksum_errors=0",
+                result.stdout,
+            )
+
+    def test_sbp_info_decodes_gps_time_pos_llh_and_vel_ned_from_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_sbp_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session.sbp"
+            input_path.write_bytes(
+                build_sbp_gps_time_frame() + build_sbp_pos_llh_frame() + build_sbp_vel_ned_frame()
+            )
+
+            result = self.run_gnss(
+                "sbp-info",
+                "--input",
+                str(input_path),
+                "--decode-time",
+                "--decode-pos",
+                "--decode-vel",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("gps_time: sender=66 week=2200 tow_ms=345600123", result.stdout)
+            self.assertIn("ns_residual=-250", result.stdout)
+            self.assertIn("pos_llh: sender=66 tow_ms=345600123", result.stdout)
+            self.assertIn("lat=35.1234567", result.stdout)
+            self.assertIn("height=42.100m", result.stdout)
+            self.assertIn("vel_ned: sender=66 tow_ms=345600123", result.stdout)
+            self.assertIn("n=1.250 e=-0.500 d=0.125mps", result.stdout)
+            self.assertIn(
+                "summary: frames=3 valid=3 gps_time=1 pos_llh=1 vel_ned=1 valid_positions=1 crc_errors=0",
+                result.stdout,
+            )
+
+    def test_sbf_info_decodes_pvt_lband_and_p2pp_from_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_sbf_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session.sbf"
+            input_path.write_bytes(
+                build_sbf_pvt_geodetic_frame()
+                + build_sbf_lband_tracker_frame()
+                + build_sbf_p2pp_status_frame()
+            )
+
+            result = self.run_gnss(
+                "sbf-info",
+                "--input",
+                str(input_path),
+                "--decode-pvt",
+                "--decode-lband",
+                "--decode-p2pp",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("pvt_geodetic: week=2200 tow_ms=345600123 mode=PPP", result.stdout)
+            self.assertIn("lat=35.1234567", result.stdout)
+            self.assertIn("lband_tracker: week=2200 tow_ms=345600123", result.stdout)
+            self.assertIn("locked=1", result.stdout)
+            self.assertIn("service=42", result.stdout)
+            self.assertIn("p2pp_status: week=2200 tow_ms=345600123", result.stdout)
+            self.assertIn("status=Connected", result.stdout)
+            self.assertIn(
+                "summary: frames=3 valid=3 pvt_geodetic=1 lband_tracker=1 p2pp_status=1 valid_positions=1 crc_errors=0",
+                result.stdout,
+            )
+
+    def test_trimble_info_decodes_time_llh_and_velocity_from_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_trimble_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session.gsof"
+            input_path.write_bytes(
+                build_gsof_genout_packet(
+                    [
+                        build_gsof_time_record(),
+                        build_gsof_llh_record(),
+                        build_gsof_velocity_record(),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "trimble-info",
+                "--input",
+                str(input_path),
+                "--decode-time",
+                "--decode-llh",
+                "--decode-vel",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("time: week=2200 tow=345600.123 svs=18", result.stdout)
+            self.assertIn("llh: lat=35.1234567 lon=139.9876543 height=42.100m", result.stdout)
+            self.assertIn("velocity: flags=0x03 horiz=1.250mps heading=90.00deg vertical=-0.125mps", result.stdout)
+            self.assertIn(
+                "summary: packets=1 valid=1 time=1 llh=1 velocity=1 valid_positions=1 checksum_errors=0",
+                result.stdout,
+            )
+
+    def test_skytraq_info_decodes_epoch_rawx_and_ack_from_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_skytraq_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session.stq"
+            input_path.write_bytes(
+                build_skytraq_epoch_message()
+                + build_skytraq_rawx_message()
+                + build_skytraq_ack_message()
+            )
+
+            result = self.run_gnss(
+                "skytraq-info",
+                "--input",
+                str(input_path),
+                "--decode-epoch",
+                "--decode-raw",
+                "--decode-ack",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("epoch: iod=7 week=2200 tow=345600.123", result.stdout)
+            self.assertIn("rawx: version=1 iod=7 week=2200 tow=345600.123 period=1.000 nsat=14", result.stdout)
+            self.assertIn("ack: msg=0x1E", result.stdout)
+            self.assertIn(
+                "summary: frames=3 valid=3 epoch=1 raw=0 rawx=1 ack=1 nack=0 checksum_errors=0",
+                result.stdout,
+            )
+
+    def test_binex_info_decodes_metadata_nav_and_proto_from_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_binex_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session.bnx"
+            input_path.write_bytes(
+                build_binex_metadata_frame() + build_binex_nav_frame() + build_binex_proto_frame()
+            )
+
+            result = self.run_gnss(
+                "binex-info",
+                "--input",
+                str(input_path),
+                "--decode-metadata",
+                "--decode-nav",
+                "--decode-proto",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("metadata: subrecord=0x08 payload_bytes=4", result.stdout)
+            self.assertIn("nav: subrecord=0x06 payload_bytes=5", result.stdout)
+            self.assertIn("proto: subrecord=0x05 payload_bytes=4", result.stdout)
+            self.assertIn(
+                "summary: frames=3 valid=3 metadata=1 nav=1 proto=1 checksum_errors=0",
+                result.stdout,
+            )
+
+    def test_qzss_l6_info_decodes_frames_and_extracts_csv(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6.bin"
+            extract_path = temp_root / "session_l6.csv"
+            input_path.write_bytes(
+                build_qzss_l6_frame(
+                    prn=199,
+                    facility_id=0,
+                    subframe_start=True,
+                    data_part=b"CLAS-L6-START",
+                )
+                + build_qzss_l6_frame(
+                    prn=200,
+                    facility_id=2,
+                    subframe_start=False,
+                    alert=True,
+                    data_part=b"CLAS-L6-NEXT",
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--show-preview",
+                "--extract-data-parts",
+                str(extract_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("l6_frame: index=1 prn=199 vendor=5 facility=Hitachi-Ota", result.stdout)
+            self.assertIn("subframe_start=1", result.stdout)
+            self.assertIn("preview=CLAS-L6-START", result.stdout)
+            self.assertIn("l6_frame: index=2 prn=200 vendor=5 facility=Kobe", result.stdout)
+            self.assertIn("alert=1", result.stdout)
+            self.assertIn("extracted: frames=2", result.stdout)
+            self.assertIn(
+                "summary: frames=2 valid=2 clas_vendor=2 subframe_starts=1 alerts=1 subframes=0 prns=199,200",
+                result.stdout,
+            )
+
+            extracted = extract_path.read_text(encoding="ascii")
+            self.assertIn("frame_index,prn,vendor_id,facility_id,reserved_bits,subframe_start,alert,data_part_bits,data_part_hex,rs_parity_hex", extracted)
+            self.assertIn("1,199,5,0,0,1,0,1695,", extracted)
+            self.assertIn("2,200,5,2,0,0,1,1695,", extracted)
+
+    def test_qzss_l6_info_assembles_five_part_subframe(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_subframe_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_subframe.bin"
+            subframe_path = temp_root / "session_l6_subframes.csv"
+            input_path.write_bytes(
+                b"".join(
+                    build_qzss_l6_frame(
+                        prn=199,
+                        facility_id=0,
+                        subframe_start=index == 0,
+                        data_part=f"SUBFRAME-{index}".encode("ascii"),
+                    )
+                    for index in range(5)
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--limit",
+                "5",
+                "--extract-subframes",
+                str(subframe_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("l6_subframe: index=1 prn=199 vendor=5 facility=Hitachi-Ota frames=5", result.stdout)
+            self.assertIn("assembled: subframes=1", result.stdout)
+            self.assertIn(
+                "summary: frames=5 valid=5 clas_vendor=5 subframe_starts=1 alerts=0 subframes=1 prns=199",
+                result.stdout,
+            )
+
+            exported = subframe_path.read_text(encoding="ascii")
+            self.assertIn(
+                "subframe_index,prn,vendor_id,facility_id,frame_count,alert_frames,data_bits,first_frame_index,last_frame_index,subframe_hex",
+                exported,
+            )
+            self.assertIn("1,199,5,0,5,0,8475,1,5,", exported)
+
+    def test_qzss_l6_info_extracts_compact_cssr_messages_and_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_compact_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_compact.bin"
+            messages_path = temp_root / "session_compact_messages.csv"
+            corrections_path = temp_root / "session_compact_corrections.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0,
+                            iod=3,
+                            prn=3,
+                            sync=False,
+                            network_id=1,
+                            dclock_m=0.025,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--limit",
+                "5",
+                "--gps-week",
+                "1316",
+                "--extract-compact-messages",
+                str(messages_path),
+                "--extract-compact-corrections",
+                str(corrections_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("cssr_message: subframe=1 index=1 subtype=1 tow=518400", result.stdout)
+            self.assertIn("cssr_message: subframe=1 index=2 subtype=11 tow=518400", result.stdout)
+            self.assertIn("decoded: compact_messages=2", result.stdout)
+            self.assertIn("extracted: compact_corrections=1", result.stdout)
+            messages_csv = messages_path.read_text(encoding="ascii")
+            self.assertIn(
+                "subframe_index,message_index,ctype,subtype,tow,udi_seconds,sync,iod,message_bits,correction_count,detail",
+                messages_csv,
+            )
+            self.assertIn("1,1,4073,1,518400,1.0,1,3,", messages_csv)
+            self.assertIn("1,2,4073,11,518400,1.0,0,3,", messages_csv)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertIn("# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m", corrections_csv)
+            self.assertIn("1316,518400.000,G,3,0.000000,0.000000,0.000000,0.025600,0.000000", corrections_csv)
+
+    def test_qzss_l6_info_extracts_separate_orbit_clock_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_orbit_clock_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_orbit_clock.bin"
+            corrections_path = temp_root / "session_orbit_clock_corrections.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_orbit_message(
+                            tow_delta=0,
+                            iod=3,
+                            dx=0.016,
+                            dy=0.0128,
+                            dz=-0.0128,
+                            sync=True,
+                        ),
+                        build_qzss_cssr_clock_message(tow_delta=0, iod=3, dclock_m=0.0256, sync=False),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--limit",
+                "5",
+                "--gps-week",
+                "1316",
+                "--extract-compact-corrections",
+                str(corrections_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("cssr_message: subframe=1 index=2 subtype=2 tow=518400", result.stdout)
+            self.assertIn("cssr_message: subframe=1 index=3 subtype=3 tow=518400", result.stdout)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertIn("1316,518400.000,G,3,0.016000,0.012800,-0.012800,0.025600,0.000000", corrections_csv)
+
+    def test_qzss_l6_info_extracts_code_bias_and_ura_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_cbias_ura_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_cbias_ura.bin"
+            corrections_path = temp_root / "session_cbias_ura_corrections.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            bias_m=-0.12,
+                            sync=True,
+                        ),
+                        build_qzss_cssr_ura_message(
+                            tow_delta=0,
+                            iod=3,
+                            ura_index=9,
+                            sync=True,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0,
+                            iod=3,
+                            prn=3,
+                            dclock_m=0.0256,
+                            sync=False,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--limit",
+                "5",
+                "--gps-week",
+                "1316",
+                "--extract-compact-corrections",
+                str(corrections_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("cssr_message: subframe=1 index=2 subtype=4 tow=518400", result.stdout)
+            self.assertIn("cssr_message: subframe=1 index=3 subtype=7 tow=518400", result.stdout)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertIn("ura_sigma_m=0.002750", corrections_csv)
+            self.assertIn("cbias:2=-0.120000", corrections_csv)
+
+    def test_qzss_l6_info_extracts_atmos_inventory(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_atmos_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_atmos.bin"
+            messages_path = temp_root / "session_atmos_messages.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_atmos_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            network_id=1,
+                            trop_avail=3,
+                            stec_avail=3,
+                            grid_count=1,
+                            selected_satellites=1,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--limit",
+                "5",
+                "--extract-compact-messages",
+                str(messages_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("cssr_message: subframe=1 index=2 subtype=12 tow=518400", result.stdout)
+            self.assertIn("detail=network=1 grids=1 trop=3 stec=3 sats=1", result.stdout)
+            messages_csv = messages_path.read_text(encoding="ascii")
+            self.assertIn("1,2,4073,12,518400,1.0,0,3,", messages_csv)
+            self.assertIn("network=1 grids=1 trop=3 stec=3 sats=1", messages_csv)
+
+    def test_qzss_l6_info_extracts_stec_inventory(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_stec_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_stec.bin"
+            messages_path = temp_root / "session_stec_messages.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_stec_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            network_id=7,
+                            stec_type=3,
+                            selected_satellites=1,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--limit",
+                "5",
+                "--extract-compact-messages",
+                str(messages_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("cssr_message: subframe=1 index=2 subtype=8 tow=518400", result.stdout)
+            self.assertIn("detail=network=7 stec_type=3 sats=1", result.stdout)
+            messages_csv = messages_path.read_text(encoding="ascii")
+            self.assertIn("1,2,4073,8,518400,1.0,0,3,", messages_csv)
+            self.assertIn("network=7 stec_type=3 sats=1", messages_csv)
+
+    def test_qzss_l6_info_extracts_service_info_packets(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_service_info_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_service_info.bin"
+            messages_path = temp_root / "session_service_messages.csv"
+            packets_path = temp_root / "session_service_packets.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_service_info_message(
+                            sync=True,
+                            info_counter=0,
+                            payload_bytes=b"\x01\x02\x03\x04\x05",
+                        ),
+                        build_qzss_cssr_service_info_message(
+                            sync=False,
+                            info_counter=1,
+                            payload_bytes=b"\x06\x07\x08\x09\x0a",
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-messages",
+                str(messages_path),
+                "--extract-service-info",
+                str(packets_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("cssr_message: subframe=1 index=1 subtype=10 tow=0", result.stdout)
+            self.assertIn("cssr_message: subframe=1 index=2 subtype=10 tow=0", result.stdout)
+            self.assertIn("extracted: service_info_packets=1", result.stdout)
+            messages_csv = messages_path.read_text(encoding="ascii")
+            self.assertIn(",10,0,0.0,1,0,", messages_csv)
+            self.assertIn(",10,0,0.0,0,1,", messages_csv)
+            packets_csv = packets_path.read_text(encoding="ascii")
+            self.assertIn("packet_index,first_subframe_index,last_subframe_index,chunk_count,total_bits,packet_hex", packets_csv)
+            self.assertIn("1,1,1,2,80,0102030405060708090a", packets_csv)
+
+    def test_qzss_l6_info_exports_atmos_metadata_on_compact_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_atmos_corr_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_atmos_corr.bin"
+            corrections_path = temp_root / "session_atmos_corr.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_atmos_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=1,
+                            trop_avail=3,
+                            stec_avail=3,
+                            grid_count=1,
+                            trop_quality=9,
+                            trop_type=2,
+                            trop_t00_m=0.12,
+                            trop_t01_m_per_deg=0.01,
+                            trop_t10_m_per_deg=-0.02,
+                            trop_t11_m_per_deg2=0.003,
+                            trop_residual_size=0,
+                            trop_offset_m=0.08,
+                            trop_residuals_m=(0.02,),
+                            stec_quality=17,
+                            stec_type=3,
+                            stec_c00_tecu=1.5,
+                            stec_c01_tecu_per_deg=0.12,
+                            stec_c10_tecu_per_deg=-0.10,
+                            stec_c11_tecu_per_deg2=0.06,
+                            stec_c02_tecu_per_deg2=0.025,
+                            stec_c20_tecu_per_deg2=-0.015,
+                            stec_residual_size=2,
+                            stec_residuals_tecu=(0.32,),
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0, iod=3, prn=3, dclock_m=0.025, sync=False
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(corrections_path),
+                "--gps-week",
+                "2200",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertIn("atmos_network_id=1", corrections_csv)
+            self.assertIn("atmos_trop_avail=3", corrections_csv)
+            self.assertIn("atmos_stec_avail=3", corrections_csv)
+            self.assertIn("atmos_grid_count=1", corrections_csv)
+            self.assertIn("atmos_trop_quality=9", corrections_csv)
+            self.assertIn("atmos_trop_type=2", corrections_csv)
+            self.assertIn("atmos_trop_t00_m=0.120000", corrections_csv)
+            self.assertIn("atmos_trop_t01_m_per_deg=0.010000", corrections_csv)
+            self.assertIn("atmos_trop_t10_m_per_deg=-0.020000", corrections_csv)
+            self.assertIn("atmos_trop_t11_m_per_deg2=0.003000", corrections_csv)
+            self.assertIn("atmos_trop_offset_m=0.080000", corrections_csv)
+            self.assertIn("atmos_trop_residuals_m=0.020000", corrections_csv)
+            self.assertIn("atmos_stec_quality:G03=17", corrections_csv)
+            self.assertIn("atmos_stec_type:G03=3", corrections_csv)
+            self.assertIn("atmos_stec_c00_tecu:G03=1.500000", corrections_csv)
+            self.assertIn("atmos_stec_c01_tecu_per_deg:G03=0.120000", corrections_csv)
+            self.assertIn("atmos_stec_c10_tecu_per_deg:G03=-0.100000", corrections_csv)
+            self.assertIn("atmos_stec_c11_tecu_per_deg2:G03=0.060000", corrections_csv)
+            self.assertIn("atmos_stec_c02_tecu_per_deg2:G03=0.025000", corrections_csv)
+            self.assertIn("atmos_stec_c20_tecu_per_deg2:G03=-0.015000", corrections_csv)
+            self.assertIn("atmos_stec_residual_size:G03=2", corrections_csv)
+            self.assertIn("atmos_stec_residuals_tecu:G03=0.320000", corrections_csv)
+
+    def test_qzss_l6_info_exports_stec_metadata_on_compact_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_stec_corr_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_stec_corr.bin"
+            corrections_path = temp_root / "session_stec_corr.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_stec_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            stec_quality=17,
+                            stec_type=3,
+                            stec_c00_tecu=1.5,
+                            stec_c01_tecu_per_deg=0.12,
+                            stec_c10_tecu_per_deg=-0.10,
+                            stec_c11_tecu_per_deg2=0.06,
+                            stec_c02_tecu_per_deg2=0.025,
+                            stec_c20_tecu_per_deg2=-0.015,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0, iod=3, prn=3, dclock_m=0.025, sync=False
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(corrections_path),
+                "--gps-week",
+                "2200",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertIn("atmos_network_id=7", corrections_csv)
+            self.assertIn("atmos_trop_avail=0", corrections_csv)
+            self.assertIn("atmos_stec_avail=1", corrections_csv)
+            self.assertIn("atmos_grid_count=0", corrections_csv)
+            self.assertIn("atmos_stec_quality:G03=17", corrections_csv)
+            self.assertIn("atmos_stec_type:G03=3", corrections_csv)
+            self.assertIn("atmos_stec_c00_tecu:G03=1.500000", corrections_csv)
+            self.assertIn("atmos_stec_c01_tecu_per_deg:G03=0.120000", corrections_csv)
+            self.assertIn("atmos_stec_c10_tecu_per_deg:G03=-0.100000", corrections_csv)
+            self.assertIn("atmos_stec_c11_tecu_per_deg2:G03=0.060000", corrections_csv)
+            self.assertIn("atmos_stec_c02_tecu_per_deg2:G03=0.025000", corrections_csv)
+            self.assertIn("atmos_stec_c20_tecu_per_deg2:G03=-0.015000", corrections_csv)
+
+    def test_qzss_l6_info_exports_gridded_metadata_on_compact_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_gridded_corr_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_gridded_corr.bin"
+            corrections_path = temp_root / "session_gridded_corr.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_gridded_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            trop_type=1,
+                            trop_quality=9,
+                            grid_count=2,
+                            selected_satellites=1,
+                            trop_hs_residuals_m=(0.100, 0.200),
+                            trop_wet_residuals_m=(-0.020, 0.032),
+                            stec_residuals_tecu=(0.40, -0.28),
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0, iod=3, prn=3, dclock_m=0.025, sync=False
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(corrections_path),
+                "--gps-week",
+                "2200",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertIn("atmos_network_id=7", corrections_csv)
+            self.assertIn("atmos_trop_type=1", corrections_csv)
+            self.assertIn("atmos_trop_quality=9", corrections_csv)
+            self.assertIn("atmos_grid_count=2", corrections_csv)
+            self.assertIn("atmos_trop_hs_residuals_m=0.100000;0.200000", corrections_csv)
+            self.assertIn("atmos_trop_wet_residuals_m=-0.020000;0.032000", corrections_csv)
+            self.assertIn("atmos_stec_residual_range=0", corrections_csv)
+            self.assertIn("atmos_stec_residuals_tecu:G03=0.400000;-0.280000", corrections_csv)
+
+    def test_qzss_l6_info_extracts_code_phase_bias_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_pbias_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_pbias.bin"
+            messages_path = temp_root / "session_pbias_messages.csv"
+            corrections_path = temp_root / "session_pbias_corrections.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0, iod=3, code_bias_m=-0.12, phase_bias_m=0.015, sync=True
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0, iod=3, prn=3, dclock_m=0.025, sync=False
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-messages",
+                str(messages_path),
+                "--extract-compact-corrections",
+                str(corrections_path),
+                "--gps-week",
+                "2200",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("cssr_message: subframe=1 index=2 subtype=6 tow=518400", result.stdout)
+            self.assertIn("mapped_code=1 mapped_phase=1", result.stdout)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertIn("cbias:2=-0.120000", corrections_csv)
+            self.assertIn("pbias:2=0.015000", corrections_csv)
+            messages_csv = messages_path.read_text(encoding="ascii")
+            self.assertIn(",6,518400,", messages_csv)
+
+    def test_qzss_l6_info_extracts_phase_bias_only_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_phase_bias_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_phase_bias.bin"
+            messages_path = temp_root / "session_phase_bias_messages.csv"
+            corrections_path = temp_root / "session_phase_bias_corrections.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_phase_bias_message(
+                            tow_delta=0, iod=3, phase_bias_m=0.015, sync=True
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0, iod=3, prn=3, dclock_m=0.025, sync=False
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-messages",
+                str(messages_path),
+                "--extract-compact-corrections",
+                str(corrections_path),
+                "--gps-week",
+                "2200",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("cssr_message: subframe=1 index=2 subtype=5 tow=518400", result.stdout)
+            self.assertIn("mapped_phase=1", result.stdout)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertIn("pbias:2=0.015000", corrections_csv)
+            messages_csv = messages_path.read_text(encoding="ascii")
+            self.assertIn(",5,518400,", messages_csv)
+
+    def test_solve_odaiba_slice_uses_glonass_and_beidou_in_rtk(self) -> None:
+        rover = ROOT_DIR / "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs"
+        base = ROOT_DIR / "data/driving/Tokyo_Data/Odaiba/base_trimble.obs"
+        nav = ROOT_DIR / "data/driving/Tokyo_Data/Odaiba/base.nav"
+        reference_csv = ROOT_DIR / "data/driving/Tokyo_Data/Odaiba/reference.csv"
+
+        self.assertTrue(rover.exists())
+        self.assertTrue(base.exists())
+        self.assertTrue(nav.exists())
+        self.assertTrue(reference_csv.exists())
+
+        with tempfile.TemporaryDirectory(prefix="gnss_solve_odaiba_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            cases = {
+                "default": [],
+                "no_glonass": ["--no-glonass"],
+                "no_beidou": ["--no-beidou"],
+                "gps_gal_qzss_only": ["--no-glonass", "--no-beidou"],
+            }
+            case_records: dict[str, list[dict[str, float | int]]] = {}
+
+            for name, extra_args in cases.items():
+                output_path = temp_root / f"{name}.pos"
+                result = self.run_gnss(
+                    "solve",
+                    "--rover",
+                    str(rover),
+                    "--base",
+                    str(base),
+                    "--nav",
+                    str(nav),
+                    "--out",
+                    str(output_path),
+                    "--no-kml",
+                    "--skip-epochs",
+                    "0",
+                    "--max-epochs",
+                    "5",
+                    *extra_args,
+                )
+
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                self.assertIn("valid solutions: 5", result.stdout)
+                self.assertTrue(output_path.exists())
+
+                records = self.read_pos_records(output_path)
+                self.assertEqual(len(records), 5)
+                self.assertTrue(all(int(record["status"]) > 0 for record in records))
+                case_records[name] = records
+
+            def average_satellites(name: str) -> float:
+                records = case_records[name]
+                return sum(int(record["satellites"]) for record in records) / len(records)
+
+            default_avg = average_satellites("default")
+            no_glonass_avg = average_satellites("no_glonass")
+            no_beidou_avg = average_satellites("no_beidou")
+            gps_gal_qzss_avg = average_satellites("gps_gal_qzss_only")
+
+            self.assertGreater(default_avg, no_glonass_avg)
+            self.assertGreater(default_avg, no_beidou_avg)
+            self.assertGreater(no_glonass_avg, gps_gal_qzss_avg)
+            self.assertGreater(no_beidou_avg, gps_gal_qzss_avg)
+
+            reference = driving_comparison.read_reference_csv(reference_csv)
+            default_epochs = driving_comparison.read_libgnss_pos(temp_root / "default.pos")
+            default_matched = driving_comparison.match_to_reference(default_epochs, reference, 0.11)
+            default_summary = driving_comparison.summarize(
+                default_matched,
+                fixed_status=4,
+                label="odaiba default slice",
+            )
+
+            self.assertEqual(default_summary["epochs"], 5)
+            self.assertLess(default_summary["p95_h_m"], 1.0)
+            self.assertLess(default_summary["max_h_m"], 1.0)
+
+    def test_solve_short_baseline_cli_reaches_fixed_solution(self) -> None:
+        rover = ROOT_DIR / "data/short_baseline/TSK200JPN_R_20240010000_01D_30S_MO.rnx"
+        base = ROOT_DIR / "data/short_baseline/TSKB00JPN_R_20240010000_01D_30S_MO.rnx"
+        nav = ROOT_DIR / "data/short_baseline/BRDC00IGS_R_20240010000_01D_MN.rnx"
+
+        self.assertTrue(rover.exists())
+        self.assertTrue(base.exists())
+        self.assertTrue(nav.exists())
+
+        with tempfile.TemporaryDirectory(prefix="gnss_solve_short_baseline_test_") as temp_dir:
+            output_path = Path(temp_dir) / "short_baseline.pos"
+            result = self.run_gnss(
+                "solve",
+                "--rover",
+                str(rover),
+                "--base",
+                str(base),
+                "--nav",
+                str(nav),
+                "--out",
+                str(output_path),
+                "--no-kml",
+                "--max-epochs",
+                "10",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("valid solutions: 10", result.stdout)
+            self.assertIn("fixed solutions:", result.stdout)
+            self.assertTrue(output_path.exists())
+
+            records = self.read_pos_records(output_path)
+            self.assertEqual(len(records), 10)
+            self.assertGreaterEqual(
+                sum(int(record["status"]) == 4 for record in records),
+                1,
+            )
+            self.assertGreaterEqual(
+                sum(int(record["satellites"]) for record in records) / len(records),
+                10.0,
+            )
+
+    def test_solve_cli_supports_estimated_iono_mode(self) -> None:
+        rover = ROOT_DIR / "data/rover_kinematic.obs"
+        base = ROOT_DIR / "data/base_kinematic.obs"
+        nav = ROOT_DIR / "data/navigation_kinematic.nav"
+
+        self.assertTrue(rover.exists())
+        self.assertTrue(base.exists())
+        self.assertTrue(nav.exists())
+
+        with tempfile.TemporaryDirectory(prefix="gnss_solve_iono_est_") as temp_dir:
+            output_path = Path(temp_dir) / "iono_est.pos"
+            result = self.run_gnss(
+                "solve",
+                "--rover",
+                str(rover),
+                "--base",
+                str(base),
+                "--nav",
+                str(nav),
+                "--out",
+                str(output_path),
+                "--no-kml",
+                "--mode",
+                "kinematic",
+                "--iono",
+                "est",
+                "--max-epochs",
+                "5",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("iono: est", result.stdout)
+            self.assertIn("valid solutions: 5", result.stdout)
+            self.assertTrue(output_path.exists())
+
+            records = self.read_pos_records(output_path)
+            self.assertEqual(len(records), 5)
+            self.assertTrue(all(int(record["status"]) > 0 for record in records))
+
+    def test_short_baseline_signoff_cli_writes_summary_and_passes_thresholds(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_short_baseline_signoff_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            output_path = temp_root / "short_baseline.pos"
+            summary_path = temp_root / "short_baseline_summary.json"
+
+            result = self.run_gnss(
+                "short-baseline-signoff",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "120",
+                "--require-fix-rate-min",
+                "95",
+                "--require-mean-error-max",
+                "0.15",
+                "--require-max-error-max",
+                "0.60",
+                "--require-mean-sats-min",
+                "14",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Finished short-baseline sign-off.", result.stdout)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["dataset"], "Tsukuba short_baseline")
+            self.assertEqual(payload["epochs"], 120)
+            self.assertGreaterEqual(payload["fix_rate_pct"], 95.0)
+            self.assertLessEqual(payload["mean_position_error_m"], 0.15)
+            self.assertLessEqual(payload["max_position_error_m"], 0.60)
+            self.assertGreaterEqual(payload["mean_satellites"], 14.0)
+
+    def test_rtk_kinematic_signoff_cli_writes_summary_and_passes_thresholds(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_rtk_kinematic_signoff_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            output_path = temp_root / "rtk_kinematic.pos"
+            summary_path = temp_root / "rtk_kinematic_summary.json"
+
+            result = self.run_gnss(
+                "rtk-kinematic-signoff",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "120",
+                "--require-valid-epochs-min",
+                "120",
+                "--require-fix-rate-min",
+                "95",
+                "--require-mean-error-max",
+                "3.0",
+                "--require-max-error-max",
+                "3.0",
+                "--require-mean-sats-min",
+                "25",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Finished RTK kinematic sign-off.", result.stdout)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["dataset"], "sample mixed-GNSS kinematic RTK")
+            self.assertEqual(payload["epochs"], 120)
+            self.assertGreaterEqual(payload["fix_rate_pct"], 95.0)
+            self.assertLessEqual(payload["mean_position_error_m"], 3.0)
+            self.assertLessEqual(payload["max_position_error_m"], 3.0)
+            self.assertGreaterEqual(payload["mean_satellites"], 25.0)
+
+    def test_ppp_static_signoff_cli_writes_summary_and_passes_thresholds(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_static_signoff_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            output_path = temp_root / "ppp_static.pos"
+            summary_path = temp_root / "ppp_static_summary.json"
+
+            result = self.run_gnss(
+                "ppp-static-signoff",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "120",
+                "--require-valid-epochs-min",
+                "120",
+                "--require-mean-error-max",
+                "1.5",
+                "--require-max-error-max",
+                "1.5",
+                "--require-mean-sats-min",
+                "6.0",
+                "--require-ppp-solution-rate-min",
+                "100.0",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Finished PPP static sign-off.", result.stdout)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["dataset"], "sample static PPP")
+            self.assertEqual(payload["epochs"], 120)
+            self.assertEqual(payload["fallback_epochs"], 0)
+            self.assertLessEqual(payload["mean_position_error_m"], 1.5)
+            self.assertLessEqual(payload["max_position_error_m"], 1.5)
+            self.assertGreaterEqual(payload["mean_satellites"], 6.0)
+            self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+
+    def test_ppp_static_signoff_cli_supports_real_data_ar_signoff(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_static_signoff_ar_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            output_path = temp_root / "ppp_static_ar.pos"
+            summary_path = temp_root / "ppp_static_ar_summary.json"
+
+            result = self.run_gnss(
+                "ppp-static-signoff",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "120",
+                "--enable-ar",
+                "--generate-products",
+                "--ar-ratio-threshold",
+                "1.5",
+                "--require-valid-epochs-min",
+                "120",
+                "--require-mean-error-max",
+                "5.0",
+                "--require-max-error-max",
+                "6.0",
+                "--require-ppp-solution-rate-min",
+                "100.0",
+                "--require-ppp-fixed-epochs-min",
+                "1",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Finished PPP static sign-off.", result.stdout)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["dataset"], "sample static PPP")
+            self.assertEqual(payload["epochs"], 120)
+            self.assertEqual(payload["fallback_epochs"], 0)
+            self.assertLessEqual(payload["mean_position_error_m"], 5.0)
+            self.assertLessEqual(payload["max_position_error_m"], 6.0)
+            self.assertGreaterEqual(payload["ppp_fixed_epochs"], 1)
+            self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+            self.assertTrue(payload["ambiguity_resolution_enabled"])
+            self.assertEqual(payload["ar_ratio_threshold"], 1.5)
+
+    def test_ppp_kinematic_signoff_cli_writes_summary_and_passes_thresholds(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_kinematic_signoff_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            output_path = temp_root / "ppp_kinematic.pos"
+            reference_path = temp_root / "ppp_kinematic_reference.pos"
+            summary_path = temp_root / "ppp_kinematic_summary.json"
+
+            result = self.run_gnss(
+                "ppp-kinematic-signoff",
+                "--out",
+                str(output_path),
+                "--reference-pos",
+                str(reference_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "60",
+                "--require-common-epoch-pairs-min",
+                "60",
+                "--require-reference-fix-rate-min",
+                "90",
+                "--require-mean-sats-min",
+                "18",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Finished PPP kinematic sign-off.", result.stdout)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(reference_path.exists())
+            self.assertTrue(summary_path.exists())
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["dataset"], "sample kinematic PPP")
+            self.assertEqual(payload["epochs"], 60)
+            self.assertEqual(payload["common_epoch_pairs"], 60)
+            self.assertGreaterEqual(payload["reference_fix_rate_pct"], 90.0)
+            self.assertGreaterEqual(payload["mean_position_error_m"], 0.0)
+            self.assertGreaterEqual(payload["p95_position_error_m"], 0.0)
+            self.assertGreaterEqual(payload["max_position_error_m"], 0.0)
+            self.assertGreaterEqual(payload["mean_satellites"], 18.0)
+            self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+
+    def test_nav_products_cli_generates_sp3_and_clk_from_static_sample(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_nav_products_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            sp3_path = temp_root / "static_products.sp3"
+            clk_path = temp_root / "static_products.clk"
+
+            result = self.run_gnss(
+                "nav-products",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--sp3-out",
+                str(sp3_path),
+                "--clk-out",
+                str(clk_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("epochs written: 4", result.stdout)
+            self.assertTrue(sp3_path.exists())
+            self.assertTrue(clk_path.exists())
+
+            sp3_text = sp3_path.read_text(encoding="ascii")
+            clk_text = clk_path.read_text(encoding="ascii")
+            self.assertIn("*  2005 04 02 00 00 00.00000000", sp3_text)
+            self.assertIn("PG03", sp3_text)
+            self.assertIn("PG07", sp3_text)
+            self.assertIn("AS G03 2005 04 02 00 00 00.00000000", clk_text)
+            self.assertIn("AS G07 2005 04 02 00 00 00.00000000", clk_text)
+
+    def test_ppp_cli_processes_real_static_sample_with_generated_products(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_real_static_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            sp3_path = temp_root / "static_products.sp3"
+            clk_path = temp_root / "static_products.clk"
+            output_path = temp_root / "ppp_real_static.pos"
+
+            nav_products = self.run_gnss(
+                "nav-products",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--sp3-out",
+                str(sp3_path),
+                "--clk-out",
+                str(clk_path),
+                "--max-epochs",
+                "120",
+            )
+            self.assertEqual(nav_products.returncode, 0, msg=nav_products.stderr)
+
+            result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "120",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertIn("valid solutions: 120", result.stdout)
+            self.assertIn("PPP float solutions: 120", result.stdout)
+            self.assertIn("PPP fixed solutions: 0", result.stdout)
+            self.assertIn("fallback solutions: 0", result.stdout)
+            self.assertIn("PPP solution rate (%): 100", result.stdout)
+
+    def test_ppp_cli_runs_real_static_slice_with_generated_products_and_ar_enabled(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_real_static_ar_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            sp3_path = temp_root / "static_products.sp3"
+            clk_path = temp_root / "static_products.clk"
+            output_path = temp_root / "ppp_real_static_ar.pos"
+
+            nav_products = self.run_gnss(
+                "nav-products",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--sp3-out",
+                str(sp3_path),
+                "--clk-out",
+                str(clk_path),
+                "--max-epochs",
+                "20",
+            )
+            self.assertEqual(nav_products.returncode, 0, msg=nav_products.stderr)
+
+            result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--enable-ar",
+                "--convergence-min-epochs",
+                "4",
+                "--ar-ratio-threshold",
+                "1.5",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "20",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertIn("valid solutions: 20", result.stdout)
+            self.assertIn("ambiguity resolution: on", result.stdout)
+            self.assertIn("PPP fixed solutions:", result.stdout)
+            self.assertIn("PPP solution rate (%):", result.stdout)
+
+    def test_ppp_cli_accepts_ssr_corrections_csv(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_ssr_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            ssr_path = temp_root / "corrections.csv"
+            output_path = temp_root / "ppp_ssr.pos"
+            ssr_path.write_text(
+                "\n".join(
+                    [
+                        "# week,tow,sat,dx,dy,dz,dclock_m",
+                        "1316,518400.0,G03,0.0,0.0,0.0,0.0",
+                        "1316,518430.0,G03,0.0,0.0,0.0,0.0",
+                        "1316,518460.0,G03,0.0,0.0,0.0,0.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--ssr",
+                str(ssr_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "3",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertIn("SSR corrections: on", result.stdout)
+            self.assertIn("valid solutions: 3", result.stdout)
+
+    def test_ppp_cli_reports_applied_atmospheric_corrections_from_sampled_ssr(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_ssr_atmos_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, true_position = build_synthetic_ppp_inputs_with_atmos(
+                temp_root
+            )
+            baseline_path = temp_root / "ppp_ssr_atmos_baseline.pos"
+            output_path = temp_root / "ppp_ssr_atmos.pos"
+
+            baseline_result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(baseline_path),
+                "--max-epochs",
+                "4",
+            )
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(baseline_result.returncode, 0, msg=baseline_result.stderr)
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(baseline_path.exists())
+            self.assertTrue(output_path.exists())
+            self.assertIn("SSR corrections: on", result.stdout)
+            self.assertIn("atmospheric trop corrections:", result.stdout)
+            self.assertIn("atmospheric ionosphere corrections:", result.stdout)
+            trop_line = next(
+                line for line in result.stdout.splitlines() if "atmospheric trop corrections:" in line
+            )
+            iono_line = next(
+                line
+                for line in result.stdout.splitlines()
+                if "atmospheric ionosphere corrections:" in line
+            )
+            self.assertGreater(int(trop_line.rsplit(":", 1)[1].strip()), 0)
+            self.assertGreater(int(iono_line.rsplit(":", 1)[1].strip()), 0)
+
+            baseline_records = self.read_pos_records(baseline_path)
+            records = self.read_pos_records(output_path)
+            self.assertEqual(len(baseline_records), 4)
+            self.assertEqual(len(records), 4)
+            baseline_last = baseline_records[-1]
+            last_record = records[-1]
+            baseline_error = math.sqrt(
+                (baseline_last["x"] - true_position[0]) ** 2
+                + (baseline_last["y"] - true_position[1]) ** 2
+                + (baseline_last["z"] - true_position[2]) ** 2
+            )
+            error = math.sqrt(
+                (last_record["x"] - true_position[0]) ** 2
+                + (last_record["y"] - true_position[1]) ** 2
+                + (last_record["z"] - true_position[2]) ** 2
+            )
+            self.assertLess(error, baseline_error)
+
+    def test_ppp_cli_applies_grid_polynomial_ionosphere_from_sampled_ssr(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_ssr_grid_poly_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, true_position = (
+                build_synthetic_ppp_inputs_with_grid_polynomial_atmos(temp_root)
+            )
+            baseline_path = temp_root / "ppp_ssr_grid_poly_baseline.pos"
+            output_path = temp_root / "ppp_ssr_grid_poly.pos"
+
+            baseline_result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(baseline_path),
+                "--max-epochs",
+                "4",
+            )
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(baseline_result.returncode, 0, msg=baseline_result.stderr)
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(baseline_path.exists())
+            self.assertTrue(output_path.exists())
+            self.assertIn("SSR corrections: on", result.stdout)
+            self.assertIn("atmospheric ionosphere corrections:", result.stdout)
+
+            iono_count_line = next(
+                line
+                for line in result.stdout.splitlines()
+                if "atmospheric ionosphere corrections:" in line
+            )
+            self.assertGreater(int(iono_count_line.rsplit(":", 1)[1].strip()), 0)
+
+            baseline_records = self.read_pos_records(baseline_path)
+            records = self.read_pos_records(output_path)
+            self.assertEqual(len(baseline_records), 4)
+            self.assertEqual(len(records), 4)
+            baseline_last = baseline_records[-1]
+            last_record = records[-1]
+            baseline_error = math.sqrt(
+                (baseline_last["x"] - true_position[0]) ** 2
+                + (baseline_last["y"] - true_position[1]) ** 2
+                + (baseline_last["z"] - true_position[2]) ** 2
+            )
+            error = math.sqrt(
+                (last_record["x"] - true_position[0]) ** 2
+                + (last_record["y"] - true_position[1]) ** 2
+                + (last_record["z"] - true_position[2]) ** 2
+            )
+            self.assertLess(error, baseline_error)
+
+    def test_ppp_cli_accepts_rtcm_ssr_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_ssr_rtcm_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            ssr_path = temp_root / "corrections.rtcm3"
+            output_path = temp_root / "ppp_ssr_rtcm.pos"
+            ssr_path.write_bytes(
+                build_rtcm1060(3, 518400) +
+                build_rtcm1059(3, 518400) +
+                build_rtcm1062(3, 518400)
+            )
+
+            result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--ssr-rtcm",
+                str(ssr_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "3",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertIn("SSR corrections: on", result.stdout)
+            self.assertIn("valid solutions: 3", result.stdout)
+
+    def test_ppp_cli_detects_cycle_slip_from_geometry_free(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_cycle_slip_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, _ = build_synthetic_ppp_inputs_with_cycle_slip(temp_root)
+            output_path = temp_root / "ppp_cycle_slip.pos"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+                extra_env={"GNSS_PPP_DEBUG": "1"},
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertIn("valid solutions: 4", result.stdout)
+            self.assertIn("cycle slip reset G01", result.stderr)
+            self.assertIn("reason=geometry-free+melbourne-wubbena", result.stderr)
+
+    def test_ppp_cli_accepts_ntrip_rtcm_ssr_corrections(self) -> None:
+        payload = build_rtcm1060(3, 518400) + build_rtcm1059(3, 518400) + build_rtcm1062(3, 518400)
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+            server.bind(("127.0.0.1", 0))
+            server.listen(1)
+            server.settimeout(2.0)
+            port = server.getsockname()[1]
+
+            def caster() -> None:
+                conn, _ = server.accept()
+                with conn:
+                    conn.recv(1024)
+                    conn.sendall(b"ICY 200 OK\r\nNtrip-Version: Ntrip/2.0\r\n\r\n")
+                    conn.sendall(payload)
+
+            thread = threading.Thread(target=caster)
+            thread.start()
+            try:
+                with tempfile.TemporaryDirectory(prefix="gnss_ppp_ssr_ntrip_cli_") as temp_dir:
+                    temp_root = Path(temp_dir)
+                    output_path = temp_root / "ppp_ssr_ntrip.pos"
+
+                    result = self.run_gnss(
+                        "ppp",
+                        "--static",
+                        "--obs",
+                        str(ROOT_DIR / "data/rover_static.obs"),
+                        "--nav",
+                        str(ROOT_DIR / "data/navigation_static.nav"),
+                        "--ssr-rtcm",
+                        f"ntrip://127.0.0.1:{port}/MOUNT1",
+                        "--out",
+                        str(output_path),
+                        "--max-epochs",
+                        "3",
+                    )
+                    self.assertEqual(result.returncode, 0, msg=result.stderr)
+                    self.assertTrue(output_path.exists())
+                    self.assertIn("SSR corrections: on", result.stdout)
+                    self.assertIn("valid solutions: 3", result.stdout)
+            finally:
+                thread.join()
+
+    def test_clas_ppp_cli_writes_summary_for_named_profile(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            ssr_path = temp_root / "corrections.rtcm3"
+            output_path = temp_root / "clas_ppp.pos"
+            summary_path = temp_root / "clas_ppp_summary.json"
+            ssr_path.write_bytes(
+                build_rtcm1060(3, 518400) +
+                build_rtcm1059(3, 518400) +
+                build_rtcm1062(3, 518400)
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "madoca",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--ssr-rtcm",
+                str(ssr_path),
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+            self.assertIn("Finished CLAS/MADOCA PPP run.", result.stdout)
+            self.assertIn("profile: madoca", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["dataset"], "CLAS/MADOCA PPP")
+            self.assertEqual(payload["correction_profile"], "madoca")
+            self.assertEqual(payload["ssr_transport"], "file")
+            self.assertEqual(payload["epochs"], 3)
+            self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+
+    def test_clas_ppp_cli_accepts_compact_sampled_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_compact_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            compact_path = temp_root / "corrections.compact.csv"
+            output_path = temp_root / "clas_ppp_compact.pos"
+            summary_path = temp_root / "clas_ppp_compact_summary.json"
+            compact_path.write_text(
+                "\n".join(
+                    [
+                        "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m",
+                        "1316,518400.0,G,3,0.0,0.0,0.0,0.0,0.025",
+                        "1316,518430.0,G,3,0.0,0.0,0.0,0.0,0.025",
+                        "1316,518460.0,G,3,0.0,0.0,0.0,0.0,0.025",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--compact-ssr",
+                str(compact_path),
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+            self.assertIn("Finished CLAS/MADOCA PPP run.", result.stdout)
+            self.assertIn("encoding: compact", result.stdout)
+            self.assertIn("expanded compact corrections:", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["dataset"], "CLAS/MADOCA PPP")
+            self.assertEqual(payload["correction_profile"], "clas")
+            self.assertEqual(payload["ssr_transport"], "file")
+            self.assertEqual(payload["correction_encoding"], "compact")
+            self.assertEqual(payload["epochs"], 3)
+            self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+
+    def test_clas_ppp_cli_accepts_direct_qzss_l6_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            l6_path = temp_root / "corrections_l6.bin"
+            output_path = temp_root / "clas_ppp_l6.pos"
+            summary_path = temp_root / "clas_ppp_l6_summary.json"
+            l6_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_combined_message(tow_delta=0, iod=3, prn=3, dclock_m=0.025),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518430, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_combined_message(tow_delta=30, iod=3, prn=3, dclock_m=0.025),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518460, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_combined_message(tow_delta=60, iod=3, prn=3, dclock_m=0.025),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--qzss-l6",
+                str(l6_path),
+                "--qzss-gps-week",
+                "1316",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+            self.assertIn("Finished CLAS/MADOCA PPP run.", result.stdout)
+            self.assertIn("encoding: qzss_l6", result.stdout)
+            self.assertIn("decoded qzss l6 corrections:", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["dataset"], "CLAS/MADOCA PPP")
+            self.assertEqual(payload["correction_profile"], "clas")
+            self.assertEqual(payload["ssr_transport"], "file")
+            self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertEqual(payload["epochs"], 3)
+            self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+
+    def test_clas_ppp_cli_accepts_direct_qzss_l6_orbit_clock_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_oc_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            l6_path = temp_root / "corrections_l6_oc.bin"
+            output_path = temp_root / "clas_ppp_l6_oc.pos"
+            summary_path = temp_root / "clas_ppp_l6_oc_summary.json"
+            l6_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_orbit_message(tow_delta=0, iod=3, dx=0.0, dy=0.0, dz=0.0, sync=True),
+                        build_qzss_cssr_clock_message(tow_delta=0, iod=3, dclock_m=0.025, sync=False),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518430, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_orbit_message(tow_delta=30, iod=3, dx=0.0, dy=0.0, dz=0.0, sync=True),
+                        build_qzss_cssr_clock_message(tow_delta=30, iod=3, dclock_m=0.025, sync=False),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518460, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_orbit_message(tow_delta=60, iod=3, dx=0.0, dy=0.0, dz=0.0, sync=True),
+                        build_qzss_cssr_clock_message(tow_delta=60, iod=3, dclock_m=0.025, sync=False),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--qzss-l6",
+                str(l6_path),
+                "--qzss-gps-week",
+                "1316",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+            self.assertIn("decoded qzss l6 corrections:", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+
+    def test_clas_ppp_cli_accepts_direct_qzss_l6_code_bias_and_ura(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_cbias_ura_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            l6_path = temp_root / "corrections_l6_cbias_ura.bin"
+            output_path = temp_root / "clas_ppp_l6_cbias_ura.pos"
+            summary_path = temp_root / "clas_ppp_l6_cbias_ura_summary.json"
+            l6_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_bias_message(tow_delta=0, iod=3, bias_m=-0.12, sync=True),
+                        build_qzss_cssr_ura_message(tow_delta=0, iod=3, ura_index=9, sync=True),
+                        build_qzss_cssr_combined_message(tow_delta=0, iod=3, prn=3, dclock_m=0.025, sync=False),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518430, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_bias_message(tow_delta=30, iod=3, bias_m=-0.12, sync=True),
+                        build_qzss_cssr_ura_message(tow_delta=30, iod=3, ura_index=9, sync=True),
+                        build_qzss_cssr_combined_message(tow_delta=30, iod=3, prn=3, dclock_m=0.025, sync=False),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518460, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_bias_message(tow_delta=60, iod=3, bias_m=-0.12, sync=True),
+                        build_qzss_cssr_ura_message(tow_delta=60, iod=3, ura_index=9, sync=True),
+                        build_qzss_cssr_combined_message(tow_delta=60, iod=3, prn=3, dclock_m=0.025, sync=False),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--qzss-l6",
+                str(l6_path),
+                "--qzss-gps-week",
+                "1316",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+            self.assertIn("decoded qzss l6 corrections:", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+
+    def test_clas_ppp_cli_accepts_direct_qzss_l6_with_atmos_inventory(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_atmos_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            l6_path = temp_root / "corrections_l6_atmos.bin"
+            output_path = temp_root / "clas_ppp_l6_atmos.pos"
+            summary_path = temp_root / "clas_ppp_l6_atmos_summary.json"
+            l6_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_atmos_message(tow_delta=0, iod=3, sync=True),
+                        build_qzss_cssr_combined_message(tow_delta=0, iod=3, prn=3, dclock_m=0.025, sync=False),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518430, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_atmos_message(tow_delta=30, iod=3, sync=True),
+                        build_qzss_cssr_combined_message(tow_delta=30, iod=3, prn=3, dclock_m=0.025, sync=False),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518460, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_atmos_message(tow_delta=60, iod=3, sync=True),
+                        build_qzss_cssr_combined_message(tow_delta=60, iod=3, prn=3, dclock_m=0.025, sync=False),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--qzss-l6",
+                str(l6_path),
+                "--qzss-gps-week",
+                "1316",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+            self.assertIn("decoded qzss l6 corrections:", result.stdout)
+            self.assertIn("atmos_messages=3", result.stdout)
+            self.assertIn("atmos_rows=3", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+            self.assertEqual(payload["atmos_messages"], 3)
+            self.assertEqual(payload["atmos_rows"], 3)
+
+    def test_clas_ppp_cli_accepts_direct_qzss_l6_with_stec_inventory(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_stec_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            l6_path = temp_root / "corrections_l6_stec.bin"
+            output_path = temp_root / "clas_ppp_l6_stec.pos"
+            summary_path = temp_root / "clas_ppp_l6_stec_summary.json"
+            l6_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_stec_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            stec_type=3,
+                            selected_satellites=1,
+                            stec_quality=17,
+                            stec_c00_tecu=1.5,
+                            stec_c01_tecu_per_deg=0.12,
+                            stec_c10_tecu_per_deg=-0.10,
+                            stec_c11_tecu_per_deg2=0.06,
+                            stec_c02_tecu_per_deg2=0.025,
+                            stec_c20_tecu_per_deg2=-0.015,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0, iod=3, prn=3, dclock_m=0.025, sync=False
+                        ),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518430, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_stec_message(
+                            tow_delta=30,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            stec_type=3,
+                            selected_satellites=1,
+                            stec_quality=17,
+                            stec_c00_tecu=1.5,
+                            stec_c01_tecu_per_deg=0.12,
+                            stec_c10_tecu_per_deg=-0.10,
+                            stec_c11_tecu_per_deg2=0.06,
+                            stec_c02_tecu_per_deg2=0.025,
+                            stec_c20_tecu_per_deg2=-0.015,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=30, iod=3, prn=3, dclock_m=0.025, sync=False
+                        ),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518460, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_stec_message(
+                            tow_delta=60,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            stec_type=3,
+                            selected_satellites=1,
+                            stec_quality=17,
+                            stec_c00_tecu=1.5,
+                            stec_c01_tecu_per_deg=0.12,
+                            stec_c10_tecu_per_deg=-0.10,
+                            stec_c11_tecu_per_deg2=0.06,
+                            stec_c02_tecu_per_deg2=0.025,
+                            stec_c20_tecu_per_deg2=-0.015,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=60, iod=3, prn=3, dclock_m=0.025, sync=False
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--qzss-l6",
+                str(l6_path),
+                "--qzss-gps-week",
+                "1316",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+                "--require-atmos-messages-min",
+                "3",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+            self.assertIn("decoded qzss l6 corrections:", result.stdout)
+            self.assertIn("atmos_messages=3", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+            self.assertEqual(payload["atmos_messages"], 3)
+
+    def test_clas_ppp_cli_reports_applied_atmospheric_corrections_for_direct_qzss_l6(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_atmos_apply_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, _, _ = build_synthetic_ppp_inputs_with_atmos(temp_root)
+            l6_path = temp_root / "corrections_l6_atmos_apply.bin"
+            output_path = temp_root / "clas_ppp_l6_atmos_apply.pos"
+            summary_path = temp_root / "clas_ppp_l6_atmos_apply_summary.json"
+            l6_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=356400, iod=3, prn=1, sync=True),
+                        build_qzss_cssr_atmos_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            selected_satellites=1,
+                            trop_avail=3,
+                            stec_avail=3,
+                            trop_quality=9,
+                            trop_type=0,
+                            trop_t00_m=0.8,
+                            stec_quality=17,
+                            stec_type=0,
+                            stec_c00_tecu=12.5,
+                        ),
+                        build_qzss_cssr_combined_message(tow_delta=0, iod=3, prn=1, dclock_m=0.0, sync=False),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=356430, iod=3, prn=1, sync=True),
+                        build_qzss_cssr_atmos_message(
+                            tow_delta=30,
+                            iod=3,
+                            sync=True,
+                            selected_satellites=1,
+                            trop_avail=3,
+                            stec_avail=3,
+                            trop_quality=9,
+                            trop_type=0,
+                            trop_t00_m=0.8,
+                            stec_quality=17,
+                            stec_type=0,
+                            stec_c00_tecu=12.5,
+                        ),
+                        build_qzss_cssr_combined_message(tow_delta=30, iod=3, prn=1, dclock_m=0.0, sync=False),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=356460, iod=3, prn=1, sync=True),
+                        build_qzss_cssr_atmos_message(
+                            tow_delta=60,
+                            iod=3,
+                            sync=True,
+                            selected_satellites=1,
+                            trop_avail=3,
+                            stec_avail=3,
+                            trop_quality=9,
+                            trop_type=0,
+                            trop_t00_m=0.8,
+                            stec_quality=17,
+                            stec_type=0,
+                            stec_c00_tecu=12.5,
+                        ),
+                        build_qzss_cssr_combined_message(tow_delta=60, iod=3, prn=1, dclock_m=0.0, sync=False),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--qzss-l6",
+                str(l6_path),
+                "--qzss-gps-week",
+                "2411",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--no-estimate-troposphere",
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+                "--require-atmos-messages-min",
+                "3",
+                "--require-ppp-atmos-trop-corrections-min",
+                "1",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertEqual(payload["atmos_messages"], 3)
+            self.assertGreaterEqual(payload["ppp_atmospheric_trop_corrections"], 1)
+            self.assertGreaterEqual(payload["ppp_atmospheric_ionosphere_corrections"], 1)
+            self.assertGreater(payload["ppp_atmospheric_trop_meters"], 0.0)
+
+    def test_clas_ppp_cli_uses_nearest_clas_grid_residuals_for_direct_qzss_l6(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_grid_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, _, _ = build_synthetic_ppp_inputs_with_atmos(temp_root)
+            l6_path = temp_root / "corrections_l6_grid.bin"
+            output_path = temp_root / "clas_ppp_l6_grid.pos"
+            summary_path = temp_root / "clas_ppp_l6_grid_summary.json"
+            # Synthetic PPP input is centered near Tokyo (35.0N, 139.0E), so CLAS network 7
+            # grid 11 (34.77N, 139.37E) is the nearest reference grid in the official grid table.
+            network_id = 7
+            grid_count = 22
+            nearest_grid_index = 10  # network 7 grid no. 11 -> zero-based index
+            trop_residuals = build_single_grid_residuals(grid_count, nearest_grid_index, 0.5)
+            stec_residuals = build_single_grid_residuals(grid_count, nearest_grid_index, 12.48)
+            l6_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=356400, iod=3, prn=1, sync=True),
+                        build_qzss_cssr_atmos_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=network_id,
+                            grid_count=grid_count,
+                            selected_satellites=1,
+                            trop_avail=2,
+                            stec_avail=2,
+                            trop_residual_size=1,
+                            trop_offset_m=0.3,
+                            trop_residuals_m=trop_residuals,
+                            stec_residual_size=3,
+                            stec_residuals_tecu=stec_residuals,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0,
+                            iod=3,
+                            prn=1,
+                            network_id=network_id,
+                            dclock_m=0.0,
+                            sync=False,
+                        ),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=356430, iod=3, prn=1, sync=True),
+                        build_qzss_cssr_atmos_message(
+                            tow_delta=30,
+                            iod=3,
+                            sync=True,
+                            network_id=network_id,
+                            grid_count=grid_count,
+                            selected_satellites=1,
+                            trop_avail=2,
+                            stec_avail=2,
+                            trop_residual_size=1,
+                            trop_offset_m=0.3,
+                            trop_residuals_m=trop_residuals,
+                            stec_residual_size=3,
+                            stec_residuals_tecu=stec_residuals,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=30,
+                            iod=3,
+                            prn=1,
+                            network_id=network_id,
+                            dclock_m=0.0,
+                            sync=False,
+                        ),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=356460, iod=3, prn=1, sync=True),
+                        build_qzss_cssr_atmos_message(
+                            tow_delta=60,
+                            iod=3,
+                            sync=True,
+                            network_id=network_id,
+                            grid_count=grid_count,
+                            selected_satellites=1,
+                            trop_avail=2,
+                            stec_avail=2,
+                            trop_residual_size=1,
+                            trop_offset_m=0.3,
+                            trop_residuals_m=trop_residuals,
+                            stec_residual_size=3,
+                            stec_residuals_tecu=stec_residuals,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=60,
+                            iod=3,
+                            prn=1,
+                            network_id=network_id,
+                            dclock_m=0.0,
+                            sync=False,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--qzss-l6",
+                str(l6_path),
+                "--qzss-gps-week",
+                "2411",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--no-estimate-troposphere",
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+                "--require-atmos-messages-min",
+                "3",
+                "--require-ppp-atmos-trop-corrections-min",
+                "1",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertEqual(payload["atmos_messages"], 3)
+            self.assertGreater(payload["ppp_atmospheric_trop_meters"], 1.5)
+
+    def test_clas_ppp_cli_accepts_direct_qzss_l6_gridded_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_gridded_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, _, _ = build_synthetic_ppp_inputs_with_atmos(temp_root)
+            l6_path = temp_root / "corrections_l6_gridded.bin"
+            output_path = temp_root / "clas_ppp_l6_gridded.pos"
+            summary_path = temp_root / "clas_ppp_l6_gridded_summary.json"
+            network_id = 7
+            grid_count = 22
+            nearest_grid_index = 10
+            trop_hs_residuals = build_single_grid_residuals(grid_count, nearest_grid_index, 0.24)
+            trop_wet_residuals = build_single_grid_residuals(grid_count, nearest_grid_index, -0.06)
+            stec_residuals = build_single_grid_residuals(grid_count, nearest_grid_index, 12.48)
+            l6_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=356400, iod=3, prn=1, sync=True),
+                        build_qzss_cssr_gridded_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=network_id,
+                            trop_type=1,
+                            trop_quality=9,
+                            grid_count=grid_count,
+                            selected_satellites=1,
+                            trop_hs_residuals_m=trop_hs_residuals,
+                            trop_wet_residuals_m=trop_wet_residuals,
+                            stec_residuals_tecu=stec_residuals,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0,
+                            iod=3,
+                            prn=1,
+                            network_id=network_id,
+                            dclock_m=0.0,
+                            sync=False,
+                        ),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=356430, iod=3, prn=1, sync=True),
+                        build_qzss_cssr_gridded_message(
+                            tow_delta=30,
+                            iod=3,
+                            sync=True,
+                            network_id=network_id,
+                            trop_type=1,
+                            trop_quality=9,
+                            grid_count=grid_count,
+                            selected_satellites=1,
+                            trop_hs_residuals_m=trop_hs_residuals,
+                            trop_wet_residuals_m=trop_wet_residuals,
+                            stec_residuals_tecu=stec_residuals,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=30,
+                            iod=3,
+                            prn=1,
+                            network_id=network_id,
+                            dclock_m=0.0,
+                            sync=False,
+                        ),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=356460, iod=3, prn=1, sync=True),
+                        build_qzss_cssr_gridded_message(
+                            tow_delta=60,
+                            iod=3,
+                            sync=True,
+                            network_id=network_id,
+                            trop_type=1,
+                            trop_quality=9,
+                            grid_count=grid_count,
+                            selected_satellites=1,
+                            trop_hs_residuals_m=trop_hs_residuals,
+                            trop_wet_residuals_m=trop_wet_residuals,
+                            stec_residuals_tecu=stec_residuals,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=60,
+                            iod=3,
+                            prn=1,
+                            network_id=network_id,
+                            dclock_m=0.0,
+                            sync=False,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--qzss-l6",
+                str(l6_path),
+                "--qzss-gps-week",
+                "2411",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--no-estimate-troposphere",
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+                "--require-atmos-messages-min",
+                "3",
+                "--require-ppp-atmos-trop-corrections-min",
+                "1",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertEqual(payload["atmos_messages"], 3)
+            self.assertGreaterEqual(payload["ppp_atmospheric_trop_corrections"], 1)
+            self.assertGreater(payload["ppp_atmospheric_trop_meters"], 1.0)
+
+    def test_clas_ppp_cli_accepts_direct_qzss_l6_code_phase_bias(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_code_phase_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            l6_path = temp_root / "corrections_l6_code_phase.bin"
+            output_path = temp_root / "clas_ppp_l6_code_phase.pos"
+            summary_path = temp_root / "clas_ppp_l6_code_phase_summary.json"
+            l6_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0, iod=3, code_bias_m=-0.12, phase_bias_m=0.015, sync=True
+                        ),
+                        build_qzss_cssr_combined_message(tow_delta=0, iod=3, prn=3, dclock_m=0.025, sync=False),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518430, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=30, iod=3, code_bias_m=-0.12, phase_bias_m=0.015, sync=True
+                        ),
+                        build_qzss_cssr_combined_message(tow_delta=30, iod=3, prn=3, dclock_m=0.025, sync=False),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518460, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=60, iod=3, code_bias_m=-0.12, phase_bias_m=0.015, sync=True
+                        ),
+                        build_qzss_cssr_combined_message(tow_delta=60, iod=3, prn=3, dclock_m=0.025, sync=False),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--qzss-l6",
+                str(l6_path),
+                "--qzss-gps-week",
+                "1316",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+            self.assertIn("decoded qzss l6 corrections:", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+
     @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
     def test_ubx_info_reads_mixed_rawx_from_serial_device(self) -> None:
+        payload = build_nav_pvt_message() + build_mixed_rawx_message()
+        last_result: subprocess.CompletedProcess[str] | None = None
+        last_output_path: Path | None = None
+
+        for _ in range(2):
+            master_fd, slave_fd = pty.openpty()
+            try:
+                slave_path = os.ttyname(slave_fd)
+            finally:
+                os.close(slave_fd)
+
+            def writer() -> None:
+                time.sleep(0.05)
+                os.write(master_fd, payload)
+                time.sleep(0.1)
+                os.close(master_fd)
+
+            with tempfile.TemporaryDirectory(prefix="gnss_ubx_serial_test_") as temp_dir:
+                output_path = Path(temp_dir) / "serial.obs"
+                last_output_path = output_path
+                thread = threading.Thread(target=writer)
+                thread.start()
+                try:
+                    result = self.run_gnss(
+                        "ubx-info",
+                        "--input",
+                        f"serial://{slave_path}?baud=115200",
+                        "--decode-observations",
+                        "--obs-rinex-out",
+                        str(output_path),
+                        "--limit",
+                        "2",
+                    )
+                finally:
+                    thread.join()
+
+                last_result = result
+                if "UBX-RXM-RAWX" in result.stdout and "summary: processed_messages=2" in result.stdout:
+                    exported = output_path.read_text(encoding="ascii")
+                    self.assertIn("G12", exported)
+                    self.assertIn("E05", exported)
+                    self.assertIn("R07", exported)
+                    self.assertIn("C19", exported)
+                    self.assertIn("J03", exported)
+                    return
+
+        self.assertIsNotNone(last_result)
+        self.assertEqual(last_result.returncode, 0, msg=last_result.stderr)
+        self.assertIsNotNone(last_output_path)
+        self.assertIn("UBX-RXM-RAWX", last_result.stdout)
+
+    @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
+    def test_nmea_info_reads_sentences_from_serial_device(self) -> None:
         master_fd, slave_fd = pty.openpty()
         try:
             slave_path = os.ttyname(slave_fd)
         finally:
             os.close(slave_fd)
 
-        payload = build_nav_pvt_message() + build_mixed_rawx_message()
+        payload = (build_nmea_gga_sentence() + build_nmea_rmc_sentence()).encode("ascii")
 
         def writer() -> None:
             time.sleep(0.05)
@@ -983,33 +5647,352 @@ class CLIToolsTest(unittest.TestCase):
             time.sleep(0.1)
             os.close(master_fd)
 
-        with tempfile.TemporaryDirectory(prefix="gnss_ubx_serial_test_") as temp_dir:
-            output_path = Path(temp_dir) / "serial.obs"
-            thread = threading.Thread(target=writer)
-            thread.start()
-            try:
-                result = self.run_gnss(
-                    "ubx-info",
-                    "--input",
-                    f"serial://{slave_path}?baud=115200",
-                    "--decode-observations",
-                    "--obs-rinex-out",
-                    str(output_path),
-                    "--limit",
-                    "2",
-                )
-            finally:
-                thread.join()
+        thread = threading.Thread(target=writer)
+        thread.start()
+        try:
+            result = self.run_gnss(
+                "nmea-info",
+                "--input",
+                f"serial://{slave_path}?baud=9600",
+                "--limit",
+                "2",
+            )
+        finally:
+            thread.join()
 
-            self.assertEqual(result.returncode, 0, msg=result.stderr)
-            self.assertIn("UBX-RXM-RAWX", result.stdout)
-            self.assertIn("summary: processed_messages=2", result.stdout)
-            exported = output_path.read_text(encoding="ascii")
-            self.assertIn("G12", exported)
-            self.assertIn("E05", exported)
-            self.assertIn("R07", exported)
-            self.assertIn("C19", exported)
-            self.assertIn("J03", exported)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("gga: time=123519", result.stdout)
+        self.assertIn("rmc: time=123520", result.stdout)
+        self.assertIn(
+            "summary: sentences=2 valid=2 gga=1 rmc=1 valid_positions=2 checksum_errors=0",
+            result.stdout,
+        )
+
+    @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
+    def test_novatel_info_reads_records_from_serial_device(self) -> None:
+        master_fd, slave_fd = pty.openpty()
+        try:
+            slave_path = os.ttyname(slave_fd)
+        finally:
+            os.close(slave_fd)
+
+        payload = (build_novatel_bestpos_record() + build_novatel_bestvel_record()).encode("ascii")
+
+        def writer() -> None:
+            time.sleep(0.20)
+            os.write(master_fd, payload)
+            time.sleep(0.1)
+            os.close(master_fd)
+
+        thread = threading.Thread(target=writer)
+        thread.start()
+        try:
+            result = self.run_gnss(
+                "novatel-info",
+                "--input",
+                f"serial://{slave_path}?baud=115200",
+                "--limit",
+                "2",
+            )
+        finally:
+            thread.join()
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("bestpos: week=2200 tow=345600.000", result.stdout)
+        self.assertIn("bestvel: week=2200 tow=345600.000", result.stdout)
+        self.assertIn(
+            "summary: records=2 valid=2 bestpos=1 bestvel=1 valid_positions=1 checksum_errors=0",
+            result.stdout,
+        )
+
+    @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
+    def test_novatel_info_reads_binary_records_from_serial_device(self) -> None:
+        master_fd, slave_fd = pty.openpty()
+        try:
+            slave_path = os.ttyname(slave_fd)
+        finally:
+            os.close(slave_fd)
+
+        payload = build_novatel_bestpos_binary_record() + build_novatel_bestvel_binary_record()
+
+        def writer() -> None:
+            time.sleep(0.20)
+            os.write(master_fd, payload)
+            time.sleep(0.1)
+            os.close(master_fd)
+
+        thread = threading.Thread(target=writer)
+        thread.start()
+        try:
+            result = self.run_gnss(
+                "novatel-info",
+                "--input",
+                f"serial://{slave_path}?baud=115200",
+                "--limit",
+                "2",
+            )
+        finally:
+            thread.join()
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("bestpos: week=2200 tow=345600.000", result.stdout)
+        self.assertIn("bestvel: week=2200 tow=345600.000", result.stdout)
+        self.assertIn(
+            "summary: records=2 valid=2 bestpos=1 bestvel=1 valid_positions=1 checksum_errors=0",
+            result.stdout,
+        )
+
+    @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
+    def test_sbp_info_reads_records_from_serial_device(self) -> None:
+        master_fd, slave_fd = pty.openpty()
+        try:
+            slave_path = os.ttyname(slave_fd)
+        finally:
+            os.close(slave_fd)
+
+        payload = build_sbp_gps_time_frame() + build_sbp_pos_llh_frame() + build_sbp_vel_ned_frame()
+
+        def writer() -> None:
+            time.sleep(0.20)
+            os.write(master_fd, payload)
+            time.sleep(0.1)
+            os.close(master_fd)
+
+        thread = threading.Thread(target=writer)
+        thread.start()
+        try:
+            result = self.run_gnss(
+                "sbp-info",
+                "--input",
+                f"serial://{slave_path}?baud=115200",
+                "--limit",
+                "3",
+            )
+        finally:
+            thread.join()
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("gps_time: sender=66 week=2200 tow_ms=345600123", result.stdout)
+        self.assertIn("pos_llh: sender=66 tow_ms=345600123", result.stdout)
+        self.assertIn("vel_ned: sender=66 tow_ms=345600123", result.stdout)
+        self.assertIn(
+            "summary: frames=3 valid=3 gps_time=1 pos_llh=1 vel_ned=1 valid_positions=1 crc_errors=0",
+            result.stdout,
+        )
+
+    @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
+    def test_sbf_info_reads_records_from_serial_device(self) -> None:
+        master_fd, slave_fd = pty.openpty()
+        try:
+            slave_path = os.ttyname(slave_fd)
+        finally:
+            os.close(slave_fd)
+
+        payload = (
+            build_sbf_pvt_geodetic_frame()
+            + build_sbf_lband_tracker_frame()
+            + build_sbf_p2pp_status_frame()
+        )
+
+        def writer() -> None:
+            time.sleep(0.20)
+            os.write(master_fd, payload)
+            time.sleep(0.1)
+            os.close(master_fd)
+
+        thread = threading.Thread(target=writer)
+        thread.start()
+        try:
+            result = self.run_gnss(
+                "sbf-info",
+                "--input",
+                f"serial://{slave_path}?baud=115200",
+                "--limit",
+                "3",
+            )
+        finally:
+            thread.join()
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("pvt_geodetic: week=2200 tow_ms=345600123 mode=PPP", result.stdout)
+        self.assertIn("lband_tracker: week=2200 tow_ms=345600123", result.stdout)
+        self.assertIn("p2pp_status: week=2200 tow_ms=345600123", result.stdout)
+        self.assertIn(
+            "summary: frames=3 valid=3 pvt_geodetic=1 lband_tracker=1 p2pp_status=1 valid_positions=1 crc_errors=0",
+            result.stdout,
+        )
+
+    @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
+    def test_trimble_info_reads_records_from_serial_device(self) -> None:
+        master_fd, slave_fd = pty.openpty()
+        try:
+            slave_path = os.ttyname(slave_fd)
+        finally:
+            os.close(slave_fd)
+
+        payload = build_gsof_genout_packet(
+            [
+                build_gsof_time_record(),
+                build_gsof_llh_record(),
+                build_gsof_velocity_record(),
+            ]
+        )
+
+        def writer() -> None:
+            time.sleep(0.20)
+            os.write(master_fd, payload)
+            time.sleep(0.1)
+            os.close(master_fd)
+
+        thread = threading.Thread(target=writer)
+        thread.start()
+        try:
+            result = self.run_gnss(
+                "trimble-info",
+                "--input",
+                f"serial://{slave_path}?baud=115200",
+                "--limit",
+                "3",
+            )
+        finally:
+            thread.join()
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("time: week=2200 tow=345600.123", result.stdout)
+        self.assertIn("llh: lat=35.1234567 lon=139.9876543 height=42.100m", result.stdout)
+        self.assertIn("velocity: flags=0x03 horiz=1.250mps heading=90.00deg vertical=-0.125mps", result.stdout)
+        self.assertIn(
+            "summary: packets=1 valid=1 time=1 llh=1 velocity=1 valid_positions=1 checksum_errors=0",
+            result.stdout,
+        )
+
+    @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
+    def test_skytraq_info_reads_epoch_and_nack_from_serial_device(self) -> None:
+        master_fd, slave_fd = pty.openpty()
+        try:
+            slave_path = os.ttyname(slave_fd)
+        finally:
+            os.close(slave_fd)
+
+        payload = build_skytraq_epoch_message() + build_skytraq_nack_message()
+
+        def writer() -> None:
+            time.sleep(0.20)
+            os.write(master_fd, payload)
+            time.sleep(0.1)
+            os.close(master_fd)
+
+        thread = threading.Thread(target=writer)
+        thread.start()
+        try:
+            result = self.run_gnss(
+                "skytraq-info",
+                "--input",
+                f"serial://{slave_path}?baud=115200",
+                "--limit",
+                "2",
+            )
+        finally:
+            thread.join()
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("epoch: iod=7 week=2200 tow=345600.123", result.stdout)
+        self.assertIn("nack: msg=0x09", result.stdout)
+        self.assertIn(
+            "summary: frames=2 valid=2 epoch=1 raw=0 rawx=0 ack=0 nack=1 checksum_errors=0",
+            result.stdout,
+        )
+
+    @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
+    def test_binex_info_reads_records_from_serial_device(self) -> None:
+        master_fd, slave_fd = pty.openpty()
+        try:
+            slave_path = os.ttyname(slave_fd)
+        finally:
+            os.close(slave_fd)
+
+        payload = build_binex_metadata_frame() + build_binex_proto_frame()
+
+        def writer() -> None:
+            time.sleep(0.20)
+            os.write(master_fd, payload)
+            time.sleep(0.1)
+            os.close(master_fd)
+
+        thread = threading.Thread(target=writer)
+        thread.start()
+        try:
+            result = self.run_gnss(
+                "binex-info",
+                "--input",
+                f"serial://{slave_path}?baud=115200",
+                "--decode-metadata",
+                "--decode-proto",
+                "--limit",
+                "2",
+            )
+        finally:
+            thread.join()
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("metadata: subrecord=0x08 payload_bytes=4", result.stdout)
+        self.assertIn("proto: subrecord=0x05 payload_bytes=4", result.stdout)
+        self.assertIn(
+            "summary: frames=2 valid=2 metadata=1 nav=0 proto=1 checksum_errors=0",
+            result.stdout,
+        )
+
+    @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
+    def test_qzss_l6_info_reads_frames_from_serial_device(self) -> None:
+        master_fd, slave_fd = pty.openpty()
+        try:
+            slave_path = os.ttyname(slave_fd)
+        finally:
+            os.close(slave_fd)
+
+        payload = (
+            build_qzss_l6_frame(
+                prn=199,
+                facility_id=1,
+                subframe_start=True,
+                data_part=b"L6-SERIAL-ONE",
+            )
+            + build_qzss_l6_frame(
+                prn=201,
+                facility_id=3,
+                subframe_start=False,
+                data_part=b"L6-SERIAL-TWO",
+            )
+        )
+
+        def writer() -> None:
+            time.sleep(0.20)
+            os.write(master_fd, payload)
+            time.sleep(0.1)
+            os.close(master_fd)
+
+        thread = threading.Thread(target=writer)
+        thread.start()
+        try:
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                f"serial://{slave_path}?baud=115200",
+                "--limit",
+                "2",
+                "--show-preview",
+            )
+        finally:
+            thread.join()
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("l6_frame: index=1 prn=199 vendor=5 facility=Hitachi-Ota", result.stdout)
+        self.assertIn("preview=L6-SERIAL-ONE", result.stdout)
+        self.assertIn("l6_frame: index=2 prn=201 vendor=5 facility=Kobe", result.stdout)
+        self.assertIn(
+            "summary: frames=2 valid=2 clas_vendor=2 subframe_starts=1 alerts=0 subframes=0 prns=199,201",
+            result.stdout,
+        )
 
     @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
     def test_convert_reads_mixed_rawx_from_serial_device(self) -> None:
@@ -1440,6 +6423,108 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertIn("receiver not running", result.stdout)
 
+    def test_rcv_status_includes_log_tail_and_restart_countdown(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_rcv_status_tail_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            status_path = temp_root / "receiver_status.json"
+            log_path = temp_root / "receiver.log"
+            now = time.time()
+            next_restart_at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(now + 3.0))
+            log_path.write_text(
+                "line one\nline two\nsummary: messages=5 written_solutions=3\n",
+                encoding="utf-8",
+            )
+            status_path.write_text(
+                json.dumps(
+                    {
+                        "state": "restarting",
+                        "pid": 999999,
+                        "config_path": str(temp_root / "receiver.conf"),
+                        "started_at": "2026-03-26T00:00:00+00:00",
+                        "log_path": str(log_path),
+                        "restart_count": 2,
+                        "next_restart_at": next_restart_at,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_gnss(
+                "rcv",
+                "status",
+                "--status-out",
+                str(status_path),
+                "--tail-log-lines",
+                "2",
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertFalse(payload["pid_running"])
+            self.assertTrue(payload["log_exists"])
+            self.assertEqual(payload["log_tail"], ["line two", "summary: messages=5 written_solutions=3"])
+            self.assertEqual(payload["restart_count"], 2)
+            self.assertGreaterEqual(payload["next_restart_in_seconds"], 0.0)
+            self.assertLessEqual(payload["next_restart_in_seconds"], 5.0)
+
+    def test_rcv_console_accepts_scripted_status_commands(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_rcv_console_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            config_path = temp_root / "receiver.conf"
+            status_path = temp_root / "receiver_status.json"
+            log_path = temp_root / "receiver.log"
+            output_path = temp_root / "receiver.pos"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        f"rover_rtcm={temp_root / 'missing_rover.rtcm3'}",
+                        f"base_rtcm={temp_root / 'missing_base.rtcm3'}",
+                        f"out={output_path}",
+                        "max_epochs=1",
+                        "quiet=true",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            log_path.write_text("line one\nsummary: messages=5 written_solutions=3\n", encoding="utf-8")
+            status_path.write_text(
+                json.dumps(
+                    {
+                        "state": "completed",
+                        "pid": 999999,
+                        "config_path": str(config_path),
+                        "log_path": str(log_path),
+                        "command": ["gnss_live", "--quiet"],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(DISPATCHER),
+                    "rcv",
+                    "console",
+                    "--config",
+                    str(config_path),
+                    "--status-out",
+                    str(status_path),
+                ],
+                cwd=ROOT_DIR,
+                text=True,
+                input="show-config\ntail 1\nquit\n",
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn('"config_path":', result.stdout)
+            self.assertIn('"log_tail": [', result.stdout)
+            self.assertIn("summary: messages=5 written_solutions=3", result.stdout)
+
     def test_rcv_restart_without_existing_status_behaves_like_start(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_rcv_restart_test_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -1473,6 +6558,86 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(restart_result.returncode, 0, msg=restart_result.stderr)
             launched = json.loads(restart_result.stdout)
             self.assertEqual(launched["state"], "starting")
+            self.assertEqual(launched["status_path"], str(status_path))
+
+    def test_rcv_reload_without_existing_status_behaves_like_start(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_rcv_reload_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            config_path = temp_root / "receiver.conf"
+            status_path = temp_root / "receiver_status.json"
+            output_path = temp_root / "receiver.pos"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        f"rover_rtcm={temp_root / 'missing_rover.rtcm3'}",
+                        f"base_rtcm={temp_root / 'missing_base.rtcm3'}",
+                        f"out={output_path}",
+                        "max_epochs=1",
+                        "quiet=true",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            reload_result = self.run_gnss(
+                "rcv",
+                "reload",
+                "--config",
+                str(config_path),
+                "--status-out",
+                str(status_path),
+                "--wait-seconds",
+                "0.1",
+            )
+            self.assertEqual(reload_result.returncode, 0, msg=reload_result.stderr)
+            launched = json.loads(reload_result.stdout)
+            self.assertEqual(launched["state"], "starting")
+            self.assertEqual(launched["status_path"], str(status_path))
+
+    def test_rcv_reload_resolves_config_from_existing_status(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_rcv_reload_managed_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            config_path = temp_root / "receiver.conf"
+            status_path = temp_root / "receiver_status.json"
+            output_path = temp_root / "receiver.pos"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        f"rover_rtcm={temp_root / 'missing_rover.rtcm3'}",
+                        f"base_rtcm={temp_root / 'missing_base.rtcm3'}",
+                        f"out={output_path}",
+                        "max_epochs=1",
+                        "quiet=true",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            status_path.write_text(
+                json.dumps(
+                    {
+                        "state": "completed",
+                        "pid": 999999,
+                        "config_path": str(config_path),
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            reload_result = self.run_gnss(
+                "rcv",
+                "reload",
+                "--status-out",
+                str(status_path),
+                "--wait-seconds",
+                "0.1",
+            )
+            self.assertEqual(reload_result.returncode, 0, msg=reload_result.stderr)
+            launched = json.loads(reload_result.stdout)
+            self.assertEqual(launched["state"], "starting")
+            self.assertEqual(launched["config_path"], str(config_path))
             self.assertEqual(launched["status_path"], str(status_path))
 
 

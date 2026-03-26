@@ -11,6 +11,7 @@ if(GTest_FOUND)
         test_types.cpp
         test_observation.cpp
         test_gnss_live.cpp
+        test_ppp.cpp
         test_rinex_writer.cpp
         test_rtk_legacy.cpp
         test_spp.cpp
@@ -35,6 +36,7 @@ if(GTest_FOUND)
     add_dependencies(run_tests
         gnss_convert
         gnss_live
+        gnss_ppp
         gnss_replay
         gnss_rinex_info
         gnss_solve
@@ -52,6 +54,28 @@ if(GTest_FOUND)
         NAME python_cli_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_tools.py
     )
+    add_test(
+        NAME python_packaging_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_packaging.py
+    )
+    add_test(
+        NAME python_bindings_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_python_bindings.py
+    )
+    set_tests_properties(
+        python_bindings_tests
+        PROPERTIES ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python"
+    )
+    if(TARGET gnss_solution_node)
+        add_test(
+            NAME python_ros2_node_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ros2_node.py
+        )
+        set_tests_properties(
+            python_ros2_node_tests
+            PROPERTIES ENVIRONMENT "GNSSPP_BINARY_DIR=${CMAKE_BINARY_DIR}"
+        )
+    endif()
 
 else()
     message(WARNING "Google Test not found. Tests will not be built.")

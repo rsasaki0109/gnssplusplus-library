@@ -8,6 +8,7 @@ import datetime as dt
 import glob
 import json
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -21,6 +22,19 @@ EXE_SUFFIX = ".exe" if os.name == "nt" else ""
 BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 RUNNING_STATES = {"starting", "running", "restarting", "stopping"}
 TRUE_VALUES = {"1", "true", "yes", "on"}
+CONSOLE_COMMANDS = (
+    "status",
+    "tail",
+    "start",
+    "stop",
+    "restart",
+    "reload",
+    "show-config",
+    "show-command",
+    "help",
+    "quit",
+    "exit",
+)
 
 ALLOWED_KEYS = {
     "rover_rtcm",
@@ -250,6 +264,15 @@ def parse_config_int(config: dict[str, str], key: str, default: int) -> int:
         raise ValueError(f"config `{key}` must be an integer") from exc
 
 
+def read_log_tail(path: Path, max_lines: int) -> list[str]:
+    if max_lines <= 0 or not path.exists():
+        return []
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    if max_lines >= len(lines):
+        return lines
+    return lines[-max_lines:]
+
+
 def resolve_managed_config_path(raw_config: str | None, status_path: Path | None) -> Path:
     if raw_config is not None:
         return Path(raw_config)
@@ -288,7 +311,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "action",
         nargs="?",
-        choices=("run", "start", "status", "stop", "restart", "reload"),
+        choices=("run", "start", "status", "stop", "restart", "reload", "console"),
         default="run",
         help="Receiver action. Defaults to `run` for backward compatibility.",
     )
@@ -325,6 +348,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=0.2,
         help="Polling interval in seconds for `status --wait-seconds`.",
     )
+    parser.add_argument(
+        "--tail-log-lines",
+        type=int,
+        default=0,
+        help="For `status`, include the last N log lines from `log_path` in the JSON output.",
+    )
     return parser
 
 
@@ -359,6 +388,13 @@ def build_run_payload(
     if log_path is not None:
         payload["log_path"] = str(log_path)
     return payload
+
+
+def clone_args(args: argparse.Namespace, action: str, **overrides: object) -> argparse.Namespace:
+    payload = vars(args).copy()
+    payload["action"] = action
+    payload.update(overrides)
+    return argparse.Namespace(**payload)
 
 
 def write_runtime_status(
@@ -672,18 +708,25 @@ def status_receiver(args: argparse.Namespace) -> int:
             0.0,
             (reference_time - started_at).total_seconds(),
         )
+    next_restart_at = parse_timestamp(payload.get("next_restart_at"))
+    if next_restart_at is not None:
+        payload["next_restart_in_seconds"] = max(
+            0.0,
+            (next_restart_at - dt.datetime.now(dt.timezone.utc)).total_seconds(),
+        )
+    log_path_value = payload.get("log_path")
+    if isinstance(log_path_value, str) and log_path_value:
+        log_path = Path(log_path_value)
+        payload["log_exists"] = log_path.exists()
+        if log_path.exists():
+            payload["log_size_bytes"] = log_path.stat().st_size
+            if args.tail_log_lines > 0:
+                payload["log_tail"] = read_log_tail(log_path, args.tail_log_lines)
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
 
 
-def stop_receiver(args: argparse.Namespace) -> int:
-    config_path = Path(args.config) if args.config else None
-    status_path = resolve_status_path(config_path, args.status_out)
-    if status_path is None:
-        raise ValueError("`--status-out` or `--config` is required for `stop`")
-    if not status_path.exists():
-        raise FileNotFoundError(f"status file not found: {status_path}")
-
+def stop_receiver_at_status_path(status_path: Path, emit_output: bool = True) -> int:
     payload = read_status(status_path)
     pid = int(payload.get("pid", 0) or 0)
     if not process_is_running(pid):
@@ -693,7 +736,8 @@ def stop_receiver(args: argparse.Namespace) -> int:
             payload["finished_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
             payload["returncode"] = int(payload.get("returncode", 0) or 0)
             write_status(status_path, payload)
-        print("receiver not running")
+        if emit_output:
+            print("receiver not running")
         return 0
 
     os.kill(pid, signal.SIGTERM)
@@ -708,10 +752,22 @@ def stop_receiver(args: argparse.Namespace) -> int:
         reloaded["state"] = "stopping"
         reloaded["stop_requested_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
         write_status(status_path, reloaded)
-        print(f"sent SIGTERM to receiver pid {pid}")
+        if emit_output:
+            print(f"sent SIGTERM to receiver pid {pid}")
     else:
-        print(f"stopped receiver pid {pid}")
+        if emit_output:
+            print(f"stopped receiver pid {pid}")
     return 0
+
+
+def stop_receiver(args: argparse.Namespace) -> int:
+    config_path = Path(args.config) if args.config else None
+    status_path = resolve_status_path(config_path, args.status_out)
+    if status_path is None:
+        raise ValueError("`--status-out` or `--config` is required for `stop`")
+    if not status_path.exists():
+        raise FileNotFoundError(f"status file not found: {status_path}")
+    return stop_receiver_at_status_path(status_path, emit_output=True)
 
 
 def restart_receiver(args: argparse.Namespace) -> int:
@@ -737,7 +793,7 @@ def restart_receiver(args: argparse.Namespace) -> int:
         return 0
 
     if status_path.exists():
-        stop_receiver(args)
+        stop_receiver_at_status_path(status_path, emit_output=False)
     if args.wait_seconds > 0.0:
         time.sleep(args.wait_seconds)
     return start_receiver(args)
@@ -750,6 +806,7 @@ def reload_receiver(args: argparse.Namespace) -> int:
     if status_path is None:
         raise ValueError("could not resolve status path")
     config, command = load_runtime(config_path, args.overrides)
+    log_path = resolve_log_path(config_path, args.log_out)
 
     resolved = {
         "action": "reload",
@@ -757,6 +814,7 @@ def reload_receiver(args: argparse.Namespace) -> int:
         "config": config,
         "command": command,
         "status_path": str(status_path),
+        "log_path": str(log_path) if log_path is not None else None,
         "wait_seconds": args.wait_seconds,
     }
     if args.dry_run:
@@ -764,11 +822,122 @@ def reload_receiver(args: argparse.Namespace) -> int:
         return 0
 
     if status_path.exists():
-        stop_receiver(args)
+        try:
+            existing = read_status(status_path)
+        except json.JSONDecodeError:
+            existing = {}
+        existing.update(
+            {
+                "state": "reloading",
+                "reload_requested_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "config_path": str(config_path),
+                "config": config,
+                "command": command,
+            }
+        )
+        if log_path is not None:
+            existing["log_path"] = str(log_path)
+        write_status(status_path, existing)
+        stop_receiver_at_status_path(status_path, emit_output=False)
     if args.wait_seconds > 0.0:
         time.sleep(args.wait_seconds)
     args.config = str(config_path)
     return start_receiver(args)
+
+
+def print_console_help() -> None:
+    print("commands: status | tail [N] | start | stop | restart | reload | show-config | show-command | help | quit")
+
+
+def console_receiver(args: argparse.Namespace) -> int:
+    if args.config is None and args.status_out is None:
+        raise ValueError("`console` requires `--config` or `--status-out`")
+
+    print_console_help()
+    prompt = "gnss-rcv> "
+    interactive = sys.stdin.isatty()
+
+    while True:
+        if interactive:
+            print(prompt, end="", flush=True)
+        line = sys.stdin.readline()
+        if not line:
+            return 0
+        command_line = line.strip()
+        if not command_line:
+            continue
+
+        try:
+            tokens = shlex.split(command_line)
+        except ValueError as exc:
+            print(f"error: {exc}")
+            continue
+        if not tokens:
+            continue
+
+        command = tokens[0].lower()
+        tail_lines = args.tail_log_lines
+        if command in {"quit", "exit"}:
+            return 0
+        if command == "help":
+            print_console_help()
+            continue
+
+        try:
+            if command == "status":
+                status_receiver(clone_args(args, "status"))
+                continue
+            if command == "tail":
+                if len(tokens) > 2:
+                    raise ValueError("usage: tail [line_count]")
+                if len(tokens) == 2:
+                    tail_lines = int(tokens[1])
+                status_receiver(clone_args(args, "status", tail_log_lines=tail_lines or 20))
+                continue
+            if command == "start":
+                start_receiver(clone_args(args, "start"))
+                continue
+            if command == "stop":
+                stop_receiver(clone_args(args, "stop"))
+                continue
+            if command == "restart":
+                restart_receiver(clone_args(args, "restart"))
+                continue
+            if command == "reload":
+                reload_receiver(clone_args(args, "reload"))
+                continue
+            if command == "show-config":
+                config_path = resolve_managed_config_path(args.config, resolve_status_path(
+                    Path(args.config) if args.config else None, args.status_out
+                ))
+                config = parse_config_file(config_path)
+                config = apply_overrides(config, args.overrides)
+                print(json.dumps({"config_path": str(config_path), "config": config}, indent=2, sort_keys=True))
+                continue
+            if command == "show-command":
+                config_path = resolve_managed_config_path(args.config, resolve_status_path(
+                    Path(args.config) if args.config else None, args.status_out
+                ))
+                config, command_payload = load_runtime(config_path, args.overrides)
+                print(
+                    json.dumps(
+                        build_run_payload(
+                            config_path,
+                            config,
+                            command_payload,
+                            resolve_status_path(config_path, args.status_out),
+                            resolve_log_path(config_path, args.log_out),
+                        ),
+                        indent=2,
+                        sort_keys=True,
+                    )
+                )
+                continue
+            raise ValueError(
+                f"unsupported console command `{command}`; available: {', '.join(CONSOLE_COMMANDS)}"
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"error: {exc}")
 
 
 def main() -> int:
@@ -788,6 +957,8 @@ def main() -> int:
             return restart_receiver(args)
         if args.action == "reload":
             return reload_receiver(args)
+        if args.action == "console":
+            return console_receiver(args)
         raise ValueError(f"unsupported action `{args.action}`")
     except (FileNotFoundError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
