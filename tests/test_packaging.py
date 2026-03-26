@@ -51,6 +51,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "lib" / "pkgconfig" / "libgnsspp.pc",
                 prefix / "tools" / "rtk_stats.py",
                 prefix / "scripts" / "generate_driving_comparison.py",
+                prefix / "scripts" / "generate_odaiba_social_card.py",
                 prefix / "configs" / "live.example.conf",
             ]
             ros2_binary = next((path for path in BUILD_DIR.rglob("gnss_solution_node") if path.is_file()), None)
