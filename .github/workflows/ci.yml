@@ -25,7 +25,7 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libeigen3-dev libgtest-dev cmake build-essential
+        sudo apt-get install -y libeigen3-dev libgtest-dev cmake build-essential python3-dev pybind11-dev
         if [ "${{ matrix.compiler }}" = "clang" ]; then
           sudo apt-get install -y clang
         fi
@@ -33,7 +33,7 @@ jobs:
     - name: Install dependencies (macOS)
       if: matrix.os == 'macos-latest'
       run: |
-        brew install eigen googletest cmake
+        brew install eigen googletest cmake pybind11 python
 
     - name: Configure CMake
       run: |
@@ -41,14 +41,14 @@ jobs:
           export CC=clang
           export CXX=clang++
         fi
-        cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_EXAMPLES=ON
+        cmake -B build -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
-      run: cmake --build build --config Release -j$(getconf _NPROCESSORS_ONLN)
+      run: cmake --build build --config Release --parallel
 
     - name: Run tests
       working-directory: build
-      run: ctest --output-on-failure || true
+      run: ctest --output-on-failure
 
   static-analysis:
     runs-on: ubuntu-latest
@@ -67,4 +67,4 @@ jobs:
           --suppress=unusedFunction \
           --suppress=unmatchedSuppression \
           -I include/ \
-          src/ || true
+          src/
