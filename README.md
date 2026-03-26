@@ -80,6 +80,7 @@ python3 apps/gnss.py --help
 ### UrbanNav Tokyo Odaiba
 
 Dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) (`2018-12-19`, Trimble rover/base, ~`170 m` baseline).
+Comparison baseline: [RTKLIB](https://github.com/tomojitakasu/RTKLIB).
 
 Current checked-in snapshot:
 
@@ -98,6 +99,7 @@ More artifacts:
 - [Full comparison figure](docs/driving_odaiba_comparison.png)
 - [Scorecard](docs/driving_odaiba_scorecard.png)
 - [Summary JSON](output/odaiba_summary.json)
+- Optional side-by-side PPP benchmark path: [JAXA-SNU/MALIB](https://github.com/JAXA-SNU/MALIB)
 
 ### Other checked sign-offs
 
