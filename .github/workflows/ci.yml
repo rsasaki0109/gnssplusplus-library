@@ -46,7 +46,11 @@ jobs:
           export CC=clang
           export CXX=clang++
         fi
-        cmake -B build -DCMAKE_BUILD_TYPE=Release
+        cmake_args="-B build -DCMAKE_BUILD_TYPE=Release"
+        if [ "${{ matrix.os }}" = "macos-latest" ]; then
+          cmake_args="$cmake_args -DPython3_EXECUTABLE=${GITHUB_WORKSPACE}/.venv/bin/python"
+        fi
+        cmake ${cmake_args}
 
     - name: Build
       run: cmake --build build --config Release --parallel
