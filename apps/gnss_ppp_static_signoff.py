@@ -13,7 +13,7 @@ import subprocess
 import sys
 import tempfile
 
-from gnss_runtime import resolve_gnss_command
+from gnss_runtime import ensure_input_exists, resolve_gnss_command
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -141,13 +141,6 @@ def parse_args() -> argparse.Namespace:
         help="Do not rerun MALIB if --malib-pos already exists.",
     )
     return parser.parse_args()
-
-
-def ensure_exists(path: Path | None, description: str) -> None:
-    if path is None:
-        return
-    if not path.exists():
-        raise SystemExit(f"Missing {description}: {path}")
 
 
 def run_command(command: list[str]) -> None:
@@ -397,13 +390,17 @@ def main() -> int:
     args = parse_args()
     gnss_command = resolve_gnss_command(ROOT_DIR)
 
-    ensure_exists(args.obs, "observation file")
-    ensure_exists(args.nav, "navigation file")
-    ensure_exists(args.sp3, "SP3 file")
-    ensure_exists(args.clk, "CLK file")
-    ensure_exists(args.malib_bin, "MALIB binary")
+    ensure_input_exists(args.obs, "observation file", ROOT_DIR)
+    if args.nav is not None:
+        ensure_input_exists(args.nav, "navigation file", ROOT_DIR)
+    if args.sp3 is not None:
+        ensure_input_exists(args.sp3, "SP3 file", ROOT_DIR)
+    if args.clk is not None:
+        ensure_input_exists(args.clk, "CLK file", ROOT_DIR)
     if args.malib_bin is not None:
-        ensure_exists(args.malib_config, "MALIB config")
+        ensure_input_exists(args.malib_bin, "MALIB binary", ROOT_DIR)
+    if args.malib_bin is not None:
+        ensure_input_exists(args.malib_config, "MALIB config", ROOT_DIR)
     if args.max_epochs == 0:
         raise SystemExit("--max-epochs must be positive or -1")
     if args.enable_ar and args.ar_ratio_threshold <= 0.0:

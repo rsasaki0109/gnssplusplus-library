@@ -12,7 +12,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from gnss_runtime import resolve_gnss_command
+from gnss_runtime import ensure_input_exists, resolve_gnss_command
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -149,11 +149,6 @@ def parse_args() -> argparse.Namespace:
         help="Disable the quasi-static low-dynamics profile.",
     )
     return parser.parse_args()
-
-
-def ensure_exists(path: Path, description: str) -> None:
-    if not path.exists():
-        raise SystemExit(f"Missing {description}: {path}")
 
 
 def run_command(command: list[str]) -> None:
@@ -453,12 +448,12 @@ def main() -> int:
     args = parse_args()
     gnss_command = resolve_gnss_command(ROOT_DIR)
 
-    ensure_exists(args.obs, "observation file")
-    ensure_exists(args.base, "base observation file")
-    ensure_exists(args.nav, "navigation file")
+    ensure_input_exists(args.obs, "observation file", ROOT_DIR)
+    ensure_input_exists(args.base, "base observation file", ROOT_DIR)
+    ensure_input_exists(args.nav, "navigation file", ROOT_DIR)
     if args.malib_bin is not None:
-        ensure_exists(args.malib_bin, "MALIB binary")
-        ensure_exists(args.malib_config, "MALIB config")
+        ensure_input_exists(args.malib_bin, "MALIB binary", ROOT_DIR)
+        ensure_input_exists(args.malib_config, "MALIB config", ROOT_DIR)
     if args.max_epochs == 0:
         raise SystemExit("--max-epochs must be positive or -1")
 
