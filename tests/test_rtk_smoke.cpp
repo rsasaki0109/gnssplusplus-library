@@ -2,6 +2,7 @@
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/io/rinex.hpp>
 
+#include <filesystem>
 #include <string>
 
 using namespace libgnss;
@@ -10,6 +11,10 @@ namespace {
 
 std::string sourcePath(const std::string& relative_path) {
     return std::string(GNSSPP_SOURCE_DIR) + "/" + relative_path;
+}
+
+bool sourcePathExists(const std::string& relative_path) {
+    return std::filesystem::exists(sourcePath(relative_path));
 }
 
 }  // namespace
@@ -25,6 +30,11 @@ protected:
     };
 
     void SetUp() override {
+        if (!sourcePathExists("data/rover_kinematic.obs") ||
+            !sourcePathExists("data/base_kinematic.obs") ||
+            !sourcePathExists("data/navigation_kinematic.nav")) {
+            GTEST_SKIP() << "repo kinematic test data is not available";
+        }
         ASSERT_TRUE(rover_reader_.open(sourcePath("data/rover_kinematic.obs")));
         ASSERT_TRUE(rover_reader_.readHeader(rover_header_));
         ASSERT_TRUE(base_reader_.open(sourcePath("data/base_kinematic.obs")));
@@ -206,6 +216,11 @@ TEST(RTKStateIndexTest, SeparatesIonoStatesFromAmbiguityStatesAndConstellations)
 }
 
 TEST(RTKMixedConstellationTest, UsesBeiDouOnOdaibaExactEpochWithoutLargeJump) {
+    if (!sourcePathExists("data/driving/Tokyo_Data/Odaiba/rover_trimble.obs") ||
+        !sourcePathExists("data/driving/Tokyo_Data/Odaiba/base_trimble.obs") ||
+        !sourcePathExists("data/driving/Tokyo_Data/Odaiba/base.nav")) {
+        GTEST_SKIP() << "repo Odaiba test data is not available";
+    }
     io::RINEXReader rover_reader;
     io::RINEXReader base_reader;
     io::RINEXReader nav_reader;
@@ -251,6 +266,11 @@ TEST(RTKMixedConstellationTest, UsesBeiDouOnOdaibaExactEpochWithoutLargeJump) {
 }
 
 TEST(RTKMixedConstellationTest, UsesGlonassOnOdaibaExactEpochWithoutLargeJump) {
+    if (!sourcePathExists("data/driving/Tokyo_Data/Odaiba/rover_trimble.obs") ||
+        !sourcePathExists("data/driving/Tokyo_Data/Odaiba/base_trimble.obs") ||
+        !sourcePathExists("data/driving/Tokyo_Data/Odaiba/base.nav")) {
+        GTEST_SKIP() << "repo Odaiba test data is not available";
+    }
     io::RINEXReader rover_reader;
     io::RINEXReader base_reader;
     io::RINEXReader nav_reader;
@@ -296,6 +316,10 @@ TEST(RTKMixedConstellationTest, UsesGlonassOnOdaibaExactEpochWithoutLargeJump) {
 }
 
 TEST(RTKMixedConstellationTest, SPPSeedHonorsGlonassSwitch) {
+    if (!sourcePathExists("data/driving/Tokyo_Data/Odaiba/rover_trimble.obs") ||
+        !sourcePathExists("data/driving/Tokyo_Data/Odaiba/base.nav")) {
+        GTEST_SKIP() << "repo Odaiba test data is not available";
+    }
     io::RINEXReader rover_reader;
     io::RINEXReader nav_reader;
     io::RINEXReader::RINEXHeader rover_header;

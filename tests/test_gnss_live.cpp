@@ -24,6 +24,10 @@ using namespace libgnss;
 
 namespace {
 
+bool sourcePathExists(const std::filesystem::path& root, const std::string& relative_path) {
+    return std::filesystem::exists(root / relative_path);
+}
+
 uint32_t crc24q(const uint8_t* data, size_t length) {
     static const uint32_t table[256] = {
         0x000000, 0x864CFB, 0x8AD50D, 0x0C99F6, 0x93E6E1, 0x15AA1A, 0x1933EC, 0x9F7F17,
@@ -388,6 +392,11 @@ TEST(GNSSLiveTest, InterpolatesBaseEpochAndUsesInlineBaseMetadata) {
     namespace fs = std::filesystem;
 
     const fs::path source_dir = GNSSPP_SOURCE_DIR;
+    if (!sourcePathExists(source_dir, "data/driving/base.obs") ||
+        !sourcePathExists(source_dir, "data/driving/rover.obs") ||
+        !sourcePathExists(source_dir, "data/driving/navigation.nav")) {
+        GTEST_SKIP() << "repo driving test data is not available";
+    }
     const fs::path binary_dir = GNSSPP_BINARY_DIR;
     const fs::path live_binary = binary_dir / "apps" / "gnss_live";
     ASSERT_TRUE(fs::exists(live_binary));
@@ -498,6 +507,11 @@ TEST(GNSSLiveTest, HoldsRecentBaseEpochWhenFutureBaseHasNotArrivedYet) {
     namespace fs = std::filesystem;
 
     const fs::path source_dir = GNSSPP_SOURCE_DIR;
+    if (!sourcePathExists(source_dir, "data/driving/base.obs") ||
+        !sourcePathExists(source_dir, "data/driving/rover.obs") ||
+        !sourcePathExists(source_dir, "data/driving/navigation.nav")) {
+        GTEST_SKIP() << "repo driving test data is not available";
+    }
     const fs::path binary_dir = GNSSPP_BINARY_DIR;
     const fs::path live_binary = binary_dir / "apps" / "gnss_live";
     ASSERT_TRUE(fs::exists(live_binary));
@@ -597,6 +611,11 @@ TEST(GNSSLiveTest, SolvesAgainstBaseRtcmWithRoverUbxFile) {
     namespace fs = std::filesystem;
 
     const fs::path source_dir = GNSSPP_SOURCE_DIR;
+    if (!sourcePathExists(source_dir, "data/driving/base.obs") ||
+        !sourcePathExists(source_dir, "data/driving/rover.obs") ||
+        !sourcePathExists(source_dir, "data/driving/navigation.nav")) {
+        GTEST_SKIP() << "repo driving test data is not available";
+    }
     const fs::path binary_dir = GNSSPP_BINARY_DIR;
     const fs::path live_binary = binary_dir / "apps" / "gnss_live";
     ASSERT_TRUE(fs::exists(live_binary));
@@ -674,6 +693,11 @@ TEST(GNSSLiveTest, SolvesAgainstBaseRtcmWithRoverUbxSerialDevice) {
     namespace fs = std::filesystem;
 
     const fs::path source_dir = GNSSPP_SOURCE_DIR;
+    if (!sourcePathExists(source_dir, "data/driving/base.obs") ||
+        !sourcePathExists(source_dir, "data/driving/rover.obs") ||
+        !sourcePathExists(source_dir, "data/driving/navigation.nav")) {
+        GTEST_SKIP() << "repo driving test data is not available";
+    }
     const fs::path binary_dir = GNSSPP_BINARY_DIR;
     const fs::path live_binary = binary_dir / "apps" / "gnss_live";
     ASSERT_TRUE(fs::exists(live_binary));
@@ -754,6 +778,11 @@ TEST(GNSSLiveTest, SolvesAgainstBaseRtcmSerialDeviceWithRoverUbxFile) {
     namespace fs = std::filesystem;
 
     const fs::path source_dir = GNSSPP_SOURCE_DIR;
+    if (!sourcePathExists(source_dir, "data/driving/base.obs") ||
+        !sourcePathExists(source_dir, "data/driving/rover.obs") ||
+        !sourcePathExists(source_dir, "data/driving/navigation.nav")) {
+        GTEST_SKIP() << "repo driving test data is not available";
+    }
     const fs::path binary_dir = GNSSPP_BINARY_DIR;
     const fs::path live_binary = binary_dir / "apps" / "gnss_live";
     ASSERT_TRUE(fs::exists(live_binary));

@@ -13,7 +13,28 @@ import libgnsspp
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
+def repo_data_exists(*relative_paths: str) -> bool:
+    return all((ROOT_DIR / relative_path).exists() for relative_path in relative_paths)
+
+
 class PythonBindingsSmokeTest(unittest.TestCase):
+    def setUp(self) -> None:
+        method = self._testMethodName
+        if method in {
+            "test_read_rinex_header_returns_expected_fields",
+            "test_read_rinex_observation_epochs_returns_epoch_summaries",
+            "test_solve_spp_file_returns_valid_solution_records",
+            "test_solve_ppp_file_returns_valid_solution_records",
+        } and not repo_data_exists("data/rover_static.obs", "data/navigation_static.nav"):
+            self.skipTest("repo static test data is not available")
+
+        if method == "test_solve_rtk_file_returns_short_baseline_solution_records" and not repo_data_exists(
+            "data/short_baseline/TSK200JPN_R_20240010000_01D_30S_MO.rnx",
+            "data/short_baseline/TSKB00JPN_R_20240010000_01D_30S_MO.rnx",
+            "data/short_baseline/BRDC00IGS_R_20240010000_01D_MN.rnx",
+        ):
+            self.skipTest("repo short-baseline test data is not available")
+
     def test_read_rinex_header_returns_expected_fields(self) -> None:
         header = libgnsspp.read_rinex_header(str(ROOT_DIR / "data" / "rover_static.obs"))
         self.assertGreaterEqual(header["version"], 2.0)

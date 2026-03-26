@@ -66,6 +66,7 @@ python3 apps/gnss.py ppp \
 | `gnss rtk-kinematic-signoff` | Kinematic RTK sign-off |
 | `gnss ppp-static-signoff` | Static PPP sign-off |
 | `gnss ppp-kinematic-signoff` | Kinematic PPP sign-off |
+| `gnss ppc-demo` | External PPC-Dataset RTK/PPP verification against `reference.csv` |
 | `gnss odaiba-benchmark` | End-to-end Odaiba benchmark pipeline |
 
 See all commands:
@@ -105,6 +106,21 @@ More artifacts:
 - Static PPP
 - Kinematic PPP
 - CLAS-style PPP from compact sampled SSR and raw QZSS L6
+
+### External dataset demo
+
+`PPC-Dataset` can be verified directly from an extracted dataset tree:
+
+```bash
+python3 apps/gnss.py ppc-demo \
+  --dataset-root /datasets/PPC-Dataset \
+  --city tokyo \
+  --run run1 \
+  --solver rtk \
+  --summary-json output/ppc_tokyo_run1_rtk_summary.json
+```
+
+Dataset source: [taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset)
 
 ## Install And Package
 
