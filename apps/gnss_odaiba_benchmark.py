@@ -645,6 +645,10 @@ def main() -> int:
             str(args.reference_csv),
             "--output",
             str(args.social_card_png),
+            "--rtklib-2d",
+            str(driving_comparison.default_panel_output(args.comparison_png, "rtklib_2d")),
+            "--lib-2d",
+            str(driving_comparison.default_panel_output(args.comparison_png, "libgnss_2d")),
             "--title",
             args.social_card_title,
         ]

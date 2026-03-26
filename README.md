@@ -1,42 +1,37 @@
 # libgnss++ — Modern C++ GNSS/RTK/PPP/CLAS Toolkit
 
-<p align="center">
-  Self-contained GNSS positioning stack in modern C++17.<br>
-  <strong>RTK, PPP, RTCM, UBX, CLAS/MADOCA, direct QZSS L6, Python bindings, and ROS2 playback</strong><br>
-  without an RTKLIB runtime dependency.
-</p>
+Modern C++17 GNSS toolkit with native `SPP`, `RTK`, `PPP`, `CLAS/MADOCA`, `RTCM`, `UBX`, and direct `QZSS L6` support.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/C%2B%2B-17-00599C?logo=c%2B%2B&logoColor=white" alt="C++17">
-  <img src="https://img.shields.io/badge/CMake-3.14%2B-064F8C?logo=cmake&logoColor=white" alt="CMake">
-  <img src="https://img.shields.io/badge/Runtime-RTKLIB--free-1F6FEB" alt="No RTKLIB runtime dependency">
-  <img src="https://img.shields.io/badge/Python-bindings-3776AB?logo=python&logoColor=white" alt="Python bindings">
-  <img src="https://img.shields.io/badge/ROS2-playback-22314E" alt="ROS2 playback">
-  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT license">
-</p>
+The goal is simple: ship a usable non-GUI GNSS stack without depending on an external RTKLIB runtime.
 
-<p align="center">
-  If this repo saves you time shipping GNSS tooling without dragging in a second runtime stack, consider starring it.
-</p>
+If this repo saves you time, consider starring it.
 
 ![Twitter-ready UrbanNav Odaiba social card](docs/driving_odaiba_social_card.png)
 
-## Why This Repo Exists
+## Why It Exists
 
-- **One native stack**: RTK, PPP, CLAS, RTCM, UBX, and direct QZSS L6 live in one codebase instead of a wrapper around external binaries.
-- **Deployable non-GUI tooling**: `gnss spp`, `solve`, `ppp`, `stream`, `convert`, `live`, `rcv`, sign-off scripts, and benchmark pipelines are all first-class.
-- **Open-data evidence**: the repo carries checked-in benchmark assets, summary JSONs, and sign-off scripts instead of hand-wavy claims.
-- **Developer-facing ergonomics**: CMake package export, `pkg-config`, Python bindings, ROS2 playback, and install-time dogfooding are in-tree.
+- One native stack for `RTK`, `PPP`, `CLAS`, `RTCM`, `UBX`, and `QZSS L6`
+- First-class non-GUI tooling: `gnss spp`, `solve`, `ppp`, `stream`, `convert`, `live`, `rcv`
+- Checked-in benchmark artifacts and sign-off scripts instead of vague claims
+- CMake install/export, Python bindings, and ROS2 playback in-tree
 
-## At A Glance
+### UrbanNav Tokyo Odaiba
 
-| What you get | Current state |
+Open driving dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) (`2018-12-19`, Trimble rover/base, ~`170 m` baseline).
+
+Current checked-in Odaiba snapshot:
+- **All matched epochs**: libgnss++ leads on matched-epoch count (`11637 vs 8241`), fix rate (`8.11% vs 7.22%`), p95 horizontal error (`7.58 m vs 27.88 m`), and max horizontal error (`61.82 m vs 82.87 m`).
+- **Common epochs only**: horizontal median is within `30 mm` of RTKLIB (`0.733 m vs 0.704 m`), median vertical error is slightly better (`0.571 m vs 0.575 m`), and p95 tail is much better (`5.94 m vs 27.67 m`).
+- **Machine-readable artifact**: the benchmark writes `output/odaiba_summary.json`.
+
+| RTKLIB 2D | libgnss++ 2D |
 |---|---|
-| Positioning engines | `SPP`, `RTK`, `PPP`, `CLAS/MADOCA-style PPP` |
-| Protocols and raw ingest | `RTCM`, `UBX`, `NMEA`, `NovAtel`, `SBP`, `SBF`, `Trimble`, `SkyTraq`, `BINEX`, `QZSS L6` |
-| Runtime interfaces | CLI suite, Python package, ROS2 playback node |
-| Packaging | `cmake --install`, CMake package export, `pkg-config`, `cpack` |
-| Verification | Unit tests, CLI regressions, benchmark scripts, installed-prefix dogfooding |
+| ![RTKLIB 2D trajectory](docs/driving_odaiba_comparison_rtklib_2d.png) | ![libgnss++ 2D trajectory](docs/driving_odaiba_comparison_libgnss_2d.png) |
+
+Additional checked-in artifacts:
+- [Detailed scorecard](docs/driving_odaiba_scorecard.png)
+- [Full comparison figure](docs/driving_odaiba_comparison.png)
+- [Summary JSON](output/odaiba_summary.json)
 
 ## Benchmark Snapshot
 
@@ -49,23 +44,6 @@ Tested on open datasets with dual-frequency observations.
 | **Long static** | 3.3 km | 52% | 60.8% | 104 mm | 14 mm* |
 
 \* The checked long-static RTKLIB output shows a large height offset relative to the RINEX header position; libgnss++ can stay much closer to the approximate header position on that sample.
-
-### UrbanNav Tokyo Odaiba
-
-Open driving dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) (`2018-12-19`, Trimble rover/base, ~`170 m` baseline).
-
-Current checked-in Odaiba snapshot:
-- **All matched epochs**: libgnss++ leads on matched-epoch count (`11637 vs 8241`), fix rate (`8.11% vs 7.22%`), p95 horizontal error (`7.58 m vs 27.88 m`), and max horizontal error (`61.82 m vs 82.87 m`).
-- **Common epochs only**: horizontal median is within `30 mm` of RTKLIB (`0.733 m vs 0.704 m`), median vertical error is slightly better (`0.571 m vs 0.575 m`), and p95 tail is much better (`5.94 m vs 27.67 m`).
-- **Machine-readable artifact**: the benchmark writes `output/odaiba_summary.json`.
-
-![Detailed Odaiba scorecard](docs/driving_odaiba_scorecard.png)
-
-![Urban driving comparison on UrbanNav Tokyo Odaiba](docs/driving_odaiba_comparison.png)
-
-| RTKLIB 2D | libgnss++ 2D |
-|---|---|
-| ![RTKLIB 2D trajectory](docs/driving_odaiba_comparison_rtklib_2d.png) | ![libgnss++ 2D trajectory](docs/driving_odaiba_comparison_libgnss_2d.png) |
 
 ### Kinematic Reference Comparison
 
