@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -25,9 +26,18 @@ std::string sourcePath(const std::string& relative_path) {
     return std::string(GNSSPP_SOURCE_DIR) + "/" + relative_path;
 }
 
+bool sourcePathExists(const std::string& relative_path) {
+    return std::filesystem::exists(sourcePath(relative_path));
+}
+
 class RTKLegacyCompatibilityTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        if (!sourcePathExists("data/rover_kinematic.obs") ||
+            !sourcePathExists("data/base_kinematic.obs") ||
+            !sourcePathExists("data/navigation_kinematic.nav")) {
+            GTEST_SKIP() << "repo kinematic test data is not available";
+        }
         ASSERT_TRUE(rover_reader_.open(sourcePath("data/rover_kinematic.obs")));
         ASSERT_TRUE(rover_reader_.readHeader(rover_header_));
         ASSERT_TRUE(base_reader_.open(sourcePath("data/base_kinematic.obs")));

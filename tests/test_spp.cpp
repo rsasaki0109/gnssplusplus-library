@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <cmath>
+#include <filesystem>
 #include <string>
 #include <vector>
 #include <set>
@@ -16,11 +17,19 @@ std::string sourcePath(const std::string& relative_path) {
     return std::string(GNSSPP_SOURCE_DIR) + "/" + relative_path;
 }
 
+bool sourcePathExists(const std::string& relative_path) {
+    return std::filesystem::exists(sourcePath(relative_path));
+}
+
 }  // namespace
 
 class SPPTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        if (!sourcePathExists("data/navigation_static.nav") ||
+            !sourcePathExists("data/rover_static.obs")) {
+            GTEST_SKIP() << "repo static test data is not available";
+        }
         processor_config_.elevation_mask = 15.0;
         processor_config_.snr_mask = 0.0;  // RINEX 2 sample data does not carry SNR.
         processor_config_.mode = PositioningMode::SPP;
@@ -412,6 +421,10 @@ TEST_F(SPPTest, UsesMultipleConstellationsOnOdaibaEpoch) {
 }
 
 TEST_F(SPPTest, BeiDouEnabledSPPStaysCloseOnOdaibaSequence) {
+    if (!sourcePathExists("data/driving/Tokyo_Data/Odaiba/base.nav") ||
+        !sourcePathExists("data/driving/Tokyo_Data/Odaiba/rover_trimble.obs")) {
+        GTEST_SKIP() << "repo Odaiba test data is not available";
+    }
     NavigationData mixed_nav;
     ASSERT_TRUE(loadOdaibaMixedNavigation(mixed_nav));
 
