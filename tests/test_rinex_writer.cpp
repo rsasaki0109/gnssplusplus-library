@@ -2,6 +2,7 @@
 #include <libgnss++/io/rinex.hpp>
 
 #include <filesystem>
+#include <fstream>
 
 using namespace libgnss;
 
@@ -310,6 +311,38 @@ TEST(RINEXWriterTest, WritesGalileoNavigationMessageReadableByReader) {
     EXPECT_NEAR(actual.tgd, expected.tgd, 1e-18);
     EXPECT_NEAR(actual.tgd_secondary, expected.tgd_secondary, 1e-18);
     EXPECT_EQ(actual.iodc, expected.iodc);
+
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXWriterTest, ReadsObservationAntennaHeaderFields) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex_obs_antenna_header_test.obs";
+    std::filesystem::remove(temp_path);
+
+    std::ofstream output(temp_path);
+    ASSERT_TRUE(output.is_open());
+    output << "     3.04           O                   M                   RINEX VERSION / TYPE\n";
+    output << "libgnss++           tests               20260327 000000 UTC PGM / RUN BY / DATE\n";
+    output << "     3875000.0000     3325000.0000     4975000.0000                  APPROX POSITION XYZ\n";
+    output << "12345               TEST-ANT                                ANT # / TYPE\n";
+    output << "        1.2340        0.1230       -0.4560                  ANTENNA: DELTA H/E/N\n";
+    output << "G    4 C1C L1C C2W L2W                                      SYS / # / OBS TYPES\n";
+    output << "                                                            END OF HEADER\n";
+    output.close();
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+
+    EXPECT_EQ(header.antenna_number, "12345");
+    EXPECT_EQ(header.antenna_type, "TEST-ANT");
+    EXPECT_NEAR(header.antenna_delta.x(), 0.1230, 1e-9);
+    EXPECT_NEAR(header.antenna_delta.y(), -0.4560, 1e-9);
+    EXPECT_NEAR(header.antenna_delta.z(), 1.2340, 1e-9);
 
     reader.close();
     std::filesystem::remove(temp_path);

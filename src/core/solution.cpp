@@ -187,6 +187,42 @@ bool Solution::writeNMEA(const std::string& filename) const {
     return true;
 }
 
+bool Solution::loadFromFile(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        return false;
+    }
+
+    solutions.clear();
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '%') {
+            continue;
+        }
+
+        std::istringstream iss(line);
+        PositionSolution sol;
+        double lat_deg = 0.0;
+        double lon_deg = 0.0;
+        int status = 0;
+
+        if (!(iss >> sol.time.week >> sol.time.tow
+                  >> sol.position_ecef(0) >> sol.position_ecef(1) >> sol.position_ecef(2)
+                  >> lat_deg >> lon_deg >> sol.position_geodetic.height
+                  >> status >> sol.num_satellites >> sol.pdop)) {
+            continue;
+        }
+
+        sol.position_geodetic.latitude = lat_deg * M_PI / 180.0;
+        sol.position_geodetic.longitude = lon_deg * M_PI / 180.0;
+        sol.status = static_cast<SolutionStatus>(status);
+        solutions.push_back(sol);
+    }
+
+    return !solutions.empty();
+}
+
 const PositionSolution* Solution::getSolution(const GNSSTime& time) const {
     for (const auto& sol : solutions) {
         if (sol.time == time) {
@@ -194,6 +230,17 @@ const PositionSolution* Solution::getSolution(const GNSSTime& time) const {
         }
     }
     return nullptr;
+}
+
+std::vector<PositionSolution> Solution::filterByStatus(SolutionStatus status) const {
+    std::vector<PositionSolution> filtered;
+    filtered.reserve(solutions.size());
+    for (const auto& sol : solutions) {
+        if (sol.status == status) {
+            filtered.push_back(sol);
+        }
+    }
+    return filtered;
 }
 
 void Solution::sortByTime() {

@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 #include <memory>
 #include "../core/observation.hpp"
 #include "../core/navigation.hpp"
@@ -32,6 +33,18 @@ enum class RTCMMessageType : uint16_t {
     RTCM_1019 = 1019,  ///< GPS ephemeris
     RTCM_1020 = 1020,  ///< GLONASS ephemeris
     RTCM_1033 = 1033,  ///< Receiver and antenna descriptors
+    RTCM_1057 = 1057,  ///< GPS SSR orbit correction
+    RTCM_1058 = 1058,  ///< GPS SSR clock correction
+    RTCM_1059 = 1059,  ///< GPS SSR code bias
+    RTCM_1060 = 1060,  ///< GPS SSR combined orbit/clock correction
+    RTCM_1061 = 1061,  ///< GPS SSR URA
+    RTCM_1062 = 1062,  ///< GPS SSR high-rate clock correction
+    RTCM_1063 = 1063,  ///< GLONASS SSR orbit correction
+    RTCM_1064 = 1064,  ///< GLONASS SSR clock correction
+    RTCM_1065 = 1065,  ///< GLONASS SSR code bias
+    RTCM_1066 = 1066,  ///< GLONASS SSR combined orbit/clock correction
+    RTCM_1067 = 1067,  ///< GLONASS SSR URA
+    RTCM_1068 = 1068,  ///< GLONASS SSR high-rate clock correction
     RTCM_1074 = 1074,  ///< GPS MSM4
     RTCM_1075 = 1075,  ///< GPS MSM5
     RTCM_1076 = 1076,  ///< GPS MSM6
@@ -44,6 +57,24 @@ enum class RTCMMessageType : uint16_t {
     RTCM_1095 = 1095,  ///< Galileo MSM5
     RTCM_1096 = 1096,  ///< Galileo MSM6
     RTCM_1097 = 1097,  ///< Galileo MSM7
+    RTCM_1240 = 1240,  ///< Galileo SSR orbit correction
+    RTCM_1241 = 1241,  ///< Galileo SSR clock correction
+    RTCM_1242 = 1242,  ///< Galileo SSR code bias
+    RTCM_1243 = 1243,  ///< Galileo SSR combined orbit/clock correction
+    RTCM_1244 = 1244,  ///< Galileo SSR URA
+    RTCM_1245 = 1245,  ///< Galileo SSR high-rate clock correction
+    RTCM_1246 = 1246,  ///< QZSS SSR orbit correction
+    RTCM_1247 = 1247,  ///< QZSS SSR clock correction
+    RTCM_1248 = 1248,  ///< QZSS SSR code bias
+    RTCM_1249 = 1249,  ///< QZSS SSR combined orbit/clock correction
+    RTCM_1250 = 1250,  ///< QZSS SSR URA
+    RTCM_1251 = 1251,  ///< QZSS SSR high-rate clock correction
+    RTCM_1258 = 1258,  ///< BeiDou SSR orbit correction
+    RTCM_1259 = 1259,  ///< BeiDou SSR clock correction
+    RTCM_1260 = 1260,  ///< BeiDou SSR code bias
+    RTCM_1261 = 1261,  ///< BeiDou SSR combined orbit/clock correction
+    RTCM_1262 = 1262,  ///< BeiDou SSR URA
+    RTCM_1263 = 1263,  ///< BeiDou SSR high-rate clock correction
     RTCM_1124 = 1124,  ///< BeiDou MSM4
     RTCM_1125 = 1125,  ///< BeiDou MSM5
     RTCM_1126 = 1126,  ///< BeiDou MSM6
@@ -63,6 +94,37 @@ struct RTCMMessage {
     RTCMMessage() = default;
     RTCMMessage(RTCMMessageType msg_type, const std::vector<uint8_t>& msg_data)
         : data(msg_data), type(msg_type), length(msg_data.size()) {}
+};
+
+/**
+ * @brief Decoded RTCM SSR orbit/clock correction
+ *
+ * Orbit fields are radial/along/cross-track deltas and rates in the RTCM SSR
+ * reference frame. Clock fields follow the RTCM SSR polynomial coefficients in
+ * meters, meters/second, and meters/second^2.
+ */
+struct RTCMSSRCorrection {
+    SatelliteId satellite;
+    GNSSTime time;
+    double update_interval_seconds = 0.0;
+    uint8_t issue_of_data = 0;
+    int provider_id = 0;
+    int solution_id = 0;
+    bool reference_datum = false;
+    int iode = -1;
+    int iodcrc = -1;
+    bool has_orbit = false;
+    bool has_clock = false;
+    bool has_code_bias = false;
+    bool has_ura = false;
+    bool has_high_rate_clock = false;
+    Vector3d orbit_delta_rac_m = Vector3d::Zero();
+    Vector3d orbit_rate_rac_mps = Vector3d::Zero();
+    Vector3d clock_delta_poly = Vector3d::Zero();
+    std::map<uint8_t, double> code_bias_m;
+    uint8_t ura_index = 63;
+    double ura_sigma_m = 0.0;
+    double high_rate_clock_m = 0.0;
 };
 
 /**
@@ -145,6 +207,12 @@ public:
      * @brief Decode an RTCM ephemeris payload into NavigationData
      */
     bool decodeNavigationData(const RTCMMessage& message, NavigationData& nav_data);
+
+    /**
+     * @brief Decode an RTCM SSR payload into orbit/clock corrections
+     */
+    bool decodeSSRCorrections(const RTCMMessage& message,
+                              std::vector<RTCMSSRCorrection>& corrections);
 
     /**
      * @brief Cache GLONASS frequency channel for later MSM decoding
@@ -269,6 +337,11 @@ namespace rtcm_utils {
      * @brief Check if message type is ephemeris message
      */
     bool isEphemerisMessage(RTCMMessageType type);
+
+    /**
+     * @brief Check if message type is an RTCM SSR correction message
+     */
+    bool isSSRMessage(RTCMMessageType type);
 
     /**
      * @brief Check if message type is station message

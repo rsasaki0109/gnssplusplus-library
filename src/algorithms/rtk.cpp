@@ -46,6 +46,10 @@ bool usesGlonassAutocal(const RTKProcessor::RTKConfig& config) {
            config.glonass_ar_mode == RTKProcessor::RTKConfig::GlonassARMode::AUTOCAL;
 }
 
+bool usesEstimatedIono(const RTKProcessor::RTKConfig& config) {
+    return config.ionoopt == RTKProcessor::RTKConfig::IonoOpt::EST;
+}
+
 bool isBeiDouGeoSatellite(const SatelliteId& sat) {
     if (sat.system != GNSSSystem::BeiDou) {
         return false;
@@ -184,6 +188,14 @@ double narrowLaneWavelength(double f1, double f2) {
     return c1 * (constants::SPEED_OF_LIGHT / f1) + c2 * (constants::SPEED_OF_LIGHT / f2);
 }
 
+double ionoFrequencyScale(int freq, double l1_frequency_hz, double current_frequency_hz) {
+    if (freq == 0 || l1_frequency_hz <= 0.0 || current_frequency_hz <= 0.0) {
+        return 1.0;
+    }
+    const double ratio = l1_frequency_hz / current_frequency_hz;
+    return ratio * ratio;
+}
+
 double glonassInterChannelBiasMeters(const RTKProcessor::RTKConfig& config,
                                      GNSSSystem ref_system,
                                      GNSSSystem sat_system,
@@ -254,7 +266,7 @@ PositionSolution RTKProcessor::processEpoch(const ObservationData& rover_obs, co
 void RTKProcessor::reset() {
     filter_initialized_ = false;
     filter_state_ = RTKState{};
-    filter_state_.next_state_idx = REAL_STATES;
+    filter_state_.next_state_idx = REAL_STATES + IONO_STATES;
     ambiguity_states_.clear();
     lock_count_l1_.clear();
     lock_count_l2_.clear();
@@ -348,7 +360,34 @@ int RTKProcessor::getOrCreateN2Index(const SatelliteId& sat, double initial_valu
     return idx;
 }
 
+int RTKProcessor::getOrCreateIonoIndex(const SatelliteId& sat, double initial_value) {
+    int idx = II(sat);
+    if (filter_state_.covariance(idx, idx) > 0.0) {
+        filter_state_.iono_indices[sat] = idx;
+        return idx;
+    }
+    filter_state_.iono_indices[sat] = idx;
+    // Keep the state active in the sparse Kalman path even if the initial iono estimate is near zero.
+    filter_state_.state(idx) = std::abs(initial_value) > 1e-6 ? initial_value : 1e-3;
+    for (int j = 0; j < NX; ++j) {
+        filter_state_.covariance(idx, j) = 0.0;
+        filter_state_.covariance(j, idx) = 0.0;
+    }
+    filter_state_.covariance(idx, idx) = 100.0;
+    return idx;
+}
+
 void RTKProcessor::removeSatelliteFromState(const SatelliteId& sat) {
+    auto it0 = filter_state_.iono_indices.find(sat);
+    if (it0 != filter_state_.iono_indices.end()) {
+        int idx = it0->second;
+        filter_state_.state(idx) = 0.0;
+        for (int j = 0; j < NX; ++j) {
+            filter_state_.covariance(idx, j) = 0.0;
+            filter_state_.covariance(j, idx) = 0.0;
+        }
+        filter_state_.iono_indices.erase(it0);
+    }
     auto it1 = filter_state_.n1_indices.find(sat);
     if (it1 != filter_state_.n1_indices.end()) {
         int idx = it1->second;
@@ -616,9 +655,10 @@ bool RTKProcessor::initializeFilter(const ObservationData& rover_obs,
     (void)base_obs;
     filter_state_.state = VectorXd::Zero(NX);
     filter_state_.covariance = MatrixXd::Zero(NX, NX);
+    filter_state_.iono_indices.clear();
     filter_state_.n1_indices.clear();
     filter_state_.n2_indices.clear();
-    filter_state_.next_state_idx = REAL_STATES;
+    filter_state_.next_state_idx = REAL_STATES + IONO_STATES;
 
     auto spp = spp_processor_.processEpoch(rover_obs, nav);
     Vector3d rover_pos;
@@ -715,6 +755,20 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
                     if (j != idx) { filter_state_.covariance(j, idx) = 0; filter_state_.covariance(idx, j) = 0; }
                 }
                 lock_counts[sat] = -rtk_config_.min_lock_count;
+                if (usesEstimatedIono(rtk_config_)) {
+                    auto iono_it = filter_state_.iono_indices.find(sat);
+                    if (iono_it != filter_state_.iono_indices.end()) {
+                        int iono_idx = iono_it->second;
+                        filter_state_.state(iono_idx) = 0.0;
+                        filter_state_.covariance(iono_idx, iono_idx) = 0.0;
+                        for (int j = 0; j < n; ++j) {
+                            if (j != iono_idx) {
+                                filter_state_.covariance(j, iono_idx) = 0.0;
+                                filter_state_.covariance(iono_idx, j) = 0.0;
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -770,6 +824,26 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
                 if (filter_state_.state(idx) != 0.0) {
                     filter_state_.covariance(idx, idx) += rtk_config_.process_noise_ambiguity;
                 }
+            }
+        }
+    }
+
+    if (usesEstimatedIono(rtk_config_)) {
+        for (const auto& [sat, sd] : sat_data) {
+            if (!sd.has_l1 || !sd.has_l2) continue;
+            if (sat.system == GNSSSystem::GLONASS) continue;
+            if (sd.l1_frequency_hz <= 0.0 || sd.l2_frequency_hz <= 0.0) continue;
+            const double gamma =
+                ionoFrequencyScale(1, sd.l1_frequency_hz, sd.l2_frequency_hz);
+            const double denom = gamma - 1.0;
+            if (!std::isfinite(denom) || std::abs(denom) < 1e-6) continue;
+            const double sd_p1 = sd.rover_l1_code - sd.base_l1_code;
+            const double sd_p2 = sd.rover_l2_code - sd.base_l2_code;
+            const double iono_l1_m = (sd_p2 - sd_p1) / denom;
+            const int idx = getOrCreateIonoIndex(sat, iono_l1_m);
+            if (filter_state_.covariance(idx, idx) > 0.0 &&
+                rtk_config_.process_noise_iono > 0.0) {
+                filter_state_.covariance(idx, idx) += rtk_config_.process_noise_iono;
             }
         }
     }
@@ -1240,6 +1314,20 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                 nb_vec.push_back(0);
                 return;
             }
+            const bool estimate_iono = usesEstimatedIono(rtk_config_);
+            const int ref_iono_idx =
+                estimate_iono ? II(ref_sat) : -1;
+            const double ref_iono_scale =
+                estimate_iono
+                    ? ionoFrequencyScale(
+                          freq,
+                          ref_sd.l1_frequency_hz,
+                          (freq == 0) ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz)
+                    : 0.0;
+            if (estimate_iono && filter_state_.covariance(ref_iono_idx, ref_iono_idx) <= 0.0) {
+                nb_vec.push_back(0);
+                return;
+            }
 
             int block_count = 0;
             for (const auto& [sat, sd] : sat_data) {
@@ -1252,12 +1340,28 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
 
                 const double sat_wavelength = (freq == 0) ? sd.l1_wavelength : sd.l2_wavelength;
                 if (sat_wavelength <= 0.0) continue;
+                const int sat_iono_idx = estimate_iono ? II(sat) : -1;
+                const double sat_iono_scale =
+                    estimate_iono
+                        ? ionoFrequencyScale(
+                              freq,
+                              sd.l1_frequency_hz,
+                              (freq == 0) ? sd.l1_frequency_hz : sd.l2_frequency_hz)
+                        : 0.0;
+                if (estimate_iono &&
+                    filter_state_.covariance(sat_iono_idx, sat_iono_idx) <= 0.0) {
+                    continue;
+                }
 
                 const double rr = geodist_range(sd.sat_pos, rover_pos) + tropModel(rover_pos, sd.elevation);
                 const double br = geodist_range(sd.sat_pos_base, base_position_) +
                                   tropModel(base_position_, sd.base_elevation);
                 const double geom_dd = (rr_ref - br_ref) - (rr - br);
                 const Vector3d dd_los = -los_ref + (sd.sat_pos - rover_pos).normalized();
+                const double ref_iono_state =
+                    estimate_iono ? filter_state_.state(ref_iono_idx) : 0.0;
+                const double sat_iono_state =
+                    estimate_iono ? filter_state_.state(sat_iono_idx) : 0.0;
 
                 if (is_phase) {
                     const double ref_phase = (freq == 0) ? ref_sd.rover_l1_phase - ref_sd.base_l1_phase
@@ -1285,20 +1389,36 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                     const double amb_term =
                         ref_wavelength * filter_state_.state(ref_state_it->second) -
                         sat_wavelength * filter_state_.state(sat_state_it->second);
+                    const double iono_term =
+                        estimate_iono ?
+                            (-ref_iono_scale * ref_iono_state + sat_iono_scale * sat_iono_state) :
+                            0.0;
                     z(oi) = ref_phase * ref_wavelength - sat_phase * sat_wavelength -
-                            geom_dd - amb_term - glonass_icb;
+                            geom_dd - amb_term - glonass_icb - iono_term;
                     if (autocal_glonass) {
                         z(oi) -= df_mhz * filter_state_.state(IL(freq));
                         H(oi, IL(freq)) = df_mhz;
                     }
                     H(oi, ref_state_it->second) = ref_wavelength;
                     H(oi, sat_state_it->second) = -sat_wavelength;
+                    if (estimate_iono) {
+                        H(oi, ref_iono_idx) = -ref_iono_scale;
+                        H(oi, sat_iono_idx) = sat_iono_scale;
+                    }
                 } else {
                     const double ref_code = (freq == 0) ? ref_sd.rover_l1_code - ref_sd.base_l1_code
                                                         : ref_sd.rover_l2_code - ref_sd.base_l2_code;
                     const double sat_code = (freq == 0) ? sd.rover_l1_code - sd.base_l1_code
                                                         : sd.rover_l2_code - sd.base_l2_code;
-                    z(oi) = (ref_code - sat_code) - geom_dd;
+                    const double iono_term =
+                        estimate_iono ?
+                            (ref_iono_scale * ref_iono_state - sat_iono_scale * sat_iono_state) :
+                            0.0;
+                    z(oi) = (ref_code - sat_code) - geom_dd - iono_term;
+                    if (estimate_iono) {
+                        H(oi, ref_iono_idx) = ref_iono_scale;
+                        H(oi, sat_iono_idx) = -sat_iono_scale;
+                    }
                 }
 
                 H(oi, 0) = dd_los(0);
@@ -1362,6 +1482,7 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
 // ============================================================
 bool RTKProcessor::resolveAmbiguities() {
     if (!filter_initialized_) return false;
+    if (usesEstimatedIono(rtk_config_)) return false;
 
     const auto& sat_data = current_sat_data_;
 
@@ -1371,6 +1492,7 @@ bool RTKProcessor::resolveAmbiguities() {
 
 bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     if (!filter_initialized_) return false;
+    if (usesEstimatedIono(rtk_config_)) return false;
 
     const auto& sat_data = current_sat_data_;
 
