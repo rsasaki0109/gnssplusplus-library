@@ -84,6 +84,7 @@ install(PROGRAMS
 install(PROGRAMS
     ${CMAKE_SOURCE_DIR}/scripts/convert_rtklib_pos.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_driving_comparison.py
+    ${CMAKE_SOURCE_DIR}/scripts/generate_feature_overview_card.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_odaiba_scorecard.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_odaiba_social_card.py
     DESTINATION scripts

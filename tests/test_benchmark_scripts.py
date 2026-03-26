@@ -27,6 +27,7 @@ import gnss_ppp_kinematic_signoff as ppp_kinematic_signoff  # noqa: E402
 import gnss_ppp_static_signoff as ppp_static_signoff  # noqa: E402
 import gnss_short_baseline_signoff as short_signoff  # noqa: E402
 import generate_driving_comparison as comparison  # noqa: E402
+import generate_feature_overview_card as feature_overview  # noqa: E402
 import generate_odaiba_scorecard as scorecard  # noqa: E402
 import generate_odaiba_social_card as social_card  # noqa: E402
 
@@ -318,6 +319,36 @@ class ScorecardRenderTest(unittest.TestCase):
 
             self.assertTrue(output_png.exists())
             self.assertGreater(output_png.stat().st_size, 0)
+            try:
+                from PIL import Image
+
+                with Image.open(output_png) as image:
+                    self.assertEqual(image.size, (1200, 630))
+            except ModuleNotFoundError:
+                pass
+
+    def test_feature_overview_card_main_renders_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_feature_card_test_") as temp_dir:
+            output_png = Path(temp_dir) / "feature_overview.png"
+
+            argv = [
+                "generate_feature_overview_card.py",
+                "--output",
+                str(output_png),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    feature_overview.main()
+
+            self.assertTrue(output_png.exists())
+            self.assertGreater(output_png.stat().st_size, 0)
+            try:
+                from PIL import Image
+
+                with Image.open(output_png) as image:
+                    self.assertEqual(image.size, (2240, 1376))
+            except ModuleNotFoundError:
+                pass
 
 
 class SegmentedBenchmarkTest(unittest.TestCase):

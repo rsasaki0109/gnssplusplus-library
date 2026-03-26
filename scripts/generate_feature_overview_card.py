@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import argparse
+import os
 from pathlib import Path
 import textwrap
 
@@ -60,7 +62,16 @@ def add_panel(ax, x: float, y: float, w: float, h: float, title: str, lines: lis
 def main() -> None:
     import matplotlib.pyplot as plt
 
-    output = Path(__file__).resolve().parents[1] / "docs" / "libgnsspp_feature_overview.png"
+    parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / "docs" / "libgnsspp_feature_overview.png",
+        help="Output path for the feature overview PNG.",
+    )
+    args = parser.parse_args()
+
+    output = args.output
 
     fig = plt.figure(figsize=(14, 8.6), dpi=160, facecolor=BG)
     ax = fig.add_axes([0, 0, 1, 1])

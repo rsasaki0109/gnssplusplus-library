@@ -51,6 +51,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "lib" / "pkgconfig" / "libgnsspp.pc",
                 prefix / "tools" / "rtk_stats.py",
                 prefix / "scripts" / "generate_driving_comparison.py",
+                prefix / "scripts" / "generate_feature_overview_card.py",
                 prefix / "scripts" / "generate_odaiba_social_card.py",
                 prefix / "configs" / "live.example.conf",
             ]
@@ -128,6 +129,40 @@ class PackagingSmokeTest(unittest.TestCase):
             )
             self.assertTrue(ppp_out.exists(), "installed PPP static signoff did not write .pos")
             self.assertTrue(ppp_summary.exists(), "installed PPP static signoff did not write summary")
+
+            social_card_png = prefix / "tmp_social_card.png"
+            subprocess.run(
+                [
+                    str(prefix / "bin" / "gnss"),
+                    "social-card",
+                    "--lib-pos",
+                    str(ROOT_DIR / "output" / "rtk_solution.pos"),
+                    "--rtklib-pos",
+                    str(ROOT_DIR / "output" / "driving_rtklib_rtk.pos"),
+                    "--reference-csv",
+                    str(ROOT_DIR / "data" / "driving" / "Tokyo_Data" / "Odaiba" / "reference.csv"),
+                    "--output",
+                    str(social_card_png),
+                ],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+            )
+            self.assertTrue(social_card_png.exists(), "installed social-card did not write PNG")
+
+            feature_overview_png = prefix / "tmp_feature_overview.png"
+            subprocess.run(
+                [
+                    "python3",
+                    str(prefix / "scripts" / "generate_feature_overview_card.py"),
+                    "--output",
+                    str(feature_overview_png),
+                ],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+            )
+            self.assertTrue(feature_overview_png.exists(), "installed feature overview generator did not write PNG")
 
 
 if __name__ == "__main__":
