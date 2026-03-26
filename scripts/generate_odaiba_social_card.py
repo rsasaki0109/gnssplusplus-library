@@ -32,10 +32,10 @@ PANEL = "#fffaf2"
 def draw_status_legend(ax) -> None:
     from matplotlib.patches import FancyBboxPatch
 
-    box_x = 0.62
-    box_y = 0.12
-    box_w = 0.33
-    box_h = 0.58
+    box_x = 0.58
+    box_y = 0.18
+    box_w = 0.38
+    box_h = 0.50
     panel = FancyBboxPatch(
         (box_x, box_y),
         box_w,
@@ -50,7 +50,7 @@ def draw_status_legend(ax) -> None:
 
     ax.text(
         box_x + 0.035,
-        box_y + box_h - 0.08,
+        box_y + box_h - 0.07,
         "Status legend",
         fontsize=12.0,
         color=MUTED,
@@ -59,8 +59,8 @@ def draw_status_legend(ax) -> None:
     )
 
     for index, status_name in enumerate(STATUS_ORDER):
-        x = box_x + 0.045 + index * 0.076
-        y = box_y + 0.15
+        x = box_x + 0.040 + index * 0.086
+        y = box_y + 0.13
         ax.scatter(
             [x],
             [y],
@@ -70,7 +70,7 @@ def draw_status_legend(ax) -> None:
             linewidths=0.9,
             zorder=3,
         )
-        ax.text(x + 0.018, y, status_name, fontsize=12.0, color=TEXT, va="center")
+        ax.text(x + 0.020, y, status_name, fontsize=12.0, color=TEXT, va="center")
 
 
 def draw_trajectory_panel(ax, title: str, reference_xy, matched, solver: str, edge_color: str, limits) -> None:
@@ -127,14 +127,14 @@ def main() -> None:
     limits = padded_xy_limits(ref_xy, matched_xy(rtklib_matched), matched_xy(lib_matched), min_pad=24.0)
 
     fig = plt.figure(figsize=(12, 6.3), dpi=100, facecolor=BG)
-    grid = fig.add_gridspec(2, 2, height_ratios=[0.25, 1.19], hspace=0.08, wspace=0.10)
+    grid = fig.add_gridspec(2, 2, height_ratios=[0.30, 1.14], hspace=0.06, wspace=0.10)
 
     ax_head = fig.add_subplot(grid[0, :])
     ax_head.set_axis_off()
     ax_head.set_xlim(0, 1)
     ax_head.set_ylim(0, 1)
-    ax_head.text(0.0, 0.86, args.title, fontsize=15, color=MUTED, weight="bold")
-    ax_head.text(0.0, 0.34, "libgnss++ vs RTKLIB", fontsize=29, color=TEXT, weight="bold")
+    ax_head.text(0.0, 0.90, args.title, fontsize=15, color=MUTED, weight="bold")
+    ax_head.text(0.0, 0.28, "libgnss++ vs RTKLIB", fontsize=29, color=TEXT, weight="bold")
     draw_status_legend(ax_head)
 
     ax_rtk = fig.add_subplot(grid[1, 0])
