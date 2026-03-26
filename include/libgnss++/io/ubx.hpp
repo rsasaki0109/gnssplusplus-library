@@ -39,6 +39,34 @@ struct UBXNavPVT {
     double vertical_accuracy_m = 0.0;
 };
 
+struct UBXSfrbx {
+    GNSSSystem system = GNSSSystem::UNKNOWN;
+    uint8_t sv_id = 0;
+    uint8_t frequency_id = 0;
+    uint8_t channel = 0;
+    uint8_t version = 0;
+    std::vector<uint32_t> words;
+};
+
+struct UBXSfrbxFrameInfo {
+    enum class Kind {
+        UNKNOWN,
+        GPS_LNAV,
+        QZSS_LNAV,
+        GAL_INAV,
+        BDS_D1,
+        BDS_D2,
+        GLO_NAV,
+        SBAS
+    };
+
+    Kind kind = Kind::UNKNOWN;
+    int frame_id = 0;
+    int page_id = 0;
+    bool has_page_id = false;
+    bool valid = false;
+};
+
 class UBXDecoder {
 public:
     struct UBXStats {
@@ -56,6 +84,7 @@ public:
 
     bool decodeNavPVT(const UBXMessage& message, UBXNavPVT& nav_pvt);
     bool decodeRawx(const UBXMessage& message, ObservationData& obs_data);
+    bool decodeSfrbx(const UBXMessage& message, UBXSfrbx& sfrbx);
 
     UBXStats getStats() const { return stats_; }
     bool hasLastNavPVT() const { return has_last_nav_pvt_; }
@@ -77,6 +106,8 @@ namespace ubx_utils {
 std::string getMessageName(uint8_t message_class, uint8_t message_id);
 GNSSSystem getSystemFromGnssId(uint8_t gnss_id);
 bool getSignalType(uint8_t gnss_id, uint8_t sig_id, SignalType& signal_type);
+bool decodeSfrbxFrameInfo(const UBXSfrbx& sfrbx, UBXSfrbxFrameInfo& frame_info);
+const char* getSfrbxFrameKindName(UBXSfrbxFrameInfo::Kind kind);
 
 }  // namespace ubx_utils
 
@@ -89,6 +120,8 @@ public:
         UBXNavPVT nav_pvt;
         bool has_observation = false;
         ObservationData observation;
+        bool has_sfrbx = false;
+        UBXSfrbx sfrbx;
     };
 
     UBXStreamDecoder() = default;
