@@ -185,6 +185,11 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_ppp_kinematic_signoff.py"),
         "summary": "Run the bundled kinematic PPP sign-off against an RTK reference and emit summary JSON.",
     },
+    "ppc-demo": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppc_demo.py"),
+        "summary": "Run an external PPC-Dataset Tokyo/Nagoya run through RTK or PPP and compare against reference.csv.",
+    },
     "clas-ppp": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_clas_ppp.py"),
@@ -262,6 +267,7 @@ def usage() -> str:
             "  python3 apps/gnss.py ppp-static-signoff --max-epochs 120 --require-valid-epochs-min 120 --require-mean-error-max 1.5 --require-max-error-max 1.5 --require-mean-sats-min 6.0 --require-ppp-solution-rate-min 100",
             "  python3 apps/gnss.py ppp-static-signoff --enable-ar --generate-products --ar-ratio-threshold 1.5 --require-mean-error-max 5.0 --require-max-error-max 6.0 --require-ppp-fixed-epochs-min 1 --require-ppp-solution-rate-min 100",
             "  python3 apps/gnss.py ppp-kinematic-signoff --max-epochs 120 --require-common-epoch-pairs-min 120 --require-reference-fix-rate-min 95 --require-mean-error-max 60 --require-p95-error-max 110 --require-max-error-max 115 --require-mean-sats-min 18 --require-ppp-solution-rate-min 100",
+            "  python3 apps/gnss.py ppc-demo --dataset-root /datasets/PPC-Dataset --city tokyo --run run1 --solver rtk --summary-json output/ppc_tokyo_run1_rtk_summary.json",
             "  python3 apps/gnss.py clas-ppp --profile madoca --obs data/rover_static.obs --nav data/navigation_static.nav --ssr-rtcm ntrip://caster/MOUNT --out output/madoca_ppp.pos --summary-json output/madoca_ppp_summary.json",
             "  python3 apps/gnss.py clas-ppp --profile clas --obs data/rover_static.obs --nav data/navigation_static.nav --compact-ssr corrections.compact.csv --out output/clas_ppp.pos --summary-json output/clas_ppp_summary.json",
             "  python3 apps/gnss.py clas-ppp --profile clas --obs data/rover_static.obs --nav data/navigation_static.nav --qzss-l6 logs/qzss_l6.bin --qzss-gps-week 2200 --out output/clas_l6.pos --summary-json output/clas_l6_summary.json",

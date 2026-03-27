@@ -26,9 +26,34 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 DISPATCHER = ROOT_DIR / "apps" / "gnss.py"
 SCRIPTS_DIR = ROOT_DIR / "scripts"
 
+STATIC_DATA_FILES = (
+    "data/rover_static.obs",
+    "data/navigation_static.nav",
+)
+SHORT_BASELINE_DATA_FILES = (
+    "data/short_baseline/TSK200JPN_R_20240010000_01D_30S_MO.rnx",
+    "data/short_baseline/TSKB00JPN_R_20240010000_01D_30S_MO.rnx",
+    "data/short_baseline/BRDC00IGS_R_20240010000_01D_MN.rnx",
+)
+KINEMATIC_DATA_FILES = (
+    "data/rover_kinematic.obs",
+    "data/base_kinematic.obs",
+    "data/navigation_kinematic.nav",
+)
+ODAIBA_DATA_FILES = (
+    "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+    "data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+    "data/driving/Tokyo_Data/Odaiba/base.nav",
+    "data/driving/Tokyo_Data/Odaiba/reference.csv",
+)
+
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import generate_driving_comparison as driving_comparison  # noqa: E402
+
+
+def repo_data_exists(*relative_paths: str) -> bool:
+    return all((ROOT_DIR / relative_path).exists() for relative_path in relative_paths)
 
 
 def crc24q(data: bytes) -> int:
@@ -2455,6 +2480,47 @@ def build_synthetic_ppp_inputs_with_grid_polynomial_atmos(
 
 
 class CLIToolsTest(unittest.TestCase):
+    STATIC_DATA_TESTS = {
+        "test_nav_products_cli_generates_sp3_and_clk_from_static_sample",
+        "test_ppp_cli_processes_real_static_sample_with_generated_products",
+        "test_ppp_cli_runs_real_static_slice_with_generated_products_and_ar_enabled",
+        "test_ppp_cli_accepts_ssr_corrections_csv",
+        "test_ppp_cli_accepts_rtcm_ssr_corrections",
+        "test_ppp_cli_accepts_ntrip_rtcm_ssr_corrections",
+        "test_clas_ppp_cli_writes_summary_for_named_profile",
+        "test_clas_ppp_cli_accepts_compact_sampled_corrections",
+        "test_clas_ppp_cli_accepts_direct_qzss_l6_corrections",
+        "test_clas_ppp_cli_accepts_direct_qzss_l6_orbit_clock_corrections",
+        "test_clas_ppp_cli_accepts_direct_qzss_l6_code_bias_and_ura",
+        "test_clas_ppp_cli_accepts_direct_qzss_l6_with_atmos_inventory",
+        "test_clas_ppp_cli_accepts_direct_qzss_l6_with_stec_inventory",
+        "test_clas_ppp_cli_accepts_direct_qzss_l6_gridded_corrections",
+        "test_clas_ppp_cli_accepts_direct_qzss_l6_code_phase_bias",
+    }
+    SHORT_BASELINE_DATA_TESTS = {
+        "test_solve_short_baseline_cli_reaches_fixed_solution",
+        "test_short_baseline_signoff_cli_writes_summary_and_passes_thresholds",
+    }
+    KINEMATIC_DATA_TESTS = {
+        "test_solve_cli_supports_estimated_iono_mode",
+        "test_rtk_kinematic_signoff_cli_writes_summary_and_passes_thresholds",
+        "test_ppp_kinematic_signoff_cli_writes_summary_and_passes_thresholds",
+    }
+    ODAIBA_DATA_TESTS = {
+        "test_solve_odaiba_slice_uses_glonass_and_beidou_in_rtk",
+    }
+
+    def setUp(self) -> None:
+        name = self._testMethodName
+        if name in self.STATIC_DATA_TESTS and not repo_data_exists(*STATIC_DATA_FILES):
+            self.skipTest("repo static test data is not available")
+        if name in self.SHORT_BASELINE_DATA_TESTS and not repo_data_exists(*SHORT_BASELINE_DATA_FILES):
+            self.skipTest("repo short-baseline test data is not available")
+        if name in self.KINEMATIC_DATA_TESTS and not repo_data_exists(*KINEMATIC_DATA_FILES):
+            self.skipTest("repo kinematic test data is not available")
+        if name in self.ODAIBA_DATA_TESTS and not repo_data_exists(*ODAIBA_DATA_FILES):
+            self.skipTest("repo Odaiba test data is not available")
+
     def run_gnss(
         self,
         *args: str,
@@ -4211,6 +4277,86 @@ class CLIToolsTest(unittest.TestCase):
             self.assertGreaterEqual(payload["max_position_error_m"], 0.0)
             self.assertGreaterEqual(payload["mean_satellites"], 18.0)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+
+    def test_ppc_demo_cli_summarizes_existing_solution_against_reference_csv(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_demo_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            run_dir = temp_root / "tokyo" / "run1"
+            run_dir.mkdir(parents=True)
+            solution_path = temp_root / "ppc_demo.pos"
+            summary_path = temp_root / "ppc_demo_summary.json"
+            reference_csv = run_dir / "reference.csv"
+
+            reference_rows = [
+                (2300, 1000.0, 35.1000000, 139.1000000, 42.0),
+                (2300, 1000.2, 35.1000100, 139.1000200, 42.2),
+                (2300, 1000.4, 35.1000200, 139.1000400, 42.4),
+            ]
+            reference_lines = [
+                "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,roll_deg,pitch_deg,yaw_deg"
+            ]
+            for week, tow, lat, lon, height in reference_rows:
+                reference_lines.append(
+                    f"{week},{tow:.3f},{lat:.7f},{lon:.7f},{height:.3f},0.0,0.0,0.0"
+                )
+            reference_csv.write_text("\n".join(reference_lines) + "\n", encoding="ascii")
+
+            with solution_path.open("w", encoding="ascii") as handle:
+                handle.write("% synthetic ppc demo solution\n")
+                for week, tow, lat, lon, height, status, satellites in (
+                    (2300, 1000.0, 35.1000002, 139.1000001, 42.1, 4, 12),
+                    (2300, 1000.2, 35.1000099, 139.1000202, 42.3, 4, 13),
+                    (2300, 1000.4, 35.1000197, 139.1000398, 42.5, 3, 11),
+                ):
+                    ecef = driving_comparison.llh_to_ecef(lat, lon, height)
+                    handle.write(
+                        f"{week} {tow:.3f} {ecef[0]:.6f} {ecef[1]:.6f} {ecef[2]:.6f} "
+                        f"{lat:.9f} {lon:.9f} {height:.4f} {status} {satellites} 1.0\n"
+                    )
+
+            result = self.run_gnss(
+                "ppc-demo",
+                "--run-dir",
+                str(run_dir),
+                "--solver",
+                "rtk",
+                "--use-existing-solution",
+                "--out",
+                str(solution_path),
+                "--summary-json",
+                str(summary_path),
+                "--require-valid-epochs-min",
+                "3",
+                "--require-matched-epochs-min",
+                "3",
+                "--require-fix-rate-min",
+                "60",
+                "--require-median-h-max",
+                "0.2",
+                "--require-p95-h-max",
+                "0.2",
+                "--require-max-h-max",
+                "0.2",
+                "--require-p95-up-max",
+                "0.2",
+                "--require-mean-sats-min",
+                "11",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Finished PPC-Dataset demo.", result.stdout)
+            self.assertTrue(summary_path.exists())
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["dataset"], "PPC-Dataset tokyo run1")
+            self.assertEqual(payload["solver"], "rtk")
+            self.assertEqual(payload["valid_epochs"], 3)
+            self.assertEqual(payload["matched_epochs"], 3)
+            self.assertEqual(payload["fixed_epochs"], 2)
+            self.assertGreaterEqual(payload["fix_rate_pct"], 60.0)
+            self.assertLessEqual(payload["p95_h_m"], 0.2)
+            self.assertLessEqual(payload["p95_abs_up_m"], 0.2)
+            self.assertGreaterEqual(payload["mean_satellites"], 11.0)
 
     def test_nav_products_cli_generates_sp3_and_clk_from_static_sample(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_nav_products_cli_") as temp_dir:

@@ -23,6 +23,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 import gnss_odaiba_benchmark as benchmark  # noqa: E402
 import gnss_clas_ppp as clas_ppp  # noqa: E402
+import gnss_ppc_demo as ppc_demo  # noqa: E402
 import gnss_ppp_kinematic_signoff as ppp_kinematic_signoff  # noqa: E402
 import gnss_ppp_static_signoff as ppp_static_signoff  # noqa: E402
 import gnss_short_baseline_signoff as short_signoff  # noqa: E402
@@ -1048,6 +1049,157 @@ class PPPKinematicSignoffTest(unittest.TestCase):
             self.assertEqual(payload["malib_common_epoch_pairs"], 2)
             self.assertAlmostEqual(payload["malib_mean_position_error_m"], 0.5)
             self.assertIn("libgnss_minus_malib_p95_error_m", payload)
+
+
+class PPCDemoTest(unittest.TestCase):
+    def write_reference_csv(
+        self,
+        path: Path,
+        rows: list[tuple[int, float, float, float, float]],
+    ) -> None:
+        with path.open("w", newline="", encoding="ascii") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(
+                [
+                    "gps_week",
+                    "gps_tow_s",
+                    "lat_deg",
+                    "lon_deg",
+                    "height_m",
+                    "roll_deg",
+                    "pitch_deg",
+                    "yaw_deg",
+                ]
+            )
+            for week, tow, lat, lon, height in rows:
+                writer.writerow([week, f"{tow:.3f}", lat, lon, height, 0.0, 0.0, 0.0])
+
+    def write_pos(
+        self,
+        path: Path,
+        rows: list[tuple[int, float, float, float, float, int, int]],
+    ) -> None:
+        with path.open("w", encoding="ascii") as handle:
+            handle.write("% synthetic ppc demo solution\n")
+            for week, tow, lat, lon, height, status, satellites in rows:
+                ecef = comparison.llh_to_ecef(lat, lon, height)
+                handle.write(
+                    f"{week} {tow:.3f} {ecef[0]:.6f} {ecef[1]:.6f} {ecef[2]:.6f} "
+                    f"{lat:.9f} {lon:.9f} {height:.4f} {status} {satellites} 1.0\n"
+                )
+
+    def test_build_summary_payload_and_requirements(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_demo_") as temp_dir:
+            temp_root = Path(temp_dir)
+            run_dir = temp_root / "tokyo" / "run1"
+            run_dir.mkdir(parents=True)
+            rover = run_dir / "rover.obs"
+            base = run_dir / "base.obs"
+            nav = run_dir / "base.nav"
+            reference_csv = run_dir / "reference.csv"
+            out = temp_root / "ppc_demo.pos"
+            summary_json = temp_root / "ppc_demo_summary.json"
+
+            rover.write_text("synthetic rover\n", encoding="ascii")
+            base.write_text("synthetic base\n", encoding="ascii")
+            nav.write_text("synthetic nav\n", encoding="ascii")
+            self.write_reference_csv(
+                reference_csv,
+                [
+                    (2300, 1000.0, 35.1000000, 139.1000000, 42.0),
+                    (2300, 1000.2, 35.1000100, 139.1000200, 42.2),
+                    (2300, 1000.4, 35.1000200, 139.1000400, 42.4),
+                ],
+            )
+            self.write_pos(
+                out,
+                [
+                    (2300, 1000.0, 35.1000002, 139.1000001, 42.1, 4, 12),
+                    (2300, 1000.2, 35.1000099, 139.1000202, 42.3, 4, 13),
+                    (2300, 1000.4, 35.1000197, 139.1000398, 42.5, 3, 11),
+                ],
+            )
+
+            args = argparse.Namespace(
+                dataset_root=None,
+                city="tokyo",
+                run="run1",
+                run_dir=run_dir,
+                solver="rtk",
+                rover=rover,
+                base=base,
+                nav=nav,
+                reference_csv=reference_csv,
+                out=out,
+                summary_json=summary_json,
+                max_epochs=120,
+                match_tolerance_s=0.25,
+                use_existing_solution=True,
+                sp3=None,
+                clk=None,
+                antex=None,
+                blq=None,
+                enable_ar=False,
+                low_dynamics=False,
+                require_valid_epochs_min=3,
+                require_matched_epochs_min=3,
+                require_fix_rate_min=60.0,
+                require_median_h_max=0.2,
+                require_p95_h_max=0.2,
+                require_max_h_max=0.2,
+                require_p95_up_max=0.2,
+                require_mean_sats_min=11.0,
+                _dataset_city="tokyo",
+                _dataset_run="run1",
+            )
+
+            payload = ppc_demo.build_summary_payload(
+                args,
+                run_dir,
+                rover,
+                base,
+                nav,
+                reference_csv,
+                out,
+                summary_json,
+            )
+            ppc_demo.enforce_summary_requirements(payload, args)
+
+            self.assertEqual(payload["dataset"], "PPC-Dataset tokyo run1")
+            self.assertEqual(payload["solver"], "rtk")
+            self.assertEqual(payload["valid_epochs"], 3)
+            self.assertEqual(payload["matched_epochs"], 3)
+            self.assertEqual(payload["fixed_epochs"], 2)
+            self.assertGreaterEqual(payload["fix_rate_pct"], 60.0)
+            self.assertLessEqual(payload["median_h_m"], 0.2)
+            self.assertLessEqual(payload["p95_h_m"], 0.2)
+            self.assertLessEqual(payload["max_h_m"], 0.2)
+            self.assertLessEqual(payload["p95_abs_up_m"], 0.2)
+            self.assertGreaterEqual(payload["mean_satellites"], 11.0)
+            self.assertTrue(summary_json.exists())
+
+            failing_args = argparse.Namespace(
+                require_valid_epochs_min=4,
+                require_matched_epochs_min=4,
+                require_fix_rate_min=90.0,
+                require_median_h_max=0.01,
+                require_p95_h_max=0.01,
+                require_max_h_max=0.01,
+                require_p95_up_max=0.01,
+                require_mean_sats_min=20.0,
+            )
+            with self.assertRaises(SystemExit) as context:
+                ppc_demo.enforce_summary_requirements(payload, failing_args)
+
+            message = str(context.exception)
+            self.assertIn("valid epochs", message)
+            self.assertIn("matched epochs", message)
+            self.assertIn("fix rate", message)
+            self.assertIn("median horizontal error", message)
+            self.assertIn("p95 horizontal error", message)
+            self.assertIn("max horizontal error", message)
+            self.assertIn("p95 absolute up error", message)
+            self.assertIn("mean satellites", message)
 
 
 if __name__ == "__main__":
