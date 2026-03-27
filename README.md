@@ -19,7 +19,7 @@
   If this repo saves you time shipping GNSS tooling without dragging in a second runtime stack, consider starring it.
 </p>
 
-![UrbanNav Odaiba benchmark scorecard](docs/driving_odaiba_scorecard.png)
+![Twitter-ready UrbanNav Odaiba social card](docs/driving_odaiba_social_card.png)
 
 ## Why This Repo Exists
 
@@ -58,6 +58,8 @@ Current checked-in Odaiba snapshot:
 - **All matched epochs**: libgnss++ leads on matched-epoch count (`11637 vs 8241`), fix rate (`8.11% vs 7.22%`), p95 horizontal error (`7.58 m vs 27.88 m`), and max horizontal error (`61.82 m vs 82.87 m`).
 - **Common epochs only**: horizontal median is within `30 mm` of RTKLIB (`0.733 m vs 0.704 m`), median vertical error is slightly better (`0.571 m vs 0.575 m`), and p95 tail is much better (`5.94 m vs 27.67 m`).
 - **Machine-readable artifact**: the benchmark writes `output/odaiba_summary.json`.
+
+![Detailed Odaiba scorecard](docs/driving_odaiba_scorecard.png)
 
 ![Urban driving comparison on UrbanNav Tokyo Odaiba](docs/driving_odaiba_comparison.png)
 
@@ -207,6 +209,7 @@ The `./apps/gnss_*` launchers remain as Unix convenience wrappers, but they are 
 | `gnss pos2kml` | Convert libgnss++ or raw RTKLIB `.pos` into KML |
 | `gnss driving-compare` | Build the README comparison figure from solution files |
 | `gnss scorecard` | Build the Odaiba scorecard image |
+| `gnss social-card` | Build a Twitter-ready Odaiba social card image |
 | `gnss odaiba-benchmark` | Run the full Odaiba benchmark pipeline end-to-end |
 | `gnss odaiba-scan` | Scan Odaiba in fixed epoch windows and dump per-window metrics |
 | `gnss short-baseline-signoff` | Run the mixed-GNSS Tsukuba short-baseline static sign-off and emit summary JSON |
@@ -313,6 +316,7 @@ python3 apps/gnss.py rtklib2pos output/driving_rtklib_rtk.pos output/driving_rtk
 python3 apps/gnss.py pos2kml output/driving_rtklib_rtk.pos output/driving_rtklib_rtk.kml --status non-spp
 python3 apps/gnss.py driving-compare --lib-pos output/rtk_solution.pos --rtklib-pos output/driving_rtklib_rtk.pos --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv --output docs/driving_odaiba_comparison.png
 python3 apps/gnss.py scorecard --lib-pos output/rtk_solution.pos --rtklib-pos output/driving_rtklib_rtk.pos --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv --output docs/driving_odaiba_scorecard.png
+python3 apps/gnss.py social-card --lib-pos output/rtk_solution.pos --rtklib-pos output/driving_rtklib_rtk.pos --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv --output docs/driving_odaiba_social_card.png
 python3 apps/gnss.py odaiba-benchmark --rtklib-bin /path/to/rnx2rtkp --summary-json output/odaiba_summary.json
 python3 apps/gnss.py odaiba-benchmark --rtklib-bin /path/to/rnx2rtkp --malib-bin /path/to/malib/rnx2rtkp --summary-json output/odaiba_summary.json
 python3 apps/gnss.py odaiba-scan --glonass-ar autocal --window-size 1000 --step 1000 --output-csv output/odaiba_window_scan.csv
@@ -473,6 +477,7 @@ python3 apps/gnss.py pos2kml output/rtk_solution.pos output/rtk_solution_from_po
 # Regenerate README comparison assets directly
 python3 apps/gnss.py driving-compare --lib-pos output/rtk_solution.pos --rtklib-pos output/driving_rtklib_rtk.pos --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv --output docs/driving_odaiba_comparison.png
 python3 apps/gnss.py scorecard --lib-pos output/rtk_solution.pos --rtklib-pos output/driving_rtklib_rtk.pos --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv --output docs/driving_odaiba_scorecard.png
+python3 apps/gnss.py social-card --lib-pos output/rtk_solution.pos --rtklib-pos output/driving_rtklib_rtk.pos --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv --output docs/driving_odaiba_social_card.png
 
 # Regenerate the UrbanNav Odaiba comparison image
 python3 apps/gnss.py odaiba-benchmark --rtklib-bin /path/to/rnx2rtkp
