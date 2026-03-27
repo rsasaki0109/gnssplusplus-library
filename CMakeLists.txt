@@ -31,11 +31,15 @@ set(GNSS_SOURCES
     src/io/ubx.cpp
     src/core/solution.cpp
     src/core/types.cpp
+    src/algorithms/ppp_atmosphere.cpp
     src/algorithms/ppp.cpp
 )
 
 # List source files for the no-optimization library
 set(GNSS_SOURCES_NO_OPTIMIZATION
+    src/algorithms/rtk_ar_selection.cpp
+    src/algorithms/rtk_measurement.cpp
+    src/algorithms/rtk_selection.cpp
     src/algorithms/rtk.cpp
     src/algorithms/spp.cpp
     src/algorithms/lambda.cpp

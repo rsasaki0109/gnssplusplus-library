@@ -122,6 +122,7 @@ python3 apps/gnss.py ppc-demo \
   --city tokyo \
   --run run1 \
   --solver rtk \
+  --require-realtime-factor-min 1.0 \
   --summary-json output/ppc_tokyo_run1_rtk_summary.json
 ```
 

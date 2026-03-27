@@ -1,6 +1,7 @@
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/models/troposphere.hpp>
 #include <libgnss++/models/ionosphere.hpp>
 #include <stdexcept>
@@ -522,7 +523,7 @@ std::vector<Observation> SPPProcessor::validateObservations(const ObservationDat
 
         // BeiDou GEO handling still needs tighter validation than the current
         // broadcast model provides. Keep MEO/IGSO enabled and gate GEO for now.
-        if (observation.satellite.system == GNSSSystem::BeiDou && observation.satellite.prn <= 5) {
+        if (signal_policy::isBeiDouGeoSatellite(observation.satellite)) {
             continue;
         }
 
