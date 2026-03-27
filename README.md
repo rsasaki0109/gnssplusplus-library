@@ -8,6 +8,8 @@ If this repo is useful, star it.
 
 ![UrbanNav Odaiba social card](docs/driving_odaiba_social_card.png)
 
+Contribution and PR workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
+
 ## What You Get
 
 - Native solvers: `SPP`, `RTK`, `PPP`, `CLAS-style PPP`
@@ -100,6 +102,7 @@ More artifacts:
 - [Scorecard](docs/driving_odaiba_scorecard.png)
 - [Summary JSON](output/odaiba_summary.json)
 - Optional side-by-side PPP benchmark path: [JAXA-SNU/MALIB](https://github.com/JAXA-SNU/MALIB)
+- Additional low-cost GNSS RTK/PPP reference implementation: [rtklibexplorer/RTKLIB](https://github.com/rtklibexplorer/RTKLIB)
 
 ### Other checked sign-offs
 

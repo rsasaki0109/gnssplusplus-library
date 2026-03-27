@@ -247,6 +247,10 @@ libgnss++/
 
 - 参考: [JAXA-SNU/MALIB](https://github.com/JAXA-SNU/MALIB)
   - RTKLIB fork ベースの MADOCA-PPP / PPP-AR / L6E 対応実装。Phase 5 の外部リファレンスとして扱う。
+- 参考: [rtklibexplorer/RTKLIB](https://github.com/rtklibexplorer/RTKLIB)
+  - low-cost GNSS receiver 向けに最適化された RTKLIB fork。PPP/RTK の tuning、運用導線、demo5 系の実装比較リファレンスとして扱う。
+- 参考: [commaai/laika](https://github.com/commaai/laika)
+  - precise product downloader/cache、補正モデルの切り分け、raw measurement abstraction の設計リファレンスとして扱う。
 - 参考: [Swift Navigation libsbp navigation docs](https://swift-nav.github.io/libsbp/c/build/docs/html/group__navigation.html)
   - `GPS_TIME / POS_LLH / VEL_NED` の official message layout。`gnss sbp-info` 実装時の protocol reference。
 - 参考: [Septentrio AsteRx SB3 Pro+ Reference Guide](https://www.septentrio.com/system/files/support/asterx_sb3_pro_firmware_v4.10.1_reference_guide.pdf)
@@ -257,6 +261,20 @@ libgnss++/
   - direct QZSS L6 250-byte frame の official header/data-part structure。`gnss qzss-l6-info` 実装時の protocol reference。
 - 参考: [QZSS-Strategy-Office/claslib](https://github.com/QZSS-Strategy-Office/claslib)
   - official CLAS reference implementation。`data/clas_grid.def` はこの `clas_grid.def` を mirror したもので、direct QZSS L6 subtype `12` の nearest-grid atmospheric application に使う。
+
+## 今後の外部実装取り込み方針
+
+- `develop` へ機能の直 push は増やさない
+- 外部実装の取り込みは `1機能 = 1PR` で分割する
+- 各 PR で最低 1 本の regression / sign-off / dogfooding check を増やす
+
+予定している分割例:
+
+- `laika-fetch-products`
+- `laika-ppp-pipeline`
+- `rtklibexplorer-low-cost-tuning`
+- `rtklibexplorer-stream-ux`
+- `ppc-signoff-expansion`
 - [x] precise products loader / interpolation (`SP3` + `CLK`)
 - [x] PPP float core groundwork
   - precise orbit/clock fallback
