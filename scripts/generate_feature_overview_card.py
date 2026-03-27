@@ -42,16 +42,16 @@ def add_panel(ax, x: float, y: float, w: float, h: float, title: str, lines: lis
         facecolor=PANEL,
     )
     ax.add_patch(patch)
-    ax.text(x + 0.04 * w, y + h - 0.14 * h, title, fontsize=16, color=TEXT, weight="bold", va="center")
-    wrapped = wrap_lines(lines, 38 if w >= 0.4 else 31)
-    line_step = 0.11 * h
+    ax.text(x + 0.04 * w, y + h - 0.14 * h, title, fontsize=15, color=TEXT, weight="bold", va="center")
+    wrapped = wrap_lines(lines, 34 if w >= 0.4 else 26)
+    line_step = 0.10 * h
     start_y = y + h - 0.34 * h
     for index, line in enumerate(wrapped):
         ax.text(
             x + 0.05 * w,
             start_y - index * line_step,
             line,
-            fontsize=11.5,
+            fontsize=10.6,
             color=MUTED,
             va="center",
         )
@@ -62,101 +62,101 @@ def main() -> None:
 
     output = Path(__file__).resolve().parents[1] / "docs" / "libgnsspp_feature_overview.png"
 
-    fig = plt.figure(figsize=(14, 8), dpi=160, facecolor=BG)
+    fig = plt.figure(figsize=(14, 8.6), dpi=160, facecolor=BG)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_axis_off()
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
 
-    ax.text(0.05, 0.91, "What Ships In libgnss++", fontsize=29, color=TEXT, weight="bold")
+    ax.text(0.05, 0.92, "What Ships In libgnss++", fontsize=28, color=TEXT, weight="bold")
     ax.text(
         0.05,
-        0.85,
+        0.86,
         "A native non-GUI GNSS stack for positioning, protocols, automation, and deployment.",
-        fontsize=15,
+        fontsize=14,
         color=MUTED,
     )
 
-    ax.text(0.05, 0.76, "No RTKLIB runtime dependency", fontsize=15, color=ACCENT, weight="bold")
-    ax.text(0.34, 0.76, "C++17 core + CLI + Python + ROS2", fontsize=15, color=ACCENT_2, weight="bold")
-    ax.text(0.64, 0.76, "Benchmarks and sign-off scripts included", fontsize=15, color=ACCENT_3, weight="bold")
+    ax.text(0.05, 0.78, "No RTKLIB runtime dependency", fontsize=14, color=ACCENT, weight="bold")
+    ax.text(0.34, 0.78, "C++17 core + CLI + Python + ROS2", fontsize=14, color=ACCENT_2, weight="bold")
+    ax.text(0.64, 0.78, "Benchmarks and sign-off scripts included", fontsize=14, color=ACCENT_3, weight="bold")
 
     add_panel(
         ax,
         0.05,
-        0.42,
+        0.43,
         0.27,
-        0.27,
+        0.29,
         "Positioning Engines",
         [
-            "SPP, RTK, PPP, and CLAS/MADOCA-style PPP",
-            "Dual-frequency workflows with benchmarked sign-off",
-            "Open-data regression assets checked into the repo",
+            "SPP, RTK, PPP, CLAS-style PPP",
+            "Dual-frequency workflows",
+            "Sign-off scripts and open-data regressions",
         ],
         ACCENT,
     )
     add_panel(
         ax,
         0.365,
-        0.42,
+        0.43,
         0.27,
-        0.27,
+        0.29,
         "Protocols and Raw Ingest",
         [
             "RINEX, RTCM, UBX, direct QZSS L6",
-            "NMEA, NovAtel, SBP, SBF, Trimble, SkyTraq, BINEX",
-            "File, NTRIP, TCP, and serial transport paths",
+            "NMEA, NovAtel, SBP, SBF, Trimble, BINEX",
+            "File, NTRIP, TCP, and serial paths",
         ],
         ACCENT_2,
     )
     add_panel(
         ax,
         0.68,
-        0.42,
+        0.43,
         0.27,
-        0.27,
+        0.29,
         "Tooling",
         [
-            "`gnss spp`, `solve`, `ppp`, `stream`, `convert`",
-            "`replay`, `live`, `rcv`, benchmark and sign-off commands",
-            "README assets regenerated from in-tree scripts",
+            "gnss spp, solve, ppp, stream",
+            "convert, replay, live, rcv",
+            "Benchmark and README asset generators",
         ],
         ACCENT_3,
     )
     add_panel(
         ax,
         0.05,
-        0.11,
+        0.10,
         0.42,
-        0.24,
+        0.26,
         "Developer Interfaces",
         [
-            "C++ library API for native integration",
-            "Python bindings for file-based solve and inspection",
-            "ROS2 playback node for `.pos` telemetry publishing",
+            "Native C++ API for integration",
+            "Python bindings for solve and inspection",
+            "ROS2 playback for POS telemetry",
         ],
         ACCENT_2,
     )
     add_panel(
         ax,
         0.53,
-        0.11,
+        0.10,
         0.42,
-        0.24,
+        0.26,
         "Packaging and Ops",
         [
-            "CMake install/export, pkg-config, and cpack",
-            "Installed-prefix dogfooding and CLI regression coverage",
-            "Benchmark artifacts: Odaiba social card, 2D plots, scorecards, summary JSON",
+            "CMake install/export, pkg-config, cpack",
+            "Installed-prefix dogfooding and CLI regressions",
+            "Odaiba cards, 2D plots, scorecards, summary JSON",
         ],
         ACCENT,
     )
 
     ax.text(
         0.05,
-        0.04,
+        0.035,
         "See README for Odaiba 2D comparison, benchmark snapshots, and exact command examples.",
-        fontsize=12.5,
+        fontsize=11.8,
         color=MUTED,
     )
 
