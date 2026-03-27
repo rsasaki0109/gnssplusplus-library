@@ -19,6 +19,7 @@ find_package(rclcpp QUIET)
 find_package(sensor_msgs QUIET)
 find_package(geometry_msgs QUIET)
 find_package(nav_msgs QUIET)
+find_package(std_msgs QUIET)
 
 # List source files for the main library
 set(GNSS_SOURCES
@@ -131,7 +132,7 @@ include(CPack)
 add_subdirectory(examples)
 add_subdirectory(apps)
 add_subdirectory(python)
-if(ament_cmake_FOUND AND rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND nav_msgs_FOUND)
+if(ament_cmake_FOUND AND rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND nav_msgs_FOUND AND std_msgs_FOUND)
     set(GNSSPP_HAS_ROS2 ON)
     add_subdirectory(ros2)
 else()
