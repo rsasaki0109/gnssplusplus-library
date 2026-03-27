@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <limits>
 #include <set>
 #include <sstream>
 #include <string>
@@ -356,6 +357,38 @@ std::string readTextFile(const std::filesystem::path& path) {
     return buffer.str();
 }
 
+std::string extractSummaryToken(const std::string& log, const std::string& key) {
+    const size_t summary_pos = log.rfind("summary:");
+    if (summary_pos == std::string::npos) {
+        return "";
+    }
+    const std::string prefix = key + "=";
+    const size_t key_pos = log.find(prefix, summary_pos);
+    if (key_pos == std::string::npos) {
+        return "";
+    }
+    const size_t value_begin = key_pos + prefix.size();
+    const size_t value_end = log.find_first_of(" \r\n", value_begin);
+    return log.substr(value_begin, value_end == std::string::npos ? std::string::npos
+                                                                  : value_end - value_begin);
+}
+
+double extractSummaryDouble(const std::string& log, const std::string& key) {
+    const std::string token = extractSummaryToken(log, key);
+    EXPECT_FALSE(token.empty()) << "missing summary token: " << key << "\n" << log;
+    if (token.empty()) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    return std::stod(token);
+}
+
+std::vector<uint8_t> corruptFrame(std::vector<uint8_t> frame) {
+    if (!frame.empty()) {
+        frame.back() ^= 0xFFU;
+    }
+    return frame;
+}
+
 #ifndef _WIN32
 struct PseudoTerminal {
     int master_fd = -1;
@@ -479,9 +512,14 @@ TEST(GNSSLiveTest, InterpolatesBaseEpochAndUsesInlineBaseMetadata) {
     ASSERT_EQ(run_rc, 0) << readTextFile(log_path);
 
     const std::string log = readTextFile(log_path);
+    EXPECT_EQ(extractSummaryToken(log, "termination"), "max_epochs_reached") << log;
     EXPECT_NE(log.find("interpolated_base_epochs=1"), std::string::npos) << log;
     EXPECT_NE(log.find("held_base_epochs=0"), std::string::npos) << log;
     EXPECT_NE(log.find("written_solutions=1"), std::string::npos) << log;
+    EXPECT_GT(extractSummaryDouble(log, "solver_wall_time_s"), 0.0) << log;
+    EXPECT_GE(extractSummaryDouble(log, "effective_epoch_rate_hz"), 0.0) << log;
+    EXPECT_EQ(extractSummaryToken(log, "rover_decoder_errors"), "0") << log;
+    EXPECT_EQ(extractSummaryToken(log, "base_decoder_errors"), "0") << log;
     ASSERT_TRUE(fs::exists(out_path));
     const std::string pos_text = readTextFile(out_path);
     EXPECT_NE(pos_text.find("LibGNSS++ Position Solution"), std::string::npos);
@@ -496,6 +534,8 @@ TEST(GNSSLiveTest, InterpolatesBaseEpochAndUsesInlineBaseMetadata) {
     EXPECT_NE(no_interp_rc, 0);
 
     const std::string no_interp_log = readTextFile(no_interp_log_path);
+    EXPECT_EQ(extractSummaryToken(no_interp_log, "termination"), "no_aligned_epochs")
+        << no_interp_log;
     EXPECT_NE(no_interp_log.find("interpolated_base_epochs=0"), std::string::npos) << no_interp_log;
     EXPECT_NE(no_interp_log.find("held_base_epochs=0"), std::string::npos) << no_interp_log;
     EXPECT_NE(no_interp_log.find("written_solutions=0"), std::string::npos) << no_interp_log;
@@ -587,8 +627,10 @@ TEST(GNSSLiveTest, HoldsRecentBaseEpochWhenFutureBaseHasNotArrivedYet) {
     ASSERT_EQ(hold_rc, 0) << readTextFile(log_path);
 
     const std::string hold_log = readTextFile(log_path);
+    EXPECT_EQ(extractSummaryToken(hold_log, "termination"), "max_epochs_reached") << hold_log;
     EXPECT_NE(hold_log.find("held_base_epochs=1"), std::string::npos) << hold_log;
     EXPECT_NE(hold_log.find("written_solutions=1"), std::string::npos) << hold_log;
+    EXPECT_GT(extractSummaryDouble(hold_log, "solver_wall_time_s"), 0.0) << hold_log;
     ASSERT_TRUE(fs::exists(out_path));
 
     const std::string disabled_command =
@@ -601,8 +643,125 @@ TEST(GNSSLiveTest, HoldsRecentBaseEpochWhenFutureBaseHasNotArrivedYet) {
     EXPECT_NE(disabled_rc, 0);
 
     const std::string disabled_log = readTextFile(disabled_log_path);
+    EXPECT_EQ(extractSummaryToken(disabled_log, "termination"), "no_aligned_epochs")
+        << disabled_log;
     EXPECT_NE(disabled_log.find("held_base_epochs=0"), std::string::npos) << disabled_log;
     EXPECT_NE(disabled_log.find("written_solutions=0"), std::string::npos) << disabled_log;
+
+    fs::remove_all(temp_dir);
+}
+
+TEST(GNSSLiveTest, ReportsDecoderErrorsWhenBaseRtcmContainsOnlyInvalidFrames) {
+    namespace fs = std::filesystem;
+
+    const fs::path source_dir = GNSSPP_SOURCE_DIR;
+    if (!sourcePathExists(source_dir, "data/driving/rover.obs")) {
+        GTEST_SKIP() << "repo driving test data is not available";
+    }
+    const fs::path binary_dir = GNSSPP_BINARY_DIR;
+    const fs::path live_binary = binary_dir / "apps" / "gnss_live";
+    ASSERT_TRUE(fs::exists(live_binary));
+
+    io::RINEXReader::RINEXHeader rover_header;
+    const auto rover_epochs =
+        loadBaseEpochs(source_dir / "data" / "driving" / "rover.obs", rover_header, 1);
+    ASSERT_EQ(rover_epochs.size(), 1U);
+    const ObservationData rover_epoch = rover_epochs[0];
+
+    io::RTCMProcessor encoder;
+    const auto rover_message =
+        encoder.encodeObservations(rover_epoch, io::RTCMMessageType::RTCM_1004);
+    ASSERT_TRUE(rover_message.valid);
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_invalid_base_rtcm");
+    const fs::path rover_path = temp_dir / "rover.rtcm3";
+    const fs::path base_path = temp_dir / "base_invalid.rtcm3";
+    const fs::path out_path = temp_dir / "live.pos";
+    const fs::path log_path = temp_dir / "live.log";
+
+    writeBinaryFile(rover_path, {buildRtcmFrame(rover_message)});
+    writeBinaryFile(base_path, {corruptFrame(buildRtcm1005(0.0, 0.0, 0.0))});
+
+    const std::string command =
+        "\"" + live_binary.string() + "\" --rover-rtcm \"" + rover_path.string() +
+        "\" --base-rtcm \"" + base_path.string() +
+        "\" --out \"" + out_path.string() +
+        "\" --max-epochs 1 --quiet > \"" + log_path.string() + "\" 2>&1";
+    const int rc = std::system(command.c_str());
+    EXPECT_NE(rc, 0);
+
+    const std::string log = readTextFile(log_path);
+    EXPECT_EQ(extractSummaryToken(log, "termination"), "no_initial_base_observation") << log;
+    EXPECT_EQ(extractSummaryToken(log, "base_valid_messages"), "0") << log;
+    EXPECT_EQ(extractSummaryToken(log, "rover_total_messages"), "1") << log;
+    EXPECT_EQ(extractSummaryToken(log, "written_solutions"), "0") << log;
+    EXPECT_GT(extractSummaryDouble(log, "solver_wall_time_s"), 0.0) << log;
+
+    fs::remove_all(temp_dir);
+}
+
+TEST(GNSSLiveTest, ReportsDecoderErrorsWhenRoverUbxContainsOnlyInvalidMessages) {
+    namespace fs = std::filesystem;
+
+    const fs::path source_dir = GNSSPP_SOURCE_DIR;
+    if (!sourcePathExists(source_dir, "data/driving/base.obs") ||
+        !sourcePathExists(source_dir, "data/driving/rover.obs")) {
+        GTEST_SKIP() << "repo driving test data is not available";
+    }
+    const fs::path binary_dir = GNSSPP_BINARY_DIR;
+    const fs::path live_binary = binary_dir / "apps" / "gnss_live";
+    ASSERT_TRUE(fs::exists(live_binary));
+
+    io::RINEXReader::RINEXHeader base_header;
+    const auto base_epochs =
+        loadBaseEpochs(source_dir / "data" / "driving" / "base.obs", base_header, 1);
+    ASSERT_EQ(base_epochs.size(), 1U);
+    const ObservationData rover_epoch =
+        findEpochAtTime(source_dir / "data" / "driving" / "rover.obs", base_epochs[0].time);
+    ASSERT_FALSE(rover_epoch.isEmpty());
+
+    io::RTCMProcessor encoder;
+    const auto base_message =
+        encoder.encodeObservations(base_epochs[0], io::RTCMMessageType::RTCM_1004);
+    ASSERT_TRUE(base_message.valid);
+
+    std::vector<uint8_t> invalid_rover_message = buildUbxRawxMessage(rover_epoch);
+    ASSERT_FALSE(invalid_rover_message.empty());
+    invalid_rover_message.back() ^= 0xFFU;
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_invalid_rover_ubx");
+    const fs::path rover_path = temp_dir / "rover_invalid.ubx";
+    const fs::path base_path = temp_dir / "base.rtcm3";
+    const fs::path out_path = temp_dir / "live.pos";
+    const fs::path log_path = temp_dir / "live.log";
+
+    {
+        std::ofstream rover_output(rover_path, std::ios::binary);
+        ASSERT_TRUE(rover_output.is_open());
+        rover_output.write(reinterpret_cast<const char*>(invalid_rover_message.data()),
+                           static_cast<std::streamsize>(invalid_rover_message.size()));
+    }
+    writeBinaryFile(base_path,
+                    {buildRtcm1005(base_header.approximate_position.x(),
+                                   base_header.approximate_position.y(),
+                                   base_header.approximate_position.z()),
+                     buildRtcmFrame(base_message)});
+
+    const std::string command =
+        "\"" + live_binary.string() + "\" --rover-ubx \"" + rover_path.string() +
+        "\" --base-rtcm \"" + base_path.string() +
+        "\" --out \"" + out_path.string() +
+        "\" --max-epochs 1 --quiet > \"" + log_path.string() + "\" 2>&1";
+    const int rc = std::system(command.c_str());
+    EXPECT_NE(rc, 0);
+
+    const std::string log = readTextFile(log_path);
+    EXPECT_EQ(extractSummaryToken(log, "termination"), "no_initial_rover_observation") << log;
+    EXPECT_EQ(extractSummaryToken(log, "rover_total_messages"), "1") << log;
+    EXPECT_EQ(extractSummaryToken(log, "rover_valid_messages"), "0") << log;
+    EXPECT_EQ(extractSummaryToken(log, "rover_decoder_errors"), "1") << log;
+    EXPECT_EQ(extractSummaryToken(log, "written_solutions"), "0") << log;
+    EXPECT_GT(extractSummaryDouble(log, "solver_wall_time_s"), 0.0) << log;
 
     fs::remove_all(temp_dir);
 }

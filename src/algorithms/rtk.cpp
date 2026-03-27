@@ -1,8 +1,12 @@
 #include <libgnss++/algorithms/rtk.hpp>
+#include <libgnss++/algorithms/rtk_ar_selection.hpp>
 #include <libgnss++/algorithms/kalman.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
+#include <libgnss++/algorithms/rtk_measurement.hpp>
+#include <libgnss++/algorithms/rtk_selection.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/constants.hpp>
+#include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/models/troposphere.hpp>
 #include <iostream>
 #include <algorithm>
@@ -51,10 +55,7 @@ bool usesEstimatedIono(const RTKProcessor::RTKConfig& config) {
 }
 
 bool isBeiDouGeoSatellite(const SatelliteId& sat) {
-    if (sat.system != GNSSSystem::BeiDou) {
-        return false;
-    }
-    return (sat.prn >= 1 && sat.prn <= 5) || (sat.prn >= 59 && sat.prn <= 63);
+    return signal_policy::isBeiDouGeoSatellite(sat);
 }
 
 bool isUsableRTKSatellite(const SatelliteId& sat) {
@@ -73,39 +74,59 @@ bool isEnabledRTKSystem(const RTKProcessor::RTKConfig& config, GNSSSystem system
 }
 
 bool isPrimaryRTKSignal(GNSSSystem system, SignalType signal) {
-    switch (system) {
-        case GNSSSystem::GPS:
-            return signal == SignalType::GPS_L1CA;
-        case GNSSSystem::GLONASS:
-            return signal == SignalType::GLO_L1CA || signal == SignalType::GLO_L1P;
-        case GNSSSystem::Galileo:
-            return signal == SignalType::GAL_E1;
-        case GNSSSystem::BeiDou:
-            return signal == SignalType::BDS_B1I || signal == SignalType::BDS_B1C;
-        case GNSSSystem::QZSS:
-            return signal == SignalType::QZS_L1CA;
-        default:
-            return false;
-    }
+    return signal_policy::isPrimarySignal(system, signal);
 }
 
 bool isSecondaryRTKSignal(GNSSSystem system, SignalType signal) {
-    switch (system) {
-        case GNSSSystem::GPS:
-            return signal == SignalType::GPS_L2C;
-        case GNSSSystem::GLONASS:
-            return signal == SignalType::GLO_L2CA || signal == SignalType::GLO_L2P;
-        case GNSSSystem::Galileo:
-            return signal == SignalType::GAL_E5A;
-        case GNSSSystem::BeiDou:
-            return signal == SignalType::BDS_B3I ||
-                   signal == SignalType::BDS_B2I ||
-                   signal == SignalType::BDS_B2A;
-        case GNSSSystem::QZSS:
-            return signal == SignalType::QZS_L2C;
-        default:
-            return false;
+    return signal_policy::isSecondarySignal(system, signal);
+}
+
+int signalSelectionPriority(GNSSSystem system, SignalType signal, bool primary) {
+    return signal_policy::signalPriority(system, signal, primary);
+}
+
+const Observation* selectPreferredObservation(
+    GNSSSystem system,
+    const std::vector<const Observation*>& candidates,
+    bool primary) {
+    const Observation* best = nullptr;
+    int best_priority = 1000;
+    for (const auto* obs : candidates) {
+        if (obs == nullptr) continue;
+        const int priority = signalSelectionPriority(system, obs->signal, primary);
+        if (priority < best_priority) {
+            best = obs;
+            best_priority = priority;
+        }
     }
+    return best;
+}
+
+bool selectMatchedObservationPair(
+    GNSSSystem system,
+    const std::vector<const Observation*>& rover_candidates,
+    const std::vector<const Observation*>& base_candidates,
+    bool primary,
+    const Observation*& rover_selected,
+    const Observation*& base_selected) {
+    rover_selected = nullptr;
+    base_selected = nullptr;
+    int best_priority = 1000;
+
+    for (const auto* rover_obs : rover_candidates) {
+        if (rover_obs == nullptr) continue;
+        for (const auto* base_obs : base_candidates) {
+            if (base_obs == nullptr) continue;
+            if (rover_obs->signal != base_obs->signal) continue;
+            const int priority = signalSelectionPriority(system, rover_obs->signal, primary);
+            if (priority < best_priority) {
+                rover_selected = rover_obs;
+                base_selected = base_obs;
+                best_priority = priority;
+            }
+        }
+    }
+    return rover_selected != nullptr && base_selected != nullptr;
 }
 
 double signalFrequencyHz(SignalType signal, const Ephemeris* eph = nullptr) {
@@ -416,17 +437,17 @@ void RTKProcessor::removeSatelliteFromState(const SatelliteId& sat) {
 std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatelliteData(
     const ObservationData& rover_obs, const ObservationData& base_obs, const NavigationData& nav) {
     std::map<SatelliteId, SatelliteData> result;
-    std::map<SatelliteId, const Observation*> rover_l1, rover_l2, base_l1, base_l2;
+    std::map<SatelliteId, std::vector<const Observation*>> rover_l1, rover_l2, base_l1, base_l2;
     for (const auto& obs : rover_obs.observations) {
         if (!isEnabledRTKSystem(rtk_config_, obs.satellite.system)) continue;
         if (!isUsableRTKSatellite(obs.satellite)) continue;
         if (isPrimaryRTKSignal(obs.satellite.system, obs.signal) &&
             obs.has_carrier_phase && obs.has_pseudorange) {
-            rover_l1[obs.satellite] = &obs;
+            rover_l1[obs.satellite].push_back(&obs);
         }
         if (isSecondaryRTKSignal(obs.satellite.system, obs.signal) &&
             obs.has_carrier_phase && obs.has_pseudorange) {
-            rover_l2[obs.satellite] = &obs;
+            rover_l2[obs.satellite].push_back(&obs);
         }
     }
     for (const auto& obs : base_obs.observations) {
@@ -434,11 +455,11 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         if (!isUsableRTKSatellite(obs.satellite)) continue;
         if (isPrimaryRTKSignal(obs.satellite.system, obs.signal) &&
             obs.has_carrier_phase && obs.has_pseudorange) {
-            base_l1[obs.satellite] = &obs;
+            base_l1[obs.satellite].push_back(&obs);
         }
         if (isSecondaryRTKSignal(obs.satellite.system, obs.signal) &&
             obs.has_carrier_phase && obs.has_pseudorange) {
-            base_l2[obs.satellite] = &obs;
+            base_l2[obs.satellite].push_back(&obs);
         }
     }
     Vector3d rover_pos_for_clk = rover_obs.receiver_position;
@@ -452,7 +473,9 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
     double rover_clk_bias = 0.0;
     {
         double sum_residual = 0.0; int count = 0;
-        for (const auto& [sat, r_obs] : rover_l1) {
+        for (const auto& [sat, candidates] : rover_l1) {
+            const Observation* r_obs = selectPreferredObservation(sat.system, candidates, true);
+            if (r_obs == nullptr) continue;
             Vector3d sat_pos, sat_vel; double clk, clk_drift;
             double approx_travel = r_obs->pseudorange / constants::SPEED_OF_LIGHT;
             GNSSTime approx_tx = rover_obs.time - approx_travel;
@@ -463,9 +486,17 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         }
         if (count > 0) rover_clk_bias = sum_residual / count;
     }
-    for (const auto& [sat, r_obs] : rover_l1) {
+    for (const auto& [sat, rover_l1_candidates] : rover_l1) {
         auto b_it = base_l1.find(sat);
         if (b_it == base_l1.end()) continue;
+
+        const Observation* r_obs = nullptr;
+        const Observation* b_obs = nullptr;
+        if (!selectMatchedObservationPair(
+                sat.system, rover_l1_candidates, b_it->second, true, r_obs, b_obs)) {
+            continue;
+        }
+
         double pr_travel = r_obs->pseudorange / constants::SPEED_OF_LIGHT;
         GNSSTime t_approx = rover_obs.time - pr_travel;
         Vector3d sat_pos, sat_vel; double clk, clk_drift;
@@ -476,7 +507,7 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         Vector3d corrected_sat_pos = sat_pos;
         Vector3d base_sat_pos = sat_pos;
         {
-            double base_pr = b_it->second->pseudorange;
+            double base_pr = b_obs->pseudorange;
             double base_travel = base_pr / constants::SPEED_OF_LIGHT;
             GNSSTime base_tx = base_obs.time - base_travel;
             Vector3d bsp, bsv; double bclk, bclkd;
@@ -500,17 +531,22 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         sd.l1_wavelength = signalWavelengthM(sd.l1_signal, eph);
         if (sd.l1_wavelength <= 0.0) continue;
         sd.rover_l1_phase = r_obs->carrier_phase; sd.rover_l1_code = r_obs->pseudorange;
-        sd.base_l1_phase = b_it->second->carrier_phase; sd.base_l1_code = b_it->second->pseudorange;
-        sd.has_l1 = true; sd.l1_lli = r_obs->lli | b_it->second->lli;
+        sd.base_l1_phase = b_obs->carrier_phase; sd.base_l1_code = b_obs->pseudorange;
+        sd.has_l1 = true; sd.l1_lli = r_obs->lli | b_obs->lli;
         auto r_l2 = rover_l2.find(sat); auto b_l2 = base_l2.find(sat);
         if (r_l2 != rover_l2.end() && b_l2 != base_l2.end()) {
-            sd.l2_signal = r_l2->second->signal;
-            sd.l2_frequency_hz = signalFrequencyHz(sd.l2_signal, eph);
-            sd.l2_wavelength = signalWavelengthM(sd.l2_signal, eph);
-            sd.rover_l2_phase = r_l2->second->carrier_phase; sd.rover_l2_code = r_l2->second->pseudorange;
-            sd.base_l2_phase = b_l2->second->carrier_phase; sd.base_l2_code = b_l2->second->pseudorange;
-            sd.has_l2 = sd.l2_wavelength > 0.0;
-            sd.l2_lli = r_l2->second->lli | b_l2->second->lli;
+            const Observation* r_l2_obs = nullptr;
+            const Observation* b_l2_obs = nullptr;
+            if (selectMatchedObservationPair(
+                    sat.system, r_l2->second, b_l2->second, false, r_l2_obs, b_l2_obs)) {
+                sd.l2_signal = r_l2_obs->signal;
+                sd.l2_frequency_hz = signalFrequencyHz(sd.l2_signal, eph);
+                sd.l2_wavelength = signalWavelengthM(sd.l2_signal, eph);
+                sd.rover_l2_phase = r_l2_obs->carrier_phase; sd.rover_l2_code = r_l2_obs->pseudorange;
+                sd.base_l2_phase = b_l2_obs->carrier_phase; sd.base_l2_code = b_l2_obs->pseudorange;
+                sd.has_l2 = sd.l2_wavelength > 0.0;
+                sd.l2_lli = r_l2_obs->lli | b_l2_obs->lli;
+            }
         }
         result[sat] = sd;
     }
@@ -549,97 +585,65 @@ bool RTKProcessor::selectSystemReferenceSatellite(
     GNSSSystem system,
     int min_lock_count,
     SatelliteId& ref_sat) const {
-    SatelliteId best_dual;
-    SatelliteId best_l1;
-    double best_dual_el = -1.0;
-    double best_l1_el = -1.0;
+    return rtk_selection::selectSystemReferenceSatellite(
+        buildSelectionSnapshot(sat_data), system, min_lock_count, ref_sat);
+}
 
-    auto has_required_lock = [&](const SatelliteId& sat, int freq) {
-        if (min_lock_count <= 0) return true;
-        const auto& lock_counts = (freq == 0) ? lock_count_l1_ : lock_count_l2_;
-        auto it = lock_counts.find(sat);
-        return it != lock_counts.end() && it->second >= min_lock_count;
-    };
-
+std::vector<rtk_selection::SatelliteSelectionData> RTKProcessor::buildSelectionSnapshot(
+    const std::map<SatelliteId, SatelliteData>& sat_data) const {
+    std::vector<rtk_selection::SatelliteSelectionData> snapshot;
+    snapshot.reserve(sat_data.size());
     for (const auto& [sat, sd] : sat_data) {
-        if (sat.system != system || !sd.has_l1) continue;
+        rtk_selection::SatelliteSelectionData item;
+        item.satellite = sat;
+        item.has_l1 = sd.has_l1;
+        item.has_l2 = sd.has_l2;
+        item.l1_wavelength = sd.l1_wavelength;
+        item.l2_wavelength = sd.l2_wavelength;
+        item.elevation = sd.elevation;
         auto n1_it = filter_state_.n1_indices.find(sat);
-        if (n1_it == filter_state_.n1_indices.end() || filter_state_.state(n1_it->second) == 0.0) continue;
-        if (!has_required_lock(sat, 0)) continue;
-
-        if (sd.elevation > best_l1_el) {
-            best_l1_el = sd.elevation;
-            best_l1 = sat;
-        }
-
+        item.n1_active = n1_it != filter_state_.n1_indices.end() &&
+                         filter_state_.state(n1_it->second) != 0.0;
         auto n2_it = filter_state_.n2_indices.find(sat);
-        if (!sd.has_l2 || n2_it == filter_state_.n2_indices.end()) continue;
-        if (filter_state_.state(n2_it->second) == 0.0) continue;
-        if (!has_required_lock(sat, 1)) continue;
-        if (sd.elevation > best_dual_el) {
-            best_dual_el = sd.elevation;
-            best_dual = sat;
-        }
+        item.n2_active = n2_it != filter_state_.n2_indices.end() &&
+                         filter_state_.state(n2_it->second) != 0.0;
+        auto l1_it = lock_count_l1_.find(sat);
+        item.lock_count_l1 = l1_it != lock_count_l1_.end() ? l1_it->second : 0;
+        auto l2_it = lock_count_l2_.find(sat);
+        item.lock_count_l2 = l2_it != lock_count_l2_.end() ? l2_it->second : 0;
+        snapshot.push_back(item);
     }
-
-    if (best_dual_el >= 0.0) {
-        ref_sat = best_dual;
-        return true;
-    }
-    if (best_l1_el >= 0.0) {
-        ref_sat = best_l1;
-        return true;
-    }
-    return false;
+    return snapshot;
 }
 
 std::vector<RTKProcessor::DDPair> RTKProcessor::buildDoubleDifferencePairs(
     const std::map<SatelliteId, SatelliteData>& sat_data,
     int min_lock_count) const {
     std::vector<DDPair> dd_pairs;
+    const auto snapshot = buildSelectionSnapshot(sat_data);
 
     for (GNSSSystem system : kRTKSupportedSystems) {
         if (!isEnabledRTKSystem(rtk_config_, system)) continue;
-        SatelliteId ref_sat;
-        if (!selectSystemReferenceSatellite(sat_data, system, min_lock_count, ref_sat)) continue;
-
-        const auto ref_sd_it = sat_data.find(ref_sat);
-        if (ref_sd_it == sat_data.end()) continue;
-        const auto& ref_sd = ref_sd_it->second;
-
-        auto ref_n1_it = filter_state_.n1_indices.find(ref_sat);
-        if (ref_n1_it != filter_state_.n1_indices.end() && ref_sd.has_l1) {
-            for (const auto& [sat, sd] : sat_data) {
-                if (sat.system != system || sat == ref_sat || !sd.has_l1) continue;
-                if (requiresMatchedCarrierWavelength(rtk_config_, system) &&
-                    std::abs(sd.l1_wavelength - ref_sd.l1_wavelength) > 1e-6) {
+        const auto system_pairs = rtk_selection::buildDoubleDifferencePairsForSystem(
+            snapshot,
+            system,
+            min_lock_count,
+            requiresMatchedCarrierWavelength(rtk_config_, system));
+        for (const auto& pair : system_pairs) {
+            if (pair.freq == 0) {
+                auto ref_idx = filter_state_.n1_indices.find(pair.ref_sat);
+                auto sat_idx = filter_state_.n1_indices.find(pair.sat);
+                if (ref_idx == filter_state_.n1_indices.end() || sat_idx == filter_state_.n1_indices.end()) {
                     continue;
                 }
-                auto n1_it = filter_state_.n1_indices.find(sat);
-                if (n1_it == filter_state_.n1_indices.end() || filter_state_.state(n1_it->second) == 0.0) continue;
-                if (min_lock_count > 0) {
-                    auto lock_it = lock_count_l1_.find(sat);
-                    if (lock_it == lock_count_l1_.end() || lock_it->second < min_lock_count) continue;
-                }
-                dd_pairs.push_back({ref_sat, ref_n1_it->second, n1_it->second, sat, 0});
-            }
-        }
-
-        auto ref_n2_it = filter_state_.n2_indices.find(ref_sat);
-        if (ref_n2_it != filter_state_.n2_indices.end() && ref_sd.has_l2) {
-            for (const auto& [sat, sd] : sat_data) {
-                if (sat.system != system || sat == ref_sat || !sd.has_l2) continue;
-                if (requiresMatchedCarrierWavelength(rtk_config_, system) &&
-                    std::abs(sd.l2_wavelength - ref_sd.l2_wavelength) > 1e-6) {
+                dd_pairs.push_back({pair.ref_sat, ref_idx->second, sat_idx->second, pair.sat, pair.freq});
+            } else {
+                auto ref_idx = filter_state_.n2_indices.find(pair.ref_sat);
+                auto sat_idx = filter_state_.n2_indices.find(pair.sat);
+                if (ref_idx == filter_state_.n2_indices.end() || sat_idx == filter_state_.n2_indices.end()) {
                     continue;
                 }
-                auto n2_it = filter_state_.n2_indices.find(sat);
-                if (n2_it == filter_state_.n2_indices.end() || filter_state_.state(n2_it->second) == 0.0) continue;
-                if (min_lock_count > 0) {
-                    auto lock_it = lock_count_l2_.find(sat);
-                    if (lock_it == lock_count_l2_.end() || lock_it->second < min_lock_count) continue;
-                }
-                dd_pairs.push_back({ref_sat, ref_n2_it->second, n2_it->second, sat, 1});
+                dd_pairs.push_back({pair.ref_sat, ref_idx->second, sat_idx->second, pair.sat, pair.freq});
             }
         }
     }
@@ -1441,27 +1445,10 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
     if (oi < 6) return false;
 
     // Build DD error covariance R (RTKLIB ddcov)
-    MatrixXd R = MatrixXd::Zero(oi, oi);
-    {
-        int k = 0;
-        for (int b = 0; b < (int)nb_vec.size(); ++b) {
-            for (int i = 0; i < nb_vec[b]; ++i) {
-                for (int j = 0; j < nb_vec[b]; ++j) {
-                    R(k + i, k + j) = Ri_vec[k + i];
-                    if (i == j) R(k + i, k + j) += Rj_vec[k + i];
-                }
-            }
-            k += nb_vec[b];
-        }
-    }
+    MatrixXd R = rtk_measurement::buildDoubleDifferenceCovariance(nb_vec, Ri_vec, Rj_vec, oi);
 
     // Reject outliers (RTKLIB maxinno check)
-    for (int i = 0; i < oi; ++i) {
-        if (std::abs(z(i)) > 30.0) {
-            z(i) = 0.0;
-            H.row(i).setZero();
-        }
-    }
+    rtk_measurement::suppressOutlierRows(z, H, 30.0);
 
     // Native Eigen Kalman filter update
     {
@@ -1548,17 +1535,13 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     // Exclude DD pairs with outlier variance (relative to median)
     // This removes newly-appearing satellites that haven't converged
     {
-        std::vector<double> vars(nb);
-        for (int i = 0; i < nb; ++i) vars[i] = Qb(i, i);
-        std::sort(vars.begin(), vars.end());
-        double median_var = vars[nb / 2];
-        double var_threshold = std::max(median_var * 10.0, 1e-4);  // at least 10x median
-
-        std::vector<int> good_pairs;
+        std::vector<rtk_ar_selection::PairDescriptor> descriptors;
+        descriptors.reserve(nb);
         for (int i = 0; i < nb; ++i) {
-            if (Qb(i, i) <= var_threshold) good_pairs.push_back(i);
+            descriptors.push_back({dd_pairs[i].ref_sat.system, Qb(i, i)});
         }
-        if ((int)good_pairs.size() < 4) good_pairs.clear();  // keep all if too few good
+        std::vector<int> good_pairs =
+            rtk_ar_selection::filterPairsByRelativeVariance(descriptors);
 
         if (!good_pairs.empty() && (int)good_pairs.size() < nb) {
             int nb_new = good_pairs.size();
@@ -1759,7 +1742,6 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         const MatrixXd full_Qb = Qb;
         const MatrixXd full_Qab = Qab;
         double best_ratio = fixed ? ratio : 0.0;
-        std::vector<int> current_subset = best_subset;
         VectorXd best_dd_float = full_dd_float;
         MatrixXd best_Qb = full_Qb;
         MatrixXd best_Qab = full_Qab;
@@ -1817,28 +1799,14 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             return false;
         };
 
-        auto build_subset_excluding = [&](std::initializer_list<GNSSSystem> excluded) {
-            std::vector<int> subset;
-            for (int i = 0; i < nb; ++i) {
-                bool keep = true;
-                for (GNSSSystem system : excluded) {
-                    if (dd_pairs[i].ref_sat.system == system) {
-                        keep = false;
-                        break;
-                    }
-                }
-                if (keep) {
-                    subset.push_back(i);
-                }
-            }
-            return subset;
-        };
+        std::vector<rtk_ar_selection::PairDescriptor> descriptors;
+        descriptors.reserve(nb);
+        for (int i = 0; i < nb; ++i) {
+            descriptors.push_back({dd_pairs[i].ref_sat.system, full_Qb(i, i)});
+        }
 
-        const std::vector<std::vector<int>> preferred_subsets = {
-            build_subset_excluding({GNSSSystem::GLONASS, GNSSSystem::BeiDou}),
-            build_subset_excluding({GNSSSystem::GLONASS}),
-            build_subset_excluding({GNSSSystem::BeiDou}),
-        };
+        const std::vector<std::vector<int>> preferred_subsets =
+            rtk_ar_selection::buildPreferredSubsets(descriptors);
         const bool compare_preferred_subsets =
             usesGlonassAutocal(rtk_config_) ||
             std::any_of(dd_pairs.begin(), dd_pairs.end(), [](const DDPair& pair) {
@@ -1855,22 +1823,10 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         }
 
         if (search_drop_subsets) {
-            for (int drop = 0; drop < std::min(nb - 4, 6); ++drop) {
-                int worst = -1;
-                double worst_var = -1;
-                for (int idx : current_subset) {
-                    if (full_Qb(idx, idx) > worst_var) { worst_var = full_Qb(idx, idx); worst = idx; }
-                }
-                if (worst < 0) break;
-
-                std::vector<int> subset;
-                for (int idx : current_subset) {
-                    if (idx != worst) subset.push_back(idx);
-                }
-                if (subset.size() < 4) break;
-
+            const auto progressive_subsets =
+                rtk_ar_selection::buildProgressiveVarianceDropSubsets(descriptors, 4, 6);
+            for (const auto& subset : progressive_subsets) {
                 try_subset(subset);
-                current_subset = subset;
             }
         }
 

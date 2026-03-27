@@ -1135,6 +1135,7 @@ class PPCDemoTest(unittest.TestCase):
                 max_epochs=120,
                 match_tolerance_s=0.25,
                 use_existing_solution=True,
+                solver_wall_time_s=0.5,
                 sp3=None,
                 clk=None,
                 antex=None,
@@ -1149,6 +1150,9 @@ class PPCDemoTest(unittest.TestCase):
                 require_max_h_max=0.2,
                 require_p95_up_max=0.2,
                 require_mean_sats_min=11.0,
+                require_solver_wall_time_max=1.0,
+                require_realtime_factor_min=0.5,
+                require_effective_epoch_rate_min=5.0,
                 _dataset_city="tokyo",
                 _dataset_run="run1",
             )
@@ -1162,6 +1166,7 @@ class PPCDemoTest(unittest.TestCase):
                 reference_csv,
                 out,
                 summary_json,
+                solver_wall_time_s=args.solver_wall_time_s,
             )
             ppc_demo.enforce_summary_requirements(payload, args)
 
@@ -1176,6 +1181,10 @@ class PPCDemoTest(unittest.TestCase):
             self.assertLessEqual(payload["max_h_m"], 0.2)
             self.assertLessEqual(payload["p95_abs_up_m"], 0.2)
             self.assertGreaterEqual(payload["mean_satellites"], 11.0)
+            self.assertEqual(payload["solver_wall_time_s"], 0.5)
+            self.assertEqual(payload["solution_span_s"], 0.4)
+            self.assertEqual(payload["realtime_factor"], 0.8)
+            self.assertEqual(payload["effective_epoch_rate_hz"], 6.0)
             self.assertTrue(summary_json.exists())
 
             failing_args = argparse.Namespace(
@@ -1187,6 +1196,9 @@ class PPCDemoTest(unittest.TestCase):
                 require_max_h_max=0.01,
                 require_p95_up_max=0.01,
                 require_mean_sats_min=20.0,
+                require_solver_wall_time_max=0.1,
+                require_realtime_factor_min=2.0,
+                require_effective_epoch_rate_min=10.0,
             )
             with self.assertRaises(SystemExit) as context:
                 ppc_demo.enforce_summary_requirements(payload, failing_args)
@@ -1200,6 +1212,9 @@ class PPCDemoTest(unittest.TestCase):
             self.assertIn("max horizontal error", message)
             self.assertIn("p95 absolute up error", message)
             self.assertIn("mean satellites", message)
+            self.assertIn("solver wall time", message)
+            self.assertIn("realtime factor", message)
+            self.assertIn("effective epoch rate", message)
 
 
 if __name__ == "__main__":

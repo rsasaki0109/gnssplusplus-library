@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 from gnss_runtime import ensure_input_exists, resolve_gnss_command
 
@@ -96,6 +97,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Do not rerun the solver; only summarize an existing --out file.",
     )
+    parser.add_argument(
+        "--solver-wall-time-s",
+        type=float,
+        default=None,
+        help="Optional solver wall time in seconds. If omitted, actual runtime is recorded when the solver is executed.",
+    )
     parser.add_argument("--sp3", type=Path, default=None, help="Optional SP3 precise orbit file for PPP.")
     parser.add_argument("--clk", type=Path, default=None, help="Optional CLK precise clock file for PPP.")
     parser.add_argument("--antex", type=Path, default=None, help="Optional ANTEX file for PPP.")
@@ -118,6 +125,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-max-h-max", type=float, default=None)
     parser.add_argument("--require-p95-up-max", type=float, default=None)
     parser.add_argument("--require-mean-sats-min", type=float, default=None)
+    parser.add_argument("--require-solver-wall-time-max", type=float, default=None)
+    parser.add_argument("--require-realtime-factor-min", type=float, default=None)
+    parser.add_argument("--require-effective-epoch-rate-min", type=float, default=None)
     return parser.parse_args()
 
 
@@ -128,6 +138,18 @@ def run_command(command: list[str]) -> None:
 
 def rounded(value: float) -> float:
     return round(value, 6)
+
+
+def week_tow_to_seconds(week: int, tow: float) -> float:
+    return week * 604800.0 + tow
+
+
+def solution_span_seconds(epochs: list[comparison.SolutionEpoch]) -> float:
+    if len(epochs) < 2:
+        return 0.0
+    first = week_tow_to_seconds(epochs[0].week, epochs[0].tow)
+    last = week_tow_to_seconds(epochs[-1].week, epochs[-1].tow)
+    return max(0.0, last - first)
 
 
 def normalize_header(name: str) -> str:
@@ -312,7 +334,7 @@ def run_solver(
     base: Path | None,
     nav: Path,
     out: Path,
-) -> None:
+) -> float:
     gnss_command = resolve_gnss_command(ROOT_DIR)
     if args.solver == "rtk":
         assert base is not None
@@ -357,7 +379,9 @@ def run_solver(
             command.append("--enable-ar")
     if args.max_epochs > 0:
         command.extend(["--max-epochs", str(args.max_epochs)])
+    start = time.perf_counter()
     run_command(command)
+    return time.perf_counter() - start
 
 
 def build_summary_payload(
@@ -369,6 +393,7 @@ def build_summary_payload(
     reference_csv: Path,
     out: Path,
     summary_json: Path,
+    solver_wall_time_s: float | None = None,
 ) -> dict[str, object]:
     reference = read_flexible_reference_csv(reference_csv)
     solution_epochs = comparison.read_libgnss_pos(out)
@@ -383,6 +408,7 @@ def build_summary_payload(
         1 for epoch in matched if epoch.status == solver_fixed_status(args.solver)
     )
     mean_satellites = sum(epoch.num_satellites for epoch in solution_epochs) / len(solution_epochs)
+    valid_span_s = solution_span_seconds(solution_epochs)
 
     payload = {
         "dataset": f"PPC-Dataset {args._dataset_city} {args._dataset_run}",
@@ -408,7 +434,15 @@ def build_summary_payload(
         "mean_up_m": rounded(float(summary["mean_up_m"])),
         "mean_satellites": rounded(mean_satellites),
         "match_tolerance_s": rounded(args.match_tolerance_s),
+        "solution_span_s": rounded(valid_span_s),
+        "solver_wall_time_s": rounded(solver_wall_time_s) if solver_wall_time_s is not None else None,
+        "realtime_factor": None,
+        "effective_epoch_rate_hz": None,
     }
+    if solver_wall_time_s is not None and solver_wall_time_s > 0.0:
+        payload["effective_epoch_rate_hz"] = rounded(len(solution_epochs) / solver_wall_time_s)
+        if valid_span_s > 0.0:
+            payload["realtime_factor"] = rounded(valid_span_s / solver_wall_time_s)
     summary_json.parent.mkdir(parents=True, exist_ok=True)
     summary_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return payload
@@ -472,6 +506,30 @@ def enforce_summary_requirements(payload: dict[str, object], args: argparse.Name
         failures.append(
             f"mean satellites {float(payload['mean_satellites']):.6f} < {args.require_mean_sats_min:.6f}"
         )
+    if args.require_solver_wall_time_max is not None:
+        solver_wall_time_s = payload["solver_wall_time_s"]
+        if solver_wall_time_s is None:
+            failures.append("solver wall time is unavailable")
+        elif float(solver_wall_time_s) > args.require_solver_wall_time_max:
+            failures.append(
+                f"solver wall time {float(solver_wall_time_s):.6f} s > {args.require_solver_wall_time_max:.6f} s"
+            )
+    if args.require_realtime_factor_min is not None:
+        realtime_factor = payload["realtime_factor"]
+        if realtime_factor is None:
+            failures.append("realtime factor is unavailable")
+        elif float(realtime_factor) < args.require_realtime_factor_min:
+            failures.append(
+                f"realtime factor {float(realtime_factor):.6f} < {args.require_realtime_factor_min:.6f}"
+            )
+    if args.require_effective_epoch_rate_min is not None:
+        effective_epoch_rate_hz = payload["effective_epoch_rate_hz"]
+        if effective_epoch_rate_hz is None:
+            failures.append("effective epoch rate is unavailable")
+        elif float(effective_epoch_rate_hz) < args.require_effective_epoch_rate_min:
+            failures.append(
+                f"effective epoch rate {float(effective_epoch_rate_hz):.6f} Hz < {args.require_effective_epoch_rate_min:.6f} Hz"
+            )
 
     if failures:
         raise SystemExit(
@@ -505,9 +563,21 @@ def main() -> int:
             ensure_input_exists(args.blq, "PPP BLQ file", ROOT_DIR)
 
         out.parent.mkdir(parents=True, exist_ok=True)
-        run_solver(args, rover, base, nav, out)
+        measured_wall_time_s = run_solver(args, rover, base, nav, out)
+        if args.solver_wall_time_s is None:
+            args.solver_wall_time_s = measured_wall_time_s
 
-    payload = build_summary_payload(args, run_dir, rover, base, nav, reference_csv, out, summary_json)
+    payload = build_summary_payload(
+        args,
+        run_dir,
+        rover,
+        base,
+        nav,
+        reference_csv,
+        out,
+        summary_json,
+        solver_wall_time_s=args.solver_wall_time_s,
+    )
     enforce_summary_requirements(payload, args)
 
     print("Finished PPC-Dataset demo.")
@@ -515,6 +585,14 @@ def main() -> int:
     print(f"  solver: {args.solver}")
     print(f"  solution: {out}")
     print(f"  summary: {summary_json}")
+    if payload["solver_wall_time_s"] is not None:
+        print(
+            "  performance:"
+            f" wall={payload['solver_wall_time_s']} s"
+            f", span={payload['solution_span_s']} s"
+            f", rtf={payload['realtime_factor']}"
+            f", rate={payload['effective_epoch_rate_hz']} Hz"
+        )
     return 0
 
 
