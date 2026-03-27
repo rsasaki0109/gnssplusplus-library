@@ -6,15 +6,22 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import csv
+import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 
+from gnss_runtime import resolve_gnss_command
+
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_RTKLIB = "/tmp/RTKLIB/app/rnx2rtkp/gcc/rnx2rtkp"
+
+sys.path.insert(0, str(ROOT_DIR / "scripts"))
+
+import generate_driving_comparison as driving_comparison  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,6 +30,11 @@ def parse_args() -> argparse.Namespace:
         "--rtklib-bin",
         default=os.environ.get("RTKLIB_RNX2RTKP", DEFAULT_RTKLIB),
         help="Path to the RTKLIB rnx2rtkp binary.",
+    )
+    parser.add_argument(
+        "--malib-bin",
+        default=os.environ.get("MALIB_RNX2RTKP"),
+        help="Optional path to the MALIB rnx2rtkp binary.",
     )
     parser.add_argument(
         "--rover",
@@ -55,6 +67,12 @@ def parse_args() -> argparse.Namespace:
         help="RTKLIB configuration file.",
     )
     parser.add_argument(
+        "--malib-config",
+        type=Path,
+        default=ROOT_DIR / "scripts/rtklib_odaiba.conf",
+        help="Optional MALIB configuration file.",
+    )
+    parser.add_argument(
         "--lib-pos",
         type=Path,
         default=ROOT_DIR / "output/rtk_solution.pos",
@@ -71,6 +89,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=ROOT_DIR / "output/driving_rtklib_rtk.pos",
         help="Output path for RTKLIB solution.",
+    )
+    parser.add_argument(
+        "--malib-pos",
+        type=Path,
+        default=ROOT_DIR / "output/driving_malib_rtk.pos",
+        help="Output path for optional MALIB solution.",
     )
     parser.add_argument(
         "--comparison-png",
@@ -93,6 +117,42 @@ def parse_args() -> argparse.Namespace:
         "--scorecard-title",
         default="UrbanNav Tokyo Odaiba",
         help="Title for the scorecard figure.",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=ROOT_DIR / "output/odaiba_summary.json",
+        help="Output path for a machine-readable benchmark summary JSON.",
+    )
+    parser.add_argument(
+        "--require-all-epochs-min",
+        type=int,
+        default=0,
+        help="Fail if libgnss++ all-epoch matched count is below this value.",
+    )
+    parser.add_argument(
+        "--require-common-epoch-pairs-min",
+        type=int,
+        default=0,
+        help="Fail if common epoch pairs are below this value.",
+    )
+    parser.add_argument(
+        "--require-lib-all-p95-h-max",
+        type=float,
+        default=None,
+        help="Fail if libgnss++ all-epoch p95 horizontal error exceeds this value in meters.",
+    )
+    parser.add_argument(
+        "--require-lib-common-median-h-max",
+        type=float,
+        default=None,
+        help="Fail if libgnss++ common-epoch median horizontal error exceeds this value in meters.",
+    )
+    parser.add_argument(
+        "--require-lib-common-p95-h-max",
+        type=float,
+        default=None,
+        help="Fail if libgnss++ common-epoch p95 horizontal error exceeds this value in meters.",
     )
     parser.add_argument(
         "--mode",
@@ -149,6 +209,134 @@ def run_command(command: list[str]) -> None:
     subprocess.run(command, check=True)
 
 
+def rounded_metrics(summary: dict[str, float]) -> dict[str, float | int]:
+    rounded: dict[str, float | int] = {}
+    for key, value in summary.items():
+        if isinstance(value, float):
+            rounded[key] = round(value, 6)
+        else:
+            rounded[key] = value
+    return rounded
+
+
+def write_summary_json(args: argparse.Namespace) -> dict[str, object]:
+    reference = driving_comparison.read_reference_csv(args.reference_csv)
+    lib_epochs = driving_comparison.read_libgnss_pos(args.lib_pos)
+    rtklib_epochs = driving_comparison.read_rtklib_pos(args.rtklib_pos)
+    malib_epochs = (
+        driving_comparison.read_rtklib_pos(args.malib_pos)
+        if args.malib_pos.exists()
+        else None
+    )
+
+    lib_matched = driving_comparison.match_to_reference(lib_epochs, reference, 0.11)
+    rtklib_matched = driving_comparison.match_to_reference(rtklib_epochs, reference, 0.11)
+    lib_summary = driving_comparison.summarize(lib_matched, fixed_status=4, label="libgnss++")
+    rtklib_summary = driving_comparison.summarize(rtklib_matched, fixed_status=1, label="RTKLIB")
+    pairs = driving_comparison.pair_epochs(lib_matched, rtklib_matched, tolerance_s=0.11)
+    lib_common_summary, rtklib_common_summary = driving_comparison.summarize_common_epochs(
+        pairs,
+        lib_fixed_status=4,
+        rtklib_fixed_status=1,
+    )
+    malib_summary = None
+    malib_pairs: list[driving_comparison.EpochPair] = []
+    malib_common_summary = None
+    if malib_epochs is not None:
+        malib_matched = driving_comparison.match_to_reference(malib_epochs, reference, 0.11)
+        malib_summary = driving_comparison.summarize(malib_matched, fixed_status=1, label="MALIB")
+        malib_pairs = driving_comparison.pair_epochs(lib_matched, malib_matched, tolerance_s=0.11)
+        lib_malib_common_summary, malib_common_summary = driving_comparison.summarize_common_epochs(
+            malib_pairs,
+            lib_fixed_status=4,
+            rtklib_fixed_status=1,
+        )
+    else:
+        lib_malib_common_summary = None
+
+    payload = {
+        "dataset": "UrbanNav Tokyo Odaiba",
+        "reference_csv": str(args.reference_csv),
+        "lib_pos": str(args.lib_pos),
+        "rtklib_pos": str(args.rtklib_pos),
+        "malib_pos": str(args.malib_pos) if args.malib_pos.exists() else None,
+        "comparison_png": str(args.comparison_png),
+        "scorecard_png": str(args.scorecard_png),
+        "common_epoch_pairs": len(pairs),
+        "rtklib_common_epoch_pairs": len(pairs),
+        "malib_common_epoch_pairs": len(malib_pairs) if malib_summary is not None else None,
+        "libgnss_all_epochs": rounded_metrics(lib_summary),
+        "rtklib_all_epochs": rounded_metrics(rtklib_summary),
+        "libgnss_common_epochs": rounded_metrics(lib_common_summary),
+        "rtklib_common_epochs": rounded_metrics(rtklib_common_summary),
+        "malib_all_epochs": rounded_metrics(malib_summary) if malib_summary is not None else None,
+        "malib_common_epochs": (
+            rounded_metrics(malib_common_summary) if malib_common_summary is not None else None
+        ),
+        "libgnss_vs_malib_common_epochs": (
+            rounded_metrics(lib_malib_common_summary)
+            if lib_malib_common_summary is not None
+            else None
+        ),
+    }
+
+    args.summary_json.parent.mkdir(parents=True, exist_ok=True)
+    args.summary_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return payload
+
+
+def enforce_summary_requirements(payload: dict[str, object], args: argparse.Namespace) -> None:
+    failures: list[str] = []
+
+    common_epoch_pairs = int(payload["common_epoch_pairs"])
+    lib_all = payload["libgnss_all_epochs"]
+    lib_common = payload["libgnss_common_epochs"]
+    assert isinstance(lib_all, dict)
+    assert isinstance(lib_common, dict)
+
+    if args.require_all_epochs_min > 0 and int(lib_all["epochs"]) < args.require_all_epochs_min:
+        failures.append(
+            f"libgnss++ all-epoch matched count {int(lib_all['epochs'])} < {args.require_all_epochs_min}"
+        )
+    if (
+        args.require_common_epoch_pairs_min > 0
+        and common_epoch_pairs < args.require_common_epoch_pairs_min
+    ):
+        failures.append(
+            f"common epoch pairs {common_epoch_pairs} < {args.require_common_epoch_pairs_min}"
+        )
+    if (
+        args.require_lib_all_p95_h_max is not None
+        and float(lib_all["p95_h_m"]) > args.require_lib_all_p95_h_max
+    ):
+        failures.append(
+            f"libgnss++ all-epoch p95_h {float(lib_all['p95_h_m']):.6f} m > "
+            f"{args.require_lib_all_p95_h_max:.6f} m"
+        )
+    if (
+        args.require_lib_common_median_h_max is not None
+        and float(lib_common["median_h_m"]) > args.require_lib_common_median_h_max
+    ):
+        failures.append(
+            f"libgnss++ common-epoch median_h {float(lib_common['median_h_m']):.6f} m > "
+            f"{args.require_lib_common_median_h_max:.6f} m"
+        )
+    if (
+        args.require_lib_common_p95_h_max is not None
+        and float(lib_common["p95_h_m"]) > args.require_lib_common_p95_h_max
+    ):
+        failures.append(
+            f"libgnss++ common-epoch p95_h {float(lib_common['p95_h_m']):.6f} m > "
+            f"{args.require_lib_common_p95_h_max:.6f} m"
+        )
+
+    if failures:
+        message = "Odaiba benchmark sign-off checks failed:\n" + "\n".join(
+            f"  - {failure}" for failure in failures
+        )
+        raise SystemExit(message)
+
+
 def read_reference_tows(path: Path) -> list[float]:
     rows: list[float] = []
     with path.open(newline="") as handle:
@@ -159,7 +347,7 @@ def read_reference_tows(path: Path) -> list[float]:
     return rows
 
 
-def run_segmented_lib_solve(args: argparse.Namespace, dispatcher: Path) -> None:
+def run_segmented_lib_solve(args: argparse.Namespace, gnss_command: Path | list[str]) -> None:
     if args.segment_epochs <= 0:
         raise ValueError("segment_epochs must be > 0")
     if args.warmup_epochs < 0:
@@ -193,6 +381,12 @@ def run_segmented_lib_solve(args: argparse.Namespace, dispatcher: Path) -> None:
         f"segment={args.segment_epochs} epochs, warmup={args.warmup_epochs}, jobs={args.jobs}"
     )
 
+    command_prefix = (
+        [sys.executable, str(gnss_command)]
+        if isinstance(gnss_command, Path)
+        else list(gnss_command)
+    )
+
     with tempfile.TemporaryDirectory(prefix="odaiba_segments_") as temp_dir:
         temp_root = Path(temp_dir)
         for index, segment in enumerate(segments):
@@ -201,8 +395,7 @@ def run_segmented_lib_solve(args: argparse.Namespace, dispatcher: Path) -> None:
         def run_one(index: int, segment: dict[str, object]) -> Path:
             out_path = segment["path"]
             command = [
-                sys.executable,
-                str(dispatcher),
+                *command_prefix,
                 "solve",
                 "--rover",
                 str(args.rover),
@@ -282,8 +475,7 @@ def run_segmented_lib_solve(args: argparse.Namespace, dispatcher: Path) -> None:
 
     run_command(
         [
-            sys.executable,
-            str(dispatcher),
+            *command_prefix,
             "pos2kml",
             str(args.lib_pos),
             str(args.lib_kml),
@@ -295,14 +487,15 @@ def run_segmented_lib_solve(args: argparse.Namespace, dispatcher: Path) -> None:
 
 def main() -> int:
     args = parse_args()
-    dispatcher = ROOT_DIR / "apps/gnss.py"
+    gnss_command = resolve_gnss_command(ROOT_DIR)
 
-    ensure_exists(dispatcher, "dispatcher")
     ensure_exists(args.rover, "rover observation file")
     ensure_exists(args.base, "base observation file")
     ensure_exists(args.nav, "navigation file")
     ensure_exists(args.reference_csv, "reference csv")
     ensure_exists(args.rtklib_config, "RTKLIB config")
+    if args.malib_bin:
+        ensure_exists(args.malib_config, "MALIB config")
     if args.skip_epochs < 0:
         raise SystemExit("--skip-epochs must be >= 0")
     if args.max_epochs == 0:
@@ -317,24 +510,28 @@ def main() -> int:
     rtklib_bin = Path(args.rtklib_bin)
     if not rtklib_bin.exists():
         raise SystemExit(f"Missing RTKLIB binary: {rtklib_bin}")
+    malib_bin = Path(args.malib_bin) if args.malib_bin else None
+    if malib_bin is not None and not malib_bin.exists():
+        raise SystemExit(f"Missing MALIB binary: {malib_bin}")
 
     for output_path in (
         args.lib_pos,
         args.lib_kml,
         args.rtklib_pos,
+        args.malib_pos,
         args.comparison_png,
         args.scorecard_png,
+        args.summary_json,
     ):
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
     partial_window = args.skip_epochs > 0 or args.max_epochs > 0
 
     if not partial_window and args.segment_epochs > 0:
-        run_segmented_lib_solve(args, dispatcher)
+        run_segmented_lib_solve(args, gnss_command)
     else:
         lib_command = [
-            sys.executable,
-            str(dispatcher),
+            *gnss_command,
             "solve",
             "--rover",
             str(args.rover),
@@ -376,10 +573,23 @@ def main() -> int:
         ]
     )
 
+    if malib_bin is not None:
+        run_command(
+            [
+                str(malib_bin),
+                "-k",
+                str(args.malib_config),
+                "-o",
+                str(args.malib_pos),
+                str(args.rover),
+                str(args.base),
+                str(args.nav),
+            ]
+        )
+
     run_command(
         [
-            sys.executable,
-            str(dispatcher),
+            *gnss_command,
             "driving-compare",
             "--lib-pos",
             str(args.lib_pos),
@@ -396,8 +606,7 @@ def main() -> int:
 
     run_command(
         [
-            sys.executable,
-            str(dispatcher),
+            *gnss_command,
             "scorecard",
             "--lib-pos",
             str(args.lib_pos),
@@ -412,11 +621,17 @@ def main() -> int:
         ]
     )
 
+    summary = write_summary_json(args)
+    enforce_summary_requirements(summary, args)
+
     print("Finished Odaiba benchmark pipeline.")
     print(f"  libgnss++: {args.lib_pos}")
     print(f"  RTKLIB: {args.rtklib_pos}")
+    if malib_bin is not None or args.malib_pos.exists():
+        print(f"  MALIB: {args.malib_pos}")
     print(f"  comparison: {args.comparison_png}")
     print(f"  scorecard: {args.scorecard_png}")
+    print(f"  summary: {args.summary_json}")
     return 0
 
 

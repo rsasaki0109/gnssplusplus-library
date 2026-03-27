@@ -163,6 +163,22 @@ TEST_F(RTKSmokeTest, GlonassARAutocalDoesNotRegressEarlyFixesOnBundledKinematicD
     EXPECT_GE(on_summary.fixed_solutions, off_summary.fixed_solutions);
 }
 
+TEST_F(RTKSmokeTest, EstimatedIonoModeProducesValidFloatSolutionsOnBundledKinematicData) {
+    RTKProcessor::RTKConfig config;
+    config.position_mode = RTKProcessor::RTKConfig::PositionMode::KINEMATIC;
+    config.ar_mode = RTKProcessor::RTKConfig::AmbiguityResolutionMode::CONTINUOUS;
+    config.ionoopt = RTKProcessor::RTKConfig::IonoOpt::EST;
+    config.min_satellites_for_ar = 5;
+    config.ratio_threshold = 3.0;
+
+    const auto summary = runEpochs(10, config);
+
+    EXPECT_EQ(summary.epochs_processed, 10);
+    EXPECT_GE(summary.valid_solutions, 8);
+    EXPECT_EQ(summary.fixed_solutions, 0);
+    EXPECT_TRUE(summary.first_valid_solution.isValid());
+}
+
 TEST(RTKStateIndexTest, SeparatesConstellationsInAmbiguityStateLayout) {
     const int gps_l1 = RTKProcessor::ambiguityStateIndex(SatelliteId(GNSSSystem::GPS, 1), 0);
     const int gal_l1 = RTKProcessor::ambiguityStateIndex(SatelliteId(GNSSSystem::Galileo, 1), 0);
@@ -176,6 +192,17 @@ TEST(RTKStateIndexTest, SeparatesConstellationsInAmbiguityStateLayout) {
     EXPECT_NE(gps_l1, bds_l1);
     EXPECT_NE(gps_l1, qzs_l1);
     EXPECT_NE(gps_l1, gps_l2);
+}
+
+TEST(RTKStateIndexTest, SeparatesIonoStatesFromAmbiguityStatesAndConstellations) {
+    const int gps_iono = RTKProcessor::ionoStateIndex(SatelliteId(GNSSSystem::GPS, 1));
+    const int gal_iono = RTKProcessor::ionoStateIndex(SatelliteId(GNSSSystem::Galileo, 1));
+    const int gps_l1 = RTKProcessor::ambiguityStateIndex(SatelliteId(GNSSSystem::GPS, 1), 0);
+    const int gps_l2 = RTKProcessor::ambiguityStateIndex(SatelliteId(GNSSSystem::GPS, 1), 1);
+
+    EXPECT_NE(gps_iono, gal_iono);
+    EXPECT_NE(gps_iono, gps_l1);
+    EXPECT_NE(gps_iono, gps_l2);
 }
 
 TEST(RTKMixedConstellationTest, UsesBeiDouOnOdaibaExactEpochWithoutLargeJump) {

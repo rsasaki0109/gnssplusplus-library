@@ -52,7 +52,8 @@ public:
         // Ionosphere option
         enum class IonoOpt {
             OFF = 0,       // no ionosphere correction (L1/L2 separate)
-            IFLC = 1       // ionosphere-free linear combination
+            IFLC = 1,      // ionosphere-free linear combination
+            EST = 2        // estimate DD ionosphere states in the KF
         };
         IonoOpt ionoopt = IonoOpt::OFF;
 
@@ -66,6 +67,7 @@ public:
         // Kalman filter parameters
         double process_noise_position = 1e-4;       // m^2/s for static baseline
         double process_noise_ambiguity = 1e-8;    // cycles^2/s (very small - ambiguities are constant)
+        double process_noise_iono = 1e-4;         // m^2/s for DD ionosphere states
         int kf_iterations = 4;                       // more iterations for position convergence
 
         // Measurement noise
@@ -118,6 +120,7 @@ public:
                      double& success_rate);
 
     static int ambiguityStateIndex(const SatelliteId& sat, int freq) { return IB(sat, freq); }
+    static int ionoStateIndex(const SatelliteId& sat) { return II(sat); }
 
 private:
     RTKConfig rtk_config_;
@@ -126,7 +129,7 @@ private:
     Vector3d base_position_;
     bool base_position_known_ = false;
 
-    // Fixed-size state: [pos(3), glo_hw_bias(2), N1(MAXSAT), N2(MAXSAT)]
+    // Fixed-size state: [pos(3), glo_hw_bias(2), iono(MAXSAT), N1(MAXSAT), N2(MAXSAT)]
     // Satellite slots are system-aware so G01/E01/Q01 do not collide.
     static constexpr int BASE_STATES = 3;
     static constexpr int GLO_HWBIAS_STATES = 2;
@@ -134,7 +137,8 @@ private:
     static constexpr int SUPPORTED_SYSTEM_BLOCKS = 6;
     static constexpr int MAXSAT = SATS_PER_SYSTEM * SUPPORTED_SYSTEM_BLOCKS;
     static constexpr int REAL_STATES = BASE_STATES + GLO_HWBIAS_STATES;
-    static constexpr int NX = REAL_STATES + MAXSAT * 2;  // total state size
+    static constexpr int IONO_STATES = MAXSAT;
+    static constexpr int NX = REAL_STATES + IONO_STATES + MAXSAT * 2;  // total state size
 
     static int systemSlotBase(GNSSSystem system) {
         switch (system) {
@@ -159,14 +163,19 @@ private:
         return BASE_STATES + freq;
     }
 
+    static int II(const SatelliteId& sat) {
+        return REAL_STATES + satelliteSlot(sat);
+    }
+
     static int IB(const SatelliteId& sat, int freq) {
-        return REAL_STATES + freq * MAXSAT + satelliteSlot(sat);
+        return REAL_STATES + IONO_STATES + freq * MAXSAT + satelliteSlot(sat);
     }
 
     struct RTKState {
         VectorXd state;
         MatrixXd covariance;
         // Legacy index maps (now use IB() directly)
+        std::map<SatelliteId, int> iono_indices;
         std::map<SatelliteId, int> n1_indices;
         std::map<SatelliteId, int> n2_indices;
         int next_state_idx = BASE_STATES;
@@ -350,6 +359,7 @@ private:
      */
     int getOrCreateN1Index(const SatelliteId& sat, double initial_value);
     int getOrCreateN2Index(const SatelliteId& sat, double initial_value);
+    int getOrCreateIonoIndex(const SatelliteId& sat, double initial_value);
 
     bool selectSystemReferenceSatellite(const std::map<SatelliteId, SatelliteData>& sat_data,
                                         GNSSSystem system,

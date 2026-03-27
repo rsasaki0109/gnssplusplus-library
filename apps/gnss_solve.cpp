@@ -35,7 +35,8 @@ enum class ModeChoice {
 enum class IonoChoice {
     AUTO,
     OFF,
-    IFLC
+    IFLC,
+    EST
 };
 
 enum class GlonassARChoice {
@@ -305,6 +306,8 @@ std::string ionoChoiceString(IonoChoice iono) {
             return "off";
         case IonoChoice::IFLC:
             return "iflc";
+        case IonoChoice::EST:
+            return "est";
     }
     return "unknown";
 }
@@ -346,7 +349,7 @@ void printUsage(const char* program_name) {
         << "  --format <pos|llh|xyz>     Output text format (default: pos)\n"
         << "  --mode <auto|kinematic|static>\n"
         << "                             Position mode (default: auto)\n"
-        << "  --iono <auto|off|iflc>     Ionosphere option (default: auto)\n"
+        << "  --iono <auto|off|iflc|est> Ionosphere option (default: auto)\n"
         << "  --ratio <value>            Ambiguity ratio threshold (default: 3.0)\n"
         << "  --min-ar-sats <n>          Minimum satellites for AR (default: 5)\n"
         << "  --elevation-mask-deg <v>   Elevation mask in degrees (default: 15)\n"
@@ -382,6 +385,7 @@ IonoChoice parseIonoChoice(const std::string& value, const char* program_name) {
     if (value == "auto") return IonoChoice::AUTO;
     if (value == "off") return IonoChoice::OFF;
     if (value == "iflc") return IonoChoice::IFLC;
+    if (value == "est") return IonoChoice::EST;
     argumentError("unsupported --iono value: " + value, program_name);
 }
 
@@ -525,6 +529,9 @@ libgnss::RTKProcessor::RTKConfig::IonoOpt resolveIonoOpt(const SolveConfig& conf
     if (config.iono == IonoChoice::IFLC) {
         return libgnss::RTKProcessor::RTKConfig::IonoOpt::IFLC;
     }
+    if (config.iono == IonoChoice::EST) {
+        return libgnss::RTKProcessor::RTKConfig::IonoOpt::EST;
+    }
 
     const std::string hint = config.data_dir + " " + config.rover_obs_path + " " + config.base_obs_path;
     const bool short_baseline = pathLooksShortBaseline(hint);
@@ -539,7 +546,15 @@ std::string positionModeString(libgnss::RTKProcessor::RTKConfig::PositionMode mo
 }
 
 std::string ionoOptString(libgnss::RTKProcessor::RTKConfig::IonoOpt iono) {
-    return iono == libgnss::RTKProcessor::RTKConfig::IonoOpt::IFLC ? "iflc" : "off";
+    switch (iono) {
+        case libgnss::RTKProcessor::RTKConfig::IonoOpt::OFF:
+            return "off";
+        case libgnss::RTKProcessor::RTKConfig::IonoOpt::IFLC:
+            return "iflc";
+        case libgnss::RTKProcessor::RTKConfig::IonoOpt::EST:
+            return "est";
+    }
+    return "off";
 }
 
 bool writeSolutions(const SolveConfig& config, const libgnss::Solution& solution) {

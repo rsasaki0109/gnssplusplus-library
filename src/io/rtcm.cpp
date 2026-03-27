@@ -56,6 +56,10 @@ constexpr double kUraMetersTable[16] = {
     96.0,  192.0, 384.0,  768.0,
     1536.0,3072.0,6144.0, 0.0
 };
+constexpr double kSsrUpdateIntervals[16] = {
+    1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0, 120.0,
+    240.0, 300.0, 600.0, 900.0, 1800.0, 3600.0, 7200.0, 10800.0
+};
 
 // CRC-24Q lookup table from gpsd/crc24q.c
 static const uint32_t crc24q_table[256] = {
@@ -297,6 +301,156 @@ bool isMsm7MessageType(RTCMMessageType message_type) {
     return isFixedFrequencyMsm7MessageType(message_type) ||
            isGlonassMsm7MessageType(message_type);
 }
+
+bool isSsrOrbitMessageType(RTCMMessageType message_type) {
+    switch (message_type) {
+        case RTCMMessageType::RTCM_1057:
+        case RTCMMessageType::RTCM_1063:
+        case RTCMMessageType::RTCM_1240:
+        case RTCMMessageType::RTCM_1246:
+        case RTCMMessageType::RTCM_1258:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isSsrClockMessageType(RTCMMessageType message_type) {
+    switch (message_type) {
+        case RTCMMessageType::RTCM_1058:
+        case RTCMMessageType::RTCM_1064:
+        case RTCMMessageType::RTCM_1241:
+        case RTCMMessageType::RTCM_1247:
+        case RTCMMessageType::RTCM_1259:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isSsrCodeBiasMessageType(RTCMMessageType message_type) {
+    switch (message_type) {
+        case RTCMMessageType::RTCM_1059:
+        case RTCMMessageType::RTCM_1065:
+        case RTCMMessageType::RTCM_1242:
+        case RTCMMessageType::RTCM_1248:
+        case RTCMMessageType::RTCM_1260:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isSsrCombinedMessageType(RTCMMessageType message_type) {
+    switch (message_type) {
+        case RTCMMessageType::RTCM_1060:
+        case RTCMMessageType::RTCM_1066:
+        case RTCMMessageType::RTCM_1243:
+        case RTCMMessageType::RTCM_1249:
+        case RTCMMessageType::RTCM_1261:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isSsrUraMessageType(RTCMMessageType message_type) {
+    switch (message_type) {
+        case RTCMMessageType::RTCM_1061:
+        case RTCMMessageType::RTCM_1067:
+        case RTCMMessageType::RTCM_1244:
+        case RTCMMessageType::RTCM_1250:
+        case RTCMMessageType::RTCM_1262:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isSsrHighRateClockMessageType(RTCMMessageType message_type) {
+    switch (message_type) {
+        case RTCMMessageType::RTCM_1062:
+        case RTCMMessageType::RTCM_1068:
+        case RTCMMessageType::RTCM_1245:
+        case RTCMMessageType::RTCM_1251:
+        case RTCMMessageType::RTCM_1263:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isSupportedSsrMessageType(RTCMMessageType message_type) {
+    return isSsrOrbitMessageType(message_type) ||
+           isSsrClockMessageType(message_type) ||
+           isSsrCodeBiasMessageType(message_type) ||
+           isSsrCombinedMessageType(message_type) ||
+           isSsrUraMessageType(message_type) ||
+           isSsrHighRateClockMessageType(message_type);
+}
+
+struct SsrSystemDescriptor {
+    GNSSSystem system = GNSSSystem::UNKNOWN;
+    int prn_bits = 0;
+    int iode_bits = 0;
+    int iodcrc_bits = 0;
+    int nsat_bits = 6;
+    int prn_offset = 0;
+};
+
+SsrSystemDescriptor ssrDescriptorForMessageType(RTCMMessageType message_type) {
+    switch (message_type) {
+        case RTCMMessageType::RTCM_1057:
+        case RTCMMessageType::RTCM_1058:
+        case RTCMMessageType::RTCM_1059:
+        case RTCMMessageType::RTCM_1060:
+        case RTCMMessageType::RTCM_1061:
+        case RTCMMessageType::RTCM_1062:
+            return {GNSSSystem::GPS, 6, 8, 0, 6, 0};
+        case RTCMMessageType::RTCM_1063:
+        case RTCMMessageType::RTCM_1064:
+        case RTCMMessageType::RTCM_1065:
+        case RTCMMessageType::RTCM_1066:
+        case RTCMMessageType::RTCM_1067:
+        case RTCMMessageType::RTCM_1068:
+            return {GNSSSystem::GLONASS, 5, 8, 0, 6, 0};
+        case RTCMMessageType::RTCM_1240:
+        case RTCMMessageType::RTCM_1241:
+        case RTCMMessageType::RTCM_1242:
+        case RTCMMessageType::RTCM_1243:
+        case RTCMMessageType::RTCM_1244:
+        case RTCMMessageType::RTCM_1245:
+            return {GNSSSystem::Galileo, 6, 10, 0, 6, 0};
+        case RTCMMessageType::RTCM_1246:
+        case RTCMMessageType::RTCM_1247:
+        case RTCMMessageType::RTCM_1248:
+        case RTCMMessageType::RTCM_1249:
+        case RTCMMessageType::RTCM_1250:
+        case RTCMMessageType::RTCM_1251:
+            return {GNSSSystem::QZSS, 4, 8, 0, 4, 0};
+        case RTCMMessageType::RTCM_1258:
+        case RTCMMessageType::RTCM_1259:
+        case RTCMMessageType::RTCM_1260:
+        case RTCMMessageType::RTCM_1261:
+        case RTCMMessageType::RTCM_1262:
+        case RTCMMessageType::RTCM_1263:
+            return {GNSSSystem::BeiDou, 6, 10, 24, 6, 1};
+        default:
+            return {};
+    }
+}
+
+struct SsrHeader {
+    GNSSTime time;
+    double update_interval_seconds = 0.0;
+    int sync = 0;
+    int issue_of_data = 0;
+    int provider_id = 0;
+    int solution_id = 0;
+    int satellite_count = 0;
+    int refd = 0;
+    int bit_pos = 0;
+};
 
 GNSSSystem fixedFrequencyMsmSystem(RTCMMessageType message_type) {
     switch (message_type) {
@@ -838,6 +992,127 @@ GNSSTime glonassMsmEpochToGpst(uint32_t epoch) {
     return utcToGpstApprox(normalizeWeekTow(glot.week, glot.tow - 10800.0));
 }
 
+GNSSTime alignGpsSsrEpoch(double tow_seconds) {
+    GNSSTime aligned(currentGpstApprox().week, tow_seconds);
+    const GNSSTime current = currentGpstApprox();
+    const double diff = aligned - current;
+    if (diff < -302400.0) {
+        aligned = aligned + constants::SECONDS_PER_WEEK;
+    } else if (diff > 302400.0) {
+        aligned = aligned - constants::SECONDS_PER_WEEK;
+    }
+    return normalizeWeekTow(aligned.week, aligned.tow);
+}
+
+GNSSTime alignGlonassSsrEpoch(double tod_glonass_seconds) {
+    GNSSTime current_glonass = gpstToUtcApprox(currentGpstApprox());
+    current_glonass = normalizeWeekTow(current_glonass.week, current_glonass.tow + 10800.0);
+    const GNSSTime aligned_glonass = alignUtcTimeOfDay(tod_glonass_seconds, current_glonass);
+    return utcToGpstApprox(normalizeWeekTow(aligned_glonass.week, aligned_glonass.tow - 10800.0));
+}
+
+bool decodeSsrOrbitHeader(const RTCMMessage& message,
+                          const SsrSystemDescriptor& descriptor,
+                          SsrHeader& header) {
+    if (descriptor.system == GNSSSystem::UNKNOWN) {
+        return false;
+    }
+
+    int bit_pos = 12;
+    if (descriptor.system == GNSSSystem::GLONASS) {
+        if (message.data.size() * 8U < 65U) {
+            return false;
+        }
+        const double tod_utc_seconds = static_cast<double>(
+            readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 17));
+        bit_pos += 17;
+        header.time = alignGlonassSsrEpoch(tod_utc_seconds);
+    } else {
+        if (message.data.size() * 8U < 64U) {
+            return false;
+        }
+        const double tow_seconds = static_cast<double>(
+            readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 20));
+        bit_pos += 20;
+        header.time = alignGpsSsrEpoch(tow_seconds);
+    }
+
+    const uint8_t update_index = static_cast<uint8_t>(
+        readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 4));
+    bit_pos += 4;
+    header.update_interval_seconds = kSsrUpdateIntervals[update_index];
+    header.sync = static_cast<int>(readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 1));
+    bit_pos += 1;
+    header.refd = static_cast<int>(readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 1));
+    bit_pos += 1;
+    header.issue_of_data = static_cast<int>(
+        readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 4));
+    bit_pos += 4;
+    header.provider_id = static_cast<int>(
+        readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 16));
+    bit_pos += 16;
+    header.solution_id = static_cast<int>(
+        readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 4));
+    bit_pos += 4;
+    header.satellite_count = static_cast<int>(
+        readUnsignedBits(message.data.data(), message.data.size(), bit_pos, descriptor.nsat_bits));
+    bit_pos += descriptor.nsat_bits;
+    header.bit_pos = bit_pos;
+    return true;
+}
+
+bool decodeSsrClockHeader(const RTCMMessage& message,
+                          const SsrSystemDescriptor& descriptor,
+                          SsrHeader& header) {
+    if (descriptor.system == GNSSSystem::UNKNOWN) {
+        return false;
+    }
+
+    int bit_pos = 12;
+    if (descriptor.system == GNSSSystem::GLONASS) {
+        if (message.data.size() * 8U < 64U) {
+            return false;
+        }
+        const double tod_utc_seconds = static_cast<double>(
+            readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 17));
+        bit_pos += 17;
+        header.time = alignGlonassSsrEpoch(tod_utc_seconds);
+    } else {
+        if (message.data.size() * 8U < 63U) {
+            return false;
+        }
+        const double tow_seconds = static_cast<double>(
+            readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 20));
+        bit_pos += 20;
+        header.time = alignGpsSsrEpoch(tow_seconds);
+    }
+
+    const uint8_t update_index = static_cast<uint8_t>(
+        readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 4));
+    bit_pos += 4;
+    header.update_interval_seconds = kSsrUpdateIntervals[update_index];
+    header.sync = static_cast<int>(readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 1));
+    bit_pos += 1;
+    header.issue_of_data = static_cast<int>(
+        readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 4));
+    bit_pos += 4;
+    header.provider_id = static_cast<int>(
+        readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 16));
+    bit_pos += 16;
+    header.solution_id = static_cast<int>(
+        readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 4));
+    bit_pos += 4;
+    header.satellite_count = static_cast<int>(
+        readUnsignedBits(message.data.data(), message.data.size(), bit_pos, descriptor.nsat_bits));
+    bit_pos += descriptor.nsat_bits;
+    header.bit_pos = bit_pos;
+    return true;
+}
+
+uint8_t decodeSsrPrn(const SsrSystemDescriptor& descriptor, uint64_t raw_prn) {
+    return static_cast<uint8_t>(raw_prn + static_cast<uint64_t>(descriptor.prn_offset));
+}
+
 int adjustGpsWeek(uint16_t week_mod_1024) {
     int current_week = currentGpstApprox().week;
     if (current_week < kMinimumExpandedGpsWeek) {
@@ -861,6 +1136,19 @@ uint8_t uraIndexFromMeters(double ura_meters) {
 
 double uraMetersFromIndex(uint8_t ura_index) {
     return (ura_index < 15U) ? kUraMetersTable[ura_index] : 32767.0;
+}
+
+double uraMetersFromSsrIndex(uint8_t ura_index) {
+    if (ura_index == 0U) {
+        return 0.15;
+    }
+    if (ura_index >= 63U) {
+        return 5.4665;
+    }
+    return (std::pow(3.0, static_cast<double>((ura_index >> 3) & 0x07U)) *
+                (1.0 + static_cast<double>(ura_index & 0x07U) / 4.0) -
+            1.0) *
+           1e-3;
 }
 
 }  // namespace
@@ -2841,6 +3129,201 @@ bool RTCMProcessor::decodeNavigationData(const RTCMMessage& message, NavigationD
     return decodeEphemerisMessage(message, nav_data);
 }
 
+bool RTCMProcessor::decodeSSRCorrections(const RTCMMessage& message,
+                                         std::vector<RTCMSSRCorrection>& corrections) {
+    corrections.clear();
+    if (!message.valid || message.data.empty() || !isSupportedSsrMessageType(message.type)) {
+        return false;
+    }
+
+    const uint64_t message_number =
+        readUnsignedBits(message.data.data(), message.data.size(), 0, 12);
+    if (message_number != static_cast<uint16_t>(message.type)) {
+        return false;
+    }
+
+    const auto descriptor = ssrDescriptorForMessageType(message.type);
+    if (descriptor.system == GNSSSystem::UNKNOWN) {
+        return false;
+    }
+
+    SsrHeader header;
+    const bool orbit_message =
+        isSsrOrbitMessageType(message.type) || isSsrCombinedMessageType(message.type);
+    const bool clock_message =
+        isSsrClockMessageType(message.type) || isSsrCombinedMessageType(message.type);
+    const bool code_bias_message = isSsrCodeBiasMessageType(message.type);
+    const bool ura_message = isSsrUraMessageType(message.type);
+    const bool high_rate_clock_message = isSsrHighRateClockMessageType(message.type);
+    const bool header_ok = orbit_message
+        ? decodeSsrOrbitHeader(message, descriptor, header)
+        : decodeSsrClockHeader(message, descriptor, header);
+    if (!header_ok) {
+        return false;
+    }
+
+    int bit_pos = header.bit_pos;
+    const size_t data_bits = message.data.size() * 8U;
+    corrections.reserve(static_cast<size_t>(header.satellite_count));
+
+    for (int index = 0; index < header.satellite_count; ++index) {
+        RTCMSSRCorrection correction;
+        correction.time = header.time;
+        correction.update_interval_seconds = header.update_interval_seconds;
+        correction.issue_of_data = static_cast<uint8_t>(header.issue_of_data);
+        correction.provider_id = header.provider_id;
+        correction.solution_id = header.solution_id;
+        correction.reference_datum = header.refd != 0;
+
+        if (orbit_message) {
+            const int required_bits =
+                descriptor.prn_bits + descriptor.iode_bits + descriptor.iodcrc_bits + 121;
+            if (static_cast<size_t>(bit_pos + required_bits) > data_bits) {
+                return false;
+            }
+
+            const uint64_t raw_prn = readUnsignedBits(
+                message.data.data(), message.data.size(), bit_pos, descriptor.prn_bits);
+            bit_pos += descriptor.prn_bits;
+            const uint8_t prn = decodeSsrPrn(descriptor, raw_prn);
+            if (prn == 0) {
+                return false;
+            }
+            correction.satellite = SatelliteId(descriptor.system, prn);
+            correction.iode = static_cast<int>(
+                readUnsignedBits(message.data.data(), message.data.size(), bit_pos, descriptor.iode_bits));
+            bit_pos += descriptor.iode_bits;
+            if (descriptor.iodcrc_bits > 0) {
+                correction.iodcrc = static_cast<int>(
+                    readUnsignedBits(message.data.data(), message.data.size(), bit_pos, descriptor.iodcrc_bits));
+                bit_pos += descriptor.iodcrc_bits;
+            }
+            correction.orbit_delta_rac_m.x() = static_cast<double>(
+                readSignedBits(message.data.data(), message.data.size(), bit_pos, 22)) * 1e-4;
+            bit_pos += 22;
+            correction.orbit_delta_rac_m.y() = static_cast<double>(
+                readSignedBits(message.data.data(), message.data.size(), bit_pos, 20)) * 4e-4;
+            bit_pos += 20;
+            correction.orbit_delta_rac_m.z() = static_cast<double>(
+                readSignedBits(message.data.data(), message.data.size(), bit_pos, 20)) * 4e-4;
+            bit_pos += 20;
+            correction.orbit_rate_rac_mps.x() = static_cast<double>(
+                readSignedBits(message.data.data(), message.data.size(), bit_pos, 21)) * 1e-6;
+            bit_pos += 21;
+            correction.orbit_rate_rac_mps.y() = static_cast<double>(
+                readSignedBits(message.data.data(), message.data.size(), bit_pos, 19)) * 4e-6;
+            bit_pos += 19;
+            correction.orbit_rate_rac_mps.z() = static_cast<double>(
+                readSignedBits(message.data.data(), message.data.size(), bit_pos, 19)) * 4e-6;
+            bit_pos += 19;
+            correction.has_orbit = true;
+        }
+
+        if (clock_message) {
+            const int required_bits = orbit_message ? 70 : (descriptor.prn_bits + 70);
+            if (static_cast<size_t>(bit_pos + required_bits) > data_bits) {
+                return false;
+            }
+
+            if (!orbit_message) {
+                const uint64_t raw_prn = readUnsignedBits(
+                    message.data.data(), message.data.size(), bit_pos, descriptor.prn_bits);
+                bit_pos += descriptor.prn_bits;
+                const uint8_t prn = decodeSsrPrn(descriptor, raw_prn);
+                if (prn == 0) {
+                    return false;
+                }
+                correction.satellite = SatelliteId(descriptor.system, prn);
+            }
+            correction.clock_delta_poly.x() = static_cast<double>(
+                readSignedBits(message.data.data(), message.data.size(), bit_pos, 22)) * 1e-4;
+            bit_pos += 22;
+            correction.clock_delta_poly.y() = static_cast<double>(
+                readSignedBits(message.data.data(), message.data.size(), bit_pos, 21)) * 1e-6;
+            bit_pos += 21;
+            correction.clock_delta_poly.z() = static_cast<double>(
+                readSignedBits(message.data.data(), message.data.size(), bit_pos, 27)) * 2e-8;
+            bit_pos += 27;
+            correction.has_clock = true;
+        }
+
+        if (code_bias_message) {
+            const int required_bits = descriptor.prn_bits + 5;
+            if (static_cast<size_t>(bit_pos + required_bits) > data_bits) {
+                return false;
+            }
+            const uint64_t raw_prn = readUnsignedBits(
+                message.data.data(), message.data.size(), bit_pos, descriptor.prn_bits);
+            bit_pos += descriptor.prn_bits;
+            const uint8_t prn = decodeSsrPrn(descriptor, raw_prn);
+            if (prn == 0) {
+                return false;
+            }
+            correction.satellite = SatelliteId(descriptor.system, prn);
+
+            const uint8_t num_biases = static_cast<uint8_t>(
+                readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 5));
+            bit_pos += 5;
+            for (uint8_t bias_index = 0; bias_index < num_biases; ++bias_index) {
+                if (static_cast<size_t>(bit_pos + 19) > data_bits) {
+                    return false;
+                }
+                const uint8_t signal_id = static_cast<uint8_t>(
+                    readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 5));
+                bit_pos += 5;
+                const double bias_m = static_cast<double>(
+                    readSignedBits(message.data.data(), message.data.size(), bit_pos, 14)) * 0.01;
+                bit_pos += 14;
+                correction.code_bias_m[signal_id] = bias_m;
+            }
+            correction.has_code_bias = !correction.code_bias_m.empty();
+        }
+
+        if (ura_message) {
+            const int required_bits = descriptor.prn_bits + 6;
+            if (static_cast<size_t>(bit_pos + required_bits) > data_bits) {
+                return false;
+            }
+            const uint64_t raw_prn = readUnsignedBits(
+                message.data.data(), message.data.size(), bit_pos, descriptor.prn_bits);
+            bit_pos += descriptor.prn_bits;
+            const uint8_t prn = decodeSsrPrn(descriptor, raw_prn);
+            if (prn == 0) {
+                return false;
+            }
+            correction.satellite = SatelliteId(descriptor.system, prn);
+            correction.ura_index = static_cast<uint8_t>(
+                readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 6));
+            bit_pos += 6;
+            correction.ura_sigma_m = uraMetersFromSsrIndex(correction.ura_index);
+            correction.has_ura = true;
+        }
+
+        if (high_rate_clock_message) {
+            const int required_bits = descriptor.prn_bits + 22;
+            if (static_cast<size_t>(bit_pos + required_bits) > data_bits) {
+                return false;
+            }
+            const uint64_t raw_prn = readUnsignedBits(
+                message.data.data(), message.data.size(), bit_pos, descriptor.prn_bits);
+            bit_pos += descriptor.prn_bits;
+            const uint8_t prn = decodeSsrPrn(descriptor, raw_prn);
+            if (prn == 0) {
+                return false;
+            }
+            correction.satellite = SatelliteId(descriptor.system, prn);
+            correction.high_rate_clock_m = static_cast<double>(
+                readSignedBits(message.data.data(), message.data.size(), bit_pos, 22)) * 1e-4;
+            bit_pos += 22;
+            correction.has_high_rate_clock = true;
+        }
+
+        corrections.push_back(correction);
+    }
+
+    return !corrections.empty();
+}
+
 
 uint32_t RTCMProcessor::calculateCRC24(const uint8_t* data, size_t length) {
     uint32_t crc = 0;
@@ -3136,6 +3619,18 @@ std::string getMessageTypeName(RTCMMessageType type) {
         case RTCMMessageType::RTCM_1019: return "GPS Ephemeris";
         case RTCMMessageType::RTCM_1020: return "GLONASS Ephemeris";
         case RTCMMessageType::RTCM_1033: return "Receiver And Antenna Descriptor";
+        case RTCMMessageType::RTCM_1057: return "GPS SSR Orbit Correction";
+        case RTCMMessageType::RTCM_1058: return "GPS SSR Clock Correction";
+        case RTCMMessageType::RTCM_1059: return "GPS SSR Code Bias";
+        case RTCMMessageType::RTCM_1060: return "GPS SSR Combined Orbit/Clock Correction";
+        case RTCMMessageType::RTCM_1061: return "GPS SSR URA";
+        case RTCMMessageType::RTCM_1062: return "GPS SSR High-Rate Clock Correction";
+        case RTCMMessageType::RTCM_1063: return "GLONASS SSR Orbit Correction";
+        case RTCMMessageType::RTCM_1064: return "GLONASS SSR Clock Correction";
+        case RTCMMessageType::RTCM_1065: return "GLONASS SSR Code Bias";
+        case RTCMMessageType::RTCM_1066: return "GLONASS SSR Combined Orbit/Clock Correction";
+        case RTCMMessageType::RTCM_1067: return "GLONASS SSR URA";
+        case RTCMMessageType::RTCM_1068: return "GLONASS SSR High-Rate Clock Correction";
         case RTCMMessageType::RTCM_1074: return "GPS MSM4";
         case RTCMMessageType::RTCM_1075: return "GPS MSM5";
         case RTCMMessageType::RTCM_1076: return "GPS MSM6";
@@ -3152,6 +3647,24 @@ std::string getMessageTypeName(RTCMMessageType type) {
         case RTCMMessageType::RTCM_1125: return "BeiDou MSM5";
         case RTCMMessageType::RTCM_1126: return "BeiDou MSM6";
         case RTCMMessageType::RTCM_1127: return "BeiDou MSM7";
+        case RTCMMessageType::RTCM_1240: return "Galileo SSR Orbit Correction";
+        case RTCMMessageType::RTCM_1241: return "Galileo SSR Clock Correction";
+        case RTCMMessageType::RTCM_1242: return "Galileo SSR Code Bias";
+        case RTCMMessageType::RTCM_1243: return "Galileo SSR Combined Orbit/Clock Correction";
+        case RTCMMessageType::RTCM_1244: return "Galileo SSR URA";
+        case RTCMMessageType::RTCM_1245: return "Galileo SSR High-Rate Clock Correction";
+        case RTCMMessageType::RTCM_1246: return "QZSS SSR Orbit Correction";
+        case RTCMMessageType::RTCM_1247: return "QZSS SSR Clock Correction";
+        case RTCMMessageType::RTCM_1248: return "QZSS SSR Code Bias";
+        case RTCMMessageType::RTCM_1249: return "QZSS SSR Combined Orbit/Clock Correction";
+        case RTCMMessageType::RTCM_1250: return "QZSS SSR URA";
+        case RTCMMessageType::RTCM_1251: return "QZSS SSR High-Rate Clock Correction";
+        case RTCMMessageType::RTCM_1258: return "BeiDou SSR Orbit Correction";
+        case RTCMMessageType::RTCM_1259: return "BeiDou SSR Clock Correction";
+        case RTCMMessageType::RTCM_1260: return "BeiDou SSR Code Bias";
+        case RTCMMessageType::RTCM_1261: return "BeiDou SSR Combined Orbit/Clock Correction";
+        case RTCMMessageType::RTCM_1262: return "BeiDou SSR URA";
+        case RTCMMessageType::RTCM_1263: return "BeiDou SSR High-Rate Clock Correction";
         default:
             return "RTCM " + std::to_string(static_cast<uint16_t>(type));
     }
@@ -3172,21 +3685,37 @@ bool isEphemerisMessage(RTCMMessageType type) {
     return type_val == 1019 || type_val == 1020;
 }
 
+bool isSSRMessage(RTCMMessageType type) {
+    const auto type_val = static_cast<uint16_t>(type);
+    return (type_val >= 1057 && type_val <= 1068) ||
+           (type_val >= 1240 && type_val <= 1263);
+}
+
 GNSSSystem getSystemFromMessageType(RTCMMessageType type) {
     const auto type_val = static_cast<uint16_t>(type);
     if ((type_val >= 1001 && type_val <= 1004) || type_val == 1019 ||
+        (type_val >= 1057 && type_val <= 1062) ||
         (type_val >= 1074 && type_val <= 1077)) {
         return GNSSSystem::GPS;
     }
     if ((type_val >= 1009 && type_val <= 1012) || type_val == 1020 ||
+        (type_val >= 1063 && type_val <= 1068) ||
         (type_val >= 1084 && type_val <= 1087)) {
         return GNSSSystem::GLONASS;
     }
-    if (type_val >= 1094 && type_val <= 1097) {
+    if ((type_val >= 1094 && type_val <= 1097) ||
+        (type_val >= 1240 && type_val <= 1245)) {
         return GNSSSystem::Galileo;
     }
-    if (type_val >= 1124 && type_val <= 1127) {
+    if (type_val >= 1246 && type_val <= 1251) {
+        return GNSSSystem::QZSS;
+    }
+    if ((type_val >= 1124 && type_val <= 1127) ||
+        (type_val >= 1258 && type_val <= 1263)) {
         return GNSSSystem::BeiDou;
+    }
+    if (type_val >= 1252 && type_val <= 1257) {
+        return GNSSSystem::SBAS;
     }
     return GNSSSystem::UNKNOWN;
 }
