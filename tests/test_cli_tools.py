@@ -18,6 +18,7 @@ import unittest
 import math
 import zlib
 from pathlib import Path
+from urllib import request
 
 if os.name != "nt":
     import pty
@@ -63,6 +64,21 @@ def ppc_dataset_root() -> Path:
     if env_value:
         return Path(env_value)
     return DEFAULT_PPC_DATASET_ROOT
+
+
+def find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def wait_for_file(path: Path, timeout_s: float = 5.0) -> str:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if path.exists():
+            return path.read_text(encoding="utf-8").strip()
+        time.sleep(0.05)
+    raise TimeoutError(f"timed out waiting for {path}")
 
 
 def crc24q(data: bytes) -> int:
@@ -6919,6 +6935,121 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--rover-rtcm", result.stdout)
         self.assertIn("--rover-ubx", result.stdout)
         self.assertIn("--base-hold-seconds", result.stdout)
+
+    def test_web_serves_overview_solution_and_status_api(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_web_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            lib_pos = temp_root / "lib.pos"
+            rtklib_pos = temp_root / "rtklib.pos"
+            summary_json = temp_root / "odaiba_summary.json"
+            status_json = temp_root / "receiver.status.json"
+            port_file = temp_root / "port.txt"
+
+            lib_pos.write_text(
+                "\n".join(
+                    [
+                        "% synthetic libgnss++",
+                        "2200 100.0 1.0 2.0 3.0 35.000000000 139.000000000 10.0 4 12 3.5",
+                        "2200 101.0 2.0 3.0 4.0 35.000001000 139.000001000 10.1 3 11 2.1",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            rtklib_pos.write_text(
+                "\n".join(
+                    [
+                        "% synthetic rtklib",
+                        "2200 100.0 35.000000000 139.000000000 10.0 1 12",
+                        "2200 101.0 35.000001000 139.000001000 10.1 2 11",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            summary_json.write_text(
+                json.dumps(
+                    {
+                        "all_epochs": {
+                            "libgnsspp": {"epochs": 11637, "fix_rate_pct": 8.11},
+                            "rtklib": {"epochs": 8241, "fix_rate_pct": 7.22},
+                        },
+                        "common_epochs": {
+                            "libgnsspp": {"median_h_m": 0.733387, "p95_h_m": 5.941091},
+                            "rtklib": {"median_h_m": 0.703880, "p95_h_m": 27.673014},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            status_json.write_text(
+                json.dumps(
+                    {
+                        "state": "running",
+                        "pid": 1234,
+                        "pid_running": True,
+                        "uptime_seconds": 12.5,
+                        "restart_count": 1,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            port = find_free_port()
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    str(DISPATCHER),
+                    "web",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(port),
+                    "--port-file",
+                    str(port_file),
+                    "--root",
+                    str(temp_root),
+                    "--lib-pos",
+                    str(lib_pos),
+                    "--rtklib-pos",
+                    str(rtklib_pos),
+                    "--odaiba-summary",
+                    str(summary_json),
+                    "--rcv-status",
+                    str(status_json),
+                ],
+                cwd=ROOT_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                bound_port = int(wait_for_file(port_file))
+                with request.urlopen(f"http://127.0.0.1:{bound_port}/") as response:
+                    html = response.read().decode("utf-8")
+                self.assertIn("libgnss++ local web UI", html)
+
+                with request.urlopen(f"http://127.0.0.1:{bound_port}/api/overview") as response:
+                    overview = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(overview["odaiba_summary"]["all_epochs"]["libgnsspp"]["epochs"], 11637)
+
+                with request.urlopen(f"http://127.0.0.1:{bound_port}/api/solution?name=libgnsspp") as response:
+                    lib_payload = json.loads(response.read().decode("utf-8"))
+                self.assertTrue(lib_payload["available"])
+                self.assertEqual(lib_payload["epoch_count"], 2)
+                self.assertIn("FIXED", lib_payload["status_counts"])
+
+                with request.urlopen(f"http://127.0.0.1:{bound_port}/api/status") as response:
+                    status_payload = json.loads(response.read().decode("utf-8"))
+                self.assertTrue(status_payload["available"])
+                self.assertEqual(status_payload["state"], "running")
+            finally:
+                process.terminate()
+                try:
+                    process.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.communicate(timeout=5)
 
     def test_live_reports_missing_rtcm_source_path_clearly(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_live_missing_source_") as temp_dir:
