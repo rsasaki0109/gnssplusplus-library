@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import textwrap
 
 
 BG = "#f4efe6"
@@ -13,6 +14,19 @@ MUTED = "#5f6c7b"
 ACCENT = "#c56a1a"
 ACCENT_2 = "#2563eb"
 ACCENT_3 = "#18794e"
+
+
+def wrap_lines(lines: list[str], width: int) -> list[str]:
+    wrapped: list[str] = []
+    for line in lines:
+        parts = textwrap.wrap(line, width=width)
+        if not parts:
+            wrapped.append("•")
+            continue
+        wrapped.append(f"• {parts[0]}")
+        for part in parts[1:]:
+            wrapped.append(f"  {part}")
+    return wrapped
 
 
 def add_panel(ax, x: float, y: float, w: float, h: float, title: str, lines: list[str], edge: str) -> None:
@@ -28,13 +42,16 @@ def add_panel(ax, x: float, y: float, w: float, h: float, title: str, lines: lis
         facecolor=PANEL,
     )
     ax.add_patch(patch)
-    ax.text(x + 0.04 * w, y + h - 0.15 * h, title, fontsize=17, color=TEXT, weight="bold", va="center")
-    for index, line in enumerate(lines):
+    ax.text(x + 0.04 * w, y + h - 0.14 * h, title, fontsize=16, color=TEXT, weight="bold", va="center")
+    wrapped = wrap_lines(lines, 38 if w >= 0.4 else 31)
+    line_step = 0.11 * h
+    start_y = y + h - 0.34 * h
+    for index, line in enumerate(wrapped):
         ax.text(
             x + 0.05 * w,
-            y + h - 0.34 * h - index * 0.14 * h,
-            f"• {line}",
-            fontsize=12.5,
+            start_y - index * line_step,
+            line,
+            fontsize=11.5,
             color=MUTED,
             va="center",
         )
@@ -51,7 +68,7 @@ def main() -> None:
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
 
-    ax.text(0.05, 0.91, "What Ships In libgnss++", fontsize=30, color=TEXT, weight="bold")
+    ax.text(0.05, 0.91, "What Ships In libgnss++", fontsize=29, color=TEXT, weight="bold")
     ax.text(
         0.05,
         0.85,
@@ -60,16 +77,16 @@ def main() -> None:
         color=MUTED,
     )
 
-    ax.text(0.05, 0.76, "No RTKLIB runtime dependency", fontsize=16, color=ACCENT, weight="bold")
-    ax.text(0.34, 0.76, "C++17 core + CLI + Python + ROS2", fontsize=16, color=ACCENT_2, weight="bold")
-    ax.text(0.66, 0.76, "Benchmarks and sign-off scripts included", fontsize=16, color=ACCENT_3, weight="bold")
+    ax.text(0.05, 0.76, "No RTKLIB runtime dependency", fontsize=15, color=ACCENT, weight="bold")
+    ax.text(0.34, 0.76, "C++17 core + CLI + Python + ROS2", fontsize=15, color=ACCENT_2, weight="bold")
+    ax.text(0.64, 0.76, "Benchmarks and sign-off scripts included", fontsize=15, color=ACCENT_3, weight="bold")
 
     add_panel(
         ax,
         0.05,
         0.42,
         0.27,
-        0.26,
+        0.27,
         "Positioning Engines",
         [
             "SPP, RTK, PPP, and CLAS/MADOCA-style PPP",
@@ -83,7 +100,7 @@ def main() -> None:
         0.365,
         0.42,
         0.27,
-        0.26,
+        0.27,
         "Protocols and Raw Ingest",
         [
             "RINEX, RTCM, UBX, direct QZSS L6",
@@ -97,7 +114,7 @@ def main() -> None:
         0.68,
         0.42,
         0.27,
-        0.26,
+        0.27,
         "Tooling",
         [
             "`gnss spp`, `solve`, `ppp`, `stream`, `convert`",
@@ -111,7 +128,7 @@ def main() -> None:
         0.05,
         0.11,
         0.42,
-        0.22,
+        0.24,
         "Developer Interfaces",
         [
             "C++ library API for native integration",
@@ -125,7 +142,7 @@ def main() -> None:
         0.53,
         0.11,
         0.42,
-        0.22,
+        0.24,
         "Packaging and Ops",
         [
             "CMake install/export, pkg-config, and cpack",
