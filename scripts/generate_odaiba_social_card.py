@@ -30,13 +30,31 @@ PANEL = "#fffaf2"
 
 
 def draw_status_legend(ax) -> None:
-    legend_x = 0.71
-    label_x = legend_x + 0.022
-    top_y = 0.63
-    row_gap = 0.23
+    from matplotlib.patches import FancyBboxPatch
+
+    box_x = 0.67
+    box_y = 0.12
+    box_w = 0.28
+    box_h = 0.68
+    panel = FancyBboxPatch(
+        (box_x, box_y),
+        box_w,
+        box_h,
+        boxstyle="round,pad=0.012,rounding_size=0.03",
+        linewidth=1.0,
+        edgecolor="#d8c9b1",
+        facecolor=PANEL,
+        zorder=1,
+    )
+    ax.add_patch(panel)
+
+    legend_x = box_x + 0.05
+    label_x = legend_x + 0.024
+    top_y = box_y + 0.20
+    row_gap = 0.17
     col_gap = 0.12
 
-    ax.text(legend_x, 0.94, "Status legend", fontsize=11.0, color=MUTED, weight="bold", va="top")
+    ax.text(legend_x, box_y + box_h - 0.07, "Status legend", fontsize=12.5, color=MUTED, weight="bold", va="top")
 
     for index, status_name in enumerate(STATUS_ORDER):
         row = index // 2
@@ -46,13 +64,13 @@ def draw_status_legend(ax) -> None:
         ax.scatter(
             [x],
             [y],
-            s=54,
+            s=78,
             color=STATUS_STYLES[status_name],
             edgecolors="white",
-            linewidths=0.7,
+            linewidths=0.9,
             zorder=3,
         )
-        ax.text(label_x + col * col_gap, y, status_name, fontsize=11, color=TEXT, va="center")
+        ax.text(label_x + col * col_gap, y, status_name, fontsize=13, color=TEXT, va="center")
 
 
 def draw_trajectory_panel(ax, title: str, reference_xy, matched, solver: str, edge_color: str, limits) -> None:
