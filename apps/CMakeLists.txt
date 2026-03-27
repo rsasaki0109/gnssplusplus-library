@@ -53,6 +53,7 @@ install(PROGRAMS
 
 install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_rcv.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_web.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_runtime.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_odaiba_benchmark.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_odaiba_scan.py

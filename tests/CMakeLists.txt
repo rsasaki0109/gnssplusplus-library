@@ -67,6 +67,10 @@ if(GTest_FOUND)
         NAME python_bindings_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_python_bindings.py
     )
+    add_test(
+        NAME python_web_ui_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_web_ui.py
+    )
     set_tests_properties(
         python_bindings_tests
         PROPERTIES ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python"
