@@ -1,72 +1,137 @@
-# libgnss++ — Modern C++ GNSS Positioning Library
+# libgnss++ — Modern C++ GNSS/RTK/PPP/CLAS Toolkit
 
-Self-contained RTK/SPP positioning library in modern C++17. No RTKLIB runtime dependency.
+<p align="center">
+  Self-contained GNSS positioning stack in modern C++17.<br>
+  <strong>RTK, PPP, RTCM, UBX, CLAS/MADOCA, direct QZSS L6, Python bindings, and ROS2 playback</strong><br>
+  without an RTKLIB runtime dependency.
+</p>
 
-## Performance vs RTKLIB
+<p align="center">
+  <img src="https://img.shields.io/badge/C%2B%2B-17-00599C?logo=c%2B%2B&logoColor=white" alt="C++17">
+  <img src="https://img.shields.io/badge/CMake-3.14%2B-064F8C?logo=cmake&logoColor=white" alt="CMake">
+  <img src="https://img.shields.io/badge/Runtime-RTKLIB--free-1F6FEB" alt="No RTKLIB runtime dependency">
+  <img src="https://img.shields.io/badge/Python-bindings-3776AB?logo=python&logoColor=white" alt="Python bindings">
+  <img src="https://img.shields.io/badge/ROS2-playback-22314E" alt="ROS2 playback">
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT license">
+</p>
 
-Tested on 3 open datasets with GPS L1+L2 dual-frequency observations.
+<p align="center">
+  If this repo saves you time shipping GNSS tooling without dragging in a second runtime stack, consider starring it.
+</p>
+
+![UrbanNav Odaiba benchmark scorecard](docs/driving_odaiba_scorecard.png)
+
+## Why This Repo Exists
+
+- **One native stack**: RTK, PPP, CLAS, RTCM, UBX, and direct QZSS L6 live in one codebase instead of a wrapper around external binaries.
+- **Deployable non-GUI tooling**: `gnss spp`, `solve`, `ppp`, `stream`, `convert`, `live`, `rcv`, sign-off scripts, and benchmark pipelines are all first-class.
+- **Open-data evidence**: the repo carries checked-in benchmark assets, summary JSONs, and sign-off scripts instead of hand-wavy claims.
+- **Developer-facing ergonomics**: CMake package export, `pkg-config`, Python bindings, ROS2 playback, and install-time dogfooding are in-tree.
+
+## At A Glance
+
+| What you get | Current state |
+|---|---|
+| Positioning engines | `SPP`, `RTK`, `PPP`, `CLAS/MADOCA-style PPP` |
+| Protocols and raw ingest | `RTCM`, `UBX`, `NMEA`, `NovAtel`, `SBP`, `SBF`, `Trimble`, `SkyTraq`, `BINEX`, `QZSS L6` |
+| Runtime interfaces | CLI suite, Python package, ROS2 playback node |
+| Packaging | `cmake --install`, CMake package export, `pkg-config`, `cpack` |
+| Verification | Unit tests, CLI regressions, benchmark scripts, installed-prefix dogfooding |
+
+## Benchmark Snapshot
+
+Tested on open datasets with dual-frequency observations.
 
 | Dataset | Baseline | libgnss++ Fix Rate | RTKLIB Fix Rate | libgnss++ RMS (h) | RTKLIB RMS (h) |
-|---------|----------|--------------------|-----------------|--------------------|-----------------|
+|---------|----------|--------------------|-----------------|-------------------|----------------|
 | **Kinematic** | 1.2 km | **100%** | 98.3% | **12 mm** | 8 mm |
 | **Short static** | 36 m | **99%** | 100% | 90 mm | — |
 | **Long static** | 3.3 km | 52% | 60.8% | 104 mm | 14 mm* |
 
-\* RTKLIB の long static 結果は RINEX header 概略位置と比較すると高さ方向に 2.2m のオフセットがあり、libgnss++ の方が概略位置に近い結果 (16cm) を示す場合がある。
+\* The checked long-static RTKLIB output shows a large height offset relative to the RINEX header position; libgnss++ can stay much closer to the approximate header position on that sample.
 
-### Kinematic Result Comparison
+### UrbanNav Tokyo Odaiba
 
-![Kinematic RTK: libgnss++ vs RTKLIB](docs/kinematic_comparison.png)
+Open driving dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) (`2018-12-19`, Trimble rover/base, ~`170 m` baseline).
 
-### Urban Driving Result Comparison
-
-Open driving dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) (2018-12-19, Trimble rover/base, ~170 m baseline). The checked-in benchmark artifacts compare the current libgnss++ Odaiba pipeline against a checked-in RTKLIB forward-kinematic baseline on the same open dataset.
-
-![UrbanNav Odaiba benchmark scorecard](docs/driving_odaiba_scorecard.png)
-
-Current Odaiba snapshot: on all matched epochs, libgnss++ leads on matched-epoch count (`11637 vs 8241`), fix rate (`8.11% vs 7.22%`), p95 horizontal error (`7.58 m vs 27.88 m`), and max horizontal error (`61.82 m vs 82.87 m`). On common epochs only, the horizontal median is within `30 mm` of RTKLIB (`0.733 m vs 0.704 m`), while libgnss++ has slightly better median vertical error (`0.571 m vs 0.575 m`) and much better p95 tail (`5.94 m vs 27.67 m`). The benchmark pipeline also emits a machine-readable snapshot to `output/odaiba_summary.json`.
+Current checked-in Odaiba snapshot:
+- **All matched epochs**: libgnss++ leads on matched-epoch count (`11637 vs 8241`), fix rate (`8.11% vs 7.22%`), p95 horizontal error (`7.58 m vs 27.88 m`), and max horizontal error (`61.82 m vs 82.87 m`).
+- **Common epochs only**: horizontal median is within `30 mm` of RTKLIB (`0.733 m vs 0.704 m`), median vertical error is slightly better (`0.571 m vs 0.575 m`), and p95 tail is much better (`5.94 m vs 27.67 m`).
+- **Machine-readable artifact**: the benchmark writes `output/odaiba_summary.json`.
 
 ![Urban driving comparison on UrbanNav Tokyo Odaiba](docs/driving_odaiba_comparison.png)
 
-**Highlights:**
-- Instant first fix (epoch 1) on all datasets
-- Kinematic fix rate exceeds RTKLIB (100% vs 98.3%)
-- Zero external GNSS library dependency (RTKLIB not required at runtime)
-- Wide-lane/Narrow-lane AR enables long baseline ambiguity resolution
+| RTKLIB 2D | libgnss++ 2D |
+|---|---|
+| ![RTKLIB 2D trajectory](docs/driving_odaiba_comparison_rtklib_2d.png) | ![libgnss++ 2D trajectory](docs/driving_odaiba_comparison_libgnss_2d.png) |
 
-## Features
+### Kinematic Reference Comparison
 
-- **RTK positioning** with carrier phase ambiguity resolution (LAMBDA)
-- **SPP positioning** with Klobuchar ionosphere and Saastamoinen troposphere
-- **Wide-lane / Narrow-lane AR** for long baseline ionosphere mitigation
-- **Fix-and-hold** ambiguity maintenance with position-based validation
-- **RINEX 2/3 reader** (GPS observation, navigation, multi-GNSS header parsing)
-- **Eigen-based Kalman filter** (no C array marshalling)
-- **Zero external GNSS dependency** (self-contained LAMBDA, troposphere, ionosphere models)
+![Kinematic RTK: libgnss++ vs RTKLIB](docs/kinematic_comparison.png)
+
+## What Is Already Strong
+
+- **Instant first fix** on the checked benchmark datasets
+- **No RTKLIB runtime dependency**
+- **Modern C++ core** with self-contained `LAMBDA`, troposphere, ionosphere, and solver logic
+- **Wide protocol coverage** for a non-GUI toolchain
+- **Sign-off scripts** for short-baseline RTK, kinematic RTK, static PPP, kinematic PPP, and Odaiba
 
 ## Architecture
 
-```
+```text
 libgnss++/
   core/         constants, coordinates, types, observation, navigation, solution
-  models/       troposphere (Saastamoinen), ionosphere (Klobuchar)
-  algorithms/   spp, rtk, kalman, lambda
-  io/           rinex, solution_writer
+  models/       troposphere, ionosphere
+  algorithms/   spp, rtk, ppp, kalman, lambda
+  io/           rinex, rtcm, ubx, ntrip, solution_writer
+  apps/         native CLI tools and benchmark/sign-off entrypoints
+  python/       pybind11 bindings
+  ros2/         solution playback node
 ```
 
 ## Quick Start
+
+### Build
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+```
+
+### First Solutions
+
+```bash
+python3 apps/gnss.py spp \
+  --obs data/rover_static.obs \
+  --nav data/navigation_static.nav \
+  --out output/spp_solution.pos
+
+python3 apps/gnss.py solve \
+  --rover data/short_baseline/TSK200JPN_R_20240010000_01D_30S_MO.rnx \
+  --base data/short_baseline/TSKB00JPN_R_20240010000_01D_30S_MO.rnx \
+  --nav data/short_baseline/BRDC00IGS_R_20240010000_01D_MN.rnx \
+  --mode static \
+  --out output/rtk_solution.pos
+
+python3 apps/gnss.py ppp \
+  --static \
+  --obs data/rover_static.obs \
+  --nav data/navigation_static.nav \
+  --out output/ppp_solution.pos
+```
+
+### C++ API
 
 ```cpp
 #include <libgnss++/gnss.hpp>
 
 int main() {
-    // Setup RTK processor
     libgnss::RTKProcessor rtk;
     libgnss::RTKProcessor::RTKConfig config;
     config.ambiguity_ratio_threshold = 3.0;
     rtk.setRTKConfig(config);
 
-    // Load data
     libgnss::io::RINEXReader rover, base, nav_reader;
     rover.open("rover.obs");
     base.open("base.obs");
@@ -75,12 +140,10 @@ int main() {
     libgnss::NavigationData nav;
     nav_reader.readNavigationData(nav);
 
-    // Set base position from RINEX header
     libgnss::io::RINEXReader::RINEXHeader base_header;
     base.readHeader(base_header);
     rtk.setBasePosition(base_header.approximate_position);
 
-    // Process epoch by epoch
     libgnss::ObservationData rover_obs, base_obs;
     while (rover.readObservationEpoch(rover_obs) && base.readObservationEpoch(base_obs)) {
         auto solution = rtk.processRTKEpoch(rover_obs, base_obs, nav);
@@ -89,14 +152,6 @@ int main() {
         }
     }
 }
-```
-
-## Building
-
-```bash
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
 ```
 
 ## Command-Line Tools
