@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import binascii
+import csv
 import json
 import socket
 import struct
@@ -2219,6 +2220,60 @@ def build_synthetic_ppp_inputs_with_cycle_slip(
     return obs_path, sp3_path, clk_path, true_position
 
 
+def write_reference_csv(
+    path: Path,
+    rows: list[tuple[int, float, float, float, float]],
+) -> None:
+    with path.open("w", newline="", encoding="ascii") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "gps_tow_s",
+                "gps_week",
+                "lat_deg",
+                "lon_deg",
+                "height_m",
+                "ecef_x_m",
+                "ecef_y_m",
+                "ecef_z_m",
+            ]
+        )
+        for week, tow, lat, lon, height in rows:
+            x, y, z = driving_comparison.llh_to_ecef(lat, lon, height)
+            writer.writerow([tow, week, lat, lon, height, x, y, z])
+
+
+def write_libgnss_pos(
+    path: Path,
+    rows: list[tuple[int, float, float, float, float, int, int, float]],
+) -> None:
+    with path.open("w", encoding="ascii") as handle:
+        handle.write("% LibGNSS++ Position Solution\n")
+        for week, tow, lat, lon, height, status, nsat, pdop in rows:
+            x, y, z = driving_comparison.llh_to_ecef(lat, lon, height)
+            handle.write(
+                f"{week} {tow:.3f} {x:.4f} {y:.4f} {z:.4f} "
+                f"{lat:.9f} {lon:.9f} {height:.4f} {status} {nsat} {pdop:.1f}\n"
+            )
+
+
+def write_rtklib_pos(
+    path: Path,
+    rows: list[tuple[int, float, float, float, float, int, int]],
+) -> None:
+    with path.open("w", encoding="ascii") as handle:
+        handle.write("% synthetic rtklib solution\n")
+        for week, tow, lat, lon, height, quality, nsat in rows:
+            handle.write(
+                f"{week} {tow:.3f} {lat:.9f} {lon:.9f} {height:.4f} {quality} {nsat}\n"
+            )
+
+
+def ros2_solution_node_exists() -> bool:
+    build_dir = ROOT_DIR / "build"
+    return any(path.is_file() for path in build_dir.rglob("gnss_solution_node"))
+
+
 def build_synthetic_ppp_inputs_with_atmos(
     temp_root: Path,
 ) -> tuple[Path, Path, Path, Path, tuple[float, float, float]]:
@@ -2481,6 +2536,7 @@ def build_synthetic_ppp_inputs_with_grid_polynomial_atmos(
 
 class CLIToolsTest(unittest.TestCase):
     STATIC_DATA_TESTS = {
+        "test_spp_cli_processes_real_static_sample",
         "test_nav_products_cli_generates_sp3_and_clk_from_static_sample",
         "test_ppp_cli_processes_real_static_sample_with_generated_products",
         "test_ppp_cli_runs_real_static_slice_with_generated_products_and_ar_enabled",
@@ -2561,6 +2617,359 @@ class CLIToolsTest(unittest.TestCase):
                 }
             )
         return records
+
+    def test_rinex_info_reports_observation_header_and_epoch_count(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_rinex_info_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, _, _, _ = build_synthetic_ppp_inputs(temp_root)
+
+            result = self.run_gnss("rinex-info", "--count-records", str(obs_path))
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("type: observation", result.stdout)
+            self.assertIn("marker: TESTMARK", result.stdout)
+            self.assertIn("epoch count: 8", result.stdout)
+            self.assertIn("total observation records: 96", result.stdout)
+
+    def test_spp_cli_processes_real_static_sample(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_spp_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            output_path = temp_root / "spp.pos"
+
+            result = self.run_gnss(
+                "spp",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "10",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Processed epochs:", result.stdout)
+            self.assertIn("Valid solutions:", result.stdout)
+            self.assertTrue(output_path.exists())
+            self.assertIn("LibGNSS++ Position Solution", output_path.read_text(encoding="ascii"))
+
+    def test_stats_reports_solution_status_breakdown(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_stats_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            pos_path = temp_root / "stats.pos"
+            write_libgnss_pos(
+                pos_path,
+                [
+                    (2200, 345600.0, 35.0, 139.0, 10.0, 4, 10, 1.0),
+                    (2200, 345630.0, 35.000001, 139.000001, 10.1, 3, 9, 1.3),
+                    (2200, 345660.0, 35.000002, 139.000002, 10.2, 1, 8, 1.8),
+                    (2200, 345690.0, 35.0000005, 139.0000005, 10.0, 4, 11, 0.9),
+                ],
+            )
+
+            result = self.run_gnss("stats", str(pos_path))
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("総エポック数", result.stdout)
+            self.assertIn("Fix解", result.stdout)
+            self.assertIn("Float解", result.stdout)
+            self.assertIn("SPP解", result.stdout)
+
+    def test_compare_generates_png_for_synthetic_solutions(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_compare_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            lib_path = temp_root / "compare.pos"
+            rtklib_path = temp_root / "compare_rtklib.pos"
+            output_png = temp_root / "compare_comparison.png"
+            write_libgnss_pos(
+                lib_path,
+                [
+                    (2200, 345600.0, 35.0, 139.0, 10.0, 4, 10, 1.0),
+                    (2200, 345630.0, 35.000001, 139.000002, 10.0, 4, 10, 1.0),
+                    (2200, 345660.0, 35.000002, 139.000004, 10.1, 3, 9, 1.2),
+                ],
+            )
+            write_rtklib_pos(
+                rtklib_path,
+                [
+                    (2200, 345600.0, 35.0, 139.0, 10.0, 1, 10),
+                    (2200, 345630.0, 35.0000012, 139.0000021, 10.1, 1, 10),
+                    (2200, 345660.0, 35.0000024, 139.0000040, 10.2, 2, 9),
+                ],
+            )
+
+            result = self.run_gnss("compare", str(lib_path), str(rtklib_path))
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("LibGNSS++:", result.stdout)
+            self.assertIn("RTKLIB   :", result.stdout)
+            self.assertTrue(output_png.exists())
+
+    def test_plot_generates_single_and_comparison_pngs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_plot_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            lib_path = temp_root / "plot.pos"
+            rtklib_path = temp_root / "plot_rtklib.pos"
+            write_libgnss_pos(
+                lib_path,
+                [
+                    (2200, 345600.0, 35.0, 139.0, 10.0, 4, 10, 1.0),
+                    (2200, 345630.0, 35.000001, 139.000001, 10.0, 3, 9, 1.2),
+                    (2200, 345660.0, 35.000002, 139.000002, 10.1, 1, 8, 1.6),
+                ],
+            )
+            write_rtklib_pos(
+                rtklib_path,
+                [
+                    (2200, 345600.0, 35.0, 139.0, 10.0, 1, 10),
+                    (2200, 345630.0, 35.0000015, 139.0000010, 10.0, 2, 9),
+                    (2200, 345660.0, 35.0000025, 139.0000021, 10.2, 5, 8),
+                ],
+            )
+
+            result = self.run_gnss("plot", str(lib_path), str(rtklib_path))
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue((temp_root / "plot_plot.png").exists())
+            self.assertTrue((temp_root / "plot_vs_rtklib.png").exists())
+
+    def test_trackplot_generates_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_trackplot_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            lib_path = temp_root / "track.pos"
+            rtklib_path = temp_root / "track_rtklib.pos"
+            output_png = temp_root / "track.png"
+            write_libgnss_pos(
+                lib_path,
+                [
+                    (2200, 345600.0, 35.0, 139.0, 10.0, 4, 10, 1.0),
+                    (2200, 345630.0, 35.000001, 139.000001, 10.1, 3, 9, 1.2),
+                    (2200, 345660.0, 35.000002, 139.000002, 10.2, 1, 8, 1.6),
+                ],
+            )
+            write_rtklib_pos(
+                rtklib_path,
+                [
+                    (2200, 345600.0, 35.0, 139.0, 10.0, 1, 10),
+                    (2200, 345630.0, 35.0000011, 139.0000011, 10.0, 2, 9),
+                    (2200, 345660.0, 35.0000022, 139.0000021, 10.1, 4, 8),
+                ],
+            )
+
+            result = self.run_gnss("trackplot", str(lib_path), str(rtklib_path), str(output_png))
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Saved:", result.stdout)
+            self.assertTrue(output_png.exists())
+
+    def test_rtklib2pos_converts_solution_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_rtklib2pos_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "input_rtklib.pos"
+            output_path = temp_root / "converted.pos"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "% synthetic rtklib solution",
+                        "2026/03/27 00:00:00.000 35.000000000 139.000000000 10.0000 1 10",
+                        "2026/03/27 00:00:30.000 35.000001000 139.000001000 10.1000 2 9",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_gnss("rtklib2pos", str(input_path), str(output_path))
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Converted 2 position solutions", result.stdout)
+            exported = output_path.read_text(encoding="utf-8")
+            self.assertIn("Converted from RTKLIB POS format", exported)
+            self.assertIn(" 4 10 0.0", exported)
+            self.assertIn(" 3 9 0.0", exported)
+
+    def test_pos2kml_exports_track_and_sample_points(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_pos2kml_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "track.pos"
+            output_path = temp_root / "track.kml"
+            write_libgnss_pos(
+                input_path,
+                [
+                    (2200, 345600.0, 35.0, 139.0, 10.0, 4, 10, 1.0),
+                    (2200, 345630.0, 35.000001, 139.000001, 10.1, 3, 9, 1.2),
+                    (2200, 345660.0, 35.000002, 139.000002, 10.2, 1, 8, 1.6),
+                ],
+            )
+
+            result = self.run_gnss(
+                "pos2kml",
+                str(input_path),
+                str(output_path),
+                "--sample-points",
+                "1",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Saved:", result.stdout)
+            self.assertIn("Epochs: 3", result.stdout)
+            exported = output_path.read_text(encoding="utf-8")
+            self.assertIn("<LineString>", exported)
+            self.assertIn("FIXED", exported)
+
+    def test_driving_compare_generates_pngs_from_synthetic_inputs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_driving_compare_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            lib_path = temp_root / "lib.pos"
+            rtklib_path = temp_root / "rtklib.pos"
+            reference_csv = temp_root / "reference.csv"
+            output_png = temp_root / "comparison.png"
+            rtklib_2d = temp_root / "rtklib_2d.png"
+            lib_2d = temp_root / "lib_2d.png"
+            reference_rows = [
+                (2200, 345600.0, 35.0, 139.0, 10.0),
+                (2200, 345630.0, 35.000001, 139.000001, 10.0),
+                (2200, 345660.0, 35.000002, 139.000002, 10.0),
+                (2200, 345690.0, 35.000003, 139.000003, 10.0),
+            ]
+            write_reference_csv(reference_csv, reference_rows)
+            write_libgnss_pos(
+                lib_path,
+                [
+                    (2200, 345600.0, 35.0, 139.0, 10.0, 4, 10, 1.0),
+                    (2200, 345630.0, 35.0000011, 139.0000011, 10.0, 3, 9, 1.2),
+                    (2200, 345660.0, 35.0000020, 139.0000021, 10.1, 1, 8, 1.5),
+                    (2200, 345690.0, 35.0000030, 139.0000030, 10.0, 4, 10, 1.0),
+                ],
+            )
+            write_rtklib_pos(
+                rtklib_path,
+                [
+                    (2200, 345600.0, 35.0, 139.0, 10.0, 1, 10),
+                    (2200, 345630.0, 35.0000012, 139.0000010, 10.0, 2, 9),
+                    (2200, 345660.0, 35.0000022, 139.0000022, 10.0, 4, 8),
+                    (2200, 345690.0, 35.0000031, 139.0000031, 10.0, 1, 10),
+                ],
+            )
+
+            result = self.run_gnss(
+                "driving-compare",
+                "--lib-pos",
+                str(lib_path),
+                "--rtklib-pos",
+                str(rtklib_path),
+                "--reference-csv",
+                str(reference_csv),
+                "--output",
+                str(output_png),
+                "--rtklib-2d-output",
+                str(rtklib_2d),
+                "--lib-2d-output",
+                str(lib_2d),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_png.exists())
+            self.assertTrue(rtklib_2d.exists())
+            self.assertTrue(lib_2d.exists())
+
+    def test_scorecard_and_social_card_generate_pngs_from_synthetic_inputs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_cards_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            lib_path = temp_root / "lib.pos"
+            rtklib_path = temp_root / "rtklib.pos"
+            reference_csv = temp_root / "reference.csv"
+            scorecard_png = temp_root / "scorecard.png"
+            social_png = temp_root / "social.png"
+            reference_rows = [
+                (2200, 345600.0, 35.0, 139.0, 10.0),
+                (2200, 345630.0, 35.000001, 139.000001, 10.0),
+                (2200, 345660.0, 35.000002, 139.000002, 10.0),
+            ]
+            write_reference_csv(reference_csv, reference_rows)
+            write_libgnss_pos(
+                lib_path,
+                [
+                    (2200, 345600.0, 35.0, 139.0, 10.0, 4, 10, 1.0),
+                    (2200, 345630.0, 35.0000011, 139.0000010, 10.0, 4, 10, 1.0),
+                    (2200, 345660.0, 35.0000021, 139.0000020, 10.0, 4, 10, 1.0),
+                ],
+            )
+            write_rtklib_pos(
+                rtklib_path,
+                [
+                    (2200, 345600.0, 35.0, 139.0, 10.0, 1, 10),
+                    (2200, 345630.0, 35.0000014, 139.0000014, 10.0, 1, 10),
+                    (2200, 345660.0, 35.0000026, 139.0000026, 10.0, 1, 10),
+                ],
+            )
+
+            scorecard_result = self.run_gnss(
+                "scorecard",
+                "--lib-pos",
+                str(lib_path),
+                "--rtklib-pos",
+                str(rtklib_path),
+                "--reference-csv",
+                str(reference_csv),
+                "--output",
+                str(scorecard_png),
+            )
+            self.assertEqual(scorecard_result.returncode, 0, msg=scorecard_result.stderr)
+            self.assertTrue(scorecard_png.exists())
+
+            social_result = self.run_gnss(
+                "social-card",
+                "--lib-pos",
+                str(lib_path),
+                "--rtklib-pos",
+                str(rtklib_path),
+                "--reference-csv",
+                str(reference_csv),
+                "--output",
+                str(social_png),
+            )
+            self.assertEqual(social_result.returncode, 0, msg=social_result.stderr)
+            self.assertIn("Saved:", social_result.stdout)
+            self.assertTrue(social_png.exists())
+
+    def test_odaiba_benchmark_help_is_available(self) -> None:
+        result = self.run_gnss("odaiba-benchmark", "--help")
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("--summary-json", result.stdout)
+        self.assertIn("--require-all-epochs-min", result.stdout)
+
+    def test_odaiba_scan_help_is_available(self) -> None:
+        result = self.run_gnss("odaiba-scan", "--help")
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("--window-size", result.stdout)
+        self.assertIn("--output-csv", result.stdout)
+
+    def test_ros2_solution_node_runs_via_dispatcher_when_built(self) -> None:
+        if not ros2_solution_node_exists():
+            self.skipTest("gnss_solution_node is not built in this environment")
+        with tempfile.TemporaryDirectory(prefix="gnss_ros2_dispatcher_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            solution_path = temp_root / "sample.pos"
+            solution_path.write_text(
+                "% synthetic solution\n"
+                "1316 518400.0 -3978242.0 3382841.0 3649903.0 35.0 139.0 10.0 4 9 1.0\n"
+                "1316 518430.0 -3978243.0 3382840.0 3649902.0 35.0 139.0 10.0 6 10 2.5\n",
+                encoding="ascii",
+            )
+            result = self.run_gnss(
+                "ros2-solution-node",
+                "--ros-args",
+                "-p",
+                f"solution_file:={solution_path}",
+                "-p",
+                "publish_period_ms:=1",
+                "-p",
+                "max_messages:=2",
+            )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("published_messages=2", result.stdout + result.stderr)
 
     def test_ppp_cli_processes_synthetic_precise_products(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_test_") as temp_dir:
