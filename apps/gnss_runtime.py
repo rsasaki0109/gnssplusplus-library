@@ -25,3 +25,23 @@ def resolve_gnss_command(root_dir: Path) -> list[str]:
     raise SystemExit(
         "Missing dispatcher: expected source-tree apps/gnss.py or installed gnss on PATH"
     )
+
+
+def ensure_input_exists(path: Path, description: str, root_dir: Path) -> None:
+    """Validate an input path and explain bundled-data behavior for installed prefixes."""
+    if path.exists():
+        return
+
+    extra = ""
+    bundled_roots = (
+        root_dir / "data",
+        root_dir / "scripts",
+        root_dir / "configs",
+    )
+    if any(str(path).startswith(str(candidate)) for candidate in bundled_roots):
+        extra = (
+            " Installed prefixes do not ship the sample datasets; "
+            "pass explicit --obs/--rover/--base/--nav paths from your own dataset or source tree."
+        )
+
+    raise SystemExit(f"Missing {description}: {path}.{extra}")
