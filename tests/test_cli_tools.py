@@ -2487,6 +2487,8 @@ class CLIToolsTest(unittest.TestCase):
         "test_ppp_cli_accepts_ssr_corrections_csv",
         "test_ppp_cli_accepts_rtcm_ssr_corrections",
         "test_ppp_cli_accepts_ntrip_rtcm_ssr_corrections",
+        "test_ppp_static_signoff_cli_writes_summary_and_passes_thresholds",
+        "test_ppp_static_signoff_cli_supports_real_data_ar_signoff",
         "test_clas_ppp_cli_writes_summary_for_named_profile",
         "test_clas_ppp_cli_accepts_compact_sampled_corrections",
         "test_clas_ppp_cli_accepts_direct_qzss_l6_corrections",
@@ -2496,6 +2498,8 @@ class CLIToolsTest(unittest.TestCase):
         "test_clas_ppp_cli_accepts_direct_qzss_l6_with_stec_inventory",
         "test_clas_ppp_cli_accepts_direct_qzss_l6_gridded_corrections",
         "test_clas_ppp_cli_accepts_direct_qzss_l6_code_phase_bias",
+        "test_clas_ppp_cli_reports_applied_atmospheric_corrections_for_direct_qzss_l6",
+        "test_clas_ppp_cli_uses_nearest_clas_grid_residuals_for_direct_qzss_l6",
     }
     SHORT_BASELINE_DATA_TESTS = {
         "test_solve_short_baseline_cli_reaches_fixed_solution",
@@ -2505,6 +2509,7 @@ class CLIToolsTest(unittest.TestCase):
         "test_solve_cli_supports_estimated_iono_mode",
         "test_rtk_kinematic_signoff_cli_writes_summary_and_passes_thresholds",
         "test_ppp_kinematic_signoff_cli_writes_summary_and_passes_thresholds",
+        "test_replay_solves_bundled_rinex_sequence",
     }
     ODAIBA_DATA_TESTS = {
         "test_solve_odaiba_slice_uses_glonass_and_beidou_in_rtk",

@@ -34,7 +34,11 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: |
         brew install eigen googletest cmake pybind11 python
-        python3 -m pip install numpy matplotlib
+        python3 -m venv .venv
+        . .venv/bin/activate
+        python -m pip install --upgrade pip
+        python -m pip install numpy matplotlib
+        echo "${GITHUB_WORKSPACE}/.venv/bin" >> "$GITHUB_PATH"
 
     - name: Configure CMake
       run: |
