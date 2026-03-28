@@ -16,6 +16,7 @@ Contribution and PR workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Native protocols: `RINEX`, `RTCM`, `UBX`, direct `QZSS L6`
 - Raw/log tooling: `NMEA`, `NovAtel`, `SBP`, `SBF`, `Trimble`, `SkyTraq`, `BINEX`
 - One CLI entrypoint: `gnss spp`, `solve`, `ppp`, `stream`, `convert`, `live`, `rcv`
+- Local web UI: `gnss web` for benchmark snapshots, 2D trajectories, and receiver status
 - Built-in sign-off scripts and checked-in benchmark artifacts
 - CMake install/export, Python bindings, and ROS2 playback node
 
@@ -70,12 +71,23 @@ python3 apps/gnss.py ppp \
 | `gnss ppp-kinematic-signoff` | Kinematic PPP sign-off |
 | `gnss ppc-demo` | External PPC-Dataset RTK/PPP verification against `reference.csv` |
 | `gnss odaiba-benchmark` | End-to-end Odaiba benchmark pipeline |
+| `gnss web` | Local browser UI for summary JSON, `.pos` trajectories, and `gnss rcv` status |
 
 See all commands:
 
 ```bash
 python3 apps/gnss.py --help
 ```
+
+### Local web UI
+
+```bash
+python3 apps/gnss.py web \
+  --port 8085 \
+  --rcv-status output/receiver.status.json
+```
+
+Then open `http://127.0.0.1:8085` to inspect Odaiba metrics, 2D trajectories, PPC summaries, and receiver status in a browser.
 
 ## Benchmark Snapshot
 

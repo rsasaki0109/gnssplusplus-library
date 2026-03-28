@@ -38,6 +38,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_ppp",
                 prefix / "bin" / "gnss_nav_products",
                 prefix / "bin" / "gnss_rcv.py",
+                prefix / "bin" / "gnss_web.py",
                 prefix / "bin" / "gnss_rtk_kinematic_signoff.py",
                 prefix / "bin" / "gnss_ppp_static_signoff.py",
                 prefix / "bin" / "gnss_ppp_kinematic_signoff.py",
@@ -179,6 +180,16 @@ class PackagingSmokeTest(unittest.TestCase):
                 env=env,
             )
             self.assertTrue(feature_overview_png.exists(), "installed feature overview generator did not write PNG")
+
+            web_help = subprocess.run(
+                [str(prefix / "bin" / "gnss"), "web", "--help"],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("local web UI", web_help.stdout)
 
 
 if __name__ == "__main__":

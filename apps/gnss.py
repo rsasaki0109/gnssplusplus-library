@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import glob
 import os
-import subprocess
 import sys
 
 
@@ -109,6 +108,11 @@ COMMANDS = {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_rcv.py"),
         "summary": "Run the live solver from an rtkrcv-style config file and emit status snapshots.",
+    },
+    "web": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_web.py"),
+        "summary": "Serve a local web UI for benchmark snapshots, 2D trajectories, and receiver status.",
     },
     "stats": {
         "kind": "python",
@@ -225,6 +229,7 @@ def usage() -> str:
             "  python3 apps/gnss.py stream --input tcp://127.0.0.1:9000 --limit 10",
             "  python3 apps/gnss.py stream --input correction.rtcm3 --output serial:///dev/ttyUSB1?baud=115200 --limit 10",
             "  python3 apps/gnss.py stream --input correction.rtcm3 --output tcp://127.0.0.1:9000 --limit 10",
+            "  python3 apps/gnss.py web --port 8085 --rcv-status output/receiver.status.json",
             "  python3 apps/gnss.py ubx-info --input logs/session.ubx --decode-observations",
             "  python3 apps/gnss.py ubx-info --input serial:///dev/ttyACM0?baud=115200 --limit 10",
             "  python3 apps/gnss.py nmea-info --input logs/session.nmea --decode-gga --decode-rmc",
@@ -304,8 +309,11 @@ def find_binary(target_name: str) -> str | None:
 def run_python(target: str, command_name: str, args: list[str]) -> int:
     env = os.environ.copy()
     env["GNSS_CLI_NAME"] = f"gnss {command_name}"
-    result = subprocess.run([sys.executable, target, *args], env=env)
-    return result.returncode
+    try:
+        os.execvpe(sys.executable, [sys.executable, target, *args], env)
+    except OSError as exc:
+        print(f"Error: failed to exec {target}: {exc}", file=sys.stderr)
+        return 1
 
 
 def run_binary(target_name: str, args: list[str]) -> int:
@@ -317,8 +325,11 @@ def run_binary(target_name: str, args: list[str]) -> int:
             file=sys.stderr,
         )
         return 1
-    result = subprocess.run([binary, *args])
-    return result.returncode
+    try:
+        os.execv(binary, [binary, *args])
+    except OSError as exc:
+        print(f"Error: failed to exec {binary}: {exc}", file=sys.stderr)
+        return 1
 
 
 def main() -> int:
