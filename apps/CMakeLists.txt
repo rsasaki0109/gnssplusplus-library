@@ -63,6 +63,7 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_static_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_kinematic_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppc_demo.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppc_rtk_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_clas_ppp.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_nmea_info.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_novatel_info.py

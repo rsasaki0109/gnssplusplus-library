@@ -4,6 +4,7 @@
 #include "../core/observation.hpp"
 #include "../core/navigation.hpp"
 #include "../core/solution.hpp"
+#include "rtk_measurement.hpp"
 #include "rtk_selection.hpp"
 #include "rtk_validation.hpp"
 #include "spp.hpp"
@@ -327,6 +328,8 @@ private:
      * Full KF update with DD observation model mapping to SD states
      */
     bool updateFilter(const std::map<SatelliteId, SatelliteData>& sat_data);
+    std::vector<rtk_measurement::MeasurementBlock> buildMeasurementBlocks(
+        const std::map<SatelliteId, SatelliteData>& sat_data) const;
 
     // Keep old signature for compatibility
     bool updateFilter(const ObservationData& rover_obs,

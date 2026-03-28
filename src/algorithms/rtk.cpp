@@ -1,9 +1,9 @@
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/rtk_ar_selection.hpp>
-#include <libgnss++/algorithms/kalman.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/rtk_measurement.hpp>
 #include <libgnss++/algorithms/rtk_selection.hpp>
+#include <libgnss++/algorithms/rtk_update.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/signal_policy.hpp>
@@ -1298,11 +1298,8 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
 // ============================================================
 // KF update: DD observation model with H mapping to SD states
 // ============================================================
-bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_data) {
-
-    if (sat_data.size() < 4) return false;
-
-    const int n_states = filter_state_.state.size();
+std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlocks(
+    const std::map<SatelliteId, SatelliteData>& sat_data) const {
     const Vector3d rover_pos = base_position_ + filter_state_.state.head<3>();
     const bool estimate_iono = usesEstimatedIono(rtk_config_);
     const auto selection_snapshot = buildSelectionSnapshot(sat_data);
@@ -1472,24 +1469,20 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
         append_frequency_blocks(1);
     }
 
-    auto measurement_system = rtk_measurement::assembleMeasurementSystem(blocks, n_states);
-    const int oi = static_cast<int>(measurement_system.residuals.size());
-    if (oi < 6) return false;
+    return blocks;
+}
 
-    // Reject outliers (RTKLIB maxinno check)
-    rtk_measurement::suppressOutlierRows(
-        measurement_system.residuals, measurement_system.design_matrix, 30.0);
+bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_data) {
+    if (sat_data.size() < 4) return false;
 
-    // Native Eigen Kalman filter update
-    {
-        int info = kalmanFilter(filter_state_.state, filter_state_.covariance,
-                                measurement_system.design_matrix,
-                                measurement_system.residuals,
-                                measurement_system.covariance);
-        if (info) return false;
-    }
-
-    return true;
+    auto measurement_system = rtk_measurement::assembleMeasurementSystem(
+        buildMeasurementBlocks(sat_data), filter_state_.state.size());
+    const auto update_result = rtk_update::applyMeasurementUpdate(filter_state_.state,
+                                                                  filter_state_.covariance,
+                                                                  measurement_system,
+                                                                  30.0,
+                                                                  6);
+    return update_result.ok;
 }
 
 // ============================================================
