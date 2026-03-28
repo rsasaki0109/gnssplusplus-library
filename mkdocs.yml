@@ -1,0 +1,27 @@
+site_name: libgnss++
+site_description: Modern C++ GNSS/RTK/PPP/CLAS toolkit
+site_url: https://rsasaki0109.github.io/gnssplusplus-library/
+repo_url: https://github.com/rsasaki0109/gnssplusplus-library
+repo_name: rsasaki0109/gnssplusplus-library
+docs_dir: docs
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Quick Start: quickstart.md
+  - Benchmarks: benchmarks.md
+  - Validation: validation.md
+  - Interfaces: interfaces.md
+  - Contributing: contributing.md
