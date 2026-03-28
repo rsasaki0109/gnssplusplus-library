@@ -45,3 +45,22 @@ def ensure_input_exists(path: Path, description: str, root_dir: Path) -> None:
         )
 
     raise SystemExit(f"Missing {description}: {path}.{extra}")
+
+
+def parse_summary_metrics(line: str) -> dict[str, object]:
+    """Parse a `summary:` line into a dict with int/float/string values."""
+    metrics: dict[str, object] = {}
+    if not line.startswith("summary:"):
+        return metrics
+    for token in line[len("summary:"):].strip().split():
+        if "=" not in token:
+            continue
+        key, value = token.split("=", 1)
+        try:
+            if "." in value:
+                metrics[key] = float(value)
+            else:
+                metrics[key] = int(value)
+        except ValueError:
+            metrics[key] = value
+    return metrics

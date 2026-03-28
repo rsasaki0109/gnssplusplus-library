@@ -543,6 +543,109 @@ TEST(GNSSLiveTest, InterpolatesBaseEpochAndUsesInlineBaseMetadata) {
     fs::remove_all(temp_dir);
 }
 
+TEST(GNSSLiveTest, ReportsRealtimeMetricsForMultiEpochReplay) {
+    namespace fs = std::filesystem;
+
+    const fs::path source_dir = GNSSPP_SOURCE_DIR;
+    if (!sourcePathExists(source_dir, "data/driving/base.obs") ||
+        !sourcePathExists(source_dir, "data/driving/rover.obs") ||
+        !sourcePathExists(source_dir, "data/driving/navigation.nav")) {
+        GTEST_SKIP() << "repo driving test data is not available";
+    }
+    const fs::path binary_dir = GNSSPP_BINARY_DIR;
+    const fs::path live_binary = binary_dir / "apps" / "gnss_live";
+    ASSERT_TRUE(fs::exists(live_binary));
+
+    io::RINEXReader::RINEXHeader base_header;
+    const auto base_epochs =
+        loadBaseEpochs(source_dir / "data" / "driving" / "base.obs", base_header, 3);
+    ASSERT_EQ(base_epochs.size(), 3U);
+    for (const auto& epoch : base_epochs) {
+        ASSERT_GE(epoch.getNumSatellites(), 4U);
+    }
+
+    std::vector<ObservationData> rover_epochs;
+    for (const auto& base_epoch : base_epochs) {
+        const ObservationData rover_epoch =
+            findEpochAtTime(source_dir / "data" / "driving" / "rover.obs", base_epoch.time);
+        ASSERT_FALSE(rover_epoch.isEmpty());
+        ASSERT_GE(rover_epoch.getNumSatellites(), 4U);
+        rover_epochs.push_back(rover_epoch);
+    }
+
+    const NavigationData nav =
+        loadNavigation(source_dir / "data" / "driving" / "navigation.nav");
+
+    io::RTCMProcessor encoder;
+    std::set<SatelliteId> satellites;
+    for (const auto& epoch : base_epochs) {
+        for (const auto& obs : epoch.observations) satellites.insert(obs.satellite);
+    }
+    for (const auto& epoch : rover_epochs) {
+        for (const auto& obs : epoch.observations) satellites.insert(obs.satellite);
+    }
+
+    std::vector<std::vector<uint8_t>> base_frames;
+    base_frames.push_back(buildRtcm1005(base_header.approximate_position.x(),
+                                        base_header.approximate_position.y(),
+                                        base_header.approximate_position.z()));
+
+    size_t nav_frames = 0;
+    for (const auto& satellite : satellites) {
+        const Ephemeris* eph = nav.getEphemeris(satellite, rover_epochs.front().time);
+        if (eph == nullptr || satellite.system != GNSSSystem::GPS) {
+            continue;
+        }
+        const auto message = encoder.encodeEphemeris(*eph);
+        ASSERT_TRUE(message.valid);
+        base_frames.push_back(buildRtcmFrame(message));
+        ++nav_frames;
+    }
+    ASSERT_GE(nav_frames, 4U);
+
+    for (const auto& epoch : base_epochs) {
+        const auto message = encoder.encodeObservations(epoch, io::RTCMMessageType::RTCM_1004);
+        ASSERT_TRUE(message.valid);
+        base_frames.push_back(buildRtcmFrame(message));
+    }
+
+    std::vector<std::vector<uint8_t>> rover_frames;
+    for (const auto& epoch : rover_epochs) {
+        const auto message = encoder.encodeObservations(epoch, io::RTCMMessageType::RTCM_1004);
+        ASSERT_TRUE(message.valid);
+        rover_frames.push_back(buildRtcmFrame(message));
+    }
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_realtime_test");
+    const fs::path rover_path = temp_dir / "rover.rtcm3";
+    const fs::path base_path = temp_dir / "base.rtcm3";
+    const fs::path out_path = temp_dir / "live.pos";
+    const fs::path log_path = temp_dir / "live.log";
+
+    writeBinaryFile(base_path, base_frames);
+    writeBinaryFile(rover_path, rover_frames);
+
+    const std::string run_command =
+        "\"" + live_binary.string() + "\" --rover-rtcm \"" + rover_path.string() +
+        "\" --base-rtcm \"" + base_path.string() +
+        "\" --out \"" + out_path.string() +
+        "\" --max-epochs 3 --quiet > \"" + log_path.string() + "\" 2>&1";
+    const int run_rc = std::system(run_command.c_str());
+    ASSERT_EQ(run_rc, 0) << readTextFile(log_path);
+
+    const std::string log = readTextFile(log_path);
+    EXPECT_EQ(extractSummaryToken(log, "termination"), "max_epochs_reached") << log;
+    EXPECT_EQ(extractSummaryToken(log, "written_solutions"), "3") << log;
+    EXPECT_EQ(extractSummaryToken(log, "rover_decoder_errors"), "0") << log;
+    EXPECT_EQ(extractSummaryToken(log, "base_decoder_errors"), "0") << log;
+    EXPECT_GT(extractSummaryDouble(log, "solution_span_s"), 0.0) << log;
+    EXPECT_GT(extractSummaryDouble(log, "effective_epoch_rate_hz"), 1.0) << log;
+    EXPECT_GT(extractSummaryDouble(log, "realtime_factor"), 1.0) << log;
+    ASSERT_TRUE(fs::exists(out_path));
+
+    fs::remove_all(temp_dir);
+}
+
 TEST(GNSSLiveTest, HoldsRecentBaseEpochWhenFutureBaseHasNotArrivedYet) {
     namespace fs = std::filesystem;
 
