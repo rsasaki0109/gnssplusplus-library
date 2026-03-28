@@ -5,6 +5,7 @@
 #include "../core/navigation.hpp"
 #include "../core/solution.hpp"
 #include "rtk_selection.hpp"
+#include "rtk_validation.hpp"
 #include "spp.hpp"
 #include <Eigen/Dense>
 #include <mutex>
@@ -216,6 +217,17 @@ private:
         SatelliteId sat;
         int freq;
     };
+    struct HoldStateSnapshot {
+        Vector3d last_fixed_position = Vector3d::Zero();
+        bool has_last_fixed_position = false;
+        std::vector<DDPair> dd_pairs;
+        std::vector<int> best_subset;
+        VectorXd dd_fixed;
+        double ar_ratio = 0.0;
+        int num_fixed_ambiguities = 0;
+
+        bool hasHeldIntegers() const { return dd_fixed.size() > 0; }
+    };
     std::vector<DDPair> last_dd_pairs_;
     std::vector<int> last_best_subset_;
     VectorXd last_dd_fixed_;
@@ -349,6 +361,8 @@ private:
      */
     bool tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_data,
                     const GNSSTime& time, int n_sats, PositionSolution& solution);
+    HoldStateSnapshot captureHoldState() const;
+    void restoreHoldState(const HoldStateSnapshot& snapshot);
 
     /**
      * Increment lock counts after KF update (RTKLIB: lock++ after filter)
