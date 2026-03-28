@@ -69,6 +69,7 @@ python3 apps/gnss.py ppp \
 | `gnss rtk-kinematic-signoff` | Kinematic RTK sign-off |
 | `gnss ppp-static-signoff` | Static PPP sign-off |
 | `gnss ppp-kinematic-signoff` | Kinematic PPP sign-off |
+| `gnss live-signoff` | Realtime/error-handling sign-off for recorded RTCM/UBX live inputs |
 | `gnss ppc-demo` | External PPC-Dataset RTK/PPP verification against `reference.csv` |
 | `gnss odaiba-benchmark` | End-to-end Odaiba benchmark pipeline |
 | `gnss web` | Local browser UI for summary JSON, `.pos` trajectories, and `gnss rcv` status |
@@ -197,6 +198,7 @@ ctest --test-dir build --output-on-failure
 Important checks already covered in-tree:
 
 - solver/unit tests
+- live realtime/error-handling regression
 - benchmark/image generation tests
 - installed-prefix packaging smoke tests
 - installed `gnss social-card` dogfooding
