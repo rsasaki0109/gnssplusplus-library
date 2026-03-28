@@ -9,6 +9,21 @@ If this repo is useful, star it.
 ![UrbanNav Odaiba social card](docs/driving_odaiba_social_card.png)
 
 Contribution and PR workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
+Architecture notes: [docs/architecture.md](docs/architecture.md)
+Documentation index: [docs/index.md](docs/index.md)
+
+## Docs
+
+- [Documentation index](docs/index.md)
+- [Architecture notes](docs/architecture.md)
+- [Contribution workflow](CONTRIBUTING.md)
+
+Local docs site:
+
+```bash
+python3 -m pip install -r requirements-docs.txt
+python3 -m mkdocs serve
+```
 
 ## What You Get
 
