@@ -39,6 +39,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_nav_products",
                 prefix / "bin" / "gnss_rcv.py",
                 prefix / "bin" / "gnss_web.py",
+                prefix / "bin" / "gnss_live_signoff.py",
                 prefix / "bin" / "gnss_rtk_kinematic_signoff.py",
                 prefix / "bin" / "gnss_ppp_static_signoff.py",
                 prefix / "bin" / "gnss_ppp_kinematic_signoff.py",
@@ -190,6 +191,16 @@ class PackagingSmokeTest(unittest.TestCase):
                 text=True,
             )
             self.assertIn("local web UI", web_help.stdout)
+
+            live_signoff_help = subprocess.run(
+                [str(prefix / "bin" / "gnss"), "live-signoff", "--help"],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("realtime", live_signoff_help.stdout.lower())
 
 
 if __name__ == "__main__":

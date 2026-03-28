@@ -104,6 +104,11 @@ COMMANDS = {
         "target": "gnss_live",
         "summary": "Continuously solve RTCM or UBX rover input against RTCM base corrections into a live RTK solution file.",
     },
+    "live-signoff": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_live_signoff.py"),
+        "summary": "Run gnss live with realtime/error-handling thresholds and emit summary JSON.",
+    },
     "rcv": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_rcv.py"),
@@ -257,6 +262,7 @@ def usage() -> str:
             "  python3 apps/gnss.py convert --format ubx --input serial:///dev/ttyACM0?baud=115200 --obs-out output/stream.obs --limit 10",
             "  python3 apps/gnss.py replay --rover-rinex data/rover_kinematic.obs --base-rinex data/base_kinematic.obs --nav-rinex data/navigation_kinematic.nav --out output/replay.pos",
             "  python3 apps/gnss.py live --rover-rtcm rover.rtcm3 --base-rtcm base.rtcm3 --nav-rinex nav.rnx",
+            "  python3 apps/gnss.py live-signoff --rover-rtcm rover.rtcm3 --base-rtcm base.rtcm3 --out output/live.pos --summary-json output/live_summary.json --require-written-solutions-min 3 --require-realtime-factor-min 1.0",
             "  python3 apps/gnss.py rcv start --config configs/live.conf --status-out output/receiver_status.json",
             "  python3 apps/gnss.py rcv status --status-out output/receiver_status.json --wait-seconds 5",
             "  python3 apps/gnss.py rcv status --status-out output/receiver_status.json --tail-log-lines 20",

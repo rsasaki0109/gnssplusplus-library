@@ -23,6 +23,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 import gnss_odaiba_benchmark as benchmark  # noqa: E402
 import gnss_clas_ppp as clas_ppp  # noqa: E402
+import gnss_live_signoff as live_signoff  # noqa: E402
 import gnss_ppc_demo as ppc_demo  # noqa: E402
 import gnss_ppp_kinematic_signoff as ppp_kinematic_signoff  # noqa: E402
 import gnss_ppp_static_signoff as ppp_static_signoff  # noqa: E402
@@ -1049,6 +1050,59 @@ class PPPKinematicSignoffTest(unittest.TestCase):
             self.assertEqual(payload["malib_common_epoch_pairs"], 2)
             self.assertAlmostEqual(payload["malib_mean_position_error_m"], 0.5)
             self.assertIn("libgnss_minus_malib_p95_error_m", payload)
+
+
+class LiveSignoffTest(unittest.TestCase):
+    def test_build_summary_payload_and_requirements(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_live_signoff_") as temp_dir:
+            temp_root = Path(temp_dir)
+            summary_json = temp_root / "summary.json"
+            args = argparse.Namespace(
+                out=temp_root / "live.pos",
+                summary_json=summary_json,
+                log_out=temp_root / "live.log",
+                use_existing_log=None,
+                require_termination="completed",
+                require_aligned_epochs_min=3,
+                require_written_solutions_min=3,
+                require_fixed_solutions_min=1,
+                require_rover_decoder_errors_max=0,
+                require_base_decoder_errors_max=0,
+                require_realtime_factor_min=1.0,
+                require_effective_epoch_rate_min=10.0,
+                require_solver_wall_time_max=2.0,
+            )
+            summary_line = (
+                "summary: termination=completed aligned_epochs=3 written_solutions=3 "
+                "fixed_solutions=1 rover_decoder_errors=0 base_decoder_errors=0 "
+                "solver_wall_time_s=0.250000 solution_span_s=1.000000 "
+                "realtime_factor=4.000000 effective_epoch_rate_hz=12.000000"
+            )
+
+            payload = live_signoff.build_summary_payload(
+                args,
+                summary_line,
+                "stdout text\n" + summary_line + "\n",
+                "",
+                0,
+            )
+            self.assertEqual(payload["metrics"]["termination"], "completed")
+            self.assertEqual(payload["metrics"]["written_solutions"], 3)
+            self.assertTrue(summary_json.exists())
+            live_signoff.enforce_requirements(payload, args)
+
+            failing_args = argparse.Namespace(
+                **{
+                    **vars(args),
+                    "require_realtime_factor_min": 5.0,
+                    "require_written_solutions_min": 4,
+                }
+            )
+            with self.assertRaises(SystemExit) as ctx:
+                live_signoff.enforce_requirements(payload, failing_args)
+
+            self.assertIn("realtime_factor", str(ctx.exception))
+            self.assertIn("written_solutions", str(ctx.exception))
 
 
 class PPCDemoTest(unittest.TestCase):

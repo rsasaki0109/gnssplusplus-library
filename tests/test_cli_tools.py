@@ -6936,6 +6936,55 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--rover-ubx", result.stdout)
         self.assertIn("--base-hold-seconds", result.stdout)
 
+    def test_live_signoff_summarizes_existing_log_and_enforces_realtime_gate(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_live_signoff_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            log_path = temp_root / "live.log"
+            summary_path = temp_root / "live_summary.json"
+            log_path.write_text(
+                "\n".join(
+                    [
+                        "some debug line",
+                        "summary: termination=completed rover_decoder_errors=0 base_decoder_errors=0 "
+                        "aligned_epochs=3 written_solutions=3 fixed_solutions=1 "
+                        "solver_wall_time_s=0.250000 solution_span_s=1.000000 "
+                        "realtime_factor=4.000000 effective_epoch_rate_hz=12.000000",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_gnss(
+                "live-signoff",
+                "--use-existing-log",
+                str(log_path),
+                "--summary-json",
+                str(summary_path),
+                "--require-termination",
+                "completed",
+                "--require-written-solutions-min",
+                "3",
+                "--require-fixed-solutions-min",
+                "1",
+                "--require-realtime-factor-min",
+                "1.0",
+                "--require-effective-epoch-rate-min",
+                "10.0",
+                "--require-rover-decoder-errors-max",
+                "0",
+                "--require-base-decoder-errors-max",
+                "0",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(summary_path.exists())
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["metrics"]["termination"], "completed")
+            self.assertEqual(payload["metrics"]["written_solutions"], 3)
+            self.assertEqual(payload["metrics"]["realtime_factor"], 4.0)
+            self.assertIn("Finished live sign-off.", result.stdout)
+
     def test_web_serves_overview_solution_and_status_api(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_web_test_") as temp_dir:
             temp_root = Path(temp_dir)
