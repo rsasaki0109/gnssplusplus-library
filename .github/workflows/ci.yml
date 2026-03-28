@@ -40,6 +40,16 @@ jobs:
         python -m pip install numpy matplotlib
         echo "${GITHUB_WORKSPACE}/.venv/bin" >> "$GITHUB_PATH"
 
+    - name: Install docs dependencies (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: python3 -m pip install --user -r requirements-docs.txt
+
+    - name: Install docs dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        . .venv/bin/activate
+        python -m pip install -r requirements-docs.txt
+
     - name: Configure CMake
       run: |
         if [ "${{ matrix.compiler }}" = "clang" ]; then
