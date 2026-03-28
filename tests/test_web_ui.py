@@ -130,7 +130,9 @@ class WebUISmokeTest(unittest.TestCase):
                         "fix_rate_pct": 96.67,
                         "median_h_m": 0.108,
                         "p95_h_m": 0.110,
+                        "solver_wall_time_s": 12.34,
                         "realtime_factor": 1.23,
+                        "effective_epoch_rate_hz": 15.67,
                     }
                 ),
                 encoding="utf-8",
@@ -182,10 +184,13 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("live_replay_summary.json", page.locator("#live-table tbody").text_content())
                     self.assertIn("completed", page.locator("#live-table tbody").text_content())
                     self.assertIn("3.50x", page.locator("#live-table tbody").text_content())
+                    self.assertIn("realtime", page.locator("#live-table tbody").text_content())
                     self.assertEqual(page.locator("canvas").count(), 2)
                     self.assertIn("FIXED", page.locator("#status-legend").text_content())
                     self.assertIn("ppc_tokyo_run1_rtk_summary.json", page.locator("#ppc-table tbody").text_content())
                     self.assertIn("96.67%", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("excellent", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("12.34 s", page.locator("#ppc-table tbody").text_content())
                     browser.close()
             finally:
                 process.terminate()

@@ -149,24 +149,22 @@ static int search(int n, int m, const double* L, const double* D,
     return 0;
 }
 
-// Solve Z' * F = E for F, where Z is n x n and E is n x m.
-// This is equivalent to RTKLIB's solve("T", Z, E, n, m, F).
-// Z' * F = E  =>  F = inv(Z') * E = inv(Z)' * E
-// Since Z is an integer matrix from Gauss transforms, we use LU.
-static int solveZt(int n, int m, const double* Z, const double* E, double* F) {
+// Solve Z' * f = e for the best integer candidate only.
+// We only need the first candidate because the second-best solution is used
+// only for the ratio test in z-space (s[1]/s[0]), not for back-transform.
+static int solveBestZt(int n, const double* Z, const double* e, double* f) {
     // Build Eigen matrices (column-major, matching RTKLIB storage)
     Eigen::Map<const Eigen::MatrixXd> Zm(Z, n, n);
     Eigen::MatrixXd Zt = Zm.transpose();
 
-    // Solve Z' * F = E  for each column of E
-    Eigen::FullPivLU<Eigen::MatrixXd> lu(Zt);
-    if (!lu.isInvertible()) return -1;
+    // Z is unimodular after Gauss/permutation transforms, so a cheaper LU is enough.
+    Eigen::PartialPivLU<Eigen::MatrixXd> lu(Zt);
+    if (lu.matrixLU().diagonal().cwiseAbs().minCoeff() <= 0.0) return -1;
 
-    for (int j = 0; j < m; ++j) {
-        Eigen::Map<const Eigen::VectorXd> ej(E + j * n, n);
-        Eigen::VectorXd fj = lu.solve(ej);
-        for (int i = 0; i < n; ++i) F[i + j * n] = fj(i);
-    }
+    const Eigen::Map<const Eigen::VectorXd> rhs(e, n);
+    const Eigen::VectorXd solution = lu.solve(rhs);
+    if (!solution.array().isFinite().all()) return -1;
+    for (int i = 0; i < n; ++i) f[i] = solution(i);
     return 0;
 }
 
@@ -178,7 +176,7 @@ bool lambdaSearch(const VectorXd& float_amb, const MatrixXd& Q_amb,
 
     // Convert to column-major flat arrays (RTKLIB convention)
     std::vector<double> Q(n * n), L(n * n, 0.0), D(n), Z(n * n, 0.0);
-    std::vector<double> a(n), z(n), E(n * m), F(n * m), s(m);
+    std::vector<double> a(n), z(n), E(n * m), F(n), s(m);
 
     // Q: column-major
     for (int i = 0; i < n; ++i)
@@ -207,8 +205,8 @@ bool lambdaSearch(const VectorXd& float_amb, const MatrixXd& Q_amb,
     info = search(n, m, L.data(), D.data(), z.data(), E.data(), s.data());
     if (info != 0) return false;
 
-    // F = Z' \ E  (solve Z' * F = E)
-    info = solveZt(n, m, Z.data(), E.data(), F.data());
+    // Only the best integer solution needs back-transform.
+    info = solveBestZt(n, Z.data(), E.data(), F.data());
     if (info != 0) return false;
 
     // Extract best solution

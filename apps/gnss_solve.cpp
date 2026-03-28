@@ -222,6 +222,13 @@ bool interpolateBaseEpoch(const libgnss::ObservationData& before,
 
     const auto before_obs = indexObservations(before);
     const auto after_obs = indexObservations(after);
+    struct ModeledRangeTriple {
+        bool valid = false;
+        double before_m = 0.0;
+        double after_m = 0.0;
+        double target_m = 0.0;
+    };
+    std::map<libgnss::SatelliteId, ModeledRangeTriple> modeled_range_cache;
 
     for (const auto& [key, obs_before_ptr] : before_obs) {
         const auto after_it = after_obs.find(key);
@@ -234,18 +241,20 @@ bool interpolateBaseEpoch(const libgnss::ObservationData& before,
             continue;
         }
 
-        const double approx_target_code =
-            obs_before.pseudorange + alpha * (obs_after.pseudorange - obs_before.pseudorange);
-
-        double modeled_before = 0.0;
-        double modeled_after = 0.0;
-        double modeled_target = 0.0;
-        if (!calculateModeledBaseRange(key.satellite, before.time, obs_before.pseudorange,
-                                       base_position, nav, modeled_before) ||
-            !calculateModeledBaseRange(key.satellite, after.time, obs_after.pseudorange,
-                                       base_position, nav, modeled_after) ||
-            !calculateModeledBaseRange(key.satellite, target_time, approx_target_code,
-                                       base_position, nav, modeled_target)) {
+        auto& modeled = modeled_range_cache[key.satellite];
+        if (!modeled.valid && modeled.before_m == 0.0 && modeled.after_m == 0.0 &&
+            modeled.target_m == 0.0) {
+            if (!calculateModeledBaseRange(key.satellite, before.time, obs_before.pseudorange,
+                                           base_position, nav, modeled.before_m) ||
+                !calculateModeledBaseRange(key.satellite, after.time, obs_after.pseudorange,
+                                           base_position, nav, modeled.after_m)) {
+                modeled.before_m = std::numeric_limits<double>::quiet_NaN();
+                continue;
+            }
+            modeled.target_m = modeled.before_m + alpha * (modeled.after_m - modeled.before_m);
+            modeled.valid = true;
+        }
+        if (!modeled.valid) {
             continue;
         }
 
@@ -257,19 +266,19 @@ bool interpolateBaseEpoch(const libgnss::ObservationData& before,
         obs.snr = (1.0 - alpha) * obs_before.snr + alpha * obs_after.snr;
         obs.loss_of_lock = obs_before.loss_of_lock || obs_after.loss_of_lock;
 
-        const double code_residual_before = obs_before.pseudorange - modeled_before;
-        const double code_residual_after = obs_after.pseudorange - modeled_after;
-        obs.pseudorange = modeled_target +
+        const double code_residual_before = obs_before.pseudorange - modeled.before_m;
+        const double code_residual_after = obs_after.pseudorange - modeled.after_m;
+        obs.pseudorange = modeled.target_m +
             code_residual_before + alpha * (code_residual_after - code_residual_before);
         obs.has_pseudorange = std::isfinite(obs.pseudorange);
 
         if (obs_before.has_carrier_phase && obs_after.has_carrier_phase &&
             (obs_before.lli & 0x01) == 0 && (obs_after.lli & 0x01) == 0 && !obs.loss_of_lock) {
-            const double phase_residual_before = obs_before.carrier_phase * wavelength - modeled_before;
-            const double phase_residual_after = obs_after.carrier_phase * wavelength - modeled_after;
+            const double phase_residual_before = obs_before.carrier_phase * wavelength - modeled.before_m;
+            const double phase_residual_after = obs_after.carrier_phase * wavelength - modeled.after_m;
             const double phase_residual_target =
                 phase_residual_before + alpha * (phase_residual_after - phase_residual_before);
-            obs.carrier_phase = (modeled_target + phase_residual_target) / wavelength;
+            obs.carrier_phase = (modeled.target_m + phase_residual_target) / wavelength;
             obs.has_carrier_phase = std::isfinite(obs.carrier_phase);
         }
 

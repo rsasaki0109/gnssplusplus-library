@@ -120,6 +120,28 @@ def load_json(path: Path) -> dict[str, Any] | None:
         return None
 
 
+def classify_realtime_status(realtime_factor: Any) -> str:
+    if not isinstance(realtime_factor, (int, float)):
+        return "n/a"
+    if realtime_factor >= 1.0:
+        return "realtime"
+    if realtime_factor >= 0.5:
+        return "near-realtime"
+    return "offline"
+
+
+def classify_accuracy_status(p95_h_m: Any) -> str:
+    if not isinstance(p95_h_m, (int, float)):
+        return "n/a"
+    if p95_h_m <= 0.5:
+        return "excellent"
+    if p95_h_m <= 2.0:
+        return "good"
+    if p95_h_m <= 10.0:
+        return "rough"
+    return "poor"
+
+
 def downsample_points(points: list[dict[str, Any]], limit: int = MAX_RENDER_POINTS) -> list[dict[str, Any]]:
     if len(points) <= limit:
         return points
@@ -204,6 +226,8 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
             continue
         payload = dict(payload)
         payload["_path"] = relative_display(path, root_dir)
+        payload["runtime_status"] = classify_realtime_status(payload.get("realtime_factor"))
+        payload["quality_status"] = classify_accuracy_status(payload.get("p95_h_m"))
         ppc_summaries.append(payload)
 
     live_summaries: list[dict[str, Any]] = []
@@ -227,6 +251,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
                 "effective_epoch_rate_hz": metrics.get("effective_epoch_rate_hz"),
                 "rover_decoder_errors": metrics.get("rover_decoder_errors"),
                 "base_decoder_errors": metrics.get("base_decoder_errors"),
+                "runtime_status": classify_realtime_status(metrics.get("realtime_factor")),
             }
         )
 
@@ -321,6 +346,37 @@ def render_html() -> str:
     .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
     .legend-item { display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
     .swatch { width: 12px; height: 12px; border-radius: 999px; border: 1px solid rgba(0,0,0,0.1); }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .badge.realtime, .badge.excellent {
+      background: rgba(46, 204, 113, 0.14);
+      color: #0f7a43;
+      border-color: rgba(46, 204, 113, 0.28);
+    }
+    .badge.near-realtime, .badge.good {
+      background: rgba(243, 156, 18, 0.16);
+      color: #9a5f00;
+      border-color: rgba(243, 156, 18, 0.26);
+    }
+    .badge.offline, .badge.rough, .badge.poor {
+      background: rgba(231, 76, 60, 0.12);
+      color: #b03a2e;
+      border-color: rgba(231, 76, 60, 0.24);
+    }
+    .badge.na {
+      background: rgba(107, 114, 128, 0.12);
+      color: #4b5563;
+      border-color: rgba(107, 114, 128, 0.18);
+    }
     .status-pre {
       margin-top: 12px;
       padding: 12px;
@@ -424,7 +480,10 @@ def render_html() -> str:
             <th>Fix rate</th>
             <th>Median H</th>
             <th>P95 H</th>
+            <th>Quality</th>
             <th>Realtime</th>
+            <th>Wall</th>
+            <th>Rate</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -521,6 +580,12 @@ def render_html() -> str:
       return String(value);
     }
 
+    function renderBadge(status) {
+      const normalized = (status || "n/a");
+      const className = normalized === "n/a" ? "na" : normalized;
+      return `<span class="badge ${className}">${normalized}</span>`;
+    }
+
     async function refreshStatus() {
       const metrics = document.getElementById("receiver-metrics");
       const pre = document.getElementById("receiver-json");
@@ -576,7 +641,7 @@ def render_html() -> str:
           <td>${row.termination || "n/a"}</td>
           <td>${row.written_solutions ?? "n/a"}</td>
           <td>${row.fixed_solutions ?? "n/a"}</td>
-          <td>${formatMaybeNumber(row.realtime_factor, 2, "x")}</td>
+          <td>${renderBadge(row.runtime_status)} ${formatMaybeNumber(row.realtime_factor, 2, "x")}</td>
           <td>${formatMaybeNumber(row.effective_epoch_rate_hz, 2, " Hz")}</td>
           <td>${(row.rover_decoder_errors ?? "n/a")}/${(row.base_decoder_errors ?? "n/a")}</td>`;
         liveBody.appendChild(tr);
@@ -592,7 +657,10 @@ def render_html() -> str:
           <td>${formatMaybeNumber(row.fix_rate_pct, 2, "%")}</td>
           <td>${formatMaybeNumber(row.median_h_m, 3, " m")}</td>
           <td>${formatMaybeNumber(row.p95_h_m, 2, " m")}</td>
-          <td>${formatMaybeNumber(row.realtime_factor, 2, "x")}</td>`;
+          <td>${renderBadge(row.quality_status)}</td>
+          <td>${renderBadge(row.runtime_status)} ${formatMaybeNumber(row.realtime_factor, 2, "x")}</td>
+          <td>${formatMaybeNumber(row.solver_wall_time_s, 2, " s")}</td>
+          <td>${formatMaybeNumber(row.effective_epoch_rate_hz, 2, " Hz")}</td>`;
         ppcBody.appendChild(tr);
       }
 

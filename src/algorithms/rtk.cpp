@@ -990,7 +990,12 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
 
         // Iterative KF update
         bool filter_ok = false;
-        for (int iter = 0; iter < rtk_config_.kf_iterations; ++iter) {
+        int max_kf_iterations = rtk_config_.kf_iterations;
+        if (rtk_config_.position_mode == RTKConfig::PositionMode::KINEMATIC &&
+            has_last_solution_position_ && max_kf_iterations > 2) {
+            max_kf_iterations = 2;
+        }
+        for (int iter = 0; iter < max_kf_iterations; ++iter) {
             const Vector3d baseline_before_iter = filter_state_.state.head<3>();
             filter_ok = updateFilter(sat_data);
             if (!filter_ok) break;
@@ -1275,50 +1280,48 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
 
     if (sat_data.size() < 4) return false;
 
-    int n_states = filter_state_.state.size();
-    int max_obs = 4 * sat_data.size();
-    MatrixXd H = MatrixXd::Zero(max_obs, n_states);
-    VectorXd z(max_obs);
-    std::vector<double> Ri_vec, Rj_vec;
-    std::vector<int> nb_vec;
+    const int n_states = filter_state_.state.size();
+    const Vector3d rover_pos = base_position_ + filter_state_.state.head<3>();
+    const bool estimate_iono = usesEstimatedIono(rtk_config_);
+    const auto selection_snapshot = buildSelectionSnapshot(sat_data);
+    std::vector<rtk_measurement::MeasurementBlock> blocks;
 
-    Vector3d rover_pos = base_position_ + filter_state_.state.head<3>();
-
-    int oi = 0;
     for (GNSSSystem system : kRTKSupportedSystems) {
         if (!isEnabledRTKSystem(rtk_config_, system)) continue;
         SatelliteId ref_sat;
-        if (!selectSystemReferenceSatellite(sat_data, system, 0, ref_sat)) continue;
+        if (!rtk_selection::selectSystemReferenceSatellite(selection_snapshot, system, 0, ref_sat)) continue;
 
         auto ref_it = sat_data.find(ref_sat);
         if (ref_it == sat_data.end()) continue;
         const auto& ref_sd = ref_it->second;
+        const auto system_pairs = rtk_selection::buildDoubleDifferencePairsForSystem(
+            selection_snapshot,
+            system,
+            0,
+            requiresMatchedCarrierWavelength(rtk_config_, system));
         const double rr_ref = geodist_range(ref_sd.sat_pos, rover_pos) +
                               tropModel(rover_pos, ref_sd.elevation);
         const double br_ref = geodist_range(ref_sd.sat_pos_base, base_position_) +
                               tropModel(base_position_, ref_sd.base_elevation);
         const Vector3d los_ref = (ref_sd.sat_pos - rover_pos).normalized();
 
-        auto append_block = [&](int freq, bool is_phase) {
-            const bool ref_has_freq = (freq == 0) ? ref_sd.has_l1 : ref_sd.has_l2;
-            if (!ref_has_freq) {
-                nb_vec.push_back(0);
-                return;
-            }
-
+        auto append_frequency_blocks = [&](int freq) {
+            rtk_measurement::MeasurementBlock phase_block;
+            rtk_measurement::MeasurementBlock code_block;
             const auto& ref_indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
             auto ref_state_it = ref_indices.find(ref_sat);
             if (ref_state_it == ref_indices.end()) {
-                nb_vec.push_back(0);
+                blocks.push_back(std::move(phase_block));
+                blocks.push_back(std::move(code_block));
                 return;
             }
 
             const double ref_wavelength = (freq == 0) ? ref_sd.l1_wavelength : ref_sd.l2_wavelength;
             if (ref_wavelength <= 0.0) {
-                nb_vec.push_back(0);
+                blocks.push_back(std::move(phase_block));
+                blocks.push_back(std::move(code_block));
                 return;
             }
-            const bool estimate_iono = usesEstimatedIono(rtk_config_);
             const int ref_iono_idx =
                 estimate_iono ? II(ref_sat) : -1;
             const double ref_iono_scale =
@@ -1329,21 +1332,27 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                           (freq == 0) ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz)
                     : 0.0;
             if (estimate_iono && filter_state_.covariance(ref_iono_idx, ref_iono_idx) <= 0.0) {
-                nb_vec.push_back(0);
+                blocks.push_back(std::move(phase_block));
+                blocks.push_back(std::move(code_block));
                 return;
             }
+            const double ref_phase_variance = varerr(ref_sd.elevation, true);
+            const double ref_code_variance = varerr(ref_sd.elevation, false);
 
-            int block_count = 0;
-            for (const auto& [sat, sd] : sat_data) {
-                if (sat.system != system || sat == ref_sat) continue;
-                const bool sat_has_freq = (freq == 0) ? sd.has_l1 : sd.has_l2;
-                if (!sat_has_freq) continue;
+            for (const auto& pair : system_pairs) {
+                if (pair.freq != freq) continue;
+                const auto sat_it = sat_data.find(pair.sat);
+                if (sat_it == sat_data.end()) continue;
+                const auto& sat = pair.sat;
+                const auto& sd = sat_it->second;
                 const auto& sat_indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
                 auto sat_state_it = sat_indices.find(sat);
                 if (sat_state_it == sat_indices.end()) continue;
 
                 const double sat_wavelength = (freq == 0) ? sd.l1_wavelength : sd.l2_wavelength;
                 if (sat_wavelength <= 0.0) continue;
+                const double sat_phase_variance = varerr(sd.elevation, true);
+                const double sat_code_variance = varerr(sd.elevation, false);
                 const int sat_iono_idx = estimate_iono ? II(sat) : -1;
                 const double sat_iono_scale =
                     estimate_iono
@@ -1366,98 +1375,95 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                     estimate_iono ? filter_state_.state(ref_iono_idx) : 0.0;
                 const double sat_iono_state =
                     estimate_iono ? filter_state_.state(sat_iono_idx) : 0.0;
+                const double ref_phase = (freq == 0) ? ref_sd.rover_l1_phase - ref_sd.base_l1_phase
+                                                     : ref_sd.rover_l2_phase - ref_sd.base_l2_phase;
+                const double sat_phase = (freq == 0) ? sd.rover_l1_phase - sd.base_l1_phase
+                                                     : sd.rover_l2_phase - sd.base_l2_phase;
+                const double ref_code = (freq == 0) ? ref_sd.rover_l1_code - ref_sd.base_l1_code
+                                                    : ref_sd.rover_l2_code - ref_sd.base_l2_code;
+                const double sat_code = (freq == 0) ? sd.rover_l1_code - sd.base_l1_code
+                                                    : sd.rover_l2_code - sd.base_l2_code;
+                const bool autocal_glonass =
+                    usesGlonassAutocal(rtk_config_) &&
+                    ref_sd.satellite.system == GNSSSystem::GLONASS &&
+                    sd.satellite.system == GNSSSystem::GLONASS &&
+                    freq < GLO_HWBIAS_STATES;
+                const double df_mhz =
+                    autocal_glonass
+                        ? (((freq == 0) ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz) -
+                           ((freq == 0) ? sd.l1_frequency_hz : sd.l2_frequency_hz)) / 1e6
+                        : 0.0;
+                const double glonass_icb =
+                    glonassInterChannelBiasMeters(
+                        rtk_config_,
+                        ref_sd.satellite.system,
+                        sd.satellite.system,
+                        (freq == 0) ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz,
+                        (freq == 0) ? sd.l1_frequency_hz : sd.l2_frequency_hz,
+                        freq);
+                const double phase_iono_term =
+                    estimate_iono ?
+                        (-ref_iono_scale * ref_iono_state + sat_iono_scale * sat_iono_state) :
+                        0.0;
+                const double code_iono_term =
+                    estimate_iono ?
+                        (ref_iono_scale * ref_iono_state - sat_iono_scale * sat_iono_state) :
+                        0.0;
 
-                if (is_phase) {
-                    const double ref_phase = (freq == 0) ? ref_sd.rover_l1_phase - ref_sd.base_l1_phase
-                                                         : ref_sd.rover_l2_phase - ref_sd.base_l2_phase;
-                    const double sat_phase = (freq == 0) ? sd.rover_l1_phase - sd.base_l1_phase
-                                                         : sd.rover_l2_phase - sd.base_l2_phase;
-                    const double glonass_icb =
-                        glonassInterChannelBiasMeters(
-                            rtk_config_,
-                            ref_sd.satellite.system,
-                            sd.satellite.system,
-                            (freq == 0) ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz,
-                            (freq == 0) ? sd.l1_frequency_hz : sd.l2_frequency_hz,
-                            freq);
-                    const bool autocal_glonass =
-                        usesGlonassAutocal(rtk_config_) &&
-                        ref_sd.satellite.system == GNSSSystem::GLONASS &&
-                        sd.satellite.system == GNSSSystem::GLONASS &&
-                        freq < GLO_HWBIAS_STATES;
-                    const double df_mhz =
-                        autocal_glonass
-                            ? (((freq == 0) ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz) -
-                               ((freq == 0) ? sd.l1_frequency_hz : sd.l2_frequency_hz)) / 1e6
-                            : 0.0;
-                    const double amb_term =
-                        ref_wavelength * filter_state_.state(ref_state_it->second) -
-                        sat_wavelength * filter_state_.state(sat_state_it->second);
-                    const double iono_term =
-                        estimate_iono ?
-                            (-ref_iono_scale * ref_iono_state + sat_iono_scale * sat_iono_state) :
-                            0.0;
-                    z(oi) = ref_phase * ref_wavelength - sat_phase * sat_wavelength -
-                            geom_dd - amb_term - glonass_icb - iono_term;
-                    if (autocal_glonass) {
-                        z(oi) -= df_mhz * filter_state_.state(IL(freq));
-                        H(oi, IL(freq)) = df_mhz;
-                    }
-                    H(oi, ref_state_it->second) = ref_wavelength;
-                    H(oi, sat_state_it->second) = -sat_wavelength;
-                    if (estimate_iono) {
-                        H(oi, ref_iono_idx) = -ref_iono_scale;
-                        H(oi, sat_iono_idx) = sat_iono_scale;
-                    }
-                } else {
-                    const double ref_code = (freq == 0) ? ref_sd.rover_l1_code - ref_sd.base_l1_code
-                                                        : ref_sd.rover_l2_code - ref_sd.base_l2_code;
-                    const double sat_code = (freq == 0) ? sd.rover_l1_code - sd.base_l1_code
-                                                        : sd.rover_l2_code - sd.base_l2_code;
-                    const double iono_term =
-                        estimate_iono ?
-                            (ref_iono_scale * ref_iono_state - sat_iono_scale * sat_iono_state) :
-                            0.0;
-                    z(oi) = (ref_code - sat_code) - geom_dd - iono_term;
-                    if (estimate_iono) {
-                        H(oi, ref_iono_idx) = ref_iono_scale;
-                        H(oi, sat_iono_idx) = -sat_iono_scale;
-                    }
+                rtk_measurement::MeasurementRow phase_row;
+                const double amb_term =
+                    ref_wavelength * filter_state_.state(ref_state_it->second) -
+                    sat_wavelength * filter_state_.state(sat_state_it->second);
+                phase_row.residual = ref_phase * ref_wavelength - sat_phase * sat_wavelength -
+                                     geom_dd - amb_term - glonass_icb - phase_iono_term;
+                if (autocal_glonass) {
+                    phase_row.residual -= df_mhz * filter_state_.state(IL(freq));
+                    phase_row.state_coefficients.push_back({IL(freq), df_mhz});
                 }
+                phase_row.state_coefficients.push_back({ref_state_it->second, ref_wavelength});
+                phase_row.state_coefficients.push_back({sat_state_it->second, -sat_wavelength});
+                if (estimate_iono) {
+                    phase_row.state_coefficients.push_back({ref_iono_idx, -ref_iono_scale});
+                    phase_row.state_coefficients.push_back({sat_iono_idx, sat_iono_scale});
+                }
+                phase_row.baseline_coefficients = dd_los;
+                phase_row.reference_variance = ref_phase_variance;
+                phase_row.satellite_variance = sat_phase_variance;
+                phase_block.rows.push_back(std::move(phase_row));
 
-                H(oi, 0) = dd_los(0);
-                H(oi, 1) = dd_los(1);
-                H(oi, 2) = dd_los(2);
-                Ri_vec.push_back(varerr(ref_sd.elevation, is_phase));
-                Rj_vec.push_back(varerr(sd.elevation, is_phase));
-                oi++;
-                block_count++;
+                rtk_measurement::MeasurementRow code_row;
+                code_row.residual = (ref_code - sat_code) - geom_dd - code_iono_term;
+                if (estimate_iono) {
+                    code_row.state_coefficients.push_back({ref_iono_idx, ref_iono_scale});
+                    code_row.state_coefficients.push_back({sat_iono_idx, -sat_iono_scale});
+                }
+                code_row.baseline_coefficients = dd_los;
+                code_row.reference_variance = ref_code_variance;
+                code_row.satellite_variance = sat_code_variance;
+                code_block.rows.push_back(std::move(code_row));
             }
-            nb_vec.push_back(block_count);
+            blocks.push_back(std::move(phase_block));
+            blocks.push_back(std::move(code_block));
         };
 
-        append_block(0, true);
-        append_block(1, true);
-        append_block(0, false);
-        append_block(1, false);
+        append_frequency_blocks(0);
+        append_frequency_blocks(1);
     }
 
+    auto measurement_system = rtk_measurement::assembleMeasurementSystem(blocks, n_states);
+    const int oi = static_cast<int>(measurement_system.residuals.size());
     if (oi < 6) return false;
 
-    // Build DD error covariance R (RTKLIB ddcov)
-    MatrixXd R = rtk_measurement::buildDoubleDifferenceCovariance(nb_vec, Ri_vec, Rj_vec, oi);
-
     // Reject outliers (RTKLIB maxinno check)
-    rtk_measurement::suppressOutlierRows(z, H, 30.0);
+    rtk_measurement::suppressOutlierRows(
+        measurement_system.residuals, measurement_system.design_matrix, 30.0);
 
     // Native Eigen Kalman filter update
     {
-        MatrixXd H_active = H.topRows(oi);
-        VectorXd v_active = z.head(oi);
-        MatrixXd R_active = R.topLeftCorner(oi, oi);
-
         int info = kalmanFilter(filter_state_.state, filter_state_.covariance,
-                                H_active, v_active, R_active);
+                                measurement_system.design_matrix,
+                                measurement_system.residuals,
+                                measurement_system.covariance);
         if (info) return false;
     }
 
@@ -1483,7 +1489,6 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
 
     const auto& sat_data = current_sat_data_;
 
-    int nx = filter_state_.state.size();
     const int na = usesGlonassAutocal(rtk_config_) ? REAL_STATES : BASE_STATES;
 
     dd_pairs.erase(
@@ -1496,31 +1501,18 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     int nb = dd_pairs.size();
     if (nb < 4) return false;
 
-
-    int ny = na + nb;
-
-    // Build D matrix (SD to DD transform)
-    MatrixXd D = MatrixXd::Zero(nx, ny);
-    for (int i = 0; i < na; ++i) D(i, i) = 1.0;
-    for (int i = 0; i < nb; ++i) {
-        D(dd_pairs[i].ref_idx, na + i) = 1.0;
-        D(dd_pairs[i].sat_idx, na + i) = -1.0;
+    std::vector<rtk_measurement::AmbiguityDifference> differences;
+    differences.reserve(nb);
+    for (const auto& pair : dd_pairs) {
+        differences.push_back({pair.ref_idx, pair.sat_idx});
     }
 
-    // Transform: y = D' * x, Qy = D' * P * D
-    VectorXd y = D.transpose() * filter_state_.state;
-    MatrixXd DP = D.transpose() * filter_state_.covariance;
-    MatrixXd Qy = DP * D;
-
-    // Extract Qb (DD amb cov) and Qab (cross-cov)
-    MatrixXd Qb(nb, nb);
-    MatrixXd Qab(na, nb);
-    for (int i = 0; i < nb; ++i)
-        for (int j = 0; j < nb; ++j)
-            Qb(i, j) = Qy(na + i, na + j);
-    for (int i = 0; i < na; ++i)
-        for (int j = 0; j < nb; ++j)
-            Qab(i, j) = Qy(i, na + j);
+    const auto ambiguity_transform = rtk_measurement::buildAmbiguityTransform(
+        filter_state_.state, filter_state_.covariance, na, differences);
+    VectorXd head_state = ambiguity_transform.head_state;
+    VectorXd dd_float = ambiguity_transform.dd_float;
+    MatrixXd Qb = ambiguity_transform.ambiguity_covariance;
+    MatrixXd Qab = ambiguity_transform.head_ambiguity_covariance;
 
     Qb = (Qb + Qb.transpose()) / 2.0;
     for (int i = 0; i < nb; ++i)
@@ -1529,8 +1521,6 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     // Variance check
     double max_var = 0;
     for (int i = 0; i < nb; ++i) max_var = std::max(max_var, Qb(i, i));
-
-    VectorXd dd_float = y.tail(nb);
 
     // Exclude DD pairs with outlier variance (relative to median)
     // This removes newly-appearing satellites that haven't converged
@@ -1713,7 +1703,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                 for (int i = 0; i < ns; ++i) if (sQb(i,i) < 1e-6) sQb(i,i) = 1e-6;
                 Eigen::LDLT<MatrixXd> slv(sQb);
                 if (slv.info() == Eigen::Success) {
-                    VectorXd xa = y.head(na) - sQab * slv.solve(sf - sx);
+                    VectorXd xa = head_state - sQab * slv.solve(sf - sx);
                     fixed_baseline_ = xa.head<3>();
                     has_fixed_solution_ = true;
                     dd_fixed = wlnl_fixed;
@@ -1852,7 +1842,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     if (Qb_solver.info() != Eigen::Success) return false;
     VectorXd Qb_inv_db = Qb_solver.solve(db);
 
-    VectorXd xa = y.head(na) - Qab * Qb_inv_db;
+    VectorXd xa = head_state - Qab * Qb_inv_db;
     fixed_baseline_ = xa.head<3>();
     has_fixed_solution_ = true;
     last_ar_ratio_ = ratio;
@@ -2023,7 +2013,6 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
                                const GNSSTime& time, int n_sats, PositionSolution& solution) {
     if (last_dd_fixed_.size() == 0 || !has_last_fixed_position_) return false;
 
-    int nx = filter_state_.state.size();
     const int na = usesGlonassAutocal(rtk_config_) ? REAL_STATES : BASE_STATES;
 
     std::vector<DDPair> dd_pairs = buildDoubleDifferencePairs(sat_data, 1);
@@ -2065,37 +2054,27 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
 
     if (matched < 4) return false;  // Need at least 4 matched pairs
 
-    // Compute fixed baseline using xa = y[:na] - Qab * Qb^-1 * (dd_float - dd_fixed)
-    // Build D matrix
-    MatrixXd D = MatrixXd::Zero(nx, na + nb);
-    for (int i = 0; i < na; ++i) D(i, i) = 1.0;
-    for (int i = 0; i < nb; ++i) {
-        D(dd_pairs[i].ref_idx, na + i) = 1.0;
-        D(dd_pairs[i].sat_idx, na + i) = -1.0;
+    std::vector<rtk_measurement::AmbiguityDifference> differences;
+    differences.reserve(nb);
+    for (const auto& pair : dd_pairs) {
+        differences.push_back({pair.ref_idx, pair.sat_idx});
     }
 
-    VectorXd y = D.transpose() * filter_state_.state;
-    MatrixXd Qy = D.transpose() * filter_state_.covariance * D;
-
-    MatrixXd Qb(nb, nb);
-    MatrixXd Qab(na, nb);
-    for (int i = 0; i < nb; ++i)
-        for (int j = 0; j < nb; ++j)
-            Qb(i, j) = Qy(na + i, na + j);
-    for (int i = 0; i < na; ++i)
-        for (int j = 0; j < nb; ++j)
-            Qab(i, j) = Qy(i, na + j);
+    const auto ambiguity_transform = rtk_measurement::buildAmbiguityTransform(
+        filter_state_.state, filter_state_.covariance, na, differences);
+    const VectorXd head_state = ambiguity_transform.head_state;
+    VectorXd dd_float_v = ambiguity_transform.dd_float;
+    MatrixXd Qb = ambiguity_transform.ambiguity_covariance;
+    MatrixXd Qab = ambiguity_transform.head_ambiguity_covariance;
     Qb = (Qb + Qb.transpose()) / 2.0;
     for (int i = 0; i < nb; ++i)
         if (Qb(i, i) < 1e-6) Qb(i, i) = 1e-6;
-
-    VectorXd dd_float_v = y.tail(nb);
     VectorXd db = dd_float_v - dd_fixed;
     Eigen::LDLT<MatrixXd> Qb_solver(Qb);
     if (Qb_solver.info() != Eigen::Success) return false;
     VectorXd Qb_inv_db = Qb_solver.solve(db);
 
-    VectorXd xa = y.head(na) - Qab * Qb_inv_db;
+    VectorXd xa = head_state - Qab * Qb_inv_db;
     Vector3d test_pos = base_position_ + xa.head<3>();
 
     // Position validation: only accept if close to last fix
@@ -2204,13 +2183,34 @@ bool RTKProcessor::lambdaMethod(const VectorXd& float_ambiguities, const MatrixX
         if (Q_reg(i, i) < MIN_VAR) Q_reg(i, i) = MIN_VAR;
     }
 
-    // Check positive-definiteness via Cholesky; if it fails, add ridge
-    Eigen::LLT<MatrixXd> llt(Q_reg);
-    if (llt.info() != Eigen::Success) {
+    // Prefer cheap diagonal ridge retries over an eigensolver fallback.
+    double ridge = 0.0;
+    Eigen::LLT<MatrixXd> llt;
+    bool ok = false;
+    for (int attempt = 0; attempt < 5; ++attempt) {
+        MatrixXd candidate = Q_reg;
+        if (ridge > 0.0) {
+            candidate.diagonal().array() += ridge;
+        }
+        llt.compute(candidate);
+        if (llt.info() == Eigen::Success) {
+            Q_reg.swap(candidate);
+            ok = true;
+            break;
+        }
+        ridge = (ridge == 0.0) ? MIN_VAR : ridge * 10.0;
+    }
+    if (!ok) {
         Eigen::SelfAdjointEigenSolver<MatrixXd> eig(Q_reg);
-        double min_eig = eig.eigenvalues().minCoeff();
+        if (eig.info() != Eigen::Success) {
+            return false;
+        }
+        const double min_eig = eig.eigenvalues().minCoeff();
+        if (!std::isfinite(min_eig)) {
+            return false;
+        }
         if (min_eig < MIN_VAR) {
-            Q_reg += MatrixXd::Identity(n, n) * (MIN_VAR - min_eig);
+            Q_reg.diagonal().array() += (MIN_VAR - min_eig);
         }
     }
 

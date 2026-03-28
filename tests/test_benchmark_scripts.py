@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from datetime import timedelta
 import json
 import os
 import sys
@@ -1142,6 +1143,20 @@ class PPCDemoTest(unittest.TestCase):
                     f"{lat:.9f} {lon:.9f} {height:.4f} {status} {satellites} 1.0\n"
                 )
 
+    def write_rtklib_pos(
+        self,
+        path: Path,
+        rows: list[tuple[int, float, float, float, float, int]],
+    ) -> None:
+        with path.open("w", encoding="ascii") as handle:
+            handle.write("% synthetic rtklib solution\n")
+            for week, tow, lat, lon, height, quality in rows:
+                stamp = ppc_demo.GPS_EPOCH + timedelta(weeks=week, seconds=tow)
+                handle.write(
+                    f"{stamp:%Y/%m/%d %H:%M:%S.%f}"[:-3]
+                    + f" {lat:.9f} {lon:.9f} {height:.4f} {quality} 0 0 0 0 0 0\n"
+                )
+
     def test_build_summary_payload_and_requirements(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_demo_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -1152,6 +1167,7 @@ class PPCDemoTest(unittest.TestCase):
             nav = run_dir / "base.nav"
             reference_csv = run_dir / "reference.csv"
             out = temp_root / "ppc_demo.pos"
+            rtklib_pos = temp_root / "ppc_demo_rtklib.pos"
             summary_json = temp_root / "ppc_demo_summary.json"
 
             rover.write_text("synthetic rover\n", encoding="ascii")
@@ -1173,6 +1189,14 @@ class PPCDemoTest(unittest.TestCase):
                     (2300, 1000.4, 35.1000197, 139.1000398, 42.5, 3, 11),
                 ],
             )
+            self.write_rtklib_pos(
+                rtklib_pos,
+                [
+                    (2300, 1000.0, 35.1000004, 139.1000003, 42.2, 1),
+                    (2300, 1000.2, 35.1000103, 139.1000205, 42.4, 1),
+                    (2300, 1000.4, 35.1000205, 139.1000404, 42.6, 2),
+                ],
+            )
 
             args = argparse.Namespace(
                 dataset_root=None,
@@ -1186,6 +1210,11 @@ class PPCDemoTest(unittest.TestCase):
                 reference_csv=reference_csv,
                 out=out,
                 summary_json=summary_json,
+                rtklib_pos=rtklib_pos,
+                rtklib_bin=None,
+                rtklib_config=None,
+                use_existing_rtklib_solution=True,
+                rtklib_solver_wall_time_s=0.1,
                 max_epochs=120,
                 match_tolerance_s=0.25,
                 use_existing_solution=True,
@@ -1207,6 +1236,9 @@ class PPCDemoTest(unittest.TestCase):
                 require_solver_wall_time_max=1.0,
                 require_realtime_factor_min=0.5,
                 require_effective_epoch_rate_min=5.0,
+                require_lib_fix_rate_vs_rtklib_min_delta=0.0,
+                require_lib_median_h_vs_rtklib_max_delta=0.0,
+                require_lib_p95_h_vs_rtklib_max_delta=0.0,
                 _dataset_city="tokyo",
                 _dataset_run="run1",
             )
@@ -1239,6 +1271,11 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["solution_span_s"], 0.4)
             self.assertEqual(payload["realtime_factor"], 0.8)
             self.assertEqual(payload["effective_epoch_rate_hz"], 6.0)
+            self.assertIn("rtklib", payload)
+            self.assertEqual(payload["rtklib"]["matched_epochs"], 3)
+            self.assertEqual(payload["rtklib"]["solver_wall_time_s"], 0.1)
+            self.assertAlmostEqual(payload["rtklib"]["realtime_factor"], 4.0, places=5)
+            self.assertIn("delta_vs_rtklib", payload)
             self.assertTrue(summary_json.exists())
 
             failing_args = argparse.Namespace(
@@ -1253,6 +1290,9 @@ class PPCDemoTest(unittest.TestCase):
                 require_solver_wall_time_max=0.1,
                 require_realtime_factor_min=2.0,
                 require_effective_epoch_rate_min=10.0,
+                require_lib_fix_rate_vs_rtklib_min_delta=10.0,
+                require_lib_median_h_vs_rtklib_max_delta=-0.01,
+                require_lib_p95_h_vs_rtklib_max_delta=-0.01,
             )
             with self.assertRaises(SystemExit) as context:
                 ppc_demo.enforce_summary_requirements(payload, failing_args)
@@ -1269,6 +1309,70 @@ class PPCDemoTest(unittest.TestCase):
             self.assertIn("solver wall time", message)
             self.assertIn("realtime factor", message)
             self.assertIn("effective epoch rate", message)
+            self.assertIn("RTKLIB", message)
+
+    def test_run_rtklib_solver_executes_binary_path(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_rtklib_bin_") as temp_dir:
+            temp_root = Path(temp_dir)
+            run_dir = temp_root / "nagoya" / "run1"
+            run_dir.mkdir(parents=True)
+            rover = run_dir / "rover.obs"
+            base = run_dir / "base.obs"
+            nav = run_dir / "base.nav"
+            reference_csv = run_dir / "reference.csv"
+            rtklib_pos = temp_root / "rtklib.pos"
+            config_path = temp_root / "rtklib.conf"
+            fake_rtklib = temp_root / "fake_rnx2rtkp.py"
+
+            rover.write_text("synthetic rover\n", encoding="ascii")
+            base.write_text("synthetic base\n", encoding="ascii")
+            nav.write_text("synthetic nav\n", encoding="ascii")
+            config_path.write_text("pos1-navsys        =1\n", encoding="ascii")
+            self.write_reference_csv(
+                reference_csv,
+                [
+                    (2300, 1000.0, 35.1000000, 139.1000000, 42.0),
+                    (2300, 1000.2, 35.1000100, 139.1000200, 42.2),
+                ],
+            )
+            fake_rtklib.write_text(
+                """#!/usr/bin/env python3
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+out = Path(args[args.index("-o") + 1])
+out.write_text(
+    "% synthetic rtklib solution\\n"
+    "2024/02/18 00:16:22.000 35.100000000 139.100000000 42.0000 1 0 0 0 0 0 0\\n"
+    "2024/02/18 00:16:22.200 35.100010000 139.100020000 42.2000 1 0 0 0 0 0 0\\n",
+    encoding="ascii",
+)
+""",
+                encoding="utf-8",
+            )
+            fake_rtklib.chmod(0o755)
+
+            args = argparse.Namespace(
+                solver="rtk",
+                rtklib_bin=fake_rtklib,
+                rtklib_config=config_path,
+                max_epochs=120,
+            )
+
+            elapsed = ppc_demo.run_rtklib_solver(
+                args,
+                rover,
+                base,
+                nav,
+                ppc_demo.read_flexible_reference_csv(reference_csv),
+                rtklib_pos,
+            )
+
+            self.assertGreaterEqual(elapsed, 0.0)
+            self.assertTrue(rtklib_pos.exists())
+            contents = rtklib_pos.read_text(encoding="ascii")
+            self.assertIn("synthetic rtklib solution", contents)
 
 
 if __name__ == "__main__":
