@@ -49,6 +49,7 @@ ODAIBA_DATA_FILES = (
     "data/driving/Tokyo_Data/Odaiba/reference.csv",
 )
 DEFAULT_PPC_DATASET_ROOT = Path("/tmp/PPC-Dataset-data/PPC-Dataset")
+DEFAULT_RTKLIB_BIN = Path("/workspace/ai_coding_ws/rtklib_v2_ws/RTKLIB/rnx2rtkp")
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -64,6 +65,13 @@ def ppc_dataset_root() -> Path:
     if env_value:
         return Path(env_value)
     return DEFAULT_PPC_DATASET_ROOT
+
+
+def rtklib_binary() -> Path:
+    env_value = os.environ.get("GNSSPP_RTKLIB_BIN")
+    if env_value:
+        return Path(env_value)
+    return DEFAULT_RTKLIB_BIN
 
 
 def find_free_port() -> int:
@@ -4869,7 +4877,7 @@ class CLIToolsTest(unittest.TestCase):
                 "--require-matched-epochs-min",
                 "100",
                 "--require-fix-rate-min",
-                "80",
+                "90",
                 "--require-median-h-max",
                 "0.10",
                 "--require-p95-h-max",
@@ -4881,11 +4889,11 @@ class CLIToolsTest(unittest.TestCase):
                 "--require-mean-sats-min",
                 "18",
                 "--require-solver-wall-time-max",
-                "60.0",
+                "10.0",
                 "--require-realtime-factor-min",
-                "0.45",
+                "1.0",
                 "--require-effective-epoch-rate-min",
-                "2.0",
+                "5.0",
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
@@ -4895,15 +4903,81 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["solver"], "rtk")
             self.assertGreaterEqual(payload["valid_epochs"], 100)
             self.assertGreaterEqual(payload["matched_epochs"], 100)
-            self.assertGreaterEqual(payload["fix_rate_pct"], 80.0)
+            self.assertGreaterEqual(payload["fix_rate_pct"], 90.0)
             self.assertLessEqual(payload["median_h_m"], 0.10)
             self.assertLessEqual(payload["p95_h_m"], 0.20)
             self.assertLessEqual(payload["max_h_m"], 0.50)
             self.assertLessEqual(payload["p95_abs_up_m"], 0.60)
             self.assertGreaterEqual(payload["mean_satellites"], 18.0)
-            self.assertLessEqual(payload["solver_wall_time_s"], 60.0)
-            self.assertGreaterEqual(payload["realtime_factor"], 0.45)
-            self.assertGreaterEqual(payload["effective_epoch_rate_hz"], 2.0)
+            self.assertLessEqual(payload["solver_wall_time_s"], 10.0)
+            self.assertGreaterEqual(payload["realtime_factor"], 1.0)
+            self.assertGreaterEqual(payload["effective_epoch_rate_hz"], 5.0)
+
+    def test_ppc_demo_cli_tokyo_rtk_realdataset_tracks_rtklib_if_present(self) -> None:
+        dataset_root = ppc_dataset_root()
+        run_dir = dataset_root / "tokyo" / "run1"
+        rtklib_bin = rtklib_binary()
+        required_files = (
+            run_dir / "rover.obs",
+            run_dir / "base.obs",
+            run_dir / "base.nav",
+            run_dir / "reference.csv",
+        )
+        if not all(path.exists() for path in required_files):
+            self.skipTest("PPC-Dataset tokyo/run1 is not available")
+        if not rtklib_bin.exists():
+            self.skipTest("RTKLIB rnx2rtkp is not available")
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_tokyo_rtk_rtklib_") as temp_dir:
+            temp_root = Path(temp_dir)
+            solution_path = temp_root / "tokyo_run1_rtk.pos"
+            summary_path = temp_root / "tokyo_run1_rtk_summary.json"
+
+            result = self.run_gnss(
+                "ppc-demo",
+                "--run-dir",
+                str(run_dir),
+                "--solver",
+                "rtk",
+                "--max-epochs",
+                "120",
+                "--out",
+                str(solution_path),
+                "--summary-json",
+                str(summary_path),
+                "--rtklib-bin",
+                str(rtklib_bin),
+                "--require-valid-epochs-min",
+                "100",
+                "--require-matched-epochs-min",
+                "100",
+                "--require-realtime-factor-min",
+                "1.0",
+                "--require-lib-fix-rate-vs-rtklib-min-delta",
+                "0.0",
+                "--require-lib-median-h-vs-rtklib-max-delta",
+                "0.01",
+                "--require-lib-p95-h-vs-rtklib-max-delta",
+                "0.02",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertIn("rtklib", payload)
+            self.assertIn("delta_vs_rtklib", payload)
+            self.assertGreaterEqual(payload["realtime_factor"], 1.0)
+            self.assertGreaterEqual(
+                payload["delta_vs_rtklib"]["fix_rate_pct"],
+                0.0,
+            )
+            self.assertLessEqual(
+                payload["delta_vs_rtklib"]["median_h_m"],
+                0.01,
+            )
+            self.assertLessEqual(
+                payload["delta_vs_rtklib"]["p95_h_m"],
+                0.02,
+            )
 
     def test_nav_products_cli_generates_sp3_and_clk_from_static_sample(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_nav_products_cli_") as temp_dir:
