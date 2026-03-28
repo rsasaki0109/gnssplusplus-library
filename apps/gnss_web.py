@@ -90,6 +90,11 @@ def parse_args() -> argparse.Namespace:
         default="output/ppc_*_summary.json",
         help="Glob under --root for PPC summary JSON files.",
     )
+    parser.add_argument(
+        "--live-summary-glob",
+        default="output/live*_summary.json",
+        help="Glob under --root for gnss live-signoff summary JSON files.",
+    )
     return parser.parse_args()
 
 
@@ -201,6 +206,30 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         payload["_path"] = relative_display(path, root_dir)
         ppc_summaries.append(payload)
 
+    live_summaries: list[dict[str, Any]] = []
+    for path in sorted(root_dir.glob(args.live_summary_glob)):
+        payload = load_json(path)
+        if payload is None:
+            continue
+        metrics = payload.get("metrics")
+        if not isinstance(metrics, dict):
+            continue
+        live_summaries.append(
+            {
+                "_path": relative_display(path, root_dir),
+                "execution_mode": payload.get("execution_mode"),
+                "exit_code": payload.get("exit_code"),
+                "termination": metrics.get("termination"),
+                "aligned_epochs": metrics.get("aligned_epochs"),
+                "written_solutions": metrics.get("written_solutions"),
+                "fixed_solutions": metrics.get("fixed_solutions"),
+                "realtime_factor": metrics.get("realtime_factor"),
+                "effective_epoch_rate_hz": metrics.get("effective_epoch_rate_hz"),
+                "rover_decoder_errors": metrics.get("rover_decoder_errors"),
+                "base_decoder_errors": metrics.get("base_decoder_errors"),
+            }
+        )
+
     return {
         "title": "libgnss++ web",
         "root": str(root_dir),
@@ -212,6 +241,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         },
         "odaiba_summary": load_json(odaiba_summary_path),
         "ppc_summaries": ppc_summaries,
+        "live_summaries": live_summaries,
         "receiver_status": rcv_status,
     }
 
@@ -320,7 +350,7 @@ def render_html() -> str:
   <main>
     <section class="hero">
       <h1>libgnss++ local web UI</h1>
-      <p>Benchmark snapshot, 2D trajectories, PPC summaries, and receiver status from the existing non-GUI stack.</p>
+      <p>Benchmark snapshot, live sign-offs, 2D trajectories, PPC summaries, and receiver status from the existing non-GUI stack.</p>
       <div class="chips" id="artifact-chips"></div>
     </section>
 
@@ -358,6 +388,27 @@ def render_html() -> str:
         </div>
       </div>
       <div class="legend" id="status-legend"></div>
+    </section>
+
+    <section class="card" style="margin-top: 18px;">
+      <div class="section-title">
+        <h2>Live sign-offs</h2>
+        <span class="tiny">auto-discovered from output/live*_summary.json</span>
+      </div>
+      <table id="live-table">
+        <thead>
+          <tr>
+            <th>Path</th>
+            <th>Termination</th>
+            <th>Written</th>
+            <th>Fixed</th>
+            <th>Realtime</th>
+            <th>Epoch rate</th>
+            <th>Decoder errors</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </section>
 
     <section class="card" style="margin-top: 18px;">
@@ -515,6 +566,21 @@ def render_html() -> str:
         ["common median H", formatMaybeNumber(odaiba.common_epochs?.libgnsspp?.median_h_m, 3, " m")],
         ["common p95 H", formatMaybeNumber(odaiba.common_epochs?.libgnsspp?.p95_h_m, 2, " m")],
       ]);
+
+      const liveBody = document.querySelector("#live-table tbody");
+      liveBody.innerHTML = "";
+      for (const row of overview.live_summaries || []) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${row._path || "n/a"}</td>
+          <td>${row.termination || "n/a"}</td>
+          <td>${row.written_solutions ?? "n/a"}</td>
+          <td>${row.fixed_solutions ?? "n/a"}</td>
+          <td>${formatMaybeNumber(row.realtime_factor, 2, "x")}</td>
+          <td>${formatMaybeNumber(row.effective_epoch_rate_hz, 2, " Hz")}</td>
+          <td>${(row.rover_decoder_errors ?? "n/a")}/${(row.base_decoder_errors ?? "n/a")}</td>`;
+        liveBody.appendChild(tr);
+      }
 
       const ppcBody = document.querySelector("#ppc-table tbody");
       ppcBody.innerHTML = "";

@@ -6992,6 +6992,7 @@ class CLIToolsTest(unittest.TestCase):
             rtklib_pos = temp_root / "rtklib.pos"
             summary_json = temp_root / "odaiba_summary.json"
             status_json = temp_root / "receiver.status.json"
+            live_summary = temp_root / "output" / "live_replay_summary.json"
             port_file = temp_root / "port.txt"
 
             lib_pos.write_text(
@@ -7043,6 +7044,25 @@ class CLIToolsTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            live_summary.parent.mkdir(parents=True, exist_ok=True)
+            live_summary.write_text(
+                json.dumps(
+                    {
+                        "execution_mode": "live",
+                        "metrics": {
+                            "termination": "completed",
+                            "aligned_epochs": 3,
+                            "written_solutions": 3,
+                            "fixed_solutions": 1,
+                            "realtime_factor": 3.5,
+                            "effective_epoch_rate_hz": 12.0,
+                            "rover_decoder_errors": 0,
+                            "base_decoder_errors": 0,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             port = find_free_port()
             process = subprocess.Popen(
@@ -7081,6 +7101,9 @@ class CLIToolsTest(unittest.TestCase):
                 with request.urlopen(f"http://127.0.0.1:{bound_port}/api/overview") as response:
                     overview = json.loads(response.read().decode("utf-8"))
                 self.assertEqual(overview["odaiba_summary"]["all_epochs"]["libgnsspp"]["epochs"], 11637)
+                self.assertEqual(len(overview["live_summaries"]), 1)
+                self.assertEqual(overview["live_summaries"][0]["termination"], "completed")
+                self.assertEqual(overview["live_summaries"][0]["realtime_factor"], 3.5)
 
                 with request.urlopen(f"http://127.0.0.1:{bound_port}/api/solution?name=libgnsspp") as response:
                     lib_payload = json.loads(response.read().decode("utf-8"))

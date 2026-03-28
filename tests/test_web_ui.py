@@ -51,6 +51,7 @@ class WebUISmokeTest(unittest.TestCase):
             rtklib_pos = temp_root / "rtklib.pos"
             summary_json = temp_root / "odaiba_summary.json"
             status_json = temp_root / "receiver.status.json"
+            live_summary = temp_root / "output" / "live_replay_summary.json"
             ppc_summary = temp_root / "output" / "ppc_tokyo_run1_rtk_summary.json"
             port_file = temp_root / "port.txt"
 
@@ -100,6 +101,24 @@ class WebUISmokeTest(unittest.TestCase):
                         "pid_running": True,
                         "uptime_seconds": 18.5,
                         "restart_count": 2,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            live_summary.write_text(
+                json.dumps(
+                    {
+                        "execution_mode": "live",
+                        "metrics": {
+                            "termination": "completed",
+                            "aligned_epochs": 3,
+                            "written_solutions": 3,
+                            "fixed_solutions": 1,
+                            "realtime_factor": 3.5,
+                            "effective_epoch_rate_hz": 12.0,
+                            "rover_decoder_errors": 0,
+                            "base_decoder_errors": 0,
+                        },
                     }
                 ),
                 encoding="utf-8",
@@ -160,6 +179,9 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("11637", page.locator("#odaiba-metrics").text_content())
                     self.assertIn("running", page.locator("#receiver-metrics").text_content())
                     self.assertIn('"restart_count": 2', page.locator("#receiver-json").text_content())
+                    self.assertIn("live_replay_summary.json", page.locator("#live-table tbody").text_content())
+                    self.assertIn("completed", page.locator("#live-table tbody").text_content())
+                    self.assertIn("3.50x", page.locator("#live-table tbody").text_content())
                     self.assertEqual(page.locator("canvas").count(), 2)
                     self.assertIn("FIXED", page.locator("#status-legend").text_content())
                     self.assertIn("ppc_tokyo_run1_rtk_summary.json", page.locator("#ppc-table tbody").text_content())
