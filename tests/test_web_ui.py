@@ -54,6 +54,7 @@ class WebUISmokeTest(unittest.TestCase):
             live_summary = temp_root / "output" / "live_replay_summary.json"
             ppc_summary = temp_root / "output" / "ppc_tokyo_run1_rtk_summary.json"
             port_file = temp_root / "port.txt"
+            docs_url = "https://example.com/libgnsspp-docs/"
 
             ppc_summary.parent.mkdir(parents=True, exist_ok=True)
             lib_pos.write_text(
@@ -160,6 +161,8 @@ class WebUISmokeTest(unittest.TestCase):
                     str(summary_json),
                     "--rcv-status",
                     str(status_json),
+                    "--docs-url",
+                    docs_url,
                 ],
                 cwd=ROOT_DIR,
                 stdout=subprocess.PIPE,
@@ -177,6 +180,11 @@ class WebUISmokeTest(unittest.TestCase):
                     page.goto(f"http://127.0.0.1:{bound_port}/", wait_until="networkidle")
 
                     self.assertEqual(page.locator("h1").text_content(), "libgnss++ local web UI")
+                    self.assertEqual(page.locator("#docs-link").text_content(), "Open docs site")
+                    self.assertEqual(
+                        page.locator("#docs-link").get_attribute("href"),
+                        docs_url,
+                    )
                     self.assertTrue(page.locator("#artifact-chips").text_content())
                     self.assertIn("11637", page.locator("#odaiba-metrics").text_content())
                     self.assertIn("running", page.locator("#receiver-metrics").text_content())

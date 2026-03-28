@@ -31,6 +31,7 @@ import gnss_ppp_kinematic_signoff as ppp_kinematic_signoff  # noqa: E402
 import gnss_ppp_static_signoff as ppp_static_signoff  # noqa: E402
 import gnss_short_baseline_signoff as short_signoff  # noqa: E402
 import generate_driving_comparison as comparison  # noqa: E402
+import generate_architecture_diagram as architecture_diagram  # noqa: E402
 import generate_feature_overview_card as feature_overview  # noqa: E402
 import generate_odaiba_scorecard as scorecard  # noqa: E402
 import generate_odaiba_social_card as social_card  # noqa: E402
@@ -399,6 +400,29 @@ class ScorecardRenderTest(unittest.TestCase):
 
                 with Image.open(output_png) as image:
                     self.assertEqual(image.size, (2240, 1376))
+            except ModuleNotFoundError:
+                pass
+
+    def test_architecture_diagram_main_renders_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_architecture_card_test_") as temp_dir:
+            output_png = Path(temp_dir) / "architecture.png"
+
+            argv = [
+                "generate_architecture_diagram.py",
+                "--output",
+                str(output_png),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    architecture_diagram.main()
+
+            self.assertTrue(output_png.exists())
+            self.assertGreater(output_png.stat().st_size, 0)
+            try:
+                from PIL import Image
+
+                with Image.open(output_png) as image:
+                    self.assertEqual(image.size, (2240, 1408))
             except ModuleNotFoundError:
                 pass
 
