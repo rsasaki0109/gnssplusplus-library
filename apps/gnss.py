@@ -117,7 +117,7 @@ COMMANDS = {
     "web": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_web.py"),
-        "summary": "Serve a local web UI for benchmark snapshots, 2D trajectories, and receiver status.",
+        "summary": "Serve a local web UI for benchmark snapshots, live sign-offs, 2D trajectories, and receiver status.",
     },
     "stats": {
         "kind": "python",
