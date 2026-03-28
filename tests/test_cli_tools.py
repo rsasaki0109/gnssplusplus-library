@@ -4722,6 +4722,7 @@ class CLIToolsTest(unittest.TestCase):
             run_dir = temp_root / "tokyo" / "run1"
             run_dir.mkdir(parents=True)
             solution_path = temp_root / "ppc_demo.pos"
+            rtklib_path = temp_root / "ppc_demo_rtklib.pos"
             summary_path = temp_root / "ppc_demo_summary.json"
             reference_csv = run_dir / "reference.csv"
 
@@ -4751,6 +4752,14 @@ class CLIToolsTest(unittest.TestCase):
                         f"{week} {tow:.3f} {ecef[0]:.6f} {ecef[1]:.6f} {ecef[2]:.6f} "
                         f"{lat:.9f} {lon:.9f} {height:.4f} {status} {satellites} 1.0\n"
                     )
+            write_rtklib_pos(
+                rtklib_path,
+                [
+                    (2300, 1000.0, 35.1000004, 139.1000003, 42.2, 1, 12),
+                    (2300, 1000.2, 35.1000103, 139.1000205, 42.4, 1, 13),
+                    (2300, 1000.4, 35.1000205, 139.1000404, 42.6, 2, 11),
+                ],
+            )
 
             result = self.run_gnss(
                 "ppc-demo",
@@ -4763,6 +4772,11 @@ class CLIToolsTest(unittest.TestCase):
                 "0.5",
                 "--out",
                 str(solution_path),
+                "--rtklib-pos",
+                str(rtklib_path),
+                "--use-existing-rtklib-solution",
+                "--rtklib-solver-wall-time-s",
+                "0.1",
                 "--summary-json",
                 str(summary_path),
                 "--require-valid-epochs-min",
@@ -4787,6 +4801,12 @@ class CLIToolsTest(unittest.TestCase):
                 "0.5",
                 "--require-effective-epoch-rate-min",
                 "5.0",
+                "--require-lib-fix-rate-vs-rtklib-min-delta",
+                "0.0",
+                "--require-lib-median-h-vs-rtklib-max-delta",
+                "0.0",
+                "--require-lib-p95-h-vs-rtklib-max-delta",
+                "0.0",
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
@@ -4807,6 +4827,12 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["solution_span_s"], 0.4)
             self.assertEqual(payload["realtime_factor"], 0.8)
             self.assertEqual(payload["effective_epoch_rate_hz"], 6.0)
+            self.assertIn("rtklib", payload)
+            self.assertEqual(payload["rtklib"]["matched_epochs"], 3)
+            self.assertEqual(payload["rtklib"]["solver_wall_time_s"], 0.1)
+            self.assertAlmostEqual(payload["rtklib"]["realtime_factor"], 4.0, places=5)
+            self.assertIn("delta_vs_rtklib", payload)
+            self.assertIn("rtklib performance: wall=0.1 s", result.stdout)
             self.assertIn("performance: wall=0.5 s, span=0.4 s, rtf=0.8, rate=6.0 Hz", result.stdout)
 
     def test_ppc_demo_cli_tokyo_rtk_realdataset_signoff_if_present(self) -> None:
@@ -7063,6 +7089,20 @@ class CLIToolsTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (temp_root / "output" / "ppc_tokyo_run1_rtk_summary.json").write_text(
+                json.dumps(
+                    {
+                        "matched_epochs": 120,
+                        "fix_rate_pct": 96.67,
+                        "median_h_m": 0.108,
+                        "p95_h_m": 0.110,
+                        "solver_wall_time_s": 12.34,
+                        "realtime_factor": 1.23,
+                        "effective_epoch_rate_hz": 15.67,
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             port = find_free_port()
             process = subprocess.Popen(
@@ -7104,6 +7144,10 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertEqual(len(overview["live_summaries"]), 1)
                 self.assertEqual(overview["live_summaries"][0]["termination"], "completed")
                 self.assertEqual(overview["live_summaries"][0]["realtime_factor"], 3.5)
+                self.assertEqual(overview["live_summaries"][0]["runtime_status"], "realtime")
+                self.assertEqual(len(overview["ppc_summaries"]), 1)
+                self.assertEqual(overview["ppc_summaries"][0]["runtime_status"], "realtime")
+                self.assertEqual(overview["ppc_summaries"][0]["quality_status"], "excellent")
 
                 with request.urlopen(f"http://127.0.0.1:{bound_port}/api/solution?name=libgnsspp") as response:
                     lib_payload = json.loads(response.read().decode("utf-8"))
