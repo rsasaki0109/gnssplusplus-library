@@ -1,4 +1,5 @@
 #include <libgnss++/algorithms/rtk.hpp>
+#include <libgnss++/algorithms/rtk_ar_evaluation.hpp>
 #include <libgnss++/algorithms/rtk_ar_selection.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/rtk_measurement.hpp>
@@ -1734,39 +1735,27 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     }
 
     // Partial AR: try removing worst satellites if full set fails
-    std::vector<int> best_subset;
-    for (int i = 0; i < nb; ++i) best_subset.push_back(i);
+    rtk_ar_evaluation::CandidateState best_candidate;
+    best_candidate.fixed = fixed;
+    best_candidate.ratio = ratio;
+    best_candidate.subset.resize(nb);
+    for (int i = 0; i < nb; ++i) best_candidate.subset[i] = i;
+    best_candidate.dd_float = dd_float;
+    best_candidate.Qb = Qb;
+    best_candidate.Qab = Qab;
+    best_candidate.dd_fixed = dd_fixed;
 
     const bool search_preferred_subsets =
-        !fixed || ratio < effective_ratio_threshold + 0.5;
+        rtk_ar_evaluation::shouldSearchPreferredSubsets(
+            fixed, ratio, effective_ratio_threshold);
     const bool search_drop_subsets =
-        !fixed || ratio < effective_ratio_threshold + 0.8 || max_var > 0.20;
+        rtk_ar_evaluation::shouldSearchDropSubsets(
+            fixed, ratio, effective_ratio_threshold, max_var);
 
     if (nb > 4 && (search_preferred_subsets || search_drop_subsets)) {
         const VectorXd full_dd_float = dd_float;
         const MatrixXd full_Qb = Qb;
         const MatrixXd full_Qab = Qab;
-        double best_ratio = fixed ? ratio : 0.0;
-        VectorXd best_dd_float = full_dd_float;
-        MatrixXd best_Qb = full_Qb;
-        MatrixXd best_Qab = full_Qab;
-        VectorXd best_dd_fixed = dd_fixed;
-        bool best_fixed = fixed;
-
-        auto adopt_subset = [&](const std::vector<int>& subset,
-                                const VectorXd& sub_float,
-                                const MatrixXd& sub_Qb,
-                                const MatrixXd& sub_Qab,
-                                const VectorXd& sub_fixed,
-                                double sub_ratio) {
-            best_subset = subset;
-            best_dd_float = sub_float;
-            best_Qb = sub_Qb;
-            best_Qab = sub_Qab;
-            best_dd_fixed = sub_fixed;
-            best_ratio = sub_ratio;
-            best_fixed = true;
-        };
 
         auto try_subset = [&](const std::vector<int>& subset) {
             const int ns = subset.size();
@@ -1774,31 +1763,21 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                 return false;
             }
 
-            VectorXd sub_float(ns);
-            MatrixXd sub_Qb(ns, ns);
-            MatrixXd sub_Qab(na, ns);
-            for (int i = 0; i < ns; ++i) {
-                sub_float(i) = full_dd_float(subset[i]);
-                for (int j = 0; j < ns; ++j) {
-                    sub_Qb(i, j) = full_Qb(subset[i], subset[j]);
-                }
-                for (int j = 0; j < na; ++j) {
-                    sub_Qab(j, i) = full_Qab(j, subset[i]);
-                }
-            }
-            sub_Qb = (sub_Qb + sub_Qb.transpose()) / 2.0;
-
+            const auto subset_matrices =
+                rtk_ar_evaluation::extractSubset(full_dd_float, full_Qb, full_Qab, subset);
             VectorXd sub_fixed;
             double sub_ratio = 0.0;
-            if (!lambdaMethod(sub_float, sub_Qb, sub_fixed, sub_ratio)) {
+            if (!lambdaMethod(subset_matrices.dd_float, subset_matrices.Qb, sub_fixed, sub_ratio)) {
                 return false;
             }
             if (sub_ratio < effective_ratio_threshold) {
                 return false;
             }
 
-            if (!best_fixed || sub_ratio > best_ratio + 1e-6) {
-                adopt_subset(subset, sub_float, sub_Qb, sub_Qab, sub_fixed, sub_ratio);
+            if (rtk_ar_evaluation::preferCandidate(
+                    best_candidate.ratio, best_candidate.fixed, sub_ratio)) {
+                rtk_ar_evaluation::adoptCandidate(
+                    best_candidate, subset, subset_matrices, sub_fixed, sub_ratio);
                 return true;
             }
             return false;
@@ -1835,29 +1814,27 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             }
         }
 
-        if (best_fixed) {
+        if (best_candidate.fixed) {
             fixed = true;
-            dd_fixed = best_dd_fixed;
-            ratio = best_ratio;
-            Qab = best_Qab;
-            Qb = best_Qb;
-            dd_float = best_dd_float;
-        } else if (!fixed && best_subset.size() < static_cast<size_t>(nb)) {
-            Qab = best_Qab;
-            Qb = best_Qb;
-            dd_float = best_dd_float;
+            dd_fixed = best_candidate.dd_fixed;
+            ratio = best_candidate.ratio;
+            Qab = best_candidate.Qab;
+            Qb = best_candidate.Qb;
+            dd_float = best_candidate.dd_float;
+        } else if (!fixed && best_candidate.subset.size() < static_cast<size_t>(nb)) {
+            Qab = best_candidate.Qab;
+            Qb = best_candidate.Qb;
+            dd_float = best_candidate.dd_float;
         }
     }
 
     if (!fixed) return false;
 
     // Fixed solution: xa = y[:na] - Qab * Qb^{-1} * (dd_float - dd_fixed)
-    VectorXd db = dd_float - dd_fixed;
-    Eigen::LDLT<MatrixXd> Qb_solver(Qb);
-    if (Qb_solver.info() != Eigen::Success) return false;
-    VectorXd Qb_inv_db = Qb_solver.solve(db);
-
-    VectorXd xa = head_state - Qab * Qb_inv_db;
+    VectorXd xa;
+    if (!rtk_ar_evaluation::solveFixedHeadState(head_state, Qab, Qb, dd_float, dd_fixed, xa)) {
+        return false;
+    }
     fixed_baseline_ = xa.head<3>();
     has_fixed_solution_ = true;
     last_ar_ratio_ = ratio;
@@ -1865,7 +1842,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
 
     // Store fix info for hold and validation
     last_dd_pairs_ = dd_pairs;
-    last_best_subset_ = best_subset;
+    last_best_subset_ = best_candidate.subset;
     last_dd_fixed_ = dd_fixed;
 
     return true;

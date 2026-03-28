@@ -26,6 +26,7 @@ import gnss_odaiba_benchmark as benchmark  # noqa: E402
 import gnss_clas_ppp as clas_ppp  # noqa: E402
 import gnss_live_signoff as live_signoff  # noqa: E402
 import gnss_ppc_demo as ppc_demo  # noqa: E402
+import gnss_ppc_rtk_signoff as ppc_rtk_signoff  # noqa: E402
 import gnss_ppp_kinematic_signoff as ppp_kinematic_signoff  # noqa: E402
 import gnss_ppp_static_signoff as ppp_static_signoff  # noqa: E402
 import gnss_short_baseline_signoff as short_signoff  # noqa: E402
@@ -124,6 +125,54 @@ class ClasCompactHelpersTest(unittest.TestCase):
         self.assertEqual(parsed["ppp_atmospheric_ionosphere_corrections"], 8)
         self.assertAlmostEqual(float(parsed["ppp_atmospheric_trop_meters"]), 5.5)
         self.assertAlmostEqual(float(parsed["ppp_atmospheric_ionosphere_meters"]), 3.25)
+
+
+class PPCRTKSignoffHelpersTest(unittest.TestCase):
+    def test_selected_thresholds_keep_rtklib_gates_only_when_enabled(self) -> None:
+        args = argparse.Namespace(**{name: None for name in ppc_rtk_signoff.REQUIREMENT_NAMES})
+
+        tokyo_without_rtklib = ppc_rtk_signoff.selected_thresholds(args, "tokyo", False)
+        self.assertNotIn("require_lib_fix_rate_vs_rtklib_min_delta", tokyo_without_rtklib)
+        self.assertEqual(tokyo_without_rtklib["require_fix_rate_min"], 95.0)
+
+        nagoya_with_rtklib = ppc_rtk_signoff.selected_thresholds(args, "nagoya", True)
+        self.assertIn("require_lib_fix_rate_vs_rtklib_min_delta", nagoya_with_rtklib)
+        self.assertEqual(nagoya_with_rtklib["require_max_h_max"], 0.60)
+
+    def test_build_ppc_demo_command_includes_profile_thresholds_and_rtklib_flags(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_rtk_signoff_unit_") as temp_dir:
+            temp_root = Path(temp_dir)
+            args = argparse.Namespace(
+                max_epochs=120,
+                match_tolerance_s=0.25,
+                use_existing_solution=True,
+                solver_wall_time_s=1.5,
+                rtklib_bin=temp_root / "rnx2rtkp",
+                rtklib_config=temp_root / "rtklib.conf",
+                rtklib_pos=temp_root / "rtklib.pos",
+                use_existing_rtklib_solution=True,
+                rtklib_solver_wall_time_s=0.8,
+            )
+            run_dir = temp_root / "tokyo" / "run1"
+            out = temp_root / "solution.pos"
+            summary_json = temp_root / "summary.json"
+            thresholds = {
+                "require_fix_rate_min": 95.0,
+                "require_lib_fix_rate_vs_rtklib_min_delta": 0.0,
+            }
+
+            command = ppc_rtk_signoff.build_ppc_demo_command(
+                args, run_dir, out, summary_json, thresholds
+            )
+
+            self.assertEqual(command[:3], [sys.executable, str(ROOT_DIR / "apps" / "gnss.py"), "ppc-demo"])
+            self.assertIn("--use-existing-solution", command)
+            self.assertIn("--rtklib-bin", command)
+            self.assertIn(str(args.rtklib_bin), command)
+            self.assertIn("--use-existing-rtklib-solution", command)
+            self.assertIn("--require-fix-rate-min", command)
+            self.assertIn("95.0", command)
+            self.assertIn("--require-lib-fix-rate-vs-rtklib-min-delta", command)
 
 
 class DrivingComparisonHelpersTest(unittest.TestCase):

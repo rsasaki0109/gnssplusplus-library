@@ -38,6 +38,7 @@ set(GNSS_SOURCES
 # List source files for the no-optimization library
 set(GNSS_SOURCES_NO_OPTIMIZATION
     src/algorithms/rtk_ar_selection.cpp
+    src/algorithms/rtk_ar_evaluation.cpp
     src/algorithms/rtk_measurement.cpp
     src/algorithms/rtk_selection.cpp
     src/algorithms/rtk_update.cpp

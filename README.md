@@ -71,6 +71,7 @@ python3 apps/gnss.py ppp \
 | `gnss ppp-kinematic-signoff` | Kinematic PPP sign-off |
 | `gnss live-signoff` | Realtime/error-handling sign-off for recorded RTCM/UBX live inputs |
 | `gnss ppc-demo` | External PPC-Dataset RTK/PPP verification against `reference.csv` |
+| `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB side-by-side gates |
 | `gnss odaiba-benchmark` | End-to-end Odaiba benchmark pipeline |
 | `gnss web` | Local browser UI for summary JSON, live sign-offs, `.pos` trajectories, and `gnss rcv` status |
 
@@ -137,6 +138,12 @@ python3 apps/gnss.py ppc-demo \
   --solver rtk \
   --require-realtime-factor-min 1.0 \
   --summary-json output/ppc_tokyo_run1_rtk_summary.json
+
+python3 apps/gnss.py ppc-rtk-signoff \
+  --dataset-root /datasets/PPC-Dataset \
+  --city tokyo \
+  --rtklib-bin /path/to/rnx2rtkp \
+  --summary-json output/ppc_tokyo_run1_rtk_signoff.json
 ```
 
 Dataset source: [taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset)
