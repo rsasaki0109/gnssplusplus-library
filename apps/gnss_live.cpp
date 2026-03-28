@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <exception>
@@ -87,6 +88,12 @@ struct RoverUbxSource {
     size_t bytes_read = 0;
     bool serial = false;
     bool eof = false;
+};
+
+struct DecoderSummaryStats {
+    size_t total_messages = 0;
+    size_t valid_messages = 0;
+    size_t decoder_errors = 0;
 };
 
 double timeDiffSeconds(const libgnss::GNSSTime& a, const libgnss::GNSSTime& b) {
@@ -850,10 +857,29 @@ bool readNextUbxObservation(RoverUbxSource& source,
     }
 }
 
+DecoderSummaryStats summarizeRtcmSource(const SourceState& source) {
+    const auto stats = source.reader.getStats();
+    DecoderSummaryStats summary;
+    summary.total_messages = std::max(stats.total_messages, source.messages_read);
+    summary.valid_messages = std::max(stats.valid_messages, source.messages_read);
+    summary.decoder_errors = stats.crc_errors;
+    return summary;
+}
+
+DecoderSummaryStats summarizeUbxSource(const RoverUbxSource& source) {
+    const auto stats = source.decoder.getStats();
+    DecoderSummaryStats summary;
+    summary.total_messages = stats.total_messages;
+    summary.valid_messages = stats.valid_messages;
+    summary.decoder_errors = stats.checksum_errors;
+    return summary;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     try {
+        const auto wall_time_begin = std::chrono::steady_clock::now();
         const LiveConfig config = parseArguments(argc, argv);
         const RoverInputKind rover_input_kind =
             config.rover_ubx_path.empty() ? RoverInputKind::RTCM : RoverInputKind::UBX;
@@ -863,23 +889,27 @@ int main(int argc, char** argv) {
         SourceState base_source;
         if (rover_input_kind == RoverInputKind::RTCM) {
             if (!openSource(config.rover_rtcm_path, config.rover_message_limit, rover_rtcm_source)) {
-                std::cerr << "Error: failed to open rover RTCM source\n";
+                std::cerr << "Error: failed to open rover RTCM source: "
+                          << config.rover_rtcm_path << "\n";
                 return 1;
             }
         } else {
             if (!openRoverUbxSource(config.rover_ubx_path, config.rover_ubx_baud, rover_ubx_source)) {
-                std::cerr << "Error: failed to open rover UBX source\n";
+                std::cerr << "Error: failed to open rover UBX source: "
+                          << config.rover_ubx_path << "\n";
                 return 1;
             }
         }
         if (!openSource(config.base_rtcm_path, config.base_message_limit, base_source)) {
-            std::cerr << "Error: failed to open base RTCM source\n";
+            std::cerr << "Error: failed to open base RTCM source: "
+                      << config.base_rtcm_path << "\n";
             return 1;
         }
 
         libgnss::NavigationData nav_data;
         if (!loadNavigationRinex(config.nav_rinex_path, nav_data)) {
-            std::cerr << "Error: failed to read navigation RINEX\n";
+            std::cerr << "Error: failed to read navigation RINEX: "
+                      << config.nav_rinex_path << "\n";
             return 1;
         }
 
@@ -924,6 +954,8 @@ int main(int argc, char** argv) {
             ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
             : readNextUbxObservation(rover_ubx_source, rover_obs, rover_ubx_events);
         bool base_ok = readNextObservation(base_source, base_obs, base_events);
+        const bool initial_rover_observation_ok = rover_ok;
+        const bool initial_base_observation_ok = base_ok;
 
         size_t aligned_epochs = 0;
         size_t exact_base_epochs = 0;
@@ -932,20 +964,28 @@ int main(int argc, char** argv) {
         size_t skipped_rover_epochs = 0;
         size_t written_solutions = 0;
         size_t fixed_solutions = 0;
+        size_t nav_event_updates = 0;
+        size_t station_position_updates = 0;
         Eigen::Vector3d rover_seed = Eigen::Vector3d::Zero();
         int solved_epochs = 0;
         libgnss::ObservationData previous_base_obs;
         bool has_previous_base = false;
+        bool have_first_aligned_time = false;
+        libgnss::GNSSTime first_aligned_time;
+        libgnss::GNSSTime last_aligned_time;
+        std::string termination_reason = "running";
 
         auto applyEvents = [&](const std::vector<libgnss::io::RTCMStreamDecoder::Event>& events) {
             for (const auto& event : events) {
                 if (event.has_navigation) {
                     mergeNavigationData(nav_data, event.navigation);
+                    ++nav_event_updates;
                 }
                 if (event.has_station_position && !config.base_position_override) {
                     base_position = event.station_position;
                     have_base_position = true;
                     rtk.setBasePosition(base_position);
+                    ++station_position_updates;
                 }
             }
         };
@@ -1076,6 +1116,11 @@ int main(int argc, char** argv) {
             }
 
             ++aligned_epochs;
+            if (!have_first_aligned_time) {
+                first_aligned_time = rover_obs.time;
+                have_first_aligned_time = true;
+            }
+            last_aligned_time = rover_obs.time;
             if (!have_base_position || nav_data.ephemeris_data.empty()) {
                 rover_ok = rover_input_kind == RoverInputKind::RTCM
                     ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
@@ -1106,6 +1151,7 @@ int main(int argc, char** argv) {
                               << " ratio=" << std::setprecision(2) << solution.ratio << "\n";
                 }
                 if (config.max_epochs >= 0 && solved_epochs >= config.max_epochs) {
+                    termination_reason = "max_epochs_reached";
                     break;
                 }
             }
@@ -1118,6 +1164,24 @@ int main(int argc, char** argv) {
                 normalizeObservationWeek(rover_obs);
             } else if (rover_ok) {
                 normalizeObservationWeek(rover_obs);
+            }
+        }
+
+        if (termination_reason == "running") {
+            if (!initial_rover_observation_ok) {
+                termination_reason = "no_initial_rover_observation";
+            } else if (!initial_base_observation_ok) {
+                termination_reason = "no_initial_base_observation";
+            } else if (written_solutions == 0 && aligned_epochs == 0) {
+                termination_reason = "no_aligned_epochs";
+            } else if (!rover_ok) {
+                termination_reason = "rover_source_exhausted";
+            } else if (!base_ok) {
+                termination_reason = "base_source_exhausted";
+            } else if (written_solutions == 0) {
+                termination_reason = "no_valid_solutions";
+            } else {
+                termination_reason = "completed";
             }
         }
 
@@ -1137,16 +1201,35 @@ int main(int argc, char** argv) {
         }
         base_source.reader.close();
 
-        const size_t rover_messages =
+        const DecoderSummaryStats rover_stats =
             rover_input_kind == RoverInputKind::RTCM
-                ? rover_rtcm_source.messages_read
-                : rover_ubx_source.decoder.getStats().valid_messages;
+                ? summarizeRtcmSource(rover_rtcm_source)
+                : summarizeUbxSource(rover_ubx_source);
+        const DecoderSummaryStats base_stats = summarizeRtcmSource(base_source);
         const std::string rover_source_label =
             rover_input_kind == RoverInputKind::RTCM ? "rtcm" : "ubx";
+        const auto wall_time_end = std::chrono::steady_clock::now();
+        const double solver_wall_time_s =
+            std::chrono::duration<double>(wall_time_end - wall_time_begin).count();
+        const double solution_span_s =
+            have_first_aligned_time
+                ? std::max(0.0, timeDiffSeconds(last_aligned_time, first_aligned_time))
+                : 0.0;
+        const double realtime_factor =
+            solver_wall_time_s > 0.0 ? solution_span_s / solver_wall_time_s : 0.0;
+        const double effective_epoch_rate_hz =
+            solver_wall_time_s > 0.0 ? static_cast<double>(aligned_epochs) / solver_wall_time_s : 0.0;
 
         std::cout << "summary: rover_source=" << rover_source_label
-                  << " rover_messages=" << rover_messages
-                  << " base_messages=" << base_source.messages_read
+                  << " termination=" << termination_reason
+                  << " rover_messages=" << rover_stats.valid_messages
+                  << " rover_total_messages=" << rover_stats.total_messages
+                  << " rover_valid_messages=" << rover_stats.valid_messages
+                  << " rover_decoder_errors=" << rover_stats.decoder_errors
+                  << " base_messages=" << base_stats.valid_messages
+                  << " base_total_messages=" << base_stats.total_messages
+                  << " base_valid_messages=" << base_stats.valid_messages
+                  << " base_decoder_errors=" << base_stats.decoder_errors
                   << " aligned_epochs=" << aligned_epochs
                   << " exact_base_epochs=" << exact_base_epochs
                   << " interpolated_base_epochs=" << interpolated_base_epochs
@@ -1154,6 +1237,12 @@ int main(int argc, char** argv) {
                   << " skipped_rover_epochs=" << skipped_rover_epochs
                   << " written_solutions=" << written_solutions
                   << " fixed_solutions=" << fixed_solutions
+                  << " nav_event_updates=" << nav_event_updates
+                  << " station_position_updates=" << station_position_updates
+                  << " solver_wall_time_s=" << std::fixed << std::setprecision(6) << solver_wall_time_s
+                  << " solution_span_s=" << solution_span_s
+                  << " realtime_factor=" << realtime_factor
+                  << " effective_epoch_rate_hz=" << effective_epoch_rate_hz
                   << " out=" << config.output_pos_path
                   << " format=" << outputFormatString(config.output_format)
                   << "\n";

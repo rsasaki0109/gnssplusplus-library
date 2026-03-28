@@ -47,6 +47,7 @@ ODAIBA_DATA_FILES = (
     "data/driving/Tokyo_Data/Odaiba/base.nav",
     "data/driving/Tokyo_Data/Odaiba/reference.csv",
 )
+DEFAULT_PPC_DATASET_ROOT = Path("/tmp/PPC-Dataset-data/PPC-Dataset")
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -55,6 +56,13 @@ import generate_driving_comparison as driving_comparison  # noqa: E402
 
 def repo_data_exists(*relative_paths: str) -> bool:
     return all((ROOT_DIR / relative_path).exists() for relative_path in relative_paths)
+
+
+def ppc_dataset_root() -> Path:
+    env_value = os.environ.get("GNSSPP_PPC_DATASET_ROOT")
+    if env_value:
+        return Path(env_value)
+    return DEFAULT_PPC_DATASET_ROOT
 
 
 def crc24q(data: bytes) -> int:
@@ -4735,6 +4743,8 @@ class CLIToolsTest(unittest.TestCase):
                 "--solver",
                 "rtk",
                 "--use-existing-solution",
+                "--solver-wall-time-s",
+                "0.5",
                 "--out",
                 str(solution_path),
                 "--summary-json",
@@ -4755,6 +4765,12 @@ class CLIToolsTest(unittest.TestCase):
                 "0.2",
                 "--require-mean-sats-min",
                 "11",
+                "--require-solver-wall-time-max",
+                "1.0",
+                "--require-realtime-factor-min",
+                "0.5",
+                "--require-effective-epoch-rate-min",
+                "5.0",
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
@@ -4771,6 +4787,81 @@ class CLIToolsTest(unittest.TestCase):
             self.assertLessEqual(payload["p95_h_m"], 0.2)
             self.assertLessEqual(payload["p95_abs_up_m"], 0.2)
             self.assertGreaterEqual(payload["mean_satellites"], 11.0)
+            self.assertEqual(payload["solver_wall_time_s"], 0.5)
+            self.assertEqual(payload["solution_span_s"], 0.4)
+            self.assertEqual(payload["realtime_factor"], 0.8)
+            self.assertEqual(payload["effective_epoch_rate_hz"], 6.0)
+            self.assertIn("performance: wall=0.5 s, span=0.4 s, rtf=0.8, rate=6.0 Hz", result.stdout)
+
+    def test_ppc_demo_cli_tokyo_rtk_realdataset_signoff_if_present(self) -> None:
+        dataset_root = ppc_dataset_root()
+        run_dir = dataset_root / "tokyo" / "run1"
+        required_files = (
+            run_dir / "rover.obs",
+            run_dir / "base.obs",
+            run_dir / "base.nav",
+            run_dir / "reference.csv",
+        )
+        if not all(path.exists() for path in required_files):
+            self.skipTest("PPC-Dataset tokyo/run1 is not available")
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_tokyo_rtk_") as temp_dir:
+            temp_root = Path(temp_dir)
+            solution_path = temp_root / "tokyo_run1_rtk.pos"
+            summary_path = temp_root / "tokyo_run1_rtk_summary.json"
+
+            result = self.run_gnss(
+                "ppc-demo",
+                "--run-dir",
+                str(run_dir),
+                "--solver",
+                "rtk",
+                "--max-epochs",
+                "120",
+                "--out",
+                str(solution_path),
+                "--summary-json",
+                str(summary_path),
+                "--require-valid-epochs-min",
+                "100",
+                "--require-matched-epochs-min",
+                "100",
+                "--require-fix-rate-min",
+                "80",
+                "--require-median-h-max",
+                "0.10",
+                "--require-p95-h-max",
+                "0.20",
+                "--require-max-h-max",
+                "0.50",
+                "--require-p95-up-max",
+                "0.60",
+                "--require-mean-sats-min",
+                "18",
+                "--require-solver-wall-time-max",
+                "60.0",
+                "--require-realtime-factor-min",
+                "0.45",
+                "--require-effective-epoch-rate-min",
+                "2.0",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Finished PPC-Dataset demo.", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["dataset"], "PPC-Dataset tokyo run1")
+            self.assertEqual(payload["solver"], "rtk")
+            self.assertGreaterEqual(payload["valid_epochs"], 100)
+            self.assertGreaterEqual(payload["matched_epochs"], 100)
+            self.assertGreaterEqual(payload["fix_rate_pct"], 80.0)
+            self.assertLessEqual(payload["median_h_m"], 0.10)
+            self.assertLessEqual(payload["p95_h_m"], 0.20)
+            self.assertLessEqual(payload["max_h_m"], 0.50)
+            self.assertLessEqual(payload["p95_abs_up_m"], 0.60)
+            self.assertGreaterEqual(payload["mean_satellites"], 18.0)
+            self.assertLessEqual(payload["solver_wall_time_s"], 60.0)
+            self.assertGreaterEqual(payload["realtime_factor"], 0.45)
+            self.assertGreaterEqual(payload["effective_epoch_rate_hz"], 2.0)
 
     def test_nav_products_cli_generates_sp3_and_clk_from_static_sample(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_nav_products_cli_") as temp_dir:
@@ -6828,6 +6919,30 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--rover-rtcm", result.stdout)
         self.assertIn("--rover-ubx", result.stdout)
         self.assertIn("--base-hold-seconds", result.stdout)
+
+    def test_live_reports_missing_rtcm_source_path_clearly(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_live_missing_source_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_path = temp_root / "missing_rover.rtcm3"
+            base_path = temp_root / "missing_base.rtcm3"
+            output_path = temp_root / "live.pos"
+
+            result = self.run_gnss(
+                "live",
+                "--rover-rtcm",
+                str(rover_path),
+                "--base-rtcm",
+                str(base_path),
+                "--out",
+                str(output_path),
+                "--quiet",
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                f"Error: failed to open rover RTCM source: {rover_path}",
+                result.stderr,
+            )
 
     def test_rcv_dry_run_and_status_snapshot(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_rcv_test_") as temp_dir:

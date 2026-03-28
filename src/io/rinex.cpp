@@ -1,4 +1,5 @@
 #include <libgnss++/io/rinex.hpp>
+#include <libgnss++/core/signal_policy.hpp>
 #include <algorithm>
 #include <fstream>
 #include <sstream>
@@ -89,67 +90,15 @@ GNSSTime adjustDay(const GNSSTime& time, const GNSSTime& reference) {
 }
 
 SignalType primarySignalForSystem(GNSSSystem system) {
-    switch (system) {
-        case GNSSSystem::GPS: return SignalType::GPS_L1CA;
-        case GNSSSystem::GLONASS: return SignalType::GLO_L1CA;
-        case GNSSSystem::Galileo: return SignalType::GAL_E1;
-        case GNSSSystem::BeiDou: return SignalType::BDS_B1I;
-        case GNSSSystem::QZSS: return SignalType::QZS_L1CA;
-        case GNSSSystem::NavIC: return SignalType::GPS_L5;
-        default: return SignalType::GPS_L1CA;
-    }
+    return signal_policy::primarySignalForSystem(system);
 }
 
 SignalType secondarySignalForSystem(GNSSSystem system) {
-    switch (system) {
-        case GNSSSystem::GPS: return SignalType::GPS_L2C;
-        case GNSSSystem::GLONASS: return SignalType::GLO_L2CA;
-        case GNSSSystem::Galileo: return SignalType::GAL_E5A;
-        case GNSSSystem::BeiDou: return SignalType::BDS_B2I;
-        case GNSSSystem::QZSS: return SignalType::QZS_L2C;
-        case GNSSSystem::NavIC: return SignalType::GPS_L5;
-        default: return SignalType::GPS_L2C;
-    }
+    return signal_policy::secondarySignalForSystem(system);
 }
 
-SignalType signalForBand(GNSSSystem system, int band, bool primary) {
-    switch (system) {
-        case GNSSSystem::GPS:
-            if (band == 1) return SignalType::GPS_L1CA;
-            if (band == 2) return SignalType::GPS_L2C;
-            if (band == 5) return SignalType::GPS_L5;
-            break;
-        case GNSSSystem::GLONASS:
-            if (band == 1) return SignalType::GLO_L1CA;
-            if (band == 2) return SignalType::GLO_L2CA;
-            if (band == 3) return SignalType::GLO_L2P;
-            break;
-        case GNSSSystem::Galileo:
-            if (band == 1) return SignalType::GAL_E1;
-            if (band == 5) return SignalType::GAL_E5A;
-            if (band == 6) return SignalType::GAL_E6;
-            if (band == 7 || band == 8) return SignalType::GAL_E5B;
-            break;
-        case GNSSSystem::BeiDou:
-            if (band == 1) return SignalType::BDS_B1I;
-            if (band == 2) return SignalType::BDS_B1I;
-            if (band == 5) return SignalType::BDS_B2A;
-            if (band == 6) return SignalType::BDS_B3I;
-            if (band == 7) return SignalType::BDS_B2I;
-            if (band == 8) return SignalType::BDS_B2A;
-            break;
-        case GNSSSystem::QZSS:
-            if (band == 1) return SignalType::QZS_L1CA;
-            if (band == 2) return SignalType::QZS_L2C;
-            if (band == 5) return SignalType::QZS_L5;
-            break;
-        case GNSSSystem::NavIC:
-            if (band == 5) return SignalType::GPS_L5;
-            break;
-        default:
-            break;
-    }
-    return primary ? primarySignalForSystem(system) : secondarySignalForSystem(system);
+SignalType signalForObservationType(GNSSSystem system, const std::string& obs_type, bool primary) {
+    return signal_policy::signalForObservationType(system, obs_type, primary);
 }
 
 GNSSTime bdtToGpst(const GNSSTime& time) {
@@ -175,74 +124,19 @@ std::string trimCopy(const std::string& text) {
 }
 
 int rinexBand(const std::string& obs_type) {
-    if (obs_type.size() < 2 || !std::isdigit(obs_type[1])) {
-        return -1;
-    }
-    return obs_type[1] - '0';
+    return signal_policy::rinexBand(obs_type);
 }
 
 bool isPrimaryBand(GNSSSystem system, int band) {
-    switch (system) {
-        case GNSSSystem::GPS:
-        case GNSSSystem::GLONASS:
-        case GNSSSystem::Galileo:
-        case GNSSSystem::BeiDou:
-        case GNSSSystem::QZSS:
-            return band == 1;
-        case GNSSSystem::NavIC:
-            return band == 5;
-        default:
-            return false;
-    }
+    return signal_policy::observationPriority(system, "C" + std::to_string(band), true) < 100;
 }
 
 bool isSecondaryBand(GNSSSystem system, int band) {
-    switch (system) {
-        case GNSSSystem::GPS: return band == 2 || band == 5;
-        case GNSSSystem::GLONASS: return band == 2 || band == 3;
-        case GNSSSystem::Galileo: return band == 5 || band == 6 || band == 7 || band == 8;
-        case GNSSSystem::BeiDou: return band == 2 || band == 5 || band == 6 || band == 7 || band == 8;
-        case GNSSSystem::QZSS: return band == 2 || band == 5 || band == 6;
-        case GNSSSystem::NavIC: return false;
-        default: return false;
-    }
+    return signal_policy::observationPriority(system, "C" + std::to_string(band), false) < 100;
 }
 
 int bandPriority(GNSSSystem system, int band, bool primary) {
-    if (primary) {
-        return isPrimaryBand(system, band) ? 0 : 100;
-    }
-
-    switch (system) {
-        case GNSSSystem::GPS:
-            if (band == 2) return 0;
-            if (band == 5) return 1;
-            return 100;
-        case GNSSSystem::GLONASS:
-            if (band == 2) return 0;
-            if (band == 3) return 1;
-            return 100;
-        case GNSSSystem::Galileo:
-            if (band == 5) return 0;
-            if (band == 7) return 1;
-            if (band == 8) return 2;
-            if (band == 6) return 3;
-            return 100;
-        case GNSSSystem::BeiDou:
-            if (band == 7) return 0;
-            if (band == 6) return 1;
-            if (band == 2) return 2;
-            if (band == 5) return 3;
-            if (band == 8) return 4;
-            return 100;
-        case GNSSSystem::QZSS:
-            if (band == 2) return 0;
-            if (band == 5) return 1;
-            if (band == 6) return 2;
-            return 100;
-        default:
-            return 100;
-    }
+    return signal_policy::observationPriority(system, "C" + std::to_string(band), primary);
 }
 
 bool isCodeObservationType(const std::string& obs_type) {
@@ -966,14 +860,14 @@ bool RINEXReader::parseObservationEpochV2(const std::string& line, ObservationDa
             const int secondary_candidate = bandPriority(sat.system, band, false);
             if (primary_candidate < 100 &&
                 (primary_candidate < primary_priority || band == primary_band)) {
-                obs_primary.signal = signalForBand(sat.system, band, true);
+                obs_primary.signal = signalForObservationType(sat.system, obs_type, true);
                 assignObservationField(obs_primary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
                 has_primary_data = true;
                 primary_priority = primary_candidate;
                 primary_band = band;
             } else if (secondary_candidate < 100 &&
                        (secondary_candidate < secondary_priority || band == secondary_band)) {
-                obs_secondary.signal = signalForBand(sat.system, band, false);
+                obs_secondary.signal = signalForObservationType(sat.system, obs_type, false);
                 assignObservationField(obs_secondary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
                 has_secondary_data = true;
                 secondary_priority = secondary_candidate;
@@ -1116,16 +1010,16 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
                 const int band = rinexBand(obs_type);
                 const int primary_candidate = bandPriority(system, band, true);
                 const int secondary_candidate = bandPriority(system, band, false);
-            if (primary_candidate < 100 &&
-                (primary_candidate < primary_priority || band == primary_band)) {
-                    obs_primary.signal = signalForBand(system, band, true);
+                if (primary_candidate < 100 &&
+                    (primary_candidate < primary_priority || band == primary_band)) {
+                    obs_primary.signal = signalForObservationType(system, obs_type, true);
                     assignObservationField(obs_primary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
                     has_primary_data = true;
                     primary_priority = primary_candidate;
                     primary_band = band;
                 } else if (secondary_candidate < 100 &&
                            (secondary_candidate < secondary_priority || band == secondary_band)) {
-                    obs_secondary.signal = signalForBand(system, band, false);
+                    obs_secondary.signal = signalForObservationType(system, obs_type, false);
                     assignObservationField(obs_secondary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
                     has_secondary_data = true;
                     secondary_priority = secondary_candidate;

@@ -4,6 +4,7 @@
 #include "../core/observation.hpp"
 #include "../core/navigation.hpp"
 #include "../core/solution.hpp"
+#include "rtk_selection.hpp"
 #include "spp.hpp"
 #include <Eigen/Dense>
 #include <mutex>
@@ -365,6 +366,8 @@ private:
                                         GNSSSystem system,
                                         int min_lock_count,
                                         SatelliteId& ref_sat) const;
+    std::vector<rtk_selection::SatelliteSelectionData> buildSelectionSnapshot(
+        const std::map<SatelliteId, SatelliteData>& sat_data) const;
     std::vector<DDPair> buildDoubleDifferencePairs(
         const std::map<SatelliteId, SatelliteData>& sat_data,
         int min_lock_count) const;
