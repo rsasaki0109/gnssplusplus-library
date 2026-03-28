@@ -11,6 +11,7 @@ if(GTest_FOUND)
         test_ppp_atmosphere.cpp
         test_rtk_ar_selection.cpp
         test_rtk_measurement.cpp
+        test_rtk_update.cpp
         test_rtk_selection.cpp
         test_rtk_validation.cpp
         test_signal_policy.cpp
