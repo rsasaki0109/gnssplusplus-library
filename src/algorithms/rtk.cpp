@@ -311,6 +311,8 @@ void RTKProcessor::reset() {
     gf_l1l2_history_.clear();
     doppler_phase_history_l1_m_.clear();
     doppler_phase_history_l2_m_.clear();
+    code_phase_history_l1_m_.clear();
+    code_phase_history_l2_m_.clear();
     consecutive_fix_count_ = 0;
     last_ar_ratio_ = 0.0;
     last_num_fixed_ambiguities_ = 0;
@@ -741,6 +743,8 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
         gf_l1l2_history_.erase(sat);
         doppler_phase_history_l1_m_.erase(sat);
         doppler_phase_history_l2_m_.erase(sat);
+        code_phase_history_l1_m_.erase(sat);
+        code_phase_history_l2_m_.erase(sat);
     }
 
     std::set<SatelliteId> gf_slips;
@@ -812,6 +816,53 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
         }
     }
 
+    std::set<SatelliteId> code_slips_l1;
+    std::set<SatelliteId> code_slips_l2;
+    if (rtk_config_.enable_code_slip_detection) {
+        const double code_slip_threshold =
+            isDynamicPositionMode(rtk_config_)
+                ? std::max(rtk_config_.code_slip_threshold, 5.0)
+                : std::max(rtk_config_.code_slip_threshold, 3.0);
+        for (const auto& [sat, sd] : sat_data) {
+            if (sd.has_l1 && sd.l1_wavelength > 0.0) {
+                const double code_minus_phase_m =
+                    rtk_slip_detection::singleDifferenceCodeMinusPhaseM(
+                        sd.rover_l1_code,
+                        sd.base_l1_code,
+                        sd.rover_l1_phase,
+                        sd.base_l1_phase,
+                        sd.l1_wavelength);
+                auto previous = code_phase_history_l1_m_.find(sat);
+                if (previous != code_phase_history_l1_m_.end() &&
+                    rtk_slip_detection::detectCodeSlip(
+                        previous->second,
+                        code_minus_phase_m,
+                        code_slip_threshold)) {
+                    code_slips_l1.insert(sat);
+                }
+                code_phase_history_l1_m_[sat] = code_minus_phase_m;
+            }
+            if (sd.has_l2 && sd.l2_wavelength > 0.0) {
+                const double code_minus_phase_m =
+                    rtk_slip_detection::singleDifferenceCodeMinusPhaseM(
+                        sd.rover_l2_code,
+                        sd.base_l2_code,
+                        sd.rover_l2_phase,
+                        sd.base_l2_phase,
+                        sd.l2_wavelength);
+                auto previous = code_phase_history_l2_m_.find(sat);
+                if (previous != code_phase_history_l2_m_.end() &&
+                    rtk_slip_detection::detectCodeSlip(
+                        previous->second,
+                        code_minus_phase_m,
+                        code_slip_threshold)) {
+                    code_slips_l2.insert(sat);
+                }
+                code_phase_history_l2_m_[sat] = code_minus_phase_m;
+            }
+        }
+    }
+
     for (int freq = 0; freq < 2; ++freq) {
         auto& indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
         auto& lock_counts = (freq == 0) ? lock_count_l1_ : lock_count_l2_;
@@ -823,6 +874,8 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
             int lli = (freq == 0) ? sd.l1_lli : sd.l2_lli;
             bool slip = (lli & 0x01) != 0 ||
                         gf_slips.find(sat) != gf_slips.end() ||
+                        (freq == 0 ? code_slips_l1.find(sat) != code_slips_l1.end()
+                                   : code_slips_l2.find(sat) != code_slips_l2.end()) ||
                         (freq == 0 ? doppler_slips_l1.find(sat) != doppler_slips_l1.end()
                                    : doppler_slips_l2.find(sat) != doppler_slips_l2.end());
             auto idx_it = indices.find(sat);

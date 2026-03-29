@@ -10,6 +10,7 @@ Examples:
 - `gnss solve`
 - `gnss ppp` (`--nav`, `--sp3`, `--clk`, `--ionex`, `--dcb`, `--ssr`, `--ssr-rtcm`)
 - `gnss fetch-products`
+- `gnss ppp-products-signoff`
 - `gnss ionex-info`
 - `gnss dcb-info`
 - `gnss visibility`
@@ -60,7 +61,7 @@ The ROS2 playback node publishes `.pos` files as:
 
 ## Local web UI
 
-`gnss web` is a local visualization layer for existing artifacts.
+`gnss web` is a local visualization layer for existing artifacts, including live and moving-base sign-off summaries plus direct links to summary and provenance files.
 
 It shows:
 
