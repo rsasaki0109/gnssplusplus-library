@@ -4843,6 +4843,108 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("rtklib performance: wall=0.1 s", result.stdout)
             self.assertIn("performance: wall=0.5 s, span=0.4 s, rtf=0.8, rate=6.0 Hz", result.stdout)
 
+    def test_ppc_rtk_signoff_cli_wraps_profile_with_existing_solutions(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_rtk_signoff_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            run_dir = temp_root / "tokyo" / "run1"
+            run_dir.mkdir(parents=True)
+            solution_path = temp_root / "ppc_signoff.pos"
+            rtklib_path = temp_root / "ppc_signoff_rtklib.pos"
+            summary_path = temp_root / "ppc_signoff_summary.json"
+            reference_csv = run_dir / "reference.csv"
+
+            reference_rows = [
+                (2300, 1000.0, 35.1000000, 139.1000000, 42.0),
+                (2300, 1000.2, 35.1000100, 139.1000200, 42.2),
+                (2300, 1000.4, 35.1000200, 139.1000400, 42.4),
+            ]
+            reference_lines = [
+                "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,roll_deg,pitch_deg,yaw_deg"
+            ]
+            for week, tow, lat, lon, height in reference_rows:
+                reference_lines.append(
+                    f"{week},{tow:.3f},{lat:.7f},{lon:.7f},{height:.3f},0.0,0.0,0.0"
+                )
+            reference_csv.write_text("\n".join(reference_lines) + "\n", encoding="ascii")
+
+            with solution_path.open("w", encoding="ascii") as handle:
+                handle.write("% synthetic ppc signoff solution\n")
+                for week, tow, lat, lon, height, status, satellites in (
+                    (2300, 1000.0, 35.1000002, 139.1000001, 42.1, 4, 12),
+                    (2300, 1000.2, 35.1000099, 139.1000202, 42.3, 4, 13),
+                    (2300, 1000.4, 35.1000197, 139.1000398, 42.5, 3, 11),
+                ):
+                    ecef = driving_comparison.llh_to_ecef(lat, lon, height)
+                    handle.write(
+                        f"{week} {tow:.3f} {ecef[0]:.6f} {ecef[1]:.6f} {ecef[2]:.6f} "
+                        f"{lat:.9f} {lon:.9f} {height:.4f} {status} {satellites} 1.0\n"
+                    )
+            write_rtklib_pos(
+                rtklib_path,
+                [
+                    (2300, 1000.0, 35.1000004, 139.1000003, 42.2, 1, 12),
+                    (2300, 1000.2, 35.1000103, 139.1000205, 42.4, 1, 13),
+                    (2300, 1000.4, 35.1000205, 139.1000404, 42.6, 2, 11),
+                ],
+            )
+
+            result = self.run_gnss(
+                "ppc-rtk-signoff",
+                "--run-dir",
+                str(run_dir),
+                "--city",
+                "tokyo",
+                "--use-existing-solution",
+                "--solver-wall-time-s",
+                "0.5",
+                "--out",
+                str(solution_path),
+                "--rtklib-pos",
+                str(rtklib_path),
+                "--use-existing-rtklib-solution",
+                "--rtklib-solver-wall-time-s",
+                "0.1",
+                "--summary-json",
+                str(summary_path),
+                "--require-valid-epochs-min",
+                "3",
+                "--require-matched-epochs-min",
+                "3",
+                "--require-fix-rate-min",
+                "60",
+                "--require-median-h-max",
+                "0.2",
+                "--require-p95-h-max",
+                "0.2",
+                "--require-max-h-max",
+                "0.2",
+                "--require-p95-up-max",
+                "0.2",
+                "--require-mean-sats-min",
+                "11",
+                "--require-solver-wall-time-max",
+                "1.0",
+                "--require-realtime-factor-min",
+                "0.5",
+                "--require-effective-epoch-rate-min",
+                "5.0",
+                "--require-lib-fix-rate-vs-rtklib-min-delta",
+                "0.0",
+                "--require-lib-median-h-vs-rtklib-max-delta",
+                "0.0",
+                "--require-lib-p95-h-vs-rtklib-max-delta",
+                "0.0",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Finished PPC RTK sign-off.", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["signoff_profile"], "ppc-rtk-tokyo")
+            self.assertTrue(payload["rtklib_comparison_enabled"])
+            self.assertIn("signoff_thresholds", payload)
+            self.assertEqual(payload["signoff_thresholds"]["require_fix_rate_min"], 60.0)
+            self.assertIn("delta_vs_rtklib", payload)
+
     def test_ppc_demo_cli_tokyo_rtk_realdataset_signoff_if_present(self) -> None:
         dataset_root = ppc_dataset_root()
         run_dir = dataset_root / "tokyo" / "run1"
@@ -4978,6 +5080,82 @@ class CLIToolsTest(unittest.TestCase):
                 payload["delta_vs_rtklib"]["p95_h_m"],
                 0.02,
             )
+
+    def test_ppc_rtk_signoff_cli_tokyo_realdataset_if_present(self) -> None:
+        dataset_root = ppc_dataset_root()
+        run_dir = dataset_root / "tokyo" / "run1"
+        rtklib_bin = rtklib_binary()
+        required_files = (
+            run_dir / "rover.obs",
+            run_dir / "base.obs",
+            run_dir / "base.nav",
+            run_dir / "reference.csv",
+        )
+        if not all(path.exists() for path in required_files):
+            self.skipTest("PPC-Dataset tokyo/run1 is not available")
+        if not rtklib_bin.exists():
+            self.skipTest("RTKLIB rnx2rtkp is not available")
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_tokyo_signoff_") as temp_dir:
+            temp_root = Path(temp_dir)
+            summary_path = temp_root / "tokyo_run1_signoff_summary.json"
+            result = self.run_gnss(
+                "ppc-rtk-signoff",
+                "--dataset-root",
+                str(dataset_root),
+                "--city",
+                "tokyo",
+                "--max-epochs",
+                "120",
+                "--summary-json",
+                str(summary_path),
+                "--rtklib-bin",
+                str(rtklib_bin),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["signoff_profile"], "ppc-rtk-tokyo")
+            self.assertTrue(payload["rtklib_comparison_enabled"])
+            self.assertGreaterEqual(payload["fix_rate_pct"], 95.0)
+            self.assertGreaterEqual(payload["delta_vs_rtklib"]["fix_rate_pct"], 0.0)
+            self.assertLessEqual(payload["delta_vs_rtklib"]["median_h_m"], 0.01)
+            self.assertLessEqual(payload["delta_vs_rtklib"]["p95_h_m"], 0.02)
+
+    def test_ppc_rtk_signoff_cli_nagoya_realdataset_if_present(self) -> None:
+        dataset_root = ppc_dataset_root()
+        run_dir = dataset_root / "nagoya" / "run1"
+        required_files = (
+            run_dir / "rover.obs",
+            run_dir / "base.obs",
+            run_dir / "base.nav",
+            run_dir / "reference.csv",
+        )
+        if not all(path.exists() for path in required_files):
+            self.skipTest("PPC-Dataset nagoya/run1 is not available")
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_nagoya_signoff_") as temp_dir:
+            temp_root = Path(temp_dir)
+            summary_path = temp_root / "nagoya_run1_signoff_summary.json"
+            result = self.run_gnss(
+                "ppc-rtk-signoff",
+                "--dataset-root",
+                str(dataset_root),
+                "--city",
+                "nagoya",
+                "--max-epochs",
+                "120",
+                "--summary-json",
+                str(summary_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["signoff_profile"], "ppc-rtk-nagoya")
+            self.assertFalse(payload["rtklib_comparison_enabled"])
+            self.assertGreaterEqual(payload["fix_rate_pct"], 95.0)
+            self.assertLessEqual(payload["median_h_m"], 0.12)
+            self.assertLessEqual(payload["p95_h_m"], 0.12)
 
     def test_nav_products_cli_generates_sp3_and_clk_from_static_sample(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_nav_products_cli_") as temp_dir:
