@@ -68,6 +68,20 @@ python3 apps/gnss.py ppp \
   --out output/ppp_solution.pos
 ```
 
+### Inspect receiver logs
+
+```bash
+python3 apps/gnss.py ubx-info \
+  --input logs/session.ubx \
+  --decode-observations
+
+python3 apps/gnss.py sbf-info \
+  --input logs/session.sbf \
+  --decode-pvt \
+  --decode-lband \
+  --decode-p2pp
+```
+
 ### Useful commands
 
 | Command | Purpose |
@@ -78,6 +92,9 @@ python3 apps/gnss.py ppp \
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
 | `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
 | `gnss ubx-info` | Inspect `NAV-PVT`, `RAWX`, `SFRBX` from file or serial |
+| `gnss sbf-info` | Inspect Septentrio SBF `PVTGeodetic`, `LBandTrackerStatus`, `P2PPStatus` from file or serial |
+| `gnss novatel-info` | Inspect NovAtel ASCII/Binary `BESTPOS` and `BESTVEL` logs |
+| `gnss nmea-info` | Inspect `GGA` and `RMC` NMEA logs from file or serial |
 | `gnss qzss-l6-info` | Inspect direct QZSS L6 frames and export Compact SSR payloads |
 | `gnss social-card` | Regenerate the Odaiba share image |
 | `gnss short-baseline-signoff` | Static RTK sign-off |
