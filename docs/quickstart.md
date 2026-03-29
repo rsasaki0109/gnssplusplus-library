@@ -87,7 +87,7 @@ python3 apps/gnss.py web \
   --rcv-status output/receiver.status.json
 ```
 
-Open `http://127.0.0.1:8085` to inspect benchmark tables, live/moving-base/PPP-product sign-offs, receiver status, moving-base/visibility plots, and linked artifacts/provenance.
+Open `http://127.0.0.1:8085` to inspect benchmark tables, live/moving-base/PPP-product sign-offs, receiver status, moving-base/visibility plots, moving-base history, and linked artifacts/provenance.
 
 Docker form:
 
