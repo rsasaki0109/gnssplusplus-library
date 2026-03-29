@@ -3011,6 +3011,31 @@ class CLIToolsTest(unittest.TestCase):
             self.assertGreater(payload["unique_satellites"], 0)
             self.assertIn("GPS", payload["rows_per_system"])
 
+    def test_visibility_plot_generates_png_from_visibility_csv(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_visibility_plot_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            csv_path = temp_root / "visibility.csv"
+            png_path = temp_root / "visibility.png"
+            csv_path.write_text(
+                "\n".join(
+                    [
+                        "epoch_index,week,tow,satellite,system,signal,azimuth_deg,elevation_deg,snr_dbhz,has_pseudorange,has_carrier_phase,has_doppler",
+                        "1,2200,100.0,G01,GPS,GPS_L1CA,45.0,30.0,42.0,1,1,0",
+                        "1,2200,100.0,G02,GPS,GPS_L1CA,120.0,55.0,47.0,1,1,0",
+                        "2,2200,130.0,E11,Galileo,GAL_E1,250.0,20.0,38.0,1,1,0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_gnss("visibility-plot", str(csv_path), str(png_path))
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Saved:", result.stdout)
+            self.assertTrue(png_path.exists())
+            self.assertGreater(png_path.stat().st_size, 0)
+
     def test_stats_reports_solution_status_breakdown(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_stats_cli_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -3377,6 +3402,7 @@ class CLIToolsTest(unittest.TestCase):
             ionex_path = temp_root / "synthetic.ionex"
             dcb_path = temp_root / "synthetic.bsx"
             out_path = temp_root / "ppp_with_bias_products.pos"
+            summary_path = temp_root / "ppp_with_bias_products.json"
             ionex_path.write_text(build_synthetic_ionex_text(), encoding="ascii")
             dcb_path.write_text(build_synthetic_dcb_text(), encoding="ascii")
 
@@ -3396,6 +3422,8 @@ class CLIToolsTest(unittest.TestCase):
                 "--no-estimate-troposphere",
                 "--out",
                 str(out_path),
+                "--summary-json",
+                str(summary_path),
                 "--max-epochs",
                 "4",
             )
@@ -3406,6 +3434,13 @@ class CLIToolsTest(unittest.TestCase):
             self.assertNotIn("ionex corrections: 0", result.stdout)
             self.assertNotIn("dcb corrections: 0", result.stdout)
             self.assertTrue(out_path.exists())
+            self.assertTrue(summary_path.exists())
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertTrue(payload["ionex_loaded"])
+            self.assertTrue(payload["dcb_loaded"])
+            self.assertGreater(payload["ionex_corrections"], 0)
+            self.assertGreater(payload["dcb_corrections"], 0)
+            self.assertEqual(payload["valid_solutions"], 4)
             records = self.read_pos_records(out_path)
             self.assertEqual(len(records), 4)
 
@@ -5114,6 +5149,9 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(set(payload["fetched_products"]), {"sp3", "clk", "ionex", "dcb"})
             self.assertTrue(str(payload["ionex"]).endswith("2024002.ionex"))
             self.assertTrue(str(payload["dcb"]).endswith("2024002.bsx"))
+            self.assertGreaterEqual(payload["ionex_corrections"], 0)
+            self.assertGreaterEqual(payload["dcb_corrections"], 0)
+            self.assertIn("ppp_run_summary", payload)
 
     def test_ppp_kinematic_signoff_cli_writes_summary_and_passes_thresholds(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_kinematic_signoff_cli_") as temp_dir:
@@ -5136,8 +5174,17 @@ class CLIToolsTest(unittest.TestCase):
                 "60",
                 "--require-reference-fix-rate-min",
                 "90",
+                "--require-converged",
+                "--require-convergence-time-max",
+                "300",
                 "--require-mean-sats-min",
                 "18",
+                "--require-mean-error-max",
+                "7",
+                "--require-p95-error-max",
+                "7",
+                "--require-max-error-max",
+                "7",
                 "--require-ppp-solution-rate-min",
                 "100",
             )
@@ -5152,10 +5199,13 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["dataset"], "sample kinematic PPP")
             self.assertEqual(payload["epochs"], 60)
             self.assertEqual(payload["common_epoch_pairs"], 60)
+            self.assertTrue(payload["ppp_converged"])
+            self.assertLessEqual(payload["ppp_convergence_time_s"], 300.0)
+            self.assertEqual(payload["fallback_epochs"], 0)
             self.assertGreaterEqual(payload["reference_fix_rate_pct"], 90.0)
-            self.assertGreaterEqual(payload["mean_position_error_m"], 0.0)
-            self.assertGreaterEqual(payload["p95_position_error_m"], 0.0)
-            self.assertGreaterEqual(payload["max_position_error_m"], 0.0)
+            self.assertLessEqual(payload["mean_position_error_m"], 7.0)
+            self.assertLessEqual(payload["p95_position_error_m"], 7.0)
+            self.assertLessEqual(payload["max_position_error_m"], 7.0)
 
     def test_ppp_kinematic_signoff_cli_can_fetch_precise_products(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_kinematic_signoff_fetch_cli_") as temp_dir:
@@ -5232,6 +5282,9 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(set(payload["fetched_products"]), {"sp3", "clk", "ionex", "dcb"})
             self.assertTrue(str(payload["ionex"]).endswith("2024002.ionex"))
             self.assertTrue(str(payload["dcb"]).endswith("2024002.bsx"))
+            self.assertGreaterEqual(payload["ionex_corrections"], 0)
+            self.assertGreaterEqual(payload["dcb_corrections"], 0)
+            self.assertIn("ppp_run_summary", payload)
             self.assertGreaterEqual(payload["mean_satellites"], 18.0)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
 
@@ -7784,6 +7837,7 @@ class CLIToolsTest(unittest.TestCase):
             live_summary = temp_root / "output" / "live_replay_summary.json"
             visibility_summary = temp_root / "output" / "visibility_static_summary.json"
             visibility_csv = temp_root / "output" / "visibility_static.csv"
+            visibility_png = temp_root / "output" / "visibility_static.png"
             port_file = temp_root / "port.txt"
 
             lib_pos.write_text(
@@ -7895,6 +7949,11 @@ class CLIToolsTest(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
+            visibility_png.write_bytes(
+                binascii.a2b_base64(
+                    b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+ymsAAAAASUVORK5CYII="
+                )
+            )
 
             port = find_free_port()
             process = subprocess.Popen(
@@ -7944,6 +8003,7 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertEqual(overview["visibility_summaries"][0]["rows_written"], 27)
                 self.assertEqual(overview["visibility_summaries"][0]["unique_satellites"], 9)
                 self.assertEqual(overview["visibility_summaries"][0]["csv_path"], "output/visibility_static.csv")
+                self.assertEqual(overview["visibility_summaries"][0]["png_path"], "output/visibility_static.png")
 
                 with request.urlopen(
                     f"http://127.0.0.1:{bound_port}/api/visibility?path=output/visibility_static.csv"
@@ -7952,6 +8012,12 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertTrue(visibility_payload["available"])
                 self.assertEqual(len(visibility_payload["rows"]), 2)
                 self.assertEqual(visibility_payload["rows"][0]["satellite"], "G01")
+
+                with request.urlopen(
+                    f"http://127.0.0.1:{bound_port}/artifact?path=output/visibility_static.png"
+                ) as response:
+                    artifact_payload = response.read()
+                self.assertGreater(len(artifact_payload), 0)
 
                 with request.urlopen(f"http://127.0.0.1:{bound_port}/api/solution?name=libgnsspp") as response:
                     lib_payload = json.loads(response.read().decode("utf-8"))
