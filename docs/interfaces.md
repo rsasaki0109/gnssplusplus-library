@@ -62,7 +62,7 @@ The ROS2 playback node publishes `.pos` files as:
 
 ## Local web UI
 
-`gnss web` is a local visualization layer for existing artifacts, including live, moving-base, and PPP-product sign-off summaries plus direct links to summary, plot, and provenance files.
+`gnss web` is a local visualization layer for existing artifacts, including live, moving-base, and PPP-product sign-off summaries, artifact bundles, and direct links to summary, plot, product, and provenance files.
 
 It shows:
 
