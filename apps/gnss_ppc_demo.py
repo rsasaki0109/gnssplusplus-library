@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
 
 from gnss_runtime import ensure_input_exists, resolve_gnss_command
@@ -108,6 +109,35 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--antex", type=Path, default=None, help="Optional ANTEX file for PPP.")
     parser.add_argument("--blq", type=Path, default=None, help="Optional BLQ loading coefficients for PPP.")
     parser.add_argument(
+        "--rtklib-bin",
+        type=Path,
+        default=None,
+        help="Optional RTKLIB rnx2rtkp binary for side-by-side comparison.",
+    )
+    parser.add_argument(
+        "--rtklib-config",
+        type=Path,
+        default=ROOT_DIR / "scripts/rtklib_odaiba.conf",
+        help="RTKLIB configuration file used when --rtklib-bin is set.",
+    )
+    parser.add_argument(
+        "--rtklib-pos",
+        type=Path,
+        default=None,
+        help="Optional RTKLIB .pos path. If omitted, one is generated next to the summary when --rtklib-bin is used.",
+    )
+    parser.add_argument(
+        "--use-existing-rtklib-solution",
+        action="store_true",
+        help="Do not rerun RTKLIB; only summarize an existing --rtklib-pos file.",
+    )
+    parser.add_argument(
+        "--rtklib-solver-wall-time-s",
+        type=float,
+        default=None,
+        help="Optional RTKLIB wall time in seconds. If omitted, actual runtime is recorded when RTKLIB is executed.",
+    )
+    parser.add_argument(
         "--enable-ar",
         action="store_true",
         help="Enable PPP ambiguity resolution.",
@@ -128,6 +158,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-solver-wall-time-max", type=float, default=None)
     parser.add_argument("--require-realtime-factor-min", type=float, default=None)
     parser.add_argument("--require-effective-epoch-rate-min", type=float, default=None)
+    parser.add_argument("--require-lib-fix-rate-vs-rtklib-min-delta", type=float, default=None)
+    parser.add_argument("--require-lib-median-h-vs-rtklib-max-delta", type=float, default=None)
+    parser.add_argument("--require-lib-p95-h-vs-rtklib-max-delta", type=float, default=None)
     return parser.parse_args()
 
 
@@ -149,6 +182,14 @@ def solution_span_seconds(epochs: list[comparison.SolutionEpoch]) -> float:
         return 0.0
     first = week_tow_to_seconds(epochs[0].week, epochs[0].tow)
     last = week_tow_to_seconds(epochs[-1].week, epochs[-1].tow)
+    return max(0.0, last - first)
+
+
+def reference_span_seconds(reference: list[comparison.ReferenceEpoch]) -> float:
+    if len(reference) < 2:
+        return 0.0
+    first = week_tow_to_seconds(reference[0].week, reference[0].tow)
+    last = week_tow_to_seconds(reference[-1].week, reference[-1].tow)
     return max(0.0, last - first)
 
 
@@ -290,7 +331,108 @@ def read_flexible_reference_csv(path: Path) -> list[comparison.ReferenceEpoch]:
                     ecef=ecef,
                 )
             )
-    return rows
+        return rows
+
+
+def gps_week_tow_to_datetime_strings(week: int, tow: float) -> tuple[str, str]:
+    stamp = GPS_EPOCH + timedelta(weeks=week, seconds=tow)
+    return stamp.strftime("%Y/%m/%d"), stamp.strftime("%H:%M:%S.%f")[:-3]
+
+
+def rtklib_config_text(config_path: Path, solver: str) -> str:
+    text = config_path.read_text(encoding="utf-8")
+    replacements = {
+        "pos1-navsys        =1": "pos1-navsys        =61",
+    }
+    if solver == "rtk":
+        replacements["pos1-posmode       =kinematic"] = "pos1-posmode       =kinematic"
+    else:
+        replacements["pos1-posmode       =kinematic"] = "pos1-posmode       =ppp-kine"
+        replacements["pos2-armode        =continuous"] = "pos2-armode        =off"
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+
+def run_rtklib_solver(
+    args: argparse.Namespace,
+    rover: Path,
+    base: Path | None,
+    nav: Path,
+    reference: list[comparison.ReferenceEpoch],
+    rtklib_pos: Path,
+) -> float:
+    if args.solver != "rtk":
+        raise SystemExit("RTKLIB comparison in ppc-demo is currently supported for --solver rtk only")
+    if base is None:
+        raise SystemExit("RTKLIB comparison requires a base observation file")
+    if not reference:
+        raise SystemExit("RTKLIB comparison requires at least one reference epoch")
+
+    rtklib_bin = Path(args.rtklib_bin)
+    command = [str(rtklib_bin)]
+    with tempfile.TemporaryDirectory(prefix="ppc_rtklib_conf_") as temp_dir:
+        temp_dir_path = Path(temp_dir)
+        config_path = temp_dir_path / "ppc_rtklib.conf"
+        config_path.write_text(rtklib_config_text(Path(args.rtklib_config), args.solver), encoding="utf-8")
+        command.extend(["-k", str(config_path), "-o", str(rtklib_pos)])
+        window_reference = reference
+        if args.max_epochs > 0:
+            window_reference = reference[:args.max_epochs]
+        start_day, start_time = gps_week_tow_to_datetime_strings(
+            window_reference[0].week, window_reference[0].tow
+        )
+        end_day, end_time = gps_week_tow_to_datetime_strings(
+            window_reference[-1].week, window_reference[-1].tow
+        )
+        command.extend(["-ts", start_day, start_time, "-te", end_day, end_time])
+        command.extend([str(rover), str(base), str(nav)])
+        start = time.perf_counter()
+        run_command(command)
+        return time.perf_counter() - start
+
+
+def summarize_solution_epochs(
+    reference: list[comparison.ReferenceEpoch],
+    solution_epochs: list[comparison.SolutionEpoch],
+    fixed_status: int,
+    label: str,
+    match_tolerance_s: float,
+    solver_wall_time_s: float | None,
+) -> dict[str, object]:
+    if not solution_epochs:
+        raise SystemExit(f"No solution epochs found for {label}")
+    matched = comparison.match_to_reference(solution_epochs, reference, match_tolerance_s)
+    if not matched:
+        raise SystemExit(f"No PPC epochs matched reference for {label}")
+
+    summary = comparison.summarize(matched, fixed_status, label)
+    matched_fixed_epochs = sum(1 for epoch in matched if epoch.status == fixed_status)
+    mean_satellites = sum(epoch.num_satellites for epoch in solution_epochs) / len(solution_epochs)
+    valid_span_s = solution_span_seconds(solution_epochs)
+
+    payload = {
+        "valid_epochs": len(solution_epochs),
+        "matched_epochs": len(matched),
+        "fixed_epochs": matched_fixed_epochs,
+        "fix_rate_pct": rounded(float(summary["fix_rate_pct"])),
+        "median_h_m": rounded(float(summary["median_h_m"])),
+        "p95_h_m": rounded(float(summary["p95_h_m"])),
+        "max_h_m": rounded(float(summary["max_h_m"])),
+        "median_abs_up_m": rounded(float(summary["median_abs_up_m"])),
+        "p95_abs_up_m": rounded(float(summary["p95_abs_up_m"])),
+        "mean_up_m": rounded(float(summary["mean_up_m"])),
+        "mean_satellites": rounded(mean_satellites),
+        "solution_span_s": rounded(valid_span_s),
+        "solver_wall_time_s": rounded(solver_wall_time_s) if solver_wall_time_s is not None else None,
+        "realtime_factor": None,
+        "effective_epoch_rate_hz": None,
+    }
+    if solver_wall_time_s is not None and solver_wall_time_s > 0.0:
+        payload["effective_epoch_rate_hz"] = rounded(len(solution_epochs) / solver_wall_time_s)
+        if valid_span_s > 0.0:
+            payload["realtime_factor"] = rounded(valid_span_s / solver_wall_time_s)
+    return payload
 
 
 def resolve_run_dir(args: argparse.Namespace) -> Path:
@@ -397,18 +539,14 @@ def build_summary_payload(
 ) -> dict[str, object]:
     reference = read_flexible_reference_csv(reference_csv)
     solution_epochs = comparison.read_libgnss_pos(out)
-    if not solution_epochs:
-        raise SystemExit(f"No solution epochs found in {out}")
-    matched = comparison.match_to_reference(solution_epochs, reference, args.match_tolerance_s)
-    if not matched:
-        raise SystemExit(f"No PPC epochs matched {reference_csv} for {out}")
-
-    summary = comparison.summarize(matched, solver_fixed_status(args.solver), args.solver)
-    matched_fixed_epochs = sum(
-        1 for epoch in matched if epoch.status == solver_fixed_status(args.solver)
+    lib_metrics = summarize_solution_epochs(
+        reference,
+        solution_epochs,
+        solver_fixed_status(args.solver),
+        args.solver,
+        args.match_tolerance_s,
+        solver_wall_time_s,
     )
-    mean_satellites = sum(epoch.num_satellites for epoch in solution_epochs) / len(solution_epochs)
-    valid_span_s = solution_span_seconds(solution_epochs)
 
     payload = {
         "dataset": f"PPC-Dataset {args._dataset_city} {args._dataset_run}",
@@ -421,28 +559,55 @@ def build_summary_payload(
         "solution_pos": str(out),
         "summary_json": str(summary_json),
         "generated_solution": not args.use_existing_solution,
-        "valid_epochs": len(solution_epochs),
+        "valid_epochs": lib_metrics["valid_epochs"],
         "reference_epochs": len(reference),
-        "matched_epochs": len(matched),
-        "fixed_epochs": matched_fixed_epochs,
-        "fix_rate_pct": rounded(float(summary["fix_rate_pct"])),
-        "median_h_m": rounded(float(summary["median_h_m"])),
-        "p95_h_m": rounded(float(summary["p95_h_m"])),
-        "max_h_m": rounded(float(summary["max_h_m"])),
-        "median_abs_up_m": rounded(float(summary["median_abs_up_m"])),
-        "p95_abs_up_m": rounded(float(summary["p95_abs_up_m"])),
-        "mean_up_m": rounded(float(summary["mean_up_m"])),
-        "mean_satellites": rounded(mean_satellites),
+        "matched_epochs": lib_metrics["matched_epochs"],
+        "fixed_epochs": lib_metrics["fixed_epochs"],
+        "fix_rate_pct": lib_metrics["fix_rate_pct"],
+        "median_h_m": lib_metrics["median_h_m"],
+        "p95_h_m": lib_metrics["p95_h_m"],
+        "max_h_m": lib_metrics["max_h_m"],
+        "median_abs_up_m": lib_metrics["median_abs_up_m"],
+        "p95_abs_up_m": lib_metrics["p95_abs_up_m"],
+        "mean_up_m": lib_metrics["mean_up_m"],
+        "mean_satellites": lib_metrics["mean_satellites"],
         "match_tolerance_s": rounded(args.match_tolerance_s),
-        "solution_span_s": rounded(valid_span_s),
-        "solver_wall_time_s": rounded(solver_wall_time_s) if solver_wall_time_s is not None else None,
-        "realtime_factor": None,
-        "effective_epoch_rate_hz": None,
+        "solution_span_s": lib_metrics["solution_span_s"],
+        "solver_wall_time_s": lib_metrics["solver_wall_time_s"],
+        "realtime_factor": lib_metrics["realtime_factor"],
+        "effective_epoch_rate_hz": lib_metrics["effective_epoch_rate_hz"],
     }
-    if solver_wall_time_s is not None and solver_wall_time_s > 0.0:
-        payload["effective_epoch_rate_hz"] = rounded(len(solution_epochs) / solver_wall_time_s)
-        if valid_span_s > 0.0:
-            payload["realtime_factor"] = rounded(valid_span_s / solver_wall_time_s)
+
+    rtklib_pos = getattr(args, "rtklib_pos", None)
+    if rtklib_pos is not None and Path(rtklib_pos).exists():
+        rtklib_metrics = summarize_solution_epochs(
+            reference,
+            comparison.read_rtklib_pos(Path(rtklib_pos)),
+            1,
+            "RTKLIB",
+            args.match_tolerance_s,
+            getattr(args, "rtklib_solver_wall_time_s", None),
+        )
+        payload["rtklib_pos"] = str(rtklib_pos)
+        payload["rtklib_generated_solution"] = not getattr(args, "use_existing_rtklib_solution", False)
+        payload["rtklib"] = rtklib_metrics
+        payload["delta_vs_rtklib"] = {
+            "fix_rate_pct": rounded(float(payload["fix_rate_pct"]) - float(rtklib_metrics["fix_rate_pct"])),
+            "median_h_m": rounded(float(payload["median_h_m"]) - float(rtklib_metrics["median_h_m"])),
+            "p95_h_m": rounded(float(payload["p95_h_m"]) - float(rtklib_metrics["p95_h_m"])),
+            "max_h_m": rounded(float(payload["max_h_m"]) - float(rtklib_metrics["max_h_m"])),
+            "solver_wall_time_s": (
+                rounded(float(payload["solver_wall_time_s"]) - float(rtklib_metrics["solver_wall_time_s"]))
+                if payload["solver_wall_time_s"] is not None and rtklib_metrics["solver_wall_time_s"] is not None
+                else None
+            ),
+            "realtime_factor": (
+                rounded(float(payload["realtime_factor"]) - float(rtklib_metrics["realtime_factor"]))
+                if payload["realtime_factor"] is not None and rtklib_metrics["realtime_factor"] is not None
+                else None
+            ),
+        }
+
     summary_json.parent.mkdir(parents=True, exist_ok=True)
     summary_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return payload
@@ -531,6 +696,37 @@ def enforce_summary_requirements(payload: dict[str, object], args: argparse.Name
                 f"effective epoch rate {float(effective_epoch_rate_hz):.6f} Hz < {args.require_effective_epoch_rate_min:.6f} Hz"
             )
 
+    if (
+        args.require_lib_fix_rate_vs_rtklib_min_delta is not None
+        or args.require_lib_median_h_vs_rtklib_max_delta is not None
+        or args.require_lib_p95_h_vs_rtklib_max_delta is not None
+    ):
+        if "delta_vs_rtklib" not in payload:
+            failures.append("RTKLIB comparison summary is unavailable")
+        else:
+            deltas = payload["delta_vs_rtklib"]
+            if args.require_lib_fix_rate_vs_rtklib_min_delta is not None:
+                if float(deltas["fix_rate_pct"]) < args.require_lib_fix_rate_vs_rtklib_min_delta:
+                    failures.append(
+                        "lib fix rate vs RTKLIB delta "
+                        f"{float(deltas['fix_rate_pct']):.6f}% < "
+                        f"{args.require_lib_fix_rate_vs_rtklib_min_delta:.6f}%"
+                    )
+            if args.require_lib_median_h_vs_rtklib_max_delta is not None:
+                if float(deltas["median_h_m"]) > args.require_lib_median_h_vs_rtklib_max_delta:
+                    failures.append(
+                        "lib median horizontal vs RTKLIB delta "
+                        f"{float(deltas['median_h_m']):.6f} m > "
+                        f"{args.require_lib_median_h_vs_rtklib_max_delta:.6f} m"
+                    )
+            if args.require_lib_p95_h_vs_rtklib_max_delta is not None:
+                if float(deltas["p95_h_m"]) > args.require_lib_p95_h_vs_rtklib_max_delta:
+                    failures.append(
+                        "lib p95 horizontal vs RTKLIB delta "
+                        f"{float(deltas['p95_h_m']):.6f} m > "
+                        f"{args.require_lib_p95_h_vs_rtklib_max_delta:.6f} m"
+                    )
+
     if failures:
         raise SystemExit(
             "PPC demo checks failed:\n" + "\n".join(f"  - {failure}" for failure in failures)
@@ -541,6 +737,10 @@ def main() -> int:
     args = parse_args()
     rover, base, nav, reference_csv, out, summary_json = resolve_paths(args)
     run_dir = resolve_run_dir(args)
+    rtklib_pos = args.rtklib_pos
+    if rtklib_pos is None and args.rtklib_bin is not None:
+        rtklib_pos = summary_json.with_name(summary_json.stem.replace("_summary", "_rtklib") + ".pos")
+        args.rtklib_pos = rtklib_pos
 
     ensure_input_exists(reference_csv, "PPC reference CSV", ROOT_DIR)
     if args.max_epochs == 0:
@@ -567,6 +767,25 @@ def main() -> int:
         if args.solver_wall_time_s is None:
             args.solver_wall_time_s = measured_wall_time_s
 
+    if args.rtklib_bin is not None or args.use_existing_rtklib_solution:
+        if args.solver != "rtk":
+            raise SystemExit("PPC RTKLIB comparison is currently supported only for --solver rtk")
+        if args.rtklib_bin is not None:
+            ensure_input_exists(args.rtklib_bin, "RTKLIB binary", ROOT_DIR)
+            ensure_input_exists(args.rtklib_config, "RTKLIB config", ROOT_DIR)
+        if args.use_existing_rtklib_solution:
+            if rtklib_pos is None:
+                raise SystemExit("--use-existing-rtklib-solution requires --rtklib-pos")
+            ensure_input_exists(rtklib_pos, "existing RTKLIB solution file", ROOT_DIR)
+        else:
+            reference = read_flexible_reference_csv(reference_csv)
+            if rtklib_pos is None:
+                raise SystemExit("missing RTKLIB output path")
+            rtklib_pos.parent.mkdir(parents=True, exist_ok=True)
+            measured_rtklib_wall_time_s = run_rtklib_solver(args, rover, base, nav, reference, rtklib_pos)
+            if args.rtklib_solver_wall_time_s is None:
+                args.rtklib_solver_wall_time_s = measured_rtklib_wall_time_s
+
     payload = build_summary_payload(
         args,
         run_dir,
@@ -592,6 +811,22 @@ def main() -> int:
             f", span={payload['solution_span_s']} s"
             f", rtf={payload['realtime_factor']}"
             f", rate={payload['effective_epoch_rate_hz']} Hz"
+        )
+    if "rtklib" in payload:
+        rtklib = payload["rtklib"]
+        print(f"  rtklib: {payload['rtklib_pos']}")
+        print(
+            "  rtklib performance:"
+            f" wall={rtklib['solver_wall_time_s']} s"
+            f", span={rtklib['solution_span_s']} s"
+            f", rtf={rtklib['realtime_factor']}"
+            f", rate={rtklib['effective_epoch_rate_hz']} Hz"
+        )
+        print(
+            "  vs rtklib:"
+            f" fix={payload['delta_vs_rtklib']['fix_rate_pct']} %"
+            f", p95_h={payload['delta_vs_rtklib']['p95_h_m']} m"
+            f", wall={payload['delta_vs_rtklib']['solver_wall_time_s']} s"
         )
     return 0
 
