@@ -42,4 +42,8 @@ Current reference repos:
 - `tomojitakasu/RTKLIB`
 - `rtklibexplorer/RTKLIB`
 - `JAXA-SNU/MALIB`
+- `QZSS-Strategy-Office/madocalib`
+- `QZSS-Strategy-Office/claslib`
 - `commaai/laika`
+- `tomojitakasu/PocketSDR`
+- `globsky/SignalSim`

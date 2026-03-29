@@ -24,4 +24,15 @@ nav:
   - Benchmarks: benchmarks.md
   - Validation: validation.md
   - Interfaces: interfaces.md
+  - References:
+      - Overview: references/index.md
+      - MADOCALIB Gap: references/madocalib-gap.md
+      - CLASLIB Gap: references/claslib-gap.md
+      - demo5 Gap: references/demo5-gap.md
+      - MALIB Ops Gap: references/malib-ops-gap.md
+      - laika Gap: references/laika-gap.md
+      - PocketSDR Notes: references/pocketsdr-notes.md
+      - SignalSim Notes: references/signalsim-notes.md
+      - GSILIB Notes: references/gsilib-notes.md
+      - Roadmap: references/roadmap.md
   - Contributing: contributing.md

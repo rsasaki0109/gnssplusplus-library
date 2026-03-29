@@ -59,7 +59,11 @@ Current reference repos used for code/design comparison:
 - `tomojitakasu/RTKLIB`
 - `rtklibexplorer/RTKLIB`
 - `JAXA-SNU/MALIB`
+- `QZSS-Strategy-Office/madocalib`
+- `QZSS-Strategy-Office/claslib`
 - `commaai/laika`
+- `tomojitakasu/PocketSDR`
+- `globsky/SignalSim`
 
 ## Sign-off Rule
 

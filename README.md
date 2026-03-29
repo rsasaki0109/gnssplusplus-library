@@ -14,8 +14,10 @@ Documentation index: [docs/index.md](docs/index.md)
 
 ## Docs
 
+- Public site: <https://rsasaki0109.github.io/gnssplusplus-library/>
 - [Documentation index](docs/index.md)
 - [Architecture notes](docs/architecture.md)
+- [Reference analyses](docs/references/index.md)
 - [Contribution workflow](CONTRIBUTING.md)
 
 Local docs site:
