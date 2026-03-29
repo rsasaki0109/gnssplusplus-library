@@ -174,6 +174,17 @@ class WebUISmokeTest(unittest.TestCase):
                     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+ymsAAAAASUVORK5CYII="
                 )
             )
+            (temp_root / "output" / "scorpion_moving_base_matches.csv").write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,baseline_error_m,baseline_length_m,heading_error_deg,status,satellites",
+                        "2250,100.000,0.042000,1.500000,4.500000,4,12",
+                        "2250,100.200,0.101000,1.510000,5.850000,4,11",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             ppp_products_summary.write_text(
                 json.dumps(
                     {
@@ -310,7 +321,7 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("completed", page.locator("#live-table tbody").text_content())
                     self.assertIn("3.50x", page.locator("#live-table tbody").text_content())
                     self.assertIn("realtime", page.locator("#live-table tbody").text_content())
-                    self.assertEqual(page.locator("canvas").count(), 3)
+                    self.assertEqual(page.locator("canvas").count(), 4)
                     self.assertIn("FIXED", page.locator("#status-legend").text_content())
                     self.assertIn("ppc_tokyo_run1_rtk_summary.json", page.locator("#ppc-table tbody").text_content())
                     self.assertIn("96.67%", page.locator("#ppc-table tbody").text_content())
@@ -330,6 +341,7 @@ class WebUISmokeTest(unittest.TestCase):
                         "output%2Fscorpion_moving_base.png",
                         page.locator("#moving-base-image").get_attribute("src"),
                     )
+                    self.assertIn("Moving-base history", page.locator("body").text_content())
                     self.assertIn("ppp_static_products_summary.json", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("PPC-Dataset tokyo run1", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("2024-01-02", page.locator("#ppp-products-table tbody").text_content())

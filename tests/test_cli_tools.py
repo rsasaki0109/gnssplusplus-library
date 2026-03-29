@@ -8654,6 +8654,17 @@ class CLIToolsTest(unittest.TestCase):
                     b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+ymsAAAAASUVORK5CYII="
                 )
             )
+            (temp_root / "output" / "scorpion_moving_base_matches.csv").write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,baseline_error_m,baseline_length_m,heading_error_deg,status,satellites",
+                        "2250,100.000,0.042000,1.500000,4.500000,4,12",
+                        "2250,100.200,0.101000,1.510000,5.850000,4,11",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             (temp_root / "output" / "ppp_static_products_summary.json").write_text(
                 json.dumps(
                     {
@@ -8817,6 +8828,15 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertTrue(visibility_payload["available"])
                 self.assertEqual(len(visibility_payload["rows"]), 2)
                 self.assertEqual(visibility_payload["rows"][0]["satellite"], "G01")
+
+                with request.urlopen(
+                    f"http://127.0.0.1:{bound_port}/api/moving-base-matches?path=output/scorpion_moving_base_matches.csv"
+                ) as response:
+                    moving_base_payload = json.loads(response.read().decode("utf-8"))
+                self.assertTrue(moving_base_payload["available"])
+                self.assertEqual(moving_base_payload["path"], "output/scorpion_moving_base_matches.csv")
+                self.assertGreaterEqual(len(moving_base_payload["rows"]), 1)
+                self.assertIn("baseline_error_m", moving_base_payload["rows"][0])
 
                 with request.urlopen(
                     f"http://127.0.0.1:{bound_port}/artifact?path=output/visibility_static.png"

@@ -185,6 +185,7 @@ jobs:
           output/scorpion_moving_base/prepare_summary.json
           output/scorpion_moving_base/products_summary.json
           output/scorpion_moving_base/scorpion_moving_base.pos
+          output/scorpion_moving_base/scorpion_moving_base_matches.csv
           output/scorpion_moving_base/scorpion_moving_base.png
           output/scorpion_moving_base/reference.csv
         if-no-files-found: ignore
@@ -198,6 +199,8 @@ jobs:
           output/ppp_kinematic_products_summary.json
           output/ppp_kinematic_products_solution.pos
           output/malib_ppp_kinematic_solution.pos
+          output/ppp_static_products_summary.json
+          output/ppp_static_products_solution.pos
         if-no-files-found: ignore
 
     - name: Upload dashboard artifacts

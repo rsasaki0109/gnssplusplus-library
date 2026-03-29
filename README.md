@@ -185,7 +185,7 @@ python3 apps/gnss.py sbf-info \
 | `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB side-by-side gates |
 | `gnss moving-base-signoff` | Real moving-base replay/live sign-off against per-epoch base/rover reference coordinates |
 | `gnss odaiba-benchmark` | End-to-end Odaiba benchmark pipeline |
-| `gnss web` | Local browser UI for summary JSON, live/moving-base/PPP-product sign-offs, `.pos` trajectories, moving-base/visibility plots, receiver status, and artifact/provenance links |
+| `gnss web` | Local browser UI for summary JSON, live/moving-base/PPP-product sign-offs, `.pos` trajectories, moving-base/visibility plots and histories, receiver status, and artifact/provenance links |
 
 See all commands:
 
@@ -201,7 +201,7 @@ python3 apps/gnss.py web \
   --rcv-status output/receiver.status.json
 ```
 
-Then open `http://127.0.0.1:8085` to inspect Odaiba metrics, live/moving-base/PPP-product sign-offs, 2D trajectories, moving-base and visibility plots, PPC summaries, receiver status, and linked artifact bundles in a browser.
+Then open `http://127.0.0.1:8085` to inspect Odaiba metrics, live/moving-base/PPP-product sign-offs, 2D trajectories, moving-base and visibility plots, moving-base history, PPC summaries, receiver status, and linked artifact bundles in a browser.
 
 Container form:
 

@@ -191,6 +191,26 @@ def load_visibility_rows(csv_path: Path) -> list[dict[str, Any]]:
         return downsample_points(rows)
 
 
+def load_moving_base_matches(csv_path: Path) -> list[dict[str, Any]]:
+    with csv_path.open("r", encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream)
+        rows: list[dict[str, Any]] = []
+        for row in reader:
+            heading_text = row.get("heading_error_deg", "")
+            rows.append(
+                {
+                    "gps_week": int(row["gps_week"]),
+                    "gps_tow_s": float(row["gps_tow_s"]),
+                    "baseline_error_m": float(row["baseline_error_m"]),
+                    "baseline_length_m": float(row["baseline_length_m"]),
+                    "heading_error_deg": float(heading_text) if heading_text else None,
+                    "status": int(row["status"]),
+                    "satellites": int(row["satellites"]),
+                }
+            )
+        return downsample_points(rows)
+
+
 def classify_realtime_status(realtime_factor: Any) -> str:
     if not isinstance(realtime_factor, (int, float)):
         return "n/a"
@@ -776,6 +796,10 @@ def render_html() -> str:
           <h3>Moving-base view</h3>
           <img id="moving-base-image" alt="Moving-base artifact" style="display:none; width:100%; border:1px solid var(--line); border-radius:10px;" />
         </div>
+        <div class="plot-card">
+          <h3>Moving-base history</h3>
+          <canvas id="moving-base-history-canvas" width="600" height="360"></canvas>
+        </div>
       </div>
     </section>
 
@@ -993,6 +1017,94 @@ def render_html() -> str:
       ctx.fillText(payload.path || "", 14, canvas.height - 10);
     }
 
+    function drawMovingBaseHistory(canvas, payload) {
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (!payload.available || !payload.rows.length) {
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "16px IBM Plex Sans, sans-serif";
+        ctx.fillText(payload.error || "No moving-base matches", 24, 40);
+        return;
+      }
+
+      const padLeft = 52;
+      const padRight = 18;
+      const padTop = 20;
+      const padBottom = 30;
+      const plotWidth = canvas.width - padLeft - padRight;
+      const plotHeight = canvas.height - padTop - padBottom;
+
+      const baselineValues = payload.rows.map((row) => row.baseline_error_m);
+      const headingValues = payload.rows
+        .map((row) => row.heading_error_deg)
+        .filter((value) => value !== null && value !== undefined);
+      const maxBaseline = Math.max(...baselineValues, 0.1);
+      const maxHeading = headingValues.length ? Math.max(...headingValues, 1.0) : 1.0;
+      const maxValue = Math.max(maxBaseline, maxHeading);
+
+      const mapX = (index) =>
+        padLeft + (plotWidth * index) / Math.max(payload.rows.length - 1, 1);
+      const mapY = (value) =>
+        padTop + plotHeight - (plotHeight * value) / Math.max(maxValue, 1e-6);
+
+      ctx.strokeStyle = "#d1d5db";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i += 1) {
+        const y = padTop + (plotHeight * i) / 4;
+        ctx.beginPath();
+        ctx.moveTo(padLeft, y);
+        ctx.lineTo(canvas.width - padRight, y);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = "#0f766e";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      payload.rows.forEach((row, index) => {
+        const x = mapX(index);
+        const y = mapY(row.baseline_error_m);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      if (headingValues.length) {
+        ctx.strokeStyle = "#b45309";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        let started = false;
+        payload.rows.forEach((row, index) => {
+          if (row.heading_error_deg === null || row.heading_error_deg === undefined) {
+            return;
+          }
+          const x = mapX(index);
+          const y = mapY(row.heading_error_deg);
+          if (!started) {
+            ctx.moveTo(x, y);
+            started = true;
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        if (started) ctx.stroke();
+      }
+
+      ctx.fillStyle = "#6b7280";
+      ctx.font = "12px IBM Plex Sans, sans-serif";
+      ctx.fillText("baseline m", 12, 18);
+      ctx.fillText("heading deg", 98, 18);
+      ctx.fillStyle = "#0f766e";
+      ctx.fillRect(74, 9, 14, 3);
+      ctx.fillStyle = "#b45309";
+      ctx.fillRect(166, 9, 14, 3);
+      ctx.fillStyle = "#6b7280";
+      ctx.fillText(`rows: ${payload.rows.length}`, 14, canvas.height - 10);
+      ctx.fillText(payload.path || "", 94, canvas.height - 10);
+    }
+
     function formatMaybeNumber(value, digits = 2, suffix = "") {
       if (value === null || value === undefined) return "n/a";
       if (typeof value === "number") return `${value.toFixed(digits)}${suffix}`;
@@ -1199,6 +1311,20 @@ def render_html() -> str:
         movingBaseImage.removeAttribute("src");
         movingBaseImage.style.display = "none";
       }
+      if (firstMovingBase && firstMovingBase.matched_csv) {
+        const movingBasePayload = await fetchJson(
+          `/api/moving-base-matches?path=${encodeURIComponent(firstMovingBase.matched_csv)}`
+        );
+        drawMovingBaseHistory(
+          document.getElementById("moving-base-history-canvas"),
+          movingBasePayload
+        );
+      } else {
+        drawMovingBaseHistory(
+          document.getElementById("moving-base-history-canvas"),
+          {available: false, rows: [], error: "No moving-base matches CSV"}
+        );
+      }
 
       const pppProductsBody = document.querySelector("#ppp-products-table tbody");
       pppProductsBody.innerHTML = "";
@@ -1401,6 +1527,33 @@ def make_handler(args: argparse.Namespace):
                             "available": True,
                             "path": relative_display(csv_path, root_dir),
                             "rows": load_visibility_rows(csv_path),
+                        }
+                    )
+                    return
+                if parsed.path == "/api/moving-base-matches":
+                    csv_arg = query.get("path", [""])[0]
+                    if not csv_arg:
+                        self._write_json({"error": "missing moving-base CSV path"}, HTTPStatus.BAD_REQUEST)
+                        return
+                    try:
+                        csv_path = resolve_under_root(root_dir, csv_arg)
+                    except ValueError:
+                        self._write_json(
+                            {"error": "moving-base CSV path escapes artifact root"},
+                            HTTPStatus.BAD_REQUEST,
+                        )
+                        return
+                    if not csv_path.exists():
+                        self._write_json(
+                            {"error": f"moving-base CSV not found: {csv_arg}"},
+                            HTTPStatus.NOT_FOUND,
+                        )
+                        return
+                    self._write_json(
+                        {
+                            "available": True,
+                            "path": relative_display(csv_path, root_dir),
+                            "rows": load_moving_base_matches(csv_path),
                         }
                     )
                     return

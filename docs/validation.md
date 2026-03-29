@@ -91,7 +91,7 @@ python3 apps/gnss.py ppp-products-signoff \
 
 Use `gnss moving-base-prepare` first when the source dataset is a ROS2 bag or Zenodo zip carrying u-blox `NAV-PVT`, `RXM-RAWX`, and `NAV-RELPOSNED` topics. For replay mode, pair the exported `rover.ubx` / `base.ubx` files with a fetched BRDC navigation file from `gnss fetch-products --preset brdc-nav`.
 
-For the public SCORPION dataset, `gnss scorpion-moving-base-signoff` wraps the same flow into one command and emits the same summary JSON fields, plus the prepare/fetch provenance and matched CSV artifact it used.
+For the public SCORPION dataset, `gnss scorpion-moving-base-signoff` wraps the same flow into one command and emits the same summary JSON fields, plus the prepare/fetch provenance, matched CSV artifact, and plot preview that `gnss web` can render directly.
 
 ## Test layers
 
