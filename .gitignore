@@ -28,6 +28,10 @@ test_rinex_read.cpp
 *.html
 *.kml
 *.pos
+site/
+
+# Explicit tracked text files
+!requirements-docs.txt
 
 # Python cache
 __pycache__/

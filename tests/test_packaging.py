@@ -59,6 +59,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "lib" / "pkgconfig" / "libgnsspp.pc",
                 prefix / "tools" / "rtk_stats.py",
                 prefix / "scripts" / "generate_driving_comparison.py",
+                prefix / "scripts" / "generate_architecture_diagram.py",
                 prefix / "scripts" / "generate_feature_overview_card.py",
                 prefix / "scripts" / "generate_odaiba_social_card.py",
                 prefix / "configs" / "live.example.conf",
@@ -182,6 +183,20 @@ class PackagingSmokeTest(unittest.TestCase):
                 env=env,
             )
             self.assertTrue(feature_overview_png.exists(), "installed feature overview generator did not write PNG")
+
+            architecture_png = prefix / "tmp_architecture.png"
+            subprocess.run(
+                [
+                    "python3",
+                    str(prefix / "scripts" / "generate_architecture_diagram.py"),
+                    "--output",
+                    str(architecture_png),
+                ],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+            )
+            self.assertTrue(architecture_png.exists(), "installed architecture generator did not write PNG")
 
             web_help = subprocess.run(
                 [str(prefix / "bin" / "gnss"), "web", "--help"],

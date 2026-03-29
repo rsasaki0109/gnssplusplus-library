@@ -33,6 +33,7 @@ STATUS_COLORS = {
 }
 
 MAX_RENDER_POINTS = 2000
+DOCS_SITE_URL = "https://rsasaki0109.github.io/gnssplusplus-library/"
 
 
 def default_root_dir() -> Path:
@@ -94,6 +95,11 @@ def parse_args() -> argparse.Namespace:
         "--live-summary-glob",
         default="output/live*_summary.json",
         help="Glob under --root for gnss live-signoff summary JSON files.",
+    )
+    parser.add_argument(
+        "--docs-url",
+        default=os.environ.get("GNSSPP_DOCS_URL", DOCS_SITE_URL),
+        help="Optional docs site URL shown in the web UI header.",
     )
     return parser.parse_args()
 
@@ -258,6 +264,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "title": "libgnss++ web",
         "root": str(root_dir),
+        "docs_url": args.docs_url,
         "artifacts": {
             "odaiba_summary": relative_display(odaiba_summary_path, root_dir),
             "lib_pos": relative_display(lib_pos_path, root_dir),
@@ -300,7 +307,22 @@ def render_html() -> str:
     h1, h2, h3 { margin: 0; }
     p { margin: 0; color: var(--muted); }
     .hero { display: grid; gap: 10px; margin-bottom: 24px; }
+    .hero-top { display: flex; justify-content: space-between; gap: 16px; align-items: start; flex-wrap: wrap; }
     .hero h1 { font-size: 2rem; letter-spacing: -0.03em; }
+    .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .hero-link {
+      display: inline-flex;
+      align-items: center;
+      padding: 9px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.82);
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .hero-link:hover { border-color: var(--accent); color: var(--accent); }
     .chips { display: flex; flex-wrap: wrap; gap: 10px; }
     .chip {
       border: 1px solid var(--line);
@@ -405,8 +427,15 @@ def render_html() -> str:
 <body>
   <main>
     <section class="hero">
-      <h1>libgnss++ local web UI</h1>
-      <p>Benchmark snapshot, live sign-offs, 2D trajectories, PPC summaries, and receiver status from the existing non-GUI stack.</p>
+      <div class="hero-top">
+        <div>
+          <h1>libgnss++ local web UI</h1>
+          <p>Benchmark snapshot, live sign-offs, 2D trajectories, PPC summaries, and receiver status from the existing non-GUI stack.</p>
+        </div>
+        <div class="hero-actions">
+          <a class="hero-link" id="docs-link" href="https://rsasaki0109.github.io/gnssplusplus-library/" target="_blank" rel="noreferrer">Open docs site</a>
+        </div>
+      </div>
       <div class="chips" id="artifact-chips"></div>
     </section>
 
@@ -612,6 +641,8 @@ def render_html() -> str:
     async function init() {
       renderLegend();
       const overview = await fetchJson("/api/overview");
+      const docsLink = document.getElementById("docs-link");
+      if (overview.docs_url) docsLink.href = overview.docs_url;
       const chips = document.getElementById("artifact-chips");
       for (const [key, value] of Object.entries(overview.artifacts)) {
         if (!value) continue;
