@@ -61,6 +61,8 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_runtime.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_live_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_moving_base_signoff.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_scorpion_moving_base_signoff.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_moving_base_prepare.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_fetch_products.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ionex_info.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_dcb_info.py

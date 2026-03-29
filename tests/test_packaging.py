@@ -20,6 +20,38 @@ def repo_data_exists(*relative_paths: str) -> bool:
 
 
 class PackagingSmokeTest(unittest.TestCase):
+    def test_docker_files_exist_and_look_like_runtime_packaging(self) -> None:
+        dockerfile = ROOT_DIR / "Dockerfile"
+        dockerignore = ROOT_DIR / ".dockerignore"
+        compose_file = ROOT_DIR / "compose.yaml"
+        docker_workflow = ROOT_DIR / ".github" / "workflows" / "docker.yml"
+
+        self.assertTrue(dockerfile.exists(), "missing Dockerfile")
+        self.assertTrue(dockerignore.exists(), "missing .dockerignore")
+        self.assertTrue(compose_file.exists(), "missing compose.yaml")
+        self.assertTrue(docker_workflow.exists(), "missing docker workflow")
+
+        dockerfile_text = dockerfile.read_text(encoding="utf-8")
+        self.assertIn("FROM ubuntu:24.04 AS builder", dockerfile_text)
+        self.assertIn("-DBUILD_TESTING=OFF", dockerfile_text)
+        self.assertIn("cmake --install build --prefix /opt/libgnsspp", dockerfile_text)
+        self.assertIn("ENTRYPOINT [\"gnss\"]", dockerfile_text)
+        self.assertIn("PYTHONPATH=/opt/libgnsspp/lib/python3/site-packages", dockerfile_text)
+
+        dockerignore_text = dockerignore.read_text(encoding="utf-8")
+        self.assertIn("build", dockerignore_text)
+        self.assertIn("output", dockerignore_text)
+        self.assertIn("data", dockerignore_text)
+
+        compose_text = compose_file.read_text(encoding="utf-8")
+        self.assertIn("gnss-web", compose_text)
+        self.assertIn("ghcr.io/rsasaki0109/gnssplusplus-library:develop", compose_text)
+        self.assertIn("8085:8085", compose_text)
+
+        docker_workflow_text = docker_workflow.read_text(encoding="utf-8")
+        self.assertIn("ghcr.io/rsasaki0109/gnssplusplus-library", docker_workflow_text)
+        self.assertIn("docker/build-push-action", docker_workflow_text)
+
     def test_cmake_install_exports_expected_layout(self) -> None:
         self.assertTrue(BUILD_DIR.exists(), "build directory must exist before packaging test")
 
@@ -46,6 +78,8 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_web.py",
                 prefix / "bin" / "gnss_live_signoff.py",
                 prefix / "bin" / "gnss_moving_base_signoff.py",
+                prefix / "bin" / "gnss_scorpion_moving_base_signoff.py",
+                prefix / "bin" / "gnss_moving_base_prepare.py",
                 prefix / "bin" / "gnss_rtk_kinematic_signoff.py",
                 prefix / "bin" / "gnss_ppp_static_signoff.py",
                 prefix / "bin" / "gnss_ppp_kinematic_signoff.py",
@@ -271,6 +305,16 @@ class PackagingSmokeTest(unittest.TestCase):
                 text=True,
             )
             self.assertIn("moving-base", moving_base_signoff_help.stdout.lower())
+
+            scorpion_moving_base_help = subprocess.run(
+                [str(prefix / "bin" / "gnss"), "scorpion-moving-base-signoff", "--help"],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("scorpion", scorpion_moving_base_help.stdout.lower())
 
             fetch_products_help = subprocess.run(
                 [str(prefix / "bin" / "gnss"), "fetch-products", "--help"],

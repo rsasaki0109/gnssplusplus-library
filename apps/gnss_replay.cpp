@@ -39,6 +39,7 @@ struct ReplayConfig {
     std::string rover_rinex_path;
     std::string rover_ubx_path;
     std::string base_rinex_path;
+    std::string base_ubx_path;
     std::string base_rtcm_path;
     std::string nav_rinex_path;
     std::string output_pos_path = "output/replay_solution.pos";
@@ -154,6 +155,7 @@ void printUsage(const char* argv0) {
         << "    --rover-ubx <file>        Rover UBX file with NAV-PVT / RXM-RAWX\n"
         << "  Base input (choose one)\n"
         << "    --base-rinex <file>       Base observation RINEX\n"
+        << "    --base-ubx <file>         Base UBX file with NAV-PVT / RXM-RAWX\n"
         << "    --base-rtcm <path|url>    Base RTCM file or ntrip:// source\n"
         << "  Navigation\n"
         << "    --nav-rinex <file>        Broadcast navigation RINEX (optional if RTCM carries nav)\n"
@@ -231,6 +233,8 @@ ReplayConfig parseArguments(int argc, char** argv) {
             config.rover_ubx_path = argv[++i];
         } else if (arg == "--base-rinex" && i + 1 < argc) {
             config.base_rinex_path = argv[++i];
+        } else if (arg == "--base-ubx" && i + 1 < argc) {
+            config.base_ubx_path = argv[++i];
         } else if (arg == "--base-rtcm" && i + 1 < argc) {
             config.base_rtcm_path = argv[++i];
         } else if (arg == "--nav-rinex" && i + 1 < argc) {
@@ -277,12 +281,13 @@ ReplayConfig parseArguments(int argc, char** argv) {
     const bool has_rover_rinex = !config.rover_rinex_path.empty();
     const bool has_rover_ubx = !config.rover_ubx_path.empty();
     const bool has_base_rinex = !config.base_rinex_path.empty();
+    const bool has_base_ubx = !config.base_ubx_path.empty();
     const bool has_base_rtcm = !config.base_rtcm_path.empty();
     if (has_rover_rinex == has_rover_ubx) {
         argumentError("choose exactly one of --rover-rinex or --rover-ubx", argv[0]);
     }
-    if (has_base_rinex == has_base_rtcm) {
-        argumentError("choose exactly one of --base-rinex or --base-rtcm", argv[0]);
+    if (static_cast<int>(has_base_rinex) + static_cast<int>(has_base_ubx) + static_cast<int>(has_base_rtcm) != 1) {
+        argumentError("choose exactly one of --base-rinex, --base-ubx, or --base-rtcm", argv[0]);
     }
     if (!has_base_rtcm && config.nav_rinex_path.empty()) {
         argumentError("--nav-rinex is required when base input is not RTCM", argv[0]);
@@ -383,6 +388,43 @@ bool loadBaseRinex(const std::string& obs_path,
     return !base_epochs.empty();
 }
 
+bool loadNavigationRinex(const std::string& path, libgnss::NavigationData& nav_data);
+
+bool loadBaseUbx(const std::string& ubx_path,
+                 const std::string& nav_path,
+                 std::vector<libgnss::ObservationData>& base_epochs,
+                 libgnss::NavigationData& nav_data,
+                 Eigen::Vector3d& base_position,
+                 bool& have_base_position) {
+    if (!loadNavigationRinex(nav_path, nav_data)) {
+        return false;
+    }
+
+    std::ifstream input(ubx_path, std::ios::binary);
+    if (!input.is_open()) {
+        return false;
+    }
+    const std::vector<uint8_t> buffer((std::istreambuf_iterator<char>(input)),
+                                      std::istreambuf_iterator<char>());
+    input.close();
+
+    libgnss::io::UBXDecoder decoder;
+    const auto messages = decoder.decode(buffer.data(), buffer.size());
+    for (const auto& message : messages) {
+        libgnss::io::UBXNavPVT nav_pvt;
+        (void)decoder.decodeNavPVT(message, nav_pvt);
+        libgnss::ObservationData obs_data;
+        if (decoder.decodeRawx(message, obs_data)) {
+            if (!have_base_position && obs_data.receiver_position.norm() > 1e6) {
+                base_position = obs_data.receiver_position;
+                have_base_position = true;
+            }
+            base_epochs.push_back(obs_data);
+        }
+    }
+    return !base_epochs.empty();
+}
+
 bool loadBaseRtcm(const std::string& source,
                   size_t message_limit,
                   std::vector<libgnss::ObservationData>& base_epochs,
@@ -462,6 +504,15 @@ size_t runReplay(const ReplayConfig& config) {
                            base_position,
                            have_base_position)) {
             throw std::runtime_error("failed to load base RINEX observations/navigation");
+        }
+    } else if (!config.base_ubx_path.empty()) {
+        if (!loadBaseUbx(config.base_ubx_path,
+                         config.nav_rinex_path,
+                         base_epochs,
+                         nav_data,
+                         base_position,
+                         have_base_position)) {
+            throw std::runtime_error("failed to load base UBX observations/navigation");
         }
     } else {
         if (!loadBaseRtcm(config.base_rtcm_path,

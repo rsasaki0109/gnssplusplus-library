@@ -27,6 +27,56 @@ python3 -m pip install -r requirements-docs.txt
 python3 -m mkdocs serve
 ```
 
+## Docker
+
+Build the runtime image:
+
+```bash
+docker build -t libgnsspp:latest .
+```
+
+Pull the published image:
+
+```bash
+docker pull ghcr.io/rsasaki0109/gnssplusplus-library:develop
+```
+
+Run the CLI against a mounted workspace or dataset directory:
+
+```bash
+docker run --rm -it \
+  -v "$PWD:/workspace" \
+  libgnsspp:latest \
+  solve --rover /workspace/data/rover_kinematic.obs \
+  --base /workspace/data/base_kinematic.obs \
+  --nav /workspace/data/navigation_kinematic.nav \
+  --out /workspace/output/docker_rtk.pos
+```
+
+Serve the local web UI from inside the container:
+
+```bash
+docker run --rm -it \
+  -p 8085:8085 \
+  -v "$PWD:/workspace" \
+  libgnsspp:latest \
+  web --host 0.0.0.0 --port 8085 --root /workspace
+```
+
+The image installs the `gnss` dispatcher, Python helpers, and `libgnsspp` Python package, but it does not embed the repo sample datasets. Mount your source tree or your own dataset directory.
+
+Run the web UI with Compose:
+
+```bash
+docker compose up gnss-web
+```
+
+Override the image if you want a local or tagged build:
+
+```bash
+LIBGNSSPP_IMAGE=ghcr.io/rsasaki0109/gnssplusplus-library:v0.1.0 docker compose up gnss-web
+```
+
 ## What You Get
 
 - Native solvers: `SPP`, `RTK`, `PPP`, `CLAS-style PPP`
@@ -34,6 +84,7 @@ python3 -m mkdocs serve
 - Raw/log tooling: `NMEA`, `NovAtel`, `SBP`, `SBF`, `Trimble`, `SkyTraq`, `BINEX`
 - Product tooling: `fetch-products`, `ionex-info`, `dcb-info`
 - Analysis tooling: `visibility` and `visibility-plot` for az/el/SNR exports and PNG quick-looks
+- Moving-base tooling: `moving-base-prepare` plus `moving-base-signoff` for real bag/replay/live validation
 - One CLI entrypoint: `gnss spp`, `solve`, `ppp`, `visibility`, `stream`, `convert`, `live`, `rcv`
 - Local web UI: `gnss web` for benchmark snapshots, live sign-offs, 2D trajectories, visibility views, and receiver status
 - Built-in sign-off scripts and checked-in benchmark artifacts
@@ -111,6 +162,8 @@ python3 apps/gnss.py sbf-info \
 | `gnss visibility` | Export azimuth/elevation/SNR visibility rows and summary JSON from rover/nav RINEX |
 | `gnss visibility-plot` | Render a visibility CSV into a polar/elevation PNG quick-look |
 | `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` files from local or remote sources |
+| `gnss moving-base-prepare` | Extract rover/base UBX plus reference CSV from a ROS2 moving-base bag |
+| `gnss scorpion-moving-base-signoff` | Prepare and validate the public SCORPION moving-base ROS2 bag through replay |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
 | `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
 | `gnss ubx-info` | Inspect `NAV-PVT`, `RAWX`, `SFRBX` from file or serial |
@@ -148,20 +201,47 @@ python3 apps/gnss.py web \
 
 Then open `http://127.0.0.1:8085` to inspect Odaiba metrics, live sign-offs, 2D trajectories, PPC summaries, visibility summaries/polar view, and receiver status in a browser.
 
+Container form:
+
+```bash
+docker run --rm -it -p 8085:8085 -v "$PWD:/workspace" \
+  libgnsspp:latest web --host 0.0.0.0 --port 8085 --root /workspace
+```
+
 ### Real moving-base sign-off
 
 `gnss solve`, `gnss replay`, and `gnss live` accept `--mode moving-base`. For real moving-base datasets, use `gnss moving-base-signoff` with a reference CSV carrying per-epoch base/rover ECEF coordinates. The repo does not ship a bundled moving-base dataset, so this command is intended for external real logs.
 
 ```bash
+python3 apps/gnss.py moving-base-prepare \
+  --input /datasets/moving_base/2023-06-14T174658Z.zip \
+  --rover-ubx-out output/moving_base_rover.ubx \
+  --base-ubx-out output/moving_base_base.ubx \
+  --reference-csv output/moving_base_reference.csv \
+  --summary-json output/moving_base_prepare.json
+
+python3 apps/gnss.py fetch-products \
+  --date 2023-06-14 \
+  --preset brdc-nav \
+  --summary-json output/moving_base_products.json
+
 python3 apps/gnss.py moving-base-signoff \
-  --solver live \
-  --rover-rtcm /datasets/moving_base/rover.rtcm3 \
-  --base-rtcm /datasets/moving_base/base.rtcm3 \
-  --reference-csv /datasets/moving_base/reference.csv \
+  --solver replay \
+  --rover-ubx output/moving_base_rover.ubx \
+  --base-ubx output/moving_base_base.ubx \
+  --nav-rinex ~/.cache/libgnsspp/products/nav/2023/165/BRDC00IGS_R_20231650000_01D_MN.rnx \
+  --reference-csv output/moving_base_reference.csv \
   --summary-json output/moving_base_summary.json \
   --require-fix-rate-min 90 \
   --require-p95-baseline-error-max 1.0 \
-  --require-realtime-factor-min 1.0
+  --require-realtime-factor-min 1.0 \
+  --max-epochs 120
+
+python3 apps/gnss.py scorpion-moving-base-signoff \
+  --input-url https://zenodo.org/api/records/8083431/files/2023-06-14T174658Z.zip/content \
+  --summary-json output/scorpion_moving_base_summary.json \
+  --require-matched-epochs-min 100 \
+  --require-fix-rate-min 80
 ```
 
 ### Product-driven PPP

@@ -44,6 +44,13 @@ PRESET_DEFINITIONS = {
             "CAS0MGXRAP_{yyyy}{doy}0000_01D_01D_DCB.BSX.gz",
         ),
     ],
+    "brdc-nav": [
+        (
+            "nav",
+            "https://igs.bkg.bund.de/root_ftp/IGS/BRDC/{yyyy}/{doy}/"
+            "BRDC00IGS_R_{yyyy}{doy}0000_01D_MN.rnx.gz",
+        ),
+    ],
 }
 
 
@@ -218,7 +225,14 @@ def read_source_bytes(source: str, timeout_seconds: float) -> tuple[bytes, str]:
 
 def maybe_decompress(raw_bytes: bytes, source: str) -> tuple[bytes, bool]:
     if source.lower().endswith(".gz"):
-        return gzip.decompress(raw_bytes), True
+        try:
+            return gzip.decompress(raw_bytes), True
+        except gzip.BadGzipFile as exc:
+            prefix = raw_bytes[:80].decode("ascii", errors="replace")
+            raise SystemExit(
+                f"Expected gzip-compressed content from `{source}`, but decompression failed. "
+                f"First bytes: {prefix!r}"
+            ) from exc
     return raw_bytes, False
 
 
