@@ -471,8 +471,8 @@ def write_reference_csv(
 
 
 def main() -> int:
-    require_ros2_support()
     args = parse_args()
+    require_ros2_support()
     ensure_input_exists(args.input)
     prepared_bag = PreparedBag(args.input)
     try:

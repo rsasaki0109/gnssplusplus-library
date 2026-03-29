@@ -108,6 +108,11 @@ def parse_args() -> argparse.Namespace:
         help="Glob under --root for gnss moving-base signoff summary JSON files.",
     )
     parser.add_argument(
+        "--ppp-products-summary-glob",
+        default="output/*ppp*_products*_summary.json",
+        help="Glob under --root for gnss PPP product signoff summary JSON files.",
+    )
+    parser.add_argument(
         "--docs-url",
         default=os.environ.get("GNSSPP_DOCS_URL", DOCS_SITE_URL),
         help="Optional docs site URL shown in the web UI header.",
@@ -197,6 +202,20 @@ def classify_baseline_status(p95_baseline_error_m: Any) -> str:
     if p95_baseline_error_m <= 2.0:
         return "rough"
     return "poor"
+
+
+def classify_ppp_products_status(
+    converged: Any,
+    p95_position_error_m: Any,
+    solution_rate_pct: Any,
+) -> str:
+    if converged is True and isinstance(p95_position_error_m, (int, float)):
+        return classify_accuracy_status(p95_position_error_m)
+    if converged is True:
+        return "converged"
+    if isinstance(solution_rate_pct, (int, float)) and solution_rate_pct >= 95.0:
+        return "tracking"
+    return "warming"
 
 
 def downsample_points(points: list[dict[str, Any]], limit: int = MAX_RENDER_POINTS) -> list[dict[str, Any]]:
@@ -374,9 +393,42 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
                 "solution_pos": payload.get("solution_pos"),
                 "prepare_summary_json": payload.get("prepare_summary_json"),
                 "products_summary_json": payload.get("products_summary_json"),
+                "plot_png": payload.get("plot_png"),
                 "signoff_profile": payload.get("signoff_profile"),
                 "runtime_status": classify_realtime_status(payload.get("realtime_factor")),
                 "quality_status": classify_baseline_status(payload.get("p95_baseline_error_m")),
+            }
+        )
+
+    ppp_products_summaries: list[dict[str, Any]] = []
+    for path in sorted(root_dir.glob(args.ppp_products_summary_glob)):
+        payload = load_json(path)
+        if payload is None:
+            continue
+        p95_error = payload.get("p95_position_error_m")
+        if not isinstance(p95_error, (int, float)):
+            p95_error = payload.get("max_position_error_m")
+        ppp_products_summaries.append(
+            {
+                "_path": relative_display(path, root_dir),
+                "summary_path": relative_display(path, root_dir),
+                "profile": payload.get("products_signoff_profile"),
+                "product_presets": payload.get("product_presets"),
+                "fetched_product_date": payload.get("fetched_product_date"),
+                "ppp_solution_rate_pct": payload.get("ppp_solution_rate_pct"),
+                "ppp_converged": payload.get("ppp_converged"),
+                "ppp_convergence_time_s": payload.get("ppp_convergence_time_s"),
+                "mean_position_error_m": payload.get("mean_position_error_m"),
+                "p95_position_error_m": payload.get("p95_position_error_m"),
+                "max_position_error_m": payload.get("max_position_error_m"),
+                "ionex_corrections": payload.get("ionex_corrections"),
+                "dcb_corrections": payload.get("dcb_corrections"),
+                "solution_pos": payload.get("solution_pos"),
+                "quality_status": classify_ppp_products_status(
+                    payload.get("ppp_converged"),
+                    p95_error,
+                    payload.get("ppp_solution_rate_pct"),
+                ),
             }
         )
 
@@ -395,6 +447,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         "live_summaries": live_summaries,
         "visibility_summaries": visibility_summaries,
         "moving_base_summaries": moving_base_summaries,
+        "ppp_products_summaries": ppp_products_summaries,
         "receiver_status": rcv_status,
     }
 
@@ -645,18 +698,49 @@ def render_html() -> str:
         <h2>Moving-base sign-offs</h2>
         <span class="tiny">auto-discovered from output/*moving_base_summary.json</span>
       </div>
-      <table id="moving-base-table">
+      <div class="grid two plot-wrap">
+        <div>
+          <table id="moving-base-table">
+            <thead>
+              <tr>
+                <th>Path</th>
+                <th>Matched</th>
+                <th>Fix rate</th>
+                <th>P95 baseline</th>
+                <th>P95 heading</th>
+                <th>Quality</th>
+                <th>Realtime</th>
+                <th>Rate</th>
+                <th>Termination</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="plot-card">
+          <h3>Moving-base view</h3>
+          <img id="moving-base-image" alt="Moving-base artifact" style="display:none; width:100%; border:1px solid var(--line); border-radius:10px;" />
+        </div>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top: 18px;">
+      <div class="section-title">
+        <h2>PPP products sign-offs</h2>
+        <span class="tiny">auto-discovered from output/*ppp*_products*_summary.json</span>
+      </div>
+      <table id="ppp-products-table">
         <thead>
           <tr>
             <th>Path</th>
-            <th>Matched</th>
-            <th>Fix rate</th>
-            <th>P95 baseline</th>
-            <th>P95 heading</th>
-            <th>Quality</th>
-            <th>Realtime</th>
-            <th>Rate</th>
-            <th>Termination</th>
+            <th>Profile</th>
+            <th>Date</th>
+            <th>PPP rate</th>
+            <th>Convergence</th>
+            <th>Mean err</th>
+            <th>P95 / max</th>
+            <th>Corrections</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -938,6 +1022,7 @@ def render_html() -> str:
           row.solution_pos ? artifactLink(row.solution_pos, "pos") : null,
           row.prepare_summary_json ? artifactLink(row.prepare_summary_json, "prepare") : null,
           row.products_summary_json ? artifactLink(row.products_summary_json, "products") : null,
+          row.plot_png ? artifactLink(row.plot_png, "plot") : null,
         ].filter(Boolean).join(" / ");
         const tr = document.createElement("tr");
         tr.innerHTML = `
@@ -951,6 +1036,36 @@ def render_html() -> str:
           <td>${formatMaybeNumber(row.effective_epoch_rate_hz, 2, " Hz")}</td>
           <td>${row.termination || "n/a"}</td>`;
         movingBaseBody.appendChild(tr);
+      }
+      const movingBaseImage = document.getElementById("moving-base-image");
+      const firstMovingBase = (overview.moving_base_summaries || []).find((row) => row.plot_png);
+      if (firstMovingBase && firstMovingBase.plot_png) {
+        movingBaseImage.src = `/artifact?path=${encodeURIComponent(firstMovingBase.plot_png)}`;
+        movingBaseImage.style.display = "block";
+      } else {
+        movingBaseImage.removeAttribute("src");
+        movingBaseImage.style.display = "none";
+      }
+
+      const pppProductsBody = document.querySelector("#ppp-products-table tbody");
+      pppProductsBody.innerHTML = "";
+      for (const row of overview.ppp_products_summaries || []) {
+        const presets = Array.isArray(row.product_presets) && row.product_presets.length
+          ? row.product_presets.join(", ")
+          : "custom";
+        const solutionLink = row.solution_pos ? artifactLink(row.solution_pos, "pos") : null;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${artifactLink(row.summary_path || row._path, row._path || "n/a")}<br><span class="tiny">${solutionLink || presets}</span></td>
+          <td>${row.profile || "n/a"}</td>
+          <td>${row.fetched_product_date || "n/a"}</td>
+          <td>${formatMaybeNumber(row.ppp_solution_rate_pct, 2, "%")}</td>
+          <td>${row.ppp_converged ? "yes" : "no"} / ${formatMaybeNumber(row.ppp_convergence_time_s, 1, " s")}</td>
+          <td>${formatMaybeNumber(row.mean_position_error_m, 3, " m")}</td>
+          <td>${formatMaybeNumber(row.p95_position_error_m, 3, " m")} / ${formatMaybeNumber(row.max_position_error_m, 3, " m")}</td>
+          <td>I ${row.ionex_corrections ?? "n/a"} / D ${row.dcb_corrections ?? "n/a"}</td>
+          <td>${renderBadge(row.quality_status)}</td>`;
+        pppProductsBody.appendChild(tr);
       }
 
       const visibilityBody = document.querySelector("#visibility-table tbody");
