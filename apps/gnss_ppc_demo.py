@@ -109,6 +109,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--antex", type=Path, default=None, help="Optional ANTEX file for PPP.")
     parser.add_argument("--blq", type=Path, default=None, help="Optional BLQ loading coefficients for PPP.")
     parser.add_argument(
+        "--preset",
+        choices=("survey", "low-cost", "moving-base"),
+        default=None,
+        help="Optional RTK tuning preset passed through to gnss solve when --solver rtk.",
+    )
+    parser.add_argument("--arfilter", dest="arfilter", action="store_true", help="Enable AR filter for RTK.")
+    parser.add_argument("--no-arfilter", dest="arfilter", action="store_false", help="Disable AR filter for RTK.")
+    parser.set_defaults(arfilter=None)
+    parser.add_argument("--arfilter-margin", type=float, default=None, help="Optional AR filter margin for RTK.")
+    parser.add_argument("--min-hold-count", type=int, default=None, help="Optional min hold count for RTK.")
+    parser.add_argument(
+        "--hold-ratio-threshold",
+        type=float,
+        default=None,
+        help="Optional ratio threshold used while hold is active for RTK.",
+    )
+    parser.add_argument(
         "--rtklib-bin",
         type=Path,
         default=None,
@@ -495,6 +512,18 @@ def run_solver(
             "kinematic",
             "--no-kml",
         ]
+        if args.preset is not None:
+            command.extend(["--preset", args.preset])
+        if args.arfilter is True:
+            command.append("--arfilter")
+        elif args.arfilter is False:
+            command.append("--no-arfilter")
+        if args.arfilter_margin is not None:
+            command.extend(["--arfilter-margin", str(args.arfilter_margin)])
+        if args.min_hold_count is not None:
+            command.extend(["--min-hold-count", str(args.min_hold_count)])
+        if args.hold_ratio_threshold is not None:
+            command.extend(["--hold-ratio-threshold", str(args.hold_ratio_threshold)])
     else:
         command = [
             *gnss_command,

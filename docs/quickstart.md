@@ -68,13 +68,14 @@ python3 apps/gnss.py replay \
 | `gnss moving-base-signoff` | Validate a real moving-base replay/live dataset against per-epoch base/rover reference coordinates |
 | `gnss scorpion-moving-base-signoff` | One-command prepare + BRDC fetch + replay validation for the public SCORPION bag |
 | `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` files from local or remote sources |
+| `gnss ppp-products-signoff` | Run static or kinematic PPP sign-off with fetched product presets or templates |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
 | `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
 | `gnss ubx-info` | Inspect `NAV-PVT`, `RAWX`, `SFRBX` from file or serial |
 | `gnss ionex-info` | Inspect `IONEX` headers, maps, and auxiliary DCB blocks |
 | `gnss dcb-info` | Inspect `Bias-SINEX` or auxiliary DCB products |
 | `gnss qzss-l6-info` | Inspect direct QZSS L6 frames and export Compact SSR payloads |
-| `gnss web` | Local browser UI for summary JSON, live sign-offs, trajectories, visibility, and receiver status |
+| `gnss web` | Local browser UI for summary JSON, live/moving-base sign-offs, trajectories, visibility, receiver status, and artifact links |
 | `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya |
 
 ## Local web UI
@@ -85,7 +86,7 @@ python3 apps/gnss.py web \
   --rcv-status output/receiver.status.json
 ```
 
-Open `http://127.0.0.1:8085` to inspect benchmark tables, live sign-offs, receiver status, and visibility summaries.
+Open `http://127.0.0.1:8085` to inspect benchmark tables, live/moving-base sign-offs, receiver status, visibility summaries, and linked artifacts.
 
 Docker form:
 
