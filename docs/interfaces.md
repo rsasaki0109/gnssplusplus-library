@@ -15,6 +15,7 @@ Examples:
 - `gnss dcb-info`
 - `gnss visibility`
 - `gnss visibility-plot`
+- `gnss moving-base-plot`
 - `gnss moving-base-signoff`
 - `gnss moving-base-prepare`
 - `gnss scorpion-moving-base-signoff`
@@ -61,13 +62,14 @@ The ROS2 playback node publishes `.pos` files as:
 
 ## Local web UI
 
-`gnss web` is a local visualization layer for existing artifacts, including live and moving-base sign-off summaries plus direct links to summary and provenance files.
+`gnss web` is a local visualization layer for existing artifacts, including live, moving-base, and PPP-product sign-off summaries plus direct links to summary, plot, and provenance files.
 
 It shows:
 
 - Odaiba metrics
 - PPC summaries
 - live sign-off summaries
+- moving-base plots
 - 2D trajectories
 - visibility summaries and a polar visibility view
 - `gnss rcv` receiver status

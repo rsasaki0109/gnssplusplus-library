@@ -83,10 +83,10 @@ LIBGNSSPP_IMAGE=ghcr.io/rsasaki0109/gnssplusplus-library:v0.1.0 docker compose u
 - Native protocols: `RINEX`, `RTCM`, `UBX`, direct `QZSS L6`
 - Raw/log tooling: `NMEA`, `NovAtel`, `SBP`, `SBF`, `Trimble`, `SkyTraq`, `BINEX`
 - Product tooling: `fetch-products`, `ionex-info`, `dcb-info`
-- Analysis tooling: `visibility` and `visibility-plot` for az/el/SNR exports and PNG quick-looks
+- Analysis tooling: `visibility`, `visibility-plot`, and `moving-base-plot` for az/el/SNR exports plus moving-base/visibility PNG quick-looks
 - Moving-base tooling: `moving-base-prepare` plus `moving-base-signoff` for real bag/replay/live validation
 - One CLI entrypoint: `gnss spp`, `solve`, `ppp`, `visibility`, `stream`, `convert`, `live`, `rcv`
-- Local web UI: `gnss web` for benchmark snapshots, live/moving-base sign-offs, 2D trajectories, visibility views, receiver status, and artifact links
+- Local web UI: `gnss web` for benchmark snapshots, live/moving-base/PPP-product sign-offs, 2D trajectories, visibility views, receiver status, and artifact links
 - Built-in sign-off scripts and checked-in benchmark artifacts
 - CMake install/export, Python bindings, and ROS2 playback node
 
@@ -161,6 +161,7 @@ python3 apps/gnss.py sbf-info \
 | `gnss ppp` | Batch PPP from rover RINEX plus nav or precise products |
 | `gnss visibility` | Export azimuth/elevation/SNR visibility rows and summary JSON from rover/nav RINEX |
 | `gnss visibility-plot` | Render a visibility CSV into a polar/elevation PNG quick-look |
+| `gnss moving-base-plot` | Render a moving-base solution/reference pair into a baseline/heading PNG quick-look |
 | `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` files from local or remote sources |
 | `gnss moving-base-prepare` | Extract rover/base UBX plus reference CSV from a ROS2 moving-base bag |
 | `gnss scorpion-moving-base-signoff` | Prepare and validate the public SCORPION moving-base ROS2 bag through replay |
@@ -184,7 +185,7 @@ python3 apps/gnss.py sbf-info \
 | `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB side-by-side gates |
 | `gnss moving-base-signoff` | Real moving-base replay/live sign-off against per-epoch base/rover reference coordinates |
 | `gnss odaiba-benchmark` | End-to-end Odaiba benchmark pipeline |
-| `gnss web` | Local browser UI for summary JSON, live/moving-base sign-offs, `.pos` trajectories, visibility, `gnss rcv` status, and artifact links |
+| `gnss web` | Local browser UI for summary JSON, live/moving-base/PPP-product sign-offs, `.pos` trajectories, moving-base/visibility plots, `gnss rcv` status, and artifact links |
 
 See all commands:
 
@@ -200,7 +201,7 @@ python3 apps/gnss.py web \
   --rcv-status output/receiver.status.json
 ```
 
-Then open `http://127.0.0.1:8085` to inspect Odaiba metrics, live sign-offs, 2D trajectories, PPC summaries, visibility summaries/polar view, and receiver status in a browser.
+Then open `http://127.0.0.1:8085` to inspect Odaiba metrics, live/moving-base/PPP-product sign-offs, 2D trajectories, moving-base and visibility plots, PPC summaries, and receiver status in a browser.
 
 Container form:
 

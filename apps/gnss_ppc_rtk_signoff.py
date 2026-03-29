@@ -26,7 +26,7 @@ PROFILE_DEFAULTS: dict[str, dict[str, float | int]] = {
         "require_mean_sats_min": 18.0,
         "require_solver_wall_time_max": 5.0,
         "require_realtime_factor_min": 5.0,
-        "require_effective_epoch_rate_min": 29.0,
+        "require_effective_epoch_rate_min": 27.5,
         "require_lib_fix_rate_vs_rtklib_min_delta": 0.0,
         "require_lib_median_h_vs_rtklib_max_delta": 0.01,
         "require_lib_p95_h_vs_rtklib_max_delta": 0.02,

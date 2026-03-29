@@ -69,6 +69,31 @@ def ros2_bag_support_available() -> bool:
     return all(importlib.util.find_spec(name) is not None for name in required)
 
 
+def write_pty_payload(
+    master_fd: int,
+    payloads: list[bytes],
+    *,
+    initial_delay_s: float,
+    between_delay_s: float,
+    final_delay_s: float,
+) -> None:
+    try:
+        time.sleep(initial_delay_s)
+        for index, payload in enumerate(payloads):
+            try:
+                os.write(master_fd, payload)
+            except OSError:
+                break
+            if index + 1 < len(payloads):
+                time.sleep(between_delay_s)
+        time.sleep(final_delay_s)
+    finally:
+        try:
+            os.close(master_fd)
+        except OSError:
+            pass
+
+
 def build_synthetic_moving_base_rosbag(bag_dir: Path) -> None:
     import rosbag2_py
     from rclpy.serialization import serialize_message
@@ -2784,9 +2809,15 @@ class CLIToolsTest(unittest.TestCase):
     }
     KINEMATIC_DATA_TESTS = {
         "test_solve_cli_supports_estimated_iono_mode",
+        "test_solve_cli_supports_moving_base_mode",
         "test_rtk_kinematic_signoff_cli_writes_summary_and_passes_thresholds",
         "test_ppp_kinematic_signoff_cli_writes_summary_and_passes_thresholds",
+        "test_ppp_kinematic_signoff_cli_can_fetch_precise_products",
         "test_replay_solves_bundled_rinex_sequence",
+        "test_replay_supports_moving_base_mode",
+    }
+    STATIC_DATA_TESTS |= {
+        "test_ppp_static_signoff_cli_can_fetch_precise_products",
     }
     ODAIBA_DATA_TESTS = {
         "test_solve_odaiba_slice_uses_glonass_and_beidou_in_rtk",
@@ -7339,12 +7370,13 @@ class CLIToolsTest(unittest.TestCase):
                 os.close(slave_fd)
 
             def writer() -> None:
-                time.sleep(0.10)
-                os.write(master_fd, payload)
-                time.sleep(0.05)
-                os.write(master_fd, payload)
-                time.sleep(0.20)
-                os.close(master_fd)
+                write_pty_payload(
+                    master_fd,
+                    [payload, payload],
+                    initial_delay_s=0.10,
+                    between_delay_s=0.05,
+                    final_delay_s=0.20,
+                )
 
             with tempfile.TemporaryDirectory(prefix="gnss_ubx_serial_test_") as temp_dir:
                 output_path = Path(temp_dir) / "serial.obs"
@@ -7755,12 +7787,13 @@ class CLIToolsTest(unittest.TestCase):
                 os.close(slave_fd)
 
             def writer() -> None:
-                time.sleep(0.10)
-                os.write(master_fd, payload)
-                time.sleep(0.05)
-                os.write(master_fd, payload)
-                time.sleep(0.20)
-                os.close(master_fd)
+                write_pty_payload(
+                    master_fd,
+                    [payload, payload],
+                    initial_delay_s=0.10,
+                    between_delay_s=0.05,
+                    final_delay_s=0.20,
+                )
 
             with tempfile.TemporaryDirectory(prefix="gnss_convert_serial_test_") as temp_dir:
                 output_path = Path(temp_dir) / "serial_converted.obs"
@@ -8386,7 +8419,32 @@ class CLIToolsTest(unittest.TestCase):
                         "solution_pos": str(temp_root / "output" / "scorpion_moving_base.pos"),
                         "prepare_summary_json": str(temp_root / "output" / "prepare_summary.json"),
                         "products_summary_json": str(temp_root / "output" / "products_summary.json"),
+                        "plot_png": str(temp_root / "output" / "scorpion_moving_base.png"),
                         "signoff_profile": "scorpion-moving-base",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (temp_root / "output" / "scorpion_moving_base.png").write_bytes(
+                binascii.a2b_base64(
+                    b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+ymsAAAAASUVORK5CYII="
+                )
+            )
+            (temp_root / "output" / "ppp_static_products_summary.json").write_text(
+                json.dumps(
+                    {
+                        "products_signoff_profile": "static",
+                        "product_presets": ["igs-final", "ionex", "dcb"],
+                        "fetched_product_date": "2024-01-02",
+                        "ppp_solution_rate_pct": 100.0,
+                        "ppp_converged": True,
+                        "ppp_convergence_time_s": 285.0,
+                        "mean_position_error_m": 0.12,
+                        "p95_position_error_m": 0.21,
+                        "max_position_error_m": 0.31,
+                        "ionex_corrections": 18,
+                        "dcb_corrections": 18,
+                        "solution_pos": str(temp_root / "output" / "ppp_static_products.pos"),
                     }
                 ),
                 encoding="utf-8",
@@ -8473,6 +8531,12 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertEqual(overview["moving_base_summaries"][0]["quality_status"], "excellent")
                 self.assertAlmostEqual(overview["moving_base_summaries"][0]["p95_baseline_error_m"], 0.101)
                 self.assertEqual(overview["moving_base_summaries"][0]["signoff_profile"], "scorpion-moving-base")
+                self.assertTrue(overview["moving_base_summaries"][0]["plot_png"].endswith("scorpion_moving_base.png"))
+                self.assertEqual(len(overview["ppp_products_summaries"]), 1)
+                self.assertEqual(overview["ppp_products_summaries"][0]["profile"], "static")
+                self.assertEqual(overview["ppp_products_summaries"][0]["fetched_product_date"], "2024-01-02")
+                self.assertEqual(overview["ppp_products_summaries"][0]["quality_status"], "excellent")
+                self.assertEqual(overview["ppp_products_summaries"][0]["ionex_corrections"], 18)
                 self.assertEqual(len(overview["visibility_summaries"]), 1)
                 self.assertEqual(overview["visibility_summaries"][0]["rows_written"], 27)
                 self.assertEqual(overview["visibility_summaries"][0]["unique_satellites"], 9)
@@ -8543,6 +8607,7 @@ class CLIToolsTest(unittest.TestCase):
             solution_path = temp_root / "moving_base.pos"
             reference_csv = temp_root / "reference.csv"
             summary_path = temp_root / "moving_base_summary.json"
+            plot_path = temp_root / "moving_base.png"
 
             solution_path.write_text(
                 "\n".join(
@@ -8578,6 +8643,8 @@ class CLIToolsTest(unittest.TestCase):
                 str(reference_csv),
                 "--summary-json",
                 str(summary_path),
+                "--plot-png",
+                str(plot_path),
                 "--solver-wall-time-s",
                 "0.5",
                 "--require-valid-epochs-min",
@@ -8593,11 +8660,56 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertIn("Finished moving-base sign-off.", result.stdout)
             self.assertTrue(summary_path.exists())
+            self.assertTrue(plot_path.exists())
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["solver"], "replay")
             self.assertEqual(payload["matched_epochs"], 2)
             self.assertEqual(payload["fixed_epochs"], 2)
             self.assertGreater(payload["realtime_factor"], 0.0)
+            self.assertEqual(payload["plot_png"], str(plot_path))
+
+    def test_moving_base_plot_renders_png_from_solution_and_reference(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_moving_base_plot_") as temp_dir:
+            temp_root = Path(temp_dir)
+            solution_path = temp_root / "moving_base.pos"
+            reference_csv = temp_root / "reference.csv"
+            png_path = temp_root / "moving_base.png"
+
+            solution_path.write_text(
+                "\n".join(
+                    [
+                        "% synthetic moving-base solution fixture",
+                        "2200 345600.000 3875001.100000 332002.000000 5029000.400000 35.0 139.0 10.0 4 12 1.0",
+                        "2200 345601.000 3875001.200000 332002.100000 5029000.450000 35.0 139.0 10.0 4 12 1.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            reference_csv.write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,base_ecef_x_m,base_ecef_y_m,base_ecef_z_m,rover_ecef_x_m,rover_ecef_y_m,rover_ecef_z_m",
+                        "2200,345600.0,3875000.0,332000.0,5029000.0,3875001.0,332002.0,5029000.5",
+                        "2200,345601.0,3875000.1,332000.1,5029000.0,3875001.1,332002.1,5029000.5",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_gnss(
+                "moving-base-plot",
+                str(solution_path),
+                str(reference_csv),
+                str(png_path),
+                "--title",
+                "Synthetic moving-base",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(png_path.exists())
+            self.assertIn("Saved:", result.stdout)
 
     def test_rcv_dry_run_and_status_snapshot(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_rcv_test_") as temp_dir:

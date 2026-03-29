@@ -80,6 +80,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_moving_base_signoff.py",
                 prefix / "bin" / "gnss_scorpion_moving_base_signoff.py",
                 prefix / "bin" / "gnss_moving_base_prepare.py",
+                prefix / "bin" / "gnss_moving_base_plot.py",
                 prefix / "bin" / "gnss_rtk_kinematic_signoff.py",
                 prefix / "bin" / "gnss_ppp_static_signoff.py",
                 prefix / "bin" / "gnss_ppp_kinematic_signoff.py",
@@ -328,6 +329,16 @@ class PackagingSmokeTest(unittest.TestCase):
                 text=True,
             )
             self.assertIn("scorpion", scorpion_moving_base_help.stdout.lower())
+
+            moving_base_plot_help = subprocess.run(
+                [str(prefix / "bin" / "gnss"), "moving-base-plot", "--help"],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("baseline", moving_base_plot_help.stdout.lower())
 
             fetch_products_help = subprocess.run(
                 [str(prefix / "bin" / "gnss"), "fetch-products", "--help"],

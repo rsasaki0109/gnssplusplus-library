@@ -149,6 +149,11 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_moving_base_prepare.py"),
         "summary": "Extract rover/base UBX files plus reference CSV from a ROS2 moving-base bag with u-blox topics.",
     },
+    "moving-base-plot": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_moving_base_plot.py"),
+        "summary": "Render moving-base sign-off solution/reference pairs into a baseline and heading PNG quick-look.",
+    },
     "rcv": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_rcv.py"),
