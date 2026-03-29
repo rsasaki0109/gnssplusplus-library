@@ -12,7 +12,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from gnss_runtime import ensure_input_exists, resolve_gnss_command
+from gnss_runtime import ensure_input_exists, resolve_gnss_command, run_fetch_products
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -42,6 +42,30 @@ def parse_args() -> argparse.Namespace:
         help="Navigation RINEX file shared by PPP and RTK reference generation.",
     )
     parser.add_argument(
+        "--sp3",
+        type=Path,
+        default=None,
+        help="Optional precise SP3 orbit file for the PPP solution.",
+    )
+    parser.add_argument(
+        "--clk",
+        type=Path,
+        default=None,
+        help="Optional precise CLK file for the PPP solution.",
+    )
+    parser.add_argument(
+        "--ionex",
+        type=Path,
+        default=None,
+        help="Optional IONEX TEC map product for the PPP solution.",
+    )
+    parser.add_argument(
+        "--dcb",
+        type=Path,
+        default=None,
+        help="Optional DCB / Bias-SINEX product for the PPP solution.",
+    )
+    parser.add_argument(
         "--out",
         type=Path,
         default=ROOT_DIR / "output/ppp_kinematic_solution.pos",
@@ -69,6 +93,29 @@ def parse_args() -> argparse.Namespace:
         "--use-existing-reference",
         action="store_true",
         help="Do not regenerate the RTK reference if --reference-pos already exists.",
+    )
+    parser.add_argument(
+        "--fetch-products",
+        action="store_true",
+        help="Fetch SP3/CLK-style products through gnss fetch-products before running PPP.",
+    )
+    parser.add_argument(
+        "--product",
+        action="append",
+        default=[],
+        metavar="KIND=SOURCE",
+        help="Product template passed through to gnss fetch-products. May be repeated.",
+    )
+    parser.add_argument(
+        "--product-date",
+        default=None,
+        help="Optional YYYY-MM-DD date for --fetch-products. Defaults to TIME OF FIRST OBS.",
+    )
+    parser.add_argument(
+        "--product-cache-dir",
+        type=Path,
+        default=None,
+        help="Optional cache directory for gnss fetch-products.",
     )
     parser.add_argument(
         "--require-common-epoch-pairs-min",
@@ -282,6 +329,13 @@ def build_summary_payload(args: argparse.Namespace) -> dict[str, object]:
         "obs": str(args.obs),
         "base": str(args.base),
         "nav": str(args.nav),
+        "sp3": str(getattr(args, "resolved_sp3", None)) if getattr(args, "resolved_sp3", None) is not None else None,
+        "clk": str(getattr(args, "resolved_clk", None)) if getattr(args, "resolved_clk", None) is not None else None,
+        "ionex": str(getattr(args, "resolved_ionex", None)) if getattr(args, "resolved_ionex", None) is not None else None,
+        "dcb": str(getattr(args, "resolved_dcb", None)) if getattr(args, "resolved_dcb", None) is not None else None,
+        "fetch_products": bool(getattr(args, "fetch_products", False)),
+        "fetched_products": getattr(args, "fetched_products", None),
+        "fetched_product_date": getattr(args, "fetched_product_date", None),
         "solution_pos": str(args.out),
         "reference_pos": str(args.reference_pos),
         "ppp_profile": "low_dynamics" if getattr(args, "low_dynamics", False) else "kinematic",
@@ -451,16 +505,53 @@ def main() -> int:
     ensure_input_exists(args.obs, "observation file", ROOT_DIR)
     ensure_input_exists(args.base, "base observation file", ROOT_DIR)
     ensure_input_exists(args.nav, "navigation file", ROOT_DIR)
+    if args.sp3 is not None:
+        ensure_input_exists(args.sp3, "SP3 file", ROOT_DIR)
+    if args.clk is not None:
+        ensure_input_exists(args.clk, "CLK file", ROOT_DIR)
     if args.malib_bin is not None:
         ensure_input_exists(args.malib_bin, "MALIB binary", ROOT_DIR)
         ensure_input_exists(args.malib_config, "MALIB config", ROOT_DIR)
     if args.max_epochs == 0:
         raise SystemExit("--max-epochs must be positive or -1")
+    if args.fetch_products and not args.product:
+        raise SystemExit("--fetch-products requires at least one --product KIND=SOURCE")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.reference_pos.parent.mkdir(parents=True, exist_ok=True)
     args.summary_json.parent.mkdir(parents=True, exist_ok=True)
     args.malib_pos.parent.mkdir(parents=True, exist_ok=True)
+    args.fetched_products = None
+    args.fetched_product_date = None
+
+    resolved_sp3 = args.sp3
+    resolved_clk = args.clk
+    resolved_ionex = args.ionex
+    resolved_dcb = args.dcb
+    if args.fetch_products:
+        fetch_payload = run_fetch_products(
+            ROOT_DIR,
+            args.obs,
+            args.product,
+            product_date_text=args.product_date,
+            cache_dir=args.product_cache_dir,
+        )
+        fetched_products = fetch_payload.get("products", {})
+        if isinstance(fetched_products, dict):
+            args.fetched_products = fetched_products
+            args.fetched_product_date = fetch_payload.get("effective_date")
+            if resolved_sp3 is None and "sp3" in fetched_products:
+                resolved_sp3 = Path(str(fetched_products["sp3"]))
+            if resolved_clk is None and "clk" in fetched_products:
+                resolved_clk = Path(str(fetched_products["clk"]))
+            if resolved_ionex is None and "ionex" in fetched_products:
+                resolved_ionex = Path(str(fetched_products["ionex"]))
+            if resolved_dcb is None and "dcb" in fetched_products:
+                resolved_dcb = Path(str(fetched_products["dcb"]))
+    args.resolved_sp3 = resolved_sp3
+    args.resolved_clk = resolved_clk
+    args.resolved_ionex = resolved_ionex
+    args.resolved_dcb = resolved_dcb
 
     if not args.use_existing_reference or not args.reference_pos.exists():
         solve_command = [
@@ -494,6 +585,14 @@ def main() -> int:
         "--out",
         str(args.out),
     ]
+    if resolved_sp3 is not None:
+        ppp_command.extend(["--sp3", str(resolved_sp3)])
+    if resolved_clk is not None:
+        ppp_command.extend(["--clk", str(resolved_clk)])
+    if resolved_ionex is not None:
+        ppp_command.extend(["--ionex", str(resolved_ionex)])
+    if resolved_dcb is not None:
+        ppp_command.extend(["--dcb", str(resolved_dcb)])
     if args.max_epochs > 0:
         ppp_command.extend(["--max-epochs", str(args.max_epochs)])
     run_command(ppp_command)

@@ -53,6 +53,8 @@ class WebUISmokeTest(unittest.TestCase):
             status_json = temp_root / "receiver.status.json"
             live_summary = temp_root / "output" / "live_replay_summary.json"
             ppc_summary = temp_root / "output" / "ppc_tokyo_run1_rtk_summary.json"
+            visibility_summary = temp_root / "output" / "visibility_static_summary.json"
+            visibility_csv = temp_root / "output" / "visibility_static.csv"
             port_file = temp_root / "port.txt"
             docs_url = "https://example.com/libgnsspp-docs/"
 
@@ -138,6 +140,33 @@ class WebUISmokeTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            visibility_summary.write_text(
+                json.dumps(
+                    {
+                        "csv": str(visibility_csv),
+                        "epochs_processed": 5,
+                        "epochs_with_rows": 5,
+                        "rows_written": 27,
+                        "unique_satellites": 9,
+                        "mean_satellites_per_epoch": 5.4,
+                        "max_satellites_per_epoch": 7,
+                        "mean_elevation_deg": 38.2,
+                        "mean_snr_dbhz": 44.7,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            visibility_csv.write_text(
+                "\n".join(
+                    [
+                        "epoch_index,week,tow,satellite,system,signal,azimuth_deg,elevation_deg,snr_dbhz,has_pseudorange,has_carrier_phase,has_doppler",
+                        "1,2200,100.000,G01,GPS,GPS_L1CA,45.0,30.0,42.0,1,1,0",
+                        "1,2200,100.000,G02,GPS,GPS_L1CA,120.0,55.0,47.4,1,1,0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
 
             port = find_free_port()
             process = subprocess.Popen(
@@ -193,12 +222,16 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("completed", page.locator("#live-table tbody").text_content())
                     self.assertIn("3.50x", page.locator("#live-table tbody").text_content())
                     self.assertIn("realtime", page.locator("#live-table tbody").text_content())
-                    self.assertEqual(page.locator("canvas").count(), 2)
+                    self.assertEqual(page.locator("canvas").count(), 3)
                     self.assertIn("FIXED", page.locator("#status-legend").text_content())
                     self.assertIn("ppc_tokyo_run1_rtk_summary.json", page.locator("#ppc-table tbody").text_content())
                     self.assertIn("96.67%", page.locator("#ppc-table tbody").text_content())
                     self.assertIn("excellent", page.locator("#ppc-table tbody").text_content())
                     self.assertIn("12.34 s", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("visibility_static_summary.json", page.locator("#visibility-table tbody").text_content())
+                    self.assertIn("27", page.locator("#visibility-table tbody").text_content())
+                    self.assertIn("44.70 dB-Hz", page.locator("#visibility-table tbody").text_content())
+                    self.assertIn("Visibility view", page.locator("body").text_content())
                     browser.close()
             finally:
                 process.terminate()

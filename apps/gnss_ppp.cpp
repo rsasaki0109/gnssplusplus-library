@@ -17,6 +17,8 @@ struct Options {
     std::string clk_path;
     std::string ssr_path;
     std::string ssr_rtcm_path;
+    std::string ionex_path;
+    std::string dcb_path;
     std::string antex_path;
     std::string blq_path;
     std::string ocean_loading_station_name;
@@ -43,6 +45,8 @@ void printUsage(const char* program_name) {
         << "  --ssr <corrections.csv>  Simple SSR orbit/clock corrections CSV\n"
         << "  --ssr-rtcm <file|ntrip://...|serial://...|tcp://...>\n"
         << "                          RTCM SSR source converted/read for PPP use\n"
+        << "  --ionex <maps.ionex>     Optional IONEX TEC map product\n"
+        << "  --dcb <bias.bsx>         Optional DCB / Bias-SINEX product\n"
         << "  --antex <antennas.atx>   Optional ANTEX file for receiver antenna PCO\n"
         << "  --blq <station.blq>      Optional BLQ ocean loading coefficient file\n"
         << "  --ocean-loading-station <name>\n"
@@ -94,6 +98,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.ssr_path = argv[++i];
         } else if (arg == "--ssr-rtcm" && i + 1 < argc) {
             options.ssr_rtcm_path = argv[++i];
+        } else if (arg == "--ionex" && i + 1 < argc) {
+            options.ionex_path = argv[++i];
+        } else if (arg == "--dcb" && i + 1 < argc) {
+            options.dcb_path = argv[++i];
         } else if (arg == "--antex" && i + 1 < argc) {
             options.antex_path = argv[++i];
         } else if (arg == "--blq" && i + 1 < argc) {
@@ -208,6 +216,8 @@ int main(int argc, char* argv[]) {
         ppp_config.ssr_file_path = options.ssr_path;
         ppp_config.use_ssr_corrections =
             !options.ssr_path.empty() || !options.ssr_rtcm_path.empty();
+        ppp_config.ionex_file_path = options.ionex_path;
+        ppp_config.dcb_file_path = options.dcb_path;
         ppp_config.antex_file_path = options.antex_path;
         ppp_config.ocean_loading_file_path = options.blq_path;
         ppp_config.estimate_troposphere = options.estimate_troposphere;
@@ -260,8 +270,12 @@ int main(int argc, char* argv[]) {
         int fallback_solutions = 0;
         int atmospheric_trop_corrections = 0;
         int atmospheric_iono_corrections = 0;
+        int ionex_corrections = 0;
+        int dcb_corrections = 0;
         double atmospheric_trop_meters = 0.0;
         double atmospheric_iono_meters = 0.0;
+        double ionex_meters = 0.0;
+        double dcb_meters = 0.0;
         while ((options.max_epochs == 0 || processed_epochs < options.max_epochs) &&
                obs_reader.readObservationEpoch(observation_data)) {
             if (obs_header.approximate_position.norm() > 0.0) {
@@ -273,10 +287,14 @@ int main(int argc, char* argv[]) {
                 processor.getLastAppliedAtmosphericTroposphereCorrections();
             atmospheric_iono_corrections +=
                 processor.getLastAppliedAtmosphericIonosphereCorrections();
+            ionex_corrections += processor.getLastAppliedIonexCorrections();
+            dcb_corrections += processor.getLastAppliedDcbCorrections();
             atmospheric_trop_meters +=
                 processor.getLastAppliedAtmosphericTroposphereMeters();
             atmospheric_iono_meters +=
                 processor.getLastAppliedAtmosphericIonosphereMeters();
+            ionex_meters += processor.getLastAppliedIonexMeters();
+            dcb_meters += processor.getLastAppliedDcbMeters();
             processed_epochs++;
             if (solution.isValid()) {
                 solutions.addSolution(solution);
@@ -328,6 +346,22 @@ int main(int argc, char* argv[]) {
                           << atmospheric_iono_corrections << "\n";
                 std::cout << "  atmospheric ionosphere meters: "
                           << atmospheric_iono_meters << "\n";
+            }
+            if (processor.hasLoadedIONEXProducts()) {
+                std::cout << "  ionex maps: "
+                          << processor.getLoadedIONEXMapCount() << "\n";
+                std::cout << "  ionex corrections: "
+                          << ionex_corrections << "\n";
+                std::cout << "  ionex meters: "
+                          << ionex_meters << "\n";
+            }
+            if (processor.hasLoadedDCBProducts()) {
+                std::cout << "  dcb entries: "
+                          << processor.getLoadedDCBEntryCount() << "\n";
+                std::cout << "  dcb corrections: "
+                          << dcb_corrections << "\n";
+                std::cout << "  dcb meters: "
+                          << dcb_meters << "\n";
             }
             if (options.enable_ar) {
                 std::cout << "  AR ratio threshold: " << options.ar_ratio_threshold << "\n";

@@ -607,6 +607,156 @@ double observationPhaseBiasMeters(GNSSSystem system,
     return coeff_primary * primary_bias + coeff_secondary * secondary_bias;
 }
 
+std::string biasObservationCode(SignalType signal) {
+    switch (signal) {
+        case SignalType::GPS_L1CA: return "C1C";
+        case SignalType::GPS_L1P: return "C1P";
+        case SignalType::GPS_L2P: return "C2P";
+        case SignalType::GPS_L2C: return "C2W";
+        case SignalType::GPS_L5: return "C5Q";
+        case SignalType::GLO_L1CA: return "C1C";
+        case SignalType::GLO_L1P: return "C1P";
+        case SignalType::GLO_L2CA: return "C2C";
+        case SignalType::GLO_L2P: return "C2P";
+        case SignalType::GAL_E1: return "C1C";
+        case SignalType::GAL_E5A: return "C5Q";
+        case SignalType::GAL_E5B: return "C7Q";
+        case SignalType::GAL_E6: return "C6C";
+        case SignalType::BDS_B1I: return "C2I";
+        case SignalType::BDS_B2I: return "C7I";
+        case SignalType::BDS_B3I: return "C6I";
+        case SignalType::BDS_B1C: return "C1C";
+        case SignalType::BDS_B2A: return "C5Q";
+        case SignalType::QZS_L1CA: return "C1C";
+        case SignalType::QZS_L2C: return "C2L";
+        case SignalType::QZS_L5: return "C5Q";
+        default: return "";
+    }
+}
+
+double dcbEntryBiasMeters(const DCBEntry& entry) {
+    std::string unit = trimCopy(entry.unit);
+    std::transform(unit.begin(), unit.end(), unit.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::toupper(ch));
+    });
+    if (unit == "NS") {
+        return entry.bias * constants::SPEED_OF_LIGHT * 1e-9;
+    }
+    if (unit == "M" || unit == "METER" || unit == "METERS") {
+        return entry.bias;
+    }
+    return std::numeric_limits<double>::quiet_NaN();
+}
+
+bool findOsbBiasMeters(const DCBProducts& dcb_products,
+                       const SatelliteId& satellite,
+                       const std::string& observation_code,
+                       double& bias_m) {
+    for (const auto& entry : dcb_products.entries) {
+        if (!entry.valid || !(entry.satellite == satellite) || entry.bias_type != "OSB") {
+            continue;
+        }
+        if (entry.observation_1 != observation_code && entry.observation_2 != observation_code) {
+            continue;
+        }
+        const double converted = dcbEntryBiasMeters(entry);
+        if (!std::isfinite(converted)) {
+            continue;
+        }
+        bias_m = converted;
+        return true;
+    }
+    return false;
+}
+
+double observationDcbBiasMeters(const DCBProducts& dcb_products,
+                                const SatelliteId& satellite,
+                                SignalType primary_signal,
+                                SignalType secondary_signal,
+                                bool use_ionosphere_free,
+                                double coeff_primary,
+                                double coeff_secondary) {
+    const std::string primary_code = biasObservationCode(primary_signal);
+    if (primary_code.empty()) {
+        return 0.0;
+    }
+
+    double primary_bias_m = 0.0;
+    const bool have_primary = findOsbBiasMeters(dcb_products, satellite, primary_code, primary_bias_m);
+    if (!use_ionosphere_free || secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
+        return have_primary ? primary_bias_m : 0.0;
+    }
+
+    const std::string secondary_code = biasObservationCode(secondary_signal);
+    if (secondary_code.empty()) {
+        return have_primary ? coeff_primary * primary_bias_m : 0.0;
+    }
+
+    double secondary_bias_m = 0.0;
+    const bool have_secondary =
+        findOsbBiasMeters(dcb_products, satellite, secondary_code, secondary_bias_m);
+    if (!have_primary && !have_secondary) {
+        return 0.0;
+    }
+    return coeff_primary * (have_primary ? primary_bias_m : 0.0) +
+           coeff_secondary * (have_secondary ? secondary_bias_m : 0.0);
+}
+
+bool ionexPiercePointAndMapping(const IONEXProducts& ionex_products,
+                                const Vector3d& receiver_position,
+                                double azimuth_rad,
+                                double elevation_rad,
+                                double& ipp_lat_deg,
+                                double& ipp_lon_deg,
+                                double& mapping_factor) {
+    if (elevation_rad <= 0.0) {
+        return false;
+    }
+    double latitude_rad = 0.0;
+    double longitude_rad = 0.0;
+    double height_m = 0.0;
+    ecef2geodetic(receiver_position, latitude_rad, longitude_rad, height_m);
+
+    const double earth_radius_m =
+        ionex_products.base_radius_km > 0.0 ?
+            ionex_products.base_radius_km * 1000.0 :
+            constants::WGS84_A;
+    const double shell_height_m =
+        !ionex_products.height_grid.empty() ?
+            ionex_products.height_grid.front() * 1000.0 :
+            450000.0;
+    if (earth_radius_m <= 0.0 || shell_height_m < 0.0) {
+        return false;
+    }
+
+    const double ratio = earth_radius_m / (earth_radius_m + shell_height_m);
+    const double cos_elevation = std::cos(elevation_rad);
+    const double argument = std::clamp(ratio * cos_elevation, -1.0, 1.0);
+    const double psi = M_PI_2 - elevation_rad - std::asin(argument);
+    const double sin_lat = std::sin(latitude_rad);
+    const double cos_lat = std::cos(latitude_rad);
+    const double sin_psi = std::sin(psi);
+    const double cos_psi = std::cos(psi);
+
+    const double ipp_lat_rad = std::asin(
+        std::clamp(sin_lat * cos_psi + cos_lat * sin_psi * std::cos(azimuth_rad), -1.0, 1.0));
+    const double ipp_lon_rad = longitude_rad + std::atan2(
+        sin_psi * std::sin(azimuth_rad),
+        cos_lat * cos_psi - sin_lat * sin_psi * std::cos(azimuth_rad));
+
+    const double mapping_argument = ratio * cos_elevation;
+    mapping_factor = 1.0 / std::sqrt(std::max(1e-12, 1.0 - mapping_argument * mapping_argument));
+    ipp_lat_deg = ipp_lat_rad / kDegreesToRadians;
+    ipp_lon_deg = ipp_lon_rad / kDegreesToRadians;
+    while (ipp_lon_deg > 180.0) {
+        ipp_lon_deg -= 360.0;
+    }
+    while (ipp_lon_deg < -180.0) {
+        ipp_lon_deg += 360.0;
+    }
+    return std::isfinite(mapping_factor);
+}
+
 std::vector<SignalType> primarySignals(GNSSSystem system) {
     switch (system) {
         case GNSSSystem::GPS: return {SignalType::GPS_L1CA};
@@ -871,6 +1021,14 @@ bool PPPProcessor::initialize(const ProcessorConfig& config) {
     if (ppp_config_.use_ssr_corrections && !ppp_config_.ssr_file_path.empty()) {
         loadSSRProducts(ppp_config_.ssr_file_path);
     }
+    if (!ppp_config_.ionex_file_path.empty() &&
+        !loadIONEXProducts(ppp_config_.ionex_file_path)) {
+        return false;
+    }
+    if (!ppp_config_.dcb_file_path.empty() &&
+        !loadDCBProducts(ppp_config_.dcb_file_path)) {
+        return false;
+    }
     return true;
 }
 
@@ -886,6 +1044,10 @@ PositionSolution PPPProcessor::processEpoch(const ObservationData& obs, const Na
     last_applied_atmos_iono_corrections_ = 0;
     last_applied_atmos_trop_m_ = 0.0;
     last_applied_atmos_iono_m_ = 0.0;
+    last_applied_ionex_corrections_ = 0;
+    last_applied_dcb_corrections_ = 0;
+    last_applied_ionex_m_ = 0.0;
+    last_applied_dcb_m_ = 0.0;
     PositionSolution seed_solution;
     const bool need_seed_solution =
         ppp_config_.reset_clock_to_spp_each_epoch ||
@@ -1003,6 +1165,8 @@ void PPPProcessor::reset() {
     last_processed_time_ = GNSSTime();
     precise_products_loaded_ = !precise_products_.orbit_clock_data.empty();
     ssr_products_loaded_ = !ssr_products_.orbit_clock_corrections.empty();
+    ionex_products_loaded_ = !ionex_products_.tec_maps.empty();
+    dcb_products_loaded_ = !dcb_products_.entries.empty();
     ocean_loading_loaded_ = false;
     ocean_loading_coefficients_ = OceanLoadingCoefficients{};
     static_anchor_position_.setZero();
@@ -1013,6 +1177,10 @@ void PPPProcessor::reset() {
     last_applied_atmos_iono_corrections_ = 0;
     last_applied_atmos_trop_m_ = 0.0;
     last_applied_atmos_iono_m_ = 0.0;
+    last_applied_ionex_corrections_ = 0;
+    last_applied_dcb_corrections_ = 0;
+    last_applied_ionex_m_ = 0.0;
+    last_applied_dcb_m_ = 0.0;
 
     std::lock_guard<std::mutex> lock(stats_mutex_);
     total_epochs_processed_ = 0;
@@ -1042,6 +1210,26 @@ bool PPPProcessor::loadSSRProducts(const std::string& ssr_file) {
     }
     ssr_products_loaded_ = ssr_products_.loadCSVFile(ssr_file);
     return ssr_products_loaded_;
+}
+
+bool PPPProcessor::loadIONEXProducts(const std::string& ionex_file) {
+    ionex_products_.clear();
+    if (ionex_file.empty()) {
+        ionex_products_loaded_ = false;
+        return false;
+    }
+    ionex_products_loaded_ = ionex_products_.loadIONEXFile(ionex_file);
+    return ionex_products_loaded_;
+}
+
+bool PPPProcessor::loadDCBProducts(const std::string& dcb_file) {
+    dcb_products_.clear();
+    if (dcb_file.empty()) {
+        dcb_products_loaded_ = false;
+        return false;
+    }
+    dcb_products_loaded_ = dcb_products_.loadFile(dcb_file);
+    return dcb_products_loaded_;
 }
 
 bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
@@ -1553,6 +1741,8 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
     for (auto& observation : observations) {
         double deferred_variance_pr = 0.0;
         double deferred_variance_cp = 0.0;
+        bool applied_ssr_code_bias = false;
+        bool applied_ssr_iono = false;
         const Vector3d receiver_antenna_offset_ecef =
             calculateReceiverAntennaOffsetEcef(receiver_marker_position, observation);
         const Vector3d receiver_position = receiver_marker_position + receiver_antenna_offset_ecef;
@@ -1615,6 +1805,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     observation.secondary_code_bias_coeff);
                 observation.pseudorange_if -= code_bias;
                 observation.pseudorange_code_bias_m = code_bias;
+                applied_ssr_code_bias = std::abs(code_bias) > 0.0;
                 if (observation.has_carrier_phase && !phase_bias_m.empty()) {
                     const double phase_bias = observationPhaseBiasMeters(
                         observation.satellite.system,
@@ -1668,6 +1859,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     observation.atmospheric_iono_correction_m = ionosphere_correction_m;
                     ++last_applied_atmos_iono_corrections_;
                     last_applied_atmos_iono_m_ += std::abs(ionosphere_correction_m);
+                    applied_ssr_iono = true;
                 }
             }
         }
@@ -1676,6 +1868,61 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         if (!std::isfinite(geometry.distance) || geometry.elevation < elevation_mask) {
             observation.valid = false;
             continue;
+        }
+
+        if (!applied_ssr_code_bias && dcb_products_loaded_) {
+            const double dcb_bias_m = observationDcbBiasMeters(
+                dcb_products_,
+                observation.satellite,
+                observation.primary_signal,
+                observation.secondary_signal,
+                ppp_config_.use_ionosphere_free,
+                observation.primary_code_bias_coeff,
+                observation.secondary_code_bias_coeff);
+            if (std::isfinite(dcb_bias_m) && std::abs(dcb_bias_m) > 0.0) {
+                observation.pseudorange_if -= dcb_bias_m;
+                observation.pseudorange_code_bias_m += dcb_bias_m;
+                ++last_applied_dcb_corrections_;
+                last_applied_dcb_m_ += std::abs(dcb_bias_m);
+            }
+        }
+
+        if (!applied_ssr_iono && ionex_products_loaded_) {
+            double ipp_lat_deg = 0.0;
+            double ipp_lon_deg = 0.0;
+            double mapping_factor = 0.0;
+            double vertical_tecu = 0.0;
+            if (ionexPiercePointAndMapping(
+                    ionex_products_,
+                    receiver_position,
+                    geometry.azimuth,
+                    geometry.elevation,
+                    ipp_lat_deg,
+                    ipp_lon_deg,
+                    mapping_factor) &&
+                ionex_products_.interpolateTecu(time, ipp_lat_deg, ipp_lon_deg, vertical_tecu, nullptr)) {
+                const double stec_tecu = mapping_factor * vertical_tecu;
+                const double ionosphere_correction_m = ppp_atmosphere::observationIonosphereDelayMeters(
+                    eph,
+                    observation.primary_signal,
+                    observation.secondary_signal,
+                    ppp_config_.use_ionosphere_free,
+                    stec_tecu,
+                    observation.primary_code_bias_coeff,
+                    observation.secondary_code_bias_coeff);
+                if (std::isfinite(ionosphere_correction_m) &&
+                    std::abs(ionosphere_correction_m) > 0.0) {
+                    observation.pseudorange_if -= ionosphere_correction_m;
+                    if (observation.has_carrier_phase) {
+                        observation.carrier_phase_if += ionosphere_correction_m;
+                    }
+                    observation.atmospheric_iono_correction_m += ionosphere_correction_m;
+                    ++last_applied_atmos_iono_corrections_;
+                    last_applied_atmos_iono_m_ += std::abs(ionosphere_correction_m);
+                    ++last_applied_ionex_corrections_;
+                    last_applied_ionex_m_ += std::abs(ionosphere_correction_m);
+                }
+            }
         }
 
         observation.satellite_position = sat_position;

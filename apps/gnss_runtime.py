@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import shutil
+import subprocess
 import sys
+from datetime import date
 
 
 def resolve_gnss_command(root_dir: Path) -> list[str]:
@@ -64,3 +67,67 @@ def parse_summary_metrics(line: str) -> dict[str, object]:
         except ValueError:
             metrics[key] = value
     return metrics
+
+
+def _normalize_rinex_year(raw_year: int) -> int:
+    if raw_year >= 100:
+        return raw_year
+    return 2000 + raw_year if raw_year < 80 else 1900 + raw_year
+
+
+def infer_rinex_first_obs_date(path: Path) -> date:
+    with path.open(encoding="ascii", errors="ignore") as handle:
+        for line in handle:
+            if "TIME OF FIRST OBS" in line:
+                fields = line[:43].split()
+                if len(fields) < 3:
+                    break
+                year = _normalize_rinex_year(int(float(fields[0])))
+                month = int(float(fields[1]))
+                day = int(float(fields[2]))
+                return date(year, month, day)
+            if "END OF HEADER" in line:
+                break
+    raise SystemExit(f"Failed to infer TIME OF FIRST OBS from {path}")
+
+
+def run_fetch_products(
+    root_dir: Path,
+    obs_path: Path,
+    product_specs: list[str],
+    product_date_text: str | None = None,
+    cache_dir: Path | None = None,
+) -> dict[str, object]:
+    if not product_specs:
+        raise SystemExit("--fetch-products requires at least one --product KIND=SOURCE")
+
+    effective_date = product_date_text or infer_rinex_first_obs_date(obs_path).isoformat()
+    command = [*resolve_gnss_command(root_dir), "fetch-products", "--date", effective_date]
+    for spec in product_specs:
+        command.extend(["--product", spec])
+    if cache_dir is not None:
+        command.extend(["--cache-dir", str(cache_dir)])
+
+    print("+", " ".join(command))
+    completed = subprocess.run(
+        command,
+        cwd=root_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise SystemExit(
+            f"gnss fetch-products failed with exit code {completed.returncode}\n"
+            f"{completed.stdout}{completed.stderr}"
+        )
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            "gnss fetch-products did not return valid JSON\n"
+            f"{completed.stdout}{completed.stderr}"
+        ) from exc
+    assert isinstance(payload, dict)
+    payload["effective_date"] = effective_date
+    return payload

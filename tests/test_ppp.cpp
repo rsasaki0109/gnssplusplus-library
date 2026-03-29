@@ -938,6 +938,94 @@ TEST(PPPTest, PreciseProductsLoadSp3AndClockAndInterpolateMidpoint) {
     std::filesystem::remove(clk_path);
 }
 
+TEST(PPPTest, IONEXProductsLoadAndInterpolateTecAndRms) {
+    const auto ionex_path = tempFilePath("libgnss_ppp_ionex_test.ionex");
+    std::filesystem::remove(ionex_path);
+
+    const std::string ionex_text =
+        "     1.0           I                   G                   IONEX VERSION / TYPE\n"
+        "  3600                                                      INTERVAL\n"
+        "    -1                                                      EXPONENT\n"
+        "    0.0   10.0   10.0                                       LAT1 / LAT2 / DLAT\n"
+        "    0.0   10.0   10.0                                       LON1 / LON2 / DLON\n"
+        "  450.0  450.0    0.0                                       HGT1 / HGT2 / DHGT\n"
+        "                                                            END OF HEADER\n"
+        "    1                                                      START OF TEC MAP\n"
+        " 2026     3    26     0     0     0                        EPOCH OF CURRENT MAP\n"
+        "    0.0    0.0   10.0   10.0  450.0                        LAT/LON1/LON2/DLON/H\n"
+        "  100 200\n"
+        "   10.0    0.0   10.0   10.0  450.0                        LAT/LON1/LON2/DLON/H\n"
+        "  300 400\n"
+        "                                                            END OF TEC MAP\n"
+        "    1                                                      START OF RMS MAP\n"
+        " 2026     3    26     0     0     0                        EPOCH OF CURRENT MAP\n"
+        "    0.0    0.0   10.0   10.0  450.0                        LAT/LON1/LON2/DLON/H\n"
+        "   10 20\n"
+        "   10.0    0.0   10.0   10.0  450.0                        LAT/LON1/LON2/DLON/H\n"
+        "   30 40\n"
+        "                                                            END OF RMS MAP\n"
+        "    2                                                      START OF TEC MAP\n"
+        " 2026     3    26     1     0     0                        EPOCH OF CURRENT MAP\n"
+        "    0.0    0.0   10.0   10.0  450.0                        LAT/LON1/LON2/DLON/H\n"
+        "  200 300\n"
+        "   10.0    0.0   10.0   10.0  450.0                        LAT/LON1/LON2/DLON/H\n"
+        "  400 500\n"
+        "                                                            END OF TEC MAP\n"
+        "    2                                                      START OF RMS MAP\n"
+        " 2026     3    26     1     0     0                        EPOCH OF CURRENT MAP\n"
+        "    0.0    0.0   10.0   10.0  450.0                        LAT/LON1/LON2/DLON/H\n"
+        "   20 30\n"
+        "   10.0    0.0   10.0   10.0  450.0                        LAT/LON1/LON2/DLON/H\n"
+        "   40 50\n"
+        "                                                            END OF RMS MAP\n";
+    writeTextFile(ionex_path, ionex_text);
+
+    IONEXProducts ionex_products;
+    ASSERT_TRUE(ionex_products.loadIONEXFile(ionex_path.string()));
+    ASSERT_EQ(ionex_products.tec_maps.size(), 2U);
+    ASSERT_EQ(ionex_products.rms_maps.size(), 2U);
+    EXPECT_EQ(ionex_products.interval_s, 3600);
+    EXPECT_EQ(ionex_products.exponent, -1);
+
+    double tecu = 0.0;
+    double rms_tecu = 0.0;
+    ASSERT_TRUE(ionex_products.interpolateTecu(
+        makeTime(2026, 3, 26, 0, 30, 0.0), 5.0, 5.0, tecu, &rms_tecu));
+    EXPECT_NEAR(tecu, 30.0, 1e-9);
+    EXPECT_NEAR(rms_tecu, 3.0, 1e-9);
+
+    std::filesystem::remove(ionex_path);
+}
+
+TEST(PPPTest, DCBProductsLoadBiasSinexAndLookupEntry) {
+    const auto dcb_path = tempFilePath("libgnss_ppp_dcb_test.bsx");
+    std::filesystem::remove(dcb_path);
+
+    const std::string dcb_text =
+        "%=BIA 1.00 TEST TEST 2024:002:00000 TEST\n"
+        "+BIAS/SOLUTION\n"
+        "*BIAS SVN PRN STATION OBS1 OBS2 BEGIN END UNIT EST STDDEV\n"
+        " DSB G01 C1C C2W 2024:002:00000 2024:003:00000 ns 1.234 0.100\n"
+        " OSB E11 C1C C5Q 2024:002:00000 2024:003:00000 ns 0.321 0.050\n"
+        "-BIAS/SOLUTION\n";
+    writeTextFile(dcb_path, dcb_text);
+
+    DCBProducts dcb_products;
+    ASSERT_TRUE(dcb_products.loadFile(dcb_path.string()));
+    ASSERT_EQ(dcb_products.entries.size(), 2U);
+
+    double bias = 0.0;
+    double sigma = 0.0;
+    ASSERT_TRUE(dcb_products.getBias(
+        SatelliteId(GNSSSystem::GPS, 1), "DSB", "C1C", "C2W", bias, &sigma));
+    EXPECT_NEAR(bias, 1.234, 1e-12);
+    EXPECT_NEAR(sigma, 0.100, 1e-12);
+    EXPECT_FALSE(dcb_products.getBias(
+        SatelliteId(GNSSSystem::GPS, 1), "DSB", "C1C", "C5Q", bias, &sigma));
+
+    std::filesystem::remove(dcb_path);
+}
+
 TEST(PPPTest, SSRProductsLoadCsvAndInterpolateMidpoint) {
     const auto ssr_path = tempFilePath("libgnss_ppp_ssr_test.csv");
     std::filesystem::remove(ssr_path);

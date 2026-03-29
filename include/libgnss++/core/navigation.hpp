@@ -368,4 +368,94 @@ public:
     void clear();
 };
 
+/**
+ * @brief IONEX latitude row stored as a longitude grid.
+ */
+struct IONEXLatitudeRow {
+    double latitude_deg = 0.0;
+    double longitude_start_deg = 0.0;
+    double longitude_end_deg = 0.0;
+    double longitude_step_deg = 0.0;
+    double height_km = 0.0;
+    std::vector<double> values_tecu;
+};
+
+/**
+ * @brief Single IONEX TEC/RMS map at an epoch.
+ */
+struct IONEXMap {
+    GNSSTime time;
+    std::vector<IONEXLatitudeRow> rows;
+};
+
+/**
+ * @brief Minimal IONEX product manager.
+ *
+ * This loader stores TEC and RMS maps and can interpolate a vertical TEC value
+ * at a latitude/longitude/time sample. The current implementation is intended
+ * as a core product container and future PPP hook point.
+ */
+class IONEXProducts {
+public:
+    std::string version;
+    std::string system;
+    int interval_s = 0;
+    int map_dimension = 0;
+    int exponent = 0;
+    double base_radius_km = 0.0;
+    double elevation_cutoff_deg = 0.0;
+    std::string mapping_function;
+    std::vector<double> latitude_grid;
+    std::vector<double> longitude_grid;
+    std::vector<double> height_grid;
+    int auxiliary_dcb_entries = 0;
+    std::vector<IONEXMap> tec_maps;
+    std::vector<IONEXMap> rms_maps;
+
+    bool loadIONEXFile(const std::string& filename);
+
+    bool interpolateTecu(const GNSSTime& time,
+                         double latitude_deg,
+                         double longitude_deg,
+                         double& tecu,
+                         double* rms_tecu = nullptr) const;
+
+    bool hasData(const GNSSTime& time) const;
+
+    void clear();
+};
+
+/**
+ * @brief Minimal differential code bias product entry.
+ */
+struct DCBEntry {
+    std::string bias_type;
+    SatelliteId satellite;
+    std::string observation_1;
+    std::string observation_2;
+    std::string unit;
+    double bias = 0.0;
+    double sigma = 0.0;
+    bool valid = false;
+};
+
+/**
+ * @brief Minimal Bias-SINEX / IONEX auxiliary DCB product manager.
+ */
+class DCBProducts {
+public:
+    std::vector<DCBEntry> entries;
+
+    bool loadFile(const std::string& filename);
+
+    bool getBias(const SatelliteId& sat,
+                 const std::string& bias_type,
+                 const std::string& observation_1,
+                 const std::string& observation_2,
+                 double& bias,
+                 double* sigma = nullptr) const;
+
+    void clear();
+};
+
 } // namespace libgnss

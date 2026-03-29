@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 from http import HTTPStatus
@@ -97,6 +98,11 @@ def parse_args() -> argparse.Namespace:
         help="Glob under --root for gnss live-signoff summary JSON files.",
     )
     parser.add_argument(
+        "--visibility-summary-glob",
+        default="output/visibility*_summary.json",
+        help="Glob under --root for gnss visibility summary JSON files.",
+    )
+    parser.add_argument(
         "--docs-url",
         default=os.environ.get("GNSSPP_DOCS_URL", DOCS_SITE_URL),
         help="Optional docs site URL shown in the web UI header.",
@@ -124,6 +130,34 @@ def load_json(path: Path) -> dict[str, Any] | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+
+
+def resolve_under_root(root_dir: Path, path_text: str) -> Path:
+    candidate = Path(path_text)
+    if not candidate.is_absolute():
+        candidate = (root_dir / candidate).resolve()
+    else:
+        candidate = candidate.resolve()
+    candidate.relative_to(root_dir.resolve())
+    return candidate
+
+
+def load_visibility_rows(csv_path: Path) -> list[dict[str, Any]]:
+    with csv_path.open("r", encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream)
+        rows: list[dict[str, Any]] = []
+        for row in reader:
+            rows.append(
+                {
+                    "satellite": row.get("satellite"),
+                    "system": row.get("system"),
+                    "signal": row.get("signal"),
+                    "azimuth_deg": float(row["azimuth_deg"]),
+                    "elevation_deg": float(row["elevation_deg"]),
+                    "snr_dbhz": float(row["snr_dbhz"]) if row.get("snr_dbhz") else None,
+                }
+            )
+        return downsample_points(rows)
 
 
 def classify_realtime_status(realtime_factor: Any) -> str:
@@ -261,6 +295,33 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
 
+    visibility_summaries: list[dict[str, Any]] = []
+    for path in sorted(root_dir.glob(args.visibility_summary_glob)):
+        payload = load_json(path)
+        if payload is None:
+            continue
+        csv_path = None
+        csv_value = payload.get("csv")
+        if isinstance(csv_value, str):
+            try:
+                csv_path = relative_display(resolve_under_root(root_dir, csv_value), root_dir)
+            except ValueError:
+                csv_path = csv_value
+        visibility_summaries.append(
+            {
+                "_path": relative_display(path, root_dir),
+                "csv_path": csv_path,
+                "epochs_processed": payload.get("epochs_processed"),
+                "epochs_with_rows": payload.get("epochs_with_rows"),
+                "rows_written": payload.get("rows_written"),
+                "unique_satellites": payload.get("unique_satellites"),
+                "mean_satellites_per_epoch": payload.get("mean_satellites_per_epoch"),
+                "max_satellites_per_epoch": payload.get("max_satellites_per_epoch"),
+                "mean_elevation_deg": payload.get("mean_elevation_deg"),
+                "mean_snr_dbhz": payload.get("mean_snr_dbhz"),
+            }
+        )
+
     return {
         "title": "libgnss++ web",
         "root": str(root_dir),
@@ -274,6 +335,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         "odaiba_summary": load_json(odaiba_summary_path),
         "ppc_summaries": ppc_summaries,
         "live_summaries": live_summaries,
+        "visibility_summaries": visibility_summaries,
         "receiver_status": rcv_status,
     }
 
@@ -518,6 +580,35 @@ def render_html() -> str:
         <tbody></tbody>
       </table>
     </section>
+
+    <section class="card" style="margin-top: 18px;">
+      <div class="section-title">
+        <h2>Visibility summaries</h2>
+        <span class="tiny">summary rows plus a quick polar view from the first CSV artifact</span>
+      </div>
+      <div class="grid two plot-wrap">
+        <div class="plot-card">
+          <h3>Visibility view</h3>
+          <canvas id="visibility-canvas" width="600" height="360"></canvas>
+        </div>
+        <div>
+          <table id="visibility-table">
+            <thead>
+              <tr>
+                <th>Path</th>
+                <th>Epochs</th>
+                <th>Rows</th>
+                <th>Unique sats</th>
+                <th>Mean sats</th>
+                <th>Mean elev</th>
+                <th>Mean SNR</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </main>
   <script>
     const STATUS_COLORS = {"FIXED":"#2ecc71","FLOAT":"#f39c12","DGPS":"#3498db","SPP":"#e74c3c"};
@@ -601,6 +692,63 @@ def render_html() -> str:
         item.innerHTML = `<span class="swatch" style="background:${color}"></span>${name}`;
         legend.appendChild(item);
       }
+    }
+
+    function drawVisibility(canvas, payload) {
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (!payload.available || !payload.rows.length) {
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "16px IBM Plex Sans, sans-serif";
+        ctx.fillText(payload.error || "No visibility data", 24, 40);
+        return;
+      }
+
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const radius = Math.min(canvas.width, canvas.height) * 0.38;
+
+      ctx.strokeStyle = "#d1d5db";
+      ctx.lineWidth = 1;
+      for (const frac of [0.25, 0.5, 0.75, 1.0]) {
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius * frac, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY - radius);
+      ctx.lineTo(centerX, centerY + radius);
+      ctx.moveTo(centerX - radius, centerY);
+      ctx.lineTo(centerX + radius, centerY);
+      ctx.stroke();
+
+      ctx.fillStyle = "#6b7280";
+      ctx.font = "12px IBM Plex Sans, sans-serif";
+      ctx.fillText("N", centerX - 4, centerY - radius - 8);
+      ctx.fillText("E", centerX + radius + 8, centerY + 4);
+      ctx.fillText("S", centerX - 4, centerY + radius + 16);
+      ctx.fillText("W", centerX - radius - 16, centerY + 4);
+
+      for (const row of payload.rows) {
+        const az = row.azimuth_deg * Math.PI / 180.0;
+        const r = radius * (90.0 - row.elevation_deg) / 90.0;
+        const x = centerX + r * Math.sin(az);
+        const y = centerY - r * Math.cos(az);
+        const snr = row.snr_dbhz ?? 0;
+        const alpha = Math.max(0.35, Math.min(1.0, snr / 50.0));
+        ctx.fillStyle = `rgba(15, 118, 110, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = "#6b7280";
+      ctx.font = "12px IBM Plex Sans, sans-serif";
+      ctx.fillText(`rows: ${payload.rows.length}`, 14, 18);
+      ctx.fillText(payload.path || "", 14, canvas.height - 10);
     }
 
     function formatMaybeNumber(value, digits = 2, suffix = "") {
@@ -695,6 +843,29 @@ def render_html() -> str:
         ppcBody.appendChild(tr);
       }
 
+      const visibilityBody = document.querySelector("#visibility-table tbody");
+      visibilityBody.innerHTML = "";
+      for (const row of overview.visibility_summaries || []) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${row._path || "n/a"}</td>
+          <td>${row.epochs_processed ?? "n/a"}</td>
+          <td>${row.rows_written ?? "n/a"}</td>
+          <td>${row.unique_satellites ?? "n/a"}</td>
+          <td>${formatMaybeNumber(row.mean_satellites_per_epoch, 2)}</td>
+          <td>${formatMaybeNumber(row.mean_elevation_deg, 2, " deg")}</td>
+          <td>${formatMaybeNumber(row.mean_snr_dbhz, 2, " dB-Hz")}</td>`;
+        visibilityBody.appendChild(tr);
+      }
+
+      const firstVisibility = (overview.visibility_summaries || []).find((row) => row.csv_path);
+      if (firstVisibility) {
+        const visibilityPayload = await fetchJson(`/api/visibility?path=${encodeURIComponent(firstVisibility.csv_path)}`);
+        drawVisibility(document.getElementById("visibility-canvas"), visibilityPayload);
+      } else {
+        drawVisibility(document.getElementById("visibility-canvas"), {available: false, rows: [], error: "No visibility CSV"});
+      }
+
       drawTrajectory(document.getElementById("lib-canvas"), await fetchJson("/api/solution?name=libgnsspp"));
       drawTrajectory(document.getElementById("rtk-canvas"), await fetchJson("/api/solution?name=rtklib"));
       await refreshStatus();
@@ -779,6 +950,27 @@ def make_handler(args: argparse.Namespace):
                         self._write_json(build_solution_payload(name, rtklib_pos_path, root_dir, "RTKLIB"))
                         return
                     self._write_json({"error": "unknown solution name"}, HTTPStatus.BAD_REQUEST)
+                    return
+                if parsed.path == "/api/visibility":
+                    csv_arg = query.get("path", [""])[0]
+                    if not csv_arg:
+                        self._write_json({"error": "missing visibility CSV path"}, HTTPStatus.BAD_REQUEST)
+                        return
+                    try:
+                        csv_path = resolve_under_root(root_dir, csv_arg)
+                    except ValueError:
+                        self._write_json({"error": "visibility CSV path escapes artifact root"}, HTTPStatus.BAD_REQUEST)
+                        return
+                    if not csv_path.exists():
+                        self._write_json({"error": f"visibility CSV not found: {csv_arg}"}, HTTPStatus.NOT_FOUND)
+                        return
+                    self._write_json(
+                        {
+                            "available": True,
+                            "path": relative_display(csv_path, root_dir),
+                            "rows": load_visibility_rows(csv_path),
+                        }
+                    )
                     return
 
                 self._write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)

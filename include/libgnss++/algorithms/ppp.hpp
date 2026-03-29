@@ -31,6 +31,8 @@ public:
         std::string clock_file_path;
         bool use_ssr_corrections = false;
         std::string ssr_file_path;
+        std::string ionex_file_path;
+        std::string dcb_file_path;
         std::string antex_file_path;
         std::string ocean_loading_file_path;
         std::string ocean_loading_station_name;
@@ -123,6 +125,16 @@ public:
     bool loadSSRProducts(const std::string& ssr_file);
 
     /**
+     * @brief Load IONEX ionosphere products for future PPP hooks.
+     */
+    bool loadIONEXProducts(const std::string& ionex_file);
+
+    /**
+     * @brief Load DCB / Bias-SINEX products for future PPP hooks.
+     */
+    bool loadDCBProducts(const std::string& dcb_file);
+
+    /**
      * @brief Load RTCM SSR orbit/clock corrections and convert them to sampled PPP corrections.
      */
     bool loadRTCMSSRProducts(const std::string& rtcm_file,
@@ -168,6 +180,22 @@ public:
     double getLastAppliedAtmosphericIonosphereMeters() const {
         return last_applied_atmos_iono_m_;
     }
+
+    int getLastAppliedIonexCorrections() const {
+        return last_applied_ionex_corrections_;
+    }
+
+    int getLastAppliedDcbCorrections() const {
+        return last_applied_dcb_corrections_;
+    }
+
+    double getLastAppliedIonexMeters() const {
+        return last_applied_ionex_m_;
+    }
+
+    double getLastAppliedDcbMeters() const {
+        return last_applied_dcb_m_;
+    }
     
     /**
      * @brief Check convergence status
@@ -178,6 +206,10 @@ public:
      * @brief Check whether any SSR products are loaded.
      */
     bool hasLoadedSSRProducts() const { return ssr_products_loaded_; }
+    bool hasLoadedIONEXProducts() const { return ionex_products_loaded_; }
+    bool hasLoadedDCBProducts() const { return dcb_products_loaded_; }
+    size_t getLoadedIONEXMapCount() const { return ionex_products_.tec_maps.size(); }
+    size_t getLoadedDCBEntryCount() const { return dcb_products_.entries.size(); }
     
     /**
      * @brief Get convergence time
@@ -189,6 +221,8 @@ private:
     SPPProcessor spp_processor_;  ///< Fallback SPP processor
     PreciseProducts precise_products_;
     SSRProducts ssr_products_;
+    IONEXProducts ionex_products_;
+    DCBProducts dcb_products_;
     
     // Kalman filter state
     struct PPPState {
@@ -219,6 +253,8 @@ private:
     bool has_last_processed_time_ = false;
     bool precise_products_loaded_ = false;
     bool ssr_products_loaded_ = false;
+    bool ionex_products_loaded_ = false;
+    bool dcb_products_loaded_ = false;
     struct OceanLoadingCoefficients {
         std::array<double, 11> up_amplitudes_m{};
         std::array<double, 11> west_amplitudes_m{};
@@ -239,6 +275,10 @@ private:
     int last_applied_atmos_iono_corrections_ = 0;
     double last_applied_atmos_trop_m_ = 0.0;
     double last_applied_atmos_iono_m_ = 0.0;
+    int last_applied_ionex_corrections_ = 0;
+    int last_applied_dcb_corrections_ = 0;
+    double last_applied_ionex_m_ = 0.0;
+    double last_applied_dcb_m_ = 0.0;
     
     // Ambiguity tracking
     struct PPPAmbiguityInfo {

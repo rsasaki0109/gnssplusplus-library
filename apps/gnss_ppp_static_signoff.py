@@ -13,7 +13,7 @@ import subprocess
 import sys
 import tempfile
 
-from gnss_runtime import ensure_input_exists, resolve_gnss_command
+from gnss_runtime import ensure_input_exists, resolve_gnss_command, run_fetch_products
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -46,6 +46,18 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional precise CLK file.",
+    )
+    parser.add_argument(
+        "--ionex",
+        type=Path,
+        default=None,
+        help="Optional IONEX TEC map product.",
+    )
+    parser.add_argument(
+        "--dcb",
+        type=Path,
+        default=None,
+        help="Optional DCB / Bias-SINEX product.",
     )
     parser.add_argument(
         "--out",
@@ -110,6 +122,29 @@ def parse_args() -> argparse.Namespace:
         "--generate-products",
         action="store_true",
         help="Generate temporary SP3/CLK products from --obs/--nav via gnss nav-products.",
+    )
+    parser.add_argument(
+        "--fetch-products",
+        action="store_true",
+        help="Fetch SP3/CLK-style products through gnss fetch-products before running PPP.",
+    )
+    parser.add_argument(
+        "--product",
+        action="append",
+        default=[],
+        metavar="KIND=SOURCE",
+        help="Product template passed through to gnss fetch-products. May be repeated.",
+    )
+    parser.add_argument(
+        "--product-date",
+        default=None,
+        help="Optional YYYY-MM-DD date for --fetch-products. Defaults to TIME OF FIRST OBS.",
+    )
+    parser.add_argument(
+        "--product-cache-dir",
+        type=Path,
+        default=None,
+        help="Optional cache directory for gnss fetch-products.",
     )
     parser.add_argument(
         "--require-ppp-fixed-epochs-min",
@@ -246,8 +281,13 @@ def build_summary_payload(args: argparse.Namespace) -> dict[str, object]:
         "dataset": "sample static PPP",
         "obs": str(args.obs),
         "nav": str(args.nav) if args.nav is not None else None,
-        "sp3": str(args.sp3) if args.sp3 is not None else None,
-        "clk": str(args.clk) if args.clk is not None else None,
+        "sp3": str(getattr(args, "resolved_sp3", None)) if getattr(args, "resolved_sp3", None) is not None else None,
+        "clk": str(getattr(args, "resolved_clk", None)) if getattr(args, "resolved_clk", None) is not None else None,
+        "ionex": str(getattr(args, "resolved_ionex", None)) if getattr(args, "resolved_ionex", None) is not None else None,
+        "dcb": str(getattr(args, "resolved_dcb", None)) if getattr(args, "resolved_dcb", None) is not None else None,
+        "fetch_products": bool(getattr(args, "fetch_products", False)),
+        "fetched_products": getattr(args, "fetched_products", None),
+        "fetched_product_date": getattr(args, "fetched_product_date", None),
         "solution_pos": str(args.out),
         "epochs": len(records),
         "ppp_float_epochs": ppp_float_epochs,
@@ -405,6 +445,10 @@ def main() -> int:
         raise SystemExit("--max-epochs must be positive or -1")
     if args.enable_ar and args.ar_ratio_threshold <= 0.0:
         raise SystemExit("--ar-ratio-threshold must be positive")
+    if args.generate_products and args.fetch_products:
+        raise SystemExit("--generate-products and --fetch-products cannot be used together")
+    if args.fetch_products and not args.product:
+        raise SystemExit("--fetch-products requires at least one --product KIND=SOURCE")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.summary_json.parent.mkdir(parents=True, exist_ok=True)
@@ -412,17 +456,49 @@ def main() -> int:
 
     resolved_sp3 = args.sp3
     resolved_clk = args.clk
+    resolved_ionex = args.ionex
+    resolved_dcb = args.dcb
     temp_products: tempfile.TemporaryDirectory[str] | None = None
+    args.fetched_products = None
+    args.fetched_product_date = None
     if args.generate_products:
         resolved_sp3, resolved_clk, temp_products = resolve_precise_products(gnss_command, args)
+    elif args.fetch_products:
+        fetch_payload = run_fetch_products(
+            ROOT_DIR,
+            args.obs,
+            args.product,
+            product_date_text=args.product_date,
+            cache_dir=args.product_cache_dir,
+        )
+        fetched_products = fetch_payload.get("products", {})
+        if isinstance(fetched_products, dict):
+            args.fetched_products = fetched_products
+            args.fetched_product_date = fetch_payload.get("effective_date")
+            if resolved_sp3 is None and "sp3" in fetched_products:
+                resolved_sp3 = Path(str(fetched_products["sp3"]))
+            if resolved_clk is None and "clk" in fetched_products:
+                resolved_clk = Path(str(fetched_products["clk"]))
+            if resolved_ionex is None and "ionex" in fetched_products:
+                resolved_ionex = Path(str(fetched_products["ionex"]))
+            if resolved_dcb is None and "dcb" in fetched_products:
+                resolved_dcb = Path(str(fetched_products["dcb"]))
     elif args.enable_ar and (resolved_sp3 is None or resolved_clk is None):
         raise SystemExit("--enable-ar requires --sp3/--clk or --generate-products")
+    if args.enable_ar and (resolved_sp3 is None or resolved_clk is None):
+        raise SystemExit(
+            "--enable-ar requires --sp3/--clk, --generate-products, or --fetch-products that yields sp3/clk"
+        )
     if args.malib_bin is not None and (
         args.enable_ar or resolved_sp3 is not None or resolved_clk is not None
     ):
         raise SystemExit(
             "MALIB PPP comparison currently supports the broadcast-nav sign-off only"
         )
+    args.resolved_sp3 = resolved_sp3
+    args.resolved_clk = resolved_clk
+    args.resolved_ionex = resolved_ionex
+    args.resolved_dcb = resolved_dcb
 
     command = [
         *gnss_command,
@@ -439,6 +515,10 @@ def main() -> int:
         command.extend(["--sp3", str(resolved_sp3)])
     if resolved_clk is not None:
         command.extend(["--clk", str(resolved_clk)])
+    if resolved_ionex is not None:
+        command.extend(["--ionex", str(resolved_ionex)])
+    if resolved_dcb is not None:
+        command.extend(["--dcb", str(resolved_dcb)])
     if args.enable_ar:
         command.extend(["--enable-ar", "--ar-ratio-threshold", str(args.ar_ratio_threshold)])
     if args.max_epochs > 0:

@@ -36,7 +36,11 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_spp",
                 prefix / "bin" / "gnss_solve",
                 prefix / "bin" / "gnss_ppp",
+                prefix / "bin" / "gnss_visibility",
                 prefix / "bin" / "gnss_nav_products",
+                prefix / "bin" / "gnss_fetch_products.py",
+                prefix / "bin" / "gnss_ionex_info.py",
+                prefix / "bin" / "gnss_dcb_info.py",
                 prefix / "bin" / "gnss_rcv.py",
                 prefix / "bin" / "gnss_web.py",
                 prefix / "bin" / "gnss_live_signoff.py",
@@ -123,6 +127,8 @@ class PackagingSmokeTest(unittest.TestCase):
             if repo_data_exists("data/rover_static.obs", "data/navigation_static.nav"):
                 ppp_out = prefix / "tmp_ppp_static.pos"
                 ppp_summary = prefix / "tmp_ppp_static.json"
+                visibility_csv = prefix / "tmp_visibility.csv"
+                visibility_summary = prefix / "tmp_visibility.json"
                 subprocess.run(
                     [
                         str(prefix / "bin" / "gnss"),
@@ -144,6 +150,29 @@ class PackagingSmokeTest(unittest.TestCase):
                 )
                 self.assertTrue(ppp_out.exists(), "installed PPP static signoff did not write .pos")
                 self.assertTrue(ppp_summary.exists(), "installed PPP static signoff did not write summary")
+
+                subprocess.run(
+                    [
+                        str(prefix / "bin" / "gnss"),
+                        "visibility",
+                        "--obs",
+                        str(ROOT_DIR / "data/rover_static.obs"),
+                        "--nav",
+                        str(ROOT_DIR / "data/navigation_static.nav"),
+                        "--csv",
+                        str(visibility_csv),
+                        "--summary-json",
+                        str(visibility_summary),
+                        "--max-epochs",
+                        "3",
+                        "--quiet",
+                    ],
+                    check=True,
+                    cwd=ROOT_DIR,
+                    env=env,
+                )
+                self.assertTrue(visibility_csv.exists(), "installed visibility did not write CSV")
+                self.assertTrue(visibility_summary.exists(), "installed visibility did not write summary")
 
             if repo_data_exists(
                 "output/rtk_solution.pos",
@@ -217,6 +246,47 @@ class PackagingSmokeTest(unittest.TestCase):
                 text=True,
             )
             self.assertIn("realtime", live_signoff_help.stdout.lower())
+
+            fetch_products_help = subprocess.run(
+                [str(prefix / "bin" / "gnss"), "fetch-products", "--help"],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("sp3=", fetch_products_help.stdout.lower())
+            self.assertIn("--preset", fetch_products_help.stdout)
+
+            ionex_help = subprocess.run(
+                [str(prefix / "bin" / "gnss"), "ionex-info", "--help"],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("IONEX", ionex_help.stdout)
+
+            dcb_help = subprocess.run(
+                [str(prefix / "bin" / "gnss"), "dcb-info", "--help"],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("DCB", dcb_help.stdout)
+
+            visibility_help = subprocess.run(
+                [str(prefix / "bin" / "gnss"), "visibility", "--help"],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("visibility rows", visibility_help.stdout.lower())
 
 
 if __name__ == "__main__":
