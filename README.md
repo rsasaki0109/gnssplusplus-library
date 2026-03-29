@@ -32,8 +32,10 @@ python3 -m mkdocs serve
 - Native solvers: `SPP`, `RTK`, `PPP`, `CLAS-style PPP`
 - Native protocols: `RINEX`, `RTCM`, `UBX`, direct `QZSS L6`
 - Raw/log tooling: `NMEA`, `NovAtel`, `SBP`, `SBF`, `Trimble`, `SkyTraq`, `BINEX`
-- One CLI entrypoint: `gnss spp`, `solve`, `ppp`, `stream`, `convert`, `live`, `rcv`
-- Local web UI: `gnss web` for benchmark snapshots, live sign-offs, 2D trajectories, and receiver status
+- Product tooling: `fetch-products`, `ionex-info`, `dcb-info`
+- Analysis tooling: `visibility` for az/el/SNR visibility exports
+- One CLI entrypoint: `gnss spp`, `solve`, `ppp`, `visibility`, `stream`, `convert`, `live`, `rcv`
+- Local web UI: `gnss web` for benchmark snapshots, live sign-offs, 2D trajectories, visibility views, and receiver status
 - Built-in sign-off scripts and checked-in benchmark artifacts
 - CMake install/export, Python bindings, and ROS2 playback node
 
@@ -68,6 +70,13 @@ python3 apps/gnss.py ppp \
   --obs data/rover_static.obs \
   --nav data/navigation_static.nav \
   --out output/ppp_solution.pos
+
+python3 apps/gnss.py visibility \
+  --obs data/rover_static.obs \
+  --nav data/navigation_static.nav \
+  --csv output/visibility.csv \
+  --summary-json output/visibility_summary.json \
+  --max-epochs 60
 ```
 
 ### Inspect receiver logs
@@ -91,12 +100,16 @@ python3 apps/gnss.py sbf-info \
 | `gnss spp` | Batch SPP from rover/nav RINEX |
 | `gnss solve` | Batch RTK from rover/base/nav RINEX |
 | `gnss ppp` | Batch PPP from rover RINEX plus nav or precise products |
+| `gnss visibility` | Export azimuth/elevation/SNR visibility rows and summary JSON from rover/nav RINEX |
+| `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` files from local or remote sources |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
 | `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
 | `gnss ubx-info` | Inspect `NAV-PVT`, `RAWX`, `SFRBX` from file or serial |
 | `gnss sbf-info` | Inspect Septentrio SBF `PVTGeodetic`, `LBandTrackerStatus`, `P2PPStatus` from file or serial |
 | `gnss novatel-info` | Inspect NovAtel ASCII/Binary `BESTPOS` and `BESTVEL` logs |
 | `gnss nmea-info` | Inspect `GGA` and `RMC` NMEA logs from file or serial |
+| `gnss ionex-info` | Inspect `IONEX` header, map count, grid metadata, and auxiliary DCB blocks |
+| `gnss dcb-info` | Inspect `Bias-SINEX` or auxiliary DCB product contents |
 | `gnss qzss-l6-info` | Inspect direct QZSS L6 frames and export Compact SSR payloads |
 | `gnss social-card` | Regenerate the Odaiba share image |
 | `gnss short-baseline-signoff` | Static RTK sign-off |
@@ -123,7 +136,27 @@ python3 apps/gnss.py web \
   --rcv-status output/receiver.status.json
 ```
 
-Then open `http://127.0.0.1:8085` to inspect Odaiba metrics, live sign-offs, 2D trajectories, PPC summaries, and receiver status in a browser.
+Then open `http://127.0.0.1:8085` to inspect Odaiba metrics, live sign-offs, 2D trajectories, PPC summaries, visibility summaries/polar view, and receiver status in a browser.
+
+### Product-driven PPP
+
+```bash
+python3 apps/gnss.py fetch-products \
+  --date 2024-01-02 \
+  --preset igs-final \
+  --preset ionex \
+  --preset dcb \
+  --summary-json output/products.json
+
+python3 apps/gnss.py ppp-static-signoff \
+  --fetch-products \
+  --product-date 2024-01-02 \
+  --product sp3=https://cddis.nasa.gov/archive/gnss/products/{gps_week}/COD0OPSFIN_{yyyy}{doy}0000_01D_05M_ORB.SP3.gz \
+  --product clk=https://cddis.nasa.gov/archive/gnss/products/{gps_week}/COD0OPSFIN_{yyyy}{doy}0000_01D_30S_CLK.CLK.gz \
+  --product ionex=https://cddis.nasa.gov/archive/gnss/products/ionex/{yyyy}/{doy}/COD0OPSFIN_{yyyy}{doy}0000_01D_01H_GIM.INX.gz \
+  --product dcb=https://cddis.nasa.gov/archive/gnss/products/bias/{yyyy}/CAS0MGXRAP_{yyyy}{doy}0000_01D_01D_DCB.BSX.gz \
+  --summary-json output/ppp_static_summary.json
+```
 
 ## Benchmark Snapshot
 
