@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import socket
 import subprocess
 import sys
@@ -55,6 +56,7 @@ class WebUISmokeTest(unittest.TestCase):
             ppc_summary = temp_root / "output" / "ppc_tokyo_run1_rtk_summary.json"
             visibility_summary = temp_root / "output" / "visibility_static_summary.json"
             visibility_csv = temp_root / "output" / "visibility_static.csv"
+            visibility_png = temp_root / "output" / "visibility_static.png"
             port_file = temp_root / "port.txt"
             docs_url = "https://example.com/libgnsspp-docs/"
 
@@ -167,6 +169,11 @@ class WebUISmokeTest(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
+            visibility_png.write_bytes(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+ymsAAAAASUVORK5CYII="
+                )
+            )
 
             port = find_free_port()
             process = subprocess.Popen(
@@ -232,6 +239,10 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("27", page.locator("#visibility-table tbody").text_content())
                     self.assertIn("44.70 dB-Hz", page.locator("#visibility-table tbody").text_content())
                     self.assertIn("Visibility view", page.locator("body").text_content())
+                    self.assertIn(
+                        "output%2Fvisibility_static.png",
+                        page.locator("#visibility-image").get_attribute("src"),
+                    )
                     browser.close()
             finally:
                 process.terminate()

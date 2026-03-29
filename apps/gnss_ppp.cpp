@@ -1,7 +1,10 @@
 #include <algorithm>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 #include <libgnss++/algorithms/ppp.hpp>
@@ -23,6 +26,7 @@ struct Options {
     std::string blq_path;
     std::string ocean_loading_station_name;
     std::string out_path;
+    std::string summary_json_path;
     std::string kml_path;
     int max_epochs = 0;
     int convergence_min_epochs = 20;
@@ -54,6 +58,8 @@ void printUsage(const char* program_name) {
         << "  --ssr-step-seconds <seconds>\n"
         << "                          Sampling step for RTCM SSR conversion (default: 1.0)\n"
         << "  --out <solution.pos>     Output position file (required)\n"
+        << "  --summary-json <summary.json>\n"
+        << "                          Optional machine-readable run summary\n"
         << "  --kml <solution.kml>     Optional KML output\n"
         << "  --max-epochs <count>     Limit processed epochs (default: all)\n"
         << "  --convergence-min-epochs <count>\n"
@@ -110,6 +116,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.ocean_loading_station_name = argv[++i];
         } else if (arg == "--out" && i + 1 < argc) {
             options.out_path = argv[++i];
+        } else if (arg == "--summary-json" && i + 1 < argc) {
+            options.summary_json_path = argv[++i];
         } else if (arg == "--kml" && i + 1 < argc) {
             options.kml_path = argv[++i];
         } else if (arg == "--max-epochs" && i + 1 < argc) {
@@ -168,6 +176,33 @@ Options parseArguments(int argc, char* argv[]) {
         argumentError("--ssr-step-seconds must be positive", argv[0]);
     }
     return options;
+}
+
+std::string jsonEscape(const std::string& value) {
+    std::ostringstream escaped;
+    for (const char ch : value) {
+        switch (ch) {
+        case '\\':
+            escaped << "\\\\";
+            break;
+        case '"':
+            escaped << "\\\"";
+            break;
+        case '\n':
+            escaped << "\\n";
+            break;
+        case '\r':
+            escaped << "\\r";
+            break;
+        case '\t':
+            escaped << "\\t";
+            break;
+        default:
+            escaped << ch;
+            break;
+        }
+    }
+    return escaped.str();
 }
 
 }  // namespace
@@ -323,8 +358,72 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
+        const auto stats = processor.getStats();
+        const double ppp_solution_rate =
+            valid_solutions > 0 ?
+                100.0 * static_cast<double>(ppp_float_solutions + ppp_fixed_solutions) /
+                    static_cast<double>(valid_solutions) :
+                0.0;
+        if (!options.summary_json_path.empty()) {
+            const std::filesystem::path summary_path(options.summary_json_path);
+            if (!summary_path.parent_path().empty()) {
+                std::filesystem::create_directories(summary_path.parent_path());
+            }
+            std::ofstream summary(summary_path);
+            if (!summary.is_open()) {
+                std::cerr << "Error: failed to write summary JSON: "
+                          << options.summary_json_path << "\n";
+                return 1;
+            }
+            summary << "{\n"
+                    << "  \"obs\": \"" << jsonEscape(options.obs_path) << "\",\n"
+                    << "  \"nav\": "
+                    << (options.nav_path.empty() ? "null" : ("\"" + jsonEscape(options.nav_path) + "\""))
+                    << ",\n"
+                    << "  \"sp3\": "
+                    << (options.sp3_path.empty() ? "null" : ("\"" + jsonEscape(options.sp3_path) + "\""))
+                    << ",\n"
+                    << "  \"clk\": "
+                    << (options.clk_path.empty() ? "null" : ("\"" + jsonEscape(options.clk_path) + "\""))
+                    << ",\n"
+                    << "  \"ionex\": "
+                    << (options.ionex_path.empty() ? "null" : ("\"" + jsonEscape(options.ionex_path) + "\""))
+                    << ",\n"
+                    << "  \"dcb\": "
+                    << (options.dcb_path.empty() ? "null" : ("\"" + jsonEscape(options.dcb_path) + "\""))
+                    << ",\n"
+                    << "  \"out\": \"" << jsonEscape(options.out_path) << "\",\n"
+                    << "  \"mode\": \"" << (options.kinematic_mode ? "kinematic" : "static") << "\",\n"
+                    << "  \"low_dynamics\": " << (options.low_dynamics_mode ? "true" : "false") << ",\n"
+                    << "  \"ambiguity_resolution_enabled\": " << (options.enable_ar ? "true" : "false") << ",\n"
+                    << "  \"ar_ratio_threshold\": " << options.ar_ratio_threshold << ",\n"
+                    << "  \"processed_epochs\": " << processed_epochs << ",\n"
+                    << "  \"valid_solutions\": " << valid_solutions << ",\n"
+                    << "  \"ppp_float_solutions\": " << ppp_float_solutions << ",\n"
+                    << "  \"ppp_fixed_solutions\": " << ppp_fixed_solutions << ",\n"
+                    << "  \"fallback_solutions\": " << fallback_solutions << ",\n"
+                    << "  \"ppp_solution_rate_pct\": " << ppp_solution_rate << ",\n"
+                    << "  \"ssr_corrections_enabled\": "
+                    << ((!options.ssr_path.empty() || !options.ssr_rtcm_path.empty()) ? "true" : "false") << ",\n"
+                    << "  \"atmospheric_trop_corrections\": " << atmospheric_trop_corrections << ",\n"
+                    << "  \"atmospheric_trop_meters\": " << atmospheric_trop_meters << ",\n"
+                    << "  \"atmospheric_iono_corrections\": " << atmospheric_iono_corrections << ",\n"
+                    << "  \"atmospheric_iono_meters\": " << atmospheric_iono_meters << ",\n"
+                    << "  \"ionex_loaded\": " << (processor.hasLoadedIONEXProducts() ? "true" : "false") << ",\n"
+                    << "  \"ionex_maps\": " << processor.getLoadedIONEXMapCount() << ",\n"
+                    << "  \"ionex_corrections\": " << ionex_corrections << ",\n"
+                    << "  \"ionex_meters\": " << ionex_meters << ",\n"
+                    << "  \"dcb_loaded\": " << (processor.hasLoadedDCBProducts() ? "true" : "false") << ",\n"
+                    << "  \"dcb_entries\": " << processor.getLoadedDCBEntryCount() << ",\n"
+                    << "  \"dcb_corrections\": " << dcb_corrections << ",\n"
+                    << "  \"dcb_meters\": " << dcb_meters << ",\n"
+                    << "  \"converged\": " << (processor.hasConverged() ? "true" : "false") << ",\n"
+                    << "  \"convergence_time_s\": " << processor.getConvergenceTime() << ",\n"
+                    << "  \"average_processing_time_ms\": " << stats.average_processing_time_ms << "\n"
+                    << "}\n";
+        }
+
         if (!options.quiet) {
-            const auto stats = processor.getStats();
             std::cout << "PPP summary:\n";
             std::cout << "  processed epochs: " << processed_epochs << "\n";
             std::cout << "  valid solutions: " << valid_solutions << "\n";
@@ -367,9 +466,6 @@ int main(int argc, char* argv[]) {
                 std::cout << "  AR ratio threshold: " << options.ar_ratio_threshold << "\n";
             }
             if (valid_solutions > 0) {
-                const double ppp_solution_rate =
-                    100.0 * static_cast<double>(ppp_float_solutions + ppp_fixed_solutions) /
-                    static_cast<double>(valid_solutions);
                 std::cout << "  PPP solution rate (%): " << ppp_solution_rate << "\n";
             }
             std::cout << "  converged: " << (processor.hasConverged() ? "yes" : "no") << "\n";

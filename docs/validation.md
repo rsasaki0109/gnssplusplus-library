@@ -26,6 +26,18 @@ python3 apps/gnss.py ppp-static-signoff \
   --product ionex=https://cddis.nasa.gov/archive/gnss/products/ionex/{yyyy}/{doy}/COD0OPSFIN_{yyyy}{doy}0000_01D_01H_GIM.INX.gz \
   --product dcb=https://cddis.nasa.gov/archive/gnss/products/bias/{yyyy}/CAS0MGXRAP_{yyyy}{doy}0000_01D_01D_DCB.BSX.gz \
   --require-ppp-solution-rate-min 100
+
+python3 apps/gnss.py ppp-kinematic-signoff \
+  --max-epochs 120 \
+  --require-common-epoch-pairs-min 120 \
+  --require-reference-fix-rate-min 95 \
+  --require-converged \
+  --require-convergence-time-max 300 \
+  --require-mean-error-max 7 \
+  --require-p95-error-max 7 \
+  --require-max-error-max 7 \
+  --require-mean-sats-min 18 \
+  --require-ppp-solution-rate-min 100
 ```
 
 ## Realtime validation

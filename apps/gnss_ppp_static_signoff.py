@@ -153,6 +153,29 @@ def parse_args() -> argparse.Namespace:
         help="Fail if PPP_FIXED epochs are below this value.",
     )
     parser.add_argument(
+        "--require-converged",
+        action="store_true",
+        help="Fail unless gnss ppp reports that the run converged.",
+    )
+    parser.add_argument(
+        "--require-convergence-time-max",
+        type=float,
+        default=None,
+        help="Fail if gnss ppp convergence time exceeds this value in seconds.",
+    )
+    parser.add_argument(
+        "--require-ionex-corrections-min",
+        type=int,
+        default=None,
+        help="Fail if gnss ppp reports fewer IONEX-applied corrections than this value.",
+    )
+    parser.add_argument(
+        "--require-dcb-corrections-min",
+        type=int,
+        default=None,
+        help="Fail if gnss ppp reports fewer DCB-applied corrections than this value.",
+    )
+    parser.add_argument(
         "--malib-bin",
         type=Path,
         default=None,
@@ -301,6 +324,21 @@ def build_summary_payload(args: argparse.Namespace) -> dict[str, object]:
         "mean_satellites": rounded(mean_satellites),
         "header_position_ecef_m": [rounded(value) for value in header_position],
     }
+    ppp_run_summary = getattr(args, "ppp_run_summary", None)
+    if isinstance(ppp_run_summary, dict):
+        payload.update(
+            {
+                "ppp_run_summary": ppp_run_summary,
+                "ppp_converged": bool(ppp_run_summary.get("converged", False)),
+                "ppp_convergence_time_s": rounded(
+                    float(ppp_run_summary.get("convergence_time_s", 0.0))
+                ),
+                "ionex_corrections": int(ppp_run_summary.get("ionex_corrections", 0)),
+                "ionex_meters": rounded(float(ppp_run_summary.get("ionex_meters", 0.0))),
+                "dcb_corrections": int(ppp_run_summary.get("dcb_corrections", 0)),
+                "dcb_meters": rounded(float(ppp_run_summary.get("dcb_meters", 0.0))),
+            }
+        )
     malib_pos = getattr(args, "malib_pos", None)
     if malib_pos is not None and Path(malib_pos).exists():
         malib_records = read_malib_xyz_records(Path(malib_pos))
@@ -389,6 +427,32 @@ def enforce_summary_requirements(payload: dict[str, object], args: argparse.Name
         failures.append(
             f"PPP fixed epochs {int(payload['ppp_fixed_epochs'])} < "
             f"{args.require_ppp_fixed_epochs_min}"
+        )
+    if getattr(args, "require_converged", False) and not bool(payload.get("ppp_converged", False)):
+        failures.append("PPP run did not report convergence")
+    if (
+        getattr(args, "require_convergence_time_max", None) is not None
+        and float(payload.get("ppp_convergence_time_s", 0.0)) > args.require_convergence_time_max
+    ):
+        failures.append(
+            f"PPP convergence time {float(payload.get('ppp_convergence_time_s', 0.0)):.6f} s > "
+            f"{args.require_convergence_time_max:.6f} s"
+        )
+    if (
+        getattr(args, "require_ionex_corrections_min", None) is not None
+        and int(payload.get("ionex_corrections", 0)) < args.require_ionex_corrections_min
+    ):
+        failures.append(
+            f"IONEX corrections {int(payload.get('ionex_corrections', 0))} < "
+            f"{args.require_ionex_corrections_min}"
+        )
+    if (
+        getattr(args, "require_dcb_corrections_min", None) is not None
+        and int(payload.get("dcb_corrections", 0)) < args.require_dcb_corrections_min
+    ):
+        failures.append(
+            f"DCB corrections {int(payload.get('dcb_corrections', 0))} < "
+            f"{args.require_dcb_corrections_min}"
         )
 
     if failures:
@@ -499,6 +563,7 @@ def main() -> int:
     args.resolved_clk = resolved_clk
     args.resolved_ionex = resolved_ionex
     args.resolved_dcb = resolved_dcb
+    ppp_run_summary_path = Path(tempfile.mkdtemp(prefix="gnss_ppp_static_signoff_run_")) / "ppp_summary.json"
 
     command = [
         *gnss_command,
@@ -508,6 +573,8 @@ def main() -> int:
         str(args.obs),
         "--out",
         str(args.out),
+        "--summary-json",
+        str(ppp_run_summary_path),
     ]
     if args.nav is not None:
         command.extend(["--nav", str(args.nav)])
@@ -525,9 +592,15 @@ def main() -> int:
         command.extend(["--max-epochs", str(args.max_epochs)])
     try:
         run_command(command)
+        args.ppp_run_summary = json.loads(ppp_run_summary_path.read_text(encoding="utf-8"))
     finally:
         if temp_products is not None:
             temp_products.cleanup()
+        try:
+            ppp_run_summary_path.unlink()
+            ppp_run_summary_path.parent.rmdir()
+        except OSError:
+            pass
 
     if args.malib_bin is not None and (
         not args.use_existing_malib or not args.malib_pos.exists()

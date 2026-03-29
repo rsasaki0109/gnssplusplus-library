@@ -1049,9 +1049,11 @@ PositionSolution PPPProcessor::processEpoch(const ObservationData& obs, const Na
     last_applied_ionex_m_ = 0.0;
     last_applied_dcb_m_ = 0.0;
     PositionSolution seed_solution;
+    const bool use_seed_assist = useLowDynamicsBroadcastSeedAssist();
     const bool need_seed_solution =
         ppp_config_.reset_clock_to_spp_each_epoch ||
         (ppp_config_.kinematic_mode && ppp_config_.reset_kinematic_position_to_spp_each_epoch) ||
+        use_seed_assist ||
         !filter_initialized_;
     const PositionSolution* seed_ptr = nullptr;
 
@@ -1117,6 +1119,9 @@ PositionSolution PPPProcessor::processEpoch(const ObservationData& obs, const Na
                 if (pppDebugEnabled()) {
                     std::cerr << "[PPP] updateFilter returned false at week=" << obs.time.week
                               << " tow=" << obs.time.tow << "\n";
+                }
+                if (use_seed_assist) {
+                    recoverLowDynamicsBroadcastState(obs, seed_ptr);
                 }
                 solution = seed_ptr != nullptr ? seed_solution : spp_processor_.processEpoch(obs, nav);
             }
@@ -1485,7 +1490,7 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
 
     filter_state_.covariance = F * filter_state_.covariance * F.transpose() + Q;
     if (use_broadcast_rtklib_model && seed_solution != nullptr && seed_solution->isValid()) {
-        if (ppp_config_.reset_clock_to_spp_each_epoch) {
+        if (ppp_config_.reset_clock_to_spp_each_epoch || useLowDynamicsBroadcastSeedAssist()) {
             reinitializeScalarState(
                 filter_state_.clock_index,
                 seed_solution->receiver_clock_bias,
@@ -2137,6 +2142,77 @@ void PPPProcessor::reinitializeScalarState(int index, double value, double varia
     filter_state_.covariance(index, index) = variance;
 }
 
+bool PPPProcessor::useLowDynamicsBroadcastSeedAssist() const {
+    return ppp_config_.kinematic_mode &&
+           ppp_config_.low_dynamics_mode &&
+           !precise_products_loaded_;
+}
+
+void PPPProcessor::recoverLowDynamicsBroadcastState(const ObservationData& obs,
+                                                    const PositionSolution* seed_solution) {
+    if (!useLowDynamicsBroadcastSeedAssist()) {
+        return;
+    }
+
+    Vector3d recovered_position = static_anchor_position_;
+    double recovered_clock_bias_m = 0.0;
+    bool have_seed = false;
+    if (seed_solution != nullptr && seed_solution->isValid()) {
+        recovered_position = seed_solution->position_ecef;
+        recovered_clock_bias_m = seed_solution->receiver_clock_bias;
+        have_seed = true;
+    } else if (validReceiverSeed(obs.receiver_position)) {
+        recovered_position = obs.receiver_position;
+        recovered_clock_bias_m = obs.receiver_clock_bias * constants::SPEED_OF_LIGHT;
+        have_seed = true;
+    }
+    if (!have_seed) {
+        return;
+    }
+
+    if (!has_static_anchor_position_) {
+        static_anchor_position_ = recovered_position;
+        has_static_anchor_position_ = true;
+    }
+
+    const Vector3d anchored_position =
+        has_static_anchor_position_ ?
+            0.85 * static_anchor_position_ + 0.15 * recovered_position :
+            recovered_position;
+    reinitializeVectorState(
+        filter_state_.pos_index,
+        anchored_position,
+        std::min(ppp_config_.initial_position_variance, 36.0));
+    reinitializeScalarState(
+        filter_state_.clock_index,
+        recovered_clock_bias_m,
+        ppp_config_.initial_clock_variance);
+    reinitializeScalarState(
+        filter_state_.glo_clock_index,
+        recovered_clock_bias_m,
+        ppp_config_.initial_clock_variance);
+    reinitializeScalarState(
+        filter_state_.trop_index,
+        modeledZenithTroposphereDelayMeters(anchored_position, obs.time),
+        ppp_config_.initial_troposphere_variance);
+
+    std::vector<SatelliteId> satellites_to_reset;
+    satellites_to_reset.reserve(ambiguity_states_.size());
+    for (const auto& [satellite, ambiguity] : ambiguity_states_) {
+        (void)ambiguity;
+        satellites_to_reset.push_back(satellite);
+    }
+    for (const auto& satellite : satellites_to_reset) {
+        resetAmbiguity(satellite, SignalType::GPS_L1CA);
+    }
+
+    recent_positions_.clear();
+    converged_ = false;
+    convergence_start_time_ = obs.time;
+    constrainStaticVelocityStates();
+    constrainStaticAnchorPosition();
+}
+
 int PPPProcessor::receiverClockStateIndex(const SatelliteId& satellite) const {
     return satellite.system == GNSSSystem::GLONASS ?
         filter_state_.glo_clock_index :
@@ -2749,6 +2825,16 @@ void PPPProcessor::constrainStaticAnchorPosition() {
             ppp_config_.low_dynamics_mode
                 ? (converged_ ? 15.0 : 8.0)
                 : (converged_ ? 100.0 : 25.0);
+        if (std::isfinite(deviation_norm) && deviation_norm > max_static_deviation_m) {
+            deviation *= max_static_deviation_m / deviation_norm;
+            filter_state_.state.segment(filter_state_.pos_index, 3) =
+                static_anchor_position_ + deviation;
+        }
+    } else if (ppp_config_.low_dynamics_mode) {
+        Vector3d deviation =
+            filter_state_.state.segment(filter_state_.pos_index, 3) - static_anchor_position_;
+        const double deviation_norm = deviation.norm();
+        const double max_static_deviation_m = converged_ ? 10.0 : 6.0;
         if (std::isfinite(deviation_norm) && deviation_norm > max_static_deviation_m) {
             deviation *= max_static_deviation_m / deviation_norm;
             filter_state_.state.segment(filter_state_.pos_index, 3) =

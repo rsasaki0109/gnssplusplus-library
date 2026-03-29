@@ -37,6 +37,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_solve",
                 prefix / "bin" / "gnss_ppp",
                 prefix / "bin" / "gnss_visibility",
+                prefix / "bin" / "gnss_visibility_plot.py",
                 prefix / "bin" / "gnss_nav_products",
                 prefix / "bin" / "gnss_fetch_products.py",
                 prefix / "bin" / "gnss_ionex_info.py",
@@ -129,6 +130,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 ppp_summary = prefix / "tmp_ppp_static.json"
                 visibility_csv = prefix / "tmp_visibility.csv"
                 visibility_summary = prefix / "tmp_visibility.json"
+                visibility_png = prefix / "tmp_visibility.png"
                 subprocess.run(
                     [
                         str(prefix / "bin" / "gnss"),
@@ -173,6 +175,18 @@ class PackagingSmokeTest(unittest.TestCase):
                 )
                 self.assertTrue(visibility_csv.exists(), "installed visibility did not write CSV")
                 self.assertTrue(visibility_summary.exists(), "installed visibility did not write summary")
+                subprocess.run(
+                    [
+                        str(prefix / "bin" / "gnss"),
+                        "visibility-plot",
+                        str(visibility_csv),
+                        str(visibility_png),
+                    ],
+                    check=True,
+                    cwd=ROOT_DIR,
+                    env=env,
+                )
+                self.assertTrue(visibility_png.exists(), "installed visibility-plot did not write PNG")
 
             if repo_data_exists(
                 "output/rtk_solution.pos",
@@ -287,6 +301,16 @@ class PackagingSmokeTest(unittest.TestCase):
                 text=True,
             )
             self.assertIn("visibility rows", visibility_help.stdout.lower())
+
+            visibility_plot_help = subprocess.run(
+                [str(prefix / "bin" / "gnss"), "visibility-plot", "--help"],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("visibility csv", visibility_plot_help.stdout.lower())
 
 
 if __name__ == "__main__":

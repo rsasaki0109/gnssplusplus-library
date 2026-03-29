@@ -301,16 +301,28 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         if payload is None:
             continue
         csv_path = None
+        png_path = None
         csv_value = payload.get("csv")
         if isinstance(csv_value, str):
             try:
-                csv_path = relative_display(resolve_under_root(root_dir, csv_value), root_dir)
+                resolved_csv = resolve_under_root(root_dir, csv_value)
+                csv_path = relative_display(resolved_csv, root_dir)
+                sibling_png = resolved_csv.with_suffix(".png")
+                if sibling_png.exists():
+                    png_path = relative_display(sibling_png, root_dir)
             except ValueError:
                 csv_path = csv_value
+        png_value = payload.get("png")
+        if isinstance(png_value, str):
+            try:
+                png_path = relative_display(resolve_under_root(root_dir, png_value), root_dir)
+            except ValueError:
+                png_path = png_value
         visibility_summaries.append(
             {
                 "_path": relative_display(path, root_dir),
                 "csv_path": csv_path,
+                "png_path": png_path,
                 "epochs_processed": payload.get("epochs_processed"),
                 "epochs_with_rows": payload.get("epochs_with_rows"),
                 "rows_written": payload.get("rows_written"),
@@ -589,6 +601,7 @@ def render_html() -> str:
       <div class="grid two plot-wrap">
         <div class="plot-card">
           <h3>Visibility view</h3>
+          <img id="visibility-image" alt="Visibility artifact" style="display:none; width:100%; border:1px solid var(--line); border-radius:10px; margin-bottom:12px;" />
           <canvas id="visibility-canvas" width="600" height="360"></canvas>
         </div>
         <div>
@@ -858,7 +871,15 @@ def render_html() -> str:
         visibilityBody.appendChild(tr);
       }
 
+      const visibilityImage = document.getElementById("visibility-image");
       const firstVisibility = (overview.visibility_summaries || []).find((row) => row.csv_path);
+      if (firstVisibility && firstVisibility.png_path) {
+        visibilityImage.src = `/artifact?path=${encodeURIComponent(firstVisibility.png_path)}`;
+        visibilityImage.style.display = "block";
+      } else {
+        visibilityImage.removeAttribute("src");
+        visibilityImage.style.display = "none";
+      }
       if (firstVisibility) {
         const visibilityPayload = await fetchJson(`/api/visibility?path=${encodeURIComponent(firstVisibility.csv_path)}`);
         drawVisibility(document.getElementById("visibility-canvas"), visibilityPayload);
@@ -971,6 +992,28 @@ def make_handler(args: argparse.Namespace):
                             "rows": load_visibility_rows(csv_path),
                         }
                     )
+                    return
+                if parsed.path == "/artifact":
+                    artifact_arg = query.get("path", [""])[0]
+                    if not artifact_arg:
+                        self._write_json({"error": "missing artifact path"}, HTTPStatus.BAD_REQUEST)
+                        return
+                    try:
+                        artifact_path = resolve_under_root(root_dir, artifact_arg)
+                    except ValueError:
+                        self._write_json({"error": "artifact path escapes artifact root"}, HTTPStatus.BAD_REQUEST)
+                        return
+                    if not artifact_path.exists():
+                        self._write_json({"error": f"artifact not found: {artifact_arg}"}, HTTPStatus.NOT_FOUND)
+                        return
+                    suffix = artifact_path.suffix.lower()
+                    content_type = {
+                        ".png": "image/png",
+                        ".jpg": "image/jpeg",
+                        ".jpeg": "image/jpeg",
+                        ".svg": "image/svg+xml",
+                    }.get(suffix, "application/octet-stream")
+                    self._write(artifact_path.read_bytes(), content_type)
                     return
 
                 self._write_json({"error": "not found"}, HTTPStatus.NOT_FOUND)

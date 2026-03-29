@@ -44,6 +44,7 @@ python3 apps/gnss.py visibility \
 | `gnss solve` | Batch RTK from rover/base/nav RINEX |
 | `gnss ppp` | Batch PPP from rover RINEX plus nav or precise products |
 | `gnss visibility` | Export azimuth/elevation/SNR visibility rows and summary JSON from rover/nav RINEX |
+| `gnss visibility-plot` | Render a visibility CSV into a polar/elevation PNG quick-look |
 | `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` files from local or remote sources |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
 | `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
@@ -82,6 +83,18 @@ python3 apps/gnss.py ppp-static-signoff \
   --product ionex=https://cddis.nasa.gov/archive/gnss/products/ionex/{yyyy}/{doy}/COD0OPSFIN_{yyyy}{doy}0000_01D_01H_GIM.INX.gz \
   --product dcb=https://cddis.nasa.gov/archive/gnss/products/bias/{yyyy}/CAS0MGXRAP_{yyyy}{doy}0000_01D_01D_DCB.BSX.gz \
   --summary-json output/ppp_static_summary.json
+
+python3 apps/gnss.py ppp-kinematic-signoff \
+  --max-epochs 120 \
+  --require-common-epoch-pairs-min 120 \
+  --require-reference-fix-rate-min 95 \
+  --require-converged \
+  --require-convergence-time-max 300 \
+  --require-mean-error-max 7 \
+  --require-p95-error-max 7 \
+  --require-max-error-max 7 \
+  --require-mean-sats-min 18 \
+  --require-ppp-solution-rate-min 100
 ```
 
 ## Local docs
