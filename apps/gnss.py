@@ -164,6 +164,11 @@ COMMANDS = {
         "target": os.path.join(ROOT_DIR, "scripts", "generate_odaiba_social_card.py"),
         "summary": "Generate a Twitter-ready Odaiba social card image.",
     },
+    "architecture-card": {
+        "kind": "python",
+        "target": os.path.join(ROOT_DIR, "scripts", "generate_architecture_diagram.py"),
+        "summary": "Generate a docs-friendly architecture diagram image.",
+    },
     "odaiba-benchmark": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_odaiba_benchmark.py"),
@@ -263,6 +268,7 @@ def usage() -> str:
             "    # exports GPS/QZSS/Galileo/GLONASS/BeiDou broadcast nav from RXM-SFRBX when available",
             "  python3 apps/gnss.py convert --format ubx --input logs/session.ubx --sfrbx-out output/session_sfrbx.csv",
             "  python3 apps/gnss.py social-card --lib-pos output/rtk_solution.pos --rtklib-pos output/driving_rtklib_rtk.pos --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv --output docs/driving_odaiba_social_card.png",
+            "  python3 apps/gnss.py architecture-card --output docs/libgnsspp_architecture.png",
             "  python3 apps/gnss.py convert --format rtcm --input tcp://127.0.0.1:9000 --obs-out output/correction.obs",
             "  python3 apps/gnss.py convert --format ubx --input serial:///dev/ttyACM0?baud=115200 --obs-out output/stream.obs --limit 10",
             "  python3 apps/gnss.py replay --rover-rinex data/rover_kinematic.obs --base-rinex data/base_kinematic.obs --nav-rinex data/navigation_kinematic.nav --out output/replay.pos",

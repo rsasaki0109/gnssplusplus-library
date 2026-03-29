@@ -17,6 +17,7 @@ checked benchmark artifacts.
 ## Visuals
 
 ![Feature overview](libgnsspp_feature_overview.png)
+![Architecture diagram](libgnsspp_architecture.png)
 
 ## Benchmark artifacts
 
