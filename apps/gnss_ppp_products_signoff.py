@@ -51,6 +51,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-p95-error-max", type=float, default=None)
     parser.add_argument("--require-max-error-max", type=float, default=None)
     parser.add_argument("--require-mean-sats-min", type=float, default=None)
+    parser.add_argument("--require-lib-mean-error-vs-malib-max-delta", type=float, default=None)
+    parser.add_argument("--require-lib-p95-error-vs-malib-max-delta", type=float, default=None)
+    parser.add_argument("--require-lib-max-error-vs-malib-max-delta", type=float, default=None)
     parser.set_defaults(low_dynamics=True)
     return parser.parse_args()
 
@@ -72,6 +75,40 @@ def default_paths(profile: str) -> tuple[Path, Path, Path | None]:
 def run_checked(command: list[str]) -> None:
     print("+", " ".join(command))
     subprocess.run(command, cwd=ROOT_DIR, check=True)
+
+
+def classify_comparison_status(*deltas: object) -> str | None:
+    numeric = [float(value) for value in deltas if isinstance(value, (int, float))]
+    if not numeric:
+        return None
+    worst = max(numeric)
+    if worst <= 0.0:
+        return "better"
+    if worst <= 0.25:
+        return "close"
+    return "worse"
+
+
+def enforce_comparison_requirements(payload: dict[str, object], args: argparse.Namespace) -> None:
+    failures: list[str] = []
+    checks = [
+        ("libgnss_minus_malib_mean_error_m", args.require_lib_mean_error_vs_malib_max_delta, "mean"),
+        ("libgnss_minus_malib_p95_error_m", args.require_lib_p95_error_vs_malib_max_delta, "p95"),
+        ("libgnss_minus_malib_max_error_m", args.require_lib_max_error_vs_malib_max_delta, "max"),
+    ]
+    for field, threshold, label in checks:
+        if threshold is None:
+            continue
+        value = payload.get(field)
+        if not isinstance(value, (int, float)):
+            failures.append(f"missing MALIB comparison metric for {label} error")
+            continue
+        if float(value) > float(threshold):
+            failures.append(
+                f"libgnss++ {label} error delta {float(value):.6f} m > {float(threshold):.6f} m"
+            )
+    if failures:
+        raise SystemExit("PPP products comparison checks failed:\n  - " + "\n  - ".join(failures))
 
 
 def main() -> int:
@@ -169,6 +206,13 @@ def main() -> int:
     payload["products_signoff_profile"] = args.profile
     payload["product_presets"] = presets
     payload["product_specs"] = list(args.product)
+    payload["comparison_target"] = "MALIB" if payload.get("malib_solution_pos") else None
+    payload["comparison_status"] = classify_comparison_status(
+        payload.get("libgnss_minus_malib_mean_error_m"),
+        payload.get("libgnss_minus_malib_p95_error_m"),
+        payload.get("libgnss_minus_malib_max_error_m"),
+    )
+    enforce_comparison_requirements(payload, args)
     summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     print("Finished PPP products sign-off.")

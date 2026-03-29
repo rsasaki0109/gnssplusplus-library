@@ -65,6 +65,7 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_moving_base_prepare.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_moving_base_plot.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_fetch_products.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_artifact_manifest.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ionex_info.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_dcb_info.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_visibility_plot.py

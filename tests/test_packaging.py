@@ -72,6 +72,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_visibility_plot.py",
                 prefix / "bin" / "gnss_nav_products",
                 prefix / "bin" / "gnss_fetch_products.py",
+                prefix / "bin" / "gnss_artifact_manifest.py",
                 prefix / "bin" / "gnss_ionex_info.py",
                 prefix / "bin" / "gnss_dcb_info.py",
                 prefix / "bin" / "gnss_rcv.py",
@@ -350,6 +351,16 @@ class PackagingSmokeTest(unittest.TestCase):
             )
             self.assertIn("sp3=", fetch_products_help.stdout.lower())
             self.assertIn("--preset", fetch_products_help.stdout)
+
+            artifact_manifest_help = subprocess.run(
+                [str(prefix / "bin" / "gnss"), "artifact-manifest", "--help"],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("artifact manifest", artifact_manifest_help.stdout.lower())
 
             ionex_help = subprocess.run(
                 [str(prefix / "bin" / "gnss"), "ionex-info", "--help"],

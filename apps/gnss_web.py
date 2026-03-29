@@ -113,6 +113,12 @@ def parse_args() -> argparse.Namespace:
         help="Glob under --root for gnss PPP product signoff summary JSON files.",
     )
     parser.add_argument(
+        "--artifact-manifest",
+        type=Path,
+        default=None,
+        help="Artifact manifest JSON path (default: <root>/output/artifact_manifest.json).",
+    )
+    parser.add_argument(
         "--docs-url",
         default=os.environ.get("GNSSPP_DOCS_URL", DOCS_SITE_URL),
         help="Optional docs site URL shown in the web UI header.",
@@ -136,6 +142,21 @@ def relative_display(path: Path, root_dir: Path) -> str:
 def load_json(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def normalize_artifact_path(root_dir: Path, value: Any) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    if value.startswith(("http://", "https://")):
+        return value
+    try:
+        return relative_display(resolve_under_root(root_dir, value), root_dir)
+    except ValueError:
+        return value
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -293,6 +314,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
     odaiba_summary_path = resolve_path(args.odaiba_summary, root_dir, "output/odaiba_summary.json")
     lib_pos_path = resolve_path(args.lib_pos, root_dir, "output/rtk_solution.pos")
     rtklib_pos_path = resolve_path(args.rtklib_pos, root_dir, "output/driving_rtklib_rtk.pos")
+    artifact_manifest_path = resolve_path(args.artifact_manifest, root_dir, "output/artifact_manifest.json")
     rcv_status = load_json(args.rcv_status) if args.rcv_status is not None else None
 
     ppc_summaries: list[dict[str, Any]] = []
@@ -390,11 +412,16 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
                 "termination": payload.get("termination"),
                 "realtime_factor": payload.get("realtime_factor"),
                 "effective_epoch_rate_hz": payload.get("effective_epoch_rate_hz"),
-                "solution_pos": payload.get("solution_pos"),
-                "prepare_summary_json": payload.get("prepare_summary_json"),
-                "products_summary_json": payload.get("products_summary_json"),
-                "plot_png": payload.get("plot_png"),
+                "solution_pos": normalize_artifact_path(root_dir, payload.get("solution_pos")),
+                "prepare_summary_json": normalize_artifact_path(root_dir, payload.get("prepare_summary_json")),
+                "products_summary_json": normalize_artifact_path(root_dir, payload.get("products_summary_json")),
+                "plot_png": normalize_artifact_path(root_dir, payload.get("plot_png")),
                 "signoff_profile": payload.get("signoff_profile"),
+                "nav_rinex": normalize_artifact_path(root_dir, payload.get("nav_rinex")),
+                "input": normalize_artifact_path(root_dir, payload.get("input")),
+                "input_url": normalize_artifact_path(root_dir, payload.get("input_url")),
+                "prepare_summary": payload.get("prepare_summary"),
+                "products_summary": payload.get("products_summary"),
                 "runtime_status": classify_realtime_status(payload.get("realtime_factor")),
                 "quality_status": classify_baseline_status(payload.get("p95_baseline_error_m")),
             }
@@ -423,7 +450,17 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
                 "max_position_error_m": payload.get("max_position_error_m"),
                 "ionex_corrections": payload.get("ionex_corrections"),
                 "dcb_corrections": payload.get("dcb_corrections"),
-                "solution_pos": payload.get("solution_pos"),
+                "solution_pos": normalize_artifact_path(root_dir, payload.get("solution_pos")),
+                "sp3": normalize_artifact_path(root_dir, payload.get("sp3")),
+                "clk": normalize_artifact_path(root_dir, payload.get("clk")),
+                "ionex": normalize_artifact_path(root_dir, payload.get("ionex")),
+                "dcb": normalize_artifact_path(root_dir, payload.get("dcb")),
+                "malib_solution_pos": normalize_artifact_path(root_dir, payload.get("malib_solution_pos")),
+                "comparison_target": payload.get("comparison_target"),
+                "comparison_status": payload.get("comparison_status"),
+                "libgnss_minus_malib_mean_error_m": payload.get("libgnss_minus_malib_mean_error_m"),
+                "libgnss_minus_malib_p95_error_m": payload.get("libgnss_minus_malib_p95_error_m"),
+                "libgnss_minus_malib_max_error_m": payload.get("libgnss_minus_malib_max_error_m"),
                 "quality_status": classify_ppp_products_status(
                     payload.get("ppp_converged"),
                     p95_error,
@@ -431,6 +468,13 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
                 ),
             }
         )
+
+    artifact_manifest_payload = load_json(artifact_manifest_path)
+    artifact_manifest = []
+    if artifact_manifest_payload is not None:
+        bundles = artifact_manifest_payload.get("bundles")
+        if isinstance(bundles, list):
+            artifact_manifest = bundles
 
     return {
         "title": "libgnss++ web",
@@ -441,6 +485,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
             "lib_pos": relative_display(lib_pos_path, root_dir),
             "rtklib_pos": relative_display(rtklib_pos_path, root_dir),
             "rcv_status": relative_display(args.rcv_status, root_dir) if args.rcv_status else None,
+            "artifact_manifest": relative_display(artifact_manifest_path, root_dir) if artifact_manifest else None,
         },
         "odaiba_summary": load_json(odaiba_summary_path),
         "ppc_summaries": ppc_summaries,
@@ -448,6 +493,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         "visibility_summaries": visibility_summaries,
         "moving_base_summaries": moving_base_summaries,
         "ppp_products_summaries": ppp_products_summaries,
+        "artifact_manifest": artifact_manifest,
         "receiver_status": rcv_status,
     }
 
@@ -558,15 +604,20 @@ def render_html() -> str:
       color: #0f7a43;
       border-color: rgba(46, 204, 113, 0.28);
     }
-    .badge.near-realtime, .badge.good {
+    .badge.near-realtime, .badge.good, .badge.close, .badge.available {
       background: rgba(243, 156, 18, 0.16);
       color: #9a5f00;
       border-color: rgba(243, 156, 18, 0.26);
     }
-    .badge.offline, .badge.rough, .badge.poor {
+    .badge.offline, .badge.rough, .badge.poor, .badge.worse {
       background: rgba(231, 76, 60, 0.12);
       color: #b03a2e;
       border-color: rgba(231, 76, 60, 0.24);
+    }
+    .badge.better {
+      background: rgba(46, 204, 113, 0.14);
+      color: #0f7a43;
+      border-color: rgba(46, 204, 113, 0.28);
     }
     .badge.na {
       background: rgba(107, 114, 128, 0.12);
@@ -740,6 +791,7 @@ def render_html() -> str:
             <th>Mean err</th>
             <th>P95 / max</th>
             <th>Corrections</th>
+            <th>Compare</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -775,6 +827,25 @@ def render_html() -> str:
           </table>
         </div>
       </div>
+    </section>
+
+    <section class="card" style="margin-top: 18px;">
+      <div class="section-title">
+        <h2>Artifact bundles</h2>
+        <span class="tiny">optional manifest from output/artifact_manifest.json</span>
+      </div>
+      <table id="artifact-manifest-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Label</th>
+            <th>Status</th>
+            <th>Summary</th>
+            <th>Artifacts</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </section>
   </main>
   <script>
@@ -935,6 +1006,14 @@ def render_html() -> str:
       return `<a href="/artifact?path=${encodeURIComponent(path)}" target="_blank" rel="noreferrer">${label || path}</a>`;
     }
 
+    function smartLink(value, label) {
+      if (!value) return label || "n/a";
+      if (String(value).startsWith("http://") || String(value).startsWith("https://")) {
+        return `<a href="${value}" target="_blank" rel="noreferrer">${label || value}</a>`;
+      }
+      return artifactLink(value, label);
+    }
+
     async function refreshStatus() {
       const metrics = document.getElementById("receiver-metrics");
       const pre = document.getElementById("receiver-json");
@@ -1022,6 +1101,9 @@ def render_html() -> str:
           row.solution_pos ? artifactLink(row.solution_pos, "pos") : null,
           row.prepare_summary_json ? artifactLink(row.prepare_summary_json, "prepare") : null,
           row.products_summary_json ? artifactLink(row.products_summary_json, "products") : null,
+          row.nav_rinex ? artifactLink(row.nav_rinex, "nav") : null,
+          row.input ? artifactLink(row.input, "input") : null,
+          row.input_url ? smartLink(row.input_url, "source") : null,
           row.plot_png ? artifactLink(row.plot_png, "plot") : null,
         ].filter(Boolean).join(" / ");
         const tr = document.createElement("tr");
@@ -1054,9 +1136,27 @@ def render_html() -> str:
           ? row.product_presets.join(", ")
           : "custom";
         const solutionLink = row.solution_pos ? artifactLink(row.solution_pos, "pos") : null;
+        const productLinks = [
+          row.sp3 ? artifactLink(row.sp3, "sp3") : null,
+          row.clk ? artifactLink(row.clk, "clk") : null,
+          row.ionex ? artifactLink(row.ionex, "ionex") : null,
+          row.dcb ? artifactLink(row.dcb, "dcb") : null,
+          row.malib_solution_pos ? artifactLink(row.malib_solution_pos, "malib") : null,
+        ].filter(Boolean).join(" / ");
+        const compareBits = [];
+        if (row.comparison_target) compareBits.push(row.comparison_target);
+        if (row.libgnss_minus_malib_mean_error_m !== null && row.libgnss_minus_malib_mean_error_m !== undefined) {
+          compareBits.push(`Δmean ${formatMaybeNumber(row.libgnss_minus_malib_mean_error_m, 3, " m")}`);
+        }
+        if (row.libgnss_minus_malib_p95_error_m !== null && row.libgnss_minus_malib_p95_error_m !== undefined) {
+          compareBits.push(`Δp95 ${formatMaybeNumber(row.libgnss_minus_malib_p95_error_m, 3, " m")}`);
+        }
+        if (row.libgnss_minus_malib_max_error_m !== null && row.libgnss_minus_malib_max_error_m !== undefined) {
+          compareBits.push(`Δmax ${formatMaybeNumber(row.libgnss_minus_malib_max_error_m, 3, " m")}`);
+        }
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>${artifactLink(row.summary_path || row._path, row._path || "n/a")}<br><span class="tiny">${solutionLink || presets}</span></td>
+          <td>${artifactLink(row.summary_path || row._path, row._path || "n/a")}<br><span class="tiny">${[solutionLink, productLinks || presets].filter(Boolean).join(" / ")}</span></td>
           <td>${row.profile || "n/a"}</td>
           <td>${row.fetched_product_date || "n/a"}</td>
           <td>${formatMaybeNumber(row.ppp_solution_rate_pct, 2, "%")}</td>
@@ -1064,7 +1164,8 @@ def render_html() -> str:
           <td>${formatMaybeNumber(row.mean_position_error_m, 3, " m")}</td>
           <td>${formatMaybeNumber(row.p95_position_error_m, 3, " m")} / ${formatMaybeNumber(row.max_position_error_m, 3, " m")}</td>
           <td>I ${row.ionex_corrections ?? "n/a"} / D ${row.dcb_corrections ?? "n/a"}</td>
-          <td>${renderBadge(row.quality_status)}</td>`;
+          <td>${compareBits.length ? compareBits.join(" / ") : "n/a"}</td>
+          <td>${renderBadge(row.quality_status)} ${row.comparison_status ? renderBadge(row.comparison_status) : ""}</td>`;
         pppProductsBody.appendChild(tr);
       }
 
@@ -1097,6 +1198,28 @@ def render_html() -> str:
         drawVisibility(document.getElementById("visibility-canvas"), visibilityPayload);
       } else {
         drawVisibility(document.getElementById("visibility-canvas"), {available: false, rows: [], error: "No visibility CSV"});
+      }
+
+      const manifestBody = document.querySelector("#artifact-manifest-table tbody");
+      manifestBody.innerHTML = "";
+      for (const bundle of overview.artifact_manifest || []) {
+        const artifactLinks = Object.entries(bundle.artifacts || {})
+          .filter(([, value]) => value)
+          .map(([key, value]) => smartLink(value, key))
+          .join(" / ");
+        const statusParts = [];
+        if (bundle.quality_status) statusParts.push(renderBadge(bundle.quality_status));
+        if (bundle.runtime_status) statusParts.push(renderBadge(bundle.runtime_status));
+        if (bundle.comparison_status) statusParts.push(renderBadge(bundle.comparison_status));
+        if (!statusParts.length && bundle.status) statusParts.push(renderBadge(bundle.status));
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${bundle.category || "n/a"}</td>
+          <td>${bundle.label || "n/a"}<br><span class="tiny">${bundle.headline || ""}</span></td>
+          <td>${statusParts.join(" ") || "n/a"}</td>
+          <td>${smartLink(bundle.summary_json, bundle.summary_json || "n/a")}</td>
+          <td>${artifactLinks || "n/a"}</td>`;
+        manifestBody.appendChild(tr);
       }
 
       drawTrajectory(document.getElementById("lib-canvas"), await fetchJson("/api/solution?name=libgnsspp"));

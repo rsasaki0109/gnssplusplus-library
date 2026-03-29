@@ -86,7 +86,7 @@ LIBGNSSPP_IMAGE=ghcr.io/rsasaki0109/gnssplusplus-library:v0.1.0 docker compose u
 - Analysis tooling: `visibility`, `visibility-plot`, and `moving-base-plot` for az/el/SNR exports plus moving-base/visibility PNG quick-looks
 - Moving-base tooling: `moving-base-prepare` plus `moving-base-signoff` for real bag/replay/live validation
 - One CLI entrypoint: `gnss spp`, `solve`, `ppp`, `visibility`, `stream`, `convert`, `live`, `rcv`
-- Local web UI: `gnss web` for benchmark snapshots, live/moving-base/PPP-product sign-offs, 2D trajectories, visibility views, receiver status, and artifact links
+- Local web UI: `gnss web` for benchmark snapshots, live/moving-base/PPP-product sign-offs, 2D trajectories, visibility views, artifact bundles, receiver status, and artifact links
 - Built-in sign-off scripts and checked-in benchmark artifacts
 - CMake install/export, Python bindings, and ROS2 playback node
 
@@ -179,7 +179,7 @@ python3 apps/gnss.py sbf-info \
 | `gnss rtk-kinematic-signoff` | Kinematic RTK sign-off |
 | `gnss ppp-static-signoff` | Static PPP sign-off |
 | `gnss ppp-kinematic-signoff` | Kinematic PPP sign-off |
-| `gnss ppp-products-signoff` | Static or kinematic PPP sign-off with fetched SP3/CLK/IONEX/DCB products |
+| `gnss ppp-products-signoff` | Static or kinematic PPP sign-off with fetched SP3/CLK/IONEX/DCB products and optional MALIB delta gates |
 | `gnss live-signoff` | Realtime/error-handling sign-off for recorded RTCM/UBX live inputs |
 | `gnss ppc-demo` | External PPC-Dataset RTK/PPP verification against `reference.csv` |
 | `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB side-by-side gates |

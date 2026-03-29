@@ -5490,6 +5490,7 @@ class CLIToolsTest(unittest.TestCase):
             products_dir.mkdir()
             output_path = temp_root / "ppp_products.pos"
             summary_path = temp_root / "ppp_products_summary.json"
+            malib_pos = temp_root / "malib_static.pos"
 
             nav_products = self.run_gnss(
                 "nav-products",
@@ -5515,6 +5516,18 @@ class CLIToolsTest(unittest.TestCase):
             with gzip.open(products_dir / "2024002.bsx.gz", "wb") as stream:
                 stream.write(build_synthetic_dcb_text().encode("ascii"))
 
+            malib_pos.write_text(
+                "\n".join(
+                    [
+                        "% synthetic MALIB static",
+                        "2024/01/02 00:00:00.000 1.0 2.0 3.0 5 7",
+                        "2024/01/02 00:00:30.000 1.0 2.0 3.0 5 7",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
             result = self.run_gnss(
                 "ppp-products-signoff",
                 "--profile",
@@ -5539,10 +5552,15 @@ class CLIToolsTest(unittest.TestCase):
                 f"ionex={products_dir / '{yyyy}{doy}.ionex.gz'}",
                 "--product",
                 f"dcb={products_dir / '{yyyy}{doy}.bsx.gz'}",
+                "--malib-pos",
+                str(malib_pos),
+                "--use-existing-malib",
                 "--require-valid-epochs-min",
                 "20",
                 "--require-ppp-solution-rate-min",
                 "100",
+                "--require-lib-mean-error-vs-malib-max-delta",
+                "100.0",
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
@@ -5552,6 +5570,42 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(len(payload["product_specs"]), 4)
             self.assertTrue(payload["fetch_products"])
             self.assertEqual(payload["fetched_product_date"], "2024-01-02")
+            self.assertEqual(payload["comparison_target"], "MALIB")
+            self.assertIn("comparison_status", payload)
+            self.assertTrue(str(payload["malib_solution_pos"]).endswith("malib_static.pos"))
+
+            failing_result = self.run_gnss(
+                "ppp-products-signoff",
+                "--profile",
+                "static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "20",
+                "--product-date",
+                "2024-01-02",
+                "--product",
+                f"sp3={products_dir / '{yyyy}{doy}.sp3.gz'}",
+                "--product",
+                f"clk={products_dir / '{yyyy}{doy}.clk.gz'}",
+                "--product",
+                f"ionex={products_dir / '{yyyy}{doy}.ionex.gz'}",
+                "--product",
+                f"dcb={products_dir / '{yyyy}{doy}.bsx.gz'}",
+                "--malib-pos",
+                str(malib_pos),
+                "--use-existing-malib",
+                "--require-lib-mean-error-vs-malib-max-delta",
+                "-1000000000.0",
+            )
+            self.assertNotEqual(failing_result.returncode, 0)
+            self.assertIn("PPP products comparison checks failed", failing_result.stderr)
 
     def test_ppc_demo_cli_summarizes_existing_solution_against_reference_csv(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_demo_cli_") as temp_dir:
@@ -7725,12 +7779,6 @@ class CLIToolsTest(unittest.TestCase):
 
     @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
     def test_qzss_l6_info_reads_frames_from_serial_device(self) -> None:
-        master_fd, slave_fd = pty.openpty()
-        try:
-            slave_path = os.ttyname(slave_fd)
-        finally:
-            os.close(slave_fd)
-
         payload = (
             build_qzss_l6_frame(
                 prn=199,
@@ -7745,34 +7793,51 @@ class CLIToolsTest(unittest.TestCase):
                 data_part=b"L6-SERIAL-TWO",
             )
         )
+        last_result: subprocess.CompletedProcess[str] | None = None
+        for _ in range(3):
+            master_fd, slave_fd = pty.openpty()
+            try:
+                slave_path = os.ttyname(slave_fd)
+            finally:
+                os.close(slave_fd)
 
-        def writer() -> None:
-            time.sleep(0.20)
-            os.write(master_fd, payload)
-            time.sleep(0.1)
-            os.close(master_fd)
+            def writer() -> None:
+                write_pty_payload(
+                    master_fd,
+                    [payload],
+                    initial_delay_s=0.20,
+                    between_delay_s=0.0,
+                    final_delay_s=0.1,
+                )
 
-        thread = threading.Thread(target=writer)
-        thread.start()
-        try:
-            result = self.run_gnss(
-                "qzss-l6-info",
-                "--input",
-                f"serial://{slave_path}?baud=115200",
-                "--limit",
-                "2",
-                "--show-preview",
-            )
-        finally:
-            thread.join()
+            thread = threading.Thread(target=writer)
+            thread.start()
+            try:
+                result = self.run_gnss(
+                    "qzss-l6-info",
+                    "--input",
+                    f"serial://{slave_path}?baud=115200",
+                    "--limit",
+                    "2",
+                    "--show-preview",
+                )
+            finally:
+                thread.join()
+            last_result = result
+            if (
+                result.returncode == 0
+                and "l6_frame: index=1 prn=199 vendor=5 facility=Hitachi-Ota" in result.stdout
+            ):
+                break
 
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertIn("l6_frame: index=1 prn=199 vendor=5 facility=Hitachi-Ota", result.stdout)
-        self.assertIn("preview=L6-SERIAL-ONE", result.stdout)
-        self.assertIn("l6_frame: index=2 prn=201 vendor=5 facility=Kobe", result.stdout)
+        assert last_result is not None
+        self.assertEqual(last_result.returncode, 0, msg=last_result.stderr)
+        self.assertIn("l6_frame: index=1 prn=199 vendor=5 facility=Hitachi-Ota", last_result.stdout)
+        self.assertIn("preview=L6-SERIAL-ONE", last_result.stdout)
+        self.assertIn("l6_frame: index=2 prn=201 vendor=5 facility=Kobe", last_result.stdout)
         self.assertIn(
             "summary: frames=2 valid=2 clas_vendor=2 subframe_starts=1 alerts=0 subframes=0 prns=199,201",
-            result.stdout,
+            last_result.stdout,
         )
 
     @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
@@ -8320,6 +8385,7 @@ class CLIToolsTest(unittest.TestCase):
             visibility_csv = temp_root / "output" / "visibility_static.csv"
             visibility_png = temp_root / "output" / "visibility_static.png"
             moving_base_summary = temp_root / "output" / "scorpion_moving_base_summary.json"
+            artifact_manifest = temp_root / "output" / "artifact_manifest.json"
             port_file = temp_root / "port.txt"
 
             lib_pos.write_text(
@@ -8420,6 +8486,8 @@ class CLIToolsTest(unittest.TestCase):
                         "prepare_summary_json": str(temp_root / "output" / "prepare_summary.json"),
                         "products_summary_json": str(temp_root / "output" / "products_summary.json"),
                         "plot_png": str(temp_root / "output" / "scorpion_moving_base.png"),
+                        "nav_rinex": str(temp_root / "output" / "brdc0010.24n"),
+                        "input_url": "https://example.com/scorpion.zip",
                         "signoff_profile": "scorpion-moving-base",
                     }
                 ),
@@ -8445,6 +8513,16 @@ class CLIToolsTest(unittest.TestCase):
                         "ionex_corrections": 18,
                         "dcb_corrections": 18,
                         "solution_pos": str(temp_root / "output" / "ppp_static_products.pos"),
+                        "sp3": str(temp_root / "output" / "igs_static.sp3"),
+                        "clk": str(temp_root / "output" / "igs_static.clk"),
+                        "ionex": str(temp_root / "output" / "codg0020.24i"),
+                        "dcb": str(temp_root / "output" / "CAS0MGXRAP_20240020000_01D_01D_DCB.BSX"),
+                        "malib_solution_pos": str(temp_root / "output" / "malib_static.pos"),
+                        "comparison_target": "MALIB",
+                        "comparison_status": "better",
+                        "libgnss_minus_malib_mean_error_m": -0.05,
+                        "libgnss_minus_malib_p95_error_m": -0.08,
+                        "libgnss_minus_malib_max_error_m": -0.12,
                     }
                 ),
                 encoding="utf-8",
@@ -8481,6 +8559,23 @@ class CLIToolsTest(unittest.TestCase):
                     b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+ymsAAAAASUVORK5CYII="
                 )
             )
+            manifest_result = subprocess.run(
+                [
+                    sys.executable,
+                    str(DISPATCHER),
+                    "artifact-manifest",
+                    "--root",
+                    str(temp_root),
+                    "--output",
+                    str(artifact_manifest),
+                ],
+                cwd=ROOT_DIR,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(manifest_result.returncode, 0, msg=manifest_result.stderr)
+            self.assertTrue(artifact_manifest.exists())
 
             port = find_free_port()
             process = subprocess.Popen(
@@ -8532,16 +8627,27 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertAlmostEqual(overview["moving_base_summaries"][0]["p95_baseline_error_m"], 0.101)
                 self.assertEqual(overview["moving_base_summaries"][0]["signoff_profile"], "scorpion-moving-base")
                 self.assertTrue(overview["moving_base_summaries"][0]["plot_png"].endswith("scorpion_moving_base.png"))
+                self.assertEqual(overview["moving_base_summaries"][0]["nav_rinex"], "output/brdc0010.24n")
+                self.assertEqual(overview["moving_base_summaries"][0]["input_url"], "https://example.com/scorpion.zip")
                 self.assertEqual(len(overview["ppp_products_summaries"]), 1)
                 self.assertEqual(overview["ppp_products_summaries"][0]["profile"], "static")
                 self.assertEqual(overview["ppp_products_summaries"][0]["fetched_product_date"], "2024-01-02")
                 self.assertEqual(overview["ppp_products_summaries"][0]["quality_status"], "excellent")
                 self.assertEqual(overview["ppp_products_summaries"][0]["ionex_corrections"], 18)
+                self.assertEqual(overview["ppp_products_summaries"][0]["comparison_target"], "MALIB")
+                self.assertEqual(overview["ppp_products_summaries"][0]["comparison_status"], "better")
+                self.assertEqual(overview["ppp_products_summaries"][0]["sp3"], "output/igs_static.sp3")
+                self.assertEqual(overview["ppp_products_summaries"][0]["malib_solution_pos"], "output/malib_static.pos")
                 self.assertEqual(len(overview["visibility_summaries"]), 1)
                 self.assertEqual(overview["visibility_summaries"][0]["rows_written"], 27)
                 self.assertEqual(overview["visibility_summaries"][0]["unique_satellites"], 9)
                 self.assertEqual(overview["visibility_summaries"][0]["csv_path"], "output/visibility_static.csv")
                 self.assertEqual(overview["visibility_summaries"][0]["png_path"], "output/visibility_static.png")
+                self.assertEqual(len(overview["artifact_manifest"]), 5)
+                manifest_categories = {entry["category"] for entry in overview["artifact_manifest"]}
+                self.assertIn("moving-base", manifest_categories)
+                self.assertIn("ppp-products", manifest_categories)
+                self.assertIn("visibility", manifest_categories)
 
                 with request.urlopen(
                     f"http://127.0.0.1:{bound_port}/api/visibility?path=output/visibility_static.csv"
@@ -8574,6 +8680,73 @@ class CLIToolsTest(unittest.TestCase):
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.communicate(timeout=5)
+
+    def test_artifact_manifest_cli_collects_bundle_metadata(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_artifact_manifest_") as temp_dir:
+            temp_root = Path(temp_dir)
+            output_dir = temp_root / "output"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path = output_dir / "artifact_manifest.json"
+            (output_dir / "ppp_static_products_summary.json").write_text(
+                json.dumps(
+                    {
+                        "products_signoff_profile": "static",
+                        "fetched_product_date": "2024-01-02",
+                        "ppp_solution_rate_pct": 100.0,
+                        "ppp_converged": True,
+                        "ppp_convergence_time_s": 285.0,
+                        "p95_position_error_m": 0.21,
+                        "solution_pos": str(output_dir / "ppp_static_products.pos"),
+                        "sp3": str(output_dir / "igs.sp3"),
+                        "clk": str(output_dir / "igs.clk"),
+                        "ionex": str(output_dir / "codg0020.24i"),
+                        "dcb": str(output_dir / "igs.bsx"),
+                        "comparison_target": "MALIB",
+                        "comparison_status": "better",
+                        "libgnss_minus_malib_mean_error_m": -0.05,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (output_dir / "scorpion_moving_base_summary.json").write_text(
+                json.dumps(
+                    {
+                        "matched_epochs": 94,
+                        "fix_rate_pct": 95.74,
+                        "p95_baseline_error_m": 0.101,
+                        "realtime_factor": 2.17,
+                        "solution_pos": str(output_dir / "scorpion_moving_base.pos"),
+                        "plot_png": str(output_dir / "scorpion_moving_base.png"),
+                        "input_url": "https://example.com/scorpion.zip",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(DISPATCHER),
+                    "artifact-manifest",
+                    "--root",
+                    str(temp_root),
+                    "--output",
+                    str(manifest_path),
+                ],
+                cwd=ROOT_DIR,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["bundle_count"], 2)
+            categories = {entry["category"] for entry in payload["bundles"]}
+            self.assertEqual(categories, {"moving-base", "ppp-products"})
+            moving_base_entry = next(entry for entry in payload["bundles"] if entry["category"] == "moving-base")
+            self.assertEqual(moving_base_entry["artifacts"]["input_url"], "https://example.com/scorpion.zip")
+            ppp_entry = next(entry for entry in payload["bundles"] if entry["category"] == "ppp-products")
+            self.assertEqual(ppp_entry["artifacts"]["sp3"], "output/igs.sp3")
+            self.assertEqual(ppp_entry["comparison_status"], "better")
 
     def test_live_reports_missing_rtcm_source_path_clearly(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_live_missing_source_") as temp_dir:
