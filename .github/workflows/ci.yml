@@ -59,6 +59,43 @@ jobs:
       working-directory: build
       run: ctest --output-on-failure
 
+    - name: Optional PPC RTK sign-off
+      if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
+      env:
+        GNSSPP_PPC_DATASET_ROOT: ${{ vars.GNSSPP_PPC_DATASET_ROOT }}
+        GNSSPP_RTKLIB_BIN: ${{ vars.GNSSPP_RTKLIB_BIN }}
+      run: |
+        if [ -z "${GNSSPP_PPC_DATASET_ROOT}" ] || [ ! -d "${GNSSPP_PPC_DATASET_ROOT}" ]; then
+          echo "PPC-Dataset root is unavailable; skipping PPC RTK sign-off."
+          exit 0
+        fi
+        mkdir -p output
+        python3 apps/gnss.py ppc-rtk-signoff \
+          --dataset-root "${GNSSPP_PPC_DATASET_ROOT}" \
+          --city nagoya \
+          --max-epochs 120 \
+          --summary-json output/ppc_nagoya_run1_rtk_summary.json
+        if [ -n "${GNSSPP_RTKLIB_BIN}" ] && [ -x "${GNSSPP_RTKLIB_BIN}" ]; then
+          python3 apps/gnss.py ppc-rtk-signoff \
+            --dataset-root "${GNSSPP_PPC_DATASET_ROOT}" \
+            --city tokyo \
+            --max-epochs 120 \
+            --rtklib-bin "${GNSSPP_RTKLIB_BIN}" \
+            --summary-json output/ppc_tokyo_run1_rtk_summary.json
+        else
+          echo "RTKLIB binary is unavailable; skipping Tokyo RTKLIB side-by-side sign-off."
+        fi
+
+    - name: Upload PPC sign-off summaries
+      if: always() && matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ppc-signoff-${{ matrix.os }}-${{ matrix.compiler }}
+        path: |
+          output/ppc_nagoya_run1_rtk_summary.json
+          output/ppc_tokyo_run1_rtk_summary.json
+        if-no-files-found: ignore
+
   static-analysis:
     runs-on: ubuntu-latest
     steps:
