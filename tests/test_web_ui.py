@@ -55,6 +55,7 @@ class WebUISmokeTest(unittest.TestCase):
             live_summary = temp_root / "output" / "live_replay_summary.json"
             ppc_summary = temp_root / "output" / "ppc_tokyo_run1_rtk_summary.json"
             moving_base_summary = temp_root / "output" / "scorpion_moving_base_summary.json"
+            ppp_products_summary = temp_root / "output" / "ppp_static_products_summary.json"
             visibility_summary = temp_root / "output" / "visibility_static_summary.json"
             visibility_csv = temp_root / "output" / "visibility_static.csv"
             visibility_png = temp_root / "output" / "visibility_static.png"
@@ -158,7 +159,32 @@ class WebUISmokeTest(unittest.TestCase):
                         "solution_pos": str(temp_root / "output" / "scorpion_moving_base.pos"),
                         "prepare_summary_json": str(temp_root / "output" / "prepare_summary.json"),
                         "products_summary_json": str(temp_root / "output" / "products_summary.json"),
+                        "plot_png": str(temp_root / "output" / "scorpion_moving_base.png"),
                         "signoff_profile": "scorpion-moving-base",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (temp_root / "output" / "scorpion_moving_base.png").write_bytes(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+ymsAAAAASUVORK5CYII="
+                )
+            )
+            ppp_products_summary.write_text(
+                json.dumps(
+                    {
+                        "products_signoff_profile": "static",
+                        "product_presets": ["igs-final", "ionex", "dcb"],
+                        "fetched_product_date": "2024-01-02",
+                        "ppp_solution_rate_pct": 100.0,
+                        "ppp_converged": True,
+                        "ppp_convergence_time_s": 285.0,
+                        "mean_position_error_m": 0.12,
+                        "p95_position_error_m": 0.21,
+                        "max_position_error_m": 0.31,
+                        "ionex_corrections": 18,
+                        "dcb_corrections": 18,
+                        "solution_pos": str(temp_root / "output" / "ppp_static_products.pos"),
                     }
                 ),
                 encoding="utf-8",
@@ -262,6 +288,15 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("completed", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("prepare", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("products", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("plot", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn(
+                        "output%2Fscorpion_moving_base.png",
+                        page.locator("#moving-base-image").get_attribute("src"),
+                    )
+                    self.assertIn("ppp_static_products_summary.json", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("2024-01-02", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("285.0 s", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("18 / D 18", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("visibility_static_summary.json", page.locator("#visibility-table tbody").text_content())
                     self.assertIn("27", page.locator("#visibility-table tbody").text_content())
                     self.assertIn("44.70 dB-Hz", page.locator("#visibility-table tbody").text_content())
