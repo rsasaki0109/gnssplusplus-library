@@ -40,6 +40,7 @@ set(GNSS_SOURCES_NO_OPTIMIZATION
     src/algorithms/rtk_ar_selection.cpp
     src/algorithms/rtk_measurement.cpp
     src/algorithms/rtk_selection.cpp
+    src/algorithms/rtk_update.cpp
     src/algorithms/rtk_validation.cpp
     src/algorithms/rtk.cpp
     src/algorithms/spp.cpp

@@ -44,6 +44,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_ppp_static_signoff.py",
                 prefix / "bin" / "gnss_ppp_kinematic_signoff.py",
                 prefix / "bin" / "gnss_ppc_demo.py",
+                prefix / "bin" / "gnss_ppc_rtk_signoff.py",
                 prefix / "bin" / "gnss_clas_ppp.py",
                 prefix / "bin" / "gnss_sbp_info.py",
                 prefix / "bin" / "gnss_sbf_info.py",
