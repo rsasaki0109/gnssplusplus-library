@@ -94,15 +94,18 @@ def infer_rinex_first_obs_date(path: Path) -> date:
 def run_fetch_products(
     root_dir: Path,
     obs_path: Path,
+    presets: list[str],
     product_specs: list[str],
     product_date_text: str | None = None,
     cache_dir: Path | None = None,
 ) -> dict[str, object]:
-    if not product_specs:
-        raise SystemExit("--fetch-products requires at least one --product KIND=SOURCE")
+    if not presets and not product_specs:
+        raise SystemExit("--fetch-products requires at least one --preset or --product KIND=SOURCE")
 
     effective_date = product_date_text or infer_rinex_first_obs_date(obs_path).isoformat()
     command = [*resolve_gnss_command(root_dir), "fetch-products", "--date", effective_date]
+    for preset in presets:
+        command.extend(["--preset", preset])
     for spec in product_specs:
         command.extend(["--product", spec])
     if cache_dir is not None:

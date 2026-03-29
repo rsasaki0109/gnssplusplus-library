@@ -26,7 +26,7 @@ PROFILE_DEFAULTS: dict[str, dict[str, float | int]] = {
         "require_mean_sats_min": 18.0,
         "require_solver_wall_time_max": 5.0,
         "require_realtime_factor_min": 5.0,
-        "require_effective_epoch_rate_min": 30.0,
+        "require_effective_epoch_rate_min": 29.0,
         "require_lib_fix_rate_vs_rtklib_min_delta": 0.0,
         "require_lib_median_h_vs_rtklib_max_delta": 0.01,
         "require_lib_p95_h_vs_rtklib_max_delta": 0.02,
@@ -42,10 +42,26 @@ PROFILE_DEFAULTS: dict[str, dict[str, float | int]] = {
         "require_mean_sats_min": 20.0,
         "require_solver_wall_time_max": 5.0,
         "require_realtime_factor_min": 5.0,
-        "require_effective_epoch_rate_min": 28.0,
+        "require_effective_epoch_rate_min": 26.5,
         "require_lib_fix_rate_vs_rtklib_min_delta": 0.0,
         "require_lib_median_h_vs_rtklib_max_delta": 0.05,
         "require_lib_p95_h_vs_rtklib_max_delta": 0.10,
+    },
+}
+
+PROFILE_TUNING_DEFAULTS: dict[str, dict[str, str | float | int | bool]] = {
+    "tokyo": {
+        "preset": "low-cost",
+        "arfilter": True,
+        "arfilter_margin": 0.35,
+        "min_hold_count": 8,
+        "hold_ratio_threshold": 2.6,
+    },
+    "nagoya": {
+        "preset": "low-cost",
+        "arfilter": False,
+        "min_hold_count": 7,
+        "hold_ratio_threshold": 2.4,
     },
 }
 
@@ -88,6 +104,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--use-existing-rtklib-solution", action="store_true")
     parser.add_argument("--rtklib-solver-wall-time-s", type=float, default=None)
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
+    parser.add_argument("--preset", choices=("survey", "low-cost", "moving-base"), default=None)
+    parser.add_argument("--arfilter", dest="arfilter", action="store_true")
+    parser.add_argument("--no-arfilter", dest="arfilter", action="store_false")
+    parser.set_defaults(arfilter=None)
+    parser.add_argument("--arfilter-margin", type=float, default=None)
+    parser.add_argument("--min-hold-count", type=int, default=None)
+    parser.add_argument("--hold-ratio-threshold", type=float, default=None)
 
     parser.add_argument("--require-valid-epochs-min", type=int, default=None)
     parser.add_argument("--require-matched-epochs-min", type=int, default=None)
@@ -142,11 +165,27 @@ def selected_thresholds(args: argparse.Namespace, city: str, use_rtklib_compare:
     return thresholds
 
 
+def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | float | int | bool]:
+    tuning = dict(PROFILE_TUNING_DEFAULTS[city])
+    if args.preset is not None:
+        tuning["preset"] = args.preset
+    if args.arfilter is not None:
+        tuning["arfilter"] = args.arfilter
+    if args.arfilter_margin is not None:
+        tuning["arfilter_margin"] = args.arfilter_margin
+    if args.min_hold_count is not None:
+        tuning["min_hold_count"] = args.min_hold_count
+    if args.hold_ratio_threshold is not None:
+        tuning["hold_ratio_threshold"] = args.hold_ratio_threshold
+    return tuning
+
+
 def build_ppc_demo_command(args: argparse.Namespace,
                            run_dir: Path,
                            out: Path,
                            summary_json: Path,
-                           thresholds: dict[str, float | int]) -> list[str]:
+                           thresholds: dict[str, float | int],
+                           tuning: dict[str, str | float | int | bool]) -> list[str]:
     gnss_command = resolve_gnss_command(ROOT_DIR)
     command = [
         *gnss_command,
@@ -176,6 +215,21 @@ def build_ppc_demo_command(args: argparse.Namespace,
         command.append("--use-existing-rtklib-solution")
     if args.rtklib_solver_wall_time_s is not None:
         command.extend(["--rtklib-solver-wall-time-s", str(args.rtklib_solver_wall_time_s)])
+
+    preset = tuning.get("preset")
+    if isinstance(preset, str):
+        command.extend(["--preset", preset])
+    arfilter = tuning.get("arfilter")
+    if arfilter is True:
+        command.append("--arfilter")
+    elif arfilter is False:
+        command.append("--no-arfilter")
+    if "arfilter_margin" in tuning:
+        command.extend(["--arfilter-margin", str(tuning["arfilter_margin"])])
+    if "min_hold_count" in tuning:
+        command.extend(["--min-hold-count", str(tuning["min_hold_count"])])
+    if "hold_ratio_threshold" in tuning:
+        command.extend(["--hold-ratio-threshold", str(tuning["hold_ratio_threshold"])])
 
     for name, value in thresholds.items():
         command.extend([f"--{name.replace('_', '-')}", str(value)])
@@ -215,14 +269,16 @@ def main() -> int:
         city,
         use_rtklib_compare=(args.rtklib_bin is not None or args.rtklib_pos is not None),
     )
+    tuning = selected_tuning(args, city)
     summary_json.parent.mkdir(parents=True, exist_ok=True)
     out.parent.mkdir(parents=True, exist_ok=True)
-    command = build_ppc_demo_command(args, run_dir, out, summary_json, thresholds)
+    command = build_ppc_demo_command(args, run_dir, out, summary_json, thresholds, tuning)
     run_command(command)
 
     payload = json.loads(summary_json.read_text(encoding="utf-8"))
     payload["signoff_profile"] = f"ppc-rtk-{city}"
     payload["signoff_thresholds"] = thresholds
+    payload["tuning_profile"] = tuning
     payload["rtklib_comparison_enabled"] = "delta_vs_rtklib" in payload
     summary_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 

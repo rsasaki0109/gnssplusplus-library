@@ -154,6 +154,11 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 rtklib_pos=temp_root / "rtklib.pos",
                 use_existing_rtklib_solution=True,
                 rtklib_solver_wall_time_s=0.8,
+                preset=None,
+                arfilter=None,
+                arfilter_margin=None,
+                min_hold_count=None,
+                hold_ratio_threshold=None,
             )
             run_dir = temp_root / "tokyo" / "run1"
             out = temp_root / "solution.pos"
@@ -162,9 +167,16 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "require_fix_rate_min": 95.0,
                 "require_lib_fix_rate_vs_rtklib_min_delta": 0.0,
             }
+            tuning = {
+                "preset": "low-cost",
+                "arfilter": True,
+                "arfilter_margin": 0.35,
+                "min_hold_count": 8,
+                "hold_ratio_threshold": 2.6,
+            }
 
             command = ppc_rtk_signoff.build_ppc_demo_command(
-                args, run_dir, out, summary_json, thresholds
+                args, run_dir, out, summary_json, thresholds, tuning
             )
 
             self.assertEqual(command[:3], [sys.executable, str(ROOT_DIR / "apps" / "gnss.py"), "ppc-demo"])
@@ -175,6 +187,26 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("--require-fix-rate-min", command)
             self.assertIn("95.0", command)
             self.assertIn("--require-lib-fix-rate-vs-rtklib-min-delta", command)
+            self.assertIn("--preset", command)
+            self.assertIn("low-cost", command)
+            self.assertIn("--arfilter", command)
+            self.assertIn("--min-hold-count", command)
+            self.assertIn("8", command)
+
+    def test_selected_tuning_uses_city_specific_defaults(self) -> None:
+        args = argparse.Namespace(
+            preset=None,
+            arfilter=None,
+            arfilter_margin=None,
+            min_hold_count=None,
+            hold_ratio_threshold=None,
+        )
+        tokyo = ppc_rtk_signoff.selected_tuning(args, "tokyo")
+        nagoya = ppc_rtk_signoff.selected_tuning(args, "nagoya")
+        self.assertEqual(tokyo["preset"], "low-cost")
+        self.assertEqual(tokyo["arfilter"], True)
+        self.assertEqual(nagoya["preset"], "low-cost")
+        self.assertEqual(nagoya["arfilter"], False)
 
 
 class MovingBaseSignoffHelpersTest(unittest.TestCase):

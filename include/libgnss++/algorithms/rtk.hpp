@@ -54,6 +54,7 @@ public:
         int min_satellites_for_ar = 5;
         int min_lock_count = 5;
         int min_hold_count = 5;   // RTKLIB minfix: consecutive fixes before holdamb
+        double hold_ambiguity_ratio_threshold = 2.0;
 
         // Ionosphere option
         enum class IonoOpt {
@@ -86,6 +87,8 @@ public:
         double cycle_slip_threshold = 0.05;
         bool enable_doppler_slip_detection = true;
         double doppler_slip_threshold = 0.20;
+        bool enable_code_slip_detection = true;
+        double code_slip_threshold = 5.0;
         bool enable_outlier_detection = true;
         double outlier_threshold = 3.0;
 
@@ -295,6 +298,8 @@ private:
     std::map<SatelliteId, double> gf_l1l2_history_;
     std::map<SatelliteId, double> doppler_phase_history_l1_m_;
     std::map<SatelliteId, double> doppler_phase_history_l2_m_;
+    std::map<SatelliteId, double> code_phase_history_l1_m_;
+    std::map<SatelliteId, double> code_phase_history_l2_m_;
 
     /**
      * Collect all satellite data for an epoch (L1+L2 for rover and base)

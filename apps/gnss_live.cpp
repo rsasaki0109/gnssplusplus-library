@@ -41,6 +41,13 @@ enum class GlonassARChoice {
     AUTOCAL
 };
 
+enum class RTKTuningPreset {
+    NONE,
+    SURVEY,
+    LOW_COST,
+    MOVING_BASE
+};
+
 enum class ModeChoice {
     KINEMATIC,
     MOVING_BASE
@@ -64,14 +71,23 @@ struct LiveConfig {
     Eigen::Vector3d base_position_ecef = Eigen::Vector3d::Zero();
     double ratio_threshold = 3.0;
     bool enable_ar_filter = false;
+    bool has_ar_filter_override = false;
     double ar_filter_margin = 0.25;
     int min_satellites_for_ar = 5;
+    int min_hold_count = 5;
+    double hold_ratio_threshold = 2.0;
     double elevation_mask_deg = 15.0;
     bool enable_glonass = true;
     bool enable_beidou = true;
     GlonassARChoice glonass_ar = GlonassARChoice::OFF;
     ModeChoice mode = ModeChoice::KINEMATIC;
     int rover_ubx_baud = 115200;
+    RTKTuningPreset preset = RTKTuningPreset::NONE;
+    bool ratio_threshold_set = false;
+    bool ar_filter_margin_set = false;
+    bool min_satellites_for_ar_set = false;
+    bool min_hold_count_set = false;
+    bool hold_ratio_threshold_set = false;
 };
 
 struct SourceState {
@@ -563,9 +579,14 @@ void printUsage(const char* argv0) {
         << "  --mode <kinematic|moving-base>\n"
         << "                            RTK mode (default: kinematic)\n"
         << "  --ratio <value>            Ambiguity ratio threshold (default: 3.0)\n"
+        << "  --preset <survey|low-cost|moving-base>\n"
+        << "                            Apply a named RTK tuning preset\n"
         << "  --arfilter                 Require extra ratio margin for subset AR fixes\n"
+        << "  --no-arfilter              Disable subset AR filter margin even if a preset enables it\n"
         << "  --arfilter-margin <v>      Extra ratio margin for --arfilter (default: 0.25)\n"
         << "  --min-ar-sats <n>          Minimum satellites for AR (default: 5)\n"
+        << "  --min-hold-count <n>       Consecutive fixes before hold ambiguity is allowed (default: 5)\n"
+        << "  --hold-ratio-threshold <v> Ratio threshold used while hold ambiguity is active (default: 2.0)\n"
         << "  --elevation-mask-deg <v>   Elevation mask in degrees (default: 15)\n"
         << "  --no-glonass               Disable GLONASS carrier processing\n"
         << "  --no-beidou                Disable BeiDou carrier processing\n"
@@ -586,6 +607,44 @@ GlonassARChoice parseGlonassARChoice(const std::string& value, const char* argv0
     if (value == "on") return GlonassARChoice::ON;
     if (value == "autocal") return GlonassARChoice::AUTOCAL;
     argumentError("unsupported --glonass-ar value: " + value, argv0);
+}
+
+RTKTuningPreset parseRTKTuningPreset(const std::string& value, const char* argv0) {
+    if (value == "survey") return RTKTuningPreset::SURVEY;
+    if (value == "low-cost") return RTKTuningPreset::LOW_COST;
+    if (value == "moving-base") return RTKTuningPreset::MOVING_BASE;
+    argumentError("unsupported --preset value: " + value, argv0);
+}
+
+void applyRTKTuningPreset(LiveConfig& config) {
+    switch (config.preset) {
+        case RTKTuningPreset::NONE:
+            return;
+        case RTKTuningPreset::SURVEY:
+            if (!config.ratio_threshold_set) config.ratio_threshold = 3.0;
+            if (!config.has_ar_filter_override) config.enable_ar_filter = false;
+            if (!config.ar_filter_margin_set) config.ar_filter_margin = 0.25;
+            if (!config.min_satellites_for_ar_set) config.min_satellites_for_ar = 5;
+            if (!config.min_hold_count_set) config.min_hold_count = 5;
+            if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.0;
+            return;
+        case RTKTuningPreset::LOW_COST:
+            if (!config.ratio_threshold_set) config.ratio_threshold = 3.0;
+            if (!config.has_ar_filter_override) config.enable_ar_filter = true;
+            if (!config.ar_filter_margin_set) config.ar_filter_margin = 0.35;
+            if (!config.min_satellites_for_ar_set) config.min_satellites_for_ar = 6;
+            if (!config.min_hold_count_set) config.min_hold_count = 8;
+            if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.5;
+            return;
+        case RTKTuningPreset::MOVING_BASE:
+            if (!config.ratio_threshold_set) config.ratio_threshold = 2.8;
+            if (!config.has_ar_filter_override) config.enable_ar_filter = true;
+            if (!config.ar_filter_margin_set) config.ar_filter_margin = 0.20;
+            if (!config.min_satellites_for_ar_set) config.min_satellites_for_ar = 6;
+            if (!config.min_hold_count_set) config.min_hold_count = 8;
+            if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.4;
+            return;
+    }
 }
 
 ModeChoice parseModeChoice(const std::string& value, const char* argv0) {
@@ -650,12 +709,27 @@ LiveConfig parseArguments(int argc, char** argv) {
             config.mode = parseModeChoice(argv[++i], argv[0]);
         } else if (arg == "--ratio" && i + 1 < argc) {
             config.ratio_threshold = std::stod(argv[++i]);
+            config.ratio_threshold_set = true;
+        } else if (arg == "--preset" && i + 1 < argc) {
+            config.preset = parseRTKTuningPreset(argv[++i], argv[0]);
         } else if (arg == "--arfilter") {
             config.enable_ar_filter = true;
+            config.has_ar_filter_override = true;
+        } else if (arg == "--no-arfilter") {
+            config.enable_ar_filter = false;
+            config.has_ar_filter_override = true;
         } else if (arg == "--arfilter-margin" && i + 1 < argc) {
             config.ar_filter_margin = std::stod(argv[++i]);
+            config.ar_filter_margin_set = true;
         } else if (arg == "--min-ar-sats" && i + 1 < argc) {
             config.min_satellites_for_ar = std::stoi(argv[++i]);
+            config.min_satellites_for_ar_set = true;
+        } else if (arg == "--min-hold-count" && i + 1 < argc) {
+            config.min_hold_count = std::stoi(argv[++i]);
+            config.min_hold_count_set = true;
+        } else if (arg == "--hold-ratio-threshold" && i + 1 < argc) {
+            config.hold_ratio_threshold = std::stod(argv[++i]);
+            config.hold_ratio_threshold_set = true;
         } else if (arg == "--elevation-mask-deg" && i + 1 < argc) {
             config.elevation_mask_deg = std::stod(argv[++i]);
         } else if (arg == "--no-glonass") {
@@ -673,6 +747,8 @@ LiveConfig parseArguments(int argc, char** argv) {
         }
     }
 
+    applyRTKTuningPreset(config);
+
     const bool has_rover_rtcm = !config.rover_rtcm_path.empty();
     const bool has_rover_ubx = !config.rover_ubx_path.empty();
     if (has_rover_rtcm == has_rover_ubx) {
@@ -689,6 +765,12 @@ LiveConfig parseArguments(int argc, char** argv) {
     }
     if (config.ar_filter_margin < 0.0) {
         argumentError("--arfilter-margin must be >= 0", argv[0]);
+    }
+    if (config.min_hold_count < 0) {
+        argumentError("--min-hold-count must be >= 0", argv[0]);
+    }
+    if (config.hold_ratio_threshold <= 0.0) {
+        argumentError("--hold-ratio-threshold must be > 0", argv[0]);
     }
     if (config.base_hold_seconds < 0.0) {
         argumentError("--base-hold-seconds must be >= 0", argv[0]);
@@ -958,9 +1040,11 @@ int main(int argc, char** argv) {
                 : libgnss::RTKProcessor::RTKConfig::PositionMode::KINEMATIC;
         rtk_config.ratio_threshold = config.ratio_threshold;
         rtk_config.ambiguity_ratio_threshold = config.ratio_threshold;
+        rtk_config.hold_ambiguity_ratio_threshold = config.hold_ratio_threshold;
         rtk_config.enable_ar_filter = config.enable_ar_filter;
         rtk_config.ar_filter_margin = config.ar_filter_margin;
         rtk_config.min_satellites_for_ar = config.min_satellites_for_ar;
+        rtk_config.min_hold_count = config.min_hold_count;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;
         rtk_config.enable_glonass = config.enable_glonass;
         rtk_config.enable_beidou = config.enable_beidou;

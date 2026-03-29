@@ -54,9 +54,9 @@ Relevant code entrypoints today:
 | Explicit `arfilter` policy switch | Present as an explicit subset-candidate ratio-margin knob in solver CLI/config, but intentionally narrower than demo5's broader tuning surface | Useful as a practical false-fix guard without collapsing the staged RTK design |
 | Explicit `PAR` implementation | `PARTIAL` exists in config, but there is no separately documented demo5-style partial ambiguity-resolution path | This matters if we want to claim parity with demo5 tuning ideas rather than just naming compatibility |
 | Doppler-aided slip threshold path | A basic Doppler/carrier consistency slip guard now exists in the RTK bias-update path, but it is not yet a broader demo5-style tuning surface with receiver-class-specific knobs | demo5 uses Doppler/carrier disagreement as an additional practical slip signal |
-| Code-based slip path | No explicit `detslp_code`-style RTK path is exposed today | This is another low-cost-receiver guard often useful when carrier-only logic is not enough |
-| Receiver-oriented tuning presets | Current tuning is mostly coded into the solver and sign-off thresholds, not yet exposed as named presets | demo5 is strong partly because it is operationally easy to tune for receiver classes |
-| Hold tuning knobs such as `varholdamb` / `gainholdamb` | Conservative hold behavior exists, but these knobs are not surfaced as user-facing tuning parameters | Useful when pushing harder on low-cost data without forking the solver |
+| Code-based slip path | A basic single-difference code-minus-phase slip guard now exists in the RTK bias-update path, but it is intentionally smaller than a full demo5 tuning surface | This is another low-cost-receiver guard often useful when carrier-only logic is not enough |
+| Receiver-oriented tuning presets | Named CLI presets now exist for `survey`, `low-cost`, and `moving-base`, and PPC RTK sign-off now carries city-specific tuning defaults (`Tokyo`: low-cost + arfilter, `Nagoya`: low-cost + no-arfilter) | demo5 is strong partly because it is operationally easy to tune for receiver classes |
+| Hold tuning knobs such as `varholdamb` / `gainholdamb` | `min_hold_count` and hold-active ratio threshold are now public knobs and are exercised through PPC RTK sign-off tuning profiles, but the broader hold policy remains intentionally simpler than demo5 | Useful when pushing harder on low-cost data without forking the solver |
 
 ## Important design difference
 
@@ -100,9 +100,9 @@ it probably should not be imported yet.
 
 1. Audit whether `PARTIAL` should become a real documented mode or remain a placeholder.
 2. Evaluate the current Doppler-aided slip detection against PPC Tokyo and Nagoya and decide whether it needs a broader named tuning surface.
-3. Evaluate code-based slip detection against the same PPC windows.
-4. Decide whether receiver-oriented preset profiles are worth exposing in CLI and sign-off wrappers.
-5. Decide whether hold-tuning knobs should become public config or remain internal policy.
+3. Evaluate whether the current basic code-slip guard needs a broader named tuning surface against the same PPC windows.
+4. Decide whether the current preset set is enough or whether receiver-class-specific presets are still worth exposing.
+5. Decide whether more hold-tuning knobs should become public config or remain internal policy.
 
 ## Exit condition for this analysis
 

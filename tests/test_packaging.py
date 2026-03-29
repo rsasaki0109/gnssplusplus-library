@@ -83,6 +83,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_rtk_kinematic_signoff.py",
                 prefix / "bin" / "gnss_ppp_static_signoff.py",
                 prefix / "bin" / "gnss_ppp_kinematic_signoff.py",
+                prefix / "bin" / "gnss_ppp_products_signoff.py",
                 prefix / "bin" / "gnss_ppc_demo.py",
                 prefix / "bin" / "gnss_ppc_rtk_signoff.py",
                 prefix / "bin" / "gnss_clas_ppp.py",
@@ -187,6 +188,18 @@ class PackagingSmokeTest(unittest.TestCase):
                 )
                 self.assertTrue(ppp_out.exists(), "installed PPP static signoff did not write .pos")
                 self.assertTrue(ppp_summary.exists(), "installed PPP static signoff did not write summary")
+
+                subprocess.run(
+                    [
+                        str(prefix / "bin" / "gnss"),
+                        "ppp-products-signoff",
+                        "--help",
+                    ],
+                    check=True,
+                    cwd=ROOT_DIR,
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                )
 
                 subprocess.run(
                     [

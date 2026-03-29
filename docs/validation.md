@@ -11,6 +11,7 @@ Main sign-off entrypoints:
 - `gnss rtk-kinematic-signoff`
 - `gnss ppp-static-signoff`
 - `gnss ppp-kinematic-signoff`
+- `gnss ppp-products-signoff`
 - `gnss live-signoff`
 - `gnss moving-base-signoff`
 - `gnss ppc-rtk-signoff`
@@ -39,6 +40,12 @@ python3 apps/gnss.py ppp-kinematic-signoff \
   --require-max-error-max 7 \
   --require-mean-sats-min 18 \
   --require-ppp-solution-rate-min 100
+
+python3 apps/gnss.py ppp-products-signoff \
+  --profile static \
+  --require-converged \
+  --require-ionex-corrections-min 1 \
+  --require-dcb-corrections-min 1
 ```
 
 ## Realtime validation

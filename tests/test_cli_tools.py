@@ -5450,6 +5450,78 @@ class CLIToolsTest(unittest.TestCase):
             self.assertGreaterEqual(payload["mean_satellites"], 18.0)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
 
+    def test_ppp_products_signoff_cli_runs_static_profile_with_local_templates(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_products_signoff_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            generated_sp3 = temp_root / "generated.sp3"
+            generated_clk = temp_root / "generated.clk"
+            products_dir = temp_root / "products"
+            products_dir.mkdir()
+            output_path = temp_root / "ppp_products.pos"
+            summary_path = temp_root / "ppp_products_summary.json"
+
+            nav_products = self.run_gnss(
+                "nav-products",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--sp3-out",
+                str(generated_sp3),
+                "--clk-out",
+                str(generated_clk),
+                "--max-epochs",
+                "20",
+            )
+            self.assertEqual(nav_products.returncode, 0, msg=nav_products.stderr)
+
+            with gzip.open(products_dir / "2024002.sp3.gz", "wb") as stream:
+                stream.write(generated_sp3.read_bytes())
+            with gzip.open(products_dir / "2024002.clk.gz", "wb") as stream:
+                stream.write(generated_clk.read_bytes())
+            with gzip.open(products_dir / "2024002.ionex.gz", "wb") as stream:
+                stream.write(build_synthetic_ionex_text().encode("ascii"))
+            with gzip.open(products_dir / "2024002.bsx.gz", "wb") as stream:
+                stream.write(build_synthetic_dcb_text().encode("ascii"))
+
+            result = self.run_gnss(
+                "ppp-products-signoff",
+                "--profile",
+                "static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "20",
+                "--product-date",
+                "2024-01-02",
+                "--product",
+                f"sp3={products_dir / '{yyyy}{doy}.sp3.gz'}",
+                "--product",
+                f"clk={products_dir / '{yyyy}{doy}.clk.gz'}",
+                "--product",
+                f"ionex={products_dir / '{yyyy}{doy}.ionex.gz'}",
+                "--product",
+                f"dcb={products_dir / '{yyyy}{doy}.bsx.gz'}",
+                "--require-valid-epochs-min",
+                "20",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["products_signoff_profile"], "static")
+            self.assertEqual(payload["product_presets"], [])
+            self.assertEqual(len(payload["product_specs"]), 4)
+            self.assertTrue(payload["fetch_products"])
+            self.assertEqual(payload["fetched_product_date"], "2024-01-02")
+
     def test_ppc_demo_cli_summarizes_existing_solution_against_reference_csv(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_demo_cli_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -5843,6 +5915,8 @@ class CLIToolsTest(unittest.TestCase):
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["signoff_profile"], "ppc-rtk-tokyo")
             self.assertTrue(payload["rtklib_comparison_enabled"])
+            self.assertEqual(payload["tuning_profile"]["preset"], "low-cost")
+            self.assertTrue(payload["tuning_profile"]["arfilter"])
             self.assertGreaterEqual(payload["fix_rate_pct"], 95.0)
             self.assertGreaterEqual(payload["delta_vs_rtklib"]["fix_rate_pct"], 0.0)
             self.assertLessEqual(payload["delta_vs_rtklib"]["median_h_m"], 0.01)
@@ -5879,6 +5953,8 @@ class CLIToolsTest(unittest.TestCase):
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["signoff_profile"], "ppc-rtk-nagoya")
             self.assertFalse(payload["rtklib_comparison_enabled"])
+            self.assertEqual(payload["tuning_profile"]["preset"], "low-cost")
+            self.assertFalse(payload["tuning_profile"]["arfilter"])
             self.assertGreaterEqual(payload["fix_rate_pct"], 95.0)
             self.assertLessEqual(payload["median_h_m"], 0.12)
             self.assertLessEqual(payload["p95_h_m"], 0.12)
@@ -7973,15 +8049,50 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--rover-ubx", result.stdout)
         self.assertIn("--base-hold-seconds", result.stdout)
         self.assertIn("--mode <kinematic|moving-base>", result.stdout)
+        self.assertIn("--preset <survey|low-cost|moving-base>", result.stdout)
         self.assertIn("--arfilter", result.stdout)
+        self.assertIn("--no-arfilter", result.stdout)
         self.assertIn("--arfilter-margin", result.stdout)
+        self.assertIn("--min-hold-count", result.stdout)
+        self.assertIn("--hold-ratio-threshold", result.stdout)
 
     def test_replay_command_help_mentions_arfilter(self) -> None:
         result = self.run_gnss("replay", "--help")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("--preset <survey|low-cost|moving-base>", result.stdout)
         self.assertIn("--arfilter", result.stdout)
+        self.assertIn("--no-arfilter", result.stdout)
         self.assertIn("--arfilter-margin", result.stdout)
+        self.assertIn("--min-hold-count", result.stdout)
+        self.assertIn("--hold-ratio-threshold", result.stdout)
         self.assertIn("--base-ubx", result.stdout)
+
+    def test_solve_accepts_low_cost_preset_and_hold_knobs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_solve_preset_") as temp_dir:
+            output_path = Path(temp_dir) / "solve_preset.pos"
+            result = self.run_gnss(
+                "solve",
+                "--rover",
+                str(ROOT_DIR / "data" / "rover_kinematic.obs"),
+                "--base",
+                str(ROOT_DIR / "data" / "base_kinematic.obs"),
+                "--nav",
+                str(ROOT_DIR / "data" / "navigation_kinematic.nav"),
+                "--preset",
+                "low-cost",
+                "--min-hold-count",
+                "7",
+                "--hold-ratio-threshold",
+                "2.6",
+                "--max-epochs",
+                "5",
+                "--out",
+                str(output_path),
+                "--no-kml",
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("mode: kinematic", result.stdout)
+            self.assertTrue(output_path.exists())
 
     @unittest.skipUnless(ros2_bag_support_available(), "ROS2 rosbag + ublox_msgs support not available")
     def test_moving_base_prepare_exports_ubx_and_reference_csv(self) -> None:
@@ -8175,6 +8286,7 @@ class CLIToolsTest(unittest.TestCase):
             visibility_summary = temp_root / "output" / "visibility_static_summary.json"
             visibility_csv = temp_root / "output" / "visibility_static.csv"
             visibility_png = temp_root / "output" / "visibility_static.png"
+            moving_base_summary = temp_root / "output" / "scorpion_moving_base_summary.json"
             port_file = temp_root / "port.txt"
 
             lib_pos.write_text(
@@ -8259,6 +8371,26 @@ class CLIToolsTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            moving_base_summary.write_text(
+                json.dumps(
+                    {
+                        "matched_epochs": 94,
+                        "valid_epochs": 94,
+                        "fix_rate_pct": 95.74,
+                        "median_baseline_error_m": 0.042,
+                        "p95_baseline_error_m": 0.101,
+                        "p95_heading_error_deg": 5.85,
+                        "termination": "completed",
+                        "realtime_factor": 2.17,
+                        "effective_epoch_rate_hz": 10.84,
+                        "solution_pos": str(temp_root / "output" / "scorpion_moving_base.pos"),
+                        "prepare_summary_json": str(temp_root / "output" / "prepare_summary.json"),
+                        "products_summary_json": str(temp_root / "output" / "products_summary.json"),
+                        "signoff_profile": "scorpion-moving-base",
+                    }
+                ),
+                encoding="utf-8",
+            )
             visibility_summary.write_text(
                 json.dumps(
                     {
@@ -8336,6 +8468,11 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertEqual(len(overview["ppc_summaries"]), 1)
                 self.assertEqual(overview["ppc_summaries"][0]["runtime_status"], "realtime")
                 self.assertEqual(overview["ppc_summaries"][0]["quality_status"], "excellent")
+                self.assertEqual(len(overview["moving_base_summaries"]), 1)
+                self.assertEqual(overview["moving_base_summaries"][0]["runtime_status"], "realtime")
+                self.assertEqual(overview["moving_base_summaries"][0]["quality_status"], "excellent")
+                self.assertAlmostEqual(overview["moving_base_summaries"][0]["p95_baseline_error_m"], 0.101)
+                self.assertEqual(overview["moving_base_summaries"][0]["signoff_profile"], "scorpion-moving-base")
                 self.assertEqual(len(overview["visibility_summaries"]), 1)
                 self.assertEqual(overview["visibility_summaries"][0]["rows_written"], 27)
                 self.assertEqual(overview["visibility_summaries"][0]["unique_satellites"], 9)

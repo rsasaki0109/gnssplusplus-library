@@ -129,6 +129,12 @@ def parse_args() -> argparse.Namespace:
         help="Fetch SP3/CLK-style products through gnss fetch-products before running PPP.",
     )
     parser.add_argument(
+        "--preset",
+        action="append",
+        default=[],
+        help="Product preset passed through to gnss fetch-products. May be repeated.",
+    )
+    parser.add_argument(
         "--product",
         action="append",
         default=[],
@@ -511,8 +517,8 @@ def main() -> int:
         raise SystemExit("--ar-ratio-threshold must be positive")
     if args.generate_products and args.fetch_products:
         raise SystemExit("--generate-products and --fetch-products cannot be used together")
-    if args.fetch_products and not args.product:
-        raise SystemExit("--fetch-products requires at least one --product KIND=SOURCE")
+    if args.fetch_products and not args.preset and not args.product:
+        raise SystemExit("--fetch-products requires at least one --preset or --product KIND=SOURCE")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.summary_json.parent.mkdir(parents=True, exist_ok=True)
@@ -531,6 +537,7 @@ def main() -> int:
         fetch_payload = run_fetch_products(
             ROOT_DIR,
             args.obs,
+            args.preset,
             args.product,
             product_date_text=args.product_date,
             cache_dir=args.product_cache_dir,
