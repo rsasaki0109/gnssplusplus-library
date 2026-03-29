@@ -69,6 +69,14 @@ jobs:
       working-directory: build
       run: ctest --output-on-failure
 
+    - name: Docker smoke
+      if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
+      run: |
+        docker build -t libgnsspp-ci .
+        docker run --rm libgnsspp-ci --help >/dev/null
+        docker run --rm libgnsspp-ci web --help >/dev/null
+        docker compose -f compose.yaml config >/dev/null
+
     - name: Optional PPC RTK sign-off
       if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
       env:
@@ -104,6 +112,45 @@ jobs:
         path: |
           output/ppc_nagoya_run1_rtk_summary.json
           output/ppc_tokyo_run1_rtk_summary.json
+        if-no-files-found: ignore
+
+    - name: Optional SCORPION moving-base sign-off
+      if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
+      env:
+        GNSSPP_SCORPION_MOVING_BASE_INPUT: ${{ vars.GNSSPP_SCORPION_MOVING_BASE_INPUT }}
+        GNSSPP_SCORPION_MOVING_BASE_URL: ${{ vars.GNSSPP_SCORPION_MOVING_BASE_URL }}
+      run: |
+        input_args=()
+        if [ -n "${GNSSPP_SCORPION_MOVING_BASE_INPUT}" ] && [ -e "${GNSSPP_SCORPION_MOVING_BASE_INPUT}" ]; then
+          input_args=(--input "${GNSSPP_SCORPION_MOVING_BASE_INPUT}")
+        elif [ -n "${GNSSPP_SCORPION_MOVING_BASE_URL}" ]; then
+          input_args=(--input-url "${GNSSPP_SCORPION_MOVING_BASE_URL}")
+        else
+          echo "SCORPION moving-base input is unavailable; skipping sign-off."
+          exit 0
+        fi
+        mkdir -p output
+        python3 apps/gnss.py scorpion-moving-base-signoff \
+          "${input_args[@]}" \
+          --summary-json output/scorpion_moving_base_summary.json \
+          --max-epochs 120 \
+          --require-matched-epochs-min 80 \
+          --require-fix-rate-min 90 \
+          --require-p95-baseline-error-max 0.20 \
+          --require-p95-heading-error-max 10 \
+          --require-realtime-factor-min 1.0
+
+    - name: Upload SCORPION moving-base artifacts
+      if: always() && matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
+      uses: actions/upload-artifact@v4
+      with:
+        name: scorpion-moving-base-${{ matrix.os }}-${{ matrix.compiler }}
+        path: |
+          output/scorpion_moving_base_summary.json
+          output/scorpion_moving_base/prepare_summary.json
+          output/scorpion_moving_base/products_summary.json
+          output/scorpion_moving_base/scorpion_moving_base.pos
+          output/scorpion_moving_base/reference.csv
         if-no-files-found: ignore
 
   static-analysis:
