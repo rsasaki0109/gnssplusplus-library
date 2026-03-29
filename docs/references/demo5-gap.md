@@ -51,9 +51,9 @@ Relevant code entrypoints today:
 
 | Gap | Current libgnss++ state | Why it matters |
 |---|---|---|
-| Explicit `arfilter` policy switch | No direct `arfilter`-style runtime policy is exposed yet | demo5 uses this as a practical false-fix guard for noisy low-cost data |
+| Explicit `arfilter` policy switch | Present as an explicit subset-candidate ratio-margin knob in solver CLI/config, but intentionally narrower than demo5's broader tuning surface | Useful as a practical false-fix guard without collapsing the staged RTK design |
 | Explicit `PAR` implementation | `PARTIAL` exists in config, but there is no separately documented demo5-style partial ambiguity-resolution path | This matters if we want to claim parity with demo5 tuning ideas rather than just naming compatibility |
-| Doppler-aided slip threshold path | No explicit `detslp_dop` equivalent was found in the current RTK solver path | demo5 uses Doppler/carrier disagreement as an additional practical slip signal |
+| Doppler-aided slip threshold path | A basic Doppler/carrier consistency slip guard now exists in the RTK bias-update path, but it is not yet a broader demo5-style tuning surface with receiver-class-specific knobs | demo5 uses Doppler/carrier disagreement as an additional practical slip signal |
 | Code-based slip path | No explicit `detslp_code`-style RTK path is exposed today | This is another low-cost-receiver guard often useful when carrier-only logic is not enough |
 | Receiver-oriented tuning presets | Current tuning is mostly coded into the solver and sign-off thresholds, not yet exposed as named presets | demo5 is strong partly because it is operationally easy to tune for receiver classes |
 | Hold tuning knobs such as `varholdamb` / `gainholdamb` | Conservative hold behavior exists, but these knobs are not surfaced as user-facing tuning parameters | Useful when pushing harder on low-cost data without forking the solver |
@@ -98,11 +98,11 @@ it probably should not be imported yet.
 
 ## Immediate work items derived from this gap
 
-1. Decide whether `arfilter` should become an explicit libgnss++ config option.
-2. Audit whether `PARTIAL` should become a real documented mode or remain a placeholder.
-3. Evaluate Doppler-aided slip detection against PPC Tokyo and Nagoya.
-4. Evaluate code-based slip detection against the same PPC windows.
-5. Decide whether receiver-oriented preset profiles are worth exposing in CLI and sign-off wrappers.
+1. Audit whether `PARTIAL` should become a real documented mode or remain a placeholder.
+2. Evaluate the current Doppler-aided slip detection against PPC Tokyo and Nagoya and decide whether it needs a broader named tuning surface.
+3. Evaluate code-based slip detection against the same PPC windows.
+4. Decide whether receiver-oriented preset profiles are worth exposing in CLI and sign-off wrappers.
+5. Decide whether hold-tuning knobs should become public config or remain internal policy.
 
 ## Exit condition for this analysis
 

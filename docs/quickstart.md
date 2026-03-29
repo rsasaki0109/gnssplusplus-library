@@ -34,6 +34,14 @@ python3 apps/gnss.py visibility \
   --csv output/visibility.csv \
   --summary-json output/visibility_summary.json \
   --max-epochs 60
+
+python3 apps/gnss.py replay \
+  --rover-rinex data/rover_kinematic.obs \
+  --base-rinex data/base_kinematic.obs \
+  --nav-rinex data/navigation_kinematic.nav \
+  --mode moving-base \
+  --out output/moving_base_replay.pos \
+  --max-epochs 20
 ```
 
 ## Main commands
@@ -45,6 +53,7 @@ python3 apps/gnss.py visibility \
 | `gnss ppp` | Batch PPP from rover RINEX plus nav or precise products |
 | `gnss visibility` | Export azimuth/elevation/SNR visibility rows and summary JSON from rover/nav RINEX |
 | `gnss visibility-plot` | Render a visibility CSV into a polar/elevation PNG quick-look |
+| `gnss moving-base-signoff` | Validate a real moving-base replay/live dataset against per-epoch base/rover reference coordinates |
 | `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` files from local or remote sources |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
 | `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
@@ -64,6 +73,10 @@ python3 apps/gnss.py web \
 ```
 
 Open `http://127.0.0.1:8085` to inspect benchmark tables, live sign-offs, receiver status, and visibility summaries.
+
+## Real moving-base sign-off
+
+`moving-base-signoff` is for external real datasets. Provide recorded `replay` or `live` inputs plus a reference CSV with per-epoch base/rover ECEF coordinates.
 
 ## Product-driven PPP
 

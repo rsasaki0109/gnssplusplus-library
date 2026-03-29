@@ -4917,6 +4917,39 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(len(records), 5)
             self.assertTrue(all(int(record["status"]) > 0 for record in records))
 
+    def test_solve_cli_supports_moving_base_mode(self) -> None:
+        rover = ROOT_DIR / "data/rover_kinematic.obs"
+        base = ROOT_DIR / "data/base_kinematic.obs"
+        nav = ROOT_DIR / "data/navigation_kinematic.nav"
+
+        self.assertTrue(rover.exists())
+        self.assertTrue(base.exists())
+        self.assertTrue(nav.exists())
+
+        with tempfile.TemporaryDirectory(prefix="gnss_solve_moving_base_") as temp_dir:
+            output_path = Path(temp_dir) / "moving_base.pos"
+            result = self.run_gnss(
+                "solve",
+                "--rover",
+                str(rover),
+                "--base",
+                str(base),
+                "--nav",
+                str(nav),
+                "--out",
+                str(output_path),
+                "--no-kml",
+                "--mode",
+                "moving-base",
+                "--max-epochs",
+                "5",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("mode: moving-base", result.stdout)
+            self.assertIn("valid solutions: 5", result.stdout)
+            self.assertTrue(output_path.exists())
+
     def test_short_baseline_signoff_cli_writes_summary_and_passes_thresholds(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_short_baseline_signoff_cli_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -7770,6 +7803,32 @@ class CLIToolsTest(unittest.TestCase):
             ]
             self.assertGreater(len(solution_lines), 0)
 
+    def test_replay_supports_moving_base_mode(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_replay_moving_base_") as temp_dir:
+            temp_root = Path(temp_dir)
+            output_path = temp_root / "replay_moving_base.pos"
+
+            result = self.run_gnss(
+                "replay",
+                "--rover-rinex",
+                str(ROOT_DIR / "data" / "rover_kinematic.obs"),
+                "--base-rinex",
+                str(ROOT_DIR / "data" / "base_kinematic.obs"),
+                "--nav-rinex",
+                str(ROOT_DIR / "data" / "navigation_kinematic.nav"),
+                "--out",
+                str(output_path),
+                "--mode",
+                "moving-base",
+                "--max-epochs",
+                "10",
+                "--quiet",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("mode=moving-base", result.stdout)
+            self.assertTrue(output_path.exists())
+
     def test_live_command_help_is_available(self) -> None:
         result = self.run_gnss("live", "--help")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
@@ -7777,6 +7836,15 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--rover-rtcm", result.stdout)
         self.assertIn("--rover-ubx", result.stdout)
         self.assertIn("--base-hold-seconds", result.stdout)
+        self.assertIn("--mode <kinematic|moving-base>", result.stdout)
+        self.assertIn("--arfilter", result.stdout)
+        self.assertIn("--arfilter-margin", result.stdout)
+
+    def test_replay_command_help_mentions_arfilter(self) -> None:
+        result = self.run_gnss("replay", "--help")
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("--arfilter", result.stdout)
+        self.assertIn("--arfilter-margin", result.stdout)
 
     def test_live_signoff_summarizes_existing_log_and_enforces_realtime_gate(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_live_signoff_cli_") as temp_dir:
@@ -8050,6 +8118,8 @@ class CLIToolsTest(unittest.TestCase):
                 str(rover_path),
                 "--base-rtcm",
                 str(base_path),
+                "--mode",
+                "moving-base",
                 "--out",
                 str(output_path),
                 "--quiet",
@@ -8060,6 +8130,68 @@ class CLIToolsTest(unittest.TestCase):
                 f"Error: failed to open rover RTCM source: {rover_path}",
                 result.stderr,
             )
+
+    def test_moving_base_signoff_summarizes_existing_solution(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_moving_base_signoff_") as temp_dir:
+            temp_root = Path(temp_dir)
+            solution_path = temp_root / "moving_base.pos"
+            reference_csv = temp_root / "reference.csv"
+            summary_path = temp_root / "moving_base_summary.json"
+
+            solution_path.write_text(
+                "\n".join(
+                    [
+                        "% synthetic moving-base solution fixture",
+                        "2200 345600.000 3875001.100000 332002.000000 5029000.400000 35.0 139.0 10.0 4 12 1.0",
+                        "2200 345601.000 3875001.200000 332002.100000 5029000.450000 35.0 139.0 10.0 4 12 1.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            reference_csv.write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,base_ecef_x_m,base_ecef_y_m,base_ecef_z_m,rover_ecef_x_m,rover_ecef_y_m,rover_ecef_z_m",
+                        "2200,345600.0,3875000.0,332000.0,5029000.0,3875001.0,332002.0,5029000.5",
+                        "2200,345601.0,3875000.1,332000.1,5029000.0,3875001.1,332002.1,5029000.5",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            result = self.run_gnss(
+                "moving-base-signoff",
+                "--solver",
+                "replay",
+                "--use-existing-solution",
+                "--out",
+                str(solution_path),
+                "--reference-csv",
+                str(reference_csv),
+                "--summary-json",
+                str(summary_path),
+                "--solver-wall-time-s",
+                "0.5",
+                "--require-valid-epochs-min",
+                "2",
+                "--require-matched-epochs-min",
+                "2",
+                "--require-fix-rate-min",
+                "90",
+                "--require-p95-baseline-error-max",
+                "1.0",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Finished moving-base sign-off.", result.stdout)
+            self.assertTrue(summary_path.exists())
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["solver"], "replay")
+            self.assertEqual(payload["matched_epochs"], 2)
+            self.assertEqual(payload["fixed_epochs"], 2)
+            self.assertGreater(payload["realtime_factor"], 0.0)
 
     def test_rcv_dry_run_and_status_snapshot(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_rcv_test_") as temp_dir:

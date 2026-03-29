@@ -77,6 +77,14 @@ python3 apps/gnss.py visibility \
   --csv output/visibility.csv \
   --summary-json output/visibility_summary.json \
   --max-epochs 60
+
+python3 apps/gnss.py replay \
+  --rover-rinex data/rover_kinematic.obs \
+  --base-rinex data/base_kinematic.obs \
+  --nav-rinex data/navigation_kinematic.nav \
+  --mode moving-base \
+  --out output/moving_base_replay.pos \
+  --max-epochs 20
 ```
 
 ### Inspect receiver logs
@@ -120,6 +128,7 @@ python3 apps/gnss.py sbf-info \
 | `gnss live-signoff` | Realtime/error-handling sign-off for recorded RTCM/UBX live inputs |
 | `gnss ppc-demo` | External PPC-Dataset RTK/PPP verification against `reference.csv` |
 | `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB side-by-side gates |
+| `gnss moving-base-signoff` | Real moving-base replay/live sign-off against per-epoch base/rover reference coordinates |
 | `gnss odaiba-benchmark` | End-to-end Odaiba benchmark pipeline |
 | `gnss web` | Local browser UI for summary JSON, live sign-offs, `.pos` trajectories, and `gnss rcv` status |
 
@@ -138,6 +147,22 @@ python3 apps/gnss.py web \
 ```
 
 Then open `http://127.0.0.1:8085` to inspect Odaiba metrics, live sign-offs, 2D trajectories, PPC summaries, visibility summaries/polar view, and receiver status in a browser.
+
+### Real moving-base sign-off
+
+`gnss solve`, `gnss replay`, and `gnss live` accept `--mode moving-base`. For real moving-base datasets, use `gnss moving-base-signoff` with a reference CSV carrying per-epoch base/rover ECEF coordinates. The repo does not ship a bundled moving-base dataset, so this command is intended for external real logs.
+
+```bash
+python3 apps/gnss.py moving-base-signoff \
+  --solver live \
+  --rover-rtcm /datasets/moving_base/rover.rtcm3 \
+  --base-rtcm /datasets/moving_base/base.rtcm3 \
+  --reference-csv /datasets/moving_base/reference.csv \
+  --summary-json output/moving_base_summary.json \
+  --require-fix-rate-min 90 \
+  --require-p95-baseline-error-max 1.0 \
+  --require-realtime-factor-min 1.0
+```
 
 ### Product-driven PPP
 

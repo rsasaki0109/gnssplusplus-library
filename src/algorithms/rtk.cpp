@@ -55,6 +55,14 @@ bool usesEstimatedIono(const RTKProcessor::RTKConfig& config) {
     return config.ionoopt == RTKProcessor::RTKConfig::IonoOpt::EST;
 }
 
+bool isMovingBasePositionMode(const RTKProcessor::RTKConfig& config) {
+    return config.position_mode == RTKProcessor::RTKConfig::PositionMode::MOVING_BASE;
+}
+
+bool isDynamicPositionMode(const RTKProcessor::RTKConfig& config) {
+    return config.position_mode != RTKProcessor::RTKConfig::PositionMode::STATIC;
+}
+
 bool isBeiDouGeoSatellite(const SatelliteId& sat) {
     return signal_policy::isBeiDouGeoSatellite(sat);
 }
@@ -301,6 +309,8 @@ void RTKProcessor::reset() {
     has_last_trusted_time_ = false;
     current_sat_data_.clear();
     gf_l1l2_history_.clear();
+    doppler_phase_history_l1_m_.clear();
+    doppler_phase_history_l2_m_.clear();
     consecutive_fix_count_ = 0;
     last_ar_ratio_ = 0.0;
     last_num_fixed_ambiguities_ = 0;
@@ -533,7 +543,10 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         if (sd.l1_wavelength <= 0.0) continue;
         sd.rover_l1_phase = r_obs->carrier_phase; sd.rover_l1_code = r_obs->pseudorange;
         sd.base_l1_phase = b_obs->carrier_phase; sd.base_l1_code = b_obs->pseudorange;
+        sd.rover_l1_doppler = r_obs->doppler;
+        sd.base_l1_doppler = b_obs->doppler;
         sd.has_l1 = true; sd.l1_lli = r_obs->lli | b_obs->lli;
+        sd.has_l1_doppler = r_obs->has_doppler && b_obs->has_doppler;
         auto r_l2 = rover_l2.find(sat); auto b_l2 = base_l2.find(sat);
         if (r_l2 != rover_l2.end() && b_l2 != base_l2.end()) {
             const Observation* r_l2_obs = nullptr;
@@ -545,8 +558,11 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
                 sd.l2_wavelength = signalWavelengthM(sd.l2_signal, eph);
                 sd.rover_l2_phase = r_l2_obs->carrier_phase; sd.rover_l2_code = r_l2_obs->pseudorange;
                 sd.base_l2_phase = b_l2_obs->carrier_phase; sd.base_l2_code = b_l2_obs->pseudorange;
+                sd.rover_l2_doppler = r_l2_obs->doppler;
+                sd.base_l2_doppler = b_l2_obs->doppler;
                 sd.has_l2 = sd.l2_wavelength > 0.0;
                 sd.l2_lli = r_l2_obs->lli | b_l2_obs->lli;
+                sd.has_l2_doppler = r_l2_obs->has_doppler && b_l2_obs->has_doppler;
             }
         }
         result[sat] = sd;
@@ -713,7 +729,7 @@ void RTKProcessor::updateGlonassHardwareBias(double dt) {
 // ============================================================
 // Update SD biases (RTKLIB udbias)
 // ============================================================
-void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_data) {
+void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_data, double dt_s) {
     std::vector<SatelliteId> sats_to_remove;
     for (const auto& [sat, idx] : filter_state_.n1_indices) {
         if (sat_data.find(sat) == sat_data.end()) sats_to_remove.push_back(sat);
@@ -723,12 +739,14 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
         lock_count_l1_.erase(sat);
         lock_count_l2_.erase(sat);
         gf_l1l2_history_.erase(sat);
+        doppler_phase_history_l1_m_.erase(sat);
+        doppler_phase_history_l2_m_.erase(sat);
     }
 
     std::set<SatelliteId> gf_slips;
     if (rtk_config_.enable_cycle_slip_detection) {
         const double gf_slip_threshold =
-            (rtk_config_.position_mode == RTKConfig::PositionMode::KINEMATIC)
+            isDynamicPositionMode(rtk_config_)
                 ? std::max(rtk_config_.cycle_slip_threshold, 0.12)
                 : rtk_config_.cycle_slip_threshold;
         for (const auto& [sat, sd] : sat_data) {
@@ -744,6 +762,56 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
         }
     }
 
+    std::set<SatelliteId> doppler_slips_l1;
+    std::set<SatelliteId> doppler_slips_l2;
+    if (rtk_config_.enable_doppler_slip_detection &&
+        std::isfinite(dt_s) &&
+        dt_s > 0.0 &&
+        dt_s <= 5.0) {
+        const double doppler_slip_threshold =
+            isDynamicPositionMode(rtk_config_)
+                ? std::max(rtk_config_.doppler_slip_threshold, 0.20)
+                : std::max(rtk_config_.doppler_slip_threshold, 0.10);
+        for (const auto& [sat, sd] : sat_data) {
+            if (sd.has_l1 && sd.has_l1_doppler && sd.l1_wavelength > 0.0) {
+                const double sd_phase_m =
+                    (sd.rover_l1_phase - sd.base_l1_phase) * sd.l1_wavelength;
+                const double sd_range_rate_mps =
+                    rtk_slip_detection::singleDifferenceRangeRateMps(
+                        sd.rover_l1_doppler, sd.base_l1_doppler, sd.l1_wavelength);
+                auto previous = doppler_phase_history_l1_m_.find(sat);
+                if (previous != doppler_phase_history_l1_m_.end() &&
+                    rtk_slip_detection::detectDopplerSlip(
+                        previous->second,
+                        sd_phase_m,
+                        sd_range_rate_mps,
+                        dt_s,
+                        doppler_slip_threshold)) {
+                    doppler_slips_l1.insert(sat);
+                }
+                doppler_phase_history_l1_m_[sat] = sd_phase_m;
+            }
+            if (sd.has_l2 && sd.has_l2_doppler && sd.l2_wavelength > 0.0) {
+                const double sd_phase_m =
+                    (sd.rover_l2_phase - sd.base_l2_phase) * sd.l2_wavelength;
+                const double sd_range_rate_mps =
+                    rtk_slip_detection::singleDifferenceRangeRateMps(
+                        sd.rover_l2_doppler, sd.base_l2_doppler, sd.l2_wavelength);
+                auto previous = doppler_phase_history_l2_m_.find(sat);
+                if (previous != doppler_phase_history_l2_m_.end() &&
+                    rtk_slip_detection::detectDopplerSlip(
+                        previous->second,
+                        sd_phase_m,
+                        sd_range_rate_mps,
+                        dt_s,
+                        doppler_slip_threshold)) {
+                    doppler_slips_l2.insert(sat);
+                }
+                doppler_phase_history_l2_m_[sat] = sd_phase_m;
+            }
+        }
+    }
+
     for (int freq = 0; freq < 2; ++freq) {
         auto& indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
         auto& lock_counts = (freq == 0) ? lock_count_l1_ : lock_count_l2_;
@@ -753,7 +821,10 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
             bool has_freq = (freq == 0) ? sd.has_l1 : sd.has_l2;
             if (!has_freq) continue;
             int lli = (freq == 0) ? sd.l1_lli : sd.l2_lli;
-            bool slip = (lli & 0x01) != 0 || gf_slips.find(sat) != gf_slips.end();
+            bool slip = (lli & 0x01) != 0 ||
+                        gf_slips.find(sat) != gf_slips.end() ||
+                        (freq == 0 ? doppler_slips_l1.find(sat) != doppler_slips_l1.end()
+                                   : doppler_slips_l2.find(sat) != doppler_slips_l2.end());
             auto idx_it = indices.find(sat);
             if (idx_it != indices.end() && slip) {
                 int idx = idx_it->second;
@@ -877,20 +948,36 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
         return;
     }
 
-    // Kinematic mode: reset position with large variance
+    const bool moving_base_mode = isMovingBasePositionMode(rtk_config_);
+    // Dynamic modes: refresh the baseline seed each epoch. Moving-base keeps the
+    // relative baseline and only uses absolute rover hints when they exist.
     Vector3d rover_pos;
-    double var_pos = 900.0;  // RTKLIB VAR_POS = SQR(30)
+    double var_pos = moving_base_mode ? 25.0 : 900.0;
     auto spp = spp_processor_.processEpoch(rover_obs, nav);
-    if (spp.isValid()) {
-        rover_pos = spp.position_ecef;
-    } else if (has_last_fixed_position_) {
-        rover_pos = last_fixed_position_;
-    } else if (rover_obs.receiver_position.norm() > 1e6) {
-        rover_pos = rover_obs.receiver_position;
-    } else if (has_last_solution_position_) {
-        rover_pos = last_solution_position_;
+    if (moving_base_mode) {
+        if (rover_obs.receiver_position.norm() > 1e6) {
+            rover_pos = rover_obs.receiver_position;
+        } else if (has_fixed_solution_) {
+            rover_pos = base_position_ + fixed_baseline_;
+        } else if (filter_initialized_ && filter_state_.state.size() >= 3) {
+            rover_pos = base_position_ + filter_state_.state.head<3>();
+        } else if (spp.isValid()) {
+            rover_pos = spp.position_ecef;
+        } else {
+            rover_pos = base_position_;
+        }
     } else {
-        rover_pos = base_position_;
+        if (spp.isValid()) {
+            rover_pos = spp.position_ecef;
+        } else if (has_last_fixed_position_) {
+            rover_pos = last_fixed_position_;
+        } else if (rover_obs.receiver_position.norm() > 1e6) {
+            rover_pos = rover_obs.receiver_position;
+        } else if (has_last_solution_position_) {
+            rover_pos = last_solution_position_;
+        } else {
+            rover_pos = base_position_;
+        }
     }
     Vector3d baseline = rover_pos - base_position_;
 
@@ -915,6 +1002,10 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
     solution.status = SolutionStatus::NONE;
 
     try {
+        const bool moving_base_mode = isMovingBasePositionMode(rtk_config_);
+        if (moving_base_mode && base_obs.receiver_position.norm() > 1e6) {
+            setBasePosition(base_obs.receiver_position);
+        }
         if (!base_position_known_) {
             auto spp = spp_processor_.processEpoch(rover_obs, nav);
             rememberSolution(spp);
@@ -927,7 +1018,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             last_ar_ratio_ = 0.0;
             last_num_fixed_ambiguities_ = 0;
             auto spp = current_spp;
-            if (spp.isValid() && has_last_trusted_position_ && has_last_trusted_time_) {
+            if (!moving_base_mode && spp.isValid() && has_last_trusted_position_ && has_last_trusted_time_) {
                 const double trusted_jump =
                     (spp.position_ecef - last_trusted_position_).norm();
                 if (spp.num_satellites <= 5 && trusted_jump > 25.0) {
@@ -936,7 +1027,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                     spp.status = SolutionStatus::NONE;
                 }
             }
-            if (spp.isValid() && has_last_solution_position_ && has_last_epoch_) {
+            if (!moving_base_mode && spp.isValid() && has_last_solution_position_ && has_last_epoch_) {
                 double dt = rover_obs.time - last_epoch_time_;
                 if (!std::isfinite(dt) || dt < 0.5) dt = 1.0;
                 const double jump =
@@ -991,12 +1082,12 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
         SatelliteId new_ref = selectReferenceSatellite(sat_data);
         handleReferenceSatelliteChange(new_ref, sat_data);
         current_sat_data_ = sat_data;
-        updateBias(sat_data);
+        updateBias(sat_data, state_dt);
 
         // Iterative KF update
         bool filter_ok = false;
         int max_kf_iterations = rtk_config_.kf_iterations;
-        if (rtk_config_.position_mode == RTKConfig::PositionMode::KINEMATIC &&
+        if (isDynamicPositionMode(rtk_config_) &&
             has_last_solution_position_ && max_kf_iterations > 2) {
             max_kf_iterations = 2;
         }
@@ -1044,7 +1135,8 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                 return fallback_spp();
             }
 
-            if (n_sats <= 4 && has_last_trusted_position_ && has_last_trusted_time_) {
+            if (!moving_base_mode &&
+                n_sats <= 4 && has_last_trusted_position_ && has_last_trusted_time_) {
                 const double trusted_jump =
                     (solution.position_ecef - saved_last_trusted_position).norm();
                 if (trusted_jump > 25.0) {
@@ -1060,7 +1152,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                 }
             }
 
-            if (saved_has_last_trusted && saved_has_last_trusted_time) {
+            if (!moving_base_mode && saved_has_last_trusted && saved_has_last_trusted_time) {
                 double dt = rover_obs.time - saved_last_trusted_time;
                 if (!std::isfinite(dt) || dt < 0.5) {
                     dt = 1.0;
@@ -1083,7 +1175,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                 }
             }
 
-            if (saved_has_last_solution && saved_has_last_solution_time) {
+            if (!moving_base_mode && saved_has_last_solution && saved_has_last_solution_time) {
                 double dt = rover_obs.time - saved_last_solution_time;
                 if (!std::isfinite(dt) || dt < 0.5) dt = 1.0;
                 const double jump =
@@ -1261,7 +1353,8 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                 }
             }
 
-            if (!applied_fix_solution &&
+            if (!moving_base_mode &&
+                !applied_fix_solution &&
                 rtk_validation::canAttemptHoldFix(consecutive_fix_count_,
                                                   rtk_config_.min_hold_count,
                                                   saved_hold_state.has_last_fixed_position,
@@ -1879,7 +1972,8 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
     // Reject fixes that jump too much from the previous fix position
     // This catches wrong integers that pass the ratio test
     Vector3d new_pos = base_position_ + fixed_baseline_;
-    if (rtk_validation::exceedsFixHistoryJump(
+    if (!isMovingBasePositionMode(rtk_config_) &&
+        rtk_validation::exceedsFixHistoryJump(
             new_pos,
             last_fixed_position_,
             has_last_fixed_position_,
@@ -2021,6 +2115,9 @@ void RTKProcessor::applyHoldAmbiguity() {
 // ============================================================
 bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_data,
                                const GNSSTime& time, int n_sats, PositionSolution& solution) {
+    if (isMovingBasePositionMode(rtk_config_)) {
+        return false;
+    }
     if (!rtk_validation::canAttemptHoldFix(consecutive_fix_count_,
                                            rtk_config_.min_hold_count,
                                            has_last_fixed_position_,
@@ -2157,7 +2254,9 @@ void RTKProcessor::rememberSolution(const PositionSolution& solution) {
     if (!refresh_trusted &&
         solution.status == SolutionStatus::FLOAT &&
         solution.num_satellites >= 5) {
-        if (!has_last_trusted_position_ || !has_last_trusted_time_) {
+        if (isMovingBasePositionMode(rtk_config_)) {
+            refresh_trusted = true;
+        } else if (!has_last_trusted_position_ || !has_last_trusted_time_) {
             refresh_trusted = true;
         } else {
             double dt = solution.time - last_trusted_time_;
@@ -2265,7 +2364,9 @@ std::vector<RTKProcessor::DoubleDifference> RTKProcessor::formDoubleDifferences(
     }
 
     const_cast<RTKProcessor*>(this)->current_sat_data_ = sat_data;
-    const_cast<RTKProcessor*>(this)->updateBias(sat_data);
+    const double bias_dt =
+        has_last_epoch_ ? std::max(rover_obs.time - last_epoch_time_, 1e-3) : 1.0;
+    const_cast<RTKProcessor*>(this)->updateBias(sat_data, bias_dt);
 
     std::vector<DoubleDifference> measurements;
     const auto dd_pairs = buildDoubleDifferencePairs(sat_data, 0);

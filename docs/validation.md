@@ -12,6 +12,7 @@ Main sign-off entrypoints:
 - `gnss ppp-static-signoff`
 - `gnss ppp-kinematic-signoff`
 - `gnss live-signoff`
+- `gnss moving-base-signoff`
 - `gnss ppc-rtk-signoff`
 - `gnss odaiba-benchmark --require-*`
 
@@ -51,6 +52,15 @@ python3 apps/gnss.py ppp-kinematic-signoff \
 - solver wall time,
 - realtime factor,
 - effective epoch rate.
+
+`gnss moving-base-signoff` verifies real moving-base datasets with a reference CSV carrying per-epoch base/rover ECEF coordinates. It can gate:
+
+- valid and matched epochs,
+- fix rate,
+- baseline error percentiles,
+- heading error percentiles,
+- solver wall time / realtime factor / effective epoch rate,
+- `live` termination and decoder errors.
 
 ## Test layers
 

@@ -45,6 +45,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_rcv.py",
                 prefix / "bin" / "gnss_web.py",
                 prefix / "bin" / "gnss_live_signoff.py",
+                prefix / "bin" / "gnss_moving_base_signoff.py",
                 prefix / "bin" / "gnss_rtk_kinematic_signoff.py",
                 prefix / "bin" / "gnss_ppp_static_signoff.py",
                 prefix / "bin" / "gnss_ppp_kinematic_signoff.py",
@@ -260,6 +261,16 @@ class PackagingSmokeTest(unittest.TestCase):
                 text=True,
             )
             self.assertIn("realtime", live_signoff_help.stdout.lower())
+
+            moving_base_signoff_help = subprocess.run(
+                [str(prefix / "bin" / "gnss"), "moving-base-signoff", "--help"],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("moving-base", moving_base_signoff_help.stdout.lower())
 
             fetch_products_help = subprocess.run(
                 [str(prefix / "bin" / "gnss"), "fetch-products", "--help"],

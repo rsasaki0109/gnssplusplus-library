@@ -16,6 +16,12 @@ TEST(RTKArEvaluationTest, SearchPoliciesTrackRatioAndVarianceThresholds) {
     EXPECT_FALSE(rtk_ar_evaluation::shouldSearchDropSubsets(true, 4.0, 3.0, 0.05));
 }
 
+TEST(RTKArEvaluationTest, ArFilterRequiresExtraRatioMarginOnlyWhenEnabled) {
+    EXPECT_TRUE(rtk_ar_evaluation::passesArFilter(false, 3.05, 3.0, 0.25));
+    EXPECT_FALSE(rtk_ar_evaluation::passesArFilter(true, 3.05, 3.0, 0.25));
+    EXPECT_TRUE(rtk_ar_evaluation::passesArFilter(true, 3.30, 3.0, 0.25));
+}
+
 TEST(RTKArEvaluationTest, ExtractSubsetSlicesFloatAndCovarianceTerms) {
     Eigen::VectorXd dd_float(4);
     dd_float << 10.0, 20.0, 30.0, 40.0;
