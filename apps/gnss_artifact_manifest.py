@@ -280,6 +280,7 @@ def build_moving_base_entries(root_dir: Path, pattern: str) -> list[dict[str, An
                 "artifacts": {
                     "summary": relative_display(path, root_dir),
                     "solution": normalize_artifact_path(root_dir, payload.get("solution_pos")),
+                    "matched_csv": normalize_artifact_path(root_dir, payload.get("matched_csv")),
                     "prepare": normalize_artifact_path(root_dir, payload.get("prepare_summary_json")),
                     "products": normalize_artifact_path(root_dir, payload.get("products_summary_json")),
                     "plot": normalize_artifact_path(root_dir, payload.get("plot_png")),
@@ -334,13 +335,15 @@ def build_ppp_products_entries(root_dir: Path, pattern: str) -> list[dict[str, A
                 "quality_status": quality_status,
                 "comparison_status": comparison_status,
                 "headline": (
-                    f"{payload.get('products_signoff_profile', 'n/a')} / "
+                    f"{payload.get('dataset', payload.get('products_signoff_profile', 'n/a'))} / "
                     f"{payload.get('ppp_solution_rate_pct', 'n/a')} rate / "
                     f"{payload.get('ppp_convergence_time_s', 'n/a')} s conv"
                 ),
                 "artifacts": {
                     "summary": relative_display(path, root_dir),
                     "solution": normalize_artifact_path(root_dir, payload.get("solution_pos")),
+                    "reference": normalize_artifact_path(root_dir, payload.get("reference_csv")),
+                    "run_dir": normalize_artifact_path(root_dir, payload.get("run_dir")),
                     "sp3": normalize_artifact_path(root_dir, payload.get("sp3")),
                     "clk": normalize_artifact_path(root_dir, payload.get("clk")),
                     "ionex": normalize_artifact_path(root_dir, payload.get("ionex")),
@@ -348,6 +351,7 @@ def build_ppp_products_entries(root_dir: Path, pattern: str) -> list[dict[str, A
                     "malib": normalize_artifact_path(root_dir, payload.get("malib_solution_pos")),
                 },
                 "metrics": {
+                    "dataset": payload.get("dataset"),
                     "profile": payload.get("products_signoff_profile"),
                     "fetched_product_date": payload.get("fetched_product_date"),
                     "ppp_solution_rate_pct": payload.get("ppp_solution_rate_pct"),

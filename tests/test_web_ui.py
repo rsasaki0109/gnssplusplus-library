@@ -158,6 +158,7 @@ class WebUISmokeTest(unittest.TestCase):
                         "realtime_factor": 2.17,
                         "effective_epoch_rate_hz": 10.84,
                         "solution_pos": str(temp_root / "output" / "scorpion_moving_base.pos"),
+                        "matched_csv": str(temp_root / "output" / "scorpion_moving_base_matches.csv"),
                         "prepare_summary_json": str(temp_root / "output" / "prepare_summary.json"),
                         "products_summary_json": str(temp_root / "output" / "products_summary.json"),
                         "plot_png": str(temp_root / "output" / "scorpion_moving_base.png"),
@@ -176,6 +177,9 @@ class WebUISmokeTest(unittest.TestCase):
             ppp_products_summary.write_text(
                 json.dumps(
                     {
+                        "dataset": "PPC-Dataset tokyo run1",
+                        "run_dir": str(temp_root / "output" / "ppc_tokyo_run1"),
+                        "reference_csv": str(temp_root / "output" / "ppc_tokyo_run1_reference.csv"),
                         "products_signoff_profile": "static",
                         "product_presets": ["igs-final", "ionex", "dcb"],
                         "fetched_product_date": "2024-01-02",
@@ -297,6 +301,7 @@ class WebUISmokeTest(unittest.TestCase):
                         page.locator("#docs-link").get_attribute("href"),
                         docs_url,
                     )
+                    self.assertIn("artifact_manifest.json", page.locator("#artifact-manifest-link").text_content())
                     self.assertTrue(page.locator("#artifact-chips").text_content())
                     self.assertIn("11637", page.locator("#odaiba-metrics").text_content())
                     self.assertIn("running", page.locator("#receiver-metrics").text_content())
@@ -315,6 +320,7 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("95.74%", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("0.101 m", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("completed", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("matches", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("prepare", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("products", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("source", page.locator("#moving-base-table tbody").text_content())
@@ -325,6 +331,7 @@ class WebUISmokeTest(unittest.TestCase):
                         page.locator("#moving-base-image").get_attribute("src"),
                     )
                     self.assertIn("ppp_static_products_summary.json", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("PPC-Dataset tokyo run1", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("2024-01-02", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("285.0 s", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("18 / D 18", page.locator("#ppp-products-table tbody").text_content())
@@ -335,6 +342,7 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("27", page.locator("#visibility-table tbody").text_content())
                     self.assertIn("44.70 dB-Hz", page.locator("#visibility-table tbody").text_content())
                     self.assertIn("Artifact bundles", page.locator("body").text_content())
+                    self.assertIn("94 matched", page.locator("#artifact-manifest-table tbody").text_content())
                     self.assertIn("ppp-products", page.locator("#artifact-manifest-table tbody").text_content())
                     self.assertIn("moving-base", page.locator("#artifact-manifest-table tbody").text_content())
                     self.assertIn("visibility", page.locator("#artifact-manifest-table tbody").text_content())

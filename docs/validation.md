@@ -46,6 +46,13 @@ python3 apps/gnss.py ppp-products-signoff \
   --require-converged \
   --require-ionex-corrections-min 1 \
   --require-dcb-corrections-min 1
+
+python3 apps/gnss.py ppp-products-signoff \
+  --profile ppc \
+  --run-dir /datasets/PPC-Dataset/tokyo/run1 \
+  --require-converged \
+  --require-ppp-solution-rate-min 95 \
+  --require-lib-mean-error-vs-malib-max-delta 0.25
 ```
 
 If you already have a MALIB `.pos` file, you can gate the delta directly:
@@ -84,7 +91,7 @@ python3 apps/gnss.py ppp-products-signoff \
 
 Use `gnss moving-base-prepare` first when the source dataset is a ROS2 bag or Zenodo zip carrying u-blox `NAV-PVT`, `RXM-RAWX`, and `NAV-RELPOSNED` topics. For replay mode, pair the exported `rover.ubx` / `base.ubx` files with a fetched BRDC navigation file from `gnss fetch-products --preset brdc-nav`.
 
-For the public SCORPION dataset, `gnss scorpion-moving-base-signoff` wraps the same flow into one command and emits the same summary JSON fields, plus the prepare/fetch provenance it used.
+For the public SCORPION dataset, `gnss scorpion-moving-base-signoff` wraps the same flow into one command and emits the same summary JSON fields, plus the prepare/fetch provenance and matched CSV artifact it used.
 
 ## Test layers
 
