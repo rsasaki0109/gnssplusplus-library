@@ -252,7 +252,7 @@ COMMANDS = {
     "ppp-products-signoff": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_ppp_products_signoff.py"),
-        "summary": "Run static or kinematic PPP sign-off with fetched SP3/CLK/IONEX/DCB product presets and emit summary JSON.",
+        "summary": "Run static, kinematic, or PPC PPP sign-off with fetched SP3/CLK/IONEX/DCB products and emit summary JSON.",
     },
     "ppc-demo": {
         "kind": "python",

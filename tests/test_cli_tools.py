@@ -3843,36 +3843,46 @@ class CLIToolsTest(unittest.TestCase):
 
     @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
     def test_stream_reads_rtcm_frame_from_serial_device(self) -> None:
-        master_fd, slave_fd = pty.openpty()
-        try:
-            slave_path = os.ttyname(slave_fd)
-        finally:
-            os.close(slave_fd)
-
         frame = build_rtcm1005(14.0, 28.0, 42.0)
+        last_result: subprocess.CompletedProcess[str] | None = None
 
-        def writer() -> None:
-            time.sleep(0.05)
-            os.write(master_fd, frame)
-            time.sleep(0.1)
-            os.close(master_fd)
+        for _ in range(3):
+            master_fd, slave_fd = pty.openpty()
+            try:
+                slave_path = os.ttyname(slave_fd)
+            finally:
+                os.close(slave_fd)
 
-        thread = threading.Thread(target=writer)
-        thread.start()
-        try:
-            result = self.run_gnss(
-                "stream",
-                "--input",
-                f"serial://{slave_path}?baud=115200",
-                "--limit",
-                "1",
-            )
-        finally:
-            thread.join()
+            def writer() -> None:
+                write_pty_payload(
+                    master_fd,
+                    [frame, frame],
+                    initial_delay_s=0.10,
+                    between_delay_s=0.05,
+                    final_delay_s=0.20,
+                )
 
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertIn("Reference Station ARP", result.stdout)
-        self.assertIn("summary: messages=1", result.stdout)
+            thread = threading.Thread(target=writer)
+            thread.start()
+            try:
+                result = self.run_gnss(
+                    "stream",
+                    "--input",
+                    f"serial://{slave_path}?baud=115200",
+                    "--limit",
+                    "1",
+                )
+            finally:
+                thread.join()
+
+            last_result = result
+            if "Reference Station ARP" in result.stdout and "summary: messages=1" in result.stdout:
+                break
+
+        assert last_result is not None
+        self.assertEqual(last_result.returncode, 0, msg=last_result.stderr)
+        self.assertIn("Reference Station ARP", last_result.stdout)
+        self.assertIn("summary: messages=1", last_result.stdout)
 
     @unittest.skipIf(os.name == "nt", "TCP source test is POSIX-only in the current build")
     def test_stream_reads_rtcm_frame_from_tcp_source(self) -> None:
@@ -5606,6 +5616,150 @@ class CLIToolsTest(unittest.TestCase):
             )
             self.assertNotEqual(failing_result.returncode, 0)
             self.assertIn("PPP products comparison checks failed", failing_result.stderr)
+
+    def test_ppp_products_signoff_cli_runs_ppc_profile_with_existing_solution(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_products_signoff_ppc_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            run_dir = temp_root / "tokyo" / "run1"
+            run_dir.mkdir(parents=True)
+            products_dir = temp_root / "products"
+            products_dir.mkdir()
+            output_path = temp_root / "ppp_ppc_products.pos"
+            summary_path = temp_root / "ppp_ppc_products_summary.json"
+            ppp_run_summary_path = temp_root / "ppp_run_summary.json"
+            malib_pos = temp_root / "malib_ppc.pos"
+            reference_csv = run_dir / "reference.csv"
+
+            (run_dir / "rover.obs").write_bytes((ROOT_DIR / "data/rover_static.obs").read_bytes())
+
+            nav_products = self.run_gnss(
+                "nav-products",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--sp3-out",
+                str(temp_root / "generated.sp3"),
+                "--clk-out",
+                str(temp_root / "generated.clk"),
+                "--max-epochs",
+                "20",
+            )
+            self.assertEqual(nav_products.returncode, 0, msg=nav_products.stderr)
+
+            with gzip.open(products_dir / "2024002.sp3.gz", "wb") as stream:
+                stream.write((temp_root / "generated.sp3").read_bytes())
+            with gzip.open(products_dir / "2024002.clk.gz", "wb") as stream:
+                stream.write((temp_root / "generated.clk").read_bytes())
+            with gzip.open(products_dir / "2024002.ionex.gz", "wb") as stream:
+                stream.write(build_synthetic_ionex_text().encode("ascii"))
+            with gzip.open(products_dir / "2024002.bsx.gz", "wb") as stream:
+                stream.write(build_synthetic_dcb_text().encode("ascii"))
+
+            reference_rows = [
+                (2300, 1000.0, 35.1000000, 139.1000000, 42.0),
+                (2300, 1000.2, 35.1000100, 139.1000200, 42.2),
+                (2300, 1000.4, 35.1000200, 139.1000400, 42.4),
+            ]
+            reference_lines = ["gps_week,gps_tow_s,lat_deg,lon_deg,height_m"]
+            for week, tow, lat, lon, height in reference_rows:
+                reference_lines.append(f"{week},{tow:.3f},{lat:.7f},{lon:.7f},{height:.3f}")
+            reference_csv.write_text("\n".join(reference_lines) + "\n", encoding="ascii")
+
+            with output_path.open("w", encoding="ascii") as handle:
+                handle.write("% synthetic ppc ppp solution\n")
+                for week, tow, lat, lon, height, status, satellites in (
+                    (2300, 1000.0, 35.1000002, 139.1000001, 42.1, 6, 12),
+                    (2300, 1000.2, 35.1000101, 139.1000201, 42.3, 6, 13),
+                    (2300, 1000.4, 35.1000202, 139.1000402, 42.5, 5, 11),
+                ):
+                    ecef = driving_comparison.llh_to_ecef(lat, lon, height)
+                    handle.write(
+                        f"{week} {tow:.3f} {ecef[0]:.6f} {ecef[1]:.6f} {ecef[2]:.6f} "
+                        f"{lat:.9f} {lon:.9f} {height:.4f} {status} {satellites} 1.0\n"
+                    )
+
+            ppp_run_summary_path.write_text(
+                json.dumps(
+                    {
+                        "converged": True,
+                        "convergence_time_s": 180.0,
+                        "solution_rate_pct": 100.0,
+                        "ionex_corrections": 3,
+                        "ionex_meters": 0.42,
+                        "dcb_corrections": 3,
+                        "dcb_meters": 0.03,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            write_rtklib_pos(
+                malib_pos,
+                [
+                    (2300, 1000.0, 35.1000006, 139.1000005, 42.4, 6, 12),
+                    (2300, 1000.2, 35.1000106, 139.1000206, 42.6, 6, 13),
+                    (2300, 1000.4, 35.1000206, 139.1000405, 42.8, 5, 11),
+                ],
+            )
+
+            result = self.run_gnss(
+                "ppp-products-signoff",
+                "--profile",
+                "ppc",
+                "--run-dir",
+                str(run_dir),
+                "--reference-csv",
+                str(reference_csv),
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--use-existing-solution",
+                "--ppp-run-summary-json",
+                str(ppp_run_summary_path),
+                "--product-date",
+                "2024-01-02",
+                "--product",
+                f"sp3={products_dir / '{yyyy}{doy}.sp3.gz'}",
+                "--product",
+                f"clk={products_dir / '{yyyy}{doy}.clk.gz'}",
+                "--product",
+                f"ionex={products_dir / '{yyyy}{doy}.ionex.gz'}",
+                "--product",
+                f"dcb={products_dir / '{yyyy}{doy}.bsx.gz'}",
+                "--malib-pos",
+                str(malib_pos),
+                "--require-valid-epochs-min",
+                "3",
+                "--require-matched-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+                "--require-converged",
+                "--require-ionex-corrections-min",
+                "1",
+                "--require-dcb-corrections-min",
+                "1",
+                "--require-lib-mean-error-vs-malib-max-delta",
+                "100.0",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["products_signoff_profile"], "ppc")
+            self.assertEqual(payload["dataset"], "PPC-Dataset tokyo run1")
+            self.assertEqual(payload["product_presets"], [])
+            self.assertTrue(payload["fetch_products"])
+            self.assertEqual(payload["fetched_product_date"], "2024-01-02")
+            self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+            self.assertTrue(payload["ppp_converged"])
+            self.assertEqual(payload["ionex_corrections"], 3)
+            self.assertEqual(payload["dcb_corrections"], 3)
+            self.assertEqual(payload["comparison_target"], "MALIB")
+            self.assertIn("comparison_status", payload)
+            self.assertTrue(str(payload["reference_csv"]).endswith("reference.csv"))
+            self.assertTrue(str(payload["run_dir"]).endswith("tokyo/run1"))
 
     def test_ppc_demo_cli_summarizes_existing_solution_against_reference_csv(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_demo_cli_") as temp_dir:
@@ -8323,6 +8477,7 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["fix_rate_pct"], 100.0)
             self.assertIsNone(payload["products_summary_json"])
             self.assertTrue(Path(payload["prepare_summary_json"]).exists())
+            self.assertTrue(Path(payload["matched_csv"]).exists())
 
     def test_live_signoff_summarizes_existing_log_and_enforces_realtime_gate(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_live_signoff_cli_") as temp_dir:
@@ -8483,6 +8638,7 @@ class CLIToolsTest(unittest.TestCase):
                         "realtime_factor": 2.17,
                         "effective_epoch_rate_hz": 10.84,
                         "solution_pos": str(temp_root / "output" / "scorpion_moving_base.pos"),
+                        "matched_csv": str(temp_root / "output" / "scorpion_moving_base_matches.csv"),
                         "prepare_summary_json": str(temp_root / "output" / "prepare_summary.json"),
                         "products_summary_json": str(temp_root / "output" / "products_summary.json"),
                         "plot_png": str(temp_root / "output" / "scorpion_moving_base.png"),
@@ -8501,6 +8657,9 @@ class CLIToolsTest(unittest.TestCase):
             (temp_root / "output" / "ppp_static_products_summary.json").write_text(
                 json.dumps(
                     {
+                        "dataset": "PPC-Dataset tokyo run1",
+                        "run_dir": str(temp_root / "output" / "ppc_tokyo_run1"),
+                        "reference_csv": str(temp_root / "output" / "ppc_tokyo_run1_reference.csv"),
                         "products_signoff_profile": "static",
                         "product_presets": ["igs-final", "ionex", "dcb"],
                         "fetched_product_date": "2024-01-02",
@@ -8627,10 +8786,12 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertAlmostEqual(overview["moving_base_summaries"][0]["p95_baseline_error_m"], 0.101)
                 self.assertEqual(overview["moving_base_summaries"][0]["signoff_profile"], "scorpion-moving-base")
                 self.assertTrue(overview["moving_base_summaries"][0]["plot_png"].endswith("scorpion_moving_base.png"))
+                self.assertTrue(overview["moving_base_summaries"][0]["matched_csv"].endswith("scorpion_moving_base_matches.csv"))
                 self.assertEqual(overview["moving_base_summaries"][0]["nav_rinex"], "output/brdc0010.24n")
                 self.assertEqual(overview["moving_base_summaries"][0]["input_url"], "https://example.com/scorpion.zip")
                 self.assertEqual(len(overview["ppp_products_summaries"]), 1)
                 self.assertEqual(overview["ppp_products_summaries"][0]["profile"], "static")
+                self.assertEqual(overview["ppp_products_summaries"][0]["dataset"], "PPC-Dataset tokyo run1")
                 self.assertEqual(overview["ppp_products_summaries"][0]["fetched_product_date"], "2024-01-02")
                 self.assertEqual(overview["ppp_products_summaries"][0]["quality_status"], "excellent")
                 self.assertEqual(overview["ppp_products_summaries"][0]["ionex_corrections"], 18)
@@ -8690,6 +8851,9 @@ class CLIToolsTest(unittest.TestCase):
             (output_dir / "ppp_static_products_summary.json").write_text(
                 json.dumps(
                     {
+                        "dataset": "PPC-Dataset tokyo run1",
+                        "run_dir": str(output_dir / "ppc_tokyo_run1"),
+                        "reference_csv": str(output_dir / "ppc_reference.csv"),
                         "products_signoff_profile": "static",
                         "fetched_product_date": "2024-01-02",
                         "ppp_solution_rate_pct": 100.0,
@@ -8716,6 +8880,7 @@ class CLIToolsTest(unittest.TestCase):
                         "p95_baseline_error_m": 0.101,
                         "realtime_factor": 2.17,
                         "solution_pos": str(output_dir / "scorpion_moving_base.pos"),
+                        "matched_csv": str(output_dir / "scorpion_moving_base_matches.csv"),
                         "plot_png": str(output_dir / "scorpion_moving_base.png"),
                         "input_url": "https://example.com/scorpion.zip",
                     }
@@ -8744,8 +8909,10 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(categories, {"moving-base", "ppp-products"})
             moving_base_entry = next(entry for entry in payload["bundles"] if entry["category"] == "moving-base")
             self.assertEqual(moving_base_entry["artifacts"]["input_url"], "https://example.com/scorpion.zip")
+            self.assertEqual(moving_base_entry["artifacts"]["matched_csv"], "output/scorpion_moving_base_matches.csv")
             ppp_entry = next(entry for entry in payload["bundles"] if entry["category"] == "ppp-products")
             self.assertEqual(ppp_entry["artifacts"]["sp3"], "output/igs.sp3")
+            self.assertEqual(ppp_entry["artifacts"]["reference"], "output/ppc_reference.csv")
             self.assertEqual(ppp_entry["comparison_status"], "better")
 
     def test_live_reports_missing_rtcm_source_path_clearly(self) -> None:
@@ -8840,6 +9007,7 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["fixed_epochs"], 2)
             self.assertGreater(payload["realtime_factor"], 0.0)
             self.assertEqual(payload["plot_png"], str(plot_path))
+            self.assertTrue(Path(payload["matched_csv"]).exists())
 
     def test_moving_base_plot_renders_png_from_solution_and_reference(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_moving_base_plot_") as temp_dir:

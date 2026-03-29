@@ -413,6 +413,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
                 "realtime_factor": payload.get("realtime_factor"),
                 "effective_epoch_rate_hz": payload.get("effective_epoch_rate_hz"),
                 "solution_pos": normalize_artifact_path(root_dir, payload.get("solution_pos")),
+                "matched_csv": normalize_artifact_path(root_dir, payload.get("matched_csv")),
                 "prepare_summary_json": normalize_artifact_path(root_dir, payload.get("prepare_summary_json")),
                 "products_summary_json": normalize_artifact_path(root_dir, payload.get("products_summary_json")),
                 "plot_png": normalize_artifact_path(root_dir, payload.get("plot_png")),
@@ -439,6 +440,9 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
             {
                 "_path": relative_display(path, root_dir),
                 "summary_path": relative_display(path, root_dir),
+                "dataset": payload.get("dataset"),
+                "run_dir": normalize_artifact_path(root_dir, payload.get("run_dir")),
+                "reference_csv": normalize_artifact_path(root_dir, payload.get("reference_csv")),
                 "profile": payload.get("products_signoff_profile"),
                 "product_presets": payload.get("product_presets"),
                 "fetched_product_date": payload.get("fetched_product_date"),
@@ -832,7 +836,7 @@ def render_html() -> str:
     <section class="card" style="margin-top: 18px;">
       <div class="section-title">
         <h2>Artifact bundles</h2>
-        <span class="tiny">optional manifest from output/artifact_manifest.json</span>
+        <span class="tiny"><a id="artifact-manifest-link" href="#" target="_blank" rel="noreferrer">manifest</a></span>
       </div>
       <table id="artifact-manifest-table">
         <thead>
@@ -1001,6 +1005,64 @@ def render_html() -> str:
       return `<span class="badge ${className}">${normalized}</span>`;
     }
 
+    function bundleMetricSummary(bundle) {
+      if (!bundle || !bundle.metrics) return "";
+      const metrics = bundle.metrics;
+      switch (bundle.category) {
+        case "ppc":
+          return [
+            metrics.matched_epochs ?? "n/a",
+            "matched",
+            "/",
+            formatMaybeNumber(metrics.p95_h_m, 2, " m"),
+            "p95",
+            "/",
+            formatMaybeNumber(metrics.realtime_factor, 2, "x"),
+          ].join(" ");
+        case "live":
+          return [
+            metrics.termination || "n/a",
+            "/",
+            metrics.written_solutions ?? "n/a",
+            "written",
+            "/",
+            formatMaybeNumber(metrics.realtime_factor, 2, "x"),
+          ].join(" ");
+        case "visibility":
+          return [
+            metrics.rows_written ?? "n/a",
+            "rows",
+            "/",
+            metrics.unique_satellites ?? "n/a",
+            "sats",
+            "/",
+            formatMaybeNumber(metrics.mean_elevation_deg, 1, " deg"),
+          ].join(" ");
+        case "moving-base":
+          return [
+            metrics.matched_epochs ?? "n/a",
+            "matched",
+            "/",
+            formatMaybeNumber(metrics.p95_baseline_error_m, 3, " m"),
+            "p95",
+            "/",
+            formatMaybeNumber(metrics.realtime_factor, 2, "x"),
+          ].join(" ");
+        case "ppp-products":
+          return [
+            formatMaybeNumber(metrics.ppp_solution_rate_pct, 1, "%"),
+            "rate",
+            "/",
+            formatMaybeNumber(metrics.ppp_convergence_time_s, 1, " s"),
+            "conv",
+            "/",
+            formatMaybeNumber(metrics.p95_position_error_m, 3, " m"),
+          ].join(" ");
+        default:
+          return "";
+      }
+    }
+
     function artifactLink(path, label) {
       if (!path) return label || "n/a";
       return `<a href="/artifact?path=${encodeURIComponent(path)}" target="_blank" rel="noreferrer">${label || path}</a>`;
@@ -1042,6 +1104,14 @@ def render_html() -> str:
       const overview = await fetchJson("/api/overview");
       const docsLink = document.getElementById("docs-link");
       if (overview.docs_url) docsLink.href = overview.docs_url;
+      const manifestLink = document.getElementById("artifact-manifest-link");
+      if (overview.artifacts.artifact_manifest) {
+        manifestLink.href = `/artifact?path=${encodeURIComponent(overview.artifacts.artifact_manifest)}`;
+        manifestLink.textContent = overview.artifacts.artifact_manifest;
+      } else {
+        manifestLink.removeAttribute("href");
+        manifestLink.textContent = "manifest unavailable";
+      }
       const chips = document.getElementById("artifact-chips");
       for (const [key, value] of Object.entries(overview.artifacts)) {
         if (!value) continue;
@@ -1099,6 +1169,7 @@ def render_html() -> str:
       for (const row of overview.moving_base_summaries || []) {
         const provenance = [
           row.solution_pos ? artifactLink(row.solution_pos, "pos") : null,
+          row.matched_csv ? artifactLink(row.matched_csv, "matches") : null,
           row.prepare_summary_json ? artifactLink(row.prepare_summary_json, "prepare") : null,
           row.products_summary_json ? artifactLink(row.products_summary_json, "products") : null,
           row.nav_rinex ? artifactLink(row.nav_rinex, "nav") : null,
@@ -1143,6 +1214,10 @@ def render_html() -> str:
           row.dcb ? artifactLink(row.dcb, "dcb") : null,
           row.malib_solution_pos ? artifactLink(row.malib_solution_pos, "malib") : null,
         ].filter(Boolean).join(" / ");
+        const provenance = [
+          row.reference_csv ? artifactLink(row.reference_csv, "reference") : null,
+          row.run_dir ? artifactLink(row.run_dir, "run") : null,
+        ].filter(Boolean).join(" / ");
         const compareBits = [];
         if (row.comparison_target) compareBits.push(row.comparison_target);
         if (row.libgnss_minus_malib_mean_error_m !== null && row.libgnss_minus_malib_mean_error_m !== undefined) {
@@ -1156,8 +1231,8 @@ def render_html() -> str:
         }
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>${artifactLink(row.summary_path || row._path, row._path || "n/a")}<br><span class="tiny">${[solutionLink, productLinks || presets].filter(Boolean).join(" / ")}</span></td>
-          <td>${row.profile || "n/a"}</td>
+          <td>${artifactLink(row.summary_path || row._path, row._path || "n/a")}<br><span class="tiny">${[row.dataset, solutionLink, provenance || null, productLinks || presets].filter(Boolean).join(" / ")}</span></td>
+          <td>${[row.profile, row.dataset].filter(Boolean).join(" / ") || "n/a"}</td>
           <td>${row.fetched_product_date || "n/a"}</td>
           <td>${formatMaybeNumber(row.ppp_solution_rate_pct, 2, "%")}</td>
           <td>${row.ppp_converged ? "yes" : "no"} / ${formatMaybeNumber(row.ppp_convergence_time_s, 1, " s")}</td>
@@ -1207,6 +1282,7 @@ def render_html() -> str:
           .filter(([, value]) => value)
           .map(([key, value]) => smartLink(value, key))
           .join(" / ");
+        const metricSummary = bundleMetricSummary(bundle);
         const statusParts = [];
         if (bundle.quality_status) statusParts.push(renderBadge(bundle.quality_status));
         if (bundle.runtime_status) statusParts.push(renderBadge(bundle.runtime_status));
@@ -1218,7 +1294,7 @@ def render_html() -> str:
           <td>${bundle.label || "n/a"}<br><span class="tiny">${bundle.headline || ""}</span></td>
           <td>${statusParts.join(" ") || "n/a"}</td>
           <td>${smartLink(bundle.summary_json, bundle.summary_json || "n/a")}</td>
-          <td>${artifactLinks || "n/a"}</td>`;
+          <td>${artifactLinks || "n/a"}${metricSummary ? `<br><span class="tiny">${metricSummary}</span>` : ""}</td>`;
         manifestBody.appendChild(tr);
       }
 

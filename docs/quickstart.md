@@ -69,7 +69,7 @@ python3 apps/gnss.py replay \
 | `gnss moving-base-signoff` | Validate a real moving-base replay/live dataset against per-epoch base/rover reference coordinates |
 | `gnss scorpion-moving-base-signoff` | One-command prepare + BRDC fetch + replay validation for the public SCORPION bag |
 | `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` files from local or remote sources |
-| `gnss ppp-products-signoff` | Run static or kinematic PPP sign-off with fetched product presets or templates |
+| `gnss ppp-products-signoff` | Run static, kinematic, or PPC PPP sign-off with fetched product presets or templates |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
 | `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
 | `gnss ubx-info` | Inspect `NAV-PVT`, `RAWX`, `SFRBX` from file or serial |
@@ -87,7 +87,7 @@ python3 apps/gnss.py web \
   --rcv-status output/receiver.status.json
 ```
 
-Open `http://127.0.0.1:8085` to inspect benchmark tables, live/moving-base/PPP-product sign-offs, receiver status, moving-base/visibility plots, and linked artifacts.
+Open `http://127.0.0.1:8085` to inspect benchmark tables, live/moving-base/PPP-product sign-offs, receiver status, moving-base/visibility plots, and linked artifacts/provenance.
 
 Docker form:
 
