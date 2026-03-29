@@ -13,6 +13,18 @@ bool shouldSearchDropSubsets(bool fixed, double ratio, double threshold, double 
     return !fixed || ratio < threshold + 0.8 || max_variance > 0.20;
 }
 
+bool passesArFilter(bool enabled, double candidate_ratio, double threshold, double margin) {
+    if (!enabled) {
+        return true;
+    }
+    if (!std::isfinite(candidate_ratio) || !std::isfinite(threshold)) {
+        return false;
+    }
+    const double effective_margin =
+        std::isfinite(margin) ? std::max(0.0, margin) : 0.0;
+    return candidate_ratio >= threshold + effective_margin;
+}
+
 SubsetMatrices extractSubset(const Eigen::VectorXd& full_dd_float,
                              const Eigen::MatrixXd& full_Qb,
                              const Eigen::MatrixXd& full_Qab,
