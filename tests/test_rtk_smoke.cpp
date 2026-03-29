@@ -189,6 +189,21 @@ TEST_F(RTKSmokeTest, EstimatedIonoModeProducesValidFloatSolutionsOnBundledKinema
     EXPECT_TRUE(summary.first_valid_solution.isValid());
 }
 
+TEST_F(RTKSmokeTest, MovingBaseModeProducesValidSolutionsOnBundledKinematicData) {
+    RTKProcessor::RTKConfig config;
+    config.position_mode = RTKProcessor::RTKConfig::PositionMode::MOVING_BASE;
+    config.ar_mode = RTKProcessor::RTKConfig::AmbiguityResolutionMode::CONTINUOUS;
+    config.min_satellites_for_ar = 5;
+    config.ratio_threshold = 3.0;
+
+    const auto summary = runEpochs(10, config);
+
+    EXPECT_EQ(summary.epochs_processed, 10);
+    EXPECT_GE(summary.valid_solutions, 8);
+    EXPECT_TRUE(summary.first_valid_solution.isValid());
+    EXPECT_GE(summary.first_valid_solution.num_satellites, 5);
+}
+
 TEST(RTKStateIndexTest, SeparatesConstellationsInAmbiguityStateLayout) {
     const int gps_l1 = RTKProcessor::ambiguityStateIndex(SatelliteId(GNSSSystem::GPS, 1), 0);
     const int gal_l1 = RTKProcessor::ambiguityStateIndex(SatelliteId(GNSSSystem::Galileo, 1), 0);

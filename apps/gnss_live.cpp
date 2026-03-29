@@ -41,6 +41,11 @@ enum class GlonassARChoice {
     AUTOCAL
 };
 
+enum class ModeChoice {
+    KINEMATIC,
+    MOVING_BASE
+};
+
 struct LiveConfig {
     std::string rover_rtcm_path;
     std::string rover_ubx_path;
@@ -58,11 +63,14 @@ struct LiveConfig {
     bool base_position_override = false;
     Eigen::Vector3d base_position_ecef = Eigen::Vector3d::Zero();
     double ratio_threshold = 3.0;
+    bool enable_ar_filter = false;
+    double ar_filter_margin = 0.25;
     int min_satellites_for_ar = 5;
     double elevation_mask_deg = 15.0;
     bool enable_glonass = true;
     bool enable_beidou = true;
     GlonassARChoice glonass_ar = GlonassARChoice::OFF;
+    ModeChoice mode = ModeChoice::KINEMATIC;
     int rover_ubx_baud = 115200;
 };
 
@@ -552,7 +560,11 @@ void printUsage(const char* argv0) {
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
         << "  --base-hold-seconds <v>    Reuse the latest base epoch for up to v seconds (default: 0.5)\n"
         << "  --base-ecef <x> <y> <z>    Override base ECEF position\n"
+        << "  --mode <kinematic|moving-base>\n"
+        << "                            RTK mode (default: kinematic)\n"
         << "  --ratio <value>            Ambiguity ratio threshold (default: 3.0)\n"
+        << "  --arfilter                 Require extra ratio margin for subset AR fixes\n"
+        << "  --arfilter-margin <v>      Extra ratio margin for --arfilter (default: 0.25)\n"
         << "  --min-ar-sats <n>          Minimum satellites for AR (default: 5)\n"
         << "  --elevation-mask-deg <v>   Elevation mask in degrees (default: 15)\n"
         << "  --no-glonass               Disable GLONASS carrier processing\n"
@@ -574,6 +586,22 @@ GlonassARChoice parseGlonassARChoice(const std::string& value, const char* argv0
     if (value == "on") return GlonassARChoice::ON;
     if (value == "autocal") return GlonassARChoice::AUTOCAL;
     argumentError("unsupported --glonass-ar value: " + value, argv0);
+}
+
+ModeChoice parseModeChoice(const std::string& value, const char* argv0) {
+    if (value == "kinematic") return ModeChoice::KINEMATIC;
+    if (value == "moving-base") return ModeChoice::MOVING_BASE;
+    argumentError("unsupported --mode value: " + value, argv0);
+}
+
+const char* modeChoiceString(ModeChoice mode) {
+    switch (mode) {
+        case ModeChoice::KINEMATIC:
+            return "kinematic";
+        case ModeChoice::MOVING_BASE:
+            return "moving-base";
+    }
+    return "kinematic";
 }
 
 libgnss::io::SolutionWriter::Format parseOutputFormat(const std::string& value, const char* argv0) {
@@ -618,8 +646,14 @@ LiveConfig parseArguments(int argc, char** argv) {
             config.base_position_ecef =
                 Eigen::Vector3d(std::stod(argv[++i]), std::stod(argv[++i]), std::stod(argv[++i]));
             config.base_position_override = true;
+        } else if (arg == "--mode" && i + 1 < argc) {
+            config.mode = parseModeChoice(argv[++i], argv[0]);
         } else if (arg == "--ratio" && i + 1 < argc) {
             config.ratio_threshold = std::stod(argv[++i]);
+        } else if (arg == "--arfilter") {
+            config.enable_ar_filter = true;
+        } else if (arg == "--arfilter-margin" && i + 1 < argc) {
+            config.ar_filter_margin = std::stod(argv[++i]);
         } else if (arg == "--min-ar-sats" && i + 1 < argc) {
             config.min_satellites_for_ar = std::stoi(argv[++i]);
         } else if (arg == "--elevation-mask-deg" && i + 1 < argc) {
@@ -652,6 +686,9 @@ LiveConfig parseArguments(int argc, char** argv) {
     }
     if (config.min_satellites_for_ar < 4) {
         argumentError("--min-ar-sats must be >= 4", argv[0]);
+    }
+    if (config.ar_filter_margin < 0.0) {
+        argumentError("--arfilter-margin must be >= 0", argv[0]);
     }
     if (config.base_hold_seconds < 0.0) {
         argumentError("--base-hold-seconds must be >= 0", argv[0]);
@@ -915,9 +952,14 @@ int main(int argc, char** argv) {
 
         libgnss::RTKProcessor rtk;
         libgnss::RTKProcessor::RTKConfig rtk_config;
-        rtk_config.position_mode = libgnss::RTKProcessor::RTKConfig::PositionMode::KINEMATIC;
+        rtk_config.position_mode =
+            config.mode == ModeChoice::MOVING_BASE
+                ? libgnss::RTKProcessor::RTKConfig::PositionMode::MOVING_BASE
+                : libgnss::RTKProcessor::RTKConfig::PositionMode::KINEMATIC;
         rtk_config.ratio_threshold = config.ratio_threshold;
         rtk_config.ambiguity_ratio_threshold = config.ratio_threshold;
+        rtk_config.enable_ar_filter = config.enable_ar_filter;
+        rtk_config.ar_filter_margin = config.ar_filter_margin;
         rtk_config.min_satellites_for_ar = config.min_satellites_for_ar;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;
         rtk_config.enable_glonass = config.enable_glonass;
@@ -1221,6 +1263,7 @@ int main(int argc, char** argv) {
             solver_wall_time_s > 0.0 ? static_cast<double>(aligned_epochs) / solver_wall_time_s : 0.0;
 
         std::cout << "summary: rover_source=" << rover_source_label
+                  << " mode=" << modeChoiceString(config.mode)
                   << " termination=" << termination_reason
                   << " rover_messages=" << rover_stats.valid_messages
                   << " rover_total_messages=" << rover_stats.total_messages

@@ -29,7 +29,8 @@ constexpr int kReacquireFixedCount = 5;
 enum class ModeChoice {
     AUTO,
     KINEMATIC,
-    STATIC
+    STATIC,
+    MOVING_BASE
 };
 
 enum class IonoChoice {
@@ -62,6 +63,8 @@ struct SolveConfig {
     libgnss::io::SolutionWriter::Format output_format = libgnss::io::SolutionWriter::Format::POS;
     double max_baseline_length_m = 20000.0;
     double ratio_threshold = 3.0;
+    bool enable_ar_filter = false;
+    double ar_filter_margin = 0.25;
     int min_satellites_for_ar = 5;
     double elevation_mask_deg = 15.0;
     bool enable_glonass = true;
@@ -303,6 +306,8 @@ std::string modeChoiceString(ModeChoice mode) {
             return "kinematic";
         case ModeChoice::STATIC:
             return "static";
+        case ModeChoice::MOVING_BASE:
+            return "moving-base";
     }
     return "unknown";
 }
@@ -356,10 +361,12 @@ void printUsage(const char* program_name) {
         << "  --kml <file>               Write KML output (default: output/rtk_solution.kml)\n"
         << "  --no-kml                   Disable KML output\n"
         << "  --format <pos|llh|xyz>     Output text format (default: pos)\n"
-        << "  --mode <auto|kinematic|static>\n"
+        << "  --mode <auto|kinematic|static|moving-base>\n"
         << "                             Position mode (default: auto)\n"
         << "  --iono <auto|off|iflc|est> Ionosphere option (default: auto)\n"
         << "  --ratio <value>            Ambiguity ratio threshold (default: 3.0)\n"
+        << "  --arfilter                 Require extra ratio margin for subset AR fixes\n"
+        << "  --arfilter-margin <v>      Extra ratio margin for --arfilter (default: 0.25)\n"
         << "  --min-ar-sats <n>          Minimum satellites for AR (default: 5)\n"
         << "  --elevation-mask-deg <v>   Elevation mask in degrees (default: 15)\n"
         << "  --no-glonass               Disable GLONASS in RTK carrier processing\n"
@@ -387,6 +394,7 @@ ModeChoice parseModeChoice(const std::string& value, const char* program_name) {
     if (value == "auto") return ModeChoice::AUTO;
     if (value == "kinematic") return ModeChoice::KINEMATIC;
     if (value == "static") return ModeChoice::STATIC;
+    if (value == "moving-base") return ModeChoice::MOVING_BASE;
     argumentError("unsupported --mode value: " + value, program_name);
 }
 
@@ -446,6 +454,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.iono = parseIonoChoice(argv[++i], argv[0]);
         } else if (arg == "--ratio" && i + 1 < argc) {
             config.ratio_threshold = std::stod(argv[++i]);
+        } else if (arg == "--arfilter") {
+            config.enable_ar_filter = true;
+        } else if (arg == "--arfilter-margin" && i + 1 < argc) {
+            config.ar_filter_margin = std::stod(argv[++i]);
         } else if (arg == "--min-ar-sats" && i + 1 < argc) {
             config.min_satellites_for_ar = std::stoi(argv[++i]);
         } else if (arg == "--elevation-mask-deg" && i + 1 < argc) {
@@ -493,6 +505,9 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.min_satellites_for_ar < 4) {
         argumentError("--min-ar-sats must be >= 4", argv[0]);
     }
+    if (config.ar_filter_margin < 0.0) {
+        argumentError("--arfilter-margin must be >= 0", argv[0]);
+    }
     if (config.elevation_mask_deg < 0.0 || config.elevation_mask_deg >= 90.0) {
         argumentError("--elevation-mask-deg must be in [0, 90)", argv[0]);
     }
@@ -521,6 +536,9 @@ libgnss::RTKProcessor::RTKConfig::PositionMode resolvePositionMode(const SolveCo
     }
     if (config.mode == ModeChoice::STATIC) {
         return libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC;
+    }
+    if (config.mode == ModeChoice::MOVING_BASE) {
+        return libgnss::RTKProcessor::RTKConfig::PositionMode::MOVING_BASE;
     }
 
     const std::string hint = config.data_dir + " " + config.rover_obs_path + " " + config.base_obs_path;
@@ -551,7 +569,15 @@ libgnss::RTKProcessor::RTKConfig::IonoOpt resolveIonoOpt(const SolveConfig& conf
 }
 
 std::string positionModeString(libgnss::RTKProcessor::RTKConfig::PositionMode mode) {
-    return mode == libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC ? "static" : "kinematic";
+    switch (mode) {
+        case libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC:
+            return "static";
+        case libgnss::RTKProcessor::RTKConfig::PositionMode::KINEMATIC:
+            return "kinematic";
+        case libgnss::RTKProcessor::RTKConfig::PositionMode::MOVING_BASE:
+            return "moving-base";
+    }
+    return "kinematic";
 }
 
 std::string ionoOptString(libgnss::RTKProcessor::RTKConfig::IonoOpt iono) {
@@ -598,6 +624,8 @@ int main(int argc, char* argv[]) {
         rtk_config.ar_mode = libgnss::RTKProcessor::RTKConfig::AmbiguityResolutionMode::CONTINUOUS;
         rtk_config.ratio_threshold = config.ratio_threshold;
         rtk_config.ambiguity_ratio_threshold = config.ratio_threshold;
+        rtk_config.enable_ar_filter = config.enable_ar_filter;
+        rtk_config.ar_filter_margin = config.ar_filter_margin;
         rtk_config.min_satellites_for_ar = config.min_satellites_for_ar;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;
         rtk_config.position_mode = resolvePositionMode(config);
@@ -899,7 +927,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (config.enable_kinematic_post_filter &&
-            rtk_config.position_mode == libgnss::RTKProcessor::RTKConfig::PositionMode::KINEMATIC &&
+            rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
             !solution.isEmpty()) {
             libgnss::Solution filtered_solution;
             filtered_solution.solutions.reserve(solution.solutions.size());
@@ -985,7 +1013,7 @@ int main(int argc, char* argv[]) {
             std::cout << "  RMS vertical (self-consistency): "
                       << stats.rms_vertical << " m" << std::endl;
         } else {
-            std::cout << "  self-consistency metrics: omitted in kinematic mode; "
+            std::cout << "  self-consistency metrics: omitted in dynamic mode; "
                       << "use reference-based comparison for accuracy." << std::endl;
         }
         std::cout << "  exact base epochs: " << exact_base_epochs << std::endl;
