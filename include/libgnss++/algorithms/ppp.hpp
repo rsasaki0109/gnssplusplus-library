@@ -476,6 +476,9 @@ private:
 
     void reinitializeVectorState(int start_index, const Vector3d& value, double variance);
     void reinitializeScalarState(int index, double value, double variance);
+    bool useLowDynamicsBroadcastSeedAssist() const;
+    void recoverLowDynamicsBroadcastState(const ObservationData& obs,
+                                          const PositionSolution* seed_solution);
     int receiverClockStateIndex(const SatelliteId& satellite) const;
     double receiverClockBiasMeters(const SatelliteId& satellite) const;
     double measurementVariance(const IonosphereFreeObs& observation, bool carrier_phase) const;
