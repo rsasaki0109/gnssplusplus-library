@@ -62,6 +62,10 @@ python3 apps/gnss.py ppp-kinematic-signoff \
 - solver wall time / realtime factor / effective epoch rate,
 - `live` termination and decoder errors.
 
+Use `gnss moving-base-prepare` first when the source dataset is a ROS2 bag or Zenodo zip carrying u-blox `NAV-PVT`, `RXM-RAWX`, and `NAV-RELPOSNED` topics. For replay mode, pair the exported `rover.ubx` / `base.ubx` files with a fetched BRDC navigation file from `gnss fetch-products --preset brdc-nav`.
+
+For the public SCORPION dataset, `gnss scorpion-moving-base-signoff` wraps the same flow into one command and emits the same summary JSON fields, plus the prepare/fetch provenance it used.
+
 ## Test layers
 
 The repo validates functionality through multiple layers:

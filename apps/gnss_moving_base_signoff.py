@@ -28,6 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rover-ubx", type=Path, default=None)
     parser.add_argument("--rover-rtcm", type=Path, default=None)
     parser.add_argument("--base-rinex", type=Path, default=None)
+    parser.add_argument("--base-ubx", type=Path, default=None)
     parser.add_argument("--base-rtcm", type=Path, default=None)
     parser.add_argument("--nav-rinex", type=Path, default=None)
     parser.add_argument("--reference-csv", type=Path, required=True)
@@ -318,8 +319,13 @@ def build_solver_command(args: argparse.Namespace) -> list[str]:
     if args.solver == "replay":
         if bool(args.rover_rinex) == bool(args.rover_ubx):
             raise SystemExit("replay sign-off requires exactly one of --rover-rinex or --rover-ubx")
-        if bool(args.base_rinex) == bool(args.base_rtcm):
-            raise SystemExit("replay sign-off requires exactly one of --base-rinex or --base-rtcm")
+        if sum(
+            int(value is not None)
+            for value in (args.base_rinex, args.base_ubx, args.base_rtcm)
+        ) != 1:
+            raise SystemExit(
+                "replay sign-off requires exactly one of --base-rinex, --base-ubx, or --base-rtcm"
+            )
         if args.rover_rinex is not None:
             ensure_input_exists(args.rover_rinex, "moving-base rover RINEX", ROOT_DIR)
             command += ["--rover-rinex", str(args.rover_rinex)]
@@ -329,6 +335,9 @@ def build_solver_command(args: argparse.Namespace) -> list[str]:
         if args.base_rinex is not None:
             ensure_input_exists(args.base_rinex, "moving-base base RINEX", ROOT_DIR)
             command += ["--base-rinex", str(args.base_rinex)]
+        if args.base_ubx is not None:
+            ensure_input_exists(args.base_ubx, "moving-base base UBX", ROOT_DIR)
+            command += ["--base-ubx", str(args.base_ubx)]
         if args.base_rtcm is not None:
             ensure_input_exists(args.base_rtcm, "moving-base base RTCM", ROOT_DIR)
             command += ["--base-rtcm", str(args.base_rtcm)]
