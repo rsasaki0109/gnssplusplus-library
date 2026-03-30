@@ -42,6 +42,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=ROOT_DIR / "output/moving_base_summary.json",
     )
+    parser.add_argument(
+        "--matched-csv",
+        type=Path,
+        default=ROOT_DIR / "output/moving_base_matches.csv",
+    )
     parser.add_argument("--plot-png", type=Path, default=None)
     parser.add_argument("--plot-title", default="Moving-base sign-off")
     parser.add_argument("--log-out", type=Path, default=None)
@@ -316,6 +321,39 @@ def rounded(value: float | None) -> float | None:
     return round(float(value), 6)
 
 
+def write_matches_csv(path: Path, matches: list[dict[str, float]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "gps_week",
+                "gps_tow_s",
+                "baseline_error_m",
+                "baseline_length_m",
+                "heading_error_deg",
+                "status",
+                "satellites",
+            ]
+        )
+        for match in matches:
+            writer.writerow(
+                [
+                    int(match["week"]),
+                    f"{float(match['tow']):.3f}",
+                    f"{float(match['baseline_error_m']):.6f}",
+                    f"{float(match['baseline_length_m']):.6f}",
+                    (
+                        f"{float(match['heading_error_deg']):.6f}"
+                        if match["heading_error_deg"] is not None
+                        else ""
+                    ),
+                    int(match["status"]),
+                    int(match["satellites"]),
+                ]
+            )
+
+
 def build_solver_command(args: argparse.Namespace) -> list[str]:
     command = [*resolve_gnss_command(ROOT_DIR), args.solver]
     if args.solver == "replay":
@@ -448,6 +486,7 @@ def build_summary_payload(
         "stderr": stderr_text,
         "exit_code": exit_code,
         "plot_png": str(args.plot_png) if args.plot_png is not None else None,
+        "matched_csv": str(args.matched_csv) if args.matched_csv is not None else None,
     }
     if solver_metrics is not None:
         payload["solver_metrics"] = solver_metrics
@@ -559,6 +598,8 @@ def main() -> int:
     if not reference_rows:
         raise SystemExit(f"No reference rows found in {args.reference_csv}")
     matches = match_solution_to_reference(solution_records, reference_rows, args.match_tolerance_s)
+    if args.matched_csv is not None:
+        write_matches_csv(args.matched_csv, matches)
     payload = build_summary_payload(
         args,
         solution_records,
@@ -581,6 +622,8 @@ def main() -> int:
     print(f"  summary: {args.summary_json}")
     if args.plot_png is not None:
         print(f"  plot: {args.plot_png}")
+    if args.matched_csv is not None:
+        print(f"  matched_csv: {args.matched_csv}")
     print(f"  matched_epochs: {payload['matched_epochs']}")
     print(f"  fix_rate_pct: {payload['fix_rate_pct']}")
     print(f"  p95_baseline_error_m: {payload['p95_baseline_error_m']}")
