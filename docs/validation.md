@@ -48,6 +48,19 @@ python3 apps/gnss.py ppp-products-signoff \
   --require-dcb-corrections-min 1
 ```
 
+If you already have a MALIB `.pos` file, you can gate the delta directly:
+
+```bash
+python3 apps/gnss.py ppp-products-signoff \
+  --profile static \
+  --obs data/rover_static.obs \
+  --nav data/navigation_static.nav \
+  --malib-pos output/malib_ppp_static_solution.pos \
+  --use-existing-malib \
+  --require-lib-mean-error-vs-malib-max-delta 0.25 \
+  --require-lib-max-error-vs-malib-max-delta 0.50
+```
+
 ## Realtime validation
 
 `gnss live-signoff` verifies:

@@ -49,6 +49,11 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_fetch_products.py"),
         "summary": "Fetch and cache SP3/CLK/IONEX/DCB-style product files from local paths or URLs.",
     },
+    "artifact-manifest": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_artifact_manifest.py"),
+        "summary": "Scan generated summaries and build a web/CI-friendly artifact manifest JSON.",
+    },
     "rinex-info": {
         "kind": "binary",
         "target": "gnss_rinex_info",
@@ -293,6 +298,7 @@ def usage() -> str:
             "  python3 apps/gnss.py ppp --kinematic --enable-ar --convergence-min-epochs 4 --ar-ratio-threshold 2.0 --obs rover.obs --sp3 precise.sp3 --clk precise.clk --out output/ppp_ar.pos",
             "  python3 apps/gnss.py nav-products --obs data/rover_static.obs --nav data/navigation_static.nav --sp3-out output/static_products.sp3 --clk-out output/static_products.clk --max-epochs 60",
             "  python3 apps/gnss.py fetch-products --date 2024-01-02 --product sp3=https://example.net/{yyyy}{doy}.sp3.gz --product clk=file:///data/{yyyy}{doy}.clk.gz --summary-json output/products.json",
+            "  python3 apps/gnss.py artifact-manifest --root . --output output/artifact_manifest.json",
             "  python3 apps/gnss.py stream --input ntrip://user:pass@caster:2101/MOUNT --limit 10",
             "  python3 apps/gnss.py stream --input tcp://127.0.0.1:9000 --limit 10",
             "  python3 apps/gnss.py stream --input correction.rtcm3 --output serial:///dev/ttyUSB1?baud=115200 --limit 10",
