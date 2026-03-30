@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 from pathlib import Path
@@ -32,6 +33,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--summary-json", type=Path, default=None)
     parser.add_argument("--reference-pos", type=Path, default=None)
+    parser.add_argument("--comparison-csv", type=Path, default=None)
+    parser.add_argument("--comparison-png", type=Path, default=None)
     parser.add_argument("--max-epochs", type=int, default=120)
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
     parser.add_argument("--use-existing-solution", action="store_true")
@@ -88,6 +91,16 @@ def default_paths(profile: str) -> tuple[Path, Path, Path | None]:
         ROOT_DIR / "output/ppp_kinematic_products_summary.json",
         ROOT_DIR / "output/ppp_kinematic_products_reference.pos",
     )
+
+
+def default_comparison_artifacts(profile: str) -> tuple[Path, Path]:
+    if profile == "ppc":
+        stem = "ppp_ppc_products_comparison"
+    elif profile == "static":
+        stem = "ppp_static_products_comparison"
+    else:
+        stem = "ppp_kinematic_products_comparison"
+    return ROOT_DIR / "output" / f"{stem}.csv", ROOT_DIR / "output" / f"{stem}.png"
 
 
 def run_checked(command: list[str]) -> None:
@@ -173,6 +186,13 @@ def enforce_ppc_metric_requirements(payload: dict[str, object], args: argparse.N
         failures.append(f"valid epochs {int(payload.get('valid_epochs', 0))} < {args.require_valid_epochs_min}")
     if args.require_matched_epochs_min is not None and int(payload.get("matched_epochs", 0)) < args.require_matched_epochs_min:
         failures.append(f"matched epochs {int(payload.get('matched_epochs', 0))} < {args.require_matched_epochs_min}")
+    if (
+        args.require_common_epoch_pairs_min is not None
+        and int(payload.get("common_epoch_pairs", 0)) < args.require_common_epoch_pairs_min
+    ):
+        failures.append(
+            f"common epoch pairs {int(payload.get('common_epoch_pairs', 0))} < {args.require_common_epoch_pairs_min}"
+        )
     if (
         args.require_mean_error_max is not None
         and float(payload.get("mean_position_error_m", 0.0)) > args.require_mean_error_max
@@ -260,13 +280,107 @@ def augment_ppc_malib_comparison(
     )
 
 
+def build_ppc_comparison_pairs(
+    solution_pos: Path,
+    reference_csv: Path,
+    malib_pos: Path,
+    match_tolerance_s: float,
+) -> list[object]:
+    reference = ppc_demo.read_flexible_reference_csv(reference_csv)
+    comparison = ppc_demo.comparison
+    lib_epochs = comparison.read_libgnss_pos(solution_pos)
+    malib_epochs = comparison.read_rtklib_pos(malib_pos)
+    lib_matched = comparison.match_to_reference(lib_epochs, reference, match_tolerance_s)
+    malib_matched = comparison.match_to_reference(malib_epochs, reference, match_tolerance_s)
+    return comparison.pair_epochs(lib_matched, malib_matched, match_tolerance_s)
+
+
+def write_ppc_comparison_csv(path: Path, pairs: list[object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(
+            [
+                "gps_tow_s",
+                "lib_h_m",
+                "malib_h_m",
+                "delta_h_m",
+                "lib_status",
+                "malib_status",
+                "lib_east_m",
+                "lib_north_m",
+                "lib_up_m",
+                "malib_east_m",
+                "malib_north_m",
+                "malib_up_m",
+            ]
+        )
+        for pair in pairs:
+            writer.writerow(
+                [
+                    f"{float(pair.tow):.3f}",
+                    f"{float(pair.lib_epoch.horiz_error_m):.6f}",
+                    f"{float(pair.rtklib_epoch.horiz_error_m):.6f}",
+                    f"{float(pair.gap_m):.6f}",
+                    int(pair.lib_epoch.status),
+                    int(pair.rtklib_epoch.status),
+                    f"{float(pair.lib_epoch.east_m):.6f}",
+                    f"{float(pair.lib_epoch.north_m):.6f}",
+                    f"{float(pair.lib_epoch.up_m):.6f}",
+                    f"{float(pair.rtklib_epoch.east_m):.6f}",
+                    f"{float(pair.rtklib_epoch.north_m):.6f}",
+                    f"{float(pair.rtklib_epoch.up_m):.6f}",
+                ]
+            )
+
+
+def render_ppc_comparison_plot(path: Path, pairs: list[object], title: str) -> None:
+    if not pairs:
+        raise SystemExit("No common epochs available for PPP products comparison plot")
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from matplotlib import pyplot as plt  # noqa: WPS433
+
+    indices = list(range(1, len(pairs) + 1))
+    lib_h = [float(pair.lib_epoch.horiz_error_m) for pair in pairs]
+    malib_h = [float(pair.rtklib_epoch.horiz_error_m) for pair in pairs]
+    delta_h = [float(pair.gap_m) for pair in pairs]
+
+    figure, axes = plt.subplots(2, 1, figsize=(10.5, 6.4), sharex=True)
+    figure.patch.set_facecolor("#f8f5ec")
+    for axis in axes:
+        axis.set_facecolor("#fffdf8")
+        axis.grid(True, alpha=0.25)
+
+    axes[0].plot(indices, lib_h, color="#d97706", linewidth=1.8, label="libgnss++")
+    axes[0].plot(indices, malib_h, color="#2563eb", linewidth=1.6, label="MALIB")
+    axes[0].set_ylabel("horizontal error (m)")
+    axes[0].set_title(title)
+    axes[0].legend(loc="upper right")
+
+    axes[1].plot(indices, delta_h, color="#0f766e", linewidth=1.8, label="MALIB - libgnss++")
+    axes[1].axhline(0.0, color="#9ca3af", linewidth=1.0, linestyle="--")
+    axes[1].set_ylabel("delta (m)")
+    axes[1].set_xlabel("common epoch")
+    axes[1].legend(loc="upper right")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure.tight_layout()
+    figure.savefig(path, dpi=170)
+    plt.close(figure)
+
+
 def main() -> int:
     args = parse_args()
     out_path, summary_path, reference_path = default_paths(args.profile)
+    default_comparison_csv, default_comparison_png = default_comparison_artifacts(args.profile)
     out_path = args.out or out_path
     summary_path = args.summary_json or summary_path
     if args.reference_pos is not None:
         reference_path = args.reference_pos
+    comparison_csv = args.comparison_csv or default_comparison_csv
+    comparison_png = args.comparison_png or default_comparison_png
 
     if args.preset:
         presets = list(args.preset)
@@ -371,6 +485,17 @@ def main() -> int:
         if args.malib_pos is not None:
             ensure_input_exists(args.malib_pos, "MALIB PPP solution file", ROOT_DIR)
             augment_ppc_malib_comparison(payload, reference_csv, args.malib_pos, args.match_tolerance_s)
+            pairs = build_ppc_comparison_pairs(out_path, reference_csv, args.malib_pos, args.match_tolerance_s)
+            if pairs:
+                write_ppc_comparison_csv(comparison_csv, pairs)
+                render_ppc_comparison_plot(
+                    comparison_png,
+                    pairs,
+                    f"{payload.get('dataset', 'PPC PPP')} vs MALIB",
+                )
+                payload["common_epoch_pairs"] = len(pairs)
+                payload["comparison_csv"] = str(comparison_csv)
+                payload["comparison_png"] = str(comparison_png)
         elif args.malib_bin is not None or args.use_existing_malib:
             raise SystemExit("--profile ppc currently supports --malib-pos comparison only")
 

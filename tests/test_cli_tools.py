@@ -5758,6 +5758,11 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["dcb_corrections"], 3)
             self.assertEqual(payload["comparison_target"], "MALIB")
             self.assertIn("comparison_status", payload)
+            self.assertEqual(payload["common_epoch_pairs"], 3)
+            self.assertTrue(str(payload["comparison_csv"]).endswith("ppp_ppc_products_comparison.csv"))
+            self.assertTrue(str(payload["comparison_png"]).endswith("ppp_ppc_products_comparison.png"))
+            self.assertTrue(Path(payload["comparison_csv"]).exists())
+            self.assertTrue(Path(payload["comparison_png"]).exists())
             self.assertTrue(str(payload["reference_csv"]).endswith("reference.csv"))
             self.assertTrue(str(payload["run_dir"]).endswith("tokyo/run1"))
 
@@ -8690,6 +8695,9 @@ class CLIToolsTest(unittest.TestCase):
                         "malib_solution_pos": str(temp_root / "output" / "malib_static.pos"),
                         "comparison_target": "MALIB",
                         "comparison_status": "better",
+                        "comparison_csv": str(temp_root / "output" / "ppp_static_products_comparison.csv"),
+                        "comparison_png": str(temp_root / "output" / "ppp_static_products_comparison.png"),
+                        "common_epoch_pairs": 42,
                         "libgnss_minus_malib_mean_error_m": -0.05,
                         "libgnss_minus_malib_p95_error_m": -0.08,
                         "libgnss_minus_malib_max_error_m": -0.12,
@@ -8808,8 +8816,11 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertEqual(overview["ppp_products_summaries"][0]["ionex_corrections"], 18)
                 self.assertEqual(overview["ppp_products_summaries"][0]["comparison_target"], "MALIB")
                 self.assertEqual(overview["ppp_products_summaries"][0]["comparison_status"], "better")
+                self.assertEqual(overview["ppp_products_summaries"][0]["common_epoch_pairs"], 42)
                 self.assertEqual(overview["ppp_products_summaries"][0]["sp3"], "output/igs_static.sp3")
                 self.assertEqual(overview["ppp_products_summaries"][0]["malib_solution_pos"], "output/malib_static.pos")
+                self.assertEqual(overview["ppp_products_summaries"][0]["comparison_csv"], "output/ppp_static_products_comparison.csv")
+                self.assertEqual(overview["ppp_products_summaries"][0]["comparison_png"], "output/ppp_static_products_comparison.png")
                 self.assertEqual(len(overview["visibility_summaries"]), 1)
                 self.assertEqual(overview["visibility_summaries"][0]["rows_written"], 27)
                 self.assertEqual(overview["visibility_summaries"][0]["unique_satellites"], 9)
@@ -8887,6 +8898,9 @@ class CLIToolsTest(unittest.TestCase):
                         "dcb": str(output_dir / "igs.bsx"),
                         "comparison_target": "MALIB",
                         "comparison_status": "better",
+                        "comparison_csv": str(output_dir / "ppp_static_products_comparison.csv"),
+                        "comparison_png": str(output_dir / "ppp_static_products_comparison.png"),
+                        "common_epoch_pairs": 42,
                         "libgnss_minus_malib_mean_error_m": -0.05,
                     }
                 ),
@@ -8933,6 +8947,9 @@ class CLIToolsTest(unittest.TestCase):
             ppp_entry = next(entry for entry in payload["bundles"] if entry["category"] == "ppp-products")
             self.assertEqual(ppp_entry["artifacts"]["sp3"], "output/igs.sp3")
             self.assertEqual(ppp_entry["artifacts"]["reference"], "output/ppc_reference.csv")
+            self.assertEqual(ppp_entry["artifacts"]["comparison_csv"], "output/ppp_static_products_comparison.csv")
+            self.assertEqual(ppp_entry["artifacts"]["comparison_png"], "output/ppp_static_products_comparison.png")
+            self.assertEqual(ppp_entry["metrics"]["common_epoch_pairs"], 42)
             self.assertEqual(ppp_entry["comparison_status"], "better")
 
     def test_live_reports_missing_rtcm_source_path_clearly(self) -> None:
