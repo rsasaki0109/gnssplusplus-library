@@ -210,12 +210,30 @@ class WebUISmokeTest(unittest.TestCase):
                         "malib_solution_pos": str(temp_root / "output" / "malib_static.pos"),
                         "comparison_target": "MALIB",
                         "comparison_status": "better",
+                        "comparison_csv": str(temp_root / "output" / "ppp_static_products_comparison.csv"),
+                        "comparison_png": str(temp_root / "output" / "ppp_static_products_comparison.png"),
+                        "common_epoch_pairs": 42,
                         "libgnss_minus_malib_mean_error_m": -0.05,
                         "libgnss_minus_malib_p95_error_m": -0.08,
                         "libgnss_minus_malib_max_error_m": -0.12,
                     }
                 ),
                 encoding="utf-8",
+            )
+            (temp_root / "output" / "ppp_static_products_comparison.csv").write_text(
+                "\n".join(
+                    [
+                        "gps_tow_s,lib_h_m,malib_h_m,delta_h_m,lib_status,malib_status,lib_east_m,lib_north_m,lib_up_m,malib_east_m,malib_north_m,malib_up_m",
+                        "1000.000,0.120,0.170,0.050,6,6,0.100,0.050,0.010,0.140,0.090,0.020",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (temp_root / "output" / "ppp_static_products_comparison.png").write_bytes(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+ymsAAAAASUVORK5CYII="
+                )
             )
             visibility_summary.write_text(
                 json.dumps(
@@ -347,7 +365,10 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("2024-01-02", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("285.0 s", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("18 / D 18", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("42 paired", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("Δmean -0.050 m", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("compare-csv", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("compare-png", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("sp3", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("malib", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("visibility_static_summary.json", page.locator("#visibility-table tbody").text_content())
