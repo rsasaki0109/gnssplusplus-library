@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+from gnss_toml_config import parse_args_with_toml
 from gnss_runtime import ensure_input_exists, parse_summary_metrics, resolve_gnss_command
 
 
@@ -18,6 +19,12 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
+    parser.add_argument(
+        "--config-toml",
+        type=Path,
+        default=None,
+        help="Optional TOML config. Uses [live_signoff] or top-level keys.",
+    )
     parser.add_argument("--rover-rtcm", type=Path, default=None, help="Rover RTCM input for gnss live.")
     parser.add_argument("--rover-ubx", type=Path, default=None, help="Rover UBX input for gnss live.")
     parser.add_argument("--base-rtcm", type=Path, default=None, help="Base RTCM input for gnss live.")
@@ -51,7 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-realtime-factor-min", type=float, default=None)
     parser.add_argument("--require-effective-epoch-rate-min", type=float, default=None)
     parser.add_argument("--require-solver-wall-time-max", type=float, default=None)
-    return parser.parse_args()
+    return parse_args_with_toml(parser, "live_signoff")
 
 
 def read_summary_line(text: str) -> str:

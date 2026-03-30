@@ -109,6 +109,8 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "configs" / "live.example.conf",
                 prefix / "configs" / "ppp_products_ppc.example.toml",
                 prefix / "configs" / "moving_base_signoff.example.toml",
+                prefix / "configs" / "live_signoff.example.toml",
+                prefix / "configs" / "ppc_rtk_signoff.example.toml",
                 prefix / "configs" / "web.example.toml",
             ]
             ros2_binary = next((path for path in BUILD_DIR.rglob("gnss_solution_node") if path.is_file()), None)

@@ -112,6 +112,8 @@ install(PROGRAMS
 
 install(FILES
     ${CMAKE_SOURCE_DIR}/configs/live.example.conf
+    ${CMAKE_SOURCE_DIR}/configs/live_signoff.example.toml
+    ${CMAKE_SOURCE_DIR}/configs/ppc_rtk_signoff.example.toml
     ${CMAKE_SOURCE_DIR}/configs/ppp_products_ppc.example.toml
     ${CMAKE_SOURCE_DIR}/configs/moving_base_signoff.example.toml
     ${CMAKE_SOURCE_DIR}/configs/web.example.toml
