@@ -7,6 +7,17 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
+## Docker
+
+```bash
+docker build -t libgnsspp:latest .
+docker pull ghcr.io/rsasaki0109/gnssplusplus-library:develop
+docker run --rm -it -v "$PWD:/workspace" libgnsspp:latest --help
+docker compose up gnss-web
+```
+
+The container installs the `gnss` dispatcher and Python helpers under `/opt/libgnsspp`. Sample datasets are not embedded, so mount your source tree or your own dataset directory into `/workspace`.
+
 ## First solutions
 
 ```bash
@@ -53,7 +64,9 @@ python3 apps/gnss.py replay \
 | `gnss ppp` | Batch PPP from rover RINEX plus nav or precise products |
 | `gnss visibility` | Export azimuth/elevation/SNR visibility rows and summary JSON from rover/nav RINEX |
 | `gnss visibility-plot` | Render a visibility CSV into a polar/elevation PNG quick-look |
+| `gnss moving-base-prepare` | Extract rover/base UBX plus reference CSV from a ROS2 moving-base bag |
 | `gnss moving-base-signoff` | Validate a real moving-base replay/live dataset against per-epoch base/rover reference coordinates |
+| `gnss scorpion-moving-base-signoff` | One-command prepare + BRDC fetch + replay validation for the public SCORPION bag |
 | `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` files from local or remote sources |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
 | `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
@@ -74,9 +87,34 @@ python3 apps/gnss.py web \
 
 Open `http://127.0.0.1:8085` to inspect benchmark tables, live sign-offs, receiver status, and visibility summaries.
 
+Docker form:
+
+```bash
+docker run --rm -it -p 8085:8085 -v "$PWD:/workspace" \
+  libgnsspp:latest web --host 0.0.0.0 --port 8085 --root /workspace
+```
+
 ## Real moving-base sign-off
 
 `moving-base-signoff` is for external real datasets. Provide recorded `replay` or `live` inputs plus a reference CSV with per-epoch base/rover ECEF coordinates.
+
+Typical replay preparation flow:
+
+```bash
+python3 apps/gnss.py moving-base-prepare \
+  --input /datasets/moving_base/2023-06-14T174658Z.zip \
+  --rover-ubx-out output/moving_base_rover.ubx \
+  --base-ubx-out output/moving_base_base.ubx \
+  --reference-csv output/moving_base_reference.csv
+
+python3 apps/gnss.py fetch-products \
+  --date 2023-06-14 \
+  --preset brdc-nav
+
+python3 apps/gnss.py scorpion-moving-base-signoff \
+  --input /datasets/moving_base/2023-06-14T174658Z.zip \
+  --summary-json output/scorpion_moving_base_summary.json
+```
 
 ## Product-driven PPP
 

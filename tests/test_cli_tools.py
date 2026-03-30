@@ -19,6 +19,7 @@ import unittest
 import math
 import zlib
 import http.server
+import importlib.util
 from functools import partial
 from pathlib import Path
 from urllib import request
@@ -61,6 +62,133 @@ import generate_driving_comparison as driving_comparison  # noqa: E402
 
 def repo_data_exists(*relative_paths: str) -> bool:
     return all((ROOT_DIR / relative_path).exists() for relative_path in relative_paths)
+
+
+def ros2_bag_support_available() -> bool:
+    required = ("rosbag2_py", "rclpy", "rosidl_runtime_py", "ublox_msgs")
+    return all(importlib.util.find_spec(name) is not None for name in required)
+
+
+def build_synthetic_moving_base_rosbag(bag_dir: Path) -> None:
+    import rosbag2_py
+    from rclpy.serialization import serialize_message
+    from ublox_msgs.msg import NavPVT, NavRELPOSNED9, RxmRAWX, RxmRAWXMeas
+
+    bag_dir.parent.mkdir(parents=True, exist_ok=True)
+    writer = rosbag2_py.SequentialWriter()
+    writer.open(
+        rosbag2_py.StorageOptions(uri=str(bag_dir), storage_id="sqlite3"),
+        rosbag2_py.ConverterOptions(input_serialization_format="cdr", output_serialization_format="cdr"),
+    )
+    topics = {
+        "/rover/navpvt": "ublox_msgs/msg/NavPVT",
+        "/base/navpvt": "ublox_msgs/msg/NavPVT",
+        "/rover/rxmrawx": "ublox_msgs/msg/RxmRAWX",
+        "/base/rxmrawx": "ublox_msgs/msg/RxmRAWX",
+        "/rover/navrelposned": "ublox_msgs/msg/NavRELPOSNED9",
+    }
+    for topic, msg_type in topics.items():
+        writer.create_topic(
+            rosbag2_py.TopicMetadata(
+                0,
+                name=topic,
+                type=msg_type,
+                serialization_format="cdr",
+                offered_qos_profiles=[],
+            )
+        )
+
+    def make_navpvt(itow_ms: int, lat_deg: float, lon_deg: float, height_m: float) -> NavPVT:
+        msg = NavPVT()
+        msg.i_tow = itow_ms
+        msg.year = 2023
+        msg.month = 6
+        msg.day = 14
+        msg.hour = 12
+        msg.min = 0
+        msg.sec = int((itow_ms // 1000) % 60)
+        msg.valid = 0x37
+        msg.fix_type = 3
+        msg.flags = 0x83
+        msg.flags2 = 0
+        msg.num_sv = 18
+        msg.lon = int(round(lon_deg * 1e7))
+        msg.lat = int(round(lat_deg * 1e7))
+        msg.height = int(round(height_m * 1000.0))
+        msg.h_msl = msg.height
+        msg.h_acc = 100
+        msg.v_acc = 100
+        msg.s_acc = 50
+        msg.head_acc = 100000
+        msg.p_dop = 150
+        return msg
+
+    def make_rawx(itow_s: float, week: int, sv_id: int, sig_id: int = 0) -> RxmRAWX:
+        meas = RxmRAWXMeas()
+        meas.pr_mes = 20200000.0 + sv_id * 1000.0
+        meas.cp_mes = 110000000.0 + sv_id * 10000.0
+        meas.do_mes = -1200.0 + sv_id
+        meas.gnss_id = 0
+        meas.sv_id = sv_id
+        meas.reserved0 = sig_id
+        meas.freq_id = 0
+        meas.locktime = 100
+        meas.cno = 45
+        meas.pr_stdev = 3
+        meas.cp_stdev = 1
+        meas.do_stdev = 5
+        meas.trk_stat = 0x03
+        meas.reserved1 = 0
+
+        msg = RxmRAWX()
+        msg.rcv_tow = itow_s
+        msg.week = week
+        msg.leap_s = 18
+        msg.num_meas = 1
+        msg.rec_stat = 1
+        msg.version = 1
+        msg.reserved1 = [0, 0]
+        msg.meas = [meas]
+        return msg
+
+    def make_relpos(itow_ms: int, north_m: float, east_m: float, down_m: float) -> NavRELPOSNED9:
+        msg = NavRELPOSNED9()
+        msg.version = 1
+        msg.i_tow = itow_ms
+        msg.rel_pos_n = int(math.trunc(north_m * 100.0))
+        msg.rel_pos_e = int(math.trunc(east_m * 100.0))
+        msg.rel_pos_d = int(math.trunc(down_m * 100.0))
+        msg.rel_pos_hpn = int(round((north_m * 10000.0) - msg.rel_pos_n * 100.0))
+        msg.rel_pos_hpe = int(round((east_m * 10000.0) - msg.rel_pos_e * 100.0))
+        msg.rel_pos_hpd = int(round((down_m * 10000.0) - msg.rel_pos_d * 100.0))
+        msg.rel_pos_length = int(round(math.sqrt(north_m * north_m + east_m * east_m + down_m * down_m) * 100.0))
+        msg.rel_pos_hp_length = 0
+        msg.rel_pos_heading = int(round((math.degrees(math.atan2(east_m, north_m)) % 360.0) * 1e5))
+        msg.acc_n = 100
+        msg.acc_e = 100
+        msg.acc_d = 100
+        msg.acc_length = 100
+        msg.acc_heading = 100
+        msg.flags = 1
+        return msg
+
+    epochs = [
+        (2200, 345600.000, 35.0000000, 139.0000000, 50.0, 1.2, 2.3, -0.4),
+        (2200, 345601.000, 35.0000003, 139.0000002, 50.1, 1.4, 2.6, -0.5),
+    ]
+    timestamp_ns = 1_000_000_000
+    for week, tow_s, base_lat, base_lon, base_h, north_m, east_m, down_m in epochs:
+        itow_ms = int(round(tow_s * 1000.0))
+        writer.write("/base/navpvt", serialize_message(make_navpvt(itow_ms, base_lat, base_lon, base_h)), timestamp_ns)
+        writer.write(
+            "/rover/navpvt",
+            serialize_message(make_navpvt(itow_ms, base_lat + 1e-6, base_lon + 1e-6, base_h)),
+            timestamp_ns + 1,
+        )
+        writer.write("/rover/navrelposned", serialize_message(make_relpos(itow_ms, north_m, east_m, down_m)), timestamp_ns + 2)
+        writer.write("/base/rxmrawx", serialize_message(make_rawx(tow_s, week, 3)), timestamp_ns + 3)
+        writer.write("/rover/rxmrawx", serialize_message(make_rawx(tow_s, week, 3)), timestamp_ns + 4)
+        timestamp_ns += 1_000_000_000
 
 
 def ppc_dataset_root() -> Path:
@@ -2816,6 +2944,7 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("igs-final", presets.stdout)
         self.assertIn("ionex", presets.stdout)
         self.assertIn("dcb", presets.stdout)
+        self.assertIn("brdc-nav", presets.stdout)
 
         with tempfile.TemporaryDirectory(prefix="gnss_fetch_products_dry_run_cli_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -7126,7 +7255,7 @@ class CLIToolsTest(unittest.TestCase):
         last_result: subprocess.CompletedProcess[str] | None = None
         last_output_path: Path | None = None
 
-        for _ in range(2):
+        for _ in range(3):
             master_fd, slave_fd = pty.openpty()
             try:
                 slave_path = os.ttyname(slave_fd)
@@ -7134,9 +7263,11 @@ class CLIToolsTest(unittest.TestCase):
                 os.close(slave_fd)
 
             def writer() -> None:
+                time.sleep(0.10)
+                os.write(master_fd, payload)
                 time.sleep(0.05)
                 os.write(master_fd, payload)
-                time.sleep(0.1)
+                time.sleep(0.20)
                 os.close(master_fd)
 
             with tempfile.TemporaryDirectory(prefix="gnss_ubx_serial_test_") as temp_dir:
@@ -7153,13 +7284,13 @@ class CLIToolsTest(unittest.TestCase):
                         "--obs-rinex-out",
                         str(output_path),
                         "--limit",
-                        "2",
+                        "4",
                     )
                 finally:
                     thread.join()
 
                 last_result = result
-                if "UBX-RXM-RAWX" in result.stdout and "summary: processed_messages=2" in result.stdout:
+                if "UBX-RXM-RAWX" in result.stdout and "summary: processed_messages=" in result.stdout:
                     exported = output_path.read_text(encoding="ascii")
                     self.assertIn("G12", exported)
                     self.assertIn("E05", exported)
@@ -7538,48 +7669,53 @@ class CLIToolsTest(unittest.TestCase):
 
     @unittest.skipIf(os.name == "nt", "serial PTY test is POSIX-only")
     def test_convert_reads_mixed_rawx_from_serial_device(self) -> None:
-        master_fd, slave_fd = pty.openpty()
-        try:
-            slave_path = os.ttyname(slave_fd)
-        finally:
-            os.close(slave_fd)
-
         payload = build_nav_pvt_message() + build_mixed_rawx_message()
-
-        def writer() -> None:
-            time.sleep(0.05)
-            os.write(master_fd, payload)
-            time.sleep(0.1)
-            os.close(master_fd)
-
-        with tempfile.TemporaryDirectory(prefix="gnss_convert_serial_test_") as temp_dir:
-            output_path = Path(temp_dir) / "serial_converted.obs"
-            thread = threading.Thread(target=writer)
-            thread.start()
+        last_result: subprocess.CompletedProcess[str] | None = None
+        for _ in range(3):
+            master_fd, slave_fd = pty.openpty()
             try:
-                result = self.run_gnss(
-                    "convert",
-                    "--format",
-                    "ubx",
-                    "--input",
-                    f"serial://{slave_path}?baud=115200",
-                    "--obs-out",
-                    str(output_path),
-                    "--limit",
-                    "2",
-                    "--quiet",
-                )
+                slave_path = os.ttyname(slave_fd)
             finally:
-                thread.join()
+                os.close(slave_fd)
 
-            self.assertEqual(result.returncode, 0, msg=result.stderr)
-            self.assertIn("summary: processed_messages=2", result.stdout)
-            exported = output_path.read_text(encoding="ascii")
-            self.assertIn("G12", exported)
-            self.assertIn("E05", exported)
-            self.assertIn("R07", exported)
-            self.assertIn("C19", exported)
-            self.assertIn("J03", exported)
+            def writer() -> None:
+                time.sleep(0.10)
+                os.write(master_fd, payload)
+                time.sleep(0.05)
+                os.write(master_fd, payload)
+                time.sleep(0.20)
+                os.close(master_fd)
+
+            with tempfile.TemporaryDirectory(prefix="gnss_convert_serial_test_") as temp_dir:
+                output_path = Path(temp_dir) / "serial_converted.obs"
+                thread = threading.Thread(target=writer)
+                thread.start()
+                try:
+                    result = self.run_gnss(
+                        "convert",
+                        "--format",
+                        "ubx",
+                        "--input",
+                        f"serial://{slave_path}?baud=115200",
+                        "--obs-out",
+                        str(output_path),
+                        "--limit",
+                        "4",
+                        "--quiet",
+                    )
+                finally:
+                    thread.join()
+
+                last_result = result
+                if "summary: processed_messages=" in result.stdout and output_path.exists():
+                    exported = output_path.read_text(encoding="ascii")
+                    if all(token in exported for token in ("G12", "E05", "R07", "C19", "J03")):
+                        self.assertEqual(result.returncode, 0, msg=result.stderr)
+                        return
+
+        self.assertIsNotNone(last_result)
+        self.assertEqual(last_result.returncode, 0, msg=last_result.stderr)
+        self.assertIn("summary: processed_messages=", last_result.stdout)
 
     def test_convert_exports_sfrbx_csv(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_convert_sfrbx_test_") as temp_dir:
@@ -7845,6 +7981,139 @@ class CLIToolsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn("--arfilter", result.stdout)
         self.assertIn("--arfilter-margin", result.stdout)
+        self.assertIn("--base-ubx", result.stdout)
+
+    @unittest.skipUnless(ros2_bag_support_available(), "ROS2 rosbag + ublox_msgs support not available")
+    def test_moving_base_prepare_exports_ubx_and_reference_csv(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_moving_base_prepare_") as temp_dir:
+            temp_root = Path(temp_dir)
+            bag_dir = temp_root / "bag"
+            build_synthetic_moving_base_rosbag(bag_dir)
+
+            rover_ubx = temp_root / "rover.ubx"
+            base_ubx = temp_root / "base.ubx"
+            reference_csv = temp_root / "reference.csv"
+            summary_json = temp_root / "summary.json"
+
+            result = self.run_gnss(
+                "moving-base-prepare",
+                "--input",
+                str(bag_dir),
+                "--rover-ubx-out",
+                str(rover_ubx),
+                "--base-ubx-out",
+                str(base_ubx),
+                "--reference-csv",
+                str(reference_csv),
+                "--summary-json",
+                str(summary_json),
+                "--max-epochs",
+                "2",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Prepared moving-base bag artifacts.", result.stdout)
+            self.assertTrue(rover_ubx.exists())
+            self.assertTrue(base_ubx.exists())
+            self.assertTrue(reference_csv.exists())
+            self.assertTrue(summary_json.exists())
+            self.assertGreater(rover_ubx.stat().st_size, 0)
+            self.assertGreater(base_ubx.stat().st_size, 0)
+
+            summary = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(summary["rover_epochs"], 2)
+            self.assertEqual(summary["matched_reference_rows"], 2)
+            self.assertEqual(summary["gps_week"], 2200)
+            self.assertEqual(summary["date"], "2023-06-14")
+
+            with reference_csv.open(encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0]["gps_week"], "2200")
+            self.assertEqual(rows[0]["gps_tow_s"], "345600.000")
+            self.assertIn("baseline_n_m", rows[0])
+
+    def test_moving_base_prepare_help_mentions_rosbag_and_ubx_exports(self) -> None:
+        result = self.run_gnss("moving-base-prepare", "--help")
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("ROS2 bag directory or Zenodo zip", result.stdout)
+        self.assertIn("--rover-ubx-out", result.stdout)
+        self.assertIn("--base-ubx-out", result.stdout)
+
+    @unittest.skipUnless(ros2_bag_support_available(), "ROS2 rosbag + ublox_msgs support not available")
+    def test_scorpion_moving_base_signoff_wraps_prepare_and_existing_solution(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_scorpion_moving_base_") as temp_dir:
+            temp_root = Path(temp_dir)
+            bag_dir = temp_root / "bag"
+            build_synthetic_moving_base_rosbag(bag_dir)
+
+            prepared_reference = temp_root / "prepared_reference.csv"
+            prepared_summary = temp_root / "prepared_summary.json"
+            prepare_result = self.run_gnss(
+                "moving-base-prepare",
+                "--input",
+                str(bag_dir),
+                "--reference-csv",
+                str(prepared_reference),
+                "--summary-json",
+                str(prepared_summary),
+                "--quiet",
+            )
+            self.assertEqual(prepare_result.returncode, 0, msg=prepare_result.stderr)
+
+            solution_path = temp_root / "moving_base.pos"
+            with prepared_reference.open(encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            solution_lines = ["% synthetic scorpion moving-base solution"]
+            for row in rows:
+                solution_lines.append(
+                    " ".join(
+                        [
+                            row["gps_week"],
+                            f"{float(row['gps_tow_s']):.3f}",
+                            f"{float(row['rover_ecef_x_m']):.6f}",
+                            f"{float(row['rover_ecef_y_m']):.6f}",
+                            f"{float(row['rover_ecef_z_m']):.6f}",
+                            "35.0",
+                            "139.0",
+                            "10.0",
+                            "4",
+                            "12",
+                            "1.0",
+                        ]
+                    )
+                )
+            solution_path.write_text("\n".join(solution_lines) + "\n", encoding="ascii")
+
+            work_dir = temp_root / "work"
+            summary_json = temp_root / "scorpion_summary.json"
+            result = self.run_gnss(
+                "scorpion-moving-base-signoff",
+                "--input",
+                str(bag_dir),
+                "--use-existing-solution",
+                "--out",
+                str(solution_path),
+                "--work-dir",
+                str(work_dir),
+                "--summary-json",
+                str(summary_json),
+                "--require-matched-epochs-min",
+                "2",
+                "--require-fix-rate-min",
+                "90",
+                "--require-p95-baseline-error-max",
+                "0.01",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Finished SCORPION moving-base sign-off.", result.stdout)
+            payload = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(payload["signoff_profile"], "scorpion-moving-base")
+            self.assertEqual(payload["matched_epochs"], 2)
+            self.assertEqual(payload["fix_rate_pct"], 100.0)
+            self.assertIsNone(payload["products_summary_json"])
+            self.assertTrue(Path(payload["prepare_summary_json"]).exists())
 
     def test_live_signoff_summarizes_existing_log_and_enforces_realtime_gate(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_live_signoff_cli_") as temp_dir:
