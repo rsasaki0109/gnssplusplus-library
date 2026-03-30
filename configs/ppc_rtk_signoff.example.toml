@@ -1,0 +1,27 @@
+[ppc_rtk_signoff]
+dataset_root = "/datasets/PPC-Dataset"
+city = "tokyo"
+run = "run1"
+out = "output/ppc_tokyo_run1_rtk.pos"
+summary_json = "output/ppc_tokyo_run1_rtk_summary.json"
+max_epochs = 120
+rtklib_bin = "/opt/rtklib/bin/rnx2rtkp"
+preset = "low-cost"
+arfilter = true
+arfilter_margin = 0.35
+min_hold_count = 8
+hold_ratio_threshold = 2.6
+require_valid_epochs_min = 100
+require_matched_epochs_min = 100
+require_fix_rate_min = 95.0
+require_median_h_max = 0.06
+require_p95_h_max = 0.15
+require_max_h_max = 0.50
+require_p95_up_max = 0.60
+require_mean_sats_min = 18.0
+require_solver_wall_time_max = 5.0
+require_realtime_factor_min = 4.5
+require_effective_epoch_rate_min = 24.0
+require_lib_fix_rate_vs_rtklib_min_delta = 0.0
+require_lib_median_h_vs_rtklib_max_delta = 0.01
+require_lib_p95_h_vs_rtklib_max_delta = 0.02

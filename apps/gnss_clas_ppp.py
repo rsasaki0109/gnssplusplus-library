@@ -630,6 +630,9 @@ def main() -> int:
 
         command.append("--kinematic" if args.kinematic else "--static")
         command.append("--estimate-troposphere" if args.estimate_troposphere else "--no-estimate-troposphere")
+        # When atmospheric corrections are available from CLAS, disable IFLC to allow
+        # direct STEC-based ionosphere correction on individual frequencies.
+        command.append("--no-ionosphere-free")
         if args.sp3 is not None:
             command.extend(["--sp3", str(args.sp3)])
         if args.clk is not None:
