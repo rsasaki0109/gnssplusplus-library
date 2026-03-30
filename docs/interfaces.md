@@ -13,6 +13,7 @@ Examples:
 - `gnss ionex-info`
 - `gnss dcb-info`
 - `gnss visibility`
+- `gnss visibility-plot`
 - `gnss stream`
 - `gnss convert`
 - `gnss live`
