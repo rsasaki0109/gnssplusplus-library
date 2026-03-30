@@ -43,6 +43,22 @@ class DocsSiteTest(unittest.TestCase):
             self.assertTrue((site_dir / "index.html").exists())
             self.assertTrue((site_dir / "architecture" / "index.html").exists() or (site_dir / "architecture.html").exists())
             self.assertTrue((site_dir / "libgnsspp_architecture.png").exists())
+            self.assertTrue(
+                (site_dir / "references" / "index.html").exists()
+                or (site_dir / "references.html").exists()
+            )
+            self.assertTrue(
+                (site_dir / "references" / "madocalib-gap" / "index.html").exists()
+                or (site_dir / "references" / "madocalib-gap.html").exists()
+            )
+            self.assertTrue(
+                (site_dir / "references" / "claslib-gap" / "index.html").exists()
+                or (site_dir / "references" / "claslib-gap.html").exists()
+            )
+            self.assertTrue(
+                (site_dir / "references" / "roadmap" / "index.html").exists()
+                or (site_dir / "references" / "roadmap.html").exists()
+            )
         finally:
             shutil.rmtree(site_dir, ignore_errors=True)
 
