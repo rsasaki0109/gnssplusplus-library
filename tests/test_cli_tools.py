@@ -5766,6 +5766,143 @@ class CLIToolsTest(unittest.TestCase):
             self.assertTrue(str(payload["reference_csv"]).endswith("reference.csv"))
             self.assertTrue(str(payload["run_dir"]).endswith("tokyo/run1"))
 
+    def test_ppp_products_signoff_cli_reads_ppc_config_toml(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_products_signoff_ppc_toml_") as temp_dir:
+            temp_root = Path(temp_dir)
+            run_dir = temp_root / "tokyo" / "run1"
+            run_dir.mkdir(parents=True)
+            products_dir = temp_root / "products"
+            products_dir.mkdir()
+            output_path = temp_root / "ppp_ppc_products.pos"
+            summary_path = temp_root / "ppp_ppc_products_summary.json"
+            ppp_run_summary_path = temp_root / "ppp_run_summary.json"
+            malib_pos = temp_root / "malib_ppc.pos"
+            reference_csv = run_dir / "reference.csv"
+            config_toml = temp_root / "ppp_products.toml"
+
+            (run_dir / "rover.obs").write_bytes((ROOT_DIR / "data/rover_static.obs").read_bytes())
+            (run_dir / "base.nav").write_bytes((ROOT_DIR / "data/navigation_static.nav").read_bytes())
+
+            nav_products = self.run_gnss(
+                "nav-products",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--sp3-out",
+                str(temp_root / "generated.sp3"),
+                "--clk-out",
+                str(temp_root / "generated.clk"),
+                "--max-epochs",
+                "20",
+            )
+            self.assertEqual(nav_products.returncode, 0, msg=nav_products.stderr)
+
+            with gzip.open(products_dir / "2024002.sp3.gz", "wb") as stream:
+                stream.write((temp_root / "generated.sp3").read_bytes())
+            with gzip.open(products_dir / "2024002.clk.gz", "wb") as stream:
+                stream.write((temp_root / "generated.clk").read_bytes())
+            with gzip.open(products_dir / "2024002.ionex.gz", "wb") as stream:
+                stream.write(build_synthetic_ionex_text().encode("ascii"))
+            with gzip.open(products_dir / "2024002.bsx.gz", "wb") as stream:
+                stream.write(build_synthetic_dcb_text().encode("ascii"))
+
+            reference_rows = [
+                (2300, 1000.0, 35.1000000, 139.1000000, 42.0),
+                (2300, 1000.2, 35.1000100, 139.1000200, 42.2),
+                (2300, 1000.4, 35.1000200, 139.1000400, 42.4),
+            ]
+            reference_lines = ["gps_week,gps_tow_s,lat_deg,lon_deg,height_m"]
+            for week, tow, lat, lon, height in reference_rows:
+                reference_lines.append(f"{week},{tow:.3f},{lat:.7f},{lon:.7f},{height:.3f}")
+            reference_csv.write_text("\n".join(reference_lines) + "\n", encoding="ascii")
+
+            with output_path.open("w", encoding="ascii") as handle:
+                handle.write("% synthetic ppc ppp solution\n")
+                for week, tow, lat, lon, height, status, satellites in (
+                    (2300, 1000.0, 35.1000002, 139.1000001, 42.1, 6, 12),
+                    (2300, 1000.2, 35.1000101, 139.1000201, 42.3, 6, 13),
+                    (2300, 1000.4, 35.1000202, 139.1000402, 42.5, 5, 11),
+                ):
+                    ecef = driving_comparison.llh_to_ecef(lat, lon, height)
+                    handle.write(
+                        f"{week} {tow:.3f} {ecef[0]:.6f} {ecef[1]:.6f} {ecef[2]:.6f} "
+                        f"{lat:.9f} {lon:.9f} {height:.4f} {status} {satellites} 1.0\n"
+                    )
+
+            ppp_run_summary_path.write_text(
+                json.dumps(
+                    {
+                        "converged": True,
+                        "convergence_time_s": 180.0,
+                        "solution_rate_pct": 100.0,
+                        "ionex_corrections": 3,
+                        "ionex_meters": 0.42,
+                        "dcb_corrections": 3,
+                        "dcb_meters": 0.03,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            write_rtklib_pos(
+                malib_pos,
+                [
+                    (2300, 1000.0, 35.1000006, 139.1000005, 42.4, 6, 12),
+                    (2300, 1000.2, 35.1000106, 139.1000206, 42.6, 6, 13),
+                    (2300, 1000.4, 35.1000206, 139.1000405, 42.8, 5, 11),
+                ],
+            )
+
+            product_specs = [
+                f"sp3={products_dir / '{yyyy}{doy}.sp3.gz'}",
+                f"clk={products_dir / '{yyyy}{doy}.clk.gz'}",
+                f"ionex={products_dir / '{yyyy}{doy}.ionex.gz'}",
+                f"dcb={products_dir / '{yyyy}{doy}.bsx.gz'}",
+            ]
+            config_lines = [
+                "[ppp_products_signoff]",
+                'profile = "ppc"',
+                f'run_dir = "{run_dir}"',
+                f'reference_csv = "{reference_csv}"',
+                f'out = "{output_path}"',
+                f'summary_json = "{summary_path}"',
+                "use_existing_solution = true",
+                f'ppp_run_summary_json = "{ppp_run_summary_path}"',
+                'product_date = "2024-01-02"',
+                "product = [",
+            ]
+            config_lines.extend(f'  "{spec}",' for spec in product_specs)
+            config_lines.extend(
+                [
+                    "]",
+                    f'malib_pos = "{malib_pos}"',
+                    "use_existing_malib = true",
+                    "require_valid_epochs_min = 3",
+                    "require_matched_epochs_min = 3",
+                    "require_ppp_solution_rate_min = 100.0",
+                    "require_converged = true",
+                    "require_ionex_corrections_min = 1",
+                    "require_dcb_corrections_min = 1",
+                    "require_lib_mean_error_vs_malib_max_delta = 100.0",
+                ]
+            )
+            config_toml.write_text("\n".join(config_lines) + "\n", encoding="utf-8")
+
+            result = self.run_gnss(
+                "ppp-products-signoff",
+                "--config-toml",
+                str(config_toml),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["products_signoff_profile"], "ppc")
+            self.assertEqual(payload["comparison_target"], "MALIB")
+            self.assertEqual(payload["common_epoch_pairs"], 3)
+            self.assertTrue(Path(payload["comparison_csv"]).exists())
+            self.assertTrue(Path(payload["comparison_png"]).exists())
+
     def test_ppc_demo_cli_summarizes_existing_solution_against_reference_csv(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_demo_cli_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -9044,6 +9181,73 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["fixed_epochs"], 2)
             self.assertGreater(payload["realtime_factor"], 0.0)
             self.assertEqual(payload["plot_png"], str(plot_path))
+            self.assertTrue(Path(payload["matched_csv"]).exists())
+
+    def test_moving_base_signoff_reads_config_toml(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_moving_base_signoff_toml_") as temp_dir:
+            temp_root = Path(temp_dir)
+            solution_path = temp_root / "moving_base.pos"
+            reference_csv = temp_root / "reference.csv"
+            summary_path = temp_root / "moving_base_summary.json"
+            plot_path = temp_root / "moving_base.png"
+            matched_csv = temp_root / "moving_base_matches.csv"
+            config_toml = temp_root / "moving_base.toml"
+
+            solution_path.write_text(
+                "\n".join(
+                    [
+                        "% synthetic moving-base solution fixture",
+                        "2200 345600.000 3875001.100000 332002.000000 5029000.400000 35.0 139.0 10.0 4 12 1.0",
+                        "2200 345601.000 3875001.200000 332002.100000 5029000.450000 35.0 139.0 10.0 4 12 1.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            reference_csv.write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,base_ecef_x_m,base_ecef_y_m,base_ecef_z_m,rover_ecef_x_m,rover_ecef_y_m,rover_ecef_z_m",
+                        "2200,345600.0,3875000.0,332000.0,5029000.0,3875001.0,332002.0,5029000.5",
+                        "2200,345601.0,3875000.1,332000.1,5029000.0,3875001.1,332002.1,5029000.5",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            config_toml.write_text(
+                "\n".join(
+                    [
+                        "[moving_base_signoff]",
+                        'solver = "replay"',
+                        "use_existing_solution = true",
+                        f'out = "{solution_path}"',
+                        f'reference_csv = "{reference_csv}"',
+                        f'summary_json = "{summary_path}"',
+                        f'matched_csv = "{matched_csv}"',
+                        f'plot_png = "{plot_path}"',
+                        "solver_wall_time_s = 0.5",
+                        "require_valid_epochs_min = 2",
+                        "require_matched_epochs_min = 2",
+                        "require_fix_rate_min = 90.0",
+                        "require_p95_baseline_error_max = 1.0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_gnss(
+                "moving-base-signoff",
+                "--config-toml",
+                str(config_toml),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["solver"], "replay")
+            self.assertEqual(payload["matched_epochs"], 2)
+            self.assertEqual(payload["fixed_epochs"], 2)
             self.assertTrue(Path(payload["matched_csv"]).exists())
 
     def test_moving_base_plot_renders_png_from_solution_and_reference(self) -> None:

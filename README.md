@@ -203,6 +203,10 @@ python3 apps/gnss.py web \
 
 Then open `http://127.0.0.1:8085` to inspect Odaiba metrics, live/moving-base/PPP-product sign-offs, 2D trajectories, moving-base and visibility plots, moving-base history, PPC summaries, receiver status, and linked artifact bundles in a browser. The PPP products table links directly to fetched products, MALIB `.pos`, comparison CSV/PNG artifacts, and dataset provenance.
 
+Long-running dashboard commands can also read TOML config files. See
+`configs/web.example.toml`, `configs/moving_base_signoff.example.toml`, and
+`configs/ppp_products_ppc.example.toml`, then pass `--config-toml <file>`.
+
 Container form:
 
 ```bash
@@ -244,6 +248,9 @@ python3 apps/gnss.py scorpion-moving-base-signoff \
   --summary-json output/scorpion_moving_base_summary.json \
   --require-matched-epochs-min 100 \
   --require-fix-rate-min 80
+
+python3 apps/gnss.py moving-base-signoff \
+  --config-toml configs/moving_base_signoff.example.toml
 ```
 
 ### Product-driven PPP
@@ -276,6 +283,9 @@ python3 apps/gnss.py ppp-kinematic-signoff \
   --require-max-error-max 7 \
   --require-mean-sats-min 18 \
   --require-ppp-solution-rate-min 100
+
+python3 apps/gnss.py ppp-products-signoff \
+  --config-toml configs/ppp_products_ppc.example.toml
 ```
 
 ## Benchmark Snapshot

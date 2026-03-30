@@ -61,6 +61,7 @@ class WebUISmokeTest(unittest.TestCase):
             visibility_png = temp_root / "output" / "visibility_static.png"
             artifact_manifest = temp_root / "output" / "artifact_manifest.json"
             port_file = temp_root / "port.txt"
+            config_toml = temp_root / "web.toml"
             docs_url = "https://example.com/libgnsspp-docs/"
 
             ppc_summary.parent.mkdir(parents=True, exist_ok=True)
@@ -284,30 +285,36 @@ class WebUISmokeTest(unittest.TestCase):
             )
             self.assertEqual(manifest_result.returncode, 0, msg=manifest_result.stderr)
 
+            config_toml.write_text(
+                "\n".join(
+                    [
+                        "[web]",
+                        'host = "127.0.0.1"',
+                        "port = 0",
+                        f'port_file = "{port_file}"',
+                        f'root = "{temp_root}"',
+                        f'lib_pos = "{lib_pos}"',
+                        f'rtklib_pos = "{rtklib_pos}"',
+                        f'odaiba_summary = "{summary_json}"',
+                        f'rcv_status = "{status_json}"',
+                        f'artifact_manifest = "{artifact_manifest}"',
+                        f'docs_url = "{docs_url}"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
             port = find_free_port()
             process = subprocess.Popen(
                 [
                     sys.executable,
                     str(DISPATCHER),
                     "web",
-                    "--host",
-                    "127.0.0.1",
+                    "--config-toml",
+                    str(config_toml),
                     "--port",
                     str(port),
-                    "--port-file",
-                    str(port_file),
-                    "--root",
-                    str(temp_root),
-                    "--lib-pos",
-                    str(lib_pos),
-                    "--rtklib-pos",
-                    str(rtklib_pos),
-                    "--odaiba-summary",
-                    str(summary_json),
-                    "--rcv-status",
-                    str(status_json),
-                    "--docs-url",
-                    docs_url,
                 ],
                 cwd=ROOT_DIR,
                 stdout=subprocess.PIPE,

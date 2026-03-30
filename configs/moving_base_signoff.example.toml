@@ -1,0 +1,19 @@
+[moving_base_signoff]
+solver = "replay"
+rover_ubx = "output/moving_base_rover.ubx"
+base_ubx = "output/moving_base_base.ubx"
+nav_rinex = ".cache/libgnsspp/products/nav/2023/165/BRDC00IGS_R_20231650000_01D_MN.rnx"
+reference_csv = "output/moving_base_reference.csv"
+out = "output/moving_base_solution.pos"
+summary_json = "output/moving_base_summary.json"
+matched_csv = "output/moving_base_matches.csv"
+plot_png = "output/moving_base_plot.png"
+plot_title = "Moving-base sign-off"
+max_epochs = 120
+match_tolerance_s = 0.25
+require_matched_epochs_min = 100
+require_fix_rate_min = 90.0
+require_p95_baseline_error_max = 1.0
+require_realtime_factor_min = 1.0
+require_rover_decoder_errors_max = 0
+require_base_decoder_errors_max = 0
