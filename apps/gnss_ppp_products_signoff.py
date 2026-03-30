@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 
 import gnss_ppc_demo as ppc_demo
+from gnss_toml_config import parse_args_with_toml
 from gnss_runtime import ensure_input_exists, resolve_gnss_command, run_fetch_products
 
 
@@ -21,6 +22,12 @@ DEFAULT_PRESETS = ["igs-final", "ionex", "dcb"]
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
+    parser.add_argument(
+        "--config-toml",
+        type=Path,
+        default=None,
+        help="Optional TOML config. Uses [ppp_products_signoff] or top-level keys.",
+    )
     parser.add_argument("--profile", choices=("static", "kinematic", "ppc"), default="static")
     parser.add_argument("--obs", type=Path, default=None)
     parser.add_argument("--base", type=Path, default=None)
@@ -70,7 +77,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-lib-p95-error-vs-malib-max-delta", type=float, default=None)
     parser.add_argument("--require-lib-max-error-vs-malib-max-delta", type=float, default=None)
     parser.set_defaults(low_dynamics=True)
-    return parser.parse_args()
+    return parse_args_with_toml(parser, "ppp_products_signoff")
 
 
 def default_paths(profile: str) -> tuple[Path, Path, Path | None]:
@@ -103,9 +110,92 @@ def default_comparison_artifacts(profile: str) -> tuple[Path, Path]:
     return ROOT_DIR / "output" / f"{stem}.csv", ROOT_DIR / "output" / f"{stem}.png"
 
 
+def gps_week_tow_to_gpst_tokens(week: int, tow_s: float) -> tuple[str, str]:
+    from datetime import datetime, timedelta
+
+    gps_epoch = datetime(1980, 1, 6)
+    stamp = gps_epoch + timedelta(weeks=week, seconds=tow_s)
+    return stamp.strftime("%Y/%m/%d"), stamp.strftime("%H:%M:%S")
+
+
 def run_checked(command: list[str]) -> None:
     print("+", " ".join(command))
     subprocess.run(command, cwd=ROOT_DIR, check=True)
+
+
+def read_lib_pos_records(path: Path) -> list[dict[str, float | int]]:
+    records: list[dict[str, float | int]] = []
+    with path.open("r", encoding="ascii") as handle:
+        for line in handle:
+            if not line.strip() or line.startswith("%"):
+                continue
+            parts = line.split()
+            if len(parts) < 10:
+                continue
+            records.append(
+                {
+                    "week": int(float(parts[0])),
+                    "tow": float(parts[1]),
+                    "status": int(parts[8]),
+                }
+            )
+    return records
+
+
+def resolve_ppc_nav_path(args: argparse.Namespace, run_dir: Path, *, require_exists: bool) -> Path:
+    nav_path = args.nav or (run_dir / "base.nav")
+    if require_exists:
+        ensure_input_exists(nav_path, "PPC navigation file", ROOT_DIR)
+    return nav_path
+
+
+def run_ppc_malib_if_needed(
+    args: argparse.Namespace,
+    rover_obs: Path,
+    nav_path: Path,
+    solution_pos: Path,
+) -> Path | None:
+    if args.malib_bin is None:
+        return args.malib_pos
+    if args.malib_config is None:
+        raise SystemExit("--malib-bin requires --malib-config")
+    ensure_input_exists(args.malib_bin, "MALIB binary", ROOT_DIR)
+    ensure_input_exists(args.malib_config, "MALIB config", ROOT_DIR)
+    if args.malib_pos is None:
+        raise SystemExit("--malib-bin requires --malib-pos")
+    if args.use_existing_malib and args.malib_pos.exists():
+        return args.malib_pos
+
+    lib_records = read_lib_pos_records(solution_pos)
+    if not lib_records:
+        raise SystemExit(f"No epochs found in libgnss++ PPP solution: {solution_pos}")
+    start_date, start_time = gps_week_tow_to_gpst_tokens(
+        int(lib_records[0]["week"]),
+        float(lib_records[0]["tow"]),
+    )
+    end_date, end_time = gps_week_tow_to_gpst_tokens(
+        int(lib_records[-1]["week"]),
+        float(lib_records[-1]["tow"]),
+    )
+    args.malib_pos.parent.mkdir(parents=True, exist_ok=True)
+    run_checked(
+        [
+            str(args.malib_bin),
+            "-k",
+            str(args.malib_config),
+            "-ts",
+            start_date,
+            start_time,
+            "-te",
+            end_date,
+            end_time,
+            "-o",
+            str(args.malib_pos),
+            str(rover_obs),
+            str(nav_path),
+        ]
+    )
+    return args.malib_pos
 
 
 def classify_comparison_status(*deltas: object) -> str | None:
@@ -392,6 +482,11 @@ def main() -> int:
     if args.profile == "ppc":
         run_dir = resolve_ppc_run_dir(args)
         rover_obs = args.obs or (run_dir / "rover.obs")
+        nav_path = resolve_ppc_nav_path(
+            args,
+            run_dir,
+            require_exists=(not args.use_existing_solution) or (args.malib_bin is not None),
+        )
         reference_csv = args.reference_csv or (run_dir / "reference.csv")
         ensure_input_exists(rover_obs, "PPC rover observation file", ROOT_DIR)
         ensure_input_exists(reference_csv, "PPC reference CSV", ROOT_DIR)
@@ -449,8 +544,8 @@ def main() -> int:
                 command.extend(["--ionex", str(fetched_products["ionex"])])
             if "dcb" in fetched_products:
                 command.extend(["--dcb", str(fetched_products["dcb"])])
-            if args.nav is not None:
-                command.extend(["--nav", str(args.nav)])
+            if not args.use_existing_solution or args.nav is not None:
+                command.extend(["--nav", str(nav_path)])
             if args.max_epochs > 0:
                 command.extend(["--max-epochs", str(args.max_epochs)])
             if args.solver_wall_time_s is not None:
@@ -482,10 +577,11 @@ def main() -> int:
         payload["p95_position_error_m"] = payload.get("p95_h_m")
         payload["max_position_error_m"] = payload.get("max_h_m")
 
-        if args.malib_pos is not None:
-            ensure_input_exists(args.malib_pos, "MALIB PPP solution file", ROOT_DIR)
-            augment_ppc_malib_comparison(payload, reference_csv, args.malib_pos, args.match_tolerance_s)
-            pairs = build_ppc_comparison_pairs(out_path, reference_csv, args.malib_pos, args.match_tolerance_s)
+        malib_pos = run_ppc_malib_if_needed(args, rover_obs, nav_path, out_path)
+        if malib_pos is not None:
+            ensure_input_exists(malib_pos, "MALIB PPP solution file", ROOT_DIR)
+            augment_ppc_malib_comparison(payload, reference_csv, malib_pos, args.match_tolerance_s)
+            pairs = build_ppc_comparison_pairs(out_path, reference_csv, malib_pos, args.match_tolerance_s)
             if pairs:
                 write_ppc_comparison_csv(comparison_csv, pairs)
                 render_ppc_comparison_plot(
@@ -496,8 +592,6 @@ def main() -> int:
                 payload["common_epoch_pairs"] = len(pairs)
                 payload["comparison_csv"] = str(comparison_csv)
                 payload["comparison_png"] = str(comparison_png)
-        elif args.malib_bin is not None or args.use_existing_malib:
-            raise SystemExit("--profile ppc currently supports --malib-pos comparison only")
 
         enforce_ppc_metric_requirements(payload, args)
         enforce_ppp_requirements(payload, args)

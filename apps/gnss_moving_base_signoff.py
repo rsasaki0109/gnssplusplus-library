@@ -12,6 +12,7 @@ from pathlib import Path
 import subprocess
 import time
 
+from gnss_toml_config import parse_args_with_toml
 from gnss_runtime import ensure_input_exists, parse_summary_metrics, resolve_gnss_command
 
 
@@ -23,6 +24,12 @@ WGS84_E2 = WGS84_F * (2.0 - WGS84_F)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
+    parser.add_argument(
+        "--config-toml",
+        type=Path,
+        default=None,
+        help="Optional TOML config. Uses [moving_base_signoff] or top-level keys.",
+    )
     parser.add_argument("--solver", choices=("replay", "live"), default="replay")
     parser.add_argument("--rover-rinex", type=Path, default=None)
     parser.add_argument("--rover-ubx", type=Path, default=None)
@@ -69,7 +76,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-termination", default=None)
     parser.add_argument("--require-rover-decoder-errors-max", type=int, default=None)
     parser.add_argument("--require-base-decoder-errors-max", type=int, default=None)
-    return parser.parse_args()
+    return parse_args_with_toml(parser, "moving_base_signoff")
 
 
 def normalize_field(name: str) -> str:

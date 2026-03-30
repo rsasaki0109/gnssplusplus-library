@@ -89,6 +89,12 @@ python3 apps/gnss.py web \
 
 Open `http://127.0.0.1:8085` to inspect benchmark tables, live/moving-base/PPP-product sign-offs, receiver status, moving-base/visibility plots, moving-base history, and linked artifacts/provenance. PPP-product rows include direct links to fetched products, MALIB `.pos`, comparison CSV/PNG, and dataset reference files.
 
+You can also store the same arguments in `configs/web.example.toml` and run:
+
+```bash
+python3 apps/gnss.py web --config-toml configs/web.example.toml
+```
+
 Docker form:
 
 ```bash
@@ -116,6 +122,9 @@ python3 apps/gnss.py fetch-products \
 python3 apps/gnss.py scorpion-moving-base-signoff \
   --input /datasets/moving_base/2023-06-14T174658Z.zip \
   --summary-json output/scorpion_moving_base_summary.json
+
+python3 apps/gnss.py moving-base-signoff \
+  --config-toml configs/moving_base_signoff.example.toml
 ```
 
 ## Product-driven PPP
@@ -148,6 +157,9 @@ python3 apps/gnss.py ppp-kinematic-signoff \
   --require-max-error-max 7 \
   --require-mean-sats-min 18 \
   --require-ppp-solution-rate-min 100
+
+python3 apps/gnss.py ppp-products-signoff \
+  --config-toml configs/ppp_products_ppc.example.toml
 ```
 
 ## Local docs
