@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 from urllib import parse, request
 
+from gnss_toml_config import parse_args_with_toml
 from gnss_runtime import resolve_gnss_command
 
 
@@ -19,6 +20,12 @@ DEFAULT_SCORPION_ZIP_URL = "https://zenodo.org/api/records/8083431/files/2023-06
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
+    parser.add_argument(
+        "--config-toml",
+        type=Path,
+        default=None,
+        help="Optional TOML config. Uses [scorpion_moving_base_signoff] or top-level keys.",
+    )
     parser.add_argument("--input", type=Path, default=None, help="Local SCORPION bag directory or zip path.")
     parser.add_argument(
         "--input-url",
@@ -69,7 +76,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-termination", default=None)
     parser.add_argument("--require-rover-decoder-errors-max", type=int, default=None)
     parser.add_argument("--require-base-decoder-errors-max", type=int, default=None)
-    return parser.parse_args()
+    return parse_args_with_toml(parser, "scorpion_moving_base_signoff")
 
 
 def resolve_output_paths(args: argparse.Namespace) -> dict[str, Path]:
