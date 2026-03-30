@@ -79,6 +79,7 @@ def resolve_output_paths(args: argparse.Namespace) -> dict[str, Path]:
         "rover_ubx": work_dir / "rover.ubx",
         "base_ubx": work_dir / "base.ubx",
         "reference_csv": work_dir / "reference.csv",
+        "matched_csv": work_dir / "scorpion_moving_base_matches.csv",
         "prepare_summary_json": work_dir / "prepare_summary.json",
         "products_summary_json": work_dir / "products_summary.json",
         "plot_png": work_dir / "scorpion_moving_base.png",
@@ -167,6 +168,8 @@ def build_signoff_command(
         str(paths["base_ubx"]),
         "--reference-csv",
         str(paths["reference_csv"]),
+        "--matched-csv",
+        str(paths["matched_csv"]),
         "--out",
         str(paths["out"]),
         "--summary-json",
@@ -269,6 +272,7 @@ def main() -> int:
     summary_payload["products_summary_json"] = (
         str(paths["products_summary_json"]) if paths["products_summary_json"].exists() else None
     )
+    summary_payload["matched_csv"] = str(paths["matched_csv"]) if paths["matched_csv"].exists() else None
     summary_payload["plot_png"] = str(paths["plot_png"]) if paths["plot_png"].exists() else None
     summary_payload["prepare_summary"] = prepare_payload
     summary_payload["products_summary"] = products_payload

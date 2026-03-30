@@ -106,8 +106,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--sp3", type=Path, default=None, help="Optional SP3 precise orbit file for PPP.")
     parser.add_argument("--clk", type=Path, default=None, help="Optional CLK precise clock file for PPP.")
+    parser.add_argument("--ionex", type=Path, default=None, help="Optional IONEX TEC map file for PPP.")
+    parser.add_argument("--dcb", type=Path, default=None, help="Optional DCB / Bias-SINEX file for PPP.")
     parser.add_argument("--antex", type=Path, default=None, help="Optional ANTEX file for PPP.")
     parser.add_argument("--blq", type=Path, default=None, help="Optional BLQ loading coefficients for PPP.")
+    parser.add_argument(
+        "--ppp-summary-json",
+        type=Path,
+        default=None,
+        help="Optional gnss ppp summary JSON output path when --solver ppp is executed.",
+    )
     parser.add_argument(
         "--preset",
         choices=("survey", "low-cost", "moving-base"),
@@ -424,6 +432,7 @@ def summarize_solution_epochs(
         raise SystemExit(f"No PPC epochs matched reference for {label}")
 
     summary = comparison.summarize(matched, fixed_status, label)
+    mean_h_m = sum(epoch.horiz_error_m for epoch in matched) / len(matched)
     matched_fixed_epochs = sum(1 for epoch in matched if epoch.status == fixed_status)
     mean_satellites = sum(epoch.num_satellites for epoch in solution_epochs) / len(solution_epochs)
     valid_span_s = solution_span_seconds(solution_epochs)
@@ -433,6 +442,7 @@ def summarize_solution_epochs(
         "matched_epochs": len(matched),
         "fixed_epochs": matched_fixed_epochs,
         "fix_rate_pct": rounded(float(summary["fix_rate_pct"])),
+        "mean_h_m": rounded(mean_h_m),
         "median_h_m": rounded(float(summary["median_h_m"])),
         "p95_h_m": rounded(float(summary["p95_h_m"])),
         "max_h_m": rounded(float(summary["max_h_m"])),
@@ -542,12 +552,18 @@ def run_solver(
             command.extend(["--sp3", str(args.sp3)])
         if args.clk is not None:
             command.extend(["--clk", str(args.clk)])
+        if args.ionex is not None:
+            command.extend(["--ionex", str(args.ionex)])
+        if args.dcb is not None:
+            command.extend(["--dcb", str(args.dcb)])
         if args.antex is not None:
             command.extend(["--antex", str(args.antex)])
         if args.blq is not None:
             command.extend(["--blq", str(args.blq)])
         if args.enable_ar:
             command.append("--enable-ar")
+        if args.ppp_summary_json is not None:
+            command.extend(["--summary-json", str(args.ppp_summary_json)])
     if args.max_epochs > 0:
         command.extend(["--max-epochs", str(args.max_epochs)])
     start = time.perf_counter()
@@ -593,6 +609,7 @@ def build_summary_payload(
         "matched_epochs": lib_metrics["matched_epochs"],
         "fixed_epochs": lib_metrics["fixed_epochs"],
         "fix_rate_pct": lib_metrics["fix_rate_pct"],
+        "mean_h_m": lib_metrics["mean_h_m"],
         "median_h_m": lib_metrics["median_h_m"],
         "p95_h_m": lib_metrics["p95_h_m"],
         "max_h_m": lib_metrics["max_h_m"],
@@ -606,6 +623,26 @@ def build_summary_payload(
         "realtime_factor": lib_metrics["realtime_factor"],
         "effective_epoch_rate_hz": lib_metrics["effective_epoch_rate_hz"],
     }
+
+    if args.solver == "ppp" and args.ppp_summary_json is not None and args.ppp_summary_json.exists():
+        ppp_run_summary = json.loads(args.ppp_summary_json.read_text(encoding="utf-8"))
+        if isinstance(ppp_run_summary, dict):
+            payload.update(
+                {
+                    "ppp_run_summary": ppp_run_summary,
+                    "ppp_converged": bool(ppp_run_summary.get("converged", False)),
+                    "ppp_convergence_time_s": rounded(
+                        float(ppp_run_summary.get("convergence_time_s", 0.0))
+                    ),
+                    "ppp_solution_rate_pct": rounded(
+                        float(ppp_run_summary.get("solution_rate_pct", 0.0))
+                    ),
+                    "ionex_corrections": int(ppp_run_summary.get("ionex_corrections", 0)),
+                    "ionex_meters": rounded(float(ppp_run_summary.get("ionex_meters", 0.0))),
+                    "dcb_corrections": int(ppp_run_summary.get("dcb_corrections", 0)),
+                    "dcb_meters": rounded(float(ppp_run_summary.get("dcb_meters", 0.0))),
+                }
+            )
 
     rtklib_pos = getattr(args, "rtklib_pos", None)
     if rtklib_pos is not None and Path(rtklib_pos).exists():
@@ -777,6 +814,8 @@ def main() -> int:
 
     if args.use_existing_solution:
         ensure_input_exists(out, "existing solution file", ROOT_DIR)
+        if args.solver == "ppp" and args.ppp_summary_json is not None:
+            ensure_input_exists(args.ppp_summary_json, "existing PPP summary JSON", ROOT_DIR)
     else:
         ensure_input_exists(rover, "PPC rover observation file", ROOT_DIR)
         ensure_input_exists(nav, "PPC navigation file", ROOT_DIR)
@@ -786,10 +825,16 @@ def main() -> int:
             ensure_input_exists(args.sp3, "PPP SP3 file", ROOT_DIR)
         if args.clk is not None:
             ensure_input_exists(args.clk, "PPP CLK file", ROOT_DIR)
+        if args.ionex is not None:
+            ensure_input_exists(args.ionex, "PPP IONEX file", ROOT_DIR)
+        if args.dcb is not None:
+            ensure_input_exists(args.dcb, "PPP DCB file", ROOT_DIR)
         if args.antex is not None:
             ensure_input_exists(args.antex, "PPP ANTEX file", ROOT_DIR)
         if args.blq is not None:
             ensure_input_exists(args.blq, "PPP BLQ file", ROOT_DIR)
+        if args.ppp_summary_json is not None:
+            args.ppp_summary_json.parent.mkdir(parents=True, exist_ok=True)
 
         out.parent.mkdir(parents=True, exist_ok=True)
         measured_wall_time_s = run_solver(args, rover, base, nav, out)
