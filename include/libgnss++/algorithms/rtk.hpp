@@ -6,6 +6,7 @@
 #include "../core/solution.hpp"
 #include "rtk_measurement.hpp"
 #include "rtk_selection.hpp"
+#include "rtk_slip_detection.hpp"
 #include "rtk_validation.hpp"
 #include "spp.hpp"
 #include <Eigen/Dense>
@@ -48,6 +49,8 @@ public:
         double ratio_threshold = 3.0;
         double ambiguity_ratio_threshold = 3.0;
         double validation_threshold = 0.15;
+        bool enable_ar_filter = false;
+        double ar_filter_margin = 0.25;
         int min_satellites_for_ar = 5;
         int min_lock_count = 5;
         int min_hold_count = 5;   // RTKLIB minfix: consecutive fixes before holdamb
@@ -63,7 +66,8 @@ public:
         // Position mode
         enum class PositionMode {
             STATIC = 0,    // position constant (add process noise)
-            KINEMATIC = 1  // position reset each epoch (RTKLIB kinematic)
+            KINEMATIC = 1, // position reset each epoch (RTKLIB kinematic)
+            MOVING_BASE = 2 // kinematic relative baseline against a time-varying base position
         };
         PositionMode position_mode = PositionMode::KINEMATIC;
 
@@ -80,6 +84,8 @@ public:
         // Quality control
         bool enable_cycle_slip_detection = true;
         double cycle_slip_threshold = 0.05;
+        bool enable_doppler_slip_detection = true;
+        double doppler_slip_threshold = 0.20;
         bool enable_outlier_detection = true;
         double outlier_threshold = 3.0;
 
@@ -259,16 +265,22 @@ private:
         // L1
         double rover_l1_phase = 0.0;  // cycles
         double rover_l1_code = 0.0;   // meters
+        double rover_l1_doppler = 0.0; // Hz
         double base_l1_phase = 0.0;
         double base_l1_code = 0.0;
+        double base_l1_doppler = 0.0; // Hz
         bool has_l1 = false;
+        bool has_l1_doppler = false;
         int l1_lli = 0;
         // L2
         double rover_l2_phase = 0.0;
         double rover_l2_code = 0.0;
+        double rover_l2_doppler = 0.0;
         double base_l2_phase = 0.0;
         double base_l2_code = 0.0;
+        double base_l2_doppler = 0.0;
         bool has_l2 = false;
+        bool has_l2_doppler = false;
         int l2_lli = 0;
         // Geometry
         Vector3d sat_pos;          // satellite position for rover (RTKLIB satposs from rover PR)
@@ -281,6 +293,8 @@ private:
     // Current epoch satellite data (cached for use across functions)
     std::map<SatelliteId, SatelliteData> current_sat_data_;
     std::map<SatelliteId, double> gf_l1l2_history_;
+    std::map<SatelliteId, double> doppler_phase_history_l1_m_;
+    std::map<SatelliteId, double> doppler_phase_history_l2_m_;
 
     /**
      * Collect all satellite data for an epoch (L1+L2 for rover and base)
@@ -312,7 +326,7 @@ private:
     /**
      * Update SD biases (RTKLIB udbias): initialize new, reset slipped
      */
-    void updateBias(const std::map<SatelliteId, SatelliteData>& sat_data);
+    void updateBias(const std::map<SatelliteId, SatelliteData>& sat_data, double dt_s);
 
     /**
      * Predict state (kinematic: reset position variance)
