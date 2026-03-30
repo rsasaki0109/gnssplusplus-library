@@ -25,8 +25,9 @@ Examples:
 - `gnss rcv`
 - `gnss web`
 
-For longer workflows, `gnss web`, `gnss moving-base-signoff`,
-`gnss scorpion-moving-base-signoff`, and `gnss ppp-products-signoff`
+For longer workflows, `gnss web`, `gnss live-signoff`,
+`gnss moving-base-signoff`, `gnss scorpion-moving-base-signoff`,
+`gnss ppc-rtk-signoff`, and `gnss ppp-products-signoff`
 also accept `--config-toml <file>`. Example templates live in `configs/`.
 
 ## Docker

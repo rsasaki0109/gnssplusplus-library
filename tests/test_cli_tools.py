@@ -5903,6 +5903,291 @@ class CLIToolsTest(unittest.TestCase):
             self.assertTrue(Path(payload["comparison_csv"]).exists())
             self.assertTrue(Path(payload["comparison_png"]).exists())
 
+    def test_ppp_products_signoff_cli_runs_ppc_profile_with_malib_bin(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_products_signoff_ppc_malib_bin_") as temp_dir:
+            temp_root = Path(temp_dir)
+            run_dir = temp_root / "tokyo" / "run1"
+            run_dir.mkdir(parents=True)
+            products_dir = temp_root / "products"
+            products_dir.mkdir()
+            output_path = temp_root / "ppp_ppc_products.pos"
+            summary_path = temp_root / "ppp_ppc_products_summary.json"
+            ppp_run_summary_path = temp_root / "ppp_run_summary.json"
+            malib_pos = temp_root / "malib_ppc.pos"
+            malib_bin = temp_root / "fake_malib.py"
+            malib_config = temp_root / "malib.conf"
+            reference_csv = run_dir / "reference.csv"
+
+            (run_dir / "rover.obs").write_bytes((ROOT_DIR / "data/rover_static.obs").read_bytes())
+            (run_dir / "base.nav").write_bytes((ROOT_DIR / "data/navigation_static.nav").read_bytes())
+            malib_config.write_text("# synthetic malib config\n", encoding="utf-8")
+
+            nav_products = self.run_gnss(
+                "nav-products",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--sp3-out",
+                str(temp_root / "generated.sp3"),
+                "--clk-out",
+                str(temp_root / "generated.clk"),
+                "--max-epochs",
+                "20",
+            )
+            self.assertEqual(nav_products.returncode, 0, msg=nav_products.stderr)
+
+            with gzip.open(products_dir / "2024002.sp3.gz", "wb") as stream:
+                stream.write((temp_root / "generated.sp3").read_bytes())
+            with gzip.open(products_dir / "2024002.clk.gz", "wb") as stream:
+                stream.write((temp_root / "generated.clk").read_bytes())
+            with gzip.open(products_dir / "2024002.ionex.gz", "wb") as stream:
+                stream.write(build_synthetic_ionex_text().encode("ascii"))
+            with gzip.open(products_dir / "2024002.bsx.gz", "wb") as stream:
+                stream.write(build_synthetic_dcb_text().encode("ascii"))
+
+            reference_rows = [
+                (2300, 1000.0, 35.1000000, 139.1000000, 42.0),
+                (2300, 1000.2, 35.1000100, 139.1000200, 42.2),
+                (2300, 1000.4, 35.1000200, 139.1000400, 42.4),
+            ]
+            reference_lines = ["gps_week,gps_tow_s,lat_deg,lon_deg,height_m"]
+            for week, tow, lat, lon, height in reference_rows:
+                reference_lines.append(f"{week},{tow:.3f},{lat:.7f},{lon:.7f},{height:.3f}")
+            reference_csv.write_text("\n".join(reference_lines) + "\n", encoding="ascii")
+
+            with output_path.open("w", encoding="ascii") as handle:
+                handle.write("% synthetic ppc ppp solution\n")
+                for week, tow, lat, lon, height, status, satellites in (
+                    (2300, 1000.0, 35.1000002, 139.1000001, 42.1, 6, 12),
+                    (2300, 1000.2, 35.1000101, 139.1000201, 42.3, 6, 13),
+                    (2300, 1000.4, 35.1000202, 139.1000402, 42.5, 5, 11),
+                ):
+                    ecef = driving_comparison.llh_to_ecef(lat, lon, height)
+                    handle.write(
+                        f"{week} {tow:.3f} {ecef[0]:.6f} {ecef[1]:.6f} {ecef[2]:.6f} "
+                        f"{lat:.9f} {lon:.9f} {height:.4f} {status} {satellites} 1.0\n"
+                    )
+
+            ppp_run_summary_path.write_text(
+                json.dumps(
+                    {
+                        "converged": True,
+                        "convergence_time_s": 180.0,
+                        "solution_rate_pct": 100.0,
+                        "ionex_corrections": 3,
+                        "ionex_meters": 0.42,
+                        "dcb_corrections": 3,
+                        "dcb_meters": 0.03,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            malib_bin.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "from datetime import datetime, timedelta",
+                        "import pathlib, sys",
+                        "out = pathlib.Path(sys.argv[sys.argv.index('-o') + 1])",
+                        "start = datetime.strptime(",
+                        "    sys.argv[sys.argv.index('-ts') + 1] + ' ' + sys.argv[sys.argv.index('-ts') + 2],",
+                        "    '%Y/%m/%d %H:%M:%S',",
+                        ")",
+                        "rows = []",
+                        "for offset, sats in ((0.0, 12), (0.2, 13), (0.4, 11)):",
+                        "    stamp = start + timedelta(seconds=offset)",
+                        "    rows.append(f\"{stamp.strftime('%Y/%m/%d %H:%M:%S.%f')[:-3]} 1.0 2.0 3.0 5 {sats}\")",
+                        "out.write_text(",
+                        "    '% synthetic MALIB ppc\\n' + '\\n'.join(rows) + '\\n',",
+                        "    encoding='ascii',",
+                        ")",
+                        "print('synthetic malib ok')",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            malib_bin.chmod(0o755)
+
+            result = self.run_gnss(
+                "ppp-products-signoff",
+                "--profile",
+                "ppc",
+                "--run-dir",
+                str(run_dir),
+                "--reference-csv",
+                str(reference_csv),
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--use-existing-solution",
+                "--ppp-run-summary-json",
+                str(ppp_run_summary_path),
+                "--product-date",
+                "2024-01-02",
+                "--product",
+                f"sp3={products_dir / '{yyyy}{doy}.sp3.gz'}",
+                "--product",
+                f"clk={products_dir / '{yyyy}{doy}.clk.gz'}",
+                "--product",
+                f"ionex={products_dir / '{yyyy}{doy}.ionex.gz'}",
+                "--product",
+                f"dcb={products_dir / '{yyyy}{doy}.bsx.gz'}",
+                "--malib-bin",
+                str(malib_bin),
+                "--malib-config",
+                str(malib_config),
+                "--malib-pos",
+                str(malib_pos),
+                "--require-valid-epochs-min",
+                "3",
+                "--require-matched-epochs-min",
+                "3",
+                "--require-converged",
+                "--require-common-epoch-pairs-min",
+                "3",
+                "--require-lib-mean-error-vs-malib-max-delta",
+                "100.0",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["comparison_target"], "MALIB")
+            self.assertEqual(payload["common_epoch_pairs"], 3)
+            self.assertTrue(Path(payload["malib_solution_pos"]).exists())
+            self.assertTrue(Path(payload["comparison_csv"]).exists())
+            self.assertTrue(Path(payload["comparison_png"]).exists())
+
+    def test_ppp_products_signoff_cli_runs_kinematic_profile_with_malib_bin(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_products_signoff_kinematic_malib_bin_") as temp_dir:
+            temp_root = Path(temp_dir)
+            generated_sp3 = temp_root / "generated.sp3"
+            generated_clk = temp_root / "generated.clk"
+            products_dir = temp_root / "products"
+            products_dir.mkdir()
+            output_path = temp_root / "ppp_kinematic_products.pos"
+            reference_path = temp_root / "ppp_kinematic_products_reference.pos"
+            summary_path = temp_root / "ppp_kinematic_products_summary.json"
+            malib_pos = temp_root / "malib_kinematic.pos"
+            malib_bin = temp_root / "fake_malib_kinematic.py"
+            malib_config = temp_root / "malib_kinematic.conf"
+
+            malib_config.write_text("# synthetic malib kinematic config\n", encoding="utf-8")
+
+            nav_products = self.run_gnss(
+                "nav-products",
+                "--obs",
+                str(ROOT_DIR / "data/rover_kinematic.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_kinematic.nav"),
+                "--sp3-out",
+                str(generated_sp3),
+                "--clk-out",
+                str(generated_clk),
+                "--max-epochs",
+                "20",
+            )
+            self.assertEqual(nav_products.returncode, 0, msg=nav_products.stderr)
+
+            with gzip.open(products_dir / "2024002.sp3.gz", "wb") as stream:
+                stream.write(generated_sp3.read_bytes())
+            with gzip.open(products_dir / "2024002.clk.gz", "wb") as stream:
+                stream.write(generated_clk.read_bytes())
+            with gzip.open(products_dir / "2024002.ionex.gz", "wb") as stream:
+                stream.write(build_synthetic_ionex_text().encode("ascii"))
+            with gzip.open(products_dir / "2024002.bsx.gz", "wb") as stream:
+                stream.write(build_synthetic_dcb_text().encode("ascii"))
+
+            malib_bin.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "from datetime import datetime, timedelta",
+                        "import pathlib, sys",
+                        "out = pathlib.Path(sys.argv[sys.argv.index('-o') + 1])",
+                        "start = datetime.strptime(",
+                        "    sys.argv[sys.argv.index('-ts') + 1] + ' ' + sys.argv[sys.argv.index('-ts') + 2],",
+                        "    '%Y/%m/%d %H:%M:%S.%f',",
+                        ")",
+                        "end = datetime.strptime(",
+                        "    sys.argv[sys.argv.index('-te') + 1] + ' ' + sys.argv[sys.argv.index('-te') + 2],",
+                        "    '%Y/%m/%d %H:%M:%S.%f',",
+                        ")",
+                        "rows = ['% synthetic MALIB kinematic']",
+                        "stamp = start",
+                        "index = 0",
+                        "while stamp <= end:",
+                        "    rows.append(",
+                        "        f\"{stamp.strftime('%Y/%m/%d %H:%M:%S.%f')[:-3]} 2077971.{1200 + index:04d} -5684020.{7100 + index:04d} 2006789.{6250 + index:04d} 5 18\"",
+                        "    )",
+                        "    stamp += timedelta(seconds=15)",
+                        "    index += 1",
+                        "out.write_text('\\n'.join(rows) + '\\n', encoding='ascii')",
+                        "print('synthetic kinematic malib ok')",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            malib_bin.chmod(0o755)
+
+            result = self.run_gnss(
+                "ppp-products-signoff",
+                "--profile",
+                "kinematic",
+                "--obs",
+                str(ROOT_DIR / "data/rover_kinematic.obs"),
+                "--base",
+                str(ROOT_DIR / "data/base_kinematic.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_kinematic.nav"),
+                "--out",
+                str(output_path),
+                "--reference-pos",
+                str(reference_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "20",
+                "--product-date",
+                "2024-01-02",
+                "--product",
+                f"sp3={products_dir / '{yyyy}{doy}.sp3.gz'}",
+                "--product",
+                f"clk={products_dir / '{yyyy}{doy}.clk.gz'}",
+                "--product",
+                f"ionex={products_dir / '{yyyy}{doy}.ionex.gz'}",
+                "--product",
+                f"dcb={products_dir / '{yyyy}{doy}.bsx.gz'}",
+                "--malib-bin",
+                str(malib_bin),
+                "--malib-config",
+                str(malib_config),
+                "--malib-pos",
+                str(malib_pos),
+                "--require-common-epoch-pairs-min",
+                "20",
+                "--require-ppp-solution-rate-min",
+                "100",
+                "--require-lib-mean-error-vs-malib-max-delta",
+                "1000000.0",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["products_signoff_profile"], "kinematic")
+            self.assertEqual(payload["comparison_target"], "MALIB")
+            self.assertEqual(payload["reference_common_epoch_pairs"], 20)
+            self.assertEqual(payload["common_epoch_pairs"], 20)
+            self.assertTrue(Path(payload["reference_pos"]).exists())
+            self.assertTrue(Path(payload["malib_solution_pos"]).exists())
+            self.assertTrue(Path(payload["comparison_csv"]).exists())
+            self.assertTrue(Path(payload["comparison_png"]).exists())
+            self.assertIn("comparison_status", payload)
+
     def test_ppc_demo_cli_summarizes_existing_solution_against_reference_csv(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_demo_cli_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -6123,6 +6408,96 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("signoff_thresholds", payload)
             self.assertEqual(payload["signoff_thresholds"]["require_fix_rate_min"], 60.0)
             self.assertIn("delta_vs_rtklib", payload)
+
+    def test_ppc_rtk_signoff_cli_reads_config_toml(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_rtk_signoff_toml_") as temp_dir:
+            temp_root = Path(temp_dir)
+            run_dir = temp_root / "tokyo" / "run1"
+            run_dir.mkdir(parents=True)
+            solution_path = temp_root / "ppc_signoff.pos"
+            rtklib_path = temp_root / "ppc_signoff_rtklib.pos"
+            summary_path = temp_root / "ppc_signoff_summary.json"
+            config_toml = temp_root / "ppc_signoff.toml"
+            reference_csv = run_dir / "reference.csv"
+
+            reference_rows = [
+                (2300, 1000.0, 35.1000000, 139.1000000, 42.0),
+                (2300, 1000.2, 35.1000100, 139.1000200, 42.2),
+                (2300, 1000.4, 35.1000200, 139.1000400, 42.4),
+            ]
+            reference_lines = [
+                "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,roll_deg,pitch_deg,yaw_deg"
+            ]
+            for week, tow, lat, lon, height in reference_rows:
+                reference_lines.append(
+                    f"{week},{tow:.3f},{lat:.7f},{lon:.7f},{height:.3f},0.0,0.0,0.0"
+                )
+            reference_csv.write_text("\n".join(reference_lines) + "\n", encoding="ascii")
+
+            with solution_path.open("w", encoding="ascii") as handle:
+                handle.write("% synthetic ppc signoff solution\n")
+                for week, tow, lat, lon, height, status, satellites in (
+                    (2300, 1000.0, 35.1000002, 139.1000001, 42.1, 4, 12),
+                    (2300, 1000.2, 35.1000099, 139.1000202, 42.3, 4, 13),
+                    (2300, 1000.4, 35.1000197, 139.1000398, 42.5, 3, 11),
+                ):
+                    ecef = driving_comparison.llh_to_ecef(lat, lon, height)
+                    handle.write(
+                        f"{week} {tow:.3f} {ecef[0]:.6f} {ecef[1]:.6f} {ecef[2]:.6f} "
+                        f"{lat:.9f} {lon:.9f} {height:.4f} {status} {satellites} 1.0\n"
+                    )
+            write_rtklib_pos(
+                rtklib_path,
+                [
+                    (2300, 1000.0, 35.1000004, 139.1000003, 42.2, 1, 12),
+                    (2300, 1000.2, 35.1000103, 139.1000205, 42.4, 1, 13),
+                    (2300, 1000.4, 35.1000205, 139.1000404, 42.6, 2, 11),
+                ],
+            )
+            config_toml.write_text(
+                "\n".join(
+                    [
+                        "[ppc_rtk_signoff]",
+                        f'run_dir = "{run_dir}"',
+                        'city = "tokyo"',
+                        f'out = "{solution_path}"',
+                        f'summary_json = "{summary_path}"',
+                        f'rtklib_pos = "{rtklib_path}"',
+                        "use_existing_solution = true",
+                        "use_existing_rtklib_solution = true",
+                        "solver_wall_time_s = 0.5",
+                        "rtklib_solver_wall_time_s = 0.1",
+                        "require_valid_epochs_min = 3",
+                        "require_matched_epochs_min = 3",
+                        "require_fix_rate_min = 60.0",
+                        "require_median_h_max = 0.2",
+                        "require_p95_h_max = 0.2",
+                        "require_max_h_max = 0.2",
+                        "require_p95_up_max = 0.2",
+                        "require_mean_sats_min = 11.0",
+                        "require_solver_wall_time_max = 1.0",
+                        "require_realtime_factor_min = 0.5",
+                        "require_effective_epoch_rate_min = 5.0",
+                        "require_lib_fix_rate_vs_rtklib_min_delta = 0.0",
+                        "require_lib_median_h_vs_rtklib_max_delta = 0.0",
+                        "require_lib_p95_h_vs_rtklib_max_delta = 0.0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_gnss(
+                "ppc-rtk-signoff",
+                "--config-toml",
+                str(config_toml),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["signoff_profile"], "ppc-rtk-tokyo")
+            self.assertTrue(payload["rtklib_comparison_enabled"])
+            self.assertEqual(payload["signoff_thresholds"]["require_fix_rate_min"], 60.0)
 
     def test_ppc_demo_cli_tokyo_rtk_realdataset_signoff_if_present(self) -> None:
         dataset_root = ppc_dataset_root()
@@ -8664,6 +9039,54 @@ class CLIToolsTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertTrue(summary_path.exists())
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["metrics"]["termination"], "completed")
+
+    def test_live_signoff_reads_config_toml(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_live_signoff_toml_") as temp_dir:
+            temp_root = Path(temp_dir)
+            log_path = temp_root / "live.log"
+            summary_path = temp_root / "live_summary.json"
+            config_toml = temp_root / "live_signoff.toml"
+            log_path.write_text(
+                "\n".join(
+                    [
+                        "some debug line",
+                        "summary: termination=completed rover_decoder_errors=0 base_decoder_errors=0 "
+                        "aligned_epochs=3 written_solutions=3 fixed_solutions=1 "
+                        "solver_wall_time_s=0.250000 solution_span_s=1.000000 "
+                        "realtime_factor=4.000000 effective_epoch_rate_hz=12.000000",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            config_toml.write_text(
+                "\n".join(
+                    [
+                        "[live_signoff]",
+                        f'use_existing_log = "{log_path}"',
+                        f'summary_json = "{summary_path}"',
+                        'require_termination = "completed"',
+                        "require_written_solutions_min = 3",
+                        "require_fixed_solutions_min = 1",
+                        "require_realtime_factor_min = 1.0",
+                        "require_effective_epoch_rate_min = 10.0",
+                        "require_rover_decoder_errors_max = 0",
+                        "require_base_decoder_errors_max = 0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_gnss(
+                "live-signoff",
+                "--config-toml",
+                str(config_toml),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["metrics"]["termination"], "completed")
             self.assertEqual(payload["metrics"]["written_solutions"], 3)
