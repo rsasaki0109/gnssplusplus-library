@@ -103,6 +103,11 @@ def parse_args() -> argparse.Namespace:
         help="Glob under --root for gnss visibility summary JSON files.",
     )
     parser.add_argument(
+        "--moving-base-summary-glob",
+        default="output/*moving_base_summary.json",
+        help="Glob under --root for gnss moving-base signoff summary JSON files.",
+    )
+    parser.add_argument(
         "--docs-url",
         default=os.environ.get("GNSSPP_DOCS_URL", DOCS_SITE_URL),
         help="Optional docs site URL shown in the web UI header.",
@@ -178,6 +183,18 @@ def classify_accuracy_status(p95_h_m: Any) -> str:
     if p95_h_m <= 2.0:
         return "good"
     if p95_h_m <= 10.0:
+        return "rough"
+    return "poor"
+
+
+def classify_baseline_status(p95_baseline_error_m: Any) -> str:
+    if not isinstance(p95_baseline_error_m, (int, float)):
+        return "n/a"
+    if p95_baseline_error_m <= 0.2:
+        return "excellent"
+    if p95_baseline_error_m <= 0.5:
+        return "good"
+    if p95_baseline_error_m <= 2.0:
         return "rough"
     return "poor"
 
@@ -334,6 +351,35 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
 
+    moving_base_summaries: list[dict[str, Any]] = []
+    for path in sorted(root_dir.glob(args.moving_base_summary_glob)):
+        payload = load_json(path)
+        if payload is None:
+            continue
+        moving_base_summaries.append(
+            {
+                "_path": relative_display(path, root_dir),
+                "summary_path": relative_display(path, root_dir),
+                "execution_mode": payload.get("execution_mode"),
+                "solver": payload.get("solver"),
+                "matched_epochs": payload.get("matched_epochs"),
+                "valid_epochs": payload.get("valid_epochs"),
+                "fix_rate_pct": payload.get("fix_rate_pct"),
+                "median_baseline_error_m": payload.get("median_baseline_error_m"),
+                "p95_baseline_error_m": payload.get("p95_baseline_error_m"),
+                "p95_heading_error_deg": payload.get("p95_heading_error_deg"),
+                "termination": payload.get("termination"),
+                "realtime_factor": payload.get("realtime_factor"),
+                "effective_epoch_rate_hz": payload.get("effective_epoch_rate_hz"),
+                "solution_pos": payload.get("solution_pos"),
+                "prepare_summary_json": payload.get("prepare_summary_json"),
+                "products_summary_json": payload.get("products_summary_json"),
+                "signoff_profile": payload.get("signoff_profile"),
+                "runtime_status": classify_realtime_status(payload.get("realtime_factor")),
+                "quality_status": classify_baseline_status(payload.get("p95_baseline_error_m")),
+            }
+        )
+
     return {
         "title": "libgnss++ web",
         "root": str(root_dir),
@@ -348,6 +394,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         "ppc_summaries": ppc_summaries,
         "live_summaries": live_summaries,
         "visibility_summaries": visibility_summaries,
+        "moving_base_summaries": moving_base_summaries,
         "receiver_status": rcv_status,
     }
 
@@ -595,6 +642,29 @@ def render_html() -> str:
 
     <section class="card" style="margin-top: 18px;">
       <div class="section-title">
+        <h2>Moving-base sign-offs</h2>
+        <span class="tiny">auto-discovered from output/*moving_base_summary.json</span>
+      </div>
+      <table id="moving-base-table">
+        <thead>
+          <tr>
+            <th>Path</th>
+            <th>Matched</th>
+            <th>Fix rate</th>
+            <th>P95 baseline</th>
+            <th>P95 heading</th>
+            <th>Quality</th>
+            <th>Realtime</th>
+            <th>Rate</th>
+            <th>Termination</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card" style="margin-top: 18px;">
+      <div class="section-title">
         <h2>Visibility summaries</h2>
         <span class="tiny">summary rows plus a quick polar view from the first CSV artifact</span>
       </div>
@@ -776,6 +846,11 @@ def render_html() -> str:
       return `<span class="badge ${className}">${normalized}</span>`;
     }
 
+    function artifactLink(path, label) {
+      if (!path) return label || "n/a";
+      return `<a href="/artifact?path=${encodeURIComponent(path)}" target="_blank" rel="noreferrer">${label || path}</a>`;
+    }
+
     async function refreshStatus() {
       const metrics = document.getElementById("receiver-metrics");
       const pre = document.getElementById("receiver-json");
@@ -854,6 +929,28 @@ def render_html() -> str:
           <td>${formatMaybeNumber(row.solver_wall_time_s, 2, " s")}</td>
           <td>${formatMaybeNumber(row.effective_epoch_rate_hz, 2, " Hz")}</td>`;
         ppcBody.appendChild(tr);
+      }
+
+      const movingBaseBody = document.querySelector("#moving-base-table tbody");
+      movingBaseBody.innerHTML = "";
+      for (const row of overview.moving_base_summaries || []) {
+        const provenance = [
+          row.solution_pos ? artifactLink(row.solution_pos, "pos") : null,
+          row.prepare_summary_json ? artifactLink(row.prepare_summary_json, "prepare") : null,
+          row.products_summary_json ? artifactLink(row.products_summary_json, "products") : null,
+        ].filter(Boolean).join(" / ");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${artifactLink(row.summary_path || row._path, row._path || "n/a")}<br><span class="tiny">${provenance || (row.signoff_profile || "n/a")}</span></td>
+          <td>${row.matched_epochs ?? "n/a"}</td>
+          <td>${formatMaybeNumber(row.fix_rate_pct, 2, "%")}</td>
+          <td>${formatMaybeNumber(row.p95_baseline_error_m, 3, " m")}</td>
+          <td>${formatMaybeNumber(row.p95_heading_error_deg, 2, " deg")}</td>
+          <td>${renderBadge(row.quality_status)}</td>
+          <td>${renderBadge(row.runtime_status)} ${formatMaybeNumber(row.realtime_factor, 2, "x")}</td>
+          <td>${formatMaybeNumber(row.effective_epoch_rate_hz, 2, " Hz")}</td>
+          <td>${row.termination || "n/a"}</td>`;
+        movingBaseBody.appendChild(tr);
       }
 
       const visibilityBody = document.querySelector("#visibility-table tbody");
@@ -1012,6 +1109,10 @@ def make_handler(args: argparse.Namespace):
                         ".jpg": "image/jpeg",
                         ".jpeg": "image/jpeg",
                         ".svg": "image/svg+xml",
+                        ".json": "application/json; charset=utf-8",
+                        ".pos": "text/plain; charset=utf-8",
+                        ".csv": "text/plain; charset=utf-8",
+                        ".txt": "text/plain; charset=utf-8",
                     }.get(suffix, "application/octet-stream")
                     self._write(artifact_path.read_bytes(), content_type)
                     return

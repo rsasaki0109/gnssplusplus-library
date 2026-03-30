@@ -54,6 +54,7 @@ class WebUISmokeTest(unittest.TestCase):
             status_json = temp_root / "receiver.status.json"
             live_summary = temp_root / "output" / "live_replay_summary.json"
             ppc_summary = temp_root / "output" / "ppc_tokyo_run1_rtk_summary.json"
+            moving_base_summary = temp_root / "output" / "scorpion_moving_base_summary.json"
             visibility_summary = temp_root / "output" / "visibility_static_summary.json"
             visibility_csv = temp_root / "output" / "visibility_static.csv"
             visibility_png = temp_root / "output" / "visibility_static.png"
@@ -138,6 +139,26 @@ class WebUISmokeTest(unittest.TestCase):
                         "solver_wall_time_s": 12.34,
                         "realtime_factor": 1.23,
                         "effective_epoch_rate_hz": 15.67,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            moving_base_summary.write_text(
+                json.dumps(
+                    {
+                        "matched_epochs": 94,
+                        "valid_epochs": 94,
+                        "fix_rate_pct": 95.74,
+                        "median_baseline_error_m": 0.042,
+                        "p95_baseline_error_m": 0.101,
+                        "p95_heading_error_deg": 5.85,
+                        "termination": "completed",
+                        "realtime_factor": 2.17,
+                        "effective_epoch_rate_hz": 10.84,
+                        "solution_pos": str(temp_root / "output" / "scorpion_moving_base.pos"),
+                        "prepare_summary_json": str(temp_root / "output" / "prepare_summary.json"),
+                        "products_summary_json": str(temp_root / "output" / "products_summary.json"),
+                        "signoff_profile": "scorpion-moving-base",
                     }
                 ),
                 encoding="utf-8",
@@ -235,6 +256,12 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("96.67%", page.locator("#ppc-table tbody").text_content())
                     self.assertIn("excellent", page.locator("#ppc-table tbody").text_content())
                     self.assertIn("12.34 s", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("scorpion_moving_base_summary.json", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("95.74%", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("0.101 m", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("completed", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("prepare", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("products", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("visibility_static_summary.json", page.locator("#visibility-table tbody").text_content())
                     self.assertIn("27", page.locator("#visibility-table tbody").text_content())
                     self.assertIn("44.70 dB-Hz", page.locator("#visibility-table tbody").text_content())
