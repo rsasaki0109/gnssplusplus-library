@@ -874,8 +874,20 @@ class PPPStaticSignoffTest(unittest.TestCase):
                 require_mean_sats_min=8.0,
                 require_ppp_solution_rate_min=60.0,
                 require_ppp_fixed_epochs_min=None,
+                require_converged=True,
+                require_convergence_time_max=120.0,
+                require_ionex_corrections_min=1,
+                require_dcb_corrections_min=1,
                 malib_pos=None,
             )
+            args.ppp_run_summary = {
+                "converged": True,
+                "convergence_time_s": 45.0,
+                "ionex_corrections": 12,
+                "ionex_meters": 23.0,
+                "dcb_corrections": 4,
+                "dcb_meters": 1.2,
+            }
 
             payload = ppp_static_signoff.build_summary_payload(args)
             ppp_static_signoff.enforce_summary_requirements(payload, args)
@@ -889,6 +901,9 @@ class PPPStaticSignoffTest(unittest.TestCase):
             self.assertLessEqual(payload["mean_position_error_m"], 2.0)
             self.assertLessEqual(payload["max_position_error_m"], 2.5)
             self.assertGreaterEqual(payload["mean_satellites"], 8.0)
+            self.assertTrue(payload["ppp_converged"])
+            self.assertEqual(payload["ionex_corrections"], 12)
+            self.assertEqual(payload["dcb_corrections"], 4)
 
             failing_args = argparse.Namespace(
                 require_valid_epochs_min=4,
@@ -897,6 +912,10 @@ class PPPStaticSignoffTest(unittest.TestCase):
                 require_mean_sats_min=10.0,
                 require_ppp_solution_rate_min=90.0,
                 require_ppp_fixed_epochs_min=1,
+                require_converged=True,
+                require_convergence_time_max=10.0,
+                require_ionex_corrections_min=20,
+                require_dcb_corrections_min=5,
             )
             with self.assertRaises(SystemExit) as context:
                 ppp_static_signoff.enforce_summary_requirements(payload, failing_args)
@@ -908,6 +927,9 @@ class PPPStaticSignoffTest(unittest.TestCase):
             self.assertIn("mean satellites", message)
             self.assertIn("PPP solution rate", message)
             self.assertIn("PPP fixed epochs", message)
+            self.assertIn("convergence time", message)
+            self.assertIn("IONEX corrections", message)
+            self.assertIn("DCB corrections", message)
 
     def test_build_summary_payload_with_malib_sidecar(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_static_signoff_malib_") as temp_dir:
@@ -1023,8 +1045,20 @@ class PPPKinematicSignoffTest(unittest.TestCase):
                 require_max_error_max=8.0,
                 require_mean_sats_min=19.0,
                 require_ppp_solution_rate_min=60.0,
+                require_converged=True,
+                require_convergence_time_max=120.0,
+                require_ionex_corrections_min=2,
+                require_dcb_corrections_min=1,
                 malib_pos=None,
             )
+            args.ppp_run_summary = {
+                "converged": True,
+                "convergence_time_s": 60.0,
+                "ionex_corrections": 8,
+                "ionex_meters": 15.0,
+                "dcb_corrections": 3,
+                "dcb_meters": 0.8,
+            }
 
             payload = ppp_kinematic_signoff.build_summary_payload(args)
             ppp_kinematic_signoff.enforce_summary_requirements(payload, args)
@@ -1041,6 +1075,9 @@ class PPPKinematicSignoffTest(unittest.TestCase):
             self.assertLessEqual(payload["max_position_error_m"], 8.0)
             self.assertGreaterEqual(payload["mean_satellites"], 19.0)
             self.assertGreaterEqual(payload["ppp_solution_rate_pct"], 60.0)
+            self.assertTrue(payload["ppp_converged"])
+            self.assertEqual(payload["ionex_corrections"], 8)
+            self.assertEqual(payload["dcb_corrections"], 3)
 
             failing_args = argparse.Namespace(
                 require_common_epoch_pairs_min=4,
@@ -1050,6 +1087,10 @@ class PPPKinematicSignoffTest(unittest.TestCase):
                 require_max_error_max=3.0,
                 require_mean_sats_min=25.0,
                 require_ppp_solution_rate_min=90.0,
+                require_converged=True,
+                require_convergence_time_max=10.0,
+                require_ionex_corrections_min=20,
+                require_dcb_corrections_min=4,
             )
             with self.assertRaises(SystemExit) as context:
                 ppp_kinematic_signoff.enforce_summary_requirements(payload, failing_args)
@@ -1062,6 +1103,9 @@ class PPPKinematicSignoffTest(unittest.TestCase):
             self.assertIn("max position error", message)
             self.assertIn("mean satellites", message)
             self.assertIn("PPP solution rate", message)
+            self.assertIn("convergence time", message)
+            self.assertIn("IONEX corrections", message)
+            self.assertIn("DCB corrections", message)
 
     def test_build_summary_payload_with_malib_sidecar(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_kinematic_signoff_malib_") as temp_dir:

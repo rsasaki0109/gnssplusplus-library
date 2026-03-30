@@ -34,6 +34,11 @@ COMMANDS = {
         "target": "gnss_visibility",
         "summary": "Analyze satellite visibility from rover/nav RINEX into azimuth/elevation/SNR CSV and summary JSON.",
     },
+    "visibility-plot": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_visibility_plot.py"),
+        "summary": "Render a visibility CSV into a polar/elevation PNG quick-look.",
+    },
     "nav-products": {
         "kind": "binary",
         "target": "gnss_nav_products",
@@ -257,6 +262,7 @@ def usage() -> str:
             "  python3 apps/gnss.py solve --data-dir data/driving --out output/rtk_solution.pos",
             "  python3 apps/gnss.py spp --obs data/rover_static.obs --nav data/navigation_static.nav --out output/spp_solution.pos",
             "  python3 apps/gnss.py visibility --obs data/rover_static.obs --nav data/navigation_static.nav --csv output/visibility.csv --summary-json output/visibility.json --max-epochs 60",
+            "  python3 apps/gnss.py visibility-plot output/visibility.csv output/visibility.png",
             "  python3 apps/gnss.py solve --rover data/rover_kinematic.obs --base data/base_kinematic.obs --nav data/navigation_kinematic.nav --iono est --max-epochs 5",
             "  python3 apps/gnss.py ppp --static --obs data/rover_static.obs --nav data/navigation_static.nav --sp3 precise.sp3 --clk precise.clk --antex igs20.atx --blq station.blq --out output/ppp_solution.pos",
             "  python3 apps/gnss.py ppp --kinematic --enable-ar --convergence-min-epochs 4 --ar-ratio-threshold 2.0 --obs rover.obs --sp3 precise.sp3 --clk precise.clk --out output/ppp_ar.pos",
@@ -312,7 +318,7 @@ def usage() -> str:
             "  python3 apps/gnss.py rtk-kinematic-signoff --max-epochs 120 --require-valid-epochs-min 120 --require-fix-rate-min 95 --require-mean-error-max 3.0 --require-max-error-max 3.0 --require-mean-sats-min 25",
             "  python3 apps/gnss.py ppp-static-signoff --max-epochs 120 --require-valid-epochs-min 120 --require-mean-error-max 1.5 --require-max-error-max 1.5 --require-mean-sats-min 6.0 --require-ppp-solution-rate-min 100",
             "  python3 apps/gnss.py ppp-static-signoff --enable-ar --generate-products --ar-ratio-threshold 1.5 --require-mean-error-max 5.0 --require-max-error-max 6.0 --require-ppp-fixed-epochs-min 1 --require-ppp-solution-rate-min 100",
-            "  python3 apps/gnss.py ppp-kinematic-signoff --max-epochs 120 --require-common-epoch-pairs-min 120 --require-reference-fix-rate-min 95 --require-mean-error-max 60 --require-p95-error-max 110 --require-max-error-max 115 --require-mean-sats-min 18 --require-ppp-solution-rate-min 100",
+            "  python3 apps/gnss.py ppp-kinematic-signoff --max-epochs 120 --require-common-epoch-pairs-min 120 --require-reference-fix-rate-min 95 --require-converged --require-convergence-time-max 300 --require-mean-error-max 7.0 --require-p95-error-max 7.0 --require-max-error-max 7.0 --require-mean-sats-min 18 --require-ppp-solution-rate-min 100",
             "  python3 apps/gnss.py ppc-demo --dataset-root /datasets/PPC-Dataset --city tokyo --run run1 --solver rtk --require-realtime-factor-min 1.0 --summary-json output/ppc_tokyo_run1_rtk_summary.json",
             "  python3 apps/gnss.py ppc-rtk-signoff --dataset-root /datasets/PPC-Dataset --city tokyo --rtklib-bin /path/to/rnx2rtkp",
             "  python3 apps/gnss.py clas-ppp --profile madoca --obs data/rover_static.obs --nav data/navigation_static.nav --ssr-rtcm ntrip://caster/MOUNT --out output/madoca_ppp.pos --summary-json output/madoca_ppp_summary.json",
