@@ -55,6 +55,8 @@ python3 apps/gnss.py ppp-products-signoff \
   --require-lib-mean-error-vs-malib-max-delta 0.25
 ```
 
+For the `ppc` profile with `--malib-pos` or `--malib-bin`, the command also emits paired comparison artifacts (`comparison_csv`, `comparison_png`) and `common_epoch_pairs`, so `gnss web` and CI artifact bundles can show the same side-by-side error slices.
+
 If you already have a MALIB `.pos` file, you can gate the delta directly:
 
 ```bash

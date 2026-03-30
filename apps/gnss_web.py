@@ -16,7 +16,6 @@ import threading
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = ROOT_DIR / "scripts"
 
@@ -482,6 +481,9 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
                 "malib_solution_pos": normalize_artifact_path(root_dir, payload.get("malib_solution_pos")),
                 "comparison_target": payload.get("comparison_target"),
                 "comparison_status": payload.get("comparison_status"),
+                "comparison_csv": normalize_artifact_path(root_dir, payload.get("comparison_csv")),
+                "comparison_png": normalize_artifact_path(root_dir, payload.get("comparison_png")),
+                "common_epoch_pairs": payload.get("common_epoch_pairs"),
                 "libgnss_minus_malib_mean_error_m": payload.get("libgnss_minus_malib_mean_error_m"),
                 "libgnss_minus_malib_p95_error_m": payload.get("libgnss_minus_malib_p95_error_m"),
                 "libgnss_minus_malib_max_error_m": payload.get("libgnss_minus_malib_max_error_m"),
@@ -1339,6 +1341,8 @@ def render_html() -> str:
           row.ionex ? artifactLink(row.ionex, "ionex") : null,
           row.dcb ? artifactLink(row.dcb, "dcb") : null,
           row.malib_solution_pos ? artifactLink(row.malib_solution_pos, "malib") : null,
+          row.comparison_csv ? artifactLink(row.comparison_csv, "compare-csv") : null,
+          row.comparison_png ? artifactLink(row.comparison_png, "compare-png") : null,
         ].filter(Boolean).join(" / ");
         const provenance = [
           row.reference_csv ? artifactLink(row.reference_csv, "reference") : null,
@@ -1346,6 +1350,9 @@ def render_html() -> str:
         ].filter(Boolean).join(" / ");
         const compareBits = [];
         if (row.comparison_target) compareBits.push(row.comparison_target);
+        if (row.common_epoch_pairs !== null && row.common_epoch_pairs !== undefined) {
+          compareBits.push(`${row.common_epoch_pairs} paired`);
+        }
         if (row.libgnss_minus_malib_mean_error_m !== null && row.libgnss_minus_malib_mean_error_m !== undefined) {
           compareBits.push(`Δmean ${formatMaybeNumber(row.libgnss_minus_malib_mean_error_m, 3, " m")}`);
         }

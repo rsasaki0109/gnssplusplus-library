@@ -198,9 +198,13 @@ jobs:
         path: |
           output/ppp_kinematic_products_summary.json
           output/ppp_kinematic_products_solution.pos
+          output/ppp_kinematic_products_comparison.csv
+          output/ppp_kinematic_products_comparison.png
           output/malib_ppp_kinematic_solution.pos
           output/ppp_static_products_summary.json
           output/ppp_static_products_solution.pos
+          output/ppp_static_products_comparison.csv
+          output/ppp_static_products_comparison.png
         if-no-files-found: ignore
 
     - name: Upload dashboard artifacts
