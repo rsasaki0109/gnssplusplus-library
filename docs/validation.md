@@ -57,7 +57,8 @@ python3 apps/gnss.py ppp-products-signoff \
 
 For the `ppc` profile with `--malib-pos` or `--malib-bin`, the command also emits paired comparison artifacts (`comparison_csv`, `comparison_png`) and `common_epoch_pairs`, so `gnss web` and CI artifact bundles can show the same side-by-side error slices.
 
-`gnss ppp-products-signoff`, `gnss moving-base-signoff`, and `gnss scorpion-moving-base-signoff`
+`gnss live-signoff`, `gnss ppp-products-signoff`, `gnss moving-base-signoff`,
+`gnss scorpion-moving-base-signoff`, and `gnss ppc-rtk-signoff`
 also accept `--config-toml`, so you can pin long threshold sets and artifact paths in a file instead of repeating them on the command line.
 
 If you already have a MALIB `.pos` file, you can gate the delta directly:

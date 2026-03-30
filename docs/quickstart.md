@@ -125,6 +125,9 @@ python3 apps/gnss.py scorpion-moving-base-signoff \
 
 python3 apps/gnss.py moving-base-signoff \
   --config-toml configs/moving_base_signoff.example.toml
+
+python3 apps/gnss.py live-signoff \
+  --config-toml configs/live_signoff.example.toml
 ```
 
 ## Product-driven PPP
@@ -160,6 +163,9 @@ python3 apps/gnss.py ppp-kinematic-signoff \
 
 python3 apps/gnss.py ppp-products-signoff \
   --config-toml configs/ppp_products_ppc.example.toml
+
+python3 apps/gnss.py ppc-rtk-signoff \
+  --config-toml configs/ppc_rtk_signoff.example.toml
 ```
 
 ## Local docs
