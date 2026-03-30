@@ -59,6 +59,7 @@ class WebUISmokeTest(unittest.TestCase):
             visibility_summary = temp_root / "output" / "visibility_static_summary.json"
             visibility_csv = temp_root / "output" / "visibility_static.csv"
             visibility_png = temp_root / "output" / "visibility_static.png"
+            artifact_manifest = temp_root / "output" / "artifact_manifest.json"
             port_file = temp_root / "port.txt"
             docs_url = "https://example.com/libgnsspp-docs/"
 
@@ -160,6 +161,8 @@ class WebUISmokeTest(unittest.TestCase):
                         "prepare_summary_json": str(temp_root / "output" / "prepare_summary.json"),
                         "products_summary_json": str(temp_root / "output" / "products_summary.json"),
                         "plot_png": str(temp_root / "output" / "scorpion_moving_base.png"),
+                        "nav_rinex": str(temp_root / "output" / "brdc0010.24n"),
+                        "input_url": "https://example.com/scorpion.zip",
                         "signoff_profile": "scorpion-moving-base",
                     }
                 ),
@@ -185,6 +188,16 @@ class WebUISmokeTest(unittest.TestCase):
                         "ionex_corrections": 18,
                         "dcb_corrections": 18,
                         "solution_pos": str(temp_root / "output" / "ppp_static_products.pos"),
+                        "sp3": str(temp_root / "output" / "igs_static.sp3"),
+                        "clk": str(temp_root / "output" / "igs_static.clk"),
+                        "ionex": str(temp_root / "output" / "codg0020.24i"),
+                        "dcb": str(temp_root / "output" / "CAS0MGXRAP_20240020000_01D_01D_DCB.BSX"),
+                        "malib_solution_pos": str(temp_root / "output" / "malib_static.pos"),
+                        "comparison_target": "MALIB",
+                        "comparison_status": "better",
+                        "libgnss_minus_malib_mean_error_m": -0.05,
+                        "libgnss_minus_malib_p95_error_m": -0.08,
+                        "libgnss_minus_malib_max_error_m": -0.12,
                     }
                 ),
                 encoding="utf-8",
@@ -221,6 +234,22 @@ class WebUISmokeTest(unittest.TestCase):
                     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+ymsAAAAASUVORK5CYII="
                 )
             )
+            manifest_result = subprocess.run(
+                [
+                    sys.executable,
+                    str(DISPATCHER),
+                    "artifact-manifest",
+                    "--root",
+                    str(temp_root),
+                    "--output",
+                    str(artifact_manifest),
+                ],
+                cwd=ROOT_DIR,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(manifest_result.returncode, 0, msg=manifest_result.stderr)
 
             port = find_free_port()
             process = subprocess.Popen(
@@ -288,6 +317,8 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("completed", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("prepare", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("products", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("source", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("nav", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("plot", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn(
                         "output%2Fscorpion_moving_base.png",
@@ -297,9 +328,16 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("2024-01-02", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("285.0 s", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("18 / D 18", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("Δmean -0.050 m", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("sp3", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("malib", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("visibility_static_summary.json", page.locator("#visibility-table tbody").text_content())
                     self.assertIn("27", page.locator("#visibility-table tbody").text_content())
                     self.assertIn("44.70 dB-Hz", page.locator("#visibility-table tbody").text_content())
+                    self.assertIn("Artifact bundles", page.locator("body").text_content())
+                    self.assertIn("ppp-products", page.locator("#artifact-manifest-table tbody").text_content())
+                    self.assertIn("moving-base", page.locator("#artifact-manifest-table tbody").text_content())
+                    self.assertIn("visibility", page.locator("#artifact-manifest-table tbody").text_content())
                     self.assertIn("Visibility view", page.locator("body").text_content())
                     self.assertIn(
                         "output%2Fvisibility_static.png",

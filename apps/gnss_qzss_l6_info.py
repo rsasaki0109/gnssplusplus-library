@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import errno
 import math
 import os
 from dataclasses import dataclass
@@ -1717,7 +1718,12 @@ class InputSource:
         if self._file is not None:
             return self._file.read(size)
         if self._fd is not None:
-            return os.read(self._fd, size)
+            try:
+                return os.read(self._fd, size)
+            except OSError as exc:
+                if exc.errno == errno.EIO:
+                    return b""
+                raise
         return b""
 
 
