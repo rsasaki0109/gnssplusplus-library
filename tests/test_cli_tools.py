@@ -8,6 +8,7 @@ import binascii
 import csv
 import json
 import socket
+import gzip
 import struct
 import subprocess
 import sys
@@ -17,6 +18,8 @@ import time
 import unittest
 import math
 import zlib
+import http.server
+from functools import partial
 from pathlib import Path
 from urllib import request
 
@@ -87,6 +90,19 @@ def wait_for_file(path: Path, timeout_s: float = 5.0) -> str:
             return path.read_text(encoding="utf-8").strip()
         time.sleep(0.05)
     raise TimeoutError(f"timed out waiting for {path}")
+
+
+class QuietSimpleHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, format: str, *args: object) -> None:
+        del format, args
+
+
+def start_static_http_server(directory: Path) -> tuple[http.server.ThreadingHTTPServer, threading.Thread, int]:
+    handler = partial(QuietSimpleHTTPRequestHandler, directory=str(directory))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread, int(server.server_address[1])
 
 
 def crc24q(data: bytes) -> int:
@@ -2083,6 +2099,50 @@ def build_synthetic_blq_text(
     )
 
 
+def build_synthetic_ionex_text() -> str:
+    return "".join(
+        (
+            "     1.0           I                   G                   IONEX VERSION / TYPE\n",
+            "   600                                                      INTERVAL\n",
+            "    -1                                                      EXPONENT\n",
+            "   30.0   40.0   10.0                                       LAT1 / LAT2 / DLAT\n",
+            "  130.0  140.0   10.0                                       LON1 / LON2 / DLON\n",
+            "  450.0  450.0    0.0                                       HGT1 / HGT2 / DHGT\n",
+            "                                                            END OF HEADER\n",
+            "    1                                                      START OF TEC MAP\n",
+            " 2026     3    26     1     0     0                        EPOCH OF CURRENT MAP\n",
+            "   30.0  130.0  140.0   10.0  450.0                        LAT/LON1/LON2/DLON/H\n",
+            "    1    2\n",
+            "   40.0  130.0  140.0   10.0  450.0                        LAT/LON1/LON2/DLON/H\n",
+            "    3    4\n",
+            "                                                            END OF TEC MAP\n",
+            "    2                                                      START OF TEC MAP\n",
+            " 2026     3    26     1    10     0                        EPOCH OF CURRENT MAP\n",
+            "   30.0  130.0  140.0   10.0  450.0                        LAT/LON1/LON2/DLON/H\n",
+            "    2    3\n",
+            "   40.0  130.0  140.0   10.0  450.0                        LAT/LON1/LON2/DLON/H\n",
+            "    4    5\n",
+            "                                                            END OF TEC MAP\n",
+        )
+    )
+
+
+def build_synthetic_dcb_text() -> str:
+    return "\n".join(
+        [
+            "%=BIA 1.00 TEST TEST 2026:085:00000 TEST",
+            "+BIAS/SOLUTION",
+            "*BIAS SVN PRN STATION OBS1 OBS2 BEGIN END UNIT EST STDDEV",
+            " OSB G01 C1C C1C 2026:085:00000 2026:086:00000 ns 0.100 0.010",
+            " OSB G01 C2W C2W 2026:085:00000 2026:086:00000 ns -0.050 0.010",
+            " OSB G02 C1C C1C 2026:085:00000 2026:086:00000 ns 0.080 0.010",
+            " OSB G02 C2W C2W 2026:085:00000 2026:086:00000 ns -0.040 0.010",
+            "-BIAS/SOLUTION",
+            "",
+        ]
+    )
+
+
 def build_synthetic_ppp_inputs(
     temp_root: Path,
     *,
@@ -2569,6 +2629,7 @@ def build_synthetic_ppp_inputs_with_grid_polynomial_atmos(
 class CLIToolsTest(unittest.TestCase):
     STATIC_DATA_TESTS = {
         "test_spp_cli_processes_real_static_sample",
+        "test_visibility_cli_writes_csv_and_summary_for_static_data",
         "test_nav_products_cli_generates_sp3_and_clk_from_static_sample",
         "test_ppp_cli_processes_real_static_sample_with_generated_products",
         "test_ppp_cli_runs_real_static_slice_with_generated_products_and_ar_enabled",
@@ -2663,6 +2724,225 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("epoch count: 8", result.stdout)
             self.assertIn("total observation records: 96", result.stdout)
 
+    def test_fetch_products_cli_copies_and_decompresses_local_template(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_fetch_products_local_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            source_dir = temp_root / "source"
+            source_dir.mkdir()
+            compressed_path = source_dir / "2024002.sp3.gz"
+            with gzip.open(compressed_path, "wb") as stream:
+                stream.write(b"TEST SP3\n")
+
+            cache_dir = temp_root / "cache"
+            summary_path = temp_root / "products.json"
+            product_template = str(source_dir / "{yyyy}{doy}.sp3.gz")
+
+            result = self.run_gnss(
+                "fetch-products",
+                "--date",
+                "2024-01-02",
+                "--product",
+                f"sp3={product_template}",
+                "--cache-dir",
+                str(cache_dir),
+                "--summary-json",
+                str(summary_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status_counts"], {"copied": 1})
+            self.assertEqual(set(payload["products"]), {"sp3"})
+            destination = Path(payload["products"]["sp3"])
+            self.assertTrue(destination.exists())
+            self.assertEqual(destination.read_bytes(), b"TEST SP3\n")
+            self.assertFalse(destination.name.endswith(".gz"))
+            self.assertEqual(json.loads(summary_path.read_text(encoding="utf-8"))["products"]["sp3"], str(destination))
+
+            cached = self.run_gnss(
+                "fetch-products",
+                "--date",
+                "2024-01-02",
+                "--product",
+                f"sp3={product_template}",
+                "--cache-dir",
+                str(cache_dir),
+            )
+            self.assertEqual(cached.returncode, 0, msg=cached.stderr)
+            cached_payload = json.loads(cached.stdout)
+            self.assertEqual(cached_payload["results"][0]["status"], "cached")
+
+    def test_fetch_products_cli_downloads_http_template(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_fetch_products_http_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            source_dir = temp_root / "source"
+            source_dir.mkdir()
+            compressed_path = source_dir / "24002.clk.gz"
+            with gzip.open(compressed_path, "wb") as stream:
+                stream.write(b"TEST CLK\n")
+
+            server, thread, port = start_static_http_server(source_dir)
+            try:
+                cache_dir = temp_root / "cache"
+                summary_path = temp_root / "products.json"
+                result = self.run_gnss(
+                    "fetch-products",
+                    "--date",
+                    "2024-01-02",
+                    "--product",
+                    f"clk=http://127.0.0.1:{port}/{{yy}}{{doy}}.clk.gz",
+                    "--cache-dir",
+                    str(cache_dir),
+                    "--summary-json",
+                    str(summary_path),
+                )
+            finally:
+                server.shutdown()
+                thread.join(timeout=2.0)
+                server.server_close()
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status_counts"], {"downloaded": 1})
+            destination = Path(payload["products"]["clk"])
+            self.assertTrue(destination.exists())
+            self.assertEqual(destination.read_bytes(), b"TEST CLK\n")
+            self.assertEqual(payload["results"][0]["resolved_source"], f"http://127.0.0.1:{port}/24002.clk.gz")
+            self.assertEqual(json.loads(summary_path.read_text(encoding="utf-8"))["products"]["clk"], str(destination))
+
+    def test_fetch_products_cli_lists_presets_and_supports_dry_run(self) -> None:
+        presets = self.run_gnss("fetch-products", "--list-presets")
+        self.assertEqual(presets.returncode, 0, msg=presets.stderr)
+        self.assertIn("igs-final", presets.stdout)
+        self.assertIn("ionex", presets.stdout)
+        self.assertIn("dcb", presets.stdout)
+
+        with tempfile.TemporaryDirectory(prefix="gnss_fetch_products_dry_run_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            cache_dir = temp_root / "cache"
+            summary_path = temp_root / "products.json"
+            dry_run = self.run_gnss(
+                "fetch-products",
+                "--date",
+                "2024-01-02",
+                "--preset",
+                "igs-final",
+                "--preset",
+                "ionex",
+                "--preset",
+                "dcb",
+                "--cache-dir",
+                str(cache_dir),
+                "--summary-json",
+                str(summary_path),
+                "--dry-run",
+            )
+            self.assertEqual(dry_run.returncode, 0, msg=dry_run.stderr)
+            payload = json.loads(dry_run.stdout)
+            self.assertTrue(payload["dry_run"])
+            self.assertEqual(payload["presets"], ["igs-final", "ionex", "dcb"])
+            self.assertEqual(set(payload["products"]), {"sp3", "clk", "ionex", "dcb"})
+            self.assertEqual(payload["status_counts"], {"dry-run": 4})
+            self.assertIn("COD0OPSFIN_20240020000_01D_05M_ORB.SP3.gz", payload["results"][0]["resolved_source"])
+            self.assertIn("CAS0MGXRAP_20240020000_01D_01D_DCB.BSX.gz", json.dumps(payload))
+            self.assertEqual(
+                json.loads(summary_path.read_text(encoding="utf-8"))["products"]["ionex"],
+                payload["products"]["ionex"],
+            )
+
+    def test_ionex_info_reports_header_and_map_counts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ionex_info_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            ionex_path = temp_root / "sample.ionex"
+            summary_path = temp_root / "sample_ionex.json"
+            ionex_path.write_text(
+                "\n".join(
+                    [
+                        "     1.0           I                   G                   IONEX VERSION / TYPE",
+                        "  2024     1     2     0     0     0                        EPOCH OF FIRST MAP",
+                        "  2024     1     2     1     0     0                        EPOCH OF LAST MAP",
+                        "    3600                                                      INTERVAL",
+                        "       2                                                    # OF MAPS IN FILE",
+                        "       2                                                    MAP DIMENSION",
+                        "  6371.0                                                    BASE RADIUS",
+                        "     10.0                                                   ELEVATION CUTOFF",
+                        "COSZ                                                        MAPPING FUNCTION",
+                        "      -1                                                    EXPONENT",
+                        "   -87.5    87.5     2.5                                    LAT1 / LAT2 / DLAT",
+                        "  -180.0   180.0     5.0                                    LON1 / LON2 / DLON",
+                        "   450.0   450.0     0.0                                    HGT1 / HGT2 / DHGT",
+                        "G01     1.234     0.100                                     PRN / BIAS / RMS",
+                        "                                                            END OF HEADER",
+                        "     1                                                      START OF TEC MAP",
+                        "  2024     1     2     0     0     0                        EPOCH OF CURRENT MAP",
+                        "     1                                                      END OF TEC MAP",
+                        "     2                                                      START OF TEC MAP",
+                        "  2024     1     2     1     0     0                        EPOCH OF CURRENT MAP",
+                        "     2                                                      END OF TEC MAP",
+                        "     1                                                      START OF RMS MAP",
+                        "     1                                                      END OF RMS MAP",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            result = self.run_gnss(
+                "ionex-info",
+                "--input",
+                str(ionex_path),
+                "--summary-json",
+                str(summary_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("format: IONEX", result.stdout)
+            self.assertIn("maps: 2", result.stdout)
+            self.assertIn("rms maps: 1", result.stdout)
+            self.assertIn("aux dcb entries: 1", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["map_count"], 2)
+            self.assertEqual(payload["rms_map_count"], 1)
+            self.assertEqual(payload["aux_dcb_count"], 1)
+            self.assertEqual(payload["system"], "G")
+
+    def test_dcb_info_reports_bias_sinex_entries(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_dcb_info_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            dcb_path = temp_root / "sample.BSX"
+            summary_path = temp_root / "sample_dcb.json"
+            dcb_path.write_text(
+                "\n".join(
+                    [
+                        "%=BIA 1.00 TEST TEST 2024:002:00000 TEST",
+                        "+BIAS/SOLUTION",
+                        "*BIAS SVN PRN STATION OBS1 OBS2 BEGIN END UNIT EST STDDEV",
+                        " DSB G01 C1C C2W 2024:002:00000 2024:003:00000 ns 1.234 0.100",
+                        " OSB E11 C1C C5Q 2024:002:00000 2024:003:00000 ns 0.321 0.050",
+                        "-BIAS/SOLUTION",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            result = self.run_gnss(
+                "dcb-info",
+                "--input",
+                str(dcb_path),
+                "--summary-json",
+                str(summary_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("format: SINEX_BIAS", result.stdout)
+            self.assertIn("entries: 2", result.stdout)
+            self.assertIn("bias types: DSB, OSB", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["entry_count"], 2)
+            self.assertEqual(payload["bias_types"], ["DSB", "OSB"])
+            self.assertEqual(payload["systems"], ["E", "G"])
+
     def test_spp_cli_processes_real_static_sample(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_spp_cli_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -2685,6 +2965,51 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("Valid solutions:", result.stdout)
             self.assertTrue(output_path.exists())
             self.assertIn("LibGNSS++ Position Solution", output_path.read_text(encoding="ascii"))
+
+    def test_visibility_cli_writes_csv_and_summary_for_static_data(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_visibility_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            csv_path = temp_root / "visibility.csv"
+            summary_path = temp_root / "visibility.json"
+
+            result = self.run_gnss(
+                "visibility",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--csv",
+                str(csv_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "5",
+                "--min-elevation-deg",
+                "5",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Visibility summary:", result.stdout)
+            self.assertIn("rows written:", result.stdout)
+            self.assertTrue(csv_path.exists())
+            self.assertTrue(summary_path.exists())
+
+            csv_lines = csv_path.read_text(encoding="utf-8").splitlines()
+            self.assertGreater(len(csv_lines), 1)
+            self.assertEqual(
+                csv_lines[0],
+                "epoch_index,week,tow,satellite,system,signal,azimuth_deg,elevation_deg,snr_dbhz,"
+                "has_pseudorange,has_carrier_phase,has_doppler",
+            )
+            first_row = csv_lines[1].split(",")
+            self.assertEqual(len(first_row), 12)
+            self.assertTrue(first_row[3].startswith(("G", "R", "E", "C", "J", "S", "I")))
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["epochs_processed"], 5)
+            self.assertGreater(payload["rows_written"], 0)
+            self.assertGreater(payload["unique_satellites"], 0)
+            self.assertIn("GPS", payload["rows_per_system"])
 
     def test_stats_reports_solution_status_breakdown(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_stats_cli_") as temp_dir:
@@ -3044,6 +3369,45 @@ class CLIToolsTest(unittest.TestCase):
                 + (last_record["z"] - true_position[2]) ** 2
             )
             self.assertLess(error, 1.0)
+
+    def test_ppp_cli_accepts_ionex_and_dcb_products(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_bias_products_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, _true_position = build_synthetic_ppp_inputs(temp_root)
+            ionex_path = temp_root / "synthetic.ionex"
+            dcb_path = temp_root / "synthetic.bsx"
+            out_path = temp_root / "ppp_with_bias_products.pos"
+            ionex_path.write_text(build_synthetic_ionex_text(), encoding="ascii")
+            dcb_path.write_text(build_synthetic_dcb_text(), encoding="ascii")
+
+            result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ionex",
+                str(ionex_path),
+                "--dcb",
+                str(dcb_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(out_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("ionex maps: 2", result.stdout)
+            self.assertIn("dcb entries: 4", result.stdout)
+            self.assertNotIn("ionex corrections: 0", result.stdout)
+            self.assertNotIn("dcb corrections: 0", result.stdout)
+            self.assertTrue(out_path.exists())
+            records = self.read_pos_records(out_path)
+            self.assertEqual(len(records), 4)
 
     def test_ppp_cli_supports_receiver_antex_offsets(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_antex_test_") as temp_dir:
@@ -4680,6 +5044,77 @@ class CLIToolsTest(unittest.TestCase):
             self.assertTrue(payload["ambiguity_resolution_enabled"])
             self.assertEqual(payload["ar_ratio_threshold"], 1.5)
 
+    def test_ppp_static_signoff_cli_can_fetch_precise_products(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_static_signoff_fetch_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            generated_sp3 = temp_root / "generated.sp3"
+            generated_clk = temp_root / "generated.clk"
+            products_dir = temp_root / "products"
+            products_dir.mkdir()
+            output_path = temp_root / "ppp_static_fetch.pos"
+            summary_path = temp_root / "ppp_static_fetch_summary.json"
+
+            nav_products = self.run_gnss(
+                "nav-products",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--sp3-out",
+                str(generated_sp3),
+                "--clk-out",
+                str(generated_clk),
+                "--max-epochs",
+                "30",
+            )
+            self.assertEqual(nav_products.returncode, 0, msg=nav_products.stderr)
+
+            with gzip.open(products_dir / "2024002.sp3.gz", "wb") as stream:
+                stream.write(generated_sp3.read_bytes())
+            with gzip.open(products_dir / "2024002.clk.gz", "wb") as stream:
+                stream.write(generated_clk.read_bytes())
+            with gzip.open(products_dir / "2024002.ionex.gz", "wb") as stream:
+                stream.write(build_synthetic_ionex_text().encode("ascii"))
+            with gzip.open(products_dir / "2024002.bsx.gz", "wb") as stream:
+                stream.write(build_synthetic_dcb_text().encode("ascii"))
+
+            result = self.run_gnss(
+                "ppp-static-signoff",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "30",
+                "--fetch-products",
+                "--product-date",
+                "2024-01-02",
+                "--product",
+                f"sp3={products_dir / '{yyyy}{doy}.sp3.gz'}",
+                "--product",
+                f"clk={products_dir / '{yyyy}{doy}.clk.gz'}",
+                "--product",
+                f"ionex={products_dir / '{yyyy}{doy}.ionex.gz'}",
+                "--product",
+                f"dcb={products_dir / '{yyyy}{doy}.bsx.gz'}",
+                "--require-valid-epochs-min",
+                "30",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertTrue(payload["fetch_products"])
+            self.assertEqual(payload["fetched_product_date"], "2024-01-02")
+            self.assertEqual(set(payload["fetched_products"]), {"sp3", "clk", "ionex", "dcb"})
+            self.assertTrue(str(payload["ionex"]).endswith("2024002.ionex"))
+            self.assertTrue(str(payload["dcb"]).endswith("2024002.bsx"))
+
     def test_ppp_kinematic_signoff_cli_writes_summary_and_passes_thresholds(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_kinematic_signoff_cli_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -4721,6 +5156,82 @@ class CLIToolsTest(unittest.TestCase):
             self.assertGreaterEqual(payload["mean_position_error_m"], 0.0)
             self.assertGreaterEqual(payload["p95_position_error_m"], 0.0)
             self.assertGreaterEqual(payload["max_position_error_m"], 0.0)
+
+    def test_ppp_kinematic_signoff_cli_can_fetch_precise_products(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_kinematic_signoff_fetch_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            generated_sp3 = temp_root / "generated.sp3"
+            generated_clk = temp_root / "generated.clk"
+            products_dir = temp_root / "products"
+            products_dir.mkdir()
+            output_path = temp_root / "ppp_kinematic_fetch.pos"
+            reference_path = temp_root / "ppp_kinematic_fetch_reference.pos"
+            summary_path = temp_root / "ppp_kinematic_fetch_summary.json"
+
+            nav_products = self.run_gnss(
+                "nav-products",
+                "--obs",
+                str(ROOT_DIR / "data/rover_kinematic.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_kinematic.nav"),
+                "--sp3-out",
+                str(generated_sp3),
+                "--clk-out",
+                str(generated_clk),
+                "--max-epochs",
+                "20",
+            )
+            self.assertEqual(nav_products.returncode, 0, msg=nav_products.stderr)
+
+            with gzip.open(products_dir / "2024002.sp3.gz", "wb") as stream:
+                stream.write(generated_sp3.read_bytes())
+            with gzip.open(products_dir / "2024002.clk.gz", "wb") as stream:
+                stream.write(generated_clk.read_bytes())
+            with gzip.open(products_dir / "2024002.ionex.gz", "wb") as stream:
+                stream.write(build_synthetic_ionex_text().encode("ascii"))
+            with gzip.open(products_dir / "2024002.bsx.gz", "wb") as stream:
+                stream.write(build_synthetic_dcb_text().encode("ascii"))
+
+            result = self.run_gnss(
+                "ppp-kinematic-signoff",
+                "--obs",
+                str(ROOT_DIR / "data/rover_kinematic.obs"),
+                "--base",
+                str(ROOT_DIR / "data/base_kinematic.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_kinematic.nav"),
+                "--out",
+                str(output_path),
+                "--reference-pos",
+                str(reference_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "20",
+                "--fetch-products",
+                "--product-date",
+                "2024-01-02",
+                "--product",
+                f"sp3={products_dir / '{yyyy}{doy}.sp3.gz'}",
+                "--product",
+                f"clk={products_dir / '{yyyy}{doy}.clk.gz'}",
+                "--product",
+                f"ionex={products_dir / '{yyyy}{doy}.ionex.gz'}",
+                "--product",
+                f"dcb={products_dir / '{yyyy}{doy}.bsx.gz'}",
+                "--require-common-epoch-pairs-min",
+                "20",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertTrue(payload["fetch_products"])
+            self.assertEqual(payload["fetched_product_date"], "2024-01-02")
+            self.assertEqual(set(payload["fetched_products"]), {"sp3", "clk", "ionex", "dcb"})
+            self.assertTrue(str(payload["ionex"]).endswith("2024002.ionex"))
+            self.assertTrue(str(payload["dcb"]).endswith("2024002.bsx"))
             self.assertGreaterEqual(payload["mean_satellites"], 18.0)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
 
@@ -7271,6 +7782,8 @@ class CLIToolsTest(unittest.TestCase):
             summary_json = temp_root / "odaiba_summary.json"
             status_json = temp_root / "receiver.status.json"
             live_summary = temp_root / "output" / "live_replay_summary.json"
+            visibility_summary = temp_root / "output" / "visibility_static_summary.json"
+            visibility_csv = temp_root / "output" / "visibility_static.csv"
             port_file = temp_root / "port.txt"
 
             lib_pos.write_text(
@@ -7355,6 +7868,33 @@ class CLIToolsTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            visibility_summary.write_text(
+                json.dumps(
+                    {
+                        "csv": str(visibility_csv),
+                        "epochs_processed": 5,
+                        "epochs_with_rows": 5,
+                        "rows_written": 27,
+                        "unique_satellites": 9,
+                        "mean_satellites_per_epoch": 5.4,
+                        "max_satellites_per_epoch": 7,
+                        "mean_elevation_deg": 38.2,
+                        "mean_snr_dbhz": 44.7,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            visibility_csv.write_text(
+                "\n".join(
+                    [
+                        "epoch_index,week,tow,satellite,system,signal,azimuth_deg,elevation_deg,snr_dbhz,has_pseudorange,has_carrier_phase,has_doppler",
+                        "1,2200,100.000,G01,GPS,GPS_L1CA,45.0,30.0,42.0,1,1,0",
+                        "1,2200,100.000,G02,GPS,GPS_L1CA,120.0,55.0,47.4,1,1,0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
 
             port = find_free_port()
             process = subprocess.Popen(
@@ -7400,6 +7940,18 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertEqual(len(overview["ppc_summaries"]), 1)
                 self.assertEqual(overview["ppc_summaries"][0]["runtime_status"], "realtime")
                 self.assertEqual(overview["ppc_summaries"][0]["quality_status"], "excellent")
+                self.assertEqual(len(overview["visibility_summaries"]), 1)
+                self.assertEqual(overview["visibility_summaries"][0]["rows_written"], 27)
+                self.assertEqual(overview["visibility_summaries"][0]["unique_satellites"], 9)
+                self.assertEqual(overview["visibility_summaries"][0]["csv_path"], "output/visibility_static.csv")
+
+                with request.urlopen(
+                    f"http://127.0.0.1:{bound_port}/api/visibility?path=output/visibility_static.csv"
+                ) as response:
+                    visibility_payload = json.loads(response.read().decode("utf-8"))
+                self.assertTrue(visibility_payload["available"])
+                self.assertEqual(len(visibility_payload["rows"]), 2)
+                self.assertEqual(visibility_payload["rows"][0]["satellite"], "G01")
 
                 with request.urlopen(f"http://127.0.0.1:{bound_port}/api/solution?name=libgnsspp") as response:
                     lib_payload = json.loads(response.read().decode("utf-8"))

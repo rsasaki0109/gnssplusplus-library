@@ -15,6 +15,19 @@ Main sign-off entrypoints:
 - `gnss ppc-rtk-signoff`
 - `gnss odaiba-benchmark --require-*`
 
+Example:
+
+```bash
+python3 apps/gnss.py ppp-static-signoff \
+  --fetch-products \
+  --product-date 2024-01-02 \
+  --product sp3=https://cddis.nasa.gov/archive/gnss/products/{gps_week}/COD0OPSFIN_{yyyy}{doy}0000_01D_05M_ORB.SP3.gz \
+  --product clk=https://cddis.nasa.gov/archive/gnss/products/{gps_week}/COD0OPSFIN_{yyyy}{doy}0000_01D_30S_CLK.CLK.gz \
+  --product ionex=https://cddis.nasa.gov/archive/gnss/products/ionex/{yyyy}/{doy}/COD0OPSFIN_{yyyy}{doy}0000_01D_01H_GIM.INX.gz \
+  --product dcb=https://cddis.nasa.gov/archive/gnss/products/bias/{yyyy}/CAS0MGXRAP_{yyyy}{doy}0000_01D_01D_DCB.BSX.gz \
+  --require-ppp-solution-rate-min 100
+```
+
 ## Realtime validation
 
 `gnss live-signoff` verifies:

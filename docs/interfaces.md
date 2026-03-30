@@ -8,7 +8,11 @@ Examples:
 
 - `gnss spp`
 - `gnss solve`
-- `gnss ppp`
+- `gnss ppp` (`--nav`, `--sp3`, `--clk`, `--ionex`, `--dcb`, `--ssr`, `--ssr-rtcm`)
+- `gnss fetch-products`
+- `gnss ionex-info`
+- `gnss dcb-info`
+- `gnss visibility`
 - `gnss stream`
 - `gnss convert`
 - `gnss live`
@@ -43,4 +47,5 @@ It shows:
 - PPC summaries
 - live sign-off summaries
 - 2D trajectories
+- visibility summaries and a polar visibility view
 - `gnss rcv` receiver status

@@ -4,6 +4,7 @@
 #include <cctype>
 #include <ctime>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -121,6 +122,158 @@ bool parseClockEpochTokens(std::istringstream& stream, GNSSTime& time) {
         return false;
     }
     return parseEpochFields(year, month, day, hour, minute, second, time);
+}
+
+bool parseIonexEpochLine(const std::string& line, GNSSTime& time) {
+    const std::string epoch_text = trimCopy(line.substr(0, std::min<size_t>(43U, line.size())));
+    if (epoch_text.empty()) {
+        return false;
+    }
+    std::istringstream stream(epoch_text);
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    int hour = 0;
+    int minute = 0;
+    double second = 0.0;
+    if (!(stream >> year >> month >> day >> hour >> minute >> second)) {
+        return false;
+    }
+    return parseEpochFields(year, month, day, hour, minute, second, time);
+}
+
+bool parseFixedFieldDoubles(const std::string& line,
+                            size_t end_column,
+                            std::vector<double>& values) {
+    values.clear();
+    std::istringstream stream(line.substr(0, std::min(end_column, line.size())));
+    double value = 0.0;
+    while (stream >> value) {
+        values.push_back(value);
+    }
+    return !values.empty();
+}
+
+double normalizeLongitudeToGrid(double lon_deg, double lon_start_deg, double lon_end_deg) {
+    double normalized = lon_deg;
+    const double min_lon = std::min(lon_start_deg, lon_end_deg);
+    const double max_lon = std::max(lon_start_deg, lon_end_deg);
+    while (normalized < min_lon - 1e-9) {
+        normalized += 360.0;
+    }
+    while (normalized > max_lon + 1e-9) {
+        normalized -= 360.0;
+    }
+    return normalized;
+}
+
+bool interpolateIonexRow(const IONEXLatitudeRow& row, double longitude_deg, double& tecu) {
+    if (row.values_tecu.empty() || std::abs(row.longitude_step_deg) < 1e-12) {
+        return false;
+    }
+    const double normalized_lon =
+        normalizeLongitudeToGrid(longitude_deg, row.longitude_start_deg, row.longitude_end_deg);
+    const double index = (normalized_lon - row.longitude_start_deg) / row.longitude_step_deg;
+    if (index < -1e-9 || index > static_cast<double>(row.values_tecu.size() - 1U) + 1e-9) {
+        return false;
+    }
+
+    const double clamped = std::max(0.0, std::min(index, static_cast<double>(row.values_tecu.size() - 1U)));
+    const size_t left = static_cast<size_t>(std::floor(clamped));
+    const size_t right = std::min(left + 1U, row.values_tecu.size() - 1U);
+    const double alpha = clamped - static_cast<double>(left);
+    const double left_value = row.values_tecu[left];
+    const double right_value = row.values_tecu[right];
+    if (!std::isfinite(left_value) || !std::isfinite(right_value)) {
+        return false;
+    }
+    tecu = left_value + alpha * (right_value - left_value);
+    return true;
+}
+
+bool interpolateIonexMap(const IONEXMap& map,
+                         double latitude_deg,
+                         double longitude_deg,
+                         double& tecu) {
+    if (map.rows.empty()) {
+        return false;
+    }
+
+    const IONEXLatitudeRow* before = nullptr;
+    const IONEXLatitudeRow* after = nullptr;
+    for (const auto& row : map.rows) {
+        if (row.latitude_deg <= latitude_deg) {
+            if (before == nullptr || row.latitude_deg > before->latitude_deg) {
+                before = &row;
+            }
+        }
+        if (row.latitude_deg >= latitude_deg) {
+            if (after == nullptr || row.latitude_deg < after->latitude_deg) {
+                after = &row;
+            }
+        }
+    }
+    if (before == nullptr) {
+        before = &map.rows.front();
+    }
+    if (after == nullptr) {
+        after = &map.rows.back();
+    }
+
+    double before_tecu = 0.0;
+    double after_tecu = 0.0;
+    if (before == after) {
+        return interpolateIonexRow(*before, longitude_deg, tecu);
+    }
+    if (!interpolateIonexRow(*before, longitude_deg, before_tecu) ||
+        !interpolateIonexRow(*after, longitude_deg, after_tecu)) {
+        return false;
+    }
+
+    const double lat_delta = after->latitude_deg - before->latitude_deg;
+    if (std::abs(lat_delta) < 1e-12) {
+        tecu = before_tecu;
+        return true;
+    }
+    const double alpha = (latitude_deg - before->latitude_deg) / lat_delta;
+    tecu = before_tecu + alpha * (after_tecu - before_tecu);
+    return true;
+}
+
+template <typename EntryType>
+const EntryType* findEntryAtOrBefore(const std::vector<EntryType>& entries, const GNSSTime& time) {
+    auto upper = std::lower_bound(
+        entries.begin(),
+        entries.end(),
+        time,
+        [](const EntryType& lhs, const GNSSTime& rhs) {
+            return lhs.time < rhs;
+        });
+    if (upper == entries.end()) {
+        return entries.empty() ? nullptr : &entries.back();
+    }
+    if (upper->time == time) {
+        return &(*upper);
+    }
+    if (upper == entries.begin()) {
+        return nullptr;
+    }
+    return &(*(upper - 1));
+}
+
+template <typename EntryType>
+const EntryType* findEntryAtOrAfter(const std::vector<EntryType>& entries, const GNSSTime& time) {
+    auto lower = std::lower_bound(
+        entries.begin(),
+        entries.end(),
+        time,
+        [](const EntryType& lhs, const GNSSTime& rhs) {
+            return lhs.time < rhs;
+        });
+    if (lower == entries.end()) {
+        return nullptr;
+    }
+    return &(*lower);
 }
 
 double normalizeGpsTime(double dt) {
@@ -1082,6 +1235,367 @@ bool SSRProducts::hasData(const SatelliteId& sat, const GNSSTime& time) const {
 
 void SSRProducts::clear() {
     orbit_clock_corrections.clear();
+}
+
+bool IONEXProducts::loadIONEXFile(const std::string& filename) {
+    clear();
+
+    std::ifstream input(filename);
+    if (!input.is_open()) {
+        return false;
+    }
+
+    bool in_header = true;
+    bool loaded_any = false;
+    bool current_is_rms = false;
+    IONEXMap current_map;
+    std::string line;
+    while (std::getline(input, line)) {
+        if (in_header) {
+            if (line.find("IONEX VERSION / TYPE") != std::string::npos) {
+                const std::string version_text = trimCopy(line.substr(0, std::min<size_t>(20U, line.size())));
+                if (!version_text.empty()) {
+                    std::istringstream version_stream(version_text);
+                    version_stream >> version;
+                }
+                const auto type_fields = trimCopy(line.substr(20, std::min<size_t>(40U, line.size() > 20 ? line.size() - 20U : 0U)));
+                if (!type_fields.empty()) {
+                    std::istringstream type_stream(type_fields);
+                    std::string unused_type;
+                    type_stream >> unused_type >> system;
+                }
+            } else if (line.find("INTERVAL") != std::string::npos) {
+                std::vector<double> values;
+                if (parseFixedFieldDoubles(line, 20U, values) && !values.empty()) {
+                    interval_s = static_cast<int>(std::llround(values.front()));
+                }
+            } else if (line.find("MAP DIMENSION") != std::string::npos) {
+                std::vector<double> values;
+                if (parseFixedFieldDoubles(line, 20U, values) && !values.empty()) {
+                    map_dimension = static_cast<int>(std::llround(values.front()));
+                }
+            } else if (line.find("BASE RADIUS") != std::string::npos) {
+                std::vector<double> values;
+                if (parseFixedFieldDoubles(line, 20U, values) && !values.empty()) {
+                    base_radius_km = values.front();
+                }
+            } else if (line.find("ELEVATION CUTOFF") != std::string::npos) {
+                std::vector<double> values;
+                if (parseFixedFieldDoubles(line, 20U, values) && !values.empty()) {
+                    elevation_cutoff_deg = values.front();
+                }
+            } else if (line.find("MAPPING FUNCTION") != std::string::npos) {
+                mapping_function = trimCopy(line.substr(0, std::min<size_t>(20U, line.size())));
+            } else if (line.find("EXPONENT") != std::string::npos) {
+                std::vector<double> values;
+                if (parseFixedFieldDoubles(line, 20U, values) && !values.empty()) {
+                    exponent = static_cast<int>(std::llround(values.front()));
+                }
+            } else if (line.find("LAT1 / LAT2 / DLAT") != std::string::npos) {
+                std::vector<double> values;
+                if (parseFixedFieldDoubles(line, 30U, values) && values.size() >= 3U) {
+                    latitude_grid = {values[0], values[1], values[2]};
+                }
+            } else if (line.find("LON1 / LON2 / DLON") != std::string::npos) {
+                std::vector<double> values;
+                if (parseFixedFieldDoubles(line, 30U, values) && values.size() >= 3U) {
+                    longitude_grid = {values[0], values[1], values[2]};
+                }
+            } else if (line.find("HGT1 / HGT2 / DHGT") != std::string::npos) {
+                std::vector<double> values;
+                if (parseFixedFieldDoubles(line, 30U, values) && values.size() >= 3U) {
+                    height_grid = {values[0], values[1], values[2]};
+                }
+            } else if (line.find("PRN / BIAS / RMS") != std::string::npos) {
+                ++auxiliary_dcb_entries;
+            } else if (line.find("END OF HEADER") != std::string::npos) {
+                in_header = false;
+            }
+            continue;
+        }
+
+        if (line.find("START OF TEC MAP") != std::string::npos) {
+            current_map = IONEXMap{};
+            current_is_rms = false;
+            continue;
+        }
+        if (line.find("START OF RMS MAP") != std::string::npos) {
+            current_map = IONEXMap{};
+            current_is_rms = true;
+            continue;
+        }
+        if (line.find("END OF TEC MAP") != std::string::npos ||
+            line.find("END OF RMS MAP") != std::string::npos) {
+            if (!current_map.rows.empty()) {
+                auto& target = current_is_rms ? rms_maps : tec_maps;
+                target.push_back(current_map);
+                loaded_any = true;
+            }
+            current_map = IONEXMap{};
+            current_is_rms = false;
+            continue;
+        }
+        if (line.find("EPOCH OF CURRENT MAP") != std::string::npos) {
+            parseIonexEpochLine(line, current_map.time);
+            continue;
+        }
+        if (line.find("LAT/LON1/LON2/DLON/H") == std::string::npos) {
+            continue;
+        }
+
+        std::vector<double> row_header;
+        if (!parseFixedFieldDoubles(line, 40U, row_header) || row_header.size() < 5U) {
+            continue;
+        }
+
+        IONEXLatitudeRow row;
+        row.latitude_deg = row_header[0];
+        row.longitude_start_deg = row_header[1];
+        row.longitude_end_deg = row_header[2];
+        row.longitude_step_deg = row_header[3];
+        row.height_km = row_header[4];
+
+        if (std::abs(row.longitude_step_deg) < 1e-12) {
+            continue;
+        }
+
+        const int longitude_count = static_cast<int>(
+            std::llround((row.longitude_end_deg - row.longitude_start_deg) / row.longitude_step_deg)) + 1;
+        if (longitude_count <= 0) {
+            continue;
+        }
+
+        while (static_cast<int>(row.values_tecu.size()) < longitude_count && std::getline(input, line)) {
+            if (line.find("END OF TEC MAP") != std::string::npos ||
+                line.find("END OF RMS MAP") != std::string::npos ||
+                line.find("LAT/LON1/LON2/DLON/H") != std::string::npos) {
+                break;
+            }
+            std::istringstream value_stream(line.substr(0, std::min<size_t>(60U, line.size())));
+            double raw_value = 0.0;
+            while (value_stream >> raw_value) {
+                if (std::abs(raw_value - 9999.0) < 1e-6) {
+                    row.values_tecu.push_back(std::numeric_limits<double>::quiet_NaN());
+                } else {
+                    row.values_tecu.push_back(raw_value * std::pow(10.0, exponent));
+                }
+                if (static_cast<int>(row.values_tecu.size()) >= longitude_count) {
+                    break;
+                }
+            }
+        }
+        if (static_cast<int>(row.values_tecu.size()) == longitude_count) {
+            current_map.rows.push_back(std::move(row));
+        }
+    }
+
+    auto sort_by_time = [](std::vector<IONEXMap>& maps) {
+        std::sort(
+            maps.begin(),
+            maps.end(),
+            [](const IONEXMap& lhs, const IONEXMap& rhs) {
+                return lhs.time < rhs.time;
+            });
+    };
+    sort_by_time(tec_maps);
+    sort_by_time(rms_maps);
+    return loaded_any;
+}
+
+bool IONEXProducts::interpolateTecu(const GNSSTime& time,
+                                    double latitude_deg,
+                                    double longitude_deg,
+                                    double& tecu,
+                                    double* rms_tecu) const {
+    const auto interpolate_map_series =
+        [&](const std::vector<IONEXMap>& maps, double& output_value) -> bool {
+            if (maps.empty()) {
+                return false;
+            }
+
+            const IONEXMap* before = findEntryAtOrBefore(maps, time);
+            const IONEXMap* after = findEntryAtOrAfter(maps, time);
+            if (before == nullptr && after == nullptr) {
+                return false;
+            }
+            if (before != nullptr && after != nullptr && before != after) {
+                double left = 0.0;
+                double right = 0.0;
+                if (!interpolateIonexMap(*before, latitude_deg, longitude_deg, left) ||
+                    !interpolateIonexMap(*after, latitude_deg, longitude_deg, right)) {
+                    return false;
+                }
+                const double dt_total = after->time - before->time;
+                if (std::abs(dt_total) < 1e-9) {
+                    output_value = left;
+                    return true;
+                }
+                const double alpha = (time - before->time) / dt_total;
+                output_value = left + alpha * (right - left);
+                return true;
+            }
+
+            const IONEXMap* sample = before != nullptr ? before : after;
+            return sample != nullptr && interpolateIonexMap(*sample, latitude_deg, longitude_deg, output_value);
+        };
+
+    if (!interpolate_map_series(tec_maps, tecu)) {
+        return false;
+    }
+    if (rms_tecu != nullptr) {
+        double rms_value = 0.0;
+        if (interpolate_map_series(rms_maps, rms_value)) {
+            *rms_tecu = rms_value;
+        } else {
+            *rms_tecu = 0.0;
+        }
+    }
+    return true;
+}
+
+bool IONEXProducts::hasData(const GNSSTime& time) const {
+    return findEntryAtOrBefore(tec_maps, time) != nullptr ||
+           findEntryAtOrAfter(tec_maps, time) != nullptr;
+}
+
+void IONEXProducts::clear() {
+    version.clear();
+    system.clear();
+    interval_s = 0;
+    map_dimension = 0;
+    exponent = 0;
+    base_radius_km = 0.0;
+    elevation_cutoff_deg = 0.0;
+    mapping_function.clear();
+    latitude_grid.clear();
+    longitude_grid.clear();
+    height_grid.clear();
+    auxiliary_dcb_entries = 0;
+    tec_maps.clear();
+    rms_maps.clear();
+}
+
+bool DCBProducts::loadFile(const std::string& filename) {
+    clear();
+
+    std::ifstream input(filename);
+    if (!input.is_open()) {
+        return false;
+    }
+
+    bool in_bias_solution = false;
+    bool loaded_any = false;
+    std::string line;
+    while (std::getline(input, line)) {
+        const std::string trimmed = trimCopy(line);
+        if (trimmed.empty()) {
+            continue;
+        }
+        if (trimmed.rfind("+BIAS/SOLUTION", 0) == 0) {
+            in_bias_solution = true;
+            continue;
+        }
+        if (trimmed.rfind("-BIAS/SOLUTION", 0) == 0) {
+            in_bias_solution = false;
+            continue;
+        }
+
+        if (in_bias_solution) {
+            if (trimmed[0] == '*') {
+                continue;
+            }
+            std::vector<std::string> fields;
+            std::istringstream stream(trimmed);
+            std::string token;
+            while (stream >> token) {
+                fields.push_back(token);
+            }
+            if (fields.size() < 9U) {
+                continue;
+            }
+
+            SatelliteId satellite;
+            if (!parseSatelliteToken(fields[1], satellite)) {
+                continue;
+            }
+
+            try {
+                DCBEntry entry;
+                entry.bias_type = fields[0];
+                entry.satellite = satellite;
+                entry.observation_1 = fields[2];
+                entry.observation_2 = fields[3];
+                entry.unit = fields[6];
+                entry.bias = std::stod(fields[7]);
+                entry.sigma = std::stod(fields[8]);
+                entry.valid = std::isfinite(entry.bias);
+                entries.push_back(entry);
+                loaded_any = true;
+            } catch (const std::exception&) {
+            }
+            continue;
+        }
+
+        if (line.find("PRN / BIAS / RMS") != std::string::npos) {
+            std::vector<double> values;
+            std::vector<std::string> fields;
+            std::istringstream stream(line.substr(0, std::min<size_t>(40U, line.size())));
+            std::string token;
+            while (stream >> token) {
+                fields.push_back(token);
+            }
+            if (fields.size() < 3U) {
+                continue;
+            }
+            SatelliteId satellite;
+            if (!parseSatelliteToken(fields[0], satellite)) {
+                continue;
+            }
+            try {
+                DCBEntry entry;
+                entry.bias_type = "DCB";
+                entry.satellite = satellite;
+                entry.unit = "ns";
+                entry.bias = std::stod(fields[1]);
+                entry.sigma = std::stod(fields[2]);
+                entry.valid = std::isfinite(entry.bias);
+                entries.push_back(entry);
+                loaded_any = true;
+            } catch (const std::exception&) {
+            }
+        }
+    }
+
+    return loaded_any;
+}
+
+bool DCBProducts::getBias(const SatelliteId& sat,
+                          const std::string& bias_type,
+                          const std::string& observation_1,
+                          const std::string& observation_2,
+                          double& bias,
+                          double* sigma) const {
+    for (const auto& entry : entries) {
+        if (!entry.valid || !(entry.satellite == sat) || entry.bias_type != bias_type) {
+            continue;
+        }
+        if (!observation_1.empty() && entry.observation_1 != observation_1) {
+            continue;
+        }
+        if (!observation_2.empty() && entry.observation_2 != observation_2) {
+            continue;
+        }
+        bias = entry.bias;
+        if (sigma != nullptr) {
+            *sigma = entry.sigma;
+        }
+        return true;
+    }
+    return false;
+}
+
+void DCBProducts::clear() {
+    entries.clear();
 }
 
 } // namespace libgnss

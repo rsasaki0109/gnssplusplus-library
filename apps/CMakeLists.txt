@@ -2,6 +2,7 @@ set(GNSS_APP_TARGETS
     gnss_spp
     gnss_solve
     gnss_ppp
+    gnss_visibility
     gnss_nav_products
     gnss_rinex_info
     gnss_stream
@@ -19,6 +20,9 @@ target_link_libraries(gnss_solve PRIVATE gnss_lib gnss_lib_noopt Threads::Thread
 
 add_executable(gnss_ppp gnss_ppp.cpp)
 target_link_libraries(gnss_ppp PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+
+add_executable(gnss_visibility gnss_visibility.cpp)
+target_link_libraries(gnss_visibility PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
 add_executable(gnss_nav_products gnss_nav_products.cpp)
 target_link_libraries(gnss_nav_products PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
@@ -56,6 +60,9 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_web.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_runtime.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_live_signoff.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_fetch_products.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ionex_info.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_dcb_info.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_odaiba_benchmark.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_odaiba_scan.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_short_baseline_signoff.py
