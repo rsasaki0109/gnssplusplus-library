@@ -15,11 +15,30 @@ Examples:
 - `gnss visibility`
 - `gnss visibility-plot`
 - `gnss moving-base-signoff`
+- `gnss moving-base-prepare`
+- `gnss scorpion-moving-base-signoff`
 - `gnss stream`
 - `gnss convert`
 - `gnss live`
 - `gnss rcv`
 - `gnss web`
+
+## Docker
+
+The repo also ships a multi-stage `Dockerfile`. The runtime image installs:
+
+- the `gnss` dispatcher on `PATH`
+- native CLI binaries under `/opt/libgnsspp/bin`
+- the `libgnsspp` Python package via `PYTHONPATH`
+
+The default entrypoint is `gnss`, so container invocations look like:
+
+```bash
+docker run --rm -it -v "$PWD:/workspace" libgnsspp:latest --help
+docker run --rm -it -v "$PWD:/workspace" libgnsspp:latest ppp --help
+docker run --rm -it -p 8085:8085 -v "$PWD:/workspace" libgnsspp:latest web --host 0.0.0.0 --port 8085 --root /workspace
+docker compose up gnss-web
+```
 
 ## Python
 
@@ -56,8 +75,10 @@ It shows:
 
 `gnss solve`, `gnss replay`, and `gnss live` accept `--mode moving-base`.
 
-`gnss moving-base-signoff` is the validation entrypoint for external real moving-base datasets. It compares solver output against a reference CSV with per-epoch base/rover ECEF coordinates and can enforce:
+`gnss moving-base-prepare` extracts rover/base UBX streams plus a per-epoch reference CSV from a ROS2 moving-base bag or Zenodo zip. `gnss moving-base-signoff` is the validation entrypoint for replay/live runs against those references. `gnss scorpion-moving-base-signoff` wraps the public SCORPION bag flow by chaining prepare, BRDC nav fetch, and replay validation. Together they cover:
 
+- ROS2 bag or zip ingestion with u-blox `NAV-PVT` / `RXM-RAWX` / `NAV-RELPOSNED`
+- replay inputs via `--rover-ubx` and `--base-ubx`
 - fix rate
 - baseline error percentiles
 - heading error percentiles
