@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -137,6 +138,63 @@ def read_lib_pos_records(path: Path) -> list[dict[str, float | int]]:
                     "week": int(float(parts[0])),
                     "tow": float(parts[1]),
                     "status": int(parts[8]),
+                }
+            )
+    return records
+
+
+def read_lib_xyz_records(path: Path) -> list[dict[str, float | int]]:
+    records: list[dict[str, float | int]] = []
+    with path.open("r", encoding="ascii") as handle:
+        for line in handle:
+            if not line.strip() or line.startswith("%"):
+                continue
+            parts = line.split()
+            if len(parts) < 10:
+                continue
+            records.append(
+                {
+                    "week": int(float(parts[0])),
+                    "tow": float(parts[1]),
+                    "x": float(parts[2]),
+                    "y": float(parts[3]),
+                    "z": float(parts[4]),
+                    "status": int(parts[8]),
+                    "satellites": int(parts[9]),
+                }
+            )
+    return records
+
+
+def read_malib_xyz_records(path: Path) -> list[dict[str, float | int]]:
+    from datetime import datetime, timedelta
+
+    gps_epoch = datetime(1980, 1, 6)
+    records: list[dict[str, float | int]] = []
+    with path.open("r", encoding="ascii") as handle:
+        for line in handle:
+            if not line.strip() or line.startswith("%"):
+                continue
+            parts = line.split()
+            if len(parts) < 7:
+                continue
+            stamp = datetime.strptime(
+                f"{parts[0]} {parts[1]}",
+                "%Y/%m/%d %H:%M:%S.%f",
+            )
+            delta: timedelta = stamp - gps_epoch
+            records.append(
+                {
+                    "week": delta.days // 7,
+                    "tow": round(
+                        (delta.days % 7) * 86400 + delta.seconds + delta.microseconds / 1e6,
+                        3,
+                    ),
+                    "x": float(parts[2]),
+                    "y": float(parts[3]),
+                    "z": float(parts[4]),
+                    "status": int(parts[5]),
+                    "satellites": int(parts[6]),
                 }
             )
     return records
@@ -461,6 +519,124 @@ def render_ppc_comparison_plot(path: Path, pairs: list[object], title: str) -> N
     plt.close(figure)
 
 
+def build_kinematic_comparison_rows(
+    solution_pos: Path,
+    reference_pos: Path,
+    malib_pos: Path,
+) -> list[dict[str, float | int]]:
+    reference_by_epoch = {
+        (int(record["week"]), round(float(record["tow"]), 3)): record
+        for record in read_lib_xyz_records(reference_pos)
+    }
+    lib_by_epoch = {
+        (int(record["week"]), round(float(record["tow"]), 3)): record
+        for record in read_lib_xyz_records(solution_pos)
+    }
+    malib_by_epoch = {
+        (int(record["week"]), round(float(record["tow"]), 3)): record
+        for record in read_malib_xyz_records(malib_pos)
+    }
+
+    rows: list[dict[str, float | int]] = []
+    shared_keys = sorted(set(lib_by_epoch) & set(malib_by_epoch) & set(reference_by_epoch))
+    for week, tow in shared_keys:
+        reference = reference_by_epoch[(week, tow)]
+        lib_record = lib_by_epoch[(week, tow)]
+        malib_record = malib_by_epoch[(week, tow)]
+        lib_error = math.dist(
+            (float(lib_record["x"]), float(lib_record["y"]), float(lib_record["z"])),
+            (float(reference["x"]), float(reference["y"]), float(reference["z"])),
+        )
+        malib_error = math.dist(
+            (float(malib_record["x"]), float(malib_record["y"]), float(malib_record["z"])),
+            (float(reference["x"]), float(reference["y"]), float(reference["z"])),
+        )
+        rows.append(
+            {
+                "gps_week": week,
+                "gps_tow_s": tow,
+                "lib_error_m": lib_error,
+                "malib_error_m": malib_error,
+                "delta_error_m": lib_error - malib_error,
+                "lib_status": int(lib_record["status"]),
+                "malib_status": int(malib_record["status"]),
+                "lib_satellites": int(lib_record["satellites"]),
+                "malib_satellites": int(malib_record["satellites"]),
+            }
+        )
+    return rows
+
+
+def write_kinematic_comparison_csv(path: Path, rows: list[dict[str, float | int]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(
+            [
+                "gps_week",
+                "gps_tow_s",
+                "lib_error_m",
+                "malib_error_m",
+                "delta_error_m",
+                "lib_status",
+                "malib_status",
+                "lib_satellites",
+                "malib_satellites",
+            ]
+        )
+        for row in rows:
+            writer.writerow(
+                [
+                    int(row["gps_week"]),
+                    f"{float(row['gps_tow_s']):.3f}",
+                    f"{float(row['lib_error_m']):.6f}",
+                    f"{float(row['malib_error_m']):.6f}",
+                    f"{float(row['delta_error_m']):.6f}",
+                    int(row["lib_status"]),
+                    int(row["malib_status"]),
+                    int(row["lib_satellites"]),
+                    int(row["malib_satellites"]),
+                ]
+            )
+
+
+def render_kinematic_comparison_plot(path: Path, rows: list[dict[str, float | int]], title: str) -> None:
+    if not rows:
+        raise SystemExit("No common epochs available for PPP kinematic comparison plot")
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from matplotlib import pyplot as plt  # noqa: WPS433
+
+    indices = list(range(1, len(rows) + 1))
+    lib_errors = [float(row["lib_error_m"]) for row in rows]
+    malib_errors = [float(row["malib_error_m"]) for row in rows]
+    delta_errors = [float(row["delta_error_m"]) for row in rows]
+
+    figure, axes = plt.subplots(2, 1, figsize=(10.5, 6.4), sharex=True)
+    figure.patch.set_facecolor("#f8f5ec")
+    for axis in axes:
+        axis.set_facecolor("#fffdf8")
+        axis.grid(True, alpha=0.25)
+
+    axes[0].plot(indices, lib_errors, color="#d97706", linewidth=1.8, label="libgnss++")
+    axes[0].plot(indices, malib_errors, color="#2563eb", linewidth=1.6, label="MALIB")
+    axes[0].set_ylabel("3D error (m)")
+    axes[0].set_title(title)
+    axes[0].legend(loc="upper right")
+
+    axes[1].plot(indices, delta_errors, color="#0f766e", linewidth=1.8, label="libgnss++ - MALIB")
+    axes[1].axhline(0.0, color="#9ca3af", linewidth=1.0, linestyle="--")
+    axes[1].set_ylabel("delta (m)")
+    axes[1].set_xlabel("common epoch")
+    axes[1].legend(loc="upper right")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure.tight_layout()
+    figure.savefig(path, dpi=170)
+    plt.close(figure)
+
+
 def main() -> int:
     args = parse_args()
     out_path, summary_path, reference_path = default_paths(args.profile)
@@ -681,6 +857,27 @@ def main() -> int:
     run_checked(command)
 
     payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    if args.profile == "kinematic" and payload.get("malib_solution_pos"):
+        reference_pos_text = payload.get("reference_pos")
+        if isinstance(reference_pos_text, str):
+            reference_pos = Path(reference_pos_text)
+            if not reference_pos.is_absolute():
+                reference_pos = (ROOT_DIR / reference_pos).resolve()
+            malib_pos = Path(str(payload["malib_solution_pos"]))
+            if not malib_pos.is_absolute():
+                malib_pos = (ROOT_DIR / malib_pos).resolve()
+            comparison_rows = build_kinematic_comparison_rows(out_path, reference_pos, malib_pos)
+            if comparison_rows:
+                write_kinematic_comparison_csv(comparison_csv, comparison_rows)
+                render_kinematic_comparison_plot(
+                    comparison_png,
+                    comparison_rows,
+                    f"{payload.get('dataset', 'PPP kinematic')} vs MALIB",
+                )
+                payload["reference_common_epoch_pairs"] = payload.get("common_epoch_pairs")
+                payload["common_epoch_pairs"] = len(comparison_rows)
+                payload["comparison_csv"] = str(comparison_csv)
+                payload["comparison_png"] = str(comparison_png)
     payload["products_signoff_profile"] = args.profile
     payload["product_presets"] = presets
     payload["product_specs"] = list(args.product)

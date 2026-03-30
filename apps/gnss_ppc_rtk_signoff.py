@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import subprocess
 
+from gnss_toml_config import parse_args_with_toml
 from gnss_runtime import ensure_input_exists, resolve_gnss_command
 
 
@@ -85,6 +86,12 @@ REQUIREMENT_NAMES = (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
+    parser.add_argument(
+        "--config-toml",
+        type=Path,
+        default=None,
+        help="Optional TOML config. Uses [ppc_rtk_signoff] or top-level keys.",
+    )
     parser.add_argument("--dataset-root", type=Path, default=None)
     parser.add_argument("--city", choices=("tokyo", "nagoya"), default=None)
     parser.add_argument("--run", default="run1")
@@ -126,7 +133,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-lib-fix-rate-vs-rtklib-min-delta", type=float, default=None)
     parser.add_argument("--require-lib-median-h-vs-rtklib-max-delta", type=float, default=None)
     parser.add_argument("--require-lib-p95-h-vs-rtklib-max-delta", type=float, default=None)
-    return parser.parse_args()
+    return parse_args_with_toml(parser, "ppc_rtk_signoff")
 
 
 def resolve_run_dir(args: argparse.Namespace) -> Path:

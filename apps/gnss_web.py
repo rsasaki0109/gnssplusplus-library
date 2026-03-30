@@ -783,6 +783,8 @@ def render_html() -> str:
         <h2>Moving-base sign-offs</h2>
         <span class="tiny">auto-discovered from output/*moving_base_summary.json</span>
       </div>
+      <div class="metrics" id="moving-base-metrics"></div>
+      <p class="tiny" id="moving-base-provenance" style="margin-top: 10px;"></p>
       <div class="grid two plot-wrap">
         <div>
           <table id="moving-base-table">
@@ -809,6 +811,10 @@ def render_html() -> str:
         <div class="plot-card">
           <h3>Moving-base history</h3>
           <canvas id="moving-base-history-canvas" width="600" height="360"></canvas>
+        </div>
+        <div class="plot-card">
+          <h3>Heading history</h3>
+          <canvas id="moving-base-heading-canvas" width="600" height="360"></canvas>
         </div>
       </div>
     </section>
@@ -1115,6 +1121,76 @@ def render_html() -> str:
       ctx.fillText(payload.path || "", 94, canvas.height - 10);
     }
 
+    function drawMovingBaseSeries(canvas, payload, field, label, color, suffix) {
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (!payload.available || !payload.rows.length) {
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "16px IBM Plex Sans, sans-serif";
+        ctx.fillText(payload.error || "No moving-base matches", 24, 40);
+        return;
+      }
+
+      const rows = payload.rows.filter((row) => row[field] !== null && row[field] !== undefined);
+      if (!rows.length) {
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "16px IBM Plex Sans, sans-serif";
+        ctx.fillText(`No ${label.toLowerCase()} data`, 24, 40);
+        return;
+      }
+
+      const padLeft = 52;
+      const padRight = 18;
+      const padTop = 20;
+      const padBottom = 30;
+      const plotWidth = canvas.width - padLeft - padRight;
+      const plotHeight = canvas.height - padTop - padBottom;
+      const values = rows.map((row) => row[field]);
+      const maxValue = Math.max(...values, 0.1);
+
+      const mapX = (index) =>
+        padLeft + (plotWidth * index) / Math.max(rows.length - 1, 1);
+      const mapY = (value) =>
+        padTop + plotHeight - (plotHeight * value) / Math.max(maxValue, 1e-6);
+
+      ctx.strokeStyle = "#d1d5db";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i += 1) {
+        const y = padTop + (plotHeight * i) / 4;
+        ctx.beginPath();
+        ctx.moveTo(padLeft, y);
+        ctx.lineTo(canvas.width - padRight, y);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      rows.forEach((row, index) => {
+        const x = mapX(index);
+        const y = mapY(row[field]);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      ctx.fillStyle = "#6b7280";
+      ctx.font = "12px IBM Plex Sans, sans-serif";
+      ctx.fillText(label, 12, 18);
+      ctx.fillStyle = color;
+      ctx.fillRect(12, 24, 18, 3);
+      ctx.fillStyle = "#6b7280";
+      ctx.fillText(`rows: ${rows.length}`, 14, canvas.height - 10);
+      ctx.fillText(
+        `max ${formatMaybeNumber(maxValue, field === "heading_error_deg" ? 2 : 3, suffix)}`,
+        94,
+        canvas.height - 10
+      );
+    }
+
     function formatMaybeNumber(value, digits = 2, suffix = "") {
       if (value === null || value === undefined) return "n/a";
       if (typeof value === "number") return `${value.toFixed(digits)}${suffix}`;
@@ -1313,7 +1389,30 @@ def render_html() -> str:
         movingBaseBody.appendChild(tr);
       }
       const movingBaseImage = document.getElementById("moving-base-image");
+      const movingBaseMetrics = document.getElementById("moving-base-metrics");
+      const movingBaseProvenance = document.getElementById("moving-base-provenance");
       const firstMovingBase = (overview.moving_base_summaries || []).find((row) => row.plot_png);
+      if (firstMovingBase) {
+        renderMetricGrid(movingBaseMetrics, [
+          ["matched", firstMovingBase.matched_epochs ?? "n/a"],
+          ["fix rate", formatMaybeNumber(firstMovingBase.fix_rate_pct, 2, "%")],
+          ["p95 baseline", formatMaybeNumber(firstMovingBase.p95_baseline_error_m, 3, " m")],
+          ["p95 heading", formatMaybeNumber(firstMovingBase.p95_heading_error_deg, 2, " deg")],
+          ["realtime", formatMaybeNumber(firstMovingBase.realtime_factor, 2, "x")],
+          ["epoch rate", formatMaybeNumber(firstMovingBase.effective_epoch_rate_hz, 2, " Hz")],
+        ]);
+        movingBaseProvenance.innerHTML = [
+          firstMovingBase.summary_path ? artifactLink(firstMovingBase.summary_path, "summary") : null,
+          firstMovingBase.prepare_summary_json ? artifactLink(firstMovingBase.prepare_summary_json, "prepare") : null,
+          firstMovingBase.products_summary_json ? artifactLink(firstMovingBase.products_summary_json, "products") : null,
+          firstMovingBase.nav_rinex ? artifactLink(firstMovingBase.nav_rinex, "nav") : null,
+          firstMovingBase.input ? artifactLink(firstMovingBase.input, "input") : null,
+          firstMovingBase.input_url ? smartLink(firstMovingBase.input_url, "source") : null,
+        ].filter(Boolean).join(" / ");
+      } else {
+        renderMetricGrid(movingBaseMetrics, [["status", "n/a"], ["summary", "unavailable"]]);
+        movingBaseProvenance.textContent = "No moving-base summaries found.";
+      }
       if (firstMovingBase && firstMovingBase.plot_png) {
         movingBaseImage.src = `/artifact?path=${encodeURIComponent(firstMovingBase.plot_png)}`;
         movingBaseImage.style.display = "block";
@@ -1329,10 +1428,26 @@ def render_html() -> str:
           document.getElementById("moving-base-history-canvas"),
           movingBasePayload
         );
+        drawMovingBaseSeries(
+          document.getElementById("moving-base-heading-canvas"),
+          movingBasePayload,
+          "heading_error_deg",
+          "heading deg",
+          "#b45309",
+          " deg"
+        );
       } else {
         drawMovingBaseHistory(
           document.getElementById("moving-base-history-canvas"),
           {available: false, rows: [], error: "No moving-base matches CSV"}
+        );
+        drawMovingBaseSeries(
+          document.getElementById("moving-base-heading-canvas"),
+          {available: false, rows: [], error: "No moving-base matches CSV"},
+          "heading_error_deg",
+          "heading deg",
+          "#b45309",
+          " deg"
         );
       }
 

@@ -32,6 +32,7 @@ struct Options {
     int convergence_min_epochs = 20;
     double ssr_step_seconds = 1.0;
     bool estimate_troposphere = true;
+    bool use_ionosphere_free = true;
     bool kinematic_mode = false;
     bool low_dynamics_mode = false;
     bool enable_ar = false;
@@ -130,6 +131,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.estimate_troposphere = false;
         } else if (arg == "--estimate-troposphere") {
             options.estimate_troposphere = true;
+        } else if (arg == "--no-ionosphere-free") {
+            options.use_ionosphere_free = false;
+        } else if (arg == "--ionosphere-free") {
+            options.use_ionosphere_free = true;
         } else if (arg == "--static") {
             options.kinematic_mode = false;
         } else if (arg == "--kinematic") {
@@ -256,6 +261,7 @@ int main(int argc, char* argv[]) {
         ppp_config.antex_file_path = options.antex_path;
         ppp_config.ocean_loading_file_path = options.blq_path;
         ppp_config.estimate_troposphere = options.estimate_troposphere;
+        ppp_config.use_ionosphere_free = options.use_ionosphere_free;
         ppp_config.kinematic_mode = options.kinematic_mode;
         ppp_config.low_dynamics_mode = options.low_dynamics_mode;
         ppp_config.enable_ambiguity_resolution = options.enable_ar;
