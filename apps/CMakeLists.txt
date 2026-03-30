@@ -59,6 +59,7 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_rcv.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_web.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_runtime.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_toml_config.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_live_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_moving_base_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_scorpion_moving_base_signoff.py
@@ -111,5 +112,8 @@ install(PROGRAMS
 
 install(FILES
     ${CMAKE_SOURCE_DIR}/configs/live.example.conf
+    ${CMAKE_SOURCE_DIR}/configs/ppp_products_ppc.example.toml
+    ${CMAKE_SOURCE_DIR}/configs/moving_base_signoff.example.toml
+    ${CMAKE_SOURCE_DIR}/configs/web.example.toml
     DESTINATION configs
 )

@@ -16,6 +16,8 @@ import threading
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from gnss_toml_config import parse_args_with_toml
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = ROOT_DIR / "scripts"
 
@@ -47,6 +49,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog=os.environ.get("GNSS_CLI_NAME"),
         description="Serve a local web UI for benchmark artifacts, trajectories, and receiver status.",
+    )
+    parser.add_argument(
+        "--config-toml",
+        type=Path,
+        default=None,
+        help="Optional TOML config. Uses [web] or top-level keys.",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1).")
     parser.add_argument("--port", type=int, default=8085, help="Bind port (default: 8085, use 0 for auto).")
@@ -122,7 +130,7 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("GNSSPP_DOCS_URL", DOCS_SITE_URL),
         help="Optional docs site URL shown in the web UI header.",
     )
-    return parser.parse_args()
+    return parse_args_with_toml(parser, "web")
 
 
 def resolve_path(explicit: Path | None, root_dir: Path, relative: str) -> Path:
