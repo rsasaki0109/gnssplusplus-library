@@ -14,6 +14,7 @@ Examples:
 - `gnss dcb-info`
 - `gnss visibility`
 - `gnss visibility-plot`
+- `gnss moving-base-signoff`
 - `gnss stream`
 - `gnss convert`
 - `gnss live`
@@ -50,3 +51,15 @@ It shows:
 - 2D trajectories
 - visibility summaries and a polar visibility view
 - `gnss rcv` receiver status
+
+## Moving-base
+
+`gnss solve`, `gnss replay`, and `gnss live` accept `--mode moving-base`.
+
+`gnss moving-base-signoff` is the validation entrypoint for external real moving-base datasets. It compares solver output against a reference CSV with per-epoch base/rover ECEF coordinates and can enforce:
+
+- fix rate
+- baseline error percentiles
+- heading error percentiles
+- realtime factor
+- decoder error counts

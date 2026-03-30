@@ -25,6 +25,7 @@ struct SubsetMatrices {
 
 bool shouldSearchPreferredSubsets(bool fixed, double ratio, double threshold);
 bool shouldSearchDropSubsets(bool fixed, double ratio, double threshold, double max_variance);
+bool passesArFilter(bool enabled, double candidate_ratio, double threshold, double margin);
 
 SubsetMatrices extractSubset(const Eigen::VectorXd& full_dd_float,
                              const Eigen::MatrixXd& full_Qb,

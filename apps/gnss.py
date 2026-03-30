@@ -134,6 +134,11 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_live_signoff.py"),
         "summary": "Run gnss live with realtime/error-handling thresholds and emit summary JSON.",
     },
+    "moving-base-signoff": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_moving_base_signoff.py"),
+        "summary": "Run a real moving-base replay/live dataset against reference baseline/heading CSV and emit summary JSON.",
+    },
     "rcv": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_rcv.py"),

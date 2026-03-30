@@ -25,6 +25,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 import gnss_odaiba_benchmark as benchmark  # noqa: E402
 import gnss_clas_ppp as clas_ppp  # noqa: E402
 import gnss_live_signoff as live_signoff  # noqa: E402
+import gnss_moving_base_signoff as moving_base_signoff  # noqa: E402
 import gnss_ppc_demo as ppc_demo  # noqa: E402
 import gnss_ppc_rtk_signoff as ppc_rtk_signoff  # noqa: E402
 import gnss_ppp_kinematic_signoff as ppp_kinematic_signoff  # noqa: E402
@@ -174,6 +175,64 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("--require-fix-rate-min", command)
             self.assertIn("95.0", command)
             self.assertIn("--require-lib-fix-rate-vs-rtklib-min-delta", command)
+
+
+class MovingBaseSignoffHelpersTest(unittest.TestCase):
+    def test_read_reference_rows_accepts_ecef_columns(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_moving_base_ref_") as temp_dir:
+            reference_csv = Path(temp_dir) / "reference.csv"
+            reference_csv.write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,base_ecef_x_m,base_ecef_y_m,base_ecef_z_m,rover_ecef_x_m,rover_ecef_y_m,rover_ecef_z_m",
+                        "2200,345600.0,3875000.0,332000.0,5029000.0,3875001.0,332002.0,5029000.5",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            rows = moving_base_signoff.read_reference_rows(reference_csv)
+
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["week"], 2200.0)
+            self.assertEqual(rows[0]["tow"], 345600.0)
+            self.assertAlmostEqual(rows[0]["base_x"], 3875000.0)
+            self.assertAlmostEqual(rows[0]["rover_y"], 332002.0)
+
+    def test_match_solution_to_reference_reports_baseline_and_heading_errors(self) -> None:
+        solution_records = [
+            {
+                "week": 2200,
+                "tow": 345600.0,
+                "x": 3875001.2,
+                "y": 332002.1,
+                "z": 5029000.4,
+                "status": 4,
+                "satellites": 12,
+            }
+        ]
+        reference_rows = [
+            {
+                "week": 2200.0,
+                "tow": 345600.0,
+                "base_x": 3875000.0,
+                "base_y": 332000.0,
+                "base_z": 5029000.0,
+                "rover_x": 3875001.0,
+                "rover_y": 332002.0,
+                "rover_z": 5029000.5,
+            }
+        ]
+
+        matches = moving_base_signoff.match_solution_to_reference(
+            solution_records, reference_rows, 0.25
+        )
+
+        self.assertEqual(len(matches), 1)
+        self.assertGreater(matches[0]["baseline_error_m"], 0.0)
+        self.assertGreater(matches[0]["baseline_length_m"], 0.0)
+        self.assertIsNotNone(matches[0]["heading_error_deg"])
 
 
 class DrivingComparisonHelpersTest(unittest.TestCase):
