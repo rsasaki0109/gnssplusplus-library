@@ -81,6 +81,7 @@ def resolve_output_paths(args: argparse.Namespace) -> dict[str, Path]:
         "reference_csv": work_dir / "reference.csv",
         "prepare_summary_json": work_dir / "prepare_summary.json",
         "products_summary_json": work_dir / "products_summary.json",
+        "plot_png": work_dir / "scorpion_moving_base.png",
         "out": args.out or (work_dir / "scorpion_moving_base.pos"),
         "summary_json": args.summary_json or (work_dir / "scorpion_moving_base_summary.json"),
     }
@@ -170,6 +171,10 @@ def build_signoff_command(
         str(paths["out"]),
         "--summary-json",
         str(paths["summary_json"]),
+        "--plot-png",
+        str(paths["plot_png"]),
+        "--plot-title",
+        "SCORPION moving-base sign-off",
         "--max-epochs",
         str(args.max_epochs),
         "--match-tolerance-s",
@@ -264,6 +269,7 @@ def main() -> int:
     summary_payload["products_summary_json"] = (
         str(paths["products_summary_json"]) if paths["products_summary_json"].exists() else None
     )
+    summary_payload["plot_png"] = str(paths["plot_png"]) if paths["plot_png"].exists() else None
     summary_payload["prepare_summary"] = prepare_payload
     summary_payload["products_summary"] = products_payload
     summary_payload["nav_rinex"] = str(nav_rinex) if nav_rinex is not None else None

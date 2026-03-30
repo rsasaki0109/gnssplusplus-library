@@ -42,6 +42,8 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=ROOT_DIR / "output/moving_base_summary.json",
     )
+    parser.add_argument("--plot-png", type=Path, default=None)
+    parser.add_argument("--plot-title", default="Moving-base sign-off")
     parser.add_argument("--log-out", type=Path, default=None)
     parser.add_argument("--max-epochs", type=int, default=120)
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
@@ -445,6 +447,7 @@ def build_summary_payload(
         "stdout": stdout_text,
         "stderr": stderr_text,
         "exit_code": exit_code,
+        "plot_png": str(args.plot_png) if args.plot_png is not None else None,
     }
     if solver_metrics is not None:
         payload["solver_metrics"] = solver_metrics
@@ -566,12 +569,18 @@ def main() -> int:
         stderr_text,
         exit_code,
     )
+    if args.plot_png is not None:
+        from gnss_moving_base_plot import render_matches_plot
+
+        render_matches_plot(matches, args.plot_png, args.plot_title)
     enforce_requirements(payload, args)
 
     print("Finished moving-base sign-off.")
     print(f"  solver: {args.solver}")
     print(f"  solution: {args.out}")
     print(f"  summary: {args.summary_json}")
+    if args.plot_png is not None:
+        print(f"  plot: {args.plot_png}")
     print(f"  matched_epochs: {payload['matched_epochs']}")
     print(f"  fix_rate_pct: {payload['fix_rate_pct']}")
     print(f"  p95_baseline_error_m: {payload['p95_baseline_error_m']}")
