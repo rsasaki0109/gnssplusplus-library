@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<struct>
+    <width>600</width> <!-- image width (pixel) -->
+    <hight>600</hight> <!-- image hight (pixel) -->
+    <xc>300</xc> <!-- image center x (pixel) -->
+    <yc>300</yc> <!-- image center y (pixel) -->
+    <!-- distance from image center vs. elevation angle  -->
+    <r>0, 300</r> <!-- distance from image center (pixel) -->
+    <el>90, 0</el> <!-- elevation angle (deg) -->
+    <degree>1</degree> <!-- degree of polynomial fit -->
+</struct>
