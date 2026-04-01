@@ -20,6 +20,7 @@ find_package(sensor_msgs QUIET)
 find_package(geometry_msgs QUIET)
 find_package(nav_msgs QUIET)
 find_package(std_msgs QUIET)
+find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs)
 
 # List source files for the main library
 set(GNSS_SOURCES
@@ -134,6 +135,35 @@ set(CPACK_GENERATOR "TGZ;DEB")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "libgnss++ maintainers")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 include(CPack)
+
+# Visibility library (fisheye camera, satellite LOS/NLOS)
+if(OpenCV_FOUND)
+    add_library(gnss_visibility_lib STATIC
+        src/visibility/fisheye_camera.cpp
+        src/visibility/proj_fisheye.cpp
+        src/visibility/im2fisheye.cpp
+        src/visibility/mask_fisheye.cpp
+        src/visibility/kml_tour.cpp
+        src/visibility/satellite_visibility.cpp
+    )
+    target_include_directories(gnss_visibility_lib PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    )
+    target_link_libraries(gnss_visibility_lib PUBLIC ${OpenCV_LIBS})
+else()
+    message(STATUS "OpenCV not found; skipping visibility library")
+endif()
+
+# KML library (Google Earth KML/KMZ generation)
+add_library(gnss_kml_lib STATIC
+    src/kml/types.cpp src/kml/utils.cpp src/kml/elements.cpp
+    src/kml/animation.cpp src/kml/camera.cpp src/kml/tour.cpp src/kml/writer.cpp
+)
+target_include_directories(gnss_kml_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
 
 # Add subdirectories
 add_subdirectory(examples)
