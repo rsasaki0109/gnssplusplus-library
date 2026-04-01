@@ -1,0 +1,22 @@
+[clas_ppp_experiment]
+dataset_label = "CLAS 2019-08-27 static PPP"
+obs = "/path/to/0627239Q.obs"
+nav = "/path/to/sept_2019239.nav"
+qzss_l6 = "/path/to/2019239Q.l6"
+qzss_gps_week = 2068
+reference_ecef = [-3957240.1233, 3310370.8778, 3737527.7041]
+max_epochs = 120
+output_dir = "output/ppp_ar_experiments"
+mode = "static"
+estimate_troposphere = true
+strategies = [
+  "iflc_float_baseline",
+  "osr_float_pipeline",
+  "osr_float_guarded_pipeline",
+  "osr_float_balanced_pipeline",
+  "osr_float_freshness_pipeline",
+  "osr_ar_pipeline",
+  "osr_ar_guarded_pipeline",
+  "osr_ar_balanced_pipeline",
+  "osr_ar_freshness_pipeline",
+]

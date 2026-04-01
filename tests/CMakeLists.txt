@@ -8,6 +8,8 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 if(GTest_FOUND)
     # Consolidate all tests into a single executable
     add_executable(run_tests
+        test_ppp_clas.cpp
+        test_ppp_osr.cpp
         test_ppp_ar.cpp
         test_ppp_atmosphere.cpp
         test_rtk_ar_evaluation.cpp
@@ -79,6 +81,10 @@ if(GTest_FOUND)
     add_test(
         NAME python_docs_site_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_docs_site.py
+    )
+    add_test(
+        NAME python_experiment_runner_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_experiment_runner.py
     )
     set_tests_properties(
         python_bindings_tests

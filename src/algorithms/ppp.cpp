@@ -1035,20 +1035,18 @@ bool PPPProcessor::initialize(const ProcessorConfig& config) {
     return true;
 }
 
-PositionSolution PPPProcessor::processEpoch(const ObservationData& obs, const NavigationData& nav) {
-    if (ppp_config_.use_clas_osr_filter) {
-        return processEpochCLAS(obs, nav);
-    }
-
-    // CLAS-PPP mode: use standard PPP filter with per-frequency OSR corrections
-    // The standard updateFilter handles per-frequency when !use_ionosphere_free
-    // with ionosphere estimation and SSR corrections applied inline.
-
+PositionSolution PPPProcessor::processEpochStandard(
+    const ObservationData& obs,
+    const NavigationData& nav,
+    const char* clas_hybrid_fallback_reason) {
     const auto processing_start = std::chrono::steady_clock::now();
 
     PositionSolution solution;
     solution.time = obs.time;
     solution.status = SolutionStatus::NONE;
+    last_clas_hybrid_fallback_used_ = clas_hybrid_fallback_reason != nullptr;
+    last_clas_hybrid_fallback_reason_ =
+        clas_hybrid_fallback_reason != nullptr ? clas_hybrid_fallback_reason : "";
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
     last_applied_atmos_trop_corrections_ = 0;
@@ -1209,6 +1207,17 @@ PositionSolution PPPProcessor::processEpoch(const ObservationData& obs, const Na
         total_convergence_time_ += solution.processing_time_ms;
     }
     return solution;
+}
+
+PositionSolution PPPProcessor::processEpoch(const ObservationData& obs, const NavigationData& nav) {
+    if (ppp_config_.use_clas_osr_filter) {
+        return processEpochCLAS(obs, nav);
+    }
+
+    // Standard PPP path: precise/broadcast navigation with optional inline
+    // OSR corrections. Experiment arms use this as the stable control and as
+    // the hybrid fallback target for CLAS epoch-policy trials.
+    return processEpochStandard(obs, nav);
 }
 
 ProcessorStats PPPProcessor::getStats() const {
@@ -1921,7 +1930,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         }
         epoch_atmos_tokens =
             selectClasEpochAtmosTokens(
-                ssr_products_, epoch_satellites, time, receiver_marker_position);
+                ssr_products_, epoch_satellites, time, receiver_marker_position, ppp_config_);
     }
     const int preferred_network_id = preferredClasNetworkId(epoch_atmos_tokens);
 
@@ -2047,7 +2056,10 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         atmos_tokens,
                         receiver_position,
                         time,
-                        ssr_geometry.elevation);
+                        ssr_geometry.elevation,
+                        ppp_config_.clas_expanded_value_construction_policy,
+                        ppp_config_.clas_subtype12_value_construction_policy,
+                        ppp_config_.clas_expanded_residual_sampling_policy);
                 if (std::isfinite(trop_correction_m) && std::abs(trop_correction_m) > 0.0) {
                     observation.pseudorange_if -= trop_correction_m;
                     if (observation.has_carrier_phase) {
@@ -2059,7 +2071,12 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 }
                 const double stec_tecu =
                     ppp_atmosphere::atmosphericStecTecu(
-                        atmos_tokens, observation.satellite, receiver_position);
+                        atmos_tokens,
+                        observation.satellite,
+                        receiver_position,
+                        ppp_config_.clas_expanded_value_construction_policy,
+                        ppp_config_.clas_subtype12_value_construction_policy,
+                        ppp_config_.clas_expanded_residual_sampling_policy);
                 if (pppDebugEnabled()) {
                     std::cerr << "[PPP-STEC] " << observation.satellite.toString()
                               << " stec_tecu=" << stec_tecu
@@ -2859,9 +2876,10 @@ std::map<SatelliteId, OSRCorrection> PPPProcessor::computeWlnlOsrCorrections(
     auto sis_continuity = clas_sis_continuity_;
     auto phase_bias_repair = clas_phase_bias_repair_;
     const auto epoch_atmos = selectClasEpochAtmosTokens(
-        ssr_products_, obs.getSatellites(), obs.time, receiver_position);
+        ssr_products_, obs.getSatellites(), obs.time, receiver_position, ppp_config_);
     for (const auto& osr : computeOSR(obs, nav, ssr_products_, epoch_atmos,
                                       receiver_position, clock_bias_m, trop_zenith,
+                                      ppp_config_,
                                       windup_cache, dispersion_compensation,
                                       sis_continuity, phase_bias_repair)) {
         if (osr.valid && osr.num_frequencies >= 2) {
@@ -3130,8 +3148,60 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     PositionSolution solution;
     solution.time = obs.time;
     solution.status = SolutionStatus::NONE;
+    last_clas_hybrid_fallback_used_ = false;
+    last_clas_hybrid_fallback_reason_.clear();
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+
+    struct ClasFallbackSnapshot {
+        PPPState filter_state;
+        bool filter_initialized = false;
+        GNSSTime convergence_start_time;
+        Vector3d static_anchor_position = Vector3d::Zero();
+        bool has_static_anchor_position = false;
+        std::map<SatelliteId, PPPAmbiguityInfo> ambiguity_states;
+        std::map<SatelliteId, CLASDispersionCompensationInfo> dispersion_compensation;
+        std::map<SatelliteId, CLASSisContinuityInfo> sis_continuity;
+        std::map<SatelliteId, double> windup_cache;
+        std::map<SatelliteId, CLASPhaseBiasRepairInfo> phase_bias_repair;
+        bool has_last_processed_time = false;
+        GNSSTime last_processed_time;
+    };
+    const ClasFallbackSnapshot fallback_snapshot{
+        filter_state_,
+        filter_initialized_,
+        convergence_start_time_,
+        static_anchor_position_,
+        has_static_anchor_position_,
+        ambiguity_states_,
+        clas_dispersion_compensation_,
+        clas_sis_continuity_,
+        windup_cache_,
+        clas_phase_bias_repair_,
+        has_last_processed_time_,
+        last_processed_time_,
+    };
+    const auto restore_clas_snapshot = [&]() {
+        filter_state_ = fallback_snapshot.filter_state;
+        filter_initialized_ = fallback_snapshot.filter_initialized;
+        convergence_start_time_ = fallback_snapshot.convergence_start_time;
+        static_anchor_position_ = fallback_snapshot.static_anchor_position;
+        has_static_anchor_position_ = fallback_snapshot.has_static_anchor_position;
+        ambiguity_states_ = fallback_snapshot.ambiguity_states;
+        clas_dispersion_compensation_ = fallback_snapshot.dispersion_compensation;
+        clas_sis_continuity_ = fallback_snapshot.sis_continuity;
+        windup_cache_ = fallback_snapshot.windup_cache;
+        clas_phase_bias_repair_ = fallback_snapshot.phase_bias_repair;
+        has_last_processed_time_ = fallback_snapshot.has_last_processed_time;
+        last_processed_time_ = fallback_snapshot.last_processed_time;
+    };
+    const bool allow_hybrid_fallback =
+        ppp_config_.clas_epoch_policy ==
+        PPPConfig::ClasEpochPolicy::HYBRID_STANDARD_PPP_FALLBACK;
+    const auto fallback_to_standard = [&](const char* reason) {
+        restore_clas_snapshot();
+        return processEpochStandard(obs, nav, reason);
+    };
 
     PositionSolution seed = spp_processor_.processEpoch(obs, nav);
     detectCycleSlips(obs);
@@ -3153,6 +3223,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         clas_phase_bias_repair_,
         precise_products_loaded_ ? 1e6 : ppp_config_.initial_ambiguity_variance);
     if (!epoch_preparation.ready) {
+        if (allow_hybrid_fallback) {
+            return fallback_to_standard("prepare_epoch_state");
+        }
         return solution;
     }
 
@@ -3163,6 +3236,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         filter_state_.state.segment(0, 3),
         filter_state_.state(filter_state_.clock_index),
         filter_state_.state(filter_state_.trop_index),
+        ppp_config_,
         windup_cache_,
         clas_dispersion_compensation_,
         clas_sis_continuity_,
@@ -3171,6 +3245,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     const auto& osr_corrections = epoch_context.osr_corrections;
 
     if (osr_corrections.size() < 4) {
+        if (allow_hybrid_fallback) {
+            return fallback_to_standard("insufficient_osr");
+        }
         solution = seed;
         return solution;
     }
@@ -3197,6 +3274,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         },
         pppDebugEnabled());
     if (!epoch_update.updated) {
+        if (allow_hybrid_fallback) {
+            return fallback_to_standard("measurement_update");
+        }
         solution = seed;
         return solution;
     }

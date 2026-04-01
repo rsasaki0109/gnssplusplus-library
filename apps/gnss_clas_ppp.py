@@ -24,7 +24,8 @@ PPP_STATUSES = {5, 6}
 DEFAULT_SERIAL_BAUD = 115200
 COMPACT_FILE_COLUMNS = (
     "week,tow,system,prn,dx,dy,dz,dclock_m"
-    "[,high_rate_clock_m][,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,atmos_<name>=<value>...]"
+    "[,high_rate_clock_m][,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...]"
+    "[,bias_network_id=<n>][,atmos_<name>=<value>...]"
 )
 
 
@@ -61,6 +62,24 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Optional GPS week override used when decoding raw QZSS L6 corrections.",
+    )
+    parser.add_argument(
+        "--compact-flush-policy",
+        choices=qzss_l6_info.COMPACT_SSR_FLUSH_POLICIES,
+        default=qzss_l6_info.COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
+        help="Compact SSR row emission policy used when expanding raw QZSS L6 into sampled SSR CSV.",
+    )
+    parser.add_argument(
+        "--compact-atmos-merge-policy",
+        choices=qzss_l6_info.COMPACT_ATMOS_MERGE_POLICIES,
+        default=qzss_l6_info.COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
+        help="Compact SSR atmosphere-token merge policy used when expanding raw QZSS L6 into sampled SSR CSV.",
+    )
+    parser.add_argument(
+        "--compact-atmos-subtype-merge-policy",
+        choices=qzss_l6_info.COMPACT_ATMOS_SUBTYPE_MERGE_POLICIES,
+        default=qzss_l6_info.COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION,
+        help="Compact SSR atmosphere subtype precedence policy used when expanding raw QZSS L6 into sampled SSR CSV.",
     )
     parser.add_argument("--out", type=Path, required=True, help="Output PPP .pos file.")
     parser.add_argument("--summary-json", type=Path, default=None, help="Optional summary JSON path.")
@@ -282,6 +301,7 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
             ura_sigma_token = None
             code_bias_tokens: list[str] = []
             phase_bias_tokens: list[str] = []
+            bias_network_tokens: list[str] = []
             atmos_tokens: list[str] = []
             extras = columns[8:]
             if extras and "=" not in extras[0] and not extras[0].startswith("cbias:"):
@@ -296,6 +316,9 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
                     continue
                 if token.startswith("pbias:") and "=" in token:
                     phase_bias_tokens.append(token)
+                    continue
+                if token.startswith("bias_network_id="):
+                    bias_network_tokens.append(token)
                     continue
                 if token.startswith("atmos_") and "=" in token:
                     atmos_tokens.append(token)
@@ -320,6 +343,7 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
                 output_tokens.append(ura_sigma_token)
             output_tokens.extend(code_bias_tokens)
             output_tokens.extend(phase_bias_tokens)
+            output_tokens.extend(bias_network_tokens)
             output_tokens.extend(atmos_tokens)
             handle.write(",".join(output_tokens) + "\n")
             rows_written += 1
@@ -364,11 +388,22 @@ def infer_gps_week_from_obs(obs_path: Path) -> int:
     raise SystemExit(f"Could not infer GPS week from observation file: {obs_path}")
 
 
-def expand_qzss_l6_source(source: str, gps_week: int, output_path: Path) -> dict[str, object]:
+def expand_qzss_l6_source(
+    source: str,
+    gps_week: int,
+    output_path: Path,
+    *,
+    compact_flush_policy: str = qzss_l6_info.COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
+    compact_atmos_merge_policy: str = qzss_l6_info.COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
+    compact_atmos_subtype_merge_policy: str = qzss_l6_info.COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION,
+) -> dict[str, object]:
     frames, subframes, _stats = qzss_l6_info.decode_source(source)
     messages, corrections, _service_info_packets = qzss_l6_info.decode_cssr_messages(
         subframes,
         gps_week=gps_week,
+        flush_policy=compact_flush_policy,
+        atmos_merge_policy=compact_atmos_merge_policy,
+        atmos_subtype_merge_policy=compact_atmos_subtype_merge_policy,
     )
     compact_source = output_path.parent / "qzss_l6_compact.csv"
     qzss_l6_info.write_compact_corrections(compact_source, corrections)
@@ -396,6 +431,8 @@ def expand_qzss_l6_source(source: str, gps_week: int, output_path: Path) -> dict
         "atmos_rows": atmos_rows,
         "compact_csv": str(compact_source),
         "expanded_csv": str(output_path),
+        "compact_atmos_merge_policy": compact_atmos_merge_policy,
+        "compact_atmos_subtype_merge_policy": compact_atmos_subtype_merge_policy,
     }
 
 
@@ -492,6 +529,8 @@ def build_summary_payload(
         "ambiguity_resolution_enabled": bool(args.enable_ar),
         "ar_ratio_threshold": rounded(args.ar_ratio_threshold),
         "mode": "kinematic" if args.kinematic else "static",
+        "compact_atmos_merge_policy": args.compact_atmos_merge_policy,
+        "compact_atmos_subtype_merge_policy": args.compact_atmos_subtype_merge_policy,
         "atmos_messages": 0,
         "atmos_rows": 0,
         "ppp_atmospheric_trop_corrections": 0,
@@ -603,7 +642,14 @@ def main() -> int:
         if args.qzss_l6 is not None:
             compact_csv = Path(temp_dir) / "qzss_l6_expanded.csv"
             gps_week = args.qzss_gps_week if args.qzss_gps_week is not None else infer_gps_week_from_obs(args.obs)
-            compact_summary = expand_qzss_l6_source(args.qzss_l6, gps_week, compact_csv)
+            compact_summary = expand_qzss_l6_source(
+                args.qzss_l6,
+                gps_week,
+                compact_csv,
+                compact_flush_policy=args.compact_flush_policy,
+                compact_atmos_merge_policy=args.compact_atmos_merge_policy,
+                compact_atmos_subtype_merge_policy=args.compact_atmos_subtype_merge_policy,
+            )
             print(
                 "decoded qzss l6 corrections:",
                 f"frames={compact_summary['frames']}",
@@ -630,9 +676,10 @@ def main() -> int:
 
         command.append("--kinematic" if args.kinematic else "--static")
         command.append("--estimate-troposphere" if args.estimate_troposphere else "--no-estimate-troposphere")
-        # When atmospheric corrections are available from CLAS, disable IFLC to allow
-        # direct STEC-based ionosphere correction on individual frequencies.
+        # When atmospheric corrections are available from CLAS, disable IFLC and
+        # enable per-satellite ionosphere estimation with STEC constraints.
         command.append("--no-ionosphere-free")
+        command.append("--estimate-ionosphere")
         if args.sp3 is not None:
             command.extend(["--sp3", str(args.sp3)])
         if args.clk is not None:

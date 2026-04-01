@@ -244,6 +244,59 @@ def write_atomic(path: Path, content: bytes) -> None:
     os.replace(temp_name, path)
 
 
+def metadata_path_for(destination: Path) -> Path:
+    return destination.with_name(destination.name + ".meta.json")
+
+
+def load_cache_metadata(path: Path) -> dict[str, object] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def metadata_matches_cache(
+    payload: dict[str, object] | None,
+    *,
+    kind: str,
+    source_template: str,
+    resolved_source: str,
+    date_value: dt.date,
+) -> bool:
+    if payload is None:
+        return False
+    return (
+        payload.get("kind") == kind
+        and payload.get("source_template") == source_template
+        and payload.get("resolved_source") == resolved_source
+        and payload.get("date") == date_value.isoformat()
+    )
+
+
+def write_cache_metadata(
+    path: Path,
+    *,
+    kind: str,
+    source_template: str,
+    resolved_source: str,
+    date_value: dt.date,
+) -> None:
+    write_atomic(
+        path,
+        json.dumps(
+            {
+                "kind": kind,
+                "source_template": source_template,
+                "resolved_source": resolved_source,
+                "date": date_value.isoformat(),
+            },
+            indent=2,
+            sort_keys=True,
+        ).encode("utf-8"),
+    )
+
+
 def fetch_one_product(
     kind: str,
     source_template: str,
@@ -257,20 +310,36 @@ def fetch_one_product(
     relative_dir = Path(kind) / values["yyyy"] / values["doy"]
     destination_name = source_basename(resolved_source, kind, values)
     destination = cache_dir / relative_dir / destination_name
+    metadata_path = metadata_path_for(destination)
     if destination.exists() and not force:
-        return {
-            "kind": kind,
-            "source_template": source_template,
-            "resolved_source": resolved_source,
-            "path": str(destination),
-            "status": "cached",
-            "compressed_source": resolved_source.lower().endswith(".gz"),
-            "date": date_value.isoformat(),
-        }
+        metadata = load_cache_metadata(metadata_path)
+        if metadata_matches_cache(
+            metadata,
+            kind=kind,
+            source_template=source_template,
+            resolved_source=resolved_source,
+            date_value=date_value,
+        ):
+            return {
+                "kind": kind,
+                "source_template": source_template,
+                "resolved_source": resolved_source,
+                "path": str(destination),
+                "status": "cached",
+                "compressed_source": resolved_source.lower().endswith(".gz"),
+                "date": date_value.isoformat(),
+            }
 
     raw_bytes, transfer_status = read_source_bytes(resolved_source, timeout_seconds)
     file_bytes, was_compressed = maybe_decompress(raw_bytes, resolved_source)
     write_atomic(destination, file_bytes)
+    write_cache_metadata(
+        metadata_path,
+        kind=kind,
+        source_template=source_template,
+        resolved_source=resolved_source,
+        date_value=date_value,
+    )
     return {
         "kind": kind,
         "source_template": source_template,

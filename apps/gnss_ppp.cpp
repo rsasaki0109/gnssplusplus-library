@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <string>
 
@@ -32,7 +33,18 @@ struct Options {
     int convergence_min_epochs = 20;
     double ssr_step_seconds = 1.0;
     bool estimate_troposphere = true;
+    bool estimate_ionosphere = false;
     bool use_ionosphere_free = true;
+    bool use_clas_osr_filter = false;
+    std::string clas_epoch_policy = "strict-osr";
+    std::string clas_osr_application = "full-osr";
+    std::string clas_phase_continuity = "full-repair";
+    std::string clas_ssr_timing = "lag-tolerant";
+    std::string clas_expanded_values = "full-composed";
+    std::string clas_subtype12_values = "full";
+    std::string clas_residual_sampling = "indexed-or-mean";
+    std::string clas_atmos_selection = "grid-first";
+    double clas_atmos_stale_after_seconds = 15.0;
     bool kinematic_mode = false;
     bool low_dynamics_mode = false;
     bool enable_ar = false;
@@ -68,6 +80,25 @@ void printUsage(const char* program_name) {
         << "  --no-estimate-troposphere\n"
         << "                          Disable zenith troposphere estimation\n"
         << "  --estimate-troposphere  Enable zenith troposphere estimation (default)\n"
+        << "  --clas-osr              Use the CLAS OSR-based PPP-RTK filter path\n"
+        << "  --clas-epoch-policy <strict-osr|hybrid-standard-ppp>\n"
+        << "                          CLAS epoch boundary policy (default: strict-osr)\n"
+        << "  --clas-osr-application <full-osr|orbit-clock-bias|orbit-clock-only>\n"
+        << "                          CLAS accepted-update correction semantics (default: full-osr)\n"
+        << "  --clas-phase-continuity <full-repair|sis-continuity-only|repair-only|raw-phase-bias|no-phase-bias>\n"
+        << "                          CLAS phase-bias / continuity semantics (default: full-repair)\n"
+        << "  --clas-ssr-timing <lag-tolerant|clock-bound-phase-bias|clock-bound-atmos-and-phase-bias>\n"
+        << "                          CLAS expanded-SSR source timing policy (default: lag-tolerant)\n"
+        << "  --clas-expanded-values <full-composed|residual-only|polynomial-only>\n"
+        << "                          CLAS expanded atmosphere-value construction policy (default: full-composed)\n"
+        << "  --clas-subtype12-values <full|planar|offset-only>\n"
+        << "                          CLAS subtype-12 surface-term policy before residual formation (default: full)\n"
+        << "  --clas-residual-sampling <indexed-or-mean|indexed-only|mean-only>\n"
+        << "                          CLAS residual-list sampling policy inside expanded atmosphere rows (default: indexed-or-mean)\n"
+        << "  --clas-atmos-selection <grid-first|grid-guarded|balanced|freshness-first>\n"
+        << "                          CLAS atmosphere token selection policy (default: grid-first)\n"
+        << "  --clas-atmos-stale-after-seconds <seconds>\n"
+        << "                          Balanced policy stale threshold (default: 15.0)\n"
         << "  --static                Use a static PPP motion model (default)\n"
         << "  --kinematic             Use a kinematic PPP motion model\n"
         << "  --low-dynamics          Keep kinematic PPP anchored for quasi-static motion\n"
@@ -131,10 +162,34 @@ Options parseArguments(int argc, char* argv[]) {
             options.estimate_troposphere = false;
         } else if (arg == "--estimate-troposphere") {
             options.estimate_troposphere = true;
+        } else if (arg == "--clas-osr") {
+            options.use_clas_osr_filter = true;
+        } else if (arg == "--clas-epoch-policy" && i + 1 < argc) {
+            options.clas_epoch_policy = argv[++i];
+        } else if (arg == "--clas-osr-application" && i + 1 < argc) {
+            options.clas_osr_application = argv[++i];
+        } else if (arg == "--clas-phase-continuity" && i + 1 < argc) {
+            options.clas_phase_continuity = argv[++i];
+        } else if (arg == "--clas-ssr-timing" && i + 1 < argc) {
+            options.clas_ssr_timing = argv[++i];
+        } else if (arg == "--clas-expanded-values" && i + 1 < argc) {
+            options.clas_expanded_values = argv[++i];
+        } else if (arg == "--clas-subtype12-values" && i + 1 < argc) {
+            options.clas_subtype12_values = argv[++i];
+        } else if (arg == "--clas-residual-sampling" && i + 1 < argc) {
+            options.clas_residual_sampling = argv[++i];
+        } else if (arg == "--clas-atmos-selection" && i + 1 < argc) {
+            options.clas_atmos_selection = argv[++i];
+        } else if (arg == "--clas-atmos-stale-after-seconds" && i + 1 < argc) {
+            options.clas_atmos_stale_after_seconds = std::stod(argv[++i]);
         } else if (arg == "--no-ionosphere-free") {
             options.use_ionosphere_free = false;
         } else if (arg == "--ionosphere-free") {
             options.use_ionosphere_free = true;
+        } else if (arg == "--estimate-ionosphere") {
+            options.estimate_ionosphere = true;
+        } else if (arg == "--no-estimate-ionosphere") {
+            options.estimate_ionosphere = false;
         } else if (arg == "--static") {
             options.kinematic_mode = false;
         } else if (arg == "--kinematic") {
@@ -177,8 +232,69 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.ar_ratio_threshold <= 0.0) {
         argumentError("--ar-ratio-threshold must be positive", argv[0]);
     }
+    if (options.clas_atmos_stale_after_seconds <= 0.0) {
+        argumentError("--clas-atmos-stale-after-seconds must be positive", argv[0]);
+    }
     if (options.ssr_step_seconds <= 0.0) {
         argumentError("--ssr-step-seconds must be positive", argv[0]);
+    }
+    if (options.clas_epoch_policy != "strict-osr" &&
+        options.clas_epoch_policy != "hybrid-standard-ppp") {
+        argumentError(
+            "--clas-epoch-policy must be one of: strict-osr, hybrid-standard-ppp",
+            argv[0]);
+    }
+    if (options.clas_osr_application != "full-osr" &&
+        options.clas_osr_application != "orbit-clock-bias" &&
+        options.clas_osr_application != "orbit-clock-only") {
+        argumentError(
+            "--clas-osr-application must be one of: full-osr, orbit-clock-bias, orbit-clock-only",
+            argv[0]);
+    }
+    if (options.clas_phase_continuity != "full-repair" &&
+        options.clas_phase_continuity != "sis-continuity-only" &&
+        options.clas_phase_continuity != "repair-only" &&
+        options.clas_phase_continuity != "raw-phase-bias" &&
+        options.clas_phase_continuity != "no-phase-bias") {
+        argumentError(
+            "--clas-phase-continuity must be one of: full-repair, sis-continuity-only, repair-only, raw-phase-bias, no-phase-bias",
+            argv[0]);
+    }
+    if (options.clas_ssr_timing != "lag-tolerant" &&
+        options.clas_ssr_timing != "clock-bound-phase-bias" &&
+        options.clas_ssr_timing != "clock-bound-atmos-and-phase-bias") {
+        argumentError(
+            "--clas-ssr-timing must be one of: lag-tolerant, clock-bound-phase-bias, clock-bound-atmos-and-phase-bias",
+            argv[0]);
+    }
+    if (options.clas_expanded_values != "full-composed" &&
+        options.clas_expanded_values != "residual-only" &&
+        options.clas_expanded_values != "polynomial-only") {
+        argumentError(
+            "--clas-expanded-values must be one of: full-composed, residual-only, polynomial-only",
+            argv[0]);
+    }
+    if (options.clas_subtype12_values != "full" &&
+        options.clas_subtype12_values != "planar" &&
+        options.clas_subtype12_values != "offset-only") {
+        argumentError(
+            "--clas-subtype12-values must be one of: full, planar, offset-only",
+            argv[0]);
+    }
+    if (options.clas_residual_sampling != "indexed-or-mean" &&
+        options.clas_residual_sampling != "indexed-only" &&
+        options.clas_residual_sampling != "mean-only") {
+        argumentError(
+            "--clas-residual-sampling must be one of: indexed-or-mean, indexed-only, mean-only",
+            argv[0]);
+    }
+    if (options.clas_atmos_selection != "grid-first" &&
+        options.clas_atmos_selection != "grid-guarded" &&
+        options.clas_atmos_selection != "balanced" &&
+        options.clas_atmos_selection != "freshness-first") {
+        argumentError(
+            "--clas-atmos-selection must be one of: grid-first, grid-guarded, balanced, freshness-first",
+            argv[0]);
     }
     return options;
 }
@@ -208,6 +324,112 @@ std::string jsonEscape(const std::string& value) {
         }
     }
     return escaped.str();
+}
+
+}  // namespace
+
+namespace {
+
+libgnss::PPPProcessor::PPPConfig::ClasEpochPolicy parseClasEpochPolicy(
+    const std::string& value) {
+    using Policy = libgnss::PPPProcessor::PPPConfig::ClasEpochPolicy;
+    if (value == "hybrid-standard-ppp") {
+        return Policy::HYBRID_STANDARD_PPP_FALLBACK;
+    }
+    return Policy::STRICT_OSR;
+}
+
+libgnss::PPPProcessor::PPPConfig::ClasAtmosSelectionPolicy parseClasAtmosSelectionPolicy(
+    const std::string& value) {
+    using Policy = libgnss::PPPProcessor::PPPConfig::ClasAtmosSelectionPolicy;
+    if (value == "grid-first") {
+        return Policy::GRID_FIRST;
+    }
+    if (value == "grid-guarded") {
+        return Policy::GRID_GUARDED;
+    }
+    if (value == "balanced") {
+        return Policy::BALANCED;
+    }
+    return Policy::FRESHNESS_FIRST;
+}
+
+libgnss::PPPProcessor::PPPConfig::ClasCorrectionApplicationPolicy parseClasCorrectionApplicationPolicy(
+    const std::string& value) {
+    using Policy = libgnss::PPPProcessor::PPPConfig::ClasCorrectionApplicationPolicy;
+    if (value == "orbit-clock-bias") {
+        return Policy::ORBIT_CLOCK_BIAS;
+    }
+    if (value == "orbit-clock-only") {
+        return Policy::ORBIT_CLOCK_ONLY;
+    }
+    return Policy::FULL_OSR;
+}
+
+libgnss::PPPProcessor::PPPConfig::ClasPhaseContinuityPolicy parseClasPhaseContinuityPolicy(
+    const std::string& value) {
+    using Policy = libgnss::PPPProcessor::PPPConfig::ClasPhaseContinuityPolicy;
+    if (value == "sis-continuity-only") {
+        return Policy::SIS_CONTINUITY_ONLY;
+    }
+    if (value == "repair-only") {
+        return Policy::REPAIR_ONLY;
+    }
+    if (value == "raw-phase-bias") {
+        return Policy::RAW_PHASE_BIAS;
+    }
+    if (value == "no-phase-bias") {
+        return Policy::NO_PHASE_BIAS;
+    }
+    return Policy::FULL_REPAIR;
+}
+
+libgnss::PPPProcessor::PPPConfig::ClasSsrTimingPolicy parseClasSsrTimingPolicy(
+    const std::string& value) {
+    using Policy = libgnss::PPPProcessor::PPPConfig::ClasSsrTimingPolicy;
+    if (value == "clock-bound-phase-bias") {
+        return Policy::CLOCK_BOUND_PHASE_BIAS;
+    }
+    if (value == "clock-bound-atmos-and-phase-bias") {
+        return Policy::CLOCK_BOUND_ATMOS_AND_PHASE_BIAS;
+    }
+    return Policy::LAG_TOLERANT;
+}
+
+libgnss::PPPProcessor::PPPConfig::ClasExpandedValueConstructionPolicy parseClasExpandedValueConstructionPolicy(
+    const std::string& value) {
+    using Policy = libgnss::PPPProcessor::PPPConfig::ClasExpandedValueConstructionPolicy;
+    if (value == "residual-only") {
+        return Policy::RESIDUAL_ONLY;
+    }
+    if (value == "polynomial-only") {
+        return Policy::POLYNOMIAL_ONLY;
+    }
+    return Policy::FULL_COMPOSED;
+}
+
+libgnss::PPPProcessor::PPPConfig::ClasExpandedResidualSamplingPolicy parseClasExpandedResidualSamplingPolicy(
+    const std::string& value) {
+    using Policy = libgnss::PPPProcessor::PPPConfig::ClasExpandedResidualSamplingPolicy;
+    if (value == "indexed-only") {
+        return Policy::INDEXED_ONLY;
+    }
+    if (value == "mean-only") {
+        return Policy::MEAN_ONLY;
+    }
+    return Policy::INDEXED_OR_MEAN;
+}
+
+libgnss::PPPProcessor::PPPConfig::ClasSubtype12ValueConstructionPolicy
+parseClasSubtype12ValueConstructionPolicy(const std::string& value) {
+    using Policy = libgnss::PPPProcessor::PPPConfig::ClasSubtype12ValueConstructionPolicy;
+    if (value == "planar") {
+        return Policy::PLANAR;
+    }
+    if (value == "offset-only") {
+        return Policy::OFFSET_ONLY;
+    }
+    return Policy::FULL;
 }
 
 }  // namespace
@@ -261,7 +483,27 @@ int main(int argc, char* argv[]) {
         ppp_config.antex_file_path = options.antex_path;
         ppp_config.ocean_loading_file_path = options.blq_path;
         ppp_config.estimate_troposphere = options.estimate_troposphere;
+        ppp_config.estimate_ionosphere = options.estimate_ionosphere;
         ppp_config.use_ionosphere_free = options.use_ionosphere_free;
+        ppp_config.use_clas_osr_filter = options.use_clas_osr_filter;
+        ppp_config.clas_epoch_policy =
+            parseClasEpochPolicy(options.clas_epoch_policy);
+        ppp_config.clas_correction_application_policy =
+            parseClasCorrectionApplicationPolicy(options.clas_osr_application);
+        ppp_config.clas_phase_continuity_policy =
+            parseClasPhaseContinuityPolicy(options.clas_phase_continuity);
+        ppp_config.clas_ssr_timing_policy =
+            parseClasSsrTimingPolicy(options.clas_ssr_timing);
+        ppp_config.clas_expanded_value_construction_policy =
+            parseClasExpandedValueConstructionPolicy(options.clas_expanded_values);
+        ppp_config.clas_subtype12_value_construction_policy =
+            parseClasSubtype12ValueConstructionPolicy(options.clas_subtype12_values);
+        ppp_config.clas_expanded_residual_sampling_policy =
+            parseClasExpandedResidualSamplingPolicy(options.clas_residual_sampling);
+        ppp_config.clas_atmos_selection_policy =
+            parseClasAtmosSelectionPolicy(options.clas_atmos_selection);
+        ppp_config.clas_atmos_stale_after_seconds =
+            options.clas_atmos_stale_after_seconds;
         ppp_config.kinematic_mode = options.kinematic_mode;
         ppp_config.low_dynamics_mode = options.low_dynamics_mode;
         ppp_config.enable_ambiguity_resolution = options.enable_ar;
@@ -313,6 +555,8 @@ int main(int argc, char* argv[]) {
         int atmospheric_iono_corrections = 0;
         int ionex_corrections = 0;
         int dcb_corrections = 0;
+        int clas_hybrid_fallback_epochs = 0;
+        std::map<std::string, int> clas_hybrid_fallback_reasons;
         double atmospheric_trop_meters = 0.0;
         double atmospheric_iono_meters = 0.0;
         double ionex_meters = 0.0;
@@ -336,6 +580,10 @@ int main(int argc, char* argv[]) {
                 processor.getLastAppliedAtmosphericIonosphereMeters();
             ionex_meters += processor.getLastAppliedIonexMeters();
             dcb_meters += processor.getLastAppliedDcbMeters();
+            if (processor.getLastClasHybridFallbackUsed()) {
+                ++clas_hybrid_fallback_epochs;
+                ++clas_hybrid_fallback_reasons[processor.getLastClasHybridFallbackReason()];
+            }
             processed_epochs++;
             if (solution.isValid()) {
                 solutions.addSolution(solution);
@@ -401,6 +649,15 @@ int main(int argc, char* argv[]) {
                     << "  \"out\": \"" << jsonEscape(options.out_path) << "\",\n"
                     << "  \"mode\": \"" << (options.kinematic_mode ? "kinematic" : "static") << "\",\n"
                     << "  \"low_dynamics\": " << (options.low_dynamics_mode ? "true" : "false") << ",\n"
+                    << "  \"clas_epoch_policy\": \"" << jsonEscape(options.clas_epoch_policy) << "\",\n"
+                    << "  \"clas_osr_application\": \"" << jsonEscape(options.clas_osr_application) << "\",\n"
+                    << "  \"clas_phase_continuity\": \"" << jsonEscape(options.clas_phase_continuity) << "\",\n"
+                    << "  \"clas_ssr_timing\": \"" << jsonEscape(options.clas_ssr_timing) << "\",\n"
+                    << "  \"clas_expanded_values\": \"" << jsonEscape(options.clas_expanded_values) << "\",\n"
+                    << "  \"clas_subtype12_values\": \"" << jsonEscape(options.clas_subtype12_values) << "\",\n"
+                    << "  \"clas_residual_sampling\": \"" << jsonEscape(options.clas_residual_sampling) << "\",\n"
+                    << "  \"clas_atmos_selection\": \"" << jsonEscape(options.clas_atmos_selection) << "\",\n"
+                    << "  \"clas_atmos_stale_after_seconds\": " << options.clas_atmos_stale_after_seconds << ",\n"
                     << "  \"ambiguity_resolution_enabled\": " << (options.enable_ar ? "true" : "false") << ",\n"
                     << "  \"ar_ratio_threshold\": " << options.ar_ratio_threshold << ",\n"
                     << "  \"processed_epochs\": " << processed_epochs << ",\n"
@@ -408,6 +665,7 @@ int main(int argc, char* argv[]) {
                     << "  \"ppp_float_solutions\": " << ppp_float_solutions << ",\n"
                     << "  \"ppp_fixed_solutions\": " << ppp_fixed_solutions << ",\n"
                     << "  \"fallback_solutions\": " << fallback_solutions << ",\n"
+                    << "  \"clas_hybrid_fallback_epochs\": " << clas_hybrid_fallback_epochs << ",\n"
                     << "  \"ppp_solution_rate_pct\": " << ppp_solution_rate << ",\n"
                     << "  \"ssr_corrections_enabled\": "
                     << ((!options.ssr_path.empty() || !options.ssr_rtcm_path.empty()) ? "true" : "false") << ",\n"
@@ -423,6 +681,16 @@ int main(int argc, char* argv[]) {
                     << "  \"dcb_entries\": " << processor.getLoadedDCBEntryCount() << ",\n"
                     << "  \"dcb_corrections\": " << dcb_corrections << ",\n"
                     << "  \"dcb_meters\": " << dcb_meters << ",\n"
+                    << "  \"clas_hybrid_fallback_reasons\": {";
+            bool first_reason = true;
+            for (const auto& [reason, count] : clas_hybrid_fallback_reasons) {
+                if (!first_reason) {
+                    summary << ", ";
+                }
+                summary << "\"" << jsonEscape(reason) << "\": " << count;
+                first_reason = false;
+            }
+            summary << "},\n"
                     << "  \"converged\": " << (processor.hasConverged() ? "true" : "false") << ",\n"
                     << "  \"convergence_time_s\": " << processor.getConvergenceTime() << ",\n"
                     << "  \"average_processing_time_ms\": " << stats.average_processing_time_ms << "\n"
@@ -436,8 +704,21 @@ int main(int argc, char* argv[]) {
             std::cout << "  PPP float solutions: " << ppp_float_solutions << "\n";
             std::cout << "  PPP fixed solutions: " << ppp_fixed_solutions << "\n";
             std::cout << "  fallback solutions: " << fallback_solutions << "\n";
+            std::cout << "  CLAS epoch policy: " << options.clas_epoch_policy << "\n";
+            std::cout << "  CLAS OSR application: " << options.clas_osr_application << "\n";
+            std::cout << "  CLAS phase continuity: " << options.clas_phase_continuity << "\n";
+            std::cout << "  CLAS SSR timing: " << options.clas_ssr_timing << "\n";
+            std::cout << "  CLAS expanded values: " << options.clas_expanded_values << "\n";
+            std::cout << "  CLAS subtype-12 values: " << options.clas_subtype12_values << "\n";
+            std::cout << "  CLAS residual sampling: " << options.clas_residual_sampling << "\n";
             std::cout << "  mode: " << (options.kinematic_mode ? "kinematic" : "static") << "\n";
             std::cout << "  low dynamics: " << (options.low_dynamics_mode ? "on" : "off") << "\n";
+            std::cout << "  CLAS atmosphere selection: " << options.clas_atmos_selection << "\n";
+            std::cout << "  CLAS stale-after (s): " << options.clas_atmos_stale_after_seconds << "\n";
+            if (clas_hybrid_fallback_epochs > 0) {
+                std::cout << "  CLAS hybrid fallback epochs: "
+                          << clas_hybrid_fallback_epochs << "\n";
+            }
             std::cout << "  ambiguity resolution: " << (options.enable_ar ? "on" : "off") << "\n";
             std::cout << "  SSR corrections: "
                       << ((options.ssr_path.empty() && options.ssr_rtcm_path.empty()) ? "off" : "on")
