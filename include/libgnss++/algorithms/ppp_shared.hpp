@@ -10,6 +10,56 @@
 namespace libgnss::ppp_shared {
 
 struct PPPConfig {
+    enum class ClasAtmosSelectionPolicy {
+        GRID_FIRST,
+        GRID_GUARDED,
+        BALANCED,
+        FRESHNESS_FIRST,
+    };
+
+    enum class ClasEpochPolicy {
+        STRICT_OSR,
+        HYBRID_STANDARD_PPP_FALLBACK,
+    };
+
+    enum class ClasCorrectionApplicationPolicy {
+        FULL_OSR,
+        ORBIT_CLOCK_BIAS,
+        ORBIT_CLOCK_ONLY,
+    };
+
+    enum class ClasPhaseContinuityPolicy {
+        FULL_REPAIR,
+        SIS_CONTINUITY_ONLY,
+        REPAIR_ONLY,
+        RAW_PHASE_BIAS,
+        NO_PHASE_BIAS,
+    };
+
+    enum class ClasSsrTimingPolicy {
+        LAG_TOLERANT,
+        CLOCK_BOUND_PHASE_BIAS,
+        CLOCK_BOUND_ATMOS_AND_PHASE_BIAS,
+    };
+
+    enum class ClasExpandedValueConstructionPolicy {
+        FULL_COMPOSED,
+        RESIDUAL_ONLY,
+        POLYNOMIAL_ONLY,
+    };
+
+    enum class ClasExpandedResidualSamplingPolicy {
+        INDEXED_OR_MEAN,
+        INDEXED_ONLY,
+        MEAN_ONLY,
+    };
+
+    enum class ClasSubtype12ValueConstructionPolicy {
+        FULL,
+        PLANAR,
+        OFFSET_ONLY,
+    };
+
     // Precise products
     bool use_precise_orbits = true;
     bool use_precise_clocks = true;
@@ -70,6 +120,22 @@ struct PPPConfig {
     double initial_ionosphere_variance = 100.0;
     double process_noise_ionosphere = 1e-3;
     bool use_ionosphere_free = true;
+    ClasEpochPolicy clas_epoch_policy = ClasEpochPolicy::STRICT_OSR;
+    ClasCorrectionApplicationPolicy clas_correction_application_policy =
+        ClasCorrectionApplicationPolicy::FULL_OSR;
+    ClasPhaseContinuityPolicy clas_phase_continuity_policy =
+        ClasPhaseContinuityPolicy::FULL_REPAIR;
+    ClasSsrTimingPolicy clas_ssr_timing_policy =
+        ClasSsrTimingPolicy::LAG_TOLERANT;
+    ClasExpandedValueConstructionPolicy clas_expanded_value_construction_policy =
+        ClasExpandedValueConstructionPolicy::FULL_COMPOSED;
+    ClasExpandedResidualSamplingPolicy clas_expanded_residual_sampling_policy =
+        ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN;
+    ClasSubtype12ValueConstructionPolicy clas_subtype12_value_construction_policy =
+        ClasSubtype12ValueConstructionPolicy::FULL;
+    ClasAtmosSelectionPolicy clas_atmos_selection_policy =
+        ClasAtmosSelectionPolicy::GRID_FIRST;
+    double clas_atmos_stale_after_seconds = 15.0;
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
     bool apply_relativity = true;

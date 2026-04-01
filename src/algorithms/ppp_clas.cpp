@@ -62,6 +62,52 @@ struct PhasePairInfo {
 
 }  // namespace
 
+AppliedOsrCorrections selectAppliedOsrCorrections(
+    const OSRCorrection& osr,
+    int freq_index,
+    ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy policy) {
+    AppliedOsrCorrections corrections;
+    if (freq_index < 0 || freq_index >= osr.num_frequencies) {
+        return corrections;
+    }
+
+    const double relativity = osr.relativity_correction_m;
+    const double receiver_antenna = osr.receiver_antenna_m[freq_index];
+    const double code_bias = osr.code_bias_m[freq_index];
+    const double phase_bias = osr.phase_bias_m[freq_index];
+    const double windup = osr.windup_m[freq_index];
+    const double phase_compensation = osr.phase_compensation_m[freq_index];
+
+    switch (policy) {
+    case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR:
+        corrections.pseudorange_correction_m =
+            osr.PRC[freq_index] - osr.trop_correction_m;
+        corrections.carrier_phase_correction_m =
+            osr.CPC[freq_index] - osr.trop_correction_m;
+        break;
+    case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::ORBIT_CLOCK_BIAS:
+        corrections.pseudorange_correction_m =
+            relativity + receiver_antenna + code_bias;
+        corrections.carrier_phase_correction_m =
+            relativity + receiver_antenna + phase_bias + windup + phase_compensation;
+        break;
+    case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::ORBIT_CLOCK_ONLY:
+        corrections.pseudorange_correction_m =
+            relativity + receiver_antenna;
+        corrections.carrier_phase_correction_m =
+            relativity + receiver_antenna + windup;
+        break;
+    }
+
+    return corrections;
+}
+
+bool usesClasTropospherePrior(
+    ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy policy) {
+    return policy ==
+           ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR;
+}
+
 std::vector<SatelliteId> collectResidualIonoSatellites(
     const ObservationData& obs,
     const SSRProducts& ssr_products) {
@@ -432,6 +478,8 @@ MeasurementBuildResult buildEpochMeasurements(
             if (!raw || !raw->valid) {
                 continue;
             }
+            const auto applied_corrections = selectAppliedOsrCorrections(
+                osr, f, config.clas_correction_application_policy);
             const double iono_scale =
                 (osr.frequencies[f] > 0.0 && osr.wavelengths[0] > 0.0)
                     ? std::pow(osr.wavelengths[f] / osr.wavelengths[0], 2)
@@ -439,11 +487,9 @@ MeasurementBuildResult buildEpochMeasurements(
             const double iono_state_m =
                 use_residual_iono_state ? filter_state.state(iono_state_index) : 0.0;
 
-            const double prc_no_trop = osr.PRC[f] - osr.trop_correction_m;
-            const double cpc_no_trop = osr.CPC[f] - osr.trop_correction_m;
-
             if (raw->has_pseudorange && std::isfinite(raw->pseudorange)) {
-                const double p_corr = raw->pseudorange - prc_no_trop;
+                const double p_corr =
+                    raw->pseudorange - applied_corrections.pseudorange_correction_m;
                 const double predicted =
                     geo - sat_clk_m + receiver_clock_m + trop_modeled +
                     iono_scale * iono_state_m;
@@ -480,7 +526,8 @@ MeasurementBuildResult buildEpochMeasurements(
 
             if (raw->has_carrier_phase && std::isfinite(raw->carrier_phase)) {
                 const double l_m = raw->carrier_phase * osr.wavelengths[f];
-                const double l_corr = l_m - cpc_no_trop;
+                const double l_corr =
+                    l_m - applied_corrections.carrier_phase_correction_m;
 
                 const uint8_t amb_prn = f == 0 ? osr.satellite.prn
                     : static_cast<uint8_t>(std::min(255, osr.satellite.prn + 100));
@@ -531,10 +578,17 @@ MeasurementBuildResult buildEpochMeasurements(
         }
     }
 
-    if (config.estimate_troposphere && !epoch_atmos.empty()) {
+    if (config.estimate_troposphere && !epoch_atmos.empty() &&
+        usesClasTropospherePrior(config.clas_correction_application_policy)) {
         const double clas_trop_zenith =
             ppp_atmosphere::atmosphericTroposphereCorrectionMeters(
-                epoch_atmos, receiver_position, obs.time, M_PI_2);
+                epoch_atmos,
+                receiver_position,
+                obs.time,
+                M_PI_2,
+                config.clas_expanded_value_construction_policy,
+                config.clas_subtype12_value_construction_policy,
+                config.clas_expanded_residual_sampling_policy);
         if (std::isfinite(clas_trop_zenith) && clas_trop_zenith > 0.0) {
             MeasurementRow row;
             row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
@@ -757,6 +811,8 @@ FixValidationStats validateFixedSolution(
             if (raw == nullptr || !raw->valid) {
                 continue;
             }
+            const auto applied_corrections = selectAppliedOsrCorrections(
+                osr, f, config.clas_correction_application_policy);
 
             const auto iono_it = filter_state.ionosphere_indices.find(osr.satellite);
             const double iono_scale =
@@ -775,12 +831,10 @@ FixValidationStats validateFixedSolution(
                 1.0 / (std::sin(osr.elevation) * std::sin(osr.elevation));
             const double predicted =
                 geo - sat_clk_m + receiver_clock_m + trop_modeled;
-            const double prc_no_trop = osr.PRC[f] - osr.trop_correction_m;
-            const double cpc_no_trop = osr.CPC[f] - osr.trop_correction_m;
 
             if (raw->has_pseudorange && std::isfinite(raw->pseudorange)) {
                 const double residual =
-                    (raw->pseudorange - prc_no_trop) -
+                    (raw->pseudorange - applied_corrections.pseudorange_correction_m) -
                     (predicted + iono_scale * iono_state_m);
                 code_sum_sq += residual * residual;
                 ++stats.code_rows;
@@ -800,7 +854,7 @@ FixValidationStats validateFixedSolution(
 
             const double carrier_phase_m = raw->carrier_phase * osr.wavelengths[f];
             const double residual =
-                (carrier_phase_m - cpc_no_trop) -
+                (carrier_phase_m - applied_corrections.carrier_phase_correction_m) -
                 (predicted - iono_scale * iono_state_m +
                  filter_state.state(ambiguity_index));
             const double variance = 0.01 * el_weight;

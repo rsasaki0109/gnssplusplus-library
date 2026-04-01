@@ -51,6 +51,72 @@ int dayOfYearFromTime(const GNSSTime& time) {
     return utc_tm.tm_yday + 1;
 }
 
+bool usePolynomialTerms(
+    ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy policy) {
+    return policy !=
+           ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy::RESIDUAL_ONLY;
+}
+
+bool useResidualTerms(
+    ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy policy) {
+    return policy !=
+           ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy::POLYNOMIAL_ONLY;
+}
+
+bool useIndexedResidualSampling(
+    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy policy) {
+    return policy !=
+           ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::MEAN_ONLY;
+}
+
+bool useMeanResidualSampling(
+    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy policy) {
+    return policy !=
+           ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_ONLY;
+}
+
+bool isSubtype12TropRow(const std::map<std::string, std::string>& atmos_tokens) {
+    const auto it = atmos_tokens.find("atmos_trop_source_subtype");
+    return it != atmos_tokens.end() && it->second == "12";
+}
+
+bool isSubtype12StecRow(const std::map<std::string, std::string>& atmos_tokens,
+                        const SatelliteId& satellite) {
+    const auto it = atmos_tokens.find("atmos_stec_source_subtype:" + satellite.toString());
+    return it != atmos_tokens.end() && it->second == "12";
+}
+
+bool useSubtype12LinearTerms(
+    ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy policy) {
+    return policy !=
+           ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy::OFFSET_ONLY;
+}
+
+bool useSubtype12QuadraticTerms(
+    ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy policy) {
+    return policy ==
+           ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy::FULL;
+}
+
+bool sampleAtmosResidualList(const std::map<std::string, std::string>& atmos_tokens,
+                             const std::string& key,
+                             bool have_grid_reference,
+                             size_t residual_index,
+                             ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy sampling_policy,
+                             double& value) {
+    if (useIndexedResidualSampling(sampling_policy) && have_grid_reference &&
+        parseAtmosListValueAtIndex(atmos_tokens, key, residual_index, value) &&
+        std::isfinite(value)) {
+        return true;
+    }
+    if (useMeanResidualSampling(sampling_policy) &&
+        parseAtmosListMeanValue(atmos_tokens, key, value) &&
+        std::isfinite(value)) {
+        return true;
+    }
+    return false;
+}
+
 }  // namespace
 
 bool parseAtmosTokenDouble(const std::map<std::string, std::string>& atmos_tokens,
@@ -193,21 +259,27 @@ double atmosphericTroposphereCorrectionMeters(
     const std::map<std::string, std::string>& atmos_tokens,
     const Vector3d& receiver_position,
     const GNSSTime& time,
-    double elevation) {
+    double elevation,
+    ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy value_policy,
+    ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy,
+    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy) {
     double correction_m = 0.0;
     bool have_correction = false;
     ClasGridReference grid_reference;
     const bool have_grid_reference =
         resolveClasGridReference(atmos_tokens, receiver_position, grid_reference);
+    const bool subtype12_row = isSubtype12TropRow(atmos_tokens);
     int trop_type = -1;
     parseAtmosTokenInt(atmos_tokens, "atmos_trop_type", trop_type);
 
     double value = 0.0;
-    if (parseAtmosTokenDouble(atmos_tokens, "atmos_trop_t00_m", value) && std::isfinite(value)) {
+    if (usePolynomialTerms(value_policy) &&
+        parseAtmosTokenDouble(atmos_tokens, "atmos_trop_t00_m", value) && std::isfinite(value)) {
         correction_m += value;
         have_correction = true;
     }
-    if (have_grid_reference && trop_type > 0) {
+    if (usePolynomialTerms(value_policy) && have_grid_reference && trop_type > 0 &&
+        (!subtype12_row || useSubtype12LinearTerms(subtype12_value_policy))) {
         if (parseAtmosTokenDouble(atmos_tokens, "atmos_trop_t01_m_per_deg", value) && std::isfinite(value)) {
             correction_m += value * grid_reference.dlat_deg;
             have_correction = true;
@@ -217,23 +289,26 @@ double atmosphericTroposphereCorrectionMeters(
             have_correction = true;
         }
     }
-    if (have_grid_reference && trop_type > 1 &&
+    if (usePolynomialTerms(value_policy) && have_grid_reference && trop_type > 1 &&
+        (!subtype12_row || useSubtype12QuadraticTerms(subtype12_value_policy)) &&
         parseAtmosTokenDouble(atmos_tokens, "atmos_trop_t11_m_per_deg2", value) &&
         std::isfinite(value)) {
         correction_m += value * grid_reference.dlat_deg * grid_reference.dlon_deg;
         have_correction = true;
     }
-    if (parseAtmosTokenDouble(atmos_tokens, "atmos_trop_offset_m", value) && std::isfinite(value)) {
+    if (useResidualTerms(value_policy) &&
+        parseAtmosTokenDouble(atmos_tokens, "atmos_trop_offset_m", value) && std::isfinite(value)) {
         correction_m += value;
         have_correction = true;
     }
-    if (have_grid_reference &&
-        parseAtmosListValueAtIndex(atmos_tokens, "atmos_trop_residuals_m", grid_reference.residual_index, value) &&
-        std::isfinite(value)) {
-        correction_m += value;
-        have_correction = true;
-    } else if (parseAtmosListMeanValue(atmos_tokens, "atmos_trop_residuals_m", value) &&
-               std::isfinite(value)) {
+    if (useResidualTerms(value_policy) &&
+        sampleAtmosResidualList(
+            atmos_tokens,
+            "atmos_trop_residuals_m",
+            have_grid_reference,
+            grid_reference.residual_index,
+            residual_sampling_policy,
+            value)) {
         correction_m += value;
         have_correction = true;
     }
@@ -251,23 +326,25 @@ double atmosphericTroposphereCorrectionMeters(
         double hydro_delta_m = 0.0;
         double wet_delta_m = 0.0;
         bool have_grid_trop = false;
-        if (have_grid_reference &&
-            parseAtmosListValueAtIndex(atmos_tokens, "atmos_trop_hs_residuals_m", grid_reference.residual_index, value) &&
-            std::isfinite(value)) {
-            hydro_delta_m = value;
-            have_grid_trop = true;
-        } else if (parseAtmosListMeanValue(atmos_tokens, "atmos_trop_hs_residuals_m", value) &&
-                   std::isfinite(value)) {
+        if (useResidualTerms(value_policy) &&
+            sampleAtmosResidualList(
+                atmos_tokens,
+                "atmos_trop_hs_residuals_m",
+                have_grid_reference,
+                grid_reference.residual_index,
+                residual_sampling_policy,
+                value)) {
             hydro_delta_m = value;
             have_grid_trop = true;
         }
-        if (have_grid_reference &&
-            parseAtmosListValueAtIndex(atmos_tokens, "atmos_trop_wet_residuals_m", grid_reference.residual_index, value) &&
-            std::isfinite(value)) {
-            wet_delta_m = value;
-            have_grid_trop = true;
-        } else if (parseAtmosListMeanValue(atmos_tokens, "atmos_trop_wet_residuals_m", value) &&
-                   std::isfinite(value)) {
+        if (useResidualTerms(value_policy) &&
+            sampleAtmosResidualList(
+                atmos_tokens,
+                "atmos_trop_wet_residuals_m",
+                have_grid_reference,
+                grid_reference.residual_index,
+                residual_sampling_policy,
+                value)) {
             wet_delta_m = value;
             have_grid_trop = true;
         }
@@ -282,23 +359,29 @@ double atmosphericTroposphereCorrectionMeters(
 
 double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_tokens,
                            const SatelliteId& satellite,
-                           const Vector3d& receiver_position) {
+                           const Vector3d& receiver_position,
+                           ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy value_policy,
+                           ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy,
+                           ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy) {
     const std::string suffix = ":" + satellite.toString();
     double stec_tecu = 0.0;
     bool have_correction = false;
     ClasGridReference grid_reference;
     const bool have_grid_reference =
         resolveClasGridReference(atmos_tokens, receiver_position, grid_reference);
+    const bool subtype12_row = isSubtype12StecRow(atmos_tokens, satellite);
     int stec_type = -1;
     parseAtmosTokenInt(atmos_tokens, "atmos_stec_type" + suffix, stec_type);
 
     double value = 0.0;
-    if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c00_tecu" + suffix, value) &&
+    if (usePolynomialTerms(value_policy) &&
+        parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c00_tecu" + suffix, value) &&
         std::isfinite(value)) {
         stec_tecu += value;
         have_correction = true;
     }
-    if (have_grid_reference && stec_type > 0) {
+    if (usePolynomialTerms(value_policy) && have_grid_reference && stec_type > 0 &&
+        (!subtype12_row || useSubtype12LinearTerms(subtype12_value_policy))) {
         if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c01_tecu_per_deg" + suffix, value) &&
             std::isfinite(value)) {
             stec_tecu += value * grid_reference.dlat_deg;
@@ -310,13 +393,15 @@ double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_token
             have_correction = true;
         }
     }
-    if (have_grid_reference && stec_type > 1 &&
+    if (usePolynomialTerms(value_policy) && have_grid_reference && stec_type > 1 &&
+        (!subtype12_row || useSubtype12QuadraticTerms(subtype12_value_policy)) &&
         parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c11_tecu_per_deg2" + suffix, value) &&
         std::isfinite(value)) {
         stec_tecu += value * grid_reference.dlat_deg * grid_reference.dlon_deg;
         have_correction = true;
     }
-    if (have_grid_reference && stec_type > 2) {
+    if (usePolynomialTerms(value_policy) && have_grid_reference && stec_type > 2 &&
+        (!subtype12_row || useSubtype12QuadraticTerms(subtype12_value_policy))) {
         if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c02_tecu_per_deg2" + suffix, value) &&
             std::isfinite(value)) {
             stec_tecu += value * grid_reference.dlat_deg * grid_reference.dlat_deg;
@@ -328,13 +413,14 @@ double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_token
             have_correction = true;
         }
     }
-    if (have_grid_reference &&
-        parseAtmosListValueAtIndex(atmos_tokens, "atmos_stec_residuals_tecu" + suffix, grid_reference.residual_index, value) &&
-        std::isfinite(value)) {
-        stec_tecu += value;
-        have_correction = true;
-    } else if (parseAtmosListMeanValue(atmos_tokens, "atmos_stec_residuals_tecu" + suffix, value) &&
-               std::isfinite(value)) {
+    if (useResidualTerms(value_policy) &&
+        sampleAtmosResidualList(
+            atmos_tokens,
+            "atmos_stec_residuals_tecu" + suffix,
+            have_grid_reference,
+            grid_reference.residual_index,
+            residual_sampling_policy,
+            value)) {
         stec_tecu += value;
         have_correction = true;
     }

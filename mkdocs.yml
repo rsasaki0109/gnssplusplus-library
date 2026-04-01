@@ -24,6 +24,8 @@ nav:
   - Benchmarks: benchmarks.md
   - Validation: validation.md
   - Interfaces: interfaces.md
+  - Experiments: experiments.md
+  - Decisions: decisions.md
   - References:
       - Overview: references/index.md
       - MADOCALIB Gap: references/madocalib-gap.md

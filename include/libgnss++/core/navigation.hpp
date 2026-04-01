@@ -324,11 +324,13 @@ struct SSROrbitClockCorrection {
     SatelliteId satellite;
     GNSSTime time;
 
-    Vector3d orbit_correction_ecef = Vector3d::Zero();   ///< Orbit delta in ECEF meters
+    Vector3d orbit_correction_ecef = Vector3d::Zero();   ///< Orbit delta in meters (ECEF or RAC per container flag)
     double clock_correction_m = 0.0;                     ///< Clock delta in meters
     double ura_sigma_m = 0.0;                            ///< SSR URA sigma in meters
     std::map<uint8_t, double> code_bias_m;               ///< SSR code biases keyed by RTCM signal id
     std::map<uint8_t, double> phase_bias_m;              ///< SSR phase biases keyed by RTCM signal id
+    int bias_network_id = 0;                             ///< Optional CLAS bias network id (0 when unset)
+    int atmos_network_id = 0;                            ///< Optional CLAS atmosphere network id (0 when unset)
     std::map<std::string, std::string> atmos_tokens;     ///< Optional atmospheric metadata tokens
 
     bool orbit_valid = false;
@@ -344,7 +346,7 @@ struct SSROrbitClockCorrection {
  *
  * This stores orbit/clock corrections keyed by satellite and epoch and can
  * linearly interpolate them. The current loader accepts a simple CSV format:
- * `week,tow,sat,dx,dy,dz,dclock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,atmos_<name>=<value>...]`
+ * `week,tow,sat,dx,dy,dz,dclock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]`
  */
 class SSRProducts {
 public:
@@ -359,13 +361,23 @@ public:
                                double* ura_sigma_m = nullptr,
                                std::map<uint8_t, double>* code_bias_m = nullptr,
                                std::map<uint8_t, double>* phase_bias_m = nullptr,
-                               std::map<std::string, std::string>* atmos_tokens = nullptr) const;
+                               std::map<std::string, std::string>* atmos_tokens = nullptr,
+                               GNSSTime* atmos_reference_time = nullptr,
+                               GNSSTime* phase_bias_reference_time = nullptr,
+                               GNSSTime* clock_reference_time = nullptr,
+                               int preferred_network_id = 0) const;
 
     bool loadCSVFile(const std::string& filename);
 
     bool hasData(const SatelliteId& sat, const GNSSTime& time) const;
 
+    bool orbitCorrectionsAreRac() const { return orbit_corrections_are_rac_; }
+    void setOrbitCorrectionsAreRac(bool enabled) { orbit_corrections_are_rac_ = enabled; }
+
     void clear();
+
+private:
+    bool orbit_corrections_are_rac_ = false;
 };
 
 /**

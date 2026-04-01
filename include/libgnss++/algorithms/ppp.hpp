@@ -12,6 +12,7 @@
 #include <Eigen/Dense>
 #include <array>
 #include <mutex>
+#include <string>
 
 namespace libgnss {
 
@@ -143,6 +144,10 @@ public:
     bool hasLoadedDCBProducts() const { return dcb_products_loaded_; }
     size_t getLoadedIONEXMapCount() const { return ionex_products_.tec_maps.size(); }
     size_t getLoadedDCBEntryCount() const { return dcb_products_.entries.size(); }
+    bool getLastClasHybridFallbackUsed() const { return last_clas_hybrid_fallback_used_; }
+    const std::string& getLastClasHybridFallbackReason() const {
+        return last_clas_hybrid_fallback_reason_;
+    }
     
     /**
      * @brief Get convergence time
@@ -195,6 +200,8 @@ private:
     int last_applied_dcb_corrections_ = 0;
     double last_applied_ionex_m_ = 0.0;
     double last_applied_dcb_m_ = 0.0;
+    bool last_clas_hybrid_fallback_used_ = false;
+    std::string last_clas_hybrid_fallback_reason_;
     
 public:
     using ARState = PPPState;
@@ -223,6 +230,11 @@ private:
     bool initializeFilter(const ObservationData& obs,
                           const NavigationData& nav,
                           const PositionSolution* seed_solution = nullptr);
+
+    PositionSolution processEpochStandard(
+        const ObservationData& obs,
+        const NavigationData& nav,
+        const char* clas_hybrid_fallback_reason = nullptr);
     
     /**
      * @brief Predict filter state

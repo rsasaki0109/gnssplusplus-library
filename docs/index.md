@@ -12,6 +12,8 @@ checked benchmark artifacts.
 - [Quick start](quickstart.md)
 - [Validation and sign-off](validation.md)
 - [Interfaces](interfaces.md)
+- [Experiments](experiments.md)
+- [Decisions](decisions.md)
 - [Reference analyses](references/index.md)
 - [Contributing](contributing.md)
 

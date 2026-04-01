@@ -1,0 +1,1166 @@
+[metadata]
+name = "ppp_ar_clas_experiments"
+reference = "CLASLIB"
+
+[strategies.iflc_float_baseline]
+label = "IFLC Float Baseline"
+design_style = "monolithic"
+status = "baseline"
+description = "Current IFLC-first PPP path. This is the control arm for CLAS-oriented work."
+claslib_reference = "Control arm used to measure how far CLASLIB-inspired observation-space work actually moves the solver."
+extra_args = []
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+]
+
+[strategies.osr_float_pipeline]
+label = "OSR Float Pipeline"
+design_style = "pipeline"
+status = "candidate"
+description = "CLASLIB-inspired observation-space path: per-frequency measurements, residual ionosphere estimation, no ambiguity fixing."
+claslib_reference = "Mirrors the CLASLIB emphasis on cssr2osr-style corrected observations before ambiguity resolution."
+extra_args = [
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_strict_pipeline]
+label = "OSR Float Strict Pipeline"
+design_style = "pipeline+boundary"
+status = "candidate"
+description = "Strict CLAS OSR epoch path with per-frequency corrections and no ambiguity fixing."
+claslib_reference = "Uses the CLASLIB-style observation-space boundary directly, without falling back to the standard PPP epoch path."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_hybrid_pipeline]
+label = "OSR Float Hybrid Pipeline"
+design_style = "pipeline+fallback"
+status = "candidate"
+description = "CLASLIB-inspired observation-space path that falls back to the stable standard PPP epoch path when the strict CLAS OSR update cannot run."
+claslib_reference = "Uses the CLASLIB-style observation-space boundary, but keeps the stable standard PPP path as an experiment-only fallback to isolate whether the failure is in the OSR builder or in the epoch boundary."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "hybrid-standard-ppp",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_orbit_clock_bias_pipeline]
+label = "OSR Float Orbit/Clock/Bias Pipeline"
+design_style = "pipeline+semantics"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps orbit/clock plus bias-side observation corrections, but suppresses CLAS atmosphere application inside accepted updates."
+claslib_reference = "Used to test whether the accepted CLAS path improves once correction application is reduced to the CLASLIB-like orbit/clock boundary plus bias semantics, without external atmosphere forcing."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-osr-application",
+  "orbit-clock-bias",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_orbit_clock_only_pipeline]
+label = "OSR Float Orbit/Clock-Only Pipeline"
+design_style = "pipeline+semantics"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps geometry and clock updates from the CLAS OSR lane, but suppresses CLAS bias and atmosphere application inside accepted updates."
+claslib_reference = "Used to isolate whether the accepted CLAS update path degrades because of bias/atmosphere semantics rather than because of the orbit/clock boundary itself."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-osr-application",
+  "orbit-clock-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_raw_phase_bias_pipeline]
+label = "OSR Float Raw-Phase-Bias Pipeline"
+design_style = "pipeline+continuity"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps raw CLAS phase-bias terms but disables SIS continuity and phase-bias repair semantics."
+claslib_reference = "Used to test whether the accepted CLAS path degrades because of the repair/continuity layer rather than because of the raw CLAS phase-bias values."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-continuity",
+  "raw-phase-bias",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_sis_continuity_only_pipeline]
+label = "OSR Float SIS-Continuity-Only Pipeline"
+design_style = "pipeline+continuity"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps CLAS phase-bias terms and SIS continuity deltas, but disables phase-bias repair offsets."
+claslib_reference = "Used to test whether the accepted CLAS path degrades because of the SIS continuity delta injection itself rather than because of repair-offset accumulation."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-continuity",
+  "sis-continuity-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_repair_only_pipeline]
+label = "OSR Float Repair-Only Pipeline"
+design_style = "pipeline+continuity"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps raw CLAS phase-bias values and repair offsets, but disables SIS continuity delta injection."
+claslib_reference = "Used to test whether the accepted CLAS path degrades because of repair-offset accumulation even when SIS continuity deltas are suppressed."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-continuity",
+  "repair-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_no_phase_bias_pipeline]
+label = "OSR Float No-Phase-Bias Pipeline"
+design_style = "pipeline+continuity"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that drops CLAS phase-bias and continuity semantics from accepted updates."
+claslib_reference = "Used to isolate whether the accepted CLAS path still degrades when the phase-bias layer is removed entirely."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-continuity",
+  "no-phase-bias",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_clock_bound_phase_bias_pipeline]
+label = "OSR Float Clock-Bound-Phase-Bias Pipeline"
+design_style = "pipeline+timing"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that only accepts CLAS phase-bias values when their reference time stays bound to the selected clock correction epoch."
+claslib_reference = "Used to test whether the expanded SSR lane over-carries phase-bias rows across compact-SSR epoch boundaries compared with the stricter cssr2osr timing semantics."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-ssr-timing",
+  "clock-bound-phase-bias",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_clock_bound_atmos_phase_bias_pipeline]
+label = "OSR Float Clock-Bound-Atmos/Phase Pipeline"
+design_style = "pipeline+timing"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that drops CLAS phase-bias and atmosphere rows whenever their reference times drift away from the selected clock epoch."
+claslib_reference = "Used to test whether the compact-to-expanded SSR lane is over-carrying both atmosphere and phase-bias rows across epoch boundaries."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-ssr-timing",
+  "clock-bound-atmos-and-phase-bias",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_orbit_or_clock_source_pipeline]
+label = "OSR Float Orbit-or-Clock Source Pipeline"
+design_style = "pipeline+source"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that drops compact-to-expanded rows unless the source epoch carries orbit or clock state for that satellite."
+claslib_reference = "Used to test whether zero-filled expanded rows from pure atmosphere/bias epochs are poisoning the cssr2osr-style observation pipeline."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_flush_policy = "orbit-or-clock-only"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_orbit_and_clock_source_pipeline]
+label = "OSR Float Orbit-and-Clock Source Pipeline"
+design_style = "pipeline+source"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that only keeps compact-to-expanded rows when the source epoch carries both orbit and clock state for that satellite."
+claslib_reference = "Used to test whether the expanded SSR lane must require fully anchored orbit+clock rows before the solver sees any CLAS bias/atmos values."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_flush_policy = "orbit-and-clock-only"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_no_carry_atmos_merge_pipeline]
+label = "OSR Float No-Carry Atmos-Merge Pipeline"
+design_style = "pipeline+merge"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that disables compact-SSR atmosphere-token carry-forward across epoch boundaries."
+claslib_reference = "Used to test whether the current expanded SSR lane is over-carrying subtype-8 STEC polynomial terms between compact SSR epochs compared with a stricter cssr2osr-style merge boundary."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_atmos_merge_policy = "no-carry"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_network_locked_atmos_merge_pipeline]
+label = "OSR Float Network-Locked Atmos-Merge Pipeline"
+design_style = "pipeline+merge"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that carries STEC polynomial terms forward only while the compact atmosphere network id stays consistent."
+claslib_reference = "Used to test whether the current expanded SSR lane is incorrectly merging carried subtype-8 STEC coefficients across compact atmosphere-network boundaries."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_atmos_merge_policy = "network-locked-stec-coeff-carry"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_gridded_priority_subtype_merge_pipeline]
+label = "OSR Float Gridded-Priority Subtype-Merge Pipeline"
+design_style = "pipeline+merge"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that lets subtype-9 gridded residual rows replace carried subtype-8 polynomial families before expanded SSR materialization."
+claslib_reference = "Used to test whether the compact-to-expanded SSR lane should treat subtype-9 residual families as dominant over older subtype-8 coefficient families within one epoch."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_atmos_subtype_merge_policy = "gridded-priority"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_combined_priority_subtype_merge_pipeline]
+label = "OSR Float Combined-Priority Subtype-Merge Pipeline"
+design_style = "pipeline+merge"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that lets subtype-12 atmosphere rows replace prior subtype-8/9 partial families before expanded SSR materialization."
+claslib_reference = "Used to test whether the compact-to-expanded SSR lane should stop mixing subtype-12 atmosphere rows with older subtype-8/9 partial families inside one epoch."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_atmos_subtype_merge_policy = "combined-priority"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_residual_only_value_pipeline]
+label = "OSR Float Residual-Only Value Pipeline"
+design_style = "pipeline+values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that constructs expanded atmosphere values from residual terms only, dropping polynomial components."
+claslib_reference = "Used to test whether the expanded SSR lane degrades because polynomial terms are being combined incorrectly before residual formation."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-expanded-values",
+  "residual-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_atmosphere.cpp",
+]
+
+[strategies.osr_float_indexed_only_residual_sampling_pipeline]
+label = "OSR Float Indexed-Only Residual-Sampling Pipeline"
+design_style = "pipeline+values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps the full composed atmosphere model but samples expanded residual lists only at the resolved grid index."
+claslib_reference = "Used to test whether CLASLIB-style indexed residual sampling is closer to the intended subtype-12 expanded-SSR semantics than indexed-or-mean fallback."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-residual-sampling",
+  "indexed-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_atmosphere.cpp",
+]
+
+[strategies.osr_float_mean_only_residual_sampling_pipeline]
+label = "OSR Float Mean-Only Residual-Sampling Pipeline"
+design_style = "pipeline+values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps the full composed atmosphere model but ignores grid-indexed residual entries and uses only mean residual values."
+claslib_reference = "Negative-control arm used to test whether current failures come from indexed residual sampling rather than from the residual values themselves."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-residual-sampling",
+  "mean-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_atmosphere.cpp",
+]
+
+[strategies.osr_float_planar_subtype12_value_pipeline]
+label = "OSR Float Planar Subtype12-Value Pipeline"
+design_style = "pipeline+values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps subtype-12 constant and first-order surface terms but drops subtype-12 quadratic terms before residual formation."
+claslib_reference = "Used to test whether subtype-12 higher-order surface terms are being expanded incorrectly relative to the CLASLIB-style compact atmosphere interpretation."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-subtype12-values",
+  "planar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "apps/gnss_ppp.cpp",
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_atmosphere.cpp",
+]
+
+[strategies.osr_float_offset_only_subtype12_value_pipeline]
+label = "OSR Float Offset-Only Subtype12-Value Pipeline"
+design_style = "pipeline+values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps only subtype-12 constant terms and residual lists, dropping subtype-12 slope and quadratic surface terms."
+claslib_reference = "Negative-control arm used to test whether subtype-12 surface-shape terms are the main source of divergence before residual formation."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-subtype12-values",
+  "offset-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "apps/gnss_ppp.cpp",
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_atmosphere.cpp",
+]
+
+[strategies.osr_float_polynomial_only_value_pipeline]
+label = "OSR Float Polynomial-Only Value Pipeline"
+design_style = "pipeline+values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that constructs expanded atmosphere values from polynomial terms only, dropping residual lists and offsets."
+claslib_reference = "Used to test whether the expanded SSR lane degrades because residual values are being combined incorrectly after compact-to-expanded materialization."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-expanded-values",
+  "polynomial-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_atmosphere.cpp",
+]
+
+[strategies.osr_float_guarded_pipeline]
+label = "OSR Float Guarded Pipeline"
+design_style = "pipeline"
+status = "candidate"
+description = "Observation-space OSR path that keeps the nearest grid but rejects atmosphere tokens once they age past the stale guard."
+claslib_reference = "Used to isolate whether old-network reuse, rather than the cssr2osr-style correction model itself, is causing the long-tail 2018 failures."
+extra_args = [
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--clas-atmos-selection",
+  "grid-guarded",
+]
+implementation_files = [
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_balanced_pipeline]
+label = "OSR Float Balanced Pipeline"
+design_style = "pipeline"
+status = "candidate"
+description = "Observation-space OSR path with a stale-aware atmosphere selector that only keeps the nearest grid while corrections stay fresh."
+claslib_reference = "Keeps the CLASLIB-style cssr2osr correction boundary while experimenting on token-selection policy instead of measurement modeling."
+extra_args = [
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--clas-atmos-selection",
+  "balanced",
+]
+implementation_files = [
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_freshness_pipeline]
+label = "OSR Float Freshness Pipeline"
+design_style = "pipeline"
+status = "candidate"
+description = "Observation-space OSR path that prioritizes fresh atmosphere tokens before grid proximity."
+claslib_reference = "Used to test whether stale network selection, rather than cssr2osr itself, is causing failures on older CLAS datasets."
+extra_args = [
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--clas-atmos-selection",
+  "freshness-first",
+]
+implementation_files = [
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_ar_pipeline]
+label = "OSR AR Pipeline"
+design_style = "pipeline+solver"
+status = "candidate"
+description = "CLASLIB-oriented observation-space path with PPP ambiguity resolution enabled."
+claslib_reference = "Uses the same correction-first boundary as CLASLIB, then layers ambiguity fixing as a separate concern."
+extra_args = [
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_strict_pipeline]
+label = "OSR AR Strict Pipeline"
+design_style = "pipeline+solver+boundary"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that uses the CLAS epoch boundary without falling back to the standard PPP epoch path."
+claslib_reference = "Measures the CLASLIB-style observation-space boundary directly so hybrid fallback arms can be judged against a strict CLAS control."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_hybrid_pipeline]
+label = "OSR AR Hybrid Pipeline"
+design_style = "pipeline+solver+fallback"
+status = "candidate"
+description = "CLASLIB-oriented OSR + AR path with a hybrid fallback to the stable standard PPP epoch path when the strict CLAS OSR stage cannot complete."
+claslib_reference = "Separates the CLASLIB-style observation-space boundary from the stable PPP fallback so epoch-boundary failures can be measured without rewriting the whole solver."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "hybrid-standard-ppp",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_orbit_clock_bias_pipeline]
+label = "OSR AR Orbit/Clock/Bias Pipeline"
+design_style = "pipeline+solver+semantics"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that keeps orbit/clock plus bias-side observation corrections, but suppresses CLAS atmosphere application inside accepted updates."
+claslib_reference = "Used to test whether ambiguity fixing becomes stable once the accepted CLAS path keeps only the bias-side semantics of the CLASLIB-style correction boundary."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-osr-application",
+  "orbit-clock-bias",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_orbit_clock_only_pipeline]
+label = "OSR AR Orbit/Clock-Only Pipeline"
+design_style = "pipeline+solver+semantics"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that keeps only geometry and clock updates from the CLAS OSR lane, suppressing CLAS bias and atmosphere application inside accepted updates."
+claslib_reference = "Used to isolate whether accepted CLAS updates can recover once the solver uses the CLASLIB-style orbit/clock boundary but drops the rest of the observation-space corrections."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-osr-application",
+  "orbit-clock-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_raw_phase_bias_pipeline]
+label = "OSR AR Raw-Phase-Bias Pipeline"
+design_style = "pipeline+solver+continuity"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that keeps raw CLAS phase-bias terms but disables SIS continuity and phase-bias repair semantics."
+claslib_reference = "Used to test whether ambiguity fixing becomes stable once the accepted CLAS path stops applying continuity repair on top of raw CLAS phase biases."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-continuity",
+  "raw-phase-bias",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_sis_continuity_only_pipeline]
+label = "OSR AR SIS-Continuity-Only Pipeline"
+design_style = "pipeline+solver+continuity"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that keeps CLAS phase-bias terms and SIS continuity deltas, but disables phase-bias repair offsets."
+claslib_reference = "Used to test whether ambiguity fixing is destabilized by SIS continuity delta injection itself rather than by repair-offset accumulation."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-continuity",
+  "sis-continuity-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_repair_only_pipeline]
+label = "OSR AR Repair-Only Pipeline"
+design_style = "pipeline+solver+continuity"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that keeps raw CLAS phase-bias values and repair offsets, but disables SIS continuity delta injection."
+claslib_reference = "Used to test whether ambiguity fixing is destabilized by repair-offset accumulation even when SIS continuity deltas are suppressed."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-continuity",
+  "repair-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_no_phase_bias_pipeline]
+label = "OSR AR No-Phase-Bias Pipeline"
+design_style = "pipeline+solver+continuity"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that removes CLAS phase-bias and continuity semantics from accepted updates."
+claslib_reference = "Used to isolate whether ambiguity fixing recovers once the phase-bias layer is removed completely from the accepted CLAS update path."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-continuity",
+  "no-phase-bias",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_clock_bound_phase_bias_pipeline]
+label = "OSR AR Clock-Bound-Phase-Bias Pipeline"
+design_style = "pipeline+solver+timing"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that only accepts CLAS phase-bias values when they stay temporally aligned with the selected clock correction epoch."
+claslib_reference = "Used to test whether ambiguity fixing recovers once the expanded SSR lane stops carrying phase-bias rows across compact-SSR epoch boundaries."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-ssr-timing",
+  "clock-bound-phase-bias",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_clock_bound_atmos_phase_bias_pipeline]
+label = "OSR AR Clock-Bound-Atmos/Phase Pipeline"
+design_style = "pipeline+solver+timing"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that drops atmosphere and phase-bias rows whenever their reference times drift away from the selected clock epoch."
+claslib_reference = "Used to test whether ambiguity fixing recovers once the expanded SSR lane stops carrying stale atmosphere and phase-bias rows across epoch boundaries."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-ssr-timing",
+  "clock-bound-atmos-and-phase-bias",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_orbit_or_clock_source_pipeline]
+label = "OSR AR Orbit-or-Clock Source Pipeline"
+design_style = "pipeline+solver+source"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that drops compact-to-expanded rows unless the source epoch carries orbit or clock state for that satellite."
+claslib_reference = "Used to test whether ambiguity fixing recovers once zero-filled expanded rows from pure atmosphere/bias epochs are removed before the solver boundary."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+compact_flush_policy = "orbit-or-clock-only"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_orbit_and_clock_source_pipeline]
+label = "OSR AR Orbit-and-Clock Source Pipeline"
+design_style = "pipeline+solver+source"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that only keeps compact-to-expanded rows when the source epoch carries both orbit and clock state for that satellite."
+claslib_reference = "Used to test whether ambiguity fixing recovers once the expanded SSR lane requires fully anchored orbit+clock rows before the solver sees any CLAS bias/atmos values."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+compact_flush_policy = "orbit-and-clock-only"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_no_carry_atmos_merge_pipeline]
+label = "OSR AR No-Carry Atmos-Merge Pipeline"
+design_style = "pipeline+solver+merge"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that disables compact-SSR atmosphere-token carry-forward across epoch boundaries."
+claslib_reference = "Used to test whether ambiguity fixing recovers once carried subtype-8 STEC coefficients are removed before expanded SSR values are materialized."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_atmos_merge_policy = "no-carry"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_network_locked_atmos_merge_pipeline]
+label = "OSR AR Network-Locked Atmos-Merge Pipeline"
+design_style = "pipeline+solver+merge"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that only carries STEC polynomial terms while the compact atmosphere network id remains consistent."
+claslib_reference = "Used to test whether ambiguity fixing is being poisoned by cross-network merge semantics in the compact-to-expanded SSR lane."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_atmos_merge_policy = "network-locked-stec-coeff-carry"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_gridded_priority_subtype_merge_pipeline]
+label = "OSR AR Gridded-Priority Subtype-Merge Pipeline"
+design_style = "pipeline+solver+merge"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that lets subtype-9 gridded residual rows replace older subtype-8 polynomial families before expanded SSR materialization."
+claslib_reference = "Used to test whether ambiguity fixing recovers once subtype-9 residual families dominate subtype-8 coefficients inside one epoch."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_atmos_subtype_merge_policy = "gridded-priority"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_combined_priority_subtype_merge_pipeline]
+label = "OSR AR Combined-Priority Subtype-Merge Pipeline"
+design_style = "pipeline+solver+merge"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that lets subtype-12 atmosphere rows replace subtype-8/9 partial families before expanded SSR materialization."
+claslib_reference = "Used to test whether ambiguity fixing recovers once subtype-12 rows stop being merged with older subtype-8/9 partial families inside one epoch."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_atmos_subtype_merge_policy = "combined-priority"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_residual_only_value_pipeline]
+label = "OSR AR Residual-Only Value Pipeline"
+design_style = "pipeline+solver+values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path with ambiguity fixing enabled, but expanded atmosphere values are built from residual terms only."
+claslib_reference = "Used to test whether PPP-AR recovers once the expanded SSR lane ignores polynomial terms and only accepts residual-side values."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-expanded-values",
+  "residual-only",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+  "src/algorithms/ppp_atmosphere.cpp",
+]
+
+[strategies.osr_ar_indexed_only_residual_sampling_pipeline]
+label = "OSR AR Indexed-Only Residual-Sampling Pipeline"
+design_style = "pipeline+solver+values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path with ambiguity fixing enabled, while expanded residual lists are sampled only at the resolved grid index."
+claslib_reference = "Used to test whether PPP-AR recovers once the CLAS observation-space path matches a stricter indexed residual-sampling interpretation."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-residual-sampling",
+  "indexed-only",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+  "src/algorithms/ppp_atmosphere.cpp",
+]
+
+[strategies.osr_ar_mean_only_residual_sampling_pipeline]
+label = "OSR AR Mean-Only Residual-Sampling Pipeline"
+design_style = "pipeline+solver+values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path with ambiguity fixing enabled, while expanded residual lists ignore grid indices and use only mean residual values."
+claslib_reference = "Negative-control arm used to show whether PPP-AR failures are caused by the indexed residual sampler or by upstream expanded-SSR value construction."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-residual-sampling",
+  "mean-only",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+  "src/algorithms/ppp_atmosphere.cpp",
+]
+
+[strategies.osr_ar_planar_subtype12_value_pipeline]
+label = "OSR AR Planar Subtype12-Value Pipeline"
+design_style = "pipeline+solver+values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path with ambiguity fixing enabled, while subtype-12 rows keep only constant and first-order surface terms before residual formation."
+claslib_reference = "Used to test whether PPP-AR recovers once subtype-12 expansion is limited to the lower-order surface terms implied by the CLASLIB atmosphere model."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-subtype12-values",
+  "planar",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "apps/gnss_ppp.cpp",
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+  "src/algorithms/ppp_atmosphere.cpp",
+]
+
+[strategies.osr_ar_offset_only_subtype12_value_pipeline]
+label = "OSR AR Offset-Only Subtype12-Value Pipeline"
+design_style = "pipeline+solver+values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path with ambiguity fixing enabled, while subtype-12 rows keep only constant terms and residual lists before residual formation."
+claslib_reference = "Negative-control arm used to test whether PPP-AR failures are driven by subtype-12 slope/quadratic terms rather than by the upstream expanded-SSR boundary itself."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-subtype12-values",
+  "offset-only",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "apps/gnss_ppp.cpp",
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+  "src/algorithms/ppp_atmosphere.cpp",
+]
+
+[strategies.osr_ar_polynomial_only_value_pipeline]
+label = "OSR AR Polynomial-Only Value Pipeline"
+design_style = "pipeline+solver+values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path with ambiguity fixing enabled, but expanded atmosphere values are built from polynomial terms only."
+claslib_reference = "Used to test whether PPP-AR recovers once the expanded SSR lane ignores residual lists and only accepts polynomial-side values."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-expanded-values",
+  "polynomial-only",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+  "src/algorithms/ppp_atmosphere.cpp",
+]
+
+[strategies.osr_ar_guarded_pipeline]
+label = "OSR AR Guarded Pipeline"
+design_style = "pipeline+solver"
+status = "candidate"
+description = "CLASLIB-oriented OSR + AR path that preserves nearest-grid behavior but rejects stale atmosphere tokens."
+claslib_reference = "Lets us test whether stale token reuse is the blocker before rewriting the underlying CLAS observation model."
+extra_args = [
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--clas-atmos-selection",
+  "grid-guarded",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_balanced_pipeline]
+label = "OSR AR Balanced Pipeline"
+design_style = "pipeline+solver"
+status = "candidate"
+description = "CLASLIB-oriented OSR + AR path with a stale-aware atmosphere selector."
+claslib_reference = "Separates the correction-first boundary from the atmosphere token policy so promotion decisions are driven by measured deltas."
+extra_args = [
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--clas-atmos-selection",
+  "balanced",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_freshness_pipeline]
+label = "OSR AR Freshness Pipeline"
+design_style = "pipeline+solver"
+status = "candidate"
+description = "CLASLIB-oriented OSR + AR path that prioritizes fresh atmosphere tokens before grid proximity."
+claslib_reference = "Used to test the upper bound of selector-driven recovery before changing the CLAS observation model itself."
+extra_args = [
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--clas-atmos-selection",
+  "freshness-first",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
