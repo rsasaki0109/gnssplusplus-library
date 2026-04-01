@@ -55,6 +55,11 @@ struct MeasurementBuildResult {
     std::set<SatelliteId> observed_iono_states;
 };
 
+struct AppliedOsrCorrections {
+    double pseudorange_correction_m = 0.0;
+    double carrier_phase_correction_m = 0.0;
+};
+
 struct KalmanUpdateStats {
     bool updated = false;
     int nobs = 0;
@@ -79,6 +84,14 @@ struct AmbiguityResolutionResult {
 struct EpochPreparationResult {
     bool ready = false;
 };
+
+AppliedOsrCorrections selectAppliedOsrCorrections(
+    const OSRCorrection& osr,
+    int freq_index,
+    ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy policy);
+
+bool usesClasTropospherePrior(
+    ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy policy);
 
 std::vector<SatelliteId> collectResidualIonoSatellites(
     const ObservationData& obs,
