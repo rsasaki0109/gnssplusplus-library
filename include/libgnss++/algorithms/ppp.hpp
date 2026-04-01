@@ -5,6 +5,9 @@
 #include "../core/navigation.hpp"
 #include "../core/solution.hpp"
 #include "lambda.hpp"
+#include "ppp_ar.hpp"
+#include "ppp_shared.hpp"
+#include "ppp_osr_types.hpp"
 #include "spp.hpp"
 #include <Eigen/Dense>
 #include <array>
@@ -20,79 +23,9 @@ namespace libgnss {
  */
 class PPPProcessor : public ProcessorBase {
 public:
-    /**
-     * @brief PPP-specific configuration
-     */
-    struct PPPConfig {
-        // Precise products
-        bool use_precise_orbits = true;
-        bool use_precise_clocks = true;
-        std::string orbit_file_path;
-        std::string clock_file_path;
-        bool use_ssr_corrections = false;
-        std::string ssr_file_path;
-        std::string ionex_file_path;
-        std::string dcb_file_path;
-        std::string antex_file_path;
-        std::string ocean_loading_file_path;
-        std::string ocean_loading_station_name;
-        std::string receiver_antenna_type;
-        Vector3d receiver_antenna_delta_enu = Vector3d::Zero();
-        
-        // Ambiguity resolution
-        bool enable_ambiguity_resolution = false;
-        double ar_ratio_threshold = 3.0;
-        int min_satellites_for_ar = 6;
-
-        // Motion model
-        bool kinematic_mode = false;
-        bool low_dynamics_mode = false;
-        bool use_dynamics_model = false;
-        bool reset_clock_to_spp_each_epoch = true;
-        bool reset_kinematic_position_to_spp_each_epoch = true;
-        
-        // Kalman filter parameters
-        double process_noise_position = 0.0;      ///< Position process noise (m²/s)
-        double process_noise_velocity = 1e-4;     ///< Velocity/acceleration proxy process noise (m²/s³)
-        double process_noise_clock = 0.0;         ///< Clock process noise (m²/s)
-        double process_noise_troposphere = 1e-8;  ///< Troposphere process noise (m²/s)
-        double process_noise_ambiguity = 1e-8;    ///< Ambiguity process noise (m²/s)
-        double initial_position_variance = 3600.0;
-        double initial_velocity_variance = 100.0;
-        double initial_clock_variance = 3600.0;
-        double initial_troposphere_variance = 0.36;
-        double initial_ambiguity_variance = 3600.0;
-        
-        // Measurement noise
-        double pseudorange_sigma = 1.0;           ///< Pseudorange measurement noise (m)
-        double carrier_phase_sigma = 0.01;        ///< Carrier phase measurement noise (m)
-        bool use_rtklib_measurement_variance = true;
-        double code_phase_error_ratio_l1 = 100.0;
-        double code_phase_error_ratio_l2 = 100.0;
-        double rtklib_phase_error_m = 0.003;
-        double rtklib_phase_error_elevation_m = 0.003;
-        int phase_measurement_min_lock_count = 1;
-        bool use_carrier_phase_without_precise_products = true;
-        
-        // Atmospheric modeling
-        bool estimate_troposphere = true;
-        bool use_ionosphere_free = true;
-        bool apply_ocean_loading = false;
-        bool apply_solid_earth_tides = true;
-        bool apply_relativity = true;
-        
-        // Convergence criteria
-        double convergence_threshold_horizontal = 0.1;  ///< Horizontal convergence threshold (m)
-        double convergence_threshold_vertical = 0.2;    ///< Vertical convergence threshold (m)
-        int convergence_min_epochs = 20;               ///< Minimum epochs for convergence check
-        
-        // Quality control
-        bool enable_outlier_detection = true;
-        double outlier_threshold = 4.0;
-        bool enable_cycle_slip_detection = true;
-        double cycle_slip_threshold = 0.05;
-        int filter_iterations = 8;
-    };
+    using PPPConfig = ppp_shared::PPPConfig;
+    using PPPState = ppp_shared::PPPState;
+    using PPPAmbiguityInfo = ppp_shared::PPPAmbiguityInfo;
     
     PPPProcessor();
     explicit PPPProcessor(const PPPConfig& ppp_config);
@@ -224,23 +157,6 @@ private:
     IONEXProducts ionex_products_;
     DCBProducts dcb_products_;
     
-    // Kalman filter state
-    struct PPPState {
-        VectorXd state;           ///< State vector [position, velocity, clock, troposphere, ambiguities]
-        MatrixXd covariance;      ///< State covariance matrix
-        
-        // State indices
-        int pos_index = 0;        ///< Position state start index
-        int vel_index = 3;        ///< Velocity state start index
-        int clock_index = 6;      ///< Clock state start index
-        int glo_clock_index = 7;  ///< GLONASS-specific receiver clock state
-        int trop_index = 8;       ///< Troposphere state start index
-        int amb_index = 9;        ///< Ambiguity state start index
-        
-        std::map<SatelliteId, int> ambiguity_indices;
-        int total_states = 9;     ///< Total number of states
-    };
-    
     PPPState filter_state_;
     bool filter_initialized_ = false;
     
@@ -280,27 +196,21 @@ private:
     double last_applied_ionex_m_ = 0.0;
     double last_applied_dcb_m_ = 0.0;
     
-    // Ambiguity tracking
-    struct PPPAmbiguityInfo {
-        double float_value = 0.0;
-        double fixed_value = 0.0;
-        bool is_fixed = false;
-        int lock_count = 0;
-        double last_phase = 0.0;
-        GNSSTime last_time;
-        double quality_indicator = 0.0;
-        double ambiguity_scale_m = 0.0;
-        bool needs_reinitialization = true;
-        double fractional_bias_cycles = 0.0;
-        int fractional_bias_samples = 0;
-        double last_geometry_free_m = 0.0;
-        bool has_last_geometry_free = false;
-        double last_melbourne_wubbena_m = 0.0;
-        bool has_last_melbourne_wubbena = false;
-    };
-    
+public:
+    using ARState = PPPState;
+    using ARAmbiguityInfo = PPPAmbiguityInfo;
+
+private:
     std::map<SatelliteId, PPPAmbiguityInfo> ambiguity_states_;
-    
+    std::map<SatelliteId, CLASDispersionCompensationInfo> clas_dispersion_compensation_;
+    std::map<SatelliteId, CLASSisContinuityInfo> clas_sis_continuity_;
+
+    // Pre-anchor covariance saved for DD-AR position correction
+    Eigen::MatrixXd pre_anchor_covariance_;
+    bool had_fixed_last_epoch_ = false;  ///< AR succeeded in previous epoch
+    std::map<SatelliteId, double> windup_cache_;  ///< Phase wind-up cache for OSR
+    std::map<SatelliteId, CLASPhaseBiasRepairInfo> clas_phase_bias_repair_;
+
     // Statistics
     mutable std::mutex stats_mutex_;
     size_t total_epochs_processed_ = 0;
@@ -352,6 +262,7 @@ private:
         double ambiguity_scale_m = 0.0;
         double atmospheric_trop_correction_m = 0.0;
         double atmospheric_iono_correction_m = 0.0;
+        std::map<std::string, std::string> ssr_atmos_tokens;
         bool has_carrier_phase = false;
         bool valid = false;
     };
@@ -397,7 +308,38 @@ private:
     /**
      * @brief Resolve PPP ambiguities
      */
-    bool resolveAmbiguities();
+    bool resolveAmbiguities(const ObservationData& obs, const NavigationData& nav);
+    bool resolveAmbiguitiesWLNL(const ObservationData& obs, const NavigationData& nav);
+    std::map<SatelliteId, OSRCorrection> computeWlnlOsrCorrections(
+        const ObservationData& obs,
+        const NavigationData& nav,
+        const Vector3d& receiver_position,
+        double clock_bias_m,
+        double trop_zenith) const;
+    bool buildWlnlNlInfoForSatellite(
+        const ObservationData& obs,
+        const NavigationData& nav,
+        const Vector3d& receiver_position,
+        double clock_bias_m,
+        double trop_zenith,
+        const std::map<SatelliteId, OSRCorrection>& osr_by_sat,
+        const SatelliteId& satellite,
+        ppp_ar::WlnlNlInfo& info) const;
+    bool buildFixedNlObservationForSatellite(
+        const ObservationData& obs,
+        const NavigationData& nav,
+        const std::map<SatelliteId, OSRCorrection>& osr_by_sat,
+        const SatelliteId& satellite,
+        const PPPAmbiguityInfo& ambiguity,
+        ppp_ar::FixedNlObservation& fixed_observation) const;
+    bool buildFixedCarrierObservation(
+        const IonosphereFreeObs& observation,
+        ppp_ar::FixedCarrierObservation& fixed_observation) const;
+
+    /// CLAS-PPP mode: process epoch using OSR-corrected observations
+    PositionSolution processEpochCLAS(const ObservationData& obs, const NavigationData& nav);
+    bool solveFixedPosition(const ObservationData& obs, const NavigationData& nav,
+                            Vector3d& fixed_position);
     
     /**
      * @brief Calculate tropospheric delay
@@ -441,6 +383,8 @@ private:
         VectorXd predicted;
         MatrixXd weight_matrix;
         VectorXd residuals;
+        std::vector<SatelliteId> row_satellites;  ///< Satellite for each row
+        std::vector<bool> row_is_phase;           ///< true=carrier phase, false=code
     };
     
     MeasurementEquation formMeasurementEquations(
@@ -499,6 +443,9 @@ private:
      * @brief Keep static or low-dynamics PPP anchored to its initial SPP seed.
      */
     void constrainStaticAnchorPosition();
+
+    bool solveFixedCarrierPhasePosition(const std::vector<IonosphereFreeObs>& observations,
+                                        Vector3d& fixed_position) const;
 
     
     /**
