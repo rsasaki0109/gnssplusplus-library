@@ -8,6 +8,7 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 if(GTest_FOUND)
     # Consolidate all tests into a single executable
     add_executable(run_tests
+        test_ppp_ar.cpp
         test_ppp_atmosphere.cpp
         test_rtk_ar_evaluation.cpp
         test_rtk_ar_selection.cpp

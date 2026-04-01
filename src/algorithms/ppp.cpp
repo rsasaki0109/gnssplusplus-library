@@ -1,5 +1,8 @@
 #include <libgnss++/algorithms/ppp.hpp>
+#include <libgnss++/algorithms/ppp_ar.hpp>
 #include <libgnss++/algorithms/ppp_atmosphere.hpp>
+#include <libgnss++/algorithms/ppp_clas.hpp>
+#include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/io/rtcm.hpp>
@@ -1033,6 +1036,14 @@ bool PPPProcessor::initialize(const ProcessorConfig& config) {
 }
 
 PositionSolution PPPProcessor::processEpoch(const ObservationData& obs, const NavigationData& nav) {
+    if (ppp_config_.use_clas_osr_filter) {
+        return processEpochCLAS(obs, nav);
+    }
+
+    // CLAS-PPP mode: use standard PPP filter with per-frequency OSR corrections
+    // The standard updateFilter handles per-frequency when !use_ionosphere_free
+    // with ionosphere estimation and SSR corrections applied inline.
+
     const auto processing_start = std::chrono::steady_clock::now();
 
     PositionSolution solution;
@@ -1101,20 +1112,72 @@ PositionSolution PPPProcessor::processEpoch(const ObservationData& obs, const Na
                 auto corrected_if_obs = if_obs;
                 applyPreciseCorrections(corrected_if_obs, nav, obs.time);
                 checkConvergence(obs.time);
+                PositionSolution float_solution = generateSolution(obs.time, corrected_if_obs);
+                float_solution.status = SolutionStatus::PPP_FLOAT;
+                float_solution.ratio = 0.0;
+                float_solution.num_fixed_ambiguities = 0;
                 const PPPState float_filter_state = filter_state_;
                 const auto float_ambiguity_states = ambiguity_states_;
                 const bool fixed =
-                    ppp_config_.enable_ambiguity_resolution && resolveAmbiguities();
-                solution = generateSolution(obs.time, corrected_if_obs);
+                    ppp_config_.enable_ambiguity_resolution && resolveAmbiguities(obs, nav);
+                solution = fixed ? generateSolution(obs.time, corrected_if_obs) : float_solution;
                 solution.status = fixed ? SolutionStatus::PPP_FIXED : SolutionStatus::PPP_FLOAT;
-                solution.ratio = last_ar_ratio_;
-                solution.num_fixed_ambiguities = last_fixed_ambiguities_;
-                if (fixed) {
-                    // Keep the current epoch's fixed status, but continue tracking with the
-                    // pre-fix float state to avoid poisoning later epochs with a bad fix.
+                solution.ratio = fixed ? last_ar_ratio_ : 0.0;
+                solution.num_fixed_ambiguities = fixed ? last_fixed_ambiguities_ : 0;
+                // For WLNL fix: override position with WLS using fixed NL ambiguities
+                const double max_fixed_position_jump_m =
+                    ppp_config_.kinematic_mode ? 25.0 : 10.0;
+                bool accepted_fixed_solution = fixed;
+                if (fixed &&
+                    (solution.position_ecef - float_solution.position_ecef).norm() >
+                        max_fixed_position_jump_m) {
+                    accepted_fixed_solution = false;
+                    if (pppDebugEnabled()) {
+                        std::cerr << "[PPP-AR] reject fixed filter-state jump="
+                                  << (solution.position_ecef - float_solution.position_ecef).norm()
+                                  << "\n";
+                    }
+                }
+                if (fixed && ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL) {
+                    Vector3d fixed_position;
+                    if (solveFixedPosition(obs, nav, fixed_position)) {
+                        if ((fixed_position - float_solution.position_ecef).norm() <= max_fixed_position_jump_m) {
+                            solution.position_ecef = fixed_position;
+                        } else if (pppDebugEnabled()) {
+                            accepted_fixed_solution = false;
+                            std::cerr << "[PPP-AR] reject WLNL fixed position jump="
+                                      << (fixed_position - float_solution.position_ecef).norm()
+                                      << "\n";
+                        } else {
+                            accepted_fixed_solution = false;
+                        }
+                    }
+                }
+                if (!accepted_fixed_solution && fixed) {
+                    solution = float_solution;
+                    solution.status = SolutionStatus::PPP_FLOAT;
+                    solution.ratio = 0.0;
+                    solution.num_fixed_ambiguities = 0;
+                }
+                if (accepted_fixed_solution) {
+                    double latitude = 0.0;
+                    double longitude = 0.0;
+                    double height = 0.0;
+                    ecef2geodetic(solution.position_ecef, latitude, longitude, height);
+                    solution.position_geodetic = GeodeticCoord(latitude, longitude, height);
+                }
+                had_fixed_last_epoch_ = accepted_fixed_solution;
+                if (fixed && !accepted_fixed_solution) {
+                    filter_state_ = float_filter_state;
+                    ambiguity_states_ = float_ambiguity_states;
+                } else if (accepted_fixed_solution && ppp_config_.ar_method != PPPConfig::ARMethod::DD_WLNL) {
+                    // For DD_IFLC/DD_PER_FREQ: revert to float state to avoid
+                    // poisoning later epochs with a bad fix.
                     filter_state_ = float_filter_state;
                     ambiguity_states_ = float_ambiguity_states;
                 }
+                // For DD_WLNL: keep holdamb-updated state — the constraint
+                // is applied via Kalman update and propagates naturally.
             } else if (!solution.isValid()) {
                 if (pppDebugEnabled()) {
                     std::cerr << "[PPP] updateFilter returned false at week=" << obs.time.week
@@ -1165,6 +1228,9 @@ void PPPProcessor::reset() {
     convergence_time_ = 0.0;
     filter_state_ = PPPState{};
     ambiguity_states_.clear();
+    clas_dispersion_compensation_.clear();
+    clas_sis_continuity_.clear();
+    clas_phase_bias_repair_.clear();
     recent_positions_.clear();
     has_last_processed_time_ = false;
     last_processed_time_ = GNSSTime();
@@ -1412,13 +1478,61 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         }
     }
 
-    const int n_states = 9;
+    // Allocate ISB states for non-GPS systems when estimate_ionosphere is on
+    int base_states = 9;  // pos(3) + vel(3) + gps_clk(1) + glo_clk(1) + trop(1)
+    filter_state_.gal_clock_index = -1;
+    filter_state_.qzs_clock_index = -1;
+    filter_state_.bds_clock_index = -1;
+    if (ppp_config_.estimate_ionosphere) {
+        std::set<GNSSSystem> visible_systems;
+        for (const auto& sat : obs.getSatellites()) visible_systems.insert(sat.system);
+        if (false && visible_systems.count(GNSSSystem::Galileo)) {
+            filter_state_.gal_clock_index = base_states++;
+        }
+        if (false && visible_systems.count(GNSSSystem::QZSS)) {
+            filter_state_.qzs_clock_index = base_states++;
+        }
+        if (false && visible_systems.count(GNSSSystem::BeiDou)) {
+            filter_state_.bds_clock_index = base_states++;
+        }
+    }
+    filter_state_.trop_index = base_states > 9 ? base_states - 1 : 8;
+    // Actually keep trop at its original position and shift ISB before it
+    // Simpler: put ISB after trop
+    filter_state_.trop_index = 8;  // keep original
+    int isb_start = 9;
+    if (ppp_config_.estimate_ionosphere) {
+        if (filter_state_.gal_clock_index >= 0) filter_state_.gal_clock_index = isb_start++;
+        if (filter_state_.qzs_clock_index >= 0) filter_state_.qzs_clock_index = isb_start++;
+        if (filter_state_.bds_clock_index >= 0) filter_state_.bds_clock_index = isb_start++;
+    }
+
+    // Reserve ionosphere states for visible satellites
+    int n_iono_states = 0;
+    filter_state_.ionosphere_indices.clear();
+    if (ppp_config_.estimate_ionosphere) {
+        filter_state_.iono_index = isb_start;
+        for (const auto& sat : obs.getSatellites()) {
+            filter_state_.ionosphere_indices[sat] = filter_state_.iono_index + n_iono_states;
+            ++n_iono_states;
+        }
+    }
+    const int n_isb = isb_start - 9;
+    const int n_states = 9 + n_isb + n_iono_states;
+    filter_state_.amb_index = 9 + n_isb + n_iono_states;
     filter_state_.state = VectorXd::Zero(n_states);
     filter_state_.covariance = MatrixXd::Identity(n_states, n_states);
     filter_state_.state.segment(filter_state_.pos_index, 3) = initial_position;
     filter_state_.state.segment(filter_state_.vel_index, 3).setZero();
     filter_state_.state(filter_state_.clock_index) = initial_clock_bias_m;
     filter_state_.state(filter_state_.glo_clock_index) = initial_clock_bias_m;
+    // Initialize ISB states
+    if (filter_state_.gal_clock_index >= 0)
+        filter_state_.state(filter_state_.gal_clock_index) = initial_clock_bias_m;
+    if (filter_state_.qzs_clock_index >= 0)
+        filter_state_.state(filter_state_.qzs_clock_index) = initial_clock_bias_m;
+    if (filter_state_.bds_clock_index >= 0)
+        filter_state_.state(filter_state_.bds_clock_index) = initial_clock_bias_m;
     filter_state_.state(filter_state_.trop_index) =
         ppp_config_.estimate_troposphere ?
             modeledZenithTroposphereDelayMeters(initial_position, obs.time) :
@@ -1434,6 +1548,20 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         use_broadcast_rtklib_model ? ppp_config_.initial_clock_variance : 1e8;
     filter_state_.covariance(filter_state_.trop_index, filter_state_.trop_index) =
         use_broadcast_rtklib_model ? ppp_config_.initial_troposphere_variance : 25.0;
+    // ISB covariance
+    if (filter_state_.gal_clock_index >= 0)
+        filter_state_.covariance(filter_state_.gal_clock_index, filter_state_.gal_clock_index) = 1e8;
+    if (filter_state_.qzs_clock_index >= 0)
+        filter_state_.covariance(filter_state_.qzs_clock_index, filter_state_.qzs_clock_index) = 1e8;
+    if (filter_state_.bds_clock_index >= 0)
+        filter_state_.covariance(filter_state_.bds_clock_index, filter_state_.bds_clock_index) = 1e8;
+    // Initialize per-satellite ionosphere states
+    if (ppp_config_.estimate_ionosphere) {
+        for (const auto& [sat, idx] : filter_state_.ionosphere_indices) {
+            filter_state_.state(idx) = 0.0;  // Initial iono delay = 0 (will be constrained by STEC)
+            filter_state_.covariance(idx, idx) = ppp_config_.initial_ionosphere_variance;
+        }
+    }
     filter_state_.total_states = n_states;
     if (!ppp_config_.kinematic_mode || ppp_config_.low_dynamics_mode) {
         static_anchor_position_ = initial_position;
@@ -1482,8 +1610,21 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
         use_broadcast_rtklib_model ? ppp_config_.process_noise_clock : 100.0;
     Q(filter_state_.clock_index, filter_state_.clock_index) = clock_process_noise * dt;
     Q(filter_state_.glo_clock_index, filter_state_.glo_clock_index) = clock_process_noise * dt;
+    // ISB process noise (white noise, re-estimated each epoch)
+    if (filter_state_.gal_clock_index >= 0)
+        Q(filter_state_.gal_clock_index, filter_state_.gal_clock_index) = clock_process_noise * dt;
+    if (filter_state_.qzs_clock_index >= 0)
+        Q(filter_state_.qzs_clock_index, filter_state_.qzs_clock_index) = clock_process_noise * dt;
+    if (filter_state_.bds_clock_index >= 0)
+        Q(filter_state_.bds_clock_index, filter_state_.bds_clock_index) = clock_process_noise * dt;
     Q(filter_state_.trop_index, filter_state_.trop_index) =
         ppp_config_.process_noise_troposphere * dt;
+    // Ionosphere process noise
+    if (ppp_config_.estimate_ionosphere) {
+        for (const auto& [sat, idx] : filter_state_.ionosphere_indices) {
+            Q(idx, idx) = ppp_config_.process_noise_ionosphere * dt;
+        }
+    }
     for (int idx = filter_state_.amb_index; idx < filter_state_.total_states; ++idx) {
         Q(idx, idx) = ppp_config_.process_noise_ambiguity * dt;
     }
@@ -1541,6 +1682,7 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
     const int filter_iterations = precise_products_loaded_ ? 3 : ppp_config_.filter_iterations;
     for (int iteration = 0; iteration < filter_iterations; ++iteration) {
         MeasurementEquation meas_eq = formMeasurementEquations(if_obs, nav, obs.time);
+
         if (meas_eq.observations.size() < config_.min_satellites) {
             if (pppDebugEnabled()) {
                 std::cerr << "[PPP] insufficient measurement rows: " << meas_eq.observations.size()
@@ -1592,6 +1734,9 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
                   << "\n";
     }
 
+    // Save covariance before anchor/velocity constraints destroy cross-terms.
+    pre_anchor_covariance_ = filter_state_.covariance;
+
     updateAmbiguityStates(obs);
     constrainStaticVelocityStates();
     constrainStaticAnchorPosition();
@@ -1632,12 +1777,31 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             entry.variance_cp = safeVariance(
                 ppp_config_.carrier_phase_sigma * ppp_config_.carrier_phase_sigma, 1e-8);
             entry.valid = true;
-            combined.push_back(entry);
-            continue;
+            // Fall through to SSR correction application below.
+            // But skip IFLC formation — keep L1-only entry.
         }
 
         const Observation* secondary =
             findObservationForSignals(obs, sat, secondarySignals(sat.system));
+
+        // Per-frequency mode: skip IFLC formation, keep L1-only entry
+        // SSR corrections (orbit/clock/bias/iono) still applied below
+        if (!ppp_config_.use_ionosphere_free) {
+            if (secondary != nullptr) {
+                entry.secondary_signal = secondary->signal;
+                // Store secondary observation info for MW combination in AR
+                const double f1 = signalFrequencyHz(primary->signal, eph);
+                const double f2 = signalFrequencyHz(secondary->signal, eph);
+                if (f1 > 0.0 && f2 > 0.0) {
+                    entry.primary_code_bias_coeff = 1.0;
+                    entry.secondary_code_bias_coeff = 0.0;
+                }
+            }
+            entry.valid = true;
+            combined.push_back(entry);
+            continue;
+        }
+
         if (secondary == nullptr) {
             entry.pseudorange_if = primary->pseudorange;
             entry.primary_signal = primary->signal;
@@ -1743,6 +1907,24 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         filter_state_.state.segment(filter_state_.pos_index, 3), time);
     const double elevation_mask = config_.elevation_mask * kDegreesToRadians;
 
+    // Pre-fetch epoch-wide atmosphere tokens from any satellite that has them.
+    // CLAS atmosphere corrections are network-wide, not per-satellite, so we
+    // retrieve them once and share across all observations in this epoch.
+    std::map<std::string, std::string> epoch_atmos_tokens;
+    if (ssr_products_loaded_) {
+        std::vector<SatelliteId> epoch_satellites;
+        epoch_satellites.reserve(observations.size());
+        for (const auto& obs_scan : observations) {
+            if (obs_scan.valid) {
+                epoch_satellites.push_back(obs_scan.satellite);
+            }
+        }
+        epoch_atmos_tokens =
+            selectClasEpochAtmosTokens(
+                ssr_products_, epoch_satellites, time, receiver_marker_position);
+    }
+    const int preferred_network_id = preferredClasNetworkId(epoch_atmos_tokens);
+
     for (auto& observation : observations) {
         double deferred_variance_pr = 0.0;
         double deferred_variance_cp = 0.0;
@@ -1768,16 +1950,33 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 sat_clock_drift);
         }
 
-        if (!have_precise &&
-            !nav.calculateSatelliteState(
-                observation.satellite,
-                time,
-                sat_position,
-                sat_velocity,
-                sat_clock_bias,
-                sat_clock_drift)) {
-            observation.valid = false;
-            continue;
+        if (!have_precise) {
+            // First pass: compute satellite state at reception time
+            if (!nav.calculateSatelliteState(
+                    observation.satellite,
+                    time,
+                    sat_position,
+                    sat_velocity,
+                    sat_clock_bias,
+                    sat_clock_drift)) {
+                observation.valid = false;
+                continue;
+            }
+            // Light travel time correction: re-evaluate at emission time
+            if (observation.pseudorange_if > 0.0) {
+                const double travel_time = observation.pseudorange_if / constants::SPEED_OF_LIGHT;
+                const GNSSTime emission_time = time - travel_time + sat_clock_bias;
+                if (!nav.calculateSatelliteState(
+                        observation.satellite,
+                        emission_time,
+                        sat_position,
+                        sat_velocity,
+                        sat_clock_bias,
+                        sat_clock_drift)) {
+                    observation.valid = false;
+                    continue;
+                }
+            }
         }
 
         if (ssr_products_loaded_) {
@@ -1787,7 +1986,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             std::map<uint8_t, double> code_bias_m;
             std::map<uint8_t, double> phase_bias_m;
             std::map<std::string, std::string> atmos_tokens;
-            if (ssr_products_.interpolateCorrection(
+            const bool ssr_ok = ssr_products_.interpolateCorrection(
                     observation.satellite,
                     time,
                     orbit_correction_ecef,
@@ -1795,8 +1994,22 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     &ura_sigma_m,
                     &code_bias_m,
                     &phase_bias_m,
-                    &atmos_tokens)) {
+                    &atmos_tokens,
+                    nullptr,
+                    nullptr,
+                    nullptr,
+                    preferred_network_id);
+            // Fall back to epoch-wide atmosphere tokens when per-satellite
+            // atmos are empty (CLAS broadcasts network-wide corrections).
+            if (atmos_tokens.empty() && !epoch_atmos_tokens.empty()) {
+                atmos_tokens = epoch_atmos_tokens;
+            }
+            if (ssr_ok) {
                 if (!have_precise) {
+                    if (ssr_products_.orbitCorrectionsAreRac()) {
+                        orbit_correction_ecef =
+                            ssrRacToEcef(sat_position, sat_velocity, orbit_correction_ecef);
+                    }
                     sat_position += orbit_correction_ecef;
                     sat_clock_bias += clock_correction_m / constants::SPEED_OF_LIGHT;
                 }
@@ -1847,6 +2060,13 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 const double stec_tecu =
                     ppp_atmosphere::atmosphericStecTecu(
                         atmos_tokens, observation.satellite, receiver_position);
+                if (pppDebugEnabled()) {
+                    std::cerr << "[PPP-STEC] " << observation.satellite.toString()
+                              << " stec_tecu=" << stec_tecu
+                              << " atmos_tokens_size=" << atmos_tokens.size()
+                              << " use_iflc=" << ppp_config_.use_ionosphere_free
+                              << "\n";
+                }
                 const double ionosphere_correction_m = ppp_atmosphere::observationIonosphereDelayMeters(
                     eph,
                     observation.primary_signal,
@@ -1855,8 +2075,32 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     stec_tecu,
                     observation.primary_code_bias_coeff,
                     observation.secondary_code_bias_coeff);
-                if (std::isfinite(ionosphere_correction_m) &&
+                if (ppp_config_.estimate_ionosphere && std::isfinite(stec_tecu) &&
+                    std::abs(stec_tecu) > 0.0) {
+                    // In ionosphere estimation mode, inject STEC as a tight constraint
+                    // on the ionosphere state instead of correcting observations.
+                    const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
+                    if (iono_it != filter_state_.ionosphere_indices.end()) {
+                        const double iono_delay_m = ppp_atmosphere::ionosphereDelayMetersFromTecu(
+                            observation.primary_signal, eph, stec_tecu);
+                        if (std::isfinite(iono_delay_m)) {
+                            const int idx = iono_it->second;
+                            const double innovation = iono_delay_m - filter_state_.state(idx);
+                            const double stec_sigma = 0.5;  // 50cm STEC constraint
+                            const double S = filter_state_.covariance(idx, idx) + stec_sigma * stec_sigma;
+                            if (S > 0.0) {
+                                VectorXd K = filter_state_.covariance.col(idx) / S;
+                                filter_state_.state += K * innovation;
+                                filter_state_.covariance -= K * filter_state_.covariance.row(idx);
+                            }
+                        }
+                    }
+                    ++last_applied_atmos_iono_corrections_;
+                    last_applied_atmos_iono_m_ += std::abs(ionosphere_correction_m);
+                    applied_ssr_iono = true;
+                } else if (std::isfinite(ionosphere_correction_m) &&
                     std::abs(ionosphere_correction_m) > 0.0) {
+                    // Direct observation correction (non-estimation mode)
                     observation.pseudorange_if -= ionosphere_correction_m;
                     if (observation.has_carrier_phase) {
                         observation.carrier_phase_if += ionosphere_correction_m;
@@ -1953,6 +2197,9 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         } else {
             observation.antenna_pco_m = 0.0;
         }
+        // In CLAS-PPP mode (estimate_ionosphere), reject satellites without
+        // both SSR orbit/clock and ionosphere corrections — matching CLASLIB's
+        // corrmeas() which returns 0 when STEC correction fails.
         observation.valid = true;
     }
 }
@@ -1988,7 +2235,10 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
 
     constexpr double kMinimumGeometryFreeSlipThresholdMeters = 0.5;
     constexpr double kMinimumMwSlipThresholdMeters = 10.0;
-    const bool use_combination_slip_detection = ppp_config_.kinematic_mode;
+    // Enable combination (GF/MW) slip detection in SSR mode even for static,
+    // because MW averaging is needed for Wide-Lane AR.
+    const bool use_combination_slip_detection =
+        ppp_config_.kinematic_mode || (ssr_products_loaded_ && ppp_config_.use_ionosphere_free);
 
     for (const auto& satellite : obs.getSatellites()) {
         const std::vector<SignalType> primary_candidates =
@@ -2002,6 +2252,17 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
         const Observation* primary =
             findCarrierObservationForSignals(obs, satellite, primary_candidates);
         if (primary == nullptr) {
+            if (pppDebugEnabled() && satellite.system == GNSSSystem::GPS) {
+                // Debug: list all observations for this satellite
+                std::cerr << "[PPP-SLIP] " << satellite.toString() << " primary=null, obs: ";
+                for (const auto& m : obs.observations) {
+                    if (m.satellite == satellite) {
+                        std::cerr << static_cast<int>(m.signal) << "(cp=" << m.has_carrier_phase
+                                  << ",v=" << m.valid << ",L=" << m.carrier_phase << ") ";
+                    }
+                }
+                std::cerr << "\n";
+            }
             continue;
         }
 
@@ -2110,6 +2371,21 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
         if (have_mw) {
             updated_ambiguity.last_melbourne_wubbena_m = mw_m;
             updated_ambiguity.has_last_melbourne_wubbena = true;
+            // Accumulate MW average for Wide-Lane AR
+            constexpr double lambda_wl_gps = constants::SPEED_OF_LIGHT / (1575.42e6 - 1227.60e6);
+            const double mw_cycles = mw_m / lambda_wl_gps;
+            if (!mw_slip) {
+                updated_ambiguity.mw_sum_cycles += mw_cycles;
+                updated_ambiguity.mw_count += 1;
+                updated_ambiguity.mw_mean_cycles =
+                    updated_ambiguity.mw_sum_cycles / updated_ambiguity.mw_count;
+            } else {
+                // Reset MW averaging on cycle slip
+                updated_ambiguity.mw_sum_cycles = mw_cycles;
+                updated_ambiguity.mw_count = 1;
+                updated_ambiguity.mw_mean_cycles = mw_cycles;
+                updated_ambiguity.wl_is_fixed = false;
+            }
         }
     }
 }
@@ -2214,9 +2490,21 @@ void PPPProcessor::recoverLowDynamicsBroadcastState(const ObservationData& obs,
 }
 
 int PPPProcessor::receiverClockStateIndex(const SatelliteId& satellite) const {
-    return satellite.system == GNSSSystem::GLONASS ?
-        filter_state_.glo_clock_index :
-        filter_state_.clock_index;
+    switch (satellite.system) {
+        case GNSSSystem::GLONASS:
+            return filter_state_.glo_clock_index;
+        case GNSSSystem::Galileo:
+            return filter_state_.gal_clock_index >= 0
+                ? filter_state_.gal_clock_index : filter_state_.clock_index;
+        case GNSSSystem::QZSS:
+            return filter_state_.qzs_clock_index >= 0
+                ? filter_state_.qzs_clock_index : filter_state_.clock_index;
+        case GNSSSystem::BeiDou:
+            return filter_state_.bds_clock_index >= 0
+                ? filter_state_.bds_clock_index : filter_state_.clock_index;
+        default:
+            return filter_state_.clock_index;
+    }
 }
 
 double PPPProcessor::receiverClockBiasMeters(const SatelliteId& satellite) const {
@@ -2279,11 +2567,11 @@ void PPPProcessor::initializeAmbiguityState(const IonosphereFreeObs& observation
     ambiguity.needs_reinitialization = false;
 }
 
-bool PPPProcessor::resolveAmbiguities() {
+bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const NavigationData& nav) {
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
 
-    if (!ppp_config_.enable_ambiguity_resolution || !precise_products_loaded_) {
+    if (!ppp_config_.enable_ambiguity_resolution || (!precise_products_loaded_ && !ssr_products_loaded_)) {
         if (pppDebugEnabled()) {
             std::cerr << "[PPP-AR] skipped: enabled=" << ppp_config_.enable_ambiguity_resolution
                       << " precise=" << precise_products_loaded_ << "\n";
@@ -2291,103 +2579,678 @@ bool PPPProcessor::resolveAmbiguities() {
         return false;
     }
 
-    std::vector<SatelliteId> satellites;
-    std::vector<int> state_indices;
-    std::vector<double> scales;
-    for (const auto& [satellite, state_index] : filter_state_.ambiguity_indices) {
-        const auto ambiguity_it = ambiguity_states_.find(satellite);
-        if (ambiguity_it == ambiguity_states_.end()) {
-            continue;
+    if (pppDebugEnabled()) {
+        int total_amb = 0, ready_amb = 0;
+        for (const auto& [satellite, state_index] : filter_state_.ambiguity_indices) {
+            ++total_amb;
+            const auto amb_it = ambiguity_states_.find(satellite);
+            if (amb_it != ambiguity_states_.end()) {
+                const auto& a = amb_it->second;
+                if (!a.needs_reinitialization && a.lock_count >= ppp_config_.convergence_min_epochs &&
+                    std::isfinite(a.ambiguity_scale_m) && a.ambiguity_scale_m > 0.0) {
+                    ++ready_amb;
+                }
+            }
         }
-        const auto& ambiguity = ambiguity_it->second;
-        if (ambiguity.needs_reinitialization || ambiguity.lock_count < ppp_config_.convergence_min_epochs) {
-            continue;
-        }
-        if (!std::isfinite(ambiguity.ambiguity_scale_m) || ambiguity.ambiguity_scale_m <= 0.0) {
-            continue;
-        }
-        if (state_index < filter_state_.amb_index || state_index >= filter_state_.total_states) {
-            continue;
-        }
-        satellites.push_back(satellite);
-        state_indices.push_back(state_index);
-        scales.push_back(ambiguity.ambiguity_scale_m);
+        std::cerr << "[PPP-AR-DBG] total_amb=" << total_amb
+                  << " ready=" << ready_amb
+                  << " min_epochs=" << ppp_config_.convergence_min_epochs << "\n";
     }
 
-    if (static_cast<int>(satellites.size()) < ppp_config_.min_satellites_for_ar) {
+    if (ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL &&
+        ppp_config_.use_ionosphere_free) {
+        // WLNL decomposition only works with IFLC ambiguities.
+        // For per-frequency mode, fall through to direct DD-AR.
+        return resolveAmbiguitiesWLNL(obs, nav);
+    }
+    // DD_IFLC and DD_PER_FREQ fall through to existing DD-AR code below
+
+    const int ar_min_lock = ssr_products_loaded_ ?
+        std::min(ppp_config_.convergence_min_epochs, 10) :
+        ppp_config_.convergence_min_epochs;
+    const auto eligible_ambiguities = ppp_ar::collectEligibleAmbiguities(
+        filter_state_, ambiguity_states_, ar_min_lock);
+
+    if (static_cast<int>(eligible_ambiguities.satellites.size()) <
+        ppp_config_.min_satellites_for_ar) {
         if (pppDebugEnabled()) {
-            std::cerr << "[PPP-AR] skipped: candidates=" << satellites.size()
+            std::cerr << "[PPP-AR] skipped: candidates="
+                      << eligible_ambiguities.satellites.size()
                       << " min=" << ppp_config_.min_satellites_for_ar << "\n";
         }
         return false;
     }
 
-    const int n = static_cast<int>(satellites.size());
-    VectorXd float_ambiguities = VectorXd::Zero(n);
-    MatrixXd covariance = MatrixXd::Zero(n, n);
-    for (int i = 0; i < n; ++i) {
-        const auto& ambiguity = ambiguity_states_[satellites[static_cast<size_t>(i)]];
-        const double float_cycles =
-            filter_state_.state(state_indices[static_cast<size_t>(i)]) /
-            scales[static_cast<size_t>(i)];
-        const bool use_fractional_bias =
-            !ppp_config_.kinematic_mode &&
-            ambiguity.fractional_bias_samples >= ppp_config_.convergence_min_epochs;
-        float_ambiguities(i) =
-            float_cycles - (use_fractional_bias ? ambiguity.fractional_bias_cycles : 0.0);
-        for (int j = 0; j < n; ++j) {
-            covariance(i, j) =
-                filter_state_.covariance(
-                    state_indices[static_cast<size_t>(i)],
-                    state_indices[static_cast<size_t>(j)]) /
-                (scales[static_cast<size_t>(i)] * scales[static_cast<size_t>(j)]);
+    std::map<SatelliteId, double> real_satellite_elevations;
+    if (ppp_config_.use_clas_osr_filter) {
+        for (const auto& satellite : eligible_ambiguities.satellites) {
+            const SatelliteId real_satellite = ppp_ar::clasRealSatellite(satellite);
+            if (real_satellite_elevations.find(real_satellite) != real_satellite_elevations.end()) {
+                continue;
+            }
+
+            Vector3d sat_pos;
+            Vector3d sat_vel;
+            double sat_clk = 0.0;
+            double sat_drift = 0.0;
+            if (!nav.calculateSatelliteState(real_satellite, obs.time, sat_pos, sat_vel, sat_clk, sat_drift)) {
+                continue;
+            }
+            if (ssr_products_loaded_) {
+                Vector3d orbit_corr;
+                double clock_corr = 0.0;
+                if (ssr_products_.interpolateCorrection(real_satellite, obs.time, orbit_corr, clock_corr,
+                                                        nullptr, nullptr, nullptr, nullptr)) {
+                    if (ssr_products_.orbitCorrectionsAreRac()) {
+                        orbit_corr = ssrRacToEcef(sat_pos, sat_vel, orbit_corr);
+                    }
+                    sat_pos += orbit_corr;
+                }
+            }
+            const Vector3d receiver_position =
+                filter_state_.state.segment(filter_state_.pos_index, 3);
+            const Vector3d line_of_sight = sat_pos - receiver_position;
+            const double line_of_sight_norm = line_of_sight.norm();
+            if (line_of_sight_norm <= 0.0 || receiver_position.norm() <= 0.0) {
+                continue;
+            }
+            const double elevation = std::asin(
+                line_of_sight.normalized().dot(receiver_position.normalized()));
+            real_satellite_elevations[real_satellite] = elevation;
         }
     }
 
-    VectorXd fixed_ambiguities = VectorXd::Zero(n);
-    double ratio = 0.0;
-    if (!lambdaSearch(float_ambiguities, covariance, fixed_ambiguities, ratio)) {
+    ppp_ar::DdFixAttempt best_attempt = ppp_ar::tryDirectDdFixWithPar(
+        ppp_config_,
+        filter_state_,
+        pre_anchor_covariance_,
+        ambiguity_states_,
+        eligible_ambiguities,
+        real_satellite_elevations,
+        pppDebugEnabled());
+
+    if (!best_attempt.fixed) {
         if (pppDebugEnabled()) {
-            std::cerr << "[PPP-AR] lambda search failed with candidates=" << n << "\n";
-        }
-        return false;
-    }
-    if (!std::isfinite(ratio) || ratio < ppp_config_.ar_ratio_threshold) {
-        if (pppDebugEnabled()) {
-            std::cerr << "[PPP-AR] ratio reject: candidates=" << n
-                      << " ratio=" << ratio
-                      << " threshold=" << ppp_config_.ar_ratio_threshold << "\n";
+            std::cerr << "[PPP-AR] DD ratio reject: ratio=" << best_attempt.ratio
+                      << " threshold=" << best_attempt.required_ratio << "\n";
         }
         return false;
     }
 
-    last_ar_ratio_ = ratio;
-    last_fixed_ambiguities_ = n;
+    last_ar_ratio_ = best_attempt.ratio;
+    last_fixed_ambiguities_ = best_attempt.nb;
+    filter_state_ = std::move(best_attempt.state);
+    ambiguity_states_ = std::move(best_attempt.ambiguities);
+
     if (pppDebugEnabled()) {
-        std::cerr << "[PPP-AR] fixed: candidates=" << n
-                  << " ratio=" << ratio << "\n";
-    }
-    for (int i = 0; i < n; ++i) {
-        const int state_index = state_indices[static_cast<size_t>(i)];
-        const auto& ambiguity_info = ambiguity_states_[satellites[static_cast<size_t>(i)]];
-        const bool use_fractional_bias =
-            !ppp_config_.kinematic_mode &&
-            ambiguity_info.fractional_bias_samples >= ppp_config_.convergence_min_epochs;
-        const double bias_cycles =
-            use_fractional_bias ? ambiguity_info.fractional_bias_cycles : 0.0;
-        const double fixed_value_m =
-            (fixed_ambiguities(i) + bias_cycles) * scales[static_cast<size_t>(i)];
-        filter_state_.state(state_index) = fixed_value_m;
-        filter_state_.covariance.row(state_index).setZero();
-        filter_state_.covariance.col(state_index).setZero();
-        filter_state_.covariance(state_index, state_index) = 1e-6;
-
-        auto& ambiguity_state = ambiguity_states_[satellites[static_cast<size_t>(i)]];
-        ambiguity_state.float_value = fixed_value_m;
-        ambiguity_state.fixed_value = fixed_value_m;
-        ambiguity_state.is_fixed = true;
+        std::cerr << "[PPP-AR] DD fixed: nb=" << best_attempt.nb
+                  << " ratio=" << best_attempt.ratio
+                  << " threshold=" << best_attempt.required_ratio << "\n";
     }
     return true;
+}
+
+// ---------- WL+NL Ambiguity Resolution ----------
+// Step 1: Fix Wide-Lane integers using averaged Melbourne-Wübbena
+// Step 2: Extract Narrow-Lane DD ambiguities from IFLC filter state + fixed WL
+// Step 3: Fix NL integers using LAMBDA
+// Step 4: Apply position correction
+
+bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const NavigationData& nav) {
+    last_ar_ratio_ = 0.0;
+    last_fixed_ambiguities_ = 0;
+
+    const auto wlnl_preparation = ppp_ar::prepareWlnlCandidates(
+        ppp_config_,
+        filter_state_,
+        ambiguity_states_,
+        ssr_products_loaded_,
+        pppDebugEnabled());
+    const auto& eligible_ambiguities = wlnl_preparation.eligible_ambiguities;
+
+    const int n = static_cast<int>(eligible_ambiguities.satellites.size());
+    if (n < ppp_config_.min_satellites_for_ar) {
+        if (pppDebugEnabled()) {
+            std::cerr << "[PPP-WLNL] insufficient candidates: " << n
+                      << " (total_amb=" << eligible_ambiguities.total_ambiguities
+                      << " reinit=" << eligible_ambiguities.skipped_reinitialization
+                      << " lock=" << eligible_ambiguities.skipped_lock
+                      << " scale=" << eligible_ambiguities.skipped_scale
+                      << " idx=" << eligible_ambiguities.skipped_index << ")\n";
+        }
+        return false;
+    }
+
+    const auto& wl_summary = wlnl_preparation.wl_summary;
+    if (wl_summary.fixed_count < ppp_config_.min_satellites_for_ar) {
+        if (pppDebugEnabled()) {
+            std::cerr << "[PPP-WLNL] insufficient WL fixes: " << wl_summary.fixed_count
+                      << " n=" << n << " max_mw=" << wl_summary.max_mw_count << "\n";
+        }
+        return false;
+    }
+
+    // ----- Step 2: Form DD Narrow-Lane ambiguities -----
+    // For satellites with fixed WL, extract NL from IFLC state:
+    //   N_NL_cycles = (IFLC_state_m / λ_NL) - α * N_WL
+    // where α = f1*f2/(f1+f2)² ... simplified: for GPS L1/L2,
+    //   IFLC_ambiguity = λ_NL * N_NL (when WL is correctly resolved and removed)
+
+    // Compute NL DD float ambiguities from RAW observations (not filter state).
+    // NL phase = f1/(f1+f2) * L1_m + f2/(f1+f2) * L2_m
+    // NL ambiguity = NL_phase - geometric_range - clock_bias + sat_clock - trop
+    //              = NL_phase - predicted (all in NL cycle units)
+    // DD NL = NL_ref - NL_sat  (integer)
+
+    // Compute NL float ambiguity for each satellite using raw L1/L2 obs
+    const Vector3d receiver_position = filter_state_.state.segment(filter_state_.pos_index, 3);
+    const double clock_bias_m = filter_state_.state(filter_state_.clock_index);
+    const double trop_zenith =
+        ppp_config_.estimate_troposphere ? filter_state_.state(filter_state_.trop_index) : 2.3;
+    const auto osr_by_sat = computeWlnlOsrCorrections(
+        obs, nav, receiver_position, clock_bias_m, trop_zenith);
+
+    const ppp_ar::WlnlFixAttempt attempt = ppp_ar::resolveWlnlFix(
+        ppp_config_,
+        filter_state_,
+        ambiguity_states_,
+        eligible_ambiguities,
+        [&](const SatelliteId& sat, ppp_ar::WlnlNlInfo& info) {
+            return buildWlnlNlInfoForSatellite(
+                obs,
+                nav,
+                receiver_position,
+                clock_bias_m,
+                trop_zenith,
+                osr_by_sat,
+                sat,
+                info);
+        },
+        pppDebugEnabled());
+    if (!attempt.fixed) {
+        return false;
+    }
+
+    last_ar_ratio_ = attempt.ratio;
+    last_fixed_ambiguities_ = attempt.nb;
+    if (pppDebugEnabled()) {
+        std::cerr << "[PPP-WLNL] NL fixed: nb=" << attempt.nb
+                  << " ratio=" << attempt.ratio << "\n";
+    }
+    return true;
+}
+
+bool PPPProcessor::solveFixedPosition(const ObservationData& obs,
+                                      const NavigationData& nav,
+                                      Vector3d& fixed_position) {
+    // Solve position using NL carrier phase with fixed integer ambiguities.
+    // Observation equation per satellite:
+    //   NL_phase - N_NL_fixed * λ_NL = geo_range + clk - c*sat_clk + trop + phase_bias
+    // Unknowns: position (3) + receiver clock (1)
+    // Iterate WLS from current filter position.
+
+    Vector3d position = filter_state_.state.segment(filter_state_.pos_index, 3);
+    double clock_m = filter_state_.state(filter_state_.clock_index);
+    const double trop_zenith =
+        ppp_config_.estimate_troposphere ? filter_state_.state(filter_state_.trop_index) : 2.3;
+    const auto osr_by_sat = computeWlnlOsrCorrections(obs, nav, position, clock_m, trop_zenith);
+
+    const auto fixed_observations = ppp_ar::buildFixedNlObservations(
+        ambiguity_states_,
+        [&](const SatelliteId& satellite,
+            const PPPAmbiguityInfo& amb,
+            ppp_ar::FixedNlObservation& fixed_observation) {
+            return buildFixedNlObservationForSatellite(
+                obs, nav, osr_by_sat, satellite, amb, fixed_observation);
+    });
+
+    double position_shift_norm_m = 0.0;
+    const bool solved = ppp_ar::solveFixedNlPosition(
+        fixed_observations,
+        position,
+        clock_m,
+        trop_zenith,
+        obs.time,
+        [&](const Vector3d& receiver_position, double elevation, const GNSSTime& time) {
+            return calculateMappingFunction(receiver_position, elevation, time);
+        },
+        fixed_position,
+        &position_shift_norm_m);
+    if (pppDebugEnabled() && solved) {
+        std::cerr << "[PPP-WLNL] fixedWLS: sats=" << fixed_observations.size()
+                  << " pos_shift=" << position_shift_norm_m << "m\n";
+    }
+    return solved;
+}
+
+bool PPPProcessor::solveFixedCarrierPhasePosition(
+    const std::vector<IonosphereFreeObs>& observations,
+    Vector3d& fixed_position) const {
+    const auto fixed_observations = ppp_ar::buildFixedCarrierObservations(
+        observations.size(),
+        [&](size_t index, ppp_ar::FixedCarrierObservation& fixed_observation) {
+            return buildFixedCarrierObservation(observations[index], fixed_observation);
+    });
+
+    return ppp_ar::solveFixedCarrierPosition(
+        fixed_observations,
+        filter_state_.state.segment(filter_state_.pos_index, 3),
+        filter_state_.state(filter_state_.clock_index),
+        ppp_config_.estimate_troposphere ? filter_state_.state(filter_state_.trop_index) : 2.3,
+        ppp_config_.estimate_troposphere,
+        fixed_position);
+}
+
+std::map<SatelliteId, OSRCorrection> PPPProcessor::computeWlnlOsrCorrections(
+    const ObservationData& obs,
+    const NavigationData& nav,
+    const Vector3d& receiver_position,
+    double clock_bias_m,
+    double trop_zenith) const {
+    std::map<SatelliteId, OSRCorrection> osr_by_sat;
+    const bool use_clas_osr_wlnl =
+        ssr_products_loaded_ && ppp_config_.estimate_ionosphere && !ppp_config_.use_ionosphere_free;
+    if (!use_clas_osr_wlnl) {
+        return osr_by_sat;
+    }
+
+    auto windup_cache = windup_cache_;
+    auto dispersion_compensation = clas_dispersion_compensation_;
+    auto sis_continuity = clas_sis_continuity_;
+    auto phase_bias_repair = clas_phase_bias_repair_;
+    const auto epoch_atmos = selectClasEpochAtmosTokens(
+        ssr_products_, obs.getSatellites(), obs.time, receiver_position);
+    for (const auto& osr : computeOSR(obs, nav, ssr_products_, epoch_atmos,
+                                      receiver_position, clock_bias_m, trop_zenith,
+                                      windup_cache, dispersion_compensation,
+                                      sis_continuity, phase_bias_repair)) {
+        if (osr.valid && osr.num_frequencies >= 2) {
+            osr_by_sat[osr.satellite] = osr;
+        }
+    }
+    return osr_by_sat;
+}
+
+bool PPPProcessor::buildWlnlNlInfoForSatellite(
+    const ObservationData& obs,
+    const NavigationData& nav,
+    const Vector3d& receiver_position,
+    double clock_bias_m,
+    double trop_zenith,
+    const std::map<SatelliteId, OSRCorrection>& osr_by_sat,
+    const SatelliteId& sat,
+    ppp_ar::WlnlNlInfo& info) const {
+    const Observation* l1_obs = nullptr;
+    const Observation* l2_obs = nullptr;
+    double sat_clk = 0.0;
+    Vector3d sat_pos = Vector3d::Zero();
+    double lambda_nl = 0.0;
+    double lambda_wl = 0.0;
+    double beta = 0.0;
+    double alpha1 = 0.0;
+    double alpha2 = 0.0;
+    double nl_phase_m = 0.0;
+    double predicted_m = 0.0;
+
+    const auto osr_it = osr_by_sat.find(sat);
+    if (osr_it != osr_by_sat.end()) {
+        const auto& osr = osr_it->second;
+        l1_obs = obs.getObservation(sat, osr.signals[0]);
+        l2_obs = obs.getObservation(sat, osr.signals[1]);
+        const double f1 = osr.frequencies[0];
+        const double f2 = osr.frequencies[1];
+        if (l1_obs == nullptr || l2_obs == nullptr ||
+            !l1_obs->has_carrier_phase || !l2_obs->has_carrier_phase ||
+            !std::isfinite(l1_obs->carrier_phase) || !std::isfinite(l2_obs->carrier_phase) ||
+            f1 <= 0.0 || f2 <= 0.0 || std::abs(f1 - f2) < 1.0) {
+            return false;
+        }
+        alpha1 = f1 / (f1 + f2);
+        alpha2 = f2 / (f1 + f2);
+        lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
+        lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
+        beta = f1 * f2 / (f1 * f1 - f2 * f2);
+        const double l1_corr_m = l1_obs->carrier_phase * osr.wavelengths[0] - osr.CPC[0];
+        const double l2_corr_m = l2_obs->carrier_phase * osr.wavelengths[1] - osr.CPC[1];
+        nl_phase_m = alpha1 * l1_corr_m + alpha2 * l2_corr_m;
+        sat_pos = osr.satellite_position;
+        sat_clk = osr.satellite_clock_bias_s;
+        predicted_m = geodist(sat_pos, receiver_position) + clock_bias_m
+                    - constants::SPEED_OF_LIGHT * sat_clk;
+    } else {
+        l1_obs = findCarrierObservationForSignals(
+            obs, sat, {SignalType::GPS_L1CA, SignalType::GPS_L1P,
+                       SignalType::GAL_E1, SignalType::QZS_L1CA});
+        l2_obs = findCarrierObservationForSignals(
+            obs, sat, {SignalType::GPS_L2C, SignalType::GPS_L2P, SignalType::GPS_L5,
+                       SignalType::GAL_E5A, SignalType::QZS_L2C, SignalType::QZS_L5});
+        if (l1_obs == nullptr || l2_obs == nullptr) {
+            return false;
+        }
+
+        const Ephemeris* eph = nav.getEphemeris(sat, obs.time);
+        const double f1 = signalFrequencyHz(l1_obs->signal, eph);
+        const double f2 = signalFrequencyHz(l2_obs->signal, eph);
+        const double lambda1 = signalWavelengthMeters(l1_obs->signal, eph);
+        const double lambda2 = signalWavelengthMeters(l2_obs->signal, eph);
+        if (lambda1 <= 0.0 || lambda2 <= 0.0 || f1 <= 0.0 || f2 <= 0.0 ||
+            std::abs(f1 - f2) < 1.0) {
+            return false;
+        }
+
+        alpha1 = f1 / (f1 + f2);
+        alpha2 = f2 / (f1 + f2);
+        lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
+        lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
+        beta = f1 * f2 / (f1 * f1 - f2 * f2);
+
+        const double l1_m = l1_obs->carrier_phase * lambda1;
+        const double l2_m = l2_obs->carrier_phase * lambda2;
+        nl_phase_m = alpha1 * l1_m + alpha2 * l2_m;
+
+        Vector3d sat_vel;
+        double sat_drift = 0.0;
+        if (!nav.calculateSatelliteState(sat, obs.time, sat_pos, sat_vel, sat_clk, sat_drift)) {
+            return false;
+        }
+        if (ssr_products_loaded_) {
+            Vector3d orbit_corr;
+            double clock_corr = 0.0;
+            if (ssr_products_.interpolateCorrection(
+                    sat, obs.time, orbit_corr, clock_corr, nullptr, nullptr, nullptr, nullptr)) {
+                if (ssr_products_.orbitCorrectionsAreRac()) {
+                    orbit_corr = ssrRacToEcef(sat_pos, sat_vel, orbit_corr);
+                }
+                sat_pos += orbit_corr;
+                sat_clk += clock_corr / constants::SPEED_OF_LIGHT;
+            }
+        }
+        const double geo_range = geodist(sat_pos, receiver_position);
+        const double elevation = std::asin(
+            (sat_pos - receiver_position).normalized().dot(receiver_position.normalized()));
+        const double trop_delay =
+            calculateMappingFunction(receiver_position, elevation, obs.time) * trop_zenith;
+        predicted_m = geo_range + clock_bias_m
+                    - constants::SPEED_OF_LIGHT * sat_clk + trop_delay;
+    }
+
+    if (lambda_nl <= 0.0 || !std::isfinite(nl_phase_m) || !std::isfinite(predicted_m)) {
+        return false;
+    }
+
+    const double nl_amb_cycles = (nl_phase_m - predicted_m) / lambda_nl;
+    info = {
+        nl_amb_cycles,
+        lambda_nl,
+        lambda_wl,
+        beta,
+        {sat.system,
+         {static_cast<int>(l1_obs->signal), static_cast<int>(l2_obs->signal)}},
+        true
+    };
+    return true;
+}
+
+bool PPPProcessor::buildFixedNlObservationForSatellite(
+    const ObservationData& obs,
+    const NavigationData& nav,
+    const std::map<SatelliteId, OSRCorrection>& osr_by_sat,
+    const SatelliteId& satellite,
+    const PPPAmbiguityInfo& ambiguity,
+    ppp_ar::FixedNlObservation& fixed_observation) const {
+    const double fixed_nl = ambiguity.nl_fixed_cycles;
+    double nl_phase_m = 0.0;
+    double lambda_nl = 0.0;
+    Vector3d sat_pos = Vector3d::Zero();
+    double sat_clk = 0.0;
+    bool use_trop_model = true;
+
+    const auto osr_it = osr_by_sat.find(satellite);
+    if (osr_it != osr_by_sat.end()) {
+        const auto& osr = osr_it->second;
+        const Observation* l1 = obs.getObservation(satellite, osr.signals[0]);
+        const Observation* l2 = obs.getObservation(satellite, osr.signals[1]);
+        const double f1 = osr.frequencies[0];
+        const double f2 = osr.frequencies[1];
+        if (l1 == nullptr || l2 == nullptr ||
+            !l1->has_carrier_phase || !l2->has_carrier_phase ||
+            !std::isfinite(l1->carrier_phase) || !std::isfinite(l2->carrier_phase) ||
+            f1 <= 0.0 || f2 <= 0.0 || std::abs(f1 - f2) < 1.0) {
+            return false;
+        }
+        const double alpha1 = f1 / (f1 + f2);
+        const double alpha2 = f2 / (f1 + f2);
+        lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
+        const double l1_corr_m = l1->carrier_phase * osr.wavelengths[0] - osr.CPC[0];
+        const double l2_corr_m = l2->carrier_phase * osr.wavelengths[1] - osr.CPC[1];
+        nl_phase_m = alpha1 * l1_corr_m + alpha2 * l2_corr_m;
+        sat_pos = osr.satellite_position;
+        sat_clk = osr.satellite_clock_bias_s;
+        use_trop_model = false;
+    } else {
+        const Observation* l1 = findCarrierObservationForSignals(
+            obs, satellite, {SignalType::GPS_L1CA, SignalType::GAL_E1, SignalType::QZS_L1CA});
+        const Observation* l2 = findCarrierObservationForSignals(
+            obs, satellite, {SignalType::GPS_L2C, SignalType::GPS_L2P,
+                             SignalType::GAL_E5A, SignalType::QZS_L2C});
+        if (!l1 || !l2) {
+            return false;
+        }
+
+        const Ephemeris* eph = nav.getEphemeris(satellite, obs.time);
+        const double f1 = signalFrequencyHz(l1->signal, eph);
+        const double f2 = signalFrequencyHz(l2->signal, eph);
+        const double lam1 = signalWavelengthMeters(l1->signal, eph);
+        const double lam2 = signalWavelengthMeters(l2->signal, eph);
+        if (lam1 <= 0.0 || lam2 <= 0.0 || f1 <= 0.0 || f2 <= 0.0 || std::abs(f1 - f2) < 1.0) {
+            return false;
+        }
+
+        const double alpha1 = f1 / (f1 + f2);
+        const double alpha2 = f2 / (f1 + f2);
+        lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
+        nl_phase_m = alpha1 * l1->carrier_phase * lam1 + alpha2 * l2->carrier_phase * lam2;
+
+        Vector3d sat_vel;
+        double sat_drift = 0.0;
+        if (!nav.calculateSatelliteState(
+                satellite, obs.time, sat_pos, sat_vel, sat_clk, sat_drift)) {
+            return false;
+        }
+        if (ssr_products_loaded_) {
+            Vector3d orbit_corr;
+            double clock_corr = 0.0;
+            if (ssr_products_.interpolateCorrection(
+                    satellite, obs.time, orbit_corr, clock_corr, nullptr, nullptr, nullptr, nullptr)) {
+                if (ssr_products_.orbitCorrectionsAreRac()) {
+                    orbit_corr = ssrRacToEcef(sat_pos, sat_vel, orbit_corr);
+                }
+                sat_pos += orbit_corr;
+                sat_clk += clock_corr / constants::SPEED_OF_LIGHT;
+            }
+        }
+    }
+
+    if (lambda_nl <= 0.0 || !std::isfinite(nl_phase_m)) {
+        return false;
+    }
+
+    fixed_observation.nl_phase_m = nl_phase_m;
+    fixed_observation.fixed_nl_cycles = fixed_nl;
+    fixed_observation.lambda_nl_m = lambda_nl;
+    fixed_observation.sat_pos = sat_pos;
+    fixed_observation.sat_clk = sat_clk;
+    fixed_observation.use_trop_model = use_trop_model;
+    return true;
+}
+
+bool PPPProcessor::buildFixedCarrierObservation(
+    const IonosphereFreeObs& observation,
+    ppp_ar::FixedCarrierObservation& fixed_observation) const {
+    if (!observation.valid || !observation.has_carrier_phase) {
+        return false;
+    }
+    const auto ambiguity_it = ambiguity_states_.find(observation.satellite);
+    if (ambiguity_it == ambiguity_states_.end() || !ambiguity_it->second.is_fixed) {
+        return false;
+    }
+    const int ambiguity_index = ambiguityStateIndex(observation.satellite);
+    if (ambiguity_index < 0 || ambiguity_index >= filter_state_.total_states) {
+        return false;
+    }
+
+    double ionosphere_m = 0.0;
+    if (ppp_config_.estimate_ionosphere) {
+        const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
+        if (iono_it != filter_state_.ionosphere_indices.end()) {
+            ionosphere_m = filter_state_.state(iono_it->second);
+        }
+    }
+
+    fixed_observation.satellite_position = observation.satellite_position;
+    fixed_observation.satellite_clock_bias_s = observation.satellite_clock_bias;
+    fixed_observation.trop_mapping = observation.trop_mapping;
+    fixed_observation.modeled_trop_delay_m = observation.modeled_trop_delay_m;
+    fixed_observation.carrier_phase_if = observation.carrier_phase_if;
+    fixed_observation.variance_cp = observation.variance_cp;
+    fixed_observation.ambiguity_m = filter_state_.state(ambiguity_index);
+    fixed_observation.system_clock_offset_m =
+        receiverClockBiasMeters(observation.satellite) -
+        filter_state_.state(filter_state_.clock_index);
+    fixed_observation.ionosphere_m = ionosphere_m;
+    return true;
+}
+
+// ============================================================================
+// CLAS-PPP mode: OSR-based PPP-RTK with per-frequency ambiguities
+// ============================================================================
+
+PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
+                                                 const NavigationData& nav) {
+    PositionSolution solution;
+    solution.time = obs.time;
+    solution.status = SolutionStatus::NONE;
+    last_ar_ratio_ = 0.0;
+    last_fixed_ambiguities_ = 0;
+
+    PositionSolution seed = spp_processor_.processEpoch(obs, nav);
+    detectCycleSlips(obs);
+    const auto epoch_preparation = ppp_clas::prepareEpochState(
+        obs,
+        seed,
+        ssr_products_,
+        filter_state_,
+        filter_initialized_,
+        convergence_start_time_,
+        static_anchor_position_,
+        has_static_anchor_position_,
+        ppp_config_,
+        modeledZenithTroposphereDelayMeters(seed.position_ecef, obs.time),
+        has_last_processed_time_,
+        last_processed_time_,
+        ambiguity_states_,
+        clas_dispersion_compensation_,
+        clas_phase_bias_repair_,
+        precise_products_loaded_ ? 1e6 : ppp_config_.initial_ambiguity_variance);
+    if (!epoch_preparation.ready) {
+        return solution;
+    }
+
+    const auto epoch_context = prepareClasEpochContext(
+        obs,
+        nav,
+        ssr_products_,
+        filter_state_.state.segment(0, 3),
+        filter_state_.state(filter_state_.clock_index),
+        filter_state_.state(filter_state_.trop_index),
+        windup_cache_,
+        clas_dispersion_compensation_,
+        clas_sis_continuity_,
+        clas_phase_bias_repair_);
+    const auto& epoch_atmos = epoch_context.epoch_atmos_tokens;
+    const auto& osr_corrections = epoch_context.osr_corrections;
+
+    if (osr_corrections.size() < 4) {
+        solution = seed;
+        return solution;
+    }
+
+    ppp_clas::ensureAmbiguityStates(filter_state_, osr_corrections);
+    ppp_clas::applyPendingPhaseBiasStateShifts(
+        filter_state_, osr_corrections, clas_phase_bias_repair_, pppDebugEnabled());
+
+    const auto epoch_update = ppp_clas::runEpochMeasurementUpdate(
+        obs,
+        epoch_context,
+        filter_state_,
+        ppp_config_,
+        seed,
+        ambiguity_states_,
+        [&](const Vector3d& receiver_pos, double elevation, const GNSSTime& time) {
+            return calculateMappingFunction(receiver_pos, elevation, time);
+        },
+        [&](const SatelliteId& satellite, SignalType signal) {
+            resetAmbiguity(satellite, signal);
+        },
+        [&](const SatelliteId& satellite) {
+            return ambiguityStateIndex(satellite);
+        },
+        pppDebugEnabled());
+    if (!epoch_update.updated) {
+        solution = seed;
+        return solution;
+    }
+    const auto& update_stats = epoch_update.update_stats;
+    pre_anchor_covariance_ = update_stats.pre_anchor_covariance;
+
+    const auto trop_mapping_for_validation =
+        [&](const Vector3d& receiver_pos, double elevation, const GNSSTime& time) {
+            return calculateMappingFunction(receiver_pos, elevation, time);
+        };
+    const auto ambiguity_index_for_validation = [&](const SatelliteId& satellite) {
+        return ambiguityStateIndex(satellite);
+    };
+
+    const auto ambiguity_resolution =
+        ppp_clas::resolveAndValidateAmbiguities(
+            filter_state_,
+            ambiguity_states_,
+            [&]() {
+                return ppp_config_.enable_ambiguity_resolution &&
+                       resolveAmbiguities(obs, nav);
+            },
+            [&]() {
+                return ppp_clas::validateFixedSolution(
+                    obs,
+                    osr_corrections,
+                    filter_state_,
+                    ppp_config_,
+                    trop_mapping_for_validation,
+                    ambiguity_index_for_validation,
+                    pppDebugEnabled());
+            },
+            pppDebugEnabled());
+    if (ambiguity_resolution.rejected_after_fix) {
+        last_ar_ratio_ = 0.0;
+        last_fixed_ambiguities_ = 0;
+    }
+
+    if (pppDebugEnabled()) {
+        ppp_clas::logUpdateSummary(update_stats, osr_corrections.size());
+    }
+
+    solution = ppp_clas::finalizeEpochSolution(
+        filter_state_,
+        ambiguity_resolution.accepted,
+        last_ar_ratio_,
+        last_fixed_ambiguities_,
+        static_cast<int>(osr_corrections.size()));
+
+    has_last_processed_time_ = true;
+    last_processed_time_ = obs.time;
+    ++total_epochs_processed_;
+
+    return solution;
 }
 
 double PPPProcessor::calculateTroposphericDelay(const Vector3d& receiver_pos,
@@ -2495,10 +3358,12 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
     std::vector<double> measured_values;
     std::vector<double> predicted_values;
     std::vector<double> variances;
+    std::vector<SatelliteId> row_satellites;
+    std::vector<bool> row_is_phase;
 
     const double zenith_delay = filter_state_.state(filter_state_.trop_index);
     const bool use_phase_rows =
-        ppp_config_.use_carrier_phase_without_precise_products || precise_products_loaded_;
+        ppp_config_.use_carrier_phase_without_precise_products || precise_products_loaded_ || ssr_products_loaded_;
 
     for (const auto& observation : observations) {
         if (!observation.valid) {
@@ -2530,11 +3395,33 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         row(clock_state_index) = 1.0;
         row(filter_state_.trop_index) =
             ppp_config_.estimate_troposphere ? observation.trop_mapping : 0.0;
+        // Per-satellite ionosphere state: pseudorange has +iono contribution
+        double iono_state_m = 0.0;
+        if (ppp_config_.estimate_ionosphere) {
+            const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
+            if (iono_it != filter_state_.ionosphere_indices.end()) {
+                row(iono_it->second) = 1.0;  // +iono for pseudorange
+                iono_state_m = filter_state_.state(iono_it->second);
+            }
+        }
 
         const double predicted =
             geometric_range + clock_bias_m -
-            constants::SPEED_OF_LIGHT * observation.satellite_clock_bias + troposphere_delay;
+            constants::SPEED_OF_LIGHT * observation.satellite_clock_bias + troposphere_delay
+            + iono_state_m;
         const double residual = observation.pseudorange_if - predicted;
+
+        if (pppDebugEnabled()) {
+            std::cerr << "[PPP-OBS] " << observation.satellite.toString()
+                      << " pr=" << observation.pseudorange_if
+                      << " geo=" << geometric_range
+                      << " clk=" << clock_bias_m
+                      << " satclk=" << (constants::SPEED_OF_LIGHT * observation.satellite_clock_bias)
+                      << " trop=" << troposphere_delay
+                      << " pred=" << predicted
+                      << " resid=" << residual
+                      << "\n";
+        }
 
         if (ppp_config_.enable_outlier_detection) {
             const double sigma = std::sqrt(std::max(
@@ -2564,6 +3451,8 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         measured_values.push_back(observation.pseudorange_if);
         predicted_values.push_back(predicted);
         variances.push_back(safeVariance(observation.variance_pr, 1e-6));
+        row_satellites.push_back(observation.satellite);
+        row_is_phase.push_back(false);
 
         if (use_phase_rows && observation.has_carrier_phase) {
             const int ambiguity_index = ambiguityStateIndex(observation.satellite);
@@ -2580,7 +3469,17 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 if (!phase_ready) {
                     continue;
                 }
-                const double predicted_phase = predicted + filter_state_.state(ambiguity_index);
+                // predicted for phase: geo + clk - satclk + trop - iono + amb
+                // (predicted already includes +iono, so subtract 2*iono for phase)
+                double iono_phase_correction = 0.0;
+                if (ppp_config_.estimate_ionosphere) {
+                    const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
+                    if (iono_it != filter_state_.ionosphere_indices.end()) {
+                        iono_phase_correction = -2.0 * filter_state_.state(iono_it->second);
+                    }
+                }
+                const double predicted_phase = predicted + iono_phase_correction
+                                               + filter_state_.state(ambiguity_index);
                 const double phase_residual = observation.carrier_phase_if - predicted_phase;
                 const double phase_residual_floor =
                     ppp_config_.kinematic_mode
@@ -2598,12 +3497,21 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     phase_row(clock_state_index) = 1.0;
                     phase_row(filter_state_.trop_index) =
                         ppp_config_.estimate_troposphere ? observation.trop_mapping : 0.0;
+                    // Per-satellite ionosphere: carrier phase has -iono contribution
+                    if (ppp_config_.estimate_ionosphere) {
+                        const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
+                        if (iono_it != filter_state_.ionosphere_indices.end()) {
+                            phase_row(iono_it->second) = -1.0;
+                        }
+                    }
                     phase_row(ambiguity_index) = 1.0;
 
                     rows.push_back(phase_row);
                     measured_values.push_back(observation.carrier_phase_if);
                     predicted_values.push_back(predicted_phase);
                     variances.push_back(safeVariance(observation.variance_cp, 1e-8));
+                    row_satellites.push_back(observation.satellite);
+                    row_is_phase.push_back(true);
                 }
             }
         }
@@ -2625,6 +3533,8 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         equation.residuals(i) = measured_values[static_cast<size_t>(i)] -
                                 predicted_values[static_cast<size_t>(i)];
     }
+    equation.row_satellites = row_satellites;
+    equation.row_is_phase = row_is_phase;
     return equation;
 }
 
@@ -2809,11 +3719,19 @@ void PPPProcessor::constrainStaticAnchorPosition() {
     if (precise_products_loaded_ && !ppp_config_.estimate_troposphere) {
         return;
     }
+    // SSR mode note: hard blend (70% SPP) caps accuracy at ~4m but prevents
+    // divergence. Soft anchor (pseudo-observation) tested with sigma=3-20m:
+    //   3m: 4.3m (worse than hard), 5m: 4.8m, 10m: 6.2m, inf: 10.6m (diverges)
+    // Root cause of 4m floor is 20-40m SSR residual spread (light travel time).
+    // Fix the residuals first, then loosen the anchor.
 
     const double anchor_blend =
         ppp_config_.low_dynamics_mode
             ? (precise_products_loaded_ ? (converged_ ? 0.65 : 0.9) : 0.95)
-            : (precise_products_loaded_ ? (converged_ ? 0.5 : 0.85) : 1.0);
+            : (precise_products_loaded_ ? (converged_ ? 0.5 : 0.85)
+               : (ssr_products_loaded_
+                    ? (converged_ ? 0.5 : 0.7)
+                    : 1.0));
     filter_state_.state.segment(filter_state_.pos_index, 3) =
         anchor_blend * static_anchor_position_ +
         (1.0 - anchor_blend) * filter_state_.state.segment(filter_state_.pos_index, 3);
@@ -3052,9 +3970,46 @@ Vector3d calculateReceiverAntennaPCO(const Vector3d& receiver_pos,
 double calculatePhaseWindup(const Vector3d& receiver_pos,
                             const Vector3d& satellite_pos,
                             double previous_windup) {
-    (void)receiver_pos;
-    (void)satellite_pos;
-    return previous_windup;
+    // Phase wind-up correction based on Wu et al. (1993)
+    // Returns accumulated phase wind-up in cycles.
+    const Vector3d e_sr = (receiver_pos - satellite_pos).normalized();
+
+    // Satellite frame: use sun direction for yaw steering
+    // Simplified: assume satellite Z points to Earth center, X in sun direction
+    const Vector3d e_z_sat = -satellite_pos.normalized();
+    // Sun direction (simplified: assume along +X in ECEF for now)
+    // A proper implementation would use solar ephemeris.
+    // Using cross-track direction as approximation:
+    Vector3d e_x_sat = e_sr.cross(e_z_sat);
+    if (e_x_sat.norm() < 1e-10) return previous_windup;
+    e_x_sat.normalize();
+    const Vector3d e_y_sat = e_z_sat.cross(e_x_sat);
+
+    // Receiver frame: Z = up, X = east, Y = north (approximate)
+    const Vector3d e_z_rcv = receiver_pos.normalized();
+    Vector3d e_x_rcv = Vector3d(-receiver_pos.y(), receiver_pos.x(), 0.0);
+    if (e_x_rcv.norm() < 1e-10) return previous_windup;
+    e_x_rcv.normalize();
+    const Vector3d e_y_rcv = e_z_rcv.cross(e_x_rcv);
+
+    // Effective dipole vectors
+    const Vector3d d_sat = e_x_sat - e_sr * (e_sr.dot(e_x_sat))
+                         + e_sr.cross(e_y_sat);
+    const Vector3d d_rcv = e_x_rcv - e_sr * (e_sr.dot(e_x_rcv))
+                         + e_sr.cross(e_y_rcv);
+
+    const double cos_phi = d_sat.dot(d_rcv) / (d_sat.norm() * d_rcv.norm() + 1e-20);
+    const double cross_sign = e_sr.dot(d_sat.cross(d_rcv));
+    double dphi = std::acos(std::clamp(cos_phi, -1.0, 1.0)) / (2.0 * M_PI);
+    if (cross_sign < 0.0) dphi = -dphi;
+
+    // Accumulate full cycles
+    double windup = previous_windup + dphi;
+    // Remove large jumps (> 0.5 cycle)
+    while (windup - previous_windup > 0.5) windup -= 1.0;
+    while (windup - previous_windup < -0.5) windup += 1.0;
+
+    return windup;
 }
 
 }  // namespace ppp_utils
