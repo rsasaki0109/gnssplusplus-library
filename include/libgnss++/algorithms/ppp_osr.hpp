@@ -17,6 +17,12 @@ int preferredClasNetworkId(const std::map<std::string, std::string>& atmos_token
 const char* clasPhaseContinuityPolicyName(
     ppp_shared::PPPConfig::ClasPhaseContinuityPolicy policy);
 
+const char* clasPhaseBiasValuePolicyName(
+    ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy policy);
+
+const char* clasPhaseBiasReferenceTimePolicyName(
+    ppp_shared::PPPConfig::ClasPhaseBiasReferenceTimePolicy policy);
+
 const char* clasSsrTimingPolicyName(
     ppp_shared::PPPConfig::ClasSsrTimingPolicy policy);
 
@@ -25,6 +31,18 @@ const char* clasExpandedValueConstructionPolicyName(
 
 bool usesClasPhaseBiasTerms(
     ppp_shared::PPPConfig::ClasPhaseContinuityPolicy policy);
+
+bool usesClasRawPhaseBiasValues(
+    ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy policy);
+
+bool usesClasPhaseCompensationValues(
+    ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy policy);
+
+GNSSTime selectClasPhaseBiasReferenceTime(
+    ppp_shared::PPPConfig::ClasPhaseBiasReferenceTimePolicy policy,
+    const GNSSTime& phase_bias_reference_time,
+    const GNSSTime& clock_reference_time,
+    const GNSSTime& observation_time);
 
 bool usesClasSisContinuity(
     ppp_shared::PPPConfig::ClasPhaseContinuityPolicy policy);

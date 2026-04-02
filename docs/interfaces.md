@@ -10,7 +10,7 @@ Examples:
 - `gnss solve`
 - `gnss ppp` (`--nav`, `--sp3`, `--clk`, `--ionex`, `--dcb`, `--ssr`, `--ssr-rtcm`)
 - `gnss clas-ppp`
-- `gnss qzss-l6-info` (`--compact-flush-policy <lag-tolerant-union|orbit-or-clock-only|orbit-and-clock-only>`, `--compact-atmos-merge-policy <stec-coeff-carry|no-carry|network-locked-stec-coeff-carry>`, `--compact-atmos-subtype-merge-policy <union|gridded-priority|combined-priority>`)
+- `gnss qzss-l6-info` (`--compact-flush-policy <lag-tolerant-union|orbit-or-clock-only|orbit-and-clock-only>`, `--compact-atmos-merge-policy <stec-coeff-carry|no-carry|network-locked-stec-coeff-carry>`, `--compact-atmos-subtype-merge-policy <union|gridded-priority|combined-priority>`, `--compact-phase-bias-merge-policy <latest-union|message-reset|selected-mask-prune>`, `--compact-phase-bias-source-policy <arrival-order|subtype5-priority|subtype6-priority>`, `--compact-phase-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`, `--compact-phase-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank>`)
 - `gnss fetch-products`
 - `gnss ppp-products-signoff`
 - `gnss ionex-info`
@@ -38,6 +38,8 @@ selector knobs used by the experiment lane:
 - `--clas-epoch-policy <strict-osr|hybrid-standard-ppp>`
 - `--clas-osr-application <full-osr|orbit-clock-bias|orbit-clock-only>`
 - `--clas-phase-continuity <full-repair|sis-continuity-only|repair-only|raw-phase-bias|no-phase-bias>`
+- `--clas-phase-bias-values <full|phase-bias-only|compensation-only>`
+- `--clas-phase-bias-reference-time <phase-bias-reference|clock-reference|observation-epoch>`
 - `--clas-ssr-timing <lag-tolerant|clock-bound-phase-bias|clock-bound-atmos-and-phase-bias>`
 - `--clas-expanded-values <full-composed|residual-only|polynomial-only>`
 - `--clas-subtype12-values <full|planar|offset-only>`
@@ -113,6 +115,10 @@ The current CLAS PPP experiment family includes:
 - `osr_float_hybrid_pipeline`
 - `osr_float_orbit_clock_bias_pipeline`
 - `osr_float_orbit_clock_only_pipeline`
+- `osr_float_phase_bias_only_value_pipeline`
+- `osr_float_compensation_only_value_pipeline`
+- `osr_float_clock_reference_time_pipeline`
+- `osr_float_observation_reference_time_pipeline`
 - `osr_float_sis_continuity_only_pipeline`
 - `osr_float_repair_only_pipeline`
 - `osr_float_raw_phase_bias_pipeline`
@@ -125,11 +131,20 @@ The current CLAS PPP experiment family includes:
 - `osr_float_network_locked_atmos_merge_pipeline`
 - `osr_float_gridded_priority_subtype_merge_pipeline`
 - `osr_float_combined_priority_subtype_merge_pipeline`
+- `osr_float_message_reset_phase_bias_merge_pipeline`
+- `osr_float_subtype5_priority_phase_bias_source_pipeline`
+- `osr_float_subtype6_priority_phase_bias_source_pipeline`
+- `osr_float_base_plus_network_phase_bias_composition_pipeline`
+- `osr_float_base_only_phase_bias_composition_pipeline`
+- `osr_float_same_30s_phase_bias_bank_pipeline`
+- `osr_float_close_30s_phase_bias_bank_pipeline`
+- `osr_float_latest_preceding_phase_bias_bank_pipeline`
 - `osr_float_residual_only_value_pipeline`
 - `osr_float_planar_subtype12_value_pipeline`
 - `osr_float_offset_only_subtype12_value_pipeline`
 - `osr_float_indexed_only_residual_sampling_pipeline`
 - `osr_float_mean_only_residual_sampling_pipeline`
+- `osr_float_selected_mask_prune_phase_bias_merge_pipeline`
 - `osr_float_polynomial_only_value_pipeline`
 - `osr_float_guarded_pipeline`
 - `osr_float_balanced_pipeline`
@@ -139,6 +154,10 @@ The current CLAS PPP experiment family includes:
 - `osr_ar_hybrid_pipeline`
 - `osr_ar_orbit_clock_bias_pipeline`
 - `osr_ar_orbit_clock_only_pipeline`
+- `osr_ar_phase_bias_only_value_pipeline`
+- `osr_ar_compensation_only_value_pipeline`
+- `osr_ar_clock_reference_time_pipeline`
+- `osr_ar_observation_reference_time_pipeline`
 - `osr_ar_sis_continuity_only_pipeline`
 - `osr_ar_repair_only_pipeline`
 - `osr_ar_raw_phase_bias_pipeline`
@@ -151,11 +170,20 @@ The current CLAS PPP experiment family includes:
 - `osr_ar_network_locked_atmos_merge_pipeline`
 - `osr_ar_gridded_priority_subtype_merge_pipeline`
 - `osr_ar_combined_priority_subtype_merge_pipeline`
+- `osr_ar_message_reset_phase_bias_merge_pipeline`
+- `osr_ar_subtype5_priority_phase_bias_source_pipeline`
+- `osr_ar_subtype6_priority_phase_bias_source_pipeline`
+- `osr_ar_base_plus_network_phase_bias_composition_pipeline`
+- `osr_ar_base_only_phase_bias_composition_pipeline`
+- `osr_ar_same_30s_phase_bias_bank_pipeline`
+- `osr_ar_close_30s_phase_bias_bank_pipeline`
+- `osr_ar_latest_preceding_phase_bias_bank_pipeline`
 - `osr_ar_residual_only_value_pipeline`
 - `osr_ar_planar_subtype12_value_pipeline`
 - `osr_ar_offset_only_subtype12_value_pipeline`
 - `osr_ar_indexed_only_residual_sampling_pipeline`
 - `osr_ar_mean_only_residual_sampling_pipeline`
+- `osr_ar_selected_mask_prune_phase_bias_merge_pipeline`
 - `osr_ar_polynomial_only_value_pipeline`
 - `osr_ar_guarded_pipeline`
 - `osr_ar_balanced_pipeline`
@@ -200,8 +228,16 @@ For compact-SSR ingestion experiments, the shared decode boundary also exposes:
 - `gnss qzss-l6-info --compact-flush-policy <lag-tolerant-union|orbit-or-clock-only|orbit-and-clock-only>`
 - `gnss qzss-l6-info --compact-atmos-merge-policy <stec-coeff-carry|no-carry|network-locked-stec-coeff-carry>`
 - `gnss qzss-l6-info --compact-atmos-subtype-merge-policy <union|gridded-priority|combined-priority>`
+- `gnss qzss-l6-info --compact-phase-bias-merge-policy <latest-union|message-reset|selected-mask-prune>`
+- `gnss qzss-l6-info --compact-phase-bias-source-policy <arrival-order|subtype5-priority|subtype6-priority>`
+- `gnss qzss-l6-info --compact-phase-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`
+- `gnss qzss-l6-info --compact-phase-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank>`
 - `gnss clas-ppp --compact-atmos-merge-policy <stec-coeff-carry|no-carry|network-locked-stec-coeff-carry>`
 - `gnss clas-ppp --compact-atmos-subtype-merge-policy <union|gridded-priority|combined-priority>`
+- `gnss clas-ppp --compact-phase-bias-merge-policy <latest-union|message-reset|selected-mask-prune>`
+- `gnss clas-ppp --compact-phase-bias-source-policy <arrival-order|subtype5-priority|subtype6-priority>`
+- `gnss clas-ppp --compact-phase-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`
+- `gnss clas-ppp --compact-phase-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank>`
 
 When a suite config is used, the output tree is partitioned by case:
 

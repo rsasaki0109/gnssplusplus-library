@@ -81,6 +81,30 @@ def parse_args() -> argparse.Namespace:
         default=qzss_l6_info.COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION,
         help="Compact SSR atmosphere subtype precedence policy used when expanding raw QZSS L6 into sampled SSR CSV.",
     )
+    parser.add_argument(
+        "--compact-phase-bias-merge-policy",
+        choices=qzss_l6_info.COMPACT_PHASE_BIAS_MERGE_POLICIES,
+        default=qzss_l6_info.COMPACT_PHASE_BIAS_MERGE_POLICY_LATEST_UNION,
+        help="Compact SSR phase-bias merge policy used when expanding raw QZSS L6 into sampled SSR CSV.",
+    )
+    parser.add_argument(
+        "--compact-phase-bias-source-policy",
+        choices=qzss_l6_info.COMPACT_PHASE_BIAS_SOURCE_POLICIES,
+        default=qzss_l6_info.COMPACT_PHASE_BIAS_SOURCE_POLICY_ARRIVAL_ORDER,
+        help="Compact SSR phase-bias source-row precedence policy used when expanding raw QZSS L6 into sampled SSR CSV.",
+    )
+    parser.add_argument(
+        "--compact-phase-bias-composition-policy",
+        choices=qzss_l6_info.COMPACT_PHASE_BIAS_COMPOSITION_POLICIES,
+        default=qzss_l6_info.COMPACT_PHASE_BIAS_COMPOSITION_POLICY_DIRECT,
+        help="Compact SSR phase-bias composition policy used when expanding raw QZSS L6 into sampled SSR CSV.",
+    )
+    parser.add_argument(
+        "--compact-phase-bias-bank-policy",
+        choices=qzss_l6_info.COMPACT_PHASE_BIAS_BANK_POLICIES,
+        default=qzss_l6_info.COMPACT_PHASE_BIAS_BANK_POLICY_PENDING_EPOCH,
+        help="Compact SSR phase-bias base-bank lookup policy used when expanding raw QZSS L6 into sampled SSR CSV.",
+    )
     parser.add_argument("--out", type=Path, required=True, help="Output PPP .pos file.")
     parser.add_argument("--summary-json", type=Path, default=None, help="Optional summary JSON path.")
     parser.add_argument("--sp3", type=Path, default=None, help="Optional precise SP3 file.")
@@ -396,6 +420,10 @@ def expand_qzss_l6_source(
     compact_flush_policy: str = qzss_l6_info.COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
     compact_atmos_merge_policy: str = qzss_l6_info.COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
     compact_atmos_subtype_merge_policy: str = qzss_l6_info.COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION,
+    compact_phase_bias_merge_policy: str = qzss_l6_info.COMPACT_PHASE_BIAS_MERGE_POLICY_LATEST_UNION,
+    compact_phase_bias_source_policy: str = qzss_l6_info.COMPACT_PHASE_BIAS_SOURCE_POLICY_ARRIVAL_ORDER,
+    compact_phase_bias_composition_policy: str = qzss_l6_info.COMPACT_PHASE_BIAS_COMPOSITION_POLICY_DIRECT,
+    compact_phase_bias_bank_policy: str = qzss_l6_info.COMPACT_PHASE_BIAS_BANK_POLICY_PENDING_EPOCH,
 ) -> dict[str, object]:
     frames, subframes, _stats = qzss_l6_info.decode_source(source)
     messages, corrections, _service_info_packets = qzss_l6_info.decode_cssr_messages(
@@ -404,6 +432,10 @@ def expand_qzss_l6_source(
         flush_policy=compact_flush_policy,
         atmos_merge_policy=compact_atmos_merge_policy,
         atmos_subtype_merge_policy=compact_atmos_subtype_merge_policy,
+        phase_bias_merge_policy=compact_phase_bias_merge_policy,
+        phase_bias_source_policy=compact_phase_bias_source_policy,
+        phase_bias_composition_policy=compact_phase_bias_composition_policy,
+        phase_bias_bank_policy=compact_phase_bias_bank_policy,
     )
     compact_source = output_path.parent / "qzss_l6_compact.csv"
     qzss_l6_info.write_compact_corrections(compact_source, corrections)
@@ -433,6 +465,10 @@ def expand_qzss_l6_source(
         "expanded_csv": str(output_path),
         "compact_atmos_merge_policy": compact_atmos_merge_policy,
         "compact_atmos_subtype_merge_policy": compact_atmos_subtype_merge_policy,
+        "compact_phase_bias_merge_policy": compact_phase_bias_merge_policy,
+        "compact_phase_bias_source_policy": compact_phase_bias_source_policy,
+        "compact_phase_bias_composition_policy": compact_phase_bias_composition_policy,
+        "compact_phase_bias_bank_policy": compact_phase_bias_bank_policy,
     }
 
 
@@ -531,6 +567,10 @@ def build_summary_payload(
         "mode": "kinematic" if args.kinematic else "static",
         "compact_atmos_merge_policy": args.compact_atmos_merge_policy,
         "compact_atmos_subtype_merge_policy": args.compact_atmos_subtype_merge_policy,
+        "compact_phase_bias_merge_policy": args.compact_phase_bias_merge_policy,
+        "compact_phase_bias_source_policy": args.compact_phase_bias_source_policy,
+        "compact_phase_bias_composition_policy": args.compact_phase_bias_composition_policy,
+        "compact_phase_bias_bank_policy": args.compact_phase_bias_bank_policy,
         "atmos_messages": 0,
         "atmos_rows": 0,
         "ppp_atmospheric_trop_corrections": 0,
@@ -649,6 +689,10 @@ def main() -> int:
                 compact_flush_policy=args.compact_flush_policy,
                 compact_atmos_merge_policy=args.compact_atmos_merge_policy,
                 compact_atmos_subtype_merge_policy=args.compact_atmos_subtype_merge_policy,
+                compact_phase_bias_merge_policy=args.compact_phase_bias_merge_policy,
+                compact_phase_bias_source_policy=args.compact_phase_bias_source_policy,
+                compact_phase_bias_composition_policy=args.compact_phase_bias_composition_policy,
+                compact_phase_bias_bank_policy=args.compact_phase_bias_bank_policy,
             )
             print(
                 "decoded qzss l6 corrections:",

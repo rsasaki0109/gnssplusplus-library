@@ -505,3 +505,246 @@ Immediate rule:
   - compact-to-expanded SSR semantics that are upstream of the accepted
     phase-bias values
   - source-row correctness before phase-bias continuity state is updated
+
+## D-0019: Do not promote split phase-bias value semantics
+
+Status: accepted
+
+The next CLAS suite was re-run with phase-bias value variants:
+
+- `full`
+- `phase-bias-only`
+- `compensation-only`
+
+Outcome:
+
+- `phase-bias-only` is effectively identical to the current `strict` CLAS arm
+  on both the `2019` and `2018` cases.
+- `compensation-only` moves the `2019` case by only a few millimeters and
+  leaves the `2018` failure untouched.
+- neither value split improves solution rate, mean/p95 3D error, or fixed-epoch
+  behavior relative to the current strict OSR pipeline.
+- `AR` still does not recover under any of the split value variants; fixed
+  epochs stay `0`.
+- the dominant failure therefore does not sit in the simple choice between
+  compact phase-bias values and derived phase-compensation values once both are
+  accepted under the same continuity policy.
+
+Immediate rule:
+
+- keep `full` as the current phase-bias value-construction policy inside the
+  CLAS experiment lane
+- keep `phase-bias-only` and `compensation-only` as negative-control
+  phase-bias value experiments
+- do not promote split phase-bias value semantics into the stable PPP path
+- shift the next experiment axis toward:
+  - phase-bias reference-time semantics before SIS/repair injection
+  - compact-to-expanded SSR semantics that are upstream of accepted phase-bias
+    values
+  - source-row correctness before phase-bias continuity state is updated
+
+## D-0020: Do not promote alternate phase-bias reference-time semantics
+
+Status: accepted
+
+The next CLAS suite was re-run with phase-bias reference-time variants:
+
+- `phase-bias-reference`
+- `clock-reference`
+- `observation-epoch`
+
+Outcome:
+
+- `clock-reference` is effectively identical to the current `strict` CLAS arm
+  on both the `2019` and `2018` cases.
+- `observation-epoch` is also effectively identical to the current `strict`
+  CLAS arm on both suite cases.
+- suite metrics stay unchanged across all three variants:
+  - solution rate `50.0%`
+  - mean 3D `4.898 m`
+  - p95 `5.134 m`
+  - fixed epochs `0`
+- ambiguity fixing still does not recover under any of the alternate
+  reference-time variants.
+- the dominant failure therefore does not sit in the simple choice between
+  binding accepted phase-bias semantics to the compact phase-bias message time,
+  the selected clock epoch, or the observation epoch.
+
+Immediate rule:
+
+- keep `phase-bias-reference` as the current reference-time policy inside the
+  CLAS experiment lane
+- keep `clock-reference` and `observation-epoch` as negative-control
+  reference-time experiments
+- do not promote alternate phase-bias reference-time semantics into the stable
+  PPP path
+- shift the next experiment axis toward:
+  - compact-to-expanded SSR semantics upstream of accepted phase-bias values
+  - source-row correctness before phase-bias continuity state is updated
+  - phase-bias continuity-state construction beyond simple time rebinding
+
+## D-0021: Do not promote alternate compact phase-bias merge semantics
+
+Status: accepted
+
+The next CLAS suite was re-run with compact phase-bias merge variants:
+
+- `latest-union`
+- `message-reset`
+- `selected-mask-prune`
+
+Outcome:
+
+- `message-reset` is effectively identical to the current `strict` CLAS arm on
+  both the `2019` and `2018` cases.
+- `selected-mask-prune` is also effectively identical to the current `strict`
+  CLAS arm on both suite cases.
+- suite metrics stay unchanged across all three variants:
+  - solution rate `50.0%`
+  - mean 3D `4.898 m`
+  - p95 `5.134 m`
+  - fixed epochs `0`
+- ambiguity fixing still does not recover under either compact phase-bias merge
+  variant.
+- the dominant failure therefore does not sit in the simple choice between
+  union-carrying stale subtype-5/6 phase-bias rows, resetting them per
+  message, or pruning them to the selected subtype-6 satellite mask before
+  expanded SSR materialization.
+
+Immediate rule:
+
+- keep `latest-union` as the current compact phase-bias merge policy inside the
+  CLAS experiment lane
+- keep `message-reset` and `selected-mask-prune` as negative-control compact
+  merge experiments
+- do not promote alternate compact phase-bias merge semantics into the stable
+  PPP path
+- shift the next experiment axis toward:
+  - compact-to-expanded SSR semantics upstream of accepted phase-bias values
+  - source-row correctness before phase-bias continuity state is updated
+  - accepted phase-bias value construction beyond simple compact merge policy
+
+## D-0022: Do not promote alternate compact phase-bias source precedence
+
+Status: accepted
+
+The next CLAS suite was re-run with compact phase-bias source-precedence
+variants:
+
+- `arrival-order`
+- `subtype5-priority`
+- `subtype6-priority`
+
+Outcome:
+
+- `subtype5-priority` is effectively identical to the current `strict` CLAS arm
+  on both the `2019` and `2018` cases.
+- `subtype6-priority` is also effectively identical to the current `strict`
+  CLAS arm on both suite cases.
+- suite metrics stay unchanged across all three variants:
+  - solution rate `50.0%`
+  - mean 3D `4.898 m`
+  - p95 `5.134 m`
+  - fixed epochs `0`
+- ambiguity fixing still does not recover under either alternate source
+  precedence variant.
+- the dominant failure therefore does not sit in the simple choice between
+  following raw arrival order, forcing dedicated subtype-5 rows to win, or
+  forcing subtype-6 code/phase-bias rows to win before expanded SSR
+  materialization.
+
+Immediate rule:
+
+- keep `arrival-order` as the current compact phase-bias source precedence
+  inside the CLAS experiment lane
+- keep `subtype5-priority` and `subtype6-priority` as negative-control source
+  precedence experiments
+- do not promote alternate compact phase-bias source precedence into the stable
+  PPP path
+- shift the next experiment axis toward:
+  - compact-to-expanded SSR semantics upstream of accepted phase-bias values
+  - source-row correctness before phase-bias continuity state is updated
+  - accepted phase-bias value construction beyond simple source precedence
+
+## D-0023: Do not promote alternate network phase-bias composition semantics
+
+Status: accepted
+
+The next CLAS suite was re-run with network phase-bias composition variants:
+
+- `direct-values`
+- `base-plus-network`
+- `base-only-if-present`
+
+Outcome:
+
+- `base-plus-network` is effectively identical to the current `strict` CLAS arm
+  on both the `2019` and `2018` cases.
+- `base-only-if-present` is also effectively identical to the current `strict`
+  CLAS arm on both suite cases.
+- suite metrics stay unchanged across all three variants:
+  - solution rate `50.0%`
+  - mean 3D `4.898 m`
+  - p95 `5.134 m`
+  - fixed epochs `0`
+- ambiguity fixing still does not recover under either alternate network
+  phase-bias composition variant.
+- the dominant failure therefore does not sit in the simple choice between
+  using subtype-6 network phase-bias rows directly, adding them on top of base
+  rows, or replacing them with base rows before expanded SSR materialization.
+
+Immediate rule:
+
+- keep `direct-values` as the current network phase-bias composition policy
+  inside the CLAS experiment lane
+- keep `base-plus-network` and `base-only-if-present` as negative-control
+  materialization experiments
+- do not promote alternate network phase-bias composition semantics into the
+  stable PPP path
+- shift the next experiment axis toward:
+  - compact-to-expanded SSR semantics that are upstream of accepted
+    phase-bias values
+  - source-row correctness before phase-bias continuity state is updated
+  - code/phase bias bank materialization semantics beyond simple base-plus-network
+
+## D-0024: Do not promote alternate compact phase-bias bank lookup semantics
+
+Status: accepted
+
+The next CLAS suite was re-run with compact phase-bias bank-lookup variants:
+
+- `pending-epoch`
+- `same-30s-bank`
+- `close-30s-bank`
+- `latest-preceding-bank`
+
+Outcome:
+
+- under the `base-plus-network` materialization lane, `same-30s-bank`,
+  `close-30s-bank`, and `latest-preceding-bank` are all effectively identical
+  to the current `strict` CLAS arm on both the `2019` and `2018` cases.
+- suite metrics stay unchanged across the current bank-lookup variants:
+  - solution rate `50.0%`
+  - mean 3D `4.898 m`
+  - p95 `5.134 m`
+  - fixed epochs `0`
+- ambiguity fixing still does not recover under any of the alternate bank
+  lookup semantics.
+- together with `D-0023`, this means the dominant failure does not sit in the
+  simple choice between staying inside the pending epoch, requiring the exact
+  30-second anchor, using the closest preceding 30-second bank, or reusing the
+  latest preceding base bank before expanded SSR materialization.
+
+Immediate rule:
+
+- keep `pending-epoch` as the current compact phase-bias bank default inside
+  the CLAS experiment lane
+- keep `same-30s-bank`, `close-30s-bank`, and `latest-preceding-bank` as
+  negative-control materialization experiments
+- do not promote alternate compact phase-bias bank lookup semantics into the
+  stable PPP path
+- shift the next experiment axis toward:
+  - compact-to-expanded SSR semantics that are upstream of accepted
+    phase-bias values
+  - source-row correctness before phase-bias continuity state is updated
+  - row/value construction beyond simple bank lookup semantics

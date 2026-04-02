@@ -212,6 +212,32 @@ const char* clasPhaseContinuityPolicyName(
     return "full-repair";
 }
 
+const char* clasPhaseBiasValuePolicyName(
+    ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy policy) {
+    switch (policy) {
+        case ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy::FULL:
+            return "full";
+        case ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy::PHASE_BIAS_ONLY:
+            return "phase-bias-only";
+        case ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy::COMPENSATION_ONLY:
+            return "compensation-only";
+    }
+    return "full";
+}
+
+const char* clasPhaseBiasReferenceTimePolicyName(
+    ppp_shared::PPPConfig::ClasPhaseBiasReferenceTimePolicy policy) {
+    switch (policy) {
+        case ppp_shared::PPPConfig::ClasPhaseBiasReferenceTimePolicy::PHASE_BIAS_REFERENCE:
+            return "phase-bias-reference";
+        case ppp_shared::PPPConfig::ClasPhaseBiasReferenceTimePolicy::CLOCK_REFERENCE:
+            return "clock-reference";
+        case ppp_shared::PPPConfig::ClasPhaseBiasReferenceTimePolicy::OBSERVATION_EPOCH:
+            return "observation-epoch";
+    }
+    return "phase-bias-reference";
+}
+
 const char* clasSsrTimingPolicyName(
     ppp_shared::PPPConfig::ClasSsrTimingPolicy policy) {
     switch (policy) {
@@ -242,6 +268,35 @@ bool usesClasPhaseBiasTerms(
     ppp_shared::PPPConfig::ClasPhaseContinuityPolicy policy) {
     return policy !=
            ppp_shared::PPPConfig::ClasPhaseContinuityPolicy::NO_PHASE_BIAS;
+}
+
+bool usesClasRawPhaseBiasValues(
+    ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy policy) {
+    return policy !=
+           ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy::COMPENSATION_ONLY;
+}
+
+bool usesClasPhaseCompensationValues(
+    ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy policy) {
+    return policy !=
+           ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy::PHASE_BIAS_ONLY;
+}
+
+GNSSTime selectClasPhaseBiasReferenceTime(
+    ppp_shared::PPPConfig::ClasPhaseBiasReferenceTimePolicy policy,
+    const GNSSTime& phase_bias_reference_time,
+    const GNSSTime& clock_reference_time,
+    const GNSSTime& observation_time) {
+    switch (policy) {
+        case ppp_shared::PPPConfig::ClasPhaseBiasReferenceTimePolicy::PHASE_BIAS_REFERENCE:
+            return phase_bias_reference_time;
+        case ppp_shared::PPPConfig::ClasPhaseBiasReferenceTimePolicy::CLOCK_REFERENCE:
+            return gnsstimeIsSet(clock_reference_time) ? clock_reference_time
+                                                       : phase_bias_reference_time;
+        case ppp_shared::PPPConfig::ClasPhaseBiasReferenceTimePolicy::OBSERVATION_EPOCH:
+            return observation_time;
+    }
+    return phase_bias_reference_time;
 }
 
 bool usesClasSisContinuity(
@@ -744,39 +799,49 @@ std::vector<OSRCorrection> computeOSR(
                 sis_continuity_info.has_last_delta = false;
             }
         }
-        const bool phase_bias_time_valid =
-            osr.phase_bias_reference_time.week != 0 ||
-            std::abs(osr.phase_bias_reference_time.tow) > 0.0;
+        const GNSSTime effective_phase_bias_reference_time =
+            selectClasPhaseBiasReferenceTime(
+                config.clas_phase_bias_reference_time_policy,
+                osr.phase_bias_reference_time,
+                osr.clock_reference_time,
+                obs.time);
+        const bool effective_phase_bias_time_valid =
+            gnsstimeIsSet(effective_phase_bias_reference_time);
         bool phase_bias_epoch_changed = false;
         double phase_bias_dt = 0.0;
         if (!usesClasPhaseBiasRepair(phase_continuity_policy)) {
             resetPhaseBiasRepairInfo(phase_bias_repair_info);
-        } else if (!phase_bias_time_valid) {
+        } else if (!effective_phase_bias_time_valid) {
             resetPhaseBiasRepairInfo(phase_bias_repair_info);
         } else if (phase_bias_repair_info.reference_time.week == 0 &&
                    std::abs(phase_bias_repair_info.reference_time.tow) == 0.0) {
-            phase_bias_repair_info.reference_time = osr.phase_bias_reference_time;
-        } else if (phase_bias_repair_info.reference_time != osr.phase_bias_reference_time) {
+            phase_bias_repair_info.reference_time = effective_phase_bias_reference_time;
+        } else if (phase_bias_repair_info.reference_time != effective_phase_bias_reference_time) {
             phase_bias_epoch_changed = true;
-            phase_bias_dt = osr.phase_bias_reference_time - phase_bias_repair_info.reference_time;
+            phase_bias_dt =
+                effective_phase_bias_reference_time - phase_bias_repair_info.reference_time;
             if (std::abs(phase_bias_dt) >= 120.0) {
                 phase_bias_repair_info.offset_cycles = {0.0, 0.0, 0.0};
                 phase_bias_repair_info.pending_state_shift_cycles = {0.0, 0.0, 0.0};
                 phase_bias_repair_info.has_last = {false, false, false};
             }
-            phase_bias_repair_info.reference_time = osr.phase_bias_reference_time;
+            phase_bias_repair_info.reference_time = effective_phase_bias_reference_time;
         }
 
         // --- 9. Aggregate PRC/CPC (CLASLIB L282-285) ---
         for (int f = 0; f < osr.num_frequencies; ++f) {
             const double fi = osr.frequencies[f] > 0.0 ? osr.wavelengths[f] / osr.wavelengths[0] : 1.0;
             const double iono_scaled = fi * fi * osr.iono_l1_m;
+            const auto phase_bias_value_policy =
+                config.clas_phase_bias_value_policy;
             const double phase_bias_term =
-                usesClasPhaseBiasTerms(phase_continuity_policy) ?
+                usesClasPhaseBiasTerms(phase_continuity_policy) &&
+                        usesClasRawPhaseBiasValues(phase_bias_value_policy) ?
                     osr.phase_bias_m[f] :
                     0.0;
             const double phase_compensation_term =
-                usesClasPhaseBiasTerms(phase_continuity_policy) ?
+                usesClasPhaseBiasTerms(phase_continuity_policy) &&
+                        usesClasPhaseCompensationValues(phase_bias_value_policy) ?
                     osr.phase_compensation_m[f] :
                     0.0;
 
@@ -788,11 +853,11 @@ std::vector<OSRCorrection> computeOSR(
                        + phase_bias_term + osr.windup_m[f]
                        + phase_compensation_term;
 
-            if (clock_time_valid && phase_bias_time_valid &&
+            if (clock_time_valid && effective_phase_bias_time_valid &&
                 sis_continuity_info.has_last_delta &&
                 usesClasSisContinuity(phase_continuity_policy)) {
                 const double pbias_lag =
-                    osr.clock_reference_time - osr.phase_bias_reference_time;
+                    osr.clock_reference_time - effective_phase_bias_reference_time;
                 if (std::abs(pbias_lag - 30.0) < 0.5) {
                     osr.CPC[f] -= sis_continuity_info.last_delta_m;
                     osr.PRC[f] -= sis_continuity_info.last_delta_m;
@@ -800,6 +865,9 @@ std::vector<OSRCorrection> computeOSR(
                         std::cerr << "[OSR-SIS] " << sat.toString()
                                   << " lag_s=" << pbias_lag
                                   << " sis_delta_m=" << sis_continuity_info.last_delta_m
+                                  << " ref_policy="
+                                  << clasPhaseBiasReferenceTimePolicyName(
+                                         config.clas_phase_bias_reference_time_policy)
                                   << "\n";
                     }
                 }
@@ -861,6 +929,7 @@ std::vector<OSRCorrection> computeOSR(
                       << " pbias0=" << osr.phase_bias_m[0]
                       << " windup=" << osr.windup_cycles
                       << " pbias_ref_tow=" << osr.phase_bias_reference_time.tow
+                      << " eff_pbias_ref_tow=" << effective_phase_bias_reference_time.tow
                       << " orb_los=" << osr.orbit_projection_m
                       << " clk_corr=" << osr.clock_correction_m
                       << " PRC0=" << osr.PRC[0]
