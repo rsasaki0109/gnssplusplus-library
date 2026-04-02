@@ -832,9 +832,11 @@ def build_qzss_cssr_mask_message(
     tow: int,
     iod: int,
     prn: int = 3,
+    prns: tuple[int, ...] | None = None,
     sync: bool = True,
     sigmask: int = 0x8000,
 ) -> tuple[bytes, int]:
+    satellites = prns if prns is not None else (prn,)
     payload = bytearray(32)
     bit = 0
     set_unsigned_bits(payload, bit, 12, 4073)
@@ -853,14 +855,17 @@ def build_qzss_cssr_mask_message(
     bit += 4
     set_unsigned_bits(payload, bit, 4, 0)
     bit += 4
-    set_unsigned_bits(payload, bit, 40, encode_cssr_satellite_mask(prn))
+    svmask = 0
+    for satellite_prn in satellites:
+        svmask |= encode_cssr_satellite_mask(satellite_prn)
+    set_unsigned_bits(payload, bit, 40, svmask)
     bit += 40
     set_unsigned_bits(payload, bit, 16, sigmask)
     bit += 16
     set_unsigned_bits(payload, bit, 1, 1)
     bit += 1
-    set_unsigned_bits(payload, bit, 1, 1)
-    bit += 1
+    set_unsigned_bits(payload, bit, len(satellites), (1 << len(satellites)) - 1)
+    bit += len(satellites)
     return bytes(payload), bit
 
 
@@ -1005,8 +1010,12 @@ def build_qzss_cssr_phase_bias_message(
     tow_delta: int,
     iod: int,
     phase_bias_m: float = 0.015,
+    phase_biases_m: tuple[float, ...] | None = None,
+    satellite_count: int = 1,
     sync: bool = True,
 ) -> tuple[bytes, int]:
+    phase_bias_values = phase_biases_m if phase_biases_m is not None else (phase_bias_m,)
+    satellite_count = max(satellite_count, len(phase_bias_values))
     payload = bytearray(40)
     bit = 0
     set_unsigned_bits(payload, bit, 12, 4073)
@@ -1021,10 +1030,12 @@ def build_qzss_cssr_phase_bias_message(
     bit += 1
     set_unsigned_bits(payload, bit, 4, iod)
     bit += 4
-    set_signed_bits(payload, bit, 15, round(phase_bias_m / 0.001))
-    bit += 15
-    set_unsigned_bits(payload, bit, 2, 0)
-    bit += 2
+    for index in range(satellite_count):
+        bias_m = phase_bias_values[index] if index < len(phase_bias_values) else phase_bias_values[-1]
+        set_signed_bits(payload, bit, 15, round(bias_m / 0.001))
+        bit += 15
+        set_unsigned_bits(payload, bit, 2, 0)
+        bit += 2
     return bytes(payload), bit
 
 
@@ -1034,9 +1045,20 @@ def build_qzss_cssr_code_phase_bias_message(
     iod: int,
     code_bias_m: float = -0.12,
     phase_bias_m: float = 0.015,
+    code_biases_m: tuple[float, ...] | None = None,
+    phase_biases_m: tuple[float, ...] | None = None,
+    satellite_count: int = 1,
     sync: bool = True,
     network_bias: bool = False,
+    code_bias_exists: bool = True,
+    phase_bias_exists: bool = True,
+    selected_mask: int | None = None,
 ) -> tuple[bytes, int]:
+    code_bias_values = code_biases_m if code_biases_m is not None else (code_bias_m,)
+    phase_bias_values = phase_biases_m if phase_biases_m is not None else (phase_bias_m,)
+    satellite_count = max(satellite_count, len(code_bias_values), len(phase_bias_values))
+    if selected_mask is None:
+        selected_mask = (1 << satellite_count) - 1
     payload = bytearray(40)
     bit = 0
     set_unsigned_bits(payload, bit, 12, 4073)
@@ -1051,23 +1073,33 @@ def build_qzss_cssr_code_phase_bias_message(
     bit += 1
     set_unsigned_bits(payload, bit, 4, iod)
     bit += 4
-    set_unsigned_bits(payload, bit, 1, 1)
+    set_unsigned_bits(payload, bit, 1, 1 if code_bias_exists else 0)
     bit += 1
-    set_unsigned_bits(payload, bit, 1, 1)
+    set_unsigned_bits(payload, bit, 1, 1 if phase_bias_exists else 0)
     bit += 1
     set_unsigned_bits(payload, bit, 1, 1 if network_bias else 0)
     bit += 1
     if network_bias:
         set_unsigned_bits(payload, bit, 5, 1)
         bit += 5
-        set_unsigned_bits(payload, bit, 1, 1)
-        bit += 1
-    set_signed_bits(payload, bit, 11, round(code_bias_m / 0.02))
-    bit += 11
-    set_signed_bits(payload, bit, 15, round(phase_bias_m / 0.001))
-    bit += 15
-    set_unsigned_bits(payload, bit, 2, 0)
-    bit += 2
+        set_unsigned_bits(payload, bit, satellite_count, selected_mask)
+        bit += satellite_count
+    selected_count = sum(
+        1
+        for index in range(satellite_count)
+        if ((selected_mask >> (satellite_count - 1 - index)) & 1) != 0
+    )
+    for index in range(selected_count):
+        if code_bias_exists:
+            bias_m = code_bias_values[index] if index < len(code_bias_values) else code_bias_values[-1]
+            set_signed_bits(payload, bit, 11, round(bias_m / 0.02))
+            bit += 11
+        if phase_bias_exists:
+            bias_m = phase_bias_values[index] if index < len(phase_bias_values) else phase_bias_values[-1]
+            set_signed_bits(payload, bit, 15, round(bias_m / 0.001))
+            bit += 15
+            set_unsigned_bits(payload, bit, 2, 0)
+            bit += 2
     return bytes(payload), bit
 
 
@@ -5342,6 +5374,560 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("atmos_stec_c00_tecu:G03=2.500000", priority_row)
             self.assertNotIn("atmos_stec_residuals_tecu:G03=0.240000", priority_row)
 
+    def test_qzss_l6_info_compact_phase_bias_merge_policy_message_reset_drops_stale_satellite_biases(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_phase_bias_reset_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_phase_bias_reset.bin"
+            default_path = temp_root / "default.csv"
+            reset_path = temp_root / "message_reset.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prns=(3, 4), sync=True),
+                        build_qzss_cssr_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            satellite_count=2,
+                            phase_biases_m=(0.015, 0.025),
+                        ),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            network_bias=True,
+                            code_bias_exists=False,
+                            phase_bias_exists=True,
+                            satellite_count=2,
+                            selected_mask=0b01,
+                            phase_biases_m=(0.045,),
+                        ),
+                    ]
+                )
+            )
+
+            default_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(default_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
+            default_csv = default_path.read_text(encoding="ascii")
+            self.assertIn("2200,518400.000,G,3", default_csv)
+            self.assertIn("pbias:2=0.015000", default_csv)
+
+            reset_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(reset_path),
+                "--gps-week",
+                "2200",
+                "--compact-phase-bias-merge-policy",
+                "message-reset",
+            )
+            self.assertEqual(reset_result.returncode, 0, msg=reset_result.stderr)
+            reset_csv = reset_path.read_text(encoding="ascii")
+            self.assertNotIn("2200,518400.000,G,3", reset_csv)
+            self.assertIn("2200,518400.000,G,4", reset_csv)
+            self.assertIn("pbias:2=0.045000", reset_csv)
+
+    def test_qzss_l6_info_compact_phase_bias_merge_policy_selected_mask_prune_drops_unselected_satellites(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_phase_bias_prune_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_phase_bias_prune.bin"
+            default_path = temp_root / "default.csv"
+            prune_path = temp_root / "selected_mask_prune.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prns=(3, 4), sync=True),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_bias=True,
+                            code_bias_exists=False,
+                            phase_bias_exists=True,
+                            satellite_count=2,
+                            selected_mask=0b10,
+                            phase_biases_m=(0.015,),
+                        ),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            network_bias=True,
+                            code_bias_exists=True,
+                            phase_bias_exists=False,
+                            satellite_count=2,
+                            selected_mask=0b01,
+                            code_biases_m=(-0.12,),
+                        ),
+                    ]
+                )
+            )
+
+            default_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(default_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
+            default_csv = default_path.read_text(encoding="ascii")
+            self.assertIn("2200,518400.000,G,3", default_csv)
+            self.assertIn("pbias:2=0.015000", default_csv)
+
+            prune_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(prune_path),
+                "--gps-week",
+                "2200",
+                "--compact-phase-bias-merge-policy",
+                "selected-mask-prune",
+            )
+            self.assertEqual(prune_result.returncode, 0, msg=prune_result.stderr)
+            prune_csv = prune_path.read_text(encoding="ascii")
+            prune_sat3_row = next(
+                line
+                for line in prune_csv.splitlines()
+                if line.startswith("2200,518400.000,G,3")
+            )
+            self.assertIn("2200,518400.000,G,4", prune_csv)
+            self.assertNotIn("pbias:2=", prune_sat3_row)
+            self.assertNotIn("pbias:2=0.015000", prune_csv)
+
+    def test_qzss_l6_info_compact_phase_bias_source_policy_subtype5_priority_keeps_dedicated_phase_bias(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_phase_bias_src5_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_phase_bias_src5.bin"
+            default_path = temp_root / "default.csv"
+            priority_path = temp_root / "subtype5_priority.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            phase_bias_m=0.015,
+                        ),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            code_bias_exists=False,
+                            phase_bias_exists=True,
+                            phase_bias_m=0.045,
+                        ),
+                    ]
+                )
+            )
+
+            default_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(default_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
+            self.assertIn("pbias:2=0.045000", default_path.read_text(encoding="ascii"))
+
+            priority_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(priority_path),
+                "--gps-week",
+                "2200",
+                "--compact-phase-bias-source-policy",
+                "subtype5-priority",
+            )
+            self.assertEqual(priority_result.returncode, 0, msg=priority_result.stderr)
+            priority_csv = priority_path.read_text(encoding="ascii")
+            self.assertIn("pbias:2=0.015000", priority_csv)
+            self.assertNotIn("pbias:2=0.045000", priority_csv)
+
+    def test_qzss_l6_info_compact_phase_bias_source_policy_subtype6_priority_keeps_code_phase_bias(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_phase_bias_src6_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_phase_bias_src6.bin"
+            default_path = temp_root / "default.csv"
+            priority_path = temp_root / "subtype6_priority.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            code_bias_exists=False,
+                            phase_bias_exists=True,
+                            phase_bias_m=0.045,
+                        ),
+                        build_qzss_cssr_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            phase_bias_m=0.015,
+                        ),
+                    ]
+                )
+            )
+
+            default_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(default_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
+            self.assertIn("pbias:2=0.015000", default_path.read_text(encoding="ascii"))
+
+            priority_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(priority_path),
+                "--gps-week",
+                "2200",
+                "--compact-phase-bias-source-policy",
+                "subtype6-priority",
+            )
+            self.assertEqual(priority_result.returncode, 0, msg=priority_result.stderr)
+            priority_csv = priority_path.read_text(encoding="ascii")
+            self.assertIn("pbias:2=0.045000", priority_csv)
+            self.assertNotIn("pbias:2=0.015000", priority_csv)
+
+    def test_qzss_l6_info_compact_phase_bias_composition_policy_base_plus_network_adds_base_row(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_phase_bias_comp_add_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_phase_bias_comp_add.bin"
+            default_path = temp_root / "default.csv"
+            composed_path = temp_root / "base_plus_network.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            phase_bias_m=0.015,
+                        ),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            network_bias=True,
+                            code_bias_exists=False,
+                            phase_bias_exists=True,
+                            selected_mask=0b1,
+                            phase_bias_m=0.045,
+                        ),
+                    ]
+                )
+            )
+
+            default_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(default_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
+            self.assertIn("pbias:2=0.045000", default_path.read_text(encoding="ascii"))
+
+            composed_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(composed_path),
+                "--gps-week",
+                "2200",
+                "--compact-phase-bias-composition-policy",
+                "base-plus-network",
+            )
+            self.assertEqual(composed_result.returncode, 0, msg=composed_result.stderr)
+            self.assertIn("pbias:2=0.060000", composed_path.read_text(encoding="ascii"))
+
+    def test_qzss_l6_info_compact_phase_bias_composition_policy_base_only_if_present_keeps_base_row(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_phase_bias_comp_base_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_phase_bias_comp_base.bin"
+            direct_path = temp_root / "direct.csv"
+            base_only_path = temp_root / "base_only.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            phase_bias_m=0.015,
+                        ),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            network_bias=True,
+                            code_bias_exists=False,
+                            phase_bias_exists=True,
+                            selected_mask=0b1,
+                            phase_bias_m=0.045,
+                        ),
+                    ]
+                )
+            )
+
+            direct_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(direct_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(direct_result.returncode, 0, msg=direct_result.stderr)
+            self.assertIn("pbias:2=0.045000", direct_path.read_text(encoding="ascii"))
+
+            base_only_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(base_only_path),
+                "--gps-week",
+                "2200",
+                "--compact-phase-bias-composition-policy",
+                "base-only-if-present",
+            )
+            self.assertEqual(base_only_result.returncode, 0, msg=base_only_result.stderr)
+            base_only_csv = base_only_path.read_text(encoding="ascii")
+            self.assertIn("pbias:2=0.015000", base_only_csv)
+            self.assertNotIn("pbias:2=0.045000", base_only_csv)
+
+    def test_qzss_l6_info_compact_phase_bias_bank_policy_same_30s_bank_uses_prior_base_bank(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_phase_bias_bank_30s_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_phase_bias_bank_30s.bin"
+            default_path = temp_root / "pending_epoch.csv"
+            anchored_path = temp_root / "same_30s.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            phase_bias_m=0.015,
+                        ),
+                        build_qzss_cssr_mask_message(tow=518412, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            network_bias=True,
+                            code_bias_exists=False,
+                            phase_bias_exists=True,
+                            selected_mask=0b1,
+                            phase_bias_m=0.045,
+                        ),
+                    ]
+                )
+            )
+
+            default_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(default_path),
+                "--gps-week",
+                "2200",
+                "--compact-phase-bias-composition-policy",
+                "base-plus-network",
+            )
+            self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
+            default_csv = default_path.read_text(encoding="ascii")
+            self.assertIn("pbias:2=0.045000", default_csv)
+            self.assertNotIn("pbias:2=0.060000", default_csv)
+
+            anchored_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(anchored_path),
+                "--gps-week",
+                "2200",
+                "--compact-phase-bias-composition-policy",
+                "base-plus-network",
+                "--compact-phase-bias-bank-policy",
+                "same-30s-bank",
+            )
+            self.assertEqual(anchored_result.returncode, 0, msg=anchored_result.stderr)
+            self.assertIn("pbias:2=0.060000", anchored_path.read_text(encoding="ascii"))
+
+    def test_qzss_l6_info_compact_phase_bias_bank_policy_latest_preceding_bank_uses_prior_anchor(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_phase_bias_bank_prev_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_phase_bias_bank_prev.bin"
+            same_30s_path = temp_root / "same_30s.csv"
+            preceding_path = temp_root / "latest_preceding.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518370, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            phase_bias_m=0.015,
+                        ),
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            network_bias=True,
+                            code_bias_exists=False,
+                            phase_bias_exists=True,
+                            selected_mask=0b1,
+                            phase_bias_m=0.045,
+                        ),
+                    ]
+                )
+            )
+
+            same_30s_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(same_30s_path),
+                "--gps-week",
+                "2200",
+                "--compact-phase-bias-composition-policy",
+                "base-plus-network",
+                "--compact-phase-bias-bank-policy",
+                "same-30s-bank",
+            )
+            self.assertEqual(same_30s_result.returncode, 0, msg=same_30s_result.stderr)
+            same_30s_csv = same_30s_path.read_text(encoding="ascii")
+            self.assertIn("pbias:2=0.045000", same_30s_csv)
+            self.assertNotIn("pbias:2=0.060000", same_30s_csv)
+
+            preceding_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(preceding_path),
+                "--gps-week",
+                "2200",
+                "--compact-phase-bias-composition-policy",
+                "base-plus-network",
+                "--compact-phase-bias-bank-policy",
+                "latest-preceding-bank",
+            )
+            self.assertEqual(preceding_result.returncode, 0, msg=preceding_result.stderr)
+            self.assertIn("pbias:2=0.060000", preceding_path.read_text(encoding="ascii"))
+
+    def test_qzss_l6_info_compact_phase_bias_bank_policy_close_30s_bank_rejects_older_anchor(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_phase_bias_bank_close30_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_phase_bias_bank_close30.bin"
+            close_30s_path = temp_root / "close_30s.csv"
+            preceding_path = temp_root / "latest_preceding.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518339, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            phase_bias_m=0.015,
+                        ),
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            network_bias=True,
+                            code_bias_exists=False,
+                            phase_bias_exists=True,
+                            selected_mask=0b1,
+                            phase_bias_m=0.045,
+                        ),
+                    ]
+                )
+            )
+
+            close_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(close_30s_path),
+                "--gps-week",
+                "2200",
+                "--compact-phase-bias-composition-policy",
+                "base-plus-network",
+                "--compact-phase-bias-bank-policy",
+                "close-30s-bank",
+            )
+            self.assertEqual(close_result.returncode, 0, msg=close_result.stderr)
+            close_30s_csv = close_30s_path.read_text(encoding="ascii")
+            self.assertIn("pbias:2=0.045000", close_30s_csv)
+            self.assertNotIn("pbias:2=0.060000", close_30s_csv)
+
+            preceding_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(preceding_path),
+                "--gps-week",
+                "2200",
+                "--compact-phase-bias-composition-policy",
+                "base-plus-network",
+                "--compact-phase-bias-bank-policy",
+                "latest-preceding-bank",
+            )
+            self.assertEqual(preceding_result.returncode, 0, msg=preceding_result.stderr)
+            self.assertIn("pbias:2=0.060000", preceding_path.read_text(encoding="ascii"))
+
     def test_solve_odaiba_slice_uses_glonass_and_beidou_in_rtk(self) -> None:
         rover = ROOT_DIR / "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs"
         base = ROOT_DIR / "data/driving/Tokyo_Data/Odaiba/base_trimble.obs"
@@ -7452,6 +8038,76 @@ class CLIToolsTest(unittest.TestCase):
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(summary["clas_phase_continuity"], "sis-continuity-only")
 
+    def test_ppp_cli_writes_phase_bias_value_mode_to_summary_json(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_clas_phase_value_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, _ = build_synthetic_ppp_inputs_with_atmos(
+                temp_root
+            )
+            output_path = temp_root / "ppp_clas_phase_value.pos"
+            summary_path = temp_root / "ppp_clas_phase_value_summary.json"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--clas-phase-bias-values",
+                "phase-bias-only",
+                "--no-estimate-troposphere",
+                "--summary-json",
+                str(summary_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["clas_phase_bias_values"], "phase-bias-only")
+
+    def test_ppp_cli_writes_phase_bias_reference_time_mode_to_summary_json(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_clas_phase_ref_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, _ = build_synthetic_ppp_inputs_with_atmos(
+                temp_root
+            )
+            output_path = temp_root / "ppp_clas_phase_ref.pos"
+            summary_path = temp_root / "ppp_clas_phase_ref_summary.json"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--clas-phase-bias-reference-time",
+                "clock-reference",
+                "--no-estimate-troposphere",
+                "--summary-json",
+                str(summary_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["clas_phase_bias_reference_time"], "clock-reference")
+
     def test_ppp_cli_writes_clas_expanded_values_mode_to_summary_json(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_clas_value_mode_cli_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -7882,6 +8538,10 @@ class CLIToolsTest(unittest.TestCase):
                 str(l6_path),
                 "--qzss-gps-week",
                 "1316",
+                "--compact-phase-bias-merge-policy",
+                "message-reset",
+                "--compact-phase-bias-source-policy",
+                "subtype5-priority",
                 "--out",
                 str(output_path),
                 "--summary-json",
@@ -7951,6 +8611,10 @@ class CLIToolsTest(unittest.TestCase):
                 str(l6_path),
                 "--qzss-gps-week",
                 "1316",
+                "--compact-phase-bias-composition-policy",
+                "base-plus-network",
+                "--compact-phase-bias-bank-policy",
+                "same-30s-bank",
                 "--out",
                 str(output_path),
                 "--summary-json",
@@ -7969,6 +8633,8 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("decoded qzss l6 corrections:", result.stdout)
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertEqual(payload["compact_phase_bias_composition_policy"], "base-plus-network")
+            self.assertEqual(payload["compact_phase_bias_bank_policy"], "same-30s-bank")
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
 
     def test_clas_ppp_cli_accepts_direct_qzss_l6_code_bias_and_ura(self) -> None:
@@ -8017,6 +8683,10 @@ class CLIToolsTest(unittest.TestCase):
                 str(l6_path),
                 "--qzss-gps-week",
                 "1316",
+                "--compact-phase-bias-merge-policy",
+                "message-reset",
+                "--compact-phase-bias-source-policy",
+                "subtype5-priority",
                 "--out",
                 str(output_path),
                 "--summary-json",
@@ -8035,6 +8705,8 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("decoded qzss l6 corrections:", result.stdout)
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertEqual(payload["compact_phase_bias_merge_policy"], "message-reset")
+            self.assertEqual(payload["compact_phase_bias_source_policy"], "subtype5-priority")
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
 
     def test_clas_ppp_cli_accepts_direct_qzss_l6_with_atmos_inventory(self) -> None:

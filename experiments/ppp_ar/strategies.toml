@@ -129,6 +129,90 @@ implementation_files = [
   "src/algorithms/ppp_clas.cpp",
 ]
 
+[strategies.osr_float_phase_bias_only_value_pipeline]
+label = "OSR Float Phase-Bias-Only Value Pipeline"
+design_style = "pipeline+phase-bias-values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps compact CLAS phase-bias values but drops derived phase-compensation terms before SIS/repair injection."
+claslib_reference = "Used to test whether the accepted CLAS path degrades because of the derived phase-compensation term rather than because of the compact phase-bias values themselves."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-bias-values",
+  "phase-bias-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_compensation_only_value_pipeline]
+label = "OSR Float Compensation-Only Value Pipeline"
+design_style = "pipeline+phase-bias-values"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that drops compact CLAS phase-bias values and keeps only derived phase-compensation terms before SIS/repair injection."
+claslib_reference = "Used to test whether the accepted CLAS path degrades because of the compact phase-bias values themselves rather than because of the derived compensation term."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-bias-values",
+  "compensation-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_clock_reference_time_pipeline]
+label = "OSR Float Clock-Reference-Time Pipeline"
+design_style = "pipeline+reference-time"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that interprets accepted phase-bias continuity and repair state against the selected clock reference epoch."
+claslib_reference = "Used to test whether the expanded SSR lane should bind accepted phase-bias semantics to the same clock epoch that drives the CLASLIB-style SIS continuity state."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-bias-reference-time",
+  "clock-reference",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_observation_reference_time_pipeline]
+label = "OSR Float Observation-Reference-Time Pipeline"
+design_style = "pipeline+reference-time"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that interprets accepted phase-bias continuity and repair state against the observation epoch instead of the compact phase-bias message timestamp."
+claslib_reference = "Used to test whether the expanded SSR lane over-trusts compact phase-bias message timestamps once corrected observations are already formed."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-bias-reference-time",
+  "observation-epoch",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
 [strategies.osr_float_sis_continuity_only_pipeline]
 label = "OSR Float SIS-Continuity-Only Pipeline"
 design_style = "pipeline+continuity"
@@ -353,6 +437,198 @@ extra_args = [
   "--estimate-ionosphere",
 ]
 compact_atmos_subtype_merge_policy = "combined-priority"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_message_reset_phase_bias_merge_pipeline]
+label = "OSR Float Message-Reset Phase-Bias-Merge Pipeline"
+design_style = "pipeline+merge"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that resets compact pending phase-bias rows whenever subtype 5/6 carries fresh phase-bias content within the same pending epoch."
+claslib_reference = "Used to test whether the compact-to-expanded SSR lane is incorrectly union-carrying stale subtype-5/6 phase-bias rows inside one compact epoch before cssr2osr-style materialization."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_merge_policy = "message-reset"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_selected_mask_prune_phase_bias_merge_pipeline]
+label = "OSR Float Selected-Mask-Prune Phase-Bias-Merge Pipeline"
+design_style = "pipeline+merge"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that prunes pending compact phase-bias rows to the selected subtype-6 satellite mask before expanded SSR materialization."
+claslib_reference = "Used to test whether stale subtype-5/6 phase-bias rows for unselected satellites are leaking through the compact-to-expanded SSR boundary."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_merge_policy = "selected-mask-prune"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_subtype5_priority_phase_bias_source_pipeline]
+label = "OSR Float Subtype5-Priority Phase-Bias-Source Pipeline"
+design_style = "pipeline+merge"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps subtype-5 phase-bias rows whenever subtype 5 and 6 both provide the same signal within one compact pending epoch."
+claslib_reference = "Used to test whether the compact-to-expanded SSR lane should treat dedicated subtype-5 phase-bias rows as authoritative when subtype-6 rows overlap before cssr2osr-style materialization."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_source_policy = "subtype5-priority"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_subtype6_priority_phase_bias_source_pipeline]
+label = "OSR Float Subtype6-Priority Phase-Bias-Source Pipeline"
+design_style = "pipeline+merge"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps subtype-6 phase-bias rows whenever subtype 5 and 6 both provide the same signal within one compact pending epoch."
+claslib_reference = "Used to test whether the compact-to-expanded SSR lane should treat subtype-6 code/phase-bias rows as authoritative when they overlap subtype-5 rows before cssr2osr-style materialization."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_source_policy = "subtype6-priority"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_base_plus_network_phase_bias_composition_pipeline]
+label = "OSR Float Base-Plus-Network Phase-Bias-Composition Pipeline"
+design_style = "pipeline+materialization"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that materializes subtype-6 network phase-bias rows by adding them on top of previously accepted base rows before expanded SSR construction."
+claslib_reference = "Used to test whether the compact-to-expanded SSR lane should follow CLASLIB-style add_base_value_to_pbias semantics instead of using raw subtype-6 network values directly."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_composition_policy = "base-plus-network"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_base_only_phase_bias_composition_pipeline]
+label = "OSR Float Base-Only Phase-Bias-Composition Pipeline"
+design_style = "pipeline+materialization"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps accepted base phase-bias rows and ignores subtype-6 network increments when a base row is present before expanded SSR construction."
+claslib_reference = "Used as a negative control to test whether network phase-bias increments themselves are the dominant source of degradation upstream of expanded SSR materialization."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_composition_policy = "base-only-if-present"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_same_30s_phase_bias_bank_pipeline]
+label = "OSR Float Same-30s Phase-Bias-Bank Pipeline"
+design_style = "pipeline+materialization"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that lets subtype-6 network phase-bias rows look up base phase-bias rows from the same 30-second compact bank before expanded SSR construction."
+claslib_reference = "Used to test whether the compact-to-expanded SSR lane should follow the CLASLIB-style 30-second base-bank anchoring implied by add_base_value_to_pbias instead of only using the current pending epoch."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_composition_policy = "base-plus-network"
+compact_phase_bias_bank_policy = "same-30s-bank"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_close_30s_phase_bias_bank_pipeline]
+label = "OSR Float Close-30s Phase-Bias-Bank Pipeline"
+design_style = "pipeline+materialization"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that lets subtype-6 network phase-bias rows look up the closest preceding base phase-bias bank within 30 seconds before expanded SSR construction."
+claslib_reference = "Used to test whether the compact-to-expanded SSR lane should follow CLASLIB-style close-bank lookup semantics rather than requiring the exact pending anchor or accepting any older preceding bank."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_composition_policy = "base-plus-network"
+compact_phase_bias_bank_policy = "close-30s-bank"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_latest_preceding_phase_bias_bank_pipeline]
+label = "OSR Float Latest-Preceding Phase-Bias-Bank Pipeline"
+design_style = "pipeline+materialization"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that lets subtype-6 network phase-bias rows look up the latest preceding available base phase-bias bank before expanded SSR construction."
+claslib_reference = "Used as a negative control to test whether ambiguity quality changes simply because the compact-to-expanded SSR lane reuses the most recent base phase-bias bank rather than the exact 30-second anchor."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_composition_policy = "base-plus-network"
+compact_phase_bias_bank_policy = "latest-preceding-bank"
 implementation_files = [
   "apps/gnss_qzss_l6_info.py",
   "src/algorithms/ppp.cpp",
@@ -687,6 +963,106 @@ implementation_files = [
   "src/algorithms/ppp_ar.cpp",
 ]
 
+[strategies.osr_ar_phase_bias_only_value_pipeline]
+label = "OSR AR Phase-Bias-Only Value Pipeline"
+design_style = "pipeline+solver+phase-bias-values"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that keeps compact CLAS phase-bias values but drops derived phase-compensation terms before SIS/repair injection."
+claslib_reference = "Used to test whether ambiguity fixing degrades because of the derived phase-compensation term rather than because of the compact phase-bias values themselves."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-bias-values",
+  "phase-bias-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_compensation_only_value_pipeline]
+label = "OSR AR Compensation-Only Value Pipeline"
+design_style = "pipeline+solver+phase-bias-values"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that drops compact CLAS phase-bias values and keeps only derived phase-compensation terms before SIS/repair injection."
+claslib_reference = "Used to test whether ambiguity fixing degrades because of the compact phase-bias values themselves rather than because of the derived compensation term."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-bias-values",
+  "compensation-only",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_clock_reference_time_pipeline]
+label = "OSR AR Clock-Reference-Time Pipeline"
+design_style = "pipeline+solver+reference-time"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that binds accepted phase-bias continuity and repair state to the selected clock reference epoch."
+claslib_reference = "Used to test whether ambiguity fixing improves once accepted phase-bias semantics share the same clock epoch that drives CLASLIB-style SIS continuity."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-bias-reference-time",
+  "clock-reference",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_observation_reference_time_pipeline]
+label = "OSR AR Observation-Reference-Time Pipeline"
+design_style = "pipeline+solver+reference-time"
+status = "candidate"
+description = "Strict CLAS OSR + AR path that binds accepted phase-bias continuity and repair state to the observation epoch."
+claslib_reference = "Used to test whether ambiguity fixing improves once accepted phase-bias semantics stop depending on compact message timestamps after observation-space expansion."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--clas-phase-bias-reference-time",
+  "observation-epoch",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+implementation_files = [
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
 [strategies.osr_ar_sis_continuity_only_pipeline]
 label = "OSR AR SIS-Continuity-Only Pipeline"
 design_style = "pipeline+solver+continuity"
@@ -946,6 +1322,216 @@ extra_args = [
   "--estimate-ionosphere",
 ]
 compact_atmos_subtype_merge_policy = "combined-priority"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_message_reset_phase_bias_merge_pipeline]
+label = "OSR AR Message-Reset Phase-Bias-Merge Pipeline"
+design_style = "pipeline+solver+merge"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that resets compact pending phase-bias rows whenever subtype 5/6 carries fresh phase-bias content within the same pending epoch."
+claslib_reference = "Used to test whether ambiguity fixing is being starved by stale subtype-5/6 phase-bias rows that survive inside one compact epoch before cssr2osr-style materialization."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_merge_policy = "message-reset"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_selected_mask_prune_phase_bias_merge_pipeline]
+label = "OSR AR Selected-Mask-Prune Phase-Bias-Merge Pipeline"
+design_style = "pipeline+solver+merge"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that prunes pending compact phase-bias rows to the selected subtype-6 satellite mask before expanded SSR materialization."
+claslib_reference = "Used to test whether ambiguity fixing improves once stale subtype-5/6 phase-bias rows for unselected satellites are dropped before they reach the CLASLIB-style OSR builder."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_merge_policy = "selected-mask-prune"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_subtype5_priority_phase_bias_source_pipeline]
+label = "OSR AR Subtype5-Priority Phase-Bias-Source Pipeline"
+design_style = "pipeline+solver+merge"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that keeps subtype-5 phase-bias rows whenever subtype 5 and 6 both provide the same signal within one compact pending epoch."
+claslib_reference = "Used to test whether ambiguity fixing recovers once dedicated subtype-5 phase-bias rows win over subtype-6 rows before they reach the CLASLIB-style OSR builder."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_source_policy = "subtype5-priority"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_subtype6_priority_phase_bias_source_pipeline]
+label = "OSR AR Subtype6-Priority Phase-Bias-Source Pipeline"
+design_style = "pipeline+solver+merge"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that keeps subtype-6 phase-bias rows whenever subtype 5 and 6 both provide the same signal within one compact pending epoch."
+claslib_reference = "Used to test whether ambiguity fixing recovers once subtype-6 code/phase-bias rows win over subtype-5 rows before they reach the CLASLIB-style OSR builder."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_source_policy = "subtype6-priority"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_base_plus_network_phase_bias_composition_pipeline]
+label = "OSR AR Base-Plus-Network Phase-Bias-Composition Pipeline"
+design_style = "pipeline+solver+materialization"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that materializes subtype-6 network phase-bias rows by adding them on top of previously accepted base rows before expanded SSR construction."
+claslib_reference = "Used to test whether ambiguity fixing recovers once the compact-to-expanded SSR lane follows CLASLIB-style add_base_value_to_pbias semantics for network phase-bias rows."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_composition_policy = "base-plus-network"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_base_only_phase_bias_composition_pipeline]
+label = "OSR AR Base-Only Phase-Bias-Composition Pipeline"
+design_style = "pipeline+solver+materialization"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that keeps accepted base phase-bias rows and ignores subtype-6 network increments when a base row is present before expanded SSR construction."
+claslib_reference = "Used as a negative control to test whether ambiguity fixing improves simply by dropping network phase-bias increments upstream of expanded SSR materialization."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_composition_policy = "base-only-if-present"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_same_30s_phase_bias_bank_pipeline]
+label = "OSR AR Same-30s Phase-Bias-Bank Pipeline"
+design_style = "pipeline+solver+materialization"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that lets subtype-6 network phase-bias rows look up base phase-bias rows from the same 30-second compact bank before expanded SSR construction."
+claslib_reference = "Used to test whether ambiguity fixing recovers once the compact-to-expanded SSR lane follows the CLASLIB-style 30-second base-bank anchoring implied by add_base_value_to_pbias."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_composition_policy = "base-plus-network"
+compact_phase_bias_bank_policy = "same-30s-bank"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_close_30s_phase_bias_bank_pipeline]
+label = "OSR AR Close-30s Phase-Bias-Bank Pipeline"
+design_style = "pipeline+solver+materialization"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that lets subtype-6 network phase-bias rows look up the closest preceding base phase-bias bank within 30 seconds before expanded SSR construction."
+claslib_reference = "Used to test whether ambiguity fixing recovers once the compact-to-expanded SSR lane follows CLASLIB-style close-bank lookup semantics rather than requiring the exact pending anchor or accepting any older preceding bank."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_composition_policy = "base-plus-network"
+compact_phase_bias_bank_policy = "close-30s-bank"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_latest_preceding_phase_bias_bank_pipeline]
+label = "OSR AR Latest-Preceding Phase-Bias-Bank Pipeline"
+design_style = "pipeline+solver+materialization"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that lets subtype-6 network phase-bias rows look up the latest preceding available base phase-bias bank before expanded SSR construction."
+claslib_reference = "Used as a negative control to test whether ambiguity fixing changes simply because the compact-to-expanded SSR lane reuses the most recent base phase-bias bank rather than the exact 30-second anchor."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_phase_bias_composition_policy = "base-plus-network"
+compact_phase_bias_bank_policy = "latest-preceding-bank"
 implementation_files = [
   "apps/gnss_qzss_l6_info.py",
   "src/algorithms/ppp.cpp",
