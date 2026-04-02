@@ -58,6 +58,10 @@ class ExperimentStrategy:
     compact_flush_policy: str | None
     compact_atmos_merge_policy: str | None
     compact_atmos_subtype_merge_policy: str | None
+    compact_phase_bias_merge_policy: str | None
+    compact_phase_bias_source_policy: str | None
+    compact_phase_bias_composition_policy: str | None
+    compact_phase_bias_bank_policy: str | None
     implementation_files: tuple[Path, ...]
 
 
@@ -222,6 +226,26 @@ def load_strategies(path: Path) -> dict[str, ExperimentStrategy]:
                 if raw.get("compact_atmos_subtype_merge_policy") is not None
                 else None
             ),
+            compact_phase_bias_merge_policy=(
+                str(raw["compact_phase_bias_merge_policy"])
+                if raw.get("compact_phase_bias_merge_policy") is not None
+                else None
+            ),
+            compact_phase_bias_source_policy=(
+                str(raw["compact_phase_bias_source_policy"])
+                if raw.get("compact_phase_bias_source_policy") is not None
+                else None
+            ),
+            compact_phase_bias_composition_policy=(
+                str(raw["compact_phase_bias_composition_policy"])
+                if raw.get("compact_phase_bias_composition_policy") is not None
+                else None
+            ),
+            compact_phase_bias_bank_policy=(
+                str(raw["compact_phase_bias_bank_policy"])
+                if raw.get("compact_phase_bias_bank_policy") is not None
+                else None
+            ),
             implementation_files=implementation_files,
         )
     return strategies
@@ -249,11 +273,25 @@ def ensure_ssr_csv(input_config: ExperimentInput, strategy: ExperimentStrategy) 
     flush_policy = strategy.compact_flush_policy or "lag-tolerant-union"
     atmos_merge_policy = strategy.compact_atmos_merge_policy or "stec-coeff-carry"
     atmos_subtype_merge_policy = strategy.compact_atmos_subtype_merge_policy or "union"
+    phase_bias_merge_policy = strategy.compact_phase_bias_merge_policy or "latest-union"
+    phase_bias_source_policy = strategy.compact_phase_bias_source_policy or "arrival-order"
+    phase_bias_composition_policy = (
+        strategy.compact_phase_bias_composition_policy or "direct-values"
+    )
+    phase_bias_bank_policy = (
+        strategy.compact_phase_bias_bank_policy or "pending-epoch"
+    )
     compact_path = input_config.output_dir / (
-        f"compact_ssr_{flush_policy}__{atmos_merge_policy}__{atmos_subtype_merge_policy}.csv"
+        "compact_ssr_"
+        f"{flush_policy}__{atmos_merge_policy}__{atmos_subtype_merge_policy}__"
+        f"{phase_bias_merge_policy}__{phase_bias_source_policy}__"
+        f"{phase_bias_composition_policy}__{phase_bias_bank_policy}.csv"
     )
     expanded_path = input_config.output_dir / (
-        f"expanded_ssr_{flush_policy}__{atmos_merge_policy}__{atmos_subtype_merge_policy}.csv"
+        "expanded_ssr_"
+        f"{flush_policy}__{atmos_merge_policy}__{atmos_subtype_merge_policy}__"
+        f"{phase_bias_merge_policy}__{phase_bias_source_policy}__"
+        f"{phase_bias_composition_policy}__{phase_bias_bank_policy}.csv"
     )
     if compact_path.exists() and expanded_path.exists():
         return expanded_path
@@ -264,6 +302,10 @@ def ensure_ssr_csv(input_config: ExperimentInput, strategy: ExperimentStrategy) 
         flush_policy=flush_policy,
         atmos_merge_policy=atmos_merge_policy,
         atmos_subtype_merge_policy=atmos_subtype_merge_policy,
+        phase_bias_merge_policy=phase_bias_merge_policy,
+        phase_bias_source_policy=phase_bias_source_policy,
+        phase_bias_composition_policy=phase_bias_composition_policy,
+        phase_bias_bank_policy=phase_bias_bank_policy,
     )
     write_compact_corrections(compact_path, corrections)
     expand_compact_ssr_text(compact_path.read_text(encoding="ascii"), expanded_path)
@@ -818,9 +860,15 @@ def render_markdown(
             "- `Orbit-* Source` arms change the compact-to-expanded row emission policy before the solver sees any CLAS SSR values.",
             "- `*Atmos-Merge*` arms change how compact STEC polynomial terms are carried or reset before expanded SSR rows are materialized.",
             "- `*Subtype-Merge*` arms change how subtype 8/9/12 atmosphere families replace or coexist before expanded SSR rows are materialized.",
+            "- `*Phase-Bias-Merge*` arms change how compact subtype-5/6 phase-bias rows reset or prune stale satellite scope before expanded SSR rows are materialized.",
+            "- `*Phase-Bias-Source*` arms keep the same compact epoch contents but change whether subtype-5, subtype-6, or raw arrival order wins when both provide the same signal row before expanded SSR materialization.",
+            "- `*Phase-Bias-Composition*` arms keep the same accepted source rows but change whether subtype-6 network rows are used directly, added on top of base rows, or replaced by base rows before expanded SSR materialization.",
+            "- `*Phase-Bias-Bank*` arms keep the same accepted source rows and composition rule but change whether subtype-6 network rows can look up base phase-bias banks only inside the pending epoch, at the same 30-second anchor, from the closest preceding anchor within 30 seconds, or from the latest preceding anchor before expanded SSR materialization.",
             "- `*Value*` arms change how expanded atmosphere values are constructed from polynomial terms and residual lists before residual formation.",
             "- `*Residual-Sampling*` arms keep the same composed atmosphere model but change whether expanded residual lists use indexed samples, mean fallback, or mean-only sampling.",
             "- `*Subtype12-Value*` arms keep residual sampling fixed and only change how subtype-12 rows retain constant, linear, or higher-order surface terms before residual formation.",
+            "- `*Phase-Bias-Only*` and `*Compensation-Only*` arms keep continuity timing fixed and only change whether accepted CLAS updates use compact phase-bias values, derived phase compensation, or both before SIS/repair injection.",
+            "- `*Reference-Time*` arms keep accepted phase-bias values fixed and only change which epoch anchors SIS continuity and repair-offset state before phase-bias corrections are injected.",
             "- Promotion is decided against the control arm and only becomes stable after repeated suite wins.",
             "- Readability and extensibility are heuristic scores generated from experiment-owned files, file size, and command surface. They are not code-review substitutes.",
         ]

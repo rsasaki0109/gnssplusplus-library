@@ -36,6 +36,18 @@ struct PPPConfig {
         NO_PHASE_BIAS,
     };
 
+    enum class ClasPhaseBiasValuePolicy {
+        FULL,
+        PHASE_BIAS_ONLY,
+        COMPENSATION_ONLY,
+    };
+
+    enum class ClasPhaseBiasReferenceTimePolicy {
+        PHASE_BIAS_REFERENCE,
+        CLOCK_REFERENCE,
+        OBSERVATION_EPOCH,
+    };
+
     enum class ClasSsrTimingPolicy {
         LAG_TOLERANT,
         CLOCK_BOUND_PHASE_BIAS,
@@ -125,6 +137,10 @@ struct PPPConfig {
         ClasCorrectionApplicationPolicy::FULL_OSR;
     ClasPhaseContinuityPolicy clas_phase_continuity_policy =
         ClasPhaseContinuityPolicy::FULL_REPAIR;
+    ClasPhaseBiasValuePolicy clas_phase_bias_value_policy =
+        ClasPhaseBiasValuePolicy::FULL;
+    ClasPhaseBiasReferenceTimePolicy clas_phase_bias_reference_time_policy =
+        ClasPhaseBiasReferenceTimePolicy::PHASE_BIAS_REFERENCE;
     ClasSsrTimingPolicy clas_ssr_timing_policy =
         ClasSsrTimingPolicy::LAG_TOLERANT;
     ClasExpandedValueConstructionPolicy clas_expanded_value_construction_policy =

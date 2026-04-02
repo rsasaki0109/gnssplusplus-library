@@ -167,6 +167,80 @@ TEST(PPPOSRTest, FullRepairContinuityPolicyKeepsBiasTermsAndRepairs) {
     EXPECT_STREQ(clasPhaseContinuityPolicyName(Policy::FULL_REPAIR), "full-repair");
 }
 
+TEST(PPPOSRTest, FullPhaseBiasValuePolicyKeepsBothBiasAndCompensationTerms) {
+    using Policy = ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy;
+    EXPECT_TRUE(usesClasRawPhaseBiasValues(Policy::FULL));
+    EXPECT_TRUE(usesClasPhaseCompensationValues(Policy::FULL));
+    EXPECT_STREQ(clasPhaseBiasValuePolicyName(Policy::FULL), "full");
+}
+
+TEST(PPPOSRTest, PhaseBiasOnlyValuePolicyDropsCompensationTerm) {
+    using Policy = ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy;
+    EXPECT_TRUE(usesClasRawPhaseBiasValues(Policy::PHASE_BIAS_ONLY));
+    EXPECT_FALSE(usesClasPhaseCompensationValues(Policy::PHASE_BIAS_ONLY));
+    EXPECT_STREQ(clasPhaseBiasValuePolicyName(Policy::PHASE_BIAS_ONLY), "phase-bias-only");
+}
+
+TEST(PPPOSRTest, CompensationOnlyValuePolicyDropsRawBiasTerm) {
+    using Policy = ppp_shared::PPPConfig::ClasPhaseBiasValuePolicy;
+    EXPECT_FALSE(usesClasRawPhaseBiasValues(Policy::COMPENSATION_ONLY));
+    EXPECT_TRUE(usesClasPhaseCompensationValues(Policy::COMPENSATION_ONLY));
+    EXPECT_STREQ(
+        clasPhaseBiasValuePolicyName(Policy::COMPENSATION_ONLY),
+        "compensation-only");
+}
+
+TEST(PPPOSRTest, PhaseBiasReferenceTimePolicyDefaultsToCompactPhaseBiasEpoch) {
+    using Policy = ppp_shared::PPPConfig::ClasPhaseBiasReferenceTimePolicy;
+    const GNSSTime phase_bias_time = makeTime(2019, 8, 27, 0, 0, 30.0);
+    const GNSSTime clock_time = makeTime(2019, 8, 27, 0, 1, 0.0);
+    const GNSSTime obs_time = makeTime(2019, 8, 27, 0, 1, 1.0);
+    EXPECT_EQ(
+        selectClasPhaseBiasReferenceTime(
+            Policy::PHASE_BIAS_REFERENCE,
+            phase_bias_time,
+            clock_time,
+            obs_time),
+        phase_bias_time);
+    EXPECT_STREQ(
+        clasPhaseBiasReferenceTimePolicyName(Policy::PHASE_BIAS_REFERENCE),
+        "phase-bias-reference");
+}
+
+TEST(PPPOSRTest, PhaseBiasReferenceTimePolicyCanBindToClockEpoch) {
+    using Policy = ppp_shared::PPPConfig::ClasPhaseBiasReferenceTimePolicy;
+    const GNSSTime phase_bias_time = makeTime(2019, 8, 27, 0, 0, 30.0);
+    const GNSSTime clock_time = makeTime(2019, 8, 27, 0, 1, 0.0);
+    const GNSSTime obs_time = makeTime(2019, 8, 27, 0, 1, 1.0);
+    EXPECT_EQ(
+        selectClasPhaseBiasReferenceTime(
+            Policy::CLOCK_REFERENCE,
+            phase_bias_time,
+            clock_time,
+            obs_time),
+        clock_time);
+    EXPECT_STREQ(
+        clasPhaseBiasReferenceTimePolicyName(Policy::CLOCK_REFERENCE),
+        "clock-reference");
+}
+
+TEST(PPPOSRTest, PhaseBiasReferenceTimePolicyCanBindToObservationEpoch) {
+    using Policy = ppp_shared::PPPConfig::ClasPhaseBiasReferenceTimePolicy;
+    const GNSSTime phase_bias_time = makeTime(2019, 8, 27, 0, 0, 30.0);
+    const GNSSTime clock_time = makeTime(2019, 8, 27, 0, 1, 0.0);
+    const GNSSTime obs_time = makeTime(2019, 8, 27, 0, 1, 1.0);
+    EXPECT_EQ(
+        selectClasPhaseBiasReferenceTime(
+            Policy::OBSERVATION_EPOCH,
+            phase_bias_time,
+            clock_time,
+            obs_time),
+        obs_time);
+    EXPECT_STREQ(
+        clasPhaseBiasReferenceTimePolicyName(Policy::OBSERVATION_EPOCH),
+        "observation-epoch");
+}
+
 TEST(PPPOSRTest, SisContinuityOnlyPolicyKeepsBiasTermsAndSisDeltaWithoutRepair) {
     using Policy = ppp_shared::PPPConfig::ClasPhaseContinuityPolicy;
     EXPECT_TRUE(usesClasPhaseBiasTerms(Policy::SIS_CONTINUITY_ONLY));

@@ -39,6 +39,8 @@ struct Options {
     std::string clas_epoch_policy = "strict-osr";
     std::string clas_osr_application = "full-osr";
     std::string clas_phase_continuity = "full-repair";
+    std::string clas_phase_bias_values = "full";
+    std::string clas_phase_bias_reference_time = "phase-bias-reference";
     std::string clas_ssr_timing = "lag-tolerant";
     std::string clas_expanded_values = "full-composed";
     std::string clas_subtype12_values = "full";
@@ -87,6 +89,10 @@ void printUsage(const char* program_name) {
         << "                          CLAS accepted-update correction semantics (default: full-osr)\n"
         << "  --clas-phase-continuity <full-repair|sis-continuity-only|repair-only|raw-phase-bias|no-phase-bias>\n"
         << "                          CLAS phase-bias / continuity semantics (default: full-repair)\n"
+        << "  --clas-phase-bias-values <full|phase-bias-only|compensation-only>\n"
+        << "                          CLAS phase-bias value-construction policy before SIS/repair injection (default: full)\n"
+        << "  --clas-phase-bias-reference-time <phase-bias-reference|clock-reference|observation-epoch>\n"
+        << "                          CLAS phase-bias reference-time semantics before SIS/repair injection (default: phase-bias-reference)\n"
         << "  --clas-ssr-timing <lag-tolerant|clock-bound-phase-bias|clock-bound-atmos-and-phase-bias>\n"
         << "                          CLAS expanded-SSR source timing policy (default: lag-tolerant)\n"
         << "  --clas-expanded-values <full-composed|residual-only|polynomial-only>\n"
@@ -170,6 +176,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.clas_osr_application = argv[++i];
         } else if (arg == "--clas-phase-continuity" && i + 1 < argc) {
             options.clas_phase_continuity = argv[++i];
+        } else if (arg == "--clas-phase-bias-values" && i + 1 < argc) {
+            options.clas_phase_bias_values = argv[++i];
+        } else if (arg == "--clas-phase-bias-reference-time" && i + 1 < argc) {
+            options.clas_phase_bias_reference_time = argv[++i];
         } else if (arg == "--clas-ssr-timing" && i + 1 < argc) {
             options.clas_ssr_timing = argv[++i];
         } else if (arg == "--clas-expanded-values" && i + 1 < argc) {
@@ -258,6 +268,20 @@ Options parseArguments(int argc, char* argv[]) {
         options.clas_phase_continuity != "no-phase-bias") {
         argumentError(
             "--clas-phase-continuity must be one of: full-repair, sis-continuity-only, repair-only, raw-phase-bias, no-phase-bias",
+            argv[0]);
+    }
+    if (options.clas_phase_bias_values != "full" &&
+        options.clas_phase_bias_values != "phase-bias-only" &&
+        options.clas_phase_bias_values != "compensation-only") {
+        argumentError(
+            "--clas-phase-bias-values must be one of: full, phase-bias-only, compensation-only",
+            argv[0]);
+    }
+    if (options.clas_phase_bias_reference_time != "phase-bias-reference" &&
+        options.clas_phase_bias_reference_time != "clock-reference" &&
+        options.clas_phase_bias_reference_time != "observation-epoch") {
+        argumentError(
+            "--clas-phase-bias-reference-time must be one of: phase-bias-reference, clock-reference, observation-epoch",
             argv[0]);
     }
     if (options.clas_ssr_timing != "lag-tolerant" &&
@@ -384,6 +408,30 @@ libgnss::PPPProcessor::PPPConfig::ClasPhaseContinuityPolicy parseClasPhaseContin
     return Policy::FULL_REPAIR;
 }
 
+libgnss::PPPProcessor::PPPConfig::ClasPhaseBiasValuePolicy parseClasPhaseBiasValuePolicy(
+    const std::string& value) {
+    using Policy = libgnss::PPPProcessor::PPPConfig::ClasPhaseBiasValuePolicy;
+    if (value == "phase-bias-only") {
+        return Policy::PHASE_BIAS_ONLY;
+    }
+    if (value == "compensation-only") {
+        return Policy::COMPENSATION_ONLY;
+    }
+    return Policy::FULL;
+}
+
+libgnss::PPPProcessor::PPPConfig::ClasPhaseBiasReferenceTimePolicy
+parseClasPhaseBiasReferenceTimePolicy(const std::string& value) {
+    using Policy = libgnss::PPPProcessor::PPPConfig::ClasPhaseBiasReferenceTimePolicy;
+    if (value == "clock-reference") {
+        return Policy::CLOCK_REFERENCE;
+    }
+    if (value == "observation-epoch") {
+        return Policy::OBSERVATION_EPOCH;
+    }
+    return Policy::PHASE_BIAS_REFERENCE;
+}
+
 libgnss::PPPProcessor::PPPConfig::ClasSsrTimingPolicy parseClasSsrTimingPolicy(
     const std::string& value) {
     using Policy = libgnss::PPPProcessor::PPPConfig::ClasSsrTimingPolicy;
@@ -492,6 +540,10 @@ int main(int argc, char* argv[]) {
             parseClasCorrectionApplicationPolicy(options.clas_osr_application);
         ppp_config.clas_phase_continuity_policy =
             parseClasPhaseContinuityPolicy(options.clas_phase_continuity);
+        ppp_config.clas_phase_bias_value_policy =
+            parseClasPhaseBiasValuePolicy(options.clas_phase_bias_values);
+        ppp_config.clas_phase_bias_reference_time_policy =
+            parseClasPhaseBiasReferenceTimePolicy(options.clas_phase_bias_reference_time);
         ppp_config.clas_ssr_timing_policy =
             parseClasSsrTimingPolicy(options.clas_ssr_timing);
         ppp_config.clas_expanded_value_construction_policy =
@@ -652,6 +704,8 @@ int main(int argc, char* argv[]) {
                     << "  \"clas_epoch_policy\": \"" << jsonEscape(options.clas_epoch_policy) << "\",\n"
                     << "  \"clas_osr_application\": \"" << jsonEscape(options.clas_osr_application) << "\",\n"
                     << "  \"clas_phase_continuity\": \"" << jsonEscape(options.clas_phase_continuity) << "\",\n"
+                    << "  \"clas_phase_bias_values\": \"" << jsonEscape(options.clas_phase_bias_values) << "\",\n"
+                    << "  \"clas_phase_bias_reference_time\": \"" << jsonEscape(options.clas_phase_bias_reference_time) << "\",\n"
                     << "  \"clas_ssr_timing\": \"" << jsonEscape(options.clas_ssr_timing) << "\",\n"
                     << "  \"clas_expanded_values\": \"" << jsonEscape(options.clas_expanded_values) << "\",\n"
                     << "  \"clas_subtype12_values\": \"" << jsonEscape(options.clas_subtype12_values) << "\",\n"
@@ -707,6 +761,9 @@ int main(int argc, char* argv[]) {
             std::cout << "  CLAS epoch policy: " << options.clas_epoch_policy << "\n";
             std::cout << "  CLAS OSR application: " << options.clas_osr_application << "\n";
             std::cout << "  CLAS phase continuity: " << options.clas_phase_continuity << "\n";
+            std::cout << "  CLAS phase-bias values: " << options.clas_phase_bias_values << "\n";
+            std::cout << "  CLAS phase-bias reference time: "
+                      << options.clas_phase_bias_reference_time << "\n";
             std::cout << "  CLAS SSR timing: " << options.clas_ssr_timing << "\n";
             std::cout << "  CLAS expanded values: " << options.clas_expanded_values << "\n";
             std::cout << "  CLAS subtype-12 values: " << options.clas_subtype12_values << "\n";
