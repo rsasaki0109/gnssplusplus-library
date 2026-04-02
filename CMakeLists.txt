@@ -32,7 +32,10 @@ set(GNSS_SOURCES
     src/io/ubx.cpp
     src/core/solution.cpp
     src/core/types.cpp
+    src/algorithms/ppp_ar.cpp
     src/algorithms/ppp_atmosphere.cpp
+    src/algorithms/ppp_clas.cpp
+    src/algorithms/ppp_osr.cpp
     src/algorithms/ppp.cpp
 )
 
