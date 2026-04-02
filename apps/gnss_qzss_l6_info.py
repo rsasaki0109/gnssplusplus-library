@@ -36,6 +36,31 @@ CSSR_SUBTYPE_GRIDDED = 9
 CSSR_SUBTYPE_SERVICE_INFO = 10
 CSSR_SUBTYPE_COMBINED = 11
 CSSR_SUBTYPE_ATMOS = 12
+
+COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT = "lag-tolerant-union"
+COMPACT_SSR_FLUSH_POLICY_ORBIT_OR_CLOCK_ONLY = "orbit-or-clock-only"
+COMPACT_SSR_FLUSH_POLICY_ORBIT_AND_CLOCK_ONLY = "orbit-and-clock-only"
+COMPACT_SSR_FLUSH_POLICIES = (
+    COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
+    COMPACT_SSR_FLUSH_POLICY_ORBIT_OR_CLOCK_ONLY,
+    COMPACT_SSR_FLUSH_POLICY_ORBIT_AND_CLOCK_ONLY,
+)
+COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY = "stec-coeff-carry"
+COMPACT_ATMOS_MERGE_POLICY_NO_CARRY = "no-carry"
+COMPACT_ATMOS_MERGE_POLICY_NETWORK_LOCKED_STEC_COEFF_CARRY = "network-locked-stec-coeff-carry"
+COMPACT_ATMOS_MERGE_POLICIES = (
+    COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
+    COMPACT_ATMOS_MERGE_POLICY_NO_CARRY,
+    COMPACT_ATMOS_MERGE_POLICY_NETWORK_LOCKED_STEC_COEFF_CARRY,
+)
+COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION = "union"
+COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_GRIDDED_PRIORITY = "gridded-priority"
+COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_COMBINED_PRIORITY = "combined-priority"
+COMPACT_ATMOS_SUBTYPE_MERGE_POLICIES = (
+    COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION,
+    COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_GRIDDED_PRIORITY,
+    COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_COMBINED_PRIORITY,
+)
 SSR_UPDATE_INTERVALS = (
     1.0,
     2.0,
@@ -292,6 +317,7 @@ class CompactSSRCorrection:
     ura_sigma_m: float | None = None
     code_bias_m: dict[int, float] | None = None
     phase_bias_m: dict[int, float] | None = None
+    bias_network_id: int | None = None
     atmos_network_id: int | None = None
     atmos_trop_avail: int | None = None
     atmos_stec_avail: int | None = None
@@ -326,7 +352,9 @@ class CSSRDecoderState:
     pending_ura: dict[str, float] | None = None
     pending_code_bias: dict[str, dict[int, float]] | None = None
     pending_phase_bias: dict[str, dict[int, float]] | None = None
+    pending_bias_network_id: int | None = None
     pending_atmos: dict[str, str] | None = None
+    pending_atmos_subtypes: set[int] | None = None
     service_info_chunks: list[tuple[int, bytes, int]] | None = None
     service_packet_index: int = 0
 
@@ -556,7 +584,157 @@ def reset_pending_corrections(state: CSSRDecoderState) -> None:
     state.pending_ura = None
     state.pending_code_bias = None
     state.pending_phase_bias = None
-    state.pending_atmos = None
+    state.pending_bias_network_id = None
+    # Preserve STEC polynomial coefficients (c00, c01, c10, etc.) across epochs.
+    # These arrive from subtype 8 at ~30s intervals, while gridded residuals
+    # (subtype 9) arrive every second.  Without carry-forward the c00 terms
+    # would be lost between subtype-8 updates.
+    if state.pending_atmos is not None:
+        carry_forward = {k: v for k, v in state.pending_atmos.items()
+                         if "stec_c0" in k or "stec_c1" in k or "stec_c2" in k
+                         or "stec_type" in k or "stec_quality" in k
+                         or k == "atmos_network_id"}
+        state.pending_atmos = carry_forward if carry_forward else None
+    else:
+        state.pending_atmos = None
+    state.pending_atmos_subtypes = None
+
+
+def carry_forward_atmos_tokens(
+    atmos_tokens: dict[str, str] | None,
+    merge_policy: str,
+) -> dict[str, str] | None:
+    if merge_policy == COMPACT_ATMOS_MERGE_POLICY_NO_CARRY or atmos_tokens is None:
+        return None
+    if merge_policy not in COMPACT_ATMOS_MERGE_POLICIES:
+        raise ValueError(f"unsupported Compact SSR atmos merge policy: {merge_policy}")
+    carry_forward = {
+        key: value
+        for key, value in atmos_tokens.items()
+        if "stec_c0" in key
+        or "stec_c1" in key
+        or "stec_c2" in key
+        or "stec_type" in key
+        or "stec_quality" in key
+        or key == "atmos_network_id"
+    }
+    return carry_forward if carry_forward else None
+
+
+def reset_pending_corrections_with_policy(
+    state: CSSRDecoderState,
+    atmos_merge_policy: str,
+) -> None:
+    pending_atmos = state.pending_atmos
+    reset_pending_corrections(state)
+    state.pending_atmos = carry_forward_atmos_tokens(pending_atmos, atmos_merge_policy)
+
+
+def merge_pending_atmos(
+    state: CSSRDecoderState,
+    atmos_tokens: dict[str, str],
+    atmos_merge_policy: str,
+    atmos_subtype_merge_policy: str,
+    source_subtype: int,
+) -> None:
+    if atmos_merge_policy not in COMPACT_ATMOS_MERGE_POLICIES:
+        raise ValueError(f"unsupported Compact SSR atmos merge policy: {atmos_merge_policy}")
+    if atmos_subtype_merge_policy not in COMPACT_ATMOS_SUBTYPE_MERGE_POLICIES:
+        raise ValueError(
+            "unsupported Compact SSR atmos subtype merge policy: "
+            f"{atmos_subtype_merge_policy}"
+        )
+    pending_subtypes = set() if state.pending_atmos_subtypes is None else set(state.pending_atmos_subtypes)
+    if (
+        atmos_merge_policy == COMPACT_ATMOS_MERGE_POLICY_NETWORK_LOCKED_STEC_COEFF_CARRY
+        and state.pending_atmos is not None
+    ):
+        carried_network = state.pending_atmos.get("atmos_network_id")
+        incoming_network = atmos_tokens.get("atmos_network_id")
+        if (
+            carried_network is not None
+            and incoming_network is not None
+            and carried_network != incoming_network
+        ):
+            state.pending_atmos = None
+            pending_subtypes.clear()
+    if (
+        atmos_subtype_merge_policy == COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_COMBINED_PRIORITY
+        and CSSR_SUBTYPE_ATMOS in pending_subtypes
+        and source_subtype in {CSSR_SUBTYPE_STEC, CSSR_SUBTYPE_GRIDDED}
+    ):
+        return
+    if (
+        atmos_subtype_merge_policy == COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_GRIDDED_PRIORITY
+        and source_subtype == CSSR_SUBTYPE_STEC
+        and state.pending_atmos is not None
+        and any(
+            key == "atmos_trop_residuals_m"
+            or key == "atmos_trop_hs_residuals_m"
+            or key == "atmos_trop_wet_residuals_m"
+            or key.startswith("atmos_stec_residuals_tecu:")
+            for key in state.pending_atmos
+        )
+    ):
+        return
+    incoming_satellites = {
+        key.split(":", 1)[1]
+        for key in atmos_tokens
+        if key.startswith("atmos_stec_") and ":" in key
+    }
+    if state.pending_atmos is not None:
+        if (
+            atmos_subtype_merge_policy == COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_COMBINED_PRIORITY
+            and source_subtype == CSSR_SUBTYPE_ATMOS
+        ):
+            state.pending_atmos = None
+            pending_subtypes.clear()
+        elif (
+            atmos_subtype_merge_policy == COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_GRIDDED_PRIORITY
+            and source_subtype in {CSSR_SUBTYPE_GRIDDED, CSSR_SUBTYPE_ATMOS}
+            and any(
+                key == "atmos_trop_residuals_m"
+                or key == "atmos_trop_hs_residuals_m"
+                or key == "atmos_trop_wet_residuals_m"
+                or key.startswith("atmos_stec_residuals_tecu:")
+                for key in atmos_tokens
+            )
+        ):
+            keys_to_drop = [
+                key
+                for key in state.pending_atmos
+                if key in {
+                    "atmos_trop_type",
+                    "atmos_trop_t00_m",
+                    "atmos_trop_t01_m_per_deg",
+                    "atmos_trop_t10_m_per_deg",
+                    "atmos_trop_t11_m_per_deg2",
+                }
+                or (
+                    ":" in key
+                    and key.startswith(
+                        (
+                            "atmos_stec_type:",
+                            "atmos_stec_quality:",
+                            "atmos_stec_c00_tecu:",
+                            "atmos_stec_c01_tecu_per_deg:",
+                            "atmos_stec_c10_tecu_per_deg:",
+                            "atmos_stec_c11_tecu_per_deg2:",
+                            "atmos_stec_c02_tecu_per_deg2:",
+                            "atmos_stec_c20_tecu_per_deg2:",
+                        )
+                    )
+                    and key.split(":", 1)[1] in incoming_satellites
+                )
+            ]
+            for key in keys_to_drop:
+                state.pending_atmos.pop(key, None)
+    if state.pending_atmos is None:
+        state.pending_atmos = dict(atmos_tokens)
+    else:
+        state.pending_atmos.update(atmos_tokens)
+    pending_subtypes.add(source_subtype)
+    state.pending_atmos_subtypes = pending_subtypes
 
 
 def ensure_pending_epoch(
@@ -564,10 +742,11 @@ def ensure_pending_epoch(
     tow: int,
     iod: int,
     udi_seconds: float,
+    atmos_merge_policy: str,
 ) -> None:
     if state.pending_tow == tow and state.pending_iod == iod:
         return
-    reset_pending_corrections(state)
+    reset_pending_corrections_with_policy(state, atmos_merge_policy)
     state.pending_tow = tow
     state.pending_iod = iod
     state.pending_udi_seconds = udi_seconds
@@ -576,13 +755,15 @@ def ensure_pending_epoch(
     state.pending_ura = {}
     state.pending_code_bias = {}
     state.pending_phase_bias = {}
-    state.pending_atmos = None
+    # pending_atmos is intentionally NOT reset here — the carry-forward
+    # in reset_pending_corrections preserves STEC polynomial coefficients.
 
 
 def flush_pending_corrections(
     state: CSSRDecoderState,
     gps_week: int | None,
     satellites: list[CSSRSatellite],
+    flush_policy: str = COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
 ) -> list[CompactSSRCorrection]:
     if gps_week is None or state.pending_tow is None:
         reset_pending_corrections(state)
@@ -595,9 +776,31 @@ def flush_pending_corrections(
     atmos = state.pending_atmos or {}
     sat_index = {satellite.sat: satellite for satellite in satellites}
     rows: list[CompactSSRCorrection] = []
-    for sat_token in sorted(
-        set(orbit_map) | set(clock_map) | set(ura_map) | set(code_bias_map) | set(phase_bias_map)
-    ):
+    # Include satellites from atmosphere data that may not have orbit/clock corrections
+    atmos_sat_tokens: set[str] = set()
+    if atmos:
+        for key in atmos:
+            # atmos keys like "atmos_stec_c00_tecu:G01" contain satellite identifiers after ':'
+            if ":" in key:
+                sat_part = key.split(":")[-1]
+                if sat_part in sat_index:
+                    atmos_sat_tokens.add(sat_part)
+    if flush_policy == COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT:
+        sat_tokens = (
+            set(orbit_map)
+            | set(clock_map)
+            | set(ura_map)
+            | set(code_bias_map)
+            | set(phase_bias_map)
+            | atmos_sat_tokens
+        )
+    elif flush_policy == COMPACT_SSR_FLUSH_POLICY_ORBIT_OR_CLOCK_ONLY:
+        sat_tokens = set(orbit_map) | set(clock_map)
+    elif flush_policy == COMPACT_SSR_FLUSH_POLICY_ORBIT_AND_CLOCK_ONLY:
+        sat_tokens = set(orbit_map) & set(clock_map)
+    else:
+        raise ValueError(f"unsupported Compact SSR flush policy: {flush_policy}")
+    for sat_token in sorted(sat_tokens):
         satellite = sat_index.get(sat_token)
         if satellite is None:
             continue
@@ -618,6 +821,7 @@ def flush_pending_corrections(
                 ura_sigma_m=ura_map.get(sat_token),
                 code_bias_m=dict(code_bias) if code_bias else None,
                 phase_bias_m=dict(phase_bias) if phase_bias else None,
+                bias_network_id=state.pending_bias_network_id,
                 atmos_network_id=int(atmos["atmos_network_id"]) if "atmos_network_id" in atmos else None,
                 atmos_trop_avail=int(atmos["atmos_trop_avail"]) if "atmos_trop_avail" in atmos else None,
                 atmos_stec_avail=int(atmos["atmos_stec_avail"]) if "atmos_stec_avail" in atmos else None,
@@ -639,6 +843,7 @@ def decode_cssr_orbit_message(
     payload: bytes,
     bit_offset: int,
     state: CSSRDecoderState,
+    atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
 ) -> tuple[CSSRMessage, int]:
     mask = require_mask_state(state, CSSR_SUBTYPE_ORBIT)
     header, bit_offset = decode_cssr_header(payload, bit_offset, CSSR_SUBTYPE_ORBIT, state)
@@ -646,7 +851,13 @@ def decode_cssr_orbit_message(
         raise ValueError(
             f"CSSR subtype 2 iod mismatch: mask={mask.iod} message={int(header['iod'])}"
         )
-    ensure_pending_epoch(state, int(header["tow"]), int(header["iod"]), float(header["udi_seconds"]))
+    ensure_pending_epoch(
+        state,
+        int(header["tow"]),
+        int(header["iod"]),
+        float(header["udi_seconds"]),
+        atmos_merge_policy,
+    )
     assert state.pending_orbit is not None
     for satellite in mask.satellites:
         orbit_iode_bits = 10 if satellite.system == "E" else 8
@@ -679,6 +890,8 @@ def decode_cssr_clock_message(
     bit_offset: int,
     state: CSSRDecoderState,
     gps_week: int | None,
+    flush_policy: str = COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
+    atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
 ) -> tuple[CSSRMessage, list[CompactSSRCorrection], int]:
     mask = require_mask_state(state, CSSR_SUBTYPE_CLOCK)
     header, bit_offset = decode_cssr_header(payload, bit_offset, CSSR_SUBTYPE_CLOCK, state)
@@ -686,14 +899,20 @@ def decode_cssr_clock_message(
         raise ValueError(
             f"CSSR subtype 3 iod mismatch: mask={mask.iod} message={int(header['iod'])}"
         )
-    ensure_pending_epoch(state, int(header["tow"]), int(header["iod"]), float(header["udi_seconds"]))
+    ensure_pending_epoch(
+        state,
+        int(header["tow"]),
+        int(header["iod"]),
+        float(header["udi_seconds"]),
+        atmos_merge_policy,
+    )
     assert state.pending_clock is not None
     for satellite in mask.satellites:
         dclock_m, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.0016)
         state.pending_clock[satellite.sat] = dclock_m
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
-        corrections = flush_pending_corrections(state, gps_week, mask.satellites)
+        corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
     state.message_index += 1
     return (
         CSSRMessage(
@@ -720,6 +939,8 @@ def decode_cssr_code_bias_message(
     bit_offset: int,
     state: CSSRDecoderState,
     gps_week: int | None,
+    flush_policy: str = COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
+    atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
 ) -> tuple[CSSRMessage, list[CompactSSRCorrection], int]:
     mask = require_mask_state(state, CSSR_SUBTYPE_CODE_BIAS)
     header, bit_offset = decode_cssr_header(payload, bit_offset, CSSR_SUBTYPE_CODE_BIAS, state)
@@ -727,7 +948,13 @@ def decode_cssr_code_bias_message(
         raise ValueError(
             f"CSSR subtype 4 iod mismatch: mask={mask.iod} message={int(header['iod'])}"
         )
-    ensure_pending_epoch(state, int(header["tow"]), int(header["iod"]), float(header["udi_seconds"]))
+    ensure_pending_epoch(
+        state,
+        int(header["tow"]),
+        int(header["iod"]),
+        float(header["udi_seconds"]),
+        atmos_merge_policy,
+    )
     assert state.pending_code_bias is not None
     mapped_count = 0
     for satellite in mask.satellites:
@@ -741,7 +968,7 @@ def decode_cssr_code_bias_message(
             mapped_count += 1
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
-        corrections = flush_pending_corrections(state, gps_week, mask.satellites)
+        corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
     state.message_index += 1
     return (
         CSSRMessage(
@@ -768,6 +995,8 @@ def decode_cssr_code_phase_bias_message(
     bit_offset: int,
     state: CSSRDecoderState,
     gps_week: int | None,
+    flush_policy: str = COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
+    atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
 ) -> tuple[CSSRMessage, list[CompactSSRCorrection], int]:
     mask = require_mask_state(state, CSSR_SUBTYPE_CODE_PHASE_BIAS)
     header, bit_offset = decode_cssr_header(payload, bit_offset, CSSR_SUBTYPE_CODE_PHASE_BIAS, state)
@@ -789,9 +1018,16 @@ def decode_cssr_code_phase_bias_message(
         selected_mask = read_bits(payload, bit_offset, mask.satellite_count)
         bit_offset += mask.satellite_count
 
-    ensure_pending_epoch(state, int(header["tow"]), int(header["iod"]), float(header["udi_seconds"]))
+    ensure_pending_epoch(
+        state,
+        int(header["tow"]),
+        int(header["iod"]),
+        float(header["udi_seconds"]),
+        atmos_merge_policy,
+    )
     assert state.pending_code_bias is not None
     assert state.pending_phase_bias is not None
+    state.pending_bias_network_id = network_id if network_bias_correction else None
 
     mapped_code = 0
     mapped_phase = 0
@@ -818,7 +1054,7 @@ def decode_cssr_code_phase_bias_message(
 
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
-        corrections = flush_pending_corrections(state, gps_week, mask.satellites)
+        corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
     state.message_index += 1
     return (
         CSSRMessage(
@@ -849,6 +1085,8 @@ def decode_cssr_phase_bias_message(
     bit_offset: int,
     state: CSSRDecoderState,
     gps_week: int | None,
+    flush_policy: str = COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
+    atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
 ) -> tuple[CSSRMessage, list[CompactSSRCorrection], int]:
     mask = require_mask_state(state, CSSR_SUBTYPE_PHASE_BIAS)
     header, bit_offset = decode_cssr_header(payload, bit_offset, CSSR_SUBTYPE_PHASE_BIAS, state)
@@ -857,7 +1095,13 @@ def decode_cssr_phase_bias_message(
             f"CSSR subtype 5 iod mismatch: mask={mask.iod} message={int(header['iod'])}"
         )
 
-    ensure_pending_epoch(state, int(header["tow"]), int(header["iod"]), float(header["udi_seconds"]))
+    ensure_pending_epoch(
+        state,
+        int(header["tow"]),
+        int(header["iod"]),
+        float(header["udi_seconds"]),
+        atmos_merge_policy,
+    )
     assert state.pending_phase_bias is not None
 
     mapped_phase = 0
@@ -873,7 +1117,7 @@ def decode_cssr_phase_bias_message(
 
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
-        corrections = flush_pending_corrections(state, gps_week, mask.satellites)
+        corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
     state.message_index += 1
     return (
         CSSRMessage(
@@ -900,6 +1144,8 @@ def decode_cssr_ura_message(
     bit_offset: int,
     state: CSSRDecoderState,
     gps_week: int | None,
+    flush_policy: str = COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
+    atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
 ) -> tuple[CSSRMessage, list[CompactSSRCorrection], int]:
     mask = require_mask_state(state, CSSR_SUBTYPE_URA)
     header, bit_offset = decode_cssr_header(payload, bit_offset, CSSR_SUBTYPE_URA, state)
@@ -907,7 +1153,13 @@ def decode_cssr_ura_message(
         raise ValueError(
             f"CSSR subtype 7 iod mismatch: mask={mask.iod} message={int(header['iod'])}"
         )
-    ensure_pending_epoch(state, int(header["tow"]), int(header["iod"]), float(header["udi_seconds"]))
+    ensure_pending_epoch(
+        state,
+        int(header["tow"]),
+        int(header["iod"]),
+        float(header["udi_seconds"]),
+        atmos_merge_policy,
+    )
     assert state.pending_ura is not None
     for satellite in mask.satellites:
         ura_index = read_bits(payload, bit_offset, 6)
@@ -915,7 +1167,7 @@ def decode_cssr_ura_message(
         state.pending_ura[satellite.sat] = ura_meters_from_ssr_index(ura_index)
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
-        corrections = flush_pending_corrections(state, gps_week, mask.satellites)
+        corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
     state.message_index += 1
     return (
         CSSRMessage(
@@ -941,6 +1193,8 @@ def decode_cssr_stec_message(
     payload: bytes,
     bit_offset: int,
     state: CSSRDecoderState,
+    atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
+    atmos_subtype_merge_policy: str = COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION,
 ) -> tuple[CSSRMessage, int]:
     mask = require_mask_state(state, CSSR_SUBTYPE_STEC)
     header, bit_offset = decode_cssr_header(payload, bit_offset, CSSR_SUBTYPE_STEC, state)
@@ -1005,9 +1259,21 @@ def decode_cssr_stec_message(
                     f"{stec_c20_tecu_per_deg2:.6f}"
                 )
 
-    ensure_pending_epoch(state, int(header["tow"]), int(header["iod"]), float(header["udi_seconds"]))
+    ensure_pending_epoch(
+        state,
+        int(header["tow"]),
+        int(header["iod"]),
+        float(header["udi_seconds"]),
+        atmos_merge_policy,
+    )
     atmos_tokens["atmos_selected_satellites"] = str(selected_satellites)
-    state.pending_atmos = atmos_tokens
+    merge_pending_atmos(
+        state,
+        atmos_tokens,
+        atmos_merge_policy,
+        atmos_subtype_merge_policy,
+        CSSR_SUBTYPE_STEC,
+    )
 
     state.message_index += 1
     return (
@@ -1032,6 +1298,8 @@ def decode_cssr_gridded_message(
     payload: bytes,
     bit_offset: int,
     state: CSSRDecoderState,
+    atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
+    atmos_subtype_merge_policy: str = COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION,
 ) -> tuple[CSSRMessage, int]:
     mask = require_mask_state(state, CSSR_SUBTYPE_GRIDDED)
     header, bit_offset = decode_cssr_header(payload, bit_offset, CSSR_SUBTYPE_GRIDDED, state)
@@ -1099,8 +1367,20 @@ def decode_cssr_gridded_message(
         atmos_tokens[f"atmos_stec_residual_size:{sat_key}"] = str(stec_residual_range)
         atmos_tokens[f"atmos_stec_residuals_tecu:{sat_key}"] = ";".join(stec_residuals_tecu[sat_key])
 
-    ensure_pending_epoch(state, int(header["tow"]), int(header["iod"]), float(header["udi_seconds"]))
-    state.pending_atmos = atmos_tokens
+    ensure_pending_epoch(
+        state,
+        int(header["tow"]),
+        int(header["iod"]),
+        float(header["udi_seconds"]),
+        atmos_merge_policy,
+    )
+    merge_pending_atmos(
+        state,
+        atmos_tokens,
+        atmos_merge_policy,
+        atmos_subtype_merge_policy,
+        CSSR_SUBTYPE_GRIDDED,
+    )
 
     state.message_index += 1
     return (
@@ -1199,6 +1479,8 @@ def decode_cssr_combined_message(
     bit_offset: int,
     state: CSSRDecoderState,
     gps_week: int | None,
+    flush_policy: str = COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
+    atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
 ) -> tuple[CSSRMessage, list[CompactSSRCorrection], int]:
     mask = require_mask_state(state, CSSR_SUBTYPE_COMBINED)
     header, bit_offset = decode_cssr_header(payload, bit_offset, CSSR_SUBTYPE_COMBINED, state)
@@ -1219,7 +1501,13 @@ def decode_cssr_combined_message(
         bit_offset += 5
         selected_mask = read_bits(payload, bit_offset, mask.satellite_count)
         bit_offset += mask.satellite_count
-    ensure_pending_epoch(state, int(header["tow"]), int(header["iod"]), float(header["udi_seconds"]))
+    ensure_pending_epoch(
+        state,
+        int(header["tow"]),
+        int(header["iod"]),
+        float(header["udi_seconds"]),
+        atmos_merge_policy,
+    )
     assert state.pending_orbit is not None
     assert state.pending_clock is not None
     selected_satellites = 0
@@ -1243,7 +1531,7 @@ def decode_cssr_combined_message(
         state.pending_clock[satellite.sat] = dclock_m
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
-        corrections = flush_pending_corrections(state, gps_week, mask.satellites)
+        corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
     state.message_index += 1
     message = CSSRMessage(
         subframe_index=subframe.index,
@@ -1269,6 +1557,8 @@ def decode_cssr_atmos_message(
     payload: bytes,
     bit_offset: int,
     state: CSSRDecoderState,
+    atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
+    atmos_subtype_merge_policy: str = COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION,
 ) -> tuple[CSSRMessage, int]:
     mask = require_mask_state(state, CSSR_SUBTYPE_ATMOS)
     header, bit_offset = decode_cssr_header(payload, bit_offset, CSSR_SUBTYPE_ATMOS, state)
@@ -1299,6 +1589,7 @@ def decode_cssr_atmos_message(
         atmos_tokens["atmos_trop_quality"] = str(trop_quality)
         bit_offset += 6
     if (trop_avail & 0x01) != 0:
+        atmos_tokens["atmos_trop_source_subtype"] = "12"
         trop_type = read_bits(payload, bit_offset, 2)
         atmos_tokens["atmos_trop_type"] = str(trop_type)
         bit_offset += 2
@@ -1348,6 +1639,7 @@ def decode_cssr_atmos_message(
             atmos_tokens[f"atmos_stec_quality:{sat_key}"] = str(stec_quality)
             bit_offset += 6
             if (stec_avail & 0x01) != 0:
+                atmos_tokens[f"atmos_stec_source_subtype:{sat_key}"] = "12"
                 stec_type = read_bits(payload, bit_offset, 2)
                 atmos_tokens[f"atmos_stec_type:{sat_key}"] = str(stec_type)
                 bit_offset += 2
@@ -1399,9 +1691,21 @@ def decode_cssr_atmos_message(
                     )
                 atmos_tokens[f"atmos_stec_residuals_tecu:{sat_key}"] = ";".join(stec_residuals_tecu)
 
-    ensure_pending_epoch(state, int(header["tow"]), int(header["iod"]), float(header["udi_seconds"]))
+    ensure_pending_epoch(
+        state,
+        int(header["tow"]),
+        int(header["iod"]),
+        float(header["udi_seconds"]),
+        atmos_merge_policy,
+    )
     atmos_tokens["atmos_selected_satellites"] = str(selected_satellites)
-    state.pending_atmos = atmos_tokens
+    merge_pending_atmos(
+        state,
+        atmos_tokens,
+        atmos_merge_policy,
+        atmos_subtype_merge_policy,
+        CSSR_SUBTYPE_ATMOS,
+    )
 
     state.message_index += 1
     return (
@@ -1427,6 +1731,9 @@ def decode_cssr_atmos_message(
 def decode_cssr_messages(
     subframes: list[L6Subframe],
     gps_week: int | None = None,
+    flush_policy: str = COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
+    atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
+    atmos_subtype_merge_policy: str = COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION,
 ) -> tuple[list[CSSRMessage], list[CompactSSRCorrection], list[CSSRServiceInfoPacket]]:
     messages: list[CSSRMessage] = []
     corrections: list[CompactSSRCorrection] = []
@@ -1446,7 +1753,12 @@ def decode_cssr_messages(
             if subtype == CSSR_SUBTYPE_MASK:
                 if state.mask is not None:
                     corrections.extend(
-                        flush_pending_corrections(state, gps_week, state.mask.satellites)
+                        flush_pending_corrections(
+                            state,
+                            gps_week,
+                            state.mask.satellites,
+                            flush_policy,
+                        )
                     )
                 message, bit_offset = decode_cssr_mask_message(subframe, subframe.data_part, bit_offset, state)
             elif subtype == CSSR_SUBTYPE_ORBIT:
@@ -1455,6 +1767,7 @@ def decode_cssr_messages(
                     subframe.data_part,
                     bit_offset,
                     state,
+                    atmos_merge_policy,
                 )
             elif subtype == CSSR_SUBTYPE_CLOCK:
                 message, message_corrections, bit_offset = decode_cssr_clock_message(
@@ -1463,6 +1776,8 @@ def decode_cssr_messages(
                     bit_offset,
                     state,
                     gps_week,
+                    flush_policy,
+                    atmos_merge_policy,
                 )
                 corrections.extend(message_corrections)
             elif subtype == CSSR_SUBTYPE_CODE_BIAS:
@@ -1472,6 +1787,8 @@ def decode_cssr_messages(
                     bit_offset,
                     state,
                     gps_week,
+                    flush_policy,
+                    atmos_merge_policy,
                 )
                 corrections.extend(message_corrections)
             elif subtype == CSSR_SUBTYPE_PHASE_BIAS:
@@ -1481,6 +1798,8 @@ def decode_cssr_messages(
                     bit_offset,
                     state,
                     gps_week,
+                    flush_policy,
+                    atmos_merge_policy,
                 )
                 corrections.extend(message_corrections)
             elif subtype == CSSR_SUBTYPE_CODE_PHASE_BIAS:
@@ -1490,6 +1809,8 @@ def decode_cssr_messages(
                     bit_offset,
                     state,
                     gps_week,
+                    flush_policy,
+                    atmos_merge_policy,
                 )
                 corrections.extend(message_corrections)
             elif subtype == CSSR_SUBTYPE_URA:
@@ -1499,6 +1820,8 @@ def decode_cssr_messages(
                     bit_offset,
                     state,
                     gps_week,
+                    flush_policy,
+                    atmos_merge_policy,
                 )
                 corrections.extend(message_corrections)
             elif subtype == CSSR_SUBTYPE_STEC:
@@ -1507,6 +1830,8 @@ def decode_cssr_messages(
                     subframe.data_part,
                     bit_offset,
                     state,
+                    atmos_merge_policy,
+                    atmos_subtype_merge_policy,
                 )
             elif subtype == CSSR_SUBTYPE_GRIDDED:
                 message, bit_offset = decode_cssr_gridded_message(
@@ -1514,6 +1839,8 @@ def decode_cssr_messages(
                     subframe.data_part,
                     bit_offset,
                     state,
+                    atmos_merge_policy,
+                    atmos_subtype_merge_policy,
                 )
             elif subtype == CSSR_SUBTYPE_SERVICE_INFO:
                 message, packets, bit_offset = decode_cssr_service_info_message(
@@ -1530,6 +1857,8 @@ def decode_cssr_messages(
                     bit_offset,
                     state,
                     gps_week,
+                    flush_policy,
+                    atmos_merge_policy,
                 )
                 corrections.extend(message_corrections)
             elif subtype == CSSR_SUBTYPE_ATMOS:
@@ -1538,15 +1867,22 @@ def decode_cssr_messages(
                     subframe.data_part,
                     bit_offset,
                     state,
+                    atmos_merge_policy,
+                    atmos_subtype_merge_policy,
                 )
             else:
                 break
             message.message_bits = bit_offset - message_start
             messages.append(message)
-            if not message.sync:
-                break
     if state.mask is not None:
-        corrections.extend(flush_pending_corrections(state, gps_week, state.mask.satellites))
+        corrections.extend(
+            flush_pending_corrections(
+                state,
+                gps_week,
+                state.mask.satellites,
+                flush_policy,
+            )
+        )
     if state.service_info_chunks:
         service_info_packets.extend(flush_service_info_packets(state, state.service_info_chunks[-1][0]))
     return messages, corrections, service_info_packets
@@ -1593,7 +1929,7 @@ def write_compact_corrections(path: Path, corrections: list[CompactSSRCorrection
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="ascii", newline="") as handle:
         handle.write(
-            "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,atmos_<name>=<value>...]\n"
+            "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]\n"
         )
         writer = csv.writer(handle)
         for correction in corrections:
@@ -1616,6 +1952,8 @@ def write_compact_corrections(path: Path, corrections: list[CompactSSRCorrection
             if correction.phase_bias_m:
                 for signal_id in sorted(correction.phase_bias_m):
                     row.append(f"pbias:{signal_id}={correction.phase_bias_m[signal_id]:.6f}")
+            if correction.bias_network_id is not None:
+                row.append(f"bias_network_id={correction.bias_network_id}")
             if correction.atmos_network_id is not None:
                 row.append(f"atmos_network_id={correction.atmos_network_id}")
             if correction.atmos_trop_avail is not None:
@@ -1806,6 +2144,33 @@ def parse_args() -> argparse.Namespace:
         help="Optional GPS week used when exporting Compact SSR correction rows.",
     )
     parser.add_argument(
+        "--compact-flush-policy",
+        choices=COMPACT_SSR_FLUSH_POLICIES,
+        default=COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
+        help=(
+            "Compact SSR row emission policy when materializing expanded rows "
+            "(default: lag-tolerant-union)."
+        ),
+    )
+    parser.add_argument(
+        "--compact-atmos-merge-policy",
+        choices=COMPACT_ATMOS_MERGE_POLICIES,
+        default=COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
+        help=(
+            "Compact SSR atmosphere-token merge policy across subtype/epoch boundaries "
+            "(default: stec-coeff-carry)."
+        ),
+    )
+    parser.add_argument(
+        "--compact-atmos-subtype-merge-policy",
+        choices=COMPACT_ATMOS_SUBTYPE_MERGE_POLICIES,
+        default=COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION,
+        help=(
+            "Compact SSR atmosphere subtype precedence policy within one pending epoch "
+            "(default: union)."
+        ),
+    )
+    parser.add_argument(
         "--extract-data-parts",
         type=Path,
         default=None,
@@ -1945,6 +2310,9 @@ def main() -> int:
         compact_messages, compact_corrections, service_info_packets = decode_cssr_messages(
             assembled_subframes,
             gps_week=args.gps_week,
+            flush_policy=args.compact_flush_policy,
+            atmos_merge_policy=args.compact_atmos_merge_policy,
+            atmos_subtype_merge_policy=args.compact_atmos_subtype_merge_policy,
         )
         for message in compact_messages:
             print(

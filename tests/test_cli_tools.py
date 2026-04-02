@@ -4929,6 +4929,419 @@ class CLIToolsTest(unittest.TestCase):
             messages_csv = messages_path.read_text(encoding="ascii")
             self.assertIn(",5,518400,", messages_csv)
 
+    def test_qzss_l6_info_compact_flush_policy_drops_phase_bias_only_rows_without_orbit_or_clock(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_flush_phase_only_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_phase_bias_only.bin"
+            corrections_path = temp_root / "session_phase_bias_only_corrections.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_phase_bias_message(
+                            tow_delta=0, iod=3, phase_bias_m=0.015, sync=False
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(corrections_path),
+                "--gps-week",
+                "2200",
+                "--compact-flush-policy",
+                "orbit-or-clock-only",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertEqual(
+                corrections_csv.strip(),
+                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
+            )
+
+    def test_qzss_l6_info_compact_flush_policy_can_require_both_orbit_and_clock(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_flush_orbit_clock_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_orbit_only.bin"
+            orbit_or_clock_path = temp_root / "orbit_or_clock.csv"
+            orbit_and_clock_path = temp_root / "orbit_and_clock.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_orbit_message(
+                            tow_delta=0, iod=3, dx=0.16, dy=0.32, dz=-0.32, sync=False
+                        ),
+                    ]
+                )
+            )
+
+            orbit_or_clock = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(orbit_or_clock_path),
+                "--gps-week",
+                "2200",
+                "--compact-flush-policy",
+                "orbit-or-clock-only",
+            )
+            self.assertEqual(orbit_or_clock.returncode, 0, msg=orbit_or_clock.stderr)
+            orbit_or_clock_csv = orbit_or_clock_path.read_text(encoding="ascii")
+            self.assertIn("0.160000", orbit_or_clock_csv)
+
+            orbit_and_clock = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(orbit_and_clock_path),
+                "--gps-week",
+                "2200",
+                "--compact-flush-policy",
+                "orbit-and-clock-only",
+            )
+            self.assertEqual(orbit_and_clock.returncode, 0, msg=orbit_and_clock.stderr)
+            orbit_and_clock_csv = orbit_and_clock_path.read_text(encoding="ascii")
+            self.assertEqual(
+                orbit_and_clock_csv.strip(),
+                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
+            )
+
+    def test_qzss_l6_info_compact_atmos_merge_policy_no_carry_drops_stec_coefficients_between_epochs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_no_carry_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_no_carry.bin"
+            default_path = temp_root / "default.csv"
+            no_carry_path = temp_root / "no_carry.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_stec_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            selected_satellites=1,
+                            stec_type=0,
+                            stec_c00_tecu=1.5,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0,
+                            iod=3,
+                            prn=3,
+                            dclock_m=0.025,
+                            sync=False,
+                        ),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518430, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=30,
+                            iod=3,
+                            prn=3,
+                            dclock_m=0.025,
+                            sync=False,
+                        ),
+                    ]
+                )
+            )
+
+            default_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(default_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
+            default_second_row = next(
+                line
+                for line in default_path.read_text(encoding="ascii").splitlines()
+                if line.startswith("2200,518430.000")
+            )
+            self.assertIn("atmos_stec_c00_tecu:G03=1.500000", default_second_row)
+
+            no_carry_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(no_carry_path),
+                "--gps-week",
+                "2200",
+                "--compact-atmos-merge-policy",
+                "no-carry",
+            )
+            self.assertEqual(no_carry_result.returncode, 0, msg=no_carry_result.stderr)
+            no_carry_second_row = next(
+                line
+                for line in no_carry_path.read_text(encoding="ascii").splitlines()
+                if line.startswith("2200,518430.000")
+            )
+            self.assertNotIn("atmos_stec_c00_tecu:G03=1.500000", no_carry_second_row)
+
+    def test_qzss_l6_info_compact_atmos_merge_policy_network_locked_resets_carried_stec_coefficients(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_network_locked_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_network_locked.bin"
+            default_path = temp_root / "default.csv"
+            network_locked_path = temp_root / "network_locked.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_stec_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            selected_satellites=1,
+                            stec_type=0,
+                            stec_c00_tecu=1.5,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0,
+                            iod=3,
+                            prn=3,
+                            dclock_m=0.025,
+                            sync=False,
+                        ),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518430, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_gridded_message(
+                            tow_delta=30,
+                            iod=3,
+                            sync=True,
+                            network_id=9,
+                            selected_satellites=1,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=30,
+                            iod=3,
+                            prn=3,
+                            dclock_m=0.025,
+                            sync=False,
+                        ),
+                    ]
+                )
+            )
+
+            default_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(default_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
+            default_second_row = next(
+                line
+                for line in default_path.read_text(encoding="ascii").splitlines()
+                if line.startswith("2200,518430.000")
+            )
+            self.assertIn("atmos_network_id=9", default_second_row)
+            self.assertIn("atmos_stec_c00_tecu:G03=1.500000", default_second_row)
+
+            network_locked_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(network_locked_path),
+                "--gps-week",
+                "2200",
+                "--compact-atmos-merge-policy",
+                "network-locked-stec-coeff-carry",
+            )
+            self.assertEqual(network_locked_result.returncode, 0, msg=network_locked_result.stderr)
+            network_locked_second_row = next(
+                line
+                for line in network_locked_path.read_text(encoding="ascii").splitlines()
+                if line.startswith("2200,518430.000")
+            )
+            self.assertIn("atmos_network_id=9", network_locked_second_row)
+            self.assertNotIn("atmos_stec_c00_tecu:G03=1.500000", network_locked_second_row)
+
+    def test_qzss_l6_info_compact_atmos_subtype_merge_policy_gridded_priority_drops_stec_polynomials(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_gridded_priority_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_gridded_priority.bin"
+            default_path = temp_root / "default.csv"
+            priority_path = temp_root / "gridded_priority.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_stec_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            selected_satellites=1,
+                            stec_type=0,
+                            stec_c00_tecu=1.5,
+                        ),
+                        build_qzss_cssr_gridded_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            selected_satellites=1,
+                            stec_residuals_tecu=(0.24,),
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0,
+                            iod=3,
+                            prn=3,
+                            dclock_m=0.025,
+                            sync=False,
+                        ),
+                    ]
+                )
+            )
+
+            default_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(default_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
+            default_row = next(
+                line
+                for line in default_path.read_text(encoding="ascii").splitlines()
+                if line.startswith("2200,518400.000")
+            )
+            self.assertIn("atmos_stec_c00_tecu:G03=1.500000", default_row)
+            self.assertIn("atmos_stec_residuals_tecu:G03=0.240000", default_row)
+
+            priority_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(priority_path),
+                "--gps-week",
+                "2200",
+                "--compact-atmos-subtype-merge-policy",
+                "gridded-priority",
+            )
+            self.assertEqual(priority_result.returncode, 0, msg=priority_result.stderr)
+            priority_row = next(
+                line
+                for line in priority_path.read_text(encoding="ascii").splitlines()
+                if line.startswith("2200,518400.000")
+            )
+            self.assertNotIn("atmos_stec_c00_tecu:G03=1.500000", priority_row)
+            self.assertIn("atmos_stec_residuals_tecu:G03=0.240000", priority_row)
+
+    def test_qzss_l6_info_compact_atmos_subtype_merge_policy_combined_priority_replaces_partial_families(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_combined_priority_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_combined_priority.bin"
+            default_path = temp_root / "default.csv"
+            priority_path = temp_root / "combined_priority.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_stec_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            selected_satellites=1,
+                            stec_type=0,
+                            stec_c00_tecu=1.5,
+                        ),
+                        build_qzss_cssr_gridded_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            selected_satellites=1,
+                            stec_residuals_tecu=(0.24,),
+                        ),
+                        build_qzss_cssr_atmos_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            trop_avail=0,
+                            stec_avail=1,
+                            selected_satellites=1,
+                            stec_type=0,
+                            stec_c00_tecu=2.5,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0,
+                            iod=3,
+                            prn=3,
+                            dclock_m=0.025,
+                            sync=False,
+                        ),
+                    ]
+                )
+            )
+
+            default_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(default_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
+            default_row = next(
+                line
+                for line in default_path.read_text(encoding="ascii").splitlines()
+                if line.startswith("2200,518400.000")
+            )
+            self.assertIn("atmos_stec_c00_tecu:G03=2.500000", default_row)
+            self.assertIn("atmos_stec_residuals_tecu:G03=0.240000", default_row)
+
+            priority_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(priority_path),
+                "--gps-week",
+                "2200",
+                "--compact-atmos-subtype-merge-policy",
+                "combined-priority",
+            )
+            self.assertEqual(priority_result.returncode, 0, msg=priority_result.stderr)
+            priority_row = next(
+                line
+                for line in priority_path.read_text(encoding="ascii").splitlines()
+                if line.startswith("2200,518400.000")
+            )
+            self.assertIn("atmos_stec_c00_tecu:G03=2.500000", priority_row)
+            self.assertNotIn("atmos_stec_residuals_tecu:G03=0.240000", priority_row)
+
     def test_solve_odaiba_slice_uses_glonass_and_beidou_in_rtk(self) -> None:
         rover = ROOT_DIR / "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs"
         base = ROOT_DIR / "data/driving/Tokyo_Data/Odaiba/base_trimble.obs"
@@ -6962,6 +7375,190 @@ class CLIToolsTest(unittest.TestCase):
                 + (last_record["z"] - true_position[2]) ** 2
             )
             self.assertLess(error, baseline_error)
+
+    def test_ppp_cli_writes_clas_osr_application_mode_to_summary_json(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_clas_osr_application_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, _ = build_synthetic_ppp_inputs_with_atmos(
+                temp_root
+            )
+            output_path = temp_root / "ppp_clas_osr_application.pos"
+            summary_path = temp_root / "ppp_clas_osr_application_summary.json"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--clas-osr-application",
+                "orbit-clock-only",
+                "--clas-phase-continuity",
+                "no-phase-bias",
+                "--no-estimate-troposphere",
+                "--summary-json",
+                str(summary_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(summary_path.exists())
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["clas_epoch_policy"], "strict-osr")
+            self.assertEqual(summary["clas_osr_application"], "orbit-clock-only")
+            self.assertEqual(summary["clas_phase_continuity"], "no-phase-bias")
+            self.assertEqual(summary["clas_ssr_timing"], "lag-tolerant")
+
+    def test_ppp_cli_writes_intermediate_phase_continuity_mode_to_summary_json(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_clas_phase_mode_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, _ = build_synthetic_ppp_inputs_with_atmos(
+                temp_root
+            )
+            output_path = temp_root / "ppp_clas_phase_mode.pos"
+            summary_path = temp_root / "ppp_clas_phase_mode_summary.json"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--clas-phase-continuity",
+                "sis-continuity-only",
+                "--no-estimate-troposphere",
+                "--summary-json",
+                str(summary_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["clas_phase_continuity"], "sis-continuity-only")
+
+    def test_ppp_cli_writes_clas_expanded_values_mode_to_summary_json(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_clas_value_mode_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, _ = build_synthetic_ppp_inputs_with_atmos(
+                temp_root
+            )
+            output_path = temp_root / "ppp_clas_value_mode.pos"
+            summary_path = temp_root / "ppp_clas_value_mode_summary.json"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--clas-expanded-values",
+                "residual-only",
+                "--no-estimate-troposphere",
+                "--summary-json",
+                str(summary_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["clas_expanded_values"], "residual-only")
+            self.assertEqual(summary["clas_epoch_policy"], "strict-osr")
+
+    def test_ppp_cli_writes_clas_residual_sampling_mode_to_summary_json(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_clas_residual_sampling_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, _ = build_synthetic_ppp_inputs_with_atmos(
+                temp_root
+            )
+            output_path = temp_root / "ppp_clas_residual_sampling.pos"
+            summary_path = temp_root / "ppp_clas_residual_sampling_summary.json"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--clas-residual-sampling",
+                "mean-only",
+                "--no-estimate-troposphere",
+                "--summary-json",
+                str(summary_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["clas_residual_sampling"], "mean-only")
+            self.assertEqual(summary["clas_epoch_policy"], "strict-osr")
+
+    def test_ppp_cli_writes_clas_subtype12_values_mode_to_summary_json(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_clas_subtype12_values_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, _ = build_synthetic_ppp_inputs_with_atmos(
+                temp_root
+            )
+            output_path = temp_root / "ppp_clas_subtype12_values.pos"
+            summary_path = temp_root / "ppp_clas_subtype12_values_summary.json"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--clas-subtype12-values",
+                "planar",
+                "--no-estimate-troposphere",
+                "--summary-json",
+                str(summary_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["clas_subtype12_values"], "planar")
+            self.assertEqual(summary["clas_epoch_policy"], "strict-osr")
 
     def test_ppp_cli_applies_grid_polynomial_ionosphere_from_sampled_ssr(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_ssr_grid_poly_cli_") as temp_dir:
