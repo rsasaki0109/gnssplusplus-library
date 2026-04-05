@@ -9,6 +9,7 @@ import sys
 import tempfile
 
 from ._libgnsspp import (
+    CorrectedMeasurement,
     GNSSTime,
     PositionSolution,
     Solution,
@@ -17,6 +18,7 @@ from ._libgnsspp import (
     ecef_to_geodetic_deg,
     geodetic_deg_to_ecef,
     load_solution,
+    preprocess_spp_file,
     read_rinex_header,
     read_rinex_observation_epochs,
     solution_status_name,

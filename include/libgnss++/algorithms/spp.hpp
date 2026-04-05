@@ -39,15 +39,36 @@ public:
         bool enable_glonass = true;                   ///< Enable GLONASS SPP support
     };
     
+    /**
+     * @brief Corrected measurement for external solvers (e.g. particle filter)
+     */
+    struct CorrectedMeasurement {
+        std::array<double, 3> satellite_ecef;    ///< Sagnac-corrected satellite ECEF [m]
+        double corrected_pseudorange;            ///< Fully corrected pseudorange [m]
+        double weight;                           ///< Elevation-based weight (sin^2(el))
+        double elevation;                        ///< Elevation angle [rad]
+        int system_id;                           ///< 0=GPS, 1=GLONASS, 2=Galileo, 3=BeiDou, 4=QZSS
+    };
+
     SPPProcessor();
     explicit SPPProcessor(const SPPConfig& spp_config);
     ~SPPProcessor() override = default;
-    
+
     // ProcessorBase interface
     bool initialize(const ProcessorConfig& config) override;
     PositionSolution processEpoch(const ObservationData& obs, const NavigationData& nav) override;
     ProcessorStats getStats() const override;
     void reset() override;
+
+    /**
+     * @brief Preprocess epoch: apply all corrections and return corrected measurements
+     *
+     * Returns satellite positions (Sagnac-corrected), corrected pseudoranges,
+     * and elevation-based weights for external use (e.g. particle filter input).
+     * Also returns the SPP position solution for reference.
+     */
+    std::pair<PositionSolution, std::vector<CorrectedMeasurement>>
+    preprocessEpoch(const ObservationData& obs, const NavigationData& nav);
     
     /**
      * @brief Set SPP-specific configuration
