@@ -2,6 +2,7 @@
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signal_policy.hpp>
+#include <libgnss++/core/signals.hpp>
 #include <libgnss++/models/troposphere.hpp>
 #include <libgnss++/models/ionosphere.hpp>
 #include <stdexcept>
@@ -25,54 +26,6 @@ bool isPrimarySPPSignal(SignalType signal, const SPPProcessor::SPPConfig& config
             return config.enable_beidou;
         default:
             return false;
-    }
-}
-
-double signalFrequencyHz(SignalType signal, const Ephemeris* eph = nullptr) {
-    switch (signal) {
-        case SignalType::GPS_L1CA:
-        case SignalType::QZS_L1CA:
-            return constants::GPS_L1_FREQ;
-        case SignalType::GPS_L2C:
-        case SignalType::QZS_L2C:
-            return constants::GPS_L2_FREQ;
-        case SignalType::GPS_L5:
-        case SignalType::QZS_L5:
-            return constants::GPS_L5_FREQ;
-        case SignalType::GLO_L1CA:
-        case SignalType::GLO_L1P:
-            if (eph && eph->satellite.system == GNSSSystem::GLONASS) {
-                return constants::GLO_L1_BASE_FREQ +
-                       eph->glonass_frequency_channel * constants::GLO_L1_STEP_FREQ;
-            }
-            return constants::GLO_L1_BASE_FREQ;
-        case SignalType::GLO_L2CA:
-        case SignalType::GLO_L2P:
-            if (eph && eph->satellite.system == GNSSSystem::GLONASS) {
-                return constants::GLO_L2_BASE_FREQ +
-                       eph->glonass_frequency_channel * constants::GLO_L2_STEP_FREQ;
-            }
-            return constants::GLO_L2_BASE_FREQ;
-        case SignalType::GAL_E1:
-            return constants::GAL_E1_FREQ;
-        case SignalType::GAL_E5A:
-            return constants::GAL_E5A_FREQ;
-        case SignalType::GAL_E5B:
-            return constants::GAL_E5B_FREQ;
-        case SignalType::GAL_E6:
-            return constants::GAL_E6_FREQ;
-        case SignalType::BDS_B1I:
-            return constants::BDS_B1I_FREQ;
-        case SignalType::BDS_B2I:
-            return constants::BDS_B2I_FREQ;
-        case SignalType::BDS_B3I:
-            return constants::BDS_B3I_FREQ;
-        case SignalType::BDS_B1C:
-            return constants::BDS_B1C_FREQ;
-        case SignalType::BDS_B2A:
-            return constants::BDS_B2A_FREQ;
-        default:
-            return 0.0;
     }
 }
 

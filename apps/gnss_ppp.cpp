@@ -568,6 +568,11 @@ int main(int argc, char* argv[]) {
             ppp_config.process_noise_position = 0.0;
             ppp_config.process_noise_velocity = 1e-8;
         }
+        // GPS week for L6 binary decode (only needed when SSR is L6 format)
+        if (obs_header.first_obs.week > 0) {
+            ppp_config.l6_gps_week = obs_header.first_obs.week;
+        }
+        ppp_config.approximate_position = obs_header.approximate_position;
         ppp_config.receiver_antenna_type = obs_header.antenna_type;
         ppp_config.receiver_antenna_delta_enu = obs_header.antenna_delta;
         ppp_config.ocean_loading_station_name =

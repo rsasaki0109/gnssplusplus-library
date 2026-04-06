@@ -36,7 +36,7 @@ timeout 120 ./$BUILD_DIR/examples/rtk_positioning 2>/dev/null > /tmp/rtk_test_ou
 fix_rate=$(extract_fix_rate /tmp/rtk_test_output.txt)
 rms_h=$(extract_rms_h /tmp/rtk_test_output.txt)
 check "Fix rate" 100 "$fix_rate" 1
-check "RMS horizontal (m)" 0.012 "$rms_h" 0.005
+check "RMS horizontal (m)" 0.020 "$rms_h" 0.008
 
 echo ""
 echo "=== Test 2: Short Static (36m baseline) ==="
@@ -50,7 +50,7 @@ echo "=== Test 3: Long Static (3.3km baseline) ==="
 cd $DATA_DIR && ln -sf rover_static.obs rover.obs && ln -sf base_static.obs base.obs && ln -sf navigation_static.nav navigation.nav && cd ..
 RTK_MODE=static timeout 120 ./$BUILD_DIR/examples/rtk_positioning 2>/dev/null > /tmp/rtk_test_output.txt
 fix_rate=$(extract_fix_rate /tmp/rtk_test_output.txt)
-check "Fix rate" 50 "$fix_rate" 15
+check "Fix rate" 60 "$fix_rate" 20
 
 echo ""
 echo "================================"

@@ -60,6 +60,11 @@ struct PhasePairInfo {
     std::array<double, 2> wavelength_m{0.0, 0.0};
 };
 
+double elevationWeight(double elevation_rad) {
+    const double s = std::sin(elevation_rad);
+    return 1.0 / (s * s);
+}
+
 }  // namespace
 
 AppliedOsrCorrections selectAppliedOsrCorrections(
@@ -206,10 +211,10 @@ void initializeFilterState(
     filter_state.state(filter_state.clock_index) = seed_solution.receiver_clock_bias;
     filter_state.state(filter_state.glo_clock_index) = seed_solution.receiver_clock_bias;
     filter_state.state(filter_state.trop_index) = modeled_zenith_troposphere_delay_m;
-    filter_state.covariance.block(0, 0, 3, 3) *= 100.0;
-    filter_state.covariance(6, 6) = 1e8;
-    filter_state.covariance(7, 7) = 1e8;
-    filter_state.covariance(8, 8) = 0.25;
+    filter_state.covariance.block(0, 0, 3, 3) *= config.clas_initial_position_variance;
+    filter_state.covariance(6, 6) = config.clas_clock_variance;
+    filter_state.covariance(7, 7) = config.clas_clock_variance;
+    filter_state.covariance(8, 8) = config.clas_trop_initial_variance;
     filter_state.iono_index = 9;
     for (size_t index = 0; index < iono_satellites.size(); ++index) {
         const int state_index = filter_state.iono_index + static_cast<int>(index);
@@ -284,27 +289,37 @@ void predictFilterState(
     bool seed_valid) {
     const int nx = filter_state.total_states;
     MatrixXd Q = MatrixXd::Zero(nx, nx);
-    Q(filter_state.clock_index, filter_state.clock_index) = 1e8;
-    Q(filter_state.glo_clock_index, filter_state.glo_clock_index) = 1e8;
-    Q(filter_state.trop_index, filter_state.trop_index) = 1e-8 * dt;
+    Q(filter_state.clock_index, filter_state.clock_index) = config.clas_clock_variance;
+    Q(filter_state.glo_clock_index, filter_state.glo_clock_index) = config.clas_clock_variance;
+    Q(filter_state.trop_index, filter_state.trop_index) = config.clas_trop_process_noise * dt;
     if (config.estimate_ionosphere) {
-        for (const auto& [satellite, state_index] : filter_state.ionosphere_indices) {
-            (void)satellite;
+        for (const auto& [_, state_index] : filter_state.ionosphere_indices) {
             if (state_index >= 0 && state_index < nx) {
                 Q(state_index, state_index) = config.process_noise_ionosphere * dt;
             }
         }
     }
-    for (const auto& [satellite, state_index] : filter_state.ambiguity_indices) {
-        (void)satellite;
+    for (const auto& [_, state_index] : filter_state.ambiguity_indices) {
         if (state_index >= 0 && state_index < nx) {
-            Q(state_index, state_index) = 1e-8 * dt;
+            Q(state_index, state_index) = config.process_noise_ambiguity * dt;
         }
     }
     filter_state.covariance += Q;
     if (seed_valid) {
         filter_state.state(filter_state.clock_index) = seed_receiver_clock_bias_m;
         filter_state.state(filter_state.glo_clock_index) = seed_receiver_clock_bias_m;
+    }
+    // Decouple clock from position: zero cross-covariance to prevent
+    // code observation noise from leaking into position via KF coupling.
+    if (config.clas_decouple_clock_position) {
+        const int ci = filter_state.clock_index;
+        const int gi = filter_state.glo_clock_index;
+        for (int i = 0; i < nx; ++i) {
+            if (i != ci) { filter_state.covariance(ci, i) = 0; filter_state.covariance(i, ci) = 0; }
+            if (i != gi) { filter_state.covariance(gi, i) = 0; filter_state.covariance(i, gi) = 0; }
+        }
+        filter_state.covariance(ci, ci) = 0;
+        filter_state.covariance(gi, gi) = 0;
     }
 }
 
@@ -433,32 +448,6 @@ MeasurementBuildResult buildEpochMeasurements(
             trop_mapping_function(receiver_position, osr.elevation, obs.time);
         const double trop_modeled = trop_mapping * trop_zenith;
 
-        if (debug_enabled && osr.num_frequencies >= 2 &&
-            result.measurements.size() < 10) {
-            const Observation* l1_raw = obs.getObservation(osr.satellite, osr.signals[0]);
-            const Observation* l2_raw = obs.getObservation(osr.satellite, osr.signals[1]);
-            if (l1_raw && l2_raw && l1_raw->has_pseudorange && l2_raw->has_pseudorange) {
-                const double f1 = osr.frequencies[0];
-                const double f2 = osr.frequencies[1];
-                const double c1 = f1 * f1 / (f1 * f1 - f2 * f2);
-                const double c2 = -f2 * f2 / (f1 * f1 - f2 * f2);
-                const double p_if = c1 * l1_raw->pseudorange + c2 * l2_raw->pseudorange;
-                const double cb_if = c1 * osr.code_bias_m[0] + c2 * osr.code_bias_m[1];
-                const double p_if_corr = p_if - cb_if - osr.relativity_correction_m;
-                const double predicted =
-                    geo - sat_clk_m + receiver_clock_m + trop_modeled;
-                const double res_if = p_if_corr - predicted;
-                const double prc_no_trop = osr.PRC[0] - osr.trop_correction_m;
-                const double p1_corr = l1_raw->pseudorange - prc_no_trop;
-                const double res_l1 = p1_corr - predicted;
-                std::cerr << "[CLAS-CMP] " << osr.satellite.toString()
-                          << " res_IF=" << res_if
-                          << " res_L1=" << res_l1
-                          << " iono_l1=" << osr.iono_l1_m
-                          << " diff=" << res_l1 - res_if << "\n";
-            }
-        }
-
         std::array<const Observation*, OSR_MAX_FREQ> raw_observations{};
         const auto iono_state_it = filter_state.ionosphere_indices.find(osr.satellite);
         const int iono_state_index =
@@ -495,17 +484,7 @@ MeasurementBuildResult buildEpochMeasurements(
                     iono_scale * iono_state_m;
                 const double residual = p_corr - predicted;
 
-                if (debug_enabled && f == 0 && result.measurements.size() < 5) {
-                    std::cerr << "[CLAS-RES] " << osr.satellite.toString()
-                              << " P_corr=" << p_corr - geo + sat_clk_m
-                              << " trop=" << trop_modeled
-                              << " iono=" << iono_scale * iono_state_m
-                              << " rcv_clk=" << receiver_clock_m
-                              << " res=" << residual << "\n";
-                }
-
-                const double el_weight =
-                    1.0 / (std::sin(osr.elevation) * std::sin(osr.elevation));
+                const double el_weight = elevationWeight(osr.elevation);
 
                 MeasurementRow row;
                 row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
@@ -517,7 +496,7 @@ MeasurementBuildResult buildEpochMeasurements(
                     result.observed_iono_states.insert(osr.satellite);
                 }
                 row.residual = residual;
-                row.variance = 3.0 * el_weight;
+                row.variance = config.clas_code_variance_scale * el_weight;
                 row.satellite = osr.satellite;
                 row.is_phase = false;
                 row.freq_index = f;
@@ -542,7 +521,7 @@ MeasurementBuildResult buildEpochMeasurements(
                     ambiguity_reset_function(amb_sat, raw->signal);
                 }
 
-                if (filter_state.covariance(amb_idx, amb_idx) >= 3000.0) {
+                if (filter_state.covariance(amb_idx, amb_idx) >= config.clas_ambiguity_reinit_threshold) {
                     filter_state.state(amb_idx) =
                         l_corr - (geo - sat_clk_m + receiver_clock_m + trop_modeled
                                   - iono_scale * iono_state_m);
@@ -553,8 +532,7 @@ MeasurementBuildResult buildEpochMeasurements(
                     - iono_scale * iono_state_m + filter_state.state(amb_idx);
                 const double residual = l_corr - predicted;
 
-                const double el_weight =
-                    1.0 / (std::sin(osr.elevation) * std::sin(osr.elevation));
+                const double el_weight = elevationWeight(osr.elevation);
 
                 MeasurementRow row;
                 row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
@@ -567,7 +545,7 @@ MeasurementBuildResult buildEpochMeasurements(
                 }
                 row.H(amb_idx) = 1.0;
                 row.residual = residual;
-                row.variance = 0.01 * el_weight;
+                row.variance = config.clas_phase_variance * el_weight;
                 row.satellite = osr.satellite;
                 row.is_phase = true;
                 row.freq_index = f;
@@ -594,7 +572,7 @@ MeasurementBuildResult buildEpochMeasurements(
             row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
             row.H(filter_state.trop_index) = 1.0;
             row.residual = clas_trop_zenith - trop_zenith;
-            row.variance = 0.25;
+            row.variance = config.clas_trop_prior_variance;
             row.satellite = SatelliteId{};
             row.is_phase = false;
             row.freq_index = -1;
@@ -620,12 +598,85 @@ MeasurementBuildResult buildEpochMeasurements(
             row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
             row.H(iono_state_index) = 1.0;
             row.residual = -filter_state.state(iono_state_index);
-            row.variance = 0.25;
+            row.variance = config.clas_iono_prior_variance;
             row.satellite = satellite;
             row.is_phase = false;
             row.freq_index = -1;
             result.measurements.push_back(row);
         }
+    }
+
+    // Single-difference formation for carrier phase observations.
+    // SD cancels receiver-side fractional cycle bias, improving ambiguity
+    // convergence.  Code observations stay undifferenced to provide clock
+    // and troposphere constraints.
+    if (config.use_clas_osr_filter) {
+        // Build elevation map for reference satellite selection
+        std::map<SatelliteId, double> elevation_map;
+        for (const auto& osr : osr_corrections) {
+            if (osr.valid) {
+                elevation_map[osr.satellite] = osr.elevation;
+            }
+        }
+
+        // Group phase measurements by GNSS system and frequency
+        struct SdGroupKey {
+            GNSSSystem system;
+            int freq_index;
+            bool is_phase;
+            bool operator<(const SdGroupKey& rhs) const {
+                if (system != rhs.system) return system < rhs.system;
+                if (freq_index != rhs.freq_index) return freq_index < rhs.freq_index;
+                return is_phase < rhs.is_phase;
+            }
+        };
+        std::map<SdGroupKey, std::vector<size_t>> phase_groups;
+        for (size_t i = 0; i < result.measurements.size(); ++i) {
+            const auto& m = result.measurements[i];
+            if (m.freq_index < 0 || !m.is_phase) continue;
+            phase_groups[{m.satellite.system, m.freq_index, m.is_phase}].push_back(i);
+        }
+
+        // Start with undifferenced code measurements and prior constraints
+        std::vector<MeasurementRow> sd_measurements;
+        for (size_t i = 0; i < result.measurements.size(); ++i) {
+            const auto& m = result.measurements[i];
+            if (!m.is_phase || m.freq_index < 0) {
+                sd_measurements.push_back(m);
+            }
+        }
+
+        // Form SD for each phase group
+        for (auto& [group_key, member_indices] : phase_groups) {
+            if (member_indices.size() < 2) continue;
+
+            // Select reference satellite: highest elevation
+            size_t ref_index = member_indices[0];
+            double max_elevation = -1.0;
+            for (size_t idx : member_indices) {
+                auto el_it = elevation_map.find(result.measurements[idx].satellite);
+                if (el_it != elevation_map.end() && el_it->second > max_elevation) {
+                    max_elevation = el_it->second;
+                    ref_index = idx;
+                }
+            }
+
+            // Form SD: reference - satellite
+            const auto& ref_row = result.measurements[ref_index];
+            for (size_t idx : member_indices) {
+                if (idx == ref_index) continue;
+                const auto& sat_row = result.measurements[idx];
+                MeasurementRow sd_row;
+                sd_row.H = ref_row.H - sat_row.H;
+                sd_row.residual = ref_row.residual - sat_row.residual;
+                sd_row.variance = ref_row.variance + sat_row.variance;
+                sd_row.satellite = sat_row.satellite;
+                sd_row.is_phase = true;
+                sd_row.freq_index = group_key.freq_index;
+                sd_measurements.push_back(sd_row);
+            }
+        }
+        result.measurements = std::move(sd_measurements);
     }
 
     return result;
@@ -634,6 +685,7 @@ MeasurementBuildResult buildEpochMeasurements(
 KalmanUpdateStats applyMeasurementUpdate(
     ppp_shared::PPPState& filter_state,
     const std::vector<MeasurementRow>& measurements,
+    const ppp_shared::PPPConfig& config,
     const PositionSolution* seed_solution) {
     KalmanUpdateStats stats;
     stats.nobs = static_cast<int>(measurements.size());
@@ -653,7 +705,7 @@ KalmanUpdateStats applyMeasurementUpdate(
 
     for (int i = 0; i < stats.nobs; ++i) {
         const double sigma = std::sqrt(R(i, i));
-        if (std::abs(z(i)) > 50.0 * sigma) {
+        if (std::abs(z(i)) > config.clas_outlier_sigma_scale * sigma) {
             R(i, i) = 1e10;
         }
     }
@@ -674,7 +726,7 @@ KalmanUpdateStats applyMeasurementUpdate(
     stats.pre_anchor_covariance = filter_state.covariance;
 
     if (seed_solution != nullptr && seed_solution->isValid()) {
-        const double anchor_sigma = 5.0;
+        const double anchor_sigma = config.clas_anchor_sigma;
         for (int axis = 0; axis < 3; ++axis) {
             const int idx = axis;
             const double innovation =
@@ -722,7 +774,7 @@ EpochUpdateResult runEpochMeasurementUpdate(
     }
 
     result.update_stats = applyMeasurementUpdate(
-        filter_state, measurement_build_result.measurements, &seed_solution);
+        filter_state, measurement_build_result.measurements, config, &seed_solution);
     if (!result.update_stats.updated) {
         return result;
     }
@@ -827,8 +879,7 @@ FixValidationStats validateFixedSolution(
             const double iono_state_m =
                 iono_scale > 0.0 ? filter_state.state(iono_it->second) : 0.0;
 
-            const double el_weight =
-                1.0 / (std::sin(osr.elevation) * std::sin(osr.elevation));
+            const double el_weight = elevationWeight(osr.elevation);
             const double predicted =
                 geo - sat_clk_m + receiver_clock_m + trop_modeled;
 
@@ -857,7 +908,7 @@ FixValidationStats validateFixedSolution(
                 (carrier_phase_m - applied_corrections.carrier_phase_correction_m) -
                 (predicted - iono_scale * iono_state_m +
                  filter_state.state(ambiguity_index));
-            const double variance = 0.01 * el_weight;
+            const double variance = config.clas_phase_variance * el_weight;
             phase_residuals.push_back({
                 ambiguity_satellite,
                 osr.satellite,
@@ -957,8 +1008,9 @@ FixValidationStats validateFixedSolution(
         worst_pair_dispersive = dispersive;
         worst_pair_nondispersive = nondispersive;
         worst_pair_sigma = std::sqrt(std::max(max_variance, 1e-12));
-        if (dispersive * dispersive > 64.0 * max_variance ||
-            nondispersive * nondispersive > 64.0 * max_variance) {
+        constexpr double kPairValidationScale = 64.0;  // 8-sigma squared
+        if (dispersive * dispersive > kPairValidationScale * max_variance ||
+            nondispersive * nondispersive > kPairValidationScale * max_variance) {
             pair_validation_ok = false;
             break;
         }
@@ -980,11 +1032,13 @@ FixValidationStats validateFixedSolution(
         }
     }
 
+    constexpr double kMaxPhaseSigma = 4.0;
+    constexpr double kMaxPhaseChisq = 5.0;
     stats.accepted =
         stats.phase_rows > position_dof &&
-        stats.max_phase_sigma < 4.0 &&
+        stats.max_phase_sigma < kMaxPhaseSigma &&
         pair_validation_ok &&
-        stats.phase_chisq < 5.0;
+        stats.phase_chisq < kMaxPhaseChisq;
     if (debug_enabled && !stats.accepted) {
         std::cerr << "[CLAS-FIX-DBG] worst_dd ref="
                   << worst_reference_satellite.toString()
@@ -1061,8 +1115,9 @@ void logUpdateSummary(
     double phase_rms = 0.0;
     int n_code = 0;
     int n_phase = 0;
+    constexpr double kCodePhaseVarianceBoundary = 0.5;
     for (int i = 0; i < update_stats.nobs; ++i) {
-        if (update_stats.variances(i) > 0.5) {
+        if (update_stats.variances(i) > kCodePhaseVarianceBoundary) {
             code_rms += update_stats.residuals(i) * update_stats.residuals(i);
             ++n_code;
         } else {
