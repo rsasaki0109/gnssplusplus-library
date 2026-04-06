@@ -27,7 +27,7 @@ QZSS CLAS (Centimeter-Level Augmentation Service) PPP from raw L6 binary, 2019-0
 | Ambiguity resolution | Float | Float | Fixed (Q4) |
 | Input format | `.l6` binary | expanded CSV | L6 direct |
 
-gnssplusplus includes a native C++ QZSS L6 CSSR decoder (ST1–ST9, ST11) that reads `.l6` binary files directly via `--ssr file.l6`. The decoder achieves identical accuracy to the CSV pipeline (14.6 cm) using the integrated Python CSSR expander, with a C++ native fallback (1.13 m) when Python is unavailable.
+gnssplusplus includes a native C++ QZSS L6 CSSR decoder (ST1–ST9, ST11) that reads `.l6` binary files directly via `--ssr file.l6`. The C++ native decoder achieves **identical 14.6 cm accuracy** to the CSV pipeline — no Python dependency required. The decoder implements message-order token merge matching the reference CSSR expander behavior.
 
 ## RTK Performance vs RTKLIB (demo5)
 
