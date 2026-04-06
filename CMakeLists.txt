@@ -30,12 +30,16 @@ set(GNSS_SOURCES
     src/io/rtcm.cpp
     src/io/rtcm_stream.cpp
     src/io/ubx.cpp
+    src/io/qzss_l6.cpp
     src/core/solution.cpp
     src/core/types.cpp
     src/algorithms/ppp_ar.cpp
     src/algorithms/ppp_atmosphere.cpp
     src/algorithms/ppp_clas.cpp
+    src/algorithms/ppp_clas_sd.cpp
     src/algorithms/ppp_osr.cpp
+    src/algorithms/ppp_wlnl.cpp
+    src/algorithms/ppp_clas_epoch.cpp
     src/algorithms/ppp.cpp
 )
 

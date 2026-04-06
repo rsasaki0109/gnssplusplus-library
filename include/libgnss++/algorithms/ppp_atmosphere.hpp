@@ -18,6 +18,10 @@ struct ClasGridReference {
     size_t residual_index = 0;
     int network_id = 0;
     int grid_no = 0;
+    // 4-grid bilinear interpolation (CLASLIB-style)
+    bool has_bilinear = false;
+    double bilinear_weights[4] = {};       // SW, SE, NW, NE
+    size_t bilinear_grid_indices[4] = {};  // residual indices for 4 grids
 };
 
 bool parseAtmosTokenDouble(const std::map<std::string, std::string>& atmos_tokens,

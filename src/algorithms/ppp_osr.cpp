@@ -1,36 +1,18 @@
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/signals.hpp>
+#include <libgnss++/models/troposphere.hpp>
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 #include <iostream>
 #include <limits>
-
-// Local frequency helper (mirrors ppp.cpp's signalFrequencyHz)
-static double signalFrequencyHz(libgnss::SignalType signal, const libgnss::Ephemeris* = nullptr) {
-    using namespace libgnss;
-    switch (signal) {
-        case SignalType::GPS_L1CA: case SignalType::GPS_L1P:
-        case SignalType::QZS_L1CA: case SignalType::GAL_E1:
-            return constants::GPS_L1_FREQ;
-        case SignalType::GPS_L2C: case SignalType::GPS_L2P:
-        case SignalType::QZS_L2C:
-            return constants::GPS_L2_FREQ;
-        case SignalType::GPS_L5: case SignalType::QZS_L5:
-        case SignalType::GAL_E5A:
-            return 1176.45e6;
-        case SignalType::GAL_E5B:
-            return 1207.14e6;
-        default: return 0.0;
-    }
-}
 
 namespace libgnss {
 
 namespace {
 
 bool pppDebugEnabled() {
-    return std::getenv("GNSS_PPP_DEBUG") != nullptr;
+    return ppp_shared::pppDebugEnabled();
 }
 
 const char* clasAtmosSelectionPolicyName(
@@ -183,14 +165,144 @@ double phaseWindup(const Vector3d& sat_pos, const Vector3d& rcv_pos, double prev
     const double sign = e_sr.dot(d_sat.cross(d_rcv)) < 0.0 ? -1.0 : 1.0;
     double dphi = sign * std::acos(std::clamp(cos_phi, -1.0, 1.0)) / (2.0 * M_PI);
 
-    double windup = prev + dphi;
-    while (windup - prev > 0.5) windup -= 1.0;
-    while (windup - prev < -0.5) windup += 1.0;
-    return windup;
+    // CLASLIB convention: ph is the absolute windup angle for this epoch.
+    // Maintain integer-turn continuity with the previous value.
+    return dphi + std::floor(prev - dphi + 0.5);
 }
 
 bool gnsstimeIsSet(const GNSSTime& time) {
     return time.week != 0 || std::abs(time.tow) > 0.0;
+}
+
+void updateDispersionCompensation(
+    OSRCorrection& osr,
+    CLASDispersionCompensationInfo& compensation,
+    const Observation* l1_obs,
+    const Observation* l2_obs,
+    const GNSSTime& obs_time) {
+    const GNSSTime interval_reference =
+        osr.atmos_reference_time.week != 0 ? osr.atmos_reference_time : obs_time;
+    if (compensation.reference_time.week == 0 ||
+        compensation.reference_time != interval_reference) {
+        compensation.reference_time = interval_reference;
+        compensation.base_phase_m = {0.0, 0.0};
+        compensation.has_base = {false, false};
+        compensation.slip = {false, false};
+        const Observation* freq_obs[2] = {l1_obs, l2_obs};
+        for (int f = 0; f < 2; ++f) {
+            const Observation* raw = freq_obs[f];
+            if (raw != nullptr && raw->valid && raw->has_carrier_phase &&
+                std::isfinite(raw->carrier_phase) && osr.wavelengths[f] > 0.0) {
+                compensation.base_phase_m[static_cast<size_t>(f)] =
+                    raw->carrier_phase * osr.wavelengths[f];
+                compensation.has_base[static_cast<size_t>(f)] = true;
+            }
+        }
+    }
+
+    auto checkSlip = [&](const Observation* obs_ptr, int freq_idx) {
+        if ((obs_ptr == nullptr || !obs_ptr->valid || !obs_ptr->has_carrier_phase ||
+             !std::isfinite(obs_ptr->carrier_phase) || obs_ptr->loss_of_lock) &&
+            compensation.reference_time.week != 0) {
+            compensation.slip[static_cast<size_t>(freq_idx)] = true;
+        }
+    };
+    checkSlip(l1_obs, 0);
+    checkSlip(l2_obs, 1);
+
+    if (!compensation.slip[0] && !compensation.slip[1] &&
+        compensation.has_base[0] && compensation.has_base[1] &&
+        l1_obs != nullptr && l2_obs != nullptr &&
+        l1_obs->has_carrier_phase && l2_obs->has_carrier_phase &&
+        std::isfinite(l1_obs->carrier_phase) &&
+        std::isfinite(l2_obs->carrier_phase) &&
+        osr.wavelengths[0] > 0.0 && osr.wavelengths[1] > 0.0) {
+        const double l1_phase_m = l1_obs->carrier_phase * osr.wavelengths[0];
+        const double l2_phase_m = l2_obs->carrier_phase * osr.wavelengths[1];
+        const double fi = osr.wavelengths[1] / osr.wavelengths[0];
+        const double denom = 1.0 - fi * fi;
+        if (std::abs(denom) > 1e-9) {
+            const double dgf = l1_phase_m - l2_phase_m -
+                (compensation.base_phase_m[0] - compensation.base_phase_m[1]);
+            osr.phase_compensation_m[0] = dgf / denom;
+            osr.phase_compensation_m[1] = (fi * fi * dgf) / denom;
+        }
+    }
+}
+
+// Minimum elevation angle for satellite inclusion (radians, ~15 degrees)
+constexpr double kElevationMaskRad = 0.26;
+// Maximum time gap for phase bias repair before resetting (seconds)
+constexpr double kPhaseBiasRepairTimeoutSeconds = 120.0;
+// Expected SSR clock interval for SIS continuity detection (seconds)
+constexpr double kSsrClockIntervalSeconds = 5.0;
+// Expected phase bias lag for SIS continuity correction (seconds)
+constexpr double kPhaseBiasLagSeconds = 30.0;
+// Phase bias 100-cycle jump detection window (cycles)
+constexpr double kPhaseBiasJumpLowerCycles = 95.0;
+constexpr double kPhaseBiasJumpUpperCycles = 105.0;
+constexpr double kPhaseBiasJumpCorrectionCycles = 100.0;
+
+/// Update SIS (Signal-In-Space) continuity tracking for a satellite.
+/// Detects clock epoch transitions and computes delta for SIS correction.
+void updateSisContinuity(
+    CLASSisContinuityInfo& info,
+    const OSRCorrection& osr,
+    bool clock_time_valid) {
+    const double current_sis_m = -osr.clock_correction_m + osr.orbit_projection_m;
+    if (!clock_time_valid) {
+        info = CLASSisContinuityInfo{};
+    } else if (!info.has_current) {
+        info.current_time = osr.clock_reference_time;
+        info.current_sis_m = current_sis_m;
+        info.has_current = true;
+    } else if (info.current_time != osr.clock_reference_time) {
+        const double dt_clock = osr.clock_reference_time - info.current_time;
+        info.previous_time = info.current_time;
+        info.previous_sis_m = info.current_sis_m;
+        info.current_time = osr.clock_reference_time;
+        info.current_sis_m = current_sis_m;
+        info.has_previous = true;
+        if (std::abs(dt_clock - kSsrClockIntervalSeconds) < 0.5) {
+            info.last_delta_m = info.current_sis_m - info.previous_sis_m;
+            info.has_last_delta = true;
+        } else {
+            info.last_delta_m = 0.0;
+            info.has_last_delta = false;
+        }
+    }
+}
+
+/// Detect phase bias epoch change and update repair tracking state.
+/// Returns {epoch_changed, phase_bias_dt} for use in PRC/CPC aggregation.
+struct PhaseBiasEpochStatus {
+    bool epoch_changed = false;
+    double dt = 0.0;
+};
+
+PhaseBiasEpochStatus updatePhaseBiasRepairState(
+    CLASPhaseBiasRepairInfo& repair_info,
+    const GNSSTime& effective_reference_time,
+    ppp_shared::PPPConfig::ClasPhaseContinuityPolicy policy) {
+    PhaseBiasEpochStatus status;
+    if (!usesClasPhaseBiasRepair(policy)) {
+        resetPhaseBiasRepairInfo(repair_info);
+    } else if (!gnsstimeIsSet(effective_reference_time)) {
+        resetPhaseBiasRepairInfo(repair_info);
+    } else if (repair_info.reference_time.week == 0 &&
+               std::abs(repair_info.reference_time.tow) == 0.0) {
+        repair_info.reference_time = effective_reference_time;
+    } else if (repair_info.reference_time != effective_reference_time) {
+        status.epoch_changed = true;
+        status.dt = effective_reference_time - repair_info.reference_time;
+        if (std::abs(status.dt) >= kPhaseBiasRepairTimeoutSeconds) {
+            repair_info.offset_cycles = {0.0, 0.0, 0.0};
+            repair_info.pending_state_shift_cycles = {0.0, 0.0, 0.0};
+            repair_info.has_last = {false, false, false};
+        }
+        repair_info.reference_time = effective_reference_time;
+    }
+    return status;
 }
 
 }  // anonymous namespace
@@ -547,24 +659,30 @@ std::vector<OSRCorrection> computeOSR(
                                        preferred_network_id)) {
             // CSV-expanded CLAS corrections carry orbit deltas in RAC, while
             // sampled RTCM SSR products are already stored in ECEF.
+            // RAC frame follows RTCM-10403.1 / CLASLIB convention:
+            //   Along-track  = normalize(velocity)
+            //   Cross-track  = normalize(position × velocity)
+            //   Radial       = along × cross  (outward from Earth center)
+            // The correction is subtracted: rs -= er*dR + ea*dA + ec*dC
             if (ssr.orbitCorrectionsAreRac() &&
                 orbit_corr.squaredNorm() > 0.0 &&
-                sat_pos.squaredNorm() > 0.0) {
-                const Vector3d r_unit = -sat_pos.normalized();  // Radial (toward Earth center)
+                sat_pos.squaredNorm() > 0.0 &&
+                sat_vel.squaredNorm() > 0.0) {
+                const Vector3d ea = sat_vel.normalized();  // Along-track
                 Vector3d c_unit = sat_pos.cross(sat_vel);
                 if (c_unit.squaredNorm() > 0.0) {
                     c_unit.normalize();  // Cross-track (normal to orbital plane)
                 } else {
                     c_unit = Vector3d(0, 0, 1);
                 }
-                const Vector3d a_unit = c_unit.cross(r_unit);  // Along-track
-                // orbit_corr = (dR, dA, dC) in RAC
-                const Vector3d orbit_ecef = r_unit * orbit_corr(0)
-                                          + a_unit * orbit_corr(1)
-                                          + c_unit * orbit_corr(2);
+                const Vector3d er = ea.cross(c_unit);  // Radial (outward)
+                // orbit_corr = (dR, dA, dC) in RAC; applied as subtraction
+                const Vector3d orbit_ecef = -(er * orbit_corr(0)
+                                            + ea * orbit_corr(1)
+                                            + c_unit * orbit_corr(2));
                 orbit_corr = orbit_ecef;
             }
-            if (std::getenv("GNSS_PPP_DEBUG") && corrections.size() < 20) {
+            if (pppDebugEnabled() && corrections.size() < 20) {
                 std::cerr << "[OSR-SSR] " << sat.toString()
                           << " orbit_ecef=" << orbit_corr.transpose()
                           << " clk_m=" << clock_corr
@@ -618,7 +736,7 @@ std::vector<OSRCorrection> computeOSR(
         const double elev = std::atan2(los_enu.z(), std::hypot(los_enu.x(), los_enu.y()));
         const double azim = std::atan2(los_enu.x(), los_enu.y());
 
-        if (elev < 0.26) continue;  // 15 deg mask
+        if (elev < kElevationMaskRad) continue;
 
         osr.elevation = elev;
         osr.azimuth = azim;
@@ -636,7 +754,8 @@ std::vector<OSRCorrection> computeOSR(
         }
 
         // --- 4. Troposphere ---
-        osr.trop_correction_m = troposphereDelay(receiver_pos, elev, trop_zenith);
+        // Use Saastamoinen as trop fallback when CLAS grid trop is unavailable.
+        osr.trop_correction_m = models::tropDelaySaastamoinen(receiver_pos, elev);
 
         // CLAS troposphere grid correction (if available)
         if (!atmos_tokens.empty()) {
@@ -649,7 +768,13 @@ std::vector<OSRCorrection> computeOSR(
                 config.clas_subtype12_value_construction_policy,
                 config.clas_expanded_residual_sampling_policy);
             if (std::isfinite(clas_trop) && std::abs(clas_trop) > 0.0) {
-                osr.trop_correction_m = clas_trop;  // Use CLAS trop instead of model
+                // Sanity check: CLAS grid trop should be within 30% of Saastamoinen.
+                // Distant networks produce unrealistic trop values.
+                const double saastamoinen = osr.trop_correction_m;
+                if (saastamoinen > 0.1 &&
+                    std::abs(clas_trop - saastamoinen) / saastamoinen < 0.3) {
+                    osr.trop_correction_m = clas_trop;
+                }
             }
         }
 
@@ -676,30 +801,8 @@ std::vector<OSRCorrection> computeOSR(
         }
 
         // --- 7. Code/Phase bias ---
-        auto signalId = [](GNSSSystem sys, SignalType sig) -> uint8_t {
-            // Simplified RTCM SSR signal ID mapping
-            switch (sys) {
-                case GNSSSystem::GPS:
-                    if (sig == SignalType::GPS_L1CA) return 2;
-                    if (sig == SignalType::GPS_L2C) return 8;
-                    if (sig == SignalType::GPS_L2P) return 9;
-                    if (sig == SignalType::GPS_L5) return 22;
-                    break;
-                case GNSSSystem::Galileo:
-                    if (sig == SignalType::GAL_E1) return 2;
-                    if (sig == SignalType::GAL_E5A) return 22;
-                    break;
-                case GNSSSystem::QZSS:
-                    if (sig == SignalType::QZS_L1CA) return 2;
-                    if (sig == SignalType::QZS_L2C) return 8;
-                    break;
-                default: break;
-            }
-            return 0;
-        };
-
         for (int f = 0; f < osr.num_frequencies; ++f) {
-            const uint8_t sid = signalId(sat.system, osr.signals[f]);
+            const uint8_t sid = rtcmSsrSignalId(sat.system, osr.signals[f]);
             auto cb_it = ssr_cbias.find(sid);
             osr.code_bias_m[f] = (cb_it != ssr_cbias.end()) ? cb_it->second : 0.0;
             auto pb_it = ssr_pbias.find(sid);
@@ -707,56 +810,8 @@ std::vector<OSRCorrection> computeOSR(
         }
 
         if (osr.num_frequencies >= 2) {
-            auto& compensation = dispersion_compensation[sat];
-            const GNSSTime interval_reference =
-                osr.atmos_reference_time.week != 0 ? osr.atmos_reference_time : obs.time;
-            if (compensation.reference_time.week == 0 ||
-                compensation.reference_time != interval_reference) {
-                compensation.reference_time = interval_reference;
-                compensation.base_phase_m = {0.0, 0.0};
-                compensation.has_base = {false, false};
-                compensation.slip = {false, false};
-                const Observation* compensation_obs[2] = {l1_obs, l2_obs};
-                for (int f = 0; f < 2; ++f) {
-                    const Observation* raw = compensation_obs[f];
-                    if (raw != nullptr && raw->valid && raw->has_carrier_phase &&
-                        std::isfinite(raw->carrier_phase) && osr.wavelengths[f] > 0.0) {
-                        compensation.base_phase_m[static_cast<size_t>(f)] =
-                            raw->carrier_phase * osr.wavelengths[f];
-                        compensation.has_base[static_cast<size_t>(f)] = true;
-                    }
-                }
-            }
-
-            if ((l1_obs == nullptr || !l1_obs->valid || !l1_obs->has_carrier_phase ||
-                 !std::isfinite(l1_obs->carrier_phase) || l1_obs->loss_of_lock) &&
-                compensation.reference_time.week != 0) {
-                compensation.slip[0] = true;
-            }
-            if ((l2_obs == nullptr || !l2_obs->valid || !l2_obs->has_carrier_phase ||
-                 !std::isfinite(l2_obs->carrier_phase) || l2_obs->loss_of_lock) &&
-                compensation.reference_time.week != 0) {
-                compensation.slip[1] = true;
-            }
-
-            if (!compensation.slip[0] && !compensation.slip[1] &&
-                compensation.has_base[0] && compensation.has_base[1] &&
-                l1_obs != nullptr && l2_obs != nullptr &&
-                l1_obs->has_carrier_phase && l2_obs->has_carrier_phase &&
-                std::isfinite(l1_obs->carrier_phase) &&
-                std::isfinite(l2_obs->carrier_phase) &&
-                osr.wavelengths[0] > 0.0 && osr.wavelengths[1] > 0.0) {
-                const double l1_phase_m = l1_obs->carrier_phase * osr.wavelengths[0];
-                const double l2_phase_m = l2_obs->carrier_phase * osr.wavelengths[1];
-                const double fi = osr.wavelengths[1] / osr.wavelengths[0];
-                const double denom = 1.0 - fi * fi;
-                if (std::abs(denom) > 1e-9) {
-                    const double dgf = l1_phase_m - l2_phase_m -
-                        (compensation.base_phase_m[0] - compensation.base_phase_m[1]);
-                    osr.phase_compensation_m[0] = dgf / denom;
-                    osr.phase_compensation_m[1] = (fi * fi * dgf) / denom;
-                }
-            }
+            updateDispersionCompensation(
+                osr, dispersion_compensation[sat], l1_obs, l2_obs, obs.time);
         }
 
         // --- 8. Phase wind-up ---
@@ -771,62 +826,19 @@ std::vector<OSRCorrection> computeOSR(
         auto& sis_continuity_info = sis_continuity[sat];
         const auto phase_continuity_policy =
             config.clas_phase_continuity_policy;
-        const bool clock_time_valid =
-            osr.clock_reference_time.week != 0 ||
-            std::abs(osr.clock_reference_time.tow) > 0.0;
-        const double current_sis_m = -osr.clock_correction_m + osr.orbit_projection_m;
-        if (!clock_time_valid) {
-            sis_continuity_info = CLASSisContinuityInfo{};
-        } else if (!sis_continuity_info.has_current) {
-            sis_continuity_info.current_time = osr.clock_reference_time;
-            sis_continuity_info.current_sis_m = current_sis_m;
-            sis_continuity_info.has_current = true;
-        } else if (sis_continuity_info.current_time != osr.clock_reference_time) {
-            const double dt_clock =
-                osr.clock_reference_time - sis_continuity_info.current_time;
-            sis_continuity_info.previous_time = sis_continuity_info.current_time;
-            sis_continuity_info.previous_sis_m = sis_continuity_info.current_sis_m;
-            sis_continuity_info.current_time = osr.clock_reference_time;
-            sis_continuity_info.current_sis_m = current_sis_m;
-            sis_continuity_info.has_previous = true;
-            if (std::abs(dt_clock - 5.0) < 0.5) {
-                sis_continuity_info.last_delta_m =
-                    sis_continuity_info.current_sis_m -
-                    sis_continuity_info.previous_sis_m;
-                sis_continuity_info.has_last_delta = true;
-            } else {
-                sis_continuity_info.last_delta_m = 0.0;
-                sis_continuity_info.has_last_delta = false;
-            }
-        }
+        const bool clock_time_valid = gnsstimeIsSet(osr.clock_reference_time);
+        updateSisContinuity(sis_continuity_info, osr, clock_time_valid);
         const GNSSTime effective_phase_bias_reference_time =
             selectClasPhaseBiasReferenceTime(
                 config.clas_phase_bias_reference_time_policy,
                 osr.phase_bias_reference_time,
                 osr.clock_reference_time,
                 obs.time);
-        const bool effective_phase_bias_time_valid =
-            gnsstimeIsSet(effective_phase_bias_reference_time);
-        bool phase_bias_epoch_changed = false;
-        double phase_bias_dt = 0.0;
-        if (!usesClasPhaseBiasRepair(phase_continuity_policy)) {
-            resetPhaseBiasRepairInfo(phase_bias_repair_info);
-        } else if (!effective_phase_bias_time_valid) {
-            resetPhaseBiasRepairInfo(phase_bias_repair_info);
-        } else if (phase_bias_repair_info.reference_time.week == 0 &&
-                   std::abs(phase_bias_repair_info.reference_time.tow) == 0.0) {
-            phase_bias_repair_info.reference_time = effective_phase_bias_reference_time;
-        } else if (phase_bias_repair_info.reference_time != effective_phase_bias_reference_time) {
-            phase_bias_epoch_changed = true;
-            phase_bias_dt =
-                effective_phase_bias_reference_time - phase_bias_repair_info.reference_time;
-            if (std::abs(phase_bias_dt) >= 120.0) {
-                phase_bias_repair_info.offset_cycles = {0.0, 0.0, 0.0};
-                phase_bias_repair_info.pending_state_shift_cycles = {0.0, 0.0, 0.0};
-                phase_bias_repair_info.has_last = {false, false, false};
-            }
-            phase_bias_repair_info.reference_time = effective_phase_bias_reference_time;
-        }
+        const auto pbias_status = updatePhaseBiasRepairState(
+            phase_bias_repair_info, effective_phase_bias_reference_time,
+            phase_continuity_policy);
+        const bool phase_bias_epoch_changed = pbias_status.epoch_changed;
+        const double phase_bias_dt = pbias_status.dt;
 
         // --- 9. Aggregate PRC/CPC (CLASLIB L282-285) ---
         for (int f = 0; f < osr.num_frequencies; ++f) {
@@ -853,15 +865,15 @@ std::vector<OSRCorrection> computeOSR(
                        + phase_bias_term + osr.windup_m[f]
                        + phase_compensation_term;
 
-            if (clock_time_valid && effective_phase_bias_time_valid &&
+            if (clock_time_valid && gnsstimeIsSet(effective_phase_bias_reference_time) &&
                 sis_continuity_info.has_last_delta &&
                 usesClasSisContinuity(phase_continuity_policy)) {
                 const double pbias_lag =
                     osr.clock_reference_time - effective_phase_bias_reference_time;
-                if (std::abs(pbias_lag - 30.0) < 0.5) {
+                if (std::abs(pbias_lag - kPhaseBiasLagSeconds) < 0.5) {
                     osr.CPC[f] -= sis_continuity_info.last_delta_m;
                     osr.PRC[f] -= sis_continuity_info.last_delta_m;
-                    if (std::getenv("GNSS_PPP_DEBUG") != nullptr && f == 0) {
+                    if (pppDebugEnabled() && f == 0) {
                         std::cerr << "[OSR-SIS] " << sat.toString()
                                   << " lag_s=" << pbias_lag
                                   << " sis_delta_m=" << sis_continuity_info.last_delta_m
@@ -876,7 +888,7 @@ std::vector<OSRCorrection> computeOSR(
             const double continuity_term =
                 osr.orbit_projection_m - osr.clock_correction_m + osr.CPC[f];
             if (phase_bias_epoch_changed &&
-                std::abs(phase_bias_dt) < 120.0 &&
+                std::abs(phase_bias_dt) < kPhaseBiasRepairTimeoutSeconds &&
                 phase_bias_repair_info.has_last[static_cast<size_t>(f)] &&
                 osr.wavelengths[f] > 0.0 &&
                 usesClasPhaseBiasRepair(phase_continuity_policy)) {
@@ -884,28 +896,12 @@ std::vector<OSRCorrection> computeOSR(
                     continuity_term -
                     phase_bias_repair_info.last_continuity_m[static_cast<size_t>(f)];
                 const double cycles = dcpc / osr.wavelengths[f];
-                if (cycles >= 95.0 && cycles < 105.0) {
-                    phase_bias_repair_info.offset_cycles[static_cast<size_t>(f)] -= 100.0;
-                    phase_bias_repair_info.pending_state_shift_cycles[static_cast<size_t>(f)] -= 100.0;
-                    if (std::getenv("GNSS_PPP_DEBUG") != nullptr) {
-                        std::cerr << "[OSR-PBIAS] slip-100 " << sat.toString()
-                                  << " f=" << f
-                                  << " dcpc_cycles=" << cycles
-                                  << " offset_cycles="
-                                  << phase_bias_repair_info.offset_cycles[static_cast<size_t>(f)]
-                                  << "\n";
-                    }
-                } else if (cycles <= -95.0 && cycles > -105.0) {
-                    phase_bias_repair_info.offset_cycles[static_cast<size_t>(f)] += 100.0;
-                    phase_bias_repair_info.pending_state_shift_cycles[static_cast<size_t>(f)] += 100.0;
-                    if (std::getenv("GNSS_PPP_DEBUG") != nullptr) {
-                        std::cerr << "[OSR-PBIAS] slip+100 " << sat.toString()
-                                  << " f=" << f
-                                  << " dcpc_cycles=" << cycles
-                                  << " offset_cycles="
-                                  << phase_bias_repair_info.offset_cycles[static_cast<size_t>(f)]
-                                  << "\n";
-                    }
+                if (cycles >= kPhaseBiasJumpLowerCycles && cycles < kPhaseBiasJumpUpperCycles) {
+                    phase_bias_repair_info.offset_cycles[static_cast<size_t>(f)] -= kPhaseBiasJumpCorrectionCycles;
+                    phase_bias_repair_info.pending_state_shift_cycles[static_cast<size_t>(f)] -= kPhaseBiasJumpCorrectionCycles;
+                } else if (cycles <= -kPhaseBiasJumpLowerCycles && cycles > -kPhaseBiasJumpUpperCycles) {
+                    phase_bias_repair_info.offset_cycles[static_cast<size_t>(f)] += kPhaseBiasJumpCorrectionCycles;
+                    phase_bias_repair_info.pending_state_shift_cycles[static_cast<size_t>(f)] += kPhaseBiasJumpCorrectionCycles;
                 }
             }
 
@@ -917,10 +913,15 @@ std::vector<OSRCorrection> computeOSR(
                     continuity_term;
                 phase_bias_repair_info.has_last[static_cast<size_t>(f)] = true;
             }
+
+            // Absorb phase bias changes across SSR epochs into the ambiguity
+            // state.  When phase_bias_m changes between SSR updates, CPC jumps
+            // by the delta.  Without compensation, the filter treats this as
+            // an ambiguity change, resetting convergence.
         }
 
         osr.valid = true;
-        if (std::getenv("GNSS_PPP_DEBUG") != nullptr && corrections.size() < 3) {
+        if (pppDebugEnabled() && corrections.size() < 3) {
             std::cerr << "[OSR] " << sat.toString()
                       << " trop=" << osr.trop_correction_m
                       << " rel=" << osr.relativity_correction_m

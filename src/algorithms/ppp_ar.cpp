@@ -572,25 +572,15 @@ WlnlFixAttempt tryWlnlFix(
         }
     }
 
-    if (nv > 0) {
-        const MatrixXd Hv = H.topRows(nv);
-        const VectorXd vv = v.head(nv);
-        const MatrixXd Rv = R.topLeftCorner(nv, nv);
-        const MatrixXd S = Hv * filter_state.covariance * Hv.transpose() + Rv;
-        const MatrixXd K = filter_state.covariance * Hv.transpose() * S.inverse();
-        const VectorXd dx = K * vv;
-        filter_state.state += dx;
-        const MatrixXd I_KH = MatrixXd::Identity(nx, nx) - K * Hv;
-        filter_state.covariance =
-            I_KH * filter_state.covariance * I_KH.transpose() + K * Rv * K.transpose();
-
-        if (debug_enabled) {
-            std::cerr << "[PPP-WLNL] holdamb: nv=" << nv
-                      << " pos_correction="
-                      << dx.segment(filter_state.pos_index, 3).norm()
-                      << "m v_norm=" << vv.norm() << "\n";
-        }
-    }
+    // Do NOT apply holdamb KF update.  The NL integer constraints are
+    // iono-free but the L1 ambiguity states are per-frequency (include
+    // iono residual).  Applying holdamb would corrupt the filter.
+    // Instead, fixed integers are stored in ambiguity_states and used
+    // by solveFixedPosition() for a clean WLS fixed solution.
+    (void)H;
+    (void)v;
+    (void)R;
+    (void)nv;
 
     for (const auto& [group, ref_idx] : system_ref_map) {
         (void)group;

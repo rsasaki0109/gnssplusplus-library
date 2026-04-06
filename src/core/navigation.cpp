@@ -1305,12 +1305,33 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
                 *ura_sigma_m = after->ura_sigma_m;
             }
         }
+        // Bias forward-fill: CLAS broadcasts bias every 30s but clock every 5s.
+        // The interpolation neighbours (before/after) are adjacent SSR entries
+        // which are typically clock-only rows with no bias.  Scan backwards
+        // through older entries to find the most recent bias, matching the
+        // CLASLIB behaviour of holding the last received bias indefinitely.
+        auto scanBackwardBias = [&](bool phase) -> const SSROrbitClockCorrection* {
+            const SSROrbitClockCorrection* best = nullptr;
+            int best_score = -1;
+            for (auto scan = lower; scan != entries.begin(); ) {
+                --scan;
+                if (std::abs(scan->time - time) > kPreciseInterpolationGapSeconds) break;
+                const int score = biasScore(*scan, phase);
+                if (score > best_score) {
+                    best_score = score;
+                    best = &(*scan);
+                }
+            }
+            return best;
+        };
         if (code_bias_m != nullptr) {
             if (biasScore(*before, false) >= biasScore(*after, false) &&
                 before->code_bias_valid && !before->code_bias_m.empty()) {
                 *code_bias_m = before->code_bias_m;
             } else if (after->code_bias_valid && !after->code_bias_m.empty()) {
                 *code_bias_m = after->code_bias_m;
+            } else if (const auto* scanned = scanBackwardBias(false)) {
+                *code_bias_m = scanned->code_bias_m;
             }
         }
         if (phase_bias_m != nullptr) {
@@ -1324,6 +1345,11 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
                 *phase_bias_m = after->phase_bias_m;
                 if (phase_bias_reference_time != nullptr) {
                     *phase_bias_reference_time = after->time;
+                }
+            } else if (const auto* scanned = scanBackwardBias(true)) {
+                *phase_bias_m = scanned->phase_bias_m;
+                if (phase_bias_reference_time != nullptr) {
+                    *phase_bias_reference_time = scanned->time;
                 }
             }
         }
@@ -1610,6 +1636,44 @@ bool SSRProducts::loadCSVFile(const std::string& filename) {
         std::cerr << "[SSR-LOAD] total_entries=" << total_entries
                   << " atmos_entries=" << atmos_entries
                   << " satellites=" << orbit_clock_corrections.size() << "\n";
+    }
+
+    // Forward-fill orbit corrections: CLAS broadcasts orbit every 30s but
+    // clock every 5s.  Carry the last valid orbit forward to clock-only epochs
+    // so all epochs use SSR-corrected satellite positions.
+    for (auto& [sat, entries] : orbit_clock_corrections) {
+        (void)sat;
+        Vector3d last_orbit = Vector3d::Zero();
+        bool has_last_orbit = false;
+        for (auto& entry : entries) {
+            if (entry.orbit_valid) {
+                last_orbit = entry.orbit_correction_ecef;
+                has_last_orbit = true;
+            } else if (has_last_orbit && entry.clock_valid) {
+                entry.orbit_correction_ecef = last_orbit;
+                entry.orbit_valid = true;
+            }
+        }
+    }
+
+    // Forward-fill atmosphere tokens: CLAS broadcasts atmos every 30s.
+    // Carry the last valid atmos forward so all epochs have STEC/trop data.
+    for (auto& [sat, entries] : orbit_clock_corrections) {
+        (void)sat;
+        std::map<std::string, std::string> last_atmos;
+        int last_atmos_network_id = 0;
+        bool has_last_atmos = false;
+        for (auto& entry : entries) {
+            if (entry.atmos_valid && !entry.atmos_tokens.empty()) {
+                last_atmos = entry.atmos_tokens;
+                last_atmos_network_id = entry.atmos_network_id;
+                has_last_atmos = true;
+            } else if (has_last_atmos && !entry.atmos_valid && entry.clock_valid) {
+                entry.atmos_tokens = last_atmos;
+                entry.atmos_network_id = last_atmos_network_id;
+                entry.atmos_valid = true;
+            }
+        }
     }
 
     return loaded_any;

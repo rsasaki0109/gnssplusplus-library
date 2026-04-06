@@ -37,6 +37,7 @@ TEST(PPPClasTest, FullOsrModeUsesPrecomputedObservationSpaceCorrections) {
         0,
         ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR);
 
+    // Trop removed from PRC/CPC; KF estimates with tight CLAS prior.
     EXPECT_DOUBLE_EQ(applied.pseudorange_correction_m, 3.0);
     EXPECT_DOUBLE_EQ(applied.carrier_phase_correction_m, 4.0);
     EXPECT_TRUE(ppp_clas::usesClasTropospherePrior(

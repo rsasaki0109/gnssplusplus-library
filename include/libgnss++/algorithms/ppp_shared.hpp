@@ -4,10 +4,16 @@
 #include <libgnss++/core/types.hpp>
 
 #include <array>
+#include <cstdlib>
 #include <map>
 #include <string>
 
 namespace libgnss::ppp_shared {
+
+/// Check if PPP debug output is enabled via GNSS_PPP_DEBUG environment variable.
+inline bool pppDebugEnabled() {
+    return std::getenv("GNSS_PPP_DEBUG") != nullptr;
+}
 
 struct PPPConfig {
     enum class ClasAtmosSelectionPolicy {
@@ -80,6 +86,8 @@ struct PPPConfig {
     bool use_ssr_corrections = false;
     bool use_clas_osr_filter = false;
     std::string ssr_file_path;
+    int l6_gps_week = 0;  // GPS week for L6 binary decode (0 = auto-detect)
+    Vector3d approximate_position = Vector3d::Zero();  // RINEX APPROX POS for L6 network selection
     std::string ionex_file_path;
     std::string dcb_file_path;
     std::string antex_file_path;
@@ -152,6 +160,21 @@ struct PPPConfig {
     ClasAtmosSelectionPolicy clas_atmos_selection_policy =
         ClasAtmosSelectionPolicy::GRID_FIRST;
     double clas_atmos_stale_after_seconds = 15.0;
+
+    // CLAS PPP filter tuning (affects FULL_OSR mode)
+    double clas_code_variance_scale = 8.0;        // Code observation variance multiplier
+    double clas_phase_variance = 0.01;            // Phase observation base variance (m^2)
+    double clas_trop_prior_variance = 0.0001;     // Tight CLAS grid trop constraint
+    double clas_trop_initial_variance = 1.0;      // Allow trop to converge from Saastamoinen
+    double clas_trop_process_noise = 1e-6;        // Small: CLAS grid trop is stable
+    double clas_initial_position_variance = 100.0; // Position covariance at filter init
+    double clas_clock_variance = 1e8;             // Clock state variance (reset each epoch)
+    double clas_iono_prior_variance = 0.25;       // Ionosphere pseudo-observation variance
+    double clas_ambiguity_reinit_threshold = 3000.0; // Re-init ambiguity when cov exceeds this
+    double clas_anchor_sigma = 5.0;               // SPP anchor constraint sigma (m)
+    double clas_outlier_sigma_scale = 50.0;       // Inflate variance when residual > N*sigma
+    bool clas_decouple_clock_position = true;      // Zero clock cross-covariance each epoch
+
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
     bool apply_relativity = true;

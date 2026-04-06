@@ -225,30 +225,78 @@ bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_to
     const double receiver_lat_deg = receiver_lat_rad / kDegreesToRadians;
     const double receiver_lon_deg = receiver_lon_rad / kDegreesToRadians;
 
-    const ClasGridPoint* nearest = nullptr;
-    double best_distance_sq = std::numeric_limits<double>::infinity();
+    // Collect candidate grid points for this network
+    struct GridCandidate {
+        const ClasGridPoint* point = nullptr;
+        double distance_sq = 0.0;
+    };
+    std::vector<GridCandidate> candidates;
     for (const auto& point : clasGridPoints()) {
-        if (point.network_id != network_id) {
-            continue;
-        }
-        if (grid_count > 0 && point.grid_no > grid_count) {
-            continue;
-        }
-        const double delta_lat_deg = receiver_lat_deg - point.latitude_deg;
-        const double delta_lon_deg = receiver_lon_deg - point.longitude_deg;
-        const double distance_sq = delta_lat_deg * delta_lat_deg + delta_lon_deg * delta_lon_deg;
-        if (distance_sq < best_distance_sq) {
-            best_distance_sq = distance_sq;
-            nearest = &point;
+        if (point.network_id != network_id) continue;
+        if (grid_count > 0 && point.grid_no > grid_count) continue;
+        const double dlat = receiver_lat_deg - point.latitude_deg;
+        const double dlon = receiver_lon_deg - point.longitude_deg;
+        candidates.push_back({&point, dlat * dlat + dlon * dlon});
+    }
+    if (candidates.empty()) return false;
+
+    // Sort by distance
+    std::sort(candidates.begin(), candidates.end(),
+              [](const GridCandidate& a, const GridCandidate& b) {
+                  return a.distance_sq < b.distance_sq;
+              });
+
+    const ClasGridPoint* nearest = candidates[0].point;
+
+    // Try to find 4 surrounding grid points for bilinear interpolation
+    // (CLASLIB approach: find grids that form a rectangle around the user)
+    const ClasGridPoint* grid_sw = nullptr;  // south-west (lat<user, lon<user)
+    const ClasGridPoint* grid_se = nullptr;  // south-east (lat<user, lon>user)
+    const ClasGridPoint* grid_nw = nullptr;  // north-west (lat>user, lon<user)
+    const ClasGridPoint* grid_ne = nullptr;  // north-east (lat>user, lon>user)
+    for (const auto& cand : candidates) {
+        const double dlat = cand.point->latitude_deg - receiver_lat_deg;
+        const double dlon = cand.point->longitude_deg - receiver_lon_deg;
+        if (dlat <= 0 && dlon <= 0 && !grid_sw) grid_sw = cand.point;
+        if (dlat <= 0 && dlon > 0 && !grid_se) grid_se = cand.point;
+        if (dlat > 0 && dlon <= 0 && !grid_nw) grid_nw = cand.point;
+        if (dlat > 0 && dlon > 0 && !grid_ne) grid_ne = cand.point;
+    }
+
+    reference.has_bilinear = false;
+    if (grid_sw && grid_se && grid_nw && grid_ne) {
+        // Bilinear interpolation weights
+        const double lat_range = grid_nw->latitude_deg - grid_sw->latitude_deg;
+        const double lon_range = grid_se->longitude_deg - grid_sw->longitude_deg;
+        // Only use bilinear if the surrounding rectangle is reasonable
+        // (< 1 degree ≈ 100km per side).
+        if (lat_range > 0.01 && lon_range > 0.01 &&
+            lat_range < 0.7 && lon_range < 0.7) {
+            const double t = (receiver_lat_deg - grid_sw->latitude_deg) / lat_range;
+            const double u = (receiver_lon_deg - grid_sw->longitude_deg) / lon_range;
+            reference.bilinear_weights[0] = (1 - t) * (1 - u);  // SW
+            reference.bilinear_weights[1] = (1 - t) * u;        // SE
+            reference.bilinear_weights[2] = t * (1 - u);        // NW
+            reference.bilinear_weights[3] = t * u;              // NE
+            reference.bilinear_grid_indices[0] =
+                static_cast<size_t>(std::max(grid_sw->grid_no - 1, 0));
+            reference.bilinear_grid_indices[1] =
+                static_cast<size_t>(std::max(grid_se->grid_no - 1, 0));
+            reference.bilinear_grid_indices[2] =
+                static_cast<size_t>(std::max(grid_nw->grid_no - 1, 0));
+            reference.bilinear_grid_indices[3] =
+                static_cast<size_t>(std::max(grid_ne->grid_no - 1, 0));
+            // dlat/dlon for polynomial: use SW grid as reference (CLASLIB convention)
+            reference.dlat_deg = receiver_lat_deg - grid_sw->latitude_deg;
+            reference.dlon_deg = receiver_lon_deg - grid_sw->longitude_deg;
+            reference.has_bilinear = true;
         }
     }
 
-    if (nearest == nullptr) {
-        return false;
+    if (!reference.has_bilinear) {
+        reference.dlat_deg = receiver_lat_deg - nearest->latitude_deg;
+        reference.dlon_deg = receiver_lon_deg - nearest->longitude_deg;
     }
-
-    reference.dlat_deg = receiver_lat_deg - nearest->latitude_deg;
-    reference.dlon_deg = receiver_lon_deg - nearest->longitude_deg;
     reference.residual_index = static_cast<size_t>(std::max(nearest->grid_no - 1, 0));
     reference.network_id = nearest->network_id;
     reference.grid_no = nearest->grid_no;
@@ -326,28 +374,31 @@ double atmosphericTroposphereCorrectionMeters(
         double hydro_delta_m = 0.0;
         double wet_delta_m = 0.0;
         bool have_grid_trop = false;
-        if (useResidualTerms(value_policy) &&
-            sampleAtmosResidualList(
-                atmos_tokens,
-                "atmos_trop_hs_residuals_m",
-                have_grid_reference,
-                grid_reference.residual_index,
-                residual_sampling_policy,
-                value)) {
-            hydro_delta_m = value;
-            have_grid_trop = true;
-        }
-        if (useResidualTerms(value_policy) &&
-            sampleAtmosResidualList(
-                atmos_tokens,
-                "atmos_trop_wet_residuals_m",
-                have_grid_reference,
-                grid_reference.residual_index,
-                residual_sampling_policy,
-                value)) {
-            wet_delta_m = value;
-            have_grid_trop = true;
-        }
+        auto sampleTropResidual = [&](const std::string& key) -> double {
+            if (!useResidualTerms(value_policy)) return 0.0;
+            if (have_grid_reference && grid_reference.has_bilinear) {
+                double bilinear_val = 0.0;
+                bool ok = true;
+                for (int g = 0; g < 4; ++g) {
+                    double gv = 0.0;
+                    if (sampleAtmosResidualList(atmos_tokens, key, true,
+                            grid_reference.bilinear_grid_indices[g],
+                            residual_sampling_policy, gv)) {
+                        bilinear_val += grid_reference.bilinear_weights[g] * gv;
+                    } else { ok = false; break; }
+                }
+                if (ok) { have_grid_trop = true; return bilinear_val; }
+            }
+            double v = 0.0;
+            if (sampleAtmosResidualList(atmos_tokens, key, have_grid_reference,
+                    grid_reference.residual_index, residual_sampling_policy, v)) {
+                have_grid_trop = true;
+                return v;
+            }
+            return 0.0;
+        };
+        hydro_delta_m = sampleTropResidual("atmos_trop_hs_residuals_m");
+        wet_delta_m = sampleTropResidual("atmos_trop_wet_residuals_m");
         if (have_grid_trop) {
             correction_m += hydro_mapping * (2.3 + hydro_delta_m) + wet_mapping * (0.252 + wet_delta_m);
             have_correction = true;
@@ -373,47 +424,82 @@ double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_token
     int stec_type = -1;
     parseAtmosTokenInt(atmos_tokens, "atmos_stec_type" + suffix, stec_type);
 
+    // STEC polynomial: c00 + c01*dlat + c10*dlon + c11*dlat*dlon [+ c02*dlat² + c20*dlon²]
+    // When 4-grid bilinear is available, evaluate the polynomial at each grid
+    // point's position and bilinear-interpolate the results (CLASLIB approach).
+    auto evaluateStecPoly = [&](double dlat, double dlon) -> double {
+        double val = 0.0;
+        double term = 0.0;
+        if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c00_tecu" + suffix, term) && std::isfinite(term))
+            val += term;
+        if (stec_type > 0 && (!subtype12_row || useSubtype12LinearTerms(subtype12_value_policy))) {
+            if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c01_tecu_per_deg" + suffix, term) && std::isfinite(term))
+                val += term * dlat;
+            if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c10_tecu_per_deg" + suffix, term) && std::isfinite(term))
+                val += term * dlon;
+        }
+        if (stec_type > 1 && (!subtype12_row || useSubtype12QuadraticTerms(subtype12_value_policy))) {
+            if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c11_tecu_per_deg2" + suffix, term) && std::isfinite(term))
+                val += term * dlat * dlon;
+        }
+        if (stec_type > 2 && (!subtype12_row || useSubtype12QuadraticTerms(subtype12_value_policy))) {
+            if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c02_tecu_per_deg2" + suffix, term) && std::isfinite(term))
+                val += term * dlat * dlat;
+            if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c20_tecu_per_deg2" + suffix, term) && std::isfinite(term))
+                val += term * dlon * dlon;
+        }
+        return val;
+    };
+
     double value = 0.0;
     if (usePolynomialTerms(value_policy) &&
         parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c00_tecu" + suffix, value) &&
         std::isfinite(value)) {
-        stec_tecu += value;
+        if (have_grid_reference && grid_reference.has_bilinear) {
+            // CLASLIB approach: evaluate polynomial at each of 4 grid points,
+            // add per-grid residual, then bilinear interpolate.
+            // Grid positions relative to nearest (SW) grid:
+            // SW=(0,0), SE=(0,lon_range), NW=(lat_range,0), NE=(lat_range,lon_range)
+            // But polynomial reference is nearest grid, so grid offsets are:
+            const double lat_range = grid_reference.dlat_deg /
+                (grid_reference.bilinear_weights[2] + grid_reference.bilinear_weights[3] > 0.01
+                     ? grid_reference.dlat_deg / (grid_reference.bilinear_weights[2] + grid_reference.bilinear_weights[3])
+                     : 1.0);
+            // Simpler: use the actual grid positions stored in weights
+            // t = dlat/lat_range, u = dlon/lon_range
+            // lat_range = dlat / t, lon_range = dlon / u
+            const double t = grid_reference.bilinear_weights[2] + grid_reference.bilinear_weights[3];
+            const double u = grid_reference.bilinear_weights[1] + grid_reference.bilinear_weights[3];
+            const double total_lat = (t > 0.01) ? grid_reference.dlat_deg / t : grid_reference.dlat_deg;
+            const double total_lon = (u > 0.01) ? grid_reference.dlon_deg / u : grid_reference.dlon_deg;
+            const double grid_dlat[4] = {0, 0, total_lat, total_lat};
+            const double grid_dlon[4] = {0, total_lon, 0, total_lon};
+
+            double bilinear_stec = 0.0;
+            for (int g = 0; g < 4; ++g) {
+                double grid_stec = evaluateStecPoly(grid_dlat[g], grid_dlon[g]);
+                // Add per-grid residual if available
+                double grid_residual = 0.0;
+                if (useResidualTerms(value_policy) &&
+                    sampleAtmosResidualList(atmos_tokens,
+                        "atmos_stec_residuals_tecu" + suffix, true,
+                        grid_reference.bilinear_grid_indices[g],
+                        residual_sampling_policy, grid_residual)) {
+                    grid_stec += grid_residual;
+                }
+                bilinear_stec += grid_reference.bilinear_weights[g] * grid_stec;
+            }
+            stec_tecu = bilinear_stec;
+        } else {
+            stec_tecu = evaluateStecPoly(
+                have_grid_reference ? grid_reference.dlat_deg : 0.0,
+                have_grid_reference ? grid_reference.dlon_deg : 0.0);
+        }
         have_correction = true;
     }
-    if (usePolynomialTerms(value_policy) && have_grid_reference && stec_type > 0 &&
-        (!subtype12_row || useSubtype12LinearTerms(subtype12_value_policy))) {
-        if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c01_tecu_per_deg" + suffix, value) &&
-            std::isfinite(value)) {
-            stec_tecu += value * grid_reference.dlat_deg;
-            have_correction = true;
-        }
-        if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c10_tecu_per_deg" + suffix, value) &&
-            std::isfinite(value)) {
-            stec_tecu += value * grid_reference.dlon_deg;
-            have_correction = true;
-        }
-    }
-    if (usePolynomialTerms(value_policy) && have_grid_reference && stec_type > 1 &&
-        (!subtype12_row || useSubtype12QuadraticTerms(subtype12_value_policy)) &&
-        parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c11_tecu_per_deg2" + suffix, value) &&
-        std::isfinite(value)) {
-        stec_tecu += value * grid_reference.dlat_deg * grid_reference.dlon_deg;
-        have_correction = true;
-    }
-    if (usePolynomialTerms(value_policy) && have_grid_reference && stec_type > 2 &&
-        (!subtype12_row || useSubtype12QuadraticTerms(subtype12_value_policy))) {
-        if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c02_tecu_per_deg2" + suffix, value) &&
-            std::isfinite(value)) {
-            stec_tecu += value * grid_reference.dlat_deg * grid_reference.dlat_deg;
-            have_correction = true;
-        }
-        if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c20_tecu_per_deg2" + suffix, value) &&
-            std::isfinite(value)) {
-            stec_tecu += value * grid_reference.dlon_deg * grid_reference.dlon_deg;
-            have_correction = true;
-        }
-    }
-    if (useResidualTerms(value_policy) &&
+    // Residuals: for bilinear mode, residuals are already included in the
+    // per-grid evaluation above.  For nearest-grid mode, add the residual.
+    if (!grid_reference.has_bilinear && useResidualTerms(value_policy) &&
         sampleAtmosResidualList(
             atmos_tokens,
             "atmos_stec_residuals_tecu" + suffix,

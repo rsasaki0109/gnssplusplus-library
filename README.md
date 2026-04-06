@@ -12,6 +12,40 @@ Contribution and PR workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
 Architecture notes: [docs/architecture.md](docs/architecture.md)
 Documentation index: [docs/index.md](docs/index.md)
 
+## CLAS PPP Performance
+
+QZSS CLAS (Centimeter-Level Augmentation Service) PPP comparison against CLASLIB (reference implementation), 2019-08-27 static dataset, 1 hour:
+
+![CLAS PPP comparison](docs/clas_ppp_comparison.png)
+
+| Metric | gnssplusplus | CLASLIB |
+|--------|-------------|---------|
+| Converged accuracy (last 100s) | **14.6 cm** | 5.1 cm |
+| Best single-epoch | **3.5 cm** | 0.9 cm |
+| 3D position offset | **7.2 cm** | ~0 |
+| Convergence time | ~50 min | ~6 s |
+| Ambiguity resolution | Float | Fixed (Q4) |
+
+gnssplusplus achieves sub-15 cm CLAS PPP accuracy using the expanded SSR CSV pipeline with phase-only single-differencing, Kalman-filter troposphere estimation with tight CLAS grid priors, and clock cross-covariance decoupling.
+
+## RTK Performance vs RTKLIB (demo5)
+
+UrbanNav Tokyo Odaiba dataset (2018-12-19, Trimble rover/base, ~170m baseline):
+
+| Metric | gnssplusplus | RTKLIB |
+|--------|-------------|--------|
+| Matched epochs | **11,637** | 8,241 |
+| Fix rate | **8.11%** | 7.22% |
+| All-epoch p95 horizontal | **7.58 m** | 27.88 m |
+| Common-epoch median horizontal | 0.733 m | **0.704 m** |
+| Common-epoch p95 horizontal | **5.94 m** | 27.67 m |
+
+| RTKLIB 2D | libgnss++ 2D |
+|---|---|
+| ![RTKLIB 2D](docs/driving_odaiba_comparison_rtklib_2d.png) | ![libgnss++ 2D](docs/driving_odaiba_comparison_libgnss_2d.png) |
+
+gnssplusplus produces 41% more epochs and 3.7x better p95 accuracy in urban multipath conditions. See [Benchmark Snapshot](#benchmark-snapshot) for details.
+
 ## Docs
 
 - Public site: <https://rsasaki0109.github.io/gnssplusplus-library/>
