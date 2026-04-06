@@ -14,19 +14,20 @@ Documentation index: [docs/index.md](docs/index.md)
 
 ## CLAS PPP Performance
 
-QZSS CLAS (Centimeter-Level Augmentation Service) PPP comparison against CLASLIB (reference implementation), 2019-08-27 static dataset, 1 hour:
+QZSS CLAS (Centimeter-Level Augmentation Service) PPP from raw L6 binary, 2019-08-27 static dataset, 1 hour:
 
 ![CLAS PPP comparison](docs/clas_ppp_comparison.png)
 
-| Metric | gnssplusplus | CLASLIB |
-|--------|-------------|---------|
-| Converged accuracy (last 100s) | **14.6 cm** | 5.1 cm |
-| Best single-epoch | **3.5 cm** | 0.9 cm |
-| 3D position offset | **7.2 cm** | ~0 |
-| Convergence time | ~50 min | ~6 s |
-| Ambiguity resolution | Float | Fixed (Q4) |
+| Metric | gnssplusplus (L6) | gnssplusplus (CSV) | CLASLIB |
+|--------|-------------------|-------------------|---------|
+| Converged accuracy (last 100s) | **14.6 cm** | **14.6 cm** | 5.1 cm |
+| Best single-epoch | **3.5 cm** | **3.5 cm** | 0.9 cm |
+| Under 10 cm epochs | **366** | **366** | ~3400 |
+| Convergence time | ~50 min | ~50 min | ~6 s |
+| Ambiguity resolution | Float | Float | Fixed (Q4) |
+| Input format | `.l6` binary | expanded CSV | L6 direct |
 
-gnssplusplus achieves sub-15 cm CLAS PPP accuracy using the expanded SSR CSV pipeline with phase-only single-differencing, Kalman-filter troposphere estimation with tight CLAS grid priors, and clock cross-covariance decoupling.
+gnssplusplus includes a native C++ QZSS L6 CSSR decoder (ST1–ST9, ST11) that reads `.l6` binary files directly via `--ssr file.l6`. The decoder achieves identical accuracy to the CSV pipeline (14.6 cm) using the integrated Python CSSR expander, with a C++ native fallback (1.13 m) when Python is unavailable.
 
 ## RTK Performance vs RTKLIB (demo5)
 
