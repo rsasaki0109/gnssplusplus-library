@@ -650,6 +650,39 @@ std::vector<CssrEpoch> L6Decoder::decodeFile(const std::string& path, int gps_we
         }
     }
 
+    // Post-process: build CSV-style merged corrections.
+    // Emulate Python's pending_atmos/pending_bias accumulation.
+    // Each epoch gets a single flat atmos token set and accumulated biases.
+    {
+        std::map<std::string, std::string> pending_atmos;
+        std::map<SatelliteId, std::map<int, double>> pending_pbias;
+        for (auto& ep : all_epochs) {
+            // Update pending atmos (message-order union, same as Python)
+            for (const auto& [net_id, tokens] : ep.atmos_by_network) {
+                for (const auto& [k, v] : tokens)
+                    pending_atmos[k] = v;
+            }
+            ep.merged_atmos = pending_atmos;
+
+            // Update pending phase bias: ST5 base resets, ST6 network updates
+            if (ep.has_phase_bias) {
+                // ST5 arrived: reset pending to base values
+                pending_pbias.clear();
+                for (const auto& [sat, biases] : ep.phase_biases)
+                    for (const auto& [slot, val] : biases)
+                        pending_pbias[sat][slot] = val;
+            }
+            // ST6 network updates: merge into pending
+            for (const auto& [net_id, sat_biases] : ep.network_phase_biases)
+                for (const auto& [sat, biases] : sat_biases)
+                    for (const auto& [slot, val] : biases)
+                        pending_pbias[sat][slot] = val;
+            // Store merged biases in epoch
+            ep.phase_biases = pending_pbias;
+            ep.has_phase_bias = !pending_pbias.empty();
+        }
+    }
+
     return all_epochs;
 }
 
@@ -743,7 +776,7 @@ void populateSSRProducts(
                 corr.code_bias_valid = !corr.code_bias_m.empty();
             }
 
-            // Phase biases
+            // Phase biases (merged: ST5 base + ST6 network updates)
             auto pb_it = epoch.phase_biases.find(sat_id);
             if (pb_it != epoch.phase_biases.end()) {
                 const int gnss_id = gnssSystemToCssrId(sat_id.system);
@@ -755,41 +788,29 @@ void populateSSRProducts(
                 }
                 corr.phase_bias_valid = !corr.phase_bias_m.empty();
             }
-
-            // Merge all network atmos tokens, matching the Python CSV
-            // expander's merge_pending_atmos(union) behavior.
-            // Last writer wins for duplicate keys. The final network_id
-            // and grid_count determine which grid points are used for
-            // residual interpolation.
-            // Merge atmos tokens from all networks in ascending order
-            // (matching Python CSV expander's merge_pending_atmos union).
-            // STEC polynomial (c00 etc) from later networks overwrites earlier.
-            // Grid/trop/residual comes from the network with grid points
-            // nearest the receiver (network_id preserved from that network).
-            // This mixed-network approach matches CSV pipeline behavior.
-            // Use last-gridded network's complete tokens (trop + STEC residual
-            // + grid reference are all consistent for the same network).
-            // STEC polynomial overlay from all networks ensures latest c00.
-            // Bias selection via ST6 per-network corrections is independent.
-            if (!epoch.atmos_by_network.empty()) {
-                int grid_net = epoch.last_gridded_network_id;
-                if (grid_net <= 0 || !epoch.atmos_by_network.count(grid_net))
-                    grid_net = epoch.atmos_by_network.begin()->first;
-                if (epoch.atmos_by_network.count(grid_net)) {
-                    corr.atmos_tokens = epoch.atmos_by_network.at(grid_net);
-                    // Overlay STEC polynomial from all networks (last wins)
-                    for (const auto& [net_id, tokens] : epoch.atmos_by_network) {
-                        for (const auto& [k, v] : tokens) {
-                            if (k.find("atmos_stec_c0") != std::string::npos ||
-                                k.find("atmos_stec_c1") != std::string::npos ||
-                                k.find("atmos_stec_c2") != std::string::npos ||
-                                k.find("atmos_stec_type:") != std::string::npos)
-                                corr.atmos_tokens[k] = v;
-                        }
+            // Set bias_network_id from the last ST6 that updated this satellite
+            // (0 means base-only from ST5)
+            if (corr.phase_bias_valid) {
+                for (auto rit = epoch.network_phase_biases.rbegin();
+                     rit != epoch.network_phase_biases.rend(); ++rit) {
+                    if (rit->second.count(sat_id)) {
+                        corr.bias_network_id = rit->first;
+                        break;
                     }
-                    corr.atmos_valid = true;
-                    corr.atmos_network_id = grid_net;
                 }
+            }
+
+            // Use merged_atmos (Python pending_atmos equivalent):
+            // flat dict accumulated in message order across all subframes.
+            // network_id, trop, STEC residuals from the last ST9.
+            // STEC polynomial from the last ST8.
+            // Phase biases are already merged in epoch.phase_biases.
+            if (!epoch.merged_atmos.empty()) {
+                corr.atmos_tokens = epoch.merged_atmos;
+                corr.atmos_valid = true;
+                auto nit = corr.atmos_tokens.find("atmos_network_id");
+                corr.atmos_network_id = (nit != corr.atmos_tokens.end()) ?
+                    std::atoi(nit->second.c_str()) : 0;
             }
             products.addCorrection(corr);
 
