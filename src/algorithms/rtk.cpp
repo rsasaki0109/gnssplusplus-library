@@ -8,6 +8,7 @@
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/signal_policy.hpp>
+#include <libgnss++/core/signals.hpp>
 #include <libgnss++/models/troposphere.hpp>
 #include <iostream>
 #include <algorithm>
@@ -136,62 +137,6 @@ bool selectMatchedObservationPair(
         }
     }
     return rover_selected != nullptr && base_selected != nullptr;
-}
-
-double signalFrequencyHz(SignalType signal, const Ephemeris* eph = nullptr) {
-    switch (signal) {
-        case SignalType::GPS_L1CA:
-        case SignalType::QZS_L1CA:
-            return constants::GPS_L1_FREQ;
-        case SignalType::GPS_L2C:
-        case SignalType::QZS_L2C:
-            return constants::GPS_L2_FREQ;
-        case SignalType::GPS_L5:
-        case SignalType::QZS_L5:
-            return constants::GPS_L5_FREQ;
-        case SignalType::GLO_L1CA:
-        case SignalType::GLO_L1P:
-            if (eph && eph->satellite.system == GNSSSystem::GLONASS) {
-                return constants::GLO_L1_BASE_FREQ +
-                       eph->glonass_frequency_channel * constants::GLO_L1_STEP_FREQ;
-            }
-            return constants::GLO_L1_BASE_FREQ;
-        case SignalType::GLO_L2CA:
-        case SignalType::GLO_L2P:
-            if (eph && eph->satellite.system == GNSSSystem::GLONASS) {
-                return constants::GLO_L2_BASE_FREQ +
-                       eph->glonass_frequency_channel * constants::GLO_L2_STEP_FREQ;
-            }
-            return constants::GLO_L2_BASE_FREQ;
-        case SignalType::GAL_E1:
-            return constants::GAL_E1_FREQ;
-        case SignalType::GAL_E5A:
-            return constants::GAL_E5A_FREQ;
-        case SignalType::GAL_E5B:
-            return constants::GAL_E5B_FREQ;
-        case SignalType::GAL_E6:
-            return constants::GAL_E6_FREQ;
-        case SignalType::BDS_B1I:
-            return constants::BDS_B1I_FREQ;
-        case SignalType::BDS_B2I:
-            return constants::BDS_B2I_FREQ;
-        case SignalType::BDS_B3I:
-            return constants::BDS_B3I_FREQ;
-        case SignalType::BDS_B1C:
-            return constants::BDS_B1C_FREQ;
-        case SignalType::BDS_B2A:
-            return constants::BDS_B2A_FREQ;
-        default:
-            return 0.0;
-    }
-}
-
-double signalWavelengthM(SignalType signal, const Ephemeris* eph = nullptr) {
-    const double frequency = signalFrequencyHz(signal, eph);
-    if (frequency <= 0.0) {
-        return 0.0;
-    }
-    return constants::SPEED_OF_LIGHT / frequency;
 }
 
 double ionoFreeCoeff1(double f1, double f2) {
@@ -541,7 +486,7 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         const Ephemeris* eph = nav.getEphemeris(sat, t_refined);
         sd.l1_signal = r_obs->signal;
         sd.l1_frequency_hz = signalFrequencyHz(sd.l1_signal, eph);
-        sd.l1_wavelength = signalWavelengthM(sd.l1_signal, eph);
+        sd.l1_wavelength = signalWavelengthMeters(sd.l1_signal, eph);
         if (sd.l1_wavelength <= 0.0) continue;
         sd.rover_l1_phase = r_obs->carrier_phase; sd.rover_l1_code = r_obs->pseudorange;
         sd.base_l1_phase = b_obs->carrier_phase; sd.base_l1_code = b_obs->pseudorange;
@@ -557,7 +502,7 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
                     sat.system, r_l2->second, b_l2->second, false, r_l2_obs, b_l2_obs)) {
                 sd.l2_signal = r_l2_obs->signal;
                 sd.l2_frequency_hz = signalFrequencyHz(sd.l2_signal, eph);
-                sd.l2_wavelength = signalWavelengthM(sd.l2_signal, eph);
+                sd.l2_wavelength = signalWavelengthMeters(sd.l2_signal, eph);
                 sd.rover_l2_phase = r_l2_obs->carrier_phase; sd.rover_l2_code = r_l2_obs->pseudorange;
                 sd.base_l2_phase = b_l2_obs->carrier_phase; sd.base_l2_code = b_l2_obs->pseudorange;
                 sd.rover_l2_doppler = r_l2_obs->doppler;

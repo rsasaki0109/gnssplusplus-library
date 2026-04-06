@@ -7,6 +7,7 @@
 #include "lambda.hpp"
 #include "ppp_ar.hpp"
 #include "ppp_shared.hpp"
+#include "ppp_clas_sd.hpp"
 #include "ppp_osr_types.hpp"
 #include "spp.hpp"
 #include <Eigen/Dense>
@@ -57,6 +58,7 @@ public:
      * @brief Load SSR orbit/clock corrections.
      */
     bool loadSSRProducts(const std::string& ssr_file);
+    bool loadL6Products(const std::string& l6_file);
 
     /**
      * @brief Load IONEX ionosphere products for future PPP hooks.
@@ -217,6 +219,9 @@ private:
     bool had_fixed_last_epoch_ = false;  ///< AR succeeded in previous epoch
     std::map<SatelliteId, double> windup_cache_;  ///< Phase wind-up cache for OSR
     std::map<SatelliteId, CLASPhaseBiasRepairInfo> clas_phase_bias_repair_;
+    ppp_clas_sd::SdFilterState clas_sd_state_;  ///< Clock-free SD filter
+    ppp_clas_sd::DdAmbAccumulator clas_dd_accumulator_;  ///< Multi-epoch DD amb accumulator
+    int last_obs_gps_week_ = 0;  ///< GPS week from latest observation (for L6 decode)
 
     // Statistics
     mutable std::mutex stats_mutex_;
@@ -459,10 +464,9 @@ private:
     bool solveFixedCarrierPhasePosition(const std::vector<IonosphereFreeObs>& observations,
                                         Vector3d& fixed_position) const;
 
-    
-    /**
-     * @brief Update processing statistics
-     */
+    static double modeledZenithTroposphereDelayMeters(
+        const Vector3d& receiver_position, const GNSSTime& time);
+
     void updateStatistics(bool converged) const;
 };
 
