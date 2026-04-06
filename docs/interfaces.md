@@ -10,7 +10,7 @@ Examples:
 - `gnss solve`
 - `gnss ppp` (`--nav`, `--sp3`, `--clk`, `--ionex`, `--dcb`, `--ssr`, `--ssr-rtcm`)
 - `gnss clas-ppp`
-- `gnss qzss-l6-info` (`--compact-flush-policy <lag-tolerant-union|orbit-or-clock-only|orbit-and-clock-only>`, `--compact-atmos-merge-policy <stec-coeff-carry|no-carry|network-locked-stec-coeff-carry>`, `--compact-atmos-subtype-merge-policy <union|gridded-priority|combined-priority>`, `--compact-phase-bias-merge-policy <latest-union|message-reset|selected-mask-prune>`, `--compact-phase-bias-source-policy <arrival-order|subtype5-priority|subtype6-priority>`, `--compact-phase-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`, `--compact-phase-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank>`)
+- `gnss qzss-l6-info` (`--compact-flush-policy <lag-tolerant-union|orbit-or-clock-only|orbit-and-clock-only>`, `--compact-atmos-merge-policy <stec-coeff-carry|no-carry|network-locked-stec-coeff-carry>`, `--compact-atmos-subtype-merge-policy <union|gridded-priority|combined-priority>`, `--compact-phase-bias-merge-policy <latest-union|message-reset|selected-mask-prune>`, `--compact-phase-bias-source-policy <arrival-order|subtype5-priority|subtype6-priority>`, `--compact-code-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`, `--compact-phase-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`, `--compact-phase-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank>`, `--compact-bias-row-materialization <overlap-only|selected-satellite-base-extend|all-base-satellite-extend>`, `--compact-row-construction-policy <independent|coupled-code-phase|row-first-value-second|network-row-driven>`)
 - `gnss fetch-products`
 - `gnss ppp-products-signoff`
 - `gnss ionex-info`
@@ -134,6 +134,13 @@ The current CLAS PPP experiment family includes:
 - `osr_float_message_reset_phase_bias_merge_pipeline`
 - `osr_float_subtype5_priority_phase_bias_source_pipeline`
 - `osr_float_subtype6_priority_phase_bias_source_pipeline`
+- `osr_float_base_plus_network_code_bias_composition_pipeline`
+- `osr_float_base_only_code_bias_composition_pipeline`
+- `osr_float_same_30s_code_bias_bank_pipeline`
+- `osr_float_close_30s_code_bias_bank_pipeline`
+- `osr_float_latest_preceding_code_bias_bank_pipeline`
+- `osr_float_selected_satellite_base_extend_pipeline`
+- `osr_float_all_base_satellite_extend_pipeline`
 - `osr_float_base_plus_network_phase_bias_composition_pipeline`
 - `osr_float_base_only_phase_bias_composition_pipeline`
 - `osr_float_same_30s_phase_bias_bank_pipeline`
@@ -173,6 +180,13 @@ The current CLAS PPP experiment family includes:
 - `osr_ar_message_reset_phase_bias_merge_pipeline`
 - `osr_ar_subtype5_priority_phase_bias_source_pipeline`
 - `osr_ar_subtype6_priority_phase_bias_source_pipeline`
+- `osr_ar_base_plus_network_code_bias_composition_pipeline`
+- `osr_ar_base_only_code_bias_composition_pipeline`
+- `osr_ar_same_30s_code_bias_bank_pipeline`
+- `osr_ar_close_30s_code_bias_bank_pipeline`
+- `osr_ar_latest_preceding_code_bias_bank_pipeline`
+- `osr_ar_selected_satellite_base_extend_pipeline`
+- `osr_ar_all_base_satellite_extend_pipeline`
 - `osr_ar_base_plus_network_phase_bias_composition_pipeline`
 - `osr_ar_base_only_phase_bias_composition_pipeline`
 - `osr_ar_same_30s_phase_bias_bank_pipeline`
@@ -230,12 +244,18 @@ For compact-SSR ingestion experiments, the shared decode boundary also exposes:
 - `gnss qzss-l6-info --compact-atmos-subtype-merge-policy <union|gridded-priority|combined-priority>`
 - `gnss qzss-l6-info --compact-phase-bias-merge-policy <latest-union|message-reset|selected-mask-prune>`
 - `gnss qzss-l6-info --compact-phase-bias-source-policy <arrival-order|subtype5-priority|subtype6-priority>`
+- `gnss qzss-l6-info --compact-code-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`
+- `gnss qzss-l6-info --compact-code-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank>`
+- `gnss qzss-l6-info --compact-bias-row-materialization <overlap-only|selected-satellite-base-extend|all-base-satellite-extend>`
 - `gnss qzss-l6-info --compact-phase-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`
 - `gnss qzss-l6-info --compact-phase-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank>`
 - `gnss clas-ppp --compact-atmos-merge-policy <stec-coeff-carry|no-carry|network-locked-stec-coeff-carry>`
 - `gnss clas-ppp --compact-atmos-subtype-merge-policy <union|gridded-priority|combined-priority>`
 - `gnss clas-ppp --compact-phase-bias-merge-policy <latest-union|message-reset|selected-mask-prune>`
 - `gnss clas-ppp --compact-phase-bias-source-policy <arrival-order|subtype5-priority|subtype6-priority>`
+- `gnss clas-ppp --compact-code-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`
+- `gnss clas-ppp --compact-code-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank>`
+- `gnss clas-ppp --compact-bias-row-materialization <overlap-only|selected-satellite-base-extend|all-base-satellite-extend>`
 - `gnss clas-ppp --compact-phase-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`
 - `gnss clas-ppp --compact-phase-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank>`
 
