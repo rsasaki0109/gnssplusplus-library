@@ -77,6 +77,46 @@ COMPACT_PHASE_BIAS_SOURCE_POLICIES = (
     COMPACT_PHASE_BIAS_SOURCE_POLICY_SUBTYPE5_PRIORITY,
     COMPACT_PHASE_BIAS_SOURCE_POLICY_SUBTYPE6_PRIORITY,
 )
+COMPACT_CODE_BIAS_COMPOSITION_POLICY_DIRECT = "direct-values"
+COMPACT_CODE_BIAS_COMPOSITION_POLICY_BASE_PLUS_NETWORK = "base-plus-network"
+COMPACT_CODE_BIAS_COMPOSITION_POLICY_BASE_ONLY_IF_PRESENT = "base-only-if-present"
+COMPACT_CODE_BIAS_COMPOSITION_POLICIES = (
+    COMPACT_CODE_BIAS_COMPOSITION_POLICY_DIRECT,
+    COMPACT_CODE_BIAS_COMPOSITION_POLICY_BASE_PLUS_NETWORK,
+    COMPACT_CODE_BIAS_COMPOSITION_POLICY_BASE_ONLY_IF_PRESENT,
+)
+COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH = "pending-epoch"
+COMPACT_CODE_BIAS_BANK_POLICY_SAME_30S_BANK = "same-30s-bank"
+COMPACT_CODE_BIAS_BANK_POLICY_CLOSE_30S_BANK = "close-30s-bank"
+COMPACT_CODE_BIAS_BANK_POLICY_LATEST_PRECEDING_BANK = "latest-preceding-bank"
+COMPACT_CODE_BIAS_BANK_POLICIES = (
+    COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH,
+    COMPACT_CODE_BIAS_BANK_POLICY_SAME_30S_BANK,
+    COMPACT_CODE_BIAS_BANK_POLICY_CLOSE_30S_BANK,
+    COMPACT_CODE_BIAS_BANK_POLICY_LATEST_PRECEDING_BANK,
+)
+COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_OVERLAP_ONLY = "overlap-only"
+COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_SELECTED_SATELLITE_BASE_EXTEND = (
+    "selected-satellite-base-extend"
+)
+COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_ALL_BASE_SATELLITE_EXTEND = (
+    "all-base-satellite-extend"
+)
+COMPACT_BIAS_ROW_MATERIALIZATION_POLICIES = (
+    COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_OVERLAP_ONLY,
+    COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_SELECTED_SATELLITE_BASE_EXTEND,
+    COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_ALL_BASE_SATELLITE_EXTEND,
+)
+COMPACT_ROW_CONSTRUCTION_POLICY_INDEPENDENT = "independent"
+COMPACT_ROW_CONSTRUCTION_POLICY_COUPLED_CODE_PHASE = "coupled-code-phase"
+COMPACT_ROW_CONSTRUCTION_POLICY_ROW_FIRST_VALUE_SECOND = "row-first-value-second"
+COMPACT_ROW_CONSTRUCTION_POLICY_NETWORK_ROW_DRIVEN = "network-row-driven"
+COMPACT_ROW_CONSTRUCTION_POLICIES = (
+    COMPACT_ROW_CONSTRUCTION_POLICY_INDEPENDENT,
+    COMPACT_ROW_CONSTRUCTION_POLICY_COUPLED_CODE_PHASE,
+    COMPACT_ROW_CONSTRUCTION_POLICY_ROW_FIRST_VALUE_SECOND,
+    COMPACT_ROW_CONSTRUCTION_POLICY_NETWORK_ROW_DRIVEN,
+)
 COMPACT_PHASE_BIAS_COMPOSITION_POLICY_DIRECT = "direct-values"
 COMPACT_PHASE_BIAS_COMPOSITION_POLICY_BASE_PLUS_NETWORK = "base-plus-network"
 COMPACT_PHASE_BIAS_COMPOSITION_POLICY_BASE_ONLY_IF_PRESENT = "base-only-if-present"
@@ -387,6 +427,8 @@ class CSSRDecoderState:
     pending_udi_seconds: float | None = None
     pending_ura: dict[str, float] | None = None
     pending_code_bias: dict[str, dict[int, float]] | None = None
+    pending_base_code_bias: dict[str, dict[int, float]] | None = None
+    base_code_bias_banks: dict[int, dict[str, dict[int, float]]] | None = None
     pending_phase_bias: dict[str, dict[int, float]] | None = None
     pending_phase_bias_source: dict[str, dict[int, int]] | None = None
     pending_base_phase_bias: dict[str, dict[int, float]] | None = None
@@ -622,6 +664,7 @@ def reset_pending_corrections(state: CSSRDecoderState) -> None:
     state.pending_udi_seconds = None
     state.pending_ura = None
     state.pending_code_bias = None
+    state.pending_base_code_bias = None
     state.pending_phase_bias = None
     state.pending_phase_bias_source = None
     state.pending_base_phase_bias = None
@@ -673,6 +716,115 @@ def reset_pending_corrections_with_policy(
 
 def phase_bias_bank_anchor_tow(tow: int) -> int:
     return tow - (tow % PHASE_BIAS_BANK_BUCKET_SECONDS)
+
+
+def prune_base_code_bias_banks(state: CSSRDecoderState, current_tow: int) -> None:
+    if state.base_code_bias_banks is None:
+        return
+    min_anchor = phase_bias_bank_anchor_tow(current_tow) - PHASE_BIAS_BANK_RETENTION_SECONDS
+    state.base_code_bias_banks = {
+        anchor: bank
+        for anchor, bank in state.base_code_bias_banks.items()
+        if anchor >= min_anchor
+    }
+
+
+def store_base_code_bias_bank_entry(
+    state: CSSRDecoderState,
+    tow: int,
+    satellite_token: str,
+    signal_id: int,
+    bias_m: float,
+) -> None:
+    if state.base_code_bias_banks is None:
+        state.base_code_bias_banks = {}
+    prune_base_code_bias_banks(state, tow)
+    anchor = phase_bias_bank_anchor_tow(tow)
+    bank = state.base_code_bias_banks.setdefault(anchor, {})
+    bank.setdefault(satellite_token, {})[signal_id] = bias_m
+
+
+def lookup_base_code_bias_bank_entry(
+    state: CSSRDecoderState,
+    tow: int,
+    satellite_token: str,
+    signal_id: int,
+    bank_policy: str,
+) -> float | None:
+    if bank_policy not in COMPACT_CODE_BIAS_BANK_POLICIES:
+        raise ValueError(
+            "unsupported Compact SSR code-bias bank policy: "
+            f"{bank_policy}"
+        )
+    if (
+        bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH
+        or not state.base_code_bias_banks
+    ):
+        return None
+    if bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_SAME_30S_BANK:
+        anchors = [phase_bias_bank_anchor_tow(tow)]
+    elif bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_CLOSE_30S_BANK:
+        current_anchor = phase_bias_bank_anchor_tow(tow)
+        anchors = [
+            anchor
+            for anchor in state.base_code_bias_banks
+            if anchor <= tow and (current_anchor - anchor) <= PHASE_BIAS_BANK_BUCKET_SECONDS
+        ]
+        anchors.sort(reverse=True)
+    else:
+        anchors = [
+            anchor
+            for anchor in state.base_code_bias_banks
+            if anchor <= tow
+        ]
+        anchors.sort(reverse=True)
+    for anchor in anchors:
+        bias_bank = state.base_code_bias_banks.get(anchor)
+        if bias_bank is None:
+            continue
+        bias_m = bias_bank.get(satellite_token, {}).get(signal_id)
+        if bias_m is not None:
+            return bias_m
+    return None
+
+
+def lookup_base_code_bias_bank_rows(
+    state: CSSRDecoderState,
+    tow: int,
+    satellite_token: str,
+    bank_policy: str,
+) -> dict[int, float]:
+    if bank_policy not in COMPACT_CODE_BIAS_BANK_POLICIES:
+        raise ValueError(
+            "unsupported Compact SSR code-bias bank policy: "
+            f"{bank_policy}"
+        )
+    if (
+        bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH
+        or not state.base_code_bias_banks
+    ):
+        return {}
+    if bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_SAME_30S_BANK:
+        anchors = [phase_bias_bank_anchor_tow(tow)]
+    elif bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_CLOSE_30S_BANK:
+        current_anchor = phase_bias_bank_anchor_tow(tow)
+        anchors = [
+            anchor
+            for anchor in state.base_code_bias_banks
+            if anchor <= tow and (current_anchor - anchor) <= PHASE_BIAS_BANK_BUCKET_SECONDS
+        ]
+        anchors.sort(reverse=True)
+    else:
+        anchors = [anchor for anchor in state.base_code_bias_banks if anchor <= tow]
+        anchors.sort(reverse=True)
+    for anchor in anchors:
+        bias_bank = state.base_code_bias_banks.get(anchor)
+        if bias_bank is None:
+            continue
+        rows = bias_bank.get(satellite_token)
+        if rows:
+            return dict(rows)
+    return {}
 
 
 def prune_base_phase_bias_banks(state: CSSRDecoderState, current_tow: int) -> None:
@@ -743,6 +895,227 @@ def lookup_base_phase_bias_bank_entry(
         if bias_m is not None:
             return bias_m
     return None
+
+
+def lookup_base_phase_bias_bank_rows(
+    state: CSSRDecoderState,
+    tow: int,
+    satellite_token: str,
+    bank_policy: str,
+) -> dict[int, float]:
+    if bank_policy not in COMPACT_PHASE_BIAS_BANK_POLICIES:
+        raise ValueError(
+            "unsupported Compact SSR phase-bias bank policy: "
+            f"{bank_policy}"
+        )
+    if (
+        bank_policy == COMPACT_PHASE_BIAS_BANK_POLICY_PENDING_EPOCH
+        or not state.base_phase_bias_banks
+    ):
+        return {}
+    if bank_policy == COMPACT_PHASE_BIAS_BANK_POLICY_SAME_30S_BANK:
+        anchors = [phase_bias_bank_anchor_tow(tow)]
+    elif bank_policy == COMPACT_PHASE_BIAS_BANK_POLICY_CLOSE_30S_BANK:
+        current_anchor = phase_bias_bank_anchor_tow(tow)
+        anchors = [
+            anchor
+            for anchor in state.base_phase_bias_banks
+            if anchor <= tow and (current_anchor - anchor) <= PHASE_BIAS_BANK_BUCKET_SECONDS
+        ]
+        anchors.sort(reverse=True)
+    else:
+        anchors = [anchor for anchor in state.base_phase_bias_banks if anchor <= tow]
+        anchors.sort(reverse=True)
+    for anchor in anchors:
+        bias_bank = state.base_phase_bias_banks.get(anchor)
+        if bias_bank is None:
+            continue
+        rows = bias_bank.get(satellite_token)
+        if rows:
+            return dict(rows)
+    return {}
+
+
+def resolve_base_code_bias_rows(
+    state: CSSRDecoderState,
+    tow: int,
+    satellite_token: str,
+    bank_policy: str,
+) -> dict[int, float]:
+    rows = lookup_base_code_bias_bank_rows(state, tow, satellite_token, bank_policy)
+    if state.pending_base_code_bias is not None:
+        rows.update(state.pending_base_code_bias.get(satellite_token, {}))
+    return rows
+
+
+def resolve_base_phase_bias_rows(
+    state: CSSRDecoderState,
+    tow: int,
+    satellite_token: str,
+    bank_policy: str,
+) -> dict[int, float]:
+    rows = lookup_base_phase_bias_bank_rows(state, tow, satellite_token, bank_policy)
+    if state.pending_base_phase_bias is not None:
+        rows.update(state.pending_base_phase_bias.get(satellite_token, {}))
+    return rows
+
+
+def materialize_missing_code_bias_rows(
+    state: CSSRDecoderState,
+    tow: int,
+    *,
+    mask_satellites: list[CSSRSatellite],
+    selected_satellites: set[str],
+    row_materialization_policy: str,
+    bank_policy: str,
+) -> None:
+    if row_materialization_policy not in COMPACT_BIAS_ROW_MATERIALIZATION_POLICIES:
+        raise ValueError(
+            "unsupported Compact SSR bias row materialization policy: "
+            f"{row_materialization_policy}"
+        )
+    if row_materialization_policy == COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_OVERLAP_ONLY:
+        return
+    assert state.pending_code_bias is not None
+    if row_materialization_policy == COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_SELECTED_SATELLITE_BASE_EXTEND:
+        target_satellites = set(selected_satellites)
+    else:
+        target_satellites = {satellite.sat for satellite in mask_satellites}
+    for satellite_token in sorted(target_satellites):
+        base_rows = resolve_base_code_bias_rows(state, tow, satellite_token, bank_policy)
+        if not base_rows:
+            continue
+        satellite_biases = state.pending_code_bias.setdefault(satellite_token, {})
+        for signal_id, bias_m in base_rows.items():
+            satellite_biases.setdefault(signal_id, bias_m)
+
+
+def materialize_missing_phase_bias_rows(
+    state: CSSRDecoderState,
+    tow: int,
+    *,
+    mask_satellites: list[CSSRSatellite],
+    selected_satellites: set[str],
+    row_materialization_policy: str,
+    bank_policy: str,
+) -> None:
+    if row_materialization_policy not in COMPACT_BIAS_ROW_MATERIALIZATION_POLICIES:
+        raise ValueError(
+            "unsupported Compact SSR bias row materialization policy: "
+            f"{row_materialization_policy}"
+        )
+    if row_materialization_policy == COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_OVERLAP_ONLY:
+        return
+    assert state.pending_phase_bias is not None
+    assert state.pending_phase_bias_source is not None
+    if row_materialization_policy == COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_SELECTED_SATELLITE_BASE_EXTEND:
+        target_satellites = set(selected_satellites)
+    else:
+        target_satellites = {satellite.sat for satellite in mask_satellites}
+    for satellite_token in sorted(target_satellites):
+        base_rows = resolve_base_phase_bias_rows(state, tow, satellite_token, bank_policy)
+        if not base_rows:
+            continue
+        satellite_biases = state.pending_phase_bias.setdefault(satellite_token, {})
+        satellite_sources = state.pending_phase_bias_source.setdefault(satellite_token, {})
+        for signal_id, bias_m in base_rows.items():
+            if signal_id in satellite_biases:
+                continue
+            satellite_biases[signal_id] = bias_m
+            satellite_sources[signal_id] = CSSR_SUBTYPE_CODE_PHASE_BIAS
+
+
+def apply_coupled_code_phase_construction(
+    state: CSSRDecoderState,
+    tow: int,
+    *,
+    selected_satellites: set[str],
+    code_bias_bank_policy: str,
+    phase_bias_bank_policy: str,
+) -> None:
+    assert state.pending_code_bias is not None
+    assert state.pending_phase_bias is not None
+    assert state.pending_phase_bias_source is not None
+    all_sat_tokens = set(state.pending_code_bias) | set(state.pending_phase_bias)
+    for satellite_token in sorted(all_sat_tokens & selected_satellites):
+        code_signals = set(state.pending_code_bias.get(satellite_token, {}))
+        phase_signals = set(state.pending_phase_bias.get(satellite_token, {}))
+        missing_code_signals = phase_signals - code_signals
+        if missing_code_signals:
+            base_code = resolve_base_code_bias_rows(
+                state, tow, satellite_token, code_bias_bank_policy,
+            )
+            sat_code = state.pending_code_bias.setdefault(satellite_token, {})
+            for signal_id in sorted(missing_code_signals):
+                if signal_id in base_code:
+                    sat_code.setdefault(signal_id, base_code[signal_id])
+        missing_phase_signals = code_signals - phase_signals
+        if missing_phase_signals:
+            base_phase = resolve_base_phase_bias_rows(
+                state, tow, satellite_token, phase_bias_bank_policy,
+            )
+            sat_phase = state.pending_phase_bias.setdefault(satellite_token, {})
+            sat_sources = state.pending_phase_bias_source.setdefault(satellite_token, {})
+            for signal_id in sorted(missing_phase_signals):
+                if signal_id in base_phase:
+                    sat_phase.setdefault(signal_id, base_phase[signal_id])
+                    sat_sources.setdefault(signal_id, CSSR_SUBTYPE_CODE_PHASE_BIAS)
+
+
+def apply_row_first_value_second_construction(
+    state: CSSRDecoderState,
+    tow: int,
+    *,
+    selected_satellites: set[str],
+    code_bias_bank_policy: str,
+    phase_bias_bank_policy: str,
+    code_bias_composition_policy: str,
+    phase_bias_composition_policy: str,
+) -> None:
+    assert state.pending_code_bias is not None
+    assert state.pending_phase_bias is not None
+    assert state.pending_phase_bias_source is not None
+    for satellite_token in sorted(selected_satellites):
+        base_code = resolve_base_code_bias_rows(
+            state, tow, satellite_token, code_bias_bank_policy,
+        )
+        base_phase = resolve_base_phase_bias_rows(
+            state, tow, satellite_token, phase_bias_bank_policy,
+        )
+        all_signals = (
+            set(state.pending_code_bias.get(satellite_token, {}))
+            | set(state.pending_phase_bias.get(satellite_token, {}))
+            | set(base_code)
+            | set(base_phase)
+        )
+        if not all_signals:
+            continue
+        sat_code = state.pending_code_bias.setdefault(satellite_token, {})
+        sat_phase = state.pending_phase_bias.setdefault(satellite_token, {})
+        sat_sources = state.pending_phase_bias_source.setdefault(satellite_token, {})
+        for signal_id in sorted(all_signals):
+            if signal_id not in sat_code and signal_id in base_code:
+                sat_code[signal_id] = base_code[signal_id]
+            if signal_id not in sat_phase and signal_id in base_phase:
+                sat_phase[signal_id] = base_phase[signal_id]
+                sat_sources.setdefault(signal_id, CSSR_SUBTYPE_CODE_PHASE_BIAS)
+
+
+def apply_network_row_driven_construction(
+    state: CSSRDecoderState,
+    *,
+    selected_satellites: set[str],
+    mask_satellites: list,
+) -> None:
+    assert state.pending_code_bias is not None
+    assert state.pending_phase_bias is not None
+    assert state.pending_phase_bias_source is not None
+    all_mask_sats = {satellite.sat for satellite in mask_satellites}
+    non_network_sats = all_mask_sats - selected_satellites
+    for satellite_token in non_network_sats:
+        state.pending_code_bias.pop(satellite_token, None)
+        state.pending_phase_bias.pop(satellite_token, None)
+        state.pending_phase_bias_source.pop(satellite_token, None)
 
 
 def prepare_pending_phase_bias_for_message(
@@ -858,6 +1231,41 @@ def compose_phase_bias_value(
     if base_bias_m is None:
         return network_bias_m
     if composition_policy == COMPACT_PHASE_BIAS_COMPOSITION_POLICY_BASE_PLUS_NETWORK:
+        return base_bias_m + network_bias_m
+    return base_bias_m
+
+
+def compose_code_bias_value(
+    *,
+    state: CSSRDecoderState,
+    tow: int,
+    satellite_token: str,
+    signal_id: int,
+    network_bias_m: float,
+    composition_policy: str,
+    bank_policy: str,
+) -> float:
+    if composition_policy not in COMPACT_CODE_BIAS_COMPOSITION_POLICIES:
+        raise ValueError(
+            "unsupported Compact SSR code-bias composition policy: "
+            f"{composition_policy}"
+        )
+    if composition_policy == COMPACT_CODE_BIAS_COMPOSITION_POLICY_DIRECT:
+        return network_bias_m
+    base_bias_m = None
+    if state.pending_base_code_bias is not None:
+        base_bias_m = state.pending_base_code_bias.get(satellite_token, {}).get(signal_id)
+    if base_bias_m is None:
+        base_bias_m = lookup_base_code_bias_bank_entry(
+            state,
+            tow,
+            satellite_token,
+            signal_id,
+            bank_policy,
+        )
+    if base_bias_m is None:
+        return network_bias_m
+    if composition_policy == COMPACT_CODE_BIAS_COMPOSITION_POLICY_BASE_PLUS_NETWORK:
         return base_bias_m + network_bias_m
     return base_bias_m
 
@@ -978,6 +1386,8 @@ def ensure_pending_epoch(
 ) -> None:
     if state.base_phase_bias_banks is None:
         state.base_phase_bias_banks = {}
+    if state.base_code_bias_banks is None:
+        state.base_code_bias_banks = {}
     if state.pending_tow == tow and state.pending_iod == iod:
         return
     reset_pending_corrections_with_policy(state, atmos_merge_policy)
@@ -988,6 +1398,7 @@ def ensure_pending_epoch(
     state.pending_clock = {}
     state.pending_ura = {}
     state.pending_code_bias = {}
+    state.pending_base_code_bias = {}
     state.pending_phase_bias = {}
     state.pending_phase_bias_source = {}
     state.pending_base_phase_bias = {}
@@ -1177,6 +1588,7 @@ def decode_cssr_code_bias_message(
     gps_week: int | None,
     flush_policy: str = COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
     atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
+    code_bias_composition_policy: str = COMPACT_CODE_BIAS_COMPOSITION_POLICY_DIRECT,
 ) -> tuple[CSSRMessage, list[CompactSSRCorrection], int]:
     mask = require_mask_state(state, CSSR_SUBTYPE_CODE_BIAS)
     header, bit_offset = decode_cssr_header(payload, bit_offset, CSSR_SUBTYPE_CODE_BIAS, state)
@@ -1192,6 +1604,7 @@ def decode_cssr_code_bias_message(
         atmos_merge_policy,
     )
     assert state.pending_code_bias is not None
+    assert state.pending_base_code_bias is not None
     mapped_count = 0
     for satellite in mask.satellites:
         satellite_biases = state.pending_code_bias.setdefault(satellite.sat, {})
@@ -1201,6 +1614,14 @@ def decode_cssr_code_bias_message(
             if signal_id == 0 or not math.isfinite(bias_m):
                 continue
             satellite_biases[signal_id] = bias_m
+            state.pending_base_code_bias.setdefault(satellite.sat, {})[signal_id] = bias_m
+            store_base_code_bias_bank_entry(
+                state,
+                int(header["tow"]),
+                satellite.sat,
+                signal_id,
+                bias_m,
+            )
             mapped_count += 1
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
@@ -1235,8 +1656,12 @@ def decode_cssr_code_phase_bias_message(
     atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
     phase_bias_merge_policy: str = COMPACT_PHASE_BIAS_MERGE_POLICY_LATEST_UNION,
     phase_bias_source_policy: str = COMPACT_PHASE_BIAS_SOURCE_POLICY_ARRIVAL_ORDER,
+    code_bias_composition_policy: str = COMPACT_CODE_BIAS_COMPOSITION_POLICY_DIRECT,
+    code_bias_bank_policy: str = COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH,
     phase_bias_composition_policy: str = COMPACT_PHASE_BIAS_COMPOSITION_POLICY_DIRECT,
     phase_bias_bank_policy: str = COMPACT_PHASE_BIAS_BANK_POLICY_PENDING_EPOCH,
+    bias_row_materialization_policy: str = COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_OVERLAP_ONLY,
+    row_construction_policy: str = COMPACT_ROW_CONSTRUCTION_POLICY_INDEPENDENT,
 ) -> tuple[CSSRMessage, list[CompactSSRCorrection], int]:
     mask = require_mask_state(state, CSSR_SUBTYPE_CODE_PHASE_BIAS)
     header, bit_offset = decode_cssr_header(payload, bit_offset, CSSR_SUBTYPE_CODE_PHASE_BIAS, state)
@@ -1266,6 +1691,7 @@ def decode_cssr_code_phase_bias_message(
         atmos_merge_policy,
     )
     assert state.pending_code_bias is not None
+    assert state.pending_base_code_bias is not None
     assert state.pending_phase_bias is not None
     assert state.pending_phase_bias_source is not None
     assert state.pending_base_phase_bias is not None
@@ -1284,18 +1710,37 @@ def decode_cssr_code_phase_bias_message(
 
     mapped_code = 0
     mapped_phase = 0
-    selected_satellites = 0
+    selected_satellite_count = 0
     for index, satellite in enumerate(mask.satellites):
         if ((selected_mask >> (mask.satellite_count - 1 - index)) & 1) == 0:
             continue
-        selected_satellites += 1
+        selected_satellite_count += 1
         satellite_code_biases = state.pending_code_bias.setdefault(satellite.sat, {})
         for signal_slot in satellite.signal_slots:
             signal_id = cssr_signal_slot_to_rtcm_id(satellite.system_id, signal_slot)
             if code_bias_exists:
                 bias_m, bit_offset = decode_scaled_signed(payload, bit_offset, 11, 0.02)
+                if signal_id != 0 and math.isfinite(bias_m) and network_bias_correction:
+                    bias_m = compose_code_bias_value(
+                        state=state,
+                        tow=int(header["tow"]),
+                        satellite_token=satellite.sat,
+                        signal_id=signal_id,
+                        network_bias_m=bias_m,
+                        composition_policy=code_bias_composition_policy,
+                        bank_policy=code_bias_bank_policy,
+                    )
                 if signal_id != 0 and math.isfinite(bias_m):
                     satellite_code_biases[signal_id] = bias_m
+                    if not network_bias_correction:
+                        state.pending_base_code_bias.setdefault(satellite.sat, {})[signal_id] = bias_m
+                        store_base_code_bias_bank_entry(
+                            state,
+                            int(header["tow"]),
+                            satellite.sat,
+                            signal_id,
+                            bias_m,
+                        )
                     mapped_code += 1
             if phase_bias_exists:
                 bias_m, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.001)
@@ -1335,6 +1780,51 @@ def decode_cssr_code_phase_bias_message(
                         )
                     mapped_phase += 1
 
+    if network_bias_correction and code_bias_exists:
+        materialize_missing_code_bias_rows(
+            state,
+            int(header["tow"]),
+            mask_satellites=mask.satellites,
+            selected_satellites=selected_satellites,
+            row_materialization_policy=bias_row_materialization_policy,
+            bank_policy=code_bias_bank_policy,
+        )
+    if network_bias_correction and phase_bias_exists:
+        materialize_missing_phase_bias_rows(
+            state,
+            int(header["tow"]),
+            mask_satellites=mask.satellites,
+            selected_satellites=selected_satellites,
+            row_materialization_policy=bias_row_materialization_policy,
+            bank_policy=phase_bias_bank_policy,
+        )
+
+    if network_bias_correction and row_construction_policy != COMPACT_ROW_CONSTRUCTION_POLICY_INDEPENDENT:
+        if row_construction_policy == COMPACT_ROW_CONSTRUCTION_POLICY_COUPLED_CODE_PHASE:
+            apply_coupled_code_phase_construction(
+                state,
+                int(header["tow"]),
+                selected_satellites=selected_satellites,
+                code_bias_bank_policy=code_bias_bank_policy,
+                phase_bias_bank_policy=phase_bias_bank_policy,
+            )
+        elif row_construction_policy == COMPACT_ROW_CONSTRUCTION_POLICY_ROW_FIRST_VALUE_SECOND:
+            apply_row_first_value_second_construction(
+                state,
+                int(header["tow"]),
+                selected_satellites=selected_satellites,
+                code_bias_bank_policy=code_bias_bank_policy,
+                phase_bias_bank_policy=phase_bias_bank_policy,
+                code_bias_composition_policy=code_bias_composition_policy,
+                phase_bias_composition_policy=phase_bias_composition_policy,
+            )
+        elif row_construction_policy == COMPACT_ROW_CONSTRUCTION_POLICY_NETWORK_ROW_DRIVEN:
+            apply_network_row_driven_construction(
+                state,
+                selected_satellites=selected_satellites,
+                mask_satellites=mask.satellites,
+            )
+
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
         corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
@@ -1352,7 +1842,7 @@ def decode_cssr_code_phase_bias_message(
             message_bits=bit_offset,
             detail=(
                 f"code={int(code_bias_exists)} phase={int(phase_bias_exists)} "
-                f"net={network_id if network_id is not None else 0} sats={selected_satellites} "
+                f"net={network_id if network_id is not None else 0} sats={selected_satellite_count} "
                 f"mapped_code={mapped_code} mapped_phase={mapped_phase}"
             ),
             correction_count=len(corrections),
@@ -2049,8 +2539,12 @@ def decode_cssr_messages(
     atmos_subtype_merge_policy: str = COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION,
     phase_bias_merge_policy: str = COMPACT_PHASE_BIAS_MERGE_POLICY_LATEST_UNION,
     phase_bias_source_policy: str = COMPACT_PHASE_BIAS_SOURCE_POLICY_ARRIVAL_ORDER,
+    code_bias_composition_policy: str = COMPACT_CODE_BIAS_COMPOSITION_POLICY_DIRECT,
+    code_bias_bank_policy: str = COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH,
     phase_bias_composition_policy: str = COMPACT_PHASE_BIAS_COMPOSITION_POLICY_DIRECT,
     phase_bias_bank_policy: str = COMPACT_PHASE_BIAS_BANK_POLICY_PENDING_EPOCH,
+    bias_row_materialization_policy: str = COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_OVERLAP_ONLY,
+    row_construction_policy: str = COMPACT_ROW_CONSTRUCTION_POLICY_INDEPENDENT,
 ) -> tuple[list[CSSRMessage], list[CompactSSRCorrection], list[CSSRServiceInfoPacket]]:
     messages: list[CSSRMessage] = []
     corrections: list[CompactSSRCorrection] = []
@@ -2106,6 +2600,7 @@ def decode_cssr_messages(
                     gps_week,
                     flush_policy,
                     atmos_merge_policy,
+                    code_bias_composition_policy,
                 )
                 corrections.extend(message_corrections)
             elif subtype == CSSR_SUBTYPE_PHASE_BIAS:
@@ -2134,8 +2629,12 @@ def decode_cssr_messages(
                     atmos_merge_policy,
                     phase_bias_merge_policy,
                     phase_bias_source_policy,
+                    code_bias_composition_policy,
+                    code_bias_bank_policy,
                     phase_bias_composition_policy,
                     phase_bias_bank_policy,
+                    bias_row_materialization_policy,
+                    row_construction_policy,
                 )
                 corrections.extend(message_corrections)
             elif subtype == CSSR_SUBTYPE_URA:
@@ -2515,6 +3014,26 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--compact-code-bias-composition-policy",
+        choices=COMPACT_CODE_BIAS_COMPOSITION_POLICIES,
+        default=COMPACT_CODE_BIAS_COMPOSITION_POLICY_DIRECT,
+        help=(
+            "Compact SSR code-bias composition policy when subtype-6 network rows are "
+            "materialized against previously accepted base rows "
+            "(default: direct-values)."
+        ),
+    )
+    parser.add_argument(
+        "--compact-code-bias-bank-policy",
+        choices=COMPACT_CODE_BIAS_BANK_POLICIES,
+        default=COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH,
+        help=(
+            "Compact SSR code-bias base-bank lookup policy when subtype-6 network rows "
+            "need previously accepted base rows "
+            "(default: pending-epoch)."
+        ),
+    )
+    parser.add_argument(
         "--compact-phase-bias-composition-policy",
         choices=COMPACT_PHASE_BIAS_COMPOSITION_POLICIES,
         default=COMPACT_PHASE_BIAS_COMPOSITION_POLICY_DIRECT,
@@ -2532,6 +3051,26 @@ def parse_args() -> argparse.Namespace:
             "Compact SSR phase-bias base-bank lookup policy when subtype-6 network rows "
             "need previously accepted base rows "
             "(default: pending-epoch)."
+        ),
+    )
+    parser.add_argument(
+        "--compact-bias-row-materialization",
+        choices=COMPACT_BIAS_ROW_MATERIALIZATION_POLICIES,
+        default=COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_OVERLAP_ONLY,
+        help=(
+            "Compact SSR row materialization policy when subtype-6 network rows "
+            "are allowed to extend missing code/phase bias signal rows from base banks "
+            "(default: overlap-only)."
+        ),
+    )
+    parser.add_argument(
+        "--compact-row-construction-policy",
+        choices=COMPACT_ROW_CONSTRUCTION_POLICIES,
+        default=COMPACT_ROW_CONSTRUCTION_POLICY_INDEPENDENT,
+        help=(
+            "Compact SSR row construction policy controlling how subtype-4/subtype-6 "
+            "row and value construction interact before expanded SSR emission "
+            "(default: independent)."
         ),
     )
     parser.add_argument(
@@ -2679,8 +3218,12 @@ def main() -> int:
             atmos_subtype_merge_policy=args.compact_atmos_subtype_merge_policy,
             phase_bias_merge_policy=args.compact_phase_bias_merge_policy,
             phase_bias_source_policy=args.compact_phase_bias_source_policy,
+            code_bias_composition_policy=args.compact_code_bias_composition_policy,
+            code_bias_bank_policy=args.compact_code_bias_bank_policy,
             phase_bias_composition_policy=args.compact_phase_bias_composition_policy,
             phase_bias_bank_policy=args.compact_phase_bias_bank_policy,
+            bias_row_materialization_policy=args.compact_bias_row_materialization,
+            row_construction_policy=args.compact_row_construction_policy,
         )
         for message in compact_messages:
             print(

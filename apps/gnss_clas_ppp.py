@@ -94,6 +94,18 @@ def parse_args() -> argparse.Namespace:
         help="Compact SSR phase-bias source-row precedence policy used when expanding raw QZSS L6 into sampled SSR CSV.",
     )
     parser.add_argument(
+        "--compact-code-bias-composition-policy",
+        choices=qzss_l6_info.COMPACT_CODE_BIAS_COMPOSITION_POLICIES,
+        default=qzss_l6_info.COMPACT_CODE_BIAS_COMPOSITION_POLICY_DIRECT,
+        help="Compact SSR code-bias composition policy used when expanding raw QZSS L6 into sampled SSR CSV.",
+    )
+    parser.add_argument(
+        "--compact-code-bias-bank-policy",
+        choices=qzss_l6_info.COMPACT_CODE_BIAS_BANK_POLICIES,
+        default=qzss_l6_info.COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH,
+        help="Compact SSR code-bias base-bank lookup policy used when expanding raw QZSS L6 into sampled SSR CSV.",
+    )
+    parser.add_argument(
         "--compact-phase-bias-composition-policy",
         choices=qzss_l6_info.COMPACT_PHASE_BIAS_COMPOSITION_POLICIES,
         default=qzss_l6_info.COMPACT_PHASE_BIAS_COMPOSITION_POLICY_DIRECT,
@@ -104,6 +116,18 @@ def parse_args() -> argparse.Namespace:
         choices=qzss_l6_info.COMPACT_PHASE_BIAS_BANK_POLICIES,
         default=qzss_l6_info.COMPACT_PHASE_BIAS_BANK_POLICY_PENDING_EPOCH,
         help="Compact SSR phase-bias base-bank lookup policy used when expanding raw QZSS L6 into sampled SSR CSV.",
+    )
+    parser.add_argument(
+        "--compact-bias-row-materialization",
+        choices=qzss_l6_info.COMPACT_BIAS_ROW_MATERIALIZATION_POLICIES,
+        default=qzss_l6_info.COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_OVERLAP_ONLY,
+        help="Compact SSR row materialization policy used when subtype-6 network rows extend missing base-bias signal rows.",
+    )
+    parser.add_argument(
+        "--compact-row-construction-policy",
+        choices=qzss_l6_info.COMPACT_ROW_CONSTRUCTION_POLICIES,
+        default=qzss_l6_info.COMPACT_ROW_CONSTRUCTION_POLICY_INDEPENDENT,
+        help="Compact SSR row construction policy controlling how subtype-4/subtype-6 row and value construction interact.",
     )
     parser.add_argument("--out", type=Path, required=True, help="Output PPP .pos file.")
     parser.add_argument("--summary-json", type=Path, default=None, help="Optional summary JSON path.")
@@ -422,8 +446,12 @@ def expand_qzss_l6_source(
     compact_atmos_subtype_merge_policy: str = qzss_l6_info.COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION,
     compact_phase_bias_merge_policy: str = qzss_l6_info.COMPACT_PHASE_BIAS_MERGE_POLICY_LATEST_UNION,
     compact_phase_bias_source_policy: str = qzss_l6_info.COMPACT_PHASE_BIAS_SOURCE_POLICY_ARRIVAL_ORDER,
+    compact_code_bias_composition_policy: str = qzss_l6_info.COMPACT_CODE_BIAS_COMPOSITION_POLICY_DIRECT,
+    compact_code_bias_bank_policy: str = qzss_l6_info.COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH,
     compact_phase_bias_composition_policy: str = qzss_l6_info.COMPACT_PHASE_BIAS_COMPOSITION_POLICY_DIRECT,
     compact_phase_bias_bank_policy: str = qzss_l6_info.COMPACT_PHASE_BIAS_BANK_POLICY_PENDING_EPOCH,
+    compact_bias_row_materialization: str = qzss_l6_info.COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_OVERLAP_ONLY,
+    compact_row_construction_policy: str = qzss_l6_info.COMPACT_ROW_CONSTRUCTION_POLICY_INDEPENDENT,
 ) -> dict[str, object]:
     frames, subframes, _stats = qzss_l6_info.decode_source(source)
     messages, corrections, _service_info_packets = qzss_l6_info.decode_cssr_messages(
@@ -434,8 +462,12 @@ def expand_qzss_l6_source(
         atmos_subtype_merge_policy=compact_atmos_subtype_merge_policy,
         phase_bias_merge_policy=compact_phase_bias_merge_policy,
         phase_bias_source_policy=compact_phase_bias_source_policy,
+        code_bias_composition_policy=compact_code_bias_composition_policy,
+        code_bias_bank_policy=compact_code_bias_bank_policy,
         phase_bias_composition_policy=compact_phase_bias_composition_policy,
         phase_bias_bank_policy=compact_phase_bias_bank_policy,
+        bias_row_materialization_policy=compact_bias_row_materialization,
+        row_construction_policy=compact_row_construction_policy,
     )
     compact_source = output_path.parent / "qzss_l6_compact.csv"
     qzss_l6_info.write_compact_corrections(compact_source, corrections)
@@ -467,8 +499,12 @@ def expand_qzss_l6_source(
         "compact_atmos_subtype_merge_policy": compact_atmos_subtype_merge_policy,
         "compact_phase_bias_merge_policy": compact_phase_bias_merge_policy,
         "compact_phase_bias_source_policy": compact_phase_bias_source_policy,
+        "compact_code_bias_composition_policy": compact_code_bias_composition_policy,
+        "compact_code_bias_bank_policy": compact_code_bias_bank_policy,
         "compact_phase_bias_composition_policy": compact_phase_bias_composition_policy,
         "compact_phase_bias_bank_policy": compact_phase_bias_bank_policy,
+        "compact_bias_row_materialization": compact_bias_row_materialization,
+        "compact_row_construction_policy": compact_row_construction_policy,
     }
 
 
@@ -569,8 +605,12 @@ def build_summary_payload(
         "compact_atmos_subtype_merge_policy": args.compact_atmos_subtype_merge_policy,
         "compact_phase_bias_merge_policy": args.compact_phase_bias_merge_policy,
         "compact_phase_bias_source_policy": args.compact_phase_bias_source_policy,
+        "compact_code_bias_composition_policy": args.compact_code_bias_composition_policy,
+        "compact_code_bias_bank_policy": args.compact_code_bias_bank_policy,
         "compact_phase_bias_composition_policy": args.compact_phase_bias_composition_policy,
         "compact_phase_bias_bank_policy": args.compact_phase_bias_bank_policy,
+        "compact_bias_row_materialization": args.compact_bias_row_materialization,
+        "compact_row_construction_policy": args.compact_row_construction_policy,
         "atmos_messages": 0,
         "atmos_rows": 0,
         "ppp_atmospheric_trop_corrections": 0,
@@ -691,8 +731,12 @@ def main() -> int:
                 compact_atmos_subtype_merge_policy=args.compact_atmos_subtype_merge_policy,
                 compact_phase_bias_merge_policy=args.compact_phase_bias_merge_policy,
                 compact_phase_bias_source_policy=args.compact_phase_bias_source_policy,
+                compact_code_bias_composition_policy=args.compact_code_bias_composition_policy,
+                compact_code_bias_bank_policy=args.compact_code_bias_bank_policy,
                 compact_phase_bias_composition_policy=args.compact_phase_bias_composition_policy,
                 compact_phase_bias_bank_policy=args.compact_phase_bias_bank_policy,
+                compact_bias_row_materialization=args.compact_bias_row_materialization,
+                compact_row_construction_policy=args.compact_row_construction_policy,
             )
             print(
                 "decoded qzss l6 corrections:",

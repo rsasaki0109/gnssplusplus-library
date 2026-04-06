@@ -60,6 +60,10 @@ class ExperimentStrategy:
     compact_atmos_subtype_merge_policy: str | None
     compact_phase_bias_merge_policy: str | None
     compact_phase_bias_source_policy: str | None
+    compact_code_bias_composition_policy: str | None
+    compact_code_bias_bank_policy: str | None
+    compact_bias_row_materialization_policy: str | None
+    compact_row_construction_policy: str | None
     compact_phase_bias_composition_policy: str | None
     compact_phase_bias_bank_policy: str | None
     implementation_files: tuple[Path, ...]
@@ -236,6 +240,26 @@ def load_strategies(path: Path) -> dict[str, ExperimentStrategy]:
                 if raw.get("compact_phase_bias_source_policy") is not None
                 else None
             ),
+            compact_code_bias_composition_policy=(
+                str(raw["compact_code_bias_composition_policy"])
+                if raw.get("compact_code_bias_composition_policy") is not None
+                else None
+            ),
+            compact_code_bias_bank_policy=(
+                str(raw["compact_code_bias_bank_policy"])
+                if raw.get("compact_code_bias_bank_policy") is not None
+                else None
+            ),
+            compact_bias_row_materialization_policy=(
+                str(raw["compact_bias_row_materialization_policy"])
+                if raw.get("compact_bias_row_materialization_policy") is not None
+                else None
+            ),
+            compact_row_construction_policy=(
+                str(raw["compact_row_construction_policy"])
+                if raw.get("compact_row_construction_policy") is not None
+                else None
+            ),
             compact_phase_bias_composition_policy=(
                 str(raw["compact_phase_bias_composition_policy"])
                 if raw.get("compact_phase_bias_composition_policy") is not None
@@ -249,6 +273,24 @@ def load_strategies(path: Path) -> dict[str, ExperimentStrategy]:
             implementation_files=implementation_files,
         )
     return strategies
+
+
+def ssr_variant_cache_key(strategy: ExperimentStrategy) -> str:
+    return "__".join(
+        [
+            strategy.compact_flush_policy or "lag-tolerant-union",
+            strategy.compact_atmos_merge_policy or "stec-coeff-carry",
+            strategy.compact_atmos_subtype_merge_policy or "union",
+            strategy.compact_phase_bias_merge_policy or "latest-union",
+            strategy.compact_phase_bias_source_policy or "arrival-order",
+            strategy.compact_code_bias_composition_policy or "direct-values",
+            strategy.compact_code_bias_bank_policy or "pending-epoch",
+            strategy.compact_bias_row_materialization_policy or "overlap-only",
+            strategy.compact_row_construction_policy or "independent",
+            strategy.compact_phase_bias_composition_policy or "direct-values",
+            strategy.compact_phase_bias_bank_policy or "pending-epoch",
+        ]
+    )
 
 
 def ensure_input_exists(path: Path | None, description: str) -> None:
@@ -275,23 +317,30 @@ def ensure_ssr_csv(input_config: ExperimentInput, strategy: ExperimentStrategy) 
     atmos_subtype_merge_policy = strategy.compact_atmos_subtype_merge_policy or "union"
     phase_bias_merge_policy = strategy.compact_phase_bias_merge_policy or "latest-union"
     phase_bias_source_policy = strategy.compact_phase_bias_source_policy or "arrival-order"
+    code_bias_composition_policy = (
+        strategy.compact_code_bias_composition_policy or "direct-values"
+    )
+    code_bias_bank_policy = (
+        strategy.compact_code_bias_bank_policy or "pending-epoch"
+    )
+    bias_row_materialization_policy = (
+        strategy.compact_bias_row_materialization_policy or "overlap-only"
+    )
+    row_construction_policy = (
+        strategy.compact_row_construction_policy or "independent"
+    )
     phase_bias_composition_policy = (
         strategy.compact_phase_bias_composition_policy or "direct-values"
     )
     phase_bias_bank_policy = (
         strategy.compact_phase_bias_bank_policy or "pending-epoch"
     )
+    variant_key = ssr_variant_cache_key(strategy)
     compact_path = input_config.output_dir / (
-        "compact_ssr_"
-        f"{flush_policy}__{atmos_merge_policy}__{atmos_subtype_merge_policy}__"
-        f"{phase_bias_merge_policy}__{phase_bias_source_policy}__"
-        f"{phase_bias_composition_policy}__{phase_bias_bank_policy}.csv"
+        f"compact_ssr_{variant_key}.csv"
     )
     expanded_path = input_config.output_dir / (
-        "expanded_ssr_"
-        f"{flush_policy}__{atmos_merge_policy}__{atmos_subtype_merge_policy}__"
-        f"{phase_bias_merge_policy}__{phase_bias_source_policy}__"
-        f"{phase_bias_composition_policy}__{phase_bias_bank_policy}.csv"
+        f"expanded_ssr_{variant_key}.csv"
     )
     if compact_path.exists() and expanded_path.exists():
         return expanded_path
@@ -304,6 +353,10 @@ def ensure_ssr_csv(input_config: ExperimentInput, strategy: ExperimentStrategy) 
         atmos_subtype_merge_policy=atmos_subtype_merge_policy,
         phase_bias_merge_policy=phase_bias_merge_policy,
         phase_bias_source_policy=phase_bias_source_policy,
+        code_bias_composition_policy=code_bias_composition_policy,
+        code_bias_bank_policy=code_bias_bank_policy,
+        bias_row_materialization_policy=bias_row_materialization_policy,
+        row_construction_policy=row_construction_policy,
         phase_bias_composition_policy=phase_bias_composition_policy,
         phase_bias_bank_policy=phase_bias_bank_policy,
     )
@@ -703,6 +756,7 @@ def render_markdown(
 ) -> str:
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     first_case = suite.cases[0]
+    resolved_strategy_path = strategy_path.resolve()
     lines = [
         "# PPP-AR Experiments",
         "",
@@ -716,7 +770,7 @@ def render_markdown(
         f"- Suite: `{suite.label}`",
         f"- Cases: `{len(suite.cases)}`",
         f"- Primary mode: `{first_case.mode}`",
-        f"- Shared strategy catalog: `{strategy_path.relative_to(ROOT_DIR)}`",
+        f"- Shared strategy catalog: `{resolved_strategy_path.relative_to(ROOT_DIR)}`",
         f"- Shared output schema: `wall_time_s`, `ppp_solution_rate_pct`, `ppp_fixed_solutions`, `fallback_solutions`, `clas_hybrid_fallback_epochs`, `mean_3d_error_m`, `median_3d_error_m`, `p95_3d_error_m`, `max_3d_error_m`, `readability_score`, `extensibility_score`",
         "",
         "## Suite Summary",
@@ -862,6 +916,9 @@ def render_markdown(
             "- `*Subtype-Merge*` arms change how subtype 8/9/12 atmosphere families replace or coexist before expanded SSR rows are materialized.",
             "- `*Phase-Bias-Merge*` arms change how compact subtype-5/6 phase-bias rows reset or prune stale satellite scope before expanded SSR rows are materialized.",
             "- `*Phase-Bias-Source*` arms keep the same compact epoch contents but change whether subtype-5, subtype-6, or raw arrival order wins when both provide the same signal row before expanded SSR materialization.",
+            "- `*Code-Bias-Composition*` arms keep the same accepted source rows but change whether subtype-6 network code-bias rows are used directly, added on top of base rows, or replaced by base rows before expanded SSR materialization.",
+            "- `*Code-Bias-Bank*` arms keep the same accepted source rows and composition rule but change whether subtype-6 network rows can look up base code-bias banks only inside the pending epoch, at the same 30-second anchor, from the closest preceding anchor within 30 seconds, or from the latest preceding anchor before expanded SSR materialization.",
+            "- `*Base-Extend*` arms keep bank lookup fixed but change whether subtype-6 network rows can materialize missing base-bias signal rows only for selected satellites or for every satellite in the current compact mask.",
             "- `*Phase-Bias-Composition*` arms keep the same accepted source rows but change whether subtype-6 network rows are used directly, added on top of base rows, or replaced by base rows before expanded SSR materialization.",
             "- `*Phase-Bias-Bank*` arms keep the same accepted source rows and composition rule but change whether subtype-6 network rows can look up base phase-bias banks only inside the pending epoch, at the same 30-second anchor, from the closest preceding anchor within 30 seconds, or from the latest preceding anchor before expanded SSR materialization.",
             "- `*Value*` arms change how expanded atmosphere values are constructed from polynomial terms and residual lists before residual formation.",
@@ -900,11 +957,11 @@ def main() -> int:
         ssr_cache: dict[str, Path] = {}
         results = []
         for strategy in selected:
-            flush_policy = strategy.compact_flush_policy or "lag-tolerant-union"
-            ssr_csv = ssr_cache.get(flush_policy)
+            variant_key = ssr_variant_cache_key(strategy)
+            ssr_csv = ssr_cache.get(variant_key)
             if ssr_csv is None:
                 ssr_csv = ensure_ssr_csv(input_config, strategy)
-                ssr_cache[flush_policy] = ssr_csv
+                ssr_cache[variant_key] = ssr_csv
             results.append(run_strategy(input_config, strategy, ssr_csv, dry_run=args.dry_run))
         case_payloads.append(
             {

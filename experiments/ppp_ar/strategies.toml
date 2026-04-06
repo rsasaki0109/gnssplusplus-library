@@ -570,6 +570,160 @@ implementation_files = [
   "src/algorithms/ppp_clas.cpp",
 ]
 
+[strategies.osr_float_base_plus_network_code_bias_composition_pipeline]
+label = "OSR Float Base-Plus-Network Code-Bias-Composition Pipeline"
+design_style = "pipeline+materialization"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that materializes subtype-6 network code-bias rows by adding them on top of previously accepted base rows before expanded SSR construction."
+claslib_reference = "Used to test whether the compact-to-expanded SSR lane should follow CLASLIB-style add_base_value_to_cbias semantics instead of using raw subtype-6 network code-bias values directly."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_composition_policy = "base-plus-network"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_base_only_code_bias_composition_pipeline]
+label = "OSR Float Base-Only Code-Bias-Composition Pipeline"
+design_style = "pipeline+materialization"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that keeps accepted base code-bias rows and ignores subtype-6 network increments when a base row is present before expanded SSR construction."
+claslib_reference = "Used as a negative control to test whether network code-bias increments themselves are the dominant source of degradation upstream of expanded SSR materialization."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_composition_policy = "base-only-if-present"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_same_30s_code_bias_bank_pipeline]
+label = "OSR Float Same-30s Code-Bias-Bank Pipeline"
+design_style = "pipeline+materialization"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that lets subtype-6 network code-bias rows look up base code-bias rows from the same 30-second compact bank before expanded SSR construction."
+claslib_reference = "Used to test whether the compact-to-expanded SSR lane should follow CLASLIB-style add_base_value_to_cbias bank anchoring instead of only using the pending epoch."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_composition_policy = "base-plus-network"
+compact_code_bias_bank_policy = "same-30s-bank"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_close_30s_code_bias_bank_pipeline]
+label = "OSR Float Close-30s Code-Bias-Bank Pipeline"
+design_style = "pipeline+materialization"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that lets subtype-6 network code-bias rows look up the closest preceding base code-bias bank within 30 seconds before expanded SSR construction."
+claslib_reference = "Used to test whether the compact-to-expanded SSR lane should follow a CLASLIB-style close-bank lookup instead of requiring the exact pending anchor or accepting any older preceding bank."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_composition_policy = "base-plus-network"
+compact_code_bias_bank_policy = "close-30s-bank"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_latest_preceding_code_bias_bank_pipeline]
+label = "OSR Float Latest-Preceding Code-Bias-Bank Pipeline"
+design_style = "pipeline+materialization"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that lets subtype-6 network code-bias rows look up the latest preceding available base code-bias bank before expanded SSR construction."
+claslib_reference = "Used as a negative control to test whether compact-to-expanded SSR behavior changes simply because the most recent base code-bias bank is reused instead of the exact 30-second anchor."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_composition_policy = "base-plus-network"
+compact_code_bias_bank_policy = "latest-preceding-bank"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_selected_satellite_base_extend_pipeline]
+label = "OSR Float Selected-Satellite Base-Extend Pipeline"
+design_style = "pipeline+materialization"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that extends missing subtype-6 network bias signal rows with same-bank base rows only for satellites selected by the network mask."
+claslib_reference = "Closest local match to CLASLIB add_base_value_to_cbias/pbias semantics: keep the network-selected satellites, add base-bank values for missing signal rows, and leave unselected satellites untouched."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_bank_policy = "same-30s-bank"
+compact_phase_bias_bank_policy = "same-30s-bank"
+compact_bias_row_materialization_policy = "selected-satellite-base-extend"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_all_base_satellite_extend_pipeline]
+label = "OSR Float All-Base-Satellite-Extend Pipeline"
+design_style = "pipeline+materialization"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that extends missing subtype-6 network bias signal rows from same-bank base rows for every satellite in the current compact mask."
+claslib_reference = "Negative control for row materialization: broader than the CLASLIB-style selected-satellite extend and used to show whether any win comes from over-extending base-bank rows rather than from the targeted CLASLIB-like behavior."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_bank_policy = "same-30s-bank"
+compact_phase_bias_bank_policy = "same-30s-bank"
+compact_bias_row_materialization_policy = "all-base-satellite-extend"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
 [strategies.osr_float_same_30s_phase_bias_bank_pipeline]
 label = "OSR Float Same-30s Phase-Bias-Bank Pipeline"
 design_style = "pipeline+materialization"
@@ -1468,6 +1622,174 @@ implementation_files = [
   "src/algorithms/ppp_ar.cpp",
 ]
 
+[strategies.osr_ar_base_plus_network_code_bias_composition_pipeline]
+label = "OSR AR Base-Plus-Network Code-Bias-Composition Pipeline"
+design_style = "pipeline+solver+materialization"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that materializes subtype-6 network code-bias rows by adding them on top of previously accepted base rows before expanded SSR construction."
+claslib_reference = "Used to test whether ambiguity fixing recovers once the compact-to-expanded SSR lane follows CLASLIB-style add_base_value_to_cbias semantics for network code-bias rows."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_composition_policy = "base-plus-network"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_base_only_code_bias_composition_pipeline]
+label = "OSR AR Base-Only Code-Bias-Composition Pipeline"
+design_style = "pipeline+solver+materialization"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that keeps accepted base code-bias rows and ignores subtype-6 network increments when a base row is present before expanded SSR construction."
+claslib_reference = "Used as a negative control to test whether ambiguity fixing improves simply by dropping network code-bias increments upstream of expanded SSR materialization."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_composition_policy = "base-only-if-present"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_same_30s_code_bias_bank_pipeline]
+label = "OSR AR Same-30s Code-Bias-Bank Pipeline"
+design_style = "pipeline+solver+materialization"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that lets subtype-6 network code-bias rows look up base code-bias rows from the same 30-second compact bank before expanded SSR construction."
+claslib_reference = "Used to test whether ambiguity fixing recovers once the compact-to-expanded SSR lane follows CLASLIB-style add_base_value_to_cbias bank anchoring."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_composition_policy = "base-plus-network"
+compact_code_bias_bank_policy = "same-30s-bank"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_close_30s_code_bias_bank_pipeline]
+label = "OSR AR Close-30s Code-Bias-Bank Pipeline"
+design_style = "pipeline+solver+materialization"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that lets subtype-6 network code-bias rows look up the closest preceding base code-bias bank within 30 seconds before expanded SSR construction."
+claslib_reference = "Used to test whether ambiguity fixing recovers once the compact-to-expanded SSR lane follows a CLASLIB-style close-bank lookup for code bias rows."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_composition_policy = "base-plus-network"
+compact_code_bias_bank_policy = "close-30s-bank"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_latest_preceding_code_bias_bank_pipeline]
+label = "OSR AR Latest-Preceding Code-Bias-Bank Pipeline"
+design_style = "pipeline+solver+materialization"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that lets subtype-6 network code-bias rows look up the latest preceding available base code-bias bank before expanded SSR construction."
+claslib_reference = "Used as a negative control to test whether ambiguity fixing changes simply because the compact-to-expanded SSR lane reuses the most recent base code-bias bank."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_composition_policy = "base-plus-network"
+compact_code_bias_bank_policy = "latest-preceding-bank"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_selected_satellite_base_extend_pipeline]
+label = "OSR AR Selected-Satellite Base-Extend Pipeline"
+design_style = "pipeline+solver+materialization"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that extends missing subtype-6 network bias signal rows with same-bank base rows only for satellites selected by the network mask."
+claslib_reference = "Closest local match to CLASLIB add_base_value_to_cbias/pbias semantics while preserving the existing AR boundary."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_bank_policy = "same-30s-bank"
+compact_phase_bias_bank_policy = "same-30s-bank"
+compact_bias_row_materialization_policy = "selected-satellite-base-extend"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_all_base_satellite_extend_pipeline]
+label = "OSR AR All-Base-Satellite-Extend Pipeline"
+design_style = "pipeline+solver+materialization"
+status = "candidate"
+description = "Strict CLAS OSR ambiguity-fixing path that extends missing subtype-6 network bias signal rows from same-bank base rows for every satellite in the current compact mask."
+claslib_reference = "Negative control for ambiguity fixing: broader than the CLASLIB-style selected-satellite extend and used to show whether any gain only appears once base-bank rows are over-materialized."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--enable-ar",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_code_bias_bank_policy = "same-30s-bank"
+compact_phase_bias_bank_policy = "same-30s-bank"
+compact_bias_row_materialization_policy = "all-base-satellite-extend"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
 [strategies.osr_ar_same_30s_phase_bias_bank_pipeline]
 label = "OSR AR Same-30s Phase-Bias-Bank Pipeline"
 design_style = "pipeline+solver+materialization"
@@ -1746,6 +2068,144 @@ extra_args = [
   "2.0",
 ]
 implementation_files = [
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_float_coupled_code_phase_pipeline]
+label = "OSR Float Coupled-Code-Phase Pipeline"
+design_style = "pipeline+construction"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that materializes code and phase bias rows together in one coupled pass: if a satellite/signal has one bias type but not the other, the missing type is brought forward from base state."
+claslib_reference = "Tests whether CLASLIB couples code and phase bias row construction before expanded SSR emission, rather than treating them as independent post-bank additions."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_row_construction_policy = "coupled-code-phase"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_row_first_value_second_pipeline]
+label = "OSR Float Row-First-Value-Second Pipeline"
+design_style = "pipeline+construction"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that determines full row existence first (union of network mask, base code bias, base phase bias), then composes values onto the fully determined row set."
+claslib_reference = "Tests whether row presence and value composition are incorrectly interleaved in the current lane, causing missing rows before the solver sees them."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_row_construction_policy = "row-first-value-second"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_float_network_row_driven_pipeline]
+label = "OSR Float Network-Row-Driven Pipeline"
+design_style = "pipeline+construction"
+status = "candidate"
+description = "Strict CLAS OSR epoch path that treats subtype-6 network rows as the authoritative row shape driver; subtype-4 base rows that are not in the network satellite mask are suppressed."
+claslib_reference = "Tests whether row geometry should come from the network correction scope (subtype-6), not from earlier base-row overlap (subtype-4)."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+]
+compact_row_construction_policy = "network-row-driven"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+]
+
+[strategies.osr_ar_coupled_code_phase_pipeline]
+label = "OSR AR Coupled-Code-Phase Pipeline"
+design_style = "pipeline+solver+construction"
+status = "candidate"
+description = "CLASLIB-oriented OSR + AR path with coupled code/phase bias row construction."
+claslib_reference = "AR-enabled version of coupled-code-phase construction to test whether ambiguity resolution quality improves when code and phase rows are structurally coupled."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+compact_row_construction_policy = "coupled-code-phase"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_row_first_value_second_pipeline]
+label = "OSR AR Row-First-Value-Second Pipeline"
+design_style = "pipeline+solver+construction"
+status = "candidate"
+description = "CLASLIB-oriented OSR + AR path with row-first-value-second construction."
+claslib_reference = "AR-enabled version of row-first-value-second construction to test whether ambiguity resolution quality improves when row existence is fully resolved before value composition."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+compact_row_construction_policy = "row-first-value-second"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
+  "src/algorithms/ppp_osr.cpp",
+  "src/algorithms/ppp_clas.cpp",
+  "src/algorithms/ppp_ar.cpp",
+]
+
+[strategies.osr_ar_network_row_driven_pipeline]
+label = "OSR AR Network-Row-Driven Pipeline"
+design_style = "pipeline+solver+construction"
+status = "candidate"
+description = "CLASLIB-oriented OSR + AR path that treats subtype-6 network rows as the authoritative row shape driver."
+claslib_reference = "AR-enabled version of network-row-driven construction to test whether ambiguity resolution improves when subtype-4 base rows outside the network mask are suppressed."
+extra_args = [
+  "--clas-osr",
+  "--clas-epoch-policy",
+  "strict-osr",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold",
+  "2.0",
+]
+compact_row_construction_policy = "network-row-driven"
+implementation_files = [
+  "apps/gnss_qzss_l6_info.py",
+  "src/algorithms/ppp.cpp",
   "src/algorithms/ppp_osr.cpp",
   "src/algorithms/ppp_clas.cpp",
   "src/algorithms/ppp_ar.cpp",
