@@ -100,24 +100,31 @@ class PPPArExperimentsTest(unittest.TestCase):
             sorted(strategies.keys()),
             [
                 "iflc_float_baseline",
+                "osr_ar_all_base_satellite_extend_pipeline",
                 "osr_ar_balanced_pipeline",
+                "osr_ar_base_only_code_bias_composition_pipeline",
                 "osr_ar_base_only_phase_bias_composition_pipeline",
+                "osr_ar_base_plus_network_code_bias_composition_pipeline",
                 "osr_ar_base_plus_network_phase_bias_composition_pipeline",
                 "osr_ar_clock_bound_atmos_phase_bias_pipeline",
                 "osr_ar_clock_bound_phase_bias_pipeline",
                 "osr_ar_clock_reference_time_pipeline",
+                "osr_ar_close_30s_code_bias_bank_pipeline",
                 "osr_ar_close_30s_phase_bias_bank_pipeline",
                 "osr_ar_combined_priority_subtype_merge_pipeline",
                 "osr_ar_compensation_only_value_pipeline",
+                "osr_ar_coupled_code_phase_pipeline",
                 "osr_ar_freshness_pipeline",
                 "osr_ar_gridded_priority_subtype_merge_pipeline",
                 "osr_ar_guarded_pipeline",
                 "osr_ar_hybrid_pipeline",
                 "osr_ar_indexed_only_residual_sampling_pipeline",
+                "osr_ar_latest_preceding_code_bias_bank_pipeline",
                 "osr_ar_latest_preceding_phase_bias_bank_pipeline",
                 "osr_ar_mean_only_residual_sampling_pipeline",
                 "osr_ar_message_reset_phase_bias_merge_pipeline",
                 "osr_ar_network_locked_atmos_merge_pipeline",
+                "osr_ar_network_row_driven_pipeline",
                 "osr_ar_no_carry_atmos_merge_pipeline",
                 "osr_ar_no_phase_bias_pipeline",
                 "osr_ar_observation_reference_time_pipeline",
@@ -133,30 +140,40 @@ class PPPArExperimentsTest(unittest.TestCase):
                 "osr_ar_raw_phase_bias_pipeline",
                 "osr_ar_repair_only_pipeline",
                 "osr_ar_residual_only_value_pipeline",
+                "osr_ar_row_first_value_second_pipeline",
+                "osr_ar_same_30s_code_bias_bank_pipeline",
                 "osr_ar_same_30s_phase_bias_bank_pipeline",
                 "osr_ar_selected_mask_prune_phase_bias_merge_pipeline",
+                "osr_ar_selected_satellite_base_extend_pipeline",
                 "osr_ar_sis_continuity_only_pipeline",
                 "osr_ar_strict_pipeline",
                 "osr_ar_subtype5_priority_phase_bias_source_pipeline",
                 "osr_ar_subtype6_priority_phase_bias_source_pipeline",
+                "osr_float_all_base_satellite_extend_pipeline",
                 "osr_float_balanced_pipeline",
+                "osr_float_base_only_code_bias_composition_pipeline",
                 "osr_float_base_only_phase_bias_composition_pipeline",
+                "osr_float_base_plus_network_code_bias_composition_pipeline",
                 "osr_float_base_plus_network_phase_bias_composition_pipeline",
                 "osr_float_clock_bound_atmos_phase_bias_pipeline",
                 "osr_float_clock_bound_phase_bias_pipeline",
                 "osr_float_clock_reference_time_pipeline",
+                "osr_float_close_30s_code_bias_bank_pipeline",
                 "osr_float_close_30s_phase_bias_bank_pipeline",
                 "osr_float_combined_priority_subtype_merge_pipeline",
                 "osr_float_compensation_only_value_pipeline",
+                "osr_float_coupled_code_phase_pipeline",
                 "osr_float_freshness_pipeline",
                 "osr_float_gridded_priority_subtype_merge_pipeline",
                 "osr_float_guarded_pipeline",
                 "osr_float_hybrid_pipeline",
                 "osr_float_indexed_only_residual_sampling_pipeline",
+                "osr_float_latest_preceding_code_bias_bank_pipeline",
                 "osr_float_latest_preceding_phase_bias_bank_pipeline",
                 "osr_float_mean_only_residual_sampling_pipeline",
                 "osr_float_message_reset_phase_bias_merge_pipeline",
                 "osr_float_network_locked_atmos_merge_pipeline",
+                "osr_float_network_row_driven_pipeline",
                 "osr_float_no_carry_atmos_merge_pipeline",
                 "osr_float_no_phase_bias_pipeline",
                 "osr_float_observation_reference_time_pipeline",
@@ -172,8 +189,11 @@ class PPPArExperimentsTest(unittest.TestCase):
                 "osr_float_raw_phase_bias_pipeline",
                 "osr_float_repair_only_pipeline",
                 "osr_float_residual_only_value_pipeline",
+                "osr_float_row_first_value_second_pipeline",
+                "osr_float_same_30s_code_bias_bank_pipeline",
                 "osr_float_same_30s_phase_bias_bank_pipeline",
                 "osr_float_selected_mask_prune_phase_bias_merge_pipeline",
+                "osr_float_selected_satellite_base_extend_pipeline",
                 "osr_float_sis_continuity_only_pipeline",
                 "osr_float_strict_pipeline",
                 "osr_float_subtype5_priority_phase_bias_source_pipeline",
@@ -181,6 +201,60 @@ class PPPArExperimentsTest(unittest.TestCase):
             ],
         )
         self.assertEqual(strategies["osr_ar_pipeline"].design_style, "pipeline+solver")
+
+    def test_ssr_variant_cache_key_distinguishes_code_bias_bank_policy(self) -> None:
+        strategies = experiments.load_strategies(EXPERIMENTS_DIR / "strategies.toml")
+        same_30s = experiments.ssr_variant_cache_key(
+            strategies["osr_float_same_30s_code_bias_bank_pipeline"]
+        )
+        preceding = experiments.ssr_variant_cache_key(
+            strategies["osr_float_latest_preceding_code_bias_bank_pipeline"]
+        )
+        self.assertNotEqual(same_30s, preceding)
+
+    def test_ssr_variant_cache_key_distinguishes_bias_row_materialization_policy(self) -> None:
+        strategies = experiments.load_strategies(EXPERIMENTS_DIR / "strategies.toml")
+        selected = experiments.ssr_variant_cache_key(
+            strategies["osr_float_selected_satellite_base_extend_pipeline"]
+        )
+        all_sat = experiments.ssr_variant_cache_key(
+            strategies["osr_float_all_base_satellite_extend_pipeline"]
+        )
+        self.assertNotEqual(selected, all_sat)
+
+    def test_ssr_variant_cache_key_distinguishes_row_construction_policy(self) -> None:
+        strategies = experiments.load_strategies(EXPERIMENTS_DIR / "strategies.toml")
+        coupled = experiments.ssr_variant_cache_key(
+            strategies["osr_float_coupled_code_phase_pipeline"]
+        )
+        row_first = experiments.ssr_variant_cache_key(
+            strategies["osr_float_row_first_value_second_pipeline"]
+        )
+        network = experiments.ssr_variant_cache_key(
+            strategies["osr_float_network_row_driven_pipeline"]
+        )
+        strict = experiments.ssr_variant_cache_key(
+            strategies["osr_float_strict_pipeline"]
+        )
+        self.assertNotEqual(coupled, row_first)
+        self.assertNotEqual(coupled, network)
+        self.assertNotEqual(row_first, network)
+        self.assertNotEqual(coupled, strict)
+
+    def test_new_row_construction_strategies_load_correctly(self) -> None:
+        strategies = experiments.load_strategies(EXPERIMENTS_DIR / "strategies.toml")
+        self.assertIn("osr_float_coupled_code_phase_pipeline", strategies)
+        self.assertIn("osr_float_row_first_value_second_pipeline", strategies)
+        self.assertIn("osr_float_network_row_driven_pipeline", strategies)
+        self.assertIn("osr_ar_coupled_code_phase_pipeline", strategies)
+        self.assertIn("osr_ar_row_first_value_second_pipeline", strategies)
+        self.assertIn("osr_ar_network_row_driven_pipeline", strategies)
+        coupled = strategies["osr_float_coupled_code_phase_pipeline"]
+        self.assertEqual(coupled.compact_row_construction_policy, "coupled-code-phase")
+        row_first = strategies["osr_float_row_first_value_second_pipeline"]
+        self.assertEqual(row_first.compact_row_construction_policy, "row-first-value-second")
+        network = strategies["osr_float_network_row_driven_pipeline"]
+        self.assertEqual(network.compact_row_construction_policy, "network-row-driven")
 
     def test_structure_metrics_distinguish_monolith_and_pipeline(self) -> None:
         strategies = experiments.load_strategies(EXPERIMENTS_DIR / "strategies.toml")
@@ -315,6 +389,74 @@ class PPPArExperimentsTest(unittest.TestCase):
         self.assertIn("Case Results", markdown)
         self.assertIn("Promotion Gate", markdown)
         self.assertIn("trial_candidate", markdown)
+
+    def test_render_markdown_accepts_relative_strategy_path(self) -> None:
+        input_config = experiments.ExperimentInput(
+            case_key="cl_static",
+            dataset_label="CLAS case",
+            obs=Path("/tmp/0627239Q.obs"),
+            nav=Path("/tmp/sept_2019239.nav"),
+            qzss_l6=Path("/tmp/2019239Q.l6"),
+            ssr_csv=None,
+            qzss_gps_week=2068,
+            reference_ecef=(-3957240.1233, 3310370.8778, 3737527.7041),
+            output_dir=Path("/tmp/out"),
+            max_epochs=120,
+            mode="static",
+            estimate_troposphere=True,
+            strategies=("iflc_float_baseline",),
+        )
+        results = [
+            {
+                "strategy": "iflc_float_baseline",
+                "label": "IFLC Float Baseline",
+                "status": "baseline",
+                "design_style": "monolithic",
+                "ppp_solution_rate_pct": 99.2,
+                "ppp_fixed_solutions": 0,
+                "mean_3d_error_m": 4.54,
+                "p95_3d_error_m": 4.64,
+                "wall_time_s": 1.2,
+                "readability_score": 12.0,
+                "extensibility_score": 14.0,
+                "readability_rating": "low",
+                "extensibility_rating": "low",
+                "module_count": 1,
+                "implementation_loc": 1200,
+                "max_file_loc": 1200,
+                "command_arg_count": 0,
+                "claslib_reference": "control",
+                "promotion_stage": "stable_control",
+                "promotion_gate_pass": False,
+                "promotion_rationale": "Control arm.",
+                "comparison_to_baseline": {},
+            },
+        ]
+        suite = experiments.ExperimentSuite(label="CLAS suite", cases=(input_config,))
+        case_payloads = [
+            {
+                "case_key": "cl_static",
+                "dataset_label": input_config.dataset_label,
+                "obs": input_config.obs.name,
+                "nav": input_config.nav.name,
+                "qzss_l6": input_config.qzss_l6.name,
+                "ssr_csv": "expanded_ssr.csv",
+                "max_epochs": input_config.max_epochs,
+                "mode": input_config.mode,
+                "estimate_troposphere": input_config.estimate_troposphere,
+                "results": results,
+            }
+        ]
+        suite_summary = experiments.summarize_suite_results(case_payloads)
+
+        markdown = experiments.render_markdown(
+            suite,
+            Path("experiments/ppp_ar/strategies.toml"),
+            case_payloads,
+            suite_summary,
+        )
+
+        self.assertIn("experiments/ppp_ar/strategies.toml", markdown)
 
     def test_evaluate_promotion_readiness_marks_solver_arm_as_candidate(self) -> None:
         results = [
