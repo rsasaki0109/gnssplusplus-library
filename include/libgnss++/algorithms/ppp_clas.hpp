@@ -170,6 +170,7 @@ MeasurementBuildResult buildEpochMeasurements(
 KalmanUpdateStats applyMeasurementUpdate(
     ppp_shared::PPPState& filter_state,
     const std::vector<MeasurementRow>& measurements,
+    const ppp_shared::PPPConfig& config,
     const PositionSolution* seed_solution = nullptr);
 
 EpochUpdateResult runEpochMeasurementUpdate(
