@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
@@ -39,6 +40,19 @@ def _write_minimal_pos(path: Path, rows: list[tuple]) -> None:
         lines.append(
             f"{r[0]} {r[1]:.6f} {r[2]:.6f} {r[3]:.6f} {r[4]:.6f} "
             f"{r[5]:.6f} {r[6]:.6f} {r[7]:.6f} {r[8]} {r[9]} {r[10]:.6f}"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_minimal_rtklib_ecef_pos(path: Path, rows: list[tuple[int, float, float, float, float]]) -> None:
+    gps0 = datetime(1980, 1, 6, 0, 0, 0, tzinfo=timezone.utc).timestamp()
+    lines = ["% RTKLIB/CLASLIB ECEF pos (minimal test)"]
+    for week, tow, x, y, z in rows:
+        ts = gps0 + week * 604800.0 + tow
+        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+        lines.append(
+            f"{dt.strftime('%Y/%m/%d')} {dt.strftime('%H:%M:%S.%f')} "
+            f"{x:.6f} {y:.6f} {z:.6f} 2 12 0 0 0 0 2.000000"
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -199,6 +213,121 @@ class ComparePppToolTest(unittest.TestCase):
                 err = data["error_vs_reference"]
                 self.assertEqual(err.get("epochs_used"), 2)
                 self.assertAlmostEqual(err["rms_3d_m"], 0.0, places=6)
+            finally:
+                out_json.unlink(missing_ok=True)
+        finally:
+            lg_path.unlink(missing_ok=True)
+            rt_path.unlink(missing_ok=True)
+
+    def test_rtklib_xyz_reference_last_n_uses_claslib_answer_exactly(self) -> None:
+        fd, lg_str = tempfile.mkstemp(prefix="gnsspp_lg_lastn_", suffix=".pos")
+        os.close(fd)
+        fd, rt_str = tempfile.mkstemp(prefix="gnsspp_rt_lastn_", suffix=".pos")
+        os.close(fd)
+        lg_path, rt_path = Path(lg_str), Path(rt_str)
+        try:
+            truth = (-3957235.3717, 3310368.2257, 3737529.7179)
+            _write_minimal_pos(
+                lg_path,
+                [
+                    (2068, 100.0, truth[0], truth[1], truth[2], 36.1, 140.0, 70.0, 5, 12, 2.0),
+                    (2068, 101.0, truth[0] + 3.0, truth[1] + 4.0, truth[2], 36.1, 140.0, 70.0, 5, 12, 2.0),
+                    (2068, 102.0, truth[0], truth[1], truth[2] + 12.0, 36.1, 140.0, 70.0, 5, 12, 2.0),
+                ],
+            )
+            _write_minimal_rtklib_ecef_pos(
+                rt_path,
+                [
+                    (2068, 100.0, truth[0], truth[1], truth[2]),
+                    (2068, 101.0, truth[0], truth[1], truth[2]),
+                    (2068, 102.0, truth[0], truth[1], truth[2]),
+                ],
+            )
+            jfd, jpath = tempfile.mkstemp(prefix="gnsspp_cmp_lastn_", suffix=".json")
+            os.close(jfd)
+            out_json = Path(jpath)
+            try:
+                r = subprocess.run(
+                    [
+                        str(PYTHON),
+                        str(COMPARE_SCRIPT),
+                        "--candidate",
+                        str(lg_path),
+                        "--reference",
+                        str(rt_path),
+                        "--reference-format",
+                        "rtklib-ecef",
+                        "--last-n",
+                        "2",
+                        "--json-out",
+                        str(out_json),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(r.returncode, 0, msg=r.stderr + r.stdout)
+                data = json.loads(out_json.read_text(encoding="utf-8"))
+                expected_rms_3d = math.sqrt((5.0 * 5.0 + 12.0 * 12.0) / 2.0)
+                self.assertEqual(data.get("reference_format"), "rtklib-ecef")
+                self.assertEqual(data["error_vs_reference"]["epochs_used"], 2)
+                self.assertAlmostEqual(data["error_vs_reference"]["rms_3d_m"], expected_rms_3d, places=6)
+            finally:
+                out_json.unlink(missing_ok=True)
+        finally:
+            lg_path.unlink(missing_ok=True)
+            rt_path.unlink(missing_ok=True)
+
+    def test_rtklib_xyz_reference_uses_only_time_aligned_epochs(self) -> None:
+        fd, lg_str = tempfile.mkstemp(prefix="gnsspp_lg_align_", suffix=".pos")
+        os.close(fd)
+        fd, rt_str = tempfile.mkstemp(prefix="gnsspp_rt_align_", suffix=".pos")
+        os.close(fd)
+        lg_path, rt_path = Path(lg_str), Path(rt_str)
+        try:
+            truth = (-3957235.3717, 3310368.2257, 3737529.7179)
+            _write_minimal_pos(
+                lg_path,
+                [
+                    (2068, 100.0, truth[0], truth[1], truth[2], 36.1, 140.0, 70.0, 5, 12, 2.0),
+                    (2068, 101.0, truth[0] + 6.0, truth[1] + 8.0, truth[2], 36.1, 140.0, 70.0, 5, 12, 2.0),
+                    (2068, 105.0, truth[0] + 1.0, truth[1], truth[2], 36.1, 140.0, 70.0, 5, 12, 2.0),
+                ],
+            )
+            _write_minimal_rtklib_ecef_pos(
+                rt_path,
+                [
+                    (2068, 100.0, truth[0], truth[1], truth[2]),
+                    (2068, 101.0, truth[0], truth[1], truth[2]),
+                ],
+            )
+            jfd, jpath = tempfile.mkstemp(prefix="gnsspp_cmp_align_", suffix=".json")
+            os.close(jfd)
+            out_json = Path(jpath)
+            try:
+                r = subprocess.run(
+                    [
+                        str(PYTHON),
+                        str(COMPARE_SCRIPT),
+                        "--candidate",
+                        str(lg_path),
+                        "--reference",
+                        str(rt_path),
+                        "--reference-format",
+                        "rtklib-ecef",
+                        "--last-n",
+                        "10",
+                        "--json-out",
+                        str(out_json),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(r.returncode, 0, msg=r.stderr + r.stdout)
+                data = json.loads(out_json.read_text(encoding="utf-8"))
+                self.assertEqual(data["error_vs_reference"]["epochs_used"], 2)
+                self.assertAlmostEqual(data["error_vs_reference"]["rms_3d_m"], math.sqrt((0.0 + 10.0 * 10.0) / 2.0), places=6)
             finally:
                 out_json.unlink(missing_ok=True)
         finally:
