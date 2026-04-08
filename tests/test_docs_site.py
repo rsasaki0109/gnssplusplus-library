@@ -44,12 +44,12 @@ class DocsSiteTest(unittest.TestCase):
             self.assertTrue((site_dir / "architecture" / "index.html").exists() or (site_dir / "architecture.html").exists())
             self.assertTrue((site_dir / "libgnsspp_architecture.png").exists())
             self.assertTrue(
-                (site_dir / "experiments" / "index.html").exists()
-                or (site_dir / "experiments.html").exists()
+                (site_dir / "track_a_benchmark_2018" / "index.html").exists()
+                or (site_dir / "track_a_benchmark_2018.html").exists()
             )
             self.assertTrue(
-                (site_dir / "decisions" / "index.html").exists()
-                or (site_dir / "decisions.html").exists()
+                (site_dir / "ssr2obs_dump_implementation" / "index.html").exists()
+                or (site_dir / "ssr2obs_dump_implementation.html").exists()
             )
             self.assertTrue(
                 (site_dir / "references" / "index.html").exists()

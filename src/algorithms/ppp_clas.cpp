@@ -158,20 +158,27 @@ EpochPreparationResult prepareEpochState(
         if (!seed_solution.isValid()) {
             return result;
         }
+        PositionSolution initial_solution = seed_solution;
+        const bool use_receiver_seed_for_static =
+            (!config.kinematic_mode || config.low_dynamics_mode) &&
+            obs.receiver_position.squaredNorm() > 0.0;
+        if (use_receiver_seed_for_static) {
+            initial_solution.position_ecef = obs.receiver_position;
+        }
         const auto iono_satellites =
             config.estimate_ionosphere
                 ? collectResidualIonoSatellites(obs, ssr_products)
                 : std::vector<SatelliteId>{};
         initializeFilterState(
             filter_state,
-            seed_solution,
+            initial_solution,
             obs.time,
             iono_satellites,
             config,
             modeled_zenith_troposphere_delay_m);
         filter_initialized = true;
         convergence_start_time = obs.time;
-        static_anchor_position = seed_solution.position_ecef;
+        static_anchor_position = initial_solution.position_ecef;
         has_static_anchor_position = true;
     }
 
@@ -203,19 +210,23 @@ void initializeFilterState(
     const std::vector<SatelliteId>& iono_satellites,
     const ppp_shared::PPPConfig& config,
     double modeled_zenith_troposphere_delay_m) {
-    const int base = 9 + static_cast<int>(iono_satellites.size());
+    filter_state.gal_clock_index = 9;
+    const int isb_end = 10;
+    const int base = isb_end + static_cast<int>(iono_satellites.size());
     filter_state.ionosphere_indices.clear();
     filter_state.state = VectorXd::Zero(base);
     filter_state.covariance = MatrixXd::Identity(base, base);
     filter_state.state.segment(0, 3) = seed_solution.position_ecef;
     filter_state.state(filter_state.clock_index) = seed_solution.receiver_clock_bias;
     filter_state.state(filter_state.glo_clock_index) = seed_solution.receiver_clock_bias;
+    filter_state.state(filter_state.gal_clock_index) = seed_solution.receiver_clock_bias;
     filter_state.state(filter_state.trop_index) = modeled_zenith_troposphere_delay_m;
     filter_state.covariance.block(0, 0, 3, 3) *= config.clas_initial_position_variance;
     filter_state.covariance(6, 6) = config.clas_clock_variance;
     filter_state.covariance(7, 7) = config.clas_clock_variance;
     filter_state.covariance(8, 8) = config.clas_trop_initial_variance;
-    filter_state.iono_index = 9;
+    filter_state.covariance(9, 9) = config.clas_clock_variance;
+    filter_state.iono_index = isb_end;
     for (size_t index = 0; index < iono_satellites.size(); ++index) {
         const int state_index = filter_state.iono_index + static_cast<int>(index);
         filter_state.ionosphere_indices[iono_satellites[index]] = state_index;
@@ -291,6 +302,9 @@ void predictFilterState(
     MatrixXd Q = MatrixXd::Zero(nx, nx);
     Q(filter_state.clock_index, filter_state.clock_index) = config.clas_clock_variance;
     Q(filter_state.glo_clock_index, filter_state.glo_clock_index) = config.clas_clock_variance;
+    if (filter_state.gal_clock_index >= 0) {
+        Q(filter_state.gal_clock_index, filter_state.gal_clock_index) = config.clas_clock_variance;
+    }
     Q(filter_state.trop_index, filter_state.trop_index) = config.clas_trop_process_noise * dt;
     if (config.estimate_ionosphere) {
         for (const auto& [_, state_index] : filter_state.ionosphere_indices) {
@@ -305,21 +319,28 @@ void predictFilterState(
         }
     }
     filter_state.covariance += Q;
-    if (seed_valid) {
+    const bool reset_clock_to_seed =
+        seed_valid &&
+        config.clas_epoch_policy ==
+            ppp_shared::PPPConfig::ClasEpochPolicy::HYBRID_STANDARD_PPP_FALLBACK;
+    if (reset_clock_to_seed) {
         filter_state.state(filter_state.clock_index) = seed_receiver_clock_bias_m;
         filter_state.state(filter_state.glo_clock_index) = seed_receiver_clock_bias_m;
+        if (filter_state.gal_clock_index >= 0) {
+            filter_state.state(filter_state.gal_clock_index) = seed_receiver_clock_bias_m;
+        }
     }
     // Decouple clock from position: zero cross-covariance to prevent
     // code observation noise from leaking into position via KF coupling.
     if (config.clas_decouple_clock_position) {
         const int ci = filter_state.clock_index;
         const int gi = filter_state.glo_clock_index;
+        const int ei = filter_state.gal_clock_index;
         for (int i = 0; i < nx; ++i) {
             if (i != ci) { filter_state.covariance(ci, i) = 0; filter_state.covariance(i, ci) = 0; }
             if (i != gi) { filter_state.covariance(gi, i) = 0; filter_state.covariance(i, gi) = 0; }
+            if (ei >= 0 && i != ei) { filter_state.covariance(ei, i) = 0; filter_state.covariance(i, ei) = 0; }
         }
-        filter_state.covariance(ci, ci) = 0;
-        filter_state.covariance(gi, gi) = 0;
     }
 }
 
@@ -489,7 +510,13 @@ MeasurementBuildResult buildEpochMeasurements(
                 MeasurementRow row;
                 row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
                 row.H.segment(0, 3) = -los.transpose();
-                row.H(filter_state.clock_index) = 1.0;
+                const int clk_idx = (osr.satellite.system == GNSSSystem::Galileo &&
+                                     filter_state.gal_clock_index >= 0)
+                    ? filter_state.gal_clock_index
+                    : (osr.satellite.system == GNSSSystem::GLONASS
+                        ? filter_state.glo_clock_index
+                        : filter_state.clock_index);
+                row.H(clk_idx) = 1.0;
                 row.H(filter_state.trop_index) = trop_mapping;
                 if (use_residual_iono_state) {
                     row.H(iono_state_index) = iono_scale;
@@ -537,7 +564,13 @@ MeasurementBuildResult buildEpochMeasurements(
                 MeasurementRow row;
                 row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
                 row.H.segment(0, 3) = -los.transpose();
-                row.H(filter_state.clock_index) = 1.0;
+                const int clk_idx_ph = (osr.satellite.system == GNSSSystem::Galileo &&
+                                        filter_state.gal_clock_index >= 0)
+                    ? filter_state.gal_clock_index
+                    : (osr.satellite.system == GNSSSystem::GLONASS
+                        ? filter_state.glo_clock_index
+                        : filter_state.clock_index);
+                row.H(clk_idx_ph) = 1.0;
                 row.H(filter_state.trop_index) = trop_mapping;
                 if (use_residual_iono_state) {
                     row.H(iono_state_index) = -iono_scale;
@@ -549,6 +582,24 @@ MeasurementBuildResult buildEpochMeasurements(
                 row.satellite = osr.satellite;
                 row.is_phase = true;
                 row.freq_index = f;
+                if (ppp_shared::pppDebugEnabled() &&
+                    osr.satellite.system == GNSSSystem::GPS &&
+                    (osr.satellite.prn == 25 || osr.satellite.prn == 26 ||
+                     osr.satellite.prn == 29 || osr.satellite.prn == 31)) {
+                    std::cerr << "[CLAS-PHASE-ROW] sat=" << osr.satellite.toString()
+                              << " f=" << f
+                              << " l_m=" << l_m
+                              << " phase_corr=" << applied_corrections.carrier_phase_correction_m
+                              << " l_corr=" << l_corr
+                              << " geo=" << geo
+                              << " sat_clk=" << sat_clk_m
+                              << " rcv_clk=" << receiver_clock_m
+                              << " trop=" << trop_modeled
+                              << " iono_term=" << (-iono_scale * iono_state_m)
+                              << " amb=" << filter_state.state(amb_idx)
+                              << " residual=" << residual
+                              << "\n";
+                }
                 result.measurements.push_back(row);
                 result.observed_ambiguities.push_back(
                     {amb_sat, raw->signal, osr.wavelengths[f], raw->carrier_phase, raw->snr});
@@ -725,7 +776,11 @@ KalmanUpdateStats applyMeasurementUpdate(
     stats.variances = R.diagonal();
     stats.pre_anchor_covariance = filter_state.covariance;
 
-    if (seed_solution != nullptr && seed_solution->isValid()) {
+    const bool use_seed_anchor =
+        seed_solution != nullptr && seed_solution->isValid() &&
+        config.clas_epoch_policy ==
+            ppp_shared::PPPConfig::ClasEpochPolicy::HYBRID_STANDARD_PPP_FALLBACK;
+    if (use_seed_anchor) {
         const double anchor_sigma = config.clas_anchor_sigma;
         for (int axis = 0; axis < 3; ++axis) {
             const int idx = axis;

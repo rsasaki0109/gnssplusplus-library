@@ -438,6 +438,10 @@ class CSSRDecoderState:
     pending_atmos_subtypes: set[int] | None = None
     service_info_chunks: list[tuple[int, bytes, int]] | None = None
     service_packet_index: int = 0
+    pending_flush_requested: bool = False
+    pending_flush_gps_week: int | None = None
+    pending_flush_policy: str = COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT
+    deferred_corrections: list[CompactSSRCorrection] | None = None
 
 
 class L6SubframeAssembler:
@@ -669,19 +673,17 @@ def reset_pending_corrections(state: CSSRDecoderState) -> None:
     state.pending_phase_bias_source = None
     state.pending_base_phase_bias = None
     state.pending_bias_network_id = None
-    # Preserve STEC polynomial coefficients (c00, c01, c10, etc.) across epochs.
-    # These arrive from subtype 8 at ~30s intervals, while gridded residuals
-    # (subtype 9) arrive every second.  Without carry-forward the c00 terms
-    # would be lost between subtype-8 updates.
+    # Preserve the full atmosphere token set across epochs. Network changes are
+    # handled in merge_pending_atmos(), which drops the carried state when a
+    # different network arrives.
     if state.pending_atmos is not None:
-        carry_forward = {k: v for k, v in state.pending_atmos.items()
-                         if "stec_c0" in k or "stec_c1" in k or "stec_c2" in k
-                         or "stec_type" in k or "stec_quality" in k
-                         or k == "atmos_network_id"}
+        carry_forward = dict(state.pending_atmos)
         state.pending_atmos = carry_forward if carry_forward else None
     else:
         state.pending_atmos = None
     state.pending_atmos_subtypes = None
+    state.pending_flush_requested = False
+    state.pending_flush_gps_week = None
 
 
 def carry_forward_atmos_tokens(
@@ -692,16 +694,7 @@ def carry_forward_atmos_tokens(
         return None
     if merge_policy not in COMPACT_ATMOS_MERGE_POLICIES:
         raise ValueError(f"unsupported Compact SSR atmos merge policy: {merge_policy}")
-    carry_forward = {
-        key: value
-        for key, value in atmos_tokens.items()
-        if "stec_c0" in key
-        or "stec_c1" in key
-        or "stec_c2" in key
-        or "stec_type" in key
-        or "stec_quality" in key
-        or key == "atmos_network_id"
-    }
+    carry_forward = dict(atmos_tokens)
     return carry_forward if carry_forward else None
 
 
@@ -1285,10 +1278,7 @@ def merge_pending_atmos(
             f"{atmos_subtype_merge_policy}"
         )
     pending_subtypes = set() if state.pending_atmos_subtypes is None else set(state.pending_atmos_subtypes)
-    if (
-        atmos_merge_policy == COMPACT_ATMOS_MERGE_POLICY_NETWORK_LOCKED_STEC_COEFF_CARRY
-        and state.pending_atmos is not None
-    ):
+    if state.pending_atmos is not None:
         carried_network = state.pending_atmos.get("atmos_network_id")
         incoming_network = atmos_tokens.get("atmos_network_id")
         if (
@@ -1375,6 +1365,27 @@ def merge_pending_atmos(
         state.pending_atmos.update(atmos_tokens)
     pending_subtypes.add(source_subtype)
     state.pending_atmos_subtypes = pending_subtypes
+    import os
+    import sys
+    if os.environ.get("GNSSPP_TRACE_ATMOS") == "1" and state.pending_tow in {230415, 230420}:
+        pending_network = state.pending_atmos.get("atmos_network_id") if state.pending_atmos else None
+        has_residuals = (
+            state.pending_atmos is not None
+            and any(
+                key == "atmos_trop_residuals_m"
+                or key == "atmos_trop_hs_residuals_m"
+                or key == "atmos_trop_wet_residuals_m"
+                or key.startswith("atmos_stec_residuals_tecu:")
+                for key in state.pending_atmos
+            )
+        )
+        print(
+            "[ATMOS-MERGE] "
+            f"tow={state.pending_tow} src={source_subtype} "
+            f"incoming={atmos_tokens.get('atmos_network_id')} "
+            f"pending={pending_network} has_residuals={int(has_residuals)}",
+            file=sys.stderr,
+        )
 
 
 def ensure_pending_epoch(
@@ -1390,7 +1401,53 @@ def ensure_pending_epoch(
         state.base_code_bias_banks = {}
     if state.pending_tow == tow and state.pending_iod == iod:
         return
-    reset_pending_corrections_with_policy(state, atmos_merge_policy)
+    should_flush_pending = (
+        state.mask is not None
+        and state.pending_tow is not None
+        and (
+            state.pending_flush_requested
+            or state.pending_atmos is not None
+            or bool(state.pending_orbit)
+            or bool(state.pending_clock)
+            or bool(state.pending_ura)
+            or bool(state.pending_code_bias)
+            or bool(state.pending_phase_bias)
+        )
+    )
+    if should_flush_pending:
+        import os
+        import sys
+        if os.environ.get("GNSSPP_TRACE_ATMOS") == "1" and state.pending_tow in {230415, 230420}:
+            pending_network = state.pending_atmos.get("atmos_network_id") if state.pending_atmos else None
+            has_residuals = (
+                state.pending_atmos is not None
+                and any(
+                    key == "atmos_trop_residuals_m"
+                    or key == "atmos_trop_hs_residuals_m"
+                    or key == "atmos_trop_wet_residuals_m"
+                    or key.startswith("atmos_stec_residuals_tecu:")
+                    for key in state.pending_atmos
+                )
+            )
+            print(
+                "[ATMOS-FLUSH] "
+                f"tow={state.pending_tow} next_tow={tow} "
+                f"pending={pending_network} has_residuals={int(has_residuals)}",
+                file=sys.stderr,
+            )
+        flushed_rows = flush_pending_corrections(
+            state,
+            state.pending_flush_gps_week,
+            state.mask.satellites,
+            state.pending_flush_policy,
+        )
+        if flushed_rows:
+            if state.deferred_corrections is None:
+                state.deferred_corrections = []
+            state.deferred_corrections.extend(flushed_rows)
+        state.pending_atmos = carry_forward_atmos_tokens(state.pending_atmos, atmos_merge_policy)
+    else:
+        reset_pending_corrections_with_policy(state, atmos_merge_policy)
     state.pending_tow = tow
     state.pending_iod = iod
     state.pending_udi_seconds = udi_seconds
@@ -1485,6 +1542,106 @@ def flush_pending_corrections(
     return rows
 
 
+def request_pending_corrections_flush(
+    state: CSSRDecoderState,
+    gps_week: int | None,
+    flush_policy: str,
+) -> None:
+    state.pending_flush_requested = True
+    state.pending_flush_gps_week = gps_week
+    state.pending_flush_policy = flush_policy
+
+
+def hydrate_atmos_only_corrections(
+    corrections: list[CompactSSRCorrection],
+) -> list[CompactSSRCorrection]:
+    base_rows: dict[tuple[int, float, str, int], CompactSSRCorrection] = {}
+    for correction in corrections:
+        key = (correction.week, correction.tow, correction.system, correction.prn)
+        has_non_atmos = (
+            abs(correction.dx) > 0.0
+            or abs(correction.dy) > 0.0
+            or abs(correction.dz) > 0.0
+            or (math.isfinite(correction.dclock_m) and abs(correction.dclock_m) > 0.0)
+            or correction.ura_sigma_m is not None
+            or bool(correction.code_bias_m)
+            or bool(correction.phase_bias_m)
+            or correction.bias_network_id is not None
+        )
+        if has_non_atmos:
+            base_rows[key] = correction
+
+    latest_orbit_rows: dict[tuple[int, str, int], CompactSSRCorrection] = {}
+    for correction in corrections:
+        sat_key = (correction.week, correction.system, correction.prn)
+        has_orbit = (
+            abs(correction.dx) > 0.0
+            or abs(correction.dy) > 0.0
+            or abs(correction.dz) > 0.0
+        )
+        if correction.atmos_tokens is None:
+            if has_orbit:
+                latest_orbit_rows[sat_key] = correction
+            continue
+        missing_orbit = (
+            correction.dx == 0.0
+            and correction.dy == 0.0
+            and correction.dz == 0.0
+        )
+        missing_clock = (not math.isfinite(correction.dclock_m) or correction.dclock_m == 0.0)
+        missing_biases = (
+            correction.ura_sigma_m is None
+            and not correction.code_bias_m
+            and not correction.phase_bias_m
+            and correction.bias_network_id is None
+        )
+        if not (missing_orbit or missing_clock or missing_biases):
+            if has_orbit:
+                latest_orbit_rows[sat_key] = correction
+            continue
+        base = base_rows.get((correction.week, correction.tow, correction.system, correction.prn))
+        orbit_source = base
+        if (
+            missing_orbit
+            and (
+                orbit_source is None
+                or (
+                    orbit_source.dx == 0.0
+                    and orbit_source.dy == 0.0
+                    and orbit_source.dz == 0.0
+                )
+            )
+        ):
+            prior_orbit = latest_orbit_rows.get(sat_key)
+            if prior_orbit is not None and abs(correction.tow - prior_orbit.tow) <= 30.0:
+                orbit_source = prior_orbit
+        if missing_orbit and orbit_source is not None:
+            correction.dx = orbit_source.dx
+            correction.dy = orbit_source.dy
+            correction.dz = orbit_source.dz
+        if base is None:
+            if has_orbit:
+                latest_orbit_rows[sat_key] = correction
+            continue
+        if missing_clock:
+            correction.dclock_m = base.dclock_m
+        if correction.ura_sigma_m is None:
+            correction.ura_sigma_m = base.ura_sigma_m
+        if not correction.code_bias_m and base.code_bias_m:
+            correction.code_bias_m = dict(base.code_bias_m)
+        if not correction.phase_bias_m and base.phase_bias_m:
+            correction.phase_bias_m = dict(base.phase_bias_m)
+        if correction.bias_network_id is None:
+            correction.bias_network_id = base.bias_network_id
+        if has_orbit or (
+            correction.dx != 0.0
+            or correction.dy != 0.0
+            or correction.dz != 0.0
+        ):
+            latest_orbit_rows[sat_key] = correction
+    return corrections
+
+
 def decode_cssr_orbit_message(
     subframe: L6Subframe,
     payload: bytes,
@@ -1559,7 +1716,7 @@ def decode_cssr_clock_message(
         state.pending_clock[satellite.sat] = dclock_m
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
-        corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
+        request_pending_corrections_flush(state, gps_week, flush_policy)
     state.message_index += 1
     return (
         CSSRMessage(
@@ -1625,7 +1782,7 @@ def decode_cssr_code_bias_message(
             mapped_count += 1
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
-        corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
+        request_pending_corrections_flush(state, gps_week, flush_policy)
     state.message_index += 1
     return (
         CSSRMessage(
@@ -1678,7 +1835,8 @@ def decode_cssr_code_phase_bias_message(
     network_id: int | None = None
     selected_mask = (1 << mask.satellite_count) - 1
     if network_bias_correction:
-        network_id = read_bits(payload, bit_offset, 5)
+        raw_network_id = read_bits(payload, bit_offset, 5)
+        network_id = raw_network_id
         bit_offset += 5
         selected_mask = read_bits(payload, bit_offset, mask.satellite_count)
         bit_offset += mask.satellite_count
@@ -1827,7 +1985,7 @@ def decode_cssr_code_phase_bias_message(
 
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
-        corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
+        request_pending_corrections_flush(state, gps_week, flush_policy)
     state.message_index += 1
     return (
         CSSRMessage(
@@ -1920,7 +2078,7 @@ def decode_cssr_phase_bias_message(
 
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
-        corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
+        request_pending_corrections_flush(state, gps_week, flush_policy)
     state.message_index += 1
     return (
         CSSRMessage(
@@ -1970,7 +2128,7 @@ def decode_cssr_ura_message(
         state.pending_ura[satellite.sat] = ura_meters_from_ssr_index(ura_index)
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
-        corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
+        request_pending_corrections_flush(state, gps_week, flush_policy)
     state.message_index += 1
     return (
         CSSRMessage(
@@ -2070,13 +2228,14 @@ def decode_cssr_stec_message(
         atmos_merge_policy,
     )
     atmos_tokens["atmos_selected_satellites"] = str(selected_satellites)
-    merge_pending_atmos(
-        state,
-        atmos_tokens,
-        atmos_merge_policy,
-        atmos_subtype_merge_policy,
-        CSSR_SUBTYPE_STEC,
-    )
+    if 1 <= network_id <= 12:
+        merge_pending_atmos(
+            state,
+            atmos_tokens,
+            atmos_merge_policy,
+            atmos_subtype_merge_policy,
+            CSSR_SUBTYPE_STEC,
+        )
 
     state.message_index += 1
     return (
@@ -2177,13 +2336,14 @@ def decode_cssr_gridded_message(
         float(header["udi_seconds"]),
         atmos_merge_policy,
     )
-    merge_pending_atmos(
-        state,
-        atmos_tokens,
-        atmos_merge_policy,
-        atmos_subtype_merge_policy,
-        CSSR_SUBTYPE_GRIDDED,
-    )
+    if 1 <= network_id <= 12:
+        merge_pending_atmos(
+            state,
+            atmos_tokens,
+            atmos_merge_policy,
+            atmos_subtype_merge_policy,
+            CSSR_SUBTYPE_GRIDDED,
+        )
 
     state.message_index += 1
     return (
@@ -2334,7 +2494,7 @@ def decode_cssr_combined_message(
         state.pending_clock[satellite.sat] = dclock_m
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
-        corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
+        request_pending_corrections_flush(state, gps_week, flush_policy)
     state.message_index += 1
     message = CSSRMessage(
         subframe_index=subframe.index,
@@ -2502,13 +2662,14 @@ def decode_cssr_atmos_message(
         atmos_merge_policy,
     )
     atmos_tokens["atmos_selected_satellites"] = str(selected_satellites)
-    merge_pending_atmos(
-        state,
-        atmos_tokens,
-        atmos_merge_policy,
-        atmos_subtype_merge_policy,
-        CSSR_SUBTYPE_ATMOS,
-    )
+    if 1 <= network_id <= 12:
+        merge_pending_atmos(
+            state,
+            atmos_tokens,
+            atmos_merge_policy,
+            atmos_subtype_merge_policy,
+            CSSR_SUBTYPE_ATMOS,
+        )
 
     state.message_index += 1
     return (
@@ -2549,8 +2710,12 @@ def decode_cssr_messages(
     messages: list[CSSRMessage] = []
     corrections: list[CompactSSRCorrection] = []
     service_info_packets: list[CSSRServiceInfoPacket] = []
-    state = CSSRDecoderState()
+    states: dict[tuple[int, int, int], CSSRDecoderState] = {}
     for subframe in subframes:
+        state_key = (subframe.prn, subframe.vendor_id, subframe.facility_id)
+        state = states.setdefault(state_key, CSSRDecoderState())
+        state.pending_flush_gps_week = gps_week
+        state.pending_flush_policy = flush_policy
         bit_offset = 0
         while bit_offset + 16 <= subframe.data_bits:
             ctype = read_bits(subframe.data_part, bit_offset, 12)
@@ -2697,19 +2862,25 @@ def decode_cssr_messages(
             else:
                 break
             message.message_bits = bit_offset - message_start
+            if state.deferred_corrections:
+                corrections.extend(state.deferred_corrections)
+                state.deferred_corrections = None
             messages.append(message)
-    if state.mask is not None:
-        corrections.extend(
-            flush_pending_corrections(
-                state,
-                gps_week,
-                state.mask.satellites,
-                flush_policy,
+    for state in states.values():
+        if state.mask is not None:
+            corrections.extend(
+                flush_pending_corrections(
+                    state,
+                    gps_week,
+                    state.mask.satellites,
+                    flush_policy,
+                )
             )
-        )
-    if state.service_info_chunks:
-        service_info_packets.extend(flush_service_info_packets(state, state.service_info_chunks[-1][0]))
-    return messages, corrections, service_info_packets
+        if state.service_info_chunks:
+            service_info_packets.extend(
+                flush_service_info_packets(state, state.service_info_chunks[-1][0])
+            )
+    return messages, hydrate_atmos_only_corrections(corrections), service_info_packets
 
 
 def write_compact_messages(path: Path, messages: list[CSSRMessage]) -> None:
@@ -2750,13 +2921,35 @@ def write_compact_messages(path: Path, messages: list[CSSRMessage]) -> None:
 
 
 def write_compact_corrections(path: Path, corrections: list[CompactSSRCorrection]) -> None:
+    def correction_sort_key(correction: CompactSSRCorrection) -> tuple[int, float, str, int, int, int]:
+        has_atmos = 1 if correction.atmos_tokens else 0
+        has_residual = 0
+        if correction.atmos_tokens:
+            has_residual = 1 if any(
+                key == "atmos_trop_residuals_m"
+                or key == "atmos_trop_hs_residuals_m"
+                or key == "atmos_trop_wet_residuals_m"
+                or key.startswith("atmos_stec_residuals_tecu:")
+                for key in correction.atmos_tokens
+            ) else 0
+        atmos_network = correction.atmos_network_id if correction.atmos_network_id is not None else -1
+        return (
+            correction.week,
+            correction.tow,
+            correction.system,
+            correction.prn,
+            has_atmos,
+            has_residual,
+            atmos_network,
+        )
+
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="ascii", newline="") as handle:
         handle.write(
             "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]\n"
         )
         writer = csv.writer(handle)
-        for correction in corrections:
+        for correction in sorted(corrections, key=correction_sort_key):
             row = [
                 correction.week,
                 f"{correction.tow:.3f}",
