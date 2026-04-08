@@ -106,8 +106,9 @@ def read_rtklib_gpst_xyz_pos(path: str) -> list[Epoch]:
     """
     RTKLIB/CLASLIB rnx2rtkp text .pos when out-solformat includes ECEF XYZ.
 
-    Typical row (white-space separated):
+    Supported rows (white-space separated):
       YYYY/MM/DD HH:MM:SS.sss  X(m) Y(m) Z(m)  Q  ns  ...
+      week tow  X(m) Y(m) Z(m)  Q  ns  ...
     Lines starting with % or # are skipped.
     """
     out: list[Epoch] = []
@@ -117,33 +118,51 @@ def read_rtklib_gpst_xyz_pos(path: str) -> list[Epoch]:
             if not line or line.startswith("%") or line.startswith("#"):
                 continue
             parts = line.split()
-            if len(parts) < 6:
+            if len(parts) < 7:
                 continue
-            if "/" not in parts[0] or len(parts[0]) < 8:
-                continue
-            date_s = parts[0]
-            time_s = parts[1]
-            try:
-                x, y, z = float(parts[2]), float(parts[3]), float(parts[4])
-            except ValueError:
-                continue
-            if not (abs(x) > 1e5 and abs(y) > 1e5 and abs(z) > 1e5):
-                continue
-            try:
-                dt = datetime.strptime(f"{date_s} {time_s}", "%Y/%m/%d %H:%M:%S.%f").replace(
-                    tzinfo=timezone.utc
-                )
-            except ValueError:
+
+            week = 0
+            tow = 0.0
+            x = y = z = 0.0
+            solq_idx = 5
+            nsats_idx = 6
+
+            if "/" in parts[0] and len(parts[0]) >= 8:
+                date_s = parts[0]
+                time_s = parts[1]
                 try:
-                    dt = datetime.strptime(f"{date_s} {time_s}", "%Y/%m/%d %H:%M:%S").replace(
-                        tzinfo=timezone.utc
-                    )
+                    x, y, z = float(parts[2]), float(parts[3]), float(parts[4])
                 except ValueError:
                     continue
-            week, tow = _unix_to_gps_week_tow(dt.timestamp())
-            solq = int(float(parts[5])) if len(parts) > 5 else 0
-            nsats = int(float(parts[6])) if len(parts) > 6 else 0
-            pdop = float(parts[10]) if len(parts) > 10 else 0.0
+                if not (abs(x) > 1e5 and abs(y) > 1e5 and abs(z) > 1e5):
+                    continue
+                try:
+                    dt = datetime.strptime(
+                        f"{date_s} {time_s}", "%Y/%m/%d %H:%M:%S.%f"
+                    ).replace(tzinfo=timezone.utc)
+                except ValueError:
+                    try:
+                        dt = datetime.strptime(
+                            f"{date_s} {time_s}", "%Y/%m/%d %H:%M:%S"
+                        ).replace(tzinfo=timezone.utc)
+                    except ValueError:
+                        continue
+                week, tow = _unix_to_gps_week_tow(dt.timestamp())
+            else:
+                try:
+                    week = int(parts[0])
+                    tow = float(parts[1])
+                    x, y, z = float(parts[2]), float(parts[3]), float(parts[4])
+                except ValueError:
+                    continue
+                if week <= 0 or tow < 0.0:
+                    continue
+                if not (abs(x) > 1e5 and abs(y) > 1e5 and abs(z) > 1e5):
+                    continue
+
+            solq = int(float(parts[solq_idx])) if len(parts) > solq_idx else 0
+            nsats = int(float(parts[nsats_idx])) if len(parts) > nsats_idx else 0
+            pdop = 0.0
             status = _rtklib_solq_to_status(solq)
             out.append(
                 Epoch(
