@@ -72,6 +72,15 @@ struct WlnlFixAttempt {
     bool fixed = false;
     double ratio = 0.0;
     int nb = 0;
+    bool has_fixed_state = false;
+    ppp_shared::PPPState fixed_state;
+    struct DdConstraint {
+        SatelliteId ref_satellite;
+        SatelliteId sat_satellite;
+        double l1_dd_ambiguity_m = 0.0;
+        double l2_dd_ambiguity_m = 0.0;
+    };
+    std::vector<DdConstraint> dd_constraints;
 };
 
 struct WlnlWideLaneFixSummary {
@@ -128,6 +137,7 @@ struct FixedNlObservation {
     double lambda_nl_m = 0.0;
     Vector3d sat_pos = Vector3d::Zero();
     double sat_clk = 0.0;
+    double system_clock_offset_m = 0.0;
     bool use_trop_model = true;
 };
 

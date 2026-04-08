@@ -55,6 +55,12 @@ struct CLASPhaseBiasRepairInfo {
     std::array<double, OSR_MAX_FREQ> offset_cycles{{0.0, 0.0, 0.0}};
     std::array<double, OSR_MAX_FREQ> pending_state_shift_cycles{{0.0, 0.0, 0.0}};
     std::array<bool, OSR_MAX_FREQ> has_last{{false, false, false}};
+    // GF-based dispersion compensation (CLASLIB compensatedisp equivalent)
+    std::array<double, OSR_MAX_FREQ> prev_phase_bias_m{{0.0, 0.0, 0.0}};
+    double prev_iono_l1_m{0.0};
+    GNSSTime prev_ssr_epoch_time{};
+    bool has_prev_ssr_epoch{false};
+    std::array<double, OSR_MAX_FREQ> dispersion_rate_m_per_s{{0.0, 0.0, 0.0}};
 };
 
 struct CLASDispersionCompensationInfo {
