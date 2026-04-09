@@ -47,6 +47,9 @@ selector knobs used by the experiment lane:
 - `--clas-atmos-selection <grid-first|grid-guarded|balanced|freshness-first>`
 - `--clas-atmos-stale-after-seconds <seconds>`
 
+For the CLAS-specific runtime boundary, module ownership, and parity-oriented
+artifacts, see [CLAS API & Flow](clas.md).
+
 ## Docker
 
 The repo also ships a multi-stage `Dockerfile`. The runtime image installs:
