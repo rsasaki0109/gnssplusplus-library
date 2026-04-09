@@ -98,7 +98,7 @@ std::vector<OSRCorrection> computeOSR(
     const ObservationData& obs,
     const NavigationData& nav,
     const SSRProducts& ssr,
-    const std::map<std::string, std::string>& atmos_tokens,
+    const std::map<std::string, std::string>& epoch_atmos_tokens,
     const Vector3d& receiver_pos,
     double receiver_clk,
     double trop_zenith,

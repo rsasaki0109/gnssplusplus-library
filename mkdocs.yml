@@ -24,8 +24,8 @@ nav:
   - Benchmarks: benchmarks.md
   - Validation: validation.md
   - Interfaces: interfaces.md
-  - Experiments: experiments.md
-  - Decisions: decisions.md
+  - Track A Benchmark (2018): track_a_benchmark_2018.md
+  - SSR2OBS Dump: ssr2obs_dump_implementation.md
   - References:
       - Overview: references/index.md
       - MADOCALIB Gap: references/madocalib-gap.md

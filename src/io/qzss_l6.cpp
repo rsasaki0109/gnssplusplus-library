@@ -363,7 +363,7 @@ void L6Decoder::decodeSubtype8(BitReader& reader) {
     const int nsat = static_cast<int>(mask_.satellites.size());
     const uint64_t selected_mask = reader.readU(nsat);
 
-    auto& tokens = current_epoch_.atmos_by_network[network_id];
+    std::map<std::string, std::string> tokens;
     tokens["atmos_network_id"] = std::to_string(network_id);
     tokens["atmos_stec_avail"] = "1";
 
@@ -407,8 +407,11 @@ void L6Decoder::decodeSubtype8(BitReader& reader) {
         }
     }
     tokens["atmos_selected_satellites"] = std::to_string(selected_count);
+    if (network_id <= 0 || network_id > 12) {
+        return;
+    }
+    current_epoch_.atmos_by_network[network_id] = tokens;
     current_epoch_.has_atmos = true;
-    // Update persistent merged atmos (Python pending_atmos equivalent)
     for (const auto& [k, v] : tokens) merged_atmos_[k] = v;
 }
 
@@ -463,7 +466,7 @@ void L6Decoder::decodeSubtype9(BitReader& reader) {
         }
     }
 
-    auto& tokens = current_epoch_.atmos_by_network[network_id];
+    std::map<std::string, std::string> tokens;
     tokens["atmos_network_id"] = std::to_string(network_id);
     tokens["atmos_trop_avail"] = trop_type != 0 ? "1" : "0";
     tokens["atmos_stec_avail"] = sel_sats.empty() ? "0" : "2";
@@ -477,9 +480,12 @@ void L6Decoder::decodeSubtype9(BitReader& reader) {
         tokens["atmos_stec_residual_size:" + sat_key] = std::to_string(stec_residual_range);
         tokens["atmos_stec_residuals_tecu:" + sat_key] = stec_residuals[sat_key];
     }
+    if (network_id <= 0 || network_id > 12) {
+        return;
+    }
+    current_epoch_.atmos_by_network[network_id] = tokens;
     current_epoch_.has_atmos = true;
     current_epoch_.last_gridded_network_id = network_id;
-    // Update persistent merged atmos
     for (const auto& [k, v] : tokens) merged_atmos_[k] = v;
 }
 

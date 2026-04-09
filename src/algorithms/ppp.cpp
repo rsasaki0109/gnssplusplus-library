@@ -442,13 +442,35 @@ double observationCodeBiasMeters(GNSSSystem system,
                                  const std::map<uint8_t, double>& code_bias_m,
                                  double coeff_primary,
                                  double coeff_secondary) {
+    auto lookupBias = [&](SignalType signal) {
+        uint8_t preferred = rtcmSsrSignalId(system, signal);
+        uint8_t fallback = 0U;
+        if (system == GNSSSystem::GPS && signal == SignalType::GPS_L2C) {
+            preferred = 9U;
+            fallback = 8U;
+        } else if (preferred == 8U || preferred == 9U) {
+            fallback = preferred == 8U ? 9U : 8U;
+        }
+        if (preferred != 0U) {
+            const auto preferred_it = code_bias_m.find(preferred);
+            if (preferred_it != code_bias_m.end()) {
+                return preferred_it->second;
+            }
+        }
+        if (fallback != 0U) {
+            const auto fallback_it = code_bias_m.find(fallback);
+            if (fallback_it != code_bias_m.end()) {
+                return fallback_it->second;
+            }
+        }
+        return 0.0;
+    };
+
     const uint8_t primary_id = rtcmSsrSignalId(system, primary_signal);
     if (primary_id == 0U) {
         return 0.0;
     }
-    const auto primary_it = code_bias_m.find(primary_id);
-    const double primary_bias =
-        primary_it != code_bias_m.end() ? primary_it->second : 0.0;
+    const double primary_bias = lookupBias(primary_signal);
     if (!use_ionosphere_free || secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
         return primary_bias;
     }
@@ -457,9 +479,7 @@ double observationCodeBiasMeters(GNSSSystem system,
     if (secondary_id == 0U) {
         return coeff_primary * primary_bias;
     }
-    const auto secondary_it = code_bias_m.find(secondary_id);
-    const double secondary_bias =
-        secondary_it != code_bias_m.end() ? secondary_it->second : 0.0;
+    const double secondary_bias = lookupBias(secondary_signal);
     return coeff_primary * primary_bias + coeff_secondary * secondary_bias;
 }
 
@@ -470,13 +490,35 @@ double observationPhaseBiasMeters(GNSSSystem system,
                                   const std::map<uint8_t, double>& phase_bias_m,
                                   double coeff_primary,
                                   double coeff_secondary) {
+    auto lookupBias = [&](SignalType signal) {
+        uint8_t preferred = rtcmSsrSignalId(system, signal);
+        uint8_t fallback = 0U;
+        if (system == GNSSSystem::GPS && signal == SignalType::GPS_L2C) {
+            preferred = 9U;
+            fallback = 8U;
+        } else if (preferred == 8U || preferred == 9U) {
+            fallback = preferred == 8U ? 9U : 8U;
+        }
+        if (preferred != 0U) {
+            const auto preferred_it = phase_bias_m.find(preferred);
+            if (preferred_it != phase_bias_m.end()) {
+                return preferred_it->second;
+            }
+        }
+        if (fallback != 0U) {
+            const auto fallback_it = phase_bias_m.find(fallback);
+            if (fallback_it != phase_bias_m.end()) {
+                return fallback_it->second;
+            }
+        }
+        return 0.0;
+    };
+
     const uint8_t primary_id = rtcmSsrSignalId(system, primary_signal);
     if (primary_id == 0U) {
         return 0.0;
     }
-    const auto primary_it = phase_bias_m.find(primary_id);
-    const double primary_bias =
-        primary_it != phase_bias_m.end() ? primary_it->second : 0.0;
+    const double primary_bias = lookupBias(primary_signal);
     if (!use_ionosphere_free || secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
         return primary_bias;
     }
@@ -485,9 +527,7 @@ double observationPhaseBiasMeters(GNSSSystem system,
     if (secondary_id == 0U) {
         return coeff_primary * primary_bias;
     }
-    const auto secondary_it = phase_bias_m.find(secondary_id);
-    const double secondary_bias =
-        secondary_it != phase_bias_m.end() ? secondary_it->second : 0.0;
+    const double secondary_bias = lookupBias(secondary_signal);
     return coeff_primary * primary_bias + coeff_secondary * secondary_bias;
 }
 
@@ -1185,9 +1225,14 @@ bool PPPProcessor::loadL6Products(const std::string& l6_file) {
         "python3 -c \""
         "import sys; sys.path.insert(0, 'apps'); "
         "from pathlib import Path; "
+        "import gnss_qzss_l6_info as qzss_l6_info; "
         "from gnss_clas_ppp import expand_qzss_l6_source; "
         "expand_qzss_l6_source('" + l6_file + "', " +
-        std::to_string(gps_week) + ", Path('" + tmp_csv + "'))\" 2>/dev/null";
+        std::to_string(gps_week) + ", Path('" + tmp_csv + "'), "
+        "compact_phase_bias_composition_policy="
+        "qzss_l6_info.COMPACT_PHASE_BIAS_COMPOSITION_POLICY_BASE_PLUS_NETWORK, "
+        "compact_phase_bias_bank_policy="
+        "qzss_l6_info.COMPACT_PHASE_BIAS_BANK_POLICY_SAME_30S_BANK)\" 2>/dev/null";
 
     const int ret = std::system(cmd.c_str());
     if (ret == 0) {
@@ -1411,6 +1456,13 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         } else {
             return false;
         }
+    }
+
+    const bool use_receiver_seed_for_static =
+        (!ppp_config_.kinematic_mode || ppp_config_.low_dynamics_mode) &&
+        validReceiverSeed(obs.receiver_position);
+    if (use_receiver_seed_for_static) {
+        initial_position = obs.receiver_position;
     }
 
     // Allocate ISB states for non-GPS systems when estimate_ionosphere is on
@@ -2315,8 +2367,16 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
             updated_ambiguity.last_melbourne_wubbena_m = mw_m;
             updated_ambiguity.has_last_melbourne_wubbena = true;
             // Accumulate MW average for Wide-Lane AR
-            constexpr double lambda_wl_gps = constants::SPEED_OF_LIGHT / (1575.42e6 - 1227.60e6);
-            const double mw_cycles = mw_m / lambda_wl_gps;
+            const double f1 = signalFrequencyHz(*primary);
+            const double f2 = signalFrequencyHz(*secondary);
+            const double lambda_wl =
+                (f1 > 0.0 && f2 > 0.0 && std::abs(f1 - f2) > 1.0) ?
+                    constants::SPEED_OF_LIGHT / std::abs(f1 - f2) :
+                    0.0;
+            if (lambda_wl <= 0.0 || !std::isfinite(lambda_wl)) {
+                continue;
+            }
+            const double mw_cycles = mw_m / lambda_wl;
             if (!mw_slip) {
                 updated_ambiguity.mw_sum_cycles += mw_cycles;
                 updated_ambiguity.mw_count += 1;
