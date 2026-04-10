@@ -5,6 +5,11 @@
 Dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset)  
 Comparison baseline: [RTKLIB](https://github.com/tomojitakasu/RTKLIB)
 
+Benchmark configuration note:
+
+- the checked-in RTKLIB baseline uses `scripts/rtklib_odaiba.conf`, which is dual-frequency `L1+L2`
+- if you want a `demo5` comparison, pass a `demo5` `rnx2rtkp` binary explicitly with the same dual-frequency config
+
 Current checked-in snapshot:
 
 - All matched epochs: libgnss++ `11637` vs RTKLIB `8241`
