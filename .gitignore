@@ -26,6 +26,7 @@ test_rinex_read.cpp
 *.png
 !docs/*.png
 *.html
+!site-pages/**/*.html
 *.kml
 *.pos
 site/

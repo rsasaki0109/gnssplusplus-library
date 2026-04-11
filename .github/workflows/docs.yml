@@ -32,10 +32,16 @@ jobs:
         run: python scripts/generate_architecture_diagram.py --output docs/libgnsspp_architecture.png
       - name: Build MkDocs site
         run: python -m mkdocs build --strict
+      - name: Assemble GitHub Pages site
+        run: |
+          mkdir -p _site/docs _site/demo
+          cp site-pages/index.html _site/
+          cp site-pages/demo/index.html _site/demo/
+          cp -r site/* _site/docs/
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: _site
 
   deploy:
     needs: build
