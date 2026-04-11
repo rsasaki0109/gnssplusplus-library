@@ -1,6 +1,6 @@
 site_name: libgnss++
 site_description: Modern C++ GNSS/RTK/PPP/CLAS toolkit
-site_url: https://rsasaki0109.github.io/gnssplusplus-library/
+site_url: https://rsasaki0109.github.io/gnssplusplus-library/docs/
 repo_url: https://github.com/rsasaki0109/gnssplusplus-library
 repo_name: rsasaki0109/gnssplusplus-library
 docs_dir: docs

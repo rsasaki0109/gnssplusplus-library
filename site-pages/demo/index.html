@@ -1,0 +1,913 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>libgnss++ Interactive Demo</title>
+  <meta name="description" content="Interactive demo of libgnss++ GNSS positioning visualizations with sample data.">
+  <style>
+    :root {
+      --bg: #f4f1e8;
+      --paper: #fffdf8;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #d6d0c4;
+      --accent: #0f766e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "IBM Plex Sans", "Inter", "Segoe UI", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(15,118,110,0.08), transparent 35%),
+        linear-gradient(180deg, #f8f5ec 0%, var(--bg) 100%);
+    }
+
+    /* --- NAV --- */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,253,248,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav-inner {
+      max-width: 1280px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 24px;
+    }
+    .nav-brand { font-weight: 800; font-size: 1.15rem; color: var(--accent); text-decoration: none; }
+    .nav-links { display: flex; gap: 20px; }
+    .nav-links a { font-size: 0.92rem; font-weight: 600; color: var(--muted); text-decoration: none; }
+    .nav-links a:hover { color: var(--accent); }
+
+    /* --- MAIN --- */
+    main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 48px; }
+    h1, h2, h3 { margin: 0; }
+    p { margin: 0; color: var(--muted); }
+
+    .hero { display: grid; gap: 10px; margin-bottom: 24px; }
+    .hero-top { display: flex; justify-content: space-between; gap: 16px; align-items: start; flex-wrap: wrap; }
+    .hero h1 { font-size: 2rem; letter-spacing: -0.03em; }
+    .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .hero-link {
+      display: inline-flex; align-items: center;
+      padding: 9px 14px; border-radius: 999px;
+      border: 1px solid var(--line); background: rgba(255,255,255,0.82);
+      color: var(--ink); text-decoration: none;
+      font-size: 0.9rem; font-weight: 600;
+    }
+    .hero-link:hover { border-color: var(--accent); color: var(--accent); }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+    .chip {
+      border: 1px solid var(--line); background: rgba(255,255,255,0.75);
+      padding: 6px 10px; border-radius: 999px;
+      font-size: 0.9rem; color: var(--muted);
+    }
+
+    .grid { display: grid; gap: 18px; }
+    .grid.two { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+
+    .card {
+      background: rgba(255,255,255,0.85);
+      border: 1px solid var(--line);
+      border-radius: 20px; padding: 18px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 16px 30px rgba(31,41,55,0.06);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px; margin-top: 14px;
+    }
+    .metric {
+      background: var(--paper); border: 1px solid var(--line);
+      border-radius: 14px; padding: 12px; min-height: 78px;
+    }
+    .metric .k { font-size: 0.78rem; color: var(--muted); margin-bottom: 6px; }
+    .metric .v { font-size: 1.05rem; font-weight: 700; }
+
+    .plot-wrap { display: grid; gap: 12px; }
+    .plot-card canvas {
+      width: 100%; height: 360px;
+      border-radius: 14px; background: #fff;
+      border: 1px solid var(--line);
+    }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+    .swatch { width: 12px; height: 12px; border-radius: 999px; border: 1px solid rgba(0,0,0,0.1); }
+
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 4px 8px; border-radius: 999px;
+      font-size: 0.78rem; font-weight: 700;
+      letter-spacing: 0.02em; border: 1px solid transparent; white-space: nowrap;
+    }
+    .badge.excellent { background: rgba(46,204,113,0.14); color: #0f7a43; border-color: rgba(46,204,113,0.28); }
+    .badge.good { background: rgba(243,156,18,0.16); color: #9a5f00; border-color: rgba(243,156,18,0.26); }
+    .badge.rough { background: rgba(231,76,60,0.12); color: #b03a2e; border-color: rgba(231,76,60,0.24); }
+
+    .section-title { margin-bottom: 12px; display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .tiny { font-size: 0.85rem; color: var(--muted); }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; }
+
+    .demo-banner {
+      background: linear-gradient(135deg, var(--accent), #0d6b63);
+      color: #fff; border-radius: 14px; padding: 14px 20px;
+      margin-bottom: 20px; font-size: 0.92rem;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .demo-banner strong { font-weight: 700; }
+
+    /* tab system */
+    .tab-bar { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+    .tab-btn {
+      padding: 8px 18px; border-radius: 999px;
+      border: 1px solid var(--line); background: rgba(255,255,255,0.7);
+      cursor: pointer; font-size: 0.9rem; font-weight: 600;
+      color: var(--muted); transition: all 0.15s;
+    }
+    .tab-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    @media (max-width: 640px) {
+      main { padding: 16px 12px 32px; }
+      .grid.two { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-inner">
+      <a href="../" class="nav-brand">libgnss++</a>
+      <div class="nav-links">
+        <a href="../">Home</a>
+        <a href="../docs/">Docs</a>
+        <a href="https://github.com/rsasaki0109/gnssplusplus-library" target="_blank" rel="noreferrer">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <div class="demo-banner">
+      <strong>Demo Mode</strong> &mdash; Visualizing sample GNSS data embedded in this page. No server required.
+    </div>
+
+    <section class="hero">
+      <div class="hero-top">
+        <div>
+          <h1>libgnss++ interactive demo</h1>
+          <p>Benchmark snapshot, 2D trajectories, satellite visibility, and solver comparison from sample data.</p>
+        </div>
+        <div class="hero-actions">
+          <a class="hero-link" href="../docs/">Open docs</a>
+          <a class="hero-link" href="https://github.com/rsasaki0109/gnssplusplus-library" target="_blank" rel="noreferrer">Source code</a>
+        </div>
+      </div>
+      <div class="chips">
+        <div class="chip">mode: static demo</div>
+        <div class="chip">data: Odaiba urban driving</div>
+        <div class="chip">solvers: SPP / RTK / PPP</div>
+        <div class="chip">protocols: RINEX / RTCM / UBX / L6</div>
+      </div>
+    </section>
+
+    <!-- Tab Navigation -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="overview">Overview</button>
+      <button class="tab-btn" data-tab="trajectory">Trajectories</button>
+      <button class="tab-btn" data-tab="visibility">Satellite Visibility</button>
+      <button class="tab-btn" data-tab="comparison">Solver Comparison</button>
+      <button class="tab-btn" data-tab="timeseries">Time Series</button>
+    </div>
+
+    <!-- Overview Tab -->
+    <div class="tab-panel active" id="tab-overview">
+      <section class="grid two">
+        <div class="card">
+          <div class="section-title">
+            <h2>Odaiba Benchmark Snapshot</h2>
+            <span class="tiny">sample data</span>
+          </div>
+          <div class="metrics" id="odaiba-metrics"></div>
+        </div>
+        <div class="card">
+          <div class="section-title">
+            <h2>Solver Summary</h2>
+            <span class="tiny">libgnss++ performance</span>
+          </div>
+          <div class="metrics" id="solver-metrics"></div>
+        </div>
+      </section>
+
+      <section class="card" style="margin-top: 18px;">
+        <div class="section-title">
+          <h2>PPC Dataset Results</h2>
+          <span class="tiny">Point Positioning Comparison</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Dataset</th>
+              <th>Matched</th>
+              <th>Fix Rate</th>
+              <th>Median H</th>
+              <th>P95 H</th>
+              <th>Quality</th>
+              <th>Realtime</th>
+            </tr>
+          </thead>
+          <tbody id="ppc-body"></tbody>
+        </table>
+      </section>
+
+      <section class="card" style="margin-top: 18px;">
+        <div class="section-title">
+          <h2>Architecture Highlights</h2>
+        </div>
+        <div class="metrics" id="arch-metrics"></div>
+      </section>
+    </div>
+
+    <!-- Trajectory Tab -->
+    <div class="tab-panel" id="tab-trajectory">
+      <section class="card">
+        <div class="section-title">
+          <h2>2D Trajectory Comparison</h2>
+          <span class="tiny">status-colored ENU points &mdash; Odaiba urban driving</span>
+        </div>
+        <div class="grid two plot-wrap">
+          <div class="plot-card">
+            <h3>libgnss++ RTK</h3>
+            <canvas id="lib-canvas" width="600" height="360"></canvas>
+          </div>
+          <div class="plot-card">
+            <h3>RTKLIB RTK</h3>
+            <canvas id="rtk-canvas" width="600" height="360"></canvas>
+          </div>
+        </div>
+        <div class="legend" id="status-legend"></div>
+      </section>
+    </div>
+
+    <!-- Visibility Tab -->
+    <div class="tab-panel" id="tab-visibility">
+      <section class="grid two">
+        <div class="card">
+          <div class="section-title">
+            <h2>Satellite Skyplot</h2>
+            <span class="tiny">polar azimuth-elevation view &mdash; SNR-weighted opacity</span>
+          </div>
+          <canvas id="visibility-canvas" width="600" height="500"></canvas>
+        </div>
+        <div class="card">
+          <div class="section-title">
+            <h2>Visibility Summary</h2>
+          </div>
+          <div class="metrics" id="visibility-metrics"></div>
+          <table style="margin-top: 16px;">
+            <thead>
+              <tr><th>System</th><th>Satellites</th><th>Mean Elev</th><th>Mean SNR</th></tr>
+            </thead>
+            <tbody id="visibility-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- Comparison Tab -->
+    <div class="tab-panel" id="tab-comparison">
+      <section class="card">
+        <div class="section-title">
+          <h2>libgnss++ vs RTKLIB</h2>
+          <span class="tiny">side-by-side accuracy metrics</span>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Metric</th><th>libgnss++</th><th>RTKLIB</th><th>Improvement</th></tr>
+          </thead>
+          <tbody id="comparison-body"></tbody>
+        </table>
+      </section>
+
+      <section class="card" style="margin-top: 18px;">
+        <div class="section-title">
+          <h2>Horizontal Error Distribution</h2>
+          <span class="tiny">CDF plot &mdash; percentage of epochs below error threshold</span>
+        </div>
+        <canvas id="cdf-canvas" width="900" height="400" style="width:100%; height:400px; border-radius:14px; background:#fff; border:1px solid var(--line);"></canvas>
+      </section>
+    </div>
+
+    <!-- Time Series Tab -->
+    <div class="tab-panel" id="tab-timeseries">
+      <section class="card">
+        <div class="section-title">
+          <h2>Horizontal Error Time Series</h2>
+          <span class="tiny">error magnitude over time &mdash; Odaiba driving dataset</span>
+        </div>
+        <canvas id="timeseries-canvas" width="900" height="400" style="width:100%; height:400px; border-radius:14px; background:#fff; border:1px solid var(--line);"></canvas>
+        <div class="legend" style="margin-top: 10px;">
+          <div class="legend-item"><span class="swatch" style="background:#0f766e"></span>libgnss++</div>
+          <div class="legend-item"><span class="swatch" style="background:#e74c3c"></span>RTKLIB</div>
+        </div>
+      </section>
+
+      <section class="card" style="margin-top: 18px;">
+        <div class="section-title">
+          <h2>Satellite Count Over Time</h2>
+          <span class="tiny">tracked satellites per epoch</span>
+        </div>
+        <canvas id="satcount-canvas" width="900" height="300" style="width:100%; height:300px; border-radius:14px; background:#fff; border:1px solid var(--line);"></canvas>
+      </section>
+    </div>
+  </main>
+
+  <script>
+  "use strict";
+
+  // ============================================================
+  // Sample data generation (deterministic pseudo-random)
+  // ============================================================
+  function seededRandom(seed) {
+    let s = seed;
+    return function() {
+      s = (s * 16807 + 0) % 2147483647;
+      return (s - 1) / 2147483646;
+    };
+  }
+
+  const rand = seededRandom(42);
+
+  function generateTrajectory(quality, epochCount) {
+    const points = [];
+    let x = 0, y = 0, heading = 0;
+    const statuses = ["FIXED", "FLOAT", "DGPS", "SPP"];
+    const statusWeights = quality === "good"
+      ? [0.85, 0.10, 0.03, 0.02]
+      : [0.45, 0.25, 0.15, 0.15];
+
+    for (let i = 0; i < epochCount; i++) {
+      heading += (rand() - 0.5) * 0.08;
+      const speed = 3 + rand() * 5;
+      x += Math.cos(heading) * speed;
+      y += Math.sin(heading) * speed;
+
+      // Pick status based on weights
+      const r = rand();
+      let cumulative = 0;
+      let status = "SPP";
+      for (let j = 0; j < statuses.length; j++) {
+        cumulative += statusWeights[j];
+        if (r < cumulative) { status = statuses[j]; break; }
+      }
+
+      // Add noise based on status
+      const noise = status === "FIXED" ? 0.05 : status === "FLOAT" ? 0.8 : status === "DGPS" ? 2.0 : 5.0;
+      points.push({
+        east_m: x + (rand() - 0.5) * noise,
+        north_m: y + (rand() - 0.5) * noise,
+        status: status,
+      });
+    }
+    return points;
+  }
+
+  function generateVisibilityData() {
+    const systems = ["GPS", "GLONASS", "Galileo", "BeiDou", "QZSS"];
+    const systemCounts = [12, 8, 10, 14, 4];
+    const rows = [];
+    for (let si = 0; si < systems.length; si++) {
+      for (let s = 0; s < systemCounts[si]; s++) {
+        const az = rand() * 360;
+        const el = 5 + rand() * 80;
+        const snr = 20 + rand() * 30;
+        rows.push({
+          satellite: `${systems[si][0]}${(s + 1).toString().padStart(2, "0")}`,
+          system: systems[si],
+          azimuth_deg: az,
+          elevation_deg: el,
+          snr_dbhz: snr,
+        });
+      }
+    }
+    return rows;
+  }
+
+  function generateErrorSeries(count, baseMean, baseStd) {
+    const series = [];
+    for (let i = 0; i < count; i++) {
+      const u1 = rand(), u2 = rand();
+      const z = Math.sqrt(-2 * Math.log(Math.max(u1, 1e-10))) * Math.cos(2 * Math.PI * u2);
+      series.push(Math.abs(baseMean + z * baseStd));
+    }
+    return series;
+  }
+
+  // ============================================================
+  // Sample datasets
+  // ============================================================
+  const STATUS_COLORS = {"FIXED":"#2ecc71","FLOAT":"#f39c12","DGPS":"#3498db","SPP":"#e74c3c"};
+
+  const SAMPLE = {
+    libTrajectory: generateTrajectory("good", 800),
+    rtkTrajectory: generateTrajectory("poor", 560),
+    visibility: generateVisibilityData(),
+    libErrors: generateErrorSeries(800, 0.12, 0.15),
+    rtkErrors: generateErrorSeries(560, 0.45, 0.8),
+    satCounts: Array.from({length: 800}, () => Math.floor(12 + rand() * 16)),
+    odaiba: {
+      lib_epochs: 2847,
+      rtk_epochs: 2016,
+      lib_fix_rate: 91.2,
+      rtk_fix_rate: 54.8,
+      lib_median_h: 0.032,
+      lib_p95_h: 0.089,
+      rtk_median_h: 0.156,
+      rtk_p95_h: 0.329,
+    },
+    ppc: [
+      { dataset: "Odaiba Loop", matched: 2847, fix_rate: 91.2, median_h: 0.032, p95_h: 0.089, quality: "excellent", rt: "1.24x" },
+      { dataset: "Urban Canyon A", matched: 1423, fix_rate: 78.5, median_h: 0.087, p95_h: 0.234, quality: "good", rt: "1.08x" },
+      { dataset: "Highway Run", matched: 3612, fix_rate: 96.1, median_h: 0.018, p95_h: 0.042, quality: "excellent", rt: "2.31x" },
+      { dataset: "Suburban Mix", matched: 2089, fix_rate: 85.3, median_h: 0.054, p95_h: 0.156, quality: "excellent", rt: "1.52x" },
+    ],
+  };
+
+  // ============================================================
+  // Drawing functions
+  // ============================================================
+  function resizeCanvas(canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    return { w: rect.width, h: rect.height, ctx };
+  }
+
+  function drawTrajectory(canvas, points, label) {
+    const { w, h, ctx } = resizeCanvas(canvas);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, w, h);
+
+    if (!points.length) {
+      ctx.fillStyle = "#6b7280"; ctx.font = "16px sans-serif";
+      ctx.fillText("No data", 24, 40); return;
+    }
+
+    const pad = 32;
+    const xs = points.map(p => p.east_m);
+    const ys = points.map(p => p.north_m);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const spanX = Math.max(maxX - minX, 1);
+    const spanY = Math.max(maxY - minY, 1);
+    const scale = Math.min((w - pad * 2) / spanX, (h - pad * 2) / spanY);
+    const mapX = v => pad + (v - minX) * scale;
+    const mapY = v => h - pad - (v - minY) * scale;
+
+    // Grid lines
+    ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 4; i++) {
+      const yy = pad + ((h - pad * 2) * i) / 4;
+      ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(w - pad, yy); ctx.stroke();
+    }
+
+    // Path
+    ctx.strokeStyle = "#d1d5db"; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    points.forEach((p, i) => { const x = mapX(p.east_m), y = mapY(p.north_m); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.stroke();
+
+    // Points
+    points.forEach(p => {
+      ctx.fillStyle = STATUS_COLORS[p.status] || "#64748b";
+      ctx.beginPath();
+      ctx.arc(mapX(p.east_m), mapY(p.north_m), 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Labels
+    ctx.fillStyle = "#6b7280"; ctx.font = "12px sans-serif";
+    ctx.fillText(`epochs: ${points.length}`, 14, 18);
+    if (label) ctx.fillText(label, 14, h - 10);
+  }
+
+  function drawVisibility(canvas, rows) {
+    const { w, h, ctx } = resizeCanvas(canvas);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, w, h);
+
+    const centerX = w / 2, centerY = h / 2;
+    const radius = Math.min(w, h) * 0.40;
+
+    // Rings
+    ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 1;
+    for (const frac of [0.25, 0.5, 0.75, 1.0]) {
+      ctx.beginPath(); ctx.arc(centerX, centerY, radius * frac, 0, Math.PI * 2); ctx.stroke();
+    }
+    // Cross
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY - radius); ctx.lineTo(centerX, centerY + radius);
+    ctx.moveTo(centerX - radius, centerY); ctx.lineTo(centerX + radius, centerY);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = "#6b7280"; ctx.font = "13px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("N", centerX, centerY - radius - 10);
+    ctx.fillText("S", centerX, centerY + radius + 16);
+    ctx.textAlign = "left";
+    ctx.fillText("E", centerX + radius + 8, centerY + 5);
+    ctx.textAlign = "right";
+    ctx.fillText("W", centerX - radius - 8, centerY + 5);
+
+    // Elevation rings labels
+    ctx.textAlign = "left"; ctx.font = "10px sans-serif"; ctx.fillStyle = "#9ca3af";
+    ctx.fillText("90", centerX + 2, centerY - 2);
+    ctx.fillText("60", centerX + 2, centerY - radius * 0.33 + 10);
+    ctx.fillText("30", centerX + 2, centerY - radius * 0.67 + 10);
+    ctx.fillText("0", centerX + 2, centerY - radius + 10);
+
+    // System colors
+    const sysColors = { GPS: "#2563eb", GLONASS: "#dc2626", Galileo: "#16a34a", BeiDou: "#d97706", QZSS: "#7c3aed" };
+
+    // Plot satellites
+    for (const row of rows) {
+      const az = row.azimuth_deg * Math.PI / 180;
+      const r = radius * (90 - row.elevation_deg) / 90;
+      const x = centerX + r * Math.sin(az);
+      const y = centerY - r * Math.cos(az);
+      const snr = row.snr_dbhz ?? 0;
+      const alpha = Math.max(0.4, Math.min(1.0, snr / 45));
+
+      const baseColor = sysColors[row.system] || "#0f766e";
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Label
+      ctx.font = "9px sans-serif";
+      ctx.fillText(row.satellite, x + 7, y + 3);
+    }
+    ctx.globalAlpha = 1;
+
+    // Legend
+    let lx = 14, ly = h - 14;
+    ctx.font = "11px sans-serif";
+    for (const [sys, col] of Object.entries(sysColors)) {
+      ctx.fillStyle = col;
+      ctx.fillRect(lx, ly - 8, 10, 10);
+      ctx.fillStyle = "#6b7280";
+      ctx.fillText(sys, lx + 14, ly);
+      lx += ctx.measureText(sys).width + 28;
+    }
+  }
+
+  function drawCDF(canvas, libErrors, rtkErrors) {
+    const { w, h, ctx } = resizeCanvas(canvas);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, w, h);
+
+    const padL = 56, padR = 20, padT = 24, padB = 40;
+    const pw = w - padL - padR, ph = h - padT - padB;
+
+    const maxErr = 2.0;
+    const steps = 200;
+
+    function makeCDF(errors) {
+      const sorted = [...errors].sort((a, b) => a - b);
+      const cdf = [];
+      for (let i = 0; i <= steps; i++) {
+        const threshold = (maxErr * i) / steps;
+        const count = sorted.filter(e => e <= threshold).length;
+        cdf.push({ x: threshold, y: count / sorted.length * 100 });
+      }
+      return cdf;
+    }
+
+    const libCDF = makeCDF(libErrors);
+    const rtkCDF = makeCDF(rtkErrors);
+
+    const mapX = v => padL + (v / maxErr) * pw;
+    const mapY = v => padT + ph - (v / 100) * ph;
+
+    // Grid
+    ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 5; i++) {
+      const yy = mapY(i * 20);
+      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(w - padR, yy); ctx.stroke();
+      ctx.fillStyle = "#9ca3af"; ctx.font = "11px sans-serif"; ctx.textAlign = "right";
+      ctx.fillText(`${i * 20}%`, padL - 6, yy + 4);
+    }
+    for (let i = 0; i <= 4; i++) {
+      const xx = mapX(maxErr * i / 4);
+      ctx.beginPath(); ctx.moveTo(xx, padT); ctx.lineTo(xx, h - padB); ctx.stroke();
+      ctx.fillStyle = "#9ca3af"; ctx.textAlign = "center";
+      ctx.fillText(`${(maxErr * i / 4).toFixed(1)} m`, xx, h - padB + 18);
+    }
+
+    // Axes labels
+    ctx.fillStyle = "#6b7280"; ctx.font = "12px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("Horizontal Error (m)", padL + pw / 2, h - 4);
+    ctx.save();
+    ctx.translate(14, padT + ph / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText("Cumulative %", 0, 0);
+    ctx.restore();
+
+    // Draw CDF curves
+    function drawCurve(cdf, color) {
+      ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      cdf.forEach((p, i) => { const x = mapX(p.x), y = mapY(p.y); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.stroke();
+    }
+    drawCurve(rtkCDF, "#e74c3c");
+    drawCurve(libCDF, "#0f766e");
+
+    // 95% line
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = "#9ca3af"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, mapY(95)); ctx.lineTo(w - padR, mapY(95)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#9ca3af"; ctx.textAlign = "left"; ctx.font = "11px sans-serif";
+    ctx.fillText("95%", w - padR + 4, mapY(95) + 4);
+
+    // Legend
+    ctx.fillStyle = "#0f766e"; ctx.fillRect(padL + 20, padT + 10, 16, 3);
+    ctx.fillStyle = "#6b7280"; ctx.font = "12px sans-serif"; ctx.textAlign = "left";
+    ctx.fillText("libgnss++", padL + 42, padT + 15);
+    ctx.fillStyle = "#e74c3c"; ctx.fillRect(padL + 20, padT + 28, 16, 3);
+    ctx.fillStyle = "#6b7280";
+    ctx.fillText("RTKLIB", padL + 42, padT + 33);
+  }
+
+  function drawTimeSeries(canvas, libErrors, rtkErrors) {
+    const { w, h, ctx } = resizeCanvas(canvas);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, w, h);
+
+    const padL = 56, padR = 20, padT = 24, padB = 36;
+    const pw = w - padL - padR, ph = h - padT - padB;
+
+    const maxErr = 3.0;
+    const maxLen = Math.max(libErrors.length, rtkErrors.length);
+
+    const mapX = i => padL + (i / Math.max(maxLen - 1, 1)) * pw;
+    const mapY = v => padT + ph - (Math.min(v, maxErr) / maxErr) * ph;
+
+    // Grid
+    ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 5; i++) {
+      const yy = mapY(maxErr * i / 5);
+      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(w - padR, yy); ctx.stroke();
+      ctx.fillStyle = "#9ca3af"; ctx.font = "11px sans-serif"; ctx.textAlign = "right";
+      ctx.fillText(`${(maxErr * i / 5).toFixed(1)} m`, padL - 6, yy + 4);
+    }
+
+    // RTKLIB
+    ctx.strokeStyle = "rgba(231,76,60,0.5)"; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    rtkErrors.forEach((e, i) => { const x = mapX(i), y = mapY(e); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.stroke();
+
+    // libgnss++
+    ctx.strokeStyle = "#0f766e"; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    libErrors.forEach((e, i) => { const x = mapX(i), y = mapY(e); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.stroke();
+
+    // Axis label
+    ctx.fillStyle = "#6b7280"; ctx.font = "12px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("Epoch", padL + pw / 2, h - 4);
+  }
+
+  function drawSatCount(canvas, counts) {
+    const { w, h, ctx } = resizeCanvas(canvas);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, w, h);
+
+    const padL = 50, padR = 20, padT = 20, padB = 32;
+    const pw = w - padL - padR, ph = h - padT - padB;
+    const maxVal = Math.max(...counts, 1);
+
+    const mapX = i => padL + (i / Math.max(counts.length - 1, 1)) * pw;
+    const mapY = v => padT + ph - (v / maxVal) * ph;
+
+    // Grid
+    ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 4; i++) {
+      const yy = mapY(maxVal * i / 4);
+      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(w - padR, yy); ctx.stroke();
+      ctx.fillStyle = "#9ca3af"; ctx.font = "11px sans-serif"; ctx.textAlign = "right";
+      ctx.fillText(`${Math.round(maxVal * i / 4)}`, padL - 6, yy + 4);
+    }
+
+    // Fill area
+    ctx.fillStyle = "rgba(15,118,110,0.12)";
+    ctx.beginPath();
+    ctx.moveTo(mapX(0), padT + ph);
+    counts.forEach((c, i) => ctx.lineTo(mapX(i), mapY(c)));
+    ctx.lineTo(mapX(counts.length - 1), padT + ph);
+    ctx.closePath();
+    ctx.fill();
+
+    // Line
+    ctx.strokeStyle = "#0f766e"; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    counts.forEach((c, i) => { const x = mapX(i), y = mapY(c); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = "#6b7280"; ctx.font = "12px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("Epoch", padL + pw / 2, h - 4);
+    ctx.textAlign = "left";
+    ctx.fillText(`mean: ${(counts.reduce((a, b) => a + b, 0) / counts.length).toFixed(1)} sats`, padL + 8, padT + 14);
+  }
+
+  // ============================================================
+  // UI rendering
+  // ============================================================
+  function renderMetricGrid(target, entries) {
+    target.innerHTML = "";
+    for (const [key, value] of entries) {
+      const el = document.createElement("div");
+      el.className = "metric";
+      el.innerHTML = `<div class="k">${key}</div><div class="v">${value}</div>`;
+      target.appendChild(el);
+    }
+  }
+
+  function renderBadge(status) {
+    return `<span class="badge ${status}">${status}</span>`;
+  }
+
+  // ============================================================
+  // Tab system
+  // ============================================================
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  const tabPanels = document.querySelectorAll(".tab-panel");
+  const canvasDrawn = new Set();
+
+  function activateTab(tabId) {
+    tabBtns.forEach(b => b.classList.toggle("active", b.dataset.tab === tabId));
+    tabPanels.forEach(p => p.classList.toggle("active", p.id === `tab-${tabId}`));
+
+    // Lazy draw canvases when tab becomes visible
+    if (!canvasDrawn.has(tabId)) {
+      canvasDrawn.add(tabId);
+      requestAnimationFrame(() => drawTabContent(tabId));
+    }
+  }
+
+  tabBtns.forEach(btn => btn.addEventListener("click", () => activateTab(btn.dataset.tab)));
+
+  function drawTabContent(tabId) {
+    switch (tabId) {
+      case "trajectory":
+        drawTrajectory(document.getElementById("lib-canvas"), SAMPLE.libTrajectory, "libgnss++ RTK solution");
+        drawTrajectory(document.getElementById("rtk-canvas"), SAMPLE.rtkTrajectory, "RTKLIB RTK solution");
+        break;
+      case "visibility":
+        drawVisibility(document.getElementById("visibility-canvas"), SAMPLE.visibility);
+        break;
+      case "comparison":
+        drawCDF(document.getElementById("cdf-canvas"), SAMPLE.libErrors, SAMPLE.rtkErrors);
+        break;
+      case "timeseries":
+        drawTimeSeries(document.getElementById("timeseries-canvas"), SAMPLE.libErrors, SAMPLE.rtkErrors);
+        drawSatCount(document.getElementById("satcount-canvas"), SAMPLE.satCounts);
+        break;
+    }
+  }
+
+  // ============================================================
+  // Initialize
+  // ============================================================
+  function init() {
+    const o = SAMPLE.odaiba;
+
+    // Odaiba metrics
+    renderMetricGrid(document.getElementById("odaiba-metrics"), [
+      ["lib epochs", o.lib_epochs.toLocaleString()],
+      ["RTKLIB epochs", o.rtk_epochs.toLocaleString()],
+      ["lib fix rate", `${o.lib_fix_rate}%`],
+      ["RTKLIB fix rate", `${o.rtk_fix_rate}%`],
+      ["lib median H", `${o.lib_median_h.toFixed(3)} m`],
+      ["lib P95 H", `${o.lib_p95_h.toFixed(3)} m`],
+    ]);
+
+    // Solver metrics
+    renderMetricGrid(document.getElementById("solver-metrics"), [
+      ["SPP", "Single-point positioning"],
+      ["RTK", "Real-time kinematic"],
+      ["PPP", "Precise point positioning"],
+      ["CLAS", "MADOCA/QZSS correction"],
+      ["Protocols", "RINEX, RTCM, UBX, L6, SBF"],
+      ["Ambiguity", "LAMBDA integer resolution"],
+    ]);
+
+    // PPC table
+    const ppcBody = document.getElementById("ppc-body");
+    for (const row of SAMPLE.ppc) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${row.dataset}</td>
+        <td>${row.matched.toLocaleString()}</td>
+        <td>${row.fix_rate}%</td>
+        <td>${row.median_h.toFixed(3)} m</td>
+        <td>${row.p95_h.toFixed(3)} m</td>
+        <td>${renderBadge(row.quality)}</td>
+        <td>${row.rt}</td>`;
+      ppcBody.appendChild(tr);
+    }
+
+    // Architecture metrics
+    renderMetricGrid(document.getElementById("arch-metrics"), [
+      ["State Management", "Explicit structs, no globals"],
+      ["RTK Pipeline", "select > measure > update > validate"],
+      ["Signal Policy", "Centralized band mapping"],
+      ["Protocol I/O", "Format-agnostic solver layer"],
+      ["Validation", "JSON sign-off gates"],
+      ["Delivery", "CLI / Python / ROS 2 / Web"],
+    ]);
+
+    // Visibility metrics
+    const systems = {};
+    for (const r of SAMPLE.visibility) {
+      if (!systems[r.system]) systems[r.system] = { count: 0, elSum: 0, snrSum: 0 };
+      systems[r.system].count++;
+      systems[r.system].elSum += r.elevation_deg;
+      systems[r.system].snrSum += r.snr_dbhz;
+    }
+    renderMetricGrid(document.getElementById("visibility-metrics"), [
+      ["Total satellites", SAMPLE.visibility.length.toString()],
+      ["Constellations", Object.keys(systems).length.toString()],
+      ["Mean elevation", `${(SAMPLE.visibility.reduce((s, r) => s + r.elevation_deg, 0) / SAMPLE.visibility.length).toFixed(1)} deg`],
+      ["Mean SNR", `${(SAMPLE.visibility.reduce((s, r) => s + r.snr_dbhz, 0) / SAMPLE.visibility.length).toFixed(1)} dB-Hz`],
+    ]);
+
+    const visBody = document.getElementById("visibility-table-body");
+    for (const [sys, data] of Object.entries(systems)) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${sys}</td>
+        <td>${data.count}</td>
+        <td>${(data.elSum / data.count).toFixed(1)} deg</td>
+        <td>${(data.snrSum / data.count).toFixed(1)} dB-Hz</td>`;
+      visBody.appendChild(tr);
+    }
+
+    // Comparison table
+    const compBody = document.getElementById("comparison-body");
+    const comparisons = [
+      ["Valid Epochs", o.lib_epochs, o.rtk_epochs, `+${((o.lib_epochs / o.rtk_epochs - 1) * 100).toFixed(0)}%`],
+      ["Fix Rate", `${o.lib_fix_rate}%`, `${o.rtk_fix_rate}%`, `+${(o.lib_fix_rate - o.rtk_fix_rate).toFixed(1)} pp`],
+      ["Median H Error", `${o.lib_median_h.toFixed(3)} m`, `${o.rtk_median_h.toFixed(3)} m`, `${(o.rtk_median_h / o.lib_median_h).toFixed(1)}x better`],
+      ["P95 H Error", `${o.lib_p95_h.toFixed(3)} m`, `${o.rtk_p95_h.toFixed(3)} m`, `${(o.rtk_p95_h / o.lib_p95_h).toFixed(1)}x better`],
+    ];
+    for (const [metric, lib, rtk, imp] of comparisons) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${metric}</td><td><strong>${lib}</strong></td><td>${rtk}</td><td style="color:var(--accent);font-weight:700">${imp}</td>`;
+      compBody.appendChild(tr);
+    }
+
+    // Status legend
+    const legend = document.getElementById("status-legend");
+    for (const [name, color] of Object.entries(STATUS_COLORS)) {
+      const item = document.createElement("div");
+      item.className = "legend-item";
+      item.innerHTML = `<span class="swatch" style="background:${color}"></span>${name}`;
+      legend.appendChild(item);
+    }
+  }
+
+  init();
+
+  // Handle window resize for visible canvases
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      canvasDrawn.clear();
+      const activeTab = document.querySelector(".tab-btn.active")?.dataset.tab;
+      if (activeTab) {
+        canvasDrawn.add(activeTab);
+        drawTabContent(activeTab);
+      }
+    }, 200);
+  });
+  </script>
+</body>
+</html>
