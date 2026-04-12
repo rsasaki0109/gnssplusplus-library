@@ -64,6 +64,12 @@ struct WlnlNlInfo {
     double lambda_nl_m = 0.0;
     double lambda_wl_m = 0.0;
     double beta = 0.0;
+    double alpha1 = 0.0;
+    double alpha2 = 0.0;
+    double l1_phase_corr_m = 0.0;
+    double l2_phase_corr_m = 0.0;
+    double nl_phase_m = 0.0;
+    double predicted_m = 0.0;
     WlnlGroupKey group{};
     bool valid = false;
 };
@@ -73,6 +79,7 @@ struct WlnlFixAttempt {
     double ratio = 0.0;
     int nb = 0;
     bool has_fixed_state = false;
+    double fixed_state_dd_gap_cycles = 1e9;
     ppp_shared::PPPState fixed_state;
     struct DdConstraint {
         SatelliteId ref_satellite;

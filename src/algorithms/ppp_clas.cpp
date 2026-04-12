@@ -65,6 +65,26 @@ double elevationWeight(double elevation_rad) {
     return 1.0 / (s * s);
 }
 
+constexpr double kStartupAmbiguityVarianceScale = 0.5;
+constexpr double kStartupPhaseVarianceInflation = 4.0;
+
+bool hasFreshAmbiguitySeed(
+    const ppp_shared::PPPState& filter_state,
+    const ppp_shared::PPPConfig& config) {
+    const double startup_variance_threshold =
+        config.clas_ambiguity_reinit_threshold * kStartupAmbiguityVarianceScale;
+    for (const auto& [_, ambiguity_index] : filter_state.ambiguity_indices) {
+        if (ambiguity_index < 0 || ambiguity_index >= filter_state.total_states) {
+            continue;
+        }
+        if (filter_state.covariance(ambiguity_index, ambiguity_index) >=
+            startup_variance_threshold) {
+            return true;
+        }
+    }
+    return false;
+}
+
 }  // namespace
 
 AppliedOsrCorrections selectAppliedOsrCorrections(
@@ -273,6 +293,17 @@ void syncSlipState(
             filter_state.covariance.col(ambiguity_index).setZero();
             filter_state.covariance(ambiguity_index, ambiguity_index) =
                 ambiguity_reset_variance;
+            const int real_prn =
+                ambiguity_satellite.prn > 100 ? ambiguity_satellite.prn - 100
+                                              : ambiguity_satellite.prn;
+            if (ppp_shared::pppDebugEnabled() &&
+                ambiguity_satellite.system == GNSSSystem::GPS &&
+                (real_prn == 14 || real_prn == 25 || real_prn == 26 || real_prn == 29)) {
+                std::cerr << "[CLAS-AMB-RESET] sat="
+                          << ambiguity_satellite.toString()
+                          << " reset_var=" << ambiguity_reset_variance
+                          << "\n";
+            }
         };
 
         if (filter_state.ambiguity_indices.find(l2_satellite) !=
@@ -429,6 +460,20 @@ void applyPendingPhaseBiasStateShifts(
             }
             filter_state.state(ambiguity_it->second) += shift_cycles * osr.wavelengths[f];
             repair_it->second.pending_state_shift_cycles[static_cast<size_t>(f)] = 0.0;
+            const int real_prn =
+                ambiguity_satellite.prn > 100 ? ambiguity_satellite.prn - 100
+                                              : ambiguity_satellite.prn;
+            if (debug_enabled &&
+                ambiguity_satellite.system == GNSSSystem::GPS &&
+                (real_prn == 14 || real_prn == 25 || real_prn == 26 || real_prn == 29)) {
+                std::cerr << "[CLAS-AMB-SHIFT] sat="
+                          << ambiguity_satellite.toString()
+                          << " f=" << f
+                          << " cycles=" << shift_cycles
+                          << " shift_m=" << shift_cycles * osr.wavelengths[f]
+                          << " new_state=" << filter_state.state(ambiguity_it->second)
+                          << "\n";
+            }
             if (debug_enabled) {
                 std::cerr << "[CLAS-PBIAS] state shift "
                           << ambiguity_satellite.toString()
@@ -506,6 +551,8 @@ MeasurementBuildResult buildEpochMeasurements(
                 const double residual = p_corr - predicted;
 
                 const double el_weight = elevationWeight(osr.elevation);
+                const double code_variance_scale =
+                    5.5 * config.clas_code_variance_scale;
 
                 MeasurementRow row;
                 row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
@@ -523,7 +570,7 @@ MeasurementBuildResult buildEpochMeasurements(
                     result.observed_iono_states.insert(osr.satellite);
                 }
                 row.residual = residual;
-                row.variance = config.clas_code_variance_scale * el_weight;
+                row.variance = code_variance_scale * el_weight;
                 row.satellite = osr.satellite;
                 row.is_phase = false;
                 row.freq_index = f;
@@ -552,6 +599,24 @@ MeasurementBuildResult buildEpochMeasurements(
                     filter_state.state(amb_idx) =
                         l_corr - (geo - sat_clk_m + receiver_clock_m + trop_modeled
                                   - iono_scale * iono_state_m);
+                    if (ppp_shared::pppDebugEnabled() &&
+                        osr.satellite.system == GNSSSystem::GPS &&
+                        (osr.satellite.prn == 14 || osr.satellite.prn == 25 || osr.satellite.prn == 26 ||
+                         osr.satellite.prn == 29)) {
+                        std::cerr << "[CLAS-AMB-SEED] tow=" << obs.time.tow
+                                  << " sat=" << osr.satellite.toString()
+                                  << " amb_sat=" << amb_sat.toString()
+                                  << " f=" << f
+                                  << " l_corr=" << l_corr
+                                  << " geo=" << geo
+                                  << " sat_clk=" << sat_clk_m
+                                  << " rcv_clk=" << receiver_clock_m
+                                  << " trop=" << trop_modeled
+                                  << " iono_term=" << (-iono_scale * iono_state_m)
+                                  << " seed=" << filter_state.state(amb_idx)
+                                  << " cov=" << filter_state.covariance(amb_idx, amb_idx)
+                                  << "\n";
+                    }
                 }
 
                 const double predicted =
@@ -584,9 +649,10 @@ MeasurementBuildResult buildEpochMeasurements(
                 row.freq_index = f;
                 if (ppp_shared::pppDebugEnabled() &&
                     osr.satellite.system == GNSSSystem::GPS &&
-                    (osr.satellite.prn == 25 || osr.satellite.prn == 26 ||
+                    (osr.satellite.prn == 14 || osr.satellite.prn == 25 || osr.satellite.prn == 26 ||
                      osr.satellite.prn == 29 || osr.satellite.prn == 31)) {
-                    std::cerr << "[CLAS-PHASE-ROW] sat=" << osr.satellite.toString()
+                    std::cerr << "[CLAS-PHASE-ROW] tow=" << obs.time.tow
+                              << " sat=" << osr.satellite.toString()
                               << " f=" << f
                               << " l_m=" << l_m
                               << " phase_corr=" << applied_corrections.carrier_phase_correction_m
@@ -737,7 +803,8 @@ KalmanUpdateStats applyMeasurementUpdate(
     ppp_shared::PPPState& filter_state,
     const std::vector<MeasurementRow>& measurements,
     const ppp_shared::PPPConfig& config,
-    const PositionSolution* seed_solution) {
+    const PositionSolution* seed_solution,
+    const GNSSTime* observation_time) {
     KalmanUpdateStats stats;
     stats.nobs = static_cast<int>(measurements.size());
     if (stats.nobs < 4) {
@@ -754,6 +821,14 @@ KalmanUpdateStats applyMeasurementUpdate(
         R(i, i) = measurements[static_cast<size_t>(i)].variance;
     }
 
+    if (hasFreshAmbiguitySeed(filter_state, config)) {
+        for (int i = 0; i < stats.nobs; ++i) {
+            if (measurements[static_cast<size_t>(i)].is_phase) {
+                R(i, i) *= kStartupPhaseVarianceInflation;
+            }
+        }
+    }
+
     for (int i = 0; i < stats.nobs; ++i) {
         const double sigma = std::sqrt(R(i, i));
         if (std::abs(z(i)) > config.clas_outlier_sigma_scale * sigma) {
@@ -761,9 +836,126 @@ KalmanUpdateStats applyMeasurementUpdate(
         }
     }
 
-    MatrixXd S = H * filter_state.covariance * H.transpose() + R;
-    MatrixXd K = filter_state.covariance * H.transpose() * S.inverse();
+    const MatrixXd covariance_before_update = filter_state.covariance;
+    const MatrixXd PHt = covariance_before_update * H.transpose();
+    MatrixXd S = H * covariance_before_update * H.transpose() + R;
+    MatrixXd K = PHt * S.inverse();
     VectorXd dx = K * z;
+    if (ppp_shared::pppDebugEnabled() &&
+        observation_time != nullptr &&
+        std::abs(observation_time->tow - 230420.0) < 1e-6) {
+        for (const auto& [amb_sat, amb_idx] : filter_state.ambiguity_indices) {
+            if (amb_sat.system != GNSSSystem::GPS) {
+                continue;
+            }
+            if (amb_sat.prn != 14 && amb_sat.prn != 25 && amb_sat.prn != 26 && amb_sat.prn != 29 &&
+                amb_sat.prn != 114 && amb_sat.prn != 125 && amb_sat.prn != 126 && amb_sat.prn != 129) {
+                continue;
+            }
+            SatelliteId iono_sat = amb_sat;
+            if (iono_sat.prn >= 100) {
+                iono_sat.prn = static_cast<uint8_t>(iono_sat.prn - 100);
+            }
+            int iono_idx = -1;
+            const auto iono_it = filter_state.ionosphere_indices.find(iono_sat);
+            if (iono_it != filter_state.ionosphere_indices.end()) {
+                iono_idx = iono_it->second;
+            }
+            const double cov_clk =
+                (filter_state.clock_index >= 0 &&
+                 filter_state.clock_index < covariance_before_update.cols())
+                    ? covariance_before_update(amb_idx, filter_state.clock_index)
+                    : 0.0;
+            const double cov_trop =
+                (filter_state.trop_index >= 0 &&
+                 filter_state.trop_index < covariance_before_update.cols())
+                    ? covariance_before_update(amb_idx, filter_state.trop_index)
+                    : 0.0;
+            const double cov_iono =
+                (iono_idx >= 0 && iono_idx < covariance_before_update.cols())
+                    ? covariance_before_update(amb_idx, iono_idx)
+                    : 0.0;
+            const double cov_pos_norm =
+                covariance_before_update.row(amb_idx).segment(0, 3).norm();
+            std::cerr << "[CLAS-COV-AMB] tow=" << observation_time->tow
+                      << " amb_sat=" << amb_sat.toString()
+                      << " var=" << covariance_before_update(amb_idx, amb_idx)
+                      << " cov_pos_norm=" << cov_pos_norm
+                      << " cov_clk=" << cov_clk
+                      << " cov_trop=" << cov_trop
+                      << " cov_iono=" << cov_iono
+                      << "\n";
+            double dx_sum = 0.0;
+            for (int i = 0; i < stats.nobs; ++i) {
+                const double contrib = K(amb_idx, i) * z(i);
+                const auto& m = measurements[static_cast<size_t>(i)];
+                const double ph_pos =
+                    covariance_before_update.row(amb_idx).segment(0, 3).dot(
+                        m.H.segment(0, 3));
+                const double ph_clk =
+                    (filter_state.clock_index >= 0 &&
+                     filter_state.clock_index < covariance_before_update.cols())
+                        ? covariance_before_update(amb_idx, filter_state.clock_index) *
+                              m.H(filter_state.clock_index)
+                        : 0.0;
+                const double ph_trop =
+                    (filter_state.trop_index >= 0 &&
+                     filter_state.trop_index < covariance_before_update.cols())
+                        ? covariance_before_update(amb_idx, filter_state.trop_index) *
+                              m.H(filter_state.trop_index)
+                        : 0.0;
+                const double ph_iono =
+                    (iono_idx >= 0 && iono_idx < covariance_before_update.cols())
+                        ? covariance_before_update(amb_idx, iono_idx) * m.H(iono_idx)
+                        : 0.0;
+                const double ph_amb =
+                    covariance_before_update(amb_idx, amb_idx) * m.H(amb_idx);
+                if (std::abs(contrib) < 1e-4 && std::abs(PHt(amb_idx, i)) < 1e-4) {
+                    continue;
+                }
+                const char* row_kind = "unknown";
+                if (m.is_phase && m.freq_index >= 0) {
+                    row_kind = "phase-sd";
+                } else if (!m.is_phase && m.freq_index >= 0) {
+                    row_kind = "code-ud";
+                } else if (!m.is_phase && m.freq_index < 0 &&
+                           m.satellite.system == GNSSSystem::GPS &&
+                           m.satellite.prn != 0) {
+                    row_kind = "iono-prior";
+                } else if (!m.is_phase && m.freq_index < 0 &&
+                           m.satellite.prn == 0) {
+                    row_kind = "trop-prior";
+                }
+                std::cerr << "[CLAS-K-AMB] tow=" << observation_time->tow
+                          << " amb_sat=" << amb_sat.toString()
+                          << " row=" << i
+                          << " kind=" << row_kind
+                          << " row_sat=" << m.satellite.toString()
+                          << " is_phase=" << (m.is_phase ? 1 : 0)
+                          << " f=" << m.freq_index
+                          << " h_clk=" << m.H(filter_state.clock_index)
+                          << " h_trop=" << m.H(filter_state.trop_index)
+                          << " h_amb=" << m.H(amb_idx)
+                          << " ph=" << PHt(amb_idx, i)
+                          << " ph_pos=" << ph_pos
+                          << " ph_clk=" << ph_clk
+                          << " ph_trop=" << ph_trop
+                          << " ph_iono=" << ph_iono
+                          << " ph_amb=" << ph_amb
+                          << " z=" << z(i)
+                          << " K=" << K(amb_idx, i)
+                          << " contrib=" << contrib
+                          << "\n";
+                dx_sum += contrib;
+            }
+            std::cerr << "[CLAS-K-AMB-SUM] tow=" << observation_time->tow
+                      << " amb_sat=" << amb_sat.toString()
+                      << " old=" << filter_state.state(amb_idx)
+                      << " dx=" << dx_sum
+                      << " new=" << (filter_state.state(amb_idx) + dx_sum)
+                      << "\n";
+        }
+    }
     filter_state.state += dx;
     MatrixXd I_KH =
         MatrixXd::Identity(filter_state.total_states, filter_state.total_states) - K * H;
@@ -824,12 +1016,38 @@ EpochUpdateResult runEpochMeasurementUpdate(
         ambiguity_reset_function,
         debug_enabled);
 
+    if (ppp_shared::pppDebugEnabled()) {
+        int phase_rows = 0;
+        int code_rows = 0;
+        int prior_rows = 0;
+        for (const auto& row : measurement_build_result.measurements) {
+            if (row.is_phase && row.freq_index >= 0) {
+                ++phase_rows;
+            } else if (!row.is_phase && row.freq_index >= 0) {
+                ++code_rows;
+            } else {
+                ++prior_rows;
+            }
+        }
+        std::cerr << "[CLAS-MEAS-BUILD] tow=" << obs.time.tow
+                  << " total=" << measurement_build_result.measurements.size()
+                  << " phase=" << phase_rows
+                  << " code=" << code_rows
+                  << " prior=" << prior_rows
+                  << " amb_obs=" << measurement_build_result.observed_ambiguities.size()
+                  << "\n";
+    }
+
     if (measurement_build_result.measurements.size() < 5) {
         return result;
     }
 
     result.update_stats = applyMeasurementUpdate(
-        filter_state, measurement_build_result.measurements, config, &seed_solution);
+        filter_state,
+        measurement_build_result.measurements,
+        config,
+        &seed_solution,
+        &obs.time);
     if (!result.update_stats.updated) {
         return result;
     }
@@ -852,6 +1070,7 @@ void updateObservedAmbiguities(
     const AmbiguityIndexFunction& ambiguity_index_function) {
     for (const auto& ambiguity_obs : observed_ambiguities) {
         auto& ambiguity = ambiguity_states[ambiguity_obs.ambiguity_satellite];
+        const double old_float_value = ambiguity.float_value;
         ambiguity.last_phase = ambiguity_obs.carrier_phase_cycles;
         ambiguity.last_time = time;
         ambiguity.lock_count += 1;
@@ -862,6 +1081,23 @@ void updateObservedAmbiguities(
             ambiguity_index_function(ambiguity_obs.ambiguity_satellite);
         if (ambiguity_index >= 0 && ambiguity_index < filter_state.total_states) {
             ambiguity.float_value = filter_state.state(ambiguity_index);
+            if (ppp_shared::pppDebugEnabled() &&
+                ambiguity_obs.ambiguity_satellite.system == GNSSSystem::GPS &&
+                (ambiguity_obs.ambiguity_satellite.prn == 14 ||
+                 ambiguity_obs.ambiguity_satellite.prn == 25 ||
+                 ambiguity_obs.ambiguity_satellite.prn == 26 ||
+                 ambiguity_obs.ambiguity_satellite.prn == 29 ||
+                 ambiguity_obs.ambiguity_satellite.prn == 114 ||
+                 ambiguity_obs.ambiguity_satellite.prn == 125 ||
+                 ambiguity_obs.ambiguity_satellite.prn == 126 ||
+                 ambiguity_obs.ambiguity_satellite.prn == 129)) {
+                std::cerr << "[CLAS-AMB-OBS] tow=" << time.tow
+                          << " amb_sat=" << ambiguity_obs.ambiguity_satellite.toString()
+                          << " old=" << old_float_value
+                          << " new=" << ambiguity.float_value
+                          << " lock=" << ambiguity.lock_count
+                          << "\n";
+            }
         }
     }
 }
@@ -1165,7 +1401,8 @@ AmbiguityResolutionResult resolveAndValidateAmbiguities(
 
 void logUpdateSummary(
     const KalmanUpdateStats& update_stats,
-    size_t satellite_count) {
+    size_t satellite_count,
+    const ppp_shared::PPPState& filter_state) {
     double code_rms = 0.0;
     double phase_rms = 0.0;
     int n_code = 0;
@@ -1186,9 +1423,31 @@ void logUpdateSummary(
     if (n_phase > 0) {
         phase_rms = std::sqrt(phase_rms / n_phase);
     }
+    const int clock_index = filter_state.clock_index;
+    const int trop_index = filter_state.trop_index;
+    const double clock_delta =
+        (clock_index >= 0 && clock_index < update_stats.dx.size())
+            ? update_stats.dx(clock_index)
+            : 0.0;
+    const double trop_delta =
+        (trop_index >= 0 && trop_index < update_stats.dx.size())
+            ? update_stats.dx(trop_index)
+            : 0.0;
+    const double clock_state =
+        (clock_index >= 0 && clock_index < filter_state.state.size())
+            ? filter_state.state(clock_index)
+            : 0.0;
+    const double trop_state =
+        (trop_index >= 0 && trop_index < filter_state.state.size())
+            ? filter_state.state(trop_index)
+            : 0.0;
     std::cerr << "[CLAS-PPP] rows=" << update_stats.nobs
               << " sats=" << satellite_count
               << " pos_delta=" << update_stats.dx.head(3).norm()
+              << " clock_delta=" << clock_delta
+              << " trop_delta=" << trop_delta
+              << " clock_state=" << clock_state
+              << " trop_state=" << trop_state
               << " code_rms=" << code_rms
               << " phase_rms=" << phase_rms
               << "\n";
