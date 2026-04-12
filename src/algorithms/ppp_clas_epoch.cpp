@@ -880,6 +880,32 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     double height = 0.0;
     ecef2geodetic(solution.position_ecef, latitude, longitude, height);
     solution.position_geodetic = GeodeticCoord(latitude, longitude, height);
+    if (pppDebugEnabled()) {
+        std::cerr << "[CLAS-STATE-DUMP] tow=" << obs.time.tow
+                  << " pos_x=" << filter_state_.state(0)
+                  << " pos_y=" << filter_state_.state(1)
+                  << " pos_z=" << filter_state_.state(2)
+                  << " trop="
+                  << (filter_state_.trop_index >= 0
+                          ? filter_state_.state(filter_state_.trop_index)
+                          : 0.0)
+                  << " clk="
+                  << (filter_state_.clock_index >= 0
+                          ? filter_state_.state(filter_state_.clock_index)
+                          : 0.0)
+                  << "\n";
+        for (const auto& [sat, idx] : filter_state_.ionosphere_indices) {
+            if (sat.system == GNSSSystem::GPS &&
+                (sat.prn == 14 || sat.prn == 25 || sat.prn == 26 ||
+                 sat.prn == 29)) {
+                std::cerr << "[CLAS-STATE-IONO] tow=" << obs.time.tow
+                          << " sat=" << sat.toString()
+                          << " iono=" << filter_state_.state(idx)
+                          << " var=" << filter_state_.covariance(idx, idx)
+                          << "\n";
+            }
+        }
+    }
     return solution;
 }
 
