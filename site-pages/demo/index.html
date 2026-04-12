@@ -97,6 +97,28 @@
     .stat-item .sk { font-size: 0.72rem; color: var(--muted); }
     .stat-item .sv { font-size: 1rem; font-weight: 700; }
 
+    /* Playback bar */
+    #playback-bar { padding: 4px 8px; }
+    #playback-bar input[type="range"] { flex: 1; height: 6px; -webkit-appearance: none;
+      appearance: none; background: var(--line); border-radius: 3px; outline: none; }
+    #playback-bar input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none;
+      width: 14px; height: 14px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+    #playback-bar input[type="range"]::-moz-range-thumb { width: 14px; height: 14px;
+      border-radius: 50%; background: var(--accent); cursor: pointer; border: none; }
+
+    /* Zoom indicator */
+    #zoom-indicator { display: none; font-size: 0.75rem; font-weight: 600;
+      color: #2563eb; background: rgba(37,99,235,0.1); padding: 2px 10px;
+      border-radius: 999px; white-space: nowrap; }
+
+    /* Comparison stats */
+    .stats-cmp { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 8px;
+      font-size: 0.78rem; }
+    .stats-cmp .sh { font-weight: 700; color: var(--muted); border-bottom: 1px solid var(--line);
+      padding: 4px 0; }
+    .stats-cmp .sa { color: #0f7a43; font-weight: 600; }
+    .stats-cmp .sb { color: #2563eb; font-weight: 600; }
+
     /* Drag & Drop overlay */
     #drop-overlay { display: none; position: fixed; inset: 0; z-index: 200;
       background: rgba(15,118,110,0.12); backdrop-filter: blur(4px);
@@ -111,6 +133,20 @@
     .legend-item { display: inline-flex; align-items: center; gap: 4px;
       font-size: 0.75rem; color: var(--muted); }
     .sw { width: 10px; height: 10px; border-radius: 999px; }
+
+    #playback-bar { gap: 8px; }
+    #playback-bar input[type="range"] {
+      -webkit-appearance: none; appearance: none; height: 6px;
+      background: var(--line); border-radius: 3px; outline: none;
+    }
+    #playback-bar input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none; width: 14px; height: 14px;
+      border-radius: 50%; background: var(--accent); cursor: pointer; border: none;
+    }
+    #playback-bar input[type="range"]::-moz-range-thumb {
+      width: 14px; height: 14px; border-radius: 50%; background: var(--accent);
+      cursor: pointer; border: none;
+    }
 
     @media (max-width: 800px) {
       #main-grid { grid-template-columns: 1fr; }
@@ -128,7 +164,7 @@
     </div>
   </div></nav>
 
-  <div id="drop-overlay"><div id="drop-box"><h2>Drop .pos file</h2><p>LibGNSS++ or RTKLIB format supported</p></div></div>
+  <div id="drop-overlay"><div id="drop-box"><h2>Drop .pos file</h2><p>LibGNSS++ or RTKLIB format supported<br><span style="font-size:0.85em;color:#0f766e">Drop a second file to compare solutions</span></p></div></div>
 
   <div id="status-bar-wrap"><canvas id="status-bar"></canvas></div>
 
@@ -151,7 +187,16 @@
     </div>
     <div class="toolbar-sep"></div>
     <button class="tbtn tbtn-reset" id="btn-reset">Reset View</button>
+    <button class="tbtn tbtn-reset" id="btn-export">Save PNG</button>
+    <button class="tbtn" id="btn-clear-cmp" style="display:none">Clear Compare</button>
+    <span id="zoom-indicator" style="display:none;font-size:0.75rem;font-weight:600;color:#2563eb;background:rgba(37,99,235,0.08);padding:2px 8px;border-radius:999px;white-space:nowrap;align-items:center;gap:4px;"></span>
     <div id="epoch-info"></div>
+  </div>
+
+  <div class="toolbar" id="playback-bar">
+    <button class="tbtn" id="btn-play">Play</button>
+    <input type="range" id="epoch-slider" min="0" max="1799" value="0" style="flex:1;margin:0 8px;">
+    <span id="slider-label" class="toolbar-label">0 / 1799</span>
   </div>
 
   <div id="main-grid">
@@ -161,7 +206,7 @@
       <div class="legend" id="status-legend"></div>
     </div>
     <div class="card" id="enu-card">
-      <div class="card-title">Position E / N / U</div>
+      <div class="card-title">Position E / N / U <span class="hint">Shift+drag=zoom, dblclick=reset</span></div>
       <canvas class="enu-canvas" id="east-canvas"></canvas>
       <canvas class="enu-canvas" id="north-canvas"></canvas>
       <canvas class="enu-canvas" id="up-canvas"></canvas>
@@ -208,6 +253,7 @@
 
 // ===== A. Constants =====
 const SC = {FIXED:"#2ecc71",FLOAT:"#f39c12",DGPS:"#3498db",SPP:"#e74c3c"};
+const SC2 = {FIXED:"#3b82f6",FLOAT:"#93c5fd",DGPS:"#60a5fa",SPP:"#60a5fa"};
 const SYS_C = {GPS:"#2563eb",GLONASS:"#dc2626",Galileo:"#16a34a",BeiDou:"#d97706",QZSS:"#7c3aed"};
 const SYS_KEYS = ["GPS","GLONASS","Galileo","BeiDou","QZSS"];
 
@@ -250,7 +296,10 @@ const S={
   hover:-1,
   visStatus:{FIXED:true,FLOAT:true,DGPS:true,SPP:true},
   visSys:{GPS:true,GLONASS:true,Galileo:true,BeiDou:true,QZSS:true},
-  gt:{cx:0,cy:0,scale:1,drag:false,dx:0,dy:0,lx:0,ly:0}
+  gt:{cx:0,cy:0,scale:1,drag:false,dx:0,dy:0,lx:0,ly:0},
+  timeStart:0, timeEnd:0,
+  brushing:false, brushStart:-1, brushCanvasId:"",
+  comparison:null
 };
 // Compute initial ground track bounds
 (function(){
@@ -259,6 +308,7 @@ const S={
   S.gt.cx=(mnE+mxE)/2; S.gt.cy=(mnN+mxN)/2;
   S.gt.scale=Math.max(mxE-mnE,mxN-mnN,1)*1.15;
   S.gt.initCx=S.gt.cx; S.gt.initCy=S.gt.cy; S.gt.initScale=S.gt.scale;
+  S.timeEnd=EPOCHS.length-1;
 })();
 
 // ===== I. Canvas helpers =====
@@ -309,6 +359,29 @@ function drawGT(canvas){
   }
   ctx.stroke();
 
+  // Comparison path line + points (drawn UNDER primary)
+  if(S.comparison){
+    ctx.strokeStyle="#bfdbfe"; ctx.lineWidth=1;
+    ctx.beginPath();
+    for(let i=0;i<S.comparison.length;i++){
+      if(!S.visStatus[S.comparison[i].status])continue;
+      const x=toX(S.comparison[i].east),y=toY(S.comparison[i].north);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    const cmpOrder=["SPP","DGPS","FLOAT","FIXED"];
+    for(const st of cmpOrder){
+      if(!S.visStatus[st])continue;
+      ctx.fillStyle=SC2[st];
+      for(let i=0;i<S.comparison.length;i++){
+        if(S.comparison[i].status!==st)continue;
+        const x=toX(S.comparison[i].east),y=toY(S.comparison[i].north);
+        if(x<-10||x>w+10||y<-10||y>h+10)continue;
+        ctx.beginPath(); ctx.arc(x,y,2,0,Math.PI*2); ctx.fill();
+      }
+    }
+  }
+
   // Points by status (draw SPP first, FIXED last = on top)
   const order=["SPP","DGPS","FLOAT","FIXED"];
   for(const st of order){
@@ -349,14 +422,15 @@ function drawTS(canvas,key,label,yAuto,color){
   ctx.fillStyle="#fff"; ctx.fillRect(0,0,w,h);
   const pL=44,pR=8,pT=14,pB=16;
   const pw=w-pL-pR, ph=h-pT-pB;
+  const tS=S.timeStart, tE=S.timeEnd, tRange=Math.max(tE-tS,1);
 
   let mn=Infinity,mx=-Infinity;
-  for(const e of EPOCHS){if(!S.visStatus[e.status])continue;const v=e[key];mn=Math.min(mn,v);mx=Math.max(mx,v);}
+  for(let i=tS;i<=tE;i++){const e=EPOCHS[i];if(!S.visStatus[e.status])continue;const v=e[key];mn=Math.min(mn,v);mx=Math.max(mx,v);}
   if(!isFinite(mn)){mn=-1;mx=1;}
   if(yAuto){const span=Math.max(mx-mn,0.01)*0.08;mn-=span;mx+=span;}
   else{const am=Math.max(Math.abs(mn),Math.abs(mx),0.01)*1.1;mn=-am;mx=am;}
 
-  const toX=i=>pL+(i/(EPOCHS.length-1))*pw;
+  const toX=i=>pL+((i-tS)/tRange)*pw;
   const toY=v=>pT+ph-(v-mn)/(mx-mn)*ph;
 
   // Grid
@@ -375,11 +449,29 @@ function drawTS(canvas,key,label,yAuto,color){
     ctx.beginPath();ctx.moveTo(pL,zy);ctx.lineTo(w-pR,zy);ctx.stroke();
   }
 
+  // Comparison data (behind primary)
+  if(S.comparison&&S.comparison.length>1&&S.comparison[0][key]!==undefined){
+    const cLen=S.comparison.length;
+    const cToX=ci=>pL+(ci/(cLen-1))*pw;
+    ctx.globalAlpha=0.45;
+    for(const st of ["SPP","DGPS","FLOAT","FIXED"]){
+      if(!S.visStatus[st])continue;
+      ctx.fillStyle=SC2[st];
+      for(let ci=0;ci<cLen;ci++){
+        if(S.comparison[ci].status!==st)continue;
+        const v=S.comparison[ci][key]; if(v===undefined)continue;
+        const x=cToX(ci),y=toY(v);
+        ctx.fillRect(x-0.6,y-0.6,1.2,1.2);
+      }
+    }
+    ctx.globalAlpha=1.0;
+  }
+
   // Data
   for(const st of ["SPP","DGPS","FLOAT","FIXED"]){
     if(!S.visStatus[st])continue;
     ctx.fillStyle=color||SC[st];
-    for(let i=0;i<EPOCHS.length;i++){
+    for(let i=tS;i<=tE;i++){
       if(EPOCHS[i].status!==st)continue;
       const x=toX(i),y=toY(EPOCHS[i][key]);
       ctx.fillRect(x-0.8,y-0.8,1.6,1.6);
@@ -391,7 +483,7 @@ function drawTS(canvas,key,label,yAuto,color){
   ctx.fillText(label,pL+4,pT+10);
 
   // Crosshair
-  if(S.hover>=0){
+  if(S.hover>=0&&S.hover>=tS&&S.hover<=tE){
     const hx=toX(S.hover);
     ctx.strokeStyle="rgba(31,41,55,0.45)"; ctx.lineWidth=1; ctx.setLineDash([3,3]);
     ctx.beginPath();ctx.moveTo(hx,pT);ctx.lineTo(hx,pT+ph);ctx.stroke();
@@ -406,16 +498,55 @@ function drawTS(canvas,key,label,yAuto,color){
       ctx.fillText(EPOCHS[S.hover][key].toFixed(3)+"m",hx+7,hy-4);
     }
   }
+
+  // Brush overlay
+  if(S.brushing&&S.brushCanvasId===canvas.id&&S.brushStart>=0&&S.hover>=0){
+    const bx0=toX(Math.max(tS,Math.min(S.brushStart,S.hover)));
+    const bx1=toX(Math.min(tE,Math.max(S.brushStart,S.hover)));
+    ctx.fillStyle="rgba(37,99,235,0.15)";
+    ctx.fillRect(bx0,pT,bx1-bx0,ph);
+    ctx.strokeStyle="rgba(37,99,235,0.4)";ctx.lineWidth=1;
+    ctx.strokeRect(bx0,pT,bx1-bx0,ph);
+  }
 }
 
 // ===== L. Status Bar =====
 function drawStatusBar(canvas){
   const{ctx,w,h}=prep(canvas);
   const n=EPOCHS.length;
-  for(let i=0;i<n;i++){
-    const x=i/n*w, bw=Math.max(w/n,1);
-    ctx.fillStyle=SC[EPOCHS[i].status];
-    ctx.fillRect(x,0,bw+0.5,h);
+  if(S.comparison){
+    // Split: top half = primary, bottom half = comparison
+    const hTop=Math.floor(h/2), hBot=h-hTop;
+    for(let i=0;i<n;i++){
+      const x=i/n*w, bw=Math.max(w/n,1);
+      ctx.fillStyle=SC[EPOCHS[i].status];
+      ctx.fillRect(x,0,bw+0.5,hTop);
+    }
+    const cn=S.comparison.length;
+    for(let i=0;i<cn;i++){
+      const x=i/cn*w, bw=Math.max(w/cn,1);
+      ctx.fillStyle=SC2[S.comparison[i].status];
+      ctx.fillRect(x,hTop,bw+0.5,hBot);
+    }
+    // Divider
+    ctx.strokeStyle="#888"; ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(0,hTop);ctx.lineTo(w,hTop);ctx.stroke();
+  }else{
+    for(let i=0;i<n;i++){
+      const x=i/n*w, bw=Math.max(w/n,1);
+      ctx.fillStyle=SC[EPOCHS[i].status];
+      ctx.fillRect(x,0,bw+0.5,h);
+    }
+  }
+  // Dim regions outside time range
+  if(S.timeStart>0||S.timeEnd<n-1){
+    ctx.fillStyle="rgba(255,255,255,0.55)";
+    if(S.timeStart>0) ctx.fillRect(0,0,S.timeStart/n*w,h);
+    if(S.timeEnd<n-1) ctx.fillRect((S.timeEnd+1)/n*w,0,w-(S.timeEnd+1)/n*w,h);
+    ctx.strokeStyle="rgba(37,99,235,0.6)";ctx.lineWidth=1.5;
+    const lx=S.timeStart/n*w, rx=(S.timeEnd+1)/n*w;
+    ctx.beginPath();ctx.moveTo(lx,0);ctx.lineTo(lx,h);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(rx,0);ctx.lineTo(rx,h);ctx.stroke();
   }
   if(S.hover>=0){
     const hx=S.hover/n*w;
@@ -431,9 +562,11 @@ function drawSatCount(canvas){
   ctx.fillStyle="#fff"; ctx.fillRect(0,0,w,h);
   const pL=36,pR=8,pT=10,pB=14;
   const pw=w-pL-pR, ph=h-pT-pB;
+  const tS=S.timeStart, tE=S.timeEnd, tRange=Math.max(tE-tS,1);
   const maxSat=35;
-  const bw=Math.max(pw/EPOCHS.length,0.8);
-  const toX=i=>pL+(i/EPOCHS.length)*pw;
+  const visCount=tE-tS+1;
+  const bw=Math.max(pw/visCount,0.8);
+  const toX=i=>pL+((i-tS)/tRange)*pw;
   const toY=v=>pT+ph-v/maxSat*ph;
 
   // Grid
@@ -449,7 +582,7 @@ function drawSatCount(canvas){
   const sysKeys=["gps","glo","gal","bds","qzss"];
   const sysColors=[SYS_C.GPS,SYS_C.GLONASS,SYS_C.Galileo,SYS_C.BeiDou,SYS_C.QZSS];
   const sysNames=["GPS","GLONASS","Galileo","BeiDou","QZSS"];
-  for(let i=0;i<EPOCHS.length;i++){
+  for(let i=tS;i<=tE;i++){
     if(!S.visStatus[EPOCHS[i].status])continue;
     let base=0;
     for(let s=0;s<5;s++){
@@ -463,7 +596,7 @@ function drawSatCount(canvas){
   }
 
   // Crosshair
-  if(S.hover>=0){
+  if(S.hover>=0&&S.hover>=tS&&S.hover<=tE){
     const hx=toX(S.hover);
     ctx.strokeStyle="rgba(31,41,55,0.45)";ctx.lineWidth=1;ctx.setLineDash([3,3]);
     ctx.beginPath();ctx.moveTo(hx,pT);ctx.lineTo(hx,pT+ph);ctx.stroke();
@@ -479,11 +612,12 @@ function drawDOP(canvas){
   ctx.fillStyle="#fff"; ctx.fillRect(0,0,w,h);
   const pL=36,pR=8,pT=10,pB=14;
   const pw=w-pL-pR, ph=h-pT-pB;
+  const tS=S.timeStart, tE=S.timeEnd, tRange=Math.max(tE-tS,1);
   let mx=0;
-  for(const e of EPOCHS)mx=Math.max(mx,e.pdop,e.hdop,e.vdop);
+  for(let i=tS;i<=tE;i++){const e=EPOCHS[i];mx=Math.max(mx,e.pdop,e.hdop,e.vdop);}
   mx=Math.ceil(mx*1.1);
 
-  const toX=i=>pL+(i/(EPOCHS.length-1))*pw;
+  const toX=i=>pL+((i-tS)/tRange)*pw;
   const toY=v=>pT+ph-v/mx*ph;
 
   // Grid
@@ -499,16 +633,17 @@ function drawDOP(canvas){
   for(const[key,col]of lines){
     ctx.strokeStyle=col; ctx.lineWidth=1.2;
     ctx.beginPath();
-    for(let i=0;i<EPOCHS.length;i++){
+    let started=false;
+    for(let i=tS;i<=tE;i++){
       if(!S.visStatus[EPOCHS[i].status])continue;
       const x=toX(i),y=toY(EPOCHS[i][key]);
-      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      started?ctx.lineTo(x,y):ctx.moveTo(x,y);started=true;
     }
     ctx.stroke();
   }
 
   // Crosshair
-  if(S.hover>=0){
+  if(S.hover>=0&&S.hover>=tS&&S.hover<=tE){
     const hx=toX(S.hover);
     ctx.strokeStyle="rgba(31,41,55,0.45)";ctx.lineWidth=1;ctx.setLineDash([3,3]);
     ctx.beginPath();ctx.moveTo(hx,pT);ctx.lineTo(hx,pT+ph);ctx.stroke();
@@ -576,11 +711,12 @@ function drawBaseline(canvas){
   ctx.fillStyle="#fff"; ctx.fillRect(0,0,w,h);
   const pL=52,pR=8,pT=10,pB=14;
   const pw=w-pL-pR, ph=h-pT-pB;
+  const tS=S.timeStart, tE=S.timeEnd, tRange=Math.max(tE-tS,1);
   let mn=Infinity,mx=-Infinity;
-  for(const e of EPOCHS){if(!S.visStatus[e.status])continue;if(e.bl>0){mn=Math.min(mn,e.bl);mx=Math.max(mx,e.bl);}}
+  for(let i=tS;i<=tE;i++){const e=EPOCHS[i];if(!S.visStatus[e.status])continue;if(e.bl>0){mn=Math.min(mn,e.bl);mx=Math.max(mx,e.bl);}}
   if(!isFinite(mn)){mn=0;mx=100;}
   const span=(mx-mn)*0.05;mn-=span;mx+=span;
-  const toX=i=>pL+(i/(EPOCHS.length-1))*pw;
+  const toX=i=>pL+((i-tS)/tRange)*pw;
   const toY=v=>pT+ph-(v-mn)/(mx-mn)*ph;
 
   ctx.strokeStyle="#e5e7eb";ctx.lineWidth=0.5;
@@ -589,7 +725,7 @@ function drawBaseline(canvas){
 
   ctx.strokeStyle="#0f766e";ctx.lineWidth=1.2;ctx.beginPath();
   let started=false;
-  for(let i=0;i<EPOCHS.length;i++){
+  for(let i=tS;i<=tE;i++){
     if(!S.visStatus[EPOCHS[i].status]||EPOCHS[i].bl<=0)continue;
     const x=toX(i),y=toY(EPOCHS[i].bl);
     started?ctx.lineTo(x,y):ctx.moveTo(x,y);started=true;
@@ -597,7 +733,7 @@ function drawBaseline(canvas){
   ctx.stroke();
 
   ctx.fillStyle="#6b7280";ctx.font="10px sans-serif";ctx.textAlign="left";ctx.fillText("Baseline (m)",pL+4,pT+10);
-  if(S.hover>=0){const hx=toX(S.hover);ctx.strokeStyle="rgba(31,41,55,0.45)";ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  if(S.hover>=0&&S.hover>=tS&&S.hover<=tE){const hx=toX(S.hover);ctx.strokeStyle="rgba(31,41,55,0.45)";ctx.lineWidth=1;ctx.setLineDash([3,3]);
     ctx.beginPath();ctx.moveTo(hx,pT);ctx.lineTo(hx,pT+ph);ctx.stroke();ctx.setLineDash([]);
     if(EPOCHS[S.hover].bl>0){ctx.fillStyle="#1f2937";ctx.font="bold 10px sans-serif";ctx.fillText(EPOCHS[S.hover].bl.toFixed(1)+"m",hx+6,pT+10);}}
 }
@@ -608,10 +744,11 @@ function drawRatio(canvas){
   ctx.fillStyle="#fff"; ctx.fillRect(0,0,w,h);
   const pL=44,pR=8,pT=10,pB=14;
   const pw=w-pL-pR, ph=h-pT-pB;
+  const tS=S.timeStart, tE=S.timeEnd, tRange=Math.max(tE-tS,1);
   let mx=0;
-  for(const e of EPOCHS)if(S.visStatus[e.status])mx=Math.max(mx,e.ratio);
+  for(let i=tS;i<=tE;i++){const e=EPOCHS[i];if(S.visStatus[e.status])mx=Math.max(mx,e.ratio);}
   mx=Math.max(mx,5)*1.1;
-  const toX=i=>pL+(i/(EPOCHS.length-1))*pw;
+  const toX=i=>pL+((i-tS)/tRange)*pw;
   const toY=v=>pT+ph-v/mx*ph;
 
   ctx.strokeStyle="#e5e7eb";ctx.lineWidth=0.5;
@@ -628,7 +765,7 @@ function drawRatio(canvas){
   for(const st of ["SPP","DGPS","FLOAT","FIXED"]){
     if(!S.visStatus[st])continue;
     ctx.fillStyle=SC[st];
-    for(let i=0;i<EPOCHS.length;i++){
+    for(let i=tS;i<=tE;i++){
       if(EPOCHS[i].status!==st||EPOCHS[i].ratio<=0)continue;
       const x=toX(i),y=toY(EPOCHS[i].ratio);
       ctx.fillRect(x-1,y-1,2.5,2.5);
@@ -636,39 +773,33 @@ function drawRatio(canvas){
   }
 
   ctx.fillStyle="#6b7280";ctx.font="10px sans-serif";ctx.textAlign="left";ctx.fillText("Ratio",pL+4,pT+10);
-  if(S.hover>=0){const hx=toX(S.hover);ctx.strokeStyle="rgba(31,41,55,0.45)";ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  if(S.hover>=0&&S.hover>=tS&&S.hover<=tE){const hx=toX(S.hover);ctx.strokeStyle="rgba(31,41,55,0.45)";ctx.lineWidth=1;ctx.setLineDash([3,3]);
     ctx.beginPath();ctx.moveTo(hx,pT);ctx.lineTo(hx,pT+ph);ctx.stroke();ctx.setLineDash([]);
     if(EPOCHS[S.hover].ratio>0){ctx.fillStyle="#1f2937";ctx.font="bold 10px sans-serif";ctx.fillText(EPOCHS[S.hover].ratio.toFixed(1),hx+6,pT+10);}}
 }
 
 // ===== P3. Statistics Panel =====
-function updateStats(){
-  const el=document.getElementById("stats-grid");
-  const n=EPOCHS.length;
-  const fixN=EPOCHS.filter(e=>e.status==="FIXED").length;
-  const floatN=EPOCHS.filter(e=>e.status==="FLOAT").length;
-  const sppN=EPOCHS.filter(e=>e.status==="SPP").length;
+function computeStats(epochs){
+  const n=epochs.length;
+  const fixN=epochs.filter(e=>e.status==="FIXED").length;
+  const floatN=epochs.filter(e=>e.status==="FLOAT").length;
+  const sppN=epochs.filter(e=>e.status==="SPP").length;
   const dgpsN=n-fixN-floatN-sppN;
-
-  // Horizontal RMS (E,N)
   let sumH2=0,sumU2=0,hErrors=[];
-  for(const e of EPOCHS){
+  for(const e of epochs){
     if(e.status==="FIXED"){const h2=e.east*e.east+e.north*e.north;sumH2+=h2;hErrors.push(Math.sqrt(h2));sumU2+=e.up*e.up;}
   }
   const hRms=fixN>0?Math.sqrt(sumH2/fixN):NaN;
   const vRms=fixN>0?Math.sqrt(sumU2/fixN):NaN;
   hErrors.sort((a,b)=>a-b);
   const p95=hErrors.length>0?hErrors[Math.floor(hErrors.length*0.95)]:NaN;
-
-  // Distance & speed
   let dist=0;
-  for(let i=1;i<n;i++){const de=EPOCHS[i].east-EPOCHS[i-1].east,dn=EPOCHS[i].north-EPOCHS[i-1].north;dist+=Math.sqrt(de*de+dn*dn);}
-  const duration=n>1?EPOCHS[n-1].tow-EPOCHS[0].tow:0;
+  for(let i=1;i<n;i++){const de=epochs[i].east-epochs[i-1].east,dn=epochs[i].north-epochs[i-1].north;dist+=Math.sqrt(de*de+dn*dn);}
+  const duration=n>1?epochs[n-1].tow-epochs[0].tow:0;
   const avgSpd=duration>0?dist/duration:0;
-  const avgSats=EPOCHS.reduce((s,e)=>s+e.nsat,0)/n;
-  const avgPdop=EPOCHS.reduce((s,e)=>s+e.pdop,0)/n;
-
-  const items=[
+  const avgSats=epochs.reduce((s,e)=>s+e.nsat,0)/n;
+  const avgPdop=epochs.reduce((s,e)=>s+e.pdop,0)/n;
+  return [
     ["Epochs",n.toLocaleString()],
     ["Duration",duration>0?(duration/60).toFixed(1)+" min":"--"],
     ["FIX",fixN+" ("+(fixN/n*100).toFixed(1)+"%)"],
@@ -684,7 +815,20 @@ function updateStats(){
     ["Avg Speed",(avgSpd*3.6).toFixed(1)+" km/h"],
     ["Sample Rate",(n/Math.max(duration,1)).toFixed(1)+" Hz"],
   ];
-  el.innerHTML=items.map(([k,v])=>`<div class="stat-item"><div class="sk">${k}</div><div class="sv">${v}</div></div>`).join("");
+}
+function updateStats(){
+  const el=document.getElementById("stats-grid");
+  const items=computeStats(EPOCHS);
+  if(S.comparison){
+    const items2=computeStats(S.comparison);
+    el.innerHTML='<div class="stat-item" style="grid-column:1/-1;text-align:center"><div class="sk">Solution A vs Solution B</div></div>'+
+      items.map(([k,v],idx)=>{
+        const v2=items2[idx]?items2[idx][1]:"--";
+        return `<div class="stat-item"><div class="sk">${k}</div><div class="sv" style="color:#2ecc71">${v}</div><div class="sv" style="color:#3b82f6;font-size:0.85rem">${v2}</div></div>`;
+      }).join("");
+  }else{
+    el.innerHTML=items.map(([k,v])=>`<div class="stat-item"><div class="sk">${k}</div><div class="sv">${v}</div></div>`).join("");
+  }
 }
 
 // ===== P4. SNR Bar Chart =====
@@ -768,13 +912,66 @@ function epochFromMouseX(canvas,e){
   const x=e.clientX-rect.left;
   const pL=44,pR=8;
   const frac=(x-pL)/(rect.width-pL-pR);
-  return Math.max(0,Math.min(EPOCHS.length-1,Math.round(frac*(EPOCHS.length-1))));
+  const tS=S.timeStart, tE=S.timeEnd;
+  return Math.max(tS,Math.min(tE,Math.round(tS+frac*(tE-tS))));
 }
 
 function bindTS(id){
   const c=document.getElementById(id);
-  c.addEventListener("mousemove",e=>{S.hover=epochFromMouseX(c,e);raf();});
-  c.addEventListener("mouseleave",()=>{S.hover=-1;raf();});
+  c.addEventListener("mousemove",e=>{
+    S.hover=epochFromMouseX(c,e);
+    raf();
+  });
+  c.addEventListener("mouseleave",()=>{
+    if(!S.brushing){S.hover=-1;}
+    raf();
+  });
+  // Shift+drag brush selection
+  c.addEventListener("mousedown",e=>{
+    if(e.shiftKey){
+      e.preventDefault();
+      S.brushing=true;
+      S.brushStart=epochFromMouseX(c,e);
+      S.brushCanvasId=id;
+    }
+  });
+  c.addEventListener("dblclick",()=>{
+    S.timeStart=0; S.timeEnd=EPOCHS.length-1;
+    updateZoomIndicator();
+    raf();
+  });
+}
+
+// Global brush handlers
+window.addEventListener("mousemove",e=>{
+  if(S.brushing&&S.brushCanvasId){
+    const c=document.getElementById(S.brushCanvasId);
+    if(c){S.hover=epochFromMouseX(c,e);raf();}
+  }
+});
+window.addEventListener("mouseup",()=>{
+  if(S.brushing){
+    const a=Math.min(S.brushStart,S.hover);
+    const b=Math.max(S.brushStart,S.hover);
+    if(b-a>=2){
+      S.timeStart=Math.max(0,a);
+      S.timeEnd=Math.min(EPOCHS.length-1,b);
+    }
+    S.brushing=false; S.brushStart=-1; S.brushCanvasId="";
+    updateZoomIndicator();
+    raf();
+  }
+});
+
+function updateZoomIndicator(){
+  const el=document.getElementById("zoom-indicator");
+  if(!el)return;
+  if(S.timeStart===0&&S.timeEnd===EPOCHS.length-1){
+    el.style.display="none";
+  }else{
+    el.style.display="inline-flex";
+    el.textContent=towToHMS(EPOCHS[S.timeStart].tow)+" - "+towToHMS(EPOCHS[S.timeEnd].tow);
+  }
 }
 
 let rafId=0;
@@ -870,9 +1067,11 @@ document.querySelectorAll(".tbtn[data-sys]").forEach(btn=>{
 // Reset view
 document.getElementById("btn-reset").addEventListener("click",()=>{
   S.gt.cx=S.gt.initCx; S.gt.cy=S.gt.initCy; S.gt.scale=S.gt.initScale;
+  S.timeStart=0; S.timeEnd=EPOCHS.length-1;
   Object.keys(S.visStatus).forEach(k=>S.visStatus[k]=true);
   Object.keys(S.visSys).forEach(k=>S.visSys[k]=true);
   document.querySelectorAll(".tbtn[data-status],.tbtn[data-sys]").forEach(b=>b.classList.add("on"));
+  updateZoomIndicator();
   raf();
 });
 
@@ -900,7 +1099,57 @@ document.getElementById("btn-reset").addEventListener("click",()=>{
 let resizeT;
 window.addEventListener("resize",()=>{clearTimeout(resizeT);resizeT=setTimeout(()=>raf(),150);});
 
-// ===== T. Drag & Drop .pos file loading =====
+// ===== T. Comparison helpers =====
+function recomputeVelocity(arr){
+  for(let i=0;i<arr.length;i++){
+    if(i<arr.length-1){const dt=arr[i+1].tow-arr[i].tow;
+      if(dt>0){arr[i].ve=(arr[i+1].east-arr[i].east)/dt;arr[i].vn=(arr[i+1].north-arr[i].north)/dt;arr[i].vu=(arr[i+1].up-arr[i].up)/dt;}
+      else{arr[i].ve=0;arr[i].vn=0;arr[i].vu=0;}}
+    else{arr[i].ve=0;arr[i].vn=0;arr[i].vu=0;}
+  }
+}
+function resetGTView(){
+  let mnE=Infinity,mxE=-Infinity,mnN=Infinity,mxN=-Infinity;
+  for(const ep of EPOCHS){mnE=Math.min(mnE,ep.east);mxE=Math.max(mxE,ep.east);mnN=Math.min(mnN,ep.north);mxN=Math.max(mxN,ep.north);}
+  if(S.comparison){for(const ep of S.comparison){mnE=Math.min(mnE,ep.east);mxE=Math.max(mxE,ep.east);mnN=Math.min(mnN,ep.north);mxN=Math.max(mxN,ep.north);}}
+  S.gt.cx=(mnE+mxE)/2;S.gt.cy=(mnN+mxN)/2;
+  S.gt.scale=Math.max(mxE-mnE,mxN-mnN,1)*1.15;
+  S.gt.initCx=S.gt.cx;S.gt.initCy=S.gt.cy;S.gt.initScale=S.gt.scale;
+}
+function updateComparisonLegend(){
+  const el=document.getElementById("status-legend");
+  el.innerHTML="";
+  if(S.comparison){
+    const h1=document.createElement("div");h1.className="legend-item";h1.style.fontWeight="700";
+    h1.textContent="Solution 1:";el.appendChild(h1);
+    for(const[name,col]of Object.entries(SC)){
+      const d=document.createElement("div");d.className="legend-item";
+      d.innerHTML=`<span class="sw" style="background:${col}"></span>${name}`;el.appendChild(d);
+    }
+    const sep=document.createElement("div");sep.className="legend-item";sep.style.margin="0 4px";sep.textContent="|";el.appendChild(sep);
+    const h2=document.createElement("div");h2.className="legend-item";h2.style.fontWeight="700";
+    h2.textContent="Solution 2:";el.appendChild(h2);
+    for(const[name,col]of Object.entries(SC2)){
+      const d=document.createElement("div");d.className="legend-item";
+      d.innerHTML=`<span class="sw" style="background:${col}"></span>${name}`;el.appendChild(d);
+    }
+  }else{
+    for(const[name,col]of Object.entries(SC)){
+      const d=document.createElement("div");d.className="legend-item";
+      d.innerHTML=`<span class="sw" style="background:${col}"></span>${name}`;el.appendChild(d);
+    }
+  }
+}
+// Clear comparison button
+document.getElementById("btn-clear-cmp").addEventListener("click",()=>{
+  S.comparison=null;
+  document.getElementById("btn-clear-cmp").style.display="none";
+  resetGTView();
+  updateComparisonLegend();
+  raf();
+});
+
+// ===== U. Drag & Drop .pos file loading =====
 const dropOverlay=document.getElementById("drop-overlay");
 let dragCount=0;
 document.addEventListener("dragenter",e=>{e.preventDefault();dragCount++;dropOverlay.classList.add("active");});
@@ -915,22 +1164,22 @@ document.addEventListener("drop",e=>{
     const text=ev.target.result;
     const parsed=parsePosFile(text);
     if(parsed.length===0){alert("No valid epochs found in file.");return;}
-    // Replace EPOCHS
-    EPOCHS.length=0;EPOCHS.push(...parsed);
-    // Recompute velocity
-    for(let i=0;i<EPOCHS.length;i++){
-      if(i<EPOCHS.length-1){const dt=EPOCHS[i+1].tow-EPOCHS[i].tow;
-        if(dt>0){EPOCHS[i].ve=(EPOCHS[i+1].east-EPOCHS[i].east)/dt;EPOCHS[i].vn=(EPOCHS[i+1].north-EPOCHS[i].north)/dt;EPOCHS[i].vu=(EPOCHS[i+1].up-EPOCHS[i].up)/dt;}
-        else{EPOCHS[i].ve=0;EPOCHS[i].vn=0;EPOCHS[i].vu=0;}}
-      else{EPOCHS[i].ve=0;EPOCHS[i].vn=0;EPOCHS[i].vu=0;}
+    recomputeVelocity(parsed);
+    if(EPOCHS.length>0&&S.comparison===null){
+      S.comparison=parsed;
+      document.getElementById("btn-clear-cmp").style.display="";
+      resetGTView();updateComparisonLegend();
+      S.hover=-1;S.timeStart=0;S.timeEnd=EPOCHS.length-1;updateZoomIndicator();raf();return;
     }
-    // Reset ground track view
-    let mnE=Infinity,mxE=-Infinity,mnN=Infinity,mxN=-Infinity;
-    for(const ep of EPOCHS){mnE=Math.min(mnE,ep.east);mxE=Math.max(mxE,ep.east);mnN=Math.min(mnN,ep.north);mxN=Math.max(mxN,ep.north);}
-    S.gt.cx=(mnE+mxE)/2;S.gt.cy=(mnN+mxN)/2;
-    S.gt.scale=Math.max(mxE-mnE,mxN-mnN,1)*1.15;
-    S.gt.initCx=S.gt.cx;S.gt.initCy=S.gt.cy;S.gt.initScale=S.gt.scale;
+    // Replace primary and clear comparison
+    S.comparison=null;
+    document.getElementById("btn-clear-cmp").style.display="none";
+    EPOCHS.length=0;EPOCHS.push(...parsed);
+    resetGTView();
+    updateComparisonLegend();
     S.hover=-1;
+    S.timeStart=0; S.timeEnd=EPOCHS.length-1;
+    updateZoomIndicator();
     raf();
   };
   reader.readAsText(file);
@@ -988,6 +1237,134 @@ function parsePosFile(text){
   if(epochs.length>3000){const stride=Math.ceil(epochs.length/3000);return epochs.filter((_,i)=>i%stride===0);}
   return epochs;
 }
+
+// ===== U. Image Export =====
+document.getElementById("btn-export").addEventListener("click",()=>{
+  const panels=[
+    {id:"gt-canvas",title:"Ground Track",col:0,row:0,rowSpan:2},
+    {id:"east-canvas",title:"East (m)",col:1,row:0},
+    {id:"north-canvas",title:"North (m)",col:1,row:1},
+    {id:"up-canvas",title:"Up (m)",col:1,row:2},
+    {id:"ve-canvas",title:"Vel-E (m/s)",col:1,row:3},
+    {id:"vn-canvas",title:"Vel-N (m/s)",col:1,row:4},
+    {id:"vu-canvas",title:"Vel-U (m/s)",col:1,row:5},
+    {id:"satcount-canvas",title:"Satellites",col:1,row:6},
+    {id:"bl-canvas",title:"Baseline Length",col:0,row:2},
+    {id:"ratio-canvas",title:"Ratio",col:0,row:3},
+    {id:"dop-canvas",title:"DOP",col:1,row:7},
+    {id:"sky-canvas",title:"Skyplot",col:0,row:4},
+    {id:"snr-canvas",title:"SNR",col:0,row:5,colSpan:2},
+  ];
+  const colW=720, headerH=40, titleH=22, gap=8;
+  // Compute row heights from actual canvas aspect ratios
+  const rowH={};
+  for(const p of panels){
+    const c=document.getElementById(p.id);
+    const rh=Math.round(c.height/c.width*colW*(p.colSpan===2?2:1));
+    const span=p.rowSpan||1;
+    for(let r=p.row;r<p.row+span;r++){
+      rowH[p.col+"_"+r]=Math.max(rowH[p.col+"_"+r]||0,Math.round(rh/span));
+    }
+  }
+  // Lay out panels
+  const totalW=colW*2+gap*3;
+  let yPos={0:headerH+gap,1:headerH+gap};
+  const tmp=document.createElement("canvas");
+  // first pass: compute total height
+  const drawn=[];
+  for(const p of panels){
+    const c=document.getElementById(p.id);
+    const pw=(p.colSpan===2)?totalW-gap*2:colW;
+    const ph=Math.round(c.height/c.width*pw);
+    const x=p.col===0?gap:(p.colSpan===2?gap:colW+gap*2);
+    const y=(p.colSpan===2)?Math.max(yPos[0],yPos[1]):yPos[p.col];
+    drawn.push({c,x,y:y+titleH,pw,ph,title:p.title,tx:x,ty:y});
+    const advance=titleH+ph+gap;
+    if(p.colSpan===2){yPos[0]=y+advance;yPos[1]=y+advance;}
+    else{
+      const span=p.rowSpan||1;
+      yPos[p.col]+=advance;
+      // For spanning panels, advance the column rows
+    }
+  }
+  const totalH=Math.max(yPos[0],yPos[1])+gap;
+  tmp.width=totalW; tmp.height=totalH;
+  const tctx=tmp.getContext("2d");
+  tctx.fillStyle="#f4f1e8"; tctx.fillRect(0,0,totalW,totalH);
+  // Header
+  tctx.fillStyle="#1f2937"; tctx.font="bold 16px sans-serif"; tctx.textAlign="left";
+  const hdr=document.getElementById("epoch-info");
+  tctx.fillText("libgnss++ Solution  —  "+hdr.textContent.trim(),gap,headerH-12);
+  // Draw panels
+  for(const d of drawn){
+    tctx.fillStyle="#6b7280"; tctx.font="bold 12px sans-serif"; tctx.textAlign="left";
+    tctx.fillText(d.title,d.tx,d.ty+12);
+    tctx.drawImage(d.c,d.x,d.y,d.pw,d.ph);
+  }
+  tmp.toBlob(blob=>{
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="gnsspp_solution.png";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+});
+
+// ===== V. Animation Playback =====
+(function(){
+  const slider=document.getElementById("epoch-slider");
+  const label=document.getElementById("slider-label");
+  const btn=document.getElementById("btn-play");
+  let playing=false, timer=null;
+
+  function syncSliderMax(){
+    const max=Math.max(0,EPOCHS.length-1);
+    slider.max=max;
+    if(parseInt(slider.value)>max) slider.value=max;
+    label.textContent=slider.value+" / "+max;
+  }
+
+  slider.addEventListener("input",()=>{
+    S.hover=parseInt(slider.value);
+    label.textContent=slider.value+" / "+slider.max;
+    raf();
+  });
+
+  btn.addEventListener("click",()=>{
+    if(playing){
+      clearInterval(timer); timer=null;
+      playing=false; btn.textContent="Play";
+    }else{
+      playing=true; btn.textContent="Pause";
+      if(parseInt(slider.value)>=parseInt(slider.max)) slider.value=0;
+      timer=setInterval(()=>{
+        let v=parseInt(slider.value)+1;
+        if(v>parseInt(slider.max)){
+          clearInterval(timer); timer=null;
+          playing=false; btn.textContent="Play";
+          return;
+        }
+        slider.value=v;
+        S.hover=v;
+        label.textContent=v+" / "+slider.max;
+        raf();
+      },100);
+    }
+  });
+
+  // Sync slider when hover changes from other interactions, and keep max in sync
+  const origRedrawAll=redrawAll;
+  redrawAll=function(){
+    syncSliderMax();
+    origRedrawAll();
+    if(S.hover>=0){
+      slider.value=S.hover;
+      label.textContent=S.hover+" / "+slider.max;
+    }
+  };
+
+  syncSliderMax();
+})();
 
 // Initial draw
 redrawAll();
