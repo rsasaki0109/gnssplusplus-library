@@ -122,6 +122,10 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         clas_phase_bias_repair_,
         ambiguity_reset_variance);
     if (!epoch_preparation.ready) {
+        if (pppDebugEnabled()) {
+            std::cerr << "[CLAS-EPOCH] tow=" << obs.time.tow
+                      << " stage=prepare_epoch_state ready=0\n";
+        }
         if (allow_hybrid_fallback) {
             return fallback_to_standard("prepare_epoch_state");
         }
@@ -144,6 +148,11 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     const auto& osr_corrections = epoch_context.osr_corrections;
 
     if (osr_corrections.size() < 4) {
+        if (pppDebugEnabled()) {
+            std::cerr << "[CLAS-EPOCH] tow=" << obs.time.tow
+                      << " stage=osr_count count=" << osr_corrections.size()
+                      << " ready=0\n";
+        }
         if (allow_hybrid_fallback) {
             return fallback_to_standard("insufficient_osr");
         }
@@ -172,6 +181,12 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             return ambiguityStateIndex(satellite);
         },
         pppDebugEnabled());
+    if (pppDebugEnabled()) {
+        std::cerr << "[CLAS-EPOCH] tow=" << obs.time.tow
+                  << " stage=measurement_update updated="
+                  << (epoch_update.updated ? 1 : 0)
+                  << "\n";
+    }
     if (!epoch_update.updated) {
         if (allow_hybrid_fallback) {
             return fallback_to_standard("measurement_update");
@@ -254,7 +269,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     }
 
     if (pppDebugEnabled()) {
-        ppp_clas::logUpdateSummary(update_stats, osr_corrections.size());
+        ppp_clas::logUpdateSummary(update_stats, osr_corrections.size(), filter_state_);
     }
     bool wlnl_fixed_position_ok = false;
     Vector3d wlnl_fixed_position = Vector3d::Zero();
@@ -294,6 +309,20 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                 MatrixXd::Identity(3, 3) *
                 std::max(ppp_config_.clas_initial_position_variance, 1.0);
             beta_state.initialized = true;
+        }
+        if (beta_state.trop_column < 0) {
+            const int trop_column = beta_state.state.size();
+            ensure_beta_size(trop_column + 1);
+            beta_state.trop_column = trop_column;
+            beta_state.state(trop_column) = base_state.state(base_state.trop_index);
+            beta_state.covariance(trop_column, trop_column) =
+                std::max(ppp_config_.clas_trop_initial_variance, 1.0);
+        } else {
+            beta_state.covariance(beta_state.trop_column, beta_state.trop_column) =
+                std::max(
+                    beta_state.covariance(beta_state.trop_column, beta_state.trop_column) +
+                        std::max(ppp_config_.clas_trop_process_noise, 1e-8),
+                    1e-8);
         }
 
         struct LocalIfRow {
@@ -401,6 +430,12 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         PPPState measurement_state = base_state;
         measurement_state.state.segment(measurement_state.pos_index, 3) =
             beta_state.state.head(3);
+        if (beta_state.trop_column >= 0 &&
+            measurement_state.trop_index >= 0 &&
+            measurement_state.trop_index < measurement_state.state.size()) {
+            measurement_state.state(measurement_state.trop_index) =
+                beta_state.state(beta_state.trop_column);
+        }
         for (const auto& [system, clock_column] : beta_state.clock_columns) {
             const int global_clock_index = global_clock_index_for_system(system);
             if (global_clock_index >= 0 &&
@@ -452,10 +487,26 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                     row.H.segment(0, 3) =
                         seed.alpha1 * rows.phase[0]->H.segment(0, 3) +
                         seed.alpha2 * rows.phase[1]->H.segment(0, 3);
+                    if (beta_state.trop_column >= 0 &&
+                        measurement_state.trop_index >= 0 &&
+                        measurement_state.trop_index < rows.phase[0]->H.size() &&
+                        measurement_state.trop_index < rows.phase[1]->H.size()) {
+                        row.H(beta_state.trop_column) =
+                            seed.alpha1 * rows.phase[0]->H(measurement_state.trop_index) +
+                            seed.alpha2 * rows.phase[1]->H(measurement_state.trop_index);
+                    }
                 } else {
                     row.H.segment(0, 3) =
                         seed.alpha1 * rows.code[0]->H.segment(0, 3) +
                         seed.alpha2 * rows.code[1]->H.segment(0, 3);
+                    if (beta_state.trop_column >= 0 &&
+                        measurement_state.trop_index >= 0 &&
+                        measurement_state.trop_index < rows.code[0]->H.size() &&
+                        measurement_state.trop_index < rows.code[1]->H.size()) {
+                        row.H(beta_state.trop_column) =
+                            seed.alpha1 * rows.code[0]->H(measurement_state.trop_index) +
+                            seed.alpha2 * rows.code[1]->H(measurement_state.trop_index);
+                    }
                 }
                 row.H(seed.clock_column) = 1.0;
                 row.is_phase = phase;
@@ -510,6 +561,19 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             row.H(clock_column) = 1.0;
             row.residual = base_state.state(global_clock_index) - beta_state.state(clock_column);
             row.variance = 1e4;
+            row.is_phase = false;
+            local_rows.push_back(std::move(row));
+        }
+        if (beta_state.trop_column >= 0 &&
+            base_state.trop_index >= 0 &&
+            base_state.trop_index < base_state.state.size()) {
+            LocalIfRow row;
+            row.H = Eigen::RowVectorXd::Zero(beta_state.state.size());
+            row.H(beta_state.trop_column) = 1.0;
+            row.residual =
+                base_state.state(base_state.trop_index) -
+                beta_state.state(beta_state.trop_column);
+            row.variance = std::max(ppp_config_.clas_trop_prior_variance, 1e-8);
             row.is_phase = false;
             local_rows.push_back(std::move(row));
         }
@@ -750,6 +814,25 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         }
         if (fixed_solved) {
             wlnl_fixed_position_ok = true;
+            const bool prefer_beta_state = fixed_shift > 0.1;
+            if (has_wlnl_fixed_state_ && prefer_beta_state) {
+                wlnl_fixed_state_.state.segment(wlnl_fixed_state_.pos_index, 3) =
+                    beta_state.state.head(3);
+                for (const auto& [system, clock_column] : beta_state.clock_columns) {
+                    const int global_clock_index = global_clock_index_for_system(system);
+                    if (global_clock_index >= 0 &&
+                        global_clock_index < wlnl_fixed_state_.state.size()) {
+                        wlnl_fixed_state_.state(global_clock_index) =
+                            beta_state.state(clock_column);
+                    }
+                }
+                if (beta_state.trop_column >= 0 &&
+                    wlnl_fixed_state_.trop_index >= 0 &&
+                    wlnl_fixed_state_.trop_index < wlnl_fixed_state_.state.size()) {
+                    wlnl_fixed_state_.state(wlnl_fixed_state_.trop_index) =
+                        beta_state.state(beta_state.trop_column);
+                }
+            }
         }
     }
 
@@ -766,7 +849,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         last_fixed_ambiguities_,
         static_cast<int>(osr_corrections.size()));
 
-    if (wlnl_fixed_position_ok) {
+    if (wlnl_fixed_position_ok && !has_wlnl_fixed_state_) {
         solution.position_ecef = wlnl_fixed_position;
     }
 

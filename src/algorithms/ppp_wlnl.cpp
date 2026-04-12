@@ -23,6 +23,12 @@ bool pppDebugEnabled() {
     return ppp_shared::pppDebugEnabled();
 }
 
+int minWlnlHoldAmbiguities(const PPPConfig& config) {
+    return config.ar_method == PPPConfig::ARMethod::DD_WLNL
+        ? 3
+        : config.min_satellites_for_ar;
+}
+
 }  // namespace
 
 // ---------- WL+NL Ambiguity Resolution ----------
@@ -45,7 +51,9 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         }
         ++held_fixed;
     }
-    const bool holding_fixed = held_fixed >= ppp_config_.min_satellites_for_ar;
+    const bool holding_fixed = held_fixed >= minWlnlHoldAmbiguities(ppp_config_);
+    const int retained_dd_constraints = static_cast<int>(wlnl_dd_constraints_.size());
+    const bool holding_previous_constraints = retained_dd_constraints >= 3;
 
     const auto wlnl_preparation = ppp_ar::prepareWlnlCandidates(
         ppp_config_,
@@ -96,15 +104,16 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         },
         pppDebugEnabled());
     if (!attempt.fixed) {
-        has_wlnl_fixed_state_ = false;
-        if (holding_fixed) {
+        if (holding_fixed || holding_previous_constraints) {
             last_ar_ratio_ = std::max(ppp_config_.ar_ratio_threshold, 1.0);
-            last_fixed_ambiguities_ = held_fixed;
+            last_fixed_ambiguities_ = std::max(held_fixed, retained_dd_constraints);
             if (pppDebugEnabled()) {
                 std::cerr << "[PPP-WLNL] NL hold: nb=" << held_fixed << "\n";
             }
             return true;
         }
+        has_wlnl_fixed_state_ = false;
+        last_wlnl_fixed_state_dd_gap_ = 1e9;
         wlnl_dd_constraints_.clear();
         return false;
     }
@@ -115,6 +124,9 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     if (attempt.has_fixed_state) {
         wlnl_fixed_state_ = attempt.fixed_state;
         has_wlnl_fixed_state_ = true;
+        last_wlnl_fixed_state_dd_gap_ = attempt.fixed_state_dd_gap_cycles;
+    } else {
+        last_wlnl_fixed_state_dd_gap_ = 1e9;
     }
     wlnl_dd_constraints_ = attempt.dd_constraints;
     if (pppDebugEnabled()) {
@@ -228,6 +240,8 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
     double beta = 0.0;
     double alpha1 = 0.0;
     double alpha2 = 0.0;
+    double l1_corr_m = 0.0;
+    double l2_corr_m = 0.0;
     double nl_phase_m = 0.0;
     double predicted_m = 0.0;
 
@@ -249,10 +263,10 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
         lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
         beta = f1 * f2 / (f1 * f1 - f2 * f2);
-        const double l1_corr_m =
+        l1_corr_m =
             l1_obs->carrier_phase * osr.wavelengths[0] -
             (osr.CPC[0] - osr.phase_compensation_m[0]);
-        const double l2_corr_m =
+        l2_corr_m =
             l2_obs->carrier_phase * osr.wavelengths[1] -
             (osr.CPC[1] - osr.phase_compensation_m[1]);
         nl_phase_m = alpha1 * l1_corr_m + alpha2 * l2_corr_m;
@@ -286,9 +300,9 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
         lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
         beta = f1 * f2 / (f1 * f1 - f2 * f2);
-        const double l1_m = l1_obs->carrier_phase * lambda1;
-        const double l2_m = l2_obs->carrier_phase * lambda2;
-        nl_phase_m = alpha1 * l1_m + alpha2 * l2_m;
+        l1_corr_m = l1_obs->carrier_phase * lambda1;
+        l2_corr_m = l2_obs->carrier_phase * lambda2;
+        nl_phase_m = alpha1 * l1_corr_m + alpha2 * l2_corr_m;
 
         Vector3d sat_vel;
         double sat_drift = 0.0;
@@ -326,6 +340,12 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         lambda_nl,
         lambda_wl,
         beta,
+        alpha1,
+        alpha2,
+        l1_corr_m,
+        l2_corr_m,
+        nl_phase_m,
+        predicted_m,
         {sat.system,
          {static_cast<int>(l1_obs->signal), static_cast<int>(l2_obs->signal)}},
         true
