@@ -29,7 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--rtklib-bin",
         default=os.environ.get("RTKLIB_RNX2RTKP", DEFAULT_RTKLIB),
-        help="Path to the RTKLIB rnx2rtkp binary.",
+        help="Path to the RTKLIB or demo5 rnx2rtkp binary.",
     )
     parser.add_argument(
         "--malib-bin",
@@ -64,13 +64,13 @@ def parse_args() -> argparse.Namespace:
         "--rtklib-config",
         type=Path,
         default=ROOT_DIR / "scripts/rtklib_odaiba.conf",
-        help="RTKLIB configuration file.",
+        help="RTKLIB configuration file. Default is the dual-frequency L1+L2 Odaiba baseline.",
     )
     parser.add_argument(
         "--malib-config",
         type=Path,
         default=ROOT_DIR / "scripts/rtklib_odaiba.conf",
-        help="Optional MALIB configuration file.",
+        help="Optional MALIB configuration file. Default is the same dual-frequency L1+L2 baseline.",
     )
     parser.add_argument(
         "--lib-pos",

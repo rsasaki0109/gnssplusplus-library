@@ -4,11 +4,20 @@ on:
   push:
     branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -68,6 +77,16 @@ jobs:
     - name: Run tests
       working-directory: build
       run: ctest --output-on-failure
+
+    - name: Upload CTest logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ctest-logs-${{ matrix.os }}-${{ matrix.compiler }}
+        path: |
+          build/Testing/**/*
+          build/CMakeFiles/CMakeConfigureLog.yaml
+        if-no-files-found: ignore
 
     - name: Docker smoke
       if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
@@ -221,6 +240,7 @@ jobs:
 
   static-analysis:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
     - uses: actions/checkout@v4
 

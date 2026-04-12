@@ -22,12 +22,19 @@
 
 Run the smallest relevant set and the broad regression set:
 
+- `python3 tests/test_ci_workflows.py`
 - `python3 tests/test_cli_tools.py`
 - `python3 tests/test_benchmark_scripts.py`
 - `python3 tests/test_packaging.py`
 - `python3 tests/test_python_bindings.py -v`
 - `python3 tests/test_ros2_node.py`
 - `ctest --test-dir build --output-on-failure`
+
+## GitHub Actions expectations
+
+- PRs into both `main` and `develop` must pass `CI`.
+- docs changes are validated on PR; Pages deploy is only from `develop` push.
+- Docker image build is validated on PR; GHCR push is only on non-PR events.
 
 ## External code references
 
