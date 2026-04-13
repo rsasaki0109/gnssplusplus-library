@@ -210,6 +210,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.estimate_troposphere = false;
             options.enable_ar = true;
             options.ar_method = "dd-wlnl";
+            options.ar_ratio_threshold = 10.0;
         } else if (arg == "--no-estimate-troposphere") {
             options.estimate_troposphere = false;
         } else if (arg == "--estimate-troposphere") {
