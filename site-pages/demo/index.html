@@ -78,6 +78,9 @@
     #sky-card { grid-column: 1; grid-row: 5; }
     #stats-card { grid-column: 2; grid-row: 5; }
     #snr-card { grid-column: 1 / 3; grid-row: 6; }
+    #snr-ts-card { grid-column: 1 / 3; grid-row: 7; }
+    #obs-summary-card { grid-column: 1 / 3; grid-row: 8; }
+    #snr-ts-canvas { height: 220px; }
 
     .card canvas { width: 100%; display: block; border-radius: 8px; }
     #gt-canvas { height: 480px; cursor: crosshair; }
@@ -164,7 +167,7 @@
     </div>
   </div></nav>
 
-  <div id="drop-overlay"><div id="drop-box"><h2>Drop .pos file</h2><p>LibGNSS++ or RTKLIB format supported<br><span style="font-size:0.85em;color:#0f766e">Drop a second file to compare solutions</span></p></div></div>
+  <div id="drop-overlay"><div id="drop-box"><h2>Drop .pos / .obs / .rnx file</h2><p>LibGNSS++ or RTKLIB .pos supported, RINEX 3.x obs for SNR visualization<br><span style="font-size:0.85em;color:#0f766e">Drop a second .pos file to compare solutions</span></p></div></div>
 
   <div id="status-bar-wrap"><canvas id="status-bar"></canvas></div>
 
@@ -189,6 +192,8 @@
     <button class="tbtn tbtn-reset" id="btn-reset">Reset View</button>
     <button class="tbtn tbtn-reset" id="btn-export">Save PNG</button>
     <button class="tbtn" id="btn-clear-cmp" style="display:none">Clear Compare</button>
+    <span id="obs-info" style="display:none;font-size:0.75rem;color:var(--accent);background:rgba(15,118,110,0.08);padding:2px 8px;border-radius:999px;"></span>
+    <button class="tbtn" id="btn-clear-obs" style="display:none">Clear Obs</button>
     <span id="zoom-indicator" style="display:none;font-size:0.75rem;font-weight:600;color:#2563eb;background:rgba(37,99,235,0.08);padding:2px 8px;border-radius:999px;white-space:nowrap;align-items:center;gap:4px;"></span>
     <div id="epoch-info"></div>
   </div>
@@ -245,6 +250,14 @@
     <div class="card" id="snr-card">
       <div class="card-title">SNR per Satellite</div>
       <canvas id="snr-canvas"></canvas>
+    </div>
+    <div class="card" id="snr-ts-card" style="display:none">
+      <div class="card-title">SNR Time Series (per satellite) <span class="hint">from RINEX obs</span></div>
+      <canvas id="snr-ts-canvas"></canvas>
+    </div>
+    <div class="card" id="obs-summary-card" style="display:none">
+      <div class="card-title">Observation Summary</div>
+      <div id="obs-summary" class="stats-grid"></div>
     </div>
   </div>
 
@@ -866,6 +879,253 @@ function drawSNR(canvas){
   }
 }
 
+// ===== P5. RINEX Observation File Support =====
+let obsData = null;
+let obsHover = -1; // independent hover index for obs epochs
+
+function parseRinexObs(text) {
+  const lines = text.split('\n');
+  const header = { version: '', marker: '', interval: 0, obsTypes: {} };
+  const snrIndices = {}; // { G: [3, 7], E: [3, 7, 11], ... }
+  let headerEnd = 0;
+
+  // Parse header
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.length < 60) continue;
+    const label = line.substring(60).trim();
+
+    if (label === 'RINEX VERSION / TYPE') {
+      header.version = line.substring(0, 9).trim();
+    } else if (label === 'MARKER NAME') {
+      header.marker = line.substring(0, 60).trim();
+    } else if (label === 'INTERVAL') {
+      header.interval = parseFloat(line.substring(0, 10));
+    } else if (label === 'SYS / # / OBS TYPES') {
+      const sys = line[0];
+      if (sys !== ' ') {
+        const count = parseInt(line.substring(3, 6));
+        const types = [];
+        let remaining = count;
+        let lineIdx = i;
+        while (remaining > 0) {
+          const l = lines[lineIdx];
+          for (let j = 0; j < 13 && remaining > 0; j++) {
+            const pos = 7 + j * 4;
+            if (pos + 3 <= l.length) {
+              const ot = l.substring(pos, pos + 3).trim();
+              if (ot) types.push(ot);
+            }
+            remaining--;
+          }
+          if (remaining > 0) { lineIdx++; i = lineIdx; }
+        }
+        header.obsTypes[sys] = types;
+        snrIndices[sys] = types.map((t, idx) => t[0] === 'S' ? idx : -1).filter(x => x >= 0);
+      }
+    } else if (label === 'END OF HEADER') {
+      headerEnd = i + 1;
+      break;
+    }
+  }
+
+  // Parse epochs
+  const SYS_MAP = { G: 'GPS', R: 'GLONASS', E: 'Galileo', C: 'BeiDou', J: 'QZSS', S: 'SBAS' };
+  const epochs = [];
+  let i = headerEnd;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line || !line.startsWith('>')) { i++; continue; }
+
+    const yr = parseInt(line.substring(2, 6));
+    const mo = parseInt(line.substring(7, 9));
+    const dy = parseInt(line.substring(10, 12));
+    const hr = parseInt(line.substring(13, 15));
+    const mn = parseInt(line.substring(16, 18));
+    const sc = parseFloat(line.substring(19, 29));
+    const numSats = parseInt(line.substring(33, 35).trim());
+    if (isNaN(numSats) || numSats <= 0) { i++; continue; }
+
+    const date = new Date(Date.UTC(yr, mo - 1, dy, hr, mn, Math.floor(sc)));
+    const gpsEpoch = Date.UTC(1980, 0, 6);
+    const msFromGps = date.getTime() - gpsEpoch;
+    const tow = (msFromGps / 1000) % (7 * 86400) + (sc % 1);
+
+    const sats = [];
+    for (let j = 0; j < numSats && (i + 1 + j) < lines.length; j++) {
+      const satLine = lines[i + 1 + j];
+      if (!satLine || satLine.length < 3) continue;
+      const sysChar = satLine[0];
+      const prn = satLine.substring(0, 3).trim();
+      const sys = SYS_MAP[sysChar] || sysChar;
+
+      const indices = snrIndices[sysChar] || [];
+      const snrVals = [];
+      for (const idx of indices) {
+        const pos = 3 + idx * 16;
+        if (pos + 14 <= satLine.length) {
+          const val = parseFloat(satLine.substring(pos, pos + 14));
+          if (!isNaN(val) && val > 0) snrVals.push(val);
+        }
+      }
+
+      if (snrVals.length > 0) {
+        sats.push({ prn, sys, snr: snrVals, maxSnr: Math.max(...snrVals) });
+      }
+    }
+
+    if (sats.length > 0) {
+      epochs.push({ tow, sats, time: `${String(hr).padStart(2,'0')}:${String(mn).padStart(2,'0')}:${String(Math.floor(sc)).padStart(2,'0')}` });
+    }
+
+    i += 1 + numSats;
+  }
+
+  // Downsample if too many epochs
+  if (epochs.length > 2000) {
+    const stride = Math.ceil(epochs.length / 2000);
+    return { header, epochs: epochs.filter((_, idx) => idx % stride === 0), snrIndices };
+  }
+
+  return { header, epochs, snrIndices };
+}
+
+function drawSnrTimeSeries(canvas) {
+  if (!obsData || !obsData.epochs.length) return;
+  const { ctx, w, h } = prep(canvas);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);
+  const pL = 44, pR = 8, pT = 14, pB = 20;
+  const pw = w - pL - pR, ph = h - pT - pB;
+  const epochs = obsData.epochs;
+  const n = epochs.length;
+  if (n === 0) return;
+
+  const maxSNR = 60;
+  const toX = i => pL + (i / (n - 1)) * pw;
+  const toY = v => pT + ph - (v / maxSNR) * ph;
+
+  // Grid
+  ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 0.5;
+  for (const v of [10, 20, 30, 40, 50]) {
+    const y = toY(v);
+    ctx.beginPath(); ctx.moveTo(pL, y); ctx.lineTo(w - pR, y); ctx.stroke();
+    ctx.fillStyle = "#aaa"; ctx.font = "9px sans-serif"; ctx.textAlign = "right";
+    ctx.fillText(v, pL - 3, y + 3);
+  }
+  // Y-axis label
+  ctx.fillStyle = "#6b7280"; ctx.font = "10px sans-serif"; ctx.textAlign = "left";
+  ctx.fillText("SNR (dB-Hz)", pL + 4, pT + 10);
+
+  // Collect all unique satellites and group by system
+  const satMap = {};
+  for (const ep of epochs) {
+    for (const s of ep.sats) {
+      if (!S.visSys[s.sys]) continue;
+      if (!satMap[s.prn]) satMap[s.prn] = { sys: s.sys, data: new Array(n).fill(NaN) };
+    }
+  }
+  for (let ei = 0; ei < n; ei++) {
+    for (const s of epochs[ei].sats) {
+      if (satMap[s.prn]) satMap[s.prn].data[ei] = s.maxSnr;
+    }
+  }
+
+  // Draw lines per satellite
+  const SYS_C_MAP = { GPS: "#2563eb", GLONASS: "#dc2626", Galileo: "#16a34a", BeiDou: "#d97706", QZSS: "#7c3aed", SBAS: "#9ca3af" };
+  for (const [prn, info] of Object.entries(satMap)) {
+    ctx.strokeStyle = SYS_C_MAP[info.sys] || "#888";
+    ctx.lineWidth = 0.8;
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    let started = false;
+    for (let ei = 0; ei < n; ei++) {
+      const v = info.data[ei];
+      if (isNaN(v)) { started = false; continue; }
+      const x = toX(ei), y = toY(v);
+      if (started) ctx.lineTo(x, y); else { ctx.moveTo(x, y); started = true; }
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // Time axis labels (5 ticks)
+  ctx.fillStyle = "#aaa"; ctx.font = "9px sans-serif"; ctx.textAlign = "center";
+  for (let t = 0; t < 5; t++) {
+    const ei = Math.floor(t / 4 * (n - 1));
+    const x = toX(ei);
+    ctx.fillText(epochs[ei].time, x, h - 4);
+  }
+
+  // Crosshair
+  if (obsHover >= 0 && obsHover < n) {
+    const hx = toX(obsHover);
+    ctx.strokeStyle = "rgba(31,41,55,0.45)"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(hx, pT); ctx.lineTo(hx, pT + ph); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Show satellite SNR values at hover
+    const ep = epochs[obsHover];
+    let labelY = pT + 14;
+    ctx.font = "bold 9px sans-serif"; ctx.textAlign = "left";
+    const shown = ep.sats.filter(s => S.visSys[s.sys]).sort((a, b) => b.maxSnr - a.maxSnr).slice(0, 8);
+    for (const s of shown) {
+      const y = toY(s.maxSnr);
+      ctx.fillStyle = SYS_C_MAP[s.sys] || "#888";
+      ctx.beginPath(); ctx.arc(hx, y, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillText(s.prn + ": " + s.maxSnr.toFixed(1), hx + 6, labelY);
+      labelY += 10;
+    }
+
+    // Time label
+    ctx.fillStyle = "#1f2937"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "right";
+    ctx.fillText(ep.time + " (" + ep.sats.length + " sats)", w - pR, pT + 10);
+  }
+}
+
+function updateObsSummary() {
+  if (!obsData) return;
+  const el = document.getElementById("obs-summary");
+  const h = obsData.header;
+  const epochs = obsData.epochs;
+  const n = epochs.length;
+
+  // Count satellites per system
+  const sysCounts = {};
+  const sysSnrSums = {};
+  const sysSnrN = {};
+  const allPrns = new Set();
+  for (const ep of epochs) {
+    for (const s of ep.sats) {
+      allPrns.add(s.prn);
+      sysCounts[s.sys] = (sysCounts[s.sys] || 0) + 1;
+      sysSnrSums[s.sys] = (sysSnrSums[s.sys] || 0) + s.maxSnr;
+      sysSnrN[s.sys] = (sysSnrN[s.sys] || 0) + 1;
+    }
+  }
+
+  const items = [
+    ["RINEX Version", h.version || "--"],
+    ["Marker", h.marker || "--"],
+    ["Interval", h.interval > 0 ? h.interval + " s" : "auto"],
+    ["Total Epochs", n.toLocaleString()],
+    ["Unique Satellites", allPrns.size.toString()],
+    ["Duration", n > 1 ? ((epochs[n - 1].tow - epochs[0].tow) / 60).toFixed(1) + " min" : "--"],
+  ];
+
+  // Per-system stats
+  const SYS_NAMES = { GPS: "G", GLONASS: "R", Galileo: "E", BeiDou: "C", QZSS: "J", SBAS: "S" };
+  for (const [sys, char] of Object.entries(SYS_NAMES)) {
+    if (sysSnrN[sys]) {
+      const avgSnr = (sysSnrSums[sys] / sysSnrN[sys]).toFixed(1);
+      const obsTypes = h.obsTypes[char] ? h.obsTypes[char].join(" ") : "--";
+      items.push([sys + " mean SNR", avgSnr + " dB-Hz"]);
+      items.push([sys + " obs types", obsTypes]);
+    }
+  }
+
+  el.innerHTML = items.map(([k, v]) => `<div class="stat-item"><div class="sk">${k}</div><div class="sv" style="font-size:0.85rem">${v}</div></div>`).join("");
+}
+
 // ===== Q. Redraw all =====
 function redrawAll(){
   drawStatusBar(document.getElementById("status-bar"));
@@ -882,6 +1142,10 @@ function redrawAll(){
   drawDOP(document.getElementById("dop-canvas"));
   drawSky(document.getElementById("sky-canvas"));
   drawSNR(document.getElementById("snr-canvas"));
+  if (obsData) {
+    drawSnrTimeSeries(document.getElementById("snr-ts-canvas"));
+    updateObsSummary();
+  }
   updateStats();
   updateEpochInfo();
 }
@@ -1044,6 +1308,20 @@ function raf(){if(!rafId)rafId=requestAnimationFrame(()=>{rafId=0;redrawAll();})
 // Bind all time series canvases
 ["east-canvas","north-canvas","up-canvas","ve-canvas","vn-canvas","vu-canvas","satcount-canvas","bl-canvas","ratio-canvas","dop-canvas"].forEach(bindTS);
 
+// Bind SNR time series canvas (independent hover for obs epochs)
+(function(){
+  const c = document.getElementById("snr-ts-canvas");
+  c.addEventListener("mousemove", e => {
+    if (!obsData || !obsData.epochs.length) return;
+    const rect = c.getBoundingClientRect();
+    const pL = 44, pR = 8;
+    const frac = (e.clientX - rect.left - pL) / (rect.width - pL - pR);
+    obsHover = Math.max(0, Math.min(obsData.epochs.length - 1, Math.round(frac * (obsData.epochs.length - 1))));
+    raf();
+  });
+  c.addEventListener("mouseleave", () => { obsHover = -1; raf(); });
+})();
+
 // Toolbar: status toggles
 document.querySelectorAll(".tbtn[data-status]").forEach(btn=>{
   btn.addEventListener("click",()=>{
@@ -1140,6 +1418,17 @@ function updateComparisonLegend(){
     }
   }
 }
+// Clear obs button
+document.getElementById("btn-clear-obs").addEventListener("click", () => {
+  obsData = null;
+  obsHover = -1;
+  document.getElementById("snr-ts-card").style.display = "none";
+  document.getElementById("obs-summary-card").style.display = "none";
+  document.getElementById("obs-info").style.display = "none";
+  document.getElementById("btn-clear-obs").style.display = "none";
+  raf();
+});
+
 // Clear comparison button
 document.getElementById("btn-clear-cmp").addEventListener("click",()=>{
   S.comparison=null;
@@ -1155,6 +1444,37 @@ let dragCount=0;
 document.addEventListener("dragenter",e=>{e.preventDefault();dragCount++;dropOverlay.classList.add("active");});
 document.addEventListener("dragleave",e=>{e.preventDefault();dragCount--;if(dragCount<=0){dragCount=0;dropOverlay.classList.remove("active");}});
 document.addEventListener("dragover",e=>e.preventDefault());
+function isRinexObs(filename, text) {
+  const fn = filename.toLowerCase();
+  if (fn.endsWith('.obs') || fn.endsWith('.rnx')) return true;
+  // Check if content starts with RINEX version header
+  const firstLine = text.substring(0, 80);
+  if (firstLine.includes('RINEX VERSION') || firstLine.includes('OBSERVATION DATA')) return true;
+  return false;
+}
+
+function loadObsData(parsed, filename) {
+  obsData = parsed;
+  obsHover = -1;
+  document.getElementById("snr-ts-card").style.display = "";
+  document.getElementById("obs-summary-card").style.display = "";
+  const infoEl = document.getElementById("obs-info");
+  infoEl.style.display = "";
+  infoEl.textContent = filename + " (" + parsed.epochs.length + " epochs)";
+  document.getElementById("btn-clear-obs").style.display = "";
+
+  // Update skyplot SATS with real obs data from last epoch if possible
+  if (parsed.epochs.length > 0) {
+    const lastEp = parsed.epochs[parsed.epochs.length - 1];
+    for (const obsSat of lastEp.sats) {
+      const existing = SATS.find(s => s.prn === obsSat.prn);
+      if (existing) {
+        existing.snr = obsSat.maxSnr;
+      }
+    }
+  }
+}
+
 document.addEventListener("drop",e=>{
   e.preventDefault();dragCount=0;dropOverlay.classList.remove("active");
   const file=e.dataTransfer.files[0];
@@ -1162,6 +1482,17 @@ document.addEventListener("drop",e=>{
   const reader=new FileReader();
   reader.onload=ev=>{
     const text=ev.target.result;
+
+    // Check if this is a RINEX obs file
+    if (isRinexObs(file.name, text)) {
+      const parsed = parseRinexObs(text);
+      if (!parsed.epochs.length) { alert("No valid obs epochs found in RINEX file."); return; }
+      loadObsData(parsed, file.name);
+      raf();
+      return;
+    }
+
+    // Otherwise treat as .pos file
     const parsed=parsePosFile(text);
     if(parsed.length===0){alert("No valid epochs found in file.");return;}
     recomputeVelocity(parsed);
@@ -1255,6 +1586,10 @@ document.getElementById("btn-export").addEventListener("click",()=>{
     {id:"sky-canvas",title:"Skyplot",col:0,row:4},
     {id:"snr-canvas",title:"SNR",col:0,row:5,colSpan:2},
   ];
+  // Add obs panels if visible
+  if (obsData && document.getElementById("snr-ts-card").style.display !== "none") {
+    panels.push({id:"snr-ts-canvas",title:"SNR Time Series (RINEX obs)",col:0,row:6,colSpan:2});
+  }
   const colW=720, headerH=40, titleH=22, gap=8;
   // Compute row heights from actual canvas aspect ratios
   const rowH={};
