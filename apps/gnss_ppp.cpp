@@ -642,6 +642,9 @@ int main(int argc, char* argv[]) {
         ppp_config.ar_method = parseArMethod(options.ar_method);
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
+        if (options.claslib_parity) {
+            ppp_config.clas_outlier_sigma_scale = 8.0;
+        }
         if (options.low_dynamics_mode) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
             ppp_config.reset_kinematic_position_to_spp_each_epoch = false;
