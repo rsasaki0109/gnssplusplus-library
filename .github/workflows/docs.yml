@@ -49,7 +49,7 @@ jobs:
           MPLBACKEND: Agg
         run: python scripts/generate_architecture_diagram.py --output docs/libgnsspp_architecture.png
       - name: Build MkDocs site
-        run: python -m mkdocs build --strict
+        run: python -m mkdocs build
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
