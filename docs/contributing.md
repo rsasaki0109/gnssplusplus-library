@@ -63,3 +63,5 @@ Current reference repos:
 - `commaai/laika`
 - `tomojitakasu/PocketSDR`
 - `globsky/SignalSim`
+
+<!-- docs-only CI skip test -->
