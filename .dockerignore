@@ -1,0 +1,13 @@
+.git
+.github
+.venv
+build
+site
+output
+__pycache__
+*.pyc
+*.pyo
+*.swp
+data
+docs/site
+tmp
