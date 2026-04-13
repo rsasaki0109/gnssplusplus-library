@@ -207,7 +207,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.clas_epoch_policy = "strict-osr";
             options.use_ionosphere_free = false;
             options.estimate_ionosphere = true;
-            options.estimate_troposphere = true;
+            options.estimate_troposphere = false;
             options.enable_ar = true;
             options.ar_method = "dd-wlnl";
         } else if (arg == "--no-estimate-troposphere") {
