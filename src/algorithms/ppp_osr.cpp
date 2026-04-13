@@ -482,6 +482,18 @@ bool usesClasExpandedResidualTerms(
            ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy::POLYNOMIAL_ONLY;
 }
 
+int satelliteStecTokenCount(const std::map<std::string, std::string>& atmos_tokens,
+                            const SatelliteId& satellite) {
+    int count = 0;
+    for (const auto& [key, _value] : atmos_tokens) {
+        if (key.find("atmos_stec") != std::string::npos &&
+            key.find(satellite.toString()) != std::string::npos) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 int preferredClasNetworkId(const std::map<std::string, std::string>& atmos_tokens) {
     int network_id = 0;
     if (!ppp_atmosphere::parseAtmosTokenInt(atmos_tokens, "atmos_network_id", network_id)) {
@@ -532,6 +544,26 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
                 static_cast<int>(correction.atmos_tokens.size()),
             };
 
+            if (pppDebugEnabled() && std::abs(time.tow - 230420.0) < 1e-6) {
+                int stec_token_count = 0;
+                const int sat_token_count =
+                    satelliteStecTokenCount(correction.atmos_tokens, satellite);
+                for (const auto& [key, _value] : correction.atmos_tokens) {
+                    if (key.find("atmos_stec") != std::string::npos) {
+                        ++stec_token_count;
+                    }
+                }
+                std::cerr << "[PPP-ATMOS-CAND] sat=" << satellite.toString()
+                          << " corr_tow=" << correction.time.tow
+                          << " tokens=" << correction.atmos_tokens.size()
+                          << " stec_tokens=" << stec_token_count
+                          << " sat_tokens=" << sat_token_count
+                          << " has_grid=" << static_cast<int>(has_grid)
+                          << " grid_dist2=" << grid_distance_sq
+                          << " dt=" << time_gap
+                          << "\n";
+            }
+
             if (!isBetterClasAtmosCandidate(candidate, best, config)) {
                 continue;
             }
@@ -560,6 +592,71 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
                   << " dt=" << best.time_gap
                   << " policy=" << clasAtmosSelectionPolicyName(config.clas_atmos_selection_policy)
                   << " stale_after_s=" << config.clas_atmos_stale_after_seconds << "\n";
+    }
+
+    return best.tokens;
+}
+
+std::map<std::string, std::string> selectClasSatelliteAtmosTokens(
+    const SSRProducts& ssr_products,
+    const SatelliteId& satellite,
+    const GNSSTime& time,
+    const Vector3d& receiver_position,
+    const ppp_shared::PPPConfig& config) {
+    constexpr double kAtmosSelectionGapSeconds = 120.0;
+
+    const auto sat_it = ssr_products.orbit_clock_corrections.find(satellite);
+    if (sat_it == ssr_products.orbit_clock_corrections.end()) {
+        return {};
+    }
+
+    ClasAtmosCandidate best;
+    for (const auto& correction : sat_it->second) {
+        if (!correction.atmos_valid || correction.atmos_tokens.empty()) {
+            continue;
+        }
+        if (satelliteStecTokenCount(correction.atmos_tokens, satellite) <= 0) {
+            continue;
+        }
+        const double time_offset = correction.time - time;
+        const double time_gap = std::abs(time_offset);
+        if (time_gap > kAtmosSelectionGapSeconds) {
+            continue;
+        }
+
+        ppp_atmosphere::ClasGridReference grid_reference;
+        const bool has_grid = ppp_atmosphere::resolveClasGridReference(
+            correction.atmos_tokens, receiver_position, grid_reference);
+        const double grid_distance_sq =
+            has_grid
+                ? (grid_reference.dlat_deg * grid_reference.dlat_deg +
+                   grid_reference.dlon_deg * grid_reference.dlon_deg)
+                : std::numeric_limits<double>::infinity();
+        const ClasAtmosCandidate candidate{
+            correction.atmos_tokens,
+            has_grid,
+            grid_distance_sq,
+            time_gap,
+            time_offset > 1e-9,
+            static_cast<int>(correction.atmos_tokens.size()),
+        };
+
+        if (!isBetterClasAtmosCandidate(candidate, best, config)) {
+            continue;
+        }
+        best = candidate;
+    }
+
+    if (pppDebugEnabled() && !best.tokens.empty() &&
+        std::abs(time.tow - 230420.0) < 1e-6) {
+        std::cerr << "[PPP-ATMOS-SAT] sat=" << satellite.toString()
+                  << " network=" << preferredClasNetworkId(best.tokens)
+                  << " tokens=" << best.tokens.size()
+                  << " dt=" << best.time_gap
+                  << " grid_selected=" << static_cast<int>(best.has_grid)
+                  << " policy="
+                  << clasAtmosSelectionPolicyName(config.clas_atmos_selection_policy)
+                  << "\n";
     }
 
     return best.tokens;
@@ -617,6 +714,12 @@ std::vector<OSRCorrection> computeOSR(
     int preferred_network_id = 0;
     ppp_atmosphere::parseAtmosTokenInt(
         epoch_atmos_tokens, "atmos_network_id", preferred_network_id);
+    ppp_shared::PPPConfig trop_config = config;
+    trop_config.clas_atmos_selection_policy =
+        ppp_shared::PPPConfig::ClasAtmosSelectionPolicy::FRESHNESS_FIRST;
+    const std::map<std::string, std::string> fresh_epoch_atmos_tokens =
+        selectClasEpochAtmosTokens(
+            ssr, obs.getSatellites(), obs.time, receiver_pos, trop_config);
 
     for (const auto& sat : obs.getSatellites()) {
         OSRCorrection osr;
@@ -753,11 +856,25 @@ std::vector<OSRCorrection> computeOSR(
             osr.atmos_reference_time = GNSSTime();
         }
 
-        std::map<std::string, std::string> effective_atmos_tokens = epoch_atmos_tokens;
-        if (effective_atmos_tokens.empty()) {
-            effective_atmos_tokens = sat_atmos_tokens;
+        const std::map<std::string, std::string> sat_specific_iono_tokens =
+            selectClasSatelliteAtmosTokens(ssr, sat, obs.time, receiver_pos, config);
+        std::map<std::string, std::string> trop_atmos_tokens = fresh_epoch_atmos_tokens;
+        if (trop_atmos_tokens.empty()) {
+            trop_atmos_tokens = epoch_atmos_tokens;
         }
-        if (!effective_atmos_tokens.empty() && !gnsstimeIsSet(osr.atmos_reference_time)) {
+        if (trop_atmos_tokens.empty()) {
+            trop_atmos_tokens = sat_atmos_tokens;
+        }
+        std::map<std::string, std::string> iono_atmos_tokens;
+        if (!sat_specific_iono_tokens.empty()) {
+            iono_atmos_tokens = sat_specific_iono_tokens;
+        } else if (satelliteStecTokenCount(sat_atmos_tokens, sat) > 0) {
+            iono_atmos_tokens = sat_atmos_tokens;
+        } else if (satelliteStecTokenCount(epoch_atmos_tokens, sat) > 0) {
+            iono_atmos_tokens = epoch_atmos_tokens;
+        }
+        if ((!trop_atmos_tokens.empty() || !iono_atmos_tokens.empty()) &&
+            !gnsstimeIsSet(osr.atmos_reference_time)) {
             osr.atmos_reference_time = obs.time;
         }
 
@@ -775,7 +892,16 @@ std::vector<OSRCorrection> computeOSR(
         const double elev = std::atan2(los_enu.z(), std::hypot(los_enu.x(), los_enu.y()));
         const double azim = std::atan2(los_enu.x(), los_enu.y());
 
-        if (elev < kElevationMaskRad) continue;
+        if (elev < kElevationMaskRad) {
+            if (pppDebugEnabled() && corrections.size() < 20) {
+                std::cerr << "[OSR-DROP] " << sat.toString()
+                          << " reason=elevation"
+                          << " elev_deg=" << (elev * 180.0 / M_PI)
+                          << " recv_pos=" << receiver_pos.transpose()
+                          << "\n";
+            }
+            continue;
+        }
 
         osr.elevation = elev;
         osr.azimuth = azim;
@@ -797,9 +923,9 @@ std::vector<OSRCorrection> computeOSR(
         osr.trop_correction_m = models::tropDelaySaastamoinen(receiver_pos, elev);
 
         // CLAS troposphere grid correction (if available)
-        if (!effective_atmos_tokens.empty()) {
+        if (!trop_atmos_tokens.empty()) {
             const double clas_trop = ppp_atmosphere::atmosphericTroposphereCorrectionMeters(
-                effective_atmos_tokens,
+                trop_atmos_tokens,
                 receiver_pos,
                 obs.time,
                 elev,
@@ -821,14 +947,30 @@ std::vector<OSRCorrection> computeOSR(
         osr.relativity_correction_m = relativisticCorrection(sat_pos, sat_vel, receiver_pos);
 
         // --- 6. Ionosphere (STEC) ---
-        if (!effective_atmos_tokens.empty()) {
+        if (!iono_atmos_tokens.empty()) {
             const double stec_tecu = ppp_atmosphere::atmosphericStecTecu(
-                effective_atmos_tokens,
+                iono_atmos_tokens,
                 sat,
                 receiver_pos,
                 config.clas_expanded_value_construction_policy,
                 config.clas_subtype12_value_construction_policy,
                 config.clas_expanded_residual_sampling_policy);
+            if (pppDebugEnabled() && corrections.size() < 20) {
+                const int sat_token_count =
+                    satelliteStecTokenCount(iono_atmos_tokens, sat);
+                int stec_token_count = 0;
+                for (const auto& [key, _value] : iono_atmos_tokens) {
+                    if (key.find("atmos_stec") != std::string::npos) {
+                        ++stec_token_count;
+                    }
+                }
+                std::cerr << "[OSR-IONO] " << sat.toString()
+                          << " stec_tecu=" << stec_tecu
+                          << " token_count=" << iono_atmos_tokens.size()
+                          << " stec_tokens=" << stec_token_count
+                          << " sat_tokens=" << sat_token_count
+                          << "\n";
+            }
             if (std::isfinite(stec_tecu) && std::abs(stec_tecu) > 0.001) {
                 // CLASLIB stores the ionosphere term as 40.3e16/(FREQ1*FREQ2)*STEC
                 // and applies the per-frequency scaling later in PRC/CPC.
@@ -839,6 +981,12 @@ std::vector<OSRCorrection> computeOSR(
             }
         }
         if (!osr.has_iono) {
+            if (pppDebugEnabled() && corrections.size() < 20) {
+                std::cerr << "[OSR-DROP] " << sat.toString()
+                          << " reason=no_iono"
+                          << " has_tokens=" << (!iono_atmos_tokens.empty() ? 1 : 0)
+                          << "\n";
+            }
             continue;  // CLASLIB rejects satellites without STEC
         }
 

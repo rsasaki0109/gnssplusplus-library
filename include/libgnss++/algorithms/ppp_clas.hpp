@@ -210,7 +210,8 @@ AmbiguityResolutionResult resolveAndValidateAmbiguities(
 
 void logUpdateSummary(
     const KalmanUpdateStats& update_stats,
-    size_t satellite_count);
+    size_t satellite_count,
+    const ppp_shared::PPPState& filter_state);
 
 PositionSolution finalizeEpochSolution(
     const ppp_shared::PPPState& filter_state,
