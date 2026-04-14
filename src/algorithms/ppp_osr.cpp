@@ -15,6 +15,97 @@ bool pppDebugEnabled() {
     return ppp_shared::pppDebugEnabled();
 }
 
+Vector3d orbitCorrectionToEcef(const Vector3d& orbit_correction,
+                               const Vector3d& sat_pos,
+                               const Vector3d& sat_vel,
+                               bool corrections_are_rac) {
+    if (!corrections_are_rac ||
+        orbit_correction.squaredNorm() <= 0.0 ||
+        sat_pos.squaredNorm() <= 0.0 ||
+        sat_vel.squaredNorm() <= 0.0) {
+        return orbit_correction;
+    }
+
+    // RAC frame follows RTCM-10403.1 / CLASLIB convention:
+    //   Along-track  = normalize(velocity)
+    //   Cross-track  = normalize(position × velocity)
+    //   Radial       = along × cross  (outward from Earth center)
+    const Vector3d ea = sat_vel.normalized();
+    Vector3d c_unit = sat_pos.cross(sat_vel);
+    if (c_unit.squaredNorm() > 0.0) {
+        c_unit.normalize();
+    } else {
+        c_unit = Vector3d(0, 0, 1);
+    }
+    const Vector3d er = ea.cross(c_unit);
+    return -(er * orbit_correction(0)
+           + ea * orbit_correction(1)
+           + c_unit * orbit_correction(2));
+}
+
+bool ssrEntryMatchesPreferredNetwork(const SSROrbitClockCorrection& entry,
+                                     int preferred_network_id) {
+    if (preferred_network_id <= 0) {
+        return true;
+    }
+    return entry.bias_network_id == preferred_network_id ||
+           entry.bias_network_id == 0 ||
+           entry.atmos_network_id == preferred_network_id;
+}
+
+const SSROrbitClockCorrection* pickHeldOrbitCorrection(
+    const SSRProducts& ssr,
+    const SatelliteId& sat,
+    const GNSSTime& time,
+    int preferred_network_id) {
+    constexpr double kSsrLookupMaxAgeSeconds = 900.0;
+
+    const auto sat_it = ssr.orbit_clock_corrections.find(sat);
+    if (sat_it == ssr.orbit_clock_corrections.end() || sat_it->second.empty()) {
+        return nullptr;
+    }
+
+    const auto& entries = sat_it->second;
+    auto upper = std::upper_bound(
+        entries.begin(),
+        entries.end(),
+        time,
+        [](const GNSSTime& lhs, const SSROrbitClockCorrection& rhs) {
+            return lhs < rhs.time;
+        });
+    size_t group_end = static_cast<size_t>(upper - entries.begin());
+    while (group_end > 0) {
+        const size_t group_last = group_end - 1;
+        const GNSSTime group_time = entries[group_last].time;
+        if (std::abs(time - group_time) > kSsrLookupMaxAgeSeconds) {
+            break;
+        }
+        size_t group_begin = group_last;
+        while (group_begin > 0 && entries[group_begin - 1].time == group_time) {
+            --group_begin;
+        }
+
+        const SSROrbitClockCorrection* fallback = nullptr;
+        for (size_t index = group_begin; index < group_end; ++index) {
+            const SSROrbitClockCorrection& entry = entries[index];
+            if (!entry.orbit_valid) {
+                continue;
+            }
+            if (fallback == nullptr) {
+                fallback = &entry;
+            }
+            if (ssrEntryMatchesPreferredNetwork(entry, preferred_network_id)) {
+                return &entry;
+            }
+        }
+        if (fallback != nullptr) {
+            return fallback;
+        }
+        group_end = group_begin;
+    }
+    return nullptr;
+}
+
 const char* clasAtmosSelectionPolicyName(
     ppp_shared::PPPConfig::ClasAtmosSelectionPolicy policy) {
     switch (policy) {
@@ -278,7 +369,8 @@ void updateSisContinuity(
     CLASSisContinuityInfo& info,
     const OSRCorrection& osr,
     bool clock_time_valid) {
-    const double current_sis_m = -osr.clock_correction_m + osr.orbit_projection_m;
+    const double current_sis_m =
+        -osr.ssr_exact_clock_m + osr.ssr_exact_orbit_los_m;
     if (!clock_time_valid) {
         info = CLASSisContinuityInfo{};
     } else if (!info.has_current) {
@@ -295,6 +387,16 @@ void updateSisContinuity(
         if (std::abs(dt_clock - kSsrClockIntervalSeconds) < 0.5) {
             info.last_delta_m = info.current_sis_m - info.previous_sis_m;
             info.has_last_delta = true;
+            if (pppDebugEnabled()) {
+                std::cerr << "[OSR-SIS] " << osr.satellite.toString()
+                          << " clk_ref_tow=" << osr.clock_reference_time.tow
+                          << " sis_prev_m=" << info.previous_sis_m
+                          << " sis_curr_m=" << info.current_sis_m
+                          << " sis_delta_m=" << info.last_delta_m
+                          << " exact_orb_los=" << osr.ssr_exact_orbit_los_m
+                          << " exact_clk=" << osr.ssr_exact_clock_m
+                          << "\n";
+            }
         } else {
             info.last_delta_m = 0.0;
             info.has_last_delta = false;
@@ -774,6 +876,8 @@ std::vector<OSRCorrection> computeOSR(
                 continue;
             }
         }
+        const Vector3d sat_pos_for_ssr_frame = sat_pos;
+        const Vector3d sat_vel_for_ssr_frame = sat_vel;
 
         // Apply SSR orbit/clock corrections
         Vector3d orbit_corr = Vector3d::Zero();
@@ -791,31 +895,11 @@ std::vector<OSRCorrection> computeOSR(
                                        &phase_bias_reference_time,
                                        &clock_reference_time,
                                        preferred_network_id)) {
-            // CSV-expanded CLAS corrections carry orbit deltas in RAC, while
-            // sampled RTCM SSR products are already stored in ECEF.
-            // RAC frame follows RTCM-10403.1 / CLASLIB convention:
-            //   Along-track  = normalize(velocity)
-            //   Cross-track  = normalize(position × velocity)
-            //   Radial       = along × cross  (outward from Earth center)
-            // The correction is subtracted: rs -= er*dR + ea*dA + ec*dC
-            if (ssr.orbitCorrectionsAreRac() &&
-                orbit_corr.squaredNorm() > 0.0 &&
-                sat_pos.squaredNorm() > 0.0 &&
-                sat_vel.squaredNorm() > 0.0) {
-                const Vector3d ea = sat_vel.normalized();  // Along-track
-                Vector3d c_unit = sat_pos.cross(sat_vel);
-                if (c_unit.squaredNorm() > 0.0) {
-                    c_unit.normalize();  // Cross-track (normal to orbital plane)
-                } else {
-                    c_unit = Vector3d(0, 0, 1);
-                }
-                const Vector3d er = ea.cross(c_unit);  // Radial (outward)
-                // orbit_corr = (dR, dA, dC) in RAC; applied as subtraction
-                const Vector3d orbit_ecef = -(er * orbit_corr(0)
-                                            + ea * orbit_corr(1)
-                                            + c_unit * orbit_corr(2));
-                orbit_corr = orbit_ecef;
-            }
+            orbit_corr = orbitCorrectionToEcef(
+                orbit_corr,
+                sat_pos_for_ssr_frame,
+                sat_vel_for_ssr_frame,
+                ssr.orbitCorrectionsAreRac());
             if (pppDebugEnabled() && corrections.size() < 20) {
                 std::cerr << "[OSR-SSR] " << sat.toString()
                           << " orbit_ecef=" << orbit_corr.transpose()
@@ -886,6 +970,45 @@ std::vector<OSRCorrection> computeOSR(
         const double geo_range = geodist(sat_pos, receiver_pos);
         const Vector3d los = (sat_pos - receiver_pos) / geo_range;
         osr.orbit_projection_m = los.dot(orbit_corr);
+        osr.ssr_exact_orbit_los_m = osr.orbit_projection_m;
+        osr.ssr_exact_clock_m = osr.clock_correction_m;
+        if (gnsstimeIsSet(osr.clock_reference_time)) {
+            double exact_clock_corr = 0.0;
+            GNSSTime exact_clock_reference_time;
+            Vector3d unused_orbit_corr = Vector3d::Zero();
+            if (ssr.interpolateCorrection(sat,
+                                          osr.clock_reference_time,
+                                          unused_orbit_corr,
+                                          exact_clock_corr,
+                                          nullptr,
+                                          nullptr,
+                                          nullptr,
+                                          nullptr,
+                                          nullptr,
+                                          nullptr,
+                                          &exact_clock_reference_time,
+                                          preferred_network_id)) {
+                if (gnsstimeIsSet(exact_clock_reference_time) &&
+                    exact_clock_reference_time == osr.clock_reference_time) {
+                    const SSROrbitClockCorrection* exact_orbit_source =
+                        pickHeldOrbitCorrection(
+                            ssr, sat, obs.time, preferred_network_id);
+                    if (exact_orbit_source == nullptr) {
+                        osr.ssr_exact_clock_m = exact_clock_corr;
+                    } else {
+                        Vector3d exact_orbit_corr =
+                            exact_orbit_source->orbit_correction_ecef;
+                        osr.ssr_exact_clock_m = exact_clock_corr;
+                        exact_orbit_corr = orbitCorrectionToEcef(
+                            exact_orbit_corr,
+                            sat_pos_for_ssr_frame,
+                            sat_vel_for_ssr_frame,
+                            ssr.orbitCorrectionsAreRac());
+                        osr.ssr_exact_orbit_los_m = los.dot(exact_orbit_corr);
+                    }
+                }
+            }
+        }
         double lat = 0.0, lon = 0.0, h = 0.0;
         ecef2geodetic(receiver_pos, lat, lon, h);
         const Vector3d los_enu = ecef2enu(sat_pos - receiver_pos, lat, lon);
