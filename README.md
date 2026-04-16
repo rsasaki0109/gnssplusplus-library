@@ -8,7 +8,7 @@ If this repo is useful, star it.
 
 ![UrbanNav Odaiba social card](docs/driving_odaiba_social_card.png)
 
-Contribution and PR workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
+Contributing and PR workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
 Architecture notes: [docs/architecture.md](docs/architecture.md)
 Documentation index: [docs/index.md](docs/index.md)
 
