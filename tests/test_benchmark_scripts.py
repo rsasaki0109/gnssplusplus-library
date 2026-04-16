@@ -18,9 +18,11 @@ from unittest import mock
 ROOT_DIR = Path(__file__).resolve().parents[1]
 APPS_DIR = ROOT_DIR / "apps"
 SCRIPTS_DIR = ROOT_DIR / "scripts"
+CI_SCRIPTS_DIR = SCRIPTS_DIR / "ci"
 
 sys.path.insert(0, str(APPS_DIR))
 sys.path.insert(0, str(SCRIPTS_DIR))
+sys.path.insert(0, str(CI_SCRIPTS_DIR))
 
 import gnss_odaiba_benchmark as benchmark  # noqa: E402
 import gnss_clas_ppp as clas_ppp  # noqa: E402
@@ -36,6 +38,9 @@ import generate_architecture_diagram as architecture_diagram  # noqa: E402
 import generate_feature_overview_card as feature_overview  # noqa: E402
 import generate_odaiba_scorecard as scorecard  # noqa: E402
 import generate_odaiba_social_card as social_card  # noqa: E402
+import detect_ci_scope as ci_scope  # noqa: E402
+import run_optional_ppp_products_signoff as ci_ppp_products_signoff  # noqa: E402
+import run_optional_rtk_signoffs as ci_rtk_signoffs  # noqa: E402
 
 
 class ScorecardHelpersTest(unittest.TestCase):
@@ -207,6 +212,323 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
         self.assertEqual(tokyo["arfilter"], True)
         self.assertEqual(nagoya["preset"], "low-cost")
         self.assertEqual(nagoya["arfilter"], False)
+
+
+class OptionalRTKSignoffScriptTest(unittest.TestCase):
+    def test_build_step_plan_marks_missing_inputs_as_skipped(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_rtk_skip_") as temp_dir:
+            output_dir = Path(temp_dir) / "output"
+            steps = ci_rtk_signoffs.build_step_plan(ROOT_DIR, output_dir, {})
+
+            self.assertEqual(
+                [step.slug for step in steps],
+                ["ppc_nagoya_run1_rtk", "ppc_tokyo_run1_rtk", "scorpion_moving_base"],
+            )
+            self.assertTrue(all(step.command is None for step in steps))
+            self.assertEqual(steps[0].skip_reason, "PPC-Dataset root is unavailable.")
+            self.assertEqual(steps[1].skip_reason, "PPC-Dataset root is unavailable.")
+            self.assertEqual(steps[2].skip_reason, "SCORPION moving-base input is unavailable.")
+
+    def test_build_step_plan_uses_dataset_rtklib_and_scorpion_url(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_rtk_plan_") as temp_dir:
+            temp_root = Path(temp_dir)
+            dataset_root = temp_root / "PPC-Dataset"
+            dataset_root.mkdir()
+            rtklib_bin = temp_root / "rnx2rtkp"
+            rtklib_bin.write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
+            rtklib_bin.chmod(0o755)
+            output_dir = temp_root / "output"
+            env = {
+                "GNSSPP_PPC_DATASET_ROOT": str(dataset_root),
+                "GNSSPP_RTKLIB_BIN": str(rtklib_bin),
+                "GNSSPP_SCORPION_MOVING_BASE_URL": "https://example.com/scorpion.ubx",
+            }
+
+            steps = ci_rtk_signoffs.build_step_plan(ROOT_DIR, output_dir, env)
+
+            nagoya, tokyo, scorpion = steps
+            self.assertIsNotNone(nagoya.command)
+            self.assertIn("--dataset-root", nagoya.command)
+            self.assertIn(str(dataset_root), nagoya.command)
+            self.assertIn("--debug-epoch-log", nagoya.command)
+            self.assertIsNotNone(tokyo.command)
+            self.assertIn("--rtklib-bin", tokyo.command)
+            self.assertIn(str(rtklib_bin), tokyo.command)
+            self.assertIn("--rtklib-pos", tokyo.command)
+            self.assertIsNotNone(scorpion.command)
+            self.assertIn("--input-url", scorpion.command)
+            self.assertIn("https://example.com/scorpion.ubx", scorpion.command)
+
+    def test_build_step_plan_skips_tokyo_when_rtklib_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_rtk_missing_rtklib_") as temp_dir:
+            temp_root = Path(temp_dir)
+            dataset_root = temp_root / "PPC-Dataset"
+            dataset_root.mkdir()
+            steps = ci_rtk_signoffs.build_step_plan(
+                ROOT_DIR,
+                temp_root / "output",
+                {"GNSSPP_PPC_DATASET_ROOT": str(dataset_root)},
+            )
+
+            nagoya, tokyo, _ = steps
+            self.assertIsNotNone(nagoya.command)
+            self.assertIsNone(tokyo.command)
+            self.assertEqual(tokyo.skip_reason, "RTKLIB binary is unavailable.")
+
+    def test_run_step_writes_log_for_skipped_and_passed_steps(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_rtk_exec_") as temp_dir:
+            temp_root = Path(temp_dir)
+            log_dir = temp_root / "logs"
+            log_dir.mkdir()
+
+            skipped = ci_rtk_signoffs.SignoffStep(
+                name="Skipped example",
+                slug="skip_example",
+                command=None,
+                outputs=[],
+                skip_reason="not configured",
+            )
+            skipped_result = ci_rtk_signoffs.run_step(skipped, ROOT_DIR, log_dir)
+            self.assertEqual(skipped_result["status"], "skipped")
+            self.assertTrue((log_dir / "skip_example.log").exists())
+
+            passed = ci_rtk_signoffs.SignoffStep(
+                name="Passed example",
+                slug="pass_example",
+                command=[sys.executable, "-c", "print('ok')"],
+                outputs=[],
+            )
+            passed_result = ci_rtk_signoffs.run_step(passed, ROOT_DIR, log_dir)
+            self.assertEqual(passed_result["status"], "passed")
+            self.assertEqual(passed_result["returncode"], 0)
+            self.assertIn("ok", (log_dir / "pass_example.log").read_text(encoding="utf-8"))
+
+    def test_render_markdown_summary_reports_status_table(self) -> None:
+        markdown = ci_rtk_signoffs.render_markdown_summary(
+            [
+                {
+                    "name": "PPC Nagoya RTK sign-off",
+                    "status": "passed",
+                    "elapsed_s": 1.25,
+                    "log_path": "/tmp/a.log",
+                },
+                {
+                    "name": "PPC Tokyo RTK sign-off with RTKLIB comparison",
+                    "status": "skipped",
+                    "skip_reason": "RTKLIB binary is unavailable.",
+                    "log_path": "/tmp/b.log",
+                },
+                {
+                    "name": "SCORPION moving-base sign-off",
+                    "status": "failed",
+                    "log_path": "/tmp/c.log",
+                },
+            ]
+        )
+
+        self.assertIn("## Optional RTK Sign-offs", markdown)
+        self.assertIn("`passed`: `1`", markdown)
+        self.assertIn("`failed`: `1`", markdown)
+        self.assertIn("`skipped`: `1`", markdown)
+        self.assertIn("| PPC Nagoya RTK sign-off | `passed` | 1.25s |", markdown)
+        self.assertIn("RTKLIB binary is unavailable.", markdown)
+        self.assertIn("see `/tmp/c.log`", markdown)
+
+class OptionalPPPProductsSignoffScriptTest(unittest.TestCase):
+    def test_build_step_plan_skips_when_malib_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_ppp_skip_") as temp_dir:
+            output_dir = Path(temp_dir) / "output"
+            steps = ci_ppp_products_signoff.build_step_plan(ROOT_DIR, output_dir, {})
+
+            self.assertEqual([step.slug for step in steps], ["ppp_kinematic_products"])
+            self.assertIsNone(steps[0].command)
+            self.assertEqual(steps[0].skip_reason, "MALIB binary is unavailable.")
+
+    def test_build_step_plan_skips_when_inputs_are_missing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_ppp_missing_inputs_") as temp_dir:
+            temp_root = Path(temp_dir)
+            malib_bin = temp_root / "malib"
+            malib_bin.write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
+            malib_bin.chmod(0o755)
+
+            steps = ci_ppp_products_signoff.build_step_plan(
+                ROOT_DIR,
+                temp_root / "output",
+                {"GNSSPP_MALIB_BIN": str(malib_bin)},
+            )
+
+            self.assertIsNone(steps[0].command)
+            self.assertIsNotNone(steps[0].skip_reason)
+            self.assertIn("PPP products input is unavailable", str(steps[0].skip_reason))
+
+    def test_build_step_plan_uses_configured_inputs_and_malib_config(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_ppp_plan_") as temp_dir:
+            temp_root = Path(temp_dir)
+            malib_bin = temp_root / "malib"
+            malib_bin.write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
+            malib_bin.chmod(0o755)
+            malib_config = temp_root / "malib.conf"
+            obs = temp_root / "rover.obs"
+            base = temp_root / "base.obs"
+            nav = temp_root / "base.nav"
+            for path in (malib_config, obs, base, nav):
+                path.write_text("synthetic\n", encoding="ascii")
+            output_dir = temp_root / "output"
+            env = {
+                "GNSSPP_MALIB_BIN": str(malib_bin),
+                "GNSSPP_PPP_PRODUCTS_MALIB_CONFIG": str(malib_config),
+                "GNSSPP_PPP_PRODUCTS_OBS": str(obs),
+                "GNSSPP_PPP_PRODUCTS_BASE": str(base),
+                "GNSSPP_PPP_PRODUCTS_NAV": str(nav),
+            }
+
+            steps = ci_ppp_products_signoff.build_step_plan(ROOT_DIR, output_dir, env)
+
+            command = steps[0].command
+            self.assertIsNotNone(command)
+            assert command is not None
+            self.assertIn("ppp-products-signoff", command)
+            self.assertIn("--obs", command)
+            self.assertIn(str(obs), command)
+            self.assertIn("--base", command)
+            self.assertIn(str(base), command)
+            self.assertIn("--nav", command)
+            self.assertIn(str(nav), command)
+            self.assertIn("--malib-bin", command)
+            self.assertIn(str(malib_bin), command)
+            self.assertIn("--malib-config", command)
+            self.assertIn(str(malib_config), command)
+            self.assertIn(str(output_dir / "ppp_kinematic_products_summary.json"), command)
+
+    def test_run_step_collects_metrics_from_summary_json(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_ppp_exec_") as temp_dir:
+            temp_root = Path(temp_dir)
+            log_dir = temp_root / "logs"
+            log_dir.mkdir()
+            summary_json = temp_root / "ppp_summary.json"
+            payload = {
+                "products_signoff_profile": "kinematic",
+                "ppp_solution_rate_pct": 100.0,
+                "common_epoch_pairs": 24,
+                "p95_position_error_m": 0.42,
+                "comparison_status": "better",
+            }
+            code = (
+                "import json\n"
+                "from pathlib import Path\n"
+                f"Path({str(summary_json)!r}).write_text(json.dumps({payload!r}), encoding='utf-8')\n"
+            )
+            step = ci_ppp_products_signoff.SignoffStep(
+                name="PPP products sign-off with MALIB comparison",
+                slug="ppp_pass",
+                command=[sys.executable, "-c", code],
+                outputs=[],
+                summary_json=str(summary_json),
+            )
+
+            result = ci_ppp_products_signoff.run_step(step, ROOT_DIR, log_dir)
+
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(result["returncode"], 0)
+            self.assertEqual(result["metrics"], payload)
+
+    def test_render_markdown_summary_reports_status_table_and_metrics(self) -> None:
+        markdown = ci_ppp_products_signoff.render_markdown_summary(
+            [
+                {
+                    "name": "PPP products sign-off with MALIB comparison",
+                    "status": "passed",
+                    "elapsed_s": 1.25,
+                    "metrics": {
+                        "products_signoff_profile": "kinematic",
+                        "ppp_solution_rate_pct": 100.0,
+                        "common_epoch_pairs": 24,
+                        "p95_position_error_m": 0.42,
+                        "comparison_status": "better",
+                    },
+                },
+                {
+                    "name": "PPP products sign-off with MALIB comparison",
+                    "status": "skipped",
+                    "skip_reason": "MALIB binary is unavailable.",
+                },
+                {
+                    "name": "PPP products sign-off with MALIB comparison",
+                    "status": "failed",
+                    "log_path": "/tmp/ppp.log",
+                },
+            ]
+        )
+
+        self.assertIn("## Optional PPP Products Sign-off", markdown)
+        self.assertIn("`passed`: `1`", markdown)
+        self.assertIn("`failed`: `1`", markdown)
+        self.assertIn("`skipped`: `1`", markdown)
+        self.assertIn("profile `kinematic`", markdown)
+        self.assertIn("PPP solution 100%", markdown)
+        self.assertIn("common pairs `24`", markdown)
+        self.assertIn("p95 0.42 m", markdown)
+        self.assertIn("comparison `better`", markdown)
+        self.assertIn("MALIB binary is unavailable.", markdown)
+        self.assertIn("see `/tmp/ppp.log`", markdown)
+
+
+class CIScopeDetectionTest(unittest.TestCase):
+    def test_classify_changed_paths_marks_docs_only_changes(self) -> None:
+        payload = ci_scope.classify_changed_paths(
+            [
+                "docs/guide.md",
+                "notes/2026-04-11_ci.md",
+                "README.md",
+                "scripts/generate_architecture_diagram.py",
+            ]
+        )
+
+        self.assertEqual(
+            payload["changed_paths"],
+            [
+                "README.md",
+                "docs/guide.md",
+                "notes/2026-04-11_ci.md",
+                "scripts/generate_architecture_diagram.py",
+            ],
+        )
+        self.assertTrue(payload["docs_only"])
+        self.assertFalse(payload["run_heavy"])
+
+    def test_classify_changed_paths_runs_heavy_when_code_changes_exist(self) -> None:
+        payload = ci_scope.classify_changed_paths(
+            [
+                "docs/guide.md",
+                "src/algorithms/rtk.cpp",
+                ".github/workflows/ci.yml",
+            ]
+        )
+
+        self.assertFalse(payload["docs_only"])
+        self.assertTrue(payload["run_heavy"])
+
+    def test_classify_changed_paths_runs_heavy_for_empty_diff(self) -> None:
+        payload = ci_scope.classify_changed_paths([])
+
+        self.assertEqual(payload["changed_paths"], [])
+        self.assertFalse(payload["docs_only"])
+        self.assertTrue(payload["run_heavy"])
+
+    def test_render_markdown_summary_includes_paths_and_flags(self) -> None:
+        markdown = ci_scope.render_markdown_summary(
+            {
+                "changed_paths": ["README.md", "docs/guide.md"],
+                "docs_only": True,
+                "run_heavy": False,
+            }
+        )
+
+        self.assertIn("## CI Scope", markdown)
+        self.assertIn("`docs_only`: `true`", markdown)
+        self.assertIn("`run_heavy`: `false`", markdown)
+        self.assertIn("`README.md`", markdown)
+        self.assertIn("`docs/guide.md`", markdown)
 
 
 class MovingBaseSignoffHelpersTest(unittest.TestCase):
