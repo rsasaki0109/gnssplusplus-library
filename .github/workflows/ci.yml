@@ -4,11 +4,77 @@ on:
   push:
     branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+      run_heavy: ${{ steps.scope.outputs.run_heavy }}
+      changed_paths_json: ${{ steps.scope.outputs.changed_paths_json }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Collect changed paths
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" > changed_paths.txt
+        elif [ "${{ github.event_name }}" = "push" ]; then
+          before="${{ github.event.before }}"
+          if [ -z "${before}" ] || [ "${before}" = "0000000000000000000000000000000000000000" ]; then
+            git diff-tree --no-commit-id --name-only -r "${{ github.sha }}" > changed_paths.txt
+          else
+            git diff --name-only "${before}" "${{ github.sha }}" > changed_paths.txt
+          fi
+        else
+          : > changed_paths.txt
+        fi
+        sed -i '/^$/d' changed_paths.txt
+        sort -u changed_paths.txt -o changed_paths.txt || true
+        echo "Changed paths:"
+        if [ -s changed_paths.txt ]; then
+          cat changed_paths.txt
+        else
+          echo "(none; workflow_dispatch or empty diff)"
+        fi
+
+    - name: Classify CI scope
+      id: scope
+      run: python3 scripts/ci/detect_ci_scope.py --paths-file changed_paths.txt --github-output "$GITHUB_OUTPUT"
+
+  hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Run hygiene checks
+      run: bash scripts/ci/run_hygiene.sh
+
   build-and-test:
+    needs: [changes, hygiene]
+    if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -21,166 +87,200 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install dependencies (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
+    - name: Prepare build
+      uses: ./.github/actions/prepare-build
+      with:
+        os-name: ${{ matrix.os }}
+        compiler: ${{ matrix.compiler }}
+        build-type: Release
+        install-docs-deps: "true"
+
+    - name: Show ccache stats
+      run: ccache -s
+
+    - name: Run core tests
+      run: bash scripts/ci/run_core_tests.sh
+
+    - name: Upload CTest diagnostics
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ctest-diagnostics-${{ matrix.os }}-${{ matrix.compiler }}
+        path: |
+          build/CMakeCache.txt
+          build/Testing/Temporary/LastTest.log
+          build/Testing/Temporary/LastTestsFailed.log
+        if-no-files-found: ignore
+
+    - name: Append build summary
+      if: always()
+      shell: bash
+      env:
+        CI_OS: ${{ matrix.os }}
+        CI_BUILD_TYPE: Release
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libeigen3-dev libgtest-dev cmake build-essential python3-dev pybind11-dev python3-numpy python3-matplotlib
-        if [ "${{ matrix.compiler }}" = "clang" ]; then
-          sudo apt-get install -y clang
-        fi
+        set -euo pipefail
+        python - <<'PY'
+        import os
+        import re
+        import subprocess
+        from pathlib import Path
 
-    - name: Install dependencies (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install eigen googletest cmake pybind11 python
-        python3 -m venv .venv
-        . .venv/bin/activate
-        python -m pip install --upgrade pip
-        python -m pip install numpy matplotlib
-        echo "${GITHUB_WORKSPACE}/.venv/bin" >> "$GITHUB_PATH"
+        os_name = os.environ["CI_OS"]
+        build_type = os.environ["CI_BUILD_TYPE"]
 
-    - name: Install docs dependencies (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
-      run: python3 -m pip install --user -r requirements-docs.txt
+        passed = "unknown"
+        failed = "unknown"
+        last_test_log = Path("build/Testing/Temporary/LastTest.log")
+        if last_test_log.exists():
+            last_test_text = last_test_log.read_text(encoding="utf-8", errors="ignore")
+            match = re.search(r"(\d+)% tests passed, (\d+) tests failed out of (\d+)", last_test_text)
+            if match is not None:
+                failed_count = int(match.group(2))
+                total_count = int(match.group(3))
+                passed = str(total_count - failed_count)
+                failed = str(failed_count)
 
-    - name: Install docs dependencies (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        . .venv/bin/activate
-        python -m pip install -r requirements-docs.txt
+        hit_rate = "unknown"
+        stats_output = subprocess.run(["ccache", "-s"], check=False, capture_output=True, text=True).stdout
+        match = re.search(r"^\s*Hits:.*\(([^)]+)\)", stats_output, re.MULTILINE)
+        if match is not None:
+            hit_rate = match.group(1).strip()
+        else:
+            direct_hits = 0
+            preprocessed_hits = 0
+            misses = 0
+            for line in stats_output.splitlines():
+                stripped = line.strip()
+                if re.fullmatch(r"cache hit \(direct\)\s+\d+", stripped):
+                    direct_hits = int(stripped.rsplit(None, 1)[-1])
+                elif re.fullmatch(r"cache hit \(preprocessed\)\s+\d+", stripped):
+                    preprocessed_hits = int(stripped.rsplit(None, 1)[-1])
+                elif re.fullmatch(r"cache miss\s+\d+", stripped):
+                    misses = int(stripped.rsplit(None, 1)[-1])
+            total_calls = direct_hits + preprocessed_hits + misses
+            if total_calls > 0:
+                hit_rate = f"{((direct_hits + preprocessed_hits) / total_calls) * 100:.2f}%"
 
-    - name: Configure CMake
-      run: |
-        if [ "${{ matrix.compiler }}" = "clang" ]; then
-          export CC=clang
-          export CXX=clang++
-        fi
-        cmake_args="-B build -DCMAKE_BUILD_TYPE=Release"
-        if [ "${{ matrix.os }}" = "macos-latest" ]; then
-          cmake_args="$cmake_args -DPython3_EXECUTABLE=${GITHUB_WORKSPACE}/.venv/bin/python"
-        fi
-        cmake ${cmake_args}
+        summary_path = Path(os.environ["GITHUB_STEP_SUMMARY"])
+        with summary_path.open("a", encoding="utf-8") as handle:
+            handle.write("### Build Summary\n\n")
+            handle.write("| Field | Value |\n")
+            handle.write("| --- | --- |\n")
+            handle.write(f"| OS | {os_name} |\n")
+            handle.write(f"| Build type | {build_type} |\n")
+            handle.write(f"| CTest passed | {passed} |\n")
+            handle.write(f"| CTest failed | {failed} |\n")
+            handle.write(f"| ccache hit rate | {hit_rate} |\n")
+        PY
 
-    - name: Build
-      run: cmake --build build --config Release --parallel
+  linux-extended-tests:
+    needs: [changes, hygiene, build-and-test]
+    if: needs.changes.outputs.run_heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@v4
 
-    - name: Run tests
-      working-directory: build
-      run: ctest --output-on-failure
+    - name: Prepare build
+      uses: ./.github/actions/prepare-build
+      with:
+        os-name: ubuntu-latest
+        build-type: Release
+        install-docs-deps: "true"
+        install-playwright: "true"
+
+    - name: Show ccache stats
+      run: ccache -s
+
+    - name: Run extended tests
+      run: bash scripts/ci/run_extended_tests.sh
+
+    - name: Upload CTest diagnostics
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ctest-diagnostics-ubuntu-extended
+        path: |
+          build/CMakeCache.txt
+          build/Testing/Temporary/LastTest.log
+          build/Testing/Temporary/LastTestsFailed.log
+        if-no-files-found: ignore
 
     - name: Docker smoke
-      if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
       run: |
         docker build -t libgnsspp-ci .
         docker run --rm libgnsspp-ci --help >/dev/null
         docker run --rm libgnsspp-ci web --help >/dev/null
         docker compose -f compose.yaml config >/dev/null
 
-    - name: Optional PPC RTK sign-off
-      if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
+    - name: Generate dashboard artifacts
+      run: bash scripts/ci/generate_dashboard_artifacts.sh
+
+    - name: Upload dashboard artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: dashboard-artifacts-ubuntu
+        path: |
+          output/artifact_manifest.json
+          output/visibility_static_summary.json
+          output/visibility_static.csv
+          output/visibility_static.png
+        if-no-files-found: ignore
+
+  linux-optional-signoffs:
+    needs: [changes, linux-extended-tests]
+    if: needs.changes.outputs.run_heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Prepare build
+      uses: ./.github/actions/prepare-build
+      with:
+        os-name: ubuntu-latest
+        build-type: Release
+        install-docs-deps: "true"
+
+    - name: Run optional integration tests
+      run: bash scripts/ci/run_optional_tests.sh
+
+    - name: Upload CTest diagnostics
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ctest-diagnostics-ubuntu-optional
+        path: |
+          build/CMakeCache.txt
+          build/Testing/Temporary/LastTest.log
+          build/Testing/Temporary/LastTestsFailed.log
+        if-no-files-found: ignore
+
+    - name: Optional RTK sign-offs
       env:
         GNSSPP_PPC_DATASET_ROOT: ${{ vars.GNSSPP_PPC_DATASET_ROOT }}
         GNSSPP_RTKLIB_BIN: ${{ vars.GNSSPP_RTKLIB_BIN }}
-      run: |
-        if [ -z "${GNSSPP_PPC_DATASET_ROOT}" ] || [ ! -d "${GNSSPP_PPC_DATASET_ROOT}" ]; then
-          echo "PPC-Dataset root is unavailable; skipping PPC RTK sign-off."
-          exit 0
-        fi
-        mkdir -p output
-        python3 apps/gnss.py ppc-rtk-signoff \
-          --dataset-root "${GNSSPP_PPC_DATASET_ROOT}" \
-          --city nagoya \
-          --max-epochs 120 \
-          --summary-json output/ppc_nagoya_run1_rtk_summary.json
-        if [ -n "${GNSSPP_RTKLIB_BIN}" ] && [ -x "${GNSSPP_RTKLIB_BIN}" ]; then
-          python3 apps/gnss.py ppc-rtk-signoff \
-            --dataset-root "${GNSSPP_PPC_DATASET_ROOT}" \
-            --city tokyo \
-            --max-epochs 120 \
-            --rtklib-bin "${GNSSPP_RTKLIB_BIN}" \
-            --summary-json output/ppc_tokyo_run1_rtk_summary.json
-        else
-          echo "RTKLIB binary is unavailable; skipping Tokyo RTKLIB side-by-side sign-off."
-        fi
-
-    - name: Upload PPC sign-off summaries
-      if: always() && matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
-      uses: actions/upload-artifact@v4
-      with:
-        name: ppc-signoff-${{ matrix.os }}-${{ matrix.compiler }}
-        path: |
-          output/ppc_nagoya_run1_rtk_summary.json
-          output/ppc_tokyo_run1_rtk_summary.json
-        if-no-files-found: ignore
-
-    - name: Optional SCORPION moving-base sign-off
-      if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
-      env:
         GNSSPP_SCORPION_MOVING_BASE_INPUT: ${{ vars.GNSSPP_SCORPION_MOVING_BASE_INPUT }}
         GNSSPP_SCORPION_MOVING_BASE_URL: ${{ vars.GNSSPP_SCORPION_MOVING_BASE_URL }}
-      run: |
-        input_args=()
-        if [ -n "${GNSSPP_SCORPION_MOVING_BASE_INPUT}" ] && [ -e "${GNSSPP_SCORPION_MOVING_BASE_INPUT}" ]; then
-          input_args=(--input "${GNSSPP_SCORPION_MOVING_BASE_INPUT}")
-        elif [ -n "${GNSSPP_SCORPION_MOVING_BASE_URL}" ]; then
-          input_args=(--input-url "${GNSSPP_SCORPION_MOVING_BASE_URL}")
-        else
-          echo "SCORPION moving-base input is unavailable; skipping sign-off."
-          exit 0
-        fi
-        mkdir -p output
-        python3 apps/gnss.py scorpion-moving-base-signoff \
-          "${input_args[@]}" \
-          --summary-json output/scorpion_moving_base_summary.json \
-          --max-epochs 120 \
-          --require-matched-epochs-min 80 \
-          --require-fix-rate-min 90 \
-          --require-p95-baseline-error-max 0.20 \
-          --require-p95-heading-error-max 10 \
-          --require-realtime-factor-min 1.0
+      run: bash scripts/ci/run_optional_rtk_signoffs.sh
 
-    - name: Optional PPP products sign-off with MALIB comparison
-      if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
-      env:
-        GNSSPP_MALIB_BIN: ${{ vars.GNSSPP_MALIB_BIN }}
-      run: |
-        if [ -z "${GNSSPP_MALIB_BIN}" ] || [ ! -x "${GNSSPP_MALIB_BIN}" ]; then
-          echo "MALIB binary is unavailable; skipping PPP products comparison sign-off."
-          exit 0
-        fi
-        mkdir -p output
-        python3 apps/gnss.py ppp-products-signoff \
-          --profile kinematic \
-          --obs data/rover_kinematic.obs \
-          --base data/base_kinematic.obs \
-          --nav data/navigation_kinematic.nav \
-          --summary-json output/ppp_kinematic_products_summary.json \
-          --max-epochs 60 \
-          --malib-bin "${GNSSPP_MALIB_BIN}" \
-          --require-common-epoch-pairs-min 20 \
-          --require-ppp-solution-rate-min 100
-
-    - name: Generate dashboard artifacts
-      if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
-      run: |
-        mkdir -p output
-        python3 apps/gnss.py visibility \
-          --obs data/rover_static.obs \
-          --nav data/navigation_static.nav \
-          --csv output/visibility_static.csv \
-          --summary-json output/visibility_static_summary.json \
-          --max-epochs 5 \
-          --quiet
-        python3 apps/gnss.py visibility-plot output/visibility_static.csv output/visibility_static.png
-        python3 apps/gnss.py artifact-manifest --root . --output output/artifact_manifest.json
-
-    - name: Upload SCORPION moving-base artifacts
-      if: always() && matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
+    - name: Upload RTK sign-off artifacts
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: scorpion-moving-base-${{ matrix.os }}-${{ matrix.compiler }}
+        name: rtk-signoffs-ubuntu
         path: |
+          output/ci_optional_rtk_signoffs_summary.json
+          output/ci_optional_rtk_signoffs/*.log
+          output/ppc_nagoya_run1_rtk_summary.json
+          output/ppc_nagoya_run1_rtk.pos
+          output/ppc_nagoya_run1_rtk_events.csv
+          output/ppc_tokyo_run1_rtk_summary.json
+          output/ppc_tokyo_run1_rtk.pos
+          output/ppc_tokyo_run1_rtk_events.csv
+          output/ppc_tokyo_run1_rtk_rtklib.pos
           output/scorpion_moving_base_summary.json
           output/scorpion_moving_base/prepare_summary.json
           output/scorpion_moving_base/products_summary.json
@@ -190,14 +290,26 @@ jobs:
           output/scorpion_moving_base/reference.csv
         if-no-files-found: ignore
 
+    - name: Optional PPP products sign-off with MALIB comparison
+      env:
+        GNSSPP_MALIB_BIN: ${{ vars.GNSSPP_MALIB_BIN }}
+        GNSSPP_PPP_PRODUCTS_OBS: ${{ vars.GNSSPP_PPP_PRODUCTS_OBS }}
+        GNSSPP_PPP_PRODUCTS_BASE: ${{ vars.GNSSPP_PPP_PRODUCTS_BASE }}
+        GNSSPP_PPP_PRODUCTS_NAV: ${{ vars.GNSSPP_PPP_PRODUCTS_NAV }}
+        GNSSPP_PPP_PRODUCTS_MALIB_CONFIG: ${{ vars.GNSSPP_PPP_PRODUCTS_MALIB_CONFIG }}
+      run: bash scripts/ci/run_optional_ppp_products_signoff.sh
+
     - name: Upload PPP products comparison artifacts
-      if: always() && matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: ppp-products-${{ matrix.os }}-${{ matrix.compiler }}
+        name: ppp-products-ubuntu
         path: |
+          output/ci_optional_ppp_products_summary.json
+          output/ci_optional_ppp_products/*.log
           output/ppp_kinematic_products_summary.json
           output/ppp_kinematic_products_solution.pos
+          output/ppp_kinematic_products_reference.pos
           output/ppp_kinematic_products_comparison.csv
           output/ppp_kinematic_products_comparison.png
           output/malib_ppp_kinematic_solution.pos
@@ -207,20 +319,11 @@ jobs:
           output/ppp_static_products_comparison.png
         if-no-files-found: ignore
 
-    - name: Upload dashboard artifacts
-      if: always() && matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
-      uses: actions/upload-artifact@v4
-      with:
-        name: dashboard-artifacts-${{ matrix.os }}-${{ matrix.compiler }}
-        path: |
-          output/artifact_manifest.json
-          output/visibility_static_summary.json
-          output/visibility_static.csv
-          output/visibility_static.png
-        if-no-files-found: ignore
-
   static-analysis:
+    needs: [changes, hygiene]
+    if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
     - uses: actions/checkout@v4
 
@@ -230,10 +333,4 @@ jobs:
         sudo apt-get install -y libeigen3-dev cppcheck
 
     - name: Run cppcheck
-      run: |
-        cppcheck --enable=warning,style --std=c++17 \
-          --suppress=missingIncludeSystem \
-          --suppress=unusedFunction \
-          --suppress=unmatchedSuppression \
-          -I include/ \
-          src/
+      run: bash scripts/ci/run_cppcheck.sh

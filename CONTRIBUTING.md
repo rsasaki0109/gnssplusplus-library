@@ -44,6 +44,22 @@ Minimum relevant checks:
 - `python3 tests/test_ros2_node.py`
 - `ctest --test-dir build --output-on-failure`
 
+If the PR touches workflow or docs pipeline files, also run:
+
+- `bash scripts/ci/run_hygiene.sh`
+- `bash scripts/ci/run_cppcheck.sh`
+- `python3 -m mkdocs build --strict`
+
+CI lanes are split as follows:
+
+- `bash scripts/ci/run_core_tests.sh` for the cross-platform gate
+- `bash scripts/ci/run_extended_tests.sh` for Linux-only heavy checks such as web, packaging, and ROS2 surfaces
+- `bash scripts/ci/run_optional_tests.sh` for broader Linux-only integration suites such as the full CLI and benchmark script regressions
+- `bash scripts/ci/run_optional_rtk_signoffs.sh` for dataset-gated RTK sign-offs with JSON/log artifacts under `output/ci_optional_rtk_signoffs*`
+- `bash scripts/ci/generate_dashboard_artifacts.sh` for the dashboard/manifest artifact path used in CI
+
+Docs-only changes keep CI on the lightweight path: hygiene here, plus the separate Docs workflow.
+
 If the PR touches only a subset, include the focused command you used in the PR body.
 
 ## External Code References

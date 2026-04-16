@@ -1,0 +1,129 @@
+name: Prepare Build
+description: Install CI build dependencies, configure CMake, and build the project.
+
+inputs:
+  os-name:
+    description: GitHub runner OS label.
+    required: true
+  python-version:
+    description: Python version to install for the job.
+    required: false
+    default: "3.12"
+  compiler:
+    description: Compiler selection for the job.
+    required: false
+    default: gcc
+  build-type:
+    description: CMake build type.
+    required: false
+    default: Release
+  install-docs-deps:
+    description: Whether to install docs Python dependencies.
+    required: false
+    default: "false"
+  install-playwright:
+    description: Whether to install Playwright and Chromium.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+        cache-dependency-path: |
+          requirements-docs.txt
+          .github/actions/prepare-build/action.yml
+
+    - name: Restore Playwright browser cache
+      if: ${{ startsWith(inputs.os-name, 'ubuntu') && inputs.install-playwright == 'true' }}
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ inputs.os-name }}-chromium-${{ hashFiles('.github/actions/prepare-build/action.yml') }}
+
+    - name: Restore ccache
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.os == 'Linux' && '~/.cache/ccache' || '~/Library/Caches/ccache' }}
+        key: ${{ runner.os }}-ccache-${{ hashFiles('CMakeLists.txt', 'src/**', 'include/**') }}
+
+    - name: Install dependencies (Ubuntu)
+      if: ${{ startsWith(inputs.os-name, 'ubuntu') }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        packages=(
+          libeigen3-dev
+          libgtest-dev
+          cmake
+          build-essential
+          ccache
+          python3-dev
+          pybind11-dev
+          python3-numpy
+          python3-matplotlib
+        )
+        if [ "${{ inputs.compiler }}" = "clang" ]; then
+          packages+=(clang)
+        fi
+        sudo apt-get update
+        sudo apt-get install -y "${packages[@]}"
+        python -m pip install --upgrade pip
+        if [ "${{ inputs.install-docs-deps }}" = "true" ]; then
+          python -m pip install --user -r requirements-docs.txt
+        fi
+        if [ "${{ inputs.install-playwright }}" = "true" ]; then
+          python -m pip install --user playwright
+          python -m playwright install --with-deps chromium
+        fi
+
+    - name: Install dependencies (macOS)
+      if: ${{ startsWith(inputs.os-name, 'macos') }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        brew install eigen googletest cmake pybind11 python ccache
+        python -m venv .venv
+        . .venv/bin/activate
+        python -m pip install --upgrade pip
+        python -m pip install numpy matplotlib
+        if [ "${{ inputs.install-docs-deps }}" = "true" ]; then
+          python -m pip install -r requirements-docs.txt
+        fi
+        echo "${GITHUB_WORKSPACE}/.venv/bin" >> "$GITHUB_PATH"
+
+    - name: Configure ccache
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+        echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+        ccache --set-config=max_size=500M
+        ccache --set-config=compression=true
+
+    - name: Configure CMake
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${{ inputs.compiler }}" = "clang" ]; then
+          export CC=clang
+          export CXX=clang++
+        fi
+        cmake_args=(
+          -B build
+          -DCMAKE_BUILD_TYPE=${{ inputs.build-type }}
+          "-DCMAKE_C_COMPILER_LAUNCHER=${CMAKE_C_COMPILER_LAUNCHER}"
+          "-DCMAKE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER}"
+        )
+        if [[ "${{ inputs.os-name }}" == macos* ]]; then
+          cmake_args+=("-DPython3_EXECUTABLE=${GITHUB_WORKSPACE}/.venv/bin/python")
+        fi
+        cmake "${cmake_args[@]}"
+
+    - name: Build
+      shell: bash
+      run: cmake --build build --config "${{ inputs.build-type }}" --parallel
