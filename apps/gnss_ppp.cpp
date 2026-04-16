@@ -3,12 +3,14 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <sstream>
 #include <string>
 
 #include <libgnss++/algorithms/ppp.hpp>
+#include <libgnss++/algorithms/ssr2obs.hpp>
 #include <libgnss++/core/solution.hpp>
 #include <libgnss++/io/rinex.hpp>
 
@@ -29,13 +31,21 @@ struct Options {
     std::string out_path;
     std::string summary_json_path;
     std::string kml_path;
+    bool has_ref_x = false;
+    bool has_ref_y = false;
+    bool has_ref_z = false;
+    double ref_x_m = 0.0;
+    double ref_y_m = 0.0;
+    double ref_z_m = 0.0;
     int max_epochs = 0;
+    int dump_ssr2obs_epoch = -1;
     int convergence_min_epochs = 20;
     double ssr_step_seconds = 1.0;
     bool estimate_troposphere = true;
     bool estimate_ionosphere = false;
     bool use_ionosphere_free = true;
     bool use_clas_osr_filter = false;
+    bool clas_epoch_policy_explicit = false;
     std::string clas_epoch_policy = "strict-osr";
     std::string clas_osr_application = "full-osr";
     std::string clas_phase_continuity = "full-repair";
@@ -47,9 +57,12 @@ struct Options {
     std::string clas_residual_sampling = "indexed-or-mean";
     std::string clas_atmos_selection = "grid-first";
     double clas_atmos_stale_after_seconds = 15.0;
+    /// Single-switch preset to align with CLASLIB-style PPP-RTK (strict OSR, uncombined, iono, WLNL AR).
+    bool claslib_parity = false;
     bool kinematic_mode = false;
     bool low_dynamics_mode = false;
     bool enable_ar = false;
+    std::string ar_method = "dd-iflc";
     double ar_ratio_threshold = 3.0;
     bool quiet = false;
 };
@@ -72,6 +85,12 @@ void printUsage(const char* program_name) {
         << "                          Station name to select from the BLQ file\n"
         << "  --ssr-step-seconds <seconds>\n"
         << "                          Sampling step for RTCM SSR conversion (default: 1.0)\n"
+        << "  --ref-x <meters>        Override receiver reference ECEF X used for CLAS grid selection\n"
+        << "  --ref-y <meters>        Override receiver reference ECEF Y used for CLAS grid selection\n"
+        << "  --ref-z <meters>        Override receiver reference ECEF Z used for CLAS grid selection\n"
+        << "  --claslib-parity         CLASLIB-oriented preset: --clas-osr, strict-osr (no hybrid default),\n"
+        << "                          --no-ionosphere-free, --estimate-ionosphere, troposphere on,\n"
+        << "                          --enable-ar --ar-method dd-wlnl. Override any piece after this flag.\n"
         << "  --out <solution.pos>     Output position file (required)\n"
         << "  --summary-json <summary.json>\n"
         << "                          Optional machine-readable run summary\n"
@@ -84,7 +103,9 @@ void printUsage(const char* program_name) {
         << "  --estimate-troposphere  Enable zenith troposphere estimation (default)\n"
         << "  --clas-osr              Use the CLAS OSR-based PPP-RTK filter path\n"
         << "  --clas-epoch-policy <strict-osr|hybrid-standard-ppp>\n"
-        << "                          CLAS epoch boundary policy (default: strict-osr)\n"
+        << "                          CLAS epoch policy. With --clas-osr the default is\n"
+        << "                          hybrid-standard-ppp (fallback to standard PPP when\n"
+        << "                          the OSR chain cannot update). Use strict-osr for pure CLAS-only runs.\n"
         << "  --clas-osr-application <full-osr|orbit-clock-bias|orbit-clock-only>\n"
         << "                          CLAS accepted-update correction semantics (default: full-osr)\n"
         << "  --clas-phase-continuity <full-repair|sis-continuity-only|repair-only|raw-phase-bias|no-phase-bias>\n"
@@ -111,8 +132,14 @@ void printUsage(const char* program_name) {
         << "  --no-low-dynamics       Disable quasi-static anchoring (default)\n"
         << "  --enable-ar             Enable PPP ambiguity fixing when supported\n"
         << "  --disable-ar            Disable PPP ambiguity fixing (default)\n"
+        << "  --ar-method <dd-iflc|dd-wlnl|dd-per-freq>\n"
+        << "                          Ambiguity resolution strategy (default: dd-iflc).\n"
+        << "                          dd-wlnl: wide-lane (MW) + narrow-lane DD on standard IF PPP\n"
+        << "                          or with CLAS OSR dual-frequency corrections when enabled.\n"
         << "  --ar-ratio-threshold <value>\n"
         << "                          Ratio threshold for PPP ambiguity fixing (default: 3.0)\n"
+        << "  --dump-ssr2obs-epoch <epoch_number>\n"
+        << "                          Dump SSR2OBS input/output for specified epoch (1-based)\n"
         << "  --quiet                  Suppress per-run summary output\n"
         << "  -h, --help               Show this help\n";
 }
@@ -164,6 +191,26 @@ Options parseArguments(int argc, char* argv[]) {
             options.convergence_min_epochs = std::stoi(argv[++i]);
         } else if (arg == "--ssr-step-seconds" && i + 1 < argc) {
             options.ssr_step_seconds = std::stod(argv[++i]);
+        } else if (arg == "--ref-x" && i + 1 < argc) {
+            options.has_ref_x = true;
+            options.ref_x_m = std::stod(argv[++i]);
+        } else if (arg == "--ref-y" && i + 1 < argc) {
+            options.has_ref_y = true;
+            options.ref_y_m = std::stod(argv[++i]);
+        } else if (arg == "--ref-z" && i + 1 < argc) {
+            options.has_ref_z = true;
+            options.ref_z_m = std::stod(argv[++i]);
+        } else if (arg == "--claslib-parity") {
+            options.claslib_parity = true;
+            options.use_clas_osr_filter = true;
+            options.clas_epoch_policy_explicit = true;
+            options.clas_epoch_policy = "strict-osr";
+            options.use_ionosphere_free = false;
+            options.estimate_ionosphere = true;
+            options.estimate_troposphere = false;
+            options.enable_ar = true;
+            options.ar_method = "dd-wlnl";
+            options.ar_ratio_threshold = 10.0;
         } else if (arg == "--no-estimate-troposphere") {
             options.estimate_troposphere = false;
         } else if (arg == "--estimate-troposphere") {
@@ -171,6 +218,7 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--clas-osr") {
             options.use_clas_osr_filter = true;
         } else if (arg == "--clas-epoch-policy" && i + 1 < argc) {
+            options.clas_epoch_policy_explicit = true;
             options.clas_epoch_policy = argv[++i];
         } else if (arg == "--clas-osr-application" && i + 1 < argc) {
             options.clas_osr_application = argv[++i];
@@ -212,8 +260,12 @@ Options parseArguments(int argc, char* argv[]) {
             options.enable_ar = true;
         } else if (arg == "--disable-ar") {
             options.enable_ar = false;
+        } else if (arg == "--ar-method" && i + 1 < argc) {
+            options.ar_method = argv[++i];
         } else if (arg == "--ar-ratio-threshold" && i + 1 < argc) {
             options.ar_ratio_threshold = std::stod(argv[++i]);
+        } else if (arg == "--dump-ssr2obs-epoch" && i + 1 < argc) {
+            options.dump_ssr2obs_epoch = std::stoi(argv[++i]);
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -227,6 +279,11 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.out_path.empty()) {
         argumentError("--out is required", argv[0]);
     }
+    if (options.has_ref_x || options.has_ref_y || options.has_ref_z) {
+        if (!(options.has_ref_x && options.has_ref_y && options.has_ref_z)) {
+            argumentError("--ref-x, --ref-y, and --ref-z must be provided together", argv[0]);
+        }
+    }
     if (options.nav_path.empty() && options.sp3_path.empty()) {
         argumentError("provide at least one of --nav or --sp3", argv[0]);
     }
@@ -239,8 +296,17 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.convergence_min_epochs <= 0) {
         argumentError("--convergence-min-epochs must be positive", argv[0]);
     }
+    if (options.dump_ssr2obs_epoch < -1 || options.dump_ssr2obs_epoch == 0) {
+        argumentError("--dump-ssr2obs-epoch must be positive or -1 (disabled)", argv[0]);
+    }
     if (options.ar_ratio_threshold <= 0.0) {
         argumentError("--ar-ratio-threshold must be positive", argv[0]);
+    }
+    if (options.ar_method != "dd-iflc" && options.ar_method != "dd-wlnl" &&
+        options.ar_method != "dd-per-freq") {
+        argumentError(
+            "--ar-method must be one of: dd-iflc, dd-wlnl, dd-per-freq",
+            argv[0]);
     }
     if (options.clas_atmos_stale_after_seconds <= 0.0) {
         argumentError("--clas-atmos-stale-after-seconds must be positive", argv[0]);
@@ -350,9 +416,21 @@ std::string jsonEscape(const std::string& value) {
     return escaped.str();
 }
 
+
 }  // namespace
 
 namespace {
+
+libgnss::PPPProcessor::PPPConfig::ARMethod parseArMethod(const std::string& value) {
+    using Method = libgnss::PPPProcessor::PPPConfig::ARMethod;
+    if (value == "dd-wlnl") {
+        return Method::DD_WLNL;
+    }
+    if (value == "dd-per-freq") {
+        return Method::DD_PER_FREQ;
+    }
+    return Method::DD_IFLC;
+}
 
 libgnss::PPPProcessor::PPPConfig::ClasEpochPolicy parseClasEpochPolicy(
     const std::string& value) {
@@ -484,7 +562,10 @@ parseClasSubtype12ValueConstructionPolicy(const std::string& value) {
 
 int main(int argc, char* argv[]) {
     try {
-        const Options options = parseArguments(argc, argv);
+        Options options = parseArguments(argc, argv);
+        if (options.use_clas_osr_filter && !options.clas_epoch_policy_explicit) {
+            options.clas_epoch_policy = "hybrid-standard-ppp";
+        }
 
         libgnss::io::RINEXReader obs_reader;
         if (!obs_reader.open(options.obs_path)) {
@@ -559,8 +640,12 @@ int main(int argc, char* argv[]) {
         ppp_config.kinematic_mode = options.kinematic_mode;
         ppp_config.low_dynamics_mode = options.low_dynamics_mode;
         ppp_config.enable_ambiguity_resolution = options.enable_ar;
+        ppp_config.ar_method = parseArMethod(options.ar_method);
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
+        if (options.claslib_parity) {
+            ppp_config.clas_outlier_sigma_scale = 8.0;
+        }
         if (options.low_dynamics_mode) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
             ppp_config.reset_kinematic_position_to_spp_each_epoch = false;
@@ -572,7 +657,12 @@ int main(int argc, char* argv[]) {
         if (obs_header.first_obs.week > 0) {
             ppp_config.l6_gps_week = obs_header.first_obs.week;
         }
-        ppp_config.approximate_position = obs_header.approximate_position;
+        if (options.has_ref_x && options.has_ref_y && options.has_ref_z) {
+            ppp_config.approximate_position =
+                libgnss::Vector3d(options.ref_x_m, options.ref_y_m, options.ref_z_m);
+        } else {
+            ppp_config.approximate_position = obs_header.approximate_position;
+        }
         ppp_config.receiver_antenna_type = obs_header.antenna_type;
         ppp_config.receiver_antenna_delta_enu = obs_header.antenna_delta;
         ppp_config.ocean_loading_station_name =
@@ -620,8 +710,47 @@ int main(int argc, char* argv[]) {
         double dcb_meters = 0.0;
         while ((options.max_epochs == 0 || processed_epochs < options.max_epochs) &&
                obs_reader.readObservationEpoch(observation_data)) {
-            if (obs_header.approximate_position.norm() > 0.0) {
+            if (options.has_ref_x && options.has_ref_y && options.has_ref_z) {
+                observation_data.receiver_position =
+                    libgnss::Vector3d(options.ref_x_m, options.ref_y_m, options.ref_z_m);
+            } else if (obs_header.approximate_position.norm() > 0.0) {
                 observation_data.receiver_position = obs_header.approximate_position;
+            }
+
+            // SSR2OBS epoch dump if requested
+            if (options.dump_ssr2obs_epoch > 0 && 
+                processed_epochs + 1 == options.dump_ssr2obs_epoch &&
+                options.use_clas_osr_filter) {
+                
+                std::cerr << "\n=== SSR2OBS Epoch " << (processed_epochs + 1) << " Dump ===\n";
+                std::cerr << "Time: GPS Week " << observation_data.time.week 
+                          << " TOW " << std::fixed << std::setprecision(1) << observation_data.time.tow << "\n";
+                std::cerr << "Raw observations: " << observation_data.observations.size() << " observations\n";
+                std::cerr << "Note: Detailed OSR corrections require internal PPP processor state\n";
+                std::cerr << "This is a simplified dump showing raw observation structure.\n\n";
+                
+                // Header
+                std::cerr << std::left << std::setw(4) << "SAT"
+                          << std::setw(6) << "SIG"
+                          << std::setw(16) << "RAW_PR(m)"
+                          << std::setw(16) << "RAW_CP(cyc)"
+                          << std::setw(12) << "PR_VALID"
+                          << std::setw(12) << "CP_VALID"
+                          << "\n";
+                std::cerr << std::string(80, '-') << "\n";
+                
+                // Dump raw observations
+                for (const auto& obs : observation_data.observations) {
+                    std::cerr << std::left << std::setw(4) << obs.satellite.toString()
+                              << std::setw(6) << static_cast<int>(obs.signal)
+                              << std::fixed << std::setprecision(3)
+                              << std::setw(16) << (obs.has_pseudorange ? obs.pseudorange : 0.0)
+                              << std::setw(16) << (obs.has_carrier_phase ? obs.carrier_phase : 0.0)
+                              << std::setw(12) << (obs.has_pseudorange ? "YES" : "NO")
+                              << std::setw(12) << (obs.has_carrier_phase ? "YES" : "NO")
+                              << "\n";
+                }
+                std::cerr << "\n";
             }
 
             const auto solution = processor.processEpoch(observation_data, nav_data);
@@ -687,6 +816,7 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             summary << "{\n"
+                    << "  \"claslib_parity\": " << (options.claslib_parity ? "true" : "false") << ",\n"
                     << "  \"obs\": \"" << jsonEscape(options.obs_path) << "\",\n"
                     << "  \"nav\": "
                     << (options.nav_path.empty() ? "null" : ("\"" + jsonEscape(options.nav_path) + "\""))
@@ -718,6 +848,7 @@ int main(int argc, char* argv[]) {
                     << "  \"clas_atmos_selection\": \"" << jsonEscape(options.clas_atmos_selection) << "\",\n"
                     << "  \"clas_atmos_stale_after_seconds\": " << options.clas_atmos_stale_after_seconds << ",\n"
                     << "  \"ambiguity_resolution_enabled\": " << (options.enable_ar ? "true" : "false") << ",\n"
+                    << "  \"ar_method\": \"" << jsonEscape(options.ar_method) << "\",\n"
                     << "  \"ar_ratio_threshold\": " << options.ar_ratio_threshold << ",\n"
                     << "  \"processed_epochs\": " << processed_epochs << ",\n"
                     << "  \"valid_solutions\": " << valid_solutions << ",\n"
@@ -757,6 +888,9 @@ int main(int argc, char* argv[]) {
         }
 
         if (!options.quiet) {
+            if (options.claslib_parity) {
+                std::cout << "CLASLIB parity preset: strict CLAS OSR, uncombined + iono, WLNL AR (override with later flags)\n";
+            }
             std::cout << "PPP summary:\n";
             std::cout << "  processed epochs: " << processed_epochs << "\n";
             std::cout << "  valid solutions: " << valid_solutions << "\n";
@@ -812,6 +946,7 @@ int main(int argc, char* argv[]) {
                           << dcb_meters << "\n";
             }
             if (options.enable_ar) {
+                std::cout << "  AR method: " << options.ar_method << "\n";
                 std::cout << "  AR ratio threshold: " << options.ar_ratio_threshold << "\n";
             }
             if (valid_solutions > 0) {

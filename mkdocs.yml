@@ -15,8 +15,16 @@ theme:
 markdown_extensions:
   - admonition
   - tables
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - toc:
       permalink: true
+extra_javascript:
+  - https://unpkg.com/mermaid@10/dist/mermaid.min.js
+  - javascripts/mermaid-init.js
 nav:
   - Home: index.md
   - Architecture: architecture.md
@@ -24,8 +32,15 @@ nav:
   - Benchmarks: benchmarks.md
   - Validation: validation.md
   - Interfaces: interfaces.md
-  - Experiments: experiments.md
-  - Decisions: decisions.md
+  - CLAS:
+      - Quick Start: clas_quickstart.md
+      - API & Flow: clas.md
+      - Compact SSR Policies: clas_compact_ssr_policies.md
+      - Parity Datasets & Artifacts: clas_parity_artifacts.md
+      - Debug Tag Playbook: clas_debug_playbook.md
+      - Parity Blockers: clas_parity_blockers.md
+  - Track A Benchmark (2018): track_a_benchmark_2018.md
+  - SSR2OBS Dump: ssr2obs_dump_implementation.md
   - References:
       - Overview: references/index.md
       - MADOCALIB Gap: references/madocalib-gap.md

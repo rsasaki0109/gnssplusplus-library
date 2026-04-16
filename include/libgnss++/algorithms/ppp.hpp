@@ -217,6 +217,19 @@ private:
     // Pre-anchor covariance saved for DD-AR position correction
     Eigen::MatrixXd pre_anchor_covariance_;
     bool had_fixed_last_epoch_ = false;  ///< AR succeeded in previous epoch
+    struct ClasIflcBetaState {
+        VectorXd state;
+        MatrixXd covariance;
+        int trop_column = -1;
+        std::map<GNSSSystem, int> clock_columns;
+        std::map<SatelliteId, int> ambiguity_columns;
+        bool initialized = false;
+    };
+    ClasIflcBetaState clas_iflc_beta_state_;
+    PPPState wlnl_fixed_state_;
+    bool has_wlnl_fixed_state_ = false;
+    double last_wlnl_fixed_state_dd_gap_ = 1e9;
+    std::vector<ppp_ar::WlnlFixAttempt::DdConstraint> wlnl_dd_constraints_;
     std::map<SatelliteId, double> windup_cache_;  ///< Phase wind-up cache for OSR
     std::map<SatelliteId, CLASPhaseBiasRepairInfo> clas_phase_bias_repair_;
     ppp_clas_sd::SdFilterState clas_sd_state_;  ///< Clock-free SD filter

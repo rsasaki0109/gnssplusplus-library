@@ -64,6 +64,12 @@ struct WlnlNlInfo {
     double lambda_nl_m = 0.0;
     double lambda_wl_m = 0.0;
     double beta = 0.0;
+    double alpha1 = 0.0;
+    double alpha2 = 0.0;
+    double l1_phase_corr_m = 0.0;
+    double l2_phase_corr_m = 0.0;
+    double nl_phase_m = 0.0;
+    double predicted_m = 0.0;
     WlnlGroupKey group{};
     bool valid = false;
 };
@@ -72,6 +78,16 @@ struct WlnlFixAttempt {
     bool fixed = false;
     double ratio = 0.0;
     int nb = 0;
+    bool has_fixed_state = false;
+    double fixed_state_dd_gap_cycles = 1e9;
+    ppp_shared::PPPState fixed_state;
+    struct DdConstraint {
+        SatelliteId ref_satellite;
+        SatelliteId sat_satellite;
+        double l1_dd_ambiguity_m = 0.0;
+        double l2_dd_ambiguity_m = 0.0;
+    };
+    std::vector<DdConstraint> dd_constraints;
 };
 
 struct WlnlWideLaneFixSummary {
@@ -128,6 +144,7 @@ struct FixedNlObservation {
     double lambda_nl_m = 0.0;
     Vector3d sat_pos = Vector3d::Zero();
     double sat_clk = 0.0;
+    double system_clock_offset_m = 0.0;
     bool use_trop_model = true;
 };
 

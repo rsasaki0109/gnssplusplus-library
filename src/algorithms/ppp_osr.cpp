@@ -15,6 +15,97 @@ bool pppDebugEnabled() {
     return ppp_shared::pppDebugEnabled();
 }
 
+Vector3d orbitCorrectionToEcef(const Vector3d& orbit_correction,
+                               const Vector3d& sat_pos,
+                               const Vector3d& sat_vel,
+                               bool corrections_are_rac) {
+    if (!corrections_are_rac ||
+        orbit_correction.squaredNorm() <= 0.0 ||
+        sat_pos.squaredNorm() <= 0.0 ||
+        sat_vel.squaredNorm() <= 0.0) {
+        return orbit_correction;
+    }
+
+    // RAC frame follows RTCM-10403.1 / CLASLIB convention:
+    //   Along-track  = normalize(velocity)
+    //   Cross-track  = normalize(position × velocity)
+    //   Radial       = along × cross  (outward from Earth center)
+    const Vector3d ea = sat_vel.normalized();
+    Vector3d c_unit = sat_pos.cross(sat_vel);
+    if (c_unit.squaredNorm() > 0.0) {
+        c_unit.normalize();
+    } else {
+        c_unit = Vector3d(0, 0, 1);
+    }
+    const Vector3d er = ea.cross(c_unit);
+    return -(er * orbit_correction(0)
+           + ea * orbit_correction(1)
+           + c_unit * orbit_correction(2));
+}
+
+bool ssrEntryMatchesPreferredNetwork(const SSROrbitClockCorrection& entry,
+                                     int preferred_network_id) {
+    if (preferred_network_id <= 0) {
+        return true;
+    }
+    return entry.bias_network_id == preferred_network_id ||
+           entry.bias_network_id == 0 ||
+           entry.atmos_network_id == preferred_network_id;
+}
+
+const SSROrbitClockCorrection* pickHeldOrbitCorrection(
+    const SSRProducts& ssr,
+    const SatelliteId& sat,
+    const GNSSTime& time,
+    int preferred_network_id) {
+    constexpr double kSsrLookupMaxAgeSeconds = 900.0;
+
+    const auto sat_it = ssr.orbit_clock_corrections.find(sat);
+    if (sat_it == ssr.orbit_clock_corrections.end() || sat_it->second.empty()) {
+        return nullptr;
+    }
+
+    const auto& entries = sat_it->second;
+    auto upper = std::upper_bound(
+        entries.begin(),
+        entries.end(),
+        time,
+        [](const GNSSTime& lhs, const SSROrbitClockCorrection& rhs) {
+            return lhs < rhs.time;
+        });
+    size_t group_end = static_cast<size_t>(upper - entries.begin());
+    while (group_end > 0) {
+        const size_t group_last = group_end - 1;
+        const GNSSTime group_time = entries[group_last].time;
+        if (std::abs(time - group_time) > kSsrLookupMaxAgeSeconds) {
+            break;
+        }
+        size_t group_begin = group_last;
+        while (group_begin > 0 && entries[group_begin - 1].time == group_time) {
+            --group_begin;
+        }
+
+        const SSROrbitClockCorrection* fallback = nullptr;
+        for (size_t index = group_begin; index < group_end; ++index) {
+            const SSROrbitClockCorrection& entry = entries[index];
+            if (!entry.orbit_valid) {
+                continue;
+            }
+            if (fallback == nullptr) {
+                fallback = &entry;
+            }
+            if (ssrEntryMatchesPreferredNetwork(entry, preferred_network_id)) {
+                return &entry;
+            }
+        }
+        if (fallback != nullptr) {
+            return fallback;
+        }
+        group_end = group_begin;
+    }
+    return nullptr;
+}
+
 const char* clasAtmosSelectionPolicyName(
     ppp_shared::PPPConfig::ClasAtmosSelectionPolicy policy) {
     switch (policy) {
@@ -43,6 +134,7 @@ struct ClasAtmosCandidate {
     bool has_grid = false;
     double grid_distance_sq = std::numeric_limits<double>::infinity();
     double time_gap = std::numeric_limits<double>::infinity();
+    bool is_future = false;
     int token_count = -1;
 };
 
@@ -50,11 +142,17 @@ bool isBetterGridFirstCandidate(const ClasAtmosCandidate& candidate,
                                 const ClasAtmosCandidate& best) {
     return (candidate.has_grid && !best.has_grid) ||
            (candidate.has_grid == best.has_grid &&
+            candidate.is_future != best.is_future &&
+            !candidate.is_future) ||
+           (candidate.has_grid == best.has_grid &&
+            candidate.is_future == best.is_future &&
             candidate.grid_distance_sq + 1e-9 < best.grid_distance_sq) ||
            (candidate.has_grid == best.has_grid &&
+            candidate.is_future == best.is_future &&
             std::abs(candidate.grid_distance_sq - best.grid_distance_sq) <= 1e-9 &&
             candidate.time_gap + 1e-9 < best.time_gap) ||
            (candidate.has_grid == best.has_grid &&
+            candidate.is_future == best.is_future &&
             std::abs(candidate.grid_distance_sq - best.grid_distance_sq) <= 1e-9 &&
             std::abs(candidate.time_gap - best.time_gap) <= 1e-9 &&
             candidate.token_count > best.token_count);
@@ -64,11 +162,17 @@ bool isBetterFreshnessFirstCandidate(const ClasAtmosCandidate& candidate,
                                      const ClasAtmosCandidate& best) {
     return (candidate.has_grid && !best.has_grid) ||
            (candidate.has_grid == best.has_grid &&
+            candidate.is_future != best.is_future &&
+            !candidate.is_future) ||
+           (candidate.has_grid == best.has_grid &&
+            candidate.is_future == best.is_future &&
             candidate.time_gap + 1e-9 < best.time_gap) ||
            (candidate.has_grid == best.has_grid &&
+            candidate.is_future == best.is_future &&
             std::abs(candidate.time_gap - best.time_gap) <= 1e-9 &&
             candidate.grid_distance_sq + 1e-9 < best.grid_distance_sq) ||
            (candidate.has_grid == best.has_grid &&
+            candidate.is_future == best.is_future &&
             std::abs(candidate.time_gap - best.time_gap) <= 1e-9 &&
             std::abs(candidate.grid_distance_sq - best.grid_distance_sq) <= 1e-9 &&
             candidate.token_count > best.token_count);
@@ -83,20 +187,28 @@ bool isBetterBalancedCandidate(const ClasAtmosCandidate& candidate,
            (candidate.has_grid == best.has_grid && candidate_stale != best_stale &&
             !candidate_stale) ||
            (candidate.has_grid == best.has_grid && candidate_stale == best_stale &&
+            candidate.is_future != best.is_future &&
+            !candidate.is_future) ||
+           (candidate.has_grid == best.has_grid && candidate_stale == best_stale &&
+            candidate.is_future == best.is_future &&
             !candidate_stale &&
             candidate.grid_distance_sq + 1e-9 < best.grid_distance_sq) ||
            (candidate.has_grid == best.has_grid && candidate_stale == best_stale &&
+            candidate.is_future == best.is_future &&
             candidate_stale &&
             candidate.time_gap + 1e-9 < best.time_gap) ||
            (candidate.has_grid == best.has_grid && candidate_stale == best_stale &&
+            candidate.is_future == best.is_future &&
             !candidate_stale &&
             std::abs(candidate.grid_distance_sq - best.grid_distance_sq) <= 1e-9 &&
             candidate.time_gap + 1e-9 < best.time_gap) ||
            (candidate.has_grid == best.has_grid && candidate_stale == best_stale &&
+            candidate.is_future == best.is_future &&
             candidate_stale &&
             std::abs(candidate.time_gap - best.time_gap) <= 1e-9 &&
             candidate.grid_distance_sq + 1e-9 < best.grid_distance_sq) ||
            (candidate.has_grid == best.has_grid && candidate_stale == best_stale &&
+            candidate.is_future == best.is_future &&
             std::abs(candidate.time_gap - best.time_gap) <= 1e-9 &&
             std::abs(candidate.grid_distance_sq - best.grid_distance_sq) <= 1e-9 &&
             candidate.token_count > best.token_count);
@@ -179,7 +291,15 @@ void updateDispersionCompensation(
     CLASDispersionCompensationInfo& compensation,
     const Observation* l1_obs,
     const Observation* l2_obs,
-    const GNSSTime& obs_time) {
+    const GNSSTime& obs_time,
+    ppp_shared::PPPConfig::ClasPhaseContinuityPolicy policy) {
+    if (usesClasPhaseBiasRepair(policy)) {
+        compensation.reference_time = GNSSTime();
+        compensation.base_phase_m = {0.0, 0.0};
+        compensation.has_base = {false, false};
+        compensation.slip = {false, false};
+        return;
+    }
     const GNSSTime interval_reference =
         osr.atmos_reference_time.week != 0 ? osr.atmos_reference_time : obs_time;
     if (compensation.reference_time.week == 0 ||
@@ -249,7 +369,8 @@ void updateSisContinuity(
     CLASSisContinuityInfo& info,
     const OSRCorrection& osr,
     bool clock_time_valid) {
-    const double current_sis_m = -osr.clock_correction_m + osr.orbit_projection_m;
+    const double current_sis_m =
+        -osr.ssr_exact_clock_m + osr.ssr_exact_orbit_los_m;
     if (!clock_time_valid) {
         info = CLASSisContinuityInfo{};
     } else if (!info.has_current) {
@@ -266,6 +387,16 @@ void updateSisContinuity(
         if (std::abs(dt_clock - kSsrClockIntervalSeconds) < 0.5) {
             info.last_delta_m = info.current_sis_m - info.previous_sis_m;
             info.has_last_delta = true;
+            if (pppDebugEnabled()) {
+                std::cerr << "[OSR-SIS] " << osr.satellite.toString()
+                          << " clk_ref_tow=" << osr.clock_reference_time.tow
+                          << " sis_prev_m=" << info.previous_sis_m
+                          << " sis_curr_m=" << info.current_sis_m
+                          << " sis_delta_m=" << info.last_delta_m
+                          << " exact_orb_los=" << osr.ssr_exact_orbit_los_m
+                          << " exact_clk=" << osr.ssr_exact_clock_m
+                          << "\n";
+            }
         } else {
             info.last_delta_m = 0.0;
             info.has_last_delta = false;
@@ -453,6 +584,18 @@ bool usesClasExpandedResidualTerms(
            ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy::POLYNOMIAL_ONLY;
 }
 
+int satelliteStecTokenCount(const std::map<std::string, std::string>& atmos_tokens,
+                            const SatelliteId& satellite) {
+    int count = 0;
+    for (const auto& [key, _value] : atmos_tokens) {
+        if (key.find("atmos_stec") != std::string::npos &&
+            key.find(satellite.toString()) != std::string::npos) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 int preferredClasNetworkId(const std::map<std::string, std::string>& atmos_tokens) {
     int network_id = 0;
     if (!ppp_atmosphere::parseAtmosTokenInt(atmos_tokens, "atmos_network_id", network_id)) {
@@ -480,7 +623,8 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
             if (!correction.atmos_valid || correction.atmos_tokens.empty()) {
                 continue;
             }
-            const double time_gap = std::abs(correction.time - time);
+            const double time_offset = correction.time - time;
+            const double time_gap = std::abs(time_offset);
             if (time_gap > kAtmosSelectionGapSeconds) {
                 continue;
             }
@@ -498,8 +642,29 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
                 has_grid,
                 grid_distance_sq,
                 time_gap,
+                time_offset > 1e-9,
                 static_cast<int>(correction.atmos_tokens.size()),
             };
+
+            if (pppDebugEnabled() && std::abs(time.tow - 230420.0) < 1e-6) {
+                int stec_token_count = 0;
+                const int sat_token_count =
+                    satelliteStecTokenCount(correction.atmos_tokens, satellite);
+                for (const auto& [key, _value] : correction.atmos_tokens) {
+                    if (key.find("atmos_stec") != std::string::npos) {
+                        ++stec_token_count;
+                    }
+                }
+                std::cerr << "[PPP-ATMOS-CAND] sat=" << satellite.toString()
+                          << " corr_tow=" << correction.time.tow
+                          << " tokens=" << correction.atmos_tokens.size()
+                          << " stec_tokens=" << stec_token_count
+                          << " sat_tokens=" << sat_token_count
+                          << " has_grid=" << static_cast<int>(has_grid)
+                          << " grid_dist2=" << grid_distance_sq
+                          << " dt=" << time_gap
+                          << "\n";
+            }
 
             if (!isBetterClasAtmosCandidate(candidate, best, config)) {
                 continue;
@@ -529,6 +694,71 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
                   << " dt=" << best.time_gap
                   << " policy=" << clasAtmosSelectionPolicyName(config.clas_atmos_selection_policy)
                   << " stale_after_s=" << config.clas_atmos_stale_after_seconds << "\n";
+    }
+
+    return best.tokens;
+}
+
+std::map<std::string, std::string> selectClasSatelliteAtmosTokens(
+    const SSRProducts& ssr_products,
+    const SatelliteId& satellite,
+    const GNSSTime& time,
+    const Vector3d& receiver_position,
+    const ppp_shared::PPPConfig& config) {
+    constexpr double kAtmosSelectionGapSeconds = 120.0;
+
+    const auto sat_it = ssr_products.orbit_clock_corrections.find(satellite);
+    if (sat_it == ssr_products.orbit_clock_corrections.end()) {
+        return {};
+    }
+
+    ClasAtmosCandidate best;
+    for (const auto& correction : sat_it->second) {
+        if (!correction.atmos_valid || correction.atmos_tokens.empty()) {
+            continue;
+        }
+        if (satelliteStecTokenCount(correction.atmos_tokens, satellite) <= 0) {
+            continue;
+        }
+        const double time_offset = correction.time - time;
+        const double time_gap = std::abs(time_offset);
+        if (time_gap > kAtmosSelectionGapSeconds) {
+            continue;
+        }
+
+        ppp_atmosphere::ClasGridReference grid_reference;
+        const bool has_grid = ppp_atmosphere::resolveClasGridReference(
+            correction.atmos_tokens, receiver_position, grid_reference);
+        const double grid_distance_sq =
+            has_grid
+                ? (grid_reference.dlat_deg * grid_reference.dlat_deg +
+                   grid_reference.dlon_deg * grid_reference.dlon_deg)
+                : std::numeric_limits<double>::infinity();
+        const ClasAtmosCandidate candidate{
+            correction.atmos_tokens,
+            has_grid,
+            grid_distance_sq,
+            time_gap,
+            time_offset > 1e-9,
+            static_cast<int>(correction.atmos_tokens.size()),
+        };
+
+        if (!isBetterClasAtmosCandidate(candidate, best, config)) {
+            continue;
+        }
+        best = candidate;
+    }
+
+    if (pppDebugEnabled() && !best.tokens.empty() &&
+        std::abs(time.tow - 230420.0) < 1e-6) {
+        std::cerr << "[PPP-ATMOS-SAT] sat=" << satellite.toString()
+                  << " network=" << preferredClasNetworkId(best.tokens)
+                  << " tokens=" << best.tokens.size()
+                  << " dt=" << best.time_gap
+                  << " grid_selected=" << static_cast<int>(best.has_grid)
+                  << " policy="
+                  << clasAtmosSelectionPolicyName(config.clas_atmos_selection_policy)
+                  << "\n";
     }
 
     return best.tokens;
@@ -572,7 +802,7 @@ std::vector<OSRCorrection> computeOSR(
     const ObservationData& obs,
     const NavigationData& nav,
     const SSRProducts& ssr,
-    const std::map<std::string, std::string>& atmos_tokens,
+    const std::map<std::string, std::string>& epoch_atmos_tokens,
     const Vector3d& receiver_pos,
     double receiver_clk,
     double trop_zenith,
@@ -585,7 +815,13 @@ std::vector<OSRCorrection> computeOSR(
     std::vector<OSRCorrection> corrections;
     int preferred_network_id = 0;
     ppp_atmosphere::parseAtmosTokenInt(
-        atmos_tokens, "atmos_network_id", preferred_network_id);
+        epoch_atmos_tokens, "atmos_network_id", preferred_network_id);
+    ppp_shared::PPPConfig trop_config = config;
+    trop_config.clas_atmos_selection_policy =
+        ppp_shared::PPPConfig::ClasAtmosSelectionPolicy::FRESHNESS_FIRST;
+    const std::map<std::string, std::string> fresh_epoch_atmos_tokens =
+        selectClasEpochAtmosTokens(
+            ssr, obs.getSatellites(), obs.time, receiver_pos, trop_config);
 
     for (const auto& sat : obs.getSatellites()) {
         OSRCorrection osr;
@@ -640,48 +876,30 @@ std::vector<OSRCorrection> computeOSR(
                 continue;
             }
         }
+        const Vector3d sat_pos_for_ssr_frame = sat_pos;
+        const Vector3d sat_vel_for_ssr_frame = sat_vel;
 
         // Apply SSR orbit/clock corrections
         Vector3d orbit_corr = Vector3d::Zero();
         double clock_corr = 0.0;
         double ura_sigma = 0.0;
         std::map<uint8_t, double> ssr_cbias, ssr_pbias;
-        std::map<std::string, std::string> atmos_tokens;
+        std::map<std::string, std::string> sat_atmos_tokens;
         GNSSTime atmos_reference_time;
         GNSSTime phase_bias_reference_time;
         GNSSTime clock_reference_time;
         if (ssr.interpolateCorrection(sat, obs.time, orbit_corr, clock_corr,
                                        &ura_sigma, &ssr_cbias, &ssr_pbias,
-                                       &atmos_tokens,
+                                       &sat_atmos_tokens,
                                        &atmos_reference_time,
                                        &phase_bias_reference_time,
                                        &clock_reference_time,
                                        preferred_network_id)) {
-            // CSV-expanded CLAS corrections carry orbit deltas in RAC, while
-            // sampled RTCM SSR products are already stored in ECEF.
-            // RAC frame follows RTCM-10403.1 / CLASLIB convention:
-            //   Along-track  = normalize(velocity)
-            //   Cross-track  = normalize(position × velocity)
-            //   Radial       = along × cross  (outward from Earth center)
-            // The correction is subtracted: rs -= er*dR + ea*dA + ec*dC
-            if (ssr.orbitCorrectionsAreRac() &&
-                orbit_corr.squaredNorm() > 0.0 &&
-                sat_pos.squaredNorm() > 0.0 &&
-                sat_vel.squaredNorm() > 0.0) {
-                const Vector3d ea = sat_vel.normalized();  // Along-track
-                Vector3d c_unit = sat_pos.cross(sat_vel);
-                if (c_unit.squaredNorm() > 0.0) {
-                    c_unit.normalize();  // Cross-track (normal to orbital plane)
-                } else {
-                    c_unit = Vector3d(0, 0, 1);
-                }
-                const Vector3d er = ea.cross(c_unit);  // Radial (outward)
-                // orbit_corr = (dR, dA, dC) in RAC; applied as subtraction
-                const Vector3d orbit_ecef = -(er * orbit_corr(0)
-                                            + ea * orbit_corr(1)
-                                            + c_unit * orbit_corr(2));
-                orbit_corr = orbit_ecef;
-            }
+            orbit_corr = orbitCorrectionToEcef(
+                orbit_corr,
+                sat_pos_for_ssr_frame,
+                sat_vel_for_ssr_frame,
+                ssr.orbitCorrectionsAreRac());
             if (pppDebugEnabled() && corrections.size() < 20) {
                 std::cerr << "[OSR-SSR] " << sat.toString()
                           << " orbit_ecef=" << orbit_corr.transpose()
@@ -718,8 +936,30 @@ std::vector<OSRCorrection> computeOSR(
             clock_ref_valid &&
             atmos_ref_valid &&
             osr.atmos_reference_time != osr.clock_reference_time) {
-            atmos_tokens.clear();
+            sat_atmos_tokens.clear();
             osr.atmos_reference_time = GNSSTime();
+        }
+
+        const std::map<std::string, std::string> sat_specific_iono_tokens =
+            selectClasSatelliteAtmosTokens(ssr, sat, obs.time, receiver_pos, config);
+        std::map<std::string, std::string> trop_atmos_tokens = fresh_epoch_atmos_tokens;
+        if (trop_atmos_tokens.empty()) {
+            trop_atmos_tokens = epoch_atmos_tokens;
+        }
+        if (trop_atmos_tokens.empty()) {
+            trop_atmos_tokens = sat_atmos_tokens;
+        }
+        std::map<std::string, std::string> iono_atmos_tokens;
+        if (!sat_specific_iono_tokens.empty()) {
+            iono_atmos_tokens = sat_specific_iono_tokens;
+        } else if (satelliteStecTokenCount(sat_atmos_tokens, sat) > 0) {
+            iono_atmos_tokens = sat_atmos_tokens;
+        } else if (satelliteStecTokenCount(epoch_atmos_tokens, sat) > 0) {
+            iono_atmos_tokens = epoch_atmos_tokens;
+        }
+        if ((!trop_atmos_tokens.empty() || !iono_atmos_tokens.empty()) &&
+            !gnsstimeIsSet(osr.atmos_reference_time)) {
+            osr.atmos_reference_time = obs.time;
         }
 
         osr.satellite_position = sat_pos;
@@ -730,13 +970,61 @@ std::vector<OSRCorrection> computeOSR(
         const double geo_range = geodist(sat_pos, receiver_pos);
         const Vector3d los = (sat_pos - receiver_pos) / geo_range;
         osr.orbit_projection_m = los.dot(orbit_corr);
+        osr.ssr_exact_orbit_los_m = osr.orbit_projection_m;
+        osr.ssr_exact_clock_m = osr.clock_correction_m;
+        if (gnsstimeIsSet(osr.clock_reference_time)) {
+            double exact_clock_corr = 0.0;
+            GNSSTime exact_clock_reference_time;
+            Vector3d unused_orbit_corr = Vector3d::Zero();
+            if (ssr.interpolateCorrection(sat,
+                                          osr.clock_reference_time,
+                                          unused_orbit_corr,
+                                          exact_clock_corr,
+                                          nullptr,
+                                          nullptr,
+                                          nullptr,
+                                          nullptr,
+                                          nullptr,
+                                          nullptr,
+                                          &exact_clock_reference_time,
+                                          preferred_network_id)) {
+                if (gnsstimeIsSet(exact_clock_reference_time) &&
+                    exact_clock_reference_time == osr.clock_reference_time) {
+                    const SSROrbitClockCorrection* exact_orbit_source =
+                        pickHeldOrbitCorrection(
+                            ssr, sat, obs.time, preferred_network_id);
+                    if (exact_orbit_source == nullptr) {
+                        osr.ssr_exact_clock_m = exact_clock_corr;
+                    } else {
+                        Vector3d exact_orbit_corr =
+                            exact_orbit_source->orbit_correction_ecef;
+                        osr.ssr_exact_clock_m = exact_clock_corr;
+                        exact_orbit_corr = orbitCorrectionToEcef(
+                            exact_orbit_corr,
+                            sat_pos_for_ssr_frame,
+                            sat_vel_for_ssr_frame,
+                            ssr.orbitCorrectionsAreRac());
+                        osr.ssr_exact_orbit_los_m = los.dot(exact_orbit_corr);
+                    }
+                }
+            }
+        }
         double lat = 0.0, lon = 0.0, h = 0.0;
         ecef2geodetic(receiver_pos, lat, lon, h);
         const Vector3d los_enu = ecef2enu(sat_pos - receiver_pos, lat, lon);
         const double elev = std::atan2(los_enu.z(), std::hypot(los_enu.x(), los_enu.y()));
         const double azim = std::atan2(los_enu.x(), los_enu.y());
 
-        if (elev < kElevationMaskRad) continue;
+        if (elev < kElevationMaskRad) {
+            if (pppDebugEnabled() && corrections.size() < 20) {
+                std::cerr << "[OSR-DROP] " << sat.toString()
+                          << " reason=elevation"
+                          << " elev_deg=" << (elev * 180.0 / M_PI)
+                          << " recv_pos=" << receiver_pos.transpose()
+                          << "\n";
+            }
+            continue;
+        }
 
         osr.elevation = elev;
         osr.azimuth = azim;
@@ -758,9 +1046,9 @@ std::vector<OSRCorrection> computeOSR(
         osr.trop_correction_m = models::tropDelaySaastamoinen(receiver_pos, elev);
 
         // CLAS troposphere grid correction (if available)
-        if (!atmos_tokens.empty()) {
+        if (!trop_atmos_tokens.empty()) {
             const double clas_trop = ppp_atmosphere::atmosphericTroposphereCorrectionMeters(
-                atmos_tokens,
+                trop_atmos_tokens,
                 receiver_pos,
                 obs.time,
                 elev,
@@ -782,36 +1070,84 @@ std::vector<OSRCorrection> computeOSR(
         osr.relativity_correction_m = relativisticCorrection(sat_pos, sat_vel, receiver_pos);
 
         // --- 6. Ionosphere (STEC) ---
-        if (!atmos_tokens.empty()) {
+        if (!iono_atmos_tokens.empty()) {
             const double stec_tecu = ppp_atmosphere::atmosphericStecTecu(
-                atmos_tokens,
+                iono_atmos_tokens,
                 sat,
                 receiver_pos,
                 config.clas_expanded_value_construction_policy,
                 config.clas_subtype12_value_construction_policy,
                 config.clas_expanded_residual_sampling_policy);
+            if (pppDebugEnabled() && corrections.size() < 20) {
+                const int sat_token_count =
+                    satelliteStecTokenCount(iono_atmos_tokens, sat);
+                int stec_token_count = 0;
+                for (const auto& [key, _value] : iono_atmos_tokens) {
+                    if (key.find("atmos_stec") != std::string::npos) {
+                        ++stec_token_count;
+                    }
+                }
+                std::cerr << "[OSR-IONO] " << sat.toString()
+                          << " stec_tecu=" << stec_tecu
+                          << " token_count=" << iono_atmos_tokens.size()
+                          << " stec_tokens=" << stec_token_count
+                          << " sat_tokens=" << sat_token_count
+                          << "\n";
+            }
             if (std::isfinite(stec_tecu) && std::abs(stec_tecu) > 0.001) {
-                osr.iono_l1_m = ppp_atmosphere::ionosphereDelayMetersFromTecu(
-                    l1_obs->signal, eph, stec_tecu);
+                // CLASLIB stores the ionosphere term as 40.3e16/(FREQ1*FREQ2)*STEC
+                // and applies the per-frequency scaling later in PRC/CPC.
+                osr.iono_l1_m =
+                    40.3e16 * stec_tecu /
+                    (constants::GPS_L1_FREQ * constants::GPS_L2_FREQ);
                 osr.has_iono = true;
             }
         }
         if (!osr.has_iono) {
+            if (pppDebugEnabled() && corrections.size() < 20) {
+                std::cerr << "[OSR-DROP] " << sat.toString()
+                          << " reason=no_iono"
+                          << " has_tokens=" << (!iono_atmos_tokens.empty() ? 1 : 0)
+                          << "\n";
+            }
             continue;  // CLASLIB rejects satellites without STEC
         }
 
         // --- 7. Code/Phase bias ---
+        // L2C(8) and L2P(9) are interchangeable for bias lookup: some satellites
+        // only broadcast one of the two, so fall back to the other if not found.
         for (int f = 0; f < osr.num_frequencies; ++f) {
             const uint8_t sid = rtcmSsrSignalId(sat.system, osr.signals[f]);
-            auto cb_it = ssr_cbias.find(sid);
+            uint8_t preferred_sid = sid;
+            uint8_t alt_sid = 0U;
+            if (sat.system == GNSSSystem::GPS &&
+                osr.signals[f] == SignalType::GPS_L2C) {
+                preferred_sid = 9U;
+                alt_sid = 8U;
+            } else if (sid == 8U || sid == 9U) {
+                alt_sid = (sid == 8U) ? 9U : 8U;
+            }
+            auto cb_it = ssr_cbias.find(preferred_sid);
+            auto pb_it = ssr_pbias.find(preferred_sid);
+            if (alt_sid != 0U &&
+                (cb_it == ssr_cbias.end() || pb_it == ssr_pbias.end())) {
+                if (cb_it == ssr_cbias.end()) {
+                    cb_it = ssr_cbias.find(alt_sid);
+                }
+                if (pb_it == ssr_pbias.end()) {
+                    pb_it = ssr_pbias.find(alt_sid);
+                }
+            }
             osr.code_bias_m[f] = (cb_it != ssr_cbias.end()) ? cb_it->second : 0.0;
-            auto pb_it = ssr_pbias.find(sid);
             osr.phase_bias_m[f] = (pb_it != ssr_pbias.end()) ? pb_it->second : 0.0;
         }
 
+        const auto phase_continuity_policy =
+            config.clas_phase_continuity_policy;
         if (osr.num_frequencies >= 2) {
             updateDispersionCompensation(
-                osr, dispersion_compensation[sat], l1_obs, l2_obs, obs.time);
+                osr, dispersion_compensation[sat], l1_obs, l2_obs, obs.time,
+                phase_continuity_policy);
         }
 
         // --- 8. Phase wind-up ---
@@ -824,8 +1160,6 @@ std::vector<OSRCorrection> computeOSR(
 
         auto& phase_bias_repair_info = phase_bias_repair[sat];
         auto& sis_continuity_info = sis_continuity[sat];
-        const auto phase_continuity_policy =
-            config.clas_phase_continuity_policy;
         const bool clock_time_valid = gnsstimeIsSet(osr.clock_reference_time);
         updateSisContinuity(sis_continuity_info, osr, clock_time_valid);
         const GNSSTime effective_phase_bias_reference_time =
@@ -840,10 +1174,64 @@ std::vector<OSRCorrection> computeOSR(
         const bool phase_bias_epoch_changed = pbias_status.epoch_changed;
         const double phase_bias_dt = pbias_status.dt;
 
+        // --- 8b. GF-based dispersion compensation (CLASLIB compensatedisp) ---
+        if (phase_bias_epoch_changed &&
+            osr.num_frequencies >= 2 &&
+            usesClasPhaseBiasRepair(phase_continuity_policy) &&
+            phase_bias_repair_info.has_prev_ssr_epoch &&
+            osr.frequencies[0] > 0.0 && osr.frequencies[1] > 0.0) {
+            const double f1 = osr.frequencies[0];
+            const double f2 = osr.frequencies[1];
+            const double fi = osr.wavelengths[1] / osr.wavelengths[0];  // λ2/λ1
+            const double fi2 = fi * fi;
+            const double iono_factor = -(f2 / f1) * (1.0 - fi2);
+            const double disp_curr = iono_factor * osr.iono_l1_m
+                + osr.phase_bias_m[0] - osr.phase_bias_m[1];
+            const double disp_prev = iono_factor * phase_bias_repair_info.prev_iono_l1_m
+                + phase_bias_repair_info.prev_phase_bias_m[0]
+                - phase_bias_repair_info.prev_phase_bias_m[1];
+            const double dt_ssr = phase_bias_dt;
+            if (std::abs(dt_ssr) > 0.1 && std::abs(dt_ssr) < kPhaseBiasRepairTimeoutSeconds) {
+                const double coef = (disp_curr - disp_prev) / dt_ssr;
+                const double norm = std::abs(iono_factor);
+                // Sanity check: reject rates that are too large (adapted from CLASLIB)
+                if (norm > 0.0 && std::abs(coef / norm) <= 1.0) {
+                    phase_bias_repair_info.dispersion_rate_m_per_s[0] =
+                        coef / (1.0 - fi2);
+                    phase_bias_repair_info.dispersion_rate_m_per_s[1] =
+                        fi2 / (1.0 - fi2) * coef;
+                } else {
+                    phase_bias_repair_info.dispersion_rate_m_per_s[0] = 0.0;
+                    phase_bias_repair_info.dispersion_rate_m_per_s[1] = 0.0;
+                }
+            }
+        }
+        if (phase_bias_epoch_changed) {
+            for (int ff = 0; ff < osr.num_frequencies && ff < OSR_MAX_FREQ; ++ff) {
+                phase_bias_repair_info.prev_phase_bias_m[static_cast<size_t>(ff)] =
+                    osr.phase_bias_m[ff];
+            }
+            phase_bias_repair_info.prev_iono_l1_m = osr.iono_l1_m;
+            phase_bias_repair_info.prev_ssr_epoch_time = effective_phase_bias_reference_time;
+            phase_bias_repair_info.has_prev_ssr_epoch = true;
+        }
+        // Apply SSR-based dispersion compensation to phase_compensation_m
+        if (phase_bias_repair_info.has_prev_ssr_epoch &&
+            usesClasPhaseBiasRepair(phase_continuity_policy)) {
+            const double dt_from_ssr =
+                obs.time - phase_bias_repair_info.prev_ssr_epoch_time;
+            for (int ff = 0; ff < osr.num_frequencies && ff < OSR_MAX_FREQ; ++ff) {
+                osr.phase_compensation_m[ff] +=
+                    phase_bias_repair_info.dispersion_rate_m_per_s[static_cast<size_t>(ff)]
+                    * dt_from_ssr;
+            }
+        }
+
         // --- 9. Aggregate PRC/CPC (CLASLIB L282-285) ---
         for (int f = 0; f < osr.num_frequencies; ++f) {
             const double fi = osr.frequencies[f] > 0.0 ? osr.wavelengths[f] / osr.wavelengths[0] : 1.0;
-            const double iono_scaled = fi * fi * osr.iono_l1_m;
+            const double iono_scaled =
+                fi * fi * (constants::GPS_L2_FREQ / constants::GPS_L1_FREQ) * osr.iono_l1_m;
             const auto phase_bias_value_policy =
                 config.clas_phase_bias_value_policy;
             const double phase_bias_term =
@@ -887,28 +1275,7 @@ std::vector<OSRCorrection> computeOSR(
 
             const double continuity_term =
                 osr.orbit_projection_m - osr.clock_correction_m + osr.CPC[f];
-            if (phase_bias_epoch_changed &&
-                std::abs(phase_bias_dt) < kPhaseBiasRepairTimeoutSeconds &&
-                phase_bias_repair_info.has_last[static_cast<size_t>(f)] &&
-                osr.wavelengths[f] > 0.0 &&
-                usesClasPhaseBiasRepair(phase_continuity_policy)) {
-                const double dcpc =
-                    continuity_term -
-                    phase_bias_repair_info.last_continuity_m[static_cast<size_t>(f)];
-                const double cycles = dcpc / osr.wavelengths[f];
-                if (cycles >= kPhaseBiasJumpLowerCycles && cycles < kPhaseBiasJumpUpperCycles) {
-                    phase_bias_repair_info.offset_cycles[static_cast<size_t>(f)] -= kPhaseBiasJumpCorrectionCycles;
-                    phase_bias_repair_info.pending_state_shift_cycles[static_cast<size_t>(f)] -= kPhaseBiasJumpCorrectionCycles;
-                } else if (cycles <= -kPhaseBiasJumpLowerCycles && cycles > -kPhaseBiasJumpUpperCycles) {
-                    phase_bias_repair_info.offset_cycles[static_cast<size_t>(f)] += kPhaseBiasJumpCorrectionCycles;
-                    phase_bias_repair_info.pending_state_shift_cycles[static_cast<size_t>(f)] += kPhaseBiasJumpCorrectionCycles;
-                }
-            }
-
             if (usesClasPhaseBiasRepair(phase_continuity_policy)) {
-                osr.CPC[f] -=
-                    phase_bias_repair_info.offset_cycles[static_cast<size_t>(f)] *
-                    osr.wavelengths[f];
                 phase_bias_repair_info.last_continuity_m[static_cast<size_t>(f)] =
                     continuity_term;
                 phase_bias_repair_info.has_last[static_cast<size_t>(f)] = true;
@@ -921,13 +1288,18 @@ std::vector<OSRCorrection> computeOSR(
         }
 
         osr.valid = true;
-        if (pppDebugEnabled() && corrections.size() < 3) {
+        if (pppDebugEnabled() && (corrections.size() < 3 || sat.toString() == "G31")) {
             std::cerr << "[OSR] " << sat.toString()
+                      << " sig0=" << static_cast<int>(osr.signals[0])
+                      << " sig1=" << (osr.num_frequencies >= 2 ?
+                          static_cast<int>(osr.signals[1]) : -1)
                       << " trop=" << osr.trop_correction_m
                       << " rel=" << osr.relativity_correction_m
                       << " iono_l1=" << osr.iono_l1_m
                       << " cbias0=" << osr.code_bias_m[0]
+                      << " cbias1=" << (osr.num_frequencies >= 2 ? osr.code_bias_m[1] : 0.0)
                       << " pbias0=" << osr.phase_bias_m[0]
+                      << " pbias1=" << (osr.num_frequencies >= 2 ? osr.phase_bias_m[1] : 0.0)
                       << " windup=" << osr.windup_cycles
                       << " pbias_ref_tow=" << osr.phase_bias_reference_time.tow
                       << " eff_pbias_ref_tow=" << effective_phase_bias_reference_time.tow
@@ -935,6 +1307,7 @@ std::vector<OSRCorrection> computeOSR(
                       << " clk_corr=" << osr.clock_correction_m
                       << " PRC0=" << osr.PRC[0]
                       << " CPC0=" << osr.CPC[0]
+                      << " CPC1=" << (osr.num_frequencies >= 2 ? osr.CPC[1] : 0.0)
                       << "\n";
         }
         corrections.push_back(osr);

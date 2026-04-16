@@ -22,6 +22,12 @@ struct ClasGridReference {
     bool has_bilinear = false;
     double bilinear_weights[4] = {};       // SW, SE, NW, NE
     size_t bilinear_grid_indices[4] = {};  // residual indices for 4 grids
+    bool has_model_interpolation = false;
+    double model_gmat[16] = {};
+    double model_emat[4] = {};
+    size_t model_grid_indices[4] = {};
+    double model_grid_dlat_deg[4] = {};
+    double model_grid_dlon_deg[4] = {};
 };
 
 bool parseAtmosTokenDouble(const std::map<std::string, std::string>& atmos_tokens,
