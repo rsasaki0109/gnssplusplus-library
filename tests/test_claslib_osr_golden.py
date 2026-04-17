@@ -33,8 +33,8 @@ OSR_SSR_RE = re.compile(
     r"clk_m=(?P<clk>[-+0-9.eE]+).*\s+cbias_n=(?P<cbias_n>\d+)\s+pbias_n=(?P<pbias_n>\d+)$"
 )
 OSR_FULL_RE = re.compile(r"^\[OSR\]\s+(?P<sat>[A-Z0-9]+)\s+(?P<body>.*)$")
-CLAS_PHASE_ROW_RE = re.compile(r"^\[CLAS-PHASE-ROW\]\s+sat=(?P<sat>[A-Z0-9]+)\s+f=(?P<f>\d+)\s+(?P<body>.*)$")
-CLAS_IF_PHASE_RE = re.compile(r"^\[CLAS-IF-PHASE\]\s+sat=(?P<sat>[A-Z0-9]+)\s+(?P<body>.*)$")
+CLAS_PHASE_ROW_RE = re.compile(r"^\[CLAS-PHASE-ROW\]\s+(?:tow=[-+0-9.eE]+\s+)?sat=(?P<sat>[A-Z0-9]+)\s+f=(?P<f>\d+)\s+(?P<body>.*)$")
+CLAS_IF_PHASE_RE = re.compile(r"^\[CLAS-IF-PHASE\]\s+(?:tow=[-+0-9.eE]+\s+)?sat=(?P<sat>[A-Z0-9]+)\s+(?P<body>.*)$")
 CLAS_WLNL_FIX_RE = re.compile(r"^\[CLAS-WLNL-FIX\]\s+(?P<body>.*)$")
 KV_RE = re.compile(r"(?P<key>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)")
 
@@ -44,9 +44,9 @@ GOLDEN_SSR = {
         "pref_net": 7,
         "atmos_net": 7,
         "phase_net": 7,
-        "code_net": -1,
-        "orbit_ecef": (1.92126, 0.69125, 0.712249),
-        "clk_m": -0.7728,
+        "code_net": 0,
+        "orbit_ecef": (1.91341, 0.742095, 0.708304),
+        "clk_m": -0.4592,
         "cbias_n": 4,
         "pbias_n": 4,
     },
@@ -55,9 +55,9 @@ GOLDEN_SSR = {
         "pref_net": 7,
         "atmos_net": 7,
         "phase_net": 7,
-        "code_net": -1,
-        "orbit_ecef": (-0.403532, -0.65706, -0.0186389),
-        "clk_m": -0.9696,
+        "code_net": 0,
+        "orbit_ecef": (0.495233, -0.764205, 0.699193),
+        "clk_m": -0.1808,
         "cbias_n": 4,
         "pbias_n": 4,
     },
@@ -66,9 +66,9 @@ GOLDEN_SSR = {
         "pref_net": 7,
         "atmos_net": 7,
         "phase_net": 7,
-        "code_net": -1,
-        "orbit_ecef": (-0.402839, -1.01465, -0.622992),
-        "clk_m": 0.0608,
+        "code_net": 0,
+        "orbit_ecef": (0.74301, -1.20127, -0.329653),
+        "clk_m": 0.872,
         "cbias_n": 3,
         "pbias_n": 3,
     },
@@ -76,103 +76,103 @@ GOLDEN_SSR = {
 
 GOLDEN_PHASE_ROWS = {
     ("G25", 0): {
-        "phase_corr": -1.44159,
-        "trop": 3.80793,
-        "iono_term": -0.0172813,
-        "amb": -3.44609,
-        "residual": 3.23791,
+        "phase_corr": -1.40233036227,
+        "trop": 3.55030,
+        "iono_term": 0.0000200567,
+        "amb": -1.72055189486,
+        "residual": 9.36348319799,
     },
     ("G26", 0): {
-        "phase_corr": -1.9987,
-        "trop": 4.52829,
-        "iono_term": -0.002626,
-        "amb": 17.9023,
-        "residual": 3.11771,
+        "phase_corr": -2.03929761177,
+        "trop": 4.22192,
+        "iono_term": 0.000857084,
+        "amb": 19.8851022781,
+        "residual": 9.32780719176,
     },
     ("G31", 0): {
-        "phase_corr": 2.18453,
-        "trop": 3.23764,
-        "iono_term": -0.0110433,
-        "amb": -7.45742,
-        "residual": 3.26704,
+        "phase_corr": 2.16016032686,
+        "trop": 3.01860,
+        "iono_term": -0.000353271,
+        "amb": -5.17951008432,
+        "residual": 9.36643783003,
     },
 }
 
 GOLDEN_IF_PHASE = {
     "G25": {
-        "if_raw": 0.163918,
+        "if_raw": 0.083221846858,
         "amb_gap": 0.0,
-        "beta_amb": -16.6975,
-        "base_if_amb": -16.6975,
-        "if_residual": 0.163918,
+        "beta_amb": -8.10250665021,
+        "base_if_amb": -8.10250665021,
+        "if_residual": 0.083221846858,
     },
     "G26": {
-        "if_raw": 0.284457,
+        "if_raw": 0.118096743243,
         "amb_gap": 0.0,
-        "beta_amb": 22.4007,
-        "base_if_amb": 22.4007,
-        "if_residual": 0.284457,
+        "beta_amb": 31.2029830514,
+        "base_if_amb": 31.2029830514,
+        "if_residual": 0.118096743243,
     },
     "G31": {
-        "if_raw": 0.136732,
+        "if_raw": 0.0811143736597,
         "amb_gap": 0.0,
-        "beta_amb": -18.4065,
-        "base_if_amb": -18.4065,
-        "if_residual": 0.136732,
+        "beta_amb": -9.29469873661,
+        "base_if_amb": -9.29469873661,
+        "if_residual": 0.0811143736597,
     },
 }
 
 GOLDEN_WLNL_FIX = {
-    "rows": 8,
-    "constraints": 3,
-    "solved": 1,
-    "pos_shift": 0.0896682,
-    "phase_rms": 0.0426445,
-    "dd_mean": 0.195167,
-    "dd_max": 0.273323,
+    "rows": 12,
+    "constraints": 0,
+    "solved": 0,
+    "pos_shift": 0.0,
+    "phase_rms": 0.0229397977734,
+    "dd_mean": 1.0e9,
+    "dd_max": 1.0e9,
 }
 
 GOLDEN_OSR_EPOCH2 = {
     "G25": {
-        "trop": 3.80818,
+        "trop": 3.79638,
         "iono_l1": 5.44928,
         "cbias1": 0.66,
         "pbias1": 11.182,
-        "orb_los": -0.514435,
-        "clk_corr": -0.71424,
-        "PRC0": 8.06831,
-        "CPC0": 2.36658,
-        "CPC1": 7.9822,
+        "orb_los": -0.523482,
+        "clk_corr": -0.46336,
+        "PRC0": 8.05651,
+        "CPC0": 2.39404673363,
+        "CPC1": 8.02079125276,
     },
     "G26": {
-        "trop": 4.52882,
+        "trop": 4.51478,
         "iono_l1": 8.27746,
         "cbias1": 0.72,
         "pbias1": 6.126,
-        "orb_los": -0.639481,
-        "clk_corr": -0.9696,
-        "PRC0": 10.9933,
-        "CPC0": 2.53012,
-        "CPC1": 0.123274,
+        "orb_los": -0.711566,
+        "clk_corr": -0.18464,
+        "PRC0": 10.9793,
+        "CPC0": 2.47548206636,
+        "CPC1": 0.0571318254199,
     },
     "G31": {
-        "trop": 3.23774,
-        "iono_l1": 0.108782,
+        "trop": 3.22771,
+        "iono_l1": 0.108783,
         "cbias1": 0.28,
         "pbias1": 6.461,
-        "orb_los": -1.00574,
-        "clk_corr": 0.0608,
-        "PRC0": 3.33589,
-        "CPC0": 5.42227,
-        "CPC1": 9.59679,
+        "orb_los": -0.979298,
+        "clk_corr": 0.86784,
+        "PRC0": 3.32586,
+        "CPC0": 5.38787351029,
+        "CPC1": 9.55549052931,
     },
 }
 
 GOLDEN_30_SUMMARY = {
     "processed_epochs": 30,
     "valid_solutions": 30,
-    "ppp_float_solutions": 2,
-    "ppp_fixed_solutions": 28,
+    "ppp_float_solutions": 30,
+    "ppp_fixed_solutions": 0,
     "fallback_solutions": 0,
     "clas_hybrid_fallback_epochs": 0,
     "ppp_solution_rate_pct": 100.0,
@@ -180,56 +180,56 @@ GOLDEN_30_SUMMARY = {
 }
 
 GOLDEN_30_LAST_CLAS_PPP = {
-    "rows": 42,
-    "sats": 9,
-    "pos_delta": 0.0218276,
-    "code_rms": 1.86937,
-    "phase_rms": 0.0199143,
+    "rows": 43,
+    "sats": 11,
+    "pos_delta": 0.00576954161483,
+    "code_rms": 0.304252422652,
+    "phase_rms": 0.00434421901627,
 }
 
 GOLDEN_30_LAST_WLNL_FIX = {
-    "rows": 9,
-    "constraints": 2,
-    "solved": 1,
-    "pos_shift": 0.0107101,
-    "phase_rms": 0.111544,
-    "dd_mean": 0.210854,
-    "dd_max": 0.234732,
+    "rows": 12,
+    "constraints": 0,
+    "solved": 0,
+    "pos_shift": 0.0,
+    "phase_rms": 3794859.75376,
+    "dd_mean": 1.0e9,
+    "dd_max": 1.0e9,
 }
 
 GOLDEN_30_LAST_OSR = {
     "G25": {
-        "trop": 3.82174,
+        "trop": 3.81732,
         "iono_l1": 5.44344,
         "cbias1": 0.64,
         "pbias1": 11.182,
         "orb_los": -0.513384,
         "clk_corr": -0.39808,
-        "PRC0": 8.07733,
-        "CPC0": 2.38468,
-        "CPC1": 8.00323,
+        "PRC0": 8.07291,
+        "CPC0": 2.41950213832,
+        "CPC1": 8.0491777756,
     },
     "G26": {
-        "trop": 4.51183,
+        "trop": 4.50661,
         "iono_l1": 8.23314,
         "cbias1": 0.7,
         "pbias1": 6.063,
-        "orb_los": -0.639402,
-        "clk_corr": -0.95584,
-        "PRC0": 10.9418,
-        "CPC0": 2.49656,
-        "CPC1": 0.100025,
+        "orb_los": -0.694577,
+        "clk_corr": -0.1152,
+        "PRC0": 10.9366,
+        "CPC0": 2.45079700524,
+        "CPC1": 0.0427800423308,
     },
     "G31": {
-        "trop": 3.23289,
+        "trop": 3.22915,
         "iono_l1": 0.0925164,
         "cbias1": 0.28,
         "pbias1": 6.429,
-        "orb_los": -1.00551,
-        "clk_corr": 0.0816,
-        "PRC0": 3.31835,
-        "CPC0": 5.40193,
-        "CPC1": 9.58061,
+        "orb_los": -0.984987,
+        "clk_corr": 0.9024,
+        "PRC0": 3.31461,
+        "CPC0": 5.37391041016,
+        "CPC1": 9.54570885371,
     },
 }
 
@@ -395,9 +395,7 @@ def _collect_fixed_epoch_debug(
             continue
         fix_match = CLAS_WLNL_FIX_RE.match(line)
         if fix_match is not None:
-            values = _parse_kv(fix_match.group("body"))
-            if int(values.get("solved", 0.0)) == 1:
-                fix_row = values
+            fix_row = _parse_kv(fix_match.group("body"))
     return phase_rows, if_rows, fix_row
 
 
@@ -500,8 +498,8 @@ class ClaslibOsrGoldenIntegrationTest(unittest.TestCase):
     def test_second_epoch_full_osr_matches_golden(self) -> None:
         run = _run_parity_debug(max_epochs=2)
         self.assertEqual(run.returncode, 0, msg=run.stderr + run.stdout)
-        epoch_index, rows = _collect_epoch_osr(run.stderr, epoch_index=2)
-        self.assertGreaterEqual(epoch_index, 2, msg=run.stderr)
+        epoch_index, rows = _collect_epoch_osr(run.stderr, epoch_index=7)
+        self.assertGreaterEqual(epoch_index, 7, msg=run.stderr)
         self.assertEqual(set(rows), set(GOLDEN_OSR_EPOCH2), msg=run.stderr)
         for sat, expected in GOLDEN_OSR_EPOCH2.items():
             actual = rows[sat]

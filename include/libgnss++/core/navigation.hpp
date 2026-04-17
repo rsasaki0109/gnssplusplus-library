@@ -327,6 +327,7 @@ struct SSROrbitClockCorrection {
     Vector3d orbit_correction_ecef = Vector3d::Zero();   ///< Orbit delta in meters (ECEF or RAC per container flag)
     double clock_correction_m = 0.0;                     ///< Clock delta in meters
     double ura_sigma_m = 0.0;                            ///< SSR URA sigma in meters
+    int iode = -1;                                       ///< Broadcast ephemeris IODE/IODnav for SSR orbit
     std::map<uint8_t, double> code_bias_m;               ///< SSR code biases keyed by RTCM signal id
     std::map<uint8_t, double> phase_bias_m;              ///< SSR phase biases keyed by RTCM signal id
     int bias_network_id = 0;                             ///< Optional CLAS bias network id (0 when unset)

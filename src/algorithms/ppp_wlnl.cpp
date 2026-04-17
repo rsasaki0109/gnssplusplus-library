@@ -91,7 +91,6 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         ppp_config_.estimate_troposphere ? filter_state_.state(filter_state_.trop_index) : 2.3;
     const auto osr_by_sat = computeWlnlOsrCorrections(
         obs, nav, receiver_position, clock_bias_m, trop_zenith);
-
     const ppp_ar::WlnlFixAttempt attempt = ppp_ar::resolveWlnlFix(
         ppp_config_,
         filter_state_,
@@ -134,6 +133,35 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
                   << " ratio=" << attempt.ratio << "\n";
     }
     return true;
+}
+
+PPPConfig PPPProcessor::effectiveClasAtmosConfig(bool for_wlnl_ar) const {
+    PPPConfig clas_config = ppp_config_;
+    const bool has_mature_wlnl_fix =
+        has_wlnl_fixed_state_ && wlnl_dd_constraints_.size() >= 3;
+    if (clas_config.clas_atmos_selection_policy !=
+            PPPConfig::ClasAtmosSelectionPolicy::GRID_GUARDED ||
+        has_mature_wlnl_fix) {
+        return clas_config;
+    }
+
+    if (for_wlnl_ar) {
+        constexpr size_t kWlnlStartupWarmupEpochs = 2;
+        if (total_epochs_processed_ < kWlnlStartupWarmupEpochs) {
+            return clas_config;
+        }
+    }
+
+    {
+        // Startup: keep the original nearest-grid behavior until the first
+        // WL/NL fixed-state snapshot exists, then switch to guarded selection
+        // so stale iono grids do not drag the settled solution. The WL/NL AR
+        // path waits for a couple of float epochs first to avoid fixing on the
+        // very first epoch with immature atmosphere/ambiguity states.
+        clas_config.clas_atmos_selection_policy =
+            PPPConfig::ClasAtmosSelectionPolicy::GRID_FIRST;
+    }
+    return clas_config;
 }
 
 bool PPPProcessor::solveFixedPosition(const ObservationData& obs,
@@ -208,11 +236,12 @@ std::map<SatelliteId, OSRCorrection> PPPProcessor::computeWlnlOsrCorrections(
     auto dispersion_compensation = clas_dispersion_compensation_;
     auto sis_continuity = clas_sis_continuity_;
     auto phase_bias_repair = clas_phase_bias_repair_;
+    const PPPConfig clas_config = effectiveClasAtmosConfig(true);
     const auto epoch_atmos = selectClasEpochAtmosTokens(
-        ssr_products_, obs.getSatellites(), obs.time, receiver_position, ppp_config_);
+        ssr_products_, obs.getSatellites(), obs.time, receiver_position, clas_config);
     for (const auto& osr : computeOSR(obs, nav, ssr_products_, epoch_atmos,
                                       receiver_position, clock_bias_m, trop_zenith,
-                                      ppp_config_,
+                                      clas_config,
                                       windup_cache, dispersion_compensation,
                                       sis_continuity, phase_bias_repair)) {
         if (osr.valid && osr.num_frequencies >= 2) {

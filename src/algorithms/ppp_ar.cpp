@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -36,6 +39,26 @@ std::pair<GNSSSystem, int> ambiguityDdGroup(const SatelliteId& satellite) {
     return {satellite.system, satellite.prn > 100 ? 1 : 0};
 }
 
+int receiverClockStateIndex(
+    const ppp_shared::PPPState& filter_state,
+    const SatelliteId& satellite) {
+    switch (satellite.system) {
+        case GNSSSystem::GLONASS:
+            return filter_state.glo_clock_index;
+        case GNSSSystem::Galileo:
+            return filter_state.gal_clock_index >= 0
+                ? filter_state.gal_clock_index : filter_state.clock_index;
+        case GNSSSystem::QZSS:
+            return filter_state.qzs_clock_index >= 0
+                ? filter_state.qzs_clock_index : filter_state.clock_index;
+        case GNSSSystem::BeiDou:
+            return filter_state.bds_clock_index >= 0
+                ? filter_state.bds_clock_index : filter_state.clock_index;
+        default:
+            return filter_state.clock_index;
+    }
+}
+
 double claslibRatioThresholdForNb(int nb) {
     if (nb <= 0) {
         return std::numeric_limits<double>::infinity();
@@ -52,10 +75,254 @@ double safeVarianceFloor(double variance, double floor_value) {
     return variance;
 }
 
+double safeCorrelation(const MatrixXd& covariance, int i, int j) {
+    if (i < 0 || j < 0 ||
+        i >= covariance.rows() || j >= covariance.cols()) {
+        return 0.0;
+    }
+    const double var_i = safeVarianceFloor(covariance(i, i), 1e-12);
+    const double var_j = safeVarianceFloor(covariance(j, j), 1e-12);
+    const double denom = std::sqrt(var_i * var_j);
+    if (!std::isfinite(denom) || denom <= 0.0) {
+        return 0.0;
+    }
+    return covariance(i, j) / denom;
+}
+
+double positionCorrelationNorm(
+    const MatrixXd& covariance,
+    const ppp_shared::PPPState& filter_state,
+    int ambiguity_index) {
+    if (ambiguity_index < 0 ||
+        ambiguity_index >= covariance.rows() ||
+        filter_state.pos_index < 0 ||
+        filter_state.pos_index + 2 >= covariance.rows()) {
+        return 0.0;
+    }
+    double corr_sq_sum = 0.0;
+    for (int axis = 0; axis < 3; ++axis) {
+        const double corr =
+            safeCorrelation(covariance, ambiguity_index, filter_state.pos_index + axis);
+        corr_sq_sum += corr * corr;
+    }
+    return std::sqrt(corr_sq_sum);
+}
+
+struct DdPair {
+    int ref_idx = -1;
+    int sat_idx = -1;
+};
+
+bool shouldDumpStrictFirstAr(
+    const ppp_shared::PPPConfig& config) {
+    return config.wlnl_strict_claslib_parity &&
+           config.ar_method == ppp_shared::PPPConfig::ARMethod::DD_PER_FREQ &&
+           !config.strict_first_ar_dump_path.empty() &&
+           !std::filesystem::exists(config.strict_first_ar_dump_path);
+}
+
+void writeStrictFirstArDump(
+    const ppp_shared::PPPConfig& config,
+    const ppp_shared::PPPState& filter_state,
+    const MatrixXd& pre_anchor_covariance,
+    const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const std::vector<SatelliteId>& satellites,
+    const std::vector<int>& state_indices,
+    const std::vector<double>& scales,
+    const std::vector<int>& active_indices,
+    const std::map<std::pair<GNSSSystem, int>, int>& system_ref_map,
+    const std::vector<DdPair>& dd_pairs,
+    const VectorXd& dd_float,
+    const MatrixXd& dd_cov,
+    const VectorXd& dd_fixed,
+    bool lambda_ok,
+    double ratio,
+    double required_ratio,
+    const GNSSTime* observation_time) {
+    std::ofstream output(config.strict_first_ar_dump_path, std::ios::trunc);
+    if (!output) {
+        std::cerr << "[PPP-AR-DUMP] failed path=" << config.strict_first_ar_dump_path << "\n";
+        return;
+    }
+
+    auto covarianceCyclesFromMatrix = [&](const MatrixXd& covariance, int a, int b) {
+        return covariance(
+            state_indices[static_cast<size_t>(a)],
+            state_indices[static_cast<size_t>(b)]) /
+            (scales[static_cast<size_t>(a)] * scales[static_cast<size_t>(b)]);
+    };
+
+    struct CorrelationEntry {
+        int lhs = -1;
+        int rhs = -1;
+        double corr = 0.0;
+    };
+
+    std::vector<CorrelationEntry> top_correlations;
+    const Eigen::Index correlation_capacity =
+        std::max<Eigen::Index>(0, dd_cov.rows() * (dd_cov.rows() - 1) / 2);
+    top_correlations.reserve(static_cast<size_t>(correlation_capacity));
+    for (int i = 0; i < dd_cov.rows(); ++i) {
+        for (int j = i + 1; j < dd_cov.cols(); ++j) {
+            top_correlations.push_back({i, j, safeCorrelation(dd_cov, i, j)});
+        }
+    }
+    std::sort(top_correlations.begin(),
+              top_correlations.end(),
+              [](const CorrelationEntry& lhs, const CorrelationEntry& rhs) {
+                  return std::abs(lhs.corr) > std::abs(rhs.corr);
+              });
+    if (top_correlations.size() > 12) {
+        top_correlations.resize(12);
+    }
+
+    output << std::fixed << std::setprecision(12);
+    output << "strict_first_ar_dump=1\n";
+    if (observation_time != nullptr) {
+        output << "time_week=" << observation_time->week << "\n";
+        output << "time_tow=" << observation_time->tow << "\n";
+    }
+    output << "candidate_count=" << active_indices.size() << "\n";
+    output << "nb=" << dd_pairs.size() << "\n";
+    output << "lambda_ok=" << (lambda_ok ? 1 : 0) << "\n";
+    output << "ratio=" << ratio << "\n";
+    output << "required_ratio=" << required_ratio << "\n";
+    if (lambda_ok && dd_fixed.size() == dd_float.size() &&
+        dd_cov.rows() == dd_float.size() && dd_cov.cols() == dd_float.size()) {
+        Eigen::LDLT<MatrixXd> dd_ldlt(dd_cov);
+        if (dd_ldlt.info() == Eigen::Success) {
+            const VectorXd residual = dd_float - dd_fixed;
+            const VectorXd weighted = dd_ldlt.solve(residual);
+            if (weighted.allFinite()) {
+                const double norm0 = residual.dot(weighted);
+                const double norm1 = ratio * norm0;
+                output << "lambda_norm0=" << norm0 << "\n";
+                output << "lambda_norm1=" << norm1 << "\n";
+            }
+        }
+    }
+    output << "[phase_states]\n";
+    for (size_t order = 0; order < active_indices.size(); ++order) {
+        const int candidate_index = active_indices[order];
+        const auto ambiguity_satellite =
+            satellites[static_cast<size_t>(candidate_index)];
+        const auto ambiguity_it = ambiguity_states.find(ambiguity_satellite);
+        const int lock_count =
+            ambiguity_it != ambiguity_states.end() ? ambiguity_it->second.lock_count : -1;
+        const int state_index = state_indices[static_cast<size_t>(candidate_index)];
+        output << "i=" << order
+               << " sat=" << ambiguity_satellite.toString()
+               << " real=" << clasRealSatellite(ambiguity_satellite).toString()
+               << " freq_group=" << ambiguityDdGroup(ambiguity_satellite).second
+               << " state_idx=" << state_index
+               << " x=" << filter_state.state(state_index)
+               << " y=" << filter_state.state(state_index) /
+                    scales[static_cast<size_t>(candidate_index)]
+               << " pdiag=" << filter_state.covariance(state_index, state_index)
+               << " qdiag_cycles=" << covarianceCyclesFromMatrix(
+                       filter_state.covariance, candidate_index, candidate_index)
+               << " lock=" << lock_count
+               << "\n";
+    }
+    if (!filter_state.ionosphere_indices.empty()) {
+        output << "[iono_states]\n";
+        std::vector<std::pair<SatelliteId, int>> iono_states(
+            filter_state.ionosphere_indices.begin(),
+            filter_state.ionosphere_indices.end());
+        std::sort(iono_states.begin(), iono_states.end(),
+                  [](const auto& lhs, const auto& rhs) {
+                      if (lhs.first.system != rhs.first.system) {
+                          return lhs.first.system < rhs.first.system;
+                      }
+                      return lhs.first.prn < rhs.first.prn;
+                  });
+        for (const auto& [satellite, state_index] : iono_states) {
+            if (state_index < 0 || state_index >= filter_state.total_states) {
+                continue;
+            }
+            output << "sat=" << satellite.toString()
+                   << " state_idx=" << state_index
+                   << " x=" << filter_state.state(state_index)
+                   << " pdiag=" << filter_state.covariance(state_index, state_index)
+                   << "\n";
+        }
+    }
+    output << "[eligible_y_na_cycles]\n";
+    for (size_t order = 0; order < active_indices.size(); ++order) {
+        const int candidate_index = active_indices[order];
+        const auto ambiguity_it =
+            ambiguity_states.find(satellites[static_cast<size_t>(candidate_index)]);
+        const int lock_count =
+            ambiguity_it != ambiguity_states.end() ? ambiguity_it->second.lock_count : -1;
+        output << "i=" << order
+               << " sat=" << satellites[static_cast<size_t>(candidate_index)].toString()
+               << " real=" << clasRealSatellite(satellites[static_cast<size_t>(candidate_index)]).toString()
+               << " state_idx=" << state_indices[static_cast<size_t>(candidate_index)]
+               << " y=" << filter_state.state(state_indices[static_cast<size_t>(candidate_index)]) /
+                    scales[static_cast<size_t>(candidate_index)]
+               << " scale=" << scales[static_cast<size_t>(candidate_index)]
+               << " lock=" << lock_count
+               << " group_sys=" << static_cast<int>(
+                      ambiguityDdGroup(satellites[static_cast<size_t>(candidate_index)]).first)
+               << " group_freq=" << ambiguityDdGroup(satellites[static_cast<size_t>(candidate_index)]).second
+               << "\n";
+    }
+    output << "[references]\n";
+    for (const auto& [group, ref_idx] : system_ref_map) {
+        output << "sys=" << static_cast<int>(group.first)
+               << " freq_group=" << group.second
+               << " ref=" << satellites[static_cast<size_t>(ref_idx)].toString()
+               << "\n";
+    }
+    output << "[dd_pairs]\n";
+    for (size_t k = 0; k < dd_pairs.size(); ++k) {
+        const int ri = dd_pairs[k].ref_idx;
+        const int si = dd_pairs[k].sat_idx;
+        double qdiag_pre = dd_cov(static_cast<int>(k), static_cast<int>(k));
+        if (pre_anchor_covariance.rows() == filter_state.covariance.rows() &&
+            pre_anchor_covariance.cols() == filter_state.covariance.cols()) {
+            qdiag_pre =
+                covarianceCyclesFromMatrix(pre_anchor_covariance, ri, ri) -
+                covarianceCyclesFromMatrix(pre_anchor_covariance, ri, si) -
+                covarianceCyclesFromMatrix(pre_anchor_covariance, si, ri) +
+                covarianceCyclesFromMatrix(pre_anchor_covariance, si, si);
+        }
+        output << "k=" << k
+               << " ref=" << satellites[static_cast<size_t>(ri)].toString()
+               << " sat=" << satellites[static_cast<size_t>(si)].toString()
+               << " dd_float=" << dd_float(static_cast<int>(k))
+               << " dd_fixed=" << (lambda_ok ? dd_fixed(static_cast<int>(k)) : 0.0)
+               << " frac=" << dd_float(static_cast<int>(k)) - std::round(dd_float(static_cast<int>(k)))
+               << " qdiag=" << dd_cov(static_cast<int>(k), static_cast<int>(k))
+               << " qdiag_pre=" << qdiag_pre
+               << "\n";
+    }
+    output << "[lambda_Qa]\n";
+    for (int row = 0; row < dd_cov.rows(); ++row) {
+        output << "row=" << row;
+        for (int col = 0; col < dd_cov.cols(); ++col) {
+            output << " q" << col << "=" << dd_cov(row, col);
+        }
+        output << "\n";
+    }
+    output << "[dd_cov_top_correlations]\n";
+    for (const auto& entry : top_correlations) {
+        output << "i=" << entry.lhs
+               << " j=" << entry.rhs
+               << " corr=" << entry.corr
+               << " pair_i=" << satellites[static_cast<size_t>(dd_pairs[static_cast<size_t>(entry.lhs)].ref_idx)].toString()
+               << "->" << satellites[static_cast<size_t>(dd_pairs[static_cast<size_t>(entry.lhs)].sat_idx)].toString()
+               << " pair_j=" << satellites[static_cast<size_t>(dd_pairs[static_cast<size_t>(entry.rhs)].ref_idx)].toString()
+               << "->" << satellites[static_cast<size_t>(dd_pairs[static_cast<size_t>(entry.rhs)].sat_idx)].toString()
+               << "\n";
+    }
+}
+
 EligibleAmbiguities collectEligibleAmbiguities(
     const ppp_shared::PPPState& filter_state,
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
-    int min_lock_count) {
+    int min_lock_count,
+    const GNSSTime* observation_time) {
     EligibleAmbiguities eligible;
     for (const auto& [satellite, state_index] : filter_state.ambiguity_indices) {
         ++eligible.total_ambiguities;
@@ -70,6 +337,11 @@ EligibleAmbiguities collectEligibleAmbiguities(
             } else {
                 ++eligible.skipped_lock;
             }
+            continue;
+        }
+        if (observation_time != nullptr &&
+            std::abs(ambiguity.last_time - *observation_time) > 1e-3) {
+            ++eligible.skipped_stale;
             continue;
         }
         if (!std::isfinite(ambiguity.ambiguity_scale_m) || ambiguity.ambiguity_scale_m <= 0.0) {
@@ -324,8 +596,29 @@ DdFixAttempt tryDirectDdFix(
     const std::vector<int>& state_indices,
     const std::vector<double>& scales,
     const std::set<SatelliteId>& excluded_real_satellites,
-    bool debug_enabled) {
+    bool debug_enabled,
+    const GNSSTime* observation_time) {
     DdFixAttempt attempt;
+
+    if (debug_enabled) {
+        for (size_t i = 0; i < satellites.size(); ++i) {
+            const auto ambiguity_it =
+                ambiguity_states.find(satellites[static_cast<size_t>(i)]);
+            const int lock_count =
+                ambiguity_it != ambiguity_states.end() ? ambiguity_it->second.lock_count : -1;
+            std::cerr << "[PPP-AR-CAND] sat=" << satellites[static_cast<size_t>(i)].toString()
+                      << " real=" << clasRealSatellite(satellites[static_cast<size_t>(i)]).toString()
+                      << " state_idx=" << state_indices[static_cast<size_t>(i)]
+                      << " scale=" << scales[static_cast<size_t>(i)]
+                      << " lock=" << lock_count
+                      << " group_sys="
+                      << static_cast<int>(
+                             ambiguityDdGroup(satellites[static_cast<size_t>(i)]).first)
+                      << " group_freq="
+                      << ambiguityDdGroup(satellites[static_cast<size_t>(i)]).second
+                      << "\n";
+        }
+    }
 
     std::vector<int> active_indices;
     active_indices.reserve(satellites.size());
@@ -338,11 +631,6 @@ DdFixAttempt tryDirectDdFix(
     if (static_cast<int>(active_indices.size()) < config.min_satellites_for_ar) {
         return attempt;
     }
-
-    struct DdPair {
-        int ref_idx = -1;
-        int sat_idx = -1;
-    };
 
     std::vector<DdPair> dd_pairs;
     std::map<std::pair<GNSSSystem, int>, int> system_ref_map;
@@ -362,7 +650,24 @@ DdFixAttempt tryDirectDdFix(
         dd_pairs.push_back({ref_index, candidate_index});
     }
 
+    if (debug_enabled) {
+        for (const auto& [group, ref_idx] : system_ref_map) {
+            std::cerr << "[PPP-AR-REF] sys=" << static_cast<int>(group.first)
+                      << " freq_group=" << group.second
+                      << " ref=" << satellites[static_cast<size_t>(ref_idx)].toString()
+                      << " lock="
+                      << ambiguity_states.at(satellites[static_cast<size_t>(ref_idx)]).lock_count
+                      << "\n";
+        }
+    }
+
     attempt.nb = static_cast<int>(dd_pairs.size());
+    if (debug_enabled) {
+        std::cerr << "[PPP-AR-DDSET] candidates=" << active_indices.size()
+                  << " nb=" << attempt.nb
+                  << " excluded_real=" << excluded_real_satellites.size()
+                  << "\n";
+    }
     if (attempt.nb < config.min_satellites_for_ar) {
         return attempt;
     }
@@ -396,9 +701,79 @@ DdFixAttempt tryDirectDdFix(
         }
     }
 
-    VectorXd dd_fixed = VectorXd::Zero(attempt.nb);
-    if (!lambdaSearch(dd_float, dd_cov, dd_fixed, attempt.ratio)) {
-        return attempt;
+    if (debug_enabled) {
+        const bool have_pre_anchor =
+            pre_anchor_covariance.rows() == filter_state.covariance.rows() &&
+            pre_anchor_covariance.cols() == filter_state.covariance.cols();
+        const MatrixXd& debug_cross_cov =
+            have_pre_anchor ? pre_anchor_covariance : filter_state.covariance;
+        auto covarianceCyclesFromMatrix = [&](const MatrixXd& covariance, int a, int b) {
+            return covariance(
+                state_indices[static_cast<size_t>(a)],
+                state_indices[static_cast<size_t>(b)]) /
+                (scales[static_cast<size_t>(a)] * scales[static_cast<size_t>(b)]);
+        };
+        const int dump_count = std::min(attempt.nb, 8);
+        for (int k = 0; k < dump_count; ++k) {
+            const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
+            const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
+            const double frac = dd_float(k) - std::round(dd_float(k));
+            const double sigma = std::sqrt(safeVarianceFloor(dd_cov(k, k), 1e-12));
+            const double var_ref = covarianceCyclesFromMatrix(filter_state.covariance, ri, ri);
+            const double var_sat = covarianceCyclesFromMatrix(filter_state.covariance, si, si);
+            const double cov_ref_sat =
+                covarianceCyclesFromMatrix(filter_state.covariance, ri, si);
+            const double corr_ref_sat =
+                cov_ref_sat /
+                std::sqrt(
+                    safeVarianceFloor(var_ref, 1e-12) *
+                    safeVarianceFloor(var_sat, 1e-12));
+            double qdiag_pre = dd_cov(k, k);
+            if (have_pre_anchor) {
+                qdiag_pre =
+                    covarianceCyclesFromMatrix(pre_anchor_covariance, ri, ri) -
+                    covarianceCyclesFromMatrix(pre_anchor_covariance, ri, si) -
+                    covarianceCyclesFromMatrix(pre_anchor_covariance, si, ri) +
+                    covarianceCyclesFromMatrix(pre_anchor_covariance, si, si);
+            }
+            const int ref_state_index = state_indices[static_cast<size_t>(ri)];
+            const int sat_state_index = state_indices[static_cast<size_t>(si)];
+            const int ref_clock_index = receiverClockStateIndex(
+                filter_state, satellites[static_cast<size_t>(ri)]);
+            const int sat_clock_index = receiverClockStateIndex(
+                filter_state, satellites[static_cast<size_t>(si)]);
+            std::cerr << "[PPP-AR-DDMAT] k=" << k
+                      << " ref=" << satellites[static_cast<size_t>(ri)].toString()
+                      << " sat=" << satellites[static_cast<size_t>(si)].toString()
+                      << " dd_float=" << dd_float(k)
+                      << " frac=" << frac
+                      << " qdiag=" << dd_cov(k, k)
+                      << " qdiag_pre=" << qdiag_pre
+                      << " sigma=" << sigma
+                      << "\n";
+            if (config.wlnl_strict_claslib_parity) {
+                std::cerr << "[PPP-AR-COV] k=" << k
+                          << " ref=" << satellites[static_cast<size_t>(ri)].toString()
+                          << " sat=" << satellites[static_cast<size_t>(si)].toString()
+                          << " var_ref=" << var_ref
+                          << " var_sat=" << var_sat
+                          << " cov_refsat=" << cov_ref_sat
+                          << " corr_refsat=" << corr_ref_sat
+                          << " ref_clk_corr="
+                          << safeCorrelation(debug_cross_cov, ref_state_index, ref_clock_index)
+                          << " sat_clk_corr="
+                          << safeCorrelation(debug_cross_cov, sat_state_index, sat_clock_index)
+                          << " ref_trop_corr="
+                          << safeCorrelation(debug_cross_cov, ref_state_index, filter_state.trop_index)
+                          << " sat_trop_corr="
+                          << safeCorrelation(debug_cross_cov, sat_state_index, filter_state.trop_index)
+                          << " ref_pos_corr="
+                          << positionCorrelationNorm(debug_cross_cov, filter_state, ref_state_index)
+                          << " sat_pos_corr="
+                          << positionCorrelationNorm(debug_cross_cov, filter_state, sat_state_index)
+                          << "\n";
+            }
+        }
     }
 
     attempt.required_ratio = config.ar_ratio_threshold;
@@ -406,6 +781,38 @@ DdFixAttempt tryDirectDdFix(
         attempt.required_ratio =
             std::max(attempt.required_ratio, claslibRatioThresholdForNb(attempt.nb));
     }
+    VectorXd dd_fixed = VectorXd::Zero(attempt.nb);
+    const bool lambda_ok = lambdaSearch(dd_float, dd_cov, dd_fixed, attempt.ratio);
+    if (shouldDumpStrictFirstAr(config)) {
+        writeStrictFirstArDump(
+            config,
+            filter_state,
+            pre_anchor_covariance,
+            ambiguity_states,
+            satellites,
+            state_indices,
+            scales,
+            active_indices,
+            system_ref_map,
+            dd_pairs,
+            dd_float,
+            dd_cov,
+            dd_fixed,
+            lambda_ok,
+            attempt.ratio,
+            attempt.required_ratio,
+            observation_time);
+    }
+    if (!lambda_ok) {
+        return attempt;
+    }
+
+    if (debug_enabled) {
+        std::cerr << "[PPP-AR-LAMBDA] nb=" << attempt.nb
+                  << " ratio=" << attempt.ratio
+                  << " base_threshold=" << config.ar_ratio_threshold << "\n";
+    }
+
     if (!std::isfinite(attempt.ratio) || attempt.ratio < attempt.required_ratio) {
         return attempt;
     }
@@ -501,7 +908,8 @@ DdFixAttempt tryDirectDdFixWithPar(
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const EligibleAmbiguities& eligible_ambiguities,
     const std::map<SatelliteId, double>& real_satellite_elevations,
-    bool debug_enabled) {
+    bool debug_enabled,
+    const GNSSTime* observation_time) {
     auto try_dd_fix = [&](const std::set<SatelliteId>& excluded_real_satellites) {
         return tryDirectDdFix(
             config,
@@ -512,7 +920,8 @@ DdFixAttempt tryDirectDdFixWithPar(
             eligible_ambiguities.state_indices,
             eligible_ambiguities.scales,
             excluded_real_satellites,
-            debug_enabled);
+            debug_enabled,
+            observation_time);
     };
 
     DdFixAttempt best_attempt = try_dd_fix({});
@@ -628,6 +1037,15 @@ WlnlFixAttempt tryWlnlFix(
             }
         }
     }
+    if (debug_enabled) {
+        for (const auto& [group, ref_idx] : system_ref_map) {
+            std::cerr << "[PPP-WLNL-REF] sys=" << static_cast<int>(group.first)
+                      << " bandpair=" << group.second.first << "," << group.second.second
+                      << " ref=" << satellites[static_cast<size_t>(ref_idx)].toString()
+                      << " lock=" << ambiguity_states.at(satellites[static_cast<size_t>(ref_idx)]).lock_count
+                      << "\n";
+        }
+    }
 
     std::vector<WlnlDdPair> dd_pairs;
     for (const int idx : wl_fixed_indices) {
@@ -642,6 +1060,7 @@ WlnlFixAttempt tryWlnlFix(
         dd_pairs.push_back({ref_it->second, idx});
     }
 
+    const bool strict_claslib_parity = config.wlnl_strict_claslib_parity;
     constexpr double kNlFractionThreshold = 0.25;
     std::vector<WlnlDdPair> active_dd_pairs;
     active_dd_pairs.reserve(dd_pairs.size());
@@ -664,7 +1083,7 @@ WlnlFixAttempt tryWlnlFix(
                       << " nl=" << dd_nl
                       << " frac=" << frac << "\n";
         }
-        if (std::abs(frac) > kNlFractionThreshold) {
+        if (!strict_claslib_parity && std::abs(frac) > kNlFractionThreshold) {
             continue;
         }
         active_dd_pairs.push_back(dd_pairs[pair_index]);
@@ -677,7 +1096,7 @@ WlnlFixAttempt tryWlnlFix(
             ++existing_nl_fixes;
         }
     }
-    if (existing_nl_fixes == 0) {
+    if (!strict_claslib_parity && existing_nl_fixes == 0) {
         std::vector<WlnlDdPair> gps_only_dd_pairs;
         gps_only_dd_pairs.reserve(active_dd_pairs.size());
         for (const auto& dd_pair : active_dd_pairs) {
@@ -687,7 +1106,7 @@ WlnlFixAttempt tryWlnlFix(
                 gps_only_dd_pairs.push_back(dd_pair);
             }
         }
-        if (gps_only_dd_pairs.size() >= 3 && gps_only_dd_pairs.size() < active_dd_pairs.size()) {
+        if (gps_only_dd_pairs.size() >= 2 && gps_only_dd_pairs.size() < active_dd_pairs.size()) {
             if (debug_enabled) {
                 std::cerr << "[PPP-WLNL] startup GPS-only DD retry: kept="
                           << gps_only_dd_pairs.size()
@@ -698,8 +1117,30 @@ WlnlFixAttempt tryWlnlFix(
         }
     }
 
+    bool startup_gps_only_subset = false;
+    if (existing_nl_fixes == 0 && !active_dd_pairs.empty()) {
+        startup_gps_only_subset = std::all_of(
+            active_dd_pairs.begin(),
+            active_dd_pairs.end(),
+            [&](const WlnlDdPair& dd_pair) {
+                const auto& ref_sat = satellites[static_cast<size_t>(dd_pair.ref_idx)];
+                const auto& sat_sat = satellites[static_cast<size_t>(dd_pair.sat_idx)];
+                return ref_sat.system == GNSSSystem::GPS &&
+                       sat_sat.system == GNSSSystem::GPS;
+            });
+    }
+
+    const int minimum_dd_pairs =
+        (existing_nl_fixes == 0 && !strict_claslib_parity) ? 2 : 3;
     attempt.nb = static_cast<int>(active_dd_pairs.size());
-    if (attempt.nb < 3) {
+    if (debug_enabled && existing_nl_fixes == 0) {
+        std::cerr << "[PPP-WLNL-DDSET] total=" << dd_pairs.size()
+                  << " active=" << active_dd_pairs.size()
+                  << " strict=" << (strict_claslib_parity ? 1 : 0)
+                  << " startup_gps_only=" << (startup_gps_only_subset ? 1 : 0)
+                  << " min_dd=" << minimum_dd_pairs << "\n";
+    }
+    if (attempt.nb < minimum_dd_pairs) {
         if (debug_enabled) {
             std::cerr << "[PPP-WLNL] insufficient DD NL pairs: " << attempt.nb << "\n";
         }
@@ -729,8 +1170,6 @@ WlnlFixAttempt tryWlnlFix(
         const int sat_l1_state = state_indices[static_cast<size_t>(si)];
         const auto ref_l2_state_it = filter_state.ambiguity_indices.find(ref_l2_sat);
         const auto sat_l2_state_it = filter_state.ambiguity_indices.find(sat_l2_sat);
-        const auto ref_iono_state_it = filter_state.ionosphere_indices.find(ref_l1_sat);
-        const auto sat_iono_state_it = filter_state.ionosphere_indices.find(sat_l1_sat);
         if (ref_it == nl_info.end() || !ref_it->second.valid ||
             sat_it == nl_info.end() || !sat_it->second.valid ||
             ref_l1_state < 0 || ref_l1_state >= filter_state.total_states ||
@@ -761,6 +1200,8 @@ WlnlFixAttempt tryWlnlFix(
         dd_state_transform(k, sat_l1_state) = -coeff_l1;
         dd_state_transform(k, ref_l2_state_it->second) = ref_coeff_l2;
         dd_state_transform(k, sat_l2_state_it->second) = -coeff_l2;
+        const auto ref_iono_state_it = filter_state.ionosphere_indices.find(ref_l1_sat);
+        const auto sat_iono_state_it = filter_state.ionosphere_indices.find(sat_l1_sat);
         if (config.estimate_ionosphere &&
             ref_iono_state_it != filter_state.ionosphere_indices.end() &&
             sat_iono_state_it != filter_state.ionosphere_indices.end() &&
@@ -781,7 +1222,7 @@ WlnlFixAttempt tryWlnlFix(
         ++valid_dd;
     }
 
-    if (valid_dd < 3) {
+    if (valid_dd < minimum_dd_pairs) {
         if (debug_enabled) {
             std::cerr << "[PPP-WLNL] insufficient valid DD NL: " << valid_dd << "\n";
         }
@@ -812,11 +1253,39 @@ WlnlFixAttempt tryWlnlFix(
         }
         return attempt;
     }
-    if (!std::isfinite(attempt.ratio) || attempt.ratio < config.ar_ratio_threshold) {
+    const VectorXd dd_state_model_cycles = dd_state_transform * filter_state.state;
+    double required_ratio = config.ar_ratio_threshold;
+    if (!strict_claslib_parity &&
+        existing_nl_fixes == 0 &&
+        startup_gps_only_subset &&
+        attempt.nb == 2) {
+        required_ratio = 6.5;
+    }
+    if (debug_enabled && existing_nl_fixes == 0) {
+        std::cerr << "[PPP-WLNL-LAMBDA] nb=" << attempt.nb
+                  << " valid_dd=" << valid_dd
+                  << " startup_gps_only=" << (startup_gps_only_subset ? 1 : 0)
+                  << " ratio=" << attempt.ratio
+                  << " threshold=" << required_ratio << "\n";
+        for (int k = 0; k < attempt.nb && k < 8; ++k) {
+            const int ri = active_dd_pairs[static_cast<size_t>(k)].ref_idx;
+            const int si = active_dd_pairs[static_cast<size_t>(k)].sat_idx;
+            std::cerr << "[PPP-WLNL-DDMAT] k=" << k
+                      << " ref=" << satellites[static_cast<size_t>(ri)].toString()
+                      << " sat=" << satellites[static_cast<size_t>(si)].toString()
+                      << " obs_nl=" << dd_nl_float(k)
+                      << " state_nl=" << dd_state_model_cycles(k)
+                      << " fixed_nl=" << dd_nl_fixed(k)
+                      << " q_obs=" << dd_nl_cov(k, k)
+                      << " q_state=" << dd_state_cov(k, k)
+                      << "\n";
+        }
+    }
+    if (!std::isfinite(attempt.ratio) || attempt.ratio < required_ratio) {
         if (debug_enabled) {
             std::cerr << "[PPP-WLNL] NL ratio reject: nb=" << attempt.nb
                       << " ratio=" << attempt.ratio
-                      << " threshold=" << config.ar_ratio_threshold << "\n";
+                      << " threshold=" << required_ratio << "\n";
         }
         return attempt;
     }

@@ -77,6 +77,7 @@ struct CssrMaskState {
 /// Per-satellite orbit correction.
 struct CssrOrbitCorrection {
     double dx = 0.0, dy = 0.0, dz = 0.0;  // RAC (radial, along, cross) in meters
+    int iode = -1;
 };
 
 /// Per-satellite clock correction.

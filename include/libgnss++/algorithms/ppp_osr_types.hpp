@@ -20,6 +20,7 @@ struct OSRCorrection {
     double iono_l1_m = 0.0;
     double code_bias_m[OSR_MAX_FREQ] = {};
     double phase_bias_m[OSR_MAX_FREQ] = {};
+    double solid_earth_tide_m = 0.0;  // Solid earth tide projected onto LOS
     double windup_cycles = 0.0;
     double windup_m[OSR_MAX_FREQ] = {};
 

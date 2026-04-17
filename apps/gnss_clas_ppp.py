@@ -347,6 +347,7 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
             dclock_m = float(columns[7])
             high_rate_clock_m = 0.0
             ura_sigma_token = None
+            iode_tokens: list[str] = []
             code_bias_tokens: list[str] = []
             phase_bias_tokens: list[str] = []
             bias_network_tokens: list[str] = []
@@ -358,6 +359,9 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
             for token in extras:
                 if token.startswith("ura_sigma_m="):
                     ura_sigma_token = token
+                    continue
+                if token.startswith("iode="):
+                    iode_tokens.append(token)
                     continue
                 if token.startswith("cbias:") and "=" in token:
                     code_bias_tokens.append(token)
@@ -389,6 +393,7 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
             ]
             if ura_sigma_token is not None:
                 output_tokens.append(ura_sigma_token)
+            output_tokens.extend(iode_tokens)
             output_tokens.extend(code_bias_tokens)
             output_tokens.extend(phase_bias_tokens)
             output_tokens.extend(bias_network_tokens)

@@ -160,23 +160,23 @@ CSSR_GNSS_LABELS = {
     1: "R",
     2: "E",
     3: "C",
-    4: "S",
-    5: "J",
+    4: "J",
+    5: "S",
 }
 CSSR_PRN_BASE = {
     0: 1,
     1: 1,
     2: 1,
     3: 1,
-    4: 120,
-    5: 193,
+    4: 1,
+    5: 120,
 }
 CSSR_SIGNAL_RTCM_IDS = {
     0: {0: 2, 1: 3, 2: 3, 3: 2, 4: 2, 5: 2, 6: 8, 7: 8, 8: 8, 9: 9, 10: 9, 11: 22, 12: 22, 13: 22},
     1: {0: 2, 1: 3, 2: 8, 3: 9},
     2: {0: 2, 1: 2, 2: 2, 3: 22, 4: 22, 5: 22, 6: 14, 7: 14, 8: 14},
     3: {0: 2, 1: 2, 2: 2, 3: 8, 4: 8, 5: 8, 6: 14, 7: 14, 8: 14},
-    5: {0: 2, 1: 2, 2: 2, 3: 2, 4: 8, 5: 8, 6: 8, 7: 22, 8: 22, 9: 22},
+    4: {0: 2, 1: 2, 2: 2, 3: 2, 4: 8, 5: 8, 6: 8, 7: 22, 8: 22, 9: 22},
 }
 
 
@@ -390,6 +390,7 @@ class CompactSSRCorrection:
     dz: float
     dclock_m: float
     high_rate_clock_m: float = 0.0
+    iode: int | None = None
     ura_sigma_m: float | None = None
     code_bias_m: dict[int, float] | None = None
     phase_bias_m: dict[int, float] | None = None
@@ -421,7 +422,11 @@ class CSSRDecoderState:
     mask: CSSRMaskState | None = None
     message_index: int = 0
     pending_orbit: dict[str, tuple[float, float, float]] | None = None
+    pending_orbit_iode: dict[str, int] | None = None
     pending_clock: dict[str, float] | None = None
+    pending_network_orbit: dict[int, dict[str, tuple[float, float, float]]] | None = None
+    pending_network_orbit_iode: dict[int, dict[str, int]] | None = None
+    pending_network_clock: dict[int, dict[str, float]] | None = None
     pending_tow: int | None = None
     pending_iod: int | None = None
     pending_udi_seconds: float | None = None
@@ -662,7 +667,11 @@ def require_mask_state(state: CSSRDecoderState, subtype: int) -> CSSRMaskState:
 
 def reset_pending_corrections(state: CSSRDecoderState) -> None:
     state.pending_orbit = None
+    state.pending_orbit_iode = None
     state.pending_clock = None
+    state.pending_network_orbit = None
+    state.pending_network_orbit_iode = None
+    state.pending_network_clock = None
     state.pending_tow = None
     state.pending_iod = None
     state.pending_udi_seconds = None
@@ -1409,6 +1418,8 @@ def ensure_pending_epoch(
             or state.pending_atmos is not None
             or bool(state.pending_orbit)
             or bool(state.pending_clock)
+            or bool(state.pending_network_orbit)
+            or bool(state.pending_network_clock)
             or bool(state.pending_ura)
             or bool(state.pending_code_bias)
             or bool(state.pending_phase_bias)
@@ -1452,7 +1463,11 @@ def ensure_pending_epoch(
     state.pending_iod = iod
     state.pending_udi_seconds = udi_seconds
     state.pending_orbit = {}
+    state.pending_orbit_iode = {}
     state.pending_clock = {}
+    state.pending_network_orbit = {}
+    state.pending_network_orbit_iode = {}
+    state.pending_network_clock = {}
     state.pending_ura = {}
     state.pending_code_bias = {}
     state.pending_base_code_bias = {}
@@ -1473,9 +1488,14 @@ def flush_pending_corrections(
         reset_pending_corrections(state)
         return []
     orbit_map = state.pending_orbit or {}
+    orbit_iode_map = state.pending_orbit_iode or {}
     clock_map = state.pending_clock or {}
+    network_orbit_maps = state.pending_network_orbit or {}
+    network_orbit_iode_maps = state.pending_network_orbit_iode or {}
+    network_clock_maps = state.pending_network_clock or {}
     ura_map = state.pending_ura or {}
     code_bias_map = state.pending_code_bias or {}
+    base_code_bias_map = state.pending_base_code_bias or {}
     phase_bias_map = state.pending_phase_bias or {}
     atmos = state.pending_atmos or {}
     sat_index = {satellite.sat: satellite for satellite in satellites}
@@ -1522,6 +1542,7 @@ def flush_pending_corrections(
                 dy=dy,
                 dz=dz,
                 dclock_m=dclock_m,
+                iode=orbit_iode_map.get(sat_token),
                 ura_sigma_m=ura_map.get(sat_token),
                 code_bias_m=dict(code_bias) if code_bias else None,
                 phase_bias_m=dict(phase_bias) if phase_bias else None,
@@ -1538,6 +1559,54 @@ def flush_pending_corrections(
                 atmos_tokens=dict(atmos) if atmos else None,
             )
         )
+        if state.pending_bias_network_id is not None and sat_token in base_code_bias_map:
+            rows.append(
+                CompactSSRCorrection(
+                    week=gps_week,
+                    tow=float(state.pending_tow),
+                    system=satellite.system,
+                    prn=satellite.prn,
+                    dx=0.0,
+                    dy=0.0,
+                    dz=0.0,
+                    dclock_m=math.nan,
+                    code_bias_m=dict(base_code_bias_map[sat_token]),
+                    bias_network_id=0,
+                )
+            )
+    network_ids = sorted(set(network_orbit_maps) | set(network_clock_maps))
+    for network_id in network_ids:
+        net_orbit_map = network_orbit_maps.get(network_id, {})
+        net_orbit_iode_map = network_orbit_iode_maps.get(network_id, {})
+        net_clock_map = network_clock_maps.get(network_id, {})
+        if flush_policy == COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT:
+            net_sat_tokens = set(net_orbit_map) | set(net_clock_map)
+        elif flush_policy == COMPACT_SSR_FLUSH_POLICY_ORBIT_OR_CLOCK_ONLY:
+            net_sat_tokens = set(net_orbit_map) | set(net_clock_map)
+        elif flush_policy == COMPACT_SSR_FLUSH_POLICY_ORBIT_AND_CLOCK_ONLY:
+            net_sat_tokens = set(net_orbit_map) & set(net_clock_map)
+        else:
+            raise ValueError(f"unsupported Compact SSR flush policy: {flush_policy}")
+        for sat_token in sorted(net_sat_tokens):
+            satellite = sat_index.get(sat_token)
+            if satellite is None:
+                continue
+            dx, dy, dz = net_orbit_map.get(sat_token, (0.0, 0.0, 0.0))
+            dclock_m = net_clock_map.get(sat_token, 0.0)
+            rows.append(
+                CompactSSRCorrection(
+                    week=gps_week,
+                    tow=float(state.pending_tow),
+                    system=satellite.system,
+                    prn=satellite.prn,
+                    dx=dx,
+                    dy=dy,
+                    dz=dz,
+                    dclock_m=dclock_m,
+                    iode=net_orbit_iode_map.get(sat_token),
+                    bias_network_id=network_id,
+                )
+            )
     reset_pending_corrections(state)
     return rows
 
@@ -1569,7 +1638,11 @@ def hydrate_atmos_only_corrections(
             or correction.bias_network_id is not None
         )
         if has_non_atmos:
-            base_rows[key] = correction
+            existing = base_rows.get(key)
+            if existing is None or (
+                existing.bias_network_id is not None and correction.bias_network_id is None
+            ):
+                base_rows[key] = correction
 
     latest_orbit_rows: dict[tuple[int, str, int], CompactSSRCorrection] = {}
     for correction in corrections:
@@ -1619,6 +1692,7 @@ def hydrate_atmos_only_corrections(
             correction.dx = orbit_source.dx
             correction.dy = orbit_source.dy
             correction.dz = orbit_source.dz
+            correction.iode = orbit_source.iode
         if base is None:
             if has_orbit:
                 latest_orbit_rows[sat_key] = correction
@@ -1663,13 +1737,16 @@ def decode_cssr_orbit_message(
         atmos_merge_policy,
     )
     assert state.pending_orbit is not None
+    assert state.pending_orbit_iode is not None
     for satellite in mask.satellites:
         orbit_iode_bits = 10 if satellite.system == "E" else 8
+        iode = read_bits(payload, bit_offset, orbit_iode_bits)
         bit_offset += orbit_iode_bits
         dx, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.0016)
         dy, bit_offset = decode_scaled_signed(payload, bit_offset, 13, 0.0064)
         dz, bit_offset = decode_scaled_signed(payload, bit_offset, 13, 0.0064)
         state.pending_orbit[satellite.sat] = (dx, dy, dz)
+        state.pending_orbit_iode[satellite.sat] = iode
     state.message_index += 1
     return (
         CSSRMessage(
@@ -2472,26 +2549,44 @@ def decode_cssr_combined_message(
         atmos_merge_policy,
     )
     assert state.pending_orbit is not None
+    assert state.pending_orbit_iode is not None
     assert state.pending_clock is not None
+    assert state.pending_network_orbit is not None
+    assert state.pending_network_orbit_iode is not None
+    assert state.pending_network_clock is not None
     selected_satellites = 0
+    if flg_net and network_id is not None:
+        orbit_target = state.pending_network_orbit.setdefault(network_id, {})
+        orbit_iode_target = state.pending_network_orbit_iode.setdefault(network_id, {})
+        clock_target = state.pending_network_clock.setdefault(network_id, {})
+    else:
+        orbit_target = state.pending_orbit
+        orbit_iode_target = state.pending_orbit_iode
+        clock_target = state.pending_clock
     for index, satellite in enumerate(mask.satellites):
         if flg_net and ((selected_mask >> (mask.satellite_count - 1 - index)) & 1) == 0:
             continue
         selected_satellites += 1
         if flg_orbit:
             orbit_iode_bits = 10 if satellite.system == "E" else 8
+            iode = read_bits(payload, bit_offset, orbit_iode_bits)
             bit_offset += orbit_iode_bits
             dx, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.0016)
             dy, bit_offset = decode_scaled_signed(payload, bit_offset, 13, 0.0064)
             dz, bit_offset = decode_scaled_signed(payload, bit_offset, 13, 0.0064)
         else:
             dx = dy = dz = 0.0
+            iode = None
         if flg_clock:
             dclock_m, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.0016)
         else:
             dclock_m = 0.0
-        state.pending_orbit[satellite.sat] = (dx, dy, dz)
-        state.pending_clock[satellite.sat] = dclock_m
+        if flg_orbit:
+            orbit_target[satellite.sat] = (dx, dy, dz)
+            if iode is not None:
+                orbit_iode_target[satellite.sat] = iode
+        if flg_clock:
+            clock_target[satellite.sat] = dclock_m
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
         request_pending_corrections_flush(state, gps_week, flush_policy)
@@ -2963,6 +3058,8 @@ def write_compact_corrections(path: Path, corrections: list[CompactSSRCorrection
             ]
             if correction.ura_sigma_m is not None:
                 row.append(f"ura_sigma_m={correction.ura_sigma_m:.6f}")
+            if correction.iode is not None:
+                row.append(f"iode={correction.iode}")
             if correction.code_bias_m:
                 for signal_id in sorted(correction.code_bias_m):
                     row.append(f"cbias:{signal_id}={correction.code_bias_m[signal_id]:.6f}")

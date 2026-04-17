@@ -39,6 +39,7 @@ struct Options {
     double ref_z_m = 0.0;
     int max_epochs = 0;
     int dump_ssr2obs_epoch = -1;
+    std::string first_ar_dump_path;
     int convergence_min_epochs = 20;
     double ssr_step_seconds = 1.0;
     bool estimate_troposphere = true;
@@ -89,8 +90,8 @@ void printUsage(const char* program_name) {
         << "  --ref-y <meters>        Override receiver reference ECEF Y used for CLAS grid selection\n"
         << "  --ref-z <meters>        Override receiver reference ECEF Z used for CLAS grid selection\n"
         << "  --claslib-parity         CLASLIB-oriented preset: --clas-osr, strict-osr (no hybrid default),\n"
-        << "                          --no-ionosphere-free, --estimate-ionosphere, troposphere on,\n"
-        << "                          --enable-ar --ar-method dd-wlnl. Override any piece after this flag.\n"
+        << "                          --no-ionosphere-free, --estimate-ionosphere, --clas-atmos-selection grid-first,\n"
+        << "                          troposphere on, --enable-ar --ar-method dd-wlnl. Override any piece after this flag.\n"
         << "  --out <solution.pos>     Output position file (required)\n"
         << "  --summary-json <summary.json>\n"
         << "                          Optional machine-readable run summary\n"
@@ -140,6 +141,7 @@ void printUsage(const char* program_name) {
         << "                          Ratio threshold for PPP ambiguity fixing (default: 3.0)\n"
         << "  --dump-ssr2obs-epoch <epoch_number>\n"
         << "                          Dump SSR2OBS input/output for specified epoch (1-based)\n"
+        << "  --first-ar-dump <path>   Dump the first strict dd-per-freq AR input set to a file\n"
         << "  --quiet                  Suppress per-run summary output\n"
         << "  -h, --help               Show this help\n";
 }
@@ -207,6 +209,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.clas_epoch_policy = "strict-osr";
             options.use_ionosphere_free = false;
             options.estimate_ionosphere = true;
+            options.clas_atmos_selection = "grid-first";
             options.estimate_troposphere = false;
             options.enable_ar = true;
             options.ar_method = "dd-wlnl";
@@ -266,6 +269,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.ar_ratio_threshold = std::stod(argv[++i]);
         } else if (arg == "--dump-ssr2obs-epoch" && i + 1 < argc) {
             options.dump_ssr2obs_epoch = std::stoi(argv[++i]);
+        } else if (arg == "--first-ar-dump" && i + 1 < argc) {
+            options.first_ar_dump_path = argv[++i];
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -643,8 +648,13 @@ int main(int argc, char* argv[]) {
         ppp_config.ar_method = parseArMethod(options.ar_method);
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
+        ppp_config.strict_first_ar_dump_path = options.first_ar_dump_path;
         if (options.claslib_parity) {
             ppp_config.clas_outlier_sigma_scale = 8.0;
+            ppp_config.clas_decouple_clock_position = false;
+            ppp_config.initial_ionosphere_variance = 1e-4;
+            ppp_config.process_noise_ionosphere = 1e-6;
+            ppp_config.wlnl_strict_claslib_parity = true;
         }
         if (options.low_dynamics_mode) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
@@ -678,6 +688,16 @@ int main(int argc, char* argv[]) {
         processor_config.orbit_file_path = options.sp3_path;
         processor_config.clock_file_path = options.clk_path;
 
+        if (!options.first_ar_dump_path.empty()) {
+            const std::filesystem::path dump_path(options.first_ar_dump_path);
+            if (dump_path.has_parent_path()) {
+                std::filesystem::create_directories(dump_path.parent_path());
+            }
+            if (std::filesystem::exists(dump_path)) {
+                std::filesystem::remove(dump_path);
+            }
+        }
+
         libgnss::PPPProcessor processor(ppp_config);
         if (!processor.initialize(processor_config)) {
             std::cerr << "Error: failed to initialize PPP processor\n";
@@ -710,10 +730,7 @@ int main(int argc, char* argv[]) {
         double dcb_meters = 0.0;
         while ((options.max_epochs == 0 || processed_epochs < options.max_epochs) &&
                obs_reader.readObservationEpoch(observation_data)) {
-            if (options.has_ref_x && options.has_ref_y && options.has_ref_z) {
-                observation_data.receiver_position =
-                    libgnss::Vector3d(options.ref_x_m, options.ref_y_m, options.ref_z_m);
-            } else if (obs_header.approximate_position.norm() > 0.0) {
+            if (obs_header.approximate_position.norm() > 0.0) {
                 observation_data.receiver_position = obs_header.approximate_position;
             }
 
@@ -850,6 +867,15 @@ int main(int argc, char* argv[]) {
                     << "  \"ambiguity_resolution_enabled\": " << (options.enable_ar ? "true" : "false") << ",\n"
                     << "  \"ar_method\": \"" << jsonEscape(options.ar_method) << "\",\n"
                     << "  \"ar_ratio_threshold\": " << options.ar_ratio_threshold << ",\n"
+                    << "  \"ref_x_m\": "
+                    << (options.has_ref_x ? std::to_string(options.ref_x_m) : "null")
+                    << ",\n"
+                    << "  \"ref_y_m\": "
+                    << (options.has_ref_y ? std::to_string(options.ref_y_m) : "null")
+                    << ",\n"
+                    << "  \"ref_z_m\": "
+                    << (options.has_ref_z ? std::to_string(options.ref_z_m) : "null")
+                    << ",\n"
                     << "  \"processed_epochs\": " << processed_epochs << ",\n"
                     << "  \"valid_solutions\": " << valid_solutions << ",\n"
                     << "  \"ppp_float_solutions\": " << ppp_float_solutions << ",\n"

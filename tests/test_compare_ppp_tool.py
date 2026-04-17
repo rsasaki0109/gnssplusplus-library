@@ -344,6 +344,7 @@ class ComparePppToolTest(unittest.TestCase):
         )
         self.assertEqual(r.returncode, 0, msg=r.stderr)
         self.assertIn("--ar-method", r.stdout)
+        self.assertIn("--first-ar-dump", r.stdout)
 
 
 if __name__ == "__main__":

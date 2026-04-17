@@ -28,6 +28,7 @@ struct EligibleAmbiguities {
     int total_ambiguities = 0;
     int skipped_reinitialization = 0;
     int skipped_lock = 0;
+    int skipped_stale = 0;
     int skipped_scale = 0;
     int skipped_index = 0;
 };
@@ -35,7 +36,8 @@ struct EligibleAmbiguities {
 EligibleAmbiguities collectEligibleAmbiguities(
     const ppp_shared::PPPState& filter_state,
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
-    int min_lock_count);
+    int min_lock_count,
+    const GNSSTime* observation_time = nullptr);
 
 DdFixAttempt tryDirectDdFix(
     const ppp_shared::PPPConfig& config,
@@ -46,7 +48,8 @@ DdFixAttempt tryDirectDdFix(
     const std::vector<int>& state_indices,
     const std::vector<double>& scales,
     const std::set<SatelliteId>& excluded_real_satellites,
-    bool debug_enabled);
+    bool debug_enabled,
+    const GNSSTime* observation_time = nullptr);
 
 DdFixAttempt tryDirectDdFixWithPar(
     const ppp_shared::PPPConfig& config,
@@ -55,7 +58,8 @@ DdFixAttempt tryDirectDdFixWithPar(
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const EligibleAmbiguities& eligible_ambiguities,
     const std::map<SatelliteId, double>& real_satellite_elevations,
-    bool debug_enabled);
+    bool debug_enabled,
+    const GNSSTime* observation_time = nullptr);
 
 using WlnlGroupKey = std::pair<GNSSSystem, std::pair<int, int>>;
 

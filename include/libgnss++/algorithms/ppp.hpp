@@ -211,6 +211,7 @@ public:
 
 private:
     std::map<SatelliteId, PPPAmbiguityInfo> ambiguity_states_;
+    std::set<SatelliteId> last_clas_ar_phase_ambiguities_;
     std::map<SatelliteId, CLASDispersionCompensationInfo> clas_dispersion_compensation_;
     std::map<SatelliteId, CLASSisContinuityInfo> clas_sis_continuity_;
 
@@ -340,6 +341,7 @@ private:
      */
     bool resolveAmbiguities(const ObservationData& obs, const NavigationData& nav);
     bool resolveAmbiguitiesWLNL(const ObservationData& obs, const NavigationData& nav);
+    PPPConfig effectiveClasAtmosConfig(bool for_wlnl_ar = false) const;
     std::map<SatelliteId, OSRCorrection> computeWlnlOsrCorrections(
         const ObservationData& obs,
         const NavigationData& nav,

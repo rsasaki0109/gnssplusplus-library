@@ -103,6 +103,8 @@ struct PPPConfig {
     enum class ARMethod { DD_IFLC, DD_WLNL, DD_PER_FREQ };
     ARMethod ar_method = ARMethod::DD_IFLC;
     int wl_min_averaging_epochs = 20;
+    bool wlnl_strict_claslib_parity = false;
+    std::string strict_first_ar_dump_path;
 
     // Motion model
     bool kinematic_mode = false;
@@ -177,6 +179,7 @@ struct PPPConfig {
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
+    bool apply_tide_as_osr = false;  // Apply tide as OSR range correction instead of position shift
     bool apply_relativity = true;
 
     // Convergence criteria

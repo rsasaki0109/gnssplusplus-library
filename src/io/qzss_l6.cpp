@@ -26,14 +26,13 @@ constexpr int kGnssGps = 0;
 constexpr int kGnssGlonass = 1;
 constexpr int kGnssGalileo = 2;
 constexpr int kGnssBeidou = 3;
-constexpr int kGnssQzss = 5;
+constexpr int kGnssQzss = 4;
+constexpr int kGnssSbas = 5;
 
 // SSR update interval table (IS-QZSS-L6-004, Table 4.2.2-9)
 constexpr double kUdiTable[] = {
     1, 2, 5, 10, 15, 30, 60, 120, 240, 300, 600, 900, 1800, 3600, 7200, 10800
 };
-
-constexpr int kGnssSbas = 4;
 
 GNSSSystem cssrSystemToGnss(int sys_id) {
     switch (sys_id) {
@@ -41,8 +40,8 @@ GNSSSystem cssrSystemToGnss(int sys_id) {
         case kGnssGlonass: return GNSSSystem::GLONASS;
         case kGnssGalileo: return GNSSSystem::Galileo;
         case kGnssBeidou: return GNSSSystem::BeiDou;
-        case kGnssSbas: return GNSSSystem::SBAS;
         case kGnssQzss: return GNSSSystem::QZSS;
+        case kGnssSbas: return GNSSSystem::SBAS;
         default: return GNSSSystem::UNKNOWN;
     }
 }
@@ -120,12 +119,20 @@ void L6Decoder::decodeSubtype1(BitReader& reader) {
         const auto sys_signals = signalSlotsFromMask(sigmask);
         const int nsig = static_cast<int>(sys_signals.size());
 
-        // PRN base per GNSS system (IS-QZSS-L6-004)
+        // PRN base per GNSS system (IS-QZSS-L6-004 / CLASLIB cssr.h).
+        // Internally we store QZSS as broadcast/RINEX PRNs (J01..), not
+        // RTCM satellite numbers (193+).
         int prn_base = 1;
         switch (sys_id) {
-            case 4: prn_base = 120; break;  // SBAS
-            case 5: prn_base = 193; break;  // QZSS
-            default: prn_base = 1; break;   // GPS, GLONASS, Galileo, BeiDou
+            case kGnssQzss:
+                prn_base = 1;
+                break;  // QZSS
+            case kGnssSbas:
+                prn_base = 120;
+                break;  // SBAS
+            default:
+                prn_base = 1;
+                break;  // GPS, GLONASS, Galileo, BeiDou
         }
 
         for (int s = 0; s < nsat; ++s) {
@@ -184,8 +191,8 @@ void L6Decoder::decodeSubtype2(BitReader& reader) {
         const SatelliteId sat_id(sat.system, sat.prn);
         // IODE: 10 bits for Galileo, 8 bits for others
         const int iode_bits = (sat.system == GNSSSystem::Galileo) ? 10 : 8;
-        reader.readU(iode_bits);  // skip IODE
         CssrOrbitCorrection corr;
+        corr.iode = static_cast<int>(reader.readU(iode_bits));
         corr.dx = reader.readS(15) * kOrbitRadialScale;   // radial
         corr.dy = reader.readS(13) * kOrbitAlongCrossScale;  // along-track
         corr.dz = reader.readS(13) * kOrbitAlongCrossScale;  // cross-track
@@ -291,19 +298,23 @@ void L6Decoder::decodeSubtype11(BitReader& reader) {
 
         if (flg_orbit) {
             const int iode_bits = (sat.system == GNSSSystem::Galileo) ? 10 : 8;
-            reader.readU(iode_bits);
             CssrOrbitCorrection corr;
+            corr.iode = static_cast<int>(reader.readU(iode_bits));
             corr.dx = reader.readS(15) * kOrbitRadialScale;
             corr.dy = reader.readS(13) * kOrbitAlongCrossScale;
             corr.dz = reader.readS(13) * kOrbitAlongCrossScale;
-            current_epoch_.orbits[sat_id] = corr;
-            current_epoch_.has_orbit = true;
+            if (!flg_net) {
+                current_epoch_.orbits[sat_id] = corr;
+                current_epoch_.has_orbit = true;
+            }
         }
         if (flg_clock) {
             CssrClockCorrection corr;
             corr.dclock_m = reader.readS(15) * kClockScale;
-            current_epoch_.clocks[sat_id] = corr;
-            current_epoch_.has_clock = true;
+            if (!flg_net) {
+                current_epoch_.clocks[sat_id] = corr;
+                current_epoch_.has_clock = true;
+            }
         }
     }
 }
@@ -697,7 +708,7 @@ namespace {
 // CSSR signal slot → RTCM SSR signal ID (IS-QZSS-L6-004 Table 4.2.2-6)
 uint8_t cssrSignalSlotToRtcmId(int gnss_id, int slot) {
     // Full mapping from IS-QZSS-L6-004 Table 4.2.2-6
-    // gnss_id: 0=GPS, 1=GLO, 2=GAL, 3=BDS, 4/5=QZSS
+    // gnss_id: 0=GPS, 1=GLO, 2=GAL, 3=BDS, 4=QZSS
     switch (gnss_id) {
         case 0: // GPS: 0-2→L1(2), 3-5→L1P(3), 6-8→L2CM(8), 9-10→L2P(9), 11-13→L5(22)
             if (slot <= 2) return 2;
@@ -722,7 +733,7 @@ uint8_t cssrSignalSlotToRtcmId(int gnss_id, int slot) {
             if (slot <= 5) return 8;
             if (slot <= 8) return 14;
             return 0;
-        case 4: case 5: // QZSS: 0-3→L1(2), 4-6→L2(8), 7-9→L5(22)
+        case 4: // QZSS: 0-3→L1(2), 4-6→L2(8), 7-9→L5(22)
             if (slot <= 3) return 2;
             if (slot <= 6) return 8;
             if (slot <= 9) return 22;
@@ -737,7 +748,8 @@ int gnssSystemToCssrId(GNSSSystem sys) {
         case GNSSSystem::GLONASS: return 1;
         case GNSSSystem::Galileo: return 2;
         case GNSSSystem::BeiDou: return 3;
-        case GNSSSystem::QZSS: return 5;
+        case GNSSSystem::QZSS: return 4;
+        case GNSSSystem::SBAS: return 5;
         default: return -1;
     }
 }
@@ -766,6 +778,7 @@ void populateSSRProducts(
             if (orbit_it != epoch.orbits.end()) {
                 const auto& o = orbit_it->second;
                 corr.orbit_correction_ecef = Vector3d(o.dx, o.dy, o.dz);
+                corr.iode = o.iode;
                 corr.orbit_valid = true;
             }
 
@@ -794,18 +807,6 @@ void populateSSRProducts(
                 }
                 corr.phase_bias_valid = !corr.phase_bias_m.empty();
             }
-            // Set bias_network_id from the last ST6 that updated this satellite
-            // (0 means base-only from ST5)
-            if (corr.phase_bias_valid) {
-                for (auto rit = epoch.network_phase_biases.rbegin();
-                     rit != epoch.network_phase_biases.rend(); ++rit) {
-                    if (rit->second.count(sat_id)) {
-                        corr.bias_network_id = rit->first;
-                        break;
-                    }
-                }
-            }
-
             // Use merged_atmos (Python pending_atmos equivalent):
             // flat dict accumulated in message order across all subframes.
             // network_id, trop, STEC residuals from the last ST9.
@@ -857,25 +858,6 @@ void populateSSRProducts(
                 products.addCorrection(pref_corr);
             }
 
-            // Add ST6 network-specific phase bias corrections.
-            // Each network's biases go in a separate correction so that
-            // interpolateCorrection can find the right bias_network_id.
-            for (const auto& [net_id, sat_biases] : epoch.network_phase_biases) {
-                auto bias_it = sat_biases.find(sat_id);
-                if (bias_it == sat_biases.end()) continue;
-                libgnss::SSROrbitClockCorrection bias_corr;
-                bias_corr.satellite = sat_id;
-                bias_corr.time = time;
-                bias_corr.bias_network_id = net_id;
-                const int gnss_id = gnssSystemToCssrId(sat_id.system);
-                for (const auto& [slot, bias_m] : bias_it->second) {
-                    const uint8_t rtcm_id = cssrSignalSlotToRtcmId(gnss_id, slot);
-                    if (rtcm_id > 0) bias_corr.phase_bias_m[rtcm_id] = bias_m;
-                }
-                bias_corr.phase_bias_valid = !bias_corr.phase_bias_m.empty();
-                if (bias_corr.phase_bias_valid)
-                    products.addCorrection(bias_corr);
-            }
         }
     }
 }

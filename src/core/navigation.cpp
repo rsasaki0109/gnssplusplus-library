@@ -19,6 +19,7 @@ constexpr double kGpsWeekSeconds = 604800.0;
 constexpr double kHalfGpsWeekSeconds = 302400.0;
 constexpr double kEarthRotationRate = 7.2921151467e-5;
 constexpr double kEarthMu = 3.986005e14;
+constexpr double kGalileoEarthMu = 3.986004418e14;
 constexpr double kGlonassEarthMu = 3.9860044e14;
 constexpr double kGlonassJ2 = 1.0826257e-3;
 constexpr double kGlonassEarthRadius = 6378136.0;
@@ -26,7 +27,6 @@ constexpr double kGlonassEarthRotationRate = 7.292115e-5;
 constexpr double kGlonassIntegrationStep = 60.0;
 constexpr double kBeiDouEarthRotationRate = 7.292115e-5;
 constexpr double kBeiDouEarthMu = 3.986004418e14;
-constexpr double kRelativityF = -4.442807633e-10;
 constexpr double kWgs84A = 6378137.0;
 constexpr double kWgs84E2 = 6.69437999014e-3;
 constexpr double kBeiDouGeoSin5Deg = -0.0871557427476582;
@@ -331,7 +331,9 @@ bool computeBroadcastState(const Ephemeris& eph,
     const double tk = normalizeGpsTime(time - eph.toe);
     const double tc = normalizeGpsTime(time - eph.toc);
     const bool is_beidou = eph.satellite.system == GNSSSystem::BeiDou;
-    const double earth_mu = is_beidou ? kBeiDouEarthMu : kEarthMu;
+    const bool is_galileo = eph.satellite.system == GNSSSystem::Galileo;
+    const double earth_mu = is_beidou ? kBeiDouEarthMu :
+        (is_galileo ? kGalileoEarthMu : kEarthMu);
     const double earth_rotation = is_beidou ? kBeiDouEarthRotationRate : kEarthRotationRate;
 
     const double n0 = std::sqrt(earth_mu / (a * a * a));
@@ -383,7 +385,8 @@ bool computeBroadcastState(const Ephemeris& eph,
     }
 
     clock_bias = eph.af0 + eph.af1 * tc + eph.af2 * tc * tc;
-    clock_bias += kRelativityF * eph.e * eph.sqrt_a * sin_e;
+    clock_bias -= 2.0 * std::sqrt(earth_mu * a) * eph.e * sin_e /
+        (constants::SPEED_OF_LIGHT * constants::SPEED_OF_LIGHT);
     // TGD NOT applied here — it's applied in SPP only (DD cancels TGD)
     // clock_bias -= eph.tgd;
     clock_drift = eph.af1 + 2.0 * eph.af2 * tc;
@@ -967,7 +970,10 @@ void SSRProducts::addCorrection(const SSROrbitClockCorrection& correction) {
         }
         if (correction.orbit_valid && !it->orbit_valid) {
             it->orbit_correction_ecef = correction.orbit_correction_ecef;
+            it->iode = correction.iode;
             it->orbit_valid = true;
+        } else if (correction.orbit_valid && it->iode < 0) {
+            it->iode = correction.iode;
         }
         if (correction.clock_valid && !it->clock_valid) {
             it->clock_correction_m = correction.clock_correction_m;
@@ -1067,6 +1073,15 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             return -1;
         }
         const size_t signal_count = phase ? entry.phase_bias_m.size() : entry.code_bias_m.size();
+        if (!phase) {
+            if (entry.bias_network_id == 0) {
+                return 300000 + static_cast<int>(signal_count);
+            }
+            if (preferred_network_id > 0 && entry.bias_network_id == preferred_network_id) {
+                return 200000 + static_cast<int>(signal_count);
+            }
+            return preferred_network_id > 0 ? -1 : 100000 + static_cast<int>(signal_count);
+        }
         if (preferred_network_id > 0) {
             if (entry.bias_network_id == preferred_network_id) {
                 return 300000 + static_cast<int>(signal_count);
@@ -1086,17 +1101,14 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             return -1;
         }
         const size_t signal_count = entry.code_bias_m.size();
+        if (entry.bias_network_id == 0) {
+            return 300000 + static_cast<int>(signal_count);
+        }
         if (preferred_network_id > 0) {
             if (entry.bias_network_id == preferred_network_id) {
-                return 300000 + static_cast<int>(signal_count);
-            }
-            if (entry.bias_network_id == 0) {
                 return 200000 + static_cast<int>(signal_count);
             }
             return 100000 + static_cast<int>(signal_count);
-        }
-        if (entry.bias_network_id == 0) {
-            return 200000 + static_cast<int>(signal_count);
         }
         return 100000 + static_cast<int>(signal_count);
     };
@@ -1316,6 +1328,13 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             }
             for (size_t index = begin; index < end; ++index) {
                 if (entries[index].orbit_valid) {
+                    if (entries[index].bias_network_id == 0) {
+                        return &entries[index];
+                    }
+                }
+            }
+            for (size_t index = begin; index < end; ++index) {
+                if (entries[index].orbit_valid) {
                     return &entries[index];
                 }
             }
@@ -1325,6 +1344,13 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             if (preferred_network_id > 0) {
                 for (size_t index = begin; index < end; ++index) {
                     if (entries[index].clock_valid && isPreferredNetwork(entries[index])) {
+                        return &entries[index];
+                    }
+                }
+            }
+            for (size_t index = begin; index < end; ++index) {
+                if (entries[index].clock_valid) {
+                    if (entries[index].bias_network_id == 0) {
                         return &entries[index];
                     }
                 }
@@ -1363,7 +1389,7 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             selected_network_id = atmos_source->atmos_network_id;
         }
         const auto pickBias = [&](bool phase) {
-            return [&](size_t begin, size_t end) -> const SSROrbitClockCorrection* {
+            return [&, phase](size_t begin, size_t end) -> const SSROrbitClockCorrection* {
                 const SSROrbitClockCorrection* best = nullptr;
                 int best_score = -1;
                 for (size_t index = begin; index < end; ++index) {
@@ -1579,22 +1605,26 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
                 pickCodeBiasInGroup(before->time);
             const SSROrbitClockCorrection* after_code =
                 pickCodeBiasInGroup(after->time);
+            const size_t lower_index = static_cast<size_t>(lower - entries.begin());
+            const SSROrbitClockCorrection* scanned_code = findRecentCodeBias(lower_index);
             const int before_code_score =
                 before_code != nullptr ? codeFallbackScore(*before_code) : -1;
             const int after_code_score =
                 after_code != nullptr ? codeFallbackScore(*after_code) : -1;
+            const int scanned_code_score =
+                scanned_code != nullptr ? codeFallbackScore(*scanned_code) : -1;
             code_bias_m->clear();
             if (before_code_score >= 0 &&
+                before_code_score >= scanned_code_score &&
                 before_code_score >= after_code_score) {
                 *code_bias_m = before_code->code_bias_m;
+            } else if (scanned_code_score >= 0 &&
+                       scanned_code_score >= after_code_score) {
+                *code_bias_m = scanned_code->code_bias_m;
             } else if (after_code_score >= 0 &&
                        after_code != nullptr) {
                 *code_bias_m = after_code->code_bias_m;
-            } else if (const auto* scanned =
-                           findRecentCodeBias(static_cast<size_t>(lower - entries.begin()))) {
-                *code_bias_m = scanned->code_bias_m;
             }
-            const size_t lower_index = static_cast<size_t>(lower - entries.begin());
             mergeCodeBiasBackwardGroups(*code_bias_m, lower_index);
         }
         if (phase_bias_m != nullptr) {
@@ -1705,10 +1735,16 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         while (sample_end_index < entries.size() && entries[sample_end_index].time == sample->time) {
             ++sample_end_index;
         }
-        if (const auto* sample_code = pickCodeBiasInRange(sample_begin_index, sample_end_index)) {
+        const auto* sample_code = pickCodeBiasInRange(sample_begin_index, sample_end_index);
+        const auto* scanned_code = findRecentCodeBias(sample_begin_index);
+        const int sample_code_score =
+            sample_code != nullptr ? codeFallbackScore(*sample_code) : -1;
+        const int scanned_code_score =
+            scanned_code != nullptr ? codeFallbackScore(*scanned_code) : -1;
+        if (sample_code_score >= 0 && sample_code_score >= scanned_code_score) {
             *code_bias_m = sample_code->code_bias_m;
-        } else if (const auto* scanned = findRecentCodeBias(sample_begin_index)) {
-            *code_bias_m = scanned->code_bias_m;
+        } else if (scanned_code_score >= 0) {
+            *code_bias_m = scanned_code->code_bias_m;
         }
         mergeCodeBiasBackwardGroups(*code_bias_m, sample_begin_index);
         mergeCodeBiasGroup(*code_bias_m, sample_begin_index, sample_end_index);
@@ -1847,6 +1883,13 @@ bool SSRProducts::loadCSVFile(const std::string& filename) {
                 }
                 continue;
             }
+            if (extra.rfind("iode=", 0) == 0) {
+                try {
+                    correction.iode = std::stoi(extra.substr(5));
+                } catch (const std::exception&) {
+                }
+                continue;
+            }
             if (extra.rfind("cbias:", 0) == 0) {
                 const auto equal_pos = extra.find('=');
                 if (equal_pos == std::string::npos || equal_pos <= 6) {
@@ -1918,7 +1961,9 @@ bool SSRProducts::loadCSVFile(const std::string& filename) {
     if (std::getenv("GNSS_PPP_DEBUG") != nullptr) {
         size_t atmos_entries = 0;
         size_t total_entries = 0;
+        std::vector<std::string> satellite_keys;
         for (const auto& [sat, entries] : orbit_clock_corrections) {
+            satellite_keys.push_back(sat.toString());
             for (const auto& e : entries) {
                 ++total_entries;
                 if (e.atmos_valid) ++atmos_entries;
@@ -1927,6 +1972,11 @@ bool SSRProducts::loadCSVFile(const std::string& filename) {
         std::cerr << "[SSR-LOAD] total_entries=" << total_entries
                   << " atmos_entries=" << atmos_entries
                   << " satellites=" << orbit_clock_corrections.size() << "\n";
+        std::cerr << "[SSR-LOAD-SATS]";
+        for (const auto& key : satellite_keys) {
+            std::cerr << " " << key;
+        }
+        std::cerr << "\n";
     }
 
     // Forward-fill orbit corrections: CLAS broadcasts orbit every 30s but
@@ -1935,13 +1985,18 @@ bool SSRProducts::loadCSVFile(const std::string& filename) {
     for (auto& [sat, entries] : orbit_clock_corrections) {
         (void)sat;
         Vector3d last_orbit = Vector3d::Zero();
+        int last_iode = -1;
         bool has_last_orbit = false;
         for (auto& entry : entries) {
             if (entry.orbit_valid) {
                 last_orbit = entry.orbit_correction_ecef;
+                if (entry.iode >= 0) {
+                    last_iode = entry.iode;
+                }
                 has_last_orbit = true;
             } else if (has_last_orbit && entry.clock_valid) {
                 entry.orbit_correction_ecef = last_orbit;
+                entry.iode = last_iode;
                 entry.orbit_valid = true;
             }
         }
@@ -1959,7 +2014,8 @@ bool SSRProducts::loadCSVFile(const std::string& filename) {
                 last_atmos = entry.atmos_tokens;
                 last_atmos_network_id = entry.atmos_network_id;
                 has_last_atmos = true;
-            } else if (has_last_atmos && !entry.atmos_valid && entry.clock_valid) {
+            } else if (has_last_atmos && !entry.atmos_valid && entry.clock_valid &&
+                       entry.bias_network_id == 0) {
                 entry.atmos_tokens = last_atmos;
                 entry.atmos_network_id = last_atmos_network_id;
                 entry.atmos_valid = true;

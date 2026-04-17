@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/ppp_clas.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
+#include <libgnss++/algorithms/tidal.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signals.hpp>
@@ -14,10 +15,11 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <fstream>
 #include <cmath>
-#include <ctime>
 #include <cctype>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -57,6 +59,16 @@ std::string trimCopy(const std::string& text) {
     }
     const size_t last = text.find_last_not_of(' ');
     return text.substr(first, last - first + 1);
+}
+
+std::string resolveBundledAppsDir() {
+    const std::filesystem::path source_path(__FILE__);
+    const std::filesystem::path bundled_apps_dir =
+        source_path.parent_path().parent_path().parent_path() / "apps";
+    if (std::filesystem::is_directory(bundled_apps_dir)) {
+        return bundled_apps_dir.string();
+    }
+    return "apps";
 }
 
 std::string normalizeAntennaType(const std::string& antenna_type) {
@@ -1116,7 +1128,19 @@ PositionSolution PPPProcessor::processEpochStandard(
 
 PositionSolution PPPProcessor::processEpoch(const ObservationData& obs, const NavigationData& nav) {
     if (ppp_config_.use_clas_osr_filter) {
-        return processEpochCLAS(obs, nav);
+        const auto processing_start = std::chrono::steady_clock::now();
+        PositionSolution solution = processEpochCLAS(obs, nav);
+        has_last_processed_time_ = true;
+        last_processed_time_ = obs.time;
+        const auto processing_end = std::chrono::steady_clock::now();
+        solution.processing_time_ms =
+            std::chrono::duration<double, std::milli>(processing_end - processing_start).count();
+        updateStatistics(solution.isValid());
+        {
+            std::lock_guard<std::mutex> lock(stats_mutex_);
+            total_convergence_time_ += solution.processing_time_ms;
+        }
+        return solution;
     }
 
     // Standard PPP path: precise/broadcast navigation with optional inline
@@ -1142,6 +1166,7 @@ void PPPProcessor::reset() {
     convergence_time_ = 0.0;
     filter_state_ = PPPState{};
     ambiguity_states_.clear();
+    last_clas_ar_phase_ambiguities_.clear();
     clas_dispersion_compensation_.clear();
     clas_sis_continuity_.clear();
     clas_phase_bias_repair_.clear();
@@ -1221,9 +1246,10 @@ bool PPPProcessor::loadL6Products(const std::string& l6_file) {
     // Try Python expander first
     const std::string tmp_csv = "/tmp/gnsspp_l6_expanded_" +
         std::to_string(std::hash<std::string>{}(l6_file)) + ".csv";
+    const std::string apps_dir = resolveBundledAppsDir();
     const std::string cmd =
         "python3 -c \""
-        "import sys; sys.path.insert(0, 'apps'); "
+        "import sys; sys.path.insert(0, r'" + apps_dir + "'); "
         "from pathlib import Path; "
         "import gnss_qzss_l6_info as qzss_l6_info; "
         "from gnss_clas_ppp import expand_qzss_l6_source; "
@@ -1240,6 +1266,9 @@ bool PPPProcessor::loadL6Products(const std::string& l6_file) {
         if (ssr_products_loaded_) {
             return true;
         }
+    } else if (pppDebugEnabled()) {
+        std::cerr << "[L6-EXPAND] python_failed ret=" << ret
+                  << " apps_dir=" << apps_dir << "\n";
     }
 
     // Fallback: C++ native L6 decoder
@@ -2582,6 +2611,15 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
         return false;
     }
 
+    int ar_min_lock =
+        ssr_products_loaded_
+            ? std::min(ppp_config_.convergence_min_epochs, 10)
+            : ppp_config_.convergence_min_epochs;
+    if (ppp_config_.wlnl_strict_claslib_parity) {
+        ar_min_lock =
+            ppp_config_.ar_method == PPPConfig::ARMethod::DD_PER_FREQ ? 6 : 1;
+    }
+
     if (pppDebugEnabled()) {
         int total_amb = 0, ready_amb = 0;
         for (const auto& [satellite, state_index] : filter_state_.ambiguity_indices) {
@@ -2589,7 +2627,7 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
             const auto amb_it = ambiguity_states_.find(satellite);
             if (amb_it != ambiguity_states_.end()) {
                 const auto& a = amb_it->second;
-                if (!a.needs_reinitialization && a.lock_count >= ppp_config_.convergence_min_epochs &&
+                if (!a.needs_reinitialization && a.lock_count >= ar_min_lock &&
                     std::isfinite(a.ambiguity_scale_m) && a.ambiguity_scale_m > 0.0) {
                     ++ready_amb;
                 }
@@ -2597,7 +2635,7 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
         }
         std::cerr << "[PPP-AR-DBG] total_amb=" << total_amb
                   << " ready=" << ready_amb
-                  << " min_epochs=" << ppp_config_.convergence_min_epochs << "\n";
+                  << " min_epochs=" << ar_min_lock << "\n";
     }
 
     if (ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL) {
@@ -2608,11 +2646,8 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
     }
     // DD_IFLC and DD_PER_FREQ fall through to existing DD-AR code below
 
-    const int ar_min_lock = ssr_products_loaded_ ?
-        std::min(ppp_config_.convergence_min_epochs, 10) :
-        ppp_config_.convergence_min_epochs;
     const auto eligible_ambiguities = ppp_ar::collectEligibleAmbiguities(
-        filter_state_, ambiguity_states_, ar_min_lock);
+        filter_state_, ambiguity_states_, ar_min_lock, &obs.time);
 
     if (static_cast<int>(eligible_ambiguities.satellites.size()) <
         ppp_config_.min_satellites_for_ar) {
@@ -2625,7 +2660,11 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
     }
 
     std::map<SatelliteId, double> real_satellite_elevations;
-    if (ppp_config_.use_clas_osr_filter) {
+    const bool need_real_satellite_elevations =
+        ppp_config_.use_clas_osr_filter ||
+        (ppp_config_.wlnl_strict_claslib_parity &&
+         ppp_config_.ar_method == PPPConfig::ARMethod::DD_PER_FREQ);
+    if (need_real_satellite_elevations) {
         for (const auto& satellite : eligible_ambiguities.satellites) {
             const SatelliteId real_satellite = ppp_ar::clasRealSatellite(satellite);
             if (real_satellite_elevations.find(real_satellite) != real_satellite_elevations.end()) {
@@ -2652,14 +2691,57 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
             }
             const Vector3d receiver_position =
                 filter_state_.state.segment(filter_state_.pos_index, 3);
-            const Vector3d line_of_sight = sat_pos - receiver_position;
-            const double line_of_sight_norm = line_of_sight.norm();
-            if (line_of_sight_norm <= 0.0 || receiver_position.norm() <= 0.0) {
+            if (receiver_position.norm() <= 0.0) {
                 continue;
             }
-            const double elevation = std::asin(
-                line_of_sight.normalized().dot(receiver_position.normalized()));
-            real_satellite_elevations[real_satellite] = elevation;
+            real_satellite_elevations[real_satellite] =
+                nav.calculateGeometry(receiver_position, sat_pos).elevation;
+        }
+    }
+
+    auto filtered_eligible_ambiguities = eligible_ambiguities;
+    if (ppp_config_.wlnl_strict_claslib_parity &&
+        ppp_config_.ar_method == PPPConfig::ARMethod::DD_PER_FREQ) {
+        constexpr double kClaslibArElevationMaskRadians = 20.0 * kDegreesToRadians;
+        ppp_ar::EligibleAmbiguities strict_filtered;
+        strict_filtered.total_ambiguities = filtered_eligible_ambiguities.total_ambiguities;
+        strict_filtered.skipped_reinitialization =
+            filtered_eligible_ambiguities.skipped_reinitialization;
+        strict_filtered.skipped_lock = filtered_eligible_ambiguities.skipped_lock;
+        strict_filtered.skipped_stale = filtered_eligible_ambiguities.skipped_stale;
+        strict_filtered.skipped_scale = filtered_eligible_ambiguities.skipped_scale;
+        strict_filtered.skipped_index = filtered_eligible_ambiguities.skipped_index;
+
+        for (size_t i = 0; i < filtered_eligible_ambiguities.satellites.size(); ++i) {
+            const SatelliteId real_satellite =
+                ppp_ar::clasRealSatellite(filtered_eligible_ambiguities.satellites[i]);
+            const auto elevation_it = real_satellite_elevations.find(real_satellite);
+            if (elevation_it == real_satellite_elevations.end() ||
+                elevation_it->second < kClaslibArElevationMaskRadians) {
+                if (pppDebugEnabled()) {
+                    std::cerr << "[PPP-AR] strict elmask reject sat="
+                              << filtered_eligible_ambiguities.satellites[i].toString()
+                              << " real=" << real_satellite.toString()
+                              << " elevation_deg="
+                              << (elevation_it == real_satellite_elevations.end() ?
+                                      -1.0 : elevation_it->second / kDegreesToRadians)
+                              << "\n";
+                }
+                continue;
+            }
+            strict_filtered.satellites.push_back(filtered_eligible_ambiguities.satellites[i]);
+            strict_filtered.state_indices.push_back(filtered_eligible_ambiguities.state_indices[i]);
+            strict_filtered.scales.push_back(filtered_eligible_ambiguities.scales[i]);
+        }
+        filtered_eligible_ambiguities = std::move(strict_filtered);
+        if (static_cast<int>(filtered_eligible_ambiguities.satellites.size()) <
+            ppp_config_.min_satellites_for_ar) {
+            if (pppDebugEnabled()) {
+                std::cerr << "[PPP-AR] strict elmask skipped: candidates="
+                          << filtered_eligible_ambiguities.satellites.size()
+                          << " min=" << ppp_config_.min_satellites_for_ar << "\n";
+            }
+            return false;
         }
     }
 
@@ -2668,9 +2750,10 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
         filter_state_,
         pre_anchor_covariance_,
         ambiguity_states_,
-        eligible_ambiguities,
+        filtered_eligible_ambiguities,
         real_satellite_elevations,
-        pppDebugEnabled());
+        pppDebugEnabled(),
+        &obs.time);
 
     if (!best_attempt.fixed) {
         if (pppDebugEnabled()) {
@@ -2739,15 +2822,7 @@ Vector3d PPPProcessor::applyGeophysicalCorrections(const Vector3d& position,
 
 Vector3d PPPProcessor::calculateSolidEarthTides(const Vector3d& position,
                                                 const GNSSTime& time) const {
-    constexpr double kSunGM = 1.32712440018e20;
-    constexpr double kMoonGM = 4.902801e12;
-    if (!position.allFinite() || position.norm() < constants::WGS84_A * 0.5) {
-        return Vector3d::Zero();
-    }
-    const Vector3d sun_position = approximateSunPositionEcef(time);
-    const Vector3d moon_position = approximateMoonPositionEcef(time);
-    return bodyTideDisplacement(position, sun_position, kSunGM) +
-           bodyTideDisplacement(position, moon_position, kMoonGM);
+    return tidal::calculateSolidEarthTides(position, time);
 }
 
 Vector3d PPPProcessor::calculateOceanLoading(const Vector3d& position,

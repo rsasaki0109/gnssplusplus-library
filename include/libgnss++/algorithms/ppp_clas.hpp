@@ -33,12 +33,49 @@ using ResolveAmbiguitiesFunction = std::function<bool()>;
 using ValidateFixedSolutionFunction = std::function<FixValidationStats()>;
 
 struct MeasurementRow {
+    struct ModelComponents {
+        bool valid = false;
+        double y = 0.0;
+        double obs = 0.0;
+        double rho = 0.0;
+        double dts = 0.0;
+        double dtr = 0.0;
+        double rel = 0.0;
+        double sagnac = 0.0;
+        double trop_dry = 0.0;
+        double trop_wet = 0.0;
+        double trop_model = 0.0;
+        double trop_grid = 0.0;
+        double iono_grid = 0.0;
+        double iono_state_term = 0.0;
+        double prc = 0.0;
+        double cpc = 0.0;
+        double osr_corr = 0.0;
+        double code_bias = 0.0;
+        double phase_bias = 0.0;
+        double phase_comp = 0.0;
+        double windup = 0.0;
+        double pco_rcv = 0.0;
+        double pco_sat = 0.0;
+        double pcv_rcv = 0.0;
+        double pcv_sat = 0.0;
+        double tide_solid = 0.0;
+        double tide_ocean = 0.0;
+        double tide_pole = 0.0;
+        double amb_m = 0.0;
+        double modeled_sum = 0.0;
+    };
+
     Eigen::RowVectorXd H;
     double residual = 0.0;
     double variance = 0.0;
+    double reference_variance = 0.0;
     SatelliteId satellite;
+    SatelliteId ambiguity_satellite;
+    SatelliteId reference_satellite;
     bool is_phase = false;
     int freq_index = 0;
+    ModelComponents components;
 };
 
 struct AmbiguityObservation {
@@ -72,6 +109,7 @@ struct KalmanUpdateStats {
 struct EpochUpdateResult {
     bool updated = false;
     KalmanUpdateStats update_stats;
+    std::set<SatelliteId> ar_phase_ambiguities;
 };
 
 struct AmbiguityResolutionResult {
@@ -146,7 +184,7 @@ void markSlipCompensationFromAmbiguities(
 void ensureAmbiguityStates(
     ppp_shared::PPPState& filter_state,
     const std::vector<OSRCorrection>& osr_corrections,
-    double initial_variance = 3600.0);
+    const ppp_shared::PPPConfig& config);
 
 void applyPendingPhaseBiasStateShifts(
     ppp_shared::PPPState& filter_state,

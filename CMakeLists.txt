@@ -41,6 +41,7 @@ set(GNSS_SOURCES
     src/algorithms/ppp_wlnl.cpp
     src/algorithms/ppp_clas_epoch.cpp
     src/algorithms/ppp.cpp
+    src/algorithms/tidal.cpp
 )
 
 # List source files for the no-optimization library

@@ -24,6 +24,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 import gnss_odaiba_benchmark as benchmark  # noqa: E402
 import gnss_clas_ppp as clas_ppp  # noqa: E402
+import gnss_qzss_l6_info as qzss_l6_info  # noqa: E402
 import gnss_live_signoff as live_signoff  # noqa: E402
 import gnss_moving_base_signoff as moving_base_signoff  # noqa: E402
 import gnss_ppc_demo as ppc_demo  # noqa: E402
@@ -50,6 +51,25 @@ class ScorecardHelpersTest(unittest.TestCase):
 
 
 class ClasCompactHelpersTest(unittest.TestCase):
+    def test_qzss_l6_cssr_system_id_4_maps_to_qzss_prns(self) -> None:
+        satellites = qzss_l6_info.svmask_to_satellites(
+            4,
+            (1 << 39) | (1 << 38),
+            [[0], [0]],
+        )
+
+        self.assertEqual([sat.sat for sat in satellites], ["J01", "J02"])
+        self.assertEqual(qzss_l6_info.cssr_signal_slot_to_rtcm_id(4, 0), 2)
+
+    def test_qzss_l6_cssr_system_id_5_maps_to_sbas_prns(self) -> None:
+        satellites = qzss_l6_info.svmask_to_satellites(
+            5,
+            1 << 39,
+            [[0]],
+        )
+
+        self.assertEqual([sat.sat for sat in satellites], ["S120"])
+
     def test_expand_compact_ssr_text_merges_high_rate_clock_and_system_tokens(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_compact_") as temp_dir:
             output_csv = Path(temp_dir) / "expanded.csv"
