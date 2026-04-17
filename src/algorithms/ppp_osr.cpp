@@ -4,6 +4,8 @@
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/models/troposphere.hpp>
 #include <algorithm>
+#include <array>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -11,6 +13,7 @@
 #include <iostream>
 #include <limits>
 #include <sstream>
+#include <utility>
 
 namespace libgnss {
 
@@ -21,6 +24,441 @@ bool pppDebugEnabled() {
 }
 
 bool gnsstimeIsSet(const GNSSTime& time);
+
+std::string trimCopy(const std::string& text) {
+    const auto first = std::find_if_not(
+        text.begin(), text.end(),
+        [](unsigned char c) { return std::isspace(c) != 0; });
+    const auto last = std::find_if_not(
+        text.rbegin(), text.rend(),
+        [](unsigned char c) { return std::isspace(c) != 0; }).base();
+    if (first >= last) {
+        return "";
+    }
+    return std::string(first, last);
+}
+
+std::string normalizeAntennaType(const std::string& antenna_type) {
+    std::string normalized = trimCopy(antenna_type);
+    std::replace(normalized.begin(), normalized.end(), '_', ' ');
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::toupper(ch));
+    });
+    while (normalized.find("  ") != std::string::npos) {
+        normalized.erase(normalized.find("  "), 1);
+    }
+    return normalized;
+}
+
+SignalType antexSignalType(const std::string& code) {
+    const std::string trimmed = trimCopy(code);
+    if (trimmed == "G01") return SignalType::GPS_L1CA;
+    if (trimmed == "G02") return SignalType::GPS_L2C;
+    if (trimmed == "G05") return SignalType::GPS_L5;
+    if (trimmed == "R01") return SignalType::GLO_L1CA;
+    if (trimmed == "R02") return SignalType::GLO_L2CA;
+    if (trimmed == "E01") return SignalType::GAL_E1;
+    if (trimmed == "E05") return SignalType::GAL_E5A;
+    if (trimmed == "E07") return SignalType::GAL_E5B;
+    if (trimmed == "E06") return SignalType::GAL_E6;
+    if (trimmed == "C02") return SignalType::BDS_B1I;
+    if (trimmed == "C07") return SignalType::BDS_B2I;
+    if (trimmed == "C06") return SignalType::BDS_B3I;
+    if (trimmed == "C01") return SignalType::BDS_B1C;
+    if (trimmed == "C05") return SignalType::BDS_B2A;
+    if (trimmed == "J01") return SignalType::QZS_L1CA;
+    if (trimmed == "J02") return SignalType::QZS_L2C;
+    if (trimmed == "J05") return SignalType::QZS_L5;
+    return SignalType::SIGNAL_TYPE_COUNT;
+}
+
+SignalType claslibAntexSignalType(const std::string& code) {
+    const std::string trimmed = trimCopy(code);
+    if (trimmed.size() < 3 ||
+        std::isdigit(static_cast<unsigned char>(trimmed[1])) == 0 ||
+        std::isdigit(static_cast<unsigned char>(trimmed[2])) == 0) {
+        return SignalType::SIGNAL_TYPE_COUNT;
+    }
+    const int frequency_number =
+        (trimmed[1] - '0') * 10 + (trimmed[2] - '0');
+    switch (frequency_number) {
+        case 1: return SignalType::GPS_L1CA;
+        case 2: return SignalType::GPS_L2C;
+        case 5: return SignalType::GPS_L5;
+        default:
+            return SignalType::SIGNAL_TYPE_COUNT;
+    }
+}
+
+SignalType receiverAntennaLookupSignal(SignalType signal,
+                                       bool claslib_frequency_collapse) {
+    if (!claslib_frequency_collapse) {
+        return signal;
+    }
+    switch (signal) {
+        case SignalType::GPS_L1CA:
+        case SignalType::GPS_L1P:
+        case SignalType::GLO_L1CA:
+        case SignalType::GLO_L1P:
+        case SignalType::GAL_E1:
+        case SignalType::BDS_B1I:
+        case SignalType::BDS_B1C:
+        case SignalType::QZS_L1CA:
+            return SignalType::GPS_L1CA;
+        case SignalType::GPS_L2P:
+        case SignalType::GPS_L2C:
+        case SignalType::GLO_L2CA:
+        case SignalType::GLO_L2P:
+        case SignalType::QZS_L2C:
+            return SignalType::GPS_L2C;
+        case SignalType::GPS_L5:
+        case SignalType::GAL_E5A:
+        case SignalType::BDS_B2A:
+        case SignalType::QZS_L5:
+            return SignalType::GPS_L5;
+        default:
+            return signal;
+    }
+}
+
+std::string extractAntexFrequencyCode(const std::string& line) {
+    for (size_t index = 0; index + 2 < std::min<size_t>(line.size(), 20U); ++index) {
+        if (std::isalpha(static_cast<unsigned char>(line[index])) != 0 &&
+            std::isdigit(static_cast<unsigned char>(line[index + 1])) != 0 &&
+            std::isdigit(static_cast<unsigned char>(line[index + 2])) != 0) {
+            return line.substr(index, 3);
+        }
+    }
+    return "";
+}
+
+struct ReceiverAntennaFrequencyModel {
+    Vector3d offset_enu = Vector3d::Zero();
+    std::array<double, 19> noazi_pcv_m{};
+    bool has_offset = false;
+    bool has_noazi_pcv = false;
+};
+
+using ReceiverAntennaModel =
+    std::map<SignalType, ReceiverAntennaFrequencyModel>;
+using ReceiverAntennaModelMap =
+    std::map<std::string, ReceiverAntennaModel>;
+
+bool loadReceiverAntennaModels(
+    const std::string& filename,
+    ReceiverAntennaModelMap& receiver_models,
+    bool claslib_frequency_collapse = false) {
+    receiver_models.clear();
+    std::ifstream input(filename);
+    if (!input.is_open()) {
+        return false;
+    }
+
+    bool in_antenna = false;
+    bool receiver_entry = false;
+    SignalType current_signal = SignalType::SIGNAL_TYPE_COUNT;
+    std::string current_type;
+    ReceiverAntennaModel current_model;
+    std::string line;
+    while (std::getline(input, line)) {
+        const std::string label = line.size() >= 60 ? trimCopy(line.substr(60)) : "";
+        if (label == "START OF ANTENNA") {
+            in_antenna = true;
+            receiver_entry = false;
+            current_signal = SignalType::SIGNAL_TYPE_COUNT;
+            current_type.clear();
+            current_model.clear();
+            continue;
+        }
+        if (!in_antenna) {
+            continue;
+        }
+        if (label == "END OF ANTENNA") {
+            if (receiver_entry && !current_type.empty() && !current_model.empty()) {
+                receiver_models[current_type] = current_model;
+            }
+            in_antenna = false;
+            continue;
+        }
+        if (label == "TYPE / SERIAL NO") {
+            current_type = normalizeAntennaType(line.substr(0, std::min<size_t>(line.size(), 20U)));
+            const std::string serial =
+                line.size() > 20 ? trimCopy(line.substr(20, std::min<size_t>(20U, line.size() - 20))) : "";
+            receiver_entry = !(serial.size() == 3 &&
+                               std::isalpha(static_cast<unsigned char>(serial[0])) != 0 &&
+                               std::isdigit(static_cast<unsigned char>(serial[1])) != 0 &&
+                               std::isdigit(static_cast<unsigned char>(serial[2])) != 0);
+            continue;
+        }
+        if (!receiver_entry) {
+            continue;
+        }
+        if (label == "START OF FREQUENCY") {
+            const std::string frequency_code = extractAntexFrequencyCode(line);
+            current_signal = claslib_frequency_collapse ?
+                claslibAntexSignalType(frequency_code) :
+                antexSignalType(frequency_code);
+            continue;
+        }
+        if (label == "END OF FREQUENCY") {
+            current_signal = SignalType::SIGNAL_TYPE_COUNT;
+            continue;
+        }
+        if (current_signal == SignalType::SIGNAL_TYPE_COUNT) {
+            continue;
+        }
+        if (label == "NORTH / EAST / UP") {
+            std::istringstream iss(line.substr(0, std::min<size_t>(line.size(), 30U)));
+            double north_mm = 0.0;
+            double east_mm = 0.0;
+            double up_mm = 0.0;
+            if (iss >> north_mm >> east_mm >> up_mm) {
+                auto& model = current_model[current_signal];
+                model.offset_enu =
+                    Vector3d(east_mm * 1e-3, north_mm * 1e-3, up_mm * 1e-3);
+                model.has_offset = true;
+            }
+            continue;
+        }
+        const size_t noazi_pos = line.find("NOAZI");
+        if (noazi_pos != std::string::npos) {
+            std::istringstream iss(line.substr(noazi_pos + 5));
+            auto& model = current_model[current_signal];
+            double value_mm = 0.0;
+            int count = 0;
+            for (; count < static_cast<int>(model.noazi_pcv_m.size()) &&
+                   (iss >> value_mm); ++count) {
+                model.noazi_pcv_m[static_cast<size_t>(count)] = value_mm * 1e-3;
+            }
+            if (count > 0) {
+                for (size_t i = static_cast<size_t>(count); i < model.noazi_pcv_m.size(); ++i) {
+                    model.noazi_pcv_m[i] = model.noazi_pcv_m[i - 1];
+                }
+                model.has_noazi_pcv = true;
+            }
+        }
+    }
+
+    return !receiver_models.empty();
+}
+
+const ReceiverAntennaModel* findReceiverAntennaModel(
+    const ppp_shared::PPPConfig& config) {
+    if (config.antex_file_path.empty() ||
+        config.receiver_antenna_type.empty()) {
+        return nullptr;
+    }
+
+    const bool claslib_frequency_collapse =
+        config.wlnl_strict_claslib_parity;
+    using CacheKey = std::pair<std::string, bool>;
+    static std::map<CacheKey, ReceiverAntennaModelMap> cache;
+    const CacheKey cache_key{
+        config.antex_file_path,
+        claslib_frequency_collapse};
+    auto cache_it = cache.find(cache_key);
+    if (cache_it == cache.end()) {
+        ReceiverAntennaModelMap models;
+        if (!loadReceiverAntennaModels(
+                config.antex_file_path,
+                models,
+                claslib_frequency_collapse)) {
+            cache[cache_key] = ReceiverAntennaModelMap{};
+        } else {
+            cache[cache_key] = std::move(models);
+        }
+        cache_it = cache.find(cache_key);
+    }
+    if (cache_it == cache.end()) {
+        return nullptr;
+    }
+
+    const std::string normalized_type =
+        normalizeAntennaType(config.receiver_antenna_type);
+    if (normalized_type.empty()) {
+        return nullptr;
+    }
+    const auto model_it = cache_it->second.find(normalized_type);
+    if (model_it != cache_it->second.end()) {
+        return &model_it->second;
+    }
+
+    // Match RTKLIB's useful fallback for descriptors without an exact radome.
+    const std::string antenna_without_radome =
+        trimCopy(normalized_type.substr(0, std::min<size_t>(20U, normalized_type.size())));
+    for (const auto& [type, model] : cache_it->second) {
+        if (type.rfind(antenna_without_radome, 0) == 0) {
+            return &model;
+        }
+    }
+    return nullptr;
+}
+
+double interpolateReceiverNoaziPcv(
+    const ReceiverAntennaFrequencyModel& model,
+    double elevation_rad) {
+    if (!model.has_noazi_pcv) {
+        return 0.0;
+    }
+    const double zenith_deg =
+        90.0 - elevation_rad * 180.0 / M_PI;
+    const double a = zenith_deg / 5.0;
+    const int i = static_cast<int>(a);
+    if (i < 0) {
+        return model.noazi_pcv_m[0];
+    }
+    if (i >= 18) {
+        return model.noazi_pcv_m[18];
+    }
+    return model.noazi_pcv_m[static_cast<size_t>(i)] * (1.0 - a + i) +
+           model.noazi_pcv_m[static_cast<size_t>(i + 1)] * (a - i);
+}
+
+struct ReceiverAntennaCorrectionDetails {
+    Vector3d offset_enu = Vector3d::Zero();
+    Vector3d offset_ecef = Vector3d::Zero();
+    double pco_m = 0.0;
+    double pcv_m = 0.0;
+    double total_m = 0.0;
+    bool has_antex = false;
+};
+
+ReceiverAntennaCorrectionDetails receiverAntennaCorrection(
+    const ppp_shared::PPPConfig& config,
+    const ReceiverAntennaModel* antenna_model,
+    SignalType signal,
+    double azimuth_rad,
+    double elevation_rad,
+    double receiver_lat_rad,
+    double receiver_lon_rad) {
+    ReceiverAntennaCorrectionDetails details;
+    details.offset_enu = config.receiver_antenna_delta_enu;
+    if (antenna_model != nullptr) {
+        const SignalType lookup_signal = receiverAntennaLookupSignal(
+            signal,
+            config.wlnl_strict_claslib_parity);
+        const auto signal_it = antenna_model->find(lookup_signal);
+        if (signal_it != antenna_model->end()) {
+            const auto& model = signal_it->second;
+            if (model.has_offset) {
+                details.offset_enu += model.offset_enu;
+                details.has_antex = true;
+            }
+            details.pcv_m = interpolateReceiverNoaziPcv(model, elevation_rad);
+        }
+    }
+
+    const double cos_el = std::cos(elevation_rad);
+    const Vector3d e_enu(
+        std::sin(azimuth_rad) * cos_el,
+        std::cos(azimuth_rad) * cos_el,
+        std::sin(elevation_rad));
+    details.pco_m = -details.offset_enu.dot(e_enu);
+    details.total_m = details.pco_m + details.pcv_m;
+    details.offset_ecef =
+        enu2ecef(details.offset_enu, receiver_lat_rad, receiver_lon_rad);
+    return details;
+}
+
+const tidal::EarthRotationParameters* cachedEarthRotationParameters(
+    const std::string& path) {
+    if (path.empty()) {
+        return nullptr;
+    }
+    struct CacheEntry {
+        bool loaded = false;
+        tidal::EarthRotationParameters erp;
+    };
+    static std::map<std::string, CacheEntry> cache;
+    auto it = cache.find(path);
+    if (it == cache.end()) {
+        CacheEntry entry;
+        entry.loaded = tidal::loadEarthRotationParameters(path, entry.erp);
+        it = cache.emplace(path, std::move(entry)).first;
+    }
+    return it->second.loaded ? &it->second.erp : nullptr;
+}
+
+const tidal::OceanLoadingGrid* cachedClasGridOceanLoading(
+    const std::string& path) {
+    if (path.empty()) {
+        return nullptr;
+    }
+    struct CacheEntry {
+        bool loaded = false;
+        tidal::OceanLoadingGrid grid;
+    };
+    static std::map<std::string, CacheEntry> cache;
+    auto it = cache.find(path);
+    if (it == cache.end()) {
+        CacheEntry entry;
+        entry.loaded = tidal::loadClasGridOceanLoading(path, entry.grid);
+        it = cache.emplace(path, std::move(entry)).first;
+    }
+    return it->second.loaded ? &it->second.grid : nullptr;
+}
+
+bool buildClasGridTideInterpolation(
+    const std::map<std::string, std::string>& atmos_tokens,
+    const Vector3d& receiver_position,
+    tidal::ClasGridInterpolation& interpolation) {
+    ppp_atmosphere::ClasGridReference reference;
+    if (!ppp_atmosphere::resolveClasGridReference(
+            atmos_tokens, receiver_position, reference)) {
+        return false;
+    }
+
+    interpolation = tidal::ClasGridInterpolation{};
+    interpolation.network_id = reference.network_id;
+    if (reference.has_model_interpolation) {
+        interpolation.grid_count = 4;
+        interpolation.use_model_interpolation = true;
+        for (int i = 0; i < 4; ++i) {
+            interpolation.grid_numbers[i] =
+                static_cast<int>(reference.model_grid_indices[i]) + 1;
+            interpolation.weights[i] = 0.0;
+        }
+        for (int i = 0; i < 16; ++i) {
+            interpolation.model_gmat[i] = reference.model_gmat[i];
+        }
+        for (int i = 0; i < 4; ++i) {
+            interpolation.model_emat[i] = reference.model_emat[i];
+        }
+        return true;
+    }
+
+    interpolation.grid_count = 1;
+    interpolation.grid_numbers[0] = reference.grid_no;
+    interpolation.weights[0] = 1.0;
+    return true;
+}
+
+tidal::TideDisplacementComponents calculateClasTideComponents(
+    const Vector3d& receiver_position,
+    const GNSSTime& time,
+    const std::map<std::string, std::string>& atmos_tokens,
+    const ppp_shared::PPPConfig& config) {
+    const tidal::EarthRotationParameters* erp =
+        cachedEarthRotationParameters(config.eop_file_path);
+    const tidal::OceanLoadingGrid* ocean_grid =
+        cachedClasGridOceanLoading(config.clas_grid_blq_file_path);
+
+    tidal::ClasGridInterpolation interpolation;
+    const bool have_ocean_interpolation =
+        config.apply_clas_grid_ocean_loading &&
+        ocean_grid != nullptr &&
+        buildClasGridTideInterpolation(atmos_tokens, receiver_position, interpolation);
+
+    return tidal::calculateTideDisplacement(
+        receiver_position,
+        time,
+        erp,
+        ocean_grid,
+        have_ocean_interpolation ? &interpolation : nullptr,
+        config.apply_solid_earth_tides,
+        config.apply_clas_grid_ocean_loading && have_ocean_interpolation,
+        config.apply_pole_tide);
+}
 
 Vector3d orbitCorrectionToEcef(const Vector3d& orbit_correction,
                                const Vector3d& sat_pos,
@@ -1108,24 +1546,32 @@ CLASEpochContext prepareClasEpochContext(
     std::map<SatelliteId, CLASSisContinuityInfo>& sis_continuity,
     std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair) {
     CLASEpochContext context;
-    context.receiver_position = receiver_pos;
     context.receiver_clock_m = receiver_clk;
     context.trop_zenith_m = trop_zenith;
     context.epoch_atmos_tokens =
         selectClasEpochAtmosTokens(ssr, obs.getSatellites(), obs.time, receiver_pos, config);
+
+    if (config.apply_tides_to_receiver_position) {
+        const auto tide_components = calculateClasTideComponents(
+            receiver_pos, obs.time, context.epoch_atmos_tokens, config);
+        context.tide_displacement_ecef = tide_components.total();
+    }
+    context.receiver_position = receiver_pos + context.tide_displacement_ecef;
+
     context.osr_corrections = computeOSR(
         obs,
         nav,
         ssr,
         context.epoch_atmos_tokens,
-        receiver_pos,
+        context.receiver_position,
         receiver_clk,
         trop_zenith,
         config,
         prev_windup,
         dispersion_compensation,
         sis_continuity,
-        phase_bias_repair);
+        phase_bias_repair,
+        context.tide_displacement_ecef);
     return context;
 }
 
@@ -1141,7 +1587,8 @@ std::vector<OSRCorrection> computeOSR(
     std::map<SatelliteId, double>& prev_windup,
     std::map<SatelliteId, CLASDispersionCompensationInfo>& dispersion_compensation,
     std::map<SatelliteId, CLASSisContinuityInfo>& sis_continuity,
-    std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair) {
+    std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair,
+    const Vector3d& receiver_tide_displacement) {
 
     std::vector<OSRCorrection> corrections;
     int preferred_network_id = 0;
@@ -1154,15 +1601,36 @@ std::vector<OSRCorrection> computeOSR(
         selectClasEpochAtmosTokens(
             ssr, obs.getSatellites(), obs.time, receiver_pos, trop_config);
 
-    // Compute solid earth tide displacement once per epoch (shared across all satellites).
+    const bool debug_enabled = pppDebugEnabled();
+    const ReceiverAntennaModel* receiver_antenna_model =
+        findReceiverAntennaModel(config);
+
+    // Receiver tide displacement is either supplied by the CLASLIB parity
+    // context or computed on demand for observation-side tide correction.
+    Vector3d tide_displacement_model = receiver_tide_displacement;
+    if (tide_displacement_model.squaredNorm() <= 0.0) {
+        if (config.apply_tide_as_osr &&
+            (config.apply_clas_grid_ocean_loading || config.apply_pole_tide ||
+             !config.eop_file_path.empty() || !config.clas_grid_blq_file_path.empty())) {
+            tide_displacement_model =
+                calculateClasTideComponents(
+                    receiver_pos, obs.time, epoch_atmos_tokens, config).total();
+        } else if (config.apply_tide_as_osr || debug_enabled) {
+            tide_displacement_model =
+                tidal::calculateSolidEarthTides(receiver_pos, obs.time);
+        }
+    }
     const Vector3d tide_displacement =
-        config.apply_tide_as_osr ?
-            tidal::calculateSolidEarthTides(receiver_pos, obs.time) :
-            Vector3d::Zero();
+        config.apply_tide_as_osr ? tide_displacement_model : Vector3d::Zero();
 
     for (const auto& sat : obs.getSatellites()) {
         OSRCorrection osr;
         osr.satellite = sat;
+        const std::string sat_id = sat.toString();
+        const bool focused_g14_dump =
+            obs.time.week == 2068 &&
+            std::abs(obs.time.tow - 230420.0) <= 1e-6 &&
+            sat_id == "G14";
 
         // --- 1. Find L1/L2 observations ---
         const auto findSignal = [&](const std::vector<SignalType>& candidates)
@@ -1422,10 +1890,24 @@ std::vector<OSRCorrection> computeOSR(
         const Vector3d los_enu = ecef2enu(sat_pos - receiver_pos, lat, lon);
         const double elev = std::atan2(los_enu.z(), std::hypot(los_enu.x(), los_enu.y()));
         const double azim = std::atan2(los_enu.x(), los_enu.y());
+        if (debug_enabled && focused_g14_dump) {
+            const Vector3d tide_enu = ecef2enu(tide_displacement_model, lat, lon);
+            const double tide_los_m = los.dot(tide_displacement_model);
+            std::cerr << std::setprecision(15)
+                      << "[OSR-TIDE] source=lib"
+                      << " week=" << obs.time.week
+                      << " tow=" << obs.time.tow
+                      << " sat=" << sat_id
+                      << " tide_ecef=" << tide_displacement_model.transpose()
+                      << " tide_enu=" << tide_enu.transpose()
+                      << " tide_los_m=" << tide_los_m
+                      << " applied=" << (config.apply_tide_as_osr ? 1 : 0)
+                      << "\n";
+        }
 
         if (elev < kElevationMaskRad) {
-            if (pppDebugEnabled() && corrections.size() < 20) {
-                std::cerr << "[OSR-DROP] " << sat.toString()
+            if (debug_enabled && corrections.size() < 20) {
+                std::cerr << "[OSR-DROP] " << sat_id
                           << " reason=elevation"
                           << " elev_deg=" << (elev * 180.0 / M_PI)
                           << " recv_pos=" << receiver_pos.transpose()
@@ -1439,17 +1921,11 @@ std::vector<OSRCorrection> computeOSR(
 
         // --- 3b. Solid earth tide (observation-side) ---
         // Project the epoch-wide tide displacement onto this satellite's LOS.
-        // Sign: tide_disp is the receiver displacement.  los points receiver→sat.
-        // When ground moves toward satellite, true range shortens but the model
-        // (using uncorrected position) computes a too-long range.  Adding
-        // -los.dot(tide_disp) to PRC/CPC compensates.
-        //
-        // NOTE: Tested 2026-04-14 on 2019 parity case.  Neither sign improved
-        // RMS over the no-tide baseline (1.32m).  The filter absorbs the constant
-        // tide into clock/position over the 100 s window.  Keep infrastructure for
-        // when float precision reaches sub-30 cm and the tide becomes resolvable.
         if (config.apply_tide_as_osr) {
-            osr.solid_earth_tide_m = -los.dot(tide_displacement);
+            osr.solid_earth_tide_m = los.dot(tide_displacement);
+        }
+        if (receiver_tide_displacement.squaredNorm() > 0.0) {
+            osr.tide_geometry_m = -los.dot(receiver_tide_displacement);
         }
 
         const Ephemeris* eph = nav.getEphemeris(sat, obs.time);
@@ -1462,6 +1938,35 @@ std::vector<OSRCorrection> computeOSR(
             osr.frequencies[1] = signalFrequencyHz(l2_obs->signal, eph);
             osr.wavelengths[1] = constants::SPEED_OF_LIGHT / osr.frequencies[1];
             osr.num_frequencies = 2;
+        }
+        for (int f = 0; f < osr.num_frequencies; ++f) {
+            const auto ant = receiverAntennaCorrection(
+                config,
+                receiver_antenna_model,
+                osr.signals[f],
+                azim,
+                elev,
+                lat,
+                lon);
+            osr.receiver_antenna_m[f] = ant.total_m;
+            if (debug_enabled && focused_g14_dump) {
+                std::cerr << std::setprecision(15)
+                          << "[OSR-RCV-ANT] source=lib"
+                          << " week=" << obs.time.week
+                          << " tow=" << obs.time.tow
+                          << " sat=" << sat_id
+                          << " f=" << f
+                          << " signal=" << static_cast<int>(osr.signals[f])
+                          << " antenna=\"" << normalizeAntennaType(config.receiver_antenna_type) << "\""
+                          << " has_antex=" << (ant.has_antex ? 1 : 0)
+                          << " offset_enu=" << ant.offset_enu.transpose()
+                          << " offset_ecef=" << ant.offset_ecef.transpose()
+                          << " los_enu=" << los_enu.normalized().transpose()
+                          << " pco_m=" << ant.pco_m
+                          << " pcv_m=" << ant.pcv_m
+                          << " total_m=" << ant.total_m
+                          << "\n";
+            }
         }
 
         // --- 4. Troposphere ---
@@ -1686,8 +2191,8 @@ std::vector<OSRCorrection> computeOSR(
                 if (std::abs(pbias_lag - kPhaseBiasLagSeconds) < 0.5) {
                     osr.CPC[f] -= sis_continuity_info.last_delta_m;
                     osr.PRC[f] -= sis_continuity_info.last_delta_m;
-                    if (pppDebugEnabled() && f == 0) {
-                        std::cerr << "[OSR-SIS] " << sat.toString()
+                    if (debug_enabled && f == 0) {
+                        std::cerr << "[OSR-SIS] " << sat_id
                                   << " lag_s=" << pbias_lag
                                   << " sis_delta_m=" << sis_continuity_info.last_delta_m
                                   << " ref_policy="
@@ -1718,9 +2223,9 @@ std::vector<OSRCorrection> computeOSR(
             obs.time.tow >= 230420.0 - 1e-6 &&
             obs.time.tow <= 230425.0 + 1e-6 &&
             isGpsClasParityTarget(sat);
-        if (pppDebugEnabled() &&
-            (corrections.size() < 3 || sat.toString() == "G31" || focused_gps_bias_dump)) {
-            std::cerr << "[OSR] " << sat.toString()
+        if (debug_enabled &&
+            (corrections.size() < 3 || sat_id == "G31" || focused_gps_bias_dump || focused_g14_dump)) {
+            std::cerr << "[OSR] " << sat_id
                       << " sig0=" << static_cast<int>(osr.signals[0])
                       << " sig1=" << (osr.num_frequencies >= 2 ?
                           static_cast<int>(osr.signals[1]) : -1)
@@ -1732,7 +2237,10 @@ std::vector<OSRCorrection> computeOSR(
                       << " pbias0=" << osr.phase_bias_m[0]
                       << " pbias1=" << (osr.num_frequencies >= 2 ? osr.phase_bias_m[1] : 0.0)
                       << " windup=" << osr.windup_cycles
+                      << " rcv_ant0=" << osr.receiver_antenna_m[0]
+                      << " rcv_ant1=" << (osr.num_frequencies >= 2 ? osr.receiver_antenna_m[1] : 0.0)
                       << " tide=" << osr.solid_earth_tide_m
+                      << " tide_geom=" << osr.tide_geometry_m
                       << " pbias_ref_tow=" << osr.phase_bias_reference_time.tow
                       << " eff_pbias_ref_tow=" << effective_phase_bias_reference_time.tow
                       << " orb_los=" << osr.orbit_projection_m

@@ -106,6 +106,7 @@ std::vector<OSRCorrection> computeOSR(
     std::map<SatelliteId, double>& prev_windup,
     std::map<SatelliteId, CLASDispersionCompensationInfo>& dispersion_compensation,
     std::map<SatelliteId, CLASSisContinuityInfo>& sis_continuity,
-    std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair);
+    std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair,
+    const Vector3d& receiver_tide_displacement = Vector3d::Zero());
 
 }  // namespace libgnss

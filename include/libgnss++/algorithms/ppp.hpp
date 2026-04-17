@@ -230,6 +230,8 @@ private:
     PPPState wlnl_fixed_state_;
     bool has_wlnl_fixed_state_ = false;
     double last_wlnl_fixed_state_dd_gap_ = 1e9;
+    PPPState clas_dd_hold_state_;
+    bool has_clas_dd_hold_state_ = false;
     std::vector<ppp_ar::WlnlFixAttempt::DdConstraint> wlnl_dd_constraints_;
     std::map<SatelliteId, double> windup_cache_;  ///< Phase wind-up cache for OSR
     std::map<SatelliteId, CLASPhaseBiasRepairInfo> clas_phase_bias_repair_;

@@ -12,6 +12,7 @@
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/algorithms/ssr2obs.hpp>
 #include <libgnss++/core/solution.hpp>
+#include <libgnss++/external/claslib_bridge.hpp>
 #include <libgnss++/io/rinex.hpp>
 
 namespace {
@@ -26,7 +27,10 @@ struct Options {
     std::string ionex_path;
     std::string dcb_path;
     std::string antex_path;
+    std::string receiver_antenna_type;
+    std::string eop_path;
     std::string blq_path;
+    std::string clas_grid_blq_path;
     std::string ocean_loading_station_name;
     std::string out_path;
     std::string summary_json_path;
@@ -60,11 +64,15 @@ struct Options {
     double clas_atmos_stale_after_seconds = 15.0;
     /// Single-switch preset to align with CLASLIB-style PPP-RTK (strict OSR, uncombined, iono, WLNL AR).
     bool claslib_parity = false;
+    bool claslib_bridge = false;
+    std::string claslib_config_path;
+    int claslib_l6_week = 0;
     bool kinematic_mode = false;
     bool low_dynamics_mode = false;
     bool enable_ar = false;
     std::string ar_method = "dd-iflc";
     double ar_ratio_threshold = 3.0;
+    bool ar_ratio_threshold_explicit = false;
     bool quiet = false;
 };
 
@@ -81,7 +89,12 @@ void printUsage(const char* program_name) {
         << "  --ionex <maps.ionex>     Optional IONEX TEC map product\n"
         << "  --dcb <bias.bsx>         Optional DCB / Bias-SINEX product\n"
         << "  --antex <antennas.atx>   Optional ANTEX file for receiver antenna PCO\n"
+        << "  --receiver-antenna-type <type>\n"
+        << "                          Receiver antenna type override when RINEX ANT # / TYPE is empty\n"
+        << "  --eop <igu.erp>          Optional ERP/EOP file for pole tide and UT1\n"
         << "  --blq <station.blq>      Optional BLQ ocean loading coefficient file\n"
+        << "  --clas-grid-blq <clas_grid.blq>\n"
+        << "                          CLAS grid BLQ file for CLASLIB parity tide loading\n"
         << "  --ocean-loading-station <name>\n"
         << "                          Station name to select from the BLQ file\n"
         << "  --ssr-step-seconds <seconds>\n"
@@ -92,6 +105,10 @@ void printUsage(const char* program_name) {
         << "  --claslib-parity         CLASLIB-oriented preset: --clas-osr, strict-osr (no hybrid default),\n"
         << "                          --no-ionosphere-free, --estimate-ionosphere, --clas-atmos-selection grid-first,\n"
         << "                          troposphere on, --enable-ar --ar-method dd-wlnl. Override any piece after this flag.\n"
+        << "  --claslib-bridge         Delegate this run to linked CLASLIB postpos() (requires CMake -DCLASLIB_PARITY_LINK=ON)\n"
+        << "  --no-claslib-bridge      Keep the native libgnss++ path even when CLASLIB bridge support is linked\n"
+        << "  --claslib-config <file>  CLASLIB rnx2rtkp config for --claslib-bridge (default: CLASLIB static.conf)\n"
+        << "  --claslib-l6-week <week> Override CLASLIB L6 GPS week for --claslib-bridge\n"
         << "  --out <solution.pos>     Output position file (required)\n"
         << "  --summary-json <summary.json>\n"
         << "                          Optional machine-readable run summary\n"
@@ -152,6 +169,13 @@ void printUsage(const char* program_name) {
     std::exit(1);
 }
 
+std::string defaultClaslibDataFile(const std::string& filename) {
+    const std::filesystem::path path =
+        "";
+    const std::filesystem::path candidate = path / filename;
+    return std::filesystem::is_regular_file(candidate) ? candidate.string() : "";
+}
+
 Options parseArguments(int argc, char* argv[]) {
     Options options;
     for (int i = 1; i < argc; ++i) {
@@ -177,8 +201,15 @@ Options parseArguments(int argc, char* argv[]) {
             options.dcb_path = argv[++i];
         } else if (arg == "--antex" && i + 1 < argc) {
             options.antex_path = argv[++i];
+        } else if ((arg == "--receiver-antenna-type" || arg == "--antenna-type") &&
+                   i + 1 < argc) {
+            options.receiver_antenna_type = argv[++i];
+        } else if (arg == "--eop" && i + 1 < argc) {
+            options.eop_path = argv[++i];
         } else if (arg == "--blq" && i + 1 < argc) {
             options.blq_path = argv[++i];
+        } else if (arg == "--clas-grid-blq" && i + 1 < argc) {
+            options.clas_grid_blq_path = argv[++i];
         } else if (arg == "--ocean-loading-station" && i + 1 < argc) {
             options.ocean_loading_station_name = argv[++i];
         } else if (arg == "--out" && i + 1 < argc) {
@@ -214,6 +245,14 @@ Options parseArguments(int argc, char* argv[]) {
             options.enable_ar = true;
             options.ar_method = "dd-wlnl";
             options.ar_ratio_threshold = 10.0;
+        } else if (arg == "--claslib-bridge") {
+            options.claslib_bridge = true;
+        } else if (arg == "--no-claslib-bridge") {
+            options.claslib_bridge = false;
+        } else if (arg == "--claslib-config" && i + 1 < argc) {
+            options.claslib_config_path = argv[++i];
+        } else if (arg == "--claslib-l6-week" && i + 1 < argc) {
+            options.claslib_l6_week = std::stoi(argv[++i]);
         } else if (arg == "--no-estimate-troposphere") {
             options.estimate_troposphere = false;
         } else if (arg == "--estimate-troposphere") {
@@ -267,6 +306,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.ar_method = argv[++i];
         } else if (arg == "--ar-ratio-threshold" && i + 1 < argc) {
             options.ar_ratio_threshold = std::stod(argv[++i]);
+            options.ar_ratio_threshold_explicit = true;
         } else if (arg == "--dump-ssr2obs-epoch" && i + 1 < argc) {
             options.dump_ssr2obs_epoch = std::stoi(argv[++i]);
         } else if (arg == "--first-ar-dump" && i + 1 < argc) {
@@ -294,6 +334,15 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (!options.ssr_rtcm_path.empty() && options.nav_path.empty()) {
         argumentError("--ssr-rtcm requires --nav", argv[0]);
+    }
+    if (options.claslib_bridge && options.nav_path.empty()) {
+        argumentError("--claslib-bridge requires --nav", argv[0]);
+    }
+    if (options.claslib_bridge && options.ssr_path.empty()) {
+        argumentError("--claslib-bridge requires --ssr <CLAS L6 file>", argv[0]);
+    }
+    if (options.claslib_l6_week < 0) {
+        argumentError("--claslib-l6-week must be non-negative", argv[0]);
     }
     if (options.max_epochs < 0) {
         argumentError("--max-epochs must be non-negative", argv[0]);
@@ -571,6 +620,97 @@ int main(int argc, char* argv[]) {
         if (options.use_clas_osr_filter && !options.clas_epoch_policy_explicit) {
             options.clas_epoch_policy = "hybrid-standard-ppp";
         }
+        if (options.claslib_parity &&
+            options.ar_method == "dd-wlnl" &&
+            !options.ar_ratio_threshold_explicit) {
+            options.ar_ratio_threshold = 1.2;
+        }
+        if (options.claslib_parity) {
+            if (options.eop_path.empty()) {
+                options.eop_path = defaultClaslibDataFile("igu00p01.erp");
+            }
+            if (options.clas_grid_blq_path.empty()) {
+                options.clas_grid_blq_path = defaultClaslibDataFile("clas_grid.blq");
+            }
+            if (options.antex_path.empty()) {
+                options.antex_path = defaultClaslibDataFile("igs14_L5copy.atx");
+            }
+            if (options.receiver_antenna_type.empty()) {
+                options.receiver_antenna_type = "TRM59800.80     NONE";
+            }
+        }
+
+        if (options.claslib_bridge) {
+            namespace claslib = libgnss::external::claslib;
+            if (!claslib::isAvailable()) {
+                std::cerr << "Error: --claslib-bridge requested, but this binary was not "
+                             "built with -DCLASLIB_PARITY_LINK=ON\n";
+                return 1;
+            }
+
+            claslib::PostposOptions bridge_options;
+            bridge_options.obs_path = options.obs_path;
+            bridge_options.nav_path = options.nav_path;
+            bridge_options.ssr_path = options.ssr_path;
+            bridge_options.out_path = options.out_path;
+            bridge_options.config_path = options.claslib_config_path;
+            bridge_options.blq_path = options.clas_grid_blq_path;
+            bridge_options.eop_path = options.eop_path;
+            bridge_options.receiver_antenna_path = options.antex_path;
+            bridge_options.receiver_antenna_type = options.receiver_antenna_type;
+            bridge_options.l6_gps_week = options.claslib_l6_week;
+            bridge_options.output_ecef_xyz = true;
+
+            const std::filesystem::path output_path(options.out_path);
+            if (output_path.has_parent_path()) {
+                std::filesystem::create_directories(output_path.parent_path());
+            }
+            std::string bridge_error;
+            const int bridge_status = claslib::runPostpos(bridge_options, &bridge_error);
+            if (bridge_status != 0) {
+                std::cerr << "Error: CLASLIB bridge failed";
+                if (!bridge_error.empty()) {
+                    std::cerr << ": " << bridge_error;
+                }
+                std::cerr << "\n";
+                return 1;
+            }
+
+            if (!options.summary_json_path.empty()) {
+                const std::filesystem::path summary_path(options.summary_json_path);
+                if (!summary_path.parent_path().empty()) {
+                    std::filesystem::create_directories(summary_path.parent_path());
+                }
+                std::ofstream summary(summary_path);
+                if (!summary.is_open()) {
+                    std::cerr << "Error: failed to write summary JSON: "
+                              << options.summary_json_path << "\n";
+                    return 1;
+                }
+                summary << "{\n"
+                        << "  \"claslib_parity\": "
+                        << (options.claslib_parity ? "true" : "false") << ",\n"
+                        << "  \"claslib_bridge\": true,\n"
+                        << "  \"claslib_bridge_status\": " << bridge_status << ",\n"
+                        << "  \"claslib_config\": "
+                        << (options.claslib_config_path.empty() ?
+                                "null" :
+                                ("\"" + jsonEscape(options.claslib_config_path) + "\""))
+                        << ",\n"
+                        << "  \"obs\": \"" << jsonEscape(options.obs_path) << "\",\n"
+                        << "  \"nav\": \"" << jsonEscape(options.nav_path) << "\",\n"
+                        << "  \"ssr\": \"" << jsonEscape(options.ssr_path) << "\",\n"
+                        << "  \"out\": \"" << jsonEscape(options.out_path) << "\",\n"
+                        << "  \"output_format\": \"rtklib-ecef\"\n"
+                        << "}\n";
+            }
+
+            if (!options.quiet) {
+                std::cout << "CLASLIB bridge: delegated run to linked CLASLIB postpos()\n";
+                std::cout << "  output: " << options.out_path << "\n";
+            }
+            return 0;
+        }
 
         libgnss::io::RINEXReader obs_reader;
         if (!obs_reader.open(options.obs_path)) {
@@ -615,7 +755,9 @@ int main(int argc, char* argv[]) {
         ppp_config.ionex_file_path = options.ionex_path;
         ppp_config.dcb_file_path = options.dcb_path;
         ppp_config.antex_file_path = options.antex_path;
+        ppp_config.eop_file_path = options.eop_path;
         ppp_config.ocean_loading_file_path = options.blq_path;
+        ppp_config.clas_grid_blq_file_path = options.clas_grid_blq_path;
         ppp_config.estimate_troposphere = options.estimate_troposphere;
         ppp_config.estimate_ionosphere = options.estimate_ionosphere;
         ppp_config.use_ionosphere_free = options.use_ionosphere_free;
@@ -655,6 +797,12 @@ int main(int argc, char* argv[]) {
             ppp_config.initial_ionosphere_variance = 1e-4;
             ppp_config.process_noise_ionosphere = 1e-6;
             ppp_config.wlnl_strict_claslib_parity = true;
+            ppp_config.apply_solid_earth_tides = true;
+            ppp_config.apply_pole_tide = !ppp_config.eop_file_path.empty();
+            ppp_config.apply_clas_grid_ocean_loading =
+                !ppp_config.clas_grid_blq_file_path.empty();
+            ppp_config.apply_tides_to_receiver_position = false;
+            ppp_config.apply_tide_as_osr = true;
         }
         if (options.low_dynamics_mode) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
@@ -673,7 +821,10 @@ int main(int argc, char* argv[]) {
         } else {
             ppp_config.approximate_position = obs_header.approximate_position;
         }
-        ppp_config.receiver_antenna_type = obs_header.antenna_type;
+        ppp_config.receiver_antenna_type =
+            options.receiver_antenna_type.empty() ?
+                obs_header.antenna_type :
+                options.receiver_antenna_type;
         ppp_config.receiver_antenna_delta_enu = obs_header.antenna_delta;
         ppp_config.ocean_loading_station_name =
             options.ocean_loading_station_name.empty() ?

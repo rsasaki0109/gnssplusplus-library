@@ -201,6 +201,14 @@ bool shouldLogClasAmbSeed(const SatelliteId& satellite, double tow) {
            shouldLogClasPhaseRow(satellite);
 }
 
+bool shouldDumpClasLongParityTime(const GNSSTime& time) {
+    return time.week == 2068 &&
+           ((time.tow >= 230420.0 - 1e-6 && time.tow <= 230425.0 + 1e-6) ||
+            std::abs(time.tow - 230620.0) <= 1e-6 ||
+            std::abs(time.tow - 231420.0) <= 1e-6 ||
+            std::abs(time.tow - 232419.0) <= 1e-6);
+}
+
 SatelliteId clasRealSatelliteForUpdateDump(const SatelliteId& satellite) {
     if (satellite.prn > 100) {
         return SatelliteId(
@@ -380,9 +388,7 @@ void dumpClasUpdateRows(
     if (!config.wlnl_strict_claslib_parity ||
         !ppp_shared::pppDebugEnabled() ||
         observation_time == nullptr ||
-        observation_time->week != 2068 ||
-        observation_time->tow < 230420.0 - 1e-6 ||
-        observation_time->tow > 230425.0 + 1e-6) {
+        !shouldDumpClasLongParityTime(*observation_time)) {
         return;
     }
 
@@ -674,7 +680,8 @@ void initializeFilterState(
     for (size_t index = 0; index < iono_satellites.size(); ++index) {
         const int state_index = filter_state.iono_index + static_cast<int>(index);
         filter_state.ionosphere_indices[iono_satellites[index]] = state_index;
-        filter_state.state(state_index) = 0.0;
+        filter_state.state(state_index) =
+            config.wlnl_strict_claslib_parity ? 1e-6 : 0.0;
         filter_state.covariance(state_index, state_index) =
             config.wlnl_strict_claslib_parity
                 ? config.initial_ionosphere_variance
@@ -757,6 +764,12 @@ void predictFilterState(
     bool seed_valid) {
     const int nx = filter_state.total_states;
     MatrixXd Q = MatrixXd::Zero(nx, nx);
+    if (config.wlnl_strict_claslib_parity) {
+        constexpr double kClaslibStaticPositionProcessVariance = 1e-8;
+        for (int axis = 0; axis < 3 && axis < nx; ++axis) {
+            Q(axis, axis) = kClaslibStaticPositionProcessVariance * std::abs(dt);
+        }
+    }
     Q(filter_state.clock_index, filter_state.clock_index) = config.clas_clock_variance;
     Q(filter_state.glo_clock_index, filter_state.glo_clock_index) = config.clas_clock_variance;
     if (filter_state.gal_clock_index >= 0) {
@@ -1097,7 +1110,8 @@ MeasurementBuildResult buildEpochMeasurements(
                 row.components.osr_corr = applied_corrections.pseudorange_correction_m;
                 row.components.code_bias = osr.code_bias_m[f];
                 row.components.pcv_rcv = osr.receiver_antenna_m[f];
-                row.components.tide_solid = osr.solid_earth_tide_m;
+                row.components.tide_solid =
+                    osr.tide_geometry_m != 0.0 ? osr.tide_geometry_m : osr.solid_earth_tide_m;
                 row.components.modeled_sum = raw->pseudorange - residual;
                 if (ppp_shared::pppDebugEnabled() &&
                     shouldLogClasPhaseRow(osr.satellite)) {
@@ -1259,7 +1273,8 @@ MeasurementBuildResult buildEpochMeasurements(
                 row.components.phase_comp = osr.phase_compensation_m[f];
                 row.components.windup = osr.windup_m[f];
                 row.components.pcv_rcv = osr.receiver_antenna_m[f];
-                row.components.tide_solid = osr.solid_earth_tide_m;
+                row.components.tide_solid =
+                    osr.tide_geometry_m != 0.0 ? osr.tide_geometry_m : osr.solid_earth_tide_m;
                 row.components.amb_m = filter_state.state(amb_idx);
                 row.components.modeled_sum = l_m - residual;
                 if (ppp_shared::pppDebugEnabled() &&
@@ -1506,10 +1521,73 @@ KalmanUpdateStats applyMeasurementUpdate(
     }
 
     const MatrixXd covariance_before_update = filter_state.covariance;
-    const MatrixXd PHt = covariance_before_update * H.transpose();
-    MatrixXd S = H * covariance_before_update * H.transpose() + R;
-    MatrixXd K = PHt * S.inverse();
-    VectorXd dx = K * z;
+    MatrixXd PHt = covariance_before_update * H.transpose();
+    MatrixXd K = MatrixXd::Zero(filter_state.total_states, stats.nobs);
+    VectorXd dx = VectorXd::Zero(filter_state.total_states);
+    MatrixXd covariance_after_update = covariance_before_update;
+
+    if (config.wlnl_strict_claslib_parity) {
+        std::vector<int> active_indices;
+        active_indices.reserve(static_cast<size_t>(filter_state.total_states));
+        for (int i = 0; i < filter_state.total_states; ++i) {
+            if (std::isfinite(filter_state.state(i)) &&
+                filter_state.state(i) != 0.0 &&
+                covariance_before_update(i, i) > 0.0) {
+                active_indices.push_back(i);
+            }
+        }
+        const int active_count = static_cast<int>(active_indices.size());
+        if (active_count == 0) {
+            return stats;
+        }
+
+        MatrixXd active_covariance = MatrixXd::Zero(active_count, active_count);
+        MatrixXd active_H = MatrixXd::Zero(stats.nobs, active_count);
+        for (int i = 0; i < active_count; ++i) {
+            const int source_i = active_indices[static_cast<size_t>(i)];
+            active_H.col(i) = H.col(source_i);
+            for (int j = 0; j < active_count; ++j) {
+                const int source_j = active_indices[static_cast<size_t>(j)];
+                active_covariance(i, j) = covariance_before_update(source_i, source_j);
+            }
+        }
+
+        const MatrixXd active_PHt = active_covariance * active_H.transpose();
+        const MatrixXd innovation_covariance = active_H * active_PHt + R;
+        Eigen::LDLT<MatrixXd> innovation_ldlt(innovation_covariance);
+        if (innovation_ldlt.info() != Eigen::Success) {
+            return stats;
+        }
+
+        const MatrixXd active_K =
+            active_PHt * innovation_ldlt.solve(MatrixXd::Identity(stats.nobs, stats.nobs));
+        const VectorXd active_dx = active_K * z;
+        const MatrixXd active_I_KH =
+            MatrixXd::Identity(active_count, active_count) - active_K * active_H;
+        const MatrixXd active_covariance_after = active_I_KH * active_covariance;
+
+        PHt.setZero();
+        for (int i = 0; i < active_count; ++i) {
+            const int target_i = active_indices[static_cast<size_t>(i)];
+            dx(target_i) = active_dx(i);
+            K.row(target_i) = active_K.row(i);
+            PHt.row(target_i) = active_PHt.row(i);
+            for (int j = 0; j < active_count; ++j) {
+                const int target_j = active_indices[static_cast<size_t>(j)];
+                covariance_after_update(target_i, target_j) =
+                    active_covariance_after(i, j);
+            }
+        }
+    } else {
+        PHt = covariance_before_update * H.transpose();
+        const MatrixXd S = H * covariance_before_update * H.transpose() + R;
+        K = PHt * S.inverse();
+        dx = K * z;
+        const MatrixXd I_KH =
+            MatrixXd::Identity(filter_state.total_states, filter_state.total_states) - K * H;
+        covariance_after_update =
+            I_KH * filter_state.covariance * I_KH.transpose() + K * R * K.transpose();
+    }
     dumpClasUpdateRows(
         filter_state,
         measurements,
@@ -1644,10 +1722,11 @@ KalmanUpdateStats applyMeasurementUpdate(
         }
     }
     filter_state.state += dx;
-    MatrixXd I_KH =
-        MatrixXd::Identity(filter_state.total_states, filter_state.total_states) - K * H;
-    filter_state.covariance =
-        I_KH * filter_state.covariance * I_KH.transpose() + K * R * K.transpose();
+    filter_state.covariance = covariance_after_update;
+    if (config.wlnl_strict_claslib_parity) {
+        filter_state.covariance =
+            0.5 * (filter_state.covariance + filter_state.covariance.transpose());
+    }
 
     stats.updated = true;
     stats.dx = dx;
@@ -2073,6 +2152,7 @@ AmbiguityResolutionResult resolveAndValidateAmbiguities(
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const ResolveAmbiguitiesFunction& resolve_ambiguities,
     const ValidateFixedSolutionFunction& validate_fixed_solution,
+    bool preserve_float_state_on_accept,
     bool debug_enabled) {
     AmbiguityResolutionResult result;
     if (!resolve_ambiguities) {
@@ -2107,6 +2187,13 @@ AmbiguityResolutionResult resolveAndValidateAmbiguities(
                       << "\n";
         }
         return result;
+    }
+
+    if (preserve_float_state_on_accept) {
+        result.fixed_filter_state = filter_state;
+        result.has_fixed_filter_state = true;
+        filter_state = pre_fix_state;
+        ambiguity_states = pre_fix_ambiguities;
     }
 
     if (debug_enabled) {

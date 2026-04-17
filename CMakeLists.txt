@@ -22,6 +22,11 @@ find_package(nav_msgs QUIET)
 find_package(std_msgs QUIET)
 find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs)
 
+option(CLASLIB_PARITY_LINK "Link the external CLASLIB C sources for explicit parity bridge runs" OFF)
+set(CLASLIB_ROOT_DIR
+    ""
+    CACHE PATH "Path to the CLASLIB checkout root")
+
 # List source files for the main library
 set(GNSS_SOURCES
     src/gnss.cpp
@@ -40,6 +45,7 @@ set(GNSS_SOURCES
     src/algorithms/ppp_osr.cpp
     src/algorithms/ppp_wlnl.cpp
     src/algorithms/ppp_clas_epoch.cpp
+    src/algorithms/ppp_claslib_bridge.cpp
     src/algorithms/ppp.cpp
     src/algorithms/tidal.cpp
 )
@@ -67,6 +73,81 @@ target_include_directories(gnss_lib PUBLIC
 )
 target_link_libraries(gnss_lib PUBLIC Eigen3::Eigen)
 
+if(CLASLIB_PARITY_LINK)
+    set(CLASLIB_SRC_DIR "${CLASLIB_ROOT_DIR}/src")
+    set(CLASLIB_DATA_DIR "${CLASLIB_ROOT_DIR}/data")
+    if(NOT EXISTS "${CLASLIB_SRC_DIR}/rtklib.h")
+        message(FATAL_ERROR "CLASLIB source tree not found: ${CLASLIB_SRC_DIR}")
+    endif()
+    find_package(BLAS REQUIRED)
+    find_package(LAPACK REQUIRED)
+
+    set(CLASLIB_SRCS
+        ${CLASLIB_SRC_DIR}/rtkcmn.c
+        ${CLASLIB_SRC_DIR}/rinex.c
+        ${CLASLIB_SRC_DIR}/rtkpos.c
+        ${CLASLIB_SRC_DIR}/postpos.c
+        ${CLASLIB_SRC_DIR}/solution.c
+        ${CLASLIB_SRC_DIR}/lambda.c
+        ${CLASLIB_SRC_DIR}/geoid.c
+        ${CLASLIB_SRC_DIR}/sbas.c
+        ${CLASLIB_SRC_DIR}/preceph.c
+        ${CLASLIB_SRC_DIR}/pntpos.c
+        ${CLASLIB_SRC_DIR}/ephemeris.c
+        ${CLASLIB_SRC_DIR}/options.c
+        ${CLASLIB_SRC_DIR}/ppp.c
+        ${CLASLIB_SRC_DIR}/ppp_ar.c
+        ${CLASLIB_SRC_DIR}/rtcm.c
+        ${CLASLIB_SRC_DIR}/rtcm2.c
+        ${CLASLIB_SRC_DIR}/rtcm3.c
+        ${CLASLIB_SRC_DIR}/rtcm3e.c
+        ${CLASLIB_SRC_DIR}/ionex.c
+        ${CLASLIB_SRC_DIR}/qzslex.c
+        ${CLASLIB_SRC_DIR}/rcvraw.c
+        ${CLASLIB_SRC_DIR}/stec.c
+        ${CLASLIB_SRC_DIR}/isb.c
+        ${CLASLIB_SRC_DIR}/grid.c
+        ${CLASLIB_SRC_DIR}/cssr.c
+        ${CLASLIB_SRC_DIR}/ppprtk.c
+        ${CLASLIB_SRC_DIR}/cssr2osr.c
+        ${CLASLIB_SRC_DIR}/rtkvrs.c
+        ${CLASLIB_SRC_DIR}/rcv/binex.c
+        ${CLASLIB_SRC_DIR}/rcv/novatel.c
+        ${CLASLIB_SRC_DIR}/rcv/ublox.c
+    )
+    add_library(claslib STATIC ${CLASLIB_SRCS})
+    target_include_directories(claslib PUBLIC ${CLASLIB_SRC_DIR})
+    target_compile_definitions(claslib
+        PRIVATE
+            TRACE
+            ENAGAL
+            ENAQZS
+            NFREQ=3
+            ENA_PPP_RTK
+            ENA_REL_VRS
+            LAPACK
+    )
+    target_link_libraries(claslib PUBLIC ${LAPACK_LIBRARIES} ${BLAS_LIBRARIES} m Threads::Threads)
+
+    target_include_directories(gnss_lib PRIVATE ${CLASLIB_SRC_DIR})
+    target_compile_definitions(gnss_lib
+        PUBLIC GNSSPP_HAS_CLASLIB_BRIDGE=1
+        PRIVATE
+            TRACE
+            ENAGAL
+            ENAQZS
+            NFREQ=3
+            ENA_PPP_RTK
+            ENA_REL_VRS
+            LAPACK
+            "GNSSPP_CLASLIB_ROOT=\"${CLASLIB_ROOT_DIR}\""
+            "GNSSPP_CLASLIB_DATA_DIR=\"${CLASLIB_DATA_DIR}\""
+    )
+    target_link_libraries(gnss_lib PUBLIC claslib)
+else()
+    target_compile_definitions(gnss_lib PUBLIC GNSSPP_HAS_CLASLIB_BRIDGE=0)
+endif()
+
 # Create the no-optimization library
 add_library(gnss_lib_noopt STATIC ${GNSS_SOURCES_NO_OPTIMIZATION})
 target_compile_options(gnss_lib_noopt PRIVATE -O0)
@@ -76,8 +157,12 @@ target_include_directories(gnss_lib_noopt PUBLIC
 )
 target_link_libraries(gnss_lib_noopt PUBLIC Eigen3::Eigen)
 
+set(GNSS_INSTALL_TARGETS gnss_lib gnss_lib_noopt)
+if(CLASLIB_PARITY_LINK)
+    list(APPEND GNSS_INSTALL_TARGETS claslib)
+endif()
 install(
-    TARGETS gnss_lib gnss_lib_noopt
+    TARGETS ${GNSS_INSTALL_TARGETS}
     EXPORT libgnssppTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

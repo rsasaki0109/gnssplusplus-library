@@ -851,6 +851,44 @@ DdFixAttempt tryDirectDdFix(
     const VectorXd delta = Qab * db;
     attempt.state.state.head(na) -= delta;
 
+    if (config.wlnl_strict_claslib_parity) {
+        constexpr double kClaslibHoldAmbVarianceCycles2 = 0.001;
+        MatrixXd hold_H = MatrixXd::Zero(attempt.nb, filter_state.total_states);
+        VectorXd hold_v = VectorXd::Zero(attempt.nb);
+        MatrixXd hold_R =
+            MatrixXd::Identity(attempt.nb, attempt.nb) *
+            kClaslibHoldAmbVarianceCycles2;
+        for (int k = 0; k < attempt.nb; ++k) {
+            const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
+            const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
+            hold_H(k, state_indices[static_cast<size_t>(ri)]) =
+                1.0 / scales[static_cast<size_t>(ri)];
+            hold_H(k, state_indices[static_cast<size_t>(si)]) =
+                -1.0 / scales[static_cast<size_t>(si)];
+            hold_v(k) = dd_fixed(k) - dd_float(k);
+        }
+
+        attempt.hold_state = filter_state;
+        const MatrixXd hold_covariance_before = attempt.hold_state.covariance;
+        const MatrixXd hold_PHt = hold_covariance_before * hold_H.transpose();
+        const MatrixXd hold_S = hold_H * hold_PHt + hold_R;
+        Eigen::LDLT<MatrixXd> hold_ldlt(hold_S);
+        if (hold_ldlt.info() == Eigen::Success) {
+            const MatrixXd hold_K =
+                hold_PHt * hold_ldlt.solve(
+                    MatrixXd::Identity(attempt.nb, attempt.nb));
+            const MatrixXd hold_I_KH =
+                MatrixXd::Identity(filter_state.total_states, filter_state.total_states) -
+                hold_K * hold_H;
+            attempt.hold_state.state += hold_K * hold_v;
+            attempt.hold_state.covariance = hold_I_KH * hold_covariance_before;
+            attempt.hold_state.covariance =
+                0.5 * (attempt.hold_state.covariance +
+                       attempt.hold_state.covariance.transpose());
+            attempt.has_hold_state = true;
+        }
+    }
+
     if (debug_enabled && excluded_real_satellites.empty()) {
         double qab_pos_norm = 0.0;
         for (int axis = 0; axis < 3; ++axis) {

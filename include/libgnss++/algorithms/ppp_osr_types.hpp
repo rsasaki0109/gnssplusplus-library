@@ -21,6 +21,7 @@ struct OSRCorrection {
     double code_bias_m[OSR_MAX_FREQ] = {};
     double phase_bias_m[OSR_MAX_FREQ] = {};
     double solid_earth_tide_m = 0.0;  // Solid earth tide projected onto LOS
+    double tide_geometry_m = 0.0;     // Diagnostic geometry shift from receiver tide displacement
     double windup_cycles = 0.0;
     double windup_m[OSR_MAX_FREQ] = {};
 
@@ -86,6 +87,7 @@ struct CLASSisContinuityInfo {
 
 struct CLASEpochContext {
     Vector3d receiver_position = Vector3d::Zero();
+    Vector3d tide_displacement_ecef = Vector3d::Zero();
     double receiver_clock_m = 0.0;
     double trop_zenith_m = 0.0;
     std::map<std::string, std::string> epoch_atmos_tokens;

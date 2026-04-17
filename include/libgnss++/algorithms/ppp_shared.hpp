@@ -91,7 +91,9 @@ struct PPPConfig {
     std::string ionex_file_path;
     std::string dcb_file_path;
     std::string antex_file_path;
+    std::string eop_file_path;
     std::string ocean_loading_file_path;
+    std::string clas_grid_blq_file_path;
     std::string ocean_loading_station_name;
     std::string receiver_antenna_type;
     Vector3d receiver_antenna_delta_enu = Vector3d::Zero();
@@ -179,6 +181,9 @@ struct PPPConfig {
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
+    bool apply_pole_tide = false;
+    bool apply_clas_grid_ocean_loading = false;
+    bool apply_tides_to_receiver_position = false;
     bool apply_tide_as_osr = false;  // Apply tide as OSR range correction instead of position shift
     bool apply_relativity = true;
 

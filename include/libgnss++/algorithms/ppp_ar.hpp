@@ -19,6 +19,8 @@ struct DdFixAttempt {
     int nb = 0;
     ppp_shared::PPPState state;
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo> ambiguities;
+    bool has_hold_state = false;
+    ppp_shared::PPPState hold_state;
 };
 
 struct EligibleAmbiguities {

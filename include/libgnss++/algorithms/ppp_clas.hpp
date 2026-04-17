@@ -116,6 +116,8 @@ struct AmbiguityResolutionResult {
     bool attempted = false;
     bool accepted = false;
     bool rejected_after_fix = false;
+    bool has_fixed_filter_state = false;
+    ppp_shared::PPPState fixed_filter_state;
     FixValidationStats validation_stats;
 };
 
@@ -244,6 +246,7 @@ AmbiguityResolutionResult resolveAndValidateAmbiguities(
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const ResolveAmbiguitiesFunction& resolve_ambiguities,
     const ValidateFixedSolutionFunction& validate_fixed_solution,
+    bool preserve_float_state_on_accept = false,
     bool debug_enabled = false);
 
 void logUpdateSummary(

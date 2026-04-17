@@ -53,12 +53,16 @@ constexpr std::array<double, 11> kOceanLoadingPeriodsSeconds = {
 };
 
 std::string trimCopy(const std::string& text) {
-    const size_t first = text.find_first_not_of(' ');
-    if (first == std::string::npos) {
+    const auto first = std::find_if_not(
+        text.begin(), text.end(),
+        [](unsigned char c) { return std::isspace(c) != 0; });
+    const auto last = std::find_if_not(
+        text.rbegin(), text.rend(),
+        [](unsigned char c) { return std::isspace(c) != 0; }).base();
+    if (first >= last) {
         return "";
     }
-    const size_t last = text.find_last_not_of(' ');
-    return text.substr(first, last - first + 1);
+    return std::string(first, last);
 }
 
 std::string resolveBundledAppsDir() {
@@ -73,9 +77,13 @@ std::string resolveBundledAppsDir() {
 
 std::string normalizeAntennaType(const std::string& antenna_type) {
     std::string normalized = trimCopy(antenna_type);
+    std::replace(normalized.begin(), normalized.end(), '_', ' ');
     std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch) {
         return static_cast<char>(std::toupper(ch));
     });
+    while (normalized.find("  ") != std::string::npos) {
+        normalized.erase(normalized.find("  "), 1);
+    }
     return normalized;
 }
 
@@ -2602,6 +2610,7 @@ void PPPProcessor::initializeAmbiguityState(const IonosphereFreeObs& observation
 bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const NavigationData& nav) {
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+    has_clas_dd_hold_state_ = false;
 
     if (!ppp_config_.enable_ambiguity_resolution || (!precise_products_loaded_ && !ssr_products_loaded_)) {
         if (pppDebugEnabled()) {
@@ -2765,6 +2774,10 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
 
     last_ar_ratio_ = best_attempt.ratio;
     last_fixed_ambiguities_ = best_attempt.nb;
+    if (ppp_config_.wlnl_strict_claslib_parity && best_attempt.has_hold_state) {
+        clas_dd_hold_state_ = best_attempt.hold_state;
+        has_clas_dd_hold_state_ = true;
+    }
     filter_state_ = std::move(best_attempt.state);
     ambiguity_states_ = std::move(best_attempt.ambiguities);
 
@@ -2831,34 +2844,14 @@ Vector3d PPPProcessor::calculateOceanLoading(const Vector3d& position,
         position.norm() < constants::WGS84_A * 0.5) {
         return Vector3d::Zero();
     }
-
-    const auto system_time = time.toSystemTime();
-    const double seconds_since_unix =
-        std::chrono::duration<double>(system_time.time_since_epoch()).count();
-
-    double up_m = 0.0;
-    double west_m = 0.0;
-    double south_m = 0.0;
-    for (size_t i = 0; i < kOceanLoadingPeriodsSeconds.size(); ++i) {
-        const double period_seconds = kOceanLoadingPeriodsSeconds[i];
-        if (period_seconds <= 0.0) {
-            continue;
-        }
-        const double angle_rad = 2.0 * M_PI * seconds_since_unix / period_seconds;
-        up_m += ocean_loading_coefficients_.up_amplitudes_m[i] *
-            std::cos(angle_rad - ocean_loading_coefficients_.up_phases_deg[i] * kDegreesToRadians);
-        west_m += ocean_loading_coefficients_.west_amplitudes_m[i] *
-            std::cos(angle_rad - ocean_loading_coefficients_.west_phases_deg[i] * kDegreesToRadians);
-        south_m += ocean_loading_coefficients_.south_amplitudes_m[i] *
-            std::cos(angle_rad - ocean_loading_coefficients_.south_phases_deg[i] * kDegreesToRadians);
-    }
-
-    double latitude_rad = 0.0;
-    double longitude_rad = 0.0;
-    double height_m = 0.0;
-    ecef2geodetic(position, latitude_rad, longitude_rad, height_m);
-    const Vector3d enu_offset(-west_m, -south_m, up_m);
-    return enu2ecef(enu_offset, latitude_rad, longitude_rad);
+    tidal::OceanLoadingCoefficients coefficients;
+    coefficients.up_amplitudes_m = ocean_loading_coefficients_.up_amplitudes_m;
+    coefficients.west_amplitudes_m = ocean_loading_coefficients_.west_amplitudes_m;
+    coefficients.south_amplitudes_m = ocean_loading_coefficients_.south_amplitudes_m;
+    coefficients.up_phases_deg = ocean_loading_coefficients_.up_phases_deg;
+    coefficients.west_phases_deg = ocean_loading_coefficients_.west_phases_deg;
+    coefficients.south_phases_deg = ocean_loading_coefficients_.south_phases_deg;
+    return tidal::calculateOceanLoading(coefficients, position, time);
 }
 
 PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(

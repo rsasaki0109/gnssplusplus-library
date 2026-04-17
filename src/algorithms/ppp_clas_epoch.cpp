@@ -1035,10 +1035,19 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                           trop_mapping_for_validation,
                           ambiguity_index_for_validation, pppDebugEnabled());
                   }},
+            ppp_config_.wlnl_strict_claslib_parity &&
+                ppp_config_.ar_method == PPPConfig::ARMethod::DD_PER_FREQ,
             pppDebugEnabled());
     if (ambiguity_resolution.rejected_after_fix) {
         last_ar_ratio_ = 0.0;
         last_fixed_ambiguities_ = 0;
+        has_clas_dd_hold_state_ = false;
+    } else if (ambiguity_resolution.accepted &&
+               has_clas_dd_hold_state_ &&
+               ppp_config_.wlnl_strict_claslib_parity &&
+               ppp_config_.ar_method == PPPConfig::ARMethod::DD_PER_FREQ) {
+        filter_state_ = clas_dd_hold_state_;
+        has_clas_dd_hold_state_ = false;
     }
 
     if (pppDebugEnabled()) {
@@ -1594,29 +1603,16 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         }
     }
 
-    if (ppp_config_.wlnl_strict_claslib_parity) {
-        constexpr size_t kStrictAnchorWarmupEpochs = 100;
-        constexpr double kStrictAnchorBlend = 0.05;
-        const size_t completed_epochs = total_epochs_processed_;
-        if (completed_epochs + 1 == kStrictAnchorWarmupEpochs) {
-            static_anchor_position_ =
-                filter_state_.state.segment(filter_state_.pos_index, 3);
-            has_static_anchor_position_ = true;
-        } else if (completed_epochs >= kStrictAnchorWarmupEpochs &&
-                   has_static_anchor_position_) {
-            filter_state_.state.segment(filter_state_.pos_index, 3) =
-                (1.0 - kStrictAnchorBlend) *
-                    filter_state_.state.segment(filter_state_.pos_index, 3) +
-                kStrictAnchorBlend * static_anchor_position_;
-        }
+    const ppp_shared::PPPState* solution_state_ptr = &filter_state_;
+    if (ambiguity_resolution.accepted &&
+        ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL &&
+        has_wlnl_fixed_state_) {
+        solution_state_ptr = &wlnl_fixed_state_;
+    } else if (ambiguity_resolution.accepted &&
+               ambiguity_resolution.has_fixed_filter_state) {
+        solution_state_ptr = &ambiguity_resolution.fixed_filter_state;
     }
-
-    const ppp_shared::PPPState& solution_state =
-        (ambiguity_resolution.accepted &&
-         ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL &&
-         has_wlnl_fixed_state_)
-            ? wlnl_fixed_state_
-            : filter_state_;
+    const ppp_shared::PPPState& solution_state = *solution_state_ptr;
     solution = ppp_clas::finalizeEpochSolution(
         solution_state,
         ambiguity_resolution.accepted,
@@ -1649,7 +1645,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
 
     solution.time = obs.time;
     solution.receiver_clock_bias =
-        filter_state_.state(filter_state_.clock_index) / constants::SPEED_OF_LIGHT;
+        solution_state.state(solution_state.clock_index) / constants::SPEED_OF_LIGHT;
     double latitude = 0.0;
     double longitude = 0.0;
     double height = 0.0;
