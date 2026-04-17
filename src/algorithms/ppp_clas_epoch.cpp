@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/algorithms/ppp_ar.hpp>
 #include <libgnss++/algorithms/ppp_clas.hpp>
+#include <libgnss++/algorithms/ppp_claslib_pntpos.hpp>
 #include <libgnss++/algorithms/kalman.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/core/constants.hpp>
@@ -815,9 +816,27 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     };
 
     PositionSolution seed = spp_processor_.processEpoch(obs, nav);
-    if (ppp_config_.wlnl_strict_claslib_parity && !filter_initialized_) {
+    if (ppp_config_.wlnl_strict_claslib_parity &&
+        (ppp_config_.use_ported_pntpos || !filter_initialized_)) {
         PositionSolution claslib_seed;
-        if (solveClaslibPntposSeed(obs, nav, Vector3d::Zero(), claslib_seed)) {
+        bool seed_ok = false;
+        if (ppp_config_.use_ported_pntpos) {
+            ppp_claslib_pntpos::PntposOptions pntpos_options;
+            pntpos_options.mode =
+                ppp_claslib_pntpos::PntposOptions::Mode::PppRtk;
+            pntpos_options.debug_dump = pppDebugEnabled();
+            Vector3d initial_rr = Vector3d::Zero();
+            if (filter_initialized_ &&
+                filter_state_.state.size() >= filter_state_.pos_index + 3) {
+                initial_rr = filter_state_.state.segment(filter_state_.pos_index, 3);
+            }
+            seed_ok = ppp_claslib_pntpos::solvePntposSeed(
+                obs, nav, initial_rr, claslib_seed, nullptr, pntpos_options);
+        } else {
+            seed_ok = solveClaslibPntposSeed(
+                obs, nav, Vector3d::Zero(), claslib_seed);
+        }
+        if (seed_ok) {
             seed = claslib_seed;
         } else if (pppDebugEnabled()) {
             std::cerr << "[CLAS-RCV-POS] source=lib week=" << obs.time.week

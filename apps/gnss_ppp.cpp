@@ -65,6 +65,7 @@ struct Options {
     /// Single-switch preset to align with CLASLIB-style PPP-RTK (strict OSR, uncombined, iono, WLNL AR).
     bool claslib_parity = false;
     bool claslib_bridge = false;
+    bool use_ported_pntpos = false;
     bool use_ported_udstate = false;
     std::string claslib_config_path;
     int claslib_l6_week = 0;
@@ -108,6 +109,7 @@ void printUsage(const char* program_name) {
         << "                          troposphere on, --enable-ar --ar-method dd-wlnl. Override any piece after this flag.\n"
         << "  --claslib-bridge         Delegate this run to linked CLASLIB postpos() (requires CMake -DCLASLIB_PARITY_LINK=ON)\n"
         << "  --no-claslib-bridge      Keep the native libgnss++ path even when CLASLIB bridge support is linked\n"
+        << "  --ported-pntpos          Use the native C++ port of CLASLIB pntpos() for the strict CLAS seed\n"
         << "  --ported-udstate         Use the native C++ port of CLASLIB udstate_ppp() in strict CLASLIB parity mode\n"
         << "  --claslib-config <file>  CLASLIB rnx2rtkp config for --claslib-bridge (default: CLASLIB static.conf)\n"
         << "  --claslib-l6-week <week> Override CLASLIB L6 GPS week for --claslib-bridge\n"
@@ -251,6 +253,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.claslib_bridge = true;
         } else if (arg == "--no-claslib-bridge") {
             options.claslib_bridge = false;
+        } else if (arg == "--ported-pntpos" || arg == "--use-ported-pntpos") {
+            options.use_ported_pntpos = true;
         } else if (arg == "--ported-udstate" || arg == "--use-ported-udstate") {
             options.use_ported_udstate = true;
         } else if (arg == "--claslib-config" && i + 1 < argc) {
@@ -795,6 +799,7 @@ int main(int argc, char* argv[]) {
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
         ppp_config.strict_first_ar_dump_path = options.first_ar_dump_path;
+        ppp_config.use_ported_pntpos = options.use_ported_pntpos;
         ppp_config.use_ported_udstate = options.use_ported_udstate;
         if (options.claslib_parity) {
             ppp_config.clas_outlier_sigma_scale = 8.0;
@@ -1020,6 +1025,8 @@ int main(int argc, char* argv[]) {
                     << "  \"clas_residual_sampling\": \"" << jsonEscape(options.clas_residual_sampling) << "\",\n"
                     << "  \"clas_atmos_selection\": \"" << jsonEscape(options.clas_atmos_selection) << "\",\n"
                     << "  \"clas_atmos_stale_after_seconds\": " << options.clas_atmos_stale_after_seconds << ",\n"
+                    << "  \"ported_pntpos\": " << (options.use_ported_pntpos ? "true" : "false") << ",\n"
+                    << "  \"ported_udstate\": " << (options.use_ported_udstate ? "true" : "false") << ",\n"
                     << "  \"ambiguity_resolution_enabled\": " << (options.enable_ar ? "true" : "false") << ",\n"
                     << "  \"ar_method\": \"" << jsonEscape(options.ar_method) << "\",\n"
                     << "  \"ar_ratio_threshold\": " << options.ar_ratio_threshold << ",\n"
