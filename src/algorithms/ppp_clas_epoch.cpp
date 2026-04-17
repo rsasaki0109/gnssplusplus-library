@@ -825,10 +825,16 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                       << " stage=claslib_spp_seed_failed\n";
         }
     }
+    const bool use_ported_udstate =
+        ppp_config_.wlnl_strict_claslib_parity &&
+        ppp_config_.use_ported_udstate;
+
     dumpReceiverPositionTrace(
         "spp_output", obs.time, obs, ppp_config_, &seed,
         filter_initialized_ ? &filter_state_ : nullptr);
-    detectCycleSlips(obs);
+    if (!use_ported_udstate) {
+        detectCycleSlips(obs);
+    }
     const double ambiguity_reset_variance =
         ppp_config_.initial_ambiguity_variance <
                 ppp_config_.clas_ambiguity_reinit_threshold * 0.1
@@ -927,6 +933,24 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     }
 
     ppp_clas::ensureAmbiguityStates(filter_state_, osr_corrections, ppp_config_);
+    if (use_ported_udstate) {
+        const double tt =
+            has_last_processed_time_ ? std::abs(obs.time - last_processed_time_) : 0.0;
+        ppp_clas::udstatePppPorted(
+            obs,
+            osr_corrections,
+            filter_state_,
+            ppp_config_,
+            tt,
+            seed,
+            ambiguity_states_,
+            clas_dispersion_compensation_,
+            clas_phase_bias_repair_,
+            ambiguity_reset_variance,
+            pppDebugEnabled());
+        ppp_clas::markSlipCompensationFromAmbiguities(
+            obs, ambiguity_states_, clas_dispersion_compensation_);
+    }
     ppp_clas::applyPendingPhaseBiasStateShifts(
         filter_state_, osr_corrections, clas_phase_bias_repair_, pppDebugEnabled());
 

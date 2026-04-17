@@ -3,6 +3,7 @@
 #include <libgnss++/algorithms/ppp_ar.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/signals.hpp>
 
 #include <algorithm>
 #include <array>
@@ -11,6 +12,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <set>
 #include <vector>
 
 namespace libgnss::ppp_clas {
@@ -129,6 +131,503 @@ double claslibIonoMappingFunction(
 
 constexpr double kStartupAmbiguityVarianceScale = 0.5;
 constexpr double kStartupPhaseVarianceInflation = 4.0;
+constexpr double kClaslibVarPos = 30.0 * 30.0;
+constexpr double kClaslibVarVel = 1.0;
+constexpr double kClaslibVarAcc = 1.0;
+constexpr double kClaslibInitZwd = 0.001;
+constexpr double kClaslibStdBiasCycles = 100.0;
+constexpr double kClaslibStdIonoMeters = 0.010;
+constexpr double kClaslibStdTropMeters = 0.005;
+constexpr double kClaslibPrnBiasMeters = 0.001;
+constexpr double kClaslibPrnIonoMeters = 0.001;
+constexpr double kClaslibPrnIonoMaxMeters = 0.050;
+constexpr double kClaslibPrnTropMeters = 0.001;
+constexpr double kClaslibPrnPosHorizontalMeters = 0.0001;
+constexpr double kClaslibPrnPosVerticalMeters = 0.0001;
+constexpr int kClaslibMaxOut = 90;
+constexpr int kClaslibMinLock = 5;
+
+bool shouldLogClasPhaseRow(const SatelliteId& satellite);
+bool shouldLogClasAmbSeed(const SatelliteId& satellite, double tow);
+SatelliteId clasRealSatelliteForUpdateDump(const SatelliteId& satellite);
+double updateDumpWavelengthMeters(const SatelliteId& satellite, int freq_index);
+
+void resizeState(ppp_shared::PPPState& filter_state, int new_size) {
+    if (new_size <= filter_state.total_states) {
+        return;
+    }
+    const int old_size = filter_state.total_states;
+    VectorXd new_state = VectorXd::Zero(new_size);
+    if (filter_state.state.size() > 0) {
+        new_state.head(std::min<int>(old_size, filter_state.state.size())) =
+            filter_state.state.head(std::min<int>(old_size, filter_state.state.size()));
+    }
+    MatrixXd new_covariance = MatrixXd::Zero(new_size, new_size);
+    if (filter_state.covariance.size() > 0) {
+        const int copy_size =
+            std::min<int>(old_size, std::min(filter_state.covariance.rows(),
+                                            filter_state.covariance.cols()));
+        new_covariance.topLeftCorner(copy_size, copy_size) =
+            filter_state.covariance.topLeftCorner(copy_size, copy_size);
+    }
+    filter_state.state = std::move(new_state);
+    filter_state.covariance = std::move(new_covariance);
+    filter_state.total_states = new_size;
+}
+
+void initx(ppp_shared::PPPState& filter_state, double xi, double var, int i) {
+    if (i < 0) {
+        return;
+    }
+    resizeState(filter_state, i + 1);
+    filter_state.state(i) = xi;
+    filter_state.covariance.row(i).setZero();
+    filter_state.covariance.col(i).setZero();
+    filter_state.covariance(i, i) = var;
+}
+
+SatelliteId ambiguitySatelliteForFreq(const SatelliteId& satellite, int f) {
+    if (f <= 0) {
+        return satellite;
+    }
+    return SatelliteId(
+        satellite.system,
+        static_cast<uint8_t>(std::min(255, static_cast<int>(satellite.prn) + 100 * f)));
+}
+
+int ambiguityFreqFromSatellite(const SatelliteId& ambiguity_satellite) {
+    return ambiguity_satellite.prn > 100 ? 1 : 0;
+}
+
+double ambiguityWavelengthForState(
+    const SatelliteId& ambiguity_satellite,
+    const std::map<SatelliteId, std::array<double, OSR_MAX_FREQ>>& wavelengths_by_sat) {
+    const int f = ambiguityFreqFromSatellite(ambiguity_satellite);
+    const SatelliteId real_satellite = clasRealSatelliteForUpdateDump(ambiguity_satellite);
+    const auto wl_it = wavelengths_by_sat.find(real_satellite);
+    if (wl_it != wavelengths_by_sat.end()) {
+        return wl_it->second[static_cast<size_t>(f)];
+    }
+    return updateDumpWavelengthMeters(real_satellite, f);
+}
+
+int ensurePortedAmbiguityState(
+    ppp_shared::PPPState& filter_state,
+    const SatelliteId& ambiguity_satellite) {
+    const auto it = filter_state.ambiguity_indices.find(ambiguity_satellite);
+    if (it != filter_state.ambiguity_indices.end()) {
+        return it->second;
+    }
+    const int state_index = filter_state.total_states;
+    filter_state.ambiguity_indices[ambiguity_satellite] = state_index;
+    resizeState(filter_state, state_index + 1);
+    filter_state.state(state_index) = 0.0;
+    filter_state.covariance(state_index, state_index) = 0.0;
+    return state_index;
+}
+
+void resetPortedPhaseRepair(
+    const SatelliteId& satellite,
+    int f,
+    std::map<SatelliteId, CLASDispersionCompensationInfo>& dispersion_compensation,
+    std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair) {
+    if (f >= 0 && f < 2) {
+        dispersion_compensation[satellite].slip[static_cast<size_t>(f)] = true;
+    }
+    auto repair_it = phase_bias_repair.find(satellite);
+    if (repair_it == phase_bias_repair.end()) {
+        return;
+    }
+    if (f >= 0 && f < OSR_MAX_FREQ) {
+        repair_it->second.reference_time = GNSSTime();
+        repair_it->second.last_continuity_m[static_cast<size_t>(f)] = 0.0;
+        repair_it->second.offset_cycles[static_cast<size_t>(f)] = 0.0;
+        repair_it->second.pending_state_shift_cycles[static_cast<size_t>(f)] = 0.0;
+        repair_it->second.has_last[static_cast<size_t>(f)] = false;
+    }
+}
+
+void udposPppPorted(
+    ppp_shared::PPPState& filter_state,
+    const ppp_shared::PPPConfig& config,
+    const PositionSolution& seed_solution,
+    double tt) {
+    (void)config;
+    if (filter_state.total_states < 3) {
+        resizeState(filter_state, 3);
+    }
+    if (filter_state.state.head(3).norm() <= 0.0) {
+        if (seed_solution.isValid()) {
+            for (int i = 0; i < 3; ++i) {
+                initx(filter_state, seed_solution.position_ecef(i), kClaslibVarPos, i);
+            }
+        }
+        return;
+    }
+
+    double var = 0.0;
+    for (int i = 0; i < 3; ++i) {
+        var += filter_state.covariance(i, i);
+    }
+    var /= 3.0;
+    if (var > kClaslibVarPos && seed_solution.isValid()) {
+        for (int i = 0; i < 3; ++i) {
+            initx(filter_state, seed_solution.position_ecef(i), kClaslibVarPos, i);
+        }
+        if (filter_state.total_states >= 6) {
+            for (int i = 3; i < 6; ++i) {
+                initx(filter_state, 0.0, kClaslibVarVel, i);
+            }
+        }
+        if (filter_state.total_states >= 9) {
+            for (int i = 6; i < 9; ++i) {
+                initx(filter_state, 1e-6, kClaslibVarAcc, i);
+            }
+        }
+        return;
+    }
+
+    const double q = kClaslibPrnPosHorizontalMeters *
+                     kClaslibPrnPosHorizontalMeters * std::abs(tt);
+    const double qv = kClaslibPrnPosVerticalMeters *
+                      kClaslibPrnPosVerticalMeters * std::abs(tt);
+    const double qpos = std::max(q, qv);
+    for (int i = 0; i < 3; ++i) {
+        filter_state.covariance(i, i) += qpos;
+    }
+}
+
+void udclkPppPorted(
+    ppp_shared::PPPState& filter_state,
+    const ppp_shared::PPPConfig& config,
+    const PositionSolution& seed_solution) {
+    const std::array<int, 4> clock_indices{
+        filter_state.clock_index,
+        filter_state.glo_clock_index,
+        filter_state.gal_clock_index,
+        filter_state.bds_clock_index};
+    for (const int index : clock_indices) {
+        if (index < 0 || index >= filter_state.total_states) {
+            continue;
+        }
+        filter_state.covariance(index, index) = config.clas_clock_variance;
+        if (seed_solution.isValid() &&
+            config.clas_epoch_policy ==
+                ppp_shared::PPPConfig::ClasEpochPolicy::HYBRID_STANDARD_PPP_FALLBACK) {
+            filter_state.state(index) = seed_solution.receiver_clock_bias;
+        }
+    }
+}
+
+void udtropPppPorted(
+    ppp_shared::PPPState& filter_state,
+    const ppp_shared::PPPConfig& config,
+    double tt) {
+    if (!config.estimate_troposphere ||
+        filter_state.trop_index < 0 ||
+        filter_state.trop_index >= filter_state.total_states) {
+        return;
+    }
+    const int j = filter_state.trop_index;
+    if (filter_state.state(j) == 0.0) {
+        initx(filter_state, kClaslibInitZwd,
+              kClaslibStdTropMeters * kClaslibStdTropMeters, j);
+    } else {
+        filter_state.covariance(j, j) +=
+            kClaslibPrnTropMeters * kClaslibPrnTropMeters * tt;
+    }
+}
+
+void udionPppPorted(
+    const std::vector<OSRCorrection>& osr_corrections,
+    ppp_shared::PPPState& filter_state,
+    const ppp_shared::PPPConfig& config,
+    double tt,
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states) {
+    if (!config.estimate_ionosphere) {
+        return;
+    }
+    std::set<SatelliteId> observed_satellites;
+    for (const auto& osr : osr_corrections) {
+        if (osr.valid) {
+            observed_satellites.insert(osr.satellite);
+        }
+    }
+    for (auto& [satellite, state_index] : filter_state.ionosphere_indices) {
+        if (state_index < 0 || state_index >= filter_state.total_states) {
+            continue;
+        }
+        if (observed_satellites.find(satellite) == observed_satellites.end()) {
+            const auto amb_it = ambiguity_states.find(satellite);
+            if (amb_it != ambiguity_states.end() &&
+                amb_it->second.outage_count > kClaslibMaxOut) {
+                filter_state.state(state_index) = 0.0;
+            }
+            continue;
+        }
+        if (filter_state.state(state_index) == 0.0) {
+            initx(filter_state, 1e-6,
+                  kClaslibStdIonoMeters * kClaslibStdIonoMeters, state_index);
+            continue;
+        }
+        const auto osr_it = std::find_if(
+            osr_corrections.begin(), osr_corrections.end(),
+            [&](const OSRCorrection& osr) {
+                return osr.valid && osr.satellite == satellite;
+            });
+        const double el = osr_it != osr_corrections.end() ? osr_it->elevation : 0.0;
+        const double fact = std::cos(el);
+        double qi = kClaslibPrnIonoMeters * fact;
+        qi *= qi;
+        qi = std::clamp(qi,
+                        kClaslibPrnIonoMeters * kClaslibPrnIonoMeters,
+                        kClaslibPrnIonoMaxMeters * kClaslibPrnIonoMaxMeters);
+        filter_state.covariance(state_index, state_index) += qi * tt;
+    }
+}
+
+void udbiasPppPorted(
+    const ObservationData& obs,
+    const std::vector<OSRCorrection>& osr_corrections,
+    ppp_shared::PPPState& filter_state,
+    const ppp_shared::PPPConfig& config,
+    double tt,
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    std::map<SatelliteId, CLASDispersionCompensationInfo>& dispersion_compensation,
+    std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair,
+    bool debug_enabled) {
+    std::map<SatelliteId, std::array<double, OSR_MAX_FREQ>> wavelengths_by_sat;
+    std::map<SatelliteId, std::array<bool, OSR_MAX_FREQ>> slip_by_sat;
+    int nf = 0;
+    for (const auto& osr : osr_corrections) {
+        if (!osr.valid) {
+            continue;
+        }
+        nf = std::max(nf, osr.num_frequencies);
+        auto& wavelengths = wavelengths_by_sat[osr.satellite];
+        auto& slips = slip_by_sat[osr.satellite];
+        for (int f = 0; f < osr.num_frequencies && f < OSR_MAX_FREQ; ++f) {
+            wavelengths[static_cast<size_t>(f)] = osr.wavelengths[f];
+            const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
+            if (raw && raw->valid && raw->has_carrier_phase && raw->loss_of_lock) {
+                slips[static_cast<size_t>(f)] = true;
+            }
+        }
+        if (osr.num_frequencies >= 2 && osr.wavelengths[0] > 0.0 &&
+            osr.wavelengths[1] > 0.0) {
+            const Observation* l1 = obs.getObservation(osr.satellite, osr.signals[0]);
+            const Observation* l2 = obs.getObservation(osr.satellite, osr.signals[1]);
+            if (l1 && l2 && l1->valid && l2->valid &&
+                l1->has_carrier_phase && l2->has_carrier_phase &&
+                std::isfinite(l1->carrier_phase) &&
+                std::isfinite(l2->carrier_phase)) {
+                const double g1 = l1->carrier_phase * osr.wavelengths[0] -
+                                  l2->carrier_phase * osr.wavelengths[1];
+                auto& ambiguity = ambiguity_states[osr.satellite];
+                if (ambiguity.has_last_geometry_free &&
+                    std::abs(g1 - ambiguity.last_geometry_free_m) >
+                        config.cycle_slip_threshold) {
+                    slips[0] = true;
+                    slips[1] = true;
+                }
+                ambiguity.last_geometry_free_m = g1;
+                ambiguity.has_last_geometry_free = true;
+            }
+        }
+    }
+    nf = std::clamp(nf, 0, OSR_MAX_FREQ);
+
+    for (const auto& [amb_satellite, state_index] : filter_state.ambiguity_indices) {
+        if (state_index < 0 || state_index >= filter_state.total_states) {
+            continue;
+        }
+        ambiguity_states[amb_satellite].outage_count++;
+    }
+
+    for (int f = 0; f < nf; ++f) {
+        for (const auto& [amb_satellite, state_index] : filter_state.ambiguity_indices) {
+            if (ambiguityFreqFromSatellite(amb_satellite) != f ||
+                state_index < 0 ||
+                state_index >= filter_state.total_states) {
+                continue;
+            }
+            auto& ambiguity = ambiguity_states[amb_satellite];
+            if (ambiguity.outage_count > kClaslibMaxOut &&
+                filter_state.state(state_index) != 0.0) {
+                initx(filter_state, 0.0, 0.0, state_index);
+                ambiguity.lock_count = -kClaslibMinLock;
+                ambiguity.needs_reinitialization = true;
+            }
+        }
+
+        for (const auto& osr : osr_corrections) {
+            if (!osr.valid || f >= osr.num_frequencies ||
+                osr.wavelengths[f] <= 0.0) {
+                continue;
+            }
+            const SatelliteId amb_satellite = ambiguitySatelliteForFreq(osr.satellite, f);
+            const int state_index = ensurePortedAmbiguityState(filter_state, amb_satellite);
+            filter_state.covariance(state_index, state_index) +=
+                kClaslibPrnBiasMeters * kClaslibPrnBiasMeters * tt *
+                osr.wavelengths[f] * osr.wavelengths[f];
+
+            auto slip_it = slip_by_sat.find(osr.satellite);
+            const bool slip =
+                slip_it != slip_by_sat.end() && slip_it->second[static_cast<size_t>(f)];
+            if (slip && filter_state.state(state_index) != 0.0) {
+                initx(filter_state, 0.0, 0.0, state_index);
+                auto& ambiguity = ambiguity_states[amb_satellite];
+                ambiguity.lock_count = -kClaslibMinLock;
+                ambiguity.needs_reinitialization = true;
+                resetPortedPhaseRepair(
+                    osr.satellite, f, dispersion_compensation, phase_bias_repair);
+            }
+        }
+
+        std::map<SatelliteId, double> bias_m;
+        double offset = 0.0;
+        int j = 0;
+        for (const auto& osr : osr_corrections) {
+            if (!osr.valid || f >= osr.num_frequencies ||
+                osr.wavelengths[f] <= 0.0) {
+                continue;
+            }
+            const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
+            if (!raw || !raw->valid || !raw->has_carrier_phase ||
+                !raw->has_pseudorange || !std::isfinite(raw->carrier_phase) ||
+                !std::isfinite(raw->pseudorange) ||
+                raw->carrier_phase == 0.0 || raw->pseudorange == 0.0) {
+                continue;
+            }
+            const SatelliteId amb_satellite = ambiguitySatelliteForFreq(osr.satellite, f);
+            const double bias = raw->carrier_phase * osr.wavelengths[f] -
+                                raw->pseudorange;
+            bias_m[amb_satellite] = bias;
+            const int state_index = ensurePortedAmbiguityState(filter_state, amb_satellite);
+            if (filter_state.state(state_index) != 0.0) {
+                offset += bias - filter_state.state(state_index);
+                j++;
+            }
+        }
+        const double com_bias = j > 0 ? offset / static_cast<double>(j) : 0.0;
+
+        for (const auto& osr : osr_corrections) {
+            if (!osr.valid || f >= osr.num_frequencies ||
+                osr.wavelengths[f] <= 0.0) {
+                continue;
+            }
+            const SatelliteId amb_satellite = ambiguitySatelliteForFreq(osr.satellite, f);
+            const auto bias_it = bias_m.find(amb_satellite);
+            if (bias_it == bias_m.end()) {
+                continue;
+            }
+            const int state_index = ensurePortedAmbiguityState(filter_state, amb_satellite);
+            if (filter_state.state(state_index) != 0.0) {
+                continue;
+            }
+            const double seed_m = bias_it->second - com_bias;
+            initx(filter_state, seed_m,
+                  std::pow(kClaslibStdBiasCycles * osr.wavelengths[f], 2),
+                  state_index);
+            auto& ambiguity = ambiguity_states[amb_satellite];
+            ambiguity.lock_count = -kClaslibMinLock;
+            ambiguity.outage_count = 0;
+            ambiguity.needs_reinitialization = true;
+            if (debug_enabled && shouldLogClasAmbSeed(osr.satellite, obs.time.tow)) {
+                const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
+                const double seed_cycles = seed_m / osr.wavelengths[f];
+                std::cerr << "[CLAS-UDSTATE-SEED] tow=" << obs.time.tow
+                          << " sat=" << osr.satellite.toString()
+                          << " amb_sat=" << amb_satellite.toString()
+                          << " f=" << f
+                          << " raw_cp=" << (raw ? raw->carrier_phase : 0.0)
+                          << " raw_pr=" << (raw ? raw->pseudorange : 0.0)
+                          << " lambda=" << osr.wavelengths[f]
+                          << " bias_m=" << bias_it->second
+                          << " com_bias_m=" << com_bias
+                          << " seed_m=" << seed_m
+                          << " seed_cycles=" << seed_cycles
+                          << "\n";
+            }
+        }
+    }
+}
+
+void dumpUdstatePorted(
+    const ObservationData& obs,
+    const ppp_shared::PPPState& filter_state,
+    const std::vector<OSRCorrection>& osr_corrections,
+    const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states) {
+    std::map<SatelliteId, std::array<double, OSR_MAX_FREQ>> wavelengths_by_sat;
+    for (const auto& osr : osr_corrections) {
+        if (!osr.valid) {
+            continue;
+        }
+        auto& wavelengths = wavelengths_by_sat[osr.satellite];
+        for (int f = 0; f < osr.num_frequencies && f < OSR_MAX_FREQ; ++f) {
+            wavelengths[static_cast<size_t>(f)] = osr.wavelengths[f];
+        }
+    }
+    const double clk =
+        filter_state.clock_index >= 0 &&
+                filter_state.clock_index < filter_state.state.size()
+            ? filter_state.state(filter_state.clock_index)
+            : 0.0;
+    const double trop =
+        filter_state.trop_index >= 0 &&
+                filter_state.trop_index < filter_state.state.size()
+            ? filter_state.state(filter_state.trop_index)
+            : 0.0;
+    std::cerr << std::setprecision(15)
+              << "[CLAS-UDSTATE] tow=" << obs.time.tow
+              << " pos_x=" << filter_state.state(0)
+              << " pos_y=" << filter_state.state(1)
+              << " pos_z=" << filter_state.state(2)
+              << " clk=" << clk
+              << " trop=" << trop
+              << "\n";
+    for (const auto& [satellite, state_index] : filter_state.ionosphere_indices) {
+        if (state_index < 0 || state_index >= filter_state.state.size() ||
+            !shouldLogClasPhaseRow(satellite)) {
+            continue;
+        }
+        std::cerr << "[CLAS-UDSTATE-IONO] tow=" << obs.time.tow
+                  << " sat=" << satellite.toString()
+                  << " iono=" << filter_state.state(state_index)
+                  << " var=" << filter_state.covariance(state_index, state_index)
+                  << "\n";
+    }
+    for (const auto& [amb_satellite, state_index] : filter_state.ambiguity_indices) {
+        if (state_index < 0 || state_index >= filter_state.state.size()) {
+            continue;
+        }
+        const SatelliteId real_satellite = clasRealSatelliteForUpdateDump(amb_satellite);
+        if (!shouldLogClasPhaseRow(real_satellite)) {
+            continue;
+        }
+        const int f = ambiguityFreqFromSatellite(amb_satellite);
+        const double wavelength =
+            ambiguityWavelengthForState(amb_satellite, wavelengths_by_sat);
+        const double x_m = filter_state.state(state_index);
+        const double x_cycles =
+            wavelength > 0.0 ? x_m / wavelength : std::numeric_limits<double>::quiet_NaN();
+        const auto amb_it = ambiguity_states.find(amb_satellite);
+        const int lock =
+            amb_it != ambiguity_states.end() ? amb_it->second.lock_count : 0;
+        const int outc =
+            amb_it != ambiguity_states.end() ? amb_it->second.outage_count : 0;
+        std::cerr << "[CLAS-UDSTATE-AMB] tow=" << obs.time.tow
+                  << " sat=" << real_satellite.toString()
+                  << " amb_sat=" << amb_satellite.toString()
+                  << " freq_group=" << f
+                  << " x_m=" << x_m
+                  << " x_cycles=" << x_cycles
+                  << " var_m2=" << filter_state.covariance(state_index, state_index)
+                  << " lock=" << lock
+                  << " outc=" << outc
+                  << "\n";
+    }
+}
 
 std::vector<int> collectFreshAmbiguityIndices(
     const ppp_shared::PPPState& filter_state,
@@ -634,6 +1133,10 @@ EpochPreparationResult prepareEpochState(
 
     const double dt =
         has_last_processed_time ? std::max(obs.time - last_processed_time, 0.001) : 1.0;
+    if (config.wlnl_strict_claslib_parity && config.use_ported_udstate) {
+        result.ready = true;
+        return result;
+    }
     syncSlipState(
         obs,
         filter_state,
@@ -814,6 +1317,46 @@ void predictFilterState(
     }
 }
 
+void udstatePppPorted(
+    const ObservationData& obs,
+    const std::vector<OSRCorrection>& osr_corrections,
+    ppp_shared::PPPState& filter_state,
+    const ppp_shared::PPPConfig& config,
+    double tt,
+    const PositionSolution& seed_solution,
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    std::map<SatelliteId, CLASDispersionCompensationInfo>& dispersion_compensation,
+    std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair,
+    double ambiguity_reset_variance,
+    bool debug_enabled) {
+    (void)ambiguity_reset_variance;
+    const double tt_abs = std::abs(tt);
+
+    udposPppPorted(filter_state, config, seed_solution, tt_abs);
+    udclkPppPorted(filter_state, config, seed_solution);
+    udtropPppPorted(filter_state, config, tt_abs);
+    udbiasPppPorted(
+        obs,
+        osr_corrections,
+        filter_state,
+        config,
+        tt_abs,
+        ambiguity_states,
+        dispersion_compensation,
+        phase_bias_repair,
+        debug_enabled);
+    udionPppPorted(
+        osr_corrections,
+        filter_state,
+        config,
+        tt_abs,
+        ambiguity_states);
+
+    if (debug_enabled) {
+        dumpUdstatePorted(obs, filter_state, osr_corrections, ambiguity_states);
+    }
+}
+
 void markSlipCompensationFromAmbiguities(
     const ObservationData& obs,
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
@@ -875,7 +1418,9 @@ void ensureAmbiguityStates(
                 : config.initial_ambiguity_variance;
         allocate_ambiguity(
             osr.satellite,
-            strict_claslib_parity ? std::numeric_limits<double>::quiet_NaN() : 0.0,
+            strict_claslib_parity && !config.use_ported_udstate
+                ? std::numeric_limits<double>::quiet_NaN()
+                : 0.0,
             l1_initial_variance);
         if (osr.num_frequencies >= 2) {
             const uint8_t l2_prn =
@@ -886,7 +1431,9 @@ void ensureAmbiguityStates(
                     : config.initial_ambiguity_variance;
             allocate_ambiguity(
                 SatelliteId(osr.satellite.system, l2_prn),
-                strict_claslib_parity ? std::numeric_limits<double>::quiet_NaN() : 0.0,
+                strict_claslib_parity && !config.use_ported_udstate
+                    ? std::numeric_limits<double>::quiet_NaN()
+                    : 0.0,
                 l2_initial_variance);
         }
     }
@@ -1872,6 +2419,7 @@ void updateObservedAmbiguities(
         ambiguity.last_phase = ambiguity_obs.carrier_phase_cycles;
         ambiguity.last_time = time;
         ambiguity.lock_count += 1;
+        ambiguity.outage_count = 0;
         ambiguity.quality_indicator = ambiguity_obs.snr;
         ambiguity.ambiguity_scale_m = ambiguity_obs.wavelength_m;
         ambiguity.needs_reinitialization = false;

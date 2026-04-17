@@ -65,6 +65,7 @@ struct Options {
     /// Single-switch preset to align with CLASLIB-style PPP-RTK (strict OSR, uncombined, iono, WLNL AR).
     bool claslib_parity = false;
     bool claslib_bridge = false;
+    bool use_ported_udstate = false;
     std::string claslib_config_path;
     int claslib_l6_week = 0;
     bool kinematic_mode = false;
@@ -107,6 +108,7 @@ void printUsage(const char* program_name) {
         << "                          troposphere on, --enable-ar --ar-method dd-wlnl. Override any piece after this flag.\n"
         << "  --claslib-bridge         Delegate this run to linked CLASLIB postpos() (requires CMake -DCLASLIB_PARITY_LINK=ON)\n"
         << "  --no-claslib-bridge      Keep the native libgnss++ path even when CLASLIB bridge support is linked\n"
+        << "  --ported-udstate         Use the native C++ port of CLASLIB udstate_ppp() in strict CLASLIB parity mode\n"
         << "  --claslib-config <file>  CLASLIB rnx2rtkp config for --claslib-bridge (default: CLASLIB static.conf)\n"
         << "  --claslib-l6-week <week> Override CLASLIB L6 GPS week for --claslib-bridge\n"
         << "  --out <solution.pos>     Output position file (required)\n"
@@ -249,6 +251,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.claslib_bridge = true;
         } else if (arg == "--no-claslib-bridge") {
             options.claslib_bridge = false;
+        } else if (arg == "--ported-udstate" || arg == "--use-ported-udstate") {
+            options.use_ported_udstate = true;
         } else if (arg == "--claslib-config" && i + 1 < argc) {
             options.claslib_config_path = argv[++i];
         } else if (arg == "--claslib-l6-week" && i + 1 < argc) {
@@ -791,6 +795,7 @@ int main(int argc, char* argv[]) {
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
         ppp_config.strict_first_ar_dump_path = options.first_ar_dump_path;
+        ppp_config.use_ported_udstate = options.use_ported_udstate;
         if (options.claslib_parity) {
             ppp_config.clas_outlier_sigma_scale = 8.0;
             ppp_config.clas_decouple_clock_position = false;

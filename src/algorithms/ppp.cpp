@@ -2626,7 +2626,10 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
             : ppp_config_.convergence_min_epochs;
     if (ppp_config_.wlnl_strict_claslib_parity) {
         ar_min_lock =
-            ppp_config_.ar_method == PPPConfig::ARMethod::DD_PER_FREQ ? 6 : 1;
+            ppp_config_.ar_method == PPPConfig::ARMethod::DD_PER_FREQ &&
+                    !ppp_config_.use_ported_udstate
+                ? 6
+                : 1;
     }
 
     if (pppDebugEnabled()) {

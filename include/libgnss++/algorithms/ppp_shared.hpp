@@ -106,6 +106,7 @@ struct PPPConfig {
     ARMethod ar_method = ARMethod::DD_IFLC;
     int wl_min_averaging_epochs = 20;
     bool wlnl_strict_claslib_parity = false;
+    bool use_ported_udstate = false;
     std::string strict_first_ar_dump_path;
 
     // Motion model
@@ -225,6 +226,7 @@ struct PPPAmbiguityInfo {
     double fixed_value = 0.0;
     bool is_fixed = false;
     int lock_count = 0;
+    int outage_count = 0;
     double last_phase = 0.0;
     GNSSTime last_time;
     double quality_indicator = 0.0;
