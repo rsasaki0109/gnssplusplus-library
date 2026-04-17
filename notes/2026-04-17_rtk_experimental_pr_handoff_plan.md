@@ -183,3 +183,15 @@ Phase 2 は以下の未決事項があり、sasaki が手作業 triage するま
 
 - CI PR #16 (既に develop に merge 済み): `codex/ci-pipeline-validation` 切り出しの前例
 - RTK final status: `notes/2026-04-17_rtk_demo5_final_status.md`
+
+## Phase 1 実行結果 (Codex)
+
+- 実行日: 2026-04-17
+- worktree: `gnssplusplus-rtk-experimental`
+- branch: `codex/rtk-experimental-notes`
+- base: `origin/develop` (`ea13cb5`)
+- 初回 commit: `72c34f2` (`Add RTK demo5 parity 2026-04-17 investigation notes and analysis script`)
+- 検証: `python3 scripts/analysis/lineage_divergence_diff.py --self-check` -> passed
+- scope 確認: notes 8 + script 1 の 9 files のみ。RTK core / CI / PPP / Docker 系 files は含めていない
+- note: `notes/` は `.gitignore` 対象だったため、`.gitignore` は変更せず Phase 1 対象 8 files だけを `git add -f` で明示追加
+- draft PR: https://github.com/rsasaki0109/gnssplusplus-library/pull/18
