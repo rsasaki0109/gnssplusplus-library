@@ -13,12 +13,15 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <ctime>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
 #include <numeric>
 #include <set>
+#include <sstream>
 #include <vector>
 
 namespace libgnss::ppp_claslib_full {
@@ -31,6 +34,7 @@ constexpr double kIonoProcessMPerSqrtS = 1e-3;
 constexpr double kIonoProcessMaxM = 0.050;
 constexpr double kBiasInitStdCycles = 100.0;
 constexpr double kBiasProcessCyclesPerSqrtS = 1e-3;
+constexpr double kClaslibPositionInitVariance = 30.0 * 30.0;
 constexpr int kMinLockForAr = 1;
 constexpr int kMaxAmbOutage = 90;
 constexpr double kElevationMaskRad = 15.0 * M_PI / 180.0;
@@ -45,6 +49,7 @@ struct ZdRow {
     const OSRCorrection* osr = nullptr;
     SatelliteId satellite;
     SatelliteId ambiguity_satellite;
+    int signal_index = 0;
     int freq_index = 0;
     int group = 0;
     bool is_phase = false;
@@ -52,6 +57,7 @@ struct ZdRow {
     double y = 0.0;
     double variance = 0.0;
     Eigen::RowVectorXd H_base;
+    ppp_clas::MeasurementRow::ModelComponents components;
 };
 
 struct FullMeasurementRow {
@@ -63,7 +69,9 @@ struct FullMeasurementRow {
     SatelliteId ambiguity_satellite;
     SatelliteId reference_satellite;
     bool is_phase = false;
+    int signal_index = 0;
     int freq_index = 0;
+    ppp_clas::MeasurementRow::ModelComponents components;
 };
 
 struct MeasurementBuild {
@@ -77,6 +85,8 @@ struct UpdateStats {
     int active_states = 0;
     VectorXd residuals;
     VectorXd variances;
+    VectorXd state_before;
+    VectorXd state_after;
     MatrixXd pre_update_covariance;
 };
 
@@ -239,6 +249,18 @@ int ambIndex(const SatelliteId& satellite, int freq_index) {
     return kClasAmbStart + kClasMaxSat * freq_index + satno - 1;
 }
 
+int clasFrequencySlot(const OSRCorrection& osr, int signal_index) {
+    if (signal_index < 0 || signal_index >= osr.num_frequencies ||
+        signal_index >= OSR_MAX_FREQ) {
+        return -1;
+    }
+    if (osr.satellite.system == GNSSSystem::Galileo &&
+        osr.signals[signal_index] == SignalType::GAL_E5A) {
+        return 2;
+    }
+    return signal_index;
+}
+
 int freqIndexFromAmbIndex(int index) {
     if (index < kClasAmbStart || index >= kClasNx) {
         return -1;
@@ -270,9 +292,388 @@ ppp_shared::PPPConfig fullConfig(const ppp_shared::PPPConfig& base) {
     config.clas_atmos_selection_policy =
         ppp_shared::PPPConfig::ClasAtmosSelectionPolicy::GRID_FIRST;
     config.clas_decouple_clock_position = false;
+    config.clas_initial_position_variance = kClaslibPositionInitVariance;
     config.initial_ionosphere_variance = kIonoInitVariance;
     config.process_noise_ionosphere = 1e-6;
     return config;
+}
+
+bool shouldDumpFullStateTime(const GNSSTime& time) {
+    if (time.week != 2068) {
+        return false;
+    }
+    return std::abs(time.tow - 230420.0) <= 1e-6 ||
+           std::abs(time.tow - 230425.0) <= 1e-6 ||
+           std::abs(time.tow - 231420.0) <= 1e-6 ||
+           std::abs(time.tow - 232419.0) <= 1e-6;
+}
+
+bool shouldDumpFullStateTarget(const SatelliteId& satellite) {
+    const SatelliteId real_satellite = realSatelliteForAmbiguity(satellite);
+    if (real_satellite.system == GNSSSystem::GPS) {
+        return real_satellite.prn == 14 || real_satellite.prn == 25 ||
+               real_satellite.prn == 26 || real_satellite.prn == 29 ||
+               real_satellite.prn == 31 || real_satellite.prn == 32;
+    }
+    if (real_satellite.system == GNSSSystem::Galileo) {
+        return real_satellite.prn == 7 || real_satellite.prn == 27 ||
+               real_satellite.prn == 30;
+    }
+    if (real_satellite.system == GNSSSystem::QZSS) {
+        return real_satellite.prn == 1 || real_satellite.prn == 2 ||
+               real_satellite.prn == 3;
+    }
+    return false;
+}
+
+const char* fullStateDumpPath() {
+    const char* path = std::getenv("CLAS_FULL_STATE_DUMP");
+    return (path != nullptr && *path != '\0') ? path : nullptr;
+}
+
+bool fullStateDumpEnabled(const GNSSTime& time) {
+    return shouldDumpFullStateTime(time) &&
+           (ppp_shared::pppDebugEnabled() || fullStateDumpPath() != nullptr);
+}
+
+void emitFullStateLine(const std::string& line) {
+    if (ppp_shared::pppDebugEnabled()) {
+        std::cerr << line << "\n";
+    }
+    if (const char* path = fullStateDumpPath()) {
+        std::ofstream file(path, std::ios::app);
+        if (file.is_open()) {
+            file << line << "\n";
+        }
+    }
+}
+
+double vectorAt(const VectorXd& values, int index) {
+    if (index < 0 || index >= values.size()) {
+        return 0.0;
+    }
+    return values(index);
+}
+
+double rowAt(const Eigen::RowVectorXd& row, int index) {
+    if (index < 0 || index >= row.size()) {
+        return 0.0;
+    }
+    return row(index);
+}
+
+ppp_clas::MeasurementRow::ModelComponents subtractComponents(
+    const ppp_clas::MeasurementRow::ModelComponents& lhs,
+    const ppp_clas::MeasurementRow::ModelComponents& rhs) {
+    ppp_clas::MeasurementRow::ModelComponents out;
+    out.valid = lhs.valid && rhs.valid;
+    auto sub = [](double a, double b) {
+        return (std::isfinite(a) && std::isfinite(b))
+                   ? a - b
+                   : std::numeric_limits<double>::quiet_NaN();
+    };
+    out.y = sub(lhs.y, rhs.y);
+    out.obs = sub(lhs.obs, rhs.obs);
+    out.rho = sub(lhs.rho, rhs.rho);
+    out.dts = sub(lhs.dts, rhs.dts);
+    out.dtr = sub(lhs.dtr, rhs.dtr);
+    out.rel = sub(lhs.rel, rhs.rel);
+    out.sagnac = sub(lhs.sagnac, rhs.sagnac);
+    out.trop_dry = sub(lhs.trop_dry, rhs.trop_dry);
+    out.trop_wet = sub(lhs.trop_wet, rhs.trop_wet);
+    out.trop_model = sub(lhs.trop_model, rhs.trop_model);
+    out.trop_grid = sub(lhs.trop_grid, rhs.trop_grid);
+    out.iono_grid = sub(lhs.iono_grid, rhs.iono_grid);
+    out.iono_state_term = sub(lhs.iono_state_term, rhs.iono_state_term);
+    out.prc = sub(lhs.prc, rhs.prc);
+    out.cpc = sub(lhs.cpc, rhs.cpc);
+    out.osr_corr = sub(lhs.osr_corr, rhs.osr_corr);
+    out.code_bias = sub(lhs.code_bias, rhs.code_bias);
+    out.phase_bias = sub(lhs.phase_bias, rhs.phase_bias);
+    out.phase_comp = sub(lhs.phase_comp, rhs.phase_comp);
+    out.windup = sub(lhs.windup, rhs.windup);
+    out.pco_rcv = sub(lhs.pco_rcv, rhs.pco_rcv);
+    out.pco_sat = sub(lhs.pco_sat, rhs.pco_sat);
+    out.pcv_rcv = sub(lhs.pcv_rcv, rhs.pcv_rcv);
+    out.pcv_sat = sub(lhs.pcv_sat, rhs.pcv_sat);
+    out.tide_solid = sub(lhs.tide_solid, rhs.tide_solid);
+    out.tide_ocean = sub(lhs.tide_ocean, rhs.tide_ocean);
+    out.tide_pole = sub(lhs.tide_pole, rhs.tide_pole);
+    out.amb_m = sub(lhs.amb_m, rhs.amb_m);
+    out.modeled_sum = sub(lhs.modeled_sum, rhs.modeled_sum);
+    return out;
+}
+
+double wavelengthForAmbiguity(
+    const SatelliteId& ambiguity_satellite,
+    const std::map<SatelliteId, std::array<double, OSR_MAX_FREQ>>& wavelengths_by_sat) {
+    const SatelliteId real_satellite = realSatelliteForAmbiguity(ambiguity_satellite);
+    int freq_index = 0;
+    if (!(ambiguity_satellite.system == GNSSSystem::QZSS &&
+          ambiguity_satellite.prn >= 193 && ambiguity_satellite.prn <= 199)) {
+        int prn = static_cast<int>(ambiguity_satellite.prn);
+        while (prn > 100) {
+            prn -= 100;
+            ++freq_index;
+        }
+    }
+    const auto it = wavelengths_by_sat.find(real_satellite);
+    if (it == wavelengths_by_sat.end() ||
+        freq_index < 0 || freq_index >= OSR_MAX_FREQ) {
+        return 0.0;
+    }
+    return it->second[static_cast<size_t>(freq_index)];
+}
+
+void dumpFullState(const ClaslibRtkState& rtk,
+                   const GNSSTime& time,
+                   const char* stage,
+                   double receiver_clock_bias_m,
+                   double trop_zenith_m,
+                   const std::vector<OSRCorrection>& osr_corrections) {
+    if (!fullStateDumpEnabled(time) || rtk.x.size() < 3) {
+        return;
+    }
+
+    std::map<SatelliteId, std::array<double, OSR_MAX_FREQ>> wavelengths_by_sat;
+    for (const auto& osr : osr_corrections) {
+        if (!osr.valid) {
+            continue;
+        }
+        auto& wavelengths = wavelengths_by_sat[osr.satellite];
+        for (int f = 0; f < osr.num_frequencies && f < OSR_MAX_FREQ; ++f) {
+            const int freq_slot = clasFrequencySlot(osr, f);
+            if (freq_slot >= 0 && freq_slot < OSR_MAX_FREQ) {
+                wavelengths[static_cast<size_t>(freq_slot)] = osr.wavelengths[f];
+            }
+        }
+    }
+
+    {
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(12)
+            << "[CLAS-FULL-STATE] source=lib kind=rcv"
+            << " week=" << time.week
+            << " tow=" << time.tow
+            << " stage=" << (stage != nullptr ? stage : "")
+            << " pos_x=" << rtk.x(0)
+            << " pos_y=" << rtk.x(1)
+            << " pos_z=" << rtk.x(2)
+            << " receiver_clock_m=" << receiver_clock_bias_m
+            << " trop_model_m=" << trop_zenith_m
+            << " nx=" << kClasNx
+            << " initialized=" << (rtk.initialized ? 1 : 0);
+        emitFullStateLine(oss.str());
+    }
+
+    for (const auto& [satellite, state_index] : rtk.ionosphere_indices) {
+        if (!shouldDumpFullStateTarget(satellite) ||
+            state_index < 0 || state_index >= rtk.x.size()) {
+            continue;
+        }
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(12)
+            << "[CLAS-FULL-STATE] source=lib kind=iono"
+            << " week=" << time.week
+            << " tow=" << time.tow
+            << " stage=" << (stage != nullptr ? stage : "")
+            << " sat=" << satellite.toString()
+            << " idx=" << state_index
+            << " iono=" << rtk.x(state_index)
+            << " var=" << rtk.P(state_index, state_index);
+        emitFullStateLine(oss.str());
+    }
+
+    for (const auto& [amb_satellite, state_index] : rtk.ambiguity_indices) {
+        const SatelliteId real_satellite = realSatelliteForAmbiguity(amb_satellite);
+        if (!shouldDumpFullStateTarget(real_satellite) ||
+            state_index < 0 || state_index >= rtk.x.size()) {
+            continue;
+        }
+        const double lambda = wavelengthForAmbiguity(amb_satellite, wavelengths_by_sat);
+        const double x_cycles = rtk.x(state_index);
+        const double pdiag_cycles2 = rtk.P(state_index, state_index);
+        const auto amb_it = rtk.ambiguity_states.find(amb_satellite);
+        const int lock =
+            amb_it != rtk.ambiguity_states.end() ? amb_it->second.lock_count : 0;
+        const int outc =
+            amb_it != rtk.ambiguity_states.end() ? amb_it->second.outage_count : 0;
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(12)
+            << "[CLAS-FULL-STATE] source=lib kind=amb"
+            << " week=" << time.week
+            << " tow=" << time.tow
+            << " stage=" << (stage != nullptr ? stage : "")
+            << " sat=" << real_satellite.toString()
+            << " amb_sat=" << amb_satellite.toString()
+            << " freq_group=" << std::max(0, freqIndexFromAmbIndex(state_index))
+            << " idx=" << state_index
+            << " x_cycles=" << x_cycles
+            << " x_m=" << x_cycles * lambda
+            << " pdiag_cycles2=" << pdiag_cycles2
+            << " pdiag_m2=" << pdiag_cycles2 * lambda * lambda
+            << " lambda=" << lambda
+            << " lock=" << lock
+            << " outc=" << outc;
+        emitFullStateLine(oss.str());
+    }
+}
+
+void dumpFullModelComponentRow(int row_index,
+                               const FullMeasurementRow& measurement,
+                               const GNSSTime& time) {
+    if (!measurement.components.valid ||
+        (!shouldDumpFullStateTarget(measurement.satellite) &&
+         !shouldDumpFullStateTarget(measurement.reference_satellite))) {
+        return;
+    }
+    const auto& c = measurement.components;
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(12)
+        << "[CLAS-FULL-STATE] source=lib kind=comp"
+        << " week=" << time.week
+        << " tow=" << time.tow
+        << " row=" << row_index
+        << " sat=" << measurement.satellite.toString()
+        << " ref=" << measurement.reference_satellite.toString()
+        << " f=" << measurement.freq_index
+        << " freq_group=" << measurement.freq_index
+        << " type=" << (measurement.is_phase ? "phase" : "code")
+        << " y=" << c.y
+        << " obs=" << c.obs
+        << " rho=" << c.rho
+        << " dts=" << c.dts
+        << " dtr=" << c.dtr
+        << " rel=" << c.rel
+        << " sagnac=" << c.sagnac
+        << " trop_dry=" << c.trop_dry
+        << " trop_wet=" << c.trop_wet
+        << " trop_model=" << c.trop_model
+        << " trop_grid=" << c.trop_grid
+        << " iono_grid=" << c.iono_grid
+        << " iono_state_term=" << c.iono_state_term
+        << " prc=" << c.prc
+        << " cpc=" << c.cpc
+        << " osr_corr=" << c.osr_corr
+        << " code_bias=" << c.code_bias
+        << " phase_bias=" << c.phase_bias
+        << " phase_comp=" << c.phase_comp
+        << " windup=" << c.windup
+        << " pco_rcv=" << c.pco_rcv
+        << " pco_sat=" << c.pco_sat
+        << " pcv_rcv=" << c.pcv_rcv
+        << " pcv_sat=" << c.pcv_sat
+        << " tide_solid=" << c.tide_solid
+        << " tide_ocean=" << c.tide_ocean
+        << " tide_pole=" << c.tide_pole
+        << " amb_m=" << c.amb_m
+        << " modeled_sum=" << c.modeled_sum;
+    emitFullStateLine(oss.str());
+}
+
+void dumpFullUpdateRows(const std::vector<FullMeasurementRow>& rows,
+                        const UpdateStats& update,
+                        const ClaslibRtkState& rtk,
+                        const GNSSTime& time) {
+    if (!fullStateDumpEnabled(time) ||
+        update.state_before.size() != kClasNx ||
+        update.state_after.size() != kClasNx) {
+        return;
+    }
+
+    struct Focus {
+        SatelliteId real_satellite;
+        SatelliteId ambiguity_satellite;
+        const char* role = "";
+    };
+
+    for (int row_index = 0; row_index < static_cast<int>(rows.size()); ++row_index) {
+        const auto& measurement = rows[static_cast<size_t>(row_index)];
+        if (measurement.freq_index < 0 || measurement.freq_index >= kClasNfreq) {
+            continue;
+        }
+        dumpFullModelComponentRow(row_index, measurement, time);
+
+        std::vector<Focus> foci;
+        if (measurement.satellite.prn != 0) {
+            const SatelliteId real_satellite =
+                realSatelliteForAmbiguity(measurement.satellite);
+            if (shouldDumpFullStateTarget(real_satellite)) {
+                const SatelliteId amb_satellite =
+                    measurement.is_phase && measurement.ambiguity_satellite.prn != 0
+                        ? measurement.ambiguity_satellite
+                        : ambiguitySatelliteForFreq(real_satellite, measurement.freq_index);
+                foci.push_back({real_satellite, amb_satellite, "sat"});
+            }
+        }
+        if (measurement.reference_satellite.prn != 0) {
+            const SatelliteId real_reference =
+                realSatelliteForAmbiguity(measurement.reference_satellite);
+            if (shouldDumpFullStateTarget(real_reference)) {
+                const SatelliteId amb_satellite =
+                    ambiguitySatelliteForFreq(real_reference, measurement.freq_index);
+                foci.push_back({real_reference, amb_satellite, "ref"});
+            }
+        }
+        if (foci.empty()) {
+            continue;
+        }
+
+        const double h_pos_x = rowAt(measurement.H, 0);
+        const double h_pos_y = rowAt(measurement.H, 1);
+        const double h_pos_z = rowAt(measurement.H, 2);
+        const double h_pos_norm =
+            std::sqrt(h_pos_x * h_pos_x + h_pos_y * h_pos_y + h_pos_z * h_pos_z);
+
+        for (const auto& focus : foci) {
+            const auto iono_it = rtk.ionosphere_indices.find(focus.real_satellite);
+            const int iono_index =
+                iono_it != rtk.ionosphere_indices.end() ? iono_it->second : -1;
+            const auto amb_it = rtk.ambiguity_indices.find(focus.ambiguity_satellite);
+            const int amb_index =
+                amb_it != rtk.ambiguity_indices.end() ? amb_it->second : -1;
+            const double h_iono = rowAt(measurement.H, iono_index);
+            const double h_amb = measurement.is_phase ? rowAt(measurement.H, amb_index) : 0.0;
+            const double state_before = vectorAt(update.state_before, amb_index);
+            const double state_after = vectorAt(update.state_after, amb_index);
+            const double dx_state = state_after - state_before;
+            const double lambda =
+                measurement.is_phase && std::abs(h_amb) > 0.0
+                    ? std::abs(h_amb)
+                    : 0.0;
+
+            std::ostringstream oss;
+            oss << std::fixed << std::setprecision(12)
+                << "[CLAS-FULL-STATE] source=lib kind=row"
+                << " week=" << time.week
+                << " tow=" << time.tow
+                << " row=" << row_index
+                << " focus_sat=" << focus.real_satellite.toString()
+                << " focus_amb_sat=" << focus.ambiguity_satellite.toString()
+                << " focus_role=" << focus.role
+                << " sat=" << measurement.satellite.toString()
+                << " ref=" << measurement.reference_satellite.toString()
+                << " f=" << measurement.freq_index
+                << " freq_group=" << measurement.freq_index
+                << " type=" << (measurement.is_phase ? "phase" : "code")
+                << " h_pos_x=" << h_pos_x
+                << " h_pos_y=" << h_pos_y
+                << " h_pos_z=" << h_pos_z
+                << " h_pos_norm=" << h_pos_norm
+                << " h_iono=" << h_iono
+                << " h_trop=0.000000000000"
+                << " h_amb=" << h_amb
+                << " h_amb_eff=" << h_amb
+                << " y=" << measurement.residual
+                << " R=" << measurement.variance
+                << " dx_state=" << dx_state
+                << " dx_state_cycles=" << dx_state
+                << " lambda=" << lambda
+                << " state_before_cycles=" << state_before
+                << " state_after_cycles=" << state_after;
+            emitFullStateLine(oss.str());
+        }
+    }
 }
 
 AppliedCorrections selectAppliedCorrections(
@@ -285,8 +686,10 @@ AppliedCorrections selectAppliedCorrections(
     }
     switch (policy) {
         case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR:
-            corrections.code_m = osr.PRC[freq_index] - osr.trop_correction_m;
-            corrections.phase_m = osr.CPC[freq_index] - osr.trop_correction_m;
+            corrections.code_m =
+                osr.PRC[freq_index] - osr.trop_correction_m;
+            corrections.phase_m =
+                osr.CPC[freq_index] - osr.trop_correction_m;
             break;
         case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::ORBIT_CLOCK_BIAS:
             corrections.code_m =
@@ -354,9 +757,14 @@ void ensureStateMaps(ClaslibRtkState& rtk, const std::vector<OSRCorrection>& osr
         if (ii >= 0) {
             rtk.ionosphere_indices[osr.satellite] = ii;
         }
-        for (int f = 0; f < std::min(osr.num_frequencies, kClasNfreq); ++f) {
-            const SatelliteId amb_sat = ambiguitySatelliteForFreq(osr.satellite, f);
-            const int ai = ambIndex(osr.satellite, f);
+        for (int f = 0; f < std::min(osr.num_frequencies, kResidualFreqCount); ++f) {
+            const int freq_slot = clasFrequencySlot(osr, f);
+            if (freq_slot < 0 || freq_slot >= kClasNfreq) {
+                continue;
+            }
+            const SatelliteId amb_sat =
+                ambiguitySatelliteForFreq(osr.satellite, freq_slot);
+            const int ai = ambIndex(osr.satellite, freq_slot);
             if (ai < 0) {
                 continue;
             }
@@ -377,8 +785,6 @@ bool solveSeed(const ObservationData& obs,
     Vector3d initial_rr = Vector3d::Zero();
     if (rtk.initialized && rtk.x.size() >= 3 && rtk.x.head<3>().norm() > 0.0) {
         initial_rr = rtk.x.head<3>();
-    } else if (obs.receiver_position.norm() > 0.0) {
-        initial_rr = obs.receiver_position;
     }
     return ppp_claslib_pntpos::solvePntposSeed(
         obs, nav, initial_rr, seed, nullptr, options);
@@ -446,15 +852,27 @@ void predictAmbiguities(ClaslibRtkState& rtk,
         }
     }
 
+    struct RawBiasSeed {
+        SatelliteId ambiguity_satellite;
+        double bias_m = 0.0;
+        double wavelength_m = 0.0;
+        int freq_slot = -1;
+        int state_index = -1;
+    };
+
     std::array<double, kClasNfreq> bias_sum{};
     std::array<int, kClasNfreq> bias_count{};
-    std::vector<std::pair<SatelliteId, double>> raw_bias;
+    std::vector<RawBiasSeed> raw_bias;
 
     for (const auto& osr : osr_corrections) {
         if (!osr.valid) {
             continue;
         }
-        for (int f = 0; f < std::min(osr.num_frequencies, kClasNfreq); ++f) {
+        for (int f = 0; f < std::min(osr.num_frequencies, kResidualFreqCount); ++f) {
+            const int freq_slot = clasFrequencySlot(osr, f);
+            if (freq_slot < 0 || freq_slot >= kClasNfreq) {
+                continue;
+            }
             const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
             if (!raw || !raw->valid || !raw->has_carrier_phase ||
                 !raw->has_pseudorange || osr.wavelengths[f] <= 0.0 ||
@@ -463,7 +881,8 @@ void predictAmbiguities(ClaslibRtkState& rtk,
                 continue;
             }
 
-            const SatelliteId amb_sat = ambiguitySatelliteForFreq(osr.satellite, f);
+            const SatelliteId amb_sat =
+                ambiguitySatelliteForFreq(osr.satellite, freq_slot);
             const auto idx_it = rtk.ambiguity_indices.find(amb_sat);
             if (idx_it == rtk.ambiguity_indices.end()) {
                 continue;
@@ -483,45 +902,35 @@ void predictAmbiguities(ClaslibRtkState& rtk,
 
             const double bias_m =
                 raw->carrier_phase * osr.wavelengths[f] - raw->pseudorange;
-            raw_bias.emplace_back(amb_sat, bias_m);
+            raw_bias.push_back(
+                {amb_sat, bias_m, osr.wavelengths[f], freq_slot, idx});
             if (idx >= 0 && idx < kClasNx &&
                 rtk.x(idx) != 0.0 && std::isfinite(rtk.x(idx)) &&
                 osr.wavelengths[f] > 0.0) {
-                bias_sum[static_cast<size_t>(f)] +=
+                bias_sum[static_cast<size_t>(freq_slot)] +=
                     bias_m - rtk.x(idx) * osr.wavelengths[f];
-                bias_count[static_cast<size_t>(f)]++;
+                bias_count[static_cast<size_t>(freq_slot)]++;
             }
         }
     }
 
-    for (const auto& [amb_sat, bias_m] : raw_bias) {
-        const auto idx_it = rtk.ambiguity_indices.find(amb_sat);
-        if (idx_it == rtk.ambiguity_indices.end()) {
-            continue;
-        }
-        const int idx = idx_it->second;
+    for (const auto& seed : raw_bias) {
+        const int idx = seed.state_index;
         if (idx < 0 || idx >= kClasNx ||
             (rtk.x(idx) != 0.0 && std::isfinite(rtk.x(idx)) && rtk.P(idx, idx) > 0.0)) {
             continue;
         }
-        const int freq_index = std::clamp(
-            freqIndexFromAmbIndex(idx), 0, kClasNfreq - 1);
-        const SatelliteId real_sat = realSatelliteForAmbiguity(amb_sat);
-        const auto osr_it = std::find_if(
-            osr_corrections.begin(), osr_corrections.end(),
-            [&](const OSRCorrection& osr) { return sameClasSatellite(osr.satellite, real_sat); });
-        if (osr_it == osr_corrections.end() ||
-            freq_index >= osr_it->num_frequencies ||
-            osr_it->wavelengths[freq_index] <= 0.0) {
+        if (seed.freq_slot < 0 || seed.freq_slot >= kClasNfreq ||
+            seed.wavelength_m <= 0.0) {
             continue;
         }
-        const int count = bias_count[static_cast<size_t>(freq_index)];
+        const int count = bias_count[static_cast<size_t>(seed.freq_slot)];
         const double common_bias_m =
-            count > 0 ? bias_sum[static_cast<size_t>(freq_index)] / count : 0.0;
+            count > 0 ? bias_sum[static_cast<size_t>(seed.freq_slot)] / count : 0.0;
         const double value_cycles =
-            (bias_m - common_bias_m) / osr_it->wavelengths[freq_index];
+            (seed.bias_m - common_bias_m) / seed.wavelength_m;
         initx(rtk, idx, value_cycles, kBiasInitStdCycles * kBiasInitStdCycles);
-        auto& ambiguity = rtk.ambiguity_states[amb_sat];
+        auto& ambiguity = rtk.ambiguity_states[seed.ambiguity_satellite];
         ambiguity.lock_count = -5;
         ambiguity.outage_count = 0;
         ambiguity.needs_reinitialization = true;
@@ -573,6 +982,10 @@ std::vector<ZdRow> buildZeroDifferenceRows(
                 : 0.0;
 
         for (int f = 0; f < std::min({osr.num_frequencies, kClasNfreq, kResidualFreqCount}); ++f) {
+            const int freq_slot = clasFrequencySlot(osr, f);
+            if (freq_slot < 0 || freq_slot >= kClasNfreq) {
+                continue;
+            }
             const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
             if (!raw || !raw->valid ||
                 !raw->has_carrier_phase || !raw->has_pseudorange ||
@@ -584,6 +997,17 @@ std::vector<ZdRow> buildZeroDifferenceRows(
             }
             const AppliedCorrections applied = selectAppliedCorrections(
                 osr, f, config.clas_correction_application_policy);
+            const double fi_for_grid =
+                (osr.wavelengths[0] > 0.0 && osr.wavelengths[f] > 0.0)
+                    ? osr.wavelengths[f] / osr.wavelengths[0]
+                    : 1.0;
+            const double iono_grid_m =
+                fi_for_grid * fi_for_grid *
+                (constants::GPS_L2_FREQ / constants::GPS_L1_FREQ) *
+                osr.iono_l1_m;
+            const double tide_applied_m =
+                osr.tide_geometry_m != 0.0 ? osr.tide_geometry_m
+                                            : osr.solid_earth_tide_m;
             Eigen::RowVectorXd h_base = Eigen::RowVectorXd::Zero(kClasNx);
             h_base.segment(0, 3) = -los.transpose();
 
@@ -594,8 +1018,10 @@ std::vector<ZdRow> buildZeroDifferenceRows(
             ZdRow phase_row;
             phase_row.osr = &osr;
             phase_row.satellite = osr.satellite;
-            phase_row.ambiguity_satellite = ambiguitySatelliteForFreq(osr.satellite, f);
-            phase_row.freq_index = f;
+            phase_row.ambiguity_satellite =
+                ambiguitySatelliteForFreq(osr.satellite, freq_slot);
+            phase_row.signal_index = f;
+            phase_row.freq_index = freq_slot;
             phase_row.group = clasResidualGroup(osr, f);
             phase_row.is_phase = true;
             phase_row.valid = true;
@@ -603,6 +1029,26 @@ std::vector<ZdRow> buildZeroDifferenceRows(
             phase_row.variance =
                 clasPhaseVarianceForRow(osr.satellite.system, osr.elevation, f);
             phase_row.H_base = h_base;
+            phase_row.components.valid = true;
+            phase_row.components.y = phase_row.y;
+            phase_row.components.obs = phase_obs_m;
+            phase_row.components.rho = rho_no_sagnac;
+            phase_row.components.dts = sat_clk_m;
+            phase_row.components.dtr = receiver_clock_bias_m;
+            phase_row.components.rel = osr.relativity_correction_m;
+            phase_row.components.sagnac = rho_sagnac - rho_no_sagnac;
+            phase_row.components.trop_dry = trop_modeled;
+            phase_row.components.trop_model = trop_modeled;
+            phase_row.components.trop_grid = osr.trop_correction_m;
+            phase_row.components.iono_grid = -iono_grid_m;
+            phase_row.components.cpc = osr.CPC[f];
+            phase_row.components.osr_corr = applied.phase_m;
+            phase_row.components.phase_bias = osr.phase_bias_m[f];
+            phase_row.components.phase_comp = osr.phase_compensation_m[f];
+            phase_row.components.windup = osr.windup_m[f];
+            phase_row.components.pcv_rcv = osr.receiver_antenna_m[f];
+            phase_row.components.tide_solid = tide_applied_m;
+            phase_row.components.modeled_sum = phase_model_m;
             rows.push_back(phase_row);
 
             const double code_model_m =
@@ -611,7 +1057,8 @@ std::vector<ZdRow> buildZeroDifferenceRows(
             ZdRow code_row;
             code_row.osr = &osr;
             code_row.satellite = osr.satellite;
-            code_row.freq_index = f;
+            code_row.signal_index = f;
+            code_row.freq_index = freq_slot;
             code_row.group = clasResidualGroup(osr, f);
             code_row.is_phase = false;
             code_row.valid = true;
@@ -619,6 +1066,24 @@ std::vector<ZdRow> buildZeroDifferenceRows(
             code_row.variance =
                 clasCodeVarianceForRow(osr.satellite.system, osr.elevation);
             code_row.H_base = h_base;
+            code_row.components.valid = true;
+            code_row.components.y = code_row.y;
+            code_row.components.obs = raw->pseudorange;
+            code_row.components.rho = rho_no_sagnac;
+            code_row.components.dts = sat_clk_m;
+            code_row.components.dtr = receiver_clock_bias_m;
+            code_row.components.rel = osr.relativity_correction_m;
+            code_row.components.sagnac = rho_sagnac - rho_no_sagnac;
+            code_row.components.trop_dry = trop_modeled;
+            code_row.components.trop_model = trop_modeled;
+            code_row.components.trop_grid = osr.trop_correction_m;
+            code_row.components.iono_grid = iono_grid_m;
+            code_row.components.prc = osr.PRC[f];
+            code_row.components.osr_corr = applied.code_m;
+            code_row.components.code_bias = osr.code_bias_m[f];
+            code_row.components.pcv_rcv = osr.receiver_antenna_m[f];
+            code_row.components.tide_solid = tide_applied_m;
+            code_row.components.modeled_sum = code_model_m;
             rows.push_back(code_row);
         }
     }
@@ -675,16 +1140,17 @@ MeasurementBuild formSingleDifferenceRows(
             row.satellite = sat->satellite;
             row.ambiguity_satellite =
                 key.is_phase ? sat->ambiguity_satellite : SatelliteId{};
-            row.reference_satellite =
-                key.is_phase ? ref->ambiguity_satellite : ref->satellite;
+            row.reference_satellite = ref->satellite;
             row.is_phase = key.is_phase;
+            row.signal_index = sat->signal_index;
             row.freq_index = key.freq_index;
+            row.components = subtractComponents(ref->components, sat->components);
 
             if (config.estimate_ionosphere) {
                 const double ref_fi =
-                    ref->osr->wavelengths[key.freq_index] / constants::GPS_L1_WAVELENGTH;
+                    ref->osr->wavelengths[ref->signal_index] / constants::GPS_L1_WAVELENGTH;
                 const double sat_fi =
-                    sat->osr->wavelengths[key.freq_index] / constants::GPS_L1_WAVELENGTH;
+                    sat->osr->wavelengths[sat->signal_index] / constants::GPS_L1_WAVELENGTH;
                 const double sign = key.is_phase ? -1.0 : 1.0;
                 const double ref_coeff =
                     sign * ref_fi * ref_fi *
@@ -708,7 +1174,10 @@ MeasurementBuild formSingleDifferenceRows(
                     ref_has_iono ? rtk.x(ref_iono_it->second) : 0.0;
                 const double sat_state =
                     sat_has_iono ? rtk.x(sat_iono_it->second) : 0.0;
-                row.residual -= ref_coeff * ref_state - sat_coeff * sat_state;
+                const double iono_state_term =
+                    ref_coeff * ref_state - sat_coeff * sat_state;
+                row.residual -= iono_state_term;
+                row.components.iono_state_term += iono_state_term;
                 if (ref_has_iono) {
                     row.H(ref_iono_it->second) = ref_coeff;
                 }
@@ -736,11 +1205,12 @@ MeasurementBuild formSingleDifferenceRows(
                 const double ref_amb_state =
                     ref_has_amb ? rtk.x(ref_amb_it->second) : 0.0;
                 const double sat_amb_state = rtk.x(sat_amb_it->second);
-                const double ref_lambda = ref->osr->wavelengths[key.freq_index];
-                const double sat_lambda = sat->osr->wavelengths[key.freq_index];
+                const double ref_lambda = ref->osr->wavelengths[ref->signal_index];
+                const double sat_lambda = sat->osr->wavelengths[sat->signal_index];
                 const double amb_state_term =
                     ref_lambda * ref_amb_state - sat_lambda * sat_amb_state;
                 row.residual -= amb_state_term;
+                row.components.amb_m += amb_state_term;
                 if (ref_has_amb) {
                     row.H(ref_amb_it->second) = ref_lambda;
                     build.observed_ambiguities.insert(ref->ambiguity_satellite);
@@ -749,7 +1219,8 @@ MeasurementBuild formSingleDifferenceRows(
                 build.observed_ambiguities.insert(sat->ambiguity_satellite);
 
                 const Observation* raw =
-                    obs.getObservation(sat->satellite, sat->osr->signals[key.freq_index]);
+                    obs.getObservation(
+                        sat->satellite, sat->osr->signals[sat->signal_index]);
                 if (raw && raw->loss_of_lock) {
                     initx(rtk, sat_amb_it->second, 0.0, 0.0);
                     auto& ambiguity = rtk.ambiguity_states[sat->ambiguity_satellite];
@@ -757,6 +1228,8 @@ MeasurementBuild formSingleDifferenceRows(
                     ambiguity.needs_reinitialization = true;
                 }
             }
+            row.components.y = row.residual;
+            row.components.modeled_sum = row.components.obs - row.residual;
             build.rows.push_back(row);
         }
     }
@@ -833,6 +1306,7 @@ UpdateStats applyMeasurementUpdate(ClaslibRtkState& rtk,
         return stats;
     }
 
+    stats.state_before = rtk.x;
     stats.pre_update_covariance = rtk.P;
     const int na = static_cast<int>(active_indices.size());
     MatrixXd Pa = MatrixXd::Zero(na, na);
@@ -868,6 +1342,7 @@ UpdateStats applyMeasurementUpdate(ClaslibRtkState& rtk,
         }
     }
     stats.updated = true;
+    stats.state_after = rtk.x;
     stats.residuals = z;
     stats.variances = R.diagonal();
 
@@ -1106,6 +1581,13 @@ EpochResult runEpoch(const ObservationData& obs,
     }
 
     propagateState(rtk, obs, epoch_context.osr_corrections, seed, epoch_config);
+    dumpFullState(
+        rtk,
+        obs.time,
+        "after_udstate",
+        seed.receiver_clock_bias,
+        trop_zenith_m,
+        epoch_context.osr_corrections);
     const auto measurement_build = buildMeasurements(
         obs,
         epoch_context.osr_corrections,
@@ -1114,10 +1596,18 @@ EpochResult runEpoch(const ObservationData& obs,
         rtk.x.head<3>(),
         seed.receiver_clock_bias,
         trop_zenith_m);
+    dumpFullState(
+        rtk,
+        obs.time,
+        "before_first_filter",
+        seed.receiver_clock_bias,
+        trop_zenith_m,
+        epoch_context.osr_corrections);
     result.measurement_count =
         static_cast<int>(measurement_build.rows.size());
     const auto update = applyMeasurementUpdate(
         rtk, measurement_build.rows, ppp_shared::pppDebugEnabled(), obs.time);
+    dumpFullUpdateRows(measurement_build.rows, update, rtk, obs.time);
     result.updated = update.updated;
     result.active_state_count = update.active_states;
     if (!update.updated) {
@@ -1127,6 +1617,13 @@ EpochResult runEpoch(const ObservationData& obs,
         return result;
     }
     markObservedAmbiguities(rtk, measurement_build, obs);
+    dumpFullState(
+        rtk,
+        obs.time,
+        "after_filter",
+        seed.receiver_clock_bias,
+        trop_zenith_m,
+        epoch_context.osr_corrections);
 
     Vector3d output_position = rtk.x.head<3>();
     result.fixed = tryAmbiguityResolution(

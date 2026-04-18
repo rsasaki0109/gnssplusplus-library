@@ -49,6 +49,31 @@ std::pair<GNSSSystem, int> ambiguityDdGroup(const SatelliteId& satellite) {
     return {satellite.system, freq_group};
 }
 
+SatelliteId ambiguitySatelliteWithOffset(const SatelliteId& satellite, int offset) {
+    return SatelliteId(
+        satellite.system,
+        static_cast<uint8_t>(
+            std::min(255, static_cast<int>(satellite.prn) + offset)));
+}
+
+SatelliteId secondaryFrequencyAmbiguitySatellite(
+    const ppp_shared::PPPState& filter_state,
+    const SatelliteId& l1_satellite) {
+    const SatelliteId plus_100 =
+        ambiguitySatelliteWithOffset(l1_satellite, 100);
+    if (filter_state.ambiguity_indices.find(plus_100) !=
+        filter_state.ambiguity_indices.end()) {
+        return plus_100;
+    }
+    const SatelliteId plus_200 =
+        ambiguitySatelliteWithOffset(l1_satellite, 200);
+    if (filter_state.ambiguity_indices.find(plus_200) !=
+        filter_state.ambiguity_indices.end()) {
+        return plus_200;
+    }
+    return plus_100;
+}
+
 int receiverClockStateIndex(
     const ppp_shared::PPPState& filter_state,
     const SatelliteId& satellite) {
@@ -1208,12 +1233,10 @@ WlnlFixAttempt tryWlnlFix(
         const auto sat_it = nl_info.find(satellites[static_cast<size_t>(si)]);
         const SatelliteId ref_l1_sat = satellites[static_cast<size_t>(ri)];
         const SatelliteId sat_l1_sat = satellites[static_cast<size_t>(si)];
-        const SatelliteId ref_l2_sat(
-            ref_l1_sat.system,
-            static_cast<uint8_t>(std::min(255, static_cast<int>(ref_l1_sat.prn) + 100)));
-        const SatelliteId sat_l2_sat(
-            sat_l1_sat.system,
-            static_cast<uint8_t>(std::min(255, static_cast<int>(sat_l1_sat.prn) + 100)));
+        const SatelliteId ref_l2_sat =
+            secondaryFrequencyAmbiguitySatellite(filter_state, ref_l1_sat);
+        const SatelliteId sat_l2_sat =
+            secondaryFrequencyAmbiguitySatellite(filter_state, sat_l1_sat);
         const int ref_l1_state = state_indices[static_cast<size_t>(ri)];
         const int sat_l1_state = state_indices[static_cast<size_t>(si)];
         const auto ref_l2_state_it = filter_state.ambiguity_indices.find(ref_l2_sat);
@@ -1384,12 +1407,10 @@ WlnlFixAttempt tryWlnlFix(
                     }
                     const auto ref_it = nl_info.find(ref_satellite);
                     const auto sat_it = nl_info.find(sat_satellite);
-                    const SatelliteId ref_l2_sat(
-                        ref_satellite.system,
-                        static_cast<uint8_t>(std::min(255, static_cast<int>(ref_satellite.prn) + 100)));
-                    const SatelliteId sat_l2_sat(
-                        sat_satellite.system,
-                        static_cast<uint8_t>(std::min(255, static_cast<int>(sat_satellite.prn) + 100)));
+                    const SatelliteId ref_l2_sat =
+                        secondaryFrequencyAmbiguitySatellite(filter_state, ref_satellite);
+                    const SatelliteId sat_l2_sat =
+                        secondaryFrequencyAmbiguitySatellite(filter_state, sat_satellite);
                     const int ref_l1_state = state_indices[static_cast<size_t>(ri)];
                     const int sat_l1_state = state_indices[static_cast<size_t>(si)];
                     const auto ref_l2_state_it = filter_state.ambiguity_indices.find(ref_l2_sat);
