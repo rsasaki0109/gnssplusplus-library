@@ -91,6 +91,8 @@ struct SolveConfig {
     bool min_satellites_for_ar_set = false;
     bool min_hold_count_set = false;
     bool hold_ratio_threshold_set = false;
+    libgnss::RTKProcessor::RTKConfig::ARPolicy ar_policy =
+        libgnss::RTKProcessor::RTKConfig::ARPolicy::EXTENDED;
 };
 
 double timeDiffSeconds(const libgnss::GNSSTime& a, const libgnss::GNSSTime& b) {
@@ -395,6 +397,11 @@ void printUsage(const char* program_name) {
         << "  --glonass-ar <off|on|autocal> GLONASS ambiguity resolution mode (default: off)\n"
         << "  --glonass-icb-l1 <m/MHz>   GLONASS L1 inter-channel bias slope (default: 0)\n"
         << "  --glonass-icb-l2 <m/MHz>   GLONASS L2 inter-channel bias slope (default: 0)\n"
+        << "  --ar-policy <extended|demo5-continuous>\n"
+        << "                             AR policy gate (default: extended)\n"
+        << "                             demo5-continuous disables relaxed-hold-ratio,\n"
+        << "                             subset/partial AR fallback, hold-fix fallback,\n"
+        << "                             and Q regularization (raw Q passed to LAMBDA)\n"
         << "  --max-baseline-m <v>       Max baseline length in meters (default: 20000)\n"
         << "  --base-ecef <x> <y> <z>    Override base ECEF position in meters\n"
         << "  --skip-epochs <n>          Skip the first n rover epochs before solving\n"
@@ -546,6 +553,15 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.glonass_icb_l1_m_per_mhz = std::stod(argv[++i]);
         } else if (arg == "--glonass-icb-l2" && i + 1 < argc) {
             config.glonass_icb_l2_m_per_mhz = std::stod(argv[++i]);
+        } else if (arg == "--ar-policy" && i + 1 < argc) {
+            const std::string policy_str = argv[++i];
+            if (policy_str == "extended") {
+                config.ar_policy = libgnss::RTKProcessor::RTKConfig::ARPolicy::EXTENDED;
+            } else if (policy_str == "demo5-continuous") {
+                config.ar_policy = libgnss::RTKProcessor::RTKConfig::ARPolicy::DEMO5_CONTINUOUS;
+            } else {
+                argumentError("unsupported --ar-policy value: " + policy_str, argv[0]);
+            }
         } else if (arg == "--max-baseline-m" && i + 1 < argc) {
             config.max_baseline_length_m = std::stod(argv[++i]);
         } else if (arg == "--base-ecef" && i + 3 < argc) {
@@ -724,6 +740,7 @@ int main(int argc, char* argv[]) {
                        : libgnss::RTKProcessor::RTKConfig::GlonassARMode::OFF);
         rtk_config.glonass_icb_l1_m_per_mhz = config.glonass_icb_l1_m_per_mhz;
         rtk_config.glonass_icb_l2_m_per_mhz = config.glonass_icb_l2_m_per_mhz;
+        rtk_config.ar_policy = config.ar_policy;
         rtk_processor.setRTKConfig(rtk_config);
         libgnss::SPPProcessor::SPPConfig spp_config;
         spp_config.use_multi_constellation = true;

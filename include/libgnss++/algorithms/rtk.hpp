@@ -100,6 +100,14 @@ public:
         bool enable_beidou = true;
         double glonass_icb_l1_m_per_mhz = 0.0;
         double glonass_icb_l2_m_per_mhz = 0.0;
+
+        /// AR policy gate.
+        /// EXTENDED (default): all hold/subset/fallback/regularization extras active.
+        /// DEMO5_CONTINUOUS:   demo5-equivalent simple AR — no relaxed hold ratio,
+        ///                     no subset/partial AR fallback, no hold-fix fallback,
+        ///                     no Q regularization (raw Q passed to LAMBDA).
+        enum class ARPolicy { EXTENDED, DEMO5_CONTINUOUS };
+        ARPolicy ar_policy = ARPolicy::EXTENDED;
     };
 
     RTKProcessor();
