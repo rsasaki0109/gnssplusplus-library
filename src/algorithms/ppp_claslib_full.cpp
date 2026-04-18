@@ -7,10 +7,13 @@
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/models/troposphere.hpp>
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
+#include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -122,6 +125,39 @@ double claslibIonoMappingFunction(const Vector3d& receiver_position, double elev
     const double arg = std::clamp(ratio * std::cos(elevation_rad), -1.0, 1.0);
     const double denom = std::cos(std::asin(arg));
     return denom > 0.0 ? 1.0 / denom : 1.0;
+}
+
+int dayOfYearFromTime(const GNSSTime& time) {
+    const auto system_time = time.toSystemTime();
+    const std::time_t utc_seconds = std::chrono::system_clock::to_time_t(system_time);
+    std::tm utc_tm{};
+    gmtime_r(&utc_seconds, &utc_tm);
+    return utc_tm.tm_yday + 1;
+}
+
+double modeledZenithTroposphereDelayMeters(const Vector3d& receiver_position,
+                                           const GNSSTime& time) {
+    double latitude_rad = 0.0;
+    double longitude_rad = 0.0;
+    double height_m = 0.0;
+    ecef2geodetic(receiver_position, latitude_rad, longitude_rad, height_m);
+    const auto delay = models::estimateZenithTroposphereClimatology(
+        latitude_rad, height_m, dayOfYearFromTime(time));
+    const double total_delay_m = delay.totalDelayMeters();
+    return std::isfinite(total_delay_m) && total_delay_m > 0.0
+               ? total_delay_m
+               : 2.3;
+}
+
+double claslibTropMappingFunction(const Vector3d& receiver_position,
+                                  double elevation_rad,
+                                  const GNSSTime& time) {
+    double latitude_rad = 0.0;
+    double longitude_rad = 0.0;
+    double height_m = 0.0;
+    ecef2geodetic(receiver_position, latitude_rad, longitude_rad, height_m);
+    return models::niellHydrostaticMapping(
+        latitude_rad, height_m, elevation_rad, dayOfYearFromTime(time));
 }
 
 int clasSystemOrder(GNSSSystem system) {
@@ -249,8 +285,8 @@ AppliedCorrections selectAppliedCorrections(
     }
     switch (policy) {
         case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR:
-            corrections.code_m = osr.PRC[freq_index];
-            corrections.phase_m = osr.CPC[freq_index];
+            corrections.code_m = osr.PRC[freq_index] - osr.trop_correction_m;
+            corrections.phase_m = osr.CPC[freq_index] - osr.trop_correction_m;
             break;
         case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::ORBIT_CLOCK_BIAS:
             corrections.code_m =
@@ -501,7 +537,9 @@ std::vector<ZdRow> buildZeroDifferenceRows(
     const ObservationData& obs,
     const std::vector<OSRCorrection>& osr_corrections,
     const ppp_shared::PPPConfig& config,
-    const Vector3d& receiver_position) {
+    const Vector3d& receiver_position,
+    double receiver_clock_bias_m,
+    double trop_zenith_m) {
     std::vector<ZdRow> rows;
     rows.reserve(osr_corrections.size() * 2 * kClasNfreq);
     for (const auto& osr : osr_corrections) {
@@ -517,6 +555,12 @@ std::vector<ZdRow> buildZeroDifferenceRows(
         const Vector3d los = (osr.satellite_position - receiver_position).normalized();
         const double sat_clk_m =
             constants::SPEED_OF_LIGHT * osr.satellite_clock_bias_s;
+        const double trop_mapping =
+            claslibTropMappingFunction(receiver_position, osr.elevation, obs.time);
+        const double trop_modeled =
+            std::isfinite(trop_zenith_m) && trop_zenith_m > 0.0
+                ? trop_mapping * trop_zenith_m
+                : 0.0;
 
         for (int f = 0; f < std::min({osr.num_frequencies, kClasNfreq, kResidualFreqCount}); ++f) {
             const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
@@ -534,7 +578,9 @@ std::vector<ZdRow> buildZeroDifferenceRows(
             h_base.segment(0, 3) = -los.transpose();
 
             const double phase_obs_m = raw->carrier_phase * osr.wavelengths[f];
-            const double phase_model_m = rho_sagnac - sat_clk_m + applied.phase_m;
+            const double phase_model_m =
+                rho_sagnac - sat_clk_m + receiver_clock_bias_m +
+                trop_modeled + applied.phase_m;
             ZdRow phase_row;
             phase_row.osr = &osr;
             phase_row.satellite = osr.satellite;
@@ -549,7 +595,9 @@ std::vector<ZdRow> buildZeroDifferenceRows(
             phase_row.H_base = h_base;
             rows.push_back(phase_row);
 
-            const double code_model_m = rho_sagnac - sat_clk_m + applied.code_m;
+            const double code_model_m =
+                rho_sagnac - sat_clk_m + receiver_clock_bias_m +
+                trop_modeled + applied.code_m;
             ZdRow code_row;
             code_row.osr = &osr;
             code_row.satellite = osr.satellite;
@@ -709,9 +757,17 @@ MeasurementBuild buildMeasurements(const ObservationData& obs,
                                    const std::vector<OSRCorrection>& osr_corrections,
                                    ClaslibRtkState& rtk,
                                    const ppp_shared::PPPConfig& config,
-                                   const Vector3d& receiver_position) {
+                                   const Vector3d& receiver_position,
+                                   double receiver_clock_bias_m,
+                                   double trop_zenith_m) {
     const auto zd_rows =
-        buildZeroDifferenceRows(obs, osr_corrections, config, receiver_position);
+        buildZeroDifferenceRows(
+            obs,
+            osr_corrections,
+            config,
+            receiver_position,
+            receiver_clock_bias_m,
+            trop_zenith_m);
     return formSingleDifferenceRows(obs, zd_rows, rtk, config, receiver_position);
 }
 
@@ -1005,13 +1061,15 @@ EpochResult runEpoch(const ObservationData& obs,
         rtk.initialized && rtk.x.size() >= 3 && rtk.x.head<3>().norm() > 0.0
             ? rtk.x.head<3>()
             : seed.position_ecef;
+    const double trop_zenith_m =
+        modeledZenithTroposphereDelayMeters(context_position, obs.time);
     const auto epoch_context = prepareClasEpochContext(
         obs,
         nav,
         ssr,
         context_position,
         seed.receiver_clock_bias,
-        0.0,
+        trop_zenith_m,
         epoch_config,
         rtk.windup_cache,
         rtk.dispersion_compensation,
@@ -1031,7 +1089,9 @@ EpochResult runEpoch(const ObservationData& obs,
         epoch_context.osr_corrections,
         rtk,
         epoch_config,
-        rtk.x.head<3>());
+        rtk.x.head<3>(),
+        seed.receiver_clock_bias,
+        trop_zenith_m);
     result.measurement_count =
         static_cast<int>(measurement_build.rows.size());
     const auto update = applyMeasurementUpdate(
