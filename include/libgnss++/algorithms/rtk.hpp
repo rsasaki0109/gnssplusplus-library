@@ -108,6 +108,15 @@ public:
         ///                     no Q regularization (raw Q passed to LAMBDA).
         enum class ARPolicy { EXTENDED, DEMO5_CONTINUOUS };
         ARPolicy ar_policy = ARPolicy::EXTENDED;
+
+        /// Max hold fix divergence from float baseline in meters.
+        /// 0 (default) disables the check — existing behavior preserved.
+        double max_hold_divergence_m = 0.0;
+
+        /// Max AR fix position jump from last fixed position in meters.
+        /// Applied in addition to the history-based exceedsFixHistoryJump check.
+        /// 0 (default) disables the check — existing behavior preserved.
+        double max_position_jump_m = 0.0;
     };
 
     RTKProcessor();

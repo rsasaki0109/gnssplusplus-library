@@ -297,6 +297,54 @@ TEST(RTKLegacyCompatibilityStandaloneTest, ArPolicyDemo5ContinuousDisablesSubset
               RTKProcessor::RTKConfig::ARPolicy::DEMO5_CONTINUOUS);
 }
 
+TEST(RTKLegacyCompatibilityStandaloneTest, MaxHoldDivergenceDefaultDisabled) {
+    // Default max_hold_divergence_m must be 0.0 (disabled — existing behavior preserved).
+    RTKProcessor processor;
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_hold_divergence_m, 0.0);
+
+    // Explicitly set 0.0 and confirm round-trip.
+    RTKProcessor::RTKConfig cfg;
+    cfg.max_hold_divergence_m = 0.0;
+    processor.setRTKConfig(cfg);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_hold_divergence_m, 0.0);
+
+    // Setting a non-zero value should be stored correctly.
+    RTKProcessor::RTKConfig cfg2;
+    cfg2.max_hold_divergence_m = 0.5;
+    processor.setRTKConfig(cfg2);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_hold_divergence_m, 0.5);
+
+    // Reset to 0 confirms disabled state.
+    RTKProcessor::RTKConfig cfg3;
+    cfg3.max_hold_divergence_m = 0.0;
+    processor.setRTKConfig(cfg3);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_hold_divergence_m, 0.0);
+}
+
+TEST(RTKLegacyCompatibilityStandaloneTest, MaxPositionJumpDefaultDisabled) {
+    // Default max_position_jump_m must be 0.0 (disabled — existing behavior preserved).
+    RTKProcessor processor;
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_m, 0.0);
+
+    // Explicitly set 0.0 and confirm round-trip.
+    RTKProcessor::RTKConfig cfg;
+    cfg.max_position_jump_m = 0.0;
+    processor.setRTKConfig(cfg);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_m, 0.0);
+
+    // Setting a non-zero value should be stored correctly.
+    RTKProcessor::RTKConfig cfg2;
+    cfg2.max_position_jump_m = 1.0;
+    processor.setRTKConfig(cfg2);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_m, 1.0);
+
+    // Reset to 0 confirms disabled state.
+    RTKProcessor::RTKConfig cfg3;
+    cfg3.max_position_jump_m = 0.0;
+    processor.setRTKConfig(cfg3);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_m, 0.0);
+}
+
 TEST(RTKLegacyCompatibilityStandaloneTest, ArPolicyDemo5ContinuousDisablesHoldFix) {
     // Under DEMO5_CONTINUOUS, the hold-fix fallback code path is gated off.
     // We verify by checking that tryHoldFix returns false when called directly
