@@ -6,8 +6,7 @@ find_package(GTest REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 if(GTest_FOUND)
-    # Consolidate all tests into a single executable
-    add_executable(run_tests
+    set(RUN_TEST_SOURCES
         test_ppp_clas.cpp
         test_ppp_osr.cpp
         test_ppp_ar.cpp
@@ -33,6 +32,12 @@ if(GTest_FOUND)
         test_rtcm_stream.cpp
         test_ubx.cpp
     )
+    if(CLASLIB_PARITY_LINK)
+        list(APPEND RUN_TEST_SOURCES test_clasnat_parity.cpp)
+    endif()
+
+    # Consolidate all tests into a single executable
+    add_executable(run_tests ${RUN_TEST_SOURCES})
 
     target_compile_options(run_tests PRIVATE -g)
     target_compile_definitions(run_tests PRIVATE

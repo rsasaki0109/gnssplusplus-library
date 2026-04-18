@@ -52,6 +52,8 @@ set(GNSS_SOURCES
     src/algorithms/ppp_osr.cpp
     src/algorithms/ppp_wlnl.cpp
     src/algorithms/ppp_clas_epoch.cpp
+    src/algorithms/clasnat_parity.cpp
+    src/algorithms/claslib_oracle.cpp
     src/algorithms/ppp_claslib_bridge.cpp
     src/algorithms/ppp.cpp
     src/algorithms/tidal.cpp
