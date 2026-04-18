@@ -15,6 +15,8 @@ namespace {
 
 constexpr double kDegreesToRadians = M_PI / 180.0;
 constexpr double kRadiansToDegrees = 180.0 / M_PI;
+constexpr double kClasPi = 3.1415926535897932;
+constexpr double kClasRadiansToDegrees = 180.0 / kClasPi;
 constexpr double kIonosphereHeightM = 350000.0;
 
 double dot3(const double a[3], const double b[3]) {
@@ -197,6 +199,212 @@ bool standardVerticalTroposphereDelays(const GNSSTime& time,
            hydrostatic_m > 0.0 && wet_m > 0.0;
 }
 
+double claslibTime2Doy(const GNSSTime& time) {
+    constexpr double kGpsEpochUnixSeconds = 315964800.0;
+    const double unix_seconds =
+        kGpsEpochUnixSeconds +
+        static_cast<double>(time.week) * constants::SECONDS_PER_WEEK +
+        time.tow;
+    const double whole_seconds = std::floor(unix_seconds);
+    const std::time_t utc_seconds = static_cast<std::time_t>(whole_seconds);
+    std::tm utc_tm{};
+    gmtime_r(&utc_seconds, &utc_tm);
+    const double frac_seconds = unix_seconds - whole_seconds;
+    const double seconds_of_day =
+        static_cast<double>(utc_tm.tm_hour * 3600 + utc_tm.tm_min * 60 + utc_tm.tm_sec) +
+        frac_seconds;
+    return static_cast<double>(utc_tm.tm_yday) + seconds_of_day / 86400.0 + 1.0;
+}
+
+double claslibInterp1(const double* x, const double* y, int nx, double xi) {
+    int i;
+    for (i = 0; i < nx - 1; ++i) {
+        if (xi < x[i + 1]) {
+            break;
+        }
+    }
+    const double dx = (xi - x[i]) / (x[i + 1] - x[i]);
+    return y[i] * (1.0 - dx) + y[i + 1] * dx;
+}
+
+double claslibInterpc(const double coef[], double lat) {
+    const int i = static_cast<int>(lat / 15.0);
+    if (i < 1) {
+        return coef[0];
+    }
+    if (i > 4) {
+        return coef[4];
+    }
+    return coef[i - 1] * (1.0 - lat / 15.0 + i) +
+           coef[i] * (lat / 15.0 - i);
+}
+
+double claslibMapf(double el, double a, double b, double c) {
+    const double sinel = std::sin(el);
+    return (1.0 + a / (1.0 + b / (1.0 + c))) /
+           (sinel + (a / (sinel + b / (sinel + c))));
+}
+
+int claslibGetMops(const double lat,
+                   const double doy,
+                   double* pre,
+                   double* temp,
+                   double* wpre,
+                   double* ltemp,
+                   double* wvap) {
+    const double latdeg = lat * kClasRadiansToDegrees;
+    const double interval[] = {15.0, 30.0, 45.0, 60.0, 75.0};
+    const double pTave[] = {1013.25, 1017.25, 1015.75, 1011.75, 1013.00};
+    const double tTave[] = {299.65, 294.15, 283.15, 272.15, 263.65};
+    const double wTave[] = {26.31, 21.79, 11.66, 6.78, 4.11};
+    const double tlTave[] = {6.30e-3, 6.05e-3, 5.58e-3, 5.39e-3, 4.53e-3};
+    const double wlTave[] = {2.77, 3.15, 2.57, 1.81, 1.55};
+    const double pTableS[] = {0.00, -3.75, -2.25, -1.75, -0.50};
+    const double tTableS[] = {0.00, 7.00, 11.00, 15.00, 14.50};
+    const double wTableS[] = {0.00, 8.85, 7.24, 5.36, 3.39};
+    const double tlTableS[] = {0.00e-3, 0.25e-3, 0.32e-3, 0.81e-3, 0.62e-3};
+    const double wlTableS[] = {0.00, 0.33, 0.46, 0.74, 0.30};
+    double calcPsta[5] = {};
+    double calcTsta[5] = {};
+    double calcWsta[5] = {};
+    double calcTLsta[5] = {};
+    double calcWLsta[5] = {};
+
+    for (int i = 0; i < 5; ++i) {
+        const double cos_ = std::cos(2.0 * kClasPi * (doy - 28.0) / 365.25);
+        calcPsta[i] = pTave[i] - pTableS[i] * cos_;
+        calcTsta[i] = tTave[i] - tTableS[i] * cos_;
+        calcWsta[i] = wTave[i] - wTableS[i] * cos_;
+        calcTLsta[i] = tlTave[i] - tlTableS[i] * cos_;
+        calcWLsta[i] = wlTave[i] - wlTableS[i] * cos_;
+    }
+
+    if (75.0 <= latdeg) {
+        *pre = calcPsta[4];
+        *temp = calcTsta[4];
+        *wpre = calcWsta[4];
+        *ltemp = calcTLsta[4];
+        *wvap = calcWLsta[4];
+    } else if (latdeg <= 15.0) {
+        *pre = calcPsta[0];
+        *temp = calcTsta[0];
+        *wpre = calcWsta[0];
+        *ltemp = calcTLsta[0];
+        *wvap = calcWLsta[0];
+    } else if (15.0 < latdeg && latdeg < 75.0) {
+        *pre = claslibInterp1(interval, calcPsta, 5, latdeg);
+        *temp = claslibInterp1(interval, calcTsta, 5, latdeg);
+        *wpre = claslibInterp1(interval, calcWsta, 5, latdeg);
+        *ltemp = claslibInterp1(interval, calcTLsta, 5, latdeg);
+        *wvap = claslibInterp1(interval, calcWLsta, 5, latdeg);
+    } else {
+        return 1;
+    }
+    return 0;
+}
+
+double claslibGetTdv(const double lat, const double Hs, const double Ps) {
+    return 2.2768 / (1.0 - 0.00266 * std::cos(2.0 * lat) - (2.8e-7) * Hs) *
+           Ps * 0.001;
+}
+
+double claslibGetTwv(const double Ts, const double es) {
+    return 2.2768 * (1255.0 / Ts + 0.05) * es * 0.001;
+}
+
+int claslibGetStTv(const GNSSTime& time,
+                   const double lat,
+                   const double hs,
+                   const double hg,
+                   double* tdv,
+                   double* twv) {
+    double P0, T0, e0, beta0, lambda0, Hs, Ts, Ps, es, t0, tk, tc, ET, doy;
+    constexpr double g = 9.80665;
+    constexpr double Rd = 287.0537625;
+
+    doy = claslibTime2Doy(time);
+    if (claslibGetMops(lat, doy, &P0, &T0, &e0, &beta0, &lambda0)) {
+        return 1;
+    }
+
+    Hs = hs - hg;
+    Ts = T0 - beta0 * Hs;
+    Ps = P0 * std::pow(1 - beta0 * Hs / T0, g / (Rd * beta0));
+    es = e0 * std::pow(1 - beta0 * Hs / T0, (lambda0 + 1.0) * g / (Rd * beta0));
+
+    t0 = 273.15;
+    tk = Ts;
+    tc = tk - t0;
+    ET = 6.11 * std::pow(tk / t0, -5.3) * std::exp(25.2 * tc / tk);
+    if (es > ET) {
+        es = ET;
+    }
+
+    *tdv = claslibGetTdv(lat, Hs + hg, Ps);
+    *twv = claslibGetTwv(Ts, es);
+    return 0;
+}
+
+double claslibNmf(const GNSSTime& time,
+                  const double pos[],
+                  const double azel[],
+                  double* mapfw) {
+    const double coef[][5] = {
+        {1.2769934E-3, 1.2683230E-3, 1.2465397E-3, 1.2196049E-3, 1.2045996E-3},
+        {2.9153695E-3, 2.9152299E-3, 2.9288445E-3, 2.9022565E-3, 2.9024912E-3},
+        {62.610505E-3, 62.837393E-3, 63.721774E-3, 63.824265E-3, 64.258455E-3},
+        {0.0000000E-0, 1.2709626E-5, 2.6523662E-5, 3.4000452E-5, 4.1202191E-5},
+        {0.0000000E-0, 2.1414979E-5, 3.0160779E-5, 7.2562722E-5, 11.723375E-5},
+        {0.0000000E-0, 9.0128400E-5, 4.3497037E-5, 84.795348E-5, 170.37206E-5},
+        {5.8021897E-4, 5.6794847E-4, 5.8118019E-4, 5.9727542E-4, 6.1641693E-4},
+        {1.4275268E-3, 1.5138625E-3, 1.4572752E-3, 1.5007428E-3, 1.7599082E-3},
+        {4.3472961E-2, 4.6729510E-2, 4.3908931E-2, 4.4626982E-2, 5.4736038E-2},
+    };
+    const double aht[] = {2.53E-5, 5.49E-3, 1.14E-3};
+
+    double ah[3], aw[3];
+    double el = azel[1];
+    double lat = pos[0] * kClasRadiansToDegrees;
+    const double hgt = pos[2];
+
+    if (el <= 0.0) {
+        if (mapfw) {
+            *mapfw = 0.0;
+        }
+        return 0.0;
+    }
+
+    const double y = (claslibTime2Doy(time) - 28.0) / 365.25 +
+                     (lat < 0.0 ? 0.5 : 0.0);
+    const double cosy = std::cos(2.0 * kClasPi * y);
+    lat = std::fabs(lat);
+
+    for (int i = 0; i < 3; ++i) {
+        ah[i] = claslibInterpc(coef[i], lat) - claslibInterpc(coef[i + 3], lat) * cosy;
+        aw[i] = claslibInterpc(coef[i + 6], lat);
+    }
+    const double dm =
+        (1.0 / std::sin(el) - claslibMapf(el, aht[0], aht[1], aht[2])) * hgt / 1E3;
+
+    if (mapfw) {
+        *mapfw = claslibMapf(el, aw[0], aw[1], aw[2]);
+    }
+    return claslibMapf(el, ah[0], ah[1], ah[2]) + dm;
+}
+
+double claslibTropmapf(const GNSSTime& time,
+                       const double pos[],
+                       const double azel[],
+                       double* mapfw) {
+    if (pos[2] < -1000.0 || pos[2] > 20000.0) {
+        if (mapfw) {
+            *mapfw = 0.0;
+        }
+        return 0.0;
+    }
+    return claslibNmf(time, pos, azel, mapfw);
+}
+
 tidal::EarthRotationParameters oneEntryErp(const GNSSTime& time, const double erpv[5]) {
     tidal::EarthRotationParameters erp;
     tidal::EarthRotationParameters::Entry entry;
@@ -373,15 +581,15 @@ double prectrop(const GNSSTime& time,
                 const double azel[2],
                 double zwd,
                 double ztd) {
-    double hydrostatic_m = 0.0;
-    double wet_m = 0.0;
-    if (!standardVerticalTroposphereDelays(time, pos, hydrostatic_m, wet_m)) {
+    double dry_delay_m = 0.0;
+    double wet_delay_m = 0.0;
+    const double geoid_height_m = embeddedGeoidHeightJapan(pos[0], pos[1]);
+    if (claslibGetStTv(time, pos[0], pos[2], geoid_height_m, &dry_delay_m, &wet_delay_m)) {
         return 0.0;
     }
-    const double dry_mapping =
-        models::niellHydrostaticMapping(pos[0], pos[2], azel[1], dayOfYearFromTime(time));
-    const double wet_mapping = models::niellWetMapping(pos[0], azel[1]);
-    return dry_mapping * hydrostatic_m * ztd + wet_mapping * wet_m * zwd;
+    double wet_mapping = 0.0;
+    const double dry_mapping = claslibTropmapf(time, pos, azel, &wet_mapping);
+    return dry_mapping * dry_delay_m * ztd + wet_mapping * wet_delay_m * zwd;
 }
 
 bool satpos_ssr(const GNSSTime& /*teph*/,
