@@ -39,6 +39,9 @@ constexpr int kMinLockForAr = 1;
 constexpr int kMaxAmbOutage = 90;
 constexpr double kElevationMaskRad = 15.0 * M_PI / 180.0;
 constexpr int kResidualFreqCount = 2;
+constexpr double kResidualRejectSigma = 4.0;
+constexpr double kDispersiveRejectSigma = 6.0;
+constexpr double kNonDispersiveRejectSigma = 6.0;
 
 struct AppliedCorrections {
     double code_m = 0.0;
@@ -88,6 +91,7 @@ struct UpdateStats {
     VectorXd state_before;
     VectorXd state_after;
     MatrixXd pre_update_covariance;
+    std::vector<int> selected_rows;
 };
 
 double elevationWeight(double elevation_rad) {
@@ -266,6 +270,15 @@ int freqIndexFromAmbIndex(int index) {
         return -1;
     }
     return (index - kClasAmbStart) / kClasMaxSat;
+}
+
+double clasCarrierWavelength(int freq_index) {
+    switch (freq_index) {
+        case 0: return constants::GPS_L1_WAVELENGTH;
+        case 1: return constants::GPS_L2_WAVELENGTH;
+        case 2: return constants::GPS_L5_WAVELENGTH;
+        default: return 0.0;
+    }
 }
 
 bool rowLessClasOrder(const ZdRow& lhs, const ZdRow& rhs) {
@@ -569,6 +582,57 @@ void dumpFullModelComponentRow(int row_index,
         << " amb_m=" << c.amb_m
         << " modeled_sum=" << c.modeled_sum;
     emitFullStateLine(oss.str());
+}
+
+void dumpSelectedUpdateRows(const std::vector<FullMeasurementRow>& rows,
+                            const std::vector<int>& selected_rows,
+                            const MatrixXd& measurement_covariance,
+                            const MatrixXd& innovation_covariance,
+                            const GNSSTime& time) {
+    if (!fullStateDumpEnabled(time)) {
+        return;
+    }
+    for (int selected_index = 0;
+         selected_index < static_cast<int>(selected_rows.size());
+         ++selected_index) {
+        const int row_index = selected_rows[static_cast<size_t>(selected_index)];
+        if (row_index < 0 || row_index >= static_cast<int>(rows.size())) {
+            continue;
+        }
+        const auto& row = rows[static_cast<size_t>(row_index)];
+        const double measurement_variance =
+            row_index < measurement_covariance.rows() &&
+                    row_index < measurement_covariance.cols()
+                ? measurement_covariance(row_index, row_index)
+                : std::numeric_limits<double>::quiet_NaN();
+        const double innovation_variance =
+            row_index < innovation_covariance.rows() &&
+                    row_index < innovation_covariance.cols()
+                ? innovation_covariance(row_index, row_index)
+                : std::numeric_limits<double>::quiet_NaN();
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(12)
+            << "[CLAS-ROWS-SELECTED] source=lib"
+            << " week=" << time.week
+            << " tow=" << time.tow
+            << " stage=0"
+            << " selected_row=" << selected_index
+            << " row=" << row_index
+            << " sat=" << row.satellite.toString()
+            << " ref=" << row.reference_satellite.toString()
+            << " f=" << row.freq_index
+            << " freq_group=" << row.freq_index
+            << " type=" << (row.is_phase ? "phase" : "code")
+            << " y=" << row.residual
+            << " R=" << measurement_variance
+            << " S=" << innovation_variance
+            << " threshold_l1l2=" << kResidualRejectSigma
+            << " threshold_disp=" << kDispersiveRejectSigma
+            << " threshold_l0=" << kNonDispersiveRejectSigma
+            << " selected_count=" << selected_rows.size()
+            << " total_rows=" << rows.size();
+        emitFullStateLine(oss.str());
+    }
 }
 
 void dumpFullUpdateRows(const std::vector<FullMeasurementRow>& rows,
@@ -1254,6 +1318,127 @@ MeasurementBuild buildMeasurements(const ObservationData& obs,
     return formSingleDifferenceRows(obs, zd_rows, rtk, config, receiver_position);
 }
 
+std::vector<int> selectClaslibResidualRows(
+    const std::vector<FullMeasurementRow>& rows,
+    const VectorXd& residuals,
+    const MatrixXd& innovation_covariance) {
+    struct PhaseKey {
+        SatelliteId satellite;
+        int freq_index = 0;
+
+        bool operator<(const PhaseKey& rhs) const {
+            if (satellite < rhs.satellite) {
+                return true;
+            }
+            if (rhs.satellite < satellite) {
+                return false;
+            }
+            return freq_index < rhs.freq_index;
+        }
+    };
+
+    std::map<PhaseKey, double> phase_residuals;
+    std::map<PhaseKey, double> phase_variances;
+    std::map<PhaseKey, bool> phase_valid;
+    std::set<SatelliteId> phase_satellites;
+
+    for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+        const auto& row = rows[static_cast<size_t>(i)];
+        if (!row.is_phase ||
+            row.freq_index < 0 || row.freq_index >= kClasNfreq) {
+            continue;
+        }
+        const PhaseKey key{row.satellite, row.freq_index};
+        phase_residuals[key] = residuals(i);
+        phase_variances[key] = innovation_covariance(i, i);
+        phase_valid[key] = true;
+        phase_satellites.insert(row.satellite);
+    }
+
+    for (const auto& satellite : phase_satellites) {
+        const PhaseKey l1_key{satellite, 0};
+        const auto l1_residual_it = phase_residuals.find(l1_key);
+        const auto l1_variance_it = phase_variances.find(l1_key);
+        if (l1_residual_it == phase_residuals.end() ||
+            l1_variance_it == phase_variances.end() ||
+            l1_variance_it->second == 0.0) {
+            continue;
+        }
+        for (int freq = 1; freq < kClasNfreq; ++freq) {
+            const PhaseKey other_key{satellite, freq};
+            const auto other_residual_it = phase_residuals.find(other_key);
+            const auto other_variance_it = phase_variances.find(other_key);
+            if (other_residual_it == phase_residuals.end() ||
+                other_variance_it == phase_variances.end() ||
+                other_variance_it->second == 0.0) {
+                continue;
+            }
+            const double lam_l1 = clasCarrierWavelength(0);
+            const double lam_other = clasCarrierWavelength(freq);
+            if (lam_l1 <= 0.0 || lam_other <= 0.0) {
+                continue;
+            }
+            const double gamma = (lam_other * lam_other) / (lam_l1 * lam_l1);
+            const double denom_disp = 1.0 - gamma;
+            const double denom_l0 = gamma - 1.0;
+            if (denom_disp == 0.0 || denom_l0 == 0.0) {
+                continue;
+            }
+
+            const double l1_residual = l1_residual_it->second;
+            const double other_residual = other_residual_it->second;
+            const double sig2 =
+                std::max(l1_variance_it->second, other_variance_it->second);
+            const double dispersive =
+                (constants::GPS_L1_FREQ / constants::GPS_L2_FREQ) *
+                (l1_residual - other_residual) / denom_disp;
+            const double non_dispersive =
+                (gamma * l1_residual - other_residual) / denom_l0;
+
+            if (kDispersiveRejectSigma > 0.0 &&
+                dispersive * dispersive >
+                    kDispersiveRejectSigma * kDispersiveRejectSigma * sig2) {
+                phase_valid[l1_key] = false;
+                phase_valid[other_key] = false;
+                continue;
+            }
+            if (kNonDispersiveRejectSigma > 0.0 &&
+                non_dispersive * non_dispersive >
+                    kNonDispersiveRejectSigma * kNonDispersiveRejectSigma * sig2) {
+                phase_valid[l1_key] = false;
+                phase_valid[other_key] = false;
+                continue;
+            }
+        }
+    }
+
+    std::vector<int> selected_rows;
+    selected_rows.reserve(rows.size());
+    for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+        const auto& row = rows[static_cast<size_t>(i)];
+        const double residual = residuals(i);
+        const double variance = innovation_covariance(i, i);
+        const bool passes_prefit =
+            variance == 0.0 ||
+            kResidualRejectSigma == 0.0 ||
+            (std::isfinite(residual) && std::isfinite(variance) &&
+             residual * residual <
+                 variance * kResidualRejectSigma * kResidualRejectSigma);
+        if (!passes_prefit) {
+            continue;
+        }
+        if (row.is_phase) {
+            const auto valid_it =
+                phase_valid.find(PhaseKey{row.satellite, row.freq_index});
+            if (valid_it != phase_valid.end() && !valid_it->second) {
+                continue;
+            }
+        }
+        selected_rows.push_back(i);
+    }
+    return selected_rows;
+}
+
 UpdateStats applyMeasurementUpdate(ClaslibRtkState& rtk,
                                    const std::vector<FullMeasurementRow>& rows,
                                    bool debug_enabled,
@@ -1321,6 +1506,9 @@ UpdateStats applyMeasurementUpdate(ClaslibRtkState& rtk,
 
     const MatrixXd PHt = Pa * Ha.transpose();
     const MatrixXd S = Ha * PHt + R;
+    stats.selected_rows = selectClaslibResidualRows(rows, z, S);
+    dumpSelectedUpdateRows(rows, stats.selected_rows, R, S, time);
+
     Eigen::LDLT<MatrixXd> ldlt(S);
     if (ldlt.info() != Eigen::Success) {
         return stats;

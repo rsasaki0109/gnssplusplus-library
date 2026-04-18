@@ -44,3 +44,6 @@ __pycache__/
 PLAN.md
 notes/
 CLAUDE.md
+
+# Codex agent task files (auto-generated, keep archive under notes/)
+/CODEX_TASK_*.md
