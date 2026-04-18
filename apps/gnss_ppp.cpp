@@ -66,6 +66,7 @@ struct Options {
     bool claslib_parity = false;
     bool claslib_bridge = false;
     bool ported_full = false;
+    bool ported_clasnat = false;
     bool use_ported_pntpos = false;
     bool use_ported_udstate = false;
     bool use_ported_zdres = false;
@@ -112,6 +113,7 @@ void printUsage(const char* program_name) {
         << "  --claslib-bridge         Delegate this run to linked CLASLIB postpos() (requires CMake -DCLASLIB_PARITY_LINK=ON)\n"
         << "  --no-claslib-bridge      Keep the native libgnss++ path even when CLASLIB bridge support is linked\n"
         << "  --ported-full            Use the native CLASLIB-mirror PPP path with NX=303 and no clock/trop state\n"
+        << "  --ported-clasnat         Use the gated native CLASLIB transcription path\n"
         << "  --ported-pntpos          Use the native C++ port of CLASLIB pntpos() for the strict CLAS seed\n"
         << "  --ported-udstate         Use the native C++ port of CLASLIB udstate_ppp() in strict CLASLIB parity mode\n"
         << "  --ported-zdres           Use the native C++ port of CLASLIB zdres()/ddres() residual construction\n"
@@ -259,6 +261,17 @@ Options parseArguments(int argc, char* argv[]) {
             options.claslib_bridge = false;
         } else if (arg == "--ported-full") {
             options.ported_full = true;
+            options.use_clas_osr_filter = true;
+            options.clas_epoch_policy_explicit = true;
+            options.clas_epoch_policy = "strict-osr";
+            options.use_ionosphere_free = false;
+            options.estimate_ionosphere = true;
+            options.estimate_troposphere = false;
+            options.clas_atmos_selection = "grid-first";
+            options.enable_ar = true;
+            options.ar_method = "dd-per-freq";
+        } else if (arg == "--ported-clasnat") {
+            options.ported_clasnat = true;
             options.use_clas_osr_filter = true;
             options.clas_epoch_policy_explicit = true;
             options.clas_epoch_policy = "strict-osr";
@@ -650,10 +663,11 @@ int main(int argc, char* argv[]) {
             !options.ar_ratio_threshold_explicit) {
             options.ar_ratio_threshold = 1.2;
         }
-        if (options.ported_full && !options.ar_ratio_threshold_explicit) {
+        if ((options.ported_full || options.ported_clasnat) &&
+            !options.ar_ratio_threshold_explicit) {
             options.ar_ratio_threshold = 1.2;
         }
-        if (options.claslib_parity || options.ported_full) {
+        if (options.claslib_parity || options.ported_full || options.ported_clasnat) {
             if (options.eop_path.empty()) {
                 options.eop_path = defaultClaslibDataFile("igu00p01.erp");
             }
@@ -819,14 +833,15 @@ int main(int argc, char* argv[]) {
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
         ppp_config.strict_first_ar_dump_path = options.first_ar_dump_path;
+        ppp_config.use_ported_clasnat = options.ported_clasnat;
         ppp_config.use_ported_full = options.ported_full;
         ppp_config.use_ported_pntpos =
-            !options.ported_full && options.use_ported_pntpos;
+            !options.ported_full && !options.ported_clasnat && options.use_ported_pntpos;
         ppp_config.use_ported_udstate =
-            !options.ported_full && options.use_ported_udstate;
+            !options.ported_full && !options.ported_clasnat && options.use_ported_udstate;
         ppp_config.use_ported_zdres =
-            !options.ported_full && options.use_ported_zdres;
-        if (options.claslib_parity || options.ported_full) {
+            !options.ported_full && !options.ported_clasnat && options.use_ported_zdres;
+        if (options.claslib_parity || options.ported_full || options.ported_clasnat) {
             ppp_config.clas_outlier_sigma_scale = 8.0;
             ppp_config.clas_decouple_clock_position = false;
             ppp_config.initial_ionosphere_variance = 1e-4;
@@ -838,6 +853,10 @@ int main(int argc, char* argv[]) {
                 !ppp_config.clas_grid_blq_file_path.empty();
             ppp_config.apply_tides_to_receiver_position = false;
             ppp_config.apply_tide_as_osr = true;
+        }
+        if (options.ported_clasnat) {
+            ppp_config.apply_tides_to_receiver_position = true;
+            ppp_config.apply_tide_as_osr = false;
         }
         if (options.low_dynamics_mode) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
@@ -1050,6 +1069,7 @@ int main(int argc, char* argv[]) {
                     << "  \"clas_residual_sampling\": \"" << jsonEscape(options.clas_residual_sampling) << "\",\n"
                     << "  \"clas_atmos_selection\": \"" << jsonEscape(options.clas_atmos_selection) << "\",\n"
                     << "  \"clas_atmos_stale_after_seconds\": " << options.clas_atmos_stale_after_seconds << ",\n"
+                    << "  \"ported_clasnat\": " << (options.ported_clasnat ? "true" : "false") << ",\n"
                     << "  \"ported_full\": " << (options.ported_full ? "true" : "false") << ",\n"
                     << "  \"ported_pntpos\": " << (options.use_ported_pntpos ? "true" : "false") << ",\n"
                     << "  \"ported_udstate\": " << (options.use_ported_udstate ? "true" : "false") << ",\n"

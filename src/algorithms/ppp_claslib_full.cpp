@@ -4,10 +4,12 @@
 #include <libgnss++/algorithms/ppp_ar.hpp>
 #include <libgnss++/algorithms/ppp_clas.hpp>
 #include <libgnss++/algorithms/ppp_claslib_pntpos.hpp>
-#include <libgnss++/algorithms/ppp_osr.hpp>
+#include <libgnss++/algorithms/ppp_clasnat_osr.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/models/troposphere.hpp>
+
+#include "ppp_clasnat_zdres.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1145,8 +1147,16 @@ std::vector<ZdRow> buildZeroDifferenceRows(
                 osr.wavelengths[f] <= 0.0) {
                 continue;
             }
-            const AppliedCorrections applied = selectAppliedCorrections(
+            AppliedCorrections applied = selectAppliedCorrections(
                 osr, f, config.clas_correction_application_policy);
+            double row_trop_modeled = trop_modeled;
+            if (config.use_ported_clasnat &&
+                config.clas_correction_application_policy ==
+                    ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR) {
+                applied.code_m = osr.PRC[f];
+                applied.phase_m = osr.CPC[f];
+                row_trop_modeled = 0.0;
+            }
             const double fi_for_grid =
                 (osr.wavelengths[0] > 0.0 && osr.wavelengths[f] > 0.0)
                     ? osr.wavelengths[f] / osr.wavelengths[0]
@@ -1164,7 +1174,7 @@ std::vector<ZdRow> buildZeroDifferenceRows(
             const double phase_obs_m = raw->carrier_phase * osr.wavelengths[f];
             const double phase_model_m =
                 rho_sagnac - sat_clk_m + receiver_clock_bias_m +
-                trop_modeled + applied.phase_m;
+                row_trop_modeled + applied.phase_m;
             ZdRow phase_row;
             phase_row.osr = &osr;
             phase_row.satellite = osr.satellite;
@@ -1187,8 +1197,8 @@ std::vector<ZdRow> buildZeroDifferenceRows(
             phase_row.components.dtr = receiver_clock_bias_m;
             phase_row.components.rel = osr.relativity_correction_m;
             phase_row.components.sagnac = rho_sagnac - rho_no_sagnac;
-            phase_row.components.trop_dry = trop_modeled;
-            phase_row.components.trop_model = trop_modeled;
+            phase_row.components.trop_dry = row_trop_modeled;
+            phase_row.components.trop_model = row_trop_modeled;
             phase_row.components.trop_grid = osr.trop_correction_m;
             phase_row.components.iono_grid = -iono_grid_m;
             phase_row.components.cpc = osr.CPC[f];
@@ -1203,7 +1213,7 @@ std::vector<ZdRow> buildZeroDifferenceRows(
 
             const double code_model_m =
                 rho_sagnac - sat_clk_m + receiver_clock_bias_m +
-                trop_modeled + applied.code_m;
+                row_trop_modeled + applied.code_m;
             ZdRow code_row;
             code_row.osr = &osr;
             code_row.satellite = osr.satellite;
@@ -1224,8 +1234,8 @@ std::vector<ZdRow> buildZeroDifferenceRows(
             code_row.components.dtr = receiver_clock_bias_m;
             code_row.components.rel = osr.relativity_correction_m;
             code_row.components.sagnac = rho_sagnac - rho_no_sagnac;
-            code_row.components.trop_dry = trop_modeled;
-            code_row.components.trop_model = trop_modeled;
+            code_row.components.trop_dry = row_trop_modeled;
+            code_row.components.trop_model = row_trop_modeled;
             code_row.components.trop_grid = osr.trop_correction_m;
             code_row.components.iono_grid = iono_grid_m;
             code_row.components.prc = osr.PRC[f];
@@ -1244,7 +1254,7 @@ std::vector<ZdRow> buildZeroDifferenceRows(
                 receiver_clock_bias_m,
                 trop_zenith_m,
                 trop_mapping,
-                trop_modeled,
+                row_trop_modeled,
                 rho_no_sagnac,
                 rho_sagnac,
                 sat_clk_m,
@@ -1411,6 +1421,43 @@ MeasurementBuild buildMeasurements(const ObservationData& obs,
                                    const Vector3d& receiver_position,
                                    double receiver_clock_bias_m,
                                    double trop_zenith_m) {
+    // iter39 zdres transcription gate disabled (regressed to 50mm).
+    // Kept as dead code for future iter40+ test-harness-driven literal port.
+    if (config.use_ported_clasnat && false) {
+        CLASEpochContext epoch_context;
+        epoch_context.receiver_position = receiver_position;
+        epoch_context.receiver_clock_m = receiver_clock_bias_m;
+        epoch_context.trop_zenith_m = trop_zenith_m;
+        epoch_context.osr_corrections = osr_corrections;
+        const auto clasnat_build =
+            ppp_clasnat_zdres::buildEpochMeasurementsClasnatZdres(
+                obs,
+                epoch_context,
+                rtk,
+                config,
+                receiver_position,
+                receiver_clock_bias_m,
+                trop_zenith_m);
+        MeasurementBuild build;
+        build.observed_ambiguities = clasnat_build.observed_ambiguities;
+        build.rows.reserve(clasnat_build.rows.size());
+        for (const auto& src : clasnat_build.rows) {
+            FullMeasurementRow row;
+            row.H = src.H;
+            row.residual = src.residual;
+            row.variance = src.variance;
+            row.reference_variance = src.reference_variance;
+            row.satellite = src.satellite;
+            row.ambiguity_satellite = src.ambiguity_satellite;
+            row.reference_satellite = src.reference_satellite;
+            row.is_phase = src.is_phase;
+            row.signal_index = src.signal_index;
+            row.freq_index = src.freq_index;
+            row.components = src.components;
+            build.rows.push_back(row);
+        }
+        return build;
+    }
     const auto zd_rows =
         buildZeroDifferenceRows(
             obs,
@@ -1852,7 +1899,7 @@ EpochResult runEpoch(const ObservationData& obs,
             : seed.position_ecef;
     const double trop_zenith_m =
         modeledZenithTroposphereDelayMeters(context_position, obs.time);
-    const auto epoch_context = prepareClasEpochContext(
+    const auto epoch_context = ppp_clasnat_osr::prepareClasnatEpochContext(
         obs,
         nav,
         ssr,
@@ -1880,12 +1927,14 @@ EpochResult runEpoch(const ObservationData& obs,
         seed.receiver_clock_bias,
         trop_zenith_m,
         epoch_context.osr_corrections);
+    const Vector3d measurement_receiver_position =
+        epoch_config.use_ported_clasnat ? epoch_context.receiver_position : rtk.x.head<3>();
     const auto measurement_build = buildMeasurements(
         obs,
         epoch_context.osr_corrections,
         rtk,
         epoch_config,
-        rtk.x.head<3>(),
+        measurement_receiver_position,
         seed.receiver_clock_bias,
         trop_zenith_m);
     dumpFullState(

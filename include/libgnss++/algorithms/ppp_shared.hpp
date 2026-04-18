@@ -107,6 +107,7 @@ struct PPPConfig {
     int wl_min_averaging_epochs = 20;
     bool wlnl_strict_claslib_parity = false;
     bool use_ported_full = false;
+    bool use_ported_clasnat = false;
     bool use_ported_pntpos = false;
     bool use_ported_udstate = false;
     bool use_ported_zdres = false;
