@@ -21,6 +21,8 @@ constexpr int kClasNx = kClasAmbStart + kClasMaxSat * kClasNfreq;
 struct ClaslibRtkState {
     Eigen::VectorXd x;
     Eigen::MatrixXd P;
+    Eigen::VectorXd xa;
+    Eigen::MatrixXd Pa;
     std::map<SatelliteId, int> ionosphere_indices;
     std::map<SatelliteId, int> ambiguity_indices;
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo> ambiguity_states;
@@ -31,6 +33,7 @@ struct ClaslibRtkState {
     GNSSTime last_time;
     bool has_last_time = false;
     bool initialized = false;
+    bool has_fixed_solution = false;
     int epoch_count = 0;
     double last_ar_ratio = 0.0;
     int last_fixed_ambiguities = 0;

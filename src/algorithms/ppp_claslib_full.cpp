@@ -315,10 +315,20 @@ AppliedCorrections selectAppliedCorrections(
 
 void ensureStorage(ClaslibRtkState& rtk) {
     if (rtk.x.size() == kClasNx && rtk.P.rows() == kClasNx && rtk.P.cols() == kClasNx) {
+        if (rtk.xa.size() != kClasNx ||
+            rtk.Pa.rows() != kClasNx ||
+            rtk.Pa.cols() != kClasNx) {
+            rtk.xa = VectorXd::Zero(kClasNx);
+            rtk.Pa = MatrixXd::Zero(kClasNx, kClasNx);
+            rtk.has_fixed_solution = false;
+        }
         return;
     }
     rtk.x = VectorXd::Zero(kClasNx);
     rtk.P = MatrixXd::Zero(kClasNx, kClasNx);
+    rtk.xa = VectorXd::Zero(kClasNx);
+    rtk.Pa = MatrixXd::Zero(kClasNx, kClasNx);
+    rtk.has_fixed_solution = false;
     rtk.ionosphere_indices.clear();
     rtk.ambiguity_indices.clear();
     rtk.ambiguity_states.clear();
@@ -919,7 +929,17 @@ ppp_shared::PPPState makeArState(const ClaslibRtkState& rtk, bool include_l5) {
     return state;
 }
 
-void copyFromArState(const ppp_shared::PPPState& state, ClaslibRtkState& rtk) {
+void copyFixedFromArState(const ppp_shared::PPPState& state, ClaslibRtkState& rtk) {
+    if (state.state.size() == kClasNx &&
+        state.covariance.rows() == kClasNx &&
+        state.covariance.cols() == kClasNx) {
+        rtk.xa = state.state;
+        rtk.Pa = state.covariance;
+        rtk.has_fixed_solution = true;
+    }
+}
+
+void copyFilterFromArState(const ppp_shared::PPPState& state, ClaslibRtkState& rtk) {
     if (state.state.size() == kClasNx &&
         state.covariance.rows() == kClasNx &&
         state.covariance.cols() == kClasNx) {
@@ -936,6 +956,7 @@ bool tryAmbiguityResolution(ClaslibRtkState& rtk,
                             Vector3d& fixed_position) {
     rtk.last_ar_ratio = 0.0;
     rtk.last_fixed_ambiguities = 0;
+    rtk.has_fixed_solution = false;
     if (!config.enable_ambiguity_resolution) {
         return false;
     }
@@ -970,13 +991,14 @@ bool tryAmbiguityResolution(ClaslibRtkState& rtk,
     if (!attempt.fixed) {
         return false;
     }
-    if (attempt.has_hold_state) {
-        copyFromArState(attempt.hold_state, rtk);
-        fixed_position = rtk.x.head<3>();
-    } else {
-        copyFromArState(attempt.state, rtk);
-        fixed_position = rtk.x.head<3>();
+    copyFixedFromArState(attempt.state, rtk);
+    if (!rtk.has_fixed_solution) {
+        return false;
     }
+    if (attempt.has_hold_state) {
+        copyFilterFromArState(attempt.hold_state, rtk);
+    }
+    fixed_position = rtk.xa.head<3>();
     rtk.ambiguity_states = attempt.ambiguities;
     return true;
 }
@@ -1114,6 +1136,8 @@ EpochResult runEpoch(const ObservationData& obs,
         update.pre_update_covariance,
         obs.time,
         output_position);
+    const MatrixXd& output_covariance =
+        result.fixed && rtk.has_fixed_solution ? rtk.Pa : rtk.P;
 
     const auto valid_osr_count = std::count_if(
         epoch_context.osr_corrections.begin(),
@@ -1122,7 +1146,7 @@ EpochResult runEpoch(const ObservationData& obs,
     result.solution = makeSolution(
         obs,
         output_position,
-        rtk.P,
+        output_covariance,
         result.fixed ? SolutionStatus::PPP_FIXED : SolutionStatus::PPP_FLOAT,
         static_cast<int>(valid_osr_count),
         result.measurement_count,
