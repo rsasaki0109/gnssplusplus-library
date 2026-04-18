@@ -345,6 +345,26 @@ TEST(RTKLegacyCompatibilityStandaloneTest, MaxPositionJumpDefaultDisabled) {
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_m, 0.0);
 }
 
+TEST(RTKLegacyCompatibilityStandaloneTest, MaxConsecutiveFloatResetDefaultDisabled) {
+    RTKProcessor processor;
+    EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 0);
+
+    RTKProcessor::RTKConfig cfg;
+    cfg.max_consecutive_float_for_reset = 0;
+    processor.setRTKConfig(cfg);
+    EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 0);
+
+    RTKProcessor::RTKConfig cfg2;
+    cfg2.max_consecutive_float_for_reset = 10;
+    processor.setRTKConfig(cfg2);
+    EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 10);
+
+    RTKProcessor::RTKConfig cfg3;
+    cfg3.max_consecutive_float_for_reset = 0;
+    processor.setRTKConfig(cfg3);
+    EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 0);
+}
+
 TEST(RTKLegacyCompatibilityStandaloneTest, ArPolicyDemo5ContinuousDisablesHoldFix) {
     // Under DEMO5_CONTINUOUS, the hold-fix fallback code path is gated off.
     // We verify by checking that tryHoldFix returns false when called directly

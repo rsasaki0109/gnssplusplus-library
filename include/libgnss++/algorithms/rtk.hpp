@@ -117,6 +117,10 @@ public:
         /// Applied in addition to the history-based exceedsFixHistoryJump check.
         /// 0 (default) disables the check — existing behavior preserved.
         double max_position_jump_m = 0.0;
+
+        /// Reset ambiguity state after N consecutive float epochs (aggressive reconvergence).
+        /// 0 (default) disables the check — existing behavior preserved.
+        int max_consecutive_float_for_reset = 0;
     };
 
     RTKProcessor();
@@ -235,6 +239,9 @@ private:
 
     // Consecutive fix tracking for holdamb
     int consecutive_fix_count_ = 0;
+
+    // Consecutive float tracking for ambiguity auto-reset gate
+    int consecutive_float_count_ = 0;
 
     // Last fix data for holdamb
     struct DDPair {
@@ -359,6 +366,13 @@ private:
      * Kinematic position reset: SPP position with large variance (RTKLIB udpos)
      */
     void resetPositionToSPP(const ObservationData& rover_obs, const NavigationData& nav);
+
+    /**
+     * Reset ambiguity states after N consecutive float epochs (experimental gate).
+     * No-op when max_consecutive_float_for_reset == 0 (default).
+     */
+    void handleConsecutiveFloatReset(const ObservationData& rover_obs,
+                                     const NavigationData& nav);
 
     /**
      * Full KF update with DD observation model mapping to SD states
