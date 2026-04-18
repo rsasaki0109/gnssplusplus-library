@@ -218,14 +218,47 @@ TEST_F(ClasnatParity, SatposSsrNativeTargetMissing) {
 }
 
 TEST_F(ClasnatParity, CorrmeasNativeTargetMissing) {
-    libgnss::clasnat_parity::CorrmeasOutput native;
-    libgnss::clasnat_parity::CorrmeasOutput oracle;
-    const bool native_ok = libgnss::clasnat_parity::corrmeas(native);
-    const bool oracle_ok = libgnss::external::claslib_oracle::corrmeas(oracle);
-    EXPECT_TRUE(native_ok)
-        << "native corrmeas parity entry point is missing; iter41 port target";
-    EXPECT_TRUE(oracle_ok)
-        << "CLASLIB corrmeas oracle adapter is missing realistic CSSR fixture wiring";
+    ASSERT_TRUE(libgnss::clasnat_parity::corrmeasAvailable());
+    for (int sample = 0; sample < 20; ++sample) {
+        libgnss::clasnat_parity::CorrmeasOutput native;
+        libgnss::clasnat_parity::CorrmeasOutput oracle;
+        const bool native_ok = libgnss::clasnat_parity::corrmeas(sample, native);
+        const bool oracle_ok = libgnss::external::claslib_oracle::corrmeas(sample, oracle);
+        ASSERT_TRUE(native_ok) << "native corrmeas failed sample=" << sample;
+        ASSERT_TRUE(oracle_ok) << "CLASLIB corrmeas oracle failed sample=" << sample;
+        ASSERT_EQ(native.num_frequencies, oracle.num_frequencies)
+            << "corrmeas sample=" << sample;
+        EXPECT_NEAR(native.iono, oracle.iono, kParityTolerance)
+            << "corrmeas iono sample=" << sample;
+        expectNearArray("corrmeas PRC sample=" + std::to_string(sample),
+                        native.prc,
+                        oracle.prc,
+                        native.num_frequencies);
+        expectNearArray("corrmeas CPC sample=" + std::to_string(sample),
+                        native.cpc,
+                        oracle.cpc,
+                        native.num_frequencies);
+        expectNearArray("corrmeas cbias sample=" + std::to_string(sample),
+                        native.code_bias,
+                        oracle.code_bias,
+                        native.num_frequencies);
+        expectNearArray("corrmeas pbias sample=" + std::to_string(sample),
+                        native.phase_bias,
+                        oracle.phase_bias,
+                        native.num_frequencies);
+        expectNearArray("corrmeas compL sample=" + std::to_string(sample),
+                        native.phase_compensation,
+                        oracle.phase_compensation,
+                        native.num_frequencies);
+        expectNearArray("corrmeas antr sample=" + std::to_string(sample),
+                        native.receiver_antenna,
+                        oracle.receiver_antenna,
+                        native.num_frequencies);
+        expectNearArray("corrmeas wup sample=" + std::to_string(sample),
+                        native.windup_m,
+                        oracle.windup_m,
+                        native.num_frequencies);
+    }
 }
 
 }  // namespace

@@ -41,6 +41,8 @@ bool satpos_ssr(const GTime& teph,
                 int sat,
                 SatposSsrOutput& out);
 
+bool corrmeas(const libgnss::clasnat_parity::CorrmeasInput& input, CorrmeasOutput& out);
+bool corrmeas(int sample_index, CorrmeasOutput& out);
 bool corrmeas(CorrmeasOutput& out);
 
 }  // namespace libgnss::external::claslib_oracle

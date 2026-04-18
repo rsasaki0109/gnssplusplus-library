@@ -4,6 +4,7 @@
 #include <libgnss++/external/claslib_bridge.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 
 #ifndef GNSSPP_HAS_CLASLIB_BRIDGE
@@ -176,9 +177,143 @@ bool satpos_ssr(const GTime& teph,
     return false;
 }
 
-bool corrmeas(CorrmeasOutput& out) {
+bool corrmeas(const libgnss::clasnat_parity::CorrmeasInput& input, CorrmeasOutput& out) {
+#if GNSSPP_HAS_CLASLIB_BRIDGE
+    out = CorrmeasOutput{};
+    const int nf = std::clamp(input.num_frequencies,
+                              0,
+                              libgnss::clasnat_parity::kParityMaxFreq);
+    const int sat = std::clamp(input.sat, 1, MAXSAT);
+
+    obsd_t obs = {};
+    obs.time = toClasTime(input.time);
+    obs.sat = static_cast<unsigned char>(sat);
+    obs.rcv = 1;
+
+    nav_t nav = {};
+    nav.rtcmmode = RTCMMODE_CSSR;
+    std::array<stec_t, MAX_NGRID> stec_grids = {};
+    std::array<stecd_t, MAXSAT> stec_data = {};
+    nav.stec = stec_grids.data();
+    nav.stec[0].n = 1;
+    nav.stec[0].nmax = static_cast<int>(stec_data.size());
+    nav.stec[0].data = stec_data.data();
+    nav.stec[0].data[0].time = toClasTime(input.stec_time);
+    nav.stec[0].data[0].sat = static_cast<unsigned char>(sat);
+    nav.stec[0].data[0].slip = 0;
+    nav.stec[0].data[0].iono = static_cast<float>(input.stec_l1_m);
+    nav.stec[0].data[0].rate = static_cast<float>(input.stec_rate_mps);
+    nav.stec[0].data[0].quality = 1.0F;
+    nav.stec[0].data[0].rms = static_cast<float>(input.stec_rms_m);
+    nav.stec[0].data[0].flag = 1;
+
+    ssr_t& ssr = nav.ssr_ch[0][sat - 1];
+    ssr.t0[0] = toClasTime(input.orbit_time);
+    ssr.t0[4] = toClasTime(input.code_bias_time);
+    ssr.t0[5] = toClasTime(input.phase_bias_time);
+    ssr.t0[8] = toClasTime(input.stec_time);
+    ssr.nsig = nf;
+
+    for (int f = 0; f < nf; ++f) {
+        obs.code[f] = input.code[f];
+        obs.L[f] = input.carrier_phase_cycles[f];
+        obs.P[f] = input.pseudorange_m[f];
+        nav.lam[sat - 1][f] = input.wavelength_m[f];
+        const int code = input.code[f];
+        ssr.smode[f] = code;
+        if (code > 0 && code <= MAXCODE) {
+            ssr.cbias[code - 1] = static_cast<float>(input.code_bias_m[f]);
+            ssr.pbias[code - 1] = static_cast<float>(input.phase_bias_m[f]);
+        }
+    }
+
+    prcopt_t opt = prcopt_default;
+    opt.nf = nf;
+    opt.posopt[1] = input.antenna_pcv_option;
+    opt.posopt[5] = input.compensation_option;
+    opt.posopt[9] = input.phase_code_timing_option;
+    for (int f = 0; f < std::min(NFREQ, libgnss::clasnat_parity::kParityMaxFreq); ++f) {
+        for (int j = 0; j < 3; ++j) {
+            opt.pcvr[0].off[f][j] =
+                input.receiver_pcv.offsets_m[static_cast<size_t>(f)][static_cast<size_t>(j)];
+        }
+        for (int j = 0; j < 19; ++j) {
+            opt.pcvr[0].var[f][j] =
+                input.receiver_pcv.variations_m[static_cast<size_t>(f)][static_cast<size_t>(j)];
+        }
+    }
+    for (int j = 0; j < 3; ++j) {
+        opt.antdel[0][j] = input.antenna_delta[j];
+    }
+
+    ssat_t ssat = {};
+    ssat.phw = input.phase_windup_cycles;
+    int pbreset[NFREQ] = {};
+    for (int f = 0; f < std::min(NFREQ, nf); ++f) {
+        ssat.slip[f] = input.slip[f];
+        pbreset[f] = input.phase_bias_reset[f];
+    }
+
+    osrd_t osr = {};
+    osr.trop = input.trop_m;
+    osr.relatv = input.relativity_m;
+    int index[MAX_NGRID] = {};
+    double weight[MAX_NGRID] = {};
+    double Gmat[MAX_NGRID * MAX_NGRID] = {};
+    double Emat[MAX_NGRID] = {};
+    int brk = 0;
+    weight[0] = 1.0;
+    Emat[3] = 1.0;
+
+    if (!::corrmeas(&obs,
+                    &nav,
+                    input.receiver_pos,
+                    input.azel,
+                    &opt,
+                    index,
+                    1,
+                    weight,
+                    Gmat,
+                    Emat,
+                    ssat,
+                    &brk,
+                    &osr,
+                    pbreset,
+                    0)) {
+        return false;
+    }
+
+    out.num_frequencies = nf;
+    out.iono = osr.iono;
+    for (int f = 0; f < nf; ++f) {
+        const double fi = input.wavelength_m[0] != 0.0
+                              ? input.wavelength_m[f] / input.wavelength_m[0]
+                              : 1.0;
+        const double iono_scaled = fi * fi * FREQ2 / FREQ1 * osr.iono;
+        out.code_bias[f] = osr.cbias[f];
+        out.phase_bias[f] = osr.pbias[f];
+        out.phase_compensation[f] = osr.compL[f];
+        out.receiver_antenna[f] = osr.antr[f];
+        out.windup_m[f] = osr.wupL[f];
+        out.prc[f] = osr.trop + osr.relatv + osr.antr[f] + iono_scaled + osr.cbias[f];
+        out.cpc[f] = osr.trop + osr.relatv + osr.antr[f] - iono_scaled +
+                     osr.pbias[f] + osr.wupL[f] + osr.compL[f];
+    }
+    return true;
+#else
+    (void)input;
     out = CorrmeasOutput{};
     return false;
+#endif
+}
+
+bool corrmeas(int sample_index, CorrmeasOutput& out) {
+    const auto input = libgnss::clasnat_parity::makeCorrmeasInput(sample_index);
+    return libgnss::external::claslib_oracle::corrmeas(input, out);
+}
+
+bool corrmeas(CorrmeasOutput& out) {
+    return libgnss::external::claslib_oracle::corrmeas(0, out);
 }
 
 }  // namespace libgnss::external::claslib_oracle

@@ -18,6 +18,102 @@ constexpr double kRadiansToDegrees = 180.0 / M_PI;
 constexpr double kClasPi = 3.1415926535897932;
 constexpr double kClasRadiansToDegrees = 180.0 / kClasPi;
 constexpr double kIonosphereHeightM = 350000.0;
+constexpr double kClasFreq1Hz = 1.57542E9;
+constexpr double kClasFreq2Hz = 1.22760E9;
+constexpr double kClasFreq5Hz = 1.17645E9;
+constexpr int kParityMaxSat = 64;
+constexpr int kParitySsrChannelCount = 2;
+constexpr int kParityMaxGrid = 4;
+constexpr int kParityMaxCode = 64;
+constexpr int kParityMaxIndexSsr = 9;
+constexpr int kParityCssrInvalid = -10000;
+constexpr int kParityRtcmModeCssr = 5;
+constexpr double kParityMaxAgeSsrBiasSeconds = 120.0;
+constexpr double kParityMaxAgeSsrIonoSeconds = 120.0;
+
+static unsigned char kObsFreqs[] = {
+    0, 1, 1, 1, 1,  1, 1, 1, 1, 1,
+    1, 1, 1, 1, 2,  2, 2, 2, 2, 2,
+    2, 2, 2, 2, 3,  3, 3, 5, 5, 5,
+    4, 4, 4, 4, 4,  4, 4, 6, 6, 6,
+    2, 2, 4, 4, 3,  3, 3, 1, 1, 0,
+};
+
+struct ParityObs {
+    GNSSTime time;
+    unsigned char sat = 0;
+    unsigned char code[kParityMaxFreq] = {};
+    double L[kParityMaxFreq] = {};
+    double P[kParityMaxFreq] = {};
+};
+
+struct ParityPrcOpt {
+    int nf = kParityMaxFreq;
+    int posopt[13] = {};
+    ReceiverPcvModel pcvr[2] = {};
+    double antdel[2][3] = {};
+};
+
+struct ParitySsat {
+    unsigned char slip[kParityMaxFreq] = {};
+    double phw = 0.0;
+};
+
+struct ParityStecData {
+    GNSSTime time;
+    unsigned char sat = 0;
+    unsigned char slip = 0;
+    float iono = 0.0F;
+    float rate = 0.0F;
+    float quality = 0.0F;
+    float rms = 0.0F;
+    int flag = 0;
+};
+
+struct ParityStec {
+    int n = 0;
+    ParityStecData data[kParityMaxSat] = {};
+};
+
+struct ParitySsr {
+    GNSSTime t0[kParityMaxIndexSsr] = {};
+    int nsig = 0;
+    int smode[kParityMaxCode] = {};
+    float cbias[kParityMaxCode] = {};
+    float pbias[kParityMaxCode] = {};
+};
+
+struct ParityNav {
+    double lam[kParityMaxSat][kParityMaxFreq] = {};
+    ParitySsr ssr_ch[kParitySsrChannelCount][kParityMaxSat] = {};
+    int rtcmmode = kParityRtcmModeCssr;
+    ParityStec stec[kParityMaxGrid] = {};
+};
+
+struct ParityOsr {
+    double trop = 0.0;
+    double iono = 0.0;
+    double relatv = 0.0;
+    double cbias[kParityMaxFreq] = {};
+    double pbias[kParityMaxFreq] = {};
+    double antr[kParityMaxFreq] = {};
+    double wupL[kParityMaxFreq] = {};
+    double compL[kParityMaxFreq] = {};
+};
+
+struct CorrmeasRuntime {
+    ParityObs obs;
+    ParityNav nav;
+    ParityPrcOpt opt;
+    ParitySsat ssat;
+    ParityOsr osr;
+    int index[kParityMaxGrid] = {};
+    double weight[kParityMaxGrid] = {};
+    double Gmat[kParityMaxGrid * kParityMaxGrid] = {};
+    double Emat[kParityMaxGrid] = {};
+    int brk = 0;
+    int pbreset[kParityMaxFreq] = {};
+};
 
 double dot3(const double a[3], const double b[3]) {
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -42,6 +138,18 @@ void cross3(const double a[3], const double b[3], double out[3]) {
     out[0] = a[1] * b[2] - a[2] * b[1];
     out[1] = a[2] * b[0] - a[0] * b[2];
     out[2] = a[0] * b[1] - a[1] * b[0];
+}
+
+double timediff(const GNSSTime& a, const GNSSTime& b) {
+    return a - b;
+}
+
+int obsFrequencyIndex(int code) {
+    if (code < 0 || code >= static_cast<int>(sizeof(kObsFreqs))) {
+        return 0;
+    }
+    const int freq = kObsFreqs[code];
+    return freq > 0 ? freq - 1 : 0;
 }
 
 double interpPcvVariation(const std::array<double, kParityPcvGridSize>& var,
@@ -419,6 +527,475 @@ tidal::EarthRotationParameters oneEntryErp(const GNSSTime& time, const double er
     return erp;
 }
 
+int parityStecData(ParityStec* stec,
+                   const GNSSTime& time,
+                   int sat,
+                   double* iono,
+                   double* rate,
+                   double* rms,
+                   double* quality,
+                   int* slip) {
+    int k, flag;
+    double tt;
+
+    if (stec->n <= 0) {
+        return 0;
+    }
+
+    for (k = flag = 0; k < stec->n; k++) {
+        if (sat == stec->data[k].sat) {
+            flag = 1;
+            break;
+        }
+    }
+    if (flag == 0 || stec->data[k].flag == -1) {
+        return 0;
+    }
+
+    tt = timediff(time, stec->data[k].time);
+    if (std::fabs(tt) > kParityMaxAgeSsrIonoSeconds) {
+        stec->data[k].flag = -1;
+        return 0;
+    }
+    *iono = stec->data[k].iono + stec->data[k].rate * tt;
+    *rate = stec->data[k].rate;
+    *rms = stec->data[k].rms;
+    *slip = stec->data[k].slip;
+    *quality = stec->data[k].quality;
+
+    return 1;
+}
+
+int parityStecGridData(ParityNav* nav,
+                       const int* index,
+                       const GNSSTime& time,
+                       int sat,
+                       int n,
+                       const double* weight,
+                       const double* Gmat,
+                       const double* Emat,
+                       double* iono,
+                       double* rate,
+                       double* var,
+                       int* brk) {
+    int i, slip;
+    double ionos[kParityMaxGrid] = {};
+    double rates[kParityMaxGrid] = {};
+    double rms[kParityMaxGrid] = {};
+    double quals[kParityMaxGrid] = {};
+    double ionos_[kParityMaxGrid] = {};
+    double rates_[kParityMaxGrid] = {};
+    double sqrms[kParityMaxGrid] = {};
+    double sqrms_[kParityMaxGrid] = {};
+    double quals_[kParityMaxGrid] = {};
+
+    if (n <= 0 || n > kParityMaxGrid) {
+        return 0;
+    }
+
+    if (n == 1) {
+        if (!parityStecData(nav->stec + index[0],
+                            time,
+                            sat,
+                            iono,
+                            rate,
+                            rms,
+                            quals,
+                            &slip)) {
+            return 0;
+        }
+        if (slip) {
+            *brk = 1;
+        }
+        *var = rms[0] * rms[0];
+        return 1;
+    } else {
+        for (i = 0; i < n; i++) {
+            if (!parityStecData(nav->stec + index[i],
+                                time,
+                                sat,
+                                ionos + i,
+                                rates + i,
+                                rms + i,
+                                quals + i,
+                                &slip)) {
+                return 0;
+            }
+            if (slip) {
+                *brk = 1;
+            }
+        }
+
+        *iono = *rate = *var = 0.0;
+
+        if (n == 4 && Gmat && Emat) {
+            for (i = 0; i < n; i++) {
+                sqrms[i] = rms[i] * rms[i];
+            }
+            for (int r = 0; r < n; ++r) {
+                for (int c = 0; c < n; ++c) {
+                    ionos_[r] += Gmat[r * n + c] * ionos[c];
+                    rates_[r] += Gmat[r * n + c] * rates[c];
+                    sqrms_[r] += Gmat[r * n + c] * sqrms[c];
+                    quals_[r] += Gmat[r * n + c] * quals[c];
+                }
+            }
+            for (i = 0; i < 4; ++i) {
+                *iono += Emat[i] * ionos_[i];
+                *rate += Emat[i] * rates_[i];
+                *var += Emat[i] * sqrms_[i];
+            }
+        } else {
+            for (i = 0; i < n; i++) {
+                *iono += ionos[i] * weight[i];
+                *rate += rates[i] * weight[i];
+                *var += rms[i] * rms[i] * weight[i];
+            }
+        }
+    }
+
+    return 1;
+}
+
+void parityCompensatedisp(const ParityNav* nav,
+                          const int* index,
+                          const ParityObs* obs,
+                          int sat,
+                          const double iono,
+                          const double* pb,
+                          double* compL,
+                          int* pbreset,
+                          const ParityPrcOpt* opt,
+                          const ParitySsat ssat,
+                          int ch) {
+    GNSSTime time = obs->time;
+    static GNSSTime t0[kParitySsrChannelCount][kParityMaxSat] = {};
+    static GNSSTime tm[kParitySsrChannelCount][kParityMaxSat] = {};
+    int i, k, qi, qj, isat = sat - 1, oft = isat * kParityMaxFreq, oft_b;
+    static double b0[kParitySsrChannelCount][kParityMaxSat * kParityMaxFreq] = {};
+    static double bm[kParitySsrChannelCount][kParityMaxSat * kParityMaxFreq] = {};
+    static double iono0[kParitySsrChannelCount][kParityMaxSat] = {};
+    static double ionom[kParitySsrChannelCount][kParityMaxSat] = {};
+    static double coef[kParitySsrChannelCount][kParityMaxSat * kParityMaxFreq] = {};
+    static int slip[kParitySsrChannelCount][kParityMaxSat * kParityMaxFreq] = {};
+    const double* lam = nav->lam[obs->sat - 1];
+    double disp0, dispm, dt, dgf, fi;
+    int nf = opt->nf, flag, fqi, fqj;
+
+    oft_b = isat * kParityMaxFreq;
+
+    for (k = flag = 0; k < nav->stec[index[0]].n; k++) {
+        if (sat == nav->stec[index[0]].data[k].sat) {
+            flag = 1;
+            break;
+        }
+    }
+    if (flag == 1 && timediff(nav->stec[index[0]].data[k].time, t0[ch][isat]) > 0.0) {
+        if (opt->posopt[5] == 1) {
+            tm[ch][isat] = t0[ch][isat];
+            t0[ch][isat] = nav->stec[index[0]].data[k].time;
+            dt = timediff(t0[ch][isat], tm[ch][isat]);
+            if (dt <= 0.0) {
+                return;
+            }
+
+            for (i = 0; i < nf; i++) {
+                if (b0[ch][oft_b + i] == 0.0 || iono0[ch][isat] == 0.0) {
+                    b0[ch][oft_b + i] = pb[i];
+                    iono0[ch][isat] = iono;
+                    return;
+                }
+            }
+
+            for (i = 0; i < nf; i++) {
+                bm[ch][oft_b + i] = b0[ch][oft_b + i];
+                b0[ch][oft_b + i] = pb[i];
+            }
+            ionom[ch][isat] = iono0[ch][isat];
+            iono0[ch][isat] = iono;
+
+            for (i = 1; i < nf; i++) {
+                qi = 0;
+                qj = i;
+                fqi = obsFrequencyIndex(nav->ssr_ch[ch][isat].smode[qi]);
+                fqj = obsFrequencyIndex(nav->ssr_ch[ch][isat].smode[qj]);
+                fi = lam[fqj] / lam[fqi];
+
+                if (pb[qi] == kParityCssrInvalid || pb[qj] == kParityCssrInvalid ||
+                    iono == 0.0) {
+                    continue;
+                }
+                dispm = -kClasFreq2Hz / kClasFreq1Hz * (1.0 - fi * fi) *
+                            ionom[ch][isat] +
+                        bm[ch][oft_b + qi] - bm[ch][oft_b + qj];
+                disp0 = -kClasFreq2Hz / kClasFreq1Hz * (1.0 - fi * fi) *
+                            iono0[ch][isat] +
+                        b0[ch][oft_b + qi] - b0[ch][oft_b + qj];
+                coef[ch][isat + (i - 1) * kParityMaxSat] = (disp0 - dispm) / dt;
+            }
+        } else {
+            for (i = 0; i < nf; i++) {
+                b0[ch][oft_b + i] = obs->L[i] * lam[i];
+                slip[ch][oft + i] = 0;
+            }
+            tm[ch][isat] = t0[ch][isat];
+            t0[ch][isat] = nav->stec[index[0]].data[k].time;
+        }
+    }
+
+    dt = timediff(time, t0[ch][isat]);
+    if (opt->posopt[5] == 1) {
+        for (i = 1; i < nf; i++) {
+            qi = 0;
+            qj = i;
+            fqi = obsFrequencyIndex(nav->ssr_ch[ch][isat].smode[qi]);
+            fqj = obsFrequencyIndex(nav->ssr_ch[ch][isat].smode[qj]);
+            fi = lam[fqj] / lam[fqi];
+
+            if (std::fabs(coef[ch][isat + (i - 1) * kParityMaxSat] /
+                          (kClasFreq2Hz / kClasFreq1Hz * (1.0 - fi * fi))) > 0.008) {
+                continue;
+            }
+            if (pbreset[qi] || pbreset[qj]) {
+                coef[ch][isat] = 0.0;
+                return;
+            }
+            compL[qi] = compL[qi] == 0.0
+                            ? (1.0 / (1.0 - fi * fi) *
+                               coef[ch][isat + (i - 1) * kParityMaxSat] * dt)
+                            : compL[qi];
+            compL[qj] = fi * fi / (1.0 - fi * fi) *
+                        coef[ch][isat + (i - 1) * kParityMaxSat] * dt;
+        }
+    } else {
+        for (i = 0; i < nf; i++) {
+            if (ssat.slip[i] > 0) {
+                slip[ch][oft + i] = 1;
+            }
+        }
+        for (i = 1; i < nf; i++) {
+            qi = 0;
+            qj = i;
+            fi = lam[qj] / lam[qi];
+            if (slip[ch][oft + qi] || slip[ch][oft + qj] ||
+                obs->L[qi] * lam[qi] == 0.0 || obs->L[qj] * lam[qj] == 0.0 ||
+                pbreset[qi] || pbreset[qj]) {
+                continue;
+            }
+            dgf = obs->L[qi] * lam[qi] - obs->L[qj] * lam[qj] -
+                  (b0[ch][oft_b + qi] - b0[ch][oft_b + qj]);
+            compL[qi] = compL[qi] == 0.0 ? (1.0 / (1.0 - fi * fi) * dgf) : compL[qi];
+            compL[qj] = fi * fi / (1.0 - fi * fi) * dgf;
+        }
+    }
+}
+
+int parityCorrmeasLiteral(const ParityObs* obs,
+                          ParityNav* nav,
+                          const double* pos,
+                          const double* azel,
+                          const ParityPrcOpt* opt,
+                          const int* index,
+                          const int n,
+                          const double* weight,
+                          const double* Gmat,
+                          const double* Emat,
+                          const ParitySsat ssat,
+                          int* brk,
+                          ParityOsr* osr,
+                          int* pbreset,
+                          int ch) {
+    const double* lam = nav->lam[obs->sat - 1];
+    double vari, dant[kParityMaxFreq] = {}, compL[kParityMaxFreq] = {};
+    double stec = 0.0, rate, t5, t6;
+    double pbias[kParityMaxFreq] = {}, cbias[kParityMaxFreq] = {};
+    int i, sat, smode, nsig, nf = opt->nf;
+    int flag;
+    double dt;
+    static GNSSTime currtime = {};
+
+    (void)pos;
+
+    sat = obs->sat;
+    for (i = 0; i < nf; i++) {
+        pbias[i] = cbias[i] = kParityCssrInvalid;
+    }
+
+    t5 = timediff(obs->time, nav->ssr_ch[ch][sat - 1].t0[4]);
+    t6 = timediff(obs->time, nav->ssr_ch[ch][sat - 1].t0[5]);
+
+    if (std::fabs(t5) > kParityMaxAgeSsrBiasSeconds ||
+        std::fabs(t6) > kParityMaxAgeSsrBiasSeconds) {
+        nav->ssr_ch[ch][sat - 1].t0[4] = {};
+        nav->ssr_ch[ch][sat - 1].t0[5] = {};
+        return 0;
+    }
+
+    switch (nav->rtcmmode) {
+        case kParityRtcmModeCssr:
+            nsig = nav->ssr_ch[ch][sat - 1].nsig;
+            for (i = 0; i < nf; i++) {
+                for (int j = 0; j < nsig; j++) {
+                    smode = nav->ssr_ch[ch][sat - 1].smode[j];
+                    if (obs->code[i] == smode) {
+                        pbias[i] = nav->ssr_ch[ch][sat - 1].pbias[smode - 1];
+                        cbias[i] = nav->ssr_ch[ch][sat - 1].cbias[smode - 1];
+                        break;
+                    }
+                }
+            }
+            break;
+        default:
+            return 0;
+    }
+
+    if (!parityStecGridData(nav,
+                            index,
+                            obs->time,
+                            sat,
+                            n,
+                            weight,
+                            Gmat,
+                            Emat,
+                            &stec,
+                            &rate,
+                            &vari,
+                            brk)) {
+        return 0;
+    }
+
+    for (i = flag = 0; i < nav->stec[index[0]].n; i++) {
+        if (sat == nav->stec[index[0]].data[i].sat) {
+            flag = 1;
+            break;
+        }
+    }
+    if (flag == 1) {
+        dt = timediff(nav->stec[index[0]].data[i].time, nav->ssr_ch[ch][sat - 1].t0[5]);
+        nav->ssr_ch[ch][sat - 1].t0[8] = nav->stec[index[0]].data[i].time;
+        if (dt < 0.0 || dt >= 30.0) {
+            return 0;
+        }
+        dt = timediff(nav->stec[index[0]].data[i].time, nav->ssr_ch[ch][sat - 1].t0[0]);
+        if (dt < -30.0 || dt > 30.0) {
+            return 0;
+        }
+    }
+    dt = timediff(nav->ssr_ch[ch][sat - 1].t0[5], nav->ssr_ch[ch][sat - 1].t0[4]);
+    if ((!opt->posopt[9] && std::fabs(dt) > 0.0) ||
+        (opt->posopt[9] && (dt > 0.0 || dt < -30.0))) {
+        return 0;
+    }
+
+    if (timediff(obs->time, currtime) != 0.0) {
+        currtime = obs->time;
+    }
+
+    if (opt->posopt[5] > 0) {
+        parityCompensatedisp(nav, index, obs, sat, stec, pbias, compL, pbreset, opt, ssat, ch);
+    }
+
+    antmodel(opt->pcvr[0], opt->antdel[0], azel, opt->posopt[1], dant);
+
+    for (i = 0; i < nf; i++) {
+        osr->cbias[i] = cbias[i];
+        osr->pbias[i] = pbias[i];
+        osr->compL[i] = compL[i];
+    }
+
+    for (i = 0; i < nf; i++) {
+        osr->wupL[i] = lam[i] * ssat.phw;
+        osr->antr[i] = dant[i];
+    }
+    osr->iono = stec;
+
+    return 1;
+}
+
+CorrmeasRuntime makeCorrmeasRuntime(const CorrmeasInput& input) {
+    CorrmeasRuntime runtime;
+    const int nf = std::clamp(input.num_frequencies, 0, kParityMaxFreq);
+    const int sat = std::clamp(input.sat, 1, kParityMaxSat);
+
+    runtime.obs.time = input.time;
+    runtime.obs.sat = static_cast<unsigned char>(sat);
+    runtime.opt.nf = nf;
+    runtime.opt.posopt[1] = input.antenna_pcv_option;
+    runtime.opt.posopt[5] = input.compensation_option;
+    runtime.opt.posopt[9] = input.phase_code_timing_option;
+    runtime.opt.pcvr[0] = input.receiver_pcv;
+    for (int j = 0; j < 3; ++j) {
+        runtime.opt.antdel[0][j] = input.antenna_delta[j];
+    }
+    runtime.ssat.phw = input.phase_windup_cycles;
+    runtime.osr.trop = input.trop_m;
+    runtime.osr.relatv = input.relativity_m;
+    runtime.index[0] = 0;
+    runtime.weight[0] = 1.0;
+    runtime.Emat[3] = 1.0;
+
+    for (int f = 0; f < nf; ++f) {
+        runtime.obs.code[f] = input.code[f];
+        runtime.obs.L[f] = input.carrier_phase_cycles[f];
+        runtime.obs.P[f] = input.pseudorange_m[f];
+        runtime.nav.lam[sat - 1][f] = input.wavelength_m[f];
+        runtime.ssat.slip[f] = input.slip[f];
+        runtime.pbreset[f] = input.phase_bias_reset[f];
+    }
+
+    ParitySsr& ssr = runtime.nav.ssr_ch[0][sat - 1];
+    ssr.t0[0] = input.orbit_time;
+    ssr.t0[4] = input.code_bias_time;
+    ssr.t0[5] = input.phase_bias_time;
+    ssr.t0[8] = input.stec_time;
+    ssr.nsig = nf;
+    for (int f = 0; f < nf; ++f) {
+        const int code = input.code[f];
+        ssr.smode[f] = code;
+        if (code > 0 && code <= kParityMaxCode) {
+            ssr.cbias[code - 1] = static_cast<float>(input.code_bias_m[f]);
+            ssr.pbias[code - 1] = static_cast<float>(input.phase_bias_m[f]);
+        }
+    }
+
+    runtime.nav.stec[0].n = 1;
+    runtime.nav.stec[0].data[0].time = input.stec_time;
+    runtime.nav.stec[0].data[0].sat = static_cast<unsigned char>(sat);
+    runtime.nav.stec[0].data[0].slip = 0;
+    runtime.nav.stec[0].data[0].iono = static_cast<float>(input.stec_l1_m);
+    runtime.nav.stec[0].data[0].rate = static_cast<float>(input.stec_rate_mps);
+    runtime.nav.stec[0].data[0].rms = static_cast<float>(input.stec_rms_m);
+    runtime.nav.stec[0].data[0].quality = 1.0F;
+    runtime.nav.stec[0].data[0].flag = 1;
+
+    return runtime;
+}
+
+void fillCorrmeasOutputFromOsr(const CorrmeasInput& input,
+                               const ParityOsr& osr,
+                               CorrmeasOutput& out) {
+    const int nf = std::clamp(input.num_frequencies, 0, kParityMaxFreq);
+    out = CorrmeasOutput{};
+    out.num_frequencies = nf;
+    out.iono = osr.iono;
+    for (int f = 0; f < nf; ++f) {
+        const double fi = (input.wavelength_m[0] != 0.0)
+                              ? input.wavelength_m[f] / input.wavelength_m[0]
+                              : 1.0;
+        const double iono_scaled =
+            fi * fi * kClasFreq2Hz / kClasFreq1Hz * osr.iono;
+        out.code_bias[f] = osr.cbias[f];
+        out.phase_bias[f] = osr.pbias[f];
+        out.phase_compensation[f] = osr.compL[f];
+        out.receiver_antenna[f] = osr.antr[f];
+        out.windup_m[f] = osr.wupL[f];
+        out.prc[f] =
+            osr.trop + osr.relatv + osr.antr[f] + iono_scaled + osr.cbias[f];
+        out.cpc[f] = osr.trop + osr.relatv + osr.antr[f] - iono_scaled +
+                     osr.pbias[f] + osr.wupL[f] + osr.compL[f];
+    }
+}
+
 }  // namespace
 
 bool tidedispAvailable() {
@@ -446,7 +1023,71 @@ bool satposSsrAvailable() {
 }
 
 bool corrmeasAvailable() {
-    return false;
+    return true;
+}
+
+CorrmeasInput makeCorrmeasInput(int sample_index) {
+    const int sample = ((sample_index % 20) + 20) % 20;
+    const int epoch = sample / 4;
+    const int sat_index = sample % 4;
+    const double lat = 36.1037748 * kDegreesToRadians;
+    const double lon = 140.0878550 * kDegreesToRadians;
+
+    CorrmeasInput input;
+    input.time = GNSSTime(2029, 230400.0 + 30.0 * epoch);
+    input.sat = 1 + sat_index;
+    input.num_frequencies = kParityMaxFreq;
+    input.code[0] = 1;   // CODE_L1C
+    input.code[1] = 17;  // CODE_L2L
+    input.code[2] = 26;  // CODE_L5X
+    input.wavelength_m[0] = constants::SPEED_OF_LIGHT / kClasFreq1Hz;
+    input.wavelength_m[1] = constants::SPEED_OF_LIGHT / kClasFreq2Hz;
+    input.wavelength_m[2] = constants::SPEED_OF_LIGHT / kClasFreq5Hz;
+    input.receiver_pos[0] = lat;
+    input.receiver_pos[1] = lon;
+    input.receiver_pos[2] = 67.0;
+    input.azel[0] = std::fmod((35.0 + sat_index * 67.0 + epoch * 4.0) *
+                                  kDegreesToRadians,
+                              2.0 * M_PI);
+    input.azel[1] = (18.0 + sat_index * 14.0 + epoch * 1.5) * kDegreesToRadians;
+
+    for (int f = 0; f < kParityMaxFreq; ++f) {
+        const double range_m =
+            20200000.0 + sample * 3750.0 + f * 950.0 + epoch * 125.0;
+        input.carrier_phase_cycles[f] = range_m / input.wavelength_m[f];
+        input.pseudorange_m[f] = range_m + 0.35 * f;
+        input.code_bias_m[f] = 0.18 + 0.015 * f - 0.002 * sample;
+        input.phase_bias_m[f] = -0.23 + 0.012 * f + 0.0015 * sample;
+        input.receiver_pcv.offsets_m[static_cast<size_t>(f)] = {
+            0.0015 * (f + 1) + 0.00005 * sample,
+            -0.0020 * (f + 1) + 0.00003 * epoch,
+            0.0450 + 0.0040 * f + 0.00004 * sat_index,
+        };
+        for (int i = 0; i < kParityPcvGridSize; ++i) {
+            input.receiver_pcv.variations_m[static_cast<size_t>(f)][static_cast<size_t>(i)] =
+                0.00015 * (f + 1) + 0.000025 * i +
+                0.000003 * f * i + 0.0000004 * sample;
+        }
+    }
+
+    input.antenna_delta[0] = 0.0025 + 0.0001 * sat_index;
+    input.antenna_delta[1] = -0.0010 + 0.00005 * epoch;
+    input.antenna_delta[2] = 0.0140 + 0.0002 * sample;
+    input.antenna_pcv_option = 1;
+    input.compensation_option = 0;
+    input.phase_code_timing_option = 0;
+    input.phase_windup_cycles = 0.125 + 0.006 * epoch + 0.002 * sat_index;
+    input.stec_l1_m = 2.05 + 0.07 * sample + 0.03 * sat_index;
+    input.stec_rate_mps = 0.0002 * static_cast<double>((sample % 5) - 2);
+    input.stec_rms_m = 0.012 + 0.0005 * sat_index;
+    input.stec_time = input.time;
+    input.orbit_time = input.time;
+    input.code_bias_time = input.time;
+    input.phase_bias_time = input.time;
+    input.trop_m = 1.34 + 0.011 * epoch + 0.006 * sat_index;
+    input.relativity_m = -0.0025 + 0.0001 * sample;
+
+    return input;
 }
 
 void tidedisp(const GNSSTime& gpst,
@@ -599,8 +1240,37 @@ bool satpos_ssr(const GNSSTime& /*teph*/,
     return false;
 }
 
-bool corrmeas(CorrmeasOutput& /*out*/) {
-    return false;
+bool corrmeas(const CorrmeasInput& input, CorrmeasOutput& out) {
+    CorrmeasRuntime runtime = makeCorrmeasRuntime(input);
+    if (!parityCorrmeasLiteral(&runtime.obs,
+                               &runtime.nav,
+                               input.receiver_pos,
+                               input.azel,
+                               &runtime.opt,
+                               runtime.index,
+                               1,
+                               runtime.weight,
+                               runtime.Gmat,
+                               runtime.Emat,
+                               runtime.ssat,
+                               &runtime.brk,
+                               &runtime.osr,
+                               runtime.pbreset,
+                               0)) {
+        out = CorrmeasOutput{};
+        return false;
+    }
+
+    fillCorrmeasOutputFromOsr(input, runtime.osr, out);
+    return true;
+}
+
+bool corrmeas(int sample_index, CorrmeasOutput& out) {
+    return corrmeas(makeCorrmeasInput(sample_index), out);
+}
+
+bool corrmeas(CorrmeasOutput& out) {
+    return corrmeas(0, out);
 }
 
 }  // namespace libgnss::clasnat_parity
