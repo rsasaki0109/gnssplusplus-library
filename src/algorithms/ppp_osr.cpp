@@ -1788,7 +1788,8 @@ std::vector<OSRCorrection> computeOSR(
             osr.atmos_reference_time = GNSSTime();
         }
 
-        std::map<std::string, std::string> trop_atmos_tokens = fresh_epoch_atmos_tokens;
+        std::map<std::string, std::string> trop_atmos_tokens =
+            config.use_ported_full ? epoch_atmos_tokens : fresh_epoch_atmos_tokens;
         if (trop_atmos_tokens.empty()) {
             trop_atmos_tokens = epoch_atmos_tokens;
         }
@@ -1982,7 +1983,8 @@ std::vector<OSRCorrection> computeOSR(
                 elev,
                 config.clas_expanded_value_construction_policy,
                 config.clas_subtype12_value_construction_policy,
-                config.clas_expanded_residual_sampling_policy);
+                config.clas_expanded_residual_sampling_policy,
+                config.use_ported_full);
             if (std::isfinite(clas_trop) && std::abs(clas_trop) > 0.0) {
                 // Sanity check: CLAS grid trop should be within 30% of Saastamoinen.
                 // Distant networks produce unrealistic trop values.

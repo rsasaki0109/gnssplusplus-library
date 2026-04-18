@@ -349,6 +349,13 @@ bool fullStateDumpEnabled(const GNSSTime& time) {
            (ppp_shared::pppDebugEnabled() || fullStateDumpPath() != nullptr);
 }
 
+bool shouldDumpFullItemizedTarget(const SatelliteId& satellite, int freq_index, bool is_phase) {
+    if (is_phase || freq_index != 0 || satellite.system != GNSSSystem::QZSS) {
+        return false;
+    }
+    return satellite.prn == 1 || satellite.prn == 2;
+}
+
 void emitFullStateLine(const std::string& line) {
     if (ppp_shared::pppDebugEnabled()) {
         std::cerr << line << "\n";
@@ -359,6 +366,85 @@ void emitFullStateLine(const std::string& line) {
             file << line << "\n";
         }
     }
+}
+
+void dumpFullItemizedZeroDiff(const GNSSTime& time,
+                              const OSRCorrection& osr,
+                              int signal_index,
+                              int freq_slot,
+                              const Observation& raw,
+                              const Vector3d& receiver_position,
+                              double receiver_clock_bias_m,
+                              double trop_zenith_m,
+                              double trop_mapping,
+                              double trop_modeled,
+                              double rho_no_sagnac,
+                              double rho_sagnac,
+                              double sat_clk_m,
+                              double iono_grid_m,
+                              double tide_applied_m,
+                              const AppliedCorrections& applied,
+                              double code_model_m) {
+    if (!fullStateDumpEnabled(time) ||
+        !shouldDumpFullItemizedTarget(osr.satellite, freq_slot, false)) {
+        return;
+    }
+    const double cp_lambda =
+        raw.has_carrier_phase && osr.wavelengths[signal_index] > 0.0
+            ? raw.carrier_phase * osr.wavelengths[signal_index]
+            : 0.0;
+    const double sagnac = rho_sagnac - rho_no_sagnac;
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(12)
+        << "[CLAS-FULL-ITEMIZED] source=lib"
+        << " week=" << time.week
+        << " tow=" << time.tow
+        << " sat=" << osr.satellite.toString()
+        << " f=" << freq_slot
+        << " freq_group=" << freq_slot
+        << " type=code"
+        << " pr=" << raw.pseudorange
+        << " cp_lambda=" << cp_lambda
+        << " rs_x=" << osr.satellite_position.x()
+        << " rs_y=" << osr.satellite_position.y()
+        << " rs_z=" << osr.satellite_position.z()
+        << " dts_m=" << sat_clk_m
+        << " rr_x=" << receiver_position.x()
+        << " rr_y=" << receiver_position.y()
+        << " rr_z=" << receiver_position.z()
+        << " dtr_m=" << receiver_clock_bias_m
+        << " rho=" << rho_no_sagnac
+        << " rho_sagnac=" << rho_sagnac
+        << " sagnac=" << sagnac
+        << " rcv_ant=" << osr.receiver_antenna_m[signal_index]
+        << " pco_rcv=0.000000000000"
+        << " pcv_rcv=" << osr.receiver_antenna_m[signal_index]
+        << " tide=" << tide_applied_m
+        << " tide_solid=" << osr.solid_earth_tide_m
+        << " tide_geom=" << osr.tide_geometry_m
+        << " windup=0.000000000000"
+        << " trop_zenith=" << trop_zenith_m
+        << " trop_mapping=" << trop_mapping
+        << " trop_mapped=" << trop_modeled
+        << " trop_grid=" << osr.trop_correction_m
+        << " iono_l1=" << osr.iono_l1_m
+        << " iono_grid=" << iono_grid_m
+        << " iono_gradient=0.000000000000"
+        << " prc=" << osr.PRC[signal_index]
+        << " cpc=" << osr.CPC[signal_index]
+        << " sat_ant=0.000000000000"
+        << " pco_sat=0.000000000000"
+        << " pcv_sat=0.000000000000"
+        << " rel=" << osr.relativity_correction_m
+        << " code_bias=" << osr.code_bias_m[signal_index]
+        << " phase_bias=0.000000000000"
+        << " phase_comp=0.000000000000"
+        << " osr_corr=" << applied.code_m
+        << " modeled_sum=" << code_model_m
+        << " modeled_sum_nodtr=" << (code_model_m - receiver_clock_bias_m)
+        << " y=" << (raw.pseudorange - code_model_m)
+        << " y_nodtr=" << (raw.pseudorange - (code_model_m - receiver_clock_bias_m));
+    emitFullStateLine(oss.str());
 }
 
 double vectorAt(const VectorXd& values, int index) {
@@ -1148,6 +1234,24 @@ std::vector<ZdRow> buildZeroDifferenceRows(
             code_row.components.pcv_rcv = osr.receiver_antenna_m[f];
             code_row.components.tide_solid = tide_applied_m;
             code_row.components.modeled_sum = code_model_m;
+            dumpFullItemizedZeroDiff(
+                obs.time,
+                osr,
+                f,
+                freq_slot,
+                *raw,
+                receiver_position,
+                receiver_clock_bias_m,
+                trop_zenith_m,
+                trop_mapping,
+                trop_modeled,
+                rho_no_sagnac,
+                rho_sagnac,
+                sat_clk_m,
+                iono_grid_m,
+                tide_applied_m,
+                applied,
+                code_model_m);
             rows.push_back(code_row);
         }
     }

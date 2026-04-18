@@ -61,7 +61,8 @@ double atmosphericTroposphereCorrectionMeters(
     ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy =
         ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy::FULL,
     ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy =
-        ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN);
+        ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN,
+    bool use_claslib_grid_composition = false);
 
 double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_tokens,
                            const SatelliteId& satellite,

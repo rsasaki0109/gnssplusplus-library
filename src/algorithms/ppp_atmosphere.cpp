@@ -17,6 +17,8 @@ namespace ppp_atmosphere {
 namespace {
 
 constexpr double kDegreesToRadians = M_PI / 180.0;
+constexpr double kClasTropHydrostaticRefM = 2.3;
+constexpr double kClasTropWetRefM = 0.252;
 
 struct ClasGridPoint {
     int network_id;
@@ -220,6 +222,349 @@ bool sampleAtmosResidualGridModel(
         grid_reference.residual_index,
         sampling_policy,
         value);
+}
+
+struct ClaslibVerticalTropDelays {
+    double hydrostatic_m = 0.0;
+    double wet_m = 0.0;
+};
+
+const ClasGridPoint* findClasGridPoint(int network_id, size_t residual_index) {
+    const int grid_no = static_cast<int>(residual_index) + 1;
+    for (const auto& point : clasGridPoints()) {
+        if (point.network_id == network_id && point.grid_no == grid_no) {
+            return &point;
+        }
+    }
+    return nullptr;
+}
+
+double claslibInterpc(const std::array<double, 5>& values, double latitude_deg) {
+    const int i = static_cast<int>(latitude_deg / 15.0);
+    if (i < 1) return values[0];
+    if (i > 4) return values[4];
+    return values[static_cast<size_t>(i - 1)] * (1.0 - latitude_deg / 15.0 + i) +
+           values[static_cast<size_t>(i)] * (latitude_deg / 15.0 - i);
+}
+
+double claslibEmbeddedGeoidHeight(double latitude_rad, double longitude_rad) {
+    constexpr int lon_min_deg = 120;
+    constexpr int lon_max_deg = 150;
+    constexpr int lat_min_deg = 20;
+    constexpr int lat_max_deg = 50;
+    constexpr double geoid[lon_max_deg - lon_min_deg + 1][lat_max_deg - lat_min_deg + 1] = {
+#include "clas_embedded_geoid_japan.inc"
+    };
+
+    double latitude_deg = latitude_rad / kDegreesToRadians;
+    double longitude_deg = longitude_rad / kDegreesToRadians;
+    if (longitude_deg < 0.0) longitude_deg += 360.0;
+    if (latitude_deg < lat_min_deg || latitude_deg > lat_max_deg ||
+        longitude_deg < lon_min_deg || longitude_deg > lon_max_deg) {
+        return 0.0;
+    }
+
+    double lon_grid = longitude_deg - lon_min_deg;
+    double lat_grid = latitude_deg - lat_min_deg;
+    int lon0 = static_cast<int>(lon_grid);
+    int lat0 = static_cast<int>(lat_grid);
+    const double lon_frac = lon_grid - lon0;
+    const double lat_frac = lat_grid - lat0;
+    const int lon1 = std::min(lon0 + 1, lon_max_deg - lon_min_deg);
+    const int lat1 = std::min(lat0 + 1, lat_max_deg - lat_min_deg);
+    lon0 = std::clamp(lon0, 0, lon_max_deg - lon_min_deg);
+    lat0 = std::clamp(lat0, 0, lat_max_deg - lat_min_deg);
+
+    const double y00 = geoid[lon0][lat0];
+    const double y10 = geoid[lon1][lat0];
+    const double y01 = geoid[lon0][lat1];
+    const double y11 = geoid[lon1][lat1];
+    return y00 * (1.0 - lon_frac) * (1.0 - lat_frac) +
+           y10 * lon_frac * (1.0 - lat_frac) +
+           y01 * (1.0 - lon_frac) * lat_frac +
+           y11 * lon_frac * lat_frac;
+}
+
+bool claslibStandardVerticalTropDelays(const GNSSTime& time,
+                                       double latitude_rad,
+                                       double ellipsoidal_height_m,
+                                       double geoid_height_m,
+                                       ClaslibVerticalTropDelays& out) {
+    constexpr std::array<double, 5> mean_pressure = {
+        1013.25, 1017.25, 1015.75, 1011.75, 1013.00};
+    constexpr std::array<double, 5> mean_temperature = {
+        299.65, 294.15, 283.15, 272.15, 263.65};
+    constexpr std::array<double, 5> mean_water_pressure = {
+        26.31, 21.79, 11.66, 6.78, 4.11};
+    constexpr std::array<double, 5> mean_lapse_rate = {
+        6.30e-3, 6.05e-3, 5.58e-3, 5.39e-3, 4.53e-3};
+    constexpr std::array<double, 5> mean_water_vapor_rate = {
+        2.77, 3.15, 2.57, 1.81, 1.55};
+    constexpr std::array<double, 5> amp_pressure = {
+        0.00, -3.75, -2.25, -1.75, -0.50};
+    constexpr std::array<double, 5> amp_temperature = {
+        0.00, 7.00, 11.00, 15.00, 14.50};
+    constexpr std::array<double, 5> amp_water_pressure = {
+        0.00, 8.85, 7.24, 5.36, 3.39};
+    constexpr std::array<double, 5> amp_lapse_rate = {
+        0.00e-3, 0.25e-3, 0.32e-3, 0.81e-3, 0.62e-3};
+    constexpr std::array<double, 5> amp_water_vapor_rate = {
+        0.00, 0.33, 0.46, 0.74, 0.30};
+    constexpr double gravity = 9.80665;
+    constexpr double gas_constant_dry = 287.0537625;
+
+    const double latitude_deg = latitude_rad / kDegreesToRadians;
+    if (latitude_deg < 0.0 || latitude_deg > 75.0) {
+        return false;
+    }
+
+    const double doy = static_cast<double>(dayOfYearFromTime(time));
+    const double seasonal = std::cos(2.0 * M_PI * (doy - 28.0) / 365.25);
+    auto seasonalValues = [&](const std::array<double, 5>& mean_values,
+                              const std::array<double, 5>& amp_values) {
+        std::array<double, 5> values = {};
+        for (size_t i = 0; i < values.size(); ++i) {
+            values[i] = mean_values[i] - amp_values[i] * seasonal;
+        }
+        return values;
+    };
+
+    const double pressure0 =
+        claslibInterpc(seasonalValues(mean_pressure, amp_pressure), latitude_deg);
+    const double temperature0 =
+        claslibInterpc(seasonalValues(mean_temperature, amp_temperature), latitude_deg);
+    const double water_pressure0 =
+        claslibInterpc(seasonalValues(mean_water_pressure, amp_water_pressure), latitude_deg);
+    const double lapse_rate =
+        claslibInterpc(seasonalValues(mean_lapse_rate, amp_lapse_rate), latitude_deg);
+    const double water_vapor_rate =
+        claslibInterpc(seasonalValues(mean_water_vapor_rate, amp_water_vapor_rate), latitude_deg);
+
+    const double orthometric_height_m = ellipsoidal_height_m - geoid_height_m;
+    const double temperature = temperature0 - lapse_rate * orthometric_height_m;
+    const double height_scale = 1.0 - lapse_rate * orthometric_height_m / temperature0;
+    if (temperature <= 0.0 || height_scale <= 0.0 || lapse_rate <= 0.0) {
+        return false;
+    }
+    const double pressure =
+        pressure0 * std::pow(height_scale, gravity / (gas_constant_dry * lapse_rate));
+    double water_pressure =
+        water_pressure0 *
+        std::pow(height_scale, (water_vapor_rate + 1.0) * gravity /
+                                   (gas_constant_dry * lapse_rate));
+
+    const double celsius = temperature - 273.15;
+    const double saturation =
+        6.11 * std::pow(temperature / 273.15, -5.3) *
+        std::exp(25.2 * celsius / temperature);
+    if (water_pressure > saturation) {
+        water_pressure = saturation;
+    }
+
+    out.hydrostatic_m =
+        2.2768 * pressure * 0.001 /
+        (1.0 - 0.00266 * std::cos(2.0 * latitude_rad) -
+         2.8e-7 * ellipsoidal_height_m);
+    out.wet_m = 2.2768 * (1255.0 / temperature + 0.05) * water_pressure * 0.001;
+    return std::isfinite(out.hydrostatic_m) && std::isfinite(out.wet_m) &&
+           out.hydrostatic_m > 0.0 && out.wet_m > 0.0;
+}
+
+bool claslibStandardVerticalTropDelaysAtGrid(const GNSSTime& time,
+                                             const ClasGridPoint& point,
+                                             ClaslibVerticalTropDelays& out) {
+    const double latitude_rad = point.latitude_deg * kDegreesToRadians;
+    const double longitude_rad = point.longitude_deg * kDegreesToRadians;
+    const double geoid_height_m = claslibEmbeddedGeoidHeight(latitude_rad, longitude_rad);
+    return claslibStandardVerticalTropDelays(
+        time, latitude_rad, 0.0, geoid_height_m, out);
+}
+
+bool claslibStandardVerticalTropDelaysAtReceiver(const GNSSTime& time,
+                                                 const Vector3d& receiver_position,
+                                                 ClaslibVerticalTropDelays& out,
+                                                 double& latitude_rad,
+                                                 double& height_m) {
+    double longitude_rad = 0.0;
+    ecef2geodetic(receiver_position, latitude_rad, longitude_rad, height_m);
+    const double geoid_height_m = claslibEmbeddedGeoidHeight(latitude_rad, longitude_rad);
+    return claslibStandardVerticalTropDelays(
+        time, latitude_rad, height_m, geoid_height_m, out);
+}
+
+double evaluateSubtype12TropDryCorrection(
+    const std::map<std::string, std::string>& atmos_tokens,
+    double dlat_deg,
+    double dlon_deg,
+    int trop_type,
+    ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy) {
+    double correction_m = 0.0;
+    double value = 0.0;
+    if (parseAtmosTokenDouble(atmos_tokens, "atmos_trop_t00_m", value) &&
+        std::isfinite(value)) {
+        correction_m += value;
+    }
+    if (trop_type > 0 && useSubtype12LinearTerms(subtype12_value_policy)) {
+        if (parseAtmosTokenDouble(atmos_tokens, "atmos_trop_t01_m_per_deg", value) &&
+            std::isfinite(value)) {
+            correction_m += value * dlat_deg;
+        }
+        if (parseAtmosTokenDouble(atmos_tokens, "atmos_trop_t10_m_per_deg", value) &&
+            std::isfinite(value)) {
+            correction_m += value * dlon_deg;
+        }
+    }
+    if (trop_type > 1 && useSubtype12QuadraticTerms(subtype12_value_policy) &&
+        parseAtmosTokenDouble(atmos_tokens, "atmos_trop_t11_m_per_deg2", value) &&
+        std::isfinite(value)) {
+        correction_m += value * dlat_deg * dlon_deg;
+    }
+    return correction_m;
+}
+
+bool claslibTropGridPointNormalizedValues(
+    const std::map<std::string, std::string>& atmos_tokens,
+    const ClasGridReference& grid_reference,
+    size_t residual_index,
+    const GNSSTime& time,
+    bool subtype12_row,
+    int trop_type,
+    ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy,
+    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy,
+    double& normalized_hydrostatic,
+    double& normalized_wet) {
+    const ClasGridPoint* point =
+        findClasGridPoint(grid_reference.network_id, residual_index);
+    if (point == nullptr) {
+        return false;
+    }
+
+    double dry_vertical_m = 0.0;
+    double wet_vertical_m = 0.0;
+    if (!subtype12_row) {
+        double hydro_delta_m = 0.0;
+        double wet_delta_m = 0.0;
+        if (!sampleAtmosResidualList(
+                atmos_tokens,
+                "atmos_trop_hs_residuals_m",
+                true,
+                residual_index,
+                residual_sampling_policy,
+                hydro_delta_m) ||
+            !sampleAtmosResidualList(
+                atmos_tokens,
+                "atmos_trop_wet_residuals_m",
+                true,
+                residual_index,
+                residual_sampling_policy,
+                wet_delta_m)) {
+            return false;
+        }
+        dry_vertical_m = kClasTropHydrostaticRefM + hydro_delta_m;
+        wet_vertical_m = kClasTropWetRefM + wet_delta_m;
+    } else {
+        double wet_offset_m = 0.0;
+        double wet_residual_m = 0.0;
+        if (!parseAtmosTokenDouble(atmos_tokens, "atmos_trop_offset_m", wet_offset_m) ||
+            !std::isfinite(wet_offset_m) ||
+            !sampleAtmosResidualList(
+                atmos_tokens,
+                "atmos_trop_residuals_m",
+                true,
+                residual_index,
+                residual_sampling_policy,
+                wet_residual_m)) {
+            return false;
+        }
+
+        double dlat_deg = 0.0;
+        double dlon_deg = 0.0;
+        if (const ClasGridPoint* origin = findClasGridPoint(grid_reference.network_id, 0)) {
+            dlat_deg = point->latitude_deg - origin->latitude_deg;
+            dlon_deg = point->longitude_deg - origin->longitude_deg;
+        }
+        dry_vertical_m =
+            kClasTropHydrostaticRefM +
+            evaluateSubtype12TropDryCorrection(
+                atmos_tokens, dlat_deg, dlon_deg, trop_type, subtype12_value_policy);
+        wet_vertical_m = wet_offset_m + wet_residual_m;
+    }
+
+    ClaslibVerticalTropDelays grid_delays;
+    if (!claslibStandardVerticalTropDelaysAtGrid(time, *point, grid_delays)) {
+        return false;
+    }
+    normalized_hydrostatic = dry_vertical_m / grid_delays.hydrostatic_m;
+    normalized_wet = wet_vertical_m / grid_delays.wet_m;
+    return std::isfinite(normalized_hydrostatic) && std::isfinite(normalized_wet);
+}
+
+bool claslibTroposphereCorrectionMeters(
+    const std::map<std::string, std::string>& atmos_tokens,
+    const ClasGridReference& grid_reference,
+    const Vector3d& receiver_position,
+    const GNSSTime& time,
+    double elevation,
+    bool subtype12_row,
+    int trop_type,
+    ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy,
+    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy,
+    double& correction_m) {
+    if (!std::isfinite(elevation) || elevation <= 0.0) {
+        return false;
+    }
+
+    double normalized_hydrostatic = 0.0;
+    double normalized_wet = 0.0;
+    if (grid_reference.has_model_interpolation) {
+        double hydro_values[4] = {};
+        double wet_values[4] = {};
+        for (int g = 0; g < 4; ++g) {
+            if (!claslibTropGridPointNormalizedValues(
+                    atmos_tokens,
+                    grid_reference,
+                    grid_reference.model_grid_indices[g],
+                    time,
+                    subtype12_row,
+                    trop_type,
+                    subtype12_value_policy,
+                    residual_sampling_policy,
+                    hydro_values[g],
+                    wet_values[g])) {
+                return false;
+            }
+        }
+        normalized_hydrostatic = applyGridModelInterpolation(grid_reference, hydro_values);
+        normalized_wet = applyGridModelInterpolation(grid_reference, wet_values);
+    } else if (!claslibTropGridPointNormalizedValues(
+                   atmos_tokens,
+                   grid_reference,
+                   grid_reference.residual_index,
+                   time,
+                   subtype12_row,
+                   trop_type,
+                   subtype12_value_policy,
+                   residual_sampling_policy,
+                   normalized_hydrostatic,
+                   normalized_wet)) {
+        return false;
+    }
+
+    ClaslibVerticalTropDelays receiver_delays;
+    double latitude_rad = 0.0;
+    double height_m = 0.0;
+    if (!claslibStandardVerticalTropDelaysAtReceiver(
+            time, receiver_position, receiver_delays, latitude_rad, height_m)) {
+        return false;
+    }
+
+    const double hydro_mapping =
+        models::niellHydrostaticMapping(latitude_rad, height_m, elevation, dayOfYearFromTime(time));
+    const double wet_mapping = models::niellWetMapping(latitude_rad, elevation);
+    correction_m =
+        hydro_mapping * receiver_delays.hydrostatic_m * normalized_hydrostatic +
+        wet_mapping * receiver_delays.wet_m * normalized_wet;
+    return std::isfinite(correction_m) && correction_m > 0.0;
 }
 
 }  // namespace
@@ -489,7 +834,8 @@ double atmosphericTroposphereCorrectionMeters(
     double elevation,
     ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy value_policy,
     ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy,
-    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy) {
+    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy,
+    bool use_claslib_grid_composition) {
     double correction_m = 0.0;
     bool have_correction = false;
     ClasGridReference grid_reference;
@@ -498,6 +844,35 @@ double atmosphericTroposphereCorrectionMeters(
     const bool subtype12_row = isSubtype12TropRow(atmos_tokens);
     int trop_type = -1;
     parseAtmosTokenInt(atmos_tokens, "atmos_trop_type", trop_type);
+
+    if (use_claslib_grid_composition &&
+        have_grid_reference &&
+        value_policy == ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy::FULL_COMPOSED &&
+        trop_type > 0) {
+        const bool has_legacy_hs_wet_grid =
+            atmos_tokens.find("atmos_trop_hs_residuals_m") != atmos_tokens.end() &&
+            atmos_tokens.find("atmos_trop_wet_residuals_m") != atmos_tokens.end();
+        const bool has_subtype12_total_wet_grid =
+            subtype12_row &&
+            atmos_tokens.find("atmos_trop_offset_m") != atmos_tokens.end() &&
+            atmos_tokens.find("atmos_trop_residuals_m") != atmos_tokens.end();
+        if (has_legacy_hs_wet_grid || has_subtype12_total_wet_grid) {
+            double claslib_correction_m = 0.0;
+            if (claslibTroposphereCorrectionMeters(
+                    atmos_tokens,
+                    grid_reference,
+                    receiver_position,
+                    time,
+                    elevation,
+                    subtype12_row,
+                    trop_type,
+                    subtype12_value_policy,
+                    residual_sampling_policy,
+                    claslib_correction_m)) {
+                return claslib_correction_m;
+            }
+        }
+    }
 
     double value = 0.0;
     if (usePolynomialTerms(value_policy) &&
