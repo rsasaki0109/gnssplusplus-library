@@ -28,15 +28,25 @@ constexpr std::array<double, 60> kClaslibRatioThresholdsAlpha10 = {
 
 SatelliteId clasRealSatellite(const SatelliteId& satellite) {
     if (satellite.prn > 100) {
+        int prn = static_cast<int>(satellite.prn);
+        while (prn > 100) {
+            prn -= 100;
+        }
         return SatelliteId(
             satellite.system,
-            static_cast<uint8_t>(std::max(1, static_cast<int>(satellite.prn) - 100)));
+            static_cast<uint8_t>(std::max(1, prn)));
     }
     return satellite;
 }
 
 std::pair<GNSSSystem, int> ambiguityDdGroup(const SatelliteId& satellite) {
-    return {satellite.system, satellite.prn > 100 ? 1 : 0};
+    int freq_group = 0;
+    if (satellite.prn > 200) {
+        freq_group = 2;
+    } else if (satellite.prn > 100) {
+        freq_group = 1;
+    }
+    return {satellite.system, freq_group};
 }
 
 int receiverClockStateIndex(

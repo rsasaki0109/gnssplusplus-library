@@ -1135,6 +1135,26 @@ PositionSolution PPPProcessor::processEpochStandard(
 }
 
 PositionSolution PPPProcessor::processEpoch(const ObservationData& obs, const NavigationData& nav) {
+    if (ppp_config_.use_ported_full) {
+        const auto processing_start = std::chrono::steady_clock::now();
+        const auto epoch_result = ppp_claslib_full::runEpoch(
+            obs, nav, ssr_products_, claslib_full_state_, ppp_config_);
+        PositionSolution solution = epoch_result.solution;
+        has_last_processed_time_ = true;
+        last_processed_time_ = obs.time;
+        last_ar_ratio_ = claslib_full_state_.last_ar_ratio;
+        last_fixed_ambiguities_ = claslib_full_state_.last_fixed_ambiguities;
+        const auto processing_end = std::chrono::steady_clock::now();
+        solution.processing_time_ms =
+            std::chrono::duration<double, std::milli>(processing_end - processing_start).count();
+        updateStatistics(solution.isValid());
+        {
+            std::lock_guard<std::mutex> lock(stats_mutex_);
+            total_convergence_time_ += solution.processing_time_ms;
+        }
+        return solution;
+    }
+
     if (ppp_config_.use_clas_osr_filter) {
         const auto processing_start = std::chrono::steady_clock::now();
         PositionSolution solution = processEpochCLAS(obs, nav);
@@ -1173,6 +1193,7 @@ void PPPProcessor::reset() {
     converged_ = false;
     convergence_time_ = 0.0;
     filter_state_ = PPPState{};
+    ppp_claslib_full::reset(claslib_full_state_);
     ambiguity_states_.clear();
     last_clas_ar_phase_ambiguities_.clear();
     clas_dispersion_compensation_.clear();

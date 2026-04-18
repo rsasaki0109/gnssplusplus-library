@@ -43,6 +43,7 @@ set(GNSS_SOURCES
     src/algorithms/ppp_clas.cpp
     src/algorithms/ppp_claslib_pntpos.cpp
     src/algorithms/ppp_claslib_zdres.cpp
+    src/algorithms/ppp_claslib_full.cpp
     src/algorithms/ppp_clas_sd.cpp
     src/algorithms/ppp_osr.cpp
     src/algorithms/ppp_wlnl.cpp
