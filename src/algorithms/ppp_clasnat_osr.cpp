@@ -1,5 +1,6 @@
 #include <libgnss++/algorithms/ppp_clasnat_osr.hpp>
 #include <libgnss++/algorithms/ppp_clasnat_trop.hpp>
+#include <libgnss++/algorithms/clasnat_parity.hpp>
 #include <libgnss++/algorithms/tidal.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signals.hpp>
@@ -1117,6 +1118,245 @@ constexpr double kPhaseBiasJumpLowerCycles = 95.0;
 constexpr double kPhaseBiasJumpUpperCycles = 105.0;
 constexpr double kPhaseBiasJumpCorrectionCycles = 100.0;
 
+int clasnatSatNo(const SatelliteId& satellite) {
+    const int prn = static_cast<int>(satellite.prn);
+    switch (satellite.system) {
+        case GNSSSystem::GPS:
+            return prn >= 1 && prn <= 32 ? prn : 0;
+        case GNSSSystem::Galileo:
+            return prn >= 1 && prn <= 36 ? 32 + prn : 0;
+        case GNSSSystem::QZSS: {
+            const int qprn = prn >= 193 ? prn - 192 : prn;
+            return qprn >= 1 && qprn <= 7 ? 68 + qprn : 0;
+        }
+        default:
+            return 0;
+    }
+}
+
+int rtklibCodeFromObservationType(const std::string& observation_type) {
+    if (observation_type.size() < 3) {
+        return 0;
+    }
+    const std::string code = observation_type.substr(1, 2);
+    if (code == "1C") return 1;
+    if (code == "1P") return 2;
+    if (code == "1W") return 3;
+    if (code == "1Y") return 4;
+    if (code == "1M") return 5;
+    if (code == "1N") return 6;
+    if (code == "1S") return 7;
+    if (code == "1L") return 8;
+    if (code == "1E") return 9;
+    if (code == "1A") return 10;
+    if (code == "1B") return 11;
+    if (code == "1X") return 12;
+    if (code == "1Z") return 13;
+    if (code == "2C") return 14;
+    if (code == "2D") return 15;
+    if (code == "2S") return 16;
+    if (code == "2L") return 17;
+    if (code == "2X") return 18;
+    if (code == "2P") return 19;
+    if (code == "2W") return 20;
+    if (code == "2Y") return 21;
+    if (code == "2M") return 22;
+    if (code == "2N") return 23;
+    if (code == "5I") return 24;
+    if (code == "5Q") return 25;
+    if (code == "5X") return 26;
+    if (code == "7I") return 27;
+    if (code == "7Q") return 28;
+    if (code == "7X") return 29;
+    if (code == "6A") return 30;
+    if (code == "6B") return 31;
+    if (code == "6C") return 32;
+    if (code == "6X") return 33;
+    if (code == "6Z") return 34;
+    if (code == "6S") return 35;
+    if (code == "6L") return 36;
+    if (code == "6E") return 37;
+    return 0;
+}
+
+int defaultRtklibCodeForSignal(SignalType signal) {
+    switch (signal) {
+        case SignalType::GPS_L1CA:
+        case SignalType::GLO_L1CA:
+        case SignalType::GAL_E1:
+        case SignalType::QZS_L1CA:
+            return 1;
+        case SignalType::GPS_L1P:
+        case SignalType::GLO_L1P:
+            return 2;
+        case SignalType::GPS_L2C:
+        case SignalType::QZS_L2C:
+            return 17;
+        case SignalType::GPS_L2P:
+        case SignalType::GLO_L2P:
+            return 20;
+        case SignalType::GLO_L2CA:
+            return 14;
+        case SignalType::GPS_L5:
+        case SignalType::GAL_E5A:
+        case SignalType::QZS_L5:
+            return 26;
+        case SignalType::GAL_E5B:
+            return 28;
+        case SignalType::GAL_E6:
+            return 33;
+        default:
+            return 0;
+    }
+}
+
+int rtklibCodeForObservation(const Observation& obs) {
+    int code = rtklibCodeFromObservationType(obs.pseudorange_observation_type);
+    if (code == 0) {
+        code = rtklibCodeFromObservationType(obs.carrier_observation_type);
+    }
+    if (code == 0) {
+        code = defaultRtklibCodeForSignal(obs.signal);
+    }
+    return code;
+}
+
+clasnat_parity::ReceiverPcvModel makeParityReceiverPcv(
+    const ppp_shared::PPPConfig& config,
+    const ReceiverAntennaModel* antenna_model,
+    const OSRCorrection& osr) {
+    clasnat_parity::ReceiverPcvModel pcv;
+    if (antenna_model == nullptr) {
+        return pcv;
+    }
+
+    for (int f = 0; f < osr.num_frequencies && f < clasnat_parity::kParityMaxFreq; ++f) {
+        const SignalType lookup_signal =
+            receiverAntennaLookupSignal(osr.signals[f], config.wlnl_strict_claslib_parity);
+        const auto signal_it = antenna_model->find(lookup_signal);
+        if (signal_it == antenna_model->end()) {
+            continue;
+        }
+        const auto& model = signal_it->second;
+        if (model.has_offset) {
+            for (int j = 0; j < 3; ++j) {
+                pcv.offsets_m[static_cast<size_t>(f)][static_cast<size_t>(j)] =
+                    model.offset_enu[j];
+            }
+        }
+        if (model.has_noazi_pcv) {
+            for (size_t i = 0; i < model.noazi_pcv_m.size(); ++i) {
+                pcv.variations_m[static_cast<size_t>(f)][i] = model.noazi_pcv_m[i];
+            }
+        }
+    }
+    return pcv;
+}
+
+int nativeCorrmeasCompensationOption(const ppp_shared::PPPConfig& config) {
+    if (!usesClasPhaseBiasTerms(config.clas_phase_continuity_policy) ||
+        !usesClasPhaseCompensationValues(config.clas_phase_bias_value_policy)) {
+        return 0;
+    }
+    // CLASLIB static PPP uses pos1-posopt6=meas; keep the native corrmeas
+    // adapter on that measurement-domain compensation branch when enabled.
+    return 2;
+}
+
+bool applyNativeCorrmeas(
+    const ObservationData& obs,
+    const SatelliteId& sat,
+    const Observation* l1_obs,
+    const Observation* l2_obs,
+    const ReceiverAntennaModel* receiver_antenna_model,
+    const ppp_shared::PPPConfig& config,
+    const GNSSTime& orbit_reference_time,
+    const GNSSTime& effective_phase_bias_reference_time,
+    const double receiver_pos_geodetic[3],
+    const double azel[2],
+    OSRCorrection& osr) {
+    if (l1_obs == nullptr || osr.num_frequencies <= 0) {
+        return false;
+    }
+    const int native_sat = clasnatSatNo(sat);
+    if (native_sat <= 0) {
+        return false;
+    }
+
+    const Observation* freq_obs[OSR_MAX_FREQ] = {l1_obs, l2_obs, nullptr};
+    clasnat_parity::CorrmeasInput input;
+    input.time = obs.time;
+    input.sat = native_sat;
+    input.num_frequencies =
+        std::min(osr.num_frequencies, clasnat_parity::kParityMaxFreq);
+    input.receiver_pcv = makeParityReceiverPcv(config, receiver_antenna_model, osr);
+    for (int j = 0; j < 3; ++j) {
+        input.receiver_pos[j] = receiver_pos_geodetic[j];
+        input.antenna_delta[j] = config.receiver_antenna_delta_enu[j];
+    }
+    input.azel[0] = azel[0];
+    input.azel[1] = azel[1];
+    input.antenna_pcv_option = 1;
+    input.compensation_option = nativeCorrmeasCompensationOption(config);
+    input.phase_code_timing_option = 0;
+    input.phase_windup_cycles = osr.windup_cycles;
+    input.stec_l1_m = osr.iono_l1_m;
+    input.stec_rate_mps = 0.0;
+    input.stec_rms_m = 0.0;
+    input.stec_time =
+        gnsstimeIsSet(osr.atmos_reference_time) ? osr.atmos_reference_time : obs.time;
+    input.orbit_time =
+        gnsstimeIsSet(orbit_reference_time) ? orbit_reference_time : obs.time;
+    const GNSSTime bias_time =
+        gnsstimeIsSet(effective_phase_bias_reference_time)
+            ? effective_phase_bias_reference_time
+            : (gnsstimeIsSet(osr.phase_bias_reference_time)
+                   ? osr.phase_bias_reference_time
+                   : obs.time);
+    input.code_bias_time = bias_time;
+    input.phase_bias_time = bias_time;
+    input.trop_m = osr.trop_correction_m + osr.solid_earth_tide_m;
+    input.relativity_m = osr.relativity_correction_m;
+
+    for (int f = 0; f < input.num_frequencies; ++f) {
+        const Observation* raw = freq_obs[f];
+        if (raw == nullptr || !raw->valid || !raw->has_carrier_phase ||
+            !raw->has_pseudorange || osr.wavelengths[f] <= 0.0) {
+            return false;
+        }
+        const int code = rtklibCodeForObservation(*raw);
+        if (code <= 0 || code > 64) {
+            return false;
+        }
+        input.code[f] = static_cast<unsigned char>(code);
+        input.carrier_phase_cycles[f] = raw->carrier_phase;
+        input.pseudorange_m[f] = raw->pseudorange;
+        input.wavelength_m[f] = osr.wavelengths[f];
+        input.code_bias_m[f] = osr.code_bias_m[f];
+        input.phase_bias_m[f] = osr.phase_bias_m[f];
+        input.slip[f] = (raw->loss_of_lock || raw->lli != 0) ? 1 : 0;
+        input.phase_bias_reset[f] = 0;
+    }
+
+    clasnat_parity::CorrmeasOutput native;
+    if (!clasnat_parity::corrmeas(input, native) ||
+        native.num_frequencies != input.num_frequencies) {
+        return false;
+    }
+
+    osr.iono_l1_m = native.iono;
+    for (int f = 0; f < native.num_frequencies; ++f) {
+        osr.code_bias_m[f] = native.code_bias[f];
+        osr.phase_bias_m[f] = native.phase_bias[f];
+        osr.phase_compensation_m[f] = native.phase_compensation[f];
+        osr.receiver_antenna_m[f] = native.receiver_antenna[f];
+        osr.windup_m[f] = native.windup_m[f];
+        osr.PRC[f] = native.prc[f];
+        osr.CPC[f] = native.cpc[f];
+    }
+    return true;
+}
+
 /// Update SIS (Signal-In-Space) continuity tracking for a satellite.
 /// Detects clock epoch transitions and computes delta for SIS correction.
 void updateSisContinuity(
@@ -1977,15 +2217,37 @@ std::vector<OSRCorrection> computeOsrClasnat(
 
         // CLAS troposphere grid correction (if available)
         if (!trop_atmos_tokens.empty()) {
-            const double clas_trop = ppp_clasnat_trop::atmosphericTroposphereCorrectionMeters(
-                trop_atmos_tokens,
-                receiver_pos,
-                obs.time,
+            double clas_trop = 0.0;
+            double zwd = 0.0;
+            double ztd = 0.0;
+            const double azel_for_native[2] = {
+                azim < 0.0 ? azim + 2.0 * M_PI : azim,
                 elev,
-                config.clas_expanded_value_construction_policy,
-                config.clas_subtype12_value_construction_policy,
-                config.clas_expanded_residual_sampling_policy,
-                config.use_ported_full);
+            };
+            const double pos_for_native[3] = {lat, lon, h};
+            if (config.use_ported_clasnat &&
+                ppp_clasnat_trop::claslibTroposphereGridScale(
+                    trop_atmos_tokens,
+                    receiver_pos,
+                    obs.time,
+                    config.clas_expanded_value_construction_policy,
+                    config.clas_subtype12_value_construction_policy,
+                    config.clas_expanded_residual_sampling_policy,
+                    &zwd,
+                    &ztd)) {
+                clas_trop = clasnat_parity::prectrop(
+                    obs.time, pos_for_native, azel_for_native, zwd, ztd);
+            } else {
+                clas_trop = ppp_clasnat_trop::atmosphericTroposphereCorrectionMeters(
+                    trop_atmos_tokens,
+                    receiver_pos,
+                    obs.time,
+                    elev,
+                    config.clas_expanded_value_construction_policy,
+                    config.clas_subtype12_value_construction_policy,
+                    config.clas_expanded_residual_sampling_policy,
+                    config.use_ported_full);
+            }
             if (std::isfinite(clas_trop) && std::abs(clas_trop) > 0.0) {
                 // Sanity check: CLAS grid trop should be within 30% of Saastamoinen.
                 // Distant networks produce unrealistic trop values.
@@ -2159,32 +2421,53 @@ std::vector<OSRCorrection> computeOsrClasnat(
         }
 
         // --- 9. Aggregate PRC/CPC (CLASLIB L282-285) ---
+        const double native_azel[2] = {
+            azim < 0.0 ? azim + 2.0 * M_PI : azim,
+            elev,
+        };
+        const double native_pos[3] = {lat, lon, h};
+        const bool native_corrmeas_applied =
+            config.use_ported_clasnat &&
+            applyNativeCorrmeas(
+                obs,
+                sat,
+                l1_obs,
+                l2_obs,
+                receiver_antenna_model,
+                config,
+                orbit_reference_time,
+                effective_phase_bias_reference_time,
+                native_pos,
+                native_azel,
+                osr);
         for (int f = 0; f < osr.num_frequencies; ++f) {
-            const double fi = osr.frequencies[f] > 0.0 ? osr.wavelengths[f] / osr.wavelengths[0] : 1.0;
-            const double iono_scaled =
-                fi * fi * (constants::GPS_L2_FREQ / constants::GPS_L1_FREQ) * osr.iono_l1_m;
-            const auto phase_bias_value_policy =
-                config.clas_phase_bias_value_policy;
-            const double phase_bias_term =
-                usesClasPhaseBiasTerms(phase_continuity_policy) &&
-                        usesClasRawPhaseBiasValues(phase_bias_value_policy) ?
-                    osr.phase_bias_m[f] :
-                    0.0;
-            const double phase_compensation_term =
-                usesClasPhaseBiasTerms(phase_continuity_policy) &&
-                        usesClasPhaseCompensationValues(phase_bias_value_policy) ?
-                    osr.phase_compensation_m[f] :
-                    0.0;
+            if (!native_corrmeas_applied) {
+                const double fi = osr.frequencies[f] > 0.0 ? osr.wavelengths[f] / osr.wavelengths[0] : 1.0;
+                const double iono_scaled =
+                    fi * fi * (constants::GPS_L2_FREQ / constants::GPS_L1_FREQ) * osr.iono_l1_m;
+                const auto phase_bias_value_policy =
+                    config.clas_phase_bias_value_policy;
+                const double phase_bias_term =
+                    usesClasPhaseBiasTerms(phase_continuity_policy) &&
+                            usesClasRawPhaseBiasValues(phase_bias_value_policy) ?
+                        osr.phase_bias_m[f] :
+                        0.0;
+                const double phase_compensation_term =
+                    usesClasPhaseBiasTerms(phase_continuity_policy) &&
+                            usesClasPhaseCompensationValues(phase_bias_value_policy) ?
+                        osr.phase_compensation_m[f] :
+                        0.0;
 
-            osr.PRC[f] = osr.trop_correction_m + osr.relativity_correction_m
-                       + osr.receiver_antenna_m[f] + iono_scaled + osr.code_bias_m[f]
-                       + osr.solid_earth_tide_m;
+                osr.PRC[f] = osr.trop_correction_m + osr.relativity_correction_m
+                           + osr.receiver_antenna_m[f] + iono_scaled + osr.code_bias_m[f]
+                           + osr.solid_earth_tide_m;
 
-            osr.CPC[f] = osr.trop_correction_m + osr.relativity_correction_m
-                       + osr.receiver_antenna_m[f] - iono_scaled
-                       + phase_bias_term + osr.windup_m[f]
-                       + phase_compensation_term
-                       + osr.solid_earth_tide_m;
+                osr.CPC[f] = osr.trop_correction_m + osr.relativity_correction_m
+                           + osr.receiver_antenna_m[f] - iono_scaled
+                           + phase_bias_term + osr.windup_m[f]
+                           + phase_compensation_term
+                           + osr.solid_earth_tide_m;
+            }
 
             if (clock_time_valid && gnsstimeIsSet(effective_phase_bias_reference_time) &&
                 sis_continuity_info.has_last_delta &&

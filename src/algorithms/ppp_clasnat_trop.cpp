@@ -968,6 +968,87 @@ double atmosphericTroposphereCorrectionMeters(
     return have_correction ? correction_m : 0.0;
 }
 
+bool claslibTroposphereGridScale(
+    const std::map<std::string, std::string>& atmos_tokens,
+    const Vector3d& receiver_position,
+    const GNSSTime& time,
+    ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy value_policy,
+    ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy,
+    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy,
+    double* zwd,
+    double* ztd) {
+    ClasGridReference grid_reference;
+    const bool have_grid_reference =
+        resolveClasGridReference(atmos_tokens, receiver_position, grid_reference);
+    const bool subtype12_row = isSubtype12TropRow(atmos_tokens);
+    int trop_type = -1;
+    parseAtmosTokenInt(atmos_tokens, "atmos_trop_type", trop_type);
+
+    if (!have_grid_reference ||
+        value_policy != ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy::FULL_COMPOSED ||
+        trop_type <= 0) {
+        return false;
+    }
+
+    const bool has_legacy_hs_wet_grid =
+        atmos_tokens.find("atmos_trop_hs_residuals_m") != atmos_tokens.end() &&
+        atmos_tokens.find("atmos_trop_wet_residuals_m") != atmos_tokens.end();
+    const bool has_subtype12_total_wet_grid =
+        subtype12_row &&
+        atmos_tokens.find("atmos_trop_offset_m") != atmos_tokens.end() &&
+        atmos_tokens.find("atmos_trop_residuals_m") != atmos_tokens.end();
+    if (!has_legacy_hs_wet_grid && !has_subtype12_total_wet_grid) {
+        return false;
+    }
+
+    double normalized_hydrostatic = 0.0;
+    double normalized_wet = 0.0;
+    if (grid_reference.has_model_interpolation) {
+        double hydro_values[4] = {};
+        double wet_values[4] = {};
+        for (int g = 0; g < 4; ++g) {
+            if (!claslibTropGridPointNormalizedValues(
+                    atmos_tokens,
+                    grid_reference,
+                    grid_reference.model_grid_indices[g],
+                    time,
+                    subtype12_row,
+                    trop_type,
+                    subtype12_value_policy,
+                    residual_sampling_policy,
+                    hydro_values[g],
+                    wet_values[g])) {
+                return false;
+            }
+        }
+        normalized_hydrostatic = applyGridModelInterpolation(grid_reference, hydro_values);
+        normalized_wet = applyGridModelInterpolation(grid_reference, wet_values);
+    } else if (!claslibTropGridPointNormalizedValues(
+                   atmos_tokens,
+                   grid_reference,
+                   grid_reference.residual_index,
+                   time,
+                   subtype12_row,
+                   trop_type,
+                   subtype12_value_policy,
+                   residual_sampling_policy,
+                   normalized_hydrostatic,
+                   normalized_wet)) {
+        return false;
+    }
+
+    if (!std::isfinite(normalized_hydrostatic) || !std::isfinite(normalized_wet)) {
+        return false;
+    }
+    if (ztd != nullptr) {
+        *ztd = normalized_hydrostatic;
+    }
+    if (zwd != nullptr) {
+        *zwd = normalized_wet;
+    }
+    return true;
+}
+
 double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_tokens,
                            const SatelliteId& satellite,
                            const Vector3d& receiver_position,
