@@ -1,6 +1,7 @@
 #include <libgnss++/algorithms/ppp_clas.hpp>
 
 #include <libgnss++/algorithms/ppp_ar.hpp>
+#include <libgnss++/algorithms/ppp_claslib_zdres.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signals.hpp>
@@ -2318,18 +2319,30 @@ EpochUpdateResult runEpochMeasurementUpdate(
     const AmbiguityIndexFunction& ambiguity_index_function,
     bool debug_enabled) {
     EpochUpdateResult result;
-    auto measurement_build_result = buildEpochMeasurements(
-        obs,
-        epoch_context.osr_corrections,
-        filter_state,
-        config,
-        epoch_context.receiver_position,
-        epoch_context.receiver_clock_m,
-        epoch_context.trop_zenith_m,
-        epoch_context.epoch_atmos_tokens,
-        trop_mapping_function,
-        ambiguity_reset_function,
-        debug_enabled);
+    const bool use_ported_zdres =
+        config.wlnl_strict_claslib_parity && config.use_ported_zdres;
+    auto measurement_build_result =
+        use_ported_zdres
+            ? ppp_claslib_zdres::buildEpochMeasurementsPortedZdres(
+                  obs,
+                  epoch_context,
+                  filter_state,
+                  config,
+                  trop_mapping_function,
+                  ambiguity_reset_function,
+                  debug_enabled)
+            : buildEpochMeasurements(
+                  obs,
+                  epoch_context.osr_corrections,
+                  filter_state,
+                  config,
+                  epoch_context.receiver_position,
+                  epoch_context.receiver_clock_m,
+                  epoch_context.trop_zenith_m,
+                  epoch_context.epoch_atmos_tokens,
+                  trop_mapping_function,
+                  ambiguity_reset_function,
+                  debug_enabled);
 
     if (ppp_shared::pppDebugEnabled()) {
         int phase_rows = 0;

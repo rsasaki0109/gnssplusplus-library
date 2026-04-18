@@ -67,6 +67,7 @@ struct Options {
     bool claslib_bridge = false;
     bool use_ported_pntpos = false;
     bool use_ported_udstate = false;
+    bool use_ported_zdres = false;
     std::string claslib_config_path;
     int claslib_l6_week = 0;
     bool kinematic_mode = false;
@@ -111,6 +112,7 @@ void printUsage(const char* program_name) {
         << "  --no-claslib-bridge      Keep the native libgnss++ path even when CLASLIB bridge support is linked\n"
         << "  --ported-pntpos          Use the native C++ port of CLASLIB pntpos() for the strict CLAS seed\n"
         << "  --ported-udstate         Use the native C++ port of CLASLIB udstate_ppp() in strict CLASLIB parity mode\n"
+        << "  --ported-zdres           Use the native C++ port of CLASLIB zdres()/ddres() residual construction\n"
         << "  --claslib-config <file>  CLASLIB rnx2rtkp config for --claslib-bridge (default: CLASLIB static.conf)\n"
         << "  --claslib-l6-week <week> Override CLASLIB L6 GPS week for --claslib-bridge\n"
         << "  --out <solution.pos>     Output position file (required)\n"
@@ -257,6 +259,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_ported_pntpos = true;
         } else if (arg == "--ported-udstate" || arg == "--use-ported-udstate") {
             options.use_ported_udstate = true;
+        } else if (arg == "--ported-zdres" || arg == "--use-ported-zdres") {
+            options.use_ported_zdres = true;
         } else if (arg == "--claslib-config" && i + 1 < argc) {
             options.claslib_config_path = argv[++i];
         } else if (arg == "--claslib-l6-week" && i + 1 < argc) {
@@ -801,6 +805,7 @@ int main(int argc, char* argv[]) {
         ppp_config.strict_first_ar_dump_path = options.first_ar_dump_path;
         ppp_config.use_ported_pntpos = options.use_ported_pntpos;
         ppp_config.use_ported_udstate = options.use_ported_udstate;
+        ppp_config.use_ported_zdres = options.use_ported_zdres;
         if (options.claslib_parity) {
             ppp_config.clas_outlier_sigma_scale = 8.0;
             ppp_config.clas_decouple_clock_position = false;
@@ -1027,6 +1032,7 @@ int main(int argc, char* argv[]) {
                     << "  \"clas_atmos_stale_after_seconds\": " << options.clas_atmos_stale_after_seconds << ",\n"
                     << "  \"ported_pntpos\": " << (options.use_ported_pntpos ? "true" : "false") << ",\n"
                     << "  \"ported_udstate\": " << (options.use_ported_udstate ? "true" : "false") << ",\n"
+                    << "  \"ported_zdres\": " << (options.use_ported_zdres ? "true" : "false") << ",\n"
                     << "  \"ambiguity_resolution_enabled\": " << (options.enable_ar ? "true" : "false") << ",\n"
                     << "  \"ar_method\": \"" << jsonEscape(options.ar_method) << "\",\n"
                     << "  \"ar_ratio_threshold\": " << options.ar_ratio_threshold << ",\n"
