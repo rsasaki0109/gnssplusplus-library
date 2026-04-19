@@ -116,6 +116,30 @@ void expectNearArray(const std::string& label,
     }
 }
 
+void expectNearSatposSsr(const std::string& label,
+                         const libgnss::clasnat_parity::SatposSsrOutput& native,
+                         const libgnss::clasnat_parity::SatposSsrOutput& oracle) {
+    constexpr double kVelocityToleranceMps = 1e-4;
+    expectNearArray(label + " position", native.rs, oracle.rs, 3);
+    for (int i = 3; i < 6; ++i) {
+        EXPECT_NEAR(native.rs[i], oracle.rs[i], kVelocityToleranceMps)
+            << label << " velocity component=" << i
+            << " native=" << native.rs[i]
+            << " oracle=" << oracle.rs[i];
+    }
+    EXPECT_NEAR(native.dts[0] * libgnss::constants::SPEED_OF_LIGHT,
+                oracle.dts[0] * libgnss::constants::SPEED_OF_LIGHT,
+                kParityTolerance)
+        << label << " clock bias";
+    EXPECT_NEAR(native.dts[1] * libgnss::constants::SPEED_OF_LIGHT,
+                oracle.dts[1] * libgnss::constants::SPEED_OF_LIGHT,
+                kParityTolerance)
+        << label << " clock drift";
+    EXPECT_NEAR(native.variance, oracle.variance, kParityTolerance)
+        << label << " variance";
+    EXPECT_EQ(native.svh, oracle.svh) << label << " svh";
+}
+
 class ClasnatParity : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -204,17 +228,20 @@ TEST_F(ClasnatParity, PrectropModeledSlant) {
     }
 }
 
-TEST_F(ClasnatParity, SatposSsrNativeTargetMissing) {
-    libgnss::clasnat_parity::SatposSsrOutput native;
-    libgnss::clasnat_parity::SatposSsrOutput oracle;
-    const bool native_ok = libgnss::clasnat_parity::satpos_ssr(
-        GNSSTime(2029, 230400.0), GNSSTime(2029, 230400.0), 1, native);
-    const bool oracle_ok = libgnss::external::claslib_oracle::satpos_ssr(
-        GNSSTime(2029, 230400.0), GNSSTime(2029, 230400.0), 1, oracle);
-    EXPECT_TRUE(native_ok)
-        << "native satpos_ssr parity entry point is missing; iter41 port target";
-    EXPECT_TRUE(oracle_ok)
-        << "CLASLIB satpos_ssr oracle adapter is missing realistic nav/SSR fixture wiring";
+TEST_F(ClasnatParity, SatposSsrBroadcastOrbitClockApplied) {
+    ASSERT_TRUE(libgnss::clasnat_parity::satposSsrAvailable());
+    for (int sample = 0; sample < 24; ++sample) {
+        const auto input = libgnss::clasnat_parity::makeSatposSsrInput(sample);
+        libgnss::clasnat_parity::SatposSsrOutput native;
+        libgnss::clasnat_parity::SatposSsrOutput oracle;
+        const bool native_ok = libgnss::clasnat_parity::satpos_ssr(input, native);
+        const bool oracle_ok = libgnss::external::claslib_oracle::satpos_ssr(input, oracle);
+        ASSERT_TRUE(native_ok) << "native satpos_ssr failed sample=" << sample;
+        ASSERT_TRUE(oracle_ok) << "CLASLIB satpos_ssr oracle failed sample=" << sample;
+        expectNearSatposSsr("satpos_ssr sample=" + std::to_string(sample),
+                            native,
+                            oracle);
+    }
 }
 
 TEST_F(ClasnatParity, CorrmeasNativeTargetMissing) {

@@ -8,6 +8,7 @@ namespace libgnss::external::claslib_oracle {
 using GTime = GNSSTime;
 using ReceiverPcvModel = libgnss::clasnat_parity::ReceiverPcvModel;
 using SatposSsrOutput = libgnss::clasnat_parity::SatposSsrOutput;
+using SatposSsrInput = libgnss::clasnat_parity::SatposSsrInput;
 using CorrmeasOutput = libgnss::clasnat_parity::CorrmeasOutput;
 
 bool available();
@@ -40,6 +41,7 @@ bool satpos_ssr(const GTime& teph,
                 const GTime& time,
                 int sat,
                 SatposSsrOutput& out);
+bool satpos_ssr(const SatposSsrInput& input, SatposSsrOutput& out);
 
 bool corrmeas(const libgnss::clasnat_parity::CorrmeasInput& input, CorrmeasOutput& out);
 bool corrmeas(int sample_index, CorrmeasOutput& out);

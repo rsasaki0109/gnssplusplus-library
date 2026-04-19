@@ -1221,6 +1221,97 @@ int rtklibCodeForObservation(const Observation& obs) {
     return code;
 }
 
+clasnat_parity::SatposBroadcastEphemeris makeNativeSatposEphemeris(
+    const SatelliteId& sat,
+    const Ephemeris& eph) {
+    clasnat_parity::SatposBroadcastEphemeris out;
+    out.valid = eph.valid;
+    out.sat = clasnatSatNo(sat);
+    out.iode = static_cast<int>(eph.iode);
+    out.iodc = static_cast<int>(eph.iodc);
+    out.sva = static_cast<int>(eph.ura);
+    out.svh = static_cast<int>(eph.health);
+    out.week = eph.week != 0 ? static_cast<int>(eph.week) : eph.toe.week;
+    out.toe = eph.toe;
+    out.toc = eph.toc;
+    out.ttr = eph.tof;
+    out.toes = eph.toes != 0.0 ? eph.toes : eph.toe.tow;
+    out.A = eph.sqrt_a * eph.sqrt_a;
+    out.e = eph.e;
+    out.i0 = eph.i0;
+    out.OMG0 = eph.omega0;
+    out.omg = eph.omega;
+    out.M0 = eph.m0;
+    out.deln = eph.delta_n;
+    out.OMGd = eph.omega_dot;
+    out.idot = eph.idot;
+    out.crc = eph.crc;
+    out.crs = eph.crs;
+    out.cuc = eph.cuc;
+    out.cus = eph.cus;
+    out.cic = eph.cic;
+    out.cis = eph.cis;
+    out.f0 = eph.af0;
+    out.f1 = eph.af1;
+    out.f2 = eph.af2;
+    out.tgd[0] = eph.tgd;
+    out.tgd[1] = eph.tgd_secondary;
+    return out;
+}
+
+bool buildNativeSatposSsrInput(
+    const SSRProducts& ssr,
+    const SatelliteId& sat,
+    const Ephemeris* eph,
+    const SSROrbitClockCorrection* orbit_source,
+    const SSROrbitClockCorrection* clock_source,
+    const GNSSTime& teph,
+    const GNSSTime& satellite_time,
+    const Vector3d& receiver_pos,
+    clasnat_parity::SatposSsrInput& input) {
+    if (!ssr.orbitCorrectionsAreRac() ||
+        eph == nullptr ||
+        orbit_source == nullptr || !orbit_source->orbit_valid ||
+        clock_source == nullptr || !clock_source->clock_valid ||
+        receiver_pos.squaredNorm() <= 0.0) {
+        return false;
+    }
+
+    const int native_sat = clasnatSatNo(sat);
+    if (native_sat <= 0 || !eph->valid || eph->sqrt_a <= 0.0) {
+        return false;
+    }
+
+    input = clasnat_parity::SatposSsrInput{};
+    input.teph = teph;
+    input.time = satellite_time;
+    input.sat = native_sat;
+    input.eph = makeNativeSatposEphemeris(sat, *eph);
+    input.eph.sat = native_sat;
+    input.eph.valid = true;
+    input.receiver_position[0] = receiver_pos(0);
+    input.receiver_position[1] = receiver_pos(1);
+    input.receiver_position[2] = receiver_pos(2);
+    input.apply_satellite_antenna_offset = false;
+
+    input.ssr.t0[0] = orbit_source->time;
+    input.ssr.t0[1] = clock_source->time;
+    input.ssr.t0[3] = clock_source->time;
+    input.ssr.iode = orbit_source->iode;
+    input.ssr.iod[0] = 0;
+    input.ssr.iod[1] = 0;
+    input.ssr.iod[2] = -1;
+    for (int i = 0; i < 3; ++i) {
+        input.ssr.deph[i] = orbit_source->orbit_correction_ecef(i);
+        input.ssr.ddeph[i] = 0.0;
+    }
+    input.ssr.dclk[0] = clock_source->clock_correction_m;
+    input.ssr.dclk[1] = 0.0;
+    input.ssr.dclk[2] = 0.0;
+    input.ssr.ura = 0;
+    return true;
+}
+
 clasnat_parity::ReceiverPcvModel makeParityReceiverPcv(
     const ppp_shared::PPPConfig& config,
     const ReceiverAntennaModel* antenna_model,
@@ -1989,17 +2080,58 @@ std::vector<OSRCorrection> computeOsrClasnat(
                 sat_pos_for_ssr_frame,
                 sat_vel_for_ssr_frame,
                 ssr.orbitCorrectionsAreRac());
+            bool native_satpos_applied = false;
+            if (config.use_ported_clasnat) {
+                clasnat_parity::SatposSsrInput native_input;
+                if (buildNativeSatposSsrInput(ssr,
+                                              sat,
+                                              eph_for_sat_time,
+                                              orbit_source,
+                                              clock_source,
+                                              obs.time,
+                                              satellite_time,
+                                              receiver_pos,
+                                              native_input)) {
+                    clasnat_parity::SatposSsrOutput native_output;
+                    if (clasnat_parity::satpos_ssr(native_input, native_output)) {
+                        const Vector3d native_pos(native_output.rs[0],
+                                                  native_output.rs[1],
+                                                  native_output.rs[2]);
+                        const Vector3d native_vel(native_output.rs[3],
+                                                  native_output.rs[4],
+                                                  native_output.rs[5]);
+                        orbit_corr_rac = orbit_source->orbit_correction_ecef;
+                        orbit_corr = native_pos - sat_pos_for_ssr_frame;
+                        clock_corr =
+                            native_output.dts[0] * constants::SPEED_OF_LIGHT -
+                            sat_clk_bcast_s * constants::SPEED_OF_LIGHT;
+                        orbit_reference_time = orbit_source->time;
+                        clock_reference_time = clock_source->time;
+                        sat_pos = native_pos;
+                        sat_vel = native_vel;
+                        sat_clk = native_output.dts[0];
+                        sat_drift = native_output.dts[1];
+                        native_satpos_applied = true;
+                    }
+                }
+            }
             if (pppDebugEnabled() && corrections.size() < 20) {
+                const double debug_total_clk_s =
+                    native_satpos_applied
+                        ? sat_clk
+                        : sat_clk + clock_corr / constants::SPEED_OF_LIGHT;
                 std::cerr << "[OSR-SSR] " << sat.toString()
                           << " orbit_ecef=" << orbit_corr.transpose()
                           << " clk_m=" << clock_corr
-                          << " brdc_clk_s=" << sat_clk
-                          << " sat_clk_total_s=" << sat_clk + clock_corr / constants::SPEED_OF_LIGHT
+                          << " brdc_clk_s=" << sat_clk_bcast_s
+                          << " sat_clk_total_s=" << debug_total_clk_s
                           << " cbias_n=" << ssr_cbias.size()
                           << " pbias_n=" << ssr_pbias.size() << "\n";
             }
-            sat_pos += orbit_corr;
-            sat_clk += clock_corr / constants::SPEED_OF_LIGHT;
+            if (!native_satpos_applied) {
+                sat_pos += orbit_corr;
+                sat_clk += clock_corr / constants::SPEED_OF_LIGHT;
+            }
             osr.has_code_bias = !ssr_cbias.empty();
             osr.has_phase_bias = !ssr_pbias.empty();
             osr.atmos_reference_time = atmos_reference_time;

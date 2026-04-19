@@ -24,6 +24,68 @@ struct SatposSsrOutput {
     int svh = 0;
 };
 
+struct SatposBroadcastEphemeris {
+    int sat = 0;
+    int iode = 0;
+    int iodc = 0;
+    int sva = 0;
+    int svh = 0;
+    int week = 0;
+    int code = 0;
+    int flag = 0;
+    GNSSTime toe;
+    GNSSTime toc;
+    GNSSTime ttr;
+    double A = 0.0;
+    double e = 0.0;
+    double i0 = 0.0;
+    double OMG0 = 0.0;
+    double omg = 0.0;
+    double M0 = 0.0;
+    double deln = 0.0;
+    double OMGd = 0.0;
+    double idot = 0.0;
+    double crc = 0.0;
+    double crs = 0.0;
+    double cuc = 0.0;
+    double cus = 0.0;
+    double cic = 0.0;
+    double cis = 0.0;
+    double toes = 0.0;
+    double fit = 0.0;
+    double f0 = 0.0;
+    double f1 = 0.0;
+    double f2 = 0.0;
+    double tgd[4] = {};
+    double Adot = 0.0;
+    double ndot = 0.0;
+    bool valid = false;
+};
+
+struct SatposSsrCorrection {
+    GNSSTime t0[9] = {};
+    double udi[9] = {};
+    int iod[9] = {};
+    int iode = -1;
+    int iodcrc = 0;
+    int ura = 0;
+    int refd = 0;
+    double deph[3] = {};
+    double ddeph[3] = {};
+    double dclk[3] = {};
+    double hrclk = 0.0;
+};
+
+struct SatposSsrInput {
+    GNSSTime teph;
+    GNSSTime time;
+    int sat = 0;
+    SatposBroadcastEphemeris eph;
+    SatposSsrCorrection ssr;
+    double receiver_position[3] = {};
+    bool apply_satellite_antenna_offset = false;
+};
+
 struct CorrmeasOutput {
     int num_frequencies = kParityMaxFreq;
     double prc[kParityMaxFreq] = {};
@@ -68,6 +130,7 @@ struct CorrmeasInput {
 };
 
 CorrmeasInput makeCorrmeasInput(int sample_index);
+SatposSsrInput makeSatposSsrInput(int sample_index);
 
 bool tidedispAvailable();
 bool windupcorrAvailable();
@@ -105,6 +168,7 @@ bool satpos_ssr(const GNSSTime& teph,
                 const GNSSTime& time,
                 int sat,
                 SatposSsrOutput& out);
+bool satpos_ssr(const SatposSsrInput& input, SatposSsrOutput& out);
 
 bool corrmeas(const CorrmeasInput& input, CorrmeasOutput& out);
 bool corrmeas(int sample_index, CorrmeasOutput& out);

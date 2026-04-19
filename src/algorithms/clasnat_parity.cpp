@@ -30,6 +30,33 @@ constexpr int kParityCssrInvalid = -10000;
 constexpr int kParityRtcmModeCssr = 5;
 constexpr double kParityMaxAgeSsrBiasSeconds = 120.0;
 constexpr double kParityMaxAgeSsrIonoSeconds = 120.0;
+constexpr int kClasSysNone = 0x00;
+constexpr int kClasSysGps = 0x01;
+constexpr int kClasSysGal = 0x08;
+constexpr int kClasSysQzs = 0x10;
+constexpr int kClasSysCmp = 0x20;
+constexpr int kClasMinPrnQzs = 193;
+constexpr int kClasMaxPrnQzs = 199;
+constexpr double kClasMuGps = 3.9860050E14;
+constexpr double kClasMuGal = 3.986004418E14;
+constexpr double kClasMuCmp = 3.986004418E14;
+constexpr double kClasOmge = 7.2921151467E-5;
+constexpr double kClasOmgeGal = 7.2921151467E-5;
+constexpr double kClasOmgeCmp = 7.292115E-5;
+constexpr double kClasSin5 = -0.0871557427476582;
+constexpr double kClasCos5 = 0.9961946980917456;
+constexpr double kClasRtolKepler = 1E-14;
+constexpr int kClasMaxIterKepler = 30;
+constexpr double kClasMaxDtoeGps = 7200.0;
+constexpr double kClasMaxDtoeQzs = 7200.0;
+constexpr double kClasMaxDtoeGal = 10800.0;
+constexpr double kClasMaxDtoeCmp = 21600.0;
+constexpr double kClasDefaultUraSsr = 0.15;
+constexpr double kClasMaxSsrOrbitCorrectionM = 50.0;
+constexpr double kClasMaxSsrClockCorrectionM = 30.0;
+constexpr double kClasMaxAgeSsrOrbitSeconds = 240.0;
+constexpr double kClasMaxAgeSsrClockSeconds = 120.0;
+constexpr double kClasMaxAgeSsrHighRateClockSeconds = 0.0;
 
 static unsigned char kObsFreqs[] = {
     0, 1, 1, 1, 1,  1, 1, 1, 1, 1,
@@ -142,6 +169,114 @@ void cross3(const double a[3], const double b[3], double out[3]) {
 
 double timediff(const GNSSTime& a, const GNSSTime& b) {
     return a - b;
+}
+
+GNSSTime clasTimeadd(const GNSSTime& time, double sec) {
+    int week = time.week;
+    int whole = static_cast<int>(time.tow);
+    double frac = time.tow - static_cast<double>(whole);
+    frac += sec;
+    const double carry = std::floor(frac);
+    whole += static_cast<int>(carry);
+    frac -= carry;
+    while (whole < 0) {
+        whole += static_cast<int>(constants::SECONDS_PER_WEEK);
+        --week;
+    }
+    while (whole >= static_cast<int>(constants::SECONDS_PER_WEEK)) {
+        whole -= static_cast<int>(constants::SECONDS_PER_WEEK);
+        ++week;
+    }
+    return GNSSTime(week, static_cast<double>(whole) + frac);
+}
+
+double clasTimediff(const GNSSTime& a, const GNSSTime& b) {
+    const int a_whole = static_cast<int>(a.tow);
+    const int b_whole = static_cast<int>(b.tow);
+    const double a_frac = a.tow - static_cast<double>(a_whole);
+    const double b_frac = b.tow - static_cast<double>(b_whole);
+    return static_cast<double>((a.week - b.week) *
+                               static_cast<int>(constants::SECONDS_PER_WEEK) +
+                               (a_whole - b_whole)) +
+           a_frac - b_frac;
+}
+
+bool gnsstimeIsSet(const GNSSTime& time) {
+    return time.week != 0 || std::fabs(time.tow) > 0.0;
+}
+
+int paritySatsys(int sat, int* prn) {
+    int sys = kClasSysNone;
+    int out_prn = 0;
+    if (sat <= 0 || sat > kParityMaxSat) {
+        out_prn = 0;
+    } else if (sat <= 32) {
+        sys = kClasSysGps;
+        out_prn = sat;
+    } else if ((sat -= 32) <= 36) {
+        sys = kClasSysGal;
+        out_prn = sat;
+    } else if ((sat -= 36) <= 7) {
+        sys = kClasSysQzs;
+        out_prn = kClasMinPrnQzs + sat - 1;
+    } else {
+        out_prn = 0;
+    }
+    if (prn != nullptr) {
+        *prn = out_prn;
+    }
+    return sys;
+}
+
+double parityMaxDtoe(int sys) {
+    switch (sys) {
+        case kClasSysQzs:
+            return kClasMaxDtoeQzs + 1.0;
+        case kClasSysGal:
+            return kClasMaxDtoeGal + 1.0;
+        case kClasSysCmp:
+            return kClasMaxDtoeCmp + 1.0;
+        default:
+            return kClasMaxDtoeGps + 1.0;
+    }
+}
+
+double parityVarUraeph(int ura, int sys) {
+    static constexpr double ura_value[] = {
+        2.4, 3.4, 4.85, 6.85, 9.65, 13.65, 24.0, 48.0,
+        96.0, 192.0, 384.0, 768.0, 1536.0, 3072.0, 6144.0};
+
+    if (sys == kClasSysGal) {
+        double temp = 0.0;
+        if (0 <= ura && ura <= 49) {
+            temp = static_cast<double>(ura);
+        } else if (50 <= ura && ura <= 74) {
+            temp = static_cast<double>(ura - 50) * 2.0 + 50.0;
+        } else if (75 <= ura && ura <= 99) {
+            temp = static_cast<double>(ura - 75) * 4.0 + 100.0;
+        } else if (100 <= ura && ura <= 125) {
+            temp = static_cast<double>(ura - 100) * 16.0 + 200.0;
+        } else {
+            temp = 6144.0 * 100.0;
+        }
+        return (temp / 100.0) * (temp / 100.0);
+    }
+    const double value =
+        (ura < 0 || 14 < ura) ? 6144.0 : ura_value[static_cast<size_t>(ura)];
+    return value * value;
+}
+
+double parityVarUrassr(int ura) {
+    if (ura <= 0) {
+        return kClasDefaultUraSsr * kClasDefaultUraSsr;
+    }
+    if (ura >= 63) {
+        return 5.4665 * 5.4665;
+    }
+    const double std_m =
+        (std::pow(3.0, (ura >> 3) & 7) * (1.0 + (ura & 7) / 4.0) - 1.0) *
+        1E-3;
+    return std_m * std_m;
 }
 
 int obsFrequencyIndex(int code) {
@@ -912,6 +1047,253 @@ int parityCorrmeasLiteral(const ParityObs* obs,
     return 1;
 }
 
+bool paritySeleph(const GNSSTime& time,
+                  int sat,
+                  int iode,
+                  const SatposBroadcastEphemeris& eph) {
+    if (!eph.valid || eph.sat != sat) {
+        return false;
+    }
+    if (iode >= 0 && eph.iode != iode) {
+        return false;
+    }
+    const int sys = paritySatsys(sat, nullptr);
+    if (sys != kClasSysGps && sys != kClasSysGal &&
+        sys != kClasSysQzs && sys != kClasSysCmp) {
+        return false;
+    }
+    return std::fabs(clasTimediff(eph.toe, time)) <= parityMaxDtoe(sys);
+}
+
+bool parityEph2pos(const GNSSTime& time,
+                   const SatposBroadcastEphemeris& eph,
+                   double* rs,
+                   double* dts,
+                   double* var) {
+    double tk, M, E, Ek, sinE, cosE, u, r, i, O;
+    double sin2u, cos2u, x, y, sinO, cosO, cosi, mu, omge;
+    double xg, yg, zg, sino, coso;
+    int n, sys, prn;
+
+    if (eph.A <= 0.0) {
+        rs[0] = rs[1] = rs[2] = *dts = *var = 0.0;
+        return true;
+    }
+    tk = clasTimediff(time, eph.toe);
+
+    switch ((sys = paritySatsys(eph.sat, &prn))) {
+        case kClasSysGal:
+            mu = kClasMuGal;
+            omge = kClasOmgeGal;
+            break;
+        case kClasSysCmp:
+            mu = kClasMuCmp;
+            omge = kClasOmgeCmp;
+            break;
+        default:
+            mu = kClasMuGps;
+            omge = kClasOmge;
+            break;
+    }
+    M = eph.M0 + (std::sqrt(mu / (eph.A * eph.A * eph.A)) + eph.deln) * tk;
+
+    for (n = 0, E = M, Ek = 0.0;
+         std::fabs(E - Ek) > kClasRtolKepler && n < kClasMaxIterKepler;
+         n++) {
+        Ek = E;
+        E -= (E - eph.e * std::sin(E) - M) / (1.0 - eph.e * std::cos(E));
+    }
+    if (n >= kClasMaxIterKepler) {
+        return false;
+    }
+    sinE = std::sin(E);
+    cosE = std::cos(E);
+
+    u = std::atan2(std::sqrt(1.0 - eph.e * eph.e) * sinE, cosE - eph.e) +
+        eph.omg;
+    r = eph.A * (1.0 - eph.e * cosE);
+    i = eph.i0 + eph.idot * tk;
+    sin2u = std::sin(2.0 * u);
+    cos2u = std::cos(2.0 * u);
+    u += eph.cus * sin2u + eph.cuc * cos2u;
+    r += eph.crs * sin2u + eph.crc * cos2u;
+    i += eph.cis * sin2u + eph.cic * cos2u;
+    x = r * std::cos(u);
+    y = r * std::sin(u);
+    cosi = std::cos(i);
+
+    if (sys == kClasSysCmp && prn <= 5) {
+        O = eph.OMG0 + eph.OMGd * tk - omge * eph.toes;
+        sinO = std::sin(O);
+        cosO = std::cos(O);
+        xg = x * cosO - y * cosi * sinO;
+        yg = x * sinO + y * cosi * cosO;
+        zg = y * std::sin(i);
+        sino = std::sin(omge * tk);
+        coso = std::cos(omge * tk);
+        rs[0] = xg * coso + yg * sino * kClasCos5 + zg * sino * kClasSin5;
+        rs[1] = -xg * sino + yg * coso * kClasCos5 + zg * coso * kClasSin5;
+        rs[2] = -yg * kClasSin5 + zg * kClasCos5;
+    } else {
+        O = eph.OMG0 + (eph.OMGd - omge) * tk - omge * eph.toes;
+        sinO = std::sin(O);
+        cosO = std::cos(O);
+        rs[0] = x * cosO - y * cosi * sinO;
+        rs[1] = x * sinO + y * cosi * cosO;
+        rs[2] = y * std::sin(i);
+    }
+    tk = clasTimediff(time, eph.toc);
+    *dts = eph.f0 + eph.f1 * tk + eph.f2 * tk * tk;
+
+    *dts -= 2.0 * std::sqrt(mu * eph.A) * eph.e * sinE /
+            (constants::SPEED_OF_LIGHT * constants::SPEED_OF_LIGHT);
+
+    *var = parityVarUraeph(eph.sva, sys);
+    return true;
+}
+
+bool parityEphpos(const GNSSTime& time,
+                  const GNSSTime& teph,
+                  int sat,
+                  const SatposBroadcastEphemeris& eph,
+                  int iode,
+                  double* rs,
+                  double* dts,
+                  double* var,
+                  int* svh) {
+    double rst[3] = {};
+    double dtst[1] = {};
+    constexpr double tt = 1E-3;
+    const int sys = paritySatsys(sat, nullptr);
+
+    *svh = -1;
+    if (sys == kClasSysGps || sys == kClasSysGal ||
+        sys == kClasSysQzs || sys == kClasSysCmp) {
+        if (!paritySeleph(teph, sat, iode, eph)) {
+            return false;
+        }
+        if (!parityEph2pos(time, eph, rs, dts, var)) {
+            return false;
+        }
+        if (!parityEph2pos(clasTimeadd(time, tt), eph, rst, dtst, var)) {
+            return false;
+        }
+        *svh = eph.svh;
+    } else {
+        return false;
+    }
+
+    for (int i = 0; i < 3; i++) {
+        rs[i + 3] = (rst[i] - rs[i]) / tt;
+    }
+    dts[1] = (dtst[0] - dts[0]) / tt;
+    return true;
+}
+
+int paritySatposSsrLiteral(const SatposSsrInput& input,
+                           int opt,
+                           double* rs,
+                           double* dts,
+                           double* var,
+                           int* svh) {
+    const SatposSsrCorrection& ssr = input.ssr;
+    double t1, t2, t3;
+    double dorb[3] = {};
+    double er[3] = {};
+    double ea[3] = {};
+    double ec[3] = {};
+    double rc[3] = {};
+    double deph[3] = {};
+    double dclk;
+    double dant[3] = {};
+    double sig[3] = {};
+    double nsig[3] = {};
+    int i;
+
+    (void)opt;
+
+    if (!gnsstimeIsSet(ssr.t0[0])) {
+        return 0;
+    }
+    if (!gnsstimeIsSet(ssr.t0[1])) {
+        return 0;
+    }
+
+    t1 = clasTimediff(input.time, ssr.t0[0]);
+    t2 = clasTimediff(input.time, ssr.t0[1]);
+    t3 = clasTimediff(input.time, ssr.t0[2]);
+
+    if (std::fabs(t1) > kClasMaxAgeSsrOrbitSeconds ||
+        std::fabs(t2) > kClasMaxAgeSsrClockSeconds) {
+        *svh = -1;
+        return 0;
+    }
+    if (ssr.udi[0] >= 1.0) {
+        t1 -= ssr.udi[0] / 2.0;
+    }
+    if (ssr.udi[1] >= 1.0) {
+        t2 -= ssr.udi[1] / 2.0;
+    }
+
+    for (i = 0; i < 3; i++) {
+        deph[i] = ssr.deph[i] + ssr.ddeph[i] * t1;
+    }
+    dclk = ssr.dclk[0] + ssr.dclk[1] * t2 + ssr.dclk[2] * t2 * t2;
+
+    if (ssr.iod[0] == ssr.iod[2] &&
+        gnsstimeIsSet(ssr.t0[2]) &&
+        std::fabs(t3) < kClasMaxAgeSsrHighRateClockSeconds) {
+        dclk += ssr.hrclk;
+    }
+    if (norm3(deph) > kClasMaxSsrOrbitCorrectionM ||
+        std::fabs(dclk) > kClasMaxSsrClockCorrectionM) {
+        *svh = -1;
+        return 0;
+    }
+
+    if (!parityEphpos(input.time,
+                      input.teph,
+                      input.sat,
+                      input.eph,
+                      ssr.iode,
+                      rs,
+                      dts,
+                      var,
+                      svh)) {
+        return 0;
+    }
+
+    if (!unit3(rs + 3, ea)) {
+        return 0;
+    }
+    cross3(rs, rs + 3, rc);
+    if (!unit3(rc, ec)) {
+        *svh = -1;
+        return 0;
+    }
+    cross3(ea, ec, er);
+
+    for (i = 0; i < 3; i++) {
+        dorb[i] = -(er[i] * deph[0] + ea[i] * deph[1] + ec[i] * deph[2]);
+        rs[i] += dorb[i] + dant[i];
+    }
+
+    dts[0] += dclk / constants::SPEED_OF_LIGHT;
+
+    if (norm3(input.receiver_position) <= 0.0) {
+        return 0;
+    }
+    for (i = 0; i < 3; i++) {
+        sig[i] = rs[i] - input.receiver_position[i];
+    }
+    if (!unit3(sig, nsig)) {
+        return 0;
+    }
+
+    *var = parityVarUrassr(ssr.ura);
+    return 1;
+}
+
 CorrmeasRuntime makeCorrmeasRuntime(const CorrmeasInput& input) {
     CorrmeasRuntime runtime;
     const int nf = std::clamp(input.num_frequencies, 0, kParityMaxFreq);
@@ -1019,7 +1401,7 @@ bool prectropAvailable() {
 }
 
 bool satposSsrAvailable() {
-    return false;
+    return true;
 }
 
 bool corrmeasAvailable() {
@@ -1086,6 +1468,82 @@ CorrmeasInput makeCorrmeasInput(int sample_index) {
     input.phase_bias_time = input.time;
     input.trop_m = 1.34 + 0.011 * epoch + 0.006 * sat_index;
     input.relativity_m = -0.0025 + 0.0001 * sample;
+
+    return input;
+}
+
+SatposSsrInput makeSatposSsrInput(int sample_index) {
+    const int sample = ((sample_index % 24) + 24) % 24;
+    const int epoch = sample / 6;
+    const int sat_case = sample % 6;
+    const int sats[6] = {1, 14, 25, 33, 59, 69};
+    const double lat = 36.1037748 * kDegreesToRadians;
+    const double lon = 140.0878550 * kDegreesToRadians;
+    const Vector3d rr = geodetic2ecef(lat, lon, 67.0);
+
+    SatposSsrInput input;
+    input.teph = GNSSTime(2029, 230400.0 + 30.0 * epoch);
+    input.time = input.teph - (0.071 + 0.002 * sat_case + 0.0005 * epoch);
+    input.sat = sats[sat_case];
+    input.receiver_position[0] = rr(0);
+    input.receiver_position[1] = rr(1);
+    input.receiver_position[2] = rr(2);
+
+    SatposBroadcastEphemeris& eph = input.eph;
+    eph.valid = true;
+    eph.sat = input.sat;
+    eph.iode = 48 + sample;
+    eph.iodc = 140 + sample;
+    eph.sva = (sat_case == 3 || sat_case == 4) ? 12 + sat_case : 2 + sat_case;
+    eph.svh = 0;
+    eph.week = input.teph.week;
+    eph.toe = GNSSTime(input.teph.week, 230000.0 + 60.0 * epoch);
+    eph.toc = eph.toe;
+    eph.ttr = eph.toe;
+    eph.toes = eph.toe.tow;
+    eph.A = (sat_case == 3 || sat_case == 4) ? 29600000.0 : 26560000.0;
+    eph.A += 1200.0 * sat_case + 350.0 * epoch;
+    eph.e = 0.0065 + 0.00035 * sat_case + 0.00005 * epoch;
+    eph.i0 = (54.0 + 0.7 * sat_case) * kDegreesToRadians;
+    eph.OMG0 = (38.0 + 41.0 * sat_case + 1.3 * epoch) * kDegreesToRadians;
+    eph.omg = (12.0 + 19.0 * sat_case + 0.5 * epoch) * kDegreesToRadians;
+    eph.M0 = (78.0 + 23.0 * sat_case + 3.1 * epoch) * kDegreesToRadians;
+    eph.deln = (3.5 + 0.2 * sat_case) * 1E-9;
+    eph.OMGd = (-8.1 - 0.15 * sat_case) * 1E-9;
+    eph.idot = (0.4 - 0.03 * sat_case) * 1E-10;
+    eph.crc = 130.0 + 3.0 * sat_case;
+    eph.crs = -42.0 + 1.7 * epoch;
+    eph.cuc = (1.2 + 0.1 * sat_case) * 1E-6;
+    eph.cus = (-0.8 + 0.05 * epoch) * 1E-6;
+    eph.cic = (0.4 + 0.02 * sat_case) * 1E-6;
+    eph.cis = (-0.3 + 0.01 * epoch) * 1E-6;
+    eph.f0 = (2.4 + 0.07 * sat_case) * 1E-5;
+    eph.f1 = (-4.0 + 0.2 * epoch) * 1E-12;
+    eph.f2 = (0.3 + 0.02 * sat_case) * 1E-18;
+    eph.tgd[0] = -2.3E-9 + 0.1E-9 * sat_case;
+    eph.tgd[1] = 1.2E-9 - 0.05E-9 * epoch;
+
+    SatposSsrCorrection& ssr = input.ssr;
+    ssr.t0[0] = input.time - (10.0 + sat_case);
+    ssr.t0[1] = input.time - (5.0 + 0.5 * epoch);
+    ssr.t0[3] = ssr.t0[1];
+    ssr.udi[0] = 30.0;
+    ssr.udi[1] = 5.0;
+    ssr.iod[0] = 3 + epoch;
+    ssr.iod[1] = 3 + epoch;
+    ssr.iod[2] = 2 + epoch;
+    ssr.iode = eph.iode;
+    ssr.ura = 10 + sat_case;
+    ssr.deph[0] = 0.18 + 0.010 * sat_case + 0.002 * epoch;
+    ssr.deph[1] = -0.075 + 0.006 * sat_case - 0.001 * epoch;
+    ssr.deph[2] = 0.043 - 0.004 * sat_case + 0.0007 * epoch;
+    ssr.ddeph[0] = (0.8 + 0.1 * sat_case) * 1E-4;
+    ssr.ddeph[1] = (-0.6 + 0.05 * epoch) * 1E-4;
+    ssr.ddeph[2] = (0.35 - 0.03 * sat_case) * 1E-4;
+    ssr.dclk[0] = 0.42 - 0.018 * sat_case + 0.006 * epoch;
+    ssr.dclk[1] = (2.0 + 0.2 * sat_case) * 1E-4;
+    ssr.dclk[2] = (-0.8 + 0.1 * epoch) * 1E-6;
+    ssr.hrclk = 0.0;
 
     return input;
 }
@@ -1233,11 +1691,33 @@ double prectrop(const GNSSTime& time,
     return dry_mapping * dry_delay_m * ztd + wet_mapping * wet_delay_m * zwd;
 }
 
-bool satpos_ssr(const GNSSTime& /*teph*/,
-                const GNSSTime& /*time*/,
-                int /*sat*/,
-                SatposSsrOutput& /*out*/) {
-    return false;
+bool satpos_ssr(const GNSSTime& teph,
+                const GNSSTime& time,
+                int sat,
+                SatposSsrOutput& out) {
+    SatposSsrInput input = makeSatposSsrInput(std::max(0, sat - 1));
+    input.teph = teph;
+    input.time = time;
+    input.sat = sat;
+    input.eph.sat = sat;
+    input.eph.toe = teph - 400.0;
+    input.eph.toc = input.eph.toe;
+    input.eph.ttr = input.eph.toe;
+    input.eph.toes = input.eph.toe.tow;
+    input.ssr.t0[0] = time;
+    input.ssr.t0[1] = time;
+    input.ssr.t0[3] = time;
+    return satpos_ssr(input, out);
+}
+
+bool satpos_ssr(const SatposSsrInput& input, SatposSsrOutput& out) {
+    out = SatposSsrOutput{};
+    return paritySatposSsrLiteral(input,
+                                  input.apply_satellite_antenna_offset ? 1 : 0,
+                                  out.rs,
+                                  out.dts,
+                                  &out.variance,
+                                  &out.svh) != 0;
 }
 
 bool corrmeas(const CorrmeasInput& input, CorrmeasOutput& out) {

@@ -50,6 +50,70 @@ void zero3(double out[3]) {
     out[2] = 0.0;
 }
 
+#if GNSSPP_HAS_CLASLIB_BRIDGE
+void fillClasEph(const libgnss::clasnat_parity::SatposBroadcastEphemeris& input,
+                 eph_t& eph) {
+    std::memset(&eph, 0, sizeof(eph));
+    eph.sat = input.sat;
+    eph.iode = input.iode;
+    eph.iodc = input.iodc;
+    eph.sva = input.sva;
+    eph.svh = input.svh;
+    eph.week = input.week;
+    eph.code = input.code;
+    eph.flag = input.flag;
+    eph.toe = toClasTime(input.toe);
+    eph.toc = toClasTime(input.toc);
+    eph.ttr = toClasTime(input.ttr);
+    eph.A = input.A;
+    eph.e = input.e;
+    eph.i0 = input.i0;
+    eph.OMG0 = input.OMG0;
+    eph.omg = input.omg;
+    eph.M0 = input.M0;
+    eph.deln = input.deln;
+    eph.OMGd = input.OMGd;
+    eph.idot = input.idot;
+    eph.crc = input.crc;
+    eph.crs = input.crs;
+    eph.cuc = input.cuc;
+    eph.cus = input.cus;
+    eph.cic = input.cic;
+    eph.cis = input.cis;
+    eph.toes = input.toes;
+    eph.fit = input.fit;
+    eph.f0 = input.f0;
+    eph.f1 = input.f1;
+    eph.f2 = input.f2;
+    for (int i = 0; i < 4; ++i) {
+        eph.tgd[i] = input.tgd[i];
+    }
+    eph.Adot = input.Adot;
+    eph.ndot = input.ndot;
+}
+
+void fillClasSsr(const libgnss::clasnat_parity::SatposSsrCorrection& input,
+                 ssr_t& ssr) {
+    std::memset(&ssr, 0, sizeof(ssr));
+    constexpr int kInputSsrCount = 9;
+    for (int i = 0; i < std::min(MAX_INDEX_SSR, kInputSsrCount); ++i) {
+        ssr.t0[i] = toClasTime(input.t0[i]);
+        ssr.udi[i] = input.udi[i];
+        ssr.iod[i] = input.iod[i];
+    }
+    ssr.iode = input.iode;
+    ssr.iodcrc = input.iodcrc;
+    ssr.ura = input.ura;
+    ssr.refd = input.refd;
+    for (int i = 0; i < 3; ++i) {
+        ssr.deph[i] = input.deph[i];
+        ssr.ddeph[i] = input.ddeph[i];
+        ssr.dclk[i] = input.dclk[i];
+    }
+    ssr.hrclk = input.hrclk;
+}
+#endif
+
 }  // namespace
 
 bool available() {
@@ -170,11 +234,57 @@ bool satpos_ssr(const GTime& teph,
                 const GTime& time,
                 int sat,
                 SatposSsrOutput& out) {
-    (void)teph;
-    (void)time;
-    (void)sat;
+    auto input = libgnss::clasnat_parity::makeSatposSsrInput(std::max(0, sat - 1));
+    input.teph = teph;
+    input.time = time;
+    input.sat = sat;
+    input.eph.sat = sat;
+    input.eph.toe = teph - 400.0;
+    input.eph.toc = input.eph.toe;
+    input.eph.ttr = input.eph.toe;
+    input.eph.toes = input.eph.toe.tow;
+    input.ssr.t0[0] = time;
+    input.ssr.t0[1] = time;
+    input.ssr.t0[3] = time;
+    return libgnss::external::claslib_oracle::satpos_ssr(input, out);
+}
+
+bool satpos_ssr(const SatposSsrInput& input, SatposSsrOutput& out) {
+#if GNSSPP_HAS_CLASLIB_BRIDGE
+    out = SatposSsrOutput{};
+    if (input.sat <= 0 || input.sat > MAXSAT) {
+        return false;
+    }
+
+    eph_t eph = {};
+    fillClasEph(input.eph, eph);
+    nav_t nav = {};
+    nav.n = 1;
+    nav.nmax = 1;
+    nav.eph = &eph;
+    nav.rtcmmode = RTCMMODE_CSSR;
+    fillClasSsr(input.ssr, nav.ssr_ch[0][input.sat - 1]);
+
+    clearsatcorr();
+    set_cssr_ch_idx(0);
+    saveposition(input.receiver_position);
+
+    const int ephopt =
+        input.apply_satellite_antenna_offset ? EPHOPT_SSRCOM : EPHOPT_SSRAPC;
+    return ::satpos(toClasTime(input.time),
+                    toClasTime(input.teph),
+                    input.sat,
+                    ephopt,
+                    &nav,
+                    out.rs,
+                    out.dts,
+                    &out.variance,
+                    &out.svh) != 0;
+#else
+    (void)input;
     out = SatposSsrOutput{};
     return false;
+#endif
 }
 
 bool corrmeas(const libgnss::clasnat_parity::CorrmeasInput& input, CorrmeasOutput& out) {
