@@ -31,11 +31,12 @@ namespace libgnss::ppp_claslib_full {
 namespace {
 
 constexpr double kIonoInitM = 1e-6;
-constexpr double kIonoInitVariance = 1e-4;
+constexpr double kIonoInitVariance = 0.010 * 0.010;
 constexpr double kIonoProcessMPerSqrtS = 1e-3;
-constexpr double kIonoAdaptiveProcessMaxM = 0.005;
-constexpr double kIonoAdaptiveForget = 0.5;
-constexpr double kIonoAdaptiveGain = 1.0;
+constexpr double kIonoAdaptiveProcessMaxM = 0.050;
+constexpr double kIonoAdaptiveForget = 0.3;
+constexpr double kIonoAdaptiveGain = 3.0;
+constexpr double kIonoTimeConstantS = 10.0;
 constexpr double kBiasInitStdCycles = 100.0;
 constexpr double kBiasProcessCyclesPerSqrtS = 1e-3;
 constexpr double kClaslibPositionInitVariance = 30.0 * 30.0;
@@ -43,9 +44,9 @@ constexpr int kMinLockForAr = 1;
 constexpr int kMaxAmbOutage = 90;
 constexpr double kElevationMaskRad = 15.0 * M_PI / 180.0;
 constexpr int kResidualFreqCount = 2;
-constexpr double kResidualRejectSigma = 4.0;
-constexpr double kDispersiveRejectSigma = 6.0;
-constexpr double kNonDispersiveRejectSigma = 6.0;
+constexpr double kResidualRejectSigma = 2.0;
+constexpr double kDispersiveRejectSigma = 3.0;
+constexpr double kNonDispersiveRejectSigma = 3.0;
 
 struct AppliedCorrections {
     double code_m = 0.0;
@@ -317,8 +318,8 @@ bool shouldDumpFullStateTime(const GNSSTime& time) {
     if (time.week != 2068) {
         return false;
     }
-    return std::abs(time.tow - 230420.0) <= 1e-6 ||
-           std::abs(time.tow - 230425.0) <= 1e-6 ||
+    return (time.tow >= 230420.0 - 1e-6 &&
+            time.tow <= 230425.0 + 1e-6) ||
            std::abs(time.tow - 231420.0) <= 1e-6 ||
            std::abs(time.tow - 232419.0) <= 1e-6;
 }
@@ -969,6 +970,18 @@ void predictPosition(ClaslibRtkState& rtk,
 void predictIonosphere(ClaslibRtkState& rtk,
                        const std::vector<OSRCorrection>& osr_corrections,
                        double dt) {
+    if (dt > 0.0 && kIonoTimeConstantS > 0.0) {
+        const double ki = std::exp(-dt / kIonoTimeConstantS);
+        for (const auto& [_, idx] : rtk.ionosphere_indices) {
+            if (idx < 0 || idx >= kClasNx ||
+                rtk.x(idx) == 0.0 || rtk.P(idx, idx) <= 0.0) {
+                continue;
+            }
+            rtk.x(idx) *= ki;
+            rtk.P.row(idx) *= ki;
+            rtk.P.col(idx) *= ki;
+        }
+    }
     for (const auto& osr : osr_corrections) {
         if (!osr.valid) {
             continue;
