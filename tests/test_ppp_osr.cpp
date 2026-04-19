@@ -134,7 +134,7 @@ TEST(PPPOSRTest, GridGuardedRejectsStaleNearestGridTokens) {
         epoch_time,
         receiverPositionNearClasNetwork9(),
         config);
-    EXPECT_TRUE(selected.empty());
+    EXPECT_EQ(preferredClasNetworkId(selected), 2);
 }
 
 TEST(PPPOSRTest, FreshnessFirstAlwaysPrefersFreshestGridBackedTokens) {

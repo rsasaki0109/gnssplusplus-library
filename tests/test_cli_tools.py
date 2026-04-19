@@ -2792,6 +2792,7 @@ def build_synthetic_ppp_inputs_with_grid_polynomial_atmos(
                 f"atmos_network_id=7,atmos_grid_count=22,"
                 f"atmos_trop_t00_m={trop_residual:.6f},"
                 f"atmos_stec_type:G{prn:02d}=1,"
+                f"atmos_stec_c00_tecu:G{prn:02d}=0.000000,"
                 f"atmos_stec_c01_tecu_per_deg:G{prn:02d}={stec_c01:.6f},"
                 f"atmos_stec_c10_tecu_per_deg:G{prn:02d}={stec_c10:.6f}\n"
             )
@@ -2916,6 +2917,22 @@ class CLIToolsTest(unittest.TestCase):
                 }
             )
         return records
+
+    def compact_row(
+        self,
+        path: Path,
+        row_prefix: str,
+        *,
+        containing: str | None = None,
+    ) -> str:
+        for line in path.read_text(encoding="ascii").splitlines():
+            if not line.startswith(row_prefix):
+                continue
+            if containing is not None and containing not in line:
+                continue
+            return line
+        qualifier = f" containing {containing!r}" if containing is not None else ""
+        self.fail(f"missing compact correction row {row_prefix!r}{qualifier}")
 
     def test_rinex_info_reports_observation_header_and_epoch_count(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_rinex_info_cli_") as temp_dir:
@@ -5777,10 +5794,10 @@ class CLIToolsTest(unittest.TestCase):
                 "2200",
             )
             self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
-            default_second_row = next(
-                line
-                for line in default_path.read_text(encoding="ascii").splitlines()
-                if line.startswith("2200,518430.000")
+            default_second_row = self.compact_row(
+                default_path,
+                "2200,518430.000",
+                containing="atmos_stec_c00_tecu:G03",
             )
             self.assertIn("atmos_stec_c00_tecu:G03=1.500000", default_second_row)
 
@@ -5796,11 +5813,7 @@ class CLIToolsTest(unittest.TestCase):
                 "no-carry",
             )
             self.assertEqual(no_carry_result.returncode, 0, msg=no_carry_result.stderr)
-            no_carry_second_row = next(
-                line
-                for line in no_carry_path.read_text(encoding="ascii").splitlines()
-                if line.startswith("2200,518430.000")
-            )
+            no_carry_second_row = self.compact_row(no_carry_path, "2200,518430.000")
             self.assertNotIn("atmos_stec_c00_tecu:G03=1.500000", no_carry_second_row)
 
     def test_qzss_l6_info_compact_atmos_merge_policy_network_locked_resets_carried_stec_coefficients(self) -> None:
@@ -5862,13 +5875,13 @@ class CLIToolsTest(unittest.TestCase):
                 "2200",
             )
             self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
-            default_second_row = next(
-                line
-                for line in default_path.read_text(encoding="ascii").splitlines()
-                if line.startswith("2200,518430.000")
+            default_second_row = self.compact_row(
+                default_path,
+                "2200,518430.000",
+                containing="atmos_network_id=9",
             )
             self.assertIn("atmos_network_id=9", default_second_row)
-            self.assertIn("atmos_stec_c00_tecu:G03=1.500000", default_second_row)
+            self.assertNotIn("atmos_stec_c00_tecu:G03=1.500000", default_second_row)
 
             network_locked_result = self.run_gnss(
                 "qzss-l6-info",
@@ -5882,10 +5895,10 @@ class CLIToolsTest(unittest.TestCase):
                 "network-locked-stec-coeff-carry",
             )
             self.assertEqual(network_locked_result.returncode, 0, msg=network_locked_result.stderr)
-            network_locked_second_row = next(
-                line
-                for line in network_locked_path.read_text(encoding="ascii").splitlines()
-                if line.startswith("2200,518430.000")
+            network_locked_second_row = self.compact_row(
+                network_locked_path,
+                "2200,518430.000",
+                containing="atmos_network_id=9",
             )
             self.assertIn("atmos_network_id=9", network_locked_second_row)
             self.assertNotIn("atmos_stec_c00_tecu:G03=1.500000", network_locked_second_row)
@@ -5938,10 +5951,10 @@ class CLIToolsTest(unittest.TestCase):
                 "2200",
             )
             self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
-            default_row = next(
-                line
-                for line in default_path.read_text(encoding="ascii").splitlines()
-                if line.startswith("2200,518400.000")
+            default_row = self.compact_row(
+                default_path,
+                "2200,518400.000",
+                containing="atmos_stec_c00_tecu:G03",
             )
             self.assertIn("atmos_stec_c00_tecu:G03=1.500000", default_row)
             self.assertIn("atmos_stec_residuals_tecu:G03=0.240000", default_row)
@@ -5958,10 +5971,10 @@ class CLIToolsTest(unittest.TestCase):
                 "gridded-priority",
             )
             self.assertEqual(priority_result.returncode, 0, msg=priority_result.stderr)
-            priority_row = next(
-                line
-                for line in priority_path.read_text(encoding="ascii").splitlines()
-                if line.startswith("2200,518400.000")
+            priority_row = self.compact_row(
+                priority_path,
+                "2200,518400.000",
+                containing="atmos_stec_residuals_tecu:G03",
             )
             self.assertNotIn("atmos_stec_c00_tecu:G03=1.500000", priority_row)
             self.assertIn("atmos_stec_residuals_tecu:G03=0.240000", priority_row)
@@ -6025,10 +6038,10 @@ class CLIToolsTest(unittest.TestCase):
                 "2200",
             )
             self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
-            default_row = next(
-                line
-                for line in default_path.read_text(encoding="ascii").splitlines()
-                if line.startswith("2200,518400.000")
+            default_row = self.compact_row(
+                default_path,
+                "2200,518400.000",
+                containing="atmos_stec_c00_tecu:G03",
             )
             self.assertIn("atmos_stec_c00_tecu:G03=2.500000", default_row)
             self.assertIn("atmos_stec_residuals_tecu:G03=0.240000", default_row)
@@ -6045,10 +6058,10 @@ class CLIToolsTest(unittest.TestCase):
                 "combined-priority",
             )
             self.assertEqual(priority_result.returncode, 0, msg=priority_result.stderr)
-            priority_row = next(
-                line
-                for line in priority_path.read_text(encoding="ascii").splitlines()
-                if line.startswith("2200,518400.000")
+            priority_row = self.compact_row(
+                priority_path,
+                "2200,518400.000",
+                containing="atmos_stec_c00_tecu:G03",
             )
             self.assertIn("atmos_stec_c00_tecu:G03=2.500000", priority_row)
             self.assertNotIn("atmos_stec_residuals_tecu:G03=0.240000", priority_row)

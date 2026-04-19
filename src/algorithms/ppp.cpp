@@ -1471,6 +1471,18 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
                 sampled.orbit_valid = true;
                 sampled.clock_valid = true;
                 ssr_products_.addCorrection(sampled);
+                if (merged.has_high_rate_clock) {
+                    auto& entries = ssr_products_.orbit_clock_corrections[sampled.satellite];
+                    for (auto& entry : entries) {
+                        if (std::abs(entry.time - sampled.time) < 1e-6 &&
+                            entry.bias_network_id == sampled.bias_network_id &&
+                            entry.atmos_network_id == sampled.atmos_network_id) {
+                            entry.clock_correction_m = sampled.clock_correction_m;
+                            entry.clock_valid = true;
+                            break;
+                        }
+                    }
+                }
                 ++sampled_corrections;
             }
         }
