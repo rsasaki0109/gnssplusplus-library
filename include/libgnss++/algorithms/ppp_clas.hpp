@@ -178,19 +178,6 @@ void predictFilterState(
     double seed_receiver_clock_bias_m,
     bool seed_valid);
 
-void udstatePppPorted(
-    const ObservationData& obs,
-    const std::vector<OSRCorrection>& osr_corrections,
-    ppp_shared::PPPState& filter_state,
-    const ppp_shared::PPPConfig& config,
-    double tt,
-    const PositionSolution& seed_solution,
-    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
-    std::map<SatelliteId, CLASDispersionCompensationInfo>& dispersion_compensation,
-    std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair,
-    double ambiguity_reset_variance,
-    bool debug_enabled = false);
-
 void markSlipCompensationFromAmbiguities(
     const ObservationData& obs,
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,

@@ -238,6 +238,48 @@ jobs:
           output/visibility_static.png
         if-no-files-found: ignore
 
+  clasnat-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Checkout CLASLIB
+      uses: actions/checkout@v4
+      with:
+        repository: QZSS-Strategy-Office/claslib
+        ref: c28c86f9bd7c908b15dd90d8544b338aa763bed5
+        path: external/claslib
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libeigen3-dev libgtest-dev cmake build-essential python3-dev pybind11-dev libblas-dev liblapack-dev
+
+    - name: Configure CMake with CLASLIB parity link
+      run: |
+        cmake -B build-clasnat-parity \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCLASLIB_PARITY_LINK=ON \
+          -DCLASLIB_ROOT_DIR="${GITHUB_WORKSPACE}/external/claslib"
+
+    - name: Build ClasnatParity tests
+      run: cmake --build build-clasnat-parity --config Release --parallel --target run_tests
+
+    - name: Run ClasnatParity
+      working-directory: build-clasnat-parity
+      run: ./tests/run_tests --gtest_filter='*ClasnatParity*'
+
+    - name: Upload ClasnatParity logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: clasnat-parity-logs
+        path: |
+          build-clasnat-parity/Testing/**/*
+          build-clasnat-parity/CMakeFiles/CMakeConfigureLog.yaml
+        if-no-files-found: ignore
+
   static-analysis:
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -108,9 +108,6 @@ struct PPPConfig {
     bool wlnl_strict_claslib_parity = false;
     bool use_ported_full = false;
     bool use_ported_clasnat = false;
-    bool use_ported_pntpos = false;
-    bool use_ported_udstate = false;
-    bool use_ported_zdres = false;
     std::string strict_first_ar_dump_path;
 
     // Motion model

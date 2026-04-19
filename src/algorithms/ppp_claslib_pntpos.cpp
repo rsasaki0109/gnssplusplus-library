@@ -1208,7 +1208,7 @@ bool estpos(std::vector<PntObservation> observations,
                      v, H, var, statuses, ns);
         if (options.debug_dump && shouldDumpPntpos(time)) {
             std::cerr << std::setprecision(12)
-                      << "[CLAS-SPP-ITER] source=lib port=ported_pntpos"
+                      << "[CLAS-SPP-ITER] source=lib port=claslib_pntpos"
                       << " week=" << time.week
                       << " tow=" << time.tow
                       << " iter=" << iter
@@ -1404,7 +1404,7 @@ const char* dumpPath() {
 std::string formatSeedDump(const GNSSTime& time, const PntposResult& result) {
     std::ostringstream ss;
     ss << std::setprecision(18)
-       << "[CLAS-SPP-SEED] source=lib port=ported_pntpos"
+       << "[CLAS-SPP-SEED] source=lib port=claslib_pntpos"
        << " week=" << time.week
        << " tow=" << time.tow
        << " stat=" << result.stat

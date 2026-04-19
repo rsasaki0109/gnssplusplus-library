@@ -21,6 +21,15 @@ class WorkflowRegressionTest(unittest.TestCase):
         self.assertIn("if: failure()", workflow)
         self.assertIn("build/Testing/**/*", workflow)
 
+    def test_ci_workflow_runs_clasnat_parity_against_checked_out_claslib(self) -> None:
+        workflow = (ROOT_DIR / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        self.assertIn("clasnat-parity:", workflow)
+        self.assertIn("repository: QZSS-Strategy-Office/claslib", workflow)
+        self.assertIn("path: external/claslib", workflow)
+        self.assertIn("-DCLASLIB_PARITY_LINK=ON", workflow)
+        self.assertIn('-DCLASLIB_ROOT_DIR="${GITHUB_WORKSPACE}/external/claslib"', workflow)
+        self.assertIn("--gtest_filter='*ClasnatParity*'", workflow)
+
     def test_docs_workflow_builds_on_pr_and_deploys_only_from_develop_push(self) -> None:
         workflow = (ROOT_DIR / ".github" / "workflows" / "docs.yml").read_text(encoding="utf-8")
         self.assertRegex(workflow, r"pull_request:\s*\n\s*branches:\s*\[\s*main,\s*develop\s*\]")
