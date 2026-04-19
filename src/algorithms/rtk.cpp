@@ -1353,6 +1353,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
 
             if (!moving_base_mode &&
                 !applied_fix_solution &&
+                rtk_config_.ar_policy != RTKConfig::ARPolicy::DEMO5_CONTINUOUS &&
                 rtk_validation::canAttemptHoldFix(consecutive_fix_count_,
                                                   rtk_config_.min_hold_count,
                                                   saved_hold_state.has_last_fixed_position,
@@ -1674,8 +1675,10 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
 
     // Use lower ratio threshold when holdamb is active (more confidence in solution)
     double effective_ratio_threshold = rtk_config_.ambiguity_ratio_threshold;
-    if (consecutive_fix_count_ >= rtk_config_.min_hold_count && has_last_fixed_position_) {
-        effective_ratio_threshold = 2.0;
+    if (rtk_config_.ar_policy != RTKConfig::ARPolicy::DEMO5_CONTINUOUS) {
+        if (consecutive_fix_count_ >= rtk_config_.min_hold_count && has_last_fixed_position_) {
+            effective_ratio_threshold = 2.0;
+        }
     }
 
     // Standard LAMBDA path
@@ -1837,9 +1840,11 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     best_candidate.dd_fixed = dd_fixed;
 
     const bool search_preferred_subsets =
+        rtk_config_.ar_policy != RTKConfig::ARPolicy::DEMO5_CONTINUOUS &&
         rtk_ar_evaluation::shouldSearchPreferredSubsets(
             fixed, ratio, effective_ratio_threshold);
     const bool search_drop_subsets =
+        rtk_config_.ar_policy != RTKConfig::ARPolicy::DEMO5_CONTINUOUS &&
         rtk_ar_evaluation::shouldSearchDropSubsets(
             fixed, ratio, effective_ratio_threshold, max_var);
 
@@ -2288,6 +2293,11 @@ bool RTKProcessor::lambdaMethod(const VectorXd& float_ambiguities, const MatrixX
     VectorXd& fixed_ambiguities, double& success_rate) {
     int n = float_ambiguities.size();
     if (n == 0 || n > MAXSAT * 2) return false;
+
+    if (rtk_config_.ar_policy == RTKConfig::ARPolicy::DEMO5_CONTINUOUS) {
+        // demo5-continuous: pass raw covariance directly to LAMBDA (no regularization)
+        return lambdaSearch(float_ambiguities, covariance, fixed_ambiguities, success_rate);
+    }
 
     // Regularize covariance to ensure positive-definiteness for LAMBDA
     MatrixXd Q_reg = covariance;
