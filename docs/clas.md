@@ -24,7 +24,7 @@ The stable public surface today is CLI-first.
 
 | Command / script | Role | Main output |
 | --- | --- | --- |
-| `gnss ppp --claslib-parity` | Run the strict parity-oriented PPP preset | `.pos`, `summary-json`, debug stderr |
+| `gnss ppp --claslib-parity` | Run the strict parity-oriented PPP preset on the native CLASNAT path | `.pos`, `summary-json`, debug stderr |
 | `gnss clas-ppp` | CLAS-oriented PPP workflow entrypoint | `.pos`, summary artifacts |
 | `gnss qzss-l6-info` | Decode raw `QZSS L6 / Compact SSR` into inspectable rows | CSV / text diagnostics |
 | `scripts/run_gnss_ppp_claslib_parity.sh` | Thin wrapper that pins the CLAS parity preset | parity `.pos`, summary JSON |
@@ -63,6 +63,9 @@ These are the knobs that define the main runtime boundary and are reasonable to
 document as first-class CLAS API:
 
 - `--claslib-parity`
+- `--ported-clasnat`
+- `--legacy-strict-parity`
+- `--no-ported-clasnat`
 - `--clas-epoch-policy`
 - `--clas-osr-application`
 - `--clas-phase-continuity`
@@ -85,6 +88,7 @@ These are valuable for parity work, but should be treated as tuning and
 verification controls rather than long-term stable public API:
 
 - compact merge/composition/bank/materialization policy flags
+- `--ported-full`, the deprecated compatibility alias for `--ported-clasnat`
 - debug stderr streams such as `[OSR]`, `[CLAS-PHASE-ROW]`, `[PPP-WLNL-COMP]`
 - parity-only wrappers and temporary strategy combinations used by issue work
 

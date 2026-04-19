@@ -62,11 +62,12 @@ struct Options {
     std::string clas_residual_sampling = "indexed-or-mean";
     std::string clas_atmos_selection = "grid-first";
     double clas_atmos_stale_after_seconds = 15.0;
-    /// Single-switch preset to align with CLASLIB-style PPP-RTK (strict OSR, uncombined, iono, WLNL AR).
+    /// Single-switch preset to align with CLASLIB-style PPP-RTK; defaults to native CLASNAT.
     bool claslib_parity = false;
     bool claslib_bridge = false;
     bool ported_full = false;
     bool ported_clasnat = false;
+    bool legacy_strict_parity = false;
     std::string claslib_config_path;
     int claslib_l6_week = 0;
     bool kinematic_mode = false;
@@ -74,9 +75,54 @@ struct Options {
     bool enable_ar = false;
     std::string ar_method = "dd-iflc";
     double ar_ratio_threshold = 3.0;
+    bool ar_method_explicit = false;
     bool ar_ratio_threshold_explicit = false;
     bool quiet = false;
 };
+
+void applyClaslibParityPreset(Options& options) {
+    options.claslib_parity = true;
+    options.use_clas_osr_filter = true;
+    options.clas_epoch_policy_explicit = true;
+    options.clas_epoch_policy = "strict-osr";
+    options.use_ionosphere_free = false;
+    options.estimate_ionosphere = true;
+    options.clas_atmos_selection = "grid-first";
+    options.estimate_troposphere = false;
+    options.enable_ar = true;
+    if (!options.ar_method_explicit) {
+        options.ar_method = "dd-wlnl";
+    }
+    options.ar_ratio_threshold = 10.0;
+}
+
+void applyPortedClasnatPreset(Options& options) {
+    options.ported_clasnat = true;
+    options.legacy_strict_parity = false;
+    options.use_clas_osr_filter = true;
+    options.clas_epoch_policy_explicit = true;
+    options.clas_epoch_policy = "strict-osr";
+    options.use_ionosphere_free = false;
+    options.estimate_ionosphere = true;
+    options.estimate_troposphere = false;
+    options.clas_atmos_selection = "grid-first";
+    options.enable_ar = true;
+    if (!options.ar_method_explicit) {
+        options.ar_method = "dd-per-freq";
+    }
+}
+
+void applyLegacyStrictParityOptOut(Options& options) {
+    options.legacy_strict_parity = true;
+    options.ported_clasnat = false;
+    options.ported_full = false;
+    if (options.claslib_parity) {
+        options.enable_ar = true;
+        if (!options.ar_method_explicit) {
+            options.ar_method = "dd-wlnl";
+        }
+    }
+}
 
 void printUsage(const char* program_name) {
     std::cout
@@ -104,13 +150,15 @@ void printUsage(const char* program_name) {
         << "  --ref-x <meters>        Override receiver reference ECEF X used for CLAS grid selection\n"
         << "  --ref-y <meters>        Override receiver reference ECEF Y used for CLAS grid selection\n"
         << "  --ref-z <meters>        Override receiver reference ECEF Z used for CLAS grid selection\n"
-        << "  --claslib-parity         CLASLIB-oriented preset: --clas-osr, strict-osr (no hybrid default),\n"
+        << "  --claslib-parity         CLASLIB-oriented preset using the native CLASNAT path by default:\n"
         << "                          --no-ionosphere-free, --estimate-ionosphere, --clas-atmos-selection grid-first,\n"
-        << "                          troposphere on, --enable-ar --ar-method dd-wlnl. Override any piece after this flag.\n"
+        << "                          troposphere off, --enable-ar --ar-method dd-per-freq. Override any piece after this flag.\n"
+        << "  --legacy-strict-parity   Use the pre-CLASNAT strict parity path for --claslib-parity\n"
+        << "  --no-ported-clasnat      Opt out of the default native CLASNAT path for --claslib-parity\n"
         << "  --claslib-bridge         Delegate this run to linked CLASLIB postpos() (requires CMake -DCLASLIB_PARITY_LINK=ON)\n"
         << "  --no-claslib-bridge      Keep the native libgnss++ path even when CLASLIB bridge support is linked\n"
         << "  --ported-full            Deprecated alias for --ported-clasnat\n"
-        << "  --ported-clasnat         Use the native CLASLIB transcription path\n"
+        << "  --ported-clasnat         Explicitly use the native CLASNAT transcription path\n"
         << "  --claslib-config <file>  CLASLIB rnx2rtkp config for --claslib-bridge (default: CLASLIB static.conf)\n"
         << "  --claslib-l6-week <week> Override CLASLIB L6 GPS week for --claslib-bridge\n"
         << "  --out <solution.pos>     Output position file (required)\n"
@@ -238,44 +286,22 @@ Options parseArguments(int argc, char* argv[]) {
             options.has_ref_z = true;
             options.ref_z_m = std::stod(argv[++i]);
         } else if (arg == "--claslib-parity") {
-            options.claslib_parity = true;
-            options.use_clas_osr_filter = true;
-            options.clas_epoch_policy_explicit = true;
-            options.clas_epoch_policy = "strict-osr";
-            options.use_ionosphere_free = false;
-            options.estimate_ionosphere = true;
-            options.clas_atmos_selection = "grid-first";
-            options.estimate_troposphere = false;
-            options.enable_ar = true;
-            options.ar_method = "dd-wlnl";
-            options.ar_ratio_threshold = 10.0;
+            applyClaslibParityPreset(options);
         } else if (arg == "--claslib-bridge") {
             options.claslib_bridge = true;
         } else if (arg == "--no-claslib-bridge") {
             options.claslib_bridge = false;
+        } else if (arg == "--legacy-strict-parity" ||
+                   arg == "--legacy-claslib-parity") {
+            applyClaslibParityPreset(options);
+            applyLegacyStrictParityOptOut(options);
+        } else if (arg == "--no-ported-clasnat") {
+            applyLegacyStrictParityOptOut(options);
         } else if (arg == "--ported-full") {
             options.ported_full = true;
-            options.ported_clasnat = true;
-            options.use_clas_osr_filter = true;
-            options.clas_epoch_policy_explicit = true;
-            options.clas_epoch_policy = "strict-osr";
-            options.use_ionosphere_free = false;
-            options.estimate_ionosphere = true;
-            options.estimate_troposphere = false;
-            options.clas_atmos_selection = "grid-first";
-            options.enable_ar = true;
-            options.ar_method = "dd-per-freq";
+            applyPortedClasnatPreset(options);
         } else if (arg == "--ported-clasnat") {
-            options.ported_clasnat = true;
-            options.use_clas_osr_filter = true;
-            options.clas_epoch_policy_explicit = true;
-            options.clas_epoch_policy = "strict-osr";
-            options.use_ionosphere_free = false;
-            options.estimate_ionosphere = true;
-            options.estimate_troposphere = false;
-            options.clas_atmos_selection = "grid-first";
-            options.enable_ar = true;
-            options.ar_method = "dd-per-freq";
+            applyPortedClasnatPreset(options);
         } else if (arg == "--claslib-config" && i + 1 < argc) {
             options.claslib_config_path = argv[++i];
         } else if (arg == "--claslib-l6-week" && i + 1 < argc) {
@@ -331,6 +357,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.enable_ar = false;
         } else if (arg == "--ar-method" && i + 1 < argc) {
             options.ar_method = argv[++i];
+            options.ar_method_explicit = true;
         } else if (arg == "--ar-ratio-threshold" && i + 1 < argc) {
             options.ar_ratio_threshold = std::stod(argv[++i]);
             options.ar_ratio_threshold_explicit = true;
@@ -355,6 +382,10 @@ Options parseArguments(int argc, char* argv[]) {
         if (!(options.has_ref_x && options.has_ref_y && options.has_ref_z)) {
             argumentError("--ref-x, --ref-y, and --ref-z must be provided together", argv[0]);
         }
+    }
+    if (options.claslib_parity && !options.claslib_bridge &&
+        !options.legacy_strict_parity && !options.ported_clasnat) {
+        applyPortedClasnatPreset(options);
     }
     if (options.nav_path.empty() && options.sp3_path.empty()) {
         argumentError("provide at least one of --nav or --sp3", argv[0]);
@@ -724,6 +755,10 @@ int main(int argc, char* argv[]) {
                 summary << "{\n"
                         << "  \"claslib_parity\": "
                         << (options.claslib_parity ? "true" : "false") << ",\n"
+                        << "  \"ported_clasnat\": "
+                        << (options.ported_clasnat ? "true" : "false") << ",\n"
+                        << "  \"legacy_strict_parity\": "
+                        << (options.legacy_strict_parity ? "true" : "false") << ",\n"
                         << "  \"claslib_bridge\": true,\n"
                         << "  \"claslib_bridge_status\": " << bridge_status << ",\n"
                         << "  \"claslib_config\": "
@@ -1057,6 +1092,7 @@ int main(int argc, char* argv[]) {
                     << "  \"clas_atmos_stale_after_seconds\": " << options.clas_atmos_stale_after_seconds << ",\n"
                     << "  \"ported_clasnat\": " << (options.ported_clasnat ? "true" : "false") << ",\n"
                     << "  \"ported_full\": " << (options.ported_full ? "true" : "false") << ",\n"
+                    << "  \"legacy_strict_parity\": " << (options.legacy_strict_parity ? "true" : "false") << ",\n"
                     << "  \"ambiguity_resolution_enabled\": " << (options.enable_ar ? "true" : "false") << ",\n"
                     << "  \"ar_method\": \"" << jsonEscape(options.ar_method) << "\",\n"
                     << "  \"ar_ratio_threshold\": " << options.ar_ratio_threshold << ",\n"
@@ -1108,7 +1144,11 @@ int main(int argc, char* argv[]) {
 
         if (!options.quiet) {
             if (options.claslib_parity) {
-                std::cout << "CLASLIB parity preset: strict CLAS OSR, uncombined + iono, WLNL AR (override with later flags)\n";
+                std::cout << "CLASLIB parity preset: strict CLAS OSR, uncombined + iono, "
+                          << (options.legacy_strict_parity ?
+                                  "legacy WLNL AR path" :
+                                  "native CLASNAT path")
+                          << " (override with later flags)\n";
             }
             std::cout << "PPP summary:\n";
             std::cout << "  processed epochs: " << processed_epochs << "\n";

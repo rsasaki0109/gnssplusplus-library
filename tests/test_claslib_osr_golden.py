@@ -280,6 +280,7 @@ def _run_parity_debug(max_epochs: int = 2) -> subprocess.CompletedProcess[str]:
                 str(REF_Z),
                 "--max-epochs",
                 str(max_epochs),
+                "--legacy-strict-parity",
             ],
             cwd=ROOT_DIR,
             env=env,
@@ -320,6 +321,7 @@ def _run_parity_debug_with_summary(max_epochs: int) -> tuple[subprocess.Complete
                 str(REF_Z),
                 "--max-epochs",
                 str(max_epochs),
+                "--legacy-strict-parity",
             ],
             cwd=ROOT_DIR,
             env=env,
@@ -514,6 +516,8 @@ class ClaslibOsrGoldenIntegrationTest(unittest.TestCase):
         for field, golden in GOLDEN_30_SUMMARY.items():
             self.assertIn(field, summary)
             self.assertEqual(summary[field], golden)
+        self.assertTrue(summary.get("legacy_strict_parity"))
+        self.assertFalse(summary.get("ported_clasnat"))
 
         last_clas_ppp = _collect_last_named_row(run.stderr, "[CLAS-PPP]")
         self.assertIsNotNone(last_clas_ppp, msg=run.stderr)

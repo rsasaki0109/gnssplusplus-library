@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 #
 # 日本語要約:
-#   「CLASLIB寄りのPPP設定」を一発で付けた gnss_ppp ラッパ。strict OSR・非IF・電離層推定・dd-wlnl 等。
+#   「CLASLIB寄りのPPP設定」を一発で付けた gnss_ppp ラッパ。既定は native CLASNAT path。
 #   以降の引数はそのまま gnss_ppp に渡る（--obs / --out / --ssr などは呼び出し側で付ける）。
 #
-# Run gnss_ppp with --claslib-parity (strict CLAS OSR preset: uncombined iono, dd-wlnl AR, etc.).
-# Pass all solver arguments after this wrapper; do not repeat --claslib-parity unless overriding later flags.
+# Run gnss_ppp with --claslib-parity (strict CLAS OSR preset, native CLASNAT by default).
+# Pass all solver arguments after this wrapper. Add --legacy-strict-parity or --no-ported-clasnat
+# after the wrapper arguments only when comparing against the older strict path.
 #
 # Bin lookup (first set wins):
 #   GNSS_PPP, GNSS_PPP_BIN, or <repo>/build/gnss_ppp

@@ -42,6 +42,11 @@ What this gives you:
 - `parity_summary.json`
 - debug stderr if `GNSS_PPP_DEBUG=1`
 
+`--claslib-parity` now uses the native CLASNAT transcription path by default.
+`--ported-clasnat` is still accepted but redundant.  Add
+`--legacy-strict-parity` or `--no-ported-clasnat` only when intentionally
+re-running the older strict CLAS OSR path for regression comparison.
+
 ## 3. Inspect raw Compact SSR or expanded rows
 
 To inspect the transport side before PPP:
@@ -100,6 +105,9 @@ The full map lives on [CLAS Debug Tag Playbook](clas_debug_playbook.md).
 The most important stable CLAS-facing knobs on `gnss ppp` are:
 
 - `--claslib-parity`
+- `--ported-clasnat`
+- `--legacy-strict-parity`
+- `--no-ported-clasnat`
 - `--clas-epoch-policy`
 - `--clas-osr-application`
 - `--clas-phase-continuity`

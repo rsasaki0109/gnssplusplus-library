@@ -1,14 +1,15 @@
 # CLAS Port Architecture
 
-Status: iter51 cleanup note.
+Status: iter52 default-promotion note.
 
-This note records the CLASLIB port structure after the iter48-50 native
-CLASNAT parity work.  The intent is to make the remaining historical layers
-explicit before continuing the native-port cleanup.
+This note records the CLASLIB port structure after the iter52 promotion of the
+native CLASNAT path to the default `--claslib-parity` behavior.  The intent is
+to keep the production path, bridge/oracle path, and retained legacy strict path
+explicit while cleanup continues.
 
 ## 1. Current Architecture
 
-The current CLAS PPP-RTK stack has four user-visible or historically relevant
+The current CLAS PPP-RTK stack has five user-visible or historically relevant
 paths:
 
 ```text
@@ -20,9 +21,22 @@ gnss_ppp
   |           Native libgnss++ state is bypassed.
   |           This path remains the oracle/reference integration.
   |
+  +-- --claslib-parity
+  |     |
+  |     +-- native CLASNAT path by default
+  |           |
+  |           +-- ppp_clasnat wrapper
+  |                 |
+  |                 +-- ppp_claslib_full core
+  |                       |
+  |                       +-- ppp_clasnat_osr
+  |                       +-- ppp_clasnat_zdres
+  |                       +-- ppp_clasnat_trop
+  |                       +-- clasnat_parity helpers
+  |
   +-- --ported-clasnat
   |     |
-  |     +-- ppp_clasnat wrapper
+  |     +-- explicit alias for the same native CLASNAT path
   |           |
   |           +-- ppp_claslib_full core
   |                 |
@@ -36,19 +50,20 @@ gnss_ppp
   |     +-- ppp_claslib_full core directly
   |           Legacy regression arm from the Phase 4 unification work.
   |
-  +-- --claslib-parity / strict CLAS OSR
+  +-- --claslib-parity --legacy-strict-parity
         |
         +-- older native CLAS OSR filter path
               Useful as history and for selected debug fixtures, but no
               longer the target architecture for CLASNAT parity.
 ```
 
-The important practical difference before iter51 is that
-`--ported-clasnat` enters a wrapper, normalizes the PPP configuration into the
-CLASNAT native preset, then delegates to the old `ppp_claslib_full` core.
-`--ported-full` skips the wrapper and calls the same core through a different
-state member.  That makes the implementation look like two native paths even
-though the successful production path is the CLASNAT preset.
+The important practical difference after iter52 is that `--claslib-parity`
+now enters the same native CLASNAT wrapper that was previously selected only
+with `--ported-clasnat`.  `--ported-clasnat` remains valid but redundant for
+explicit scripts.  `--no-ported-clasnat` and `--legacy-strict-parity` reserve
+the older strict CLAS OSR path for regression/reference work.  `--ported-full`
+still skips the wrapper and calls the same core through a different state member
+as a deprecated compatibility alias.
 
 Bridge-related code is separate:
 
@@ -65,7 +80,8 @@ function-level reference for native helper tests.
 
 ## 2. Native Port Completion Status
 
-The native `--ported-clasnat` path has reached the current numeric target:
+The native CLASNAT path has reached the current numeric target and is now the
+default for `--claslib-parity`:
 
 - 7 `ClasnatParity` helper tests pass against the oracle.
 - 2000-epoch 2019 CLAS static run stays at the fixed-only 3D RMS target
@@ -111,7 +127,7 @@ The remaining debt is mostly structural rather than numeric:
   one wrapper state for `--ported-clasnat`, and one core state for
   `--ported-full`.
 - `--ported-full` exists as a regression arm even though the maintained native
-  target is `--ported-clasnat`.
+  target is now `--claslib-parity` entering the CLASNAT core.
 - Naming mixes CLASLIB-origin terms and CLASNAT terms:
   `ClaslibRtkState`, `ppp_claslib_full`, `fullConfig`, and debug labels sit
   next to `ppp_clasnat_osr`, `ppp_clasnat_trop`, and `clasnat_parity`.
@@ -128,7 +144,7 @@ The remaining debt is mostly structural rather than numeric:
 The target is a single native CLASNAT path:
 
 ```text
-gnss_ppp --ported-clasnat
+gnss_ppp --claslib-parity
   |
   +-- ppp_clasnat_core
         |
@@ -145,6 +161,8 @@ gnss_ppp --ported-clasnat
               Small native CLASLIB-equivalent math/helpers.
 
 optional references:
+  --ported-clasnat -> explicit native CLASNAT selection, redundant with --claslib-parity
+  --legacy-strict-parity / --no-ported-clasnat -> older strict CLAS OSR path
   --claslib-bridge -> external CLASLIB whole-run oracle
   claslib_oracle   -> direct function oracle for tests
 ```
@@ -152,7 +170,11 @@ optional references:
 Rules for the target structure:
 
 - There is one production native core: `ppp_clasnat_core`.
-- `--ported-clasnat` is the canonical CLI switch for that core.
+- `--claslib-parity` is the canonical user-facing switch for that core.
+- `--ported-clasnat` remains accepted as an explicit, redundant native path
+  selector for existing scripts.
+- `--legacy-strict-parity` and `--no-ported-clasnat` retain the iter13-era
+  strict path for archive/regression reference only.
 - `--ported-full` remains only as a deprecated alias while old scripts are
   migrated.
 - The core owns the CLASNAT filter state directly as `ClasnatRtkState`.
@@ -174,7 +196,9 @@ Recommended next phases:
 2. Collapse legacy flags further.
    Keep `PPPConfig::use_ported_full` as a compatibility bit for one or two
    iterations, then remove internal branches once scripts no longer depend on
-   it.  The CLI can keep a deprecated alias longer if needed.
+   it.  The CLI can keep a deprecated alias longer if needed.  Keep
+   `--legacy-strict-parity` while the older strict path is still valuable as a
+   regression reference.
 
 3. Expand `ClasnatParity` coverage.
    Low-risk additions are broadcast ephemeris helpers (`eph2pos`, `eph2clk`),
@@ -192,5 +216,5 @@ Recommended next phases:
 
 6. Remove obsolete Phase 4 language from user-facing docs.
    Once the code no longer exposes the old wrapper/core split, update README
-   and scripts so new users see only `--ported-clasnat` and bridge/oracle
-   options.
+   and scripts so new users see `--claslib-parity` as the production native
+   entrypoint, with bridge/oracle options documented separately.
