@@ -121,6 +121,11 @@ public:
         /// Reset ambiguity state after N consecutive float epochs (aggressive reconvergence).
         /// 0 (default) disables the check — existing behavior preserved.
         int max_consecutive_float_for_reset = 0;
+
+        /// Max L1 post-fix phase residual RMS in meters.
+        /// Computed after the LAMBDA fix is obtained, using the fixed DD ambiguities.
+        /// 0 (default) disables the check — existing behavior preserved.
+        double max_postfix_residual_rms = 0.0;
     };
 
     RTKProcessor();

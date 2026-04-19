@@ -2115,6 +2115,146 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         }
     }
 
+    auto computePostFixResidualRms = [&]() {
+        if (last_dd_fixed_.size() == 0 ||
+            last_best_subset_.size() != static_cast<size_t>(last_dd_fixed_.size()) ||
+            filter_state_.state.size() < 3) {
+            return std::numeric_limits<double>::infinity();
+        }
+
+        VectorXd fixed_state = filter_state_.state;
+        fixed_state.head<3>() = fixed_baseline_;
+        for (int i = 0; i < static_cast<int>(last_best_subset_.size()); ++i) {
+            const int dd_idx = last_best_subset_[i];
+            if (dd_idx < 0 || dd_idx >= static_cast<int>(last_dd_pairs_.size())) {
+                return std::numeric_limits<double>::infinity();
+            }
+            const auto& pair = last_dd_pairs_[dd_idx];
+            if (pair.ref_idx < 0 || pair.sat_idx < 0 ||
+                pair.ref_idx >= fixed_state.size() || pair.sat_idx >= fixed_state.size()) {
+                return std::numeric_limits<double>::infinity();
+            }
+            fixed_state(pair.sat_idx) = fixed_state(pair.ref_idx) - last_dd_fixed_(i);
+        }
+
+        const Vector3d rover_pos = base_position_ + fixed_baseline_;
+        double l1_sum_sq = 0.0;
+        int l1_count = 0;
+        double all_sum_sq = 0.0;
+        int all_count = 0;
+
+        for (int i = 0; i < static_cast<int>(last_best_subset_.size()); ++i) {
+            const int dd_idx = last_best_subset_[i];
+            if (dd_idx < 0 || dd_idx >= static_cast<int>(last_dd_pairs_.size())) {
+                continue;
+            }
+            const auto& pair = last_dd_pairs_[dd_idx];
+            const auto ref_it = sat_data.find(pair.ref_sat);
+            const auto sat_it = sat_data.find(pair.sat);
+            if (ref_it == sat_data.end() || sat_it == sat_data.end()) {
+                continue;
+            }
+
+            const auto& ref_sd = ref_it->second;
+            const auto& sd = sat_it->second;
+            const bool use_l1 = pair.freq == 0;
+            if ((use_l1 && (!ref_sd.has_l1 || !sd.has_l1)) ||
+                (!use_l1 && (!ref_sd.has_l2 || !sd.has_l2))) {
+                continue;
+            }
+
+            const double ref_wavelength = use_l1 ? ref_sd.l1_wavelength : ref_sd.l2_wavelength;
+            const double sat_wavelength = use_l1 ? sd.l1_wavelength : sd.l2_wavelength;
+            if (ref_wavelength <= 0.0 || sat_wavelength <= 0.0 ||
+                pair.ref_idx < 0 || pair.sat_idx < 0 ||
+                pair.ref_idx >= fixed_state.size() || pair.sat_idx >= fixed_state.size()) {
+                continue;
+            }
+
+            const double ref_phase = use_l1 ? ref_sd.rover_l1_phase - ref_sd.base_l1_phase
+                                            : ref_sd.rover_l2_phase - ref_sd.base_l2_phase;
+            const double sat_phase = use_l1 ? sd.rover_l1_phase - sd.base_l1_phase
+                                            : sd.rover_l2_phase - sd.base_l2_phase;
+            const double rr_ref =
+                geodist_range(ref_sd.sat_pos, rover_pos) + tropModel(rover_pos, ref_sd.elevation);
+            const double br_ref = geodist_range(ref_sd.sat_pos_base, base_position_) +
+                                  tropModel(base_position_, ref_sd.base_elevation);
+            const double rr =
+                geodist_range(sd.sat_pos, rover_pos) + tropModel(rover_pos, sd.elevation);
+            const double br = geodist_range(sd.sat_pos_base, base_position_) +
+                              tropModel(base_position_, sd.base_elevation);
+            const double geom_dd = (rr_ref - br_ref) - (rr - br);
+            const double amb_term =
+                ref_wavelength * fixed_state(pair.ref_idx) -
+                sat_wavelength * fixed_state(pair.sat_idx);
+            const bool autocal_glonass =
+                usesGlonassAutocal(rtk_config_) &&
+                ref_sd.satellite.system == GNSSSystem::GLONASS &&
+                sd.satellite.system == GNSSSystem::GLONASS &&
+                pair.freq < GLO_HWBIAS_STATES;
+            const double df_mhz =
+                autocal_glonass
+                    ? (((use_l1 ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz) -
+                        (use_l1 ? sd.l1_frequency_hz : sd.l2_frequency_hz)) / 1e6)
+                    : 0.0;
+            const double glonass_icb =
+                glonassInterChannelBiasMeters(
+                    rtk_config_,
+                    ref_sd.satellite.system,
+                    sd.satellite.system,
+                    use_l1 ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz,
+                    use_l1 ? sd.l1_frequency_hz : sd.l2_frequency_hz,
+                    pair.freq);
+            const double phase_iono_term =
+                usesEstimatedIono(rtk_config_)
+                    ? (-ionoFrequencyScale(
+                           pair.freq,
+                           ref_sd.l1_frequency_hz,
+                           use_l1 ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz) *
+                           fixed_state(II(pair.ref_sat)) +
+                       ionoFrequencyScale(
+                           pair.freq,
+                           sd.l1_frequency_hz,
+                           use_l1 ? sd.l1_frequency_hz : sd.l2_frequency_hz) *
+                           fixed_state(II(pair.sat)))
+                    : 0.0;
+
+            double residual =
+                ref_phase * ref_wavelength - sat_phase * sat_wavelength -
+                geom_dd - amb_term - glonass_icb - phase_iono_term;
+            if (autocal_glonass) {
+                residual -= df_mhz * fixed_state(IL(pair.freq));
+            }
+            if (!std::isfinite(residual)) {
+                continue;
+            }
+
+            all_sum_sq += residual * residual;
+            all_count++;
+            if (use_l1) {
+                l1_sum_sq += residual * residual;
+                l1_count++;
+            }
+        }
+
+        if (l1_count > 0) {
+            return std::sqrt(l1_sum_sq / static_cast<double>(l1_count));
+        }
+        if (all_count > 0) {
+            return std::sqrt(all_sum_sq / static_cast<double>(all_count));
+        }
+        return std::numeric_limits<double>::infinity();
+    };
+
+    const double max_postfix_residual_rms = rtk_config_.max_postfix_residual_rms;
+    if (filter_initialized_ &&
+        filter_state_.state.size() >= 3 &&
+        std::isfinite(max_postfix_residual_rms) &&
+        max_postfix_residual_rms > 0.0 &&
+        computePostFixResidualRms() > max_postfix_residual_rms) {
+        return false;
+    }
+
     return true;
 }
 
