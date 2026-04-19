@@ -519,4 +519,52 @@ PYBIND11_MODULE(_libgnsspp, m) {
     m.def("solution_status_name", &solutionStatusName, py::arg("status"));
     m.def("ecef_to_geodetic_deg", &ecefToGeodeticDegrees, py::arg("ecef_m"));
     m.def("geodetic_deg_to_ecef", &geodeticDegreesToEcef, py::arg("llh_deg_m"));
+
+    // CorrectedMeasurement for external solvers (PF, etc.)
+    py::class_<libgnss::SPPProcessor::CorrectedMeasurement>(m, "CorrectedMeasurement")
+        .def_readonly("satellite_ecef", &libgnss::SPPProcessor::CorrectedMeasurement::satellite_ecef)
+        .def_readonly("corrected_pseudorange", &libgnss::SPPProcessor::CorrectedMeasurement::corrected_pseudorange)
+        .def_readonly("weight", &libgnss::SPPProcessor::CorrectedMeasurement::weight)
+        .def_readonly("elevation", &libgnss::SPPProcessor::CorrectedMeasurement::elevation)
+        .def_readonly("system_id", &libgnss::SPPProcessor::CorrectedMeasurement::system_id);
+
+    m.def("preprocess_spp_file",
+          [](const std::string& obs_path, const std::string& nav_path, size_t max_epochs) {
+              libgnss::io::RINEXReader obs_reader;
+              if (!obs_reader.open(obs_path)) {
+                  throw std::runtime_error("failed to open: " + obs_path);
+              }
+              libgnss::io::RINEXReader::RINEXHeader obs_header;
+              if (!obs_reader.readHeader(obs_header)) {
+                  throw std::runtime_error("failed to read header: " + obs_path);
+              }
+              const auto nav = loadNavigationData(nav_path);
+
+              libgnss::ProcessorConfig config;
+              config.mode = libgnss::PositioningMode::SPP;
+              libgnss::SPPProcessor processor;
+              processor.initialize(config);
+
+              using EpochResult = std::pair<
+                  libgnss::PositionSolution,
+                  std::vector<libgnss::SPPProcessor::CorrectedMeasurement>>;
+              std::vector<EpochResult> results;
+
+              libgnss::ObservationData obs;
+              size_t processed = 0;
+              while (obs_reader.readObservationEpoch(obs)) {
+                  if (obs_header.approximate_position.norm() > 0.0) {
+                      obs.receiver_position = obs_header.approximate_position;
+                  }
+                  auto [sol, measurements] = processor.preprocessEpoch(obs, nav);
+                  results.emplace_back(sol, measurements);
+                  ++processed;
+                  if (max_epochs > 0 && processed >= max_epochs) break;
+              }
+              return results;
+          },
+          py::arg("obs_path"),
+          py::arg("nav_path"),
+          py::arg("max_epochs") = 0,
+          "Preprocess RINEX with full SPP corrections, return corrected measurements per epoch");
 }
