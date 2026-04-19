@@ -347,8 +347,13 @@ const char* fullStateDumpPath() {
     return (path != nullptr && *path != '\0') ? path : nullptr;
 }
 
+bool fullStateDumpAllTimes() {
+    const char* value = std::getenv("CLAS_FULL_STATE_DUMP_ALL");
+    return value != nullptr && *value != '\0' && std::string(value) != "0";
+}
+
 bool fullStateDumpEnabled(const GNSSTime& time) {
-    return shouldDumpFullStateTime(time) &&
+    return (fullStateDumpAllTimes() || shouldDumpFullStateTime(time)) &&
            (ppp_shared::pppDebugEnabled() || fullStateDumpPath() != nullptr);
 }
 
@@ -1887,6 +1892,9 @@ bool tryAmbiguityResolution(ClaslibRtkState& rtk,
     }
     fixed_position = rtk.xa.head<3>();
     rtk.ambiguity_states = attempt.ambiguities;
+    if (attempt.has_hold_state) {
+        copyFilterFromArState(attempt.hold_state, rtk);
+    }
     return true;
 }
 
