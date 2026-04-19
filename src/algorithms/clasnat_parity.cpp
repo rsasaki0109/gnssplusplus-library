@@ -30,6 +30,7 @@ constexpr int kParityCssrInvalid = -10000;
 constexpr int kParityRtcmModeCssr = 5;
 constexpr double kParityMaxAgeSsrBiasSeconds = 120.0;
 constexpr double kParityMaxAgeSsrIonoSeconds = 120.0;
+constexpr double kParityMaxAgeSsrTropSeconds = 120.0;
 constexpr int kClasSysNone = 0x00;
 constexpr int kClasSysGps = 0x01;
 constexpr int kClasSysGal = 0x08;
@@ -1047,6 +1048,110 @@ int parityCorrmeasLiteral(const ParityObs* obs,
     return 1;
 }
 
+int parityTropData(const TropGridPoint& grid,
+                   const GNSSTime& time,
+                   double* ztd,
+                   double* zwd,
+                   double* quality,
+                   int* valid) {
+    const double tt = timediff(time, grid.time);
+    if (std::fabs(tt) > kParityMaxAgeSsrTropSeconds) {
+        return 0;
+    }
+    const double pos[2] = {
+        grid.pos_deg[0] * kDegreesToRadians,
+        grid.pos_deg[1] * kDegreesToRadians,
+    };
+    const double geoid_height_m = embeddedGeoidHeightJapan(pos[0], pos[1]);
+    double tdvd = 0.0;
+    double twvd = 0.0;
+    if (claslibGetStTv(time, pos[0], 0.0, geoid_height_m, &tdvd, &twvd)) {
+        return 0;
+    }
+    const double raw_zwd = static_cast<double>(static_cast<float>(grid.zwd));
+    const double raw_ztd = static_cast<double>(static_cast<float>(grid.ztd));
+    if (raw_ztd == kParityCssrInvalid || raw_zwd == kParityCssrInvalid) {
+        return 0;
+    }
+    *ztd = (raw_ztd - raw_zwd) / tdvd;
+    *zwd = raw_zwd / twvd;
+    *quality = static_cast<double>(static_cast<float>(grid.quality));
+    *valid = grid.valid;
+    return 1;
+}
+
+int parityTropGridDataLiteral(const TropGridInput& input, TropGridOutput& out) {
+    const int n = std::clamp(input.n, 0, 4);
+    if (n <= 0) {
+        return 0;
+    }
+
+    double zwds[4] = {};
+    double ztds[4] = {};
+    double quals[4] = {};
+    int valid[4] = {};
+    if (n == 1) {
+        const int idx = std::clamp(input.index[0], 0, 3);
+        double quality = 0.0;
+        int valid0 = 0;
+        if (!parityTropData(input.grid[idx],
+                            input.time,
+                            &out.ztd,
+                            &out.zwd,
+                            &quality,
+                            &valid0)) {
+            out = TropGridOutput{};
+            return 0;
+        }
+        out.break_flag = 0;
+        return 1;
+    }
+
+    for (int i = 0; i < n; ++i) {
+        const int idx = std::clamp(input.index[i], 0, 3);
+        if (!parityTropData(input.grid[idx],
+                            input.time,
+                            &ztds[i],
+                            &zwds[i],
+                            &quals[i],
+                            &valid[i])) {
+            out = TropGridOutput{};
+            return 0;
+        }
+    }
+
+    out.zwd = 0.0;
+    out.ztd = 0.0;
+    if (n == 4) {
+        double zwds_g[4] = {};
+        double ztds_g[4] = {};
+        double quals_g[4] = {};
+        for (int r = 0; r < n; ++r) {
+            for (int c = 0; c < n; ++c) {
+                ztds_g[r] += input.Gmat[r * n + c] * ztds[c];
+                zwds_g[r] += input.Gmat[r * n + c] * zwds[c];
+                quals_g[r] += input.Gmat[r * n + c] * quals[c];
+            }
+        }
+        (void)quals_g;
+        for (int i = 0; i < 4; ++i) {
+            out.ztd += input.Emat[i] * ztds_g[i];
+            out.zwd += input.Emat[i] * zwds_g[i];
+        }
+    } else {
+        for (int i = 0; i < n; ++i) {
+            out.zwd += zwds[i] * input.weight[i];
+            out.ztd += ztds[i] * input.weight[i];
+        }
+    }
+    int valid_count = 0;
+    for (int i = 0; i < n; ++i) {
+        valid_count += valid[i];
+    }
+    out.break_flag = valid_count == n ? 0 : 1;
+    return 1;
+}
+
 bool paritySeleph(const GNSSTime& time,
                   int sat,
                   int iode,
@@ -1420,6 +1525,18 @@ bool corrmeasAvailable() {
     return true;
 }
 
+bool satantoffAvailable() {
+    return true;
+}
+
+bool compensatedispAvailable() {
+    return true;
+}
+
+bool tropGridDataAvailable() {
+    return true;
+}
+
 CorrmeasInput makeCorrmeasInput(int sample_index) {
     const int sample = ((sample_index % 20) + 20) % 20;
     const int epoch = sample / 4;
@@ -1481,6 +1598,79 @@ CorrmeasInput makeCorrmeasInput(int sample_index) {
     input.trop_m = 1.34 + 0.011 * epoch + 0.006 * sat_index;
     input.relativity_m = -0.0025 + 0.0001 * sample;
 
+    return input;
+}
+
+SatAntOffInput makeSatAntOffInput(int sample_index) {
+    const int sample = ((sample_index % 20) + 20) % 20;
+    const int epoch = sample / 4;
+    const int sat_case = sample % 4;
+    const int sats[4] = {1, 14, 33, 69};
+    const double lat = 36.1037748 * kDegreesToRadians;
+    const double lon = 140.0878550 * kDegreesToRadians;
+    const Vector3d rr = geodetic2ecef(lat, lon, 67.0);
+    const double az = std::fmod((42.0 + sat_case * 71.0 + epoch * 5.0) *
+                                    kDegreesToRadians,
+                                2.0 * M_PI);
+    const double el = (22.0 + sat_case * 13.0 + epoch * 1.25) * kDegreesToRadians;
+    const Vector3d los_enu(std::sin(az) * std::cos(el),
+                           std::cos(az) * std::cos(el),
+                           std::sin(el));
+    const Vector3d los_ecef = enu2ecef(los_enu, lat, lon).normalized();
+    const double range_m = 23250000.0 + sample * 42000.0;
+    const Vector3d sat_pos = rr + range_m * los_ecef;
+    const Vector3d east = enu2ecef(Vector3d(1.0, 0.0, 0.0), lat, lon).normalized();
+    const Vector3d north = enu2ecef(Vector3d(0.0, 1.0, 0.0), lat, lon).normalized();
+    const Vector3d sat_vel =
+        2850.0 * (std::cos(az) * east - std::sin(az) * north) +
+        (40.0 + sat_case * 8.0) * los_ecef;
+
+    SatAntOffInput input;
+    input.time = GNSSTime(2029, 230400.0 + epoch * 30.0);
+    input.sat = sats[sat_case];
+    input.rs[0] = sat_pos(0);
+    input.rs[1] = sat_pos(1);
+    input.rs[2] = sat_pos(2);
+    input.rs[3] = sat_vel(0);
+    input.rs[4] = sat_vel(1);
+    input.rs[5] = sat_vel(2);
+    input.wavelength_m[0] = constants::SPEED_OF_LIGHT / kClasFreq1Hz;
+    input.wavelength_m[1] = constants::SPEED_OF_LIGHT / kClasFreq2Hz;
+    input.wavelength_m[2] = constants::SPEED_OF_LIGHT / kClasFreq5Hz;
+    for (int f = 0; f < kParityMaxFreq; ++f) {
+        input.satellite_pcv.offsets_m[static_cast<size_t>(f)] = {
+            0.18 + 0.010 * f + 0.001 * sample,
+            -0.04 + 0.006 * f - 0.0005 * epoch,
+            0.72 + 0.025 * f + 0.002 * sat_case,
+        };
+    }
+    return input;
+}
+
+TropGridInput makeTropGridInput(int sample_index) {
+    const int sample = ((sample_index % 20) + 20) % 20;
+    TropGridInput input;
+    input.time = GNSSTime(2029, 230400.0 + 15.0 * sample);
+    input.n = (sample % 2 == 0) ? 1 : 4;
+    input.weight[0] = 1.0;
+    if (input.n == 4) {
+        for (int i = 0; i < 4; ++i) {
+            input.index[i] = i;
+            input.Emat[i] = 0.10 + 0.10 * i;
+            input.Gmat[i * 4 + i] = 1.0;
+        }
+    }
+    for (int i = 0; i < 4; ++i) {
+        input.grid[i].pos_deg[0] = 36.00 + 0.07 * i + 0.002 * sample;
+        input.grid[i].pos_deg[1] = 140.00 + 0.05 * i - 0.001 * sample;
+        input.grid[i].pos_deg[2] = 0.0;
+        input.grid[i].time = input.time - (3.0 + i);
+        input.grid[i].zwd = 0.18 + 0.006 * i + 0.0015 * sample;
+        input.grid[i].ztd = 2.48 + 0.011 * i + 0.0020 * sample;
+        input.grid[i].quality = 0.75 + 0.01 * i;
+        input.grid[i].rms = 0.012 + 0.001 * i;
+        input.grid[i].valid = ((sample + i) % 7 == 0) ? 0 : 1;
+    }
     return input;
 }
 
@@ -1794,6 +1984,82 @@ bool corrmeas(int sample_index, CorrmeasOutput& out) {
 
 bool corrmeas(CorrmeasOutput& out) {
     return corrmeas(0, out);
+}
+
+void satantoff(const SatAntOffInput& input, double dant[3]) {
+    dant[0] = dant[1] = dant[2] = 0.0;
+    const double* lam = input.wavelength_m;
+    const Vector3d sun = tidal::approximateSunPositionEcef(input.time);
+    double ez_vec[3] = {-input.rs[0], -input.rs[1], -input.rs[2]};
+    double ez[3] = {};
+    if (!unit3(ez_vec, ez)) {
+        return;
+    }
+    double es_vec[3] = {
+        sun(0) - input.rs[0],
+        sun(1) - input.rs[1],
+        sun(2) - input.rs[2],
+    };
+    double es[3] = {};
+    if (!unit3(es_vec, es)) {
+        return;
+    }
+    double ey_vec[3] = {};
+    double ey[3] = {};
+    cross3(ez, es, ey_vec);
+    if (!unit3(ey_vec, ey)) {
+        return;
+    }
+    double ex[3] = {};
+    cross3(ey, ez, ex);
+
+    int j = 0;
+    int k = 1;
+    const int sys = paritySatsys(input.sat, nullptr);
+    if (kParityMaxFreq >= 3 && sys == kClasSysGal) {
+        k = 2;
+    }
+    if (lam[j] == 0.0 || lam[k] == 0.0) {
+        return;
+    }
+    const double gamma = (lam[k] * lam[k]) / (lam[j] * lam[j]);
+    const double c1 = gamma / (gamma - 1.0);
+    const double c2 = -1.0 / (gamma - 1.0);
+    for (int i = 0; i < 3; ++i) {
+        const auto& off1 = input.satellite_pcv.offsets_m[static_cast<size_t>(j)];
+        const auto& off2 = input.satellite_pcv.offsets_m[static_cast<size_t>(k)];
+        const double dant1 = off1[0] * ex[i] + off1[1] * ey[i] + off1[2] * ez[i];
+        const double dant2 = off2[0] * ex[i] + off2[1] * ey[i] + off2[2] * ez[i];
+        dant[i] = c1 * dant1 + c2 * dant2;
+    }
+}
+
+bool compensatedisp(const CorrmeasInput& input, double compL[kParityMaxFreq]) {
+    for (int f = 0; f < kParityMaxFreq; ++f) {
+        compL[f] = 0.0;
+    }
+    CorrmeasRuntime runtime = makeCorrmeasRuntime(input);
+    double pbias[kParityMaxFreq] = {};
+    for (int f = 0; f < kParityMaxFreq; ++f) {
+        pbias[f] = input.phase_bias_m[f];
+    }
+    parityCompensatedisp(&runtime.nav,
+                         runtime.index,
+                         &runtime.obs,
+                         runtime.obs.sat,
+                         input.stec_l1_m,
+                         pbias,
+                         compL,
+                         runtime.pbreset,
+                         &runtime.opt,
+                         runtime.ssat,
+                         0);
+    return true;
+}
+
+bool trop_grid_data(const TropGridInput& input, TropGridOutput& out) {
+    out = TropGridOutput{};
+    return parityTropGridDataLiteral(input, out) != 0;
 }
 
 }  // namespace libgnss::clasnat_parity

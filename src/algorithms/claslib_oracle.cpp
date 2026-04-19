@@ -469,4 +469,133 @@ bool corrmeas(CorrmeasOutput& out) {
     return libgnss::external::claslib_oracle::corrmeas(0, out);
 }
 
+void satantoff(const SatAntOffInput& input, double dant[3]) {
+#if GNSSPP_HAS_CLASLIB_BRIDGE
+    dant[0] = dant[1] = dant[2] = 0.0;
+    nav_t nav = {};
+    const int sat = std::clamp(input.sat, 1, MAXSAT);
+    for (int f = 0; f < std::min(NFREQ, libgnss::clasnat_parity::kParityMaxFreq); ++f) {
+        nav.lam[sat - 1][f] = input.wavelength_m[f];
+        for (int j = 0; j < 3; ++j) {
+            nav.pcvs[sat - 1].off[f][j] =
+                input.satellite_pcv.offsets_m[static_cast<size_t>(f)][static_cast<size_t>(j)];
+        }
+    }
+    ::satantoff(toClasTime(input.time), input.rs, sat, &nav, dant);
+#else
+    (void)input;
+    zero3(dant);
+#endif
+}
+
+bool compensatedisp(const libgnss::clasnat_parity::CorrmeasInput& input,
+                    double compL[libgnss::clasnat_parity::kParityMaxFreq]) {
+#if GNSSPP_HAS_CLASLIB_BRIDGE
+    const int nf = std::clamp(input.num_frequencies,
+                              0,
+                              libgnss::clasnat_parity::kParityMaxFreq);
+    const int sat = std::clamp(input.sat, 1, MAXSAT);
+    for (int f = 0; f < libgnss::clasnat_parity::kParityMaxFreq; ++f) {
+        compL[f] = 0.0;
+    }
+
+    obsd_t obs = {};
+    obs.time = toClasTime(input.time);
+    obs.sat = static_cast<unsigned char>(sat);
+    nav_t nav = {};
+    std::array<stec_t, MAX_NGRID> stec_grids = {};
+    std::array<stecd_t, MAXSAT> stec_data = {};
+    nav.stec = stec_grids.data();
+    nav.stec[0].n = 1;
+    nav.stec[0].nmax = static_cast<int>(stec_data.size());
+    nav.stec[0].data = stec_data.data();
+    nav.stec[0].data[0].time = toClasTime(input.stec_time);
+    nav.stec[0].data[0].sat = static_cast<unsigned char>(sat);
+    nav.stec[0].data[0].iono = static_cast<float>(input.stec_l1_m);
+    nav.stec[0].data[0].rate = static_cast<float>(input.stec_rate_mps);
+    nav.stec[0].data[0].quality = 1.0F;
+    nav.stec[0].data[0].rms = static_cast<float>(input.stec_rms_m);
+    nav.stec[0].data[0].flag = 1;
+    ssr_t& ssr = nav.ssr_ch[0][sat - 1];
+    ssr.nsig = nf;
+    for (int f = 0; f < nf; ++f) {
+        obs.code[f] = input.code[f];
+        obs.L[f] = input.carrier_phase_cycles[f];
+        nav.lam[sat - 1][f] = input.wavelength_m[f];
+        ssr.smode[f] = input.code[f];
+    }
+    prcopt_t opt = prcopt_default;
+    opt.nf = nf;
+    opt.posopt[5] = input.compensation_option;
+    ssat_t ssat = {};
+    int pbreset[NFREQ] = {};
+    double pbias[NFREQ] = {};
+    for (int f = 0; f < std::min(NFREQ, nf); ++f) {
+        ssat.slip[f] = input.slip[f];
+        pbreset[f] = input.phase_bias_reset[f];
+        pbias[f] = input.phase_bias_m[f];
+    }
+    int index[MAX_NGRID] = {};
+    ::compensatedisp(&nav,
+                     index,
+                     &obs,
+                     sat,
+                     input.stec_l1_m,
+                     pbias,
+                     compL,
+                     pbreset,
+                     &opt,
+                     ssat,
+                     0);
+    return true;
+#else
+    (void)input;
+    for (int f = 0; f < libgnss::clasnat_parity::kParityMaxFreq; ++f) {
+        compL[f] = 0.0;
+    }
+    return false;
+#endif
+}
+
+bool trop_grid_data(const TropGridInput& input, TropGridOutput& out) {
+#if GNSSPP_HAS_CLASLIB_BRIDGE
+    out = TropGridOutput{};
+    nav_t nav = {};
+    std::array<zwd_t, MAX_NGRID> zwd_grids = {};
+    std::array<zwdd_t, MAX_NGRID> zwd_data = {};
+    nav.zwd = zwd_grids.data();
+    for (int i = 0; i < std::min<int>(MAX_NGRID, 4); ++i) {
+        nav.zwd[i].pos[0] = static_cast<float>(input.grid[i].pos_deg[0]);
+        nav.zwd[i].pos[1] = static_cast<float>(input.grid[i].pos_deg[1]);
+        nav.zwd[i].pos[2] = static_cast<float>(input.grid[i].pos_deg[2]);
+        nav.zwd[i].n = 1;
+        nav.zwd[i].nmax = 1;
+        nav.zwd[i].data = &zwd_data[static_cast<size_t>(i)];
+        nav.zwd[i].data[0].time = toClasTime(input.grid[i].time);
+        nav.zwd[i].data[0].valid = static_cast<unsigned char>(input.grid[i].valid);
+        nav.zwd[i].data[0].zwd = static_cast<float>(input.grid[i].zwd);
+        nav.zwd[i].data[0].ztd = static_cast<float>(input.grid[i].ztd);
+        nav.zwd[i].data[0].quality = static_cast<float>(input.grid[i].quality);
+        nav.zwd[i].data[0].rms = static_cast<float>(input.grid[i].rms);
+    }
+    int tbrk = 0;
+    const int ok = ::trop_grid_data(&nav,
+                                    input.index,
+                                    toClasTime(input.time),
+                                    input.n,
+                                    input.weight,
+                                    input.Gmat,
+                                    input.Emat,
+                                    &out.zwd,
+                                    &out.ztd,
+                                    &tbrk);
+    out.break_flag = tbrk;
+    return ok != 0;
+#else
+    (void)input;
+    out = TropGridOutput{};
+    return false;
+#endif
+}
+
 }  // namespace libgnss::external::claslib_oracle

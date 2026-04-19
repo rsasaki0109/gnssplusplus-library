@@ -362,4 +362,53 @@ TEST_F(ClasnatParity, CorrmeasNativeTargetMissing) {
     }
 }
 
+TEST_F(ClasnatParity, SatantoffSatelliteAntennaOffset) {
+    ASSERT_TRUE(libgnss::clasnat_parity::satantoffAvailable());
+    for (int sample = 0; sample < 20; ++sample) {
+        const auto input = libgnss::clasnat_parity::makeSatAntOffInput(sample);
+        double native[3] = {};
+        double oracle[3] = {};
+        libgnss::clasnat_parity::satantoff(input, native);
+        libgnss::external::claslib_oracle::satantoff(input, oracle);
+        expectNearArray("satantoff sample=" + std::to_string(sample), native, oracle, 3);
+    }
+}
+
+TEST_F(ClasnatParity, CompensatedispPhaseBiasCompensation) {
+    ASSERT_TRUE(libgnss::clasnat_parity::compensatedispAvailable());
+    for (int sample = 0; sample < 20; ++sample) {
+        auto input = libgnss::clasnat_parity::makeCorrmeasInput(sample);
+        input.compensation_option = 1;
+        double native[libgnss::clasnat_parity::kParityMaxFreq] = {};
+        double oracle[libgnss::clasnat_parity::kParityMaxFreq] = {};
+        ASSERT_TRUE(libgnss::clasnat_parity::compensatedisp(input, native))
+            << "native compensatedisp failed sample=" << sample;
+        ASSERT_TRUE(libgnss::external::claslib_oracle::compensatedisp(input, oracle))
+            << "CLASLIB compensatedisp oracle failed sample=" << sample;
+        expectNearArray("compensatedisp sample=" + std::to_string(sample),
+                        native,
+                        oracle,
+                        input.num_frequencies);
+    }
+}
+
+TEST_F(ClasnatParity, TropGridDataInterpolation) {
+    ASSERT_TRUE(libgnss::clasnat_parity::tropGridDataAvailable());
+    for (int sample = 0; sample < 20; ++sample) {
+        const auto input = libgnss::clasnat_parity::makeTropGridInput(sample);
+        libgnss::clasnat_parity::TropGridOutput native;
+        libgnss::clasnat_parity::TropGridOutput oracle;
+        const bool native_ok = libgnss::clasnat_parity::trop_grid_data(input, native);
+        const bool oracle_ok = libgnss::external::claslib_oracle::trop_grid_data(input, oracle);
+        ASSERT_TRUE(native_ok) << "native trop_grid_data failed sample=" << sample;
+        ASSERT_TRUE(oracle_ok) << "CLASLIB trop_grid_data oracle failed sample=" << sample;
+        EXPECT_NEAR(native.zwd, oracle.zwd, kParityTolerance)
+            << "trop_grid_data zwd sample=" << sample;
+        EXPECT_NEAR(native.ztd, oracle.ztd, kParityTolerance)
+            << "trop_grid_data ztd sample=" << sample;
+        EXPECT_EQ(native.break_flag, oracle.break_flag)
+            << "trop_grid_data break flag sample=" << sample;
+    }
+}
+
 }  // namespace

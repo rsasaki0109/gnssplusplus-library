@@ -129,8 +129,44 @@ struct CorrmeasInput {
     int phase_bias_reset[kParityMaxFreq] = {};
 };
 
+struct SatAntOffInput {
+    GNSSTime time;
+    int sat = 1;
+    double rs[6] = {};
+    double wavelength_m[kParityMaxFreq] = {};
+    ReceiverPcvModel satellite_pcv;
+};
+
+struct TropGridPoint {
+    double pos_deg[3] = {};
+    GNSSTime time;
+    double zwd = 0.0;
+    double ztd = 0.0;
+    double quality = 0.0;
+    double rms = 0.0;
+    int valid = 1;
+};
+
+struct TropGridInput {
+    GNSSTime time;
+    int n = 1;
+    int index[4] = {};
+    double weight[4] = {};
+    double Gmat[16] = {};
+    double Emat[4] = {};
+    TropGridPoint grid[4];
+};
+
+struct TropGridOutput {
+    double zwd = 0.0;
+    double ztd = 0.0;
+    int break_flag = 0;
+};
+
 CorrmeasInput makeCorrmeasInput(int sample_index);
 SatposSsrInput makeSatposSsrInput(int sample_index);
+SatAntOffInput makeSatAntOffInput(int sample_index);
+TropGridInput makeTropGridInput(int sample_index);
 
 bool tidedispAvailable();
 bool windupcorrAvailable();
@@ -142,6 +178,9 @@ bool eph2posAvailable();
 bool geodistAvailable();
 bool satposSsrAvailable();
 bool corrmeasAvailable();
+bool satantoffAvailable();
+bool compensatedispAvailable();
+bool tropGridDataAvailable();
 
 void tidedisp(const GNSSTime& gpst,
               const double rr[3],
@@ -186,5 +225,9 @@ bool satpos_ssr(const SatposSsrInput& input, SatposSsrOutput& out);
 bool corrmeas(const CorrmeasInput& input, CorrmeasOutput& out);
 bool corrmeas(int sample_index, CorrmeasOutput& out);
 bool corrmeas(CorrmeasOutput& out);
+
+void satantoff(const SatAntOffInput& input, double dant[3]);
+bool compensatedisp(const CorrmeasInput& input, double compL[kParityMaxFreq]);
+bool trop_grid_data(const TropGridInput& input, TropGridOutput& out);
 
 }  // namespace libgnss::clasnat_parity

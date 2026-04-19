@@ -11,6 +11,9 @@ using SatposBroadcastEphemeris = libgnss::clasnat_parity::SatposBroadcastEphemer
 using SatposSsrOutput = libgnss::clasnat_parity::SatposSsrOutput;
 using SatposSsrInput = libgnss::clasnat_parity::SatposSsrInput;
 using CorrmeasOutput = libgnss::clasnat_parity::CorrmeasOutput;
+using SatAntOffInput = libgnss::clasnat_parity::SatAntOffInput;
+using TropGridInput = libgnss::clasnat_parity::TropGridInput;
+using TropGridOutput = libgnss::clasnat_parity::TropGridOutput;
 
 bool available();
 
@@ -57,5 +60,10 @@ bool satpos_ssr(const SatposSsrInput& input, SatposSsrOutput& out);
 bool corrmeas(const libgnss::clasnat_parity::CorrmeasInput& input, CorrmeasOutput& out);
 bool corrmeas(int sample_index, CorrmeasOutput& out);
 bool corrmeas(CorrmeasOutput& out);
+
+void satantoff(const SatAntOffInput& input, double dant[3]);
+bool compensatedisp(const libgnss::clasnat_parity::CorrmeasInput& input,
+                    double compL[libgnss::clasnat_parity::kParityMaxFreq]);
+bool trop_grid_data(const TropGridInput& input, TropGridOutput& out);
 
 }  // namespace libgnss::external::claslib_oracle

@@ -932,18 +932,12 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     ppp_clas::applyPendingPhaseBiasStateShifts(
         filter_state_, osr_corrections, clas_phase_bias_repair_, pppDebugEnabled());
 
-    PositionSolution epoch_seed = seed;
-    if ((!ppp_config_.wlnl_strict_claslib_parity) &&
-        (!ppp_config_.kinematic_mode || ppp_config_.low_dynamics_mode) &&
-        obs.receiver_position.squaredNorm() > 0.0) {
-        epoch_seed.position_ecef = obs.receiver_position;
-    }
     const auto epoch_update = ppp_clas::runEpochMeasurementUpdate(
         obs,
         epoch_context,
         filter_state_,
         ppp_config_,
-        epoch_seed,
+        seed,
         ambiguity_states_,
         [&](const Vector3d& receiver_pos, double elevation, const GNSSTime& time) {
             return calculateMappingFunction(receiver_pos, elevation, time);
@@ -1637,9 +1631,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             3.0,   // AR ratio threshold
             20,    // Min accumulation epochs before attempting LAMBDA
             pppDebugEnabled());
-        constexpr bool kEnableClasSdMarPositionOverride = false;
-        if (kEnableClasSdMarPositionOverride &&
-            sd_ar_result.valid && sd_ar_result.code_rms <= 3.0) {
+        if (sd_ar_result.valid && sd_ar_result.code_rms >= 3.0) {
             solution.position_ecef = sd_ar_result.position;
             solution.status = SolutionStatus::PPP_FIXED;
         }

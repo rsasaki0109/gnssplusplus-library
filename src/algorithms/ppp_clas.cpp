@@ -615,13 +615,6 @@ EpochPreparationResult prepareEpochState(
             return result;
         }
         PositionSolution initial_solution = seed_solution;
-        const bool use_receiver_seed_for_static =
-            (!config.wlnl_strict_claslib_parity) &&
-            (!config.kinematic_mode || config.low_dynamics_mode) &&
-            obs.receiver_position.squaredNorm() > 0.0;
-        if (use_receiver_seed_for_static) {
-            initial_solution.position_ecef = obs.receiver_position;
-        }
         const auto iono_satellites =
             config.estimate_ionosphere
                 ? collectResidualIonoSatellites(obs, ssr_products)
