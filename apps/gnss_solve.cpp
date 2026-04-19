@@ -93,6 +93,8 @@ struct SolveConfig {
     bool hold_ratio_threshold_set = false;
     libgnss::RTKProcessor::RTKConfig::ARPolicy ar_policy =
         libgnss::RTKProcessor::RTKConfig::ARPolicy::EXTENDED;
+    double max_hold_divergence_m = 0.0;
+    double max_position_jump_m = 0.0;
 };
 
 double timeDiffSeconds(const libgnss::GNSSTime& a, const libgnss::GNSSTime& b) {
@@ -402,6 +404,10 @@ void printUsage(const char* program_name) {
         << "                             demo5-continuous disables relaxed-hold-ratio,\n"
         << "                             subset/partial AR fallback, hold-fix fallback,\n"
         << "                             and Q regularization (raw Q passed to LAMBDA)\n"
+        << "  --max-hold-div <v>         Max hold fix divergence from float in meters\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-pos-jump <v>         Max AR fix jump from last fixed pos in meters\n"
+        << "                             (default: 0, disabled; additional to history check)\n"
         << "  --max-baseline-m <v>       Max baseline length in meters (default: 20000)\n"
         << "  --base-ecef <x> <y> <z>    Override base ECEF position in meters\n"
         << "  --skip-epochs <n>          Skip the first n rover epochs before solving\n"
@@ -562,6 +568,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             } else {
                 argumentError("unsupported --ar-policy value: " + policy_str, argv[0]);
             }
+        } else if (arg == "--max-hold-div" && i + 1 < argc) {
+            config.max_hold_divergence_m = std::stod(argv[++i]);
+        } else if (arg == "--max-pos-jump" && i + 1 < argc) {
+            config.max_position_jump_m = std::stod(argv[++i]);
         } else if (arg == "--max-baseline-m" && i + 1 < argc) {
             config.max_baseline_length_m = std::stod(argv[++i]);
         } else if (arg == "--base-ecef" && i + 3 < argc) {
@@ -741,6 +751,8 @@ int main(int argc, char* argv[]) {
         rtk_config.glonass_icb_l1_m_per_mhz = config.glonass_icb_l1_m_per_mhz;
         rtk_config.glonass_icb_l2_m_per_mhz = config.glonass_icb_l2_m_per_mhz;
         rtk_config.ar_policy = config.ar_policy;
+        rtk_config.max_hold_divergence_m = config.max_hold_divergence_m;
+        rtk_config.max_position_jump_m = config.max_position_jump_m;
         rtk_processor.setRTKConfig(rtk_config);
         libgnss::SPPProcessor::SPPConfig spp_config;
         spp_config.use_multi_constellation = true;
