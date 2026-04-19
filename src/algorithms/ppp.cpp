@@ -1135,35 +1135,15 @@ PositionSolution PPPProcessor::processEpochStandard(
 }
 
 PositionSolution PPPProcessor::processEpoch(const ObservationData& obs, const NavigationData& nav) {
-    if (ppp_config_.use_ported_clasnat) {
+    if (ppp_config_.use_ported_clasnat || ppp_config_.use_ported_full) {
         const auto processing_start = std::chrono::steady_clock::now();
-        const auto epoch_result = ppp_clasnat::runEpoch(
-            obs, nav, ssr_products_, clasnat_state_, ppp_config_);
+        const auto epoch_result = ppp_clasnat_core::runEpoch(
+            obs, nav, ssr_products_, clasnat_core_state_, ppp_config_);
         PositionSolution solution = epoch_result.solution;
         has_last_processed_time_ = true;
         last_processed_time_ = obs.time;
-        last_ar_ratio_ = clasnat_state_.last_ar_ratio;
-        last_fixed_ambiguities_ = clasnat_state_.last_fixed_ambiguities;
-        const auto processing_end = std::chrono::steady_clock::now();
-        solution.processing_time_ms =
-            std::chrono::duration<double, std::milli>(processing_end - processing_start).count();
-        updateStatistics(solution.isValid());
-        {
-            std::lock_guard<std::mutex> lock(stats_mutex_);
-            total_convergence_time_ += solution.processing_time_ms;
-        }
-        return solution;
-    }
-
-    if (ppp_config_.use_ported_full) {
-        const auto processing_start = std::chrono::steady_clock::now();
-        const auto epoch_result = ppp_claslib_full::runEpoch(
-            obs, nav, ssr_products_, claslib_full_state_, ppp_config_);
-        PositionSolution solution = epoch_result.solution;
-        has_last_processed_time_ = true;
-        last_processed_time_ = obs.time;
-        last_ar_ratio_ = claslib_full_state_.last_ar_ratio;
-        last_fixed_ambiguities_ = claslib_full_state_.last_fixed_ambiguities;
+        last_ar_ratio_ = clasnat_core_state_.last_ar_ratio;
+        last_fixed_ambiguities_ = clasnat_core_state_.last_fixed_ambiguities;
         const auto processing_end = std::chrono::steady_clock::now();
         solution.processing_time_ms =
             std::chrono::duration<double, std::milli>(processing_end - processing_start).count();
@@ -1213,8 +1193,7 @@ void PPPProcessor::reset() {
     converged_ = false;
     convergence_time_ = 0.0;
     filter_state_ = PPPState{};
-    ppp_clasnat::reset(clasnat_state_);
-    ppp_claslib_full::reset(claslib_full_state_);
+    ppp_clasnat_core::reset(clasnat_core_state_);
     ambiguity_states_.clear();
     last_clas_ar_phase_ambiguities_.clear();
     clas_dispersion_compensation_.clear();

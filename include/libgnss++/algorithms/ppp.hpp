@@ -6,8 +6,7 @@
 #include "../core/solution.hpp"
 #include "lambda.hpp"
 #include "ppp_ar.hpp"
-#include "ppp_claslib_full.hpp"
-#include "ppp_clasnat.hpp"
+#include "ppp_clasnat_core.hpp"
 #include "ppp_shared.hpp"
 #include "ppp_clas_sd.hpp"
 #include "ppp_osr_types.hpp"
@@ -239,8 +238,7 @@ private:
     std::map<SatelliteId, CLASPhaseBiasRepairInfo> clas_phase_bias_repair_;
     ppp_clas_sd::SdFilterState clas_sd_state_;  ///< Clock-free SD filter
     ppp_clas_sd::DdAmbAccumulator clas_dd_accumulator_;  ///< Multi-epoch DD amb accumulator
-    ppp_claslib_full::ClaslibRtkState claslib_full_state_;  ///< Native CLASLIB mirror state
-    ppp_clasnat::RtkState clasnat_state_;  ///< CLASLIB-native transcription state
+    ppp_clasnat_core::ClasnatRtkState clasnat_core_state_;  ///< Native CLASNAT transcription state
     int last_obs_gps_week_ = 0;  ///< GPS week from latest observation (for L6 decode)
 
     // Statistics

@@ -397,16 +397,16 @@ SatelliteId ambiguitySatelliteForFreq(const SatelliteId& satellite, int freq_ind
 
 int ionoIndex(const SatelliteId& satellite) {
     const int satno = clasSatNo(satellite);
-    return satno > 0 ? ppp_claslib_full::kClasNp + satno - 1 : -1;
+    return satno > 0 ? ppp_clasnat_core::kClasNp + satno - 1 : -1;
 }
 
 int ambIndex(const SatelliteId& satellite, int freq_index) {
     const int satno = clasSatNo(satellite);
-    if (satno <= 0 || freq_index < 0 || freq_index >= ppp_claslib_full::kClasNfreq) {
+    if (satno <= 0 || freq_index < 0 || freq_index >= ppp_clasnat_core::kClasNfreq) {
         return -1;
     }
-    return ppp_claslib_full::kClasAmbStart +
-           ppp_claslib_full::kClasMaxSat * freq_index + satno - 1;
+    return ppp_clasnat_core::kClasAmbStart +
+           ppp_clasnat_core::kClasMaxSat * freq_index + satno - 1;
 }
 
 double clasCarrierWavelength(int freq_index) {
@@ -505,9 +505,9 @@ ppp_clas::MeasurementRow::ModelComponents subtractComponents(
     return out;
 }
 
-void initx(ppp_claslib_full::ClaslibRtkState& rtk, int index,
+void initx(ppp_clasnat_core::ClasnatRtkState& rtk, int index,
            double value, double variance) {
-    if (index < 0 || index >= ppp_claslib_full::kClasNx) {
+    if (index < 0 || index >= ppp_clasnat_core::kClasNx) {
         return;
     }
     rtk.x(index) = value;
@@ -701,7 +701,7 @@ std::vector<ZdRow> buildZeroDifferenceRowsFromClas(
                 osr->tide_geometry_m != 0.0 ? osr->tide_geometry_m
                                             : osr->solid_earth_tide_m;
             Eigen::RowVectorXd h_base =
-                Eigen::RowVectorXd::Zero(ppp_claslib_full::kClasNx);
+                Eigen::RowVectorXd::Zero(ppp_clasnat_core::kClasNx);
             h_base(0) = -e[static_cast<size_t>(i * 3 + 0)];
             h_base(1) = -e[static_cast<size_t>(i * 3 + 1)];
             h_base(2) = -e[static_cast<size_t>(i * 3 + 2)];
@@ -785,7 +785,7 @@ std::vector<ZdRow> buildZeroDifferenceRowsFromClas(
 ClasnatMeasurementBuild formSingleDifferenceRows(
     const ObservationData& obs,
     const std::vector<ZdRow>& zd_rows,
-    ppp_claslib_full::ClaslibRtkState& rtk,
+    ppp_clasnat_core::ClasnatRtkState& rtk,
     const ppp_shared::PPPConfig& config,
     const Vector3d& receiver_position) {
     ClasnatMeasurementBuild build;
@@ -856,11 +856,11 @@ ClasnatMeasurementBuild formSingleDifferenceRows(
                 const bool ref_has_iono =
                     ref_iono_it != rtk.ionosphere_indices.end() &&
                     ref_iono_it->second >= 0 &&
-                    ref_iono_it->second < ppp_claslib_full::kClasNx;
+                    ref_iono_it->second < ppp_clasnat_core::kClasNx;
                 const bool sat_has_iono =
                     sat_iono_it != rtk.ionosphere_indices.end() &&
                     sat_iono_it->second >= 0 &&
-                    sat_iono_it->second < ppp_claslib_full::kClasNx;
+                    sat_iono_it->second < ppp_clasnat_core::kClasNx;
                 const double ref_state =
                     ref_has_iono ? rtk.x(ref_iono_it->second) : 0.0;
                 const double sat_state =
@@ -886,11 +886,11 @@ ClasnatMeasurementBuild formSingleDifferenceRows(
                 const bool ref_has_amb =
                     ref_amb_it != rtk.ambiguity_indices.end() &&
                     ref_amb_it->second >= 0 &&
-                    ref_amb_it->second < ppp_claslib_full::kClasNx;
+                    ref_amb_it->second < ppp_clasnat_core::kClasNx;
                 const bool sat_has_amb =
                     sat_amb_it != rtk.ambiguity_indices.end() &&
                     sat_amb_it->second >= 0 &&
-                    sat_amb_it->second < ppp_claslib_full::kClasNx;
+                    sat_amb_it->second < ppp_clasnat_core::kClasNx;
                 if (!sat_has_amb) {
                     continue;
                 }
@@ -1215,7 +1215,7 @@ int zdres(const obsd_t *obs_org,
 ClasnatMeasurementBuild buildEpochMeasurementsClasnatZdres(
     const ObservationData& obs,
     const CLASEpochContext& epoch_context,
-    ppp_claslib_full::ClaslibRtkState& rtk,
+    ppp_clasnat_core::ClasnatRtkState& rtk,
     const ppp_shared::PPPConfig& config,
     const Vector3d& receiver_position,
     double receiver_clock_bias_m,
@@ -1257,8 +1257,8 @@ ClasnatMeasurementBuild buildEpochMeasurementsClasnatZdres(
         return {};
     }
 
-    std::vector<double> x(static_cast<size_t>(ppp_claslib_full::kClasNx), 0.0);
-    for (int i = 0; i < std::min<int>(rtk.x.size(), ppp_claslib_full::kClasNx); ++i) {
+    std::vector<double> x(static_cast<size_t>(ppp_clasnat_core::kClasNx), 0.0);
+    for (int i = 0; i < std::min<int>(rtk.x.size(), ppp_clasnat_core::kClasNx); ++i) {
         x[static_cast<size_t>(i)] = rtk.x(i);
     }
     x[0] = receiver_position.x();

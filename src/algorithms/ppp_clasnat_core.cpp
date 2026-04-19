@@ -1,4 +1,4 @@
-#include <libgnss++/algorithms/ppp_claslib_full.hpp>
+#include <libgnss++/algorithms/ppp_clasnat_core.hpp>
 
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/ppp_ar.hpp>
@@ -26,7 +26,7 @@
 #include <sstream>
 #include <vector>
 
-namespace libgnss::ppp_claslib_full {
+namespace libgnss::ppp_clasnat_core {
 
 namespace {
 
@@ -294,8 +294,10 @@ bool rowLessClasOrder(const ZdRow& lhs, const ZdRow& rhs) {
     return lhs.satellite.prn < rhs.satellite.prn;
 }
 
-ppp_shared::PPPConfig fullConfig(const ppp_shared::PPPConfig& base) {
+ppp_shared::PPPConfig clasnatConfig(const ppp_shared::PPPConfig& base) {
     ppp_shared::PPPConfig config = base;
+    config.use_ported_clasnat = true;
+    config.use_ported_full = true;
     config.use_clas_osr_filter = true;
     config.wlnl_strict_claslib_parity = true;
     config.use_ionosphere_free = false;
@@ -311,6 +313,8 @@ ppp_shared::PPPConfig fullConfig(const ppp_shared::PPPConfig& base) {
     config.clas_initial_position_variance = kClaslibPositionInitVariance;
     config.initial_ionosphere_variance = kIonoInitVariance;
     config.process_noise_ionosphere = 1e-6;
+    config.apply_tides_to_receiver_position = true;
+    config.apply_tide_as_osr = false;
     return config;
 }
 
@@ -532,7 +536,7 @@ double wavelengthForAmbiguity(
     return it->second[static_cast<size_t>(freq_index)];
 }
 
-void dumpFullState(const ClaslibRtkState& rtk,
+void dumpFullState(const ClasnatRtkState& rtk,
                    const GNSSTime& time,
                    const char* stage,
                    double receiver_clock_bias_m,
@@ -731,7 +735,7 @@ void dumpSelectedUpdateRows(const std::vector<FullMeasurementRow>& rows,
 
 void dumpFullUpdateRows(const std::vector<FullMeasurementRow>& rows,
                         const UpdateStats& update,
-                        const ClaslibRtkState& rtk,
+                        const ClasnatRtkState& rtk,
                         const GNSSTime& time) {
     if (!fullStateDumpEnabled(time) ||
         update.state_before.size() != kClasNx ||
@@ -874,7 +878,7 @@ AppliedCorrections selectAppliedCorrections(
     return corrections;
 }
 
-void ensureStorage(ClaslibRtkState& rtk) {
+void ensureStorage(ClasnatRtkState& rtk) {
     if (rtk.x.size() == kClasNx &&
         rtk.P.rows() == kClasNx && rtk.P.cols() == kClasNx &&
         rtk.Q.rows() == kClasNx && rtk.Q.cols() == kClasNx) {
@@ -898,7 +902,7 @@ void ensureStorage(ClaslibRtkState& rtk) {
     rtk.ambiguity_states.clear();
 }
 
-void initx(ClaslibRtkState& rtk, int index, double value, double variance) {
+void initx(ClasnatRtkState& rtk, int index, double value, double variance) {
     if (index < 0 || index >= kClasNx) {
         return;
     }
@@ -912,7 +916,7 @@ void initx(ClaslibRtkState& rtk, int index, double value, double variance) {
     }
 }
 
-void ensureStateMaps(ClaslibRtkState& rtk, const std::vector<OSRCorrection>& osr_corrections) {
+void ensureStateMaps(ClasnatRtkState& rtk, const std::vector<OSRCorrection>& osr_corrections) {
     ensureStorage(rtk);
     for (const auto& osr : osr_corrections) {
         if (!osr.valid) {
@@ -942,7 +946,7 @@ void ensureStateMaps(ClaslibRtkState& rtk, const std::vector<OSRCorrection>& osr
 
 bool solveSeed(const ObservationData& obs,
                const NavigationData& nav,
-               const ClaslibRtkState& rtk,
+               const ClasnatRtkState& rtk,
                PositionSolution& seed) {
     ppp_claslib_pntpos::PntposOptions options;
     options.mode = ppp_claslib_pntpos::PntposOptions::Mode::PppRtk;
@@ -955,7 +959,7 @@ bool solveSeed(const ObservationData& obs,
         obs, nav, initial_rr, seed, nullptr, options);
 }
 
-void predictPosition(ClaslibRtkState& rtk,
+void predictPosition(ClasnatRtkState& rtk,
                      const PositionSolution& seed,
                      const ppp_shared::PPPConfig& config) {
     ensureStorage(rtk);
@@ -972,7 +976,7 @@ void predictPosition(ClaslibRtkState& rtk,
     }
 }
 
-void predictIonosphere(ClaslibRtkState& rtk,
+void predictIonosphere(ClasnatRtkState& rtk,
                        const std::vector<OSRCorrection>& osr_corrections,
                        double dt) {
     if (dt > 0.0 && kIonoTimeConstantS > 0.0) {
@@ -1019,7 +1023,7 @@ void predictIonosphere(ClaslibRtkState& rtk,
     }
 }
 
-void predictAmbiguities(ClaslibRtkState& rtk,
+void predictAmbiguities(ClasnatRtkState& rtk,
                         const ObservationData& obs,
                         const std::vector<OSRCorrection>& osr_corrections,
                         double dt) {
@@ -1124,7 +1128,7 @@ void predictAmbiguities(ClaslibRtkState& rtk,
     }
 }
 
-void propagateState(ClaslibRtkState& rtk,
+void propagateState(ClasnatRtkState& rtk,
                     const ObservationData& obs,
                     const std::vector<OSRCorrection>& osr_corrections,
                     const PositionSolution& seed,
@@ -1305,7 +1309,7 @@ std::vector<ZdRow> buildZeroDifferenceRows(
 MeasurementBuild formSingleDifferenceRows(
     const ObservationData& obs,
     const std::vector<ZdRow>& zd_rows,
-    ClaslibRtkState& rtk,
+    ClasnatRtkState& rtk,
     const ppp_shared::PPPConfig& config,
     const Vector3d& receiver_position) {
     MeasurementBuild build;
@@ -1450,7 +1454,7 @@ MeasurementBuild formSingleDifferenceRows(
 
 MeasurementBuild buildMeasurements(const ObservationData& obs,
                                    const std::vector<OSRCorrection>& osr_corrections,
-                                   ClaslibRtkState& rtk,
+                                   ClasnatRtkState& rtk,
                                    const ppp_shared::PPPConfig& config,
                                    const Vector3d& receiver_position,
                                    double receiver_clock_bias_m,
@@ -1624,7 +1628,7 @@ std::vector<int> selectClaslibResidualRows(
     return selected_rows;
 }
 
-UpdateStats applyMeasurementUpdate(ClaslibRtkState& rtk,
+UpdateStats applyMeasurementUpdate(ClasnatRtkState& rtk,
                                    const std::vector<FullMeasurementRow>& rows,
                                    bool debug_enabled,
                                    const GNSSTime& time) {
@@ -1778,7 +1782,7 @@ UpdateStats applyMeasurementUpdate(ClaslibRtkState& rtk,
     return stats;
 }
 
-void markObservedAmbiguities(ClaslibRtkState& rtk,
+void markObservedAmbiguities(ClasnatRtkState& rtk,
                              const MeasurementBuild& build,
                              const ObservationData& obs) {
     for (const auto& amb_sat : build.observed_ambiguities) {
@@ -1799,7 +1803,7 @@ void markObservedAmbiguities(ClaslibRtkState& rtk,
     }
 }
 
-ppp_shared::PPPState makeArState(const ClaslibRtkState& rtk, bool include_l5) {
+ppp_shared::PPPState makeArState(const ClasnatRtkState& rtk, bool include_l5) {
     ppp_shared::PPPState state;
     state.state = rtk.x;
     state.covariance = rtk.P;
@@ -1824,7 +1828,7 @@ ppp_shared::PPPState makeArState(const ClaslibRtkState& rtk, bool include_l5) {
     return state;
 }
 
-void copyFixedFromArState(const ppp_shared::PPPState& state, ClaslibRtkState& rtk) {
+void copyFixedFromArState(const ppp_shared::PPPState& state, ClasnatRtkState& rtk) {
     if (state.state.size() == kClasNx &&
         state.covariance.rows() == kClasNx &&
         state.covariance.cols() == kClasNx) {
@@ -1834,7 +1838,7 @@ void copyFixedFromArState(const ppp_shared::PPPState& state, ClaslibRtkState& rt
     }
 }
 
-void copyFilterFromArState(const ppp_shared::PPPState& state, ClaslibRtkState& rtk) {
+void copyFilterFromArState(const ppp_shared::PPPState& state, ClasnatRtkState& rtk) {
     if (state.state.size() == kClasNx &&
         state.covariance.rows() == kClasNx &&
         state.covariance.cols() == kClasNx) {
@@ -1843,7 +1847,7 @@ void copyFilterFromArState(const ppp_shared::PPPState& state, ClaslibRtkState& r
     }
 }
 
-bool tryAmbiguityResolution(ClaslibRtkState& rtk,
+bool tryAmbiguityResolution(ClasnatRtkState& rtk,
                             const std::vector<OSRCorrection>& osr_corrections,
                             const ppp_shared::PPPConfig& config,
                             const MatrixXd& pre_update_covariance,
@@ -1943,17 +1947,17 @@ double residualRms(const VectorXd& residuals) {
 
 }  // namespace
 
-void reset(ClaslibRtkState& state) {
-    state = ClaslibRtkState{};
+void reset(ClasnatRtkState& state) {
+    state = ClasnatRtkState{};
 }
 
 EpochResult runEpoch(const ObservationData& obs,
                      const NavigationData& nav,
                      const SSRProducts& ssr,
-                     ClaslibRtkState& rtk,
+                     ClasnatRtkState& rtk,
                      const ppp_shared::PPPConfig& config) {
     EpochResult result;
-    const ppp_shared::PPPConfig epoch_config = fullConfig(config);
+    const ppp_shared::PPPConfig epoch_config = clasnatConfig(config);
 
     PositionSolution seed;
     const bool seed_ok = solveSeed(obs, nav, rtk, seed);
@@ -2092,4 +2096,4 @@ EpochResult runEpoch(const ObservationData& obs,
     return result;
 }
 
-}  // namespace libgnss::ppp_claslib_full
+}  // namespace libgnss::ppp_clasnat_core

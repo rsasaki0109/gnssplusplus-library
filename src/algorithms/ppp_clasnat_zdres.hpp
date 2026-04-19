@@ -1,7 +1,7 @@
 #pragma once
 
 #include <libgnss++/algorithms/ppp_clas.hpp>
-#include <libgnss++/algorithms/ppp_claslib_full.hpp>
+#include <libgnss++/algorithms/ppp_clasnat_core.hpp>
 #include <libgnss++/algorithms/ppp_osr_types.hpp>
 #include <libgnss++/algorithms/ppp_shared.hpp>
 #include <libgnss++/core/observation.hpp>
@@ -23,9 +23,9 @@ constexpr double CLIGHT = 299792458.0;      /* speed of light (m/s) */
 constexpr double FREQ1 = 1.57542E9;         /* L1/E1  frequency (Hz) */
 constexpr double FREQ2 = 1.22760E9;         /* L2     frequency (Hz) */
 
-constexpr int NFREQ = ppp_claslib_full::kClasNfreq;
+constexpr int NFREQ = ppp_clasnat_core::kClasNfreq;
 constexpr int NEXOBS = 0;
-constexpr int MAXSAT = ppp_claslib_full::kClasMaxSat;
+constexpr int MAXSAT = ppp_clasnat_core::kClasMaxSat;
 constexpr int MAXOBS = 64;
 constexpr int SSR_CH_NUM = 2;
 constexpr int MAX_NGRID = 4;                /* number of grids for interpolation */
@@ -218,7 +218,7 @@ struct grid_t {
 struct rtk_t {         /* RTK control/result type */
     sol_t sol;         /* RTK solution */
     double rb[6] = {}; /* base position/velocity (ecef) (m|m/s) */
-    int nx = ppp_claslib_full::kClasNx, na = ppp_claslib_full::kClasNx;
+    int nx = ppp_clasnat_core::kClasNx, na = ppp_clasnat_core::kClasNx;
     double tt = 0.0;   /* time difference between current and previous (s) */
     double* x = nullptr;
     double* P = nullptr;
@@ -260,7 +260,7 @@ int zdres(const obsd_t *obs_org,
 ClasnatMeasurementBuild buildEpochMeasurementsClasnatZdres(
     const ObservationData& obs,
     const CLASEpochContext& epoch_context,
-    ppp_claslib_full::ClaslibRtkState& rtk,
+    ppp_clasnat_core::ClasnatRtkState& rtk,
     const ppp_shared::PPPConfig& config,
     const Vector3d& receiver_position,
     double receiver_clock_bias_m,

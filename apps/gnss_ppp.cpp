@@ -109,8 +109,8 @@ void printUsage(const char* program_name) {
         << "                          troposphere on, --enable-ar --ar-method dd-wlnl. Override any piece after this flag.\n"
         << "  --claslib-bridge         Delegate this run to linked CLASLIB postpos() (requires CMake -DCLASLIB_PARITY_LINK=ON)\n"
         << "  --no-claslib-bridge      Keep the native libgnss++ path even when CLASLIB bridge support is linked\n"
-        << "  --ported-full            Use the native CLASLIB-mirror PPP path with NX=303 and no clock/trop state\n"
-        << "  --ported-clasnat         Use the gated native CLASLIB transcription path\n"
+        << "  --ported-full            Deprecated alias for --ported-clasnat\n"
+        << "  --ported-clasnat         Use the native CLASLIB transcription path\n"
         << "  --claslib-config <file>  CLASLIB rnx2rtkp config for --claslib-bridge (default: CLASLIB static.conf)\n"
         << "  --claslib-l6-week <week> Override CLASLIB L6 GPS week for --claslib-bridge\n"
         << "  --out <solution.pos>     Output position file (required)\n"
@@ -255,6 +255,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.claslib_bridge = false;
         } else if (arg == "--ported-full") {
             options.ported_full = true;
+            options.ported_clasnat = true;
             options.use_clas_osr_filter = true;
             options.clas_epoch_policy_explicit = true;
             options.clas_epoch_policy = "strict-osr";
@@ -669,6 +670,9 @@ int main(int argc, char* argv[]) {
                 options.receiver_antenna_type = "TRM59800.80     NONE";
             }
         }
+        if (options.ported_full && !options.quiet) {
+            std::cerr << "Warning: --ported-full is deprecated; using --ported-clasnat.\n";
+        }
 
         if (options.claslib_bridge) {
             namespace claslib = libgnss::external::claslib;
@@ -821,7 +825,7 @@ int main(int argc, char* argv[]) {
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
         ppp_config.strict_first_ar_dump_path = options.first_ar_dump_path;
-        ppp_config.use_ported_clasnat = options.ported_clasnat;
+        ppp_config.use_ported_clasnat = options.ported_clasnat || options.ported_full;
         ppp_config.use_ported_full = options.ported_full;
         if (options.claslib_parity || options.ported_full || options.ported_clasnat) {
             ppp_config.clas_outlier_sigma_scale = 8.0;

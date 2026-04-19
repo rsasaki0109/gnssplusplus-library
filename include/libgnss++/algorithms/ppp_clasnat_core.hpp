@@ -9,7 +9,7 @@
 #include <map>
 #include <set>
 
-namespace libgnss::ppp_claslib_full {
+namespace libgnss::ppp_clasnat_core {
 
 constexpr int kClasMaxSat = 75;
 constexpr int kClasNfreq = 3;
@@ -18,7 +18,7 @@ constexpr int kClasNi = kClasMaxSat;
 constexpr int kClasAmbStart = kClasNp + kClasNi;
 constexpr int kClasNx = kClasAmbStart + kClasMaxSat * kClasNfreq;
 
-struct ClaslibRtkState {
+struct ClasnatRtkState {
     Eigen::VectorXd x;
     Eigen::MatrixXd P;
     Eigen::MatrixXd Q;
@@ -48,12 +48,12 @@ struct EpochResult {
     int active_state_count = 0;
 };
 
-void reset(ClaslibRtkState& state);
+void reset(ClasnatRtkState& state);
 
 EpochResult runEpoch(const ObservationData& obs,
                      const NavigationData& nav,
                      const SSRProducts& ssr,
-                     ClaslibRtkState& rtk,
+                     ClasnatRtkState& rtk,
                      const ppp_shared::PPPConfig& config);
 
-}  // namespace libgnss::ppp_claslib_full
+}  // namespace libgnss::ppp_clasnat_core

@@ -42,8 +42,7 @@ set(GNSS_SOURCES
     src/algorithms/ppp_atmosphere.cpp
     src/algorithms/ppp_clas.cpp
     src/algorithms/ppp_claslib_pntpos.cpp
-    src/algorithms/ppp_claslib_full.cpp
-    src/algorithms/ppp_clasnat.cpp
+    src/algorithms/ppp_clasnat_core.cpp
     src/algorithms/ppp_clasnat_osr.cpp
     src/algorithms/ppp_clasnat_zdres.cpp
     src/algorithms/ppp_clasnat_trop.cpp
