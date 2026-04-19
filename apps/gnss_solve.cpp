@@ -96,6 +96,7 @@ struct SolveConfig {
     double max_hold_divergence_m = 0.0;
     double max_position_jump_m = 0.0;
     int max_consecutive_float_for_reset = 0;
+    double max_postfix_residual_rms = 0.0;
 };
 
 double timeDiffSeconds(const libgnss::GNSSTime& a, const libgnss::GNSSTime& b) {
@@ -409,6 +410,8 @@ void printUsage(const char* program_name) {
         << "                             (default: 0, disabled)\n"
         << "  --max-pos-jump <v>         Max AR fix jump from last fixed pos in meters\n"
         << "                             (default: 0, disabled; additional to history check)\n"
+        << "  --max-postfix-rms <v>      Max L1 post-fix phase residual RMS in meters\n"
+        << "                             (default: 0, disabled)\n"
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
         << "                             (default: 0, disabled; e.g. 10 for aggressive urban reconvergence)\n"
@@ -576,6 +579,8 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.max_hold_divergence_m = std::stod(argv[++i]);
         } else if (arg == "--max-pos-jump" && i + 1 < argc) {
             config.max_position_jump_m = std::stod(argv[++i]);
+        } else if (arg == "--max-postfix-rms" && i + 1 < argc) {
+            config.max_postfix_residual_rms = std::stod(argv[++i]);
         } else if (arg == "--max-consec-float-reset" && i + 1 < argc) {
             config.max_consecutive_float_for_reset = std::stoi(argv[++i]);
         } else if (arg == "--max-baseline-m" && i + 1 < argc) {
@@ -760,6 +765,7 @@ int main(int argc, char* argv[]) {
         rtk_config.max_hold_divergence_m = config.max_hold_divergence_m;
         rtk_config.max_position_jump_m = config.max_position_jump_m;
         rtk_config.max_consecutive_float_for_reset = config.max_consecutive_float_for_reset;
+        rtk_config.max_postfix_residual_rms = config.max_postfix_residual_rms;
         rtk_processor.setRTKConfig(rtk_config);
         libgnss::SPPProcessor::SPPConfig spp_config;
         spp_config.use_multi_constellation = true;

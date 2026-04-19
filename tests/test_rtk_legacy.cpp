@@ -365,6 +365,64 @@ TEST(RTKLegacyCompatibilityStandaloneTest, MaxConsecutiveFloatResetDefaultDisabl
     EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 0);
 }
 
+TEST(RTKLegacyCompatibilityStandaloneTest, MaxPostfixResidualRmsDefaultDisabled) {
+    // Default max_postfix_residual_rms must be 0.0 (disabled — existing behavior preserved).
+    RTKProcessor processor;
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_postfix_residual_rms, 0.0);
+
+    // Explicitly set 0.0 and confirm round-trip.
+    RTKProcessor::RTKConfig cfg;
+    cfg.max_postfix_residual_rms = 0.0;
+    processor.setRTKConfig(cfg);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_postfix_residual_rms, 0.0);
+
+    // Setting a non-zero value should be stored correctly.
+    RTKProcessor::RTKConfig cfg2;
+    cfg2.max_postfix_residual_rms = 0.5;
+    processor.setRTKConfig(cfg2);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_postfix_residual_rms, 0.5);
+
+    // Reset to 0 confirms disabled state.
+    RTKProcessor::RTKConfig cfg3;
+    cfg3.max_postfix_residual_rms = 0.0;
+    processor.setRTKConfig(cfg3);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_postfix_residual_rms, 0.0);
+}
+
+TEST(RTKLegacyCompatibilityStandaloneTest, MaxPostfixResidualRmsConfigurable) {
+    RTKProcessor processor;
+
+    // 1.0 m threshold
+    RTKProcessor::RTKConfig cfg1;
+    cfg1.max_postfix_residual_rms = 1.0;
+    processor.setRTKConfig(cfg1);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_postfix_residual_rms, 1.0);
+
+    // 0.5 m threshold
+    RTKProcessor::RTKConfig cfg2;
+    cfg2.max_postfix_residual_rms = 0.5;
+    processor.setRTKConfig(cfg2);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_postfix_residual_rms, 0.5);
+
+    // infinity sentinel (disabled)
+    RTKProcessor::RTKConfig cfg3;
+    cfg3.max_postfix_residual_rms = std::numeric_limits<double>::infinity();
+    processor.setRTKConfig(cfg3);
+    EXPECT_TRUE(std::isinf(processor.getRTKConfig().max_postfix_residual_rms));
+
+    // NaN sentinel (also disabled by isfinite guard)
+    RTKProcessor::RTKConfig cfg4;
+    cfg4.max_postfix_residual_rms = std::numeric_limits<double>::quiet_NaN();
+    processor.setRTKConfig(cfg4);
+    EXPECT_TRUE(std::isnan(processor.getRTKConfig().max_postfix_residual_rms));
+
+    // 0.0 (disabled)
+    RTKProcessor::RTKConfig cfg5;
+    cfg5.max_postfix_residual_rms = 0.0;
+    processor.setRTKConfig(cfg5);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_postfix_residual_rms, 0.0);
+}
+
 TEST(RTKLegacyCompatibilityStandaloneTest, ArPolicyDemo5ContinuousDisablesHoldFix) {
     // Under DEMO5_CONTINUOUS, the hold-fix fallback code path is gated off.
     // We verify by checking that tryHoldFix returns false when called directly
