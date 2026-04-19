@@ -140,6 +140,22 @@ void expectNearSatposSsr(const std::string& label,
     EXPECT_EQ(native.svh, oracle.svh) << label << " svh";
 }
 
+void expectNearEph2pos(const std::string& label,
+                       const double native_rs[3],
+                       double native_dts,
+                       double native_variance,
+                       const double oracle_rs[3],
+                       double oracle_dts,
+                       double oracle_variance) {
+    expectNearArray(label + " position", native_rs, oracle_rs, 3);
+    EXPECT_NEAR(native_dts * libgnss::constants::SPEED_OF_LIGHT,
+                oracle_dts * libgnss::constants::SPEED_OF_LIGHT,
+                kParityTolerance)
+        << label << " clock bias";
+    EXPECT_NEAR(native_variance, oracle_variance, kParityTolerance)
+        << label << " variance";
+}
+
 class ClasnatParity : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -225,6 +241,64 @@ TEST_F(ClasnatParity, PrectropModeledSlant) {
         const double oracle = libgnss::external::claslib_oracle::prectrop(
             samples[i].time, samples[i].pos, samples[i].azel, zwd, ztd);
         EXPECT_NEAR(native, oracle, kParityTolerance) << "prectrop sample=" << i;
+    }
+}
+
+TEST_F(ClasnatParity, Eph2clkBroadcastClock) {
+    ASSERT_TRUE(libgnss::clasnat_parity::eph2clkAvailable());
+    for (int sample = 0; sample < 20; ++sample) {
+        const auto input = libgnss::clasnat_parity::makeSatposSsrInput(sample);
+        const double native = libgnss::clasnat_parity::eph2clk(input.time, input.eph);
+        const double oracle = libgnss::external::claslib_oracle::eph2clk(
+            input.time, input.eph);
+        EXPECT_NEAR(native * libgnss::constants::SPEED_OF_LIGHT,
+                    oracle * libgnss::constants::SPEED_OF_LIGHT,
+                    kParityTolerance)
+            << "eph2clk sample=" << sample;
+    }
+}
+
+TEST_F(ClasnatParity, Eph2posBroadcastOrbitClock) {
+    ASSERT_TRUE(libgnss::clasnat_parity::eph2posAvailable());
+    for (int sample = 0; sample < 20; ++sample) {
+        const auto input = libgnss::clasnat_parity::makeSatposSsrInput(sample);
+        double native_rs[3] = {};
+        double oracle_rs[3] = {};
+        double native_dts = 0.0;
+        double oracle_dts = 0.0;
+        double native_variance = 0.0;
+        double oracle_variance = 0.0;
+        const bool native_ok = libgnss::clasnat_parity::eph2pos(
+            input.time, input.eph, native_rs, native_dts, native_variance);
+        const bool oracle_ok = libgnss::external::claslib_oracle::eph2pos(
+            input.time, input.eph, oracle_rs, oracle_dts, oracle_variance);
+        ASSERT_TRUE(native_ok) << "native eph2pos failed sample=" << sample;
+        ASSERT_TRUE(oracle_ok) << "CLASLIB eph2pos oracle failed sample=" << sample;
+        expectNearEph2pos("eph2pos sample=" + std::to_string(sample),
+                          native_rs,
+                          native_dts,
+                          native_variance,
+                          oracle_rs,
+                          oracle_dts,
+                          oracle_variance);
+    }
+}
+
+TEST_F(ClasnatParity, GeodistSagnacRangeAndLos) {
+    ASSERT_TRUE(libgnss::clasnat_parity::geodistAvailable());
+    const auto samples = makeSamples();
+    for (size_t i = 0; i < samples.size(); ++i) {
+        double native_e[3] = {};
+        double oracle_e[3] = {};
+        const double native = libgnss::clasnat_parity::geodist(
+            samples[i].rs, samples[i].rr, native_e);
+        const double oracle = libgnss::external::claslib_oracle::geodist(
+            samples[i].rs, samples[i].rr, oracle_e);
+        EXPECT_NEAR(native, oracle, kParityTolerance) << "geodist range sample=" << i;
+        expectNearArray("geodist los sample=" + std::to_string(i),
+                        native_e,
+                        oracle_e,
+                        3);
     }
 }
 

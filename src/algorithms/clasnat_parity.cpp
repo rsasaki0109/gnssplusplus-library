@@ -1400,6 +1400,18 @@ bool prectropAvailable() {
     return true;
 }
 
+bool eph2clkAvailable() {
+    return true;
+}
+
+bool eph2posAvailable() {
+    return true;
+}
+
+bool geodistAvailable() {
+    return true;
+}
+
 bool satposSsrAvailable() {
     return true;
 }
@@ -1689,6 +1701,37 @@ double prectrop(const GNSSTime& time,
     double wet_mapping = 0.0;
     const double dry_mapping = claslibTropmapf(time, pos, azel, &wet_mapping);
     return dry_mapping * dry_delay_m * ztd + wet_mapping * wet_delay_m * zwd;
+}
+
+double eph2clk(const GNSSTime& time, const SatposBroadcastEphemeris& eph) {
+    double t = clasTimediff(time, eph.toc);
+    for (int i = 0; i < 2; ++i) {
+        t -= eph.f0 + eph.f1 * t + eph.f2 * t * t;
+    }
+    return eph.f0 + eph.f1 * t + eph.f2 * t * t;
+}
+
+bool eph2pos(const GNSSTime& time,
+             const SatposBroadcastEphemeris& eph,
+             double rs[3],
+             double& dts,
+             double& variance) {
+    return parityEph2pos(time, eph, rs, &dts, &variance);
+}
+
+double geodist(const double rs[3], const double rr[3], double e[3]) {
+    if (norm3(rs) < constants::WGS84_A) {
+        return -1.0;
+    }
+    for (int i = 0; i < 3; ++i) {
+        e[i] = rs[i] - rr[i];
+    }
+    const double r = norm3(e);
+    for (int i = 0; i < 3; ++i) {
+        e[i] /= r;
+    }
+    return r + kClasOmge * (rs[0] * rr[1] - rs[1] * rr[0]) /
+                   constants::SPEED_OF_LIGHT;
 }
 
 bool satpos_ssr(const GNSSTime& teph,

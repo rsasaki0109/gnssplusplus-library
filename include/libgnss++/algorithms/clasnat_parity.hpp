@@ -137,6 +137,9 @@ bool windupcorrAvailable();
 bool antmodelAvailable();
 bool ionmapfAvailable();
 bool prectropAvailable();
+bool eph2clkAvailable();
+bool eph2posAvailable();
+bool geodistAvailable();
 bool satposSsrAvailable();
 bool corrmeasAvailable();
 
@@ -163,6 +166,16 @@ double prectrop(const GNSSTime& time,
                 const double azel[2],
                 double zwd,
                 double ztd);
+
+double eph2clk(const GNSSTime& time, const SatposBroadcastEphemeris& eph);
+
+bool eph2pos(const GNSSTime& time,
+             const SatposBroadcastEphemeris& eph,
+             double rs[3],
+             double& dts,
+             double& variance);
+
+double geodist(const double rs[3], const double rr[3], double e[3]);
 
 bool satpos_ssr(const GNSSTime& teph,
                 const GNSSTime& time,

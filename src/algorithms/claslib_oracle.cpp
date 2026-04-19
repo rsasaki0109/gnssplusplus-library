@@ -230,6 +230,49 @@ double prectrop(const GTime& time,
 #endif
 }
 
+double eph2clk(const GTime& time, const SatposBroadcastEphemeris& input) {
+#if GNSSPP_HAS_CLASLIB_BRIDGE
+    eph_t eph = {};
+    fillClasEph(input, eph);
+    return ::eph2clk(toClasTime(time), &eph);
+#else
+    (void)time;
+    (void)input;
+    return 0.0;
+#endif
+}
+
+bool eph2pos(const GTime& time,
+             const SatposBroadcastEphemeris& input,
+             double rs[3],
+             double& dts,
+             double& variance) {
+#if GNSSPP_HAS_CLASLIB_BRIDGE
+    eph_t eph = {};
+    fillClasEph(input, eph);
+    ::eph2pos(toClasTime(time), &eph, rs, &dts, &variance);
+    return true;
+#else
+    (void)time;
+    (void)input;
+    zero3(rs);
+    dts = 0.0;
+    variance = 0.0;
+    return false;
+#endif
+}
+
+double geodist(const double rs[3], const double rr[3], double e[3]) {
+#if GNSSPP_HAS_CLASLIB_BRIDGE
+    return ::geodist(rs, rr, e);
+#else
+    (void)rs;
+    (void)rr;
+    zero3(e);
+    return -1.0;
+#endif
+}
+
 bool satpos_ssr(const GTime& teph,
                 const GTime& time,
                 int sat,

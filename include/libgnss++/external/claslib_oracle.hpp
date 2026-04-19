@@ -7,6 +7,7 @@ namespace libgnss::external::claslib_oracle {
 
 using GTime = GNSSTime;
 using ReceiverPcvModel = libgnss::clasnat_parity::ReceiverPcvModel;
+using SatposBroadcastEphemeris = libgnss::clasnat_parity::SatposBroadcastEphemeris;
 using SatposSsrOutput = libgnss::clasnat_parity::SatposSsrOutput;
 using SatposSsrInput = libgnss::clasnat_parity::SatposSsrInput;
 using CorrmeasOutput = libgnss::clasnat_parity::CorrmeasOutput;
@@ -36,6 +37,16 @@ double prectrop(const GTime& time,
                 const double azel[2],
                 double zwd,
                 double ztd);
+
+double eph2clk(const GTime& time, const SatposBroadcastEphemeris& eph);
+
+bool eph2pos(const GTime& time,
+             const SatposBroadcastEphemeris& eph,
+             double rs[3],
+             double& dts,
+             double& variance);
+
+double geodist(const double rs[3], const double rr[3], double e[3]);
 
 bool satpos_ssr(const GTime& teph,
                 const GTime& time,
