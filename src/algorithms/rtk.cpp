@@ -1984,6 +1984,13 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
             consecutive_fix_count_)) {
         return false;
     }
+    if (!isMovingBasePositionMode(rtk_config_) &&
+        rtk_config_.max_position_jump_m > 0.0 &&
+        rtk_validation::exceedsAbsoluteJump(
+            new_pos, last_fixed_position_, has_last_fixed_position_,
+            rtk_config_.max_position_jump_m)) {
+        return false;
+    }
 
     // Sanity check: reject fixes where any component is unreasonably large
     if (fixed_baseline_.norm() > rtk_config_.max_baseline_length) {
@@ -2198,6 +2205,12 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
     if (rtk_validation::exceedsAbsoluteJump(
             test_pos, last_fixed_position_, has_last_fixed_position_, max_hold_jump_m)) {
         return false;
+    }
+    if (rtk_config_.max_hold_divergence_m > 0.0 && filter_state_.state.size() >= 3) {
+        const Vector3d float_pos = base_position_ + filter_state_.state.head<3>();
+        if ((test_pos - float_pos).norm() > rtk_config_.max_hold_divergence_m) {
+            return false;
+        }
     }
 
     // Accept hold fix
