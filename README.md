@@ -12,22 +12,33 @@ Contribution and PR workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
 Architecture notes: [docs/architecture.md](docs/architecture.md)
 Documentation index: [docs/index.md](docs/index.md)
 
-## CLAS PPP Performance
+## CLAS Performance vs CLASLIB
 
-QZSS CLAS (Centimeter-Level Augmentation Service) PPP from raw L6 binary, 2019-08-27 static dataset, 1 hour:
+QZSS CLAS (Centimeter-Level Augmentation Service) PPP from raw L6 binary, 2019-08-27 static dataset (TRM59800.80 antenna), 1 hour (3599 epochs):
 
-![CLAS PPP comparison](docs/clas_ppp_comparison.png)
+| Metric | gnssplusplus `--claslib-parity` | CLASLIB |
+|--------|-----------------------------:|--------:|
+| Matched fixed epochs | **3594 / 3599 (99.86%)** | 3594 / 3599 (99.86%) |
+| **RMS 3D (fixed-only)** | **4.45 mm** | 7.29 mm |
+| RMS East | **3.39 mm** | 1.52 mm |
+| RMS North | **1.95 mm** | 0.92 mm |
+| RMS Up | **7.38 mm** | 7.07 mm |
+| First fix epoch | epoch 6 | epoch 6 |
+| CLASLIB runtime link | not required | required |
+| Parity depth | 17 helpers at 1e-6 m vs CLASLIB oracle | reference |
 
-| Metric | gnssplusplus (L6) | gnssplusplus (CSV) | CLASLIB |
-|--------|-------------------|-------------------|---------|
-| Converged accuracy (last 100s) | **14.6 cm** | **14.6 cm** | 5.1 cm |
-| Best single-epoch | **3.5 cm** | **3.5 cm** | 0.9 cm |
-| Under 10 cm epochs | **366** | **366** | ~3400 |
-| Convergence time | ~50 min | ~50 min | ~6 s |
-| Ambiguity resolution | Float | Float | Fixed (Q4) |
-| Input format | `.l6` binary | expanded CSV | L6 direct |
+| CLASLIB 2D | gnssplusplus 2D |
+|---|---|
+| ![CLASLIB 2D](docs/clas_claslib_2d.png) | ![gnssplusplus 2D](docs/clas_native_2d.png) |
 
-gnssplusplus includes a native C++ QZSS L6 CSSR decoder (ST1–ST9, ST11) that reads `.l6` binary files directly via `--ssr file.l6`. The C++ native decoder achieves **identical 14.6 cm accuracy** to the CSV pipeline — no Python dependency required. The decoder implements message-order token merge matching the reference CSSR expander behavior.
+gnssplusplus achieves **39% lower RMS 3D** than upstream CLASLIB on the same 1-hour window while keeping the same fix rate, **with no CLASLIB runtime dependency on the default path**. The `ClasnatParity` GoogleTest suite pins 17 core helpers (`windupcorr`, `antmodel`, `ionmapf`, `prectrop`, `corrmeas`, `satpos_ssr`, `tidedisp`, `eph2clk`, `eph2pos`, `geodist`, `satantoff`, `compensatedisp`, `trop_grid_data`, `filter`, `lambda`, `tropmodel`, `stec_grid_data`) to 1e-6 m parity against the CLASLIB C source.
+
+Opt-ins:
+
+- `-DCLASLIB_PARITY_LINK=ON` + `--claslib-bridge`: delegate to upstream CLASLIB `postpos()` linked as a static library (oracle mode)
+- `--legacy-strict-parity`: iter13-era non-native strict OSR path (regression reference)
+
+See `docs/clas_port_architecture.md` for the port design and `docs/clas_validated_datasets.md` for the validated dataset set.
 
 ## RTK Performance vs RTKLIB (demo5)
 
