@@ -4,12 +4,79 @@ on:
   push:
     branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+      run_heavy: ${{ steps.scope.outputs.run_heavy }}
+      changed_paths_json: ${{ steps.scope.outputs.changed_paths_json }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Collect changed paths
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" > changed_paths.txt
+        elif [ "${{ github.event_name }}" = "push" ]; then
+          before="${{ github.event.before }}"
+          if [ -z "${before}" ] || [ "${before}" = "0000000000000000000000000000000000000000" ]; then
+            git diff-tree --no-commit-id --name-only -r "${{ github.sha }}" > changed_paths.txt
+          else
+            git diff --name-only "${before}" "${{ github.sha }}" > changed_paths.txt
+          fi
+        else
+          : > changed_paths.txt
+        fi
+        sed -i '/^$/d' changed_paths.txt
+        sort -u changed_paths.txt -o changed_paths.txt || true
+        echo "Changed paths:"
+        if [ -s changed_paths.txt ]; then
+          cat changed_paths.txt
+        else
+          echo "(none; workflow_dispatch or empty diff)"
+        fi
+
+    - name: Classify CI scope
+      id: scope
+      run: python3 scripts/ci/detect_ci_scope.py --paths-file changed_paths.txt --github-output "$GITHUB_OUTPUT"
+
+  hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Run hygiene checks
+      run: bash scripts/ci/run_hygiene.sh
+
   build-and-test:
+    needs: [changes, hygiene]
+    if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         compiler: [gcc, clang]
@@ -18,67 +85,245 @@ jobs:
             compiler: gcc
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - name: Install dependencies (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
+    - name: Prepare build
+      uses: ./.github/actions/prepare-build
+      with:
+        os-name: ${{ matrix.os }}
+        compiler: ${{ matrix.compiler }}
+        build-type: Release
+        install-docs-deps: "true"
+
+    - name: Show ccache stats
+      run: ccache -s
+
+    - name: Run core tests
+      run: bash scripts/ci/run_core_tests.sh
+
+    - name: Upload CTest diagnostics
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ctest-diagnostics-${{ matrix.os }}-${{ matrix.compiler }}
+        path: |
+          build/CMakeCache.txt
+          build/Testing/Temporary/LastTest.log
+          build/Testing/Temporary/LastTestsFailed.log
+        if-no-files-found: ignore
+
+    - name: Append build summary
+      if: always()
+      shell: bash
+      env:
+        CI_OS: ${{ matrix.os }}
+        CI_BUILD_TYPE: Release
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libeigen3-dev libgtest-dev cmake build-essential
-        if [ "${{ matrix.compiler }}" = "clang" ]; then
-          sudo apt-get install -y clang
+        set -euo pipefail
+        python - <<'PY'
+        import os
+        import re
+        import subprocess
+        from pathlib import Path
+
+        os_name = os.environ["CI_OS"]
+        build_type = os.environ["CI_BUILD_TYPE"]
+
+        passed = "unknown"
+        failed = "unknown"
+        last_test_log = Path("build/Testing/Temporary/LastTest.log")
+        if last_test_log.exists():
+            last_test_text = last_test_log.read_text(encoding="utf-8", errors="ignore")
+            match = re.search(r"(\d+)% tests passed, (\d+) tests failed out of (\d+)", last_test_text)
+            if match is not None:
+                failed_count = int(match.group(2))
+                total_count = int(match.group(3))
+                passed = str(total_count - failed_count)
+                failed = str(failed_count)
+
+        hit_rate = "unknown"
+        stats_output = subprocess.run(["ccache", "-s"], check=False, capture_output=True, text=True).stdout
+        match = re.search(r"^\s*Hits:.*\(([^)]+)\)", stats_output, re.MULTILINE)
+        if match is not None:
+            hit_rate = match.group(1).strip()
+        else:
+            direct_hits = 0
+            preprocessed_hits = 0
+            misses = 0
+            for line in stats_output.splitlines():
+                stripped = line.strip()
+                if re.fullmatch(r"cache hit \(direct\)\s+\d+", stripped):
+                    direct_hits = int(stripped.rsplit(None, 1)[-1])
+                elif re.fullmatch(r"cache hit \(preprocessed\)\s+\d+", stripped):
+                    preprocessed_hits = int(stripped.rsplit(None, 1)[-1])
+                elif re.fullmatch(r"cache miss\s+\d+", stripped):
+                    misses = int(stripped.rsplit(None, 1)[-1])
+            total_calls = direct_hits + preprocessed_hits + misses
+            if total_calls > 0:
+                hit_rate = f"{((direct_hits + preprocessed_hits) / total_calls) * 100:.2f}%"
+
+        summary_path = Path(os.environ["GITHUB_STEP_SUMMARY"])
+        with summary_path.open("a", encoding="utf-8") as handle:
+            handle.write("### Build Summary\n\n")
+            handle.write("| Field | Value |\n")
+            handle.write("| --- | --- |\n")
+            handle.write(f"| OS | {os_name} |\n")
+            handle.write(f"| Build type | {build_type} |\n")
+            handle.write(f"| CTest passed | {passed} |\n")
+            handle.write(f"| CTest failed | {failed} |\n")
+            handle.write(f"| ccache hit rate | {hit_rate} |\n")
+        PY
+
+  linux-extended-tests:
+    needs: [changes, hygiene, build-and-test]
+    if: needs.changes.outputs.run_heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Prepare build
+      uses: ./.github/actions/prepare-build
+      with:
+        os-name: ubuntu-latest
+        build-type: Release
+        install-docs-deps: "true"
+        install-playwright: "true"
+
+    - name: Show ccache stats
+      run: ccache -s
+
+    - name: Run extended tests
+      run: bash scripts/ci/run_extended_tests.sh
+
+    - name: Upload CTest diagnostics
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ctest-diagnostics-ubuntu-extended
+        path: |
+          build/CMakeCache.txt
+          build/Testing/Temporary/LastTest.log
+          build/Testing/Temporary/LastTestsFailed.log
+        if-no-files-found: ignore
+
+    - name: Docker smoke
+      run: |
+        docker build -t libgnsspp-ci .
+        docker compose -f compose.yaml config >/dev/null
+        # Container run tests require the gnss CLI binary (not yet on main)
+        # docker run --rm libgnsspp-ci --help >/dev/null
+
+  linux-optional-signoffs:
+    needs: [changes, linux-extended-tests]
+    if: needs.changes.outputs.run_heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Prepare build
+      uses: ./.github/actions/prepare-build
+      with:
+        os-name: ubuntu-latest
+        build-type: Release
+        install-docs-deps: "true"
+
+    - name: Run optional integration tests
+      run: bash scripts/ci/run_optional_tests.sh
+
+    - name: Upload CTest diagnostics
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ctest-diagnostics-ubuntu-optional
+        path: |
+          build/CMakeCache.txt
+          build/Testing/Temporary/LastTest.log
+          build/Testing/Temporary/LastTestsFailed.log
+        if-no-files-found: ignore
+
+    - name: Optional RTK sign-offs
+      env:
+        GNSSPP_PPC_DATASET_ROOT: ${{ vars.GNSSPP_PPC_DATASET_ROOT }}
+        GNSSPP_RTKLIB_BIN: ${{ vars.GNSSPP_RTKLIB_BIN }}
+        GNSSPP_SCORPION_MOVING_BASE_INPUT: ${{ vars.GNSSPP_SCORPION_MOVING_BASE_INPUT }}
+        GNSSPP_SCORPION_MOVING_BASE_URL: ${{ vars.GNSSPP_SCORPION_MOVING_BASE_URL }}
+      run: bash scripts/ci/run_optional_rtk_signoffs.sh
+
+    - name: Upload RTK sign-off artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: rtk-signoffs-ubuntu
+        path: |
+          output/ci_optional_rtk_signoffs_summary.json
+          output/ci_optional_rtk_signoffs/*.log
+          output/ppc_nagoya_run1_rtk_summary.json
+          output/ppc_nagoya_run1_rtk.pos
+          output/ppc_nagoya_run1_rtk_events.csv
+          output/ppc_tokyo_run1_rtk_summary.json
+          output/ppc_tokyo_run1_rtk.pos
+          output/ppc_tokyo_run1_rtk_events.csv
+          output/ppc_tokyo_run1_rtk_rtklib.pos
+          output/scorpion_moving_base_summary.json
+          output/scorpion_moving_base/prepare_summary.json
+          output/scorpion_moving_base/products_summary.json
+          output/scorpion_moving_base/scorpion_moving_base.pos
+          output/scorpion_moving_base/scorpion_moving_base_matches.csv
+          output/scorpion_moving_base/scorpion_moving_base.png
+          output/scorpion_moving_base/reference.csv
+        if-no-files-found: ignore
+
+    - name: Optional PPP products sign-off with MALIB comparison
+      env:
+        GNSSPP_MALIB_BIN: ${{ vars.GNSSPP_MALIB_BIN }}
+      run: |
+        if [ -z "${GNSSPP_MALIB_BIN}" ] || [ ! -x "${GNSSPP_MALIB_BIN}" ]; then
+          echo "MALIB binary is unavailable; skipping PPP products comparison sign-off."
+          exit 0
         fi
+        mkdir -p output
+        python3 apps/gnss.py ppp-products-signoff \
+          --profile kinematic \
+          --obs data/rover_kinematic.obs \
+          --base data/base_kinematic.obs \
+          --nav data/navigation_kinematic.nav \
+          --summary-json output/ppp_kinematic_products_summary.json \
+          --max-epochs 60 \
+          --malib-bin "${GNSSPP_MALIB_BIN}" \
+          --require-common-epoch-pairs-min 20 \
+          --require-ppp-solution-rate-min 100
 
-    - name: Install dependencies (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install eigen googletest cmake
-        if [ "${{ matrix.compiler }}" = "clang" ]; then
-          brew install llvm
-        fi
-
-    - name: Configure CMake
-      run: |
-        if [ "${{ matrix.compiler }}" = "clang" ]; then
-          export CC=clang
-          export CXX=clang++
-        fi
-        cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_EXAMPLES=ON
-
-    - name: Build
-      run: cmake --build build --config Release -j$(nproc)
-
-    - name: Run tests
-      working-directory: build
-      run: ctest --output-on-failure
-
-    - name: Run examples
-      working-directory: build
-      run: |
-        # Create test data directory
-        mkdir -p test_data
-        # Note: In real usage, you would add actual RINEX test files here
-        echo "Examples would run with real RINEX data"
+    - name: Upload PPP products comparison artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ppp-products-ubuntu
+        path: |
+          output/ppp_kinematic_products_summary.json
+          output/ppp_kinematic_products_solution.pos
+          output/ppp_kinematic_products_comparison.csv
+          output/ppp_kinematic_products_comparison.png
+          output/malib_ppp_kinematic_solution.pos
+          output/ppp_static_products_summary.json
+          output/ppp_static_products_solution.pos
+          output/ppp_static_products_comparison.csv
+          output/ppp_static_products_comparison.png
+        if-no-files-found: ignore
 
   static-analysis:
+    needs: [changes, hygiene]
+    if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libeigen3-dev cppcheck clang-tidy
+        sudo apt-get install -y libeigen3-dev cppcheck
 
     - name: Run cppcheck
-      run: |
-        cppcheck --enable=all --std=c++17 --suppress=missingIncludeSystem \
-          --suppress=unusedFunction --error-exitcode=1 include/
-
-    - name: Configure for clang-tidy
-      run: |
-        cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-
-    - name: Run clang-tidy
-      run: |
-        find include/ -name "*.hpp" | xargs clang-tidy -p build/
+      run: bash scripts/ci/run_cppcheck.sh

@@ -1,0 +1,40 @@
+site_name: libgnss++
+site_description: Modern C++ GNSS/RTK/PPP/CLAS toolkit
+site_url: https://rsasaki0109.github.io/gnssplusplus-library/
+repo_url: https://github.com/rsasaki0109/gnssplusplus-library
+repo_name: rsasaki0109/gnssplusplus-library
+docs_dir: docs
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Quick Start: quickstart.md
+  - Benchmarks: benchmarks.md
+  - Validation: validation.md
+  - Interfaces: interfaces.md
+  - Experiments: experiments.md
+  - Decisions: decisions.md
+  - References:
+      - Overview: references/index.md
+      - MADOCALIB Gap: references/madocalib-gap.md
+      - CLASLIB Gap: references/claslib-gap.md
+      - demo5 Gap: references/demo5-gap.md
+      - MALIB Ops Gap: references/malib-ops-gap.md
+      - laika Gap: references/laika-gap.md
+      - PocketSDR Notes: references/pocketsdr-notes.md
+      - SignalSim Notes: references/signalsim-notes.md
+      - GSILIB Notes: references/gsilib-notes.md
+      - Roadmap: references/roadmap.md
+  - Contributing: contributing.md
