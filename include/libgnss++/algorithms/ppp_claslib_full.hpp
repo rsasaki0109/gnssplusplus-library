@@ -21,6 +21,7 @@ constexpr int kClasNx = kClasAmbStart + kClasMaxSat * kClasNfreq;
 struct ClaslibRtkState {
     Eigen::VectorXd x;
     Eigen::MatrixXd P;
+    Eigen::MatrixXd Q;
     Eigen::VectorXd xa;
     Eigen::MatrixXd Pa;
     std::map<SatelliteId, int> ionosphere_indices;

@@ -863,7 +863,16 @@ DdFixAttempt tryDirectDdFix(
         return DdFixAttempt{};
     }
 
-    const VectorXd db = ldlt.solve(dd_residual);
+    VectorXd db;
+    if (config.wlnl_strict_claslib_parity) {
+        Eigen::FullPivLU<MatrixXd> lu(dd_cov_copy);
+        if (!lu.isInvertible()) {
+            return DdFixAttempt{};
+        }
+        db = lu.solve(dd_residual);
+    } else {
+        db = ldlt.solve(dd_residual);
+    }
     if (!db.allFinite()) {
         return DdFixAttempt{};
     }

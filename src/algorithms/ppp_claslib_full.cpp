@@ -33,7 +33,9 @@ namespace {
 constexpr double kIonoInitM = 1e-6;
 constexpr double kIonoInitVariance = 1e-4;
 constexpr double kIonoProcessMPerSqrtS = 1e-3;
-constexpr double kIonoProcessMaxM = 0.050;
+constexpr double kIonoAdaptiveProcessMaxM = 0.005;
+constexpr double kIonoAdaptiveForget = 0.5;
+constexpr double kIonoAdaptiveGain = 1.0;
 constexpr double kBiasInitStdCycles = 100.0;
 constexpr double kBiasProcessCyclesPerSqrtS = 1e-3;
 constexpr double kClaslibPositionInitVariance = 30.0 * 30.0;
@@ -188,10 +190,7 @@ int clasSystemOrder(GNSSSystem system) {
 }
 
 int clasResidualGroup(const OSRCorrection& osr, int freq_index) {
-    if (osr.satellite.system == GNSSSystem::GPS && freq_index == 1 &&
-        osr.signals[freq_index] == SignalType::GPS_L2C) {
-        return 5;
-    }
+    (void)freq_index;
     return clasSystemOrder(osr.satellite.system);
 }
 
@@ -285,8 +284,9 @@ double clasCarrierWavelength(int freq_index) {
 
 bool rowLessClasOrder(const ZdRow& lhs, const ZdRow& rhs) {
     if (lhs.group != rhs.group) return lhs.group < rhs.group;
-    if (lhs.freq_index != rhs.freq_index) return lhs.freq_index < rhs.freq_index;
-    if (lhs.is_phase != rhs.is_phase) return lhs.is_phase && !rhs.is_phase;
+    const int lhs_loop = lhs.is_phase ? lhs.freq_index : lhs.freq_index + kClasNfreq;
+    const int rhs_loop = rhs.is_phase ? rhs.freq_index : rhs.freq_index + kClasNfreq;
+    if (lhs_loop != rhs_loop) return lhs_loop < rhs_loop;
     if (lhs.satellite.system != rhs.satellite.system) {
         return lhs.satellite.system < rhs.satellite.system;
     }
@@ -869,7 +869,9 @@ AppliedCorrections selectAppliedCorrections(
 }
 
 void ensureStorage(ClaslibRtkState& rtk) {
-    if (rtk.x.size() == kClasNx && rtk.P.rows() == kClasNx && rtk.P.cols() == kClasNx) {
+    if (rtk.x.size() == kClasNx &&
+        rtk.P.rows() == kClasNx && rtk.P.cols() == kClasNx &&
+        rtk.Q.rows() == kClasNx && rtk.Q.cols() == kClasNx) {
         if (rtk.xa.size() != kClasNx ||
             rtk.Pa.rows() != kClasNx ||
             rtk.Pa.cols() != kClasNx) {
@@ -881,6 +883,7 @@ void ensureStorage(ClaslibRtkState& rtk) {
     }
     rtk.x = VectorXd::Zero(kClasNx);
     rtk.P = MatrixXd::Zero(kClasNx, kClasNx);
+    rtk.Q = MatrixXd::Zero(kClasNx, kClasNx);
     rtk.xa = VectorXd::Zero(kClasNx);
     rtk.Pa = MatrixXd::Zero(kClasNx, kClasNx);
     rtk.has_fixed_solution = false;
@@ -897,6 +900,10 @@ void initx(ClaslibRtkState& rtk, int index, double value, double variance) {
     rtk.P.row(index).setZero();
     rtk.P.col(index).setZero();
     rtk.P(index, index) = variance;
+    if (rtk.Q.rows() == kClasNx && rtk.Q.cols() == kClasNx) {
+        rtk.Q.row(index).setZero();
+        rtk.Q.col(index).setZero();
+    }
 }
 
 void ensureStateMaps(ClaslibRtkState& rtk, const std::vector<OSRCorrection>& osr_corrections) {
@@ -977,11 +984,19 @@ void predictIonosphere(ClaslibRtkState& rtk,
         if (rtk.x(idx) == 0.0 || rtk.P(idx, idx) <= 0.0) {
             initx(rtk, idx, kIonoInitM, kIonoInitVariance);
         } else if (dt > 0.0) {
-            const double sin_el = std::max(std::sin(osr.elevation), 1e-3);
-            const double q = std::pow(std::min(kIonoProcessMaxM,
-                                               kIonoProcessMPerSqrtS / sin_el), 2) *
-                             dt;
-            rtk.P(idx, idx) += q;
+            double q = rtk.Q(idx, idx);
+            if (q == 0.0) {
+                const double factor = std::cos(osr.elevation);
+                q = std::pow(kIonoProcessMPerSqrtS * factor, 2);
+                rtk.Q(idx, idx) = q;
+            } else if (q > std::pow(kIonoAdaptiveProcessMaxM, 2)) {
+                q = std::pow(kIonoAdaptiveProcessMaxM, 2);
+                rtk.Q(idx, idx) = q;
+            } else if (q < std::pow(kIonoProcessMPerSqrtS, 2)) {
+                q = std::pow(kIonoProcessMPerSqrtS, 2);
+                rtk.Q(idx, idx) = q;
+            }
+            rtk.P(idx, idx) += q * dt;
         }
     }
 }
@@ -1187,7 +1202,7 @@ std::vector<ZdRow> buildZeroDifferenceRows(
             phase_row.valid = true;
             phase_row.y = phase_obs_m - phase_model_m;
             phase_row.variance =
-                clasPhaseVarianceForRow(osr.satellite.system, osr.elevation, f);
+                clasPhaseVarianceForRow(osr.satellite.system, osr.elevation, freq_slot);
             phase_row.H_base = h_base;
             phase_row.components.valid = true;
             phase_row.components.y = phase_row.y;
@@ -1282,8 +1297,9 @@ MeasurementBuild formSingleDifferenceRows(
         bool is_phase = false;
         bool operator<(const GroupKey& rhs) const {
             if (group != rhs.group) return group < rhs.group;
-            if (freq_index != rhs.freq_index) return freq_index < rhs.freq_index;
-            return is_phase > rhs.is_phase;
+            const int lhs_loop = is_phase ? freq_index : freq_index + kClasNfreq;
+            const int rhs_loop = rhs.is_phase ? rhs.freq_index : rhs.freq_index + kClasNfreq;
+            return lhs_loop < rhs_loop;
         }
     };
     std::map<GroupKey, std::vector<const ZdRow*>> groups;
@@ -1659,17 +1675,36 @@ UpdateStats applyMeasurementUpdate(ClaslibRtkState& rtk,
     const MatrixXd S = Ha * PHt + R;
     stats.selected_rows = selectClaslibResidualRows(rows, z, S);
     dumpSelectedUpdateRows(rows, stats.selected_rows, R, S, time);
-
-    Eigen::LDLT<MatrixXd> ldlt(S);
-    if (ldlt.info() != Eigen::Success) {
+    if (stats.selected_rows.empty()) {
         return stats;
     }
-    const MatrixXd K = PHt * ldlt.solve(MatrixXd::Identity(stats.nobs, stats.nobs));
-    const VectorXd dxa = K * z;
+
+    const int ns = static_cast<int>(stats.selected_rows.size());
+    MatrixXd Ha_selected = MatrixXd::Zero(ns, na);
+    VectorXd z_selected = VectorXd::Zero(ns);
+    MatrixXd S_selected = MatrixXd::Zero(ns, ns);
+    MatrixXd PHt_selected = MatrixXd::Zero(na, ns);
+    for (int i = 0; i < ns; ++i) {
+        const int src_i = stats.selected_rows[static_cast<size_t>(i)];
+        Ha_selected.row(i) = Ha.row(src_i);
+        z_selected(i) = z(src_i);
+        PHt_selected.col(i) = PHt.col(src_i);
+        for (int j = 0; j < ns; ++j) {
+            const int src_j = stats.selected_rows[static_cast<size_t>(j)];
+            S_selected(i, j) = S(src_i, src_j);
+        }
+    }
+
+    Eigen::FullPivLU<MatrixXd> lu(S_selected);
+    if (!lu.isInvertible()) {
+        return stats;
+    }
+    const MatrixXd K = PHt_selected * lu.solve(MatrixXd::Identity(ns, ns));
+    const VectorXd dxa = K * z_selected;
     if (!dxa.allFinite()) {
         return stats;
     }
-    const MatrixXd I_KH = MatrixXd::Identity(na, na) - K * Ha;
+    const MatrixXd I_KH = MatrixXd::Identity(na, na) - K * Ha_selected;
     MatrixXd Pa_after = I_KH * Pa;
     Pa_after = 0.5 * (Pa_after + Pa_after.transpose());
 
@@ -1679,6 +1714,34 @@ UpdateStats applyMeasurementUpdate(ClaslibRtkState& rtk,
         for (int j = 0; j < na; ++j) {
             rtk.P(dst_i, active_indices[static_cast<size_t>(j)]) = Pa_after(i, j);
         }
+    }
+
+    std::set<SatelliteId> observed_ionosphere_satellites;
+    for (const auto& row : rows) {
+        observed_ionosphere_satellites.insert(row.satellite);
+        observed_ionosphere_satellites.insert(row.reference_satellite);
+    }
+    for (const auto& satellite : observed_ionosphere_satellites) {
+        const auto idx_it = rtk.ionosphere_indices.find(satellite);
+        if (idx_it == rtk.ionosphere_indices.end()) {
+            continue;
+        }
+        const int state_index = idx_it->second;
+        if (state_index < 0 || state_index >= kClasNx) {
+            continue;
+        }
+        const auto active_it =
+            std::find(active_indices.begin(), active_indices.end(), state_index);
+        if (active_it == active_indices.end()) {
+            continue;
+        }
+        const int active_index =
+            static_cast<int>(std::distance(active_indices.begin(), active_it));
+        const double qp_diag = dxa(active_index) * dxa(active_index);
+        rtk.Q(state_index, state_index) =
+            kIonoAdaptiveForget * rtk.Q(state_index, state_index) +
+            (1.0 - kIonoAdaptiveForget) *
+                kIonoAdaptiveGain * kIonoAdaptiveGain * qp_diag;
     }
     stats.updated = true;
     stats.state_after = rtk.x;
@@ -1808,9 +1871,6 @@ bool tryAmbiguityResolution(ClaslibRtkState& rtk,
     copyFixedFromArState(attempt.state, rtk);
     if (!rtk.has_fixed_solution) {
         return false;
-    }
-    if (attempt.has_hold_state) {
-        copyFilterFromArState(attempt.hold_state, rtk);
     }
     fixed_position = rtk.xa.head<3>();
     rtk.ambiguity_states = attempt.ambiguities;
