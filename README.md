@@ -44,21 +44,64 @@ See `docs/clas_port_architecture.md` for the port design and `docs/clas_validate
 
 ## RTK Performance vs RTKLIB (demo5)
 
-UrbanNav Tokyo Odaiba dataset (2018-12-19, Trimble rover/base, ~170m baseline):
+gnssplusplus `develop` (post PR #19–#23) dominates RTKLIB `demo5` on the
+PPC-Dataset Tokyo and Nagoya urban runs across Fix count, Fix rate, and
+precision — with **no Phase 2 opt-in flags**. UrbanNav Tokyo Odaiba is dominated
+on Fix count, Hp95, and Vp95; Hmed sits within 9 cm of demo5 once
+`--enable-wide-lane-ar --wide-lane-threshold 0.10` is opted in.
 
-| Metric | gnssplusplus | RTKLIB |
-|--------|-------------|--------|
-| Matched epochs | **11,637** | 8,241 |
-| Fix rate | **8.11%** | 7.22% |
-| All-epoch p95 horizontal | **7.58 m** | 27.88 m |
-| Common-epoch median horizontal | 0.733 m | **0.704 m** |
-| Common-epoch p95 horizontal | **5.94 m** | 27.67 m |
+All runs below use `--mode kinematic --preset low-cost --match-tolerance-s 0.25`.
+
+### PPC Tokyo (kinematic, low-cost preset, no Phase 2 flags)
+
+| Run  | gnssplusplus Fix / rate | RTKLIB Fix / rate | Hmed (m)              | Vp95 (m)               |
+|------|------------------------:|------------------:|:---------------------:|:----------------------:|
+| run1 | **3572 / 81.26%**       | 2418 / 30.52%     | **0.037** vs 1.567 (42×) | **1.259** vs 36.703 (29×) |
+| run2 | **4674 / 80.12%**       | 2127 / 27.58%     | **0.016** vs 0.835 (52×) | **0.313** vs 42.624 (136×) |
+| run3 | **7516 / 86.84%**       | 5778 / 40.55%     | **0.012** vs 0.666 (56×) | **0.137** vs 24.521 (179×) |
+
+### PPC Nagoya (same preset)
+
+| Run  | Fix delta    | rate delta    | Hmed delta     |
+|------|-------------:|--------------:|---------------:|
+| run1 | **+1743**    | **+58.03 pp** | **9× better**  |
+| run2 | **+1735**    | **+64.00 pp** | **10× better** |
+| run3 | **+154**     | **+50.16 pp** | **44× better** |
+
+### UrbanNav Tokyo Odaiba (kinematic, low-cost preset)
+
+| Config                                                                     | Fix              | Rate        | Hmed (m)           | Hp95 (m)    | Vp95 (m)    |
+|----------------------------------------------------------------------------|-----------------:|------------:|:------------------:|:-----------:|:-----------:|
+| RTKLIB demo5                                                               | 595              | 7.22%       | **0.707**          | 27.878      | 45.212      |
+| gnssplusplus default                                                       | **1268** (+673)  | **36.98%**  | 1.707              | **19.585**  | **25.495**  |
+| gnssplusplus `--enable-wide-lane-ar --wide-lane-threshold 0.10`            | 818 (+223)       | 33.65%      | **0.799** (9 cm gap) | **19.971**  | **26.429**  |
+
+PPC Tokyo + Nagoya need no Phase 2 flags. On Odaiba, `--enable-wide-lane-ar
+--wide-lane-threshold 0.10` is the precision optimum.
 
 | RTKLIB 2D | libgnss++ 2D |
 |---|---|
 | ![RTKLIB 2D](docs/driving_odaiba_comparison_rtklib_2d.png) | ![libgnss++ 2D](docs/driving_odaiba_comparison_libgnss_2d.png) |
 
-gnssplusplus produces 41% more epochs and 3.7x better p95 accuracy in urban multipath conditions. See [Benchmark Snapshot](#benchmark-snapshot) for details.
+## Phase 2 opt-in tuning gates
+
+The default RTK pipeline already dominates demo5 on the production datasets
+above. Five additional gates ship default-off for situations where you want to
+push further on precision-vs-fix-count tradeoffs. All are byte-identical to the
+default behavior unless explicitly enabled.
+
+| Flag | Purpose | Default |
+|------|---------|---------|
+| `--ar-policy {extended\|demo5-continuous}` | AR extras gate. `demo5-continuous` disables relaxed-hold-ratio / subset-fallback / hold-fix / Q-regularization for demo5-style continuous ambiguity tracking. | `extended` |
+| `--max-hold-div <m>` | Reject fix if the hold-state diverges from float by more than N meters. | `0` (disabled) |
+| `--max-pos-jump <m>` | Reject fix if the epoch-to-epoch position jump exceeds N meters. | `0` (disabled) |
+| `--max-consec-float-reset <N>` | Auto-reset ambiguities after N consecutive float epochs. | `0` (disabled) |
+| `--max-postfix-rms <m>` | Reject fix if the L1 post-fix DD phase residual RMS exceeds N meters. | `0` (disabled) |
+| `--enable-wide-lane-ar` + `--wide-lane-threshold <cycle>` | Pre-compute MW wide-lane integers and inject them as Kalman constraints into the LAMBDA search. Halves Hmed on Odaiba at the cost of ~35% Fix count. | `false` / `0.25` |
+
+These were added in PR #19–#23. On PPC Tokyo and Nagoya the defaults already
+win, so leave them off. On Odaiba (or other urban multipath sets),
+`--enable-wide-lane-ar --wide-lane-threshold 0.10` is the precision optimum.
 
 ## Docs
 
@@ -350,13 +393,14 @@ python3 apps/gnss.py ppc-rtk-signoff \
 Dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) (`2018-12-19`, Trimble rover/base, ~`170 m` baseline).
 Comparison baseline: [RTKLIB](https://github.com/tomojitakasu/RTKLIB).
 
-Current checked-in snapshot:
+Current checked-in snapshot (kinematic, low-cost preset):
 
-- All matched epochs: libgnss++ `11637` vs RTKLIB `8241`
-- Fix rate: libgnss++ `8.11%` vs RTKLIB `7.22%`
-- All-epoch p95 horizontal: libgnss++ `7.58 m` vs RTKLIB `27.88 m`
-- Common-epoch median horizontal: libgnss++ `0.733 m` vs RTKLIB `0.704 m`
-- Common-epoch p95 horizontal: libgnss++ `5.94 m` vs RTKLIB `27.67 m`
+- RTKLIB demo5: Fix `595` / Rate `7.22%` / Hmed `0.707 m` / Hp95 `27.878 m` / Vp95 `45.212 m`
+- libgnss++ default: Fix `1268` (+673) / Rate `36.98%` / Hmed `1.707 m` / Hp95 `19.585 m` / Vp95 `25.495 m`
+- libgnss++ `--enable-wide-lane-ar --wide-lane-threshold 0.10`: Fix `818` (+223) / Rate `33.65%` / Hmed `0.799 m` (9 cm gap) / Hp95 `19.971 m` / Vp95 `26.429 m`
+
+libgnss++ dominates Fix count, Hp95, and Vp95 at any config; Hmed is the sole
+demo5 edge under default flags, and Phase 2 wide-lane AR closes it to 9 cm.
 
 | RTKLIB 2D | libgnss++ 2D |
 |---|---|

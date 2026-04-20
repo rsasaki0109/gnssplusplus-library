@@ -1,17 +1,41 @@
 # Benchmarks
 
+gnssplusplus `develop` (post PR #19–#23) dominates RTKLIB `demo5` on the
+PPC-Dataset Tokyo and Nagoya urban runs across Fix count, rate, and precision
+— with no Phase 2 opt-in flags. UrbanNav-Odaiba is dominated on Fix count,
+Hp95, and Vp95; Hmed is within 9 cm of demo5 with
+`--enable-wide-lane-ar --wide-lane-threshold 0.10` opted in.
+
+All runs below use `--mode kinematic --preset low-cost --match-tolerance-s 0.25`.
+
+## PPC Tokyo (kinematic, low-cost preset, no Phase 2 flags)
+
+| Run  | gnssplusplus Fix / rate | RTKLIB Fix / rate | Hmed (m)              | Vp95 (m)               |
+|------|------------------------:|------------------:|:---------------------:|:----------------------:|
+| run1 | **3572 / 81.26%**       | 2418 / 30.52%     | **0.037** vs 1.567 (42×) | **1.259** vs 36.703 (29×) |
+| run2 | **4674 / 80.12%**       | 2127 / 27.58%     | **0.016** vs 0.835 (52×) | **0.313** vs 42.624 (136×) |
+| run3 | **7516 / 86.84%**       | 5778 / 40.55%     | **0.012** vs 0.666 (56×) | **0.137** vs 24.521 (179×) |
+
+## PPC Nagoya (same preset)
+
+| Run  | Fix delta    | rate delta    | Hmed delta     |
+|------|-------------:|--------------:|---------------:|
+| run1 | **+1743**    | **+58.03 pp** | **9× better**  |
+| run2 | **+1735**    | **+64.00 pp** | **10× better** |
+| run3 | **+154**     | **+50.16 pp** | **44× better** |
+
 ## UrbanNav Tokyo Odaiba
 
 Dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset)  
 Comparison baseline: [RTKLIB](https://github.com/tomojitakasu/RTKLIB)
 
-Current checked-in snapshot:
+Current checked-in snapshot (kinematic, low-cost preset):
 
-- All matched epochs: libgnss++ `11637` vs RTKLIB `8241`
-- Fix rate: libgnss++ `8.11%` vs RTKLIB `7.22%`
-- All-epoch p95 horizontal: libgnss++ `7.58 m` vs RTKLIB `27.88 m`
-- Common-epoch median horizontal: libgnss++ `0.733 m` vs RTKLIB `0.704 m`
-- Common-epoch p95 horizontal: libgnss++ `5.94 m` vs RTKLIB `27.67 m`
+| Config                                                                     | Fix              | Rate        | Hmed (m)              | Hp95 (m)    | Vp95 (m)    |
+|----------------------------------------------------------------------------|-----------------:|------------:|:---------------------:|:-----------:|:-----------:|
+| RTKLIB demo5                                                               | 595              | 7.22%       | **0.707**             | 27.878      | 45.212      |
+| libgnss++ default                                                          | **1268** (+673)  | **36.98%**  | 1.707                 | **19.585**  | **25.495**  |
+| libgnss++ `--enable-wide-lane-ar --wide-lane-threshold 0.10`               | 818 (+223)       | 33.65%      | **0.799** (9 cm gap)  | **19.971**  | **26.429**  |
 
 | RTKLIB 2D | libgnss++ 2D |
 |---|---|
