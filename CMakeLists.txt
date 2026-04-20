@@ -48,6 +48,7 @@ set(GNSS_SOURCES
     src/algorithms/ppp_clas_epoch.cpp
     src/algorithms/madoca_parity.cpp
     src/algorithms/madocalib_oracle.cpp
+    src/algorithms/madocalib_bridge.cpp
     src/algorithms/ppp.cpp
 )
 
@@ -81,10 +82,29 @@ if(MADOCALIB_PARITY_LINK)
     endif()
 
     add_library(madocalib STATIC
-        ${MADOCALIB_SRC_DIR}/ephemeris.c
-        ${MADOCALIB_SRC_DIR}/preceph.c
-        ${MADOCALIB_SRC_DIR}/sbas.c
         ${MADOCALIB_SRC_DIR}/rtkcmn.c
+        ${MADOCALIB_SRC_DIR}/rinex.c
+        ${MADOCALIB_SRC_DIR}/rtkpos.c
+        ${MADOCALIB_SRC_DIR}/postpos.c
+        ${MADOCALIB_SRC_DIR}/solution.c
+        ${MADOCALIB_SRC_DIR}/lambda.c
+        ${MADOCALIB_SRC_DIR}/geoid.c
+        ${MADOCALIB_SRC_DIR}/sbas.c
+        ${MADOCALIB_SRC_DIR}/preceph.c
+        ${MADOCALIB_SRC_DIR}/pntpos.c
+        ${MADOCALIB_SRC_DIR}/ephemeris.c
+        ${MADOCALIB_SRC_DIR}/options.c
+        ${MADOCALIB_SRC_DIR}/ppp.c
+        ${MADOCALIB_SRC_DIR}/ppp_ar.c
+        ${MADOCALIB_SRC_DIR}/ppp_iono.c
+        ${MADOCALIB_SRC_DIR}/rtcm.c
+        ${MADOCALIB_SRC_DIR}/rtcm2.c
+        ${MADOCALIB_SRC_DIR}/rtcm3.c
+        ${MADOCALIB_SRC_DIR}/rtcm3e.c
+        ${MADOCALIB_SRC_DIR}/ionex.c
+        ${MADOCALIB_SRC_DIR}/tides.c
+        ${MADOCALIB_SRC_DIR}/mdccssr.c
+        ${MADOCALIB_SRC_DIR}/mdciono.c
     )
     target_include_directories(madocalib PUBLIC ${MADOCALIB_SRC_DIR})
     target_compile_definitions(madocalib
@@ -98,11 +118,16 @@ if(MADOCALIB_PARITY_LINK)
             NFREQ=5
             NEXOBS=5
     )
-    target_link_libraries(madocalib PUBLIC m)
+    target_link_libraries(madocalib PUBLIC m Threads::Threads)
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(madocalib PUBLIC rt)
+    endif()
 
     target_include_directories(gnss_lib PRIVATE ${MADOCALIB_SRC_DIR})
     target_compile_definitions(gnss_lib
-        PUBLIC GNSSPP_HAS_MADOCALIB_ORACLE=1
+        PUBLIC
+            GNSSPP_HAS_MADOCALIB_BRIDGE=1
+            GNSSPP_HAS_MADOCALIB_ORACLE=1
         PRIVATE
             TRACE
             ENAGLO
@@ -116,7 +141,10 @@ if(MADOCALIB_PARITY_LINK)
     )
     target_link_libraries(gnss_lib PUBLIC madocalib)
 else()
-    target_compile_definitions(gnss_lib PUBLIC GNSSPP_HAS_MADOCALIB_ORACLE=0)
+    target_compile_definitions(gnss_lib
+        PUBLIC
+            GNSSPP_HAS_MADOCALIB_BRIDGE=0
+            GNSSPP_HAS_MADOCALIB_ORACLE=0)
 endif()
 
 # Create the no-optimization library

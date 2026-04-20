@@ -7,9 +7,11 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/core/solution.hpp>
+#include <libgnss++/external/madocalib_bridge.hpp>
 #include <libgnss++/io/rinex.hpp>
 
 namespace {
@@ -47,6 +49,14 @@ struct Options {
     std::string clas_residual_sampling = "indexed-or-mean";
     std::string clas_atmos_selection = "grid-first";
     double clas_atmos_stale_after_seconds = 15.0;
+    bool madocalib_bridge = false;
+    std::string madocalib_config_path;
+    std::vector<std::string> madocalib_l6_paths;
+    std::vector<std::string> madocalib_mdciono_paths;
+    std::string madocalib_start_time;
+    std::string madocalib_end_time;
+    double madocalib_time_interval_seconds = 0.0;
+    int madocalib_trace_level = 0;
     bool kinematic_mode = false;
     bool low_dynamics_mode = false;
     bool enable_ar = false;
@@ -105,6 +115,20 @@ void printUsage(const char* program_name) {
         << "                          CLAS atmosphere token selection policy (default: grid-first)\n"
         << "  --clas-atmos-stale-after-seconds <seconds>\n"
         << "                          Balanced policy stale threshold (default: 15.0)\n"
+        << "  --madocalib-bridge      Delegate this run to linked MADOCALIB postpos()\n"
+        << "                          (requires CMake -DMADOCALIB_PARITY_LINK=ON)\n"
+        << "  --madocalib-l6 <file>   Extra MADOCA L6 input file; repeat for two-channel L6E\n"
+        << "  --madocalib-mdciono <file>\n"
+        << "                          Extra MADOCA L6D ionosphere file; repeat up to three\n"
+        << "  --madocalib-config <file>\n"
+        << "                          MADOCALIB rnx2rtkp config (default: sample.conf)\n"
+        << "  --madocalib-start <time>\n"
+        << "                          MADOCALIB start time, e.g. '2025/04/01 00:00:00'\n"
+        << "  --madocalib-end <time>  MADOCALIB end time, e.g. '2025/04/01 00:59:30'\n"
+        << "  --madocalib-ti <seconds>\n"
+        << "                          MADOCALIB output interval passed to postpos()\n"
+        << "  --madocalib-trace <level>\n"
+        << "                          MADOCALIB trace level (default: 0)\n"
         << "  --static                Use a static PPP motion model (default)\n"
         << "  --kinematic             Use a kinematic PPP motion model\n"
         << "  --low-dynamics          Keep kinematic PPP anchored for quasi-static motion\n"
@@ -192,6 +216,22 @@ Options parseArguments(int argc, char* argv[]) {
             options.clas_atmos_selection = argv[++i];
         } else if (arg == "--clas-atmos-stale-after-seconds" && i + 1 < argc) {
             options.clas_atmos_stale_after_seconds = std::stod(argv[++i]);
+        } else if (arg == "--madocalib-bridge") {
+            options.madocalib_bridge = true;
+        } else if (arg == "--madocalib-l6" && i + 1 < argc) {
+            options.madocalib_l6_paths.push_back(argv[++i]);
+        } else if (arg == "--madocalib-mdciono" && i + 1 < argc) {
+            options.madocalib_mdciono_paths.push_back(argv[++i]);
+        } else if (arg == "--madocalib-config" && i + 1 < argc) {
+            options.madocalib_config_path = argv[++i];
+        } else if (arg == "--madocalib-start" && i + 1 < argc) {
+            options.madocalib_start_time = argv[++i];
+        } else if (arg == "--madocalib-end" && i + 1 < argc) {
+            options.madocalib_end_time = argv[++i];
+        } else if (arg == "--madocalib-ti" && i + 1 < argc) {
+            options.madocalib_time_interval_seconds = std::stod(argv[++i]);
+        } else if (arg == "--madocalib-trace" && i + 1 < argc) {
+            options.madocalib_trace_level = std::stoi(argv[++i]);
         } else if (arg == "--no-ionosphere-free") {
             options.use_ionosphere_free = false;
         } else if (arg == "--ionosphere-free") {
@@ -247,6 +287,12 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.ssr_step_seconds <= 0.0) {
         argumentError("--ssr-step-seconds must be positive", argv[0]);
+    }
+    if (options.madocalib_time_interval_seconds < 0.0) {
+        argumentError("--madocalib-ti must be non-negative", argv[0]);
+    }
+    if (options.madocalib_trace_level < 0) {
+        argumentError("--madocalib-trace must be non-negative", argv[0]);
     }
     if (options.clas_epoch_policy != "strict-osr" &&
         options.clas_epoch_policy != "hybrid-standard-ppp") {
@@ -485,6 +531,130 @@ parseClasSubtype12ValueConstructionPolicy(const std::string& value) {
 int main(int argc, char* argv[]) {
     try {
         const Options options = parseArguments(argc, argv);
+
+        if (options.madocalib_bridge) {
+            namespace madocalib = libgnss::external::madocalib;
+            if (!madocalib::isAvailable()) {
+                std::cerr << "Error: --madocalib-bridge requested, but this binary was not "
+                             "built with -DMADOCALIB_PARITY_LINK=ON\n";
+                return 1;
+            }
+
+            madocalib::PostposOptions bridge_options;
+            bridge_options.obs_path = options.obs_path;
+            bridge_options.nav_path = options.nav_path;
+            bridge_options.out_path = options.out_path;
+            bridge_options.config_path = options.madocalib_config_path;
+            bridge_options.antenna_path = options.antex_path;
+            bridge_options.start_time = options.madocalib_start_time;
+            bridge_options.end_time = options.madocalib_end_time;
+            bridge_options.time_interval_seconds =
+                options.madocalib_time_interval_seconds;
+            bridge_options.trace_level = options.madocalib_trace_level;
+            if (!options.sp3_path.empty()) {
+                bridge_options.auxiliary_input_paths.push_back(options.sp3_path);
+            }
+            if (!options.clk_path.empty()) {
+                bridge_options.auxiliary_input_paths.push_back(options.clk_path);
+            }
+            if (!options.ssr_path.empty()) {
+                bridge_options.auxiliary_input_paths.push_back(options.ssr_path);
+            }
+            for (const std::string& l6_path : options.madocalib_l6_paths) {
+                bridge_options.auxiliary_input_paths.push_back(l6_path);
+            }
+            bridge_options.mdciono_paths = options.madocalib_mdciono_paths;
+
+            const std::filesystem::path output_path(options.out_path);
+            if (output_path.has_parent_path()) {
+                std::filesystem::create_directories(output_path.parent_path());
+            }
+
+            std::string bridge_error;
+            const int bridge_status =
+                madocalib::runPostpos(bridge_options, &bridge_error);
+            if (bridge_status != 0) {
+                std::cerr << "Error: " << bridge_error << "\n";
+                return 1;
+            }
+            if (!std::filesystem::is_regular_file(options.out_path)) {
+                std::cerr << "Error: MADOCALIB bridge completed without output file: "
+                          << options.out_path << "\n";
+                return 1;
+            }
+
+            if (!options.summary_json_path.empty()) {
+                const std::filesystem::path summary_path(options.summary_json_path);
+                if (summary_path.has_parent_path()) {
+                    std::filesystem::create_directories(summary_path.parent_path());
+                }
+                std::ofstream summary(summary_path);
+                if (!summary.is_open()) {
+                    std::cerr << "Error: failed to write summary JSON: "
+                              << options.summary_json_path << "\n";
+                    return 1;
+                }
+                summary << "{\n"
+                        << "  \"obs\": \"" << jsonEscape(options.obs_path) << "\",\n"
+                        << "  \"nav\": "
+                        << (options.nav_path.empty() ?
+                                "null" :
+                                ("\"" + jsonEscape(options.nav_path) + "\""))
+                        << ",\n"
+                        << "  \"sp3\": "
+                        << (options.sp3_path.empty() ?
+                                "null" :
+                                ("\"" + jsonEscape(options.sp3_path) + "\""))
+                        << ",\n"
+                        << "  \"clk\": "
+                        << (options.clk_path.empty() ?
+                                "null" :
+                                ("\"" + jsonEscape(options.clk_path) + "\""))
+                        << ",\n"
+                        << "  \"ssr\": "
+                        << (options.ssr_path.empty() ?
+                                "null" :
+                                ("\"" + jsonEscape(options.ssr_path) + "\""))
+                        << ",\n"
+                        << "  \"out\": \"" << jsonEscape(options.out_path) << "\",\n"
+                        << "  \"madocalib_bridge\": true,\n"
+                        << "  \"madocalib_bridge_status\": " << bridge_status << ",\n"
+                        << "  \"madocalib_config\": "
+                        << (options.madocalib_config_path.empty() ?
+                                "null" :
+                                ("\"" + jsonEscape(options.madocalib_config_path) + "\""))
+                        << ",\n"
+                        << "  \"madocalib_start\": "
+                        << (options.madocalib_start_time.empty() ?
+                                "null" :
+                                ("\"" + jsonEscape(options.madocalib_start_time) + "\""))
+                        << ",\n"
+                        << "  \"madocalib_end\": "
+                        << (options.madocalib_end_time.empty() ?
+                                "null" :
+                                ("\"" + jsonEscape(options.madocalib_end_time) + "\""))
+                        << ",\n"
+                        << "  \"madocalib_time_interval_seconds\": "
+                        << options.madocalib_time_interval_seconds << ",\n"
+                        << "  \"madocalib_l6_inputs\": [";
+                bool first_l6 = true;
+                for (const std::string& l6_path : options.madocalib_l6_paths) {
+                    if (!first_l6) {
+                        summary << ", ";
+                    }
+                    summary << "\"" << jsonEscape(l6_path) << "\"";
+                    first_l6 = false;
+                }
+                summary << "]\n"
+                        << "}\n";
+            }
+
+            if (!options.quiet) {
+                std::cout << "MADOCALIB bridge: delegated run to linked MADOCALIB postpos()\n";
+                std::cout << "  output: " << options.out_path << "\n";
+            }
+            return 0;
+        }
 
         libgnss::io::RINEXReader obs_reader;
         if (!obs_reader.open(options.obs_path)) {

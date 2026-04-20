@@ -231,8 +231,66 @@ Future production modules, not for iter1:
 Future oracle modules, test-only and opt-in:
 
 - `tests/madocalib_oracle/`
-- `CLASLIB_PARITY_LINK` should not be reused blindly; use a MADOCA-specific
-  CMake option if direct linking is added.
+- `include/libgnss++/external/madocalib_bridge.hpp`
+- `src/algorithms/madocalib_bridge.cpp`
+- `MADOCALIB_PARITY_LINK=ON` links the MADOCALIB C sources for direct helper
+  oracle calls and the whole-run `postpos()` bridge.  The default build keeps
+  this off.
+
+## Iter4 MADOCALIB Bridge Baseline
+
+The first whole-run oracle path is an opt-in static-link delegate:
+
+- Configure with `-DMADOCALIB_PARITY_LINK=ON`.
+- Run `gnss_ppp --madocalib-bridge` to delegate the whole run to MADOCALIB
+  `postpos()`.
+- Pass MADOCA L6E files with repeated `--madocalib-l6 <file>` arguments.
+- Pass L6D ionosphere files with repeated `--madocalib-mdciono <file>`
+  arguments when using the ionosphere scenario.
+- The default build does not link MADOCALIB and rejects `--madocalib-bridge`
+  before producing output.
+
+The public sample-data smoke case uses the `exec_ppp.bat` MIZU scenario with
+the two L6E channels from the `is-qzss-mdc-004` tree:
+
+```sh
+ROOT=
+
+./build_iter4_madocalib/apps/gnss_ppp \
+  --madocalib-bridge \
+  --obs "$ROOT/sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx" \
+  --nav "$ROOT/sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx" \
+  --madocalib-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.204.l6" \
+  --madocalib-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.206.l6" \
+  --antex "$ROOT/sample_data/data/igs20.atx" \
+  --madocalib-start "2025/04/01 00:00:00" \
+  --madocalib-end "2025/04/01 00:59:30" \
+  --madocalib-ti 30 \
+  --out /tmp/madocalib_bridge_sample_0000.pos \
+  --summary-json /tmp/madocalib_bridge_sample_0000.json \
+  --quiet
+```
+
+Observed iter4 result:
+
+- Command exit status: `0`.
+- Output: `/tmp/madocalib_bridge_sample_0000.pos`, MADOCALIB format.
+- Header program line: `MADOCALIB ver.2.1`.
+- Time span in solution rows: `2025/04/01 00:01:00.000` through
+  `2025/04/01 00:59:30.000`.
+- Solution rows: `118`.
+- Quality counts: `Q=6` for all `118` rows.
+- Health-check RMS against the observation RINEX approximate-position header
+  `(-3857167.6484, 3108694.9138, 4004041.6876)`:
+  all rows `4.502422 m`, last 100 rows `4.461333 m`, last 60 rows
+  `4.453027 m`, last 30 rows `4.457820 m`.
+
+The RMS values above are not an accuracy acceptance gate.  No precise truth
+coordinate was found in the inspected public sample-data files, so the RINEX
+header approximate position is used only as a run-health check.  For the native
+MADOCA port, the reference baseline is the generated MADOCALIB bridge
+trajectory itself, starting with this MIZU one-hour PPP window and later adding
+the PPP-AR and L6D ionosphere sample windows.
 
 ## MADOCALIB License Notes
 
