@@ -19,10 +19,12 @@ QZSS CLAS (Centimeter-Level Augmentation Service) PPP from raw L6 binary, 2019-0
 | Metric | gnssplusplus `--claslib-parity` | CLASLIB |
 |--------|-----------------------------:|--------:|
 | Matched fixed epochs | **3594 / 3599 (99.86%)** | 3594 / 3599 (99.86%) |
-| **RMS 3D (fixed-only)** | **4.45 mm** | 7.29 mm |
-| RMS East | **3.39 mm** | 1.52 mm |
-| RMS North | **1.95 mm** | 0.92 mm |
-| RMS Up | **7.38 mm** | 7.07 mm |
+| **RMS 3D (fixed-only)** | **3.57 mm** | 7.29 mm |
+| 3D bias (mean offset) | **1.66 mm** | 4.84 mm |
+| RMS East | **1.15 mm** | 1.52 mm |
+| RMS North | **1.21 mm** | 0.92 mm |
+| RMS Up | **3.15 mm** | 7.07 mm |
+| Mean E / N / U | -0.72 / +0.93 / +1.17 mm | +0.65 / -0.59 / +4.76 mm |
 | First fix epoch | epoch 6 | epoch 6 |
 | CLASLIB runtime link | not required | required |
 | Parity depth | 17 helpers at 1e-6 m vs CLASLIB oracle | reference |
@@ -31,7 +33,7 @@ QZSS CLAS (Centimeter-Level Augmentation Service) PPP from raw L6 binary, 2019-0
 |---|---|
 | ![CLASLIB 2D](docs/clas_claslib_2d.png) | ![gnssplusplus 2D](docs/clas_native_2d.png) |
 
-gnssplusplus achieves **39% lower RMS 3D** than upstream CLASLIB on the same 1-hour window while keeping the same fix rate, **with no CLASLIB runtime dependency on the default path**. The `ClasnatParity` GoogleTest suite pins 17 core helpers (`windupcorr`, `antmodel`, `ionmapf`, `prectrop`, `corrmeas`, `satpos_ssr`, `tidedisp`, `eph2clk`, `eph2pos`, `geodist`, `satantoff`, `compensatedisp`, `trop_grid_data`, `filter`, `lambda`, `tropmodel`, `stec_grid_data`) to 1e-6 m parity against the CLASLIB C source.
+gnssplusplus achieves **51% lower RMS 3D** and **~3x tighter 3D bias** than upstream CLASLIB on the same 1-hour window while keeping the same fix rate, **with no CLASLIB runtime dependency on the default path**. The `ClasnatParity` GoogleTest suite pins 17 core helpers (`windupcorr`, `antmodel`, `ionmapf`, `prectrop`, `corrmeas`, `satpos_ssr`, `tidedisp`, `eph2clk`, `eph2pos`, `geodist`, `satantoff`, `compensatedisp`, `trop_grid_data`, `filter`, `lambda`, `tropmodel`, `stec_grid_data`) to 1e-6 m parity against the CLASLIB C source.
 
 Opt-ins:
 
