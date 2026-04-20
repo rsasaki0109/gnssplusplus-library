@@ -35,6 +35,8 @@ public:
         
         // Clock modeling
         bool model_intersystem_bias = true;           ///< Model inter-system clock biases
+        bool enable_beidou = true;                    ///< Enable BeiDou SPP support
+        bool enable_glonass = true;                   ///< Enable GLONASS SPP support
     };
     
     SPPProcessor();
@@ -67,9 +69,9 @@ private:
     
     // Statistics
     mutable std::mutex stats_mutex_;
-    size_t total_epochs_processed_ = 0;
-    size_t successful_solutions_ = 0;
-    double total_processing_time_ms_ = 0.0;
+    mutable size_t total_epochs_processed_ = 0;
+    mutable size_t successful_solutions_ = 0;
+    mutable double total_processing_time_ms_ = 0.0;
     
     /**
      * @brief Solve position using weighted least squares
@@ -77,14 +79,21 @@ private:
     PositionSolution solvePosition(const std::vector<Observation>& valid_obs,
                                  const NavigationData& nav,
                                  const GNSSTime& time);
-    
+
+    /**
+     * @brief Native weighted least-squares solver with atmospheric corrections
+     */
+    PositionSolution solvePositionLS(const std::vector<Observation>& valid_obs,
+                                    const NavigationData& nav,
+                                    const GNSSTime& time);
+
     /**
      * @brief Calculate predicted pseudorange
      */
     double calculatePredictedRange(const Vector3d& receiver_pos,
                                  const Vector3d& satellite_pos,
-                                 double receiver_clock_bias,
-                                 double satellite_clock_bias) const;
+                                 double receiver_clock_bias_m,
+                                 double satellite_clock_bias_s) const;
     
     /**
      * @brief Calculate geometry matrix (design matrix)

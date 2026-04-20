@@ -1,115 +1,188 @@
-cmake_minimum_required(VERSION 3.15)
-project(LibGNSSPlusPlus VERSION 1.0.0 LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.14)
+project(gnss_lib VERSION 0.1.0 LANGUAGES C CXX)
 
-# Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-# Build options
-option(BUILD_EXAMPLES "Build example programs" ON)
-option(BUILD_TESTS "Build unit tests" ON)
-option(BUILD_TOOLS "Build command-line tools" ON)
-option(USE_OPENMP "Enable OpenMP parallelization" ON)
-
-# Find dependencies
-find_package(Eigen3 REQUIRED)
-
-if(USE_OPENMP)
-    find_package(OpenMP)
-    if(OpenMP_CXX_FOUND)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-    endif()
-endif()
-
-# Compiler flags
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -O3 -march=native")
-    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -DDEBUG")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
-endif()
-
-# Include directories
-include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${EIGEN3_INCLUDE_DIR}
-)
-
-# Create source file list
-set(LIBGNSS_SOURCES
-    src/gnss.cpp
-    src/core/solution.cpp
-    src/core/navigation.cpp
-    src/core/types.cpp
-    src/core/observation.cpp
-    src/algorithms/spp.cpp
-    src/algorithms/rtk.cpp
-    src/algorithms/ppp.cpp
-    src/io/rinex.cpp
-)
-
-# Static library
-add_library(libgnss++ STATIC ${LIBGNSS_SOURCES})
-target_include_directories(libgnss++ PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
-target_compile_features(libgnss++ PUBLIC cxx_std_17)
-
-# Link Eigen3
-target_link_libraries(libgnss++ PUBLIC Eigen3::Eigen)
-
-if(OpenMP_CXX_FOUND)
-    target_link_libraries(libgnss++ PUBLIC OpenMP::OpenMP_CXX)
-endif()
-
-# Add subdirectories
-if(BUILD_EXAMPLES)
-    add_subdirectory(examples)
-endif()
-
-if(BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
-endif()
-
-if(BUILD_TOOLS)
-    add_subdirectory(tools)
-endif()
-
-# Installation
-install(TARGETS libgnss++
-    EXPORT libgnss++Targets
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
-    RUNTIME DESTINATION bin
-    INCLUDES DESTINATION include
-)
-
-install(DIRECTORY include/ DESTINATION include)
-
-install(EXPORT libgnss++Targets
-    FILE libgnss++Targets.cmake
-    NAMESPACE libgnss++::
-    DESTINATION lib/cmake/libgnss++
-)
-
-# Create config file
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+include(CTest)
+include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+
+# Find necessary packages
+find_package(Eigen3 REQUIRED)
+find_package(Threads REQUIRED)
+find_package(Doxygen QUIET)
+find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
+find_package(pybind11 CONFIG REQUIRED)
+find_package(ament_cmake QUIET)
+find_package(rclcpp QUIET)
+find_package(sensor_msgs QUIET)
+find_package(geometry_msgs QUIET)
+find_package(nav_msgs QUIET)
+find_package(std_msgs QUIET)
+find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs)
+
+# List source files for the main library
+set(GNSS_SOURCES
+    src/gnss.cpp
+    src/io/ntrip.cpp
+    src/io/rinex.cpp
+    src/io/rtcm.cpp
+    src/io/rtcm_stream.cpp
+    src/io/ubx.cpp
+    src/io/qzss_l6.cpp
+    src/core/solution.cpp
+    src/core/types.cpp
+    src/algorithms/ppp_ar.cpp
+    src/algorithms/ppp_atmosphere.cpp
+    src/algorithms/ppp_clas.cpp
+    src/algorithms/ppp_clas_sd.cpp
+    src/algorithms/ppp_osr.cpp
+    src/algorithms/ppp_wlnl.cpp
+    src/algorithms/ppp_clas_epoch.cpp
+    src/algorithms/ppp.cpp
+)
+
+# List source files for the no-optimization library
+set(GNSS_SOURCES_NO_OPTIMIZATION
+    src/algorithms/rtk_ar_selection.cpp
+    src/algorithms/rtk_ar_evaluation.cpp
+    src/algorithms/rtk_measurement.cpp
+    src/algorithms/rtk_selection.cpp
+    src/algorithms/rtk_update.cpp
+    src/algorithms/rtk_validation.cpp
+    src/algorithms/rtk.cpp
+    src/algorithms/spp.cpp
+    src/algorithms/lambda.cpp
+    src/core/navigation.cpp
+    src/core/observation.cpp
+)
+
+# Create the main library
+add_library(gnss_lib STATIC ${GNSS_SOURCES})
+target_include_directories(gnss_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+target_link_libraries(gnss_lib PUBLIC Eigen3::Eigen)
+
+# Create the no-optimization library
+add_library(gnss_lib_noopt STATIC ${GNSS_SOURCES_NO_OPTIMIZATION})
+target_compile_options(gnss_lib_noopt PRIVATE -O0)
+target_include_directories(gnss_lib_noopt PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+target_link_libraries(gnss_lib_noopt PUBLIC Eigen3::Eigen)
+
+install(
+    TARGETS gnss_lib gnss_lib_noopt
+    EXPORT libgnssppTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/libgnssppConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/libgnssppConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libgnsspp
+)
 write_basic_package_version_file(
-    "libgnss++ConfigVersion.cmake"
+    ${CMAKE_CURRENT_BINARY_DIR}/libgnssppConfigVersion.cmake
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY SameMajorVersion
 )
-
-configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/libgnss++Config.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/libgnss++Config.cmake"
-    INSTALL_DESTINATION lib/cmake/libgnss++
+install(
+    EXPORT libgnssppTargets
+    FILE libgnssppTargets.cmake
+    NAMESPACE libgnsspp::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libgnsspp
+)
+install(
+    FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/libgnssppConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/libgnssppConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libgnsspp
 )
 
-install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/libgnss++Config.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/libgnss++ConfigVersion.cmake"
-    DESTINATION lib/cmake/libgnss++
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/libgnsspp.pc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/libgnsspp.pc
+    @ONLY
 )
+install(
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/libgnsspp.pc
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+)
+
+if(DOXYGEN_FOUND)
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Doxyfile.in
+        ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+        @ONLY
+    )
+    add_custom_target(
+        doc_doxygen
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "Generating API documentation with Doxygen"
+        VERBATIM
+    )
+endif()
+
+set(CPACK_PACKAGE_NAME "libgnsspp")
+set(CPACK_PACKAGE_VENDOR "libgnss++")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "GNSS processing library and CLI toolchain")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE)
+set(CPACK_GENERATOR "TGZ;DEB")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "libgnss++ maintainers")
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+include(CPack)
+
+# Visibility library (fisheye camera, satellite LOS/NLOS)
+if(OpenCV_FOUND)
+    add_library(gnss_visibility_lib STATIC
+        src/visibility/fisheye_camera.cpp
+        src/visibility/proj_fisheye.cpp
+        src/visibility/im2fisheye.cpp
+        src/visibility/mask_fisheye.cpp
+        src/visibility/kml_tour.cpp
+        src/visibility/satellite_visibility.cpp
+    )
+    target_include_directories(gnss_visibility_lib PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    )
+    target_link_libraries(gnss_visibility_lib PUBLIC ${OpenCV_LIBS})
+else()
+    message(STATUS "OpenCV not found; skipping visibility library")
+endif()
+
+# KML library (Google Earth KML/KMZ generation)
+add_library(gnss_kml_lib STATIC
+    src/kml/types.cpp src/kml/utils.cpp src/kml/elements.cpp
+    src/kml/animation.cpp src/kml/camera.cpp src/kml/tour.cpp src/kml/writer.cpp
+)
+target_include_directories(gnss_kml_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+# Add subdirectories
+add_subdirectory(examples)
+add_subdirectory(apps)
+add_subdirectory(python)
+if(ament_cmake_FOUND AND rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND nav_msgs_FOUND AND std_msgs_FOUND)
+    set(GNSSPP_HAS_ROS2 ON)
+    add_subdirectory(ros2)
+else()
+    set(GNSSPP_HAS_ROS2 OFF)
+    message(STATUS "ROS2 dependencies not found; skipping ros2/ node build")
+endif()
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

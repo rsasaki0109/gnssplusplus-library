@@ -1,1 +1,47 @@
+# Build artifacts
 build/
+build_local/
+bin/
+*.a
+*.o
+
+# Data (large RINEX files)
+data/
+
+# Output
+output/
+
+# Temporary files
+*.log
+*.txt
+!CMakeLists.txt
+lambda_debug.txt
+lambda2.txt
+lambda3.txt
+rtklib_diag.txt
+test_rinex_read
+test_rinex_read.cpp
+
+# Generated (except docs/)
+*.png
+!docs/*.png
+*.html
+!site-pages/**/*.html
+*.kml
+*.pos
+site/
+
+# Explicit tracked text files
+!requirements-docs.txt
+
+# Python cache
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+*.swp
+PLAN.md
+notes/
+CLAUDE.md

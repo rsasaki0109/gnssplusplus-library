@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+import argparse
+from datetime import datetime
+import os
+import xml.sax.saxutils as xml_escape
+
+
+RTKLIB_STATUS_MAP = {1: 4, 2: 3, 4: 2, 5: 1}
+STATUS_LABELS = {1: "SPP", 2: "DGPS", 3: "FLOAT", 4: "FIXED"}
+STATUS_COLORS = {
+    1: "ff2d3fd3",
+    2: "ffdb8b34",
+    3: "ff1aa0ff",
+    4: "ff2fbf71",
+}
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Convert libgnss++ or RTKLIB POS output into a KML track."
+    )
+    parser.add_argument("input_pos", help="Input .pos file")
+    parser.add_argument("output_kml", nargs="?", help="Output .kml path")
+    parser.add_argument(
+        "--name",
+        default=None,
+        help="Track name inside the KML document",
+    )
+    parser.add_argument(
+        "--status",
+        choices=["all", "fixed", "float", "dgps", "spp", "non-spp"],
+        default="all",
+        help="Filter solutions by status before writing the track",
+    )
+    parser.add_argument(
+        "--sample-points",
+        type=int,
+        default=0,
+        help="Emit point placemarks every N epochs (0 disables point placemarks)",
+    )
+    return parser.parse_args()
+
+
+def read_pos(path):
+    epochs = []
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line or line.startswith("%"):
+                continue
+            cols = line.split()
+            try:
+                if len(cols) >= 7 and "/" in cols[0] and ":" in cols[1]:
+                    dt = datetime.strptime(f"{cols[0]} {cols[1]}", "%Y/%m/%d %H:%M:%S.%f")
+                    gps_epoch = datetime(1980, 1, 6)
+                    delta = dt - gps_epoch
+                    week = delta.days // 7
+                    tow = (delta.days % 7) * 86400 + delta.seconds + delta.microseconds / 1e6
+                    epochs.append(
+                        {
+                            "week": week,
+                            "tow": tow,
+                            "lat": float(cols[2]),
+                            "lon": float(cols[3]),
+                            "hgt": float(cols[4]),
+                            "status": RTKLIB_STATUS_MAP.get(int(cols[5]), 1),
+                        }
+                    )
+                elif len(cols) >= 11:
+                    epochs.append(
+                        {
+                            "week": int(cols[0]),
+                            "tow": float(cols[1]),
+                            "lat": float(cols[5]),
+                            "lon": float(cols[6]),
+                            "hgt": float(cols[7]),
+                            "status": int(cols[8]),
+                        }
+                    )
+                elif len(cols) >= 6:
+                    epochs.append(
+                        {
+                            "week": int(cols[0]),
+                            "tow": float(cols[1]),
+                            "lat": float(cols[2]),
+                            "lon": float(cols[3]),
+                            "hgt": float(cols[4]),
+                            "status": RTKLIB_STATUS_MAP.get(int(cols[5]), 1),
+                        }
+                    )
+            except ValueError:
+                continue
+    return epochs
+
+
+def filter_epochs(epochs, status_filter):
+    if status_filter == "all":
+        return epochs
+    if status_filter == "fixed":
+        return [ep for ep in epochs if ep["status"] == 4]
+    if status_filter == "float":
+        return [ep for ep in epochs if ep["status"] == 3]
+    if status_filter == "dgps":
+        return [ep for ep in epochs if ep["status"] == 2]
+    if status_filter == "spp":
+        return [ep for ep in epochs if ep["status"] == 1]
+    if status_filter == "non-spp":
+        return [ep for ep in epochs if ep["status"] != 1]
+    return epochs
+
+
+def output_path(input_path, explicit_output):
+    if explicit_output:
+        return explicit_output
+    base, _ = os.path.splitext(input_path)
+    return base + ".kml"
+
+
+def write_kml(path, name, epochs, sample_points):
+    escaped_name = xml_escape.escape(name)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+        handle.write("<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n")
+        handle.write("  <Document>\n")
+        handle.write(f"    <name>{escaped_name}</name>\n")
+        handle.write("    <Style id=\"trackLine\">\n")
+        handle.write("      <LineStyle><color>ff2fbf71</color><width>3</width></LineStyle>\n")
+        handle.write("    </Style>\n")
+        for status, color in STATUS_COLORS.items():
+            handle.write(f"    <Style id=\"status{status}\">\n")
+            handle.write(
+                f"      <IconStyle><color>{color}</color><scale>0.7</scale></IconStyle>\n"
+            )
+            handle.write("    </Style>\n")
+        handle.write("    <Placemark>\n")
+        handle.write(f"      <name>{escaped_name} track</name>\n")
+        handle.write("      <styleUrl>#trackLine</styleUrl>\n")
+        handle.write("      <LineString>\n")
+        handle.write("        <tessellate>1</tessellate>\n")
+        handle.write("        <coordinates>\n")
+        for epoch in epochs:
+            handle.write(
+                f"          {epoch['lon']:.9f},{epoch['lat']:.9f},{epoch['hgt']:.4f}\n"
+            )
+        handle.write("        </coordinates>\n")
+        handle.write("      </LineString>\n")
+        handle.write("    </Placemark>\n")
+
+        if sample_points > 0:
+            for index, epoch in enumerate(epochs):
+                if index % sample_points != 0:
+                    continue
+                status_label = STATUS_LABELS.get(epoch["status"], str(epoch["status"]))
+                handle.write("    <Placemark>\n")
+                handle.write(
+                    f"      <name>{status_label} W{epoch['week']} {epoch['tow']:.3f}</name>\n"
+                )
+                handle.write(f"      <styleUrl>#status{epoch['status']}</styleUrl>\n")
+                handle.write("      <Point>\n")
+                handle.write(
+                    f"        <coordinates>{epoch['lon']:.9f},{epoch['lat']:.9f},{epoch['hgt']:.4f}</coordinates>\n"
+                )
+                handle.write("      </Point>\n")
+                handle.write("    </Placemark>\n")
+
+        handle.write("  </Document>\n")
+        handle.write("</kml>\n")
+
+
+def main():
+    args = parse_args()
+    epochs = read_pos(args.input_pos)
+    if not epochs:
+        raise SystemExit(f"No usable position epochs found in {args.input_pos}")
+
+    filtered = filter_epochs(epochs, args.status)
+    if not filtered:
+        raise SystemExit(f"No epochs matched --status={args.status}")
+
+    out_path = output_path(args.input_pos, args.output_kml)
+    track_name = args.name or os.path.splitext(os.path.basename(out_path))[0]
+    write_kml(out_path, track_name, filtered, args.sample_points)
+    print(f"Saved: {out_path}")
+    print(f"Epochs: {len(filtered)}")
+
+
+if __name__ == "__main__":
+    main()

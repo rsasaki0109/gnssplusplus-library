@@ -1,123 +1,96 @@
-# Contributing to LibGNSS++
+# Contributing
 
-We welcome contributions to LibGNSS++! This document provides guidelines for contributing to the project.
+## Branch And PR Workflow
 
-## Getting Started
+- Do not push new feature work directly to `develop`.
+- Start from the latest `develop` and use a topic branch:
+  - `feature/<topic>`
+  - `fix/<topic>`
+  - `docs/<topic>`
+- Keep one user-visible value per PR.
+- Every PR should add or tighten at least one regression, sign-off, or dogfooding check.
 
-1. Fork the repository on GitHub
-2. Clone your fork locally
-3. Create a new branch for your feature or bugfix
-4. Make your changes
-5. Test your changes
-6. Submit a pull request
+## PR Size Rule
 
-## Development Environment
+Use this rule when splitting work:
 
-### Prerequisites
+- 1 PR = 1 feature or 1 operational improvement
+- 1 PR = 1 clear benchmark/sign-off/test story
+- Do not mix protocol ingestion, solver tuning, and docs-only cleanup in the same PR
 
-- C++17 compatible compiler (GCC 7+, Clang 6+, MSVC 2019+)
-- CMake 3.15+
-- Eigen3 library
-- Google Test (for running tests)
+Good examples:
 
-### Building
+- `feature/laika-fetch-products`
+- `feature/laika-ppp-pipeline`
+- `feature/rtklibexplorer-low-cost-tuning`
+- `feature/rtklibexplorer-stream-ux`
+- `feature/ppc-signoff-expansion`
 
-```bash
-git clone https://github.com/your-username/libgnss++.git
-cd libgnss++
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
-```
+Bad examples:
 
-### Running Tests
+- `feature/external-repos`
+- `feature/ppp-and-stream-and-docs`
 
-```bash
-cd build
-ctest --output-on-failure
-```
+## Required Checks
 
-## Code Style
+Before opening a PR, run the smallest relevant set and the broad regression set.
 
-- Follow modern C++ best practices
-- Use meaningful variable and function names
-- Add comprehensive documentation for public APIs
-- Include unit tests for new functionality
-- Use const-correctness
-- Prefer RAII and smart pointers
-- Follow the existing code style in the project
+Minimum relevant checks:
 
-### Naming Conventions
+- `python3 tests/test_cli_tools.py`
+- `python3 tests/test_benchmark_scripts.py`
+- `python3 tests/test_packaging.py`
+- `python3 tests/test_python_bindings.py -v`
+- `python3 tests/test_ros2_node.py`
+- `ctest --test-dir build --output-on-failure`
 
-- Classes: `PascalCase` (e.g., `GNSSProcessor`)
-- Functions and variables: `snake_case` (e.g., `process_epoch`)
-- Constants: `UPPER_SNAKE_CASE` (e.g., `SPEED_OF_LIGHT`)
-- Private members: trailing underscore (e.g., `member_variable_`)
+If the PR touches workflow or docs pipeline files, also run:
 
-## Documentation
+- `bash scripts/ci/run_hygiene.sh`
+- `bash scripts/ci/run_cppcheck.sh`
+- `python3 -m mkdocs build --strict`
 
-- Use Doxygen-style comments for all public APIs
-- Include usage examples in documentation
-- Update README.md if adding new features
-- Add inline comments for complex algorithms
+CI lanes are split as follows:
 
-## Testing
+- `bash scripts/ci/run_core_tests.sh` for the cross-platform gate
+- `bash scripts/ci/run_extended_tests.sh` for Linux-only heavy checks such as web, packaging, and ROS2 surfaces
+- `bash scripts/ci/run_optional_tests.sh` for broader Linux-only integration suites such as the full CLI and benchmark script regressions
+- `bash scripts/ci/run_optional_rtk_signoffs.sh` for dataset-gated RTK sign-offs with JSON/log artifacts under `output/ci_optional_rtk_signoffs*`
+- `bash scripts/ci/generate_dashboard_artifacts.sh` for the dashboard/manifest artifact path used in CI
 
-- Write unit tests for all new functionality
-- Ensure tests pass on all supported platforms
-- Include edge cases and error conditions
-- Use Google Test framework
-- Aim for high code coverage
+Docs-only changes keep CI on the lightweight path: hygiene here, plus the separate Docs workflow.
 
-## Pull Request Process
+If the PR touches only a subset, include the focused command you used in the PR body.
 
-1. Ensure your code builds without warnings
-2. Run all tests and ensure they pass
-3. Update documentation as needed
-4. Add entry to CHANGELOG.md if applicable
-5. Create a clear pull request description explaining:
-   - What changes were made
-   - Why the changes were necessary
-   - How to test the changes
+## External Code References
 
-## Reporting Issues
+External repos are references, not vendored dependencies. When taking ideas from them:
 
-When reporting issues, please include:
+- mention the source repo in the PR body
+- describe what was adopted at the code/design level
+- add a local regression proving the imported idea is still working here
 
-- Operating system and version
-- Compiler and version
-- LibGNSS++ version
-- Minimal code example reproducing the issue
-- Expected vs actual behavior
-- Any relevant error messages
+Current reference repos used for code/design comparison:
 
-## Feature Requests
+- `tomojitakasu/RTKLIB`
+- `rtklibexplorer/RTKLIB`
+- `JAXA-SNU/MALIB`
+- `QZSS-Strategy-Office/madocalib`
+- `QZSS-Strategy-Office/claslib`
+- `commaai/laika`
+- `tomojitakasu/PocketSDR`
+- `globsky/SignalSim`
 
-For feature requests, please:
+## Sign-off Rule
 
-- Check if the feature already exists
-- Describe the use case clearly
-- Explain why the feature would be beneficial
-- Consider if it fits with the project's goals
+If a command has a `*-signoff` variant, prefer using it in PR validation.
 
-## Code of Conduct
+Examples:
 
-- Be respectful and inclusive
-- Focus on constructive feedback
-- Help newcomers get started
-- Maintain professional communication
+- `gnss short-baseline-signoff`
+- `gnss rtk-kinematic-signoff`
+- `gnss ppp-static-signoff`
+- `gnss ppp-kinematic-signoff`
+- `gnss odaiba-benchmark --require-*`
 
-## License
-
-By contributing to LibGNSS++, you agree that your contributions will be licensed under the MIT License.
-
-## Questions?
-
-If you have questions about contributing, please:
-
-- Check the documentation
-- Search existing issues
-- Create a new issue with the "question" label
-- Join our community discussions
-
-Thank you for contributing to LibGNSS++!
+Sign-off commands are the preferred quality gates for solver changes.

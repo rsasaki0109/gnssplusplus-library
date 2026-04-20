@@ -5,36 +5,22 @@
 namespace libgnss {
 
 std::string SatelliteId::toString() const {
-    std::ostringstream oss;
-    
+    char system_char;
     switch (system) {
-        case GNSSSystem::GPS:
-            oss << "G" << std::setfill('0') << std::setw(2) << static_cast<int>(prn);
-            break;
-        case GNSSSystem::GLONASS:
-            oss << "R" << std::setfill('0') << std::setw(2) << static_cast<int>(prn);
-            break;
-        case GNSSSystem::Galileo:
-            oss << "E" << std::setfill('0') << std::setw(2) << static_cast<int>(prn);
-            break;
-        case GNSSSystem::BeiDou:
-            oss << "C" << std::setfill('0') << std::setw(2) << static_cast<int>(prn);
-            break;
-        case GNSSSystem::QZSS:
-            oss << "J" << std::setfill('0') << std::setw(2) << static_cast<int>(prn);
-            break;
-        case GNSSSystem::SBAS:
-            oss << "S" << std::setfill('0') << std::setw(2) << static_cast<int>(prn);
-            break;
-        case GNSSSystem::NavIC:
-            oss << "I" << std::setfill('0') << std::setw(2) << static_cast<int>(prn);
-            break;
-        default:
-            oss << "U" << std::setfill('0') << std::setw(2) << static_cast<int>(prn);
-            break;
+        case GNSSSystem::GPS:     system_char = 'G'; break;
+        case GNSSSystem::GLONASS: system_char = 'R'; break;
+        case GNSSSystem::Galileo: system_char = 'E'; break;
+        case GNSSSystem::BeiDou:  system_char = 'C'; break;
+        case GNSSSystem::QZSS:    system_char = 'J'; break;
+        case GNSSSystem::SBAS:    system_char = 'S'; break;
+        case GNSSSystem::NavIC:   system_char = 'I'; break;
+        default:                  system_char = 'U'; break;
     }
-    
-    return oss.str();
+    std::string prn_str = std::to_string(prn);
+    if (prn_str.length() < 2) {
+        prn_str = "0" + prn_str;
+    }
+    return system_char + prn_str;
 }
 
 std::chrono::system_clock::time_point GNSSTime::toSystemTime() const {

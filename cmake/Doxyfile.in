@@ -1,0 +1,15 @@
+PROJECT_NAME           = "libgnss++"
+PROJECT_NUMBER         = "@PROJECT_VERSION@"
+OUTPUT_DIRECTORY       = "@CMAKE_CURRENT_BINARY_DIR@/docs/doxygen"
+CREATE_SUBDIRS         = NO
+OUTPUT_LANGUAGE        = English
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+RECURSIVE              = YES
+EXTRACT_ALL            = YES
+JAVADOC_AUTOBRIEF      = YES
+INPUT                  = "@CMAKE_SOURCE_DIR@/include" "@CMAKE_SOURCE_DIR@/README.md"
+FILE_PATTERNS          = *.hpp *.h *.md
+USE_MDFILE_AS_MAINPAGE = "@CMAKE_SOURCE_DIR@/README.md"

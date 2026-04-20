@@ -178,7 +178,7 @@ std::vector<ObservationData> ObservationSeries::getEpochs(const GNSSTime& start,
                                                          const GNSSTime& end) const {
     std::vector<ObservationData> result;
     for (const auto& epoch : epochs) {
-        if (epoch.time < end && start < epoch.time) {
+        if (epoch.time <= end && start <= epoch.time) {
             result.push_back(epoch);
         }
     }
