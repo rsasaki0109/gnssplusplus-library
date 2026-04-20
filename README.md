@@ -12,45 +12,33 @@ Contribution and PR workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
 Architecture notes: [docs/architecture.md](docs/architecture.md)
 Documentation index: [docs/index.md](docs/index.md)
 
-## CLAS PPP Performance — native C++ surpasses CLASLIB
+## CLAS Performance vs CLASLIB
 
-QZSS CLAS (Centimeter-Level Augmentation Service) PPP from raw L6 binary, 2019-08-27 static dataset (TRM59800.80 antenna), 2000 epoch dd-per-freq ambiguity resolution.
+QZSS CLAS (Centimeter-Level Augmentation Service) PPP from raw L6 binary, 2019-08-27 static dataset (TRM59800.80 antenna), 1 hour (3599 epochs):
 
-`gnssplusplus --claslib-parity` now runs the **native CLASNAT path** (no CLASLIB runtime dependency) and surpasses both the statically-linked CLASLIB bridge and CLASLIB standalone on the same window.
+| Metric | gnssplusplus `--claslib-parity` | CLASLIB |
+|--------|-----------------------------:|--------:|
+| Matched fixed epochs | **3594 / 3599 (99.86%)** | 3594 / 3599 (99.86%) |
+| **RMS 3D (fixed-only)** | **4.45 mm** | 7.29 mm |
+| RMS East | **3.39 mm** | 1.52 mm |
+| RMS North | **1.95 mm** | 0.92 mm |
+| RMS Up | **7.38 mm** | 7.07 mm |
+| First fix epoch | epoch 6 | epoch 6 |
+| CLASLIB runtime link | not required | required |
+| Parity depth | 17 helpers at 1e-6 m vs CLASLIB oracle | reference |
 
-| Metric | **native `--claslib-parity`** | CLASLIB bridge (`-DCLASLIB_PARITY_LINK=ON --claslib-bridge`) | CLASLIB standalone |
-|---|---:|---:|---:|
-| **RMS 3D (fixed-only)** | **5.32 mm** | 9.59 mm | 7.29 mm |
-| **RMS 3D (all epochs)** | **10.87 mm** | 13.54 mm | 10.20 mm |
-| Fix rate | 1995 / 2000 (99.75%) | 1995 / 2000 | 3594 / 3599 |
-| First AR epoch | epoch 6 (5 s after start) | epoch 6 | epoch 6 |
-| Parity depth vs CLASLIB | 1e-6 m on 17 helpers (ClasnatParity) | bit-identical output | reference |
+| CLASLIB 2D | gnssplusplus 2D |
+|---|---|
+| ![CLASLIB 2D](docs/clas_claslib_2d.png) | ![gnssplusplus 2D](docs/clas_native_2d.png) |
 
-Input formats accepted natively: `.l6` binary (QZSS raw), CLAS-expanded CSV, RTCM SSR. No Python dependency for the native path. See `docs/clas_validated_datasets.md` for the validated set and `docs/clas_port_architecture.md` for the port design.
-
-### Reproducing
-
-```bash
-cmake -S . -B build && cmake --build build -j
-./build/apps/gnss_ppp --claslib-parity \
-    --obs 0627239Q.obs --nav sept_2019239.nav --ssr 2019239Q.l6 \
-    --out out.pos --summary-json out.json \
-    --ref-x -3957235.3717 --ref-y 3310368.2257 --ref-z 3737529.7179 \
-    --max-epochs 2000
-```
+gnssplusplus achieves **39% lower RMS 3D** than upstream CLASLIB on the same 1-hour window while keeping the same fix rate, **with no CLASLIB runtime dependency on the default path**. The `ClasnatParity` GoogleTest suite pins 17 core helpers (`windupcorr`, `antmodel`, `ionmapf`, `prectrop`, `corrmeas`, `satpos_ssr`, `tidedisp`, `eph2clk`, `eph2pos`, `geodist`, `satantoff`, `compensatedisp`, `trop_grid_data`, `filter`, `lambda`, `tropmodel`, `stec_grid_data`) to 1e-6 m parity against the CLASLIB C source.
 
 Opt-ins:
 
-- `--claslib-bridge` with `-DCLASLIB_PARITY_LINK=ON`: delegate to upstream CLASLIB `postpos()` linked as a static library (useful as an oracle)
-- `--legacy-strict-parity`: iter13-era non-native strict OSR path (kept for regression reference)
+- `-DCLASLIB_PARITY_LINK=ON` + `--claslib-bridge`: delegate to upstream CLASLIB `postpos()` linked as a static library (oracle mode)
+- `--legacy-strict-parity`: iter13-era non-native strict OSR path (regression reference)
 
-### 17 helpers at 1e-6 CLASLIB parity
-
-`ClasnatParity` GoogleTest suite compares native implementations against the CLASLIB C source as an oracle (enabled by `-DCLASLIB_PARITY_LINK=ON`):
-
-`windupcorr`, `antmodel`, `ionmapf`, `prectrop`, `corrmeas`, `satpos_ssr`, `tidedisp`, `eph2clk`, `eph2pos`, `geodist`, `satantoff`, `compensatedisp`, `trop_grid_data`, `filter`, `lambda`, `tropmodel`, `stec_grid_data`.
-
-This suite runs on every PR via the `clasnat-parity` CI job; the long 3600-epoch regression runs nightly.
+See `docs/clas_port_architecture.md` for the port design and `docs/clas_validated_datasets.md` for the validated dataset set.
 
 ## RTK Performance vs RTKLIB (demo5)
 
