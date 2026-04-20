@@ -171,6 +171,53 @@ double ionoFrequencyScale(int freq, double l1_frequency_hz, double current_frequ
     return ratio * ratio;
 }
 
+inline double distanceToNearestInteger(double value) {
+    return std::abs(value - std::round(value));
+}
+
+bool applyAmbiguityConstraintUpdate(VectorXd& head_state,
+                                    VectorXd& dd_float,
+                                    MatrixXd& Qb,
+                                    MatrixXd& Qab,
+                                    int lhs_index,
+                                    int rhs_index,
+                                    double fixed_difference,
+                                    double measurement_variance) {
+    if (lhs_index < 0 || rhs_index < 0 ||
+        lhs_index >= dd_float.size() || rhs_index >= dd_float.size() ||
+        lhs_index >= Qb.rows() || rhs_index >= Qb.rows() ||
+        lhs_index >= Qb.cols() || rhs_index >= Qb.cols() ||
+        lhs_index >= Qab.cols() || rhs_index >= Qab.cols()) {
+        return false;
+    }
+
+    VectorXd h = VectorXd::Zero(dd_float.size());
+    h(lhs_index) = 1.0;
+    h(rhs_index) = -1.0;
+    const VectorXd Qb_h = Qb * h;
+    const auto h_Qb = h.transpose() * Qb;
+    const VectorXd Qab_h = Qab * h;
+    const double innovation_variance =
+        h.dot(Qb_h) + std::max(measurement_variance, 1e-6);
+    if (!std::isfinite(innovation_variance) || innovation_variance <= 0.0) {
+        return false;
+    }
+
+    const double innovation = fixed_difference - h.dot(dd_float);
+    dd_float += (Qb_h / innovation_variance) * innovation;
+    head_state += (Qab_h / innovation_variance) * innovation;
+    Qb -= (Qb_h * h_Qb) / innovation_variance;
+    Qab -= (Qab_h * h_Qb) / innovation_variance;
+    Qb = (Qb + Qb.transpose()) * 0.5;
+    for (int i = 0; i < Qb.rows(); ++i) {
+        if (Qb(i, i) < 1e-6) {
+            Qb(i, i) = 1e-6;
+        }
+    }
+    return dd_float.allFinite() && head_state.allFinite() &&
+           Qb.allFinite() && Qab.allFinite();
+}
+
 double glonassInterChannelBiasMeters(const RTKProcessor::RTKConfig& config,
                                      GNSSSystem ref_system,
                                      GNSSSystem sat_system,
@@ -1719,9 +1766,170 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         }
     }
 
+    // === Wide-lane AR pre-step (default-off) ===
+    // Frozen copies of full-size matrices for use in build_search_problem
+    // (best_candidate may update dd_float/Qb/Qab to subset-sized values later)
+    const VectorXd base_dd_float = dd_float;
+    const MatrixXd base_Qb = Qb;
+    const MatrixXd base_Qab = Qab;
+    const VectorXd base_head_state = head_state;
+
+    std::vector<int> full_subset(nb);
+    for (int i = 0; i < nb; ++i) {
+        full_subset[i] = i;
+    }
+
+    struct WideLaneConstraint {
+        int l1_index = -1;
+        int l2_index = -1;
+        double fixed_integer = 0.0;
+    };
+    std::vector<WideLaneConstraint> wide_lane_constraints;
+    int wide_lane_total = 0;
+    int wide_lane_fixed = 0;
+
+    auto compute_wide_lane_float = [&](int l1_index, int l2_index, double& wide_lane_float) {
+        if (l1_index < 0 || l2_index < 0 ||
+            l1_index >= nb || l2_index >= nb ||
+            dd_pairs[l1_index].freq != 0 || dd_pairs[l2_index].freq != 1) {
+            return false;
+        }
+
+        const auto ref_it = sat_data.find(dd_pairs[l1_index].ref_sat);
+        const auto sat_it = sat_data.find(dd_pairs[l1_index].sat);
+        if (ref_it == sat_data.end() || sat_it == sat_data.end()) {
+            return false;
+        }
+        const auto& ref_sd = ref_it->second;
+        const auto& sd = sat_it->second;
+        if (!ref_sd.has_l1 || !ref_sd.has_l2 || !sd.has_l1 || !sd.has_l2) {
+            return false;
+        }
+
+        const double f1 = ref_sd.l1_frequency_hz;
+        const double f2 = ref_sd.l2_frequency_hz;
+        const double lambda_wl_m = wideLaneWavelength(f1, f2);
+        if (f1 <= 0.0 || f2 <= 0.0 || lambda_wl_m <= 0.0) {
+            return false;
+        }
+
+        auto single_difference_wide_lane = [&](const SatelliteData& data) {
+            const double phi1_m =
+                (data.rover_l1_phase - data.base_l1_phase) * data.l1_wavelength;
+            const double phi2_m =
+                (data.rover_l2_phase - data.base_l2_phase) * data.l2_wavelength;
+            const double code_term =
+                (f1 * (data.rover_l1_code - data.base_l1_code) +
+                 f2 * (data.rover_l2_code - data.base_l2_code)) / (f1 + f2);
+            return ((f1 * phi1_m - f2 * phi2_m) / (f1 - f2) - code_term) / lambda_wl_m;
+        };
+
+        wide_lane_float = single_difference_wide_lane(ref_sd) -
+                          single_difference_wide_lane(sd);
+        return std::isfinite(wide_lane_float);
+    };
+
+    if (rtk_config_.enable_wide_lane_ar) {
+        const double wide_lane_threshold =
+            std::max(0.0, rtk_config_.wide_lane_acceptance_threshold);
+        for (int i = 0; i < nb; ++i) {
+            if (dd_pairs[i].freq != 0 || dd_pairs[i].ref_sat.system == GNSSSystem::GLONASS) {
+                continue;
+            }
+            int l2_pair = -1;
+            for (int j = 0; j < nb; ++j) {
+                if (dd_pairs[j].freq == 1 &&
+                    dd_pairs[j].sat == dd_pairs[i].sat &&
+                    dd_pairs[j].ref_sat == dd_pairs[i].ref_sat) {
+                    l2_pair = j;
+                    break;
+                }
+            }
+            if (l2_pair < 0) {
+                continue;
+            }
+
+            wide_lane_total++;
+            double wide_lane_float = 0.0;
+            if (!compute_wide_lane_float(i, l2_pair, wide_lane_float)) {
+                continue;
+            }
+            const double fixed_integer = std::round(wide_lane_float);
+            if (distanceToNearestInteger(wide_lane_float) >= wide_lane_threshold) {
+                continue;
+            }
+
+            wide_lane_constraints.push_back({i, l2_pair, fixed_integer});
+            wide_lane_fixed++;
+        }
+        if (wide_lane_total > 0) {
+            std::clog << "[RTK-AR] WL fixed " << wide_lane_fixed
+                      << "/" << wide_lane_total << "\n";
+        }
+    }
+
+    struct SearchProblem {
+        VectorXd head_state;
+        VectorXd dd_float;
+        MatrixXd Qb;
+        MatrixXd Qab;
+    };
+    auto build_search_problem = [&](const std::vector<int>& subset) {
+        SearchProblem problem;
+        problem.head_state = base_head_state;
+        if (subset.size() == static_cast<size_t>(nb)) {
+            problem.dd_float = base_dd_float;
+            problem.Qb = base_Qb;
+            problem.Qab = base_Qab;
+        } else {
+            const auto subset_matrices =
+                rtk_ar_evaluation::extractSubset(base_dd_float, base_Qb, base_Qab, subset);
+            problem.dd_float = subset_matrices.dd_float;
+            problem.Qb = subset_matrices.Qb;
+            problem.Qab = subset_matrices.Qab;
+        }
+
+        if (!wide_lane_constraints.empty()) {
+            std::map<int, int> local_index_by_full_index;
+            for (int local = 0; local < static_cast<int>(subset.size()); ++local) {
+                local_index_by_full_index[subset[local]] = local;
+            }
+
+            for (const auto& constraint : wide_lane_constraints) {
+                const auto l1_it = local_index_by_full_index.find(constraint.l1_index);
+                const auto l2_it = local_index_by_full_index.find(constraint.l2_index);
+                if (l1_it == local_index_by_full_index.end() ||
+                    l2_it == local_index_by_full_index.end()) {
+                    continue;
+                }
+                applyAmbiguityConstraintUpdate(problem.head_state,
+                                               problem.dd_float,
+                                               problem.Qb,
+                                               problem.Qab,
+                                               l1_it->second,
+                                               l2_it->second,
+                                               constraint.fixed_integer,
+                                               1e-4);
+            }
+        }
+
+        if (wide_lane_constraints.empty()) {
+            return problem;
+        }
+
+        problem.Qb = (problem.Qb + problem.Qb.transpose()) * 0.5;
+        for (int i = 0; i < problem.Qb.rows(); ++i) {
+            if (problem.Qb(i, i) < 1e-6) {
+                problem.Qb(i, i) = 1e-6;
+            }
+        }
+        return problem;
+    };
+
     // Standard LAMBDA path
     if (!fixed) {
-        if (lambdaMethod(dd_float, Qb, dd_fixed, ratio)) {
+        const auto full_problem = build_search_problem(full_subset);
+        if (lambdaMethod(full_problem.dd_float, full_problem.Qb, dd_fixed, ratio)) {
             if (ratio >= effective_ratio_threshold) {
                 fixed = true;
 
@@ -1887,21 +2095,16 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             fixed, ratio, effective_ratio_threshold, max_var);
 
     if (nb > 4 && (search_preferred_subsets || search_drop_subsets)) {
-        const VectorXd full_dd_float = dd_float;
-        const MatrixXd full_Qb = Qb;
-        const MatrixXd full_Qab = Qab;
-
         auto try_subset = [&](const std::vector<int>& subset) {
             const int ns = subset.size();
             if (ns < 4) {
                 return false;
             }
 
-            const auto subset_matrices =
-                rtk_ar_evaluation::extractSubset(full_dd_float, full_Qb, full_Qab, subset);
+            const auto subset_problem = build_search_problem(subset);
             VectorXd sub_fixed;
             double sub_ratio = 0.0;
-            if (!lambdaMethod(subset_matrices.dd_float, subset_matrices.Qb, sub_fixed, sub_ratio)) {
+            if (!lambdaMethod(subset_problem.dd_float, subset_problem.Qb, sub_fixed, sub_ratio)) {
                 return false;
             }
             if (sub_ratio < effective_ratio_threshold) {
@@ -1910,6 +2113,10 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
 
             if (rtk_ar_evaluation::preferCandidate(
                     best_candidate.ratio, best_candidate.fixed, sub_ratio)) {
+                rtk_ar_evaluation::SubsetMatrices subset_matrices;
+                subset_matrices.dd_float = subset_problem.dd_float;
+                subset_matrices.Qb = subset_problem.Qb;
+                subset_matrices.Qab = subset_problem.Qab;
                 rtk_ar_evaluation::adoptCandidate(
                     best_candidate, subset, subset_matrices, sub_fixed, sub_ratio);
                 return true;
@@ -1920,7 +2127,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         std::vector<rtk_ar_selection::PairDescriptor> descriptors;
         descriptors.reserve(nb);
         for (int i = 0; i < nb; ++i) {
-            descriptors.push_back({dd_pairs[i].ref_sat.system, full_Qb(i, i)});
+            descriptors.push_back({dd_pairs[i].ref_sat.system, Qb(i, i)});
         }
 
         const std::vector<std::vector<int>> preferred_subsets =
@@ -1965,8 +2172,13 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     if (!fixed) return false;
 
     // Fixed solution: xa = y[:na] - Qab * Qb^{-1} * (dd_float - dd_fixed)
+    const auto fixed_problem = build_search_problem(best_candidate.subset);
     VectorXd xa;
-    if (!rtk_ar_evaluation::solveFixedHeadState(head_state, Qab, Qb, dd_float, dd_fixed, xa)) {
+    if (!rtk_ar_evaluation::solveFixedHeadState(fixed_problem.head_state,
+                                                fixed_problem.Qab,
+                                                fixed_problem.Qb,
+                                                fixed_problem.dd_float,
+                                                dd_fixed, xa)) {
         return false;
     }
     fixed_baseline_ = xa.head<3>();

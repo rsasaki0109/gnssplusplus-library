@@ -97,6 +97,8 @@ struct SolveConfig {
     double max_position_jump_m = 0.0;
     int max_consecutive_float_for_reset = 0;
     double max_postfix_residual_rms = 0.0;
+    bool enable_wide_lane_ar = false;
+    double wide_lane_acceptance_threshold = 0.25;
 };
 
 double timeDiffSeconds(const libgnss::GNSSTime& a, const libgnss::GNSSTime& b) {
@@ -412,6 +414,8 @@ void printUsage(const char* program_name) {
         << "                             (default: 0, disabled; additional to history check)\n"
         << "  --max-postfix-rms <v>      Max L1 post-fix phase residual RMS in meters\n"
         << "                             (default: 0, disabled)\n"
+        << "  --enable-wide-lane-ar      Enable MW wide-lane AR pre-step (default: off)\n"
+        << "  --wide-lane-threshold <v>  WL float->int threshold in cycles (default: 0.25)\n"
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
         << "                             (default: 0, disabled; e.g. 10 for aggressive urban reconvergence)\n"
@@ -581,6 +585,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.max_position_jump_m = std::stod(argv[++i]);
         } else if (arg == "--max-postfix-rms" && i + 1 < argc) {
             config.max_postfix_residual_rms = std::stod(argv[++i]);
+        } else if (arg == "--enable-wide-lane-ar") {
+            config.enable_wide_lane_ar = true;
+        } else if (arg == "--wide-lane-threshold" && i + 1 < argc) {
+            config.wide_lane_acceptance_threshold = std::stod(argv[++i]);
         } else if (arg == "--max-consec-float-reset" && i + 1 < argc) {
             config.max_consecutive_float_for_reset = std::stoi(argv[++i]);
         } else if (arg == "--max-baseline-m" && i + 1 < argc) {
@@ -766,6 +774,8 @@ int main(int argc, char* argv[]) {
         rtk_config.max_position_jump_m = config.max_position_jump_m;
         rtk_config.max_consecutive_float_for_reset = config.max_consecutive_float_for_reset;
         rtk_config.max_postfix_residual_rms = config.max_postfix_residual_rms;
+        rtk_config.enable_wide_lane_ar = config.enable_wide_lane_ar;
+        rtk_config.wide_lane_acceptance_threshold = config.wide_lane_acceptance_threshold;
         rtk_processor.setRTKConfig(rtk_config);
         libgnss::SPPProcessor::SPPConfig spp_config;
         spp_config.use_multi_constellation = true;

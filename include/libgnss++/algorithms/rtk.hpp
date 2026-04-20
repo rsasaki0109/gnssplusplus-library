@@ -126,6 +126,18 @@ public:
         /// Computed after the LAMBDA fix is obtained, using the fixed DD ambiguities.
         /// 0 (default) disables the check — existing behavior preserved.
         double max_postfix_residual_rms = 0.0;
+
+        /// Enable MW wide-lane AR pre-step.
+        /// When true, fix wide-lane integers per L1/L2 pair before the N1/N2 LAMBDA
+        /// search and inject the fixed WL integers as hard constraints into the
+        /// search problem (head_state, dd_float, Qb, Qab).
+        /// false (default) disables — existing behavior preserved.
+        bool enable_wide_lane_ar = false;
+
+        /// Threshold for accepting a wide-lane float as an integer (cycles).
+        /// |WL_float - round(WL_float)| < threshold → fix. 0.25 is the worktree
+        /// default; only referenced when enable_wide_lane_ar = true.
+        double wide_lane_acceptance_threshold = 0.25;
     };
 
     RTKProcessor();
