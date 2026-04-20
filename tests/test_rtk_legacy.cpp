@@ -423,6 +423,64 @@ TEST(RTKLegacyCompatibilityStandaloneTest, MaxPostfixResidualRmsConfigurable) {
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_postfix_residual_rms, 0.0);
 }
 
+TEST(RTKLegacyCompatibilityStandaloneTest, WideLaneArDefaultDisabled) {
+    // Default enable_wide_lane_ar must be false (disabled — existing behavior preserved).
+    RTKProcessor processor;
+    EXPECT_FALSE(processor.getRTKConfig().enable_wide_lane_ar);
+
+    // Default wide_lane_acceptance_threshold must be 0.25.
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().wide_lane_acceptance_threshold, 0.25);
+
+    // Explicitly set false and confirm round-trip.
+    RTKProcessor::RTKConfig cfg;
+    cfg.enable_wide_lane_ar = false;
+    processor.setRTKConfig(cfg);
+    EXPECT_FALSE(processor.getRTKConfig().enable_wide_lane_ar);
+
+    // Setting true should be stored correctly.
+    RTKProcessor::RTKConfig cfg2;
+    cfg2.enable_wide_lane_ar = true;
+    processor.setRTKConfig(cfg2);
+    EXPECT_TRUE(processor.getRTKConfig().enable_wide_lane_ar);
+
+    // Reset to false confirms disabled state.
+    RTKProcessor::RTKConfig cfg3;
+    cfg3.enable_wide_lane_ar = false;
+    processor.setRTKConfig(cfg3);
+    EXPECT_FALSE(processor.getRTKConfig().enable_wide_lane_ar);
+
+    // Threshold default preserved after round-trip.
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().wide_lane_acceptance_threshold, 0.25);
+}
+
+TEST(RTKLegacyCompatibilityStandaloneTest, WideLaneArConfigurable) {
+    RTKProcessor processor;
+
+    // threshold 0.10
+    RTKProcessor::RTKConfig cfg1;
+    cfg1.enable_wide_lane_ar = true;
+    cfg1.wide_lane_acceptance_threshold = 0.10;
+    processor.setRTKConfig(cfg1);
+    EXPECT_TRUE(processor.getRTKConfig().enable_wide_lane_ar);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().wide_lane_acceptance_threshold, 0.10);
+
+    // threshold 0.25 (worktree default)
+    RTKProcessor::RTKConfig cfg2;
+    cfg2.enable_wide_lane_ar = true;
+    cfg2.wide_lane_acceptance_threshold = 0.25;
+    processor.setRTKConfig(cfg2);
+    EXPECT_TRUE(processor.getRTKConfig().enable_wide_lane_ar);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().wide_lane_acceptance_threshold, 0.25);
+
+    // threshold 0.50
+    RTKProcessor::RTKConfig cfg3;
+    cfg3.enable_wide_lane_ar = true;
+    cfg3.wide_lane_acceptance_threshold = 0.50;
+    processor.setRTKConfig(cfg3);
+    EXPECT_TRUE(processor.getRTKConfig().enable_wide_lane_ar);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().wide_lane_acceptance_threshold, 0.50);
+}
+
 TEST(RTKLegacyCompatibilityStandaloneTest, ArPolicyDemo5ContinuousDisablesHoldFix) {
     // Under DEMO5_CONTINUOUS, the hold-fix fallback code path is gated off.
     // We verify by checking that tryHoldFix returns false when called directly
