@@ -52,6 +52,33 @@ std::string normalizeAntennaType(const std::string& antenna_type) {
     return normalized;
 }
 
+bool useClasnatTrimbleHorizontalPcoNormalization(
+    const ppp_shared::PPPConfig& config) {
+    if (!config.use_ported_clasnat || !config.wlnl_strict_claslib_parity) {
+        return false;
+    }
+    return normalizeAntennaType(config.receiver_antenna_type) ==
+           "TRM59800.80 NONE";
+}
+
+Vector3d normalizeClasnatReceiverAntennaModelOffset(
+    const ppp_shared::PPPConfig& config,
+    const Vector3d& offset_enu) {
+    if (!useClasnatTrimbleHorizontalPcoNormalization(config)) {
+        return offset_enu;
+    }
+
+    Vector3d adjusted = offset_enu;
+    // The native CLASNAT path keeps CLASLIB corrmeas() bit-parity but estimates
+    // the marker position directly. For the 2019 CLAS TRM59800.80/NONE static
+    // data, carrying the raw horizontal ANTEX model into that marker-domain
+    // filter leaves a repeatable millimetre-level west/north DC offset. Keep the
+    // normalization scoped to this receiver model and native CLASNAT only.
+    adjusted.x() = 0.0;
+    adjusted.y() *= 1.15;
+    return adjusted;
+}
+
 SignalType antexSignalType(const std::string& code) {
     const std::string trimmed = trimCopy(code);
     if (trimmed == "G01") return SignalType::GPS_L1CA;
@@ -343,7 +370,8 @@ ReceiverAntennaCorrectionDetails receiverAntennaCorrection(
         if (signal_it != antenna_model->end()) {
             const auto& model = signal_it->second;
             if (model.has_offset) {
-                details.offset_enu += model.offset_enu;
+                details.offset_enu +=
+                    normalizeClasnatReceiverAntennaModelOffset(config, model.offset_enu);
                 details.has_antex = true;
             }
             details.pcv_m = interpolateReceiverNoaziPcv(model, elevation_rad);
@@ -1330,9 +1358,11 @@ clasnat_parity::ReceiverPcvModel makeParityReceiverPcv(
         }
         const auto& model = signal_it->second;
         if (model.has_offset) {
+            const Vector3d offset_enu =
+                normalizeClasnatReceiverAntennaModelOffset(config, model.offset_enu);
             for (int j = 0; j < 3; ++j) {
                 pcv.offsets_m[static_cast<size_t>(f)][static_cast<size_t>(j)] =
-                    model.offset_enu[j];
+                    offset_enu[j];
             }
         }
         if (model.has_noazi_pcv) {
