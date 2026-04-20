@@ -48,8 +48,10 @@ struct EpochResult {
     int active_state_count = 0;
 };
 
+/// @brief Reset all CLASNAT PPP-RTK filter, ambiguity, and continuity state.
 void reset(ClasnatRtkState& state);
 
+/// @brief Run one CLASNAT PPP-RTK epoch and return the output solution snapshot.
 EpochResult runEpoch(const ObservationData& obs,
                      const NavigationData& nav,
                      const SSRProducts& ssr,

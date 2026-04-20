@@ -35,6 +35,7 @@ nav:
   - CLAS:
       - Quick Start: clas_quickstart.md
       - API & Flow: clas.md
+      - Public Validation Datasets: clas_validated_datasets.md
       - Compact SSR Policies: clas_compact_ssr_policies.md
       - Parity Datasets & Artifacts: clas_parity_artifacts.md
       - Debug Tag Playbook: clas_debug_playbook.md

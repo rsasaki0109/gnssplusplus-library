@@ -1,0 +1,50 @@
+name: Long-Run CLAS Regression
+
+on:
+  schedule:
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: long-run-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  clas-ppp-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libeigen3-dev libgtest-dev cmake build-essential python3-dev pybind11-dev python3-numpy python3-matplotlib python3-pytest
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build gnss_ppp
+      run: cmake --build build --config Release --parallel --target gnss_ppp
+
+    - name: Run 3600 epoch CLAS PPP regression
+      env:
+        PYTHONUNBUFFERED: "1"
+      run: |
+        set -o pipefail
+        mkdir -p output/long-run
+        python3 -m pytest tests/test_cli_tools.py::CLIToolsTest::test_clas_ppp_regression_cm_accuracy -q 2>&1 | tee output/long-run/clas_ppp_regression.log
+
+    - name: Upload CLAS regression artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: clas-ppp-regression-${{ github.run_id }}
+        path: |
+          output/long-run/**/*
+          build/Testing/**/*
+          build/CMakeFiles/CMakeConfigureLog.yaml
+        if-no-files-found: ignore

@@ -9,8 +9,6 @@
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
-#include "ppp_clasnat_zdres.hpp"
-
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -21,7 +19,6 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
-#include <numeric>
 #include <set>
 #include <sstream>
 #include <vector>
@@ -39,7 +36,7 @@ constexpr double kIonoAdaptiveGain = 3.0;
 constexpr double kIonoTimeConstantS = 10.0;
 constexpr double kBiasInitStdCycles = 100.0;
 constexpr double kBiasProcessCyclesPerSqrtS = 1e-3;
-constexpr double kClaslibPositionInitVariance = 30.0 * 30.0;
+constexpr double kClasnatPositionInitVariance = 30.0 * 30.0;
 constexpr int kMinLockForAr = 1;
 constexpr int kMaxAmbOutage = 90;
 constexpr double kElevationMaskRad = 15.0 * M_PI / 180.0;
@@ -99,6 +96,10 @@ struct UpdateStats {
     std::vector<int> selected_rows;
 };
 
+// -----------------------------------------------------------------------------
+// CLASNAT configuration and CLASLIB-compatible scalar helpers
+// -----------------------------------------------------------------------------
+
 double elevationWeight(double elevation_rad) {
     const double sin_el = std::max(std::sin(elevation_rad), 1e-3);
     return 1.0 / (sin_el * sin_el);
@@ -127,7 +128,8 @@ double clasPhaseVarianceForRow(GNSSSystem system, double elevation_rad, int freq
     return variance;
 }
 
-double claslibIonoMappingFunction(const Vector3d& receiver_position, double elevation_rad) {
+// CLASLIB correspondence: ionmapf() in rtkcmn.c.
+double clasnatIonoMappingFunction(const Vector3d& receiver_position, double elevation_rad) {
     constexpr double kIonosphereHeightM = 350000.0;
     double lat = 0.0;
     double lon = 0.0;
@@ -168,7 +170,8 @@ double modeledZenithTroposphereDelayMeters(const Vector3d& receiver_position,
                : 2.3;
 }
 
-double claslibTropMappingFunction(const Vector3d& receiver_position,
+// CLASLIB correspondence: tropmapf() used by prectrop2() in ppprtk.c.
+double clasnatTropMappingFunction(const Vector3d& receiver_position,
                                   double elevation_rad,
                                   const GNSSTime& time) {
     double latitude_rad = 0.0;
@@ -209,11 +212,6 @@ int clasSatNo(const SatelliteId& satellite) {
         default:
             return 0;
     }
-}
-
-bool sameClasSatellite(const SatelliteId& lhs, const SatelliteId& rhs) {
-    return lhs.system == rhs.system && clasSatNo(lhs) == clasSatNo(rhs) &&
-           clasSatNo(lhs) > 0;
 }
 
 SatelliteId realSatelliteForAmbiguity(const SatelliteId& satellite) {
@@ -294,6 +292,7 @@ bool rowLessClasOrder(const ZdRow& lhs, const ZdRow& rhs) {
     return lhs.satellite.prn < rhs.satellite.prn;
 }
 
+// CLASLIB correspondence: prcopt_default CLAS PPP-RTK option shaping.
 ppp_shared::PPPConfig clasnatConfig(const ppp_shared::PPPConfig& base) {
     ppp_shared::PPPConfig config = base;
     config.use_ported_clasnat = true;
@@ -310,13 +309,17 @@ ppp_shared::PPPConfig clasnatConfig(const ppp_shared::PPPConfig& base) {
     config.clas_atmos_selection_policy =
         ppp_shared::PPPConfig::ClasAtmosSelectionPolicy::GRID_FIRST;
     config.clas_decouple_clock_position = false;
-    config.clas_initial_position_variance = kClaslibPositionInitVariance;
+    config.clas_initial_position_variance = kClasnatPositionInitVariance;
     config.initial_ionosphere_variance = kIonoInitVariance;
     config.process_noise_ionosphere = 1e-6;
     config.apply_tides_to_receiver_position = true;
     config.apply_tide_as_osr = false;
     return config;
 }
+
+// -----------------------------------------------------------------------------
+// Debug and parity dump helpers
+// -----------------------------------------------------------------------------
 
 bool shouldDumpFullStateTime(const GNSSTime& time) {
     if (time.week != 2068) {
@@ -838,45 +841,9 @@ void dumpFullUpdateRows(const std::vector<FullMeasurementRow>& rows,
     }
 }
 
-AppliedCorrections selectAppliedCorrections(
-    const OSRCorrection& osr,
-    int freq_index,
-    ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy policy) {
-    AppliedCorrections corrections;
-    if (freq_index < 0 || freq_index >= osr.num_frequencies) {
-        return corrections;
-    }
-    switch (policy) {
-        case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR:
-            corrections.code_m =
-                osr.PRC[freq_index] - osr.trop_correction_m;
-            corrections.phase_m =
-                osr.CPC[freq_index] - osr.trop_correction_m;
-            break;
-        case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::ORBIT_CLOCK_BIAS:
-            corrections.code_m =
-                osr.relativity_correction_m +
-                osr.receiver_antenna_m[freq_index] +
-                osr.code_bias_m[freq_index] +
-                osr.solid_earth_tide_m;
-            corrections.phase_m =
-                osr.relativity_correction_m +
-                osr.receiver_antenna_m[freq_index] +
-                osr.phase_bias_m[freq_index] +
-                osr.windup_m[freq_index] +
-                osr.phase_compensation_m[freq_index] +
-                osr.solid_earth_tide_m;
-            break;
-        case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::ORBIT_CLOCK_ONLY:
-            corrections.code_m =
-                osr.relativity_correction_m +
-                osr.receiver_antenna_m[freq_index] +
-                osr.solid_earth_tide_m;
-            corrections.phase_m = corrections.code_m;
-            break;
-    }
-    return corrections;
-}
+// -----------------------------------------------------------------------------
+// Time update and state prediction
+// -----------------------------------------------------------------------------
 
 void ensureStorage(ClasnatRtkState& rtk) {
     if (rtk.x.size() == kClasNx &&
@@ -944,6 +911,7 @@ void ensureStateMaps(ClasnatRtkState& rtk, const std::vector<OSRCorrection>& osr
     }
 }
 
+// CLASLIB correspondence: pntpos() seed before pppos() refinement.
 bool solveSeed(const ObservationData& obs,
                const NavigationData& nav,
                const ClasnatRtkState& rtk,
@@ -959,6 +927,7 @@ bool solveSeed(const ObservationData& obs,
         obs, nav, initial_rr, seed, nullptr, options);
 }
 
+// CLASLIB correspondence: udpos_ppp() in ppprtk.c.
 void predictPosition(ClasnatRtkState& rtk,
                      const PositionSolution& seed,
                      const ppp_shared::PPPConfig& config) {
@@ -976,6 +945,7 @@ void predictPosition(ClasnatRtkState& rtk,
     }
 }
 
+// CLASLIB correspondence: ionosphere state propagation used by udstate_ppp()/ddres().
 void predictIonosphere(ClasnatRtkState& rtk,
                        const std::vector<OSRCorrection>& osr_corrections,
                        double dt) {
@@ -1023,6 +993,7 @@ void predictIonosphere(ClasnatRtkState& rtk,
     }
 }
 
+// CLASLIB correspondence: udbias_ppp() in ppprtk.c.
 void predictAmbiguities(ClasnatRtkState& rtk,
                         const ObservationData& obs,
                         const std::vector<OSRCorrection>& osr_corrections,
@@ -1128,6 +1099,7 @@ void predictAmbiguities(ClasnatRtkState& rtk,
     }
 }
 
+// CLASLIB correspondence: udstate_ppp() update sequence in ppprtk.c.
 void propagateState(ClasnatRtkState& rtk,
                     const ObservationData& obs,
                     const std::vector<OSRCorrection>& osr_corrections,
@@ -1141,6 +1113,51 @@ void propagateState(ClasnatRtkState& rtk,
     predictAmbiguities(rtk, obs, osr_corrections, dt);
 }
 
+// -----------------------------------------------------------------------------
+// Measurement construction
+// -----------------------------------------------------------------------------
+
+AppliedCorrections selectAppliedCorrections(
+    const OSRCorrection& osr,
+    int freq_index,
+    ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy policy) {
+    AppliedCorrections corrections;
+    if (freq_index < 0 || freq_index >= osr.num_frequencies) {
+        return corrections;
+    }
+    switch (policy) {
+        case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR:
+            corrections.code_m =
+                osr.PRC[freq_index] - osr.trop_correction_m;
+            corrections.phase_m =
+                osr.CPC[freq_index] - osr.trop_correction_m;
+            break;
+        case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::ORBIT_CLOCK_BIAS:
+            corrections.code_m =
+                osr.relativity_correction_m +
+                osr.receiver_antenna_m[freq_index] +
+                osr.code_bias_m[freq_index] +
+                osr.solid_earth_tide_m;
+            corrections.phase_m =
+                osr.relativity_correction_m +
+                osr.receiver_antenna_m[freq_index] +
+                osr.phase_bias_m[freq_index] +
+                osr.windup_m[freq_index] +
+                osr.phase_compensation_m[freq_index] +
+                osr.solid_earth_tide_m;
+            break;
+        case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::ORBIT_CLOCK_ONLY:
+            corrections.code_m =
+                osr.relativity_correction_m +
+                osr.receiver_antenna_m[freq_index] +
+                osr.solid_earth_tide_m;
+            corrections.phase_m = corrections.code_m;
+            break;
+    }
+    return corrections;
+}
+
+// CLASLIB correspondence: zdres() zero-difference residual construction.
 std::vector<ZdRow> buildZeroDifferenceRows(
     const ObservationData& obs,
     const std::vector<OSRCorrection>& osr_corrections,
@@ -1164,7 +1181,7 @@ std::vector<ZdRow> buildZeroDifferenceRows(
         const double sat_clk_m =
             constants::SPEED_OF_LIGHT * osr.satellite_clock_bias_s;
         const double trop_mapping =
-            claslibTropMappingFunction(receiver_position, osr.elevation, obs.time);
+            clasnatTropMappingFunction(receiver_position, osr.elevation, obs.time);
         const double trop_modeled =
             std::isfinite(trop_zenith_m) && trop_zenith_m > 0.0
                 ? trop_mapping * trop_zenith_m
@@ -1306,6 +1323,7 @@ std::vector<ZdRow> buildZeroDifferenceRows(
     return rows;
 }
 
+// CLASLIB correspondence: ddres() single-difference residual assembly.
 MeasurementBuild formSingleDifferenceRows(
     const ObservationData& obs,
     const std::vector<ZdRow>& zd_rows,
@@ -1370,10 +1388,10 @@ MeasurementBuild formSingleDifferenceRows(
                 const double sign = key.is_phase ? -1.0 : 1.0;
                 const double ref_coeff =
                     sign * ref_fi * ref_fi *
-                    claslibIonoMappingFunction(receiver_position, ref->osr->elevation);
+                    clasnatIonoMappingFunction(receiver_position, ref->osr->elevation);
                 const double sat_coeff =
                     sign * sat_fi * sat_fi *
-                    claslibIonoMappingFunction(receiver_position, sat->osr->elevation);
+                    clasnatIonoMappingFunction(receiver_position, sat->osr->elevation);
                 const auto ref_iono_it =
                     rtk.ionosphere_indices.find(ref->satellite);
                 const auto sat_iono_it =
@@ -1459,43 +1477,6 @@ MeasurementBuild buildMeasurements(const ObservationData& obs,
                                    const Vector3d& receiver_position,
                                    double receiver_clock_bias_m,
                                    double trop_zenith_m) {
-    // iter39 zdres transcription gate disabled (regressed to 50mm).
-    // Kept as dead code for future iter40+ test-harness-driven literal port.
-    if (config.use_ported_clasnat && false) {
-        CLASEpochContext epoch_context;
-        epoch_context.receiver_position = receiver_position;
-        epoch_context.receiver_clock_m = receiver_clock_bias_m;
-        epoch_context.trop_zenith_m = trop_zenith_m;
-        epoch_context.osr_corrections = osr_corrections;
-        const auto clasnat_build =
-            ppp_clasnat_zdres::buildEpochMeasurementsClasnatZdres(
-                obs,
-                epoch_context,
-                rtk,
-                config,
-                receiver_position,
-                receiver_clock_bias_m,
-                trop_zenith_m);
-        MeasurementBuild build;
-        build.observed_ambiguities = clasnat_build.observed_ambiguities;
-        build.rows.reserve(clasnat_build.rows.size());
-        for (const auto& src : clasnat_build.rows) {
-            FullMeasurementRow row;
-            row.H = src.H;
-            row.residual = src.residual;
-            row.variance = src.variance;
-            row.reference_variance = src.reference_variance;
-            row.satellite = src.satellite;
-            row.ambiguity_satellite = src.ambiguity_satellite;
-            row.reference_satellite = src.reference_satellite;
-            row.is_phase = src.is_phase;
-            row.signal_index = src.signal_index;
-            row.freq_index = src.freq_index;
-            row.components = src.components;
-            build.rows.push_back(row);
-        }
-        return build;
-    }
     const auto zd_rows =
         buildZeroDifferenceRows(
             obs,
@@ -1507,7 +1488,12 @@ MeasurementBuild buildMeasurements(const ObservationData& obs,
     return formSingleDifferenceRows(obs, zd_rows, rtk, config, receiver_position);
 }
 
-std::vector<int> selectClaslibResidualRows(
+// -----------------------------------------------------------------------------
+// Measurement update
+// -----------------------------------------------------------------------------
+
+// CLASLIB correspondence: residual gating in ddres().
+std::vector<int> selectClasnatResidualRows(
     const std::vector<FullMeasurementRow>& rows,
     const VectorXd& residuals,
     const MatrixXd& innovation_covariance) {
@@ -1628,6 +1614,7 @@ std::vector<int> selectClaslibResidualRows(
     return selected_rows;
 }
 
+// CLASLIB correspondence: filter() in rtkcmn.c.
 UpdateStats applyMeasurementUpdate(ClasnatRtkState& rtk,
                                    const std::vector<FullMeasurementRow>& rows,
                                    bool debug_enabled,
@@ -1695,7 +1682,7 @@ UpdateStats applyMeasurementUpdate(ClasnatRtkState& rtk,
 
     const MatrixXd PHt = Pa * Ha.transpose();
     const MatrixXd S = Ha * PHt + R;
-    stats.selected_rows = selectClaslibResidualRows(rows, z, S);
+    stats.selected_rows = selectClasnatResidualRows(rows, z, S);
     dumpSelectedUpdateRows(rows, stats.selected_rows, R, S, time);
     if (stats.selected_rows.empty()) {
         return stats;
@@ -1782,6 +1769,11 @@ UpdateStats applyMeasurementUpdate(ClasnatRtkState& rtk,
     return stats;
 }
 
+// -----------------------------------------------------------------------------
+// Ambiguity resolution
+// -----------------------------------------------------------------------------
+
+// CLASLIB correspondence: ssat lock/outage bookkeeping after ddres()/filter().
 void markObservedAmbiguities(ClasnatRtkState& rtk,
                              const MeasurementBuild& build,
                              const ObservationData& obs) {
@@ -1847,6 +1839,7 @@ void copyFilterFromArState(const ppp_shared::PPPState& state, ClasnatRtkState& r
     }
 }
 
+// CLASLIB correspondence: resamb_LAMBDA() in ppprtk.c.
 bool tryAmbiguityResolution(ClasnatRtkState& rtk,
                             const std::vector<OSRCorrection>& osr_corrections,
                             const ppp_shared::PPPConfig& config,
@@ -1902,6 +1895,11 @@ bool tryAmbiguityResolution(ClasnatRtkState& rtk,
     return true;
 }
 
+// -----------------------------------------------------------------------------
+// Output helpers
+// -----------------------------------------------------------------------------
+
+// CLASLIB correspondence: sol_t output update at the end of pppos().
 PositionSolution makeSolution(const ObservationData& obs,
                               const Vector3d& position,
                               const MatrixXd& covariance,
@@ -1947,10 +1945,16 @@ double residualRms(const VectorXd& residuals) {
 
 }  // namespace
 
+// -----------------------------------------------------------------------------
+// Public API
+// -----------------------------------------------------------------------------
+
+/// @brief Reset all CLASNAT PPP-RTK filter state.
 void reset(ClasnatRtkState& state) {
     state = ClasnatRtkState{};
 }
 
+/// @brief Run one CLASNAT epoch; CLASLIB correspondence: pppos() in ppprtk.c.
 EpochResult runEpoch(const ObservationData& obs,
                      const NavigationData& nav,
                      const SSRProducts& ssr,
