@@ -5,6 +5,7 @@
 #include <libgnss++/external/madocalib_oracle.hpp>
 
 #include <cmath>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,7 @@ namespace madoca = libgnss::algorithms::madoca_parity;
 
 constexpr double kDegToRad = 3.141592653589793238462643383279502884 / 180.0;
 constexpr double kParityTolerance = madoca::kOracleTolerance;
+constexpr double kClockTolerance = 1e-12;
 
 struct GeometrySample {
     double rr[3] = {};
@@ -30,6 +32,29 @@ void copyVector3(const libgnss::Vector3d& value, double out[3]) {
     out[0] = value(0);
     out[1] = value(1);
     out[2] = value(2);
+}
+
+madoca::GTime makeTime(int year, int mon, int day, int hour, int min, double second) {
+    const int doy[] = {1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335};
+    madoca::GTime time = {};
+    if (year < 1970 || 2099 < year || mon < 1 || 12 < mon) {
+        return time;
+    }
+    const int days = (year - 1970) * 365 + (year - 1969) / 4 + doy[mon - 1] +
+                     day - 2 + (year % 4 == 0 && mon >= 3 ? 1 : 0);
+    const int sec = static_cast<int>(std::floor(second));
+    time.time = static_cast<decltype(time.time)>(days) * 86400 + hour * 3600 +
+                min * 60 + sec;
+    time.sec = second - sec;
+    return time;
+}
+
+madoca::GTime addSeconds(madoca::GTime time, double seconds) {
+    time.sec += seconds;
+    const double whole = std::floor(time.sec);
+    time.time += static_cast<decltype(time.time)>(whole);
+    time.sec -= whole;
+    return time;
 }
 
 GeometrySample makeSample(int index) {
@@ -66,6 +91,66 @@ std::vector<GeometrySample> makeSamples() {
         samples.push_back(makeSample(i));
     }
     return samples;
+}
+
+madoca::AntennaPcv makePcv() {
+    madoca::AntennaPcv pcv;
+    for (int i = 0; i < madoca::kMadocalibNFreqPcv; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            pcv.off[i][j] =
+                0.0125 * static_cast<double>(i + 1) +
+                0.004 * static_cast<double>(j + 1) -
+                0.0007 * static_cast<double>((i + j) % 3);
+        }
+        for (int j = 0; j < madoca::kMadocalibPcvAngles; ++j) {
+            pcv.var[i][j] =
+                0.0008 * static_cast<double>(i + 1) +
+                0.00013 * static_cast<double>(j) +
+                0.00001 * static_cast<double>((i * j) % 5);
+        }
+    }
+    return pcv;
+}
+
+madoca::BroadcastEphemeris makeEph(int sys, int prn, int index) {
+    madoca::BroadcastEphemeris eph;
+    eph.sat = madoca::satno(sys, prn);
+    eph.iode = 10 + index;
+    eph.iodc = 20 + index;
+    eph.sva = sys == madoca::kSysGal ? 65 + index : 2 + index;
+    eph.svh = 0;
+    eph.week = 2400;
+    eph.code = sys == madoca::kSysGal ? (1 << 9) : 0;
+    eph.flag = 0;
+    eph.toe = makeTime(2026, 4, 19, 12, 0, 0.0 + 600.0 * index);
+    eph.toc = addSeconds(eph.toe, -120.0 + 15.0 * index);
+    eph.ttr = addSeconds(eph.toe, 30.0);
+    eph.A = (sys == madoca::kSysCmp && prn <= 5) ? 42164000.0 : 26560000.0;
+    if (sys == madoca::kSysGal) {
+        eph.A = 29601000.0;
+    } else if (sys == madoca::kSysCmp && prn > 5) {
+        eph.A = 27906100.0;
+    }
+    eph.e = 0.008 + 0.001 * static_cast<double>(index);
+    eph.i0 = (sys == madoca::kSysCmp && prn <= 5 ? 4.5 : 55.0 + index) * kDegToRad;
+    eph.OMG0 = (45.0 + 11.0 * static_cast<double>(index)) * kDegToRad;
+    eph.omg = (15.0 + 7.0 * static_cast<double>(index)) * kDegToRad;
+    eph.M0 = (5.0 + 19.0 * static_cast<double>(index)) * kDegToRad;
+    eph.deln = (3.5 + static_cast<double>(index)) * 1E-9;
+    eph.OMGd = (-8.0 - 0.4 * static_cast<double>(index)) * 1E-9;
+    eph.idot = (0.2 + 0.03 * static_cast<double>(index)) * 1E-10;
+    eph.crc = 180.0 + 8.0 * static_cast<double>(index);
+    eph.crs = -70.0 + 4.0 * static_cast<double>(index);
+    eph.cuc = (0.9 + 0.1 * static_cast<double>(index)) * 1E-6;
+    eph.cus = (1.7 + 0.08 * static_cast<double>(index)) * 1E-6;
+    eph.cic = (-0.5 + 0.03 * static_cast<double>(index)) * 1E-6;
+    eph.cis = (0.7 + 0.02 * static_cast<double>(index)) * 1E-6;
+    eph.toes = 302400.0 + 600.0 * static_cast<double>(index);
+    eph.fit = 4.0;
+    eph.f0 = (2.0 + 0.3 * static_cast<double>(index)) * 1E-4;
+    eph.f1 = (-4.0 + 0.2 * static_cast<double>(index)) * 1E-12;
+    eph.f2 = (1.0 + 0.1 * static_cast<double>(index)) * 1E-18;
+    return eph;
 }
 
 void expectNearArray(const std::string& label,
@@ -168,6 +253,142 @@ TEST_F(MadocaParity, GeodistSagnacRangeAndLos) {
         EXPECT_NEAR(native, oracle, kParityTolerance)
             << "range sample=" << i;
         expectNearArray("los sample=" + std::to_string(i), native_e, oracle_e, 3);
+    }
+}
+
+TEST_F(MadocaParity, TropmodelSaastamoinenDelay) {
+    ASSERT_TRUE(madoca::tropmodelAvailable());
+    const auto samples = makeSamples();
+    const madoca::GTime time = makeTime(2026, 4, 20, 6, 30, 15.25);
+    for (size_t i = 0; i < samples.size(); ++i) {
+        const double humi = 0.15 + 0.08 * static_cast<double>(i % 7);
+        const double native = madoca::tropmodel(time, samples[i].pos, samples[i].azel, humi);
+        const double oracle = libgnss::external::madocalib_oracle::tropmodel(
+            time, samples[i].pos, samples[i].azel, humi);
+        EXPECT_NEAR(native, oracle, kParityTolerance) << "sample=" << i;
+    }
+
+    const double low_pos[3] = {35.0 * kDegToRad, 139.0 * kDegToRad, -101.0};
+    const double azel[2] = {30.0 * kDegToRad, 20.0 * kDegToRad};
+    EXPECT_NEAR(madoca::tropmodel(time, low_pos, azel, 0.5),
+                libgnss::external::madocalib_oracle::tropmodel(time, low_pos, azel, 0.5),
+                kParityTolerance);
+}
+
+TEST_F(MadocaParity, TropmapfNiellMappingFunction) {
+    ASSERT_TRUE(madoca::tropmapfAvailable());
+    const auto samples = makeSamples();
+    const madoca::GTime times[] = {
+        makeTime(2026, 1, 15, 0, 0, 0.0),
+        makeTime(2026, 4, 20, 12, 30, 0.0),
+        makeTime(2026, 8, 1, 23, 45, 30.0),
+    };
+    for (size_t i = 0; i < samples.size(); ++i) {
+        double native_mapfw = -1.0;
+        double oracle_mapfw = -2.0;
+        const madoca::GTime time = times[i % 3];
+        const double native =
+            madoca::tropmapf(time, samples[i].pos, samples[i].azel, &native_mapfw);
+        const double oracle = libgnss::external::madocalib_oracle::tropmapf(
+            time, samples[i].pos, samples[i].azel, &oracle_mapfw);
+        EXPECT_NEAR(native, oracle, kParityTolerance) << "dry sample=" << i;
+        EXPECT_NEAR(native_mapfw, oracle_mapfw, kParityTolerance)
+            << "wet sample=" << i;
+        EXPECT_NEAR(madoca::tropmapf(time, samples[i].pos, samples[i].azel, nullptr),
+                    libgnss::external::madocalib_oracle::tropmapf(
+                        time, samples[i].pos, samples[i].azel, nullptr),
+                    kParityTolerance)
+            << "nullptr sample=" << i;
+    }
+}
+
+TEST_F(MadocaParity, AntmodelReceiverPcoPcv) {
+    ASSERT_TRUE(madoca::antmodelAvailable());
+    const auto samples = makeSamples();
+    const madoca::AntennaPcv pcv = makePcv();
+    const double del[3] = {0.012, -0.025, 0.081};
+
+    for (size_t i = 0; i < samples.size(); ++i) {
+        for (int opt : {0, 1}) {
+            double native[madoca::kMadocalibNFreqPcv] = {};
+            double oracle[madoca::kMadocalibNFreqPcv] = {};
+            madoca::antmodel(&pcv, del, samples[i].azel, opt, native);
+            libgnss::external::madocalib_oracle::antmodel(
+                &pcv, del, samples[i].azel, opt, oracle);
+            expectNearArray("antmodel sample=" + std::to_string(i) +
+                                " opt=" + std::to_string(opt),
+                            native,
+                            oracle,
+                            madoca::kMadocalibNFreqPcv);
+        }
+    }
+}
+
+TEST_F(MadocaParity, AntmodelSatellitePcv) {
+    ASSERT_TRUE(madoca::antmodelSAvailable());
+    const madoca::AntennaPcv pcv = makePcv();
+    const double nadirs[] = {0.0, 1.0 * kDegToRad, 4.25 * kDegToRad, 9.1 * kDegToRad};
+    for (double nadir : nadirs) {
+        double native[madoca::kMadocalibNFreqPcv] = {};
+        double oracle[madoca::kMadocalibNFreqPcv] = {};
+        madoca::antmodel_s(&pcv, nadir, native);
+        libgnss::external::madocalib_oracle::antmodel_s(&pcv, nadir, oracle);
+        expectNearArray("antmodel_s nadir=" + std::to_string(nadir),
+                        native,
+                        oracle,
+                        madoca::kMadocalibNFreqPcv);
+    }
+}
+
+TEST_F(MadocaParity, Eph2clkBroadcastClock) {
+    ASSERT_TRUE(madoca::eph2clkAvailable());
+    const madoca::BroadcastEphemeris ephs[] = {
+        makeEph(madoca::kSysGps, 3, 0),
+        makeEph(madoca::kSysGal, 11, 1),
+        makeEph(madoca::kSysCmp, 3, 2),
+        makeEph(madoca::kSysCmp, 20, 3),
+    };
+    for (size_t i = 0; i < std::size(ephs); ++i) {
+        for (double dt : {-360.0, 0.0, 540.0, 1800.0}) {
+            const madoca::GTime time = addSeconds(ephs[i].toc, dt);
+            const double native = madoca::eph2clk(time, &ephs[i]);
+            const double oracle = libgnss::external::madocalib_oracle::eph2clk(time, &ephs[i]);
+            EXPECT_NEAR(native, oracle, kClockTolerance)
+                << "eph=" << i << " dt=" << dt;
+        }
+    }
+}
+
+TEST_F(MadocaParity, Eph2posBroadcastKeplerEcef) {
+    ASSERT_TRUE(madoca::eph2posAvailable());
+    const madoca::BroadcastEphemeris ephs[] = {
+        makeEph(madoca::kSysGps, 3, 0),
+        makeEph(madoca::kSysGal, 11, 1),
+        makeEph(madoca::kSysCmp, 3, 2),
+        makeEph(madoca::kSysCmp, 20, 3),
+    };
+    for (size_t i = 0; i < std::size(ephs); ++i) {
+        for (double dt : {60.0, 900.0, 2400.0}) {
+            const madoca::GTime time = addSeconds(ephs[i].toe, dt);
+            double native_rs[3] = {};
+            double oracle_rs[3] = {};
+            double native_dts = 0.0;
+            double oracle_dts = 0.0;
+            double native_var = 0.0;
+            double oracle_var = 0.0;
+            madoca::eph2pos(time, &ephs[i], native_rs, &native_dts, &native_var);
+            libgnss::external::madocalib_oracle::eph2pos(
+                time, &ephs[i], oracle_rs, &oracle_dts, &oracle_var);
+            expectNearArray("eph2pos rs eph=" + std::to_string(i) +
+                                " dt=" + std::to_string(dt),
+                            native_rs,
+                            oracle_rs,
+                            3);
+            EXPECT_NEAR(native_dts, oracle_dts, kClockTolerance)
+                << "dts eph=" << i << " dt=" << dt;
+            EXPECT_NEAR(native_var, oracle_var, kParityTolerance)
+                << "var eph=" << i << " dt=" << dt;
+        }
     }
 }
 

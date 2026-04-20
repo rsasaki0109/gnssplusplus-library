@@ -81,6 +81,9 @@ if(MADOCALIB_PARITY_LINK)
     endif()
 
     add_library(madocalib STATIC
+        ${MADOCALIB_SRC_DIR}/ephemeris.c
+        ${MADOCALIB_SRC_DIR}/preceph.c
+        ${MADOCALIB_SRC_DIR}/sbas.c
         ${MADOCALIB_SRC_DIR}/rtkcmn.c
     )
     target_include_directories(madocalib PUBLIC ${MADOCALIB_SRC_DIR})
