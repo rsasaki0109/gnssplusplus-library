@@ -88,7 +88,6 @@ These are valuable for parity work, but should be treated as tuning and
 verification controls rather than long-term stable public API:
 
 - compact merge/composition/bank/materialization policy flags
-- `--ported-full`, the deprecated compatibility alias for `--ported-clasnat`
 - debug stderr streams such as `[OSR]`, `[CLAS-PHASE-ROW]`, `[PPP-WLNL-COMP]`
 - parity-only wrappers and temporary strategy combinations used by issue work
 
@@ -174,6 +173,9 @@ These tests pin:
 
 The parity datasets and expected output artifacts are documented on
 [CLAS Parity Datasets & Artifacts](clas_parity_artifacts.md).
+
+The public provenance and current accepted/probed CLAS datasets are documented
+on [CLAS Public Validation Datasets](clas_validated_datasets.md).
 
 The current debug stderr tags and how to use them are documented on
 [CLAS Debug Tag Playbook](clas_debug_playbook.md).

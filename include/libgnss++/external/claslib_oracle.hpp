@@ -14,6 +14,13 @@ using CorrmeasOutput = libgnss::clasnat_parity::CorrmeasOutput;
 using SatAntOffInput = libgnss::clasnat_parity::SatAntOffInput;
 using TropGridInput = libgnss::clasnat_parity::TropGridInput;
 using TropGridOutput = libgnss::clasnat_parity::TropGridOutput;
+using StecGridInput = libgnss::clasnat_parity::StecGridInput;
+using StecGridOutput = libgnss::clasnat_parity::StecGridOutput;
+using TropmodelInput = libgnss::clasnat_parity::TropmodelInput;
+using FilterInput = libgnss::clasnat_parity::FilterInput;
+using FilterOutput = libgnss::clasnat_parity::FilterOutput;
+using LambdaInput = libgnss::clasnat_parity::LambdaInput;
+using LambdaOutput = libgnss::clasnat_parity::LambdaOutput;
 
 bool available();
 
@@ -65,5 +72,9 @@ void satantoff(const SatAntOffInput& input, double dant[3]);
 bool compensatedisp(const libgnss::clasnat_parity::CorrmeasInput& input,
                     double compL[libgnss::clasnat_parity::kParityMaxFreq]);
 bool trop_grid_data(const TropGridInput& input, TropGridOutput& out);
+bool stec_grid_data(const StecGridInput& input, StecGridOutput& out);
+double tropmodel(const TropmodelInput& input);
+bool filter_update(const FilterInput& input, FilterOutput& out);
+bool lambda_search(const LambdaInput& input, LambdaOutput& out);
 
 }  // namespace libgnss::external::claslib_oracle

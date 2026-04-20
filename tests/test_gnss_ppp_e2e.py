@@ -133,6 +133,9 @@ class GnssPppHelpTest(unittest.TestCase):
         self.assertIn("hybrid-standard-ppp", r.stdout)
         self.assertIn("--clas-osr", r.stdout)
         self.assertIn("--claslib-parity", r.stdout)
+        self.assertIn("--ported-clasnat", r.stdout)
+        removed_alias = "--ported" "-full"
+        self.assertNotIn(removed_alias, r.stdout)
 
 
 if __name__ == "__main__":

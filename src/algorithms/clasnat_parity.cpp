@@ -1,4 +1,6 @@
 #include <libgnss++/algorithms/clasnat_parity.hpp>
+#include <libgnss++/algorithms/kalman.hpp>
+#include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/tidal.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -1537,6 +1539,22 @@ bool tropGridDataAvailable() {
     return true;
 }
 
+bool stecGridDataAvailable() {
+    return true;
+}
+
+bool tropmodelAvailable() {
+    return true;
+}
+
+bool filterUpdateAvailable() {
+    return true;
+}
+
+bool lambdaSearchAvailable() {
+    return true;
+}
+
 CorrmeasInput makeCorrmeasInput(int sample_index) {
     const int sample = ((sample_index % 20) + 20) % 20;
     const int epoch = sample / 4;
@@ -1670,6 +1688,92 @@ TropGridInput makeTropGridInput(int sample_index) {
         input.grid[i].quality = 0.75 + 0.01 * i;
         input.grid[i].rms = 0.012 + 0.001 * i;
         input.grid[i].valid = ((sample + i) % 7 == 0) ? 0 : 1;
+    }
+    return input;
+}
+
+StecGridInput makeStecGridInput(int sample_index) {
+    const int sample = ((sample_index % 20) + 20) % 20;
+    StecGridInput input;
+    input.time = GNSSTime(2029, 230400.0 + 15.0 * sample);
+    input.sat = 1 + (sample % 4);
+    input.n = (sample % 2 == 0) ? 1 : 4;
+    input.weight[0] = 1.0;
+    if (input.n == 4) {
+        for (int i = 0; i < 4; ++i) {
+            input.index[i] = i;
+            input.Emat[i] = 0.10 + 0.10 * i;
+            input.Gmat[i * 4 + i] = 1.0;
+        }
+    }
+    for (int i = 0; i < 4; ++i) {
+        input.grid[i].time = input.time - (2.0 + i);
+        input.grid[i].sat = input.sat;
+        input.grid[i].slip = ((sample + i) % 9 == 0) ? 1 : 0;
+        input.grid[i].iono = 1.80 + 0.08 * sample + 0.03 * i;
+        input.grid[i].rate = 0.0003 * static_cast<double>(i - 1);
+        input.grid[i].quality = 0.70 + 0.02 * i;
+        input.grid[i].rms = 0.010 + 0.001 * i + 0.0001 * sample;
+        input.grid[i].flag = 1;
+    }
+    return input;
+}
+
+TropmodelInput makeTropmodelInput(int sample_index) {
+    const int sample = ((sample_index % 20) + 20) % 20;
+    TropmodelInput input;
+    input.time = GNSSTime(2029, 230400.0 + 30.0 * sample);
+    input.pos[0] = (32.0 + 0.7 * (sample % 6)) * kDegreesToRadians;
+    input.pos[1] = (135.0 + 0.9 * (sample % 5)) * kDegreesToRadians;
+    input.pos[2] = 10.0 + 45.0 * (sample % 8);
+    input.azel[0] = std::fmod((20.0 + 17.0 * sample) * kDegreesToRadians, 2.0 * M_PI);
+    input.azel[1] = (12.0 + 2.5 * (sample % 10)) * kDegreesToRadians;
+    input.humidity = 0.35 + 0.02 * (sample % 5);
+    return input;
+}
+
+FilterInput makeFilterInput(int sample_index) {
+    const int sample = ((sample_index % 8) + 8) % 8;
+    FilterInput input;
+    input.n = 5;
+    input.m = 3;
+    for (int i = 0; i < input.n; ++i) {
+        input.x[i] = 0.30 + 0.07 * i + 0.01 * sample;
+    }
+    for (int r = 0; r < input.n; ++r) {
+        for (int c = 0; c < input.n; ++c) {
+            const double diag = (r == c) ? (2.0 + 0.35 * r + 0.04 * sample) : 0.0;
+            const double corr = (r == c) ? 0.0 : 0.015 / (1.0 + std::abs(r - c));
+            input.P[r * input.n + c] = diag + corr;
+        }
+    }
+    for (int j = 0; j < input.m; ++j) {
+        input.v[j] = 0.12 - 0.03 * j + 0.004 * sample;
+        for (int i = 0; i < input.n; ++i) {
+            input.H[j * input.n + i] =
+                0.04 * (j + 1) * (i + 1) + ((i + j + sample) % 2 == 0 ? 0.015 : -0.010);
+        }
+        for (int k = 0; k < input.m; ++k) {
+            input.R[j * input.m + k] = (j == k) ? (0.35 + 0.06 * j) : 0.01;
+        }
+    }
+    return input;
+}
+
+LambdaInput makeLambdaInput(int sample_index) {
+    const int sample = ((sample_index % 8) + 8) % 8;
+    LambdaInput input;
+    input.n = 4;
+    input.m = 2;
+    for (int i = 0; i < input.n; ++i) {
+        input.a[i] = 2.15 + 0.65 * i + 0.03 * sample;
+    }
+    for (int r = 0; r < input.n; ++r) {
+        for (int c = 0; c < input.n; ++c) {
+            const double base = (r == c) ? (0.18 + 0.05 * r + 0.01 * sample) : 0.0;
+            const double corr = (r == c) ? 0.0 : 0.012 / (1.0 + std::abs(r - c));
+            input.Q[r * input.n + c] = base + corr;
+        }
     }
     return input;
 }
@@ -2060,6 +2164,135 @@ bool compensatedisp(const CorrmeasInput& input, double compL[kParityMaxFreq]) {
 bool trop_grid_data(const TropGridInput& input, TropGridOutput& out) {
     out = TropGridOutput{};
     return parityTropGridDataLiteral(input, out) != 0;
+}
+
+bool stec_grid_data(const StecGridInput& input, StecGridOutput& out) {
+    out = StecGridOutput{};
+    const int n = std::clamp(input.n, 0, kParityMaxGrid);
+    if (n <= 0) {
+        return false;
+    }
+
+    ParityNav nav;
+    const int sat = std::clamp(input.sat, 1, kParityMaxSat);
+    for (int i = 0; i < n; ++i) {
+        const int idx = std::clamp(input.index[i], 0, kParityMaxGrid - 1);
+        nav.stec[idx].n = 1;
+        nav.stec[idx].data[0].time = input.grid[idx].time;
+        nav.stec[idx].data[0].sat = static_cast<unsigned char>(sat);
+        nav.stec[idx].data[0].slip = static_cast<unsigned char>(input.grid[idx].slip);
+        nav.stec[idx].data[0].iono = static_cast<float>(input.grid[idx].iono);
+        nav.stec[idx].data[0].rate = static_cast<float>(input.grid[idx].rate);
+        nav.stec[idx].data[0].quality = static_cast<float>(input.grid[idx].quality);
+        nav.stec[idx].data[0].rms = static_cast<float>(input.grid[idx].rms);
+        nav.stec[idx].data[0].flag = input.grid[idx].flag;
+    }
+
+    int break_flag = 0;
+    const int ok = parityStecGridData(&nav,
+                                      input.index,
+                                      input.time,
+                                      sat,
+                                      n,
+                                      input.weight,
+                                      input.Gmat,
+                                      input.Emat,
+                                      &out.iono,
+                                      &out.rate,
+                                      &out.variance,
+                                      &break_flag);
+    out.break_flag = break_flag;
+    return ok != 0;
+}
+
+double tropmodel(const TropmodelInput& input) {
+    constexpr double temp0_celsius = 15.0;
+    if (input.pos[2] < -100.0 || input.pos[2] > 1E4 || input.azel[1] <= 0.0) {
+        return 0.0;
+    }
+
+    const double hgt = input.pos[2] < 0.0 ? 0.0 : input.pos[2];
+    const double pres = 1013.25 * std::pow(1.0 - 2.2557E-5 * hgt, 5.2568);
+    const double temp = temp0_celsius - 6.5E-3 * hgt + 273.16;
+    const double e =
+        6.108 * input.humidity * std::exp((17.15 * temp - 4684.0) / (temp - 38.45));
+    const double z = M_PI / 2.0 - input.azel[1];
+    const double trph =
+        0.0022768 * pres /
+        (1.0 - 0.00266 * std::cos(2.0 * input.pos[0]) - 0.00028 * hgt / 1E3) /
+        std::cos(z);
+    const double trpw = 0.002277 * (1255.0 / temp + 0.05) * e / std::cos(z);
+    return trph + trpw;
+}
+
+bool filter_update(const FilterInput& input, FilterOutput& out) {
+    out = FilterOutput{};
+    const int n = input.n;
+    const int m = input.m;
+    if (n <= 0 || n > kParityFilterMaxState ||
+        m <= 0 || m > kParityFilterMaxMeasurement) {
+        out.info = -1;
+        return false;
+    }
+
+    VectorXd x(n);
+    MatrixXd P(n, n);
+    MatrixXd H(m, n);
+    VectorXd v(m);
+    MatrixXd R(m, m);
+    for (int i = 0; i < n; ++i) {
+        x(i) = input.x[i];
+        for (int j = 0; j < n; ++j) {
+            P(i, j) = input.P[i * n + j];
+        }
+    }
+    for (int j = 0; j < m; ++j) {
+        v(j) = input.v[j];
+        for (int i = 0; i < n; ++i) {
+            H(j, i) = input.H[j * n + i];
+        }
+        for (int k = 0; k < m; ++k) {
+            R(j, k) = input.R[j * m + k];
+        }
+    }
+
+    out.info = kalmanFilter(x, P, H, v, R);
+    for (int i = 0; i < n; ++i) {
+        out.x[i] = x(i);
+        for (int j = 0; j < n; ++j) {
+            out.P[i * n + j] = P(i, j);
+        }
+    }
+    return out.info == 0;
+}
+
+bool lambda_search(const LambdaInput& input, LambdaOutput& out) {
+    out = LambdaOutput{};
+    const int n = input.n;
+    if (n <= 0 || n > kParityLambdaMaxAmbiguity || input.m < 2) {
+        out.info = -1;
+        return false;
+    }
+    VectorXd a(n);
+    MatrixXd Q(n, n);
+    for (int i = 0; i < n; ++i) {
+        a(i) = input.a[i];
+        for (int j = 0; j < n; ++j) {
+            Q(i, j) = input.Q[i * n + j];
+        }
+    }
+    VectorXd fixed;
+    double ratio = 0.0;
+    if (!lambdaSearch(a, Q, fixed, ratio)) {
+        out.info = -1;
+        return false;
+    }
+    out.info = 0;
+    out.ratio = ratio;
+    for (int i = 0; i < n; ++i) {
+        out.fixed[i] = fixed(i);
+    }
+    return true;
 }
 
 }  // namespace libgnss::clasnat_parity

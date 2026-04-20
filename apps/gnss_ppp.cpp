@@ -65,7 +65,6 @@ struct Options {
     /// Single-switch preset to align with CLASLIB-style PPP-RTK; defaults to native CLASNAT.
     bool claslib_parity = false;
     bool claslib_bridge = false;
-    bool ported_full = false;
     bool ported_clasnat = false;
     bool legacy_strict_parity = false;
     std::string claslib_config_path;
@@ -115,7 +114,6 @@ void applyPortedClasnatPreset(Options& options) {
 void applyLegacyStrictParityOptOut(Options& options) {
     options.legacy_strict_parity = true;
     options.ported_clasnat = false;
-    options.ported_full = false;
     if (options.claslib_parity) {
         options.enable_ar = true;
         if (!options.ar_method_explicit) {
@@ -157,7 +155,6 @@ void printUsage(const char* program_name) {
         << "  --no-ported-clasnat      Opt out of the default native CLASNAT path for --claslib-parity\n"
         << "  --claslib-bridge         Delegate this run to linked CLASLIB postpos() (requires CMake -DCLASLIB_PARITY_LINK=ON)\n"
         << "  --no-claslib-bridge      Keep the native libgnss++ path even when CLASLIB bridge support is linked\n"
-        << "  --ported-full            Deprecated alias for --ported-clasnat\n"
         << "  --ported-clasnat         Explicitly use the native CLASNAT transcription path\n"
         << "  --claslib-config <file>  CLASLIB rnx2rtkp config for --claslib-bridge (default: CLASLIB static.conf)\n"
         << "  --claslib-l6-week <week> Override CLASLIB L6 GPS week for --claslib-bridge\n"
@@ -297,9 +294,6 @@ Options parseArguments(int argc, char* argv[]) {
             applyLegacyStrictParityOptOut(options);
         } else if (arg == "--no-ported-clasnat") {
             applyLegacyStrictParityOptOut(options);
-        } else if (arg == "--ported-full") {
-            options.ported_full = true;
-            applyPortedClasnatPreset(options);
         } else if (arg == "--ported-clasnat") {
             applyPortedClasnatPreset(options);
         } else if (arg == "--claslib-config" && i + 1 < argc) {
@@ -683,11 +677,10 @@ int main(int argc, char* argv[]) {
             !options.ar_ratio_threshold_explicit) {
             options.ar_ratio_threshold = 1.2;
         }
-        if ((options.ported_full || options.ported_clasnat) &&
-            !options.ar_ratio_threshold_explicit) {
+        if (options.ported_clasnat && !options.ar_ratio_threshold_explicit) {
             options.ar_ratio_threshold = 1.2;
         }
-        if (options.claslib_parity || options.ported_full || options.ported_clasnat) {
+        if (options.claslib_parity || options.ported_clasnat) {
             if (options.eop_path.empty()) {
                 options.eop_path = defaultClaslibDataFile("igu00p01.erp");
             }
@@ -700,9 +693,6 @@ int main(int argc, char* argv[]) {
             if (options.receiver_antenna_type.empty()) {
                 options.receiver_antenna_type = "TRM59800.80     NONE";
             }
-        }
-        if (options.ported_full && !options.quiet) {
-            std::cerr << "Warning: --ported-full is deprecated; using --ported-clasnat.\n";
         }
 
         if (options.claslib_bridge) {
@@ -860,9 +850,9 @@ int main(int argc, char* argv[]) {
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
         ppp_config.strict_first_ar_dump_path = options.first_ar_dump_path;
-        ppp_config.use_ported_clasnat = options.ported_clasnat || options.ported_full;
-        ppp_config.use_ported_full = options.ported_full;
-        if (options.claslib_parity || options.ported_full || options.ported_clasnat) {
+        ppp_config.use_ported_clasnat = options.ported_clasnat;
+        ppp_config.use_ported_full = false;
+        if (options.claslib_parity || options.ported_clasnat) {
             ppp_config.clas_outlier_sigma_scale = 8.0;
             ppp_config.clas_decouple_clock_position = false;
             ppp_config.initial_ionosphere_variance = 1e-4;
@@ -1091,7 +1081,6 @@ int main(int argc, char* argv[]) {
                     << "  \"clas_atmos_selection\": \"" << jsonEscape(options.clas_atmos_selection) << "\",\n"
                     << "  \"clas_atmos_stale_after_seconds\": " << options.clas_atmos_stale_after_seconds << ",\n"
                     << "  \"ported_clasnat\": " << (options.ported_clasnat ? "true" : "false") << ",\n"
-                    << "  \"ported_full\": " << (options.ported_full ? "true" : "false") << ",\n"
                     << "  \"legacy_strict_parity\": " << (options.legacy_strict_parity ? "true" : "false") << ",\n"
                     << "  \"ambiguity_resolution_enabled\": " << (options.enable_ar ? "true" : "false") << ",\n"
                     << "  \"ar_method\": \"" << jsonEscape(options.ar_method) << "\",\n"

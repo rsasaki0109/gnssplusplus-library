@@ -411,4 +411,78 @@ TEST_F(ClasnatParity, TropGridDataInterpolation) {
     }
 }
 
+TEST_F(ClasnatParity, StecGridDataInterpolation) {
+    ASSERT_TRUE(libgnss::clasnat_parity::stecGridDataAvailable());
+    for (int sample = 0; sample < 20; ++sample) {
+        const auto input = libgnss::clasnat_parity::makeStecGridInput(sample);
+        libgnss::clasnat_parity::StecGridOutput native;
+        libgnss::clasnat_parity::StecGridOutput oracle;
+        const bool native_ok = libgnss::clasnat_parity::stec_grid_data(input, native);
+        const bool oracle_ok = libgnss::external::claslib_oracle::stec_grid_data(input, oracle);
+        ASSERT_TRUE(native_ok) << "native stec_grid_data failed sample=" << sample;
+        ASSERT_TRUE(oracle_ok) << "CLASLIB stec_grid_data oracle failed sample=" << sample;
+        EXPECT_NEAR(native.iono, oracle.iono, kParityTolerance)
+            << "stec_grid_data iono sample=" << sample;
+        EXPECT_NEAR(native.rate, oracle.rate, kParityTolerance)
+            << "stec_grid_data rate sample=" << sample;
+        EXPECT_NEAR(native.variance, oracle.variance, kParityTolerance)
+            << "stec_grid_data variance sample=" << sample;
+        EXPECT_EQ(native.break_flag, oracle.break_flag)
+            << "stec_grid_data break flag sample=" << sample;
+    }
+}
+
+TEST_F(ClasnatParity, TropmodelSaastamoinenDelay) {
+    ASSERT_TRUE(libgnss::clasnat_parity::tropmodelAvailable());
+    for (int sample = 0; sample < 20; ++sample) {
+        const auto input = libgnss::clasnat_parity::makeTropmodelInput(sample);
+        const double native = libgnss::clasnat_parity::tropmodel(input);
+        const double oracle = libgnss::external::claslib_oracle::tropmodel(input);
+        EXPECT_NEAR(native, oracle, kParityTolerance)
+            << "tropmodel sample=" << sample;
+    }
+}
+
+TEST_F(ClasnatParity, FilterUpdateLdltKalman) {
+    ASSERT_TRUE(libgnss::clasnat_parity::filterUpdateAvailable());
+    for (int sample = 0; sample < 8; ++sample) {
+        const auto input = libgnss::clasnat_parity::makeFilterInput(sample);
+        libgnss::clasnat_parity::FilterOutput native;
+        libgnss::clasnat_parity::FilterOutput oracle;
+        const bool native_ok = libgnss::clasnat_parity::filter_update(input, native);
+        const bool oracle_ok = libgnss::external::claslib_oracle::filter_update(input, oracle);
+        ASSERT_TRUE(native_ok) << "native filter_update failed sample=" << sample;
+        ASSERT_TRUE(oracle_ok) << "CLASLIB filter oracle failed sample=" << sample;
+        EXPECT_EQ(native.info, oracle.info) << "filter_update info sample=" << sample;
+        expectNearArray("filter_update x sample=" + std::to_string(sample),
+                        native.x,
+                        oracle.x,
+                        input.n);
+        expectNearArray("filter_update P sample=" + std::to_string(sample),
+                        native.P,
+                        oracle.P,
+                        input.n * input.n);
+    }
+}
+
+TEST_F(ClasnatParity, LambdaSearchIntegerAmbiguity) {
+    ASSERT_TRUE(libgnss::clasnat_parity::lambdaSearchAvailable());
+    for (int sample = 0; sample < 8; ++sample) {
+        const auto input = libgnss::clasnat_parity::makeLambdaInput(sample);
+        libgnss::clasnat_parity::LambdaOutput native;
+        libgnss::clasnat_parity::LambdaOutput oracle;
+        const bool native_ok = libgnss::clasnat_parity::lambda_search(input, native);
+        const bool oracle_ok = libgnss::external::claslib_oracle::lambda_search(input, oracle);
+        ASSERT_TRUE(native_ok) << "native lambda_search failed sample=" << sample;
+        ASSERT_TRUE(oracle_ok) << "CLASLIB lambda oracle failed sample=" << sample;
+        EXPECT_EQ(native.info, oracle.info) << "lambda_search info sample=" << sample;
+        expectNearArray("lambda_search fixed sample=" + std::to_string(sample),
+                        native.fixed,
+                        oracle.fixed,
+                        input.n);
+        EXPECT_NEAR(native.ratio, oracle.ratio, kParityTolerance)
+            << "lambda_search ratio sample=" << sample;
+    }
+}
+
 }  // namespace

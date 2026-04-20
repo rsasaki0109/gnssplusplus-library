@@ -598,4 +598,162 @@ bool trop_grid_data(const TropGridInput& input, TropGridOutput& out) {
 #endif
 }
 
+bool stec_grid_data(const StecGridInput& input, StecGridOutput& out) {
+#if GNSSPP_HAS_CLASLIB_BRIDGE
+    out = StecGridOutput{};
+    const int n = std::clamp(input.n, 0, 4);
+    if (n <= 0) {
+        return false;
+    }
+
+    nav_t nav = {};
+    std::array<stec_t, MAX_NGRID> stec_grids = {};
+    std::array<stecd_t, MAX_NGRID> stec_data = {};
+    nav.stec = stec_grids.data();
+    const int sat = std::clamp(input.sat, 1, MAXSAT);
+    for (int i = 0; i < n && i < MAX_NGRID; ++i) {
+        const int idx = std::clamp(input.index[i], 0, MAX_NGRID - 1);
+        nav.stec[idx].n = 1;
+        nav.stec[idx].nmax = 1;
+        nav.stec[idx].data = &stec_data[static_cast<size_t>(idx)];
+        nav.stec[idx].data[0].time = toClasTime(input.grid[idx].time);
+        nav.stec[idx].data[0].sat = static_cast<unsigned char>(sat);
+        nav.stec[idx].data[0].slip = static_cast<unsigned char>(input.grid[idx].slip);
+        nav.stec[idx].data[0].iono = static_cast<float>(input.grid[idx].iono);
+        nav.stec[idx].data[0].rate = static_cast<float>(input.grid[idx].rate);
+        nav.stec[idx].data[0].quality = static_cast<float>(input.grid[idx].quality);
+        nav.stec[idx].data[0].rms = static_cast<float>(input.grid[idx].rms);
+        nav.stec[idx].data[0].flag = input.grid[idx].flag;
+    }
+    int break_flag = 0;
+    const int ok = ::stec_grid_data(&nav,
+                                    input.index,
+                                    toClasTime(input.time),
+                                    sat,
+                                    n,
+                                    input.weight,
+                                    input.Gmat,
+                                    input.Emat,
+                                    &out.iono,
+                                    &out.rate,
+                                    &out.variance,
+                                    &break_flag);
+    out.break_flag = break_flag;
+    return ok != 0;
+#else
+    (void)input;
+    out = StecGridOutput{};
+    return false;
+#endif
+}
+
+double tropmodel(const TropmodelInput& input) {
+#if GNSSPP_HAS_CLASLIB_BRIDGE
+    return ::tropmodel(toClasTime(input.time), input.pos, input.azel, input.humidity);
+#else
+    (void)input;
+    return 0.0;
+#endif
+}
+
+bool filter_update(const FilterInput& input, FilterOutput& out) {
+#if GNSSPP_HAS_CLASLIB_BRIDGE
+    out = FilterOutput{};
+    const int n = input.n;
+    const int m = input.m;
+    if (n <= 0 || n > libgnss::clasnat_parity::kParityFilterMaxState ||
+        m <= 0 || m > libgnss::clasnat_parity::kParityFilterMaxMeasurement) {
+        out.info = -1;
+        return false;
+    }
+
+    std::array<double, libgnss::clasnat_parity::kParityFilterMaxState> x = {};
+    std::array<double,
+               libgnss::clasnat_parity::kParityFilterMaxState *
+                   libgnss::clasnat_parity::kParityFilterMaxState>
+        P = {};
+    std::array<double,
+               libgnss::clasnat_parity::kParityFilterMaxState *
+                   libgnss::clasnat_parity::kParityFilterMaxMeasurement>
+        H = {};
+    std::array<double, libgnss::clasnat_parity::kParityFilterMaxMeasurement> v = {};
+    std::array<double,
+               libgnss::clasnat_parity::kParityFilterMaxMeasurement *
+                   libgnss::clasnat_parity::kParityFilterMaxMeasurement>
+        R = {};
+
+    for (int i = 0; i < n; ++i) {
+        x[static_cast<size_t>(i)] = input.x[i];
+        for (int j = 0; j < n; ++j) {
+            P[static_cast<size_t>(i + j * n)] = input.P[i * n + j];
+        }
+    }
+    for (int j = 0; j < m; ++j) {
+        v[static_cast<size_t>(j)] = input.v[j];
+        for (int i = 0; i < n; ++i) {
+            H[static_cast<size_t>(i + j * n)] = input.H[j * n + i];
+        }
+        for (int k = 0; k < m; ++k) {
+            R[static_cast<size_t>(j + k * m)] = input.R[j * m + k];
+        }
+    }
+
+    out.info = ::filter(x.data(), P.data(), H.data(), v.data(), R.data(), n, m);
+    for (int i = 0; i < n; ++i) {
+        out.x[i] = x[static_cast<size_t>(i)];
+        for (int j = 0; j < n; ++j) {
+            out.P[i * n + j] = P[static_cast<size_t>(i + j * n)];
+        }
+    }
+    return out.info == 0;
+#else
+    (void)input;
+    out = FilterOutput{};
+    out.info = -1;
+    return false;
+#endif
+}
+
+bool lambda_search(const LambdaInput& input, LambdaOutput& out) {
+#if GNSSPP_HAS_CLASLIB_BRIDGE
+    out = LambdaOutput{};
+    const int n = input.n;
+    const int m = 2;
+    if (n <= 0 || n > libgnss::clasnat_parity::kParityLambdaMaxAmbiguity) {
+        out.info = -1;
+        return false;
+    }
+
+    std::array<double, libgnss::clasnat_parity::kParityLambdaMaxAmbiguity> a = {};
+    std::array<double,
+               libgnss::clasnat_parity::kParityLambdaMaxAmbiguity *
+                   libgnss::clasnat_parity::kParityLambdaMaxAmbiguity>
+        Q = {};
+    std::array<double,
+               libgnss::clasnat_parity::kParityLambdaMaxAmbiguity * 2>
+        F = {};
+    std::array<double, 2> s = {};
+    for (int i = 0; i < n; ++i) {
+        a[static_cast<size_t>(i)] = input.a[i];
+        for (int j = 0; j < n; ++j) {
+            Q[static_cast<size_t>(i + j * n)] = input.Q[i * n + j];
+        }
+    }
+    out.info = ::lambda(n, m, a.data(), Q.data(), F.data(), s.data());
+    if (out.info != 0) {
+        return false;
+    }
+    for (int i = 0; i < n; ++i) {
+        out.fixed[i] = F[static_cast<size_t>(i)];
+    }
+    out.ratio = s[0] > 0.0 ? s[1] / s[0] : 0.0;
+    return true;
+#else
+    (void)input;
+    out = LambdaOutput{};
+    out.info = -1;
+    return false;
+#endif
+}
+
 }  // namespace libgnss::external::claslib_oracle

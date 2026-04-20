@@ -8,6 +8,9 @@ namespace libgnss::clasnat_parity {
 
 constexpr int kParityMaxFreq = 3;
 constexpr int kParityPcvGridSize = 19;
+constexpr int kParityFilterMaxState = 6;
+constexpr int kParityFilterMaxMeasurement = 4;
+constexpr int kParityLambdaMaxAmbiguity = 5;
 
 using PcvOffsets = std::array<std::array<double, 3>, kParityMaxFreq>;
 using PcvVariations = std::array<std::array<double, kParityPcvGridSize>, kParityMaxFreq>;
@@ -163,10 +166,79 @@ struct TropGridOutput {
     int break_flag = 0;
 };
 
+struct StecGridPoint {
+    GNSSTime time;
+    int sat = 1;
+    int slip = 0;
+    double iono = 0.0;
+    double rate = 0.0;
+    double quality = 0.0;
+    double rms = 0.0;
+    int flag = 1;
+};
+
+struct StecGridInput {
+    GNSSTime time;
+    int sat = 1;
+    int n = 1;
+    int index[4] = {};
+    double weight[4] = {};
+    double Gmat[16] = {};
+    double Emat[4] = {};
+    StecGridPoint grid[4];
+};
+
+struct StecGridOutput {
+    double iono = 0.0;
+    double rate = 0.0;
+    double variance = 0.0;
+    int break_flag = 0;
+};
+
+struct TropmodelInput {
+    GNSSTime time;
+    double pos[3] = {};
+    double azel[2] = {};
+    double humidity = 0.0;
+};
+
+struct FilterInput {
+    int n = 0;
+    int m = 0;
+    double x[kParityFilterMaxState] = {};
+    double P[kParityFilterMaxState * kParityFilterMaxState] = {};
+    double H[kParityFilterMaxMeasurement * kParityFilterMaxState] = {};
+    double v[kParityFilterMaxMeasurement] = {};
+    double R[kParityFilterMaxMeasurement * kParityFilterMaxMeasurement] = {};
+};
+
+struct FilterOutput {
+    int info = 0;
+    double x[kParityFilterMaxState] = {};
+    double P[kParityFilterMaxState * kParityFilterMaxState] = {};
+};
+
+struct LambdaInput {
+    int n = 0;
+    int m = 2;
+    double a[kParityLambdaMaxAmbiguity] = {};
+    double Q[kParityLambdaMaxAmbiguity * kParityLambdaMaxAmbiguity] = {};
+};
+
+struct LambdaOutput {
+    int info = 0;
+    double fixed[kParityLambdaMaxAmbiguity] = {};
+    double ratio = 0.0;
+};
+
 CorrmeasInput makeCorrmeasInput(int sample_index);
 SatposSsrInput makeSatposSsrInput(int sample_index);
 SatAntOffInput makeSatAntOffInput(int sample_index);
 TropGridInput makeTropGridInput(int sample_index);
+StecGridInput makeStecGridInput(int sample_index);
+TropmodelInput makeTropmodelInput(int sample_index);
+FilterInput makeFilterInput(int sample_index);
+LambdaInput makeLambdaInput(int sample_index);
 
 bool tidedispAvailable();
 bool windupcorrAvailable();
@@ -181,6 +253,10 @@ bool corrmeasAvailable();
 bool satantoffAvailable();
 bool compensatedispAvailable();
 bool tropGridDataAvailable();
+bool stecGridDataAvailable();
+bool tropmodelAvailable();
+bool filterUpdateAvailable();
+bool lambdaSearchAvailable();
 
 void tidedisp(const GNSSTime& gpst,
               const double rr[3],
@@ -229,5 +305,9 @@ bool corrmeas(CorrmeasOutput& out);
 void satantoff(const SatAntOffInput& input, double dant[3]);
 bool compensatedisp(const CorrmeasInput& input, double compL[kParityMaxFreq]);
 bool trop_grid_data(const TropGridInput& input, TropGridOutput& out);
+bool stec_grid_data(const StecGridInput& input, StecGridOutput& out);
+double tropmodel(const TropmodelInput& input);
+bool filter_update(const FilterInput& input, FilterOutput& out);
+bool lambda_search(const LambdaInput& input, LambdaOutput& out);
 
 }  // namespace libgnss::clasnat_parity

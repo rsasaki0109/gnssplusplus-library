@@ -8,7 +8,8 @@ It is the documentation counterpart to the in-tree CLAS parity tests.
 ## Main reference case
 
 The main checked developer reference today is the `2019-08-27` CLAS parity
-case, using the local CLASLIB-compatible 2019 data workspace.
+case, using files from the public
+`QZSS-Strategy-Office/claslib` repository's `data/` directory.
 
 Typical inputs:
 
@@ -140,10 +141,12 @@ themselves mean:
 The intended contract is narrower:
 
 - the main parity dataset is named,
+- the public provenance is named,
 - the expected artifacts are named,
 - the regression layers are named.
 
 ## Related pages
 
 - [CLAS API & Flow](clas.md)
+- [CLAS Public Validation Datasets](clas_validated_datasets.md)
 - [CLAS Compact SSR Policies](clas_compact_ssr_policies.md)
