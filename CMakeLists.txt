@@ -22,6 +22,11 @@ find_package(nav_msgs QUIET)
 find_package(std_msgs QUIET)
 find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs)
 
+option(MADOCALIB_PARITY_LINK "Link external MADOCALIB C sources for opt-in parity oracle tests" OFF)
+set(MADOCALIB_ROOT_DIR
+    ""
+    CACHE PATH "Path to the MADOCALIB checkout root")
+
 # List source files for the main library
 set(GNSS_SOURCES
     src/gnss.cpp
@@ -41,6 +46,8 @@ set(GNSS_SOURCES
     src/algorithms/ppp_osr.cpp
     src/algorithms/ppp_wlnl.cpp
     src/algorithms/ppp_clas_epoch.cpp
+    src/algorithms/madoca_parity.cpp
+    src/algorithms/madocalib_oracle.cpp
     src/algorithms/ppp.cpp
 )
 
@@ -67,6 +74,48 @@ target_include_directories(gnss_lib PUBLIC
 )
 target_link_libraries(gnss_lib PUBLIC Eigen3::Eigen)
 
+if(MADOCALIB_PARITY_LINK)
+    set(MADOCALIB_SRC_DIR "${MADOCALIB_ROOT_DIR}/src")
+    if(NOT EXISTS "${MADOCALIB_SRC_DIR}/rtklib.h")
+        message(FATAL_ERROR "MADOCALIB source tree not found: ${MADOCALIB_SRC_DIR}")
+    endif()
+
+    add_library(madocalib STATIC
+        ${MADOCALIB_SRC_DIR}/rtkcmn.c
+    )
+    target_include_directories(madocalib PUBLIC ${MADOCALIB_SRC_DIR})
+    target_compile_definitions(madocalib
+        PRIVATE
+            TRACE
+            ENAGLO
+            ENAQZS
+            ENAGAL
+            ENACMP
+            ENAIRN
+            NFREQ=5
+            NEXOBS=5
+    )
+    target_link_libraries(madocalib PUBLIC m)
+
+    target_include_directories(gnss_lib PRIVATE ${MADOCALIB_SRC_DIR})
+    target_compile_definitions(gnss_lib
+        PUBLIC GNSSPP_HAS_MADOCALIB_ORACLE=1
+        PRIVATE
+            TRACE
+            ENAGLO
+            ENAQZS
+            ENAGAL
+            ENACMP
+            ENAIRN
+            NFREQ=5
+            NEXOBS=5
+            "GNSSPP_MADOCALIB_ROOT=\"${MADOCALIB_ROOT_DIR}\""
+    )
+    target_link_libraries(gnss_lib PUBLIC madocalib)
+else()
+    target_compile_definitions(gnss_lib PUBLIC GNSSPP_HAS_MADOCALIB_ORACLE=0)
+endif()
+
 # Create the no-optimization library
 add_library(gnss_lib_noopt STATIC ${GNSS_SOURCES_NO_OPTIMIZATION})
 target_compile_options(gnss_lib_noopt PRIVATE -O0)
@@ -76,8 +125,13 @@ target_include_directories(gnss_lib_noopt PUBLIC
 )
 target_link_libraries(gnss_lib_noopt PUBLIC Eigen3::Eigen)
 
+set(GNSS_INSTALL_TARGETS gnss_lib gnss_lib_noopt)
+if(MADOCALIB_PARITY_LINK)
+    list(APPEND GNSS_INSTALL_TARGETS madocalib)
+endif()
+
 install(
-    TARGETS gnss_lib gnss_lib_noopt
+    TARGETS ${GNSS_INSTALL_TARGETS}
     EXPORT libgnssppTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

@@ -234,6 +234,25 @@ Future oracle modules, test-only and opt-in:
 - `CLASLIB_PARITY_LINK` should not be reused blindly; use a MADOCA-specific
   CMake option if direct linking is added.
 
+## MADOCALIB License Notes
+
+`madocalib/readme.txt` identifies MADOCALIB as a MADOCA-PPP reference/test
+library derived from RTKLIB 2.4.3 b34, with PPP-AR and message-conversion
+functions copyrighted by third parties.  It is distributed under BSD 2-Clause
+terms with additional clauses.  Source redistributions must retain the upstream
+copyright notice, license conditions, and disclaimer; binary redistributions
+must reproduce those notices in documentation or other materials.  The upstream
+readme also notes companion Windows executables/shared libraries with their
+own original licenses, and the optional GUI has separate license information in
+`MADOCALIB_GUI_LICENSE.txt`.
+
+For CI parity use, checkout `QZSS-Strategy-Office/madocalib` into an
+`external/madocalib` directory and point `MADOCALIB_ROOT_DIR` there.  The
+opt-in oracle build links only the required source file(s), does not vendor
+MADOCALIB into the default build, and keeps the upstream checkout/readme
+available in the workflow workspace so the BSD notice and additional terms are
+retained.
+
 ## Roadmap
 
 Phase 0, iter1 foundation:

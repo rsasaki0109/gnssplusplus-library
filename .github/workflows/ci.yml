@@ -319,6 +319,52 @@ jobs:
           output/ppp_static_products_comparison.png
         if-no-files-found: ignore
 
+  madoca-parity:
+    needs: [changes, hygiene]
+    if: needs.changes.outputs.run_heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Checkout MADOCALIB
+      uses: actions/checkout@v4
+      with:
+        repository: QZSS-Strategy-Office/madocalib
+        ref: 0089f7dc97e8e2ba283a40be2edf4b73a140df6c
+        path: external/madocalib
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libeigen3-dev libgtest-dev cmake build-essential python3-dev pybind11-dev
+
+    - name: Configure CMake with MADOCALIB parity link
+      run: |
+        cmake -B build-madoca-parity \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DMADOCALIB_PARITY_LINK=ON \
+          -DMADOCALIB_ROOT_DIR="${GITHUB_WORKSPACE}/external/madocalib"
+
+    - name: Build MadocaParity tests
+      run: cmake --build build-madoca-parity --config Release --parallel --target run_tests
+
+    - name: Run MadocaParity
+      working-directory: build-madoca-parity
+      run: ./tests/run_tests --gtest_filter='*MadocaParity*'
+
+    - name: Upload MadocaParity diagnostics
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: madoca-parity-diagnostics
+        path: |
+          build-madoca-parity/CMakeCache.txt
+          build-madoca-parity/Testing/Temporary/LastTest.log
+          build-madoca-parity/Testing/Temporary/LastTestsFailed.log
+          build-madoca-parity/CMakeFiles/CMakeConfigureLog.yaml
+        if-no-files-found: ignore
+
   static-analysis:
     needs: [changes, hygiene]
     if: needs.changes.outputs.run_heavy == 'true'
