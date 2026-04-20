@@ -81,6 +81,15 @@ def normalize_artifact_path(root_dir: Path, value: Any) -> str | None:
         return value
 
 
+def normalize_commercial_receiver(root_dir: Path, payload: Any) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+    normalized = dict(payload)
+    for key in ("solution_pos", "matched_csv"):
+        normalized[key] = normalize_artifact_path(root_dir, normalized.get(key))
+    return normalized
+
+
 def classify_realtime_status(realtime_factor: Any) -> str:
     if not isinstance(realtime_factor, (int, float)):
         return "n/a"
@@ -145,6 +154,16 @@ def build_ppc_entries(root_dir: Path, pattern: str) -> list[dict[str, Any]]:
             continue
         quality_status = classify_accuracy_status(payload.get("p95_h_m"))
         runtime_status = classify_realtime_status(payload.get("realtime_factor"))
+        commercial_receiver = normalize_commercial_receiver(root_dir, payload.get("commercial_receiver"))
+        commercial_delta = payload.get("delta_vs_commercial_receiver")
+        if not isinstance(commercial_delta, dict):
+            commercial_delta = None
+        comparison_status = classify_comparison_status(
+            commercial_delta.get("median_h_m") if commercial_delta else None,
+            commercial_delta.get("p95_h_m") if commercial_delta else None,
+            commercial_delta.get("max_h_m") if commercial_delta else None,
+            commercial_delta.get("p95_abs_up_m") if commercial_delta else None,
+        )
         entries.append(
             {
                 "category": "ppc",
@@ -153,6 +172,7 @@ def build_ppc_entries(root_dir: Path, pattern: str) -> list[dict[str, Any]]:
                 "status": quality_status,
                 "quality_status": quality_status,
                 "runtime_status": runtime_status,
+                "comparison_status": comparison_status,
                 "headline": (
                     f"{payload.get('matched_epochs', 'n/a')} matched / "
                     f"{payload.get('fix_rate_pct', 'n/a')} fix / "
@@ -163,6 +183,12 @@ def build_ppc_entries(root_dir: Path, pattern: str) -> list[dict[str, Any]]:
                     "solution": normalize_artifact_path(root_dir, payload.get("solution_pos")),
                     "reference": normalize_artifact_path(root_dir, payload.get("reference_pos")),
                     "rtklib": normalize_artifact_path(root_dir, payload.get("rtklib_solution_pos")),
+                    "commercial_solution": (
+                        commercial_receiver.get("solution_pos") if commercial_receiver else None
+                    ),
+                    "commercial_matches": (
+                        commercial_receiver.get("matched_csv") if commercial_receiver else None
+                    ),
                 },
                 "metrics": {
                     "matched_epochs": payload.get("matched_epochs"),
@@ -172,6 +198,8 @@ def build_ppc_entries(root_dir: Path, pattern: str) -> list[dict[str, Any]]:
                     "solver_wall_time_s": payload.get("solver_wall_time_s"),
                     "realtime_factor": payload.get("realtime_factor"),
                     "effective_epoch_rate_hz": payload.get("effective_epoch_rate_hz"),
+                    "commercial_receiver": commercial_receiver,
+                    "delta_vs_commercial_receiver": commercial_delta,
                 },
             }
         )
@@ -264,6 +292,16 @@ def build_moving_base_entries(root_dir: Path, pattern: str) -> list[dict[str, An
             continue
         quality_status = classify_baseline_status(payload.get("p95_baseline_error_m"))
         runtime_status = classify_realtime_status(payload.get("realtime_factor"))
+        commercial_receiver = normalize_commercial_receiver(root_dir, payload.get("commercial_receiver"))
+        commercial_delta = payload.get("libgnss_vs_commercial_receiver")
+        if not isinstance(commercial_delta, dict):
+            commercial_delta = None
+        comparison_status = classify_comparison_status(
+            commercial_delta.get("median_baseline_error_m_delta") if commercial_delta else None,
+            commercial_delta.get("p95_baseline_error_m_delta") if commercial_delta else None,
+            commercial_delta.get("max_baseline_error_m_delta") if commercial_delta else None,
+            commercial_delta.get("p95_heading_error_deg_delta") if commercial_delta else None,
+        )
         entries.append(
             {
                 "category": "moving-base",
@@ -272,6 +310,7 @@ def build_moving_base_entries(root_dir: Path, pattern: str) -> list[dict[str, An
                 "status": quality_status,
                 "quality_status": quality_status,
                 "runtime_status": runtime_status,
+                "comparison_status": comparison_status,
                 "headline": (
                     f"{payload.get('matched_epochs', 'n/a')} matched / "
                     f"{payload.get('fix_rate_pct', 'n/a')} fix / "
@@ -287,6 +326,16 @@ def build_moving_base_entries(root_dir: Path, pattern: str) -> list[dict[str, An
                     "nav_rinex": normalize_artifact_path(root_dir, payload.get("nav_rinex")),
                     "input": normalize_artifact_path(root_dir, payload.get("input")),
                     "input_url": normalize_artifact_path(root_dir, payload.get("input_url")),
+                    "commercial_solution": (
+                        commercial_receiver.get("solution_pos")
+                        if commercial_receiver
+                        else normalize_artifact_path(root_dir, payload.get("commercial_receiver_csv"))
+                    ),
+                    "commercial_matches": (
+                        commercial_receiver.get("matched_csv")
+                        if commercial_receiver
+                        else normalize_artifact_path(root_dir, payload.get("commercial_receiver_matched_csv"))
+                    ),
                 },
                 "metrics": {
                     "matched_epochs": payload.get("matched_epochs"),
@@ -298,6 +347,8 @@ def build_moving_base_entries(root_dir: Path, pattern: str) -> list[dict[str, An
                     "termination": payload.get("termination"),
                     "realtime_factor": payload.get("realtime_factor"),
                     "effective_epoch_rate_hz": payload.get("effective_epoch_rate_hz"),
+                    "commercial_receiver": commercial_receiver,
+                    "libgnss_vs_commercial_receiver": commercial_delta,
                 },
             }
         )
