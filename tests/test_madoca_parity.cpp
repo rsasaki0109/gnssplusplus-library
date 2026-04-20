@@ -153,6 +153,41 @@ madoca::BroadcastEphemeris makeEph(int sys, int prn, int index) {
     return eph;
 }
 
+madoca::MionoAreaFixture makeMionoArea(int region_id,
+                                       int area_number,
+                                       int sid,
+                                       double ref_lat_deg,
+                                       double ref_lon_deg,
+                                       double span0,
+                                       double span1,
+                                       int type) {
+    madoca::MionoAreaFixture area;
+    area.region_id = region_id;
+    area.area_number = area_number;
+    area.rvalid = 1;
+    area.ralert = 0;
+    area.avalid = 1;
+    area.sid = sid;
+    area.type = type;
+    area.ref[0] = ref_lat_deg;
+    area.ref[1] = ref_lon_deg;
+    area.span[0] = span0;
+    area.span[1] = span1;
+    return area;
+}
+
+void setMionoSat(madoca::MionoAreaFixture& area,
+                 int sat,
+                 madoca::GTime time,
+                 int sqi,
+                 const double coef[6]) {
+    area.sat[sat - 1].t0 = time;
+    area.sat[sat - 1].sqi = sqi;
+    for (int i = 0; i < 6; ++i) {
+        area.sat[sat - 1].coef[i] = coef[i];
+    }
+}
+
 void expectNearArray(const std::string& label,
                      const double* native,
                      const double* oracle,
@@ -163,6 +198,19 @@ void expectNearArray(const std::string& label,
             << " native=" << native[i]
             << " oracle=" << oracle[i];
     }
+}
+
+void expectNearMionoSat(const std::string& label,
+                        const madoca::MionoCorrResult& native,
+                        const madoca::MionoCorrResult& oracle,
+                        int sat) {
+    const int idx = sat - 1;
+    EXPECT_EQ(native.t0[idx].time, oracle.t0[idx].time) << label;
+    EXPECT_NEAR(native.t0[idx].sec, oracle.t0[idx].sec, kClockTolerance) << label;
+    EXPECT_NEAR(native.delay[idx], oracle.delay[idx], kParityTolerance)
+        << label << " delay";
+    EXPECT_NEAR(native.std[idx], oracle.std[idx], kParityTolerance)
+        << label << " std";
 }
 
 TEST(MadocaParityConfig, OracleToleranceIsDefined) {
@@ -389,6 +437,185 @@ TEST_F(MadocaParity, Eph2posBroadcastKeplerEcef) {
             EXPECT_NEAR(native_var, oracle_var, kParityTolerance)
                 << "var eph=" << i << " dt=" << dt;
         }
+    }
+}
+
+TEST_F(MadocaParity, McssrBiasCodeSelection) {
+    ASSERT_TRUE(madoca::mcssrSelBiascodeAvailable());
+    struct BiasCase {
+        int sys;
+        int code;
+    };
+    const BiasCase cases[] = {
+        {madoca::kSysGps, madoca::kCodeL1C},
+        {madoca::kSysGps, madoca::kCodeL1P},
+        {madoca::kSysGps, madoca::kCodeL1L},
+        {madoca::kSysGps, madoca::kCodeL2S},
+        {madoca::kSysGps, madoca::kCodeL5Q},
+        {madoca::kSysGlo, madoca::kCodeL1P},
+        {madoca::kSysGlo, madoca::kCodeL2P},
+        {madoca::kSysGal, madoca::kCodeL1B},
+        {madoca::kSysGal, madoca::kCodeL6X},
+        {madoca::kSysQzs, madoca::kCodeL1L},
+        {madoca::kSysQzs, madoca::kCodeL5I},
+        {madoca::kSysQzs, madoca::kCodeL1E},
+        {madoca::kSysCmp, madoca::kCodeL2X},
+        {madoca::kSysCmp, madoca::kCodeL6Q},
+        {madoca::kSysCmp, madoca::kCodeL7D},
+        {madoca::kSysBd2, madoca::kCodeL2I},
+        {madoca::kSysGps, madoca::kCodeL7D},
+    };
+
+    for (const auto& sample : cases) {
+        EXPECT_EQ(madoca::mcssr_sel_biascode(sample.sys, sample.code),
+                  libgnss::external::madocalib_oracle::mcssr_sel_biascode(
+                      sample.sys, sample.code))
+            << "sys=" << sample.sys << " code=" << sample.code;
+    }
+}
+
+TEST_F(MadocaParity, MionoRectangleCorrectionPolynomial) {
+    ASSERT_TRUE(madoca::mionoGetCorrAvailable());
+    const auto sample = makeSample(0);
+    const madoca::GTime time = makeTime(2026, 4, 20, 7, 0, 15.0);
+    std::vector<madoca::MionoAreaFixture> areas;
+    areas.push_back(makeMionoArea(11, 4, 0, 35.65, 139.75, 0.20, 0.30, 3));
+
+    const int sat = madoca::satno(madoca::kSysGps, 5);
+    const double coef[6] = {12.5, 0.35, -0.22, 0.015, 0.006, 99.0};
+    setMionoSat(areas[0], sat, time, 9, coef);
+
+    madoca::MionoCorrResult native;
+    madoca::MionoCorrResult oracle;
+    const int native_status =
+        madoca::miono_get_corr(time, sample.rr, areas.data(), areas.size(), &native);
+    const int oracle_status = libgnss::external::madocalib_oracle::miono_get_corr(
+        time, sample.rr, areas.data(), areas.size(), &oracle);
+
+    ASSERT_EQ(native_status, oracle_status);
+    ASSERT_EQ(native_status, 1);
+    EXPECT_EQ(native.rid, oracle.rid);
+    EXPECT_EQ(native.area_number, oracle.area_number);
+    expectNearMionoSat("rectangle gps", native, oracle, sat);
+}
+
+TEST_F(MadocaParity, MionoCircleSelectsNearestArea) {
+    ASSERT_TRUE(madoca::mionoGetCorrAvailable());
+    const auto sample = makeSample(2);
+    const double lat_deg = sample.pos[0] / kDegToRad;
+    const double lon_deg = sample.pos[1] / kDegToRad;
+    const madoca::GTime time = makeTime(2026, 4, 20, 7, 10, 30.0);
+
+    std::vector<madoca::MionoAreaFixture> areas;
+    areas.push_back(makeMionoArea(20, 1, 1, lat_deg + 1.0, lon_deg + 1.0, 1000.0, 0.0, 2));
+    areas.push_back(makeMionoArea(21, 2, 1, lat_deg + 0.02, lon_deg - 0.01, 1000.0, 0.0, 2));
+
+    const int sat = madoca::satno(madoca::kSysGal, 11);
+    const double far_coef[6] = {30.0, 0.10, 0.20, -0.010, 0.0, 0.0};
+    const double near_coef[6] = {8.0, -0.30, 0.40, 0.025, 0.0, 0.0};
+    setMionoSat(areas[0], sat, time, 17, far_coef);
+    setMionoSat(areas[1], sat, time, 17, near_coef);
+
+    madoca::MionoCorrResult native;
+    madoca::MionoCorrResult oracle;
+    const int native_status =
+        madoca::miono_get_corr(time, sample.rr, areas.data(), areas.size(), &native);
+    const int oracle_status = libgnss::external::madocalib_oracle::miono_get_corr(
+        time, sample.rr, areas.data(), areas.size(), &oracle);
+
+    ASSERT_EQ(native_status, oracle_status);
+    ASSERT_EQ(native_status, 1);
+    EXPECT_EQ(native.rid, 21);
+    EXPECT_EQ(native.area_number, 2);
+    EXPECT_EQ(native.rid, oracle.rid);
+    EXPECT_EQ(native.area_number, oracle.area_number);
+    expectNearMionoSat("nearest circle galileo", native, oracle, sat);
+}
+
+TEST_F(MadocaParity, MionoQualityIndicatorStdBoundaries) {
+    ASSERT_TRUE(madoca::mionoGetCorrAvailable());
+    const auto sample = makeSample(1);
+    const madoca::GTime time = makeTime(2026, 4, 20, 7, 20, 45.0);
+    std::vector<madoca::MionoAreaFixture> areas;
+    areas.push_back(makeMionoArea(33, 7, 0, 35.9, 140.1, 1.0, 1.0, 0));
+
+    const int gps_sat = madoca::satno(madoca::kSysGps, 1);
+    const int gal_sat = madoca::satno(madoca::kSysGal, 2);
+    const int qzs_sat = madoca::satno(madoca::kSysQzs, 193);
+    const double gps_coef[6] = {4.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    const double gal_coef[6] = {5.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    const double qzs_coef[6] = {6.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    setMionoSat(areas[0], gps_sat, time, 0, gps_coef);
+    setMionoSat(areas[0], gal_sat, time, 63, gal_coef);
+    setMionoSat(areas[0], qzs_sat, time, 9, qzs_coef);
+
+    madoca::MionoCorrResult native;
+    madoca::MionoCorrResult oracle;
+    const int native_status =
+        madoca::miono_get_corr(time, sample.rr, areas.data(), areas.size(), &native);
+    const int oracle_status = libgnss::external::madocalib_oracle::miono_get_corr(
+        time, sample.rr, areas.data(), areas.size(), &oracle);
+
+    ASSERT_EQ(native_status, oracle_status);
+    ASSERT_EQ(native_status, 1);
+    expectNearMionoSat("sqi gps undef", native, oracle, gps_sat);
+    expectNearMionoSat("sqi gal max", native, oracle, gal_sat);
+    expectNearMionoSat("sqi qzs", native, oracle, qzs_sat);
+    EXPECT_NEAR(native.std[gps_sat - 1], 5.4665, kParityTolerance);
+    EXPECT_NEAR(native.std[gal_sat - 1], 5.4665, kParityTolerance);
+    EXPECT_NEAR(native.std[qzs_sat - 1], 0.00275, kParityTolerance);
+}
+
+TEST_F(MadocaParity, SatposBroadcastPositionVelocity) {
+    ASSERT_TRUE(madoca::satposAvailable());
+    const std::vector<madoca::BroadcastEphemeris> ephs = {
+        makeEph(madoca::kSysGps, 3, 0),
+        makeEph(madoca::kSysGal, 11, 1),
+        makeEph(madoca::kSysCmp, 20, 3),
+    };
+
+    for (size_t i = 0; i < ephs.size(); ++i) {
+        const madoca::GTime time = addSeconds(ephs[i].toe, 900.0);
+        double native_rs[6] = {};
+        double oracle_rs[6] = {};
+        double native_dts[2] = {};
+        double oracle_dts[2] = {};
+        double native_var = 0.0;
+        double oracle_var = 0.0;
+        int native_svh = -2;
+        int oracle_svh = -3;
+
+        const int native_status = madoca::satpos(time,
+                                                 time,
+                                                 ephs[i].sat,
+                                                 madoca::kEphOptBrdc,
+                                                 ephs.data(),
+                                                 ephs.size(),
+                                                 native_rs,
+                                                 native_dts,
+                                                 &native_var,
+                                                 &native_svh);
+        const int oracle_status = libgnss::external::madocalib_oracle::satpos(
+            time,
+            time,
+            ephs[i].sat,
+            madoca::kEphOptBrdc,
+            ephs.data(),
+            ephs.size(),
+            oracle_rs,
+            oracle_dts,
+            &oracle_var,
+            &oracle_svh);
+
+        ASSERT_EQ(native_status, oracle_status) << "eph=" << i;
+        ASSERT_EQ(native_status, 1) << "eph=" << i;
+        EXPECT_EQ(native_svh, oracle_svh) << "eph=" << i;
+        expectNearArray("satpos rs eph=" + std::to_string(i), native_rs, oracle_rs, 6);
+        EXPECT_NEAR(native_dts[0], oracle_dts[0], kClockTolerance)
+            << "dts bias eph=" << i;
+        EXPECT_NEAR(native_dts[1], oracle_dts[1], kClockTolerance)
+            << "dts drift eph=" << i;
+        EXPECT_NEAR(native_var, oracle_var, kParityTolerance) << "var eph=" << i;
     }
 }
 

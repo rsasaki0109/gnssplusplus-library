@@ -54,6 +54,11 @@ constexpr double kCosNeg5 = 0.9961946980917456;
 constexpr double kRtolKepler = 1E-13;
 constexpr int kMaxIterKepler = 30;
 constexpr double kStdGalNapa = 500.0;
+constexpr double kMaxDtoeGps = 7200.0;
+constexpr double kMaxDtoeQzs = 7200.0;
+constexpr double kMaxDtoeGal = 14400.0;
+constexpr double kMaxDtoeCmp = 21600.0;
+constexpr double kMaxDtoeIrn = 7200.0;
 
 const double kGpsTime0[] = {1980, 1, 6, 0, 0, 0};
 
@@ -274,6 +279,145 @@ double var_uraeph(int sys, int ura) {
     return ura < 0 || 14 < ura ? sqr(6144.0) : sqr(ura_value[ura]);
 }
 
+void pos2ecefRtklib(const double* pos, double* r) {
+    const double sinp = std::sin(pos[0]);
+    const double cosp = std::cos(pos[0]);
+    const double sinl = std::sin(pos[1]);
+    const double cosl = std::cos(pos[1]);
+    const double e2 = constants::WGS84_F * (2.0 - constants::WGS84_F);
+    const double v =
+        constants::WGS84_A / std::sqrt(1.0 - e2 * sinp * sinp);
+
+    r[0] = (v + pos[2]) * cosp * cosl;
+    r[1] = (v + pos[2]) * cosp * sinl;
+    r[2] = (v * (1.0 - e2) + pos[2]) * sinp;
+}
+
+void ecef2posRtklib(const double* r, double* pos) {
+    const double e2 = constants::WGS84_F * (2.0 - constants::WGS84_F);
+    const double r2 = dot(r, r, 2);
+    double z;
+    double zk;
+    double v = constants::WGS84_A;
+    double sinp = 0.0;
+
+    for (z = r[2], zk = 0.0; std::fabs(z - zk) >= 1E-4;) {
+        zk = z;
+        sinp = z / std::sqrt(r2 + z * z);
+        v = constants::WGS84_A / std::sqrt(1.0 - e2 * sinp * sinp);
+        z = r[2] + v * e2 * sinp;
+    }
+    pos[0] = r2 > 1E-12 ? std::atan(z / std::sqrt(r2))
+                         : (r[2] > 0.0 ? kPi / 2.0 : -kPi / 2.0);
+    pos[1] = r2 > 1E-12 ? std::atan2(r[1], r[0]) : 0.0;
+    pos[2] = std::sqrt(r2 + z * z) - v;
+}
+
+double mionoStdStecUra(int ura) {
+    if (ura <= 0) {
+        return 5.4665;
+    }
+    if (ura >= 63) {
+        return 5.4665;
+    }
+    return (std::pow(3.0, (ura >> 3) & 7) * (1.0 + (ura & 7) / 4.0) - 1.0) *
+           1E-3;
+}
+
+double mionoL1cFrequency(int sat) {
+    int prn = 0;
+    const int sys = satsys(sat, &prn);
+    switch (sys) {
+        case kSysGps:
+        case kSysGal:
+        case kSysQzs:
+            return constants::GPS_L1_FREQ;
+        case kSysCmp:
+            return prn < kMinPrnBds3 ? 0.0 : constants::BDS_B1C_FREQ;
+        default:
+            return 0.0;
+    }
+}
+
+double mionoDelay(const MionoAreaFixture& area, int sat, const double* ll) {
+    const double* c = area.sat[sat - 1].coef;
+    const double freq = mionoL1cFrequency(sat);
+    const double fact = 40.31E16 / freq / freq;
+    double stec = c[0];
+
+    if (area.type >= 1) {
+        stec += c[1] * (ll[0] - area.ref[0]) + c[2] * (ll[1] - area.ref[1]);
+    }
+    if (area.type >= 2) {
+        stec += c[3] * (ll[0] - area.ref[0]) * (ll[1] - area.ref[1]);
+    }
+    if (area.type >= 3) {
+        stec += c[4] * sqr(ll[0] - area.ref[0]) +
+                c[2] * sqr(ll[1] - area.ref[1]);
+    }
+    return fact * stec;
+}
+
+double maxToeDiffForSys(int sys) {
+    switch (sys) {
+        case kSysGal:
+            return kMaxDtoeGal;
+        case kSysQzs:
+            return kMaxDtoeQzs + 1.0;
+        case kSysCmp:
+            return kMaxDtoeCmp + 1.0;
+        case kSysIrn:
+            return kMaxDtoeIrn + 1.0;
+        case kSysGps:
+        default:
+            return kMaxDtoeGps + 1.0;
+    }
+}
+
+const BroadcastEphemeris* selectBroadcastEph(GTime time,
+                                             int sat,
+                                             int iode,
+                                             const BroadcastEphemeris* ephs,
+                                             int eph_count) {
+    int sys = satsys(sat, nullptr);
+    double tmin = maxToeDiffForSys(sys) + 1.0;
+    int selected = -1;
+
+    for (int i = 0; i < eph_count; ++i) {
+        if (ephs[i].sat != sat) {
+            continue;
+        }
+        if (sys == kSysCmp) {
+            if (iode >= 0 &&
+                static_cast<int>(ephs[i].toes) % 2048 != (iode * 8) % 2048) {
+                continue;
+            }
+        } else if (iode >= 0 && ephs[i].iode != iode) {
+            continue;
+        }
+        if (sys == kSysGal) {
+            if (!(ephs[i].code & (1 << 9))) {
+                continue;
+            }
+            if (timediff(ephs[i].toe, time) >= 0.0) {
+                continue;
+            }
+        }
+        const double t = std::fabs(timediff(ephs[i].toe, time));
+        if (t > maxToeDiffForSys(sys)) {
+            continue;
+        }
+        if (iode >= 0) {
+            return &ephs[i];
+        }
+        if (t <= tmin) {
+            selected = i;
+            tmin = t;
+        }
+    }
+    return selected < 0 ? nullptr : &ephs[selected];
+}
+
 }  // namespace
 
 bool satnoAvailable() {
@@ -313,6 +457,18 @@ bool eph2clkAvailable() {
 }
 
 bool eph2posAvailable() {
+    return true;
+}
+
+bool mcssrSelBiascodeAvailable() {
+    return true;
+}
+
+bool mionoGetCorrAvailable() {
+    return true;
+}
+
+bool satposAvailable() {
     return true;
 }
 
@@ -628,6 +784,240 @@ void eph2pos(GTime time,
             sqr(constants::SPEED_OF_LIGHT);
 
     *var = var_uraeph(sys, eph->sva);
+}
+
+int mcssr_sel_biascode(int sys, int code) {
+    switch (sys) {
+        case kSysGps:
+            switch (code) {
+                case kCodeL1C:
+                    return kCodeL1C;
+                case kCodeL1P:
+                case kCodeL1W:
+                    return kCodeL1W;
+                case kCodeL1S:
+                case kCodeL1L:
+                case kCodeL1X:
+                    return kCodeL1X;
+                case kCodeL2S:
+                case kCodeL2L:
+                case kCodeL2X:
+                    return kCodeL2X;
+                case kCodeL2P:
+                case kCodeL2W:
+                    return kCodeL2W;
+                case kCodeL5I:
+                    return kCodeL5I;
+                case kCodeL5Q:
+                    return kCodeL5Q;
+                case kCodeL5X:
+                    return kCodeL5X;
+            }
+            break;
+        case kSysGlo:
+            switch (code) {
+                case kCodeL1C:
+                case kCodeL1P:
+                    return kCodeL1C;
+                case kCodeL2C:
+                case kCodeL2P:
+                    return kCodeL2C;
+            }
+            break;
+        case kSysGal:
+            switch (code) {
+                case kCodeL1C:
+                case kCodeL1B:
+                case kCodeL1X:
+                    return kCodeL1X;
+                case kCodeL5I:
+                case kCodeL5Q:
+                case kCodeL5X:
+                    return kCodeL5X;
+                case kCodeL7I:
+                case kCodeL7Q:
+                case kCodeL7X:
+                    return kCodeL7X;
+                case kCodeL6B:
+                case kCodeL6C:
+                case kCodeL6X:
+                    return kCodeL6B;
+            }
+            break;
+        case kSysQzs:
+            switch (code) {
+                case kCodeL1C:
+                    return kCodeL1C;
+                case kCodeL1S:
+                case kCodeL1L:
+                case kCodeL1X:
+                    return kCodeL1X;
+                case kCodeL2S:
+                case kCodeL2L:
+                case kCodeL2X:
+                    return kCodeL2X;
+                case kCodeL5I:
+                case kCodeL5Q:
+                case kCodeL5X:
+                    return kCodeL5X;
+                case kCodeL1E:
+                    return kCodeL1E;
+            }
+            break;
+        case kSysCmp:
+            switch (code) {
+                case kCodeL2I:
+                case kCodeL2Q:
+                case kCodeL2X:
+                    return kCodeL2I;
+                case kCodeL6I:
+                case kCodeL6Q:
+                case kCodeL6X:
+                    return kCodeL6I;
+                case kCodeL7I:
+                case kCodeL7Q:
+                case kCodeL7X:
+                    return kCodeL7I;
+                case kCodeL5D:
+                    return kCodeL5D;
+                case kCodeL5P:
+                    return kCodeL5P;
+                case kCodeL5X:
+                    return kCodeL5X;
+                case kCodeL1D:
+                    return kCodeL1D;
+                case kCodeL1P:
+                    return kCodeL1P;
+                case kCodeL1X:
+                    return kCodeL1X;
+                case kCodeL7D:
+                    return kCodeL7D;
+            }
+            break;
+    }
+    return kCodeNone;
+}
+
+int miono_get_corr(GTime time,
+                   const double rr[3],
+                   const MionoAreaFixture* areas,
+                   int area_count,
+                   MionoCorrResult* result) {
+    if (result == nullptr) {
+        return 0;
+    }
+    *result = MionoCorrResult{};
+
+    if (time.time == 0 || areas == nullptr || area_count <= 0) {
+        return 0;
+    }
+    if (rr[0] == 0.0 && rr[1] == 0.0 && rr[2] == 0.0) {
+        return 0;
+    }
+
+    double pos[3];
+    double latlon[2];
+    ecef2posRtklib(rr, pos);
+    latlon[0] = pos[0] * kR2D;
+    latlon[1] = pos[1] * kR2D;
+
+    const MionoAreaFixture* selected = nullptr;
+    double min_dist = 1E5;
+    for (int i = 0; i < area_count; ++i) {
+        const MionoAreaFixture& area = areas[i];
+        if (!area.rvalid || area.ralert || !area.avalid) {
+            continue;
+        }
+
+        double ref_llh[3] = {area.ref[0] * kD2R, area.ref[1] * kD2R, 0.0};
+        double ref_ecef[3];
+        double diff[3];
+        pos2ecefRtklib(ref_llh, ref_ecef);
+        for (int k = 0; k < 3; ++k) {
+            diff[k] = rr[k] - ref_ecef[k];
+        }
+        const double dist = norm3(diff) / 1E3;
+        if (dist > min_dist) {
+            continue;
+        }
+
+        if (area.sid == 0) {
+            if (latlon[0] < area.ref[0] - area.span[0] ||
+                latlon[0] > area.ref[0] + area.span[0] ||
+                latlon[1] < area.ref[1] - area.span[1] ||
+                latlon[1] > area.ref[1] + area.span[1]) {
+                continue;
+            }
+        } else if (dist > area.span[0]) {
+            continue;
+        }
+
+        selected = &area;
+        min_dist = dist;
+    }
+
+    if (selected == nullptr) {
+        return 0;
+    }
+
+    result->rid = selected->region_id;
+    result->area_number = selected->area_number;
+    for (int i = 0; i < kMadocalibMaxSat; ++i) {
+        if (!selected->sat[i].t0.time) {
+            result->t0[i].time = 0;
+            continue;
+        }
+        result->t0[i] = selected->sat[i].t0;
+        result->delay[i] = mionoDelay(*selected, i + 1, latlon);
+        result->std[i] = mionoStdStecUra(selected->sat[i].sqi);
+    }
+    return 1;
+}
+
+int satpos(GTime time,
+           GTime teph,
+           int sat,
+           int ephopt,
+           const BroadcastEphemeris* ephs,
+           int eph_count,
+           double rs[6],
+           double dts[2],
+           double* var,
+           int* svh) {
+    if (rs == nullptr || dts == nullptr || var == nullptr || svh == nullptr) {
+        return 0;
+    }
+    for (int i = 0; i < 6; ++i) {
+        rs[i] = 0.0;
+    }
+    dts[0] = dts[1] = 0.0;
+    *var = 0.0;
+    *svh = 0;
+
+    if (ephopt != kEphOptBrdc || ephs == nullptr || eph_count <= 0) {
+        *svh = -1;
+        return 0;
+    }
+
+    const BroadcastEphemeris* eph = selectBroadcastEph(teph, sat, -1, ephs, eph_count);
+    if (eph == nullptr) {
+        *svh = -1;
+        return 0;
+    }
+
+    double rst[3] = {};
+    double dtst = 0.0;
+    double var_t = 0.0;
+    constexpr double tt = 1E-3;
+
+    eph2pos(time, eph, rs, &dts[0], var);
+    eph2pos(timeadd(time, tt), eph, rst, &dtst, &var_t);
+    for (int i = 0; i < 3; ++i) {
+        rs[i + 3] = (rst[i] - rs[i]) / tt;
+    }
+    dts[1] = (dtst - dts[0]) / tt;
+    *svh = eph->svh;
+    return 1;
 }
 
 }  // namespace libgnss::algorithms::madoca_parity

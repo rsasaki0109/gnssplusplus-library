@@ -7,6 +7,8 @@ namespace libgnss::external::madocalib_oracle {
 using AntennaPcv = libgnss::algorithms::madoca_parity::AntennaPcv;
 using BroadcastEphemeris = libgnss::algorithms::madoca_parity::BroadcastEphemeris;
 using GTime = libgnss::algorithms::madoca_parity::GTime;
+using MionoAreaFixture = libgnss::algorithms::madoca_parity::MionoAreaFixture;
+using MionoCorrResult = libgnss::algorithms::madoca_parity::MionoCorrResult;
 
 bool available();
 
@@ -32,5 +34,21 @@ void eph2pos(GTime time,
              double rs[3],
              double* dts,
              double* var);
+int mcssr_sel_biascode(int sys, int code);
+int miono_get_corr(GTime time,
+                   const double rr[3],
+                   const MionoAreaFixture* areas,
+                   int area_count,
+                   MionoCorrResult* result);
+int satpos(GTime time,
+           GTime teph,
+           int sat,
+           int ephopt,
+           const BroadcastEphemeris* ephs,
+           int eph_count,
+           double rs[6],
+           double dts[2],
+           double* var,
+           int* svh);
 
 }  // namespace libgnss::external::madocalib_oracle

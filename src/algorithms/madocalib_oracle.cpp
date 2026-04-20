@@ -1,5 +1,8 @@
 #include <libgnss++/external/madocalib_oracle.hpp>
 
+#include <memory>
+#include <vector>
+
 #ifndef GNSSPP_HAS_MADOCALIB_ORACLE
 #define GNSSPP_HAS_MADOCALIB_ORACLE 0
 #endif
@@ -32,6 +35,13 @@ void zeroN(double* out, int n) {
 gtime_t toOracleTime(GTime time) {
     gtime_t out = {};
     out.time = static_cast<time_t>(time.time);
+    out.sec = time.sec;
+    return out;
+}
+
+GTime fromOracleTime(gtime_t time) {
+    GTime out = {};
+    out.time = static_cast<decltype(out.time)>(time.time);
     out.sec = time.sec;
     return out;
 }
@@ -227,6 +237,139 @@ void eph2pos(GTime time,
     if (var != nullptr) {
         *var = 0.0;
     }
+#endif
+}
+
+int mcssr_sel_biascode(int sys, int code) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    return ::mcssr_sel_biascode(sys, code);
+#else
+    (void)sys;
+    (void)code;
+    return 0;
+#endif
+}
+
+int miono_get_corr(GTime time,
+                   const double rr[3],
+                   const MionoAreaFixture* areas,
+                   int area_count,
+                   MionoCorrResult* result) {
+    if (result != nullptr) {
+        *result = MionoCorrResult{};
+    }
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    if (rr == nullptr || areas == nullptr || area_count <= 0 || result == nullptr) {
+        return 0;
+    }
+
+    ::init_miono(toOracleTime(time));
+    auto nav = std::make_unique<nav_t>();
+
+    for (int i = 0; i < area_count; ++i) {
+        const MionoAreaFixture& src = areas[i];
+        if (src.region_id < 0 || MIONO_MAX_RID <= src.region_id ||
+            src.area_number < 0 || MIONO_MAX_ANUM <= src.area_number) {
+            continue;
+        }
+        miono_region_t& region = nav->pppiono.re[src.region_id];
+        miono_area_t& area = region.area[src.area_number];
+
+        region.rvalid = src.rvalid;
+        region.ralert = src.ralert;
+        region.narea = src.area_number + 1 > region.narea ? src.area_number + 1
+                                                           : region.narea;
+        area.avalid = src.avalid;
+        area.sid = src.sid;
+        area.type = src.type;
+        for (int j = 0; j < 2; ++j) {
+            area.ref[j] = src.ref[j];
+            area.span[j] = src.span[j];
+        }
+        for (int sat = 0; sat < MAXSAT && sat < libgnss::algorithms::madoca_parity::kMadocalibMaxSat;
+             ++sat) {
+            area.sat[sat].t0 = toOracleTime(src.sat[sat].t0);
+            area.sat[sat].sqi = src.sat[sat].sqi;
+            for (int k = 0; k < 6; ++k) {
+                area.sat[sat].coef[k] = src.sat[sat].coef[k];
+            }
+        }
+    }
+
+    const int status = ::miono_get_corr(rr, nav.get());
+    result->rid = nav->pppiono.rid;
+    result->area_number = nav->pppiono.anum;
+    for (int sat = 0; sat < MAXSAT && sat < libgnss::algorithms::madoca_parity::kMadocalibMaxSat;
+         ++sat) {
+        result->t0[sat] = fromOracleTime(nav->pppiono.corr.t0[sat]);
+        result->delay[sat] = nav->pppiono.corr.dly[sat];
+        result->std[sat] = nav->pppiono.corr.std[sat];
+    }
+    return status;
+#else
+    (void)time;
+    (void)rr;
+    (void)areas;
+    (void)area_count;
+    return 0;
+#endif
+}
+
+int satpos(GTime time,
+           GTime teph,
+           int sat,
+           int ephopt,
+           const BroadcastEphemeris* ephs,
+           int eph_count,
+           double rs[6],
+           double dts[2],
+           double* var,
+           int* svh) {
+    if (rs != nullptr) {
+        zeroN(rs, 6);
+    }
+    if (dts != nullptr) {
+        zeroN(dts, 2);
+    }
+    if (var != nullptr) {
+        *var = 0.0;
+    }
+    if (svh != nullptr) {
+        *svh = -1;
+    }
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    if (rs == nullptr || dts == nullptr || var == nullptr || svh == nullptr ||
+        ephs == nullptr || eph_count <= 0) {
+        return 0;
+    }
+
+    auto nav = std::make_unique<nav_t>();
+    std::vector<eph_t> c_ephs;
+    c_ephs.reserve(static_cast<size_t>(eph_count));
+    for (int i = 0; i < eph_count; ++i) {
+        c_ephs.push_back(toOracleEph(&ephs[i]));
+    }
+    nav->eph = c_ephs.data();
+    nav->n = static_cast<int>(c_ephs.size());
+    nav->nmax = nav->n;
+
+    return ::satpos(toOracleTime(time),
+                    toOracleTime(teph),
+                    sat,
+                    ephopt,
+                    nav.get(),
+                    rs,
+                    dts,
+                    var,
+                    svh);
+#else
+    (void)time;
+    (void)teph;
+    (void)sat;
+    (void)ephopt;
+    (void)ephs;
+    (void)eph_count;
+    return 0;
 #endif
 }
 
