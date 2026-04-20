@@ -25,6 +25,7 @@ if(GTest_FOUND)
         test_gnss_live.cpp
         test_ppp.cpp
         test_rinex_writer.cpp
+        test_madoca_parity.cpp
         test_rtk_legacy.cpp
         test_spp.cpp
         test_rtk_smoke.cpp

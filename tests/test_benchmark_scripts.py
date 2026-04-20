@@ -354,7 +354,12 @@ class OptionalPPPProductsSignoffScriptTest(unittest.TestCase):
             steps = ci_ppp_products_signoff.build_step_plan(
                 ROOT_DIR,
                 temp_root / "output",
-                {"GNSSPP_MALIB_BIN": str(malib_bin)},
+                {
+                    "GNSSPP_MALIB_BIN": str(malib_bin),
+                    "GNSSPP_PPP_PRODUCTS_OBS": str(temp_root / "missing_rover.obs"),
+                    "GNSSPP_PPP_PRODUCTS_BASE": str(temp_root / "missing_base.obs"),
+                    "GNSSPP_PPP_PRODUCTS_NAV": str(temp_root / "missing_nav.nav"),
+                },
             )
 
             self.assertIsNone(steps[0].command)

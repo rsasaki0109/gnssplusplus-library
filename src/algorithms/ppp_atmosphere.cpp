@@ -451,10 +451,42 @@ double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_token
         return val;
     };
 
+    auto haveStecPolynomialTerms = [&]() -> bool {
+        double term = 0.0;
+        if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c00_tecu" + suffix, term) &&
+            std::isfinite(term)) {
+            return true;
+        }
+        if (stec_type > 0) {
+            if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c01_tecu_per_deg" + suffix, term) &&
+                std::isfinite(term)) {
+                return true;
+            }
+            if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c10_tecu_per_deg" + suffix, term) &&
+                std::isfinite(term)) {
+                return true;
+            }
+        }
+        if (stec_type > 1 &&
+            parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c11_tecu_per_deg2" + suffix, term) &&
+            std::isfinite(term)) {
+            return true;
+        }
+        if (stec_type > 2) {
+            if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c02_tecu_per_deg2" + suffix, term) &&
+                std::isfinite(term)) {
+                return true;
+            }
+            if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c20_tecu_per_deg2" + suffix, term) &&
+                std::isfinite(term)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     double value = 0.0;
-    if (usePolynomialTerms(value_policy) &&
-        parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c00_tecu" + suffix, value) &&
-        std::isfinite(value)) {
+    if (usePolynomialTerms(value_policy) && haveStecPolynomialTerms()) {
         if (have_grid_reference && grid_reference.has_bilinear) {
             // CLASLIB approach: evaluate polynomial at each of 4 grid points,
             // add per-grid residual, then bilinear interpolate.

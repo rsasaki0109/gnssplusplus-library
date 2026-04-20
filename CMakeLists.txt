@@ -27,6 +27,7 @@ set(GNSS_SOURCES
     src/gnss.cpp
     src/io/ntrip.cpp
     src/io/rinex.cpp
+    src/io/rinex4.cpp
     src/io/rtcm.cpp
     src/io/rtcm_stream.cpp
     src/io/ubx.cpp
