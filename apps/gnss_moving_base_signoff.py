@@ -57,6 +57,32 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--plot-png", type=Path, default=None)
     parser.add_argument("--plot-title", default="Moving-base sign-off")
     parser.add_argument("--log-out", type=Path, default=None)
+    parser.add_argument(
+        "--commercial-pos",
+        type=Path,
+        default=None,
+        help=(
+            "Optional commercial receiver solution, as libgnss .pos or normalized CSV, "
+            "to summarize against the same reference."
+        ),
+    )
+    parser.add_argument(
+        "--commercial-format",
+        choices=("auto", "pos", "csv"),
+        default="auto",
+        help="Commercial receiver solution format (default: auto from suffix).",
+    )
+    parser.add_argument(
+        "--commercial-label",
+        default="commercial_receiver",
+        help="Label stored in the commercial receiver summary.",
+    )
+    parser.add_argument(
+        "--commercial-matched-csv",
+        type=Path,
+        default=None,
+        help="Optional CSV of commercial receiver epochs matched to the reference.",
+    )
     parser.add_argument("--max-epochs", type=int, default=120)
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
     parser.add_argument("--use-existing-solution", action="store_true")
@@ -169,6 +195,150 @@ def read_pos_records(path: Path) -> list[dict[str, float | int]]:
                 }
             )
     return records
+
+
+def parse_solution_status(token: str | None) -> int:
+    if token is None or token == "":
+        return 0
+    try:
+        return int(float(token))
+    except ValueError:
+        normalized = normalize_field(token)
+    if normalized in {"fix", "fixed", "rtkfix", "rtkfixed", "integer", "integerfix"}:
+        return 4
+    if normalized in {"float", "rtkfloat", "rtkflt"}:
+        return 3
+    if normalized in {"dgps", "dgnss", "differential"}:
+        return 2
+    if normalized in {"single", "spp", "standalone"}:
+        return 1
+    return 0
+
+
+def read_commercial_csv_records(path: Path) -> list[dict[str, float | int]]:
+    records: list[dict[str, float | int]] = []
+    with path.open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            week_token = get_token(row, "gps_week", "week")
+            tow_token = get_token(row, "gps_tow_s", "tow_s", "tow", "gpstow")
+            if week_token is None or tow_token is None:
+                raise SystemExit(
+                    f"{path} must contain gps_week/week and gps_tow_s/tow columns"
+                )
+
+            x_token = get_token(
+                row,
+                "ecef_x_m",
+                "x_m",
+                "x",
+                "rover_ecef_x_m",
+                "rover_x_m",
+                "rover_x",
+            )
+            y_token = get_token(
+                row,
+                "ecef_y_m",
+                "y_m",
+                "y",
+                "rover_ecef_y_m",
+                "rover_y_m",
+                "rover_y",
+            )
+            z_token = get_token(
+                row,
+                "ecef_z_m",
+                "z_m",
+                "z",
+                "rover_ecef_z_m",
+                "rover_z_m",
+                "rover_z",
+            )
+            if x_token is not None and y_token is not None and z_token is not None:
+                x, y, z = float(x_token), float(y_token), float(z_token)
+            else:
+                lat_token = get_token(
+                    row,
+                    "lat_deg",
+                    "latitude_deg",
+                    "lat",
+                    "rover_lat_deg",
+                    "rover_lat",
+                )
+                lon_token = get_token(
+                    row,
+                    "lon_deg",
+                    "longitude_deg",
+                    "lon",
+                    "rover_lon_deg",
+                    "rover_lon",
+                )
+                h_token = get_token(
+                    row,
+                    "height_m",
+                    "h_m",
+                    "height",
+                    "ellipsoid_height_m",
+                    "rover_height_m",
+                    "rover_h_m",
+                    "rover_height",
+                )
+                if lat_token is None or lon_token is None or h_token is None:
+                    raise SystemExit(
+                        f"{path} must contain ECEF x/y/z or lat/lon/height columns"
+                    )
+                x, y, z = geodetic_to_ecef(float(lat_token), float(lon_token), float(h_token))
+
+            status = parse_solution_status(
+                get_token(
+                    row,
+                    "status",
+                    "quality",
+                    "quality_status",
+                    "fix_type",
+                    "solution_status",
+                )
+            )
+            satellites_token = get_token(
+                row,
+                "satellites",
+                "num_satellites",
+                "ns",
+                "n_sats",
+                "sats",
+            )
+            satellites = int(float(satellites_token)) if satellites_token not in (None, "") else 0
+            records.append(
+                {
+                    "week": int(float(week_token)),
+                    "tow": float(tow_token),
+                    "x": x,
+                    "y": y,
+                    "z": z,
+                    "status": status,
+                    "satellites": satellites,
+                }
+            )
+    records.sort(key=lambda item: (int(item["week"]), float(item["tow"])))
+    return records
+
+
+def resolve_commercial_format(path: Path, requested_format: str) -> str:
+    if requested_format != "auto":
+        return requested_format
+    return "pos" if path.suffix.lower() == ".pos" else "csv"
+
+
+def read_commercial_solution_records(
+    path: Path,
+    requested_format: str,
+) -> tuple[list[dict[str, float | int]], str]:
+    resolved_format = resolve_commercial_format(path, requested_format)
+    if resolved_format == "pos":
+        return read_pos_records(path), resolved_format
+    if resolved_format == "csv":
+        return read_commercial_csv_records(path), resolved_format
+    raise SystemExit(f"Unsupported commercial receiver solution format: {requested_format}")
 
 
 def read_reference_rows(path: Path) -> list[dict[str, float]]:
@@ -361,6 +531,94 @@ def write_matches_csv(path: Path, matches: list[dict[str, float]]) -> None:
             )
 
 
+def summarize_solution_quality(
+    solution_records: list[dict[str, float | int]],
+    matches: list[dict[str, float]],
+) -> dict[str, object]:
+    heading_errors = [
+        float(match["heading_error_deg"])
+        for match in matches
+        if match["heading_error_deg"] is not None
+    ]
+    baseline_errors = [float(match["baseline_error_m"]) for match in matches]
+    baseline_lengths = [float(match["baseline_length_m"]) for match in matches]
+    valid_epochs = len(solution_records)
+    fixed_epochs = sum(1 for record in solution_records if int(record["status"]) == 4)
+    return {
+        "epochs": valid_epochs,
+        "valid_epochs": valid_epochs,
+        "matched_epochs": len(matches),
+        "fixed_epochs": fixed_epochs,
+        "fix_rate_pct": rounded(100.0 * fixed_epochs / valid_epochs) if valid_epochs else 0.0,
+        "median_baseline_error_m": (
+            rounded(percentile(baseline_errors, 0.5)) if baseline_errors else None
+        ),
+        "p95_baseline_error_m": (
+            rounded(percentile(baseline_errors, 0.95)) if baseline_errors else None
+        ),
+        "max_baseline_error_m": rounded(max(baseline_errors)) if baseline_errors else None,
+        "mean_baseline_length_m": (
+            rounded(sum(baseline_lengths) / len(baseline_lengths)) if baseline_lengths else None
+        ),
+        "heading_samples": len(heading_errors),
+        "median_heading_error_deg": (
+            rounded(percentile(heading_errors, 0.5)) if heading_errors else None
+        ),
+        "p95_heading_error_deg": (
+            rounded(percentile(heading_errors, 0.95)) if heading_errors else None
+        ),
+        "max_heading_error_deg": rounded(max(heading_errors)) if heading_errors else None,
+    }
+
+
+def build_commercial_summary(
+    args: argparse.Namespace,
+    records: list[dict[str, float | int]],
+    matches: list[dict[str, float]],
+    resolved_format: str,
+) -> dict[str, object]:
+    summary = summarize_solution_quality(records, matches)
+    summary.update(
+        {
+            "label": args.commercial_label,
+            "solution_pos": str(args.commercial_pos),
+            "format": resolved_format,
+            "matched_csv": (
+                str(args.commercial_matched_csv)
+                if args.commercial_matched_csv is not None
+                else None
+            ),
+        }
+    )
+    return summary
+
+
+def build_commercial_delta(
+    lib_summary: dict[str, object],
+    commercial_summary: dict[str, object],
+) -> dict[str, object]:
+    def optional_delta(key: str) -> float | None:
+        left = lib_summary.get(key)
+        right = commercial_summary.get(key)
+        if left is None or right is None:
+            return None
+        return rounded(float(left) - float(right))
+
+    return {
+        "fixed_epochs_delta": (
+            int(lib_summary["fixed_epochs"]) - int(commercial_summary["fixed_epochs"])
+        ),
+        "matched_epochs_delta": (
+            int(lib_summary["matched_epochs"]) - int(commercial_summary["matched_epochs"])
+        ),
+        "fix_rate_pct_delta": optional_delta("fix_rate_pct"),
+        "median_baseline_error_m_delta": optional_delta("median_baseline_error_m"),
+        "p95_baseline_error_m_delta": optional_delta("p95_baseline_error_m"),
+        "max_baseline_error_m_delta": optional_delta("max_baseline_error_m"),
+        "p95_heading_error_deg_delta": optional_delta("p95_heading_error_deg"),
+    }
+
+
 def build_solver_command(args: argparse.Namespace) -> list[str]:
     command = [*resolve_gnss_command(ROOT_DIR), args.solver]
     if args.solver == "replay":
@@ -429,16 +687,10 @@ def build_summary_payload(
     stdout_text: str,
     stderr_text: str,
     exit_code: int | None,
+    commercial_summary: dict[str, object] | None,
 ) -> dict[str, object]:
-    heading_errors = [
-        float(match["heading_error_deg"])
-        for match in matches
-        if match["heading_error_deg"] is not None
-    ]
-    baseline_errors = [float(match["baseline_error_m"]) for match in matches]
-    baseline_lengths = [float(match["baseline_length_m"]) for match in matches]
+    lib_summary = summarize_solution_quality(solution_records, matches)
     valid_epochs = len(solution_records)
-    fixed_epochs = sum(1 for record in solution_records if int(record["status"]) == 4)
     solution_span_s = 0.0
     if solution_records:
         first = solution_records[0]
@@ -472,19 +724,6 @@ def build_summary_payload(
         "log_out": str(args.log_out) if args.log_out is not None else None,
         "use_existing_solution": bool(args.use_existing_solution),
         "match_tolerance_s": rounded(args.match_tolerance_s),
-        "epochs": valid_epochs,
-        "valid_epochs": valid_epochs,
-        "matched_epochs": len(matches),
-        "fixed_epochs": fixed_epochs,
-        "fix_rate_pct": rounded(100.0 * fixed_epochs / valid_epochs) if valid_epochs else 0.0,
-        "median_baseline_error_m": rounded(percentile(baseline_errors, 0.5)) if baseline_errors else None,
-        "p95_baseline_error_m": rounded(percentile(baseline_errors, 0.95)) if baseline_errors else None,
-        "max_baseline_error_m": rounded(max(baseline_errors)) if baseline_errors else None,
-        "mean_baseline_length_m": rounded(sum(baseline_lengths) / len(baseline_lengths)) if baseline_lengths else None,
-        "heading_samples": len(heading_errors),
-        "median_heading_error_deg": rounded(percentile(heading_errors, 0.5)) if heading_errors else None,
-        "p95_heading_error_deg": rounded(percentile(heading_errors, 0.95)) if heading_errors else None,
-        "max_heading_error_deg": rounded(max(heading_errors)) if heading_errors else None,
         "solution_span_s": rounded(solution_span_s),
         "solver_wall_time_s": rounded(effective_wall_time_s),
         "realtime_factor": rounded(realtime_factor),
@@ -495,6 +734,13 @@ def build_summary_payload(
         "plot_png": str(args.plot_png) if args.plot_png is not None else None,
         "matched_csv": str(args.matched_csv) if args.matched_csv is not None else None,
     }
+    payload.update(lib_summary)
+    if commercial_summary is not None:
+        payload["commercial_receiver"] = commercial_summary
+        payload["libgnss_vs_commercial_receiver"] = build_commercial_delta(
+            lib_summary,
+            commercial_summary,
+        )
     if solver_metrics is not None:
         payload["solver_metrics"] = solver_metrics
         for key in (
@@ -562,6 +808,10 @@ def enforce_requirements(payload: dict[str, object], args: argparse.Namespace) -
 def main() -> int:
     args = parse_args()
     ensure_input_exists(args.reference_csv, "moving-base reference CSV", ROOT_DIR)
+    if args.commercial_pos is not None:
+        ensure_input_exists(args.commercial_pos, "commercial receiver solution", ROOT_DIR)
+    elif args.commercial_matched_csv is not None:
+        raise SystemExit("--commercial-matched-csv requires --commercial-pos")
     if args.use_existing_solution:
         ensure_input_exists(args.out, "existing moving-base solution", ROOT_DIR)
 
@@ -607,6 +857,27 @@ def main() -> int:
     matches = match_solution_to_reference(solution_records, reference_rows, args.match_tolerance_s)
     if args.matched_csv is not None:
         write_matches_csv(args.matched_csv, matches)
+    commercial_summary = None
+    if args.commercial_pos is not None:
+        commercial_records, commercial_format = read_commercial_solution_records(
+            args.commercial_pos,
+            args.commercial_format,
+        )
+        if not commercial_records:
+            raise SystemExit(f"No commercial receiver epochs found in {args.commercial_pos}")
+        commercial_matches = match_solution_to_reference(
+            commercial_records,
+            reference_rows,
+            args.match_tolerance_s,
+        )
+        if args.commercial_matched_csv is not None:
+            write_matches_csv(args.commercial_matched_csv, commercial_matches)
+        commercial_summary = build_commercial_summary(
+            args,
+            commercial_records,
+            commercial_matches,
+            commercial_format,
+        )
     payload = build_summary_payload(
         args,
         solution_records,
@@ -616,6 +887,7 @@ def main() -> int:
         stdout_text,
         stderr_text,
         exit_code,
+        commercial_summary,
     )
     if args.plot_png is not None:
         from gnss_moving_base_plot import render_matches_plot
@@ -631,6 +903,8 @@ def main() -> int:
         print(f"  plot: {args.plot_png}")
     if args.matched_csv is not None:
         print(f"  matched_csv: {args.matched_csv}")
+    if args.commercial_pos is not None:
+        print(f"  commercial_receiver: {args.commercial_pos}")
     print(f"  matched_epochs: {payload['matched_epochs']}")
     print(f"  fix_rate_pct: {payload['fix_rate_pct']}")
     print(f"  p95_baseline_error_m: {payload['p95_baseline_error_m']}")

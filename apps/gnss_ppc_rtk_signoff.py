@@ -110,6 +110,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rtklib-pos", type=Path, default=None)
     parser.add_argument("--use-existing-rtklib-solution", action="store_true")
     parser.add_argument("--rtklib-solver-wall-time-s", type=float, default=None)
+    parser.add_argument("--commercial-pos", type=Path, default=None)
+    parser.add_argument("--commercial-format", choices=("auto", "pos", "csv"), default="auto")
+    parser.add_argument("--commercial-label", default="commercial_receiver")
+    parser.add_argument("--commercial-matched-csv", type=Path, default=None)
+    parser.add_argument("--commercial-solver-wall-time-s", type=float, default=None)
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
     parser.add_argument("--preset", choices=("survey", "low-cost", "moving-base"), default=None)
     parser.add_argument("--arfilter", dest="arfilter", action="store_true")
@@ -222,6 +227,21 @@ def build_ppc_demo_command(args: argparse.Namespace,
         command.append("--use-existing-rtklib-solution")
     if args.rtklib_solver_wall_time_s is not None:
         command.extend(["--rtklib-solver-wall-time-s", str(args.rtklib_solver_wall_time_s)])
+    if args.commercial_pos is not None:
+        command.extend(
+            [
+                "--commercial-pos",
+                str(args.commercial_pos),
+                "--commercial-format",
+                args.commercial_format,
+                "--commercial-label",
+                args.commercial_label,
+            ]
+        )
+    if args.commercial_matched_csv is not None:
+        command.extend(["--commercial-matched-csv", str(args.commercial_matched_csv)])
+    if args.commercial_solver_wall_time_s is not None:
+        command.extend(["--commercial-solver-wall-time-s", str(args.commercial_solver_wall_time_s)])
 
     preset = tuning.get("preset")
     if isinstance(preset, str):
@@ -270,6 +290,10 @@ def main() -> int:
         ensure_input_exists(out, "existing PPC RTK solution", ROOT_DIR)
     if args.use_existing_rtklib_solution and args.rtklib_pos is not None:
         ensure_input_exists(args.rtklib_pos, "existing RTKLIB solution", ROOT_DIR)
+    if args.commercial_pos is not None:
+        ensure_input_exists(args.commercial_pos, "commercial receiver solution", ROOT_DIR)
+    elif args.commercial_matched_csv is not None:
+        raise SystemExit("--commercial-matched-csv requires --commercial-pos")
 
     thresholds = selected_thresholds(
         args,
@@ -287,6 +311,7 @@ def main() -> int:
     payload["signoff_thresholds"] = thresholds
     payload["tuning_profile"] = tuning
     payload["rtklib_comparison_enabled"] = "delta_vs_rtklib" in payload
+    payload["commercial_receiver_comparison_enabled"] = "delta_vs_commercial_receiver" in payload
     summary_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     print("Finished PPC RTK sign-off.")

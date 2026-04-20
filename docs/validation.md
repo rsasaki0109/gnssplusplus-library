@@ -61,6 +61,8 @@ For the `ppc` profile with `--malib-pos` or `--malib-bin`, the command also emit
 `gnss scorpion-moving-base-signoff`, and `gnss ppc-rtk-signoff`
 also accept `--config-toml`, so you can pin long threshold sets and artifact paths in a file instead of repeating them on the command line.
 
+For PPC-Dataset RTK runs, `gnss ppc-demo` and `gnss ppc-rtk-signoff` also accept `--commercial-pos`. This is the public-data path for comparing libgnss++ against a commercial receiver solution when the dataset has an independent `reference.csv`; the receiver summary is stored under `commercial_receiver`, and `delta_vs_commercial_receiver` reports libgnss++ minus receiver deltas for fix rate and horizontal/up error metrics.
+
 If you already have a MALIB `.pos` file, you can gate the delta directly:
 
 ```bash
@@ -95,9 +97,15 @@ python3 apps/gnss.py ppp-products-signoff \
 - solver wall time / realtime factor / effective epoch rate,
 - `live` termination and decoder errors.
 
-Use `gnss moving-base-prepare` first when the source dataset is a ROS2 bag or Zenodo zip carrying u-blox `NAV-PVT`, `RXM-RAWX`, and `NAV-RELPOSNED` topics. For replay mode, pair the exported `rover.ubx` / `base.ubx` files with a fetched BRDC navigation file from `gnss fetch-products --preset brdc-nav`.
+Use `gnss moving-base-prepare` first when the source dataset is a ROS2 bag or Zenodo zip carrying u-blox `NAV-PVT`, `RXM-RAWX`, and `NAV-RELPOSNED` topics. For replay mode, pair the exported `rover.ubx` / `base.ubx` files with a fetched BRDC navigation file from `gnss fetch-products --preset brdc-nav`. Add `--commercial-csv` to export the rover receiver's `NAV-PVT` solution as a normalized commercial receiver CSV.
 
-For the public SCORPION dataset, `gnss scorpion-moving-base-signoff` wraps the same flow into one command and emits the same summary JSON fields, plus the prepare/fetch provenance, matched CSV artifact, and plot preview that `gnss web` can render directly.
+For commercial receiver side-by-side evaluation, add `--commercial-pos` with a normalized receiver
+solution CSV or `.pos` file. The commercial solution is matched to the same reference CSV and stored
+under `commercial_receiver` in the summary JSON. Treat RTKLIB/demo5 as a public reproducible
+baseline; moving-RTK quality claims should use independent reference data plus commercial receiver
+output when available.
+
+For the public SCORPION dataset, `gnss scorpion-moving-base-signoff` wraps the same flow into one command and defaults to the public Zenodo zip when no `--input` is supplied. It emits the same summary JSON fields plus prepare/fetch provenance, libgnss matched CSV, commercial receiver CSV, commercial receiver matched CSV, and a plot preview that `gnss web` can render directly. The SCORPION receiver CSV comes from rover `NAV-PVT`; it is a public receiver side-by-side baseline, not an independent survey truth source.
 
 ## Test layers
 

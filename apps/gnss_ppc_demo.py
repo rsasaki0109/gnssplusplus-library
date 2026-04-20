@@ -27,6 +27,7 @@ WGS84_E2 = 6.69437999014e-3
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import generate_driving_comparison as comparison  # noqa: E402
+import gnss_moving_base_signoff as moving_base_signoff  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -161,6 +162,38 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=None,
         help="Optional RTKLIB wall time in seconds. If omitted, actual runtime is recorded when RTKLIB is executed.",
+    )
+    parser.add_argument(
+        "--commercial-pos",
+        type=Path,
+        default=None,
+        help=(
+            "Optional commercial receiver solution, as libgnss .pos or normalized CSV, "
+            "to summarize against the PPC reference."
+        ),
+    )
+    parser.add_argument(
+        "--commercial-format",
+        choices=("auto", "pos", "csv"),
+        default="auto",
+        help="Commercial receiver solution format (default: auto from suffix).",
+    )
+    parser.add_argument(
+        "--commercial-label",
+        default="commercial_receiver",
+        help="Label stored in the commercial receiver summary.",
+    )
+    parser.add_argument(
+        "--commercial-matched-csv",
+        type=Path,
+        default=None,
+        help="Optional CSV of commercial receiver epochs matched to the PPC reference.",
+    )
+    parser.add_argument(
+        "--commercial-solver-wall-time-s",
+        type=float,
+        default=None,
+        help="Optional commercial receiver wall time in seconds for realtime metrics.",
     )
     parser.add_argument(
         "--enable-ar",
@@ -462,6 +495,99 @@ def summarize_solution_epochs(
     return payload
 
 
+def read_commercial_solution_epochs(
+    path: Path,
+    requested_format: str,
+) -> tuple[list[comparison.SolutionEpoch], str]:
+    records, resolved_format = moving_base_signoff.read_commercial_solution_records(
+        path,
+        requested_format,
+    )
+    epochs: list[comparison.SolutionEpoch] = []
+    for record in records:
+        x = float(record["x"])
+        y = float(record["y"])
+        z = float(record["z"])
+        lat_deg, lon_deg, height_m = llh_from_ecef(x, y, z)
+        ecef = comparison.llh_to_ecef(lat_deg, lon_deg, height_m)
+        epochs.append(
+            comparison.SolutionEpoch(
+                week=int(record["week"]),
+                tow=float(record["tow"]),
+                lat_deg=lat_deg,
+                lon_deg=lon_deg,
+                height_m=height_m,
+                ecef=ecef,
+                status=int(record["status"]),
+                num_satellites=int(record["satellites"]),
+            )
+        )
+    return epochs, resolved_format
+
+
+def write_reference_matches_csv(
+    path: Path,
+    matches: list[comparison.MatchedEpoch],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "gps_tow_s",
+                "traj_east_m",
+                "traj_north_m",
+                "traj_up_m",
+                "east_error_m",
+                "north_error_m",
+                "up_error_m",
+                "horizontal_error_m",
+                "status",
+            ]
+        )
+        for match in matches:
+            writer.writerow(
+                [
+                    f"{match.tow:.3f}",
+                    f"{match.traj_east_m:.6f}",
+                    f"{match.traj_north_m:.6f}",
+                    f"{match.traj_up_m:.6f}",
+                    f"{match.east_m:.6f}",
+                    f"{match.north_m:.6f}",
+                    f"{match.up_m:.6f}",
+                    f"{match.horiz_error_m:.6f}",
+                    int(match.status),
+                ]
+            )
+
+
+def solution_metric_delta(
+    left: dict[str, object],
+    right: dict[str, object],
+) -> dict[str, object]:
+    def optional_delta(key: str) -> float | None:
+        left_value = left.get(key)
+        right_value = right.get(key)
+        if left_value is None or right_value is None:
+            return None
+        return rounded(float(left_value) - float(right_value))
+
+    return {
+        "valid_epochs": int(left["valid_epochs"]) - int(right["valid_epochs"]),
+        "matched_epochs": int(left["matched_epochs"]) - int(right["matched_epochs"]),
+        "fixed_epochs": int(left["fixed_epochs"]) - int(right["fixed_epochs"]),
+        "fix_rate_pct": optional_delta("fix_rate_pct"),
+        "mean_h_m": optional_delta("mean_h_m"),
+        "median_h_m": optional_delta("median_h_m"),
+        "p95_h_m": optional_delta("p95_h_m"),
+        "max_h_m": optional_delta("max_h_m"),
+        "median_abs_up_m": optional_delta("median_abs_up_m"),
+        "p95_abs_up_m": optional_delta("p95_abs_up_m"),
+        "solver_wall_time_s": optional_delta("solver_wall_time_s"),
+        "realtime_factor": optional_delta("realtime_factor"),
+    }
+
+
 def resolve_run_dir(args: argparse.Namespace) -> Path:
     if args.run_dir is not None:
         return args.run_dir
@@ -674,6 +800,44 @@ def build_summary_payload(
             ),
         }
 
+    commercial_pos = getattr(args, "commercial_pos", None)
+    if commercial_pos is not None and Path(commercial_pos).exists():
+        commercial_epochs, commercial_format = read_commercial_solution_epochs(
+            Path(commercial_pos),
+            getattr(args, "commercial_format", "auto"),
+        )
+        commercial_metrics = summarize_solution_epochs(
+            reference,
+            commercial_epochs,
+            4,
+            getattr(args, "commercial_label", "commercial_receiver"),
+            args.match_tolerance_s,
+            getattr(args, "commercial_solver_wall_time_s", None),
+        )
+        commercial_matched_csv = getattr(args, "commercial_matched_csv", None)
+        if commercial_matched_csv is not None:
+            commercial_matches = comparison.match_to_reference(
+                commercial_epochs,
+                reference,
+                args.match_tolerance_s,
+            )
+            write_reference_matches_csv(Path(commercial_matched_csv), commercial_matches)
+        commercial_metrics.update(
+            {
+                "label": getattr(args, "commercial_label", "commercial_receiver"),
+                "solution_pos": str(commercial_pos),
+                "format": commercial_format,
+                "matched_csv": (
+                    str(commercial_matched_csv) if commercial_matched_csv is not None else None
+                ),
+            }
+        )
+        payload["commercial_receiver"] = commercial_metrics
+        payload["delta_vs_commercial_receiver"] = solution_metric_delta(
+            payload,
+            commercial_metrics,
+        )
+
     summary_json.parent.mkdir(parents=True, exist_ok=True)
     summary_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return payload
@@ -809,6 +973,10 @@ def main() -> int:
         args.rtklib_pos = rtklib_pos
 
     ensure_input_exists(reference_csv, "PPC reference CSV", ROOT_DIR)
+    if args.commercial_pos is not None:
+        ensure_input_exists(args.commercial_pos, "commercial receiver solution", ROOT_DIR)
+    elif args.commercial_matched_csv is not None:
+        raise SystemExit("--commercial-matched-csv requires --commercial-pos")
     if args.max_epochs == 0:
         raise SystemExit("--max-epochs must be positive or -1")
 
@@ -901,6 +1069,14 @@ def main() -> int:
             f" fix={payload['delta_vs_rtklib']['fix_rate_pct']} %"
             f", p95_h={payload['delta_vs_rtklib']['p95_h_m']} m"
             f", wall={payload['delta_vs_rtklib']['solver_wall_time_s']} s"
+        )
+    if "commercial_receiver" in payload:
+        commercial = payload["commercial_receiver"]
+        print(f"  commercial_receiver: {commercial['solution_pos']}")
+        print(
+            "  vs commercial_receiver:"
+            f" fix={payload['delta_vs_commercial_receiver']['fix_rate_pct']} %"
+            f", p95_h={payload['delta_vs_commercial_receiver']['p95_h_m']} m"
         )
     return 0
 

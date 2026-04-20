@@ -7960,6 +7960,8 @@ class CLIToolsTest(unittest.TestCase):
             run_dir.mkdir(parents=True)
             solution_path = temp_root / "ppc_demo.pos"
             rtklib_path = temp_root / "ppc_demo_rtklib.pos"
+            commercial_path = temp_root / "ppc_commercial_receiver.csv"
+            commercial_matches = temp_root / "ppc_commercial_matches.csv"
             summary_path = temp_root / "ppc_demo_summary.json"
             reference_csv = run_dir / "reference.csv"
 
@@ -7997,6 +7999,18 @@ class CLIToolsTest(unittest.TestCase):
                     (2300, 1000.4, 35.1000205, 139.1000404, 42.6, 2, 11),
                 ],
             )
+            commercial_path.write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,solution_status,num_satellites",
+                        "2300,1000.0,35.1000001,139.1000001,42.1,rtk_fixed,14",
+                        "2300,1000.2,35.1000101,139.1000201,42.2,rtk_fixed,14",
+                        "2300,1000.4,35.1000201,139.1000401,42.4,rtk_float,13",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
 
             result = self.run_gnss(
                 "ppc-demo",
@@ -8014,6 +8028,14 @@ class CLIToolsTest(unittest.TestCase):
                 "--use-existing-rtklib-solution",
                 "--rtklib-solver-wall-time-s",
                 "0.1",
+                "--commercial-pos",
+                str(commercial_path),
+                "--commercial-label",
+                "survey_receiver",
+                "--commercial-matched-csv",
+                str(commercial_matches),
+                "--commercial-solver-wall-time-s",
+                "0.2",
                 "--summary-json",
                 str(summary_path),
                 "--require-valid-epochs-min",
@@ -8069,7 +8091,15 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["rtklib"]["solver_wall_time_s"], 0.1)
             self.assertAlmostEqual(payload["rtklib"]["realtime_factor"], 4.0, places=5)
             self.assertIn("delta_vs_rtklib", payload)
+            self.assertIn("commercial_receiver", payload)
+            self.assertEqual(payload["commercial_receiver"]["label"], "survey_receiver")
+            self.assertEqual(payload["commercial_receiver"]["matched_epochs"], 3)
+            self.assertEqual(payload["commercial_receiver"]["fixed_epochs"], 2)
+            self.assertEqual(payload["commercial_receiver"]["matched_csv"], str(commercial_matches))
+            self.assertTrue(commercial_matches.exists())
+            self.assertIn("delta_vs_commercial_receiver", payload)
             self.assertIn("rtklib performance: wall=0.1 s", result.stdout)
+            self.assertIn("commercial_receiver:", result.stdout)
             self.assertIn("performance: wall=0.5 s, span=0.4 s, rtf=0.8, rate=6.0 Hz", result.stdout)
 
     def test_ppc_rtk_signoff_cli_wraps_profile_with_existing_solutions(self) -> None:
@@ -8079,6 +8109,8 @@ class CLIToolsTest(unittest.TestCase):
             run_dir.mkdir(parents=True)
             solution_path = temp_root / "ppc_signoff.pos"
             rtklib_path = temp_root / "ppc_signoff_rtklib.pos"
+            commercial_path = temp_root / "ppc_signoff_commercial.csv"
+            commercial_matches = temp_root / "ppc_signoff_commercial_matches.csv"
             summary_path = temp_root / "ppc_signoff_summary.json"
             reference_csv = run_dir / "reference.csv"
 
@@ -8116,6 +8148,18 @@ class CLIToolsTest(unittest.TestCase):
                     (2300, 1000.4, 35.1000205, 139.1000404, 42.6, 2, 11),
                 ],
             )
+            commercial_path.write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,solution_status,num_satellites",
+                        "2300,1000.0,35.1000001,139.1000001,42.1,rtk_fixed,14",
+                        "2300,1000.2,35.1000101,139.1000201,42.2,rtk_fixed,14",
+                        "2300,1000.4,35.1000201,139.1000401,42.4,rtk_float,13",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
 
             result = self.run_gnss(
                 "ppc-rtk-signoff",
@@ -8133,6 +8177,12 @@ class CLIToolsTest(unittest.TestCase):
                 "--use-existing-rtklib-solution",
                 "--rtklib-solver-wall-time-s",
                 "0.1",
+                "--commercial-pos",
+                str(commercial_path),
+                "--commercial-matched-csv",
+                str(commercial_matches),
+                "--commercial-solver-wall-time-s",
+                "0.2",
                 "--summary-json",
                 str(summary_path),
                 "--require-valid-epochs-min",
@@ -8173,6 +8223,9 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("signoff_thresholds", payload)
             self.assertEqual(payload["signoff_thresholds"]["require_fix_rate_min"], 60.0)
             self.assertIn("delta_vs_rtklib", payload)
+            self.assertTrue(payload["commercial_receiver_comparison_enabled"])
+            self.assertIn("commercial_receiver", payload)
+            self.assertTrue(commercial_matches.exists())
 
     def test_ppc_rtk_signoff_cli_reads_config_toml(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_rtk_signoff_toml_") as temp_dir:
@@ -11277,6 +11330,7 @@ class CLIToolsTest(unittest.TestCase):
             rover_ubx = temp_root / "rover.ubx"
             base_ubx = temp_root / "base.ubx"
             reference_csv = temp_root / "reference.csv"
+            commercial_csv = temp_root / "commercial_receiver.csv"
             summary_json = temp_root / "summary.json"
 
             result = self.run_gnss(
@@ -11289,6 +11343,8 @@ class CLIToolsTest(unittest.TestCase):
                 str(base_ubx),
                 "--reference-csv",
                 str(reference_csv),
+                "--commercial-csv",
+                str(commercial_csv),
                 "--summary-json",
                 str(summary_json),
                 "--max-epochs",
@@ -11300,6 +11356,7 @@ class CLIToolsTest(unittest.TestCase):
             self.assertTrue(rover_ubx.exists())
             self.assertTrue(base_ubx.exists())
             self.assertTrue(reference_csv.exists())
+            self.assertTrue(commercial_csv.exists())
             self.assertTrue(summary_json.exists())
             self.assertGreater(rover_ubx.stat().st_size, 0)
             self.assertGreater(base_ubx.stat().st_size, 0)
@@ -11307,6 +11364,8 @@ class CLIToolsTest(unittest.TestCase):
             summary = json.loads(summary_json.read_text(encoding="utf-8"))
             self.assertEqual(summary["rover_epochs"], 2)
             self.assertEqual(summary["matched_reference_rows"], 2)
+            self.assertEqual(summary["matched_commercial_receiver_rows"], 2)
+            self.assertEqual(summary["commercial_receiver_csv"], str(commercial_csv))
             self.assertEqual(summary["gps_week"], 2200)
             self.assertEqual(summary["date"], "2023-06-14")
 
@@ -11316,6 +11375,12 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(rows[0]["gps_week"], "2200")
             self.assertEqual(rows[0]["gps_tow_s"], "345600.000")
             self.assertIn("baseline_n_m", rows[0])
+            with commercial_csv.open(encoding="utf-8", newline="") as handle:
+                commercial_rows = list(csv.DictReader(handle))
+            self.assertEqual(len(commercial_rows), 2)
+            self.assertEqual(commercial_rows[0]["gps_week"], "2200")
+            self.assertEqual(commercial_rows[0]["solution_status"], "rtk_fixed")
+            self.assertEqual(commercial_rows[0]["num_satellites"], "18")
 
     def test_moving_base_prepare_help_mentions_rosbag_and_ubx_exports(self) -> None:
         result = self.run_gnss("moving-base-prepare", "--help")
@@ -11323,6 +11388,22 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("ROS2 bag directory or Zenodo zip", result.stdout)
         self.assertIn("--rover-ubx-out", result.stdout)
         self.assertIn("--base-ubx-out", result.stdout)
+        self.assertIn("--commercial-csv", result.stdout)
+
+    def test_scorpion_cache_filename_preserves_zenodo_zip_name(self) -> None:
+        sys_path_backup = sys.path[:]
+        sys.path.insert(0, str(ROOT_DIR / "apps"))
+        try:
+            import gnss_scorpion_moving_base_signoff as scorpion_signoff
+
+            self.assertEqual(
+                scorpion_signoff.download_cache_filename(
+                    "https://zenodo.org/api/records/8083431/files/2023-06-14T174658Z.zip/content"
+                ),
+                "2023-06-14T174658Z.zip",
+            )
+        finally:
+            sys.path[:] = sys_path_backup
 
     @unittest.skipUnless(ros2_bag_support_available(), "ROS2 rosbag + ublox_msgs support not available")
     def test_scorpion_moving_base_signoff_wraps_prepare_and_existing_solution(self) -> None:
@@ -11399,6 +11480,10 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIsNone(payload["products_summary_json"])
             self.assertTrue(Path(payload["prepare_summary_json"]).exists())
             self.assertTrue(Path(payload["matched_csv"]).exists())
+            self.assertTrue(Path(payload["commercial_receiver_csv"]).exists())
+            self.assertTrue(Path(payload["commercial_receiver_matched_csv"]).exists())
+            self.assertIn("commercial_receiver", payload)
+            self.assertEqual(payload["commercial_receiver"]["matched_epochs"], 2)
 
     def test_live_signoff_summarizes_existing_log_and_enforces_realtime_gate(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_live_signoff_cli_") as temp_dir:
@@ -12009,6 +12094,83 @@ class CLIToolsTest(unittest.TestCase):
             self.assertGreater(payload["realtime_factor"], 0.0)
             self.assertEqual(payload["plot_png"], str(plot_path))
             self.assertTrue(Path(payload["matched_csv"]).exists())
+
+    def test_moving_base_signoff_summarizes_commercial_receiver_solution(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_moving_base_commercial_") as temp_dir:
+            temp_root = Path(temp_dir)
+            solution_path = temp_root / "moving_base.pos"
+            commercial_path = temp_root / "commercial_receiver.csv"
+            reference_csv = temp_root / "reference.csv"
+            summary_path = temp_root / "moving_base_summary.json"
+            matched_csv = temp_root / "moving_base_matches.csv"
+            commercial_matched_csv = temp_root / "commercial_matches.csv"
+
+            solution_path.write_text(
+                "\n".join(
+                    [
+                        "% synthetic moving-base solution fixture",
+                        "2200 345600.000 3875001.100000 332002.000000 5029000.400000 35.0 139.0 10.0 4 12 1.0",
+                        "2200 345601.000 3875001.200000 332002.100000 5029000.450000 35.0 139.0 10.0 4 12 1.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            commercial_path.write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,rover_ecef_x_m,rover_ecef_y_m,rover_ecef_z_m,fix_type,num_satellites",
+                        "2200,345600.0,3875001.0,332002.0,5029000.5,rtk_fixed,14",
+                        "2200,345601.0,3875001.1,332002.1,5029000.5,rtk_float,13",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            reference_csv.write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,base_ecef_x_m,base_ecef_y_m,base_ecef_z_m,rover_ecef_x_m,rover_ecef_y_m,rover_ecef_z_m",
+                        "2200,345600.0,3875000.0,332000.0,5029000.0,3875001.0,332002.0,5029000.5",
+                        "2200,345601.0,3875000.1,332000.1,5029000.0,3875001.1,332002.1,5029000.5",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            result = self.run_gnss(
+                "moving-base-signoff",
+                "--solver",
+                "replay",
+                "--use-existing-solution",
+                "--out",
+                str(solution_path),
+                "--reference-csv",
+                str(reference_csv),
+                "--summary-json",
+                str(summary_path),
+                "--matched-csv",
+                str(matched_csv),
+                "--commercial-pos",
+                str(commercial_path),
+                "--commercial-matched-csv",
+                str(commercial_matched_csv),
+                "--solver-wall-time-s",
+                "0.5",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("commercial_receiver:", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            commercial = payload["commercial_receiver"]
+            self.assertEqual(commercial["format"], "csv")
+            self.assertEqual(commercial["matched_epochs"], 2)
+            self.assertEqual(commercial["fixed_epochs"], 1)
+            self.assertEqual(commercial["fix_rate_pct"], 50.0)
+            self.assertEqual(commercial["matched_csv"], str(commercial_matched_csv))
+            self.assertTrue(commercial_matched_csv.exists())
+            self.assertIn("libgnss_vs_commercial_receiver", payload)
 
     def test_moving_base_signoff_reads_config_toml(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_moving_base_signoff_toml_") as temp_dir:
