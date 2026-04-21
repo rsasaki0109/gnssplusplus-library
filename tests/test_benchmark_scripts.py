@@ -31,6 +31,7 @@ import gnss_moving_base_signoff as moving_base_signoff  # noqa: E402
 import gnss_ppc_commercial as ppc_commercial  # noqa: E402
 import gnss_ppc_coverage_matrix as ppc_coverage_matrix  # noqa: E402
 import gnss_ppc_demo as ppc_demo  # noqa: E402
+import gnss_ppc_metrics as ppc_metrics  # noqa: E402
 import gnss_ppc_rtk_signoff as ppc_rtk_signoff  # noqa: E402
 import gnss_public_rtk_benchmarks as public_rtk_benchmarks  # noqa: E402
 import gnss_smartloc_adapter as smartloc_adapter  # noqa: E402
@@ -74,13 +75,16 @@ class ScorecardHelpersTest(unittest.TestCase):
                                 "metrics": {
                                     "positioning_rate_pct": 86.2,
                                     "fix_rate_pct": 48.6,
+                                    "ppc_official_score_pct": 42.0,
                                 },
                                 "rtklib": {
                                     "positioning_rate_pct": 66.3,
                                     "fix_rate_pct": 30.5,
+                                    "ppc_official_score_pct": 21.0,
                                 },
                                 "delta_vs_rtklib": {
                                     "positioning_rate_pct": 19.9,
+                                    "ppc_official_score_pct": 21.0,
                                     "ppc_score_3d_50cm_ref_pct": 35.6,
                                     "p95_h_m": -6.97,
                                 },
@@ -97,6 +101,7 @@ class ScorecardHelpersTest(unittest.TestCase):
             self.assertEqual(runs[0].label, "Tokyo r1")
             self.assertEqual(runs[0].positioning_delta_pct, 19.9)
             self.assertEqual(runs[0].lib_fix_pct - runs[0].rtklib_fix_pct, 18.1)
+            self.assertEqual(runs[0].official_score_delta_pct, 21.0)
 
 
 class ClasCompactHelpersTest(unittest.TestCase):
@@ -419,6 +424,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                     {
                         "positioning_rate_pct": 86.2,
                         "fix_rate_pct": 48.6,
+                        "ppc_official_score_pct": 42.0,
                         "ppc_score_3d_50cm_ref_pct": 35.6,
                         "p95_h_m": 24.16,
                         "max_h_m": 47.9,
@@ -427,10 +433,12 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                         "rtklib": {
                             "positioning_rate_pct": 66.3,
                             "fix_rate_pct": 30.5,
+                            "ppc_official_score_pct": 21.0,
                         },
                         "delta_vs_rtklib": {
                             "positioning_rate_pct": 19.9,
                             "fix_rate_pct": 18.1,
+                            "ppc_official_score_pct": 21.0,
                             "ppc_score_3d_50cm_ref_pct": 35.6,
                             "p95_h_m": -6.97,
                         },
@@ -457,6 +465,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             markdown = ppc_coverage_matrix.render_markdown(payload)
 
             self.assertEqual(payload["aggregates"]["avg_positioning_delta_pct"], 19.9)
+            self.assertEqual(payload["aggregates"]["avg_official_score_delta_pct"], 21.0)
             self.assertEqual(payload["aggregates"]["avg_p95_h_delta_m"], -6.97)
             self.assertEqual(payload["aggregates"]["float_bridge_tail_rejected_epochs"], 147)
             self.assertIn("tokyo_run1", markdown)
@@ -468,6 +477,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 argparse.Namespace(
                     require_positioning_delta_min=0.0,
                     require_fix_delta_min=0.0,
+                    require_official_score_delta_min=0.0,
                     require_score_3d_50cm_ref_delta_min=0.0,
                     require_p95_h_delta_max=0.0,
                 ),
@@ -478,10 +488,32 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                     argparse.Namespace(
                         require_positioning_delta_min=20.0,
                         require_fix_delta_min=None,
+                        require_official_score_delta_min=None,
                         require_score_3d_50cm_ref_delta_min=None,
                         require_p95_h_delta_max=None,
                     ),
                 )
+
+
+class PPCMetricsTest(unittest.TestCase):
+    def test_official_distance_score_weights_reference_distance(self) -> None:
+        reference = [
+            comparison.ReferenceEpoch(2300, 0.0, 0.0, 0.0, 0.0, (0.0, 0.0, 0.0)),
+            comparison.ReferenceEpoch(2300, 1.0, 0.0, 0.0, 0.0, (10.0, 0.0, 0.0)),
+            comparison.ReferenceEpoch(2300, 2.0, 0.0, 0.0, 0.0, (20.0, 0.0, 0.0)),
+            comparison.ReferenceEpoch(2300, 3.0, 0.0, 0.0, 0.0, (40.0, 0.0, 0.0)),
+        ]
+        solution = [
+            comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, (10.2, 0.0, 0.0), 4, 12),
+            comparison.SolutionEpoch(2300, 2.0, 0.0, 0.0, 0.0, (21.0, 0.0, 0.0), 4, 12),
+        ]
+
+        score = ppc_metrics.ppc_official_distance_score(reference, solution, 0.25)
+
+        self.assertEqual(score["ppc_official_total_distance_m"], 40.0)
+        self.assertEqual(score["ppc_official_matched_distance_m"], 20.0)
+        self.assertEqual(score["ppc_official_score_distance_m"], 10.0)
+        self.assertEqual(score["ppc_official_score_pct"], 25.0)
 
 
 class PPCCoverageReadmeUpdateTest(unittest.TestCase):
@@ -493,14 +525,16 @@ class PPCCoverageReadmeUpdateTest(unittest.TestCase):
                     "metrics": {
                         "positioning_rate_pct": 86.2,
                         "fix_rate_pct": 48.6,
+                        "ppc_official_score_pct": 42.0,
                     },
                     "rtklib": {
                         "positioning_rate_pct": 66.3,
                         "fix_rate_pct": 30.5,
+                        "ppc_official_score_pct": 21.0,
                     },
                     "delta_vs_rtklib": {
                         "positioning_rate_pct": 19.9,
-                        "ppc_score_3d_50cm_ref_pct": 35.6,
+                        "ppc_official_score_pct": 21.0,
                         "p95_h_m": -6.97,
                     },
                 },
@@ -509,14 +543,16 @@ class PPCCoverageReadmeUpdateTest(unittest.TestCase):
                     "metrics": {
                         "positioning_rate_pct": 87.9,
                         "fix_rate_pct": 60.3,
+                        "ppc_official_score_pct": 50.0,
                     },
                     "rtklib": {
                         "positioning_rate_pct": 65.8,
                         "fix_rate_pct": 33.8,
+                        "ppc_official_score_pct": 25.0,
                     },
                     "delta_vs_rtklib": {
                         "positioning_rate_pct": 22.1,
-                        "ppc_score_3d_50cm_ref_pct": 32.8,
+                        "ppc_official_score_pct": 25.0,
                         "p95_h_m": -22.63,
                     },
                 },
@@ -528,8 +564,10 @@ class PPCCoverageReadmeUpdateTest(unittest.TestCase):
 
         self.assertIn("| Tokyo run1 | **86.2%** | 66.3% | **+19.9 pp** |", block)
         self.assertIn("| Nagoya run1 | **87.9%** | 65.8% | **+22.1 pp** |", block)
+        self.assertIn("PPC official score", block)
         self.assertIn("Across these two public runs", block)
         self.assertIn("**+21.0 pp**", block)
+        self.assertIn("**+23.0 pp** PPC official-score lead", block)
         self.assertIn("**-14.80 m** P95", block)
 
     def test_replace_marked_block_keeps_surrounding_markdown(self) -> None:
@@ -2638,6 +2676,12 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["ppc_score_3d_50cm_epochs"], 3)
             self.assertEqual(payload["ppc_score_3d_50cm_matched_pct"], 100.0)
             self.assertEqual(payload["ppc_score_3d_50cm_ref_pct"], 100.0)
+            self.assertEqual(payload["ppc_official_score_pct"], 100.0)
+            self.assertGreater(payload["ppc_official_total_distance_m"], 0.0)
+            self.assertEqual(
+                payload["ppc_official_score_distance_m"],
+                payload["ppc_official_total_distance_m"],
+            )
             self.assertLessEqual(payload["median_h_m"], 0.2)
             self.assertLessEqual(payload["p95_h_m"], 0.2)
             self.assertLessEqual(payload["max_h_m"], 0.2)
@@ -2654,6 +2698,7 @@ class PPCDemoTest(unittest.TestCase):
             self.assertIn("delta_vs_rtklib", payload)
             self.assertEqual(payload["delta_vs_rtklib"]["positioning_rate_pct"], 0.0)
             self.assertEqual(payload["delta_vs_rtklib"]["ppc_score_3d_50cm_ref_pct"], 0.0)
+            self.assertEqual(payload["delta_vs_rtklib"]["ppc_official_score_pct"], 0.0)
             self.assertIn("commercial_receiver", payload)
             self.assertEqual(payload["commercial_receiver"]["label"], "survey_receiver")
             self.assertEqual(payload["commercial_receiver"]["matched_epochs"], 3)

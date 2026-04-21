@@ -71,8 +71,8 @@ accept `--commercial-pos` for an existing receiver solution or
 `--commercial-rover` for a commercial receiver rover RINEX solved through
 libgnss++ against the same base/nav/reference. The receiver summary is stored
 under `commercial_receiver`, and `delta_vs_commercial_receiver` reports
-libgnss++ minus receiver deltas for positioning rate, fix rate, 3D<=50cm
-reference score, and horizontal/up error metrics.
+libgnss++ minus receiver deltas for positioning rate, fix rate, PPC official
+distance-ratio score, 3D<=50cm reference-epoch score, and horizontal/up error metrics.
 Run `gnss public-rtk-benchmarks` before treating any single public dataset as
 representative coverage; UrbanNav Tokyo is a Tier-1 smoke/regression row, not
 the final commercial RTK receiver proof.

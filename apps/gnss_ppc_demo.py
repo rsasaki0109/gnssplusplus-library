@@ -328,6 +328,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-matched-epochs-min", type=int, default=None)
     parser.add_argument("--require-positioning-rate-min", type=float, default=None)
     parser.add_argument("--require-fix-rate-min", type=float, default=None)
+    parser.add_argument("--require-ppc-official-score-min", type=float, default=None)
     parser.add_argument("--require-ppc-score-3d-50cm-ref-min", type=float, default=None)
     parser.add_argument("--require-median-h-max", type=float, default=None)
     parser.add_argument("--require-p95-h-max", type=float, default=None)
@@ -924,6 +925,11 @@ def build_summary_payload(
         "ppc_score_3d_50cm_epochs": lib_metrics["ppc_score_3d_50cm_epochs"],
         "ppc_score_3d_50cm_matched_pct": lib_metrics["ppc_score_3d_50cm_matched_pct"],
         "ppc_score_3d_50cm_ref_pct": lib_metrics["ppc_score_3d_50cm_ref_pct"],
+        "ppc_official_score_threshold_m": lib_metrics["ppc_official_score_threshold_m"],
+        "ppc_official_total_distance_m": lib_metrics["ppc_official_total_distance_m"],
+        "ppc_official_matched_distance_m": lib_metrics["ppc_official_matched_distance_m"],
+        "ppc_official_score_distance_m": lib_metrics["ppc_official_score_distance_m"],
+        "ppc_official_score_pct": lib_metrics["ppc_official_score_pct"],
         "median_abs_up_m": lib_metrics["median_abs_up_m"],
         "p95_abs_up_m": lib_metrics["p95_abs_up_m"],
         "mean_up_m": lib_metrics["mean_up_m"],
@@ -982,6 +988,17 @@ def build_summary_payload(
             ),
             "ppc_score_3d_50cm_ref_pct": rounded(
                 float(payload["ppc_score_3d_50cm_ref_pct"]) - float(rtklib_metrics["ppc_score_3d_50cm_ref_pct"])
+            ),
+            "ppc_official_score_pct": rounded(
+                float(payload["ppc_official_score_pct"]) - float(rtklib_metrics["ppc_official_score_pct"])
+            ),
+            "ppc_official_matched_distance_m": rounded(
+                float(payload["ppc_official_matched_distance_m"])
+                - float(rtklib_metrics["ppc_official_matched_distance_m"])
+            ),
+            "ppc_official_score_distance_m": rounded(
+                float(payload["ppc_official_score_distance_m"])
+                - float(rtklib_metrics["ppc_official_score_distance_m"])
             ),
             "solver_wall_time_s": (
                 rounded(float(payload["solver_wall_time_s"]) - float(rtklib_metrics["solver_wall_time_s"]))
@@ -1064,6 +1081,15 @@ def enforce_summary_requirements(payload: dict[str, object], args: argparse.Name
         failures.append(
             "positioning rate "
             f"{float(payload['positioning_rate_pct']):.6f}% < {args.require_positioning_rate_min:.6f}%"
+        )
+    if (
+        getattr(args, "require_ppc_official_score_min", None) is not None
+        and float(payload["ppc_official_score_pct"]) < args.require_ppc_official_score_min
+    ):
+        failures.append(
+            "PPC official distance score "
+            f"{float(payload['ppc_official_score_pct']):.6f}% < "
+            f"{args.require_ppc_official_score_min:.6f}%"
         )
     if (
         getattr(args, "require_ppc_score_3d_50cm_ref_min", None) is not None
@@ -1319,6 +1345,7 @@ def main() -> int:
             "  vs rtklib:"
             f" fix={payload['delta_vs_rtklib']['fix_rate_pct']} %"
             f", positioning={payload['delta_vs_rtklib']['positioning_rate_pct']} %"
+            f", ppc_official={payload['delta_vs_rtklib']['ppc_official_score_pct']} %"
             f", 3d50_ref={payload['delta_vs_rtklib']['ppc_score_3d_50cm_ref_pct']} %"
             f", p95_h={payload['delta_vs_rtklib']['p95_h_m']} m"
             f", wall={payload['delta_vs_rtklib']['solver_wall_time_s']} s"

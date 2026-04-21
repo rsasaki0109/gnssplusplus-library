@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import bisect
 import csv
 import math
 from pathlib import Path
@@ -35,6 +36,73 @@ def solution_span_seconds(epochs: list[comparison.SolutionEpoch]) -> float:
     first = week_tow_to_seconds(epochs[0].week, epochs[0].tow)
     last = week_tow_to_seconds(epochs[-1].week, epochs[-1].tow)
     return max(0.0, last - first)
+
+
+def reference_segment_distances(reference: list[comparison.ReferenceEpoch]) -> list[float]:
+    distances = [0.0]
+    for index in range(1, len(reference)):
+        distances.append(float(math.dist(reference[index - 1].ecef, reference[index].ecef)))
+    return distances
+
+
+def ppc_official_distance_score(
+    reference: list[comparison.ReferenceEpoch],
+    solution_epochs: list[comparison.SolutionEpoch],
+    match_tolerance_s: float,
+    threshold_m: float = 0.50,
+) -> dict[str, object]:
+    """PPC official-style score: driven-distance ratio with 3D error <= threshold."""
+    if len(reference) < 2:
+        return {
+            "ppc_official_score_threshold_m": rounded(threshold_m),
+            "ppc_official_total_distance_m": 0.0,
+            "ppc_official_matched_distance_m": 0.0,
+            "ppc_official_score_distance_m": 0.0,
+            "ppc_official_score_pct": 0.0,
+        }
+
+    reference_tows = [epoch.tow for epoch in reference]
+    best_error_by_reference_index: dict[int, float] = {}
+    for solution in solution_epochs:
+        index = bisect.bisect_left(reference_tows, solution.tow)
+        candidates = [
+            candidate
+            for candidate in (index - 1, index, index + 1)
+            if 0 <= candidate < len(reference)
+        ]
+        if not candidates:
+            continue
+        ref_index = min(candidates, key=lambda candidate: abs(reference[candidate].tow - solution.tow))
+        ref = reference[ref_index]
+        if ref.week != solution.week or abs(ref.tow - solution.tow) > match_tolerance_s:
+            continue
+        error_3d_m = float(math.dist(solution.ecef, ref.ecef))
+        previous = best_error_by_reference_index.get(ref_index)
+        if previous is None or error_3d_m < previous:
+            best_error_by_reference_index[ref_index] = error_3d_m
+
+    segment_distances = reference_segment_distances(reference)
+    total_distance_m = sum(segment_distances)
+    matched_distance_m = 0.0
+    score_distance_m = 0.0
+    for ref_index, distance_m in enumerate(segment_distances):
+        if ref_index == 0:
+            continue
+        error = best_error_by_reference_index.get(ref_index)
+        if error is None:
+            continue
+        matched_distance_m += distance_m
+        if error <= threshold_m:
+            score_distance_m += distance_m
+
+    score_pct = 100.0 * score_distance_m / total_distance_m if total_distance_m > 0.0 else 0.0
+    return {
+        "ppc_official_score_threshold_m": rounded(threshold_m),
+        "ppc_official_total_distance_m": rounded(total_distance_m),
+        "ppc_official_matched_distance_m": rounded(matched_distance_m),
+        "ppc_official_score_distance_m": rounded(score_distance_m),
+        "ppc_official_score_pct": rounded(score_pct),
+    }
 
 
 def llh_from_ecef(ecef_x_m: float, ecef_y_m: float, ecef_z_m: float) -> tuple[float, float, float]:
@@ -74,6 +142,12 @@ def summarize_solution_epochs(
         for epoch in matched
         if math.hypot(epoch.horiz_error_m, epoch.up_m) <= 0.50
     )
+    ppc_official_score = ppc_official_distance_score(
+        reference,
+        solution_epochs,
+        match_tolerance_s,
+        threshold_m=0.50,
+    )
     matched_fixed_epochs = sum(1 for epoch in matched if epoch.status == fixed_status)
     mean_satellites = sum(epoch.num_satellites for epoch in solution_epochs) / len(solution_epochs)
     valid_span_s = solution_span_seconds(solution_epochs)
@@ -95,6 +169,7 @@ def summarize_solution_epochs(
         "ppc_score_3d_50cm_ref_pct": rounded(
             100.0 * ppc_score_3d_50cm_epochs / reference_count
         ),
+        **ppc_official_score,
         "median_abs_up_m": rounded(float(summary["median_abs_up_m"])),
         "p95_abs_up_m": rounded(float(summary["p95_abs_up_m"])),
         "mean_up_m": rounded(float(summary["mean_up_m"])),
@@ -170,6 +245,9 @@ def solution_metric_delta(
         "max_h_m": optional_delta("max_h_m"),
         "ppc_score_3d_50cm_matched_pct": optional_delta("ppc_score_3d_50cm_matched_pct"),
         "ppc_score_3d_50cm_ref_pct": optional_delta("ppc_score_3d_50cm_ref_pct"),
+        "ppc_official_score_pct": optional_delta("ppc_official_score_pct"),
+        "ppc_official_matched_distance_m": optional_delta("ppc_official_matched_distance_m"),
+        "ppc_official_score_distance_m": optional_delta("ppc_official_score_distance_m"),
         "median_abs_up_m": optional_delta("median_abs_up_m"),
         "p95_abs_up_m": optional_delta("p95_abs_up_m"),
         "solver_wall_time_s": optional_delta("solver_wall_time_s"),

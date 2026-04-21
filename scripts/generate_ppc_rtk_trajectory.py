@@ -7,6 +7,13 @@ import argparse
 import math
 import os
 from pathlib import Path
+import sys
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+APPS_DIR = ROOT_DIR / "apps"
+if str(APPS_DIR) not in sys.path:
+    sys.path.insert(0, str(APPS_DIR))
 
 from generate_driving_comparison import (
     build_status_legend_handles,
@@ -20,6 +27,7 @@ from generate_driving_comparison import (
     status_style,
     trajectory_enu,
 )
+import gnss_ppc_metrics as ppc_metrics  # noqa: E402
 
 
 BG = "#f4efe6"
@@ -59,6 +67,7 @@ def draw_solver_panel(
     reference_count: int,
     reference_enu,
     limits: tuple[float, float, float, float],
+    official_score_pct: float,
     score_threshold_m: float,
     max_gap_s: float,
 ) -> None:
@@ -76,7 +85,7 @@ def draw_solver_panel(
     for spine in ax.spines.values():
         spine.set_color(EDGE)
 
-    scored, matched_score_pct, reference_score_pct = ppc_3d_score(
+    scored, matched_score_pct, _reference_score_pct = ppc_3d_score(
         matched,
         reference_count,
         score_threshold_m,
@@ -87,7 +96,7 @@ def draw_solver_panel(
         [
             f"pos {len(matched)}/{reference_count}",
             f"pos rate {positioning_rate_pct:.1f}%",
-            f"3D50/ref {reference_score_pct:.1f}%",
+            f"official {official_score_pct:.1f}%",
             f"3D50/pos {matched_score_pct:.1f}%",
             f"FIX {counts.get('FIXED', 0)}",
             f"FLOAT {counts.get('FLOAT', 0)}",
@@ -141,13 +150,15 @@ def main() -> int:
     import matplotlib.pyplot as plt
 
     reference = read_reference_csv(args.reference_csv)
+    lib_epochs = read_libgnss_pos(args.lib_pos)
+    rtklib_epochs = read_rtklib_pos(args.rtklib_pos)
     lib_matched = match_to_reference(
-        read_libgnss_pos(args.lib_pos),
+        lib_epochs,
         reference,
         args.match_tolerance_s,
     )
     rtklib_matched = match_to_reference(
-        read_rtklib_pos(args.rtklib_pos),
+        rtklib_epochs,
         reference,
         args.match_tolerance_s,
     )
@@ -157,6 +168,18 @@ def main() -> int:
         raise SystemExit("No RTKLIB epochs matched the PPC reference.")
 
     reference_enu = trajectory_enu(reference, reference[0])
+    lib_official = ppc_metrics.ppc_official_distance_score(
+        reference,
+        lib_epochs,
+        args.match_tolerance_s,
+        args.score_threshold_m,
+    )
+    rtklib_official = ppc_metrics.ppc_official_distance_score(
+        reference,
+        rtklib_epochs,
+        args.match_tolerance_s,
+        args.score_threshold_m,
+    )
     limits = padded_xy_limits(
         reference_enu[:, :2],
         matched_xy(lib_matched),
@@ -189,6 +212,7 @@ def main() -> int:
         reference_count=len(reference),
         reference_enu=reference_enu,
         limits=limits,
+        official_score_pct=float(rtklib_official["ppc_official_score_pct"]),
         score_threshold_m=args.score_threshold_m,
         max_gap_s=args.max_gap_s,
     )
@@ -201,6 +225,7 @@ def main() -> int:
         reference_count=len(reference),
         reference_enu=reference_enu,
         limits=limits,
+        official_score_pct=float(lib_official["ppc_official_score_pct"]),
         score_threshold_m=args.score_threshold_m,
         max_gap_s=args.max_gap_s,
     )

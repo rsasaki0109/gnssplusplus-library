@@ -61,17 +61,17 @@ below is the sign-off view for no-solution gaps and fallback-positioned epochs.
 ## PPC Coverage Profile
 
 <!-- PPC_COVERAGE_MATRIX:START -->
-| Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | 3D <= 50 cm / ref delta | P95 H delta |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo run1 | **86.2%** | 66.3% | **+19.9 pp** | **48.6%** | 30.5% | **+35.6 pp** | -6.97 m |
-| Tokyo run2 | **95.3%** | 84.3% | **+11.0 pp** | **60.8%** | 27.6% | **+39.9 pp** | -18.89 m |
-| Tokyo run3 | **96.0%** | 93.1% | **+2.9 pp** | **60.3%** | 40.5% | **+23.6 pp** | -0.69 m |
-| Nagoya run1 | **87.9%** | 65.8% | **+22.1 pp** | **60.3%** | 33.8% | **+32.8 pp** | -22.63 m |
-| Nagoya run2 | **86.2%** | 69.8% | **+16.5 pp** | **40.3%** | 18.8% | **+20.0 pp** | -27.16 m |
-| Nagoya run3 | **94.6%** | 67.7% | **+26.9 pp** | **19.7%** | 13.9% | **+9.4 pp** | -5.54 m |
+| Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | PPC official score | RTKLIB official score | Official delta | P95 H delta |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Tokyo run1 | **86.2%** | 66.3% | **+19.9 pp** | **48.6%** | 30.5% | **29.3%** | 0.0% | **+29.3 pp** | -6.97 m |
+| Tokyo run2 | **95.3%** | 84.3% | **+11.0 pp** | **60.8%** | 27.6% | **68.4%** | 16.9% | **+51.5 pp** | -18.89 m |
+| Tokyo run3 | **96.0%** | 93.1% | **+2.9 pp** | **60.3%** | 40.5% | **59.4%** | 35.6% | **+23.8 pp** | -0.69 m |
+| Nagoya run1 | **87.9%** | 65.8% | **+22.1 pp** | **60.3%** | 33.8% | **43.0%** | 22.4% | **+20.6 pp** | -22.63 m |
+| Nagoya run2 | **86.2%** | 69.8% | **+16.5 pp** | **40.3%** | 18.8% | **20.8%** | 11.0% | **+9.8 pp** | -27.16 m |
+| Nagoya run3 | **94.6%** | 67.7% | **+26.9 pp** | **19.7%** | 13.9% | **26.9%** | 7.6% | **+19.2 pp** | -5.54 m |
 
 Across these six public runs, the coverage profile averages **+16.5 pp**
-Positioning-rate lead, **+26.9 pp** 3D<=50cm/reference-score lead, and
+Positioning-rate lead, **+25.7 pp** PPC official-score lead, and
 **-13.65 m** P95 horizontal-error delta versus RTKLIB `demo5`.
 <!-- PPC_COVERAGE_MATRIX:END -->
 
@@ -83,7 +83,8 @@ The default FLOAT bridge-tail guard then removes 147 more FLOAT epochs in the
 remaining low-speed tail, using horizontal FIX-anchor speed so vertical anchor
 noise does not create false motion. Together these guards turn the previous
 P95H regression into a **6.97 m** P95H lead, keep Positioning at **86.2%**
-(**+19.9 pp** over RTKLIB), and keep the 3D<=50cm/reference score unchanged.
+(**+19.9 pp** over RTKLIB), and lift the PPC official score to **29.3%**
+(**+29.3 pp** over RTKLIB).
 The full machine-readable reports are
 `ppc_tokyo_run1_coverage_quality.json` and
 `ppc_tokyo_run1_coverage_bad_segments.csv`; the bad-segment CSV includes
@@ -112,7 +113,8 @@ precision-oriented output filter.
 PPC2024's official score is a distance ratio with 3D error <= 50 cm; the
 published first-place result was 78.7% Public / 85.6% Private in
 [PPC2024 results](https://taroz.net/data/PPC2024_results.pdf). The table above
-is an open-run replay metric, not an official Kaggle submission.
+uses the same score definition on the public open runs, but it is still a local
+open-run replay, not an official Kaggle submission or hidden Private split.
 
 ![PPC Tokyo run3 RTK trajectory by solution status](ppc_tokyo_run3_rtk_trajectory_status.png)
 
@@ -177,7 +179,7 @@ python3 apps/gnss.py ppc-coverage-matrix \
   --summary-json output/ppc_coverage_matrix/summary.json \
   --markdown-output output/ppc_coverage_matrix/table.md \
   --require-positioning-delta-min 0 \
-  --require-score-3d-50cm-ref-delta-min 0 \
+  --require-official-score-delta-min 0 \
   --require-p95-h-delta-max 0
 
 python3 scripts/update_ppc_coverage_readme.py \

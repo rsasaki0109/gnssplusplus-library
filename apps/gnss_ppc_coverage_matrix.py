@@ -94,6 +94,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--require-positioning-delta-min", type=float, default=None)
     parser.add_argument("--require-fix-delta-min", type=float, default=None)
+    parser.add_argument("--require-official-score-delta-min", type=float, default=None)
     parser.add_argument("--require-score-3d-50cm-ref-delta-min", type=float, default=None)
     parser.add_argument("--require-p95-h-delta-max", type=float, default=None)
     return parser.parse_args()
@@ -223,6 +224,7 @@ def load_run_record(
         "metrics": {
             "positioning_rate_pct": payload.get("positioning_rate_pct"),
             "fix_rate_pct": payload.get("fix_rate_pct"),
+            "ppc_official_score_pct": payload.get("ppc_official_score_pct"),
             "ppc_score_3d_50cm_ref_pct": payload.get("ppc_score_3d_50cm_ref_pct"),
             "p95_h_m": payload.get("p95_h_m"),
             "max_h_m": payload.get("max_h_m"),
@@ -269,9 +271,11 @@ def aggregate_runs(runs: list[dict[str, object]]) -> dict[str, object]:
         "rtklib_comparison_run_count": len(delta_dicts),
         "avg_positioning_delta_pct": average(delta_values("positioning_rate_pct")),
         "avg_fix_delta_pct": average(delta_values("fix_rate_pct")),
+        "avg_official_score_delta_pct": average(delta_values("ppc_official_score_pct")),
         "avg_score_3d_50cm_ref_delta_pct": average(delta_values("ppc_score_3d_50cm_ref_pct")),
         "avg_p95_h_delta_m": average(delta_values("p95_h_m")),
         "min_positioning_delta_pct": min(delta_values("positioning_rate_pct"), default=None),
+        "min_official_score_delta_pct": min(delta_values("ppc_official_score_pct"), default=None),
         "max_p95_h_delta_m": max(delta_values("p95_h_m"), default=None),
         "float_bridge_tail_rejected_epochs": bridge_rejected if bridge_seen else None,
     }
@@ -303,8 +307,8 @@ def metric(metrics: dict[str, object] | None, name: str) -> float | None:
 
 def render_markdown(payload: dict[str, object]) -> str:
     lines = [
-        "| Run | Positioning | RTKLIB Positioning | Delta | Fix | RTKLIB Fix | 3D<=50cm/ref delta | P95 H delta | FLOAT bridge-tail rejected |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Run | Positioning | RTKLIB Positioning | Delta | Fix | RTKLIB Fix | PPC official | RTKLIB official | Official delta | P95 H delta | FLOAT bridge-tail rejected |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for run in payload["runs"]:
         assert isinstance(run, dict)
@@ -318,10 +322,12 @@ def render_markdown(payload: dict[str, object]) -> str:
 
         positioning = metric(metrics if isinstance(metrics, dict) else None, "positioning_rate_pct")
         fix = metric(metrics if isinstance(metrics, dict) else None, "fix_rate_pct")
+        official = metric(metrics if isinstance(metrics, dict) else None, "ppc_official_score_pct")
         rtklib_positioning = metric(rtklib if isinstance(rtklib, dict) else None, "positioning_rate_pct")
         rtklib_fix = metric(rtklib if isinstance(rtklib, dict) else None, "fix_rate_pct")
+        rtklib_official = metric(rtklib if isinstance(rtklib, dict) else None, "ppc_official_score_pct")
         positioning_delta = metric(delta if isinstance(delta, dict) else None, "positioning_rate_pct")
-        score_delta = metric(delta if isinstance(delta, dict) else None, "ppc_score_3d_50cm_ref_pct")
+        official_delta = metric(delta if isinstance(delta, dict) else None, "ppc_official_score_pct")
         p95_delta = metric(delta if isinstance(delta, dict) else None, "p95_h_m")
 
         def pct(value: float | None) -> str:
@@ -336,7 +342,8 @@ def render_markdown(payload: dict[str, object]) -> str:
         lines.append(
             f"| {run['key']} | {pct(positioning)} | {pct(rtklib_positioning)} | "
             f"{pp(positioning_delta)} | {pct(fix)} | {pct(rtklib_fix)} | "
-            f"{pp(score_delta)} | {meters(p95_delta)} | {bridge_rejected} |"
+            f"{pct(official)} | {pct(rtklib_official)} | {pp(official_delta)} | "
+            f"{meters(p95_delta)} | {bridge_rejected} |"
         )
 
     aggregates = payload["aggregates"]
@@ -351,7 +358,7 @@ def render_markdown(payload: dict[str, object]) -> str:
             "",
             "Averages:",
             f"- Positioning delta: {aggregate_text('avg_positioning_delta_pct', ' pp')}",
-            f"- 3D<=50cm/reference delta: {aggregate_text('avg_score_3d_50cm_ref_delta_pct', ' pp')}",
+            f"- PPC official score delta: {aggregate_text('avg_official_score_delta_pct', ' pp')}",
             f"- P95 H delta: {aggregate_text('avg_p95_h_delta_m', ' m')}",
             f"- FLOAT bridge-tail rejected epochs: {aggregate_text('float_bridge_tail_rejected_epochs')}",
             "",
@@ -364,6 +371,7 @@ def enforce_requirements(payload: dict[str, object], args: argparse.Namespace) -
     requirements = {
         "positioning_rate_pct": (args.require_positioning_delta_min, ">="),
         "fix_rate_pct": (args.require_fix_delta_min, ">="),
+        "ppc_official_score_pct": (args.require_official_score_delta_min, ">="),
         "ppc_score_3d_50cm_ref_pct": (args.require_score_3d_50cm_ref_delta_min, ">="),
         "p95_h_m": (args.require_p95_h_delta_max, "<="),
     }

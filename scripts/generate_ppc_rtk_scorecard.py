@@ -30,17 +30,19 @@ class CoverageRun:
     positioning_delta_pct: float
     lib_fix_pct: float
     rtklib_fix_pct: float
-    score_3d_50cm_ref_delta_pct: float
+    lib_official_score_pct: float
+    rtklib_official_score_pct: float
+    official_score_delta_pct: float
     p95_h_delta_m: float
 
 
 DEFAULT_RUNS = [
-    CoverageRun("tokyo_run1", "Tokyo r1", 86.201991, 66.287340, 19.914651, 48.582799, 30.522595, 35.628818, -6.973535),
-    CoverageRun("tokyo_run2", "Tokyo r2", 95.311988, 84.274943, 11.037045, 60.811740, 27.580394, 39.940990, -18.893530),
-    CoverageRun("tokyo_run3", "Tokyo r3", 95.987190, 93.131168, 2.856022, 60.257370, 40.547368, 23.632443, -0.691234),
-    CoverageRun("nagoya_run1", "Nagoya r1", 87.883937, 65.821461, 22.062476, 60.306365, 33.756950, 32.845380, -22.632527),
-    CoverageRun("nagoya_run2", "Nagoya r2", 86.244842, 69.791556, 16.453286, 40.326340, 18.829594, 19.976722, -27.159796),
-    CoverageRun("nagoya_run3", "Nagoya r3", 94.635647, 67.698520, 26.937127, 19.687119, 13.888100, 9.402038, -5.539148),
+    CoverageRun("tokyo_run1", "Tokyo r1", 86.201991, 66.287340, 19.914651, 48.582799, 30.522595, 29.329930, 0.028882, 29.301048, -6.973535),
+    CoverageRun("tokyo_run2", "Tokyo r2", 95.311988, 84.274943, 11.037045, 60.811740, 27.580394, 68.375721, 16.873271, 51.502450, -18.893530),
+    CoverageRun("tokyo_run3", "Tokyo r3", 95.987190, 93.131168, 2.856022, 60.257370, 40.547368, 59.411151, 35.630677, 23.780474, -0.691234),
+    CoverageRun("nagoya_run1", "Nagoya r1", 87.883937, 65.821461, 22.062476, 60.306365, 33.756950, 43.032180, 22.446739, 20.585441, -22.632527),
+    CoverageRun("nagoya_run2", "Nagoya r2", 86.244842, 69.791556, 16.453286, 40.326340, 18.829594, 20.815568, 11.002465, 9.813103, -27.159796),
+    CoverageRun("nagoya_run3", "Nagoya r3", 94.635647, 67.698520, 26.937127, 19.687119, 13.888100, 26.857978, 7.649536, 19.208442, -5.539148),
 ]
 
 
@@ -85,7 +87,9 @@ def runs_from_summary(path: Path) -> list[CoverageRun]:
                 positioning_delta_pct=required_number(delta, "positioning_rate_pct", key),
                 lib_fix_pct=required_number(metrics, "fix_rate_pct", key),
                 rtklib_fix_pct=required_number(rtklib, "fix_rate_pct", key),
-                score_3d_50cm_ref_delta_pct=required_number(delta, "ppc_score_3d_50cm_ref_pct", key),
+                lib_official_score_pct=required_number(metrics, "ppc_official_score_pct", key),
+                rtklib_official_score_pct=required_number(rtklib, "ppc_official_score_pct", key),
+                official_score_delta_pct=required_number(delta, "ppc_official_score_pct", key),
                 p95_h_delta_m=required_number(delta, "p95_h_m", key),
             )
         )
@@ -176,7 +180,7 @@ def draw_delta_table(ax, runs: list[CoverageRun]) -> None:
     ax.text(0.0, 0.965, "Run deltas vs RTKLIB demo5", fontsize=14.5, color=TEXT, weight="bold", va="top")
     ax.text(0.0, 0.895, "Positive pp is better; negative P95 H delta is better.", fontsize=9.4, color=MUTED, va="top")
 
-    headers = ["Run", "Pos", "Fix", "3D50/ref", "P95 H"]
+    headers = ["Run", "Pos", "Fix", "Official", "P95 H"]
     xs = [0.02, 0.40, 0.56, 0.74, 0.98]
     aligns = ["left", "right", "right", "right", "right"]
     header_y = 0.78
@@ -189,7 +193,7 @@ def draw_delta_table(ax, runs: list[CoverageRun]) -> None:
         ax.text(xs[0], y, run.label, fontsize=9.8, color=TEXT, weight="bold", ha="left", va="center")
         ax.text(xs[1], y, f"+{run.positioning_delta_pct:.1f}", fontsize=9.6, color=WIN, weight="bold", ha="right", va="center")
         ax.text(xs[2], y, f"+{run.lib_fix_pct - run.rtklib_fix_pct:.1f}", fontsize=9.6, color=WIN, weight="bold", ha="right", va="center")
-        ax.text(xs[3], y, f"+{run.score_3d_50cm_ref_delta_pct:.1f}", fontsize=9.6, color=WIN, weight="bold", ha="right", va="center")
+        ax.text(xs[3], y, f"+{run.official_score_delta_pct:.1f}", fontsize=9.6, color=WIN, weight="bold", ha="right", va="center")
         ax.text(xs[4], y, f"{run.p95_h_delta_m:.2f} m", fontsize=9.6, color=WIN, weight="bold", ha="right", va="center")
         y -= 0.095
 
@@ -210,7 +214,7 @@ def main() -> int:
     runs = load_runs(args.summary_json)
     positioning_wins = sum(1 for run in runs if run.positioning_delta_pct > 0.0)
     avg_positioning_delta = average([run.positioning_delta_pct for run in runs])
-    avg_score_delta = average([run.score_3d_50cm_ref_delta_pct for run in runs])
+    avg_official_delta = average([run.official_score_delta_pct for run in runs])
     avg_p95_delta = average([run.p95_h_delta_m for run in runs])
     min_positioning_delta = min(run.positioning_delta_pct for run in runs)
 
@@ -258,9 +262,9 @@ def main() -> int:
         0.625,
         0.205,
         0.105,
-        "Average 3D50/ref delta",
-        f"+{avg_score_delta:.1f} pp",
-        "PPC public score proxy",
+        "Average official-score delta",
+        f"+{avg_official_delta:.1f} pp",
+        "PPC distance-ratio score",
         value_color=WIN,
     )
     draw_summary_card(

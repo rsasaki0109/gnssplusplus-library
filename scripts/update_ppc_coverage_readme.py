@@ -42,7 +42,9 @@ class CoverageRun:
     positioning_delta_pct: float
     lib_fix_pct: float
     rtklib_fix_pct: float
-    score_3d_50cm_ref_delta_pct: float
+    lib_official_score_pct: float
+    rtklib_official_score_pct: float
+    official_score_delta_pct: float
     p95_h_delta_m: float
 
 
@@ -116,7 +118,9 @@ def extract_runs(payload: dict[str, Any]) -> list[CoverageRun]:
                 positioning_delta_pct=required_number(delta, "positioning_rate_pct", key),
                 lib_fix_pct=required_number(metrics, "fix_rate_pct", key),
                 rtklib_fix_pct=required_number(rtklib, "fix_rate_pct", key),
-                score_3d_50cm_ref_delta_pct=required_number(delta, "ppc_score_3d_50cm_ref_pct", key),
+                lib_official_score_pct=required_number(metrics, "ppc_official_score_pct", key),
+                rtklib_official_score_pct=required_number(rtklib, "ppc_official_score_pct", key),
+                official_score_delta_pct=required_number(delta, "ppc_official_score_pct", key),
                 p95_h_delta_m=required_number(delta, "p95_h_m", key),
             )
         )
@@ -148,26 +152,27 @@ def run_count_text(count: int) -> str:
 def render_coverage_block(payload: dict[str, Any]) -> str:
     runs = extract_runs(payload)
     lines = [
-        "| Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | 3D <= 50 cm / ref delta | P95 H delta |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | PPC official score | RTKLIB official score | Official delta | P95 H delta |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for run in runs:
         lines.append(
             f"| {run.label} | **{pct(run.lib_positioning_pct)}** | "
             f"{pct(run.rtklib_positioning_pct)} | **{pp(run.positioning_delta_pct)}** | "
             f"**{pct(run.lib_fix_pct)}** | {pct(run.rtklib_fix_pct)} | "
-            f"**{pp(run.score_3d_50cm_ref_delta_pct)}** | {meters(run.p95_h_delta_m)} |"
+            f"**{pct(run.lib_official_score_pct)}** | {pct(run.rtklib_official_score_pct)} | "
+            f"**{pp(run.official_score_delta_pct)}** | {meters(run.p95_h_delta_m)} |"
         )
 
     avg_positioning_delta = average([run.positioning_delta_pct for run in runs])
-    avg_score_delta = average([run.score_3d_50cm_ref_delta_pct for run in runs])
+    avg_official_delta = average([run.official_score_delta_pct for run in runs])
     avg_p95_delta = average([run.p95_h_delta_m for run in runs])
     lines.extend(
         [
             "",
             f"Across these {run_count_text(len(runs))} public runs, the coverage profile averages "
             f"**{pp(avg_positioning_delta)}**",
-            f"Positioning-rate lead, **{pp(avg_score_delta)}** 3D<=50cm/reference-score lead, and",
+            f"Positioning-rate lead, **{pp(avg_official_delta)}** PPC official-score lead, and",
             f"**{meters(avg_p95_delta)}** P95 horizontal-error delta versus RTKLIB `demo5`.",
         ]
     )
