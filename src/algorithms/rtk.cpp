@@ -13,6 +13,8 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <set>
 
 namespace libgnss {
 
@@ -287,6 +289,7 @@ PositionSolution RTKProcessor::processEpoch(const ObservationData& rover_obs, co
 
 void RTKProcessor::reset() {
     filter_initialized_ = false;
+    debug_telemetry_ = EpochDebugTelemetry{};
     filter_state_ = RTKState{};
     filter_state_.next_state_idx = REAL_STATES + IONO_STATES;
     ambiguity_states_.clear();
@@ -1194,6 +1197,7 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
 // ============================================================
 PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
     const ObservationData& base_obs, const NavigationData& nav) {
+    debug_telemetry_ = EpochDebugTelemetry{};
     PositionSolution solution;
     solution.time = rover_obs.time;
     solution.status = SolutionStatus::NONE;
@@ -1505,13 +1509,17 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
 
             bool applied_fix_solution = false;
             if (have_fix_candidate && has_fixed_solution_) {
-                if (validateFixedSolution(sat_data, rover_obs.time)) {
+                debug_telemetry_.validation_attempted = true;
+                const bool validation_ok = validateFixedSolution(sat_data, rover_obs.time);
+                debug_telemetry_.validation_passed = validation_ok;
+                if (validation_ok) {
                     Vector3d saved_baseline = filter_state_.state.head<3>();
                     filter_state_.state.head<3>() = fixed_baseline_;
                     solution = generateSolution(rover_obs.time, SolutionStatus::FIXED, n_sats);
                     filter_state_.state.head<3>() = saved_baseline;
                     const double fixed_float_jump =
                         (solution.position_ecef - float_solution.position_ecef).norm();
+                    debug_telemetry_.fixed_float_jump_m = fixed_float_jump;
                     bool exceeds_trusted_jump = false;
                     if (saved_has_last_trusted && saved_has_last_trusted_time) {
                         const double dt = rover_obs.time - saved_last_trusted_time;
@@ -1526,6 +1534,16 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                         deviatesTooFarFromSPP(solution, 150.0) ||
                         fixed_float_jump > 20.0 ||
                         exceeds_trusted_jump) {
+                        debug_telemetry_.post_validation_rejected = true;
+                        if (!finitePosition(solution)) {
+                            debug_telemetry_.reject_reason = "nonfinite_fixed";
+                        } else if (deviatesTooFarFromSPP(solution, 150.0)) {
+                            debug_telemetry_.reject_reason = "fixed_spp_distance";
+                        } else if (fixed_float_jump > 20.0) {
+                            debug_telemetry_.reject_reason = "fixed_float_jump";
+                        } else if (exceeds_trusted_jump) {
+                            debug_telemetry_.reject_reason = "trusted_jump";
+                        }
                         has_fixed_solution_ = false;
                         restoreHoldState(saved_hold_state);
                         last_trusted_position_ = saved_last_trusted_position;
@@ -1535,7 +1553,9 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                     } else {
                         updateStatistics(SolutionStatus::FIXED);
                         consecutive_fix_count_++;
+                        consecutive_float_count_ = 0;
                         recordFixedEpoch();
+                        debug_telemetry_.final_fixed_applied = true;
 
                         // Save fixed position for next epoch's position reset
                         last_fixed_position_ = base_position_ + fixed_baseline_;
@@ -1550,6 +1570,9 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                         applied_fix_solution = true;
                     }
                 } else {
+                    if (debug_telemetry_.reject_reason.empty()) {
+                        debug_telemetry_.reject_reason = "fixed_validation";
+                    }
                     has_fixed_solution_ = false;
                 }
             }
@@ -1565,7 +1588,9 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                 if (tryHoldFix(sat_data, rover_obs.time, n_sats, solution)) {
                     updateStatistics(SolutionStatus::FIXED);
                     consecutive_fix_count_++;
+                    consecutive_float_count_ = 0;
                     recordFixedEpoch();
+                    debug_telemetry_.final_fixed_applied = true;
                     if (consecutive_fix_count_ >= rtk_config_.min_hold_count) {
                         applyHoldAmbiguity();
                     }
@@ -1848,6 +1873,8 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     if (usesEstimatedIono(rtk_config_)) return false;
 
     const auto& sat_data = current_sat_data_;
+    debug_telemetry_.ar_attempted = true;
+    debug_telemetry_.input_pair_count = static_cast<int>(dd_pairs.size());
 
     const int na = usesGlonassAutocal(rtk_config_) ? REAL_STATES : BASE_STATES;
 
@@ -1859,7 +1886,11 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         dd_pairs.end());
 
     int nb = dd_pairs.size();
-    if (nb < 4) return false;
+    debug_telemetry_.pair_count = nb;
+    if (nb < 4) {
+        debug_telemetry_.reject_reason = "too_few_pairs";
+        return false;
+    }
 
     std::vector<rtk_measurement::AmbiguityDifference> differences;
     differences.reserve(nb);
@@ -1881,6 +1912,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     // Variance check
     double max_var = 0;
     for (int i = 0; i < nb; ++i) max_var = std::max(max_var, Qb(i, i));
+    debug_telemetry_.max_ambiguity_variance = max_var;
 
     // Exclude DD pairs with outlier variance (relative to median)
     // This removes newly-appearing satellites that haven't converged
@@ -1917,6 +1949,8 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             nb = nb_new;
             max_var = 0;
             for (int i = 0; i < nb; ++i) max_var = std::max(max_var, Qb(i, i));
+            debug_telemetry_.pair_count = nb;
+            debug_telemetry_.max_ambiguity_variance = max_var;
         }
     }
 
@@ -1932,6 +1966,67 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             effective_ratio_threshold = 2.0;
         }
     }
+    debug_telemetry_.effective_ratio_threshold = effective_ratio_threshold;
+    const int min_subset_pairs_for_ar = std::max(4, rtk_config_.min_subset_pairs_for_ar);
+    debug_telemetry_.min_subset_pair_count = min_subset_pairs_for_ar;
+    const double min_full_ratio_for_subset_ar =
+        std::isfinite(rtk_config_.min_full_ratio_for_subset_ar)
+            ? std::max(0.0, rtk_config_.min_full_ratio_for_subset_ar)
+            : 0.0;
+    debug_telemetry_.min_full_ratio_for_subset_ar = min_full_ratio_for_subset_ar;
+
+    struct SubsetDiversity {
+        int distinct_sats = 0;
+        int distinct_systems = 0;
+        int distinct_frequencies = 0;
+        int dual_frequency_sats = 0;
+    };
+    auto compute_subset_diversity = [&](const std::vector<int>& subset) {
+        SubsetDiversity diversity;
+        std::set<SatelliteId> sats;
+        std::set<GNSSSystem> systems;
+        std::set<int> frequencies;
+        std::map<SatelliteId, std::set<int>> frequencies_by_sat;
+        for (int index : subset) {
+            if (index < 0 || index >= static_cast<int>(dd_pairs.size())) {
+                continue;
+            }
+            const auto& pair = dd_pairs[index];
+            sats.insert(pair.sat);
+            systems.insert(pair.sat.system);
+            frequencies.insert(pair.freq);
+            frequencies_by_sat[pair.sat].insert(pair.freq);
+        }
+        for (const auto& [sat, sat_frequencies] : frequencies_by_sat) {
+            (void)sat;
+            if (sat_frequencies.size() >= 2) {
+                diversity.dual_frequency_sats++;
+            }
+        }
+        diversity.distinct_sats = static_cast<int>(sats.size());
+        diversity.distinct_systems = static_cast<int>(systems.size());
+        diversity.distinct_frequencies = static_cast<int>(frequencies.size());
+        return diversity;
+    };
+    auto passes_subset_diversity_gate = [&](const SubsetDiversity& diversity) {
+        if (rtk_config_.min_subset_sats_for_ar > 0 &&
+            diversity.distinct_sats < rtk_config_.min_subset_sats_for_ar) {
+            return false;
+        }
+        if (rtk_config_.min_subset_systems_for_ar > 0 &&
+            diversity.distinct_systems < rtk_config_.min_subset_systems_for_ar) {
+            return false;
+        }
+        if (rtk_config_.min_subset_frequencies_for_ar > 0 &&
+            diversity.distinct_frequencies < rtk_config_.min_subset_frequencies_for_ar) {
+            return false;
+        }
+        if (rtk_config_.min_subset_dual_frequency_sats_for_ar > 0 &&
+            diversity.dual_frequency_sats < rtk_config_.min_subset_dual_frequency_sats_for_ar) {
+            return false;
+        }
+        return true;
+    };
 
     // === Wide-lane AR pre-step (default-off) ===
     // Frozen copies of full-size matrices for use in build_search_problem
@@ -1954,6 +2049,9 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     std::vector<WideLaneConstraint> wide_lane_constraints;
     int wide_lane_total = 0;
     int wide_lane_fixed = 0;
+    int wide_lane_rejected = 0;
+    double wide_lane_min_distance = std::numeric_limits<double>::infinity();
+    double wide_lane_max_distance = 0.0;
 
     auto compute_wide_lane_float = [&](int l1_index, int l2_index, double& wide_lane_float) {
         if (l1_index < 0 || l2_index < 0 ||
@@ -2022,7 +2120,11 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                 continue;
             }
             const double fixed_integer = std::round(wide_lane_float);
-            if (distanceToNearestInteger(wide_lane_float) >= wide_lane_threshold) {
+            const double wl_distance = distanceToNearestInteger(wide_lane_float);
+            wide_lane_min_distance = std::min(wide_lane_min_distance, wl_distance);
+            wide_lane_max_distance = std::max(wide_lane_max_distance, wl_distance);
+            if (wl_distance >= wide_lane_threshold) {
+                wide_lane_rejected++;
                 continue;
             }
 
@@ -2033,6 +2135,13 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             std::clog << "[RTK-AR] WL fixed " << wide_lane_fixed
                       << "/" << wide_lane_total << "\n";
         }
+    }
+    debug_telemetry_.wide_lane_total = wide_lane_total;
+    debug_telemetry_.wide_lane_fixed = wide_lane_fixed;
+    debug_telemetry_.wide_lane_rejected = wide_lane_rejected;
+    if (std::isfinite(wide_lane_min_distance)) {
+        debug_telemetry_.wide_lane_min_distance = wide_lane_min_distance;
+        debug_telemetry_.wide_lane_max_distance = wide_lane_max_distance;
     }
 
     struct SearchProblem {
@@ -2096,7 +2205,11 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     // Standard LAMBDA path
     if (!fixed) {
         const auto full_problem = build_search_problem(full_subset);
-        if (lambdaMethod(full_problem.dd_float, full_problem.Qb, dd_fixed, ratio)) {
+        const bool full_solved =
+            lambdaMethod(full_problem.dd_float, full_problem.Qb, dd_fixed, ratio);
+        debug_telemetry_.full_lambda_solved = full_solved;
+        if (full_solved) {
+            debug_telemetry_.full_ratio = ratio;
             if (ratio >= effective_ratio_threshold) {
                 fixed = true;
 
@@ -2232,6 +2345,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                     dd_fixed = wlnl_fixed;
                     fixed = true;
                     ratio = 999.9;
+                    debug_telemetry_.used_wlnl_fallback = true;
                     last_dd_pairs_ = dd_pairs;
                     last_best_subset_.clear();
                     for (int i = 0; i < nb; ++i) last_best_subset_.push_back(i);
@@ -2261,10 +2375,29 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         rtk_ar_evaluation::shouldSearchDropSubsets(
             fixed, ratio, effective_ratio_threshold, max_var);
 
-    if (nb > 4 && (search_preferred_subsets || search_drop_subsets)) {
+    if (nb > min_subset_pairs_for_ar && (search_preferred_subsets || search_drop_subsets)) {
+        auto passes_full_ratio_gate = [&]() {
+            if (min_full_ratio_for_subset_ar <= 0.0) {
+                return true;
+            }
+            return debug_telemetry_.full_lambda_solved &&
+                std::isfinite(debug_telemetry_.full_ratio) &&
+                debug_telemetry_.full_ratio >= min_full_ratio_for_subset_ar;
+        };
+
         auto try_subset = [&](const std::vector<int>& subset) {
             const int ns = subset.size();
-            if (ns < 4) {
+            if (ns < min_subset_pairs_for_ar) {
+                return false;
+            }
+            const auto subset_diversity = compute_subset_diversity(subset);
+            debug_telemetry_.subset_candidates_evaluated++;
+            if (!passes_subset_diversity_gate(subset_diversity)) {
+                debug_telemetry_.subset_candidates_rejected_by_diversity++;
+                return false;
+            }
+            if (!passes_full_ratio_gate()) {
+                debug_telemetry_.subset_candidates_rejected_by_full_ratio++;
                 return false;
             }
 
@@ -2307,7 +2440,8 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             });
         if (compare_preferred_subsets && search_preferred_subsets) {
             for (const auto& subset : preferred_subsets) {
-                if (subset.size() < 4 || subset.size() >= static_cast<size_t>(nb)) {
+                if (subset.size() < static_cast<size_t>(min_subset_pairs_for_ar) ||
+                    subset.size() >= static_cast<size_t>(nb)) {
                     continue;
                 }
                 try_subset(subset);
@@ -2316,7 +2450,8 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
 
         if (search_drop_subsets) {
             const auto progressive_subsets =
-                rtk_ar_selection::buildProgressiveVarianceDropSubsets(descriptors, 4, 6);
+                rtk_ar_selection::buildProgressiveVarianceDropSubsets(
+                    descriptors, min_subset_pairs_for_ar, 6);
             for (const auto& subset : progressive_subsets) {
                 try_subset(subset);
             }
@@ -2336,7 +2471,22 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         }
     }
 
-    if (!fixed) return false;
+    debug_telemetry_.selected_ratio = ratio;
+    debug_telemetry_.selected_pair_count = static_cast<int>(best_candidate.subset.size());
+    const auto selected_diversity = compute_subset_diversity(best_candidate.subset);
+    debug_telemetry_.selected_distinct_sats = selected_diversity.distinct_sats;
+    debug_telemetry_.selected_distinct_systems = selected_diversity.distinct_systems;
+    debug_telemetry_.selected_distinct_frequencies = selected_diversity.distinct_frequencies;
+    debug_telemetry_.selected_dual_frequency_sats = selected_diversity.dual_frequency_sats;
+    debug_telemetry_.selected_used_subset = best_candidate.subset.size() < static_cast<size_t>(nb);
+    if (!fixed) {
+        debug_telemetry_.selected_fixed = false;
+        if (debug_telemetry_.reject_reason.empty()) {
+            debug_telemetry_.reject_reason = "lambda_not_fixed";
+        }
+        return false;
+    }
+    debug_telemetry_.selected_fixed = true;
 
     // Fixed solution: xa = y[:na] - Qab * Qb^{-1} * (dd_float - dd_fixed)
     const auto fixed_problem = build_search_problem(best_candidate.subset);
@@ -2346,12 +2496,14 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                                                 fixed_problem.Qb,
                                                 fixed_problem.dd_float,
                                                 dd_fixed, xa)) {
+        debug_telemetry_.reject_reason = "fixed_head_solve";
         return false;
     }
     fixed_baseline_ = xa.head<3>();
     has_fixed_solution_ = true;
     last_ar_ratio_ = ratio;
     last_num_fixed_ambiguities_ = dd_fixed.size();
+    debug_telemetry_.selected_fixed_ambiguities = static_cast<int>(dd_fixed.size());
 
     // Store fix info for hold and validation
     last_dd_pairs_ = dd_pairs;
@@ -2392,7 +2544,10 @@ void RTKProcessor::restoreHoldState(const HoldStateSnapshot& snapshot) {
 
 bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data,
                                          const GNSSTime& current_time) {
-    if (!has_fixed_solution_) return false;
+    if (!has_fixed_solution_) {
+        debug_telemetry_.reject_reason = "no_fixed_solution";
+        return false;
+    }
 
     // Reject fixes that jump too much from the previous fix position
     // This catches wrong integers that pass the ratio test
@@ -2404,6 +2559,7 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
             has_last_fixed_position_,
             rtk_config_.position_mode == RTKConfig::PositionMode::STATIC,
             consecutive_fix_count_)) {
+        debug_telemetry_.reject_reason = "fix_history_jump";
         return false;
     }
     if (!isMovingBasePositionMode(rtk_config_) &&
@@ -2411,6 +2567,7 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         rtk_validation::exceedsAbsoluteJump(
             new_pos, last_fixed_position_, has_last_fixed_position_,
             rtk_config_.max_position_jump_m)) {
+        debug_telemetry_.reject_reason = "max_position_jump";
         return false;
     }
     if (!isMovingBasePositionMode(rtk_config_) &&
@@ -2428,6 +2585,7 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
 
     // Sanity check: reject fixes where any component is unreasonably large
     if (fixed_baseline_.norm() > rtk_config_.max_baseline_length) {
+        debug_telemetry_.reject_reason = "max_baseline";
         return false;
     }
 
@@ -2507,6 +2665,7 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
 
         // If more than half of checked satellites have wrong WL, reject the fix
         if (checked_count > 0 && bad_wl_count > checked_count / 2) {
+            debug_telemetry_.reject_reason = "iflc_wl_consistency";
             return false;
         }
     }
@@ -2642,12 +2801,19 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         return std::numeric_limits<double>::infinity();
     };
 
+    const double postfix_residual_rms =
+        (filter_initialized_ && filter_state_.state.size() >= 3)
+            ? computePostFixResidualRms()
+            : std::numeric_limits<double>::infinity();
+    debug_telemetry_.postfix_residual_rms = postfix_residual_rms;
+
     const double max_postfix_residual_rms = rtk_config_.max_postfix_residual_rms;
     if (filter_initialized_ &&
         filter_state_.state.size() >= 3 &&
         std::isfinite(max_postfix_residual_rms) &&
         max_postfix_residual_rms > 0.0 &&
-        computePostFixResidualRms() > max_postfix_residual_rms) {
+        postfix_residual_rms > max_postfix_residual_rms) {
+        debug_telemetry_.reject_reason = "postfix_rms";
         return false;
     }
 

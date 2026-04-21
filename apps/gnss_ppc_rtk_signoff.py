@@ -135,7 +135,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--commercial-min-hold-count", type=int, default=None)
     parser.add_argument("--commercial-hold-ratio-threshold", type=float, default=None)
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
-    parser.add_argument("--preset", choices=("survey", "low-cost", "moving-base"), default=None)
+    parser.add_argument("--preset", choices=("survey", "low-cost", "moving-base", "urban-nav"), default=None)
     parser.add_argument("--iono", choices=("auto", "off", "iflc", "est"), default=None)
     parser.add_argument("--ratio", type=float, default=None)
     parser.add_argument("--max-hold-div", type=float, default=None)
