@@ -97,6 +97,12 @@ python3 apps/gnss.py ppp-products-signoff \
 
 Use `gnss moving-base-prepare` first when the source dataset is a ROS2 bag or Zenodo zip carrying u-blox `NAV-PVT`, `RXM-RAWX`, and `NAV-RELPOSNED` topics. For replay mode, pair the exported `rover.ubx` / `base.ubx` files with a fetched BRDC navigation file from `gnss fetch-products --preset brdc-nav`.
 
+For commercial receiver side-by-side evaluation, add `--commercial-pos` with a normalized receiver
+solution CSV or `.pos` file. The commercial solution is matched to the same reference CSV and stored
+under `commercial_receiver` in the summary JSON. Treat RTKLIB/demo5 as a public reproducible
+baseline; moving-RTK quality claims should use independent reference data plus commercial receiver
+output when available.
+
 For the public SCORPION dataset, `gnss scorpion-moving-base-signoff` wraps the same flow into one command and emits the same summary JSON fields, plus the prepare/fetch provenance, matched CSV artifact, and plot preview that `gnss web` can render directly.
 
 ## Test layers

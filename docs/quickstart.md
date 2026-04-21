@@ -126,6 +126,11 @@ python3 apps/gnss.py scorpion-moving-base-signoff \
 python3 apps/gnss.py moving-base-signoff \
   --config-toml configs/moving_base_signoff.example.toml
 
+python3 apps/gnss.py moving-base-signoff \
+  --config-toml configs/moving_base_signoff.example.toml \
+  --commercial-pos output/commercial_receiver_solution.csv \
+  --commercial-matched-csv output/commercial_receiver_matches.csv
+
 python3 apps/gnss.py live-signoff \
   --config-toml configs/live_signoff.example.toml
 ```

@@ -588,6 +588,32 @@ class MovingBaseSignoffHelpersTest(unittest.TestCase):
         self.assertGreater(matches[0]["baseline_length_m"], 0.0)
         self.assertIsNotNone(matches[0]["heading_error_deg"])
 
+    def test_read_commercial_csv_records_accepts_receiver_solution_columns(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_commercial_rtk_") as temp_dir:
+            commercial_csv = Path(temp_dir) / "receiver.csv"
+            commercial_csv.write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,rover_ecef_x_m,rover_ecef_y_m,rover_ecef_z_m,fix_type,num_satellites",
+                        "2200,345600.0,3875001.0,332002.0,5029000.5,rtk_fixed,14",
+                        "2200,345601.0,3875001.1,332002.1,5029000.5,rtk_float,12",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            records, resolved_format = moving_base_signoff.read_commercial_solution_records(
+                commercial_csv,
+                "auto",
+            )
+
+            self.assertEqual(resolved_format, "csv")
+            self.assertEqual(len(records), 2)
+            self.assertEqual(records[0]["status"], 4)
+            self.assertEqual(records[1]["status"], 3)
+            self.assertEqual(records[0]["satellites"], 14)
+
 
 class DrivingComparisonHelpersTest(unittest.TestCase):
     @staticmethod

@@ -9,6 +9,11 @@ summary_json = "output/moving_base_summary.json"
 matched_csv = "output/moving_base_matches.csv"
 plot_png = "output/moving_base_plot.png"
 plot_title = "Moving-base sign-off"
+# Optional commercial receiver side-by-side baseline, converted to normalized CSV or .pos.
+# commercial_pos = "output/commercial_receiver_solution.csv"
+# commercial_format = "auto"
+# commercial_label = "commercial_receiver"
+# commercial_matched_csv = "output/commercial_receiver_matches.csv"
 max_epochs = 120
 match_tolerance_s = 0.25
 require_matched_epochs_min = 100
