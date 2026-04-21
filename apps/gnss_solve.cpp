@@ -29,6 +29,8 @@ constexpr double kDefaultNonFixDriftGuardMaxAnchorGapSeconds = 120.0;
 constexpr double kDefaultNonFixDriftGuardMaxAnchorSpeedMps = 1.0;
 constexpr double kDefaultNonFixDriftGuardMaxResidualMeters = 30.0;
 constexpr int kDefaultNonFixDriftGuardMinSegmentEpochs = 20;
+constexpr double kDefaultSppHeightStepGuardMinMeters = 30.0;
+constexpr double kDefaultSppHeightStepGuardMaxRateMps = 4.0;
 constexpr int kReacquireFixedCount = 5;
 
 enum class ModeChoice {
@@ -95,6 +97,9 @@ struct SolveConfig {
     double nonfix_drift_guard_max_anchor_speed_mps = kDefaultNonFixDriftGuardMaxAnchorSpeedMps;
     double nonfix_drift_guard_max_residual_m = kDefaultNonFixDriftGuardMaxResidualMeters;
     int nonfix_drift_guard_min_segment_epochs = kDefaultNonFixDriftGuardMinSegmentEpochs;
+    bool enable_spp_height_step_guard = true;
+    double spp_height_step_guard_min_m = kDefaultSppHeightStepGuardMinMeters;
+    double spp_height_step_guard_max_rate_mps = kDefaultSppHeightStepGuardMaxRateMps;
     RTKTuningPreset preset = RTKTuningPreset::NONE;
     bool ratio_threshold_set = false;
     bool ar_filter_margin_set = false;
@@ -439,6 +444,11 @@ void printUsage(const char* program_name) {
         << "                             in low-speed segments (default: 30)\n"
         << "  --nonfix-drift-min-segment-epochs <n>\n"
         << "                             Minimum bounded non-FIX segment length to inspect (default: 20)\n"
+        << "  --no-spp-height-step-guard\n"
+        << "                             Disable SPP vertical spike rejection\n"
+        << "  --spp-height-step-min <m>  Minimum SPP height jump rejected (default: 30)\n"
+        << "  --spp-height-step-rate <m/s>\n"
+        << "                             Rate-scaled SPP height jump limit (default: 4)\n"
         << "  --max-baseline-m <v>       Max baseline length in meters (default: 20000)\n"
         << "  --base-ecef <x> <y> <z>    Override base ECEF position in meters\n"
         << "  --skip-epochs <n>          Skip the first n rover epochs before solving\n"
@@ -621,6 +631,12 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.nonfix_drift_guard_max_residual_m = std::stod(argv[++i]);
         } else if (arg == "--nonfix-drift-min-segment-epochs" && i + 1 < argc) {
             config.nonfix_drift_guard_min_segment_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--no-spp-height-step-guard") {
+            config.enable_spp_height_step_guard = false;
+        } else if (arg == "--spp-height-step-min" && i + 1 < argc) {
+            config.spp_height_step_guard_min_m = std::stod(argv[++i]);
+        } else if (arg == "--spp-height-step-rate" && i + 1 < argc) {
+            config.spp_height_step_guard_max_rate_mps = std::stod(argv[++i]);
         } else if (arg == "--max-baseline-m" && i + 1 < argc) {
             config.max_baseline_length_m = std::stod(argv[++i]);
         } else if (arg == "--base-ecef" && i + 3 < argc) {
@@ -682,6 +698,12 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.nonfix_drift_guard_min_segment_epochs < 1) {
         argumentError("--nonfix-drift-min-segment-epochs must be >= 1", argv[0]);
+    }
+    if (config.spp_height_step_guard_min_m <= 0.0) {
+        argumentError("--spp-height-step-min must be > 0", argv[0]);
+    }
+    if (config.spp_height_step_guard_max_rate_mps < 0.0) {
+        argumentError("--spp-height-step-rate must be >= 0", argv[0]);
     }
     if (config.skip_epochs < 0) {
         argumentError("--skip-epochs must be >= 0", argv[0]);
@@ -948,6 +970,7 @@ int main(int argc, char* argv[]) {
         int nonfix_drift_guard_inspected_segments = 0;
         int nonfix_drift_guard_rejected_segments = 0;
         int nonfix_drift_guard_rejected_epochs = 0;
+        int spp_height_step_guard_rejected_epochs = 0;
         libgnss::PositionSolution last_fixed_output;
         bool have_last_fixed_output = false;
 
@@ -1124,6 +1147,19 @@ int main(int argc, char* argv[]) {
             solution.solutions = std::move(guard_result.solutions);
         }
 
+        if (config.enable_spp_height_step_guard &&
+            rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
+            !solution.isEmpty()) {
+            libgnss::rtk_validation::SppHeightStepGuardConfig guard_config;
+            guard_config.min_step_m = config.spp_height_step_guard_min_m;
+            guard_config.max_rate_mps = config.spp_height_step_guard_max_rate_mps;
+            auto guard_result = libgnss::rtk_validation::filterSppHeightSteps(
+                solution.solutions,
+                guard_config);
+            spp_height_step_guard_rejected_epochs = guard_result.rejected_epochs;
+            solution.solutions = std::move(guard_result.solutions);
+        }
+
         if (config.enable_kinematic_post_filter &&
             rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
             !solution.isEmpty()) {
@@ -1223,6 +1259,10 @@ int main(int argc, char* argv[]) {
                       << " inspected_segments=" << nonfix_drift_guard_inspected_segments
                       << " rejected_segments=" << nonfix_drift_guard_rejected_segments
                       << " rejected_epochs=" << nonfix_drift_guard_rejected_epochs
+                      << std::endl;
+            std::cout << "  SPP height-step guard: "
+                      << (config.enable_spp_height_step_guard ? "enabled" : "disabled")
+                      << " rejected_epochs=" << spp_height_step_guard_rejected_epochs
                       << std::endl;
         }
         if (rtk_config.position_mode == libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&

@@ -139,4 +139,39 @@ NonFixedDriftGuardResult filterNonFixedStationaryDrift(
     return result;
 }
 
+SppHeightStepGuardResult filterSppHeightSteps(
+    const std::vector<PositionSolution>& solutions,
+    const SppHeightStepGuardConfig& config) {
+    SppHeightStepGuardResult result;
+    result.solutions.reserve(solutions.size());
+
+    const PositionSolution* last_kept = nullptr;
+    for (const PositionSolution& solution : solutions) {
+        bool reject = false;
+        if (last_kept != nullptr &&
+            solution.status == SolutionStatus::SPP &&
+            solution.isValid()) {
+            const double dt_seconds = solution.time - last_kept->time;
+            const double max_height_step_m =
+                adaptiveJumpLimit(dt_seconds, config.min_step_m, config.max_rate_mps);
+            const double height_step_m = std::abs(
+                solution.position_geodetic.height -
+                last_kept->position_geodetic.height);
+            reject = std::isfinite(height_step_m) &&
+                height_step_m > max_height_step_m;
+        }
+
+        if (reject) {
+            result.rejected_epochs++;
+            continue;
+        }
+        result.solutions.push_back(solution);
+        if (solution.isValid()) {
+            last_kept = &result.solutions.back();
+        }
+    }
+
+    return result;
+}
+
 }  // namespace libgnss::rtk_validation

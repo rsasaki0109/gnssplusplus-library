@@ -76,30 +76,6 @@
       ]
     },
     {
-      "duration_s": 1.0,
-      "end_tow_s": 189074.2,
-      "epochs": 4,
-      "max_h_m": 73.900686,
-      "median_h_m": 71.026844,
-      "p95_h_m": 73.494139,
-      "start_tow_s": 189073.2,
-      "statuses": [
-        "SPP"
-      ]
-    },
-    {
-      "duration_s": 1.0,
-      "end_tow_s": 189070.4,
-      "epochs": 4,
-      "max_h_m": 53.544092,
-      "median_h_m": 50.366341,
-      "p95_h_m": 53.147052,
-      "start_tow_s": 189069.4,
-      "statuses": [
-        "SPP"
-      ]
-    },
-    {
       "duration_s": 0.6,
       "end_tow_s": 188404.2,
       "epochs": 4,
@@ -149,18 +125,6 @@
     },
     {
       "duration_s": 0.2,
-      "end_tow_s": 189071.6,
-      "epochs": 2,
-      "max_h_m": 59.918805,
-      "median_h_m": 59.344195,
-      "p95_h_m": 59.861344,
-      "start_tow_s": 189071.4,
-      "statuses": [
-        "SPP"
-      ]
-    },
-    {
-      "duration_s": 0.2,
       "end_tow_s": 189165.6,
       "epochs": 2,
       "max_h_m": 47.921316,
@@ -169,54 +133,6 @@
       "start_tow_s": 189165.4,
       "statuses": [
         "FLOAT"
-      ]
-    },
-    {
-      "duration_s": 0.0,
-      "end_tow_s": 189077.2,
-      "epochs": 1,
-      "max_h_m": 81.066897,
-      "median_h_m": 81.066897,
-      "p95_h_m": 81.066897,
-      "start_tow_s": 189077.2,
-      "statuses": [
-        "SPP"
-      ]
-    },
-    {
-      "duration_s": 0.0,
-      "end_tow_s": 189075.0,
-      "epochs": 1,
-      "max_h_m": 74.155248,
-      "median_h_m": 74.155248,
-      "p95_h_m": 74.155248,
-      "start_tow_s": 189075.0,
-      "statuses": [
-        "SPP"
-      ]
-    },
-    {
-      "duration_s": 0.0,
-      "end_tow_s": 189064.2,
-      "epochs": 1,
-      "max_h_m": 69.540654,
-      "median_h_m": 69.540654,
-      "p95_h_m": 69.540654,
-      "start_tow_s": 189064.2,
-      "statuses": [
-        "SPP"
-      ]
-    },
-    {
-      "duration_s": 0.0,
-      "end_tow_s": 189066.0,
-      "epochs": 1,
-      "max_h_m": 69.238181,
-      "median_h_m": 69.238181,
-      "p95_h_m": 69.238181,
-      "start_tow_s": 189066.0,
-      "statuses": [
-        "SPP"
       ]
     },
     {
@@ -233,18 +149,6 @@
     },
     {
       "duration_s": 0.0,
-      "end_tow_s": 189068.8,
-      "epochs": 1,
-      "max_h_m": 45.355307,
-      "median_h_m": 45.355307,
-      "p95_h_m": 45.355307,
-      "start_tow_s": 189068.8,
-      "statuses": [
-        "SPP"
-      ]
-    },
-    {
-      "duration_s": 0.0,
       "end_tow_s": 189161.8,
       "epochs": 1,
       "max_h_m": 35.536077,
@@ -256,8 +160,8 @@
       ]
     }
   ],
-  "common_epoch_pairs": 7466,
-  "global_p95_h_m": 25.725482,
+  "common_epoch_pairs": 7444,
+  "global_p95_h_m": 25.607709,
   "lib_by_status": [
     {
       "epochs": 5005,
@@ -290,43 +194,43 @@
       "status": "FLOAT"
     },
     {
-      "epochs": 283,
-      "max_h_m": 81.066897,
-      "median_abs_up_m": 5.996134,
-      "median_h_m": 5.652367,
-      "p90_h_m": 32.139818,
-      "p95_abs_up_m": 106.581266,
-      "p95_h_m": 44.591109,
-      "p99_h_m": 71.678229,
+      "epochs": 253,
+      "max_h_m": 37.713328,
+      "median_abs_up_m": 5.088546,
+      "median_h_m": 4.705571,
+      "p90_h_m": 26.275013,
+      "p95_abs_up_m": 73.575477,
+      "p95_h_m": 32.276751,
+      "p99_h_m": 36.801643,
       "ppc_score_3d_50cm_epochs": 0,
       "ppc_score_3d_50cm_matched_pct": 0.0,
       "ppc_score_3d_50cm_ref_pct": 0.0,
-      "reference_rate_pct": 2.368003,
+      "reference_rate_pct": 2.116978,
       "status": "SPP"
     }
   ],
-  "lib_matched_epochs": 10479,
+  "lib_matched_epochs": 10449,
   "match_tolerance_s": 0.25,
   "p95_contribution_by_status": [
     {
       "epochs": 27,
       "max_h_m": 34.788491,
       "median_h_m": 34.383755,
-      "share_pct": 5.152672,
+      "share_pct": 5.162524,
       "status": "FIXED"
     },
     {
-      "epochs": 447,
+      "epochs": 460,
       "max_h_m": 47.921316,
-      "median_h_m": 34.07774,
-      "share_pct": 85.305344,
+      "median_h_m": 33.472141,
+      "share_pct": 87.954111,
       "status": "FLOAT"
     },
     {
-      "epochs": 50,
-      "max_h_m": 81.066897,
-      "median_h_m": 35.636685,
-      "share_pct": 9.541985,
+      "epochs": 36,
+      "max_h_m": 37.713328,
+      "median_h_m": 31.548333,
+      "share_pct": 6.883365,
       "status": "SPP"
     }
   ],
@@ -350,12 +254,12 @@
       "status": "FLOAT"
     },
     {
-      "lib_worse_epochs": 76,
-      "lib_worse_gt_5m_epochs": 38,
-      "lib_worse_pct": 38.383838,
-      "median_delta_h_m": -1.525392,
-      "p95_delta_h_m": 52.983077,
-      "pairs": 198,
+      "lib_worse_epochs": 56,
+      "lib_worse_gt_5m_epochs": 19,
+      "lib_worse_pct": 31.818182,
+      "median_delta_h_m": -2.292434,
+      "p95_delta_h_m": 24.370737,
+      "pairs": 176,
       "status": "SPP"
     }
   ],

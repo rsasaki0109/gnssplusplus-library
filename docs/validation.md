@@ -90,6 +90,9 @@ non-FIX drift guard remains active in that profile; it rejects bounded
 FLOAT/SPP segments whose surrounding FIX anchors are nearly stationary but whose
 fallback positions drift more than 30 m from the anchor bridge. Use
 `--no-nonfix-drift-guard` only when reproducing the unguarded fallback stream.
+The default SPP height-step guard then removes SPP-only vertical spikes above
+the `--spp-height-step-min` / `--spp-height-step-rate` envelope; use
+`--no-spp-height-step-guard` only when reproducing the raw SPP fallback stream.
 Use `scripts/analyze_ppc_coverage_quality.py` with the PPC solution, RTKLIB
 solution, and `reference.csv` when a coverage run improves Positioning rate but
 regresses P95 horizontal error; the report separates FIXED/FLOAT/SPP quality and

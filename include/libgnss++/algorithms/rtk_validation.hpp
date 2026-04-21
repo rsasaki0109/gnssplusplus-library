@@ -20,6 +20,16 @@ struct NonFixedDriftGuardResult {
     int rejected_epochs = 0;
 };
 
+struct SppHeightStepGuardConfig {
+    double min_step_m = 30.0;
+    double max_rate_mps = 4.0;
+};
+
+struct SppHeightStepGuardResult {
+    std::vector<PositionSolution> solutions;
+    int rejected_epochs = 0;
+};
+
 double normalizedDt(double dt_seconds, double fallback_dt_seconds = 1.0);
 
 double adaptiveJumpLimit(double dt_seconds, double min_jump_m, double rate_m_per_s);
@@ -49,5 +59,9 @@ bool canAttemptHoldFix(int consecutive_fix_count,
 NonFixedDriftGuardResult filterNonFixedStationaryDrift(
     const std::vector<PositionSolution>& solutions,
     const NonFixedDriftGuardConfig& config = NonFixedDriftGuardConfig{});
+
+SppHeightStepGuardResult filterSppHeightSteps(
+    const std::vector<PositionSolution>& solutions,
+    const SppHeightStepGuardConfig& config = SppHeightStepGuardConfig{});
 
 }  // namespace libgnss::rtk_validation

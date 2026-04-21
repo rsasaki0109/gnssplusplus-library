@@ -13,7 +13,7 @@ Tier-1 public smoke/regression run.
 
 All runs below use `--mode kinematic --preset low-cost --match-tolerance-s 0.25`.
 The coverage profile additionally uses `--no-arfilter --no-kinematic-post-filter`
-plus the default low-speed non-FIX drift guard.
+plus the default low-speed non-FIX drift guard and SPP height-step guard.
 
 ## Public Moving-RTK Benchmark Matrix
 
@@ -56,31 +56,33 @@ about matching a proprietary receiver RTK engine.
 
 | Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | 3D <= 50 cm / ref delta | P95 H delta |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo run1 | **87.7%** | 66.3% | **+21.4 pp** | **47.8%** | 30.5% | **+35.6 pp** | -5.41 m |
-| Tokyo run2 | **95.4%** | 84.3% | **+11.2 pp** | **60.7%** | 27.6% | **+39.9 pp** | -18.84 m |
+| Tokyo run1 | **87.4%** | 66.3% | **+21.1 pp** | **47.9%** | 30.5% | **+35.6 pp** | -5.53 m |
+| Tokyo run2 | **95.3%** | 84.3% | **+11.0 pp** | **60.7%** | 27.6% | **+39.9 pp** | -18.89 m |
 | Tokyo run3 | **96.0%** | 93.1% | **+2.9 pp** | **60.2%** | 40.5% | **+23.6 pp** | -0.70 m |
-| Nagoya run1 | **88.4%** | 65.8% | **+22.5 pp** | **60.0%** | 33.8% | **+32.8 pp** | -21.26 m |
-| Nagoya run2 | **86.8%** | 69.8% | **+17.0 pp** | **40.1%** | 18.8% | **+20.0 pp** | -26.59 m |
+| Nagoya run1 | **87.9%** | 65.8% | **+22.1 pp** | **60.0%** | 33.8% | **+32.8 pp** | -22.64 m |
+| Nagoya run2 | **86.2%** | 69.8% | **+16.5 pp** | **40.1%** | 18.8% | **+20.0 pp** | -27.16 m |
 | Nagoya run3 | **94.6%** | 67.7% | **+26.9 pp** | **19.7%** | 13.9% | **+9.4 pp** | -5.54 m |
 
-Across these six public runs, the coverage profile averages **+17.0 pp**
+Across these six public runs, the coverage profile averages **+16.8 pp**
 Positioning-rate lead, **+26.9 pp** 3D<=50cm/reference-score lead, and
-**-13.06 m** P95 horizontal-error delta versus RTKLIB `demo5`.
+**-13.41 m** P95 horizontal-error delta versus RTKLIB `demo5`.
 
 ### Tokyo run1 coverage-quality split
 
 Tokyo run1's low-speed non-FIX drift guard removes 320 bounded fallback epochs,
-turning the previous P95H regression into a **5.41 m** P95H lead while keeping
-the 3D<=50cm/reference score unchanged. The remaining P95 tail is still
-FLOAT/SPP-dominated. The full machine-readable reports are
+and the SPP height-step guard removes another 30 vertical-spike fallback epochs.
+Together they turn the previous P95H regression into a **5.53 m** P95H lead,
+drop Tokyo run1 maxH from 81.1 m to **47.9 m**, and keep the
+3D<=50cm/reference score unchanged. The remaining P95 tail is now mostly
+FLOAT-dominated. The full machine-readable reports are
 `ppc_tokyo_run1_coverage_quality.json` and
 `ppc_tokyo_run1_coverage_bad_segments.csv`.
 
 | Status | Epochs | P50 H | P95 H | 3D <= 50 cm / reference | P95H exceedance share |
 |---|---:|---:|---:|---:|---:|
 | FIXED | 5005 | 0.03 m | 1.57 m | 33.1% | 5.2% |
-| FLOAT | 5191 | 2.34 m | 32.68 m | 2.5% | 85.3% |
-| SPP | 283 | 5.65 m | 44.59 m | 0.0% | 9.5% |
+| FLOAT | 5191 | 2.34 m | 32.68 m | 2.5% | 88.0% |
+| SPP | 253 | 4.71 m | 32.28 m | 0.0% | 6.9% |
 
 ![PPC Tokyo run1 coverage quality by status](ppc_tokyo_run1_coverage_quality.png)
 

@@ -11,11 +11,13 @@ namespace {
 
 PositionSolution makeValidationSolution(double tow,
                                         SolutionStatus status,
-                                        const Eigen::Vector3d& position) {
+                                        const Eigen::Vector3d& position,
+                                        double height_m = 0.0) {
     PositionSolution solution;
     solution.time = GNSSTime(2300, tow);
     solution.status = status;
     solution.position_ecef = position;
+    solution.position_geodetic.height = height_m;
     solution.num_satellites = 8;
     return solution;
 }
@@ -120,4 +122,42 @@ TEST(RTKValidationTest, NonFixedDriftGuardIgnoresMovingOrShortSegments) {
     EXPECT_EQ(short_result.inspected_segments, 0);
     EXPECT_EQ(short_result.rejected_epochs, 0);
     EXPECT_EQ(short_result.solutions.size(), short_segment.size());
+}
+
+TEST(RTKValidationTest, SppHeightStepGuardRejectsSppSpikeCluster) {
+    std::vector<PositionSolution> solutions = {
+        makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d::Zero(), 10.0),
+        makeValidationSolution(1.0, SolutionStatus::SPP, Eigen::Vector3d::Zero(), 80.0),
+        makeValidationSolution(2.0, SolutionStatus::SPP, Eigen::Vector3d::Zero(), 82.0),
+        makeValidationSolution(3.0, SolutionStatus::FLOAT, Eigen::Vector3d::Zero(), 85.0),
+        makeValidationSolution(4.0, SolutionStatus::SPP, Eigen::Vector3d::Zero(), 88.0),
+    };
+
+    rtk_validation::SppHeightStepGuardConfig config;
+    config.min_step_m = 30.0;
+    config.max_rate_mps = 4.0;
+
+    const auto result = rtk_validation::filterSppHeightSteps(solutions, config);
+
+    EXPECT_EQ(result.rejected_epochs, 2);
+    ASSERT_EQ(result.solutions.size(), 3U);
+    EXPECT_DOUBLE_EQ(result.solutions[0].time.tow, 0.0);
+    EXPECT_DOUBLE_EQ(result.solutions[1].time.tow, 3.0);
+    EXPECT_DOUBLE_EQ(result.solutions[2].time.tow, 4.0);
+}
+
+TEST(RTKValidationTest, SppHeightStepGuardKeepsRateScaledSppStep) {
+    std::vector<PositionSolution> solutions = {
+        makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d::Zero(), 10.0),
+        makeValidationSolution(10.0, SolutionStatus::SPP, Eigen::Vector3d::Zero(), 45.0),
+    };
+
+    rtk_validation::SppHeightStepGuardConfig config;
+    config.min_step_m = 30.0;
+    config.max_rate_mps = 4.0;
+
+    const auto result = rtk_validation::filterSppHeightSteps(solutions, config);
+
+    EXPECT_EQ(result.rejected_epochs, 0);
+    EXPECT_EQ(result.solutions.size(), solutions.size());
 }

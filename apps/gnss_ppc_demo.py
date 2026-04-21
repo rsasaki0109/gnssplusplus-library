@@ -26,6 +26,10 @@ NONFIX_DRIFT_GUARD_DEFAULTS = {
     "max_residual_m": 30.0,
     "min_segment_epochs": 20,
 }
+SPP_HEIGHT_STEP_GUARD_DEFAULTS = {
+    "min_step_m": 30.0,
+    "max_rate_mps": 4.0,
+}
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -172,6 +176,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nonfix-drift-max-anchor-speed", type=float, default=None)
     parser.add_argument("--nonfix-drift-max-residual", type=float, default=None)
     parser.add_argument("--nonfix-drift-min-segment-epochs", type=int, default=None)
+    parser.add_argument(
+        "--no-spp-height-step-guard",
+        action="store_true",
+        help="Disable the RTK SPP vertical spike guard in gnss solve.",
+    )
+    parser.add_argument("--spp-height-step-min", type=float, default=None)
+    parser.add_argument("--spp-height-step-rate", type=float, default=None)
     parser.add_argument(
         "--rtklib-bin",
         type=Path,
@@ -360,6 +371,40 @@ def nonfix_drift_guard_config(args: argparse.Namespace) -> dict[str, float | int
                 args,
                 "nonfix_drift_min_segment_epochs",
                 "min_segment_epochs",
+            )
+        ),
+    }
+
+
+def spp_height_step_guard_value(
+    args: argparse.Namespace,
+    attr_name: str,
+    default_name: str,
+) -> float:
+    value = getattr(args, attr_name, None)
+    if value is None:
+        return SPP_HEIGHT_STEP_GUARD_DEFAULTS[default_name]
+    return value
+
+
+def spp_height_step_guard_config(args: argparse.Namespace) -> dict[str, float]:
+    return {
+        "min_step_m": rounded(
+            float(
+                spp_height_step_guard_value(
+                    args,
+                    "spp_height_step_min",
+                    "min_step_m",
+                )
+            )
+        ),
+        "max_rate_mps": rounded(
+            float(
+                spp_height_step_guard_value(
+                    args,
+                    "spp_height_step_rate",
+                    "max_rate_mps",
+                )
             )
         ),
     }
@@ -653,6 +698,12 @@ def run_solver(
             command.extend(["--nonfix-drift-max-residual", str(args.nonfix_drift_max_residual)])
         if getattr(args, "nonfix_drift_min_segment_epochs", None) is not None:
             command.extend(["--nonfix-drift-min-segment-epochs", str(args.nonfix_drift_min_segment_epochs)])
+        if getattr(args, "no_spp_height_step_guard", False):
+            command.append("--no-spp-height-step-guard")
+        if getattr(args, "spp_height_step_min", None) is not None:
+            command.extend(["--spp-height-step-min", str(args.spp_height_step_min)])
+        if getattr(args, "spp_height_step_rate", None) is not None:
+            command.extend(["--spp-height-step-rate", str(args.spp_height_step_rate)])
     else:
         command = [
             *gnss_command,
@@ -725,6 +776,10 @@ def build_summary_payload(
         "kinematic_post_filter_enabled": not getattr(args, "no_kinematic_post_filter", False),
         "nonfix_drift_guard_enabled": args.solver == "rtk" and not getattr(args, "no_nonfix_drift_guard", False),
         "nonfix_drift_guard": nonfix_drift_guard_config(args) if args.solver == "rtk" else None,
+        "spp_height_step_guard_enabled": (
+            args.solver == "rtk" and not getattr(args, "no_spp_height_step_guard", False)
+        ),
+        "spp_height_step_guard": spp_height_step_guard_config(args) if args.solver == "rtk" else None,
         "solution_pos": str(out),
         "summary_json": str(summary_json),
         "generated_solution": not args.use_existing_solution,

@@ -2293,6 +2293,9 @@ class PPCDemoTest(unittest.TestCase):
                 enable_ar=False,
                 low_dynamics=False,
                 no_kinematic_post_filter=True,
+                no_spp_height_step_guard=False,
+                spp_height_step_min=None,
+                spp_height_step_rate=None,
                 require_valid_epochs_min=3,
                 require_matched_epochs_min=3,
                 require_fix_rate_min=60.0,
@@ -2333,6 +2336,9 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["nonfix_drift_guard"]["max_anchor_speed_mps"], 1.0)
             self.assertEqual(payload["nonfix_drift_guard"]["max_residual_m"], 30.0)
             self.assertEqual(payload["nonfix_drift_guard"]["min_segment_epochs"], 20)
+            self.assertTrue(payload["spp_height_step_guard_enabled"])
+            self.assertEqual(payload["spp_height_step_guard"]["min_step_m"], 30.0)
+            self.assertEqual(payload["spp_height_step_guard"]["max_rate_mps"], 4.0)
             provenance = payload["receiver_observation_provenance"]
             self.assertEqual(provenance["vehicle_receiver"], "Septentrio mosaic-X5")
             self.assertEqual(provenance["vehicle_antenna"], "Trimble AT1675")
