@@ -60,6 +60,7 @@ below is the sign-off view for no-solution gaps and fallback-positioned epochs.
 
 ## PPC Coverage Profile
 
+<!-- PPC_COVERAGE_MATRIX:START -->
 | Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | 3D <= 50 cm / ref delta | P95 H delta |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | Tokyo run1 | **86.2%** | 66.3% | **+19.9 pp** | **48.6%** | 30.5% | **+35.6 pp** | -6.97 m |
@@ -72,6 +73,7 @@ below is the sign-off view for no-solution gaps and fallback-positioned epochs.
 Across these six public runs, the coverage profile averages **+16.5 pp**
 Positioning-rate lead, **+26.9 pp** 3D<=50cm/reference-score lead, and
 **-13.65 m** P95 horizontal-error delta versus RTKLIB `demo5`.
+<!-- PPC_COVERAGE_MATRIX:END -->
 
 ### Tokyo run1 coverage-quality split
 
@@ -177,6 +179,10 @@ python3 apps/gnss.py ppc-coverage-matrix \
   --require-positioning-delta-min 0 \
   --require-score-3d-50cm-ref-delta-min 0 \
   --require-p95-h-delta-max 0
+
+python3 scripts/update_ppc_coverage_readme.py \
+  --summary-json output/ppc_coverage_matrix/summary.json \
+  --check
 ```
 
 `ppc-rtk-signoff` is the fixed-threshold path for Tokyo/Nagoya quality and

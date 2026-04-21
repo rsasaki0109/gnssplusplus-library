@@ -46,6 +46,7 @@ import generate_odaiba_social_card as social_card  # noqa: E402
 import analyze_ppc_coverage_quality as ppc_coverage_quality  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
 import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
+import update_ppc_coverage_readme as ppc_coverage_readme  # noqa: E402
 import detect_ci_scope as ci_scope  # noqa: E402
 import run_optional_ppp_products_signoff as ci_ppp_products_signoff  # noqa: E402
 import run_optional_rtk_signoffs as ci_rtk_signoffs  # noqa: E402
@@ -481,6 +482,101 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                         require_p95_h_delta_max=None,
                     ),
                 )
+
+
+class PPCCoverageReadmeUpdateTest(unittest.TestCase):
+    def sample_summary(self) -> dict[str, object]:
+        return {
+            "runs": [
+                {
+                    "key": "tokyo_run1",
+                    "metrics": {
+                        "positioning_rate_pct": 86.2,
+                        "fix_rate_pct": 48.6,
+                    },
+                    "rtklib": {
+                        "positioning_rate_pct": 66.3,
+                        "fix_rate_pct": 30.5,
+                    },
+                    "delta_vs_rtklib": {
+                        "positioning_rate_pct": 19.9,
+                        "ppc_score_3d_50cm_ref_pct": 35.6,
+                        "p95_h_m": -6.97,
+                    },
+                },
+                {
+                    "key": "nagoya_run1",
+                    "metrics": {
+                        "positioning_rate_pct": 87.9,
+                        "fix_rate_pct": 60.3,
+                    },
+                    "rtklib": {
+                        "positioning_rate_pct": 65.8,
+                        "fix_rate_pct": 33.8,
+                    },
+                    "delta_vs_rtklib": {
+                        "positioning_rate_pct": 22.1,
+                        "ppc_score_3d_50cm_ref_pct": 32.8,
+                        "p95_h_m": -22.63,
+                    },
+                },
+            ]
+        }
+
+    def test_render_coverage_block_formats_table_and_averages(self) -> None:
+        block = ppc_coverage_readme.render_coverage_block(self.sample_summary())
+
+        self.assertIn("| Tokyo run1 | **86.2%** | 66.3% | **+19.9 pp** |", block)
+        self.assertIn("| Nagoya run1 | **87.9%** | 65.8% | **+22.1 pp** |", block)
+        self.assertIn("Across these two public runs", block)
+        self.assertIn("**+21.0 pp**", block)
+        self.assertIn("**-14.80 m** P95", block)
+
+    def test_replace_marked_block_keeps_surrounding_markdown(self) -> None:
+        original = "\n".join(
+            [
+                "before",
+                ppc_coverage_readme.START_MARKER,
+                "old generated block",
+                ppc_coverage_readme.END_MARKER,
+                "after",
+            ]
+        )
+
+        updated = ppc_coverage_readme.replace_marked_block(original, "new generated block")
+
+        self.assertIn("before", updated)
+        self.assertIn("after", updated)
+        self.assertIn("new generated block", updated)
+        self.assertNotIn("old generated block", updated)
+
+    def test_check_mode_reports_stale_target_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_readme_update_") as temp_dir:
+            target = Path(temp_dir) / "README.md"
+            original = "\n".join(
+                [
+                    ppc_coverage_readme.START_MARKER,
+                    "old generated block",
+                    ppc_coverage_readme.END_MARKER,
+                    "",
+                ]
+            )
+            target.write_text(original, encoding="utf-8")
+
+            changed = ppc_coverage_readme.update_target(target, "new generated block", check=True)
+
+            self.assertTrue(changed)
+            self.assertEqual(target.read_text(encoding="utf-8"), original)
+
+    def test_missing_rtklib_delta_fails(self) -> None:
+        payload = self.sample_summary()
+        runs = payload["runs"]
+        assert isinstance(runs, list)
+        assert isinstance(runs[0], dict)
+        del runs[0]["delta_vs_rtklib"]
+
+        with self.assertRaises(SystemExit):
+            ppc_coverage_readme.render_coverage_block(payload)
 
 
 class PPCCommercialHelpersTest(unittest.TestCase):

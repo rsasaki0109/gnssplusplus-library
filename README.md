@@ -96,6 +96,7 @@ below is the sign-off view for no-solution gaps and fallback-positioned epochs.
 
 ### PPC coverage profile (GNSS-only fallback epochs retained)
 
+<!-- PPC_COVERAGE_MATRIX:START -->
 | Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | 3D <= 50 cm / ref delta | P95 H delta |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | Tokyo run1 | **86.2%** | 66.3% | **+19.9 pp** | **48.6%** | 30.5% | **+35.6 pp** | -6.97 m |
@@ -108,6 +109,7 @@ below is the sign-off view for no-solution gaps and fallback-positioned epochs.
 Across these six public runs, the coverage profile averages **+16.5 pp**
 Positioning-rate lead, **+26.9 pp** 3D<=50cm/reference-score lead, and
 **-13.65 m** P95 horizontal-error delta versus RTKLIB `demo5`.
+<!-- PPC_COVERAGE_MATRIX:END -->
 
 Tokyo run1's low-speed non-FIX drift guard removes 320 bounded fallback epochs,
 and the SPP height-step guard removes another 30 vertical-spike fallback epochs.
@@ -546,6 +548,9 @@ python3 apps/gnss.py ppc-coverage-matrix \
   --rtklib-root output/benchmark \
   --summary-json output/ppc_coverage_matrix/summary.json \
   --markdown-output output/ppc_coverage_matrix/table.md
+
+python3 scripts/update_ppc_coverage_readme.py \
+  --summary-json output/ppc_coverage_matrix/summary.json
 ```
 
 The PPC summary records `receiver_observation_provenance` for the bundled
