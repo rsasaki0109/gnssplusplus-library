@@ -42,6 +42,7 @@ import generate_architecture_diagram as architecture_diagram  # noqa: E402
 import generate_feature_overview_card as feature_overview  # noqa: E402
 import generate_odaiba_scorecard as scorecard  # noqa: E402
 import generate_odaiba_social_card as social_card  # noqa: E402
+import analyze_ppc_coverage_quality as ppc_coverage_quality  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
 import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
 import detect_ci_scope as ci_scope  # noqa: E402
@@ -1034,6 +1035,35 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         self.assertEqual(rt_common["epochs"], 2)
         self.assertAlmostEqual(lib_common["median_h_m"], 0.85)
         self.assertAlmostEqual(rt_common["median_h_m"], 0.65)
+
+    def test_ppc_coverage_quality_groups_status_and_bad_segments(self) -> None:
+        matches = [
+            self.matched_epoch(0.0, 0.1, 0.1, 4),
+            self.matched_epoch(1.0, 10.0, 1.0, 3),
+            self.matched_epoch(2.0, 20.0, 2.0, 3),
+            self.matched_epoch(2.5, 30.0, 3.0, 1),
+        ]
+
+        status_rows = ppc_coverage_quality.summarize_by_status(matches, reference_count=5)
+        status_by_name = {row["status"]: row for row in status_rows}
+        self.assertEqual(status_by_name["FIXED"]["epochs"], 1)
+        self.assertEqual(status_by_name["FLOAT"]["epochs"], 2)
+        self.assertEqual(status_by_name["SPP"]["epochs"], 1)
+        self.assertEqual(status_by_name["FIXED"]["ppc_score_3d_50cm_epochs"], 1)
+
+        global_p95, contribution = ppc_coverage_quality.p95_contribution_by_status(matches)
+        self.assertGreater(global_p95, 20.0)
+        self.assertEqual(contribution[0]["status"], "SPP")
+        self.assertEqual(contribution[0]["epochs"], 1)
+
+        segments = ppc_coverage_quality.bad_segments(
+            matches,
+            threshold_m=15.0,
+            max_gap_s=0.6,
+        )
+        self.assertEqual(len(segments), 1)
+        self.assertEqual(segments[0]["epochs"], 2)
+        self.assertEqual(segments[0]["statuses"], ["FLOAT", "SPP"])
 
 
 class ScorecardRenderTest(unittest.TestCase):

@@ -102,6 +102,18 @@ Positioning-rate lead and **+26.9 pp** 3D<=50cm/reference-score lead versus
 RTKLIB `demo5`. Tokyo run1 is the remaining trade-off case: it gains coverage
 and 3D50/reference score, but P95 horizontal error worsens by 2.07 m.
 
+Tokyo run1's coverage-quality split shows that the P95H regression is not a
+FIX problem. FLOAT fallback epochs contribute **91.5%** of the global P95H
+exceedance, with the largest drift window at GPS TOW 188341.2-188400.0 s.
+
+| Status | Epochs | P50 H | P95 H | 3D <= 50 cm / reference | P95H exceedance share |
+|---|---:|---:|---:|---:|---:|
+| FIXED | 5005 | 0.03 m | 1.57 m | 33.1% | 3.0% |
+| FLOAT | 5454 | 2.61 m | 34.91 m | 2.5% | 91.5% |
+| SPP | 340 | 8.18 m | 36.88 m | 0.0% | 5.6% |
+
+![PPC Tokyo run1 coverage quality by status](docs/ppc_tokyo_run1_coverage_quality.png)
+
 The 2D sanity plot below uses the PPC Tokyo run3 open data (Harumi-Odaiba).
 Points are colored by RTK solution status, and no IMU input is used by this
 GNSS-only RTK replay. The coverage profile retains valid SPP/float fallback

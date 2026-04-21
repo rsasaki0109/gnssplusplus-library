@@ -86,6 +86,10 @@ gaps cannot be hidden by a high fixed-solution ratio over only positioned
 epochs. Use `--no-arfilter --no-kinematic-post-filter` when validating the RTK
 coverage profile; that keeps valid SPP/float fallback epochs and records
 `rtk_output_profile: coverage` in the summary JSON.
+Use `scripts/analyze_ppc_coverage_quality.py` with the PPC solution, RTKLIB
+solution, and `reference.csv` when a coverage run improves Positioning rate but
+regresses P95 horizontal error; the report separates FIXED/FLOAT/SPP quality and
+bad continuous drift segments.
 
 `gnss smartloc-adapter` widens the public matrix beyond UrbanNav by exporting
 smartLoc `NAV-POSLLH.csv` into a `reference.csv` plus a normalized u-blox
