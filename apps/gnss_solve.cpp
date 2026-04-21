@@ -70,7 +70,7 @@ enum class RTKTuningPreset {
     SURVEY,
     LOW_COST,
     MOVING_BASE,
-    URBAN_NAV
+    ODAIBA
 };
 
 struct SolveConfig {
@@ -548,7 +548,7 @@ void printUsage(const char* program_name) {
         << "                             Position mode (default: auto)\n"
         << "  --iono <auto|off|iflc|est> Ionosphere option (default: auto)\n"
         << "  --ratio <value>            Ambiguity ratio threshold (default: 3.0)\n"
-        << "  --preset <survey|low-cost|moving-base|urban-nav>\n"
+        << "  --preset <survey|low-cost|moving-base|odaiba>\n"
         << "                             Apply a named RTK tuning preset\n"
         << "  --arfilter                 Require extra ratio margin for subset AR fixes\n"
         << "  --no-arfilter              Disable subset AR filter margin even if a preset enables it\n"
@@ -704,7 +704,7 @@ RTKTuningPreset parseRTKTuningPreset(const std::string& value, const char* progr
     if (value == "survey") return RTKTuningPreset::SURVEY;
     if (value == "low-cost") return RTKTuningPreset::LOW_COST;
     if (value == "moving-base") return RTKTuningPreset::MOVING_BASE;
-    if (value == "urban-nav") return RTKTuningPreset::URBAN_NAV;
+    if (value == "odaiba") return RTKTuningPreset::ODAIBA;
     argumentError("unsupported --preset value: " + value, program_name);
 }
 
@@ -736,7 +736,7 @@ void applyRTKTuningPreset(SolveConfig& config) {
             if (!config.min_hold_count_set) config.min_hold_count = 8;
             if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.4;
             return;
-        case RTKTuningPreset::URBAN_NAV:
+        case RTKTuningPreset::ODAIBA:
             if (!config.ratio_threshold_set) config.ratio_threshold = 3.0;
             if (!config.has_ar_filter_override) config.enable_ar_filter = true;
             if (!config.ar_filter_margin_set) config.ar_filter_margin = 0.35;
