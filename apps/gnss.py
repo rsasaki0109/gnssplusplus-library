@@ -147,12 +147,12 @@ COMMANDS = {
     "scorpion-moving-base-signoff": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_scorpion_moving_base_signoff.py"),
-        "summary": "Prepare and validate the public SCORPION moving-base ROS2 bag through replay plus BRDC nav fetch.",
+        "summary": "Prepare and validate the public SCORPION moving-base ROS2 bag through replay plus receiver side-by-side output.",
     },
     "moving-base-prepare": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_moving_base_prepare.py"),
-        "summary": "Extract rover/base UBX files plus reference CSV from a ROS2 moving-base bag with u-blox topics.",
+        "summary": "Extract rover/base UBX files plus reference and optional receiver CSVs from a ROS2 moving-base bag.",
     },
     "moving-base-plot": {
         "kind": "python",

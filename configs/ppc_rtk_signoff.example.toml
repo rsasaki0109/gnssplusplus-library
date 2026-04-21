@@ -6,6 +6,11 @@ out = "output/ppc_tokyo_run1_rtk.pos"
 summary_json = "output/ppc_tokyo_run1_rtk_summary.json"
 max_epochs = 120
 rtklib_bin = "/opt/rtklib/bin/rnx2rtkp"
+# Optional commercial receiver side-by-side baseline against the PPC reference.csv.
+# commercial_pos = "output/ppc_tokyo_run1_commercial_receiver.csv"
+# commercial_format = "auto"
+# commercial_label = "commercial_receiver"
+# commercial_matched_csv = "output/ppc_tokyo_run1_commercial_receiver_matches.csv"
 preset = "low-cost"
 arfilter = true
 arfilter_margin = 0.35
