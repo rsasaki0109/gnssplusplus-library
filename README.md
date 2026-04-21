@@ -175,7 +175,7 @@ LIBGNSSPP_IMAGE=ghcr.io/rsasaki0109/gnssplusplus-library:v0.1.0 docker compose u
 - Raw/log tooling: `NMEA`, `NovAtel`, `SBP`, `SBF`, `Trimble`, `SkyTraq`, `BINEX`
 - Product tooling: `fetch-products`, `ionex-info`, `dcb-info`
 - Analysis tooling: `visibility`, `visibility-plot`, and `moving-base-plot` for az/el/SNR exports plus moving-base/visibility PNG quick-looks
-- Moving-base tooling: `moving-base-prepare` plus `moving-base-signoff` for real bag/replay/live validation
+- Moving-base tooling: `moving-base-prepare` plus `moving-base-signoff` for real bag/replay/live validation, including optional commercial receiver side-by-side summaries
 - One CLI entrypoint: `gnss spp`, `solve`, `ppp`, `visibility`, `stream`, `convert`, `live`, `rcv`
 - Local web UI: `gnss web` for benchmark snapshots, live/moving-base/PPP-product sign-offs, 2D trajectories, visibility views, artifact bundles, receiver status, and artifact links
 - Built-in sign-off scripts and checked-in benchmark artifacts
@@ -254,8 +254,8 @@ python3 apps/gnss.py sbf-info \
 | `gnss visibility-plot` | Render a visibility CSV into a polar/elevation PNG quick-look |
 | `gnss moving-base-plot` | Render a moving-base solution/reference pair into a baseline/heading PNG quick-look |
 | `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` files from local or remote sources |
-| `gnss moving-base-prepare` | Extract rover/base UBX plus reference CSV from a ROS2 moving-base bag |
-| `gnss scorpion-moving-base-signoff` | Prepare and validate the public SCORPION moving-base ROS2 bag through replay |
+| `gnss moving-base-prepare` | Extract rover/base UBX, reference CSV, and optional receiver CSV from a ROS2 moving-base bag |
+| `gnss scorpion-moving-base-signoff` | Prepare and validate the public SCORPION moving-base ROS2 bag through replay with receiver side-by-side output |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
 | `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
 | `gnss ubx-info` | Inspect `NAV-PVT`, `RAWX`, `SFRBX` from file or serial |
@@ -316,6 +316,7 @@ python3 apps/gnss.py moving-base-prepare \
   --rover-ubx-out output/moving_base_rover.ubx \
   --base-ubx-out output/moving_base_base.ubx \
   --reference-csv output/moving_base_reference.csv \
+  --commercial-csv output/commercial_receiver_solution.csv \
   --summary-json output/moving_base_prepare.json
 
 python3 apps/gnss.py fetch-products \
@@ -336,7 +337,6 @@ python3 apps/gnss.py moving-base-signoff \
   --max-epochs 120
 
 python3 apps/gnss.py scorpion-moving-base-signoff \
-  --input-url https://zenodo.org/api/records/8083431/files/2023-06-14T174658Z.zip/content \
   --summary-json output/scorpion_moving_base_summary.json \
   --require-matched-epochs-min 100 \
   --require-fix-rate-min 80

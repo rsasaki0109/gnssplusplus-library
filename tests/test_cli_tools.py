@@ -11277,6 +11277,7 @@ class CLIToolsTest(unittest.TestCase):
             rover_ubx = temp_root / "rover.ubx"
             base_ubx = temp_root / "base.ubx"
             reference_csv = temp_root / "reference.csv"
+            commercial_csv = temp_root / "commercial_receiver.csv"
             summary_json = temp_root / "summary.json"
 
             result = self.run_gnss(
@@ -11289,6 +11290,8 @@ class CLIToolsTest(unittest.TestCase):
                 str(base_ubx),
                 "--reference-csv",
                 str(reference_csv),
+                "--commercial-csv",
+                str(commercial_csv),
                 "--summary-json",
                 str(summary_json),
                 "--max-epochs",
@@ -11300,6 +11303,7 @@ class CLIToolsTest(unittest.TestCase):
             self.assertTrue(rover_ubx.exists())
             self.assertTrue(base_ubx.exists())
             self.assertTrue(reference_csv.exists())
+            self.assertTrue(commercial_csv.exists())
             self.assertTrue(summary_json.exists())
             self.assertGreater(rover_ubx.stat().st_size, 0)
             self.assertGreater(base_ubx.stat().st_size, 0)
@@ -11307,6 +11311,8 @@ class CLIToolsTest(unittest.TestCase):
             summary = json.loads(summary_json.read_text(encoding="utf-8"))
             self.assertEqual(summary["rover_epochs"], 2)
             self.assertEqual(summary["matched_reference_rows"], 2)
+            self.assertEqual(summary["matched_commercial_receiver_rows"], 2)
+            self.assertEqual(summary["commercial_receiver_csv"], str(commercial_csv))
             self.assertEqual(summary["gps_week"], 2200)
             self.assertEqual(summary["date"], "2023-06-14")
 
@@ -11316,6 +11322,12 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(rows[0]["gps_week"], "2200")
             self.assertEqual(rows[0]["gps_tow_s"], "345600.000")
             self.assertIn("baseline_n_m", rows[0])
+            with commercial_csv.open(encoding="utf-8", newline="") as handle:
+                commercial_rows = list(csv.DictReader(handle))
+            self.assertEqual(len(commercial_rows), 2)
+            self.assertEqual(commercial_rows[0]["gps_week"], "2200")
+            self.assertEqual(commercial_rows[0]["solution_status"], "rtk_fixed")
+            self.assertEqual(commercial_rows[0]["num_satellites"], "18")
 
     def test_moving_base_prepare_help_mentions_rosbag_and_ubx_exports(self) -> None:
         result = self.run_gnss("moving-base-prepare", "--help")
@@ -11323,6 +11335,22 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("ROS2 bag directory or Zenodo zip", result.stdout)
         self.assertIn("--rover-ubx-out", result.stdout)
         self.assertIn("--base-ubx-out", result.stdout)
+        self.assertIn("--commercial-csv", result.stdout)
+
+    def test_scorpion_cache_filename_preserves_zenodo_zip_name(self) -> None:
+        sys_path_backup = sys.path[:]
+        sys.path.insert(0, str(ROOT_DIR / "apps"))
+        try:
+            import gnss_scorpion_moving_base_signoff as scorpion_signoff
+
+            self.assertEqual(
+                scorpion_signoff.download_cache_filename(
+                    "https://zenodo.org/api/records/8083431/files/2023-06-14T174658Z.zip/content"
+                ),
+                "2023-06-14T174658Z.zip",
+            )
+        finally:
+            sys.path[:] = sys_path_backup
 
     @unittest.skipUnless(ros2_bag_support_available(), "ROS2 rosbag + ublox_msgs support not available")
     def test_scorpion_moving_base_signoff_wraps_prepare_and_existing_solution(self) -> None:
@@ -11399,6 +11427,10 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIsNone(payload["products_summary_json"])
             self.assertTrue(Path(payload["prepare_summary_json"]).exists())
             self.assertTrue(Path(payload["matched_csv"]).exists())
+            self.assertTrue(Path(payload["commercial_receiver_csv"]).exists())
+            self.assertTrue(Path(payload["commercial_receiver_matched_csv"]).exists())
+            self.assertIn("commercial_receiver", payload)
+            self.assertEqual(payload["commercial_receiver"]["matched_epochs"], 2)
 
     def test_live_signoff_summarizes_existing_log_and_enforces_realtime_gate(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_live_signoff_cli_") as temp_dir:
