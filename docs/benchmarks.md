@@ -72,4 +72,7 @@ python3 apps/gnss.py ppc-rtk-signoff \
 ```
 
 `ppc-rtk-signoff` is the fixed-threshold path for Tokyo/Nagoya quality and
-runtime checks, with optional RTKLIB delta gates.
+runtime checks, with optional RTKLIB delta gates. Add `--commercial-pos` with
+a normalized receiver CSV or `.pos` file to summarize a commercial receiver
+against the same PPC `reference.csv`; `--commercial-matched-csv` writes the
+per-epoch commercial receiver matches.

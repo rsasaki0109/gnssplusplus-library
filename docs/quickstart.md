@@ -77,7 +77,7 @@ python3 apps/gnss.py replay \
 | `gnss dcb-info` | Inspect `Bias-SINEX` or auxiliary DCB products |
 | `gnss qzss-l6-info` | Inspect direct QZSS L6 frames and export Compact SSR payloads |
 | `gnss web` | Local browser UI for summary JSON, live/moving-base/PPP-product sign-offs, trajectories, moving-base/visibility plots, receiver status, and artifact links |
-| `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya |
+| `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB/commercial receiver side-by-side output |
 
 ## Local web UI
 

@@ -61,6 +61,8 @@ For the `ppc` profile with `--malib-pos` or `--malib-bin`, the command also emit
 `gnss scorpion-moving-base-signoff`, and `gnss ppc-rtk-signoff`
 also accept `--config-toml`, so you can pin long threshold sets and artifact paths in a file instead of repeating them on the command line.
 
+For PPC-Dataset RTK runs, `gnss ppc-demo` and `gnss ppc-rtk-signoff` also accept `--commercial-pos`. This is the public-data path for comparing libgnss++ against a commercial receiver solution when the dataset has an independent `reference.csv`; the receiver summary is stored under `commercial_receiver`, and `delta_vs_commercial_receiver` reports libgnss++ minus receiver deltas for fix rate and horizontal/up error metrics.
+
 If you already have a MALIB `.pos` file, you can gate the delta directly:
 
 ```bash

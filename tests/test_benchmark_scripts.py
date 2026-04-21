@@ -159,6 +159,11 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 rtklib_pos=temp_root / "rtklib.pos",
                 use_existing_rtklib_solution=True,
                 rtklib_solver_wall_time_s=0.8,
+                commercial_pos=temp_root / "commercial.csv",
+                commercial_format="csv",
+                commercial_label="survey_receiver",
+                commercial_matched_csv=temp_root / "commercial_matches.csv",
+                commercial_solver_wall_time_s=0.9,
                 preset=None,
                 arfilter=None,
                 arfilter_margin=None,
@@ -189,6 +194,10 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("--rtklib-bin", command)
             self.assertIn(str(args.rtklib_bin), command)
             self.assertIn("--use-existing-rtklib-solution", command)
+            self.assertIn("--commercial-pos", command)
+            self.assertIn(str(args.commercial_pos), command)
+            self.assertIn("--commercial-matched-csv", command)
+            self.assertIn(str(args.commercial_matched_csv), command)
             self.assertIn("--require-fix-rate-min", command)
             self.assertIn("95.0", command)
             self.assertIn("--require-lib-fix-rate-vs-rtklib-min-delta", command)
@@ -1724,6 +1733,8 @@ class PPCDemoTest(unittest.TestCase):
             reference_csv = run_dir / "reference.csv"
             out = temp_root / "ppc_demo.pos"
             rtklib_pos = temp_root / "ppc_demo_rtklib.pos"
+            commercial_pos = temp_root / "commercial_receiver.csv"
+            commercial_matches = temp_root / "commercial_receiver_matches.csv"
             summary_json = temp_root / "ppc_demo_summary.json"
 
             rover.write_text("synthetic rover\n", encoding="ascii")
@@ -1753,6 +1764,18 @@ class PPCDemoTest(unittest.TestCase):
                     (2300, 1000.4, 35.1000205, 139.1000404, 42.6, 2),
                 ],
             )
+            commercial_pos.write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,solution_status,num_satellites",
+                        "2300,1000.0,35.1000001,139.1000001,42.1,rtk_fixed,14",
+                        "2300,1000.2,35.1000101,139.1000201,42.2,rtk_fixed,14",
+                        "2300,1000.4,35.1000201,139.1000401,42.4,rtk_float,13",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
 
             args = argparse.Namespace(
                 dataset_root=None,
@@ -1771,6 +1794,11 @@ class PPCDemoTest(unittest.TestCase):
                 rtklib_config=None,
                 use_existing_rtklib_solution=True,
                 rtklib_solver_wall_time_s=0.1,
+                commercial_pos=commercial_pos,
+                commercial_format="auto",
+                commercial_label="survey_receiver",
+                commercial_matched_csv=commercial_matches,
+                commercial_solver_wall_time_s=0.2,
                 max_epochs=120,
                 match_tolerance_s=0.25,
                 use_existing_solution=True,
@@ -1832,6 +1860,13 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtklib"]["solver_wall_time_s"], 0.1)
             self.assertAlmostEqual(payload["rtklib"]["realtime_factor"], 4.0, places=5)
             self.assertIn("delta_vs_rtklib", payload)
+            self.assertIn("commercial_receiver", payload)
+            self.assertEqual(payload["commercial_receiver"]["label"], "survey_receiver")
+            self.assertEqual(payload["commercial_receiver"]["matched_epochs"], 3)
+            self.assertEqual(payload["commercial_receiver"]["fixed_epochs"], 2)
+            self.assertEqual(payload["commercial_receiver"]["matched_csv"], str(commercial_matches))
+            self.assertTrue(commercial_matches.exists())
+            self.assertIn("delta_vs_commercial_receiver", payload)
             self.assertTrue(summary_json.exists())
 
             failing_args = argparse.Namespace(

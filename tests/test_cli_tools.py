@@ -7960,6 +7960,8 @@ class CLIToolsTest(unittest.TestCase):
             run_dir.mkdir(parents=True)
             solution_path = temp_root / "ppc_demo.pos"
             rtklib_path = temp_root / "ppc_demo_rtklib.pos"
+            commercial_path = temp_root / "ppc_commercial_receiver.csv"
+            commercial_matches = temp_root / "ppc_commercial_matches.csv"
             summary_path = temp_root / "ppc_demo_summary.json"
             reference_csv = run_dir / "reference.csv"
 
@@ -7997,6 +7999,18 @@ class CLIToolsTest(unittest.TestCase):
                     (2300, 1000.4, 35.1000205, 139.1000404, 42.6, 2, 11),
                 ],
             )
+            commercial_path.write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,solution_status,num_satellites",
+                        "2300,1000.0,35.1000001,139.1000001,42.1,rtk_fixed,14",
+                        "2300,1000.2,35.1000101,139.1000201,42.2,rtk_fixed,14",
+                        "2300,1000.4,35.1000201,139.1000401,42.4,rtk_float,13",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
 
             result = self.run_gnss(
                 "ppc-demo",
@@ -8014,6 +8028,14 @@ class CLIToolsTest(unittest.TestCase):
                 "--use-existing-rtklib-solution",
                 "--rtklib-solver-wall-time-s",
                 "0.1",
+                "--commercial-pos",
+                str(commercial_path),
+                "--commercial-label",
+                "survey_receiver",
+                "--commercial-matched-csv",
+                str(commercial_matches),
+                "--commercial-solver-wall-time-s",
+                "0.2",
                 "--summary-json",
                 str(summary_path),
                 "--require-valid-epochs-min",
@@ -8069,7 +8091,15 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["rtklib"]["solver_wall_time_s"], 0.1)
             self.assertAlmostEqual(payload["rtklib"]["realtime_factor"], 4.0, places=5)
             self.assertIn("delta_vs_rtklib", payload)
+            self.assertIn("commercial_receiver", payload)
+            self.assertEqual(payload["commercial_receiver"]["label"], "survey_receiver")
+            self.assertEqual(payload["commercial_receiver"]["matched_epochs"], 3)
+            self.assertEqual(payload["commercial_receiver"]["fixed_epochs"], 2)
+            self.assertEqual(payload["commercial_receiver"]["matched_csv"], str(commercial_matches))
+            self.assertTrue(commercial_matches.exists())
+            self.assertIn("delta_vs_commercial_receiver", payload)
             self.assertIn("rtklib performance: wall=0.1 s", result.stdout)
+            self.assertIn("commercial_receiver:", result.stdout)
             self.assertIn("performance: wall=0.5 s, span=0.4 s, rtf=0.8, rate=6.0 Hz", result.stdout)
 
     def test_ppc_rtk_signoff_cli_wraps_profile_with_existing_solutions(self) -> None:
@@ -8079,6 +8109,8 @@ class CLIToolsTest(unittest.TestCase):
             run_dir.mkdir(parents=True)
             solution_path = temp_root / "ppc_signoff.pos"
             rtklib_path = temp_root / "ppc_signoff_rtklib.pos"
+            commercial_path = temp_root / "ppc_signoff_commercial.csv"
+            commercial_matches = temp_root / "ppc_signoff_commercial_matches.csv"
             summary_path = temp_root / "ppc_signoff_summary.json"
             reference_csv = run_dir / "reference.csv"
 
@@ -8116,6 +8148,18 @@ class CLIToolsTest(unittest.TestCase):
                     (2300, 1000.4, 35.1000205, 139.1000404, 42.6, 2, 11),
                 ],
             )
+            commercial_path.write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,solution_status,num_satellites",
+                        "2300,1000.0,35.1000001,139.1000001,42.1,rtk_fixed,14",
+                        "2300,1000.2,35.1000101,139.1000201,42.2,rtk_fixed,14",
+                        "2300,1000.4,35.1000201,139.1000401,42.4,rtk_float,13",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
 
             result = self.run_gnss(
                 "ppc-rtk-signoff",
@@ -8133,6 +8177,12 @@ class CLIToolsTest(unittest.TestCase):
                 "--use-existing-rtklib-solution",
                 "--rtklib-solver-wall-time-s",
                 "0.1",
+                "--commercial-pos",
+                str(commercial_path),
+                "--commercial-matched-csv",
+                str(commercial_matches),
+                "--commercial-solver-wall-time-s",
+                "0.2",
                 "--summary-json",
                 str(summary_path),
                 "--require-valid-epochs-min",
@@ -8173,6 +8223,9 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("signoff_thresholds", payload)
             self.assertEqual(payload["signoff_thresholds"]["require_fix_rate_min"], 60.0)
             self.assertIn("delta_vs_rtklib", payload)
+            self.assertTrue(payload["commercial_receiver_comparison_enabled"])
+            self.assertIn("commercial_receiver", payload)
+            self.assertTrue(commercial_matches.exists())
 
     def test_ppc_rtk_signoff_cli_reads_config_toml(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_rtk_signoff_toml_") as temp_dir:

@@ -272,8 +272,8 @@ python3 apps/gnss.py sbf-info \
 | `gnss ppp-kinematic-signoff` | Kinematic PPP sign-off |
 | `gnss ppp-products-signoff` | Static, kinematic, or PPC PPP sign-off with fetched SP3/CLK/IONEX/DCB products, optional MALIB delta gates, and comparison CSV/PNG artifacts |
 | `gnss live-signoff` | Realtime/error-handling sign-off for recorded RTCM/UBX live inputs |
-| `gnss ppc-demo` | External PPC-Dataset RTK/PPP verification against `reference.csv` |
-| `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB side-by-side gates |
+| `gnss ppc-demo` | External PPC-Dataset RTK/PPP verification against `reference.csv`, with optional RTKLIB/commercial receiver side-by-side summaries |
+| `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB/commercial receiver side-by-side gates |
 | `gnss moving-base-signoff` | Real moving-base replay/live sign-off against per-epoch base/rover reference coordinates |
 | `gnss odaiba-benchmark` | End-to-end Odaiba benchmark pipeline |
 | `gnss web` | Local browser UI for summary JSON, live/moving-base/PPP-product sign-offs, `.pos` trajectories, moving-base/visibility plots and histories, receiver status, and artifact/provenance links |
@@ -439,6 +439,8 @@ python3 apps/gnss.py ppc-rtk-signoff \
   --dataset-root /datasets/PPC-Dataset \
   --city tokyo \
   --rtklib-bin /path/to/rnx2rtkp \
+  --commercial-pos /datasets/PPC-Dataset/tokyo/run1/commercial_receiver.csv \
+  --commercial-matched-csv output/ppc_tokyo_run1_commercial_matches.csv \
   --summary-json output/ppc_tokyo_run1_rtk_signoff.json
 ```
 
