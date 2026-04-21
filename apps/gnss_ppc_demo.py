@@ -150,6 +150,14 @@ def parse_args() -> argparse.Namespace:
         help="Optional ratio threshold used while hold is active for RTK.",
     )
     parser.add_argument(
+        "--no-kinematic-post-filter",
+        action="store_true",
+        help=(
+            "For RTK runs, keep valid SPP/float fallback epochs instead of applying "
+            "the precision-oriented kinematic post-filter."
+        ),
+    )
+    parser.add_argument(
         "--rtklib-bin",
         type=Path,
         default=None,
@@ -568,6 +576,8 @@ def run_solver(
             command.extend(["--min-hold-count", str(args.min_hold_count)])
         if args.hold_ratio_threshold is not None:
             command.extend(["--hold-ratio-threshold", str(args.hold_ratio_threshold)])
+        if getattr(args, "no_kinematic_post_filter", False):
+            command.append("--no-kinematic-post-filter")
     else:
         command = [
             *gnss_command,
@@ -636,6 +646,8 @@ def build_summary_payload(
         "nav": str(nav),
         "reference_csv": str(reference_csv),
         "receiver_observation_provenance": ppc_receiver_observation_provenance(args._dataset_city),
+        "rtk_output_profile": "coverage" if getattr(args, "no_kinematic_post_filter", False) else "precision",
+        "kinematic_post_filter_enabled": not getattr(args, "no_kinematic_post_filter", False),
         "solution_pos": str(out),
         "summary_json": str(summary_json),
         "generated_solution": not args.use_existing_solution,

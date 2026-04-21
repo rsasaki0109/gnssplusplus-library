@@ -190,6 +190,7 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 arfilter_margin=None,
                 min_hold_count=None,
                 hold_ratio_threshold=None,
+                no_kinematic_post_filter=True,
             )
             run_dir = temp_root / "tokyo" / "run1"
             out = temp_root / "solution.pos"
@@ -227,6 +228,7 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("--arfilter", command)
             self.assertIn("--min-hold-count", command)
             self.assertIn("8", command)
+            self.assertIn("--no-kinematic-post-filter", command)
 
     def test_build_ppc_demo_command_passes_commercial_rover_flags(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_rtk_commercial_rover_") as temp_dir:
@@ -2260,6 +2262,7 @@ class PPCDemoTest(unittest.TestCase):
                 blq=None,
                 enable_ar=False,
                 low_dynamics=False,
+                no_kinematic_post_filter=True,
                 require_valid_epochs_min=3,
                 require_matched_epochs_min=3,
                 require_fix_rate_min=60.0,
@@ -2293,6 +2296,8 @@ class PPCDemoTest(unittest.TestCase):
 
             self.assertEqual(payload["dataset"], "PPC-Dataset tokyo run1")
             self.assertEqual(payload["solver"], "rtk")
+            self.assertEqual(payload["rtk_output_profile"], "coverage")
+            self.assertFalse(payload["kinematic_post_filter_enabled"])
             provenance = payload["receiver_observation_provenance"]
             self.assertEqual(provenance["vehicle_receiver"], "Septentrio mosaic-X5")
             self.assertEqual(provenance["vehicle_antenna"], "Trimble AT1675")

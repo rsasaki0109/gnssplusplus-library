@@ -34,6 +34,9 @@ arfilter = true
 arfilter_margin = 0.35
 min_hold_count = 8
 hold_ratio_threshold = 2.6
+# Set true for the coverage profile: valid SPP/float fallback epochs are kept
+# instead of being removed by the precision-oriented kinematic output filter.
+# no_kinematic_post_filter = true
 require_valid_epochs_min = 100
 require_matched_epochs_min = 100
 # Positioning rate is matched reference epochs / total reference epochs.

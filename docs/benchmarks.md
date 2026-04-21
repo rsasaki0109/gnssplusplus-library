@@ -2,7 +2,9 @@
 
 gnssplusplus `develop` (post PR #19-#23) leads RTKLIB `demo5` on PPC
 positioned-epoch precision and Fix rate with no Phase 2 opt-in flags.
-Positioning rate is tracked separately because no-solution gaps still matter.
+Positioning rate is tracked separately because no-solution gaps still matter;
+the Tokyo run3 coverage profile keeps valid SPP/float fallback epochs and now
+exceeds RTKLIB `demo5` on both Positioning rate and 3D<=50cm/reference score.
 PPC is the primary public RTK benchmark here because it bundles survey-grade
 receiver observations, reference-station observations, broadcast navigation
 data, and reliable trajectory truth. It is not used as a proprietary
@@ -49,15 +51,15 @@ about matching a proprietary receiver RTK engine.
 | run3 | **7516 / 86.84%**       | 5778 / 40.55%     | **0.012** vs 0.666 (56×) | **0.137** vs 24.521 (179×) |
 
 PPC Tokyo run3 is also checked visually as a 2D status-colored trajectory.
-The replay uses GNSS observations only, with no IMU input. This exposes the
-current gap: gnssplusplus is precise when it positions, but it does not yet
-position every reference epoch. Fix rate and Positioning rate are tracked
-separately.
+The replay uses GNSS observations only, with no IMU input. The coverage profile
+is run with `--no-kinematic-post-filter`, so valid SPP/float fallback epochs are
+retained instead of being dropped by the precision-oriented output filter.
 
-| Solver | Positioning rate | 3D <= 50 cm / reference | 3D <= 50 cm / positioned |
-|---|---:|---:|---:|
-| RTKLIB `demo5` | 93.1% | 39.9% | 42.8% |
-| gnssplusplus | 56.6% | 55.3% | 97.7% |
+| Solver/profile | Positioning rate | Fix rate | 3D <= 50 cm / reference | 3D <= 50 cm / positioned |
+|---|---:|---:|---:|---:|
+| RTKLIB `demo5` | 93.1% | 40.5% | 39.9% | 42.8% |
+| gnssplusplus coverage | **96.0%** | **60.2%** | **63.5%** | **66.1%** |
+| gnssplusplus precision | 56.6% | 86.8% | 55.3% | 97.7% |
 
 PPC2024's official score is a distance ratio with 3D error <= 50 cm; the
 published first-place result was 78.7% Public / 85.6% Private in

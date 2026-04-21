@@ -53,11 +53,12 @@ RTKLIB `demo5`. It is **not** a proprietary receiver-engine comparison.
 
 On PPC Tokyo and Nagoya, gnssplusplus `develop` (post PR #19-#23) dominates
 RTKLIB `demo5` on positioned-epoch precision and Fix rate with **no Phase 2
-opt-in flags**, but Positioning rate is now tracked as a separate first-class
-metric because no-solution gaps still matter. UrbanNav Tokyo Odaiba is kept as
-an independent public urban stress smoke: gnssplusplus wins Fix count, Hp95,
-and Vp95 there, while the Hmed gap closes to 9 cm when wide-lane AR is
-explicitly enabled.
+opt-in flags**. Positioning rate is tracked as a separate first-class metric:
+the Tokyo run3 coverage profile keeps valid SPP/float fallback epochs and now
+exceeds RTKLIB `demo5` on both Positioning rate and 3D<=50cm/reference score.
+UrbanNav Tokyo Odaiba is kept as an independent public urban stress smoke:
+gnssplusplus wins Fix count, Hp95, and Vp95 there, while the Hmed gap closes to
+9 cm when wide-lane AR is explicitly enabled.
 
 All runs below use `--mode kinematic --preset low-cost --match-tolerance-s
 0.25`.
@@ -86,14 +87,15 @@ observation solve against reference truth.
 
 The 2D sanity plot below uses the PPC Tokyo run3 open data (Harumi-Odaiba).
 Points are colored by RTK solution status, and no IMU input is used by this
-GNSS-only RTK replay. This exposes the current gap: gnssplusplus is precise
-when it positions, but it does **not** yet position every reference epoch.
-Therefore Fix rate and Positioning rate are tracked separately.
+GNSS-only RTK replay. The coverage profile is run with
+`--no-kinematic-post-filter`, so valid SPP/float fallback epochs are retained
+instead of being dropped by the precision-oriented output filter.
 
-| Solver | Positioning rate | 3D <= 50 cm / reference | 3D <= 50 cm / positioned |
-|---|---:|---:|---:|
-| RTKLIB `demo5` | 93.1% | 39.9% | 42.8% |
-| gnssplusplus | 56.6% | 55.3% | 97.7% |
+| Solver/profile | Positioning rate | Fix rate | 3D <= 50 cm / reference | 3D <= 50 cm / positioned |
+|---|---:|---:|---:|---:|
+| RTKLIB `demo5` | 93.1% | 40.5% | 39.9% | 42.8% |
+| gnssplusplus coverage | **96.0%** | **60.2%** | **63.5%** | **66.1%** |
+| gnssplusplus precision | 56.6% | 86.8% | 55.3% | 97.7% |
 
 PPC2024's official score is a distance ratio with 3D error <= 50 cm; the
 published first-place result was 78.7% Public / 85.6% Private in

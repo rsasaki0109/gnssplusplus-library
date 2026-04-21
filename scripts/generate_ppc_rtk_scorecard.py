@@ -191,7 +191,7 @@ def main() -> int:
     ax.text(
         0.05,
         0.785,
-        "Same public rover/base/nav observations. Fix rate is positioned-epoch only; positioning rate is tracked separately.",
+        "Same public rover/base/nav observations. Precision and coverage profiles are reported separately.",
         fontsize=14,
         color=MUTED,
     )
@@ -222,9 +222,9 @@ def main() -> int:
         0.625,
         0.27,
         0.105,
-        "Positioning gap remains",
-        "56.6%",
-        "Tokyo run3 positioned/reference",
+        "Tokyo run3 coverage lead",
+        "+2.9 pp",
+        "96.0% positioned/reference",
     )
 
     left = fig.add_axes([0.065, 0.11, 0.53, 0.42], facecolor=PANEL)
@@ -237,7 +237,7 @@ def main() -> int:
     ax.text(
         0.05,
         0.04,
-        "PPC-Dataset: GNSS-only replay. See the trajectory status plot for no-solution gaps and 3D50/reference score.",
+        "Fix-rate bars use the precision profile; the Tokyo run3 coverage profile keeps valid SPP/float fallbacks for the trajectory and 3D50/reference score.",
         fontsize=10.5,
         color=MUTED,
     )

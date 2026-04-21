@@ -141,6 +141,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--arfilter-margin", type=float, default=None)
     parser.add_argument("--min-hold-count", type=int, default=None)
     parser.add_argument("--hold-ratio-threshold", type=float, default=None)
+    parser.add_argument("--no-kinematic-post-filter", action="store_true")
 
     parser.add_argument("--require-valid-epochs-min", type=int, default=None)
     parser.add_argument("--require-matched-epochs-min", type=int, default=None)
@@ -316,6 +317,8 @@ def build_ppc_demo_command(args: argparse.Namespace,
         command.extend(["--min-hold-count", str(tuning["min_hold_count"])])
     if "hold_ratio_threshold" in tuning:
         command.extend(["--hold-ratio-threshold", str(tuning["hold_ratio_threshold"])])
+    if getattr(args, "no_kinematic_post_filter", False):
+        command.append("--no-kinematic-post-filter")
 
     for name, value in thresholds.items():
         command.extend([f"--{name.replace('_', '-')}", str(value)])
