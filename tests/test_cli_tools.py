@@ -11594,6 +11594,10 @@ class CLIToolsTest(unittest.TestCase):
             visibility_csv = temp_root / "output" / "visibility_static.csv"
             visibility_png = temp_root / "output" / "visibility_static.png"
             moving_base_summary = temp_root / "output" / "scorpion_moving_base_summary.json"
+            moving_base_commercial = temp_root / "output" / "commercial_receiver_solution.csv"
+            moving_base_commercial_matches = temp_root / "output" / "commercial_receiver_matches.csv"
+            ppc_commercial = temp_root / "output" / "ppc_commercial_receiver.csv"
+            ppc_commercial_matches = temp_root / "output" / "ppc_commercial_receiver_matches.csv"
             artifact_manifest = temp_root / "output" / "artifact_manifest.json"
             port_file = temp_root / "port.txt"
 
@@ -11675,9 +11679,38 @@ class CLIToolsTest(unittest.TestCase):
                         "solver_wall_time_s": 12.34,
                         "realtime_factor": 1.23,
                         "effective_epoch_rate_hz": 15.67,
+                        "commercial_receiver": {
+                            "label": "survey_receiver",
+                            "solution_pos": str(ppc_commercial),
+                            "format": "csv",
+                            "matched_csv": str(ppc_commercial_matches),
+                            "matched_epochs": 120,
+                            "valid_epochs": 120,
+                            "fixed_epochs": 118,
+                            "fix_rate_pct": 98.33,
+                            "median_h_m": 0.095,
+                            "p95_h_m": 0.105,
+                            "p95_abs_up_m": 0.120,
+                        },
+                        "delta_vs_commercial_receiver": {
+                            "matched_epochs": 0,
+                            "fixed_epochs": -2,
+                            "fix_rate_pct": -1.66,
+                            "median_h_m": 0.013,
+                            "p95_h_m": 0.005,
+                            "p95_abs_up_m": -0.010,
+                        },
                     }
                 ),
                 encoding="utf-8",
+            )
+            ppc_commercial.write_text(
+                "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,solution_status,num_satellites\n",
+                encoding="ascii",
+            )
+            ppc_commercial_matches.write_text(
+                "gps_tow_s,traj_east_m,traj_north_m,traj_up_m,east_error_m,north_error_m,up_error_m,horizontal_error_m,status\n",
+                encoding="ascii",
             )
             moving_base_summary.write_text(
                 json.dumps(
@@ -11699,9 +11732,40 @@ class CLIToolsTest(unittest.TestCase):
                         "nav_rinex": str(temp_root / "output" / "brdc0010.24n"),
                         "input_url": "https://example.com/scorpion.zip",
                         "signoff_profile": "scorpion-moving-base",
+                        "commercial_receiver_csv": str(moving_base_commercial),
+                        "commercial_receiver_matched_csv": str(moving_base_commercial_matches),
+                        "commercial_receiver": {
+                            "label": "rover_nav_pvt",
+                            "solution_pos": str(moving_base_commercial),
+                            "format": "csv",
+                            "matched_csv": str(moving_base_commercial_matches),
+                            "matched_epochs": 120,
+                            "valid_epochs": 120,
+                            "fixed_epochs": 120,
+                            "fix_rate_pct": 100.0,
+                            "median_baseline_error_m": 0.102,
+                            "p95_baseline_error_m": 0.133,
+                            "p95_heading_error_deg": 3.80,
+                        },
+                        "libgnss_vs_commercial_receiver": {
+                            "matched_epochs_delta": -26,
+                            "fixed_epochs_delta": -30,
+                            "fix_rate_pct_delta": -4.26,
+                            "median_baseline_error_m_delta": -0.060,
+                            "p95_baseline_error_m_delta": -0.032,
+                            "p95_heading_error_deg_delta": 2.05,
+                        },
                     }
                 ),
                 encoding="utf-8",
+            )
+            moving_base_commercial.write_text(
+                "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,solution_status,num_satellites\n",
+                encoding="ascii",
+            )
+            moving_base_commercial_matches.write_text(
+                "gps_week,gps_tow_s,baseline_error_m,baseline_length_m,heading_error_deg,status,satellites\n",
+                encoding="ascii",
             )
             (temp_root / "output" / "scorpion_moving_base.png").write_bytes(
                 binascii.a2b_base64(
@@ -11848,6 +11912,17 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertEqual(len(overview["ppc_summaries"]), 1)
                 self.assertEqual(overview["ppc_summaries"][0]["runtime_status"], "realtime")
                 self.assertEqual(overview["ppc_summaries"][0]["quality_status"], "excellent")
+                self.assertEqual(overview["ppc_summaries"][0]["commercial_receiver"]["label"], "survey_receiver")
+                self.assertEqual(
+                    overview["ppc_summaries"][0]["commercial_receiver"]["solution_pos"],
+                    "output/ppc_commercial_receiver.csv",
+                )
+                self.assertEqual(
+                    overview["ppc_summaries"][0]["commercial_receiver"]["matched_csv"],
+                    "output/ppc_commercial_receiver_matches.csv",
+                )
+                self.assertEqual(overview["ppc_summaries"][0]["delta_vs_commercial_receiver"]["p95_h_m"], 0.005)
+                self.assertEqual(overview["ppc_summaries"][0]["commercial_comparison_status"], "close")
                 self.assertEqual(len(overview["moving_base_summaries"]), 1)
                 self.assertEqual(overview["moving_base_summaries"][0]["runtime_status"], "realtime")
                 self.assertEqual(overview["moving_base_summaries"][0]["quality_status"], "excellent")
@@ -11855,6 +11930,21 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertEqual(overview["moving_base_summaries"][0]["signoff_profile"], "scorpion-moving-base")
                 self.assertTrue(overview["moving_base_summaries"][0]["plot_png"].endswith("scorpion_moving_base.png"))
                 self.assertTrue(overview["moving_base_summaries"][0]["matched_csv"].endswith("scorpion_moving_base_matches.csv"))
+                self.assertEqual(
+                    overview["moving_base_summaries"][0]["commercial_receiver"]["solution_pos"],
+                    "output/commercial_receiver_solution.csv",
+                )
+                self.assertEqual(
+                    overview["moving_base_summaries"][0]["commercial_receiver"]["matched_csv"],
+                    "output/commercial_receiver_matches.csv",
+                )
+                self.assertEqual(
+                    overview["moving_base_summaries"][0]["libgnss_vs_commercial_receiver"][
+                        "p95_baseline_error_m_delta"
+                    ],
+                    -0.032,
+                )
+                self.assertEqual(overview["moving_base_summaries"][0]["commercial_comparison_status"], "worse")
                 self.assertEqual(overview["moving_base_summaries"][0]["nav_rinex"], "output/brdc0010.24n")
                 self.assertEqual(overview["moving_base_summaries"][0]["input_url"], "https://example.com/scorpion.zip")
                 self.assertEqual(len(overview["ppp_products_summaries"]), 1)
@@ -11880,6 +11970,15 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertIn("moving-base", manifest_categories)
                 self.assertIn("ppp-products", manifest_categories)
                 self.assertIn("visibility", manifest_categories)
+                ppc_bundle = next(entry for entry in overview["artifact_manifest"] if entry["category"] == "ppc")
+                self.assertEqual(ppc_bundle["artifacts"]["commercial_solution"], "output/ppc_commercial_receiver.csv")
+                moving_base_bundle = next(
+                    entry for entry in overview["artifact_manifest"] if entry["category"] == "moving-base"
+                )
+                self.assertEqual(
+                    moving_base_bundle["artifacts"]["commercial_matches"],
+                    "output/commercial_receiver_matches.csv",
+                )
 
                 with request.urlopen(
                     f"http://127.0.0.1:{bound_port}/api/visibility?path=output/visibility_static.csv"
@@ -11966,6 +12065,18 @@ class CLIToolsTest(unittest.TestCase):
                         "matched_csv": str(output_dir / "scorpion_moving_base_matches.csv"),
                         "plot_png": str(output_dir / "scorpion_moving_base.png"),
                         "input_url": "https://example.com/scorpion.zip",
+                        "commercial_receiver": {
+                            "label": "rover_nav_pvt",
+                            "solution_pos": str(output_dir / "commercial_receiver_solution.csv"),
+                            "matched_csv": str(output_dir / "commercial_receiver_matches.csv"),
+                            "matched_epochs": 120,
+                            "fix_rate_pct": 100.0,
+                            "p95_baseline_error_m": 0.133,
+                        },
+                        "libgnss_vs_commercial_receiver": {
+                            "fix_rate_pct_delta": -4.26,
+                            "p95_baseline_error_m_delta": -0.032,
+                        },
                     }
                 ),
                 encoding="utf-8",
@@ -11993,6 +12104,14 @@ class CLIToolsTest(unittest.TestCase):
             moving_base_entry = next(entry for entry in payload["bundles"] if entry["category"] == "moving-base")
             self.assertEqual(moving_base_entry["artifacts"]["input_url"], "https://example.com/scorpion.zip")
             self.assertEqual(moving_base_entry["artifacts"]["matched_csv"], "output/scorpion_moving_base_matches.csv")
+            self.assertEqual(
+                moving_base_entry["artifacts"]["commercial_solution"],
+                "output/commercial_receiver_solution.csv",
+            )
+            self.assertEqual(
+                moving_base_entry["metrics"]["libgnss_vs_commercial_receiver"]["p95_baseline_error_m_delta"],
+                -0.032,
+            )
             ppp_entry = next(entry for entry in payload["bundles"] if entry["category"] == "ppp-products")
             self.assertEqual(ppp_entry["artifacts"]["sp3"], "output/igs.sp3")
             self.assertEqual(ppp_entry["artifacts"]["reference"], "output/ppc_reference.csv")

@@ -87,7 +87,7 @@ python3 apps/gnss.py web \
   --rcv-status output/receiver.status.json
 ```
 
-Open `http://127.0.0.1:8085` to inspect benchmark tables, live/moving-base/PPP-product sign-offs, receiver status, moving-base/visibility plots, moving-base history, and linked artifacts/provenance. PPP-product rows include direct links to fetched products, MALIB `.pos`, comparison CSV/PNG, and dataset reference files.
+Open `http://127.0.0.1:8085` to inspect benchmark tables, live/moving-base/PPP-product sign-offs, receiver status, moving-base/visibility plots, moving-base history, commercial receiver side-by-side metrics, and linked artifacts/provenance. PPC and moving-base rows include receiver comparison deltas when their summaries contain commercial receiver results; PPP-product rows include direct links to fetched products, MALIB `.pos`, comparison CSV/PNG, and dataset reference files.
 
 You can also store the same arguments in `configs/web.example.toml` and run:
 
