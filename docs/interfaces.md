@@ -270,10 +270,11 @@ When a suite config is used, the output tree is partitioned by case:
 
 `gnss solve`, `gnss replay`, and `gnss live` accept `--mode moving-base`.
 
-`gnss moving-base-prepare` extracts rover/base UBX streams plus a per-epoch reference CSV from a ROS2 moving-base bag or Zenodo zip. `gnss moving-base-signoff` is the validation entrypoint for replay/live runs against those references. `gnss scorpion-moving-base-signoff` wraps the public SCORPION bag flow by chaining prepare, BRDC nav fetch, and replay validation. Together they cover:
+`gnss moving-base-prepare` extracts rover/base UBX streams plus a per-epoch reference CSV from a ROS2 moving-base bag or Zenodo zip. It can also export the rover receiver `NAV-PVT` solution as a normalized commercial receiver CSV. `gnss moving-base-signoff` is the validation entrypoint for replay/live runs against those references. `gnss scorpion-moving-base-signoff` wraps the public SCORPION bag flow by chaining prepare, BRDC nav fetch, replay validation, and receiver side-by-side matching. Together they cover:
 
 - ROS2 bag or zip ingestion with u-blox `NAV-PVT` / `RXM-RAWX` / `NAV-RELPOSNED`
 - replay inputs via `--rover-ubx` and `--base-ubx`
+- public receiver side-by-side summaries via `--commercial-csv` / `--commercial-pos`
 - fix rate
 - baseline error percentiles
 - heading error percentiles

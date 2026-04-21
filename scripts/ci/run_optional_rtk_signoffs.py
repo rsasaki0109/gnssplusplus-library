@@ -134,6 +134,8 @@ def make_scorpion_step(context: SignoffContext) -> SignoffStep:
         context.output_dir / "scorpion_moving_base" / "products_summary.json",
         context.output_dir / "scorpion_moving_base" / "scorpion_moving_base.pos",
         context.output_dir / "scorpion_moving_base" / "scorpion_moving_base_matches.csv",
+        context.output_dir / "scorpion_moving_base" / "commercial_receiver_solution.csv",
+        context.output_dir / "scorpion_moving_base" / "commercial_receiver_matches.csv",
         context.output_dir / "scorpion_moving_base" / "scorpion_moving_base.png",
         context.output_dir / "scorpion_moving_base" / "reference.csv",
     ]

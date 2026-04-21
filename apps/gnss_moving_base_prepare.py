@@ -48,6 +48,9 @@ class NavPvtSample:
     lat_deg: float
     lon_deg: float
     height_m: float
+    fix_type: int
+    flags: int
+    num_sv: int
 
 
 @dataclass
@@ -79,6 +82,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=ROOT_DIR / "output/moving_base_reference.csv",
         help="Output reference CSV for gnss moving-base-signoff.",
+    )
+    parser.add_argument(
+        "--commercial-csv",
+        type=Path,
+        default=None,
+        help="Optional normalized commercial receiver solution CSV from rover NAV-PVT.",
     )
     parser.add_argument(
         "--summary-json",
@@ -261,6 +270,9 @@ def navpvt_sample(message: object) -> NavPvtSample:
         lat_deg=float(message.lat) * 1e-7,
         lon_deg=float(message.lon) * 1e-7,
         height_m=float(message.height) * 1e-3,
+        fix_type=int(message.fix_type),
+        flags=int(message.flags),
+        num_sv=int(message.num_sv),
     )
 
 
@@ -327,7 +339,19 @@ class PreparedBag:
             self._temp_dir = None
 
 
-def collect_messages(args: argparse.Namespace, bag_dir: Path) -> tuple[bytes, bytes, list[RawxEpoch], list[NavPvtSample], list[NavRelPosSample], dict[str, int], str | None]:
+def collect_messages(
+    args: argparse.Namespace,
+    bag_dir: Path,
+) -> tuple[
+    bytes,
+    bytes,
+    list[RawxEpoch],
+    list[NavPvtSample],
+    list[NavPvtSample],
+    list[NavRelPosSample],
+    dict[str, int],
+    str | None,
+]:
     reader = rosbag2_py.SequentialReader()
     reader.open(
         rosbag2_py.StorageOptions(uri=str(bag_dir), storage_id="sqlite3"),
@@ -351,6 +375,7 @@ def collect_messages(args: argparse.Namespace, bag_dir: Path) -> tuple[bytes, by
     rover_frames = bytearray()
     base_frames = bytearray()
     rover_epochs: list[RawxEpoch] = []
+    rover_nav: list[NavPvtSample] = []
     base_nav: list[NavPvtSample] = []
     relpos: list[NavRelPosSample] = []
     date_text: str | None = None
@@ -372,6 +397,7 @@ def collect_messages(args: argparse.Namespace, bag_dir: Path) -> tuple[bytes, by
         if topic == args.rover_navpvt_topic:
             rover_frames.extend(pack_nav_pvt(message))
             sample = navpvt_sample(message)
+            rover_nav.append(sample)
             if date_text is None:
                 date_text = f"{sample.year:04d}-{sample.month:02d}-{sample.day:02d}"
         elif topic == args.base_navpvt_topic:
@@ -392,11 +418,81 @@ def collect_messages(args: argparse.Namespace, bag_dir: Path) -> tuple[bytes, by
 
     if not rover_epochs:
         raise SystemExit(f"No RAWX epochs found on {args.rover_rawx_topic}")
+    if not rover_nav:
+        raise SystemExit(f"No NavPVT messages found on {args.rover_navpvt_topic}")
     if not base_nav:
         raise SystemExit(f"No NavPVT messages found on {args.base_navpvt_topic}")
     if not relpos:
         raise SystemExit(f"No NavRELPOSNED messages found on {args.rover_relpos_topic}")
-    return bytes(rover_frames), bytes(base_frames), rover_epochs, base_nav, relpos, counts, date_text
+    return bytes(rover_frames), bytes(base_frames), rover_epochs, rover_nav, base_nav, relpos, counts, date_text
+
+
+def navpvt_solution_status(sample: NavPvtSample) -> str:
+    carrier_solution = (sample.flags >> 6) & 0x03
+    if sample.fix_type >= 3 and carrier_solution == 2:
+        return "rtk_fixed"
+    if sample.fix_type >= 3 and carrier_solution == 1:
+        return "rtk_float"
+    if sample.fix_type >= 3 and sample.flags & 0x02:
+        return "dgnss"
+    if sample.fix_type >= 2:
+        return "single"
+    return "invalid"
+
+
+def write_commercial_receiver_csv(
+    rover_epochs: list[RawxEpoch],
+    rover_nav: list[NavPvtSample],
+    tolerance_ms: int,
+    output_path: Path,
+) -> dict[str, object]:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    matched_rows = 0
+    skipped_no_rover_nav = 0
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "gps_week",
+                "gps_tow_s",
+                "lat_deg",
+                "lon_deg",
+                "height_m",
+                "solution_status",
+                "num_satellites",
+                "navpvt_fix_type",
+                "navpvt_flags",
+            ]
+        )
+        for epoch in rover_epochs:
+            target_i_tow_ms = int(round(epoch.tow_s * 1000.0))
+            nav_index = nearest_sample_index(rover_nav, target_i_tow_ms, tolerance_ms, lambda item: item.i_tow_ms)
+            if nav_index is None:
+                skipped_no_rover_nav += 1
+                continue
+            sample = rover_nav[nav_index]
+            writer.writerow(
+                [
+                    epoch.week,
+                    f"{epoch.tow_s:.3f}",
+                    f"{sample.lat_deg:.10f}",
+                    f"{sample.lon_deg:.10f}",
+                    f"{sample.height_m:.4f}",
+                    navpvt_solution_status(sample),
+                    sample.num_sv,
+                    sample.fix_type,
+                    f"0x{sample.flags:02X}",
+                ]
+            )
+            matched_rows += 1
+
+    if matched_rows == 0:
+        raise SystemExit("Failed to match rover RAWX epochs to rover NavPVT commercial receiver rows")
+    return {
+        "commercial_receiver_csv": str(output_path),
+        "matched_commercial_receiver_rows": matched_rows,
+        "skipped_missing_rover_nav": skipped_no_rover_nav,
+    }
 
 
 def write_reference_csv(
@@ -476,7 +572,10 @@ def main() -> int:
     ensure_input_exists(args.input)
     prepared_bag = PreparedBag(args.input)
     try:
-        rover_frames, base_frames, rover_epochs, base_nav, relpos, counts, date_text = collect_messages(args, prepared_bag.bag_dir)
+        rover_frames, base_frames, rover_epochs, rover_nav, base_nav, relpos, counts, date_text = collect_messages(
+            args,
+            prepared_bag.bag_dir,
+        )
     finally:
         prepared_bag.close()
 
@@ -492,6 +591,14 @@ def main() -> int:
         args.match_tolerance_ms,
         args.reference_csv,
     )
+    commercial_metrics: dict[str, object] = {}
+    if args.commercial_csv is not None:
+        commercial_metrics = write_commercial_receiver_csv(
+            rover_epochs,
+            rover_nav,
+            args.match_tolerance_ms,
+            args.commercial_csv,
+        )
 
     summary = {
         "input": str(args.input),
@@ -507,6 +614,7 @@ def main() -> int:
         "base_ubx_bytes": len(base_frames),
         "topics": counts,
         **reference_metrics,
+        **commercial_metrics,
     }
     args.summary_json.parent.mkdir(parents=True, exist_ok=True)
     args.summary_json.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -516,6 +624,8 @@ def main() -> int:
         print(f"  rover_ubx: {args.rover_ubx_out}")
         print(f"  base_ubx: {args.base_ubx_out}")
         print(f"  reference_csv: {args.reference_csv}")
+        if args.commercial_csv is not None:
+            print(f"  commercial_csv: {args.commercial_csv}")
         print(f"  summary_json: {args.summary_json}")
         print(f"  rover_epochs: {summary['rover_epochs']}")
         print(f"  matched_reference_rows: {summary['matched_reference_rows']}")
