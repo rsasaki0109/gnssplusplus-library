@@ -106,6 +106,9 @@ regresses P95 horizontal error; the report separates FIXED/FLOAT/SPP quality and
 bad continuous drift segments. The segment CSV also records adjacent FIX-anchor
 gap/speed, solution path length, and bridge residuals so FLOAT-tail guards can
 be designed from bounded segment evidence instead of status-only ratios.
+Add `--official-segments-csv` when tuning PPC official score directly; it writes
+one row per reference distance segment with gnssplusplus and RTKLIB score state,
+3D error, status, and score-delta distance.
 
 `gnss smartloc-adapter` widens the public matrix beyond UrbanNav by exporting
 smartLoc `NAV-POSLLH.csv` into a `reference.csv` plus a normalized u-blox

@@ -10,16 +10,20 @@ import math
 import os
 from pathlib import Path
 import sys
-from typing import Any
 
 import numpy as np
 
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = Path(__file__).resolve().parent
+APPS_DIR = ROOT_DIR / "apps"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
+if str(APPS_DIR) not in sys.path:
+    sys.path.insert(0, str(APPS_DIR))
 
 import generate_driving_comparison as comparison  # noqa: E402
+import gnss_ppc_metrics as ppc_metrics  # noqa: E402
 
 
 STATUS_NAMES = {
@@ -35,6 +39,13 @@ STATUS_COLORS = {
     "DGPS": "#3498db",
     "SPP": "#e74c3c",
 }
+RTKLIB_STATUS_NAMES = {
+    1: "FIXED",
+    2: "FLOAT",
+    4: "DGPS",
+    5: "SPP",
+}
+SCORE_STATE_ORDER = ("scored", "high_error", "no_solution")
 
 
 def rounded(value: float) -> float:
@@ -51,10 +62,24 @@ def status_name(status: int) -> str:
     return STATUS_NAMES.get(status, f"status_{status}")
 
 
+def rtklib_status_name(status: int) -> str:
+    return RTKLIB_STATUS_NAMES.get(status, f"status_{status}")
+
+
 def ordered_status_names(names: set[str]) -> list[str]:
     ordered = [name for name in STATUS_ORDER if name in names]
     ordered.extend(sorted(names.difference(STATUS_ORDER)))
     return ordered
+
+
+def ordered_segment_status_names(names: set[str]) -> list[str]:
+    ordered = [name for name in ("NO_SOLUTION", *STATUS_ORDER) if name in names]
+    ordered.extend(sorted(names.difference({"NO_SOLUTION", *STATUS_ORDER})))
+    return ordered
+
+
+def optional_float(value: object) -> float | None:
+    return None if value is None else float(value)
 
 
 def horizontal_track_distance(
@@ -154,6 +179,212 @@ def paired_degradation_by_status(
             }
         )
     return rows
+
+
+def official_loss_by_state(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    total_distance_m = sum(float(record["segment_distance_m"]) for record in records)
+    rows: list[dict[str, object]] = []
+    for state in SCORE_STATE_ORDER:
+        state_records = [record for record in records if record["score_state"] == state]
+        distance_m = sum(float(record["segment_distance_m"]) for record in state_records)
+        errors = [
+            float(record["error_3d_m"])
+            for record in state_records
+            if record["error_3d_m"] is not None
+        ]
+        rows.append(
+            {
+                "score_state": state,
+                "segments": len(state_records),
+                "distance_m": rounded(distance_m),
+                "distance_pct": rounded(100.0 * distance_m / total_distance_m)
+                if total_distance_m > 0.0
+                else 0.0,
+                "median_3d_m": percentile(errors, 50),
+                "p95_3d_m": percentile(errors, 95),
+                "max_3d_m": rounded(max(errors)) if errors else 0.0,
+            }
+        )
+    return rows
+
+
+def official_status_label(
+    record: dict[str, object],
+    status_labeler,
+) -> str:
+    status = record["status"]
+    if status is None:
+        return "NO_SOLUTION"
+    return status_labeler(int(status))
+
+
+def dominant_by_distance(distance_by_name: dict[str, float]) -> str:
+    if not distance_by_name:
+        return ""
+    return max(distance_by_name, key=lambda name: distance_by_name[name])
+
+
+def official_loss_segments(
+    records: list[dict[str, object]],
+    status_labeler,
+    total_distance_m: float | None = None,
+) -> list[dict[str, object]]:
+    if total_distance_m is None:
+        total_distance_m = sum(float(record["segment_distance_m"]) for record in records)
+
+    segments: list[list[dict[str, object]]] = []
+    current: list[dict[str, object]] = []
+    for record in records:
+        if record["score_state"] == "scored":
+            if current:
+                segments.append(current)
+                current = []
+            continue
+        current.append(record)
+    if current:
+        segments.append(current)
+
+    rows: list[dict[str, object]] = []
+    for segment in segments:
+        distance_m = sum(float(record["segment_distance_m"]) for record in segment)
+        state_distances: dict[str, float] = {}
+        status_counts: dict[str, int] = {}
+        for record in segment:
+            state = str(record["score_state"])
+            state_distances[state] = state_distances.get(state, 0.0) + float(record["segment_distance_m"])
+            label = official_status_label(record, status_labeler)
+            status_counts[label] = status_counts.get(label, 0) + 1
+        errors = [
+            float(record["error_3d_m"])
+            for record in segment
+            if record["error_3d_m"] is not None
+        ]
+        ordered_statuses = ordered_segment_status_names(set(status_counts))
+        rows.append(
+            {
+                "start_tow_s": rounded(float(segment[0]["start_tow_s"])),
+                "end_tow_s": rounded(float(segment[-1]["end_tow_s"])),
+                "duration_s": rounded(float(segment[-1]["end_tow_s"]) - float(segment[0]["start_tow_s"])),
+                "segments": len(segment),
+                "distance_m": rounded(distance_m),
+                "distance_pct": rounded(100.0 * distance_m / total_distance_m)
+                if total_distance_m > 0.0
+                else 0.0,
+                "score_state_distances_m": {
+                    state: rounded(state_distances[state])
+                    for state in SCORE_STATE_ORDER
+                    if state in state_distances
+                },
+                "dominant_score_state": dominant_by_distance(state_distances),
+                "statuses": ordered_statuses,
+                "status_counts": {name: status_counts[name] for name in ordered_statuses},
+                "dominant_status": max(ordered_statuses, key=lambda name: status_counts[name])
+                if ordered_statuses
+                else "",
+                "median_3d_m": percentile(errors, 50),
+                "p95_3d_m": percentile(errors, 95),
+                "max_3d_m": rounded(max(errors)) if errors else 0.0,
+            }
+        )
+    rows.sort(key=lambda row: float(row["distance_m"]), reverse=True)
+    return rows
+
+
+def official_bucket(lib_record: dict[str, object], rtklib_record: dict[str, object]) -> str:
+    lib_scored = bool(lib_record["scored"])
+    rtklib_scored = bool(rtklib_record["scored"])
+    if lib_scored and rtklib_scored:
+        return "both_scored"
+    if lib_scored and not rtklib_scored:
+        return "gnssplusplus_gain"
+    if not lib_scored and rtklib_scored:
+        return "rtklib_gain"
+    if lib_record["score_state"] == "no_solution" and rtklib_record["score_state"] == "no_solution":
+        return "both_no_solution"
+    return "both_unscored"
+
+
+def official_combined_records(
+    lib_records: list[dict[str, object]],
+    rtklib_records: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    rtklib_by_index = {int(record["reference_index"]): record for record in rtklib_records}
+    rows: list[dict[str, object]] = []
+    for lib_record in lib_records:
+        reference_index = int(lib_record["reference_index"])
+        rtklib_record = rtklib_by_index.get(reference_index)
+        if rtklib_record is None:
+            continue
+        segment_distance_m = float(lib_record["segment_distance_m"])
+        lib_score_distance_m = segment_distance_m if bool(lib_record["scored"]) else 0.0
+        rtklib_score_distance_m = segment_distance_m if bool(rtklib_record["scored"]) else 0.0
+        lib_error = optional_float(lib_record["error_3d_m"])
+        rtklib_error = optional_float(rtklib_record["error_3d_m"])
+        rows.append(
+            {
+                "reference_index": reference_index,
+                "start_tow_s": lib_record["start_tow_s"],
+                "end_tow_s": lib_record["end_tow_s"],
+                "segment_distance_m": segment_distance_m,
+                "bucket": official_bucket(lib_record, rtklib_record),
+                "score_delta_distance_m": lib_score_distance_m - rtklib_score_distance_m,
+                "lib_score_state": lib_record["score_state"],
+                "lib_scored": lib_record["scored"],
+                "lib_status": lib_record["status"],
+                "lib_error_3d_m": lib_error,
+                "lib_horiz_error_m": optional_float(lib_record["horiz_error_m"]),
+                "lib_up_error_m": optional_float(lib_record["up_error_m"]),
+                "lib_num_satellites": lib_record["num_satellites"],
+                "rtklib_score_state": rtklib_record["score_state"],
+                "rtklib_scored": rtklib_record["scored"],
+                "rtklib_status": rtklib_record["status"],
+                "rtklib_error_3d_m": rtklib_error,
+                "rtklib_horiz_error_m": optional_float(rtklib_record["horiz_error_m"]),
+                "rtklib_up_error_m": optional_float(rtklib_record["up_error_m"]),
+                "rtklib_num_satellites": rtklib_record["num_satellites"],
+                "error_delta_3d_m": lib_error - rtklib_error
+                if lib_error is not None and rtklib_error is not None
+                else None,
+            }
+        )
+    return rows
+
+
+def official_delta_by_bucket(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    total_distance_m = sum(float(row["segment_distance_m"]) for row in rows)
+    bucket_order = (
+        "gnssplusplus_gain",
+        "rtklib_gain",
+        "both_scored",
+        "both_unscored",
+        "both_no_solution",
+    )
+    grouped: dict[str, list[dict[str, object]]] = {}
+    for row in rows:
+        grouped.setdefault(str(row["bucket"]), []).append(row)
+
+    out: list[dict[str, object]] = []
+    for bucket in bucket_order:
+        bucket_rows = grouped.get(bucket, [])
+        if not bucket_rows:
+            continue
+        distance_m = sum(float(row["segment_distance_m"]) for row in bucket_rows)
+        score_delta_distance_m = sum(float(row["score_delta_distance_m"]) for row in bucket_rows)
+        out.append(
+            {
+                "bucket": bucket,
+                "segments": len(bucket_rows),
+                "distance_m": rounded(distance_m),
+                "distance_pct": rounded(100.0 * distance_m / total_distance_m)
+                if total_distance_m > 0.0
+                else 0.0,
+                "score_delta_distance_m": rounded(score_delta_distance_m),
+                "score_delta_pct": rounded(100.0 * score_delta_distance_m / total_distance_m)
+                if total_distance_m > 0.0
+                else 0.0,
+            }
+        )
+    return out
 
 
 def fixed_anchor(
@@ -315,13 +546,15 @@ def build_report(
     bad_gap_s: float,
 ) -> dict[str, object]:
     reference = comparison.read_reference_csv(reference_csv)
+    lib_epochs = comparison.read_libgnss_pos(lib_pos)
+    rtklib_epochs = comparison.read_rtklib_pos(rtklib_pos)
     lib_matches = comparison.match_to_reference(
-        comparison.read_libgnss_pos(lib_pos),
+        lib_epochs,
         reference,
         match_tolerance_s,
     )
     rtklib_matches = comparison.match_to_reference(
-        comparison.read_rtklib_pos(rtklib_pos),
+        rtklib_epochs,
         reference,
         match_tolerance_s,
     )
@@ -332,6 +565,17 @@ def build_report(
 
     pairs = comparison.pair_epochs(lib_matches, rtklib_matches, match_tolerance_s)
     global_p95_h_m, contribution_rows = p95_contribution_by_status(lib_matches)
+    lib_official_records = ppc_metrics.ppc_official_segment_records(
+        reference,
+        lib_epochs,
+        match_tolerance_s,
+    )
+    rtklib_official_records = ppc_metrics.ppc_official_segment_records(
+        reference,
+        rtklib_epochs,
+        match_tolerance_s,
+    )
+    official_records = official_combined_records(lib_official_records, rtklib_official_records)
     return {
         "reference_epochs": len(reference),
         "lib_matched_epochs": len(lib_matches),
@@ -343,7 +587,26 @@ def build_report(
         "lib_by_status": summarize_by_status(lib_matches, len(reference)),
         "p95_contribution_by_status": contribution_rows,
         "paired_delta_by_status": paired_degradation_by_status(pairs),
+        "official_score": ppc_metrics.ppc_official_distance_score(
+            reference,
+            lib_epochs,
+            match_tolerance_s,
+        ),
+        "rtklib_official_score": ppc_metrics.ppc_official_distance_score(
+            reference,
+            rtklib_epochs,
+            match_tolerance_s,
+        ),
+        "official_loss_by_state": official_loss_by_state(lib_official_records),
+        "rtklib_official_loss_by_state": official_loss_by_state(rtklib_official_records),
+        "official_delta_by_bucket": official_delta_by_bucket(official_records),
+        "official_loss_segments": official_loss_segments(lib_official_records, status_name)[:12],
+        "rtklib_official_loss_segments": official_loss_segments(
+            rtklib_official_records,
+            rtklib_status_name,
+        )[:12],
         "bad_segments": bad_segments(lib_matches, bad_h_threshold_m, bad_gap_s),
+        "_official_segment_records": official_records,
     }
 
 
@@ -373,7 +636,7 @@ def write_segments_csv(path: Path, rows: list[dict[str, object]]) -> None:
         "fixed_anchor_bridge_residual_max_m",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             serialized = dict(row)
@@ -387,6 +650,56 @@ def write_segments_csv(path: Path, rows: list[dict[str, object]]) -> None:
             writer.writerow(serialized)
 
 
+def write_official_segments_csv(path: Path, rows: list[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "reference_index",
+        "start_tow_s",
+        "end_tow_s",
+        "segment_distance_m",
+        "bucket",
+        "score_delta_distance_m",
+        "lib_score_state",
+        "lib_scored",
+        "lib_status",
+        "lib_status_name",
+        "lib_error_3d_m",
+        "lib_horiz_error_m",
+        "lib_up_error_m",
+        "lib_num_satellites",
+        "rtklib_score_state",
+        "rtklib_scored",
+        "rtklib_status",
+        "rtklib_status_name",
+        "rtklib_error_3d_m",
+        "rtklib_horiz_error_m",
+        "rtklib_up_error_m",
+        "rtklib_num_satellites",
+        "error_delta_3d_m",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            serialized = dict(row)
+            serialized["lib_status_name"] = (
+                status_name(int(row["lib_status"])) if row["lib_status"] is not None else ""
+            )
+            serialized["rtklib_status_name"] = (
+                rtklib_status_name(int(row["rtklib_status"])) if row["rtklib_status"] is not None else ""
+            )
+            for key, value in list(serialized.items()):
+                if value is None:
+                    serialized[key] = ""
+                elif isinstance(value, float):
+                    serialized[key] = rounded(value)
+            writer.writerow(serialized)
+
+
+def public_report(report: dict[str, object]) -> dict[str, object]:
+    return {key: value for key, value in report.items() if not key.startswith("_")}
+
+
 def format_status_table(rows: list[dict[str, object]]) -> str:
     lines = ["status   epochs   p50H   p95H   3D50/ref"]
     for row in rows:
@@ -395,6 +708,41 @@ def format_status_table(rows: list[dict[str, object]]) -> str:
             f"{float(row['median_h_m']):>6.2f} "
             f"{float(row['p95_h_m']):>6.2f} "
             f"{float(row['ppc_score_3d_50cm_ref_pct']):>8.1f}%"
+        )
+    return "\n".join(lines)
+
+
+def format_official_loss_table(rows: list[dict[str, object]]) -> str:
+    labels = {
+        "scored": "scored",
+        "high_error": ">50cm",
+        "no_solution": "no-sol",
+    }
+    lines = ["state      dist(m)  share   p95_3D"]
+    for row in rows:
+        lines.append(
+            f"{labels.get(str(row['score_state']), str(row['score_state'])):<9} "
+            f"{float(row['distance_m']):>7.1f} "
+            f"{float(row['distance_pct']):>5.1f}% "
+            f"{float(row['p95_3d_m']):>7.2f}"
+        )
+    return "\n".join(lines)
+
+
+def format_official_delta_table(rows: list[dict[str, object]]) -> str:
+    labels = {
+        "gnssplusplus_gain": "g++ gain",
+        "rtklib_gain": "rtk gain",
+        "both_scored": "both ok",
+        "both_unscored": "both bad",
+        "both_no_solution": "both none",
+    }
+    lines = ["bucket       dist(m)  delta"]
+    for row in rows:
+        lines.append(
+            f"{labels.get(str(row['bucket']), str(row['bucket'])):<11} "
+            f"{float(row['distance_m']):>7.1f} "
+            f"{float(row['score_delta_pct']):>+5.1f}pp"
         )
     return "\n".join(lines)
 
@@ -413,24 +761,39 @@ def format_segment_line(row: dict[str, object]) -> str:
     )
 
 
+def format_official_segment_line(row: dict[str, object]) -> str:
+    status_text = ",".join(str(status) for status in row["statuses"])
+    return (
+        f"{float(row['start_tow_s']):.1f}-{float(row['end_tow_s']):.1f}s "
+        f"{float(row['distance_m']):.1f}m "
+        f"{row['dominant_score_state']} {status_text} "
+        f"max3D={float(row['max_3d_m']):.1f}m"
+    )
+
+
 def render_png(report: dict[str, object], output: Path, title: str) -> None:
     import matplotlib.pyplot as plt
 
     by_status = list(report["lib_by_status"])
-    contribution = list(report["p95_contribution_by_status"])
-    segments = list(report["bad_segments"])[:6]
+    official_loss = list(report["official_loss_by_state"])
+    official_delta = list(report["official_delta_by_bucket"])
+    official_segments = list(report["official_loss_segments"])[:6]
 
     fig = plt.figure(figsize=(13.5, 7.2), dpi=100, facecolor="#f4efe6")
     grid = fig.add_gridspec(2, 2, height_ratios=[0.30, 1.0], hspace=0.28, wspace=0.22)
 
     ax_head = fig.add_subplot(grid[0, :])
     ax_head.set_axis_off()
+    official = dict(report["official_score"])
+    rtklib_official = dict(report["rtklib_official_score"])
     ax_head.text(0.0, 0.75, title, fontsize=25, weight="bold", color="#14213d")
     ax_head.text(
         0.0,
         0.34,
         (
             f"matched={report['lib_matched_epochs']}/{report['reference_epochs']}  "
+            f"official={float(official['ppc_official_score_pct']):.1f}%  "
+            f"RTKLIB={float(rtklib_official['ppc_official_score_pct']):.1f}%  "
             f"global p95H={float(report['global_p95_h_m']):.2f} m  "
             f"bad threshold={float(report['bad_h_threshold_m']):.1f} m"
         ),
@@ -470,14 +833,10 @@ def render_png(report: dict[str, object], output: Path, title: str) -> None:
         va="top",
     )
 
-    contrib_text = "\n".join(
-        f"{row['status']:<7} {int(row['epochs']):>4} epochs  {float(row['share_pct']):>5.1f}%"
-        for row in contribution
-    )
     ax_table.text(
         0.0,
         0.36,
-        "Global p95H exceedance contribution",
+        "Official distance score loss",
         fontsize=12.5,
         weight="bold",
         color="#14213d",
@@ -486,18 +845,37 @@ def render_png(report: dict[str, object], output: Path, title: str) -> None:
     ax_table.text(
         0.0,
         0.27,
-        contrib_text,
+        format_official_loss_table(official_loss),
         family="monospace",
-        fontsize=10.5,
+        fontsize=9.7,
         color="#14213d",
         va="top",
     )
 
-    segment_lines = [format_segment_line(row) for row in segments]
+    ax_table.text(
+        0.48,
+        -0.03,
+        "Official delta buckets",
+        fontsize=12.5,
+        weight="bold",
+        color="#14213d",
+        va="top",
+    )
+    ax_table.text(
+        0.48,
+        -0.12,
+        format_official_delta_table(official_delta),
+        family="monospace",
+        fontsize=9.2,
+        color="#14213d",
+        va="top",
+    )
+
+    segment_lines = [format_official_segment_line(row) for row in official_segments]
     ax_table.text(
         0.0,
-        -0.03,
-        "Largest >threshold segments",
+        -0.42,
+        "Largest official loss intervals",
         fontsize=12.5,
         weight="bold",
         color="#14213d",
@@ -505,10 +883,10 @@ def render_png(report: dict[str, object], output: Path, title: str) -> None:
     )
     ax_table.text(
         0.0,
-        -0.12,
+        -0.51,
         "\n".join(segment_lines),
         family="monospace",
-        fontsize=9.5,
+        fontsize=8.8,
         color="#14213d",
         va="top",
     )
@@ -525,6 +903,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reference-csv", type=Path, required=True)
     parser.add_argument("--summary-json", type=Path, default=None)
     parser.add_argument("--segments-csv", type=Path, default=None)
+    parser.add_argument("--official-segments-csv", type=Path, default=None)
     parser.add_argument("--output-png", type=Path, default=None)
     parser.add_argument("--title", default="PPC coverage quality by status")
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
@@ -545,15 +924,29 @@ def main() -> int:
     )
     if args.summary_json is not None:
         args.summary_json.parent.mkdir(parents=True, exist_ok=True)
-        args.summary_json.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        args.summary_json.write_text(
+            json.dumps(public_report(report), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         print(f"Saved: {args.summary_json}")
     if args.segments_csv is not None:
         write_segments_csv(args.segments_csv, list(report["bad_segments"]))
         print(f"Saved: {args.segments_csv}")
+    if args.official_segments_csv is not None:
+        write_official_segments_csv(
+            args.official_segments_csv,
+            list(report["_official_segment_records"]),
+        )
+        print(f"Saved: {args.official_segments_csv}")
     if args.output_png is not None:
         render_png(report, args.output_png, args.title)
-    if args.summary_json is None and args.segments_csv is None and args.output_png is None:
-        print(json.dumps(report, indent=2, sort_keys=True))
+    if (
+        args.summary_json is None
+        and args.segments_csv is None
+        and args.official_segments_csv is None
+        and args.output_png is None
+    ):
+        print(json.dumps(public_report(report), indent=2, sort_keys=True))
     return 0
 
 

@@ -85,11 +85,17 @@ noise does not create false motion. Together these guards turn the previous
 P95H regression into a **6.97 m** P95H lead, keep Positioning at **86.2%**
 (**+19.9 pp** over RTKLIB), and lift the PPC official score to **29.3%**
 (**+29.3 pp** over RTKLIB).
+The official loss split shows **29.3%** scored distance, **58.7%** 50cm-plus
+error distance, and **12.0%** no-solution distance, so the next improvement is
+mostly accuracy recovery inside positioned FLOAT/FIX spans rather than simply
+filling gaps.
 The full machine-readable reports are
 `ppc_tokyo_run1_coverage_quality.json` and
 `ppc_tokyo_run1_coverage_bad_segments.csv`; the bad-segment CSV includes
 status counts, adjacent FIX-anchor gap/speed, solution path length, and
 FIX-anchor bridge residuals for continued FLOAT-tail design.
+Use `scripts/analyze_ppc_coverage_quality.py --official-segments-csv` to emit
+the full per-reference-distance official score ledger.
 
 | Status | Epochs | P50 H | P95 H | 3D <= 50 cm / reference | P95H exceedance share |
 |---|---:|---:|---:|---:|---:|
@@ -98,6 +104,8 @@ FIX-anchor bridge residuals for continued FLOAT-tail design.
 | SPP | 253 | 4.71 m | 32.28 m | 0.0% | 7.2% |
 
 ![PPC Tokyo run1 coverage quality by status](ppc_tokyo_run1_coverage_quality.png)
+
+![PPC Tokyo run1 official-score trajectory](ppc_tokyo_run1_official_score_trajectory.png)
 
 Across the six PPC Tokyo/Nagoya runs, the default FLOAT bridge-tail guard
 rejects 148 epochs total: 147 on Tokyo run1, 1 on Tokyo run3, and 0 on the

@@ -327,6 +327,411 @@
   ],
   "lib_matched_epochs": 10302,
   "match_tolerance_s": 0.25,
+  "official_delta_by_bucket": [
+    {
+      "bucket": "gnssplusplus_gain",
+      "distance_m": 3023.265697,
+      "distance_pct": 29.301048,
+      "score_delta_distance_m": 3023.265697,
+      "score_delta_pct": 29.301048,
+      "segments": 4257
+    },
+    {
+      "bucket": "both_scored",
+      "distance_m": 2.980025,
+      "distance_pct": 0.028882,
+      "score_delta_distance_m": 0.0,
+      "score_delta_pct": 0.0,
+      "segments": 2
+    },
+    {
+      "bucket": "both_unscored",
+      "distance_m": 6510.138598,
+      "distance_pct": 63.095309,
+      "score_delta_distance_m": 0.0,
+      "score_delta_pct": 0.0,
+      "segments": 6570
+    },
+    {
+      "bucket": "both_no_solution",
+      "distance_m": 781.559582,
+      "distance_pct": 7.574761,
+      "score_delta_distance_m": 0.0,
+      "score_delta_pct": 0.0,
+      "segments": 1121
+    }
+  ],
+  "official_loss_by_state": [
+    {
+      "distance_m": 3026.245721,
+      "distance_pct": 29.32993,
+      "max_3d_m": 0.499573,
+      "median_3d_m": 0.041656,
+      "p95_3d_m": 0.371243,
+      "score_state": "scored",
+      "segments": 4259
+    },
+    {
+      "distance_m": 6056.14042,
+      "distance_pct": 58.695225,
+      "max_3d_m": 99.063254,
+      "median_3d_m": 7.474473,
+      "p95_3d_m": 55.913874,
+      "score_state": "high_error",
+      "segments": 6042
+    },
+    {
+      "distance_m": 1235.55776,
+      "distance_pct": 11.974845,
+      "max_3d_m": 0.0,
+      "median_3d_m": 0.0,
+      "p95_3d_m": 0.0,
+      "score_state": "no_solution",
+      "segments": 1649
+    }
+  ],
+  "official_loss_segments": [
+    {
+      "distance_m": 2795.044368,
+      "distance_pct": 27.08916,
+      "dominant_score_state": "high_error",
+      "dominant_status": "FLOAT",
+      "duration_s": 533.0,
+      "end_tow_s": 189860.0,
+      "max_3d_m": 46.745407,
+      "median_3d_m": 19.936518,
+      "p95_3d_m": 45.401181,
+      "score_state_distances_m": {
+        "high_error": 2783.241173,
+        "no_solution": 11.803195
+      },
+      "segments": 2665,
+      "start_tow_s": 189327.0,
+      "status_counts": {
+        "FIXED": 428,
+        "FLOAT": 2224,
+        "NO_SOLUTION": 7,
+        "SPP": 6
+      },
+      "statuses": [
+        "NO_SOLUTION",
+        "FIXED",
+        "FLOAT",
+        "SPP"
+      ]
+    },
+    {
+      "distance_m": 1186.034783,
+      "distance_pct": 11.494875,
+      "dominant_score_state": "high_error",
+      "dominant_status": "NO_SOLUTION",
+      "duration_s": 352.4,
+      "end_tow_s": 188503.0,
+      "max_3d_m": 89.201741,
+      "median_3d_m": 48.649702,
+      "p95_3d_m": 76.307855,
+      "score_state_distances_m": {
+        "high_error": 863.296872,
+        "no_solution": 322.737911
+      },
+      "segments": 1762,
+      "start_tow_s": 188150.6,
+      "status_counts": {
+        "FIXED": 83,
+        "FLOAT": 788,
+        "NO_SOLUTION": 839,
+        "SPP": 52
+      },
+      "statuses": [
+        "NO_SOLUTION",
+        "FIXED",
+        "FLOAT",
+        "SPP"
+      ]
+    },
+    {
+      "distance_m": 1127.803219,
+      "distance_pct": 10.930503,
+      "dominant_score_state": "high_error",
+      "dominant_status": "FLOAT",
+      "duration_s": 276.0,
+      "end_tow_s": 189231.6,
+      "max_3d_m": 99.063254,
+      "median_3d_m": 1.853587,
+      "p95_3d_m": 32.200296,
+      "score_state_distances_m": {
+        "high_error": 782.673538,
+        "no_solution": 345.129681
+      },
+      "segments": 1380,
+      "start_tow_s": 188955.6,
+      "status_counts": {
+        "FIXED": 109,
+        "FLOAT": 872,
+        "NO_SOLUTION": 368,
+        "SPP": 31
+      },
+      "statuses": [
+        "NO_SOLUTION",
+        "FIXED",
+        "FLOAT",
+        "SPP"
+      ]
+    },
+    {
+      "distance_m": 257.495307,
+      "distance_pct": 2.495607,
+      "dominant_score_state": "high_error",
+      "dominant_status": "NO_SOLUTION",
+      "duration_s": 50.2,
+      "end_tow_s": 188065.0,
+      "max_3d_m": 27.207855,
+      "median_3d_m": 4.00114,
+      "p95_3d_m": 22.286848,
+      "score_state_distances_m": {
+        "high_error": 185.191735,
+        "no_solution": 72.303572
+      },
+      "segments": 251,
+      "start_tow_s": 188014.8,
+      "status_counts": {
+        "FIXED": 20,
+        "FLOAT": 64,
+        "NO_SOLUTION": 89,
+        "SPP": 78
+      },
+      "statuses": [
+        "NO_SOLUTION",
+        "FIXED",
+        "FLOAT",
+        "SPP"
+      ]
+    },
+    {
+      "distance_m": 245.199792,
+      "distance_pct": 2.37644,
+      "dominant_score_state": "no_solution",
+      "dominant_status": "NO_SOLUTION",
+      "duration_s": 24.6,
+      "end_tow_s": 189290.4,
+      "max_3d_m": 8.787553,
+      "median_3d_m": 2.41835,
+      "p95_3d_m": 7.989867,
+      "score_state_distances_m": {
+        "high_error": 23.534068,
+        "no_solution": 221.665724
+      },
+      "segments": 123,
+      "start_tow_s": 189265.8,
+      "status_counts": {
+        "FIXED": 5,
+        "FLOAT": 2,
+        "NO_SOLUTION": 110,
+        "SPP": 6
+      },
+      "statuses": [
+        "NO_SOLUTION",
+        "FIXED",
+        "FLOAT",
+        "SPP"
+      ]
+    },
+    {
+      "distance_m": 194.756395,
+      "distance_pct": 1.88755,
+      "dominant_score_state": "high_error",
+      "dominant_status": "FLOAT",
+      "duration_s": 19.0,
+      "end_tow_s": 188574.2,
+      "max_3d_m": 34.359926,
+      "median_3d_m": 9.018839,
+      "p95_3d_m": 28.639224,
+      "score_state_distances_m": {
+        "high_error": 133.234949,
+        "no_solution": 61.521446
+      },
+      "segments": 95,
+      "start_tow_s": 188555.2,
+      "status_counts": {
+        "FIXED": 6,
+        "FLOAT": 37,
+        "NO_SOLUTION": 30,
+        "SPP": 22
+      },
+      "statuses": [
+        "NO_SOLUTION",
+        "FIXED",
+        "FLOAT",
+        "SPP"
+      ]
+    },
+    {
+      "distance_m": 191.008766,
+      "distance_pct": 1.851229,
+      "dominant_score_state": "high_error",
+      "dominant_status": "FLOAT",
+      "duration_s": 21.2,
+      "end_tow_s": 187988.6,
+      "max_3d_m": 4.445077,
+      "median_3d_m": 1.177659,
+      "p95_3d_m": 2.515185,
+      "score_state_distances_m": {
+        "high_error": 191.008766
+      },
+      "segments": 106,
+      "start_tow_s": 187967.4,
+      "status_counts": {
+        "FIXED": 9,
+        "FLOAT": 97
+      },
+      "statuses": [
+        "FIXED",
+        "FLOAT"
+      ]
+    },
+    {
+      "distance_m": 106.153355,
+      "distance_pct": 1.028823,
+      "dominant_score_state": "high_error",
+      "dominant_status": "FLOAT",
+      "duration_s": 36.2,
+      "end_tow_s": 188955.2,
+      "max_3d_m": 2.843753,
+      "median_3d_m": 1.783467,
+      "p95_3d_m": 2.305496,
+      "score_state_distances_m": {
+        "high_error": 105.046861,
+        "no_solution": 1.106494
+      },
+      "segments": 181,
+      "start_tow_s": 188919.0,
+      "status_counts": {
+        "FIXED": 78,
+        "FLOAT": 102,
+        "NO_SOLUTION": 1
+      },
+      "statuses": [
+        "NO_SOLUTION",
+        "FIXED",
+        "FLOAT"
+      ]
+    },
+    {
+      "distance_m": 94.34832,
+      "distance_pct": 0.91441,
+      "dominant_score_state": "no_solution",
+      "dominant_status": "NO_SOLUTION",
+      "duration_s": 8.6,
+      "end_tow_s": 187999.0,
+      "max_3d_m": 7.181355,
+      "median_3d_m": 4.634612,
+      "p95_3d_m": 7.106719,
+      "score_state_distances_m": {
+        "high_error": 39.481179,
+        "no_solution": 54.867141
+      },
+      "segments": 43,
+      "start_tow_s": 187990.4,
+      "status_counts": {
+        "FIXED": 4,
+        "FLOAT": 13,
+        "NO_SOLUTION": 25,
+        "SPP": 1
+      },
+      "statuses": [
+        "NO_SOLUTION",
+        "FIXED",
+        "FLOAT",
+        "SPP"
+      ]
+    },
+    {
+      "distance_m": 84.26813,
+      "distance_pct": 0.816714,
+      "dominant_score_state": "high_error",
+      "dominant_status": "FLOAT",
+      "duration_s": 8.4,
+      "end_tow_s": 188137.6,
+      "max_3d_m": 12.080362,
+      "median_3d_m": 2.267318,
+      "p95_3d_m": 9.127105,
+      "score_state_distances_m": {
+        "high_error": 72.447314,
+        "no_solution": 11.820816
+      },
+      "segments": 42,
+      "start_tow_s": 188129.2,
+      "status_counts": {
+        "FIXED": 4,
+        "FLOAT": 17,
+        "NO_SOLUTION": 6,
+        "SPP": 15
+      },
+      "statuses": [
+        "NO_SOLUTION",
+        "FIXED",
+        "FLOAT",
+        "SPP"
+      ]
+    },
+    {
+      "distance_m": 68.744698,
+      "distance_pct": 0.666264,
+      "dominant_score_state": "high_error",
+      "dominant_status": "SPP",
+      "duration_s": 7.0,
+      "end_tow_s": 187639.8,
+      "max_3d_m": 9.212825,
+      "median_3d_m": 2.6425,
+      "p95_3d_m": 8.770101,
+      "score_state_distances_m": {
+        "high_error": 68.744698
+      },
+      "segments": 35,
+      "start_tow_s": 187632.8,
+      "status_counts": {
+        "FIXED": 2,
+        "FLOAT": 9,
+        "SPP": 24
+      },
+      "statuses": [
+        "FIXED",
+        "FLOAT",
+        "SPP"
+      ]
+    },
+    {
+      "distance_m": 64.659791,
+      "distance_pct": 0.626673,
+      "dominant_score_state": "high_error",
+      "dominant_status": "FIXED",
+      "duration_s": 7.8,
+      "end_tow_s": 189259.6,
+      "max_3d_m": 1.807609,
+      "median_3d_m": 1.552326,
+      "p95_3d_m": 1.781153,
+      "score_state_distances_m": {
+        "high_error": 64.659791
+      },
+      "segments": 39,
+      "start_tow_s": 189251.8,
+      "status_counts": {
+        "FIXED": 26,
+        "FLOAT": 13
+      },
+      "statuses": [
+        "FIXED",
+        "FLOAT"
+      ]
+    }
+  ],
+  "official_score": {
+    "ppc_official_matched_distance_m": 9082.386142,
+    "ppc_official_score_distance_m": 3026.245721,
+    "ppc_official_score_pct": 29.32993,
+    "ppc_official_score_threshold_m": 0.5,
+    "ppc_official_total_distance_m": 10317.943902
+  },
   "p95_contribution_by_status": [
     {
       "epochs": 27,
@@ -380,5 +785,101 @@
     }
   ],
   "reference_epochs": 11951,
-  "rtklib_matched_epochs": 7922
+  "rtklib_matched_epochs": 7922,
+  "rtklib_official_loss_by_state": [
+    {
+      "distance_m": 2.980025,
+      "distance_pct": 0.028882,
+      "max_3d_m": 0.411423,
+      "median_3d_m": 0.308078,
+      "p95_3d_m": 0.401089,
+      "score_state": "scored",
+      "segments": 2
+    },
+    {
+      "distance_m": 7404.339213,
+      "distance_pct": 71.76177,
+      "max_3d_m": 1617.774512,
+      "median_3d_m": 3.336776,
+      "p95_3d_m": 52.674744,
+      "score_state": "high_error",
+      "segments": 7919
+    },
+    {
+      "distance_m": 2910.624664,
+      "distance_pct": 28.209348,
+      "max_3d_m": 0.0,
+      "median_3d_m": 0.0,
+      "p95_3d_m": 0.0,
+      "score_state": "no_solution",
+      "segments": 4029
+    }
+  ],
+  "rtklib_official_loss_segments": [
+    {
+      "distance_m": 7138.799454,
+      "distance_pct": 69.188198,
+      "dominant_score_state": "high_error",
+      "dominant_status": "NO_SOLUTION",
+      "duration_s": 1735.0,
+      "end_tow_s": 189860.0,
+      "max_3d_m": 1617.774512,
+      "median_3d_m": 4.143513,
+      "p95_3d_m": 85.119185,
+      "score_state_distances_m": {
+        "high_error": 4657.495847,
+        "no_solution": 2481.303607
+      },
+      "segments": 8675,
+      "start_tow_s": 188125.0,
+      "status_counts": {
+        "FIXED": 1134,
+        "FLOAT": 2579,
+        "NO_SOLUTION": 3402,
+        "SPP": 1560
+      },
+      "statuses": [
+        "NO_SOLUTION",
+        "FIXED",
+        "FLOAT",
+        "SPP"
+      ]
+    },
+    {
+      "distance_m": 3176.164423,
+      "distance_pct": 30.78292,
+      "dominant_score_state": "high_error",
+      "dominant_status": "FIXED",
+      "duration_s": 654.6,
+      "end_tow_s": 188124.6,
+      "max_3d_m": 47.339009,
+      "median_3d_m": 3.310898,
+      "p95_3d_m": 12.570759,
+      "score_state_distances_m": {
+        "high_error": 2746.843366,
+        "no_solution": 429.321057
+      },
+      "segments": 3273,
+      "start_tow_s": 187470.0,
+      "status_counts": {
+        "FIXED": 1283,
+        "FLOAT": 945,
+        "NO_SOLUTION": 627,
+        "SPP": 418
+      },
+      "statuses": [
+        "NO_SOLUTION",
+        "FIXED",
+        "FLOAT",
+        "SPP"
+      ]
+    }
+  ],
+  "rtklib_official_score": {
+    "ppc_official_matched_distance_m": 7407.319237,
+    "ppc_official_score_distance_m": 2.980025,
+    "ppc_official_score_pct": 0.028882,
+    "ppc_official_score_threshold_m": 0.5,
+    "ppc_official_total_distance_m": 10317.943902
+  }
 }

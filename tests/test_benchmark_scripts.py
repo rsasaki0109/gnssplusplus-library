@@ -14,6 +14,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import numpy as np
+
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 APPS_DIR = ROOT_DIR / "apps"
@@ -514,6 +516,12 @@ class PPCMetricsTest(unittest.TestCase):
         self.assertEqual(score["ppc_official_matched_distance_m"], 20.0)
         self.assertEqual(score["ppc_official_score_distance_m"], 10.0)
         self.assertEqual(score["ppc_official_score_pct"], 25.0)
+
+        records = ppc_metrics.ppc_official_segment_records(reference, solution, 0.25)
+        self.assertEqual([record["score_state"] for record in records], ["scored", "high_error", "no_solution"])
+        self.assertEqual(records[0]["status"], 4)
+        self.assertEqual(records[1]["status"], 4)
+        self.assertIsNone(records[2]["status"])
 
 
 class PPCCoverageReadmeUpdateTest(unittest.TestCase):
@@ -1377,6 +1385,48 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         self.assertEqual(segments[0]["fixed_anchor_speed_mps"], 1.0)
         self.assertEqual(segments[0]["fixed_anchor_bridge_residual_max_m"], 0.0)
 
+        reference = [
+            comparison.ReferenceEpoch(2300, 0.0, 0.0, 0.0, 0.0, np.array([0.0, 0.0, 0.0])),
+            comparison.ReferenceEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([10.0, 0.0, 0.0])),
+            comparison.ReferenceEpoch(2300, 2.0, 0.0, 0.0, 0.0, np.array([20.0, 0.0, 0.0])),
+            comparison.ReferenceEpoch(2300, 3.0, 0.0, 0.0, 0.0, np.array([40.0, 0.0, 0.0])),
+        ]
+        lib_solution = [
+            comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([10.2, 0.0, 0.0]), 4, 12),
+            comparison.SolutionEpoch(2300, 2.0, 0.0, 0.0, 0.0, np.array([21.0, 0.0, 0.0]), 3, 12),
+        ]
+        rtklib_solution = [
+            comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([11.0, 0.0, 0.0]), 2, 12),
+            comparison.SolutionEpoch(2300, 2.0, 0.0, 0.0, 0.0, np.array([20.1, 0.0, 0.0]), 1, 12),
+        ]
+        lib_records = ppc_metrics.ppc_official_segment_records(reference, lib_solution, 0.25)
+        rtklib_records = ppc_metrics.ppc_official_segment_records(reference, rtklib_solution, 0.25)
+
+        loss_by_state = {
+            row["score_state"]: row
+            for row in ppc_coverage_quality.official_loss_by_state(lib_records)
+        }
+        self.assertEqual(loss_by_state["scored"]["distance_m"], 10.0)
+        self.assertEqual(loss_by_state["high_error"]["distance_m"], 10.0)
+        self.assertEqual(loss_by_state["no_solution"]["distance_m"], 20.0)
+
+        official_segments = ppc_coverage_quality.official_loss_segments(
+            lib_records,
+            ppc_coverage_quality.status_name,
+        )
+        self.assertEqual(len(official_segments), 1)
+        self.assertEqual(official_segments[0]["distance_m"], 30.0)
+        self.assertEqual(official_segments[0]["dominant_score_state"], "no_solution")
+        self.assertEqual(official_segments[0]["status_counts"], {"NO_SOLUTION": 1, "FLOAT": 1})
+
+        combined = ppc_coverage_quality.official_combined_records(lib_records, rtklib_records)
+        delta_by_bucket = {
+            row["bucket"]: row
+            for row in ppc_coverage_quality.official_delta_by_bucket(combined)
+        }
+        self.assertEqual(delta_by_bucket["gnssplusplus_gain"]["score_delta_pct"], 25.0)
+        self.assertEqual(delta_by_bucket["rtklib_gain"]["score_delta_pct"], -25.0)
+
 
 class ScorecardRenderTest(unittest.TestCase):
     def write_reference_csv(
@@ -1640,6 +1690,30 @@ class ScorecardRenderTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertTrue(output_png.exists())
             self.assertGreater(output_png.stat().st_size, 0)
+
+            official_png = temp_root / "ppc_rtk_trajectory_official.png"
+            argv = [
+                "generate_ppc_rtk_trajectory.py",
+                "--lib-pos",
+                str(lib_pos),
+                "--rtklib-pos",
+                str(rtklib_pos),
+                "--reference-csv",
+                str(reference_csv),
+                "--output",
+                str(official_png),
+                "--title",
+                "Synthetic PPC official trajectory",
+                "--color-mode",
+                "official",
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_rtk_trajectory.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(official_png.exists())
+            self.assertGreater(official_png.stat().st_size, 0)
 
     def test_architecture_diagram_main_renders_png(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_architecture_card_test_") as temp_dir:

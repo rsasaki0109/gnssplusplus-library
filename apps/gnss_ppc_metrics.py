@@ -10,6 +10,8 @@ from pathlib import Path
 import sys
 from typing import Any
 
+import numpy as np
+
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = ROOT_DIR / "scripts"
@@ -45,6 +47,93 @@ def reference_segment_distances(reference: list[comparison.ReferenceEpoch]) -> l
     return distances
 
 
+def _best_official_matches_by_reference_index(
+    reference: list[comparison.ReferenceEpoch],
+    solution_epochs: list[comparison.SolutionEpoch],
+    match_tolerance_s: float,
+) -> dict[int, dict[str, object]]:
+    reference_tows = [epoch.tow for epoch in reference]
+    best_by_reference_index: dict[int, dict[str, object]] = {}
+    for solution in solution_epochs:
+        index = bisect.bisect_left(reference_tows, solution.tow)
+        candidates = [
+            candidate
+            for candidate in (index - 1, index, index + 1)
+            if 0 <= candidate < len(reference)
+        ]
+        if not candidates:
+            continue
+        ref_index = min(candidates, key=lambda candidate: abs(reference[candidate].tow - solution.tow))
+        ref = reference[ref_index]
+        if ref.week != solution.week or abs(ref.tow - solution.tow) > match_tolerance_s:
+            continue
+        solution_ecef = np.asarray(solution.ecef, dtype=float)
+        reference_ecef = np.asarray(ref.ecef, dtype=float)
+        enu = comparison.ecef_to_enu(solution_ecef - reference_ecef, ref.lat_deg, ref.lon_deg)
+        horiz_error_m = float(math.hypot(float(enu[0]), float(enu[1])))
+        up_error_m = float(enu[2])
+        error_3d_m = float(math.dist(solution_ecef, reference_ecef))
+        previous = best_by_reference_index.get(ref_index)
+        if previous is None or error_3d_m < float(previous["error_3d_m"]):
+            best_by_reference_index[ref_index] = {
+                "solution": solution,
+                "time_gap_s": abs(ref.tow - solution.tow),
+                "error_3d_m": error_3d_m,
+                "horiz_error_m": horiz_error_m,
+                "up_error_m": up_error_m,
+            }
+    return best_by_reference_index
+
+
+def ppc_official_segment_records(
+    reference: list[comparison.ReferenceEpoch],
+    solution_epochs: list[comparison.SolutionEpoch],
+    match_tolerance_s: float,
+    threshold_m: float = 0.50,
+) -> list[dict[str, object]]:
+    """Return PPC official-style scoring records for each driven reference segment."""
+    if len(reference) < 2:
+        return []
+
+    best_by_reference_index = _best_official_matches_by_reference_index(
+        reference,
+        solution_epochs,
+        match_tolerance_s,
+    )
+    segment_distances = reference_segment_distances(reference)
+    records: list[dict[str, object]] = []
+    for ref_index, distance_m in enumerate(segment_distances):
+        if ref_index == 0:
+            continue
+        match = best_by_reference_index.get(ref_index)
+        scored = match is not None and float(match["error_3d_m"]) <= threshold_m
+        score_state = "scored" if scored else "high_error" if match is not None else "no_solution"
+        solution = match["solution"] if match is not None else None
+        assert solution is None or isinstance(solution, comparison.SolutionEpoch)
+        records.append(
+            {
+                "reference_index": ref_index,
+                "start_tow_s": rounded(reference[ref_index - 1].tow),
+                "end_tow_s": rounded(reference[ref_index].tow),
+                "segment_distance_m": distance_m,
+                "matched": match is not None,
+                "scored": scored,
+                "score_state": score_state,
+                "score_threshold_m": threshold_m,
+                "score_distance_m": distance_m if scored else 0.0,
+                "matched_distance_m": distance_m if match is not None else 0.0,
+                "solution_tow_s": rounded(solution.tow) if solution is not None else None,
+                "time_gap_s": match["time_gap_s"] if match is not None else None,
+                "status": solution.status if solution is not None else None,
+                "num_satellites": solution.num_satellites if solution is not None else None,
+                "error_3d_m": match["error_3d_m"] if match is not None else None,
+                "horiz_error_m": match["horiz_error_m"] if match is not None else None,
+                "up_error_m": match["up_error_m"] if match is not None else None,
+            }
+        )
+    return records
+
+
 def ppc_official_distance_score(
     reference: list[comparison.ReferenceEpoch],
     solution_epochs: list[comparison.SolutionEpoch],
@@ -61,39 +150,15 @@ def ppc_official_distance_score(
             "ppc_official_score_pct": 0.0,
         }
 
-    reference_tows = [epoch.tow for epoch in reference]
-    best_error_by_reference_index: dict[int, float] = {}
-    for solution in solution_epochs:
-        index = bisect.bisect_left(reference_tows, solution.tow)
-        candidates = [
-            candidate
-            for candidate in (index - 1, index, index + 1)
-            if 0 <= candidate < len(reference)
-        ]
-        if not candidates:
-            continue
-        ref_index = min(candidates, key=lambda candidate: abs(reference[candidate].tow - solution.tow))
-        ref = reference[ref_index]
-        if ref.week != solution.week or abs(ref.tow - solution.tow) > match_tolerance_s:
-            continue
-        error_3d_m = float(math.dist(solution.ecef, ref.ecef))
-        previous = best_error_by_reference_index.get(ref_index)
-        if previous is None or error_3d_m < previous:
-            best_error_by_reference_index[ref_index] = error_3d_m
-
-    segment_distances = reference_segment_distances(reference)
-    total_distance_m = sum(segment_distances)
-    matched_distance_m = 0.0
-    score_distance_m = 0.0
-    for ref_index, distance_m in enumerate(segment_distances):
-        if ref_index == 0:
-            continue
-        error = best_error_by_reference_index.get(ref_index)
-        if error is None:
-            continue
-        matched_distance_m += distance_m
-        if error <= threshold_m:
-            score_distance_m += distance_m
+    segment_records = ppc_official_segment_records(
+        reference,
+        solution_epochs,
+        match_tolerance_s,
+        threshold_m,
+    )
+    total_distance_m = sum(float(record["segment_distance_m"]) for record in segment_records)
+    matched_distance_m = sum(float(record["matched_distance_m"]) for record in segment_records)
+    score_distance_m = sum(float(record["score_distance_m"]) for record in segment_records)
 
     score_pct = 100.0 * score_distance_m / total_distance_m if total_distance_m > 0.0 else 0.0
     return {
