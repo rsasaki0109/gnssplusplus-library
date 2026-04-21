@@ -745,13 +745,7 @@ void applyRTKTuningPreset(SolveConfig& config) {
             if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.5;
             if (!config.wide_lane_ar_set) config.enable_wide_lane_ar = true;
             if (!config.wide_lane_acceptance_threshold_set) {
-                config.wide_lane_acceptance_threshold = 0.10;
-            }
-            if (!config.min_subset_sats_for_ar_set) config.min_subset_sats_for_ar = 5;
-            if (!config.min_subset_systems_for_ar_set) config.min_subset_systems_for_ar = 3;
-            if (!config.min_subset_frequencies_for_ar_set) config.min_subset_frequencies_for_ar = 2;
-            if (!config.min_subset_dual_frequency_sats_for_ar_set) {
-                config.min_subset_dual_frequency_sats_for_ar = 1;
+                config.wide_lane_acceptance_threshold = 0.12;
             }
             return;
     }
