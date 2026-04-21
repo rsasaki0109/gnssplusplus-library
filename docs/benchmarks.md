@@ -2,13 +2,44 @@
 
 gnssplusplus `develop` (post PR #19–#23) dominates RTKLIB `demo5` on the
 PPC-Dataset Tokyo and Nagoya urban runs across Fix count, rate, and precision
-— with no Phase 2 opt-in flags. UrbanNav-Odaiba is dominated on Fix count,
-Hp95, and Vp95; Hmed is within 9 cm of demo5 with
-`--enable-wide-lane-ar --wide-lane-threshold 0.10` opted in.
+with no Phase 2 opt-in flags. PPC is the primary public RTK benchmark here
+because it bundles survey-grade receiver observations, reference-station
+observations, broadcast navigation data, and reliable trajectory truth. It is
+not used as a proprietary receiver-engine comparison. Treat the UrbanNav Odaiba
+snapshot below as a Tier-1 public smoke/regression run.
 
 All runs below use `--mode kinematic --preset low-cost --match-tolerance-s 0.25`.
 
+## Public Moving-RTK Benchmark Matrix
+
+The public-data strategy is intentionally multi-dataset. A single UrbanNav
+run is useful because it exposes u-blox and Trimble rover observations with an
+independent Applanix reference, but it is only one environment. Use
+`gnss public-rtk-benchmarks` to keep adapter status and caveats visible:
+
+```bash
+python3 apps/gnss.py public-rtk-benchmarks --format markdown
+```
+
+| Profile | Status | Role | Reference | Receiver artifacts | Adapter | Caveat |
+|---|---|---|---|---|---|---|
+| [PPC-Dataset Tokyo/Nagoya](https://github.com/taroz/PPC-Dataset) | primary-public-rtk-signoff | survey-grade receiver observation sign-off | `reference.csv` trajectory truth for Tokyo/Nagoya runs | Septentrio mosaic-X5 rover RINEX plus Trimble Alloy/NetR9 base RINEX/nav | native `ppc-demo` and `ppc-rtk-signoff` layout with receiver hardware provenance | survey-grade observations and reference truth are bundled; proprietary receiver-engine solution is not treated as the benchmark target |
+| [UrbanNav Tokyo Odaiba/Shinjuku](https://github.com/IPNL-POLYU/UrbanNavDataset) | wired-path-overrides | Tier-1 public smoke | Applanix POS LV620 `reference.csv` | u-blox F9P rover RINEX plus Trimble NetR9 rover/base RINEX | `ppc-rtk-signoff` path overrides with `--commercial-rover` | two Tokyo runs; Trimble observations are solved by libgnss++, not the Trimble RTK engine |
+| [smartLoc urban GNSS](https://www.tu-chemnitz.de/projekt/smartLoc/gnss_dataset.html.en) | receiver-fix-signoff | urban NLOS stress | NovAtel SPAN differential RTK/IMU reference | u-blox EVK-M8T mass-market raw/fix data plus NLOS labels | `smartloc-adapter` exports receiver/raw data; `smartloc-signoff` gates receiver-fix metrics | solver sign-off still needs compatible nav/base inputs beyond the public receiver-fix path |
+| [Google Smartphone Decimeter Challenge](https://www.ion.org/gnss/googlecompetition.cfm) | candidate | phone-grade stress | precise ground truth for raw GNSS and IMU traces | Android raw GNSS measurements and sensor logs | needs smartphone measurement converter; not a commercial RTK receiver path | useful stress data, but phone antenna/clock behavior is a different receiver class |
+| [Ford Highway Driving RTK](https://arxiv.org/abs/2010.01774) | candidate | large-scale highway coverage | INS coupled with survey-grade GNSS receivers | production automotive GNSS over long highway drives | needs Ford log normalizer and highway-specific thresholds | excellent scale, but not an urban canyon RTK receiver comparison |
+| [Oxford RobotCar RTK ground truth](https://arxiv.org/abs/2002.10152) | candidate | long-term localization coverage | post-processed raw GPS/IMU/static-base centimeter ground truth | RobotCar traversals with reference localization products | needs RobotCar reference mapper and observation availability check | strong localization benchmark, but indirect for commercial RTK receiver claims |
+
 ## PPC Tokyo (kinematic, low-cost preset, no Phase 2 flags)
+
+PPC receiver hardware provenance is emitted in every `ppc-demo` summary under
+`receiver_observation_provenance`. Tokyo uses a Septentrio mosaic-X5 rover with
+a Trimble AT1675 antenna and a Trimble Alloy / Zephyr Geodetic 2 reference
+station. Nagoya uses a Septentrio mosaic-X5 rover with a Trimble Zephyr 3 Rover
+antenna and a Trimble NetR9 / Zephyr 3 Base reference station. The field
+`receiver_engine_solution_available` is deliberately `false`; this benchmark is
+about solving survey-grade receiver observations against reference truth, not
+about matching a proprietary receiver RTK engine.
 
 | Run  | gnssplusplus Fix / rate | RTKLIB Fix / rate | Hmed (m)              | Vp95 (m)               |
 |------|------------------------:|------------------:|:---------------------:|:----------------------:|
@@ -24,12 +55,13 @@ All runs below use `--mode kinematic --preset low-cost --match-tolerance-s 0.25`
 | run2 | **+1735**    | **+64.00 pp** | **10× better** |
 | run3 | **+154**     | **+50.16 pp** | **44× better** |
 
-## UrbanNav Tokyo Odaiba
+## UrbanNav Tokyo Odaiba Snapshot
 
 Dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset)  
 Comparison baseline: [RTKLIB](https://github.com/tomojitakasu/RTKLIB)
 
-Current checked-in snapshot (kinematic, low-cost preset):
+Current checked-in snapshot (kinematic, low-cost preset). This validates one
+public urban slice and should be read together with the matrix above:
 
 | Config                                                                     | Fix              | Rate        | Hmed (m)              | Hp95 (m)    | Vp95 (m)    |
 |----------------------------------------------------------------------------|-----------------:|------------:|:---------------------:|:-----------:|:-----------:|
@@ -76,3 +108,85 @@ runtime checks, with optional RTKLIB delta gates. Add `--commercial-pos` with
 a normalized receiver CSV or `.pos` file to summarize a commercial receiver
 against the same PPC `reference.csv`; `--commercial-matched-csv` writes the
 per-epoch commercial receiver matches.
+
+For the `urban-nav-tokyo` matrix row, the same path can compare low-cost and
+commercial receiver observations against the independent Applanix reference.
+UrbanNav-TK-20181219 includes `/Odaiba` and `/Shinjuku` runs with
+`rover_ublox.obs`, `rover_trimble.obs`, `base_trimble.obs`, `base.nav`, and
+`reference.csv` artifacts. Use the low-cost rover as the primary `--rover` and
+solve the Trimble NetR9 rover through the localized commercial path:
+
+```bash
+python3 apps/gnss.py ppc-rtk-signoff \
+  --run-dir /datasets/UrbanNav-TK-20181219/Odaiba \
+  --city tokyo \
+  --rover /datasets/UrbanNav-TK-20181219/Odaiba/rover_ublox.obs \
+  --base /datasets/UrbanNav-TK-20181219/Odaiba/base_trimble.obs \
+  --nav /datasets/UrbanNav-TK-20181219/Odaiba/base.nav \
+  --reference-csv /datasets/UrbanNav-TK-20181219/Odaiba/reference.csv \
+  --commercial-rover /datasets/UrbanNav-TK-20181219/Odaiba/rover_trimble.obs \
+  --commercial-preset survey \
+  --commercial-label trimble_net_r9 \
+  --commercial-matched-csv output/urban_nav_tokyo_odaiba_trimble_matches.csv \
+  --summary-json output/urban_nav_tokyo_odaiba_rtk_summary.json
+```
+
+This records `commercial_receiver.source =
+libgnss_solved_receiver_observations`, so the comparison is between receiver
+hardware observation streams solved by libgnss++ rather than the proprietary
+Trimble RTK engine.
+
+## smartLoc Adapter
+
+smartLoc is the first non-UrbanNav candidate promoted into a sign-off boundary.
+The source `NAV-POSLLH.csv` contains the NovAtel-derived ground truth columns
+and the u-blox EVK-M8T receiver fix columns on the same time scale. Export
+those into the existing comparison contracts:
+
+```bash
+python3 apps/gnss.py smartloc-adapter \
+  --input-url https://www.tu-chemnitz.de/projekt/smartLoc/gnss_dataset/berlin/scenario1/berlin1_potsdamer_platz.zip \
+  --reference-csv output/smartloc_berlin1_reference.csv \
+  --receiver-csv output/smartloc_berlin1_ublox.csv \
+  --raw-csv output/smartloc_berlin1_rawx.csv \
+  --obs-rinex output/smartloc_berlin1_rover.obs \
+  --summary-json output/smartloc_berlin1_adapter_summary.json
+```
+
+The resulting `reference.csv` can be read by `ppc-demo` style metric helpers,
+and `receiver-csv` can be passed as `--commercial-pos --commercial-format csv`
+for receiver side-by-side summaries. `raw-csv` preserves the RXM-RAWX
+measurement rows with NLOS labels, and `obs-rinex` emits a minimal RINEX 3.04
+rover observation file using `C1C/L1C/D1C/S1C` fields. This still is not a
+complete smartLoc solver sign-off by itself because broadcast nav/base inputs
+must be supplied separately.
+When `--input` or direct CSV paths are omitted, `smartloc-adapter` can also
+download the public zip through `--input-url` into `output/downloads`.
+
+For the closed receiver-fix path, use the wrapper:
+
+```bash
+python3 apps/gnss.py smartloc-signoff \
+  --input-url https://www.tu-chemnitz.de/projekt/smartLoc/gnss_dataset/berlin/scenario1/berlin1_potsdamer_platz.zip \
+  --output-dir output/smartloc_berlin1 \
+  --raw-max-epochs 200 \
+  --require-matched-epochs-min 100 \
+  --require-p95-h-max 10.0
+```
+
+This emits the same adapter artifacts plus `smartloc_signoff_summary.json` with
+`receiver_fix` metrics and optional raw-observation provenance. It deliberately
+reports `solver_signoff_available = false` until compatible broadcast
+navigation/base inputs are provided for the RINEX rover observations.
+If `--input` or direct CSV paths are omitted, the wrapper downloads the public
+zip into `output/downloads` and records both `input_url` and `downloaded_input`
+in the summary JSON.
+
+The wrapper also emits `solver_preflight`, which inventories the public zip
+before making solver claims. For the Berlin Potsdamer Platz scenario, preflight
+finds the generated rover RINEX OBS and the bundled `gbm19001.sp3.Z` precise
+orbit, but no broadcast navigation RINEX, base-station observations, or precise
+clock product. Therefore RTK solver sign-off, SPP smoke, and PPP smoke remain
+blocked by input availability instead of being silently skipped. Use
+`--require-solver-inputs-available` when a dataset variant is expected to carry
+all RTK solver inputs.

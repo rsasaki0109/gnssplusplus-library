@@ -2,15 +2,33 @@
 dataset_root = "/datasets/PPC-Dataset"
 city = "tokyo"
 run = "run1"
+# Example public benchmark override for one UrbanNav Tokyo run.
+# Use this as a Tier-1 smoke/regression row, not as complete receiver coverage.
+# rover = "/datasets/UrbanNav-TK-20181219/Odaiba/rover_ublox.obs"
+# base = "/datasets/UrbanNav-TK-20181219/Odaiba/base_trimble.obs"
+# nav = "/datasets/UrbanNav-TK-20181219/Odaiba/base.nav"
+# reference_csv = "/datasets/UrbanNav-TK-20181219/Odaiba/reference.csv"
 out = "output/ppc_tokyo_run1_rtk.pos"
 summary_json = "output/ppc_tokyo_run1_rtk_summary.json"
 max_epochs = 120
 rtklib_bin = "/opt/rtklib/bin/rnx2rtkp"
-# Optional commercial receiver side-by-side baseline against the PPC reference.csv.
+# Optional external receiver-engine solution side-by-side baseline against the
+# PPC reference.csv. The public PPC sign-off itself uses bundled survey-grade
+# rover/base observations plus reference truth; it does not require this file.
 # commercial_pos = "output/ppc_tokyo_run1_commercial_receiver.csv"
 # commercial_format = "auto"
 # commercial_label = "commercial_receiver"
 # commercial_matched_csv = "output/ppc_tokyo_run1_commercial_receiver_matches.csv"
+# UrbanNav matrix row: solve commercial receiver rover observations against
+# the same base/nav/reference, then compare that .pos against the primary rover.
+# This is observation-stream comparison, not proprietary Trimble RTK engine output.
+# commercial_rover = "/datasets/UrbanNav-TK-20181219/Odaiba/rover_trimble.obs"
+# commercial_base = "/datasets/UrbanNav-TK-20181219/Odaiba/base_trimble.obs"
+# commercial_nav = "/datasets/UrbanNav-TK-20181219/Odaiba/base.nav"
+# commercial_out = "output/ppc_tokyo_odaiba_trimble_net_r9.pos"
+# commercial_label = "trimble_net_r9"
+# commercial_preset = "survey"
+# commercial_matched_csv = "output/ppc_tokyo_odaiba_trimble_net_r9_matches.csv"
 preset = "low-cost"
 arfilter = true
 arfilter_margin = 0.35

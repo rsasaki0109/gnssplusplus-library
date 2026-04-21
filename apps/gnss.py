@@ -264,6 +264,21 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_ppc_rtk_signoff.py"),
         "summary": "Run the PPC-Dataset RTK sign-off profile for Tokyo/Nagoya, with optional RTKLIB side-by-side gates.",
     },
+    "public-rtk-benchmarks": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_public_rtk_benchmarks.py"),
+        "summary": "List public moving-RTK benchmark profiles, adapter status, and caveats.",
+    },
+    "smartloc-adapter": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_smartloc_adapter.py"),
+        "summary": "Export smartLoc NAV-POSLLH.csv into reference and receiver CSV comparison artifacts.",
+    },
+    "smartloc-signoff": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_smartloc_signoff.py"),
+        "summary": "Run smartLoc adapter export plus receiver-fix comparison gates.",
+    },
     "clas-ppp": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_clas_ppp.py"),
@@ -352,6 +367,9 @@ def usage() -> str:
             "  python3 apps/gnss.py ppp-kinematic-signoff --max-epochs 120 --require-common-epoch-pairs-min 120 --require-reference-fix-rate-min 95 --require-converged --require-convergence-time-max 300 --require-mean-error-max 7.0 --require-p95-error-max 7.0 --require-max-error-max 7.0 --require-mean-sats-min 18 --require-ppp-solution-rate-min 100",
             "  python3 apps/gnss.py ppc-demo --dataset-root /datasets/PPC-Dataset --city tokyo --run run1 --solver rtk --require-realtime-factor-min 1.0 --summary-json output/ppc_tokyo_run1_rtk_summary.json",
             "  python3 apps/gnss.py ppc-rtk-signoff --dataset-root /datasets/PPC-Dataset --city tokyo --rtklib-bin /path/to/rnx2rtkp",
+            "  python3 apps/gnss.py public-rtk-benchmarks --format markdown",
+            "  python3 apps/gnss.py smartloc-adapter --input-url https://www.tu-chemnitz.de/projekt/smartLoc/gnss_dataset/berlin/scenario1/berlin1_potsdamer_platz.zip --reference-csv output/smartloc_reference.csv --receiver-csv output/smartloc_ublox.csv --raw-csv output/smartloc_rawx.csv --obs-rinex output/smartloc_rover.obs",
+            "  python3 apps/gnss.py smartloc-signoff --input-url https://www.tu-chemnitz.de/projekt/smartLoc/gnss_dataset/berlin/scenario1/berlin1_potsdamer_platz.zip --output-dir output/smartloc --require-matched-epochs-min 100",
             "  python3 apps/gnss.py clas-ppp --profile madoca --obs data/rover_static.obs --nav data/navigation_static.nav --ssr-rtcm ntrip://caster/MOUNT --out output/madoca_ppp.pos --summary-json output/madoca_ppp_summary.json",
             "  python3 apps/gnss.py clas-ppp --profile clas --obs data/rover_static.obs --nav data/navigation_static.nav --compact-ssr corrections.compact.csv --out output/clas_ppp.pos --summary-json output/clas_ppp_summary.json",
             "  python3 apps/gnss.py clas-ppp --profile clas --obs data/rover_static.obs --nav data/navigation_static.nav --qzss-l6 logs/qzss_l6.bin --qzss-gps-week 2200 --out output/clas_l6.pos --summary-json output/clas_l6_summary.json",

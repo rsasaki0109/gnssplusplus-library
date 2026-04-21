@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Small PPC comparison metric helpers shared by CLI wrappers."""
+
+from __future__ import annotations
+
+import csv
+import math
+from pathlib import Path
+import sys
+from typing import Any
+
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = ROOT_DIR / "scripts"
+WGS84_A = 6378137.0
+WGS84_E2 = 6.69437999014e-3
+
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+import generate_driving_comparison as comparison  # noqa: E402
+
+
+def rounded(value: float) -> float:
+    return round(value, 6)
+
+
+def week_tow_to_seconds(week: int, tow: float) -> float:
+    return week * 604800.0 + tow
+
+
+def solution_span_seconds(epochs: list[comparison.SolutionEpoch]) -> float:
+    if len(epochs) < 2:
+        return 0.0
+    first = week_tow_to_seconds(epochs[0].week, epochs[0].tow)
+    last = week_tow_to_seconds(epochs[-1].week, epochs[-1].tow)
+    return max(0.0, last - first)
+
+
+def llh_from_ecef(ecef_x_m: float, ecef_y_m: float, ecef_z_m: float) -> tuple[float, float, float]:
+    longitude = math.atan2(ecef_y_m, ecef_x_m)
+    p = math.hypot(ecef_x_m, ecef_y_m)
+    latitude = math.atan2(ecef_z_m, p * (1.0 - WGS84_E2))
+    for _ in range(6):
+        sin_lat = math.sin(latitude)
+        n = WGS84_A / math.sqrt(1.0 - WGS84_E2 * sin_lat * sin_lat)
+        height = p / max(math.cos(latitude), 1e-12) - n
+        latitude = math.atan2(ecef_z_m, p * (1.0 - WGS84_E2 * n / (n + height)))
+    sin_lat = math.sin(latitude)
+    n = WGS84_A / math.sqrt(1.0 - WGS84_E2 * sin_lat * sin_lat)
+    height = p / max(math.cos(latitude), 1e-12) - n
+    return math.degrees(latitude), math.degrees(longitude), height
+
+
+def summarize_solution_epochs(
+    reference: list[comparison.ReferenceEpoch],
+    solution_epochs: list[comparison.SolutionEpoch],
+    fixed_status: int,
+    label: str,
+    match_tolerance_s: float,
+    solver_wall_time_s: float | None,
+) -> dict[str, object]:
+    if not solution_epochs:
+        raise SystemExit(f"No solution epochs found for {label}")
+    matched = comparison.match_to_reference(solution_epochs, reference, match_tolerance_s)
+    if not matched:
+        raise SystemExit(f"No PPC epochs matched reference for {label}")
+
+    summary = comparison.summarize(matched, fixed_status, label)
+    mean_h_m = sum(epoch.horiz_error_m for epoch in matched) / len(matched)
+    matched_fixed_epochs = sum(1 for epoch in matched if epoch.status == fixed_status)
+    mean_satellites = sum(epoch.num_satellites for epoch in solution_epochs) / len(solution_epochs)
+    valid_span_s = solution_span_seconds(solution_epochs)
+
+    payload: dict[str, object] = {
+        "valid_epochs": len(solution_epochs),
+        "matched_epochs": len(matched),
+        "fixed_epochs": matched_fixed_epochs,
+        "fix_rate_pct": rounded(float(summary["fix_rate_pct"])),
+        "mean_h_m": rounded(mean_h_m),
+        "median_h_m": rounded(float(summary["median_h_m"])),
+        "p95_h_m": rounded(float(summary["p95_h_m"])),
+        "max_h_m": rounded(float(summary["max_h_m"])),
+        "median_abs_up_m": rounded(float(summary["median_abs_up_m"])),
+        "p95_abs_up_m": rounded(float(summary["p95_abs_up_m"])),
+        "mean_up_m": rounded(float(summary["mean_up_m"])),
+        "mean_satellites": rounded(mean_satellites),
+        "solution_span_s": rounded(valid_span_s),
+        "solver_wall_time_s": rounded(solver_wall_time_s) if solver_wall_time_s is not None else None,
+        "realtime_factor": None,
+        "effective_epoch_rate_hz": None,
+    }
+    if solver_wall_time_s is not None and solver_wall_time_s > 0.0:
+        payload["effective_epoch_rate_hz"] = rounded(len(solution_epochs) / solver_wall_time_s)
+        if valid_span_s > 0.0:
+            payload["realtime_factor"] = rounded(valid_span_s / solver_wall_time_s)
+    return payload
+
+
+def write_reference_matches_csv(
+    path: Path,
+    matches: list[comparison.MatchedEpoch],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "gps_tow_s",
+                "traj_east_m",
+                "traj_north_m",
+                "traj_up_m",
+                "east_error_m",
+                "north_error_m",
+                "up_error_m",
+                "horizontal_error_m",
+                "status",
+            ]
+        )
+        for match in matches:
+            writer.writerow(
+                [
+                    f"{match.tow:.3f}",
+                    f"{match.traj_east_m:.6f}",
+                    f"{match.traj_north_m:.6f}",
+                    f"{match.traj_up_m:.6f}",
+                    f"{match.east_m:.6f}",
+                    f"{match.north_m:.6f}",
+                    f"{match.up_m:.6f}",
+                    f"{match.horiz_error_m:.6f}",
+                    int(match.status),
+                ]
+            )
+
+
+def solution_metric_delta(
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> dict[str, object]:
+    def optional_delta(key: str) -> float | None:
+        left_value = left.get(key)
+        right_value = right.get(key)
+        if left_value is None or right_value is None:
+            return None
+        return rounded(float(left_value) - float(right_value))
+
+    return {
+        "valid_epochs": int(left["valid_epochs"]) - int(right["valid_epochs"]),
+        "matched_epochs": int(left["matched_epochs"]) - int(right["matched_epochs"]),
+        "fixed_epochs": int(left["fixed_epochs"]) - int(right["fixed_epochs"]),
+        "fix_rate_pct": optional_delta("fix_rate_pct"),
+        "mean_h_m": optional_delta("mean_h_m"),
+        "median_h_m": optional_delta("median_h_m"),
+        "p95_h_m": optional_delta("p95_h_m"),
+        "max_h_m": optional_delta("max_h_m"),
+        "median_abs_up_m": optional_delta("median_abs_up_m"),
+        "p95_abs_up_m": optional_delta("p95_abs_up_m"),
+        "solver_wall_time_s": optional_delta("solver_wall_time_s"),
+        "realtime_factor": optional_delta("realtime_factor"),
+    }

@@ -96,6 +96,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--city", choices=("tokyo", "nagoya"), default=None)
     parser.add_argument("--run", default="run1")
     parser.add_argument("--run-dir", type=Path, default=None)
+    parser.add_argument("--rover", type=Path, default=None)
+    parser.add_argument("--base", type=Path, default=None)
+    parser.add_argument("--nav", type=Path, default=None)
+    parser.add_argument("--reference-csv", type=Path, default=None)
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--summary-json", type=Path, default=None)
     parser.add_argument("--max-epochs", type=int, default=120)
@@ -111,10 +115,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--use-existing-rtklib-solution", action="store_true")
     parser.add_argument("--rtklib-solver-wall-time-s", type=float, default=None)
     parser.add_argument("--commercial-pos", type=Path, default=None)
+    parser.add_argument("--commercial-rover", type=Path, default=None)
+    parser.add_argument("--commercial-base", type=Path, default=None)
+    parser.add_argument("--commercial-nav", type=Path, default=None)
+    parser.add_argument("--commercial-out", type=Path, default=None)
+    parser.add_argument("--use-existing-commercial-solution", action="store_true")
     parser.add_argument("--commercial-format", choices=("auto", "pos", "csv"), default="auto")
     parser.add_argument("--commercial-label", default="commercial_receiver")
     parser.add_argument("--commercial-matched-csv", type=Path, default=None)
     parser.add_argument("--commercial-solver-wall-time-s", type=float, default=None)
+    parser.add_argument("--commercial-preset", choices=("survey", "low-cost", "moving-base"), default=None)
+    parser.add_argument("--commercial-arfilter", dest="commercial_arfilter", action="store_true")
+    parser.add_argument("--no-commercial-arfilter", dest="commercial_arfilter", action="store_false")
+    parser.set_defaults(commercial_arfilter=None)
+    parser.add_argument("--commercial-arfilter-margin", type=float, default=None)
+    parser.add_argument("--commercial-min-hold-count", type=int, default=None)
+    parser.add_argument("--commercial-hold-ratio-threshold", type=float, default=None)
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
     parser.add_argument("--preset", choices=("survey", "low-cost", "moving-base"), default=None)
     parser.add_argument("--arfilter", dest="arfilter", action="store_true")
@@ -213,6 +229,16 @@ def build_ppc_demo_command(args: argparse.Namespace,
         "--match-tolerance-s",
         str(args.match_tolerance_s),
     ]
+    if args.city is not None:
+        command.extend(["--city", args.city])
+    if args.rover is not None:
+        command.extend(["--rover", str(args.rover)])
+    if args.base is not None:
+        command.extend(["--base", str(args.base)])
+    if args.nav is not None:
+        command.extend(["--nav", str(args.nav)])
+    if args.reference_csv is not None:
+        command.extend(["--reference-csv", str(args.reference_csv)])
     if args.max_epochs > 0:
         command.extend(["--max-epochs", str(args.max_epochs)])
     if args.use_existing_solution:
@@ -238,10 +264,39 @@ def build_ppc_demo_command(args: argparse.Namespace,
                 args.commercial_label,
             ]
         )
+    if args.commercial_rover is not None:
+        command.extend(
+            [
+                "--commercial-rover",
+                str(args.commercial_rover),
+                "--commercial-label",
+                args.commercial_label,
+            ]
+        )
+    if args.commercial_base is not None:
+        command.extend(["--commercial-base", str(args.commercial_base)])
+    if args.commercial_nav is not None:
+        command.extend(["--commercial-nav", str(args.commercial_nav)])
+    if args.commercial_out is not None:
+        command.extend(["--commercial-out", str(args.commercial_out)])
+    if args.use_existing_commercial_solution:
+        command.append("--use-existing-commercial-solution")
     if args.commercial_matched_csv is not None:
         command.extend(["--commercial-matched-csv", str(args.commercial_matched_csv)])
     if args.commercial_solver_wall_time_s is not None:
         command.extend(["--commercial-solver-wall-time-s", str(args.commercial_solver_wall_time_s)])
+    if args.commercial_preset is not None:
+        command.extend(["--commercial-preset", args.commercial_preset])
+    if args.commercial_arfilter is True:
+        command.append("--commercial-arfilter")
+    elif args.commercial_arfilter is False:
+        command.append("--no-commercial-arfilter")
+    if args.commercial_arfilter_margin is not None:
+        command.extend(["--commercial-arfilter-margin", str(args.commercial_arfilter_margin)])
+    if args.commercial_min_hold_count is not None:
+        command.extend(["--commercial-min-hold-count", str(args.commercial_min_hold_count)])
+    if args.commercial_hold_ratio_threshold is not None:
+        command.extend(["--commercial-hold-ratio-threshold", str(args.commercial_hold_ratio_threshold)])
 
     preset = tuning.get("preset")
     if isinstance(preset, str):
@@ -290,10 +345,24 @@ def main() -> int:
         ensure_input_exists(out, "existing PPC RTK solution", ROOT_DIR)
     if args.use_existing_rtklib_solution and args.rtklib_pos is not None:
         ensure_input_exists(args.rtklib_pos, "existing RTKLIB solution", ROOT_DIR)
+    if args.commercial_pos is not None and args.commercial_rover is not None:
+        raise SystemExit("Use either --commercial-pos or --commercial-rover, not both")
     if args.commercial_pos is not None:
         ensure_input_exists(args.commercial_pos, "commercial receiver solution", ROOT_DIR)
+    elif args.commercial_rover is not None:
+        ensure_input_exists(args.commercial_rover, "commercial rover observation file", ROOT_DIR)
+        if args.commercial_base is not None:
+            ensure_input_exists(args.commercial_base, "commercial base observation file", ROOT_DIR)
+        if args.commercial_nav is not None:
+            ensure_input_exists(args.commercial_nav, "commercial navigation file", ROOT_DIR)
+        if args.use_existing_commercial_solution:
+            if args.commercial_out is None:
+                raise SystemExit("--use-existing-commercial-solution requires --commercial-out")
+            ensure_input_exists(args.commercial_out, "existing commercial receiver solution", ROOT_DIR)
     elif args.commercial_matched_csv is not None:
-        raise SystemExit("--commercial-matched-csv requires --commercial-pos")
+        raise SystemExit("--commercial-matched-csv requires --commercial-pos or --commercial-rover")
+    elif args.use_existing_commercial_solution:
+        raise SystemExit("--use-existing-commercial-solution requires --commercial-rover")
 
     thresholds = selected_thresholds(
         args,

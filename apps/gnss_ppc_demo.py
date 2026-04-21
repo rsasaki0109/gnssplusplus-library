@@ -7,7 +7,6 @@ import argparse
 import csv
 from datetime import datetime, timedelta
 import json
-import math
 import os
 from pathlib import Path
 import subprocess
@@ -21,13 +20,29 @@ from gnss_runtime import ensure_input_exists, resolve_gnss_command
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = ROOT_DIR / "scripts"
 GPS_EPOCH = datetime(1980, 1, 6)
-WGS84_A = 6378137.0
-WGS84_E2 = 6.69437999014e-3
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import generate_driving_comparison as comparison  # noqa: E402
-import gnss_moving_base_signoff as moving_base_signoff  # noqa: E402
+import gnss_ppc_commercial as ppc_commercial  # noqa: E402
+import gnss_ppc_metrics as ppc_metrics  # noqa: E402
+
+PPC_RECEIVER_HARDWARE: dict[str, dict[str, object]] = {
+    "tokyo": {
+        "vehicle_receiver": "Septentrio mosaic-X5",
+        "vehicle_antenna": "Trimble AT1675",
+        "reference_station_receiver": "Trimble Alloy",
+        "reference_station_antenna": "Trimble Zephyr Geodetic 2",
+        "reference_station_phase_center_llh_deg_m": [35.66633426, 139.79220181, 59.82],
+    },
+    "nagoya": {
+        "vehicle_receiver": "Septentrio mosaic-X5",
+        "vehicle_antenna": "Trimble Zephyr 3 Rover",
+        "reference_station_receiver": "Trimble NetR9",
+        "reference_station_antenna": "Trimble Zephyr 3 Base",
+        "reference_station_phase_center_llh_deg_m": [35.13470947, 136.97757427, 104.718],
+    },
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -173,6 +188,38 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--commercial-rover",
+        type=Path,
+        default=None,
+        help=(
+            "Optional commercial receiver rover observation RINEX. It is solved with libgnss++ "
+            "against the same reference for public datasets such as UrbanNav Tokyo."
+        ),
+    )
+    parser.add_argument(
+        "--commercial-base",
+        type=Path,
+        default=None,
+        help="Base observation file for --commercial-rover (default: the primary RTK base).",
+    )
+    parser.add_argument(
+        "--commercial-nav",
+        type=Path,
+        default=None,
+        help="Navigation file for --commercial-rover (default: the primary navigation file).",
+    )
+    parser.add_argument(
+        "--commercial-out",
+        type=Path,
+        default=None,
+        help="Output .pos path for --commercial-rover (default: next to --summary-json).",
+    )
+    parser.add_argument(
+        "--use-existing-commercial-solution",
+        action="store_true",
+        help="Do not solve --commercial-rover; summarize an existing --commercial-out file.",
+    )
+    parser.add_argument(
         "--commercial-format",
         choices=("auto", "pos", "csv"),
         default="auto",
@@ -195,6 +242,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional commercial receiver wall time in seconds for realtime metrics.",
     )
+    parser.add_argument(
+        "--commercial-preset",
+        choices=("survey", "low-cost", "moving-base"),
+        default=None,
+        help="Optional RTK preset for solving --commercial-rover.",
+    )
+    parser.add_argument("--commercial-arfilter", dest="commercial_arfilter", action="store_true")
+    parser.add_argument("--no-commercial-arfilter", dest="commercial_arfilter", action="store_false")
+    parser.set_defaults(commercial_arfilter=None)
+    parser.add_argument("--commercial-arfilter-margin", type=float, default=None)
+    parser.add_argument("--commercial-min-hold-count", type=int, default=None)
+    parser.add_argument("--commercial-hold-ratio-threshold", type=float, default=None)
     parser.add_argument(
         "--enable-ar",
         action="store_true",
@@ -229,26 +288,6 @@ def run_command(command: list[str]) -> None:
 
 def rounded(value: float) -> float:
     return round(value, 6)
-
-
-def week_tow_to_seconds(week: int, tow: float) -> float:
-    return week * 604800.0 + tow
-
-
-def solution_span_seconds(epochs: list[comparison.SolutionEpoch]) -> float:
-    if len(epochs) < 2:
-        return 0.0
-    first = week_tow_to_seconds(epochs[0].week, epochs[0].tow)
-    last = week_tow_to_seconds(epochs[-1].week, epochs[-1].tow)
-    return max(0.0, last - first)
-
-
-def reference_span_seconds(reference: list[comparison.ReferenceEpoch]) -> float:
-    if len(reference) < 2:
-        return 0.0
-    first = week_tow_to_seconds(reference[0].week, reference[0].tow)
-    last = week_tow_to_seconds(reference[-1].week, reference[-1].tow)
-    return max(0.0, last - first)
 
 
 def normalize_header(name: str) -> str:
@@ -292,21 +331,6 @@ def parse_reference_timestamp(text: str) -> tuple[int, float]:
         except ValueError:
             continue
     raise SystemExit(f"Unsupported PPC reference timestamp format: {text}")
-
-
-def llh_from_ecef(ecef_x_m: float, ecef_y_m: float, ecef_z_m: float) -> tuple[float, float, float]:
-    longitude = math.atan2(ecef_y_m, ecef_x_m)
-    p = math.hypot(ecef_x_m, ecef_y_m)
-    latitude = math.atan2(ecef_z_m, p * (1.0 - WGS84_E2))
-    for _ in range(6):
-        sin_lat = math.sin(latitude)
-        n = WGS84_A / math.sqrt(1.0 - WGS84_E2 * sin_lat * sin_lat)
-        height = p / max(math.cos(latitude), 1e-12) - n
-        latitude = math.atan2(ecef_z_m, p * (1.0 - WGS84_E2 * n / (n + height)))
-    sin_lat = math.sin(latitude)
-    n = WGS84_A / math.sqrt(1.0 - WGS84_E2 * sin_lat * sin_lat)
-    height = p / max(math.cos(latitude), 1e-12) - n
-    return math.degrees(latitude), math.degrees(longitude), height
 
 
 def read_flexible_reference_csv(path: Path) -> list[comparison.ReferenceEpoch]:
@@ -372,7 +396,7 @@ def read_flexible_reference_csv(path: Path) -> list[comparison.ReferenceEpoch]:
                 ecef_x_m = float(ecef_x_token)
                 ecef_y_m = float(ecef_y_token)
                 ecef_z_m = float(ecef_z_token)
-                lat_deg, lon_deg, height_m = llh_from_ecef(ecef_x_m, ecef_y_m, ecef_z_m)
+                lat_deg, lon_deg, height_m = ppc_metrics.llh_from_ecef(ecef_x_m, ecef_y_m, ecef_z_m)
                 ecef = comparison.llh_to_ecef(lat_deg, lon_deg, height_m)
             else:
                 raise SystemExit(
@@ -450,144 +474,6 @@ def run_rtklib_solver(
         return time.perf_counter() - start
 
 
-def summarize_solution_epochs(
-    reference: list[comparison.ReferenceEpoch],
-    solution_epochs: list[comparison.SolutionEpoch],
-    fixed_status: int,
-    label: str,
-    match_tolerance_s: float,
-    solver_wall_time_s: float | None,
-) -> dict[str, object]:
-    if not solution_epochs:
-        raise SystemExit(f"No solution epochs found for {label}")
-    matched = comparison.match_to_reference(solution_epochs, reference, match_tolerance_s)
-    if not matched:
-        raise SystemExit(f"No PPC epochs matched reference for {label}")
-
-    summary = comparison.summarize(matched, fixed_status, label)
-    mean_h_m = sum(epoch.horiz_error_m for epoch in matched) / len(matched)
-    matched_fixed_epochs = sum(1 for epoch in matched if epoch.status == fixed_status)
-    mean_satellites = sum(epoch.num_satellites for epoch in solution_epochs) / len(solution_epochs)
-    valid_span_s = solution_span_seconds(solution_epochs)
-
-    payload = {
-        "valid_epochs": len(solution_epochs),
-        "matched_epochs": len(matched),
-        "fixed_epochs": matched_fixed_epochs,
-        "fix_rate_pct": rounded(float(summary["fix_rate_pct"])),
-        "mean_h_m": rounded(mean_h_m),
-        "median_h_m": rounded(float(summary["median_h_m"])),
-        "p95_h_m": rounded(float(summary["p95_h_m"])),
-        "max_h_m": rounded(float(summary["max_h_m"])),
-        "median_abs_up_m": rounded(float(summary["median_abs_up_m"])),
-        "p95_abs_up_m": rounded(float(summary["p95_abs_up_m"])),
-        "mean_up_m": rounded(float(summary["mean_up_m"])),
-        "mean_satellites": rounded(mean_satellites),
-        "solution_span_s": rounded(valid_span_s),
-        "solver_wall_time_s": rounded(solver_wall_time_s) if solver_wall_time_s is not None else None,
-        "realtime_factor": None,
-        "effective_epoch_rate_hz": None,
-    }
-    if solver_wall_time_s is not None and solver_wall_time_s > 0.0:
-        payload["effective_epoch_rate_hz"] = rounded(len(solution_epochs) / solver_wall_time_s)
-        if valid_span_s > 0.0:
-            payload["realtime_factor"] = rounded(valid_span_s / solver_wall_time_s)
-    return payload
-
-
-def read_commercial_solution_epochs(
-    path: Path,
-    requested_format: str,
-) -> tuple[list[comparison.SolutionEpoch], str]:
-    records, resolved_format = moving_base_signoff.read_commercial_solution_records(
-        path,
-        requested_format,
-    )
-    epochs: list[comparison.SolutionEpoch] = []
-    for record in records:
-        x = float(record["x"])
-        y = float(record["y"])
-        z = float(record["z"])
-        lat_deg, lon_deg, height_m = llh_from_ecef(x, y, z)
-        ecef = comparison.llh_to_ecef(lat_deg, lon_deg, height_m)
-        epochs.append(
-            comparison.SolutionEpoch(
-                week=int(record["week"]),
-                tow=float(record["tow"]),
-                lat_deg=lat_deg,
-                lon_deg=lon_deg,
-                height_m=height_m,
-                ecef=ecef,
-                status=int(record["status"]),
-                num_satellites=int(record["satellites"]),
-            )
-        )
-    return epochs, resolved_format
-
-
-def write_reference_matches_csv(
-    path: Path,
-    matches: list[comparison.MatchedEpoch],
-) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(
-            [
-                "gps_tow_s",
-                "traj_east_m",
-                "traj_north_m",
-                "traj_up_m",
-                "east_error_m",
-                "north_error_m",
-                "up_error_m",
-                "horizontal_error_m",
-                "status",
-            ]
-        )
-        for match in matches:
-            writer.writerow(
-                [
-                    f"{match.tow:.3f}",
-                    f"{match.traj_east_m:.6f}",
-                    f"{match.traj_north_m:.6f}",
-                    f"{match.traj_up_m:.6f}",
-                    f"{match.east_m:.6f}",
-                    f"{match.north_m:.6f}",
-                    f"{match.up_m:.6f}",
-                    f"{match.horiz_error_m:.6f}",
-                    int(match.status),
-                ]
-            )
-
-
-def solution_metric_delta(
-    left: dict[str, object],
-    right: dict[str, object],
-) -> dict[str, object]:
-    def optional_delta(key: str) -> float | None:
-        left_value = left.get(key)
-        right_value = right.get(key)
-        if left_value is None or right_value is None:
-            return None
-        return rounded(float(left_value) - float(right_value))
-
-    return {
-        "valid_epochs": int(left["valid_epochs"]) - int(right["valid_epochs"]),
-        "matched_epochs": int(left["matched_epochs"]) - int(right["matched_epochs"]),
-        "fixed_epochs": int(left["fixed_epochs"]) - int(right["fixed_epochs"]),
-        "fix_rate_pct": optional_delta("fix_rate_pct"),
-        "mean_h_m": optional_delta("mean_h_m"),
-        "median_h_m": optional_delta("median_h_m"),
-        "p95_h_m": optional_delta("p95_h_m"),
-        "max_h_m": optional_delta("max_h_m"),
-        "median_abs_up_m": optional_delta("median_abs_up_m"),
-        "p95_abs_up_m": optional_delta("p95_abs_up_m"),
-        "solver_wall_time_s": optional_delta("solver_wall_time_s"),
-        "realtime_factor": optional_delta("realtime_factor"),
-    }
-
-
 def resolve_run_dir(args: argparse.Namespace) -> Path:
     if args.run_dir is not None:
         return args.run_dir
@@ -607,6 +493,26 @@ def solver_fixed_status(solver: str) -> int:
     if solver == "ppp":
         return 6
     return 4
+
+
+def ppc_receiver_observation_provenance(city: str) -> dict[str, object]:
+    normalized = city.strip().lower()
+    hardware = PPC_RECEIVER_HARDWARE.get(normalized)
+    payload: dict[str, object] = {
+        "city": normalized,
+        "vehicle_observation_format": "RINEX 3.04",
+        "vehicle_observation_rate_hz": 5.0,
+        "reference_station_observation_format": "RINEX 3.04",
+        "reference_station_observation_rate_hz": 1.0,
+        "receiver_engine_solution_available": False,
+        "receiver_engine_solution_role": "not used as benchmark target",
+        "benchmark_role": "survey-grade receiver observations plus reference trajectory truth",
+    }
+    if hardware is not None:
+        payload.update(hardware)
+    else:
+        payload["hardware_status"] = "unknown city; PPC README documents tokyo and nagoya hardware"
+    return payload
 
 
 def resolve_paths(args: argparse.Namespace) -> tuple[Path, Path | None, Path, Path, Path, Path]:
@@ -710,7 +616,7 @@ def build_summary_payload(
 ) -> dict[str, object]:
     reference = read_flexible_reference_csv(reference_csv)
     solution_epochs = comparison.read_libgnss_pos(out)
-    lib_metrics = summarize_solution_epochs(
+    lib_metrics = ppc_metrics.summarize_solution_epochs(
         reference,
         solution_epochs,
         solver_fixed_status(args.solver),
@@ -727,6 +633,7 @@ def build_summary_payload(
         "base": str(base) if base is not None else None,
         "nav": str(nav),
         "reference_csv": str(reference_csv),
+        "receiver_observation_provenance": ppc_receiver_observation_provenance(args._dataset_city),
         "solution_pos": str(out),
         "summary_json": str(summary_json),
         "generated_solution": not args.use_existing_solution,
@@ -772,7 +679,7 @@ def build_summary_payload(
 
     rtklib_pos = getattr(args, "rtklib_pos", None)
     if rtklib_pos is not None and Path(rtklib_pos).exists():
-        rtklib_metrics = summarize_solution_epochs(
+        rtklib_metrics = ppc_metrics.summarize_solution_epochs(
             reference,
             comparison.read_rtklib_pos(Path(rtklib_pos)),
             1,
@@ -800,40 +707,36 @@ def build_summary_payload(
             ),
         }
 
-    commercial_pos = getattr(args, "commercial_pos", None)
-    if commercial_pos is not None and Path(commercial_pos).exists():
-        commercial_epochs, commercial_format = read_commercial_solution_epochs(
-            Path(commercial_pos),
-            getattr(args, "commercial_format", "auto"),
-        )
-        commercial_metrics = summarize_solution_epochs(
-            reference,
-            commercial_epochs,
-            4,
-            getattr(args, "commercial_label", "commercial_receiver"),
-            args.match_tolerance_s,
-            getattr(args, "commercial_solver_wall_time_s", None),
-        )
-        commercial_matched_csv = getattr(args, "commercial_matched_csv", None)
-        if commercial_matched_csv is not None:
-            commercial_matches = comparison.match_to_reference(
-                commercial_epochs,
-                reference,
-                args.match_tolerance_s,
-            )
-            write_reference_matches_csv(Path(commercial_matched_csv), commercial_matches)
-        commercial_metrics.update(
-            {
-                "label": getattr(args, "commercial_label", "commercial_receiver"),
-                "solution_pos": str(commercial_pos),
-                "format": commercial_format,
-                "matched_csv": (
-                    str(commercial_matched_csv) if commercial_matched_csv is not None else None
-                ),
-            }
+    if args.commercial_pos is not None and Path(args.commercial_pos).exists():
+        commercial_metrics = ppc_commercial.summarize_existing_receiver_solution(
+            reference=reference,
+            solution_pos=Path(args.commercial_pos),
+            requested_format=getattr(args, "commercial_format", "auto"),
+            label=getattr(args, "commercial_label", "commercial_receiver"),
+            matched_csv=getattr(args, "commercial_matched_csv", None),
+            match_tolerance_s=args.match_tolerance_s,
+            solver_wall_time_s=getattr(args, "commercial_solver_wall_time_s", None),
         )
         payload["commercial_receiver"] = commercial_metrics
-        payload["delta_vs_commercial_receiver"] = solution_metric_delta(
+        payload["delta_vs_commercial_receiver"] = ppc_metrics.solution_metric_delta(
+            payload,
+            commercial_metrics,
+        )
+    elif args.commercial_rover is not None and args.commercial_out is not None and args.commercial_out.exists():
+        commercial_metrics = ppc_commercial.summarize_solved_receiver_observations(
+            reference=reference,
+            solution_pos=args.commercial_out,
+            label=getattr(args, "commercial_label", "commercial_receiver"),
+            matched_csv=getattr(args, "commercial_matched_csv", None),
+            match_tolerance_s=args.match_tolerance_s,
+            solver_wall_time_s=getattr(args, "commercial_solver_wall_time_s", None),
+            generated_solution=not bool(getattr(args, "use_existing_commercial_solution", False)),
+            rover=args.commercial_rover,
+            base=args.commercial_base or base,
+            nav=args.commercial_nav or nav,
+        )
+        payload["commercial_receiver"] = commercial_metrics
+        payload["delta_vs_commercial_receiver"] = ppc_metrics.solution_metric_delta(
             payload,
             commercial_metrics,
         )
@@ -971,12 +874,29 @@ def main() -> int:
     if rtklib_pos is None and args.rtklib_bin is not None:
         rtklib_pos = summary_json.with_name(summary_json.stem.replace("_summary", "_rtklib") + ".pos")
         args.rtklib_pos = rtklib_pos
+    if args.commercial_rover is not None and args.commercial_out is None:
+        args.commercial_out = ppc_commercial.default_commercial_out(summary_json)
 
     ensure_input_exists(reference_csv, "PPC reference CSV", ROOT_DIR)
+    if args.commercial_pos is not None and args.commercial_rover is not None:
+        raise SystemExit("Use either --commercial-pos or --commercial-rover, not both")
     if args.commercial_pos is not None:
         ensure_input_exists(args.commercial_pos, "commercial receiver solution", ROOT_DIR)
+    elif args.commercial_rover is not None:
+        if args.solver != "rtk":
+            raise SystemExit("--commercial-rover is currently supported only with --solver rtk")
+        if base is None:
+            raise SystemExit("--commercial-rover requires a primary or explicit base observation file")
+        assert args.commercial_out is not None
+        ensure_input_exists(args.commercial_rover, "commercial rover observation file", ROOT_DIR)
+        ensure_input_exists(args.commercial_base or base, "commercial base observation file", ROOT_DIR)
+        ensure_input_exists(args.commercial_nav or nav, "commercial navigation file", ROOT_DIR)
+        if args.use_existing_commercial_solution:
+            ensure_input_exists(args.commercial_out, "existing commercial receiver solution", ROOT_DIR)
     elif args.commercial_matched_csv is not None:
-        raise SystemExit("--commercial-matched-csv requires --commercial-pos")
+        raise SystemExit("--commercial-matched-csv requires --commercial-pos or --commercial-rover")
+    elif args.use_existing_commercial_solution:
+        raise SystemExit("--use-existing-commercial-solution requires --commercial-rover")
     if args.max_epochs == 0:
         raise SystemExit("--max-epochs must be positive or -1")
 
@@ -1027,6 +947,32 @@ def main() -> int:
             measured_rtklib_wall_time_s = run_rtklib_solver(args, rover, base, nav, reference, rtklib_pos)
             if args.rtklib_solver_wall_time_s is None:
                 args.rtklib_solver_wall_time_s = measured_rtklib_wall_time_s
+
+    if args.commercial_rover is not None and not args.use_existing_commercial_solution:
+        assert base is not None
+        assert args.commercial_out is not None
+        args.commercial_out.parent.mkdir(parents=True, exist_ok=True)
+        commercial_solve = ppc_commercial.CommercialRoverSolve(
+            rover=args.commercial_rover,
+            base=args.commercial_base or base,
+            nav=args.commercial_nav or nav,
+            out=args.commercial_out,
+            max_epochs=args.max_epochs,
+            tuning=ppc_commercial.CommercialRoverTuning(
+                preset=args.commercial_preset,
+                arfilter=args.commercial_arfilter,
+                arfilter_margin=args.commercial_arfilter_margin,
+                min_hold_count=args.commercial_min_hold_count,
+                hold_ratio_threshold=args.commercial_hold_ratio_threshold,
+            ),
+        )
+        measured_commercial_wall_time_s = ppc_commercial.run_commercial_rover_solver(
+            resolve_gnss_command(ROOT_DIR),
+            commercial_solve,
+            run_command,
+        )
+        if args.commercial_solver_wall_time_s is None:
+            args.commercial_solver_wall_time_s = measured_commercial_wall_time_s
 
     payload = build_summary_payload(
         args,

@@ -16,6 +16,9 @@ Main sign-off entrypoints:
 - `gnss moving-base-signoff`
 - `gnss ppc-rtk-signoff`
 - `gnss odaiba-benchmark --require-*`
+- `gnss public-rtk-benchmarks`
+- `gnss smartloc-adapter`
+- `gnss smartloc-signoff`
 
 Example:
 
@@ -61,7 +64,37 @@ For the `ppc` profile with `--malib-pos` or `--malib-bin`, the command also emit
 `gnss scorpion-moving-base-signoff`, and `gnss ppc-rtk-signoff`
 also accept `--config-toml`, so you can pin long threshold sets and artifact paths in a file instead of repeating them on the command line.
 
-For PPC-Dataset RTK runs, `gnss ppc-demo` and `gnss ppc-rtk-signoff` also accept `--commercial-pos`. This is the public-data path for comparing libgnss++ against a commercial receiver solution when the dataset has an independent `reference.csv`; the receiver summary is stored under `commercial_receiver`, and `delta_vs_commercial_receiver` reports libgnss++ minus receiver deltas for fix rate and horizontal/up error metrics.
+For public benchmark rows that can be expressed as rover/base/nav plus an
+independent `reference.csv`, `gnss ppc-demo` and `gnss ppc-rtk-signoff` also
+accept `--commercial-pos` for an existing receiver solution or
+`--commercial-rover` for a commercial receiver rover RINEX solved through
+libgnss++ against the same base/nav/reference. The receiver summary is stored
+under `commercial_receiver`, and `delta_vs_commercial_receiver` reports
+libgnss++ minus receiver deltas for fix rate and horizontal/up error metrics.
+Run `gnss public-rtk-benchmarks` before treating any single public dataset as
+representative coverage; UrbanNav Tokyo is a Tier-1 smoke/regression row, not
+the final commercial RTK receiver proof.
+
+PPC-Dataset is the primary public moving-RTK sign-off. It carries survey-grade
+receiver observations, reference-station observations, broadcast nav, and
+reference trajectory truth. `gnss ppc-demo` records the rover/base receiver and
+antenna provenance under `receiver_observation_provenance`; proprietary
+receiver-engine solutions are intentionally not the benchmark target.
+
+`gnss smartloc-adapter` widens the public matrix beyond UrbanNav by exporting
+smartLoc `NAV-POSLLH.csv` into a `reference.csv` plus a normalized u-blox
+receiver CSV, and by exporting `RXM-RAWX.csv` into a normalized raw observation
+CSV plus minimal RINEX 3.04 rover observations. `gnss smartloc-signoff` wraps
+that adapter and gates the receiver-fix metrics against the smartLoc ground
+truth. When local inputs are omitted, it can download the public scenario zip
+through `--input-url` into `--download-cache-dir` and records that provenance in
+the summary JSON. That closes the public receiver-fix path, but not the whole
+solver sign-off: smartLoc solver runs still need compatible broadcast
+navigation and base/reference inputs. The summary includes `solver_preflight`
+so CI can distinguish generated rover RINEX, bundled precise-orbit artifacts,
+missing broadcast nav, missing base observations, and missing precise clocks.
+Add `--require-solver-inputs-available` to fail the sign-off when the RTK solver
+input set is expected to be complete.
 
 If you already have a MALIB `.pos` file, you can gate the delta directly:
 

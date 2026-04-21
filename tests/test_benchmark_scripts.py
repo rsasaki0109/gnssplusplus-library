@@ -28,8 +28,12 @@ import gnss_odaiba_benchmark as benchmark  # noqa: E402
 import gnss_clas_ppp as clas_ppp  # noqa: E402
 import gnss_live_signoff as live_signoff  # noqa: E402
 import gnss_moving_base_signoff as moving_base_signoff  # noqa: E402
+import gnss_ppc_commercial as ppc_commercial  # noqa: E402
 import gnss_ppc_demo as ppc_demo  # noqa: E402
 import gnss_ppc_rtk_signoff as ppc_rtk_signoff  # noqa: E402
+import gnss_public_rtk_benchmarks as public_rtk_benchmarks  # noqa: E402
+import gnss_smartloc_adapter as smartloc_adapter  # noqa: E402
+import gnss_smartloc_signoff as smartloc_signoff  # noqa: E402
 import gnss_ppp_kinematic_signoff as ppp_kinematic_signoff  # noqa: E402
 import gnss_ppp_static_signoff as ppp_static_signoff  # noqa: E402
 import gnss_short_baseline_signoff as short_signoff  # noqa: E402
@@ -38,6 +42,7 @@ import generate_architecture_diagram as architecture_diagram  # noqa: E402
 import generate_feature_overview_card as feature_overview  # noqa: E402
 import generate_odaiba_scorecard as scorecard  # noqa: E402
 import generate_odaiba_social_card as social_card  # noqa: E402
+import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
 import detect_ci_scope as ci_scope  # noqa: E402
 import run_optional_ppp_products_signoff as ci_ppp_products_signoff  # noqa: E402
 import run_optional_rtk_signoffs as ci_rtk_signoffs  # noqa: E402
@@ -152,6 +157,11 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             args = argparse.Namespace(
                 max_epochs=120,
                 match_tolerance_s=0.25,
+                city="tokyo",
+                rover=None,
+                base=None,
+                nav=None,
+                reference_csv=None,
                 use_existing_solution=True,
                 solver_wall_time_s=1.5,
                 rtklib_bin=temp_root / "rnx2rtkp",
@@ -160,10 +170,20 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 use_existing_rtklib_solution=True,
                 rtklib_solver_wall_time_s=0.8,
                 commercial_pos=temp_root / "commercial.csv",
+                commercial_rover=None,
+                commercial_base=None,
+                commercial_nav=None,
+                commercial_out=None,
+                use_existing_commercial_solution=False,
                 commercial_format="csv",
                 commercial_label="survey_receiver",
                 commercial_matched_csv=temp_root / "commercial_matches.csv",
                 commercial_solver_wall_time_s=0.9,
+                commercial_preset=None,
+                commercial_arfilter=None,
+                commercial_arfilter_margin=None,
+                commercial_min_hold_count=None,
+                commercial_hold_ratio_threshold=None,
                 preset=None,
                 arfilter=None,
                 arfilter_margin=None,
@@ -207,6 +227,73 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("--min-hold-count", command)
             self.assertIn("8", command)
 
+    def test_build_ppc_demo_command_passes_commercial_rover_flags(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_rtk_commercial_rover_") as temp_dir:
+            temp_root = Path(temp_dir)
+            args = argparse.Namespace(
+                max_epochs=120,
+                match_tolerance_s=0.25,
+                city="tokyo",
+                rover=temp_root / "rover_ublox.obs",
+                base=temp_root / "base_trimble.obs",
+                nav=temp_root / "base.nav",
+                reference_csv=temp_root / "reference.csv",
+                use_existing_solution=True,
+                solver_wall_time_s=None,
+                rtklib_bin=None,
+                rtklib_config=temp_root / "rtklib.conf",
+                rtklib_pos=None,
+                use_existing_rtklib_solution=False,
+                rtklib_solver_wall_time_s=None,
+                commercial_pos=None,
+                commercial_rover=temp_root / "rover_trimble.obs",
+                commercial_base=temp_root / "base_trimble.obs",
+                commercial_nav=temp_root / "base.nav",
+                commercial_out=temp_root / "commercial.pos",
+                use_existing_commercial_solution=True,
+                commercial_format="auto",
+                commercial_label="trimble_net_r9",
+                commercial_matched_csv=temp_root / "commercial_matches.csv",
+                commercial_solver_wall_time_s=1.2,
+                commercial_preset="survey",
+                commercial_arfilter=False,
+                commercial_arfilter_margin=0.2,
+                commercial_min_hold_count=4,
+                commercial_hold_ratio_threshold=2.0,
+                preset=None,
+                arfilter=None,
+                arfilter_margin=None,
+                min_hold_count=None,
+                hold_ratio_threshold=None,
+            )
+            command = ppc_rtk_signoff.build_ppc_demo_command(
+                args,
+                temp_root / "tokyo" / "run1",
+                temp_root / "solution.pos",
+                temp_root / "summary.json",
+                {"require_fix_rate_min": 95.0},
+                {"preset": "low-cost"},
+            )
+
+            self.assertIn("--commercial-rover", command)
+            self.assertIn(str(args.commercial_rover), command)
+            self.assertIn("--rover", command)
+            self.assertIn(str(args.rover), command)
+            self.assertIn("--reference-csv", command)
+            self.assertIn(str(args.reference_csv), command)
+            self.assertIn("--commercial-base", command)
+            self.assertIn(str(args.commercial_base), command)
+            self.assertIn("--commercial-nav", command)
+            self.assertIn(str(args.commercial_nav), command)
+            self.assertIn("--commercial-out", command)
+            self.assertIn(str(args.commercial_out), command)
+            self.assertIn("--use-existing-commercial-solution", command)
+            self.assertIn("--commercial-preset", command)
+            self.assertIn("survey", command)
+            self.assertIn("--no-commercial-arfilter", command)
+            self.assertIn("--commercial-min-hold-count", command)
+            self.assertIn("4", command)
+
     def test_selected_tuning_uses_city_specific_defaults(self) -> None:
         args = argparse.Namespace(
             preset=None,
@@ -221,6 +308,285 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
         self.assertEqual(tokyo["arfilter"], True)
         self.assertEqual(nagoya["preset"], "low-cost")
         self.assertEqual(nagoya["arfilter"], False)
+
+
+class PPCCommercialHelpersTest(unittest.TestCase):
+    def test_build_commercial_rover_command_keeps_tuning_local(self) -> None:
+        solve = ppc_commercial.CommercialRoverSolve(
+            rover=Path("rover_trimble.obs"),
+            base=Path("base_trimble.obs"),
+            nav=Path("base.nav"),
+            out=Path("trimble.pos"),
+            max_epochs=120,
+            tuning=ppc_commercial.CommercialRoverTuning(
+                preset="survey",
+                arfilter=False,
+                arfilter_margin=0.2,
+                min_hold_count=4,
+                hold_ratio_threshold=2.0,
+            ),
+        )
+
+        command = ppc_commercial.build_commercial_rover_command(
+            [sys.executable, str(ROOT_DIR / "apps" / "gnss.py")],
+            solve,
+        )
+
+        self.assertEqual(command[:3], [sys.executable, str(ROOT_DIR / "apps" / "gnss.py"), "solve"])
+        self.assertIn("--rover", command)
+        self.assertIn("rover_trimble.obs", command)
+        self.assertIn("--preset", command)
+        self.assertIn("survey", command)
+        self.assertIn("--no-arfilter", command)
+        self.assertIn("--max-epochs", command)
+        self.assertIn("120", command)
+
+    def test_summarize_receiver_epochs_writes_isolated_match_csv(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_commercial_summary_") as temp_dir:
+            temp_root = Path(temp_dir)
+            reference = [
+                comparison.ReferenceEpoch(
+                    week=2300,
+                    tow=1000.0,
+                    lat_deg=35.0,
+                    lon_deg=139.0,
+                    height_m=42.0,
+                    ecef=comparison.llh_to_ecef(35.0, 139.0, 42.0),
+                )
+            ]
+            epochs = [
+                comparison.SolutionEpoch(
+                    week=2300,
+                    tow=1000.0,
+                    lat_deg=35.0000001,
+                    lon_deg=139.0000001,
+                    height_m=42.1,
+                    ecef=comparison.llh_to_ecef(35.0000001, 139.0000001, 42.1),
+                    status=4,
+                    num_satellites=18,
+                )
+            ]
+            match_csv = temp_root / "commercial_matches.csv"
+
+            summary = ppc_commercial.summarize_receiver_epochs(
+                reference=reference,
+                epochs=epochs,
+                label="trimble_net_r9",
+                source="libgnss_solved_receiver_observations",
+                solution_pos=temp_root / "trimble.pos",
+                solution_format="pos",
+                matched_csv=match_csv,
+                match_tolerance_s=0.25,
+                solver_wall_time_s=0.5,
+                generated_solution=False,
+                rover=temp_root / "rover_trimble.obs",
+                base=temp_root / "base_trimble.obs",
+                nav=temp_root / "base.nav",
+            )
+
+            self.assertEqual(summary["label"], "trimble_net_r9")
+            self.assertEqual(summary["source"], "libgnss_solved_receiver_observations")
+            self.assertFalse(summary["generated_solution"])
+            self.assertEqual(summary["matched_epochs"], 1)
+            self.assertTrue(match_csv.exists())
+            self.assertIn("horizontal_error_m", match_csv.read_text(encoding="utf-8"))
+
+
+class PublicRTKBenchmarksTest(unittest.TestCase):
+    def test_matrix_keeps_urban_nav_as_tier_one_smoke(self) -> None:
+        profiles = {
+            profile.profile_id: profile for profile in public_rtk_benchmarks.PROFILES
+        }
+
+        urban_nav = profiles["urban-nav-tokyo"]
+        smartloc = profiles["smartloc"]
+        ppc = profiles["ppc-dataset"]
+
+        self.assertEqual(ppc.status, "primary-public-rtk-signoff")
+        self.assertIn("Septentrio mosaic-X5", ppc.receiver_artifacts)
+        self.assertIn("proprietary receiver-engine solution", ppc.caveat)
+        self.assertEqual(urban_nav.status, "wired-path-overrides")
+        self.assertEqual(urban_nav.role, "tier-1 public smoke")
+        self.assertIn("not the Trimble RTK engine", urban_nav.caveat)
+        self.assertIn("--commercial-rover", urban_nav.adapter)
+        self.assertEqual(smartloc.status, "receiver-fix-signoff")
+        self.assertIn("smartloc-adapter", smartloc.adapter)
+
+    def test_matrix_separates_candidate_adapters(self) -> None:
+        candidates = public_rtk_benchmarks.select_profiles(["candidate"])
+        candidate_ids = {profile.profile_id for profile in candidates}
+        markdown = public_rtk_benchmarks.render_markdown(candidates)
+
+        self.assertIn("gsdc", candidate_ids)
+        self.assertIn("Ford Highway Driving RTK", markdown)
+        self.assertNotIn("urban-nav-tokyo", candidate_ids)
+        self.assertNotIn("smartloc", candidate_ids)
+
+
+class SmartLocAdapterTest(unittest.TestCase):
+    def test_convert_nav_posllh_exports_existing_comparison_contracts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_smartloc_adapter_") as temp_dir:
+            temp_root = Path(temp_dir)
+            nav_posllh = temp_root / "NAV-POSLLH.csv"
+            reference_csv = temp_root / "reference.csv"
+            receiver_csv = temp_root / "receiver.csv"
+            summary_json = temp_root / "summary.json"
+            nav_posllh.write_text(
+                "\n".join(
+                    [
+                        "GPSWeek [weeks];GPSSecondsOfWeek [s];Longitude (GT Lon) [deg];Longitude Cov (GT Lon Cov) [deg];Latitude (GT Lat) [deg];Latitude Cov (GT Lat Cov) [deg];Height above ellipsoid (GT Height) [m];Height above ellipsoid Cov (GT Height Cov) [m];Heading (0 = East, counterclockwise) - (GT Heading) [rad];Heading Cov (0 = East, counterclockwise) - (GT Heading Cov) [rad];Acceleration (GT Acceleration) [ms^2];Acceleration Cov (GT Acceleration Cov) [ms^2];Velocity (GT Velocity) [m/s];Velocity Cov (GT Velocity Cov) [m/s];Yaw-Rate (GT Yaw-rate) [rad/s];Yaw-Rate Cov (GT Yaw-rate Cov) [rad/s];GPS time of week of the navigation epoch (iTOW) [ms];Longitude (lon) [deg];Latitude (lat) [deg];Height above ellipsoid (height) [m];Height above mean sea level (hMSL) [m];Horizontal accuracy estimate (hAcc) [m];Vertical accuracy estimate (vAcc) [m]",
+                        "1900;126641.5;13.373657763;0.0;52.504560275;0.0;76.004611;0.0;1.24;0.0;0.9;0.0;5.7;0.0;0.002;0.0;126641500;13.3736776;52.5045750;80.242;38.043;0.547;-1",
+                        "1900;126641.7;13.373662801;0.0;52.504570098;0.0;76.010967;0.0;1.23;0.0;0.8;0.0;5.8;0.0;-0.007;0.0;126641700;13.3736829;52.5045848;80.234;38.035;0.547;-1",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            summary = smartloc_adapter.convert_nav_posllh(
+                source_path=nav_posllh,
+                reference_csv=reference_csv,
+                receiver_csv=receiver_csv,
+                receiver_label="smartloc_ublox",
+                summary_json=summary_json,
+            )
+
+            self.assertEqual(summary["epochs"], 2)
+            self.assertEqual(summary["adapter_status"], "receiver_csv_adapter")
+            self.assertTrue(reference_csv.exists())
+            self.assertTrue(receiver_csv.exists())
+            self.assertTrue(summary_json.exists())
+            reference = ppc_demo.read_flexible_reference_csv(reference_csv)
+            receiver_records, receiver_format = moving_base_signoff.read_commercial_solution_records(
+                receiver_csv,
+                "csv",
+            )
+            self.assertEqual(len(reference), 2)
+            self.assertEqual(len(receiver_records), 2)
+            self.assertEqual(receiver_format, "csv")
+            self.assertEqual(receiver_records[0]["status"], 1)
+
+    def test_convert_rawx_exports_csv_and_rinex_observations(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_smartloc_rawx_adapter_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rawx = temp_root / "RXM-RAWX.csv"
+            raw_csv = temp_root / "rawx.csv"
+            obs_rinex = temp_root / "rover.obs"
+            summary_json = temp_root / "raw_summary.json"
+            rawx.write_text(
+                "\n".join(
+                    [
+                        "GPSWeek [weeks];GPSSecondsOfWeek [s];Longitude (GT Lon) [deg];Longitude Cov (GT Lon) [deg];Latitude (GT Lat) [deg];Latitude Cov (GT Lat) [deg];Height above ellipsoid (GT Height) [m];Height above ellipsoid Cov (GT Height) [m];Heading (0 = East, counterclockwise) - (GT Heading) [rad];Heading Cov (0 = East, counterclockwise) - (GT Heading Cov) [rad];Acceleration (GT Acceleration) [ms^2];Acceleration Cov (GT Acceleration Cov) [ms^2];Velocity (GT Velocity) [m/s];Velocity Cov (GT Velocity Cov) [m/s];Yaw-Rate (GT Yaw-rate) [rad/s];Yaw-Rate Cov (GT Yaw-rate Cov) [rad/s];Measurement time of week (rcvTow) [s];GPS week number (week) [weeks];GPS leap seconds (leapS) [s];Number of measurements to follow (numMeas) [];Receiver tracking status (recStat) [];Pseudorange measurement (prMes) [m];Carrier phase measurement (cpMes) [cycles];Doppler measurement (doMes) [Hz];GNSS identifier (gnssId) [];Satellite identifier (svId) [];Frequency slot - only Glonass (freqId) [];Carrier phase locktime counter (locktime) [ms];Carrier-to-noise density ratio (cno) [dbHz];Estimated pseudorange measurement standard deviation (prStdev) [m];Estimated carrier phase measurement standard deviation (cpStdev) [cycles];Estimated Doppler measurement standard deviation (doStdev) [Hz];Tracking status (trkStat) [];NLOS (0 == no, 1 == yes, # == No Information)",
+                        "1900;126641.5;13.0;0.0;52.0;0.0;76.0;0.0;1.0;0.0;0.0;0.0;5.0;0.0;0.0;0.0;126641.5;1900;17;2;1;19834597.871;104231506.047;222.1658;GPS;12;0;64500;50;0.32;0.004;0.128;15;0",
+                        "1900;126641.5;13.0;0.0;52.0;0.0;76.0;0.0;1.0;0.0;0.0;0.0;5.0;0.0;0.0;0.0;126641.5;1900;17;2;1;19784715.199;105797774.172;2219.386;Glonass;20;9;20400;39;2.56;0.012;1.024;7;1",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            summary = smartloc_adapter.convert_rawx(
+                source_path=rawx,
+                raw_csv=raw_csv,
+                obs_rinex=obs_rinex,
+                summary_json=summary_json,
+            )
+
+            self.assertEqual(summary["adapter_status"], "rawx_rinex_adapter")
+            self.assertEqual(summary["raw_epochs"], 1)
+            self.assertEqual(summary["raw_observations"], 2)
+            self.assertEqual(summary["nlos_observations"], 1)
+            self.assertTrue(raw_csv.exists())
+            self.assertTrue(obs_rinex.exists())
+            self.assertIn("pseudorange_m", raw_csv.read_text(encoding="utf-8"))
+            rinex_text = obs_rinex.read_text(encoding="utf-8")
+            self.assertIn("SYS / # / OBS TYPES", rinex_text)
+            self.assertIn("G12", rinex_text)
+            self.assertIn("R20", rinex_text)
+            self.assertTrue(summary_json.exists())
+
+
+class SmartLocSignoffTest(unittest.TestCase):
+    def test_download_cache_filename_preserves_public_zip_name(self) -> None:
+        self.assertEqual(
+            smartloc_signoff.download_cache_filename(
+                "https://www.tu-chemnitz.de/projekt/smartLoc/gnss_dataset/berlin/scenario1/berlin1_potsdamer_platz.zip"
+            ),
+            "berlin1_potsdamer_platz.zip",
+        )
+
+    def test_main_writes_receiver_fix_summary_with_raw_provenance(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_smartloc_signoff_") as temp_dir:
+            temp_root = Path(temp_dir)
+            nav_posllh = temp_root / "NAV-POSLLH.csv"
+            rawx = temp_root / "RXM-RAWX.csv"
+            output_dir = temp_root / "out"
+            nav_posllh.write_text(
+                "\n".join(
+                    [
+                        "GPSWeek [weeks];GPSSecondsOfWeek [s];Longitude (GT Lon) [deg];Longitude Cov (GT Lon Cov) [deg];Latitude (GT Lat) [deg];Latitude Cov (GT Lat Cov) [deg];Height above ellipsoid (GT Height) [m];Height above ellipsoid Cov (GT Height Cov) [m];Heading (0 = East, counterclockwise) - (GT Heading) [rad];Heading Cov (0 = East, counterclockwise) - (GT Heading Cov) [rad];Acceleration (GT Acceleration) [ms^2];Acceleration Cov (GT Acceleration Cov) [ms^2];Velocity (GT Velocity) [m/s];Velocity Cov (GT Velocity Cov) [m/s];Yaw-Rate (GT Yaw-rate) [rad/s];Yaw-Rate Cov (GT Yaw-rate Cov) [rad/s];GPS time of week of the navigation epoch (iTOW) [ms];Longitude (lon) [deg];Latitude (lat) [deg];Height above ellipsoid (height) [m];Height above mean sea level (hMSL) [m];Horizontal accuracy estimate (hAcc) [m];Vertical accuracy estimate (vAcc) [m]",
+                        "1900;126641.5;13.373657763;0.0;52.504560275;0.0;76.004611;0.0;1.24;0.0;0.9;0.0;5.7;0.0;0.002;0.0;126641500;13.3736578;52.5045603;76.104;38.043;0.547;-1",
+                        "1900;126641.7;13.373662801;0.0;52.504570098;0.0;76.010967;0.0;1.23;0.0;0.8;0.0;5.8;0.0;-0.007;0.0;126641700;13.3736629;52.5045702;76.111;38.035;0.547;-1",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            rawx.write_text(
+                "\n".join(
+                    [
+                        "GPSWeek [weeks];GPSSecondsOfWeek [s];Longitude (GT Lon) [deg];Longitude Cov (GT Lon) [deg];Latitude (GT Lat) [deg];Latitude Cov (GT Lat) [deg];Height above ellipsoid (GT Height) [m];Height above ellipsoid Cov (GT Height Cov) [m];Heading (0 = East, counterclockwise) - (GT Heading) [rad];Heading Cov (0 = East, counterclockwise) - (GT Heading Cov) [rad];Acceleration (GT Acceleration) [ms^2];Acceleration Cov (GT Acceleration Cov) [ms^2];Velocity (GT Velocity) [m/s];Velocity Cov (GT Velocity Cov) [m/s];Yaw-Rate (GT Yaw-rate) [rad/s];Yaw-Rate Cov (GT Yaw-rate Cov) [rad/s];Measurement time of week (rcvTow) [s];GPS week number (week) [weeks];GPS leap seconds (leapS) [s];Number of measurements to follow (numMeas) [];Receiver tracking status (recStat) [];Pseudorange measurement (prMes) [m];Carrier phase measurement (cpMes) [cycles];Doppler measurement (doMes) [Hz];GNSS identifier (gnssId) [];Satellite identifier (svId) [];Frequency slot - only Glonass (freqId) [];Carrier phase locktime counter (locktime) [ms];Carrier-to-noise density ratio (cno) [dbHz];Estimated pseudorange measurement standard deviation (prStdev) [m];Estimated carrier phase measurement standard deviation (cpStdev) [cycles];Estimated Doppler measurement standard deviation (doStdev) [Hz];Tracking status (trkStat) [];NLOS (0 == no, 1 == yes, # == No Information)",
+                        "1900;126641.5;13.0;0.0;52.0;0.0;76.0;0.0;1.0;0.0;0.0;0.0;5.0;0.0;0.0;0.0;126641.5;1900;17;1;1;19834597.871;104231506.047;222.1658;GPS;12;0;64500;50;0.32;0.004;0.128;15;0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            args = argparse.Namespace(
+                input=None,
+                input_url=smartloc_signoff.DEFAULT_SMARTLOC_ZIP_URL,
+                download_cache_dir=temp_root / "cache",
+                force_download=False,
+                nav_posllh=nav_posllh,
+                rawx=rawx,
+                output_dir=output_dir,
+                reference_csv=None,
+                receiver_csv=None,
+                raw_csv=None,
+                obs_rinex=None,
+                matched_csv=None,
+                summary_json=None,
+                receiver_label="smartloc_ublox",
+                match_tolerance_s=0.25,
+                max_rows=-1,
+                raw_max_epochs=-1,
+                skip_raw_export=False,
+                require_matched_epochs_min=2,
+                require_mean_h_max=1.0,
+                require_median_h_max=None,
+                require_p95_h_max=1.0,
+                require_max_h_max=1.0,
+                require_p95_up_max=1.0,
+                require_raw_epochs_min=1,
+                require_raw_observations_min=1,
+                require_solver_inputs_available=False,
+            )
+
+            with mock.patch.object(smartloc_signoff, "parse_args", return_value=args):
+                exit_code = smartloc_signoff.main()
+
+            self.assertEqual(exit_code, 0)
+            summary_path = output_dir / "smartloc_signoff_summary.json"
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["signoff_profile"], "smartloc-receiver-fix")
+            self.assertEqual(payload["receiver_fix"]["matched_epochs"], 2)
+            self.assertEqual(payload["raw_adapter"]["raw_epochs"], 1)
+            self.assertEqual(payload["solver_preflight"]["status"], "blocked")
+            self.assertIn(
+                "missing broadcast navigation RINEX in smartLoc input",
+                payload["solver_preflight"]["rtk_blockers"],
+            )
+            self.assertFalse(payload["solver_signoff_available"])
 
 
 class OptionalRTKSignoffScriptTest(unittest.TestCase):
@@ -848,6 +1214,30 @@ class ScorecardRenderTest(unittest.TestCase):
 
                 with Image.open(output_png) as image:
                     self.assertEqual(image.size, (2240, 1376))
+            except ModuleNotFoundError:
+                pass
+
+    def test_ppc_rtk_scorecard_main_renders_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_scorecard_test_") as temp_dir:
+            output_png = Path(temp_dir) / "ppc_rtk_scorecard.png"
+
+            argv = [
+                "generate_ppc_rtk_scorecard.py",
+                "--output",
+                str(output_png),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_rtk_scorecard.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(output_png.exists())
+            self.assertGreater(output_png.stat().st_size, 0)
+            try:
+                from PIL import Image
+
+                with Image.open(output_png) as image:
+                    self.assertEqual(image.size, (1400, 750))
             except ModuleNotFoundError:
                 pass
 
@@ -1795,6 +2185,11 @@ class PPCDemoTest(unittest.TestCase):
                 use_existing_rtklib_solution=True,
                 rtklib_solver_wall_time_s=0.1,
                 commercial_pos=commercial_pos,
+                commercial_rover=None,
+                commercial_base=None,
+                commercial_nav=None,
+                commercial_out=None,
+                use_existing_commercial_solution=False,
                 commercial_format="auto",
                 commercial_label="survey_receiver",
                 commercial_matched_csv=commercial_matches,
@@ -1842,6 +2237,11 @@ class PPCDemoTest(unittest.TestCase):
 
             self.assertEqual(payload["dataset"], "PPC-Dataset tokyo run1")
             self.assertEqual(payload["solver"], "rtk")
+            provenance = payload["receiver_observation_provenance"]
+            self.assertEqual(provenance["vehicle_receiver"], "Septentrio mosaic-X5")
+            self.assertEqual(provenance["vehicle_antenna"], "Trimble AT1675")
+            self.assertEqual(provenance["reference_station_receiver"], "Trimble Alloy")
+            self.assertFalse(provenance["receiver_engine_solution_available"])
             self.assertEqual(payload["valid_epochs"], 3)
             self.assertEqual(payload["matched_epochs"], 3)
             self.assertEqual(payload["fixed_epochs"], 2)

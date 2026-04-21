@@ -44,13 +44,35 @@ See `docs/clas_port_architecture.md` for the port design and `docs/clas_validate
 
 ## RTK Performance vs RTKLIB (demo5)
 
-gnssplusplus `develop` (post PR #19–#23) dominates RTKLIB `demo5` on the
-PPC-Dataset Tokyo and Nagoya urban runs across Fix count, Fix rate, and
-precision — with **no Phase 2 opt-in flags**. UrbanNav Tokyo Odaiba is dominated
-on Fix count, Hp95, and Vp95; Hmed sits within 9 cm of demo5 once
-`--enable-wide-lane-ar --wide-lane-threshold 0.10` is opted in.
+The primary public RTK benchmark is
+[taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset): urban Tokyo/Nagoya
+vehicle runs with survey-grade receiver observations, reference-station
+observations, broadcast navigation data, and trajectory truth. The comparison
+below solves the same public rover/base/nav observations with gnssplusplus and
+RTKLIB `demo5`. It is **not** a proprietary receiver-engine comparison.
 
-All runs below use `--mode kinematic --preset low-cost --match-tolerance-s 0.25`.
+On PPC Tokyo and Nagoya, gnssplusplus `develop` (post PR #19-#23) dominates
+RTKLIB `demo5` across Fix count, Fix rate, and precision with **no Phase 2
+opt-in flags**. UrbanNav Tokyo Odaiba is kept as an independent public urban
+stress smoke: gnssplusplus wins Fix count, Hp95, and Vp95 there, while the Hmed
+gap closes to 9 cm when wide-lane AR is explicitly enabled.
+
+All runs below use `--mode kinematic --preset low-cost --match-tolerance-s
+0.25`.
+
+### Benchmark Scope
+
+| Dataset | Role | Receiver/input basis | Comparison target |
+|---|---|---|---|
+| PPC Tokyo/Nagoya | Primary public moving-RTK sign-off | Septentrio mosaic-X5 rover RINEX plus Trimble Alloy/NetR9 base RINEX/nav and `reference.csv` truth | gnssplusplus vs RTKLIB `demo5` on the same observations |
+| UrbanNav Tokyo Odaiba | External urban stress smoke | Public Odaiba rover/base/nav and Applanix reference | gnssplusplus vs RTKLIB `demo5`; not a receiver-engine benchmark |
+
+`ppc-demo` summaries record this under `receiver_observation_provenance`,
+including the rover/base receiver and antenna model. `receiver_engine_solution_available`
+is intentionally `false` for PPC because the benchmark target is the open
+observation solve against reference truth.
+
+![PPC RTK benchmark scorecard](docs/ppc_rtk_demo5_scorecard.png)
 
 ### PPC Tokyo (kinematic, low-cost preset, no Phase 2 flags)
 
@@ -85,10 +107,11 @@ PPC Tokyo + Nagoya need no Phase 2 flags. On Odaiba, `--enable-wide-lane-ar
 
 ## Phase 2 opt-in tuning gates
 
-The default RTK pipeline already dominates demo5 on the production datasets
+The default RTK pipeline already dominates demo5 on the PPC production runs
 above. Five additional gates ship default-off for situations where you want to
-push further on precision-vs-fix-count tradeoffs. All are byte-identical to the
-default behavior unless explicitly enabled.
+push further on precision-vs-fix-count tradeoffs, especially on Odaiba-style
+urban multipath stress. All are byte-identical to the default behavior unless
+explicitly enabled.
 
 | Flag | Purpose | Default |
 |------|---------|---------|
@@ -439,10 +462,12 @@ python3 apps/gnss.py ppc-rtk-signoff \
   --dataset-root /datasets/PPC-Dataset \
   --city tokyo \
   --rtklib-bin /path/to/rnx2rtkp \
-  --commercial-pos /datasets/PPC-Dataset/tokyo/run1/commercial_receiver.csv \
-  --commercial-matched-csv output/ppc_tokyo_run1_commercial_matches.csv \
   --summary-json output/ppc_tokyo_run1_rtk_signoff.json
 ```
+
+The PPC summary records `receiver_observation_provenance` for the bundled
+survey-grade rover/base RINEX streams. Proprietary receiver-engine solutions are
+not assumed to be part of the PPC benchmark target.
 
 Dataset source: [taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset)
 
