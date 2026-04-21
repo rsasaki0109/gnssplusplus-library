@@ -1,10 +1,28 @@
 #include <libgnss++/algorithms/rtk_validation.hpp>
+#include <libgnss++/core/coordinates.hpp>
 
 #include <algorithm>
 #include <cmath>
 #include <vector>
 
 namespace libgnss::rtk_validation {
+
+namespace {
+
+double horizontalDistanceFromOrigin(const PositionSolution& origin,
+                                    const Eigen::Vector3d& target_position_ecef) {
+    double lat = origin.position_geodetic.latitude;
+    double lon = origin.position_geodetic.longitude;
+    if (!std::isfinite(lat) || !std::isfinite(lon)) {
+        double height = 0.0;
+        ecef2geodetic(origin.position_ecef, lat, lon, height);
+    }
+    const Eigen::Vector3d enu =
+        ecef2enu(target_position_ecef - origin.position_ecef, lat, lon);
+    return std::hypot(enu.x(), enu.y());
+}
+
+}  // namespace
 
 double normalizedDt(double dt_seconds, double fallback_dt_seconds) {
     if (!std::isfinite(dt_seconds) || dt_seconds < 0.5) {
@@ -219,7 +237,8 @@ FloatBridgeTailGuardResult filterFloatBridgeTail(
 
         const Eigen::Vector3d anchor_delta =
             anchor_after.position_ecef - anchor_before.position_ecef;
-        const double anchor_speed_mps = anchor_delta.norm() / anchor_gap_s;
+        const double anchor_speed_mps =
+            horizontalDistanceFromOrigin(anchor_before, anchor_after.position_ecef) / anchor_gap_s;
         if (!std::isfinite(anchor_speed_mps) ||
             anchor_speed_mps < config.min_anchor_speed_mps ||
             anchor_speed_mps > config.max_anchor_speed_mps) {

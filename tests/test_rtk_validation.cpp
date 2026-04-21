@@ -165,10 +165,10 @@ TEST(RTKValidationTest, SppHeightStepGuardKeepsRateScaledSppStep) {
 TEST(RTKValidationTest, FloatBridgeTailGuardRejectsSlowBoundedFloatResiduals) {
     std::vector<PositionSolution> solutions = {
         makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),
-        makeValidationSolution(10.0, SolutionStatus::FLOAT, Eigen::Vector3d(10.0, 0.0, 0.0)),
-        makeValidationSolution(20.0, SolutionStatus::FLOAT, Eigen::Vector3d(20.0, 15.0, 0.0)),
-        makeValidationSolution(30.0, SolutionStatus::SPP, Eigen::Vector3d(30.0, 15.0, 0.0)),
-        makeValidationSolution(100.0, SolutionStatus::FIXED, Eigen::Vector3d(100.0, 0.0, 0.0)),
+        makeValidationSolution(10.0, SolutionStatus::FLOAT, Eigen::Vector3d(0.0, 10.0, 0.0)),
+        makeValidationSolution(20.0, SolutionStatus::FLOAT, Eigen::Vector3d(0.0, 20.0, 15.0)),
+        makeValidationSolution(30.0, SolutionStatus::SPP, Eigen::Vector3d(0.0, 30.0, 15.0)),
+        makeValidationSolution(100.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 100.0, 0.0)),
     };
 
     rtk_validation::FloatBridgeTailGuardConfig config;
@@ -193,9 +193,31 @@ TEST(RTKValidationTest, FloatBridgeTailGuardRejectsSlowBoundedFloatResiduals) {
 TEST(RTKValidationTest, FloatBridgeTailGuardIgnoresFastAnchors) {
     std::vector<PositionSolution> solutions = {
         makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),
-        makeValidationSolution(10.0, SolutionStatus::FLOAT, Eigen::Vector3d(10.0, 50.0, 0.0)),
-        makeValidationSolution(20.0, SolutionStatus::FLOAT, Eigen::Vector3d(20.0, 50.0, 0.0)),
-        makeValidationSolution(100.0, SolutionStatus::FIXED, Eigen::Vector3d(300.0, 0.0, 0.0)),
+        makeValidationSolution(10.0, SolutionStatus::FLOAT, Eigen::Vector3d(0.0, 10.0, 50.0)),
+        makeValidationSolution(20.0, SolutionStatus::FLOAT, Eigen::Vector3d(0.0, 20.0, 50.0)),
+        makeValidationSolution(100.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 300.0, 0.0)),
+    };
+
+    rtk_validation::FloatBridgeTailGuardConfig config;
+    config.max_anchor_gap_s = 120.0;
+    config.min_anchor_speed_mps = 0.4;
+    config.max_anchor_speed_mps = 1.2;
+    config.max_residual_m = 10.0;
+    config.min_segment_epochs = 2;
+
+    const auto result = rtk_validation::filterFloatBridgeTail(solutions, config);
+
+    EXPECT_EQ(result.inspected_segments, 0);
+    EXPECT_EQ(result.rejected_epochs, 0);
+    EXPECT_EQ(result.solutions.size(), solutions.size());
+}
+
+TEST(RTKValidationTest, FloatBridgeTailGuardUsesHorizontalAnchorSpeed) {
+    std::vector<PositionSolution> solutions = {
+        makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),
+        makeValidationSolution(10.0, SolutionStatus::FLOAT, Eigen::Vector3d(0.0, 5.0, 40.0)),
+        makeValidationSolution(20.0, SolutionStatus::FLOAT, Eigen::Vector3d(0.0, 5.0, 45.0)),
+        makeValidationSolution(50.0, SolutionStatus::FIXED, Eigen::Vector3d(50.0, 5.0, 0.0)),
     };
 
     rtk_validation::FloatBridgeTailGuardConfig config;

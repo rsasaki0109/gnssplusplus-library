@@ -13,7 +13,8 @@ Tier-1 public smoke/regression run.
 
 All runs below use `--mode kinematic --preset low-cost --match-tolerance-s 0.25`.
 The coverage profile additionally uses `--no-arfilter --no-kinematic-post-filter`
-plus the default low-speed non-FIX drift guard and SPP height-step guard.
+plus the default low-speed non-FIX drift guard, SPP height-step guard, and
+FLOAT bridge-tail guard.
 
 ## Public Moving-RTK Benchmark Matrix
 
@@ -56,48 +57,45 @@ about matching a proprietary receiver RTK engine.
 
 | Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | 3D <= 50 cm / ref delta | P95 H delta |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo run1 | **87.4%** | 66.3% | **+21.1 pp** | **47.9%** | 30.5% | **+35.6 pp** | -5.53 m |
-| Tokyo run2 | **95.3%** | 84.3% | **+11.0 pp** | **60.7%** | 27.6% | **+39.9 pp** | -18.89 m |
-| Tokyo run3 | **96.0%** | 93.1% | **+2.9 pp** | **60.2%** | 40.5% | **+23.6 pp** | -0.70 m |
-| Nagoya run1 | **87.9%** | 65.8% | **+22.1 pp** | **60.0%** | 33.8% | **+32.8 pp** | -22.64 m |
-| Nagoya run2 | **86.2%** | 69.8% | **+16.5 pp** | **40.1%** | 18.8% | **+20.0 pp** | -27.16 m |
+| Tokyo run1 | **86.2%** | 66.3% | **+19.9 pp** | **48.6%** | 30.5% | **+35.6 pp** | -6.97 m |
+| Tokyo run2 | **95.3%** | 84.3% | **+11.0 pp** | **60.8%** | 27.6% | **+39.9 pp** | -18.89 m |
+| Tokyo run3 | **96.0%** | 93.1% | **+2.9 pp** | **60.3%** | 40.5% | **+23.6 pp** | -0.69 m |
+| Nagoya run1 | **87.9%** | 65.8% | **+22.1 pp** | **60.3%** | 33.8% | **+32.8 pp** | -22.63 m |
+| Nagoya run2 | **86.2%** | 69.8% | **+16.5 pp** | **40.3%** | 18.8% | **+20.0 pp** | -27.16 m |
 | Nagoya run3 | **94.6%** | 67.7% | **+26.9 pp** | **19.7%** | 13.9% | **+9.4 pp** | -5.54 m |
 
-Across these six public runs, the coverage profile averages **+16.8 pp**
+Across these six public runs, the coverage profile averages **+16.5 pp**
 Positioning-rate lead, **+26.9 pp** 3D<=50cm/reference-score lead, and
-**-13.41 m** P95 horizontal-error delta versus RTKLIB `demo5`.
+**-13.65 m** P95 horizontal-error delta versus RTKLIB `demo5`.
 
 ### Tokyo run1 coverage-quality split
 
 Tokyo run1's low-speed non-FIX drift guard removes 320 bounded fallback epochs,
 and the SPP height-step guard removes another 30 vertical-spike fallback epochs.
-Together they turn the previous P95H regression into a **5.53 m** P95H lead,
-drop Tokyo run1 maxH from 81.1 m to **47.9 m**, and keep the
-3D<=50cm/reference score unchanged. The remaining P95 tail is now mostly
-FLOAT-dominated. The full machine-readable reports are
+The default FLOAT bridge-tail guard then removes 147 more FLOAT epochs in the
+remaining low-speed tail, using horizontal FIX-anchor speed so vertical anchor
+noise does not create false motion. Together these guards turn the previous
+P95H regression into a **6.97 m** P95H lead, keep Positioning at **86.2%**
+(**+19.9 pp** over RTKLIB), and keep the 3D<=50cm/reference score unchanged.
+The full machine-readable reports are
 `ppc_tokyo_run1_coverage_quality.json` and
 `ppc_tokyo_run1_coverage_bad_segments.csv`; the bad-segment CSV includes
 status counts, adjacent FIX-anchor gap/speed, solution path length, and
-FIX-anchor bridge residuals for the next FLOAT-tail guard design.
+FIX-anchor bridge residuals for continued FLOAT-tail design.
 
 | Status | Epochs | P50 H | P95 H | 3D <= 50 cm / reference | P95H exceedance share |
 |---|---:|---:|---:|---:|---:|
 | FIXED | 5005 | 0.03 m | 1.57 m | 33.1% | 5.2% |
-| FLOAT | 5191 | 2.34 m | 32.68 m | 2.5% | 88.0% |
-| SPP | 253 | 4.71 m | 32.28 m | 0.0% | 6.9% |
+| FLOAT | 5044 | 2.26 m | 26.61 m | 2.5% | 87.6% |
+| SPP | 253 | 4.71 m | 32.28 m | 0.0% | 7.2% |
 
 ![PPC Tokyo run1 coverage quality by status](ppc_tokyo_run1_coverage_quality.png)
 
-The opt-in `--float-bridge-tail-guard` is the first FLOAT-tail candidate. On
-Tokyo run1 it rejects 154 FLOAT epochs in slow bounded FIX-to-FIX segments,
-keeps Positioning at **86.1%** (**+19.9 pp** over RTKLIB), keeps the
-3D<=50cm/reference score unchanged, and improves P95H to **24.17 m**
-(**6.97 m** better than RTKLIB). It remains default-off until the same
-threshold is checked across all six PPC Tokyo/Nagoya runs. Artifacts:
-`ppc_tokyo_run1_float_bridge_tail_quality.json`,
-`ppc_tokyo_run1_float_bridge_tail_bad_segments.csv`.
-
-![PPC Tokyo run1 FLOAT bridge-tail opt-in quality](ppc_tokyo_run1_float_bridge_tail_quality.png)
+Across the six PPC Tokyo/Nagoya runs, the default FLOAT bridge-tail guard
+rejects 148 epochs total: 147 on Tokyo run1, 1 on Tokyo run3, and 0 on the
+other four runs. The previous 3D-speed prototype also rejected 115 Nagoya run3
+FLOAT epochs with low horizontal anchor speed; the shipped guard uses
+horizontal anchor speed and avoids that positioning-rate loss.
 
 PPC Tokyo run3 is also checked visually as a 2D status-colored trajectory.
 The replay uses GNSS observations only, with no IMU input. The coverage profile

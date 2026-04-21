@@ -105,7 +105,7 @@ struct SolveConfig {
     bool enable_spp_height_step_guard = true;
     double spp_height_step_guard_min_m = kDefaultSppHeightStepGuardMinMeters;
     double spp_height_step_guard_max_rate_mps = kDefaultSppHeightStepGuardMaxRateMps;
-    bool enable_float_bridge_tail_guard = false;
+    bool enable_float_bridge_tail_guard = true;
     double float_bridge_tail_guard_max_anchor_gap_s = kDefaultFloatBridgeTailGuardMaxAnchorGapSeconds;
     double float_bridge_tail_guard_min_anchor_speed_mps = kDefaultFloatBridgeTailGuardMinAnchorSpeedMps;
     double float_bridge_tail_guard_max_anchor_speed_mps = kDefaultFloatBridgeTailGuardMaxAnchorSpeedMps;
@@ -460,13 +460,15 @@ void printUsage(const char* program_name) {
         << "  --spp-height-step-min <m>  Minimum SPP height jump rejected (default: 30)\n"
         << "  --spp-height-step-rate <m/s>\n"
         << "                             Rate-scaled SPP height jump limit (default: 4)\n"
-        << "  --float-bridge-tail-guard Enable slow FLOAT bridge-tail rejection (default: off)\n"
+        << "  --float-bridge-tail-guard Enable slow FLOAT bridge-tail rejection (default: on)\n"
+        << "  --no-float-bridge-tail-guard\n"
+        << "                             Disable slow FLOAT bridge-tail rejection\n"
         << "  --float-bridge-tail-max-anchor-gap <s>\n"
         << "                             Max FIX-to-FIX gap for FLOAT bridge-tail guard (default: 120)\n"
         << "  --float-bridge-tail-min-anchor-speed <m/s>\n"
-        << "                             Min FIX-anchor speed for FLOAT bridge-tail guard (default: 0.4)\n"
+        << "                             Min horizontal FIX-anchor speed for FLOAT bridge-tail guard (default: 0.4)\n"
         << "  --float-bridge-tail-max-anchor-speed <m/s>\n"
-        << "                             Max FIX-anchor speed for FLOAT bridge-tail guard (default: 1.0)\n"
+        << "                             Max horizontal FIX-anchor speed for FLOAT bridge-tail guard (default: 1.0)\n"
         << "  --float-bridge-tail-max-residual <m>\n"
         << "                             Reject FLOAT epochs farther than this from FIX-anchor bridge\n"
         << "                             in slow bounded segments (default: 12)\n"

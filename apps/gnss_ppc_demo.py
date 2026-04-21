@@ -190,11 +190,20 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--spp-height-step-min", type=float, default=None)
     parser.add_argument("--spp-height-step-rate", type=float, default=None)
-    parser.add_argument(
+    float_bridge_tail_group = parser.add_mutually_exclusive_group()
+    float_bridge_tail_group.add_argument(
         "--float-bridge-tail-guard",
+        dest="float_bridge_tail_guard",
         action="store_true",
-        help="Enable the experimental slow FLOAT bridge-tail guard in gnss solve.",
+        help="Enable the slow FLOAT bridge-tail guard in gnss solve (default).",
     )
+    float_bridge_tail_group.add_argument(
+        "--no-float-bridge-tail-guard",
+        dest="float_bridge_tail_guard",
+        action="store_false",
+        help="Disable the slow FLOAT bridge-tail guard in gnss solve.",
+    )
+    parser.set_defaults(float_bridge_tail_guard=True)
     parser.add_argument("--float-bridge-tail-max-anchor-gap", type=float, default=None)
     parser.add_argument("--float-bridge-tail-min-anchor-speed", type=float, default=None)
     parser.add_argument("--float-bridge-tail-max-anchor-speed", type=float, default=None)
@@ -780,8 +789,10 @@ def run_solver(
             command.extend(["--spp-height-step-min", str(args.spp_height_step_min)])
         if getattr(args, "spp_height_step_rate", None) is not None:
             command.extend(["--spp-height-step-rate", str(args.spp_height_step_rate)])
-        if getattr(args, "float_bridge_tail_guard", False):
+        if getattr(args, "float_bridge_tail_guard", True):
             command.append("--float-bridge-tail-guard")
+        else:
+            command.append("--no-float-bridge-tail-guard")
         if getattr(args, "float_bridge_tail_max_anchor_gap", None) is not None:
             command.extend(
                 [
@@ -894,7 +905,7 @@ def build_summary_payload(
         ),
         "spp_height_step_guard": spp_height_step_guard_config(args) if args.solver == "rtk" else None,
         "float_bridge_tail_guard_enabled": (
-            args.solver == "rtk" and getattr(args, "float_bridge_tail_guard", False)
+            args.solver == "rtk" and getattr(args, "float_bridge_tail_guard", True)
         ),
         "float_bridge_tail_guard": float_bridge_tail_guard_config(args) if args.solver == "rtk" else None,
         "solution_pos": str(out),

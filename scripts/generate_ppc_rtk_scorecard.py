@@ -223,7 +223,7 @@ def main() -> int:
         0.27,
         0.105,
         "All-run coverage lead",
-        "+17.7 pp",
+        "+16.5 pp",
         "min +2.9 pp across 6 runs",
     )
 

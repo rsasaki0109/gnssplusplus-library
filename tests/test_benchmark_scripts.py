@@ -2305,7 +2305,7 @@ class PPCDemoTest(unittest.TestCase):
                 no_spp_height_step_guard=False,
                 spp_height_step_min=None,
                 spp_height_step_rate=None,
-                float_bridge_tail_guard=False,
+                float_bridge_tail_guard=True,
                 float_bridge_tail_max_anchor_gap=None,
                 float_bridge_tail_min_anchor_speed=None,
                 float_bridge_tail_max_anchor_speed=None,
@@ -2354,7 +2354,7 @@ class PPCDemoTest(unittest.TestCase):
             self.assertTrue(payload["spp_height_step_guard_enabled"])
             self.assertEqual(payload["spp_height_step_guard"]["min_step_m"], 30.0)
             self.assertEqual(payload["spp_height_step_guard"]["max_rate_mps"], 4.0)
-            self.assertFalse(payload["float_bridge_tail_guard_enabled"])
+            self.assertTrue(payload["float_bridge_tail_guard_enabled"])
             self.assertEqual(payload["float_bridge_tail_guard"]["max_anchor_gap_s"], 120.0)
             self.assertEqual(payload["float_bridge_tail_guard"]["min_anchor_speed_mps"], 0.4)
             self.assertEqual(payload["float_bridge_tail_guard"]["max_anchor_speed_mps"], 1.0)

@@ -32,80 +32,26 @@
     },
     {
       "dominant_status": "FLOAT",
-      "duration_s": 20.8,
-      "end_tow_s": 188325.2,
-      "epochs": 104,
-      "fixed_anchor_bridge_residual_max_m": 12.841982,
-      "fixed_anchor_bridge_residual_median_m": 6.775793,
-      "fixed_anchor_bridge_residual_p95_m": 12.041323,
+      "duration_s": 13.8,
+      "end_tow_s": 188318.2,
+      "epochs": 70,
+      "fixed_anchor_bridge_residual_max_m": 8.487798,
+      "fixed_anchor_bridge_residual_median_m": 5.050685,
+      "fixed_anchor_bridge_residual_p95_m": 8.153468,
       "fixed_anchor_distance_m": 68.609686,
       "fixed_anchor_gap_s": 106.0,
       "fixed_anchor_speed_mps": 0.647261,
-      "max_h_m": 37.761641,
-      "median_h_m": 36.779563,
+      "max_h_m": 37.639037,
+      "median_h_m": 36.404807,
       "next_fixed_tow_s": 188408.0,
-      "p95_h_m": 37.673494,
+      "p95_h_m": 37.516976,
       "previous_fixed_tow_s": 188302.0,
-      "solution_chord_m": 1.470079,
-      "solution_path_m": 3.154573,
-      "solution_path_speed_mps": 0.151662,
+      "solution_chord_m": 1.954424,
+      "solution_path_m": 2.213485,
+      "solution_path_speed_mps": 0.160397,
       "start_tow_s": 188304.4,
       "status_counts": {
-        "FLOAT": 104
-      },
-      "statuses": [
-        "FLOAT"
-      ]
-    },
-    {
-      "dominant_status": "FLOAT",
-      "duration_s": 12.8,
-      "end_tow_s": 188338.8,
-      "epochs": 65,
-      "fixed_anchor_bridge_residual_max_m": 22.26317,
-      "fixed_anchor_bridge_residual_median_m": 17.728061,
-      "fixed_anchor_bridge_residual_p95_m": 21.817659,
-      "fixed_anchor_distance_m": 68.609686,
-      "fixed_anchor_gap_s": 106.0,
-      "fixed_anchor_speed_mps": 0.647261,
-      "max_h_m": 37.115351,
-      "median_h_m": 36.540223,
-      "next_fixed_tow_s": 188408.0,
-      "p95_h_m": 37.084579,
-      "previous_fixed_tow_s": 188302.0,
-      "solution_chord_m": 1.207769,
-      "solution_path_m": 1.361377,
-      "solution_path_speed_mps": 0.106358,
-      "start_tow_s": 188326.0,
-      "status_counts": {
-        "FLOAT": 65
-      },
-      "statuses": [
-        "FLOAT"
-      ]
-    },
-    {
-      "dominant_status": "FLOAT",
-      "duration_s": 8.2,
-      "end_tow_s": 188349.4,
-      "epochs": 42,
-      "fixed_anchor_bridge_residual_max_m": 29.866726,
-      "fixed_anchor_bridge_residual_median_m": 26.846614,
-      "fixed_anchor_bridge_residual_p95_m": 29.555736,
-      "fixed_anchor_distance_m": 68.609686,
-      "fixed_anchor_gap_s": 106.0,
-      "fixed_anchor_speed_mps": 0.647261,
-      "max_h_m": 35.922826,
-      "median_h_m": 35.44654,
-      "next_fixed_tow_s": 188408.0,
-      "p95_h_m": 35.880379,
-      "previous_fixed_tow_s": 188302.0,
-      "solution_chord_m": 0.972699,
-      "solution_path_m": 1.070814,
-      "solution_path_speed_mps": 0.130587,
-      "start_tow_s": 188341.2,
-      "status_counts": {
-        "FLOAT": 42
+        "FLOAT": 70
       },
       "statuses": [
         "FLOAT"
@@ -165,33 +111,6 @@
       },
       "statuses": [
         "SPP"
-      ]
-    },
-    {
-      "dominant_status": "FLOAT",
-      "duration_s": 0.6,
-      "end_tow_s": 188404.2,
-      "epochs": 4,
-      "fixed_anchor_bridge_residual_max_m": 29.926119,
-      "fixed_anchor_bridge_residual_median_m": 27.902347,
-      "fixed_anchor_bridge_residual_p95_m": 29.726802,
-      "fixed_anchor_distance_m": 68.609686,
-      "fixed_anchor_gap_s": 106.0,
-      "fixed_anchor_speed_mps": 0.647261,
-      "max_h_m": 35.126548,
-      "median_h_m": 35.024037,
-      "next_fixed_tow_s": 188408.0,
-      "p95_h_m": 35.11419,
-      "previous_fixed_tow_s": 188302.0,
-      "solution_chord_m": 4.514243,
-      "solution_path_m": 4.516281,
-      "solution_path_speed_mps": 7.527135,
-      "start_tow_s": 188403.6,
-      "status_counts": {
-        "FLOAT": 4
-      },
-      "statuses": [
-        "FLOAT"
       ]
     },
     {
@@ -357,8 +276,8 @@
       ]
     }
   ],
-  "common_epoch_pairs": 7444,
-  "global_p95_h_m": 25.607709,
+  "common_epoch_pairs": 7443,
+  "global_p95_h_m": 24.164244,
   "lib_by_status": [
     {
       "epochs": 5005,
@@ -376,18 +295,18 @@
       "status": "FIXED"
     },
     {
-      "epochs": 5191,
+      "epochs": 5044,
       "max_h_m": 47.921316,
-      "median_abs_up_m": 9.599751,
-      "median_h_m": 2.341738,
-      "p90_h_m": 24.80634,
-      "p95_abs_up_m": 60.464709,
-      "p95_h_m": 32.677288,
-      "p99_h_m": 37.075311,
+      "median_abs_up_m": 8.592711,
+      "median_h_m": 2.261766,
+      "p90_h_m": 23.657436,
+      "p95_abs_up_m": 49.208864,
+      "p95_h_m": 26.614135,
+      "p99_h_m": 36.18831,
       "ppc_score_3d_50cm_epochs": 300,
-      "ppc_score_3d_50cm_matched_pct": 5.779233,
+      "ppc_score_3d_50cm_matched_pct": 5.947661,
       "ppc_score_3d_50cm_ref_pct": 2.51025,
-      "reference_rate_pct": 43.435696,
+      "reference_rate_pct": 42.205673,
       "status": "FLOAT"
     },
     {
@@ -406,28 +325,28 @@
       "status": "SPP"
     }
   ],
-  "lib_matched_epochs": 10449,
+  "lib_matched_epochs": 10302,
   "match_tolerance_s": 0.25,
   "p95_contribution_by_status": [
     {
       "epochs": 27,
       "max_h_m": 34.788491,
       "median_h_m": 34.383755,
-      "share_pct": 5.162524,
+      "share_pct": 5.232558,
       "status": "FIXED"
     },
     {
-      "epochs": 460,
+      "epochs": 452,
       "max_h_m": 47.921316,
-      "median_h_m": 33.472141,
-      "share_pct": 87.954111,
+      "median_h_m": 27.420955,
+      "share_pct": 87.596899,
       "status": "FLOAT"
     },
     {
-      "epochs": 36,
+      "epochs": 37,
       "max_h_m": 37.713328,
-      "median_h_m": 31.548333,
-      "share_pct": 6.883365,
+      "median_h_m": 31.539405,
+      "share_pct": 7.170543,
       "status": "SPP"
     }
   ],
@@ -444,10 +363,10 @@
     {
       "lib_worse_epochs": 1584,
       "lib_worse_gt_5m_epochs": 544,
-      "lib_worse_pct": 46.68435,
-      "median_delta_h_m": -0.356444,
-      "p95_delta_h_m": 22.786002,
-      "pairs": 3393,
+      "lib_worse_pct": 46.698113,
+      "median_delta_h_m": -0.355375,
+      "p95_delta_h_m": 22.786144,
+      "pairs": 3392,
       "status": "FLOAT"
     },
     {

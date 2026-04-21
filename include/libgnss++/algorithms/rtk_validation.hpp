@@ -32,6 +32,7 @@ struct SppHeightStepGuardResult {
 
 struct FloatBridgeTailGuardConfig {
     double max_anchor_gap_s = 120.0;
+    // Horizontal FIX-anchor speed bounds in the local ENU frame.
     double min_anchor_speed_mps = 0.4;
     double max_anchor_speed_mps = 1.0;
     double max_residual_m = 12.0;
