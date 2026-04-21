@@ -31,6 +31,11 @@ constexpr double kDefaultNonFixDriftGuardMaxResidualMeters = 30.0;
 constexpr int kDefaultNonFixDriftGuardMinSegmentEpochs = 20;
 constexpr double kDefaultSppHeightStepGuardMinMeters = 30.0;
 constexpr double kDefaultSppHeightStepGuardMaxRateMps = 4.0;
+constexpr double kDefaultFloatBridgeTailGuardMaxAnchorGapSeconds = 120.0;
+constexpr double kDefaultFloatBridgeTailGuardMinAnchorSpeedMps = 0.4;
+constexpr double kDefaultFloatBridgeTailGuardMaxAnchorSpeedMps = 1.0;
+constexpr double kDefaultFloatBridgeTailGuardMaxResidualMeters = 12.0;
+constexpr int kDefaultFloatBridgeTailGuardMinSegmentEpochs = 20;
 constexpr int kReacquireFixedCount = 5;
 
 enum class ModeChoice {
@@ -100,6 +105,12 @@ struct SolveConfig {
     bool enable_spp_height_step_guard = true;
     double spp_height_step_guard_min_m = kDefaultSppHeightStepGuardMinMeters;
     double spp_height_step_guard_max_rate_mps = kDefaultSppHeightStepGuardMaxRateMps;
+    bool enable_float_bridge_tail_guard = false;
+    double float_bridge_tail_guard_max_anchor_gap_s = kDefaultFloatBridgeTailGuardMaxAnchorGapSeconds;
+    double float_bridge_tail_guard_min_anchor_speed_mps = kDefaultFloatBridgeTailGuardMinAnchorSpeedMps;
+    double float_bridge_tail_guard_max_anchor_speed_mps = kDefaultFloatBridgeTailGuardMaxAnchorSpeedMps;
+    double float_bridge_tail_guard_max_residual_m = kDefaultFloatBridgeTailGuardMaxResidualMeters;
+    int float_bridge_tail_guard_min_segment_epochs = kDefaultFloatBridgeTailGuardMinSegmentEpochs;
     RTKTuningPreset preset = RTKTuningPreset::NONE;
     bool ratio_threshold_set = false;
     bool ar_filter_margin_set = false;
@@ -449,6 +460,18 @@ void printUsage(const char* program_name) {
         << "  --spp-height-step-min <m>  Minimum SPP height jump rejected (default: 30)\n"
         << "  --spp-height-step-rate <m/s>\n"
         << "                             Rate-scaled SPP height jump limit (default: 4)\n"
+        << "  --float-bridge-tail-guard Enable slow FLOAT bridge-tail rejection (default: off)\n"
+        << "  --float-bridge-tail-max-anchor-gap <s>\n"
+        << "                             Max FIX-to-FIX gap for FLOAT bridge-tail guard (default: 120)\n"
+        << "  --float-bridge-tail-min-anchor-speed <m/s>\n"
+        << "                             Min FIX-anchor speed for FLOAT bridge-tail guard (default: 0.4)\n"
+        << "  --float-bridge-tail-max-anchor-speed <m/s>\n"
+        << "                             Max FIX-anchor speed for FLOAT bridge-tail guard (default: 1.0)\n"
+        << "  --float-bridge-tail-max-residual <m>\n"
+        << "                             Reject FLOAT epochs farther than this from FIX-anchor bridge\n"
+        << "                             in slow bounded segments (default: 12)\n"
+        << "  --float-bridge-tail-min-segment-epochs <n>\n"
+        << "                             Minimum bounded FLOAT-tail segment length to inspect (default: 20)\n"
         << "  --max-baseline-m <v>       Max baseline length in meters (default: 20000)\n"
         << "  --base-ecef <x> <y> <z>    Override base ECEF position in meters\n"
         << "  --skip-epochs <n>          Skip the first n rover epochs before solving\n"
@@ -637,6 +660,20 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.spp_height_step_guard_min_m = std::stod(argv[++i]);
         } else if (arg == "--spp-height-step-rate" && i + 1 < argc) {
             config.spp_height_step_guard_max_rate_mps = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-guard") {
+            config.enable_float_bridge_tail_guard = true;
+        } else if (arg == "--no-float-bridge-tail-guard") {
+            config.enable_float_bridge_tail_guard = false;
+        } else if (arg == "--float-bridge-tail-max-anchor-gap" && i + 1 < argc) {
+            config.float_bridge_tail_guard_max_anchor_gap_s = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-min-anchor-speed" && i + 1 < argc) {
+            config.float_bridge_tail_guard_min_anchor_speed_mps = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-max-anchor-speed" && i + 1 < argc) {
+            config.float_bridge_tail_guard_max_anchor_speed_mps = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-max-residual" && i + 1 < argc) {
+            config.float_bridge_tail_guard_max_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-min-segment-epochs" && i + 1 < argc) {
+            config.float_bridge_tail_guard_min_segment_epochs = std::stoi(argv[++i]);
         } else if (arg == "--max-baseline-m" && i + 1 < argc) {
             config.max_baseline_length_m = std::stod(argv[++i]);
         } else if (arg == "--base-ecef" && i + 3 < argc) {
@@ -704,6 +741,22 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.spp_height_step_guard_max_rate_mps < 0.0) {
         argumentError("--spp-height-step-rate must be >= 0", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_max_anchor_gap_s <= 0.0) {
+        argumentError("--float-bridge-tail-max-anchor-gap must be > 0", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_min_anchor_speed_mps < 0.0) {
+        argumentError("--float-bridge-tail-min-anchor-speed must be >= 0", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_max_anchor_speed_mps <
+        config.float_bridge_tail_guard_min_anchor_speed_mps) {
+        argumentError("--float-bridge-tail-max-anchor-speed must be >= min anchor speed", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_max_residual_m <= 0.0) {
+        argumentError("--float-bridge-tail-max-residual must be > 0", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_min_segment_epochs < 1) {
+        argumentError("--float-bridge-tail-min-segment-epochs must be >= 1", argv[0]);
     }
     if (config.skip_epochs < 0) {
         argumentError("--skip-epochs must be >= 0", argv[0]);
@@ -971,6 +1024,9 @@ int main(int argc, char* argv[]) {
         int nonfix_drift_guard_rejected_segments = 0;
         int nonfix_drift_guard_rejected_epochs = 0;
         int spp_height_step_guard_rejected_epochs = 0;
+        int float_bridge_tail_guard_inspected_segments = 0;
+        int float_bridge_tail_guard_rejected_segments = 0;
+        int float_bridge_tail_guard_rejected_epochs = 0;
         libgnss::PositionSolution last_fixed_output;
         bool have_last_fixed_output = false;
 
@@ -1160,6 +1216,27 @@ int main(int argc, char* argv[]) {
             solution.solutions = std::move(guard_result.solutions);
         }
 
+        if (config.enable_float_bridge_tail_guard &&
+            rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
+            !solution.isEmpty()) {
+            libgnss::rtk_validation::FloatBridgeTailGuardConfig guard_config;
+            guard_config.max_anchor_gap_s = config.float_bridge_tail_guard_max_anchor_gap_s;
+            guard_config.min_anchor_speed_mps =
+                config.float_bridge_tail_guard_min_anchor_speed_mps;
+            guard_config.max_anchor_speed_mps =
+                config.float_bridge_tail_guard_max_anchor_speed_mps;
+            guard_config.max_residual_m = config.float_bridge_tail_guard_max_residual_m;
+            guard_config.min_segment_epochs =
+                config.float_bridge_tail_guard_min_segment_epochs;
+            auto guard_result = libgnss::rtk_validation::filterFloatBridgeTail(
+                solution.solutions,
+                guard_config);
+            float_bridge_tail_guard_inspected_segments = guard_result.inspected_segments;
+            float_bridge_tail_guard_rejected_segments = guard_result.rejected_segments;
+            float_bridge_tail_guard_rejected_epochs = guard_result.rejected_epochs;
+            solution.solutions = std::move(guard_result.solutions);
+        }
+
         if (config.enable_kinematic_post_filter &&
             rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
             !solution.isEmpty()) {
@@ -1263,6 +1340,12 @@ int main(int argc, char* argv[]) {
             std::cout << "  SPP height-step guard: "
                       << (config.enable_spp_height_step_guard ? "enabled" : "disabled")
                       << " rejected_epochs=" << spp_height_step_guard_rejected_epochs
+                      << std::endl;
+            std::cout << "  FLOAT bridge-tail guard: "
+                      << (config.enable_float_bridge_tail_guard ? "enabled" : "disabled")
+                      << " inspected_segments=" << float_bridge_tail_guard_inspected_segments
+                      << " rejected_segments=" << float_bridge_tail_guard_rejected_segments
+                      << " rejected_epochs=" << float_bridge_tail_guard_rejected_epochs
                       << std::endl;
         }
         if (rtk_config.position_mode == libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&

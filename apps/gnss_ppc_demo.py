@@ -30,6 +30,13 @@ SPP_HEIGHT_STEP_GUARD_DEFAULTS = {
     "min_step_m": 30.0,
     "max_rate_mps": 4.0,
 }
+FLOAT_BRIDGE_TAIL_GUARD_DEFAULTS = {
+    "max_anchor_gap_s": 120.0,
+    "min_anchor_speed_mps": 0.4,
+    "max_anchor_speed_mps": 1.0,
+    "max_residual_m": 12.0,
+    "min_segment_epochs": 20,
+}
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -183,6 +190,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--spp-height-step-min", type=float, default=None)
     parser.add_argument("--spp-height-step-rate", type=float, default=None)
+    parser.add_argument(
+        "--float-bridge-tail-guard",
+        action="store_true",
+        help="Enable the experimental slow FLOAT bridge-tail guard in gnss solve.",
+    )
+    parser.add_argument("--float-bridge-tail-max-anchor-gap", type=float, default=None)
+    parser.add_argument("--float-bridge-tail-min-anchor-speed", type=float, default=None)
+    parser.add_argument("--float-bridge-tail-max-anchor-speed", type=float, default=None)
+    parser.add_argument("--float-bridge-tail-max-residual", type=float, default=None)
+    parser.add_argument("--float-bridge-tail-min-segment-epochs", type=int, default=None)
     parser.add_argument(
         "--rtklib-bin",
         type=Path,
@@ -405,6 +422,65 @@ def spp_height_step_guard_config(args: argparse.Namespace) -> dict[str, float]:
                     "spp_height_step_rate",
                     "max_rate_mps",
                 )
+            )
+        ),
+    }
+
+
+def float_bridge_tail_guard_value(
+    args: argparse.Namespace,
+    attr_name: str,
+    default_name: str,
+) -> float | int:
+    value = getattr(args, attr_name, None)
+    if value is None:
+        return FLOAT_BRIDGE_TAIL_GUARD_DEFAULTS[default_name]
+    return value
+
+
+def float_bridge_tail_guard_config(args: argparse.Namespace) -> dict[str, float | int]:
+    return {
+        "max_anchor_gap_s": rounded(
+            float(
+                float_bridge_tail_guard_value(
+                    args,
+                    "float_bridge_tail_max_anchor_gap",
+                    "max_anchor_gap_s",
+                )
+            )
+        ),
+        "min_anchor_speed_mps": rounded(
+            float(
+                float_bridge_tail_guard_value(
+                    args,
+                    "float_bridge_tail_min_anchor_speed",
+                    "min_anchor_speed_mps",
+                )
+            )
+        ),
+        "max_anchor_speed_mps": rounded(
+            float(
+                float_bridge_tail_guard_value(
+                    args,
+                    "float_bridge_tail_max_anchor_speed",
+                    "max_anchor_speed_mps",
+                )
+            )
+        ),
+        "max_residual_m": rounded(
+            float(
+                float_bridge_tail_guard_value(
+                    args,
+                    "float_bridge_tail_max_residual",
+                    "max_residual_m",
+                )
+            )
+        ),
+        "min_segment_epochs": int(
+            float_bridge_tail_guard_value(
+                args,
+                "float_bridge_tail_min_segment_epochs",
+                "min_segment_epochs",
             )
         ),
     }
@@ -704,6 +780,43 @@ def run_solver(
             command.extend(["--spp-height-step-min", str(args.spp_height_step_min)])
         if getattr(args, "spp_height_step_rate", None) is not None:
             command.extend(["--spp-height-step-rate", str(args.spp_height_step_rate)])
+        if getattr(args, "float_bridge_tail_guard", False):
+            command.append("--float-bridge-tail-guard")
+        if getattr(args, "float_bridge_tail_max_anchor_gap", None) is not None:
+            command.extend(
+                [
+                    "--float-bridge-tail-max-anchor-gap",
+                    str(args.float_bridge_tail_max_anchor_gap),
+                ]
+            )
+        if getattr(args, "float_bridge_tail_min_anchor_speed", None) is not None:
+            command.extend(
+                [
+                    "--float-bridge-tail-min-anchor-speed",
+                    str(args.float_bridge_tail_min_anchor_speed),
+                ]
+            )
+        if getattr(args, "float_bridge_tail_max_anchor_speed", None) is not None:
+            command.extend(
+                [
+                    "--float-bridge-tail-max-anchor-speed",
+                    str(args.float_bridge_tail_max_anchor_speed),
+                ]
+            )
+        if getattr(args, "float_bridge_tail_max_residual", None) is not None:
+            command.extend(
+                [
+                    "--float-bridge-tail-max-residual",
+                    str(args.float_bridge_tail_max_residual),
+                ]
+            )
+        if getattr(args, "float_bridge_tail_min_segment_epochs", None) is not None:
+            command.extend(
+                [
+                    "--float-bridge-tail-min-segment-epochs",
+                    str(args.float_bridge_tail_min_segment_epochs),
+                ]
+            )
     else:
         command = [
             *gnss_command,
@@ -780,6 +893,10 @@ def build_summary_payload(
             args.solver == "rtk" and not getattr(args, "no_spp_height_step_guard", False)
         ),
         "spp_height_step_guard": spp_height_step_guard_config(args) if args.solver == "rtk" else None,
+        "float_bridge_tail_guard_enabled": (
+            args.solver == "rtk" and getattr(args, "float_bridge_tail_guard", False)
+        ),
+        "float_bridge_tail_guard": float_bridge_tail_guard_config(args) if args.solver == "rtk" else None,
         "solution_pos": str(out),
         "summary_json": str(summary_json),
         "generated_solution": not args.use_existing_solution,

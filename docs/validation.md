@@ -93,6 +93,10 @@ fallback positions drift more than 30 m from the anchor bridge. Use
 The default SPP height-step guard then removes SPP-only vertical spikes above
 the `--spp-height-step-min` / `--spp-height-step-rate` envelope; use
 `--no-spp-height-step-guard` only when reproducing the raw SPP fallback stream.
+`--float-bridge-tail-guard` is an opt-in candidate for the remaining FLOAT tail:
+it rejects FLOAT epochs in slow bounded FIX-to-FIX segments when their position
+diverges from the anchor bridge, and should stay opt-in until the threshold has
+six-run PPC sign-off.
 Use `scripts/analyze_ppc_coverage_quality.py` with the PPC solution, RTKLIB
 solution, and `reference.csv` when a coverage run improves Positioning rate but
 regresses P95 horizontal error; the report separates FIXED/FLOAT/SPP quality and

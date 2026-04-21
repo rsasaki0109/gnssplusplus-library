@@ -2305,6 +2305,12 @@ class PPCDemoTest(unittest.TestCase):
                 no_spp_height_step_guard=False,
                 spp_height_step_min=None,
                 spp_height_step_rate=None,
+                float_bridge_tail_guard=False,
+                float_bridge_tail_max_anchor_gap=None,
+                float_bridge_tail_min_anchor_speed=None,
+                float_bridge_tail_max_anchor_speed=None,
+                float_bridge_tail_max_residual=None,
+                float_bridge_tail_min_segment_epochs=None,
                 require_valid_epochs_min=3,
                 require_matched_epochs_min=3,
                 require_fix_rate_min=60.0,
@@ -2348,6 +2354,12 @@ class PPCDemoTest(unittest.TestCase):
             self.assertTrue(payload["spp_height_step_guard_enabled"])
             self.assertEqual(payload["spp_height_step_guard"]["min_step_m"], 30.0)
             self.assertEqual(payload["spp_height_step_guard"]["max_rate_mps"], 4.0)
+            self.assertFalse(payload["float_bridge_tail_guard_enabled"])
+            self.assertEqual(payload["float_bridge_tail_guard"]["max_anchor_gap_s"], 120.0)
+            self.assertEqual(payload["float_bridge_tail_guard"]["min_anchor_speed_mps"], 0.4)
+            self.assertEqual(payload["float_bridge_tail_guard"]["max_anchor_speed_mps"], 1.0)
+            self.assertEqual(payload["float_bridge_tail_guard"]["max_residual_m"], 12.0)
+            self.assertEqual(payload["float_bridge_tail_guard"]["min_segment_epochs"], 20)
             provenance = payload["receiver_observation_provenance"]
             self.assertEqual(provenance["vehicle_receiver"], "Septentrio mosaic-X5")
             self.assertEqual(provenance["vehicle_antenna"], "Trimble AT1675")

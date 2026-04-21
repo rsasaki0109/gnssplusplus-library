@@ -161,3 +161,53 @@ TEST(RTKValidationTest, SppHeightStepGuardKeepsRateScaledSppStep) {
     EXPECT_EQ(result.rejected_epochs, 0);
     EXPECT_EQ(result.solutions.size(), solutions.size());
 }
+
+TEST(RTKValidationTest, FloatBridgeTailGuardRejectsSlowBoundedFloatResiduals) {
+    std::vector<PositionSolution> solutions = {
+        makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),
+        makeValidationSolution(10.0, SolutionStatus::FLOAT, Eigen::Vector3d(10.0, 0.0, 0.0)),
+        makeValidationSolution(20.0, SolutionStatus::FLOAT, Eigen::Vector3d(20.0, 15.0, 0.0)),
+        makeValidationSolution(30.0, SolutionStatus::SPP, Eigen::Vector3d(30.0, 15.0, 0.0)),
+        makeValidationSolution(100.0, SolutionStatus::FIXED, Eigen::Vector3d(100.0, 0.0, 0.0)),
+    };
+
+    rtk_validation::FloatBridgeTailGuardConfig config;
+    config.max_anchor_gap_s = 120.0;
+    config.min_anchor_speed_mps = 0.4;
+    config.max_anchor_speed_mps = 1.2;
+    config.max_residual_m = 10.0;
+    config.min_segment_epochs = 2;
+
+    const auto result = rtk_validation::filterFloatBridgeTail(solutions, config);
+
+    EXPECT_EQ(result.inspected_segments, 1);
+    EXPECT_EQ(result.rejected_segments, 1);
+    EXPECT_EQ(result.rejected_epochs, 1);
+    ASSERT_EQ(result.solutions.size(), 4U);
+    EXPECT_DOUBLE_EQ(result.solutions[0].time.tow, 0.0);
+    EXPECT_DOUBLE_EQ(result.solutions[1].time.tow, 10.0);
+    EXPECT_DOUBLE_EQ(result.solutions[2].time.tow, 30.0);
+    EXPECT_DOUBLE_EQ(result.solutions[3].time.tow, 100.0);
+}
+
+TEST(RTKValidationTest, FloatBridgeTailGuardIgnoresFastAnchors) {
+    std::vector<PositionSolution> solutions = {
+        makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),
+        makeValidationSolution(10.0, SolutionStatus::FLOAT, Eigen::Vector3d(10.0, 50.0, 0.0)),
+        makeValidationSolution(20.0, SolutionStatus::FLOAT, Eigen::Vector3d(20.0, 50.0, 0.0)),
+        makeValidationSolution(100.0, SolutionStatus::FIXED, Eigen::Vector3d(300.0, 0.0, 0.0)),
+    };
+
+    rtk_validation::FloatBridgeTailGuardConfig config;
+    config.max_anchor_gap_s = 120.0;
+    config.min_anchor_speed_mps = 0.4;
+    config.max_anchor_speed_mps = 1.2;
+    config.max_residual_m = 10.0;
+    config.min_segment_epochs = 2;
+
+    const auto result = rtk_validation::filterFloatBridgeTail(solutions, config);
+
+    EXPECT_EQ(result.inspected_segments, 0);
+    EXPECT_EQ(result.rejected_epochs, 0);
+    EXPECT_EQ(result.solutions.size(), solutions.size());
+}

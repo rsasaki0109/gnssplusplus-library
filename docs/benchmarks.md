@@ -88,6 +88,17 @@ FIX-anchor bridge residuals for the next FLOAT-tail guard design.
 
 ![PPC Tokyo run1 coverage quality by status](ppc_tokyo_run1_coverage_quality.png)
 
+The opt-in `--float-bridge-tail-guard` is the first FLOAT-tail candidate. On
+Tokyo run1 it rejects 154 FLOAT epochs in slow bounded FIX-to-FIX segments,
+keeps Positioning at **86.1%** (**+19.9 pp** over RTKLIB), keeps the
+3D<=50cm/reference score unchanged, and improves P95H to **24.17 m**
+(**6.97 m** better than RTKLIB). It remains default-off until the same
+threshold is checked across all six PPC Tokyo/Nagoya runs. Artifacts:
+`ppc_tokyo_run1_float_bridge_tail_quality.json`,
+`ppc_tokyo_run1_float_bridge_tail_bad_segments.csv`.
+
+![PPC Tokyo run1 FLOAT bridge-tail opt-in quality](ppc_tokyo_run1_float_bridge_tail_quality.png)
+
 PPC Tokyo run3 is also checked visually as a 2D status-colored trajectory.
 The replay uses GNSS observations only, with no IMU input. The coverage profile
 retains valid SPP/float fallback epochs instead of dropping them with the

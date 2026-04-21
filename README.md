@@ -119,6 +119,13 @@ that FLOAT-tail design work.
 
 ![PPC Tokyo run1 coverage quality by status](docs/ppc_tokyo_run1_coverage_quality.png)
 
+The opt-in `--float-bridge-tail-guard` targets the remaining low-speed FLOAT
+plateau. On Tokyo run1 it rejects 154 FLOAT epochs, keeps Positioning at
+**86.1%** (**+19.9 pp** over RTKLIB), keeps the 3D<=50cm/reference score
+unchanged, and improves P95H to **24.17 m** (**6.97 m** better than RTKLIB).
+It stays default-off until the same threshold is checked across all six PPC
+Tokyo/Nagoya runs.
+
 The 2D sanity plot below uses the PPC Tokyo run3 open data (Harumi-Odaiba).
 Points are colored by RTK solution status, and no IMU input is used by this
 GNSS-only RTK replay. The coverage profile retains valid SPP/float fallback
@@ -165,7 +172,7 @@ rejects SPP-only vertical spikes above `--spp-height-step-min` /
 `--spp-height-step-rate` while preserving FLOAT and FIXED epochs.
 
 The default RTK pipeline already dominates demo5 on the PPC production runs
-above. Five additional gates ship default-off for situations where you want to
+above. Six additional gates ship default-off for situations where you want to
 push further on precision-vs-fix-count tradeoffs, especially on Odaiba-style
 urban multipath stress. All are byte-identical to the default behavior unless
 explicitly enabled.
@@ -177,6 +184,7 @@ explicitly enabled.
 | `--max-pos-jump <m>` | Reject fix if the epoch-to-epoch position jump exceeds N meters. | `0` (disabled) |
 | `--max-consec-float-reset <N>` | Auto-reset ambiguities after N consecutive float epochs. | `0` (disabled) |
 | `--max-postfix-rms <m>` | Reject fix if the L1 post-fix DD phase residual RMS exceeds N meters. | `0` (disabled) |
+| `--float-bridge-tail-guard` | Reject FLOAT epochs in slow bounded FIX-to-FIX segments when they diverge from the anchor bridge. This is a PPC FLOAT-tail candidate and remains opt-in pending six-run sign-off. | `false` |
 | `--enable-wide-lane-ar` + `--wide-lane-threshold <cycle>` | Pre-compute MW wide-lane integers and inject them as Kalman constraints into the LAMBDA search. Halves Hmed on Odaiba at the cost of ~35% Fix count. | `false` / `0.25` |
 
 These were added in PR #19–#23. On PPC Tokyo and Nagoya the defaults already
