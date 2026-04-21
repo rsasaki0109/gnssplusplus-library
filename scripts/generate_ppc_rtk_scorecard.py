@@ -222,9 +222,9 @@ def main() -> int:
         0.625,
         0.27,
         0.105,
-        "Tokyo run3 coverage lead",
-        "+2.9 pp",
-        "96.0% positioned/reference",
+        "All-run coverage lead",
+        "+17.7 pp",
+        "min +2.9 pp across 6 runs",
     )
 
     left = fig.add_axes([0.065, 0.11, 0.53, 0.42], facecolor=PANEL)
@@ -237,7 +237,7 @@ def main() -> int:
     ax.text(
         0.05,
         0.04,
-        "Fix-rate bars use the precision profile; the Tokyo run3 coverage profile keeps valid SPP/float fallbacks for the trajectory and 3D50/reference score.",
+        "Fix-rate bars use the precision profile; coverage profile keeps valid SPP/float fallbacks and beats RTKLIB positioning on all 6 PPC runs.",
         fontsize=10.5,
         color=MUTED,
     )

@@ -54,14 +54,15 @@ RTKLIB `demo5`. It is **not** a proprietary receiver-engine comparison.
 On PPC Tokyo and Nagoya, gnssplusplus `develop` (post PR #19-#23) dominates
 RTKLIB `demo5` on positioned-epoch precision and Fix rate with **no Phase 2
 opt-in flags**. Positioning rate is tracked as a separate first-class metric:
-the Tokyo run3 coverage profile keeps valid SPP/float fallback epochs and now
-exceeds RTKLIB `demo5` on both Positioning rate and 3D<=50cm/reference score.
+the PPC coverage profile keeps valid SPP/float fallback epochs and now exceeds
+RTKLIB `demo5` on Positioning rate for all six public Tokyo/Nagoya runs.
 UrbanNav Tokyo Odaiba is kept as an independent public urban stress smoke:
 gnssplusplus wins Fix count, Hp95, and Vp95 there, while the Hmed gap closes to
 9 cm when wide-lane AR is explicitly enabled.
 
 All runs below use `--mode kinematic --preset low-cost --match-tolerance-s
-0.25`.
+0.25`. The coverage profile additionally uses `--no-arfilter
+--no-kinematic-post-filter`.
 
 ### Benchmark Scope
 
@@ -85,17 +86,26 @@ observation solve against reference truth.
 | run2 | **4674 / 80.12%**       | 2127 / 27.58%     | **0.016** vs 0.835 (52×) | **0.313** vs 42.624 (136×) |
 | run3 | **7516 / 86.84%**       | 5778 / 40.55%     | **0.012** vs 0.666 (56×) | **0.137** vs 24.521 (179×) |
 
+### PPC coverage profile (GNSS-only fallback epochs retained)
+
+| Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | 3D <= 50 cm / ref delta | P95 H delta |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Tokyo run1 | **90.4%** | 66.3% | **+24.1 pp** | **46.3%** | 30.5% | **+35.6 pp** | +2.07 m |
+| Tokyo run2 | **95.4%** | 84.3% | **+11.2 pp** | **60.7%** | 27.6% | **+39.9 pp** | -18.84 m |
+| Tokyo run3 | **96.0%** | 93.1% | **+2.9 pp** | **60.2%** | 40.5% | **+23.6 pp** | -0.70 m |
+| Nagoya run1 | **88.4%** | 65.8% | **+22.5 pp** | **60.0%** | 33.8% | **+32.8 pp** | -21.26 m |
+| Nagoya run2 | **88.4%** | 69.8% | **+18.6 pp** | **39.4%** | 18.8% | **+20.0 pp** | -20.90 m |
+| Nagoya run3 | **94.8%** | 67.7% | **+27.1 pp** | **19.7%** | 13.9% | **+9.4 pp** | -5.54 m |
+
+Across these six public runs, the coverage profile averages **+17.7 pp**
+Positioning-rate lead and **+26.9 pp** 3D<=50cm/reference-score lead versus
+RTKLIB `demo5`. Tokyo run1 is the remaining trade-off case: it gains coverage
+and 3D50/reference score, but P95 horizontal error worsens by 2.07 m.
+
 The 2D sanity plot below uses the PPC Tokyo run3 open data (Harumi-Odaiba).
 Points are colored by RTK solution status, and no IMU input is used by this
-GNSS-only RTK replay. The coverage profile is run with
-`--no-kinematic-post-filter`, so valid SPP/float fallback epochs are retained
-instead of being dropped by the precision-oriented output filter.
-
-| Solver/profile | Positioning rate | Fix rate | 3D <= 50 cm / reference | 3D <= 50 cm / positioned |
-|---|---:|---:|---:|---:|
-| RTKLIB `demo5` | 93.1% | 40.5% | 39.9% | 42.8% |
-| gnssplusplus coverage | **96.0%** | **60.2%** | **63.5%** | **66.1%** |
-| gnssplusplus precision | 56.6% | 86.8% | 55.3% | 97.7% |
+GNSS-only RTK replay. The coverage profile retains valid SPP/float fallback
+epochs instead of dropping them with the precision-oriented output filter.
 
 PPC2024's official score is a distance ratio with 3D error <= 50 cm; the
 published first-place result was 78.7% Public / 85.6% Private in

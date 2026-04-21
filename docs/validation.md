@@ -83,8 +83,8 @@ antenna provenance under `receiver_observation_provenance`; proprietary
 receiver-engine solutions are intentionally not the benchmark target. It also
 reports `positioning_rate_pct` separately from `fix_rate_pct`, so no-solution
 gaps cannot be hidden by a high fixed-solution ratio over only positioned
-epochs. Use `--no-kinematic-post-filter` when validating the RTK coverage
-profile; that keeps valid SPP/float fallback epochs and records
+epochs. Use `--no-arfilter --no-kinematic-post-filter` when validating the RTK
+coverage profile; that keeps valid SPP/float fallback epochs and records
 `rtk_output_profile: coverage` in the summary JSON.
 
 `gnss smartloc-adapter` widens the public matrix beyond UrbanNav by exporting
