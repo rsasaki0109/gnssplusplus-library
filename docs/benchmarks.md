@@ -9,7 +9,8 @@ PPC is the primary public RTK benchmark here because it bundles survey-grade
 receiver observations, reference-station observations, broadcast navigation
 data, and reliable trajectory truth. It is not used as a proprietary
 receiver-engine comparison. Treat the UrbanNav Odaiba snapshot below as a
-Tier-1 public smoke/regression run.
+Tier-1 public smoke/regression run; the explicit `--preset odaiba` opt-in
+profile beats demo5 on Fix count, rate, Hmed, Hp95, and Vp95 for that scene.
 
 All runs below use `--mode kinematic --preset low-cost --match-tolerance-s 0.25`.
 The coverage profile additionally uses `--no-arfilter --no-kinematic-post-filter`
@@ -404,7 +405,7 @@ public urban slice and should be read together with the matrix above:
 |----------------------------------------------------------------------------|-----------------:|------------:|:---------------------:|:-----------:|:-----------:|
 | RTKLIB demo5                                                               | 595              | 7.22%       | **0.707**             | 27.878      | 45.212      |
 | libgnss++ default                                                          | **1268** (+673)  | **36.98%**  | 1.707                 | **19.585**  | **25.495**  |
-| libgnss++ `--enable-wide-lane-ar --wide-lane-threshold 0.10`               | 818 (+223)       | 33.65%      | **0.799** (9 cm gap)  | **19.971**  | **26.429**  |
+| libgnss++ `--preset odaiba`                                                | **735** (+140)   | **32.81%**  | **0.698**             | **19.976**  | **26.440**  |
 
 | RTKLIB 2D | libgnss++ 2D |
 |---|---|

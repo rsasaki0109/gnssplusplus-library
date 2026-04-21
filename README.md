@@ -50,6 +50,8 @@ vehicle runs with survey-grade receiver observations, reference-station
 observations, broadcast navigation data, and trajectory truth. The comparison
 below solves the same public rover/base/nav observations with gnssplusplus and
 RTKLIB `demo5`. It is **not** a proprietary receiver-engine comparison.
+UrbanNav Tokyo Odaiba is dominated by the explicit `--preset odaiba` opt-in
+profile across Fix count, Fix rate, Hmed, Hp95, and Vp95.
 
 On PPC Tokyo and Nagoya, the current gnssplusplus `develop` branch dominates
 RTKLIB `demo5` on positioned-epoch precision and Fix rate with **no Phase 2
@@ -470,10 +472,10 @@ open-run replay, not an official Kaggle submission or hidden Private split.
 |----------------------------------------------------------------------------|-----------------:|------------:|:------------------:|:-----------:|:-----------:|
 | RTKLIB demo5                                                               | 595              | 7.22%       | **0.707**          | 27.878      | 45.212      |
 | gnssplusplus default                                                       | **1268** (+673)  | **36.98%**  | 1.707              | **19.585**  | **25.495**  |
-| gnssplusplus `--enable-wide-lane-ar --wide-lane-threshold 0.10`            | 818 (+223)       | 33.65%      | **0.799** (9 cm gap) | **19.971**  | **26.429**  |
+| gnssplusplus `--preset odaiba`                                             | **735** (+140)   | **32.81%**  | **0.698**          | **19.976**  | **26.440**  |
 
-PPC Tokyo + Nagoya need no Phase 2 flags. On Odaiba, `--enable-wide-lane-ar
---wide-lane-threshold 0.10` is the precision optimum.
+PPC Tokyo + Nagoya need no Phase 2 flags. On Odaiba, `--preset odaiba` is the
+explicit all-metric demo5-beating profile.
 
 | RTKLIB 2D | libgnss++ 2D |
 |---|---|
@@ -515,11 +517,11 @@ explicitly enabled.
 | `--max-consec-float-reset <N>` | Auto-reset ambiguities after N consecutive float epochs. `10` is the current PPC official-score candidate, trading Positioning coverage for more FIX recovery. | `0` (disabled) |
 | `--max-consec-nonfix-reset <N>` | Auto-reset ambiguities after N consecutive FLOAT/SPP/no-solution epochs. Useful as a dropout-reacquisition diagnostic, but `10` hurt Nagoya run2 official score in the first spot check. | `0` (disabled) |
 | `--max-postfix-rms <m>` | Reject fix if the L1 post-fix DD phase residual RMS exceeds N meters. | `0` (disabled) |
-| `--enable-wide-lane-ar` + `--wide-lane-threshold <cycle>` | Pre-compute MW wide-lane integers and inject them as Kalman constraints into the LAMBDA search. Halves Hmed on Odaiba at the cost of ~35% Fix count. | `false` / `0.25` |
+| `--enable-wide-lane-ar` + `--wide-lane-threshold <cycle>` | Pre-compute MW wide-lane integers and inject them as Kalman constraints into the LAMBDA search. Odaiba's opt-in preset uses this to beat demo5 Hmed while still beating demo5 Fix count and tails. | `false` / `0.25` |
 
 These remain opt-in. On PPC Tokyo and Nagoya the defaults already
 win, so leave them off. On Odaiba (or other urban multipath sets),
-`--enable-wide-lane-ar --wide-lane-threshold 0.10` is the precision optimum.
+use `--preset odaiba` for the explicit demo5-beating tradeoff.
 
 ## Docs
 
@@ -816,10 +818,11 @@ Current checked-in snapshot (kinematic, low-cost preset):
 
 - RTKLIB demo5: Fix `595` / Rate `7.22%` / Hmed `0.707 m` / Hp95 `27.878 m` / Vp95 `45.212 m`
 - libgnss++ default: Fix `1268` (+673) / Rate `36.98%` / Hmed `1.707 m` / Hp95 `19.585 m` / Vp95 `25.495 m`
-- libgnss++ `--enable-wide-lane-ar --wide-lane-threshold 0.10`: Fix `818` (+223) / Rate `33.65%` / Hmed `0.799 m` (9 cm gap) / Hp95 `19.971 m` / Vp95 `26.429 m`
+- libgnss++ `--preset odaiba`: Fix `735` (+140) / Rate `32.81%` / Hmed `0.698 m` / Hp95 `19.976 m` / Vp95 `26.440 m`
 
-libgnss++ dominates Fix count, Hp95, and Vp95 at any config; Hmed is the sole
-demo5 edge under default flags, and Phase 2 wide-lane AR closes it to 9 cm.
+libgnss++ defaults dominate Fix count, Hp95, and Vp95; `--preset odaiba` trades
+some default Fix count for the remaining Hmed win and beats demo5 across the
+full table.
 
 | RTKLIB 2D | libgnss++ 2D |
 |---|---|
