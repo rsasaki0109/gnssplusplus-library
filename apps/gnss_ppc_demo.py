@@ -266,7 +266,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--require-valid-epochs-min", type=int, default=None)
     parser.add_argument("--require-matched-epochs-min", type=int, default=None)
+    parser.add_argument("--require-positioning-rate-min", type=float, default=None)
     parser.add_argument("--require-fix-rate-min", type=float, default=None)
+    parser.add_argument("--require-ppc-score-3d-50cm-ref-min", type=float, default=None)
     parser.add_argument("--require-median-h-max", type=float, default=None)
     parser.add_argument("--require-p95-h-max", type=float, default=None)
     parser.add_argument("--require-max-h-max", type=float, default=None)
@@ -641,13 +643,15 @@ def build_summary_payload(
         "reference_epochs": len(reference),
         "matched_epochs": lib_metrics["matched_epochs"],
         "fixed_epochs": lib_metrics["fixed_epochs"],
+        "positioning_rate_pct": lib_metrics["positioning_rate_pct"],
         "fix_rate_pct": lib_metrics["fix_rate_pct"],
         "mean_h_m": lib_metrics["mean_h_m"],
         "median_h_m": lib_metrics["median_h_m"],
         "p95_h_m": lib_metrics["p95_h_m"],
         "max_h_m": lib_metrics["max_h_m"],
         "ppc_score_3d_50cm_epochs": lib_metrics["ppc_score_3d_50cm_epochs"],
-        "ppc_score_3d_50cm_pct": lib_metrics["ppc_score_3d_50cm_pct"],
+        "ppc_score_3d_50cm_matched_pct": lib_metrics["ppc_score_3d_50cm_matched_pct"],
+        "ppc_score_3d_50cm_ref_pct": lib_metrics["ppc_score_3d_50cm_ref_pct"],
         "median_abs_up_m": lib_metrics["median_abs_up_m"],
         "p95_abs_up_m": lib_metrics["p95_abs_up_m"],
         "mean_up_m": lib_metrics["mean_up_m"],
@@ -694,11 +698,18 @@ def build_summary_payload(
         payload["rtklib"] = rtklib_metrics
         payload["delta_vs_rtklib"] = {
             "fix_rate_pct": rounded(float(payload["fix_rate_pct"]) - float(rtklib_metrics["fix_rate_pct"])),
+            "positioning_rate_pct": rounded(
+                float(payload["positioning_rate_pct"]) - float(rtklib_metrics["positioning_rate_pct"])
+            ),
             "median_h_m": rounded(float(payload["median_h_m"]) - float(rtklib_metrics["median_h_m"])),
             "p95_h_m": rounded(float(payload["p95_h_m"]) - float(rtklib_metrics["p95_h_m"])),
             "max_h_m": rounded(float(payload["max_h_m"]) - float(rtklib_metrics["max_h_m"])),
-            "ppc_score_3d_50cm_pct": rounded(
-                float(payload["ppc_score_3d_50cm_pct"]) - float(rtklib_metrics["ppc_score_3d_50cm_pct"])
+            "ppc_score_3d_50cm_matched_pct": rounded(
+                float(payload["ppc_score_3d_50cm_matched_pct"])
+                - float(rtklib_metrics["ppc_score_3d_50cm_matched_pct"])
+            ),
+            "ppc_score_3d_50cm_ref_pct": rounded(
+                float(payload["ppc_score_3d_50cm_ref_pct"]) - float(rtklib_metrics["ppc_score_3d_50cm_ref_pct"])
             ),
             "solver_wall_time_s": (
                 rounded(float(payload["solver_wall_time_s"]) - float(rtklib_metrics["solver_wall_time_s"]))
@@ -773,6 +784,23 @@ def enforce_summary_requirements(payload: dict[str, object], args: argparse.Name
     ):
         failures.append(
             f"fix rate {float(payload['fix_rate_pct']):.6f}% < {args.require_fix_rate_min:.6f}%"
+        )
+    if (
+        getattr(args, "require_positioning_rate_min", None) is not None
+        and float(payload["positioning_rate_pct"]) < args.require_positioning_rate_min
+    ):
+        failures.append(
+            "positioning rate "
+            f"{float(payload['positioning_rate_pct']):.6f}% < {args.require_positioning_rate_min:.6f}%"
+        )
+    if (
+        getattr(args, "require_ppc_score_3d_50cm_ref_min", None) is not None
+        and float(payload["ppc_score_3d_50cm_ref_pct"]) < args.require_ppc_score_3d_50cm_ref_min
+    ):
+        failures.append(
+            "PPC 3D<=50cm reference score "
+            f"{float(payload['ppc_score_3d_50cm_ref_pct']):.6f}% < "
+            f"{args.require_ppc_score_3d_50cm_ref_min:.6f}%"
         )
     if (
         args.require_median_h_max is not None
@@ -1018,7 +1046,8 @@ def main() -> int:
         print(
             "  vs rtklib:"
             f" fix={payload['delta_vs_rtklib']['fix_rate_pct']} %"
-            f", 3d50={payload['delta_vs_rtklib']['ppc_score_3d_50cm_pct']} %"
+            f", positioning={payload['delta_vs_rtklib']['positioning_rate_pct']} %"
+            f", 3d50_ref={payload['delta_vs_rtklib']['ppc_score_3d_50cm_ref_pct']} %"
             f", p95_h={payload['delta_vs_rtklib']['p95_h_m']} m"
             f", wall={payload['delta_vs_rtklib']['solver_wall_time_s']} s"
         )

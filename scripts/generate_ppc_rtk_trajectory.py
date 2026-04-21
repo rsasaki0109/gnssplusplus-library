@@ -29,15 +29,17 @@ MUTED = "#5f6c7b"
 EDGE = "#d8c9b1"
 
 
-def ppc_3d_score(matched, threshold_m: float) -> tuple[int, float]:
+def ppc_3d_score(matched, reference_count: int, threshold_m: float) -> tuple[int, float, float]:
     if not matched:
-        return 0, 0.0
+        return 0, 0.0, 0.0
     scored = sum(
         1
         for epoch in matched
         if math.hypot(epoch.horiz_error_m, epoch.up_m) <= threshold_m
     )
-    return scored, 100.0 * scored / len(matched)
+    matched_pct = 100.0 * scored / len(matched)
+    reference_pct = 100.0 * scored / max(reference_count, 1)
+    return scored, matched_pct, reference_pct
 
 
 def status_counts(matched, solver: str) -> dict[str, int]:
@@ -54,6 +56,7 @@ def draw_solver_panel(
     title: str,
     solver: str,
     matched,
+    reference_count: int,
     reference_enu,
     limits: tuple[float, float, float, float],
     score_threshold_m: float,
@@ -73,13 +76,20 @@ def draw_solver_panel(
     for spine in ax.spines.values():
         spine.set_color(EDGE)
 
-    scored, score_pct = ppc_3d_score(matched, score_threshold_m)
+    scored, matched_score_pct, reference_score_pct = ppc_3d_score(
+        matched,
+        reference_count,
+        score_threshold_m,
+    )
+    positioning_rate_pct = 100.0 * len(matched) / max(reference_count, 1)
     counts = status_counts(matched, solver)
     detail = "\n".join(
         [
-            f"matched {len(matched)}",
-            f"3D<={score_threshold_m:.2f}m {score_pct:.1f}%",
-            f"FIXED {counts.get('FIXED', 0)}",
+            f"pos {len(matched)}/{reference_count}",
+            f"pos rate {positioning_rate_pct:.1f}%",
+            f"3D50/ref {reference_score_pct:.1f}%",
+            f"3D50/pos {matched_score_pct:.1f}%",
+            f"FIX {counts.get('FIXED', 0)}",
             f"FLOAT {counts.get('FLOAT', 0)}",
             f"DGPS  {counts.get('DGPS', 0)}",
             f"SPP   {counts.get('SPP', 0)}",
@@ -96,17 +106,19 @@ def draw_solver_panel(
         fontsize=8.7,
         color=TEXT,
         bbox=dict(boxstyle="round,pad=0.35", facecolor="white", edgecolor=EDGE, alpha=0.90),
+        zorder=12,
     )
     ax.text(
         0.975,
         0.035,
-        f"{scored}/{len(matched)} epochs",
+        f"{scored}/{reference_count} ref epochs",
         transform=ax.transAxes,
         va="bottom",
         ha="right",
         fontsize=8.5,
         color=MUTED,
         bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor=EDGE, alpha=0.80),
+        zorder=12,
     )
 
 
@@ -119,7 +131,7 @@ def main() -> int:
     parser.add_argument("--title", default="PPC RTK trajectory")
     parser.add_argument(
         "--subtitle",
-        default="2D track colored by solution status; PPC-style score uses 3D error <= 0.50 m.",
+        default="2D track colored by solution status; positioning rate is matched/reference epochs.",
     )
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
     parser.add_argument("--score-threshold-m", type=float, default=0.50)
@@ -174,6 +186,7 @@ def main() -> int:
         title="RTKLIB demo5",
         solver="RTKLIB",
         matched=rtklib_matched,
+        reference_count=len(reference),
         reference_enu=reference_enu,
         limits=limits,
         score_threshold_m=args.score_threshold_m,
@@ -185,6 +198,7 @@ def main() -> int:
         title="gnssplusplus",
         solver="libgnss++",
         matched=lib_matched,
+        reference_count=len(reference),
         reference_enu=reference_enu,
         limits=limits,
         score_threshold_m=args.score_threshold_m,

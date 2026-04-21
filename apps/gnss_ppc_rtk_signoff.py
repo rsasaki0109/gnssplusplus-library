@@ -69,7 +69,9 @@ PROFILE_TUNING_DEFAULTS: dict[str, dict[str, str | float | int | bool]] = {
 REQUIREMENT_NAMES = (
     "require_valid_epochs_min",
     "require_matched_epochs_min",
+    "require_positioning_rate_min",
     "require_fix_rate_min",
+    "require_ppc_score_3d_50cm_ref_min",
     "require_median_h_max",
     "require_p95_h_max",
     "require_max_h_max",
@@ -142,7 +144,9 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--require-valid-epochs-min", type=int, default=None)
     parser.add_argument("--require-matched-epochs-min", type=int, default=None)
+    parser.add_argument("--require-positioning-rate-min", type=float, default=None)
     parser.add_argument("--require-fix-rate-min", type=float, default=None)
+    parser.add_argument("--require-ppc-score-3d-50cm-ref-min", type=float, default=None)
     parser.add_argument("--require-median-h-max", type=float, default=None)
     parser.add_argument("--require-p95-h-max", type=float, default=None)
     parser.add_argument("--require-max-h-max", type=float, default=None)

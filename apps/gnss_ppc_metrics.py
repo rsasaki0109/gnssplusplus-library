@@ -68,6 +68,7 @@ def summarize_solution_epochs(
 
     summary = comparison.summarize(matched, fixed_status, label)
     mean_h_m = sum(epoch.horiz_error_m for epoch in matched) / len(matched)
+    reference_count = max(len(reference), 1)
     ppc_score_3d_50cm_epochs = sum(
         1
         for epoch in matched
@@ -81,14 +82,18 @@ def summarize_solution_epochs(
         "valid_epochs": len(solution_epochs),
         "matched_epochs": len(matched),
         "fixed_epochs": matched_fixed_epochs,
+        "positioning_rate_pct": rounded(100.0 * len(matched) / reference_count),
         "fix_rate_pct": rounded(float(summary["fix_rate_pct"])),
         "mean_h_m": rounded(mean_h_m),
         "median_h_m": rounded(float(summary["median_h_m"])),
         "p95_h_m": rounded(float(summary["p95_h_m"])),
         "max_h_m": rounded(float(summary["max_h_m"])),
         "ppc_score_3d_50cm_epochs": ppc_score_3d_50cm_epochs,
-        "ppc_score_3d_50cm_pct": rounded(
+        "ppc_score_3d_50cm_matched_pct": rounded(
             100.0 * ppc_score_3d_50cm_epochs / len(matched)
+        ),
+        "ppc_score_3d_50cm_ref_pct": rounded(
+            100.0 * ppc_score_3d_50cm_epochs / reference_count
         ),
         "median_abs_up_m": rounded(float(summary["median_abs_up_m"])),
         "p95_abs_up_m": rounded(float(summary["p95_abs_up_m"])),
@@ -157,12 +162,14 @@ def solution_metric_delta(
         "valid_epochs": int(left["valid_epochs"]) - int(right["valid_epochs"]),
         "matched_epochs": int(left["matched_epochs"]) - int(right["matched_epochs"]),
         "fixed_epochs": int(left["fixed_epochs"]) - int(right["fixed_epochs"]),
+        "positioning_rate_pct": optional_delta("positioning_rate_pct"),
         "fix_rate_pct": optional_delta("fix_rate_pct"),
         "mean_h_m": optional_delta("mean_h_m"),
         "median_h_m": optional_delta("median_h_m"),
         "p95_h_m": optional_delta("p95_h_m"),
         "max_h_m": optional_delta("max_h_m"),
-        "ppc_score_3d_50cm_pct": optional_delta("ppc_score_3d_50cm_pct"),
+        "ppc_score_3d_50cm_matched_pct": optional_delta("ppc_score_3d_50cm_matched_pct"),
+        "ppc_score_3d_50cm_ref_pct": optional_delta("ppc_score_3d_50cm_ref_pct"),
         "median_abs_up_m": optional_delta("median_abs_up_m"),
         "p95_abs_up_m": optional_delta("p95_abs_up_m"),
         "solver_wall_time_s": optional_delta("solver_wall_time_s"),

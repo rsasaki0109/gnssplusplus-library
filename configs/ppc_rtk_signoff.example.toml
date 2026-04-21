@@ -36,6 +36,10 @@ min_hold_count = 8
 hold_ratio_threshold = 2.6
 require_valid_epochs_min = 100
 require_matched_epochs_min = 100
+# Positioning rate is matched reference epochs / total reference epochs.
+# Keep this separate from fix_rate_min, which is computed over positioned epochs.
+# require_positioning_rate_min = 90.0
+# require_ppc_score_3d_50cm_ref_min = 80.0
 require_fix_rate_min = 95.0
 require_median_h_max = 0.06
 require_p95_h_max = 0.15

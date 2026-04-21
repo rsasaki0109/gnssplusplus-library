@@ -70,7 +70,8 @@ accept `--commercial-pos` for an existing receiver solution or
 `--commercial-rover` for a commercial receiver rover RINEX solved through
 libgnss++ against the same base/nav/reference. The receiver summary is stored
 under `commercial_receiver`, and `delta_vs_commercial_receiver` reports
-libgnss++ minus receiver deltas for fix rate and horizontal/up error metrics.
+libgnss++ minus receiver deltas for positioning rate, fix rate, 3D<=50cm
+reference score, and horizontal/up error metrics.
 Run `gnss public-rtk-benchmarks` before treating any single public dataset as
 representative coverage; UrbanNav Tokyo is a Tier-1 smoke/regression row, not
 the final commercial RTK receiver proof.
@@ -79,7 +80,10 @@ PPC-Dataset is the primary public moving-RTK sign-off. It carries survey-grade
 receiver observations, reference-station observations, broadcast nav, and
 reference trajectory truth. `gnss ppc-demo` records the rover/base receiver and
 antenna provenance under `receiver_observation_provenance`; proprietary
-receiver-engine solutions are intentionally not the benchmark target.
+receiver-engine solutions are intentionally not the benchmark target. It also
+reports `positioning_rate_pct` separately from `fix_rate_pct`, so no-solution
+gaps cannot be hidden by a high fixed-solution ratio over only positioned
+epochs.
 
 `gnss smartloc-adapter` widens the public matrix beyond UrbanNav by exporting
 smartLoc `NAV-POSLLH.csv` into a `reference.csv` plus a normalized u-blox

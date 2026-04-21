@@ -52,10 +52,12 @@ below solves the same public rover/base/nav observations with gnssplusplus and
 RTKLIB `demo5`. It is **not** a proprietary receiver-engine comparison.
 
 On PPC Tokyo and Nagoya, gnssplusplus `develop` (post PR #19-#23) dominates
-RTKLIB `demo5` across Fix count, Fix rate, and precision with **no Phase 2
-opt-in flags**. UrbanNav Tokyo Odaiba is kept as an independent public urban
-stress smoke: gnssplusplus wins Fix count, Hp95, and Vp95 there, while the Hmed
-gap closes to 9 cm when wide-lane AR is explicitly enabled.
+RTKLIB `demo5` on positioned-epoch precision and Fix rate with **no Phase 2
+opt-in flags**, but Positioning rate is now tracked as a separate first-class
+metric because no-solution gaps still matter. UrbanNav Tokyo Odaiba is kept as
+an independent public urban stress smoke: gnssplusplus wins Fix count, Hp95,
+and Vp95 there, while the Hmed gap closes to 9 cm when wide-lane AR is
+explicitly enabled.
 
 All runs below use `--mode kinematic --preset low-cost --match-tolerance-s
 0.25`.
@@ -84,12 +86,19 @@ observation solve against reference truth.
 
 The 2D sanity plot below uses the PPC Tokyo run3 open data (Harumi-Odaiba).
 Points are colored by RTK solution status, and no IMU input is used by this
-GNSS-only RTK replay. The PPC2024 official scoring rule is the distance ratio
-with 3D error <= 50 cm; the published first-place result was 78.7% Public /
-85.6% Private in [PPC2024 results](https://taroz.net/data/PPC2024_results.pdf).
-On this open run, the same 50 cm-style score is 97.7% for gnssplusplus vs 42.8%
-for RTKLIB `demo5`. This is an open-run replay metric, not an official Kaggle
-submission.
+GNSS-only RTK replay. This exposes the current gap: gnssplusplus is precise
+when it positions, but it does **not** yet position every reference epoch.
+Therefore Fix rate and Positioning rate are tracked separately.
+
+| Solver | Positioning rate | 3D <= 50 cm / reference | 3D <= 50 cm / positioned |
+|---|---:|---:|---:|
+| RTKLIB `demo5` | 93.1% | 39.9% | 42.8% |
+| gnssplusplus | 56.6% | 55.3% | 97.7% |
+
+PPC2024's official score is a distance ratio with 3D error <= 50 cm; the
+published first-place result was 78.7% Public / 85.6% Private in
+[PPC2024 results](https://taroz.net/data/PPC2024_results.pdf). The table above
+is an open-run replay metric, not an official Kaggle submission.
 
 ![PPC Tokyo run3 RTK trajectory by solution status](docs/ppc_tokyo_run3_rtk_trajectory_status.png)
 

@@ -191,7 +191,7 @@ def main() -> int:
     ax.text(
         0.05,
         0.785,
-        "Same public rover/base/nav observations. Survey-grade receiver logs plus reference.csv truth, not receiver-engine output.",
+        "Same public rover/base/nav observations. Fix rate is positioned-epoch only; positioning rate is tracked separately.",
         fontsize=14,
         color=MUTED,
     )
@@ -222,9 +222,9 @@ def main() -> int:
         0.625,
         0.27,
         0.105,
-        "Phase 2 flags required",
-        "0",
-        "PPC Tokyo and Nagoya pass on defaults",
+        "Positioning gap remains",
+        "56.6%",
+        "Tokyo run3 positioned/reference",
     )
 
     left = fig.add_axes([0.065, 0.11, 0.53, 0.42], facecolor=PANEL)
@@ -237,7 +237,7 @@ def main() -> int:
     ax.text(
         0.05,
         0.04,
-        "PPC-Dataset: Septentrio mosaic-X5 rover, Trimble Alloy/NetR9 base, broadcast nav, reference trajectory truth.",
+        "PPC-Dataset: GNSS-only replay. See the trajectory status plot for no-solution gaps and 3D50/reference score.",
         fontsize=10.5,
         color=MUTED,
     )
