@@ -1042,14 +1042,15 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
             self.matched_epoch(1.0, 10.0, 1.0, 3),
             self.matched_epoch(2.0, 20.0, 2.0, 3),
             self.matched_epoch(2.5, 30.0, 3.0, 1),
+            self.matched_epoch(3.0, 0.1, 0.1, 4),
         ]
 
         status_rows = ppc_coverage_quality.summarize_by_status(matches, reference_count=5)
         status_by_name = {row["status"]: row for row in status_rows}
-        self.assertEqual(status_by_name["FIXED"]["epochs"], 1)
+        self.assertEqual(status_by_name["FIXED"]["epochs"], 2)
         self.assertEqual(status_by_name["FLOAT"]["epochs"], 2)
         self.assertEqual(status_by_name["SPP"]["epochs"], 1)
-        self.assertEqual(status_by_name["FIXED"]["ppc_score_3d_50cm_epochs"], 1)
+        self.assertEqual(status_by_name["FIXED"]["ppc_score_3d_50cm_epochs"], 2)
 
         global_p95, contribution = ppc_coverage_quality.p95_contribution_by_status(matches)
         self.assertGreater(global_p95, 20.0)
@@ -1064,6 +1065,14 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         self.assertEqual(len(segments), 1)
         self.assertEqual(segments[0]["epochs"], 2)
         self.assertEqual(segments[0]["statuses"], ["FLOAT", "SPP"])
+        self.assertEqual(segments[0]["status_counts"], {"FLOAT": 1, "SPP": 1})
+        self.assertEqual(segments[0]["dominant_status"], "FLOAT")
+        self.assertEqual(segments[0]["previous_fixed_tow_s"], 0.0)
+        self.assertEqual(segments[0]["next_fixed_tow_s"], 3.0)
+        self.assertEqual(segments[0]["fixed_anchor_gap_s"], 3.0)
+        self.assertEqual(segments[0]["fixed_anchor_distance_m"], 3.0)
+        self.assertEqual(segments[0]["fixed_anchor_speed_mps"], 1.0)
+        self.assertEqual(segments[0]["fixed_anchor_bridge_residual_max_m"], 0.0)
 
 
 class ScorecardRenderTest(unittest.TestCase):

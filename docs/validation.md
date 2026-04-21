@@ -96,7 +96,9 @@ the `--spp-height-step-min` / `--spp-height-step-rate` envelope; use
 Use `scripts/analyze_ppc_coverage_quality.py` with the PPC solution, RTKLIB
 solution, and `reference.csv` when a coverage run improves Positioning rate but
 regresses P95 horizontal error; the report separates FIXED/FLOAT/SPP quality and
-bad continuous drift segments.
+bad continuous drift segments. The segment CSV also records adjacent FIX-anchor
+gap/speed, solution path length, and bridge residuals so FLOAT-tail guards can
+be designed from bounded segment evidence instead of status-only ratios.
 
 `gnss smartloc-adapter` widens the public matrix beyond UrbanNav by exporting
 smartLoc `NAV-POSLLH.csv` into a `reference.csv` plus a normalized u-blox

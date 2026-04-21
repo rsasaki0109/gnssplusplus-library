@@ -76,7 +76,9 @@ drop Tokyo run1 maxH from 81.1 m to **47.9 m**, and keep the
 3D<=50cm/reference score unchanged. The remaining P95 tail is now mostly
 FLOAT-dominated. The full machine-readable reports are
 `ppc_tokyo_run1_coverage_quality.json` and
-`ppc_tokyo_run1_coverage_bad_segments.csv`.
+`ppc_tokyo_run1_coverage_bad_segments.csv`; the bad-segment CSV includes
+status counts, adjacent FIX-anchor gap/speed, solution path length, and
+FIX-anchor bridge residuals for the next FLOAT-tail guard design.
 
 | Status | Epochs | P50 H | P95 H | 3D <= 50 cm / reference | P95H exceedance share |
 |---|---:|---:|---:|---:|---:|

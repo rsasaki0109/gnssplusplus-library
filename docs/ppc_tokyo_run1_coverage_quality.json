@@ -2,159 +2,356 @@
   "bad_h_threshold_m": 30.0,
   "bad_segments": [
     {
+      "dominant_status": "FLOAT",
       "duration_s": 25.6,
       "end_tow_s": 188433.6,
       "epochs": 129,
+      "fixed_anchor_bridge_residual_max_m": 299.854081,
+      "fixed_anchor_bridge_residual_median_m": 256.741888,
+      "fixed_anchor_bridge_residual_p95_m": 295.591297,
+      "fixed_anchor_distance_m": 688.37378,
+      "fixed_anchor_gap_s": 201.2,
+      "fixed_anchor_speed_mps": 3.421341,
       "max_h_m": 34.788491,
       "median_h_m": 32.643548,
+      "next_fixed_tow_s": 188503.2,
       "p95_h_m": 34.479473,
+      "previous_fixed_tow_s": 188302.0,
+      "solution_chord_m": 179.383304,
+      "solution_path_m": 183.051468,
+      "solution_path_speed_mps": 7.150448,
       "start_tow_s": 188408.0,
+      "status_counts": {
+        "FIXED": 25,
+        "FLOAT": 104
+      },
       "statuses": [
         "FIXED",
         "FLOAT"
       ]
     },
     {
+      "dominant_status": "FLOAT",
       "duration_s": 20.8,
       "end_tow_s": 188325.2,
       "epochs": 104,
+      "fixed_anchor_bridge_residual_max_m": 12.841982,
+      "fixed_anchor_bridge_residual_median_m": 6.775793,
+      "fixed_anchor_bridge_residual_p95_m": 12.041323,
+      "fixed_anchor_distance_m": 68.609686,
+      "fixed_anchor_gap_s": 106.0,
+      "fixed_anchor_speed_mps": 0.647261,
       "max_h_m": 37.761641,
       "median_h_m": 36.779563,
+      "next_fixed_tow_s": 188408.0,
       "p95_h_m": 37.673494,
+      "previous_fixed_tow_s": 188302.0,
+      "solution_chord_m": 1.470079,
+      "solution_path_m": 3.154573,
+      "solution_path_speed_mps": 0.151662,
       "start_tow_s": 188304.4,
+      "status_counts": {
+        "FLOAT": 104
+      },
       "statuses": [
         "FLOAT"
       ]
     },
     {
+      "dominant_status": "FLOAT",
       "duration_s": 12.8,
       "end_tow_s": 188338.8,
       "epochs": 65,
+      "fixed_anchor_bridge_residual_max_m": 22.26317,
+      "fixed_anchor_bridge_residual_median_m": 17.728061,
+      "fixed_anchor_bridge_residual_p95_m": 21.817659,
+      "fixed_anchor_distance_m": 68.609686,
+      "fixed_anchor_gap_s": 106.0,
+      "fixed_anchor_speed_mps": 0.647261,
       "max_h_m": 37.115351,
       "median_h_m": 36.540223,
+      "next_fixed_tow_s": 188408.0,
       "p95_h_m": 37.084579,
+      "previous_fixed_tow_s": 188302.0,
+      "solution_chord_m": 1.207769,
+      "solution_path_m": 1.361377,
+      "solution_path_speed_mps": 0.106358,
       "start_tow_s": 188326.0,
+      "status_counts": {
+        "FLOAT": 65
+      },
       "statuses": [
         "FLOAT"
       ]
     },
     {
+      "dominant_status": "FLOAT",
       "duration_s": 8.2,
       "end_tow_s": 188349.4,
       "epochs": 42,
+      "fixed_anchor_bridge_residual_max_m": 29.866726,
+      "fixed_anchor_bridge_residual_median_m": 26.846614,
+      "fixed_anchor_bridge_residual_p95_m": 29.555736,
+      "fixed_anchor_distance_m": 68.609686,
+      "fixed_anchor_gap_s": 106.0,
+      "fixed_anchor_speed_mps": 0.647261,
       "max_h_m": 35.922826,
       "median_h_m": 35.44654,
+      "next_fixed_tow_s": 188408.0,
       "p95_h_m": 35.880379,
+      "previous_fixed_tow_s": 188302.0,
+      "solution_chord_m": 0.972699,
+      "solution_path_m": 1.070814,
+      "solution_path_speed_mps": 0.130587,
       "start_tow_s": 188341.2,
+      "status_counts": {
+        "FLOAT": 42
+      },
       "statuses": [
         "FLOAT"
       ]
     },
     {
+      "dominant_status": "FLOAT",
       "duration_s": 2.2,
       "end_tow_s": 188303.6,
       "epochs": 12,
+      "fixed_anchor_bridge_residual_max_m": 9.92354,
+      "fixed_anchor_bridge_residual_median_m": 8.39045,
+      "fixed_anchor_bridge_residual_p95_m": 9.808046,
+      "fixed_anchor_distance_m": 78.925898,
+      "fixed_anchor_gap_s": 119.8,
+      "fixed_anchor_speed_mps": 0.658814,
       "max_h_m": 35.12728,
       "median_h_m": 32.830118,
+      "next_fixed_tow_s": 188408.0,
       "p95_h_m": 34.952735,
+      "previous_fixed_tow_s": 188288.2,
+      "solution_chord_m": 4.90012,
+      "solution_path_m": 5.719239,
+      "solution_path_speed_mps": 2.599654,
       "start_tow_s": 188301.4,
+      "status_counts": {
+        "FIXED": 2,
+        "FLOAT": 10
+      },
       "statuses": [
         "FIXED",
         "FLOAT"
       ]
     },
     {
+      "dominant_status": "SPP",
       "duration_s": 2.4,
       "end_tow_s": 189086.8,
       "epochs": 11,
+      "fixed_anchor_bridge_residual_max_m": 136.294515,
+      "fixed_anchor_bridge_residual_median_m": 133.463084,
+      "fixed_anchor_bridge_residual_p95_m": 136.157588,
+      "fixed_anchor_distance_m": 258.915049,
+      "fixed_anchor_gap_s": 179.8,
+      "fixed_anchor_speed_mps": 1.440017,
       "max_h_m": 37.713328,
       "median_h_m": 36.745352,
+      "next_fixed_tow_s": 189169.2,
       "p95_h_m": 37.675133,
+      "previous_fixed_tow_s": 188989.4,
+      "solution_chord_m": 14.898039,
+      "solution_path_m": 17.09578,
+      "solution_path_speed_mps": 7.123242,
       "start_tow_s": 189084.4,
+      "status_counts": {
+        "SPP": 11
+      },
       "statuses": [
         "SPP"
       ]
     },
     {
+      "dominant_status": "FLOAT",
       "duration_s": 0.6,
       "end_tow_s": 188404.2,
       "epochs": 4,
+      "fixed_anchor_bridge_residual_max_m": 29.926119,
+      "fixed_anchor_bridge_residual_median_m": 27.902347,
+      "fixed_anchor_bridge_residual_p95_m": 29.726802,
+      "fixed_anchor_distance_m": 68.609686,
+      "fixed_anchor_gap_s": 106.0,
+      "fixed_anchor_speed_mps": 0.647261,
       "max_h_m": 35.126548,
       "median_h_m": 35.024037,
+      "next_fixed_tow_s": 188408.0,
       "p95_h_m": 35.11419,
+      "previous_fixed_tow_s": 188302.0,
+      "solution_chord_m": 4.514243,
+      "solution_path_m": 4.516281,
+      "solution_path_speed_mps": 7.527135,
       "start_tow_s": 188403.6,
+      "status_counts": {
+        "FLOAT": 4
+      },
       "statuses": [
         "FLOAT"
       ]
     },
     {
+      "dominant_status": "SPP",
       "duration_s": 0.6,
       "end_tow_s": 189088.0,
       "epochs": 4,
+      "fixed_anchor_bridge_residual_max_m": 116.691693,
+      "fixed_anchor_bridge_residual_median_m": 115.377583,
+      "fixed_anchor_bridge_residual_p95_m": 116.525074,
+      "fixed_anchor_distance_m": 258.915049,
+      "fixed_anchor_gap_s": 179.8,
+      "fixed_anchor_speed_mps": 1.440017,
       "max_h_m": 33.695449,
       "median_h_m": 32.289046,
+      "next_fixed_tow_s": 189169.2,
       "p95_h_m": 33.49371,
+      "previous_fixed_tow_s": 188989.4,
+      "solution_chord_m": 1.653427,
+      "solution_path_m": 4.028042,
+      "solution_path_speed_mps": 6.713404,
       "start_tow_s": 189087.4,
+      "status_counts": {
+        "SPP": 4
+      },
       "statuses": [
         "SPP"
       ]
     },
     {
+      "dominant_status": "SPP",
       "duration_s": 0.4,
       "end_tow_s": 189168.8,
       "epochs": 3,
+      "fixed_anchor_bridge_residual_max_m": 37.032976,
+      "fixed_anchor_bridge_residual_median_m": 36.161135,
+      "fixed_anchor_bridge_residual_p95_m": 36.945792,
+      "fixed_anchor_distance_m": 258.915049,
+      "fixed_anchor_gap_s": 179.8,
+      "fixed_anchor_speed_mps": 1.440017,
       "max_h_m": 31.788806,
       "median_h_m": 31.462944,
+      "next_fixed_tow_s": 189169.2,
       "p95_h_m": 31.756219,
+      "previous_fixed_tow_s": 188989.4,
+      "solution_chord_m": 2.76028,
+      "solution_path_m": 2.760289,
+      "solution_path_speed_mps": 6.900722,
       "start_tow_s": 189168.4,
+      "status_counts": {
+        "SPP": 3
+      },
       "statuses": [
         "SPP"
       ]
     },
     {
+      "dominant_status": "SPP",
       "duration_s": 0.6,
       "end_tow_s": 189083.2,
       "epochs": 3,
+      "fixed_anchor_bridge_residual_max_m": 150.838718,
+      "fixed_anchor_bridge_residual_median_m": 150.775099,
+      "fixed_anchor_bridge_residual_p95_m": 150.832356,
+      "fixed_anchor_distance_m": 258.915049,
+      "fixed_anchor_gap_s": 179.8,
+      "fixed_anchor_speed_mps": 1.440017,
       "max_h_m": 31.724818,
       "median_h_m": 31.628587,
+      "next_fixed_tow_s": 189169.2,
       "p95_h_m": 31.715195,
+      "previous_fixed_tow_s": 188989.4,
+      "solution_chord_m": 2.716077,
+      "solution_path_m": 2.743959,
+      "solution_path_speed_mps": 4.573265,
       "start_tow_s": 189082.6,
+      "status_counts": {
+        "SPP": 3
+      },
       "statuses": [
         "SPP"
       ]
     },
     {
+      "dominant_status": "FLOAT",
       "duration_s": 0.2,
       "end_tow_s": 189165.6,
       "epochs": 2,
+      "fixed_anchor_bridge_residual_max_m": 31.670222,
+      "fixed_anchor_bridge_residual_median_m": 30.850127,
+      "fixed_anchor_bridge_residual_p95_m": 31.588213,
+      "fixed_anchor_distance_m": 258.915049,
+      "fixed_anchor_gap_s": 179.8,
+      "fixed_anchor_speed_mps": 1.440017,
       "max_h_m": 47.921316,
       "median_h_m": 46.740906,
+      "next_fixed_tow_s": 189169.2,
       "p95_h_m": 47.803275,
+      "previous_fixed_tow_s": 188989.4,
+      "solution_chord_m": 1.41208,
+      "solution_path_m": 1.41208,
+      "solution_path_speed_mps": 7.060402,
       "start_tow_s": 189165.4,
+      "status_counts": {
+        "FLOAT": 2
+      },
       "statuses": [
         "FLOAT"
       ]
     },
     {
+      "dominant_status": "FLOAT",
       "duration_s": 0.0,
       "end_tow_s": 189163.6,
       "epochs": 1,
+      "fixed_anchor_bridge_residual_max_m": 33.074946,
+      "fixed_anchor_bridge_residual_median_m": 33.074946,
+      "fixed_anchor_bridge_residual_p95_m": 33.074946,
+      "fixed_anchor_distance_m": 258.915049,
+      "fixed_anchor_gap_s": 179.8,
+      "fixed_anchor_speed_mps": 1.440017,
       "max_h_m": 46.552528,
       "median_h_m": 46.552528,
+      "next_fixed_tow_s": 189169.2,
       "p95_h_m": 46.552528,
+      "previous_fixed_tow_s": 188989.4,
+      "solution_chord_m": 0.0,
+      "solution_path_m": 0.0,
+      "solution_path_speed_mps": null,
       "start_tow_s": 189163.6,
+      "status_counts": {
+        "FLOAT": 1
+      },
       "statuses": [
         "FLOAT"
       ]
     },
     {
+      "dominant_status": "FLOAT",
       "duration_s": 0.0,
       "end_tow_s": 189161.8,
       "epochs": 1,
+      "fixed_anchor_bridge_residual_max_m": 38.603889,
+      "fixed_anchor_bridge_residual_median_m": 38.603889,
+      "fixed_anchor_bridge_residual_p95_m": 38.603889,
+      "fixed_anchor_distance_m": 258.915049,
+      "fixed_anchor_gap_s": 179.8,
+      "fixed_anchor_speed_mps": 1.440017,
       "max_h_m": 35.536077,
       "median_h_m": 35.536077,
+      "next_fixed_tow_s": 189169.2,
       "p95_h_m": 35.536077,
+      "previous_fixed_tow_s": 188989.4,
+      "solution_chord_m": 0.0,
+      "solution_path_m": 0.0,
+      "solution_path_speed_mps": null,
       "start_tow_s": 189161.8,
+      "status_counts": {
+        "FLOAT": 1
+      },
       "statuses": [
         "FLOAT"
       ]

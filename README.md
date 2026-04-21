@@ -107,7 +107,9 @@ and the SPP height-step guard removes another 30 vertical-spike fallback epochs.
 Together they turn the previous P95H regression into a **5.53 m** P95H lead,
 drop Tokyo run1 maxH from 81.1 m to **47.9 m**, and keep the
 3D<=50cm/reference score unchanged. The remaining P95 tail is now mostly
-FLOAT-dominated, so it stays visible as the next quality target.
+FLOAT-dominated, so it stays visible as the next quality target. The bad
+segment CSV now includes adjacent FIX-anchor speed/gap and bridge residuals for
+that FLOAT-tail design work.
 
 | Status | Epochs | P50 H | P95 H | 3D <= 50 cm / reference | P95H exceedance share |
 |---|---:|---:|---:|---:|---:|

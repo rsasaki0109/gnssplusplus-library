@@ -51,6 +51,22 @@ def status_name(status: int) -> str:
     return STATUS_NAMES.get(status, f"status_{status}")
 
 
+def ordered_status_names(names: set[str]) -> list[str]:
+    ordered = [name for name in STATUS_ORDER if name in names]
+    ordered.extend(sorted(names.difference(STATUS_ORDER)))
+    return ordered
+
+
+def horizontal_track_distance(
+    first: comparison.MatchedEpoch,
+    second: comparison.MatchedEpoch,
+) -> float:
+    return math.hypot(
+        second.traj_east_m - first.traj_east_m,
+        second.traj_north_m - first.traj_north_m,
+    )
+
+
 def score_3d_50cm(matches: list[comparison.MatchedEpoch]) -> int:
     return sum(1 for match in matches if math.hypot(match.horiz_error_m, match.up_m) <= 0.50)
 
@@ -84,10 +100,7 @@ def summarize_by_status(
     reference_count: int,
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    seen = {status_name(match.status) for match in matches}
-    ordered_names = [name for name in STATUS_ORDER if name in seen]
-    ordered_names.extend(sorted(seen.difference(STATUS_ORDER)))
-    for name in ordered_names:
+    for name in ordered_status_names({status_name(match.status) for match in matches}):
         status_matches = [match for match in matches if status_name(match.status) == name]
         row = {"status": name}
         row.update(summarize_matches(status_matches, reference_count))
@@ -121,10 +134,7 @@ def paired_degradation_by_status(
     pairs: list[comparison.PairedEpoch],
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    seen = {status_name(pair.lib_epoch.status) for pair in pairs}
-    ordered_names = [name for name in STATUS_ORDER if name in seen]
-    ordered_names.extend(sorted(seen.difference(STATUS_ORDER)))
-    for name in ordered_names:
+    for name in ordered_status_names({status_name(pair.lib_epoch.status) for pair in pairs}):
         status_pairs = [pair for pair in pairs if status_name(pair.lib_epoch.status) == name]
         deltas = [
             pair.lib_epoch.horiz_error_m - pair.rtklib_epoch.horiz_error_m
@@ -146,39 +156,151 @@ def paired_degradation_by_status(
     return rows
 
 
+def fixed_anchor(
+    matches: list[comparison.MatchedEpoch],
+    start_index: int,
+    step: int,
+) -> comparison.MatchedEpoch | None:
+    index = start_index
+    while 0 <= index < len(matches):
+        if status_name(matches[index].status) == "FIXED":
+            return matches[index]
+        index += step
+    return None
+
+
+def bridge_residuals(
+    segment: list[comparison.MatchedEpoch],
+    anchor_before: comparison.MatchedEpoch | None,
+    anchor_after: comparison.MatchedEpoch | None,
+) -> list[float]:
+    if anchor_before is None or anchor_after is None:
+        return []
+    anchor_gap_s = anchor_after.tow - anchor_before.tow
+    if not math.isfinite(anchor_gap_s) or anchor_gap_s <= 0.0:
+        return []
+
+    residuals = []
+    for match in segment:
+        fraction = (match.tow - anchor_before.tow) / anchor_gap_s
+        predicted_east = anchor_before.traj_east_m + (
+            anchor_after.traj_east_m - anchor_before.traj_east_m
+        ) * fraction
+        predicted_north = anchor_before.traj_north_m + (
+            anchor_after.traj_north_m - anchor_before.traj_north_m
+        ) * fraction
+        residuals.append(
+            math.hypot(
+                match.traj_east_m - predicted_east,
+                match.traj_north_m - predicted_north,
+            )
+        )
+    return residuals
+
+
+def segment_solution_path(segment: list[comparison.MatchedEpoch]) -> float:
+    return sum(
+        horizontal_track_distance(segment[index - 1], segment[index])
+        for index in range(1, len(segment))
+    )
+
+
+def segment_status_counts(segment: list[comparison.MatchedEpoch]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for match in segment:
+        name = status_name(match.status)
+        counts[name] = counts.get(name, 0) + 1
+    return {name: counts[name] for name in ordered_status_names(set(counts))}
+
+
+def dominant_status(status_counts: dict[str, int]) -> str:
+    ordered_names = ordered_status_names(set(status_counts))
+    return max(ordered_names, key=lambda name: status_counts[name]) if ordered_names else ""
+
+
+def segment_anchor_features(
+    matches: list[comparison.MatchedEpoch],
+    segment_indexes: list[int],
+) -> dict[str, object]:
+    segment = [matches[index] for index in segment_indexes]
+    duration_s = segment[-1].tow - segment[0].tow
+    solution_path_m = segment_solution_path(segment)
+    status_counts = segment_status_counts(segment)
+    anchor_before = fixed_anchor(matches, segment_indexes[0] - 1, -1)
+    anchor_after = fixed_anchor(matches, segment_indexes[-1] + 1, 1)
+    residuals = bridge_residuals(segment, anchor_before, anchor_after)
+
+    features: dict[str, object] = {
+        "status_counts": status_counts,
+        "dominant_status": dominant_status(status_counts),
+        "solution_path_m": rounded(solution_path_m),
+        "solution_chord_m": rounded(
+            horizontal_track_distance(segment[0], segment[-1]) if len(segment) > 1 else 0.0
+        ),
+        "solution_path_speed_mps": rounded(solution_path_m / duration_s)
+        if duration_s > 0.0
+        else None,
+        "previous_fixed_tow_s": rounded(anchor_before.tow) if anchor_before is not None else None,
+        "next_fixed_tow_s": rounded(anchor_after.tow) if anchor_after is not None else None,
+        "fixed_anchor_gap_s": None,
+        "fixed_anchor_distance_m": None,
+        "fixed_anchor_speed_mps": None,
+        "fixed_anchor_bridge_residual_median_m": None,
+        "fixed_anchor_bridge_residual_p95_m": None,
+        "fixed_anchor_bridge_residual_max_m": None,
+    }
+    if anchor_before is not None and anchor_after is not None:
+        anchor_gap_s = anchor_after.tow - anchor_before.tow
+        anchor_distance_m = horizontal_track_distance(anchor_before, anchor_after)
+        features.update(
+            {
+                "fixed_anchor_gap_s": rounded(anchor_gap_s),
+                "fixed_anchor_distance_m": rounded(anchor_distance_m),
+                "fixed_anchor_speed_mps": rounded(anchor_distance_m / anchor_gap_s)
+                if anchor_gap_s > 0.0
+                else None,
+                "fixed_anchor_bridge_residual_median_m": percentile(residuals, 50),
+                "fixed_anchor_bridge_residual_p95_m": percentile(residuals, 95),
+                "fixed_anchor_bridge_residual_max_m": rounded(max(residuals)) if residuals else 0.0,
+            }
+        )
+    return features
+
+
 def bad_segments(
     matches: list[comparison.MatchedEpoch],
     threshold_m: float,
     max_gap_s: float,
 ) -> list[dict[str, object]]:
-    bad = [match for match in matches if match.horiz_error_m > threshold_m]
-    segments: list[list[comparison.MatchedEpoch]] = []
-    current: list[comparison.MatchedEpoch] = []
-    for match in bad:
-        if not current or match.tow - current[-1].tow <= max_gap_s:
-            current.append(match)
+    bad_indexes = [index for index, match in enumerate(matches) if match.horiz_error_m > threshold_m]
+    segments: list[list[int]] = []
+    current: list[int] = []
+    for index in bad_indexes:
+        if not current or matches[index].tow - matches[current[-1]].tow <= max_gap_s:
+            current.append(index)
             continue
         segments.append(current)
-        current = [match]
+        current = [index]
     if current:
         segments.append(current)
 
     rows: list[dict[str, object]] = []
-    for segment in segments:
+    for segment_indexes in segments:
+        segment = [matches[index] for index in segment_indexes]
         horiz = [match.horiz_error_m for match in segment]
         statuses = sorted({status_name(match.status) for match in segment})
-        rows.append(
-            {
-                "start_tow_s": rounded(segment[0].tow),
-                "end_tow_s": rounded(segment[-1].tow),
-                "duration_s": rounded(segment[-1].tow - segment[0].tow),
-                "epochs": len(segment),
-                "statuses": statuses,
-                "median_h_m": percentile(horiz, 50),
-                "p95_h_m": percentile(horiz, 95),
-                "max_h_m": rounded(max(horiz)),
-            }
-        )
+        row: dict[str, object] = {
+            "start_tow_s": rounded(segment[0].tow),
+            "end_tow_s": rounded(segment[-1].tow),
+            "duration_s": rounded(segment[-1].tow - segment[0].tow),
+            "epochs": len(segment),
+            "statuses": statuses,
+            "median_h_m": percentile(horiz, 50),
+            "p95_h_m": percentile(horiz, 95),
+            "max_h_m": rounded(max(horiz)),
+        }
+        row.update(segment_anchor_features(matches, segment_indexes))
+        rows.append(row)
     rows.sort(key=lambda row: (int(row["epochs"]), float(row["max_h_m"])), reverse=True)
     return rows
 
@@ -233,9 +355,22 @@ def write_segments_csv(path: Path, rows: list[dict[str, object]]) -> None:
         "duration_s",
         "epochs",
         "statuses",
+        "status_counts",
+        "dominant_status",
         "median_h_m",
         "p95_h_m",
         "max_h_m",
+        "solution_path_m",
+        "solution_chord_m",
+        "solution_path_speed_mps",
+        "previous_fixed_tow_s",
+        "next_fixed_tow_s",
+        "fixed_anchor_gap_s",
+        "fixed_anchor_distance_m",
+        "fixed_anchor_speed_mps",
+        "fixed_anchor_bridge_residual_median_m",
+        "fixed_anchor_bridge_residual_p95_m",
+        "fixed_anchor_bridge_residual_max_m",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -243,6 +378,12 @@ def write_segments_csv(path: Path, rows: list[dict[str, object]]) -> None:
         for row in rows:
             serialized = dict(row)
             serialized["statuses"] = ";".join(str(item) for item in row["statuses"])
+            serialized["status_counts"] = ";".join(
+                f"{name}:{count}" for name, count in dict(row["status_counts"]).items()
+            )
+            for key, value in list(serialized.items()):
+                if value is None:
+                    serialized[key] = ""
             writer.writerow(serialized)
 
 
@@ -256,6 +397,20 @@ def format_status_table(rows: list[dict[str, object]]) -> str:
             f"{float(row['ppc_score_3d_50cm_ref_pct']):>8.1f}%"
         )
     return "\n".join(lines)
+
+
+def format_segment_line(row: dict[str, object]) -> str:
+    prefix = (
+        f"{row['start_tow_s']:.1f}-{row['end_tow_s']:.1f}s "
+        f"n={int(row['epochs'])} max={float(row['max_h_m']):.1f} "
+        f"{','.join(row['statuses'])}"
+    )
+    if row["fixed_anchor_speed_mps"] is None:
+        return f"{prefix} no-anchor"
+    return (
+        f"{prefix} a={float(row['fixed_anchor_speed_mps']):.1f}m/s "
+        f"b95={float(row['fixed_anchor_bridge_residual_p95_m']):.1f}m"
+    )
 
 
 def render_png(report: dict[str, object], output: Path, title: str) -> None:
@@ -338,12 +493,7 @@ def render_png(report: dict[str, object], output: Path, title: str) -> None:
         va="top",
     )
 
-    segment_lines = [
-        f"{row['start_tow_s']:.1f}-{row['end_tow_s']:.1f}s "
-        f"n={int(row['epochs'])} max={float(row['max_h_m']):.1f} "
-        f"{','.join(row['statuses'])}"
-        for row in segments
-    ]
+    segment_lines = [format_segment_line(row) for row in segments]
     ax_table.text(
         0.0,
         -0.03,
