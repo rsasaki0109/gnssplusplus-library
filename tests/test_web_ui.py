@@ -54,7 +54,11 @@ class WebUISmokeTest(unittest.TestCase):
             status_json = temp_root / "receiver.status.json"
             live_summary = temp_root / "output" / "live_replay_summary.json"
             ppc_summary = temp_root / "output" / "ppc_tokyo_run1_rtk_summary.json"
+            ppc_commercial = temp_root / "output" / "ppc_commercial_receiver.csv"
+            ppc_commercial_matches = temp_root / "output" / "ppc_commercial_receiver_matches.csv"
             moving_base_summary = temp_root / "output" / "scorpion_moving_base_summary.json"
+            moving_base_commercial = temp_root / "output" / "commercial_receiver_solution.csv"
+            moving_base_commercial_matches = temp_root / "output" / "commercial_receiver_matches.csv"
             ppp_products_summary = temp_root / "output" / "ppp_static_products_summary.json"
             visibility_summary = temp_root / "output" / "visibility_static_summary.json"
             visibility_csv = temp_root / "output" / "visibility_static.csv"
@@ -142,9 +146,38 @@ class WebUISmokeTest(unittest.TestCase):
                         "solver_wall_time_s": 12.34,
                         "realtime_factor": 1.23,
                         "effective_epoch_rate_hz": 15.67,
+                        "commercial_receiver": {
+                            "label": "survey_receiver",
+                            "solution_pos": str(ppc_commercial),
+                            "format": "csv",
+                            "matched_csv": str(ppc_commercial_matches),
+                            "matched_epochs": 120,
+                            "valid_epochs": 120,
+                            "fixed_epochs": 118,
+                            "fix_rate_pct": 98.33,
+                            "median_h_m": 0.095,
+                            "p95_h_m": 0.105,
+                            "p95_abs_up_m": 0.120,
+                        },
+                        "delta_vs_commercial_receiver": {
+                            "matched_epochs": 0,
+                            "fixed_epochs": -2,
+                            "fix_rate_pct": -1.66,
+                            "median_h_m": 0.013,
+                            "p95_h_m": 0.005,
+                            "p95_abs_up_m": -0.010,
+                        },
                     }
                 ),
                 encoding="utf-8",
+            )
+            ppc_commercial.write_text(
+                "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,solution_status,num_satellites\n",
+                encoding="ascii",
+            )
+            ppc_commercial_matches.write_text(
+                "gps_tow_s,traj_east_m,traj_north_m,traj_up_m,east_error_m,north_error_m,up_error_m,horizontal_error_m,status\n",
+                encoding="ascii",
             )
             moving_base_summary.write_text(
                 json.dumps(
@@ -166,9 +199,40 @@ class WebUISmokeTest(unittest.TestCase):
                         "nav_rinex": str(temp_root / "output" / "brdc0010.24n"),
                         "input_url": "https://example.com/scorpion.zip",
                         "signoff_profile": "scorpion-moving-base",
+                        "commercial_receiver_csv": str(moving_base_commercial),
+                        "commercial_receiver_matched_csv": str(moving_base_commercial_matches),
+                        "commercial_receiver": {
+                            "label": "rover_nav_pvt",
+                            "solution_pos": str(moving_base_commercial),
+                            "format": "csv",
+                            "matched_csv": str(moving_base_commercial_matches),
+                            "matched_epochs": 120,
+                            "valid_epochs": 120,
+                            "fixed_epochs": 120,
+                            "fix_rate_pct": 100.0,
+                            "median_baseline_error_m": 0.102,
+                            "p95_baseline_error_m": 0.133,
+                            "p95_heading_error_deg": 3.80,
+                        },
+                        "libgnss_vs_commercial_receiver": {
+                            "matched_epochs_delta": -26,
+                            "fixed_epochs_delta": -30,
+                            "fix_rate_pct_delta": -4.26,
+                            "median_baseline_error_m_delta": -0.060,
+                            "p95_baseline_error_m_delta": -0.032,
+                            "p95_heading_error_deg_delta": 2.05,
+                        },
                     }
                 ),
                 encoding="utf-8",
+            )
+            moving_base_commercial.write_text(
+                "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,solution_status,num_satellites\n",
+                encoding="ascii",
+            )
+            moving_base_commercial_matches.write_text(
+                "gps_week,gps_tow_s,baseline_error_m,baseline_length_m,heading_error_deg,status,satellites\n",
+                encoding="ascii",
             )
             (temp_root / "output" / "scorpion_moving_base.png").write_bytes(
                 base64.b64decode(
@@ -350,11 +414,16 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("FIXED", page.locator("#status-legend").text_content())
                     self.assertIn("ppc_tokyo_run1_rtk_summary.json", page.locator("#ppc-table tbody").text_content())
                     self.assertIn("96.67%", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("survey_receiver", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("Δp95 0.005 m", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("receiver-matches", page.locator("#ppc-table tbody").text_content())
                     self.assertIn("excellent", page.locator("#ppc-table tbody").text_content())
                     self.assertIn("12.34 s", page.locator("#ppc-table tbody").text_content())
                     self.assertIn("scorpion_moving_base_summary.json", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("95.74%", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("0.101 m", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("rover_nav_pvt", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("Δhead 2.05 deg", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("completed", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("matches", page.locator("#moving-base-table tbody").text_content())
                     self.assertIn("prepare", page.locator("#moving-base-table tbody").text_content())
@@ -371,8 +440,10 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("summary", page.locator("#moving-base-provenance").text_content())
                     self.assertIn("prepare", page.locator("#moving-base-provenance").text_content())
                     self.assertIn("products", page.locator("#moving-base-provenance").text_content())
+                    self.assertIn("receiver", page.locator("#moving-base-provenance").text_content())
                     self.assertIn("95.74%", page.locator("#moving-base-metrics").text_content())
                     self.assertIn("0.101 m", page.locator("#moving-base-metrics").text_content())
+                    self.assertIn("-0.032 m", page.locator("#moving-base-metrics").text_content())
                     self.assertIn("ppp_static_products_summary.json", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("PPC-Dataset tokyo run1", page.locator("#ppp-products-table tbody").text_content())
                     self.assertIn("2024-01-02", page.locator("#ppp-products-table tbody").text_content())
@@ -389,6 +460,8 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("44.70 dB-Hz", page.locator("#visibility-table tbody").text_content())
                     self.assertIn("Artifact bundles", page.locator("body").text_content())
                     self.assertIn("94 matched", page.locator("#artifact-manifest-table tbody").text_content())
+                    self.assertIn("commercial_solution", page.locator("#artifact-manifest-table tbody").text_content())
+                    self.assertIn("commercial_matches", page.locator("#artifact-manifest-table tbody").text_content())
                     self.assertIn("ppp-products", page.locator("#artifact-manifest-table tbody").text_content())
                     self.assertIn("moving-base", page.locator("#artifact-manifest-table tbody").text_content())
                     self.assertIn("visibility", page.locator("#artifact-manifest-table tbody").text_content())
