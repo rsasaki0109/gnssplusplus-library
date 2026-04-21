@@ -163,6 +163,15 @@ python3 apps/gnss.py ppc-rtk-signoff \
   --city tokyo \
   --rtklib-bin /path/to/rnx2rtkp \
   --summary-json output/ppc_tokyo_run1_rtk_signoff.json
+
+python3 apps/gnss.py ppc-coverage-matrix \
+  --dataset-root /datasets/PPC-Dataset \
+  --rtklib-root output/benchmark \
+  --summary-json output/ppc_coverage_matrix/summary.json \
+  --markdown-output output/ppc_coverage_matrix/table.md \
+  --require-positioning-delta-min 0 \
+  --require-score-3d-50cm-ref-delta-min 0 \
+  --require-p95-h-delta-max 0
 ```
 
 `ppc-rtk-signoff` is the fixed-threshold path for Tokyo/Nagoya quality and

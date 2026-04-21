@@ -15,6 +15,7 @@ Main sign-off entrypoints:
 - `gnss live-signoff`
 - `gnss moving-base-signoff`
 - `gnss ppc-rtk-signoff`
+- `gnss ppc-coverage-matrix`
 - `gnss odaiba-benchmark --require-*`
 - `gnss public-rtk-benchmarks`
 - `gnss smartloc-adapter`

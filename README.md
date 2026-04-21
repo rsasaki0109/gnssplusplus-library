@@ -366,6 +366,7 @@ python3 apps/gnss.py sbf-info \
 | `gnss live-signoff` | Realtime/error-handling sign-off for recorded RTCM/UBX live inputs |
 | `gnss ppc-demo` | External PPC-Dataset RTK/PPP verification against `reference.csv`, with optional RTKLIB/commercial receiver side-by-side summaries |
 | `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB/commercial receiver side-by-side gates |
+| `gnss ppc-coverage-matrix` | Full six-run PPC Tokyo/Nagoya coverage-profile matrix with JSON/Markdown summaries and RTKLIB delta gates |
 | `gnss moving-base-signoff` | Real moving-base replay/live sign-off against per-epoch base/rover reference coordinates |
 | `gnss odaiba-benchmark` | End-to-end Odaiba benchmark pipeline |
 | `gnss web` | Local browser UI for summary JSON, live/moving-base/PPP-product sign-offs, `.pos` trajectories, moving-base/visibility plots and histories, receiver status, and artifact/provenance links |
@@ -532,6 +533,12 @@ python3 apps/gnss.py ppc-rtk-signoff \
   --city tokyo \
   --rtklib-bin /path/to/rnx2rtkp \
   --summary-json output/ppc_tokyo_run1_rtk_signoff.json
+
+python3 apps/gnss.py ppc-coverage-matrix \
+  --dataset-root /datasets/PPC-Dataset \
+  --rtklib-root output/benchmark \
+  --summary-json output/ppc_coverage_matrix/summary.json \
+  --markdown-output output/ppc_coverage_matrix/table.md
 ```
 
 The PPC summary records `receiver_observation_provenance` for the bundled

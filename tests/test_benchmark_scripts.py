@@ -29,6 +29,7 @@ import gnss_clas_ppp as clas_ppp  # noqa: E402
 import gnss_live_signoff as live_signoff  # noqa: E402
 import gnss_moving_base_signoff as moving_base_signoff  # noqa: E402
 import gnss_ppc_commercial as ppc_commercial  # noqa: E402
+import gnss_ppc_coverage_matrix as ppc_coverage_matrix  # noqa: E402
 import gnss_ppc_demo as ppc_demo  # noqa: E402
 import gnss_ppc_rtk_signoff as ppc_rtk_signoff  # noqa: E402
 import gnss_public_rtk_benchmarks as public_rtk_benchmarks  # noqa: E402
@@ -312,6 +313,138 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
         self.assertEqual(tokyo["arfilter"], True)
         self.assertEqual(nagoya["preset"], "low-cost")
         self.assertEqual(nagoya["arfilter"], False)
+
+
+class PPCCoverageMatrixTest(unittest.TestCase):
+    def test_validate_inputs_rejects_invalid_epoch_limit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_coverage_validate_") as temp_dir:
+            dataset_root = Path(temp_dir) / "PPC-Dataset"
+            dataset_root.mkdir()
+            args = argparse.Namespace(
+                dataset_root=dataset_root,
+                max_epochs=-2,
+                rtklib_root=None,
+                rtklib_bin=None,
+                rtklib_config=ROOT_DIR / "scripts" / "rtklib_odaiba.conf",
+            )
+
+            with self.assertRaises(SystemExit):
+                ppc_coverage_matrix.validate_inputs(args)
+
+    def test_build_ppc_demo_command_uses_coverage_profile_and_rtklib_root(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_coverage_matrix_") as temp_dir:
+            temp_root = Path(temp_dir)
+            args = argparse.Namespace(
+                dataset_root=temp_root / "PPC-Dataset",
+                output_dir=temp_root / "out",
+                max_epochs=-1,
+                match_tolerance_s=0.25,
+                preset="low-cost",
+                rtklib_root=temp_root / "benchmark",
+                rtklib_bin=None,
+                rtklib_config=ROOT_DIR / "scripts" / "rtklib_odaiba.conf",
+                use_existing_solutions=False,
+                no_float_bridge_tail_guard=False,
+            )
+            paths = ppc_coverage_matrix.output_paths(args.output_dir, "tokyo", "run1")
+
+            command = ppc_coverage_matrix.build_ppc_demo_command(args, "tokyo", "run1", paths)
+
+            self.assertEqual(command[:3], [sys.executable, str(ROOT_DIR / "apps" / "gnss.py"), "ppc-demo"])
+            self.assertIn("--max-epochs", command)
+            self.assertIn("-1", command)
+            self.assertIn("--no-arfilter", command)
+            self.assertIn("--no-kinematic-post-filter", command)
+            self.assertIn("--rtklib-pos", command)
+            self.assertIn(str(temp_root / "benchmark" / "tokyo_run1" / "rtklib.pos"), command)
+            self.assertIn("--use-existing-rtklib-solution", command)
+            self.assertNotIn("--no-float-bridge-tail-guard", command)
+
+            args.no_float_bridge_tail_guard = True
+            disabled_command = ppc_coverage_matrix.build_ppc_demo_command(args, "tokyo", "run1", paths)
+            self.assertIn("--no-float-bridge-tail-guard", disabled_command)
+
+    def test_matrix_payload_aggregates_rtklib_deltas_and_guard_counts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_coverage_payload_") as temp_dir:
+            temp_root = Path(temp_dir)
+            args = argparse.Namespace(
+                dataset_root=temp_root / "PPC-Dataset",
+                output_dir=temp_root / "out",
+                max_epochs=-1,
+                match_tolerance_s=0.25,
+                preset="low-cost",
+                no_float_bridge_tail_guard=False,
+            )
+            paths = ppc_coverage_matrix.output_paths(args.output_dir, "tokyo", "run1")
+            paths["summary"].parent.mkdir(parents=True)
+            paths["summary"].write_text(
+                json.dumps(
+                    {
+                        "positioning_rate_pct": 86.2,
+                        "fix_rate_pct": 48.6,
+                        "ppc_score_3d_50cm_ref_pct": 35.6,
+                        "p95_h_m": 24.16,
+                        "max_h_m": 47.9,
+                        "solver_wall_time_s": 1.0,
+                        "realtime_factor": 10.0,
+                        "rtklib": {
+                            "positioning_rate_pct": 66.3,
+                            "fix_rate_pct": 30.5,
+                        },
+                        "delta_vs_rtklib": {
+                            "positioning_rate_pct": 19.9,
+                            "fix_rate_pct": 18.1,
+                            "ppc_score_3d_50cm_ref_pct": 35.6,
+                            "p95_h_m": -6.97,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            log_text = "\n".join(
+                [
+                    "  non-FIX drift guard: enabled inspected_segments=5 rejected_segments=2 rejected_epochs=320",
+                    "  SPP height-step guard: enabled rejected_epochs=30",
+                    "  FLOAT bridge-tail guard: enabled inspected_segments=2 rejected_segments=1 rejected_epochs=147",
+                ]
+            )
+            run = ppc_coverage_matrix.load_run_record(
+                "tokyo",
+                "run1",
+                paths,
+                ["gnss", "ppc-demo"],
+                log_text,
+                2.5,
+            )
+            payload = ppc_coverage_matrix.build_matrix_payload(args, [run])
+            markdown = ppc_coverage_matrix.render_markdown(payload)
+
+            self.assertEqual(payload["aggregates"]["avg_positioning_delta_pct"], 19.9)
+            self.assertEqual(payload["aggregates"]["avg_p95_h_delta_m"], -6.97)
+            self.assertEqual(payload["aggregates"]["float_bridge_tail_rejected_epochs"], 147)
+            self.assertIn("tokyo_run1", markdown)
+            self.assertIn("+19.9 pp", markdown)
+            self.assertIn("147", markdown)
+
+            ppc_coverage_matrix.enforce_requirements(
+                payload,
+                argparse.Namespace(
+                    require_positioning_delta_min=0.0,
+                    require_fix_delta_min=0.0,
+                    require_score_3d_50cm_ref_delta_min=0.0,
+                    require_p95_h_delta_max=0.0,
+                ),
+            )
+            with self.assertRaises(SystemExit):
+                ppc_coverage_matrix.enforce_requirements(
+                    payload,
+                    argparse.Namespace(
+                        require_positioning_delta_min=20.0,
+                        require_fix_delta_min=None,
+                        require_score_3d_50cm_ref_delta_min=None,
+                        require_p95_h_delta_max=None,
+                    ),
+                )
 
 
 class PPCCommercialHelpersTest(unittest.TestCase):
