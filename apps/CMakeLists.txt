@@ -113,6 +113,7 @@ install(PROGRAMS
     ${CMAKE_SOURCE_DIR}/scripts/generate_odaiba_scorecard.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_odaiba_social_card.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_rtk_scorecard.py
+    ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_rtk_trajectory.py
     DESTINATION scripts
 )
 

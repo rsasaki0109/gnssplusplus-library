@@ -68,6 +68,11 @@ def summarize_solution_epochs(
 
     summary = comparison.summarize(matched, fixed_status, label)
     mean_h_m = sum(epoch.horiz_error_m for epoch in matched) / len(matched)
+    ppc_score_3d_50cm_epochs = sum(
+        1
+        for epoch in matched
+        if math.hypot(epoch.horiz_error_m, epoch.up_m) <= 0.50
+    )
     matched_fixed_epochs = sum(1 for epoch in matched if epoch.status == fixed_status)
     mean_satellites = sum(epoch.num_satellites for epoch in solution_epochs) / len(solution_epochs)
     valid_span_s = solution_span_seconds(solution_epochs)
@@ -81,6 +86,10 @@ def summarize_solution_epochs(
         "median_h_m": rounded(float(summary["median_h_m"])),
         "p95_h_m": rounded(float(summary["p95_h_m"])),
         "max_h_m": rounded(float(summary["max_h_m"])),
+        "ppc_score_3d_50cm_epochs": ppc_score_3d_50cm_epochs,
+        "ppc_score_3d_50cm_pct": rounded(
+            100.0 * ppc_score_3d_50cm_epochs / len(matched)
+        ),
         "median_abs_up_m": rounded(float(summary["median_abs_up_m"])),
         "p95_abs_up_m": rounded(float(summary["p95_abs_up_m"])),
         "mean_up_m": rounded(float(summary["mean_up_m"])),
@@ -153,6 +162,7 @@ def solution_metric_delta(
         "median_h_m": optional_delta("median_h_m"),
         "p95_h_m": optional_delta("p95_h_m"),
         "max_h_m": optional_delta("max_h_m"),
+        "ppc_score_3d_50cm_pct": optional_delta("ppc_score_3d_50cm_pct"),
         "median_abs_up_m": optional_delta("median_abs_up_m"),
         "p95_abs_up_m": optional_delta("p95_abs_up_m"),
         "solver_wall_time_s": optional_delta("solver_wall_time_s"),

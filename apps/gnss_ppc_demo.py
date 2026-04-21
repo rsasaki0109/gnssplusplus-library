@@ -646,6 +646,8 @@ def build_summary_payload(
         "median_h_m": lib_metrics["median_h_m"],
         "p95_h_m": lib_metrics["p95_h_m"],
         "max_h_m": lib_metrics["max_h_m"],
+        "ppc_score_3d_50cm_epochs": lib_metrics["ppc_score_3d_50cm_epochs"],
+        "ppc_score_3d_50cm_pct": lib_metrics["ppc_score_3d_50cm_pct"],
         "median_abs_up_m": lib_metrics["median_abs_up_m"],
         "p95_abs_up_m": lib_metrics["p95_abs_up_m"],
         "mean_up_m": lib_metrics["mean_up_m"],
@@ -695,6 +697,9 @@ def build_summary_payload(
             "median_h_m": rounded(float(payload["median_h_m"]) - float(rtklib_metrics["median_h_m"])),
             "p95_h_m": rounded(float(payload["p95_h_m"]) - float(rtklib_metrics["p95_h_m"])),
             "max_h_m": rounded(float(payload["max_h_m"]) - float(rtklib_metrics["max_h_m"])),
+            "ppc_score_3d_50cm_pct": rounded(
+                float(payload["ppc_score_3d_50cm_pct"]) - float(rtklib_metrics["ppc_score_3d_50cm_pct"])
+            ),
             "solver_wall_time_s": (
                 rounded(float(payload["solver_wall_time_s"]) - float(rtklib_metrics["solver_wall_time_s"]))
                 if payload["solver_wall_time_s"] is not None and rtklib_metrics["solver_wall_time_s"] is not None
@@ -1013,6 +1018,7 @@ def main() -> int:
         print(
             "  vs rtklib:"
             f" fix={payload['delta_vs_rtklib']['fix_rate_pct']} %"
+            f", 3d50={payload['delta_vs_rtklib']['ppc_score_3d_50cm_pct']} %"
             f", p95_h={payload['delta_vs_rtklib']['p95_h_m']} m"
             f", wall={payload['delta_vs_rtklib']['solver_wall_time_s']} s"
         )

@@ -82,6 +82,17 @@ observation solve against reference truth.
 | run2 | **4674 / 80.12%**       | 2127 / 27.58%     | **0.016** vs 0.835 (52×) | **0.313** vs 42.624 (136×) |
 | run3 | **7516 / 86.84%**       | 5778 / 40.55%     | **0.012** vs 0.666 (56×) | **0.137** vs 24.521 (179×) |
 
+The 2D sanity plot below uses the PPC Tokyo run3 open data (Harumi-Odaiba).
+Points are colored by RTK solution status, and no IMU input is used by this
+GNSS-only RTK replay. The PPC2024 official scoring rule is the distance ratio
+with 3D error <= 50 cm; the published first-place result was 78.7% Public /
+85.6% Private in [PPC2024 results](https://taroz.net/data/PPC2024_results.pdf).
+On this open run, the same 50 cm-style score is 97.7% for gnssplusplus vs 42.8%
+for RTKLIB `demo5`. This is an open-run replay metric, not an official Kaggle
+submission.
+
+![PPC Tokyo run3 RTK trajectory by solution status](docs/ppc_tokyo_run3_rtk_trajectory_status.png)
+
 ### PPC Nagoya (same preset)
 
 | Run  | Fix delta    | rate delta    | Hmed delta     |

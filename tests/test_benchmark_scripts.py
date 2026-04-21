@@ -43,6 +43,7 @@ import generate_feature_overview_card as feature_overview  # noqa: E402
 import generate_odaiba_scorecard as scorecard  # noqa: E402
 import generate_odaiba_social_card as social_card  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
+import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
 import detect_ci_scope as ci_scope  # noqa: E402
 import run_optional_ppp_products_signoff as ci_ppp_products_signoff  # noqa: E402
 import run_optional_rtk_signoffs as ci_rtk_signoffs  # noqa: E402
@@ -1241,6 +1242,61 @@ class ScorecardRenderTest(unittest.TestCase):
             except ModuleNotFoundError:
                 pass
 
+    def test_ppc_rtk_trajectory_main_renders_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_trajectory_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            reference_csv = temp_root / "reference.csv"
+            lib_pos = temp_root / "lib.pos"
+            rtklib_pos = temp_root / "rtklib.pos"
+            output_png = temp_root / "ppc_rtk_trajectory.png"
+
+            rows = [
+                (2000, 0.0, 35.0000000, 139.0000000, 10.0),
+                (2000, 1.0, 35.0000100, 139.0000100, 10.2),
+                (2000, 2.0, 35.0000200, 139.0000200, 10.4),
+                (2000, 3.0, 35.0000300, 139.0000300, 10.6),
+            ]
+            self.write_reference_csv(reference_csv, rows)
+            self.write_lib_pos(
+                lib_pos,
+                [
+                    (2000, 0.0, 35.0000000, 139.0000000, 10.0, 4),
+                    (2000, 1.0, 35.0000101, 139.0000101, 10.2, 4),
+                    (2000, 2.0, 35.0000202, 139.0000202, 10.5, 3),
+                    (2000, 3.0, 35.0000300, 139.0000300, 10.6, 4),
+                ],
+            )
+            self.write_rtklib_pos(
+                rtklib_pos,
+                [
+                    (2000, 0.0, 35.0000000, 139.0000000, 10.0, 1),
+                    (2000, 1.0, 35.0000110, 139.0000110, 10.5, 2),
+                    (2000, 2.0, 35.0000200, 139.0000200, 10.4, 5),
+                    (2000, 3.0, 35.0000300, 139.0000300, 10.6, 1),
+                ],
+            )
+
+            argv = [
+                "generate_ppc_rtk_trajectory.py",
+                "--lib-pos",
+                str(lib_pos),
+                "--rtklib-pos",
+                str(rtklib_pos),
+                "--reference-csv",
+                str(reference_csv),
+                "--output",
+                str(output_png),
+                "--title",
+                "Synthetic PPC trajectory",
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_rtk_trajectory.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(output_png.exists())
+            self.assertGreater(output_png.stat().st_size, 0)
+
     def test_architecture_diagram_main_renders_png(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_architecture_card_test_") as temp_dir:
             output_png = Path(temp_dir) / "architecture.png"
@@ -2246,6 +2302,8 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["matched_epochs"], 3)
             self.assertEqual(payload["fixed_epochs"], 2)
             self.assertGreaterEqual(payload["fix_rate_pct"], 60.0)
+            self.assertEqual(payload["ppc_score_3d_50cm_epochs"], 3)
+            self.assertEqual(payload["ppc_score_3d_50cm_pct"], 100.0)
             self.assertLessEqual(payload["median_h_m"], 0.2)
             self.assertLessEqual(payload["p95_h_m"], 0.2)
             self.assertLessEqual(payload["max_h_m"], 0.2)
@@ -2260,6 +2318,7 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtklib"]["solver_wall_time_s"], 0.1)
             self.assertAlmostEqual(payload["rtklib"]["realtime_factor"], 4.0, places=5)
             self.assertIn("delta_vs_rtklib", payload)
+            self.assertEqual(payload["delta_vs_rtklib"]["ppc_score_3d_50cm_pct"], 0.0)
             self.assertIn("commercial_receiver", payload)
             self.assertEqual(payload["commercial_receiver"]["label"], "survey_receiver")
             self.assertEqual(payload["commercial_receiver"]["matched_epochs"], 3)

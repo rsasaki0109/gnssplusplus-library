@@ -47,6 +47,17 @@ about matching a proprietary receiver RTK engine.
 | run2 | **4674 / 80.12%**       | 2127 / 27.58%     | **0.016** vs 0.835 (52×) | **0.313** vs 42.624 (136×) |
 | run3 | **7516 / 86.84%**       | 5778 / 40.55%     | **0.012** vs 0.666 (56×) | **0.137** vs 24.521 (179×) |
 
+PPC Tokyo run3 is also checked visually as a 2D status-colored trajectory.
+The replay uses GNSS observations only, with no IMU input. PPC2024's official
+score was the distance ratio with 3D error <= 50 cm; the published first-place
+result was 78.7% Public / 85.6% Private in
+[PPC2024 results](https://taroz.net/data/PPC2024_results.pdf). On this open
+run, gnssplusplus reaches 97.7% on the same 50 cm-style score while RTKLIB
+`demo5` reaches 42.8%. Treat this as an open-run replay metric rather than an
+official Kaggle submission.
+
+![PPC Tokyo run3 RTK trajectory by solution status](ppc_tokyo_run3_rtk_trajectory_status.png)
+
 ## PPC Nagoya (same preset)
 
 | Run  | Fix delta    | rate delta    | Hmed delta     |
