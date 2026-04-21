@@ -1,74 +1,106 @@
 #!/usr/bin/env python3
-"""Generate a README-friendly PPC RTK benchmark scorecard."""
+"""Generate a README-friendly PPC RTK coverage scorecard."""
 
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 
 
-BG = "#f4efe6"
-PANEL = "#fffaf2"
-TEXT = "#14213d"
-MUTED = "#5f6c7b"
-LIB = "#c56a1a"
+BG = "#f7f8fb"
+PANEL = "#ffffff"
+TEXT = "#172033"
+MUTED = "#667085"
+GRID = "#d0d5dd"
+LIB = "#d97706"
 RTKLIB = "#2563eb"
 WIN = "#18794e"
-EDGE = "#d8c9b1"
+EDGE = "#d0d5dd"
 
-TOKYO_RUNS = [
-    {
-        "run": "run1",
-        "lib_fix": 3572,
-        "lib_rate": 81.26,
-        "rtklib_fix": 2418,
-        "rtklib_rate": 30.52,
-        "hmed_ratio": 42,
-        "vp95_ratio": 29,
-    },
-    {
-        "run": "run2",
-        "lib_fix": 4674,
-        "lib_rate": 80.12,
-        "rtklib_fix": 2127,
-        "rtklib_rate": 27.58,
-        "hmed_ratio": 52,
-        "vp95_ratio": 136,
-    },
-    {
-        "run": "run3",
-        "lib_fix": 7516,
-        "lib_rate": 86.84,
-        "rtklib_fix": 5778,
-        "rtklib_rate": 40.55,
-        "hmed_ratio": 56,
-        "vp95_ratio": 179,
-    },
-]
 
-NAGOYA_RUNS = [
-    {"run": "run1", "fix_delta": 1743, "rate_delta": 58.03, "hmed_ratio": 9},
-    {"run": "run2", "fix_delta": 1735, "rate_delta": 64.00, "hmed_ratio": 10},
-    {"run": "run3", "fix_delta": 154, "rate_delta": 50.16, "hmed_ratio": 44},
+@dataclass(frozen=True)
+class CoverageRun:
+    key: str
+    label: str
+    lib_positioning_pct: float
+    rtklib_positioning_pct: float
+    positioning_delta_pct: float
+    lib_fix_pct: float
+    rtklib_fix_pct: float
+    score_3d_50cm_ref_delta_pct: float
+    p95_h_delta_m: float
+
+
+DEFAULT_RUNS = [
+    CoverageRun("tokyo_run1", "Tokyo r1", 86.201991, 66.287340, 19.914651, 48.582799, 30.522595, 35.628818, -6.973535),
+    CoverageRun("tokyo_run2", "Tokyo r2", 95.311988, 84.274943, 11.037045, 60.811740, 27.580394, 39.940990, -18.893530),
+    CoverageRun("tokyo_run3", "Tokyo r3", 95.987190, 93.131168, 2.856022, 60.257370, 40.547368, 23.632443, -0.691234),
+    CoverageRun("nagoya_run1", "Nagoya r1", 87.883937, 65.821461, 22.062476, 60.306365, 33.756950, 32.845380, -22.632527),
+    CoverageRun("nagoya_run2", "Nagoya r2", 86.244842, 69.791556, 16.453286, 40.326340, 18.829594, 19.976722, -27.159796),
+    CoverageRun("nagoya_run3", "Nagoya r3", 94.635647, 67.698520, 26.937127, 19.687119, 13.888100, 9.402038, -5.539148),
 ]
 
 
 def average(values: list[float]) -> float:
-    if not values:
-        return 0.0
-    return sum(values) / float(len(values))
+    return sum(values) / len(values) if values else 0.0
 
 
-def tokyo_average_rate_delta() -> float:
-    return average([row["lib_rate"] - row["rtklib_rate"] for row in TOKYO_RUNS])
+def run_label(key: str) -> str:
+    city, _, run_name = key.partition("_")
+    return f"{city.capitalize()} {run_name.replace('run', 'r')}" if run_name else key
 
 
-def nagoya_average_rate_delta() -> float:
-    return average([row["rate_delta"] for row in NAGOYA_RUNS])
+def required_number(mapping: dict[str, object], name: str, context: str) -> float:
+    value = mapping.get(name)
+    if not isinstance(value, (int, float)):
+        raise SystemExit(f"Missing numeric `{name}` in {context}")
+    return float(value)
 
 
-def add_panel(ax, x: float, y: float, w: float, h: float, radius: float = 0.025) -> None:
+def runs_from_summary(path: Path) -> list[CoverageRun]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    runs = payload.get("runs")
+    if not isinstance(runs, list):
+        raise SystemExit(f"{path} does not look like a ppc-coverage-matrix summary")
+
+    parsed: list[CoverageRun] = []
+    for item in runs:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key", ""))
+        metrics = item.get("metrics")
+        rtklib = item.get("rtklib")
+        delta = item.get("delta_vs_rtklib")
+        if not isinstance(metrics, dict) or not isinstance(rtklib, dict) or not isinstance(delta, dict):
+            raise SystemExit(f"{path} run `{key}` is missing metrics/rtklib/delta blocks")
+        parsed.append(
+            CoverageRun(
+                key=key,
+                label=run_label(key),
+                lib_positioning_pct=required_number(metrics, "positioning_rate_pct", key),
+                rtklib_positioning_pct=required_number(rtklib, "positioning_rate_pct", key),
+                positioning_delta_pct=required_number(delta, "positioning_rate_pct", key),
+                lib_fix_pct=required_number(metrics, "fix_rate_pct", key),
+                rtklib_fix_pct=required_number(rtklib, "fix_rate_pct", key),
+                score_3d_50cm_ref_delta_pct=required_number(delta, "ppc_score_3d_50cm_ref_pct", key),
+                p95_h_delta_m=required_number(delta, "p95_h_m", key),
+            )
+        )
+    if not parsed:
+        raise SystemExit(f"{path} did not contain any coverage runs")
+    return parsed
+
+
+def load_runs(summary_json: Path | None) -> list[CoverageRun]:
+    if summary_json is None:
+        return list(DEFAULT_RUNS)
+    return runs_from_summary(summary_json)
+
+
+def add_panel(ax, x: float, y: float, w: float, h: float, radius: float = 0.018) -> None:
     from matplotlib.patches import FancyBboxPatch
 
     ax.add_patch(
@@ -84,101 +116,103 @@ def add_panel(ax, x: float, y: float, w: float, h: float, radius: float = 0.025)
     )
 
 
-def draw_summary_card(ax, x: float, y: float, w: float, h: float, title: str, value: str, detail: str) -> None:
-    add_panel(ax, x, y, w, h, radius=0.020)
-    ax.text(x + 0.05 * w, y + h - 0.22 * h, title, fontsize=12, color=MUTED, weight="bold")
-    ax.text(x + 0.05 * w, y + 0.40 * h, value, fontsize=27, color=TEXT, weight="bold")
-    ax.text(x + 0.05 * w, y + 0.17 * h, detail, fontsize=11.5, color=MUTED)
+def draw_summary_card(
+    ax,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    title: str,
+    value: str,
+    detail: str,
+    *,
+    value_color: str = TEXT,
+) -> None:
+    add_panel(ax, x, y, w, h)
+    ax.text(x + 0.052 * w, y + h - 0.25 * h, title, fontsize=11.0, color=MUTED, weight="bold")
+    ax.text(x + 0.052 * w, y + 0.40 * h, value, fontsize=24.0, color=value_color, weight="bold")
+    ax.text(x + 0.052 * w, y + 0.17 * h, detail, fontsize=10.3, color=MUTED)
 
 
-def draw_tokyo_bars(ax) -> None:
+def draw_positioning_bars(ax, runs: list[CoverageRun]) -> None:
     import numpy as np
 
-    labels = [row["run"] for row in TOKYO_RUNS]
-    lib_rates = [row["lib_rate"] for row in TOKYO_RUNS]
-    rtklib_rates = [row["rtklib_rate"] for row in TOKYO_RUNS]
+    labels = [run.label for run in runs]
+    lib_rates = [run.lib_positioning_pct for run in runs]
+    rtklib_rates = [run.rtklib_positioning_pct for run in runs]
 
     positions = np.arange(len(labels))
     width = 0.34
     ax.bar(positions - width / 2, lib_rates, width, color=LIB, label="gnssplusplus")
     ax.bar(positions + width / 2, rtklib_rates, width, color=RTKLIB, label="RTKLIB demo5")
-    ax.set_ylim(0, 100)
+    ax.set_ylim(0, 105)
     ax.set_xticks(positions)
-    ax.set_xticklabels(labels, color=TEXT, fontsize=11)
-    ax.set_ylabel("Fix rate (%)", color=MUTED, fontsize=10)
-    ax.tick_params(axis="y", labelsize=9, colors=MUTED)
-    ax.grid(axis="y", alpha=0.18)
-    ax.legend(loc="upper left", frameon=False, fontsize=10)
-    ax.set_title("PPC Tokyo: fix rate", color=TEXT, fontsize=15, weight="bold", pad=10)
+    ax.set_xticklabels(labels, color=TEXT, fontsize=9.2)
+    ax.set_ylabel("Positioning rate (%)", color=MUTED, fontsize=9.5)
+    ax.tick_params(axis="y", labelsize=8.5, colors=MUTED)
+    ax.grid(axis="y", alpha=0.22, color=GRID)
+    ax.legend(loc="upper left", frameon=False, fontsize=9.5, ncol=2)
+    ax.set_title("PPC coverage profile: positioned epochs", color=TEXT, fontsize=14.5, weight="bold", pad=10)
     for spine in ax.spines.values():
-        spine.set_alpha(0.12)
+        spine.set_alpha(0.15)
 
-    for index, row in enumerate(TOKYO_RUNS):
-        ax.text(
-            positions[index] - width / 2,
-            row["lib_rate"] + 2.1,
-            f"{row['lib_rate']:.1f}%",
-            color=TEXT,
-            fontsize=9,
-            ha="center",
-            weight="bold",
-        )
-        ax.text(
-            positions[index] + width / 2,
-            row["rtklib_rate"] + 2.1,
-            f"{row['rtklib_rate']:.1f}%",
-            color=TEXT,
-            fontsize=9,
-            ha="center",
-            weight="bold",
-        )
+    for index, run in enumerate(runs):
+        y = max(run.lib_positioning_pct, run.rtklib_positioning_pct) + 2.0
         ax.text(
             positions[index],
-            5,
-            f"Hmed {row['hmed_ratio']}x\nVp95 {row['vp95_ratio']}x",
-            color=MUTED,
+            min(y, 101.0),
+            f"+{run.positioning_delta_pct:.1f} pp",
+            color=WIN,
             fontsize=8.4,
             ha="center",
-            va="bottom",
+            weight="bold",
         )
 
 
-def draw_nagoya_table(ax) -> None:
+def draw_delta_table(ax, runs: list[CoverageRun]) -> None:
     ax.set_axis_off()
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    ax.text(0.0, 0.95, "PPC Nagoya: same preset", fontsize=15, color=TEXT, weight="bold", va="top")
-    ax.text(
-        0.0,
-        0.875,
-        "gnssplusplus delta vs RTKLIB demo5",
-        fontsize=10.5,
-        color=MUTED,
-        va="top",
-    )
+    ax.text(0.0, 0.965, "Run deltas vs RTKLIB demo5", fontsize=14.5, color=TEXT, weight="bold", va="top")
+    ax.text(0.0, 0.895, "Positive pp is better; negative P95 H delta is better.", fontsize=9.4, color=MUTED, va="top")
 
-    header_y = 0.75
-    xs = [0.02, 0.25, 0.50, 0.84]
-    headers = ["run", "Fix delta", "Rate delta", "Hmed"]
-    for x, header in zip(xs, headers):
-        ax.text(x, header_y, header, fontsize=10.5, color=MUTED, weight="bold", va="center")
-    ax.plot([0.0, 1.0], [0.69, 0.69], color=EDGE, linewidth=1.0)
+    headers = ["Run", "Pos", "Fix", "3D50/ref", "P95 H"]
+    xs = [0.02, 0.40, 0.56, 0.74, 0.98]
+    aligns = ["left", "right", "right", "right", "right"]
+    header_y = 0.78
+    for x, header, align in zip(xs, headers, aligns):
+        ax.text(x, header_y, header, fontsize=9.2, color=MUTED, weight="bold", ha=align, va="center")
+    ax.plot([0.0, 1.0], [0.735, 0.735], color=EDGE, linewidth=1.0)
 
-    y = 0.57
-    for row in NAGOYA_RUNS:
-        ax.text(xs[0], y, row["run"], fontsize=12, color=TEXT, weight="bold", va="center")
-        ax.text(xs[1], y, f"+{row['fix_delta']}", fontsize=11.5, color=WIN, weight="bold", va="center")
-        ax.text(xs[2], y, f"+{row['rate_delta']:.2f} pp", fontsize=11.5, color=WIN, weight="bold", va="center")
-        ax.text(xs[3], y, f"{row['hmed_ratio']}x", fontsize=11.5, color=WIN, weight="bold", va="center")
-        y -= 0.18
+    y = 0.655
+    for run in runs:
+        ax.text(xs[0], y, run.label, fontsize=9.8, color=TEXT, weight="bold", ha="left", va="center")
+        ax.text(xs[1], y, f"+{run.positioning_delta_pct:.1f}", fontsize=9.6, color=WIN, weight="bold", ha="right", va="center")
+        ax.text(xs[2], y, f"+{run.lib_fix_pct - run.rtklib_fix_pct:.1f}", fontsize=9.6, color=WIN, weight="bold", ha="right", va="center")
+        ax.text(xs[3], y, f"+{run.score_3d_50cm_ref_delta_pct:.1f}", fontsize=9.6, color=WIN, weight="bold", ha="right", va="center")
+        ax.text(xs[4], y, f"{run.p95_h_delta_m:.2f} m", fontsize=9.6, color=WIN, weight="bold", ha="right", va="center")
+        y -= 0.095
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
     parser.add_argument("--output", type=Path, default=Path("docs/ppc_rtk_demo5_scorecard.png"))
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=None,
+        help="Optional ppc-coverage-matrix summary JSON to render instead of the embedded current metrics.",
+    )
     args = parser.parse_args()
 
     import matplotlib.pyplot as plt
+
+    runs = load_runs(args.summary_json)
+    positioning_wins = sum(1 for run in runs if run.positioning_delta_pct > 0.0)
+    avg_positioning_delta = average([run.positioning_delta_pct for run in runs])
+    avg_score_delta = average([run.score_3d_50cm_ref_delta_pct for run in runs])
+    avg_p95_delta = average([run.p95_h_delta_m for run in runs])
+    min_positioning_delta = min(run.positioning_delta_pct for run in runs)
 
     fig = plt.figure(figsize=(14, 7.5), dpi=100, facecolor=BG)
     ax = fig.add_axes([0, 0, 1, 1])
@@ -186,13 +220,13 @@ def main() -> int:
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
 
-    ax.text(0.05, 0.925, "PPC RTK benchmark", fontsize=22, color=MUTED, weight="bold")
-    ax.text(0.05, 0.845, "gnssplusplus vs RTKLIB demo5", fontsize=38, color=TEXT, weight="bold")
+    ax.text(0.05, 0.925, "PPC RTK coverage profile", fontsize=21, color=MUTED, weight="bold")
+    ax.text(0.05, 0.845, "gnssplusplus vs RTKLIB demo5", fontsize=37, color=TEXT, weight="bold")
     ax.text(
         0.05,
         0.785,
-        "Same public rover/base/nav observations. Precision and coverage profiles are reported separately.",
-        fontsize=14,
+        "Same public rover/base/nav observations. Positioning rate is reported separately from Fix rate.",
+        fontsize=13.5,
         color=MUTED,
     )
 
@@ -200,45 +234,59 @@ def main() -> int:
         ax,
         0.05,
         0.625,
-        0.27,
+        0.205,
         0.105,
-        "Tokyo average fix-rate lead",
-        f"+{tokyo_average_rate_delta():.1f} pp",
-        "3 urban vehicle runs",
+        "Positioning wins",
+        f"{positioning_wins}/{len(runs)}",
+        f"minimum lead +{min_positioning_delta:.1f} pp",
+        value_color=WIN,
     )
     draw_summary_card(
         ax,
-        0.365,
+        0.282,
         0.625,
-        0.27,
+        0.205,
         0.105,
-        "Nagoya average fix-rate lead",
-        f"+{nagoya_average_rate_delta():.1f} pp",
-        "same low-cost preset",
+        "Average positioning delta",
+        f"+{avg_positioning_delta:.1f} pp",
+        "valid fallback epochs retained",
+        value_color=WIN,
     )
     draw_summary_card(
         ax,
-        0.68,
+        0.514,
         0.625,
-        0.27,
+        0.205,
         0.105,
-        "All-run coverage lead",
-        "+16.5 pp",
-        "min +2.9 pp across 6 runs",
+        "Average 3D50/ref delta",
+        f"+{avg_score_delta:.1f} pp",
+        "PPC public score proxy",
+        value_color=WIN,
+    )
+    draw_summary_card(
+        ax,
+        0.746,
+        0.625,
+        0.205,
+        0.105,
+        "Average P95 H delta",
+        f"{avg_p95_delta:.2f} m",
+        "negative means tighter error tail",
+        value_color=WIN,
     )
 
-    left = fig.add_axes([0.065, 0.11, 0.53, 0.42], facecolor=PANEL)
-    draw_tokyo_bars(left)
+    bars_ax = fig.add_axes([0.065, 0.115, 0.555, 0.405], facecolor=PANEL)
+    draw_positioning_bars(bars_ax, runs)
 
-    add_panel(ax, 0.625, 0.11, 0.325, 0.42, radius=0.020)
-    table_ax = fig.add_axes([0.650, 0.145, 0.280, 0.35], facecolor=PANEL)
-    draw_nagoya_table(table_ax)
+    add_panel(ax, 0.655, 0.105, 0.295, 0.435)
+    table_ax = fig.add_axes([0.675, 0.135, 0.255, 0.375], facecolor=PANEL)
+    draw_delta_table(table_ax, runs)
 
     ax.text(
         0.05,
-        0.04,
-        "Fix-rate bars use the precision profile; coverage profile keeps valid SPP/float fallbacks and beats RTKLIB positioning on all 6 PPC runs.",
-        fontsize=10.5,
+        0.044,
+        "Profile: low-cost RTK, no AR/post kinematic output filters, default drift/SPP/bridge-tail guards, match tolerance 0.25 s.",
+        fontsize=10.3,
         color=MUTED,
     )
 

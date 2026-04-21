@@ -16,6 +16,8 @@ The coverage profile additionally uses `--no-arfilter --no-kinematic-post-filter
 plus the default low-speed non-FIX drift guard, SPP height-step guard, and
 FLOAT bridge-tail guard.
 
+![PPC RTK coverage scorecard](ppc_rtk_demo5_scorecard.png)
+
 ## Public Moving-RTK Benchmark Matrix
 
 The public-data strategy is intentionally multi-dataset. A single UrbanNav
@@ -36,7 +38,7 @@ python3 apps/gnss.py public-rtk-benchmarks --format markdown
 | [Ford Highway Driving RTK](https://arxiv.org/abs/2010.01774) | candidate | large-scale highway coverage | INS coupled with survey-grade GNSS receivers | production automotive GNSS over long highway drives | needs Ford log normalizer and highway-specific thresholds | excellent scale, but not an urban canyon RTK receiver comparison |
 | [Oxford RobotCar RTK ground truth](https://arxiv.org/abs/2002.10152) | candidate | long-term localization coverage | post-processed raw GPS/IMU/static-base centimeter ground truth | RobotCar traversals with reference localization products | needs RobotCar reference mapper and observation availability check | strong localization benchmark, but indirect for commercial RTK receiver claims |
 
-## PPC Tokyo (kinematic, low-cost preset, no Phase 2 flags)
+## PPC Tokyo Precision Profile
 
 PPC receiver hardware provenance is emitted in every `ppc-demo` summary under
 `receiver_observation_provenance`. Tokyo uses a Septentrio mosaic-X5 rover with
@@ -52,6 +54,9 @@ about matching a proprietary receiver RTK engine.
 | run1 | **3572 / 81.26%**       | 2418 / 30.52%     | **0.037** vs 1.567 (42×) | **1.259** vs 36.703 (29×) |
 | run2 | **4674 / 80.12%**       | 2127 / 27.58%     | **0.016** vs 0.835 (52×) | **0.313** vs 42.624 (136×) |
 | run3 | **7516 / 86.84%**       | 5778 / 40.55%     | **0.012** vs 0.666 (56×) | **0.137** vs 24.521 (179×) |
+
+This fixed-output table is the precision-oriented view. The coverage table
+below is the sign-off view for no-solution gaps and fallback-positioned epochs.
 
 ## PPC Coverage Profile
 

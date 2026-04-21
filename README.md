@@ -77,9 +77,16 @@ including the rover/base receiver and antenna model. `receiver_engine_solution_a
 is intentionally `false` for PPC because the benchmark target is the open
 observation solve against reference truth.
 
-![PPC RTK benchmark scorecard](docs/ppc_rtk_demo5_scorecard.png)
+The checked-in scorecard is generated from `gnss ppc-coverage-matrix` output,
+so it shows Positioning-rate wins first and keeps Fix-rate, 3D<=50cm/reference,
+and P95 horizontal-error deltas visible in the same view.
 
-### PPC Tokyo (kinematic, low-cost preset, no Phase 2 flags)
+![PPC RTK coverage scorecard](docs/ppc_rtk_demo5_scorecard.png)
+
+### PPC Tokyo precision profile (kinematic, low-cost preset, no Phase 2 flags)
+
+This fixed-output table is the precision-oriented view. The coverage table
+below is the sign-off view for no-solution gaps and fallback-positioned epochs.
 
 | Run  | gnssplusplus Fix / rate | RTKLIB Fix / rate | Hmed (m)              | Vp95 (m)               |
 |------|------------------------:|------------------:|:---------------------:|:----------------------:|

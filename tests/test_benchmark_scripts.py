@@ -61,6 +61,42 @@ class ScorecardHelpersTest(unittest.TestCase):
         self.assertEqual(scorecard.improvement_text(1.0, 0.0), "n/a")
         self.assertEqual(scorecard.improvement_text(1.0, 4.0), "75%")
 
+    def test_ppc_scorecard_loads_coverage_matrix_summary(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_scorecard_summary_") as temp_dir:
+            summary_json = Path(temp_dir) / "summary.json"
+            summary_json.write_text(
+                json.dumps(
+                    {
+                        "runs": [
+                            {
+                                "key": "tokyo_run1",
+                                "metrics": {
+                                    "positioning_rate_pct": 86.2,
+                                    "fix_rate_pct": 48.6,
+                                },
+                                "rtklib": {
+                                    "positioning_rate_pct": 66.3,
+                                    "fix_rate_pct": 30.5,
+                                },
+                                "delta_vs_rtklib": {
+                                    "positioning_rate_pct": 19.9,
+                                    "ppc_score_3d_50cm_ref_pct": 35.6,
+                                    "p95_h_m": -6.97,
+                                },
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            runs = ppc_rtk_scorecard.runs_from_summary(summary_json)
+
+            self.assertEqual(len(runs), 1)
+            self.assertEqual(runs[0].label, "Tokyo r1")
+            self.assertEqual(runs[0].positioning_delta_pct, 19.9)
+            self.assertEqual(runs[0].lib_fix_pct - runs[0].rtklib_fix_pct, 18.1)
+
 
 class ClasCompactHelpersTest(unittest.TestCase):
     def test_expand_compact_ssr_text_merges_high_rate_clock_and_system_tokens(self) -> None:
