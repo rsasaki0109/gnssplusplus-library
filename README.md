@@ -564,7 +564,10 @@ python3 scripts/update_ppc_coverage_readme.py \
 
 The PPC summary records `receiver_observation_provenance` for the bundled
 survey-grade rover/base RINEX streams. Proprietary receiver-engine solutions are
-not assumed to be part of the PPC benchmark target.
+not assumed to be part of the PPC benchmark target. RTK ionosphere sweeps can be
+run reproducibly through `ppc-demo`, `ppc-rtk-signoff`, or
+`ppc-coverage-matrix` with `--iono auto|off|iflc|est`; PPC summaries record the
+requested value as `rtk_iono`.
 
 Dataset source: [taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset)
 

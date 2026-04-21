@@ -155,6 +155,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional RTK tuning preset passed through to gnss solve when --solver rtk.",
     )
+    parser.add_argument(
+        "--iono",
+        choices=("auto", "off", "iflc", "est"),
+        default=None,
+        help="Optional RTK ionosphere option passed through to gnss solve when --solver rtk.",
+    )
     parser.add_argument("--arfilter", dest="arfilter", action="store_true", help="Enable AR filter for RTK.")
     parser.add_argument("--no-arfilter", dest="arfilter", action="store_false", help="Disable AR filter for RTK.")
     parser.set_defaults(arfilter=None)
@@ -762,6 +768,8 @@ def run_solver(
         ]
         if args.preset is not None:
             command.extend(["--preset", args.preset])
+        if getattr(args, "iono", None) is not None:
+            command.extend(["--iono", args.iono])
         if args.arfilter is True:
             command.append("--arfilter")
         elif args.arfilter is False:
@@ -897,6 +905,7 @@ def build_summary_payload(
         "nav": str(nav),
         "reference_csv": str(reference_csv),
         "receiver_observation_provenance": ppc_receiver_observation_provenance(args._dataset_city),
+        "rtk_iono": getattr(args, "iono", None) if args.solver == "rtk" else None,
         "rtk_output_profile": "coverage" if getattr(args, "no_kinematic_post_filter", False) else "precision",
         "kinematic_post_filter_enabled": not getattr(args, "no_kinematic_post_filter", False),
         "nonfix_drift_guard_enabled": args.solver == "rtk" and not getattr(args, "no_nonfix_drift_guard", False),

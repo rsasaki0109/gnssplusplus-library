@@ -30,6 +30,8 @@ rtklib_bin = "/opt/rtklib/bin/rnx2rtkp"
 # commercial_preset = "survey"
 # commercial_matched_csv = "output/ppc_tokyo_odaiba_trimble_net_r9_matches.csv"
 preset = "low-cost"
+# Optional RTK ionosphere sweep mode: "auto", "off", "iflc", or "est".
+# iono = "iflc"
 arfilter = true
 arfilter_margin = 0.35
 min_hold_count = 8

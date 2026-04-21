@@ -109,6 +109,9 @@ be designed from bounded segment evidence instead of status-only ratios.
 Add `--official-segments-csv` when tuning PPC official score directly; it writes
 one row per reference distance segment with gnssplusplus and RTKLIB score state,
 3D error, status, and score-delta distance.
+Use `--iono auto|off|iflc|est` on `ppc-demo`, `ppc-rtk-signoff`, or
+`ppc-coverage-matrix` when sweeping RTK ionosphere handling; the PPC summary
+records the requested mode as `rtk_iono`.
 
 `gnss smartloc-adapter` widens the public matrix beyond UrbanNav by exporting
 smartLoc `NAV-POSLLH.csv` into a `reference.csv` plus a normalized u-blox

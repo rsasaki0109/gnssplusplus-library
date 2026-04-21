@@ -75,6 +75,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
     parser.add_argument("--preset", choices=("survey", "low-cost", "moving-base"), default="low-cost")
     parser.add_argument(
+        "--iono",
+        choices=("auto", "off", "iflc", "est"),
+        default=None,
+        help="Optional RTK ionosphere option passed to each ppc-demo run.",
+    )
+    parser.add_argument(
         "--rtklib-root",
         type=Path,
         default=None,
@@ -152,6 +158,8 @@ def build_ppc_demo_command(
         "--no-arfilter",
         "--no-kinematic-post-filter",
     ]
+    if getattr(args, "iono", None) is not None:
+        command.extend(["--iono", args.iono])
     if args.use_existing_solutions:
         command.append("--use-existing-solution")
     if args.no_float_bridge_tail_guard:
@@ -288,6 +296,7 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_epochs": args.max_epochs,
         "match_tolerance_s": args.match_tolerance_s,
         "preset": args.preset,
+        "iono": getattr(args, "iono", None),
         "coverage_profile": {
             "no_arfilter": True,
             "no_kinematic_post_filter": True,
