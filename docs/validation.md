@@ -85,7 +85,11 @@ reports `positioning_rate_pct` separately from `fix_rate_pct`, so no-solution
 gaps cannot be hidden by a high fixed-solution ratio over only positioned
 epochs. Use `--no-arfilter --no-kinematic-post-filter` when validating the RTK
 coverage profile; that keeps valid SPP/float fallback epochs and records
-`rtk_output_profile: coverage` in the summary JSON.
+`rtk_output_profile: coverage` in the summary JSON. The default low-speed
+non-FIX drift guard remains active in that profile; it rejects bounded
+FLOAT/SPP segments whose surrounding FIX anchors are nearly stationary but whose
+fallback positions drift more than 30 m from the anchor bridge. Use
+`--no-nonfix-drift-guard` only when reproducing the unguarded fallback stream.
 Use `scripts/analyze_ppc_coverage_quality.py` with the PPC solution, RTKLIB
 solution, and `reference.csv` when a coverage run improves Positioning rate but
 regresses P95 horizontal error; the report separates FIXED/FLOAT/SPP quality and

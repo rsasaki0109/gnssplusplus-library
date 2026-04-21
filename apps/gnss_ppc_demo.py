@@ -20,6 +20,12 @@ from gnss_runtime import ensure_input_exists, resolve_gnss_command
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = ROOT_DIR / "scripts"
 GPS_EPOCH = datetime(1980, 1, 6)
+NONFIX_DRIFT_GUARD_DEFAULTS = {
+    "max_anchor_gap_s": 120.0,
+    "max_anchor_speed_mps": 1.0,
+    "max_residual_m": 30.0,
+    "min_segment_epochs": 20,
+}
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -157,6 +163,15 @@ def parse_args() -> argparse.Namespace:
             "the precision-oriented kinematic post-filter."
         ),
     )
+    parser.add_argument(
+        "--no-nonfix-drift-guard",
+        action="store_true",
+        help="Disable the low-speed non-FIX drift guard in gnss solve.",
+    )
+    parser.add_argument("--nonfix-drift-max-anchor-gap", type=float, default=None)
+    parser.add_argument("--nonfix-drift-max-anchor-speed", type=float, default=None)
+    parser.add_argument("--nonfix-drift-max-residual", type=float, default=None)
+    parser.add_argument("--nonfix-drift-min-segment-epochs", type=int, default=None)
     parser.add_argument(
         "--rtklib-bin",
         type=Path,
@@ -298,6 +313,56 @@ def run_command(command: list[str]) -> None:
 
 def rounded(value: float) -> float:
     return round(value, 6)
+
+
+def nonfix_drift_guard_value(
+    args: argparse.Namespace,
+    attr_name: str,
+    default_name: str,
+) -> float | int:
+    value = getattr(args, attr_name, None)
+    if value is None:
+        return NONFIX_DRIFT_GUARD_DEFAULTS[default_name]
+    return value
+
+
+def nonfix_drift_guard_config(args: argparse.Namespace) -> dict[str, float | int]:
+    return {
+        "max_anchor_gap_s": rounded(
+            float(
+                nonfix_drift_guard_value(
+                    args,
+                    "nonfix_drift_max_anchor_gap",
+                    "max_anchor_gap_s",
+                )
+            )
+        ),
+        "max_anchor_speed_mps": rounded(
+            float(
+                nonfix_drift_guard_value(
+                    args,
+                    "nonfix_drift_max_anchor_speed",
+                    "max_anchor_speed_mps",
+                )
+            )
+        ),
+        "max_residual_m": rounded(
+            float(
+                nonfix_drift_guard_value(
+                    args,
+                    "nonfix_drift_max_residual",
+                    "max_residual_m",
+                )
+            )
+        ),
+        "min_segment_epochs": int(
+            nonfix_drift_guard_value(
+                args,
+                "nonfix_drift_min_segment_epochs",
+                "min_segment_epochs",
+            )
+        ),
+    }
 
 
 def normalize_header(name: str) -> str:
@@ -578,6 +643,16 @@ def run_solver(
             command.extend(["--hold-ratio-threshold", str(args.hold_ratio_threshold)])
         if getattr(args, "no_kinematic_post_filter", False):
             command.append("--no-kinematic-post-filter")
+        if getattr(args, "no_nonfix_drift_guard", False):
+            command.append("--no-nonfix-drift-guard")
+        if getattr(args, "nonfix_drift_max_anchor_gap", None) is not None:
+            command.extend(["--nonfix-drift-max-anchor-gap", str(args.nonfix_drift_max_anchor_gap)])
+        if getattr(args, "nonfix_drift_max_anchor_speed", None) is not None:
+            command.extend(["--nonfix-drift-max-anchor-speed", str(args.nonfix_drift_max_anchor_speed)])
+        if getattr(args, "nonfix_drift_max_residual", None) is not None:
+            command.extend(["--nonfix-drift-max-residual", str(args.nonfix_drift_max_residual)])
+        if getattr(args, "nonfix_drift_min_segment_epochs", None) is not None:
+            command.extend(["--nonfix-drift-min-segment-epochs", str(args.nonfix_drift_min_segment_epochs)])
     else:
         command = [
             *gnss_command,
@@ -648,6 +723,8 @@ def build_summary_payload(
         "receiver_observation_provenance": ppc_receiver_observation_provenance(args._dataset_city),
         "rtk_output_profile": "coverage" if getattr(args, "no_kinematic_post_filter", False) else "precision",
         "kinematic_post_filter_enabled": not getattr(args, "no_kinematic_post_filter", False),
+        "nonfix_drift_guard_enabled": args.solver == "rtk" and not getattr(args, "no_nonfix_drift_guard", False),
+        "nonfix_drift_guard": nonfix_drift_guard_config(args) if args.solver == "rtk" else None,
         "solution_pos": str(out),
         "summary_json": str(summary_json),
         "generated_solution": not args.use_existing_solution,

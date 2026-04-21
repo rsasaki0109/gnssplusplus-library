@@ -3,8 +3,24 @@
 #include <libgnss++/algorithms/rtk_validation.hpp>
 
 #include <limits>
+#include <vector>
 
 using namespace libgnss;
+
+namespace {
+
+PositionSolution makeValidationSolution(double tow,
+                                        SolutionStatus status,
+                                        const Eigen::Vector3d& position) {
+    PositionSolution solution;
+    solution.time = GNSSTime(2300, tow);
+    solution.status = status;
+    solution.position_ecef = position;
+    solution.num_satellites = 8;
+    return solution;
+}
+
+}  // namespace
 
 TEST(RTKValidationTest, NormalizesNonFiniteOrShortDt) {
     EXPECT_DOUBLE_EQ(rtk_validation::normalizedDt(std::numeric_limits<double>::quiet_NaN()), 1.0);
@@ -42,4 +58,66 @@ TEST(RTKValidationTest, HoldAttemptRequiresStableHistoryAndHeldIntegers) {
     EXPECT_FALSE(rtk_validation::canAttemptHoldFix(5, 5, false, true));
     EXPECT_FALSE(rtk_validation::canAttemptHoldFix(5, 5, true, false));
     EXPECT_TRUE(rtk_validation::canAttemptHoldFix(5, 5, true, true));
+}
+
+TEST(RTKValidationTest, NonFixedDriftGuardRejectsLowSpeedBoundedOutliers) {
+    std::vector<PositionSolution> solutions = {
+        makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),
+        makeValidationSolution(1.0, SolutionStatus::FLOAT, Eigen::Vector3d(0.5, 0.0, 0.0)),
+        makeValidationSolution(2.0, SolutionStatus::FLOAT, Eigen::Vector3d(1.0, 40.0, 0.0)),
+        makeValidationSolution(3.0, SolutionStatus::SPP, Eigen::Vector3d(1.5, 0.0, 0.0)),
+        makeValidationSolution(4.0, SolutionStatus::FIXED, Eigen::Vector3d(2.0, 0.0, 0.0)),
+    };
+
+    rtk_validation::NonFixedDriftGuardConfig config;
+    config.max_anchor_gap_s = 10.0;
+    config.max_anchor_speed_mps = 1.0;
+    config.max_residual_m = 10.0;
+    config.min_segment_epochs = 2;
+
+    const auto result = rtk_validation::filterNonFixedStationaryDrift(solutions, config);
+
+    EXPECT_EQ(result.inspected_segments, 1);
+    EXPECT_EQ(result.rejected_segments, 1);
+    EXPECT_EQ(result.rejected_epochs, 1);
+    ASSERT_EQ(result.solutions.size(), 4U);
+    EXPECT_DOUBLE_EQ(result.solutions[0].time.tow, 0.0);
+    EXPECT_DOUBLE_EQ(result.solutions[1].time.tow, 1.0);
+    EXPECT_DOUBLE_EQ(result.solutions[2].time.tow, 3.0);
+    EXPECT_DOUBLE_EQ(result.solutions[3].time.tow, 4.0);
+}
+
+TEST(RTKValidationTest, NonFixedDriftGuardIgnoresMovingOrShortSegments) {
+    rtk_validation::NonFixedDriftGuardConfig config;
+    config.max_anchor_gap_s = 10.0;
+    config.max_anchor_speed_mps = 1.0;
+    config.max_residual_m = 10.0;
+    config.min_segment_epochs = 3;
+
+    std::vector<PositionSolution> moving_segment = {
+        makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),
+        makeValidationSolution(1.0, SolutionStatus::FLOAT, Eigen::Vector3d(25.0, 40.0, 0.0)),
+        makeValidationSolution(2.0, SolutionStatus::FLOAT, Eigen::Vector3d(50.0, 40.0, 0.0)),
+        makeValidationSolution(3.0, SolutionStatus::FLOAT, Eigen::Vector3d(75.0, 40.0, 0.0)),
+        makeValidationSolution(4.0, SolutionStatus::FIXED, Eigen::Vector3d(100.0, 0.0, 0.0)),
+    };
+
+    const auto moving_result =
+        rtk_validation::filterNonFixedStationaryDrift(moving_segment, config);
+    EXPECT_EQ(moving_result.inspected_segments, 0);
+    EXPECT_EQ(moving_result.rejected_epochs, 0);
+    EXPECT_EQ(moving_result.solutions.size(), moving_segment.size());
+
+    std::vector<PositionSolution> short_segment = {
+        makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),
+        makeValidationSolution(1.0, SolutionStatus::FLOAT, Eigen::Vector3d(0.5, 40.0, 0.0)),
+        makeValidationSolution(2.0, SolutionStatus::FLOAT, Eigen::Vector3d(1.0, 40.0, 0.0)),
+        makeValidationSolution(3.0, SolutionStatus::FIXED, Eigen::Vector3d(1.5, 0.0, 0.0)),
+    };
+
+    const auto short_result =
+        rtk_validation::filterNonFixedStationaryDrift(short_segment, config);
+    EXPECT_EQ(short_result.inspected_segments, 0);
+    EXPECT_EQ(short_result.rejected_epochs, 0);
+    EXPECT_EQ(short_result.solutions.size(), short_segment.size());
 }

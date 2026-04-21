@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <libgnss++/algorithms/rtk.hpp>
+#include <libgnss++/algorithms/rtk_validation.hpp>
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -24,6 +25,10 @@ constexpr double kExactTimeToleranceSeconds = 1e-6;
 constexpr double kDefaultFloatVsSppGuardMeters = 30.0;
 constexpr double kDefaultNonFixedJumpGuardMeters = 8.0;
 constexpr double kDefaultVerticalStepGuardMeters = 1.0;
+constexpr double kDefaultNonFixDriftGuardMaxAnchorGapSeconds = 120.0;
+constexpr double kDefaultNonFixDriftGuardMaxAnchorSpeedMps = 1.0;
+constexpr double kDefaultNonFixDriftGuardMaxResidualMeters = 30.0;
+constexpr int kDefaultNonFixDriftGuardMinSegmentEpochs = 20;
 constexpr int kReacquireFixedCount = 5;
 
 enum class ModeChoice {
@@ -85,6 +90,11 @@ struct SolveConfig {
     int skip_epochs = 0;
     int max_epochs = -1;
     bool enable_kinematic_post_filter = true;
+    bool enable_nonfix_drift_guard = true;
+    double nonfix_drift_guard_max_anchor_gap_s = kDefaultNonFixDriftGuardMaxAnchorGapSeconds;
+    double nonfix_drift_guard_max_anchor_speed_mps = kDefaultNonFixDriftGuardMaxAnchorSpeedMps;
+    double nonfix_drift_guard_max_residual_m = kDefaultNonFixDriftGuardMaxResidualMeters;
+    int nonfix_drift_guard_min_segment_epochs = kDefaultNonFixDriftGuardMinSegmentEpochs;
     RTKTuningPreset preset = RTKTuningPreset::NONE;
     bool ratio_threshold_set = false;
     bool ar_filter_margin_set = false;
@@ -419,6 +429,16 @@ void printUsage(const char* program_name) {
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
         << "                             (default: 0, disabled; e.g. 10 for aggressive urban reconvergence)\n"
+        << "  --no-nonfix-drift-guard   Disable low-speed non-FIX segment drift rejection\n"
+        << "  --nonfix-drift-max-anchor-gap <s>\n"
+        << "                             Max FIX-to-FIX gap for non-FIX drift guard (default: 120)\n"
+        << "  --nonfix-drift-max-anchor-speed <m/s>\n"
+        << "                             Max FIX-anchor speed treated as stationary (default: 1.0)\n"
+        << "  --nonfix-drift-max-residual <m>\n"
+        << "                             Reject non-FIX epochs farther than this from FIX-anchor bridge\n"
+        << "                             in low-speed segments (default: 30)\n"
+        << "  --nonfix-drift-min-segment-epochs <n>\n"
+        << "                             Minimum bounded non-FIX segment length to inspect (default: 20)\n"
         << "  --max-baseline-m <v>       Max baseline length in meters (default: 20000)\n"
         << "  --base-ecef <x> <y> <z>    Override base ECEF position in meters\n"
         << "  --skip-epochs <n>          Skip the first n rover epochs before solving\n"
@@ -591,6 +611,16 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.wide_lane_acceptance_threshold = std::stod(argv[++i]);
         } else if (arg == "--max-consec-float-reset" && i + 1 < argc) {
             config.max_consecutive_float_for_reset = std::stoi(argv[++i]);
+        } else if (arg == "--no-nonfix-drift-guard") {
+            config.enable_nonfix_drift_guard = false;
+        } else if (arg == "--nonfix-drift-max-anchor-gap" && i + 1 < argc) {
+            config.nonfix_drift_guard_max_anchor_gap_s = std::stod(argv[++i]);
+        } else if (arg == "--nonfix-drift-max-anchor-speed" && i + 1 < argc) {
+            config.nonfix_drift_guard_max_anchor_speed_mps = std::stod(argv[++i]);
+        } else if (arg == "--nonfix-drift-max-residual" && i + 1 < argc) {
+            config.nonfix_drift_guard_max_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--nonfix-drift-min-segment-epochs" && i + 1 < argc) {
+            config.nonfix_drift_guard_min_segment_epochs = std::stoi(argv[++i]);
         } else if (arg == "--max-baseline-m" && i + 1 < argc) {
             config.max_baseline_length_m = std::stod(argv[++i]);
         } else if (arg == "--base-ecef" && i + 3 < argc) {
@@ -640,6 +670,18 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.max_baseline_length_m <= 0.0) {
         argumentError("--max-baseline-m must be > 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_max_anchor_gap_s <= 0.0) {
+        argumentError("--nonfix-drift-max-anchor-gap must be > 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_max_anchor_speed_mps < 0.0) {
+        argumentError("--nonfix-drift-max-anchor-speed must be >= 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_max_residual_m <= 0.0) {
+        argumentError("--nonfix-drift-max-residual must be > 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_min_segment_epochs < 1) {
+        argumentError("--nonfix-drift-min-segment-epochs must be >= 1", argv[0]);
     }
     if (config.skip_epochs < 0) {
         argumentError("--skip-epochs must be >= 0", argv[0]);
@@ -903,6 +945,9 @@ int main(int argc, char* argv[]) {
         int exact_base_epochs = 0;
         int interpolated_base_epochs = 0;
         int skipped_rover_epochs = 0;
+        int nonfix_drift_guard_inspected_segments = 0;
+        int nonfix_drift_guard_rejected_segments = 0;
+        int nonfix_drift_guard_rejected_epochs = 0;
         libgnss::PositionSolution last_fixed_output;
         bool have_last_fixed_output = false;
 
@@ -1062,6 +1107,23 @@ int main(int argc, char* argv[]) {
             processed_rover_epochs++;
         }
 
+        if (config.enable_nonfix_drift_guard &&
+            rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
+            !solution.isEmpty()) {
+            libgnss::rtk_validation::NonFixedDriftGuardConfig guard_config;
+            guard_config.max_anchor_gap_s = config.nonfix_drift_guard_max_anchor_gap_s;
+            guard_config.max_anchor_speed_mps = config.nonfix_drift_guard_max_anchor_speed_mps;
+            guard_config.max_residual_m = config.nonfix_drift_guard_max_residual_m;
+            guard_config.min_segment_epochs = config.nonfix_drift_guard_min_segment_epochs;
+            auto guard_result = libgnss::rtk_validation::filterNonFixedStationaryDrift(
+                solution.solutions,
+                guard_config);
+            nonfix_drift_guard_inspected_segments = guard_result.inspected_segments;
+            nonfix_drift_guard_rejected_segments = guard_result.rejected_segments;
+            nonfix_drift_guard_rejected_epochs = guard_result.rejected_epochs;
+            solution.solutions = std::move(guard_result.solutions);
+        }
+
         if (config.enable_kinematic_post_filter &&
             rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
             !solution.isEmpty()) {
@@ -1155,6 +1217,14 @@ int main(int argc, char* argv[]) {
         std::cout << "  exact base epochs: " << exact_base_epochs << std::endl;
         std::cout << "  interpolated base epochs: " << interpolated_base_epochs << std::endl;
         std::cout << "  skipped rover epochs: " << skipped_rover_epochs << std::endl;
+        if (rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC) {
+            std::cout << "  non-FIX drift guard: "
+                      << (config.enable_nonfix_drift_guard ? "enabled" : "disabled")
+                      << " inspected_segments=" << nonfix_drift_guard_inspected_segments
+                      << " rejected_segments=" << nonfix_drift_guard_rejected_segments
+                      << " rejected_epochs=" << nonfix_drift_guard_rejected_epochs
+                      << std::endl;
+        }
         if (rtk_config.position_mode == libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
             rover_header.approximate_position.norm() > 0.0 && mean_count > 0) {
             std::cout << "  header vs mean diff: "

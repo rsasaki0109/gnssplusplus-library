@@ -2328,6 +2328,11 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["solver"], "rtk")
             self.assertEqual(payload["rtk_output_profile"], "coverage")
             self.assertFalse(payload["kinematic_post_filter_enabled"])
+            self.assertTrue(payload["nonfix_drift_guard_enabled"])
+            self.assertEqual(payload["nonfix_drift_guard"]["max_anchor_gap_s"], 120.0)
+            self.assertEqual(payload["nonfix_drift_guard"]["max_anchor_speed_mps"], 1.0)
+            self.assertEqual(payload["nonfix_drift_guard"]["max_residual_m"], 30.0)
+            self.assertEqual(payload["nonfix_drift_guard"]["min_segment_epochs"], 20)
             provenance = payload["receiver_observation_provenance"]
             self.assertEqual(provenance["vehicle_receiver"], "Septentrio mosaic-X5")
             self.assertEqual(provenance["vehicle_antenna"], "Trimble AT1675")
