@@ -233,3 +233,58 @@ TEST(RTKValidationTest, FloatBridgeTailGuardUsesHorizontalAnchorSpeed) {
     EXPECT_EQ(result.rejected_epochs, 0);
     EXPECT_EQ(result.solutions.size(), solutions.size());
 }
+
+TEST(RTKValidationTest, FixedBridgeBurstGuardRejectsShortBoundedFixedOutliers) {
+    std::vector<PositionSolution> solutions = {
+        makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),
+        makeValidationSolution(3.0, SolutionStatus::FIXED, Eigen::Vector3d(30.0, 40.0, 0.0)),
+        makeValidationSolution(3.2, SolutionStatus::FIXED, Eigen::Vector3d(32.0, 42.0, 0.0)),
+        makeValidationSolution(6.0, SolutionStatus::FIXED, Eigen::Vector3d(60.0, 0.0, 0.0)),
+    };
+
+    rtk_validation::FixedBridgeBurstGuardConfig config;
+    config.max_anchor_gap_s = 10.0;
+    config.min_boundary_gap_s = 1.0;
+    config.max_residual_m = 10.0;
+    config.max_segment_epochs = 4;
+
+    const auto result = rtk_validation::filterFixedBridgeBursts(solutions, config);
+
+    EXPECT_EQ(result.inspected_segments, 1);
+    EXPECT_EQ(result.rejected_segments, 1);
+    EXPECT_EQ(result.rejected_epochs, 2);
+    ASSERT_EQ(result.solutions.size(), 2U);
+    EXPECT_DOUBLE_EQ(result.solutions[0].time.tow, 0.0);
+    EXPECT_DOUBLE_EQ(result.solutions[1].time.tow, 6.0);
+}
+
+TEST(RTKValidationTest, FixedBridgeBurstGuardKeepsLongOrContinuousFixedRuns) {
+    rtk_validation::FixedBridgeBurstGuardConfig config;
+    config.max_anchor_gap_s = 10.0;
+    config.min_boundary_gap_s = 1.0;
+    config.max_residual_m = 10.0;
+    config.max_segment_epochs = 2;
+
+    std::vector<PositionSolution> continuous = {
+        makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),
+        makeValidationSolution(0.2, SolutionStatus::FIXED, Eigen::Vector3d(0.2, 20.0, 0.0)),
+        makeValidationSolution(0.4, SolutionStatus::FIXED, Eigen::Vector3d(0.4, 20.0, 0.0)),
+        makeValidationSolution(0.6, SolutionStatus::FIXED, Eigen::Vector3d(0.6, 0.0, 0.0)),
+    };
+    const auto continuous_result = rtk_validation::filterFixedBridgeBursts(continuous, config);
+    EXPECT_EQ(continuous_result.inspected_segments, 0);
+    EXPECT_EQ(continuous_result.rejected_epochs, 0);
+    EXPECT_EQ(continuous_result.solutions.size(), continuous.size());
+
+    std::vector<PositionSolution> long_segment = {
+        makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),
+        makeValidationSolution(2.0, SolutionStatus::FIXED, Eigen::Vector3d(20.0, 20.0, 0.0)),
+        makeValidationSolution(2.2, SolutionStatus::FIXED, Eigen::Vector3d(22.0, 20.0, 0.0)),
+        makeValidationSolution(2.4, SolutionStatus::FIXED, Eigen::Vector3d(24.0, 20.0, 0.0)),
+        makeValidationSolution(5.0, SolutionStatus::FIXED, Eigen::Vector3d(50.0, 0.0, 0.0)),
+    };
+    const auto long_result = rtk_validation::filterFixedBridgeBursts(long_segment, config);
+    EXPECT_EQ(long_result.inspected_segments, 0);
+    EXPECT_EQ(long_result.rejected_epochs, 0);
+    EXPECT_EQ(long_result.solutions.size(), long_segment.size());
+}

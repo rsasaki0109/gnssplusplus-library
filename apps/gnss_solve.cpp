@@ -36,6 +36,10 @@ constexpr double kDefaultFloatBridgeTailGuardMinAnchorSpeedMps = 0.4;
 constexpr double kDefaultFloatBridgeTailGuardMaxAnchorSpeedMps = 1.0;
 constexpr double kDefaultFloatBridgeTailGuardMaxResidualMeters = 12.0;
 constexpr int kDefaultFloatBridgeTailGuardMinSegmentEpochs = 20;
+constexpr double kDefaultFixedBridgeBurstGuardMaxAnchorGapSeconds = 30.0;
+constexpr double kDefaultFixedBridgeBurstGuardMinBoundaryGapSeconds = 1.0;
+constexpr double kDefaultFixedBridgeBurstGuardMaxResidualMeters = 20.0;
+constexpr int kDefaultFixedBridgeBurstGuardMaxSegmentEpochs = 12;
 constexpr int kReacquireFixedCount = 5;
 
 enum class ModeChoice {
@@ -111,6 +115,11 @@ struct SolveConfig {
     double float_bridge_tail_guard_max_anchor_speed_mps = kDefaultFloatBridgeTailGuardMaxAnchorSpeedMps;
     double float_bridge_tail_guard_max_residual_m = kDefaultFloatBridgeTailGuardMaxResidualMeters;
     int float_bridge_tail_guard_min_segment_epochs = kDefaultFloatBridgeTailGuardMinSegmentEpochs;
+    bool enable_fixed_bridge_burst_guard = false;
+    double fixed_bridge_burst_guard_max_anchor_gap_s = kDefaultFixedBridgeBurstGuardMaxAnchorGapSeconds;
+    double fixed_bridge_burst_guard_min_boundary_gap_s = kDefaultFixedBridgeBurstGuardMinBoundaryGapSeconds;
+    double fixed_bridge_burst_guard_max_residual_m = kDefaultFixedBridgeBurstGuardMaxResidualMeters;
+    int fixed_bridge_burst_guard_max_segment_epochs = kDefaultFixedBridgeBurstGuardMaxSegmentEpochs;
     RTKTuningPreset preset = RTKTuningPreset::NONE;
     bool ratio_threshold_set = false;
     bool ar_filter_margin_set = false;
@@ -479,6 +488,18 @@ void printUsage(const char* program_name) {
         << "                             in slow bounded segments (default: 12)\n"
         << "  --float-bridge-tail-min-segment-epochs <n>\n"
         << "                             Minimum bounded FLOAT-tail segment length to inspect (default: 20)\n"
+        << "  --fixed-bridge-burst-guard\n"
+        << "                             Enable short FIX burst bridge-residual rejection (default: off)\n"
+        << "  --no-fixed-bridge-burst-guard\n"
+        << "                             Disable short FIX burst bridge-residual rejection\n"
+        << "  --fixed-bridge-burst-max-anchor-gap <s>\n"
+        << "                             Max FIX-anchor gap for fixed-burst guard (default: 30)\n"
+        << "  --fixed-bridge-burst-min-boundary-gap <s>\n"
+        << "                             Min gap around a short FIX burst (default: 1)\n"
+        << "  --fixed-bridge-burst-max-residual <m>\n"
+        << "                             Reject burst FIX epochs farther than this from FIX bridge (default: 20)\n"
+        << "  --fixed-bridge-burst-max-segment-epochs <n>\n"
+        << "                             Max short FIX segment length to inspect (default: 12)\n"
         << "  --max-baseline-m <v>       Max baseline length in meters (default: 20000)\n"
         << "  --base-ecef <x> <y> <z>    Override base ECEF position in meters\n"
         << "  --skip-epochs <n>          Skip the first n rover epochs before solving\n"
@@ -685,6 +706,18 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.float_bridge_tail_guard_max_residual_m = std::stod(argv[++i]);
         } else if (arg == "--float-bridge-tail-min-segment-epochs" && i + 1 < argc) {
             config.float_bridge_tail_guard_min_segment_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--fixed-bridge-burst-guard") {
+            config.enable_fixed_bridge_burst_guard = true;
+        } else if (arg == "--no-fixed-bridge-burst-guard") {
+            config.enable_fixed_bridge_burst_guard = false;
+        } else if (arg == "--fixed-bridge-burst-max-anchor-gap" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_max_anchor_gap_s = std::stod(argv[++i]);
+        } else if (arg == "--fixed-bridge-burst-min-boundary-gap" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_min_boundary_gap_s = std::stod(argv[++i]);
+        } else if (arg == "--fixed-bridge-burst-max-residual" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_max_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--fixed-bridge-burst-max-segment-epochs" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_max_segment_epochs = std::stoi(argv[++i]);
         } else if (arg == "--max-baseline-m" && i + 1 < argc) {
             config.max_baseline_length_m = std::stod(argv[++i]);
         } else if (arg == "--base-ecef" && i + 3 < argc) {
@@ -777,6 +810,18 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.float_bridge_tail_guard_min_segment_epochs < 1) {
         argumentError("--float-bridge-tail-min-segment-epochs must be >= 1", argv[0]);
+    }
+    if (config.fixed_bridge_burst_guard_max_anchor_gap_s <= 0.0) {
+        argumentError("--fixed-bridge-burst-max-anchor-gap must be > 0", argv[0]);
+    }
+    if (config.fixed_bridge_burst_guard_min_boundary_gap_s < 0.0) {
+        argumentError("--fixed-bridge-burst-min-boundary-gap must be >= 0", argv[0]);
+    }
+    if (config.fixed_bridge_burst_guard_max_residual_m <= 0.0) {
+        argumentError("--fixed-bridge-burst-max-residual must be > 0", argv[0]);
+    }
+    if (config.fixed_bridge_burst_guard_max_segment_epochs < 1) {
+        argumentError("--fixed-bridge-burst-max-segment-epochs must be >= 1", argv[0]);
     }
     if (config.skip_epochs < 0) {
         argumentError("--skip-epochs must be >= 0", argv[0]);
@@ -1049,6 +1094,9 @@ int main(int argc, char* argv[]) {
         int float_bridge_tail_guard_inspected_segments = 0;
         int float_bridge_tail_guard_rejected_segments = 0;
         int float_bridge_tail_guard_rejected_epochs = 0;
+        int fixed_bridge_burst_guard_inspected_segments = 0;
+        int fixed_bridge_burst_guard_rejected_segments = 0;
+        int fixed_bridge_burst_guard_rejected_epochs = 0;
         libgnss::PositionSolution last_fixed_output;
         bool have_last_fixed_output = false;
 
@@ -1259,6 +1307,23 @@ int main(int argc, char* argv[]) {
             solution.solutions = std::move(guard_result.solutions);
         }
 
+        if (config.enable_fixed_bridge_burst_guard &&
+            rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
+            !solution.isEmpty()) {
+            libgnss::rtk_validation::FixedBridgeBurstGuardConfig guard_config;
+            guard_config.max_anchor_gap_s = config.fixed_bridge_burst_guard_max_anchor_gap_s;
+            guard_config.min_boundary_gap_s = config.fixed_bridge_burst_guard_min_boundary_gap_s;
+            guard_config.max_residual_m = config.fixed_bridge_burst_guard_max_residual_m;
+            guard_config.max_segment_epochs = config.fixed_bridge_burst_guard_max_segment_epochs;
+            auto guard_result = libgnss::rtk_validation::filterFixedBridgeBursts(
+                solution.solutions,
+                guard_config);
+            fixed_bridge_burst_guard_inspected_segments = guard_result.inspected_segments;
+            fixed_bridge_burst_guard_rejected_segments = guard_result.rejected_segments;
+            fixed_bridge_burst_guard_rejected_epochs = guard_result.rejected_epochs;
+            solution.solutions = std::move(guard_result.solutions);
+        }
+
         if (config.enable_kinematic_post_filter &&
             rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
             !solution.isEmpty()) {
@@ -1368,6 +1433,12 @@ int main(int argc, char* argv[]) {
                       << " inspected_segments=" << float_bridge_tail_guard_inspected_segments
                       << " rejected_segments=" << float_bridge_tail_guard_rejected_segments
                       << " rejected_epochs=" << float_bridge_tail_guard_rejected_epochs
+                      << std::endl;
+            std::cout << "  fixed bridge-burst guard: "
+                      << (config.enable_fixed_bridge_burst_guard ? "enabled" : "disabled")
+                      << " inspected_segments=" << fixed_bridge_burst_guard_inspected_segments
+                      << " rejected_segments=" << fixed_bridge_burst_guard_rejected_segments
+                      << " rejected_epochs=" << fixed_bridge_burst_guard_rejected_epochs
                       << std::endl;
         }
         if (rtk_config.position_mode == libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&

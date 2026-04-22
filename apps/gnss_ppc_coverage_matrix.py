@@ -42,6 +42,12 @@ GUARD_PATTERNS = {
         r"rejected_segments=(?P<rejected_segments>\d+) "
         r"rejected_epochs=(?P<rejected_epochs>\d+)"
     ),
+    "fixed_bridge_burst_guard": re.compile(
+        r"fixed bridge-burst guard: (?P<state>enabled|disabled) "
+        r"inspected_segments=(?P<inspected_segments>\d+) "
+        r"rejected_segments=(?P<rejected_segments>\d+) "
+        r"rejected_epochs=(?P<rejected_epochs>\d+)"
+    ),
 }
 
 
@@ -128,6 +134,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Pass through to ppc-demo for pre-bridge-tail coverage reproduction.",
     )
+    parser.add_argument("--fixed-bridge-burst-guard", action="store_true")
+    parser.add_argument("--fixed-bridge-burst-max-anchor-gap", type=float, default=None)
+    parser.add_argument("--fixed-bridge-burst-min-boundary-gap", type=float, default=None)
+    parser.add_argument("--fixed-bridge-burst-max-residual", type=float, default=None)
+    parser.add_argument("--fixed-bridge-burst-max-segment-epochs", type=int, default=None)
     parser.add_argument("--require-positioning-delta-min", type=float, default=None)
     parser.add_argument("--require-fix-delta-min", type=float, default=None)
     parser.add_argument("--require-official-score-delta-min", type=float, default=None)
@@ -204,6 +215,28 @@ def build_ppc_demo_command(
         command.append("--use-existing-solution")
     if args.no_float_bridge_tail_guard:
         command.append("--no-float-bridge-tail-guard")
+    if getattr(args, "fixed_bridge_burst_guard", False):
+        command.append("--fixed-bridge-burst-guard")
+    if getattr(args, "fixed_bridge_burst_max_anchor_gap", None) is not None:
+        command.extend([
+            "--fixed-bridge-burst-max-anchor-gap",
+            str(args.fixed_bridge_burst_max_anchor_gap),
+        ])
+    if getattr(args, "fixed_bridge_burst_min_boundary_gap", None) is not None:
+        command.extend([
+            "--fixed-bridge-burst-min-boundary-gap",
+            str(args.fixed_bridge_burst_min_boundary_gap),
+        ])
+    if getattr(args, "fixed_bridge_burst_max_residual", None) is not None:
+        command.extend([
+            "--fixed-bridge-burst-max-residual",
+            str(args.fixed_bridge_burst_max_residual),
+        ])
+    if getattr(args, "fixed_bridge_burst_max_segment_epochs", None) is not None:
+        command.extend([
+            "--fixed-bridge-burst-max-segment-epochs",
+            str(args.fixed_bridge_burst_max_segment_epochs),
+        ])
 
     rtklib_pos = rtklib_pos_for(args, paths, city, run_name)
     if rtklib_pos is not None:
@@ -305,6 +338,8 @@ def aggregate_runs(runs: list[dict[str, object]]) -> dict[str, object]:
 
     bridge_rejected = 0
     bridge_seen = False
+    fixed_burst_rejected = 0
+    fixed_burst_seen = False
     for run in runs:
         guards = run.get("guards")
         if not isinstance(guards, dict):
@@ -313,6 +348,10 @@ def aggregate_runs(runs: list[dict[str, object]]) -> dict[str, object]:
         if isinstance(bridge, dict):
             bridge_seen = True
             bridge_rejected += int(bridge.get("rejected_epochs", 0))
+        fixed_burst = guards.get("fixed_bridge_burst_guard")
+        if isinstance(fixed_burst, dict):
+            fixed_burst_seen = True
+            fixed_burst_rejected += int(fixed_burst.get("rejected_epochs", 0))
 
     return {
         "run_count": len(runs),
@@ -326,6 +365,7 @@ def aggregate_runs(runs: list[dict[str, object]]) -> dict[str, object]:
         "min_official_score_delta_pct": min(delta_values("ppc_official_score_pct"), default=None),
         "max_p95_h_delta_m": max(delta_values("p95_h_m"), default=None),
         "float_bridge_tail_rejected_epochs": bridge_rejected if bridge_seen else None,
+        "fixed_bridge_burst_rejected_epochs": fixed_burst_rejected if fixed_burst_seen else None,
     }
 
 
@@ -342,6 +382,11 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_pos_jump": getattr(args, "max_pos_jump", None),
         "max_pos_jump_min": getattr(args, "max_pos_jump_min", None),
         "max_pos_jump_rate": getattr(args, "max_pos_jump_rate", None),
+        "fixed_bridge_burst_guard": getattr(args, "fixed_bridge_burst_guard", False),
+        "fixed_bridge_burst_max_anchor_gap": getattr(args, "fixed_bridge_burst_max_anchor_gap", None),
+        "fixed_bridge_burst_min_boundary_gap": getattr(args, "fixed_bridge_burst_min_boundary_gap", None),
+        "fixed_bridge_burst_max_residual": getattr(args, "fixed_bridge_burst_max_residual", None),
+        "fixed_bridge_burst_max_segment_epochs": getattr(args, "fixed_bridge_burst_max_segment_epochs", None),
         "coverage_profile": {
             "no_arfilter": True,
             "no_kinematic_post_filter": True,
@@ -361,8 +406,8 @@ def metric(metrics: dict[str, object] | None, name: str) -> float | None:
 
 def render_markdown(payload: dict[str, object]) -> str:
     lines = [
-        "| Run | Positioning | RTKLIB Positioning | Delta | Fix | RTKLIB Fix | PPC official | RTKLIB official | Official delta | P95 H delta | FLOAT bridge-tail rejected |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Run | Positioning | RTKLIB Positioning | Delta | Fix | RTKLIB Fix | PPC official | RTKLIB official | Official delta | P95 H delta | FLOAT bridge-tail rejected | FIX bridge-burst rejected |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for run in payload["runs"]:
         assert isinstance(run, dict)
@@ -373,6 +418,11 @@ def render_markdown(payload: dict[str, object]) -> str:
         bridge_rejected = "n/a"
         if isinstance(guards, dict) and isinstance(guards.get("float_bridge_tail_guard"), dict):
             bridge_rejected = str(guards["float_bridge_tail_guard"].get("rejected_epochs", ""))
+        fixed_burst_rejected = "n/a"
+        if isinstance(guards, dict) and isinstance(guards.get("fixed_bridge_burst_guard"), dict):
+            fixed_burst_rejected = str(
+                guards["fixed_bridge_burst_guard"].get("rejected_epochs", "")
+            )
 
         positioning = metric(metrics if isinstance(metrics, dict) else None, "positioning_rate_pct")
         fix = metric(metrics if isinstance(metrics, dict) else None, "fix_rate_pct")
@@ -397,7 +447,7 @@ def render_markdown(payload: dict[str, object]) -> str:
             f"| {run['key']} | {pct(positioning)} | {pct(rtklib_positioning)} | "
             f"{pp(positioning_delta)} | {pct(fix)} | {pct(rtklib_fix)} | "
             f"{pct(official)} | {pct(rtklib_official)} | {pp(official_delta)} | "
-            f"{meters(p95_delta)} | {bridge_rejected} |"
+            f"{meters(p95_delta)} | {bridge_rejected} | {fixed_burst_rejected} |"
         )
 
     aggregates = payload["aggregates"]
@@ -415,6 +465,7 @@ def render_markdown(payload: dict[str, object]) -> str:
             f"- PPC official score delta: {aggregate_text('avg_official_score_delta_pct', ' pp')}",
             f"- P95 H delta: {aggregate_text('avg_p95_h_delta_m', ' m')}",
             f"- FLOAT bridge-tail rejected epochs: {aggregate_text('float_bridge_tail_rejected_epochs')}",
+            f"- FIX bridge-burst rejected epochs: {aggregate_text('fixed_bridge_burst_rejected_epochs')}",
             "",
         ]
     )

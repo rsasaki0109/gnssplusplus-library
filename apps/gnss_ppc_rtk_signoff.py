@@ -142,6 +142,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-pos-jump", type=float, default=None)
     parser.add_argument("--max-pos-jump-min", type=float, default=None)
     parser.add_argument("--max-pos-jump-rate", type=float, default=None)
+    parser.add_argument("--fixed-bridge-burst-guard", action="store_true")
+    parser.add_argument("--fixed-bridge-burst-max-anchor-gap", type=float, default=None)
+    parser.add_argument("--fixed-bridge-burst-min-boundary-gap", type=float, default=None)
+    parser.add_argument("--fixed-bridge-burst-max-residual", type=float, default=None)
+    parser.add_argument("--fixed-bridge-burst-max-segment-epochs", type=int, default=None)
     parser.add_argument("--arfilter", dest="arfilter", action="store_true")
     parser.add_argument("--no-arfilter", dest="arfilter", action="store_false")
     parser.set_defaults(arfilter=None)
@@ -222,6 +227,16 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["max_pos_jump_min"] = args.max_pos_jump_min
     if getattr(args, "max_pos_jump_rate", None) is not None:
         tuning["max_pos_jump_rate"] = args.max_pos_jump_rate
+    if getattr(args, "fixed_bridge_burst_guard", False):
+        tuning["fixed_bridge_burst_guard"] = True
+    if getattr(args, "fixed_bridge_burst_max_anchor_gap", None) is not None:
+        tuning["fixed_bridge_burst_max_anchor_gap"] = args.fixed_bridge_burst_max_anchor_gap
+    if getattr(args, "fixed_bridge_burst_min_boundary_gap", None) is not None:
+        tuning["fixed_bridge_burst_min_boundary_gap"] = args.fixed_bridge_burst_min_boundary_gap
+    if getattr(args, "fixed_bridge_burst_max_residual", None) is not None:
+        tuning["fixed_bridge_burst_max_residual"] = args.fixed_bridge_burst_max_residual
+    if getattr(args, "fixed_bridge_burst_max_segment_epochs", None) is not None:
+        tuning["fixed_bridge_burst_max_segment_epochs"] = args.fixed_bridge_burst_max_segment_epochs
     if args.arfilter is not None:
         tuning["arfilter"] = args.arfilter
     if args.arfilter_margin is not None:
@@ -344,6 +359,20 @@ def build_ppc_demo_command(args: argparse.Namespace,
     max_pos_jump_rate = tuning.get("max_pos_jump_rate")
     if isinstance(max_pos_jump_rate, (int, float)):
         command.extend(["--max-pos-jump-rate", str(max_pos_jump_rate)])
+    if tuning.get("fixed_bridge_burst_guard") is True:
+        command.append("--fixed-bridge-burst-guard")
+    fixed_burst_max_anchor_gap = tuning.get("fixed_bridge_burst_max_anchor_gap")
+    if isinstance(fixed_burst_max_anchor_gap, (int, float)):
+        command.extend(["--fixed-bridge-burst-max-anchor-gap", str(fixed_burst_max_anchor_gap)])
+    fixed_burst_min_boundary_gap = tuning.get("fixed_bridge_burst_min_boundary_gap")
+    if isinstance(fixed_burst_min_boundary_gap, (int, float)):
+        command.extend(["--fixed-bridge-burst-min-boundary-gap", str(fixed_burst_min_boundary_gap)])
+    fixed_burst_max_residual = tuning.get("fixed_bridge_burst_max_residual")
+    if isinstance(fixed_burst_max_residual, (int, float)):
+        command.extend(["--fixed-bridge-burst-max-residual", str(fixed_burst_max_residual)])
+    fixed_burst_max_segment_epochs = tuning.get("fixed_bridge_burst_max_segment_epochs")
+    if isinstance(fixed_burst_max_segment_epochs, int):
+        command.extend(["--fixed-bridge-burst-max-segment-epochs", str(fixed_burst_max_segment_epochs)])
     arfilter = tuning.get("arfilter")
     if arfilter is True:
         command.append("--arfilter")

@@ -41,6 +41,14 @@ preset = "low-cost"
 # Adaptive jump guards scale the allowed FIX-to-FIX jump with elapsed time.
 # max_pos_jump_min = 20.0
 # max_pos_jump_rate = 25.0
+# Optional short FIX-burst bridge-residual guard. This is default-off because
+# it intentionally trades a small amount of Positioning/Fix rate for P95/max
+# error-tail cleanup in Tokyo run1-style false-fix bursts.
+# fixed_bridge_burst_guard = true
+# fixed_bridge_burst_max_anchor_gap = 30.0
+# fixed_bridge_burst_min_boundary_gap = 1.0
+# fixed_bridge_burst_max_residual = 20.0
+# fixed_bridge_burst_max_segment_epochs = 12
 arfilter = true
 arfilter_margin = 0.35
 min_hold_count = 8

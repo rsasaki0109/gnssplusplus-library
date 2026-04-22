@@ -46,6 +46,20 @@ struct FloatBridgeTailGuardResult {
     int rejected_epochs = 0;
 };
 
+struct FixedBridgeBurstGuardConfig {
+    double max_anchor_gap_s = 30.0;
+    double min_boundary_gap_s = 1.0;
+    double max_residual_m = 20.0;
+    int max_segment_epochs = 12;
+};
+
+struct FixedBridgeBurstGuardResult {
+    std::vector<PositionSolution> solutions;
+    int inspected_segments = 0;
+    int rejected_segments = 0;
+    int rejected_epochs = 0;
+};
+
 double normalizedDt(double dt_seconds, double fallback_dt_seconds = 1.0);
 
 double adaptiveJumpLimit(double dt_seconds, double min_jump_m, double rate_m_per_s);
@@ -83,5 +97,9 @@ SppHeightStepGuardResult filterSppHeightSteps(
 FloatBridgeTailGuardResult filterFloatBridgeTail(
     const std::vector<PositionSolution>& solutions,
     const FloatBridgeTailGuardConfig& config = FloatBridgeTailGuardConfig{});
+
+FixedBridgeBurstGuardResult filterFixedBridgeBursts(
+    const std::vector<PositionSolution>& solutions,
+    const FixedBridgeBurstGuardConfig& config = FixedBridgeBurstGuardConfig{});
 
 }  // namespace libgnss::rtk_validation

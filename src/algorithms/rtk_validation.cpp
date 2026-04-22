@@ -277,4 +277,103 @@ FloatBridgeTailGuardResult filterFloatBridgeTail(
     return result;
 }
 
+FixedBridgeBurstGuardResult filterFixedBridgeBursts(
+    const std::vector<PositionSolution>& solutions,
+    const FixedBridgeBurstGuardConfig& config) {
+    FixedBridgeBurstGuardResult result;
+    result.solutions.reserve(solutions.size());
+
+    if (solutions.empty()) {
+        return result;
+    }
+
+    std::vector<bool> keep(solutions.size(), true);
+    size_t index = 0;
+    while (index < solutions.size()) {
+        if (!solutions[index].isFixed()) {
+            ++index;
+            continue;
+        }
+
+        const size_t segment_start = index;
+        size_t segment_end = index + 1;
+        while (segment_end < solutions.size() && solutions[segment_end].isFixed()) {
+            const double fixed_gap_s =
+                solutions[segment_end].time - solutions[segment_end - 1].time;
+            if (!std::isfinite(fixed_gap_s) ||
+                fixed_gap_s > config.min_boundary_gap_s) {
+                break;
+            }
+            ++segment_end;
+        }
+        index = segment_end;
+
+        const size_t segment_epochs = segment_end - segment_start;
+        if (segment_epochs == 0 ||
+            segment_epochs > static_cast<size_t>(std::max(1, config.max_segment_epochs))) {
+            continue;
+        }
+
+        const PositionSolution* anchor_before = nullptr;
+        for (size_t before = segment_start; before > 0; --before) {
+            if (solutions[before - 1].isFixed()) {
+                anchor_before = &solutions[before - 1];
+                break;
+            }
+        }
+        const PositionSolution* anchor_after = nullptr;
+        for (size_t after = segment_end; after < solutions.size(); ++after) {
+            if (solutions[after].isFixed()) {
+                anchor_after = &solutions[after];
+                break;
+            }
+        }
+        if (anchor_before == nullptr || anchor_after == nullptr) {
+            continue;
+        }
+
+        const double before_gap_s = solutions[segment_start].time - anchor_before->time;
+        const double after_gap_s = anchor_after->time - solutions[segment_end - 1].time;
+        if (!std::isfinite(before_gap_s) || !std::isfinite(after_gap_s) ||
+            before_gap_s < config.min_boundary_gap_s ||
+            after_gap_s < config.min_boundary_gap_s) {
+            continue;
+        }
+
+        const double anchor_gap_s = anchor_after->time - anchor_before->time;
+        if (!std::isfinite(anchor_gap_s) || anchor_gap_s <= 0.0 ||
+            anchor_gap_s > config.max_anchor_gap_s) {
+            continue;
+        }
+
+        result.inspected_segments++;
+        const Eigen::Vector3d anchor_delta =
+            anchor_after->position_ecef - anchor_before->position_ecef;
+        bool rejected_segment = false;
+        for (size_t solution_index = segment_start; solution_index < segment_end; ++solution_index) {
+            const PositionSolution& candidate = solutions[solution_index];
+            const double fraction = (candidate.time - anchor_before->time) / anchor_gap_s;
+            const Eigen::Vector3d predicted_position =
+                anchor_before->position_ecef + anchor_delta * fraction;
+            const double residual_m =
+                (candidate.position_ecef - predicted_position).norm();
+            if (std::isfinite(residual_m) && residual_m > config.max_residual_m) {
+                keep[solution_index] = false;
+                rejected_segment = true;
+                result.rejected_epochs++;
+            }
+        }
+        if (rejected_segment) {
+            result.rejected_segments++;
+        }
+    }
+
+    for (size_t solution_index = 0; solution_index < solutions.size(); ++solution_index) {
+        if (keep[solution_index]) {
+            result.solutions.push_back(solutions[solution_index]);
+        }
+    }
+    return result;
+}
+
 }  // namespace libgnss::rtk_validation

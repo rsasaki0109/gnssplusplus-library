@@ -138,6 +138,12 @@ clustered in the northern Odaiba section. The long 188301-188437 s intervals are
 mostly FLOAT, while the shorter 189080-189084 s spikes are FIXED false-fix
 bursts, so the next solver work should separate FLOAT recovery from fixed-burst
 validation instead of treating the whole P95 tail as one failure mode.
+The default-off `--fixed-bridge-burst-guard --fixed-bridge-burst-max-residual
+20` pass now removes 12 epochs across 3 short FIX bursts on Tokyo run1:
+Positioning moves **90.00% -> 89.90%**, Fix **54.39% -> 54.34%**, PPC official
+**34.92% -> 34.89%**, while P95H improves **34.53 m -> 34.41 m** and max H
+improves **51.63 m -> 47.29 m**. That makes it a targeted tail-diagnostic
+gate, not a new default coverage profile.
 
 ![PPC Tokyo run1 bad segment trajectory](docs/ppc_tokyo_run1_bad_segments_trajectory.png)
 
@@ -212,6 +218,7 @@ explicitly enabled.
 | `--max-hold-div <m>` | Reject fix if the hold-state diverges from float by more than N meters. | `0` (disabled) |
 | `--max-pos-jump <m>` | Reject fix if the epoch-to-epoch position jump exceeds N meters. | `0` (disabled) |
 | `--max-pos-jump-min <m>` + `--max-pos-jump-rate <m/s>` | Reject fix if the jump from the last fixed position exceeds `max(min, rate * dt)`, so vehicle gaps can be tested without a stale absolute distance clamp. | `0` / `0` (disabled) |
+| `--fixed-bridge-burst-guard` + `--fixed-bridge-burst-max-residual <m>` | Reject isolated short FIX bursts when they diverge from the straight bridge between surrounding FIX anchors. Tokyo run1 removes 12 false-fix-tail epochs with a small Positioning/Fix-rate cost, so it remains opt-in. | `false` / `20` |
 | `--max-consec-float-reset <N>` | Auto-reset ambiguities after N consecutive float epochs. | `0` (disabled) |
 | `--max-postfix-rms <m>` | Reject fix if the L1 post-fix DD phase residual RMS exceeds N meters. | `0` (disabled) |
 | `--enable-wide-lane-ar` + `--wide-lane-threshold <cycle>` | Pre-compute MW wide-lane integers and inject them as Kalman constraints into the LAMBDA search. Halves Hmed on Odaiba at the cost of ~35% Fix count. | `false` / `0.25` |

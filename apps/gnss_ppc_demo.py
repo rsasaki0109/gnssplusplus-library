@@ -37,6 +37,12 @@ FLOAT_BRIDGE_TAIL_GUARD_DEFAULTS = {
     "max_residual_m": 12.0,
     "min_segment_epochs": 20,
 }
+FIXED_BRIDGE_BURST_GUARD_DEFAULTS = {
+    "max_anchor_gap_s": 30.0,
+    "min_boundary_gap_s": 1.0,
+    "max_residual_m": 20.0,
+    "max_segment_epochs": 12,
+}
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -245,6 +251,35 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--float-bridge-tail-max-anchor-speed", type=float, default=None)
     parser.add_argument("--float-bridge-tail-max-residual", type=float, default=None)
     parser.add_argument("--float-bridge-tail-min-segment-epochs", type=int, default=None)
+    parser.add_argument(
+        "--fixed-bridge-burst-guard",
+        action="store_true",
+        help="Enable opt-in short FIX burst rejection against surrounding FIX-anchor bridge.",
+    )
+    parser.add_argument(
+        "--fixed-bridge-burst-max-anchor-gap",
+        type=float,
+        default=None,
+        help="Maximum surrounding FIX-anchor gap in seconds for the short FIX burst guard.",
+    )
+    parser.add_argument(
+        "--fixed-bridge-burst-min-boundary-gap",
+        type=float,
+        default=None,
+        help="Minimum non-contiguous gap in seconds on each side of a candidate FIX burst.",
+    )
+    parser.add_argument(
+        "--fixed-bridge-burst-max-residual",
+        type=float,
+        default=None,
+        help="Reject burst FIX epochs farther than this from the surrounding FIX-anchor bridge.",
+    )
+    parser.add_argument(
+        "--fixed-bridge-burst-max-segment-epochs",
+        type=int,
+        default=None,
+        help="Maximum contiguous FIX epochs considered a short burst.",
+    )
     parser.add_argument(
         "--rtklib-bin",
         type=Path,
@@ -527,6 +562,56 @@ def float_bridge_tail_guard_config(args: argparse.Namespace) -> dict[str, float 
                 args,
                 "float_bridge_tail_min_segment_epochs",
                 "min_segment_epochs",
+            )
+        ),
+    }
+
+
+def fixed_bridge_burst_guard_value(
+    args: argparse.Namespace,
+    attr_name: str,
+    default_name: str,
+) -> float | int:
+    value = getattr(args, attr_name, None)
+    if value is None:
+        return FIXED_BRIDGE_BURST_GUARD_DEFAULTS[default_name]
+    return value
+
+
+def fixed_bridge_burst_guard_config(args: argparse.Namespace) -> dict[str, float | int]:
+    return {
+        "max_anchor_gap_s": rounded(
+            float(
+                fixed_bridge_burst_guard_value(
+                    args,
+                    "fixed_bridge_burst_max_anchor_gap",
+                    "max_anchor_gap_s",
+                )
+            )
+        ),
+        "min_boundary_gap_s": rounded(
+            float(
+                fixed_bridge_burst_guard_value(
+                    args,
+                    "fixed_bridge_burst_min_boundary_gap",
+                    "min_boundary_gap_s",
+                )
+            )
+        ),
+        "max_residual_m": rounded(
+            float(
+                fixed_bridge_burst_guard_value(
+                    args,
+                    "fixed_bridge_burst_max_residual",
+                    "max_residual_m",
+                )
+            )
+        ),
+        "max_segment_epochs": int(
+            fixed_bridge_burst_guard_value(
+                args,
+                "fixed_bridge_burst_max_segment_epochs",
+                "max_segment_epochs",
             )
         ),
     }
@@ -877,6 +962,28 @@ def run_solver(
                     str(args.float_bridge_tail_min_segment_epochs),
                 ]
             )
+        if getattr(args, "fixed_bridge_burst_guard", False):
+            command.append("--fixed-bridge-burst-guard")
+        if getattr(args, "fixed_bridge_burst_max_anchor_gap", None) is not None:
+            command.extend([
+                "--fixed-bridge-burst-max-anchor-gap",
+                str(args.fixed_bridge_burst_max_anchor_gap),
+            ])
+        if getattr(args, "fixed_bridge_burst_min_boundary_gap", None) is not None:
+            command.extend([
+                "--fixed-bridge-burst-min-boundary-gap",
+                str(args.fixed_bridge_burst_min_boundary_gap),
+            ])
+        if getattr(args, "fixed_bridge_burst_max_residual", None) is not None:
+            command.extend([
+                "--fixed-bridge-burst-max-residual",
+                str(args.fixed_bridge_burst_max_residual),
+            ])
+        if getattr(args, "fixed_bridge_burst_max_segment_epochs", None) is not None:
+            command.extend([
+                "--fixed-bridge-burst-max-segment-epochs",
+                str(args.fixed_bridge_burst_max_segment_epochs),
+            ])
     else:
         command = [
             *gnss_command,
@@ -967,6 +1074,10 @@ def build_summary_payload(
             args.solver == "rtk" and getattr(args, "float_bridge_tail_guard", True)
         ),
         "float_bridge_tail_guard": float_bridge_tail_guard_config(args) if args.solver == "rtk" else None,
+        "fixed_bridge_burst_guard_enabled": (
+            args.solver == "rtk" and getattr(args, "fixed_bridge_burst_guard", False)
+        ),
+        "fixed_bridge_burst_guard": fixed_bridge_burst_guard_config(args) if args.solver == "rtk" else None,
         "solution_pos": str(out),
         "summary_json": str(summary_json),
         "generated_solution": not args.use_existing_solution,

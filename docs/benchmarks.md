@@ -108,6 +108,12 @@ largest horizontal-error intervals on the gnssplusplus panel. The dominant long
 segments are FLOAT-heavy around 188301-188437 s, while the worst short spikes
 around 189080-189084 s are FIXED bursts. That split is useful because FLOAT-tail
 cleanup and false-fix validation need different guards.
+The default-off `--fixed-bridge-burst-guard --fixed-bridge-burst-max-residual
+20` pass removes 12 epochs across 3 short FIX bursts on Tokyo run1: Positioning
+moves **90.00% -> 89.90%**, Fix **54.39% -> 54.34%**, PPC official **34.92% ->
+34.89%**, P95H **34.53 m -> 34.41 m**, and max H **51.63 m -> 47.29 m**.
+It is therefore documented as an opt-in tail-diagnostic guard, not as the
+default coverage profile.
 
 ![PPC Tokyo run1 bad segment trajectory](ppc_tokyo_run1_bad_segments_trajectory.png)
 

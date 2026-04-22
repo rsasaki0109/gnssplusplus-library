@@ -100,6 +100,13 @@ diverges from the anchor bridge. Its speed gate uses horizontal FIX-anchor
 speed so vertical anchor noise does not create false motion; use
 `--no-float-bridge-tail-guard` only when reproducing the pre-bridge-tail
 coverage stream.
+For isolated false-fix spikes, `--fixed-bridge-burst-guard` is available as a
+default-off PPC tuning gate. It inspects short FIX segments bounded by nearby
+FIX anchors and rejects only the burst epochs whose bridge residual exceeds
+`--fixed-bridge-burst-max-residual` (20 m by default). On Tokyo run1 ratio 2.4
+coverage it rejects 12 epochs, lowering max H by 4.33 m and P95H by 0.12 m
+while costing 0.10 pp Positioning and 0.03 pp PPC official score, so keep it
+explicit when evaluating precision-tail tradeoffs.
 Use `scripts/analyze_ppc_coverage_quality.py` with the PPC solution, RTKLIB
 solution, and `reference.csv` when a coverage run improves Positioning rate but
 regresses P95 horizontal error; the report separates FIXED/FLOAT/SPP quality and
