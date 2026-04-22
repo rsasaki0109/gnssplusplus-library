@@ -123,6 +123,18 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK FLOAT-vs-SPP divergence guard passed to each ppc-demo run.",
     )
     parser.add_argument(
+        "--max-float-prefit-rms",
+        type=float,
+        default=None,
+        help="Optional RTK FLOAT prefit DD residual RMS reset/fallback threshold.",
+    )
+    parser.add_argument(
+        "--max-float-prefit-max",
+        type=float,
+        default=None,
+        help="Optional RTK FLOAT prefit DD residual magnitude reset/fallback threshold.",
+    )
+    parser.add_argument(
         "--max-consec-float-reset",
         type=int,
         default=None,
@@ -257,6 +269,10 @@ def build_ppc_demo_command(
         command.extend(["--max-pos-jump-rate", str(args.max_pos_jump_rate)])
     if getattr(args, "max_float_spp_div", None) is not None:
         command.extend(["--max-float-spp-div", str(args.max_float_spp_div)])
+    if getattr(args, "max_float_prefit_rms", None) is not None:
+        command.extend(["--max-float-prefit-rms", str(args.max_float_prefit_rms)])
+    if getattr(args, "max_float_prefit_max", None) is not None:
+        command.extend(["--max-float-prefit-max", str(args.max_float_prefit_max)])
     if getattr(args, "max_consec_float_reset", None) is not None:
         command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
     if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -516,6 +532,8 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_pos_jump_min": getattr(args, "max_pos_jump_min", None),
         "max_pos_jump_rate": getattr(args, "max_pos_jump_rate", None),
         "max_float_spp_div": getattr(args, "max_float_spp_div", None),
+        "max_float_prefit_rms": getattr(args, "max_float_prefit_rms", None),
+        "max_float_prefit_max": getattr(args, "max_float_prefit_max", None),
         "max_consec_float_reset": getattr(args, "max_consec_float_reset", None),
         "max_consec_nonfix_reset": getattr(args, "max_consec_nonfix_reset", None),
         "max_postfix_rms": getattr(args, "max_postfix_rms", None),

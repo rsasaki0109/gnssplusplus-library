@@ -266,6 +266,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "max_pos_jump_min": 20.0,
                 "max_pos_jump_rate": 25.0,
                 "max_float_spp_div": 30.0,
+                "max_float_prefit_rms": 6.0,
+                "max_float_prefit_max": 30.0,
                 "max_consec_float_reset": 10,
                 "max_consec_nonfix_reset": 10,
                 "max_postfix_rms": 0.20,
@@ -319,6 +321,10 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("--max-pos-jump-rate", command)
             self.assertIn("25.0", command)
             self.assertIn("--max-float-spp-div", command)
+            self.assertIn("30.0", command)
+            self.assertIn("--max-float-prefit-rms", command)
+            self.assertIn("6.0", command)
+            self.assertIn("--max-float-prefit-max", command)
             self.assertIn("30.0", command)
             self.assertIn("--max-consec-float-reset", command)
             self.assertIn("10", command)
@@ -471,6 +477,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 max_pos_jump_min=20.0,
                 max_pos_jump_rate=25.0,
                 max_float_spp_div=30.0,
+                max_float_prefit_rms=6.0,
+                max_float_prefit_max=30.0,
                 max_consec_float_reset=10,
                 max_consec_nonfix_reset=10,
                 max_postfix_rms=0.20,
@@ -524,6 +532,10 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("--max-pos-jump-rate", command)
             self.assertIn("25.0", command)
             self.assertIn("--max-float-spp-div", command)
+            self.assertIn("30.0", command)
+            self.assertIn("--max-float-prefit-rms", command)
+            self.assertIn("6.0", command)
+            self.assertIn("--max-float-prefit-max", command)
             self.assertIn("30.0", command)
             self.assertIn("--max-consec-float-reset", command)
             self.assertIn("10", command)
@@ -655,6 +667,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertEqual(payload["aggregates"]["fixed_bridge_burst_rejected_epochs"], 12)
             self.assertIsNone(payload["max_pos_jump_min"])
             self.assertIsNone(payload["max_pos_jump_rate"])
+            self.assertIsNone(payload["max_float_prefit_rms"])
+            self.assertIsNone(payload["max_float_prefit_max"])
             self.assertIsNone(payload["max_consec_float_reset"])
             self.assertIsNone(payload["max_consec_nonfix_reset"])
             self.assertIsNone(payload["max_postfix_rms"])
@@ -3044,6 +3058,8 @@ class PPCDemoTest(unittest.TestCase):
             max_pos_jump_min=20.0,
             max_pos_jump_rate=25.0,
             max_float_spp_div=30.0,
+            max_float_prefit_rms=6.0,
+            max_float_prefit_max=30.0,
             max_consec_float_reset=10,
             max_consec_nonfix_reset=10,
             max_postfix_rms=0.20,
@@ -3103,6 +3119,10 @@ class PPCDemoTest(unittest.TestCase):
         self.assertIn("--max-pos-jump-rate", commands[0])
         self.assertIn("25.0", commands[0])
         self.assertIn("--max-float-spp-div", commands[0])
+        self.assertIn("30.0", commands[0])
+        self.assertIn("--max-float-prefit-rms", commands[0])
+        self.assertIn("6.0", commands[0])
+        self.assertIn("--max-float-prefit-max", commands[0])
         self.assertIn("30.0", commands[0])
         self.assertIn("--max-consec-float-reset", commands[0])
         self.assertIn("10", commands[0])
@@ -3216,6 +3236,8 @@ class PPCDemoTest(unittest.TestCase):
                 max_pos_jump_min=20.0,
                 max_pos_jump_rate=25.0,
                 max_float_spp_div=30.0,
+                max_float_prefit_rms=6.0,
+                max_float_prefit_max=30.0,
                 max_consec_float_reset=10,
                 max_consec_nonfix_reset=10,
                 max_postfix_rms=0.20,
@@ -3277,6 +3299,8 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtk_max_position_jump_min_m"], 20.0)
             self.assertEqual(payload["rtk_max_position_jump_rate_mps"], 25.0)
             self.assertEqual(payload["rtk_max_float_spp_divergence_m"], 30.0)
+            self.assertEqual(payload["rtk_max_float_prefit_residual_rms_m"], 6.0)
+            self.assertEqual(payload["rtk_max_float_prefit_residual_max_m"], 30.0)
             self.assertEqual(payload["rtk_max_consecutive_float_for_reset"], 10)
             self.assertEqual(payload["rtk_max_consecutive_nonfix_for_reset"], 10)
             self.assertEqual(payload["rtk_max_postfix_residual_rms_m"], 0.20)

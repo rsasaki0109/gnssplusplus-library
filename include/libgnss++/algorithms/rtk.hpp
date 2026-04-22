@@ -131,6 +131,18 @@ public:
         /// diagnostic gate and preserves existing behavior.
         double max_float_spp_divergence_m = 0.0;
 
+        /// Max accepted FLOAT prefit DD residual RMS in meters.
+        /// When > 0, high-residual FLOAT epochs reset ambiguity states and
+        /// fall back to SPP/no-solution instead of being reported as FLOAT.
+        /// 0 (default) disables the diagnostic gate.
+        double max_float_prefit_residual_rms_m = 0.0;
+
+        /// Max accepted FLOAT prefit DD residual magnitude in meters.
+        /// When > 0, high-residual FLOAT epochs reset ambiguity states and
+        /// fall back to SPP/no-solution instead of being reported as FLOAT.
+        /// 0 (default) disables the diagnostic gate.
+        double max_float_prefit_residual_max_m = 0.0;
+
         /// Reset ambiguity state after N consecutive float epochs (aggressive reconvergence).
         /// 0 (default) disables the check — existing behavior preserved.
         int max_consecutive_float_for_reset = 0;
@@ -431,6 +443,7 @@ private:
                                      const NavigationData& nav);
     void resetAmbiguityStatesForReacquisition(const ObservationData& rover_obs,
                                               const NavigationData& nav);
+    bool floatResidualExceedsReacquisitionGate() const;
     void recordFixedEpoch();
     void recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav);
     void recordFallbackEpoch(const ObservationData& rover_obs, const NavigationData& nav);

@@ -1028,6 +1028,25 @@ void RTKProcessor::resetAmbiguityStatesForReacquisition(const ObservationData& r
     consecutive_nonfix_count_ = 0;
 }
 
+bool RTKProcessor::floatResidualExceedsReacquisitionGate() const {
+    if (rtk_config_.ar_policy == RTKConfig::ARPolicy::DEMO5_CONTINUOUS) {
+        return false;
+    }
+    const double max_prefit_rms = rtk_config_.max_float_prefit_residual_rms_m;
+    if (std::isfinite(max_prefit_rms) && max_prefit_rms > 0.0 &&
+        std::isfinite(current_update_diagnostics_.prefit_residual_rms_m) &&
+        current_update_diagnostics_.prefit_residual_rms_m > max_prefit_rms) {
+        return true;
+    }
+    const double max_prefit_residual = rtk_config_.max_float_prefit_residual_max_m;
+    if (std::isfinite(max_prefit_residual) && max_prefit_residual > 0.0 &&
+        std::isfinite(current_update_diagnostics_.prefit_residual_max_m) &&
+        current_update_diagnostics_.prefit_residual_max_m > max_prefit_residual) {
+        return true;
+    }
+    return false;
+}
+
 void RTKProcessor::recordFixedEpoch() {
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
@@ -1245,6 +1264,16 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             const bool saved_has_last_trusted = has_last_trusted_position_;
             const GNSSTime saved_last_trusted_time = last_trusted_time_;
             const bool saved_has_last_trusted_time = has_last_trusted_time_;
+            auto restoreRememberedState = [&]() {
+                last_solution_position_ = saved_last_solution_position;
+                has_last_solution_position_ = saved_has_last_solution;
+                last_epoch_time_ = saved_last_solution_time;
+                has_last_epoch_ = saved_has_last_solution_time;
+                last_trusted_position_ = saved_last_trusted_position;
+                has_last_trusted_position_ = saved_has_last_trusted;
+                last_trusted_time_ = saved_last_trusted_time;
+                has_last_trusted_time_ = saved_has_last_trusted_time;
+            };
             last_ar_ratio_ = 0.0;
             last_num_fixed_ambiguities_ = 0;
             solution = generateSolution(rover_obs.time, SolutionStatus::FLOAT, n_sats);
@@ -1258,14 +1287,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             if (!finitePosition(solution) ||
                 deviatesTooFarFromSPP(solution, 150.0) ||
                 float_exceeds_spp_gate) {
-                last_solution_position_ = saved_last_solution_position;
-                has_last_solution_position_ = saved_has_last_solution;
-                last_epoch_time_ = saved_last_solution_time;
-                has_last_epoch_ = saved_has_last_solution_time;
-                last_trusted_position_ = saved_last_trusted_position;
-                has_last_trusted_position_ = saved_has_last_trusted;
-                last_trusted_time_ = saved_last_trusted_time;
-                has_last_trusted_time_ = saved_has_last_trusted_time;
+                restoreRememberedState();
                 return fallback_spp();
             }
 
@@ -1274,14 +1296,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                 const double trusted_jump =
                     (solution.position_ecef - saved_last_trusted_position).norm();
                 if (trusted_jump > 25.0) {
-                    last_solution_position_ = saved_last_solution_position;
-                    has_last_solution_position_ = saved_has_last_solution;
-                    last_epoch_time_ = saved_last_solution_time;
-                    has_last_epoch_ = saved_has_last_solution_time;
-                    last_trusted_position_ = saved_last_trusted_position;
-                    has_last_trusted_position_ = saved_has_last_trusted;
-                    last_trusted_time_ = saved_last_trusted_time;
-                    has_last_trusted_time_ = saved_has_last_trusted_time;
+                    restoreRememberedState();
                     return fallback_spp();
                 }
             }
@@ -1296,14 +1311,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                         (solution.position_ecef - saved_last_trusted_position).norm();
                     const double max_trusted_jump = std::max(8.0, 12.0 * dt);
                     if (trusted_jump > max_trusted_jump) {
-                        last_solution_position_ = saved_last_solution_position;
-                        has_last_solution_position_ = saved_has_last_solution;
-                        last_epoch_time_ = saved_last_solution_time;
-                        has_last_epoch_ = saved_has_last_solution_time;
-                        last_trusted_position_ = saved_last_trusted_position;
-                        has_last_trusted_position_ = saved_has_last_trusted;
-                        last_trusted_time_ = saved_last_trusted_time;
-                        has_last_trusted_time_ = saved_has_last_trusted_time;
+                        restoreRememberedState();
                         return fallback_spp();
                     }
                 }
@@ -1316,10 +1324,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                     (solution.position_ecef - saved_last_solution_position).norm();
                 const double max_jump = std::max(120.0, 35.0 * dt);
                 if (n_sats <= 5 && jump > max_jump) {
-                    last_solution_position_ = saved_last_solution_position;
-                    has_last_solution_position_ = saved_has_last_solution;
-                    last_epoch_time_ = saved_last_solution_time;
-                    has_last_epoch_ = saved_has_last_solution_time;
+                    restoreRememberedState();
                     return fallback_spp();
                 }
             }
@@ -1511,6 +1516,11 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
 
             if (!applied_fix_solution) {
                 restoreHoldState(saved_hold_state);
+                if (!moving_base_mode && floatResidualExceedsReacquisitionGate()) {
+                    restoreRememberedState();
+                    resetAmbiguityStatesForReacquisition(rover_obs, nav);
+                    return fallback_spp();
+                }
                 rememberSolution(float_solution);
                 updateStatistics(SolutionStatus::FLOAT);
                 consecutive_fix_count_ = 0;

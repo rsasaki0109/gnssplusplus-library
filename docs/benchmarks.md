@@ -149,8 +149,12 @@ segments diagnosable by measurement-update quality instead of status/ratio
 alone.
 A targeted Nagoya run2 loss-window replay (555940-556070 s) shows scored FLOAT
 prefit residual RMS around **0.25 m** versus FLOAT high-error median **4.54 m**,
-with median max residual **20.0 m** in the high-error group. The next FLOAT
-recovery work should use that residual signal directly.
+with median max residual **20.0 m** in the high-error group. The
+`--max-float-prefit-rms` / `--max-float-prefit-max` gates use that residual
+signal directly by resetting ambiguities and falling back when a no-fix FLOAT
+epoch exceeds either threshold. In this loss-window smoke, `6` / `30` kept
+scored distance unchanged while tighter `2` / `12` and max-only `20` were too
+aggressive.
 
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 

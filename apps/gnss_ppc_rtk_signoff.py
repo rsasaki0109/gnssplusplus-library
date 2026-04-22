@@ -143,6 +143,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-pos-jump-min", type=float, default=None)
     parser.add_argument("--max-pos-jump-rate", type=float, default=None)
     parser.add_argument("--max-float-spp-div", type=float, default=None)
+    parser.add_argument("--max-float-prefit-rms", type=float, default=None)
+    parser.add_argument("--max-float-prefit-max", type=float, default=None)
     parser.add_argument("--max-consec-float-reset", type=int, default=None)
     parser.add_argument("--max-consec-nonfix-reset", type=int, default=None)
     parser.add_argument("--max-postfix-rms", type=float, default=None)
@@ -242,6 +244,10 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["max_pos_jump_rate"] = args.max_pos_jump_rate
     if getattr(args, "max_float_spp_div", None) is not None:
         tuning["max_float_spp_div"] = args.max_float_spp_div
+    if getattr(args, "max_float_prefit_rms", None) is not None:
+        tuning["max_float_prefit_rms"] = args.max_float_prefit_rms
+    if getattr(args, "max_float_prefit_max", None) is not None:
+        tuning["max_float_prefit_max"] = args.max_float_prefit_max
     if getattr(args, "max_consec_float_reset", None) is not None:
         tuning["max_consec_float_reset"] = args.max_consec_float_reset
     if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -401,6 +407,12 @@ def build_ppc_demo_command(args: argparse.Namespace,
     max_float_spp_div = tuning.get("max_float_spp_div")
     if isinstance(max_float_spp_div, (int, float)):
         command.extend(["--max-float-spp-div", str(max_float_spp_div)])
+    max_float_prefit_rms = tuning.get("max_float_prefit_rms")
+    if isinstance(max_float_prefit_rms, (int, float)):
+        command.extend(["--max-float-prefit-rms", str(max_float_prefit_rms)])
+    max_float_prefit_max = tuning.get("max_float_prefit_max")
+    if isinstance(max_float_prefit_max, (int, float)):
+        command.extend(["--max-float-prefit-max", str(max_float_prefit_max)])
     max_consec_float_reset = tuning.get("max_consec_float_reset")
     if isinstance(max_consec_float_reset, int):
         command.extend(["--max-consec-float-reset", str(max_consec_float_reset)])

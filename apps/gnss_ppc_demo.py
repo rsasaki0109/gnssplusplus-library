@@ -206,6 +206,18 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK FLOAT-vs-SPP divergence guard passed through to gnss solve.",
     )
     parser.add_argument(
+        "--max-float-prefit-rms",
+        type=float,
+        default=None,
+        help="Optional RTK FLOAT prefit DD residual RMS reset/fallback threshold in meters.",
+    )
+    parser.add_argument(
+        "--max-float-prefit-max",
+        type=float,
+        default=None,
+        help="Optional RTK FLOAT prefit DD residual magnitude reset/fallback threshold in meters.",
+    )
+    parser.add_argument(
         "--max-consec-float-reset",
         type=int,
         default=None,
@@ -952,6 +964,10 @@ def run_solver(
             command.extend(["--max-pos-jump-rate", str(args.max_pos_jump_rate)])
         if getattr(args, "max_float_spp_div", None) is not None:
             command.extend(["--max-float-spp-div", str(args.max_float_spp_div)])
+        if getattr(args, "max_float_prefit_rms", None) is not None:
+            command.extend(["--max-float-prefit-rms", str(args.max_float_prefit_rms)])
+        if getattr(args, "max_float_prefit_max", None) is not None:
+            command.extend(["--max-float-prefit-max", str(args.max_float_prefit_max)])
         if getattr(args, "max_consec_float_reset", None) is not None:
             command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
         if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -1138,6 +1154,12 @@ def build_summary_payload(
         ),
         "rtk_max_float_spp_divergence_m": (
             getattr(args, "max_float_spp_div", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_float_prefit_residual_rms_m": (
+            getattr(args, "max_float_prefit_rms", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_float_prefit_residual_max_m": (
+            getattr(args, "max_float_prefit_max", None) if args.solver == "rtk" else None
         ),
         "rtk_max_consecutive_float_for_reset": (
             getattr(args, "max_consec_float_reset", None) if args.solver == "rtk" else None
