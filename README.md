@@ -186,6 +186,12 @@ Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**
 (**17.52 pp**), so RTKLIB-side fallback cannot close the PPC2024 second-place
 gap.
+An SPP-divergence posthoc sweep also keeps `--max-float-spp-div` diagnostic:
+on the six reset10 outputs, thresholds **10/20/30/50/80 m** predict
+**55.33/56.62/57.41/58.07/58.45%** weighted official score versus the
+**58.90%** reset10 baseline. SPP fallback recovers almost no scored distance,
+so the missing FLOAT distance needs better RTK float-state recovery rather than
+SPP substitution.
 
 ![PPC RTK tail-cleanup diagnostic scorecard](docs/ppc_tail_cleanup_scorecard.png)
 

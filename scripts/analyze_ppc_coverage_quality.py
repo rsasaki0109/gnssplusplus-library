@@ -485,6 +485,106 @@ def official_best_of_lib_rtklib_score(
     }
 
 
+def epoch_by_tow(epochs: list[comparison.SolutionEpoch]) -> dict[float, comparison.SolutionEpoch]:
+    return {rounded(epoch.tow): epoch for epoch in epochs}
+
+
+def official_float_spp_divergence_sweep(
+    lib_records: list[dict[str, object]],
+    spp_records: list[dict[str, object]],
+    lib_epochs: list[comparison.SolutionEpoch],
+    spp_epochs: list[comparison.SolutionEpoch],
+    thresholds_m: list[float],
+) -> list[dict[str, object]]:
+    total_distance_m = sum(float(record["segment_distance_m"]) for record in lib_records)
+    original_score_distance_m = sum(
+        float(record["segment_distance_m"]) for record in lib_records if bool(record["scored"])
+    )
+    spp_by_reference_index = {int(record["reference_index"]): record for record in spp_records}
+    lib_by_tow = epoch_by_tow(lib_epochs)
+    spp_by_tow = epoch_by_tow(spp_epochs)
+
+    rows: list[dict[str, object]] = []
+    for threshold_m in sorted(thresholds_m):
+        simulated_score_distance_m = original_score_distance_m
+        eligible_float_distance_m = 0.0
+        rejected_distance_m = 0.0
+        recovered_distance_m = 0.0
+        lost_distance_m = 0.0
+        rejected_state_distances: dict[str, float] = {}
+        replacement_state_distances: dict[str, float] = {}
+
+        for lib_record in lib_records:
+            if lib_record["status"] != 3 or lib_record["solution_tow_s"] is None:
+                continue
+            tow = rounded(float(lib_record["solution_tow_s"]))
+            lib_epoch = lib_by_tow.get(tow)
+            spp_epoch = spp_by_tow.get(tow)
+            if lib_epoch is None or spp_epoch is None:
+                continue
+            segment_distance_m = float(lib_record["segment_distance_m"])
+            eligible_float_distance_m += segment_distance_m
+            divergence_m = float(np.linalg.norm(lib_epoch.ecef - spp_epoch.ecef))
+            if divergence_m <= threshold_m:
+                continue
+
+            spp_record = spp_by_reference_index.get(int(lib_record["reference_index"]))
+            before_score_m = segment_distance_m if bool(lib_record["scored"]) else 0.0
+            after_score_m = (
+                segment_distance_m
+                if spp_record is not None and bool(spp_record["scored"])
+                else 0.0
+            )
+            simulated_score_distance_m += after_score_m - before_score_m
+            if after_score_m > before_score_m:
+                recovered_distance_m += after_score_m - before_score_m
+            elif before_score_m > after_score_m:
+                lost_distance_m += before_score_m - after_score_m
+
+            rejected_distance_m += segment_distance_m
+            rejected_state = str(lib_record["score_state"])
+            rejected_state_distances[rejected_state] = (
+                rejected_state_distances.get(rejected_state, 0.0) + segment_distance_m
+            )
+            replacement_state = str(spp_record["score_state"]) if spp_record is not None else "no_solution"
+            replacement_state_distances[replacement_state] = (
+                replacement_state_distances.get(replacement_state, 0.0) + segment_distance_m
+            )
+
+        score_delta_distance_m = simulated_score_distance_m - original_score_distance_m
+        rows.append(
+            {
+                "threshold_m": rounded(threshold_m),
+                "eligible_float_distance_m": rounded(eligible_float_distance_m),
+                "rejected_distance_m": rounded(rejected_distance_m),
+                "rejected_distance_pct": rounded(100.0 * rejected_distance_m / total_distance_m)
+                if total_distance_m > 0.0
+                else 0.0,
+                "score_distance_m": rounded(simulated_score_distance_m),
+                "score_pct": rounded(100.0 * simulated_score_distance_m / total_distance_m)
+                if total_distance_m > 0.0
+                else 0.0,
+                "score_delta_distance_m": rounded(score_delta_distance_m),
+                "score_delta_pct": rounded(100.0 * score_delta_distance_m / total_distance_m)
+                if total_distance_m > 0.0
+                else 0.0,
+                "recovered_distance_m": rounded(recovered_distance_m),
+                "lost_distance_m": rounded(lost_distance_m),
+                "rejected_score_state_distances_m": {
+                    state: rounded(rejected_state_distances[state])
+                    for state in SCORE_STATE_ORDER
+                    if state in rejected_state_distances
+                },
+                "replacement_score_state_distances_m": {
+                    state: rounded(replacement_state_distances[state])
+                    for state in SCORE_STATE_ORDER
+                    if state in replacement_state_distances
+                },
+            }
+        )
+    return rows
+
+
 def fixed_anchor(
     matches: list[comparison.MatchedEpoch],
     start_index: int,
@@ -642,10 +742,13 @@ def build_report(
     match_tolerance_s: float,
     bad_h_threshold_m: float,
     bad_gap_s: float,
+    spp_pos: Path | None = None,
+    float_spp_div_thresholds_m: list[float] | None = None,
 ) -> dict[str, object]:
     reference = comparison.read_reference_csv(reference_csv)
     lib_epochs = comparison.read_libgnss_pos(lib_pos)
     rtklib_epochs = comparison.read_rtklib_pos(rtklib_pos)
+    spp_epochs = comparison.read_libgnss_pos(spp_pos) if spp_pos is not None else []
     lib_matches = comparison.match_to_reference(
         lib_epochs,
         reference,
@@ -684,7 +787,7 @@ def build_report(
         rtklib_epochs,
         match_tolerance_s,
     )
-    return {
+    report: dict[str, object] = {
         "reference_epochs": len(reference),
         "lib_matched_epochs": len(lib_matches),
         "rtklib_matched_epochs": len(rtklib_matches),
@@ -722,6 +825,20 @@ def build_report(
         "bad_segments": bad_segments(lib_matches, bad_h_threshold_m, bad_gap_s),
         "_official_segment_records": official_records,
     }
+    if spp_pos is not None and float_spp_div_thresholds_m:
+        spp_official_records = ppc_metrics.ppc_official_segment_records(
+            reference,
+            spp_epochs,
+            match_tolerance_s,
+        )
+        report["official_float_spp_divergence_sweep"] = official_float_spp_divergence_sweep(
+            lib_official_records,
+            spp_official_records,
+            lib_epochs,
+            spp_epochs,
+            float_spp_div_thresholds_m,
+        )
+    return report
 
 
 def write_segments_csv(path: Path, rows: list[dict[str, object]]) -> None:
@@ -1019,6 +1136,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lib-pos", type=Path, required=True)
     parser.add_argument("--rtklib-pos", type=Path, required=True)
     parser.add_argument("--reference-csv", type=Path, required=True)
+    parser.add_argument("--spp-pos", type=Path, default=None)
+    parser.add_argument(
+        "--float-spp-div-thresholds",
+        default=None,
+        help="Comma-separated FLOAT-vs-SPP divergence thresholds in meters.",
+    )
     parser.add_argument("--summary-json", type=Path, default=None)
     parser.add_argument("--segments-csv", type=Path, default=None)
     parser.add_argument("--official-segments-csv", type=Path, default=None)
@@ -1030,8 +1153,22 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def parse_thresholds(text: str | None) -> list[float] | None:
+    if text is None:
+        return None
+    thresholds = [float(part.strip()) for part in text.split(",") if part.strip()]
+    if not thresholds:
+        raise SystemExit("--float-spp-div-thresholds did not contain any numeric thresholds.")
+    if any(threshold < 0.0 for threshold in thresholds):
+        raise SystemExit("--float-spp-div-thresholds values must be >= 0.")
+    return thresholds
+
+
 def main() -> int:
     args = parse_args()
+    float_spp_div_thresholds = parse_thresholds(args.float_spp_div_thresholds)
+    if float_spp_div_thresholds is not None and args.spp_pos is None:
+        raise SystemExit("--float-spp-div-thresholds requires --spp-pos.")
     report = build_report(
         lib_pos=args.lib_pos,
         rtklib_pos=args.rtklib_pos,
@@ -1039,6 +1176,8 @@ def main() -> int:
         match_tolerance_s=args.match_tolerance_s,
         bad_h_threshold_m=args.bad_h_threshold_m,
         bad_gap_s=args.bad_gap_s,
+        spp_pos=args.spp_pos,
+        float_spp_div_thresholds_m=float_spp_div_thresholds,
     )
     if args.summary_json is not None:
         args.summary_json.parent.mkdir(parents=True, exist_ok=True)

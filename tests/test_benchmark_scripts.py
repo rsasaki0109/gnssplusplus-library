@@ -1634,8 +1634,13 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
             comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([11.0, 0.0, 0.0]), 2, 12),
             comparison.SolutionEpoch(2300, 2.0, 0.0, 0.0, 0.0, np.array([20.1, 0.0, 0.0]), 1, 12),
         ]
+        spp_solution = [
+            comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([10.3, 0.0, 0.0]), 1, 12),
+            comparison.SolutionEpoch(2300, 2.0, 0.0, 0.0, 0.0, np.array([20.1, 0.0, 0.0]), 1, 12),
+        ]
         lib_records = ppc_metrics.ppc_official_segment_records(reference, lib_solution, 0.25)
         rtklib_records = ppc_metrics.ppc_official_segment_records(reference, rtklib_solution, 0.25)
+        spp_records = ppc_metrics.ppc_official_segment_records(reference, spp_solution, 0.25)
 
         loss_by_state = {
             row["score_state"]: row
@@ -1689,6 +1694,17 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         self.assertEqual(best_of_score["score_pct"], 50.0)
         self.assertEqual(best_of_score["rtklib_additional_distance_m"], 10.0)
         self.assertEqual(best_of_score["remaining_unscored_distance_m"], 20.0)
+        float_spp_sweep = ppc_coverage_quality.official_float_spp_divergence_sweep(
+            lib_records,
+            spp_records,
+            lib_solution,
+            spp_solution,
+            [0.5],
+        )
+        self.assertEqual(float_spp_sweep[0]["threshold_m"], 0.5)
+        self.assertEqual(float_spp_sweep[0]["score_distance_m"], 20.0)
+        self.assertEqual(float_spp_sweep[0]["score_delta_distance_m"], 10.0)
+        self.assertEqual(float_spp_sweep[0]["recovered_distance_m"], 10.0)
         self.assertEqual(combined[1]["lib_ratio"], 12.0)
         self.assertEqual(combined[1]["lib_baseline_m"], 101.0)
 
