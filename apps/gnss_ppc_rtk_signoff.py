@@ -138,6 +138,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--preset", choices=("survey", "low-cost", "moving-base"), default=None)
     parser.add_argument("--iono", choices=("auto", "off", "iflc", "est"), default=None)
     parser.add_argument("--ratio", type=float, default=None)
+    parser.add_argument("--max-hold-div", type=float, default=None)
+    parser.add_argument("--max-pos-jump", type=float, default=None)
     parser.add_argument("--arfilter", dest="arfilter", action="store_true")
     parser.add_argument("--no-arfilter", dest="arfilter", action="store_false")
     parser.set_defaults(arfilter=None)
@@ -210,6 +212,10 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["iono"] = args.iono
     if getattr(args, "ratio", None) is not None:
         tuning["ratio"] = args.ratio
+    if getattr(args, "max_hold_div", None) is not None:
+        tuning["max_hold_div"] = args.max_hold_div
+    if getattr(args, "max_pos_jump", None) is not None:
+        tuning["max_pos_jump"] = args.max_pos_jump
     if args.arfilter is not None:
         tuning["arfilter"] = args.arfilter
     if args.arfilter_margin is not None:
@@ -320,6 +326,12 @@ def build_ppc_demo_command(args: argparse.Namespace,
     ratio = tuning.get("ratio")
     if isinstance(ratio, (int, float)):
         command.extend(["--ratio", str(ratio)])
+    max_hold_div = tuning.get("max_hold_div")
+    if isinstance(max_hold_div, (int, float)):
+        command.extend(["--max-hold-div", str(max_hold_div)])
+    max_pos_jump = tuning.get("max_pos_jump")
+    if isinstance(max_pos_jump, (int, float)):
+        command.extend(["--max-pos-jump", str(max_pos_jump)])
     arfilter = tuning.get("arfilter")
     if arfilter is True:
         command.append("--arfilter")

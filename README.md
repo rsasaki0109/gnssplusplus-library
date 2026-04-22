@@ -567,7 +567,8 @@ not assumed to be part of the PPC benchmark target. RTK ionosphere sweeps can be
 run reproducibly through `ppc-demo`, `ppc-rtk-signoff`, or
 `ppc-coverage-matrix` with `--iono auto|off|iflc|est`; PPC summaries record the
 requested value as `rtk_iono`. Ambiguity-ratio sweeps use `--ratio <value>`;
-PPC summaries record the requested value as `rtk_ratio_threshold`.
+PPC summaries record the requested value as `rtk_ratio_threshold`. Fixed-solution
+validation sweeps can also pass `--max-hold-div` and `--max-pos-jump`.
 
 Dataset source: [taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset)
 

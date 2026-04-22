@@ -167,6 +167,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional RTK ambiguity ratio threshold passed through to gnss solve when --solver rtk.",
     )
+    parser.add_argument(
+        "--max-hold-div",
+        type=float,
+        default=None,
+        help="Optional RTK hold-fix divergence guard passed through to gnss solve when --solver rtk.",
+    )
+    parser.add_argument(
+        "--max-pos-jump",
+        type=float,
+        default=None,
+        help="Optional RTK fixed-position jump guard passed through to gnss solve when --solver rtk.",
+    )
     parser.add_argument("--arfilter", dest="arfilter", action="store_true", help="Enable AR filter for RTK.")
     parser.add_argument("--no-arfilter", dest="arfilter", action="store_false", help="Disable AR filter for RTK.")
     parser.set_defaults(arfilter=None)
@@ -778,6 +790,10 @@ def run_solver(
             command.extend(["--iono", args.iono])
         if getattr(args, "ratio", None) is not None:
             command.extend(["--ratio", str(args.ratio)])
+        if getattr(args, "max_hold_div", None) is not None:
+            command.extend(["--max-hold-div", str(args.max_hold_div)])
+        if getattr(args, "max_pos_jump", None) is not None:
+            command.extend(["--max-pos-jump", str(args.max_pos_jump)])
         if args.arfilter is True:
             command.append("--arfilter")
         elif args.arfilter is False:
@@ -915,6 +931,8 @@ def build_summary_payload(
         "receiver_observation_provenance": ppc_receiver_observation_provenance(args._dataset_city),
         "rtk_iono": getattr(args, "iono", None) if args.solver == "rtk" else None,
         "rtk_ratio_threshold": getattr(args, "ratio", None) if args.solver == "rtk" else None,
+        "rtk_max_hold_divergence_m": getattr(args, "max_hold_div", None) if args.solver == "rtk" else None,
+        "rtk_max_position_jump_m": getattr(args, "max_pos_jump", None) if args.solver == "rtk" else None,
         "rtk_output_profile": "coverage" if getattr(args, "no_kinematic_post_filter", False) else "precision",
         "kinematic_post_filter_enabled": not getattr(args, "no_kinematic_post_filter", False),
         "nonfix_drift_guard_enabled": args.solver == "rtk" and not getattr(args, "no_nonfix_drift_guard", False),

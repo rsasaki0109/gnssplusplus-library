@@ -35,6 +35,9 @@ preset = "low-cost"
 # Optional AR ratio sweep. The six-run coverage profile currently favors 2.4
 # over IFLC on low-score Tokyo/Nagoya runs.
 # ratio = 2.4
+# Optional RTK fixed-solution validation sweeps.
+# max_hold_div = 5.0
+# max_pos_jump = 20.0
 arfilter = true
 arfilter_margin = 0.35
 min_hold_count = 8

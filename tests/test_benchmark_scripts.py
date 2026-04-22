@@ -234,6 +234,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 preset=None,
                 iono=None,
                 ratio=None,
+                max_hold_div=None,
+                max_pos_jump=None,
                 arfilter=None,
                 arfilter_margin=None,
                 min_hold_count=None,
@@ -251,6 +253,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "preset": "low-cost",
                 "iono": "iflc",
                 "ratio": 2.4,
+                "max_hold_div": 5.0,
+                "max_pos_jump": 20.0,
                 "arfilter": True,
                 "arfilter_margin": 0.35,
                 "min_hold_count": 8,
@@ -279,6 +283,10 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("iflc", command)
             self.assertIn("--ratio", command)
             self.assertIn("2.4", command)
+            self.assertIn("--max-hold-div", command)
+            self.assertIn("5.0", command)
+            self.assertIn("--max-pos-jump", command)
+            self.assertIn("20.0", command)
             self.assertIn("--arfilter", command)
             self.assertIn("--min-hold-count", command)
             self.assertIn("8", command)
@@ -320,6 +328,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 preset=None,
                 iono=None,
                 ratio=None,
+                max_hold_div=None,
+                max_pos_jump=None,
                 arfilter=None,
                 arfilter_margin=None,
                 min_hold_count=None,
@@ -396,6 +406,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 preset="low-cost",
                 iono="iflc",
                 ratio=2.4,
+                max_hold_div=5.0,
+                max_pos_jump=20.0,
                 rtklib_root=temp_root / "benchmark",
                 rtklib_bin=None,
                 rtklib_config=ROOT_DIR / "scripts" / "rtklib_odaiba.conf",
@@ -415,6 +427,10 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("iflc", command)
             self.assertIn("--ratio", command)
             self.assertIn("2.4", command)
+            self.assertIn("--max-hold-div", command)
+            self.assertIn("5.0", command)
+            self.assertIn("--max-pos-jump", command)
+            self.assertIn("20.0", command)
             self.assertIn("--rtklib-pos", command)
             self.assertIn(str(temp_root / "benchmark" / "tokyo_run1" / "rtklib.pos"), command)
             self.assertIn("--use-existing-rtklib-solution", command)
@@ -435,6 +451,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 preset="low-cost",
                 iono=None,
                 ratio=None,
+                max_hold_div=None,
+                max_pos_jump=None,
                 no_float_bridge_tail_guard=False,
             )
             paths = ppc_coverage_matrix.output_paths(args.output_dir, "tokyo", "run1")
@@ -2610,6 +2628,8 @@ class PPCDemoTest(unittest.TestCase):
             preset="low-cost",
             iono="iflc",
             ratio=2.4,
+            max_hold_div=5.0,
+            max_pos_jump=20.0,
             arfilter=False,
             arfilter_margin=None,
             min_hold_count=None,
@@ -2648,6 +2668,10 @@ class PPCDemoTest(unittest.TestCase):
         self.assertIn("iflc", commands[0])
         self.assertIn("--ratio", commands[0])
         self.assertIn("2.4", commands[0])
+        self.assertIn("--max-hold-div", commands[0])
+        self.assertIn("5.0", commands[0])
+        self.assertIn("--max-pos-jump", commands[0])
+        self.assertIn("20.0", commands[0])
         self.assertIn("--no-arfilter", commands[0])
         self.assertIn("--no-kinematic-post-filter", commands[0])
 
@@ -2744,6 +2768,8 @@ class PPCDemoTest(unittest.TestCase):
                 enable_ar=False,
                 iono="iflc",
                 ratio=2.4,
+                max_hold_div=5.0,
+                max_pos_jump=20.0,
                 low_dynamics=False,
                 no_kinematic_post_filter=True,
                 no_spp_height_step_guard=False,
@@ -2790,6 +2816,8 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["solver"], "rtk")
             self.assertEqual(payload["rtk_iono"], "iflc")
             self.assertEqual(payload["rtk_ratio_threshold"], 2.4)
+            self.assertEqual(payload["rtk_max_hold_divergence_m"], 5.0)
+            self.assertEqual(payload["rtk_max_position_jump_m"], 20.0)
             self.assertEqual(payload["rtk_output_profile"], "coverage")
             self.assertFalse(payload["kinematic_post_filter_enabled"])
             self.assertTrue(payload["nonfix_drift_guard_enabled"])
