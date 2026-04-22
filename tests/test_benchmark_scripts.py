@@ -1748,6 +1748,22 @@ class ScorecardRenderTest(unittest.TestCase):
             self.assertGreater(output_png.stat().st_size, 0)
 
             official_png = temp_root / "ppc_rtk_trajectory_official.png"
+            bad_segments_json = temp_root / "coverage_quality.json"
+            bad_segments_json.write_text(
+                json.dumps(
+                    {
+                        "bad_segments": [
+                            {
+                                "start_tow_s": 1.0,
+                                "end_tow_s": 2.0,
+                                "epochs": 2,
+                                "max_h_m": 3.2,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
             argv = [
                 "generate_ppc_rtk_trajectory.py",
                 "--lib-pos",
@@ -1762,6 +1778,8 @@ class ScorecardRenderTest(unittest.TestCase):
                 "Synthetic PPC official trajectory",
                 "--color-mode",
                 "official",
+                "--bad-segments-json",
+                str(bad_segments_json),
             ]
             with mock.patch.object(sys, "argv", argv):
                 with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):

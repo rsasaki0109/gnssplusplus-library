@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 from pathlib import Path
@@ -45,6 +46,7 @@ OFFICIAL_SCORE_LABELS = {
     "high_error": ">50 cm loss",
     "no_solution": "no-solution loss",
 }
+BAD_SEGMENT_COLOR = "#d1495b"
 
 
 def ppc_3d_score(matched, reference_count: int, threshold_m: float) -> tuple[int, float, float]:
@@ -85,6 +87,84 @@ def official_score_legend_handles():
     ]
 
 
+def bad_segment_legend_handle():
+    from matplotlib.lines import Line2D
+
+    return Line2D(
+        [0],
+        [0],
+        color=BAD_SEGMENT_COLOR,
+        lw=2.5,
+        marker="o",
+        markerfacecolor="none",
+        markeredgecolor=BAD_SEGMENT_COLOR,
+        markeredgewidth=1.2,
+        label="bad P95 segment",
+    )
+
+
+def load_bad_segments(path: Path | None, top_n: int) -> list[dict[str, object]]:
+    if path is None:
+        return []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    segments = list(payload.get("bad_segments", []))
+    segments.sort(
+        key=lambda row: (
+            int(row.get("epochs", 0) or 0),
+            float(row.get("max_h_m", 0.0) or 0.0),
+        ),
+        reverse=True,
+    )
+    return segments[:top_n] if top_n > 0 else segments
+
+
+def plot_bad_segment_overlays(ax, matched, bad_segments: list[dict[str, object]]) -> None:
+    for index, segment in enumerate(bad_segments, start=1):
+        start_tow = float(segment["start_tow_s"])
+        end_tow = float(segment["end_tow_s"])
+        points = [
+            (epoch.traj_east_m, epoch.traj_north_m)
+            for epoch in matched
+            if start_tow <= epoch.tow <= end_tow
+        ]
+        if not points:
+            continue
+        xs = [point[0] for point in points]
+        ys = [point[1] for point in points]
+        if len(points) > 1:
+            ax.plot(
+                xs,
+                ys,
+                color=BAD_SEGMENT_COLOR,
+                linewidth=2.0,
+                alpha=0.78,
+                zorder=10,
+            )
+        ax.scatter(
+            xs,
+            ys,
+            s=42,
+            marker="o",
+            facecolor="none",
+            edgecolor=BAD_SEGMENT_COLOR,
+            linewidth=1.15,
+            alpha=0.90,
+            zorder=11,
+        )
+        label_index = len(points) // 2
+        max_h_m = float(segment.get("max_h_m", 0.0) or 0.0)
+        ax.text(
+            xs[label_index],
+            ys[label_index],
+            f"{index}: {max_h_m:.0f}m",
+            fontsize=7.8,
+            color=BAD_SEGMENT_COLOR,
+            weight="bold",
+            bbox=dict(boxstyle="round,pad=0.20", facecolor="white", edgecolor=BAD_SEGMENT_COLOR, alpha=0.88),
+            zorder=12,
+        )
+
+
 def plot_official_score_segments(ax, reference_enu, official_records: list[dict[str, object]]) -> None:
     from matplotlib.collections import LineCollection
 
@@ -118,6 +198,7 @@ def draw_solver_panel(
     score_threshold_m: float,
     max_gap_s: float,
     color_mode: str,
+    bad_segments: list[dict[str, object]] | None = None,
 ) -> None:
     ax.set_facecolor(PANEL)
     ax.plot(reference_enu[:, 0], reference_enu[:, 1], color="black", linewidth=1.4, alpha=0.46, zorder=1)
@@ -125,6 +206,8 @@ def draw_solver_panel(
         plot_official_score_segments(ax, reference_enu, official_records)
     else:
         plot_solver_trajectory(ax, matched, solver=solver, max_gap_s=max_gap_s, point_size=9.5)
+    if bad_segments:
+        plot_bad_segment_overlays(ax, matched, bad_segments)
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlim(limits[0], limits[1])
     ax.set_ylim(limits[2], limits[3])
@@ -217,6 +300,18 @@ def main() -> int:
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
     parser.add_argument("--score-threshold-m", type=float, default=0.50)
     parser.add_argument("--max-gap-s", type=float, default=2.0)
+    parser.add_argument(
+        "--bad-segments-json",
+        type=Path,
+        default=None,
+        help="Optional coverage-quality JSON whose bad_segments should be highlighted on the gnssplusplus panel.",
+    )
+    parser.add_argument(
+        "--bad-segments-top-n",
+        type=int,
+        default=8,
+        help="Number of largest bad segments to overlay when --bad-segments-json is set (default: 8; <=0 for all).",
+    )
     args = parser.parse_args()
     if args.subtitle is None:
         args.subtitle = (
@@ -270,6 +365,7 @@ def main() -> int:
         args.match_tolerance_s,
         args.score_threshold_m,
     )
+    bad_segments = load_bad_segments(args.bad_segments_json, args.bad_segments_top_n)
     limits = padded_xy_limits(
         reference_enu[:, :2],
         matched_xy(lib_matched),
@@ -285,12 +381,18 @@ def main() -> int:
     ax_head.set_ylim(0, 1)
     ax_head.text(0.0, 0.78, args.title, fontsize=28, color=TEXT, weight="bold")
     ax_head.text(0.0, 0.28, args.subtitle, fontsize=12.8, color=MUTED)
+    legend_handles = (
+        official_score_legend_handles() if args.color_mode == "official" else build_status_legend_handles()
+    )
+    if bad_segments:
+        legend_handles = [*legend_handles, bad_segment_legend_handle()]
     ax_head.legend(
-        handles=official_score_legend_handles() if args.color_mode == "official" else build_status_legend_handles(),
-        loc="center right",
-        ncol=4,
+        handles=legend_handles,
+        loc="lower right",
+        bbox_to_anchor=(1.0, 0.00),
+        ncol=5 if bad_segments else 4,
         frameon=False,
-        fontsize=10,
+        fontsize=9.5,
     )
 
     ax_rtklib = fig.add_subplot(grid[1, 0])
@@ -322,6 +424,7 @@ def main() -> int:
         score_threshold_m=args.score_threshold_m,
         max_gap_s=args.max_gap_s,
         color_mode=args.color_mode,
+        bad_segments=bad_segments,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

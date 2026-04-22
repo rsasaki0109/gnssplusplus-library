@@ -103,6 +103,14 @@ the full per-reference-distance official score ledger.
 
 ![PPC Tokyo run1 coverage quality by status](ppc_tokyo_run1_coverage_quality.png)
 
+The bad-segment trajectory overlay keeps the same status colors and marks the
+largest horizontal-error intervals on the gnssplusplus panel. The dominant long
+segments are FLOAT-heavy around 188301-188437 s, while the worst short spikes
+around 189080-189084 s are FIXED bursts. That split is useful because FLOAT-tail
+cleanup and false-fix validation need different guards.
+
+![PPC Tokyo run1 bad segment trajectory](ppc_tokyo_run1_bad_segments_trajectory.png)
+
 ![PPC Tokyo run1 official-score trajectory](ppc_tokyo_run1_official_score_trajectory.png)
 
 Across the six PPC Tokyo/Nagoya runs, the default FLOAT bridge-tail guard

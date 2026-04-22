@@ -133,6 +133,14 @@ design work.
 
 ![PPC Tokyo run1 coverage quality by status](docs/ppc_tokyo_run1_coverage_quality.png)
 
+The highlighted 2D overlay shows that Tokyo run1's largest P95 contributors are
+clustered in the northern Odaiba section. The long 188301-188437 s intervals are
+mostly FLOAT, while the shorter 189080-189084 s spikes are FIXED false-fix
+bursts, so the next solver work should separate FLOAT recovery from fixed-burst
+validation instead of treating the whole P95 tail as one failure mode.
+
+![PPC Tokyo run1 bad segment trajectory](docs/ppc_tokyo_run1_bad_segments_trajectory.png)
+
 ![PPC Tokyo run1 official-score trajectory](docs/ppc_tokyo_run1_official_score_trajectory.png)
 
 Across the six PPC Tokyo/Nagoya runs, the default FLOAT bridge-tail guard
