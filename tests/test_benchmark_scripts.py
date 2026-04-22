@@ -47,6 +47,7 @@ import generate_feature_overview_card as feature_overview  # noqa: E402
 import generate_odaiba_scorecard as scorecard  # noqa: E402
 import generate_odaiba_social_card as social_card  # noqa: E402
 import analyze_ppc_coverage_quality as ppc_coverage_quality  # noqa: E402
+import analyze_ppc_residual_reset_sweep as ppc_residual_reset_sweep  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
 import generate_ppc_tail_cleanup_scorecard as ppc_tail_cleanup_scorecard  # noqa: E402
 import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
@@ -709,6 +710,100 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                         require_p95_h_delta_max=None,
                     ),
                 )
+
+
+class PPCResidualResetSweepAnalysisTest(unittest.TestCase):
+    @staticmethod
+    def summary_run(
+        key: str,
+        score_m: float,
+        total_m: float,
+        positioning_pct: float,
+        p95_h_m: float,
+    ) -> dict[str, object]:
+        city, _, run_name = key.partition("_")
+        return {
+            "key": key,
+            "city": city,
+            "run": run_name,
+            "metrics": {
+                "ppc_official_score_distance_m": score_m,
+                "ppc_official_total_distance_m": total_m,
+                "positioning_rate_pct": positioning_pct,
+                "p95_h_m": p95_h_m,
+            },
+        }
+
+    @staticmethod
+    def write_summary(path: Path, runs: list[dict[str, object]]) -> Path:
+        path.write_text(json.dumps({"runs": runs}), encoding="utf-8")
+        return path
+
+    def test_selector_analysis_reports_global_city_and_run_oracles(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_residual_reset_sweep_") as temp_dir:
+            temp_root = Path(temp_dir)
+            baseline_path = self.write_summary(
+                temp_root / "baseline.json",
+                [
+                    self.summary_run("tokyo_run1", 500.0, 1000.0, 90.0, 4.0),
+                    self.summary_run("tokyo_run2", 700.0, 1000.0, 92.0, 5.0),
+                    self.summary_run("nagoya_run1", 600.0, 2000.0, 80.0, 8.0),
+                ],
+            )
+            candidate_a_path = self.write_summary(
+                temp_root / "candidate_a.json",
+                [
+                    self.summary_run("tokyo_run1", 540.0, 1000.0, 91.0, 3.5),
+                    self.summary_run("tokyo_run2", 690.0, 1000.0, 91.5, 5.5),
+                    self.summary_run("nagoya_run1", 580.0, 2000.0, 78.0, 8.5),
+                ],
+            )
+            candidate_b_path = self.write_summary(
+                temp_root / "candidate_b.json",
+                [
+                    self.summary_run("tokyo_run1", 520.0, 1000.0, 89.0, 3.0),
+                    self.summary_run("tokyo_run2", 740.0, 1000.0, 92.5, 4.5),
+                    self.summary_run("nagoya_run1", 590.0, 2000.0, 79.0, 8.2),
+                ],
+            )
+
+            baseline = ppc_residual_reset_sweep.load_profile("baseline", baseline_path)
+            candidate_a = ppc_residual_reset_sweep.load_profile("candidate_a", candidate_a_path)
+            candidate_b = ppc_residual_reset_sweep.load_profile("candidate_b", candidate_b_path)
+            payload = ppc_residual_reset_sweep.build_payload(baseline, [candidate_a, candidate_b])
+            markdown = ppc_residual_reset_sweep.render_markdown(payload)
+
+            self.assertEqual(payload["profiles"][0]["weighted_official_score_pct"], 45.0)
+            self.assertEqual(payload["global_best_profile"]["label"], "candidate_b")
+            self.assertEqual(payload["global_best_profile"]["weighted_official_score_pct"], 46.25)
+            self.assertEqual(payload["best_by_city_selector"]["weighted_official_score_pct"], 46.5)
+            self.assertEqual(payload["best_by_city_selector"]["delta_vs_baseline_score_distance_m"], 60.0)
+            city_profiles = {
+                row["city"]: row["profile"]
+                for row in payload["best_by_city_selector"]["selections"]
+            }
+            self.assertEqual(city_profiles["tokyo"], "candidate_b")
+            self.assertEqual(city_profiles["nagoya"], "baseline")
+            self.assertEqual(payload["best_per_run_oracle"]["weighted_official_score_pct"], 47.0)
+            run_profiles = {row["key"]: row["best_profile"] for row in payload["runs"]}
+            self.assertEqual(run_profiles["tokyo_run1"], "candidate_a")
+            self.assertEqual(run_profiles["tokyo_run2"], "candidate_b")
+            self.assertEqual(run_profiles["nagoya_run1"], "baseline")
+            self.assertIn("Global best profile: **candidate_b**", markdown)
+            self.assertIn("Per-run oracle: **47.00%**", markdown)
+
+            summary_json = temp_root / "analysis.json"
+            markdown_output = temp_root / "analysis.md"
+            ppc_residual_reset_sweep.write_outputs(
+                payload,
+                argparse.Namespace(summary_json=summary_json, markdown_output=markdown_output),
+            )
+            written = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(
+                written["best_per_run_oracle"]["weighted_official_score_pct"],
+                47.0,
+            )
+            self.assertIn("City Selector", markdown_output.read_text(encoding="utf-8"))
 
 
 class PPCMetricsTest(unittest.TestCase):

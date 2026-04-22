@@ -164,6 +164,14 @@ run1 gain, so simply delaying resets eventually converges back toward the
 baseline. The best measured residual gate still trails the plain reset10
 baseline (**58.90%**) because positioning loss outweighs the p95 cleanup. Keep
 it opt-in while the next selector adds motion/continuity context.
+`scripts/analyze_ppc_residual_reset_sweep.py` compares those full-run summaries
+and computes selector upper bounds. On reset10 plus streak `3`/`5`/`8`, the
+global profile winner is still baseline (**58.90%**), a city selector reaches
+**58.97%** by applying streak `8` only to Tokyo, and a per-run oracle reaches
+**58.98%** by applying streak `5` to Tokyo run1, streak `8` to Tokyo run2, and
+baseline elsewhere. That is only **35.6 m** of official scored-distance upside,
+so the next target is a segment-level trigger rather than another whole-run
+threshold.
 
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
@@ -267,6 +275,14 @@ python3 apps/gnss.py ppc-coverage-matrix \
   --output-dir output/ppc_coverage_matrix_floatreset10 \
   --summary-json output/ppc_coverage_matrix_floatreset10/summary.json \
   --markdown-output output/ppc_coverage_matrix_floatreset10/table.md
+
+python3 scripts/analyze_ppc_residual_reset_sweep.py \
+  --baseline-summary-json output/ppc_coverage_matrix_floatreset10/summary.json \
+  --candidate streak3=output/ppc_coverage_matrix_floatreset10_prefit_streak3_6_30/ppc_coverage_matrix_summary.json \
+  --candidate streak5=output/ppc_coverage_matrix_floatreset10_prefit_streak5_6_30/ppc_coverage_matrix_summary.json \
+  --candidate streak8=output/ppc_coverage_matrix_floatreset10_prefit_streak8_6_30/ppc_coverage_matrix_summary.json \
+  --summary-json output/ppc_residual_reset_sweep_selector.json \
+  --markdown-output output/ppc_residual_reset_sweep_selector.md
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \

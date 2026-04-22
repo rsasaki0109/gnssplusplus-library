@@ -203,6 +203,14 @@ at streak `5` and **58.83%** at streak `8`; a streak `12` probe already loses
 the Tokyo run1 gain, so the useful band is finite. The best measured residual
 gate still trails the plain reset10 baseline at **58.90%**, so keep it opt-in
 until a continuity-aware selector can recover that remaining positioning loss.
+`scripts/analyze_ppc_residual_reset_sweep.py` now compares reset10 against
+residual-reset sweeps and reports selector upper bounds. On the reset10 plus
+streak `3`/`5`/`8` summaries, the global profile winner remains baseline
+(**58.90%**), a city selector reaches **58.97%** by using streak `8` only for
+Tokyo, and a per-run oracle reaches **58.98%** by using streak `5` for Tokyo
+run1, streak `8` for Tokyo run2, and baseline elsewhere. The gain is only
+**35.6 m** of official scored distance, so the next improvement needs a
+segment-level trigger rather than another whole-run threshold.
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
 GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**
@@ -660,6 +668,14 @@ python3 apps/gnss.py ppc-coverage-matrix \
   --output-dir output/ppc_coverage_matrix_floatreset10 \
   --summary-json output/ppc_coverage_matrix_floatreset10/summary.json \
   --markdown-output output/ppc_coverage_matrix_floatreset10/table.md
+
+python3 scripts/analyze_ppc_residual_reset_sweep.py \
+  --baseline-summary-json output/ppc_coverage_matrix_floatreset10/summary.json \
+  --candidate streak3=output/ppc_coverage_matrix_floatreset10_prefit_streak3_6_30/ppc_coverage_matrix_summary.json \
+  --candidate streak5=output/ppc_coverage_matrix_floatreset10_prefit_streak5_6_30/ppc_coverage_matrix_summary.json \
+  --candidate streak8=output/ppc_coverage_matrix_floatreset10_prefit_streak8_6_30/ppc_coverage_matrix_summary.json \
+  --summary-json output/ppc_residual_reset_sweep_selector.json \
+  --markdown-output output/ppc_residual_reset_sweep_selector.md
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \
