@@ -456,6 +456,35 @@ def official_delta_by_bucket(rows: list[dict[str, object]]) -> list[dict[str, ob
     return out
 
 
+def official_best_of_lib_rtklib_score(
+    lib_score: dict[str, object],
+    rows: list[dict[str, object]],
+) -> dict[str, object]:
+    total_distance_m = float(lib_score["ppc_official_total_distance_m"])
+    lib_score_distance_m = float(lib_score["ppc_official_score_distance_m"])
+    rtklib_gain_distance_m = sum(
+        float(row["segment_distance_m"])
+        for row in rows
+        if str(row["bucket"]) == "rtklib_gain"
+    )
+    best_score_distance_m = lib_score_distance_m + rtklib_gain_distance_m
+    remaining_distance_m = max(0.0, total_distance_m - best_score_distance_m)
+    return {
+        "score_distance_m": rounded(best_score_distance_m),
+        "score_pct": rounded(100.0 * best_score_distance_m / total_distance_m)
+        if total_distance_m > 0.0
+        else 0.0,
+        "rtklib_additional_distance_m": rounded(rtklib_gain_distance_m),
+        "rtklib_additional_pct": rounded(100.0 * rtklib_gain_distance_m / total_distance_m)
+        if total_distance_m > 0.0
+        else 0.0,
+        "remaining_unscored_distance_m": rounded(remaining_distance_m),
+        "remaining_unscored_pct": rounded(100.0 * remaining_distance_m / total_distance_m)
+        if total_distance_m > 0.0
+        else 0.0,
+    }
+
+
 def fixed_anchor(
     matches: list[comparison.MatchedEpoch],
     start_index: int,
@@ -645,6 +674,16 @@ def build_report(
         match_tolerance_s,
     )
     official_records = official_combined_records(lib_official_records, rtklib_official_records)
+    official_score = ppc_metrics.ppc_official_distance_score(
+        reference,
+        lib_epochs,
+        match_tolerance_s,
+    )
+    rtklib_official_score = ppc_metrics.ppc_official_distance_score(
+        reference,
+        rtklib_epochs,
+        match_tolerance_s,
+    )
     return {
         "reference_epochs": len(reference),
         "lib_matched_epochs": len(lib_matches),
@@ -656,15 +695,11 @@ def build_report(
         "lib_by_status": summarize_by_status(lib_matches, len(reference)),
         "p95_contribution_by_status": contribution_rows,
         "paired_delta_by_status": paired_degradation_by_status(pairs),
-        "official_score": ppc_metrics.ppc_official_distance_score(
-            reference,
-            lib_epochs,
-            match_tolerance_s,
-        ),
-        "rtklib_official_score": ppc_metrics.ppc_official_distance_score(
-            reference,
-            rtklib_epochs,
-            match_tolerance_s,
+        "official_score": official_score,
+        "rtklib_official_score": rtklib_official_score,
+        "official_best_of_lib_rtklib_score": official_best_of_lib_rtklib_score(
+            official_score,
+            official_records,
         ),
         "official_loss_by_state": official_loss_by_state(lib_official_records),
         "rtklib_official_loss_by_state": official_loss_by_state(rtklib_official_records),

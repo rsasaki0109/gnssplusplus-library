@@ -181,6 +181,11 @@ high-error **1330.7 m**, NO_SOLUTION **1250.9 m**, and FIXED high-error
 **451.6 m**; only **41.4 m** of the FIXED high-error distance has Ratio >= 10.
 That points the next non-IMU push at FLOAT recovery and dropout reacquisition
 first, with high-ratio false-fix validation as a smaller secondary target.
+Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
+**60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
+GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**
+(**17.52 pp**), so RTKLIB-side fallback cannot close the PPC2024 second-place
+gap.
 
 ![PPC RTK tail-cleanup diagnostic scorecard](docs/ppc_tail_cleanup_scorecard.png)
 

@@ -1675,6 +1675,14 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         }
         self.assertEqual(delta_by_bucket["gnssplusplus_gain"]["score_delta_pct"], 25.0)
         self.assertEqual(delta_by_bucket["rtklib_gain"]["score_delta_pct"], -25.0)
+        best_of_score = ppc_coverage_quality.official_best_of_lib_rtklib_score(
+            ppc_metrics.ppc_official_distance_score(reference, lib_solution, 0.25),
+            combined,
+        )
+        self.assertEqual(best_of_score["score_distance_m"], 20.0)
+        self.assertEqual(best_of_score["score_pct"], 50.0)
+        self.assertEqual(best_of_score["rtklib_additional_distance_m"], 10.0)
+        self.assertEqual(best_of_score["remaining_unscored_distance_m"], 20.0)
         self.assertEqual(combined[1]["lib_ratio"], 12.0)
         self.assertEqual(combined[1]["lib_baseline_m"], 101.0)
 
