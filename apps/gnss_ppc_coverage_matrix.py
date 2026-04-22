@@ -141,6 +141,12 @@ def parse_args() -> argparse.Namespace:
         help="Optional consecutive high-residual FLOAT epochs before state reset.",
     )
     parser.add_argument(
+        "--min-float-prefit-trusted-jump",
+        type=float,
+        default=None,
+        help="Optional minimum high-residual FLOAT jump from last trusted position before state reset.",
+    )
+    parser.add_argument(
         "--max-consec-float-reset",
         type=int,
         default=None,
@@ -284,6 +290,13 @@ def build_ppc_demo_command(
             [
                 "--max-float-prefit-reset-streak",
                 str(args.max_float_prefit_reset_streak),
+            ]
+        )
+    if getattr(args, "min_float_prefit_trusted_jump", None) is not None:
+        command.extend(
+            [
+                "--min-float-prefit-trusted-jump",
+                str(args.min_float_prefit_trusted_jump),
             ]
         )
     if getattr(args, "max_consec_float_reset", None) is not None:
@@ -548,6 +561,7 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_float_prefit_rms": getattr(args, "max_float_prefit_rms", None),
         "max_float_prefit_max": getattr(args, "max_float_prefit_max", None),
         "max_float_prefit_reset_streak": getattr(args, "max_float_prefit_reset_streak", None),
+        "min_float_prefit_trusted_jump": getattr(args, "min_float_prefit_trusted_jump", None),
         "max_consec_float_reset": getattr(args, "max_consec_float_reset", None),
         "max_consec_nonfix_reset": getattr(args, "max_consec_nonfix_reset", None),
         "max_postfix_rms": getattr(args, "max_postfix_rms", None),

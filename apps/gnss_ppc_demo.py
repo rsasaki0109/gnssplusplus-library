@@ -224,6 +224,12 @@ def parse_args() -> argparse.Namespace:
         help="Optional consecutive high-residual FLOAT epochs before state reset.",
     )
     parser.add_argument(
+        "--min-float-prefit-trusted-jump",
+        type=float,
+        default=None,
+        help="Optional minimum high-residual FLOAT jump from last trusted position before state reset.",
+    )
+    parser.add_argument(
         "--max-consec-float-reset",
         type=int,
         default=None,
@@ -981,6 +987,13 @@ def run_solver(
                     str(args.max_float_prefit_reset_streak),
                 ]
             )
+        if getattr(args, "min_float_prefit_trusted_jump", None) is not None:
+            command.extend(
+                [
+                    "--min-float-prefit-trusted-jump",
+                    str(args.min_float_prefit_trusted_jump),
+                ]
+            )
         if getattr(args, "max_consec_float_reset", None) is not None:
             command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
         if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -1176,6 +1189,9 @@ def build_summary_payload(
         ),
         "rtk_max_float_prefit_residual_reset_streak": (
             getattr(args, "max_float_prefit_reset_streak", None) if args.solver == "rtk" else None
+        ),
+        "rtk_min_float_prefit_residual_trusted_jump_m": (
+            getattr(args, "min_float_prefit_trusted_jump", None) if args.solver == "rtk" else None
         ),
         "rtk_max_consecutive_float_for_reset": (
             getattr(args, "max_consec_float_reset", None) if args.solver == "rtk" else None

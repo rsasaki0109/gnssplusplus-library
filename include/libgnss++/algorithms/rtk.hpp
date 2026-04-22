@@ -149,6 +149,12 @@ public:
         /// residual spikes.
         int max_float_prefit_residual_reset_streak = 3;
 
+        /// Minimum FLOAT position jump from the last trusted FIX/FLOAT state
+        /// before a high-prefit-residual reset is allowed. 0 (default)
+        /// preserves the residual-only behavior when the residual gate is
+        /// enabled.
+        double min_float_prefit_residual_trusted_jump_m = 0.0;
+
         /// Reset ambiguity state after N consecutive float epochs (aggressive reconvergence).
         /// 0 (default) disables the check — existing behavior preserved.
         int max_consecutive_float_for_reset = 0;
@@ -453,7 +459,18 @@ private:
     void resetAmbiguityStatesForReacquisition(const ObservationData& rover_obs,
                                               const NavigationData& nav);
     bool floatResidualExceedsReacquisitionGate() const;
-    bool shouldResetAfterFloatResidualGate();
+    bool floatResidualTrustedJumpPassesGate(
+        const PositionSolution& float_solution,
+        const Vector3d& saved_last_trusted_position,
+        bool saved_has_last_trusted,
+        const GNSSTime& saved_last_trusted_time,
+        bool saved_has_last_trusted_time) const;
+    bool shouldResetAfterFloatResidualGate(
+        const PositionSolution& float_solution,
+        const Vector3d& saved_last_trusted_position,
+        bool saved_has_last_trusted,
+        const GNSSTime& saved_last_trusted_time,
+        bool saved_has_last_trusted_time);
     void recordFixedEpoch();
     void recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav);
     void recordFallbackEpoch(const ObservationData& rover_obs, const NavigationData& nav);

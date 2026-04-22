@@ -172,6 +172,10 @@ global profile winner is still baseline (**58.90%**), a city selector reaches
 baseline elsewhere. That is only **35.6 m** of official scored-distance upside,
 so the next target is a segment-level trigger rather than another whole-run
 threshold.
+The opt-in `--min-float-prefit-trusted-jump` gate starts that selector path:
+high-residual FLOAT epochs only reset after the streak threshold when the FLOAT
+position is also at least the configured distance away from the last trusted
+FIX/FLOAT state. The default `0` preserves residual-only behavior.
 
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 

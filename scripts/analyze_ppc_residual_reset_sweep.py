@@ -165,6 +165,7 @@ def profile_settings(profile: Profile) -> dict[str, Any]:
         "max_float_prefit_rms",
         "max_float_prefit_max",
         "max_float_prefit_reset_streak",
+        "min_float_prefit_trusted_jump",
         "no_float_bridge_tail_guard",
         "fixed_bridge_burst_guard",
     )

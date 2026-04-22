@@ -1050,8 +1050,45 @@ bool RTKProcessor::floatResidualExceedsReacquisitionGate() const {
     return false;
 }
 
-bool RTKProcessor::shouldResetAfterFloatResidualGate() {
+bool RTKProcessor::floatResidualTrustedJumpPassesGate(
+    const PositionSolution& float_solution,
+    const Vector3d& saved_last_trusted_position,
+    bool saved_has_last_trusted,
+    const GNSSTime& saved_last_trusted_time,
+    bool saved_has_last_trusted_time) const {
+    const double min_trusted_jump =
+        rtk_config_.min_float_prefit_residual_trusted_jump_m;
+    if (!std::isfinite(min_trusted_jump) || min_trusted_jump <= 0.0) {
+        return true;
+    }
+    if (!saved_has_last_trusted || !saved_has_last_trusted_time ||
+        !float_solution.position_ecef.allFinite()) {
+        return false;
+    }
+    const double dt = float_solution.time - saved_last_trusted_time;
+    if (!std::isfinite(dt) || dt < 0.0) {
+        return false;
+    }
+    const double trusted_jump =
+        (float_solution.position_ecef - saved_last_trusted_position).norm();
+    return std::isfinite(trusted_jump) && trusted_jump >= min_trusted_jump;
+}
+
+bool RTKProcessor::shouldResetAfterFloatResidualGate(
+    const PositionSolution& float_solution,
+    const Vector3d& saved_last_trusted_position,
+    bool saved_has_last_trusted,
+    const GNSSTime& saved_last_trusted_time,
+    bool saved_has_last_trusted_time) {
     if (!floatResidualExceedsReacquisitionGate()) {
+        consecutive_high_float_residual_count_ = 0;
+        return false;
+    }
+    if (!floatResidualTrustedJumpPassesGate(float_solution,
+                                            saved_last_trusted_position,
+                                            saved_has_last_trusted,
+                                            saved_last_trusted_time,
+                                            saved_has_last_trusted_time)) {
         consecutive_high_float_residual_count_ = 0;
         return false;
     }
@@ -1540,7 +1577,12 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                 restoreHoldState(saved_hold_state);
                 solution = float_solution;
                 const bool reset_after_high_float =
-                    !moving_base_mode && shouldResetAfterFloatResidualGate();
+                    !moving_base_mode &&
+                    shouldResetAfterFloatResidualGate(float_solution,
+                                                      saved_last_trusted_position,
+                                                      saved_has_last_trusted,
+                                                      saved_last_trusted_time,
+                                                      saved_has_last_trusted_time);
                 if (reset_after_high_float) {
                     restoreRememberedState();
                 } else {

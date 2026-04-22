@@ -211,6 +211,11 @@ Tokyo, and a per-run oracle reaches **58.98%** by using streak `5` for Tokyo
 run1, streak `8` for Tokyo run2, and baseline elsewhere. The gain is only
 **35.6 m** of official scored distance, so the next improvement needs a
 segment-level trigger rather than another whole-run threshold.
+The opt-in `--min-float-prefit-trusted-jump` gate is the first continuity-aware
+selector for that path: high-residual FLOAT epochs only reset ambiguities after
+the streak threshold when the FLOAT position has also moved at least the
+configured distance from the last trusted FIX/FLOAT state. The default `0`
+preserves the residual-only experimental behavior.
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
 GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**
@@ -300,6 +305,7 @@ explicitly enabled.
 | `--max-pos-jump-min <m>` + `--max-pos-jump-rate <m/s>` | Reject fix if the jump from the last fixed position exceeds `max(min, rate * dt)`, so vehicle gaps can be tested without a stale absolute distance clamp. | `0` / `0` (disabled) |
 | `--max-float-spp-div <m>` | Reject FLOAT epochs that diverge from the same-epoch SPP solution by more than N meters, then fall back to SPP/no-solution. Diagnostic gate for PPC FLOAT high-error sweeps. | `0` (disabled) |
 | `--max-float-prefit-rms <m>` + `--max-float-prefit-max <m>` + `--max-float-prefit-reset-streak <N>` | Opt-in residual diagnostic gate. Reset ambiguity states for the next epoch after N consecutive otherwise accepted FLOAT epochs have high DD prefit residual RMS or max residual. The current FLOAT epoch is still reported, avoiding SPP fallback score loss and isolated residual spikes. Full PPC `6` / `30` reaches `58.52%` at streak `3`, `58.80%` at streak `5`, and `58.83%` at streak `8`, below the reset10 baseline `58.90%`, so it is not a default profile. | `0` / `0` (disabled) / `3` |
+| `--min-float-prefit-trusted-jump <m>` | Continuity selector for the residual gate. When > 0, high-residual FLOAT resets are allowed only if the FLOAT position has also diverged by at least N meters from the last trusted FIX/FLOAT position. This keeps the residual gate opt-in while making segment-level sweeps possible. | `0` (disabled) |
 | `--nonfix-drift-max-residual <m>` + `--nonfix-drift-min-horizontal-residual <m>` | Tighten the default low-speed non-FIX drift guard for tail diagnostics while avoiding vertical-only fallback pruning. The PPC diagnostic profile uses `4` / `6`. | `30` / `0` |
 | `--fixed-bridge-burst-guard` + `--fixed-bridge-burst-max-residual <m>` | Reject isolated short FIX bursts when they diverge from the straight bridge between surrounding FIX anchors. Tokyo run1 removes 12 false-fix-tail epochs with a small Positioning/Fix-rate cost, so it remains opt-in. | `false` / `20` |
 | `--max-consec-float-reset <N>` | Auto-reset ambiguities after N consecutive float epochs. `10` is the current PPC official-score candidate, trading Positioning coverage for more FIX recovery. | `0` (disabled) |
