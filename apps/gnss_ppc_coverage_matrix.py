@@ -117,6 +117,12 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK adaptive fixed-position jump rate passed to each ppc-demo run.",
     )
     parser.add_argument(
+        "--max-float-spp-div",
+        type=float,
+        default=None,
+        help="Optional RTK FLOAT-vs-SPP divergence guard passed to each ppc-demo run.",
+    )
+    parser.add_argument(
         "--max-consec-float-reset",
         type=int,
         default=None,
@@ -249,6 +255,8 @@ def build_ppc_demo_command(
         command.extend(["--max-pos-jump-min", str(args.max_pos_jump_min)])
     if getattr(args, "max_pos_jump_rate", None) is not None:
         command.extend(["--max-pos-jump-rate", str(args.max_pos_jump_rate)])
+    if getattr(args, "max_float_spp_div", None) is not None:
+        command.extend(["--max-float-spp-div", str(args.max_float_spp_div)])
     if getattr(args, "max_consec_float_reset", None) is not None:
         command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
     if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -507,6 +515,7 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_pos_jump": getattr(args, "max_pos_jump", None),
         "max_pos_jump_min": getattr(args, "max_pos_jump_min", None),
         "max_pos_jump_rate": getattr(args, "max_pos_jump_rate", None),
+        "max_float_spp_div": getattr(args, "max_float_spp_div", None),
         "max_consec_float_reset": getattr(args, "max_consec_float_reset", None),
         "max_consec_nonfix_reset": getattr(args, "max_consec_nonfix_reset", None),
         "max_postfix_rms": getattr(args, "max_postfix_rms", None),

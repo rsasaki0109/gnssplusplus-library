@@ -355,6 +355,21 @@ TEST(RTKLegacyCompatibilityStandaloneTest, MaxPositionJumpDefaultDisabled) {
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_rate_mps, 0.0);
 }
 
+TEST(RTKLegacyCompatibilityStandaloneTest, MaxFloatSppDivergenceDefaultDisabled) {
+    RTKProcessor processor;
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_float_spp_divergence_m, 0.0);
+
+    RTKProcessor::RTKConfig cfg;
+    cfg.max_float_spp_divergence_m = 0.0;
+    processor.setRTKConfig(cfg);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_float_spp_divergence_m, 0.0);
+
+    RTKProcessor::RTKConfig cfg2;
+    cfg2.max_float_spp_divergence_m = 30.0;
+    processor.setRTKConfig(cfg2);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_float_spp_divergence_m, 30.0);
+}
+
 TEST(RTKLegacyCompatibilityStandaloneTest, MaxConsecutiveFloatResetDefaultDisabled) {
     RTKProcessor processor;
     EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 0);

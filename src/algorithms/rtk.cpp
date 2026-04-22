@@ -1247,7 +1247,14 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             solution = generateSolution(rover_obs.time, SolutionStatus::FLOAT, n_sats);
             const PositionSolution float_solution = solution;
 
-            if (!finitePosition(solution) || deviatesTooFarFromSPP(solution, 150.0)) {
+            const double max_float_spp_divergence_m = rtk_config_.max_float_spp_divergence_m;
+            const bool float_exceeds_spp_gate =
+                std::isfinite(max_float_spp_divergence_m) &&
+                max_float_spp_divergence_m > 0.0 &&
+                deviatesTooFarFromSPP(solution, max_float_spp_divergence_m);
+            if (!finitePosition(solution) ||
+                deviatesTooFarFromSPP(solution, 150.0) ||
+                float_exceeds_spp_gate) {
                 last_solution_position_ = saved_last_solution_position;
                 has_last_solution_position_ = saved_has_last_solution;
                 last_epoch_time_ = saved_last_solution_time;

@@ -125,6 +125,12 @@ public:
         double max_position_jump_min_m = 0.0;
         double max_position_jump_rate_mps = 0.0;
 
+        /// Max FLOAT solution divergence from same-epoch SPP in meters.
+        /// When > 0, FLOAT epochs farther than this from the current SPP
+        /// solution fall back to SPP/no-solution. 0 (default) disables the
+        /// diagnostic gate and preserves existing behavior.
+        double max_float_spp_divergence_m = 0.0;
+
         /// Reset ambiguity state after N consecutive float epochs (aggressive reconvergence).
         /// 0 (default) disables the check — existing behavior preserved.
         int max_consecutive_float_for_reset = 0;

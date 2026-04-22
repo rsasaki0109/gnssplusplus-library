@@ -200,6 +200,12 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK adaptive fixed-position jump rate passed through to gnss solve.",
     )
     parser.add_argument(
+        "--max-float-spp-div",
+        type=float,
+        default=None,
+        help="Optional RTK FLOAT-vs-SPP divergence guard passed through to gnss solve.",
+    )
+    parser.add_argument(
         "--max-consec-float-reset",
         type=int,
         default=None,
@@ -944,6 +950,8 @@ def run_solver(
             command.extend(["--max-pos-jump-min", str(args.max_pos_jump_min)])
         if getattr(args, "max_pos_jump_rate", None) is not None:
             command.extend(["--max-pos-jump-rate", str(args.max_pos_jump_rate)])
+        if getattr(args, "max_float_spp_div", None) is not None:
+            command.extend(["--max-float-spp-div", str(args.max_float_spp_div)])
         if getattr(args, "max_consec_float_reset", None) is not None:
             command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
         if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -1127,6 +1135,9 @@ def build_summary_payload(
         ),
         "rtk_max_position_jump_rate_mps": (
             getattr(args, "max_pos_jump_rate", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_float_spp_divergence_m": (
+            getattr(args, "max_float_spp_div", None) if args.solver == "rtk" else None
         ),
         "rtk_max_consecutive_float_for_reset": (
             getattr(args, "max_consec_float_reset", None) if args.solver == "rtk" else None
