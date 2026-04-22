@@ -158,9 +158,12 @@ score by replacing usable FLOAT epochs with SPP/no-solution, so the implemented
 gate is reset-only and defaults to a 3-epoch streak. On the full six-run PPC
 replay, `6` / `30` / streak `3` improves the residual gate prototype from
 **54.14%** (fallback) and **54.39%** (single-epoch reset-only) to **58.52%**
-weighted official score, but it still trails the plain reset10 baseline
-(**58.90%**) because positioning loss outweighs the p95 cleanup. Keep it
-opt-in while the next selector adds motion/continuity context.
+weighted official score. Sweeping the same thresholds gives **58.80%** at
+streak `5` and **58.83%** at streak `8`; a streak `12` probe loses the Tokyo
+run1 gain, so simply delaying resets eventually converges back toward the
+baseline. The best measured residual gate still trails the plain reset10
+baseline (**58.90%**) because positioning loss outweighs the p95 cleanup. Keep
+it opt-in while the next selector adds motion/continuity context.
 
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 

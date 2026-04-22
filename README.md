@@ -198,9 +198,11 @@ prototype was too aggressive on full PPC runs because it replaced usable FLOAT
 epochs with SPP/no-solution, so the shipped gate is reset-only and streaked.
 On the full six-run PPC replay, `6` / `30` / streak `3` lifts the residual gate
 prototype from **54.14%** (fallback) and **54.39%** (single-epoch reset-only) to
-**58.52%** weighted official score, but it still trails the plain reset10
-baseline at **58.90%**; keep it opt-in until a continuity-aware selector can
-recover that remaining positioning loss.
+**58.52%** weighted official score. A streak sweep improves that to **58.80%**
+at streak `5` and **58.83%** at streak `8`; a streak `12` probe already loses
+the Tokyo run1 gain, so the useful band is finite. The best measured residual
+gate still trails the plain reset10 baseline at **58.90%**, so keep it opt-in
+until a continuity-aware selector can recover that remaining positioning loss.
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
 GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**
@@ -289,7 +291,7 @@ explicitly enabled.
 | `--max-pos-jump <m>` | Reject fix if the epoch-to-epoch position jump exceeds N meters. | `0` (disabled) |
 | `--max-pos-jump-min <m>` + `--max-pos-jump-rate <m/s>` | Reject fix if the jump from the last fixed position exceeds `max(min, rate * dt)`, so vehicle gaps can be tested without a stale absolute distance clamp. | `0` / `0` (disabled) |
 | `--max-float-spp-div <m>` | Reject FLOAT epochs that diverge from the same-epoch SPP solution by more than N meters, then fall back to SPP/no-solution. Diagnostic gate for PPC FLOAT high-error sweeps. | `0` (disabled) |
-| `--max-float-prefit-rms <m>` + `--max-float-prefit-max <m>` + `--max-float-prefit-reset-streak <N>` | Opt-in residual diagnostic gate. Reset ambiguity states for the next epoch after N consecutive otherwise accepted FLOAT epochs have high DD prefit residual RMS or max residual. The current FLOAT epoch is still reported, avoiding SPP fallback score loss and isolated residual spikes. Full PPC `6` / `30` / `3` reaches `58.52%`, below the reset10 baseline `58.90%`, so it is not a default profile. | `0` / `0` (disabled) / `3` |
+| `--max-float-prefit-rms <m>` + `--max-float-prefit-max <m>` + `--max-float-prefit-reset-streak <N>` | Opt-in residual diagnostic gate. Reset ambiguity states for the next epoch after N consecutive otherwise accepted FLOAT epochs have high DD prefit residual RMS or max residual. The current FLOAT epoch is still reported, avoiding SPP fallback score loss and isolated residual spikes. Full PPC `6` / `30` reaches `58.52%` at streak `3`, `58.80%` at streak `5`, and `58.83%` at streak `8`, below the reset10 baseline `58.90%`, so it is not a default profile. | `0` / `0` (disabled) / `3` |
 | `--nonfix-drift-max-residual <m>` + `--nonfix-drift-min-horizontal-residual <m>` | Tighten the default low-speed non-FIX drift guard for tail diagnostics while avoiding vertical-only fallback pruning. The PPC diagnostic profile uses `4` / `6`. | `30` / `0` |
 | `--fixed-bridge-burst-guard` + `--fixed-bridge-burst-max-residual <m>` | Reject isolated short FIX bursts when they diverge from the straight bridge between surrounding FIX anchors. Tokyo run1 removes 12 false-fix-tail epochs with a small Positioning/Fix-rate cost, so it remains opt-in. | `false` / `20` |
 | `--max-consec-float-reset <N>` | Auto-reset ambiguities after N consecutive float epochs. `10` is the current PPC official-score candidate, trading Positioning coverage for more FIX recovery. | `0` (disabled) |
