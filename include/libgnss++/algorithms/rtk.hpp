@@ -132,16 +132,22 @@ public:
         double max_float_spp_divergence_m = 0.0;
 
         /// Max accepted FLOAT prefit DD residual RMS in meters.
-        /// When > 0, high-residual FLOAT epochs reset ambiguity states and
-        /// fall back to SPP/no-solution instead of being reported as FLOAT.
+        /// When > 0, high-residual FLOAT epochs are still reported as FLOAT,
+        /// but ambiguity states are reset for the next epoch's reacquisition.
         /// 0 (default) disables the diagnostic gate.
         double max_float_prefit_residual_rms_m = 0.0;
 
         /// Max accepted FLOAT prefit DD residual magnitude in meters.
-        /// When > 0, high-residual FLOAT epochs reset ambiguity states and
-        /// fall back to SPP/no-solution instead of being reported as FLOAT.
+        /// When > 0, high-residual FLOAT epochs are still reported as FLOAT,
+        /// but ambiguity states are reset for the next epoch's reacquisition.
         /// 0 (default) disables the diagnostic gate.
         double max_float_prefit_residual_max_m = 0.0;
+
+        /// Number of consecutive high-residual FLOAT epochs before resetting
+        /// ambiguity states. Used only when a FLOAT prefit residual threshold
+        /// is enabled. Defaults to 3 to avoid reacting to isolated multipath
+        /// residual spikes.
+        int max_float_prefit_residual_reset_streak = 3;
 
         /// Reset ambiguity state after N consecutive float epochs (aggressive reconvergence).
         /// 0 (default) disables the check — existing behavior preserved.
@@ -296,6 +302,9 @@ private:
     // Consecutive non-FIX tracking for ambiguity auto-reset gate
     int consecutive_nonfix_count_ = 0;
 
+    // Consecutive high-residual FLOAT tracking for residual-aware reacquisition
+    int consecutive_high_float_residual_count_ = 0;
+
     // Last fix data for holdamb
     struct DDPair {
         SatelliteId ref_sat;
@@ -444,6 +453,7 @@ private:
     void resetAmbiguityStatesForReacquisition(const ObservationData& rover_obs,
                                               const NavigationData& nav);
     bool floatResidualExceedsReacquisitionGate() const;
+    bool shouldResetAfterFloatResidualGate();
     void recordFixedEpoch();
     void recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav);
     void recordFallbackEpoch(const ObservationData& rover_obs, const NavigationData& nav);

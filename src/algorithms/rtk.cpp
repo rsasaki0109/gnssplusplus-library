@@ -309,6 +309,7 @@ void RTKProcessor::reset() {
     consecutive_fix_count_ = 0;
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
+    consecutive_high_float_residual_count_ = 0;
     last_ar_ratio_ = 0.0;
     last_num_fixed_ambiguities_ = 0;
     current_update_diagnostics_ = RTKUpdateDiagnostics{};
@@ -1009,6 +1010,7 @@ void RTKProcessor::resetAmbiguityStatesForReacquisition(const ObservationData& r
     if (!filter_initialized_) {
         consecutive_float_count_ = 0;
         consecutive_nonfix_count_ = 0;
+        consecutive_high_float_residual_count_ = 0;
         return;
     }
 
@@ -1026,6 +1028,7 @@ void RTKProcessor::resetAmbiguityStatesForReacquisition(const ObservationData& r
     // last_best_subset_) — they enable hold fix after reset.
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
+    consecutive_high_float_residual_count_ = 0;
 }
 
 bool RTKProcessor::floatResidualExceedsReacquisitionGate() const {
@@ -1047,9 +1050,25 @@ bool RTKProcessor::floatResidualExceedsReacquisitionGate() const {
     return false;
 }
 
+bool RTKProcessor::shouldResetAfterFloatResidualGate() {
+    if (!floatResidualExceedsReacquisitionGate()) {
+        consecutive_high_float_residual_count_ = 0;
+        return false;
+    }
+    consecutive_high_float_residual_count_++;
+    const int reset_streak =
+        std::max(1, rtk_config_.max_float_prefit_residual_reset_streak);
+    if (consecutive_high_float_residual_count_ < reset_streak) {
+        return false;
+    }
+    consecutive_high_float_residual_count_ = 0;
+    return true;
+}
+
 void RTKProcessor::recordFixedEpoch() {
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
+    consecutive_high_float_residual_count_ = 0;
 }
 
 void RTKProcessor::recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav) {
@@ -1066,6 +1085,7 @@ void RTKProcessor::recordFloatEpoch(const ObservationData& rover_obs, const Navi
 void RTKProcessor::recordFallbackEpoch(const ObservationData& rover_obs, const NavigationData& nav) {
     consecutive_fix_count_ = 0;
     consecutive_float_count_ = 0;
+    consecutive_high_float_residual_count_ = 0;
     if (!filter_initialized_) {
         consecutive_nonfix_count_ = 0;
         return;
@@ -1153,6 +1173,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             consecutive_fix_count_ = 0;
             consecutive_float_count_ = 0;
             consecutive_nonfix_count_ = 0;
+            consecutive_high_float_residual_count_ = 0;
             return spp;
         }
 
@@ -1273,6 +1294,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                 has_last_trusted_position_ = saved_has_last_trusted;
                 last_trusted_time_ = saved_last_trusted_time;
                 has_last_trusted_time_ = saved_has_last_trusted_time;
+                consecutive_high_float_residual_count_ = 0;
             };
             last_ar_ratio_ = 0.0;
             last_num_fixed_ambiguities_ = 0;
@@ -1516,15 +1538,21 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
 
             if (!applied_fix_solution) {
                 restoreHoldState(saved_hold_state);
-                if (!moving_base_mode && floatResidualExceedsReacquisitionGate()) {
+                solution = float_solution;
+                const bool reset_after_high_float =
+                    !moving_base_mode && shouldResetAfterFloatResidualGate();
+                if (reset_after_high_float) {
                     restoreRememberedState();
-                    resetAmbiguityStatesForReacquisition(rover_obs, nav);
-                    return fallback_spp();
+                } else {
+                    rememberSolution(float_solution);
                 }
-                rememberSolution(float_solution);
                 updateStatistics(SolutionStatus::FLOAT);
                 consecutive_fix_count_ = 0;
-                recordFloatEpoch(rover_obs, nav);
+                if (reset_after_high_float) {
+                    resetAmbiguityStatesForReacquisition(rover_obs, nav);
+                } else {
+                    recordFloatEpoch(rover_obs, nav);
+                }
             }
         } else {
             return fallback_spp();
@@ -1536,6 +1564,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
         consecutive_fix_count_ = 0;
         consecutive_float_count_ = 0;
         consecutive_nonfix_count_ = 0;
+        consecutive_high_float_residual_count_ = 0;
         return spp;
     }
     return solution;

@@ -151,10 +151,16 @@ A targeted Nagoya run2 loss-window replay (555940-556070 s) shows scored FLOAT
 prefit residual RMS around **0.25 m** versus FLOAT high-error median **4.54 m**,
 with median max residual **20.0 m** in the high-error group. The
 `--max-float-prefit-rms` / `--max-float-prefit-max` gates use that residual
-signal directly by resetting ambiguities and falling back when a no-fix FLOAT
-epoch exceeds either threshold. In this loss-window smoke, `6` / `30` kept
-scored distance unchanged while tighter `2` / `12` and max-only `20` were too
-aggressive.
+signal directly by reporting the FLOAT epoch but resetting ambiguities for the
+next epoch after `--max-float-prefit-reset-streak` consecutive no-fix FLOAT
+epochs exceed either threshold. A fallback-style prototype reduced full-run
+score by replacing usable FLOAT epochs with SPP/no-solution, so the implemented
+gate is reset-only and defaults to a 3-epoch streak. On the full six-run PPC
+replay, `6` / `30` / streak `3` improves the residual gate prototype from
+**54.14%** (fallback) and **54.39%** (single-epoch reset-only) to **58.52%**
+weighted official score, but it still trails the plain reset10 baseline
+(**58.90%**) because positioning loss outweighs the p95 cleanup. Keep it
+opt-in while the next selector adds motion/continuity context.
 
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
