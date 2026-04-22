@@ -11683,6 +11683,8 @@ class CLIToolsTest(unittest.TestCase):
                 "7",
                 "--hold-ratio-threshold",
                 "2.6",
+                "--max-consec-nonfix-reset",
+                "4",
                 "--max-epochs",
                 "5",
                 "--out",

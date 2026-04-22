@@ -129,6 +129,12 @@ public:
         /// 0 (default) disables the check — existing behavior preserved.
         int max_consecutive_float_for_reset = 0;
 
+        /// Reset ambiguity state after N consecutive non-FIX epochs.
+        /// Counts FLOAT, SPP fallback, and no-solution epochs, so urban dropouts
+        /// can force a clean ambiguity reacquisition even when FLOAT streaks are
+        /// broken by fallback epochs. 0 (default) disables the check.
+        int max_consecutive_nonfix_for_reset = 0;
+
         /// Max L1 post-fix phase residual RMS in meters.
         /// Computed after the LAMBDA fix is obtained, using the fixed DD ambiguities.
         /// 0 (default) disables the check — existing behavior preserved.
@@ -269,6 +275,9 @@ private:
     // Consecutive float tracking for ambiguity auto-reset gate
     int consecutive_float_count_ = 0;
 
+    // Consecutive non-FIX tracking for ambiguity auto-reset gate
+    int consecutive_nonfix_count_ = 0;
+
     // Last fix data for holdamb
     struct DDPair {
         SatelliteId ref_sat;
@@ -401,6 +410,11 @@ private:
      */
     void handleConsecutiveFloatReset(const ObservationData& rover_obs,
                                      const NavigationData& nav);
+    void resetAmbiguityStatesForReacquisition(const ObservationData& rover_obs,
+                                              const NavigationData& nav);
+    void recordFixedEpoch();
+    void recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav);
+    void recordFallbackEpoch(const ObservationData& rover_obs, const NavigationData& nav);
 
     /**
      * Full KF update with DD observation model mapping to SD states

@@ -358,21 +358,28 @@ TEST(RTKLegacyCompatibilityStandaloneTest, MaxPositionJumpDefaultDisabled) {
 TEST(RTKLegacyCompatibilityStandaloneTest, MaxConsecutiveFloatResetDefaultDisabled) {
     RTKProcessor processor;
     EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 0);
+    EXPECT_EQ(processor.getRTKConfig().max_consecutive_nonfix_for_reset, 0);
 
     RTKProcessor::RTKConfig cfg;
     cfg.max_consecutive_float_for_reset = 0;
+    cfg.max_consecutive_nonfix_for_reset = 0;
     processor.setRTKConfig(cfg);
     EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 0);
+    EXPECT_EQ(processor.getRTKConfig().max_consecutive_nonfix_for_reset, 0);
 
     RTKProcessor::RTKConfig cfg2;
     cfg2.max_consecutive_float_for_reset = 10;
+    cfg2.max_consecutive_nonfix_for_reset = 12;
     processor.setRTKConfig(cfg2);
     EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 10);
+    EXPECT_EQ(processor.getRTKConfig().max_consecutive_nonfix_for_reset, 12);
 
     RTKProcessor::RTKConfig cfg3;
     cfg3.max_consecutive_float_for_reset = 0;
+    cfg3.max_consecutive_nonfix_for_reset = 0;
     processor.setRTKConfig(cfg3);
     EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 0);
+    EXPECT_EQ(processor.getRTKConfig().max_consecutive_nonfix_for_reset, 0);
 }
 
 TEST(RTKLegacyCompatibilityStandaloneTest, MaxPostfixResidualRmsDefaultDisabled) {

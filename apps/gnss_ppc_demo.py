@@ -206,6 +206,18 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK ambiguity reset after N consecutive FLOAT epochs.",
     )
     parser.add_argument(
+        "--max-consec-nonfix-reset",
+        type=int,
+        default=None,
+        help="Optional RTK ambiguity reset after N consecutive non-FIX epochs.",
+    )
+    parser.add_argument(
+        "--max-postfix-rms",
+        type=float,
+        default=None,
+        help="Optional RTK post-fix residual RMS rejection threshold in meters.",
+    )
+    parser.add_argument(
         "--enable-wide-lane-ar",
         action="store_true",
         help="Enable the RTK Melbourne-Wubbena wide-lane AR pre-step.",
@@ -934,6 +946,10 @@ def run_solver(
             command.extend(["--max-pos-jump-rate", str(args.max_pos_jump_rate)])
         if getattr(args, "max_consec_float_reset", None) is not None:
             command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
+        if getattr(args, "max_consec_nonfix_reset", None) is not None:
+            command.extend(["--max-consec-nonfix-reset", str(args.max_consec_nonfix_reset)])
+        if getattr(args, "max_postfix_rms", None) is not None:
+            command.extend(["--max-postfix-rms", str(args.max_postfix_rms)])
         if getattr(args, "enable_wide_lane_ar", False):
             command.append("--enable-wide-lane-ar")
         if getattr(args, "wide_lane_threshold", None) is not None:
@@ -1114,6 +1130,12 @@ def build_summary_payload(
         ),
         "rtk_max_consecutive_float_for_reset": (
             getattr(args, "max_consec_float_reset", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_consecutive_nonfix_for_reset": (
+            getattr(args, "max_consec_nonfix_reset", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_postfix_residual_rms_m": (
+            getattr(args, "max_postfix_rms", None) if args.solver == "rtk" else None
         ),
         "rtk_wide_lane_ar_enabled": bool(
             args.solver == "rtk" and getattr(args, "enable_wide_lane_ar", False)

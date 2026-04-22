@@ -57,6 +57,8 @@ preset = "low-cost"
 # Optional official-score experiment knobs. Use coverage-matrix sweeps before
 # promoting any value to a sign-off profile.
 # max_consec_float_reset = 10
+# max_consec_nonfix_reset = 10
+# max_postfix_rms = 0.20
 # enable_wide_lane_ar = true
 # wide_lane_threshold = 0.10
 arfilter = true

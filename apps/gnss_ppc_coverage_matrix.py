@@ -122,6 +122,13 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional RTK ambiguity reset after N consecutive FLOAT epochs.",
     )
+    parser.add_argument(
+        "--max-consec-nonfix-reset",
+        type=int,
+        default=None,
+        help="Optional RTK ambiguity reset after N consecutive non-FIX epochs.",
+    )
+    parser.add_argument("--max-postfix-rms", type=float, default=None)
     parser.add_argument("--enable-wide-lane-ar", action="store_true")
     parser.add_argument("--wide-lane-threshold", type=float, default=None)
     parser.add_argument(
@@ -244,6 +251,10 @@ def build_ppc_demo_command(
         command.extend(["--max-pos-jump-rate", str(args.max_pos_jump_rate)])
     if getattr(args, "max_consec_float_reset", None) is not None:
         command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
+    if getattr(args, "max_consec_nonfix_reset", None) is not None:
+        command.extend(["--max-consec-nonfix-reset", str(args.max_consec_nonfix_reset)])
+    if getattr(args, "max_postfix_rms", None) is not None:
+        command.extend(["--max-postfix-rms", str(args.max_postfix_rms)])
     if getattr(args, "enable_wide_lane_ar", False):
         command.append("--enable-wide-lane-ar")
     if getattr(args, "wide_lane_threshold", None) is not None:
@@ -497,6 +508,8 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_pos_jump_min": getattr(args, "max_pos_jump_min", None),
         "max_pos_jump_rate": getattr(args, "max_pos_jump_rate", None),
         "max_consec_float_reset": getattr(args, "max_consec_float_reset", None),
+        "max_consec_nonfix_reset": getattr(args, "max_consec_nonfix_reset", None),
+        "max_postfix_rms": getattr(args, "max_postfix_rms", None),
         "enable_wide_lane_ar": getattr(args, "enable_wide_lane_ar", False),
         "wide_lane_threshold": getattr(args, "wide_lane_threshold", None),
         "no_nonfix_drift_guard": getattr(args, "no_nonfix_drift_guard", False),

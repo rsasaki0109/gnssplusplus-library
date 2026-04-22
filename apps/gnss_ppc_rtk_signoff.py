@@ -143,6 +143,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-pos-jump-min", type=float, default=None)
     parser.add_argument("--max-pos-jump-rate", type=float, default=None)
     parser.add_argument("--max-consec-float-reset", type=int, default=None)
+    parser.add_argument("--max-consec-nonfix-reset", type=int, default=None)
+    parser.add_argument("--max-postfix-rms", type=float, default=None)
     parser.add_argument("--enable-wide-lane-ar", action="store_true")
     parser.add_argument("--wide-lane-threshold", type=float, default=None)
     parser.add_argument("--no-nonfix-drift-guard", action="store_true")
@@ -239,6 +241,10 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["max_pos_jump_rate"] = args.max_pos_jump_rate
     if getattr(args, "max_consec_float_reset", None) is not None:
         tuning["max_consec_float_reset"] = args.max_consec_float_reset
+    if getattr(args, "max_consec_nonfix_reset", None) is not None:
+        tuning["max_consec_nonfix_reset"] = args.max_consec_nonfix_reset
+    if getattr(args, "max_postfix_rms", None) is not None:
+        tuning["max_postfix_rms"] = args.max_postfix_rms
     if getattr(args, "enable_wide_lane_ar", False):
         tuning["enable_wide_lane_ar"] = True
     if getattr(args, "wide_lane_threshold", None) is not None:
@@ -392,6 +398,12 @@ def build_ppc_demo_command(args: argparse.Namespace,
     max_consec_float_reset = tuning.get("max_consec_float_reset")
     if isinstance(max_consec_float_reset, int):
         command.extend(["--max-consec-float-reset", str(max_consec_float_reset)])
+    max_consec_nonfix_reset = tuning.get("max_consec_nonfix_reset")
+    if isinstance(max_consec_nonfix_reset, int):
+        command.extend(["--max-consec-nonfix-reset", str(max_consec_nonfix_reset)])
+    max_postfix_rms = tuning.get("max_postfix_rms")
+    if isinstance(max_postfix_rms, (int, float)):
+        command.extend(["--max-postfix-rms", str(max_postfix_rms)])
     if tuning.get("enable_wide_lane_ar") is True:
         command.append("--enable-wide-lane-ar")
     wide_lane_threshold = tuning.get("wide_lane_threshold")

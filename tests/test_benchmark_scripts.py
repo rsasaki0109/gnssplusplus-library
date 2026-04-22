@@ -240,6 +240,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 max_pos_jump_min=None,
                 max_pos_jump_rate=None,
                 max_consec_float_reset=None,
+                max_consec_nonfix_reset=None,
+                max_postfix_rms=None,
                 enable_wide_lane_ar=False,
                 wide_lane_threshold=None,
                 arfilter=None,
@@ -264,6 +266,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "max_pos_jump_min": 20.0,
                 "max_pos_jump_rate": 25.0,
                 "max_consec_float_reset": 10,
+                "max_consec_nonfix_reset": 10,
+                "max_postfix_rms": 0.20,
                 "enable_wide_lane_ar": True,
                 "wide_lane_threshold": 0.10,
                 "nonfix_drift_max_anchor_gap": 90.0,
@@ -315,6 +319,9 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("25.0", command)
             self.assertIn("--max-consec-float-reset", command)
             self.assertIn("10", command)
+            self.assertIn("--max-consec-nonfix-reset", command)
+            self.assertIn("--max-postfix-rms", command)
+            self.assertIn("0.2", command)
             self.assertIn("--enable-wide-lane-ar", command)
             self.assertIn("--wide-lane-threshold", command)
             self.assertIn("0.1", command)
@@ -461,6 +468,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 max_pos_jump_min=20.0,
                 max_pos_jump_rate=25.0,
                 max_consec_float_reset=10,
+                max_consec_nonfix_reset=10,
+                max_postfix_rms=0.20,
                 enable_wide_lane_ar=True,
                 wide_lane_threshold=0.10,
                 fixed_bridge_burst_guard=True,
@@ -512,6 +521,9 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("25.0", command)
             self.assertIn("--max-consec-float-reset", command)
             self.assertIn("10", command)
+            self.assertIn("--max-consec-nonfix-reset", command)
+            self.assertIn("--max-postfix-rms", command)
+            self.assertIn("0.2", command)
             self.assertIn("--enable-wide-lane-ar", command)
             self.assertIn("--wide-lane-threshold", command)
             self.assertIn("0.1", command)
@@ -569,6 +581,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 max_pos_jump_min=None,
                 max_pos_jump_rate=None,
                 max_consec_float_reset=None,
+                max_consec_nonfix_reset=None,
+                max_postfix_rms=None,
                 enable_wide_lane_ar=False,
                 wide_lane_threshold=None,
                 no_float_bridge_tail_guard=False,
@@ -636,6 +650,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIsNone(payload["max_pos_jump_min"])
             self.assertIsNone(payload["max_pos_jump_rate"])
             self.assertIsNone(payload["max_consec_float_reset"])
+            self.assertIsNone(payload["max_consec_nonfix_reset"])
+            self.assertIsNone(payload["max_postfix_rms"])
             self.assertFalse(payload["enable_wide_lane_ar"])
             self.assertIsNone(payload["wide_lane_threshold"])
             self.assertIn("tokyo_run1", markdown)
@@ -2862,6 +2878,8 @@ class PPCDemoTest(unittest.TestCase):
             max_pos_jump_min=20.0,
             max_pos_jump_rate=25.0,
             max_consec_float_reset=10,
+            max_consec_nonfix_reset=10,
+            max_postfix_rms=0.20,
             enable_wide_lane_ar=True,
             wide_lane_threshold=0.10,
             fixed_bridge_burst_guard=True,
@@ -2919,6 +2937,9 @@ class PPCDemoTest(unittest.TestCase):
         self.assertIn("25.0", commands[0])
         self.assertIn("--max-consec-float-reset", commands[0])
         self.assertIn("10", commands[0])
+        self.assertIn("--max-consec-nonfix-reset", commands[0])
+        self.assertIn("--max-postfix-rms", commands[0])
+        self.assertIn("0.2", commands[0])
         self.assertIn("--enable-wide-lane-ar", commands[0])
         self.assertIn("--wide-lane-threshold", commands[0])
         self.assertIn("0.1", commands[0])
@@ -3026,6 +3047,8 @@ class PPCDemoTest(unittest.TestCase):
                 max_pos_jump_min=20.0,
                 max_pos_jump_rate=25.0,
                 max_consec_float_reset=10,
+                max_consec_nonfix_reset=10,
+                max_postfix_rms=0.20,
                 enable_wide_lane_ar=True,
                 wide_lane_threshold=0.10,
                 fixed_bridge_burst_guard=True,
@@ -3084,6 +3107,8 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtk_max_position_jump_min_m"], 20.0)
             self.assertEqual(payload["rtk_max_position_jump_rate_mps"], 25.0)
             self.assertEqual(payload["rtk_max_consecutive_float_for_reset"], 10)
+            self.assertEqual(payload["rtk_max_consecutive_nonfix_for_reset"], 10)
+            self.assertEqual(payload["rtk_max_postfix_residual_rms_m"], 0.20)
             self.assertTrue(payload["rtk_wide_lane_ar_enabled"])
             self.assertEqual(payload["rtk_wide_lane_threshold"], 0.10)
             self.assertTrue(payload["fixed_bridge_burst_guard_enabled"])

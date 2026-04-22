@@ -136,6 +136,12 @@ still below the PPC2024 second-place Public score of **77.6%** by **18.70 pp**
 longer beats RTKLIB on Positioning. Treat it as the current official-score
 candidate, not as the coverage sign-off profile.
 
+Follow-up spot checks kept the next knobs experimental: `--max-consec-nonfix-reset
+10` raised Nagoya run2 Positioning/Fix but reduced official score
+**31.48% -> 30.18%**, while `--max-postfix-rms 0.20` nudged Nagoya run2
+to **31.80%** and left Nagoya run3 effectively flat. Use these as sweep
+controls before promoting any profile.
+
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
 ![PPC Tokyo run1 bad segment trajectory](ppc_tokyo_run1_bad_segments_trajectory.png)

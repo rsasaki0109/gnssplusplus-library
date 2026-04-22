@@ -138,6 +138,7 @@ struct SolveConfig {
     double max_position_jump_min_m = 0.0;
     double max_position_jump_rate_mps = 0.0;
     int max_consecutive_float_for_reset = 0;
+    int max_consecutive_nonfix_for_reset = 0;
     double max_postfix_residual_rms = 0.0;
     bool enable_wide_lane_ar = false;
     double wide_lane_acceptance_threshold = 0.25;
@@ -464,6 +465,9 @@ void printUsage(const char* program_name) {
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
         << "                             (default: 0, disabled; e.g. 10 for aggressive urban reconvergence)\n"
+        << "  --max-consec-nonfix-reset <n>\n"
+        << "                             Reset ambiguity state after n consecutive non-FIX epochs\n"
+        << "                             including FLOAT/SPP/no-solution (default: 0, disabled)\n"
         << "  --no-nonfix-drift-guard   Disable low-speed non-FIX segment drift rejection\n"
         << "  --nonfix-drift-max-anchor-gap <s>\n"
         << "                             Max FIX-to-FIX gap for non-FIX drift guard (default: 120)\n"
@@ -687,6 +691,8 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.wide_lane_acceptance_threshold = std::stod(argv[++i]);
         } else if (arg == "--max-consec-float-reset" && i + 1 < argc) {
             config.max_consecutive_float_for_reset = std::stoi(argv[++i]);
+        } else if (arg == "--max-consec-nonfix-reset" && i + 1 < argc) {
+            config.max_consecutive_nonfix_for_reset = std::stoi(argv[++i]);
         } else if (arg == "--no-nonfix-drift-guard") {
             config.enable_nonfix_drift_guard = false;
         } else if (arg == "--nonfix-drift-max-anchor-gap" && i + 1 < argc) {
@@ -978,6 +984,7 @@ int main(int argc, char* argv[]) {
         rtk_config.max_position_jump_min_m = config.max_position_jump_min_m;
         rtk_config.max_position_jump_rate_mps = config.max_position_jump_rate_mps;
         rtk_config.max_consecutive_float_for_reset = config.max_consecutive_float_for_reset;
+        rtk_config.max_consecutive_nonfix_for_reset = config.max_consecutive_nonfix_for_reset;
         rtk_config.max_postfix_residual_rms = config.max_postfix_residual_rms;
         rtk_config.enable_wide_lane_ar = config.enable_wide_lane_ar;
         rtk_config.wide_lane_acceptance_threshold = config.wide_lane_acceptance_threshold;
