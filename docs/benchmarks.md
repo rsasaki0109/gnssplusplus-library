@@ -147,6 +147,10 @@ DD-update diagnostics (`RTKObs`, phase/code row counts, suppressed outliers,
 prefit/post-suppression residual RMS/max). These fields make FLOAT high-error
 segments diagnosable by measurement-update quality instead of status/ratio
 alone.
+A targeted Nagoya run2 loss-window replay (555940-556070 s) shows scored FLOAT
+prefit residual RMS around **0.25 m** versus FLOAT high-error median **4.54 m**,
+with median max residual **20.0 m** in the high-error group. The next FLOAT
+recovery work should use that residual signal directly.
 
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 

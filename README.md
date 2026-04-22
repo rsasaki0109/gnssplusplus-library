@@ -183,6 +183,12 @@ high-error **1330.7 m**, NO_SOLUTION **1250.9 m**, and FIXED high-error
 **451.6 m**; only **41.4 m** of the FIXED high-error distance has Ratio >= 10.
 That points the next non-IMU push at FLOAT recovery and dropout reacquisition
 first, with high-ratio false-fix validation as a smaller secondary target.
+A targeted Nagoya run2 loss-window replay (555940-556070 s) with the new RTK
+diagnostics shows the separation clearly: scored FLOAT segments have prefit
+residual RMS around **0.25 m** and max residual around **4.5 m**, while FLOAT
+high-error segments in the same window have median prefit RMS **4.54 m** and
+median max residual **20.0 m**. That makes residual-aware FLOAT recovery a
+better next lever than another status-only fallback rule.
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
 GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**

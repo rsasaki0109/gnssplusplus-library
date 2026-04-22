@@ -364,6 +364,132 @@ def official_loss_by_status(
     return rows
 
 
+def rtk_update_diagnostic_summary(records: list[dict[str, object]]) -> dict[str, object]:
+    errors = [
+        float(record["error_3d_m"])
+        for record in records
+        if record.get("error_3d_m") is not None
+    ]
+    ratios = [
+        float(record["ratio"])
+        for record in records
+        if record.get("ratio") is not None and math.isfinite(float(record["ratio"]))
+    ]
+    rtk_iterations = rtk_diagnostic_values(records, "rtk_iterations")
+    rtk_observations = rtk_diagnostic_values(records, "rtk_update_observations")
+    rtk_phase_observations = rtk_diagnostic_values(records, "rtk_update_phase_observations")
+    rtk_code_observations = rtk_diagnostic_values(records, "rtk_update_code_observations")
+    rtk_suppressed_outliers = rtk_diagnostic_values(records, "rtk_update_suppressed_outliers")
+    rtk_prefit_rms = rtk_diagnostic_values(records, "rtk_update_prefit_residual_rms_m")
+    rtk_prefit_max = rtk_diagnostic_values(records, "rtk_update_prefit_residual_max_m")
+    rtk_post_suppression_rms = rtk_diagnostic_values(
+        records,
+        "rtk_update_post_suppression_residual_rms_m",
+    )
+    rtk_post_suppression_max = rtk_diagnostic_values(
+        records,
+        "rtk_update_post_suppression_residual_max_m",
+    )
+    return {
+        "median_3d_m": percentile(errors, 50),
+        "p95_3d_m": percentile(errors, 95),
+        "max_3d_m": rounded(max(errors)) if errors else 0.0,
+        "median_ratio": percentile(ratios, 50) if ratios else None,
+        "p95_ratio": percentile(ratios, 95) if ratios else None,
+        "median_rtk_iterations": percentile(rtk_iterations, 50)
+        if rtk_iterations
+        else None,
+        "median_rtk_update_observations": percentile(rtk_observations, 50)
+        if rtk_observations
+        else None,
+        "p95_rtk_update_observations": percentile(rtk_observations, 95)
+        if rtk_observations
+        else None,
+        "median_rtk_phase_observations": percentile(rtk_phase_observations, 50)
+        if rtk_phase_observations
+        else None,
+        "median_rtk_code_observations": percentile(rtk_code_observations, 50)
+        if rtk_code_observations
+        else None,
+        "median_rtk_suppressed_outliers": percentile(rtk_suppressed_outliers, 50)
+        if rtk_suppressed_outliers
+        else None,
+        "p95_rtk_suppressed_outliers": percentile(rtk_suppressed_outliers, 95)
+        if rtk_suppressed_outliers
+        else None,
+        "median_rtk_prefit_rms_m": percentile(rtk_prefit_rms, 50)
+        if rtk_prefit_rms
+        else None,
+        "p95_rtk_prefit_rms_m": percentile(rtk_prefit_rms, 95)
+        if rtk_prefit_rms
+        else None,
+        "median_rtk_prefit_max_m": percentile(rtk_prefit_max, 50)
+        if rtk_prefit_max
+        else None,
+        "p95_rtk_prefit_max_m": percentile(rtk_prefit_max, 95)
+        if rtk_prefit_max
+        else None,
+        "median_rtk_post_suppression_rms_m": percentile(rtk_post_suppression_rms, 50)
+        if rtk_post_suppression_rms
+        else None,
+        "p95_rtk_post_suppression_rms_m": percentile(rtk_post_suppression_rms, 95)
+        if rtk_post_suppression_rms
+        else None,
+        "median_rtk_post_suppression_max_m": percentile(rtk_post_suppression_max, 50)
+        if rtk_post_suppression_max
+        else None,
+        "p95_rtk_post_suppression_max_m": percentile(rtk_post_suppression_max, 95)
+        if rtk_post_suppression_max
+        else None,
+    }
+
+
+def official_rtk_update_diagnostics_by_state(
+    records: list[dict[str, object]],
+    status_labeler,
+) -> list[dict[str, object]]:
+    total_distance_m = sum(float(record["segment_distance_m"]) for record in records)
+    grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
+    for record in records:
+        if record.get("status") is None:
+            continue
+        observations = record.get("rtk_update_observations")
+        if observations is None or int(observations) <= 0:
+            continue
+        label = status_labeler(int(record["status"]))
+        state = str(record["score_state"])
+        grouped.setdefault((label, state), []).append(record)
+
+    rows: list[dict[str, object]] = []
+    ordered_statuses = ordered_status_names({status for status, _ in grouped})
+    for status in ordered_statuses:
+        for state in SCORE_STATE_ORDER:
+            state_records = grouped.get((status, state), [])
+            if not state_records:
+                continue
+            distance_m = sum(float(record["segment_distance_m"]) for record in state_records)
+            row: dict[str, object] = {
+                "status": status,
+                "score_state": state,
+                "segments": len(state_records),
+                "distance_m": rounded(distance_m),
+                "distance_pct": rounded(100.0 * distance_m / total_distance_m)
+                if total_distance_m > 0.0
+                else 0.0,
+            }
+            row.update(rtk_update_diagnostic_summary(state_records))
+            rows.append(row)
+    rows.sort(
+        key=lambda row: (
+            str(row["status"]),
+            SCORE_STATE_ORDER.index(str(row["score_state"]))
+            if str(row["score_state"]) in SCORE_STATE_ORDER
+            else len(SCORE_STATE_ORDER),
+        )
+    )
+    return rows
+
+
 def official_status_label(
     record: dict[str, object],
     status_labeler,
@@ -931,6 +1057,10 @@ def build_report(
             lib_official_records,
             status_name,
             ("high_error",),
+        ),
+        "official_rtk_update_diagnostics_by_state": official_rtk_update_diagnostics_by_state(
+            lib_official_records,
+            status_name,
         ),
         "official_delta_by_bucket": official_delta_by_bucket(official_records),
         "official_loss_segments": official_loss_segments(lib_official_records, status_name)[:12],

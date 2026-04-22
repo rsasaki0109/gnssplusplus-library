@@ -1637,7 +1637,27 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
             comparison.ReferenceEpoch(2300, 3.0, 0.0, 0.0, 0.0, np.array([40.0, 0.0, 0.0])),
         ]
         lib_solution = [
-            comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([10.2, 0.0, 0.0]), 4, 12, 4.0, 100.0),
+            comparison.SolutionEpoch(
+                2300,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                np.array([10.2, 0.0, 0.0]),
+                3,
+                12,
+                4.0,
+                100.0,
+                2,
+                14,
+                7,
+                7,
+                0,
+                0.25,
+                4.0,
+                0.25,
+                4.0,
+            ),
             comparison.SolutionEpoch(
                 2300,
                 2.0,
@@ -1694,6 +1714,23 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         self.assertEqual(high_error_by_status["FLOAT"]["median_rtk_update_observations"], 16.0)
         self.assertEqual(high_error_by_status["FLOAT"]["median_rtk_prefit_rms_m"], 2.5)
         self.assertEqual(high_error_by_status["FLOAT"]["p95_rtk_prefit_max_m"], 31.0)
+        rtk_diagnostics_by_state = {
+            (row["status"], row["score_state"]): row
+            for row in ppc_coverage_quality.official_rtk_update_diagnostics_by_state(
+                lib_records,
+                ppc_coverage_quality.status_name,
+            )
+        }
+        self.assertEqual(rtk_diagnostics_by_state[("FLOAT", "scored")]["distance_m"], 10.0)
+        self.assertEqual(rtk_diagnostics_by_state[("FLOAT", "high_error")]["distance_m"], 10.0)
+        self.assertEqual(
+            rtk_diagnostics_by_state[("FLOAT", "scored")]["median_rtk_prefit_rms_m"],
+            0.25,
+        )
+        self.assertEqual(
+            rtk_diagnostics_by_state[("FLOAT", "high_error")]["median_rtk_prefit_rms_m"],
+            2.5,
+        )
         unscored_by_status = {
             row["status"]: row
             for row in ppc_coverage_quality.official_loss_by_status(
