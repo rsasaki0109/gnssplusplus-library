@@ -10,7 +10,11 @@ struct NonFixedDriftGuardConfig {
     double max_anchor_gap_s = 120.0;
     double max_anchor_speed_mps = 1.0;
     double max_residual_m = 30.0;
+    double min_horizontal_residual_m = 0.0;
     int min_segment_epochs = 20;
+    // 0 disables the upper bound. Useful for diagnostic profiles that should
+    // avoid pruning very long fallback outages.
+    int max_segment_epochs = 0;
 };
 
 struct NonFixedDriftGuardResult {

@@ -114,18 +114,18 @@ moves **90.00% -> 89.90%**, Fix **54.39% -> 54.34%**, PPC official **34.92% ->
 34.89%**, P95H **34.53 m -> 34.41 m**, and max H **51.63 m -> 47.29 m**.
 It is therefore documented as an opt-in tail-diagnostic guard, not as the
 default coverage profile.
-Combining that guard with `--nonfix-drift-max-residual 4` is a stronger
-P95-cleanup diagnostic: Tokyo run1 P95H moves to **26.61 m** and max H stays
-**47.29 m**, but Positioning falls to **87.60%** and PPC official stays
-effectively flat at **34.89%**. Swept across all six public Tokyo/Nagoya runs,
-the same cleanup profile still beats RTKLIB `demo5` on Positioning for every
-run (average **+13.3 pp**) and keeps the PPC official-score lead essentially
-unchanged (**+28.1 pp**), but costs **3.67 pp** average Positioning versus the
-coverage profile. P95H improves on **3/6** runs with an average **+1.39 m**
-tail gain; Nagoya run3 is the warning case, losing **13.90 pp** Positioning
-with no useful P95/official-score benefit. Keep that profile for isolating long
-stationary FLOAT drift and false-fix bursts, not for the Positioning-rate
-sign-off.
+Combining that guard with `--nonfix-drift-max-residual 4
+--nonfix-drift-min-horizontal-residual 6` is a stronger P95-cleanup diagnostic:
+Tokyo run1 P95H moves to **30.61 m** and max H to **47.29 m**, while
+Positioning falls to **88.53%** and PPC official stays effectively flat at
+**34.89%**. Swept across all six public Tokyo/Nagoya runs, the same cleanup
+profile still beats RTKLIB `demo5` on Positioning for every run (average
+**+15.7 pp**) and keeps the PPC official-score lead unchanged (**+28.1 pp**),
+but costs **1.33 pp** average Positioning versus the coverage profile. P95H
+improves on **3/6** runs with an average **+0.69 m** tail gain; the horizontal
+residual floor reduces Nagoya run3 over-pruning from **13.90 pp** to **3.48 pp**
+Positioning cost. Keep that profile for isolating long stationary FLOAT drift
+and false-fix bursts, not for the Positioning-rate sign-off.
 
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
@@ -228,13 +228,14 @@ python3 apps/gnss.py ppc-coverage-matrix \
   --fixed-bridge-burst-guard \
   --fixed-bridge-burst-max-residual 20 \
   --nonfix-drift-max-residual 4 \
-  --output-dir output/ppc_coverage_matrix_tail_cleanup \
-  --summary-json output/ppc_coverage_matrix_tail_cleanup/summary.json \
-  --markdown-output output/ppc_coverage_matrix_tail_cleanup/table.md
+  --nonfix-drift-min-horizontal-residual 6 \
+  --output-dir output/ppc_coverage_matrix_tail_hres6 \
+  --summary-json output/ppc_coverage_matrix_tail_hres6/summary.json \
+  --markdown-output output/ppc_coverage_matrix_tail_hres6/table.md
 
 python3 scripts/generate_ppc_tail_cleanup_scorecard.py \
   --baseline-summary-json output/ppc_coverage_matrix/summary.json \
-  --cleanup-summary-json output/ppc_coverage_matrix_tail_cleanup/summary.json \
+  --cleanup-summary-json output/ppc_coverage_matrix_tail_hres6/summary.json \
   --output docs/ppc_tail_cleanup_scorecard.png
 ```
 

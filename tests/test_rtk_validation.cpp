@@ -124,6 +124,63 @@ TEST(RTKValidationTest, NonFixedDriftGuardIgnoresMovingOrShortSegments) {
     EXPECT_EQ(short_result.solutions.size(), short_segment.size());
 }
 
+TEST(RTKValidationTest, NonFixedDriftGuardIgnoresOverlongSegmentsWhenBounded) {
+    std::vector<PositionSolution> solutions = {
+        makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),
+        makeValidationSolution(1.0, SolutionStatus::FLOAT, Eigen::Vector3d(0.5, 40.0, 0.0)),
+        makeValidationSolution(2.0, SolutionStatus::FLOAT, Eigen::Vector3d(1.0, 40.0, 0.0)),
+        makeValidationSolution(3.0, SolutionStatus::FLOAT, Eigen::Vector3d(1.5, 40.0, 0.0)),
+        makeValidationSolution(4.0, SolutionStatus::FIXED, Eigen::Vector3d(2.0, 0.0, 0.0)),
+    };
+
+    rtk_validation::NonFixedDriftGuardConfig config;
+    config.max_anchor_gap_s = 10.0;
+    config.max_anchor_speed_mps = 1.0;
+    config.max_residual_m = 10.0;
+    config.min_segment_epochs = 2;
+    config.max_segment_epochs = 2;
+
+    const auto result = rtk_validation::filterNonFixedStationaryDrift(solutions, config);
+
+    EXPECT_EQ(result.inspected_segments, 0);
+    EXPECT_EQ(result.rejected_epochs, 0);
+    EXPECT_EQ(result.solutions.size(), solutions.size());
+}
+
+TEST(RTKValidationTest, NonFixedDriftGuardCanRequireHorizontalResidual) {
+    std::vector<PositionSolution> vertical_only = {
+        makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),
+        makeValidationSolution(1.0, SolutionStatus::FLOAT, Eigen::Vector3d(40.0, 0.0, 0.5)),
+        makeValidationSolution(2.0, SolutionStatus::FLOAT, Eigen::Vector3d(40.0, 0.0, 1.0)),
+        makeValidationSolution(3.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 1.5)),
+    };
+
+    rtk_validation::NonFixedDriftGuardConfig config;
+    config.max_anchor_gap_s = 10.0;
+    config.max_anchor_speed_mps = 1.0;
+    config.max_residual_m = 10.0;
+    config.min_horizontal_residual_m = 5.0;
+    config.min_segment_epochs = 2;
+
+    const auto vertical_result =
+        rtk_validation::filterNonFixedStationaryDrift(vertical_only, config);
+    EXPECT_EQ(vertical_result.inspected_segments, 1);
+    EXPECT_EQ(vertical_result.rejected_epochs, 0);
+    EXPECT_EQ(vertical_result.solutions.size(), vertical_only.size());
+
+    std::vector<PositionSolution> horizontal_outlier = vertical_only;
+    horizontal_outlier[1].position_ecef = Eigen::Vector3d(0.0, 40.0, 0.5);
+    horizontal_outlier[2].position_ecef = Eigen::Vector3d(0.0, 40.0, 1.0);
+
+    const auto horizontal_result =
+        rtk_validation::filterNonFixedStationaryDrift(horizontal_outlier, config);
+    EXPECT_EQ(horizontal_result.inspected_segments, 1);
+    EXPECT_EQ(horizontal_result.rejected_epochs, 2);
+    ASSERT_EQ(horizontal_result.solutions.size(), 2U);
+    EXPECT_DOUBLE_EQ(horizontal_result.solutions[0].time.tow, 0.0);
+    EXPECT_DOUBLE_EQ(horizontal_result.solutions[1].time.tow, 3.0);
+}
+
 TEST(RTKValidationTest, SppHeightStepGuardRejectsSppSpikeCluster) {
     std::vector<PositionSolution> solutions = {
         makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d::Zero(), 10.0),

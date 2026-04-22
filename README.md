@@ -145,19 +145,19 @@ Positioning moves **90.00% -> 89.90%**, Fix **54.39% -> 54.34%**, PPC official
 improves **51.63 m -> 47.29 m**. That makes it a targeted tail-diagnostic
 gate, not a new default coverage profile.
 For a stronger P95-cleanup diagnostic profile, combine that fixed-burst guard
-with `--nonfix-drift-max-residual 4`: Tokyo run1 P95H improves to **26.61 m**
-and max H stays **47.29 m**, while Positioning drops to **87.60%** and PPC
-official remains effectively flat at **34.89%**. That profile is useful for
-isolating long stationary FLOAT drift, but it is not the Positioning-rate
-sign-off profile. Swept across all six public Tokyo/Nagoya runs, the same
-cleanup profile still beats RTKLIB `demo5` on Positioning for every run
-(average **+13.3 pp**) and keeps the PPC official-score lead essentially
-unchanged (**+28.1 pp**), but costs **3.67 pp** average Positioning versus the
-coverage profile. P95H improves on **3/6** runs with an average **+1.39 m**
-tail gain; Nagoya run3 is the warning case, losing **13.90 pp** Positioning
-with no useful P95/official-score benefit. The diagnostic sweep rejects 1,674
-non-FIX drift epochs plus 31 fixed-burst epochs, so keep it as evidence for
-solver recovery work rather than the README sign-off table.
+with `--nonfix-drift-max-residual 4 --nonfix-drift-min-horizontal-residual 6`.
+Tokyo run1 P95H improves to **30.61 m** and max H to **47.29 m**, while
+Positioning drops to **88.53%** and PPC official remains effectively flat at
+**34.89%**. This keeps the useful stationary FLOAT-drift cleanup but avoids
+most vertical-only fallback pruning. Swept across all six public Tokyo/Nagoya
+runs, the cleanup profile still beats RTKLIB `demo5` on Positioning for every
+run (average **+15.7 pp**) and keeps the PPC official-score lead unchanged
+(**+28.1 pp**), while costing **1.33 pp** average Positioning versus the
+coverage profile. P95H improves on **3/6** runs with an average **+0.69 m**
+tail gain; Nagoya run3 now loses **3.48 pp** Positioning instead of the earlier
+13.90 pp over-pruning. The diagnostic sweep rejects 771 non-FIX drift epochs
+plus 31 fixed-burst epochs, so keep it as evidence for solver recovery work
+rather than the README sign-off table.
 
 ![PPC RTK tail-cleanup diagnostic scorecard](docs/ppc_tail_cleanup_scorecard.png)
 
@@ -234,6 +234,7 @@ explicitly enabled.
 | `--max-hold-div <m>` | Reject fix if the hold-state diverges from float by more than N meters. | `0` (disabled) |
 | `--max-pos-jump <m>` | Reject fix if the epoch-to-epoch position jump exceeds N meters. | `0` (disabled) |
 | `--max-pos-jump-min <m>` + `--max-pos-jump-rate <m/s>` | Reject fix if the jump from the last fixed position exceeds `max(min, rate * dt)`, so vehicle gaps can be tested without a stale absolute distance clamp. | `0` / `0` (disabled) |
+| `--nonfix-drift-max-residual <m>` + `--nonfix-drift-min-horizontal-residual <m>` | Tighten the default low-speed non-FIX drift guard for tail diagnostics while avoiding vertical-only fallback pruning. The PPC diagnostic profile uses `4` / `6`. | `30` / `0` |
 | `--fixed-bridge-burst-guard` + `--fixed-bridge-burst-max-residual <m>` | Reject isolated short FIX bursts when they diverge from the straight bridge between surrounding FIX anchors. Tokyo run1 removes 12 false-fix-tail epochs with a small Positioning/Fix-rate cost, so it remains opt-in. | `false` / `20` |
 | `--max-consec-float-reset <N>` | Auto-reset ambiguities after N consecutive float epochs. | `0` (disabled) |
 | `--max-postfix-rms <m>` | Reject fix if the L1 post-fix DD phase residual RMS exceeds N meters. | `0` (disabled) |
@@ -599,13 +600,14 @@ python3 apps/gnss.py ppc-coverage-matrix \
   --fixed-bridge-burst-guard \
   --fixed-bridge-burst-max-residual 20 \
   --nonfix-drift-max-residual 4 \
-  --output-dir output/ppc_coverage_matrix_tail_cleanup \
-  --summary-json output/ppc_coverage_matrix_tail_cleanup/summary.json \
-  --markdown-output output/ppc_coverage_matrix_tail_cleanup/table.md
+  --nonfix-drift-min-horizontal-residual 6 \
+  --output-dir output/ppc_coverage_matrix_tail_hres6 \
+  --summary-json output/ppc_coverage_matrix_tail_hres6/summary.json \
+  --markdown-output output/ppc_coverage_matrix_tail_hres6/table.md
 
 python3 scripts/generate_ppc_tail_cleanup_scorecard.py \
   --baseline-summary-json output/ppc_coverage_matrix/summary.json \
-  --cleanup-summary-json output/ppc_coverage_matrix_tail_cleanup/summary.json \
+  --cleanup-summary-json output/ppc_coverage_matrix_tail_hres6/summary.json \
   --output docs/ppc_tail_cleanup_scorecard.png
 ```
 

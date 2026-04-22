@@ -9,17 +9,21 @@ namespace libgnss::rtk_validation {
 
 namespace {
 
-double horizontalDistanceFromOrigin(const PositionSolution& origin,
-                                    const Eigen::Vector3d& target_position_ecef) {
+double horizontalDistanceFromDelta(const PositionSolution& origin,
+                                   const Eigen::Vector3d& delta_ecef) {
     double lat = origin.position_geodetic.latitude;
     double lon = origin.position_geodetic.longitude;
     if (!std::isfinite(lat) || !std::isfinite(lon)) {
         double height = 0.0;
         ecef2geodetic(origin.position_ecef, lat, lon, height);
     }
-    const Eigen::Vector3d enu =
-        ecef2enu(target_position_ecef - origin.position_ecef, lat, lon);
+    const Eigen::Vector3d enu = ecef2enu(delta_ecef, lat, lon);
     return std::hypot(enu.x(), enu.y());
+}
+
+double horizontalDistanceFromOrigin(const PositionSolution& origin,
+                                    const Eigen::Vector3d& target_position_ecef) {
+    return horizontalDistanceFromDelta(origin, target_position_ecef - origin.position_ecef);
 }
 
 }  // namespace
@@ -102,7 +106,12 @@ NonFixedDriftGuardResult filterNonFixedStationaryDrift(
         }
         const size_t segment_end = index;
 
-        if (segment_end - segment_start < static_cast<size_t>(std::max(1, config.min_segment_epochs))) {
+        const size_t segment_epochs = segment_end - segment_start;
+        if (segment_epochs < static_cast<size_t>(std::max(1, config.min_segment_epochs))) {
+            continue;
+        }
+        if (config.max_segment_epochs > 0 &&
+            segment_epochs > static_cast<size_t>(config.max_segment_epochs)) {
             continue;
         }
         if (segment_start == 0 || segment_end >= solutions.size()) {
@@ -136,9 +145,16 @@ NonFixedDriftGuardResult filterNonFixedStationaryDrift(
             const double fraction = (candidate.time - anchor_before.time) / anchor_gap_s;
             const Eigen::Vector3d predicted_position =
                 anchor_before.position_ecef + anchor_delta * fraction;
-            const double residual_m =
-                (candidate.position_ecef - predicted_position).norm();
-            if (std::isfinite(residual_m) && residual_m > config.max_residual_m) {
+            const Eigen::Vector3d residual_delta = candidate.position_ecef - predicted_position;
+            const double residual_m = residual_delta.norm();
+            const double horizontal_residual_m =
+                horizontalDistanceFromDelta(anchor_before, residual_delta);
+            const bool horizontal_residual_ok =
+                config.min_horizontal_residual_m <= 0.0 ||
+                (std::isfinite(horizontal_residual_m) &&
+                 horizontal_residual_m >= config.min_horizontal_residual_m);
+            if (std::isfinite(residual_m) && residual_m > config.max_residual_m &&
+                horizontal_residual_ok) {
                 keep[solution_index] = false;
                 rejected_segment = true;
                 result.rejected_epochs++;

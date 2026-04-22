@@ -52,6 +52,8 @@ preset = "low-cost"
 # Optional P95-cleanup profile for stationary FLOAT-drift analysis. It is not
 # the Positioning-rate sign-off profile because it removes positioned epochs.
 # nonfix_drift_max_residual = 4.0
+# nonfix_drift_min_horizontal_residual = 6.0
+# nonfix_drift_max_segment_epochs = 0
 arfilter = true
 arfilter_margin = 0.35
 min_hold_count = 8

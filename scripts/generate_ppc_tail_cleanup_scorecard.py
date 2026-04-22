@@ -270,12 +270,18 @@ def footer_text(cleanup_summary: Path) -> str:
     payload = json.loads(cleanup_summary.read_text(encoding="utf-8"))
     ratio = payload.get("ratio")
     residual = payload.get("nonfix_drift_max_residual")
+    horizontal_residual = payload.get("nonfix_drift_min_horizontal_residual")
+    max_segment_epochs = payload.get("nonfix_drift_max_segment_epochs")
     fixed_residual = payload.get("fixed_bridge_burst_max_residual")
     parts = ["coverage profile plus tail-cleanup diagnostics"]
     if isinstance(ratio, (int, float)):
         parts.append(f"ratio {ratio:g}")
     if isinstance(residual, (int, float)):
         parts.append(f"non-FIX residual {residual:g} m")
+    if isinstance(horizontal_residual, (int, float)) and horizontal_residual > 0.0:
+        parts.append(f"horizontal residual floor {horizontal_residual:g} m")
+    if isinstance(max_segment_epochs, int) and max_segment_epochs > 0:
+        parts.append(f"non-FIX max segment {max_segment_epochs} epochs")
     if isinstance(fixed_residual, (int, float)):
         parts.append(f"fixed-burst residual {fixed_residual:g} m")
     parts.append("not the Positioning-rate sign-off profile")

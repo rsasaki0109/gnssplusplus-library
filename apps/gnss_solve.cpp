@@ -28,7 +28,9 @@ constexpr double kDefaultVerticalStepGuardMeters = 1.0;
 constexpr double kDefaultNonFixDriftGuardMaxAnchorGapSeconds = 120.0;
 constexpr double kDefaultNonFixDriftGuardMaxAnchorSpeedMps = 1.0;
 constexpr double kDefaultNonFixDriftGuardMaxResidualMeters = 30.0;
+constexpr double kDefaultNonFixDriftGuardMinHorizontalResidualMeters = 0.0;
 constexpr int kDefaultNonFixDriftGuardMinSegmentEpochs = 20;
+constexpr int kDefaultNonFixDriftGuardMaxSegmentEpochs = 0;
 constexpr double kDefaultSppHeightStepGuardMinMeters = 30.0;
 constexpr double kDefaultSppHeightStepGuardMaxRateMps = 4.0;
 constexpr double kDefaultFloatBridgeTailGuardMaxAnchorGapSeconds = 120.0;
@@ -105,7 +107,10 @@ struct SolveConfig {
     double nonfix_drift_guard_max_anchor_gap_s = kDefaultNonFixDriftGuardMaxAnchorGapSeconds;
     double nonfix_drift_guard_max_anchor_speed_mps = kDefaultNonFixDriftGuardMaxAnchorSpeedMps;
     double nonfix_drift_guard_max_residual_m = kDefaultNonFixDriftGuardMaxResidualMeters;
+    double nonfix_drift_guard_min_horizontal_residual_m =
+        kDefaultNonFixDriftGuardMinHorizontalResidualMeters;
     int nonfix_drift_guard_min_segment_epochs = kDefaultNonFixDriftGuardMinSegmentEpochs;
+    int nonfix_drift_guard_max_segment_epochs = kDefaultNonFixDriftGuardMaxSegmentEpochs;
     bool enable_spp_height_step_guard = true;
     double spp_height_step_guard_min_m = kDefaultSppHeightStepGuardMinMeters;
     double spp_height_step_guard_max_rate_mps = kDefaultSppHeightStepGuardMaxRateMps;
@@ -467,8 +472,14 @@ void printUsage(const char* program_name) {
         << "  --nonfix-drift-max-residual <m>\n"
         << "                             Reject non-FIX epochs farther than this from FIX-anchor bridge\n"
         << "                             in low-speed segments (default: 30)\n"
+        << "  --nonfix-drift-min-horizontal-residual <m>\n"
+        << "                             Require this horizontal bridge residual before rejecting\n"
+        << "                             a non-FIX epoch (default: 0, disabled)\n"
         << "  --nonfix-drift-min-segment-epochs <n>\n"
         << "                             Minimum bounded non-FIX segment length to inspect (default: 20)\n"
+        << "  --nonfix-drift-max-segment-epochs <n>\n"
+        << "                             Maximum bounded non-FIX segment length to inspect\n"
+        << "                             (default: 0, disabled)\n"
         << "  --no-spp-height-step-guard\n"
         << "                             Disable SPP vertical spike rejection\n"
         << "  --spp-height-step-min <m>  Minimum SPP height jump rejected (default: 30)\n"
@@ -684,8 +695,12 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.nonfix_drift_guard_max_anchor_speed_mps = std::stod(argv[++i]);
         } else if (arg == "--nonfix-drift-max-residual" && i + 1 < argc) {
             config.nonfix_drift_guard_max_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--nonfix-drift-min-horizontal-residual" && i + 1 < argc) {
+            config.nonfix_drift_guard_min_horizontal_residual_m = std::stod(argv[++i]);
         } else if (arg == "--nonfix-drift-min-segment-epochs" && i + 1 < argc) {
             config.nonfix_drift_guard_min_segment_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--nonfix-drift-max-segment-epochs" && i + 1 < argc) {
+            config.nonfix_drift_guard_max_segment_epochs = std::stoi(argv[++i]);
         } else if (arg == "--no-spp-height-step-guard") {
             config.enable_spp_height_step_guard = false;
         } else if (arg == "--spp-height-step-min" && i + 1 < argc) {
@@ -786,8 +801,14 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.nonfix_drift_guard_max_residual_m <= 0.0) {
         argumentError("--nonfix-drift-max-residual must be > 0", argv[0]);
     }
+    if (config.nonfix_drift_guard_min_horizontal_residual_m < 0.0) {
+        argumentError("--nonfix-drift-min-horizontal-residual must be >= 0", argv[0]);
+    }
     if (config.nonfix_drift_guard_min_segment_epochs < 1) {
         argumentError("--nonfix-drift-min-segment-epochs must be >= 1", argv[0]);
+    }
+    if (config.nonfix_drift_guard_max_segment_epochs < 0) {
+        argumentError("--nonfix-drift-max-segment-epochs must be >= 0", argv[0]);
     }
     if (config.spp_height_step_guard_min_m <= 0.0) {
         argumentError("--spp-height-step-min must be > 0", argv[0]);
@@ -1263,7 +1284,10 @@ int main(int argc, char* argv[]) {
             guard_config.max_anchor_gap_s = config.nonfix_drift_guard_max_anchor_gap_s;
             guard_config.max_anchor_speed_mps = config.nonfix_drift_guard_max_anchor_speed_mps;
             guard_config.max_residual_m = config.nonfix_drift_guard_max_residual_m;
+            guard_config.min_horizontal_residual_m =
+                config.nonfix_drift_guard_min_horizontal_residual_m;
             guard_config.min_segment_epochs = config.nonfix_drift_guard_min_segment_epochs;
+            guard_config.max_segment_epochs = config.nonfix_drift_guard_max_segment_epochs;
             auto guard_result = libgnss::rtk_validation::filterNonFixedStationaryDrift(
                 solution.solutions,
                 guard_config);

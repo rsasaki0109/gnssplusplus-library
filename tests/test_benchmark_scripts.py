@@ -263,7 +263,9 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "nonfix_drift_max_anchor_gap": 90.0,
                 "nonfix_drift_max_anchor_speed": 0.75,
                 "nonfix_drift_max_residual": 4.0,
+                "nonfix_drift_min_horizontal_residual": 6.0,
                 "nonfix_drift_min_segment_epochs": 20,
+                "nonfix_drift_max_segment_epochs": 180,
                 "fixed_bridge_burst_guard": True,
                 "fixed_bridge_burst_max_anchor_gap": 30.0,
                 "fixed_bridge_burst_min_boundary_gap": 1.0,
@@ -311,7 +313,11 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("0.75", command)
             self.assertIn("--nonfix-drift-max-residual", command)
             self.assertIn("4.0", command)
+            self.assertIn("--nonfix-drift-min-horizontal-residual", command)
+            self.assertIn("6.0", command)
             self.assertIn("--nonfix-drift-min-segment-epochs", command)
+            self.assertIn("--nonfix-drift-max-segment-epochs", command)
+            self.assertIn("180", command)
             self.assertIn("--fixed-bridge-burst-guard", command)
             self.assertIn("--fixed-bridge-burst-max-anchor-gap", command)
             self.assertIn("30.0", command)
@@ -456,7 +462,9 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 nonfix_drift_max_anchor_gap=90.0,
                 nonfix_drift_max_anchor_speed=0.75,
                 nonfix_drift_max_residual=4.0,
+                nonfix_drift_min_horizontal_residual=6.0,
                 nonfix_drift_min_segment_epochs=20,
+                nonfix_drift_max_segment_epochs=180,
                 no_spp_height_step_guard=False,
                 spp_height_step_min=25.0,
                 spp_height_step_rate=3.0,
@@ -494,8 +502,12 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("0.75", command)
             self.assertIn("--nonfix-drift-max-residual", command)
             self.assertIn("4.0", command)
+            self.assertIn("--nonfix-drift-min-horizontal-residual", command)
+            self.assertIn("6.0", command)
             self.assertIn("--nonfix-drift-min-segment-epochs", command)
             self.assertIn("20", command)
+            self.assertIn("--nonfix-drift-max-segment-epochs", command)
+            self.assertIn("180", command)
             self.assertIn("--spp-height-step-min", command)
             self.assertIn("25.0", command)
             self.assertIn("--spp-height-step-rate", command)
@@ -2829,7 +2841,9 @@ class PPCDemoTest(unittest.TestCase):
             nonfix_drift_max_anchor_gap=None,
             nonfix_drift_max_anchor_speed=None,
             nonfix_drift_max_residual=None,
+            nonfix_drift_min_horizontal_residual=None,
             nonfix_drift_min_segment_epochs=None,
+            nonfix_drift_max_segment_epochs=None,
             no_spp_height_step_guard=False,
             spp_height_step_min=None,
             spp_height_step_rate=None,
@@ -3035,7 +3049,9 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["nonfix_drift_guard"]["max_anchor_gap_s"], 120.0)
             self.assertEqual(payload["nonfix_drift_guard"]["max_anchor_speed_mps"], 1.0)
             self.assertEqual(payload["nonfix_drift_guard"]["max_residual_m"], 30.0)
+            self.assertEqual(payload["nonfix_drift_guard"]["min_horizontal_residual_m"], 0.0)
             self.assertEqual(payload["nonfix_drift_guard"]["min_segment_epochs"], 20)
+            self.assertEqual(payload["nonfix_drift_guard"]["max_segment_epochs"], 0)
             self.assertTrue(payload["spp_height_step_guard_enabled"])
             self.assertEqual(payload["spp_height_step_guard"]["min_step_m"], 30.0)
             self.assertEqual(payload["spp_height_step_guard"]["max_rate_mps"], 4.0)

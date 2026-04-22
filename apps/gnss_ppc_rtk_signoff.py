@@ -146,7 +146,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nonfix-drift-max-anchor-gap", type=float, default=None)
     parser.add_argument("--nonfix-drift-max-anchor-speed", type=float, default=None)
     parser.add_argument("--nonfix-drift-max-residual", type=float, default=None)
+    parser.add_argument("--nonfix-drift-min-horizontal-residual", type=float, default=None)
     parser.add_argument("--nonfix-drift-min-segment-epochs", type=int, default=None)
+    parser.add_argument("--nonfix-drift-max-segment-epochs", type=int, default=None)
     parser.add_argument("--fixed-bridge-burst-guard", action="store_true")
     parser.add_argument("--fixed-bridge-burst-max-anchor-gap", type=float, default=None)
     parser.add_argument("--fixed-bridge-burst-min-boundary-gap", type=float, default=None)
@@ -240,8 +242,12 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["nonfix_drift_max_anchor_speed"] = args.nonfix_drift_max_anchor_speed
     if getattr(args, "nonfix_drift_max_residual", None) is not None:
         tuning["nonfix_drift_max_residual"] = args.nonfix_drift_max_residual
+    if getattr(args, "nonfix_drift_min_horizontal_residual", None) is not None:
+        tuning["nonfix_drift_min_horizontal_residual"] = args.nonfix_drift_min_horizontal_residual
     if getattr(args, "nonfix_drift_min_segment_epochs", None) is not None:
         tuning["nonfix_drift_min_segment_epochs"] = args.nonfix_drift_min_segment_epochs
+    if getattr(args, "nonfix_drift_max_segment_epochs", None) is not None:
+        tuning["nonfix_drift_max_segment_epochs"] = args.nonfix_drift_max_segment_epochs
     if getattr(args, "fixed_bridge_burst_guard", False):
         tuning["fixed_bridge_burst_guard"] = True
     if getattr(args, "fixed_bridge_burst_max_anchor_gap", None) is not None:
@@ -385,9 +391,18 @@ def build_ppc_demo_command(args: argparse.Namespace,
     nonfix_max_residual = tuning.get("nonfix_drift_max_residual")
     if isinstance(nonfix_max_residual, (int, float)):
         command.extend(["--nonfix-drift-max-residual", str(nonfix_max_residual)])
+    nonfix_min_horizontal_residual = tuning.get("nonfix_drift_min_horizontal_residual")
+    if isinstance(nonfix_min_horizontal_residual, (int, float)):
+        command.extend([
+            "--nonfix-drift-min-horizontal-residual",
+            str(nonfix_min_horizontal_residual),
+        ])
     nonfix_min_segment_epochs = tuning.get("nonfix_drift_min_segment_epochs")
     if isinstance(nonfix_min_segment_epochs, int):
         command.extend(["--nonfix-drift-min-segment-epochs", str(nonfix_min_segment_epochs)])
+    nonfix_max_segment_epochs = tuning.get("nonfix_drift_max_segment_epochs")
+    if isinstance(nonfix_max_segment_epochs, int):
+        command.extend(["--nonfix-drift-max-segment-epochs", str(nonfix_max_segment_epochs)])
     if tuning.get("fixed_bridge_burst_guard") is True:
         command.append("--fixed-bridge-burst-guard")
     fixed_burst_max_anchor_gap = tuning.get("fixed_bridge_burst_max_anchor_gap")

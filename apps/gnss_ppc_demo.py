@@ -24,7 +24,9 @@ NONFIX_DRIFT_GUARD_DEFAULTS = {
     "max_anchor_gap_s": 120.0,
     "max_anchor_speed_mps": 1.0,
     "max_residual_m": 30.0,
+    "min_horizontal_residual_m": 0.0,
     "min_segment_epochs": 20,
+    "max_segment_epochs": 0,
 }
 SPP_HEIGHT_STEP_GUARD_DEFAULTS = {
     "min_step_m": 30.0,
@@ -224,7 +226,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nonfix-drift-max-anchor-gap", type=float, default=None)
     parser.add_argument("--nonfix-drift-max-anchor-speed", type=float, default=None)
     parser.add_argument("--nonfix-drift-max-residual", type=float, default=None)
+    parser.add_argument("--nonfix-drift-min-horizontal-residual", type=float, default=None)
     parser.add_argument("--nonfix-drift-min-segment-epochs", type=int, default=None)
+    parser.add_argument("--nonfix-drift-max-segment-epochs", type=int, default=None)
     parser.add_argument(
         "--no-spp-height-step-guard",
         action="store_true",
@@ -464,11 +468,27 @@ def nonfix_drift_guard_config(args: argparse.Namespace) -> dict[str, float | int
                 )
             )
         ),
+        "min_horizontal_residual_m": rounded(
+            float(
+                nonfix_drift_guard_value(
+                    args,
+                    "nonfix_drift_min_horizontal_residual",
+                    "min_horizontal_residual_m",
+                )
+            )
+        ),
         "min_segment_epochs": int(
             nonfix_drift_guard_value(
                 args,
                 "nonfix_drift_min_segment_epochs",
                 "min_segment_epochs",
+            )
+        ),
+        "max_segment_epochs": int(
+            nonfix_drift_guard_value(
+                args,
+                "nonfix_drift_max_segment_epochs",
+                "max_segment_epochs",
             )
         ),
     }
@@ -915,8 +935,15 @@ def run_solver(
             command.extend(["--nonfix-drift-max-anchor-speed", str(args.nonfix_drift_max_anchor_speed)])
         if getattr(args, "nonfix_drift_max_residual", None) is not None:
             command.extend(["--nonfix-drift-max-residual", str(args.nonfix_drift_max_residual)])
+        if getattr(args, "nonfix_drift_min_horizontal_residual", None) is not None:
+            command.extend([
+                "--nonfix-drift-min-horizontal-residual",
+                str(args.nonfix_drift_min_horizontal_residual),
+            ])
         if getattr(args, "nonfix_drift_min_segment_epochs", None) is not None:
             command.extend(["--nonfix-drift-min-segment-epochs", str(args.nonfix_drift_min_segment_epochs)])
+        if getattr(args, "nonfix_drift_max_segment_epochs", None) is not None:
+            command.extend(["--nonfix-drift-max-segment-epochs", str(args.nonfix_drift_max_segment_epochs)])
         if getattr(args, "no_spp_height_step_guard", False):
             command.append("--no-spp-height-step-guard")
         if getattr(args, "spp_height_step_min", None) is not None:
