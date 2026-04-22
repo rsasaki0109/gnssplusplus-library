@@ -77,6 +77,15 @@ class SolutionEpoch:
     num_satellites: int
     ratio: float | None = None
     baseline_m: float | None = None
+    rtk_iterations: int | None = None
+    rtk_update_observations: int | None = None
+    rtk_update_phase_observations: int | None = None
+    rtk_update_code_observations: int | None = None
+    rtk_update_suppressed_outliers: int | None = None
+    rtk_update_prefit_residual_rms_m: float | None = None
+    rtk_update_prefit_residual_max_m: float | None = None
+    rtk_update_post_suppression_residual_rms_m: float | None = None
+    rtk_update_post_suppression_residual_max_m: float | None = None
 
 
 @dataclass(frozen=True)
@@ -185,6 +194,19 @@ def read_libgnss_pos(path: Path) -> list[SolutionEpoch]:
             num_satellites = int(parts[9])
             ratio = float(parts[11]) if len(parts) > 11 else None
             baseline_m = float(parts[12]) if len(parts) > 12 else None
+            rtk_iterations = int(float(parts[13])) if len(parts) > 13 else None
+            rtk_update_observations = int(float(parts[14])) if len(parts) > 14 else None
+            rtk_update_phase_observations = int(float(parts[15])) if len(parts) > 15 else None
+            rtk_update_code_observations = int(float(parts[16])) if len(parts) > 16 else None
+            rtk_update_suppressed_outliers = int(float(parts[17])) if len(parts) > 17 else None
+            rtk_update_prefit_residual_rms_m = float(parts[18]) if len(parts) > 18 else None
+            rtk_update_prefit_residual_max_m = float(parts[19]) if len(parts) > 19 else None
+            rtk_update_post_suppression_residual_rms_m = (
+                float(parts[20]) if len(parts) > 20 else None
+            )
+            rtk_update_post_suppression_residual_max_m = (
+                float(parts[21]) if len(parts) > 21 else None
+            )
             rows.append(
                 SolutionEpoch(
                     week,
@@ -197,6 +219,15 @@ def read_libgnss_pos(path: Path) -> list[SolutionEpoch]:
                     num_satellites,
                     ratio,
                     baseline_m,
+                    rtk_iterations,
+                    rtk_update_observations,
+                    rtk_update_phase_observations,
+                    rtk_update_code_observations,
+                    rtk_update_suppressed_outliers,
+                    rtk_update_prefit_residual_rms_m,
+                    rtk_update_prefit_residual_max_m,
+                    rtk_update_post_suppression_residual_rms_m,
+                    rtk_update_post_suppression_residual_max_m,
                 )
             )
     return rows

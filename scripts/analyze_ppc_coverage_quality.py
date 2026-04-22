@@ -82,6 +82,25 @@ def optional_float(value: object) -> float | None:
     return None if value is None else float(value)
 
 
+def optional_int(value: object) -> int | None:
+    return None if value is None else int(value)
+
+
+def rtk_diagnostic_values(records: list[dict[str, object]], key: str) -> list[float]:
+    values: list[float] = []
+    for record in records:
+        observations = record.get("rtk_update_observations")
+        if observations is None or int(observations) <= 0:
+            continue
+        value = record.get(key)
+        if value is None:
+            continue
+        numeric = float(value)
+        if math.isfinite(numeric):
+            values.append(numeric)
+    return values
+
+
 def horizontal_track_distance(
     first: comparison.MatchedEpoch,
     second: comparison.MatchedEpoch,
@@ -235,6 +254,36 @@ def official_loss_by_status(
             for record in status_records
             if record.get("ratio") is not None and math.isfinite(float(record["ratio"]))
         ]
+        rtk_iterations = rtk_diagnostic_values(status_records, "rtk_iterations")
+        rtk_observations = rtk_diagnostic_values(status_records, "rtk_update_observations")
+        rtk_phase_observations = rtk_diagnostic_values(
+            status_records,
+            "rtk_update_phase_observations",
+        )
+        rtk_code_observations = rtk_diagnostic_values(
+            status_records,
+            "rtk_update_code_observations",
+        )
+        rtk_suppressed_outliers = rtk_diagnostic_values(
+            status_records,
+            "rtk_update_suppressed_outliers",
+        )
+        rtk_prefit_rms = rtk_diagnostic_values(
+            status_records,
+            "rtk_update_prefit_residual_rms_m",
+        )
+        rtk_prefit_max = rtk_diagnostic_values(
+            status_records,
+            "rtk_update_prefit_residual_max_m",
+        )
+        rtk_post_suppression_rms = rtk_diagnostic_values(
+            status_records,
+            "rtk_update_post_suppression_residual_rms_m",
+        )
+        rtk_post_suppression_max = rtk_diagnostic_values(
+            status_records,
+            "rtk_update_post_suppression_residual_max_m",
+        )
         state_distances: dict[str, float] = {}
         ratio_ge_10_distance_m = 0.0
         for record in status_records:
@@ -267,6 +316,48 @@ def official_loss_by_status(
                 "ratio_ge_10_share_pct": rounded(100.0 * ratio_ge_10_distance_m / distance_m)
                 if distance_m > 0.0
                 else 0.0,
+                "median_rtk_iterations": percentile(rtk_iterations, 50)
+                if rtk_iterations
+                else None,
+                "median_rtk_update_observations": percentile(rtk_observations, 50)
+                if rtk_observations
+                else None,
+                "median_rtk_phase_observations": percentile(rtk_phase_observations, 50)
+                if rtk_phase_observations
+                else None,
+                "median_rtk_code_observations": percentile(rtk_code_observations, 50)
+                if rtk_code_observations
+                else None,
+                "median_rtk_suppressed_outliers": percentile(rtk_suppressed_outliers, 50)
+                if rtk_suppressed_outliers
+                else None,
+                "p95_rtk_suppressed_outliers": percentile(rtk_suppressed_outliers, 95)
+                if rtk_suppressed_outliers
+                else None,
+                "median_rtk_prefit_rms_m": percentile(rtk_prefit_rms, 50)
+                if rtk_prefit_rms
+                else None,
+                "p95_rtk_prefit_rms_m": percentile(rtk_prefit_rms, 95)
+                if rtk_prefit_rms
+                else None,
+                "median_rtk_prefit_max_m": percentile(rtk_prefit_max, 50)
+                if rtk_prefit_max
+                else None,
+                "p95_rtk_prefit_max_m": percentile(rtk_prefit_max, 95)
+                if rtk_prefit_max
+                else None,
+                "median_rtk_post_suppression_rms_m": percentile(rtk_post_suppression_rms, 50)
+                if rtk_post_suppression_rms
+                else None,
+                "p95_rtk_post_suppression_rms_m": percentile(rtk_post_suppression_rms, 95)
+                if rtk_post_suppression_rms
+                else None,
+                "median_rtk_post_suppression_max_m": percentile(rtk_post_suppression_max, 50)
+                if rtk_post_suppression_max
+                else None,
+                "p95_rtk_post_suppression_max_m": percentile(rtk_post_suppression_max, 95)
+                if rtk_post_suppression_max
+                else None,
             }
         )
     rows.sort(key=lambda row: float(row["distance_m"]), reverse=True)
@@ -402,6 +493,31 @@ def official_combined_records(
                 "lib_num_satellites": lib_record["num_satellites"],
                 "lib_ratio": optional_float(lib_record["ratio"]),
                 "lib_baseline_m": optional_float(lib_record["baseline_m"]),
+                "lib_rtk_iterations": optional_int(lib_record.get("rtk_iterations")),
+                "lib_rtk_update_observations": optional_int(
+                    lib_record.get("rtk_update_observations")
+                ),
+                "lib_rtk_update_phase_observations": optional_int(
+                    lib_record.get("rtk_update_phase_observations")
+                ),
+                "lib_rtk_update_code_observations": optional_int(
+                    lib_record.get("rtk_update_code_observations")
+                ),
+                "lib_rtk_update_suppressed_outliers": optional_int(
+                    lib_record.get("rtk_update_suppressed_outliers")
+                ),
+                "lib_rtk_update_prefit_residual_rms_m": optional_float(
+                    lib_record.get("rtk_update_prefit_residual_rms_m")
+                ),
+                "lib_rtk_update_prefit_residual_max_m": optional_float(
+                    lib_record.get("rtk_update_prefit_residual_max_m")
+                ),
+                "lib_rtk_update_post_suppression_residual_rms_m": optional_float(
+                    lib_record.get("rtk_update_post_suppression_residual_rms_m")
+                ),
+                "lib_rtk_update_post_suppression_residual_max_m": optional_float(
+                    lib_record.get("rtk_update_post_suppression_residual_max_m")
+                ),
                 "rtklib_score_state": rtklib_record["score_state"],
                 "rtklib_scored": rtklib_record["scored"],
                 "rtklib_status": rtklib_record["status"],
@@ -900,6 +1016,15 @@ def write_official_segments_csv(path: Path, rows: list[dict[str, object]]) -> No
         "lib_num_satellites",
         "lib_ratio",
         "lib_baseline_m",
+        "lib_rtk_iterations",
+        "lib_rtk_update_observations",
+        "lib_rtk_update_phase_observations",
+        "lib_rtk_update_code_observations",
+        "lib_rtk_update_suppressed_outliers",
+        "lib_rtk_update_prefit_residual_rms_m",
+        "lib_rtk_update_prefit_residual_max_m",
+        "lib_rtk_update_post_suppression_residual_rms_m",
+        "lib_rtk_update_post_suppression_residual_max_m",
         "rtklib_score_state",
         "rtklib_scored",
         "rtklib_status",

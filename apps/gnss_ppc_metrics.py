@@ -128,6 +128,35 @@ def ppc_official_segment_records(
                 "num_satellites": solution.num_satellites if solution is not None else None,
                 "ratio": solution.ratio if solution is not None else None,
                 "baseline_m": solution.baseline_m if solution is not None else None,
+                "rtk_iterations": solution.rtk_iterations if solution is not None else None,
+                "rtk_update_observations": (
+                    solution.rtk_update_observations if solution is not None else None
+                ),
+                "rtk_update_phase_observations": (
+                    solution.rtk_update_phase_observations if solution is not None else None
+                ),
+                "rtk_update_code_observations": (
+                    solution.rtk_update_code_observations if solution is not None else None
+                ),
+                "rtk_update_suppressed_outliers": (
+                    solution.rtk_update_suppressed_outliers if solution is not None else None
+                ),
+                "rtk_update_prefit_residual_rms_m": (
+                    solution.rtk_update_prefit_residual_rms_m if solution is not None else None
+                ),
+                "rtk_update_prefit_residual_max_m": (
+                    solution.rtk_update_prefit_residual_max_m if solution is not None else None
+                ),
+                "rtk_update_post_suppression_residual_rms_m": (
+                    solution.rtk_update_post_suppression_residual_rms_m
+                    if solution is not None
+                    else None
+                ),
+                "rtk_update_post_suppression_residual_max_m": (
+                    solution.rtk_update_post_suppression_residual_max_m
+                    if solution is not None
+                    else None
+                ),
                 "error_3d_m": match["error_3d_m"] if match is not None else None,
                 "horiz_error_m": match["horiz_error_m"] if match is not None else None,
                 "up_error_m": match["up_error_m"] if match is not None else None,

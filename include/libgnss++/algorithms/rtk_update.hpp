@@ -11,6 +11,10 @@ struct FilterUpdateResult {
     bool ok = false;
     int observation_count = 0;
     int suppressed_outliers = 0;
+    double prefit_residual_rms_m = 0.0;
+    double prefit_residual_max_abs_m = 0.0;
+    double post_suppression_residual_rms_m = 0.0;
+    double post_suppression_residual_max_abs_m = 0.0;
 };
 
 FilterUpdateResult applyMeasurementUpdate(Eigen::VectorXd& state,

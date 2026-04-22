@@ -311,6 +311,7 @@ void RTKProcessor::reset() {
     consecutive_nonfix_count_ = 0;
     last_ar_ratio_ = 0.0;
     last_num_fixed_ambiguities_ = 0;
+    current_update_diagnostics_ = RTKUpdateDiagnostics{};
     std::lock_guard<std::mutex> lock(stats_mutex_);
     total_epochs_processed_ = 0;
     fixed_solutions_ = 0;
@@ -1120,6 +1121,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
     PositionSolution solution;
     solution.time = rover_obs.time;
     solution.status = SolutionStatus::NONE;
+    current_update_diagnostics_ = RTKUpdateDiagnostics{};
 
     try {
         const bool moving_base_mode = isMovingBasePositionMode(rtk_config_);
@@ -1219,6 +1221,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             const Vector3d baseline_before_iter = filter_state_.state.head<3>();
             filter_ok = updateFilter(sat_data);
             if (!filter_ok) break;
+            current_update_diagnostics_.iterations++;
             if (iter >= 1) {
                 const double baseline_step =
                     (filter_state_.state.head<3>() - baseline_before_iter).norm();
@@ -1559,7 +1562,11 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
 
         auto append_frequency_blocks = [&](int freq) {
             rtk_measurement::MeasurementBlock phase_block;
+            phase_block.kind = rtk_measurement::MeasurementKind::PHASE;
+            phase_block.frequency_index = freq;
             rtk_measurement::MeasurementBlock code_block;
+            code_block.kind = rtk_measurement::MeasurementKind::CODE;
+            code_block.frequency_index = freq;
             const auto& ref_indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
             auto ref_state_it = ref_indices.find(ref_sat);
             if (ref_state_it == ref_indices.end()) {
@@ -1708,13 +1715,30 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
 bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_data) {
     if (sat_data.size() < 4) return false;
 
+    const auto blocks = buildMeasurementBlocks(sat_data);
+    const auto measurement_diagnostics = rtk_measurement::summarizeMeasurementBlocks(blocks);
     auto measurement_system = rtk_measurement::assembleMeasurementSystem(
-        buildMeasurementBlocks(sat_data), filter_state_.state.size());
+        blocks, filter_state_.state.size());
     const auto update_result = rtk_update::applyMeasurementUpdate(filter_state_.state,
                                                                   filter_state_.covariance,
                                                                   measurement_system,
                                                                   30.0,
                                                                   6);
+    current_update_diagnostics_.observation_count = update_result.observation_count;
+    current_update_diagnostics_.phase_observation_count =
+        measurement_diagnostics.phase_observation_count;
+    current_update_diagnostics_.code_observation_count =
+        measurement_diagnostics.code_observation_count;
+    current_update_diagnostics_.suppressed_outliers += update_result.suppressed_outliers;
+    current_update_diagnostics_.prefit_residual_rms_m = update_result.prefit_residual_rms_m;
+    current_update_diagnostics_.prefit_residual_max_m =
+        std::max(current_update_diagnostics_.prefit_residual_max_m,
+                 update_result.prefit_residual_max_abs_m);
+    current_update_diagnostics_.post_suppression_residual_rms_m =
+        update_result.post_suppression_residual_rms_m;
+    current_update_diagnostics_.post_suppression_residual_max_m =
+        std::max(current_update_diagnostics_.post_suppression_residual_max_m,
+                 update_result.post_suppression_residual_max_abs_m);
     return update_result.ok;
 }
 
@@ -2720,6 +2744,20 @@ PositionSolution RTKProcessor::generateSolution(const GNSSTime& time, SolutionSt
     if (filter_state_.state.size() >= 3) solution.baseline_length = filter_state_.state.head<3>().norm();
     solution.ratio = last_ar_ratio_;
     solution.num_fixed_ambiguities = last_num_fixed_ambiguities_;
+    solution.iterations = current_update_diagnostics_.iterations;
+    solution.residual_rms = current_update_diagnostics_.post_suppression_residual_rms_m;
+    solution.rtk_update_observations = current_update_diagnostics_.observation_count;
+    solution.rtk_update_phase_observations = current_update_diagnostics_.phase_observation_count;
+    solution.rtk_update_code_observations = current_update_diagnostics_.code_observation_count;
+    solution.rtk_update_suppressed_outliers = current_update_diagnostics_.suppressed_outliers;
+    solution.rtk_update_prefit_residual_rms_m =
+        current_update_diagnostics_.prefit_residual_rms_m;
+    solution.rtk_update_prefit_residual_max_m =
+        current_update_diagnostics_.prefit_residual_max_m;
+    solution.rtk_update_post_suppression_residual_rms_m =
+        current_update_diagnostics_.post_suppression_residual_rms_m;
+    solution.rtk_update_post_suppression_residual_max_m =
+        current_update_diagnostics_.post_suppression_residual_max_m;
     rememberSolution(solution);
     return solution;
 }

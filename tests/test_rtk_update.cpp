@@ -2,6 +2,8 @@
 
 #include <libgnss++/algorithms/rtk_update.hpp>
 
+#include <cmath>
+
 namespace libgnss {
 namespace {
 
@@ -19,6 +21,8 @@ TEST(RTKUpdateTest, RejectsMeasurementSystemsWithTooFewObservations) {
     EXPECT_FALSE(result.ok);
     EXPECT_EQ(result.observation_count, 5);
     EXPECT_EQ(result.suppressed_outliers, 0);
+    EXPECT_DOUBLE_EQ(result.prefit_residual_rms_m, 0.0);
+    EXPECT_DOUBLE_EQ(result.prefit_residual_max_abs_m, 0.0);
 }
 
 TEST(RTKUpdateTest, AppliesKalmanUpdateAndSuppressesOutliers) {
@@ -44,6 +48,10 @@ TEST(RTKUpdateTest, AppliesKalmanUpdateAndSuppressesOutliers) {
     ASSERT_TRUE(result.ok);
     EXPECT_EQ(result.observation_count, 6);
     EXPECT_EQ(result.suppressed_outliers, 1);
+    EXPECT_NEAR(result.prefit_residual_rms_m, std::sqrt((10000.0 + 5.0 * 0.04) / 6.0), 1e-12);
+    EXPECT_DOUBLE_EQ(result.prefit_residual_max_abs_m, 100.0);
+    EXPECT_NEAR(result.post_suppression_residual_rms_m, std::sqrt((5.0 * 0.04) / 6.0), 1e-12);
+    EXPECT_DOUBLE_EQ(result.post_suppression_residual_max_abs_m, 0.2);
     EXPECT_NEAR(system.residuals(0), 0.0, 1e-12);
     EXPECT_TRUE(system.design_matrix.row(0).isZero(0.0));
     EXPECT_GT(state(0), 0.05);

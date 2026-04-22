@@ -323,6 +323,19 @@ private:
     size_t fixed_solutions_ = 0;
     size_t float_solutions_ = 0;
 
+    struct RTKUpdateDiagnostics {
+        int iterations = 0;
+        int observation_count = 0;
+        int phase_observation_count = 0;
+        int code_observation_count = 0;
+        int suppressed_outliers = 0;
+        double prefit_residual_rms_m = 0.0;
+        double prefit_residual_max_m = 0.0;
+        double post_suppression_residual_rms_m = 0.0;
+        double post_suppression_residual_max_m = 0.0;
+    };
+    RTKUpdateDiagnostics current_update_diagnostics_;
+
     // Satellite data for current epoch
     struct SatelliteData {
         SatelliteId satellite;

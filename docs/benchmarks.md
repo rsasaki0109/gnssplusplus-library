@@ -142,6 +142,12 @@ Follow-up spot checks kept the next knobs experimental: `--max-consec-nonfix-res
 to **31.80%** and left Nagoya run3 effectively flat. Use these as sweep
 controls before promoting any profile.
 
+The official-loss analyzer preserves solver Ratio/Baseline telemetry plus RTK
+DD-update diagnostics (`RTKObs`, phase/code row counts, suppressed outliers,
+prefit/post-suppression residual RMS/max). These fields make FLOAT high-error
+segments diagnosable by measurement-update quality instead of status/ratio
+alone.
+
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
 ![PPC Tokyo run1 bad segment trajectory](ppc_tokyo_run1_bad_segments_trajectory.png)

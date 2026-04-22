@@ -698,7 +698,8 @@ class PPCMetricsTest(unittest.TestCase):
                 "\n".join(
                     [
                         "% GPS_Week GPS_TOW X Y Z Lat Lon Height Status NumSat PDOP Ratio Baseline",
-                        "2300 1.000 10.0 0.0 0.0 0.0 0.0 0.0 4 12 2.0 17.5 9400.25",
+                        "2300 1.000 10.0 0.0 0.0 0.0 0.0 0.0 4 12 2.0 "
+                        "17.5 9400.25 2 16 8 8 1 2.5 31.0 1.2 20.0",
                     ]
                 )
                 + "\n",
@@ -710,6 +711,15 @@ class PPCMetricsTest(unittest.TestCase):
             self.assertEqual(len(epochs), 1)
             self.assertEqual(epochs[0].ratio, 17.5)
             self.assertEqual(epochs[0].baseline_m, 9400.25)
+            self.assertEqual(epochs[0].rtk_iterations, 2)
+            self.assertEqual(epochs[0].rtk_update_observations, 16)
+            self.assertEqual(epochs[0].rtk_update_phase_observations, 8)
+            self.assertEqual(epochs[0].rtk_update_code_observations, 8)
+            self.assertEqual(epochs[0].rtk_update_suppressed_outliers, 1)
+            self.assertEqual(epochs[0].rtk_update_prefit_residual_rms_m, 2.5)
+            self.assertEqual(epochs[0].rtk_update_prefit_residual_max_m, 31.0)
+            self.assertEqual(epochs[0].rtk_update_post_suppression_residual_rms_m, 1.2)
+            self.assertEqual(epochs[0].rtk_update_post_suppression_residual_max_m, 20.0)
 
     def test_rtklib_pos_parser_keeps_ratio_telemetry(self) -> None:
         with tempfile.TemporaryDirectory(prefix="rtklib_pos_ratio_parse_") as temp_dir:
@@ -1628,7 +1638,27 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         ]
         lib_solution = [
             comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([10.2, 0.0, 0.0]), 4, 12, 4.0, 100.0),
-            comparison.SolutionEpoch(2300, 2.0, 0.0, 0.0, 0.0, np.array([21.0, 0.0, 0.0]), 3, 12, 12.0, 101.0),
+            comparison.SolutionEpoch(
+                2300,
+                2.0,
+                0.0,
+                0.0,
+                0.0,
+                np.array([21.0, 0.0, 0.0]),
+                3,
+                12,
+                12.0,
+                101.0,
+                2,
+                16,
+                8,
+                8,
+                1,
+                2.5,
+                31.0,
+                1.2,
+                20.0,
+            ),
         ]
         rtklib_solution = [
             comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([11.0, 0.0, 0.0]), 2, 12),
@@ -1661,6 +1691,9 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         self.assertEqual(high_error_by_status["FLOAT"]["distance_m"], 10.0)
         self.assertEqual(high_error_by_status["FLOAT"]["median_ratio"], 12.0)
         self.assertEqual(high_error_by_status["FLOAT"]["ratio_ge_10_distance_m"], 10.0)
+        self.assertEqual(high_error_by_status["FLOAT"]["median_rtk_update_observations"], 16.0)
+        self.assertEqual(high_error_by_status["FLOAT"]["median_rtk_prefit_rms_m"], 2.5)
+        self.assertEqual(high_error_by_status["FLOAT"]["p95_rtk_prefit_max_m"], 31.0)
         unscored_by_status = {
             row["status"]: row
             for row in ppc_coverage_quality.official_loss_by_status(
@@ -1707,6 +1740,8 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         self.assertEqual(float_spp_sweep[0]["recovered_distance_m"], 10.0)
         self.assertEqual(combined[1]["lib_ratio"], 12.0)
         self.assertEqual(combined[1]["lib_baseline_m"], 101.0)
+        self.assertEqual(combined[1]["lib_rtk_update_observations"], 16)
+        self.assertEqual(combined[1]["lib_rtk_update_prefit_residual_max_m"], 31.0)
 
 
 class ScorecardRenderTest(unittest.TestCase):

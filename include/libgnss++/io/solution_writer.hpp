@@ -94,7 +94,9 @@ public:
         case Format::POS:
             file_ << "% LibGNSS++ Position Solution\n"
                   << "% GPS_Week GPS_TOW X(m) Y(m) Z(m) Lat(deg) Lon(deg) Height(m) "
-                     "Status NumSat PDOP Ratio Baseline(m)\n";
+                     "Status NumSat PDOP Ratio Baseline(m) RTKIter RTKObs RTKPhaseObs "
+                     "RTKCodeObs RTKOutliers RTKPrefitRMS(m) RTKPrefitMax(m) "
+                     "RTKPostSuppressRMS(m) RTKPostSuppressMax(m)\n";
             break;
         case Format::LLH:
             file_ << "% GPS_Week GPS_TOW Lat(deg) Lon(deg) Height(m) Status\n";
@@ -132,7 +134,16 @@ public:
                   << sol.num_satellites << " "
                   << std::setprecision(2) << sol.pdop << " "
                   << std::setprecision(1) << sol.ratio << " "
-                  << std::setprecision(4) << sol.baseline_length
+                  << std::setprecision(4) << sol.baseline_length << " "
+                  << sol.iterations << " "
+                  << sol.rtk_update_observations << " "
+                  << sol.rtk_update_phase_observations << " "
+                  << sol.rtk_update_code_observations << " "
+                  << sol.rtk_update_suppressed_outliers << " "
+                  << std::setprecision(4) << sol.rtk_update_prefit_residual_rms_m << " "
+                  << sol.rtk_update_prefit_residual_max_m << " "
+                  << sol.rtk_update_post_suppression_residual_rms_m << " "
+                  << sol.rtk_update_post_suppression_residual_max_m
                   << "\n";
             break;
 

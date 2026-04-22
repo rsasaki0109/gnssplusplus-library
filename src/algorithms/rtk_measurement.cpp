@@ -1,5 +1,6 @@
 #include <libgnss++/algorithms/rtk_measurement.hpp>
 
+#include <algorithm>
 #include <cmath>
 
 namespace libgnss {
@@ -64,6 +65,30 @@ MeasurementSystem assembleMeasurementSystem(const std::vector<MeasurementBlock>&
     }
 
     return system;
+}
+
+MeasurementDiagnostics summarizeMeasurementBlocks(const std::vector<MeasurementBlock>& blocks) {
+    MeasurementDiagnostics diagnostics;
+    double sum_sq = 0.0;
+    for (const auto& block : blocks) {
+        const int block_observations = static_cast<int>(block.rows.size());
+        diagnostics.observation_count += block_observations;
+        if (block.kind == MeasurementKind::PHASE) {
+            diagnostics.phase_observation_count += block_observations;
+        } else if (block.kind == MeasurementKind::CODE) {
+            diagnostics.code_observation_count += block_observations;
+        }
+        for (const auto& row : block.rows) {
+            sum_sq += row.residual * row.residual;
+            diagnostics.residual_max_abs_m =
+                std::max(diagnostics.residual_max_abs_m, std::abs(row.residual));
+        }
+    }
+    if (diagnostics.observation_count > 0) {
+        diagnostics.residual_rms_m =
+            std::sqrt(sum_sq / static_cast<double>(diagnostics.observation_count));
+    }
+    return diagnostics;
 }
 
 AmbiguityTransform buildAmbiguityTransform(const Eigen::VectorXd& state,
