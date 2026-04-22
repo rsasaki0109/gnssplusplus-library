@@ -142,6 +142,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-pos-jump", type=float, default=None)
     parser.add_argument("--max-pos-jump-min", type=float, default=None)
     parser.add_argument("--max-pos-jump-rate", type=float, default=None)
+    parser.add_argument("--no-nonfix-drift-guard", action="store_true")
+    parser.add_argument("--nonfix-drift-max-anchor-gap", type=float, default=None)
+    parser.add_argument("--nonfix-drift-max-anchor-speed", type=float, default=None)
+    parser.add_argument("--nonfix-drift-max-residual", type=float, default=None)
+    parser.add_argument("--nonfix-drift-min-segment-epochs", type=int, default=None)
     parser.add_argument("--fixed-bridge-burst-guard", action="store_true")
     parser.add_argument("--fixed-bridge-burst-max-anchor-gap", type=float, default=None)
     parser.add_argument("--fixed-bridge-burst-min-boundary-gap", type=float, default=None)
@@ -227,6 +232,16 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["max_pos_jump_min"] = args.max_pos_jump_min
     if getattr(args, "max_pos_jump_rate", None) is not None:
         tuning["max_pos_jump_rate"] = args.max_pos_jump_rate
+    if getattr(args, "no_nonfix_drift_guard", False):
+        tuning["no_nonfix_drift_guard"] = True
+    if getattr(args, "nonfix_drift_max_anchor_gap", None) is not None:
+        tuning["nonfix_drift_max_anchor_gap"] = args.nonfix_drift_max_anchor_gap
+    if getattr(args, "nonfix_drift_max_anchor_speed", None) is not None:
+        tuning["nonfix_drift_max_anchor_speed"] = args.nonfix_drift_max_anchor_speed
+    if getattr(args, "nonfix_drift_max_residual", None) is not None:
+        tuning["nonfix_drift_max_residual"] = args.nonfix_drift_max_residual
+    if getattr(args, "nonfix_drift_min_segment_epochs", None) is not None:
+        tuning["nonfix_drift_min_segment_epochs"] = args.nonfix_drift_min_segment_epochs
     if getattr(args, "fixed_bridge_burst_guard", False):
         tuning["fixed_bridge_burst_guard"] = True
     if getattr(args, "fixed_bridge_burst_max_anchor_gap", None) is not None:
@@ -359,6 +374,20 @@ def build_ppc_demo_command(args: argparse.Namespace,
     max_pos_jump_rate = tuning.get("max_pos_jump_rate")
     if isinstance(max_pos_jump_rate, (int, float)):
         command.extend(["--max-pos-jump-rate", str(max_pos_jump_rate)])
+    if tuning.get("no_nonfix_drift_guard") is True:
+        command.append("--no-nonfix-drift-guard")
+    nonfix_max_anchor_gap = tuning.get("nonfix_drift_max_anchor_gap")
+    if isinstance(nonfix_max_anchor_gap, (int, float)):
+        command.extend(["--nonfix-drift-max-anchor-gap", str(nonfix_max_anchor_gap)])
+    nonfix_max_anchor_speed = tuning.get("nonfix_drift_max_anchor_speed")
+    if isinstance(nonfix_max_anchor_speed, (int, float)):
+        command.extend(["--nonfix-drift-max-anchor-speed", str(nonfix_max_anchor_speed)])
+    nonfix_max_residual = tuning.get("nonfix_drift_max_residual")
+    if isinstance(nonfix_max_residual, (int, float)):
+        command.extend(["--nonfix-drift-max-residual", str(nonfix_max_residual)])
+    nonfix_min_segment_epochs = tuning.get("nonfix_drift_min_segment_epochs")
+    if isinstance(nonfix_min_segment_epochs, int):
+        command.extend(["--nonfix-drift-min-segment-epochs", str(nonfix_min_segment_epochs)])
     if tuning.get("fixed_bridge_burst_guard") is True:
         command.append("--fixed-bridge-burst-guard")
     fixed_burst_max_anchor_gap = tuning.get("fixed_bridge_burst_max_anchor_gap")

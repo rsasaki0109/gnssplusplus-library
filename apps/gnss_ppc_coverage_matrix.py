@@ -130,10 +130,31 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--use-existing-solutions", action="store_true")
     parser.add_argument(
+        "--no-nonfix-drift-guard",
+        action="store_true",
+        help="Pass through to ppc-demo when reproducing raw non-FIX fallback drift.",
+    )
+    parser.add_argument("--nonfix-drift-max-anchor-gap", type=float, default=None)
+    parser.add_argument("--nonfix-drift-max-anchor-speed", type=float, default=None)
+    parser.add_argument("--nonfix-drift-max-residual", type=float, default=None)
+    parser.add_argument("--nonfix-drift-min-segment-epochs", type=int, default=None)
+    parser.add_argument(
+        "--no-spp-height-step-guard",
+        action="store_true",
+        help="Pass through to ppc-demo when reproducing raw SPP fallback spikes.",
+    )
+    parser.add_argument("--spp-height-step-min", type=float, default=None)
+    parser.add_argument("--spp-height-step-rate", type=float, default=None)
+    parser.add_argument(
         "--no-float-bridge-tail-guard",
         action="store_true",
         help="Pass through to ppc-demo for pre-bridge-tail coverage reproduction.",
     )
+    parser.add_argument("--float-bridge-tail-max-anchor-gap", type=float, default=None)
+    parser.add_argument("--float-bridge-tail-min-anchor-speed", type=float, default=None)
+    parser.add_argument("--float-bridge-tail-max-anchor-speed", type=float, default=None)
+    parser.add_argument("--float-bridge-tail-max-residual", type=float, default=None)
+    parser.add_argument("--float-bridge-tail-min-segment-epochs", type=int, default=None)
     parser.add_argument("--fixed-bridge-burst-guard", action="store_true")
     parser.add_argument("--fixed-bridge-burst-max-anchor-gap", type=float, default=None)
     parser.add_argument("--fixed-bridge-burst-min-boundary-gap", type=float, default=None)
@@ -213,8 +234,49 @@ def build_ppc_demo_command(
         command.extend(["--max-pos-jump-rate", str(args.max_pos_jump_rate)])
     if args.use_existing_solutions:
         command.append("--use-existing-solution")
+    if getattr(args, "no_nonfix_drift_guard", False):
+        command.append("--no-nonfix-drift-guard")
+    if getattr(args, "nonfix_drift_max_anchor_gap", None) is not None:
+        command.extend(["--nonfix-drift-max-anchor-gap", str(args.nonfix_drift_max_anchor_gap)])
+    if getattr(args, "nonfix_drift_max_anchor_speed", None) is not None:
+        command.extend(["--nonfix-drift-max-anchor-speed", str(args.nonfix_drift_max_anchor_speed)])
+    if getattr(args, "nonfix_drift_max_residual", None) is not None:
+        command.extend(["--nonfix-drift-max-residual", str(args.nonfix_drift_max_residual)])
+    if getattr(args, "nonfix_drift_min_segment_epochs", None) is not None:
+        command.extend(["--nonfix-drift-min-segment-epochs", str(args.nonfix_drift_min_segment_epochs)])
+    if getattr(args, "no_spp_height_step_guard", False):
+        command.append("--no-spp-height-step-guard")
+    if getattr(args, "spp_height_step_min", None) is not None:
+        command.extend(["--spp-height-step-min", str(args.spp_height_step_min)])
+    if getattr(args, "spp_height_step_rate", None) is not None:
+        command.extend(["--spp-height-step-rate", str(args.spp_height_step_rate)])
     if args.no_float_bridge_tail_guard:
         command.append("--no-float-bridge-tail-guard")
+    if getattr(args, "float_bridge_tail_max_anchor_gap", None) is not None:
+        command.extend([
+            "--float-bridge-tail-max-anchor-gap",
+            str(args.float_bridge_tail_max_anchor_gap),
+        ])
+    if getattr(args, "float_bridge_tail_min_anchor_speed", None) is not None:
+        command.extend([
+            "--float-bridge-tail-min-anchor-speed",
+            str(args.float_bridge_tail_min_anchor_speed),
+        ])
+    if getattr(args, "float_bridge_tail_max_anchor_speed", None) is not None:
+        command.extend([
+            "--float-bridge-tail-max-anchor-speed",
+            str(args.float_bridge_tail_max_anchor_speed),
+        ])
+    if getattr(args, "float_bridge_tail_max_residual", None) is not None:
+        command.extend([
+            "--float-bridge-tail-max-residual",
+            str(args.float_bridge_tail_max_residual),
+        ])
+    if getattr(args, "float_bridge_tail_min_segment_epochs", None) is not None:
+        command.extend([
+            "--float-bridge-tail-min-segment-epochs",
+            str(args.float_bridge_tail_min_segment_epochs),
+        ])
     if getattr(args, "fixed_bridge_burst_guard", False):
         command.append("--fixed-bridge-burst-guard")
     if getattr(args, "fixed_bridge_burst_max_anchor_gap", None) is not None:
@@ -382,6 +444,20 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_pos_jump": getattr(args, "max_pos_jump", None),
         "max_pos_jump_min": getattr(args, "max_pos_jump_min", None),
         "max_pos_jump_rate": getattr(args, "max_pos_jump_rate", None),
+        "no_nonfix_drift_guard": getattr(args, "no_nonfix_drift_guard", False),
+        "nonfix_drift_max_anchor_gap": getattr(args, "nonfix_drift_max_anchor_gap", None),
+        "nonfix_drift_max_anchor_speed": getattr(args, "nonfix_drift_max_anchor_speed", None),
+        "nonfix_drift_max_residual": getattr(args, "nonfix_drift_max_residual", None),
+        "nonfix_drift_min_segment_epochs": getattr(args, "nonfix_drift_min_segment_epochs", None),
+        "no_spp_height_step_guard": getattr(args, "no_spp_height_step_guard", False),
+        "spp_height_step_min": getattr(args, "spp_height_step_min", None),
+        "spp_height_step_rate": getattr(args, "spp_height_step_rate", None),
+        "no_float_bridge_tail_guard": getattr(args, "no_float_bridge_tail_guard", False),
+        "float_bridge_tail_max_anchor_gap": getattr(args, "float_bridge_tail_max_anchor_gap", None),
+        "float_bridge_tail_min_anchor_speed": getattr(args, "float_bridge_tail_min_anchor_speed", None),
+        "float_bridge_tail_max_anchor_speed": getattr(args, "float_bridge_tail_max_anchor_speed", None),
+        "float_bridge_tail_max_residual": getattr(args, "float_bridge_tail_max_residual", None),
+        "float_bridge_tail_min_segment_epochs": getattr(args, "float_bridge_tail_min_segment_epochs", None),
         "fixed_bridge_burst_guard": getattr(args, "fixed_bridge_burst_guard", False),
         "fixed_bridge_burst_max_anchor_gap": getattr(args, "fixed_bridge_burst_max_anchor_gap", None),
         "fixed_bridge_burst_min_boundary_gap": getattr(args, "fixed_bridge_burst_min_boundary_gap", None),

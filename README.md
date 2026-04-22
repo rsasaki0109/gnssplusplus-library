@@ -144,6 +144,12 @@ Positioning moves **90.00% -> 89.90%**, Fix **54.39% -> 54.34%**, PPC official
 **34.92% -> 34.89%**, while P95H improves **34.53 m -> 34.41 m** and max H
 improves **51.63 m -> 47.29 m**. That makes it a targeted tail-diagnostic
 gate, not a new default coverage profile.
+For a stronger P95-cleanup diagnostic profile, combine that fixed-burst guard
+with `--nonfix-drift-max-residual 4`: Tokyo run1 P95H improves to **26.61 m**
+and max H stays **47.29 m**, while Positioning drops to **87.60%** and PPC
+official remains effectively flat at **34.89%**. That profile is useful for
+isolating long stationary FLOAT drift, but it is not the Positioning-rate
+sign-off profile.
 
 ![PPC Tokyo run1 bad segment trajectory](docs/ppc_tokyo_run1_bad_segments_trajectory.png)
 

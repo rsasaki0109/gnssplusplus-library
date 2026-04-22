@@ -259,6 +259,10 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "max_pos_jump": 20.0,
                 "max_pos_jump_min": 20.0,
                 "max_pos_jump_rate": 25.0,
+                "nonfix_drift_max_anchor_gap": 90.0,
+                "nonfix_drift_max_anchor_speed": 0.75,
+                "nonfix_drift_max_residual": 4.0,
+                "nonfix_drift_min_segment_epochs": 20,
                 "fixed_bridge_burst_guard": True,
                 "fixed_bridge_burst_max_anchor_gap": 30.0,
                 "fixed_bridge_burst_min_boundary_gap": 1.0,
@@ -300,6 +304,13 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("20.0", command)
             self.assertIn("--max-pos-jump-rate", command)
             self.assertIn("25.0", command)
+            self.assertIn("--nonfix-drift-max-anchor-gap", command)
+            self.assertIn("90.0", command)
+            self.assertIn("--nonfix-drift-max-anchor-speed", command)
+            self.assertIn("0.75", command)
+            self.assertIn("--nonfix-drift-max-residual", command)
+            self.assertIn("4.0", command)
+            self.assertIn("--nonfix-drift-min-segment-epochs", command)
             self.assertIn("--fixed-bridge-burst-guard", command)
             self.assertIn("--fixed-bridge-burst-max-anchor-gap", command)
             self.assertIn("30.0", command)
@@ -440,7 +451,20 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 rtklib_bin=None,
                 rtklib_config=ROOT_DIR / "scripts" / "rtklib_odaiba.conf",
                 use_existing_solutions=False,
+                no_nonfix_drift_guard=False,
+                nonfix_drift_max_anchor_gap=90.0,
+                nonfix_drift_max_anchor_speed=0.75,
+                nonfix_drift_max_residual=4.0,
+                nonfix_drift_min_segment_epochs=20,
+                no_spp_height_step_guard=False,
+                spp_height_step_min=25.0,
+                spp_height_step_rate=3.0,
                 no_float_bridge_tail_guard=False,
+                float_bridge_tail_max_anchor_gap=100.0,
+                float_bridge_tail_min_anchor_speed=0.3,
+                float_bridge_tail_max_anchor_speed=1.2,
+                float_bridge_tail_max_residual=10.0,
+                float_bridge_tail_min_segment_epochs=18,
             )
             paths = ppc_coverage_matrix.output_paths(args.output_dir, "tokyo", "run1")
 
@@ -463,6 +487,28 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("20.0", command)
             self.assertIn("--max-pos-jump-rate", command)
             self.assertIn("25.0", command)
+            self.assertIn("--nonfix-drift-max-anchor-gap", command)
+            self.assertIn("90.0", command)
+            self.assertIn("--nonfix-drift-max-anchor-speed", command)
+            self.assertIn("0.75", command)
+            self.assertIn("--nonfix-drift-max-residual", command)
+            self.assertIn("4.0", command)
+            self.assertIn("--nonfix-drift-min-segment-epochs", command)
+            self.assertIn("20", command)
+            self.assertIn("--spp-height-step-min", command)
+            self.assertIn("25.0", command)
+            self.assertIn("--spp-height-step-rate", command)
+            self.assertIn("3.0", command)
+            self.assertIn("--float-bridge-tail-max-anchor-gap", command)
+            self.assertIn("100.0", command)
+            self.assertIn("--float-bridge-tail-min-anchor-speed", command)
+            self.assertIn("0.3", command)
+            self.assertIn("--float-bridge-tail-max-anchor-speed", command)
+            self.assertIn("1.2", command)
+            self.assertIn("--float-bridge-tail-max-residual", command)
+            self.assertIn("10.0", command)
+            self.assertIn("--float-bridge-tail-min-segment-epochs", command)
+            self.assertIn("18", command)
             self.assertIn("--fixed-bridge-burst-guard", command)
             self.assertIn("--fixed-bridge-burst-max-residual", command)
             self.assertIn("20.0", command)

@@ -107,6 +107,12 @@ FIX anchors and rejects only the burst epochs whose bridge residual exceeds
 coverage it rejects 12 epochs, lowering max H by 4.33 m and P95H by 0.12 m
 while costing 0.10 pp Positioning and 0.03 pp PPC official score, so keep it
 explicit when evaluating precision-tail tradeoffs.
+Use `--nonfix-drift-max-residual 4` only for an explicit P95-cleanup profile:
+combined with the fixed-burst guard it rejects 337 non-FIX drift epochs on
+Tokyo run1, improves P95H from 34.53 m to 26.61 m, and keeps PPC official nearly
+flat, but costs 2.40 pp Positioning rate. `ppc-coverage-matrix` accepts these
+non-FIX, SPP height-step, FLOAT bridge-tail, and fixed-burst tuning flags so the
+same profile can be swept across all six PPC runs.
 Use `scripts/analyze_ppc_coverage_quality.py` with the PPC solution, RTKLIB
 solution, and `reference.csv` when a coverage run improves Positioning rate but
 regresses P95 horizontal error; the report separates FIXED/FLOAT/SPP quality and

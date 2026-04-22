@@ -114,6 +114,11 @@ moves **90.00% -> 89.90%**, Fix **54.39% -> 54.34%**, PPC official **34.92% ->
 34.89%**, P95H **34.53 m -> 34.41 m**, and max H **51.63 m -> 47.29 m**.
 It is therefore documented as an opt-in tail-diagnostic guard, not as the
 default coverage profile.
+Combining that guard with `--nonfix-drift-max-residual 4` is a stronger
+P95-cleanup diagnostic: Tokyo run1 P95H moves to **26.61 m** and max H stays
+**47.29 m**, but Positioning falls to **87.60%** and PPC official stays
+effectively flat at **34.89%**. Keep that profile for isolating long stationary
+FLOAT drift, not for the Positioning-rate sign-off.
 
 ![PPC Tokyo run1 bad segment trajectory](ppc_tokyo_run1_bad_segments_trajectory.png)
 
