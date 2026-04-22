@@ -32,6 +32,9 @@ rtklib_bin = "/opt/rtklib/bin/rnx2rtkp"
 preset = "low-cost"
 # Optional RTK ionosphere sweep mode: "auto", "off", "iflc", or "est".
 # iono = "iflc"
+# Optional AR ratio sweep. The six-run coverage profile currently favors 2.4
+# over IFLC on low-score Tokyo/Nagoya runs.
+# ratio = 2.4
 arfilter = true
 arfilter_margin = 0.35
 min_hold_count = 8

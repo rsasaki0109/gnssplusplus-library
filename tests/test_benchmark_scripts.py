@@ -233,6 +233,7 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 commercial_hold_ratio_threshold=None,
                 preset=None,
                 iono=None,
+                ratio=None,
                 arfilter=None,
                 arfilter_margin=None,
                 min_hold_count=None,
@@ -249,6 +250,7 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             tuning = {
                 "preset": "low-cost",
                 "iono": "iflc",
+                "ratio": 2.4,
                 "arfilter": True,
                 "arfilter_margin": 0.35,
                 "min_hold_count": 8,
@@ -275,6 +277,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("low-cost", command)
             self.assertIn("--iono", command)
             self.assertIn("iflc", command)
+            self.assertIn("--ratio", command)
+            self.assertIn("2.4", command)
             self.assertIn("--arfilter", command)
             self.assertIn("--min-hold-count", command)
             self.assertIn("8", command)
@@ -315,6 +319,7 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 commercial_hold_ratio_threshold=2.0,
                 preset=None,
                 iono=None,
+                ratio=None,
                 arfilter=None,
                 arfilter_margin=None,
                 min_hold_count=None,
@@ -390,6 +395,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 match_tolerance_s=0.25,
                 preset="low-cost",
                 iono="iflc",
+                ratio=2.4,
                 rtklib_root=temp_root / "benchmark",
                 rtklib_bin=None,
                 rtklib_config=ROOT_DIR / "scripts" / "rtklib_odaiba.conf",
@@ -407,6 +413,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("--no-kinematic-post-filter", command)
             self.assertIn("--iono", command)
             self.assertIn("iflc", command)
+            self.assertIn("--ratio", command)
+            self.assertIn("2.4", command)
             self.assertIn("--rtklib-pos", command)
             self.assertIn(str(temp_root / "benchmark" / "tokyo_run1" / "rtklib.pos"), command)
             self.assertIn("--use-existing-rtklib-solution", command)
@@ -426,6 +434,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 match_tolerance_s=0.25,
                 preset="low-cost",
                 iono=None,
+                ratio=None,
                 no_float_bridge_tail_guard=False,
             )
             paths = ppc_coverage_matrix.output_paths(args.output_dir, "tokyo", "run1")
@@ -2600,6 +2609,7 @@ class PPCDemoTest(unittest.TestCase):
             solver="rtk",
             preset="low-cost",
             iono="iflc",
+            ratio=2.4,
             arfilter=False,
             arfilter_margin=None,
             min_hold_count=None,
@@ -2636,6 +2646,8 @@ class PPCDemoTest(unittest.TestCase):
         self.assertEqual(len(commands), 1)
         self.assertIn("--iono", commands[0])
         self.assertIn("iflc", commands[0])
+        self.assertIn("--ratio", commands[0])
+        self.assertIn("2.4", commands[0])
         self.assertIn("--no-arfilter", commands[0])
         self.assertIn("--no-kinematic-post-filter", commands[0])
 
@@ -2731,6 +2743,7 @@ class PPCDemoTest(unittest.TestCase):
                 blq=None,
                 enable_ar=False,
                 iono="iflc",
+                ratio=2.4,
                 low_dynamics=False,
                 no_kinematic_post_filter=True,
                 no_spp_height_step_guard=False,
@@ -2776,6 +2789,7 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["dataset"], "PPC-Dataset tokyo run1")
             self.assertEqual(payload["solver"], "rtk")
             self.assertEqual(payload["rtk_iono"], "iflc")
+            self.assertEqual(payload["rtk_ratio_threshold"], 2.4)
             self.assertEqual(payload["rtk_output_profile"], "coverage")
             self.assertFalse(payload["kinematic_post_filter_enabled"])
             self.assertTrue(payload["nonfix_drift_guard_enabled"])

@@ -63,7 +63,7 @@ gnssplusplus wins Fix count, Hp95, and Vp95 there, while the Hmed gap closes to
 All runs below use `--mode kinematic --preset low-cost --match-tolerance-s
 0.25`. The coverage profile additionally uses `--no-arfilter
 --no-kinematic-post-filter` plus the default low-speed non-FIX drift guard and
-SPP height-step guard, and the default FLOAT bridge-tail guard.
+SPP height-step guard, the default FLOAT bridge-tail guard, and `--ratio 2.4`.
 
 ### Benchmark Scope
 
@@ -99,39 +99,37 @@ below is the sign-off view for no-solution gaps and fallback-positioned epochs.
 <!-- PPC_COVERAGE_MATRIX:START -->
 | Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | PPC official score | RTKLIB official score | Official delta | P95 H delta |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo run1 | **86.2%** | 66.3% | **+19.9 pp** | **48.6%** | 30.5% | **29.3%** | 0.0% | **+29.3 pp** | -6.97 m |
-| Tokyo run2 | **95.3%** | 84.3% | **+11.0 pp** | **60.8%** | 27.6% | **68.4%** | 16.9% | **+51.5 pp** | -18.89 m |
-| Tokyo run3 | **96.0%** | 93.1% | **+2.9 pp** | **60.3%** | 40.5% | **59.4%** | 35.6% | **+23.8 pp** | -0.69 m |
-| Nagoya run1 | **87.9%** | 65.8% | **+22.1 pp** | **60.3%** | 33.8% | **43.0%** | 22.4% | **+20.6 pp** | -22.63 m |
-| Nagoya run2 | **86.2%** | 69.8% | **+16.5 pp** | **40.3%** | 18.8% | **20.8%** | 11.0% | **+9.8 pp** | -27.16 m |
-| Nagoya run3 | **94.6%** | 67.7% | **+26.9 pp** | **19.7%** | 13.9% | **26.9%** | 7.6% | **+19.2 pp** | -5.54 m |
+| Tokyo run1 | **90.0%** | 66.3% | **+23.7 pp** | **54.4%** | 30.5% | **34.9%** | 0.0% | **+34.9 pp** | +3.39 m |
+| Tokyo run2 | **95.3%** | 84.3% | **+11.0 pp** | **64.1%** | 27.6% | **69.0%** | 16.9% | **+52.1 pp** | -18.51 m |
+| Tokyo run3 | **95.7%** | 93.1% | **+2.5 pp** | **63.0%** | 40.5% | **60.6%** | 35.6% | **+25.0 pp** | -0.24 m |
+| Nagoya run1 | **88.8%** | 65.8% | **+23.0 pp** | **64.5%** | 33.8% | **49.5%** | 22.4% | **+27.1 pp** | -23.78 m |
+| Nagoya run2 | **85.6%** | 69.8% | **+15.8 pp** | **51.4%** | 18.8% | **20.9%** | 11.0% | **+9.9 pp** | -27.24 m |
+| Nagoya run3 | **93.8%** | 67.7% | **+26.1 pp** | **27.1%** | 13.9% | **27.4%** | 7.6% | **+19.7 pp** | -5.37 m |
 
-Across these six public runs, the coverage profile averages **+16.5 pp**
-Positioning-rate lead, **+25.7 pp** PPC official-score lead, and
-**-13.65 m** P95 horizontal-error delta versus RTKLIB `demo5`.
+Across these six public runs, the coverage profile averages **+17.0 pp**
+Positioning-rate lead, **+28.1 pp** PPC official-score lead, and
+**-11.96 m** P95 horizontal-error delta versus RTKLIB `demo5`.
 <!-- PPC_COVERAGE_MATRIX:END -->
 
-Tokyo run1's low-speed non-FIX drift guard removes 320 bounded fallback epochs,
-and the SPP height-step guard removes another 30 vertical-spike fallback epochs.
-The default FLOAT bridge-tail guard then removes 147 more FLOAT epochs in the
-remaining low-speed tail, using horizontal FIX-anchor speed so vertical anchor
-noise does not create false motion. Together these guards turn the previous
-P95H regression into a **6.97 m** P95H lead, keep Positioning at **86.2%**
-(**+19.9 pp** over RTKLIB), and lift the PPC official score to **29.3%**
-(**+29.3 pp** over RTKLIB).
-The official loss split shows **29.3%** scored distance, **58.7%** 50cm-plus
-error distance, and **12.0%** no-solution distance, so the next improvement is
-mostly accuracy recovery inside positioned FLOAT/FIX spans rather than simply
-filling gaps. `scripts/analyze_ppc_coverage_quality.py --official-segments-csv`
-emits the per-reference-distance score ledger; the bad segment CSV still
-includes adjacent FIX-anchor speed/gap and bridge residuals for continued
-FLOAT-tail design work.
+Lowering the RTK ambiguity ratio threshold to `2.4` lifts Tokyo run1 Positioning
+to **90.0%** (**+23.7 pp** over RTKLIB), Fix to **54.4%**, and PPC official
+score to **34.9%** (**+34.9 pp** over RTKLIB). This is an explicit coverage and
+official-score trade: Tokyo run1 P95H is now **+3.39 m** versus RTKLIB, while
+the six-run average still keeps a **-11.96 m** P95H delta and improves the
+average PPC official-score lead to **+28.1 pp**. The official loss split shows
+**34.9%** scored distance, **54.0%** 50cm-plus error distance, and **11.1%**
+no-solution distance, so the next improvement is still mostly accuracy recovery
+inside positioned FLOAT/FIX spans rather than simply filling gaps.
+`scripts/analyze_ppc_coverage_quality.py --official-segments-csv` emits the
+per-reference-distance score ledger; the bad segment CSV still includes
+adjacent FIX-anchor speed/gap and bridge residuals for continued FLOAT-tail
+design work.
 
 | Status | Epochs | P50 H | P95 H | 3D <= 50 cm / reference | P95H exceedance share |
 |---|---:|---:|---:|---:|---:|
-| FIXED | 5005 | 0.03 m | 1.57 m | 33.1% | 5.2% |
-| FLOAT | 5044 | 2.26 m | 26.61 m | 2.5% | 87.6% |
-| SPP | 253 | 4.71 m | 32.28 m | 0.0% | 7.2% |
+| FIXED | 5850 | 0.04 m | 2.73 m | 37.2% | 16.5% |
+| FLOAT | 4676 | 3.70 m | 36.36 m | 3.0% | 83.5% |
+| SPP | 230 | 4.41 m | 25.94 m | 0.0% | 0.0% |
 
 ![PPC Tokyo run1 coverage quality by status](docs/ppc_tokyo_run1_coverage_quality.png)
 
@@ -555,6 +553,7 @@ python3 apps/gnss.py ppc-rtk-signoff \
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \
   --rtklib-root output/benchmark \
+  --ratio 2.4 \
   --summary-json output/ppc_coverage_matrix/summary.json \
   --markdown-output output/ppc_coverage_matrix/table.md
 
@@ -567,7 +566,8 @@ survey-grade rover/base RINEX streams. Proprietary receiver-engine solutions are
 not assumed to be part of the PPC benchmark target. RTK ionosphere sweeps can be
 run reproducibly through `ppc-demo`, `ppc-rtk-signoff`, or
 `ppc-coverage-matrix` with `--iono auto|off|iflc|est`; PPC summaries record the
-requested value as `rtk_iono`.
+requested value as `rtk_iono`. Ambiguity-ratio sweeps use `--ratio <value>`;
+PPC summaries record the requested value as `rtk_ratio_threshold`.
 
 Dataset source: [taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset)
 

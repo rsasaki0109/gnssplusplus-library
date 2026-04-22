@@ -137,6 +137,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
     parser.add_argument("--preset", choices=("survey", "low-cost", "moving-base"), default=None)
     parser.add_argument("--iono", choices=("auto", "off", "iflc", "est"), default=None)
+    parser.add_argument("--ratio", type=float, default=None)
     parser.add_argument("--arfilter", dest="arfilter", action="store_true")
     parser.add_argument("--no-arfilter", dest="arfilter", action="store_false")
     parser.set_defaults(arfilter=None)
@@ -207,6 +208,8 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["preset"] = args.preset
     if getattr(args, "iono", None) is not None:
         tuning["iono"] = args.iono
+    if getattr(args, "ratio", None) is not None:
+        tuning["ratio"] = args.ratio
     if args.arfilter is not None:
         tuning["arfilter"] = args.arfilter
     if args.arfilter_margin is not None:
@@ -314,6 +317,9 @@ def build_ppc_demo_command(args: argparse.Namespace,
     iono = tuning.get("iono")
     if isinstance(iono, str):
         command.extend(["--iono", iono])
+    ratio = tuning.get("ratio")
+    if isinstance(ratio, (int, float)):
+        command.extend(["--ratio", str(ratio)])
     arfilter = tuning.get("arfilter")
     if arfilter is True:
         command.append("--arfilter")

@@ -112,6 +112,8 @@ one row per reference distance segment with gnssplusplus and RTKLIB score state,
 Use `--iono auto|off|iflc|est` on `ppc-demo`, `ppc-rtk-signoff`, or
 `ppc-coverage-matrix` when sweeping RTK ionosphere handling; the PPC summary
 records the requested mode as `rtk_iono`.
+Use `--ratio <value>` on the same commands when sweeping ambiguity-ratio
+thresholds; the summary records the requested value as `rtk_ratio_threshold`.
 
 `gnss smartloc-adapter` widens the public matrix beyond UrbanNav by exporting
 smartLoc `NAV-POSLLH.csv` into a `reference.csv` plus a normalized u-blox

@@ -18,6 +18,7 @@ GRID = "#d0d5dd"
 LIB = "#d97706"
 RTKLIB = "#2563eb"
 WIN = "#18794e"
+LOSS = "#b42318"
 EDGE = "#d0d5dd"
 
 
@@ -37,12 +38,12 @@ class CoverageRun:
 
 
 DEFAULT_RUNS = [
-    CoverageRun("tokyo_run1", "Tokyo r1", 86.201991, 66.287340, 19.914651, 48.582799, 30.522595, 29.329930, 0.028882, 29.301048, -6.973535),
-    CoverageRun("tokyo_run2", "Tokyo r2", 95.311988, 84.274943, 11.037045, 60.811740, 27.580394, 68.375721, 16.873271, 51.502450, -18.893530),
-    CoverageRun("tokyo_run3", "Tokyo r3", 95.987190, 93.131168, 2.856022, 60.257370, 40.547368, 59.411151, 35.630677, 23.780474, -0.691234),
-    CoverageRun("nagoya_run1", "Nagoya r1", 87.883937, 65.821461, 22.062476, 60.306365, 33.756950, 43.032180, 22.446739, 20.585441, -22.632527),
-    CoverageRun("nagoya_run2", "Nagoya r2", 86.244842, 69.791556, 16.453286, 40.326340, 18.829594, 20.815568, 11.002465, 9.813103, -27.159796),
-    CoverageRun("nagoya_run3", "Nagoya r3", 94.635647, 67.698520, 26.937127, 19.687119, 13.888100, 26.857978, 7.649536, 19.208442, -5.539148),
+    CoverageRun("tokyo_run1", "Tokyo r1", 90.000837, 66.287340, 23.713497, 54.388248, 30.522595, 34.920226, 0.028882, 34.891344, 3.392650),
+    CoverageRun("tokyo_run2", "Tokyo r2", 95.322916, 84.274943, 11.047973, 64.106385, 27.580394, 68.956110, 16.873271, 52.082839, -18.513524),
+    CoverageRun("tokyo_run3", "Tokyo r3", 95.666950, 93.131168, 2.535782, 63.014073, 40.547368, 60.598736, 35.630677, 24.968059, -0.242115),
+    CoverageRun("nagoya_run1", "Nagoya r1", 88.785780, 65.821461, 22.964319, 64.463418, 33.756950, 49.544107, 22.446739, 27.097368, -23.779976),
+    CoverageRun("nagoya_run2", "Nagoya r2", 85.567665, 69.791556, 15.776109, 51.440584, 18.829594, 20.944227, 11.002465, 9.941762, -27.239142),
+    CoverageRun("nagoya_run3", "Nagoya r3", 93.751202, 67.698520, 26.052682, 27.112387, 13.888100, 27.377916, 7.649536, 19.728380, -5.374863),
 ]
 
 
@@ -102,6 +103,26 @@ def load_runs(summary_json: Path | None) -> list[CoverageRun]:
     if summary_json is None:
         return list(DEFAULT_RUNS)
     return runs_from_summary(summary_json)
+
+
+def profile_footer(summary_json: Path | None) -> str:
+    parts = [
+        "low-cost RTK",
+        "no AR/post kinematic output filters",
+        "default drift/SPP/bridge-tail guards",
+        "match tolerance 0.25 s",
+    ]
+    if summary_json is None:
+        parts.append("ratio 2.4")
+    else:
+        payload = json.loads(summary_json.read_text(encoding="utf-8"))
+        ratio = payload.get("ratio")
+        iono = payload.get("iono")
+        if isinstance(ratio, (int, float)):
+            parts.append(f"ratio {ratio:g}")
+        if isinstance(iono, str):
+            parts.append(f"iono {iono}")
+    return "Profile: " + ", ".join(parts) + "."
 
 
 def add_panel(ax, x: float, y: float, w: float, h: float, radius: float = 0.018) -> None:
@@ -194,7 +215,8 @@ def draw_delta_table(ax, runs: list[CoverageRun]) -> None:
         ax.text(xs[1], y, f"+{run.positioning_delta_pct:.1f}", fontsize=9.6, color=WIN, weight="bold", ha="right", va="center")
         ax.text(xs[2], y, f"+{run.lib_fix_pct - run.rtklib_fix_pct:.1f}", fontsize=9.6, color=WIN, weight="bold", ha="right", va="center")
         ax.text(xs[3], y, f"+{run.official_score_delta_pct:.1f}", fontsize=9.6, color=WIN, weight="bold", ha="right", va="center")
-        ax.text(xs[4], y, f"{run.p95_h_delta_m:.2f} m", fontsize=9.6, color=WIN, weight="bold", ha="right", va="center")
+        p95_color = WIN if run.p95_h_delta_m <= 0.0 else LOSS
+        ax.text(xs[4], y, f"{run.p95_h_delta_m:.2f} m", fontsize=9.6, color=p95_color, weight="bold", ha="right", va="center")
         y -= 0.095
 
 
@@ -289,7 +311,7 @@ def main() -> int:
     ax.text(
         0.05,
         0.044,
-        "Profile: low-cost RTK, no AR/post kinematic output filters, default drift/SPP/bridge-tail guards, match tolerance 0.25 s.",
+        profile_footer(args.summary_json),
         fontsize=10.3,
         color=MUTED,
     )
