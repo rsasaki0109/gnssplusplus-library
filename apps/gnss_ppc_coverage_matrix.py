@@ -117,6 +117,14 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK adaptive fixed-position jump rate passed to each ppc-demo run.",
     )
     parser.add_argument(
+        "--max-consec-float-reset",
+        type=int,
+        default=None,
+        help="Optional RTK ambiguity reset after N consecutive FLOAT epochs.",
+    )
+    parser.add_argument("--enable-wide-lane-ar", action="store_true")
+    parser.add_argument("--wide-lane-threshold", type=float, default=None)
+    parser.add_argument(
         "--rtklib-root",
         type=Path,
         default=None,
@@ -234,6 +242,12 @@ def build_ppc_demo_command(
         command.extend(["--max-pos-jump-min", str(args.max_pos_jump_min)])
     if getattr(args, "max_pos_jump_rate", None) is not None:
         command.extend(["--max-pos-jump-rate", str(args.max_pos_jump_rate)])
+    if getattr(args, "max_consec_float_reset", None) is not None:
+        command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
+    if getattr(args, "enable_wide_lane_ar", False):
+        command.append("--enable-wide-lane-ar")
+    if getattr(args, "wide_lane_threshold", None) is not None:
+        command.extend(["--wide-lane-threshold", str(args.wide_lane_threshold)])
     if args.use_existing_solutions:
         command.append("--use-existing-solution")
     if getattr(args, "no_nonfix_drift_guard", False):
@@ -377,6 +391,8 @@ def load_run_record(
             "positioning_rate_pct": payload.get("positioning_rate_pct"),
             "fix_rate_pct": payload.get("fix_rate_pct"),
             "ppc_official_score_pct": payload.get("ppc_official_score_pct"),
+            "ppc_official_score_distance_m": payload.get("ppc_official_score_distance_m"),
+            "ppc_official_total_distance_m": payload.get("ppc_official_total_distance_m"),
             "ppc_score_3d_50cm_ref_pct": payload.get("ppc_score_3d_50cm_ref_pct"),
             "p95_h_m": payload.get("p95_h_m"),
             "max_h_m": payload.get("max_h_m"),
@@ -407,6 +423,22 @@ def aggregate_runs(runs: list[dict[str, object]]) -> dict[str, object]:
                 values.append(float(value))
         return values
 
+    def weighted_official_score(section_name: str) -> float | None:
+        score_distance_m = 0.0
+        total_distance_m = 0.0
+        for run in runs:
+            section = run.get(section_name)
+            if not isinstance(section, dict):
+                continue
+            score = section.get("ppc_official_score_distance_m")
+            total = section.get("ppc_official_total_distance_m")
+            if isinstance(score, (int, float)) and isinstance(total, (int, float)) and total > 0.0:
+                score_distance_m += float(score)
+                total_distance_m += float(total)
+        if total_distance_m <= 0.0:
+            return None
+        return round(100.0 * score_distance_m / total_distance_m, 6)
+
     bridge_rejected = 0
     bridge_seen = False
     fixed_burst_rejected = 0
@@ -424,9 +456,20 @@ def aggregate_runs(runs: list[dict[str, object]]) -> dict[str, object]:
             fixed_burst_seen = True
             fixed_burst_rejected += int(fixed_burst.get("rejected_epochs", 0))
 
+    weighted_official = weighted_official_score("metrics")
+    weighted_rtklib_official = weighted_official_score("rtklib")
+    weighted_official_delta = (
+        round(weighted_official - weighted_rtklib_official, 6)
+        if weighted_official is not None and weighted_rtklib_official is not None
+        else None
+    )
+
     return {
         "run_count": len(runs),
         "rtklib_comparison_run_count": len(delta_dicts),
+        "weighted_official_score_pct": weighted_official,
+        "weighted_rtklib_official_score_pct": weighted_rtklib_official,
+        "weighted_official_score_delta_pct": weighted_official_delta,
         "avg_positioning_delta_pct": average(delta_values("positioning_rate_pct")),
         "avg_fix_delta_pct": average(delta_values("fix_rate_pct")),
         "avg_official_score_delta_pct": average(delta_values("ppc_official_score_pct")),
@@ -453,6 +496,9 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_pos_jump": getattr(args, "max_pos_jump", None),
         "max_pos_jump_min": getattr(args, "max_pos_jump_min", None),
         "max_pos_jump_rate": getattr(args, "max_pos_jump_rate", None),
+        "max_consec_float_reset": getattr(args, "max_consec_float_reset", None),
+        "enable_wide_lane_ar": getattr(args, "enable_wide_lane_ar", False),
+        "wide_lane_threshold": getattr(args, "wide_lane_threshold", None),
         "no_nonfix_drift_guard": getattr(args, "no_nonfix_drift_guard", False),
         "nonfix_drift_max_anchor_gap": getattr(args, "nonfix_drift_max_anchor_gap", None),
         "nonfix_drift_max_anchor_speed": getattr(args, "nonfix_drift_max_anchor_speed", None),
@@ -554,6 +600,9 @@ def render_markdown(payload: dict[str, object]) -> str:
             "Averages:",
             f"- Positioning delta: {aggregate_text('avg_positioning_delta_pct', ' pp')}",
             f"- PPC official score delta: {aggregate_text('avg_official_score_delta_pct', ' pp')}",
+            f"- PPC official weighted score: {aggregate_text('weighted_official_score_pct', '%')}",
+            f"- RTKLIB official weighted score: {aggregate_text('weighted_rtklib_official_score_pct', '%')}",
+            f"- PPC official weighted delta: {aggregate_text('weighted_official_score_delta_pct', ' pp')}",
             f"- P95 H delta: {aggregate_text('avg_p95_h_delta_m', ' m')}",
             f"- FLOAT bridge-tail rejected epochs: {aggregate_text('float_bridge_tail_rejected_epochs')}",
             f"- FIX bridge-burst rejected epochs: {aggregate_text('fixed_bridge_burst_rejected_epochs')}",

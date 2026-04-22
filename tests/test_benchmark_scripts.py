@@ -239,6 +239,9 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 max_pos_jump=None,
                 max_pos_jump_min=None,
                 max_pos_jump_rate=None,
+                max_consec_float_reset=None,
+                enable_wide_lane_ar=False,
+                wide_lane_threshold=None,
                 arfilter=None,
                 arfilter_margin=None,
                 min_hold_count=None,
@@ -260,6 +263,9 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "max_pos_jump": 20.0,
                 "max_pos_jump_min": 20.0,
                 "max_pos_jump_rate": 25.0,
+                "max_consec_float_reset": 10,
+                "enable_wide_lane_ar": True,
+                "wide_lane_threshold": 0.10,
                 "nonfix_drift_max_anchor_gap": 90.0,
                 "nonfix_drift_max_anchor_speed": 0.75,
                 "nonfix_drift_max_residual": 4.0,
@@ -307,6 +313,11 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("20.0", command)
             self.assertIn("--max-pos-jump-rate", command)
             self.assertIn("25.0", command)
+            self.assertIn("--max-consec-float-reset", command)
+            self.assertIn("10", command)
+            self.assertIn("--enable-wide-lane-ar", command)
+            self.assertIn("--wide-lane-threshold", command)
+            self.assertIn("0.1", command)
             self.assertIn("--nonfix-drift-max-anchor-gap", command)
             self.assertIn("90.0", command)
             self.assertIn("--nonfix-drift-max-anchor-speed", command)
@@ -449,6 +460,9 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 max_pos_jump=20.0,
                 max_pos_jump_min=20.0,
                 max_pos_jump_rate=25.0,
+                max_consec_float_reset=10,
+                enable_wide_lane_ar=True,
+                wide_lane_threshold=0.10,
                 fixed_bridge_burst_guard=True,
                 fixed_bridge_burst_max_anchor_gap=30.0,
                 fixed_bridge_burst_min_boundary_gap=1.0,
@@ -496,6 +510,11 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("20.0", command)
             self.assertIn("--max-pos-jump-rate", command)
             self.assertIn("25.0", command)
+            self.assertIn("--max-consec-float-reset", command)
+            self.assertIn("10", command)
+            self.assertIn("--enable-wide-lane-ar", command)
+            self.assertIn("--wide-lane-threshold", command)
+            self.assertIn("0.1", command)
             self.assertIn("--nonfix-drift-max-anchor-gap", command)
             self.assertIn("90.0", command)
             self.assertIn("--nonfix-drift-max-anchor-speed", command)
@@ -549,6 +568,9 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 max_pos_jump=None,
                 max_pos_jump_min=None,
                 max_pos_jump_rate=None,
+                max_consec_float_reset=None,
+                enable_wide_lane_ar=False,
+                wide_lane_threshold=None,
                 no_float_bridge_tail_guard=False,
             )
             paths = ppc_coverage_matrix.output_paths(args.output_dir, "tokyo", "run1")
@@ -559,6 +581,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                         "positioning_rate_pct": 86.2,
                         "fix_rate_pct": 48.6,
                         "ppc_official_score_pct": 42.0,
+                        "ppc_official_score_distance_m": 420.0,
+                        "ppc_official_total_distance_m": 1000.0,
                         "ppc_score_3d_50cm_ref_pct": 35.6,
                         "p95_h_m": 24.16,
                         "max_h_m": 47.9,
@@ -568,6 +592,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                             "positioning_rate_pct": 66.3,
                             "fix_rate_pct": 30.5,
                             "ppc_official_score_pct": 21.0,
+                            "ppc_official_score_distance_m": 210.0,
+                            "ppc_official_total_distance_m": 1000.0,
                         },
                         "delta_vs_rtklib": {
                             "positioning_rate_pct": 19.9,
@@ -601,13 +627,21 @@ class PPCCoverageMatrixTest(unittest.TestCase):
 
             self.assertEqual(payload["aggregates"]["avg_positioning_delta_pct"], 19.9)
             self.assertEqual(payload["aggregates"]["avg_official_score_delta_pct"], 21.0)
+            self.assertEqual(payload["aggregates"]["weighted_official_score_pct"], 42.0)
+            self.assertEqual(payload["aggregates"]["weighted_rtklib_official_score_pct"], 21.0)
+            self.assertEqual(payload["aggregates"]["weighted_official_score_delta_pct"], 21.0)
             self.assertEqual(payload["aggregates"]["avg_p95_h_delta_m"], -6.97)
             self.assertEqual(payload["aggregates"]["float_bridge_tail_rejected_epochs"], 147)
             self.assertEqual(payload["aggregates"]["fixed_bridge_burst_rejected_epochs"], 12)
             self.assertIsNone(payload["max_pos_jump_min"])
             self.assertIsNone(payload["max_pos_jump_rate"])
+            self.assertIsNone(payload["max_consec_float_reset"])
+            self.assertFalse(payload["enable_wide_lane_ar"])
+            self.assertIsNone(payload["wide_lane_threshold"])
             self.assertIn("tokyo_run1", markdown)
             self.assertIn("+19.9 pp", markdown)
+            self.assertIn("42.0%", markdown)
+            self.assertIn("PPC official weighted delta: 21.0 pp", markdown)
             self.assertIn("147", markdown)
             self.assertIn("12", markdown)
 
@@ -2827,6 +2861,9 @@ class PPCDemoTest(unittest.TestCase):
             max_pos_jump=20.0,
             max_pos_jump_min=20.0,
             max_pos_jump_rate=25.0,
+            max_consec_float_reset=10,
+            enable_wide_lane_ar=True,
+            wide_lane_threshold=0.10,
             fixed_bridge_burst_guard=True,
             fixed_bridge_burst_max_anchor_gap=30.0,
             fixed_bridge_burst_min_boundary_gap=1.0,
@@ -2880,6 +2917,11 @@ class PPCDemoTest(unittest.TestCase):
         self.assertIn("20.0", commands[0])
         self.assertIn("--max-pos-jump-rate", commands[0])
         self.assertIn("25.0", commands[0])
+        self.assertIn("--max-consec-float-reset", commands[0])
+        self.assertIn("10", commands[0])
+        self.assertIn("--enable-wide-lane-ar", commands[0])
+        self.assertIn("--wide-lane-threshold", commands[0])
+        self.assertIn("0.1", commands[0])
         self.assertIn("--fixed-bridge-burst-guard", commands[0])
         self.assertIn("--fixed-bridge-burst-max-residual", commands[0])
         self.assertIn("20.0", commands[0])
@@ -2983,6 +3025,9 @@ class PPCDemoTest(unittest.TestCase):
                 max_pos_jump=20.0,
                 max_pos_jump_min=20.0,
                 max_pos_jump_rate=25.0,
+                max_consec_float_reset=10,
+                enable_wide_lane_ar=True,
+                wide_lane_threshold=0.10,
                 fixed_bridge_burst_guard=True,
                 fixed_bridge_burst_max_anchor_gap=30.0,
                 fixed_bridge_burst_min_boundary_gap=1.0,
@@ -3038,6 +3083,9 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtk_max_position_jump_m"], 20.0)
             self.assertEqual(payload["rtk_max_position_jump_min_m"], 20.0)
             self.assertEqual(payload["rtk_max_position_jump_rate_mps"], 25.0)
+            self.assertEqual(payload["rtk_max_consecutive_float_for_reset"], 10)
+            self.assertTrue(payload["rtk_wide_lane_ar_enabled"])
+            self.assertEqual(payload["rtk_wide_lane_threshold"], 0.10)
             self.assertTrue(payload["fixed_bridge_burst_guard_enabled"])
             self.assertEqual(payload["fixed_bridge_burst_guard"]["max_anchor_gap_s"], 30.0)
             self.assertEqual(payload["fixed_bridge_burst_guard"]["min_boundary_gap_s"], 1.0)

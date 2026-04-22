@@ -54,6 +54,11 @@ preset = "low-cost"
 # nonfix_drift_max_residual = 4.0
 # nonfix_drift_min_horizontal_residual = 6.0
 # nonfix_drift_max_segment_epochs = 0
+# Optional official-score experiment knobs. Use coverage-matrix sweeps before
+# promoting any value to a sign-off profile.
+# max_consec_float_reset = 10
+# enable_wide_lane_ar = true
+# wide_lane_threshold = 0.10
 arfilter = true
 arfilter_margin = 0.35
 min_hold_count = 8

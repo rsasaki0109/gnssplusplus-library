@@ -142,6 +142,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-pos-jump", type=float, default=None)
     parser.add_argument("--max-pos-jump-min", type=float, default=None)
     parser.add_argument("--max-pos-jump-rate", type=float, default=None)
+    parser.add_argument("--max-consec-float-reset", type=int, default=None)
+    parser.add_argument("--enable-wide-lane-ar", action="store_true")
+    parser.add_argument("--wide-lane-threshold", type=float, default=None)
     parser.add_argument("--no-nonfix-drift-guard", action="store_true")
     parser.add_argument("--nonfix-drift-max-anchor-gap", type=float, default=None)
     parser.add_argument("--nonfix-drift-max-anchor-speed", type=float, default=None)
@@ -234,6 +237,12 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["max_pos_jump_min"] = args.max_pos_jump_min
     if getattr(args, "max_pos_jump_rate", None) is not None:
         tuning["max_pos_jump_rate"] = args.max_pos_jump_rate
+    if getattr(args, "max_consec_float_reset", None) is not None:
+        tuning["max_consec_float_reset"] = args.max_consec_float_reset
+    if getattr(args, "enable_wide_lane_ar", False):
+        tuning["enable_wide_lane_ar"] = True
+    if getattr(args, "wide_lane_threshold", None) is not None:
+        tuning["wide_lane_threshold"] = args.wide_lane_threshold
     if getattr(args, "no_nonfix_drift_guard", False):
         tuning["no_nonfix_drift_guard"] = True
     if getattr(args, "nonfix_drift_max_anchor_gap", None) is not None:
@@ -380,6 +389,14 @@ def build_ppc_demo_command(args: argparse.Namespace,
     max_pos_jump_rate = tuning.get("max_pos_jump_rate")
     if isinstance(max_pos_jump_rate, (int, float)):
         command.extend(["--max-pos-jump-rate", str(max_pos_jump_rate)])
+    max_consec_float_reset = tuning.get("max_consec_float_reset")
+    if isinstance(max_consec_float_reset, int):
+        command.extend(["--max-consec-float-reset", str(max_consec_float_reset)])
+    if tuning.get("enable_wide_lane_ar") is True:
+        command.append("--enable-wide-lane-ar")
+    wide_lane_threshold = tuning.get("wide_lane_threshold")
+    if isinstance(wide_lane_threshold, (int, float)):
+        command.extend(["--wide-lane-threshold", str(wide_lane_threshold)])
     if tuning.get("no_nonfix_drift_guard") is True:
         command.append("--no-nonfix-drift-guard")
     nonfix_max_anchor_gap = tuning.get("nonfix_drift_max_anchor_gap")

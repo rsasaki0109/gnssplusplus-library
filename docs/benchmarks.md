@@ -127,6 +127,15 @@ residual floor reduces Nagoya run3 over-pruning from **13.90 pp** to **3.48 pp**
 Positioning cost. Keep that profile for isolating long stationary FLOAT drift
 and false-fix bursts, not for the Positioning-rate sign-off.
 
+For the PPC official-score chase, `--max-consec-float-reset 10` is the first
+large non-IMU lever found so far. Replayed on the same six public runs, it lifts
+the distance-weighted official score from **48.66%** to **58.90%** and the
+run-average official lead over RTKLIB from **+28.1 pp** to **+37.9 pp**. It is
+still below the PPC2024 second-place Public score of **77.6%** by **18.70 pp**
+(about **8.66 km** of additional scored reference distance), and Tokyo run3 no
+longer beats RTKLIB on Positioning. Treat it as the current official-score
+candidate, not as the coverage sign-off profile.
+
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
 ![PPC Tokyo run1 bad segment trajectory](ppc_tokyo_run1_bad_segments_trajectory.png)
@@ -220,6 +229,15 @@ python3 apps/gnss.py ppc-coverage-matrix \
 python3 scripts/update_ppc_coverage_readme.py \
   --summary-json output/ppc_coverage_matrix/summary.json \
   --check
+
+python3 apps/gnss.py ppc-coverage-matrix \
+  --dataset-root /datasets/PPC-Dataset \
+  --rtklib-root output/benchmark \
+  --ratio 2.4 \
+  --max-consec-float-reset 10 \
+  --output-dir output/ppc_coverage_matrix_floatreset10 \
+  --summary-json output/ppc_coverage_matrix_floatreset10/summary.json \
+  --markdown-output output/ppc_coverage_matrix_floatreset10/table.md
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \

@@ -159,6 +159,15 @@ tail gain; Nagoya run3 now loses **3.48 pp** Positioning instead of the earlier
 plus 31 fixed-burst epochs, so keep it as evidence for solver recovery work
 rather than the README sign-off table.
 
+For the PPC official-score chase, `--max-consec-float-reset 10` is the first
+large non-IMU lever found so far. Replayed on the same six public runs, it lifts
+the distance-weighted official score from **48.66%** to **58.90%** and the
+run-average official lead over RTKLIB from **+28.1 pp** to **+37.9 pp**. It is
+still below the PPC2024 second-place Public score of **77.6%** by **18.70 pp**
+(about **8.66 km** of additional scored reference distance), and Tokyo run3 no
+longer beats RTKLIB on Positioning. Treat it as the current official-score
+candidate, not as the coverage sign-off profile.
+
 ![PPC RTK tail-cleanup diagnostic scorecard](docs/ppc_tail_cleanup_scorecard.png)
 
 ![PPC Tokyo run1 bad segment trajectory](docs/ppc_tokyo_run1_bad_segments_trajectory.png)
@@ -236,7 +245,7 @@ explicitly enabled.
 | `--max-pos-jump-min <m>` + `--max-pos-jump-rate <m/s>` | Reject fix if the jump from the last fixed position exceeds `max(min, rate * dt)`, so vehicle gaps can be tested without a stale absolute distance clamp. | `0` / `0` (disabled) |
 | `--nonfix-drift-max-residual <m>` + `--nonfix-drift-min-horizontal-residual <m>` | Tighten the default low-speed non-FIX drift guard for tail diagnostics while avoiding vertical-only fallback pruning. The PPC diagnostic profile uses `4` / `6`. | `30` / `0` |
 | `--fixed-bridge-burst-guard` + `--fixed-bridge-burst-max-residual <m>` | Reject isolated short FIX bursts when they diverge from the straight bridge between surrounding FIX anchors. Tokyo run1 removes 12 false-fix-tail epochs with a small Positioning/Fix-rate cost, so it remains opt-in. | `false` / `20` |
-| `--max-consec-float-reset <N>` | Auto-reset ambiguities after N consecutive float epochs. | `0` (disabled) |
+| `--max-consec-float-reset <N>` | Auto-reset ambiguities after N consecutive float epochs. `10` is the current PPC official-score candidate, trading Positioning coverage for more FIX recovery. | `0` (disabled) |
 | `--max-postfix-rms <m>` | Reject fix if the L1 post-fix DD phase residual RMS exceeds N meters. | `0` (disabled) |
 | `--enable-wide-lane-ar` + `--wide-lane-threshold <cycle>` | Pre-compute MW wide-lane integers and inject them as Kalman constraints into the LAMBDA search. Halves Hmed on Odaiba at the cost of ~35% Fix count. | `false` / `0.25` |
 
@@ -592,6 +601,15 @@ python3 apps/gnss.py ppc-coverage-matrix \
 
 python3 scripts/update_ppc_coverage_readme.py \
   --summary-json output/ppc_coverage_matrix/summary.json
+
+python3 apps/gnss.py ppc-coverage-matrix \
+  --dataset-root /datasets/PPC-Dataset \
+  --rtklib-root output/benchmark \
+  --ratio 2.4 \
+  --max-consec-float-reset 10 \
+  --output-dir output/ppc_coverage_matrix_floatreset10 \
+  --summary-json output/ppc_coverage_matrix_floatreset10/summary.json \
+  --markdown-output output/ppc_coverage_matrix_floatreset10/table.md
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \

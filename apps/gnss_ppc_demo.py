@@ -199,6 +199,23 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional RTK adaptive fixed-position jump rate passed through to gnss solve.",
     )
+    parser.add_argument(
+        "--max-consec-float-reset",
+        type=int,
+        default=None,
+        help="Optional RTK ambiguity reset after N consecutive FLOAT epochs.",
+    )
+    parser.add_argument(
+        "--enable-wide-lane-ar",
+        action="store_true",
+        help="Enable the RTK Melbourne-Wubbena wide-lane AR pre-step.",
+    )
+    parser.add_argument(
+        "--wide-lane-threshold",
+        type=float,
+        default=None,
+        help="Optional wide-lane integer acceptance threshold in cycles.",
+    )
     parser.add_argument("--arfilter", dest="arfilter", action="store_true", help="Enable AR filter for RTK.")
     parser.add_argument("--no-arfilter", dest="arfilter", action="store_false", help="Disable AR filter for RTK.")
     parser.set_defaults(arfilter=None)
@@ -915,6 +932,12 @@ def run_solver(
             command.extend(["--max-pos-jump-min", str(args.max_pos_jump_min)])
         if getattr(args, "max_pos_jump_rate", None) is not None:
             command.extend(["--max-pos-jump-rate", str(args.max_pos_jump_rate)])
+        if getattr(args, "max_consec_float_reset", None) is not None:
+            command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
+        if getattr(args, "enable_wide_lane_ar", False):
+            command.append("--enable-wide-lane-ar")
+        if getattr(args, "wide_lane_threshold", None) is not None:
+            command.extend(["--wide-lane-threshold", str(args.wide_lane_threshold)])
         if args.arfilter is True:
             command.append("--arfilter")
         elif args.arfilter is False:
@@ -1088,6 +1111,15 @@ def build_summary_payload(
         ),
         "rtk_max_position_jump_rate_mps": (
             getattr(args, "max_pos_jump_rate", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_consecutive_float_for_reset": (
+            getattr(args, "max_consec_float_reset", None) if args.solver == "rtk" else None
+        ),
+        "rtk_wide_lane_ar_enabled": bool(
+            args.solver == "rtk" and getattr(args, "enable_wide_lane_ar", False)
+        ),
+        "rtk_wide_lane_threshold": (
+            getattr(args, "wide_lane_threshold", None) if args.solver == "rtk" else None
         ),
         "rtk_output_profile": "coverage" if getattr(args, "no_kinematic_post_filter", False) else "precision",
         "kinematic_post_filter_enabled": not getattr(args, "no_kinematic_post_filter", False),
