@@ -236,6 +236,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 ratio=None,
                 max_hold_div=None,
                 max_pos_jump=None,
+                max_pos_jump_min=None,
+                max_pos_jump_rate=None,
                 arfilter=None,
                 arfilter_margin=None,
                 min_hold_count=None,
@@ -255,6 +257,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "ratio": 2.4,
                 "max_hold_div": 5.0,
                 "max_pos_jump": 20.0,
+                "max_pos_jump_min": 20.0,
+                "max_pos_jump_rate": 25.0,
                 "arfilter": True,
                 "arfilter_margin": 0.35,
                 "min_hold_count": 8,
@@ -287,6 +291,10 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("5.0", command)
             self.assertIn("--max-pos-jump", command)
             self.assertIn("20.0", command)
+            self.assertIn("--max-pos-jump-min", command)
+            self.assertIn("20.0", command)
+            self.assertIn("--max-pos-jump-rate", command)
+            self.assertIn("25.0", command)
             self.assertIn("--arfilter", command)
             self.assertIn("--min-hold-count", command)
             self.assertIn("8", command)
@@ -330,6 +338,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 ratio=None,
                 max_hold_div=None,
                 max_pos_jump=None,
+                max_pos_jump_min=None,
+                max_pos_jump_rate=None,
                 arfilter=None,
                 arfilter_margin=None,
                 min_hold_count=None,
@@ -408,6 +418,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 ratio=2.4,
                 max_hold_div=5.0,
                 max_pos_jump=20.0,
+                max_pos_jump_min=20.0,
+                max_pos_jump_rate=25.0,
                 rtklib_root=temp_root / "benchmark",
                 rtklib_bin=None,
                 rtklib_config=ROOT_DIR / "scripts" / "rtklib_odaiba.conf",
@@ -431,6 +443,10 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("5.0", command)
             self.assertIn("--max-pos-jump", command)
             self.assertIn("20.0", command)
+            self.assertIn("--max-pos-jump-min", command)
+            self.assertIn("20.0", command)
+            self.assertIn("--max-pos-jump-rate", command)
+            self.assertIn("25.0", command)
             self.assertIn("--rtklib-pos", command)
             self.assertIn(str(temp_root / "benchmark" / "tokyo_run1" / "rtklib.pos"), command)
             self.assertIn("--use-existing-rtklib-solution", command)
@@ -453,6 +469,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 ratio=None,
                 max_hold_div=None,
                 max_pos_jump=None,
+                max_pos_jump_min=None,
+                max_pos_jump_rate=None,
                 no_float_bridge_tail_guard=False,
             )
             paths = ppc_coverage_matrix.output_paths(args.output_dir, "tokyo", "run1")
@@ -506,6 +524,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertEqual(payload["aggregates"]["avg_official_score_delta_pct"], 21.0)
             self.assertEqual(payload["aggregates"]["avg_p95_h_delta_m"], -6.97)
             self.assertEqual(payload["aggregates"]["float_bridge_tail_rejected_epochs"], 147)
+            self.assertIsNone(payload["max_pos_jump_min"])
+            self.assertIsNone(payload["max_pos_jump_rate"])
             self.assertIn("tokyo_run1", markdown)
             self.assertIn("+19.9 pp", markdown)
             self.assertIn("147", markdown)
@@ -2630,6 +2650,8 @@ class PPCDemoTest(unittest.TestCase):
             ratio=2.4,
             max_hold_div=5.0,
             max_pos_jump=20.0,
+            max_pos_jump_min=20.0,
+            max_pos_jump_rate=25.0,
             arfilter=False,
             arfilter_margin=None,
             min_hold_count=None,
@@ -2672,6 +2694,10 @@ class PPCDemoTest(unittest.TestCase):
         self.assertIn("5.0", commands[0])
         self.assertIn("--max-pos-jump", commands[0])
         self.assertIn("20.0", commands[0])
+        self.assertIn("--max-pos-jump-min", commands[0])
+        self.assertIn("20.0", commands[0])
+        self.assertIn("--max-pos-jump-rate", commands[0])
+        self.assertIn("25.0", commands[0])
         self.assertIn("--no-arfilter", commands[0])
         self.assertIn("--no-kinematic-post-filter", commands[0])
 
@@ -2770,6 +2796,8 @@ class PPCDemoTest(unittest.TestCase):
                 ratio=2.4,
                 max_hold_div=5.0,
                 max_pos_jump=20.0,
+                max_pos_jump_min=20.0,
+                max_pos_jump_rate=25.0,
                 low_dynamics=False,
                 no_kinematic_post_filter=True,
                 no_spp_height_step_guard=False,
@@ -2818,6 +2846,8 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtk_ratio_threshold"], 2.4)
             self.assertEqual(payload["rtk_max_hold_divergence_m"], 5.0)
             self.assertEqual(payload["rtk_max_position_jump_m"], 20.0)
+            self.assertEqual(payload["rtk_max_position_jump_min_m"], 20.0)
+            self.assertEqual(payload["rtk_max_position_jump_rate_mps"], 25.0)
             self.assertEqual(payload["rtk_output_profile"], "coverage")
             self.assertFalse(payload["kinematic_post_filter_enabled"])
             self.assertTrue(payload["nonfix_drift_guard_enabled"])

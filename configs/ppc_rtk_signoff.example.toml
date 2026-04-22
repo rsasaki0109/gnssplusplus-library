@@ -38,6 +38,9 @@ preset = "low-cost"
 # Optional RTK fixed-solution validation sweeps.
 # max_hold_div = 5.0
 # max_pos_jump = 20.0
+# Adaptive jump guards scale the allowed FIX-to-FIX jump with elapsed time.
+# max_pos_jump_min = 20.0
+# max_pos_jump_rate = 25.0
 arfilter = true
 arfilter_margin = 0.35
 min_hold_count = 8

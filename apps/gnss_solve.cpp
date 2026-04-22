@@ -121,6 +121,8 @@ struct SolveConfig {
         libgnss::RTKProcessor::RTKConfig::ARPolicy::EXTENDED;
     double max_hold_divergence_m = 0.0;
     double max_position_jump_m = 0.0;
+    double max_position_jump_min_m = 0.0;
+    double max_position_jump_rate_mps = 0.0;
     int max_consecutive_float_for_reset = 0;
     double max_postfix_residual_rms = 0.0;
     bool enable_wide_lane_ar = false;
@@ -438,6 +440,9 @@ void printUsage(const char* program_name) {
         << "                             (default: 0, disabled)\n"
         << "  --max-pos-jump <v>         Max AR fix jump from last fixed pos in meters\n"
         << "                             (default: 0, disabled; additional to history check)\n"
+        << "  --max-pos-jump-min <v>     Min adaptive AR fix jump in meters (default: 0)\n"
+        << "  --max-pos-jump-rate <v>    Max adaptive AR fix jump rate in m/s\n"
+        << "                             (default: 0, disabled)\n"
         << "  --max-postfix-rms <v>      Max L1 post-fix phase residual RMS in meters\n"
         << "                             (default: 0, disabled)\n"
         << "  --enable-wide-lane-ar      Enable MW wide-lane AR pre-step (default: off)\n"
@@ -638,6 +643,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.max_hold_divergence_m = std::stod(argv[++i]);
         } else if (arg == "--max-pos-jump" && i + 1 < argc) {
             config.max_position_jump_m = std::stod(argv[++i]);
+        } else if (arg == "--max-pos-jump-min" && i + 1 < argc) {
+            config.max_position_jump_min_m = std::stod(argv[++i]);
+        } else if (arg == "--max-pos-jump-rate" && i + 1 < argc) {
+            config.max_position_jump_rate_mps = std::stod(argv[++i]);
         } else if (arg == "--max-postfix-rms" && i + 1 < argc) {
             config.max_postfix_residual_rms = std::stod(argv[++i]);
         } else if (arg == "--enable-wide-lane-ar") {
@@ -725,6 +734,15 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.max_baseline_length_m <= 0.0) {
         argumentError("--max-baseline-m must be > 0", argv[0]);
+    }
+    if (config.max_position_jump_m < 0.0) {
+        argumentError("--max-pos-jump must be >= 0", argv[0]);
+    }
+    if (config.max_position_jump_min_m < 0.0) {
+        argumentError("--max-pos-jump-min must be >= 0", argv[0]);
+    }
+    if (config.max_position_jump_rate_mps < 0.0) {
+        argumentError("--max-pos-jump-rate must be >= 0", argv[0]);
     }
     if (config.nonfix_drift_guard_max_anchor_gap_s <= 0.0) {
         argumentError("--nonfix-drift-max-anchor-gap must be > 0", argv[0]);
@@ -891,6 +909,8 @@ int main(int argc, char* argv[]) {
         rtk_config.ar_policy = config.ar_policy;
         rtk_config.max_hold_divergence_m = config.max_hold_divergence_m;
         rtk_config.max_position_jump_m = config.max_position_jump_m;
+        rtk_config.max_position_jump_min_m = config.max_position_jump_min_m;
+        rtk_config.max_position_jump_rate_mps = config.max_position_jump_rate_mps;
         rtk_config.max_consecutive_float_for_reset = config.max_consecutive_float_for_reset;
         rtk_config.max_postfix_residual_rms = config.max_postfix_residual_rms;
         rtk_config.enable_wide_lane_ar = config.enable_wide_lane_ar;

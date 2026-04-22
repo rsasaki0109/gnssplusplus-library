@@ -114,9 +114,10 @@ Use `--iono auto|off|iflc|est` on `ppc-demo`, `ppc-rtk-signoff`, or
 records the requested mode as `rtk_iono`.
 Use `--ratio <value>` on the same commands when sweeping ambiguity-ratio
 thresholds; the summary records the requested value as `rtk_ratio_threshold`.
-Use `--max-hold-div` and `--max-pos-jump` for explicit fixed-solution
-validation sweeps; summaries record them as `rtk_max_hold_divergence_m` and
-`rtk_max_position_jump_m`.
+Use `--max-hold-div`, `--max-pos-jump`, `--max-pos-jump-min`, and
+`--max-pos-jump-rate` for explicit fixed-solution validation sweeps; summaries
+record the jump settings as `rtk_max_position_jump_m`,
+`rtk_max_position_jump_min_m`, and `rtk_max_position_jump_rate_mps`.
 
 `gnss smartloc-adapter` widens the public matrix beyond UrbanNav by exporting
 smartLoc `NAV-POSLLH.csv` into a `reference.csv` plus a normalized u-blox

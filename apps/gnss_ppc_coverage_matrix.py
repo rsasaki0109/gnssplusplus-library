@@ -99,6 +99,18 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK fixed-position jump guard passed to each ppc-demo run.",
     )
     parser.add_argument(
+        "--max-pos-jump-min",
+        type=float,
+        default=None,
+        help="Optional RTK adaptive fixed-position jump floor passed to each ppc-demo run.",
+    )
+    parser.add_argument(
+        "--max-pos-jump-rate",
+        type=float,
+        default=None,
+        help="Optional RTK adaptive fixed-position jump rate passed to each ppc-demo run.",
+    )
+    parser.add_argument(
         "--rtklib-root",
         type=Path,
         default=None,
@@ -184,6 +196,10 @@ def build_ppc_demo_command(
         command.extend(["--max-hold-div", str(args.max_hold_div)])
     if getattr(args, "max_pos_jump", None) is not None:
         command.extend(["--max-pos-jump", str(args.max_pos_jump)])
+    if getattr(args, "max_pos_jump_min", None) is not None:
+        command.extend(["--max-pos-jump-min", str(args.max_pos_jump_min)])
+    if getattr(args, "max_pos_jump_rate", None) is not None:
+        command.extend(["--max-pos-jump-rate", str(args.max_pos_jump_rate)])
     if args.use_existing_solutions:
         command.append("--use-existing-solution")
     if args.no_float_bridge_tail_guard:
@@ -324,6 +340,8 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "ratio": getattr(args, "ratio", None),
         "max_hold_div": getattr(args, "max_hold_div", None),
         "max_pos_jump": getattr(args, "max_pos_jump", None),
+        "max_pos_jump_min": getattr(args, "max_pos_jump_min", None),
+        "max_pos_jump_rate": getattr(args, "max_pos_jump_rate", None),
         "coverage_profile": {
             "no_arfilter": True,
             "no_kinematic_post_filter": True,

@@ -140,6 +140,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ratio", type=float, default=None)
     parser.add_argument("--max-hold-div", type=float, default=None)
     parser.add_argument("--max-pos-jump", type=float, default=None)
+    parser.add_argument("--max-pos-jump-min", type=float, default=None)
+    parser.add_argument("--max-pos-jump-rate", type=float, default=None)
     parser.add_argument("--arfilter", dest="arfilter", action="store_true")
     parser.add_argument("--no-arfilter", dest="arfilter", action="store_false")
     parser.set_defaults(arfilter=None)
@@ -216,6 +218,10 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["max_hold_div"] = args.max_hold_div
     if getattr(args, "max_pos_jump", None) is not None:
         tuning["max_pos_jump"] = args.max_pos_jump
+    if getattr(args, "max_pos_jump_min", None) is not None:
+        tuning["max_pos_jump_min"] = args.max_pos_jump_min
+    if getattr(args, "max_pos_jump_rate", None) is not None:
+        tuning["max_pos_jump_rate"] = args.max_pos_jump_rate
     if args.arfilter is not None:
         tuning["arfilter"] = args.arfilter
     if args.arfilter_margin is not None:
@@ -332,6 +338,12 @@ def build_ppc_demo_command(args: argparse.Namespace,
     max_pos_jump = tuning.get("max_pos_jump")
     if isinstance(max_pos_jump, (int, float)):
         command.extend(["--max-pos-jump", str(max_pos_jump)])
+    max_pos_jump_min = tuning.get("max_pos_jump_min")
+    if isinstance(max_pos_jump_min, (int, float)):
+        command.extend(["--max-pos-jump-min", str(max_pos_jump_min)])
+    max_pos_jump_rate = tuning.get("max_pos_jump_rate")
+    if isinstance(max_pos_jump_rate, (int, float)):
+        command.extend(["--max-pos-jump-rate", str(max_pos_jump_rate)])
     arfilter = tuning.get("arfilter")
     if arfilter is True:
         command.append("--arfilter")

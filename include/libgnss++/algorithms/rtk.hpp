@@ -118,6 +118,13 @@ public:
         /// 0 (default) disables the check — existing behavior preserved.
         double max_position_jump_m = 0.0;
 
+        /// Adaptive max AR fix jump from last fixed position.
+        /// When max_position_jump_rate_mps > 0, accepted jump is
+        /// max(max_position_jump_min_m, max_position_jump_rate_mps * dt).
+        /// Disabled by default to preserve existing behavior.
+        double max_position_jump_min_m = 0.0;
+        double max_position_jump_rate_mps = 0.0;
+
         /// Reset ambiguity state after N consecutive float epochs (aggressive reconvergence).
         /// 0 (default) disables the check — existing behavior preserved.
         int max_consecutive_float_for_reset = 0;
@@ -249,6 +256,8 @@ private:
     // Last validated fixed position (for position reset in next epoch)
     Vector3d last_fixed_position_ = Vector3d::Zero();
     bool has_last_fixed_position_ = false;
+    GNSSTime last_fixed_time_;
+    bool has_last_fixed_time_ = false;
     Vector3d last_solution_position_ = Vector3d::Zero();
     bool has_last_solution_position_ = false;
     Vector3d last_trusted_position_ = Vector3d::Zero();
@@ -271,6 +280,8 @@ private:
     struct HoldStateSnapshot {
         Vector3d last_fixed_position = Vector3d::Zero();
         bool has_last_fixed_position = false;
+        GNSSTime last_fixed_time;
+        bool has_last_fixed_time = false;
         std::vector<DDPair> dd_pairs;
         std::vector<int> best_subset;
         VectorXd dd_fixed;
@@ -419,7 +430,8 @@ private:
     /**
      * Validate fixed solution with post-fit residual check (RTKLIB valpos)
      */
-    bool validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data);
+    bool validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data,
+                               const GNSSTime& current_time);
 
     /**
      * Hold ambiguities after consecutive fixes (RTKLIB holdamb)

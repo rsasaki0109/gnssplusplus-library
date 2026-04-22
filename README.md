@@ -193,7 +193,7 @@ Use `--no-float-bridge-tail-guard` to reproduce the pre-bridge-tail coverage
 stream.
 
 The default RTK pipeline already dominates demo5 on the PPC production runs
-above. Six additional gates ship default-off for situations where you want to
+above. Additional gates ship default-off for situations where you want to
 push further on precision-vs-fix-count tradeoffs, especially on Odaiba-style
 urban multipath stress. All are byte-identical to the default behavior unless
 explicitly enabled.
@@ -203,6 +203,7 @@ explicitly enabled.
 | `--ar-policy {extended\|demo5-continuous}` | AR extras gate. `demo5-continuous` disables relaxed-hold-ratio / subset-fallback / hold-fix / Q-regularization for demo5-style continuous ambiguity tracking. | `extended` |
 | `--max-hold-div <m>` | Reject fix if the hold-state diverges from float by more than N meters. | `0` (disabled) |
 | `--max-pos-jump <m>` | Reject fix if the epoch-to-epoch position jump exceeds N meters. | `0` (disabled) |
+| `--max-pos-jump-min <m>` + `--max-pos-jump-rate <m/s>` | Reject fix if the jump from the last fixed position exceeds `max(min, rate * dt)`, so vehicle gaps can be tested without a stale absolute distance clamp. | `0` / `0` (disabled) |
 | `--max-consec-float-reset <N>` | Auto-reset ambiguities after N consecutive float epochs. | `0` (disabled) |
 | `--max-postfix-rms <m>` | Reject fix if the L1 post-fix DD phase residual RMS exceeds N meters. | `0` (disabled) |
 | `--enable-wide-lane-ar` + `--wide-lane-threshold <cycle>` | Pre-compute MW wide-lane integers and inject them as Kalman constraints into the LAMBDA search. Halves Hmed on Odaiba at the cost of ~35% Fix count. | `false` / `0.25` |
@@ -568,7 +569,8 @@ run reproducibly through `ppc-demo`, `ppc-rtk-signoff`, or
 `ppc-coverage-matrix` with `--iono auto|off|iflc|est`; PPC summaries record the
 requested value as `rtk_iono`. Ambiguity-ratio sweeps use `--ratio <value>`;
 PPC summaries record the requested value as `rtk_ratio_threshold`. Fixed-solution
-validation sweeps can also pass `--max-hold-div` and `--max-pos-jump`.
+validation sweeps can also pass `--max-hold-div`, `--max-pos-jump`,
+`--max-pos-jump-min`, and `--max-pos-jump-rate`.
 
 Dataset source: [taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset)
 

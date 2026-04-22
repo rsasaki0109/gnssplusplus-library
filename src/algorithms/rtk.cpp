@@ -294,6 +294,7 @@ void RTKProcessor::reset() {
     lock_count_l2_.clear();
     has_fixed_solution_ = false;
     has_last_fixed_position_ = false;
+    has_last_fixed_time_ = false;
     has_last_solution_position_ = false;
     has_last_trusted_position_ = false;
     has_ref_satellite_ = false;
@@ -1386,7 +1387,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
 
             bool applied_fix_solution = false;
             if (have_fix_candidate && has_fixed_solution_) {
-                if (validateFixedSolution(sat_data)) {
+                if (validateFixedSolution(sat_data, rover_obs.time)) {
                     Vector3d saved_baseline = filter_state_.state.head<3>();
                     filter_state_.state.head<3>() = fixed_baseline_;
                     solution = generateSolution(rover_obs.time, SolutionStatus::FIXED, n_sats);
@@ -1421,6 +1422,8 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                         // Save fixed position for next epoch's position reset
                         last_fixed_position_ = base_position_ + fixed_baseline_;
                         has_last_fixed_position_ = true;
+                        last_fixed_time_ = rover_obs.time;
+                        has_last_fixed_time_ = true;
 
                         // holdamb: constrain SD ambiguities toward validated DD integers
                         if (consecutive_fix_count_ >= rtk_config_.min_hold_count) {
@@ -2201,6 +2204,8 @@ RTKProcessor::HoldStateSnapshot RTKProcessor::captureHoldState() const {
     HoldStateSnapshot snapshot;
     snapshot.last_fixed_position = last_fixed_position_;
     snapshot.has_last_fixed_position = has_last_fixed_position_;
+    snapshot.last_fixed_time = last_fixed_time_;
+    snapshot.has_last_fixed_time = has_last_fixed_time_;
     snapshot.dd_pairs = last_dd_pairs_;
     snapshot.best_subset = last_best_subset_;
     snapshot.dd_fixed = last_dd_fixed_;
@@ -2212,6 +2217,8 @@ RTKProcessor::HoldStateSnapshot RTKProcessor::captureHoldState() const {
 void RTKProcessor::restoreHoldState(const HoldStateSnapshot& snapshot) {
     last_fixed_position_ = snapshot.last_fixed_position;
     has_last_fixed_position_ = snapshot.has_last_fixed_position;
+    last_fixed_time_ = snapshot.last_fixed_time;
+    has_last_fixed_time_ = snapshot.has_last_fixed_time;
     last_dd_pairs_ = snapshot.dd_pairs;
     last_best_subset_ = snapshot.best_subset;
     last_dd_fixed_ = snapshot.dd_fixed;
@@ -2219,7 +2226,8 @@ void RTKProcessor::restoreHoldState(const HoldStateSnapshot& snapshot) {
     last_num_fixed_ambiguities_ = snapshot.num_fixed_ambiguities;
 }
 
-bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data) {
+bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data,
+                                         const GNSSTime& current_time) {
     if (!has_fixed_solution_) return false;
 
     // Reject fixes that jump too much from the previous fix position
@@ -2239,6 +2247,18 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         rtk_validation::exceedsAbsoluteJump(
             new_pos, last_fixed_position_, has_last_fixed_position_,
             rtk_config_.max_position_jump_m)) {
+        return false;
+    }
+    if (!isMovingBasePositionMode(rtk_config_) &&
+        rtk_config_.max_position_jump_rate_mps > 0.0 &&
+        has_last_fixed_position_ &&
+        has_last_fixed_time_ &&
+        rtk_validation::exceedsAdaptiveJump(
+            new_pos,
+            last_fixed_position_,
+            current_time - last_fixed_time_,
+            rtk_config_.max_position_jump_min_m,
+            rtk_config_.max_position_jump_rate_mps)) {
         return false;
     }
 
@@ -2620,6 +2640,8 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
     filter_state_.state.head<3>() = saved_baseline;
 
     last_fixed_position_ = base_position_ + fixed_baseline_;
+    last_fixed_time_ = time;
+    has_last_fixed_time_ = true;
 
     return true;
 }
@@ -2979,7 +3001,7 @@ bool RTKProcessor::trySingleEpochAR(const std::map<SatelliteId, SatelliteData>& 
     if (!resolveAmbiguities(buildDoubleDifferencePairs(sat_data, 0))) {
         return false;
     }
-    return has_fixed_solution_ && validateFixedSolution(sat_data);
+    return has_fixed_solution_ && validateFixedSolution(sat_data, last_epoch_time_);
 }
 
 } // namespace libgnss
