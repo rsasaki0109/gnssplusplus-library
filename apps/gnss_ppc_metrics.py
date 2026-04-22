@@ -126,6 +126,8 @@ def ppc_official_segment_records(
                 "time_gap_s": match["time_gap_s"] if match is not None else None,
                 "status": solution.status if solution is not None else None,
                 "num_satellites": solution.num_satellites if solution is not None else None,
+                "ratio": solution.ratio if solution is not None else None,
+                "baseline_m": solution.baseline_m if solution is not None else None,
                 "error_3d_m": match["error_3d_m"] if match is not None else None,
                 "horiz_error_m": match["horiz_error_m"] if match is not None else None,
                 "up_error_m": match["up_error_m"] if match is not None else None,

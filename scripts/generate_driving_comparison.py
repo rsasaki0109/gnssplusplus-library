@@ -75,6 +75,8 @@ class SolutionEpoch:
     ecef: np.ndarray
     status: int
     num_satellites: int
+    ratio: float | None = None
+    baseline_m: float | None = None
 
 
 @dataclass(frozen=True)
@@ -181,7 +183,22 @@ def read_libgnss_pos(path: Path) -> list[SolutionEpoch]:
             height = float(parts[7])
             status = int(parts[8])
             num_satellites = int(parts[9])
-            rows.append(SolutionEpoch(week, tow, lat, lon, height, ecef, status, num_satellites))
+            ratio = float(parts[11]) if len(parts) > 11 else None
+            baseline_m = float(parts[12]) if len(parts) > 12 else None
+            rows.append(
+                SolutionEpoch(
+                    week,
+                    tow,
+                    lat,
+                    lon,
+                    height,
+                    ecef,
+                    status,
+                    num_satellites,
+                    ratio,
+                    baseline_m,
+                )
+            )
     return rows
 
 
@@ -201,7 +218,20 @@ def read_rtklib_pos(path: Path) -> list[SolutionEpoch]:
             status = int(parts[5])
             num_satellites = int(parts[6])
             ecef = llh_to_ecef(lat, lon, height)
-            rows.append(SolutionEpoch(week, tow, lat, lon, height, ecef, status, num_satellites))
+            ratio = float(parts[14]) if len(parts) > 14 else None
+            rows.append(
+                SolutionEpoch(
+                    week,
+                    tow,
+                    lat,
+                    lon,
+                    height,
+                    ecef,
+                    status,
+                    num_satellites,
+                    ratio,
+                )
+            )
     return rows
 
 

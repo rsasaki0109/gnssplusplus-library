@@ -174,6 +174,14 @@ Follow-up spot checks kept the next knobs experimental: `--max-consec-nonfix-res
 to **31.80%** and left Nagoya run3 effectively flat. Use these as sweep
 controls before promoting any profile.
 
+The official-loss analyzer now preserves solver Ratio/Baseline telemetry and
+adds `official_high_error_by_status` / `official_unscored_by_status` summaries.
+On the reset10 Nagoya run2 replay, lost official distance splits into FLOAT
+high-error **1330.7 m**, NO_SOLUTION **1250.9 m**, and FIXED high-error
+**451.6 m**; only **41.4 m** of the FIXED high-error distance has Ratio >= 10.
+That points the next non-IMU push at FLOAT recovery and dropout reacquisition
+first, with high-ratio false-fix validation as a smaller secondary target.
+
 ![PPC RTK tail-cleanup diagnostic scorecard](docs/ppc_tail_cleanup_scorecard.png)
 
 ![PPC Tokyo run1 bad segment trajectory](docs/ppc_tokyo_run1_bad_segments_trajectory.png)

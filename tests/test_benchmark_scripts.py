@@ -685,6 +685,48 @@ class PPCCoverageMatrixTest(unittest.TestCase):
 
 
 class PPCMetricsTest(unittest.TestCase):
+    def test_libgnss_pos_parser_keeps_ratio_and_baseline_telemetry(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_pos_ratio_parse_") as temp_dir:
+            pos_path = Path(temp_dir) / "solution.pos"
+            pos_path.write_text(
+                "\n".join(
+                    [
+                        "% GPS_Week GPS_TOW X Y Z Lat Lon Height Status NumSat PDOP Ratio Baseline",
+                        "2300 1.000 10.0 0.0 0.0 0.0 0.0 0.0 4 12 2.0 17.5 9400.25",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            epochs = comparison.read_libgnss_pos(pos_path)
+
+            self.assertEqual(len(epochs), 1)
+            self.assertEqual(epochs[0].ratio, 17.5)
+            self.assertEqual(epochs[0].baseline_m, 9400.25)
+
+    def test_rtklib_pos_parser_keeps_ratio_telemetry(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="rtklib_pos_ratio_parse_") as temp_dir:
+            pos_path = Path(temp_dir) / "rtklib.pos"
+            pos_path.write_text(
+                "\n".join(
+                    [
+                        "%  GPST latitude(deg) longitude(deg) height(m) Q ns sdn sde sdu sdne sdeu sdun age ratio",
+                        "2024/07/20 10:22:00.000 35.165452362 136.881445510 "
+                        "41.1780 1 7 0.0049 0.0044 0.0135 0.0026 0.0030 "
+                        "0.0031 0.00 8.5",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            epochs = comparison.read_rtklib_pos(pos_path)
+
+            self.assertEqual(len(epochs), 1)
+            self.assertEqual(epochs[0].ratio, 8.5)
+            self.assertIsNone(epochs[0].baseline_m)
+
     def test_official_distance_score_weights_reference_distance(self) -> None:
         reference = [
             comparison.ReferenceEpoch(2300, 0.0, 0.0, 0.0, 0.0, (0.0, 0.0, 0.0)),
@@ -1579,8 +1621,8 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
             comparison.ReferenceEpoch(2300, 3.0, 0.0, 0.0, 0.0, np.array([40.0, 0.0, 0.0])),
         ]
         lib_solution = [
-            comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([10.2, 0.0, 0.0]), 4, 12),
-            comparison.SolutionEpoch(2300, 2.0, 0.0, 0.0, 0.0, np.array([21.0, 0.0, 0.0]), 3, 12),
+            comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([10.2, 0.0, 0.0]), 4, 12, 4.0, 100.0),
+            comparison.SolutionEpoch(2300, 2.0, 0.0, 0.0, 0.0, np.array([21.0, 0.0, 0.0]), 3, 12, 12.0, 101.0),
         ]
         rtklib_solution = [
             comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([11.0, 0.0, 0.0]), 2, 12),
@@ -1596,6 +1638,26 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         self.assertEqual(loss_by_state["scored"]["distance_m"], 10.0)
         self.assertEqual(loss_by_state["high_error"]["distance_m"], 10.0)
         self.assertEqual(loss_by_state["no_solution"]["distance_m"], 20.0)
+
+        high_error_by_status = {
+            row["status"]: row
+            for row in ppc_coverage_quality.official_loss_by_status(
+                lib_records,
+                ppc_coverage_quality.status_name,
+                ("high_error",),
+            )
+        }
+        self.assertEqual(high_error_by_status["FLOAT"]["distance_m"], 10.0)
+        self.assertEqual(high_error_by_status["FLOAT"]["median_ratio"], 12.0)
+        self.assertEqual(high_error_by_status["FLOAT"]["ratio_ge_10_distance_m"], 10.0)
+        unscored_by_status = {
+            row["status"]: row
+            for row in ppc_coverage_quality.official_loss_by_status(
+                lib_records,
+                ppc_coverage_quality.status_name,
+            )
+        }
+        self.assertEqual(unscored_by_status["NO_SOLUTION"]["distance_m"], 20.0)
 
         official_segments = ppc_coverage_quality.official_loss_segments(
             lib_records,
@@ -1613,6 +1675,8 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         }
         self.assertEqual(delta_by_bucket["gnssplusplus_gain"]["score_delta_pct"], 25.0)
         self.assertEqual(delta_by_bucket["rtklib_gain"]["score_delta_pct"], -25.0)
+        self.assertEqual(combined[1]["lib_ratio"], 12.0)
+        self.assertEqual(combined[1]["lib_baseline_m"], 101.0)
 
 
 class ScorecardRenderTest(unittest.TestCase):

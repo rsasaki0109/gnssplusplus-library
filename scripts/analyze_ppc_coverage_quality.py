@@ -208,6 +208,71 @@ def official_loss_by_state(records: list[dict[str, object]]) -> list[dict[str, o
     return rows
 
 
+def official_loss_by_status(
+    records: list[dict[str, object]],
+    status_labeler,
+    score_states: tuple[str, ...] = ("high_error", "no_solution"),
+) -> list[dict[str, object]]:
+    total_distance_m = sum(float(record["segment_distance_m"]) for record in records)
+    grouped: dict[str, list[dict[str, object]]] = {}
+    for record in records:
+        if str(record["score_state"]) not in score_states:
+            continue
+        label = official_status_label(record, status_labeler)
+        grouped.setdefault(label, []).append(record)
+
+    rows: list[dict[str, object]] = []
+    for name in ordered_segment_status_names(set(grouped)):
+        status_records = grouped[name]
+        distance_m = sum(float(record["segment_distance_m"]) for record in status_records)
+        errors = [
+            float(record["error_3d_m"])
+            for record in status_records
+            if record["error_3d_m"] is not None
+        ]
+        ratios = [
+            float(record["ratio"])
+            for record in status_records
+            if record.get("ratio") is not None and math.isfinite(float(record["ratio"]))
+        ]
+        state_distances: dict[str, float] = {}
+        ratio_ge_10_distance_m = 0.0
+        for record in status_records:
+            state = str(record["score_state"])
+            segment_distance_m = float(record["segment_distance_m"])
+            state_distances[state] = state_distances.get(state, 0.0) + segment_distance_m
+            ratio = record.get("ratio")
+            if ratio is not None and math.isfinite(float(ratio)) and float(ratio) >= 10.0:
+                ratio_ge_10_distance_m += segment_distance_m
+        rows.append(
+            {
+                "status": name,
+                "segments": len(status_records),
+                "distance_m": rounded(distance_m),
+                "distance_pct": rounded(100.0 * distance_m / total_distance_m)
+                if total_distance_m > 0.0
+                else 0.0,
+                "score_state_distances_m": {
+                    state: rounded(state_distances[state])
+                    for state in SCORE_STATE_ORDER
+                    if state in state_distances
+                },
+                "median_3d_m": percentile(errors, 50),
+                "p95_3d_m": percentile(errors, 95),
+                "max_3d_m": rounded(max(errors)) if errors else 0.0,
+                "median_ratio": percentile(ratios, 50) if ratios else None,
+                "p95_ratio": percentile(ratios, 95) if ratios else None,
+                "max_ratio": rounded(max(ratios)) if ratios else None,
+                "ratio_ge_10_distance_m": rounded(ratio_ge_10_distance_m),
+                "ratio_ge_10_share_pct": rounded(100.0 * ratio_ge_10_distance_m / distance_m)
+                if distance_m > 0.0
+                else 0.0,
+            }
+        )
+    rows.sort(key=lambda row: float(row["distance_m"]), reverse=True)
+    return rows
+
+
 def official_status_label(
     record: dict[str, object],
     status_labeler,
@@ -335,6 +400,8 @@ def official_combined_records(
                 "lib_horiz_error_m": optional_float(lib_record["horiz_error_m"]),
                 "lib_up_error_m": optional_float(lib_record["up_error_m"]),
                 "lib_num_satellites": lib_record["num_satellites"],
+                "lib_ratio": optional_float(lib_record["ratio"]),
+                "lib_baseline_m": optional_float(lib_record["baseline_m"]),
                 "rtklib_score_state": rtklib_record["score_state"],
                 "rtklib_scored": rtklib_record["scored"],
                 "rtklib_status": rtklib_record["status"],
@@ -342,6 +409,8 @@ def official_combined_records(
                 "rtklib_horiz_error_m": optional_float(rtklib_record["horiz_error_m"]),
                 "rtklib_up_error_m": optional_float(rtklib_record["up_error_m"]),
                 "rtklib_num_satellites": rtklib_record["num_satellites"],
+                "rtklib_ratio": optional_float(rtklib_record["ratio"]),
+                "rtklib_baseline_m": optional_float(rtklib_record["baseline_m"]),
                 "error_delta_3d_m": lib_error - rtklib_error
                 if lib_error is not None and rtklib_error is not None
                 else None,
@@ -599,6 +668,16 @@ def build_report(
         ),
         "official_loss_by_state": official_loss_by_state(lib_official_records),
         "rtklib_official_loss_by_state": official_loss_by_state(rtklib_official_records),
+        "official_unscored_by_status": official_loss_by_status(
+            lib_official_records,
+            status_name,
+            ("high_error", "no_solution"),
+        ),
+        "official_high_error_by_status": official_loss_by_status(
+            lib_official_records,
+            status_name,
+            ("high_error",),
+        ),
         "official_delta_by_bucket": official_delta_by_bucket(official_records),
         "official_loss_segments": official_loss_segments(lib_official_records, status_name)[:12],
         "rtklib_official_loss_segments": official_loss_segments(
@@ -667,6 +746,8 @@ def write_official_segments_csv(path: Path, rows: list[dict[str, object]]) -> No
         "lib_horiz_error_m",
         "lib_up_error_m",
         "lib_num_satellites",
+        "lib_ratio",
+        "lib_baseline_m",
         "rtklib_score_state",
         "rtklib_scored",
         "rtklib_status",
@@ -675,6 +756,8 @@ def write_official_segments_csv(path: Path, rows: list[dict[str, object]]) -> No
         "rtklib_horiz_error_m",
         "rtklib_up_error_m",
         "rtklib_num_satellites",
+        "rtklib_ratio",
+        "rtklib_baseline_m",
         "error_delta_3d_m",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
