@@ -112,7 +112,12 @@ combined with the fixed-burst guard it rejects 337 non-FIX drift epochs on
 Tokyo run1, improves P95H from 34.53 m to 26.61 m, and keeps PPC official nearly
 flat, but costs 2.40 pp Positioning rate. `ppc-coverage-matrix` accepts these
 non-FIX, SPP height-step, FLOAT bridge-tail, and fixed-burst tuning flags so the
-same profile can be swept across all six PPC runs.
+same profile can be swept across all six PPC runs. The full six-run sweep keeps
+a +13.3 pp average Positioning lead over RTKLIB and a +28.1 pp PPC official
+lead, but costs 3.67 pp average Positioning versus the coverage profile and
+only improves P95H on 3/6 runs; Nagoya run3 loses 13.90 pp Positioning with no
+useful P95 gain. Treat the profile as a tail-diagnostic lens, not as the
+Positioning-rate sign-off.
 Use `scripts/analyze_ppc_coverage_quality.py` with the PPC solution, RTKLIB
 solution, and `reference.csv` when a coverage run improves Positioning rate but
 regresses P95 horizontal error; the report separates FIXED/FLOAT/SPP quality and

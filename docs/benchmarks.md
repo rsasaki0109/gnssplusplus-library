@@ -117,8 +117,17 @@ default coverage profile.
 Combining that guard with `--nonfix-drift-max-residual 4` is a stronger
 P95-cleanup diagnostic: Tokyo run1 P95H moves to **26.61 m** and max H stays
 **47.29 m**, but Positioning falls to **87.60%** and PPC official stays
-effectively flat at **34.89%**. Keep that profile for isolating long stationary
-FLOAT drift, not for the Positioning-rate sign-off.
+effectively flat at **34.89%**. Swept across all six public Tokyo/Nagoya runs,
+the same cleanup profile still beats RTKLIB `demo5` on Positioning for every
+run (average **+13.3 pp**) and keeps the PPC official-score lead essentially
+unchanged (**+28.1 pp**), but costs **3.67 pp** average Positioning versus the
+coverage profile. P95H improves on **3/6** runs with an average **+1.39 m**
+tail gain; Nagoya run3 is the warning case, losing **13.90 pp** Positioning
+with no useful P95/official-score benefit. Keep that profile for isolating long
+stationary FLOAT drift and false-fix bursts, not for the Positioning-rate
+sign-off.
+
+![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
 ![PPC Tokyo run1 bad segment trajectory](ppc_tokyo_run1_bad_segments_trajectory.png)
 
@@ -211,6 +220,22 @@ python3 apps/gnss.py ppc-coverage-matrix \
 python3 scripts/update_ppc_coverage_readme.py \
   --summary-json output/ppc_coverage_matrix/summary.json \
   --check
+
+python3 apps/gnss.py ppc-coverage-matrix \
+  --dataset-root /datasets/PPC-Dataset \
+  --rtklib-root output/benchmark \
+  --ratio 2.4 \
+  --fixed-bridge-burst-guard \
+  --fixed-bridge-burst-max-residual 20 \
+  --nonfix-drift-max-residual 4 \
+  --output-dir output/ppc_coverage_matrix_tail_cleanup \
+  --summary-json output/ppc_coverage_matrix_tail_cleanup/summary.json \
+  --markdown-output output/ppc_coverage_matrix_tail_cleanup/table.md
+
+python3 scripts/generate_ppc_tail_cleanup_scorecard.py \
+  --baseline-summary-json output/ppc_coverage_matrix/summary.json \
+  --cleanup-summary-json output/ppc_coverage_matrix_tail_cleanup/summary.json \
+  --output docs/ppc_tail_cleanup_scorecard.png
 ```
 
 `ppc-rtk-signoff` is the fixed-threshold path for Tokyo/Nagoya quality and

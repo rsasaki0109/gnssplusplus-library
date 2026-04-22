@@ -149,7 +149,17 @@ with `--nonfix-drift-max-residual 4`: Tokyo run1 P95H improves to **26.61 m**
 and max H stays **47.29 m**, while Positioning drops to **87.60%** and PPC
 official remains effectively flat at **34.89%**. That profile is useful for
 isolating long stationary FLOAT drift, but it is not the Positioning-rate
-sign-off profile.
+sign-off profile. Swept across all six public Tokyo/Nagoya runs, the same
+cleanup profile still beats RTKLIB `demo5` on Positioning for every run
+(average **+13.3 pp**) and keeps the PPC official-score lead essentially
+unchanged (**+28.1 pp**), but costs **3.67 pp** average Positioning versus the
+coverage profile. P95H improves on **3/6** runs with an average **+1.39 m**
+tail gain; Nagoya run3 is the warning case, losing **13.90 pp** Positioning
+with no useful P95/official-score benefit. The diagnostic sweep rejects 1,674
+non-FIX drift epochs plus 31 fixed-burst epochs, so keep it as evidence for
+solver recovery work rather than the README sign-off table.
+
+![PPC RTK tail-cleanup diagnostic scorecard](docs/ppc_tail_cleanup_scorecard.png)
 
 ![PPC Tokyo run1 bad segment trajectory](docs/ppc_tokyo_run1_bad_segments_trajectory.png)
 
@@ -581,6 +591,22 @@ python3 apps/gnss.py ppc-coverage-matrix \
 
 python3 scripts/update_ppc_coverage_readme.py \
   --summary-json output/ppc_coverage_matrix/summary.json
+
+python3 apps/gnss.py ppc-coverage-matrix \
+  --dataset-root /datasets/PPC-Dataset \
+  --rtklib-root output/benchmark \
+  --ratio 2.4 \
+  --fixed-bridge-burst-guard \
+  --fixed-bridge-burst-max-residual 20 \
+  --nonfix-drift-max-residual 4 \
+  --output-dir output/ppc_coverage_matrix_tail_cleanup \
+  --summary-json output/ppc_coverage_matrix_tail_cleanup/summary.json \
+  --markdown-output output/ppc_coverage_matrix_tail_cleanup/table.md
+
+python3 scripts/generate_ppc_tail_cleanup_scorecard.py \
+  --baseline-summary-json output/ppc_coverage_matrix/summary.json \
+  --cleanup-summary-json output/ppc_coverage_matrix_tail_cleanup/summary.json \
+  --output docs/ppc_tail_cleanup_scorecard.png
 ```
 
 The PPC summary records `receiver_observation_provenance` for the bundled

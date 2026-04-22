@@ -48,6 +48,7 @@ import generate_odaiba_scorecard as scorecard  # noqa: E402
 import generate_odaiba_social_card as social_card  # noqa: E402
 import analyze_ppc_coverage_quality as ppc_coverage_quality  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
+import generate_ppc_tail_cleanup_scorecard as ppc_tail_cleanup_scorecard  # noqa: E402
 import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
 import update_ppc_coverage_readme as ppc_coverage_readme  # noqa: E402
 import detect_ci_scope as ci_scope  # noqa: E402
@@ -1757,6 +1758,82 @@ class ScorecardRenderTest(unittest.TestCase):
 
                 with Image.open(output_png) as image:
                     self.assertEqual(image.size, (1400, 750))
+            except ModuleNotFoundError:
+                pass
+
+    def test_ppc_tail_cleanup_scorecard_main_renders_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_tail_scorecard_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            baseline_summary = temp_root / "baseline.json"
+            cleanup_summary = temp_root / "cleanup.json"
+            output_png = temp_root / "ppc_tail_cleanup_scorecard.png"
+
+            def run_record(key: str, pos: float, official: float, p95: float, max_h: float, rejected: int) -> dict[str, object]:
+                return {
+                    "key": key,
+                    "metrics": {
+                        "positioning_rate_pct": pos,
+                        "fix_rate_pct": 50.0,
+                        "ppc_official_score_pct": official,
+                        "p95_h_m": p95,
+                        "max_h_m": max_h,
+                    },
+                    "delta_vs_rtklib": {
+                        "p95_h_m": p95 - 30.0,
+                    },
+                    "guards": {
+                        "nonfix_drift_guard": {"rejected_epochs": rejected},
+                        "fixed_bridge_burst_guard": {"rejected_epochs": 2},
+                    },
+                }
+
+            baseline_summary.write_text(
+                json.dumps(
+                    {
+                        "runs": [
+                            run_record("tokyo_run1", 90.0, 35.0, 34.0, 52.0, 0),
+                            run_record("nagoya_run1", 88.0, 49.0, 12.0, 18.0, 0),
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cleanup_summary.write_text(
+                json.dumps(
+                    {
+                        "ratio": 2.4,
+                        "nonfix_drift_max_residual": 4.0,
+                        "fixed_bridge_burst_max_residual": 20.0,
+                        "runs": [
+                            run_record("tokyo_run1", 87.6, 34.9, 26.6, 47.3, 337),
+                            run_record("nagoya_run1", 87.7, 48.9, 11.0, 16.5, 5),
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            argv = [
+                "generate_ppc_tail_cleanup_scorecard.py",
+                "--baseline-summary-json",
+                str(baseline_summary),
+                "--cleanup-summary-json",
+                str(cleanup_summary),
+                "--output",
+                str(output_png),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_tail_cleanup_scorecard.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(output_png.exists())
+            self.assertGreater(output_png.stat().st_size, 0)
+            try:
+                from PIL import Image
+
+                with Image.open(output_png) as image:
+                    self.assertEqual(image.size, (1400, 760))
             except ModuleNotFoundError:
                 pass
 
