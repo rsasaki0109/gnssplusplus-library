@@ -255,14 +255,28 @@ summaries and renders the checked-in scorecard below.
 
 ![PPC dual-profile selector scorecard](docs/ppc_jump0p5_dual_selector_scorecard.png)
 
-`scripts/analyze_ppc_segment_selector_leave_one_run_out.py` checks whether that
-segment selector survives run-level holdout. With the same three-condition sweep
-settings, leave-one-run-out remains positive in aggregate (**+26.8 m** versus
-candidate-all **-407.9 m**, **+434.6 m** selector-vs-candidate), and **5 / 6**
-holdout runs stay non-negative. The weak fold is Tokyo run2 (**-85.5 m**), so
-the baseline-band selector is an in-sample recovery diagnostic rather than a
-deployment default until the sweep uses a robustness objective or stronger
-feature constraints.
+For run-level validation, the selector sweep now has a robustness objective and
+explicit feature constraints: `--rank-objective robust` ranks by negative-run
+count, worst-run distance, then net distance, while `--required-categorical` and
+`--required-numeric` keep the searched rule family local. The high-net
+baseline-band selector above remains useful as an in-sample upper-bound
+diagnostic, but its original leave-one-run-out result was only **+26.8 m** with
+**5 / 6** non-negative holdout runs and a Tokyo run2 fold at **-85.5 m**.
+
+The robust deployment-candidate family is deliberately narrower:
+`status_transition == FLOAT->FIXED`, `candidate_baseline_m >= 940.785`, and
+`candidate_rtk_update_prefit_residual_rms_m >= 0.2018`; the full-data top rule
+adds `candidate_rtk_update_suppressed_outliers <= 4` and tightens baseline to
+`>= 949.004 m`. That rule keeps **+251.2 m** in-sample, exposes only
+**-4.1 m** selected loss, reaches **98.4%** selected-distance precision, and
+keeps every public run non-negative. Leave-one-run-out improves to **+193.5 m**
+holdout net versus candidate-all **-407.9 m** (**+601.4 m**
+selector-vs-candidate), **97.2%** holdout precision, **6 / 6** non-negative
+holdout runs, and **+1.6 m** minimum holdout delta. This is still a segment-rule
+validation result; the next promotion step is applying this constrained rule to
+`.pos` outputs and re-running the normal PPC matrix.
+
+![PPC jump0.5 selector validation scorecard](docs/ppc_jump0p5_selector_validation_scorecard.png)
 
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over

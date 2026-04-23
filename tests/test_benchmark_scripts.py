@@ -54,6 +54,7 @@ import analyze_ppc_segment_selector_leave_one_run_out as ppc_segment_selector_lo
 import analyze_ppc_segment_selector_sweep as ppc_segment_selector_sweep  # noqa: E402
 import apply_ppc_dual_profile_selector as ppc_dual_profile_selector  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
+import generate_ppc_selector_validation_scorecard as ppc_selector_scorecard  # noqa: E402
 import generate_ppc_tail_cleanup_scorecard as ppc_tail_cleanup_scorecard  # noqa: E402
 import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
 import update_ppc_coverage_readme as ppc_coverage_readme  # noqa: E402
@@ -981,6 +982,8 @@ class PPCSegmentSelectorSweepTest(unittest.TestCase):
         self.assertEqual(score["avoided_loss_distance_m"], 27.0)
         self.assertEqual(score["gain_recall_pct"], 100.0)
         self.assertEqual(score["loss_exposure_pct"], 0.0)
+        self.assertEqual(score["negative_run_count"], 0)
+        self.assertEqual(score["min_run_score_delta_distance_m"], 0.0)
 
         payload = ppc_segment_selector_sweep.build_payload(
             rows,
@@ -995,6 +998,59 @@ class PPCSegmentSelectorSweepTest(unittest.TestCase):
         markdown = ppc_segment_selector_sweep.render_markdown(payload)
         self.assertIn("PPC Segment Selector Sweep", markdown)
         self.assertIn("Best Rule By Run", markdown)
+
+    def test_selector_sweep_can_require_candidate_status(self) -> None:
+        rows = [
+            self.selector_row("tokyo_run1", 10.0, 10.0, "FLOAT", "FIXED", 0.4, 8.0, 12.0),
+            self.selector_row("tokyo_run1", -5.0, 5.0, "FLOAT", "FLOAT", 0.4, 8.0, 12.0),
+        ]
+
+        payload = ppc_segment_selector_sweep.build_payload(
+            rows,
+            top_rules=4,
+            max_thresholds=8,
+            required_candidate_status="FIXED",
+        )
+
+        best_rule = payload["top_rules"][0]["rule"]
+        self.assertEqual(payload["required_candidate_status"], "FIXED")
+        self.assertTrue("candidate_status_name == FIXED" in best_rule or "->FIXED" in best_rule)
+
+    def test_selector_sweep_robust_objective_prefers_nonnegative_runs(self) -> None:
+        rows = [
+            self.selector_row("tokyo_run1", 20.0, 20.0, "FIXED", "FIXED", 0.4, 8.0, 12.0, 500.0),
+            self.selector_row("tokyo_run2", -5.0, 5.0, "FIXED", "FIXED", 0.4, 8.0, 12.0, 500.0),
+            self.selector_row("tokyo_run1", 10.0, 10.0, "FIXED", "FIXED", 0.4, 8.0, 6.0, 1000.0),
+            self.selector_row("tokyo_run2", 4.0, 4.0, "FIXED", "FIXED", 0.4, 8.0, 6.0, 1000.0),
+            self.selector_row("tokyo_run2", -30.0, 30.0, "FIXED", "FIXED", 0.4, 8.0, 6.0, 500.0),
+        ]
+
+        net_payload = ppc_segment_selector_sweep.build_payload(
+            rows,
+            top_rules=4,
+            max_thresholds=8,
+            max_numeric_conditions=1,
+            rank_objective="net",
+            min_selected_distance_m=1.0,
+        )
+        robust_payload = ppc_segment_selector_sweep.build_payload(
+            rows,
+            top_rules=4,
+            max_thresholds=8,
+            max_numeric_conditions=1,
+            rank_objective="robust",
+            min_selected_distance_m=1.0,
+        )
+
+        net_best = net_payload["top_rules"][0]
+        robust_best = robust_payload["top_rules"][0]
+        self.assertIn("candidate_num_satellites >= 12", net_best["rule"])
+        self.assertEqual(net_best["selected_score_delta_distance_m"], 15.0)
+        self.assertEqual(net_best["negative_run_count"], 1)
+        self.assertIn("candidate_baseline_m >= 1000", robust_best["rule"])
+        self.assertEqual(robust_best["selected_score_delta_distance_m"], 14.0)
+        self.assertEqual(robust_best["negative_run_count"], 0)
+        self.assertEqual(robust_payload["rank_objective"], "robust")
 
     def test_selector_sweep_can_refine_with_two_numeric_conditions(self) -> None:
         rows = [
@@ -1073,6 +1129,7 @@ class PPCSegmentSelectorLeaveOneRunOutTest(unittest.TestCase):
             max_numeric_conditions=2,
             numeric_refinement_beam=4,
             numeric_threshold_refinement_beam=4,
+            rank_objective="robust",
         )
 
         aggregates = payload["aggregates"]
@@ -1081,6 +1138,7 @@ class PPCSegmentSelectorLeaveOneRunOutTest(unittest.TestCase):
         self.assertEqual(aggregates["holdout_candidate_all_delta_distance_m"], 10.0)
         self.assertEqual(aggregates["holdout_selector_vs_candidate_all_delta_m"], 10.0)
         self.assertEqual(aggregates["nonnegative_holdout_runs"], 2)
+        self.assertEqual(payload["rank_objective"], "robust")
         self.assertIn("candidate_num_satellites", payload["folds"][0]["learned_rule"])
 
         markdown = ppc_segment_selector_loo.render_markdown(payload)
@@ -2685,6 +2743,69 @@ class ScorecardRenderTest(unittest.TestCase):
             with mock.patch.object(sys, "argv", argv):
                 with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
                     exit_code = ppc_tail_cleanup_scorecard.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(output_png.exists())
+            self.assertGreater(output_png.stat().st_size, 0)
+            try:
+                from PIL import Image
+
+                with Image.open(output_png) as image:
+                    self.assertEqual(image.size, (1400, 760))
+            except ModuleNotFoundError:
+                pass
+
+    def test_ppc_selector_validation_scorecard_main_renders_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_selector_scorecard_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            net_summary = temp_root / "net.json"
+            robust_summary = temp_root / "robust.json"
+            output_png = temp_root / "ppc_selector_validation_scorecard.png"
+
+            def summary(net_m: float, precision_pct: float, nonnegative: int) -> dict[str, object]:
+                return {
+                    "aggregates": {
+                        "fold_count": 2,
+                        "holdout_selected_score_delta_distance_m": net_m,
+                        "holdout_selector_vs_candidate_all_delta_m": net_m + 20.0,
+                        "holdout_distance_precision_pct": precision_pct,
+                        "nonnegative_holdout_runs": nonnegative,
+                        "min_holdout_delta_m": min(1.0, net_m),
+                        "holdout_selected_loss_distance_m": -2.0,
+                    },
+                    "folds": [
+                        {
+                            "holdout_run": "tokyo_run1",
+                            "holdout_selected_score_delta_distance_m": net_m - 1.0,
+                            "holdout_selected_loss_distance_m": -2.0,
+                            "holdout_selected_segments": 3,
+                        },
+                        {
+                            "holdout_run": "nagoya_run1",
+                            "holdout_selected_score_delta_distance_m": 1.0,
+                            "holdout_selected_loss_distance_m": 0.0,
+                            "holdout_selected_segments": 1,
+                        },
+                    ],
+                }
+
+            net_summary.write_text(json.dumps(summary(10.0, 80.0, 2)), encoding="utf-8")
+            robust_summary.write_text(json.dumps(summary(18.0, 95.0, 2)), encoding="utf-8")
+
+            argv = [
+                "generate_ppc_selector_validation_scorecard.py",
+                "--summary",
+                f"net={net_summary}",
+                "--summary",
+                f"robust={robust_summary}",
+                "--best-label",
+                "robust",
+                "--output",
+                str(output_png),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_selector_scorecard.main()
 
             self.assertEqual(exit_code, 0)
             self.assertTrue(output_png.exists())

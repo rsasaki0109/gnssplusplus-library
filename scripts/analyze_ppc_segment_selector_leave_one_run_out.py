@@ -63,6 +63,41 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="Drop rules that select less changed-segment distance than this threshold.",
     )
+    parser.add_argument(
+        "--rank-objective",
+        choices=selector_sweep.RANK_OBJECTIVES,
+        default="net",
+        help=(
+            "Training sweep ranking objective. 'net' maximizes total selected distance gain; "
+            "'robust' minimizes negative per-run selected deltas, maximizes worst-run delta, "
+            "then maximizes net gain (default: net)."
+        ),
+    )
+    parser.add_argument(
+        "--required-candidate-status",
+        default=None,
+        help=(
+            "Keep only training rules that explicitly require this candidate solution status, "
+            "either through candidate_status_name or a status_transition target."
+        ),
+    )
+    parser.add_argument(
+        "--required-categorical",
+        action="append",
+        default=[],
+        metavar="FEATURE=VALUE",
+        help="Keep only training rules that include this exact categorical condition. Repeat as needed.",
+    )
+    parser.add_argument(
+        "--required-numeric",
+        action="append",
+        default=[],
+        metavar="FEATURE>=VALUE",
+        help=(
+            "Keep only training rules that include a numeric condition at least as restrictive "
+            "as this bound. Supports FEATURE>=VALUE and FEATURE<=VALUE. Repeat as needed."
+        ),
+    )
     parser.add_argument("--summary-json", type=Path, default=None)
     parser.add_argument("--markdown-output", type=Path, default=None)
     return parser.parse_args()
@@ -114,6 +149,10 @@ def build_fold(
     numeric_refinement_beam: int,
     numeric_threshold_refinement_beam: int,
     min_selected_distance_m: float,
+    rank_objective: str,
+    required_candidate_status: str | None,
+    required_categorical: tuple[selector_sweep.CategoricalCondition, ...],
+    required_numeric: tuple[selector_sweep.NumericCondition, ...],
 ) -> dict[str, object]:
     train_rows, holdout_rows = fold_rows(rows, holdout_run)
     if not train_rows or not holdout_rows:
@@ -126,6 +165,10 @@ def build_fold(
         numeric_refinement_beam=numeric_refinement_beam,
         numeric_threshold_refinement_beam=numeric_threshold_refinement_beam,
         min_selected_distance_m=min_selected_distance_m,
+        rank_objective=rank_objective,
+        required_candidate_status=required_candidate_status,
+        required_categorical=required_categorical,
+        required_numeric=required_numeric,
     )
     best_rule = dict(train_payload["top_rules"][0])
     rule = parse_rule(str(best_rule["rule"]))
@@ -150,6 +193,8 @@ def build_fold(
         "train_selected_score_delta_distance_m": best_rule["selected_score_delta_distance_m"],
         "train_selected_gain_distance_m": best_rule["selected_gain_distance_m"],
         "train_selected_loss_distance_m": best_rule["selected_loss_distance_m"],
+        "train_negative_run_count": best_rule["negative_run_count"],
+        "train_min_run_score_delta_distance_m": best_rule["min_run_score_delta_distance_m"],
         "holdout_changed_segments": len(holdout_rows),
         "holdout_candidate_all_delta_distance_m": candidate_all[
             "selected_score_delta_distance_m"
@@ -207,6 +252,10 @@ def build_payload(
     numeric_refinement_beam: int,
     numeric_threshold_refinement_beam: int,
     min_selected_distance_m: float = 0.0,
+    rank_objective: str = "net",
+    required_candidate_status: str | None = None,
+    required_categorical: tuple[selector_sweep.CategoricalCondition, ...] = (),
+    required_numeric: tuple[selector_sweep.NumericCondition, ...] = (),
 ) -> dict[str, object]:
     run_labels = sorted({str(row["run_label"]) for row in rows})
     if len(run_labels) < 2:
@@ -221,6 +270,10 @@ def build_payload(
             numeric_refinement_beam=numeric_refinement_beam,
             numeric_threshold_refinement_beam=numeric_threshold_refinement_beam,
             min_selected_distance_m=min_selected_distance_m,
+            rank_objective=rank_objective,
+            required_candidate_status=required_candidate_status,
+            required_categorical=required_categorical,
+            required_numeric=required_numeric,
         )
         for run_label in run_labels
     ]
@@ -234,6 +287,12 @@ def build_payload(
         "numeric_refinement_beam": numeric_refinement_beam,
         "numeric_threshold_refinement_beam": numeric_threshold_refinement_beam,
         "min_selected_distance_m": min_selected_distance_m,
+        "rank_objective": rank_objective,
+        "required_candidate_status": required_candidate_status,
+        "required_categorical": [
+            condition.expression() for condition in required_categorical
+        ],
+        "required_numeric": [condition.expression() for condition in required_numeric],
     }
 
 
@@ -263,14 +322,23 @@ def render_markdown(payload: dict[str, object]) -> str:
             "Non-negative holdout runs: "
             f"**{aggregates['nonnegative_holdout_runs']} / {aggregates['fold_count']}**"
         ),
+        f"Ranking objective: **{payload['rank_objective']}**",
+        f"Required candidate status: **{payload['required_candidate_status'] or 'none'}**",
+        (
+            "Required categorical: "
+            f"**{', '.join(payload['required_categorical']) or 'none'}**"
+        ),
+        f"Required numeric: **{', '.join(payload['required_numeric']) or 'none'}**",
         "",
-        "| holdout | train net m | holdout net m | holdout gain m | holdout loss m | candidate-all m | selected | learned rule |",
-        "|---|---:|---:|---:|---:|---:|---:|---|",
+        "| holdout | train net m | train min run m | train neg runs | holdout net m | holdout gain m | holdout loss m | candidate-all m | selected | learned rule |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for fold in payload["folds"]:
         lines.append(
             f"| {fold['holdout_run']} | "
             f"{fmt(fold['train_selected_score_delta_distance_m'])} | "
+            f"{fmt(fold['train_min_run_score_delta_distance_m'])} | "
+            f"{fold['train_negative_run_count']} | "
             f"{fmt(fold['holdout_selected_score_delta_distance_m'])} | "
             f"{fmt(fold['holdout_selected_gain_distance_m'])} | "
             f"{fmt(fold['holdout_selected_loss_distance_m'])} | "
@@ -286,6 +354,13 @@ def main() -> None:
     if not args.segment_csv:
         raise SystemExit("At least one --segment-csv LABEL=CSV is required")
     specs = [selector_sweep.parse_segment_csv(value) for value in args.segment_csv]
+    required_categorical = tuple(
+        selector_sweep.parse_required_categorical(value)
+        for value in args.required_categorical
+    )
+    required_numeric = tuple(
+        selector_sweep.parse_required_numeric(value) for value in args.required_numeric
+    )
     rows = selector_sweep.load_segment_rows(specs)
     payload = build_payload(
         rows,
@@ -295,6 +370,10 @@ def main() -> None:
         numeric_refinement_beam=args.numeric_refinement_beam,
         numeric_threshold_refinement_beam=args.numeric_threshold_refinement_beam,
         min_selected_distance_m=args.min_selected_distance_m,
+        rank_objective=args.rank_objective,
+        required_candidate_status=args.required_candidate_status,
+        required_categorical=required_categorical,
+        required_numeric=required_numeric,
     )
     if args.summary_json:
         args.summary_json.parent.mkdir(parents=True, exist_ok=True)
