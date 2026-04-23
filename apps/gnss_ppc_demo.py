@@ -230,6 +230,12 @@ def parse_args() -> argparse.Namespace:
         help="Optional minimum high-residual FLOAT jump from last trusted position before state reset.",
     )
     parser.add_argument(
+        "--max-update-nis-per-obs",
+        type=float,
+        default=None,
+        help="Optional RTK DD Kalman update NIS/observation rejection threshold.",
+    )
+    parser.add_argument(
         "--max-consec-float-reset",
         type=int,
         default=None,
@@ -994,6 +1000,8 @@ def run_solver(
                     str(args.min_float_prefit_trusted_jump),
                 ]
             )
+        if getattr(args, "max_update_nis_per_obs", None) is not None:
+            command.extend(["--max-update-nis-per-obs", str(args.max_update_nis_per_obs)])
         if getattr(args, "max_consec_float_reset", None) is not None:
             command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
         if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -1192,6 +1200,9 @@ def build_summary_payload(
         ),
         "rtk_min_float_prefit_residual_trusted_jump_m": (
             getattr(args, "min_float_prefit_trusted_jump", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_update_nis_per_observation": (
+            getattr(args, "max_update_nis_per_obs", None) if args.solver == "rtk" else None
         ),
         "rtk_max_consecutive_float_for_reset": (
             getattr(args, "max_consec_float_reset", None) if args.solver == "rtk" else None

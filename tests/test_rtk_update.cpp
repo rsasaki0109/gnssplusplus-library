@@ -58,5 +58,29 @@ TEST(RTKUpdateTest, AppliesKalmanUpdateAndSuppressesOutliers) {
     EXPECT_LT(covariance(0, 0), 1.0);
 }
 
+TEST(RTKUpdateTest, RejectsLargeNormalizedInnovationBeforeKalmanUpdate) {
+    Eigen::VectorXd state = Eigen::VectorXd::Constant(2, 1.0);
+    Eigen::MatrixXd covariance = Eigen::MatrixXd::Identity(2, 2);
+    const Eigen::VectorXd original_state = state;
+    const Eigen::MatrixXd original_covariance = covariance;
+
+    rtk_measurement::MeasurementSystem system;
+    system.design_matrix = Eigen::MatrixXd::Identity(2, 2);
+    system.residuals = Eigen::VectorXd::Zero(2);
+    system.residuals(0) = 10.0;
+    system.covariance = Eigen::MatrixXd::Identity(2, 2);
+
+    const auto result =
+        rtk_update::applyMeasurementUpdate(state, covariance, system, 30.0, 2, 10.0);
+
+    EXPECT_FALSE(result.ok);
+    EXPECT_TRUE(result.rejected_by_innovation_gate);
+    EXPECT_EQ(result.innovation_observation_count, 2);
+    EXPECT_NEAR(result.normalized_innovation_squared, 50.0, 1e-12);
+    EXPECT_NEAR(result.normalized_innovation_squared_per_observation, 25.0, 1e-12);
+    EXPECT_TRUE(state.isApprox(original_state, 0.0));
+    EXPECT_TRUE(covariance.isApprox(original_covariance, 0.0));
+}
+
 }  // namespace
 }  // namespace libgnss

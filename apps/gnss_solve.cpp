@@ -142,6 +142,7 @@ struct SolveConfig {
     double max_float_prefit_residual_max_m = 0.0;
     int max_float_prefit_residual_reset_streak = 3;
     double min_float_prefit_residual_trusted_jump_m = 0.0;
+    double max_update_nis_per_observation = 0.0;
     int max_consecutive_float_for_reset = 0;
     int max_consecutive_nonfix_for_reset = 0;
     double max_postfix_residual_rms = 0.0;
@@ -474,6 +475,9 @@ void printUsage(const char* program_name) {
         << "  --min-float-prefit-trusted-jump <v>\n"
         << "                             Require high-residual FLOAT to be this far from last trusted pos\n"
         << "                             before reset (default: 0, disabled)\n"
+        << "  --max-update-nis-per-obs <v>\n"
+        << "                             Reject DD Kalman update when NIS/active observation exceeds v\n"
+        << "                             (default: 0, disabled)\n"
         << "  --max-postfix-rms <v>      Max L1 post-fix phase residual RMS in meters\n"
         << "                             (default: 0, disabled)\n"
         << "  --enable-wide-lane-ar      Enable MW wide-lane AR pre-step (default: off)\n"
@@ -709,6 +713,8 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.max_float_prefit_residual_reset_streak = std::stoi(argv[++i]);
         } else if (arg == "--min-float-prefit-trusted-jump" && i + 1 < argc) {
             config.min_float_prefit_residual_trusted_jump_m = std::stod(argv[++i]);
+        } else if (arg == "--max-update-nis-per-obs" && i + 1 < argc) {
+            config.max_update_nis_per_observation = std::stod(argv[++i]);
         } else if (arg == "--max-postfix-rms" && i + 1 < argc) {
             config.max_postfix_residual_rms = std::stod(argv[++i]);
         } else if (arg == "--enable-wide-lane-ar") {
@@ -838,6 +844,9 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.min_float_prefit_residual_trusted_jump_m < 0.0) {
         argumentError("--min-float-prefit-trusted-jump must be >= 0", argv[0]);
+    }
+    if (config.max_update_nis_per_observation < 0.0) {
+        argumentError("--max-update-nis-per-obs must be >= 0", argv[0]);
     }
     if (config.nonfix_drift_guard_max_anchor_gap_s <= 0.0) {
         argumentError("--nonfix-drift-max-anchor-gap must be > 0", argv[0]);
@@ -1033,6 +1042,7 @@ int main(int argc, char* argv[]) {
             config.max_float_prefit_residual_reset_streak;
         rtk_config.min_float_prefit_residual_trusted_jump_m =
             config.min_float_prefit_residual_trusted_jump_m;
+        rtk_config.max_update_nis_per_observation = config.max_update_nis_per_observation;
         rtk_config.max_consecutive_float_for_reset = config.max_consecutive_float_for_reset;
         rtk_config.max_consecutive_nonfix_for_reset = config.max_consecutive_nonfix_for_reset;
         rtk_config.max_postfix_residual_rms = config.max_postfix_residual_rms;

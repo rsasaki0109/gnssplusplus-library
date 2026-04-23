@@ -147,6 +147,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-float-prefit-max", type=float, default=None)
     parser.add_argument("--max-float-prefit-reset-streak", type=int, default=None)
     parser.add_argument("--min-float-prefit-trusted-jump", type=float, default=None)
+    parser.add_argument("--max-update-nis-per-obs", type=float, default=None)
     parser.add_argument("--max-consec-float-reset", type=int, default=None)
     parser.add_argument("--max-consec-nonfix-reset", type=int, default=None)
     parser.add_argument("--max-postfix-rms", type=float, default=None)
@@ -254,6 +255,8 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["max_float_prefit_reset_streak"] = args.max_float_prefit_reset_streak
     if getattr(args, "min_float_prefit_trusted_jump", None) is not None:
         tuning["min_float_prefit_trusted_jump"] = args.min_float_prefit_trusted_jump
+    if getattr(args, "max_update_nis_per_obs", None) is not None:
+        tuning["max_update_nis_per_obs"] = args.max_update_nis_per_obs
     if getattr(args, "max_consec_float_reset", None) is not None:
         tuning["max_consec_float_reset"] = args.max_consec_float_reset
     if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -425,6 +428,9 @@ def build_ppc_demo_command(args: argparse.Namespace,
     min_float_prefit_trusted_jump = tuning.get("min_float_prefit_trusted_jump")
     if isinstance(min_float_prefit_trusted_jump, (int, float)):
         command.extend(["--min-float-prefit-trusted-jump", str(min_float_prefit_trusted_jump)])
+    max_update_nis_per_obs = tuning.get("max_update_nis_per_obs")
+    if isinstance(max_update_nis_per_obs, (int, float)):
+        command.extend(["--max-update-nis-per-obs", str(max_update_nis_per_obs)])
     max_consec_float_reset = tuning.get("max_consec_float_reset")
     if isinstance(max_consec_float_reset, int):
         command.extend(["--max-consec-float-reset", str(max_consec_float_reset)])

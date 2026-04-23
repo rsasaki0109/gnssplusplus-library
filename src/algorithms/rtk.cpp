@@ -1804,7 +1804,8 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                                                                   filter_state_.covariance,
                                                                   measurement_system,
                                                                   30.0,
-                                                                  6);
+                                                                  6,
+                                                                  rtk_config_.max_update_nis_per_observation);
     current_update_diagnostics_.observation_count = update_result.observation_count;
     current_update_diagnostics_.phase_observation_count =
         measurement_diagnostics.phase_observation_count;
@@ -1820,6 +1821,12 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
     current_update_diagnostics_.post_suppression_residual_max_m =
         std::max(current_update_diagnostics_.post_suppression_residual_max_m,
                  update_result.post_suppression_residual_max_abs_m);
+    current_update_diagnostics_.normalized_innovation_squared =
+        update_result.normalized_innovation_squared;
+    current_update_diagnostics_.normalized_innovation_squared_per_observation =
+        update_result.normalized_innovation_squared_per_observation;
+    current_update_diagnostics_.rejected_by_innovation_gate =
+        update_result.rejected_by_innovation_gate;
     return update_result.ok;
 }
 

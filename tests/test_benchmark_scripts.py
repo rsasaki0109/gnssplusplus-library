@@ -282,6 +282,7 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "max_float_prefit_max": 30.0,
                 "max_float_prefit_reset_streak": 5,
                 "min_float_prefit_trusted_jump": 8.0,
+                "max_update_nis_per_obs": 12.0,
                 "max_consec_float_reset": 10,
                 "max_consec_nonfix_reset": 10,
                 "max_postfix_rms": 0.20,
@@ -344,6 +345,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("5", command)
             self.assertIn("--min-float-prefit-trusted-jump", command)
             self.assertIn("8.0", command)
+            self.assertIn("--max-update-nis-per-obs", command)
+            self.assertIn("12.0", command)
             self.assertIn("--max-consec-float-reset", command)
             self.assertIn("10", command)
             self.assertIn("--max-consec-nonfix-reset", command)
@@ -499,6 +502,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 max_float_prefit_max=30.0,
                 max_float_prefit_reset_streak=5,
                 min_float_prefit_trusted_jump=8.0,
+                max_update_nis_per_obs=12.0,
                 max_consec_float_reset=10,
                 max_consec_nonfix_reset=10,
                 max_postfix_rms=0.20,
@@ -561,6 +565,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("5", command)
             self.assertIn("--min-float-prefit-trusted-jump", command)
             self.assertIn("8.0", command)
+            self.assertIn("--max-update-nis-per-obs", command)
+            self.assertIn("12.0", command)
             self.assertIn("--max-consec-float-reset", command)
             self.assertIn("10", command)
             self.assertIn("--max-consec-nonfix-reset", command)
@@ -695,6 +701,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIsNone(payload["max_float_prefit_max"])
             self.assertIsNone(payload["max_float_prefit_reset_streak"])
             self.assertIsNone(payload["min_float_prefit_trusted_jump"])
+            self.assertIsNone(payload["max_update_nis_per_obs"])
             self.assertIsNone(payload["max_consec_float_reset"])
             self.assertIsNone(payload["max_consec_nonfix_reset"])
             self.assertIsNone(payload["max_postfix_rms"])
@@ -4344,6 +4351,7 @@ class PPCDemoTest(unittest.TestCase):
             max_float_prefit_max=30.0,
             max_float_prefit_reset_streak=5,
             min_float_prefit_trusted_jump=8.0,
+            max_update_nis_per_obs=12.0,
             max_consec_float_reset=10,
             max_consec_nonfix_reset=10,
             max_postfix_rms=0.20,
@@ -4412,6 +4420,8 @@ class PPCDemoTest(unittest.TestCase):
         self.assertIn("5", commands[0])
         self.assertIn("--min-float-prefit-trusted-jump", commands[0])
         self.assertIn("8.0", commands[0])
+        self.assertIn("--max-update-nis-per-obs", commands[0])
+        self.assertIn("12.0", commands[0])
         self.assertIn("--max-consec-float-reset", commands[0])
         self.assertIn("10", commands[0])
         self.assertIn("--max-consec-nonfix-reset", commands[0])
@@ -4528,6 +4538,7 @@ class PPCDemoTest(unittest.TestCase):
                 max_float_prefit_max=30.0,
                 max_float_prefit_reset_streak=5,
                 min_float_prefit_trusted_jump=8.0,
+                max_update_nis_per_obs=12.0,
                 max_consec_float_reset=10,
                 max_consec_nonfix_reset=10,
                 max_postfix_rms=0.20,
@@ -4593,6 +4604,7 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtk_max_float_prefit_residual_max_m"], 30.0)
             self.assertEqual(payload["rtk_max_float_prefit_residual_reset_streak"], 5)
             self.assertEqual(payload["rtk_min_float_prefit_residual_trusted_jump_m"], 8.0)
+            self.assertEqual(payload["rtk_max_update_nis_per_observation"], 12.0)
             self.assertEqual(payload["rtk_max_consecutive_float_for_reset"], 10)
             self.assertEqual(payload["rtk_max_consecutive_nonfix_for_reset"], 10)
             self.assertEqual(payload["rtk_max_postfix_residual_rms_m"], 0.20)

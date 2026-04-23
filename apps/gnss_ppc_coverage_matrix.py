@@ -147,6 +147,12 @@ def parse_args() -> argparse.Namespace:
         help="Optional minimum high-residual FLOAT jump from last trusted position before state reset.",
     )
     parser.add_argument(
+        "--max-update-nis-per-obs",
+        type=float,
+        default=None,
+        help="Optional RTK DD Kalman update NIS/observation rejection threshold.",
+    )
+    parser.add_argument(
         "--max-consec-float-reset",
         type=int,
         default=None,
@@ -299,6 +305,8 @@ def build_ppc_demo_command(
                 str(args.min_float_prefit_trusted_jump),
             ]
         )
+    if getattr(args, "max_update_nis_per_obs", None) is not None:
+        command.extend(["--max-update-nis-per-obs", str(args.max_update_nis_per_obs)])
     if getattr(args, "max_consec_float_reset", None) is not None:
         command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
     if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -562,6 +570,7 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_float_prefit_max": getattr(args, "max_float_prefit_max", None),
         "max_float_prefit_reset_streak": getattr(args, "max_float_prefit_reset_streak", None),
         "min_float_prefit_trusted_jump": getattr(args, "min_float_prefit_trusted_jump", None),
+        "max_update_nis_per_obs": getattr(args, "max_update_nis_per_obs", None),
         "max_consec_float_reset": getattr(args, "max_consec_float_reset", None),
         "max_consec_nonfix_reset": getattr(args, "max_consec_nonfix_reset", None),
         "max_postfix_rms": getattr(args, "max_postfix_rms", None),

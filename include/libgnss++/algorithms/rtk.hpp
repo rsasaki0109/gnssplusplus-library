@@ -155,6 +155,11 @@ public:
         /// enabled.
         double min_float_prefit_residual_trusted_jump_m = 0.0;
 
+        /// Reject a whole RTK DD Kalman update when normalized innovation
+        /// squared divided by active observations exceeds this threshold.
+        /// 0 (default) disables the update gate.
+        double max_update_nis_per_observation = 0.0;
+
         /// Reset ambiguity state after N consecutive float epochs (aggressive reconvergence).
         /// 0 (default) disables the check — existing behavior preserved.
         int max_consecutive_float_for_reset = 0;
@@ -360,6 +365,9 @@ private:
         double prefit_residual_max_m = 0.0;
         double post_suppression_residual_rms_m = 0.0;
         double post_suppression_residual_max_m = 0.0;
+        double normalized_innovation_squared = 0.0;
+        double normalized_innovation_squared_per_observation = 0.0;
+        bool rejected_by_innovation_gate = false;
     };
     RTKUpdateDiagnostics current_update_diagnostics_;
 
