@@ -354,6 +354,19 @@ not just a wider anchor set.
 
 ![PPC telemetry-anchor CV dropout bridge](docs/ppc_cv_bridge_telemetry_anchor_scorecard.png)
 
+`--anchor-mode innovation` is the next bridge between the scored-anchor oracle
+and the telemetry-only gate. It keeps scored anchors as safe seed/reseed points,
+then admits additional FIXED telemetry anchors only when they agree with the
+constant-velocity prediction from the last two trusted anchors. With
+`--anchor-statuses FIXED --anchor-max-innovation-m 0.5`, it recovers
+**+249.2 m** and moves the weighted PPC official score to **59.44%** across
+**130 / 1008** dropout spans. That closes most of the telemetry-anchor loss
+(**+208.3 m -> +249.2 m**) while still staying below the scored-anchor upper
+bound (**+262.7 m**), making innovation-gated GNSS updates the next practical
+Kalman/IMU target.
+
+![PPC innovation-anchor CV dropout bridge](docs/ppc_cv_bridge_innovation_anchor_scorecard.png)
+
 `scripts/run_ppc_imu_dropout_bridge_matrix.py` wires the public `imu.csv` into
 the same causal bridge harness. It subtracts a recent horizontal accelerometer
 bias, initializes heading from the last trusted GNSS velocity, projects body
@@ -903,6 +916,20 @@ python3 scripts/run_ppc_cv_dropout_bridge_matrix.py \
   --markdown-output output/ppc_cv_bridge_tele_fixed_matrix.md \
   --output-png docs/ppc_cv_bridge_telemetry_anchor_scorecard.png \
   --title 'PPC telemetry-anchor CV dropout bridge'
+
+python3 scripts/run_ppc_cv_dropout_bridge_matrix.py \
+  --dataset-root /datasets/PPC-Dataset \
+  --run-output-template 'output/ppc_{key}_cv_bridge_innov_fixed.pos' \
+  --max-gap-s 10 \
+  --max-anchor-age-s 2 \
+  --max-velocity-baseline-s 1 \
+  --anchor-mode innovation \
+  --anchor-statuses FIXED \
+  --anchor-max-innovation-m 0.5 \
+  --summary-json output/ppc_cv_bridge_innov_fixed_matrix.json \
+  --markdown-output output/ppc_cv_bridge_innov_fixed_matrix.md \
+  --output-png docs/ppc_cv_bridge_innovation_anchor_scorecard.png \
+  --title 'PPC innovation-anchor CV dropout bridge'
 
 python3 scripts/run_ppc_imu_dropout_bridge_matrix.py \
   --dataset-root /datasets/PPC-Dataset \

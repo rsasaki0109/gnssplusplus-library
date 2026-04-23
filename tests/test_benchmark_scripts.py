@@ -1751,8 +1751,78 @@ class PPCCVDropoutBridgeMatrixTest(unittest.TestCase):
             [high_error_fixed],
         )
 
+    def test_cv_bridge_innovation_anchor_rejects_predicted_jump(self) -> None:
+        reference = [self.reference_epoch(index) for index in range(3)]
+        anchors = [
+            self.solution_epoch(0),
+            self.solution_epoch(1),
+            comparison.SolutionEpoch(
+                2300,
+                2.0,
+                0.0,
+                0.0,
+                0.0,
+                np.array([200.0, 0.0, 0.0]),
+                4,
+                12,
+                12.0,
+            ),
+        ]
+        config = ppc_cv_bridge_matrix.BridgeConfig(
+            max_gap_s=1.0,
+            max_anchor_age_s=1.0,
+            max_velocity_baseline_s=1.0,
+            bridge_status=3,
+            bridge_num_satellites=0,
+            match_tolerance_s=0.25,
+            threshold_m=0.50,
+            anchor_mode="innovation",
+            anchor_statuses=(4,),
+            anchor_min_ratio=10.0,
+            anchor_max_innovation_m=5.0,
+        )
 
-class PPCIMUDropoutBridgeMatrixTest(PPCCVDropoutBridgeMatrixTest):
+        trusted = ppc_cv_bridge_matrix.trusted_anchor_epochs(reference, anchors, config)
+
+        self.assertEqual([epoch.tow for epoch in trusted], [0.0, 1.0])
+
+    def test_cv_bridge_innovation_anchor_accepts_predicted_fixed(self) -> None:
+        reference = [self.reference_epoch(index) for index in range(3)]
+        anchors = [
+            self.solution_epoch(0),
+            self.solution_epoch(1),
+            comparison.SolutionEpoch(
+                2300,
+                2.0,
+                0.0,
+                0.0,
+                0.0,
+                np.array([20.2, 0.0, 0.0]),
+                4,
+                12,
+                12.0,
+            ),
+        ]
+        config = ppc_cv_bridge_matrix.BridgeConfig(
+            max_gap_s=1.0,
+            max_anchor_age_s=1.0,
+            max_velocity_baseline_s=1.0,
+            bridge_status=3,
+            bridge_num_satellites=0,
+            match_tolerance_s=0.25,
+            threshold_m=0.10,
+            anchor_mode="innovation",
+            anchor_statuses=(4,),
+            anchor_min_ratio=10.0,
+            anchor_max_innovation_m=5.0,
+        )
+
+        trusted = ppc_cv_bridge_matrix.trusted_anchor_epochs(reference, anchors, config)
+
+        self.assertEqual([epoch.tow for epoch in trusted], [0.0, 1.0, 2.0])
+
+
+class PPCIMUDropoutBridgeMatrixTest(unittest.TestCase):
     @staticmethod
     def solution_epoch(index: int) -> comparison.SolutionEpoch:
         return comparison.SolutionEpoch(

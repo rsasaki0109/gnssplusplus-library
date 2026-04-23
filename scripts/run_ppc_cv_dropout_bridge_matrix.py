@@ -79,6 +79,7 @@ class BridgeConfig:
     anchor_max_prefit_rms_m: float | None = None
     anchor_max_post_rms_m: float | None = None
     anchor_max_suppressed_outliers: int | None = None
+    anchor_max_innovation_m: float | None = None
 
 
 def rounded(value: float, digits: int = 6) -> float:
@@ -167,27 +168,75 @@ def telemetry_anchor_ok(epoch: comparison.SolutionEpoch, config: BridgeConfig) -
     return True
 
 
+def predicted_ecef_from_anchors(
+    previous_anchor: comparison.SolutionEpoch,
+    last_anchor: comparison.SolutionEpoch,
+    target_epoch: comparison.SolutionEpoch,
+) -> np.ndarray | None:
+    previous_s = gps_seconds(previous_anchor.week, previous_anchor.tow)
+    last_s = gps_seconds(last_anchor.week, last_anchor.tow)
+    target_s = gps_seconds(target_epoch.week, target_epoch.tow)
+    if last_s <= previous_s or target_s < last_s:
+        return None
+    velocity_ecef_mps = (last_anchor.ecef - previous_anchor.ecef) / (last_s - previous_s)
+    return last_anchor.ecef + velocity_ecef_mps * (target_s - last_s)
+
+
+def innovation_anchor_ok(
+    anchors: list[comparison.SolutionEpoch],
+    epoch: comparison.SolutionEpoch,
+    config: BridgeConfig,
+) -> bool:
+    if config.anchor_max_innovation_m is None:
+        raise SystemExit("--anchor-max-innovation-m is required for --anchor-mode innovation")
+    if len(anchors) < 2 or not telemetry_anchor_ok(epoch, config):
+        return False
+    previous_anchor = anchors[-2]
+    last_anchor = anchors[-1]
+    previous_s = gps_seconds(previous_anchor.week, previous_anchor.tow)
+    last_s = gps_seconds(last_anchor.week, last_anchor.tow)
+    target_s = gps_seconds(epoch.week, epoch.tow)
+    if last_s <= previous_s:
+        return False
+    if last_s - previous_s > config.max_velocity_baseline_s:
+        return False
+    if target_s - last_s > config.max_anchor_age_s:
+        return False
+    predicted = predicted_ecef_from_anchors(previous_anchor, last_anchor, epoch)
+    if predicted is None:
+        return False
+    innovation_m = float(np.linalg.norm(epoch.ecef - predicted))
+    return innovation_m <= config.anchor_max_innovation_m
+
+
 def trusted_anchor_epochs(
     reference: list[comparison.ReferenceEpoch],
     epochs: list[comparison.SolutionEpoch],
     config: BridgeConfig,
 ) -> list[comparison.SolutionEpoch]:
-    if config.anchor_mode not in {"scored", "telemetry"}:
-        raise SystemExit("--anchor-mode must be scored or telemetry")
+    if config.anchor_mode not in {"scored", "telemetry", "innovation"}:
+        raise SystemExit("--anchor-mode must be scored, telemetry, or innovation")
+    if config.anchor_mode == "innovation" and config.anchor_max_innovation_m is None:
+        raise SystemExit("--anchor-max-innovation-m is required for --anchor-mode innovation")
     reference_seconds = [gps_seconds(ref.week, ref.tow) for ref in reference]
     anchors: list[comparison.SolutionEpoch] = []
-    for epoch in epochs:
+    for epoch in sorted(epochs, key=lambda item: gps_seconds(item.week, item.tow)):
         ref = nearest_reference_for_epoch(reference, reference_seconds, epoch)
         if ref is None:
             continue
         if abs(ref.tow - epoch.tow) > config.match_tolerance_s:
             continue
+        error_3d_m = float(np.linalg.norm(epoch.ecef - ref.ecef))
+        scored = error_3d_m <= config.threshold_m
+        if config.anchor_mode == "innovation":
+            if scored or innovation_anchor_ok(anchors, epoch, config):
+                anchors.append(epoch)
+            continue
         if config.anchor_mode == "telemetry":
             if telemetry_anchor_ok(epoch, config):
                 anchors.append(epoch)
             continue
-        error_3d_m = float(np.linalg.norm(epoch.ecef - ref.ecef))
-        if error_3d_m <= config.threshold_m:
+        if scored:
             anchors.append(epoch)
     anchors.sort(key=lambda epoch: gps_seconds(epoch.week, epoch.tow))
     return anchors
@@ -712,15 +761,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--bridge-num-satellites", type=int, default=0)
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
     parser.add_argument("--threshold-m", type=float, default=0.50)
-    parser.add_argument("--anchor-mode", choices=("scored", "telemetry"), default="scored")
+    parser.add_argument("--anchor-mode", choices=("scored", "telemetry", "innovation"), default="scored")
     parser.add_argument(
         "--anchor-statuses",
-        help="Comma-separated libgnss++ statuses for --anchor-mode telemetry, e.g. FIXED,FLOAT or 4,3.",
+        help="Comma-separated libgnss++ statuses for telemetry/innovation anchors, e.g. FIXED,FLOAT or 4,3.",
     )
     parser.add_argument("--anchor-min-ratio", type=float)
     parser.add_argument("--anchor-max-prefit-rms-m", type=float)
     parser.add_argument("--anchor-max-post-rms-m", type=float)
     parser.add_argument("--anchor-max-suppressed-outliers", type=int)
+    parser.add_argument("--anchor-max-innovation-m", type=float)
     parser.add_argument("--summary-json", type=Path, required=True)
     parser.add_argument("--markdown-output", type=Path)
     parser.add_argument("--output-png", type=Path)
@@ -744,6 +794,7 @@ def main(argv: list[str] | None = None) -> int:
         anchor_max_prefit_rms_m=args.anchor_max_prefit_rms_m,
         anchor_max_post_rms_m=args.anchor_max_post_rms_m,
         anchor_max_suppressed_outliers=args.anchor_max_suppressed_outliers,
+        anchor_max_innovation_m=args.anchor_max_innovation_m,
     )
     runs = [
         summarize_run(

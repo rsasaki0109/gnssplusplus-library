@@ -69,6 +69,7 @@ class IMUBridgeConfig:
     anchor_max_prefit_rms_m: float | None = None
     anchor_max_post_rms_m: float | None = None
     anchor_max_suppressed_outliers: int | None = None
+    anchor_max_innovation_m: float | None = None
 
 
 def normalize_header(name: str) -> str:
@@ -479,15 +480,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--lateral-axis", choices=("x", "y"), default="y")
     parser.add_argument("--forward-sign", type=float, choices=(-1.0, 1.0), default=1.0)
     parser.add_argument("--lateral-sign", type=float, choices=(-1.0, 1.0), default=1.0)
-    parser.add_argument("--anchor-mode", choices=("scored", "telemetry"), default="scored")
+    parser.add_argument("--anchor-mode", choices=("scored", "telemetry", "innovation"), default="scored")
     parser.add_argument(
         "--anchor-statuses",
-        help="Comma-separated libgnss++ statuses for --anchor-mode telemetry, e.g. FIXED,FLOAT or 4,3.",
+        help="Comma-separated libgnss++ statuses for telemetry/innovation anchors, e.g. FIXED,FLOAT or 4,3.",
     )
     parser.add_argument("--anchor-min-ratio", type=float)
     parser.add_argument("--anchor-max-prefit-rms-m", type=float)
     parser.add_argument("--anchor-max-post-rms-m", type=float)
     parser.add_argument("--anchor-max-suppressed-outliers", type=int)
+    parser.add_argument("--anchor-max-innovation-m", type=float)
     parser.add_argument("--summary-json", type=Path, required=True)
     parser.add_argument("--markdown-output", type=Path)
     parser.add_argument("--output-png", type=Path)
@@ -520,6 +522,7 @@ def main(argv: list[str] | None = None) -> int:
         anchor_max_prefit_rms_m=args.anchor_max_prefit_rms_m,
         anchor_max_post_rms_m=args.anchor_max_post_rms_m,
         anchor_max_suppressed_outliers=args.anchor_max_suppressed_outliers,
+        anchor_max_innovation_m=args.anchor_max_innovation_m,
     )
     runs = [
         summarize_run(
