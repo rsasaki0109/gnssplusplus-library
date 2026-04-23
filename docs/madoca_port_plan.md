@@ -1871,6 +1871,29 @@ Phase 5, PPP-AR and multifrequency:
   is off initially and switches to strict IODE after a warm-up), which
   is a separate design decision and not the immediate priority.
 
+  A hybrid gate was then implemented as
+  `PPPConfig::ssr_orbit_iode_admission_gate_warmup_epochs` / CLI flag
+  `--ssr-orbit-iode-admission-gate-warmup-epochs <N>`.  The flag
+  deactivates the admission-only IODE gate for the first `N` processed
+  epochs, then activates it from epoch `N+1` onward.  Sweeping
+  `N=2/3/5/7/10/15` on the same MIZU run gives
+  `0.510/0.518/0.500/0.481/0.442/0.410 m` full-window 3D RMS and
+  `0.189/0.157/0.156/0.152/0.142/0.133 m` tail RMS.  The warmup
+  direction therefore monotonically degrades full-window RMS and
+  monotonically improves tail RMS vs pure admission-only (`N=0`):
+  pure admission-only is the best full-window (`0.382 m`), while
+  larger warmups progressively approach default (`N=999` gives
+  `0.393/0.169`).  The mid-run activation cliff (where satellites that
+  were being tracked get suddenly rejected) is the mechanism behind
+  the full-window degradation, and the tail improvement is a secondary
+  effect from the larger warmup keeping a fuller state going into the
+  mid window.  No intermediate warmup dominates on both metrics.  The
+  hybrid flag is therefore kept as a diagnostic knob rather than a
+  default-mode change; regression coverage in
+  `PPPTest.ProcessorAdmissionOnlySsrOrbitIodeWarmupEpochsAdmitsEarly`
+  verifies that warmup admits an otherwise-gated row during the first
+  epoch.
+
 ## Acceptance Gates
 
 - Existing tests pass without MADOCALIB installed.

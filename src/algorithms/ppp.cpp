@@ -3098,8 +3098,14 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             }
             if (ssr_ok) {
                 if (!have_precise) {
+                    const bool iode_gate_after_warmup =
+                        ppp_config_.ssr_orbit_iode_admission_gate_warmup_epochs <= 0 ||
+                        total_epochs_processed_ >=
+                            static_cast<size_t>(
+                                ppp_config_.ssr_orbit_iode_admission_gate_warmup_epochs);
                     if ((ppp_config_.enforce_ssr_orbit_iode ||
-                         ppp_config_.enforce_ssr_orbit_iode_admission_only) &&
+                         (ppp_config_.enforce_ssr_orbit_iode_admission_only &&
+                          iode_gate_after_warmup)) &&
                         orbit_iode >= 0) {
                         const Ephemeris* matched_eph = nav.getEphemerisByIode(
                             observation.satellite, static_cast<uint16_t>(orbit_iode), time);

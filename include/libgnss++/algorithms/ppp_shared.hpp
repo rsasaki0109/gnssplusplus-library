@@ -90,6 +90,10 @@ struct PPPConfig {
     bool require_ssr_observation_biases = false;
     bool enforce_ssr_orbit_iode = false;
     bool enforce_ssr_orbit_iode_admission_only = false;
+    // Skip the admission-only IODE gate for the first N epochs so sparse
+    // stale-CSSR-IODE observations (e.g. BDS at run start) can seed the
+    // filter before the gate activates. 0 applies the gate from epoch 0.
+    int ssr_orbit_iode_admission_gate_warmup_epochs = 0;
     bool use_rtklib_broadcast_selection = false;
     bool use_clas_osr_filter = false;
     std::string ssr_file_path;

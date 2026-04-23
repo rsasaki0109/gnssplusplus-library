@@ -60,6 +60,7 @@ struct Options {
     double ssr_step_seconds = 1.0;
     bool enforce_ssr_orbit_iode = false;
     bool enforce_ssr_orbit_iode_admission_only = false;
+    int ssr_orbit_iode_admission_gate_warmup_epochs = 0;
     bool estimate_troposphere = true;
     bool estimate_ionosphere = false;
     bool use_ionosphere_free = true;
@@ -125,6 +126,10 @@ void printUsage(const char* program_name) {
         << "  --enforce-ssr-orbit-iode-admission-only\n"
         << "                          Gate admission on SSR orbit IODE match without\n"
         << "                          swapping broadcast-state selection for range modeling\n"
+        << "  --ssr-orbit-iode-admission-gate-warmup-epochs <N>\n"
+        << "                          Skip the admission-only IODE gate for the first N\n"
+        << "                          epochs so stale-CSSR-IODE observations can seed the\n"
+        << "                          filter before the gate activates (default: 0)\n"
         << "  --out <solution.pos>     Output position file (required)\n"
         << "  --summary-json <summary.json>\n"
         << "                          Optional machine-readable run summary\n"
@@ -558,6 +563,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.enforce_ssr_orbit_iode_admission_only = true;
         } else if (arg == "--no-enforce-ssr-orbit-iode-admission-only") {
             options.enforce_ssr_orbit_iode_admission_only = false;
+        } else if (arg == "--ssr-orbit-iode-admission-gate-warmup-epochs" && i + 1 < argc) {
+            options.ssr_orbit_iode_admission_gate_warmup_epochs = std::stoi(argv[++i]);
         } else if (arg == "--no-estimate-troposphere") {
             options.estimate_troposphere = false;
         } else if (arg == "--estimate-troposphere") {
@@ -1572,6 +1579,8 @@ int main(int argc, char* argv[]) {
         ppp_config.enforce_ssr_orbit_iode = options.enforce_ssr_orbit_iode;
         ppp_config.enforce_ssr_orbit_iode_admission_only =
             options.enforce_ssr_orbit_iode_admission_only;
+        ppp_config.ssr_orbit_iode_admission_gate_warmup_epochs =
+            options.ssr_orbit_iode_admission_gate_warmup_epochs;
         ppp_config.use_ssr_corrections =
             options.ssr_path.empty() == false ||
             options.ssr_rtcm_path.empty() == false ||
@@ -2055,6 +2064,8 @@ int main(int argc, char* argv[]) {
                     << (ppp_config.enforce_ssr_orbit_iode ? "true" : "false") << ",\n"
                     << "  \"enforce_ssr_orbit_iode_admission_only\": "
                     << (ppp_config.enforce_ssr_orbit_iode_admission_only ? "true" : "false") << ",\n"
+                    << "  \"ssr_orbit_iode_admission_gate_warmup_epochs\": "
+                    << ppp_config.ssr_orbit_iode_admission_gate_warmup_epochs << ",\n"
                     << "  \"low_dynamics\": " << (options.low_dynamics_mode ? "true" : "false") << ",\n"
                     << "  \"clas_epoch_policy\": \"" << jsonEscape(options.clas_epoch_policy) << "\",\n"
                     << "  \"clas_osr_application\": \"" << jsonEscape(options.clas_osr_application) << "\",\n"
@@ -2305,6 +2316,12 @@ int main(int argc, char* argv[]) {
                 std::cout << "  SSR orbit IODE admission-only gate: "
                           << (ppp_config.enforce_ssr_orbit_iode_admission_only ? "on" : "off")
                           << "\n";
+                if (ppp_config.enforce_ssr_orbit_iode_admission_only &&
+                    ppp_config.ssr_orbit_iode_admission_gate_warmup_epochs > 0) {
+                    std::cout << "  SSR orbit IODE gate warmup epochs: "
+                              << ppp_config.ssr_orbit_iode_admission_gate_warmup_epochs
+                              << "\n";
+                }
             }
             if (madoca_native_l6e_loaded) {
                 std::cout << "  MADOCA native L6E files: "

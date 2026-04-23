@@ -1829,6 +1829,81 @@ TEST(PPPTest, ProcessorAdmissionOnlySsrOrbitIodeRejectsMismatch) {
     std::filesystem::remove(ssr_path);
 }
 
+TEST(PPPTest, ProcessorAdmissionOnlySsrOrbitIodeWarmupEpochsAdmitsEarly) {
+    const auto ssr_path = tempFilePath("libgnss_ppp_iode_warmup_test.csv");
+    std::filesystem::remove(ssr_path);
+
+    Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    eph.iode = 77;
+    eph.valid = true;
+    const GNSSTime epoch_time = eph.toe;
+
+    std::ostringstream ssr_text;
+    ssr_text << epoch_time.week << "," << epoch_time.tow
+             << ",G01,0.1,0.0,0.0,0.2,orbit_iode=99\n";
+    writeTextFile(ssr_path, ssr_text.str());
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(10.0, -5.0, 3.0);
+    std::vector<SyntheticSatellite> satellites = makeSyntheticSatellites(true_receiver_position);
+    satellites.resize(1);
+    ObservationData epoch = makeSyntheticEpoch(
+        epoch_time,
+        true_receiver_position,
+        approximate_receiver_position,
+        satellites);
+
+    NavigationData nav_data;
+    nav_data.addEphemeris(eph);
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_precise_orbits = false;
+    ppp_config.use_precise_clocks = false;
+    ppp_config.use_ssr_corrections = true;
+    ppp_config.require_ssr_orbit_clock = true;
+    ppp_config.enforce_ssr_orbit_iode = false;
+    ppp_config.enforce_ssr_orbit_iode_admission_only = true;
+    ppp_config.ssr_orbit_iode_admission_gate_warmup_epochs = 5;
+    ppp_config.ssr_file_path = ssr_path.string();
+    ppp_config.prefer_receiver_position_seed = true;
+    ppp_config.estimate_troposphere = false;
+    ppp_config.convergence_min_epochs = 1;
+    PPPProcessor processor(ppp_config);
+
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 1;
+    processor_config.elevation_mask = 0.0;
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    (void)processor.processEpoch(epoch, nav_data);
+
+    // With warmup=5 epochs, the first epoch should NOT reject the IODE
+    // mismatch. The SSR is still applied (orbit/clock) using the existing
+    // RTKLIB-selection broadcast state.
+    const auto& diagnostics = processor.getLastSSRApplicationDiagnostics();
+    ASSERT_FALSE(diagnostics.empty());
+    bool saw_applied = false;
+    for (const auto& diagnostic : diagnostics) {
+        if (diagnostic.satellite == SatelliteId(GNSSSystem::GPS, 1)) {
+            saw_applied = true;
+            EXPECT_TRUE(diagnostic.ssr_available);
+            EXPECT_EQ(diagnostic.ssr_orbit_iode, 99);
+            // During warmup, the admission-only gate is inactive; the SSR
+            // orbit/clock should be applied, and skip_reason should not be
+            // the IODE mismatch string.
+            EXPECT_NE(
+                diagnostic.orbit_clock_skip_reason,
+                "ssr_orbit_iode_no_matching_ephemeris");
+        }
+    }
+    EXPECT_TRUE(saw_applied);
+
+    std::filesystem::remove(ssr_path);
+}
+
 TEST(PPPTest, ProcessorLoadsRtcmSsrCorrectionsFromFile) {
     const auto rtcm_path = tempFilePath("libgnss_ppp_ssr_rtcm_test.rtcm3");
     std::filesystem::remove(rtcm_path);
