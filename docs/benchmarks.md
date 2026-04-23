@@ -177,9 +177,13 @@ high-residual FLOAT epochs only reset after the streak threshold when the FLOAT
 position is also at least the configured distance away from the last trusted
 FIX/FLOAT state. The default `0` preserves residual-only behavior.
 A focused `6` / `30` / streak `5` spot check shows why the selector still needs
-city/segment context: Tokyo run1 improves to **55.91%** official score at
+run/segment context: Tokyo run1 improves to **55.91%** official score at
 `0.5 m` (**+44.2 m** versus reset10), while `2/4/8 m` fall back to **55.52%**
-(**+3.7 m**) and Nagoya run2 at `0.5 m` drops to **30.82%** (**-31.6 m**).
+(**+3.7 m**). The same `0.5 m` gate breaks Tokyo run2 (**73.61%**, **-377.2
+m**), Nagoya run2 (**30.82%**, **-31.6 m**), and Nagoya run3 (**37.90%**,
+**-25.2 m**). Combining `jump0.5` only for Tokyo run1 with the previous streak
+`8` Tokyo run2 result gives a **59.00%** mixed oracle (**+45.9 m**) versus
+reset10.
 
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
