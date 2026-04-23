@@ -311,6 +311,20 @@ down-weight or reject high-error RTK updates.
 
 ![PPC IMU fusion readiness](docs/ppc_imu_fusion_readiness.png)
 
+`scripts/analyze_ppc_imu_bridge_targets.py` turns that into a bridge target
+upper bound from the same official segment CSVs. If a loose Kalman/IMU bridge
+could keep every bracketed no-solution span within PPC's 0.5 m threshold, the
+score would rise only to **72.28%** (**+6,197.1 m**). A more realistic
+short-gap bridge gets **69.03%** at spans up to **5 s** (**+4,691.2 m**) and
+**72.13%** at spans up to **30 s** (**+6,129.4 m**). Even the all-dropout
+upper bound remains **2,466.0 m** short of **77.6%**, while high-error distance
+is still **12,843.2 m**: **8,667.9 m** FLOAT, **2,572.3 m** FIXED, and
+**1,603.0 m** SPP. That sets the Kalman work split: first bridge short GNSS
+dropouts, then robustly gate/tight-couple high-error RTK updates rather than
+only filling missing epochs.
+
+![PPC IMU bridge targets](docs/ppc_imu_bridge_targets.png)
+
 An SPP-divergence posthoc sweep also keeps `--max-float-spp-div` diagnostic:
 on the six reset10 outputs, thresholds **10/20/30/50/80 m** predict
 **55.33/56.62/57.41/58.07/58.45%** weighted official score versus the
@@ -812,6 +826,13 @@ python3 scripts/analyze_ppc_imu_coverage.py \
   --markdown-output output/ppc_imu_coverage_summary.md \
   --output-png docs/ppc_imu_fusion_readiness.png \
   --title 'PPC IMU fusion readiness'
+
+python3 scripts/analyze_ppc_imu_bridge_targets.py \
+  --segment-csv-template 'output/ppc_quality_floatreset10/{key}_official_segments.csv' \
+  --summary-json output/ppc_imu_bridge_targets.json \
+  --markdown-output output/ppc_imu_bridge_targets.md \
+  --output-png docs/ppc_imu_bridge_targets.png \
+  --title 'PPC IMU bridge target upper bound'
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \

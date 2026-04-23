@@ -48,6 +48,7 @@ import generate_odaiba_scorecard as scorecard  # noqa: E402
 import generate_odaiba_social_card as social_card  # noqa: E402
 import analyze_ppc_coverage_quality as ppc_coverage_quality  # noqa: E402
 import analyze_ppc_dual_profile_selector_matrix as ppc_dual_selector_matrix  # noqa: E402
+import analyze_ppc_imu_bridge_targets as ppc_imu_bridge_targets  # noqa: E402
 import analyze_ppc_imu_coverage as ppc_imu_coverage  # noqa: E402
 import analyze_ppc_profile_segment_delta as ppc_profile_segment_delta  # noqa: E402
 import analyze_ppc_residual_reset_sweep as ppc_residual_reset_sweep  # noqa: E402
@@ -1545,6 +1546,68 @@ class PPCIMUCoverageTest(unittest.TestCase):
             self.assertEqual(aggregates["target_gap_distance_m"], 3.0)
             self.assertEqual(aggregates["no_solution_share_of_target_gap_pct"], 100.0)
             self.assertIn("Tokyo r1", ppc_imu_coverage.render_markdown(payload))
+
+
+class PPCIMUBridgeTargetsTest(unittest.TestCase):
+    def write_segments_csv(self, path: Path) -> None:
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=[
+                    "reference_index",
+                    "start_tow_s",
+                    "end_tow_s",
+                    "segment_distance_m",
+                    "lib_score_state",
+                    "lib_status_name",
+                    "lib_error_3d_m",
+                ],
+                lineterminator="\n",
+            )
+            writer.writeheader()
+            rows = [
+                (1, 0.0, 1.0, 10.0, "scored", "FIXED", 0.1),
+                (2, 1.0, 1.5, 5.0, "no_solution", "", None),
+                (3, 1.5, 2.0, 10.0, "scored", "FIXED", 0.1),
+                (4, 2.0, 5.0, 8.0, "no_solution", "", None),
+                (5, 5.0, 6.0, 10.0, "scored", "FLOAT", 0.2),
+                (6, 6.0, 7.0, 7.0, "high_error", "FLOAT", 2.0),
+            ]
+            for reference_index, start, end, distance, state, status, error in rows:
+                writer.writerow(
+                    {
+                        "reference_index": reference_index,
+                        "start_tow_s": start,
+                        "end_tow_s": end,
+                        "segment_distance_m": distance,
+                        "lib_score_state": state,
+                        "lib_status_name": status,
+                        "lib_error_3d_m": "" if error is None else error,
+                    }
+                )
+
+    def test_bridge_targets_report_gap_limited_upper_bound(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_imu_bridge_targets_") as temp_dir:
+            temp_root = Path(temp_dir)
+            segment_csv = temp_root / "tokyo_run1_official_segments.csv"
+            self.write_segments_csv(segment_csv)
+
+            payload = ppc_imu_bridge_targets.build_payload(
+                str(temp_root / "{key}_official_segments.csv"),
+                [ppc_imu_bridge_targets.RunSpec("tokyo", "run1")],
+                [1.0, 3.0],
+            )
+
+            aggregates = payload["aggregates"]
+            self.assertEqual(aggregates["baseline_score_pct"], 60.0)
+            self.assertEqual(aggregates["no_solution_span_count"], 2)
+            rows = aggregates["bridge_thresholds"]
+            self.assertEqual(rows[0]["recovered_no_solution_distance_m"], 5.0)
+            self.assertEqual(rows[0]["score_pct"], 70.0)
+            self.assertEqual(rows[1]["recovered_no_solution_distance_m"], 13.0)
+            self.assertEqual(rows[1]["score_pct"], 86.0)
+            self.assertEqual(aggregates["high_error_by_status"][0]["status_name"], "FLOAT")
+            self.assertIn("PPC IMU Bridge Targets", ppc_imu_bridge_targets.render_markdown(payload))
 
 
 class PPCMetricsTest(unittest.TestCase):
