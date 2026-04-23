@@ -276,7 +276,10 @@ holdout runs, and **+1.6 m** minimum holdout delta.
 
 ![PPC jump0.5 selector validation scorecard](docs/ppc_jump0p5_selector_validation_scorecard.png)
 
-Applied to actual `.pos` outputs, that robust rule is lower-gain than the
+`scripts/run_ppc_dual_profile_selector_matrix.py` applies a selector rule across
+the six PPC runs and regenerates the per-run selected `.pos` files plus the
+matrix JSON/Markdown/PNG. Applied to actual `.pos` outputs, that robust rule is
+lower-gain than the
 in-sample baseline-band selector but materially safer: weighted official score
 moves **58.90% -> 59.44%** (**+251.2 m**, **+0.54 pp**) versus reset10,
 selector-vs-candidate-all is **+659.1 m**, every run gains official distance
@@ -776,25 +779,14 @@ python3 scripts/analyze_ppc_segment_selector_sweep.py \
   --summary-json output/ppc_jump0p5_segment_selector_sweep_6run_refined.json \
   --markdown-output output/ppc_jump0p5_segment_selector_sweep_6run_refined.md
 
-python3 scripts/apply_ppc_dual_profile_selector.py \
-  --reference-csv /datasets/PPC-Dataset/tokyo/run1/reference.csv \
-  --baseline-pos output/ppc_coverage_matrix_floatreset10/tokyo_run1.pos \
-  --candidate-pos output/ppc_tokyo_run1_rtk_prefit_s5_jump0p5_matrixprofile.pos \
-  --selector-summary-json output/ppc_jump0p5_segment_selector_sweep_6run_refined.json \
-  --out-pos output/ppc_tokyo_run1_jump0p5_dual_selector_6run_refined.pos \
-  --summary-json output/ppc_tokyo_run1_jump0p5_dual_selector_6run_refined_summary.json \
-  --segments-csv output/ppc_tokyo_run1_jump0p5_dual_selector_6run_refined_segments.csv
-
-python3 scripts/analyze_ppc_dual_profile_selector_matrix.py \
-  --run tokyo_run1=output/ppc_tokyo_run1_jump0p5_dual_selector_6run_refined_summary.json \
-  --run tokyo_run2=output/ppc_tokyo_run2_jump0p5_dual_selector_6run_refined_summary.json \
-  --run tokyo_run3=output/ppc_tokyo_run3_jump0p5_dual_selector_6run_refined_summary.json \
-  --run nagoya_run1=output/ppc_nagoya_run1_jump0p5_dual_selector_6run_refined_summary.json \
-  --run nagoya_run2=output/ppc_nagoya_run2_jump0p5_dual_selector_6run_refined_summary.json \
-  --run nagoya_run3=output/ppc_nagoya_run3_jump0p5_dual_selector_6run_refined_summary.json \
-  --summary-json output/ppc_jump0p5_dual_selector_6run_refined_matrix.json \
-  --markdown-output output/ppc_jump0p5_dual_selector_6run_refined_matrix.md \
-  --output-png docs/ppc_jump0p5_dual_selector_scorecard.png
+python3 scripts/run_ppc_dual_profile_selector_matrix.py \
+  --dataset-root /datasets/PPC-Dataset \
+  --run-output-template 'output/ppc_{key}_jump0p5_dual_selector_6run_robust.pos' \
+  --rule 'status_transition == FLOAT->FIXED AND candidate_baseline_m >= 949.004 AND candidate_rtk_update_prefit_residual_rms_m >= 0.2018 AND candidate_rtk_update_suppressed_outliers <= 4' \
+  --matrix-summary-json output/ppc_jump0p5_dual_selector_6run_robust_matrix.json \
+  --matrix-markdown-output output/ppc_jump0p5_dual_selector_6run_robust_matrix.md \
+  --matrix-output-png docs/ppc_jump0p5_dual_selector_robust_scorecard.png \
+  --title 'PPC robust dual-profile selector'
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \

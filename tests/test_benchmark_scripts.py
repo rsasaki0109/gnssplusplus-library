@@ -57,6 +57,7 @@ import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
 import generate_ppc_selector_validation_scorecard as ppc_selector_scorecard  # noqa: E402
 import generate_ppc_tail_cleanup_scorecard as ppc_tail_cleanup_scorecard  # noqa: E402
 import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
+import run_ppc_dual_profile_selector_matrix as ppc_dual_selector_driver  # noqa: E402
 import update_ppc_coverage_readme as ppc_coverage_readme  # noqa: E402
 import detect_ci_scope as ci_scope  # noqa: E402
 import run_optional_ppp_products_signoff as ci_ppp_products_signoff  # noqa: E402
@@ -1378,6 +1379,112 @@ class PPCDualProfileSelectorMatrixTest(unittest.TestCase):
                     self.assertEqual(image.size, (1400, 780))
             except ModuleNotFoundError:
                 pass
+
+
+class PPCDualProfileSelectorDriverTest(unittest.TestCase):
+    @staticmethod
+    def write_reference_csv(path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["tow", "week", "lat", "lon", "height", "ecef_x", "ecef_y", "ecef_z"])
+            for index in range(3):
+                writer.writerow([float(index), 2300, 0.0, 0.0, 0.0, 10.0 * index, 0.0, 0.0])
+
+    @staticmethod
+    def solution_epoch(
+        index: int,
+        ecef_x_m: float,
+        status: int,
+        prefit_rms_m: float | None,
+    ) -> comparison.SolutionEpoch:
+        return comparison.SolutionEpoch(
+            2300,
+            float(index),
+            0.0,
+            0.0,
+            0.0,
+            np.array([ecef_x_m, 0.0, 0.0]),
+            status,
+            12,
+            10.0 if status == 4 else 0.0,
+            1000.0,
+            2,
+            16,
+            8,
+            8,
+            0,
+            prefit_rms_m,
+            None if prefit_rms_m is None else prefit_rms_m * 4.0,
+            prefit_rms_m,
+            None if prefit_rms_m is None else prefit_rms_m * 4.0,
+        )
+
+    def test_driver_applies_selector_and_writes_matrix_outputs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_dual_driver_") as temp_dir:
+            temp_root = Path(temp_dir)
+            dataset_root = temp_root / "PPC-Dataset"
+            baseline_dir = temp_root / "baseline"
+            candidate_dir = temp_root / "candidate"
+            output_dir = temp_root / "selected"
+            matrix_json = temp_root / "matrix.json"
+            matrix_md = temp_root / "matrix.md"
+            matrix_png = temp_root / "matrix.png"
+
+            baseline = [
+                self.solution_epoch(0, 0.0, 4, None),
+                self.solution_epoch(1, 11.2, 3, None),
+                self.solution_epoch(2, 20.1, 4, None),
+            ]
+            candidate = [
+                self.solution_epoch(0, 0.0, 4, 0.2),
+                self.solution_epoch(1, 10.1, 4, 0.3),
+                self.solution_epoch(2, 21.0, 3, 0.2),
+            ]
+            for city, run_name in (("tokyo", "run1"), ("nagoya", "run1")):
+                key = f"{city}_{run_name}"
+                self.write_reference_csv(dataset_root / city / run_name / "reference.csv")
+                ppc_dual_profile_selector.write_pos(baseline_dir / f"{key}.pos", baseline)
+                ppc_dual_profile_selector.write_pos(candidate_dir / f"{key}.pos", candidate)
+
+            argv = [
+                "run_ppc_dual_profile_selector_matrix.py",
+                "--dataset-root",
+                str(dataset_root),
+                "--ppc-run",
+                "tokyo/run1",
+                "--ppc-run",
+                "nagoya/run1",
+                "--baseline-pos-template",
+                str(baseline_dir / "{key}.pos"),
+                "--candidate-pos-template",
+                str(candidate_dir / "{key}.pos"),
+                "--run-output-template",
+                str(output_dir / "{key}_selected.pos"),
+                "--rule",
+                "candidate_status_name == FIXED AND "
+                "candidate_rtk_update_prefit_residual_rms_m >= 0.2",
+                "--matrix-summary-json",
+                str(matrix_json),
+                "--matrix-markdown-output",
+                str(matrix_md),
+                "--matrix-output-png",
+                str(matrix_png),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_dual_selector_driver.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue((output_dir / "tokyo_run1_selected.pos").exists())
+            self.assertTrue((output_dir / "tokyo_run1_selected_summary.json").exists())
+            self.assertTrue((output_dir / "tokyo_run1_selected_segments.csv").exists())
+            self.assertTrue(matrix_json.exists())
+            self.assertTrue(matrix_md.exists())
+            self.assertTrue(matrix_png.exists())
+            payload = json.loads(matrix_json.read_text(encoding="utf-8"))
+            self.assertGreater(payload["aggregates"]["selector_official_score_delta_m"], 0.0)
+            self.assertIn("PPC dual-profile selector", matrix_md.read_text(encoding="utf-8"))
 
 
 class PPCMetricsTest(unittest.TestCase):
