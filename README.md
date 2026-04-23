@@ -215,6 +215,9 @@ segment-level trigger rather than another whole-run threshold.
 given a reset10 `.pos`, a candidate `.pos`, and the same PPC `reference.csv`,
 it writes the exact official-score gain/loss segments, score/status
 transitions, and candidate residual diagnostics before promoting a gate.
+`scripts/analyze_ppc_segment_selector_sweep.py` consumes those segment CSVs and
+ranks simple observable candidate-selection rules by net official-distance gain,
+capturing gain, loss exposure, and run-by-run breakdowns.
 The opt-in `--min-float-prefit-trusted-jump` gate is the first continuity-aware
 selector for that path: high-residual FLOAT epochs only reset ambiguities after
 the streak threshold when the FLOAT position has also moved at least the
@@ -236,6 +239,12 @@ segments into FIX; Tokyo run2 gains only **7.1 m** and loses **384.3 m**, mostly
 `scored -> high_error` FLOAT/FIXED degradation. Nagoya run2 and run3 are also
 net negative (**-31.6 m** and **-25.2 m**), so the viable selector must be
 segment-local rather than city-local.
+On the four available `jump0.5` probes, candidate-all is **-389.7 m** versus
+reset10, but the best single segment-local rule
+`candidate_status_name == FIXED` plus candidate post-suppression residual RMS
+`<= 3.1545 m` reaches **+192.9 m**. It keeps **243.5 m** of gain, exposes only
+**50.6 m** of loss, and cuts Tokyo run2 from **-377.2 m** to **-29.6 m** while
+lifting Tokyo run1 to **+168.5 m**.
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
 GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**
@@ -710,6 +719,14 @@ python3 scripts/analyze_ppc_profile_segment_delta.py \
   --summary-json output/ppc_tokyo_run1_jump0p5_segment_delta.json \
   --markdown-output output/ppc_tokyo_run1_jump0p5_segment_delta.md \
   --segments-csv output/ppc_tokyo_run1_jump0p5_segment_delta.csv
+
+python3 scripts/analyze_ppc_segment_selector_sweep.py \
+  --segment-csv tokyo_run1=output/ppc_tokyo_run1_jump0p5_segment_delta.csv \
+  --segment-csv tokyo_run2=output/ppc_tokyo_run2_jump0p5_segment_delta.csv \
+  --segment-csv nagoya_run2=output/ppc_nagoya_run2_jump0p5_segment_delta.csv \
+  --segment-csv nagoya_run3=output/ppc_nagoya_run3_jump0p5_segment_delta.csv \
+  --summary-json output/ppc_jump0p5_segment_selector_sweep.json \
+  --markdown-output output/ppc_jump0p5_segment_selector_sweep.md
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \

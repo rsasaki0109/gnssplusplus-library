@@ -49,6 +49,7 @@ import generate_odaiba_social_card as social_card  # noqa: E402
 import analyze_ppc_coverage_quality as ppc_coverage_quality  # noqa: E402
 import analyze_ppc_profile_segment_delta as ppc_profile_segment_delta  # noqa: E402
 import analyze_ppc_residual_reset_sweep as ppc_residual_reset_sweep  # noqa: E402
+import analyze_ppc_segment_selector_sweep as ppc_segment_selector_sweep  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
 import generate_ppc_tail_cleanup_scorecard as ppc_tail_cleanup_scorecard  # noqa: E402
 import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
@@ -911,6 +912,82 @@ class PPCProfileSegmentDeltaTest(unittest.TestCase):
             self.assertIn("PPC Profile Segment Delta", markdown)
             self.assertIn("high_error->scored", markdown)
             self.assertIn("Top Losses", markdown)
+
+
+class PPCSegmentSelectorSweepTest(unittest.TestCase):
+    @staticmethod
+    def selector_row(
+        run_label: str,
+        delta_m: float,
+        distance_m: float,
+        baseline_status: str,
+        candidate_status: str,
+        candidate_rms_m: float,
+        candidate_ratio: float = 10.0,
+    ) -> dict[str, object]:
+        return {
+            "run_label": run_label,
+            "segment_distance_m": distance_m,
+            "score_delta_distance_m": delta_m,
+            "status_transition": f"{baseline_status}->{candidate_status}",
+            "baseline_status_name": baseline_status,
+            "candidate_status_name": candidate_status,
+            "candidate_ratio": candidate_ratio,
+            "candidate_num_satellites": 12.0,
+            "candidate_rtk_update_observations": 16.0,
+            "candidate_rtk_update_suppressed_outliers": 0.0,
+            "candidate_rtk_update_prefit_residual_rms_m": candidate_rms_m,
+            "candidate_rtk_update_prefit_residual_max_m": candidate_rms_m * 4.0,
+            "candidate_rtk_update_post_suppression_residual_rms_m": candidate_rms_m,
+            "candidate_rtk_update_post_suppression_residual_max_m": candidate_rms_m * 4.0,
+            "baseline_ratio": 0.0,
+            "baseline_num_satellites": 12.0,
+        }
+
+    def test_selector_sweep_ranks_segment_local_candidate_rules(self) -> None:
+        rows = [
+            self.selector_row("tokyo_run1", 12.0, 12.0, "FLOAT", "FIXED", 0.4, 20.0),
+            self.selector_row("tokyo_run1", -7.0, 7.0, "FIXED", "FIXED", 5.0, 30.0),
+            self.selector_row("tokyo_run2", -20.0, 20.0, "FLOAT", "FLOAT", 0.5, 0.0),
+        ]
+        rule = ppc_segment_selector_sweep.RuleSpec(
+            categorical=(
+                ppc_segment_selector_sweep.CategoricalCondition(
+                    "candidate_status_name",
+                    "FIXED",
+                ),
+            ),
+            numeric=(
+                ppc_segment_selector_sweep.NumericCondition(
+                    "candidate_rtk_update_post_suppression_residual_rms_m",
+                    "<=",
+                    1.0,
+                ),
+            ),
+        )
+
+        score = ppc_segment_selector_sweep.score_rule(rows, rule)
+
+        self.assertEqual(score["selected_score_delta_distance_m"], 12.0)
+        self.assertEqual(score["selected_gain_distance_m"], 12.0)
+        self.assertEqual(score["selected_loss_distance_m"], 0.0)
+        self.assertEqual(score["avoided_loss_distance_m"], 27.0)
+        self.assertEqual(score["gain_recall_pct"], 100.0)
+        self.assertEqual(score["loss_exposure_pct"], 0.0)
+
+        payload = ppc_segment_selector_sweep.build_payload(
+            rows,
+            top_rules=8,
+            max_thresholds=16,
+        )
+        self.assertEqual(payload["candidate_all"]["selected_score_delta_distance_m"], -15.0)
+        self.assertGreaterEqual(
+            payload["top_rules"][0]["selected_score_delta_distance_m"],
+            12.0,
+        )
+        markdown = ppc_segment_selector_sweep.render_markdown(payload)
+        self.assertIn("PPC Segment Selector Sweep", markdown)
+        self.assertIn("Best Rule By Run", markdown)
 
 
 class PPCMetricsTest(unittest.TestCase):
