@@ -340,6 +340,20 @@ so more dropout spans have usable anchors.
 
 ![PPC causal CV dropout bridge](docs/ppc_cv_bridge_scorecard.png)
 
+The bridge driver now also supports deployable-style telemetry anchors through
+`--anchor-mode telemetry`, so dropout bridging can be tested without using the
+reference trajectory to decide which GNSS epochs are trusted. A first
+FIXED-only anchor gate (`--anchor-statuses FIXED`) generates **2,156** epochs
+across **330 / 1008** dropout spans, but recovers only **+208.3 m**
+(weighted score **59.35%**), below the scored-anchor CV bridge's **+262.7 m**.
+The small sweep also shows `FIXED,FLOAT` is worse (**+109.4 m**) and simple
+ratio/residual constraints reduce coverage before they recover more score. The
+practical lesson is that status-only update trust accepts too many poor
+anchors; the Kalman path needs innovation/covariance-aware GNSS update gating,
+not just a wider anchor set.
+
+![PPC telemetry-anchor CV dropout bridge](docs/ppc_cv_bridge_telemetry_anchor_scorecard.png)
+
 `scripts/run_ppc_imu_dropout_bridge_matrix.py` wires the public `imu.csv` into
 the same causal bridge harness. It subtracts a recent horizontal accelerometer
 bias, initializes heading from the last trusted GNSS velocity, projects body
@@ -876,6 +890,19 @@ python3 scripts/run_ppc_cv_dropout_bridge_matrix.py \
   --markdown-output output/ppc_cv_bridge_gap10_age2_matrix.md \
   --output-png docs/ppc_cv_bridge_scorecard.png \
   --title 'PPC causal CV dropout bridge'
+
+python3 scripts/run_ppc_cv_dropout_bridge_matrix.py \
+  --dataset-root /datasets/PPC-Dataset \
+  --run-output-template 'output/ppc_{key}_cv_bridge_tele_fixed.pos' \
+  --max-gap-s 10 \
+  --max-anchor-age-s 2 \
+  --max-velocity-baseline-s 1 \
+  --anchor-mode telemetry \
+  --anchor-statuses FIXED \
+  --summary-json output/ppc_cv_bridge_tele_fixed_matrix.json \
+  --markdown-output output/ppc_cv_bridge_tele_fixed_matrix.md \
+  --output-png docs/ppc_cv_bridge_telemetry_anchor_scorecard.png \
+  --title 'PPC telemetry-anchor CV dropout bridge'
 
 python3 scripts/run_ppc_imu_dropout_bridge_matrix.py \
   --dataset-root /datasets/PPC-Dataset \

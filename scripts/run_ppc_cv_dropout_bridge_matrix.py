@@ -35,6 +35,12 @@ DEFAULT_RUNS = (
     ("nagoya", "run2"),
     ("nagoya", "run3"),
 )
+STATUS_NAME_TO_CODE = {
+    "FIXED": 4,
+    "FLOAT": 3,
+    "DGPS": 2,
+    "SPP": 1,
+}
 
 
 @dataclass(frozen=True)
@@ -67,6 +73,12 @@ class BridgeConfig:
     bridge_num_satellites: int
     match_tolerance_s: float
     threshold_m: float
+    anchor_mode: str = "scored"
+    anchor_statuses: tuple[int, ...] = ()
+    anchor_min_ratio: float | None = None
+    anchor_max_prefit_rms_m: float | None = None
+    anchor_max_post_rms_m: float | None = None
+    anchor_max_suppressed_outliers: int | None = None
 
 
 def rounded(value: float, digits: int = 6) -> float:
@@ -78,6 +90,21 @@ def parse_run(value: str) -> RunSpec:
     if not separator or not city or not run:
         raise argparse.ArgumentTypeError("--ppc-run must use CITY/RUN")
     return RunSpec(city, run)
+
+
+def parse_statuses(value: str | None) -> tuple[int, ...]:
+    if value is None or not value.strip():
+        return ()
+    statuses: list[int] = []
+    for token in value.replace(";", ",").split(","):
+        item = token.strip().upper()
+        if not item:
+            continue
+        if item in STATUS_NAME_TO_CODE:
+            statuses.append(STATUS_NAME_TO_CODE[item])
+        else:
+            statuses.append(int(item))
+    return tuple(statuses)
 
 
 def default_run_specs() -> list[RunSpec]:
@@ -98,34 +125,69 @@ def solution_by_key(
     return {epoch_key(epoch): epoch for epoch in epochs}
 
 
+def nearest_reference_for_epoch(
+    reference: list[comparison.ReferenceEpoch],
+    reference_seconds: list[float],
+    epoch: comparison.SolutionEpoch,
+) -> comparison.ReferenceEpoch | None:
+    epoch_seconds = gps_seconds(epoch.week, epoch.tow)
+    index = bisect.bisect_left(reference_seconds, epoch_seconds)
+    candidate_indexes = [
+        candidate
+        for candidate in (index - 1, index, index + 1)
+        if 0 <= candidate < len(reference)
+    ]
+    if not candidate_indexes:
+        return None
+    ref = min(
+        (reference[candidate] for candidate in candidate_indexes),
+        key=lambda candidate: abs(gps_seconds(candidate.week, candidate.tow) - epoch_seconds),
+    )
+    return ref if ref.week == epoch.week else None
+
+
+def telemetry_anchor_ok(epoch: comparison.SolutionEpoch, config: BridgeConfig) -> bool:
+    if config.anchor_statuses and epoch.status not in config.anchor_statuses:
+        return False
+    if config.anchor_min_ratio is not None:
+        if epoch.ratio is None or epoch.ratio < config.anchor_min_ratio:
+            return False
+    if config.anchor_max_prefit_rms_m is not None:
+        value = epoch.rtk_update_prefit_residual_rms_m
+        if value is None or value > config.anchor_max_prefit_rms_m:
+            return False
+    if config.anchor_max_post_rms_m is not None:
+        value = epoch.rtk_update_post_suppression_residual_rms_m
+        if value is None or value > config.anchor_max_post_rms_m:
+            return False
+    if config.anchor_max_suppressed_outliers is not None:
+        value = epoch.rtk_update_suppressed_outliers
+        if value is None or value > config.anchor_max_suppressed_outliers:
+            return False
+    return True
+
+
 def trusted_anchor_epochs(
     reference: list[comparison.ReferenceEpoch],
     epochs: list[comparison.SolutionEpoch],
-    match_tolerance_s: float,
-    threshold_m: float,
+    config: BridgeConfig,
 ) -> list[comparison.SolutionEpoch]:
+    if config.anchor_mode not in {"scored", "telemetry"}:
+        raise SystemExit("--anchor-mode must be scored or telemetry")
     reference_seconds = [gps_seconds(ref.week, ref.tow) for ref in reference]
     anchors: list[comparison.SolutionEpoch] = []
     for epoch in epochs:
-        epoch_seconds = gps_seconds(epoch.week, epoch.tow)
-        index = bisect.bisect_left(reference_seconds, epoch_seconds)
-        candidate_indexes = [
-            candidate
-            for candidate in (index - 1, index, index + 1)
-            if 0 <= candidate < len(reference)
-        ]
-        if not candidate_indexes:
+        ref = nearest_reference_for_epoch(reference, reference_seconds, epoch)
+        if ref is None:
             continue
-        ref = min(
-            (reference[candidate] for candidate in candidate_indexes),
-            key=lambda candidate: abs(gps_seconds(candidate.week, candidate.tow) - epoch_seconds),
-        )
-        if ref.week != epoch.week:
+        if abs(ref.tow - epoch.tow) > config.match_tolerance_s:
             continue
-        if abs(ref.tow - epoch.tow) > match_tolerance_s:
+        if config.anchor_mode == "telemetry":
+            if telemetry_anchor_ok(epoch, config):
+                anchors.append(epoch)
             continue
         error_3d_m = float(np.linalg.norm(epoch.ecef - ref.ecef))
-        if error_3d_m <= threshold_m:
+        if error_3d_m <= config.threshold_m:
             anchors.append(epoch)
     anchors.sort(key=lambda epoch: gps_seconds(epoch.week, epoch.tow))
     return anchors
@@ -224,8 +286,7 @@ def bridge_dropout_spans(
     anchors = trusted_anchor_epochs(
         reference,
         baseline_epochs,
-        config.match_tolerance_s,
-        config.threshold_m,
+        config,
     )
     spans = dropout_spans(baseline_records)
     selected_by_key = solution_by_key(baseline_epochs)
@@ -651,6 +712,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--bridge-num-satellites", type=int, default=0)
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
     parser.add_argument("--threshold-m", type=float, default=0.50)
+    parser.add_argument("--anchor-mode", choices=("scored", "telemetry"), default="scored")
+    parser.add_argument(
+        "--anchor-statuses",
+        help="Comma-separated libgnss++ statuses for --anchor-mode telemetry, e.g. FIXED,FLOAT or 4,3.",
+    )
+    parser.add_argument("--anchor-min-ratio", type=float)
+    parser.add_argument("--anchor-max-prefit-rms-m", type=float)
+    parser.add_argument("--anchor-max-post-rms-m", type=float)
+    parser.add_argument("--anchor-max-suppressed-outliers", type=int)
     parser.add_argument("--summary-json", type=Path, required=True)
     parser.add_argument("--markdown-output", type=Path)
     parser.add_argument("--output-png", type=Path)
@@ -668,6 +738,12 @@ def main(argv: list[str] | None = None) -> int:
         bridge_num_satellites=args.bridge_num_satellites,
         match_tolerance_s=args.match_tolerance_s,
         threshold_m=args.threshold_m,
+        anchor_mode=args.anchor_mode,
+        anchor_statuses=parse_statuses(args.anchor_statuses),
+        anchor_min_ratio=args.anchor_min_ratio,
+        anchor_max_prefit_rms_m=args.anchor_max_prefit_rms_m,
+        anchor_max_post_rms_m=args.anchor_max_post_rms_m,
+        anchor_max_suppressed_outliers=args.anchor_max_suppressed_outliers,
     )
     runs = [
         summarize_run(

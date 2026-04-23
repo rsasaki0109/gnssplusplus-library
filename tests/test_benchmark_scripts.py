@@ -1699,6 +1699,58 @@ class PPCCVDropoutBridgeMatrixTest(unittest.TestCase):
             self.assertEqual(run_payload["selection"]["recovered_distance_m"], 20.0)
             self.assertIn("PPC causal CV dropout bridge", ppc_cv_bridge_matrix.render_markdown(matrix))
 
+    def test_cv_bridge_can_use_telemetry_anchor_mode(self) -> None:
+        reference = [self.reference_epoch(0)]
+        high_error_fixed = comparison.SolutionEpoch(
+            2300,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            np.array([2.0, 0.0, 0.0]),
+            4,
+            12,
+            12.0,
+        )
+        scored_config = ppc_cv_bridge_matrix.BridgeConfig(
+            max_gap_s=1.0,
+            max_anchor_age_s=1.0,
+            max_velocity_baseline_s=1.0,
+            bridge_status=3,
+            bridge_num_satellites=0,
+            match_tolerance_s=0.25,
+            threshold_m=0.50,
+        )
+        telemetry_config = ppc_cv_bridge_matrix.BridgeConfig(
+            max_gap_s=1.0,
+            max_anchor_age_s=1.0,
+            max_velocity_baseline_s=1.0,
+            bridge_status=3,
+            bridge_num_satellites=0,
+            match_tolerance_s=0.25,
+            threshold_m=0.50,
+            anchor_mode="telemetry",
+            anchor_statuses=(4,),
+            anchor_min_ratio=10.0,
+        )
+
+        self.assertEqual(
+            ppc_cv_bridge_matrix.trusted_anchor_epochs(
+                reference,
+                [high_error_fixed],
+                scored_config,
+            ),
+            [],
+        )
+        self.assertEqual(
+            ppc_cv_bridge_matrix.trusted_anchor_epochs(
+                reference,
+                [high_error_fixed],
+                telemetry_config,
+            ),
+            [high_error_fixed],
+        )
+
 
 class PPCIMUDropoutBridgeMatrixTest(PPCCVDropoutBridgeMatrixTest):
     @staticmethod
