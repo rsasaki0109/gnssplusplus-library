@@ -325,6 +325,21 @@ only filling missing epochs.
 
 ![PPC IMU bridge targets](docs/ppc_imu_bridge_targets.png)
 
+`scripts/run_ppc_cv_dropout_bridge_matrix.py` is the first non-oracle bridge
+candidate. It is causal: it uses only the last two already-scored GNSS
+positions, estimates a local ECEF velocity, and fills no-solution spans up to
+the configured gap without using a future anchor or reference trajectory. With
+`--max-gap-s 10 --max-anchor-age-s 2 --max-velocity-baseline-s 1`, it generates
+**831** epochs across **125 / 1008** dropout spans and moves the six-run
+weighted PPC official score **58.90% -> 59.47%** (**+262.7 m**, **+0.57 pp**).
+A small sweep over gap **5/10/30 s** and anchor age **2/5/10 s** saturates at
+the same **+262.7 m**, far below the **+6.2 km** dropout upper bound. That
+confirms the missing piece is not just interpolation mechanics; Kalman/IMU
+fusion must keep a trustworthy state through high-error FLOAT/FIX/SPP periods
+so more dropout spans have usable anchors.
+
+![PPC causal CV dropout bridge](docs/ppc_cv_bridge_scorecard.png)
+
 An SPP-divergence posthoc sweep also keeps `--max-float-spp-div` diagnostic:
 on the six reset10 outputs, thresholds **10/20/30/50/80 m** predict
 **55.33/56.62/57.41/58.07/58.45%** weighted official score versus the
@@ -833,6 +848,18 @@ python3 scripts/analyze_ppc_imu_bridge_targets.py \
   --markdown-output output/ppc_imu_bridge_targets.md \
   --output-png docs/ppc_imu_bridge_targets.png \
   --title 'PPC IMU bridge target upper bound'
+
+python3 scripts/run_ppc_cv_dropout_bridge_matrix.py \
+  --dataset-root /datasets/PPC-Dataset \
+  --run-output-template 'output/ppc_{key}_cv_bridge_gap10_age2.pos' \
+  --run-summary-template 'output/ppc_{key}_cv_bridge_gap10_age2_summary.json' \
+  --max-gap-s 10 \
+  --max-anchor-age-s 2 \
+  --max-velocity-baseline-s 1 \
+  --summary-json output/ppc_cv_bridge_gap10_age2_matrix.json \
+  --markdown-output output/ppc_cv_bridge_gap10_age2_matrix.md \
+  --output-png docs/ppc_cv_bridge_scorecard.png \
+  --title 'PPC causal CV dropout bridge'
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \
