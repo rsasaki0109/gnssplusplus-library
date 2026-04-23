@@ -44,6 +44,8 @@ SEGMENT_FIELDNAMES = [
     "selected_solution_tow_s",
     "candidate_rtk_update_post_suppression_residual_rms_m",
     "candidate_rtk_update_prefit_residual_rms_m",
+    "candidate_rtk_update_normalized_innovation_squared_per_observation",
+    "candidate_rtk_update_rejected_by_innovation_gate",
 ]
 
 
@@ -255,6 +257,9 @@ def optional_tokens(epoch: comparison.SolutionEpoch) -> list[object | None]:
         epoch.rtk_update_prefit_residual_max_m,
         epoch.rtk_update_post_suppression_residual_rms_m,
         epoch.rtk_update_post_suppression_residual_max_m,
+        epoch.rtk_update_normalized_innovation_squared,
+        epoch.rtk_update_normalized_innovation_squared_per_observation,
+        epoch.rtk_update_rejected_by_innovation_gate,
     ]
 
 
@@ -266,7 +271,8 @@ def write_pos(path: Path, epochs: list[comparison.SolutionEpoch]) -> None:
             "% GPS_Week GPS_TOW X(m) Y(m) Z(m) Lat(deg) Lon(deg) Height(m) "
             "Status NumSat PDOP Ratio Baseline(m) RtkIter RtkObs RtkPhaseObs "
             "RtkCodeObs RtkOutliers RtkPrefitRms(m) RtkPrefitMax(m) "
-            "RtkPostRms(m) RtkPostMax(m)\n"
+            "RtkPostRms(m) RtkPostMax(m) RtkUpdateNIS RtkUpdateNISPerObs "
+            "RtkUpdateNISRejected\n"
         )
         for epoch in epochs:
             tokens: list[str] = [

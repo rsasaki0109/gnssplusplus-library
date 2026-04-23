@@ -868,6 +868,13 @@ class PPCProfileSegmentDeltaTest(unittest.TestCase):
             "rtk_update_prefit_residual_max_m": None if prefit_rms_m is None else prefit_rms_m * 4.0,
             "rtk_update_post_suppression_residual_rms_m": None,
             "rtk_update_post_suppression_residual_max_m": None,
+            "rtk_update_normalized_innovation_squared": (
+                None if prefit_rms_m is None else prefit_rms_m * 160.0
+            ),
+            "rtk_update_normalized_innovation_squared_per_observation": (
+                None if prefit_rms_m is None else prefit_rms_m * 10.0
+            ),
+            "rtk_update_rejected_by_innovation_gate": 0 if status is not None else None,
             "error_3d_m": error_3d_m,
             "horiz_error_m": error_3d_m,
             "up_error_m": 0.0 if error_3d_m is not None else None,
@@ -907,6 +914,12 @@ class PPCProfileSegmentDeltaTest(unittest.TestCase):
         self.assertEqual(
             summary["candidate_gain_diagnostics"]["median_rtk_update_prefit_residual_rms_m"],
             0.3,
+        )
+        self.assertEqual(
+            summary["candidate_gain_diagnostics"][
+                "median_rtk_update_normalized_innovation_squared_per_observation"
+            ],
+            3.0,
         )
 
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_segment_delta_") as temp_dir:
@@ -960,6 +973,11 @@ class PPCSegmentSelectorSweepTest(unittest.TestCase):
             "candidate_rtk_update_prefit_residual_max_m": candidate_rms_m * 4.0,
             "candidate_rtk_update_post_suppression_residual_rms_m": candidate_rms_m,
             "candidate_rtk_update_post_suppression_residual_max_m": candidate_rms_m * 4.0,
+            "candidate_rtk_update_normalized_innovation_squared": candidate_rms_m * 160.0,
+            "candidate_rtk_update_normalized_innovation_squared_per_observation": (
+                candidate_rms_m * 10.0
+            ),
+            "candidate_rtk_update_rejected_by_innovation_gate": 0.0,
             "baseline_ratio": 0.0,
             "baseline_num_satellites": 12.0,
         }
@@ -1939,7 +1957,7 @@ class PPCMetricsTest(unittest.TestCase):
                     [
                         "% GPS_Week GPS_TOW X Y Z Lat Lon Height Status NumSat PDOP Ratio Baseline",
                         "2300 1.000 10.0 0.0 0.0 0.0 0.0 0.0 4 12 2.0 "
-                        "17.5 9400.25 2 16 8 8 1 2.5 31.0 1.2 20.0",
+                        "17.5 9400.25 2 16 8 8 1 2.5 31.0 1.2 20.0 64.0 4.0 1",
                     ]
                 )
                 + "\n",
@@ -1960,6 +1978,12 @@ class PPCMetricsTest(unittest.TestCase):
             self.assertEqual(epochs[0].rtk_update_prefit_residual_max_m, 31.0)
             self.assertEqual(epochs[0].rtk_update_post_suppression_residual_rms_m, 1.2)
             self.assertEqual(epochs[0].rtk_update_post_suppression_residual_max_m, 20.0)
+            self.assertEqual(epochs[0].rtk_update_normalized_innovation_squared, 64.0)
+            self.assertEqual(
+                epochs[0].rtk_update_normalized_innovation_squared_per_observation,
+                4.0,
+            )
+            self.assertEqual(epochs[0].rtk_update_rejected_by_innovation_gate, 1)
 
     def test_rtklib_pos_parser_keeps_ratio_telemetry(self) -> None:
         with tempfile.TemporaryDirectory(prefix="rtklib_pos_ratio_parse_") as temp_dir:
@@ -2897,6 +2921,9 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
                 4.0,
                 0.25,
                 4.0,
+                56.0,
+                4.0,
+                0,
             ),
             comparison.SolutionEpoch(
                 2300,
@@ -2918,6 +2945,9 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
                 31.0,
                 1.2,
                 20.0,
+                128.0,
+                8.0,
+                1,
             ),
         ]
         rtklib_solution = [
@@ -2954,6 +2984,9 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         self.assertEqual(high_error_by_status["FLOAT"]["median_rtk_update_observations"], 16.0)
         self.assertEqual(high_error_by_status["FLOAT"]["median_rtk_prefit_rms_m"], 2.5)
         self.assertEqual(high_error_by_status["FLOAT"]["p95_rtk_prefit_max_m"], 31.0)
+        self.assertEqual(high_error_by_status["FLOAT"]["median_rtk_update_nis_per_obs"], 8.0)
+        self.assertEqual(high_error_by_status["FLOAT"]["rtk_update_nis_rejected_segments"], 1)
+        self.assertEqual(high_error_by_status["FLOAT"]["rtk_update_nis_rejected_distance_m"], 10.0)
         rtk_diagnostics_by_state = {
             (row["status"], row["score_state"]): row
             for row in ppc_coverage_quality.official_rtk_update_diagnostics_by_state(
@@ -2970,6 +3003,12 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         self.assertEqual(
             rtk_diagnostics_by_state[("FLOAT", "high_error")]["median_rtk_prefit_rms_m"],
             2.5,
+        )
+        self.assertEqual(
+            rtk_diagnostics_by_state[("FLOAT", "high_error")][
+                "median_rtk_update_nis_per_obs"
+            ],
+            8.0,
         )
         unscored_by_status = {
             row["status"]: row
@@ -3019,6 +3058,11 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         self.assertEqual(combined[1]["lib_baseline_m"], 101.0)
         self.assertEqual(combined[1]["lib_rtk_update_observations"], 16)
         self.assertEqual(combined[1]["lib_rtk_update_prefit_residual_max_m"], 31.0)
+        self.assertEqual(
+            combined[1]["lib_rtk_update_normalized_innovation_squared_per_observation"],
+            8.0,
+        )
+        self.assertEqual(combined[1]["lib_rtk_update_rejected_by_innovation_gate"], 1)
 
 
 class ScorecardRenderTest(unittest.TestCase):

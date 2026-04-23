@@ -86,11 +86,15 @@ def optional_int(value: object) -> int | None:
     return None if value is None else int(value)
 
 
+def has_rtk_update_record(record: dict[str, object]) -> bool:
+    observations = record.get("rtk_update_observations")
+    return observations is not None and int(observations) > 0
+
+
 def rtk_diagnostic_values(records: list[dict[str, object]], key: str) -> list[float]:
     values: list[float] = []
     for record in records:
-        observations = record.get("rtk_update_observations")
-        if observations is None or int(observations) <= 0:
+        if not has_rtk_update_record(record):
             continue
         value = record.get(key)
         if value is None:
@@ -99,6 +103,15 @@ def rtk_diagnostic_values(records: list[dict[str, object]], key: str) -> list[fl
         if math.isfinite(numeric):
             values.append(numeric)
     return values
+
+
+def rtk_update_rejected_records(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    return [
+        record
+        for record in records
+        if has_rtk_update_record(record)
+        and int(record.get("rtk_update_rejected_by_innovation_gate") or 0) > 0
+    ]
 
 
 def horizontal_track_distance(
@@ -284,8 +297,20 @@ def official_loss_by_status(
             status_records,
             "rtk_update_post_suppression_residual_max_m",
         )
+        rtk_update_nis = rtk_diagnostic_values(
+            status_records,
+            "rtk_update_normalized_innovation_squared",
+        )
+        rtk_update_nis_per_obs = rtk_diagnostic_values(
+            status_records,
+            "rtk_update_normalized_innovation_squared_per_observation",
+        )
         state_distances: dict[str, float] = {}
         ratio_ge_10_distance_m = 0.0
+        rejected_records = rtk_update_rejected_records(status_records)
+        rejected_distance_m = sum(
+            float(record["segment_distance_m"]) for record in rejected_records
+        )
         for record in status_records:
             state = str(record["score_state"])
             segment_distance_m = float(record["segment_distance_m"])
@@ -358,6 +383,25 @@ def official_loss_by_status(
                 "p95_rtk_post_suppression_max_m": percentile(rtk_post_suppression_max, 95)
                 if rtk_post_suppression_max
                 else None,
+                "median_rtk_update_nis": percentile(rtk_update_nis, 50)
+                if rtk_update_nis
+                else None,
+                "p95_rtk_update_nis": percentile(rtk_update_nis, 95)
+                if rtk_update_nis
+                else None,
+                "median_rtk_update_nis_per_obs": percentile(rtk_update_nis_per_obs, 50)
+                if rtk_update_nis_per_obs
+                else None,
+                "p95_rtk_update_nis_per_obs": percentile(rtk_update_nis_per_obs, 95)
+                if rtk_update_nis_per_obs
+                else None,
+                "rtk_update_nis_rejected_segments": len(rejected_records),
+                "rtk_update_nis_rejected_distance_m": rounded(rejected_distance_m),
+                "rtk_update_nis_rejected_share_pct": rounded(
+                    100.0 * rejected_distance_m / distance_m
+                )
+                if distance_m > 0.0
+                else 0.0,
             }
         )
     rows.sort(key=lambda row: float(row["distance_m"]), reverse=True)
@@ -389,6 +433,20 @@ def rtk_update_diagnostic_summary(records: list[dict[str, object]]) -> dict[str,
     rtk_post_suppression_max = rtk_diagnostic_values(
         records,
         "rtk_update_post_suppression_residual_max_m",
+    )
+    rtk_update_nis = rtk_diagnostic_values(
+        records,
+        "rtk_update_normalized_innovation_squared",
+    )
+    rtk_update_nis_per_obs = rtk_diagnostic_values(
+        records,
+        "rtk_update_normalized_innovation_squared_per_observation",
+    )
+    rejected_records = rtk_update_rejected_records(records)
+    rejected_distance_m = sum(
+        float(record["segment_distance_m"])
+        for record in rejected_records
+        if record.get("segment_distance_m") is not None
     )
     return {
         "median_3d_m": percentile(errors, 50),
@@ -441,6 +499,20 @@ def rtk_update_diagnostic_summary(records: list[dict[str, object]]) -> dict[str,
         "p95_rtk_post_suppression_max_m": percentile(rtk_post_suppression_max, 95)
         if rtk_post_suppression_max
         else None,
+        "median_rtk_update_nis": percentile(rtk_update_nis, 50)
+        if rtk_update_nis
+        else None,
+        "p95_rtk_update_nis": percentile(rtk_update_nis, 95)
+        if rtk_update_nis
+        else None,
+        "median_rtk_update_nis_per_obs": percentile(rtk_update_nis_per_obs, 50)
+        if rtk_update_nis_per_obs
+        else None,
+        "p95_rtk_update_nis_per_obs": percentile(rtk_update_nis_per_obs, 95)
+        if rtk_update_nis_per_obs
+        else None,
+        "rtk_update_nis_rejected_segments": len(rejected_records),
+        "rtk_update_nis_rejected_distance_m": rounded(rejected_distance_m),
     }
 
 
@@ -643,6 +715,15 @@ def official_combined_records(
                 ),
                 "lib_rtk_update_post_suppression_residual_max_m": optional_float(
                     lib_record.get("rtk_update_post_suppression_residual_max_m")
+                ),
+                "lib_rtk_update_normalized_innovation_squared": optional_float(
+                    lib_record.get("rtk_update_normalized_innovation_squared")
+                ),
+                "lib_rtk_update_normalized_innovation_squared_per_observation": optional_float(
+                    lib_record.get("rtk_update_normalized_innovation_squared_per_observation")
+                ),
+                "lib_rtk_update_rejected_by_innovation_gate": optional_int(
+                    lib_record.get("rtk_update_rejected_by_innovation_gate")
                 ),
                 "rtklib_score_state": rtklib_record["score_state"],
                 "rtklib_scored": rtklib_record["scored"],
@@ -1155,6 +1236,9 @@ def write_official_segments_csv(path: Path, rows: list[dict[str, object]]) -> No
         "lib_rtk_update_prefit_residual_max_m",
         "lib_rtk_update_post_suppression_residual_rms_m",
         "lib_rtk_update_post_suppression_residual_max_m",
+        "lib_rtk_update_normalized_innovation_squared",
+        "lib_rtk_update_normalized_innovation_squared_per_observation",
+        "lib_rtk_update_rejected_by_innovation_gate",
         "rtklib_score_state",
         "rtklib_scored",
         "rtklib_status",

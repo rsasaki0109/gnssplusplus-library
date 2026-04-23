@@ -96,7 +96,8 @@ public:
                   << "% GPS_Week GPS_TOW X(m) Y(m) Z(m) Lat(deg) Lon(deg) Height(m) "
                      "Status NumSat PDOP Ratio Baseline(m) RTKIter RTKObs RTKPhaseObs "
                      "RTKCodeObs RTKOutliers RTKPrefitRMS(m) RTKPrefitMax(m) "
-                     "RTKPostSuppressRMS(m) RTKPostSuppressMax(m)\n";
+                     "RTKPostSuppressRMS(m) RTKPostSuppressMax(m) RTKUpdateNIS "
+                     "RTKUpdateNISPerObs RTKUpdateNISRejected\n";
             break;
         case Format::LLH:
             file_ << "% GPS_Week GPS_TOW Lat(deg) Lon(deg) Height(m) Status\n";
@@ -143,7 +144,10 @@ public:
                   << std::setprecision(4) << sol.rtk_update_prefit_residual_rms_m << " "
                   << sol.rtk_update_prefit_residual_max_m << " "
                   << sol.rtk_update_post_suppression_residual_rms_m << " "
-                  << sol.rtk_update_post_suppression_residual_max_m
+                  << sol.rtk_update_post_suppression_residual_max_m << " "
+                  << sol.rtk_update_normalized_innovation_squared << " "
+                  << sol.rtk_update_normalized_innovation_squared_per_observation << " "
+                  << sol.rtk_update_rejected_by_innovation_gate
                   << "\n";
             break;
 

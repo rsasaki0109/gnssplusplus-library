@@ -86,6 +86,9 @@ class SolutionEpoch:
     rtk_update_prefit_residual_max_m: float | None = None
     rtk_update_post_suppression_residual_rms_m: float | None = None
     rtk_update_post_suppression_residual_max_m: float | None = None
+    rtk_update_normalized_innovation_squared: float | None = None
+    rtk_update_normalized_innovation_squared_per_observation: float | None = None
+    rtk_update_rejected_by_innovation_gate: int | None = None
 
 
 @dataclass(frozen=True)
@@ -207,6 +210,15 @@ def read_libgnss_pos(path: Path) -> list[SolutionEpoch]:
             rtk_update_post_suppression_residual_max_m = (
                 float(parts[21]) if len(parts) > 21 else None
             )
+            rtk_update_normalized_innovation_squared = (
+                float(parts[22]) if len(parts) > 22 else None
+            )
+            rtk_update_normalized_innovation_squared_per_observation = (
+                float(parts[23]) if len(parts) > 23 else None
+            )
+            rtk_update_rejected_by_innovation_gate = (
+                int(float(parts[24])) if len(parts) > 24 else None
+            )
             rows.append(
                 SolutionEpoch(
                     week,
@@ -228,6 +240,9 @@ def read_libgnss_pos(path: Path) -> list[SolutionEpoch]:
                     rtk_update_prefit_residual_max_m,
                     rtk_update_post_suppression_residual_rms_m,
                     rtk_update_post_suppression_residual_max_m,
+                    rtk_update_normalized_innovation_squared,
+                    rtk_update_normalized_innovation_squared_per_observation,
+                    rtk_update_rejected_by_innovation_gate,
                 )
             )
     return rows

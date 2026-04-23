@@ -81,6 +81,12 @@ SEGMENT_FIELDNAMES = [
     "candidate_rtk_update_post_suppression_residual_rms_m",
     "baseline_rtk_update_post_suppression_residual_max_m",
     "candidate_rtk_update_post_suppression_residual_max_m",
+    "baseline_rtk_update_normalized_innovation_squared",
+    "candidate_rtk_update_normalized_innovation_squared",
+    "baseline_rtk_update_normalized_innovation_squared_per_observation",
+    "candidate_rtk_update_normalized_innovation_squared_per_observation",
+    "baseline_rtk_update_rejected_by_innovation_gate",
+    "candidate_rtk_update_rejected_by_innovation_gate",
 ]
 DIAGNOSTIC_KEYS = (
     "ratio",
@@ -91,6 +97,9 @@ DIAGNOSTIC_KEYS = (
     "rtk_update_prefit_residual_max_m",
     "rtk_update_post_suppression_residual_rms_m",
     "rtk_update_post_suppression_residual_max_m",
+    "rtk_update_normalized_innovation_squared",
+    "rtk_update_normalized_innovation_squared_per_observation",
+    "rtk_update_rejected_by_innovation_gate",
 )
 
 
@@ -307,6 +316,32 @@ def segment_row(
         ),
         "candidate_rtk_update_post_suppression_residual_max_m": rounded(
             optional_float(candidate_record, "rtk_update_post_suppression_residual_max_m")
+        ),
+        "baseline_rtk_update_normalized_innovation_squared": rounded(
+            optional_float(baseline_record, "rtk_update_normalized_innovation_squared")
+        ),
+        "candidate_rtk_update_normalized_innovation_squared": rounded(
+            optional_float(candidate_record, "rtk_update_normalized_innovation_squared")
+        ),
+        "baseline_rtk_update_normalized_innovation_squared_per_observation": rounded(
+            optional_float(
+                baseline_record,
+                "rtk_update_normalized_innovation_squared_per_observation",
+            )
+        ),
+        "candidate_rtk_update_normalized_innovation_squared_per_observation": rounded(
+            optional_float(
+                candidate_record,
+                "rtk_update_normalized_innovation_squared_per_observation",
+            )
+        ),
+        "baseline_rtk_update_rejected_by_innovation_gate": optional_int(
+            baseline_record,
+            "rtk_update_rejected_by_innovation_gate",
+        ),
+        "candidate_rtk_update_rejected_by_innovation_gate": optional_int(
+            candidate_record,
+            "rtk_update_rejected_by_innovation_gate",
         ),
     }
 

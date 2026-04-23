@@ -157,6 +157,21 @@ def ppc_official_segment_records(
                     if solution is not None
                     else None
                 ),
+                "rtk_update_normalized_innovation_squared": (
+                    solution.rtk_update_normalized_innovation_squared
+                    if solution is not None
+                    else None
+                ),
+                "rtk_update_normalized_innovation_squared_per_observation": (
+                    solution.rtk_update_normalized_innovation_squared_per_observation
+                    if solution is not None
+                    else None
+                ),
+                "rtk_update_rejected_by_innovation_gate": (
+                    solution.rtk_update_rejected_by_innovation_gate
+                    if solution is not None
+                    else None
+                ),
                 "error_3d_m": match["error_3d_m"] if match is not None else None,
                 "horiz_error_m": match["horiz_error_m"] if match is not None else None,
                 "up_error_m": match["up_error_m"] if match is not None else None,

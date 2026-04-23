@@ -2846,6 +2846,12 @@ PositionSolution RTKProcessor::generateSolution(const GNSSTime& time, SolutionSt
         current_update_diagnostics_.post_suppression_residual_rms_m;
     solution.rtk_update_post_suppression_residual_max_m =
         current_update_diagnostics_.post_suppression_residual_max_m;
+    solution.rtk_update_normalized_innovation_squared =
+        current_update_diagnostics_.normalized_innovation_squared;
+    solution.rtk_update_normalized_innovation_squared_per_observation =
+        current_update_diagnostics_.normalized_innovation_squared_per_observation;
+    solution.rtk_update_rejected_by_innovation_gate =
+        current_update_diagnostics_.rejected_by_innovation_gate ? 1 : 0;
     rememberSolution(solution);
     return solution;
 }
