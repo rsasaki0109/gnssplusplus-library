@@ -227,31 +227,32 @@ A focused `6` / `30` / streak `5` sweep shows the selector is sharp and not
 city-wide. On Tokyo run1, `0.5 m` reaches **55.91%** official score (**+44.2
 m** versus reset10 baseline and **+10.2 m** versus streak `5`), while `2/4/8 m`
 collapse to **55.52%** (**+3.7 m**) and worsen P95. The same `0.5 m` setting
-breaks Tokyo run2 (**73.61%**, **-377.2 m**), Nagoya run2 (**30.82%**, **-31.6
-m**), and Nagoya run3 (**37.90%**, **-25.2 m**), so this remains a run/segment
-selector candidate rather than a global PPC profile. A mixed oracle using
-`jump0.5` only for Tokyo run1 and the prior streak `8` result for Tokyo run2
-reaches **59.00%** weighted official score (**+45.9 m**) versus the **58.90%**
-reset10 baseline.
+breaks Tokyo run2 (**73.61%**, **-377.2 m**), Tokyo run3 (**66.96%**, **-9.9
+m**), Nagoya run1 (**49.10%**, **-8.2 m**), Nagoya run2 (**30.82%**, **-31.6
+m**), and Nagoya run3 (**37.90%**, **-25.2 m**), so this remains a
+run/segment selector candidate rather than a global PPC profile.
 The segment-delta report explains the asymmetry: Tokyo run1 `jump0.5` gains
 **177.8 m** but gives back **133.6 m**, mainly by recovering FLOAT/high-error
 segments into FIX; Tokyo run2 gains only **7.1 m** and loses **384.3 m**, mostly
-`scored -> high_error` FLOAT/FIXED degradation. Nagoya run2 and run3 are also
-net negative (**-31.6 m** and **-25.2 m**), so the viable selector must be
+`scored -> high_error` FLOAT/FIXED degradation. Across all six runs,
+candidate-all is **-407.9 m** versus reset10, so the viable selector must be
 segment-local rather than city-local.
-On the four available `jump0.5` probes, candidate-all is **-389.7 m** versus
-reset10, but the best single segment-local rule
-`candidate_status_name == FIXED` plus candidate post-suppression residual RMS
-`<= 3.1545 m` reaches **+192.9 m**. It keeps **243.5 m** of gain, exposes only
-**50.6 m** of loss, and cuts Tokyo run2 from **-377.2 m** to **-29.6 m** while
-lifting Tokyo run1 to **+168.5 m**.
+Sweeping all six `jump0.5` probes keeps the same best single segment-local
+rule: `candidate_status_name == FIXED` plus candidate post-suppression residual
+RMS `<= 3.1545 m`. It flips the global candidate-all loss to **+285.6 m**,
+keeps **336.2 m** of gain, exposes only **50.6 m** of loss, and cuts Tokyo run2
+from **-377.2 m** to **-29.6 m** while adding **+91.1 m** on Tokyo run3.
 `scripts/apply_ppc_dual_profile_selector.py` applies that rule to actual
 baseline/candidate `.pos` files and writes a selected `.pos` for normal PPC
-re-scoring. On the same four probes, the combined selector moves weighted
-official score **55.39% -> 56.14%** (**+192.9 m**, **+0.76 pp**) versus reset10
-and stays above candidate-all by **582.7 m**. Positioning is not sacrificed:
-the four-run average Positioning delta is **+0.37 pp** and Fix delta is
-**+1.39 pp** versus reset10.
+re-scoring. On the full six-run matrix, the combined selector moves weighted
+official score **58.90% -> 59.52%** (**+285.6 m**, **+0.62 pp**) versus reset10
+and stays above candidate-all by **693.5 m**. Positioning is not sacrificed:
+the six-run average Positioning delta is **+0.25 pp** and Fix delta is
+**+1.08 pp** versus reset10.
+`scripts/analyze_ppc_dual_profile_selector_matrix.py` aggregates those selected
+summaries and renders the checked-in scorecard below.
+
+![PPC dual-profile selector scorecard](docs/ppc_jump0p5_dual_selector_scorecard.png)
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
 GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**
@@ -730,19 +731,32 @@ python3 scripts/analyze_ppc_profile_segment_delta.py \
 python3 scripts/analyze_ppc_segment_selector_sweep.py \
   --segment-csv tokyo_run1=output/ppc_tokyo_run1_jump0p5_segment_delta.csv \
   --segment-csv tokyo_run2=output/ppc_tokyo_run2_jump0p5_segment_delta.csv \
+  --segment-csv tokyo_run3=output/ppc_tokyo_run3_jump0p5_segment_delta.csv \
+  --segment-csv nagoya_run1=output/ppc_nagoya_run1_jump0p5_segment_delta.csv \
   --segment-csv nagoya_run2=output/ppc_nagoya_run2_jump0p5_segment_delta.csv \
   --segment-csv nagoya_run3=output/ppc_nagoya_run3_jump0p5_segment_delta.csv \
-  --summary-json output/ppc_jump0p5_segment_selector_sweep.json \
-  --markdown-output output/ppc_jump0p5_segment_selector_sweep.md
+  --summary-json output/ppc_jump0p5_segment_selector_sweep_6run.json \
+  --markdown-output output/ppc_jump0p5_segment_selector_sweep_6run.md
 
 python3 scripts/apply_ppc_dual_profile_selector.py \
   --reference-csv /datasets/PPC-Dataset/tokyo/run1/reference.csv \
   --baseline-pos output/ppc_coverage_matrix_floatreset10/tokyo_run1.pos \
   --candidate-pos output/ppc_tokyo_run1_rtk_prefit_s5_jump0p5_matrixprofile.pos \
-  --selector-summary-json output/ppc_jump0p5_segment_selector_sweep.json \
-  --out-pos output/ppc_tokyo_run1_jump0p5_dual_selector.pos \
-  --summary-json output/ppc_tokyo_run1_jump0p5_dual_selector_summary.json \
-  --segments-csv output/ppc_tokyo_run1_jump0p5_dual_selector_segments.csv
+  --selector-summary-json output/ppc_jump0p5_segment_selector_sweep_6run.json \
+  --out-pos output/ppc_tokyo_run1_jump0p5_dual_selector_6run.pos \
+  --summary-json output/ppc_tokyo_run1_jump0p5_dual_selector_6run_summary.json \
+  --segments-csv output/ppc_tokyo_run1_jump0p5_dual_selector_6run_segments.csv
+
+python3 scripts/analyze_ppc_dual_profile_selector_matrix.py \
+  --run tokyo_run1=output/ppc_tokyo_run1_jump0p5_dual_selector_6run_summary.json \
+  --run tokyo_run2=output/ppc_tokyo_run2_jump0p5_dual_selector_6run_summary.json \
+  --run tokyo_run3=output/ppc_tokyo_run3_jump0p5_dual_selector_6run_summary.json \
+  --run nagoya_run1=output/ppc_nagoya_run1_jump0p5_dual_selector_6run_summary.json \
+  --run nagoya_run2=output/ppc_nagoya_run2_jump0p5_dual_selector_6run_summary.json \
+  --run nagoya_run3=output/ppc_nagoya_run3_jump0p5_dual_selector_6run_summary.json \
+  --summary-json output/ppc_jump0p5_dual_selector_6run_matrix.json \
+  --markdown-output output/ppc_jump0p5_dual_selector_6run_matrix.md \
+  --output-png docs/ppc_jump0p5_dual_selector_scorecard.png
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \

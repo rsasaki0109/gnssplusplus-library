@@ -47,6 +47,7 @@ import generate_feature_overview_card as feature_overview  # noqa: E402
 import generate_odaiba_scorecard as scorecard  # noqa: E402
 import generate_odaiba_social_card as social_card  # noqa: E402
 import analyze_ppc_coverage_quality as ppc_coverage_quality  # noqa: E402
+import analyze_ppc_dual_profile_selector_matrix as ppc_dual_selector_matrix  # noqa: E402
 import analyze_ppc_profile_segment_delta as ppc_profile_segment_delta  # noqa: E402
 import analyze_ppc_residual_reset_sweep as ppc_residual_reset_sweep  # noqa: E402
 import analyze_ppc_segment_selector_sweep as ppc_segment_selector_sweep  # noqa: E402
@@ -1089,6 +1090,138 @@ class PPCDualProfileSelectorTest(unittest.TestCase):
                 solver_wall_time_s=None,
             )
             self.assertEqual(metrics["ppc_official_score_pct"], 100.0)
+
+
+class PPCDualProfileSelectorMatrixTest(unittest.TestCase):
+    @staticmethod
+    def summary(
+        total_distance_m: float,
+        baseline_score_m: float,
+        candidate_score_m: float,
+        selected_score_m: float,
+        selected_segments: int,
+    ) -> dict[str, object]:
+        def metrics(score_m: float, positioning: float, fix: float) -> dict[str, float]:
+            return {
+                "positioning_rate_pct": positioning,
+                "fix_rate_pct": fix,
+                "ppc_official_score_pct": 100.0 * score_m / total_distance_m,
+                "ppc_official_score_distance_m": score_m,
+                "ppc_official_total_distance_m": total_distance_m,
+                "p95_h_m": 1.0,
+                "max_h_m": 3.0,
+            }
+
+        return {
+            "rule": (
+                "candidate_status_name == FIXED AND "
+                "candidate_rtk_update_post_suppression_residual_rms_m <= 3.1545"
+            ),
+            "baseline": metrics(baseline_score_m, 80.0, 60.0),
+            "candidate": metrics(candidate_score_m, 81.0, 61.0),
+            "metrics": metrics(selected_score_m, 82.5, 63.0),
+            "delta_vs_baseline": {
+                "positioning_rate_pct": 2.5,
+                "fix_rate_pct": 3.0,
+                "ppc_official_score_pct": 100.0 * (selected_score_m - baseline_score_m) / total_distance_m,
+                "ppc_official_score_distance_m": selected_score_m - baseline_score_m,
+                "p95_h_m": -0.2,
+            },
+            "delta_vs_candidate": {
+                "positioning_rate_pct": 1.5,
+                "fix_rate_pct": 2.0,
+                "ppc_official_score_pct": 100.0 * (selected_score_m - candidate_score_m) / total_distance_m,
+                "ppc_official_score_distance_m": selected_score_m - candidate_score_m,
+                "p95_h_m": -0.1,
+            },
+            "selection": {
+                "baseline_selected_segments": 20,
+                "candidate_selected_segments": selected_segments,
+                "candidate_selected_gain_distance_m": max(0.0, selected_score_m - baseline_score_m),
+                "candidate_selected_loss_distance_m": min(0.0, selected_score_m - baseline_score_m),
+                "candidate_selected_score_delta_distance_m": selected_score_m - baseline_score_m,
+                "segments": 30,
+            },
+        }
+
+    def test_dual_selector_matrix_aggregates_weighted_scores(self) -> None:
+        runs = [
+            ppc_dual_selector_matrix.SelectorRun(
+                key="tokyo_run1",
+                label="Tokyo r1",
+                rule="candidate_status_name == FIXED",
+                baseline=self.summary(100.0, 50.0, 45.0, 60.0, 5)["baseline"],
+                candidate=self.summary(100.0, 50.0, 45.0, 60.0, 5)["candidate"],
+                selected=self.summary(100.0, 50.0, 45.0, 60.0, 5)["metrics"],
+                delta_vs_baseline=self.summary(100.0, 50.0, 45.0, 60.0, 5)["delta_vs_baseline"],
+                delta_vs_candidate=self.summary(100.0, 50.0, 45.0, 60.0, 5)["delta_vs_candidate"],
+                selection=self.summary(100.0, 50.0, 45.0, 60.0, 5)["selection"],
+            ),
+            ppc_dual_selector_matrix.SelectorRun(
+                key="nagoya_run1",
+                label="Nagoya r1",
+                rule="candidate_status_name == FIXED",
+                baseline=self.summary(300.0, 150.0, 120.0, 180.0, 7)["baseline"],
+                candidate=self.summary(300.0, 150.0, 120.0, 180.0, 7)["candidate"],
+                selected=self.summary(300.0, 150.0, 120.0, 180.0, 7)["metrics"],
+                delta_vs_baseline=self.summary(300.0, 150.0, 120.0, 180.0, 7)["delta_vs_baseline"],
+                delta_vs_candidate=self.summary(300.0, 150.0, 120.0, 180.0, 7)["delta_vs_candidate"],
+                selection=self.summary(300.0, 150.0, 120.0, 180.0, 7)["selection"],
+            ),
+        ]
+
+        payload = ppc_dual_selector_matrix.build_payload(runs, "Selector matrix")
+        aggregates = payload["aggregates"]
+
+        self.assertEqual(aggregates["weighted_baseline_official_score_pct"], 50.0)
+        self.assertEqual(aggregates["weighted_candidate_all_official_score_pct"], 41.25)
+        self.assertEqual(aggregates["weighted_selector_official_score_pct"], 60.0)
+        self.assertEqual(aggregates["selector_official_score_delta_m"], 40.0)
+        self.assertEqual(aggregates["candidate_selected_segments"], 12)
+        markdown = ppc_dual_selector_matrix.render_markdown(payload)
+        self.assertIn("Selector matrix", markdown)
+        self.assertIn("dual selector weighted official", markdown)
+
+    def test_dual_selector_matrix_main_writes_json_markdown_and_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_dual_matrix_") as temp_dir:
+            temp_root = Path(temp_dir)
+            summary_a = temp_root / "tokyo.json"
+            summary_b = temp_root / "nagoya.json"
+            output_json = temp_root / "matrix.json"
+            output_md = temp_root / "matrix.md"
+            output_png = temp_root / "matrix.png"
+            summary_a.write_text(json.dumps(self.summary(100.0, 50.0, 45.0, 60.0, 5)), encoding="utf-8")
+            summary_b.write_text(json.dumps(self.summary(300.0, 150.0, 120.0, 180.0, 7)), encoding="utf-8")
+
+            argv = [
+                "analyze_ppc_dual_profile_selector_matrix.py",
+                "--run",
+                f"tokyo_run1={summary_a}",
+                "--run",
+                f"nagoya_run1={summary_b}",
+                "--summary-json",
+                str(output_json),
+                "--markdown-output",
+                str(output_md),
+                "--output-png",
+                str(output_png),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_dual_selector_matrix.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(output_json.exists())
+            self.assertTrue(output_md.exists())
+            self.assertTrue(output_png.exists())
+            self.assertGreater(output_png.stat().st_size, 0)
+            try:
+                from PIL import Image
+
+                with Image.open(output_png) as image:
+                    self.assertEqual(image.size, (1400, 780))
+            except ModuleNotFoundError:
+                pass
 
 
 class PPCMetricsTest(unittest.TestCase):

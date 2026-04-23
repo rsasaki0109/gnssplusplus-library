@@ -187,26 +187,27 @@ A focused `6` / `30` / streak `5` spot check shows why the selector still needs
 run/segment context: Tokyo run1 improves to **55.91%** official score at
 `0.5 m` (**+44.2 m** versus reset10), while `2/4/8 m` fall back to **55.52%**
 (**+3.7 m**). The same `0.5 m` gate breaks Tokyo run2 (**73.61%**, **-377.2
+m**), Tokyo run3 (**66.96%**, **-9.9 m**), Nagoya run1 (**49.10%**, **-8.2
 m**), Nagoya run2 (**30.82%**, **-31.6 m**), and Nagoya run3 (**37.90%**,
-**-25.2 m**). Combining `jump0.5` only for Tokyo run1 with the previous streak
-`8` Tokyo run2 result gives a **59.00%** mixed oracle (**+45.9 m**) versus
-reset10.
+**-25.2 m**).
 The segment-delta report shows why this cannot be a city-level default: Tokyo
 run1 `jump0.5` gains **177.8 m** and loses **133.6 m**, while Tokyo run2 gains
-only **7.1 m** and loses **384.3 m**. The Tokyo run2 loss is dominated by
-`scored -> high_error` segments across FLOAT/FIXED states, and Nagoya run2/run3
-are also net negative (**-31.6 m** / **-25.2 m**).
-Sweeping segment-local rules over the four available `jump0.5` probes flips the
-global **-389.7 m** candidate-all result to **+192.9 m** with the best single
-rule: candidate status must be FIXED and candidate post-suppression residual RMS
-must be `<= 3.1545 m`. That rule keeps **243.5 m** of gain, exposes **50.6 m**
-of loss, and reduces Tokyo run2's damage from **-377.2 m** to **-29.6 m**.
+only **7.1 m** and loses **384.3 m**. Across all six runs, candidate-all is
+**-407.9 m** versus reset10, so the selector must be segment-local.
+Sweeping segment-local rules over all six `jump0.5` probes flips that global
+loss to **+285.6 m** with the best single rule: candidate status must be FIXED
+and candidate post-suppression residual RMS must be `<= 3.1545 m`. That rule
+keeps **336.2 m** of gain, exposes **50.6 m** of loss, reduces Tokyo run2's
+damage from **-377.2 m** to **-29.6 m**, and adds **+91.1 m** on Tokyo run3.
 Applying the rule with `scripts/apply_ppc_dual_profile_selector.py` writes real
 selected `.pos` outputs and reuses the normal PPC metrics path. Across those
-four probes, weighted official score becomes **56.14%** versus **55.39%** for
-reset10 (**+192.9 m**, **+0.76 pp**) and **53.86%** for candidate-all.
-Positioning remains positive on every run, averaging **+0.37 pp** versus
-reset10, while Fix averages **+1.39 pp**.
+six probes, weighted official score becomes **59.52%** versus **58.90%** for
+reset10 (**+285.6 m**, **+0.62 pp**) and **58.02%** for candidate-all.
+Positioning remains positive on every run, averaging **+0.25 pp** versus
+reset10, while Fix averages **+1.08 pp**. The matrix aggregation and scorecard
+come from `scripts/analyze_ppc_dual_profile_selector_matrix.py`.
+
+![PPC dual-profile selector scorecard](ppc_jump0p5_dual_selector_scorecard.png)
 
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
@@ -330,19 +331,32 @@ python3 scripts/analyze_ppc_profile_segment_delta.py \
 python3 scripts/analyze_ppc_segment_selector_sweep.py \
   --segment-csv tokyo_run1=output/ppc_tokyo_run1_jump0p5_segment_delta.csv \
   --segment-csv tokyo_run2=output/ppc_tokyo_run2_jump0p5_segment_delta.csv \
+  --segment-csv tokyo_run3=output/ppc_tokyo_run3_jump0p5_segment_delta.csv \
+  --segment-csv nagoya_run1=output/ppc_nagoya_run1_jump0p5_segment_delta.csv \
   --segment-csv nagoya_run2=output/ppc_nagoya_run2_jump0p5_segment_delta.csv \
   --segment-csv nagoya_run3=output/ppc_nagoya_run3_jump0p5_segment_delta.csv \
-  --summary-json output/ppc_jump0p5_segment_selector_sweep.json \
-  --markdown-output output/ppc_jump0p5_segment_selector_sweep.md
+  --summary-json output/ppc_jump0p5_segment_selector_sweep_6run.json \
+  --markdown-output output/ppc_jump0p5_segment_selector_sweep_6run.md
 
 python3 scripts/apply_ppc_dual_profile_selector.py \
   --reference-csv /datasets/PPC-Dataset/tokyo/run1/reference.csv \
   --baseline-pos output/ppc_coverage_matrix_floatreset10/tokyo_run1.pos \
   --candidate-pos output/ppc_tokyo_run1_rtk_prefit_s5_jump0p5_matrixprofile.pos \
-  --selector-summary-json output/ppc_jump0p5_segment_selector_sweep.json \
-  --out-pos output/ppc_tokyo_run1_jump0p5_dual_selector.pos \
-  --summary-json output/ppc_tokyo_run1_jump0p5_dual_selector_summary.json \
-  --segments-csv output/ppc_tokyo_run1_jump0p5_dual_selector_segments.csv
+  --selector-summary-json output/ppc_jump0p5_segment_selector_sweep_6run.json \
+  --out-pos output/ppc_tokyo_run1_jump0p5_dual_selector_6run.pos \
+  --summary-json output/ppc_tokyo_run1_jump0p5_dual_selector_6run_summary.json \
+  --segments-csv output/ppc_tokyo_run1_jump0p5_dual_selector_6run_segments.csv
+
+python3 scripts/analyze_ppc_dual_profile_selector_matrix.py \
+  --run tokyo_run1=output/ppc_tokyo_run1_jump0p5_dual_selector_6run_summary.json \
+  --run tokyo_run2=output/ppc_tokyo_run2_jump0p5_dual_selector_6run_summary.json \
+  --run tokyo_run3=output/ppc_tokyo_run3_jump0p5_dual_selector_6run_summary.json \
+  --run nagoya_run1=output/ppc_nagoya_run1_jump0p5_dual_selector_6run_summary.json \
+  --run nagoya_run2=output/ppc_nagoya_run2_jump0p5_dual_selector_6run_summary.json \
+  --run nagoya_run3=output/ppc_nagoya_run3_jump0p5_dual_selector_6run_summary.json \
+  --summary-json output/ppc_jump0p5_dual_selector_6run_matrix.json \
+  --markdown-output output/ppc_jump0p5_dual_selector_6run_matrix.md \
+  --output-png docs/ppc_jump0p5_dual_selector_scorecard.png
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \
