@@ -216,6 +216,12 @@ selector for that path: high-residual FLOAT epochs only reset ambiguities after
 the streak threshold when the FLOAT position has also moved at least the
 configured distance from the last trusted FIX/FLOAT state. The default `0`
 preserves the residual-only experimental behavior.
+A focused `6` / `30` / streak `5` sweep on Tokyo run1 shows the selector is
+sharp: `0.5 m` reaches **55.91%** official score (**+44.2 m** versus reset10
+baseline and **+10.2 m** versus streak `5`), while `2/4/8 m` collapse to
+**55.52%** (**+3.7 m**) and worsen P95. The same `0.5 m` setting hurts Nagoya
+run2 (**30.82%**, **-31.6 m** versus reset10), so this remains a run/segment
+selector candidate rather than a global PPC profile.
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
 GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**
