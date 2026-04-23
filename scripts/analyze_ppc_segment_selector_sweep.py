@@ -121,6 +121,19 @@ def parse_args() -> argparse.Namespace:
         help="Maximum numeric thresholds to test per feature/category (default: 128).",
     )
     parser.add_argument(
+        "--max-numeric-conditions",
+        type=int,
+        choices=(1, 2),
+        default=1,
+        help="Maximum numeric conditions per rule. Use 2 for one-step rule refinement (default: 1).",
+    )
+    parser.add_argument(
+        "--numeric-refinement-beam",
+        type=int,
+        default=64,
+        help="Top one-numeric rules per categorical base to refine when --max-numeric-conditions=2.",
+    )
+    parser.add_argument(
         "--min-selected-distance-m",
         type=float,
         default=0.0,
@@ -236,7 +249,43 @@ def dataset_gain_loss(rows: list[dict[str, object]]) -> tuple[float, float]:
     return gain, loss
 
 
-def generate_rules(rows: list[dict[str, object]], max_thresholds: int) -> list[RuleSpec]:
+def normalize_rule(rule: RuleSpec) -> RuleSpec:
+    return RuleSpec(
+        categorical=tuple(sorted(rule.categorical, key=lambda item: (item.feature, item.value))),
+        numeric=tuple(
+            sorted(
+                rule.numeric,
+                key=lambda item: (item.feature, item.operator, round(item.threshold, 9)),
+            )
+        ),
+    )
+
+
+def numeric_conditions(rows: list[dict[str, object]], max_thresholds: int) -> list[NumericCondition]:
+    conditions: list[NumericCondition] = []
+    for feature in NUMERIC_FEATURES:
+        thresholds = threshold_values(rows, feature, max_thresholds)
+        for threshold in thresholds:
+            for operator in ("<=", ">="):
+                conditions.append(NumericCondition(feature, operator, threshold))
+    return conditions
+
+
+def rule_rank_key(summary: dict[str, object]) -> tuple[float, float, float, int]:
+    return (
+        float(summary["selected_score_delta_distance_m"]),
+        -abs(float(summary["selected_loss_distance_m"])),
+        float(summary["gain_recall_pct"] or 0.0),
+        -int(summary["selected_segments"]),
+    )
+
+
+def generate_rules(
+    rows: list[dict[str, object]],
+    max_thresholds: int,
+    max_numeric_conditions: int = 1,
+    numeric_refinement_beam: int = 64,
+) -> list[RuleSpec]:
     rules: list[RuleSpec] = []
     seen: set[tuple[tuple[tuple[str, str], ...], tuple[tuple[str, str, float], ...]]] = set()
     bases = categorical_rule_bases(rows)
@@ -248,19 +297,44 @@ def generate_rules(rows: list[dict[str, object]], max_thresholds: int) -> list[R
             if rule.key() not in seen:
                 rules.append(rule)
                 seen.add(rule.key())
-        for feature in NUMERIC_FEATURES:
-            thresholds = threshold_values(base_rows, feature, max_thresholds)
-            for threshold in thresholds:
-                for operator in ("<=", ">="):
-                    numeric = NumericCondition(feature, operator, threshold)
-                    rule = RuleSpec(
-                        categorical=base.categorical,
-                        numeric=(numeric,),
+        one_numeric_rules: list[RuleSpec] = []
+        for numeric in numeric_conditions(base_rows, max_thresholds):
+            rule = normalize_rule(
+                RuleSpec(
+                    categorical=base.categorical,
+                    numeric=(numeric,),
+                )
+            )
+            one_numeric_rules.append(rule)
+            if rule.key() in seen:
+                continue
+            rules.append(rule)
+            seen.add(rule.key())
+        if max_numeric_conditions < 2:
+            continue
+
+        scored_one_numeric: list[tuple[dict[str, object], RuleSpec]] = []
+        for rule in one_numeric_rules:
+            scored_one_numeric.append((score_rule(base_rows, rule, include_by_run=False), rule))
+        scored_one_numeric.sort(key=lambda item: rule_rank_key(item[0]), reverse=True)
+        for _, seed in scored_one_numeric[: max(0, numeric_refinement_beam)]:
+            seed_rows = rows_matching(base_rows, seed)
+            if not seed_rows:
+                continue
+            existing = set(seed.numeric)
+            for extra in numeric_conditions(seed_rows, max_thresholds):
+                if extra in existing:
+                    continue
+                rule = normalize_rule(
+                    RuleSpec(
+                        categorical=seed.categorical,
+                        numeric=(*seed.numeric, extra),
                     )
-                    if rule.key() in seen:
-                        continue
-                    rules.append(rule)
-                    seen.add(rule.key())
+                )
+                if rule.key() in seen:
+                    continue
+                rules.append(rule)
+                seen.add(rule.key())
     return rules
 
 
@@ -327,15 +401,6 @@ def score_rule(
     }
 
 
-def rule_rank_key(summary: dict[str, object]) -> tuple[float, float, float, int]:
-    return (
-        float(summary["selected_score_delta_distance_m"]),
-        -abs(float(summary["selected_loss_distance_m"])),
-        float(summary["gain_recall_pct"] or 0.0),
-        -int(summary["selected_segments"]),
-    )
-
-
 def run_summaries(rows: list[dict[str, object]]) -> list[dict[str, object]]:
     summaries: list[dict[str, object]] = []
     for run_label in sorted({str(row["run_label"]) for row in rows}):
@@ -359,11 +424,18 @@ def build_payload(
     *,
     top_rules: int,
     max_thresholds: int,
+    max_numeric_conditions: int = 1,
+    numeric_refinement_beam: int = 64,
     min_selected_distance_m: float = 0.0,
 ) -> dict[str, object]:
     if not rows:
         raise SystemExit("No segment-delta rows were loaded")
-    rules = generate_rules(rows, max_thresholds)
+    rules = generate_rules(
+        rows,
+        max_thresholds,
+        max_numeric_conditions=max_numeric_conditions,
+        numeric_refinement_beam=numeric_refinement_beam,
+    )
     totals = dataset_gain_loss(rows)
     ranked: list[tuple[dict[str, object], RuleSpec]] = []
     for rule in rules:
@@ -399,6 +471,8 @@ def build_payload(
         "top_rules": top_rule_summaries,
         "evaluated_rules": len(ranked),
         "max_thresholds": max_thresholds,
+        "max_numeric_conditions": max_numeric_conditions,
+        "numeric_refinement_beam": numeric_refinement_beam,
         "min_selected_distance_m": min_selected_distance_m,
     }
 
@@ -494,6 +568,8 @@ def main() -> None:
         rows,
         top_rules=args.top_rules,
         max_thresholds=args.max_thresholds,
+        max_numeric_conditions=args.max_numeric_conditions,
+        numeric_refinement_beam=args.numeric_refinement_beam,
         min_selected_distance_m=args.min_selected_distance_m,
     )
     if args.summary_json:

@@ -57,7 +57,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--rule",
         default=None,
-        help="Selector rule, e.g. `candidate_status_name == FIXED AND candidate_rtk_update_post_suppression_residual_rms_m <= 3.1545`.",
+        help=(
+            "Selector rule, e.g. `candidate_status_name == FIXED AND "
+            "candidate_num_satellites >= 8 AND "
+            "candidate_rtk_update_post_suppression_residual_rms_m <= 4.6682`."
+        ),
     )
     parser.add_argument(
         "--selector-summary-json",

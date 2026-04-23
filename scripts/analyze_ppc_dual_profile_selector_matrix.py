@@ -504,13 +504,14 @@ def render_png(payload: dict[str, object], output: Path) -> None:
     table_ax = fig.add_axes([0.675, 0.105, 0.275, 0.43], facecolor=BG)
     draw_run_table(table_ax, runs)
 
-    ax.text(
-        0.05,
-        0.035,
-        "Rule: candidate_status_name == FIXED and candidate post-suppression residual RMS <= 3.1545 m.",
-        fontsize=10.2,
-        color=MUTED,
+    rule_text = str(payload["rule"])
+    rule_text = rule_text.replace("candidate_status_name == FIXED", "candidate FIXED")
+    rule_text = rule_text.replace(
+        "candidate_rtk_update_post_suppression_residual_rms_m",
+        "post RMS",
     )
+    rule_text = rule_text.replace("candidate_num_satellites", "candidate sats")
+    ax.text(0.05, 0.035, f"Rule: {rule_text}.", fontsize=10.2, color=MUTED)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output, dpi=100, facecolor=BG)

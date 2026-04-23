@@ -926,6 +926,7 @@ class PPCSegmentSelectorSweepTest(unittest.TestCase):
         candidate_status: str,
         candidate_rms_m: float,
         candidate_ratio: float = 10.0,
+        candidate_num_satellites: float = 12.0,
     ) -> dict[str, object]:
         return {
             "run_label": run_label,
@@ -935,7 +936,7 @@ class PPCSegmentSelectorSweepTest(unittest.TestCase):
             "baseline_status_name": baseline_status,
             "candidate_status_name": candidate_status,
             "candidate_ratio": candidate_ratio,
-            "candidate_num_satellites": 12.0,
+            "candidate_num_satellites": candidate_num_satellites,
             "candidate_rtk_update_observations": 16.0,
             "candidate_rtk_update_suppressed_outliers": 0.0,
             "candidate_rtk_update_prefit_residual_rms_m": candidate_rms_m,
@@ -990,6 +991,26 @@ class PPCSegmentSelectorSweepTest(unittest.TestCase):
         markdown = ppc_segment_selector_sweep.render_markdown(payload)
         self.assertIn("PPC Segment Selector Sweep", markdown)
         self.assertIn("Best Rule By Run", markdown)
+
+    def test_selector_sweep_can_refine_with_two_numeric_conditions(self) -> None:
+        rows = [
+            self.selector_row("tokyo_run1", 12.0, 12.0, "FLOAT", "FIXED", 0.4, 8.0, 12.0),
+            self.selector_row("tokyo_run1", -10.0, 10.0, "FIXED", "FIXED", 0.4, 8.0, 6.0),
+            self.selector_row("tokyo_run1", -7.0, 7.0, "FIXED", "FIXED", 5.0, 8.0, 12.0),
+            self.selector_row("tokyo_run2", -20.0, 20.0, "FLOAT", "FLOAT", 0.5, 0.0, 12.0),
+        ]
+
+        payload = ppc_segment_selector_sweep.build_payload(
+            rows,
+            top_rules=8,
+            max_thresholds=16,
+            max_numeric_conditions=2,
+        )
+
+        best_rule = payload["top_rules"][0]
+        self.assertEqual(best_rule["selected_score_delta_distance_m"], 12.0)
+        self.assertIn("candidate_num_satellites >= 12", best_rule["rule"])
+        self.assertIn("residual_rms_m <= 0.4", best_rule["rule"])
 
 
 class PPCDualProfileSelectorTest(unittest.TestCase):
@@ -1115,7 +1136,8 @@ class PPCDualProfileSelectorMatrixTest(unittest.TestCase):
         return {
             "rule": (
                 "candidate_status_name == FIXED AND "
-                "candidate_rtk_update_post_suppression_residual_rms_m <= 3.1545"
+                "candidate_num_satellites >= 8 AND "
+                "candidate_rtk_update_post_suppression_residual_rms_m <= 4.6682"
             ),
             "baseline": metrics(baseline_score_m, 80.0, 60.0),
             "candidate": metrics(candidate_score_m, 81.0, 61.0),

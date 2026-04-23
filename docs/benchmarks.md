@@ -194,17 +194,18 @@ The segment-delta report shows why this cannot be a city-level default: Tokyo
 run1 `jump0.5` gains **177.8 m** and loses **133.6 m**, while Tokyo run2 gains
 only **7.1 m** and loses **384.3 m**. Across all six runs, candidate-all is
 **-407.9 m** versus reset10, so the selector must be segment-local.
-Sweeping segment-local rules over all six `jump0.5` probes flips that global
-loss to **+285.6 m** with the best single rule: candidate status must be FIXED
-and candidate post-suppression residual RMS must be `<= 3.1545 m`. That rule
-keeps **336.2 m** of gain, exposes **50.6 m** of loss, reduces Tokyo run2's
-damage from **-377.2 m** to **-29.6 m**, and adds **+91.1 m** on Tokyo run3.
+Sweeping segment-local rules over all six `jump0.5` probes and allowing one
+extra numeric refinement flips that global loss to **+293.8 m**. The refined
+rule requires candidate status FIXED, `candidate_num_satellites >= 8`, and
+candidate post-suppression residual RMS `<= 4.6682 m`. It keeps **335.8 m** of
+gain, exposes **42.1 m** of loss, reduces Tokyo run2's damage from **-377.2 m**
+to **-21.0 m**, and adds **+91.1 m** on Tokyo run3.
 Applying the rule with `scripts/apply_ppc_dual_profile_selector.py` writes real
 selected `.pos` outputs and reuses the normal PPC metrics path. Across those
-six probes, weighted official score becomes **59.52%** versus **58.90%** for
-reset10 (**+285.6 m**, **+0.62 pp**) and **58.02%** for candidate-all.
-Positioning remains positive on every run, averaging **+0.25 pp** versus
-reset10, while Fix averages **+1.08 pp**. The matrix aggregation and scorecard
+six probes, weighted official score becomes **59.53%** versus **58.90%** for
+reset10 (**+293.8 m**, **+0.63 pp**) and **58.02%** for candidate-all.
+Positioning remains positive on every run, averaging **+0.26 pp** versus
+reset10, while Fix averages **+1.17 pp**. The matrix aggregation and scorecard
 come from `scripts/analyze_ppc_dual_profile_selector_matrix.py`.
 
 ![PPC dual-profile selector scorecard](ppc_jump0p5_dual_selector_scorecard.png)
@@ -335,27 +336,30 @@ python3 scripts/analyze_ppc_segment_selector_sweep.py \
   --segment-csv nagoya_run1=output/ppc_nagoya_run1_jump0p5_segment_delta.csv \
   --segment-csv nagoya_run2=output/ppc_nagoya_run2_jump0p5_segment_delta.csv \
   --segment-csv nagoya_run3=output/ppc_nagoya_run3_jump0p5_segment_delta.csv \
-  --summary-json output/ppc_jump0p5_segment_selector_sweep_6run.json \
-  --markdown-output output/ppc_jump0p5_segment_selector_sweep_6run.md
+  --max-numeric-conditions 2 \
+  --max-thresholds 64 \
+  --numeric-refinement-beam 24 \
+  --summary-json output/ppc_jump0p5_segment_selector_sweep_6run_refined.json \
+  --markdown-output output/ppc_jump0p5_segment_selector_sweep_6run_refined.md
 
 python3 scripts/apply_ppc_dual_profile_selector.py \
   --reference-csv /datasets/PPC-Dataset/tokyo/run1/reference.csv \
   --baseline-pos output/ppc_coverage_matrix_floatreset10/tokyo_run1.pos \
   --candidate-pos output/ppc_tokyo_run1_rtk_prefit_s5_jump0p5_matrixprofile.pos \
-  --selector-summary-json output/ppc_jump0p5_segment_selector_sweep_6run.json \
-  --out-pos output/ppc_tokyo_run1_jump0p5_dual_selector_6run.pos \
-  --summary-json output/ppc_tokyo_run1_jump0p5_dual_selector_6run_summary.json \
-  --segments-csv output/ppc_tokyo_run1_jump0p5_dual_selector_6run_segments.csv
+  --selector-summary-json output/ppc_jump0p5_segment_selector_sweep_6run_refined.json \
+  --out-pos output/ppc_tokyo_run1_jump0p5_dual_selector_6run_refined.pos \
+  --summary-json output/ppc_tokyo_run1_jump0p5_dual_selector_6run_refined_summary.json \
+  --segments-csv output/ppc_tokyo_run1_jump0p5_dual_selector_6run_refined_segments.csv
 
 python3 scripts/analyze_ppc_dual_profile_selector_matrix.py \
-  --run tokyo_run1=output/ppc_tokyo_run1_jump0p5_dual_selector_6run_summary.json \
-  --run tokyo_run2=output/ppc_tokyo_run2_jump0p5_dual_selector_6run_summary.json \
-  --run tokyo_run3=output/ppc_tokyo_run3_jump0p5_dual_selector_6run_summary.json \
-  --run nagoya_run1=output/ppc_nagoya_run1_jump0p5_dual_selector_6run_summary.json \
-  --run nagoya_run2=output/ppc_nagoya_run2_jump0p5_dual_selector_6run_summary.json \
-  --run nagoya_run3=output/ppc_nagoya_run3_jump0p5_dual_selector_6run_summary.json \
-  --summary-json output/ppc_jump0p5_dual_selector_6run_matrix.json \
-  --markdown-output output/ppc_jump0p5_dual_selector_6run_matrix.md \
+  --run tokyo_run1=output/ppc_tokyo_run1_jump0p5_dual_selector_6run_refined_summary.json \
+  --run tokyo_run2=output/ppc_tokyo_run2_jump0p5_dual_selector_6run_refined_summary.json \
+  --run tokyo_run3=output/ppc_tokyo_run3_jump0p5_dual_selector_6run_refined_summary.json \
+  --run nagoya_run1=output/ppc_nagoya_run1_jump0p5_dual_selector_6run_refined_summary.json \
+  --run nagoya_run2=output/ppc_nagoya_run2_jump0p5_dual_selector_6run_refined_summary.json \
+  --run nagoya_run3=output/ppc_nagoya_run3_jump0p5_dual_selector_6run_refined_summary.json \
+  --summary-json output/ppc_jump0p5_dual_selector_6run_refined_matrix.json \
+  --markdown-output output/ppc_jump0p5_dual_selector_6run_refined_matrix.md \
   --output-png docs/ppc_jump0p5_dual_selector_scorecard.png
 
 python3 apps/gnss.py ppc-coverage-matrix \
