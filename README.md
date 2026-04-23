@@ -272,11 +272,20 @@ adds `candidate_rtk_update_suppressed_outliers <= 4` and tightens baseline to
 keeps every public run non-negative. Leave-one-run-out improves to **+193.5 m**
 holdout net versus candidate-all **-407.9 m** (**+601.4 m**
 selector-vs-candidate), **97.2%** holdout precision, **6 / 6** non-negative
-holdout runs, and **+1.6 m** minimum holdout delta. This is still a segment-rule
-validation result; the next promotion step is applying this constrained rule to
-`.pos` outputs and re-running the normal PPC matrix.
+holdout runs, and **+1.6 m** minimum holdout delta.
 
 ![PPC jump0.5 selector validation scorecard](docs/ppc_jump0p5_selector_validation_scorecard.png)
+
+Applied to actual `.pos` outputs, that robust rule is lower-gain than the
+in-sample baseline-band selector but materially safer: weighted official score
+moves **58.90% -> 59.44%** (**+251.2 m**, **+0.54 pp**) versus reset10,
+selector-vs-candidate-all is **+659.1 m**, every run gains official distance
+(minimum **+1.6 m**), selected loss is only **-4.1 m**, average Positioning
+delta is **+0.00 pp**, and average Fix delta is **+1.43 pp**. The selector only
+switches **724** reference segments to the `jump0.5` candidate, compared with
+**21,706** for the higher-gain baseline-band diagnostic above.
+
+![PPC robust dual-profile selector scorecard](docs/ppc_jump0p5_dual_selector_robust_scorecard.png)
 
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
