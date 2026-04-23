@@ -59,8 +59,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Selector rule, e.g. `candidate_status_name == FIXED AND "
-            "candidate_num_satellites >= 8 AND "
-            "candidate_rtk_update_post_suppression_residual_rms_m <= 3.1545`."
+            "candidate_baseline_m <= 9053.95 AND candidate_baseline_m >= 940.785 AND "
+            "candidate_num_satellites >= 8`."
         ),
     )
     parser.add_argument(

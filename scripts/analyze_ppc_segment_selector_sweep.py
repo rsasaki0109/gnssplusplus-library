@@ -20,6 +20,7 @@ CATEGORICAL_FEATURES = (
 NUMERIC_FEATURES = (
     "candidate_ratio",
     "candidate_num_satellites",
+    "candidate_baseline_m",
     "candidate_rtk_update_observations",
     "candidate_rtk_update_suppressed_outliers",
     "candidate_rtk_update_prefit_residual_rms_m",
@@ -28,6 +29,7 @@ NUMERIC_FEATURES = (
     "candidate_rtk_update_post_suppression_residual_max_m",
     "baseline_ratio",
     "baseline_num_satellites",
+    "baseline_baseline_m",
 )
 BASE_NUMERIC_FIELDS = (
     "segment_distance_m",
@@ -123,9 +125,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-numeric-conditions",
         type=int,
-        choices=(1, 2),
+        choices=(1, 2, 3),
         default=1,
-        help="Maximum numeric conditions per rule. Use 2 for one-step rule refinement (default: 1).",
+        help="Maximum numeric conditions per rule. Use 2 or 3 for beam refinement (default: 1).",
     )
     parser.add_argument(
         "--numeric-refinement-beam",
@@ -259,11 +261,21 @@ def dataset_gain_loss(rows: list[dict[str, object]]) -> tuple[float, float]:
 
 
 def normalize_rule(rule: RuleSpec) -> RuleSpec:
+    numeric_by_bound: dict[tuple[str, str], NumericCondition] = {}
+    for condition in rule.numeric:
+        key = (condition.feature, condition.operator)
+        existing = numeric_by_bound.get(key)
+        if existing is None:
+            numeric_by_bound[key] = condition
+        elif condition.operator == "<=" and condition.threshold < existing.threshold:
+            numeric_by_bound[key] = condition
+        elif condition.operator == ">=" and condition.threshold > existing.threshold:
+            numeric_by_bound[key] = condition
     return RuleSpec(
         categorical=tuple(sorted(rule.categorical, key=lambda item: (item.feature, item.value))),
         numeric=tuple(
             sorted(
-                rule.numeric,
+                numeric_by_bound.values(),
                 key=lambda item: (item.feature, item.operator, round(item.threshold, 9)),
             )
         ),
@@ -319,31 +331,42 @@ def generate_rules(
                 continue
             rules.append(rule)
             seen.add(rule.key())
-        if max_numeric_conditions < 2:
-            continue
+        level_rules = one_numeric_rules
+        for _ in range(2, max_numeric_conditions + 1):
+            scored_level: list[tuple[dict[str, object], RuleSpec]] = []
+            for rule in level_rules:
+                scored_level.append((score_rule(base_rows, rule, include_by_run=False), rule))
+            scored_level.sort(key=lambda item: rule_rank_key(item[0]), reverse=True)
 
-        scored_one_numeric: list[tuple[dict[str, object], RuleSpec]] = []
-        for rule in one_numeric_rules:
-            scored_one_numeric.append((score_rule(base_rows, rule, include_by_run=False), rule))
-        scored_one_numeric.sort(key=lambda item: rule_rank_key(item[0]), reverse=True)
-        for _, seed in scored_one_numeric[: max(0, numeric_refinement_beam)]:
-            seed_rows = rows_matching(base_rows, seed)
-            if not seed_rows:
-                continue
-            existing = set(seed.numeric)
-            for extra in numeric_conditions(seed_rows, max_thresholds):
-                if extra in existing:
+            next_level_rules: list[RuleSpec] = []
+            next_level_seen: set[
+                tuple[tuple[tuple[str, str], ...], tuple[tuple[str, str, float], ...]]
+            ] = set()
+            for _, seed in scored_level[: max(0, numeric_refinement_beam)]:
+                seed_rows = rows_matching(base_rows, seed)
+                if not seed_rows:
                     continue
-                rule = normalize_rule(
-                    RuleSpec(
-                        categorical=seed.categorical,
-                        numeric=(*seed.numeric, extra),
+                existing = set(seed.numeric)
+                for extra in numeric_conditions(seed_rows, max_thresholds):
+                    if extra in existing:
+                        continue
+                    rule = normalize_rule(
+                        RuleSpec(
+                            categorical=seed.categorical,
+                            numeric=(*seed.numeric, extra),
+                        )
                     )
-                )
-                if rule.key() in seen:
-                    continue
-                rules.append(rule)
-                seen.add(rule.key())
+                    if rule.key() in next_level_seen:
+                        continue
+                    next_level_rules.append(rule)
+                    next_level_seen.add(rule.key())
+                    if rule.key() in seen:
+                        continue
+                    rules.append(rule)
+                    seen.add(rule.key())
+            level_rules = next_level_rules
+            if not level_rules:
+                break
     return rules
 
 

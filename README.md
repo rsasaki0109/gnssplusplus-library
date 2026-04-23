@@ -238,18 +238,18 @@ segments into FIX; Tokyo run2 gains only **7.1 m** and loses **384.3 m**, mostly
 candidate-all is **-407.9 m** versus reset10, so the viable selector must be
 segment-local rather than city-local.
 Sweeping all six `jump0.5` probes with local numeric-threshold refinement adds a
-low-satellite false-fix guard to the selector: `candidate_status_name == FIXED`,
-`candidate_num_satellites >= 8`, and candidate post-suppression residual RMS
-`<= 3.1545 m`. It flips the global candidate-all loss to **+295.2 m**, keeps
-**334.3 m** of gain, exposes only **39.0 m** of loss, and cuts Tokyo run2 from
-**-377.2 m** to **-18.0 m** while adding **+91.1 m** on Tokyo run3.
+baseline-length band and low-satellite false-fix guard to the selector:
+`candidate_status_name == FIXED`, candidate baseline `940.785..9053.95 m`, and
+`candidate_num_satellites >= 8`. It flips the global candidate-all loss to
+**+301.5 m**, keeps **317.0 m** of gain, exposes only **15.5 m** of loss, cuts
+Tokyo run2 from **-377.2 m** to **+2.0 m**, and keeps every run non-negative.
 `scripts/apply_ppc_dual_profile_selector.py` applies that rule to actual
 baseline/candidate `.pos` files and writes a selected `.pos` for normal PPC
 re-scoring. On the full six-run matrix, the combined selector moves weighted
-official score **58.90% -> 59.54%** (**+295.2 m**, **+0.64 pp**) versus reset10
-and stays above candidate-all by **703.1 m**. Positioning is not sacrificed:
-the six-run average Positioning delta is **+0.25 pp** and Fix delta is
-**+1.07 pp** versus reset10.
+official score **58.90% -> 59.55%** (**+301.5 m**, **+0.65 pp**) versus reset10
+and stays above candidate-all by **709.4 m**. Positioning is not sacrificed:
+the six-run average Positioning delta is **+0.33 pp** and Fix delta is
+**+1.69 pp** versus reset10.
 `scripts/analyze_ppc_dual_profile_selector_matrix.py` aggregates those selected
 summaries and renders the checked-in scorecard below.
 
@@ -737,9 +737,9 @@ python3 scripts/analyze_ppc_segment_selector_sweep.py \
   --segment-csv nagoya_run1=output/ppc_nagoya_run1_jump0p5_segment_delta.csv \
   --segment-csv nagoya_run2=output/ppc_nagoya_run2_jump0p5_segment_delta.csv \
   --segment-csv nagoya_run3=output/ppc_nagoya_run3_jump0p5_segment_delta.csv \
-  --max-numeric-conditions 2 \
+  --max-numeric-conditions 3 \
   --max-thresholds 64 \
-  --numeric-refinement-beam 24 \
+  --numeric-refinement-beam 12 \
   --numeric-threshold-refinement-beam 32 \
   --summary-json output/ppc_jump0p5_segment_selector_sweep_6run_refined.json \
   --markdown-output output/ppc_jump0p5_segment_selector_sweep_6run_refined.md

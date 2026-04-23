@@ -511,6 +511,7 @@ def render_png(payload: dict[str, object], output: Path) -> None:
         "post RMS",
     )
     rule_text = rule_text.replace("candidate_num_satellites", "candidate sats")
+    rule_text = rule_text.replace("candidate_baseline_m", "candidate baseline")
     ax.text(0.05, 0.035, f"Rule: {rule_text}.", fontsize=10.2, color=MUTED)
 
     output.parent.mkdir(parents=True, exist_ok=True)
