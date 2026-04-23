@@ -61,6 +61,7 @@ import generate_ppc_tail_cleanup_scorecard as ppc_tail_cleanup_scorecard  # noqa
 import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
 import run_ppc_cv_dropout_bridge_matrix as ppc_cv_bridge_matrix  # noqa: E402
 import run_ppc_dual_profile_selector_matrix as ppc_dual_selector_driver  # noqa: E402
+import run_ppc_imu_dropout_bridge_matrix as ppc_imu_bridge_matrix  # noqa: E402
 import update_ppc_coverage_readme as ppc_coverage_readme  # noqa: E402
 import detect_ci_scope as ci_scope  # noqa: E402
 import run_optional_ppp_products_signoff as ci_ppp_products_signoff  # noqa: E402
@@ -1697,6 +1698,107 @@ class PPCCVDropoutBridgeMatrixTest(unittest.TestCase):
             self.assertEqual(run_payload["selection"]["generated_epochs"], 2)
             self.assertEqual(run_payload["selection"]["recovered_distance_m"], 20.0)
             self.assertIn("PPC causal CV dropout bridge", ppc_cv_bridge_matrix.render_markdown(matrix))
+
+
+class PPCIMUDropoutBridgeMatrixTest(PPCCVDropoutBridgeMatrixTest):
+    @staticmethod
+    def solution_epoch(index: int) -> comparison.SolutionEpoch:
+        return comparison.SolutionEpoch(
+            2300,
+            float(index),
+            0.0,
+            0.0,
+            0.0,
+            np.array([6378137.0, 10.0 * index, 0.0]),
+            4,
+            12,
+        )
+
+    def write_reference_csv(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="ascii", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(
+                [
+                    "GPS TOW (s)",
+                    "GPS Week",
+                    "Latitude (deg)",
+                    "Longitude (deg)",
+                    "Ellipsoid Height (m)",
+                    "ECEF X (m)",
+                    "ECEF Y (m)",
+                    "ECEF Z (m)",
+                ]
+            )
+            for index in range(5):
+                writer.writerow([float(index), 2300, 0.0, 0.0, 0.0, 6378137.0, 10.0 * index, 0.0])
+
+    def write_imu_csv(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="ascii", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(
+                [
+                    "GPS TOW (s)",
+                    "GPS Week",
+                    "Acc X (m/s^2)",
+                    "Acc Y (m/s^2)",
+                    "Acc Z (m/s^2)",
+                ]
+            )
+            for index in range(5):
+                writer.writerow([float(index), 2300, 0.0, 0.0, 9.8])
+
+    def test_imu_bridge_recovers_linear_dropout_with_zero_accel(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_imu_bridge_matrix_") as temp_dir:
+            temp_root = Path(temp_dir)
+            self.write_reference_csv(temp_root / "tokyo" / "run1" / "reference.csv")
+            self.write_imu_csv(temp_root / "tokyo" / "run1" / "imu.csv")
+            baseline_dir = temp_root / "baseline"
+            output_dir = temp_root / "out"
+            baseline_epochs = [
+                self.solution_epoch(0),
+                self.solution_epoch(1),
+                self.solution_epoch(4),
+            ]
+            ppc_dual_profile_selector.write_pos(baseline_dir / "tokyo_run1.pos", baseline_epochs)
+
+            config = ppc_imu_bridge_matrix.IMUBridgeConfig(
+                max_gap_s=3.0,
+                max_anchor_age_s=1.0,
+                max_velocity_baseline_s=1.0,
+                bridge_status=3,
+                bridge_num_satellites=0,
+                match_tolerance_s=0.25,
+                threshold_m=0.50,
+                bias_window_s=1.0,
+                min_heading_speed_mps=0.5,
+                max_horizontal_accel_mps2=3.0,
+                forward_axis="x",
+                lateral_axis="y",
+                forward_sign=1.0,
+                lateral_sign=1.0,
+            )
+            run_payload = ppc_imu_bridge_matrix.summarize_run(
+                temp_root,
+                ppc_cv_bridge_matrix.RunSpec("tokyo", "run1"),
+                str(baseline_dir / "{key}.pos"),
+                str(output_dir / "{key}_imu_bridge.pos"),
+                None,
+                config,
+            )
+            matrix = ppc_imu_bridge_matrix.build_matrix_payload(
+                [run_payload],
+                "PPC causal IMU dropout bridge",
+                config,
+            )
+
+            self.assertEqual(run_payload["baseline"]["ppc_official_score_pct"], 50.0)
+            self.assertEqual(run_payload["metrics"]["ppc_official_score_pct"], 100.0)
+            self.assertEqual(run_payload["selection"]["bridge_span_count"], 1)
+            self.assertEqual(run_payload["selection"]["generated_epochs"], 2)
+            self.assertEqual(run_payload["selection"]["recovered_distance_m"], 20.0)
+            self.assertIn("PPC causal IMU dropout bridge", ppc_imu_bridge_matrix.render_markdown(matrix))
 
 
 class PPCMetricsTest(unittest.TestCase):

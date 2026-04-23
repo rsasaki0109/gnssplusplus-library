@@ -340,6 +340,22 @@ so more dropout spans have usable anchors.
 
 ![PPC causal CV dropout bridge](docs/ppc_cv_bridge_scorecard.png)
 
+`scripts/run_ppc_imu_dropout_bridge_matrix.py` wires the public `imu.csv` into
+the same causal bridge harness. It subtracts a recent horizontal accelerometer
+bias, initializes heading from the last trusted GNSS velocity, projects body
+horizontal acceleration into local ENU, and propagates only dropout spans that
+already pass the same causal anchor checks. The first mount-axis sweep
+(`x/y` or `y/x`, each sign) does not yet beat the constant-velocity bridge:
+the best setting is `--forward-axis x --lateral-axis y --forward-sign 1
+--lateral-sign 1`, scoring **59.47%** (**+262.5 m**) with **692** generated
+epochs across **111 / 1008** dropout spans. The result is intentionally kept as
+a reproducible lower-bound IMU hook: raw horizontal acceleration without
+attitude/bias-state estimation is not enough, so the next Kalman step needs an
+explicit attitude/bias model and robust GNSS update gating through high-error
+periods.
+
+![PPC causal IMU dropout bridge](docs/ppc_imu_bridge_scorecard.png)
+
 An SPP-divergence posthoc sweep also keeps `--max-float-spp-div` diagnostic:
 on the six reset10 outputs, thresholds **10/20/30/50/80 m** predict
 **55.33/56.62/57.41/58.07/58.45%** weighted official score versus the
@@ -860,6 +876,22 @@ python3 scripts/run_ppc_cv_dropout_bridge_matrix.py \
   --markdown-output output/ppc_cv_bridge_gap10_age2_matrix.md \
   --output-png docs/ppc_cv_bridge_scorecard.png \
   --title 'PPC causal CV dropout bridge'
+
+python3 scripts/run_ppc_imu_dropout_bridge_matrix.py \
+  --dataset-root /datasets/PPC-Dataset \
+  --run-output-template 'output/ppc_{key}_imu_bridge_gap10_age2_xf_yl.pos' \
+  --run-summary-template 'output/ppc_{key}_imu_bridge_gap10_age2_xf_yl_summary.json' \
+  --max-gap-s 10 \
+  --max-anchor-age-s 2 \
+  --max-velocity-baseline-s 1 \
+  --forward-axis x \
+  --lateral-axis y \
+  --forward-sign 1 \
+  --lateral-sign 1 \
+  --summary-json output/ppc_imu_bridge_gap10_age2_xf_yl_matrix.json \
+  --markdown-output output/ppc_imu_bridge_gap10_age2_xf_yl_matrix.md \
+  --output-png docs/ppc_imu_bridge_scorecard.png \
+  --title 'PPC causal IMU dropout bridge'
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \

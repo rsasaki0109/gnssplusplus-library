@@ -438,6 +438,7 @@ def build_matrix_payload(runs: list[dict[str, object]], title: str, config: Brid
     }
     return {
         "title": title,
+        "bridge_label": "CV bridge",
         "config": config.__dict__,
         "runs": runs,
         "aggregates": {
@@ -480,6 +481,7 @@ def fmt_m(value: object) -> str:
 def render_markdown(payload: dict[str, object]) -> str:
     aggregates = payload["aggregates"]  # type: ignore[index]
     selection = aggregates["selection"]  # type: ignore[index]
+    bridge_label = str(payload.get("bridge_label", "CV bridge"))
     lines = [
         f"# {payload['title']}",
         "",
@@ -495,7 +497,7 @@ def render_markdown(payload: dict[str, object]) -> str:
             f"**{fmt_m(selection['recovered_distance_m'])}** official distance."
         ),
         "",
-        "| Run | Baseline | CV bridge | Delta | Bridge spans | Generated epochs | Recovered | Positioning delta |",
+        f"| Run | Baseline | {bridge_label} | Delta | Bridge spans | Generated epochs | Recovered | Positioning delta |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for run in payload["runs"]:  # type: ignore[index]
@@ -533,6 +535,7 @@ def render_png(payload: dict[str, object], output: Path) -> None:
 
     aggregates = payload["aggregates"]  # type: ignore[index]
     runs = payload["runs"]  # type: ignore[index]
+    bridge_label = str(payload.get("bridge_label", "CV bridge"))
     labels = [run_label(str(run["key"])) for run in runs]
     baseline_scores = [float(run["baseline"]["ppc_official_score_pct"]) for run in runs]
     bridge_scores = [float(run["metrics"]["ppc_official_score_pct"]) for run in runs]
@@ -592,7 +595,7 @@ def render_png(payload: dict[str, object], output: Path) -> None:
     x = np.arange(len(labels))
     width = 0.36
     ax_score.bar(x - width / 2, baseline_scores, width=width, color=BASE, label="reset10")
-    ax_score.bar(x + width / 2, bridge_scores, width=width, color=BRIDGE, label="CV bridge")
+    ax_score.bar(x + width / 2, bridge_scores, width=width, color=BRIDGE, label=bridge_label)
     ax_score.set_xticks(x)
     ax_score.set_xticklabels(labels, rotation=20, ha="right", fontsize=9)
     ax_score.set_ylabel("PPC official score (%)", fontsize=9.5, color=MUTED)
