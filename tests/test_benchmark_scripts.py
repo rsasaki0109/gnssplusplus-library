@@ -50,6 +50,7 @@ import analyze_ppc_coverage_quality as ppc_coverage_quality  # noqa: E402
 import analyze_ppc_dual_profile_selector_matrix as ppc_dual_selector_matrix  # noqa: E402
 import analyze_ppc_profile_segment_delta as ppc_profile_segment_delta  # noqa: E402
 import analyze_ppc_residual_reset_sweep as ppc_residual_reset_sweep  # noqa: E402
+import analyze_ppc_segment_selector_leave_one_run_out as ppc_segment_selector_loo  # noqa: E402
 import analyze_ppc_segment_selector_sweep as ppc_segment_selector_sweep  # noqa: E402
 import apply_ppc_dual_profile_selector as ppc_dual_profile_selector  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
@@ -1053,6 +1054,38 @@ class PPCSegmentSelectorSweepTest(unittest.TestCase):
         self.assertIn("candidate_baseline_m", best_rule["rule"])
         self.assertIn("candidate_num_satellites", best_rule["rule"])
         self.assertIn("residual_rms_m", best_rule["rule"])
+
+
+class PPCSegmentSelectorLeaveOneRunOutTest(unittest.TestCase):
+    def test_leave_one_run_out_scores_learned_rules_on_holdout_runs(self) -> None:
+        row = PPCSegmentSelectorSweepTest.selector_row
+        rows = [
+            row("tokyo_run1", 10.0, 10.0, "FIXED", "FIXED", 0.4, 8.0, 12.0),
+            row("tokyo_run1", -5.0, 5.0, "FIXED", "FIXED", 0.4, 8.0, 6.0),
+            row("tokyo_run2", 10.0, 10.0, "FIXED", "FIXED", 0.4, 8.0, 12.0),
+            row("tokyo_run2", -5.0, 5.0, "FIXED", "FIXED", 0.4, 8.0, 6.0),
+        ]
+
+        payload = ppc_segment_selector_loo.build_payload(
+            rows,
+            top_rules=4,
+            max_thresholds=8,
+            max_numeric_conditions=2,
+            numeric_refinement_beam=4,
+            numeric_threshold_refinement_beam=4,
+        )
+
+        aggregates = payload["aggregates"]
+        self.assertEqual(aggregates["fold_count"], 2)
+        self.assertEqual(aggregates["holdout_selected_score_delta_distance_m"], 20.0)
+        self.assertEqual(aggregates["holdout_candidate_all_delta_distance_m"], 10.0)
+        self.assertEqual(aggregates["holdout_selector_vs_candidate_all_delta_m"], 10.0)
+        self.assertEqual(aggregates["nonnegative_holdout_runs"], 2)
+        self.assertIn("candidate_num_satellites", payload["folds"][0]["learned_rule"])
+
+        markdown = ppc_segment_selector_loo.render_markdown(payload)
+        self.assertIn("PPC Segment Selector Leave-One-Run-Out", markdown)
+        self.assertIn("tokyo_run1", markdown)
 
 
 class PPCDualProfileSelectorTest(unittest.TestCase):

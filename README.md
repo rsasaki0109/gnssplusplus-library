@@ -255,6 +255,15 @@ summaries and renders the checked-in scorecard below.
 
 ![PPC dual-profile selector scorecard](docs/ppc_jump0p5_dual_selector_scorecard.png)
 
+`scripts/analyze_ppc_segment_selector_leave_one_run_out.py` checks whether that
+segment selector survives run-level holdout. With the same three-condition sweep
+settings, leave-one-run-out remains positive in aggregate (**+26.8 m** versus
+candidate-all **-407.9 m**, **+434.6 m** selector-vs-candidate), and **5 / 6**
+holdout runs stay non-negative. The weak fold is Tokyo run2 (**-85.5 m**), so
+the baseline-band selector is an in-sample recovery diagnostic rather than a
+deployment default until the sweep uses a robustness objective or stronger
+feature constraints.
+
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
 GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**

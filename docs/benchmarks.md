@@ -210,6 +210,14 @@ come from `scripts/analyze_ppc_dual_profile_selector_matrix.py`.
 
 ![PPC dual-profile selector scorecard](ppc_jump0p5_dual_selector_scorecard.png)
 
+`scripts/analyze_ppc_segment_selector_leave_one_run_out.py` retrains the
+segment selector with each run held out once. With the same three-condition
+sweep settings, holdout aggregate remains positive (**+26.8 m**) and beats
+candidate-all by **+434.6 m**, with **5 / 6** non-negative holdout runs. The
+Tokyo run2 holdout still loses **85.5 m**, so the baseline-band rule is treated
+as an in-sample diagnostic until the selector objective explicitly optimizes
+run-level robustness.
+
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
 ![PPC Tokyo run1 bad segment trajectory](ppc_tokyo_run1_bad_segments_trajectory.png)
