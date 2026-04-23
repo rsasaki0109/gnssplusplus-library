@@ -47,6 +47,7 @@ import generate_feature_overview_card as feature_overview  # noqa: E402
 import generate_odaiba_scorecard as scorecard  # noqa: E402
 import generate_odaiba_social_card as social_card  # noqa: E402
 import analyze_ppc_coverage_quality as ppc_coverage_quality  # noqa: E402
+import analyze_ppc_profile_segment_delta as ppc_profile_segment_delta  # noqa: E402
 import analyze_ppc_residual_reset_sweep as ppc_residual_reset_sweep  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
 import generate_ppc_tail_cleanup_scorecard as ppc_tail_cleanup_scorecard  # noqa: E402
@@ -811,6 +812,105 @@ class PPCResidualResetSweepAnalysisTest(unittest.TestCase):
                 47.0,
             )
             self.assertIn("City Selector", markdown_output.read_text(encoding="utf-8"))
+
+
+class PPCProfileSegmentDeltaTest(unittest.TestCase):
+    @staticmethod
+    def record(
+        reference_index: int,
+        distance_m: float,
+        score_state: str,
+        status: int | None,
+        error_3d_m: float | None,
+        ratio: float | None = None,
+        prefit_rms_m: float | None = None,
+    ) -> dict[str, object]:
+        return {
+            "reference_index": reference_index,
+            "start_tow_s": float(reference_index - 1),
+            "end_tow_s": float(reference_index),
+            "segment_distance_m": distance_m,
+            "matched": status is not None,
+            "scored": score_state == "scored",
+            "score_state": score_state,
+            "score_threshold_m": 0.5,
+            "score_distance_m": distance_m if score_state == "scored" else 0.0,
+            "matched_distance_m": distance_m if status is not None else 0.0,
+            "solution_tow_s": float(reference_index) if status is not None else None,
+            "time_gap_s": 0.0 if status is not None else None,
+            "status": status,
+            "num_satellites": 12 if status is not None else None,
+            "ratio": ratio,
+            "baseline_m": 100.0 if status is not None else None,
+            "rtk_iterations": 2 if status is not None else None,
+            "rtk_update_observations": 16 if status is not None else None,
+            "rtk_update_phase_observations": 8 if status is not None else None,
+            "rtk_update_code_observations": 8 if status is not None else None,
+            "rtk_update_suppressed_outliers": 1 if status is not None else None,
+            "rtk_update_prefit_residual_rms_m": prefit_rms_m,
+            "rtk_update_prefit_residual_max_m": None if prefit_rms_m is None else prefit_rms_m * 4.0,
+            "rtk_update_post_suppression_residual_rms_m": None,
+            "rtk_update_post_suppression_residual_max_m": None,
+            "error_3d_m": error_3d_m,
+            "horiz_error_m": error_3d_m,
+            "up_error_m": 0.0 if error_3d_m is not None else None,
+        }
+
+    def test_segment_delta_reports_gain_loss_transitions_and_csv(self) -> None:
+        baseline = [
+            self.record(1, 10.0, "scored", 4, 0.2, 20.0, 0.2),
+            self.record(2, 20.0, "high_error", 3, 1.2, 4.0, 6.0),
+            self.record(3, 30.0, "scored", 4, 0.1, 18.0, 0.1),
+        ]
+        candidate = [
+            self.record(1, 10.0, "high_error", 3, 0.8, 3.0, 7.0),
+            self.record(2, 20.0, "scored", 4, 0.2, 24.0, 0.3),
+            self.record(3, 30.0, "scored", 4, 0.1, 18.0, 0.1),
+        ]
+
+        summary = ppc_profile_segment_delta.compare_segment_records(
+            baseline,
+            candidate,
+            "candidate",
+            top_segments=4,
+        )
+
+        self.assertEqual(summary["delta_vs_baseline_score_distance_m"], 10.0)
+        self.assertEqual(summary["gain_distance_m"], 20.0)
+        self.assertEqual(summary["loss_distance_m"], -10.0)
+        self.assertEqual(summary["changed_segments"], 2)
+        transitions = {
+            row["score_transition"]: row
+            for row in summary["score_transitions"]
+        }
+        self.assertEqual(transitions["high_error->scored"]["score_delta_distance_m"], 20.0)
+        self.assertEqual(transitions["scored->high_error"]["score_delta_distance_m"], -10.0)
+        self.assertEqual(summary["top_gains"][0]["reference_index"], 2)
+        self.assertEqual(summary["top_losses"][0]["reference_index"], 1)
+        self.assertEqual(
+            summary["candidate_gain_diagnostics"]["median_rtk_update_prefit_residual_rms_m"],
+            0.3,
+        )
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_segment_delta_") as temp_dir:
+            temp_root = Path(temp_dir)
+            csv_path = temp_root / "segments.csv"
+            ppc_profile_segment_delta.write_segments_csv(csv_path, [summary])
+            with csv_path.open(encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0]["candidate_label"], "candidate")
+            self.assertEqual(rows[0]["score_transition"], "scored->high_error")
+
+            markdown = ppc_profile_segment_delta.render_markdown(
+                "baseline",
+                temp_root / "baseline.pos",
+                temp_root / "reference.csv",
+                [summary],
+            )
+            self.assertIn("PPC Profile Segment Delta", markdown)
+            self.assertIn("high_error->scored", markdown)
+            self.assertIn("Top Losses", markdown)
 
 
 class PPCMetricsTest(unittest.TestCase):

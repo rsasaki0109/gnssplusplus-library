@@ -211,6 +211,10 @@ Tokyo, and a per-run oracle reaches **58.98%** by using streak `5` for Tokyo
 run1, streak `8` for Tokyo run2, and baseline elsewhere. The gain is only
 **35.6 m** of official scored distance, so the next improvement needs a
 segment-level trigger rather than another whole-run threshold.
+`scripts/analyze_ppc_profile_segment_delta.py` is the segment-level companion:
+given a reset10 `.pos`, a candidate `.pos`, and the same PPC `reference.csv`,
+it writes the exact official-score gain/loss segments, score/status
+transitions, and candidate residual diagnostics before promoting a gate.
 The opt-in `--min-float-prefit-trusted-jump` gate is the first continuity-aware
 selector for that path: high-residual FLOAT epochs only reset ambiguities after
 the streak threshold when the FLOAT position has also moved at least the
@@ -226,6 +230,12 @@ selector candidate rather than a global PPC profile. A mixed oracle using
 `jump0.5` only for Tokyo run1 and the prior streak `8` result for Tokyo run2
 reaches **59.00%** weighted official score (**+45.9 m**) versus the **58.90%**
 reset10 baseline.
+The segment-delta report explains the asymmetry: Tokyo run1 `jump0.5` gains
+**177.8 m** but gives back **133.6 m**, mainly by recovering FLOAT/high-error
+segments into FIX; Tokyo run2 gains only **7.1 m** and loses **384.3 m**, mostly
+`scored -> high_error` FLOAT/FIXED degradation. Nagoya run2 and run3 are also
+net negative (**-31.6 m** and **-25.2 m**), so the viable selector must be
+segment-local rather than city-local.
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
 GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**
@@ -692,6 +702,14 @@ python3 scripts/analyze_ppc_residual_reset_sweep.py \
   --candidate streak8=output/ppc_coverage_matrix_floatreset10_prefit_streak8_6_30/ppc_coverage_matrix_summary.json \
   --summary-json output/ppc_residual_reset_sweep_selector.json \
   --markdown-output output/ppc_residual_reset_sweep_selector.md
+
+python3 scripts/analyze_ppc_profile_segment_delta.py \
+  --reference-csv /datasets/PPC-Dataset/tokyo/run1/reference.csv \
+  --baseline-pos output/ppc_coverage_matrix_floatreset10/tokyo_run1.pos \
+  --candidate jump0p5=output/ppc_tokyo_run1_rtk_prefit_s5_jump0p5_matrixprofile.pos \
+  --summary-json output/ppc_tokyo_run1_jump0p5_segment_delta.json \
+  --markdown-output output/ppc_tokyo_run1_jump0p5_segment_delta.md \
+  --segments-csv output/ppc_tokyo_run1_jump0p5_segment_delta.csv
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \
