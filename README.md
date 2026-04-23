@@ -245,6 +245,13 @@ reset10, but the best single segment-local rule
 `<= 3.1545 m` reaches **+192.9 m**. It keeps **243.5 m** of gain, exposes only
 **50.6 m** of loss, and cuts Tokyo run2 from **-377.2 m** to **-29.6 m** while
 lifting Tokyo run1 to **+168.5 m**.
+`scripts/apply_ppc_dual_profile_selector.py` applies that rule to actual
+baseline/candidate `.pos` files and writes a selected `.pos` for normal PPC
+re-scoring. On the same four probes, the combined selector moves weighted
+official score **55.39% -> 56.14%** (**+192.9 m**, **+0.76 pp**) versus reset10
+and stays above candidate-all by **582.7 m**. Positioning is not sacrificed:
+the four-run average Positioning delta is **+0.37 pp** and Fix delta is
+**+1.39 pp** versus reset10.
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
 GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**
@@ -727,6 +734,15 @@ python3 scripts/analyze_ppc_segment_selector_sweep.py \
   --segment-csv nagoya_run3=output/ppc_nagoya_run3_jump0p5_segment_delta.csv \
   --summary-json output/ppc_jump0p5_segment_selector_sweep.json \
   --markdown-output output/ppc_jump0p5_segment_selector_sweep.md
+
+python3 scripts/apply_ppc_dual_profile_selector.py \
+  --reference-csv /datasets/PPC-Dataset/tokyo/run1/reference.csv \
+  --baseline-pos output/ppc_coverage_matrix_floatreset10/tokyo_run1.pos \
+  --candidate-pos output/ppc_tokyo_run1_rtk_prefit_s5_jump0p5_matrixprofile.pos \
+  --selector-summary-json output/ppc_jump0p5_segment_selector_sweep.json \
+  --out-pos output/ppc_tokyo_run1_jump0p5_dual_selector.pos \
+  --summary-json output/ppc_tokyo_run1_jump0p5_dual_selector_summary.json \
+  --segments-csv output/ppc_tokyo_run1_jump0p5_dual_selector_segments.csv
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \

@@ -50,6 +50,7 @@ import analyze_ppc_coverage_quality as ppc_coverage_quality  # noqa: E402
 import analyze_ppc_profile_segment_delta as ppc_profile_segment_delta  # noqa: E402
 import analyze_ppc_residual_reset_sweep as ppc_residual_reset_sweep  # noqa: E402
 import analyze_ppc_segment_selector_sweep as ppc_segment_selector_sweep  # noqa: E402
+import apply_ppc_dual_profile_selector as ppc_dual_profile_selector  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
 import generate_ppc_tail_cleanup_scorecard as ppc_tail_cleanup_scorecard  # noqa: E402
 import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
@@ -988,6 +989,106 @@ class PPCSegmentSelectorSweepTest(unittest.TestCase):
         markdown = ppc_segment_selector_sweep.render_markdown(payload)
         self.assertIn("PPC Segment Selector Sweep", markdown)
         self.assertIn("Best Rule By Run", markdown)
+
+
+class PPCDualProfileSelectorTest(unittest.TestCase):
+    @staticmethod
+    def reference_epoch(index: int) -> comparison.ReferenceEpoch:
+        return comparison.ReferenceEpoch(
+            2300,
+            float(index),
+            0.0,
+            0.0,
+            0.0,
+            np.array([10.0 * index, 0.0, 0.0]),
+        )
+
+    @staticmethod
+    def solution_epoch(
+        index: int,
+        ecef_x_m: float,
+        status: int,
+        post_rms_m: float | None,
+    ) -> comparison.SolutionEpoch:
+        return comparison.SolutionEpoch(
+            2300,
+            float(index),
+            0.0,
+            0.0,
+            0.0,
+            np.array([ecef_x_m, 0.0, 0.0]),
+            status,
+            12,
+            10.0 if status == 4 else 0.0,
+            100.0,
+            2,
+            16,
+            8,
+            8,
+            0,
+            post_rms_m,
+            None if post_rms_m is None else post_rms_m * 4.0,
+            post_rms_m,
+            None if post_rms_m is None else post_rms_m * 4.0,
+        )
+
+    def test_dual_profile_selector_writes_selected_pos_and_metrics(self) -> None:
+        reference = [self.reference_epoch(index) for index in range(3)]
+        baseline = [
+            self.solution_epoch(0, 0.0, 4, None),
+            self.solution_epoch(1, 11.2, 3, None),
+            self.solution_epoch(2, 20.1, 4, None),
+        ]
+        candidate = [
+            self.solution_epoch(0, 0.0, 4, 0.2),
+            self.solution_epoch(1, 10.1, 4, 0.3),
+            self.solution_epoch(2, 21.0, 3, 0.2),
+        ]
+        baseline_records = ppc_metrics.ppc_official_segment_records(reference, baseline, 0.25)
+        candidate_records = ppc_metrics.ppc_official_segment_records(reference, candidate, 0.25)
+        rows = ppc_dual_profile_selector.all_segment_rows(
+            baseline_records,
+            candidate_records,
+            "candidate",
+        )
+        ppc_dual_profile_selector.augment_solution_tows(
+            rows,
+            baseline_records,
+            candidate_records,
+        )
+        rule = ppc_dual_profile_selector.parse_rule(
+            "candidate_status_name == FIXED AND "
+            "candidate_rtk_update_post_suppression_residual_rms_m <= 1.0"
+        )
+        selected, selected_rows = ppc_dual_profile_selector.selected_solution_epochs(
+            reference,
+            baseline,
+            candidate,
+            rows,
+            rule,
+            0.25,
+        )
+
+        self.assertEqual([epoch.tow for epoch in selected], [0.0, 1.0, 2.0])
+        self.assertEqual(selected[1].status, 4)
+        self.assertEqual(selected[2].ecef[0], 20.1)
+        self.assertEqual(selected_rows[0]["selected_profile"], "candidate")
+        self.assertEqual(selected_rows[1]["selected_profile"], "baseline")
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_dual_profile_selector_") as temp_dir:
+            temp_root = Path(temp_dir)
+            out_pos = temp_root / "selected.pos"
+            ppc_dual_profile_selector.write_pos(out_pos, selected)
+            reparsed = comparison.read_libgnss_pos(out_pos)
+            metrics = ppc_metrics.summarize_solution_epochs(
+                reference,
+                reparsed,
+                fixed_status=4,
+                label="selected",
+                match_tolerance_s=0.25,
+                solver_wall_time_s=None,
+            )
+            self.assertEqual(metrics["ppc_official_score_pct"], 100.0)
 
 
 class PPCMetricsTest(unittest.TestCase):

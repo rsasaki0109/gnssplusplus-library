@@ -201,6 +201,12 @@ global **-389.7 m** candidate-all result to **+192.9 m** with the best single
 rule: candidate status must be FIXED and candidate post-suppression residual RMS
 must be `<= 3.1545 m`. That rule keeps **243.5 m** of gain, exposes **50.6 m**
 of loss, and reduces Tokyo run2's damage from **-377.2 m** to **-29.6 m**.
+Applying the rule with `scripts/apply_ppc_dual_profile_selector.py` writes real
+selected `.pos` outputs and reuses the normal PPC metrics path. Across those
+four probes, weighted official score becomes **56.14%** versus **55.39%** for
+reset10 (**+192.9 m**, **+0.76 pp**) and **53.86%** for candidate-all.
+Positioning remains positive on every run, averaging **+0.37 pp** versus
+reset10, while Fix averages **+1.39 pp**.
 
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
@@ -328,6 +334,15 @@ python3 scripts/analyze_ppc_segment_selector_sweep.py \
   --segment-csv nagoya_run3=output/ppc_nagoya_run3_jump0p5_segment_delta.csv \
   --summary-json output/ppc_jump0p5_segment_selector_sweep.json \
   --markdown-output output/ppc_jump0p5_segment_selector_sweep.md
+
+python3 scripts/apply_ppc_dual_profile_selector.py \
+  --reference-csv /datasets/PPC-Dataset/tokyo/run1/reference.csv \
+  --baseline-pos output/ppc_coverage_matrix_floatreset10/tokyo_run1.pos \
+  --candidate-pos output/ppc_tokyo_run1_rtk_prefit_s5_jump0p5_matrixprofile.pos \
+  --selector-summary-json output/ppc_jump0p5_segment_selector_sweep.json \
+  --out-pos output/ppc_tokyo_run1_jump0p5_dual_selector.pos \
+  --summary-json output/ppc_tokyo_run1_jump0p5_dual_selector_summary.json \
+  --segments-csv output/ppc_tokyo_run1_jump0p5_dual_selector_segments.csv
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \

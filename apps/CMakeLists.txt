@@ -115,6 +115,7 @@ install(PROGRAMS
     ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_rtk_scorecard.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_tail_cleanup_scorecard.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_rtk_trajectory.py
+    ${CMAKE_SOURCE_DIR}/scripts/apply_ppc_dual_profile_selector.py
     ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_profile_segment_delta.py
     ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_residual_reset_sweep.py
     ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_segment_selector_sweep.py
