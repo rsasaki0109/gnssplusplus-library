@@ -48,6 +48,7 @@ import generate_odaiba_scorecard as scorecard  # noqa: E402
 import generate_odaiba_social_card as social_card  # noqa: E402
 import analyze_ppc_coverage_quality as ppc_coverage_quality  # noqa: E402
 import analyze_ppc_dual_profile_selector_matrix as ppc_dual_selector_matrix  # noqa: E402
+import analyze_ppc_imu_coverage as ppc_imu_coverage  # noqa: E402
 import analyze_ppc_profile_segment_delta as ppc_profile_segment_delta  # noqa: E402
 import analyze_ppc_residual_reset_sweep as ppc_residual_reset_sweep  # noqa: E402
 import analyze_ppc_segment_selector_leave_one_run_out as ppc_segment_selector_loo  # noqa: E402
@@ -1485,6 +1486,65 @@ class PPCDualProfileSelectorDriverTest(unittest.TestCase):
             payload = json.loads(matrix_json.read_text(encoding="utf-8"))
             self.assertGreater(payload["aggregates"]["selector_official_score_delta_m"], 0.0)
             self.assertIn("PPC dual-profile selector", matrix_md.read_text(encoding="utf-8"))
+
+
+class PPCIMUCoverageTest(unittest.TestCase):
+    def test_imu_coverage_summarizes_timing_overlap_and_loss_pool(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_imu_coverage_") as temp_dir:
+            temp_root = Path(temp_dir)
+            run_root = temp_root / "tokyo" / "run1"
+            run_root.mkdir(parents=True)
+            (run_root / "imu.csv").write_text(
+                "\n".join(
+                    [
+                        "GPS TOW (s), GPS Week, Acc X (m/s^2), Acc Y (m/s^2), Acc Z (m/s^2), Ang Rate X (deg/s), Ang Rate Y (deg/s), Ang Rate Z (deg/s)",
+                        "10.00,2324,0.0,0.0,9.8,0.1,0.2,0.3",
+                        "10.01,2324,0.1,0.0,9.8,0.1,0.2,0.4",
+                        "10.02,2324,0.0,0.1,9.8,0.1,0.2,0.5",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            (run_root / "reference.csv").write_text(
+                "\n".join(
+                    [
+                        "GPS TOW (s),GPS Week,Latitude (deg),Longitude (deg),Ellipsoid Height (m)",
+                        "10.00,2324,35.0,139.0,10.0",
+                        "10.02,2324,35.0,139.0,10.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            quality_dir = temp_root / "quality"
+            quality_dir.mkdir()
+            (quality_dir / "tokyo_run1.json").write_text(
+                json.dumps(
+                    {
+                        "official_loss_by_state": [
+                            {"score_state": "scored", "distance_m": 5.0},
+                            {"score_state": "high_error", "distance_m": 2.0},
+                            {"score_state": "no_solution", "distance_m": 3.0},
+                        ]
+                    }
+                ),
+                encoding="ascii",
+            )
+
+            payload = ppc_imu_coverage.build_payload(
+                temp_root,
+                [ppc_imu_coverage.RunSpec("tokyo", "run1")],
+                quality_json_template=str(quality_dir / "{key}.json"),
+                target_score_pct=80.0,
+            )
+
+            aggregates = payload["aggregates"]
+            self.assertEqual(aggregates["ready_run_count"], 1)
+            self.assertEqual(aggregates["median_imu_rate_hz"], 100.0)
+            self.assertEqual(aggregates["target_gap_distance_m"], 3.0)
+            self.assertEqual(aggregates["no_solution_share_of_target_gap_pct"], 100.0)
+            self.assertIn("Tokyo r1", ppc_imu_coverage.render_markdown(payload))
 
 
 class PPCMetricsTest(unittest.TestCase):

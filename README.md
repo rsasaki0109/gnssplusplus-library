@@ -295,6 +295,22 @@ Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**
 (**17.52 pp**), so RTKLIB-side fallback cannot close the PPC2024 second-place
 gap.
+The public PPC data does include synchronized rover IMU streams, so the next
+step can move beyond GNSS-only fallback. `scripts/analyze_ppc_imu_coverage.py`
+checks `imu.csv` timing against `reference.csv` and the current reset10 loss
+pool when given the per-run quality JSON from
+`scripts/analyze_ppc_coverage_quality.py`. All six Tokyo/Nagoya runs are ready
+for a Kalman bridge: **1,174,006**
+IMU samples total, **100.000 Hz** median rate, **100.000%** minimum reference
+overlap, and **0.010 s** maximum IMU gap. The reset10 replay currently scores
+**27,286.4 m** (**58.90%**) and leaves **19,040.3 m** unscored: **12,843.2 m**
+high-error plus **6,197.1 m** no-solution. The gap to the PPC2024 second-place
+Public score (**77.6%**) is **8,663.1 m**, so loose IMU bridging of dropouts
+alone is not enough; the Kalman path also needs robust/tight coupling to
+down-weight or reject high-error RTK updates.
+
+![PPC IMU fusion readiness](docs/ppc_imu_fusion_readiness.png)
+
 An SPP-divergence posthoc sweep also keeps `--max-float-spp-div` diagnostic:
 on the six reset10 outputs, thresholds **10/20/30/50/80 m** predict
 **55.33/56.62/57.41/58.07/58.45%** weighted official score versus the
@@ -787,6 +803,15 @@ python3 scripts/run_ppc_dual_profile_selector_matrix.py \
   --matrix-markdown-output output/ppc_jump0p5_dual_selector_6run_robust_matrix.md \
   --matrix-output-png docs/ppc_jump0p5_dual_selector_robust_scorecard.png \
   --title 'PPC robust dual-profile selector'
+
+python3 scripts/analyze_ppc_imu_coverage.py \
+  --dataset-root /datasets/PPC-Dataset \
+  --quality-json-template 'output/ppc_quality_floatreset10/{key}.json' \
+  --target-score-pct 77.6 \
+  --summary-json output/ppc_imu_coverage_summary.json \
+  --markdown-output output/ppc_imu_coverage_summary.md \
+  --output-png docs/ppc_imu_fusion_readiness.png \
+  --title 'PPC IMU fusion readiness'
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \
