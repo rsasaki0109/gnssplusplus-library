@@ -6,7 +6,9 @@
 #include <array>
 #include <cstdlib>
 #include <map>
+#include <set>
 #include <string>
+#include <utility>
 
 namespace libgnss::ppp_shared {
 
@@ -84,10 +86,17 @@ struct PPPConfig {
     std::string orbit_file_path;
     std::string clock_file_path;
     bool use_ssr_corrections = false;
+    bool require_ssr_orbit_clock = false;
+    bool require_ssr_observation_biases = false;
+    bool enforce_ssr_orbit_iode = false;
+    bool enforce_ssr_orbit_iode_admission_only = false;
+    bool use_rtklib_broadcast_selection = false;
     bool use_clas_osr_filter = false;
     std::string ssr_file_path;
     int l6_gps_week = 0;  // GPS week for L6 binary decode (0 = auto-detect)
     Vector3d approximate_position = Vector3d::Zero();  // RINEX APPROX POS for L6 network selection
+    std::set<GNSSSystem> allowed_systems;  // Empty means all observed systems are accepted.
+    bool allow_future_ssr_corrections = true;
     std::string ionex_file_path;
     std::string dcb_file_path;
     std::string antex_file_path;
@@ -110,6 +119,7 @@ struct PPPConfig {
     bool use_dynamics_model = false;
     bool reset_clock_to_spp_each_epoch = true;
     bool reset_kinematic_position_to_spp_each_epoch = true;
+    bool prefer_receiver_position_seed = false;
 
     // Kalman filter parameters
     double process_noise_position = 0.0;
@@ -132,11 +142,27 @@ struct PPPConfig {
     double rtklib_phase_error_m = 0.003;
     double rtklib_phase_error_elevation_m = 0.003;
     int phase_measurement_min_lock_count = 1;
+    bool enable_initial_phase_admission_warm_start = false;
+    bool enable_all_frequency_initial_phase_admission_warm_start = false;
+    std::set<GNSSSystem> initial_phase_admission_warm_start_systems;
+    std::set<SatelliteId> initial_phase_admission_warm_start_satellites;
+    std::set<int> initial_phase_admission_warm_start_frequency_indexes;
+    std::set<std::pair<SatelliteId, int>>
+        initial_phase_admission_warm_start_satellite_frequency_pairs;
+    std::set<std::pair<SatelliteId, int>> phase_admission_excluded_satellite_frequency_pairs;
+    std::map<std::pair<SatelliteId, int>, GNSSTime>
+        phase_admission_excluded_before_by_satellite_frequency_pair;
+    std::map<std::pair<SatelliteId, int>, double>
+        phase_admission_residual_floor_by_satellite_frequency_pair;
+    bool reset_phase_ambiguity_on_before_exclusion = false;
+    double kinematic_preconvergence_phase_residual_floor_m = 200.0;
     bool use_carrier_phase_without_precise_products = true;
 
     // Atmospheric modeling
     bool estimate_troposphere = true;
     bool estimate_ionosphere = false;
+    bool enable_per_frequency_phase_bias_states = false;
+    bool initialize_phase_ambiguity_with_ionosphere_state = false;
     double initial_ionosphere_variance = 100.0;
     double process_noise_ionosphere = 1e-3;
     bool use_ionosphere_free = true;
@@ -192,6 +218,14 @@ struct PPPConfig {
     int filter_iterations = 8;
 };
 
+using FrequencyAmbiguityKey = std::pair<SatelliteId, int>;
+
+inline FrequencyAmbiguityKey frequencyAmbiguityKey(
+    const SatelliteId& satellite,
+    int frequency_index) {
+    return {satellite, frequency_index};
+}
+
 struct PPPState {
     VectorXd state;
     MatrixXd covariance;
@@ -203,12 +237,15 @@ struct PPPState {
     int gal_clock_index = -1;
     int qzs_clock_index = -1;
     int bds_clock_index = -1;
+    int bds2_clock_index = -1;
+    int bds3_clock_index = -1;
     int trop_index = 8;
     int iono_index = 9;
     int amb_index = 9;
 
     std::map<SatelliteId, int> ionosphere_indices;
     std::map<SatelliteId, int> ambiguity_indices;
+    std::map<FrequencyAmbiguityKey, int> frequency_ambiguity_indices;
     int total_states = 9;
 };
 

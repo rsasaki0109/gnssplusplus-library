@@ -2,6 +2,7 @@
 
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/signals.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
 #include <chrono>
@@ -365,7 +366,8 @@ ObservationData makeSyntheticEpochWithAtmosphericBiases(
     const Vector3d& approximate_receiver_position,
     const std::vector<SyntheticSatellite>& satellites,
     double zenith_trop_delay_m,
-    double stec_base_tecu) {
+    double stec_base_tecu,
+    SignalType secondary_signal = SignalType::GPS_L2C) {
     NavigationData nav;
     ObservationData epoch(time);
     epoch.receiver_position = approximate_receiver_position;
@@ -379,8 +381,10 @@ ObservationData makeSyntheticEpochWithAtmosphericBiases(
         const double stec_tecu = stec_base_tecu + 0.5 * static_cast<double>(satellite.id.prn);
         const double l1_iono_m =
             ionosphereDelayMetersForFrequency(constants::GPS_L1_FREQ, stec_tecu);
+        const double secondary_frequency_hz = signalFrequencyHz(secondary_signal);
+        const double secondary_wavelength_m = signalWavelengthMeters(secondary_signal);
         const double l2_iono_m =
-            ionosphereDelayMetersForFrequency(constants::GPS_L2_FREQ, stec_tecu);
+            ionosphereDelayMetersForFrequency(secondary_frequency_hz, stec_tecu);
 
         Observation l1(satellite.id, SignalType::GPS_L1CA);
         l1.valid = true;
@@ -391,12 +395,12 @@ ObservationData makeSyntheticEpochWithAtmosphericBiases(
         l1.snr = 48.0;
         epoch.addObservation(l1);
 
-        Observation l2(satellite.id, SignalType::GPS_L2C);
+        Observation l2(satellite.id, secondary_signal);
         l2.valid = true;
         l2.has_pseudorange = true;
         l2.has_carrier_phase = true;
         l2.pseudorange = range_m + trop_delay_m + l2_iono_m;
-        l2.carrier_phase = (range_m + trop_delay_m - l2_iono_m) / constants::GPS_L2_WAVELENGTH;
+        l2.carrier_phase = (range_m + trop_delay_m - l2_iono_m) / secondary_wavelength_m;
         l2.snr = 45.0;
         epoch.addObservation(l2);
     }
@@ -408,7 +412,9 @@ std::string buildAtmosphericSsrText(const std::vector<SyntheticSatellite>& satel
                                     const Vector3d& true_receiver_position,
                                     const GNSSTime& time,
                                     double zenith_trop_delay_m,
-                                    double stec_base_tecu) {
+                                    double stec_base_tecu,
+                                    double stec_std_l1_m = 0.5,
+                                    const std::string& extra_tokens = "") {
     NavigationData nav;
     std::ostringstream text;
     text << "# week,tow,sat,dx,dy,dz,dclock_m[,atmos_<name>=<value>...]\n";
@@ -420,7 +426,10 @@ std::string buildAtmosphericSsrText(const std::vector<SyntheticSatellite>& satel
              << ",0.0,0.0,0.0,0.0"
              << ",atmos_trop_t00_m=" << std::fixed << std::setprecision(6) << trop_delay_m
              << ",atmos_stec_c00_tecu:" << satellite.id.toString() << "="
-             << std::fixed << std::setprecision(6) << stec_tecu << "\n";
+             << std::fixed << std::setprecision(6) << stec_tecu
+             << ",atmos_stec_std_l1_m:" << satellite.id.toString() << "="
+             << std::fixed << std::setprecision(6) << stec_std_l1_m
+             << extra_tokens << "\n";
     }
     return text.str();
 }
@@ -521,8 +530,21 @@ std::string buildSimpleReceiverAntexText(const std::string& antenna_type,
                                          double l1_up_mm,
                                          double l2_north_mm,
                                          double l2_east_mm,
-                                         double l2_up_mm) {
+                                         double l2_up_mm,
+                                         bool include_pcv = false,
+                                         double l1_pcv_start_mm = 0.0,
+                                         double l1_pcv_step_mm = 0.0,
+                                         double l2_pcv_start_mm = 0.0,
+                                         double l2_pcv_step_mm = 0.0) {
     std::ostringstream text;
+    auto append_noazi = [&](double start_mm, double step_mm) {
+        std::ostringstream values;
+        values << std::fixed << std::setprecision(1) << "   NOAZI";
+        for (int i = 0; i < 19; ++i) {
+            values << std::setw(8) << (start_mm + step_mm * static_cast<double>(i));
+        }
+        text << values.str() << "\n";
+    };
     text << std::left << std::setw(60) << "     1.4            M                                       "
          << "ANTEX VERSION / SYST\n";
     text << std::left << std::setw(60) << ""
@@ -544,6 +566,9 @@ std::string buildSimpleReceiverAntexText(const std::string& antenna_type,
         text << std::left << std::setw(60) << offsets.str()
              << "NORTH / EAST / UP\n";
     }
+    if (include_pcv) {
+        append_noazi(l1_pcv_start_mm, l1_pcv_step_mm);
+    }
     text << std::left << std::setw(60) << ""
          << "END OF FREQUENCY\n";
     text << std::left << std::setw(60) << "   G02"
@@ -557,10 +582,67 @@ std::string buildSimpleReceiverAntexText(const std::string& antenna_type,
         text << std::left << std::setw(60) << offsets.str()
              << "NORTH / EAST / UP\n";
     }
+    if (include_pcv) {
+        append_noazi(l2_pcv_start_mm, l2_pcv_step_mm);
+    }
     text << std::left << std::setw(60) << ""
          << "END OF FREQUENCY\n";
     text << std::left << std::setw(60) << ""
          << "END OF ANTENNA\n";
+    return text.str();
+}
+
+std::string buildSimpleSatelliteAntexText(const std::vector<SyntheticSatellite>& satellites,
+                                          double l1_north_mm,
+                                          double l1_east_mm,
+                                          double l1_up_mm,
+                                          double l2_north_mm,
+                                          double l2_east_mm,
+                                          double l2_up_mm) {
+    std::ostringstream text;
+    text << std::left << std::setw(60) << "     1.4            M                                       "
+         << "ANTEX VERSION / SYST\n";
+    for (const auto& satellite : satellites) {
+        text << std::left << std::setw(60) << ""
+             << "START OF ANTENNA\n";
+        std::ostringstream type_line;
+        type_line << std::left << std::setw(20) << "BLOCK TEST"
+                  << std::setw(20) << satellite.id.toString();
+        text << std::left << std::setw(60) << type_line.str()
+             << "TYPE / SERIAL NO\n";
+        text << std::left << std::setw(60) << "  2020     1     1     0     0    0.0000000"
+             << "VALID FROM\n";
+        text << std::left << std::setw(60) << "     2"
+             << "# OF FREQUENCIES\n";
+        text << std::left << std::setw(60) << "   G01"
+             << "START OF FREQUENCY\n";
+        {
+            std::ostringstream offsets;
+            offsets << std::fixed << std::setprecision(1)
+                    << std::setw(10) << l1_north_mm
+                    << std::setw(10) << l1_east_mm
+                    << std::setw(10) << l1_up_mm;
+            text << std::left << std::setw(60) << offsets.str()
+                 << "NORTH / EAST / UP\n";
+        }
+        text << std::left << std::setw(60) << ""
+             << "END OF FREQUENCY\n";
+        text << std::left << std::setw(60) << "   G02"
+             << "START OF FREQUENCY\n";
+        {
+            std::ostringstream offsets;
+            offsets << std::fixed << std::setprecision(1)
+                    << std::setw(10) << l2_north_mm
+                    << std::setw(10) << l2_east_mm
+                    << std::setw(10) << l2_up_mm;
+            text << std::left << std::setw(60) << offsets.str()
+                 << "NORTH / EAST / UP\n";
+        }
+        text << std::left << std::setw(60) << ""
+             << "END OF FREQUENCY\n";
+        text << std::left << std::setw(60) << ""
+             << "END OF ANTENNA\n";
+    }
     return text.str();
 }
 
@@ -812,6 +894,164 @@ TEST(PPPTest, ReceiverAntexPcoChangesSyntheticPrecisePppSolutionWithoutBreakingI
         (plain_solution.position_ecef - antex_solution.position_ecef).norm();
     EXPECT_GT(position_delta_m, 1e-4);
     EXPECT_LT(position_delta_m, 1.0);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(antex_path);
+}
+
+
+TEST(PPPTest, ReceiverAntexPcvChangesSyntheticPrecisePppSolutionWithoutBreakingIt) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_antex_pcv_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_antex_pcv_test.clk");
+    const auto antex_path = tempFilePath("libgnss_ppp_antex_pcv_test.atx");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(antex_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(8.0, -5.0, 3.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 7, 0, 0.0);
+    const GNSSTime last_precise_time = first_time + 600.0;
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, last_precise_time));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, last_precise_time));
+    writeTextFile(
+        antex_path,
+        buildSimpleReceiverAntexText(
+            "TEST_ANTENNA", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            true, 0.0, 10.0, 5.0, 14.0));
+
+    PPPProcessor::PPPConfig base_config;
+    base_config.use_precise_orbits = true;
+    base_config.use_precise_clocks = true;
+    base_config.orbit_file_path = sp3_path.string();
+    base_config.clock_file_path = clk_path.string();
+    base_config.convergence_min_epochs = 5;
+    base_config.convergence_threshold_horizontal = 0.2;
+    base_config.estimate_troposphere = false;
+    base_config.enable_ambiguity_resolution = false;
+    base_config.kinematic_mode = false;
+
+    PPPProcessor::PPPConfig plain_config = base_config;
+    PPPProcessor::PPPConfig antex_config = base_config;
+    antex_config.antex_file_path = antex_path.string();
+    antex_config.receiver_antenna_type = "TEST_ANTENNA";
+
+    PPPProcessor plain_processor(plain_config);
+    PPPProcessor antex_processor(antex_config);
+
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(plain_processor.initialize(processor_config));
+    ASSERT_TRUE(antex_processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    PositionSolution plain_solution;
+    PositionSolution antex_solution;
+    for (int i = 0; i < 8; ++i) {
+        const ObservationData epoch = makeSyntheticEpoch(
+            first_time + 30.0 * static_cast<double>(i),
+            true_receiver_position,
+            approximate_receiver_position,
+            satellites);
+        plain_solution = plain_processor.processEpoch(epoch, nav_data);
+        antex_solution = antex_processor.processEpoch(epoch, nav_data);
+    }
+
+    ASSERT_TRUE(plain_solution.isValid());
+    ASSERT_TRUE(antex_solution.isValid());
+    EXPECT_LT((plain_solution.position_ecef - true_receiver_position).norm(), 1.0);
+    EXPECT_LT((antex_solution.position_ecef - true_receiver_position).norm(), 1.0);
+    const double position_delta_m =
+        (plain_solution.position_ecef - antex_solution.position_ecef).norm();
+    EXPECT_GT(position_delta_m, 1e-4);
+    EXPECT_LT(position_delta_m, 1.0);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(antex_path);
+}
+
+TEST(PPPTest, SatelliteAntexPcoChangesSyntheticPrecisePppSolutionWithoutBreakingIt) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_sat_antex_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_sat_antex_test.clk");
+    const auto antex_path = tempFilePath("libgnss_ppp_sat_antex_test.atx");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(antex_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(8.0, -5.0, 3.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 7, 0, 0.0);
+    const GNSSTime last_precise_time = first_time + 600.0;
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, last_precise_time));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, last_precise_time));
+    writeTextFile(
+        antex_path,
+        buildSimpleSatelliteAntexText(satellites, 250.0, -120.0, 800.0, 180.0, -80.0, 650.0));
+
+    PPPProcessor::PPPConfig base_config;
+    base_config.use_precise_orbits = true;
+    base_config.use_precise_clocks = true;
+    base_config.orbit_file_path = sp3_path.string();
+    base_config.clock_file_path = clk_path.string();
+    base_config.convergence_min_epochs = 5;
+    base_config.convergence_threshold_horizontal = 0.2;
+    base_config.estimate_troposphere = false;
+    base_config.enable_ambiguity_resolution = false;
+    base_config.kinematic_mode = false;
+
+    PPPProcessor::PPPConfig plain_config = base_config;
+    PPPProcessor::PPPConfig antex_config = base_config;
+    antex_config.antex_file_path = antex_path.string();
+
+    PPPProcessor plain_processor(plain_config);
+    PPPProcessor antex_processor(antex_config);
+
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(plain_processor.initialize(processor_config));
+    ASSERT_TRUE(antex_processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    PositionSolution plain_solution;
+    PositionSolution antex_solution;
+    for (int i = 0; i < 8; ++i) {
+        const ObservationData epoch = makeSyntheticEpoch(
+            first_time + 30.0 * static_cast<double>(i),
+            true_receiver_position,
+            approximate_receiver_position,
+            satellites);
+        plain_solution = plain_processor.processEpoch(epoch, nav_data);
+        antex_solution = antex_processor.processEpoch(epoch, nav_data);
+    }
+
+    ASSERT_TRUE(plain_solution.isValid());
+    ASSERT_TRUE(antex_solution.isValid());
+    EXPECT_LT((plain_solution.position_ecef - true_receiver_position).norm(), 1.0);
+    EXPECT_LT((antex_solution.position_ecef - true_receiver_position).norm(), 2.0);
+    const double position_delta_m =
+        (plain_solution.position_ecef - antex_solution.position_ecef).norm();
+    EXPECT_GT(position_delta_m, 1e-3);
+    EXPECT_LT(position_delta_m, 2.0);
 
     std::filesystem::remove(sp3_path);
     std::filesystem::remove(clk_path);
@@ -1096,6 +1336,499 @@ TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens
     std::filesystem::remove(ssr_path);
 }
 
+TEST(PPPTest, SSRProductsExactAtmosOnlyRowsDoNotSuppressOrbitClockInterpolation) {
+    SSRProducts ssr_products;
+    const SatelliteId satellite(GNSSSystem::GPS, 1);
+
+    SSROrbitClockCorrection before;
+    before.satellite = satellite;
+    before.time = GNSSTime(2414, 345570.0);
+    before.orbit_correction_ecef = Vector3d(1.0, -2.0, 3.0);
+    before.clock_correction_m = 4.0;
+    before.ura_sigma_m = 0.5;
+    before.orbit_valid = true;
+    before.clock_valid = true;
+    before.ura_valid = true;
+    ssr_products.addCorrection(before);
+
+    SSROrbitClockCorrection after = before;
+    after.time = GNSSTime(2414, 345630.0);
+    after.orbit_correction_ecef = Vector3d(3.0, -4.0, 5.0);
+    after.clock_correction_m = 8.0;
+    after.ura_sigma_m = 0.9;
+    ssr_products.addCorrection(after);
+
+    SSROrbitClockCorrection atmos;
+    atmos.satellite = satellite;
+    atmos.time = GNSSTime(2414, 345600.0);
+    atmos.atmos_valid = true;
+    atmos.atmos_network_id = 5;
+    atmos.atmos_tokens["atmos_network_id"] = "5";
+    atmos.atmos_tokens["atmos_stec_avail"] = "1";
+    ssr_products.addCorrection(atmos);
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    double ura_sigma_m = 0.0;
+    std::map<std::string, std::string> atmos_tokens;
+    ASSERT_TRUE(ssr_products.interpolateCorrection(
+        satellite,
+        GNSSTime(2414, 345600.0),
+        orbit_correction,
+        clock_correction_m,
+        &ura_sigma_m,
+        nullptr,
+        nullptr,
+        &atmos_tokens));
+
+    EXPECT_NEAR(orbit_correction.x(), 2.0, 1e-12);
+    EXPECT_NEAR(orbit_correction.y(), -3.0, 1e-12);
+    EXPECT_NEAR(orbit_correction.z(), 4.0, 1e-12);
+    EXPECT_NEAR(clock_correction_m, 6.0, 1e-12);
+    EXPECT_NEAR(ura_sigma_m, 0.7, 1e-12);
+    ASSERT_EQ(atmos_tokens.size(), 2U);
+    EXPECT_EQ(atmos_tokens.at("atmos_network_id"), "5");
+}
+
+TEST(PPPTest, SSRProductsLeadingAtmosOnlyRowsUseNearbyOrbitClockSample) {
+    SSRProducts ssr_products;
+    const SatelliteId satellite(GNSSSystem::GPS, 1);
+
+    SSROrbitClockCorrection atmos;
+    atmos.satellite = satellite;
+    atmos.time = GNSSTime(2414, 345606.0);
+    atmos.atmos_valid = true;
+    atmos.atmos_network_id = 5;
+    atmos.atmos_tokens["atmos_network_id"] = "5";
+    atmos.atmos_tokens["atmos_stec_avail"] = "1";
+    ssr_products.addCorrection(atmos);
+
+    SSROrbitClockCorrection orbit_clock;
+    orbit_clock.satellite = satellite;
+    orbit_clock.time = GNSSTime(2414, 345635.0);
+    orbit_clock.orbit_correction_ecef = Vector3d(1.0, -2.0, 3.0);
+    orbit_clock.clock_correction_m = 4.0;
+    orbit_clock.ura_sigma_m = 0.5;
+    orbit_clock.orbit_valid = true;
+    orbit_clock.clock_valid = true;
+    orbit_clock.ura_valid = true;
+    ssr_products.addCorrection(orbit_clock);
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    double ura_sigma_m = 0.0;
+    std::map<std::string, std::string> atmos_tokens;
+    ASSERT_TRUE(ssr_products.interpolateCorrection(
+        satellite,
+        GNSSTime(2414, 345600.0),
+        orbit_correction,
+        clock_correction_m,
+        &ura_sigma_m,
+        nullptr,
+        nullptr,
+        &atmos_tokens));
+
+    EXPECT_NEAR(orbit_correction.x(), 1.0, 1e-12);
+    EXPECT_NEAR(orbit_correction.y(), -2.0, 1e-12);
+    EXPECT_NEAR(orbit_correction.z(), 3.0, 1e-12);
+    EXPECT_NEAR(clock_correction_m, 4.0, 1e-12);
+    EXPECT_NEAR(ura_sigma_m, 0.5, 1e-12);
+    ASSERT_EQ(atmos_tokens.size(), 2U);
+    EXPECT_EQ(atmos_tokens.at("atmos_network_id"), "5");
+}
+
+TEST(PPPTest, SSRProductsInterveningAtmosRowsDoNotHideNearbyUra) {
+    SSRProducts ssr_products;
+    const SatelliteId satellite(GNSSSystem::Galileo, 4);
+
+    SSROrbitClockCorrection atmos;
+    atmos.satellite = satellite;
+    atmos.time = GNSSTime(2414, 345606.0);
+    atmos.atmos_valid = true;
+    atmos.atmos_network_id = 5;
+    atmos.atmos_tokens["atmos_network_id"] = "5";
+    ssr_products.addCorrection(atmos);
+
+    SSROrbitClockCorrection orbit_clock;
+    orbit_clock.satellite = satellite;
+    orbit_clock.time = GNSSTime(2414, 345635.0);
+    orbit_clock.orbit_correction_ecef = Vector3d(1.0, 2.0, 3.0);
+    orbit_clock.clock_correction_m = 4.0;
+    orbit_clock.orbit_valid = true;
+    orbit_clock.clock_valid = true;
+    ssr_products.addCorrection(orbit_clock);
+
+    SSROrbitClockCorrection ura_sample = orbit_clock;
+    ura_sample.time = GNSSTime(2414, 345640.0);
+    ura_sample.ura_sigma_m = 0.026;
+    ura_sample.ura_valid = true;
+    ssr_products.addCorrection(ura_sample);
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    double ura_sigma_m = 0.0;
+    std::map<std::string, std::string> atmos_tokens;
+    ASSERT_TRUE(ssr_products.interpolateCorrection(
+        satellite,
+        GNSSTime(2414, 345630.0),
+        orbit_correction,
+        clock_correction_m,
+        &ura_sigma_m,
+        nullptr,
+        nullptr,
+        &atmos_tokens));
+
+    EXPECT_NEAR(orbit_correction.x(), 1.0, 1e-12);
+    EXPECT_NEAR(clock_correction_m, 4.0, 1e-12);
+    EXPECT_NEAR(ura_sigma_m, 0.026, 1e-12);
+    ASSERT_EQ(atmos_tokens.size(), 1U);
+    EXPECT_EQ(atmos_tokens.at("atmos_network_id"), "5");
+}
+
+TEST(PPPTest, SSRProductsCausalModeDoesNotUseFutureOrbitClockCorrections) {
+    SSRProducts ssr_products;
+    const SatelliteId satellite(GNSSSystem::GPS, 1);
+
+    SSROrbitClockCorrection before;
+    before.satellite = satellite;
+    before.time = GNSSTime(2414, 345570.0);
+    before.orbit_correction_ecef = Vector3d(1.0, -2.0, 3.0);
+    before.clock_correction_m = 4.0;
+    before.orbit_valid = true;
+    before.clock_valid = true;
+    ssr_products.addCorrection(before);
+
+    SSROrbitClockCorrection after = before;
+    after.time = GNSSTime(2414, 345630.0);
+    after.orbit_correction_ecef = Vector3d(3.0, -4.0, 5.0);
+    after.clock_correction_m = 8.0;
+    ssr_products.addCorrection(after);
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    ASSERT_TRUE(ssr_products.interpolateCorrection(satellite,
+                                                   GNSSTime(2414, 345600.0),
+                                                   orbit_correction,
+                                                   clock_correction_m,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   0,
+                                                   false,
+                                                   true));
+    EXPECT_NEAR(orbit_correction.x(), 1.0, 1e-12);
+    EXPECT_NEAR(orbit_correction.y(), -2.0, 1e-12);
+    EXPECT_NEAR(orbit_correction.z(), 3.0, 1e-12);
+    EXPECT_NEAR(clock_correction_m, 4.0, 1e-12);
+
+    SSRProducts future_only;
+    future_only.addCorrection(after);
+    orbit_correction = Vector3d(9.0, 9.0, 9.0);
+    clock_correction_m = 9.0;
+    EXPECT_FALSE(future_only.interpolateCorrection(satellite,
+                                                   GNSSTime(2414, 345600.0),
+                                                   orbit_correction,
+                                                   clock_correction_m,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   0,
+                                                   false,
+                                                   true));
+    EXPECT_TRUE(orbit_correction.isZero(0.0));
+    EXPECT_DOUBLE_EQ(clock_correction_m, 0.0);
+}
+
+TEST(PPPTest, NavigationDataSelectsEphemerisByIode) {
+    NavigationData nav_data;
+
+    Ephemeris matching = makeBroadcastGpsEphemeris(1);
+    matching.iode = 77;
+    matching.toe = GNSSTime(matching.week, 345600.0);
+    matching.toc = matching.toe;
+    matching.toes = matching.toe.tow;
+
+    Ephemeris closer_wrong_iode = matching;
+    closer_wrong_iode.iode = 78;
+    closer_wrong_iode.toe = GNSSTime(matching.week, 345630.0);
+    closer_wrong_iode.toc = closer_wrong_iode.toe;
+    closer_wrong_iode.toes = closer_wrong_iode.toe.tow;
+
+    nav_data.addEphemeris(matching);
+    nav_data.addEphemeris(closer_wrong_iode);
+
+    const GNSSTime query_time(matching.week, 345625.0);
+    const Ephemeris* default_eph = nav_data.getEphemeris(matching.satellite, query_time);
+    ASSERT_NE(default_eph, nullptr);
+    EXPECT_EQ(default_eph->iode, 78);
+
+    const Ephemeris* matched_eph = nav_data.getEphemerisByIode(matching.satellite, 77, query_time);
+    ASSERT_NE(matched_eph, nullptr);
+    EXPECT_EQ(matched_eph->iode, 77);
+    EXPECT_EQ(nav_data.getEphemerisByIode(matching.satellite, 99, query_time), nullptr);
+}
+
+TEST(PPPTest, NavigationDataRtklibSelectionSkipsCurrentGalileoToe) {
+    NavigationData nav_data;
+
+    Ephemeris previous = makeBroadcastGpsEphemeris(6);
+    previous.satellite = SatelliteId(GNSSSystem::Galileo, 6);
+    previous.iode = 34;
+    previous.toe = GNSSTime(previous.week, 172800.0);
+    previous.toc = previous.toe;
+    previous.toes = previous.toe.tow;
+
+    Ephemeris strict_ssr = previous;
+    strict_ssr.iode = 33;
+    strict_ssr.toe = GNSSTime(previous.week, 172200.0);
+    strict_ssr.toc = strict_ssr.toe;
+    strict_ssr.toes = strict_ssr.toe.tow;
+
+    Ephemeris current = previous;
+    current.iode = 35;
+    current.toe = GNSSTime(previous.week, 173400.0);
+    current.toc = current.toe;
+    current.toes = current.toe.tow;
+
+    nav_data.addEphemeris(strict_ssr);
+    nav_data.addEphemeris(previous);
+    nav_data.addEphemeris(current);
+
+    const GNSSTime query_time(previous.week, 173400.0);
+    const Ephemeris* default_eph = nav_data.getEphemeris(previous.satellite, query_time);
+    ASSERT_NE(default_eph, nullptr);
+    EXPECT_EQ(default_eph->iode, 35);
+
+    const Ephemeris* rtklib_eph = nav_data.getRtklibEphemeris(previous.satellite, query_time);
+    ASSERT_NE(rtklib_eph, nullptr);
+    EXPECT_EQ(rtklib_eph->iode, 34);
+}
+
+TEST(PPPTest, NavigationDataMatchesBeiDouSsrIodeByToeModulo) {
+    NavigationData nav_data;
+
+    Ephemeris matching = makeBroadcastGpsEphemeris(29);
+    matching.satellite = SatelliteId(GNSSSystem::BeiDou, 29);
+    matching.iode = 5;
+    matching.toe = GNSSTime(matching.week, 345600.0);
+    matching.toc = matching.toe;
+    matching.toes = 2048.0 + 12.0 * 8.0;
+
+    Ephemeris wrong_toe = matching;
+    wrong_toe.iode = 12;
+    wrong_toe.toe = GNSSTime(matching.week, 345630.0);
+    wrong_toe.toc = wrong_toe.toe;
+    wrong_toe.toes = 2048.0 + 13.0 * 8.0;
+
+    nav_data.addEphemeris(matching);
+    nav_data.addEphemeris(wrong_toe);
+
+    const Ephemeris* matched_eph = nav_data.getEphemerisByIode(
+        matching.satellite, 12, GNSSTime(matching.week, 345625.0));
+    ASSERT_NE(matched_eph, nullptr);
+    EXPECT_DOUBLE_EQ(matched_eph->toes, matching.toes);
+    EXPECT_EQ(nav_data.getEphemerisByIode(
+                  matching.satellite, 99, GNSSTime(matching.week, 345625.0)),
+              nullptr);
+}
+
+TEST(PPPTest, SSRProductsReturnsOrbitIodeAndAvoidsCrossIodeOrbitInterpolation) {
+    SSRProducts ssr_products;
+    const SatelliteId satellite(GNSSSystem::GPS, 1);
+
+    SSROrbitClockCorrection before;
+    before.satellite = satellite;
+    before.time = GNSSTime(2414, 345570.0);
+    before.orbit_correction_ecef = Vector3d(1.0, -2.0, 3.0);
+    before.clock_correction_m = 4.0;
+    before.orbit_iode = 77;
+    before.orbit_valid = true;
+    before.clock_valid = true;
+    ssr_products.addCorrection(before);
+
+    SSROrbitClockCorrection after = before;
+    after.time = GNSSTime(2414, 345630.0);
+    after.orbit_correction_ecef = Vector3d(3.0, -4.0, 5.0);
+    after.clock_correction_m = 8.0;
+    after.orbit_iode = 78;
+    ssr_products.addCorrection(after);
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    int orbit_iode = -1;
+    ASSERT_TRUE(ssr_products.interpolateCorrection(satellite,
+                                                   GNSSTime(2414, 345600.0),
+                                                   orbit_correction,
+                                                   clock_correction_m,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   nullptr,
+                                                   0,
+                                                   true,
+                                                   true,
+                                                   &orbit_iode));
+
+    EXPECT_NEAR(orbit_correction.x(), 1.0, 1e-12);
+    EXPECT_NEAR(orbit_correction.y(), -2.0, 1e-12);
+    EXPECT_NEAR(orbit_correction.z(), 3.0, 1e-12);
+    EXPECT_NEAR(clock_correction_m, 6.0, 1e-12);
+    EXPECT_EQ(orbit_iode, 77);
+}
+
+TEST(PPPTest, ProcessorReportsSsrOrbitIodeMismatchDiagnostics) {
+    const auto ssr_path = tempFilePath("libgnss_ppp_iode_mismatch_diagnostic.csv");
+    std::filesystem::remove(ssr_path);
+
+    Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    eph.iode = 77;
+    eph.valid = true;
+    const GNSSTime epoch_time = eph.toe;
+
+    std::ostringstream ssr_text;
+    ssr_text << epoch_time.week << "," << epoch_time.tow
+             << ",G01,0.1,0.0,0.0,0.2,orbit_iode=99\n";
+    writeTextFile(ssr_path, ssr_text.str());
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(10.0, -5.0, 3.0);
+    std::vector<SyntheticSatellite> satellites = makeSyntheticSatellites(true_receiver_position);
+    satellites.resize(1);
+    ObservationData epoch = makeSyntheticEpoch(
+        epoch_time,
+        true_receiver_position,
+        approximate_receiver_position,
+        satellites);
+
+    NavigationData nav_data;
+    nav_data.addEphemeris(eph);
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_precise_orbits = false;
+    ppp_config.use_precise_clocks = false;
+    ppp_config.use_ssr_corrections = true;
+    ppp_config.require_ssr_orbit_clock = true;
+    ppp_config.enforce_ssr_orbit_iode = true;
+    ppp_config.ssr_file_path = ssr_path.string();
+    ppp_config.prefer_receiver_position_seed = true;
+    ppp_config.estimate_troposphere = false;
+    ppp_config.convergence_min_epochs = 1;
+    PPPProcessor processor(ppp_config);
+
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 1;
+    processor_config.elevation_mask = 0.0;
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    (void)processor.processEpoch(epoch, nav_data);
+
+    const auto& diagnostics = processor.getLastSSRApplicationDiagnostics();
+    ASSERT_FALSE(diagnostics.empty());
+    bool saw_mismatch = false;
+    for (const auto& diagnostic : diagnostics) {
+        if (diagnostic.satellite == SatelliteId(GNSSSystem::GPS, 1)) {
+            saw_mismatch = true;
+            EXPECT_TRUE(diagnostic.ssr_available);
+            EXPECT_EQ(diagnostic.ssr_orbit_iode, 99);
+            EXPECT_EQ(diagnostic.broadcast_iode, 77);
+            EXPECT_FALSE(diagnostic.orbit_clock_applied);
+            EXPECT_FALSE(diagnostic.valid_after_corrections);
+            EXPECT_EQ(
+                diagnostic.orbit_clock_skip_reason,
+                "ssr_orbit_iode_no_matching_ephemeris");
+        }
+    }
+    EXPECT_TRUE(saw_mismatch);
+
+    std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, ProcessorAdmissionOnlySsrOrbitIodeRejectsMismatch) {
+    const auto ssr_path = tempFilePath("libgnss_ppp_iode_admission_only_test.csv");
+    std::filesystem::remove(ssr_path);
+
+    Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    eph.iode = 77;
+    eph.valid = true;
+    const GNSSTime epoch_time = eph.toe;
+
+    std::ostringstream ssr_text;
+    ssr_text << epoch_time.week << "," << epoch_time.tow
+             << ",G01,0.1,0.0,0.0,0.2,orbit_iode=99\n";
+    writeTextFile(ssr_path, ssr_text.str());
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(10.0, -5.0, 3.0);
+    std::vector<SyntheticSatellite> satellites = makeSyntheticSatellites(true_receiver_position);
+    satellites.resize(1);
+    ObservationData epoch = makeSyntheticEpoch(
+        epoch_time,
+        true_receiver_position,
+        approximate_receiver_position,
+        satellites);
+
+    NavigationData nav_data;
+    nav_data.addEphemeris(eph);
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_precise_orbits = false;
+    ppp_config.use_precise_clocks = false;
+    ppp_config.use_ssr_corrections = true;
+    ppp_config.require_ssr_orbit_clock = true;
+    ppp_config.enforce_ssr_orbit_iode = false;
+    ppp_config.enforce_ssr_orbit_iode_admission_only = true;
+    ppp_config.ssr_file_path = ssr_path.string();
+    ppp_config.prefer_receiver_position_seed = true;
+    ppp_config.estimate_troposphere = false;
+    ppp_config.convergence_min_epochs = 1;
+    PPPProcessor processor(ppp_config);
+
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 1;
+    processor_config.elevation_mask = 0.0;
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    (void)processor.processEpoch(epoch, nav_data);
+
+    const auto& diagnostics = processor.getLastSSRApplicationDiagnostics();
+    ASSERT_FALSE(diagnostics.empty());
+    bool saw_mismatch = false;
+    for (const auto& diagnostic : diagnostics) {
+        if (diagnostic.satellite == SatelliteId(GNSSSystem::GPS, 1)) {
+            saw_mismatch = true;
+            EXPECT_TRUE(diagnostic.ssr_available);
+            EXPECT_EQ(diagnostic.ssr_orbit_iode, 99);
+            // Admission-only: broadcast IODE field should reflect the
+            // RTKLIB-selected ephemeris, not the mismatched match attempt.
+            EXPECT_FALSE(diagnostic.orbit_clock_applied);
+            EXPECT_FALSE(diagnostic.valid_after_corrections);
+            EXPECT_EQ(
+                diagnostic.orbit_clock_skip_reason,
+                "ssr_orbit_iode_no_matching_ephemeris");
+        }
+    }
+    EXPECT_TRUE(saw_mismatch);
+
+    std::filesystem::remove(ssr_path);
+}
+
 TEST(PPPTest, ProcessorLoadsRtcmSsrCorrectionsFromFile) {
     const auto rtcm_path = tempFilePath("libgnss_ppp_ssr_rtcm_test.rtcm3");
     std::filesystem::remove(rtcm_path);
@@ -1270,6 +2003,100 @@ TEST(PPPTest, ProcessorProducesConvergedFloatSolutionWithSyntheticPreciseProduct
     std::filesystem::remove(clk_path);
 }
 
+
+TEST(PPPTest, ProcessorSkipsBeiDouGeoSatellites) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_bds_geo_gate_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_bds_geo_gate_test.clk");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(8.0, -5.0, 3.0);
+    const auto gps_satellites = makeSyntheticSatellites(true_receiver_position);
+    std::vector<SyntheticSatellite> precise_satellites = gps_satellites;
+    const SyntheticSatellite beidou_geo{
+        SatelliteId(GNSSSystem::BeiDou, 3),
+        gps_satellites.front().position,
+    };
+    precise_satellites.push_back(beidou_geo);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 5, 0, 0.0);
+    const GNSSTime last_precise_time = first_time + 600.0;
+    writeTextFile(sp3_path, buildSp3Text(precise_satellites, first_time, last_precise_time));
+    writeTextFile(clk_path, buildClockText(precise_satellites, first_time, last_precise_time));
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_precise_orbits = true;
+    ppp_config.use_precise_clocks = true;
+    ppp_config.orbit_file_path = sp3_path.string();
+    ppp_config.clock_file_path = clk_path.string();
+    ppp_config.estimate_troposphere = false;
+    ppp_config.enable_ambiguity_resolution = false;
+    ppp_config.convergence_min_epochs = 1;
+    ppp_config.kinematic_mode = false;
+
+    PPPProcessor processor(ppp_config);
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    ObservationData epoch = makeSyntheticEpoch(
+        first_time,
+        true_receiver_position,
+        approximate_receiver_position,
+        gps_satellites);
+
+    NavigationData geometry_nav;
+    const auto geometry = geometry_nav.calculateGeometry(
+        true_receiver_position,
+        beidou_geo.position);
+    const double range_m = geodist(beidou_geo.position, true_receiver_position);
+    const double trop_delay_m = modeledPppTroposphereDelay(
+        true_receiver_position,
+        geometry.elevation,
+        first_time);
+
+    Observation b1(beidou_geo.id, SignalType::BDS_B1I);
+    b1.valid = true;
+    b1.has_pseudorange = true;
+    b1.has_carrier_phase = true;
+    b1.pseudorange = range_m + trop_delay_m;
+    b1.carrier_phase = (range_m + trop_delay_m) / constants::BDS_B1I_WAVELENGTH;
+    b1.snr = 48.0;
+    epoch.addObservation(b1);
+
+    Observation b2(beidou_geo.id, SignalType::BDS_B2I);
+    b2.valid = true;
+    b2.has_pseudorange = true;
+    b2.has_carrier_phase = true;
+    b2.pseudorange = range_m + trop_delay_m;
+    b2.carrier_phase = (range_m + trop_delay_m) / constants::BDS_B2I_WAVELENGTH;
+    b2.snr = 45.0;
+    epoch.addObservation(b2);
+
+    NavigationData nav_data;
+    const PositionSolution solution = processor.processEpoch(epoch, nav_data);
+    ASSERT_TRUE(solution.isValid());
+    EXPECT_EQ(solution.num_satellites, static_cast<int>(gps_satellites.size()));
+    const std::string beidou_geo_id = beidou_geo.id.toString();
+    for (const auto& satellite : solution.satellites_used) {
+        EXPECT_NE(satellite.toString(), beidou_geo_id);
+    }
+    for (const auto& diagnostic : processor.getLastPPPResidualDiagnostics()) {
+        EXPECT_NE(diagnostic.satellite.toString(), beidou_geo_id);
+    }
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+}
+
 TEST(PPPTest, ProcessorAppliesAtmosphericCorrectionsFromSampledSSRWithPreciseProducts) {
     const auto sp3_path = tempFilePath("libgnss_ppp_atmos_processor_test.sp3");
     const auto clk_path = tempFilePath("libgnss_ppp_atmos_processor_test.clk");
@@ -1340,6 +2167,50 @@ TEST(PPPTest, ProcessorAppliesAtmosphericCorrectionsFromSampledSSRWithPrecisePro
     EXPECT_GT(atmos_processor.getLastAppliedAtmosphericIonosphereCorrections(), 0);
     EXPECT_GT(atmos_processor.getLastAppliedAtmosphericTroposphereMeters(), 0.0);
     EXPECT_GT(atmos_processor.getLastAppliedAtmosphericIonosphereMeters(), 0.0);
+
+    const auto& diagnostics = atmos_processor.getLastSSRApplicationDiagnostics();
+    ASSERT_FALSE(diagnostics.empty());
+    bool saw_valid_atmospheric_diagnostic = false;
+    for (const auto& diagnostic : diagnostics) {
+        if (diagnostic.valid_after_corrections && diagnostic.ssr_available &&
+            diagnostic.atmos_token_count > 0 &&
+            std::abs(diagnostic.trop_correction_m) > 0.0 &&
+            std::abs(diagnostic.iono_correction_m) > 0.0) {
+            EXPECT_GT(diagnostic.elevation_deg, 0.0);
+            EXPECT_GT(diagnostic.variance_pr, 0.0);
+            EXPECT_GT(diagnostic.variance_cp, 0.0);
+            saw_valid_atmospheric_diagnostic = true;
+        }
+    }
+    EXPECT_TRUE(saw_valid_atmospheric_diagnostic);
+
+    const auto& filter_diagnostics =
+        atmos_processor.getLastPPPFilterIterationDiagnostics();
+    ASSERT_FALSE(filter_diagnostics.empty());
+    EXPECT_GT(filter_diagnostics.back().rows, 0);
+    EXPECT_GT(filter_diagnostics.back().code_rows, 0);
+    EXPECT_GT(filter_diagnostics.back().phase_rows, 0);
+    EXPECT_GE(filter_diagnostics.back().pos_delta_m, 0.0);
+    EXPECT_GE(filter_diagnostics.back().code_residual_rms_m, 0.0);
+    EXPECT_GE(filter_diagnostics.back().phase_residual_rms_m, 0.0);
+
+    const auto& residual_diagnostics =
+        atmos_processor.getLastPPPResidualDiagnostics();
+    ASSERT_FALSE(residual_diagnostics.empty());
+    bool saw_code_residual = false;
+    bool saw_phase_residual = false;
+    bool saw_positive_elevation = false;
+    for (const auto& diagnostic : residual_diagnostics) {
+        saw_code_residual = saw_code_residual || !diagnostic.carrier_phase;
+        saw_phase_residual = saw_phase_residual || diagnostic.carrier_phase;
+        saw_positive_elevation = saw_positive_elevation || diagnostic.elevation_deg > 0.0;
+        EXPECT_GT(diagnostic.variance_m2, 0.0);
+        EXPECT_TRUE(std::isfinite(diagnostic.residual_m));
+    }
+    EXPECT_TRUE(saw_code_residual);
+    EXPECT_TRUE(saw_phase_residual);
+    EXPECT_TRUE(saw_positive_elevation);
+
     EXPECT_LT(corrected_solution.residual_rms, baseline_solution.residual_rms);
     EXPECT_LT(
         (corrected_solution.position_ecef - true_receiver_position).norm(),
@@ -1350,6 +2221,595 @@ TEST(PPPTest, ProcessorAppliesAtmosphericCorrectionsFromSampledSSRWithPrecisePro
     std::filesystem::remove(clk_path);
     std::filesystem::remove(ssr_path);
 }
+
+
+TEST(PPPTest, ProcessorSkipsHighStdStecConstraint) {
+    const Vector3d true_receiver_position(-2700000.0, -4300000.0, 3850000.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(4.0, -3.0, 2.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const auto sp3_path = tempFilePath("ppp_high_std_stec.sp3");
+    const auto clk_path = tempFilePath("ppp_high_std_stec.clk");
+    const auto ssr_path = tempFilePath("ppp_high_std_stec.ssr");
+    const GNSSTime first_time = makeTime(2026, 3, 26, 3, 30, 0.0);
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, first_time + 300.0));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, first_time + 300.0));
+    writeTextFile(
+        ssr_path,
+        buildAtmosphericSsrText(satellites, true_receiver_position, first_time, 0.0, 15.0, 5.4665));
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_precise_orbits = true;
+    ppp_config.use_precise_clocks = true;
+    ppp_config.orbit_file_path = sp3_path.string();
+    ppp_config.clock_file_path = clk_path.string();
+    ppp_config.use_ssr_corrections = true;
+    ppp_config.ssr_file_path = ssr_path.string();
+    ppp_config.use_ionosphere_free = false;
+    ppp_config.estimate_ionosphere = true;
+    ppp_config.estimate_troposphere = false;
+    ppp_config.enable_ambiguity_resolution = false;
+    ppp_config.convergence_min_epochs = 1;
+    ppp_config.kinematic_mode = false;
+
+    PPPProcessor processor(ppp_config);
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    const ObservationData epoch = makeSyntheticEpochWithAtmosphericBiases(
+        first_time,
+        true_receiver_position,
+        approximate_receiver_position,
+        satellites,
+        0.0,
+        15.0);
+    ASSERT_TRUE(processor.processEpoch(epoch, nav_data).isValid());
+
+    bool saw_stec_diagnostic = false;
+    for (const auto& diagnostic : processor.getLastSSRApplicationDiagnostics()) {
+        if (diagnostic.valid_after_corrections && diagnostic.stec_tecu > 0.0) {
+            saw_stec_diagnostic = true;
+            EXPECT_FALSE(diagnostic.ionosphere_estimation_constraint);
+        }
+    }
+    EXPECT_TRUE(saw_stec_diagnostic);
+    EXPECT_EQ(processor.getLastAppliedAtmosphericIonosphereCorrections(), 0);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(ssr_path);
+}
+
+
+TEST(PPPTest, ProcessorAddsSecondaryCodeRowsInEstimatedIonosphereMode) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_multifrequency_code_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_multifrequency_code_test.clk");
+    const auto ssr_path = tempFilePath("libgnss_ppp_multifrequency_code_test.csv");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(ssr_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(12.0, -8.0, 4.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 3, 45, 0.0);
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, first_time + 300.0));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, first_time + 300.0));
+    writeTextFile(
+        ssr_path,
+        buildAtmosphericSsrText(satellites, true_receiver_position, first_time, 0.0, 15.0));
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_precise_orbits = true;
+    ppp_config.use_precise_clocks = true;
+    ppp_config.orbit_file_path = sp3_path.string();
+    ppp_config.clock_file_path = clk_path.string();
+    ppp_config.use_ssr_corrections = true;
+    ppp_config.ssr_file_path = ssr_path.string();
+    ppp_config.use_ionosphere_free = false;
+    ppp_config.estimate_ionosphere = true;
+    ppp_config.estimate_troposphere = false;
+    ppp_config.enable_ambiguity_resolution = false;
+    ppp_config.convergence_min_epochs = 1;
+    ppp_config.kinematic_mode = false;
+
+    PPPProcessor processor(ppp_config);
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    const ObservationData epoch = makeSyntheticEpochWithAtmosphericBiases(
+        first_time,
+        true_receiver_position,
+        approximate_receiver_position,
+        satellites,
+        0.0,
+        15.0);
+    const PositionSolution first_solution = processor.processEpoch(epoch, nav_data);
+    ASSERT_TRUE(first_solution.isValid());
+    EXPECT_EQ(first_solution.num_satellites, static_cast<int>(satellites.size()));
+    EXPECT_EQ(first_solution.num_frequencies, 2);
+
+    int l1_diagnostics = 0;
+    int l2_diagnostics = 0;
+    int l1_constraints = 0;
+    int l2_constraints = 0;
+    double prn1_l1_iono_m = 0.0;
+    double prn1_l2_iono_m = 0.0;
+    for (const auto& diagnostic : processor.getLastSSRApplicationDiagnostics()) {
+        if (!diagnostic.valid_after_corrections) {
+            continue;
+        }
+        if (diagnostic.primary_signal == SignalType::GPS_L1CA) {
+            ++l1_diagnostics;
+            if (diagnostic.ionosphere_estimation_constraint) {
+                ++l1_constraints;
+            }
+            if (diagnostic.satellite.prn == 1) {
+                prn1_l1_iono_m = diagnostic.iono_correction_m;
+            }
+        } else if (diagnostic.primary_signal == SignalType::GPS_L2C) {
+            ++l2_diagnostics;
+            if (diagnostic.ionosphere_estimation_constraint) {
+                ++l2_constraints;
+            }
+            if (diagnostic.satellite.prn == 1) {
+                prn1_l2_iono_m = diagnostic.iono_correction_m;
+            }
+        }
+    }
+    EXPECT_EQ(l1_diagnostics, static_cast<int>(satellites.size()));
+    EXPECT_EQ(l2_diagnostics, static_cast<int>(satellites.size()));
+    EXPECT_EQ(l1_constraints, static_cast<int>(satellites.size()));
+    EXPECT_EQ(l2_constraints, 0);
+    ASSERT_GT(prn1_l1_iono_m, 0.0);
+    ASSERT_GT(prn1_l2_iono_m, 0.0);
+    EXPECT_NEAR(
+        prn1_l2_iono_m / prn1_l1_iono_m,
+        std::pow(constants::GPS_L1_FREQ / constants::GPS_L2_FREQ, 2.0),
+        1e-9);
+
+    const auto first_filter_diagnostics = processor.getLastPPPFilterIterationDiagnostics();
+    ASSERT_FALSE(first_filter_diagnostics.empty());
+    EXPECT_EQ(
+        first_filter_diagnostics.front().code_rows,
+        static_cast<int>(satellites.size() * 2U));
+    EXPECT_EQ(
+        first_filter_diagnostics.front().ionosphere_constraint_rows,
+        static_cast<int>(satellites.size()));
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, ProcessorRejectsRowsMissingRequiredSsrCodeBias) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_required_ssr_bias_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_required_ssr_bias_test.clk");
+    const auto ssr_path = tempFilePath("libgnss_ppp_required_ssr_bias_test.csv");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(ssr_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(12.0, -8.0, 4.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 3, 45, 0.0);
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, first_time + 300.0));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, first_time + 300.0));
+    writeTextFile(
+        ssr_path,
+        buildAtmosphericSsrText(
+            satellites,
+            true_receiver_position,
+            first_time,
+            0.0,
+            15.0,
+            0.5,
+            ",cbias:2=0.000000,pbias:2=0.000000"));
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_precise_orbits = true;
+    ppp_config.use_precise_clocks = true;
+    ppp_config.orbit_file_path = sp3_path.string();
+    ppp_config.clock_file_path = clk_path.string();
+    ppp_config.use_ssr_corrections = true;
+    ppp_config.require_ssr_observation_biases = true;
+    ppp_config.ssr_file_path = ssr_path.string();
+    ppp_config.use_ionosphere_free = false;
+    ppp_config.estimate_ionosphere = true;
+    ppp_config.estimate_troposphere = false;
+    ppp_config.enable_ambiguity_resolution = false;
+    ppp_config.convergence_min_epochs = 1;
+    ppp_config.enable_outlier_detection = false;
+    ppp_config.kinematic_mode = false;
+
+    PPPProcessor processor(ppp_config);
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    const ObservationData epoch = makeSyntheticEpochWithAtmosphericBiases(
+        first_time,
+        true_receiver_position,
+        approximate_receiver_position,
+        satellites,
+        0.0,
+        15.0);
+    ASSERT_TRUE(processor.processEpoch(epoch, nav_data).isValid());
+
+    int l1_valid = 0;
+    int l2_rejected = 0;
+    for (const auto& diagnostic : processor.getLastSSRApplicationDiagnostics()) {
+        if (diagnostic.primary_signal == SignalType::GPS_L1CA) {
+            if (diagnostic.valid_after_corrections) {
+                ++l1_valid;
+            }
+        } else if (diagnostic.primary_signal == SignalType::GPS_L2C) {
+            if (!diagnostic.valid_after_corrections &&
+                diagnostic.orbit_clock_skip_reason == "ssr_code_bias_unavailable") {
+                ++l2_rejected;
+            }
+        }
+    }
+    EXPECT_EQ(l1_valid, static_cast<int>(satellites.size()));
+    EXPECT_EQ(l2_rejected, static_cast<int>(satellites.size()));
+
+    const auto filter_diagnostics = processor.getLastPPPFilterIterationDiagnostics();
+    ASSERT_FALSE(filter_diagnostics.empty());
+    EXPECT_EQ(filter_diagnostics.front().code_rows, static_cast<int>(satellites.size()));
+    EXPECT_EQ(filter_diagnostics.front().ionosphere_constraint_rows, static_cast<int>(satellites.size()));
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, ProcessorAppliesRawSecondaryBiasesToEstimatedIonosphereRows) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_secondary_bias_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_secondary_bias_test.clk");
+    const auto ssr_path = tempFilePath("libgnss_ppp_secondary_bias_test.csv");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(ssr_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(12.0, -8.0, 4.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 3, 45, 0.0);
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, first_time + 300.0));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, first_time + 300.0));
+    writeTextFile(
+        ssr_path,
+        buildAtmosphericSsrText(
+            satellites,
+            true_receiver_position,
+            first_time,
+            0.0,
+            15.0,
+            0.5,
+            ",cbias:2=-0.120000,cbias:9=0.340000,pbias:2=0.015000,pbias:9=-0.025000"));
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_precise_orbits = true;
+    ppp_config.use_precise_clocks = true;
+    ppp_config.orbit_file_path = sp3_path.string();
+    ppp_config.clock_file_path = clk_path.string();
+    ppp_config.use_ssr_corrections = true;
+    ppp_config.ssr_file_path = ssr_path.string();
+    ppp_config.use_ionosphere_free = false;
+    ppp_config.estimate_ionosphere = true;
+    ppp_config.enable_per_frequency_phase_bias_states = true;
+    ppp_config.estimate_troposphere = false;
+    ppp_config.enable_ambiguity_resolution = false;
+    ppp_config.convergence_min_epochs = 1;
+    ppp_config.enable_outlier_detection = false;
+    ppp_config.kinematic_mode = false;
+
+    PPPProcessor processor(ppp_config);
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    const ObservationData epoch = makeSyntheticEpochWithAtmosphericBiases(
+        first_time,
+        true_receiver_position,
+        approximate_receiver_position,
+        satellites,
+        0.0,
+        15.0,
+        SignalType::GPS_L2P);
+    ASSERT_TRUE(processor.processEpoch(epoch, nav_data).isValid());
+
+    bool saw_l1_bias = false;
+    bool saw_l2_bias = false;
+    for (const auto& diagnostic : processor.getLastSSRApplicationDiagnostics()) {
+        if (!diagnostic.valid_after_corrections || diagnostic.satellite.prn != 1) {
+            continue;
+        }
+        if (diagnostic.primary_signal == SignalType::GPS_L1CA) {
+            saw_l1_bias = true;
+            EXPECT_EQ(diagnostic.secondary_signal, SignalType::GPS_L2P);
+            EXPECT_EQ(diagnostic.frequency_index, 0);
+            EXPECT_NEAR(diagnostic.ionosphere_coefficient, 1.0, 1e-12);
+            EXPECT_TRUE(diagnostic.has_carrier_phase);
+            EXPECT_NEAR(diagnostic.code_bias_m, -0.12, 1e-12);
+            EXPECT_NEAR(diagnostic.phase_bias_m, 0.015, 1e-12);
+            EXPECT_TRUE(diagnostic.ionosphere_estimation_constraint);
+        } else if (diagnostic.primary_signal == SignalType::GPS_L2P) {
+            saw_l2_bias = true;
+            EXPECT_EQ(diagnostic.secondary_signal, SignalType::SIGNAL_TYPE_COUNT);
+            EXPECT_EQ(diagnostic.frequency_index, 1);
+            EXPECT_GT(diagnostic.ionosphere_coefficient, 1.0);
+            EXPECT_TRUE(diagnostic.has_carrier_phase);
+            EXPECT_NEAR(diagnostic.code_bias_m, 0.34, 1e-12);
+            EXPECT_NEAR(diagnostic.phase_bias_m, -0.025, 1e-12);
+            EXPECT_GT(diagnostic.iono_correction_m, 0.0);
+            EXPECT_FALSE(diagnostic.ionosphere_estimation_constraint);
+        }
+    }
+    EXPECT_TRUE(saw_l1_bias);
+    EXPECT_TRUE(saw_l2_bias);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, ProcessorAddsSecondaryCarrierRowsWhenPerFrequencyStatesEnabled) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_multifrequency_phase_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_multifrequency_phase_test.clk");
+    const auto ssr_path = tempFilePath("libgnss_ppp_multifrequency_phase_test.csv");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(ssr_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(12.0, -8.0, 4.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 3, 45, 0.0);
+    const GNSSTime second_time = first_time + 30.0;
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, first_time + 300.0));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, first_time + 300.0));
+    writeTextFile(
+        ssr_path,
+        buildAtmosphericSsrText(satellites, true_receiver_position, first_time, 0.0, 15.0) +
+            buildAtmosphericSsrText(satellites, true_receiver_position, second_time, 0.0, 15.0));
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_precise_orbits = true;
+    ppp_config.use_precise_clocks = true;
+    ppp_config.orbit_file_path = sp3_path.string();
+    ppp_config.clock_file_path = clk_path.string();
+    ppp_config.use_ssr_corrections = true;
+    ppp_config.ssr_file_path = ssr_path.string();
+    ppp_config.use_ionosphere_free = false;
+    ppp_config.estimate_ionosphere = true;
+    ppp_config.enable_per_frequency_phase_bias_states = true;
+    ppp_config.estimate_troposphere = false;
+    ppp_config.enable_ambiguity_resolution = false;
+    ppp_config.convergence_min_epochs = 1;
+    ppp_config.enable_outlier_detection = false;
+    ppp_config.kinematic_mode = false;
+
+    PPPProcessor processor(ppp_config);
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    const ObservationData first_epoch = makeSyntheticEpochWithAtmosphericBiases(
+        first_time,
+        true_receiver_position,
+        approximate_receiver_position,
+        satellites,
+        0.0,
+        15.0);
+    ASSERT_TRUE(processor.processEpoch(first_epoch, nav_data).isValid());
+
+    const ObservationData second_epoch = makeSyntheticEpochWithAtmosphericBiases(
+        second_time,
+        true_receiver_position,
+        approximate_receiver_position,
+        satellites,
+        0.0,
+        15.0);
+    ASSERT_TRUE(processor.processEpoch(second_epoch, nav_data).isValid());
+
+    const auto diagnostics = processor.getLastPPPFilterIterationDiagnostics();
+    ASSERT_FALSE(diagnostics.empty());
+    EXPECT_EQ(diagnostics.front().code_rows, static_cast<int>(satellites.size() * 2U));
+    EXPECT_EQ(diagnostics.front().phase_rows, static_cast<int>(satellites.size() * 2U));
+    EXPECT_EQ(
+        diagnostics.front().ionosphere_constraint_rows,
+        static_cast<int>(satellites.size()));
+
+    int l1_phase_diagnostics = 0;
+    int l2_phase_diagnostics = 0;
+    for (const auto& diagnostic : processor.getLastSSRApplicationDiagnostics()) {
+        if (!diagnostic.valid_after_corrections) {
+            continue;
+        }
+        if (diagnostic.frequency_index == 0 && diagnostic.has_carrier_phase) {
+            ++l1_phase_diagnostics;
+        } else if (diagnostic.frequency_index == 1 && diagnostic.has_carrier_phase) {
+            ++l2_phase_diagnostics;
+            EXPECT_GT(diagnostic.ionosphere_coefficient, 1.0);
+        }
+    }
+    EXPECT_EQ(l1_phase_diagnostics, static_cast<int>(satellites.size()));
+    EXPECT_EQ(l2_phase_diagnostics, static_cast<int>(satellites.size()));
+
+    int l1_phase_residuals = 0;
+    int l2_phase_residuals = 0;
+    int ionosphere_constraint_residuals = 0;
+    for (const auto& residual : processor.getLastPPPResidualDiagnostics()) {
+        if (residual.ionosphere_constraint) {
+            ++ionosphere_constraint_residuals;
+            EXPECT_EQ(residual.frequency_index, 0);
+            continue;
+        }
+        if (residual.carrier_phase && !residual.phase_candidate && residual.iono_state_m != 0.0) {
+            EXPECT_TRUE(residual.phase_accepted);
+            EXPECT_TRUE(residual.phase_ready);
+            EXPECT_GE(residual.ambiguity_state_index, 0);
+            EXPECT_GE(residual.ambiguity_lock_count, residual.required_lock_count);
+            if (residual.frequency_index == 0) {
+                ++l1_phase_residuals;
+                EXPECT_EQ(residual.primary_signal, SignalType::GPS_L1CA);
+            } else if (residual.frequency_index == 1) {
+                ++l2_phase_residuals;
+                EXPECT_EQ(residual.primary_signal, SignalType::GPS_L2C);
+                EXPECT_EQ(residual.secondary_signal, SignalType::SIGNAL_TYPE_COUNT);
+                EXPECT_GT(residual.ionosphere_coefficient, 1.0);
+            }
+        }
+    }
+    EXPECT_GT(l1_phase_residuals, 0);
+    EXPECT_GT(l2_phase_residuals, 0);
+    EXPECT_GT(ionosphere_constraint_residuals, 0);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, ProcessorCreatesIonosphereStateForLateSatellite) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_late_iono_state_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_late_iono_state_test.clk");
+    const auto ssr_path = tempFilePath("libgnss_ppp_late_iono_state_test.csv");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(ssr_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(12.0, -8.0, 4.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+    ASSERT_GE(satellites.size(), 6U);
+    const SatelliteId late_satellite = satellites.back().id;
+    const std::vector<SyntheticSatellite> initial_satellites(
+        satellites.begin(), satellites.end() - 1);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 4, 0, 0.0);
+    const GNSSTime last_precise_time = first_time + 600.0;
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, last_precise_time));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, last_precise_time));
+    writeTextFile(
+        ssr_path,
+        buildAtmosphericSsrText(satellites, true_receiver_position, first_time, 0.0, 15.0));
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_precise_orbits = true;
+    ppp_config.use_precise_clocks = true;
+    ppp_config.orbit_file_path = sp3_path.string();
+    ppp_config.clock_file_path = clk_path.string();
+    ppp_config.use_ssr_corrections = true;
+    ppp_config.ssr_file_path = ssr_path.string();
+    ppp_config.use_ionosphere_free = false;
+    ppp_config.estimate_ionosphere = true;
+    ppp_config.estimate_troposphere = false;
+    ppp_config.enable_ambiguity_resolution = false;
+    ppp_config.convergence_min_epochs = 1;
+    ppp_config.kinematic_mode = false;
+
+    PPPProcessor processor(ppp_config);
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    const ObservationData first_epoch = makeSyntheticEpochWithAtmosphericBiases(
+        first_time,
+        true_receiver_position,
+        approximate_receiver_position,
+        initial_satellites,
+        0.0,
+        15.0);
+    ASSERT_TRUE(processor.processEpoch(first_epoch, nav_data).isValid());
+
+    const ObservationData second_epoch = makeSyntheticEpochWithAtmosphericBiases(
+        first_time + 30.0,
+        true_receiver_position,
+        approximate_receiver_position,
+        satellites,
+        0.0,
+        15.0);
+    ASSERT_TRUE(processor.processEpoch(second_epoch, nav_data).isValid());
+
+    bool late_satellite_constrained = false;
+    for (const auto& diagnostic : processor.getLastSSRApplicationDiagnostics()) {
+        if (diagnostic.satellite == late_satellite) {
+            late_satellite_constrained =
+                late_satellite_constrained || diagnostic.ionosphere_estimation_constraint;
+            EXPECT_TRUE(diagnostic.valid_after_corrections);
+            EXPECT_GT(diagnostic.stec_tecu, 0.0);
+        }
+    }
+    EXPECT_TRUE(late_satellite_constrained);
+
+    bool late_satellite_has_iono_state = false;
+    for (const auto& diagnostic : processor.getLastPPPResidualDiagnostics()) {
+        if (diagnostic.satellite == late_satellite && !diagnostic.carrier_phase) {
+            late_satellite_has_iono_state = std::abs(diagnostic.iono_state_m) > 0.1;
+        }
+    }
+    EXPECT_TRUE(late_satellite_has_iono_state);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(ssr_path);
+}
+
 
 TEST(PPPTest, ProcessorUsesModeledTroposphereWhenZenithStateIsDisabled) {
     const auto sp3_path = tempFilePath("libgnss_ppp_modeled_trop_test.sp3");

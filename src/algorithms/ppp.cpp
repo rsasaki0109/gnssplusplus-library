@@ -6,6 +6,7 @@
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/io/qzss_l6.hpp>
 #include <libgnss++/io/rtcm.hpp>
@@ -104,9 +105,47 @@ std::string extractAntexFrequencyCode(const std::string& line) {
     return "";
 }
 
+bool parseAntexNoaziValues(const std::string& line,
+                           std::array<double, 19>& pcv_m) {
+    pcv_m.fill(0.0);
+    std::istringstream iss(line);
+    std::string token;
+    if (!(iss >> token) || token != "NOAZI") {
+        return false;
+    }
+    double value_mm = 0.0;
+    int count = 0;
+    while (count < static_cast<int>(pcv_m.size()) && iss >> value_mm) {
+        pcv_m[static_cast<size_t>(count)] = value_mm * 1e-3;
+        ++count;
+    }
+    if (count == 0) {
+        return false;
+    }
+    for (; count < static_cast<int>(pcv_m.size()); ++count) {
+        pcv_m[static_cast<size_t>(count)] = pcv_m[static_cast<size_t>(count - 1)];
+    }
+    return true;
+}
+
+double interpolateNoaziPcv(const std::array<double, 19>& pcv_m,
+                           double zenith_angle_deg) {
+    const double a = zenith_angle_deg / 5.0;
+    const int index = static_cast<int>(a);
+    if (index < 0) {
+        return pcv_m.front();
+    }
+    if (index >= 18) {
+        return pcv_m.back();
+    }
+    const double fraction = a - static_cast<double>(index);
+    return pcv_m[static_cast<size_t>(index)] * (1.0 - fraction) +
+           pcv_m[static_cast<size_t>(index + 1)] * fraction;
+}
+
 bool loadReceiverAntexOffsets(
     const std::string& filename,
-    std::map<std::string, std::map<SignalType, Vector3d>>& receiver_offsets) {
+    std::map<std::string, ReceiverAntexEntry>& receiver_offsets) {
     receiver_offsets.clear();
     std::ifstream input(filename);
     if (!input.is_open()) {
@@ -117,7 +156,7 @@ bool loadReceiverAntexOffsets(
     bool receiver_entry = false;
     SignalType current_signal = SignalType::SIGNAL_TYPE_COUNT;
     std::string current_type;
-    std::map<SignalType, Vector3d> current_offsets;
+    ReceiverAntexEntry current_entry;
     std::string line;
     while (std::getline(input, line)) {
         const std::string label = line.size() >= 60 ? trimCopy(line.substr(60)) : "";
@@ -126,15 +165,16 @@ bool loadReceiverAntexOffsets(
             receiver_entry = false;
             current_signal = SignalType::SIGNAL_TYPE_COUNT;
             current_type.clear();
-            current_offsets.clear();
+            current_entry = ReceiverAntexEntry{};
             continue;
         }
         if (!in_antenna) {
             continue;
         }
         if (label == "END OF ANTENNA") {
-            if (receiver_entry && !current_type.empty() && !current_offsets.empty()) {
-                receiver_offsets[current_type] = current_offsets;
+            if (receiver_entry && !current_type.empty() &&
+                (!current_entry.offsets_enu_m.empty() || !current_entry.noazi_pcv_m.empty())) {
+                receiver_offsets[current_type] = current_entry;
             }
             in_antenna = false;
             continue;
@@ -166,13 +206,162 @@ bool loadReceiverAntexOffsets(
             double east_mm = 0.0;
             double up_mm = 0.0;
             if (iss >> north_mm >> east_mm >> up_mm) {
-                current_offsets[current_signal] =
+                current_entry.offsets_enu_m[current_signal] =
                     Vector3d(east_mm * 1e-3, north_mm * 1e-3, up_mm * 1e-3);
+            }
+            continue;
+        }
+        if (line.find("NOAZI") != std::string::npos &&
+            current_signal != SignalType::SIGNAL_TYPE_COUNT) {
+            std::array<double, 19> pcv_m{};
+            if (parseAntexNoaziValues(line, pcv_m)) {
+                current_entry.noazi_pcv_m[current_signal] = pcv_m;
             }
         }
     }
 
     return !receiver_offsets.empty();
+}
+
+bool satelliteIdFromAntexSerial(const std::string& serial_field, SatelliteId& satellite) {
+    const std::string serial = trimCopy(serial_field);
+    if (serial.size() < 2) {
+        return false;
+    }
+    GNSSSystem system = GNSSSystem::UNKNOWN;
+    switch (serial[0]) {
+        case 'G': system = GNSSSystem::GPS; break;
+        case 'R': system = GNSSSystem::GLONASS; break;
+        case 'E': system = GNSSSystem::Galileo; break;
+        case 'C': system = GNSSSystem::BeiDou; break;
+        case 'J': system = GNSSSystem::QZSS; break;
+        default: return false;
+    }
+    try {
+        const int prn = std::stoi(serial.substr(1));
+        if (prn <= 0 || prn > 255) {
+            return false;
+        }
+        satellite = SatelliteId(system, static_cast<uint8_t>(prn));
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+bool parseAntexEpoch(const std::string& line, GNSSTime& time) {
+    std::istringstream iss(line.substr(0, std::min<size_t>(line.size(), 50U)));
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    int hour = 0;
+    int minute = 0;
+    double second = 0.0;
+    if (!(iss >> year >> month >> day >> hour >> minute >> second)) {
+        return false;
+    }
+    std::tm epoch_tm{};
+    epoch_tm.tm_year = year - 1900;
+    epoch_tm.tm_mon = month - 1;
+    epoch_tm.tm_mday = day;
+    epoch_tm.tm_hour = hour;
+    epoch_tm.tm_min = minute;
+    epoch_tm.tm_sec = static_cast<int>(std::floor(second));
+    const time_t seconds_since_unix = timegm(&epoch_tm);
+    if (seconds_since_unix == static_cast<time_t>(-1)) {
+        return false;
+    }
+    const auto tp = std::chrono::system_clock::from_time_t(seconds_since_unix) +
+        std::chrono::microseconds(
+            static_cast<long long>(std::llround((second - std::floor(second)) * 1e6)));
+    time = GNSSTime::fromSystemTime(tp);
+    return true;
+}
+
+bool loadSatelliteAntexOffsets(
+    const std::string& filename,
+    std::map<SatelliteId, std::vector<SatelliteAntexEntry>>& satellite_offsets) {
+    satellite_offsets.clear();
+    std::ifstream input(filename);
+    if (!input.is_open()) {
+        return false;
+    }
+
+    bool in_antenna = false;
+    bool satellite_entry = false;
+    SignalType current_signal = SignalType::SIGNAL_TYPE_COUNT;
+    SatelliteId current_satellite;
+    SatelliteAntexEntry current_entry;
+    std::string line;
+    while (std::getline(input, line)) {
+        const std::string label = line.size() >= 60 ? trimCopy(line.substr(60)) : "";
+        if (label == "START OF ANTENNA") {
+            in_antenna = true;
+            satellite_entry = false;
+            current_signal = SignalType::SIGNAL_TYPE_COUNT;
+            current_satellite = SatelliteId();
+            current_entry = SatelliteAntexEntry{};
+            continue;
+        }
+        if (!in_antenna) {
+            continue;
+        }
+        if (label == "END OF ANTENNA") {
+            if (satellite_entry && !current_entry.offsets_neu_m.empty()) {
+                satellite_offsets[current_satellite].push_back(current_entry);
+            }
+            in_antenna = false;
+            continue;
+        }
+        if (label == "TYPE / SERIAL NO") {
+            satellite_entry = satelliteIdFromAntexSerial(line.substr(20, 20), current_satellite);
+            continue;
+        }
+        if (!satellite_entry) {
+            continue;
+        }
+        if (label == "VALID FROM") {
+            current_entry.has_valid_from = parseAntexEpoch(line, current_entry.valid_from);
+            continue;
+        }
+        if (label == "VALID UNTIL") {
+            current_entry.has_valid_until = parseAntexEpoch(line, current_entry.valid_until);
+            continue;
+        }
+        if (label == "START OF FREQUENCY") {
+            current_signal = antexSignalType(extractAntexFrequencyCode(line));
+            continue;
+        }
+        if (label == "END OF FREQUENCY") {
+            current_signal = SignalType::SIGNAL_TYPE_COUNT;
+            continue;
+        }
+        if (label == "NORTH / EAST / UP" &&
+            current_signal != SignalType::SIGNAL_TYPE_COUNT) {
+            std::istringstream iss(line.substr(0, std::min<size_t>(line.size(), 30U)));
+            double north_mm = 0.0;
+            double east_mm = 0.0;
+            double up_mm = 0.0;
+            if (iss >> north_mm >> east_mm >> up_mm) {
+                current_entry.offsets_neu_m[current_signal] =
+                    Vector3d(north_mm * 1e-3, east_mm * 1e-3, up_mm * 1e-3);
+            }
+        }
+    }
+
+    for (auto& [satellite, entries] : satellite_offsets) {
+        std::sort(entries.begin(), entries.end(), [](const SatelliteAntexEntry& lhs,
+                                                      const SatelliteAntexEntry& rhs) {
+            if (lhs.has_valid_from != rhs.has_valid_from) {
+                return lhs.has_valid_from;
+            }
+            if (!lhs.has_valid_from) {
+                return false;
+            }
+            return lhs.valid_from < rhs.valid_from;
+        });
+    }
+    return !satellite_offsets.empty();
 }
 
 bool parseBlqValues(const std::string& line, std::array<double, 11>& values) {
@@ -320,6 +509,91 @@ Vector3d approximateSunPositionEcef(const GNSSTime& time) {
     return rotateEciToEcef(eci, greenwichMeanSiderealTime(time));
 }
 
+bool normalizeVector(const Vector3d& input, Vector3d& output) {
+    const double norm = input.norm();
+    if (!std::isfinite(norm) || norm <= 0.0) {
+        return false;
+    }
+    output = input / norm;
+    return true;
+}
+
+double nominalYawAngle(double beta_rad, double orbit_angle_rad) {
+    if (std::abs(beta_rad) < 1e-12 && std::abs(orbit_angle_rad) < 1e-12) {
+        return M_PI;
+    }
+    return std::atan2(-std::tan(beta_rad), std::sin(orbit_angle_rad)) + M_PI;
+}
+
+double calculatePhaseWindupCycles(const GNSSTime& time,
+                                  const Vector3d& receiver_position_ecef,
+                                  const Vector3d& satellite_position_ecef,
+                                  const Vector3d& satellite_velocity_ecef,
+                                  double previous_windup_cycles) {
+    const Vector3d sun_position_ecef = approximateSunPositionEcef(time);
+
+    Vector3d satellite_unit;
+    Vector3d sun_unit;
+    Vector3d orbit_normal_unit;
+    Vector3d sun_orbit_cross_unit;
+    Vector3d adjusted_velocity = satellite_velocity_ecef;
+    adjusted_velocity.x() -= constants::OMEGA_E * satellite_position_ecef.y();
+    adjusted_velocity.y() += constants::OMEGA_E * satellite_position_ecef.x();
+    const Vector3d orbit_normal = satellite_position_ecef.cross(adjusted_velocity);
+    const Vector3d sun_orbit_cross = sun_position_ecef.cross(orbit_normal);
+    if (!normalizeVector(satellite_position_ecef, satellite_unit) ||
+        !normalizeVector(sun_position_ecef, sun_unit) ||
+        !normalizeVector(orbit_normal, orbit_normal_unit) ||
+        !normalizeVector(sun_orbit_cross, sun_orbit_cross_unit)) {
+        return previous_windup_cycles;
+    }
+
+    const double beta = M_PI_2 - std::acos(std::clamp(sun_unit.dot(orbit_normal_unit), -1.0, 1.0));
+    const double orbit_angle = std::acos(std::clamp(satellite_unit.dot(sun_orbit_cross_unit), -1.0, 1.0));
+    double mu = M_PI_2 + (satellite_unit.dot(sun_unit) <= 0.0 ? -orbit_angle : orbit_angle);
+    if (mu < -M_PI_2) {
+        mu += 2.0 * M_PI;
+    } else if (mu >= M_PI_2) {
+        mu -= 2.0 * M_PI;
+    }
+
+    const double yaw = nominalYawAngle(beta, mu);
+    Vector3d satellite_x_nominal = orbit_normal_unit.cross(satellite_unit);
+    if (!normalizeVector(satellite_x_nominal, satellite_x_nominal)) {
+        return previous_windup_cycles;
+    }
+    const double cos_yaw = std::cos(yaw);
+    const double sin_yaw = std::sin(yaw);
+    const Vector3d satellite_x = -sin_yaw * orbit_normal_unit + cos_yaw * satellite_x_nominal;
+    const Vector3d satellite_y = -cos_yaw * orbit_normal_unit - sin_yaw * satellite_x_nominal;
+
+    Vector3d line_of_sight;
+    if (!normalizeVector(receiver_position_ecef - satellite_position_ecef, line_of_sight)) {
+        return previous_windup_cycles;
+    }
+    double latitude_rad = 0.0;
+    double longitude_rad = 0.0;
+    double height_m = 0.0;
+    ecef2geodetic(receiver_position_ecef, latitude_rad, longitude_rad, height_m);
+    const Vector3d receiver_x = enu2ecef(Vector3d(0.0, 1.0, 0.0), latitude_rad, longitude_rad);
+    const Vector3d receiver_y = -enu2ecef(Vector3d(1.0, 0.0, 0.0), latitude_rad, longitude_rad);
+
+    const Vector3d satellite_dipole =
+        satellite_x - line_of_sight * line_of_sight.dot(satellite_x) - line_of_sight.cross(satellite_y);
+    const Vector3d receiver_dipole =
+        receiver_x - line_of_sight * line_of_sight.dot(receiver_x) + line_of_sight.cross(receiver_y);
+    const double norm_product = satellite_dipole.norm() * receiver_dipole.norm();
+    if (!std::isfinite(norm_product) || norm_product <= 0.0) {
+        return previous_windup_cycles;
+    }
+    const double cosine = std::clamp(satellite_dipole.dot(receiver_dipole) / norm_product, -1.0, 1.0);
+    double phase = std::acos(cosine) / (2.0 * M_PI);
+    if (line_of_sight.dot(satellite_dipole.cross(receiver_dipole)) < 0.0) {
+        phase = -phase;
+    }
+    return phase + std::floor(previous_windup_cycles - phase + 0.5);
+}
+
 Vector3d approximateMoonPositionEcef(const GNSSTime& time) {
     constexpr double kKilometersToMeters = 1000.0;
     const double days_since_j2000 = julianDateFromTime(time) - 2451545.0;
@@ -435,6 +709,74 @@ double modeledTroposphereDelayMeters(const Vector3d& receiver_position,
         kDefaultZenithDelayMeters;
 }
 
+double wetTroposphereMapping(const Vector3d& receiver_position,
+                             double elevation,
+                             const GNSSTime& time) {
+    (void)time;
+    double latitude_rad = 0.0;
+    double longitude_rad = 0.0;
+    double height_m = 0.0;
+    ecef2geodetic(receiver_position, latitude_rad, longitude_rad, height_m);
+    return models::niellWetMapping(latitude_rad, elevation);
+}
+
+double estimatedTroposphereDelayFromState(double modeled_slant_delay_m,
+                                          double wet_mapping,
+                                          double modeled_zenith_delay_m,
+                                          double zenith_delay_m) {
+    if (std::isfinite(modeled_slant_delay_m) && modeled_slant_delay_m > 0.0 &&
+        std::isfinite(wet_mapping) && wet_mapping > 0.0 &&
+        std::isfinite(modeled_zenith_delay_m) && modeled_zenith_delay_m > 0.0) {
+        return modeled_slant_delay_m + wet_mapping * (zenith_delay_m - modeled_zenith_delay_m);
+    }
+    return wet_mapping * zenith_delay_m;
+}
+
+double estimatedTroposphereDelayMeters(const Vector3d& receiver_position,
+                                       double elevation,
+                                       const GNSSTime& time,
+                                       double zenith_delay_m) {
+    return estimatedTroposphereDelayFromState(
+        modeledTroposphereDelayMeters(receiver_position, elevation, time),
+        wetTroposphereMapping(receiver_position, elevation, time),
+        modeledZenithTroposphereDelayMetersImpl(receiver_position, time),
+        zenith_delay_m);
+}
+
+int ionosphereConstraintSystemIndex(GNSSSystem system) {
+    switch (system) {
+        case GNSSSystem::GPS: return 0;
+        case GNSSSystem::GLONASS: return 1;
+        case GNSSSystem::Galileo: return 2;
+        case GNSSSystem::QZSS: return 3;
+        default: return -1;
+    }
+}
+
+bool stecConstraintSigmaMeters(const std::map<std::string, std::string>& atmos_tokens,
+                                const SatelliteId& satellite,
+                                double& sigma_m) {
+    sigma_m = 0.5;
+    const std::string stec_std_key = "atmos_stec_std_l1_m:" + satellite.toString();
+    double broadcast_sigma_m = 0.0;
+    if (ppp_atmosphere::parseAtmosTokenDouble(
+            atmos_tokens, stec_std_key, broadcast_sigma_m) &&
+        std::isfinite(broadcast_sigma_m) && broadcast_sigma_m > 0.0) {
+        if (broadcast_sigma_m > 1.0) {
+            return false;
+        }
+        sigma_m = std::max(1e-3, broadcast_sigma_m);
+    }
+    return true;
+}
+
+bool usablePseudorangeObservation(const Observation& observation) {
+    return observation.valid &&
+           observation.has_pseudorange &&
+           observation.pseudorange > 0.0 &&
+           std::isfinite(observation.pseudorange);
+}
+
 double observationCodeBiasMeters(GNSSSystem system,
                                  SignalType primary_signal,
                                  SignalType secondary_signal,
@@ -491,6 +833,39 @@ double observationPhaseBiasMeters(GNSSSystem system,
     return coeff_primary * primary_bias + coeff_secondary * secondary_bias;
 }
 
+bool hasSsrBiasForSignal(GNSSSystem system,
+                         SignalType signal,
+                         const std::map<uint8_t, double>& bias_m) {
+    const uint8_t signal_id = rtcmSsrSignalId(system, signal);
+    return signal_id != 0U && bias_m.find(signal_id) != bias_m.end();
+}
+
+bool observationHasRequiredSsrBiases(GNSSSystem system,
+                                     SignalType primary_signal,
+                                     SignalType secondary_signal,
+                                     bool use_ionosphere_free,
+                                     const std::map<uint8_t, double>& bias_m) {
+    if (!hasSsrBiasForSignal(system, primary_signal, bias_m)) {
+        return false;
+    }
+    if (!use_ionosphere_free || secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
+        return true;
+    }
+    return hasSsrBiasForSignal(system, secondary_signal, bias_m);
+}
+
+bool observationHasRequiredSsrPhaseBiases(GNSSSystem system,
+                                          SignalType primary_signal,
+                                          SignalType secondary_signal,
+                                          bool use_ionosphere_free,
+                                          const std::map<uint8_t, double>& phase_bias_m) {
+    if (system == GNSSSystem::GLONASS) {
+        return true;
+    }
+    return observationHasRequiredSsrBiases(
+        system, primary_signal, secondary_signal, use_ionosphere_free, phase_bias_m);
+}
+
 std::string biasObservationCode(SignalType signal) {
     switch (signal) {
         case SignalType::GPS_L1CA: return "C1C";
@@ -532,6 +907,18 @@ double dcbEntryBiasMeters(const DCBEntry& entry) {
     return std::numeric_limits<double>::quiet_NaN();
 }
 
+std::string canonicalBiasObservationCode(SignalType fallback_signal,
+                                           const std::string& observation_code) {
+    if (observation_code.size() >= 3 && observation_code[0] == 'C') {
+        return observation_code.substr(0, 3);
+    }
+    if (observation_code.size() >= 2 && observation_code[0] == 'P' &&
+        observation_code[1] >= '0' && observation_code[1] <= '9') {
+        return std::string{"C"} + observation_code[1] + "P";
+    }
+    return biasObservationCode(fallback_signal);
+}
+
 bool findOsbBiasMeters(const DCBProducts& dcb_products,
                        const SatelliteId& satellite,
                        const std::string& observation_code,
@@ -557,10 +944,13 @@ double observationDcbBiasMeters(const DCBProducts& dcb_products,
                                 const SatelliteId& satellite,
                                 SignalType primary_signal,
                                 SignalType secondary_signal,
+                                const std::string& primary_observation_code,
+                                const std::string& secondary_observation_code,
                                 bool use_ionosphere_free,
                                 double coeff_primary,
                                 double coeff_secondary) {
-    const std::string primary_code = biasObservationCode(primary_signal);
+    const std::string primary_code =
+        canonicalBiasObservationCode(primary_signal, primary_observation_code);
     if (primary_code.empty()) {
         return 0.0;
     }
@@ -571,7 +961,8 @@ double observationDcbBiasMeters(const DCBProducts& dcb_products,
         return have_primary ? primary_bias_m : 0.0;
     }
 
-    const std::string secondary_code = biasObservationCode(secondary_signal);
+    const std::string secondary_code =
+        canonicalBiasObservationCode(secondary_signal, secondary_observation_code);
     if (secondary_code.empty()) {
         return have_primary ? coeff_primary * primary_bias_m : 0.0;
     }
@@ -643,7 +1034,7 @@ bool ionexPiercePointAndMapping(const IONEXProducts& ionex_products,
 
 std::vector<SignalType> primarySignals(GNSSSystem system) {
     switch (system) {
-        case GNSSSystem::GPS: return {SignalType::GPS_L1CA};
+        case GNSSSystem::GPS: return {SignalType::GPS_L1CA, SignalType::GPS_L1P};
         case GNSSSystem::GLONASS: return {SignalType::GLO_L1CA, SignalType::GLO_L1P};
         case GNSSSystem::Galileo: return {SignalType::GAL_E1};
         case GNSSSystem::BeiDou: return {SignalType::BDS_B1I, SignalType::BDS_B1C};
@@ -654,7 +1045,7 @@ std::vector<SignalType> primarySignals(GNSSSystem system) {
 
 std::vector<SignalType> secondarySignals(GNSSSystem system) {
     switch (system) {
-        case GNSSSystem::GPS: return {SignalType::GPS_L2C, SignalType::GPS_L5};
+        case GNSSSystem::GPS: return {SignalType::GPS_L2P, SignalType::GPS_L2C, SignalType::GPS_L5};
         case GNSSSystem::GLONASS: return {SignalType::GLO_L2CA, SignalType::GLO_L2P};
         case GNSSSystem::Galileo: return {SignalType::GAL_E5A, SignalType::GAL_E5B, SignalType::GAL_E6};
         case GNSSSystem::BeiDou: return {SignalType::BDS_B2I, SignalType::BDS_B2A, SignalType::BDS_B3I};
@@ -663,20 +1054,56 @@ std::vector<SignalType> secondarySignals(GNSSSystem system) {
     }
 }
 
+bool estimatePrimaryIonosphereDelaySeedMeters(
+    const Observation& primary,
+    const Observation& secondary,
+    const Ephemeris* eph,
+    double& ionosphere_delay_m);
+
 const Observation* findObservationForSignals(const ObservationData& obs,
                                              const SatelliteId& sat,
                                              const std::vector<SignalType>& candidates) {
     for (const auto signal : candidates) {
         const Observation* candidate = obs.getObservation(sat, signal);
-        if (candidate == nullptr || !candidate->valid || !candidate->has_pseudorange) {
-            continue;
-        }
-        if (candidate->pseudorange <= 0.0 || !std::isfinite(candidate->pseudorange)) {
+        if (candidate == nullptr || !usablePseudorangeObservation(*candidate)) {
             continue;
         }
         return candidate;
     }
     return nullptr;
+}
+
+bool estimatePrimaryIonosphereDelaySeedMeters(
+    const ObservationData& obs,
+    const NavigationData& nav,
+    const SatelliteId& sat,
+    double& ionosphere_delay_m) {
+    const Observation* primary = findObservationForSignals(obs, sat, primarySignals(sat.system));
+    const Observation* secondary = findObservationForSignals(obs, sat, secondarySignals(sat.system));
+    if (primary == nullptr || secondary == nullptr) {
+        return false;
+    }
+    const Ephemeris* eph = nav.getEphemeris(sat, obs.time);
+    return estimatePrimaryIonosphereDelaySeedMeters(
+        *primary, *secondary, eph, ionosphere_delay_m);
+}
+
+bool estimatePrimaryIonosphereDelaySeedMeters(
+    const Observation& primary,
+    const Observation& secondary,
+    const Ephemeris* eph,
+    double& ionosphere_delay_m) {
+    const double f1 = signalFrequencyHz(primary.signal, eph);
+    const double f2 = signalFrequencyHz(secondary.signal, eph);
+    if (f1 <= 0.0 || f2 <= 0.0 || std::abs(f1 - f2) < 1.0) {
+        return false;
+    }
+    const double denominator = 1.0 - (f1 * f1) / (f2 * f2);
+    if (std::abs(denominator) < 1e-12) {
+        return false;
+    }
+    ionosphere_delay_m = (primary.pseudorange - secondary.pseudorange) / denominator;
+    return std::isfinite(ionosphere_delay_m);
 }
 
 const Observation* findCarrierObservationForSignals(const ObservationData& obs,
@@ -697,6 +1124,58 @@ bool validReceiverSeed(const Vector3d& receiver_position) {
            std::isfinite(receiver_position.y()) &&
            std::isfinite(receiver_position.z()) &&
            receiver_position.norm() > 1000.0;
+}
+
+bool isUsablePppSatellite(const SatelliteId& satellite) {
+    return !signal_policy::isBeiDouGeoSatellite(satellite);
+}
+
+ReceiverClockBiasGroup receiverClockBiasGroupForSatellite(const SatelliteId& satellite) {
+    switch (satellite.system) {
+        case GNSSSystem::GPS:
+        case GNSSSystem::QZSS:
+            return ReceiverClockBiasGroup::GPS;
+        case GNSSSystem::GLONASS:
+            return ReceiverClockBiasGroup::GLONASS;
+        case GNSSSystem::Galileo:
+            return ReceiverClockBiasGroup::Galileo;
+        case GNSSSystem::BeiDou:
+            if (signal_policy::isBeiDou2Satellite(satellite)) {
+                return ReceiverClockBiasGroup::BeiDou2;
+            }
+            if (signal_policy::isBeiDou3Satellite(satellite)) {
+                return ReceiverClockBiasGroup::BeiDou3;
+            }
+            return ReceiverClockBiasGroup::BeiDou;
+        case GNSSSystem::NavIC:
+            return ReceiverClockBiasGroup::NavIC;
+        default:
+            return ReceiverClockBiasGroup::UNKNOWN;
+    }
+}
+
+double seededReceiverClockBiasMeters(const PositionSolution* seed_solution,
+                                     ReceiverClockBiasGroup group,
+                                     double fallback_bias_m) {
+    if (seed_solution == nullptr || !seed_solution->isValid()) {
+        return fallback_bias_m;
+    }
+    const auto exact_it = seed_solution->receiver_clock_biases_m.find(group);
+    if (exact_it != seed_solution->receiver_clock_biases_m.end() &&
+        std::isfinite(exact_it->second)) {
+        return exact_it->second;
+    }
+    if (group == ReceiverClockBiasGroup::BeiDou2 || group == ReceiverClockBiasGroup::BeiDou3) {
+        const auto bds_it = seed_solution->receiver_clock_biases_m.find(ReceiverClockBiasGroup::BeiDou);
+        if (bds_it != seed_solution->receiver_clock_biases_m.end() &&
+            std::isfinite(bds_it->second)) {
+            return bds_it->second;
+        }
+    }
+    if (group == ReceiverClockBiasGroup::GPS && std::isfinite(seed_solution->receiver_clock_bias)) {
+        return seed_solution->receiver_clock_bias;
+    }
+    return fallback_bias_m;
 }
 
 double safeVariance(double variance, double floor_value) {
@@ -856,11 +1335,13 @@ bool PPPProcessor::initialize(const ProcessorConfig& config) {
     reset();
 
     receiver_antex_offsets_.clear();
+    satellite_antex_offsets_.clear();
     receiver_antex_loaded_ = false;
     if (!ppp_config_.antex_file_path.empty()) {
         receiver_antex_loaded_ =
             loadReceiverAntexOffsets(ppp_config_.antex_file_path, receiver_antex_offsets_);
-        if (!receiver_antex_loaded_) {
+        loadSatelliteAntexOffsets(ppp_config_.antex_file_path, satellite_antex_offsets_);
+        if (!receiver_antex_loaded_ && satellite_antex_offsets_.empty()) {
             return false;
         }
     }
@@ -922,6 +1403,9 @@ PositionSolution PPPProcessor::processEpochStandard(
     last_applied_dcb_corrections_ = 0;
     last_applied_ionex_m_ = 0.0;
     last_applied_dcb_m_ = 0.0;
+    last_ssr_application_diagnostics_.clear();
+    last_filter_iteration_diagnostics_.clear();
+    last_residual_diagnostics_.clear();
     PositionSolution seed_solution;
     const bool use_seed_assist = useLowDynamicsBroadcastSeedAssist();
     const bool need_seed_solution =
@@ -981,6 +1465,8 @@ PositionSolution PPPProcessor::processEpochStandard(
                 float_solution.num_fixed_ambiguities = 0;
                 const PPPState float_filter_state = filter_state_;
                 const auto float_ambiguity_states = ambiguity_states_;
+                const auto float_phase_ambiguity_admission_offsets =
+                    phase_ambiguity_admission_offsets_m_;
                 const bool fixed =
                     ppp_config_.enable_ambiguity_resolution && resolveAmbiguities(obs, nav);
                 solution = fixed ? generateSolution(obs.time, corrected_if_obs) : float_solution;
@@ -1033,11 +1519,15 @@ PositionSolution PPPProcessor::processEpochStandard(
                 if (fixed && !accepted_fixed_solution) {
                     filter_state_ = float_filter_state;
                     ambiguity_states_ = float_ambiguity_states;
+                    phase_ambiguity_admission_offsets_m_ =
+                        float_phase_ambiguity_admission_offsets;
                 } else if (accepted_fixed_solution && ppp_config_.ar_method != PPPConfig::ARMethod::DD_WLNL) {
                     // For DD_IFLC/DD_PER_FREQ: revert to float state to avoid
                     // poisoning later epochs with a bad fix.
                     filter_state_ = float_filter_state;
                     ambiguity_states_ = float_ambiguity_states;
+                    phase_ambiguity_admission_offsets_m_ =
+                        float_phase_ambiguity_admission_offsets;
                 }
                 // For DD_WLNL: keep holdamb-updated state — the constraint
                 // is applied via Kalman update and propagates naturally.
@@ -1102,9 +1592,11 @@ void PPPProcessor::reset() {
     convergence_time_ = 0.0;
     filter_state_ = PPPState{};
     ambiguity_states_.clear();
+    phase_ambiguity_admission_offsets_m_.clear();
     clas_dispersion_compensation_.clear();
     clas_sis_continuity_.clear();
     clas_phase_bias_repair_.clear();
+    windup_cache_.clear();
     recent_positions_.clear();
     has_last_processed_time_ = false;
     last_processed_time_ = GNSSTime();
@@ -1126,6 +1618,9 @@ void PPPProcessor::reset() {
     last_applied_dcb_corrections_ = 0;
     last_applied_ionex_m_ = 0.0;
     last_applied_dcb_m_ = 0.0;
+    last_ssr_application_diagnostics_.clear();
+    last_filter_iteration_diagnostics_.clear();
+    last_residual_diagnostics_.clear();
 
     std::lock_guard<std::mutex> lock(stats_mutex_);
     total_epochs_processed_ = 0;
@@ -1168,6 +1663,12 @@ bool PPPProcessor::loadSSRProducts(const std::string& ssr_file) {
         }
     }
     ssr_products_loaded_ = ssr_products_.loadCSVFile(ssr_file);
+    return ssr_products_loaded_;
+}
+
+bool PPPProcessor::loadSSRProducts(const SSRProducts& products) {
+    ssr_products_ = products;
+    ssr_products_loaded_ = ssr_products_.orbit_clock_corrections.size() > 0U;
     return ssr_products_loaded_;
 }
 
@@ -1325,6 +1826,9 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
                 SSROrbitClockCorrection sampled;
                 sampled.satellite = merged.satellite;
                 sampled.time = sample_time;
+                if (merged.iode >= 0) {
+                    sampled.orbit_iode = merged.iode;
+                }
                 sampled.orbit_correction_ecef = ssrRacToEcef(
                     position,
                     velocity,
@@ -1389,7 +1893,13 @@ bool PPPProcessor::interpolateLoadedSSRCorrection(const SatelliteId& sat,
         ura_sigma_m,
         code_bias_m,
         phase_bias_m,
-        atmos_tokens);
+        atmos_tokens,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        ppp_config_.allow_future_ssr_corrections,
+        ppp_config_.require_ssr_orbit_clock);
 }
 
 bool PPPProcessor::initializeFilter(const ObservationData& obs,
@@ -1397,14 +1907,25 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
                                     const PositionSolution* seed_solution) {
     Vector3d initial_position = Vector3d::Zero();
     double initial_clock_bias_m = 0.0;
-    if (seed_solution != nullptr && seed_solution->isValid()) {
-        initial_position = seed_solution->position_ecef;
-        initial_clock_bias_m = seed_solution->receiver_clock_bias;
+    PositionSolution generated_spp_solution;
+    const PositionSolution* clock_seed_solution =
+        seed_solution != nullptr && seed_solution->isValid() ? seed_solution : nullptr;
+    if (ppp_config_.prefer_receiver_position_seed &&
+        validReceiverSeed(obs.receiver_position)) {
+        initial_position = obs.receiver_position;
+        initial_clock_bias_m =
+            clock_seed_solution != nullptr ?
+                clock_seed_solution->receiver_clock_bias :
+                obs.receiver_clock_bias * constants::SPEED_OF_LIGHT;
+    } else if (clock_seed_solution != nullptr) {
+        initial_position = clock_seed_solution->position_ecef;
+        initial_clock_bias_m = clock_seed_solution->receiver_clock_bias;
     } else {
-        auto spp_solution = spp_processor_.processEpoch(obs, nav);
-        if (spp_solution.isValid()) {
-            initial_position = spp_solution.position_ecef;
-            initial_clock_bias_m = spp_solution.receiver_clock_bias;
+        generated_spp_solution = spp_processor_.processEpoch(obs, nav);
+        if (generated_spp_solution.isValid()) {
+            clock_seed_solution = &generated_spp_solution;
+            initial_position = generated_spp_solution.position_ecef;
+            initial_clock_bias_m = generated_spp_solution.receiver_clock_bias;
         } else if (validReceiverSeed(obs.receiver_position)) {
             initial_position = obs.receiver_position;
             initial_clock_bias_m = obs.receiver_clock_bias * constants::SPEED_OF_LIGHT;
@@ -1418,17 +1939,27 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     filter_state_.gal_clock_index = -1;
     filter_state_.qzs_clock_index = -1;
     filter_state_.bds_clock_index = -1;
+    filter_state_.bds2_clock_index = -1;
+    filter_state_.bds3_clock_index = -1;
     if (ppp_config_.estimate_ionosphere) {
-        std::set<GNSSSystem> visible_systems;
-        for (const auto& sat : obs.getSatellites()) visible_systems.insert(sat.system);
-        if (false && visible_systems.count(GNSSSystem::Galileo)) {
+        std::set<ReceiverClockBiasGroup> visible_clock_groups;
+        for (const auto& sat : obs.getSatellites()) {
+            if (isUsablePppSatellite(sat)) {
+                visible_clock_groups.insert(receiverClockBiasGroupForSatellite(sat));
+            }
+        }
+        if (false && visible_clock_groups.count(ReceiverClockBiasGroup::Galileo)) {
             filter_state_.gal_clock_index = base_states++;
         }
-        if (false && visible_systems.count(GNSSSystem::QZSS)) {
+        // QZSS stays tied to the GPS receiver clock in the current model.
+        if (false && visible_clock_groups.count(ReceiverClockBiasGroup::QZSS)) {
             filter_state_.qzs_clock_index = base_states++;
         }
-        if (false && visible_systems.count(GNSSSystem::BeiDou)) {
-            filter_state_.bds_clock_index = base_states++;
+        if (visible_clock_groups.count(ReceiverClockBiasGroup::BeiDou2)) {
+            filter_state_.bds2_clock_index = base_states++;
+        }
+        if (visible_clock_groups.count(ReceiverClockBiasGroup::BeiDou3)) {
+            filter_state_.bds3_clock_index = base_states++;
         }
     }
     filter_state_.trop_index = base_states > 9 ? base_states - 1 : 8;
@@ -1440,6 +1971,22 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         if (filter_state_.gal_clock_index >= 0) filter_state_.gal_clock_index = isb_start++;
         if (filter_state_.qzs_clock_index >= 0) filter_state_.qzs_clock_index = isb_start++;
         if (filter_state_.bds_clock_index >= 0) filter_state_.bds_clock_index = isb_start++;
+        if (filter_state_.bds2_clock_index >= 0) filter_state_.bds2_clock_index = isb_start++;
+        if (filter_state_.bds3_clock_index >= 0) filter_state_.bds3_clock_index = isb_start++;
+    }
+
+    std::map<SatelliteId, double> initial_ionosphere_delay_seeds_m;
+    if (ppp_config_.estimate_ionosphere && !ppp_config_.use_ionosphere_free) {
+        for (const auto& sat : obs.getSatellites()) {
+            if (!isUsablePppSatellite(sat)) {
+                continue;
+            }
+            double ionosphere_delay_m = 0.0;
+            if (estimatePrimaryIonosphereDelaySeedMeters(
+                    obs, nav, sat, ionosphere_delay_m)) {
+                initial_ionosphere_delay_seeds_m[sat] = ionosphere_delay_m;
+            }
+        }
     }
 
     // Reserve ionosphere states for visible satellites
@@ -1448,6 +1995,9 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     if (ppp_config_.estimate_ionosphere) {
         filter_state_.iono_index = isb_start;
         for (const auto& sat : obs.getSatellites()) {
+            if (!isUsablePppSatellite(sat)) {
+                continue;
+            }
             filter_state_.ionosphere_indices[sat] = filter_state_.iono_index + n_iono_states;
             ++n_iono_states;
         }
@@ -1459,15 +2009,26 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     filter_state_.covariance = MatrixXd::Identity(n_states, n_states);
     filter_state_.state.segment(filter_state_.pos_index, 3) = initial_position;
     filter_state_.state.segment(filter_state_.vel_index, 3).setZero();
-    filter_state_.state(filter_state_.clock_index) = initial_clock_bias_m;
-    filter_state_.state(filter_state_.glo_clock_index) = initial_clock_bias_m;
+    filter_state_.state(filter_state_.clock_index) = seededReceiverClockBiasMeters(
+        clock_seed_solution, ReceiverClockBiasGroup::GPS, initial_clock_bias_m);
+    filter_state_.state(filter_state_.glo_clock_index) = seededReceiverClockBiasMeters(
+        clock_seed_solution, ReceiverClockBiasGroup::GLONASS, initial_clock_bias_m);
     // Initialize ISB states
     if (filter_state_.gal_clock_index >= 0)
-        filter_state_.state(filter_state_.gal_clock_index) = initial_clock_bias_m;
+        filter_state_.state(filter_state_.gal_clock_index) = seededReceiverClockBiasMeters(
+            clock_seed_solution, ReceiverClockBiasGroup::Galileo, initial_clock_bias_m);
     if (filter_state_.qzs_clock_index >= 0)
-        filter_state_.state(filter_state_.qzs_clock_index) = initial_clock_bias_m;
+        filter_state_.state(filter_state_.qzs_clock_index) = seededReceiverClockBiasMeters(
+            clock_seed_solution, ReceiverClockBiasGroup::GPS, initial_clock_bias_m);
     if (filter_state_.bds_clock_index >= 0)
-        filter_state_.state(filter_state_.bds_clock_index) = initial_clock_bias_m;
+        filter_state_.state(filter_state_.bds_clock_index) = seededReceiverClockBiasMeters(
+            clock_seed_solution, ReceiverClockBiasGroup::BeiDou, initial_clock_bias_m);
+    if (filter_state_.bds2_clock_index >= 0)
+        filter_state_.state(filter_state_.bds2_clock_index) = seededReceiverClockBiasMeters(
+            clock_seed_solution, ReceiverClockBiasGroup::BeiDou2, initial_clock_bias_m);
+    if (filter_state_.bds3_clock_index >= 0)
+        filter_state_.state(filter_state_.bds3_clock_index) = seededReceiverClockBiasMeters(
+            clock_seed_solution, ReceiverClockBiasGroup::BeiDou3, initial_clock_bias_m);
     filter_state_.state(filter_state_.trop_index) =
         ppp_config_.estimate_troposphere ?
             modeledZenithTroposphereDelayMeters(initial_position, obs.time) :
@@ -1490,10 +2051,16 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         filter_state_.covariance(filter_state_.qzs_clock_index, filter_state_.qzs_clock_index) = 1e8;
     if (filter_state_.bds_clock_index >= 0)
         filter_state_.covariance(filter_state_.bds_clock_index, filter_state_.bds_clock_index) = 1e8;
+    if (filter_state_.bds2_clock_index >= 0)
+        filter_state_.covariance(filter_state_.bds2_clock_index, filter_state_.bds2_clock_index) = 1e8;
+    if (filter_state_.bds3_clock_index >= 0)
+        filter_state_.covariance(filter_state_.bds3_clock_index, filter_state_.bds3_clock_index) = 1e8;
     // Initialize per-satellite ionosphere states
     if (ppp_config_.estimate_ionosphere) {
         for (const auto& [sat, idx] : filter_state_.ionosphere_indices) {
-            filter_state_.state(idx) = 0.0;  // Initial iono delay = 0 (will be constrained by STEC)
+            const auto seed_it = initial_ionosphere_delay_seeds_m.find(sat);
+            filter_state_.state(idx) =
+                seed_it != initial_ionosphere_delay_seeds_m.end() ? seed_it->second : 0.0;
             filter_state_.covariance(idx, idx) = ppp_config_.initial_ionosphere_variance;
         }
     }
@@ -1552,29 +2119,83 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
         Q(filter_state_.qzs_clock_index, filter_state_.qzs_clock_index) = clock_process_noise * dt;
     if (filter_state_.bds_clock_index >= 0)
         Q(filter_state_.bds_clock_index, filter_state_.bds_clock_index) = clock_process_noise * dt;
+    if (filter_state_.bds2_clock_index >= 0)
+        Q(filter_state_.bds2_clock_index, filter_state_.bds2_clock_index) = clock_process_noise * dt;
+    if (filter_state_.bds3_clock_index >= 0)
+        Q(filter_state_.bds3_clock_index, filter_state_.bds3_clock_index) = clock_process_noise * dt;
     Q(filter_state_.trop_index, filter_state_.trop_index) =
         ppp_config_.process_noise_troposphere * dt;
     // Ionosphere process noise
     if (ppp_config_.estimate_ionosphere) {
         for (const auto& [sat, idx] : filter_state_.ionosphere_indices) {
-            Q(idx, idx) = ppp_config_.process_noise_ionosphere * dt;
+            (void)sat;
+            if (idx >= 0 && idx < filter_state_.total_states) {
+                Q(idx, idx) = ppp_config_.process_noise_ionosphere * dt;
+            }
         }
     }
-    for (int idx = filter_state_.amb_index; idx < filter_state_.total_states; ++idx) {
-        Q(idx, idx) = ppp_config_.process_noise_ambiguity * dt;
+    for (const auto& [sat, idx] : filter_state_.ambiguity_indices) {
+        (void)sat;
+        if (idx >= 0 && idx < filter_state_.total_states) {
+            Q(idx, idx) = ppp_config_.process_noise_ambiguity * dt;
+        }
+    }
+    for (const auto& [key, idx] : filter_state_.frequency_ambiguity_indices) {
+        (void)key;
+        if (idx >= 0 && idx < filter_state_.total_states) {
+            Q(idx, idx) = ppp_config_.process_noise_ambiguity * dt;
+        }
     }
 
     filter_state_.covariance = F * filter_state_.covariance * F.transpose() + Q;
     if (use_broadcast_rtklib_model && seed_solution != nullptr && seed_solution->isValid()) {
         if (ppp_config_.reset_clock_to_spp_each_epoch || useLowDynamicsBroadcastSeedAssist()) {
+            const double fallback_clock_bias_m = seed_solution->receiver_clock_bias;
             reinitializeScalarState(
                 filter_state_.clock_index,
-                seed_solution->receiver_clock_bias,
+                seededReceiverClockBiasMeters(
+                    seed_solution, ReceiverClockBiasGroup::GPS, fallback_clock_bias_m),
                 ppp_config_.initial_clock_variance);
             reinitializeScalarState(
                 filter_state_.glo_clock_index,
-                seed_solution->receiver_clock_bias,
+                seededReceiverClockBiasMeters(
+                    seed_solution, ReceiverClockBiasGroup::GLONASS, fallback_clock_bias_m),
                 ppp_config_.initial_clock_variance);
+            if (filter_state_.gal_clock_index >= 0) {
+                reinitializeScalarState(
+                    filter_state_.gal_clock_index,
+                    seededReceiverClockBiasMeters(
+                        seed_solution, ReceiverClockBiasGroup::Galileo, fallback_clock_bias_m),
+                    ppp_config_.initial_clock_variance);
+            }
+            if (filter_state_.qzs_clock_index >= 0) {
+                reinitializeScalarState(
+                    filter_state_.qzs_clock_index,
+                    seededReceiverClockBiasMeters(
+                        seed_solution, ReceiverClockBiasGroup::GPS, fallback_clock_bias_m),
+                    ppp_config_.initial_clock_variance);
+            }
+            if (filter_state_.bds_clock_index >= 0) {
+                reinitializeScalarState(
+                    filter_state_.bds_clock_index,
+                    seededReceiverClockBiasMeters(
+                        seed_solution, ReceiverClockBiasGroup::BeiDou, fallback_clock_bias_m),
+                    ppp_config_.initial_clock_variance);
+            }
+            if (filter_state_.bds2_clock_index >= 0) {
+                reinitializeScalarState(
+                    filter_state_.bds2_clock_index,
+                    seededReceiverClockBiasMeters(
+                        seed_solution, ReceiverClockBiasGroup::BeiDou2, fallback_clock_bias_m),
+                    ppp_config_.initial_clock_variance);
+            }
+            if (filter_state_.bds3_clock_index >= 0) {
+                reinitializeScalarState(
+                    filter_state_.bds3_clock_index,
+                    seededReceiverClockBiasMeters(
+                        seed_solution, ReceiverClockBiasGroup::BeiDou3, fallback_clock_bias_m),
+                    ppp_config_.initial_clock_variance);
+            }
         }
         if (ppp_config_.kinematic_mode &&
             !ppp_config_.low_dynamics_mode &&
@@ -1591,6 +2212,9 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
 }
 
 bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData& nav) {
+    last_filter_iteration_diagnostics_.clear();
+    last_residual_diagnostics_.clear();
+
     auto if_obs = formIonosphereFree(obs, nav);
     if (if_obs.size() < static_cast<size_t>(config_.min_satellites)) {
         if (pppDebugEnabled()) {
@@ -1600,6 +2224,7 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
         return false;
     }
 
+    ensureIonosphereStates(if_obs);
     applyPreciseCorrections(if_obs, nav, obs.time);
     ensureAmbiguityStates(if_obs);
     size_t valid_count = 0;
@@ -1618,12 +2243,134 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
     for (int iteration = 0; iteration < filter_iterations; ++iteration) {
         MeasurementEquation meas_eq = formMeasurementEquations(if_obs, nav, obs.time);
 
-        if (meas_eq.observations.size() < config_.min_satellites) {
+        const int measurement_rows = static_cast<int>(meas_eq.observations.size());
+        if (measurement_rows < config_.min_satellites) {
             if (pppDebugEnabled()) {
-                std::cerr << "[PPP] insufficient measurement rows: " << meas_eq.observations.size()
+                std::cerr << "[PPP] insufficient measurement rows: " << measurement_rows
                           << " < " << config_.min_satellites << "\n";
             }
             return false;
+        }
+
+        PPPFilterIterationDiagnostic iteration_diagnostic;
+        iteration_diagnostic.iteration = iteration;
+        iteration_diagnostic.rows = measurement_rows;
+        double code_residual_sum_sq = 0.0;
+        double phase_residual_sum_sq = 0.0;
+        double code_residual_max_abs = -1.0;
+        double phase_residual_max_abs = -1.0;
+        std::vector<PPPResidualDiagnostic> iteration_residual_diagnostics;
+        iteration_residual_diagnostics.reserve(
+            static_cast<size_t>(measurement_rows) +
+            meas_eq.phase_candidate_diagnostics.size());
+        for (int row_index = 0; row_index < measurement_rows; ++row_index) {
+            const auto row = static_cast<size_t>(row_index);
+            const SatelliteId satellite =
+                row < meas_eq.row_satellites.size() ? meas_eq.row_satellites[row] : SatelliteId{};
+            const bool is_phase = row < meas_eq.row_is_phase.size() && meas_eq.row_is_phase[row];
+            const bool is_ionosphere_constraint =
+                row < meas_eq.row_is_ionosphere_constraint.size() &&
+                meas_eq.row_is_ionosphere_constraint[row];
+            const double residual = meas_eq.residuals(row_index);
+            const double abs_residual = std::abs(residual);
+            if (is_ionosphere_constraint) {
+                ++iteration_diagnostic.ionosphere_constraint_rows;
+            } else if (is_phase) {
+                ++iteration_diagnostic.phase_rows;
+                phase_residual_sum_sq += residual * residual;
+                if (abs_residual > phase_residual_max_abs) {
+                    phase_residual_max_abs = abs_residual;
+                    iteration_diagnostic.phase_residual_max_abs_m = abs_residual;
+                    iteration_diagnostic.phase_residual_max_sat = satellite;
+                }
+            } else {
+                ++iteration_diagnostic.code_rows;
+                code_residual_sum_sq += residual * residual;
+                if (abs_residual > code_residual_max_abs) {
+                    code_residual_max_abs = abs_residual;
+                    iteration_diagnostic.code_residual_max_abs_m = abs_residual;
+                    iteration_diagnostic.code_residual_max_sat = satellite;
+                }
+            }
+
+            PPPResidualDiagnostic residual_diagnostic;
+            residual_diagnostic.iteration = iteration;
+            residual_diagnostic.row_index = row_index;
+            residual_diagnostic.satellite = satellite;
+            residual_diagnostic.primary_signal =
+                row < meas_eq.row_primary_signals.size() ?
+                    meas_eq.row_primary_signals[row] : SignalType::SIGNAL_TYPE_COUNT;
+            residual_diagnostic.secondary_signal =
+                row < meas_eq.row_secondary_signals.size() ?
+                    meas_eq.row_secondary_signals[row] : SignalType::SIGNAL_TYPE_COUNT;
+            residual_diagnostic.primary_observation_code =
+                row < meas_eq.row_primary_observation_codes.size() ?
+                    meas_eq.row_primary_observation_codes[row] : std::string{};
+            residual_diagnostic.secondary_observation_code =
+                row < meas_eq.row_secondary_observation_codes.size() ?
+                    meas_eq.row_secondary_observation_codes[row] : std::string{};
+            residual_diagnostic.frequency_index =
+                row < meas_eq.row_frequency_indices.size() ? meas_eq.row_frequency_indices[row] : 0;
+            residual_diagnostic.ionosphere_coefficient =
+                row < meas_eq.row_ionosphere_coefficients.size() ?
+                    meas_eq.row_ionosphere_coefficients[row] : 1.0;
+            residual_diagnostic.receiver_clock_state_index =
+                row < meas_eq.row_receiver_clock_state_indices.size() ?
+                    meas_eq.row_receiver_clock_state_indices[row] : -1;
+            residual_diagnostic.receiver_clock_design_coeff =
+                row < meas_eq.row_receiver_clock_design_coefficients.size() ?
+                    meas_eq.row_receiver_clock_design_coefficients[row] : 0.0;
+            residual_diagnostic.ionosphere_state_index =
+                row < meas_eq.row_ionosphere_state_indices.size() ?
+                    meas_eq.row_ionosphere_state_indices[row] : -1;
+            residual_diagnostic.ionosphere_design_coeff =
+                row < meas_eq.row_ionosphere_design_coefficients.size() ?
+                    meas_eq.row_ionosphere_design_coefficients[row] : 0.0;
+            residual_diagnostic.ambiguity_state_index =
+                row < meas_eq.row_ambiguity_state_indices.size() ?
+                    meas_eq.row_ambiguity_state_indices[row] : -1;
+            residual_diagnostic.ambiguity_design_coeff =
+                row < meas_eq.row_ambiguity_design_coefficients.size() ?
+                    meas_eq.row_ambiguity_design_coefficients[row] : 0.0;
+            residual_diagnostic.ambiguity_lock_count =
+                row < meas_eq.row_ambiguity_lock_counts.size() ?
+                    meas_eq.row_ambiguity_lock_counts[row] : -1;
+            residual_diagnostic.required_lock_count =
+                row < meas_eq.row_required_lock_counts.size() ?
+                    meas_eq.row_required_lock_counts[row] : 0;
+            residual_diagnostic.phase_limit_m =
+                row < meas_eq.row_phase_limits_m.size() ? meas_eq.row_phase_limits_m[row] : 0.0;
+            residual_diagnostic.phase_skip_reason =
+                row < meas_eq.row_phase_skip_reasons.size() ?
+                    meas_eq.row_phase_skip_reasons[row] : std::string{};
+            residual_diagnostic.carrier_phase = is_phase;
+            residual_diagnostic.ionosphere_constraint = is_ionosphere_constraint;
+            residual_diagnostic.phase_accepted = is_phase;
+            residual_diagnostic.phase_ready = is_phase;
+            residual_diagnostic.observation_m = meas_eq.observations(row_index);
+            residual_diagnostic.predicted_m = meas_eq.predicted(row_index);
+            residual_diagnostic.residual_m = residual;
+            residual_diagnostic.variance_m2 = meas_eq.weight_matrix(row_index, row_index);
+            residual_diagnostic.elevation_deg =
+                row < meas_eq.row_elevation_deg.size() ? meas_eq.row_elevation_deg[row] : 0.0;
+            residual_diagnostic.iono_state_m =
+                row < meas_eq.row_iono_state_m.size() ? meas_eq.row_iono_state_m[row] : 0.0;
+            iteration_residual_diagnostics.push_back(residual_diagnostic);
+        }
+        int phase_candidate_index = 0;
+        for (auto candidate : meas_eq.phase_candidate_diagnostics) {
+            candidate.iteration = iteration;
+            candidate.row_index = measurement_rows + phase_candidate_index;
+            iteration_residual_diagnostics.push_back(candidate);
+            ++phase_candidate_index;
+        }
+        if (iteration_diagnostic.code_rows > 0) {
+            iteration_diagnostic.code_residual_rms_m = std::sqrt(
+                code_residual_sum_sq / static_cast<double>(iteration_diagnostic.code_rows));
+        }
+        if (iteration_diagnostic.phase_rows > 0) {
+            iteration_diagnostic.phase_residual_rms_m = std::sqrt(
+                phase_residual_sum_sq / static_cast<double>(iteration_diagnostic.phase_rows));
         }
 
         const MatrixXd innovation_covariance =
@@ -1635,18 +2382,209 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
         const MatrixXd gain =
             filter_state_.covariance * meas_eq.design_matrix.transpose() * innovation_inverse;
         const VectorXd delta_state = gain * meas_eq.residuals;
+        const auto deltaAt = [&](int index) {
+            return index >= 0 && index < delta_state.size() ? delta_state(index) : 0.0;
+        };
+        const auto stateAt = [&](int index) {
+            return index >= 0 && index < filter_state_.state.size()
+                ? filter_state_.state(index) : 0.0;
+        };
+
+        const Vector3d position_delta = delta_state.segment(filter_state_.pos_index, 3);
+        iteration_diagnostic.pos_delta_m = position_delta.norm();
+        iteration_diagnostic.pos_delta_x_m = position_delta(0);
+        iteration_diagnostic.pos_delta_y_m = position_delta(1);
+        iteration_diagnostic.pos_delta_z_m = position_delta(2);
+        iteration_diagnostic.clock_delta_m = deltaAt(filter_state_.clock_index);
+        iteration_diagnostic.glo_clock_delta_m = deltaAt(filter_state_.glo_clock_index);
+        iteration_diagnostic.gal_clock_delta_m = deltaAt(filter_state_.gal_clock_index);
+        iteration_diagnostic.qzs_clock_delta_m = deltaAt(filter_state_.qzs_clock_index);
+        iteration_diagnostic.bds_clock_delta_m = deltaAt(filter_state_.bds_clock_index);
+        iteration_diagnostic.bds2_clock_delta_m = deltaAt(filter_state_.bds2_clock_index);
+        iteration_diagnostic.bds3_clock_delta_m = deltaAt(filter_state_.bds3_clock_index);
+        iteration_diagnostic.trop_delta_m = deltaAt(filter_state_.trop_index);
+        double iono_delta_sum_sq = 0.0;
+        double iono_delta_max_abs = 0.0;
+        int iono_delta_count = 0;
+        for (const auto& [satellite, index] : filter_state_.ionosphere_indices) {
+            (void)satellite;
+            if (index < 0 || index >= delta_state.size()) {
+                continue;
+            }
+            const double delta = delta_state(index);
+            iono_delta_sum_sq += delta * delta;
+            iono_delta_max_abs = std::max(iono_delta_max_abs, std::abs(delta));
+            ++iono_delta_count;
+        }
+        if (iono_delta_count > 0) {
+            iteration_diagnostic.iono_delta_rms_m =
+                std::sqrt(iono_delta_sum_sq / static_cast<double>(iono_delta_count));
+            iteration_diagnostic.iono_delta_max_abs_m = iono_delta_max_abs;
+        }
 
         if (pppDebugEnabled()) {
             std::cerr << "[PPP] iter=" << iteration
-                      << " rows=" << meas_eq.observations.size()
-                      << " pos_delta=" << delta_state.segment(filter_state_.pos_index, 3).norm()
-                      << " clock_delta=" << delta_state(filter_state_.clock_index)
-                      << " trop_delta=" << delta_state(filter_state_.trop_index)
+                      << " rows=" << measurement_rows
+                      << " pos_delta=" << iteration_diagnostic.pos_delta_m
+                      << " clock_delta=" << iteration_diagnostic.clock_delta_m
+                      << " trop_delta=" << iteration_diagnostic.trop_delta_m
                       << "\n";
         }
 
         filter_state_.state += delta_state;
         constrainStaticAnchorPosition();
+
+        const Vector3d position_state = filter_state_.state.segment(filter_state_.pos_index, 3);
+        iteration_diagnostic.position_x_m = position_state(0);
+        iteration_diagnostic.position_y_m = position_state(1);
+        iteration_diagnostic.position_z_m = position_state(2);
+        iteration_diagnostic.clock_state_m = stateAt(filter_state_.clock_index);
+        iteration_diagnostic.glo_clock_state_m = stateAt(filter_state_.glo_clock_index);
+        iteration_diagnostic.gal_clock_state_m = stateAt(filter_state_.gal_clock_index);
+        iteration_diagnostic.qzs_clock_state_m = stateAt(filter_state_.qzs_clock_index);
+        iteration_diagnostic.bds_clock_state_m = stateAt(filter_state_.bds_clock_index);
+        iteration_diagnostic.bds2_clock_state_m = stateAt(filter_state_.bds2_clock_index);
+        iteration_diagnostic.bds3_clock_state_m = stateAt(filter_state_.bds3_clock_index);
+        iteration_diagnostic.trop_state_m = stateAt(filter_state_.trop_index);
+        double iono_state_sum_sq = 0.0;
+        double iono_state_max_abs = 0.0;
+        int iono_state_count = 0;
+        for (const auto& [satellite, index] : filter_state_.ionosphere_indices) {
+            (void)satellite;
+            if (index < 0 || index >= filter_state_.state.size()) {
+                continue;
+            }
+            const double state = filter_state_.state(index);
+            iono_state_sum_sq += state * state;
+            iono_state_max_abs = std::max(iono_state_max_abs, std::abs(state));
+            ++iono_state_count;
+        }
+        if (iono_state_count > 0) {
+            iteration_diagnostic.iono_state_rms_m =
+                std::sqrt(iono_state_sum_sq / static_cast<double>(iono_state_count));
+            iteration_diagnostic.iono_state_max_abs_m = iono_state_max_abs;
+        }
+
+        const auto kalmanGainAt = [&](int state_index, int row_index) {
+            return state_index >= 0 && state_index < gain.rows() &&
+                   row_index >= 0 && row_index < gain.cols()
+                ? gain(state_index, row_index)
+                : 0.0;
+        };
+        const auto innovationVarianceAt = [&](int row_index) {
+            return row_index >= 0 && row_index < innovation_covariance.rows() &&
+                   row_index < innovation_covariance.cols()
+                ? innovation_covariance(row_index, row_index)
+                : 0.0;
+        };
+        const auto innovationInverseDiagonalAt = [&](int row_index) {
+            return row_index >= 0 && row_index < innovation_inverse.rows() &&
+                   row_index < innovation_inverse.cols()
+                ? innovation_inverse(row_index, row_index)
+                : 0.0;
+        };
+        const auto measurementRowKind = [&](int row_index) {
+            const auto row = static_cast<size_t>(row_index);
+            if (row_index >= 0 && row < meas_eq.row_is_ionosphere_constraint.size() &&
+                meas_eq.row_is_ionosphere_constraint[row]) {
+                return 2;
+            }
+            if (row_index >= 0 && row < meas_eq.row_is_phase.size() &&
+                meas_eq.row_is_phase[row]) {
+                return 1;
+            }
+            return 0;
+        };
+        const auto accumulateRowCouplings = [&, measurementRowKind](
+            const MatrixXd& matrix,
+            int row_index,
+            double& code_abs_sum,
+            double& phase_abs_sum,
+            double& ionosphere_constraint_abs_sum) {
+            code_abs_sum = 0.0;
+            phase_abs_sum = 0.0;
+            ionosphere_constraint_abs_sum = 0.0;
+            if (row_index < 0 || row_index >= matrix.rows()) {
+                return;
+            }
+            for (int column = 0; column < matrix.cols(); ++column) {
+                if (column == row_index) {
+                    continue;
+                }
+                const double value = std::abs(matrix(row_index, column));
+                switch (measurementRowKind(column)) {
+                    case 2:
+                        ionosphere_constraint_abs_sum += value;
+                        break;
+                    case 1:
+                        phase_abs_sum += value;
+                        break;
+                    default:
+                        code_abs_sum += value;
+                        break;
+                }
+            }
+        };
+        const auto updateContributionAt = [&](int state_index, int row_index) {
+            return kalmanGainAt(state_index, row_index) *
+                   (row_index >= 0 && row_index < meas_eq.residuals.size() ?
+                        meas_eq.residuals(row_index) : 0.0);
+        };
+        const int accepted_diagnostic_rows = std::min(
+            measurement_rows,
+            static_cast<int>(iteration_residual_diagnostics.size()));
+        for (int row_index = 0; row_index < accepted_diagnostic_rows; ++row_index) {
+            auto& diagnostic = iteration_residual_diagnostics[static_cast<size_t>(row_index)];
+            diagnostic.innovation_variance_m2 = innovationVarianceAt(row_index);
+            diagnostic.innovation_inverse_diagonal_1_per_m2 =
+                innovationInverseDiagonalAt(row_index);
+            accumulateRowCouplings(
+                innovation_covariance,
+                row_index,
+                diagnostic.innovation_covariance_code_coupling_abs_m2,
+                diagnostic.innovation_covariance_phase_coupling_abs_m2,
+                diagnostic.innovation_covariance_ionosphere_constraint_coupling_abs_m2);
+            accumulateRowCouplings(
+                innovation_inverse,
+                row_index,
+                diagnostic.innovation_inverse_code_coupling_abs_1_per_m2,
+                diagnostic.innovation_inverse_phase_coupling_abs_1_per_m2,
+                diagnostic.innovation_inverse_ionosphere_constraint_coupling_abs_1_per_m2);
+            diagnostic.position_x_kalman_gain = kalmanGainAt(filter_state_.pos_index, row_index);
+            diagnostic.position_y_kalman_gain = kalmanGainAt(filter_state_.pos_index + 1, row_index);
+            diagnostic.position_z_kalman_gain = kalmanGainAt(filter_state_.pos_index + 2, row_index);
+            diagnostic.position_update_contribution_x_m = updateContributionAt(
+                filter_state_.pos_index, row_index);
+            diagnostic.position_update_contribution_y_m = updateContributionAt(
+                filter_state_.pos_index + 1, row_index);
+            diagnostic.position_update_contribution_z_m = updateContributionAt(
+                filter_state_.pos_index + 2, row_index);
+            diagnostic.position_update_contribution_3d_m = std::sqrt(
+                diagnostic.position_update_contribution_x_m *
+                    diagnostic.position_update_contribution_x_m +
+                diagnostic.position_update_contribution_y_m *
+                    diagnostic.position_update_contribution_y_m +
+                diagnostic.position_update_contribution_z_m *
+                    diagnostic.position_update_contribution_z_m);
+            diagnostic.receiver_clock_kalman_gain = kalmanGainAt(
+                diagnostic.receiver_clock_state_index, row_index);
+            diagnostic.ionosphere_kalman_gain = kalmanGainAt(
+                diagnostic.ionosphere_state_index, row_index);
+            diagnostic.ambiguity_kalman_gain = kalmanGainAt(
+                diagnostic.ambiguity_state_index, row_index);
+            diagnostic.receiver_clock_update_contribution_m = updateContributionAt(
+                diagnostic.receiver_clock_state_index, row_index);
+            diagnostic.ionosphere_update_contribution_m = updateContributionAt(
+                diagnostic.ionosphere_state_index, row_index);
+            diagnostic.ambiguity_update_contribution_m = updateContributionAt(
+                diagnostic.ambiguity_state_index, row_index);
+        }
+        last_residual_diagnostics_.insert(
+            last_residual_diagnostics_.end(),
+            iteration_residual_diagnostics.begin(),
+            iteration_residual_diagnostics.end());
+
+        last_filter_iteration_diagnostics_.push_back(iteration_diagnostic);
 
         const MatrixXd identity =
             MatrixXd::Identity(filter_state_.total_states, filter_state_.total_states);
@@ -1655,9 +2593,9 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
             (identity - kh) * filter_state_.covariance * (identity - kh).transpose() +
             gain * meas_eq.weight_matrix * gain.transpose();
 
-        if (delta_state.segment(filter_state_.pos_index, 3).norm() < 1e-4 &&
-            std::abs(delta_state(filter_state_.clock_index)) < 1e-3 &&
-            std::abs(delta_state(filter_state_.trop_index)) < 1e-3) {
+        if (iteration_diagnostic.pos_delta_m < 1e-4 &&
+            std::abs(iteration_diagnostic.clock_delta_m) < 1e-3 &&
+            std::abs(iteration_diagnostic.trop_delta_m) < 1e-3) {
             break;
         }
     }
@@ -1682,9 +2620,18 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
     const ObservationData& obs,
     const NavigationData& nav) {
     std::vector<IonosphereFreeObs> combined;
-    combined.reserve(obs.getSatellites().size());
+    combined.reserve(ppp_config_.use_ionosphere_free ? obs.getSatellites().size()
+                                                     : obs.observations.size());
 
     for (const auto& sat : obs.getSatellites()) {
+        if (!ppp_config_.allowed_systems.empty() &&
+            ppp_config_.allowed_systems.count(sat.system) == 0U) {
+            continue;
+        }
+        // Match SPP/RTK until native BDS2 GEO clock/ionosphere handling is complete.
+        if (!isUsablePppSatellite(sat)) {
+            continue;
+        }
         const Observation* primary = findObservationForSignals(obs, sat, primarySignals(sat.system));
         if (primary == nullptr) {
             continue;
@@ -1693,10 +2640,12 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         const Ephemeris* eph = nav.getEphemeris(sat, obs.time);
         IonosphereFreeObs entry;
         entry.satellite = sat;
+        entry.frequency_index = 0;
 
         if (!ppp_config_.use_ionosphere_free) {
             entry.pseudorange_if = primary->pseudorange;
             entry.primary_signal = primary->signal;
+            entry.primary_observation_code = primary->observation_code;
             entry.primary_code_bias_coeff = 1.0;
             entry.secondary_code_bias_coeff = 0.0;
             if (primary->has_carrier_phase) {
@@ -1724,22 +2673,89 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         if (!ppp_config_.use_ionosphere_free) {
             if (secondary != nullptr) {
                 entry.secondary_signal = secondary->signal;
+                entry.secondary_observation_code = secondary->observation_code;
                 // Store secondary observation info for MW combination in AR
-                const double f1 = signalFrequencyHz(primary->signal, eph);
-                const double f2 = signalFrequencyHz(secondary->signal, eph);
-                if (f1 > 0.0 && f2 > 0.0) {
-                    entry.primary_code_bias_coeff = 1.0;
-                    entry.secondary_code_bias_coeff = 0.0;
+                entry.primary_code_bias_coeff = 1.0;
+                entry.secondary_code_bias_coeff = 0.0;
+                double ionosphere_delay_m = 0.0;
+                if (estimatePrimaryIonosphereDelaySeedMeters(
+                        *primary, *secondary, eph, ionosphere_delay_m)) {
+                    entry.ionosphere_delay_seed_m = ionosphere_delay_m;
+                    entry.has_ionosphere_delay_seed = true;
                 }
             }
             entry.valid = true;
             combined.push_back(entry);
+            if (ppp_config_.estimate_ionosphere) {
+                const double primary_frequency_hz = signalFrequencyHz(primary->signal, eph);
+                if (primary_frequency_hz > 0.0) {
+                    std::set<long long> emitted_frequencies_hz;
+                    emitted_frequencies_hz.insert(
+                        static_cast<long long>(std::llround(primary_frequency_hz)));
+                    int next_frequency_index = 1;
+                    for (const auto signal : secondarySignals(sat.system)) {
+                        const Observation* extra = obs.getObservation(sat, signal);
+                        if (extra == nullptr || !usablePseudorangeObservation(*extra)) {
+                            continue;
+                        }
+                        const double frequency_hz = signalFrequencyHz(extra->signal, eph);
+                        if (frequency_hz <= 0.0 || !std::isfinite(frequency_hz) ||
+                            std::abs(frequency_hz - primary_frequency_hz) < 1.0) {
+                            continue;
+                        }
+                        const long long rounded_frequency_hz =
+                            static_cast<long long>(std::llround(frequency_hz));
+                        if (!emitted_frequencies_hz.insert(rounded_frequency_hz).second) {
+                            continue;
+                        }
+
+                        IonosphereFreeObs code_entry = entry;
+                        code_entry.primary_signal = extra->signal;
+                        code_entry.secondary_signal = SignalType::SIGNAL_TYPE_COUNT;
+                        code_entry.primary_observation_code = extra->observation_code;
+                        code_entry.secondary_observation_code.clear();
+                        code_entry.frequency_index = next_frequency_index++;
+                        code_entry.primary_code_bias_coeff = 1.0;
+                        code_entry.secondary_code_bias_coeff = 0.0;
+                        code_entry.ionosphere_coefficient =
+                            (primary_frequency_hz * primary_frequency_hz) /
+                            (frequency_hz * frequency_hz);
+                        code_entry.pseudorange_if = extra->pseudorange;
+                        code_entry.carrier_phase_if = 0.0;
+                        code_entry.ambiguity_scale_m = 0.0;
+                        code_entry.has_carrier_phase = false;
+                        if (ppp_config_.enable_per_frequency_phase_bias_states &&
+                            extra->has_carrier_phase) {
+                            const double wavelength = signalWavelengthMeters(extra->signal, eph);
+                            if (wavelength > 0.0) {
+                                code_entry.carrier_phase_if = extra->carrier_phase * wavelength;
+                                code_entry.ambiguity_scale_m = wavelength;
+                                code_entry.variance_cp = safeVariance(
+                                    ppp_config_.carrier_phase_sigma * ppp_config_.carrier_phase_sigma,
+                                    1e-8);
+                                code_entry.has_carrier_phase = true;
+                            }
+                        }
+                        code_entry.pseudorange_code_bias_m = 0.0;
+                        code_entry.carrier_phase_bias_m = 0.0;
+                        code_entry.atmospheric_trop_correction_m = 0.0;
+                        code_entry.atmospheric_iono_correction_m = 0.0;
+                        code_entry.ionosphere_constraint_m = 0.0;
+                        code_entry.ionosphere_constraint_sigma_m = 0.0;
+                        code_entry.has_ionosphere_constraint = false;
+                        code_entry.allow_ionosphere_constraint = false;
+                        code_entry.ssr_atmos_tokens.clear();
+                        combined.push_back(code_entry);
+                    }
+                }
+            }
             continue;
         }
 
         if (secondary == nullptr) {
             entry.pseudorange_if = primary->pseudorange;
             entry.primary_signal = primary->signal;
+            entry.primary_observation_code = primary->observation_code;
             entry.primary_code_bias_coeff = 1.0;
             entry.secondary_code_bias_coeff = 0.0;
             if (primary->has_carrier_phase) {
@@ -1770,8 +2786,16 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             coefficients.first * primary->pseudorange + coefficients.second * secondary->pseudorange;
         entry.primary_signal = primary->signal;
         entry.secondary_signal = secondary->signal;
+        entry.primary_observation_code = primary->observation_code;
+        entry.secondary_observation_code = secondary->observation_code;
         entry.primary_code_bias_coeff = coefficients.first;
         entry.secondary_code_bias_coeff = coefficients.second;
+        double ionosphere_delay_m = 0.0;
+        if (estimatePrimaryIonosphereDelaySeedMeters(
+                *primary, *secondary, eph, ionosphere_delay_m)) {
+            entry.ionosphere_delay_seed_m = ionosphere_delay_m;
+            entry.has_ionosphere_delay_seed = true;
+        }
         entry.pseudorange_code_bias_m = 0.0;
         entry.variance_pr = safeVariance(
             (coefficients.first * coefficients.first +
@@ -1817,8 +2841,8 @@ Vector3d PPPProcessor::calculateReceiverAntennaOffsetEcef(
             receiver_antex_offsets_.find(normalizeAntennaType(ppp_config_.receiver_antenna_type));
         if (antenna_it != receiver_antex_offsets_.end()) {
             auto signal_offset = [&](SignalType signal) -> Vector3d {
-                const auto it = antenna_it->second.find(signal);
-                return it != antenna_it->second.end() ? it->second : Vector3d::Zero();
+                const auto it = antenna_it->second.offsets_enu_m.find(signal);
+                return it != antenna_it->second.offsets_enu_m.end() ? it->second : Vector3d::Zero();
             };
             if (!ppp_config_.use_ionosphere_free ||
                 observation.secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
@@ -1835,12 +2859,100 @@ Vector3d PPPProcessor::calculateReceiverAntennaOffsetEcef(
     return enu2ecef(offset_enu, latitude_rad, longitude_rad);
 }
 
+double PPPProcessor::calculateReceiverAntennaPcvMeters(
+    const IonosphereFreeObs& observation,
+    double elevation_rad) const {
+    if (!receiver_antex_loaded_ || ppp_config_.receiver_antenna_type.empty() ||
+        !std::isfinite(elevation_rad)) {
+        return 0.0;
+    }
+    const auto antenna_it =
+        receiver_antex_offsets_.find(normalizeAntennaType(ppp_config_.receiver_antenna_type));
+    if (antenna_it == receiver_antex_offsets_.end()) {
+        return 0.0;
+    }
+
+    const double zenith_angle_deg = 90.0 - elevation_rad / kDegreesToRadians;
+    auto signal_pcv = [&](SignalType signal) -> double {
+        const auto it = antenna_it->second.noazi_pcv_m.find(signal);
+        return it != antenna_it->second.noazi_pcv_m.end() ?
+            interpolateNoaziPcv(it->second, zenith_angle_deg) : 0.0;
+    };
+
+    if (!ppp_config_.use_ionosphere_free ||
+        observation.secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
+        return signal_pcv(observation.primary_signal);
+    }
+    return observation.primary_code_bias_coeff * signal_pcv(observation.primary_signal) +
+           observation.secondary_code_bias_coeff * signal_pcv(observation.secondary_signal);
+}
+
+Vector3d PPPProcessor::calculateSatelliteAntennaOffsetEcef(
+    const IonosphereFreeObs& observation,
+    const Vector3d& satellite_position_ecef,
+    const GNSSTime& time) const {
+    const auto satellite_it = satellite_antex_offsets_.find(observation.satellite);
+    if (satellite_it == satellite_antex_offsets_.end() ||
+        satellite_position_ecef.squaredNorm() <= 0.0) {
+        return Vector3d::Zero();
+    }
+
+    const SatelliteAntexEntry* selected_entry = nullptr;
+    for (const auto& entry : satellite_it->second) {
+        if (entry.has_valid_from && time < entry.valid_from) {
+            continue;
+        }
+        if (entry.has_valid_until && time > entry.valid_until) {
+            continue;
+        }
+        selected_entry = &entry;
+    }
+    if (selected_entry == nullptr) {
+        return Vector3d::Zero();
+    }
+
+    auto signal_offset = [&](SignalType signal) -> Vector3d {
+        const auto it = selected_entry->offsets_neu_m.find(signal);
+        return it != selected_entry->offsets_neu_m.end() ? it->second : Vector3d::Zero();
+    };
+
+    Vector3d offset_neu = Vector3d::Zero();
+    if (!ppp_config_.use_ionosphere_free ||
+        observation.secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
+        offset_neu = signal_offset(observation.primary_signal);
+    } else {
+        offset_neu =
+            observation.primary_code_bias_coeff * signal_offset(observation.primary_signal) +
+            observation.secondary_code_bias_coeff * signal_offset(observation.secondary_signal);
+    }
+    if (offset_neu.squaredNorm() <= 0.0) {
+        return Vector3d::Zero();
+    }
+
+    const Vector3d ez = -satellite_position_ecef.normalized();
+    const Vector3d sun_position_ecef = approximateSunPositionEcef(time);
+    Vector3d sun_direction = sun_position_ecef - satellite_position_ecef;
+    if (sun_direction.squaredNorm() <= 0.0) {
+        return Vector3d::Zero();
+    }
+    sun_direction.normalize();
+    Vector3d ey = ez.cross(sun_direction);
+    if (ey.squaredNorm() <= 0.0) {
+        return Vector3d::Zero();
+    }
+    ey.normalize();
+    const Vector3d ex = ey.cross(ez).normalized();
+
+    return -(offset_neu.x() * ex + offset_neu.y() * ey + offset_neu.z() * ez);
+}
+
 void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& observations,
                                            const NavigationData& nav,
                                            const GNSSTime& time) {
     const Vector3d receiver_marker_position = applyGeophysicalCorrections(
         filter_state_.state.segment(filter_state_.pos_index, 3), time);
     const double elevation_mask = config_.elevation_mask * kDegreesToRadians;
+    last_ssr_application_diagnostics_.clear();
 
     // Pre-fetch epoch-wide atmosphere tokens from any satellite that has them.
     // CLAS atmosphere corrections are network-wide, not per-satellite, so we
@@ -1861,18 +2973,59 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
     const int preferred_network_id = preferredClasNetworkId(epoch_atmos_tokens);
 
     for (auto& observation : observations) {
+        const bool collect_diagnostics =
+            ssr_products_loaded_ || ionex_products_loaded_ || dcb_products_loaded_;
+        SSRApplicationDiagnostic diagnostic;
+        diagnostic.satellite = observation.satellite;
+        diagnostic.primary_signal = observation.primary_signal;
+        diagnostic.secondary_signal = observation.secondary_signal;
+        diagnostic.primary_observation_code = observation.primary_observation_code;
+        diagnostic.secondary_observation_code = observation.secondary_observation_code;
+        diagnostic.frequency_index = observation.frequency_index;
+        diagnostic.primary_code_bias_coeff = observation.primary_code_bias_coeff;
+        diagnostic.secondary_code_bias_coeff = observation.secondary_code_bias_coeff;
+        diagnostic.ionosphere_coefficient = observation.ionosphere_coefficient;
+        diagnostic.has_carrier_phase = observation.has_carrier_phase;
+        diagnostic.preferred_network_id = preferred_network_id;
+        bool diagnostic_pushed = false;
+        const auto pushDiagnostic = [&]() {
+            if (collect_diagnostics && !diagnostic_pushed) {
+                diagnostic.has_carrier_phase = observation.has_carrier_phase;
+                last_ssr_application_diagnostics_.push_back(diagnostic);
+                diagnostic_pushed = true;
+            }
+        };
+
         double deferred_variance_pr = 0.0;
         double deferred_variance_cp = 0.0;
         bool applied_ssr_code_bias = false;
         bool applied_ssr_iono = false;
+        bool applied_satellite_antenna_offset = false;
         const Vector3d receiver_antenna_offset_ecef =
             calculateReceiverAntennaOffsetEcef(receiver_marker_position, observation);
         const Vector3d receiver_position = receiver_marker_position + receiver_antenna_offset_ecef;
-        const Ephemeris* eph = nav.getEphemeris(observation.satellite, time);
+        const Ephemeris* eph = ppp_config_.use_rtklib_broadcast_selection
+            ? nav.getRtklibEphemeris(observation.satellite, time)
+            : nav.getEphemeris(observation.satellite, time);
+        if (eph != nullptr) {
+            diagnostic.broadcast_iode = static_cast<int>(eph->iode);
+        }
         Vector3d sat_position = Vector3d::Zero();
         Vector3d sat_velocity = Vector3d::Zero();
         double sat_clock_bias = 0.0;
         double sat_clock_drift = 0.0;
+
+        auto applySatelliteAntennaOffset = [&]() {
+            if (!applied_satellite_antenna_offset) {
+                sat_position += calculateSatelliteAntennaOffsetEcef(observation, sat_position, time);
+                applied_satellite_antenna_offset = true;
+            }
+        };
+        auto calculateBroadcastState = [&](const Ephemeris& broadcast_eph,
+                                           const GNSSTime& state_time) {
+            return broadcast_eph.calculateSatelliteState(
+                state_time, sat_position, sat_velocity, sat_clock_bias, sat_clock_drift);
+        };
 
         bool have_precise = false;
         if (precise_products_loaded_) {
@@ -1887,28 +3040,21 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
 
         if (!have_precise) {
             // First pass: compute satellite state at reception time
-            if (!nav.calculateSatelliteState(
-                    observation.satellite,
-                    time,
-                    sat_position,
-                    sat_velocity,
-                    sat_clock_bias,
-                    sat_clock_drift)) {
+            if (eph == nullptr || !calculateBroadcastState(*eph, time)) {
+                diagnostic.orbit_clock_skip_reason =
+                    eph == nullptr ? "broadcast_ephemeris_unavailable" : "broadcast_state_failed";
                 observation.valid = false;
+                pushDiagnostic();
                 continue;
             }
             // Light travel time correction: re-evaluate at emission time
             if (observation.pseudorange_if > 0.0) {
                 const double travel_time = observation.pseudorange_if / constants::SPEED_OF_LIGHT;
                 const GNSSTime emission_time = time - travel_time + sat_clock_bias;
-                if (!nav.calculateSatelliteState(
-                        observation.satellite,
-                        emission_time,
-                        sat_position,
-                        sat_velocity,
-                        sat_clock_bias,
-                        sat_clock_drift)) {
+                if (!calculateBroadcastState(*eph, emission_time)) {
+                    diagnostic.orbit_clock_skip_reason = "broadcast_state_failed";
                     observation.valid = false;
+                    pushDiagnostic();
                     continue;
                 }
             }
@@ -1921,6 +3067,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             std::map<uint8_t, double> code_bias_m;
             std::map<uint8_t, double> phase_bias_m;
             std::map<std::string, std::string> atmos_tokens;
+            int orbit_iode = -1;
             const bool ssr_ok = ssr_products_.interpolateCorrection(
                     observation.satellite,
                     time,
@@ -1933,20 +3080,83 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     nullptr,
                     nullptr,
                     nullptr,
-                    preferred_network_id);
+                    preferred_network_id,
+                    ppp_config_.allow_future_ssr_corrections,
+                    ppp_config_.require_ssr_orbit_clock,
+                    &orbit_iode);
             // Fall back to epoch-wide atmosphere tokens when per-satellite
             // atmos are empty (CLAS broadcasts network-wide corrections).
             if (atmos_tokens.empty() && !epoch_atmos_tokens.empty()) {
                 atmos_tokens = epoch_atmos_tokens;
             }
+            diagnostic.ssr_available = ssr_ok;
+            diagnostic.ssr_orbit_iode = orbit_iode;
+            diagnostic.ura_sigma_m = ura_sigma_m;
+            diagnostic.atmos_token_count = static_cast<int>(atmos_tokens.size());
+            if (!ssr_ok && !have_precise) {
+                diagnostic.orbit_clock_skip_reason = "ssr_unavailable";
+            }
             if (ssr_ok) {
                 if (!have_precise) {
+                    if ((ppp_config_.enforce_ssr_orbit_iode ||
+                         ppp_config_.enforce_ssr_orbit_iode_admission_only) &&
+                        orbit_iode >= 0) {
+                        const Ephemeris* matched_eph = nav.getEphemerisByIode(
+                            observation.satellite, static_cast<uint16_t>(orbit_iode), time);
+                        if (matched_eph == nullptr) {
+                            diagnostic.orbit_clock_skip_reason =
+                                "ssr_orbit_iode_no_matching_ephemeris";
+                            observation.valid = false;
+                            pushDiagnostic();
+                            continue;
+                        }
+                        if (ppp_config_.enforce_ssr_orbit_iode) {
+                            eph = matched_eph;
+                            diagnostic.broadcast_iode = static_cast<int>(eph->iode);
+                            if (!calculateBroadcastState(*eph, time)) {
+                                diagnostic.orbit_clock_skip_reason = "ssr_orbit_iode_state_failed";
+                                observation.valid = false;
+                                pushDiagnostic();
+                                continue;
+                            }
+                            if (observation.pseudorange_if > 0.0) {
+                                const double travel_time =
+                                    observation.pseudorange_if / constants::SPEED_OF_LIGHT;
+                                const GNSSTime emission_time = time - travel_time + sat_clock_bias;
+                                if (!calculateBroadcastState(*eph, emission_time)) {
+                                    diagnostic.orbit_clock_skip_reason =
+                                        "ssr_orbit_iode_state_failed";
+                                    observation.valid = false;
+                                    pushDiagnostic();
+                                    continue;
+                                }
+                            }
+                        }
+                    }
                     if (ssr_products_.orbitCorrectionsAreRac()) {
                         orbit_correction_ecef =
                             ssrRacToEcef(sat_position, sat_velocity, orbit_correction_ecef);
                     }
+                    diagnostic.orbit_clock_applied = true;
+                    diagnostic.orbit_correction_x_m = orbit_correction_ecef.x();
+                    diagnostic.orbit_correction_y_m = orbit_correction_ecef.y();
+                    diagnostic.orbit_correction_z_m = orbit_correction_ecef.z();
+                    diagnostic.clock_correction_m = clock_correction_m;
                     sat_position += orbit_correction_ecef;
                     sat_clock_bias += clock_correction_m / constants::SPEED_OF_LIGHT;
+                }
+                applySatelliteAntennaOffset();
+                if (ppp_config_.require_ssr_observation_biases &&
+                    !observationHasRequiredSsrBiases(
+                        observation.satellite.system,
+                        observation.primary_signal,
+                        observation.secondary_signal,
+                        ppp_config_.use_ionosphere_free,
+                        code_bias_m)) {
+                    diagnostic.orbit_clock_skip_reason = "ssr_code_bias_unavailable";
+                    observation.valid = false;
+                    pushDiagnostic();
+                    continue;
                 }
                 const double code_bias = observationCodeBiasMeters(
                     observation.satellite.system,
@@ -1958,7 +3168,22 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     observation.secondary_code_bias_coeff);
                 observation.pseudorange_if -= code_bias;
                 observation.pseudorange_code_bias_m = code_bias;
-                applied_ssr_code_bias = std::abs(code_bias) > 0.0;
+                diagnostic.code_bias_m = code_bias;
+                applied_ssr_code_bias =
+                    ppp_config_.require_ssr_observation_biases || std::abs(code_bias) > 0.0;
+                if (observation.has_carrier_phase &&
+                    ppp_config_.require_ssr_observation_biases &&
+                    !observationHasRequiredSsrPhaseBiases(
+                        observation.satellite.system,
+                        observation.primary_signal,
+                        observation.secondary_signal,
+                        ppp_config_.use_ionosphere_free,
+                        phase_bias_m)) {
+                    observation.has_carrier_phase = false;
+                    observation.carrier_phase_if = 0.0;
+                    observation.carrier_phase_bias_m = 0.0;
+                    observation.ambiguity_scale_m = 0.0;
+                }
                 if (observation.has_carrier_phase && !phase_bias_m.empty()) {
                     const double phase_bias = observationPhaseBiasMeters(
                         observation.satellite.system,
@@ -1970,6 +3195,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         observation.secondary_code_bias_coeff);
                     observation.carrier_phase_if -= phase_bias;
                     observation.carrier_phase_bias_m = phase_bias;
+                    diagnostic.phase_bias_m = phase_bias;
                 }
                 if (ura_sigma_m > 0.0 && std::isfinite(ura_sigma_m)) {
                     const double ura_variance = ura_sigma_m * ura_sigma_m;
@@ -1986,6 +3212,9 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         ppp_config_.clas_expanded_value_construction_policy,
                         ppp_config_.clas_subtype12_value_construction_policy,
                         ppp_config_.clas_expanded_residual_sampling_policy);
+                if (std::isfinite(trop_correction_m)) {
+                    diagnostic.trop_correction_m = trop_correction_m;
+                }
                 if (std::isfinite(trop_correction_m) && std::abs(trop_correction_m) > 0.0) {
                     observation.pseudorange_if -= trop_correction_m;
                     if (observation.has_carrier_phase) {
@@ -2003,6 +3232,9 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         ppp_config_.clas_expanded_value_construction_policy,
                         ppp_config_.clas_subtype12_value_construction_policy,
                         ppp_config_.clas_expanded_residual_sampling_policy);
+                if (std::isfinite(stec_tecu)) {
+                    diagnostic.stec_tecu = stec_tecu;
+                }
                 if (pppDebugEnabled()) {
                     std::cerr << "[PPP-STEC] " << observation.satellite.toString()
                               << " stec_tecu=" << stec_tecu
@@ -2018,30 +3250,37 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     stec_tecu,
                     observation.primary_code_bias_coeff,
                     observation.secondary_code_bias_coeff);
-                if (ppp_config_.estimate_ionosphere && std::isfinite(stec_tecu) &&
-                    std::abs(stec_tecu) > 0.0) {
-                    // In ionosphere estimation mode, inject STEC as a tight constraint
-                    // on the ionosphere state instead of correcting observations.
+                if (std::isfinite(ionosphere_correction_m)) {
+                    diagnostic.iono_correction_m = ionosphere_correction_m;
+                }
+                double stec_sigma_m = 0.5;
+                const bool use_stec_constraint =
+                    stecConstraintSigmaMeters(atmos_tokens, observation.satellite, stec_sigma_m);
+                if (ppp_config_.estimate_ionosphere &&
+                    observation.allow_ionosphere_constraint &&
+                    use_stec_constraint &&
+                    std::isfinite(stec_tecu) && std::abs(stec_tecu) > 0.0) {
                     const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
-                    if (iono_it != filter_state_.ionosphere_indices.end()) {
+                    const int system_index =
+                        ionosphereConstraintSystemIndex(observation.satellite.system);
+                    if (iono_it != filter_state_.ionosphere_indices.end() &&
+                        system_index >= 0) {
                         const double iono_delay_m = ppp_atmosphere::ionosphereDelayMetersFromTecu(
                             observation.primary_signal, eph, stec_tecu);
                         if (std::isfinite(iono_delay_m)) {
-                            const int idx = iono_it->second;
-                            const double innovation = iono_delay_m - filter_state_.state(idx);
-                            const double stec_sigma = 0.5;  // 50cm STEC constraint
-                            const double S = filter_state_.covariance(idx, idx) + stec_sigma * stec_sigma;
-                            if (S > 0.0) {
-                                VectorXd K = filter_state_.covariance.col(idx) / S;
-                                filter_state_.state += K * innovation;
-                                filter_state_.covariance -= K * filter_state_.covariance.row(idx);
-                            }
+                            // MADOCALIB injects MIONO as a PPP pseudo-observation
+                            // after removing a per-system common bias. Store the
+                            // candidate here; formMeasurementEquations adds the
+                            // biased constraint rows using the current iteration state.
+                            observation.has_ionosphere_constraint = true;
+                            observation.ionosphere_constraint_m = iono_delay_m;
+                            observation.ionosphere_constraint_sigma_m = stec_sigma_m;
+                            observation.atmospheric_iono_correction_m = ionosphere_correction_m;
+                            applied_ssr_iono = true;
                         }
                     }
-                    ++last_applied_atmos_iono_corrections_;
-                    last_applied_atmos_iono_m_ += std::abs(ionosphere_correction_m);
-                    applied_ssr_iono = true;
-                } else if (std::isfinite(ionosphere_correction_m) &&
+                } else if (!ppp_config_.estimate_ionosphere && use_stec_constraint &&
+                    std::isfinite(ionosphere_correction_m) &&
                     std::abs(ionosphere_correction_m) > 0.0) {
                     // Direct observation correction (non-estimation mode)
                     observation.pseudorange_if -= ionosphere_correction_m;
@@ -2056,10 +3295,83 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             }
         }
 
+        applySatelliteAntennaOffset();
         const auto geometry = nav.calculateGeometry(receiver_position, sat_position);
+        diagnostic.receiver_position_x_m = receiver_position.x();
+        diagnostic.receiver_position_y_m = receiver_position.y();
+        diagnostic.receiver_position_z_m = receiver_position.z();
+        diagnostic.satellite_position_x_m = sat_position.x();
+        diagnostic.satellite_position_y_m = sat_position.y();
+        diagnostic.satellite_position_z_m = sat_position.z();
+        diagnostic.satellite_clock_bias_m = sat_clock_bias * constants::SPEED_OF_LIGHT;
+        diagnostic.geometric_range_m = geometry.distance;
+        if (std::isfinite(geometry.distance) && geometry.distance > 0.0) {
+            const Vector3d line_of_sight = (sat_position - receiver_position) / geometry.distance;
+            diagnostic.line_of_sight_x = line_of_sight.x();
+            diagnostic.line_of_sight_y = line_of_sight.y();
+            diagnostic.line_of_sight_z = line_of_sight.z();
+        }
+        diagnostic.elevation_deg = geometry.elevation / kDegreesToRadians;
         if (!std::isfinite(geometry.distance) || geometry.elevation < elevation_mask) {
             observation.valid = false;
+            diagnostic.variance_pr = safeVariance(observation.variance_pr + deferred_variance_pr, 1e-6);
+            diagnostic.variance_cp = safeVariance(observation.variance_cp + deferred_variance_cp, 1e-8);
+            pushDiagnostic();
             continue;
+        }
+        if (ppp_config_.require_ssr_orbit_clock && ssr_products_loaded_ &&
+            !have_precise && !diagnostic.orbit_clock_applied) {
+            if (diagnostic.orbit_clock_skip_reason.empty()) {
+                diagnostic.orbit_clock_skip_reason = "ssr_orbit_clock_required";
+            }
+            observation.valid = false;
+            diagnostic.variance_pr = safeVariance(observation.variance_pr + deferred_variance_pr, 1e-6);
+            diagnostic.variance_cp = safeVariance(observation.variance_cp + deferred_variance_cp, 1e-8);
+            pushDiagnostic();
+            continue;
+        }
+
+        if (observation.has_ionosphere_constraint) {
+            ++last_applied_atmos_iono_corrections_;
+            last_applied_atmos_iono_m_ += std::abs(observation.atmospheric_iono_correction_m);
+            diagnostic.ionosphere_estimation_constraint = true;
+        }
+
+        if (observation.has_carrier_phase) {
+            double& previous_windup_cycles = windup_cache_[observation.satellite];
+            const double phase_windup_cycles = calculatePhaseWindupCycles(
+                time,
+                receiver_position,
+                sat_position,
+                sat_velocity,
+                previous_windup_cycles);
+            previous_windup_cycles = phase_windup_cycles;
+            auto signal_windup_m = [&](SignalType signal) -> double {
+                const double wavelength = signalWavelengthMeters(signal, eph);
+                return wavelength > 0.0 ? phase_windup_cycles * wavelength : 0.0;
+            };
+            double phase_windup_m = 0.0;
+            if (!ppp_config_.use_ionosphere_free ||
+                observation.secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
+                phase_windup_m = signal_windup_m(observation.primary_signal);
+            } else {
+                phase_windup_m =
+                    observation.primary_code_bias_coeff * signal_windup_m(observation.primary_signal) +
+                    observation.secondary_code_bias_coeff * signal_windup_m(observation.secondary_signal);
+            }
+            if (std::isfinite(phase_windup_m) && std::abs(phase_windup_m) > 0.0) {
+                observation.carrier_phase_if -= phase_windup_m;
+            }
+        }
+
+        const double receiver_antenna_pcv_m =
+            calculateReceiverAntennaPcvMeters(observation, geometry.elevation);
+        if (std::isfinite(receiver_antenna_pcv_m) &&
+            std::abs(receiver_antenna_pcv_m) > 0.0) {
+            observation.pseudorange_if -= receiver_antenna_pcv_m;
+            if (observation.has_carrier_phase) {
+                observation.carrier_phase_if -= receiver_antenna_pcv_m;
+            }
         }
 
         if (!applied_ssr_code_bias && dcb_products_loaded_) {
@@ -2068,6 +3380,8 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 observation.satellite,
                 observation.primary_signal,
                 observation.secondary_signal,
+                observation.primary_observation_code,
+                observation.secondary_observation_code,
                 ppp_config_.use_ionosphere_free,
                 observation.primary_code_bias_coeff,
                 observation.secondary_code_bias_coeff);
@@ -2076,6 +3390,8 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 observation.pseudorange_code_bias_m += dcb_bias_m;
                 ++last_applied_dcb_corrections_;
                 last_applied_dcb_m_ += std::abs(dcb_bias_m);
+                diagnostic.dcb_applied = true;
+                diagnostic.dcb_bias_m = dcb_bias_m;
             }
         }
 
@@ -2102,6 +3418,12 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     stec_tecu,
                     observation.primary_code_bias_coeff,
                     observation.secondary_code_bias_coeff);
+                if (std::isfinite(stec_tecu)) {
+                    diagnostic.stec_tecu = stec_tecu;
+                }
+                if (std::isfinite(ionosphere_correction_m)) {
+                    diagnostic.iono_correction_m += ionosphere_correction_m;
+                }
                 if (std::isfinite(ionosphere_correction_m) &&
                     std::abs(ionosphere_correction_m) > 0.0) {
                     observation.pseudorange_if -= ionosphere_correction_m;
@@ -2113,6 +3435,8 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     last_applied_atmos_iono_m_ += std::abs(ionosphere_correction_m);
                     ++last_applied_ionex_corrections_;
                     last_applied_ionex_m_ += std::abs(ionosphere_correction_m);
+                    diagnostic.ionex_applied = true;
+                    diagnostic.ionex_iono_m += ionosphere_correction_m;
                 }
             }
         }
@@ -2127,6 +3451,8 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             calculateMappingFunction(receiver_position, geometry.elevation, time);
         observation.modeled_trop_delay_m =
             modeledTroposphereDelayMeters(receiver_position, geometry.elevation, time);
+        observation.modeled_zenith_trop_delay_m =
+            modeledZenithTroposphereDelayMeters(receiver_position, time);
         if (ppp_config_.use_rtklib_measurement_variance && !precise_products_loaded_) {
             observation.variance_pr = measurementVariance(observation, false);
             observation.variance_cp = measurementVariance(observation, true);
@@ -2144,6 +3470,10 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         // both SSR orbit/clock and ionosphere corrections — matching CLASLIB's
         // corrmeas() which returns 0 when STEC correction fails.
         observation.valid = true;
+        diagnostic.variance_pr = observation.variance_pr;
+        diagnostic.variance_cp = observation.variance_cp;
+        diagnostic.valid_after_corrections = true;
+        pushDiagnostic();
     }
 }
 
@@ -2190,7 +3520,7 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
                 primarySignals(satellite.system);
         const std::vector<SignalType> secondary_candidates =
             satellite.system == GNSSSystem::GPS ?
-                std::vector<SignalType>{SignalType::GPS_L2C, SignalType::GPS_L2P, SignalType::GPS_L5} :
+                std::vector<SignalType>{SignalType::GPS_L2P, SignalType::GPS_L2C, SignalType::GPS_L5} :
                 secondarySignals(satellite.system);
         const Observation* primary =
             findCarrierObservationForSignals(obs, satellite, primary_candidates);
@@ -2333,6 +3663,37 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
     }
 }
 
+void PPPProcessor::ensureIonosphereStates(const std::vector<IonosphereFreeObs>& observations) {
+    if (!ppp_config_.estimate_ionosphere) {
+        return;
+    }
+    for (const auto& observation : observations) {
+        if (!observation.valid || !isUsablePppSatellite(observation.satellite)) {
+            continue;
+        }
+        getOrCreateIonosphereState(observation);
+    }
+}
+
+int PPPProcessor::getOrCreateIonosphereState(const IonosphereFreeObs& observation) {
+    const auto existing = filter_state_.ionosphere_indices.find(observation.satellite);
+    if (existing != filter_state_.ionosphere_indices.end()) {
+        return existing->second;
+    }
+
+    const int new_index = filter_state_.total_states;
+    filter_state_.total_states += 1;
+    filter_state_.state.conservativeResize(filter_state_.total_states);
+    filter_state_.state(new_index) =
+        observation.has_ionosphere_delay_seed ? observation.ionosphere_delay_seed_m : 0.0;
+    filter_state_.covariance.conservativeResize(filter_state_.total_states, filter_state_.total_states);
+    filter_state_.covariance.row(new_index).setZero();
+    filter_state_.covariance.col(new_index).setZero();
+    filter_state_.covariance(new_index, new_index) = ppp_config_.initial_ionosphere_variance;
+    filter_state_.ionosphere_indices[observation.satellite] = new_index;
+    return new_index;
+}
+
 void PPPProcessor::ensureAmbiguityStates(const std::vector<IonosphereFreeObs>& observations) {
     for (const auto& observation : observations) {
         if (!observation.valid || !observation.has_carrier_phase) {
@@ -2402,14 +3763,31 @@ void PPPProcessor::recoverLowDynamicsBroadcastState(const ObservationData& obs,
         filter_state_.pos_index,
         anchored_position,
         std::min(ppp_config_.initial_position_variance, 36.0));
+    const double recovered_gps_clock_bias_m = seededReceiverClockBiasMeters(
+        seed_solution, ReceiverClockBiasGroup::GPS, recovered_clock_bias_m);
     reinitializeScalarState(
         filter_state_.clock_index,
-        recovered_clock_bias_m,
+        recovered_gps_clock_bias_m,
         ppp_config_.initial_clock_variance);
     reinitializeScalarState(
         filter_state_.glo_clock_index,
-        recovered_clock_bias_m,
+        seededReceiverClockBiasMeters(
+            seed_solution, ReceiverClockBiasGroup::GLONASS, recovered_gps_clock_bias_m),
         ppp_config_.initial_clock_variance);
+    if (filter_state_.bds2_clock_index >= 0) {
+        reinitializeScalarState(
+            filter_state_.bds2_clock_index,
+            seededReceiverClockBiasMeters(
+                seed_solution, ReceiverClockBiasGroup::BeiDou2, recovered_gps_clock_bias_m),
+            ppp_config_.initial_clock_variance);
+    }
+    if (filter_state_.bds3_clock_index >= 0) {
+        reinitializeScalarState(
+            filter_state_.bds3_clock_index,
+            seededReceiverClockBiasMeters(
+                seed_solution, ReceiverClockBiasGroup::BeiDou3, recovered_gps_clock_bias_m),
+            ppp_config_.initial_clock_variance);
+    }
     reinitializeScalarState(
         filter_state_.trop_index,
         modeledZenithTroposphereDelayMeters(anchored_position, obs.time),
@@ -2443,6 +3821,14 @@ int PPPProcessor::receiverClockStateIndex(const SatelliteId& satellite) const {
             return filter_state_.qzs_clock_index >= 0
                 ? filter_state_.qzs_clock_index : filter_state_.clock_index;
         case GNSSSystem::BeiDou:
+            if (signal_policy::isBeiDou2Satellite(satellite) &&
+                filter_state_.bds2_clock_index >= 0) {
+                return filter_state_.bds2_clock_index;
+            }
+            if (signal_policy::isBeiDou3Satellite(satellite) &&
+                filter_state_.bds3_clock_index >= 0) {
+                return filter_state_.bds3_clock_index;
+            }
             return filter_state_.bds_clock_index >= 0
                 ? filter_state_.bds_clock_index : filter_state_.clock_index;
         default:
@@ -2460,12 +3846,51 @@ int PPPProcessor::ambiguityStateIndex(const SatelliteId& satellite) const {
 }
 
 int PPPProcessor::getOrCreateAmbiguityState(const IonosphereFreeObs& observation) {
+    const bool use_frequency_state =
+        ppp_config_.enable_per_frequency_phase_bias_states &&
+        !ppp_config_.use_ionosphere_free &&
+        observation.frequency_index > 0;
+    const auto register_primary_frequency_ambiguity = [&](int state_index) {
+        if (!ppp_config_.use_ionosphere_free) {
+            filter_state_.frequency_ambiguity_indices[
+                ppp_shared::frequencyAmbiguityKey(observation.satellite, 0)] = state_index;
+        }
+    };
+
+    if (use_frequency_state) {
+        const auto key = ppp_shared::frequencyAmbiguityKey(
+            observation.satellite, observation.frequency_index);
+        const auto existing_frequency = filter_state_.frequency_ambiguity_indices.find(key);
+        if (existing_frequency != filter_state_.frequency_ambiguity_indices.end()) {
+            const auto ambiguity_it = ambiguity_states_.find(observation.satellite);
+            if (ambiguity_it != ambiguity_states_.end() &&
+                ambiguity_it->second.needs_reinitialization) {
+                initializeFrequencyAmbiguityState(observation, existing_frequency->second);
+            }
+            return existing_frequency->second;
+        }
+
+        const int new_index = filter_state_.total_states;
+        filter_state_.total_states += 1;
+        filter_state_.state.conservativeResize(filter_state_.total_states);
+        filter_state_.state(new_index) = 0.0;
+        filter_state_.covariance.conservativeResize(filter_state_.total_states, filter_state_.total_states);
+        filter_state_.covariance.row(new_index).setZero();
+        filter_state_.covariance.col(new_index).setZero();
+        filter_state_.covariance(new_index, new_index) =
+            precise_products_loaded_ ? 100.0 : ppp_config_.initial_ambiguity_variance;
+        filter_state_.frequency_ambiguity_indices[key] = new_index;
+        initializeFrequencyAmbiguityState(observation, new_index);
+        return new_index;
+    }
+
     const auto existing = filter_state_.ambiguity_indices.find(observation.satellite);
     if (existing != filter_state_.ambiguity_indices.end()) {
         auto& ambiguity = ambiguity_states_[observation.satellite];
         if (ambiguity.needs_reinitialization) {
             initializeAmbiguityState(observation, existing->second);
         }
+        register_primary_frequency_ambiguity(existing->second);
         return existing->second;
     }
 
@@ -2479,25 +3904,69 @@ int PPPProcessor::getOrCreateAmbiguityState(const IonosphereFreeObs& observation
     filter_state_.covariance(new_index, new_index) =
         precise_products_loaded_ ? 100.0 : ppp_config_.initial_ambiguity_variance;
     filter_state_.ambiguity_indices[observation.satellite] = new_index;
+    register_primary_frequency_ambiguity(new_index);
     initializeAmbiguityState(observation, new_index);
     return new_index;
 }
 
-void PPPProcessor::initializeAmbiguityState(const IonosphereFreeObs& observation, int state_index) {
+double PPPProcessor::phaseAmbiguityInitializerPrediction(
+    const IonosphereFreeObs& observation,
+    bool include_ionosphere_state) const {
     const Vector3d receiver_position =
         observation.receiver_position.norm() > 1000.0 ?
             observation.receiver_position :
             filter_state_.state.segment(filter_state_.pos_index, 3);
     const double clock_bias_m = receiverClockBiasMeters(observation.satellite);
     const double zenith_delay = filter_state_.state(filter_state_.trop_index);
-    const double predicted =
+    double predicted =
         geodist(observation.satellite_position, receiver_position) +
         clock_bias_m -
         constants::SPEED_OF_LIGHT * observation.satellite_clock_bias +
         (ppp_config_.estimate_troposphere ?
-            observation.trop_mapping * zenith_delay :
+            estimatedTroposphereDelayFromState(
+                observation.modeled_trop_delay_m,
+                observation.trop_mapping,
+                observation.modeled_zenith_trop_delay_m,
+                zenith_delay) :
             observation.modeled_trop_delay_m);
+    if (include_ionosphere_state && ppp_config_.estimate_ionosphere) {
+        const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
+        if (iono_it != filter_state_.ionosphere_indices.end()) {
+            const int index = iono_it->second;
+            if (index >= 0 && index < filter_state_.state.size()) {
+                predicted -= observation.ionosphere_coefficient * filter_state_.state(index);
+            }
+        }
+    }
+    return predicted;
+}
+
+void PPPProcessor::initializeFrequencyAmbiguityState(
+    const IonosphereFreeObs& observation,
+    int state_index) {
+    const bool include_ionosphere_state =
+        ppp_config_.initialize_phase_ambiguity_with_ionosphere_state &&
+        ppp_config_.estimate_ionosphere;
+    const double predicted =
+        phaseAmbiguityInitializerPrediction(observation, include_ionosphere_state);
+    const double legacy_predicted = phaseAmbiguityInitializerPrediction(observation, false);
     filter_state_.state(state_index) = observation.carrier_phase_if - predicted;
+    phase_ambiguity_admission_offsets_m_[state_index] =
+        include_ionosphere_state ? (predicted - legacy_predicted) : 0.0;
+    filter_state_.covariance(state_index, state_index) =
+        precise_products_loaded_ ? 25.0 : ppp_config_.initial_ambiguity_variance;
+}
+
+void PPPProcessor::initializeAmbiguityState(const IonosphereFreeObs& observation, int state_index) {
+    const bool include_ionosphere_state =
+        ppp_config_.initialize_phase_ambiguity_with_ionosphere_state &&
+        ppp_config_.estimate_ionosphere;
+    const double predicted =
+        phaseAmbiguityInitializerPrediction(observation, include_ionosphere_state);
+    const double legacy_predicted = phaseAmbiguityInitializerPrediction(observation, false);
+    filter_state_.state(state_index) = observation.carrier_phase_if - predicted;
+    phase_ambiguity_admission_offsets_m_[state_index] =
+        include_ionosphere_state ? (predicted - legacy_predicted) : 0.0;
     filter_state_.covariance(state_index, state_index) =
         precise_products_loaded_ ? 25.0 : ppp_config_.initial_ambiguity_variance;
 
@@ -2582,8 +4051,20 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
             if (ssr_products_loaded_) {
                 Vector3d orbit_corr;
                 double clock_corr = 0.0;
-                if (ssr_products_.interpolateCorrection(real_satellite, obs.time, orbit_corr, clock_corr,
-                                                        nullptr, nullptr, nullptr, nullptr)) {
+                if (ssr_products_.interpolateCorrection(real_satellite,
+                                                        obs.time,
+                                                        orbit_corr,
+                                                        clock_corr,
+                                                        nullptr,
+                                                        nullptr,
+                                                        nullptr,
+                                                        nullptr,
+                                                        nullptr,
+                                                        nullptr,
+                                                        nullptr,
+                                                        0,
+                                                        ppp_config_.allow_future_ssr_corrections,
+                                                        ppp_config_.require_ssr_orbit_clock)) {
                     if (ssr_products_.orbitCorrectionsAreRac()) {
                         orbit_corr = ssrRacToEcef(sat_pos, sat_vel, orbit_corr);
                     }
@@ -2647,22 +4128,13 @@ double PPPProcessor::calculateTroposphericDelay(const Vector3d& receiver_pos,
     if (!ppp_config_.estimate_troposphere) {
         return modeledTroposphereDelayMeters(receiver_pos, elevation, time);
     }
-    const double mapping = calculateMappingFunction(receiver_pos, elevation, time);
-    return mapping * zenith_delay;
+    return estimatedTroposphereDelayMeters(receiver_pos, elevation, time, zenith_delay);
 }
 
 double PPPProcessor::calculateMappingFunction(const Vector3d& receiver_pos,
                                               double elevation,
                                               const GNSSTime& time) const {
-    double lat = 0.0;
-    double lon = 0.0;
-    double h = 0.0;
-    ecef2geodetic(receiver_pos, lat, lon, h);
-    const double hydrostatic =
-        models::niellHydrostaticMapping(lat, h, elevation, dayOfYearFromTime(time));
-    // Hydrostatic (dry) mapping only — the KF tracks a single zenith delay
-    // and the hydrostatic component dominates (2.3m vs 0.25m wet).
-    return hydrostatic;
+    return wetTroposphereMapping(receiver_pos, elevation, time);
 }
 
 Vector3d PPPProcessor::applyGeophysicalCorrections(const Vector3d& position,
@@ -2731,14 +4203,35 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
     const NavigationData& nav,
     const GNSSTime& time) {
     (void)nav;
-    (void)time;
 
     std::vector<Eigen::RowVectorXd> rows;
     std::vector<double> measured_values;
     std::vector<double> predicted_values;
     std::vector<double> variances;
     std::vector<SatelliteId> row_satellites;
+    std::vector<SignalType> row_primary_signals;
+    std::vector<SignalType> row_secondary_signals;
+    std::vector<std::string> row_primary_observation_codes;
+    std::vector<std::string> row_secondary_observation_codes;
+    std::vector<int> row_frequency_indices;
+    std::vector<double> row_ionosphere_coefficients;
+    std::vector<int> row_receiver_clock_state_indices;
+    std::vector<double> row_receiver_clock_design_coefficients;
+    std::vector<int> row_ionosphere_state_indices;
+    std::vector<double> row_ionosphere_design_coefficients;
+    std::vector<int> row_ambiguity_state_indices;
+    std::vector<double> row_ambiguity_design_coefficients;
+    std::vector<int> row_ambiguity_lock_counts;
+    std::vector<int> row_required_lock_counts;
+    std::vector<double> row_phase_limits_m;
+    std::vector<std::string> row_phase_skip_reasons;
     std::vector<bool> row_is_phase;
+    std::vector<bool> row_is_ionosphere_constraint;
+    std::vector<double> row_elevation_deg;
+    std::vector<double> row_iono_state_m;
+    std::vector<PPPResidualDiagnostic> phase_candidate_diagnostics;
+    std::set<std::pair<SatelliteId, int>> before_excluded_phase_pairs_to_reset;
+    std::set<SatelliteId> satellites_with_phase_rows;
 
     const double zenith_delay = filter_state_.state(filter_state_.trop_index);
     const bool use_phase_rows =
@@ -2764,7 +4257,11 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         const Vector3d line_of_sight = range_vector / euclidean_range;
         const double troposphere_delay =
             ppp_config_.estimate_troposphere ?
-                observation.trop_mapping * zenith_delay :
+                estimatedTroposphereDelayFromState(
+                    observation.modeled_trop_delay_m,
+                    observation.trop_mapping,
+                    observation.modeled_zenith_trop_delay_m,
+                    zenith_delay) :
                 observation.modeled_trop_delay_m;
         const int clock_state_index = receiverClockStateIndex(observation.satellite);
         const double clock_bias_m = receiverClockBiasMeters(observation.satellite);
@@ -2775,19 +4272,24 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         row(filter_state_.trop_index) =
             ppp_config_.estimate_troposphere ? observation.trop_mapping : 0.0;
         // Per-satellite ionosphere state: pseudorange has +iono contribution
+        int ionosphere_state_index = -1;
         double iono_state_m = 0.0;
+        double ionosphere_contribution_m = 0.0;
         if (ppp_config_.estimate_ionosphere) {
             const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
             if (iono_it != filter_state_.ionosphere_indices.end()) {
-                row(iono_it->second) = 1.0;  // +iono for pseudorange
-                iono_state_m = filter_state_.state(iono_it->second);
+                ionosphere_state_index = iono_it->second;
+                row(ionosphere_state_index) = observation.ionosphere_coefficient;
+                iono_state_m = filter_state_.state(ionosphere_state_index);
+                ionosphere_contribution_m =
+                    observation.ionosphere_coefficient * iono_state_m;
             }
         }
 
         const double predicted =
             geometric_range + clock_bias_m -
             constants::SPEED_OF_LIGHT * observation.satellite_clock_bias + troposphere_delay
-            + iono_state_m;
+            + ionosphere_contribution_m;
         const double residual = observation.pseudorange_if - predicted;
 
         if (pppDebugEnabled()) {
@@ -2831,68 +4333,350 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         predicted_values.push_back(predicted);
         variances.push_back(safeVariance(observation.variance_pr, 1e-6));
         row_satellites.push_back(observation.satellite);
+        row_primary_signals.push_back(observation.primary_signal);
+        row_secondary_signals.push_back(observation.secondary_signal);
+        row_primary_observation_codes.push_back(observation.primary_observation_code);
+        row_secondary_observation_codes.push_back(observation.secondary_observation_code);
+        row_frequency_indices.push_back(observation.frequency_index);
+        row_ionosphere_coefficients.push_back(observation.ionosphere_coefficient);
+        row_receiver_clock_state_indices.push_back(clock_state_index);
+        row_receiver_clock_design_coefficients.push_back(1.0);
+        row_ionosphere_state_indices.push_back(ionosphere_state_index);
+        row_ionosphere_design_coefficients.push_back(
+            ionosphere_state_index >= 0 ? observation.ionosphere_coefficient : 0.0);
+        row_ambiguity_state_indices.push_back(-1);
+        row_ambiguity_design_coefficients.push_back(0.0);
+        row_ambiguity_lock_counts.push_back(-1);
+        row_required_lock_counts.push_back(0);
+        row_phase_limits_m.push_back(0.0);
+        row_phase_skip_reasons.emplace_back();
         row_is_phase.push_back(false);
+        row_is_ionosphere_constraint.push_back(false);
+        row_elevation_deg.push_back(observation.elevation / kDegreesToRadians);
+        row_iono_state_m.push_back(iono_state_m);
 
         if (use_phase_rows && observation.has_carrier_phase) {
-            const int ambiguity_index = ambiguityStateIndex(observation.satellite);
-            if (ambiguity_index >= 0 && ambiguity_index < filter_state_.total_states) {
-                const auto ambiguity_it = ambiguity_states_.find(observation.satellite);
-                const int required_lock_count =
-                    precise_products_loaded_ ?
-                        ppp_config_.convergence_min_epochs :
-                        ppp_config_.phase_measurement_min_lock_count;
-                const bool phase_ready =
-                    ambiguity_it != ambiguity_states_.end() &&
-                    !ambiguity_it->second.needs_reinitialization &&
-                    ambiguity_it->second.lock_count >= required_lock_count;
-                if (!phase_ready) {
-                    continue;
-                }
-                // predicted for phase: geo + clk - satclk + trop - iono + amb
-                // (predicted already includes +iono, so subtract 2*iono for phase)
-                double iono_phase_correction = 0.0;
-                if (ppp_config_.estimate_ionosphere) {
-                    const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
-                    if (iono_it != filter_state_.ionosphere_indices.end()) {
-                        iono_phase_correction = -2.0 * filter_state_.state(iono_it->second);
-                    }
-                }
-                const double predicted_phase = predicted + iono_phase_correction
-                                               + filter_state_.state(ambiguity_index);
-                const double phase_residual = observation.carrier_phase_if - predicted_phase;
-                const double phase_residual_floor =
-                    ppp_config_.kinematic_mode
-                        ? (converged_ ? 20.0 : 200.0)
-                        : (converged_ ? 10.0 : 50.0);
-                const double phase_limit =
-                    std::max(
-                        ppp_config_.outlier_threshold *
-                            std::sqrt(safeVariance(observation.variance_cp, 1e-8)) * 10.0,
-                        phase_residual_floor);
-                if (!ppp_config_.enable_outlier_detection ||
-                    std::abs(phase_residual) <= phase_limit) {
-                    Eigen::RowVectorXd phase_row = Eigen::RowVectorXd::Zero(filter_state_.total_states);
-                    phase_row.segment(filter_state_.pos_index, 3) = -line_of_sight;
-                    phase_row(clock_state_index) = 1.0;
-                    phase_row(filter_state_.trop_index) =
-                        ppp_config_.estimate_troposphere ? observation.trop_mapping : 0.0;
-                    // Per-satellite ionosphere: carrier phase has -iono contribution
-                    if (ppp_config_.estimate_ionosphere) {
-                        const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
-                        if (iono_it != filter_state_.ionosphere_indices.end()) {
-                            phase_row(iono_it->second) = -1.0;
-                        }
-                    }
-                    phase_row(ambiguity_index) = 1.0;
+            int ambiguity_index = ambiguityStateIndex(observation.satellite);
+            if (ppp_config_.enable_per_frequency_phase_bias_states &&
+                !ppp_config_.use_ionosphere_free &&
+                observation.frequency_index > 0) {
+                const auto frequency_ambiguity_it =
+                    filter_state_.frequency_ambiguity_indices.find(
+                        ppp_shared::frequencyAmbiguityKey(
+                            observation.satellite, observation.frequency_index));
+                ambiguity_index =
+                    frequency_ambiguity_it == filter_state_.frequency_ambiguity_indices.end() ?
+                        -1 : frequency_ambiguity_it->second;
+            }
 
-                    rows.push_back(phase_row);
-                    measured_values.push_back(observation.carrier_phase_if);
-                    predicted_values.push_back(predicted_phase);
-                    variances.push_back(safeVariance(observation.variance_cp, 1e-8));
-                    row_satellites.push_back(observation.satellite);
-                    row_is_phase.push_back(true);
+            const int required_lock_count =
+                precise_products_loaded_ ?
+                    ppp_config_.convergence_min_epochs :
+                    ppp_config_.phase_measurement_min_lock_count;
+            const auto ambiguity_it = ambiguity_states_.find(observation.satellite);
+            const int ambiguity_lock_count =
+                ambiguity_it == ambiguity_states_.end() ? -1 : ambiguity_it->second.lock_count;
+            const bool ambiguity_needs_reinitialization =
+                ambiguity_it == ambiguity_states_.end() || ambiguity_it->second.needs_reinitialization;
+            const bool lock_count_ready =
+                ambiguity_it != ambiguity_states_.end() &&
+                !ambiguity_it->second.needs_reinitialization &&
+                ambiguity_it->second.lock_count >= required_lock_count;
+            bool phase_ready = lock_count_ready;
+            int effective_required_lock_count = required_lock_count;
+
+            PPPResidualDiagnostic phase_candidate;
+            phase_candidate.satellite = observation.satellite;
+            phase_candidate.primary_signal = observation.primary_signal;
+            phase_candidate.secondary_signal = observation.secondary_signal;
+            phase_candidate.primary_observation_code = observation.primary_observation_code;
+            phase_candidate.secondary_observation_code = observation.secondary_observation_code;
+            phase_candidate.frequency_index = observation.frequency_index;
+            phase_candidate.ionosphere_coefficient = observation.ionosphere_coefficient;
+            phase_candidate.carrier_phase = true;
+            phase_candidate.phase_candidate = true;
+            phase_candidate.phase_ready = phase_ready;
+            phase_candidate.phase_accepted = false;
+            phase_candidate.receiver_clock_state_index = clock_state_index;
+            phase_candidate.receiver_clock_design_coeff = 1.0;
+            phase_candidate.ionosphere_state_index = ionosphere_state_index;
+            phase_candidate.ionosphere_design_coeff =
+                ionosphere_state_index >= 0 ? -observation.ionosphere_coefficient : 0.0;
+            phase_candidate.ambiguity_state_index = ambiguity_index;
+            phase_candidate.ambiguity_design_coeff =
+                ambiguity_index >= 0 ? 1.0 : 0.0;
+            phase_candidate.ambiguity_lock_count = ambiguity_lock_count;
+            phase_candidate.required_lock_count = required_lock_count;
+            phase_candidate.observation_m = observation.carrier_phase_if;
+            phase_candidate.variance_m2 = safeVariance(observation.variance_cp, 1e-8);
+            phase_candidate.elevation_deg = observation.elevation / kDegreesToRadians;
+            phase_candidate.iono_state_m = iono_state_m;
+
+            if (ambiguity_index < 0 || ambiguity_index >= filter_state_.total_states) {
+                phase_candidate.phase_skip_reason = "no_ambiguity_state";
+                phase_candidate_diagnostics.push_back(phase_candidate);
+                continue;
+            }
+
+            // predicted for phase: geo + clk - satclk + trop - iono + amb
+            // (predicted already includes +iono, so subtract 2*iono for phase)
+            double iono_phase_correction = 0.0;
+            if (ppp_config_.estimate_ionosphere) {
+                const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
+                if (iono_it != filter_state_.ionosphere_indices.end()) {
+                    iono_phase_correction =
+                        -2.0 * observation.ionosphere_coefficient *
+                        filter_state_.state(iono_it->second);
                 }
             }
+            const double ambiguity_state = filter_state_.state(ambiguity_index);
+            const double predicted_phase = predicted + iono_phase_correction + ambiguity_state;
+            const double phase_residual = observation.carrier_phase_if - predicted_phase;
+            double predicted_phase_for_gate = predicted_phase;
+            double phase_gate_residual = phase_residual;
+            const auto admission_offset_it =
+                phase_ambiguity_admission_offsets_m_.find(ambiguity_index);
+            if (admission_offset_it != phase_ambiguity_admission_offsets_m_.end() &&
+                admission_offset_it->second != 0.0) {
+                predicted_phase_for_gate =
+                    predicted + iono_phase_correction + ambiguity_state +
+                    admission_offset_it->second;
+                phase_gate_residual = observation.carrier_phase_if - predicted_phase_for_gate;
+            }
+            double phase_residual_floor =
+                ppp_config_.kinematic_mode
+                    ? (converged_ ? 20.0 :
+                                      ppp_config_.kinematic_preconvergence_phase_residual_floor_m)
+                    : (converged_ ? 10.0 : 50.0);
+            const auto phase_admission_pair =
+                std::make_pair(observation.satellite, observation.frequency_index);
+            const auto residual_floor_it =
+                ppp_config_.phase_admission_residual_floor_by_satellite_frequency_pair.find(
+                    phase_admission_pair);
+            if (residual_floor_it !=
+                ppp_config_.phase_admission_residual_floor_by_satellite_frequency_pair.end()) {
+                phase_residual_floor = residual_floor_it->second;
+            }
+            const double phase_limit =
+                std::max(
+                    ppp_config_.outlier_threshold *
+                        std::sqrt(safeVariance(observation.variance_cp, 1e-8)) * 10.0,
+                    phase_residual_floor);
+            phase_candidate.predicted_m = predicted_phase_for_gate;
+            phase_candidate.residual_m = phase_gate_residual;
+            phase_candidate.phase_limit_m = phase_limit;
+
+            if (ppp_config_.phase_admission_excluded_satellite_frequency_pairs.count(
+                    phase_admission_pair) > 0) {
+                phase_candidate.phase_skip_reason = "excluded_sat_frequency_pair";
+                phase_candidate_diagnostics.push_back(phase_candidate);
+                continue;
+            }
+            const auto before_exclusion_it =
+                ppp_config_.phase_admission_excluded_before_by_satellite_frequency_pair.find(
+                    phase_admission_pair);
+            if (before_exclusion_it !=
+                    ppp_config_.phase_admission_excluded_before_by_satellite_frequency_pair.end() &&
+                time < before_exclusion_it->second) {
+                phase_candidate.phase_skip_reason = "excluded_sat_frequency_pair_before_time";
+                phase_candidate_diagnostics.push_back(phase_candidate);
+                if (ppp_config_.reset_phase_ambiguity_on_before_exclusion) {
+                    before_excluded_phase_pairs_to_reset.insert(phase_admission_pair);
+                }
+                continue;
+            }
+
+            const bool warm_start_system_allowed =
+                ppp_config_.initial_phase_admission_warm_start_systems.empty() ||
+                ppp_config_.initial_phase_admission_warm_start_systems.count(
+                    observation.satellite.system) > 0;
+            const bool warm_start_satellite_allowed =
+                ppp_config_.initial_phase_admission_warm_start_satellites.empty() ||
+                ppp_config_.initial_phase_admission_warm_start_satellites.count(
+                    observation.satellite) > 0;
+            const bool warm_start_frequency_allowed =
+                ppp_config_.initial_phase_admission_warm_start_frequency_indexes.empty() ||
+                ppp_config_.initial_phase_admission_warm_start_frequency_indexes.count(
+                    observation.frequency_index) > 0;
+            const bool warm_start_satellite_frequency_allowed =
+                ppp_config_.initial_phase_admission_warm_start_satellite_frequency_pairs.empty() ||
+                ppp_config_.initial_phase_admission_warm_start_satellite_frequency_pairs.count(
+                    {observation.satellite, observation.frequency_index}) > 0;
+            const bool warm_start_common =
+                ssr_products_loaded_ && !precise_products_loaded_ &&
+                !ppp_config_.use_ionosphere_free &&
+                warm_start_system_allowed &&
+                warm_start_satellite_allowed &&
+                warm_start_frequency_allowed &&
+                warm_start_satellite_frequency_allowed &&
+                ambiguity_it != ambiguity_states_.end() &&
+                !ambiguity_needs_reinitialization &&
+                ambiguity_lock_count == 0 &&
+                required_lock_count > 0 &&
+                std::abs(phase_gate_residual) <= phase_limit;
+            const bool initial_phase_warm_start =
+                warm_start_common &&
+                ((ppp_config_.enable_initial_phase_admission_warm_start &&
+                  observation.frequency_index == 0 &&
+                  observation.satellite.system != GNSSSystem::Galileo) ||
+                 ppp_config_.enable_all_frequency_initial_phase_admission_warm_start);
+            if (initial_phase_warm_start) {
+                phase_ready = true;
+                effective_required_lock_count = 0;
+                phase_candidate.phase_ready = true;
+                phase_candidate.required_lock_count = effective_required_lock_count;
+            }
+
+            if (!phase_ready) {
+                if (ambiguity_it == ambiguity_states_.end()) {
+                    phase_candidate.phase_skip_reason = "missing_ambiguity";
+                } else if (ambiguity_needs_reinitialization) {
+                    phase_candidate.phase_skip_reason = "ambiguity_reinitializing";
+                } else {
+                    phase_candidate.phase_skip_reason = "lock_count";
+                }
+                phase_candidate_diagnostics.push_back(phase_candidate);
+                continue;
+            }
+            if (ppp_config_.enable_outlier_detection &&
+                std::abs(phase_gate_residual) > phase_limit) {
+                phase_candidate.phase_skip_reason = "outlier";
+                phase_candidate_diagnostics.push_back(phase_candidate);
+                continue;
+            }
+
+            phase_ambiguity_admission_offsets_m_.erase(ambiguity_index);
+
+            Eigen::RowVectorXd phase_row = Eigen::RowVectorXd::Zero(filter_state_.total_states);
+            phase_row.segment(filter_state_.pos_index, 3) = -line_of_sight;
+            phase_row(clock_state_index) = 1.0;
+            phase_row(filter_state_.trop_index) =
+                ppp_config_.estimate_troposphere ? observation.trop_mapping : 0.0;
+            // Per-satellite ionosphere: carrier phase has -iono contribution
+            if (ppp_config_.estimate_ionosphere && ionosphere_state_index >= 0) {
+                phase_row(ionosphere_state_index) = -observation.ionosphere_coefficient;
+            }
+            phase_row(ambiguity_index) = 1.0;
+
+            rows.push_back(phase_row);
+            measured_values.push_back(observation.carrier_phase_if);
+            predicted_values.push_back(predicted_phase);
+            variances.push_back(safeVariance(observation.variance_cp, 1e-8));
+            row_satellites.push_back(observation.satellite);
+            row_primary_signals.push_back(observation.primary_signal);
+            row_secondary_signals.push_back(observation.secondary_signal);
+            row_primary_observation_codes.push_back(observation.primary_observation_code);
+            row_secondary_observation_codes.push_back(observation.secondary_observation_code);
+            row_frequency_indices.push_back(observation.frequency_index);
+            row_ionosphere_coefficients.push_back(observation.ionosphere_coefficient);
+            row_receiver_clock_state_indices.push_back(clock_state_index);
+            row_receiver_clock_design_coefficients.push_back(1.0);
+            row_ionosphere_state_indices.push_back(ionosphere_state_index);
+            row_ionosphere_design_coefficients.push_back(
+                ionosphere_state_index >= 0 ? -observation.ionosphere_coefficient : 0.0);
+            row_ambiguity_state_indices.push_back(ambiguity_index);
+            row_ambiguity_design_coefficients.push_back(1.0);
+            row_ambiguity_lock_counts.push_back(ambiguity_lock_count);
+            row_required_lock_counts.push_back(effective_required_lock_count);
+            row_phase_limits_m.push_back(phase_limit);
+            row_phase_skip_reasons.emplace_back();
+            row_is_phase.push_back(true);
+            row_is_ionosphere_constraint.push_back(false);
+            satellites_with_phase_rows.insert(observation.satellite);
+            row_elevation_deg.push_back(observation.elevation / kDegreesToRadians);
+            row_iono_state_m.push_back(iono_state_m);
+        }
+    }
+
+    if (ppp_config_.estimate_ionosphere) {
+        constexpr int kConstraintSystemCount = 4;
+        std::array<double, kConstraintSystemCount> system_bias_sum{};
+        std::array<int, kConstraintSystemCount> system_bias_count{};
+        for (const auto& observation : observations) {
+            if (!observation.valid || !observation.has_ionosphere_constraint) {
+                continue;
+            }
+            const int system_index =
+                ionosphereConstraintSystemIndex(observation.satellite.system);
+            const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
+            if (system_index < 0 || iono_it == filter_state_.ionosphere_indices.end()) {
+                continue;
+            }
+            const int state_index = iono_it->second;
+            if (state_index < 0 || state_index >= filter_state_.state.size()) {
+                continue;
+            }
+            system_bias_sum[static_cast<size_t>(system_index)] +=
+                observation.ionosphere_constraint_m - filter_state_.state(state_index);
+            ++system_bias_count[static_cast<size_t>(system_index)];
+        }
+
+        for (const auto& observation : observations) {
+            if (!observation.valid || !observation.has_ionosphere_constraint) {
+                continue;
+            }
+            const int system_index =
+                ionosphereConstraintSystemIndex(observation.satellite.system);
+            const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
+            if (system_index < 0 || iono_it == filter_state_.ionosphere_indices.end()) {
+                continue;
+            }
+            const int state_index = iono_it->second;
+            if (state_index < 0 || state_index >= filter_state_.total_states) {
+                continue;
+            }
+            const size_t bias_index = static_cast<size_t>(system_index);
+            if (system_bias_count[bias_index] <= 0) {
+                continue;
+            }
+            const double system_bias_m =
+                system_bias_sum[bias_index] / static_cast<double>(system_bias_count[bias_index]);
+            const double constrained_delay_m =
+                observation.ionosphere_constraint_m - system_bias_m;
+            if (!std::isfinite(constrained_delay_m) ||
+                !std::isfinite(observation.ionosphere_constraint_sigma_m) ||
+                observation.ionosphere_constraint_sigma_m <= 0.0) {
+                continue;
+            }
+
+            Eigen::RowVectorXd iono_row = Eigen::RowVectorXd::Zero(filter_state_.total_states);
+            iono_row(state_index) = 1.0;
+            const double iono_state_m = filter_state_.state(state_index);
+            rows.push_back(iono_row);
+            measured_values.push_back(constrained_delay_m);
+            predicted_values.push_back(iono_state_m);
+            variances.push_back(safeVariance(
+                observation.ionosphere_constraint_sigma_m *
+                    observation.ionosphere_constraint_sigma_m,
+                1e-6));
+            row_satellites.push_back(observation.satellite);
+            row_primary_signals.push_back(observation.primary_signal);
+            row_secondary_signals.push_back(observation.secondary_signal);
+            row_primary_observation_codes.push_back(observation.primary_observation_code);
+            row_secondary_observation_codes.push_back(observation.secondary_observation_code);
+            row_frequency_indices.push_back(observation.frequency_index);
+            row_ionosphere_coefficients.push_back(observation.ionosphere_coefficient);
+            row_receiver_clock_state_indices.push_back(-1);
+            row_receiver_clock_design_coefficients.push_back(0.0);
+            row_ionosphere_state_indices.push_back(state_index);
+            row_ionosphere_design_coefficients.push_back(1.0);
+            row_ambiguity_state_indices.push_back(-1);
+            row_ambiguity_design_coefficients.push_back(0.0);
+            row_ambiguity_lock_counts.push_back(-1);
+            row_required_lock_counts.push_back(0);
+            row_phase_limits_m.push_back(0.0);
+            row_phase_skip_reasons.emplace_back();
+            row_is_phase.push_back(false);
+            row_is_ionosphere_constraint.push_back(true);
+            row_elevation_deg.push_back(observation.elevation / kDegreesToRadians);
+            row_iono_state_m.push_back(iono_state_m);
+        }
+    }
+
+    for (const auto& [satellite, frequency_index] : before_excluded_phase_pairs_to_reset) {
+        (void)frequency_index;
+        if (satellites_with_phase_rows.count(satellite) == 0) {
+            resetAmbiguity(satellite, SignalType::SIGNAL_TYPE_COUNT);
         }
     }
 
@@ -2913,7 +4697,27 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                                 predicted_values[static_cast<size_t>(i)];
     }
     equation.row_satellites = row_satellites;
+    equation.row_primary_signals = row_primary_signals;
+    equation.row_secondary_signals = row_secondary_signals;
+    equation.row_primary_observation_codes = row_primary_observation_codes;
+    equation.row_secondary_observation_codes = row_secondary_observation_codes;
+    equation.row_frequency_indices = row_frequency_indices;
+    equation.row_ionosphere_coefficients = row_ionosphere_coefficients;
+    equation.row_receiver_clock_state_indices = row_receiver_clock_state_indices;
+    equation.row_receiver_clock_design_coefficients = row_receiver_clock_design_coefficients;
+    equation.row_ionosphere_state_indices = row_ionosphere_state_indices;
+    equation.row_ionosphere_design_coefficients = row_ionosphere_design_coefficients;
+    equation.row_ambiguity_state_indices = row_ambiguity_state_indices;
+    equation.row_ambiguity_design_coefficients = row_ambiguity_design_coefficients;
+    equation.row_ambiguity_lock_counts = row_ambiguity_lock_counts;
+    equation.row_required_lock_counts = row_required_lock_counts;
+    equation.row_phase_limits_m = row_phase_limits_m;
+    equation.row_phase_skip_reasons = row_phase_skip_reasons;
     equation.row_is_phase = row_is_phase;
+    equation.row_is_ionosphere_constraint = row_is_ionosphere_constraint;
+    equation.row_elevation_deg = row_elevation_deg;
+    equation.row_iono_state_m = row_iono_state_m;
+    equation.phase_candidate_diagnostics = phase_candidate_diagnostics;
     return equation;
 }
 
@@ -2963,6 +4767,30 @@ PositionSolution PPPProcessor::generateSolution(const GNSSTime& time,
     solution.position_ecef = filter_state_.state.segment(filter_state_.pos_index, 3);
     solution.receiver_clock_bias =
         filter_state_.state(filter_state_.clock_index) / constants::SPEED_OF_LIGHT;
+    solution.receiver_clock_biases_m[ReceiverClockBiasGroup::GPS] =
+        filter_state_.state(filter_state_.clock_index);
+    solution.receiver_clock_biases_m[ReceiverClockBiasGroup::GLONASS] =
+        filter_state_.state(filter_state_.glo_clock_index);
+    if (filter_state_.gal_clock_index >= 0) {
+        solution.receiver_clock_biases_m[ReceiverClockBiasGroup::Galileo] =
+            filter_state_.state(filter_state_.gal_clock_index);
+    }
+    if (filter_state_.qzs_clock_index >= 0) {
+        solution.receiver_clock_biases_m[ReceiverClockBiasGroup::QZSS] =
+            filter_state_.state(filter_state_.qzs_clock_index);
+    }
+    if (filter_state_.bds_clock_index >= 0) {
+        solution.receiver_clock_biases_m[ReceiverClockBiasGroup::BeiDou] =
+            filter_state_.state(filter_state_.bds_clock_index);
+    }
+    if (filter_state_.bds2_clock_index >= 0) {
+        solution.receiver_clock_biases_m[ReceiverClockBiasGroup::BeiDou2] =
+            filter_state_.state(filter_state_.bds2_clock_index);
+    }
+    if (filter_state_.bds3_clock_index >= 0) {
+        solution.receiver_clock_biases_m[ReceiverClockBiasGroup::BeiDou3] =
+            filter_state_.state(filter_state_.bds3_clock_index);
+    }
     solution.position_covariance =
         filter_state_.covariance.block(filter_state_.pos_index, filter_state_.pos_index, 3, 3);
 
@@ -2972,22 +4800,41 @@ PositionSolution PPPProcessor::generateSolution(const GNSSTime& time,
     ecef2geodetic(solution.position_ecef, latitude, longitude, height);
     solution.position_geodetic = GeodeticCoord(latitude, longitude, height);
 
+    std::set<SatelliteId> counted_satellites;
+    bool saw_secondary_frequency = false;
     for (const auto& observation : observations) {
         if (!observation.valid) {
             continue;
         }
-        solution.num_satellites++;
-        solution.satellites_used.push_back(observation.satellite);
-        solution.satellite_elevations.push_back(observation.elevation);
+        if (counted_satellites.insert(observation.satellite).second) {
+            solution.satellites_used.push_back(observation.satellite);
+            solution.satellite_elevations.push_back(observation.elevation);
+        }
+        if (observation.secondary_signal != SignalType::SIGNAL_TYPE_COUNT) {
+            saw_secondary_frequency = true;
+        } else {
+            const auto primary_candidates = primarySignals(observation.satellite.system);
+            saw_secondary_frequency = saw_secondary_frequency ||
+                (std::find(primary_candidates.begin(), primary_candidates.end(),
+                           observation.primary_signal) == primary_candidates.end());
+        }
         const double geometric_range = geodist(observation.satellite_position, solution.position_ecef);
         const double clock_bias_m = receiverClockBiasMeters(observation.satellite);
         const double predicted = geometric_range +
             clock_bias_m -
             constants::SPEED_OF_LIGHT * observation.satellite_clock_bias +
             (ppp_config_.estimate_troposphere
-                ? observation.trop_mapping * filter_state_.state(filter_state_.trop_index)
+                ? estimatedTroposphereDelayFromState(
+                    observation.modeled_trop_delay_m,
+                    observation.trop_mapping,
+                    observation.modeled_zenith_trop_delay_m,
+                    filter_state_.state(filter_state_.trop_index))
                 : observation.modeled_trop_delay_m);
         solution.satellite_residuals.push_back(observation.pseudorange_if - predicted);
+    }
+    solution.num_satellites = static_cast<int>(counted_satellites.size());
+    if (!ppp_config_.use_ionosphere_free) {
+        solution.num_frequencies = saw_secondary_frequency ? 2 : 1;
     }
 
     if (!solution.satellite_residuals.empty()) {
@@ -3060,13 +4907,22 @@ void PPPProcessor::resetAmbiguity(const SatelliteId& satellite, SignalType signa
     ambiguity = PPPAmbiguityInfo{};
     ambiguity.needs_reinitialization = true;
 
-    const int ambiguity_index = ambiguityStateIndex(satellite);
-    if (ambiguity_index >= 0 && ambiguity_index < filter_state_.total_states) {
-        filter_state_.state(ambiguity_index) = 0.0;
-        filter_state_.covariance.row(ambiguity_index).setZero();
-        filter_state_.covariance.col(ambiguity_index).setZero();
-        filter_state_.covariance(ambiguity_index, ambiguity_index) =
-            precise_products_loaded_ ? 1e6 : ppp_config_.initial_ambiguity_variance;
+    const auto reset_state_index = [&](int ambiguity_index) {
+        phase_ambiguity_admission_offsets_m_.erase(ambiguity_index);
+        if (ambiguity_index >= 0 && ambiguity_index < filter_state_.total_states) {
+            filter_state_.state(ambiguity_index) = 0.0;
+            filter_state_.covariance.row(ambiguity_index).setZero();
+            filter_state_.covariance.col(ambiguity_index).setZero();
+            filter_state_.covariance(ambiguity_index, ambiguity_index) =
+                precise_products_loaded_ ? 1e6 : ppp_config_.initial_ambiguity_variance;
+        }
+    };
+
+    reset_state_index(ambiguityStateIndex(satellite));
+    for (const auto& [key, state_index] : filter_state_.frequency_ambiguity_indices) {
+        if (key.first == satellite) {
+            reset_state_index(state_index);
+        }
     }
 
     const auto sat_it = ambiguity_states_.find(satellite);
@@ -3184,7 +5040,11 @@ VectorXd PPPProcessor::calculateResiduals(const std::vector<IonosphereFreeObs>& 
             clock_bias_m -
             constants::SPEED_OF_LIGHT * observation.satellite_clock_bias +
             (ppp_config_.estimate_troposphere ?
-                observation.trop_mapping * zenith_delay :
+                estimatedTroposphereDelayFromState(
+                    observation.modeled_trop_delay_m,
+                    observation.trop_mapping,
+                    observation.modeled_zenith_trop_delay_m,
+                    zenith_delay) :
                 observation.modeled_trop_delay_m);
         residuals.push_back(observation.pseudorange_if - predicted);
     }
