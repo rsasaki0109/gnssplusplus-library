@@ -1012,6 +1012,24 @@ class PPCSegmentSelectorSweepTest(unittest.TestCase):
         self.assertIn("candidate_num_satellites >= 12", best_rule["rule"])
         self.assertIn("residual_rms_m <= 0.4", best_rule["rule"])
 
+    def test_selector_sweep_refines_coarse_numeric_thresholds(self) -> None:
+        rows = [
+            self.selector_row("tokyo_run1", 5.0, 5.0, "FIXED", "FIXED", 0.1, 8.0),
+            self.selector_row("tokyo_run1", 20.0, 20.0, "FIXED", "FIXED", 0.8, 8.0),
+            self.selector_row("tokyo_run1", -15.0, 15.0, "FIXED", "FIXED", 1.5, 8.0),
+        ]
+
+        payload = ppc_segment_selector_sweep.build_payload(
+            rows,
+            top_rules=8,
+            max_thresholds=2,
+            numeric_threshold_refinement_beam=32,
+        )
+
+        best_rule = payload["top_rules"][0]
+        self.assertEqual(best_rule["selected_score_delta_distance_m"], 25.0)
+        self.assertIn("residual_rms_m <= 0.8", best_rule["rule"])
+
 
 class PPCDualProfileSelectorTest(unittest.TestCase):
     @staticmethod
@@ -1137,7 +1155,7 @@ class PPCDualProfileSelectorMatrixTest(unittest.TestCase):
             "rule": (
                 "candidate_status_name == FIXED AND "
                 "candidate_num_satellites >= 8 AND "
-                "candidate_rtk_update_post_suppression_residual_rms_m <= 4.6682"
+                "candidate_rtk_update_post_suppression_residual_rms_m <= 3.1545"
             ),
             "baseline": metrics(baseline_score_m, 80.0, 60.0),
             "candidate": metrics(candidate_score_m, 81.0, 61.0),

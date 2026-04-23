@@ -134,6 +134,15 @@ def parse_args() -> argparse.Namespace:
         help="Top one-numeric rules per categorical base to refine when --max-numeric-conditions=2.",
     )
     parser.add_argument(
+        "--numeric-threshold-refinement-beam",
+        type=int,
+        default=32,
+        help=(
+            "Top ranked rules whose numeric thresholds are rescored against exact local "
+            "thresholds after the coarse sweep (default: 32)."
+        ),
+    )
+    parser.add_argument(
         "--min-selected-distance-m",
         type=float,
         default=0.0,
@@ -338,6 +347,42 @@ def generate_rules(
     return rules
 
 
+def rule_with_numeric_threshold(rule: RuleSpec, index: int, threshold: float) -> RuleSpec:
+    numeric = list(rule.numeric)
+    condition = numeric[index]
+    numeric[index] = NumericCondition(condition.feature, condition.operator, threshold)
+    return normalize_rule(RuleSpec(categorical=rule.categorical, numeric=tuple(numeric)))
+
+
+def numeric_threshold_refinement_rules(
+    rows: list[dict[str, object]],
+    ranked: list[tuple[dict[str, object], RuleSpec]],
+    beam: int,
+) -> list[RuleSpec]:
+    rules: list[RuleSpec] = []
+    seen: set[tuple[tuple[tuple[str, str], ...], tuple[tuple[str, str, float], ...]]] = set()
+    for _, rule in ranked[: max(0, beam)]:
+        if not rule.numeric:
+            continue
+        for index, condition in enumerate(rule.numeric):
+            fixed_numeric = tuple(
+                other_condition
+                for other_index, other_condition in enumerate(rule.numeric)
+                if other_index != index
+            )
+            local_rows = rows_matching(
+                rows,
+                RuleSpec(categorical=rule.categorical, numeric=fixed_numeric),
+            )
+            for threshold in threshold_values(local_rows, condition.feature, 0):
+                refined_rule = rule_with_numeric_threshold(rule, index, threshold)
+                if refined_rule.key() in seen:
+                    continue
+                rules.append(refined_rule)
+                seen.add(refined_rule.key())
+    return rules
+
+
 def score_rule(
     rows: list[dict[str, object]],
     rule: RuleSpec,
@@ -426,6 +471,7 @@ def build_payload(
     max_thresholds: int,
     max_numeric_conditions: int = 1,
     numeric_refinement_beam: int = 64,
+    numeric_threshold_refinement_beam: int = 32,
     min_selected_distance_m: float = 0.0,
 ) -> dict[str, object]:
     if not rows:
@@ -444,6 +490,21 @@ def build_payload(
             continue
         ranked.append((summary, rule))
     ranked.sort(key=lambda item: rule_rank_key(item[0]), reverse=True)
+    if numeric_threshold_refinement_beam > 0:
+        seen = {rule.key() for _, rule in ranked}
+        for rule in numeric_threshold_refinement_rules(
+            rows,
+            ranked,
+            numeric_threshold_refinement_beam,
+        ):
+            if rule.key() in seen:
+                continue
+            summary = score_rule(rows, rule, totals=totals, include_by_run=False)
+            if float(summary["selected_distance_m"] or 0.0) < min_selected_distance_m:
+                continue
+            ranked.append((summary, rule))
+            seen.add(rule.key())
+        ranked.sort(key=lambda item: rule_rank_key(item[0]), reverse=True)
     top_rule_summaries = [
         score_rule(rows, rule, totals=totals, include_by_run=True)
         for _, rule in ranked[:top_rules]
@@ -473,6 +534,7 @@ def build_payload(
         "max_thresholds": max_thresholds,
         "max_numeric_conditions": max_numeric_conditions,
         "numeric_refinement_beam": numeric_refinement_beam,
+        "numeric_threshold_refinement_beam": numeric_threshold_refinement_beam,
         "min_selected_distance_m": min_selected_distance_m,
     }
 
@@ -570,6 +632,7 @@ def main() -> None:
         max_thresholds=args.max_thresholds,
         max_numeric_conditions=args.max_numeric_conditions,
         numeric_refinement_beam=args.numeric_refinement_beam,
+        numeric_threshold_refinement_beam=args.numeric_threshold_refinement_beam,
         min_selected_distance_m=args.min_selected_distance_m,
     )
     if args.summary_json:

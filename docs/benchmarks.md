@@ -194,18 +194,18 @@ The segment-delta report shows why this cannot be a city-level default: Tokyo
 run1 `jump0.5` gains **177.8 m** and loses **133.6 m**, while Tokyo run2 gains
 only **7.1 m** and loses **384.3 m**. Across all six runs, candidate-all is
 **-407.9 m** versus reset10, so the selector must be segment-local.
-Sweeping segment-local rules over all six `jump0.5` probes and allowing one
-extra numeric refinement flips that global loss to **+293.8 m**. The refined
+Sweeping segment-local rules over all six `jump0.5` probes and allowing local
+numeric-threshold refinement flips that global loss to **+295.2 m**. The refined
 rule requires candidate status FIXED, `candidate_num_satellites >= 8`, and
-candidate post-suppression residual RMS `<= 4.6682 m`. It keeps **335.8 m** of
-gain, exposes **42.1 m** of loss, reduces Tokyo run2's damage from **-377.2 m**
-to **-21.0 m**, and adds **+91.1 m** on Tokyo run3.
+candidate post-suppression residual RMS `<= 3.1545 m`. It keeps **334.3 m** of
+gain, exposes **39.0 m** of loss, reduces Tokyo run2's damage from **-377.2 m**
+to **-18.0 m**, and adds **+91.1 m** on Tokyo run3.
 Applying the rule with `scripts/apply_ppc_dual_profile_selector.py` writes real
 selected `.pos` outputs and reuses the normal PPC metrics path. Across those
-six probes, weighted official score becomes **59.53%** versus **58.90%** for
-reset10 (**+293.8 m**, **+0.63 pp**) and **58.02%** for candidate-all.
-Positioning remains positive on every run, averaging **+0.26 pp** versus
-reset10, while Fix averages **+1.17 pp**. The matrix aggregation and scorecard
+six probes, weighted official score becomes **59.54%** versus **58.90%** for
+reset10 (**+295.2 m**, **+0.64 pp**) and **58.02%** for candidate-all.
+Positioning remains positive on every run, averaging **+0.25 pp** versus
+reset10, while Fix averages **+1.07 pp**. The matrix aggregation and scorecard
 come from `scripts/analyze_ppc_dual_profile_selector_matrix.py`.
 
 ![PPC dual-profile selector scorecard](ppc_jump0p5_dual_selector_scorecard.png)
@@ -339,6 +339,7 @@ python3 scripts/analyze_ppc_segment_selector_sweep.py \
   --max-numeric-conditions 2 \
   --max-thresholds 64 \
   --numeric-refinement-beam 24 \
+  --numeric-threshold-refinement-beam 32 \
   --summary-json output/ppc_jump0p5_segment_selector_sweep_6run_refined.json \
   --markdown-output output/ppc_jump0p5_segment_selector_sweep_6run_refined.md
 

@@ -237,19 +237,19 @@ segments into FIX; Tokyo run2 gains only **7.1 m** and loses **384.3 m**, mostly
 `scored -> high_error` FLOAT/FIXED degradation. Across all six runs,
 candidate-all is **-407.9 m** versus reset10, so the viable selector must be
 segment-local rather than city-local.
-Sweeping all six `jump0.5` probes with one extra numeric refinement adds a
+Sweeping all six `jump0.5` probes with local numeric-threshold refinement adds a
 low-satellite false-fix guard to the selector: `candidate_status_name == FIXED`,
 `candidate_num_satellites >= 8`, and candidate post-suppression residual RMS
-`<= 4.6682 m`. It flips the global candidate-all loss to **+293.8 m**, keeps
-**335.8 m** of gain, exposes only **42.1 m** of loss, and cuts Tokyo run2 from
-**-377.2 m** to **-21.0 m** while adding **+91.1 m** on Tokyo run3.
+`<= 3.1545 m`. It flips the global candidate-all loss to **+295.2 m**, keeps
+**334.3 m** of gain, exposes only **39.0 m** of loss, and cuts Tokyo run2 from
+**-377.2 m** to **-18.0 m** while adding **+91.1 m** on Tokyo run3.
 `scripts/apply_ppc_dual_profile_selector.py` applies that rule to actual
 baseline/candidate `.pos` files and writes a selected `.pos` for normal PPC
 re-scoring. On the full six-run matrix, the combined selector moves weighted
-official score **58.90% -> 59.53%** (**+293.8 m**, **+0.63 pp**) versus reset10
-and stays above candidate-all by **701.6 m**. Positioning is not sacrificed:
-the six-run average Positioning delta is **+0.26 pp** and Fix delta is
-**+1.17 pp** versus reset10.
+official score **58.90% -> 59.54%** (**+295.2 m**, **+0.64 pp**) versus reset10
+and stays above candidate-all by **703.1 m**. Positioning is not sacrificed:
+the six-run average Positioning delta is **+0.25 pp** and Fix delta is
+**+1.07 pp** versus reset10.
 `scripts/analyze_ppc_dual_profile_selector_matrix.py` aggregates those selected
 summaries and renders the checked-in scorecard below.
 
@@ -740,6 +740,7 @@ python3 scripts/analyze_ppc_segment_selector_sweep.py \
   --max-numeric-conditions 2 \
   --max-thresholds 64 \
   --numeric-refinement-beam 24 \
+  --numeric-threshold-refinement-beam 32 \
   --summary-json output/ppc_jump0p5_segment_selector_sweep_6run_refined.json \
   --markdown-output output/ppc_jump0p5_segment_selector_sweep_6run_refined.md
 
