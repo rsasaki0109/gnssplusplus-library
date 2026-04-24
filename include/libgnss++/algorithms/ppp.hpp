@@ -73,6 +73,7 @@ public:
      * @brief Load SSR orbit/clock corrections.
      */
     bool loadSSRProducts(const std::string& ssr_file);
+    bool loadSSRProducts(const SSRProducts& products);
     bool loadL6Products(const std::string& l6_file);
 
     /**
@@ -147,6 +148,163 @@ public:
     double getLastAppliedDcbMeters() const {
         return last_applied_dcb_m_;
     }
+
+    struct SSRApplicationDiagnostic {
+        SatelliteId satellite;
+        SignalType primary_signal = SignalType::SIGNAL_TYPE_COUNT;
+        SignalType secondary_signal = SignalType::SIGNAL_TYPE_COUNT;
+        std::string primary_observation_code;
+        std::string secondary_observation_code;
+        int frequency_index = 0;
+        double primary_code_bias_coeff = 1.0;
+        double secondary_code_bias_coeff = 0.0;
+        double ionosphere_coefficient = 1.0;
+        bool ssr_available = false;
+        int ssr_orbit_iode = -1;
+        int broadcast_iode = -1;
+        bool orbit_clock_applied = false;
+        std::string orbit_clock_skip_reason;
+        double orbit_correction_x_m = 0.0;
+        double orbit_correction_y_m = 0.0;
+        double orbit_correction_z_m = 0.0;
+        double clock_correction_m = 0.0;
+        double ura_sigma_m = 0.0;
+        double code_bias_m = 0.0;
+        double phase_bias_m = 0.0;
+        double trop_correction_m = 0.0;
+        double stec_tecu = 0.0;
+        double iono_correction_m = 0.0;
+        bool ionosphere_estimation_constraint = false;
+        bool dcb_applied = false;
+        double dcb_bias_m = 0.0;
+        bool ionex_applied = false;
+        double ionex_iono_m = 0.0;
+        int atmos_token_count = 0;
+        int preferred_network_id = 0;
+        double elevation_deg = 0.0;
+        double variance_pr = 0.0;
+        double variance_cp = 0.0;
+        bool has_carrier_phase = false;
+        bool valid_after_corrections = false;
+        double receiver_position_x_m = 0.0;
+        double receiver_position_y_m = 0.0;
+        double receiver_position_z_m = 0.0;
+        double satellite_position_x_m = 0.0;
+        double satellite_position_y_m = 0.0;
+        double satellite_position_z_m = 0.0;
+        double satellite_clock_bias_m = 0.0;
+        double geometric_range_m = 0.0;
+        double line_of_sight_x = 0.0;
+        double line_of_sight_y = 0.0;
+        double line_of_sight_z = 0.0;
+    };
+
+    const std::vector<SSRApplicationDiagnostic>& getLastSSRApplicationDiagnostics() const {
+        return last_ssr_application_diagnostics_;
+    }
+
+    struct PPPFilterIterationDiagnostic {
+        int iteration = 0;
+        int rows = 0;
+        int code_rows = 0;
+        int phase_rows = 0;
+        double pos_delta_m = 0.0;
+        double pos_delta_x_m = 0.0;
+        double pos_delta_y_m = 0.0;
+        double pos_delta_z_m = 0.0;
+        double clock_delta_m = 0.0;
+        double glo_clock_delta_m = 0.0;
+        double gal_clock_delta_m = 0.0;
+        double qzs_clock_delta_m = 0.0;
+        double bds_clock_delta_m = 0.0;
+        double bds2_clock_delta_m = 0.0;
+        double bds3_clock_delta_m = 0.0;
+        double trop_delta_m = 0.0;
+        double iono_delta_rms_m = 0.0;
+        double iono_delta_max_abs_m = 0.0;
+        double position_x_m = 0.0;
+        double position_y_m = 0.0;
+        double position_z_m = 0.0;
+        double clock_state_m = 0.0;
+        double glo_clock_state_m = 0.0;
+        double gal_clock_state_m = 0.0;
+        double qzs_clock_state_m = 0.0;
+        double bds_clock_state_m = 0.0;
+        double bds2_clock_state_m = 0.0;
+        double bds3_clock_state_m = 0.0;
+        double trop_state_m = 0.0;
+        double iono_state_rms_m = 0.0;
+        double iono_state_max_abs_m = 0.0;
+        double code_residual_rms_m = 0.0;
+        double code_residual_max_abs_m = 0.0;
+        SatelliteId code_residual_max_sat;
+        double phase_residual_rms_m = 0.0;
+        double phase_residual_max_abs_m = 0.0;
+        SatelliteId phase_residual_max_sat;
+        int ionosphere_constraint_rows = 0;
+    };
+
+    struct PPPResidualDiagnostic {
+        int iteration = 0;
+        int row_index = 0;
+        SatelliteId satellite;
+        SignalType primary_signal = SignalType::SIGNAL_TYPE_COUNT;
+        SignalType secondary_signal = SignalType::SIGNAL_TYPE_COUNT;
+        std::string primary_observation_code;
+        std::string secondary_observation_code;
+        int frequency_index = 0;
+        double ionosphere_coefficient = 1.0;
+        bool carrier_phase = false;
+        bool ionosphere_constraint = false;
+        bool phase_candidate = false;
+        bool phase_accepted = false;
+        bool phase_ready = false;
+        std::string phase_skip_reason;
+        double innovation_variance_m2 = 0.0;
+        double innovation_inverse_diagonal_1_per_m2 = 0.0;
+        double innovation_covariance_code_coupling_abs_m2 = 0.0;
+        double innovation_covariance_phase_coupling_abs_m2 = 0.0;
+        double innovation_covariance_ionosphere_constraint_coupling_abs_m2 = 0.0;
+        double innovation_inverse_code_coupling_abs_1_per_m2 = 0.0;
+        double innovation_inverse_phase_coupling_abs_1_per_m2 = 0.0;
+        double innovation_inverse_ionosphere_constraint_coupling_abs_1_per_m2 = 0.0;
+        double position_x_kalman_gain = 0.0;
+        double position_y_kalman_gain = 0.0;
+        double position_z_kalman_gain = 0.0;
+        double position_update_contribution_x_m = 0.0;
+        double position_update_contribution_y_m = 0.0;
+        double position_update_contribution_z_m = 0.0;
+        double position_update_contribution_3d_m = 0.0;
+        int receiver_clock_state_index = -1;
+        double receiver_clock_design_coeff = 0.0;
+        double receiver_clock_kalman_gain = 0.0;
+        double receiver_clock_update_contribution_m = 0.0;
+        int ionosphere_state_index = -1;
+        double ionosphere_design_coeff = 0.0;
+        double ionosphere_kalman_gain = 0.0;
+        double ionosphere_update_contribution_m = 0.0;
+        int ambiguity_state_index = -1;
+        double ambiguity_design_coeff = 0.0;
+        double ambiguity_kalman_gain = 0.0;
+        double ambiguity_update_contribution_m = 0.0;
+        int ambiguity_lock_count = -1;
+        int required_lock_count = 0;
+        double phase_limit_m = 0.0;
+        double observation_m = 0.0;
+        double predicted_m = 0.0;
+        double residual_m = 0.0;
+        double variance_m2 = 0.0;
+        double elevation_deg = 0.0;
+        double iono_state_m = 0.0;
+    };
+
+    const std::vector<PPPFilterIterationDiagnostic>& getLastPPPFilterIterationDiagnostics() const {
+        return last_filter_iteration_diagnostics_;
+    }
+
+    const std::vector<PPPResidualDiagnostic>& getLastPPPResidualDiagnostics() const {
+        return last_residual_diagnostics_;
+    }
     
     /**
      * @brief Check convergence status
@@ -180,6 +338,7 @@ private:
     DCBProducts dcb_products_;
     
     PPPState filter_state_;
+    std::map<int, double> phase_ambiguity_admission_offsets_m_;
     bool filter_initialized_ = false;
     
     // Convergence monitoring
@@ -203,7 +362,8 @@ private:
     };
     OceanLoadingCoefficients ocean_loading_coefficients_{};
     bool ocean_loading_loaded_ = false;
-    std::map<std::string, std::map<SignalType, Vector3d>> receiver_antex_offsets_;
+    std::map<std::string, ReceiverAntexEntry> receiver_antex_offsets_;
+    std::map<SatelliteId, std::vector<SatelliteAntexEntry>> satellite_antex_offsets_;
     bool receiver_antex_loaded_ = false;
     Vector3d static_anchor_position_ = Vector3d::Zero();
     bool has_static_anchor_position_ = false;
@@ -219,6 +379,9 @@ private:
     double last_applied_dcb_m_ = 0.0;
     bool last_clas_hybrid_fallback_used_ = false;
     std::string last_clas_hybrid_fallback_reason_;
+    std::vector<SSRApplicationDiagnostic> last_ssr_application_diagnostics_;
+    std::vector<PPPFilterIterationDiagnostic> last_filter_iteration_diagnostics_;
+    std::vector<PPPResidualDiagnostic> last_residual_diagnostics_;
     
 public:
     using ARState = PPPState;
@@ -233,6 +396,10 @@ private:
     Eigen::MatrixXd pre_anchor_covariance_;
     bool had_fixed_last_epoch_ = false;  ///< AR succeeded in previous epoch
     std::map<SatelliteId, double> windup_cache_;  ///< Phase wind-up cache for OSR
+    /// Last-seen MADOCA phase discontinuity indicator per (satellite, RTCM signal id).
+    /// When the indicator changes between epochs the ambiguity is reset — this mirrors
+    /// MADOCALIB's behavior on phase-bias discontinuity events.
+    std::map<SatelliteId, std::map<uint8_t, uint8_t>> last_phase_disc_indicators_;
     std::map<SatelliteId, CLASPhaseBiasRepairInfo> clas_phase_bias_repair_;
     ppp_clas_sd::SdFilterState clas_sd_state_;  ///< Clock-free SD filter
     ppp_clas_sd::DdAmbAccumulator clas_dd_accumulator_;  ///< Multi-epoch DD amb accumulator
@@ -273,10 +440,16 @@ private:
         SatelliteId satellite;
         SignalType primary_signal = SignalType::SIGNAL_TYPE_COUNT;
         SignalType secondary_signal = SignalType::SIGNAL_TYPE_COUNT;
+        std::string primary_observation_code;
+        std::string secondary_observation_code;
+        int frequency_index = 0;
         double primary_code_bias_coeff = 1.0;
         double secondary_code_bias_coeff = 0.0;
+        double ionosphere_coefficient = 1.0;
         double pseudorange_if = 0.0;
         double carrier_phase_if = 0.0;
+        double ionosphere_delay_seed_m = 0.0;
+        bool has_ionosphere_delay_seed = false;
         double pseudorange_code_bias_m = 0.0;
         double carrier_phase_bias_m = 0.0;
         double variance_pr = 0.0;
@@ -290,11 +463,16 @@ private:
         double azimuth = 0.0;
         double trop_mapping = 0.0;
         double modeled_trop_delay_m = 0.0;
+        double modeled_zenith_trop_delay_m = 0.0;
         double antenna_pco_m = 0.0;
         double ambiguity_scale_m = 0.0;
         double atmospheric_trop_correction_m = 0.0;
         double atmospheric_iono_correction_m = 0.0;
+        double ionosphere_constraint_m = 0.0;
+        double ionosphere_constraint_sigma_m = 0.0;
         std::map<std::string, std::string> ssr_atmos_tokens;
+        bool allow_ionosphere_constraint = true;
+        bool has_ionosphere_constraint = false;
         bool has_carrier_phase = false;
         bool valid = false;
     };
@@ -311,11 +489,26 @@ private:
 
     Vector3d calculateReceiverAntennaOffsetEcef(const Vector3d& receiver_marker_position,
                                                 const IonosphereFreeObs& observation) const;
+    double calculateReceiverAntennaPcvMeters(const IonosphereFreeObs& observation,
+                                             double elevation_rad) const;
+    Vector3d calculateSatelliteAntennaOffsetEcef(const IonosphereFreeObs& observation,
+                                                const Vector3d& satellite_position_ecef,
+                                                const GNSSTime& time) const;
     
     /**
      * @brief Detect cycle slips
      */
     void detectCycleSlips(const ObservationData& obs);
+
+    /**
+     * @brief Ensure ionosphere states exist for valid observations.
+     */
+    void ensureIonosphereStates(const std::vector<IonosphereFreeObs>& observations);
+
+    /**
+     * @brief Get or create ionosphere state for a satellite observation.
+     */
+    int getOrCreateIonosphereState(const IonosphereFreeObs& observation);
 
     /**
      * @brief Ensure ambiguity states exist for valid carrier-phase observations.
@@ -335,7 +528,11 @@ private:
     /**
      * @brief Initialize or reinitialize a phase-bias ambiguity state.
      */
+    double phaseAmbiguityInitializerPrediction(
+        const IonosphereFreeObs& observation,
+        bool include_ionosphere_state) const;
     void initializeAmbiguityState(const IonosphereFreeObs& observation, int state_index);
+    void initializeFrequencyAmbiguityState(const IonosphereFreeObs& observation, int state_index);
     
     /**
      * @brief Resolve PPP ambiguities
@@ -416,7 +613,27 @@ private:
         MatrixXd weight_matrix;
         VectorXd residuals;
         std::vector<SatelliteId> row_satellites;  ///< Satellite for each row
+        std::vector<SignalType> row_primary_signals;
+        std::vector<SignalType> row_secondary_signals;
+        std::vector<std::string> row_primary_observation_codes;
+        std::vector<std::string> row_secondary_observation_codes;
+        std::vector<int> row_frequency_indices;
+        std::vector<double> row_ionosphere_coefficients;
+        std::vector<int> row_receiver_clock_state_indices;
+        std::vector<double> row_receiver_clock_design_coefficients;
+        std::vector<int> row_ionosphere_state_indices;
+        std::vector<double> row_ionosphere_design_coefficients;
+        std::vector<int> row_ambiguity_state_indices;
+        std::vector<double> row_ambiguity_design_coefficients;
+        std::vector<int> row_ambiguity_lock_counts;
+        std::vector<int> row_required_lock_counts;
+        std::vector<double> row_phase_limits_m;
+        std::vector<std::string> row_phase_skip_reasons;
         std::vector<bool> row_is_phase;           ///< true=carrier phase, false=code
+        std::vector<bool> row_is_ionosphere_constraint;
+        std::vector<double> row_elevation_deg;
+        std::vector<double> row_iono_state_m;
+        std::vector<PPPResidualDiagnostic> phase_candidate_diagnostics;
     };
     
     MeasurementEquation formMeasurementEquations(

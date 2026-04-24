@@ -71,12 +71,14 @@ struct CssrSatellite {
 struct CssrMaskState {
     int iod = -1;
     int tow0 = -1;  // hourly epoch TOW
+    int ep0 = 0;    // seconds into the current hour from the mask epoch
     std::vector<CssrSatellite> satellites;
 };
 
 /// Per-satellite orbit correction.
 struct CssrOrbitCorrection {
     double dx = 0.0, dy = 0.0, dz = 0.0;  // RAC (radial, along, cross) in meters
+    int iode = -1;
 };
 
 /// Per-satellite clock correction.
@@ -94,8 +96,15 @@ struct CssrEpoch {
     std::map<SatelliteId, CssrClockCorrection> clocks;
     std::map<SatelliteId, std::map<int, double>> code_biases;   // signal_id → meters
     std::map<SatelliteId, std::map<int, double>> phase_biases;  // signal_id → meters
+    /// Phase discontinuity indicator (2 bits) per (satellite, signal).  A change
+    /// between epochs signals the receiver-side accumulated ambiguity has slipped
+    /// at the network provider and the integer should be re-initialized.
+    std::map<SatelliteId, std::map<int, uint8_t>> phase_discontinuity_indicators;
+    std::map<SatelliteId, int> ura_indices;                     // SSR URA index
     /// Network-specific phase biases from ST6, keyed by network_id
     std::map<int, std::map<SatelliteId, std::map<int, double>>> network_phase_biases;
+    /// Network-specific phase discontinuity indicators from ST6
+    std::map<int, std::map<SatelliteId, std::map<int, uint8_t>>> network_phase_discontinuity_indicators;
     /// Atmosphere tokens (STEC + gridded trop), keyed by network_id
     std::map<int, std::map<std::string, std::string>> atmos_by_network;
     int last_gridded_network_id = 0;  ///< Last ST9 network processed
@@ -105,6 +114,7 @@ struct CssrEpoch {
     bool has_clock = false;
     bool has_code_bias = false;
     bool has_phase_bias = false;
+    bool has_ura = false;
     bool has_atmos = false;
 };
 
@@ -124,6 +134,7 @@ public:
 private:
     struct PendingSubframe {
         std::vector<std::vector<uint8_t>> frame_data_parts;
+        int expected_frames = kSubframeFrames;
     };
 
     void processSubframe(const uint8_t* data, int bits, int gps_week);
@@ -133,6 +144,7 @@ private:
     void decodeSubtype3(BitReader& reader);
     void decodeSubtype4(BitReader& reader);
     void decodeSubtype5(BitReader& reader);
+    void decodeSubtype7(BitReader& reader);
     void decodeSubtype6(BitReader& reader);
     void decodeSubtype8(BitReader& reader);
     void decodeSubtype9(BitReader& reader);
@@ -147,16 +159,21 @@ private:
     std::map<std::string, std::string> merged_atmos_;
     /// Base phase biases from ST5 (Python pending_base_phase_bias)
     std::map<SatelliteId, std::map<int, double>> base_phase_biases_;
+    /// Phase discontinuity indicators from ST5 (parallel to base_phase_biases_)
+    std::map<SatelliteId, std::map<int, uint8_t>> base_phase_discontinuity_;
     /// Network phase biases from ST6 (Python pending_phase_bias)
     std::map<SatelliteId, std::map<int, double>> network_phase_biases_;
     /// Base code biases from ST4
     std::map<SatelliteId, std::map<int, double>> base_code_biases_;
     /// Network code biases from ST6
     std::map<SatelliteId, std::map<int, double>> network_code_biases_;
+    /// Persistent URA indices from ST7
+    std::map<SatelliteId, int> base_ura_indices_;
     std::vector<CssrEpoch> completed_epochs_;
     std::map<std::tuple<int, int, int>, PendingSubframe> pending_subframes_;
     int frame_index_ = 0;
     int gps_week_ = 0;
+    bool madoca_l6e_mode_ = false;
 };
 
 /// Convert decoded CSSR epochs into SSRProducts for use with PPP pipeline.

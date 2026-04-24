@@ -3162,6 +3162,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             double ura_sigma_m = 0.0;
             std::map<uint8_t, double> code_bias_m;
             std::map<uint8_t, double> phase_bias_m;
+            std::map<uint8_t, uint8_t> phase_disc_m;
             std::map<std::string, std::string> atmos_tokens;
             int orbit_iode = -1;
             const bool ssr_ok = ssr_products_.interpolateCorrection(
@@ -3179,7 +3180,8 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     preferred_network_id,
                     ppp_config_.allow_future_ssr_corrections,
                     ppp_config_.require_ssr_orbit_clock,
-                    &orbit_iode);
+                    &orbit_iode,
+                    &phase_disc_m);
             // Fall back to epoch-wide atmosphere tokens when per-satellite
             // atmos are empty (CLAS broadcasts network-wide corrections).
             if (atmos_tokens.empty() && !epoch_atmos_tokens.empty()) {
@@ -3298,6 +3300,31 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     observation.carrier_phase_if -= phase_bias;
                     observation.carrier_phase_bias_m = phase_bias;
                     diagnostic.phase_bias_m = phase_bias;
+                }
+                // MADOCA phase discontinuity indicators: when the PDI for
+                // (sat, signal) changes between epochs, the receiver-side
+                // integer has slipped at the network provider — reset the
+                // ambiguity so the filter re-initializes from the next
+                // carrier-phase measurement.  Runs even when the bias value
+                // itself looks identical, because PDI is a separate cycle-slip
+                // signal independent of the bias magnitude.
+                if (!phase_disc_m.empty()) {
+                    auto& last_map = last_phase_disc_indicators_[observation.satellite];
+                    bool pdi_changed = false;
+                    for (const auto& [rtcm_id, new_pdi] : phase_disc_m) {
+                        const auto prev_it = last_map.find(rtcm_id);
+                        if (prev_it != last_map.end() && prev_it->second != new_pdi) {
+                            pdi_changed = true;
+                        }
+                        last_map[rtcm_id] = new_pdi;
+                    }
+                    if (pdi_changed) {
+                        if (pppDebugEnabled()) {
+                            std::cerr << "[PPP-MADOCA-PDI] reset "
+                                      << observation.satellite.toString() << "\n";
+                        }
+                        resetAmbiguity(observation.satellite, observation.primary_signal);
+                    }
                 }
                 if (ura_sigma_m > 0.0 && std::isfinite(ura_sigma_m)) {
                     const double ura_variance = ura_sigma_m * ura_sigma_m;
