@@ -322,11 +322,17 @@ progression:
 | 3 | stage2 hybrid | NIS10 | `FIXED AND baseline_ratio ≤ 2.5` | **64.473%** | +5.575 pp |
 | 4 | stage3 hybrid | NIS20 | `baseline FLOAT AND candidate_obs ≥ 14` | **64.785%** | +5.887 pp |
 | 5 | stage4 hybrid | NIS50 | `FIXED AND baseline_ratio ≤ 2.7` | **64.995%** | +6.097 pp |
+| 6 | stage5 hybrid | jump0.5 dual selector | `FLOAT→FIXED` | **65.103%** | +6.205 pp |
+| 7 | stage6 hybrid | IMU bridge (fy1_lx1) | `NO_SOLUTION→FLOAT` | **65.644%** | +6.747 pp |
 
-Five selector stages add **+6.097 pp / +2 824.5 m** versus reset10, with
+Seven selector stages add **+6.747 pp / +3 125.5 m** versus reset10, with
 every stage strictly non-negative per-run. The gap to PPC2024 second place
-(77.6%) narrows to **12.61 pp**. Marginal gain per stage declines from
-+4.36 pp (stage 1) to +0.21 pp (stage 5), so further stages are low value.
+(77.6%) narrows to **11.96 pp**. Marginal gain per stage declines from
++4.36 pp (stage 1) to +0.11 pp (stage 6), with an IMU-bridge stage 7
+recovering another +0.54 pp by filling no-solution dropouts with dead-
+reckoned FLOAT solutions. Further stages with additional CV-bridge
+candidates add only ~+0.02 pp (tested with `gap10_age2`,
+`innov_fixed_1`, `tele_fixed_ratio3` at stage 8) so are omitted.
 
 The chain is deployable: each stage is a deterministic single-rule apply
 using `scripts/apply_ppc_dual_profile_selector.py` with the rank 1 rule

@@ -306,14 +306,18 @@ weighted score moves **58.90% -> 63.26%** (**+2,019.8 m**, **+4.36 pp**) vs
 reset10, all six runs gain, and both Positioning (+0.43 pp) and Fix (+6.59 pp)
 improve. See `docs/benchmarks.md` for the ranked rule table and scorecards.
 
-Chaining five dual-profile selectors back-to-back (NIS5 → NIS3 → NIS10 →
-NIS20 → NIS50) extends this further to **58.90% -> 65.00%**
-(**+2,824.5 m**, **+6.10 pp**). Each later stage applies a single-rule
-selector on the previous hybrid using a different NIS-threshold candidate,
-capturing gain segments the earlier stages missed. The marginal gain per
-stage declines from +4.36 pp (stage 1) to +0.21 pp (stage 5), so further
-stages are low value. See `docs/benchmarks.md` for the per-stage rules and
-the progression scorecard.
+Chaining seven dual-profile selectors back-to-back (five NIS-threshold
+stages NIS5 → NIS3 → NIS10 → NIS20 → NIS50, then a jump0.5 dual-selector
+stage, then an IMU-bridge stage filling no-solution dropouts) extends
+this further to **58.90% -> 65.64%** (**+3,125.5 m**, **+6.75 pp**).
+Each later stage applies a single-rule selector on the previous hybrid
+using a different candidate family, capturing gain segments the earlier
+stages missed. The marginal gain per stage declines from +4.36 pp
+(stage 1) to +0.11 pp (stage 6), then jumps back up to +0.54 pp for the
+IMU bridge stage (which fills gaps the NIS stages cannot touch). Gap to
+the PPC2024 public second-place reference (77.6%) narrows from 18.70 pp
+at reset10 to 11.96 pp after stage 7. See `docs/benchmarks.md` for the
+per-stage rules and the progression scorecard.
 
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
