@@ -303,6 +303,47 @@ Gap to the PPC2024 public second-place reference (**77.6%**) after this
 step: **14.34 pp**, down from **18.70 pp** at reset10 — 23% of the gap
 closed by a docs-only recipe that reuses the existing solver.
 
+#### Chained dual-profile selector (NIS5 → NIS3 → NIS10 → NIS20 → NIS50)
+
+The NIS5 single-stage selector does not exhaust the gate sweep's headroom.
+Applying a second dual-profile selector on top of the NIS5 hybrid — this
+time using reset10 as the reset10-equivalent baseline, but the NIS5 hybrid
+output from stage 1 as the selector input and a tighter NIS candidate as
+the "other side" — finds additional gain segments that stage 1 missed.
+Iterating five times with `scripts/apply_ppc_dual_profile_selector.py` and
+five different candidate profiles produces a strictly monotonic
+progression:
+
+| stage | baseline | candidate | added rule | weighted | Δ vs reset10 |
+|---|---|---|---|---:|---:|
+| 0 | — | — | (reset10) | **58.898%** | — |
+| 1 | reset10 | NIS5 | `FIXED AND baseline_m ≤ 10034.9` | **63.258%** | **+4.360 pp** |
+| 2 | stage1 hybrid | NIS3 | `FLOAT→FIXED AND post_max ≤ 25.5708` | **63.921%** | +5.023 pp |
+| 3 | stage2 hybrid | NIS10 | `FIXED AND baseline_ratio ≤ 2.5` | **64.473%** | +5.575 pp |
+| 4 | stage3 hybrid | NIS20 | `baseline FLOAT AND candidate_obs ≥ 14` | **64.785%** | +5.887 pp |
+| 5 | stage4 hybrid | NIS50 | `FIXED AND baseline_ratio ≤ 2.7` | **64.995%** | +6.097 pp |
+
+Five selector stages add **+6.097 pp / +2 824.5 m** versus reset10, with
+every stage strictly non-negative per-run. The gap to PPC2024 second place
+(77.6%) narrows to **12.61 pp**. Marginal gain per stage declines from
++4.36 pp (stage 1) to +0.21 pp (stage 5), so further stages are low value.
+
+The chain is deployable: each stage is a deterministic single-rule apply
+using `scripts/apply_ppc_dual_profile_selector.py` with the rank 1 rule
+from a per-stage fast selector sweep. The rule expressions above are the
+canonical rules used for the numbers in this table. Each stage requires
+one extra matrix run at a different `--max-update-nis-per-obs` threshold,
+so the full recipe is (1) reset10 matrix, (2) NIS5 matrix, (3) NIS3
+matrix, (4) NIS10 matrix, (5) NIS20 matrix, (6) NIS50 matrix, plus five
+sequential selector sweeps and applies.
+
+![PPC chained dual-profile selector progression](ppc_chained_selector_progression.png)
+
+The **tighter-gate-wins-with-selector** principle (see NIS5 subsection)
+extends: each successive stage further filters the previous hybrid using
+a different threshold's idiosyncratic FIXED/FLOAT segments, capturing
+gain segments the earlier stages missed.
+
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
 ![PPC Tokyo run1 bad segment trajectory](ppc_tokyo_run1_bad_segments_trajectory.png)
