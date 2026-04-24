@@ -12,6 +12,12 @@ struct StateCoefficient {
     double coefficient = 0.0;
 };
 
+enum class MeasurementKind {
+    UNKNOWN = 0,
+    PHASE = 1,
+    CODE = 2
+};
+
 struct MeasurementRow {
     double residual = 0.0;
     Eigen::Vector3d baseline_coefficients = Eigen::Vector3d::Zero();
@@ -21,6 +27,8 @@ struct MeasurementRow {
 };
 
 struct MeasurementBlock {
+    MeasurementKind kind = MeasurementKind::UNKNOWN;
+    int frequency_index = -1;
     std::vector<MeasurementRow> rows;
 };
 
@@ -28,6 +36,14 @@ struct MeasurementSystem {
     Eigen::MatrixXd design_matrix;
     Eigen::VectorXd residuals;
     Eigen::MatrixXd covariance;
+};
+
+struct MeasurementDiagnostics {
+    int observation_count = 0;
+    int phase_observation_count = 0;
+    int code_observation_count = 0;
+    double residual_rms_m = 0.0;
+    double residual_max_abs_m = 0.0;
 };
 
 struct AmbiguityDifference {
@@ -49,6 +65,8 @@ Eigen::MatrixXd buildDoubleDifferenceCovariance(const std::vector<int>& block_si
 
 MeasurementSystem assembleMeasurementSystem(const std::vector<MeasurementBlock>& blocks,
                                             int n_states);
+
+MeasurementDiagnostics summarizeMeasurementBlocks(const std::vector<MeasurementBlock>& blocks);
 
 AmbiguityTransform buildAmbiguityTransform(const Eigen::VectorXd& state,
                                           const Eigen::MatrixXd& covariance,

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <libgnss++/algorithms/rtk.hpp>
+#include <libgnss++/algorithms/rtk_validation.hpp>
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -24,6 +25,23 @@ constexpr double kExactTimeToleranceSeconds = 1e-6;
 constexpr double kDefaultFloatVsSppGuardMeters = 30.0;
 constexpr double kDefaultNonFixedJumpGuardMeters = 8.0;
 constexpr double kDefaultVerticalStepGuardMeters = 1.0;
+constexpr double kDefaultNonFixDriftGuardMaxAnchorGapSeconds = 120.0;
+constexpr double kDefaultNonFixDriftGuardMaxAnchorSpeedMps = 1.0;
+constexpr double kDefaultNonFixDriftGuardMaxResidualMeters = 30.0;
+constexpr double kDefaultNonFixDriftGuardMinHorizontalResidualMeters = 0.0;
+constexpr int kDefaultNonFixDriftGuardMinSegmentEpochs = 20;
+constexpr int kDefaultNonFixDriftGuardMaxSegmentEpochs = 0;
+constexpr double kDefaultSppHeightStepGuardMinMeters = 30.0;
+constexpr double kDefaultSppHeightStepGuardMaxRateMps = 4.0;
+constexpr double kDefaultFloatBridgeTailGuardMaxAnchorGapSeconds = 120.0;
+constexpr double kDefaultFloatBridgeTailGuardMinAnchorSpeedMps = 0.4;
+constexpr double kDefaultFloatBridgeTailGuardMaxAnchorSpeedMps = 1.0;
+constexpr double kDefaultFloatBridgeTailGuardMaxResidualMeters = 12.0;
+constexpr int kDefaultFloatBridgeTailGuardMinSegmentEpochs = 20;
+constexpr double kDefaultFixedBridgeBurstGuardMaxAnchorGapSeconds = 30.0;
+constexpr double kDefaultFixedBridgeBurstGuardMinBoundaryGapSeconds = 1.0;
+constexpr double kDefaultFixedBridgeBurstGuardMaxResidualMeters = 20.0;
+constexpr int kDefaultFixedBridgeBurstGuardMaxSegmentEpochs = 12;
 constexpr int kReacquireFixedCount = 5;
 
 enum class ModeChoice {
@@ -85,6 +103,28 @@ struct SolveConfig {
     int skip_epochs = 0;
     int max_epochs = -1;
     bool enable_kinematic_post_filter = true;
+    bool enable_nonfix_drift_guard = true;
+    double nonfix_drift_guard_max_anchor_gap_s = kDefaultNonFixDriftGuardMaxAnchorGapSeconds;
+    double nonfix_drift_guard_max_anchor_speed_mps = kDefaultNonFixDriftGuardMaxAnchorSpeedMps;
+    double nonfix_drift_guard_max_residual_m = kDefaultNonFixDriftGuardMaxResidualMeters;
+    double nonfix_drift_guard_min_horizontal_residual_m =
+        kDefaultNonFixDriftGuardMinHorizontalResidualMeters;
+    int nonfix_drift_guard_min_segment_epochs = kDefaultNonFixDriftGuardMinSegmentEpochs;
+    int nonfix_drift_guard_max_segment_epochs = kDefaultNonFixDriftGuardMaxSegmentEpochs;
+    bool enable_spp_height_step_guard = true;
+    double spp_height_step_guard_min_m = kDefaultSppHeightStepGuardMinMeters;
+    double spp_height_step_guard_max_rate_mps = kDefaultSppHeightStepGuardMaxRateMps;
+    bool enable_float_bridge_tail_guard = true;
+    double float_bridge_tail_guard_max_anchor_gap_s = kDefaultFloatBridgeTailGuardMaxAnchorGapSeconds;
+    double float_bridge_tail_guard_min_anchor_speed_mps = kDefaultFloatBridgeTailGuardMinAnchorSpeedMps;
+    double float_bridge_tail_guard_max_anchor_speed_mps = kDefaultFloatBridgeTailGuardMaxAnchorSpeedMps;
+    double float_bridge_tail_guard_max_residual_m = kDefaultFloatBridgeTailGuardMaxResidualMeters;
+    int float_bridge_tail_guard_min_segment_epochs = kDefaultFloatBridgeTailGuardMinSegmentEpochs;
+    bool enable_fixed_bridge_burst_guard = false;
+    double fixed_bridge_burst_guard_max_anchor_gap_s = kDefaultFixedBridgeBurstGuardMaxAnchorGapSeconds;
+    double fixed_bridge_burst_guard_min_boundary_gap_s = kDefaultFixedBridgeBurstGuardMinBoundaryGapSeconds;
+    double fixed_bridge_burst_guard_max_residual_m = kDefaultFixedBridgeBurstGuardMaxResidualMeters;
+    int fixed_bridge_burst_guard_max_segment_epochs = kDefaultFixedBridgeBurstGuardMaxSegmentEpochs;
     RTKTuningPreset preset = RTKTuningPreset::NONE;
     bool ratio_threshold_set = false;
     bool ar_filter_margin_set = false;
@@ -95,7 +135,16 @@ struct SolveConfig {
         libgnss::RTKProcessor::RTKConfig::ARPolicy::EXTENDED;
     double max_hold_divergence_m = 0.0;
     double max_position_jump_m = 0.0;
+    double max_position_jump_min_m = 0.0;
+    double max_position_jump_rate_mps = 0.0;
+    double max_float_spp_divergence_m = 0.0;
+    double max_float_prefit_residual_rms_m = 0.0;
+    double max_float_prefit_residual_max_m = 0.0;
+    int max_float_prefit_residual_reset_streak = 3;
+    double min_float_prefit_residual_trusted_jump_m = 0.0;
+    double max_update_nis_per_observation = 0.0;
     int max_consecutive_float_for_reset = 0;
+    int max_consecutive_nonfix_for_reset = 0;
     double max_postfix_residual_rms = 0.0;
     bool enable_wide_lane_ar = false;
     double wide_lane_acceptance_threshold = 0.25;
@@ -412,6 +461,23 @@ void printUsage(const char* program_name) {
         << "                             (default: 0, disabled)\n"
         << "  --max-pos-jump <v>         Max AR fix jump from last fixed pos in meters\n"
         << "                             (default: 0, disabled; additional to history check)\n"
+        << "  --max-pos-jump-min <v>     Min adaptive AR fix jump in meters (default: 0)\n"
+        << "  --max-pos-jump-rate <v>    Max adaptive AR fix jump rate in m/s\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-float-spp-div <v>    Max FLOAT divergence from same-epoch SPP in meters\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-float-prefit-rms <v> Max FLOAT prefit DD residual RMS before state reset\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-float-prefit-max <v> Max FLOAT prefit DD residual magnitude before state reset\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-float-prefit-reset-streak <n>\n"
+        << "                             Consecutive high-residual FLOAT epochs before reset (default: 3)\n"
+        << "  --min-float-prefit-trusted-jump <v>\n"
+        << "                             Require high-residual FLOAT to be this far from last trusted pos\n"
+        << "                             before reset (default: 0, disabled)\n"
+        << "  --max-update-nis-per-obs <v>\n"
+        << "                             Reject DD Kalman update when NIS/active observation exceeds v\n"
+        << "                             (default: 0, disabled)\n"
         << "  --max-postfix-rms <v>      Max L1 post-fix phase residual RMS in meters\n"
         << "                             (default: 0, disabled)\n"
         << "  --enable-wide-lane-ar      Enable MW wide-lane AR pre-step (default: off)\n"
@@ -419,6 +485,56 @@ void printUsage(const char* program_name) {
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
         << "                             (default: 0, disabled; e.g. 10 for aggressive urban reconvergence)\n"
+        << "  --max-consec-nonfix-reset <n>\n"
+        << "                             Reset ambiguity state after n consecutive non-FIX epochs\n"
+        << "                             including FLOAT/SPP/no-solution (default: 0, disabled)\n"
+        << "  --no-nonfix-drift-guard   Disable low-speed non-FIX segment drift rejection\n"
+        << "  --nonfix-drift-max-anchor-gap <s>\n"
+        << "                             Max FIX-to-FIX gap for non-FIX drift guard (default: 120)\n"
+        << "  --nonfix-drift-max-anchor-speed <m/s>\n"
+        << "                             Max FIX-anchor speed treated as stationary (default: 1.0)\n"
+        << "  --nonfix-drift-max-residual <m>\n"
+        << "                             Reject non-FIX epochs farther than this from FIX-anchor bridge\n"
+        << "                             in low-speed segments (default: 30)\n"
+        << "  --nonfix-drift-min-horizontal-residual <m>\n"
+        << "                             Require this horizontal bridge residual before rejecting\n"
+        << "                             a non-FIX epoch (default: 0, disabled)\n"
+        << "  --nonfix-drift-min-segment-epochs <n>\n"
+        << "                             Minimum bounded non-FIX segment length to inspect (default: 20)\n"
+        << "  --nonfix-drift-max-segment-epochs <n>\n"
+        << "                             Maximum bounded non-FIX segment length to inspect\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --no-spp-height-step-guard\n"
+        << "                             Disable SPP vertical spike rejection\n"
+        << "  --spp-height-step-min <m>  Minimum SPP height jump rejected (default: 30)\n"
+        << "  --spp-height-step-rate <m/s>\n"
+        << "                             Rate-scaled SPP height jump limit (default: 4)\n"
+        << "  --float-bridge-tail-guard Enable slow FLOAT bridge-tail rejection (default: on)\n"
+        << "  --no-float-bridge-tail-guard\n"
+        << "                             Disable slow FLOAT bridge-tail rejection\n"
+        << "  --float-bridge-tail-max-anchor-gap <s>\n"
+        << "                             Max FIX-to-FIX gap for FLOAT bridge-tail guard (default: 120)\n"
+        << "  --float-bridge-tail-min-anchor-speed <m/s>\n"
+        << "                             Min horizontal FIX-anchor speed for FLOAT bridge-tail guard (default: 0.4)\n"
+        << "  --float-bridge-tail-max-anchor-speed <m/s>\n"
+        << "                             Max horizontal FIX-anchor speed for FLOAT bridge-tail guard (default: 1.0)\n"
+        << "  --float-bridge-tail-max-residual <m>\n"
+        << "                             Reject FLOAT epochs farther than this from FIX-anchor bridge\n"
+        << "                             in slow bounded segments (default: 12)\n"
+        << "  --float-bridge-tail-min-segment-epochs <n>\n"
+        << "                             Minimum bounded FLOAT-tail segment length to inspect (default: 20)\n"
+        << "  --fixed-bridge-burst-guard\n"
+        << "                             Enable short FIX burst bridge-residual rejection (default: off)\n"
+        << "  --no-fixed-bridge-burst-guard\n"
+        << "                             Disable short FIX burst bridge-residual rejection\n"
+        << "  --fixed-bridge-burst-max-anchor-gap <s>\n"
+        << "                             Max FIX-anchor gap for fixed-burst guard (default: 30)\n"
+        << "  --fixed-bridge-burst-min-boundary-gap <s>\n"
+        << "                             Min gap around a short FIX burst (default: 1)\n"
+        << "  --fixed-bridge-burst-max-residual <m>\n"
+        << "                             Reject burst FIX epochs farther than this from FIX bridge (default: 20)\n"
+        << "  --fixed-bridge-burst-max-segment-epochs <n>\n"
+        << "                             Max short FIX segment length to inspect (default: 12)\n"
         << "  --max-baseline-m <v>       Max baseline length in meters (default: 20000)\n"
         << "  --base-ecef <x> <y> <z>    Override base ECEF position in meters\n"
         << "  --skip-epochs <n>          Skip the first n rover epochs before solving\n"
@@ -583,6 +699,22 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.max_hold_divergence_m = std::stod(argv[++i]);
         } else if (arg == "--max-pos-jump" && i + 1 < argc) {
             config.max_position_jump_m = std::stod(argv[++i]);
+        } else if (arg == "--max-pos-jump-min" && i + 1 < argc) {
+            config.max_position_jump_min_m = std::stod(argv[++i]);
+        } else if (arg == "--max-pos-jump-rate" && i + 1 < argc) {
+            config.max_position_jump_rate_mps = std::stod(argv[++i]);
+        } else if (arg == "--max-float-spp-div" && i + 1 < argc) {
+            config.max_float_spp_divergence_m = std::stod(argv[++i]);
+        } else if (arg == "--max-float-prefit-rms" && i + 1 < argc) {
+            config.max_float_prefit_residual_rms_m = std::stod(argv[++i]);
+        } else if (arg == "--max-float-prefit-max" && i + 1 < argc) {
+            config.max_float_prefit_residual_max_m = std::stod(argv[++i]);
+        } else if (arg == "--max-float-prefit-reset-streak" && i + 1 < argc) {
+            config.max_float_prefit_residual_reset_streak = std::stoi(argv[++i]);
+        } else if (arg == "--min-float-prefit-trusted-jump" && i + 1 < argc) {
+            config.min_float_prefit_residual_trusted_jump_m = std::stod(argv[++i]);
+        } else if (arg == "--max-update-nis-per-obs" && i + 1 < argc) {
+            config.max_update_nis_per_observation = std::stod(argv[++i]);
         } else if (arg == "--max-postfix-rms" && i + 1 < argc) {
             config.max_postfix_residual_rms = std::stod(argv[++i]);
         } else if (arg == "--enable-wide-lane-ar") {
@@ -591,6 +723,54 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.wide_lane_acceptance_threshold = std::stod(argv[++i]);
         } else if (arg == "--max-consec-float-reset" && i + 1 < argc) {
             config.max_consecutive_float_for_reset = std::stoi(argv[++i]);
+        } else if (arg == "--max-consec-nonfix-reset" && i + 1 < argc) {
+            config.max_consecutive_nonfix_for_reset = std::stoi(argv[++i]);
+        } else if (arg == "--no-nonfix-drift-guard") {
+            config.enable_nonfix_drift_guard = false;
+        } else if (arg == "--nonfix-drift-max-anchor-gap" && i + 1 < argc) {
+            config.nonfix_drift_guard_max_anchor_gap_s = std::stod(argv[++i]);
+        } else if (arg == "--nonfix-drift-max-anchor-speed" && i + 1 < argc) {
+            config.nonfix_drift_guard_max_anchor_speed_mps = std::stod(argv[++i]);
+        } else if (arg == "--nonfix-drift-max-residual" && i + 1 < argc) {
+            config.nonfix_drift_guard_max_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--nonfix-drift-min-horizontal-residual" && i + 1 < argc) {
+            config.nonfix_drift_guard_min_horizontal_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--nonfix-drift-min-segment-epochs" && i + 1 < argc) {
+            config.nonfix_drift_guard_min_segment_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--nonfix-drift-max-segment-epochs" && i + 1 < argc) {
+            config.nonfix_drift_guard_max_segment_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--no-spp-height-step-guard") {
+            config.enable_spp_height_step_guard = false;
+        } else if (arg == "--spp-height-step-min" && i + 1 < argc) {
+            config.spp_height_step_guard_min_m = std::stod(argv[++i]);
+        } else if (arg == "--spp-height-step-rate" && i + 1 < argc) {
+            config.spp_height_step_guard_max_rate_mps = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-guard") {
+            config.enable_float_bridge_tail_guard = true;
+        } else if (arg == "--no-float-bridge-tail-guard") {
+            config.enable_float_bridge_tail_guard = false;
+        } else if (arg == "--float-bridge-tail-max-anchor-gap" && i + 1 < argc) {
+            config.float_bridge_tail_guard_max_anchor_gap_s = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-min-anchor-speed" && i + 1 < argc) {
+            config.float_bridge_tail_guard_min_anchor_speed_mps = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-max-anchor-speed" && i + 1 < argc) {
+            config.float_bridge_tail_guard_max_anchor_speed_mps = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-max-residual" && i + 1 < argc) {
+            config.float_bridge_tail_guard_max_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-min-segment-epochs" && i + 1 < argc) {
+            config.float_bridge_tail_guard_min_segment_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--fixed-bridge-burst-guard") {
+            config.enable_fixed_bridge_burst_guard = true;
+        } else if (arg == "--no-fixed-bridge-burst-guard") {
+            config.enable_fixed_bridge_burst_guard = false;
+        } else if (arg == "--fixed-bridge-burst-max-anchor-gap" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_max_anchor_gap_s = std::stod(argv[++i]);
+        } else if (arg == "--fixed-bridge-burst-min-boundary-gap" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_min_boundary_gap_s = std::stod(argv[++i]);
+        } else if (arg == "--fixed-bridge-burst-max-residual" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_max_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--fixed-bridge-burst-max-segment-epochs" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_max_segment_epochs = std::stoi(argv[++i]);
         } else if (arg == "--max-baseline-m" && i + 1 < argc) {
             config.max_baseline_length_m = std::stod(argv[++i]);
         } else if (arg == "--base-ecef" && i + 3 < argc) {
@@ -640,6 +820,85 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.max_baseline_length_m <= 0.0) {
         argumentError("--max-baseline-m must be > 0", argv[0]);
+    }
+    if (config.max_position_jump_m < 0.0) {
+        argumentError("--max-pos-jump must be >= 0", argv[0]);
+    }
+    if (config.max_position_jump_min_m < 0.0) {
+        argumentError("--max-pos-jump-min must be >= 0", argv[0]);
+    }
+    if (config.max_position_jump_rate_mps < 0.0) {
+        argumentError("--max-pos-jump-rate must be >= 0", argv[0]);
+    }
+    if (config.max_float_spp_divergence_m < 0.0) {
+        argumentError("--max-float-spp-div must be >= 0", argv[0]);
+    }
+    if (config.max_float_prefit_residual_rms_m < 0.0) {
+        argumentError("--max-float-prefit-rms must be >= 0", argv[0]);
+    }
+    if (config.max_float_prefit_residual_max_m < 0.0) {
+        argumentError("--max-float-prefit-max must be >= 0", argv[0]);
+    }
+    if (config.max_float_prefit_residual_reset_streak < 1) {
+        argumentError("--max-float-prefit-reset-streak must be >= 1", argv[0]);
+    }
+    if (config.min_float_prefit_residual_trusted_jump_m < 0.0) {
+        argumentError("--min-float-prefit-trusted-jump must be >= 0", argv[0]);
+    }
+    if (config.max_update_nis_per_observation < 0.0) {
+        argumentError("--max-update-nis-per-obs must be >= 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_max_anchor_gap_s <= 0.0) {
+        argumentError("--nonfix-drift-max-anchor-gap must be > 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_max_anchor_speed_mps < 0.0) {
+        argumentError("--nonfix-drift-max-anchor-speed must be >= 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_max_residual_m <= 0.0) {
+        argumentError("--nonfix-drift-max-residual must be > 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_min_horizontal_residual_m < 0.0) {
+        argumentError("--nonfix-drift-min-horizontal-residual must be >= 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_min_segment_epochs < 1) {
+        argumentError("--nonfix-drift-min-segment-epochs must be >= 1", argv[0]);
+    }
+    if (config.nonfix_drift_guard_max_segment_epochs < 0) {
+        argumentError("--nonfix-drift-max-segment-epochs must be >= 0", argv[0]);
+    }
+    if (config.spp_height_step_guard_min_m <= 0.0) {
+        argumentError("--spp-height-step-min must be > 0", argv[0]);
+    }
+    if (config.spp_height_step_guard_max_rate_mps < 0.0) {
+        argumentError("--spp-height-step-rate must be >= 0", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_max_anchor_gap_s <= 0.0) {
+        argumentError("--float-bridge-tail-max-anchor-gap must be > 0", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_min_anchor_speed_mps < 0.0) {
+        argumentError("--float-bridge-tail-min-anchor-speed must be >= 0", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_max_anchor_speed_mps <
+        config.float_bridge_tail_guard_min_anchor_speed_mps) {
+        argumentError("--float-bridge-tail-max-anchor-speed must be >= min anchor speed", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_max_residual_m <= 0.0) {
+        argumentError("--float-bridge-tail-max-residual must be > 0", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_min_segment_epochs < 1) {
+        argumentError("--float-bridge-tail-min-segment-epochs must be >= 1", argv[0]);
+    }
+    if (config.fixed_bridge_burst_guard_max_anchor_gap_s <= 0.0) {
+        argumentError("--fixed-bridge-burst-max-anchor-gap must be > 0", argv[0]);
+    }
+    if (config.fixed_bridge_burst_guard_min_boundary_gap_s < 0.0) {
+        argumentError("--fixed-bridge-burst-min-boundary-gap must be >= 0", argv[0]);
+    }
+    if (config.fixed_bridge_burst_guard_max_residual_m <= 0.0) {
+        argumentError("--fixed-bridge-burst-max-residual must be > 0", argv[0]);
+    }
+    if (config.fixed_bridge_burst_guard_max_segment_epochs < 1) {
+        argumentError("--fixed-bridge-burst-max-segment-epochs must be >= 1", argv[0]);
     }
     if (config.skip_epochs < 0) {
         argumentError("--skip-epochs must be >= 0", argv[0]);
@@ -772,7 +1031,20 @@ int main(int argc, char* argv[]) {
         rtk_config.ar_policy = config.ar_policy;
         rtk_config.max_hold_divergence_m = config.max_hold_divergence_m;
         rtk_config.max_position_jump_m = config.max_position_jump_m;
+        rtk_config.max_position_jump_min_m = config.max_position_jump_min_m;
+        rtk_config.max_position_jump_rate_mps = config.max_position_jump_rate_mps;
+        rtk_config.max_float_spp_divergence_m = config.max_float_spp_divergence_m;
+        rtk_config.max_float_prefit_residual_rms_m =
+            config.max_float_prefit_residual_rms_m;
+        rtk_config.max_float_prefit_residual_max_m =
+            config.max_float_prefit_residual_max_m;
+        rtk_config.max_float_prefit_residual_reset_streak =
+            config.max_float_prefit_residual_reset_streak;
+        rtk_config.min_float_prefit_residual_trusted_jump_m =
+            config.min_float_prefit_residual_trusted_jump_m;
+        rtk_config.max_update_nis_per_observation = config.max_update_nis_per_observation;
         rtk_config.max_consecutive_float_for_reset = config.max_consecutive_float_for_reset;
+        rtk_config.max_consecutive_nonfix_for_reset = config.max_consecutive_nonfix_for_reset;
         rtk_config.max_postfix_residual_rms = config.max_postfix_residual_rms;
         rtk_config.enable_wide_lane_ar = config.enable_wide_lane_ar;
         rtk_config.wide_lane_acceptance_threshold = config.wide_lane_acceptance_threshold;
@@ -903,6 +1175,16 @@ int main(int argc, char* argv[]) {
         int exact_base_epochs = 0;
         int interpolated_base_epochs = 0;
         int skipped_rover_epochs = 0;
+        int nonfix_drift_guard_inspected_segments = 0;
+        int nonfix_drift_guard_rejected_segments = 0;
+        int nonfix_drift_guard_rejected_epochs = 0;
+        int spp_height_step_guard_rejected_epochs = 0;
+        int float_bridge_tail_guard_inspected_segments = 0;
+        int float_bridge_tail_guard_rejected_segments = 0;
+        int float_bridge_tail_guard_rejected_epochs = 0;
+        int fixed_bridge_burst_guard_inspected_segments = 0;
+        int fixed_bridge_burst_guard_rejected_segments = 0;
+        int fixed_bridge_burst_guard_rejected_epochs = 0;
         libgnss::PositionSolution last_fixed_output;
         bool have_last_fixed_output = false;
 
@@ -1062,6 +1344,77 @@ int main(int argc, char* argv[]) {
             processed_rover_epochs++;
         }
 
+        if (config.enable_nonfix_drift_guard &&
+            rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
+            !solution.isEmpty()) {
+            libgnss::rtk_validation::NonFixedDriftGuardConfig guard_config;
+            guard_config.max_anchor_gap_s = config.nonfix_drift_guard_max_anchor_gap_s;
+            guard_config.max_anchor_speed_mps = config.nonfix_drift_guard_max_anchor_speed_mps;
+            guard_config.max_residual_m = config.nonfix_drift_guard_max_residual_m;
+            guard_config.min_horizontal_residual_m =
+                config.nonfix_drift_guard_min_horizontal_residual_m;
+            guard_config.min_segment_epochs = config.nonfix_drift_guard_min_segment_epochs;
+            guard_config.max_segment_epochs = config.nonfix_drift_guard_max_segment_epochs;
+            auto guard_result = libgnss::rtk_validation::filterNonFixedStationaryDrift(
+                solution.solutions,
+                guard_config);
+            nonfix_drift_guard_inspected_segments = guard_result.inspected_segments;
+            nonfix_drift_guard_rejected_segments = guard_result.rejected_segments;
+            nonfix_drift_guard_rejected_epochs = guard_result.rejected_epochs;
+            solution.solutions = std::move(guard_result.solutions);
+        }
+
+        if (config.enable_spp_height_step_guard &&
+            rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
+            !solution.isEmpty()) {
+            libgnss::rtk_validation::SppHeightStepGuardConfig guard_config;
+            guard_config.min_step_m = config.spp_height_step_guard_min_m;
+            guard_config.max_rate_mps = config.spp_height_step_guard_max_rate_mps;
+            auto guard_result = libgnss::rtk_validation::filterSppHeightSteps(
+                solution.solutions,
+                guard_config);
+            spp_height_step_guard_rejected_epochs = guard_result.rejected_epochs;
+            solution.solutions = std::move(guard_result.solutions);
+        }
+
+        if (config.enable_float_bridge_tail_guard &&
+            rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
+            !solution.isEmpty()) {
+            libgnss::rtk_validation::FloatBridgeTailGuardConfig guard_config;
+            guard_config.max_anchor_gap_s = config.float_bridge_tail_guard_max_anchor_gap_s;
+            guard_config.min_anchor_speed_mps =
+                config.float_bridge_tail_guard_min_anchor_speed_mps;
+            guard_config.max_anchor_speed_mps =
+                config.float_bridge_tail_guard_max_anchor_speed_mps;
+            guard_config.max_residual_m = config.float_bridge_tail_guard_max_residual_m;
+            guard_config.min_segment_epochs =
+                config.float_bridge_tail_guard_min_segment_epochs;
+            auto guard_result = libgnss::rtk_validation::filterFloatBridgeTail(
+                solution.solutions,
+                guard_config);
+            float_bridge_tail_guard_inspected_segments = guard_result.inspected_segments;
+            float_bridge_tail_guard_rejected_segments = guard_result.rejected_segments;
+            float_bridge_tail_guard_rejected_epochs = guard_result.rejected_epochs;
+            solution.solutions = std::move(guard_result.solutions);
+        }
+
+        if (config.enable_fixed_bridge_burst_guard &&
+            rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
+            !solution.isEmpty()) {
+            libgnss::rtk_validation::FixedBridgeBurstGuardConfig guard_config;
+            guard_config.max_anchor_gap_s = config.fixed_bridge_burst_guard_max_anchor_gap_s;
+            guard_config.min_boundary_gap_s = config.fixed_bridge_burst_guard_min_boundary_gap_s;
+            guard_config.max_residual_m = config.fixed_bridge_burst_guard_max_residual_m;
+            guard_config.max_segment_epochs = config.fixed_bridge_burst_guard_max_segment_epochs;
+            auto guard_result = libgnss::rtk_validation::filterFixedBridgeBursts(
+                solution.solutions,
+                guard_config);
+            fixed_bridge_burst_guard_inspected_segments = guard_result.inspected_segments;
+            fixed_bridge_burst_guard_rejected_segments = guard_result.rejected_segments;
+            fixed_bridge_burst_guard_rejected_epochs = guard_result.rejected_epochs;
+            solution.solutions = std::move(guard_result.solutions);
+        }
+
         if (config.enable_kinematic_post_filter &&
             rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
             !solution.isEmpty()) {
@@ -1155,6 +1508,30 @@ int main(int argc, char* argv[]) {
         std::cout << "  exact base epochs: " << exact_base_epochs << std::endl;
         std::cout << "  interpolated base epochs: " << interpolated_base_epochs << std::endl;
         std::cout << "  skipped rover epochs: " << skipped_rover_epochs << std::endl;
+        if (rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC) {
+            std::cout << "  non-FIX drift guard: "
+                      << (config.enable_nonfix_drift_guard ? "enabled" : "disabled")
+                      << " inspected_segments=" << nonfix_drift_guard_inspected_segments
+                      << " rejected_segments=" << nonfix_drift_guard_rejected_segments
+                      << " rejected_epochs=" << nonfix_drift_guard_rejected_epochs
+                      << std::endl;
+            std::cout << "  SPP height-step guard: "
+                      << (config.enable_spp_height_step_guard ? "enabled" : "disabled")
+                      << " rejected_epochs=" << spp_height_step_guard_rejected_epochs
+                      << std::endl;
+            std::cout << "  FLOAT bridge-tail guard: "
+                      << (config.enable_float_bridge_tail_guard ? "enabled" : "disabled")
+                      << " inspected_segments=" << float_bridge_tail_guard_inspected_segments
+                      << " rejected_segments=" << float_bridge_tail_guard_rejected_segments
+                      << " rejected_epochs=" << float_bridge_tail_guard_rejected_epochs
+                      << std::endl;
+            std::cout << "  fixed bridge-burst guard: "
+                      << (config.enable_fixed_bridge_burst_guard ? "enabled" : "disabled")
+                      << " inspected_segments=" << fixed_bridge_burst_guard_inspected_segments
+                      << " rejected_segments=" << fixed_bridge_burst_guard_rejected_segments
+                      << " rejected_epochs=" << fixed_bridge_burst_guard_rejected_epochs
+                      << std::endl;
+        }
         if (rtk_config.position_mode == libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
             rover_header.approximate_position.norm() > 0.0 && mean_count > 0) {
             std::cout << "  header vs mean diff: "

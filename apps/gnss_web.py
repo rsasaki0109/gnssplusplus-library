@@ -818,7 +818,9 @@ def render_html() -> str:
           <tr>
             <th>Path</th>
             <th>Matched</th>
+            <th>Positioning</th>
             <th>Fix rate</th>
+            <th>3D50/ref</th>
             <th>Median H</th>
             <th>P95 H</th>
             <th>Receiver</th>
@@ -1469,7 +1471,9 @@ def render_html() -> str:
         tr.innerHTML = `
           <td>${row._path || "n/a"}</td>
           <td>${row.matched_epochs ?? "n/a"}</td>
+          <td>${formatMaybeNumber(row.positioning_rate_pct, 2, "%")}</td>
           <td>${formatMaybeNumber(row.fix_rate_pct, 2, "%")}</td>
+          <td>${formatMaybeNumber(row.ppc_score_3d_50cm_ref_pct, 2, "%")}</td>
           <td>${formatMaybeNumber(row.median_h_m, 3, " m")}</td>
           <td>${formatMaybeNumber(row.p95_h_m, 2, " m")}</td>
           <td>${commercialReceiverSummary(row, "ppc")}</td>

@@ -15,7 +15,11 @@ Main sign-off entrypoints:
 - `gnss live-signoff`
 - `gnss moving-base-signoff`
 - `gnss ppc-rtk-signoff`
+- `gnss ppc-coverage-matrix`
 - `gnss odaiba-benchmark --require-*`
+- `gnss public-rtk-benchmarks`
+- `gnss smartloc-adapter`
+- `gnss smartloc-signoff`
 
 Example:
 
@@ -61,7 +65,93 @@ For the `ppc` profile with `--malib-pos` or `--malib-bin`, the command also emit
 `gnss scorpion-moving-base-signoff`, and `gnss ppc-rtk-signoff`
 also accept `--config-toml`, so you can pin long threshold sets and artifact paths in a file instead of repeating them on the command line.
 
-For PPC-Dataset RTK runs, `gnss ppc-demo` and `gnss ppc-rtk-signoff` also accept `--commercial-pos`. This is the public-data path for comparing libgnss++ against a commercial receiver solution when the dataset has an independent `reference.csv`; the receiver summary is stored under `commercial_receiver`, and `delta_vs_commercial_receiver` reports libgnss++ minus receiver deltas for fix rate and horizontal/up error metrics.
+For public benchmark rows that can be expressed as rover/base/nav plus an
+independent `reference.csv`, `gnss ppc-demo` and `gnss ppc-rtk-signoff` also
+accept `--commercial-pos` for an existing receiver solution or
+`--commercial-rover` for a commercial receiver rover RINEX solved through
+libgnss++ against the same base/nav/reference. The receiver summary is stored
+under `commercial_receiver`, and `delta_vs_commercial_receiver` reports
+libgnss++ minus receiver deltas for positioning rate, fix rate, PPC official
+distance-ratio score, 3D<=50cm reference-epoch score, and horizontal/up error metrics.
+Run `gnss public-rtk-benchmarks` before treating any single public dataset as
+representative coverage; UrbanNav Tokyo is a Tier-1 smoke/regression row, not
+the final commercial RTK receiver proof.
+
+PPC-Dataset is the primary public moving-RTK sign-off. It carries survey-grade
+receiver observations, reference-station observations, broadcast nav, and
+reference trajectory truth. `gnss ppc-demo` records the rover/base receiver and
+antenna provenance under `receiver_observation_provenance`; proprietary
+receiver-engine solutions are intentionally not the benchmark target. It also
+reports `positioning_rate_pct` separately from `fix_rate_pct`, so no-solution
+gaps cannot be hidden by a high fixed-solution ratio over only positioned
+epochs. Use `--no-arfilter --no-kinematic-post-filter` when validating the RTK
+coverage profile; that keeps valid SPP/float fallback epochs and records
+`rtk_output_profile: coverage` in the summary JSON. The default low-speed
+non-FIX drift guard remains active in that profile; it rejects bounded
+FLOAT/SPP segments whose surrounding FIX anchors are nearly stationary but whose
+fallback positions drift more than 30 m from the anchor bridge. Use
+`--no-nonfix-drift-guard` only when reproducing the unguarded fallback stream.
+The default SPP height-step guard then removes SPP-only vertical spikes above
+the `--spp-height-step-min` / `--spp-height-step-rate` envelope; use
+`--no-spp-height-step-guard` only when reproducing the raw SPP fallback stream.
+The FLOAT bridge-tail guard is also default-on after six-run PPC sign-off: it
+rejects FLOAT epochs in slow bounded FIX-to-FIX segments when their position
+diverges from the anchor bridge. Its speed gate uses horizontal FIX-anchor
+speed so vertical anchor noise does not create false motion; use
+`--no-float-bridge-tail-guard` only when reproducing the pre-bridge-tail
+coverage stream.
+For isolated false-fix spikes, `--fixed-bridge-burst-guard` is available as a
+default-off PPC tuning gate. It inspects short FIX segments bounded by nearby
+FIX anchors and rejects only the burst epochs whose bridge residual exceeds
+`--fixed-bridge-burst-max-residual` (20 m by default). On Tokyo run1 ratio 2.4
+coverage it rejects 12 epochs, lowering max H by 4.33 m and P95H by 0.12 m
+while costing 0.10 pp Positioning and 0.03 pp PPC official score, so keep it
+explicit when evaluating precision-tail tradeoffs.
+Use `--nonfix-drift-max-residual 4 --nonfix-drift-min-horizontal-residual 6`
+only for an explicit P95-cleanup profile: combined with the fixed-burst guard it
+rejects 226 non-FIX drift epochs on Tokyo run1, improves P95H from 34.53 m to
+30.61 m, and keeps PPC official nearly flat, but costs 1.47 pp Positioning rate.
+`ppc-coverage-matrix` accepts these non-FIX, SPP height-step, FLOAT bridge-tail,
+and fixed-burst tuning flags so the same profile can be swept across all six PPC
+runs. The full six-run sweep keeps a +15.7 pp average Positioning lead over
+RTKLIB and a +28.1 pp PPC official lead, but costs 1.33 pp average Positioning
+versus the coverage profile and only improves P95H on 3/6 runs; the horizontal
+residual floor reduces Nagoya run3 over-pruning from 13.90 pp to 3.48 pp
+Positioning cost. Treat the profile as a tail-diagnostic lens, not as the
+Positioning-rate sign-off.
+Use `scripts/analyze_ppc_coverage_quality.py` with the PPC solution, RTKLIB
+solution, and `reference.csv` when a coverage run improves Positioning rate but
+regresses P95 horizontal error; the report separates FIXED/FLOAT/SPP quality and
+bad continuous drift segments. The segment CSV also records adjacent FIX-anchor
+gap/speed, solution path length, and bridge residuals so FLOAT-tail guards can
+be designed from bounded segment evidence instead of status-only ratios.
+Add `--official-segments-csv` when tuning PPC official score directly; it writes
+one row per reference distance segment with gnssplusplus and RTKLIB score state,
+3D error, status, and score-delta distance.
+Use `--iono auto|off|iflc|est` on `ppc-demo`, `ppc-rtk-signoff`, or
+`ppc-coverage-matrix` when sweeping RTK ionosphere handling; the PPC summary
+records the requested mode as `rtk_iono`.
+Use `--ratio <value>` on the same commands when sweeping ambiguity-ratio
+thresholds; the summary records the requested value as `rtk_ratio_threshold`.
+Use `--max-hold-div`, `--max-pos-jump`, `--max-pos-jump-min`, and
+`--max-pos-jump-rate` for explicit fixed-solution validation sweeps; summaries
+record the jump settings as `rtk_max_position_jump_m`,
+`rtk_max_position_jump_min_m`, and `rtk_max_position_jump_rate_mps`.
+
+`gnss smartloc-adapter` widens the public matrix beyond UrbanNav by exporting
+smartLoc `NAV-POSLLH.csv` into a `reference.csv` plus a normalized u-blox
+receiver CSV, and by exporting `RXM-RAWX.csv` into a normalized raw observation
+CSV plus minimal RINEX 3.04 rover observations. `gnss smartloc-signoff` wraps
+that adapter and gates the receiver-fix metrics against the smartLoc ground
+truth. When local inputs are omitted, it can download the public scenario zip
+through `--input-url` into `--download-cache-dir` and records that provenance in
+the summary JSON. That closes the public receiver-fix path, but not the whole
+solver sign-off: smartLoc solver runs still need compatible broadcast
+navigation and base/reference inputs. The summary includes `solver_preflight`
+so CI can distinguish generated rover RINEX, bundled precise-orbit artifacts,
+missing broadcast nav, missing base observations, and missing precise clocks.
+Add `--require-solver-inputs-available` to fail the sign-off when the RTK solver
+input set is expected to be complete.
 
 If you already have a MALIB `.pos` file, you can gate the delta directly:
 
