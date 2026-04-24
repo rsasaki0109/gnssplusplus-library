@@ -327,10 +327,11 @@ progression:
 | 8 | stage7 hybrid | ratio4 (stricter AR validation) | `baseline FLOAT AND candidate_obs ≥ 14` | **66.057%** | +7.159 pp |
 | 9 | stage8 hybrid | ratio5 (even stricter AR validation) | `FIXED AND baseline_ratio ≤ 2.6` | **66.239%** | +7.341 pp |
 | 10 | stage9 hybrid | ratio3 (moderate AR validation) | `FIXED AND baseline_ratio ≤ 3.4` | **66.410%** | +7.512 pp |
+| 11 | stage10 hybrid | iono=iflc (iono-free linear combination) | `baseline NO_SOLUTION` | **66.474%** | +7.576 pp |
 
-Ten selector stages add **+7.512 pp / +3 480.0 m** versus reset10, with
+Eleven selector stages add **+7.576 pp / +3 509.8 m** versus reset10, with
 every stage strictly non-negative per-run. The gap to PPC2024 second place
-(77.6%) narrows to **11.19 pp**. Marginal gain per stage declines from
+(77.6%) narrows to **11.13 pp**. Marginal gain per stage declines from
 +4.36 pp (stage 1) to +0.11 pp (stage 6), with an IMU-bridge stage 7
 recovering another +0.54 pp by filling no-solution dropouts and
 ratio4/ratio5 stages 8 and 9 (`--ratio 4.0` and `--ratio 5.0`, stricter

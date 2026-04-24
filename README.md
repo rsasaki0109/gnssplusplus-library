@@ -306,21 +306,24 @@ weighted score moves **58.90% -> 63.26%** (**+2,019.8 m**, **+4.36 pp**) vs
 reset10, all six runs gain, and both Positioning (+0.43 pp) and Fix (+6.59 pp)
 improve. See `docs/benchmarks.md` for the ranked rule table and scorecards.
 
-Chaining ten dual-profile selectors back-to-back (five NIS-threshold
+Chaining eleven dual-profile selectors back-to-back (five NIS-threshold
 stages NIS5 → NIS3 → NIS10 → NIS20 → NIS50, then a jump0.5 dual-selector
 stage, then an IMU-bridge stage filling no-solution dropouts, then three
-ratio-tightening stages ratio4/ratio5/ratio3) extends this further to
-**58.90% -> 66.41%** (**+3,480.0 m**, **+7.51 pp**). Each later stage
+ratio-tightening stages ratio4/ratio5/ratio3, then an iono-free linear
+combination stage) extends this further to **58.90% -> 66.47%**
+(**+3,509.8 m**, **+7.58 pp**). Each later stage
 applies a single-rule selector on the previous hybrid using a different
 candidate family, capturing gain segments the earlier stages missed.
 The marginal gain per stage declines from +4.36 pp (stage 1) to +0.11 pp
 (stage 6), then jumps back up to +0.54 pp (IMU bridge stage 7, filling
 no-solution gaps), +0.41 pp (ratio4 stage 8, replacing stage-7 FLOAT
 with higher-confidence FIX), +0.18 pp (ratio5 stage 9, catching
-remaining weak-FIX segments), and +0.17 pp (ratio3 stage 10, moderate
-AR validation picking up remaining baseline-ratio<=3.4 segments). Gap
-to the PPC2024 public second-place reference (77.6%) narrows from
-18.70 pp at reset10 to 11.19 pp after stage 10. See
+remaining weak-FIX segments), +0.17 pp (ratio3 stage 10, moderate
+AR validation picking up remaining baseline-ratio<=3.4 segments), and
++0.06 pp (iono=iflc stage 11, filling residual no-solution gaps with an
+iono-free linear combination candidate). Gap to the PPC2024 public
+second-place reference (77.6%) narrows from 18.70 pp at reset10 to
+11.13 pp after stage 11. See
 `docs/benchmarks.md` for the per-stage rules and the progression
 scorecard.
 
