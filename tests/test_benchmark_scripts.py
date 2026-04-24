@@ -14,6 +14,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import numpy as np
+
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 APPS_DIR = ROOT_DIR / "apps"
@@ -28,8 +30,14 @@ import gnss_odaiba_benchmark as benchmark  # noqa: E402
 import gnss_clas_ppp as clas_ppp  # noqa: E402
 import gnss_live_signoff as live_signoff  # noqa: E402
 import gnss_moving_base_signoff as moving_base_signoff  # noqa: E402
+import gnss_ppc_commercial as ppc_commercial  # noqa: E402
+import gnss_ppc_coverage_matrix as ppc_coverage_matrix  # noqa: E402
 import gnss_ppc_demo as ppc_demo  # noqa: E402
+import gnss_ppc_metrics as ppc_metrics  # noqa: E402
 import gnss_ppc_rtk_signoff as ppc_rtk_signoff  # noqa: E402
+import gnss_public_rtk_benchmarks as public_rtk_benchmarks  # noqa: E402
+import gnss_smartloc_adapter as smartloc_adapter  # noqa: E402
+import gnss_smartloc_signoff as smartloc_signoff  # noqa: E402
 import gnss_ppp_kinematic_signoff as ppp_kinematic_signoff  # noqa: E402
 import gnss_ppp_static_signoff as ppp_static_signoff  # noqa: E402
 import gnss_short_baseline_signoff as short_signoff  # noqa: E402
@@ -38,6 +46,23 @@ import generate_architecture_diagram as architecture_diagram  # noqa: E402
 import generate_feature_overview_card as feature_overview  # noqa: E402
 import generate_odaiba_scorecard as scorecard  # noqa: E402
 import generate_odaiba_social_card as social_card  # noqa: E402
+import analyze_ppc_coverage_quality as ppc_coverage_quality  # noqa: E402
+import analyze_ppc_dual_profile_selector_matrix as ppc_dual_selector_matrix  # noqa: E402
+import analyze_ppc_imu_bridge_targets as ppc_imu_bridge_targets  # noqa: E402
+import analyze_ppc_imu_coverage as ppc_imu_coverage  # noqa: E402
+import analyze_ppc_profile_segment_delta as ppc_profile_segment_delta  # noqa: E402
+import analyze_ppc_residual_reset_sweep as ppc_residual_reset_sweep  # noqa: E402
+import analyze_ppc_segment_selector_leave_one_run_out as ppc_segment_selector_loo  # noqa: E402
+import analyze_ppc_segment_selector_sweep as ppc_segment_selector_sweep  # noqa: E402
+import apply_ppc_dual_profile_selector as ppc_dual_profile_selector  # noqa: E402
+import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
+import generate_ppc_selector_validation_scorecard as ppc_selector_scorecard  # noqa: E402
+import generate_ppc_tail_cleanup_scorecard as ppc_tail_cleanup_scorecard  # noqa: E402
+import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
+import run_ppc_cv_dropout_bridge_matrix as ppc_cv_bridge_matrix  # noqa: E402
+import run_ppc_dual_profile_selector_matrix as ppc_dual_selector_driver  # noqa: E402
+import run_ppc_imu_dropout_bridge_matrix as ppc_imu_bridge_matrix  # noqa: E402
+import update_ppc_coverage_readme as ppc_coverage_readme  # noqa: E402
 import detect_ci_scope as ci_scope  # noqa: E402
 import run_optional_ppp_products_signoff as ci_ppp_products_signoff  # noqa: E402
 import run_optional_rtk_signoffs as ci_rtk_signoffs  # noqa: E402
@@ -52,6 +77,46 @@ class ScorecardHelpersTest(unittest.TestCase):
     def test_improvement_text_handles_zero_baseline(self) -> None:
         self.assertEqual(scorecard.improvement_text(1.0, 0.0), "n/a")
         self.assertEqual(scorecard.improvement_text(1.0, 4.0), "75%")
+
+    def test_ppc_scorecard_loads_coverage_matrix_summary(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_scorecard_summary_") as temp_dir:
+            summary_json = Path(temp_dir) / "summary.json"
+            summary_json.write_text(
+                json.dumps(
+                    {
+                        "runs": [
+                            {
+                                "key": "tokyo_run1",
+                                "metrics": {
+                                    "positioning_rate_pct": 86.2,
+                                    "fix_rate_pct": 48.6,
+                                    "ppc_official_score_pct": 42.0,
+                                },
+                                "rtklib": {
+                                    "positioning_rate_pct": 66.3,
+                                    "fix_rate_pct": 30.5,
+                                    "ppc_official_score_pct": 21.0,
+                                },
+                                "delta_vs_rtklib": {
+                                    "positioning_rate_pct": 19.9,
+                                    "ppc_official_score_pct": 21.0,
+                                    "ppc_score_3d_50cm_ref_pct": 35.6,
+                                    "p95_h_m": -6.97,
+                                },
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            runs = ppc_rtk_scorecard.runs_from_summary(summary_json)
+
+            self.assertEqual(len(runs), 1)
+            self.assertEqual(runs[0].label, "Tokyo r1")
+            self.assertEqual(runs[0].positioning_delta_pct, 19.9)
+            self.assertEqual(runs[0].lib_fix_pct - runs[0].rtklib_fix_pct, 18.1)
+            self.assertEqual(runs[0].official_score_delta_pct, 21.0)
 
 
 class ClasCompactHelpersTest(unittest.TestCase):
@@ -152,6 +217,11 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             args = argparse.Namespace(
                 max_epochs=120,
                 match_tolerance_s=0.25,
+                city="tokyo",
+                rover=None,
+                base=None,
+                nav=None,
+                reference_csv=None,
                 use_existing_solution=True,
                 solver_wall_time_s=1.5,
                 rtklib_bin=temp_root / "rnx2rtkp",
@@ -160,15 +230,37 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 use_existing_rtklib_solution=True,
                 rtklib_solver_wall_time_s=0.8,
                 commercial_pos=temp_root / "commercial.csv",
+                commercial_rover=None,
+                commercial_base=None,
+                commercial_nav=None,
+                commercial_out=None,
+                use_existing_commercial_solution=False,
                 commercial_format="csv",
                 commercial_label="survey_receiver",
                 commercial_matched_csv=temp_root / "commercial_matches.csv",
                 commercial_solver_wall_time_s=0.9,
+                commercial_preset=None,
+                commercial_arfilter=None,
+                commercial_arfilter_margin=None,
+                commercial_min_hold_count=None,
+                commercial_hold_ratio_threshold=None,
                 preset=None,
+                iono=None,
+                ratio=None,
+                max_hold_div=None,
+                max_pos_jump=None,
+                max_pos_jump_min=None,
+                max_pos_jump_rate=None,
+                max_consec_float_reset=None,
+                max_consec_nonfix_reset=None,
+                max_postfix_rms=None,
+                enable_wide_lane_ar=False,
+                wide_lane_threshold=None,
                 arfilter=None,
                 arfilter_margin=None,
                 min_hold_count=None,
                 hold_ratio_threshold=None,
+                no_kinematic_post_filter=True,
             )
             run_dir = temp_root / "tokyo" / "run1"
             out = temp_root / "solution.pos"
@@ -179,6 +271,34 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             }
             tuning = {
                 "preset": "low-cost",
+                "iono": "iflc",
+                "ratio": 2.4,
+                "max_hold_div": 5.0,
+                "max_pos_jump": 20.0,
+                "max_pos_jump_min": 20.0,
+                "max_pos_jump_rate": 25.0,
+                "max_float_spp_div": 30.0,
+                "max_float_prefit_rms": 6.0,
+                "max_float_prefit_max": 30.0,
+                "max_float_prefit_reset_streak": 5,
+                "min_float_prefit_trusted_jump": 8.0,
+                "max_update_nis_per_obs": 12.0,
+                "max_consec_float_reset": 10,
+                "max_consec_nonfix_reset": 10,
+                "max_postfix_rms": 0.20,
+                "enable_wide_lane_ar": True,
+                "wide_lane_threshold": 0.10,
+                "nonfix_drift_max_anchor_gap": 90.0,
+                "nonfix_drift_max_anchor_speed": 0.75,
+                "nonfix_drift_max_residual": 4.0,
+                "nonfix_drift_min_horizontal_residual": 6.0,
+                "nonfix_drift_min_segment_epochs": 20,
+                "nonfix_drift_max_segment_epochs": 180,
+                "fixed_bridge_burst_guard": True,
+                "fixed_bridge_burst_max_anchor_gap": 30.0,
+                "fixed_bridge_burst_min_boundary_gap": 1.0,
+                "fixed_bridge_burst_max_residual": 20.0,
+                "fixed_bridge_burst_max_segment_epochs": 12,
                 "arfilter": True,
                 "arfilter_margin": 0.35,
                 "min_hold_count": 8,
@@ -203,9 +323,132 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("--require-lib-fix-rate-vs-rtklib-min-delta", command)
             self.assertIn("--preset", command)
             self.assertIn("low-cost", command)
+            self.assertIn("--iono", command)
+            self.assertIn("iflc", command)
+            self.assertIn("--ratio", command)
+            self.assertIn("2.4", command)
+            self.assertIn("--max-hold-div", command)
+            self.assertIn("5.0", command)
+            self.assertIn("--max-pos-jump", command)
+            self.assertIn("20.0", command)
+            self.assertIn("--max-pos-jump-min", command)
+            self.assertIn("20.0", command)
+            self.assertIn("--max-pos-jump-rate", command)
+            self.assertIn("25.0", command)
+            self.assertIn("--max-float-spp-div", command)
+            self.assertIn("30.0", command)
+            self.assertIn("--max-float-prefit-rms", command)
+            self.assertIn("6.0", command)
+            self.assertIn("--max-float-prefit-max", command)
+            self.assertIn("30.0", command)
+            self.assertIn("--max-float-prefit-reset-streak", command)
+            self.assertIn("5", command)
+            self.assertIn("--min-float-prefit-trusted-jump", command)
+            self.assertIn("8.0", command)
+            self.assertIn("--max-update-nis-per-obs", command)
+            self.assertIn("12.0", command)
+            self.assertIn("--max-consec-float-reset", command)
+            self.assertIn("10", command)
+            self.assertIn("--max-consec-nonfix-reset", command)
+            self.assertIn("--max-postfix-rms", command)
+            self.assertIn("0.2", command)
+            self.assertIn("--enable-wide-lane-ar", command)
+            self.assertIn("--wide-lane-threshold", command)
+            self.assertIn("0.1", command)
+            self.assertIn("--nonfix-drift-max-anchor-gap", command)
+            self.assertIn("90.0", command)
+            self.assertIn("--nonfix-drift-max-anchor-speed", command)
+            self.assertIn("0.75", command)
+            self.assertIn("--nonfix-drift-max-residual", command)
+            self.assertIn("4.0", command)
+            self.assertIn("--nonfix-drift-min-horizontal-residual", command)
+            self.assertIn("6.0", command)
+            self.assertIn("--nonfix-drift-min-segment-epochs", command)
+            self.assertIn("--nonfix-drift-max-segment-epochs", command)
+            self.assertIn("180", command)
+            self.assertIn("--fixed-bridge-burst-guard", command)
+            self.assertIn("--fixed-bridge-burst-max-anchor-gap", command)
+            self.assertIn("30.0", command)
+            self.assertIn("--fixed-bridge-burst-max-residual", command)
+            self.assertIn("--fixed-bridge-burst-max-segment-epochs", command)
+            self.assertIn("12", command)
             self.assertIn("--arfilter", command)
             self.assertIn("--min-hold-count", command)
             self.assertIn("8", command)
+            self.assertIn("--no-kinematic-post-filter", command)
+
+    def test_build_ppc_demo_command_passes_commercial_rover_flags(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_rtk_commercial_rover_") as temp_dir:
+            temp_root = Path(temp_dir)
+            args = argparse.Namespace(
+                max_epochs=120,
+                match_tolerance_s=0.25,
+                city="tokyo",
+                rover=temp_root / "rover_ublox.obs",
+                base=temp_root / "base_trimble.obs",
+                nav=temp_root / "base.nav",
+                reference_csv=temp_root / "reference.csv",
+                use_existing_solution=True,
+                solver_wall_time_s=None,
+                rtklib_bin=None,
+                rtklib_config=temp_root / "rtklib.conf",
+                rtklib_pos=None,
+                use_existing_rtklib_solution=False,
+                rtklib_solver_wall_time_s=None,
+                commercial_pos=None,
+                commercial_rover=temp_root / "rover_trimble.obs",
+                commercial_base=temp_root / "base_trimble.obs",
+                commercial_nav=temp_root / "base.nav",
+                commercial_out=temp_root / "commercial.pos",
+                use_existing_commercial_solution=True,
+                commercial_format="auto",
+                commercial_label="trimble_net_r9",
+                commercial_matched_csv=temp_root / "commercial_matches.csv",
+                commercial_solver_wall_time_s=1.2,
+                commercial_preset="survey",
+                commercial_arfilter=False,
+                commercial_arfilter_margin=0.2,
+                commercial_min_hold_count=4,
+                commercial_hold_ratio_threshold=2.0,
+                preset=None,
+                iono=None,
+                ratio=None,
+                max_hold_div=None,
+                max_pos_jump=None,
+                max_pos_jump_min=None,
+                max_pos_jump_rate=None,
+                arfilter=None,
+                arfilter_margin=None,
+                min_hold_count=None,
+                hold_ratio_threshold=None,
+            )
+            command = ppc_rtk_signoff.build_ppc_demo_command(
+                args,
+                temp_root / "tokyo" / "run1",
+                temp_root / "solution.pos",
+                temp_root / "summary.json",
+                {"require_fix_rate_min": 95.0},
+                {"preset": "low-cost"},
+            )
+
+            self.assertIn("--commercial-rover", command)
+            self.assertIn(str(args.commercial_rover), command)
+            self.assertIn("--rover", command)
+            self.assertIn(str(args.rover), command)
+            self.assertIn("--reference-csv", command)
+            self.assertIn(str(args.reference_csv), command)
+            self.assertIn("--commercial-base", command)
+            self.assertIn(str(args.commercial_base), command)
+            self.assertIn("--commercial-nav", command)
+            self.assertIn(str(args.commercial_nav), command)
+            self.assertIn("--commercial-out", command)
+            self.assertIn(str(args.commercial_out), command)
+            self.assertIn("--use-existing-commercial-solution", command)
+            self.assertIn("--commercial-preset", command)
+            self.assertIn("survey", command)
+            self.assertIn("--no-commercial-arfilter", command)
+            self.assertIn("--commercial-min-hold-count", command)
+            self.assertIn("4", command)
 
     def test_selected_tuning_uses_city_specific_defaults(self) -> None:
         args = argparse.Namespace(
@@ -221,6 +464,1953 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
         self.assertEqual(tokyo["arfilter"], True)
         self.assertEqual(nagoya["preset"], "low-cost")
         self.assertEqual(nagoya["arfilter"], False)
+
+
+class PPCCoverageMatrixTest(unittest.TestCase):
+    def test_validate_inputs_rejects_invalid_epoch_limit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_coverage_validate_") as temp_dir:
+            dataset_root = Path(temp_dir) / "PPC-Dataset"
+            dataset_root.mkdir()
+            args = argparse.Namespace(
+                dataset_root=dataset_root,
+                max_epochs=-2,
+                rtklib_root=None,
+                rtklib_bin=None,
+                rtklib_config=ROOT_DIR / "scripts" / "rtklib_odaiba.conf",
+            )
+
+            with self.assertRaises(SystemExit):
+                ppc_coverage_matrix.validate_inputs(args)
+
+    def test_build_ppc_demo_command_uses_coverage_profile_and_rtklib_root(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_coverage_matrix_") as temp_dir:
+            temp_root = Path(temp_dir)
+            args = argparse.Namespace(
+                dataset_root=temp_root / "PPC-Dataset",
+                output_dir=temp_root / "out",
+                max_epochs=-1,
+                match_tolerance_s=0.25,
+                preset="low-cost",
+                iono="iflc",
+                ratio=2.4,
+                max_hold_div=5.0,
+                max_pos_jump=20.0,
+                max_pos_jump_min=20.0,
+                max_pos_jump_rate=25.0,
+                max_float_spp_div=30.0,
+                max_float_prefit_rms=6.0,
+                max_float_prefit_max=30.0,
+                max_float_prefit_reset_streak=5,
+                min_float_prefit_trusted_jump=8.0,
+                max_update_nis_per_obs=12.0,
+                max_consec_float_reset=10,
+                max_consec_nonfix_reset=10,
+                max_postfix_rms=0.20,
+                enable_wide_lane_ar=True,
+                wide_lane_threshold=0.10,
+                fixed_bridge_burst_guard=True,
+                fixed_bridge_burst_max_anchor_gap=30.0,
+                fixed_bridge_burst_min_boundary_gap=1.0,
+                fixed_bridge_burst_max_residual=20.0,
+                fixed_bridge_burst_max_segment_epochs=12,
+                rtklib_root=temp_root / "benchmark",
+                rtklib_bin=None,
+                rtklib_config=ROOT_DIR / "scripts" / "rtklib_odaiba.conf",
+                use_existing_solutions=False,
+                no_nonfix_drift_guard=False,
+                nonfix_drift_max_anchor_gap=90.0,
+                nonfix_drift_max_anchor_speed=0.75,
+                nonfix_drift_max_residual=4.0,
+                nonfix_drift_min_horizontal_residual=6.0,
+                nonfix_drift_min_segment_epochs=20,
+                nonfix_drift_max_segment_epochs=180,
+                no_spp_height_step_guard=False,
+                spp_height_step_min=25.0,
+                spp_height_step_rate=3.0,
+                no_float_bridge_tail_guard=False,
+                float_bridge_tail_max_anchor_gap=100.0,
+                float_bridge_tail_min_anchor_speed=0.3,
+                float_bridge_tail_max_anchor_speed=1.2,
+                float_bridge_tail_max_residual=10.0,
+                float_bridge_tail_min_segment_epochs=18,
+            )
+            paths = ppc_coverage_matrix.output_paths(args.output_dir, "tokyo", "run1")
+
+            command = ppc_coverage_matrix.build_ppc_demo_command(args, "tokyo", "run1", paths)
+
+            self.assertEqual(command[:3], [sys.executable, str(ROOT_DIR / "apps" / "gnss.py"), "ppc-demo"])
+            self.assertIn("--max-epochs", command)
+            self.assertIn("-1", command)
+            self.assertIn("--no-arfilter", command)
+            self.assertIn("--no-kinematic-post-filter", command)
+            self.assertIn("--iono", command)
+            self.assertIn("iflc", command)
+            self.assertIn("--ratio", command)
+            self.assertIn("2.4", command)
+            self.assertIn("--max-hold-div", command)
+            self.assertIn("5.0", command)
+            self.assertIn("--max-pos-jump", command)
+            self.assertIn("20.0", command)
+            self.assertIn("--max-pos-jump-min", command)
+            self.assertIn("20.0", command)
+            self.assertIn("--max-pos-jump-rate", command)
+            self.assertIn("25.0", command)
+            self.assertIn("--max-float-spp-div", command)
+            self.assertIn("30.0", command)
+            self.assertIn("--max-float-prefit-rms", command)
+            self.assertIn("6.0", command)
+            self.assertIn("--max-float-prefit-max", command)
+            self.assertIn("30.0", command)
+            self.assertIn("--max-float-prefit-reset-streak", command)
+            self.assertIn("5", command)
+            self.assertIn("--min-float-prefit-trusted-jump", command)
+            self.assertIn("8.0", command)
+            self.assertIn("--max-update-nis-per-obs", command)
+            self.assertIn("12.0", command)
+            self.assertIn("--max-consec-float-reset", command)
+            self.assertIn("10", command)
+            self.assertIn("--max-consec-nonfix-reset", command)
+            self.assertIn("--max-postfix-rms", command)
+            self.assertIn("0.2", command)
+            self.assertIn("--enable-wide-lane-ar", command)
+            self.assertIn("--wide-lane-threshold", command)
+            self.assertIn("0.1", command)
+            self.assertIn("--nonfix-drift-max-anchor-gap", command)
+            self.assertIn("90.0", command)
+            self.assertIn("--nonfix-drift-max-anchor-speed", command)
+            self.assertIn("0.75", command)
+            self.assertIn("--nonfix-drift-max-residual", command)
+            self.assertIn("4.0", command)
+            self.assertIn("--nonfix-drift-min-horizontal-residual", command)
+            self.assertIn("6.0", command)
+            self.assertIn("--nonfix-drift-min-segment-epochs", command)
+            self.assertIn("20", command)
+            self.assertIn("--nonfix-drift-max-segment-epochs", command)
+            self.assertIn("180", command)
+            self.assertIn("--spp-height-step-min", command)
+            self.assertIn("25.0", command)
+            self.assertIn("--spp-height-step-rate", command)
+            self.assertIn("3.0", command)
+            self.assertIn("--float-bridge-tail-max-anchor-gap", command)
+            self.assertIn("100.0", command)
+            self.assertIn("--float-bridge-tail-min-anchor-speed", command)
+            self.assertIn("0.3", command)
+            self.assertIn("--float-bridge-tail-max-anchor-speed", command)
+            self.assertIn("1.2", command)
+            self.assertIn("--float-bridge-tail-max-residual", command)
+            self.assertIn("10.0", command)
+            self.assertIn("--float-bridge-tail-min-segment-epochs", command)
+            self.assertIn("18", command)
+            self.assertIn("--fixed-bridge-burst-guard", command)
+            self.assertIn("--fixed-bridge-burst-max-residual", command)
+            self.assertIn("20.0", command)
+            self.assertIn("--rtklib-pos", command)
+            self.assertIn(str(temp_root / "benchmark" / "tokyo_run1" / "rtklib.pos"), command)
+            self.assertIn("--use-existing-rtklib-solution", command)
+            self.assertNotIn("--no-float-bridge-tail-guard", command)
+
+            args.no_float_bridge_tail_guard = True
+            disabled_command = ppc_coverage_matrix.build_ppc_demo_command(args, "tokyo", "run1", paths)
+            self.assertIn("--no-float-bridge-tail-guard", disabled_command)
+
+    def test_matrix_payload_aggregates_rtklib_deltas_and_guard_counts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_coverage_payload_") as temp_dir:
+            temp_root = Path(temp_dir)
+            args = argparse.Namespace(
+                dataset_root=temp_root / "PPC-Dataset",
+                output_dir=temp_root / "out",
+                max_epochs=-1,
+                match_tolerance_s=0.25,
+                preset="low-cost",
+                iono=None,
+                ratio=None,
+                max_hold_div=None,
+                max_pos_jump=None,
+                max_pos_jump_min=None,
+                max_pos_jump_rate=None,
+                max_consec_float_reset=None,
+                max_consec_nonfix_reset=None,
+                max_postfix_rms=None,
+                enable_wide_lane_ar=False,
+                wide_lane_threshold=None,
+                no_float_bridge_tail_guard=False,
+            )
+            paths = ppc_coverage_matrix.output_paths(args.output_dir, "tokyo", "run1")
+            paths["summary"].parent.mkdir(parents=True)
+            paths["summary"].write_text(
+                json.dumps(
+                    {
+                        "positioning_rate_pct": 86.2,
+                        "fix_rate_pct": 48.6,
+                        "ppc_official_score_pct": 42.0,
+                        "ppc_official_score_distance_m": 420.0,
+                        "ppc_official_total_distance_m": 1000.0,
+                        "ppc_score_3d_50cm_ref_pct": 35.6,
+                        "p95_h_m": 24.16,
+                        "max_h_m": 47.9,
+                        "solver_wall_time_s": 1.0,
+                        "realtime_factor": 10.0,
+                        "rtklib": {
+                            "positioning_rate_pct": 66.3,
+                            "fix_rate_pct": 30.5,
+                            "ppc_official_score_pct": 21.0,
+                            "ppc_official_score_distance_m": 210.0,
+                            "ppc_official_total_distance_m": 1000.0,
+                        },
+                        "delta_vs_rtklib": {
+                            "positioning_rate_pct": 19.9,
+                            "fix_rate_pct": 18.1,
+                            "ppc_official_score_pct": 21.0,
+                            "ppc_score_3d_50cm_ref_pct": 35.6,
+                            "p95_h_m": -6.97,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            log_text = "\n".join(
+                [
+                    "  non-FIX drift guard: enabled inspected_segments=5 rejected_segments=2 rejected_epochs=320",
+                    "  SPP height-step guard: enabled rejected_epochs=30",
+                    "  FLOAT bridge-tail guard: enabled inspected_segments=2 rejected_segments=1 rejected_epochs=147",
+                    "  fixed bridge-burst guard: enabled inspected_segments=21 rejected_segments=3 rejected_epochs=12",
+                ]
+            )
+            run = ppc_coverage_matrix.load_run_record(
+                "tokyo",
+                "run1",
+                paths,
+                ["gnss", "ppc-demo"],
+                log_text,
+                2.5,
+            )
+            payload = ppc_coverage_matrix.build_matrix_payload(args, [run])
+            markdown = ppc_coverage_matrix.render_markdown(payload)
+
+            self.assertEqual(payload["aggregates"]["avg_positioning_delta_pct"], 19.9)
+            self.assertEqual(payload["aggregates"]["avg_official_score_delta_pct"], 21.0)
+            self.assertEqual(payload["aggregates"]["weighted_official_score_pct"], 42.0)
+            self.assertEqual(payload["aggregates"]["weighted_rtklib_official_score_pct"], 21.0)
+            self.assertEqual(payload["aggregates"]["weighted_official_score_delta_pct"], 21.0)
+            self.assertEqual(payload["aggregates"]["avg_p95_h_delta_m"], -6.97)
+            self.assertEqual(payload["aggregates"]["float_bridge_tail_rejected_epochs"], 147)
+            self.assertEqual(payload["aggregates"]["fixed_bridge_burst_rejected_epochs"], 12)
+            self.assertIsNone(payload["max_pos_jump_min"])
+            self.assertIsNone(payload["max_pos_jump_rate"])
+            self.assertIsNone(payload["max_float_prefit_rms"])
+            self.assertIsNone(payload["max_float_prefit_max"])
+            self.assertIsNone(payload["max_float_prefit_reset_streak"])
+            self.assertIsNone(payload["min_float_prefit_trusted_jump"])
+            self.assertIsNone(payload["max_update_nis_per_obs"])
+            self.assertIsNone(payload["max_consec_float_reset"])
+            self.assertIsNone(payload["max_consec_nonfix_reset"])
+            self.assertIsNone(payload["max_postfix_rms"])
+            self.assertFalse(payload["enable_wide_lane_ar"])
+            self.assertIsNone(payload["wide_lane_threshold"])
+            self.assertIn("tokyo_run1", markdown)
+            self.assertIn("+19.9 pp", markdown)
+            self.assertIn("42.0%", markdown)
+            self.assertIn("PPC official weighted delta: 21.0 pp", markdown)
+            self.assertIn("147", markdown)
+            self.assertIn("12", markdown)
+
+            ppc_coverage_matrix.enforce_requirements(
+                payload,
+                argparse.Namespace(
+                    require_positioning_delta_min=0.0,
+                    require_fix_delta_min=0.0,
+                    require_official_score_delta_min=0.0,
+                    require_score_3d_50cm_ref_delta_min=0.0,
+                    require_p95_h_delta_max=0.0,
+                ),
+            )
+            with self.assertRaises(SystemExit):
+                ppc_coverage_matrix.enforce_requirements(
+                    payload,
+                    argparse.Namespace(
+                        require_positioning_delta_min=20.0,
+                        require_fix_delta_min=None,
+                        require_official_score_delta_min=None,
+                        require_score_3d_50cm_ref_delta_min=None,
+                        require_p95_h_delta_max=None,
+                    ),
+                )
+
+
+class PPCResidualResetSweepAnalysisTest(unittest.TestCase):
+    @staticmethod
+    def summary_run(
+        key: str,
+        score_m: float,
+        total_m: float,
+        positioning_pct: float,
+        p95_h_m: float,
+    ) -> dict[str, object]:
+        city, _, run_name = key.partition("_")
+        return {
+            "key": key,
+            "city": city,
+            "run": run_name,
+            "metrics": {
+                "ppc_official_score_distance_m": score_m,
+                "ppc_official_total_distance_m": total_m,
+                "positioning_rate_pct": positioning_pct,
+                "p95_h_m": p95_h_m,
+            },
+        }
+
+    @staticmethod
+    def write_summary(path: Path, runs: list[dict[str, object]]) -> Path:
+        path.write_text(json.dumps({"runs": runs}), encoding="utf-8")
+        return path
+
+    def test_selector_analysis_reports_global_city_and_run_oracles(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_residual_reset_sweep_") as temp_dir:
+            temp_root = Path(temp_dir)
+            baseline_path = self.write_summary(
+                temp_root / "baseline.json",
+                [
+                    self.summary_run("tokyo_run1", 500.0, 1000.0, 90.0, 4.0),
+                    self.summary_run("tokyo_run2", 700.0, 1000.0, 92.0, 5.0),
+                    self.summary_run("nagoya_run1", 600.0, 2000.0, 80.0, 8.0),
+                ],
+            )
+            candidate_a_path = self.write_summary(
+                temp_root / "candidate_a.json",
+                [
+                    self.summary_run("tokyo_run1", 540.0, 1000.0, 91.0, 3.5),
+                    self.summary_run("tokyo_run2", 690.0, 1000.0, 91.5, 5.5),
+                    self.summary_run("nagoya_run1", 580.0, 2000.0, 78.0, 8.5),
+                ],
+            )
+            candidate_b_path = self.write_summary(
+                temp_root / "candidate_b.json",
+                [
+                    self.summary_run("tokyo_run1", 520.0, 1000.0, 89.0, 3.0),
+                    self.summary_run("tokyo_run2", 740.0, 1000.0, 92.5, 4.5),
+                    self.summary_run("nagoya_run1", 590.0, 2000.0, 79.0, 8.2),
+                ],
+            )
+
+            baseline = ppc_residual_reset_sweep.load_profile("baseline", baseline_path)
+            candidate_a = ppc_residual_reset_sweep.load_profile("candidate_a", candidate_a_path)
+            candidate_b = ppc_residual_reset_sweep.load_profile("candidate_b", candidate_b_path)
+            payload = ppc_residual_reset_sweep.build_payload(baseline, [candidate_a, candidate_b])
+            markdown = ppc_residual_reset_sweep.render_markdown(payload)
+
+            self.assertEqual(payload["profiles"][0]["weighted_official_score_pct"], 45.0)
+            self.assertEqual(payload["global_best_profile"]["label"], "candidate_b")
+            self.assertEqual(payload["global_best_profile"]["weighted_official_score_pct"], 46.25)
+            self.assertEqual(payload["best_by_city_selector"]["weighted_official_score_pct"], 46.5)
+            self.assertEqual(payload["best_by_city_selector"]["delta_vs_baseline_score_distance_m"], 60.0)
+            city_profiles = {
+                row["city"]: row["profile"]
+                for row in payload["best_by_city_selector"]["selections"]
+            }
+            self.assertEqual(city_profiles["tokyo"], "candidate_b")
+            self.assertEqual(city_profiles["nagoya"], "baseline")
+            self.assertEqual(payload["best_per_run_oracle"]["weighted_official_score_pct"], 47.0)
+            run_profiles = {row["key"]: row["best_profile"] for row in payload["runs"]}
+            self.assertEqual(run_profiles["tokyo_run1"], "candidate_a")
+            self.assertEqual(run_profiles["tokyo_run2"], "candidate_b")
+            self.assertEqual(run_profiles["nagoya_run1"], "baseline")
+            self.assertIn("Global best profile: **candidate_b**", markdown)
+            self.assertIn("Per-run oracle: **47.00%**", markdown)
+
+            summary_json = temp_root / "analysis.json"
+            markdown_output = temp_root / "analysis.md"
+            ppc_residual_reset_sweep.write_outputs(
+                payload,
+                argparse.Namespace(summary_json=summary_json, markdown_output=markdown_output),
+            )
+            written = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(
+                written["best_per_run_oracle"]["weighted_official_score_pct"],
+                47.0,
+            )
+            self.assertIn("City Selector", markdown_output.read_text(encoding="utf-8"))
+
+
+class PPCProfileSegmentDeltaTest(unittest.TestCase):
+    @staticmethod
+    def record(
+        reference_index: int,
+        distance_m: float,
+        score_state: str,
+        status: int | None,
+        error_3d_m: float | None,
+        ratio: float | None = None,
+        prefit_rms_m: float | None = None,
+    ) -> dict[str, object]:
+        return {
+            "reference_index": reference_index,
+            "start_tow_s": float(reference_index - 1),
+            "end_tow_s": float(reference_index),
+            "segment_distance_m": distance_m,
+            "matched": status is not None,
+            "scored": score_state == "scored",
+            "score_state": score_state,
+            "score_threshold_m": 0.5,
+            "score_distance_m": distance_m if score_state == "scored" else 0.0,
+            "matched_distance_m": distance_m if status is not None else 0.0,
+            "solution_tow_s": float(reference_index) if status is not None else None,
+            "time_gap_s": 0.0 if status is not None else None,
+            "status": status,
+            "num_satellites": 12 if status is not None else None,
+            "ratio": ratio,
+            "baseline_m": 100.0 if status is not None else None,
+            "rtk_iterations": 2 if status is not None else None,
+            "rtk_update_observations": 16 if status is not None else None,
+            "rtk_update_phase_observations": 8 if status is not None else None,
+            "rtk_update_code_observations": 8 if status is not None else None,
+            "rtk_update_suppressed_outliers": 1 if status is not None else None,
+            "rtk_update_prefit_residual_rms_m": prefit_rms_m,
+            "rtk_update_prefit_residual_max_m": None if prefit_rms_m is None else prefit_rms_m * 4.0,
+            "rtk_update_post_suppression_residual_rms_m": None,
+            "rtk_update_post_suppression_residual_max_m": None,
+            "rtk_update_normalized_innovation_squared": (
+                None if prefit_rms_m is None else prefit_rms_m * 160.0
+            ),
+            "rtk_update_normalized_innovation_squared_per_observation": (
+                None if prefit_rms_m is None else prefit_rms_m * 10.0
+            ),
+            "rtk_update_rejected_by_innovation_gate": 0 if status is not None else None,
+            "error_3d_m": error_3d_m,
+            "horiz_error_m": error_3d_m,
+            "up_error_m": 0.0 if error_3d_m is not None else None,
+        }
+
+    def test_segment_delta_reports_gain_loss_transitions_and_csv(self) -> None:
+        baseline = [
+            self.record(1, 10.0, "scored", 4, 0.2, 20.0, 0.2),
+            self.record(2, 20.0, "high_error", 3, 1.2, 4.0, 6.0),
+            self.record(3, 30.0, "scored", 4, 0.1, 18.0, 0.1),
+        ]
+        candidate = [
+            self.record(1, 10.0, "high_error", 3, 0.8, 3.0, 7.0),
+            self.record(2, 20.0, "scored", 4, 0.2, 24.0, 0.3),
+            self.record(3, 30.0, "scored", 4, 0.1, 18.0, 0.1),
+        ]
+
+        summary = ppc_profile_segment_delta.compare_segment_records(
+            baseline,
+            candidate,
+            "candidate",
+            top_segments=4,
+        )
+
+        self.assertEqual(summary["delta_vs_baseline_score_distance_m"], 10.0)
+        self.assertEqual(summary["gain_distance_m"], 20.0)
+        self.assertEqual(summary["loss_distance_m"], -10.0)
+        self.assertEqual(summary["changed_segments"], 2)
+        transitions = {
+            row["score_transition"]: row
+            for row in summary["score_transitions"]
+        }
+        self.assertEqual(transitions["high_error->scored"]["score_delta_distance_m"], 20.0)
+        self.assertEqual(transitions["scored->high_error"]["score_delta_distance_m"], -10.0)
+        self.assertEqual(summary["top_gains"][0]["reference_index"], 2)
+        self.assertEqual(summary["top_losses"][0]["reference_index"], 1)
+        self.assertEqual(
+            summary["candidate_gain_diagnostics"]["median_rtk_update_prefit_residual_rms_m"],
+            0.3,
+        )
+        self.assertEqual(
+            summary["candidate_gain_diagnostics"][
+                "median_rtk_update_normalized_innovation_squared_per_observation"
+            ],
+            3.0,
+        )
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_segment_delta_") as temp_dir:
+            temp_root = Path(temp_dir)
+            csv_path = temp_root / "segments.csv"
+            ppc_profile_segment_delta.write_segments_csv(csv_path, [summary])
+            with csv_path.open(encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0]["candidate_label"], "candidate")
+            self.assertEqual(rows[0]["score_transition"], "scored->high_error")
+
+            markdown = ppc_profile_segment_delta.render_markdown(
+                "baseline",
+                temp_root / "baseline.pos",
+                temp_root / "reference.csv",
+                [summary],
+            )
+            self.assertIn("PPC Profile Segment Delta", markdown)
+            self.assertIn("high_error->scored", markdown)
+            self.assertIn("Top Losses", markdown)
+
+
+class PPCSegmentSelectorSweepTest(unittest.TestCase):
+    @staticmethod
+    def selector_row(
+        run_label: str,
+        delta_m: float,
+        distance_m: float,
+        baseline_status: str,
+        candidate_status: str,
+        candidate_rms_m: float,
+        candidate_ratio: float = 10.0,
+        candidate_num_satellites: float = 12.0,
+        candidate_baseline_m: float = 1000.0,
+    ) -> dict[str, object]:
+        return {
+            "run_label": run_label,
+            "segment_distance_m": distance_m,
+            "score_delta_distance_m": delta_m,
+            "status_transition": f"{baseline_status}->{candidate_status}",
+            "baseline_status_name": baseline_status,
+            "candidate_status_name": candidate_status,
+            "candidate_ratio": candidate_ratio,
+            "candidate_num_satellites": candidate_num_satellites,
+            "candidate_baseline_m": candidate_baseline_m,
+            "baseline_baseline_m": candidate_baseline_m,
+            "candidate_rtk_update_observations": 16.0,
+            "candidate_rtk_update_suppressed_outliers": 0.0,
+            "candidate_rtk_update_prefit_residual_rms_m": candidate_rms_m,
+            "candidate_rtk_update_prefit_residual_max_m": candidate_rms_m * 4.0,
+            "candidate_rtk_update_post_suppression_residual_rms_m": candidate_rms_m,
+            "candidate_rtk_update_post_suppression_residual_max_m": candidate_rms_m * 4.0,
+            "candidate_rtk_update_normalized_innovation_squared": candidate_rms_m * 160.0,
+            "candidate_rtk_update_normalized_innovation_squared_per_observation": (
+                candidate_rms_m * 10.0
+            ),
+            "candidate_rtk_update_rejected_by_innovation_gate": 0.0,
+            "baseline_ratio": 0.0,
+            "baseline_num_satellites": 12.0,
+        }
+
+    def test_selector_sweep_ranks_segment_local_candidate_rules(self) -> None:
+        rows = [
+            self.selector_row("tokyo_run1", 12.0, 12.0, "FLOAT", "FIXED", 0.4, 20.0),
+            self.selector_row("tokyo_run1", -7.0, 7.0, "FIXED", "FIXED", 5.0, 30.0),
+            self.selector_row("tokyo_run2", -20.0, 20.0, "FLOAT", "FLOAT", 0.5, 0.0),
+        ]
+        rule = ppc_segment_selector_sweep.RuleSpec(
+            categorical=(
+                ppc_segment_selector_sweep.CategoricalCondition(
+                    "candidate_status_name",
+                    "FIXED",
+                ),
+            ),
+            numeric=(
+                ppc_segment_selector_sweep.NumericCondition(
+                    "candidate_rtk_update_post_suppression_residual_rms_m",
+                    "<=",
+                    1.0,
+                ),
+            ),
+        )
+
+        score = ppc_segment_selector_sweep.score_rule(rows, rule)
+
+        self.assertEqual(score["selected_score_delta_distance_m"], 12.0)
+        self.assertEqual(score["selected_gain_distance_m"], 12.0)
+        self.assertEqual(score["selected_loss_distance_m"], 0.0)
+        self.assertEqual(score["avoided_loss_distance_m"], 27.0)
+        self.assertEqual(score["gain_recall_pct"], 100.0)
+        self.assertEqual(score["loss_exposure_pct"], 0.0)
+        self.assertEqual(score["negative_run_count"], 0)
+        self.assertEqual(score["min_run_score_delta_distance_m"], 0.0)
+
+        payload = ppc_segment_selector_sweep.build_payload(
+            rows,
+            top_rules=8,
+            max_thresholds=16,
+        )
+        self.assertEqual(payload["candidate_all"]["selected_score_delta_distance_m"], -15.0)
+        self.assertGreaterEqual(
+            payload["top_rules"][0]["selected_score_delta_distance_m"],
+            12.0,
+        )
+        markdown = ppc_segment_selector_sweep.render_markdown(payload)
+        self.assertIn("PPC Segment Selector Sweep", markdown)
+        self.assertIn("Best Rule By Run", markdown)
+
+    def test_selector_sweep_can_require_candidate_status(self) -> None:
+        rows = [
+            self.selector_row("tokyo_run1", 10.0, 10.0, "FLOAT", "FIXED", 0.4, 8.0, 12.0),
+            self.selector_row("tokyo_run1", -5.0, 5.0, "FLOAT", "FLOAT", 0.4, 8.0, 12.0),
+        ]
+
+        payload = ppc_segment_selector_sweep.build_payload(
+            rows,
+            top_rules=4,
+            max_thresholds=8,
+            required_candidate_status="FIXED",
+        )
+
+        best_rule = payload["top_rules"][0]["rule"]
+        self.assertEqual(payload["required_candidate_status"], "FIXED")
+        self.assertTrue("candidate_status_name == FIXED" in best_rule or "->FIXED" in best_rule)
+
+    def test_selector_sweep_robust_objective_prefers_nonnegative_runs(self) -> None:
+        rows = [
+            self.selector_row("tokyo_run1", 20.0, 20.0, "FIXED", "FIXED", 0.4, 8.0, 12.0, 500.0),
+            self.selector_row("tokyo_run2", -5.0, 5.0, "FIXED", "FIXED", 0.4, 8.0, 12.0, 500.0),
+            self.selector_row("tokyo_run1", 10.0, 10.0, "FIXED", "FIXED", 0.4, 8.0, 6.0, 1000.0),
+            self.selector_row("tokyo_run2", 4.0, 4.0, "FIXED", "FIXED", 0.4, 8.0, 6.0, 1000.0),
+            self.selector_row("tokyo_run2", -30.0, 30.0, "FIXED", "FIXED", 0.4, 8.0, 6.0, 500.0),
+        ]
+
+        net_payload = ppc_segment_selector_sweep.build_payload(
+            rows,
+            top_rules=4,
+            max_thresholds=8,
+            max_numeric_conditions=1,
+            rank_objective="net",
+            min_selected_distance_m=1.0,
+        )
+        robust_payload = ppc_segment_selector_sweep.build_payload(
+            rows,
+            top_rules=4,
+            max_thresholds=8,
+            max_numeric_conditions=1,
+            rank_objective="robust",
+            min_selected_distance_m=1.0,
+        )
+
+        net_best = net_payload["top_rules"][0]
+        robust_best = robust_payload["top_rules"][0]
+        self.assertIn("candidate_num_satellites >= 12", net_best["rule"])
+        self.assertEqual(net_best["selected_score_delta_distance_m"], 15.0)
+        self.assertEqual(net_best["negative_run_count"], 1)
+        self.assertIn("candidate_baseline_m >= 1000", robust_best["rule"])
+        self.assertEqual(robust_best["selected_score_delta_distance_m"], 14.0)
+        self.assertEqual(robust_best["negative_run_count"], 0)
+        self.assertEqual(robust_payload["rank_objective"], "robust")
+
+    def test_selector_sweep_can_refine_with_two_numeric_conditions(self) -> None:
+        rows = [
+            self.selector_row("tokyo_run1", 12.0, 12.0, "FLOAT", "FIXED", 0.4, 8.0, 12.0),
+            self.selector_row("tokyo_run1", -10.0, 10.0, "FIXED", "FIXED", 0.4, 8.0, 6.0),
+            self.selector_row("tokyo_run1", -7.0, 7.0, "FIXED", "FIXED", 5.0, 8.0, 12.0),
+            self.selector_row("tokyo_run2", -20.0, 20.0, "FLOAT", "FLOAT", 0.5, 0.0, 12.0),
+        ]
+
+        payload = ppc_segment_selector_sweep.build_payload(
+            rows,
+            top_rules=8,
+            max_thresholds=16,
+            max_numeric_conditions=2,
+        )
+
+        best_rule = payload["top_rules"][0]
+        self.assertEqual(best_rule["selected_score_delta_distance_m"], 12.0)
+        self.assertIn("candidate_num_satellites >= 12", best_rule["rule"])
+        self.assertIn("residual_rms_m <= 0.4", best_rule["rule"])
+
+    def test_selector_sweep_refines_coarse_numeric_thresholds(self) -> None:
+        rows = [
+            self.selector_row("tokyo_run1", 5.0, 5.0, "FIXED", "FIXED", 0.1, 8.0),
+            self.selector_row("tokyo_run1", 20.0, 20.0, "FIXED", "FIXED", 0.8, 8.0),
+            self.selector_row("tokyo_run1", -15.0, 15.0, "FIXED", "FIXED", 1.5, 8.0),
+        ]
+
+        payload = ppc_segment_selector_sweep.build_payload(
+            rows,
+            top_rules=8,
+            max_thresholds=2,
+            numeric_threshold_refinement_beam=32,
+        )
+
+        best_rule = payload["top_rules"][0]
+        self.assertEqual(best_rule["selected_score_delta_distance_m"], 25.0)
+        self.assertIn("residual_rms_m <= 0.8", best_rule["rule"])
+
+    def test_selector_sweep_can_refine_with_three_numeric_conditions(self) -> None:
+        rows = [
+            self.selector_row("tokyo_run1", 30.0, 30.0, "FIXED", "FIXED", 0.4, 8.0, 12.0, 1000.0),
+            self.selector_row("tokyo_run1", -10.0, 10.0, "FIXED", "FIXED", 0.4, 8.0, 6.0, 1000.0),
+            self.selector_row("tokyo_run1", -8.0, 8.0, "FIXED", "FIXED", 5.0, 8.0, 12.0, 1000.0),
+            self.selector_row("tokyo_run1", -7.0, 7.0, "FIXED", "FIXED", 0.4, 8.0, 12.0, 100.0),
+        ]
+
+        payload = ppc_segment_selector_sweep.build_payload(
+            rows,
+            top_rules=8,
+            max_thresholds=16,
+            max_numeric_conditions=3,
+        )
+
+        best_rule = payload["top_rules"][0]
+        self.assertEqual(best_rule["selected_score_delta_distance_m"], 30.0)
+        self.assertIn("candidate_baseline_m", best_rule["rule"])
+        self.assertIn("candidate_num_satellites", best_rule["rule"])
+        self.assertIn("residual_rms_m", best_rule["rule"])
+
+
+class PPCSegmentSelectorLeaveOneRunOutTest(unittest.TestCase):
+    def test_leave_one_run_out_scores_learned_rules_on_holdout_runs(self) -> None:
+        row = PPCSegmentSelectorSweepTest.selector_row
+        rows = [
+            row("tokyo_run1", 10.0, 10.0, "FIXED", "FIXED", 0.4, 8.0, 12.0),
+            row("tokyo_run1", -5.0, 5.0, "FIXED", "FIXED", 0.4, 8.0, 6.0),
+            row("tokyo_run2", 10.0, 10.0, "FIXED", "FIXED", 0.4, 8.0, 12.0),
+            row("tokyo_run2", -5.0, 5.0, "FIXED", "FIXED", 0.4, 8.0, 6.0),
+        ]
+
+        payload = ppc_segment_selector_loo.build_payload(
+            rows,
+            top_rules=4,
+            max_thresholds=8,
+            max_numeric_conditions=2,
+            numeric_refinement_beam=4,
+            numeric_threshold_refinement_beam=4,
+            rank_objective="robust",
+        )
+
+        aggregates = payload["aggregates"]
+        self.assertEqual(aggregates["fold_count"], 2)
+        self.assertEqual(aggregates["holdout_selected_score_delta_distance_m"], 20.0)
+        self.assertEqual(aggregates["holdout_candidate_all_delta_distance_m"], 10.0)
+        self.assertEqual(aggregates["holdout_selector_vs_candidate_all_delta_m"], 10.0)
+        self.assertEqual(aggregates["nonnegative_holdout_runs"], 2)
+        self.assertEqual(payload["rank_objective"], "robust")
+        self.assertIn("candidate_num_satellites", payload["folds"][0]["learned_rule"])
+
+        markdown = ppc_segment_selector_loo.render_markdown(payload)
+        self.assertIn("PPC Segment Selector Leave-One-Run-Out", markdown)
+        self.assertIn("tokyo_run1", markdown)
+
+
+class PPCDualProfileSelectorTest(unittest.TestCase):
+    @staticmethod
+    def reference_epoch(index: int) -> comparison.ReferenceEpoch:
+        return comparison.ReferenceEpoch(
+            2300,
+            float(index),
+            0.0,
+            0.0,
+            0.0,
+            np.array([10.0 * index, 0.0, 0.0]),
+        )
+
+    @staticmethod
+    def solution_epoch(
+        index: int,
+        ecef_x_m: float,
+        status: int,
+        post_rms_m: float | None,
+    ) -> comparison.SolutionEpoch:
+        return comparison.SolutionEpoch(
+            2300,
+            float(index),
+            0.0,
+            0.0,
+            0.0,
+            np.array([ecef_x_m, 0.0, 0.0]),
+            status,
+            12,
+            10.0 if status == 4 else 0.0,
+            100.0,
+            2,
+            16,
+            8,
+            8,
+            0,
+            post_rms_m,
+            None if post_rms_m is None else post_rms_m * 4.0,
+            post_rms_m,
+            None if post_rms_m is None else post_rms_m * 4.0,
+        )
+
+    def test_dual_profile_selector_writes_selected_pos_and_metrics(self) -> None:
+        reference = [self.reference_epoch(index) for index in range(3)]
+        baseline = [
+            self.solution_epoch(0, 0.0, 4, None),
+            self.solution_epoch(1, 11.2, 3, None),
+            self.solution_epoch(2, 20.1, 4, None),
+        ]
+        candidate = [
+            self.solution_epoch(0, 0.0, 4, 0.2),
+            self.solution_epoch(1, 10.1, 4, 0.3),
+            self.solution_epoch(2, 21.0, 3, 0.2),
+        ]
+        baseline_records = ppc_metrics.ppc_official_segment_records(reference, baseline, 0.25)
+        candidate_records = ppc_metrics.ppc_official_segment_records(reference, candidate, 0.25)
+        rows = ppc_dual_profile_selector.all_segment_rows(
+            baseline_records,
+            candidate_records,
+            "candidate",
+        )
+        ppc_dual_profile_selector.augment_solution_tows(
+            rows,
+            baseline_records,
+            candidate_records,
+        )
+        rule = ppc_dual_profile_selector.parse_rule(
+            "candidate_status_name == FIXED AND "
+            "candidate_rtk_update_post_suppression_residual_rms_m <= 1.0"
+        )
+        selected, selected_rows = ppc_dual_profile_selector.selected_solution_epochs(
+            reference,
+            baseline,
+            candidate,
+            rows,
+            rule,
+            0.25,
+        )
+
+        self.assertEqual([epoch.tow for epoch in selected], [0.0, 1.0, 2.0])
+        self.assertEqual(selected[1].status, 4)
+        self.assertEqual(selected[2].ecef[0], 20.1)
+        self.assertEqual(selected_rows[0]["selected_profile"], "candidate")
+        self.assertEqual(selected_rows[1]["selected_profile"], "baseline")
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_dual_profile_selector_") as temp_dir:
+            temp_root = Path(temp_dir)
+            out_pos = temp_root / "selected.pos"
+            ppc_dual_profile_selector.write_pos(out_pos, selected)
+            reparsed = comparison.read_libgnss_pos(out_pos)
+            metrics = ppc_metrics.summarize_solution_epochs(
+                reference,
+                reparsed,
+                fixed_status=4,
+                label="selected",
+                match_tolerance_s=0.25,
+                solver_wall_time_s=None,
+            )
+            self.assertEqual(metrics["ppc_official_score_pct"], 100.0)
+
+
+class PPCDualProfileSelectorMatrixTest(unittest.TestCase):
+    @staticmethod
+    def summary(
+        total_distance_m: float,
+        baseline_score_m: float,
+        candidate_score_m: float,
+        selected_score_m: float,
+        selected_segments: int,
+    ) -> dict[str, object]:
+        def metrics(score_m: float, positioning: float, fix: float) -> dict[str, float]:
+            return {
+                "positioning_rate_pct": positioning,
+                "fix_rate_pct": fix,
+                "ppc_official_score_pct": 100.0 * score_m / total_distance_m,
+                "ppc_official_score_distance_m": score_m,
+                "ppc_official_total_distance_m": total_distance_m,
+                "p95_h_m": 1.0,
+                "max_h_m": 3.0,
+            }
+
+        return {
+            "rule": (
+                "candidate_status_name == FIXED AND "
+                "candidate_baseline_m <= 9053.95 AND "
+                "candidate_baseline_m >= 940.785 AND "
+                "candidate_num_satellites >= 8"
+            ),
+            "baseline": metrics(baseline_score_m, 80.0, 60.0),
+            "candidate": metrics(candidate_score_m, 81.0, 61.0),
+            "metrics": metrics(selected_score_m, 82.5, 63.0),
+            "delta_vs_baseline": {
+                "positioning_rate_pct": 2.5,
+                "fix_rate_pct": 3.0,
+                "ppc_official_score_pct": 100.0 * (selected_score_m - baseline_score_m) / total_distance_m,
+                "ppc_official_score_distance_m": selected_score_m - baseline_score_m,
+                "p95_h_m": -0.2,
+            },
+            "delta_vs_candidate": {
+                "positioning_rate_pct": 1.5,
+                "fix_rate_pct": 2.0,
+                "ppc_official_score_pct": 100.0 * (selected_score_m - candidate_score_m) / total_distance_m,
+                "ppc_official_score_distance_m": selected_score_m - candidate_score_m,
+                "p95_h_m": -0.1,
+            },
+            "selection": {
+                "baseline_selected_segments": 20,
+                "candidate_selected_segments": selected_segments,
+                "candidate_selected_gain_distance_m": max(0.0, selected_score_m - baseline_score_m),
+                "candidate_selected_loss_distance_m": min(0.0, selected_score_m - baseline_score_m),
+                "candidate_selected_score_delta_distance_m": selected_score_m - baseline_score_m,
+                "segments": 30,
+            },
+        }
+
+    def test_dual_selector_matrix_aggregates_weighted_scores(self) -> None:
+        runs = [
+            ppc_dual_selector_matrix.SelectorRun(
+                key="tokyo_run1",
+                label="Tokyo r1",
+                rule="candidate_status_name == FIXED",
+                baseline=self.summary(100.0, 50.0, 45.0, 60.0, 5)["baseline"],
+                candidate=self.summary(100.0, 50.0, 45.0, 60.0, 5)["candidate"],
+                selected=self.summary(100.0, 50.0, 45.0, 60.0, 5)["metrics"],
+                delta_vs_baseline=self.summary(100.0, 50.0, 45.0, 60.0, 5)["delta_vs_baseline"],
+                delta_vs_candidate=self.summary(100.0, 50.0, 45.0, 60.0, 5)["delta_vs_candidate"],
+                selection=self.summary(100.0, 50.0, 45.0, 60.0, 5)["selection"],
+            ),
+            ppc_dual_selector_matrix.SelectorRun(
+                key="nagoya_run1",
+                label="Nagoya r1",
+                rule="candidate_status_name == FIXED",
+                baseline=self.summary(300.0, 150.0, 120.0, 180.0, 7)["baseline"],
+                candidate=self.summary(300.0, 150.0, 120.0, 180.0, 7)["candidate"],
+                selected=self.summary(300.0, 150.0, 120.0, 180.0, 7)["metrics"],
+                delta_vs_baseline=self.summary(300.0, 150.0, 120.0, 180.0, 7)["delta_vs_baseline"],
+                delta_vs_candidate=self.summary(300.0, 150.0, 120.0, 180.0, 7)["delta_vs_candidate"],
+                selection=self.summary(300.0, 150.0, 120.0, 180.0, 7)["selection"],
+            ),
+        ]
+
+        payload = ppc_dual_selector_matrix.build_payload(runs, "Selector matrix")
+        aggregates = payload["aggregates"]
+
+        self.assertEqual(aggregates["weighted_baseline_official_score_pct"], 50.0)
+        self.assertEqual(aggregates["weighted_candidate_all_official_score_pct"], 41.25)
+        self.assertEqual(aggregates["weighted_selector_official_score_pct"], 60.0)
+        self.assertEqual(aggregates["selector_official_score_delta_m"], 40.0)
+        self.assertEqual(aggregates["candidate_selected_segments"], 12)
+        markdown = ppc_dual_selector_matrix.render_markdown(payload)
+        self.assertIn("Selector matrix", markdown)
+        self.assertIn("dual selector weighted official", markdown)
+
+    def test_dual_selector_matrix_main_writes_json_markdown_and_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_dual_matrix_") as temp_dir:
+            temp_root = Path(temp_dir)
+            summary_a = temp_root / "tokyo.json"
+            summary_b = temp_root / "nagoya.json"
+            output_json = temp_root / "matrix.json"
+            output_md = temp_root / "matrix.md"
+            output_png = temp_root / "matrix.png"
+            summary_a.write_text(json.dumps(self.summary(100.0, 50.0, 45.0, 60.0, 5)), encoding="utf-8")
+            summary_b.write_text(json.dumps(self.summary(300.0, 150.0, 120.0, 180.0, 7)), encoding="utf-8")
+
+            argv = [
+                "analyze_ppc_dual_profile_selector_matrix.py",
+                "--run",
+                f"tokyo_run1={summary_a}",
+                "--run",
+                f"nagoya_run1={summary_b}",
+                "--summary-json",
+                str(output_json),
+                "--markdown-output",
+                str(output_md),
+                "--output-png",
+                str(output_png),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_dual_selector_matrix.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(output_json.exists())
+            self.assertTrue(output_md.exists())
+            self.assertTrue(output_png.exists())
+            self.assertGreater(output_png.stat().st_size, 0)
+            try:
+                from PIL import Image
+
+                with Image.open(output_png) as image:
+                    self.assertEqual(image.size, (1400, 780))
+            except ModuleNotFoundError:
+                pass
+
+
+class PPCDualProfileSelectorDriverTest(unittest.TestCase):
+    @staticmethod
+    def write_reference_csv(path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["tow", "week", "lat", "lon", "height", "ecef_x", "ecef_y", "ecef_z"])
+            for index in range(3):
+                writer.writerow([float(index), 2300, 0.0, 0.0, 0.0, 10.0 * index, 0.0, 0.0])
+
+    @staticmethod
+    def solution_epoch(
+        index: int,
+        ecef_x_m: float,
+        status: int,
+        prefit_rms_m: float | None,
+    ) -> comparison.SolutionEpoch:
+        return comparison.SolutionEpoch(
+            2300,
+            float(index),
+            0.0,
+            0.0,
+            0.0,
+            np.array([ecef_x_m, 0.0, 0.0]),
+            status,
+            12,
+            10.0 if status == 4 else 0.0,
+            1000.0,
+            2,
+            16,
+            8,
+            8,
+            0,
+            prefit_rms_m,
+            None if prefit_rms_m is None else prefit_rms_m * 4.0,
+            prefit_rms_m,
+            None if prefit_rms_m is None else prefit_rms_m * 4.0,
+        )
+
+    def test_driver_applies_selector_and_writes_matrix_outputs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_dual_driver_") as temp_dir:
+            temp_root = Path(temp_dir)
+            dataset_root = temp_root / "PPC-Dataset"
+            baseline_dir = temp_root / "baseline"
+            candidate_dir = temp_root / "candidate"
+            output_dir = temp_root / "selected"
+            matrix_json = temp_root / "matrix.json"
+            matrix_md = temp_root / "matrix.md"
+            matrix_png = temp_root / "matrix.png"
+
+            baseline = [
+                self.solution_epoch(0, 0.0, 4, None),
+                self.solution_epoch(1, 11.2, 3, None),
+                self.solution_epoch(2, 20.1, 4, None),
+            ]
+            candidate = [
+                self.solution_epoch(0, 0.0, 4, 0.2),
+                self.solution_epoch(1, 10.1, 4, 0.3),
+                self.solution_epoch(2, 21.0, 3, 0.2),
+            ]
+            for city, run_name in (("tokyo", "run1"), ("nagoya", "run1")):
+                key = f"{city}_{run_name}"
+                self.write_reference_csv(dataset_root / city / run_name / "reference.csv")
+                ppc_dual_profile_selector.write_pos(baseline_dir / f"{key}.pos", baseline)
+                ppc_dual_profile_selector.write_pos(candidate_dir / f"{key}.pos", candidate)
+
+            argv = [
+                "run_ppc_dual_profile_selector_matrix.py",
+                "--dataset-root",
+                str(dataset_root),
+                "--ppc-run",
+                "tokyo/run1",
+                "--ppc-run",
+                "nagoya/run1",
+                "--baseline-pos-template",
+                str(baseline_dir / "{key}.pos"),
+                "--candidate-pos-template",
+                str(candidate_dir / "{key}.pos"),
+                "--run-output-template",
+                str(output_dir / "{key}_selected.pos"),
+                "--rule",
+                "candidate_status_name == FIXED AND "
+                "candidate_rtk_update_prefit_residual_rms_m >= 0.2",
+                "--matrix-summary-json",
+                str(matrix_json),
+                "--matrix-markdown-output",
+                str(matrix_md),
+                "--matrix-output-png",
+                str(matrix_png),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_dual_selector_driver.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue((output_dir / "tokyo_run1_selected.pos").exists())
+            self.assertTrue((output_dir / "tokyo_run1_selected_summary.json").exists())
+            self.assertTrue((output_dir / "tokyo_run1_selected_segments.csv").exists())
+            self.assertTrue(matrix_json.exists())
+            self.assertTrue(matrix_md.exists())
+            self.assertTrue(matrix_png.exists())
+            payload = json.loads(matrix_json.read_text(encoding="utf-8"))
+            self.assertGreater(payload["aggregates"]["selector_official_score_delta_m"], 0.0)
+            self.assertIn("PPC dual-profile selector", matrix_md.read_text(encoding="utf-8"))
+
+
+class PPCIMUCoverageTest(unittest.TestCase):
+    def test_imu_coverage_summarizes_timing_overlap_and_loss_pool(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_imu_coverage_") as temp_dir:
+            temp_root = Path(temp_dir)
+            run_root = temp_root / "tokyo" / "run1"
+            run_root.mkdir(parents=True)
+            (run_root / "imu.csv").write_text(
+                "\n".join(
+                    [
+                        "GPS TOW (s), GPS Week, Acc X (m/s^2), Acc Y (m/s^2), Acc Z (m/s^2), Ang Rate X (deg/s), Ang Rate Y (deg/s), Ang Rate Z (deg/s)",
+                        "10.00,2324,0.0,0.0,9.8,0.1,0.2,0.3",
+                        "10.01,2324,0.1,0.0,9.8,0.1,0.2,0.4",
+                        "10.02,2324,0.0,0.1,9.8,0.1,0.2,0.5",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            (run_root / "reference.csv").write_text(
+                "\n".join(
+                    [
+                        "GPS TOW (s),GPS Week,Latitude (deg),Longitude (deg),Ellipsoid Height (m)",
+                        "10.00,2324,35.0,139.0,10.0",
+                        "10.02,2324,35.0,139.0,10.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            quality_dir = temp_root / "quality"
+            quality_dir.mkdir()
+            (quality_dir / "tokyo_run1.json").write_text(
+                json.dumps(
+                    {
+                        "official_loss_by_state": [
+                            {"score_state": "scored", "distance_m": 5.0},
+                            {"score_state": "high_error", "distance_m": 2.0},
+                            {"score_state": "no_solution", "distance_m": 3.0},
+                        ]
+                    }
+                ),
+                encoding="ascii",
+            )
+
+            payload = ppc_imu_coverage.build_payload(
+                temp_root,
+                [ppc_imu_coverage.RunSpec("tokyo", "run1")],
+                quality_json_template=str(quality_dir / "{key}.json"),
+                target_score_pct=80.0,
+            )
+
+            aggregates = payload["aggregates"]
+            self.assertEqual(aggregates["ready_run_count"], 1)
+            self.assertEqual(aggregates["median_imu_rate_hz"], 100.0)
+            self.assertEqual(aggregates["target_gap_distance_m"], 3.0)
+            self.assertEqual(aggregates["no_solution_share_of_target_gap_pct"], 100.0)
+            self.assertIn("Tokyo r1", ppc_imu_coverage.render_markdown(payload))
+
+
+class PPCIMUBridgeTargetsTest(unittest.TestCase):
+    def write_segments_csv(self, path: Path) -> None:
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=[
+                    "reference_index",
+                    "start_tow_s",
+                    "end_tow_s",
+                    "segment_distance_m",
+                    "lib_score_state",
+                    "lib_status_name",
+                    "lib_error_3d_m",
+                ],
+                lineterminator="\n",
+            )
+            writer.writeheader()
+            rows = [
+                (1, 0.0, 1.0, 10.0, "scored", "FIXED", 0.1),
+                (2, 1.0, 1.5, 5.0, "no_solution", "", None),
+                (3, 1.5, 2.0, 10.0, "scored", "FIXED", 0.1),
+                (4, 2.0, 5.0, 8.0, "no_solution", "", None),
+                (5, 5.0, 6.0, 10.0, "scored", "FLOAT", 0.2),
+                (6, 6.0, 7.0, 7.0, "high_error", "FLOAT", 2.0),
+            ]
+            for reference_index, start, end, distance, state, status, error in rows:
+                writer.writerow(
+                    {
+                        "reference_index": reference_index,
+                        "start_tow_s": start,
+                        "end_tow_s": end,
+                        "segment_distance_m": distance,
+                        "lib_score_state": state,
+                        "lib_status_name": status,
+                        "lib_error_3d_m": "" if error is None else error,
+                    }
+                )
+
+    def test_bridge_targets_report_gap_limited_upper_bound(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_imu_bridge_targets_") as temp_dir:
+            temp_root = Path(temp_dir)
+            segment_csv = temp_root / "tokyo_run1_official_segments.csv"
+            self.write_segments_csv(segment_csv)
+
+            payload = ppc_imu_bridge_targets.build_payload(
+                str(temp_root / "{key}_official_segments.csv"),
+                [ppc_imu_bridge_targets.RunSpec("tokyo", "run1")],
+                [1.0, 3.0],
+            )
+
+            aggregates = payload["aggregates"]
+            self.assertEqual(aggregates["baseline_score_pct"], 60.0)
+            self.assertEqual(aggregates["no_solution_span_count"], 2)
+            rows = aggregates["bridge_thresholds"]
+            self.assertEqual(rows[0]["recovered_no_solution_distance_m"], 5.0)
+            self.assertEqual(rows[0]["score_pct"], 70.0)
+            self.assertEqual(rows[1]["recovered_no_solution_distance_m"], 13.0)
+            self.assertEqual(rows[1]["score_pct"], 86.0)
+            self.assertEqual(aggregates["high_error_by_status"][0]["status_name"], "FLOAT")
+            self.assertIn("PPC IMU Bridge Targets", ppc_imu_bridge_targets.render_markdown(payload))
+
+
+class PPCCVDropoutBridgeMatrixTest(unittest.TestCase):
+    @staticmethod
+    def reference_epoch(index: int) -> comparison.ReferenceEpoch:
+        return comparison.ReferenceEpoch(
+            2300,
+            float(index),
+            0.0,
+            0.0,
+            0.0,
+            np.array([10.0 * index, 0.0, 0.0]),
+        )
+
+    @staticmethod
+    def solution_epoch(index: int) -> comparison.SolutionEpoch:
+        return comparison.SolutionEpoch(
+            2300,
+            float(index),
+            0.0,
+            0.0,
+            0.0,
+            np.array([10.0 * index, 0.0, 0.0]),
+            4,
+            12,
+        )
+
+    def write_reference_csv(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="ascii", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(
+                [
+                    "GPS TOW (s)",
+                    "GPS Week",
+                    "Latitude (deg)",
+                    "Longitude (deg)",
+                    "Ellipsoid Height (m)",
+                    "ECEF X (m)",
+                    "ECEF Y (m)",
+                    "ECEF Z (m)",
+                ]
+            )
+            for index in range(5):
+                writer.writerow([float(index), 2300, 0.0, 0.0, 0.0, 10.0 * index, 0.0, 0.0])
+
+    def test_cv_bridge_recovers_causal_linear_dropout(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_cv_bridge_matrix_") as temp_dir:
+            temp_root = Path(temp_dir)
+            self.write_reference_csv(temp_root / "tokyo" / "run1" / "reference.csv")
+            baseline_dir = temp_root / "baseline"
+            output_dir = temp_root / "out"
+            baseline_epochs = [
+                self.solution_epoch(0),
+                self.solution_epoch(1),
+                self.solution_epoch(4),
+            ]
+            ppc_dual_profile_selector.write_pos(baseline_dir / "tokyo_run1.pos", baseline_epochs)
+
+            config = ppc_cv_bridge_matrix.BridgeConfig(
+                max_gap_s=3.0,
+                max_anchor_age_s=1.0,
+                max_velocity_baseline_s=1.0,
+                bridge_status=3,
+                bridge_num_satellites=0,
+                match_tolerance_s=0.25,
+                threshold_m=0.50,
+            )
+            run_payload = ppc_cv_bridge_matrix.summarize_run(
+                temp_root,
+                ppc_cv_bridge_matrix.RunSpec("tokyo", "run1"),
+                str(baseline_dir / "{key}.pos"),
+                str(output_dir / "{key}_cv_bridge.pos"),
+                None,
+                config,
+            )
+            matrix = ppc_cv_bridge_matrix.build_matrix_payload(
+                [run_payload],
+                "PPC causal CV dropout bridge",
+                config,
+            )
+
+            self.assertEqual(run_payload["baseline"]["ppc_official_score_pct"], 50.0)
+            self.assertEqual(run_payload["metrics"]["ppc_official_score_pct"], 100.0)
+            self.assertEqual(run_payload["selection"]["bridge_span_count"], 1)
+            self.assertEqual(run_payload["selection"]["generated_epochs"], 2)
+            self.assertEqual(run_payload["selection"]["recovered_distance_m"], 20.0)
+            self.assertIn("PPC causal CV dropout bridge", ppc_cv_bridge_matrix.render_markdown(matrix))
+
+    def test_cv_bridge_can_use_telemetry_anchor_mode(self) -> None:
+        reference = [self.reference_epoch(0)]
+        high_error_fixed = comparison.SolutionEpoch(
+            2300,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            np.array([2.0, 0.0, 0.0]),
+            4,
+            12,
+            12.0,
+        )
+        scored_config = ppc_cv_bridge_matrix.BridgeConfig(
+            max_gap_s=1.0,
+            max_anchor_age_s=1.0,
+            max_velocity_baseline_s=1.0,
+            bridge_status=3,
+            bridge_num_satellites=0,
+            match_tolerance_s=0.25,
+            threshold_m=0.50,
+        )
+        telemetry_config = ppc_cv_bridge_matrix.BridgeConfig(
+            max_gap_s=1.0,
+            max_anchor_age_s=1.0,
+            max_velocity_baseline_s=1.0,
+            bridge_status=3,
+            bridge_num_satellites=0,
+            match_tolerance_s=0.25,
+            threshold_m=0.50,
+            anchor_mode="telemetry",
+            anchor_statuses=(4,),
+            anchor_min_ratio=10.0,
+        )
+
+        self.assertEqual(
+            ppc_cv_bridge_matrix.trusted_anchor_epochs(
+                reference,
+                [high_error_fixed],
+                scored_config,
+            ),
+            [],
+        )
+        self.assertEqual(
+            ppc_cv_bridge_matrix.trusted_anchor_epochs(
+                reference,
+                [high_error_fixed],
+                telemetry_config,
+            ),
+            [high_error_fixed],
+        )
+
+    def test_cv_bridge_innovation_anchor_rejects_predicted_jump(self) -> None:
+        reference = [self.reference_epoch(index) for index in range(3)]
+        anchors = [
+            self.solution_epoch(0),
+            self.solution_epoch(1),
+            comparison.SolutionEpoch(
+                2300,
+                2.0,
+                0.0,
+                0.0,
+                0.0,
+                np.array([200.0, 0.0, 0.0]),
+                4,
+                12,
+                12.0,
+            ),
+        ]
+        config = ppc_cv_bridge_matrix.BridgeConfig(
+            max_gap_s=1.0,
+            max_anchor_age_s=1.0,
+            max_velocity_baseline_s=1.0,
+            bridge_status=3,
+            bridge_num_satellites=0,
+            match_tolerance_s=0.25,
+            threshold_m=0.50,
+            anchor_mode="innovation",
+            anchor_statuses=(4,),
+            anchor_min_ratio=10.0,
+            anchor_max_innovation_m=5.0,
+        )
+
+        trusted = ppc_cv_bridge_matrix.trusted_anchor_epochs(reference, anchors, config)
+
+        self.assertEqual([epoch.tow for epoch in trusted], [0.0, 1.0])
+
+    def test_cv_bridge_innovation_anchor_accepts_predicted_fixed(self) -> None:
+        reference = [self.reference_epoch(index) for index in range(3)]
+        anchors = [
+            self.solution_epoch(0),
+            self.solution_epoch(1),
+            comparison.SolutionEpoch(
+                2300,
+                2.0,
+                0.0,
+                0.0,
+                0.0,
+                np.array([20.2, 0.0, 0.0]),
+                4,
+                12,
+                12.0,
+            ),
+        ]
+        config = ppc_cv_bridge_matrix.BridgeConfig(
+            max_gap_s=1.0,
+            max_anchor_age_s=1.0,
+            max_velocity_baseline_s=1.0,
+            bridge_status=3,
+            bridge_num_satellites=0,
+            match_tolerance_s=0.25,
+            threshold_m=0.10,
+            anchor_mode="innovation",
+            anchor_statuses=(4,),
+            anchor_min_ratio=10.0,
+            anchor_max_innovation_m=5.0,
+        )
+
+        trusted = ppc_cv_bridge_matrix.trusted_anchor_epochs(reference, anchors, config)
+
+        self.assertEqual([epoch.tow for epoch in trusted], [0.0, 1.0, 2.0])
+
+
+class PPCIMUDropoutBridgeMatrixTest(unittest.TestCase):
+    @staticmethod
+    def solution_epoch(index: int) -> comparison.SolutionEpoch:
+        return comparison.SolutionEpoch(
+            2300,
+            float(index),
+            0.0,
+            0.0,
+            0.0,
+            np.array([6378137.0, 10.0 * index, 0.0]),
+            4,
+            12,
+        )
+
+    def write_reference_csv(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="ascii", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(
+                [
+                    "GPS TOW (s)",
+                    "GPS Week",
+                    "Latitude (deg)",
+                    "Longitude (deg)",
+                    "Ellipsoid Height (m)",
+                    "ECEF X (m)",
+                    "ECEF Y (m)",
+                    "ECEF Z (m)",
+                ]
+            )
+            for index in range(5):
+                writer.writerow([float(index), 2300, 0.0, 0.0, 0.0, 6378137.0, 10.0 * index, 0.0])
+
+    def write_imu_csv(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="ascii", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(
+                [
+                    "GPS TOW (s)",
+                    "GPS Week",
+                    "Acc X (m/s^2)",
+                    "Acc Y (m/s^2)",
+                    "Acc Z (m/s^2)",
+                ]
+            )
+            for index in range(5):
+                writer.writerow([float(index), 2300, 0.0, 0.0, 9.8])
+
+    def test_imu_bridge_recovers_linear_dropout_with_zero_accel(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_imu_bridge_matrix_") as temp_dir:
+            temp_root = Path(temp_dir)
+            self.write_reference_csv(temp_root / "tokyo" / "run1" / "reference.csv")
+            self.write_imu_csv(temp_root / "tokyo" / "run1" / "imu.csv")
+            baseline_dir = temp_root / "baseline"
+            output_dir = temp_root / "out"
+            baseline_epochs = [
+                self.solution_epoch(0),
+                self.solution_epoch(1),
+                self.solution_epoch(4),
+            ]
+            ppc_dual_profile_selector.write_pos(baseline_dir / "tokyo_run1.pos", baseline_epochs)
+
+            config = ppc_imu_bridge_matrix.IMUBridgeConfig(
+                max_gap_s=3.0,
+                max_anchor_age_s=1.0,
+                max_velocity_baseline_s=1.0,
+                bridge_status=3,
+                bridge_num_satellites=0,
+                match_tolerance_s=0.25,
+                threshold_m=0.50,
+                bias_window_s=1.0,
+                min_heading_speed_mps=0.5,
+                max_horizontal_accel_mps2=3.0,
+                forward_axis="x",
+                lateral_axis="y",
+                forward_sign=1.0,
+                lateral_sign=1.0,
+            )
+            run_payload = ppc_imu_bridge_matrix.summarize_run(
+                temp_root,
+                ppc_cv_bridge_matrix.RunSpec("tokyo", "run1"),
+                str(baseline_dir / "{key}.pos"),
+                str(output_dir / "{key}_imu_bridge.pos"),
+                None,
+                config,
+            )
+            matrix = ppc_imu_bridge_matrix.build_matrix_payload(
+                [run_payload],
+                "PPC causal IMU dropout bridge",
+                config,
+            )
+
+            self.assertEqual(run_payload["baseline"]["ppc_official_score_pct"], 50.0)
+            self.assertEqual(run_payload["metrics"]["ppc_official_score_pct"], 100.0)
+            self.assertEqual(run_payload["selection"]["bridge_span_count"], 1)
+            self.assertEqual(run_payload["selection"]["generated_epochs"], 2)
+            self.assertEqual(run_payload["selection"]["recovered_distance_m"], 20.0)
+            self.assertIn("PPC causal IMU dropout bridge", ppc_imu_bridge_matrix.render_markdown(matrix))
+
+
+class PPCMetricsTest(unittest.TestCase):
+    def test_libgnss_pos_parser_keeps_ratio_and_baseline_telemetry(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_pos_ratio_parse_") as temp_dir:
+            pos_path = Path(temp_dir) / "solution.pos"
+            pos_path.write_text(
+                "\n".join(
+                    [
+                        "% GPS_Week GPS_TOW X Y Z Lat Lon Height Status NumSat PDOP Ratio Baseline",
+                        "2300 1.000 10.0 0.0 0.0 0.0 0.0 0.0 4 12 2.0 "
+                        "17.5 9400.25 2 16 8 8 1 2.5 31.0 1.2 20.0 64.0 4.0 1",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            epochs = comparison.read_libgnss_pos(pos_path)
+
+            self.assertEqual(len(epochs), 1)
+            self.assertEqual(epochs[0].ratio, 17.5)
+            self.assertEqual(epochs[0].baseline_m, 9400.25)
+            self.assertEqual(epochs[0].rtk_iterations, 2)
+            self.assertEqual(epochs[0].rtk_update_observations, 16)
+            self.assertEqual(epochs[0].rtk_update_phase_observations, 8)
+            self.assertEqual(epochs[0].rtk_update_code_observations, 8)
+            self.assertEqual(epochs[0].rtk_update_suppressed_outliers, 1)
+            self.assertEqual(epochs[0].rtk_update_prefit_residual_rms_m, 2.5)
+            self.assertEqual(epochs[0].rtk_update_prefit_residual_max_m, 31.0)
+            self.assertEqual(epochs[0].rtk_update_post_suppression_residual_rms_m, 1.2)
+            self.assertEqual(epochs[0].rtk_update_post_suppression_residual_max_m, 20.0)
+            self.assertEqual(epochs[0].rtk_update_normalized_innovation_squared, 64.0)
+            self.assertEqual(
+                epochs[0].rtk_update_normalized_innovation_squared_per_observation,
+                4.0,
+            )
+            self.assertEqual(epochs[0].rtk_update_rejected_by_innovation_gate, 1)
+
+    def test_rtklib_pos_parser_keeps_ratio_telemetry(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="rtklib_pos_ratio_parse_") as temp_dir:
+            pos_path = Path(temp_dir) / "rtklib.pos"
+            pos_path.write_text(
+                "\n".join(
+                    [
+                        "%  GPST latitude(deg) longitude(deg) height(m) Q ns sdn sde sdu sdne sdeu sdun age ratio",
+                        "2024/07/20 10:22:00.000 35.165452362 136.881445510 "
+                        "41.1780 1 7 0.0049 0.0044 0.0135 0.0026 0.0030 "
+                        "0.0031 0.00 8.5",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            epochs = comparison.read_rtklib_pos(pos_path)
+
+            self.assertEqual(len(epochs), 1)
+            self.assertEqual(epochs[0].ratio, 8.5)
+            self.assertIsNone(epochs[0].baseline_m)
+
+    def test_official_distance_score_weights_reference_distance(self) -> None:
+        reference = [
+            comparison.ReferenceEpoch(2300, 0.0, 0.0, 0.0, 0.0, (0.0, 0.0, 0.0)),
+            comparison.ReferenceEpoch(2300, 1.0, 0.0, 0.0, 0.0, (10.0, 0.0, 0.0)),
+            comparison.ReferenceEpoch(2300, 2.0, 0.0, 0.0, 0.0, (20.0, 0.0, 0.0)),
+            comparison.ReferenceEpoch(2300, 3.0, 0.0, 0.0, 0.0, (40.0, 0.0, 0.0)),
+        ]
+        solution = [
+            comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, (10.2, 0.0, 0.0), 4, 12),
+            comparison.SolutionEpoch(2300, 2.0, 0.0, 0.0, 0.0, (21.0, 0.0, 0.0), 4, 12),
+        ]
+
+        score = ppc_metrics.ppc_official_distance_score(reference, solution, 0.25)
+
+        self.assertEqual(score["ppc_official_total_distance_m"], 40.0)
+        self.assertEqual(score["ppc_official_matched_distance_m"], 20.0)
+        self.assertEqual(score["ppc_official_score_distance_m"], 10.0)
+        self.assertEqual(score["ppc_official_score_pct"], 25.0)
+
+        records = ppc_metrics.ppc_official_segment_records(reference, solution, 0.25)
+        self.assertEqual([record["score_state"] for record in records], ["scored", "high_error", "no_solution"])
+        self.assertEqual(records[0]["status"], 4)
+        self.assertEqual(records[1]["status"], 4)
+        self.assertIsNone(records[2]["status"])
+
+
+class PPCCoverageReadmeUpdateTest(unittest.TestCase):
+    def sample_summary(self) -> dict[str, object]:
+        return {
+            "runs": [
+                {
+                    "key": "tokyo_run1",
+                    "metrics": {
+                        "positioning_rate_pct": 86.2,
+                        "fix_rate_pct": 48.6,
+                        "ppc_official_score_pct": 42.0,
+                    },
+                    "rtklib": {
+                        "positioning_rate_pct": 66.3,
+                        "fix_rate_pct": 30.5,
+                        "ppc_official_score_pct": 21.0,
+                    },
+                    "delta_vs_rtklib": {
+                        "positioning_rate_pct": 19.9,
+                        "ppc_official_score_pct": 21.0,
+                        "p95_h_m": -6.97,
+                    },
+                },
+                {
+                    "key": "nagoya_run1",
+                    "metrics": {
+                        "positioning_rate_pct": 87.9,
+                        "fix_rate_pct": 60.3,
+                        "ppc_official_score_pct": 50.0,
+                    },
+                    "rtklib": {
+                        "positioning_rate_pct": 65.8,
+                        "fix_rate_pct": 33.8,
+                        "ppc_official_score_pct": 25.0,
+                    },
+                    "delta_vs_rtklib": {
+                        "positioning_rate_pct": 22.1,
+                        "ppc_official_score_pct": 25.0,
+                        "p95_h_m": -22.63,
+                    },
+                },
+            ]
+        }
+
+    def test_render_coverage_block_formats_table_and_averages(self) -> None:
+        block = ppc_coverage_readme.render_coverage_block(self.sample_summary())
+
+        self.assertIn("| Tokyo run1 | **86.2%** | 66.3% | **+19.9 pp** |", block)
+        self.assertIn("| Nagoya run1 | **87.9%** | 65.8% | **+22.1 pp** |", block)
+        self.assertIn("PPC official score", block)
+        self.assertIn("Across these two public runs", block)
+        self.assertIn("**+21.0 pp**", block)
+        self.assertIn("**+23.0 pp** PPC official-score lead", block)
+        self.assertIn("**-14.80 m** P95", block)
+
+    def test_replace_marked_block_keeps_surrounding_markdown(self) -> None:
+        original = "\n".join(
+            [
+                "before",
+                ppc_coverage_readme.START_MARKER,
+                "old generated block",
+                ppc_coverage_readme.END_MARKER,
+                "after",
+            ]
+        )
+
+        updated = ppc_coverage_readme.replace_marked_block(original, "new generated block")
+
+        self.assertIn("before", updated)
+        self.assertIn("after", updated)
+        self.assertIn("new generated block", updated)
+        self.assertNotIn("old generated block", updated)
+
+    def test_check_mode_reports_stale_target_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_readme_update_") as temp_dir:
+            target = Path(temp_dir) / "README.md"
+            original = "\n".join(
+                [
+                    ppc_coverage_readme.START_MARKER,
+                    "old generated block",
+                    ppc_coverage_readme.END_MARKER,
+                    "",
+                ]
+            )
+            target.write_text(original, encoding="utf-8")
+
+            changed = ppc_coverage_readme.update_target(target, "new generated block", check=True)
+
+            self.assertTrue(changed)
+            self.assertEqual(target.read_text(encoding="utf-8"), original)
+
+    def test_missing_rtklib_delta_fails(self) -> None:
+        payload = self.sample_summary()
+        runs = payload["runs"]
+        assert isinstance(runs, list)
+        assert isinstance(runs[0], dict)
+        del runs[0]["delta_vs_rtklib"]
+
+        with self.assertRaises(SystemExit):
+            ppc_coverage_readme.render_coverage_block(payload)
+
+
+class PPCCommercialHelpersTest(unittest.TestCase):
+    def test_build_commercial_rover_command_keeps_tuning_local(self) -> None:
+        solve = ppc_commercial.CommercialRoverSolve(
+            rover=Path("rover_trimble.obs"),
+            base=Path("base_trimble.obs"),
+            nav=Path("base.nav"),
+            out=Path("trimble.pos"),
+            max_epochs=120,
+            tuning=ppc_commercial.CommercialRoverTuning(
+                preset="survey",
+                arfilter=False,
+                arfilter_margin=0.2,
+                min_hold_count=4,
+                hold_ratio_threshold=2.0,
+            ),
+        )
+
+        command = ppc_commercial.build_commercial_rover_command(
+            [sys.executable, str(ROOT_DIR / "apps" / "gnss.py")],
+            solve,
+        )
+
+        self.assertEqual(command[:3], [sys.executable, str(ROOT_DIR / "apps" / "gnss.py"), "solve"])
+        self.assertIn("--rover", command)
+        self.assertIn("rover_trimble.obs", command)
+        self.assertIn("--preset", command)
+        self.assertIn("survey", command)
+        self.assertIn("--no-arfilter", command)
+        self.assertIn("--max-epochs", command)
+        self.assertIn("120", command)
+
+    def test_summarize_receiver_epochs_writes_isolated_match_csv(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_commercial_summary_") as temp_dir:
+            temp_root = Path(temp_dir)
+            reference = [
+                comparison.ReferenceEpoch(
+                    week=2300,
+                    tow=1000.0,
+                    lat_deg=35.0,
+                    lon_deg=139.0,
+                    height_m=42.0,
+                    ecef=comparison.llh_to_ecef(35.0, 139.0, 42.0),
+                )
+            ]
+            epochs = [
+                comparison.SolutionEpoch(
+                    week=2300,
+                    tow=1000.0,
+                    lat_deg=35.0000001,
+                    lon_deg=139.0000001,
+                    height_m=42.1,
+                    ecef=comparison.llh_to_ecef(35.0000001, 139.0000001, 42.1),
+                    status=4,
+                    num_satellites=18,
+                )
+            ]
+            match_csv = temp_root / "commercial_matches.csv"
+
+            summary = ppc_commercial.summarize_receiver_epochs(
+                reference=reference,
+                epochs=epochs,
+                label="trimble_net_r9",
+                source="libgnss_solved_receiver_observations",
+                solution_pos=temp_root / "trimble.pos",
+                solution_format="pos",
+                matched_csv=match_csv,
+                match_tolerance_s=0.25,
+                solver_wall_time_s=0.5,
+                generated_solution=False,
+                rover=temp_root / "rover_trimble.obs",
+                base=temp_root / "base_trimble.obs",
+                nav=temp_root / "base.nav",
+            )
+
+            self.assertEqual(summary["label"], "trimble_net_r9")
+            self.assertEqual(summary["source"], "libgnss_solved_receiver_observations")
+            self.assertFalse(summary["generated_solution"])
+            self.assertEqual(summary["matched_epochs"], 1)
+            self.assertTrue(match_csv.exists())
+            self.assertIn("horizontal_error_m", match_csv.read_text(encoding="utf-8"))
+
+
+class PublicRTKBenchmarksTest(unittest.TestCase):
+    def test_matrix_keeps_urban_nav_as_tier_one_smoke(self) -> None:
+        profiles = {
+            profile.profile_id: profile for profile in public_rtk_benchmarks.PROFILES
+        }
+
+        urban_nav = profiles["urban-nav-tokyo"]
+        smartloc = profiles["smartloc"]
+        ppc = profiles["ppc-dataset"]
+
+        self.assertEqual(ppc.status, "primary-public-rtk-signoff")
+        self.assertIn("Septentrio mosaic-X5", ppc.receiver_artifacts)
+        self.assertIn("proprietary receiver-engine solution", ppc.caveat)
+        self.assertEqual(urban_nav.status, "wired-path-overrides")
+        self.assertEqual(urban_nav.role, "tier-1 public smoke")
+        self.assertIn("not the Trimble RTK engine", urban_nav.caveat)
+        self.assertIn("--commercial-rover", urban_nav.adapter)
+        self.assertEqual(smartloc.status, "receiver-fix-signoff")
+        self.assertIn("smartloc-adapter", smartloc.adapter)
+
+    def test_matrix_separates_candidate_adapters(self) -> None:
+        candidates = public_rtk_benchmarks.select_profiles(["candidate"])
+        candidate_ids = {profile.profile_id for profile in candidates}
+        markdown = public_rtk_benchmarks.render_markdown(candidates)
+
+        self.assertIn("gsdc", candidate_ids)
+        self.assertIn("Ford Highway Driving RTK", markdown)
+        self.assertNotIn("urban-nav-tokyo", candidate_ids)
+        self.assertNotIn("smartloc", candidate_ids)
+
+
+class SmartLocAdapterTest(unittest.TestCase):
+    def test_convert_nav_posllh_exports_existing_comparison_contracts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_smartloc_adapter_") as temp_dir:
+            temp_root = Path(temp_dir)
+            nav_posllh = temp_root / "NAV-POSLLH.csv"
+            reference_csv = temp_root / "reference.csv"
+            receiver_csv = temp_root / "receiver.csv"
+            summary_json = temp_root / "summary.json"
+            nav_posllh.write_text(
+                "\n".join(
+                    [
+                        "GPSWeek [weeks];GPSSecondsOfWeek [s];Longitude (GT Lon) [deg];Longitude Cov (GT Lon Cov) [deg];Latitude (GT Lat) [deg];Latitude Cov (GT Lat Cov) [deg];Height above ellipsoid (GT Height) [m];Height above ellipsoid Cov (GT Height Cov) [m];Heading (0 = East, counterclockwise) - (GT Heading) [rad];Heading Cov (0 = East, counterclockwise) - (GT Heading Cov) [rad];Acceleration (GT Acceleration) [ms^2];Acceleration Cov (GT Acceleration Cov) [ms^2];Velocity (GT Velocity) [m/s];Velocity Cov (GT Velocity Cov) [m/s];Yaw-Rate (GT Yaw-rate) [rad/s];Yaw-Rate Cov (GT Yaw-rate Cov) [rad/s];GPS time of week of the navigation epoch (iTOW) [ms];Longitude (lon) [deg];Latitude (lat) [deg];Height above ellipsoid (height) [m];Height above mean sea level (hMSL) [m];Horizontal accuracy estimate (hAcc) [m];Vertical accuracy estimate (vAcc) [m]",
+                        "1900;126641.5;13.373657763;0.0;52.504560275;0.0;76.004611;0.0;1.24;0.0;0.9;0.0;5.7;0.0;0.002;0.0;126641500;13.3736776;52.5045750;80.242;38.043;0.547;-1",
+                        "1900;126641.7;13.373662801;0.0;52.504570098;0.0;76.010967;0.0;1.23;0.0;0.8;0.0;5.8;0.0;-0.007;0.0;126641700;13.3736829;52.5045848;80.234;38.035;0.547;-1",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            summary = smartloc_adapter.convert_nav_posllh(
+                source_path=nav_posllh,
+                reference_csv=reference_csv,
+                receiver_csv=receiver_csv,
+                receiver_label="smartloc_ublox",
+                summary_json=summary_json,
+            )
+
+            self.assertEqual(summary["epochs"], 2)
+            self.assertEqual(summary["adapter_status"], "receiver_csv_adapter")
+            self.assertTrue(reference_csv.exists())
+            self.assertTrue(receiver_csv.exists())
+            self.assertTrue(summary_json.exists())
+            reference = ppc_demo.read_flexible_reference_csv(reference_csv)
+            receiver_records, receiver_format = moving_base_signoff.read_commercial_solution_records(
+                receiver_csv,
+                "csv",
+            )
+            self.assertEqual(len(reference), 2)
+            self.assertEqual(len(receiver_records), 2)
+            self.assertEqual(receiver_format, "csv")
+            self.assertEqual(receiver_records[0]["status"], 1)
+
+    def test_convert_rawx_exports_csv_and_rinex_observations(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_smartloc_rawx_adapter_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rawx = temp_root / "RXM-RAWX.csv"
+            raw_csv = temp_root / "rawx.csv"
+            obs_rinex = temp_root / "rover.obs"
+            summary_json = temp_root / "raw_summary.json"
+            rawx.write_text(
+                "\n".join(
+                    [
+                        "GPSWeek [weeks];GPSSecondsOfWeek [s];Longitude (GT Lon) [deg];Longitude Cov (GT Lon) [deg];Latitude (GT Lat) [deg];Latitude Cov (GT Lat) [deg];Height above ellipsoid (GT Height) [m];Height above ellipsoid Cov (GT Height) [m];Heading (0 = East, counterclockwise) - (GT Heading) [rad];Heading Cov (0 = East, counterclockwise) - (GT Heading Cov) [rad];Acceleration (GT Acceleration) [ms^2];Acceleration Cov (GT Acceleration Cov) [ms^2];Velocity (GT Velocity) [m/s];Velocity Cov (GT Velocity Cov) [m/s];Yaw-Rate (GT Yaw-rate) [rad/s];Yaw-Rate Cov (GT Yaw-rate Cov) [rad/s];Measurement time of week (rcvTow) [s];GPS week number (week) [weeks];GPS leap seconds (leapS) [s];Number of measurements to follow (numMeas) [];Receiver tracking status (recStat) [];Pseudorange measurement (prMes) [m];Carrier phase measurement (cpMes) [cycles];Doppler measurement (doMes) [Hz];GNSS identifier (gnssId) [];Satellite identifier (svId) [];Frequency slot - only Glonass (freqId) [];Carrier phase locktime counter (locktime) [ms];Carrier-to-noise density ratio (cno) [dbHz];Estimated pseudorange measurement standard deviation (prStdev) [m];Estimated carrier phase measurement standard deviation (cpStdev) [cycles];Estimated Doppler measurement standard deviation (doStdev) [Hz];Tracking status (trkStat) [];NLOS (0 == no, 1 == yes, # == No Information)",
+                        "1900;126641.5;13.0;0.0;52.0;0.0;76.0;0.0;1.0;0.0;0.0;0.0;5.0;0.0;0.0;0.0;126641.5;1900;17;2;1;19834597.871;104231506.047;222.1658;GPS;12;0;64500;50;0.32;0.004;0.128;15;0",
+                        "1900;126641.5;13.0;0.0;52.0;0.0;76.0;0.0;1.0;0.0;0.0;0.0;5.0;0.0;0.0;0.0;126641.5;1900;17;2;1;19784715.199;105797774.172;2219.386;Glonass;20;9;20400;39;2.56;0.012;1.024;7;1",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            summary = smartloc_adapter.convert_rawx(
+                source_path=rawx,
+                raw_csv=raw_csv,
+                obs_rinex=obs_rinex,
+                summary_json=summary_json,
+            )
+
+            self.assertEqual(summary["adapter_status"], "rawx_rinex_adapter")
+            self.assertEqual(summary["raw_epochs"], 1)
+            self.assertEqual(summary["raw_observations"], 2)
+            self.assertEqual(summary["nlos_observations"], 1)
+            self.assertTrue(raw_csv.exists())
+            self.assertTrue(obs_rinex.exists())
+            self.assertIn("pseudorange_m", raw_csv.read_text(encoding="utf-8"))
+            rinex_text = obs_rinex.read_text(encoding="utf-8")
+            self.assertIn("SYS / # / OBS TYPES", rinex_text)
+            self.assertIn("G12", rinex_text)
+            self.assertIn("R20", rinex_text)
+            self.assertTrue(summary_json.exists())
+
+
+class SmartLocSignoffTest(unittest.TestCase):
+    def test_download_cache_filename_preserves_public_zip_name(self) -> None:
+        self.assertEqual(
+            smartloc_signoff.download_cache_filename(
+                "https://www.tu-chemnitz.de/projekt/smartLoc/gnss_dataset/berlin/scenario1/berlin1_potsdamer_platz.zip"
+            ),
+            "berlin1_potsdamer_platz.zip",
+        )
+
+    def test_main_writes_receiver_fix_summary_with_raw_provenance(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_smartloc_signoff_") as temp_dir:
+            temp_root = Path(temp_dir)
+            nav_posllh = temp_root / "NAV-POSLLH.csv"
+            rawx = temp_root / "RXM-RAWX.csv"
+            output_dir = temp_root / "out"
+            nav_posllh.write_text(
+                "\n".join(
+                    [
+                        "GPSWeek [weeks];GPSSecondsOfWeek [s];Longitude (GT Lon) [deg];Longitude Cov (GT Lon Cov) [deg];Latitude (GT Lat) [deg];Latitude Cov (GT Lat Cov) [deg];Height above ellipsoid (GT Height) [m];Height above ellipsoid Cov (GT Height Cov) [m];Heading (0 = East, counterclockwise) - (GT Heading) [rad];Heading Cov (0 = East, counterclockwise) - (GT Heading Cov) [rad];Acceleration (GT Acceleration) [ms^2];Acceleration Cov (GT Acceleration Cov) [ms^2];Velocity (GT Velocity) [m/s];Velocity Cov (GT Velocity Cov) [m/s];Yaw-Rate (GT Yaw-rate) [rad/s];Yaw-Rate Cov (GT Yaw-rate Cov) [rad/s];GPS time of week of the navigation epoch (iTOW) [ms];Longitude (lon) [deg];Latitude (lat) [deg];Height above ellipsoid (height) [m];Height above mean sea level (hMSL) [m];Horizontal accuracy estimate (hAcc) [m];Vertical accuracy estimate (vAcc) [m]",
+                        "1900;126641.5;13.373657763;0.0;52.504560275;0.0;76.004611;0.0;1.24;0.0;0.9;0.0;5.7;0.0;0.002;0.0;126641500;13.3736578;52.5045603;76.104;38.043;0.547;-1",
+                        "1900;126641.7;13.373662801;0.0;52.504570098;0.0;76.010967;0.0;1.23;0.0;0.8;0.0;5.8;0.0;-0.007;0.0;126641700;13.3736629;52.5045702;76.111;38.035;0.547;-1",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            rawx.write_text(
+                "\n".join(
+                    [
+                        "GPSWeek [weeks];GPSSecondsOfWeek [s];Longitude (GT Lon) [deg];Longitude Cov (GT Lon) [deg];Latitude (GT Lat) [deg];Latitude Cov (GT Lat) [deg];Height above ellipsoid (GT Height) [m];Height above ellipsoid Cov (GT Height Cov) [m];Heading (0 = East, counterclockwise) - (GT Heading) [rad];Heading Cov (0 = East, counterclockwise) - (GT Heading Cov) [rad];Acceleration (GT Acceleration) [ms^2];Acceleration Cov (GT Acceleration Cov) [ms^2];Velocity (GT Velocity) [m/s];Velocity Cov (GT Velocity Cov) [m/s];Yaw-Rate (GT Yaw-rate) [rad/s];Yaw-Rate Cov (GT Yaw-rate Cov) [rad/s];Measurement time of week (rcvTow) [s];GPS week number (week) [weeks];GPS leap seconds (leapS) [s];Number of measurements to follow (numMeas) [];Receiver tracking status (recStat) [];Pseudorange measurement (prMes) [m];Carrier phase measurement (cpMes) [cycles];Doppler measurement (doMes) [Hz];GNSS identifier (gnssId) [];Satellite identifier (svId) [];Frequency slot - only Glonass (freqId) [];Carrier phase locktime counter (locktime) [ms];Carrier-to-noise density ratio (cno) [dbHz];Estimated pseudorange measurement standard deviation (prStdev) [m];Estimated carrier phase measurement standard deviation (cpStdev) [cycles];Estimated Doppler measurement standard deviation (doStdev) [Hz];Tracking status (trkStat) [];NLOS (0 == no, 1 == yes, # == No Information)",
+                        "1900;126641.5;13.0;0.0;52.0;0.0;76.0;0.0;1.0;0.0;0.0;0.0;5.0;0.0;0.0;0.0;126641.5;1900;17;1;1;19834597.871;104231506.047;222.1658;GPS;12;0;64500;50;0.32;0.004;0.128;15;0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            args = argparse.Namespace(
+                input=None,
+                input_url=smartloc_signoff.DEFAULT_SMARTLOC_ZIP_URL,
+                download_cache_dir=temp_root / "cache",
+                force_download=False,
+                nav_posllh=nav_posllh,
+                rawx=rawx,
+                output_dir=output_dir,
+                reference_csv=None,
+                receiver_csv=None,
+                raw_csv=None,
+                obs_rinex=None,
+                matched_csv=None,
+                summary_json=None,
+                receiver_label="smartloc_ublox",
+                match_tolerance_s=0.25,
+                max_rows=-1,
+                raw_max_epochs=-1,
+                skip_raw_export=False,
+                require_matched_epochs_min=2,
+                require_mean_h_max=1.0,
+                require_median_h_max=None,
+                require_p95_h_max=1.0,
+                require_max_h_max=1.0,
+                require_p95_up_max=1.0,
+                require_raw_epochs_min=1,
+                require_raw_observations_min=1,
+                require_solver_inputs_available=False,
+            )
+
+            with mock.patch.object(smartloc_signoff, "parse_args", return_value=args):
+                exit_code = smartloc_signoff.main()
+
+            self.assertEqual(exit_code, 0)
+            summary_path = output_dir / "smartloc_signoff_summary.json"
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["signoff_profile"], "smartloc-receiver-fix")
+            self.assertEqual(payload["receiver_fix"]["matched_epochs"], 2)
+            self.assertEqual(payload["raw_adapter"]["raw_epochs"], 1)
+            self.assertEqual(payload["solver_preflight"]["status"], "blocked")
+            self.assertIn(
+                "missing broadcast navigation RINEX in smartLoc input",
+                payload["solver_preflight"]["rtk_blockers"],
+            )
+            self.assertFalse(payload["solver_signoff_available"])
 
 
 class OptionalRTKSignoffScriptTest(unittest.TestCase):
@@ -666,6 +2856,214 @@ class DrivingComparisonHelpersTest(unittest.TestCase):
         self.assertAlmostEqual(lib_common["median_h_m"], 0.85)
         self.assertAlmostEqual(rt_common["median_h_m"], 0.65)
 
+    def test_ppc_coverage_quality_groups_status_and_bad_segments(self) -> None:
+        matches = [
+            self.matched_epoch(0.0, 0.1, 0.1, 4),
+            self.matched_epoch(1.0, 10.0, 1.0, 3),
+            self.matched_epoch(2.0, 20.0, 2.0, 3),
+            self.matched_epoch(2.5, 30.0, 3.0, 1),
+            self.matched_epoch(3.0, 0.1, 0.1, 4),
+        ]
+
+        status_rows = ppc_coverage_quality.summarize_by_status(matches, reference_count=5)
+        status_by_name = {row["status"]: row for row in status_rows}
+        self.assertEqual(status_by_name["FIXED"]["epochs"], 2)
+        self.assertEqual(status_by_name["FLOAT"]["epochs"], 2)
+        self.assertEqual(status_by_name["SPP"]["epochs"], 1)
+        self.assertEqual(status_by_name["FIXED"]["ppc_score_3d_50cm_epochs"], 2)
+
+        global_p95, contribution = ppc_coverage_quality.p95_contribution_by_status(matches)
+        self.assertGreater(global_p95, 20.0)
+        self.assertEqual(contribution[0]["status"], "SPP")
+        self.assertEqual(contribution[0]["epochs"], 1)
+
+        segments = ppc_coverage_quality.bad_segments(
+            matches,
+            threshold_m=15.0,
+            max_gap_s=0.6,
+        )
+        self.assertEqual(len(segments), 1)
+        self.assertEqual(segments[0]["epochs"], 2)
+        self.assertEqual(segments[0]["statuses"], ["FLOAT", "SPP"])
+        self.assertEqual(segments[0]["status_counts"], {"FLOAT": 1, "SPP": 1})
+        self.assertEqual(segments[0]["dominant_status"], "FLOAT")
+        self.assertEqual(segments[0]["previous_fixed_tow_s"], 0.0)
+        self.assertEqual(segments[0]["next_fixed_tow_s"], 3.0)
+        self.assertEqual(segments[0]["fixed_anchor_gap_s"], 3.0)
+        self.assertEqual(segments[0]["fixed_anchor_distance_m"], 3.0)
+        self.assertEqual(segments[0]["fixed_anchor_speed_mps"], 1.0)
+        self.assertEqual(segments[0]["fixed_anchor_bridge_residual_max_m"], 0.0)
+
+        reference = [
+            comparison.ReferenceEpoch(2300, 0.0, 0.0, 0.0, 0.0, np.array([0.0, 0.0, 0.0])),
+            comparison.ReferenceEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([10.0, 0.0, 0.0])),
+            comparison.ReferenceEpoch(2300, 2.0, 0.0, 0.0, 0.0, np.array([20.0, 0.0, 0.0])),
+            comparison.ReferenceEpoch(2300, 3.0, 0.0, 0.0, 0.0, np.array([40.0, 0.0, 0.0])),
+        ]
+        lib_solution = [
+            comparison.SolutionEpoch(
+                2300,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                np.array([10.2, 0.0, 0.0]),
+                3,
+                12,
+                4.0,
+                100.0,
+                2,
+                14,
+                7,
+                7,
+                0,
+                0.25,
+                4.0,
+                0.25,
+                4.0,
+                56.0,
+                4.0,
+                0,
+            ),
+            comparison.SolutionEpoch(
+                2300,
+                2.0,
+                0.0,
+                0.0,
+                0.0,
+                np.array([21.0, 0.0, 0.0]),
+                3,
+                12,
+                12.0,
+                101.0,
+                2,
+                16,
+                8,
+                8,
+                1,
+                2.5,
+                31.0,
+                1.2,
+                20.0,
+                128.0,
+                8.0,
+                1,
+            ),
+        ]
+        rtklib_solution = [
+            comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([11.0, 0.0, 0.0]), 2, 12),
+            comparison.SolutionEpoch(2300, 2.0, 0.0, 0.0, 0.0, np.array([20.1, 0.0, 0.0]), 1, 12),
+        ]
+        spp_solution = [
+            comparison.SolutionEpoch(2300, 1.0, 0.0, 0.0, 0.0, np.array([10.3, 0.0, 0.0]), 1, 12),
+            comparison.SolutionEpoch(2300, 2.0, 0.0, 0.0, 0.0, np.array([20.1, 0.0, 0.0]), 1, 12),
+        ]
+        lib_records = ppc_metrics.ppc_official_segment_records(reference, lib_solution, 0.25)
+        rtklib_records = ppc_metrics.ppc_official_segment_records(reference, rtklib_solution, 0.25)
+        spp_records = ppc_metrics.ppc_official_segment_records(reference, spp_solution, 0.25)
+
+        loss_by_state = {
+            row["score_state"]: row
+            for row in ppc_coverage_quality.official_loss_by_state(lib_records)
+        }
+        self.assertEqual(loss_by_state["scored"]["distance_m"], 10.0)
+        self.assertEqual(loss_by_state["high_error"]["distance_m"], 10.0)
+        self.assertEqual(loss_by_state["no_solution"]["distance_m"], 20.0)
+
+        high_error_by_status = {
+            row["status"]: row
+            for row in ppc_coverage_quality.official_loss_by_status(
+                lib_records,
+                ppc_coverage_quality.status_name,
+                ("high_error",),
+            )
+        }
+        self.assertEqual(high_error_by_status["FLOAT"]["distance_m"], 10.0)
+        self.assertEqual(high_error_by_status["FLOAT"]["median_ratio"], 12.0)
+        self.assertEqual(high_error_by_status["FLOAT"]["ratio_ge_10_distance_m"], 10.0)
+        self.assertEqual(high_error_by_status["FLOAT"]["median_rtk_update_observations"], 16.0)
+        self.assertEqual(high_error_by_status["FLOAT"]["median_rtk_prefit_rms_m"], 2.5)
+        self.assertEqual(high_error_by_status["FLOAT"]["p95_rtk_prefit_max_m"], 31.0)
+        self.assertEqual(high_error_by_status["FLOAT"]["median_rtk_update_nis_per_obs"], 8.0)
+        self.assertEqual(high_error_by_status["FLOAT"]["rtk_update_nis_rejected_segments"], 1)
+        self.assertEqual(high_error_by_status["FLOAT"]["rtk_update_nis_rejected_distance_m"], 10.0)
+        rtk_diagnostics_by_state = {
+            (row["status"], row["score_state"]): row
+            for row in ppc_coverage_quality.official_rtk_update_diagnostics_by_state(
+                lib_records,
+                ppc_coverage_quality.status_name,
+            )
+        }
+        self.assertEqual(rtk_diagnostics_by_state[("FLOAT", "scored")]["distance_m"], 10.0)
+        self.assertEqual(rtk_diagnostics_by_state[("FLOAT", "high_error")]["distance_m"], 10.0)
+        self.assertEqual(
+            rtk_diagnostics_by_state[("FLOAT", "scored")]["median_rtk_prefit_rms_m"],
+            0.25,
+        )
+        self.assertEqual(
+            rtk_diagnostics_by_state[("FLOAT", "high_error")]["median_rtk_prefit_rms_m"],
+            2.5,
+        )
+        self.assertEqual(
+            rtk_diagnostics_by_state[("FLOAT", "high_error")][
+                "median_rtk_update_nis_per_obs"
+            ],
+            8.0,
+        )
+        unscored_by_status = {
+            row["status"]: row
+            for row in ppc_coverage_quality.official_loss_by_status(
+                lib_records,
+                ppc_coverage_quality.status_name,
+            )
+        }
+        self.assertEqual(unscored_by_status["NO_SOLUTION"]["distance_m"], 20.0)
+
+        official_segments = ppc_coverage_quality.official_loss_segments(
+            lib_records,
+            ppc_coverage_quality.status_name,
+        )
+        self.assertEqual(len(official_segments), 1)
+        self.assertEqual(official_segments[0]["distance_m"], 30.0)
+        self.assertEqual(official_segments[0]["dominant_score_state"], "no_solution")
+        self.assertEqual(official_segments[0]["status_counts"], {"NO_SOLUTION": 1, "FLOAT": 1})
+
+        combined = ppc_coverage_quality.official_combined_records(lib_records, rtklib_records)
+        delta_by_bucket = {
+            row["bucket"]: row
+            for row in ppc_coverage_quality.official_delta_by_bucket(combined)
+        }
+        self.assertEqual(delta_by_bucket["gnssplusplus_gain"]["score_delta_pct"], 25.0)
+        self.assertEqual(delta_by_bucket["rtklib_gain"]["score_delta_pct"], -25.0)
+        best_of_score = ppc_coverage_quality.official_best_of_lib_rtklib_score(
+            ppc_metrics.ppc_official_distance_score(reference, lib_solution, 0.25),
+            combined,
+        )
+        self.assertEqual(best_of_score["score_distance_m"], 20.0)
+        self.assertEqual(best_of_score["score_pct"], 50.0)
+        self.assertEqual(best_of_score["rtklib_additional_distance_m"], 10.0)
+        self.assertEqual(best_of_score["remaining_unscored_distance_m"], 20.0)
+        float_spp_sweep = ppc_coverage_quality.official_float_spp_divergence_sweep(
+            lib_records,
+            spp_records,
+            lib_solution,
+            spp_solution,
+            [0.5],
+        )
+        self.assertEqual(float_spp_sweep[0]["threshold_m"], 0.5)
+        self.assertEqual(float_spp_sweep[0]["score_distance_m"], 20.0)
+        self.assertEqual(float_spp_sweep[0]["score_delta_distance_m"], 10.0)
+        self.assertEqual(float_spp_sweep[0]["recovered_distance_m"], 10.0)
+        self.assertEqual(combined[1]["lib_ratio"], 12.0)
+        self.assertEqual(combined[1]["lib_baseline_m"], 101.0)
+        self.assertEqual(combined[1]["lib_rtk_update_observations"], 16)
+        self.assertEqual(combined[1]["lib_rtk_update_prefit_residual_max_m"], 31.0)
+        self.assertEqual(
+            combined[1]["lib_rtk_update_normalized_innovation_squared_per_observation"],
+            8.0,
+        )
+        self.assertEqual(combined[1]["lib_rtk_update_rejected_by_innovation_gate"], 1)
+
 
 class ScorecardRenderTest(unittest.TestCase):
     def write_reference_csv(
@@ -850,6 +3248,266 @@ class ScorecardRenderTest(unittest.TestCase):
                     self.assertEqual(image.size, (2240, 1376))
             except ModuleNotFoundError:
                 pass
+
+    def test_ppc_rtk_scorecard_main_renders_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_scorecard_test_") as temp_dir:
+            output_png = Path(temp_dir) / "ppc_rtk_scorecard.png"
+
+            argv = [
+                "generate_ppc_rtk_scorecard.py",
+                "--output",
+                str(output_png),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_rtk_scorecard.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(output_png.exists())
+            self.assertGreater(output_png.stat().st_size, 0)
+            try:
+                from PIL import Image
+
+                with Image.open(output_png) as image:
+                    self.assertEqual(image.size, (1400, 750))
+            except ModuleNotFoundError:
+                pass
+
+    def test_ppc_tail_cleanup_scorecard_main_renders_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_tail_scorecard_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            baseline_summary = temp_root / "baseline.json"
+            cleanup_summary = temp_root / "cleanup.json"
+            output_png = temp_root / "ppc_tail_cleanup_scorecard.png"
+
+            def run_record(key: str, pos: float, official: float, p95: float, max_h: float, rejected: int) -> dict[str, object]:
+                return {
+                    "key": key,
+                    "metrics": {
+                        "positioning_rate_pct": pos,
+                        "fix_rate_pct": 50.0,
+                        "ppc_official_score_pct": official,
+                        "p95_h_m": p95,
+                        "max_h_m": max_h,
+                    },
+                    "delta_vs_rtklib": {
+                        "p95_h_m": p95 - 30.0,
+                    },
+                    "guards": {
+                        "nonfix_drift_guard": {"rejected_epochs": rejected},
+                        "fixed_bridge_burst_guard": {"rejected_epochs": 2},
+                    },
+                }
+
+            baseline_summary.write_text(
+                json.dumps(
+                    {
+                        "runs": [
+                            run_record("tokyo_run1", 90.0, 35.0, 34.0, 52.0, 0),
+                            run_record("nagoya_run1", 88.0, 49.0, 12.0, 18.0, 0),
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cleanup_summary.write_text(
+                json.dumps(
+                    {
+                        "ratio": 2.4,
+                        "nonfix_drift_max_residual": 4.0,
+                        "fixed_bridge_burst_max_residual": 20.0,
+                        "runs": [
+                            run_record("tokyo_run1", 87.6, 34.9, 26.6, 47.3, 337),
+                            run_record("nagoya_run1", 87.7, 48.9, 11.0, 16.5, 5),
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            argv = [
+                "generate_ppc_tail_cleanup_scorecard.py",
+                "--baseline-summary-json",
+                str(baseline_summary),
+                "--cleanup-summary-json",
+                str(cleanup_summary),
+                "--output",
+                str(output_png),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_tail_cleanup_scorecard.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(output_png.exists())
+            self.assertGreater(output_png.stat().st_size, 0)
+            try:
+                from PIL import Image
+
+                with Image.open(output_png) as image:
+                    self.assertEqual(image.size, (1400, 760))
+            except ModuleNotFoundError:
+                pass
+
+    def test_ppc_selector_validation_scorecard_main_renders_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_selector_scorecard_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            net_summary = temp_root / "net.json"
+            robust_summary = temp_root / "robust.json"
+            output_png = temp_root / "ppc_selector_validation_scorecard.png"
+
+            def summary(net_m: float, precision_pct: float, nonnegative: int) -> dict[str, object]:
+                return {
+                    "aggregates": {
+                        "fold_count": 2,
+                        "holdout_selected_score_delta_distance_m": net_m,
+                        "holdout_selector_vs_candidate_all_delta_m": net_m + 20.0,
+                        "holdout_distance_precision_pct": precision_pct,
+                        "nonnegative_holdout_runs": nonnegative,
+                        "min_holdout_delta_m": min(1.0, net_m),
+                        "holdout_selected_loss_distance_m": -2.0,
+                    },
+                    "folds": [
+                        {
+                            "holdout_run": "tokyo_run1",
+                            "holdout_selected_score_delta_distance_m": net_m - 1.0,
+                            "holdout_selected_loss_distance_m": -2.0,
+                            "holdout_selected_segments": 3,
+                        },
+                        {
+                            "holdout_run": "nagoya_run1",
+                            "holdout_selected_score_delta_distance_m": 1.0,
+                            "holdout_selected_loss_distance_m": 0.0,
+                            "holdout_selected_segments": 1,
+                        },
+                    ],
+                }
+
+            net_summary.write_text(json.dumps(summary(10.0, 80.0, 2)), encoding="utf-8")
+            robust_summary.write_text(json.dumps(summary(18.0, 95.0, 2)), encoding="utf-8")
+
+            argv = [
+                "generate_ppc_selector_validation_scorecard.py",
+                "--summary",
+                f"net={net_summary}",
+                "--summary",
+                f"robust={robust_summary}",
+                "--best-label",
+                "robust",
+                "--output",
+                str(output_png),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_selector_scorecard.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(output_png.exists())
+            self.assertGreater(output_png.stat().st_size, 0)
+            try:
+                from PIL import Image
+
+                with Image.open(output_png) as image:
+                    self.assertEqual(image.size, (1400, 760))
+            except ModuleNotFoundError:
+                pass
+
+    def test_ppc_rtk_trajectory_main_renders_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_trajectory_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            reference_csv = temp_root / "reference.csv"
+            lib_pos = temp_root / "lib.pos"
+            rtklib_pos = temp_root / "rtklib.pos"
+            output_png = temp_root / "ppc_rtk_trajectory.png"
+
+            rows = [
+                (2000, 0.0, 35.0000000, 139.0000000, 10.0),
+                (2000, 1.0, 35.0000100, 139.0000100, 10.2),
+                (2000, 2.0, 35.0000200, 139.0000200, 10.4),
+                (2000, 3.0, 35.0000300, 139.0000300, 10.6),
+            ]
+            self.write_reference_csv(reference_csv, rows)
+            self.write_lib_pos(
+                lib_pos,
+                [
+                    (2000, 0.0, 35.0000000, 139.0000000, 10.0, 4),
+                    (2000, 1.0, 35.0000101, 139.0000101, 10.2, 4),
+                    (2000, 2.0, 35.0000202, 139.0000202, 10.5, 3),
+                    (2000, 3.0, 35.0000300, 139.0000300, 10.6, 4),
+                ],
+            )
+            self.write_rtklib_pos(
+                rtklib_pos,
+                [
+                    (2000, 0.0, 35.0000000, 139.0000000, 10.0, 1),
+                    (2000, 1.0, 35.0000110, 139.0000110, 10.5, 2),
+                    (2000, 2.0, 35.0000200, 139.0000200, 10.4, 5),
+                    (2000, 3.0, 35.0000300, 139.0000300, 10.6, 1),
+                ],
+            )
+
+            argv = [
+                "generate_ppc_rtk_trajectory.py",
+                "--lib-pos",
+                str(lib_pos),
+                "--rtklib-pos",
+                str(rtklib_pos),
+                "--reference-csv",
+                str(reference_csv),
+                "--output",
+                str(output_png),
+                "--title",
+                "Synthetic PPC trajectory",
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_rtk_trajectory.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(output_png.exists())
+            self.assertGreater(output_png.stat().st_size, 0)
+
+            official_png = temp_root / "ppc_rtk_trajectory_official.png"
+            bad_segments_json = temp_root / "coverage_quality.json"
+            bad_segments_json.write_text(
+                json.dumps(
+                    {
+                        "bad_segments": [
+                            {
+                                "start_tow_s": 1.0,
+                                "end_tow_s": 2.0,
+                                "epochs": 2,
+                                "max_h_m": 3.2,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            argv = [
+                "generate_ppc_rtk_trajectory.py",
+                "--lib-pos",
+                str(lib_pos),
+                "--rtklib-pos",
+                str(rtklib_pos),
+                "--reference-csv",
+                str(reference_csv),
+                "--output",
+                str(official_png),
+                "--title",
+                "Synthetic PPC official trajectory",
+                "--color-mode",
+                "official",
+                "--bad-segments-json",
+                str(bad_segments_json),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_rtk_trajectory.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(official_png.exists())
+            self.assertGreater(official_png.stat().st_size, 0)
 
     def test_architecture_diagram_main_renders_png(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_architecture_card_test_") as temp_dir:
@@ -1722,6 +4380,106 @@ class PPCDemoTest(unittest.TestCase):
                     + f" {lat:.9f} {lon:.9f} {height:.4f} {quality} 0 0 0 0 0 0\n"
                 )
 
+    def test_run_solver_passes_rtk_iono_option(self) -> None:
+        args = argparse.Namespace(
+            solver="rtk",
+            preset="low-cost",
+            iono="iflc",
+            ratio=2.4,
+            max_hold_div=5.0,
+            max_pos_jump=20.0,
+            max_pos_jump_min=20.0,
+            max_pos_jump_rate=25.0,
+            max_float_spp_div=30.0,
+            max_float_prefit_rms=6.0,
+            max_float_prefit_max=30.0,
+            max_float_prefit_reset_streak=5,
+            min_float_prefit_trusted_jump=8.0,
+            max_update_nis_per_obs=12.0,
+            max_consec_float_reset=10,
+            max_consec_nonfix_reset=10,
+            max_postfix_rms=0.20,
+            enable_wide_lane_ar=True,
+            wide_lane_threshold=0.10,
+            fixed_bridge_burst_guard=True,
+            fixed_bridge_burst_max_anchor_gap=30.0,
+            fixed_bridge_burst_min_boundary_gap=1.0,
+            fixed_bridge_burst_max_residual=20.0,
+            fixed_bridge_burst_max_segment_epochs=12,
+            arfilter=False,
+            arfilter_margin=None,
+            min_hold_count=None,
+            hold_ratio_threshold=None,
+            no_kinematic_post_filter=True,
+            no_nonfix_drift_guard=False,
+            nonfix_drift_max_anchor_gap=None,
+            nonfix_drift_max_anchor_speed=None,
+            nonfix_drift_max_residual=None,
+            nonfix_drift_min_horizontal_residual=None,
+            nonfix_drift_min_segment_epochs=None,
+            nonfix_drift_max_segment_epochs=None,
+            no_spp_height_step_guard=False,
+            spp_height_step_min=None,
+            spp_height_step_rate=None,
+            float_bridge_tail_guard=True,
+            float_bridge_tail_max_anchor_gap=None,
+            float_bridge_tail_min_anchor_speed=None,
+            float_bridge_tail_max_anchor_speed=None,
+            float_bridge_tail_max_residual=None,
+            float_bridge_tail_min_segment_epochs=None,
+            max_epochs=120,
+        )
+        commands: list[list[str]] = []
+
+        with mock.patch.object(ppc_demo, "run_command", side_effect=commands.append):
+            elapsed = ppc_demo.run_solver(
+                args,
+                Path("rover.obs"),
+                Path("base.obs"),
+                Path("base.nav"),
+                Path("out.pos"),
+            )
+
+        self.assertGreaterEqual(elapsed, 0.0)
+        self.assertEqual(len(commands), 1)
+        self.assertIn("--iono", commands[0])
+        self.assertIn("iflc", commands[0])
+        self.assertIn("--ratio", commands[0])
+        self.assertIn("2.4", commands[0])
+        self.assertIn("--max-hold-div", commands[0])
+        self.assertIn("5.0", commands[0])
+        self.assertIn("--max-pos-jump", commands[0])
+        self.assertIn("20.0", commands[0])
+        self.assertIn("--max-pos-jump-min", commands[0])
+        self.assertIn("20.0", commands[0])
+        self.assertIn("--max-pos-jump-rate", commands[0])
+        self.assertIn("25.0", commands[0])
+        self.assertIn("--max-float-spp-div", commands[0])
+        self.assertIn("30.0", commands[0])
+        self.assertIn("--max-float-prefit-rms", commands[0])
+        self.assertIn("6.0", commands[0])
+        self.assertIn("--max-float-prefit-max", commands[0])
+        self.assertIn("30.0", commands[0])
+        self.assertIn("--max-float-prefit-reset-streak", commands[0])
+        self.assertIn("5", commands[0])
+        self.assertIn("--min-float-prefit-trusted-jump", commands[0])
+        self.assertIn("8.0", commands[0])
+        self.assertIn("--max-update-nis-per-obs", commands[0])
+        self.assertIn("12.0", commands[0])
+        self.assertIn("--max-consec-float-reset", commands[0])
+        self.assertIn("10", commands[0])
+        self.assertIn("--max-consec-nonfix-reset", commands[0])
+        self.assertIn("--max-postfix-rms", commands[0])
+        self.assertIn("0.2", commands[0])
+        self.assertIn("--enable-wide-lane-ar", commands[0])
+        self.assertIn("--wide-lane-threshold", commands[0])
+        self.assertIn("0.1", commands[0])
+        self.assertIn("--fixed-bridge-burst-guard", commands[0])
+        self.assertIn("--fixed-bridge-burst-max-residual", commands[0])
+        self.assertIn("20.0", commands[0])
+        self.assertIn("--no-arfilter", commands[0])
+        self.assertIn("--no-kinematic-post-filter", commands[0])
+
     def test_build_summary_payload_and_requirements(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_demo_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -1795,6 +4553,11 @@ class PPCDemoTest(unittest.TestCase):
                 use_existing_rtklib_solution=True,
                 rtklib_solver_wall_time_s=0.1,
                 commercial_pos=commercial_pos,
+                commercial_rover=None,
+                commercial_base=None,
+                commercial_nav=None,
+                commercial_out=None,
+                use_existing_commercial_solution=False,
                 commercial_format="auto",
                 commercial_label="survey_receiver",
                 commercial_matched_csv=commercial_matches,
@@ -1808,7 +4571,39 @@ class PPCDemoTest(unittest.TestCase):
                 antex=None,
                 blq=None,
                 enable_ar=False,
+                iono="iflc",
+                ratio=2.4,
+                max_hold_div=5.0,
+                max_pos_jump=20.0,
+                max_pos_jump_min=20.0,
+                max_pos_jump_rate=25.0,
+                max_float_spp_div=30.0,
+                max_float_prefit_rms=6.0,
+                max_float_prefit_max=30.0,
+                max_float_prefit_reset_streak=5,
+                min_float_prefit_trusted_jump=8.0,
+                max_update_nis_per_obs=12.0,
+                max_consec_float_reset=10,
+                max_consec_nonfix_reset=10,
+                max_postfix_rms=0.20,
+                enable_wide_lane_ar=True,
+                wide_lane_threshold=0.10,
+                fixed_bridge_burst_guard=True,
+                fixed_bridge_burst_max_anchor_gap=30.0,
+                fixed_bridge_burst_min_boundary_gap=1.0,
+                fixed_bridge_burst_max_residual=20.0,
+                fixed_bridge_burst_max_segment_epochs=12,
                 low_dynamics=False,
+                no_kinematic_post_filter=True,
+                no_spp_height_step_guard=False,
+                spp_height_step_min=None,
+                spp_height_step_rate=None,
+                float_bridge_tail_guard=True,
+                float_bridge_tail_max_anchor_gap=None,
+                float_bridge_tail_min_anchor_speed=None,
+                float_bridge_tail_max_anchor_speed=None,
+                float_bridge_tail_max_residual=None,
+                float_bridge_tail_min_segment_epochs=None,
                 require_valid_epochs_min=3,
                 require_matched_epochs_min=3,
                 require_fix_rate_min=60.0,
@@ -1842,10 +4637,65 @@ class PPCDemoTest(unittest.TestCase):
 
             self.assertEqual(payload["dataset"], "PPC-Dataset tokyo run1")
             self.assertEqual(payload["solver"], "rtk")
+            self.assertEqual(payload["rtk_iono"], "iflc")
+            self.assertEqual(payload["rtk_ratio_threshold"], 2.4)
+            self.assertEqual(payload["rtk_max_hold_divergence_m"], 5.0)
+            self.assertEqual(payload["rtk_max_position_jump_m"], 20.0)
+            self.assertEqual(payload["rtk_max_position_jump_min_m"], 20.0)
+            self.assertEqual(payload["rtk_max_position_jump_rate_mps"], 25.0)
+            self.assertEqual(payload["rtk_max_float_spp_divergence_m"], 30.0)
+            self.assertEqual(payload["rtk_max_float_prefit_residual_rms_m"], 6.0)
+            self.assertEqual(payload["rtk_max_float_prefit_residual_max_m"], 30.0)
+            self.assertEqual(payload["rtk_max_float_prefit_residual_reset_streak"], 5)
+            self.assertEqual(payload["rtk_min_float_prefit_residual_trusted_jump_m"], 8.0)
+            self.assertEqual(payload["rtk_max_update_nis_per_observation"], 12.0)
+            self.assertEqual(payload["rtk_max_consecutive_float_for_reset"], 10)
+            self.assertEqual(payload["rtk_max_consecutive_nonfix_for_reset"], 10)
+            self.assertEqual(payload["rtk_max_postfix_residual_rms_m"], 0.20)
+            self.assertTrue(payload["rtk_wide_lane_ar_enabled"])
+            self.assertEqual(payload["rtk_wide_lane_threshold"], 0.10)
+            self.assertTrue(payload["fixed_bridge_burst_guard_enabled"])
+            self.assertEqual(payload["fixed_bridge_burst_guard"]["max_anchor_gap_s"], 30.0)
+            self.assertEqual(payload["fixed_bridge_burst_guard"]["min_boundary_gap_s"], 1.0)
+            self.assertEqual(payload["fixed_bridge_burst_guard"]["max_residual_m"], 20.0)
+            self.assertEqual(payload["fixed_bridge_burst_guard"]["max_segment_epochs"], 12)
+            self.assertEqual(payload["rtk_output_profile"], "coverage")
+            self.assertFalse(payload["kinematic_post_filter_enabled"])
+            self.assertTrue(payload["nonfix_drift_guard_enabled"])
+            self.assertEqual(payload["nonfix_drift_guard"]["max_anchor_gap_s"], 120.0)
+            self.assertEqual(payload["nonfix_drift_guard"]["max_anchor_speed_mps"], 1.0)
+            self.assertEqual(payload["nonfix_drift_guard"]["max_residual_m"], 30.0)
+            self.assertEqual(payload["nonfix_drift_guard"]["min_horizontal_residual_m"], 0.0)
+            self.assertEqual(payload["nonfix_drift_guard"]["min_segment_epochs"], 20)
+            self.assertEqual(payload["nonfix_drift_guard"]["max_segment_epochs"], 0)
+            self.assertTrue(payload["spp_height_step_guard_enabled"])
+            self.assertEqual(payload["spp_height_step_guard"]["min_step_m"], 30.0)
+            self.assertEqual(payload["spp_height_step_guard"]["max_rate_mps"], 4.0)
+            self.assertTrue(payload["float_bridge_tail_guard_enabled"])
+            self.assertEqual(payload["float_bridge_tail_guard"]["max_anchor_gap_s"], 120.0)
+            self.assertEqual(payload["float_bridge_tail_guard"]["min_anchor_speed_mps"], 0.4)
+            self.assertEqual(payload["float_bridge_tail_guard"]["max_anchor_speed_mps"], 1.0)
+            self.assertEqual(payload["float_bridge_tail_guard"]["max_residual_m"], 12.0)
+            self.assertEqual(payload["float_bridge_tail_guard"]["min_segment_epochs"], 20)
+            provenance = payload["receiver_observation_provenance"]
+            self.assertEqual(provenance["vehicle_receiver"], "Septentrio mosaic-X5")
+            self.assertEqual(provenance["vehicle_antenna"], "Trimble AT1675")
+            self.assertEqual(provenance["reference_station_receiver"], "Trimble Alloy")
+            self.assertFalse(provenance["receiver_engine_solution_available"])
             self.assertEqual(payload["valid_epochs"], 3)
             self.assertEqual(payload["matched_epochs"], 3)
             self.assertEqual(payload["fixed_epochs"], 2)
+            self.assertEqual(payload["positioning_rate_pct"], 100.0)
             self.assertGreaterEqual(payload["fix_rate_pct"], 60.0)
+            self.assertEqual(payload["ppc_score_3d_50cm_epochs"], 3)
+            self.assertEqual(payload["ppc_score_3d_50cm_matched_pct"], 100.0)
+            self.assertEqual(payload["ppc_score_3d_50cm_ref_pct"], 100.0)
+            self.assertEqual(payload["ppc_official_score_pct"], 100.0)
+            self.assertGreater(payload["ppc_official_total_distance_m"], 0.0)
+            self.assertEqual(
+                payload["ppc_official_score_distance_m"],
+                payload["ppc_official_total_distance_m"],
+            )
             self.assertLessEqual(payload["median_h_m"], 0.2)
             self.assertLessEqual(payload["p95_h_m"], 0.2)
             self.assertLessEqual(payload["max_h_m"], 0.2)
@@ -1860,6 +4710,9 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtklib"]["solver_wall_time_s"], 0.1)
             self.assertAlmostEqual(payload["rtklib"]["realtime_factor"], 4.0, places=5)
             self.assertIn("delta_vs_rtklib", payload)
+            self.assertEqual(payload["delta_vs_rtklib"]["positioning_rate_pct"], 0.0)
+            self.assertEqual(payload["delta_vs_rtklib"]["ppc_score_3d_50cm_ref_pct"], 0.0)
+            self.assertEqual(payload["delta_vs_rtklib"]["ppc_official_score_pct"], 0.0)
             self.assertIn("commercial_receiver", payload)
             self.assertEqual(payload["commercial_receiver"]["label"], "survey_receiver")
             self.assertEqual(payload["commercial_receiver"]["matched_epochs"], 3)
