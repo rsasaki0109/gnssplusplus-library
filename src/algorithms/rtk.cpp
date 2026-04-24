@@ -1965,9 +1965,11 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             debug_telemetry_.pair_count = nb;
             debug_telemetry_.max_ambiguity_variance = max_var;
             if (nb < 4) {
-                debug_telemetry_.reject_reason = "too_few_pairs_after_var_filter";
+                // Diagnostic-only: mark root cause; do NOT early-return.
+                // Preserve original solver flow so LAMBDA still attempts AR
+                // (and fails the usual way). LAMBDA_FAILED assignment below
+                // is guarded so this more-specific reason is not overwritten.
                 debug_telemetry_.ar_skip_reason = ARSkipReason::DD_PAIRS_LT_4_AFTER_VAR_FILTER;
-                return false;
             }
         }
     }
@@ -2502,7 +2504,11 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         if (debug_telemetry_.reject_reason.empty()) {
             debug_telemetry_.reject_reason = "lambda_not_fixed";
         }
-        debug_telemetry_.ar_skip_reason = ARSkipReason::LAMBDA_FAILED;
+        // First-cause wins: a more specific skip reason set earlier
+        // (e.g. DD_PAIRS_LT_4_AFTER_VAR_FILTER) should not be overwritten.
+        if (debug_telemetry_.ar_skip_reason == ARSkipReason::NONE) {
+            debug_telemetry_.ar_skip_reason = ARSkipReason::LAMBDA_FAILED;
+        }
         return false;
     }
     debug_telemetry_.selected_fixed = true;
@@ -2516,7 +2522,9 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                                                 fixed_problem.dd_float,
                                                 dd_fixed, xa)) {
         debug_telemetry_.reject_reason = "fixed_head_solve";
-        debug_telemetry_.ar_skip_reason = ARSkipReason::RATIO_COMPUTATION_FAILED;
+        if (debug_telemetry_.ar_skip_reason == ARSkipReason::NONE) {
+            debug_telemetry_.ar_skip_reason = ARSkipReason::RATIO_COMPUTATION_FAILED;
+        }
         return false;
     }
     fixed_baseline_ = xa.head<3>();
