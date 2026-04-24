@@ -306,13 +306,13 @@ weighted score moves **58.90% -> 63.26%** (**+2,019.8 m**, **+4.36 pp**) vs
 reset10, all six runs gain, and both Positioning (+0.43 pp) and Fix (+6.59 pp)
 improve. See `docs/benchmarks.md` for the ranked rule table and scorecards.
 
-Chaining thirteen dual-profile selectors back-to-back (five NIS-threshold
+Chaining fourteen dual-profile selectors back-to-back (five NIS-threshold
 stages NIS5 → NIS3 → NIS10 → NIS20 → NIS50, then a jump0.5 dual-selector
 stage, then an IMU-bridge stage filling no-solution dropouts, then three
 ratio-tightening stages ratio4/ratio5/ratio3, then an iono-free linear
-combination stage, then two reset-streak stages floatreset5/nonfixreset5)
-extends this further to **58.90% -> 66.75%** (**+3,637.6 m**,
-**+7.85 pp**). Each later stage
+combination stage, then two reset-streak stages floatreset5/nonfixreset5,
+then a postfit-RMS gate stage) extends this further to **58.90% ->
+66.84%** (**+3,677.1 m**, **+7.94 pp**). Each later stage
 applies a single-rule selector on the previous hybrid using a different
 candidate family, capturing gain segments the earlier stages missed.
 The marginal gain per stage declines from +4.36 pp (stage 1) to +0.11 pp
@@ -323,10 +323,11 @@ remaining weak-FIX segments), +0.17 pp (ratio3 stage 10, moderate
 AR validation picking up remaining baseline-ratio<=3.4 segments), and
 +0.06 pp (iono=iflc stage 11, filling residual no-solution gaps with an
 iono-free linear combination candidate), and +0.12 pp (floatreset5 stage 12, replacing stage-11 FLOAT segments with
-a tighter-reset candidate), and +0.15 pp (nonfixreset5 stage 13,
-non-FIX reset streak candidate picking up FIX at baseline_ratio ≤ 3.6).
-Gap to the PPC2024 public second-place reference (77.6%) narrows from
-18.70 pp at reset10 to 10.85 pp after stage 13. See
+a tighter-reset candidate), and +0.15 pp (nonfixreset5 stage 13, non-FIX reset streak candidate
+picking up FIX at baseline_ratio ≤ 3.6), and +0.09 pp (postfix-RMS 2.0
+stage 14, rejecting FLOAT segments with high post-suppression residual
+max). Gap to the PPC2024 public second-place reference (77.6%) narrows
+from 18.70 pp at reset10 to 10.76 pp after stage 14. See
 `docs/benchmarks.md` for the per-stage rules and the progression
 scorecard.
 

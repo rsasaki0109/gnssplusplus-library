@@ -330,10 +330,11 @@ progression:
 | 11 | stage10 hybrid | iono=iflc (iono-free linear combination) | `baseline NO_SOLUTION` | **66.474%** | +7.576 pp |
 | 12 | stage11 hybrid | floatreset5 (tighter FLOAT reset) | `baseline FLOAT AND candidate_baseline_m ≤ 8885.9` | **66.597%** | +7.699 pp |
 | 13 | stage12 hybrid | nonfixreset5 (non-FIX reset streak) | `FIXED AND baseline_ratio ≤ 3.6` | **66.750%** | +7.852 pp |
+| 14 | stage13 hybrid | postfix-rms 2.0 (postfit residual gate) | `FLOAT→FLOAT AND candidate_post_max ≤ 19.2352` | **66.835%** | +7.937 pp |
 
-Thirteen selector stages add **+7.852 pp / +3 637.6 m** versus reset10, with
+Fourteen selector stages add **+7.937 pp / +3 677.1 m** versus reset10, with
 every stage strictly non-negative per-run. The gap to PPC2024 second place
-(77.6%) narrows to **10.85 pp**. Marginal gain per stage declines from
+(77.6%) narrows to **10.76 pp**. Marginal gain per stage declines from
 +4.36 pp (stage 1) to +0.11 pp (stage 6), with an IMU-bridge stage 7
 recovering another +0.54 pp by filling no-solution dropouts and
 ratio4/ratio5 stages 8 and 9 (`--ratio 4.0` and `--ratio 5.0`, stricter
