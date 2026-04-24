@@ -1581,6 +1581,12 @@ int main(int argc, char* argv[]) {
             options.enforce_ssr_orbit_iode_admission_only;
         ppp_config.ssr_orbit_iode_admission_gate_warmup_epochs =
             options.ssr_orbit_iode_admission_gate_warmup_epochs;
+        // MADOCA-PPP SSR corrections are delivered at the satellite antenna
+        // phase center (pos1-sateph=brdc+ssrapc in MADOCALIB). Suppress the
+        // satellite PCO application to avoid double-correcting the orbit.
+        if (use_madoca_native_l6e) {
+            ppp_config.ssr_orbit_reference_is_apc = true;
+        }
         ppp_config.use_ssr_corrections =
             options.ssr_path.empty() == false ||
             options.ssr_rtcm_path.empty() == false ||

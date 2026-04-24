@@ -90,6 +90,13 @@ struct PPPConfig {
     bool require_ssr_observation_biases = false;
     bool enforce_ssr_orbit_iode = false;
     bool enforce_ssr_orbit_iode_admission_only = false;
+    // MADOCA SSR corrections are delivered at the antenna phase center
+    // (EPHOPT_SSRAPC in MADOCALIB), so the satellite PCO must NOT be
+    // re-applied on top of the SSR orbit correction.  Setting this to true
+    // suppresses satellite PCO application regardless of whether ANTEX is
+    // loaded.  The default (false) preserves the RTKLIB/brdc+ssrcom path
+    // that applies satellite PCO to convert CoM -> APC.
+    bool ssr_orbit_reference_is_apc = false;
     // Skip the admission-only IODE gate for the first N epochs so sparse
     // stale-CSSR-IODE observations (e.g. BDS at run start) can seed the
     // filter before the gate activates. 0 applies the gate from epoch 0.

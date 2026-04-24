@@ -1871,6 +1871,39 @@ Phase 5, PPP-AR and multifrequency:
   is off initially and switches to strict IODE after a warm-up), which
   is a separate design decision and not the immediate priority.
 
+  A deeper ANTEX investigation then explained why earlier native runs
+  had been done without `--antex`: enabling the same ANTEX file that
+  bridge uses degraded native from `0.382 m` to `0.811 m` 3D delta.
+  The root cause turned out to be a MADOCA-specific SSR convention.
+  MADOCALIB's sample `pos1-sateph = brdc+ssrapc` uses `EPHOPT_SSRAPC`,
+  which passes `opt=0` to `satpos_ssr()` so that `satantoff()` is NOT
+  called: MADOCA SSR orbit corrections are already delivered at the
+  satellite antenna phase center.  Native was re-applying the
+  satellite PCO on top of the APC-referenced SSR orbit, which double-
+  corrected the satellite position by the GPS/QZSS/Galileo Z-axis
+  offset (`~2.25 m` body-frame), and after rotation projected into
+  meter-scale range errors per satellite.  A secondary bug in the
+  same path: native was applying the satellite PCO with a reversed
+  sign and in per-signal (not iono-free-LC) mode, while MADOCALIB
+  always uses the IFLC of frequency-0/1 PCOs (`preceph.c:617-621`).
+
+  `PPPConfig::ssr_orbit_reference_is_apc` now suppresses satellite
+  PCO application when SSR orbits are delivered at the phase center,
+  and MADOCA native path (`--madoca-l6e` enabled) sets this flag to
+  true.  The remaining satellite PCO path (for CoM-referenced SSR)
+  now uses the MADOCALIB iono-free-LC combination with the RTKLIB-
+  standard positive sign.  On the `29`-row MIZU warm-start run with
+  `--antex`, the bridge comparison moves from `0.254/0.285/0.382 m`
+  to `0.253/0.261/0.364 m` 3D delta (full-window) and from
+  `0.108/0.147/0.182` to `0.105/0.116/0.156` in the tail 1800 s, and
+  the absolute reference RMS drops from `0.428/0.188 m`
+  (full/tail) to `0.395/0.161 m`.  Without `--antex` the numbers are
+  unchanged, confirming the fix is surgical to the ANTEX path.  The
+  bridge itself reaches `0.184/0.024 m` absolute, so the structural
+  receiver/satellite PCO double-correction is closed; the remaining
+  tail gap is likely AR (bridge fixes, native stays float) and
+  state-seeding details that need their own separate audit.
+
   A hybrid gate was then implemented as
   `PPPConfig::ssr_orbit_iode_admission_gate_warmup_epochs` / CLI flag
   `--ssr-orbit-iode-admission-gate-warmup-epochs <N>`.  The flag

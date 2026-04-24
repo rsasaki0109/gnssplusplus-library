@@ -2916,14 +2916,22 @@ Vector3d PPPProcessor::calculateSatelliteAntennaOffsetEcef(
         return it != selected_entry->offsets_neu_m.end() ? it->second : Vector3d::Zero();
     };
 
+    // MADOCALIB/RTKLIB satantoff() always combines the satellite PCO as the
+    // iono-free LC of the two primary frequencies (preceph.c:617-621).  The
+    // SSR orbit corrections are defined relative to that IFLC phase center,
+    // so the same combination must be applied even when the filter itself
+    // runs in estimated-ionosphere mode; otherwise a large per-satellite
+    // offset (tens of cm) is introduced into the range.
     Vector3d offset_neu = Vector3d::Zero();
-    if (!ppp_config_.use_ionosphere_free ||
-        observation.secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
+    if (observation.secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
         offset_neu = signal_offset(observation.primary_signal);
     } else {
+        const double f1 = signalFrequencyHz(observation.primary_signal);
+        const double f2 = signalFrequencyHz(observation.secondary_signal);
+        const auto iflc = ppp_utils::getIonosphereFreeCoefficients(f1, f2);
         offset_neu =
-            observation.primary_code_bias_coeff * signal_offset(observation.primary_signal) +
-            observation.secondary_code_bias_coeff * signal_offset(observation.secondary_signal);
+            iflc.first * signal_offset(observation.primary_signal) +
+            iflc.second * signal_offset(observation.secondary_signal);
     }
     if (offset_neu.squaredNorm() <= 0.0) {
         return Vector3d::Zero();
@@ -2943,7 +2951,14 @@ Vector3d PPPProcessor::calculateSatelliteAntennaOffsetEcef(
     ey.normalize();
     const Vector3d ex = ey.cross(ez).normalized();
 
-    return -(offset_neu.x() * ex + offset_neu.y() * ey + offset_neu.z() * ez);
+    // MADOCALIB/RTKLIB convention (preceph.c satantoff):
+    //   dant = pcv->off[a][0]*ex + pcv->off[a][1]*ey + pcv->off[a][2]*ez
+    //   rs   = rss + dant   (satellite center-of-mass -> phase center)
+    // ANTEX satellite PCO components are stored as (X, Y, Z) in the
+    // satellite body-fixed frame despite the "NORTH / EAST / UP" header
+    // label.  Native's offset_neu storage preserves the file order
+    // (offset.x = first field = body X, etc.).
+    return offset_neu.x() * ex + offset_neu.y() * ey + offset_neu.z() * ez;
 }
 
 void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& observations,
@@ -3017,7 +3032,13 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
 
         auto applySatelliteAntennaOffset = [&]() {
             if (!applied_satellite_antenna_offset) {
-                sat_position += calculateSatelliteAntennaOffsetEcef(observation, sat_position, time);
+                // Skip when SSR orbits are delivered at the antenna phase
+                // center (MADOCALIB EPHOPT_SSRAPC); re-applying the PCO
+                // here would double-correct the satellite position.
+                if (!ppp_config_.ssr_orbit_reference_is_apc) {
+                    sat_position +=
+                        calculateSatelliteAntennaOffsetEcef(observation, sat_position, time);
+                }
                 applied_satellite_antenna_offset = true;
             }
         };
