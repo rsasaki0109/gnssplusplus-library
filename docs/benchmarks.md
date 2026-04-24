@@ -324,15 +324,17 @@ progression:
 | 5 | stage4 hybrid | NIS50 | `FIXED AND baseline_ratio ≤ 2.7` | **64.995%** | +6.097 pp |
 | 6 | stage5 hybrid | jump0.5 dual selector | `FLOAT→FIXED` | **65.103%** | +6.205 pp |
 | 7 | stage6 hybrid | IMU bridge (fy1_lx1) | `NO_SOLUTION→FLOAT` | **65.644%** | +6.747 pp |
+| 8 | stage7 hybrid | ratio4 (stricter AR validation) | `baseline FLOAT AND candidate_obs ≥ 14` | **66.057%** | +7.159 pp |
 
-Seven selector stages add **+6.747 pp / +3 125.5 m** versus reset10, with
+Eight selector stages add **+7.159 pp / +3 316.5 m** versus reset10, with
 every stage strictly non-negative per-run. The gap to PPC2024 second place
-(77.6%) narrows to **11.96 pp**. Marginal gain per stage declines from
+(77.6%) narrows to **11.54 pp**. Marginal gain per stage declines from
 +4.36 pp (stage 1) to +0.11 pp (stage 6), with an IMU-bridge stage 7
-recovering another +0.54 pp by filling no-solution dropouts with dead-
-reckoned FLOAT solutions. Further stages with additional CV-bridge
-candidates add only ~+0.02 pp (tested with `gap10_age2`,
-`innov_fixed_1`, `tele_fixed_ratio3` at stage 8) so are omitted.
+recovering another +0.54 pp by filling no-solution dropouts and a
+ratio4 stage 8 (`--ratio 4.0`, stricter AR validation) recovering
+another +0.41 pp by replacing stage-7 FLOAT segments with a high-
+confidence candidate FIX. Further CV-bridge and IMU-axis variants
+at stage 9 add only ~+0.02 pp so are omitted.
 
 The chain is deployable: each stage is a deterministic single-rule apply
 using `scripts/apply_ppc_dual_profile_selector.py` with the rank 1 rule
