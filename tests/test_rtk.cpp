@@ -1126,3 +1126,36 @@ TEST_F(RTKRealDataTest, FloatAmbiguityDiagnostic) {
         std::cout << "  Fixed: " << fixed_amb.transpose() << std::endl;
     }
 }
+
+// ============================================================================
+// ARSkipReason diagnostics
+// ============================================================================
+
+TEST(RTKArSkipReasonTest, DefaultTelemetryHasNoneSkipReason) {
+    RTKProcessor::EpochDebugTelemetry telemetry;
+    EXPECT_EQ(telemetry.ar_skip_reason, RTKProcessor::ARSkipReason::NONE);
+}
+
+TEST(RTKArSkipReasonTest, StringifyCoversAllValues) {
+    using R = RTKProcessor::ARSkipReason;
+    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::NONE),                             "none");
+    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::FILTER_NOT_INIT),                  "filter_not_init");
+    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::ESTIMATED_IONO_MODE),              "estimated_iono_mode");
+    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::DD_PAIRS_LT_4_BEFORE_VAR_FILTER),  "dd_lt4_before_var");
+    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::DD_PAIRS_LT_4_AFTER_VAR_FILTER),   "dd_lt4_after_var");
+    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::LAMBDA_FAILED),                    "lambda_failed");
+    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::RATIO_COMPUTATION_FAILED),         "ratio_computation_failed");
+}
+
+TEST(RTKArSkipReasonTest, UninitializedProcessorReturnsFilterNotInit) {
+    // An RTKProcessor with no epoch processed should report FILTER_NOT_INIT
+    // because the Kalman filter is not yet initialized.
+    RTKProcessor rtk;
+    RTKConfig cfg;
+    cfg.enable_ar = true;
+    rtk.setRTKConfig(cfg);
+
+    // getLastDebugTelemetry() default state
+    const auto& tel = rtk.getLastDebugTelemetry();
+    EXPECT_EQ(tel.ar_skip_reason, RTKProcessor::ARSkipReason::NONE);
+}
