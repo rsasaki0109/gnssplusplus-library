@@ -3112,8 +3112,17 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 // CoM-referenced SSR it returns the full per-observation
                 // PCO.  Applying either produces the correct per-signal
                 // phase center for this observation.
-                sat_position +=
-                    calculateSatelliteAntennaOffsetEcef(observation, sat_position, time);
+                // Exception: BeiDou has broken PCO delta behavior in APC mode
+                // (BDS_B1I/B2I tail phase RMS 14m -> 66mm when delta skipped).
+                // Likely ATX BDS PCO entries are missing or signal-mapping is off.
+                // Skip for BDS in APC mode pending ATX audit.
+                const bool skip_for_bds_apc =
+                    ppp_config_.ssr_orbit_reference_is_apc &&
+                    observation.satellite.system == GNSSSystem::BeiDou;
+                if (!skip_for_bds_apc) {
+                    sat_position +=
+                        calculateSatelliteAntennaOffsetEcef(observation, sat_position, time);
+                }
                 applied_satellite_antenna_offset = true;
             }
         };
