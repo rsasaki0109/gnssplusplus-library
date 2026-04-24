@@ -306,19 +306,20 @@ weighted score moves **58.90% -> 63.26%** (**+2,019.8 m**, **+4.36 pp**) vs
 reset10, all six runs gain, and both Positioning (+0.43 pp) and Fix (+6.59 pp)
 improve. See `docs/benchmarks.md` for the ranked rule table and scorecards.
 
-Chaining eight dual-profile selectors back-to-back (five NIS-threshold
+Chaining nine dual-profile selectors back-to-back (five NIS-threshold
 stages NIS5 → NIS3 → NIS10 → NIS20 → NIS50, then a jump0.5 dual-selector
-stage, then an IMU-bridge stage filling no-solution dropouts, then a
-ratio4 stricter-AR-validation stage) extends this further to
-**58.90% -> 66.06%** (**+3,316.5 m**, **+7.16 pp**). Each later stage
+stage, then an IMU-bridge stage filling no-solution dropouts, then two
+stricter-AR-validation stages ratio4 and ratio5) extends this further to
+**58.90% -> 66.24%** (**+3,401.1 m**, **+7.34 pp**). Each later stage
 applies a single-rule selector on the previous hybrid using a different
 candidate family, capturing gain segments the earlier stages missed.
 The marginal gain per stage declines from +4.36 pp (stage 1) to +0.11 pp
 (stage 6), then jumps back up to +0.54 pp (IMU bridge stage 7, filling
-no-solution gaps) and +0.41 pp (ratio4 stage 8, replacing stage-7 FLOAT
-with higher-confidence FIX). Gap to the PPC2024 public second-place
-reference (77.6%) narrows from 18.70 pp at reset10 to 11.54 pp after
-stage 8. See `docs/benchmarks.md` for the per-stage rules and the
+no-solution gaps), +0.41 pp (ratio4 stage 8, replacing stage-7 FLOAT
+with higher-confidence FIX), and +0.18 pp (ratio5 stage 9, catching
+remaining weak-FIX segments). Gap to the PPC2024 public second-place
+reference (77.6%) narrows from 18.70 pp at reset10 to 11.36 pp after
+stage 9. See `docs/benchmarks.md` for the per-stage rules and the
 progression scorecard.
 
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
