@@ -1904,6 +1904,25 @@ Phase 5, PPP-AR and multifrequency:
   tail gap is likely AR (bridge fixes, native stays float) and
   state-seeding details that need their own separate audit.
 
+  An AR (ambiguity resolution) audit then examined the remaining
+  tail absolute gap.  Bridge tail absolute RMS is `0.024 m` because
+  MADOCALIB cascaded AR fixes `9..30` ambiguities per epoch from
+  `TOW 172860` onward (`$SAT` `fix=1` in the bridge stat).  Native
+  with `--ar-method dd-wlnl` produces DD NL pairs but the fractional
+  parts run `0.1..0.4` cycles, LAMBDA ratios stay at `1.0..1.2`, and
+  the default `1.5` ratio gate rejects all fixes.  Lowering the
+  ratio gate accepts marginal fixes that degrade the trajectory:
+  at `ratio=1.0` native produces `101` fixed solutions but the
+  bridge comparison worsens from `0.364/0.156 m` full/tail to
+  `0.371/0.205 m`.  The N1 float precision (~40% cycles) is the
+  bottleneck: bridge achieves the required precision by cascaded
+  EWL/WL/N1 with MADOCALIB-specific phase-bias gates and variance
+  de-weighting, which the native WLNL path does not yet replicate.
+  Closing this gap is an AR pipeline refactor, out of scope for
+  this admission/PCO commit series.  `gnss_ppp` now exposes
+  `--ar-method <dd-iflc|dd-wlnl|dd-per-freq>` so future AR work
+  can be triaged alongside existing diagnostics.
+
   A hybrid gate was then implemented as
   `PPPConfig::ssr_orbit_iode_admission_gate_warmup_epochs` / CLI flag
   `--ssr-orbit-iode-admission-gate-warmup-epochs <N>`.  The flag

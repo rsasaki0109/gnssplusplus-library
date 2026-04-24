@@ -61,6 +61,7 @@ struct Options {
     bool enforce_ssr_orbit_iode = false;
     bool enforce_ssr_orbit_iode_admission_only = false;
     int ssr_orbit_iode_admission_gate_warmup_epochs = 0;
+    std::string ar_method_arg;  // "dd-iflc" (default), "dd-wlnl", "dd-per-freq"
     bool estimate_troposphere = true;
     bool estimate_ionosphere = false;
     bool use_ionosphere_free = true;
@@ -130,6 +131,8 @@ void printUsage(const char* program_name) {
         << "                          Skip the admission-only IODE gate for the first N\n"
         << "                          epochs so stale-CSSR-IODE observations can seed the\n"
         << "                          filter before the gate activates (default: 0)\n"
+        << "  --ar-method <dd-iflc|dd-wlnl|dd-per-freq>\n"
+        << "                          PPP ambiguity resolution method (default: dd-iflc)\n"
         << "  --out <solution.pos>     Output position file (required)\n"
         << "  --summary-json <summary.json>\n"
         << "                          Optional machine-readable run summary\n"
@@ -565,6 +568,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.enforce_ssr_orbit_iode_admission_only = false;
         } else if (arg == "--ssr-orbit-iode-admission-gate-warmup-epochs" && i + 1 < argc) {
             options.ssr_orbit_iode_admission_gate_warmup_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--ar-method" && i + 1 < argc) {
+            options.ar_method_arg = argv[++i];
         } else if (arg == "--no-estimate-troposphere") {
             options.estimate_troposphere = false;
         } else if (arg == "--estimate-troposphere") {
@@ -1581,6 +1586,17 @@ int main(int argc, char* argv[]) {
             options.enforce_ssr_orbit_iode_admission_only;
         ppp_config.ssr_orbit_iode_admission_gate_warmup_epochs =
             options.ssr_orbit_iode_admission_gate_warmup_epochs;
+        if (!options.ar_method_arg.empty()) {
+            if (options.ar_method_arg == "dd-iflc") {
+                ppp_config.ar_method = libgnss::PPPProcessor::PPPConfig::ARMethod::DD_IFLC;
+            } else if (options.ar_method_arg == "dd-wlnl") {
+                ppp_config.ar_method = libgnss::PPPProcessor::PPPConfig::ARMethod::DD_WLNL;
+            } else if (options.ar_method_arg == "dd-per-freq") {
+                ppp_config.ar_method = libgnss::PPPProcessor::PPPConfig::ARMethod::DD_PER_FREQ;
+            } else {
+                argumentError("--ar-method must be dd-iflc|dd-wlnl|dd-per-freq", argv[0]);
+            }
+        }
         // MADOCA-PPP SSR corrections are delivered at the satellite antenna
         // phase center (pos1-sateph=brdc+ssrapc in MADOCALIB). Suppress the
         // satellite PCO application to avoid double-correcting the orbit.
