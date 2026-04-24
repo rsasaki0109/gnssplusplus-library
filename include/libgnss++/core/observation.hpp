@@ -3,6 +3,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <string>
 #include "types.hpp"
 
 namespace libgnss {
@@ -13,6 +14,7 @@ namespace libgnss {
 struct Observation {
     SatelliteId satellite;
     SignalType signal;
+    std::string observation_code;   ///< RINEX code observation type, e.g. C1C/C2W
 
     double pseudorange = 0.0;       ///< Pseudorange in meters
     double carrier_phase = 0.0;     ///< Carrier phase in cycles

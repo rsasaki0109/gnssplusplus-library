@@ -3,9 +3,22 @@
 #include <vector>
 #include <string>
 #include <chrono>
+#include <map>
 #include "types.hpp"
 
 namespace libgnss {
+
+enum class ReceiverClockBiasGroup : uint8_t {
+    UNKNOWN = 0,
+    GPS,
+    GLONASS,
+    Galileo,
+    BeiDou,
+    BeiDou2,
+    BeiDou3,
+    QZSS,
+    NavIC
+};
 
 /**
  * @brief Single position solution
@@ -26,9 +39,10 @@ struct PositionSolution {
     bool has_velocity = false;
     
     // Clock
-    double receiver_clock_bias = 0.0;     ///< Receiver clock bias in seconds
+    double receiver_clock_bias = 0.0;     ///< Legacy receiver clock bias; units depend on producer
     double receiver_clock_drift = 0.0;    ///< Receiver clock drift in s/s
     double clock_variance = 0.0;          ///< Clock bias variance
+    std::map<ReceiverClockBiasGroup, double> receiver_clock_biases_m; ///< Group clock biases in meters
     
     // Quality indicators
     double pdop = 999.9;            ///< Position dilution of precision
