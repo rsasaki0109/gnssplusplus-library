@@ -101,6 +101,8 @@ struct Options {
     int filter_iterations = 0;  // 0 keeps PPPConfig default
     double initial_ionosphere_variance = -1.0;  // negative keeps default
     double initial_troposphere_variance = -1.0;
+    double code_phase_error_ratio_l1 = -1.0;
+    double code_phase_error_ratio_l2 = -1.0;
     bool quiet = false;
 };
 
@@ -727,6 +729,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.initial_ionosphere_variance = std::stod(argv[++i]);
         } else if (arg == "--initial-troposphere-variance" && i + 1 < argc) {
             options.initial_troposphere_variance = std::stod(argv[++i]);
+        } else if (arg == "--code-phase-error-ratio-l1" && i + 1 < argc) {
+            options.code_phase_error_ratio_l1 = std::stod(argv[++i]);
+        } else if (arg == "--code-phase-error-ratio-l2" && i + 1 < argc) {
+            options.code_phase_error_ratio_l2 = std::stod(argv[++i]);
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -827,6 +833,14 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.initial_troposphere_variance >= 0.0 &&
         options.initial_troposphere_variance == 0.0) {
         argumentError("--initial-troposphere-variance must be positive", argv[0]);
+    }
+    if (options.code_phase_error_ratio_l1 >= 0.0 &&
+        options.code_phase_error_ratio_l1 <= 0.0) {
+        argumentError("--code-phase-error-ratio-l1 must be positive", argv[0]);
+    }
+    if (options.code_phase_error_ratio_l2 >= 0.0 &&
+        options.code_phase_error_ratio_l2 <= 0.0) {
+        argumentError("--code-phase-error-ratio-l2 must be positive", argv[0]);
     }
     if (options.elevation_mask_deg < 0.0 || options.elevation_mask_deg >= 90.0) {
         argumentError("--elevation-mask must be in [0, 90) degrees", argv[0]);
@@ -1742,6 +1756,12 @@ int main(int argc, char* argv[]) {
         }
         if (options.initial_troposphere_variance > 0.0) {
             ppp_config.initial_troposphere_variance = options.initial_troposphere_variance;
+        }
+        if (options.code_phase_error_ratio_l1 > 0.0) {
+            ppp_config.code_phase_error_ratio_l1 = options.code_phase_error_ratio_l1;
+        }
+        if (options.code_phase_error_ratio_l2 > 0.0) {
+            ppp_config.code_phase_error_ratio_l2 = options.code_phase_error_ratio_l2;
         }
         ppp_config.use_clas_osr_filter = options.use_clas_osr_filter;
         ppp_config.clas_epoch_policy =
