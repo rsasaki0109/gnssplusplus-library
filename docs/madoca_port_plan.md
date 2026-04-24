@@ -1904,6 +1904,91 @@ Phase 5, PPP-AR and multifrequency:
   tail gap is likely AR (bridge fixes, native stays float) and
   state-seeding details that need their own separate audit.
 
+  A detailed MADOCALIB AR pipeline study then mapped out the gap
+  between native and `ppp_amb_ILS` for future implementation.  Key
+  constants from `ppp_ar.c`:
+  `MAX_FRAC_WL_FIX=0.20` cycle, `MAX_STD_WL_FIX=1.00` cycle,
+  `CONST_AMB=0.01 m` for N1, `CONST_AMB_BDS=0.05 m`,
+  `CONST_AMB_BDS_B2a=0.10 m`, `CONST_AMB_GAL_E6=0.10 m`,
+  `CONST_AMB_EWL=0.10 m`, `MAX_STD_FIX=0.15 m`, ratio threshold
+  inflation table `{5.0, 5.0, 3.0, 2.0, 1.5}` applied for
+  `na - MIN_AMB_RES(4)` in `{0..4}`, `REL_MATCH_RATE=0.90`
+  (relax ratio * 0.8 when first/second LAMBDA candidates share
+  >=90% integers), `MIN_MATCH_RATE=0.10` (abort when <10% share).
+
+  The MADOCALIB pipeline is structured as:
+  1. `gen_sat_sd()` builds single-difference satellite pairs by
+     picking a reference sat per constellation and making SD with
+     every other valid sat in that constellation.
+  2. `search_amb_ewl()` (nf>=3) computes SD extra-wide-lane
+     ambiguity from `x[j1]/lam[f1] - x[j2]/lam[f2]` for both ref
+     and pair sats, rounds, and gates on `|frac| <= 0.20 cycles`
+     AND `sigma <= 1.00 cycles`.  Kept rows feed a design matrix D.
+  3. `update_states(STEP_EWL)` injects the EWL fixes as Kalman
+     pseudo-observations with `R=CONST_AMB_EWL^2=0.01 m^2` (or
+     `CONST_AMB_GAL_E6^2` for Galileo E6).  This tightens the
+     per-frequency ambiguity covariance before WL.
+  4. `search_amb_wl()` does the same thing for WL (F1-F2), using
+     the now-tightened per-frequency ambiguity states.
+  5. `update_states(STEP_WL)` applies WL fixes as constraints with
+     `R=CONST_AMB^2=0.0001 m^2`.
+  6. N1 narrow-lane: gate on `sqrt(P(pos)) <= thresar[1]=1.5 m`
+     first, then loop `armaxiter=10` times calling
+     `gen_sd_matrix_n1` (build D and Q on L1 SD pairs),
+     `search_amb_lambda` (LAMBDA with inflated threshold and
+     match-rate relaxation), and `exc_sat_par` (partial AR;
+     exclude worst candidate).  On ratio pass, update state with
+     `STEP_NL` and gate on `MAX_STD_FIX=0.15 m` post-fix position
+     std.  On fail, keep WL-fixed state but return wide-lane-only
+     solution.
+
+  The sample `pos2-arthres=1.5` configuration means that at
+  `na>=9`, the effective LAMBDA threshold matches the native
+  default of `1.5`, so the ratio gate itself is not the
+  discriminator.  The real discriminator is the **state
+  tightening** performed by `update_states` at STEP_EWL and
+  STEP_WL: by the time N1 LAMBDA runs, the per-frequency
+  ambiguity covariance has been constrained by the EWL/WL fixed
+  integers with `R=0.01..0.10 m^2`, which reduces the N1 float
+  variance to the point where LAMBDA can distinguish first and
+  second candidates.
+
+  Native currently applies WL fixes as `ambiguity.wl_is_fixed=true`
+  flags with MW-smoothed values, but does NOT inject them as
+  Kalman pseudo-observations against the filter state.  The N1
+  LAMBDA therefore runs on an untightened state where variances
+  remain at the standard PPP process-noise scale, giving the
+  `0.1..0.4` cycle fractional residuals observed in the earlier
+  audit.  Porting MADOCALIB's `update_states(STEP_EWL/STEP_WL)`
+  is the single largest expected win for AR parity.
+
+  Implementation sketch for a future iteration:
+  - Add `DD_MADOCA_CASCADED` ARMethod option.
+  - Port `applyWideLaneStateConstraint(pairs, integers, D, R)`
+    that builds a design matrix mapping per-frequency ambiguity
+    state indices to WL (1/lam_L1, -1/lam_L2 for ref; -1/lam_L1,
+    +1/lam_L2 for pair) and injects Kalman pseudo-observations
+    with `R=CONST_AMB^2=1e-4 m^2` (per-constellation de-weighting
+    for BDS/B2a/GAL-E6).
+  - Compute EWL first when nf>=3 (QZSS L5, Galileo E5a/E5b/E6, BDS
+    B2a/B2I/B3I); this requires per-frequency ambiguity states
+    for the 3rd/4th frequency, which native already supports via
+    `enable_per_frequency_phase_bias_states`.
+  - After EWL+WL state tightening, run L1 DD LAMBDA on the
+    constrained state.
+  - Implement match-rate-based ratio relaxation: extend
+    `lambdaSearch()` to also return the second-best integer
+    vector, compute per-row agreement fraction, then apply
+    `thres *= 0.8` when >=90% match, `thres = 99.99` when <10%.
+  - Implement PAR iteration: on ratio fail, identify the SD pair
+    whose integer most disagrees with the second candidate, drop
+    it, repeat up to `armaxiter=10`.
+  - Expected outcome: native fixes `9..30` sats per epoch on MIZU
+    like bridge does; tail absolute RMS drops from 0.161 m
+    toward bridge's 0.024 m.  The code change is order of
+    200-400 lines in new helpers plus wiring; the validation is
+    fixture-level test coverage at each cascade step.
+
   An AR (ambiguity resolution) audit then examined the remaining
   tail absolute gap.  Bridge tail absolute RMS is `0.024 m` because
   MADOCALIB cascaded AR fixes `9..30` ambiguities per epoch from
