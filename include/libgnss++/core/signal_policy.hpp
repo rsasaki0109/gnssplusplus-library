@@ -6,6 +6,14 @@
 
 namespace libgnss::signal_policy {
 
+inline bool isBeiDou2Satellite(const SatelliteId& sat) {
+    return sat.system == GNSSSystem::BeiDou && sat.prn >= 1 && sat.prn <= 18;
+}
+
+inline bool isBeiDou3Satellite(const SatelliteId& sat) {
+    return sat.system == GNSSSystem::BeiDou && sat.prn >= 19 && sat.prn <= 63;
+}
+
 inline bool isBeiDouGeoSatellite(const SatelliteId& sat) {
     if (sat.system != GNSSSystem::BeiDou) {
         return false;

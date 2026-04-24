@@ -12,10 +12,25 @@
 #include "spp.hpp"
 #include <Eigen/Dense>
 #include <array>
+#include <map>
 #include <mutex>
 #include <string>
+#include <vector>
 
 namespace libgnss {
+
+struct SatelliteAntexEntry {
+    GNSSTime valid_from;
+    GNSSTime valid_until;
+    bool has_valid_from = false;
+    bool has_valid_until = false;
+    std::map<SignalType, Vector3d> offsets_neu_m;
+};
+
+struct ReceiverAntexEntry {
+    std::map<SignalType, Vector3d> offsets_enu_m;
+    std::map<SignalType, std::array<double, 19>> noazi_pcv_m;
+};
 
 /**
  * @brief Precise Point Positioning (PPP) processor
