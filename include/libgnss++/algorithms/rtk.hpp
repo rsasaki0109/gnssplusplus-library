@@ -118,9 +118,57 @@ public:
         /// 0 (default) disables the check — existing behavior preserved.
         double max_position_jump_m = 0.0;
 
+        /// Adaptive max AR fix jump from last fixed position.
+        /// When max_position_jump_rate_mps > 0, accepted jump is
+        /// max(max_position_jump_min_m, max_position_jump_rate_mps * dt).
+        /// Disabled by default to preserve existing behavior.
+        double max_position_jump_min_m = 0.0;
+        double max_position_jump_rate_mps = 0.0;
+
+        /// Max FLOAT solution divergence from same-epoch SPP in meters.
+        /// When > 0, FLOAT epochs farther than this from the current SPP
+        /// solution fall back to SPP/no-solution. 0 (default) disables the
+        /// diagnostic gate and preserves existing behavior.
+        double max_float_spp_divergence_m = 0.0;
+
+        /// Max accepted FLOAT prefit DD residual RMS in meters.
+        /// When > 0, high-residual FLOAT epochs are still reported as FLOAT,
+        /// but ambiguity states are reset for the next epoch's reacquisition.
+        /// 0 (default) disables the diagnostic gate.
+        double max_float_prefit_residual_rms_m = 0.0;
+
+        /// Max accepted FLOAT prefit DD residual magnitude in meters.
+        /// When > 0, high-residual FLOAT epochs are still reported as FLOAT,
+        /// but ambiguity states are reset for the next epoch's reacquisition.
+        /// 0 (default) disables the diagnostic gate.
+        double max_float_prefit_residual_max_m = 0.0;
+
+        /// Number of consecutive high-residual FLOAT epochs before resetting
+        /// ambiguity states. Used only when a FLOAT prefit residual threshold
+        /// is enabled. Defaults to 3 to avoid reacting to isolated multipath
+        /// residual spikes.
+        int max_float_prefit_residual_reset_streak = 3;
+
+        /// Minimum FLOAT position jump from the last trusted FIX/FLOAT state
+        /// before a high-prefit-residual reset is allowed. 0 (default)
+        /// preserves the residual-only behavior when the residual gate is
+        /// enabled.
+        double min_float_prefit_residual_trusted_jump_m = 0.0;
+
+        /// Reject a whole RTK DD Kalman update when normalized innovation
+        /// squared divided by active observations exceeds this threshold.
+        /// 0 (default) disables the update gate.
+        double max_update_nis_per_observation = 0.0;
+
         /// Reset ambiguity state after N consecutive float epochs (aggressive reconvergence).
         /// 0 (default) disables the check — existing behavior preserved.
         int max_consecutive_float_for_reset = 0;
+
+        /// Reset ambiguity state after N consecutive non-FIX epochs.
+        /// Counts FLOAT, SPP fallback, and no-solution epochs, so urban dropouts
+        /// can force a clean ambiguity reacquisition even when FLOAT streaks are
+        /// broken by fallback epochs. 0 (default) disables the check.
+        int max_consecutive_nonfix_for_reset = 0;
 
         /// Max L1 post-fix phase residual RMS in meters.
         /// Computed after the LAMBDA fix is obtained, using the fixed DD ambiguities.
@@ -249,6 +297,8 @@ private:
     // Last validated fixed position (for position reset in next epoch)
     Vector3d last_fixed_position_ = Vector3d::Zero();
     bool has_last_fixed_position_ = false;
+    GNSSTime last_fixed_time_;
+    bool has_last_fixed_time_ = false;
     Vector3d last_solution_position_ = Vector3d::Zero();
     bool has_last_solution_position_ = false;
     Vector3d last_trusted_position_ = Vector3d::Zero();
@@ -259,6 +309,12 @@ private:
 
     // Consecutive float tracking for ambiguity auto-reset gate
     int consecutive_float_count_ = 0;
+
+    // Consecutive non-FIX tracking for ambiguity auto-reset gate
+    int consecutive_nonfix_count_ = 0;
+
+    // Consecutive high-residual FLOAT tracking for residual-aware reacquisition
+    int consecutive_high_float_residual_count_ = 0;
 
     // Last fix data for holdamb
     struct DDPair {
@@ -271,6 +327,8 @@ private:
     struct HoldStateSnapshot {
         Vector3d last_fixed_position = Vector3d::Zero();
         bool has_last_fixed_position = false;
+        GNSSTime last_fixed_time;
+        bool has_last_fixed_time = false;
         std::vector<DDPair> dd_pairs;
         std::vector<int> best_subset;
         VectorXd dd_fixed;
@@ -296,6 +354,22 @@ private:
     size_t total_epochs_processed_ = 0;
     size_t fixed_solutions_ = 0;
     size_t float_solutions_ = 0;
+
+    struct RTKUpdateDiagnostics {
+        int iterations = 0;
+        int observation_count = 0;
+        int phase_observation_count = 0;
+        int code_observation_count = 0;
+        int suppressed_outliers = 0;
+        double prefit_residual_rms_m = 0.0;
+        double prefit_residual_max_m = 0.0;
+        double post_suppression_residual_rms_m = 0.0;
+        double post_suppression_residual_max_m = 0.0;
+        double normalized_innovation_squared = 0.0;
+        double normalized_innovation_squared_per_observation = 0.0;
+        bool rejected_by_innovation_gate = false;
+    };
+    RTKUpdateDiagnostics current_update_diagnostics_;
 
     // Satellite data for current epoch
     struct SatelliteData {
@@ -390,6 +464,24 @@ private:
      */
     void handleConsecutiveFloatReset(const ObservationData& rover_obs,
                                      const NavigationData& nav);
+    void resetAmbiguityStatesForReacquisition(const ObservationData& rover_obs,
+                                              const NavigationData& nav);
+    bool floatResidualExceedsReacquisitionGate() const;
+    bool floatResidualTrustedJumpPassesGate(
+        const PositionSolution& float_solution,
+        const Vector3d& saved_last_trusted_position,
+        bool saved_has_last_trusted,
+        const GNSSTime& saved_last_trusted_time,
+        bool saved_has_last_trusted_time) const;
+    bool shouldResetAfterFloatResidualGate(
+        const PositionSolution& float_solution,
+        const Vector3d& saved_last_trusted_position,
+        bool saved_has_last_trusted,
+        const GNSSTime& saved_last_trusted_time,
+        bool saved_has_last_trusted_time);
+    void recordFixedEpoch();
+    void recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav);
+    void recordFallbackEpoch(const ObservationData& rover_obs, const NavigationData& nav);
 
     /**
      * Full KF update with DD observation model mapping to SD states
@@ -419,7 +511,8 @@ private:
     /**
      * Validate fixed solution with post-fit residual check (RTKLIB valpos)
      */
-    bool validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data);
+    bool validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data,
+                               const GNSSTime& current_time);
 
     /**
      * Hold ambiguities after consecutive fixes (RTKLIB holdamb)

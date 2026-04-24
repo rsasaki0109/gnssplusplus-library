@@ -325,6 +325,8 @@ TEST(RTKLegacyCompatibilityStandaloneTest, MaxPositionJumpDefaultDisabled) {
     // Default max_position_jump_m must be 0.0 (disabled — existing behavior preserved).
     RTKProcessor processor;
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_m, 0.0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_min_m, 0.0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_rate_mps, 0.0);
 
     // Explicitly set 0.0 and confirm round-trip.
     RTKProcessor::RTKConfig cfg;
@@ -335,34 +337,98 @@ TEST(RTKLegacyCompatibilityStandaloneTest, MaxPositionJumpDefaultDisabled) {
     // Setting a non-zero value should be stored correctly.
     RTKProcessor::RTKConfig cfg2;
     cfg2.max_position_jump_m = 1.0;
+    cfg2.max_position_jump_min_m = 20.0;
+    cfg2.max_position_jump_rate_mps = 25.0;
     processor.setRTKConfig(cfg2);
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_m, 1.0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_min_m, 20.0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_rate_mps, 25.0);
 
     // Reset to 0 confirms disabled state.
     RTKProcessor::RTKConfig cfg3;
     cfg3.max_position_jump_m = 0.0;
+    cfg3.max_position_jump_min_m = 0.0;
+    cfg3.max_position_jump_rate_mps = 0.0;
     processor.setRTKConfig(cfg3);
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_m, 0.0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_min_m, 0.0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_position_jump_rate_mps, 0.0);
+}
+
+TEST(RTKLegacyCompatibilityStandaloneTest, MaxFloatSppDivergenceDefaultDisabled) {
+    RTKProcessor processor;
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_float_spp_divergence_m, 0.0);
+
+    RTKProcessor::RTKConfig cfg;
+    cfg.max_float_spp_divergence_m = 0.0;
+    processor.setRTKConfig(cfg);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_float_spp_divergence_m, 0.0);
+
+    RTKProcessor::RTKConfig cfg2;
+    cfg2.max_float_spp_divergence_m = 30.0;
+    processor.setRTKConfig(cfg2);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_float_spp_divergence_m, 30.0);
+}
+
+TEST(RTKLegacyCompatibilityStandaloneTest, MaxFloatPrefitResidualGateDefaultDisabled) {
+    RTKProcessor processor;
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_float_prefit_residual_rms_m, 0.0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_float_prefit_residual_max_m, 0.0);
+    EXPECT_EQ(processor.getRTKConfig().max_float_prefit_residual_reset_streak, 3);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().min_float_prefit_residual_trusted_jump_m, 0.0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_update_nis_per_observation, 0.0);
+
+    RTKProcessor::RTKConfig cfg;
+    cfg.max_float_prefit_residual_rms_m = 0.0;
+    cfg.max_float_prefit_residual_max_m = 0.0;
+    cfg.min_float_prefit_residual_trusted_jump_m = 0.0;
+    cfg.max_update_nis_per_observation = 0.0;
+    processor.setRTKConfig(cfg);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_float_prefit_residual_rms_m, 0.0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_float_prefit_residual_max_m, 0.0);
+    EXPECT_EQ(processor.getRTKConfig().max_float_prefit_residual_reset_streak, 3);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().min_float_prefit_residual_trusted_jump_m, 0.0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_update_nis_per_observation, 0.0);
+
+    RTKProcessor::RTKConfig cfg2;
+    cfg2.max_float_prefit_residual_rms_m = 6.0;
+    cfg2.max_float_prefit_residual_max_m = 30.0;
+    cfg2.max_float_prefit_residual_reset_streak = 5;
+    cfg2.min_float_prefit_residual_trusted_jump_m = 8.0;
+    cfg2.max_update_nis_per_observation = 12.0;
+    processor.setRTKConfig(cfg2);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_float_prefit_residual_rms_m, 6.0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_float_prefit_residual_max_m, 30.0);
+    EXPECT_EQ(processor.getRTKConfig().max_float_prefit_residual_reset_streak, 5);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().min_float_prefit_residual_trusted_jump_m, 8.0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_update_nis_per_observation, 12.0);
 }
 
 TEST(RTKLegacyCompatibilityStandaloneTest, MaxConsecutiveFloatResetDefaultDisabled) {
     RTKProcessor processor;
     EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 0);
+    EXPECT_EQ(processor.getRTKConfig().max_consecutive_nonfix_for_reset, 0);
 
     RTKProcessor::RTKConfig cfg;
     cfg.max_consecutive_float_for_reset = 0;
+    cfg.max_consecutive_nonfix_for_reset = 0;
     processor.setRTKConfig(cfg);
     EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 0);
+    EXPECT_EQ(processor.getRTKConfig().max_consecutive_nonfix_for_reset, 0);
 
     RTKProcessor::RTKConfig cfg2;
     cfg2.max_consecutive_float_for_reset = 10;
+    cfg2.max_consecutive_nonfix_for_reset = 12;
     processor.setRTKConfig(cfg2);
     EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 10);
+    EXPECT_EQ(processor.getRTKConfig().max_consecutive_nonfix_for_reset, 12);
 
     RTKProcessor::RTKConfig cfg3;
     cfg3.max_consecutive_float_for_reset = 0;
+    cfg3.max_consecutive_nonfix_for_reset = 0;
     processor.setRTKConfig(cfg3);
     EXPECT_EQ(processor.getRTKConfig().max_consecutive_float_for_reset, 0);
+    EXPECT_EQ(processor.getRTKConfig().max_consecutive_nonfix_for_reset, 0);
 }
 
 TEST(RTKLegacyCompatibilityStandaloneTest, MaxPostfixResidualRmsDefaultDisabled) {

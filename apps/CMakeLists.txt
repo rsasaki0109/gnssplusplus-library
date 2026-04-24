@@ -78,7 +78,12 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_kinematic_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_products_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppc_demo.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppc_commercial.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppc_metrics.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppc_rtk_signoff.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_public_rtk_benchmarks.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_smartloc_adapter.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_smartloc_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_clas_ppp.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_nmea_info.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_novatel_info.py
@@ -107,6 +112,15 @@ install(PROGRAMS
     ${CMAKE_SOURCE_DIR}/scripts/generate_feature_overview_card.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_odaiba_scorecard.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_odaiba_social_card.py
+    ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_rtk_scorecard.py
+    ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_tail_cleanup_scorecard.py
+    ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_rtk_trajectory.py
+    ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_dual_profile_selector_matrix.py
+    ${CMAKE_SOURCE_DIR}/scripts/apply_ppc_dual_profile_selector.py
+    ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_profile_segment_delta.py
+    ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_residual_reset_sweep.py
+    ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_segment_selector_sweep.py
+    ${CMAKE_SOURCE_DIR}/scripts/update_ppc_coverage_readme.py
     DESTINATION scripts
 )
 
