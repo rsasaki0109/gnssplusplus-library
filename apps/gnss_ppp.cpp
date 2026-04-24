@@ -99,6 +99,8 @@ struct Options {
     double ar_ratio_threshold = 3.0;
     double kinematic_preconvergence_phase_residual_floor_m = 200.0;
     int filter_iterations = 0;  // 0 keeps PPPConfig default
+    double initial_ionosphere_variance = -1.0;  // negative keeps default
+    double initial_troposphere_variance = -1.0;
     bool quiet = false;
 };
 
@@ -721,6 +723,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.ar_ratio_threshold = std::stod(argv[++i]);
         } else if (arg == "--filter-iterations" && i + 1 < argc) {
             options.filter_iterations = std::stoi(argv[++i]);
+        } else if (arg == "--initial-ionosphere-variance" && i + 1 < argc) {
+            options.initial_ionosphere_variance = std::stod(argv[++i]);
+        } else if (arg == "--initial-troposphere-variance" && i + 1 < argc) {
+            options.initial_troposphere_variance = std::stod(argv[++i]);
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -813,6 +819,14 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.filter_iterations < 0) {
         argumentError("--filter-iterations must be non-negative", argv[0]);
+    }
+    if (options.initial_ionosphere_variance >= 0.0 &&
+        options.initial_ionosphere_variance == 0.0) {
+        argumentError("--initial-ionosphere-variance must be positive", argv[0]);
+    }
+    if (options.initial_troposphere_variance >= 0.0 &&
+        options.initial_troposphere_variance == 0.0) {
+        argumentError("--initial-troposphere-variance must be positive", argv[0]);
     }
     if (options.elevation_mask_deg < 0.0 || options.elevation_mask_deg >= 90.0) {
         argumentError("--elevation-mask must be in [0, 90) degrees", argv[0]);
@@ -1722,6 +1736,12 @@ int main(int argc, char* argv[]) {
         ppp_config.enable_outlier_detection = options.enable_ppp_outlier_detection;
         if (options.filter_iterations > 0) {
             ppp_config.filter_iterations = options.filter_iterations;
+        }
+        if (options.initial_ionosphere_variance > 0.0) {
+            ppp_config.initial_ionosphere_variance = options.initial_ionosphere_variance;
+        }
+        if (options.initial_troposphere_variance > 0.0) {
+            ppp_config.initial_troposphere_variance = options.initial_troposphere_variance;
         }
         ppp_config.use_clas_osr_filter = options.use_clas_osr_filter;
         ppp_config.clas_epoch_policy =
