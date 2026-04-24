@@ -98,6 +98,7 @@ struct Options {
     bool enable_ar = false;
     double ar_ratio_threshold = 3.0;
     double kinematic_preconvergence_phase_residual_floor_m = 200.0;
+    int filter_iterations = 0;  // 0 keeps PPPConfig default
     bool quiet = false;
 };
 
@@ -718,6 +719,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.enable_ar = false;
         } else if (arg == "--ar-ratio-threshold" && i + 1 < argc) {
             options.ar_ratio_threshold = std::stod(argv[++i]);
+        } else if (arg == "--filter-iterations" && i + 1 < argc) {
+            options.filter_iterations = std::stoi(argv[++i]);
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -807,6 +810,9 @@ Options parseArguments(int argc, char* argv[]) {
     if (!std::isfinite(options.kinematic_preconvergence_phase_residual_floor_m) ||
         options.kinematic_preconvergence_phase_residual_floor_m <= 0.0) {
         argumentError("--kinematic-preconvergence-phase-residual-floor must be positive", argv[0]);
+    }
+    if (options.filter_iterations < 0) {
+        argumentError("--filter-iterations must be non-negative", argv[0]);
     }
     if (options.elevation_mask_deg < 0.0 || options.elevation_mask_deg >= 90.0) {
         argumentError("--elevation-mask must be in [0, 90) degrees", argv[0]);
@@ -1714,6 +1720,9 @@ int main(int argc, char* argv[]) {
         ppp_config.initialize_phase_ambiguity_with_ionosphere_state =
             options.initialize_phase_ambiguity_with_ionosphere_state;
         ppp_config.enable_outlier_detection = options.enable_ppp_outlier_detection;
+        if (options.filter_iterations > 0) {
+            ppp_config.filter_iterations = options.filter_iterations;
+        }
         ppp_config.use_clas_osr_filter = options.use_clas_osr_filter;
         ppp_config.clas_epoch_policy =
             parseClasEpochPolicy(options.clas_epoch_policy);
