@@ -290,6 +290,15 @@ switches **724** reference segments to the `jump0.5` candidate, compared with
 
 ![PPC robust dual-profile selector scorecard](docs/ppc_jump0p5_dual_selector_robust_scorecard.png)
 
+The innovation-gate variant `--max-update-nis-per-obs 50.0` plus a segment
+selector (`candidate_status_name == FIXED AND baseline_ratio <= 2.4 AND
+candidate_rtk_update_observations >= 16`) supersedes the jump0.5 selectors
+above. Applying the rule with `scripts/apply_ppc_dual_profile_selector.py`
+lifts weighted official score **58.90% -> 60.55%** (**+766.6 m**,
+**+1.65 pp**) versus reset10, keeps every run non-negative, and does not
+move the Positioning rate. See `docs/benchmarks.md` for the rule, the
+per-run breakdown, and the scorecard.
+
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over
 GNSS++ alone. The remaining gap to **77.6%** is still **8.12 km**

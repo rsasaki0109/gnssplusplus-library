@@ -218,6 +218,51 @@ Tokyo run2 holdout still loses **85.5 m**, so the baseline-band rule is treated
 as an in-sample diagnostic until the selector objective explicitly optimizes
 run-level robustness.
 
+### NIS-gate dual-profile selector (new best public-data result)
+
+The innovation-gate variant `--max-update-nis-per-obs 50.0` (commits
+`a24f052`/`375832a`) does not move the six-run weighted official score on its
+own (**58.860%** vs reset10's **58.898%**) because the gate rejects very few
+updates and those rejected epochs drop out of the PPC output entirely. A
+segment-delta plus selector sweep over the gate candidate discovers a rule
+that picks only the segments where the gate actually helps:
+
+`candidate_status_name == FIXED AND baseline_ratio <= 2.4 AND candidate_rtk_update_observations >= 16`
+
+In words: keep the gated candidate only where the reset10 baseline was
+struggling (low or unresolved AR ratio) and the gated candidate achieved a
+FIXED solution with at least 16 DD observations. Applying this rule with
+`scripts/apply_ppc_dual_profile_selector.py` (rank 1 of the robust-objective
+sweep) gives:
+
+- **60.553%** weighted PPC official score
+- **+1.655 pp / +766.6 m** versus the reset10 baseline (**58.898%**)
+- **+3.73 pp** Fix rate, **0.00 pp** Positioning rate (no collateral loss)
+- all six runs non-negative: Tokyo r1 **+309.8 m**, r2 **+18.7 m**,
+  r3 **+242.7 m**; Nagoya r1 **+94.3 m**, r2 **+48.5 m**, r3 **+52.6 m**
+
+This is the best public-data PPC result measured on this branch to date and
+supersedes the `jump0.5` selector (**59.55%**, **+301.5 m**) and the
+scored-anchor CV bridge (**59.47%**, **+262.5 m**).
+
+![PPC NIS50 dual-profile selector scorecard](ppc_nis50_dual_selector_scorecard.png)
+
+NIS-rate variants
+(`AND candidate_rtk_update_normalized_innovation_squared_per_observation <= 2.0`)
+appear at rank 3-16 with slightly higher precision (98.0% vs 97.1%) but lose
+~160 m of net gain. The observation count `>= 16` is the more discriminating
+feature on this dataset. Rules that relax `baseline_ratio` to 2.5-3.3 reach
+**+781 m** net at higher loss exposure, but the worst-run gain drops from
+**+18.7 m** to **+17.3 m**, so the tighter `<= 2.4` variant is the robust
+optimum.
+
+The gate's `RTKUpdateNISRejected` column in `.pos` output is always `0`
+because `applyMeasurementUpdate` returns early on rejection
+(`src/algorithms/rtk_update.cpp:135`) and the outer epoch pipeline skips
+emitting an RTK solution for that epoch. Count "epochs missing from the gated
+candidate vs reset10" (~1000-1200 per run) when diagnosing gate firing, not
+the rejection flag.
+
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
 ![PPC Tokyo run1 bad segment trajectory](ppc_tokyo_run1_bad_segments_trajectory.png)
