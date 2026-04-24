@@ -55,6 +55,7 @@ struct Options {
     std::string phase_admission_excluded_satellite_frequency_pairs_arg;
     std::string phase_admission_excluded_before_satellite_frequency_pairs_arg;
     std::string phase_admission_residual_floor_satellite_frequency_pairs_arg;
+    std::string exclude_known_bad_madoca_sats_preset;
     bool reset_phase_ambiguity_on_before_exclusion = false;
     double elevation_mask_deg = 15.0;
     double ssr_step_seconds = 1.0;
@@ -171,6 +172,10 @@ void printUsage(const char* program_name) {
         << "                          Exclude diagnostic carrier-phase rows before GPS week/TOW (e.g. E31:0:2360:173610; default none)\n"
         << "  --phase-admission-residual-floor-sat-frequency-pairs <csv>\n"
         << "                          Override phase residual floor by satellite:frequency:meters (e.g. C30:1:60; default none)\n"
+        << "  --exclude-known-bad-madoca-sats <preset>\n"
+        << "                          Expand a named preset to --phase-admission-exclude-sat-frequency-pairs.\n"
+        << "                          Presets target satellites whose MADOCA SSR phase bias does not capture\n"
+        << "                          the per-sat hardware bias (see docs). Supported: mizu-2025-04.\n"
         << "  --reset-phase-ambiguity-on-before-exclusion\n"
         << "                          Reset ambiguity state while before-time phase exclusion is active (default: keep state)\n"
         << "  --elevation-mask <deg>  Satellite elevation mask in degrees (default: 15)\n"
@@ -462,6 +467,55 @@ parseSatelliteFrequencyPairResidualFloorToken(const std::string& token) {
     return {pair, floor_m};
 }
 
+// Empirically derived "known bad" MADOCA satellite/frequency pairs: satellites
+// whose tail-window mean phase residual stays above ~15 mm on MIZU benchmarks,
+// where MADOCA SSR phase bias does not capture the per-sat hardware bias.
+// Excluding these pairs halved tail-60 3D RMS (0.304 m → 0.156 m on MIZU
+// 2025-04 day 091). The list is dataset/month specific; re-audit as the
+// constellation evolves (retires, replacements, new IIIA/IIR-M launches).
+std::map<std::string, std::string> knownBadMadocaSatPresets() {
+    return {
+        {"mizu-2025-04",
+         "J02:0,J02:1,J03:0,G26:0,G26:1,G16:0,G16:1"},
+    };
+}
+
+std::string lookupKnownBadMadocaSatPreset(const std::string& name) {
+    const std::string trimmed = trimCopy(name);
+    if (trimmed.empty()) {
+        return {};
+    }
+    const auto presets = knownBadMadocaSatPresets();
+    const auto it = presets.find(trimmed);
+    if (it == presets.end()) {
+        std::string available;
+        for (const auto& entry : presets) {
+            if (!available.empty()) {
+                available += ", ";
+            }
+            available += entry.first;
+        }
+        throw std::invalid_argument(
+            "unknown --exclude-known-bad-madoca-sats preset '" + trimmed +
+            "' (available: " + available + ")");
+    }
+    return it->second;
+}
+
+std::string mergeCsvPairLists(const std::string& left, const std::string& right) {
+    std::string merged = trimCopy(left);
+    const std::string rhs = trimCopy(right);
+    if (rhs.empty()) {
+        return merged;
+    }
+    if (merged.empty()) {
+        return rhs;
+    }
+    merged += ",";
+    merged += rhs;
+    return merged;
+}
+
 std::map<std::pair<libgnss::SatelliteId, int>, double>
 parseSatelliteFrequencyPairResidualFloorMap(const std::string& value) {
     if (trimCopy(value).empty() || equalsIgnoreCase(trimCopy(value), "none")) {
@@ -552,6 +606,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.phase_admission_excluded_before_satellite_frequency_pairs_arg = argv[++i];
         } else if (arg == "--phase-admission-residual-floor-sat-frequency-pairs" && i + 1 < argc) {
             options.phase_admission_residual_floor_satellite_frequency_pairs_arg = argv[++i];
+        } else if (arg == "--exclude-known-bad-madoca-sats" && i + 1 < argc) {
+            options.exclude_known_bad_madoca_sats_preset = argv[++i];
         } else if (arg == "--reset-phase-ambiguity-on-before-exclusion") {
             options.reset_phase_ambiguity_on_before_exclusion = true;
         } else if (arg == "--elevation-mask" && i + 1 < argc) {
@@ -716,6 +772,14 @@ Options parseArguments(int argc, char* argv[]) {
         (void)parseFrequencyIndexSet(options.initial_phase_admission_warm_start_frequency_indexes_arg);
         (void)parseSatelliteFrequencyPairSet(
             options.initial_phase_admission_warm_start_satellite_frequency_pairs_arg);
+        if (!options.exclude_known_bad_madoca_sats_preset.empty()) {
+            const std::string preset_csv = lookupKnownBadMadocaSatPreset(
+                options.exclude_known_bad_madoca_sats_preset);
+            options.phase_admission_excluded_satellite_frequency_pairs_arg =
+                mergeCsvPairLists(
+                    options.phase_admission_excluded_satellite_frequency_pairs_arg,
+                    preset_csv);
+        }
         (void)parseSatelliteFrequencyPairSet(
             options.phase_admission_excluded_satellite_frequency_pairs_arg);
         (void)parseSatelliteFrequencyPairBeforeTimeMap(
