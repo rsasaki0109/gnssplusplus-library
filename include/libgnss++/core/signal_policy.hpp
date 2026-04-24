@@ -52,14 +52,19 @@ inline int rinexBand(const std::string& obs_type) {
     return obs_type[1] - '0';
 }
 
+inline bool isGpsPYCode(char code) {
+    return code == 'P' || code == 'Y' || code == 'W' || code == 'M' || code == 'N';
+}
+
 inline bool trySignalForObservationType(GNSSSystem system,
                                         const std::string& obs_type,
                                         SignalType& signal) {
     const int band = rinexBand(obs_type);
+    const char code = obs_type.size() >= 3 ? obs_type[2] : '\0';
     switch (system) {
         case GNSSSystem::GPS:
-            if (band == 1) { signal = SignalType::GPS_L1CA; return true; }
-            if (band == 2) { signal = SignalType::GPS_L2C; return true; }
+            if (band == 1) { signal = isGpsPYCode(code) ? SignalType::GPS_L1P : SignalType::GPS_L1CA; return true; }
+            if (band == 2) { signal = isGpsPYCode(code) ? SignalType::GPS_L2P : SignalType::GPS_L2C; return true; }
             if (band == 5) { signal = SignalType::GPS_L5; return true; }
             break;
         case GNSSSystem::GLONASS:
@@ -109,7 +114,7 @@ inline SignalType signalForObservationType(GNSSSystem system,
 inline bool isPrimarySignal(GNSSSystem system, SignalType signal) {
     switch (system) {
         case GNSSSystem::GPS:
-            return signal == SignalType::GPS_L1CA;
+            return signal == SignalType::GPS_L1CA || signal == SignalType::GPS_L1P;
         case GNSSSystem::GLONASS:
             return signal == SignalType::GLO_L1CA || signal == SignalType::GLO_L1P;
         case GNSSSystem::Galileo:
@@ -128,7 +133,9 @@ inline bool isPrimarySignal(GNSSSystem system, SignalType signal) {
 inline bool isSecondarySignal(GNSSSystem system, SignalType signal) {
     switch (system) {
         case GNSSSystem::GPS:
-            return signal == SignalType::GPS_L2C || signal == SignalType::GPS_L5;
+            return signal == SignalType::GPS_L2P ||
+                   signal == SignalType::GPS_L2C ||
+                   signal == SignalType::GPS_L5;
         case GNSSSystem::GLONASS:
             return signal == SignalType::GLO_L2CA || signal == SignalType::GLO_L2P;
         case GNSSSystem::Galileo:
@@ -151,7 +158,9 @@ inline int signalPriority(GNSSSystem system, SignalType signal, bool primary) {
     if (primary) {
         switch (system) {
             case GNSSSystem::GPS:
-                return signal == SignalType::GPS_L1CA ? 0 : 100;
+                if (signal == SignalType::GPS_L1CA) return 0;
+                if (signal == SignalType::GPS_L1P) return 1;
+                return 100;
             case GNSSSystem::GLONASS:
                 if (signal == SignalType::GLO_L1CA) return 0;
                 if (signal == SignalType::GLO_L1P) return 1;
@@ -173,8 +182,9 @@ inline int signalPriority(GNSSSystem system, SignalType signal, bool primary) {
 
     switch (system) {
         case GNSSSystem::GPS:
-            if (signal == SignalType::GPS_L2C) return 0;
-            if (signal == SignalType::GPS_L5) return 1;
+            if (signal == SignalType::GPS_L2P) return 0;
+            if (signal == SignalType::GPS_L2C) return 1;
+            if (signal == SignalType::GPS_L5) return 2;
             return 100;
         case GNSSSystem::GLONASS:
             if (signal == SignalType::GLO_L2CA) return 0;

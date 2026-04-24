@@ -2911,17 +2911,43 @@ Vector3d PPPProcessor::calculateSatelliteAntennaOffsetEcef(
         return Vector3d::Zero();
     }
 
+    // Map obs-side signal variants to the ATX-side canonical key.  The ATX
+    // stores one PCO entry per frequency band (G01/G02/G05/...); tracking
+    // code variants within the same band (L1CA vs L1P, L2C vs L2P, etc.)
+    // share the PCO.  Without this, lookups for e.g. GPS_L2P miss the map.
+    auto canonical_antex_signal = [](SignalType signal) -> SignalType {
+        switch (signal) {
+            case SignalType::GPS_L1P: return SignalType::GPS_L1CA;
+            case SignalType::GPS_L2P: return SignalType::GPS_L2C;
+            case SignalType::GLO_L1P: return SignalType::GLO_L1CA;
+            case SignalType::GLO_L2P: return SignalType::GLO_L2CA;
+            default: return signal;
+        }
+    };
+    auto signal_offset_lookup = [&](SignalType signal, bool& found) -> Vector3d {
+        found = false;
+        const auto canonical = canonical_antex_signal(signal);
+        auto it = selected_entry->offsets_neu_m.find(canonical);
+        if (it != selected_entry->offsets_neu_m.end()) {
+            found = true;
+            return it->second;
+        }
+        if (canonical != signal) {
+            it = selected_entry->offsets_neu_m.find(signal);
+            if (it != selected_entry->offsets_neu_m.end()) {
+                found = true;
+                return it->second;
+            }
+        }
+        return Vector3d::Zero();
+    };
     auto signal_offset = [&](SignalType signal) -> Vector3d {
-        const auto it = selected_entry->offsets_neu_m.find(signal);
-        return it != selected_entry->offsets_neu_m.end() ? it->second : Vector3d::Zero();
+        bool found = false;
+        return signal_offset_lookup(signal, found);
     };
 
-    // MADOCALIB/RTKLIB satantoff() always combines the satellite PCO as the
-    // iono-free LC of the two primary frequencies (preceph.c:617-621).  The
-    // SSR orbit corrections are defined relative to that IFLC phase center,
-    // so the same combination must be applied even when the filter itself
-    // runs in estimated-ionosphere mode; otherwise a large per-satellite
-    // offset (tens of cm) is introduced into the range.
+    // Effective PCO for this observation (per-signal for single-band,
+    // IFLC-combined for the primary dual-freq pair).
     Vector3d offset_neu = Vector3d::Zero();
     if (observation.secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
         offset_neu = signal_offset(observation.primary_signal);
@@ -2933,6 +2959,54 @@ Vector3d PPPProcessor::calculateSatelliteAntennaOffsetEcef(
             iflc.first * signal_offset(observation.primary_signal) +
             iflc.second * signal_offset(observation.secondary_signal);
     }
+
+    // MADOCALIB/RTKLIB satantoff() always combines the satellite PCO as the
+    // iono-free LC of the two primary frequencies (preceph.c:617-621).  SSR
+    // orbit corrections are referenced to that IFLC phase center, so when
+    // the SSR is delivered at the antenna phase center (e.g. MADOCA-PPP
+    // EPHOPT_SSRAPC) we must subtract that IFLC reference so only the
+    // per-observation PCO delta is applied; otherwise, extra-band (L5/E5a)
+    // observations inherit a ~1m range bias from the L1/L2 IFLC reference.
+    if (ppp_config_.ssr_orbit_reference_is_apc) {
+        // If the per-observation signal has no PCO entry (common for L5 on
+        // older GPS blocks without G05 in IGS20 ATX), we cannot compute a
+        // meaningful delta — subtracting the IFLC reference alone would
+        // inject a 0.5-1.5m false offset.  Return zero so sat_position
+        // stays at the SSR reference (the caller accepts the residual
+        // L5-vs-L1/L2 PCO discrepancy, which is smaller than the fabricated
+        // delta would be).
+        bool primary_found = false;
+        signal_offset_lookup(observation.primary_signal, primary_found);
+        if (!primary_found) {
+            return Vector3d::Zero();
+        }
+        bool secondary_found = true;
+        if (observation.secondary_signal != SignalType::SIGNAL_TYPE_COUNT) {
+            signal_offset_lookup(observation.secondary_signal, secondary_found);
+            if (!secondary_found) {
+                return Vector3d::Zero();
+            }
+        }
+
+        const SignalType ref_primary =
+            signal_policy::primarySignalForSystem(observation.satellite.system);
+        const SignalType ref_secondary =
+            signal_policy::secondarySignalForSystem(observation.satellite.system);
+        Vector3d reference_offset_neu = Vector3d::Zero();
+        if (ref_primary != SignalType::SIGNAL_TYPE_COUNT &&
+            ref_secondary != SignalType::SIGNAL_TYPE_COUNT) {
+            const double f1 = signalFrequencyHz(ref_primary);
+            const double f2 = signalFrequencyHz(ref_secondary);
+            if (f1 > 0.0 && f2 > 0.0 && std::abs(f1 - f2) > 1.0) {
+                const auto iflc = ppp_utils::getIonosphereFreeCoefficients(f1, f2);
+                reference_offset_neu =
+                    iflc.first * signal_offset(ref_primary) +
+                    iflc.second * signal_offset(ref_secondary);
+            }
+        }
+        offset_neu -= reference_offset_neu;
+    }
+
     if (offset_neu.squaredNorm() <= 0.0) {
         return Vector3d::Zero();
     }
@@ -3032,13 +3106,14 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
 
         auto applySatelliteAntennaOffset = [&]() {
             if (!applied_satellite_antenna_offset) {
-                // Skip when SSR orbits are delivered at the antenna phase
-                // center (MADOCALIB EPHOPT_SSRAPC); re-applying the PCO
-                // here would double-correct the satellite position.
-                if (!ppp_config_.ssr_orbit_reference_is_apc) {
-                    sat_position +=
-                        calculateSatelliteAntennaOffsetEcef(observation, sat_position, time);
-                }
+                // For APC-referenced SSR (MADOCALIB EPHOPT_SSRAPC), the
+                // helper returns the PCO delta from the L1/L2 IFLC reference
+                // (zero for primary IFLC observations, ~1m for L5).  For
+                // CoM-referenced SSR it returns the full per-observation
+                // PCO.  Applying either produces the correct per-signal
+                // phase center for this observation.
+                sat_position +=
+                    calculateSatelliteAntennaOffsetEcef(observation, sat_position, time);
                 applied_satellite_antenna_offset = true;
             }
         };
