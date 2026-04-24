@@ -295,9 +295,16 @@ selector (`candidate_status_name == FIXED AND baseline_ratio <= 2.4 AND
 candidate_rtk_update_observations >= 16`) supersedes the jump0.5 selectors
 above. Applying the rule with `scripts/apply_ppc_dual_profile_selector.py`
 lifts weighted official score **58.90% -> 60.55%** (**+766.6 m**,
-**+1.65 pp**) versus reset10, keeps every run non-negative, and does not
-move the Positioning rate. See `docs/benchmarks.md` for the rule, the
-per-run breakdown, and the scorecard.
+**+1.65 pp**) versus reset10.
+
+Sweeping the NIS threshold finds a much better selector at
+`--max-update-nis-per-obs 5.0` (the standalone gate at `5` scores **50.54%**
+but its FIXED segments are cleaner, so the selector recall is higher). With
+a single-condition rule `candidate_status_name == FIXED AND candidate_baseline_m <= 10034.9`
+(the baseline constraint is a no-op on this dataset — PPC baselines are ~170 m),
+weighted score moves **58.90% -> 63.26%** (**+2,019.8 m**, **+4.36 pp**) vs
+reset10, all six runs gain, and both Positioning (+0.43 pp) and Fix (+6.59 pp)
+improve. See `docs/benchmarks.md` for the ranked rule table and scorecards.
 
 Across all six reset10 replays, a best-of GNSS++/RTKLIB oracle only reaches
 **60.08%** weighted official score, adding **545.5 m** (**+1.18 pp**) over

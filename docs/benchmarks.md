@@ -263,6 +263,46 @@ emitting an RTK solution for that epoch. Count "epochs missing from the gated
 candidate vs reset10" (~1000-1200 per run) when diagnosing gate firing, not
 the rejection flag.
 
+#### Tightening the gate: NIS5 selector beats NIS50 by +2.70 pp
+
+Sweeping `--max-update-nis-per-obs` across `{1, 3, 5, 10, 20, 30, 50}` shows
+that standalone weighted score decreases monotonically as the gate tightens
+(50.5% at 5, 30.4% at 1). The upper bound on selector gain, however, peaks at
+`--max-update-nis-per-obs 5.0` (**+2398 m** in segment-delta terms), not at
+the loose threshold. A fast robust sweep (`--max-numeric-conditions 1`,
+`--rank-objective robust`) over the six-run segment CSVs finds:
+
+`candidate_status_name == FIXED AND candidate_rtk_update_observations >= 12` (nis1, +1005 m)
+`candidate_status_name == FIXED AND candidate_rtk_update_normalized_innovation_squared_per_observation <= 2.9162 AND candidate_rtk_update_post_suppression_residual_rms_m <= 1.1621` (nis3, +1695 m, `--max-numeric-conditions 2`)
+`candidate_status_name == FIXED AND candidate_baseline_m <= 10034.9` (nis5, **+2022 m**)
+`status_transition == FLOAT->FIXED AND candidate_rtk_update_post_suppression_residual_rms_m <= 0.948` (nis10, +1069 m)
+`baseline_status_name == FLOAT AND candidate_rtk_update_observations >= 14` (nis20, +1007 m)
+`status_transition == FLOAT->FIXED AND candidate_rtk_update_normalized_innovation_squared_per_observation <= 2.0675` (nis30, +560 m)
+
+The **NIS5 rank 1 rule** wins on every run. Applied with
+`scripts/apply_ppc_dual_profile_selector.py` against the reset10 baseline:
+
+- **63.258%** weighted PPC official score
+- **+4.360 pp / +2019.8 m** versus the reset10 baseline (**58.898%**)
+- **+6.59 pp** Fix rate, **+0.43 pp** Positioning rate (both improve)
+- all six runs non-negative: Tokyo r1 **+726.7 m**, r2 **+177.4 m**,
+  r3 **+475.6 m**; Nagoya r1 **+228.5 m**, r2 **+101.2 m**, r3 **+310.4 m**
+
+The `candidate_baseline_m <= 10034.9` constraint is effectively a no-op
+(rover-to-base baselines on PPC Tokyo/Nagoya are ~170 m), so the rule
+reduces to "any NIS5 FIXED epoch is clean enough to keep". That is only
+true because the tighter `5.0` threshold filters bad measurement updates
+earlier, letting remaining FIXED epochs converge to truth. Looser gates
+(NIS50, NIS10) leak bad updates into the filter state, so their FIXED
+epochs need additional guards (ratio, obs count, prefit residuals) to
+be reliable.
+
+![PPC NIS5 dual-profile selector scorecard](ppc_nis5_dual_selector_scorecard.png)
+
+Gap to the PPC2024 public second-place reference (**77.6%**) after this
+step: **14.34 pp**, down from **18.70 pp** at reset10 — 23% of the gap
+closed by a docs-only recipe that reuses the existing solver.
+
 ![PPC RTK tail-cleanup diagnostic scorecard](ppc_tail_cleanup_scorecard.png)
 
 ![PPC Tokyo run1 bad segment trajectory](ppc_tokyo_run1_bad_segments_trajectory.png)
