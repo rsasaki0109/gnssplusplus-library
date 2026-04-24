@@ -1,8 +1,12 @@
 #include <gtest/gtest.h>
 #include <libgnss++/io/rinex.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
+#include <sstream>
+#include <vector>
 
 using namespace libgnss;
 
@@ -140,6 +144,42 @@ Ephemeris makeGalileoEphemeris() {
     return eph;
 }
 
+std::string makeRinex3ObsTypesLine(char system,
+                                   int total_count,
+                                   const std::vector<std::string>& types) {
+    std::ostringstream line_stream;
+    if (system == ' ') {
+        line_stream << "       ";
+    } else {
+        line_stream << system << "  " << std::setw(3) << total_count << ' ';
+    }
+    for (const auto& type : types) {
+        line_stream << type << ' ';
+    }
+
+    std::string line = line_stream.str();
+    if (line.size() < 60) {
+        line.resize(60, ' ');
+    }
+    line += "SYS / # / OBS TYPES";
+    return line;
+}
+
+std::string makeRinex3ObservationLine(const std::string& satellite,
+                                      const std::vector<double>& values) {
+    std::string line = satellite;
+    for (const double value : values) {
+        if (value == 0.0) {
+            line += std::string(16, ' ');
+            continue;
+        }
+        std::ostringstream value_stream;
+        value_stream << std::fixed << std::setprecision(3) << std::setw(14) << value << "  ";
+        line += value_stream.str();
+    }
+    return line;
+}
+
 }  // namespace
 
 TEST(RINEXWriterTest, WritesGpsNavigationMessageReadableByReader) {
@@ -224,6 +264,66 @@ TEST(RINEXWriterTest, WritesGlonassNavigationMessageReadableByReader) {
     EXPECT_NEAR((actual.glonass_acceleration - expected.glonass_acceleration).norm(), 0.0, 1e-6);
     EXPECT_EQ(actual.glonass_frequency_channel, expected.glonass_frequency_channel);
     EXPECT_EQ(actual.glonass_age, expected.glonass_age);
+
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+
+TEST(RINEXWriterTest, KeepsRinex3CodeAndCarrierOnSelectedTrackingCode) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex_obs_tracking_code_selection_test.obs";
+    std::filesystem::remove(temp_path);
+
+    std::ofstream output(temp_path);
+    ASSERT_TRUE(output.is_open());
+    output << "     3.04           O                   M                   RINEX VERSION / TYPE\n";
+    output << "libgnss++           tests               20260421 000000 UTC PGM / RUN BY / DATE\n";
+    output << makeRinex3ObsTypesLine('G', 9,
+                                      {"C1C", "C1L", "C1W", "L1C", "L1L",
+                                       "C2L", "C2W", "L2L", "L2W"})
+           << "\n";
+    output << "                                                            END OF HEADER\n";
+    output << "> 2025 04 01 00 00 00.0000000  0  1\n";
+
+    std::vector<double> gps_values(9, 0.0);
+    gps_values[0] = 20200000.125;  // C1C: highest-priority GPS L1 code
+    gps_values[1] = 20200010.000;  // C1L: must not overwrite C1C
+    gps_values[2] = 20200020.000;  // C1W: must not overwrite C1C
+    gps_values[3] = 106150000.250; // L1C: must match selected C1C
+    gps_values[4] = 106150010.000; // L1L: must not mix with C1C
+    gps_values[5] = 20200005.000;  // C2L: lower priority than C2W
+    gps_values[6] = 20200006.500;  // C2W: selected GPS L2 code
+    gps_values[7] = 82700000.000;  // L2L: must not mix with C2W
+    gps_values[8] = 82700000.750;  // L2W: must match selected C2W
+    output << makeRinex3ObservationLine("G01", gps_values) << "\n";
+    output.close();
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+
+    ObservationData epoch;
+    ASSERT_TRUE(reader.readObservationEpoch(epoch));
+
+    const SatelliteId gps_sat(GNSSSystem::GPS, 1);
+    const Observation* gps_l1 = epoch.getObservation(gps_sat, SignalType::GPS_L1CA);
+    ASSERT_NE(gps_l1, nullptr);
+    EXPECT_TRUE(gps_l1->has_pseudorange);
+    EXPECT_TRUE(gps_l1->has_carrier_phase);
+    EXPECT_NEAR(gps_l1->pseudorange, 20200000.125, 1e-6);
+    EXPECT_NEAR(gps_l1->carrier_phase, 106150000.250, 1e-6);
+
+    const Observation* gps_l2 = epoch.getObservation(gps_sat, SignalType::GPS_L2P);
+    ASSERT_NE(gps_l2, nullptr);
+    EXPECT_EQ(epoch.getObservation(gps_sat, SignalType::GPS_L2C), nullptr);
+    EXPECT_TRUE(gps_l2->has_pseudorange);
+    EXPECT_TRUE(gps_l2->has_carrier_phase);
+    EXPECT_EQ(gps_l2->observation_code, "C2W");
+    EXPECT_NEAR(gps_l2->pseudorange, 20200006.500, 1e-6);
+    EXPECT_NEAR(gps_l2->carrier_phase, 82700000.750, 1e-6);
 
     reader.close();
     std::filesystem::remove(temp_path);
@@ -343,6 +443,82 @@ TEST(RINEXWriterTest, ReadsObservationAntennaHeaderFields) {
     EXPECT_NEAR(header.antenna_delta.x(), 0.1230, 1e-9);
     EXPECT_NEAR(header.antenna_delta.y(), -0.4560, 1e-9);
     EXPECT_NEAR(header.antenna_delta.z(), 1.2340, 1e-9);
+
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+
+TEST(RINEXWriterTest, ReadsRinex3ContinuedObservationTypesAndValues) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex_obs_types_continuation_test.obs";
+    std::filesystem::remove(temp_path);
+
+    std::ofstream output(temp_path);
+    ASSERT_TRUE(output.is_open());
+    output << "     3.04           O                   M                   RINEX VERSION / TYPE\n";
+    output << "libgnss++           tests               20260421 000000 UTC PGM / RUN BY / DATE\n";
+    output << makeRinex3ObsTypesLine('G', 15,
+                                      {"C1C", "L1C", "D1C", "S1C", "C2W", "D2W", "S2W",
+                                       "C5Q", "L5Q", "D5Q", "S5Q", "C1L", "L1L"})
+           << "\n";
+    output << makeRinex3ObsTypesLine(' ', 15, {"L2W", "S1W"}) << "\n";
+    output << makeRinex3ObsTypesLine('C', 15,
+                                      {"C2I", "L2I", "D2I", "S2I", "C6I", "L6I", "D6I",
+                                       "S6I", "C7I", "D7I", "S7I", "C1P", "L1P"})
+           << "\n";
+    output << makeRinex3ObsTypesLine(' ', 15, {"L7I", "S1P"}) << "\n";
+    output << "                                                            END OF HEADER\n";
+    output << "> 2025 04 01 00 00 00.0000000  0  2\n";
+
+    std::vector<double> gps_values(15, 0.0);
+    gps_values[0] = 20200000.125;
+    gps_values[1] = 106150000.250;
+    gps_values[4] = 20200005.500;
+    gps_values[13] = 82700000.750;
+    output << makeRinex3ObservationLine("G01", gps_values) << "\n";
+
+    std::vector<double> bds_values(15, 0.0);
+    bds_values[0] = 21400000.125;
+    bds_values[1] = 112000000.250;
+    bds_values[8] = 21400005.500;
+    bds_values[13] = 86000000.750;
+    output << makeRinex3ObservationLine("C07", bds_values) << "\n";
+    output.close();
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+
+    ASSERT_EQ(header.system_obs_types['G'].size(), 15U);
+    ASSERT_EQ(header.system_obs_types['C'].size(), 15U);
+    EXPECT_EQ(header.system_obs_types['G'][13], "L2W");
+    EXPECT_EQ(header.system_obs_types['C'][13], "L7I");
+    EXPECT_NE(std::find(header.observation_types.begin(), header.observation_types.end(), "L2W"),
+              header.observation_types.end());
+
+    ObservationData epoch;
+    ASSERT_TRUE(reader.readObservationEpoch(epoch));
+
+    const SatelliteId gps_sat(GNSSSystem::GPS, 1);
+    const Observation* gps_l2 = epoch.getObservation(gps_sat, SignalType::GPS_L2P);
+    ASSERT_NE(gps_l2, nullptr);
+    EXPECT_EQ(epoch.getObservation(gps_sat, SignalType::GPS_L2C), nullptr);
+    EXPECT_TRUE(gps_l2->has_pseudorange);
+    EXPECT_TRUE(gps_l2->has_carrier_phase);
+    EXPECT_EQ(gps_l2->observation_code, "C2W");
+    EXPECT_NEAR(gps_l2->pseudorange, 20200005.500, 1e-6);
+    EXPECT_NEAR(gps_l2->carrier_phase, 82700000.750, 1e-6);
+
+    const SatelliteId bds_sat(GNSSSystem::BeiDou, 7);
+    const Observation* bds_b2i = epoch.getObservation(bds_sat, SignalType::BDS_B2I);
+    ASSERT_NE(bds_b2i, nullptr);
+    EXPECT_TRUE(bds_b2i->has_pseudorange);
+    EXPECT_TRUE(bds_b2i->has_carrier_phase);
+    EXPECT_NEAR(bds_b2i->pseudorange, 21400005.500, 1e-6);
+    EXPECT_NEAR(bds_b2i->carrier_phase, 86000000.750, 1e-6);
 
     reader.close();
     std::filesystem::remove(temp_path);

@@ -2,6 +2,7 @@
 
 #include <libgnss++/algorithms/madoca_parity.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/navigation.hpp>
 #include <libgnss++/external/madocalib_oracle.hpp>
 
 #include <cmath>
@@ -55,6 +56,62 @@ madoca::GTime addSeconds(madoca::GTime time, double seconds) {
     time.time += static_cast<decltype(time.time)>(whole);
     time.sec -= whole;
     return time;
+}
+
+libgnss::GNSSTime toGnssTime(madoca::GTime time) {
+    constexpr std::int64_t kGpsEpochUnixSeconds = 315964800;
+    double seconds =
+        static_cast<double>(time.time - kGpsEpochUnixSeconds) + time.sec;
+    int week = static_cast<int>(std::floor(seconds / 604800.0));
+    double tow = seconds - static_cast<double>(week) * 604800.0;
+    while (tow < 0.0) {
+        tow += 604800.0;
+        --week;
+    }
+    while (tow >= 604800.0) {
+        tow -= 604800.0;
+        ++week;
+    }
+    return libgnss::GNSSTime(week, tow);
+}
+
+libgnss::Ephemeris toLibEphemeris(const madoca::BroadcastEphemeris& eph,
+                                  libgnss::GNSSSystem system,
+                                  std::uint8_t prn) {
+    libgnss::Ephemeris out;
+    out.satellite = libgnss::SatelliteId(system, prn);
+    out.iode = static_cast<std::uint16_t>(eph.iode);
+    out.iodc = static_cast<std::uint16_t>(eph.iodc);
+    out.ura = static_cast<std::uint8_t>(eph.sva);
+    out.health = static_cast<std::uint8_t>(eph.svh);
+    out.week = static_cast<std::uint16_t>(eph.week);
+    out.toe = toGnssTime(eph.toe);
+    out.toc = toGnssTime(eph.toc);
+    out.tof = toGnssTime(eph.ttr);
+    out.toes = eph.toes;
+    out.sqrt_a = std::sqrt(eph.A);
+    out.e = eph.e;
+    out.i0 = eph.i0;
+    out.omega0 = eph.OMG0;
+    out.omega = eph.omg;
+    out.m0 = eph.M0;
+    out.delta_n = eph.deln;
+    out.omega_dot = eph.OMGd;
+    out.idot = eph.idot;
+    out.i_dot = eph.idot;
+    out.crc = eph.crc;
+    out.crs = eph.crs;
+    out.cuc = eph.cuc;
+    out.cus = eph.cus;
+    out.cic = eph.cic;
+    out.cis = eph.cis;
+    out.af0 = eph.f0;
+    out.af1 = eph.f1;
+    out.af2 = eph.f2;
+    out.tgd = eph.tgd[0];
+    out.tgd_secondary = eph.tgd[1];
+    out.valid = true;
+    return out;
 }
 
 GeometrySample makeSample(int index) {
@@ -215,6 +272,30 @@ void expectNearMionoSat(const std::string& label,
 
 TEST(MadocaParityConfig, OracleToleranceIsDefined) {
     EXPECT_DOUBLE_EQ(madoca::kOracleTolerance, 1e-6);
+}
+
+TEST(MadocaParityConfig, CoreGalileoBroadcastStateMatchesParityEph2pos) {
+    ASSERT_TRUE(madoca::eph2posAvailable());
+    const madoca::BroadcastEphemeris madoca_eph = makeEph(madoca::kSysGal, 11, 1);
+    const libgnss::Ephemeris lib_eph =
+        toLibEphemeris(madoca_eph, libgnss::GNSSSystem::Galileo, 11);
+    const madoca::GTime time = addSeconds(madoca_eph.toe, 2400.0);
+
+    libgnss::Vector3d pos;
+    libgnss::Vector3d vel;
+    double clock_bias = 0.0;
+    double clock_drift = 0.0;
+    ASSERT_TRUE(lib_eph.calculateSatelliteState(
+        toGnssTime(time), pos, vel, clock_bias, clock_drift));
+
+    double rs[3] = {};
+    double dts = 0.0;
+    double var = 0.0;
+    madoca::eph2pos(time, &madoca_eph, rs, &dts, &var);
+
+    const libgnss::Vector3d parity_pos(rs[0], rs[1], rs[2]);
+    EXPECT_LT((pos - parity_pos).norm(), 1e-6);
+    EXPECT_NEAR(clock_bias, dts, kClockTolerance);
 }
 
 #if GNSSPP_HAS_MADOCALIB_ORACLE

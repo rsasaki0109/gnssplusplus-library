@@ -120,7 +120,7 @@ struct PPPConfig {
     bool enable_ambiguity_resolution = false;
     double ar_ratio_threshold = 3.0;
     int min_satellites_for_ar = 6;
-    enum class ARMethod { DD_IFLC, DD_WLNL, DD_PER_FREQ };
+    enum class ARMethod { DD_IFLC, DD_WLNL, DD_PER_FREQ, DD_MADOCA_CASCADED };
     ARMethod ar_method = ARMethod::DD_IFLC;
     int wl_min_averaging_epochs = 20;
 

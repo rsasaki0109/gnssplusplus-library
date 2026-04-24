@@ -67,6 +67,7 @@ struct Options {
     bool estimate_ionosphere = false;
     bool use_ionosphere_free = true;
     bool enable_per_frequency_phase_bias_states = false;
+    bool enable_extra_band_observations = false;
     bool initialize_phase_ambiguity_with_ionosphere_state = false;
     bool enable_ppp_outlier_detection = true;
     bool use_clas_osr_filter = false;
@@ -132,8 +133,10 @@ void printUsage(const char* program_name) {
         << "                          Skip the admission-only IODE gate for the first N\n"
         << "                          epochs so stale-CSSR-IODE observations can seed the\n"
         << "                          filter before the gate activates (default: 0)\n"
-        << "  --ar-method <dd-iflc|dd-wlnl|dd-per-freq>\n"
-        << "                          PPP ambiguity resolution method (default: dd-iflc)\n"
+        << "  --ar-method <dd-iflc|dd-wlnl|dd-per-freq|dd-madoca-cascaded>\n"
+        << "                          PPP ambiguity resolution method (default: dd-iflc).\n"
+        << "                          dd-madoca-cascaded adds MADOCALIB-style Kalman\n"
+        << "                          WL state-constraint injection before N1 LAMBDA\n"
         << "  --out <solution.pos>     Output position file (required)\n"
         << "  --summary-json <summary.json>\n"
         << "                          Optional machine-readable run summary\n"
@@ -188,6 +191,11 @@ void printUsage(const char* program_name) {
         << "  --estimate-ionosphere   Estimate per-satellite ionosphere states\n"
         << "  --no-estimate-ionosphere\n"
         << "                          Disable per-satellite ionosphere state estimation (default)\n"
+        << "  --enable-extra-band-observations\n"
+        << "                          Emit RINEX observations for bands beyond the\n"
+        << "                          primary/secondary pair (enables 3rd-freq states).\n"
+        << "                          Experimental; SSR bias path for extra bands may\n"
+        << "                          not be fully wired for all product types.\n"
         << "  --enable-per-frequency-phase-bias-states\n"
         << "                          Add guarded non-IFLC carrier-phase ambiguity states per frequency\n"
         << "  --disable-per-frequency-phase-bias-states\n"
@@ -682,6 +690,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.enable_per_frequency_phase_bias_states = true;
         } else if (arg == "--disable-per-frequency-phase-bias-states") {
             options.enable_per_frequency_phase_bias_states = false;
+        } else if (arg == "--enable-extra-band-observations") {
+            options.enable_extra_band_observations = true;
+        } else if (arg == "--disable-extra-band-observations") {
+            options.enable_extra_band_observations = false;
         } else if (arg == "--enable-ionosphere-aware-phase-ambiguity-init") {
             options.initialize_phase_ambiguity_with_ionosphere_state = true;
         } else if (arg == "--disable-ionosphere-aware-phase-ambiguity-init") {
@@ -1565,6 +1577,9 @@ int main(int argc, char* argv[]) {
         }
 
         libgnss::io::RINEXReader obs_reader;
+        if (options.enable_extra_band_observations) {
+            obs_reader.setEmitExtraBandObservations(true);
+        }
         if (!obs_reader.open(options.obs_path)) {
             std::cerr << "Error: failed to open observation file: " << options.obs_path << "\n";
             return 1;
@@ -1657,8 +1672,13 @@ int main(int argc, char* argv[]) {
                 ppp_config.ar_method = libgnss::PPPProcessor::PPPConfig::ARMethod::DD_WLNL;
             } else if (options.ar_method_arg == "dd-per-freq") {
                 ppp_config.ar_method = libgnss::PPPProcessor::PPPConfig::ARMethod::DD_PER_FREQ;
+            } else if (options.ar_method_arg == "dd-madoca-cascaded") {
+                ppp_config.ar_method =
+                    libgnss::PPPProcessor::PPPConfig::ARMethod::DD_MADOCA_CASCADED;
             } else {
-                argumentError("--ar-method must be dd-iflc|dd-wlnl|dd-per-freq", argv[0]);
+                argumentError(
+                    "--ar-method must be dd-iflc|dd-wlnl|dd-per-freq|dd-madoca-cascaded",
+                    argv[0]);
             }
         }
         // MADOCA-PPP SSR corrections are delivered at the satellite antenna

@@ -1,6 +1,7 @@
 # Build artifacts
 build/
 build_local/
+build_madoca/
 bin/
 *.a
 *.o

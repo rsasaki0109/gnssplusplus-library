@@ -52,6 +52,118 @@ double safeVarianceFloor(double variance, double floor_value) {
     return variance;
 }
 
+int madocaFrequencyAmbiguityStateIndex(
+    const ppp_shared::PPPState& filter_state,
+    const SatelliteId& satellite,
+    int frequency_index) {
+    if (frequency_index < 0) {
+        return -1;
+    }
+    const auto index_it = filter_state.frequency_ambiguity_indices.find(
+        ppp_shared::frequencyAmbiguityKey(satellite, frequency_index));
+    return index_it == filter_state.frequency_ambiguity_indices.end() ? -1 : index_it->second;
+}
+
+AmbiguityStateIndexProvider makeMadocaFrequencyAmbiguityStateIndexProvider(
+    const ppp_shared::PPPState& filter_state) {
+    return [&filter_state](const SatelliteId& satellite, int frequency_index) {
+        return madocaFrequencyAmbiguityStateIndex(filter_state, satellite, frequency_index);
+    };
+}
+
+MadocaArDesignRow buildMadocaArDesignRow(
+    const SatelliteId& satellite,
+    const SatelliteId& reference_satellite,
+    int first_frequency_index,
+    int second_frequency_index,
+    const AmbiguityStateIndexProvider& state_index_provider,
+    const AmbiguityWavelengthProvider& wavelength_provider) {
+    MadocaArDesignRow row;
+    if (!state_index_provider || !wavelength_provider || first_frequency_index < 0) {
+        return row;
+    }
+
+    auto append_term = [&](const SatelliteId& term_satellite,
+                           int frequency_index,
+                           double sign) {
+        const int state_index = state_index_provider(term_satellite, frequency_index);
+        const double wavelength_m = wavelength_provider(term_satellite, frequency_index);
+        if (state_index < 0 || !std::isfinite(wavelength_m) || wavelength_m <= 0.0) {
+            row.valid = false;
+            row.terms.clear();
+            return false;
+        }
+
+        MadocaArDesignTerm term;
+        term.satellite = term_satellite;
+        term.frequency_index = frequency_index;
+        term.state_index = state_index;
+        term.coefficient = sign / wavelength_m;
+        row.terms.push_back(term);
+        return true;
+    };
+
+    row.valid = true;
+    if (!append_term(satellite, first_frequency_index, 1.0) ||
+        !append_term(reference_satellite, first_frequency_index, -1.0)) {
+        return row;
+    }
+
+    if (second_frequency_index >= 0) {
+        const MadocaArDesignTerm reference_first = row.terms.back();
+        row.terms.pop_back();
+        if (!append_term(satellite, second_frequency_index, -1.0)) {
+            return row;
+        }
+        row.terms.push_back(reference_first);
+        if (!append_term(reference_satellite, second_frequency_index, 1.0)) {
+            return row;
+        }
+    }
+
+    return row;
+}
+
+double evaluateMadocaArDesignRow(
+    const MadocaArDesignRow& row,
+    const VectorXd& state) {
+    if (!row.valid) {
+        return 0.0;
+    }
+
+    double value = 0.0;
+    for (const auto& term : row.terms) {
+        if (term.state_index < 0 || term.state_index >= state.size()) {
+            return 0.0;
+        }
+        value += term.coefficient * state(term.state_index);
+    }
+    return value;
+}
+
+double madocaArDesignRowVariance(
+    const MadocaArDesignRow& row,
+    const MatrixXd& covariance) {
+    if (!row.valid) {
+        return 0.0;
+    }
+
+    double variance = 0.0;
+    for (const auto& lhs : row.terms) {
+        if (lhs.state_index < 0 || lhs.state_index >= covariance.rows()) {
+            return 0.0;
+        }
+        for (const auto& rhs : row.terms) {
+            if (rhs.state_index < 0 || rhs.state_index >= covariance.cols()) {
+                return 0.0;
+            }
+            variance += lhs.coefficient * covariance(lhs.state_index, rhs.state_index) *
+                rhs.coefficient;
+        }
+    }
+    return variance;
+}
+
 EligibleAmbiguities collectEligibleAmbiguities(
     const ppp_shared::PPPState& filter_state,
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
@@ -85,6 +197,299 @@ EligibleAmbiguities collectEligibleAmbiguities(
         eligible.scales.push_back(ambiguity.ambiguity_scale_m);
     }
     return eligible;
+}
+
+namespace {
+
+// Apply a scalar Kalman pseudo-observation y=innovation onto filter_state with
+// sparse design row `row` and scalar variance R (cycles^2).  Returns false on
+// numerical failure so the caller can count skips and skip side effects.
+bool applyScalarMadocaStateConstraint(
+    ppp_shared::PPPState& filter_state,
+    const MadocaArDesignRow& row,
+    double innovation,
+    double observation_variance_cycles_sq) {
+    const int n = static_cast<int>(filter_state.state.size());
+    if (filter_state.covariance.rows() != n ||
+        filter_state.covariance.cols() != n) {
+        return false;
+    }
+
+    VectorXd h = VectorXd::Zero(n);
+    for (const auto& term : row.terms) {
+        if (term.state_index < 0 || term.state_index >= n) {
+            return false;
+        }
+        h(term.state_index) = term.coefficient;
+    }
+    if (h.isZero(0.0)) {
+        return false;
+    }
+
+    const VectorXd Ph = filter_state.covariance * h;
+    const double HPHt = h.dot(Ph);
+    const double innovation_cov = HPHt + observation_variance_cycles_sq;
+    if (!(innovation_cov > 0.0) || !std::isfinite(innovation_cov)) {
+        return false;
+    }
+
+    const VectorXd K = Ph / innovation_cov;
+    filter_state.state += K * innovation;
+    filter_state.covariance.noalias() -= K * Ph.transpose();
+    filter_state.covariance =
+        0.5 * (filter_state.covariance + filter_state.covariance.transpose());
+    return true;
+}
+
+}  // namespace
+
+MadocaEwlConstraintSummary applyMadocaExtraWideLaneStateConstraint(
+    ppp_shared::PPPState& filter_state,
+    const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const AmbiguityStateIndexProvider& state_index_provider,
+    const AmbiguityWavelengthProvider& wavelength_provider,
+    double observation_variance_cycles_sq,
+    double frac_gate_cycles,
+    double sigma_gate_cycles,
+    bool debug_enabled) {
+    MadocaEwlConstraintSummary summary;
+    if (!state_index_provider || !wavelength_provider ||
+        !(observation_variance_cycles_sq > 0.0) ||
+        !std::isfinite(observation_variance_cycles_sq) ||
+        !(frac_gate_cycles > 0.0) || !(sigma_gate_cycles > 0.0)) {
+        return summary;
+    }
+
+    struct ReferenceCandidate {
+        SatelliteId satellite;
+        int lock_count = -1;
+    };
+    std::map<std::pair<GNSSSystem, int>, ReferenceCandidate> references;
+
+    // EWL requires per-frequency states at freq 1 AND 2.  Pick the highest
+    // lock_count sat per system group as reference.
+    for (const auto& [satellite, ambiguity] : ambiguity_states) {
+        if (state_index_provider(satellite, 1) < 0 ||
+            state_index_provider(satellite, 2) < 0) {
+            continue;
+        }
+        const auto group = ambiguityDdGroup(satellite);
+        auto& ref = references[group];
+        if (ambiguity.lock_count > ref.lock_count) {
+            ref.satellite = satellite;
+            ref.lock_count = ambiguity.lock_count;
+        }
+    }
+
+    for (const auto& [satellite, ambiguity] : ambiguity_states) {
+        if (state_index_provider(satellite, 1) < 0 ||
+            state_index_provider(satellite, 2) < 0) {
+            continue;
+        }
+        const auto group = ambiguityDdGroup(satellite);
+        const auto ref_it = references.find(group);
+        if (ref_it == references.end() || ref_it->second.lock_count < 0) {
+            continue;
+        }
+        const SatelliteId& reference = ref_it->second.satellite;
+        if (reference == satellite) {
+            continue;
+        }
+
+        ++summary.candidates;
+
+        const MadocaArDesignRow row = buildMadocaArDesignRow(
+            satellite, reference, 1, 2,
+            state_index_provider, wavelength_provider);
+        if (!row.valid) {
+            ++summary.skipped_invalid_row;
+            continue;
+        }
+
+        const double sd_ewl_float =
+            evaluateMadocaArDesignRow(row, filter_state.state);
+        const double sd_ewl_var =
+            madocaArDesignRowVariance(row, filter_state.covariance);
+        const double sd_ewl_sigma =
+            (std::isfinite(sd_ewl_var) && sd_ewl_var > 0.0)
+                ? std::sqrt(sd_ewl_var)
+                : std::numeric_limits<double>::infinity();
+
+        if (!std::isfinite(sd_ewl_float)) {
+            ++summary.skipped_invalid_row;
+            continue;
+        }
+
+        const long long integer = static_cast<long long>(
+            std::llround(sd_ewl_float));
+        const double frac = sd_ewl_float - static_cast<double>(integer);
+
+        if (sd_ewl_sigma > sigma_gate_cycles) {
+            ++summary.skipped_large_sigma;
+            continue;
+        }
+        if (std::abs(frac) > frac_gate_cycles) {
+            ++summary.skipped_large_frac;
+            continue;
+        }
+
+        const double innovation =
+            static_cast<double>(integer) - sd_ewl_float;
+        if (!applyScalarMadocaStateConstraint(
+                filter_state, row, innovation, observation_variance_cycles_sq)) {
+            ++summary.skipped_no_covariance;
+            continue;
+        }
+
+        ++summary.applied_constraints;
+
+        if (debug_enabled) {
+            std::cerr << "[PPP-MADOCA-EWL] ref=" << reference.toString()
+                      << " sat=" << satellite.toString()
+                      << " ewl_int=" << integer
+                      << " ewl_float=" << sd_ewl_float
+                      << " frac=" << frac
+                      << " sigma=" << sd_ewl_sigma << "\n";
+        }
+    }
+
+    return summary;
+}
+
+MadocaWlConstraintSummary applyMadocaWideLaneStateConstraint(
+    ppp_shared::PPPState& filter_state,
+    const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const AmbiguityStateIndexProvider& state_index_provider,
+    const AmbiguityWavelengthProvider& wavelength_provider,
+    double observation_variance_cycles_sq,
+    bool debug_enabled) {
+    MadocaWlConstraintSummary summary;
+    if (!state_index_provider || !wavelength_provider ||
+        !(observation_variance_cycles_sq > 0.0) ||
+        !std::isfinite(observation_variance_cycles_sq)) {
+        return summary;
+    }
+
+    struct ReferenceCandidate {
+        SatelliteId satellite;
+        int lock_count = -1;
+    };
+    std::map<std::pair<GNSSSystem, int>, ReferenceCandidate> references;
+
+    for (const auto& [satellite, ambiguity] : ambiguity_states) {
+        if (!ambiguity.wl_is_fixed) {
+            continue;
+        }
+        if (state_index_provider(satellite, 0) < 0 ||
+            state_index_provider(satellite, 1) < 0) {
+            continue;
+        }
+        const auto group = ambiguityDdGroup(satellite);
+        auto& ref = references[group];
+        if (ambiguity.lock_count > ref.lock_count) {
+            ref.satellite = satellite;
+            ref.lock_count = ambiguity.lock_count;
+        }
+    }
+
+    for (const auto& [satellite, ambiguity] : ambiguity_states) {
+        if (!ambiguity.wl_is_fixed) {
+            continue;
+        }
+        const auto group = ambiguityDdGroup(satellite);
+        const auto ref_it = references.find(group);
+        if (ref_it == references.end() || ref_it->second.lock_count < 0) {
+            continue;
+        }
+        const SatelliteId& reference = ref_it->second.satellite;
+        if (reference == satellite) {
+            continue;
+        }
+        const auto ref_amb_it = ambiguity_states.find(reference);
+        if (ref_amb_it == ambiguity_states.end() ||
+            !ref_amb_it->second.wl_is_fixed) {
+            continue;
+        }
+
+        ++summary.attempted_pairs;
+
+        const MadocaArDesignRow row = buildMadocaArDesignRow(
+            satellite, reference, 0, 1,
+            state_index_provider, wavelength_provider);
+        if (!row.valid) {
+            ++summary.skipped_invalid_row;
+            continue;
+        }
+
+        const int sd_fixed_cycles =
+            ambiguity.wl_fixed_integer - ref_amb_it->second.wl_fixed_integer;
+        const double sd_float_cycles =
+            evaluateMadocaArDesignRow(row, filter_state.state);
+        const double innovation =
+            static_cast<double>(sd_fixed_cycles) - sd_float_cycles;
+
+        // Reject pseudo-observations whose innovation is implausibly large
+        // (> 5 cycles SD frac) — this suggests the per-frequency state is
+        // not yet consistent with the MW-averaged WL integer.  Applying a
+        // tight constraint in that regime poisons the filter.
+        if (!std::isfinite(innovation) || std::abs(innovation) > 5.0) {
+            ++summary.skipped_large_innovation;
+            if (debug_enabled) {
+                std::cerr << "[PPP-MADOCA-WL] skip large innovation ref="
+                          << reference.toString()
+                          << " sat=" << satellite.toString()
+                          << " innov=" << innovation << "\n";
+            }
+            continue;
+        }
+
+        const int n = static_cast<int>(filter_state.state.size());
+        if (filter_state.covariance.rows() != n ||
+            filter_state.covariance.cols() != n) {
+            ++summary.skipped_no_covariance;
+            continue;
+        }
+
+        VectorXd h = VectorXd::Zero(n);
+        for (const auto& term : row.terms) {
+            if (term.state_index < 0 || term.state_index >= n) {
+                h.setZero();
+                break;
+            }
+            h(term.state_index) = term.coefficient;
+        }
+        if (h.isZero(0.0)) {
+            ++summary.skipped_invalid_row;
+            continue;
+        }
+
+        const VectorXd Ph = filter_state.covariance * h;
+        const double HPHt = h.dot(Ph);
+        const double innovation_cov = HPHt + observation_variance_cycles_sq;
+        if (!(innovation_cov > 0.0) || !std::isfinite(innovation_cov)) {
+            ++summary.skipped_no_covariance;
+            continue;
+        }
+
+        const VectorXd K = Ph / innovation_cov;
+        filter_state.state += K * innovation;
+        filter_state.covariance.noalias() -= K * Ph.transpose();
+        filter_state.covariance =
+            0.5 * (filter_state.covariance + filter_state.covariance.transpose());
+
+        ++summary.applied_constraints;
+
+        if (debug_enabled) {
+            std::cerr << "[PPP-MADOCA-WL] ref=" << reference.toString()
+                      << " sat=" << satellite.toString()
+                      << " sd_fix=" << sd_fixed_cycles
+                      << " sd_float=" << sd_float_cycles
+                      << " innov=" << innovation
+                      << " HPHt=" << HPHt << "\n";
+        }
+    }
+
+    return summary;
 }
 
 WlnlWideLaneFixSummary applyWideLaneFixes(
@@ -232,6 +637,23 @@ DdFixAttempt tryDirectDdFix(
         return attempt;
     }
 
+    if (debug_enabled && excluded_real_satellites.empty()) {
+        // Summarize DD float/frac/diag to understand LAMBDA ratio behavior.
+        // Large mean_abs_frac indicates per-sat state bias that DD does not
+        // cancel — blocks ratio>1.5 even with tight covariance.
+        double sum_abs_frac = 0.0;
+        double max_abs_frac = 0.0;
+        for (int k = 0; k < attempt.nb; ++k) {
+            const double frac = dd_float(k) - std::round(dd_float(k));
+            sum_abs_frac += std::abs(frac);
+            max_abs_frac = std::max(max_abs_frac, std::abs(frac));
+        }
+        std::cerr << "[PPP-AR-DD] nb=" << attempt.nb
+                  << " ratio=" << attempt.ratio
+                  << " mean_abs_frac=" << (sum_abs_frac / std::max(1, attempt.nb))
+                  << " max_abs_frac=" << max_abs_frac << "\n";
+    }
+
     attempt.required_ratio = config.ar_ratio_threshold;
     if (config.use_clas_osr_filter) {
         attempt.required_ratio =
@@ -347,7 +769,13 @@ DdFixAttempt tryDirectDdFixWithPar(
     };
 
     DdFixAttempt best_attempt = try_dd_fix({});
-    if (best_attempt.fixed || !config.use_clas_osr_filter || real_satellite_elevations.empty()) {
+    if (best_attempt.fixed || real_satellite_elevations.empty()) {
+        return best_attempt;
+    }
+    const bool par_allowed =
+        config.use_clas_osr_filter ||
+        config.ar_method == ppp_shared::PPPConfig::ARMethod::DD_MADOCA_CASCADED;
+    if (!par_allowed) {
         return best_attempt;
     }
 
@@ -774,10 +1202,21 @@ bool solveFixedCarrierPosition(
                 return false;
             }
             const Vector3d line_of_sight = range_vector / geometric_range;
-            const double trop_delay =
-                estimate_troposphere
-                    ? fixed_observation.trop_mapping * trop_zenith
-                    : fixed_observation.modeled_trop_delay_m;
+            double trop_delay = fixed_observation.modeled_trop_delay_m;
+            if (estimate_troposphere) {
+                if (std::isfinite(fixed_observation.modeled_trop_delay_m) &&
+                    fixed_observation.modeled_trop_delay_m > 0.0 &&
+                    std::isfinite(fixed_observation.modeled_zenith_trop_delay_m) &&
+                    fixed_observation.modeled_zenith_trop_delay_m > 0.0 &&
+                    std::isfinite(fixed_observation.trop_mapping) &&
+                    fixed_observation.trop_mapping > 0.0) {
+                    trop_delay = fixed_observation.modeled_trop_delay_m +
+                        fixed_observation.trop_mapping *
+                            (trop_zenith - fixed_observation.modeled_zenith_trop_delay_m);
+                } else {
+                    trop_delay = fixed_observation.trop_mapping * trop_zenith;
+                }
+            }
             const double predicted =
                 geometric_range + clock_m + fixed_observation.system_clock_offset_m
                 - constants::SPEED_OF_LIGHT * fixed_observation.satellite_clock_bias_s

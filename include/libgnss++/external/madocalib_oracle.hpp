@@ -2,6 +2,9 @@
 
 #include <libgnss++/algorithms/madoca_parity.hpp>
 
+#include <string>
+#include <vector>
+
 namespace libgnss::external::madocalib_oracle {
 
 using AntennaPcv = libgnss::algorithms::madoca_parity::AntennaPcv;
@@ -10,7 +13,27 @@ using GTime = libgnss::algorithms::madoca_parity::GTime;
 using MionoAreaFixture = libgnss::algorithms::madoca_parity::MionoAreaFixture;
 using MionoCorrResult = libgnss::algorithms::madoca_parity::MionoCorrResult;
 
+struct SsrCorrectionSnapshot {
+    int sat = 0;
+    GTime t0[6] = {};
+    double deph[3] = {};
+    double dclk[3] = {};
+    int iod[6] = {};
+    int iode = 0;
+    int ura = 0;
+    double cbias[libgnss::algorithms::madoca_parity::kMadocalibMaxCode] = {};
+    double pbias[libgnss::algorithms::madoca_parity::kMadocalibMaxCode] = {};
+    int vcbias[libgnss::algorithms::madoca_parity::kMadocalibMaxCode] = {};
+    int vpbias[libgnss::algorithms::madoca_parity::kMadocalibMaxCode] = {};
+    bool orbit_valid = false;
+    bool clock_valid = false;
+    bool code_bias_valid = false;
+    bool phase_bias_valid = false;
+    bool ura_valid = false;
+};
+
 bool available();
+std::string rootDirectory();
 
 int satno(int sys, int prn);
 int satsys(int sat, int* prn);
@@ -40,6 +63,16 @@ int miono_get_corr(GTime time,
                    const MionoAreaFixture* areas,
                    int area_count,
                    MionoCorrResult* result);
+std::vector<MionoCorrResult> decode_l6d_file(const std::string& path,
+                                             int gps_week,
+                                             const double rr[3]);
+std::vector<MionoCorrResult> decode_l6d_files(const std::vector<std::string>& paths,
+                                              int gps_week,
+                                              const double rr[3]);
+std::vector<SsrCorrectionSnapshot> decode_l6e_file(const std::string& path,
+                                                   int gps_week);
+std::vector<SsrCorrectionSnapshot> decode_l6e_files(const std::vector<std::string>& paths,
+                                                    int gps_week);
 int satpos(GTime time,
            GTime teph,
            int sat,

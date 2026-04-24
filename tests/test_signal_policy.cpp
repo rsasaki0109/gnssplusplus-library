@@ -17,6 +17,19 @@ TEST(SignalPolicyTest, MapsBeiDouObservationTypesConsistently) {
               SignalType::BDS_B2A);
 }
 
+TEST(SignalPolicyTest, MapsGpsPYTrackingCodesToPSignals) {
+    EXPECT_EQ(signal_policy::signalForObservationType(GNSSSystem::GPS, "C1C", true),
+              SignalType::GPS_L1CA);
+    EXPECT_EQ(signal_policy::signalForObservationType(GNSSSystem::GPS, "C1W", true),
+              SignalType::GPS_L1P);
+    EXPECT_EQ(signal_policy::signalForObservationType(GNSSSystem::GPS, "C2W", false),
+              SignalType::GPS_L2P);
+    EXPECT_EQ(signal_policy::signalForObservationType(GNSSSystem::GPS, "C2L", false),
+              SignalType::GPS_L2C);
+    EXPECT_LT(signal_policy::observationPriority(GNSSSystem::GPS, "C2W", false),
+              signal_policy::observationPriority(GNSSSystem::GPS, "C2L", false));
+}
+
 TEST(SignalPolicyTest, PrefersBeiDouB1IOverB1CForPrimarySelection) {
     EXPECT_LT(signal_policy::signalPriority(GNSSSystem::BeiDou, SignalType::BDS_B1I, true),
               signal_policy::signalPriority(GNSSSystem::BeiDou, SignalType::BDS_B1C, true));
@@ -46,4 +59,16 @@ TEST(SignalPolicyTest, DetectsBeiDouGeoPrnRanges) {
     EXPECT_TRUE(signal_policy::isBeiDouGeoSatellite(SatelliteId(GNSSSystem::BeiDou, 63)));
     EXPECT_FALSE(signal_policy::isBeiDouGeoSatellite(SatelliteId(GNSSSystem::BeiDou, 6)));
     EXPECT_FALSE(signal_policy::isBeiDouGeoSatellite(SatelliteId(GNSSSystem::GPS, 1)));
+}
+
+TEST(SignalPolicyTest, SplitsBeiDou2AndBeiDou3PrnRanges) {
+    EXPECT_TRUE(signal_policy::isBeiDou2Satellite(SatelliteId(GNSSSystem::BeiDou, 1)));
+    EXPECT_TRUE(signal_policy::isBeiDou2Satellite(SatelliteId(GNSSSystem::BeiDou, 18)));
+    EXPECT_FALSE(signal_policy::isBeiDou2Satellite(SatelliteId(GNSSSystem::BeiDou, 0)));
+    EXPECT_FALSE(signal_policy::isBeiDou2Satellite(SatelliteId(GNSSSystem::BeiDou, 19)));
+    EXPECT_TRUE(signal_policy::isBeiDou3Satellite(SatelliteId(GNSSSystem::BeiDou, 19)));
+    EXPECT_TRUE(signal_policy::isBeiDou3Satellite(SatelliteId(GNSSSystem::BeiDou, 63)));
+    EXPECT_FALSE(signal_policy::isBeiDou3Satellite(SatelliteId(GNSSSystem::BeiDou, 18)));
+    EXPECT_FALSE(signal_policy::isBeiDou3Satellite(SatelliteId(GNSSSystem::BeiDou, 64)));
+    EXPECT_FALSE(signal_policy::isBeiDou2Satellite(SatelliteId(GNSSSystem::GPS, 1)));
 }

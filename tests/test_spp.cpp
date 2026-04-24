@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <libgnss++/algorithms/spp.hpp>
+#include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/io/rinex.hpp>
 
 #include <memory>
@@ -410,14 +411,26 @@ TEST_F(SPPTest, UsesMultipleConstellationsOnOdaibaEpoch) {
 
     ASSERT_TRUE(solution.isValid());
     std::set<GNSSSystem> used_systems;
+    bool used_bds2 = false;
+    bool used_bds3 = false;
     for (const auto& sat : solution.satellites_used) {
         used_systems.insert(sat.system);
+        used_bds2 = used_bds2 || signal_policy::isBeiDou2Satellite(sat);
+        used_bds3 = used_bds3 || signal_policy::isBeiDou3Satellite(sat);
     }
     EXPECT_TRUE(used_systems.count(GNSSSystem::GPS));
     EXPECT_TRUE(used_systems.count(GNSSSystem::GLONASS));
     EXPECT_TRUE(used_systems.count(GNSSSystem::BeiDou));
     EXPECT_TRUE(used_systems.count(GNSSSystem::QZSS));
     EXPECT_GE(used_systems.size(), 4U);
+    EXPECT_TRUE(solution.receiver_clock_biases_m.count(ReceiverClockBiasGroup::GPS));
+    EXPECT_TRUE(solution.receiver_clock_biases_m.count(ReceiverClockBiasGroup::GLONASS));
+    if (used_bds2) {
+        EXPECT_TRUE(solution.receiver_clock_biases_m.count(ReceiverClockBiasGroup::BeiDou2));
+    }
+    if (used_bds3) {
+        EXPECT_TRUE(solution.receiver_clock_biases_m.count(ReceiverClockBiasGroup::BeiDou3));
+    }
 }
 
 TEST_F(SPPTest, BeiDouEnabledSPPStaysCloseOnOdaibaSequence) {

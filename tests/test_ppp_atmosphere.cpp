@@ -22,6 +22,24 @@ std::string makeResidualList(size_t size, size_t hot_index, double hot_value, do
 
 }  // namespace
 
+TEST(PPPAtmosphereTest, MapsGpsPYSignalsToCarrierFrequencies) {
+    constexpr double kStecTecu = 12.5;
+    const double l1_ca_delay = ppp_atmosphere::ionosphereDelayMetersFromTecu(
+        SignalType::GPS_L1CA, nullptr, kStecTecu);
+    const double l1_p_delay = ppp_atmosphere::ionosphereDelayMetersFromTecu(
+        SignalType::GPS_L1P, nullptr, kStecTecu);
+    const double l2_c_delay = ppp_atmosphere::ionosphereDelayMetersFromTecu(
+        SignalType::GPS_L2C, nullptr, kStecTecu);
+    const double l2_p_delay = ppp_atmosphere::ionosphereDelayMetersFromTecu(
+        SignalType::GPS_L2P, nullptr, kStecTecu);
+
+    EXPECT_GT(l1_p_delay, 0.0);
+    EXPECT_GT(l2_p_delay, 0.0);
+    EXPECT_NEAR(l1_p_delay, l1_ca_delay, 1e-12);
+    EXPECT_NEAR(l2_p_delay, l2_c_delay, 1e-12);
+    EXPECT_GT(l2_p_delay, l1_p_delay);
+}
+
 TEST(PPPAtmosphereTest, ResolveClasGridReferenceChoosesNearestGridPoint) {
     std::map<std::string, std::string> atmos_tokens;
     atmos_tokens["atmos_network_id"] = "3";

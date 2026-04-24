@@ -29,32 +29,42 @@ bool isPrimarySPPSignal(SignalType signal, const SPPProcessor::SPPConfig& config
     }
 }
 
-GNSSSystem clockBiasGroup(GNSSSystem system) {
-    switch (system) {
+ReceiverClockBiasGroup clockBiasGroup(const SatelliteId& satellite) {
+    switch (satellite.system) {
         case GNSSSystem::GPS:
         case GNSSSystem::QZSS:
-            return GNSSSystem::GPS;
-        case GNSSSystem::Galileo:
-        case GNSSSystem::BeiDou:
+            return ReceiverClockBiasGroup::GPS;
         case GNSSSystem::GLONASS:
+            return ReceiverClockBiasGroup::GLONASS;
+        case GNSSSystem::Galileo:
+            return ReceiverClockBiasGroup::Galileo;
+        case GNSSSystem::BeiDou:
+            if (signal_policy::isBeiDou2Satellite(satellite)) {
+                return ReceiverClockBiasGroup::BeiDou2;
+            }
+            if (signal_policy::isBeiDou3Satellite(satellite)) {
+                return ReceiverClockBiasGroup::BeiDou3;
+            }
+            return ReceiverClockBiasGroup::BeiDou;
         case GNSSSystem::NavIC:
-            return system;
+            return ReceiverClockBiasGroup::NavIC;
         default:
-            return GNSSSystem::UNKNOWN;
+            return ReceiverClockBiasGroup::UNKNOWN;
     }
 }
 
-bool usesSeparateClockBias(GNSSSystem group) {
-    return group != GNSSSystem::UNKNOWN && group != GNSSSystem::GPS;
+bool usesSeparateClockBias(ReceiverClockBiasGroup group) {
+    return group != ReceiverClockBiasGroup::UNKNOWN && group != ReceiverClockBiasGroup::GPS;
 }
 
-GNSSSystem selectReferenceClockGroup(const std::map<GNSSSystem, int>& group_counts) {
-    const auto gps_it = group_counts.find(GNSSSystem::GPS);
+ReceiverClockBiasGroup selectReferenceClockGroup(
+    const std::map<ReceiverClockBiasGroup, int>& group_counts) {
+    const auto gps_it = group_counts.find(ReceiverClockBiasGroup::GPS);
     if (gps_it != group_counts.end() && gps_it->second > 0) {
-        return GNSSSystem::GPS;
+        return ReceiverClockBiasGroup::GPS;
     }
 
-    GNSSSystem best_group = GNSSSystem::UNKNOWN;
+    ReceiverClockBiasGroup best_group = ReceiverClockBiasGroup::UNKNOWN;
     int best_count = -1;
     for (const auto& [group, count] : group_counts) {
         if (count > best_count) {
@@ -187,7 +197,7 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<Observation>& v
     struct MeasurementModel {
         Observation observation;
         Vector3d satellite_position;
-        GNSSSystem clock_group = GNSSSystem::UNKNOWN;
+        ReceiverClockBiasGroup clock_group = ReceiverClockBiasGroup::UNKNOWN;
         double corrected_pseudorange = 0.0;
         double elevation = 0.0;
         double weight = 1.0;
@@ -270,11 +280,11 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<Observation>& v
             MeasurementModel measurement;
             measurement.observation = obs;
             measurement.satellite_position = corrected_sat_pos;
-            measurement.clock_group = clockBiasGroup(obs.satellite.system);
+            measurement.clock_group = clockBiasGroup(obs.satellite);
             measurement.corrected_pseudorange = corrected_pr;
             measurement.elevation = geom.elevation;
             measurement.weight = sin_el * sin_el;
-            if (measurement.clock_group == GNSSSystem::UNKNOWN) {
+            if (measurement.clock_group == ReceiverClockBiasGroup::UNKNOWN) {
                 continue;
             }
             measurements.push_back(measurement);
@@ -285,10 +295,10 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<Observation>& v
 
     Vector3d position = estimated_position_;
     double clock_bias = receiver_clock_bias_;
-    std::map<GNSSSystem, double> bias_estimates;
+    std::map<ReceiverClockBiasGroup, double> bias_estimates;
     std::vector<MeasurementModel> final_measurements;
-    GNSSSystem final_reference_group = GNSSSystem::UNKNOWN;
-    std::vector<GNSSSystem> final_bias_groups;
+    ReceiverClockBiasGroup final_reference_group = ReceiverClockBiasGroup::UNKNOWN;
+    std::vector<ReceiverClockBiasGroup> final_bias_groups;
 
     for (int iter = 0; iter < spp_config_.max_iterations; ++iter) {
         auto measurements = buildMeasurements(position);
@@ -297,13 +307,13 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<Observation>& v
             return solution;
         }
 
-        std::map<GNSSSystem, int> group_counts;
+        std::map<ReceiverClockBiasGroup, int> group_counts;
         for (const auto& measurement : measurements) {
             group_counts[measurement.clock_group]++;
         }
 
-        const GNSSSystem reference_group = selectReferenceClockGroup(group_counts);
-        std::vector<GNSSSystem> bias_groups;
+        const ReceiverClockBiasGroup reference_group = selectReferenceClockGroup(group_counts);
+        std::vector<ReceiverClockBiasGroup> bias_groups;
         if (spp_config_.model_intersystem_bias) {
             for (const auto& [group, count] : group_counts) {
                 if (count <= 0 || group == reference_group || !usesSeparateClockBias(group)) {
@@ -320,7 +330,7 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<Observation>& v
             return solution;
         }
 
-        std::map<GNSSSystem, int> bias_columns;
+        std::map<ReceiverClockBiasGroup, int> bias_columns;
         for (int i = 0; i < static_cast<int>(bias_groups.size()); ++i) {
             bias_columns[bias_groups[i]] = 4 + i;
         }
@@ -391,7 +401,7 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<Observation>& v
         return solution;
     }
 
-    std::map<GNSSSystem, int> final_group_counts;
+    std::map<ReceiverClockBiasGroup, int> final_group_counts;
     for (const auto& measurement : final_measurements) {
         final_group_counts[measurement.clock_group]++;
     }
@@ -406,7 +416,7 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<Observation>& v
         }
     }
 
-    std::map<GNSSSystem, int> final_bias_columns;
+    std::map<ReceiverClockBiasGroup, int> final_bias_columns;
     for (int i = 0; i < static_cast<int>(final_bias_groups.size()); ++i) {
         final_bias_columns[final_bias_groups[i]] = 4 + i;
     }
@@ -428,6 +438,20 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<Observation>& v
 
     solution.position_ecef = position;
     solution.receiver_clock_bias = clock_bias;
+    solution.receiver_clock_biases_m.clear();
+    for (const auto& [group, count] : final_group_counts) {
+        if (count <= 0 || group == ReceiverClockBiasGroup::UNKNOWN) {
+            continue;
+        }
+        double group_clock_bias_m = clock_bias;
+        if (group != final_reference_group) {
+            const auto bias_it = bias_estimates.find(group);
+            if (bias_it != bias_estimates.end()) {
+                group_clock_bias_m += bias_it->second;
+            }
+        }
+        solution.receiver_clock_biases_m[group] = group_clock_bias_m;
+    }
     solution.num_satellites = static_cast<int>(final_measurements.size());
     solution.num_frequencies = 1;
     solution.residual_rms = std::sqrt(final_residuals.squaredNorm() /

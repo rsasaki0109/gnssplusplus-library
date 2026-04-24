@@ -2,14 +2,14 @@
 # libgnss++ vs CLASLIB Float精度比較
 # Usage: ./scripts/compare_with_claslib.sh [max_epochs]
 set -e
-GNSSPP=/workspace/ai_coding_ws/rtklib_v2_ws/gnssplusplus-library
-THESIS=/workspace/ai_coding_ws/gnssplusplus_thesis_ws
-CLAS=$THESIS/data/clas/claslib/data
-CLASLIB=$THESIS/data/clas/claslib/util/rnx2rtkp
+GNSSPP=${GNSSPP:-$(cd "$(dirname "$0")/.." && pwd)}
+CLASLIB_ROOT=${CLASLIB_ROOT:?set CLASLIB_ROOT to a CLASLIB checkout}
+CLAS=$CLASLIB_ROOT/data
+CLASLIB=${CLASLIB:-$CLASLIB_ROOT/util/rnx2rtkp}
 MAX=${1:-3600}
 REF_X=-3957240.1233; REF_Y=3310370.8778; REF_Z=3737527.7041
 
-cd $GNSSPP
+cd "$GNSSPP"
 
 # 1. libgnss++ CLAS-PPP
 echo "=== libgnss++ CLAS-PPP ==="

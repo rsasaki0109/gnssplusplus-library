@@ -18,13 +18,9 @@ The current CLAS parity data comes from the public CLASLIB repository:
 https://github.com/QZSS-Strategy-Office/claslib.git
 ```
 
-The local validation copy used during iter55 was:
+For local validation, set `CLASLIB_ROOT` to a checkout of that repository.
 
-```text
-
-```
-
-Its Git remote was confirmed as:
+Its Git remote should be:
 
 ```text
 origin  https://github.com/QZSS-Strategy-Office/claslib.git

@@ -552,11 +552,13 @@ double ionosphereDelayMetersFromTecu(SignalType signal,
     double frequency_hz = 0.0;
     switch (signal) {
         case SignalType::GPS_L1CA:
+        case SignalType::GPS_L1P:
         case SignalType::QZS_L1CA:
         case SignalType::GAL_E1:
             frequency_hz = constants::GPS_L1_FREQ;
             break;
         case SignalType::GPS_L2C:
+        case SignalType::GPS_L2P:
         case SignalType::QZS_L2C:
             frequency_hz = constants::GPS_L2_FREQ;
             break;

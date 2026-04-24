@@ -62,7 +62,19 @@ public:
     
     RINEXReader() = default;
     ~RINEXReader() = default;
-    
+
+    /**
+     * @brief Enable emission of observations for bands beyond the
+     * primary/secondary pair (e.g. GPS L5, Galileo E5a, BDS B2a).
+     * Default off preserves legacy 2-band-per-sat behavior.
+     */
+    void setEmitExtraBandObservations(bool enable) {
+        emit_extra_band_observations_ = enable;
+    }
+    bool emitsExtraBandObservations() const {
+        return emit_extra_band_observations_;
+    }
+
     /**
      * @brief Open RINEX file
      */
@@ -117,6 +129,9 @@ private:
     std::ifstream file_;
     RINEXHeader header_;
     int current_line_ = 0;
+    char rinex3_obs_types_system_ = '\0';
+    int rinex3_obs_types_expected_ = 0;
+    bool emit_extra_band_observations_ = false;
     
     /**
      * @brief Parse header line

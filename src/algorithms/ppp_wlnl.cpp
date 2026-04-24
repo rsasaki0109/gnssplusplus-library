@@ -221,23 +221,20 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
         lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
         beta = f1 * f2 / (f1 * f1 - f2 * f2);
-        const double l1_corr_m = l1_obs->carrier_phase * osr.wavelengths[0]
-                                - (osr.CPC[0] - osr.windup_m[0] - osr.phase_compensation_m[0]);
-        const double l2_corr_m = l2_obs->carrier_phase * osr.wavelengths[1]
-                                - (osr.CPC[1] - osr.windup_m[1] - osr.phase_compensation_m[1]);
+        // CPC already contains the OSR phase corrections used by fixed-position WLS.
+        const double l1_corr_m = l1_obs->carrier_phase * osr.wavelengths[0] - osr.CPC[0];
+        const double l2_corr_m = l2_obs->carrier_phase * osr.wavelengths[1] - osr.CPC[1];
         nl_phase_m = alpha1 * l1_corr_m + alpha2 * l2_corr_m;
         sat_pos = osr.satellite_position;
         sat_clk = osr.satellite_clock_bias_s;
-        const double nl_iono_m = osr.has_iono ? osr.iono_l1_m * f1 / f2 : 0.0;
         predicted_m = geodist(sat_pos, receiver_position) + clock_bias_m
-                    - constants::SPEED_OF_LIGHT * sat_clk
-                    + osr.trop_correction_m + nl_iono_m;
+                    - constants::SPEED_OF_LIGHT * sat_clk;
     } else {
         l1_obs = ppp_utils::findCarrierObservation(
             obs, sat, {SignalType::GPS_L1CA, SignalType::GPS_L1P,
                        SignalType::GAL_E1, SignalType::QZS_L1CA});
         l2_obs = ppp_utils::findCarrierObservation(
-            obs, sat, {SignalType::GPS_L2C, SignalType::GPS_L2P, SignalType::GPS_L5,
+            obs, sat, {SignalType::GPS_L2P, SignalType::GPS_L2C, SignalType::GPS_L5,
                        SignalType::GAL_E5A, SignalType::QZS_L2C, SignalType::QZS_L5});
         if (l1_obs == nullptr || l2_obs == nullptr) {
             return false;
@@ -284,7 +281,7 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         const double elevation = std::asin(
             (sat_pos - receiver_position).normalized().dot(receiver_position.normalized()));
         const double trop_delay =
-            calculateMappingFunction(receiver_position, elevation, obs.time) * trop_zenith;
+            calculateTroposphericDelay(receiver_position, sat_pos, obs.time, trop_zenith);
         predicted_m = geo_range + clock_bias_m
                     - constants::SPEED_OF_LIGHT * sat_clk + trop_delay;
     }
@@ -346,7 +343,7 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
         const Observation* l1 = ppp_utils::findCarrierObservation(
             obs, satellite, {SignalType::GPS_L1CA, SignalType::GAL_E1, SignalType::QZS_L1CA});
         const Observation* l2 = ppp_utils::findCarrierObservation(
-            obs, satellite, {SignalType::GPS_L2C, SignalType::GPS_L2P,
+            obs, satellite, {SignalType::GPS_L2P, SignalType::GPS_L2C,
                              SignalType::GAL_E5A, SignalType::QZS_L2C});
         if (!l1 || !l2) {
             return false;
@@ -426,6 +423,7 @@ bool PPPProcessor::buildFixedCarrierObservation(
     fixed_observation.satellite_clock_bias_s = observation.satellite_clock_bias;
     fixed_observation.trop_mapping = observation.trop_mapping;
     fixed_observation.modeled_trop_delay_m = observation.modeled_trop_delay_m;
+    fixed_observation.modeled_zenith_trop_delay_m = observation.modeled_zenith_trop_delay_m;
     fixed_observation.carrier_phase_if = observation.carrier_phase_if;
     fixed_observation.variance_cp = observation.variance_cp;
     fixed_observation.ambiguity_m = filter_state_.state(ambiguity_index);

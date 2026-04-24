@@ -24,7 +24,7 @@ find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs)
 
 option(MADOCALIB_PARITY_LINK "Link external MADOCALIB C sources for opt-in parity oracle tests" OFF)
 set(MADOCALIB_ROOT_DIR
-    ""
+    "$ENV{MADOCALIB_ROOT_DIR}"
     CACHE PATH "Path to the MADOCALIB checkout root")
 
 # List source files for the main library
@@ -46,6 +46,7 @@ set(GNSS_SOURCES
     src/algorithms/ppp_osr.cpp
     src/algorithms/ppp_wlnl.cpp
     src/algorithms/ppp_clas_epoch.cpp
+    src/algorithms/madoca_core.cpp
     src/algorithms/madoca_parity.cpp
     src/algorithms/madocalib_oracle.cpp
     src/algorithms/madocalib_bridge.cpp

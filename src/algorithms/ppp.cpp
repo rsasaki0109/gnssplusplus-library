@@ -68,6 +68,20 @@ std::string normalizeAntennaType(const std::string& antenna_type) {
     return normalized;
 }
 
+// Map tracking-code variants to the canonical per-band signal stored in
+// ATX files (IGS20 stores one entry per band under G01/G02/G05 etc., so
+// GPS_L1P queries should fall through to GPS_L1CA's PCO, etc.).  Shared
+// by receiver and satellite PCO/PCV lookups.
+SignalType canonicalAntexSignalShared(SignalType signal) {
+    switch (signal) {
+        case SignalType::GPS_L1P: return SignalType::GPS_L1CA;
+        case SignalType::GPS_L2P: return SignalType::GPS_L2C;
+        case SignalType::GLO_L1P: return SignalType::GLO_L1CA;
+        case SignalType::GLO_L2P: return SignalType::GLO_L2CA;
+        default: return signal;
+    }
+}
+
 std::string normalizeStationName(const std::string& station_name) {
     return normalizeAntennaType(station_name);
 }
@@ -4153,13 +4167,123 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
         // (NL float values are computed from corrected dual-freq observations).
         return resolveAmbiguitiesWLNL(obs, nav);
     }
-    // DD_IFLC and DD_PER_FREQ fall through to existing DD-AR code below
+
+    // DD_MADOCA_CASCADED: apply MADOCALIB-style Kalman state constraint from
+    // MW-fixed WL integers before DD LAMBDA.  Requires per-frequency ambiguity
+    // states (enable_per_frequency_phase_bias_states=true).  Because the
+    // pseudo-observation injection modifies the filter state in place, we
+    // snapshot here and restore on no-fix so the modification does not
+    // persist into the next epoch when DD LAMBDA cannot confirm the integers.
+    const bool madoca_cascaded_active =
+        ppp_config_.ar_method == PPPConfig::ARMethod::DD_MADOCA_CASCADED &&
+        ppp_config_.enable_per_frequency_phase_bias_states;
+    PPPState madoca_cascaded_pre_constraint_state;
+    std::map<SatelliteId, PPPAmbiguityInfo> madoca_cascaded_pre_constraint_ambiguities;
+    if (madoca_cascaded_active) {
+        madoca_cascaded_pre_constraint_state = filter_state_;
+        madoca_cascaded_pre_constraint_ambiguities = ambiguity_states_;
+        // Update MW averages into wl_is_fixed flags using the existing gate.
+        std::vector<SatelliteId> candidate_satellites;
+        candidate_satellites.reserve(filter_state_.ambiguity_indices.size());
+        for (const auto& [satellite, _] : filter_state_.ambiguity_indices) {
+            candidate_satellites.push_back(satellite);
+        }
+        const auto wl_summary = ppp_ar::applyWideLaneFixes(
+            ppp_config_, ambiguity_states_, candidate_satellites, pppDebugEnabled());
+
+        const auto state_index_provider =
+            ppp_ar::makeMadocaFrequencyAmbiguityStateIndexProvider(filter_state_);
+        // Frequency indices must match the emission order in
+        // formIonosphereFree → secondarySignals iteration: Galileo emits
+        // {E5A, E5B, E6} as freq_idx 1/2/3 and BDS emits {B2I, B2A, B3I}
+        // as 1/2/3, not the alphabetical enum order.
+        const ppp_ar::AmbiguityWavelengthProvider wavelength_provider =
+            [](const SatelliteId& satellite, int frequency_index) -> double {
+                using namespace libgnss::constants;
+                switch (satellite.system) {
+                    case GNSSSystem::GPS:
+                    case GNSSSystem::QZSS:
+                        if (frequency_index == 0) return GPS_L1_WAVELENGTH;
+                        if (frequency_index == 1) return GPS_L2_WAVELENGTH;
+                        if (frequency_index == 2) return GPS_L5_WAVELENGTH;
+                        return 0.0;
+                    case GNSSSystem::Galileo:
+                        if (frequency_index == 0) return GAL_E1_WAVELENGTH;
+                        if (frequency_index == 1) return GAL_E5A_WAVELENGTH;
+                        if (frequency_index == 2) return GAL_E5B_WAVELENGTH;
+                        if (frequency_index == 3) return GAL_E6_WAVELENGTH;
+                        return 0.0;
+                    case GNSSSystem::BeiDou:
+                        if (frequency_index == 0) return BDS_B1I_WAVELENGTH;
+                        if (frequency_index == 1) return BDS_B2I_WAVELENGTH;
+                        if (frequency_index == 2) return BDS_B2A_WAVELENGTH;
+                        if (frequency_index == 3) return BDS_B3I_WAVELENGTH;
+                        return 0.0;
+                    default:
+                        return 0.0;
+                }
+            };
+
+        // STEP_EWL: if per-frequency states exist at freq 2 (L5/E5a/B2a),
+        // round the state-derived SD EWL integer and inject as a tight
+        // pseudo-obs.  Long EWL wavelength (~5.86 m for GPS L2-L5) makes the
+        // rounding robust once the state has started converging; the
+        // covariance tightening from this step propagates into WL and N1.
+        constexpr double kMadocaEwlObsVarianceCyclesSq = 0.01;  // (0.1 cycle)^2
+        constexpr double kMadocaEwlFracGateCycles = 0.20;
+        constexpr double kMadocaEwlSigmaGateCycles = 1.00;
+        const auto ewl_summary = ppp_ar::applyMadocaExtraWideLaneStateConstraint(
+            filter_state_,
+            ambiguity_states_,
+            state_index_provider,
+            wavelength_provider,
+            kMadocaEwlObsVarianceCyclesSq,
+            kMadocaEwlFracGateCycles,
+            kMadocaEwlSigmaGateCycles,
+            pppDebugEnabled());
+
+        // STEP_WL: inject MW-derived WL integers as pseudo-observations on
+        // the (possibly EWL-tightened) state.
+        constexpr double kMadocaWlObsVarianceCyclesSq = 2.5e-3;  // (0.05 cycle)^2
+        const auto constraint_summary = ppp_ar::applyMadocaWideLaneStateConstraint(
+            filter_state_,
+            ambiguity_states_,
+            state_index_provider,
+            wavelength_provider,
+            kMadocaWlObsVarianceCyclesSq,
+            pppDebugEnabled());
+
+        if (pppDebugEnabled()) {
+            std::cerr << "[PPP-MADOCA-AR] WL fix=" << wl_summary.fixed_count
+                      << " EWL applied=" << ewl_summary.applied_constraints
+                      << "/" << ewl_summary.candidates
+                      << " (skip_frac=" << ewl_summary.skipped_large_frac
+                      << " skip_sigma=" << ewl_summary.skipped_large_sigma
+                      << ")"
+                      << " WL applied="
+                      << constraint_summary.applied_constraints
+                      << "/" << constraint_summary.attempted_pairs
+                      << " skip_row=" << constraint_summary.skipped_invalid_row
+                      << " skip_cov=" << constraint_summary.skipped_no_covariance
+                      << " skip_innov=" << constraint_summary.skipped_large_innovation
+                      << "\n";
+        }
+    }
+
+    // DD_IFLC / DD_PER_FREQ / DD_MADOCA_CASCADED fall through to DD LAMBDA.
 
     const int ar_min_lock = ssr_products_loaded_ ?
         std::min(ppp_config_.convergence_min_epochs, 10) :
         ppp_config_.convergence_min_epochs;
     const auto eligible_ambiguities = ppp_ar::collectEligibleAmbiguities(
         filter_state_, ambiguity_states_, ar_min_lock);
+
+    const auto revert_madoca_cascaded_state = [&]() {
+        if (madoca_cascaded_active) {
+            filter_state_ = madoca_cascaded_pre_constraint_state;
+            ambiguity_states_ = madoca_cascaded_pre_constraint_ambiguities;
+        }
+    };
 
     if (static_cast<int>(eligible_ambiguities.satellites.size()) <
         ppp_config_.min_satellites_for_ar) {
@@ -4168,11 +4292,18 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
                       << eligible_ambiguities.satellites.size()
                       << " min=" << ppp_config_.min_satellites_for_ar << "\n";
         }
+        revert_madoca_cascaded_state();
         return false;
     }
 
     std::map<SatelliteId, double> real_satellite_elevations;
-    if (ppp_config_.use_clas_osr_filter) {
+    // Populate elevations when CLAS OSR filter is active OR when cascaded
+    // MADOCA AR is selected — both need per-sat elevations to drive Partial
+    // AR exclusion ordering.
+    const bool populate_elevations =
+        ppp_config_.use_clas_osr_filter ||
+        ppp_config_.ar_method == PPPConfig::ARMethod::DD_MADOCA_CASCADED;
+    if (populate_elevations) {
         for (const auto& satellite : eligible_ambiguities.satellites) {
             const SatelliteId real_satellite = ppp_ar::clasRealSatellite(satellite);
             if (real_satellite_elevations.find(real_satellite) != real_satellite_elevations.end()) {
@@ -4236,6 +4367,7 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
             std::cerr << "[PPP-AR] DD ratio reject: ratio=" << best_attempt.ratio
                       << " threshold=" << best_attempt.required_ratio << "\n";
         }
+        revert_madoca_cascaded_state();
         return false;
     }
 

@@ -605,7 +605,7 @@ std::vector<OSRCorrection> computeOSR(
         switch (sat.system) {
             case GNSSSystem::GPS:
                 l1_cands = {SignalType::GPS_L1CA, SignalType::GPS_L1P};
-                l2_cands = {SignalType::GPS_L2C, SignalType::GPS_L2P, SignalType::GPS_L5};
+                l2_cands = {SignalType::GPS_L2P, SignalType::GPS_L2C, SignalType::GPS_L5};
                 break;
             case GNSSSystem::Galileo:
                 l1_cands = {SignalType::GAL_E1};

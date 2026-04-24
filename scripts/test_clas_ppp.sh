@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
-GNSSPP=/workspace/ai_coding_ws/rtklib_v2_ws/gnssplusplus-library
-THESIS=/workspace/ai_coding_ws/gnssplusplus_thesis_ws
-CLAS=$THESIS/data/clas/claslib/data
+GNSSPP=${GNSSPP:-$(cd "$(dirname "$0")/.." && pwd)}
+CLASLIB_ROOT=${CLASLIB_ROOT:?set CLASLIB_ROOT to a CLASLIB checkout}
+CLAS=$CLASLIB_ROOT/data
 MAX_EPOCHS=${1:-3600}
 
-cd $GNSSPP
+cd "$GNSSPP"
 
 # 1. ビルド
 echo "=== Build ==="

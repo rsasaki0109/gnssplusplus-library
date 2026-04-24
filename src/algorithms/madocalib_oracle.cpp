@@ -1,6 +1,12 @@
 #include <libgnss++/external/madocalib_oracle.hpp>
 
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <memory>
+#include <set>
+#include <string>
+#include <tuple>
 #include <vector>
 
 #ifndef GNSSPP_HAS_MADOCALIB_ORACLE
@@ -99,12 +105,201 @@ eph_t toOracleEph(const BroadcastEphemeris* eph) {
     out.ndot = eph->ndot;
     return out;
 }
+
+gtime_t oracleGpsWeekTime(int gps_week, double tow) {
+    return ::gpst2time(gps_week, tow);
+}
+
+MionoCorrResult fromOraclePppiono(const pppiono_t& pppiono) {
+    MionoCorrResult result;
+    result.rid = pppiono.rid;
+    result.area_number = pppiono.anum;
+    for (int sat = 0; sat < MAXSAT &&
+         sat < libgnss::algorithms::madoca_parity::kMadocalibMaxSat;
+         ++sat) {
+        result.t0[sat] = fromOracleTime(pppiono.corr.t0[sat]);
+        result.delay[sat] = pppiono.corr.dly[sat];
+        result.std[sat] = pppiono.corr.std[sat];
+    }
+    return result;
+}
+
+bool sameOracleTime(GTime lhs, gtime_t rhs) {
+    return lhs.time == static_cast<decltype(lhs.time)>(rhs.time) &&
+           std::abs(lhs.sec - rhs.sec) < 1e-9;
+}
+
+bool hasCorrectionAtTime(const MionoCorrResult& result, gtime_t time) {
+    for (int sat = 0; sat < libgnss::algorithms::madoca_parity::kMadocalibMaxSat;
+         ++sat) {
+        if (result.t0[sat].time != 0 && sameOracleTime(result.t0[sat], time)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void clearDecodedRegion(mdcl6d_t& control) {
+    control.re.rvalid = 0;
+    for (int area_index = 0; area_index < MIONO_MAX_ANUM; ++area_index) {
+        control.re.area[area_index].avalid = 0;
+        for (int sat = 0; sat < MAXSAT; ++sat) {
+            control.re.area[area_index].sat[sat].t0.time = 0;
+            control.re.area[area_index].sat[sat].t0.sec = 0.0;
+        }
+    }
+}
+
+bool copyDecodedRegion(mdcl6d_t& control, nav_t& nav) {
+    if (!control.re.rvalid || control.rid < 0 || MIONO_MAX_RID <= control.rid) {
+        return false;
+    }
+    nav.pppiono.re[control.rid] = control.re;
+    clearDecodedRegion(control);
+    return true;
+}
+
+SsrCorrectionSnapshot fromOracleSsr(int sat, const ssr_t& ssr) {
+    SsrCorrectionSnapshot result;
+    result.sat = sat;
+    for (int i = 0; i < 6; ++i) {
+        result.t0[i] = fromOracleTime(ssr.t0[i]);
+        result.iod[i] = ssr.iod[i];
+    }
+    for (int i = 0; i < 3; ++i) {
+        result.deph[i] = ssr.deph[i];
+        result.dclk[i] = ssr.dclk[i];
+    }
+    result.iode = ssr.iode;
+    result.ura = ssr.ura;
+    result.orbit_valid = ssr.t0[0].time != 0;
+    result.clock_valid = ssr.t0[1].time != 0;
+    result.ura_valid = ssr.t0[3].time != 0;
+    for (int code = 0;
+         code < MAXCODE && code < libgnss::algorithms::madoca_parity::kMadocalibMaxCode;
+         ++code) {
+        result.cbias[code] = ssr.cbias[code];
+        result.pbias[code] = ssr.pbias[code];
+        result.vcbias[code] = ssr.vcbias[code];
+        result.vpbias[code] = ssr.vpbias[code];
+        result.code_bias_valid = result.code_bias_valid || ssr.vcbias[code] != 0;
+        result.phase_bias_valid = result.phase_bias_valid || ssr.vpbias[code] != 0;
+    }
+    return result;
+}
+
+std::vector<SsrCorrectionSnapshot> decodeL6EFilesImpl(
+    const std::vector<std::string>& paths,
+    int gps_week) {
+    std::vector<SsrCorrectionSnapshot> results;
+    const gtime_t initial_time = oracleGpsWeekTime(gps_week, 0.0);
+
+    using ClockKey = std::tuple<int, std::int64_t, long long>;
+    std::set<ClockKey> emitted_clock_rows;
+
+    for (const std::string& path : paths) {
+        std::FILE* file = std::fopen(path.c_str(), "rb");
+        if (file == nullptr) {
+            continue;
+        }
+
+        ::init_mcssr(initial_time);
+        auto control = std::make_unique<rtcm_t>();
+        if (::init_rtcm(control.get()) == 0) {
+            std::fclose(file);
+            continue;
+        }
+        control->time = initial_time;
+        control->nbyte = 0;
+
+        while (true) {
+            const int status = ::input_qzssl6ef(control.get(), file);
+            if (status == 10) {
+                for (int sat = 1;
+                     sat <= MAXSAT &&
+                     sat <= libgnss::algorithms::madoca_parity::kMadocalibMaxSat;
+                     ++sat) {
+                    const ssr_t& ssr = control->ssr[sat - 1];
+                    if (ssr.t0[1].time == 0 ||
+                        !sameOracleTime(fromOracleTime(ssr.t0[1]), control->time)) {
+                        continue;
+                    }
+                    const ClockKey key = {
+                        sat,
+                        static_cast<std::int64_t>(ssr.t0[1].time),
+                        static_cast<long long>(std::llround(ssr.t0[1].sec * 1e9))};
+                    if (emitted_clock_rows.insert(key).second) {
+                        results.push_back(fromOracleSsr(sat, ssr));
+                    }
+                }
+            }
+            if (status < -1) {
+                break;
+            }
+        }
+        ::free_rtcm(control.get());
+        std::fclose(file);
+    }
+
+    return results;
+}
+
+std::vector<MionoCorrResult> decodeL6DFilesImpl(const std::vector<std::string>& paths,
+                                                int gps_week,
+                                                const double rr[3]) {
+    std::vector<MionoCorrResult> results;
+    if (rr == nullptr) {
+        return results;
+    }
+
+    const gtime_t initial_time = oracleGpsWeekTime(gps_week, 0.0);
+    ::init_miono(initial_time);
+    auto nav = std::make_unique<nav_t>();
+
+    for (const std::string& path : paths) {
+        mdcl6d_t control = {};
+        control.time = initial_time;
+        control.nbyte = 0;
+
+        std::FILE* file = std::fopen(path.c_str(), "rb");
+        if (file == nullptr) {
+            continue;
+        }
+
+        while (true) {
+            const int status = ::input_qzssl6df(&control, file);
+            copyDecodedRegion(control, *nav);
+
+            if (status == 10 && ::miono_get_corr(rr, nav.get())) {
+                MionoCorrResult result = fromOraclePppiono(nav->pppiono);
+                if (hasCorrectionAtTime(result, control.time)) {
+                    results.push_back(result);
+                }
+            }
+            if (status < -1) {
+                break;
+            }
+        }
+        std::fclose(file);
+    }
+
+    return results;
+}
+
 #endif
 
 }  // namespace
 
 bool available() {
     return GNSSPP_HAS_MADOCALIB_ORACLE != 0;
+}
+
+std::string rootDirectory() {
+#ifdef GNSSPP_MADOCALIB_ROOT
+    return GNSSPP_MADOCALIB_ROOT;
+#else
+    return {};
+#endif
 }
 
 int satno(int sys, int prn) {
@@ -312,6 +507,54 @@ int miono_get_corr(GTime time,
     (void)areas;
     (void)area_count;
     return 0;
+#endif
+}
+
+std::vector<MionoCorrResult> decode_l6d_file(const std::string& path,
+                                             int gps_week,
+                                             const double rr[3]) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    return decodeL6DFilesImpl(std::vector<std::string>{path}, gps_week, rr);
+#else
+    (void)path;
+    (void)gps_week;
+    (void)rr;
+    return {};
+#endif
+}
+
+std::vector<MionoCorrResult> decode_l6d_files(const std::vector<std::string>& paths,
+                                              int gps_week,
+                                              const double rr[3]) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    return decodeL6DFilesImpl(paths, gps_week, rr);
+#else
+    (void)paths;
+    (void)gps_week;
+    (void)rr;
+    return {};
+#endif
+}
+
+std::vector<SsrCorrectionSnapshot> decode_l6e_file(const std::string& path,
+                                                   int gps_week) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    return decodeL6EFilesImpl(std::vector<std::string>{path}, gps_week);
+#else
+    (void)path;
+    (void)gps_week;
+    return {};
+#endif
+}
+
+std::vector<SsrCorrectionSnapshot> decode_l6e_files(const std::vector<std::string>& paths,
+                                                    int gps_week) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    return decodeL6EFilesImpl(paths, gps_week);
+#else
+    (void)paths;
+    (void)gps_week;
+    return {};
 #endif
 }
 
