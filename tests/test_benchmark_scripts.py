@@ -66,6 +66,7 @@ import update_ppc_coverage_readme as ppc_coverage_readme  # noqa: E402
 import detect_ci_scope as ci_scope  # noqa: E402
 import run_optional_ppp_products_signoff as ci_ppp_products_signoff  # noqa: E402
 import run_optional_rtk_signoffs as ci_rtk_signoffs  # noqa: E402
+import apply_ppc_multi_candidate_selector as ppc_multi_candidate_selector  # noqa: E402
 
 
 class ScorecardHelpersTest(unittest.TestCase):
@@ -4817,6 +4818,196 @@ out.write_text(
             self.assertTrue(rtklib_pos.exists())
             contents = rtklib_pos.read_text(encoding="ascii")
             self.assertIn("synthetic rtklib solution", contents)
+
+
+class PPCMultiCandidateSelectorTest(unittest.TestCase):
+    """Tests for apply_ppc_multi_candidate_selector."""
+
+    @staticmethod
+    def reference_epoch(index: int) -> comparison.ReferenceEpoch:
+        return comparison.ReferenceEpoch(
+            2300,
+            float(index),
+            0.0,
+            0.0,
+            0.0,
+            np.array([10.0 * index, 0.0, 0.0]),
+        )
+
+    @staticmethod
+    def solution_epoch(
+        index: int,
+        ecef_x_m: float,
+        status: int,
+        post_rms_m: float | None,
+    ) -> comparison.SolutionEpoch:
+        return comparison.SolutionEpoch(
+            2300,
+            float(index),
+            0.0,
+            0.0,
+            0.0,
+            np.array([ecef_x_m, 0.0, 0.0]),
+            status,
+            12,
+            10.0 if status == 4 else 0.0,
+            100.0,
+            2,
+            16,
+            8,
+            8,
+            0,
+            post_rms_m,
+            None if post_rms_m is None else post_rms_m * 4.0,
+            post_rms_m,
+            None if post_rms_m is None else post_rms_m * 4.0,
+        )
+
+    @staticmethod
+    def write_reference_csv(path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["tow", "week", "lat", "lon", "height", "ecef_x", "ecef_y", "ecef_z"])
+            for index in range(3):
+                writer.writerow([float(index), 2300, 0.0, 0.0, 0.0, 10.0 * index, 0.0, 0.0])
+
+    def test_apply_ppc_multi_candidate_selector_emits_pos_and_summary(self) -> None:
+        """Multi-candidate selector writes a .pos and summary JSON with expected keys."""
+        reference = [self.reference_epoch(index) for index in range(3)]
+        baseline = [
+            self.solution_epoch(0, 0.0, 4, None),
+            self.solution_epoch(1, 11.2, 3, None),
+            self.solution_epoch(2, 20.1, 4, None),
+        ]
+        # nis5 candidate: segment 1 is FIXED (better than baseline FLOAT)
+        nis5 = [
+            self.solution_epoch(0, 0.0, 4, 0.2),
+            self.solution_epoch(1, 10.1, 4, 0.3),
+            self.solution_epoch(2, 21.0, 3, 0.2),
+        ]
+        # ratio4 candidate: segment 2 is FIXED (same baseline_m as nis5)
+        ratio4 = [
+            self.solution_epoch(0, 0.0, 4, 0.15),
+            self.solution_epoch(1, 11.0, 3, 0.25),
+            self.solution_epoch(2, 10.2, 4, 0.1),
+        ]
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_multi_candidate_") as temp_dir:
+            temp_root = Path(temp_dir)
+            reference_csv = temp_root / "reference.csv"
+            baseline_pos = temp_root / "baseline.pos"
+            nis5_pos = temp_root / "nis5.pos"
+            ratio4_pos = temp_root / "ratio4.pos"
+            out_pos = temp_root / "selected.pos"
+            summary_json = temp_root / "summary.json"
+            segments_csv = temp_root / "segments.csv"
+
+            self.write_reference_csv(reference_csv)
+            ppc_dual_profile_selector.write_pos(baseline_pos, baseline)
+            ppc_dual_profile_selector.write_pos(nis5_pos, nis5)
+            ppc_dual_profile_selector.write_pos(ratio4_pos, ratio4)
+
+            argv = [
+                "apply_ppc_multi_candidate_selector.py",
+                "--reference-csv", str(reference_csv),
+                "--baseline-pos", str(baseline_pos),
+                "--candidate", f"nis5={nis5_pos}",
+                "--candidate", f"ratio4={ratio4_pos}",
+                "--candidate-rule", "nis5=candidate_status_name == FIXED",
+                "--candidate-rule", "ratio4=candidate_status_name == FIXED",
+                "--priority-order", "nis5,ratio4",
+                "--out-pos", str(out_pos),
+                "--summary-json", str(summary_json),
+                "--segments-csv", str(segments_csv),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                ppc_multi_candidate_selector.main()
+
+            self.assertTrue(out_pos.exists(), "selected .pos file must exist")
+            self.assertTrue(summary_json.exists(), "summary JSON must exist")
+            self.assertTrue(segments_csv.exists(), "segments CSV must exist")
+
+            payload = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertIn("metrics", payload)
+            self.assertIn("baseline", payload)
+            self.assertIn("delta_vs_baseline", payload)
+            self.assertIn("selection", payload)
+            self.assertIn("active_candidates", payload)
+            self.assertIn("ppc_official_score_pct", payload["metrics"])
+
+            reparsed = comparison.read_libgnss_pos(out_pos)
+            self.assertGreater(len(reparsed), 0)
+
+            metrics = ppc_metrics.summarize_solution_epochs(
+                reference,
+                reparsed,
+                fixed_status=4,
+                label="selected",
+                match_tolerance_s=0.25,
+                solver_wall_time_s=None,
+            )
+            self.assertGreaterEqual(
+                metrics["ppc_official_score_pct"],
+                payload["baseline"]["ppc_official_score_pct"],
+            )
+
+    def test_multi_candidate_selector_drops_negative_candidate(self) -> None:
+        """drop_negative_candidates removes any candidate whose selected net < 0.
+
+        The function is called after select_segments.  We exercise it directly
+        with a hand-crafted result_rows list where bad_cand has been selected on
+        two segments with a net negative score delta, then verify that the
+        returned active_specs no longer contains bad_cand.
+        """
+        good_epochs = [
+            self.solution_epoch(0, 0.0, 4, 0.1),
+            self.solution_epoch(1, 10.0, 4, 0.1),
+            self.solution_epoch(2, 20.0, 4, 0.1),
+        ]
+        bad_epochs = [
+            self.solution_epoch(0, 0.0, 4, 0.2),
+            self.solution_epoch(1, 10.0, 4, 0.2),
+            self.solution_epoch(2, 20.0, 4, 0.2),
+        ]
+
+        good_rule = ppc_multi_candidate_selector.parse_rule("candidate_all")
+        bad_rule = ppc_multi_candidate_selector.parse_rule("candidate_all")
+
+        candidate_specs = [
+            ("good_cand", good_epochs, good_rule),
+            ("bad_cand", bad_epochs, bad_rule),
+        ]
+
+        # Simulate result_rows where bad_cand was selected on two segments with
+        # a net negative contribution (gained +5 on seg 0, lost -10 on seg 1).
+        result_rows: list[dict[str, object]] = [
+            {
+                "reference_index": 0,
+                "selected_candidate": "bad_cand",
+                "score_delta_distance_m": 5.0,
+            },
+            {
+                "reference_index": 1,
+                "selected_candidate": "bad_cand",
+                "score_delta_distance_m": -10.0,
+            },
+            {
+                "reference_index": 2,
+                "selected_candidate": "good_cand",
+                "score_delta_distance_m": 3.0,
+            },
+        ]
+
+        # bad_cand net = 5 + (-10) = -5 < 0 → must be dropped
+        updated_specs, any_dropped = ppc_multi_candidate_selector.drop_negative_candidates(
+            candidate_specs, {}, result_rows
+        )
+
+        self.assertTrue(any_dropped, "drop_negative_candidates must report a drop")
+        active_labels = [label for label, _, _ in updated_specs]
+        self.assertNotIn("bad_cand", active_labels, "bad_cand must be removed from active specs")
+        self.assertIn("good_cand", active_labels, "good_cand must remain in active specs")
 
 
 if __name__ == "__main__":
