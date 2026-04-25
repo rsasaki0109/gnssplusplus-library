@@ -1574,6 +1574,15 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                         debug_telemetry_.reject_reason = "fixed_validation";
                     }
                     has_fixed_solution_ = false;
+                    // Mirror the post-validation reject branch above: validateFixedSolution
+                    // ran after generateSolution(FIXED) which updated last_trusted_position_
+                    // via rememberSolution; if we don't roll those back, downstream epochs
+                    // see the rejected fix as "trusted" and fail deviatesTooFarFromSPP /
+                    // trusted-jump gates, cascading into fallback_spp and aborting the run.
+                    last_trusted_position_ = saved_last_trusted_position;
+                    has_last_trusted_position_ = saved_has_last_trusted;
+                    last_trusted_time_ = saved_last_trusted_time;
+                    has_last_trusted_time_ = saved_has_last_trusted_time;
                 }
             }
 
