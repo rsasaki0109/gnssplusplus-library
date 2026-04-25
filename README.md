@@ -63,9 +63,12 @@ gnssplusplus wins Fix count, Hp95, and Vp95 there, while the Hmed gap closes to
 9 cm when wide-lane AR is explicitly enabled.
 
 All runs below use `--mode kinematic --preset low-cost --match-tolerance-s
-0.25`. The coverage profile additionally uses `--no-arfilter
---no-kinematic-post-filter` plus the default low-speed non-FIX drift guard and
-SPP height-step guard, the default FLOAT bridge-tail guard, and `--ratio 2.4`.
+0.25`. The coverage profile additionally uses `--no-arfilter` plus the default
+low-speed non-FIX drift guard and SPP height-step guard, the default FLOAT
+bridge-tail guard, and `--ratio 2.4`. The kinematic post-filter cascade was
+removed in PR #36 (single-epoch height-step drop only), so
+`--no-kinematic-post-filter` is no longer required for coverage parity with the
+default profile.
 
 ### Benchmark Scope
 
@@ -506,7 +509,7 @@ explicitly enabled.
 |------|---------|---------|
 | `--ar-policy {extended\|demo5-continuous}` | AR extras gate. `demo5-continuous` disables relaxed-hold-ratio / subset-fallback / hold-fix / Q-regularization for demo5-style continuous ambiguity tracking. | `extended` |
 | `--max-hold-div <m>` | Reject fix if the hold-state diverges from float by more than N meters. | `0` (disabled) |
-| `--max-pos-jump <m>` | Reject fix if the epoch-to-epoch position jump exceeds N meters. | `0` (disabled) |
+| `--max-pos-jump <m>` | Reject fix if the epoch-to-epoch position jump exceeds N meters. Truth-validation against PPC reference (6 runs) showed jumps cluster at <5m (correct fixes) or >10m (wrong-FIX); a 5m gate cuts wrong-FIX `fix_wrong/fixes` 28.9%→19.4% and `fix95%` 0.81→0.19m without losing real fixes. Pass `0` to disable. | `5` (m) |
 | `--max-pos-jump-min <m>` + `--max-pos-jump-rate <m/s>` | Reject fix if the jump from the last fixed position exceeds `max(min, rate * dt)`, so vehicle gaps can be tested without a stale absolute distance clamp. | `0` / `0` (disabled) |
 | `--max-float-spp-div <m>` | Reject FLOAT epochs that diverge from the same-epoch SPP solution by more than N meters, then fall back to SPP/no-solution. Diagnostic gate for PPC FLOAT high-error sweeps. | `0` (disabled) |
 | `--max-float-prefit-rms <m>` + `--max-float-prefit-max <m>` + `--max-float-prefit-reset-streak <N>` | Opt-in residual diagnostic gate. Reset ambiguity states for the next epoch after N consecutive otherwise accepted FLOAT epochs have high DD prefit residual RMS or max residual. The current FLOAT epoch is still reported, avoiding SPP fallback score loss and isolated residual spikes. Full PPC `6` / `30` reaches `58.52%` at streak `3`, `58.80%` at streak `5`, and `58.83%` at streak `8`, below the reset10 baseline `58.90%`, so it is not a default profile. | `0` / `0` (disabled) / `3` |

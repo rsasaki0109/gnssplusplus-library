@@ -13,11 +13,44 @@ Tier-1 public smoke/regression run; the explicit `--preset odaiba` opt-in
 profile beats demo5 on Fix count, rate, Hmed, Hp95, and Vp95 for that scene.
 
 All runs below use `--mode kinematic --preset low-cost --match-tolerance-s 0.25`.
-The coverage profile additionally uses `--no-arfilter --no-kinematic-post-filter`
-plus the default low-speed non-FIX drift guard, SPP height-step guard, and
-FLOAT bridge-tail guard, with `--ratio 2.4`.
+The coverage profile additionally uses `--no-arfilter` plus the default
+low-speed non-FIX drift guard, SPP height-step guard, and FLOAT bridge-tail
+guard, with `--ratio 2.4`. The kinematic post-filter cascade was removed in
+PR #36 (single-epoch height-step drop only), so `--no-kinematic-post-filter`
+is no longer required for coverage parity with the default profile.
 
 ![PPC RTK coverage scorecard](ppc_rtk_demo5_scorecard.png)
+
+## 2026-04-26 truth-validation baseline
+
+Truth-validation against PPC `reference.csv` (5 Hz ECEF) on the six public
+Tokyo/Nagoya runs, after PR #29-#36 stack (`develop @ 5101549`). Default
+config (`--mode kinematic`, no opt-in flags). Solution rows joined by
+`(GPS Week, GPS TOW)` and classified against the reference: `fix_ok` is
+`Status==FIXED` and ECEF 3D error ≤ 0.10 m; `fix_wrong` is `FIXED` but error
+> 0.10 m; coverage is matched-rows / reference-rows.
+
+| Metric | Pre-stack default | Post-stack default (PR #29-#36) | Change |
+|---|---:|---:|---:|
+| coverage (matched / reference) | 47.8% | **85.0%** | +37.2 pp |
+| `fix_wrong` / total fixes | 28.9% | **19.4%** | -9.5 pp |
+| `fix95%` (m) | 0.81 | **0.19** | -77% |
+| `fix_ok` count | 16,809 | 3,380 | -80% |
+| nagoya_run2 `fix95%` (m) | 46.85 | **0.28** | -99% |
+
+The `fix_ok` drop was isolated to PR #35 (`--max-pos-jump` default 5 m); a
+sweep against `0 / 5 / 7.5 / 10` (six runs each) shows AR-candidate jumps
+cluster at <5 m (correct) or >10 m (wrong-FIX). The 5 m gate is at the
+inflection point: relaxing to 7.5 m gains only +151 epochs (+4.5%) while
+adding wrong-FIX, and disabling it returns to the pre-stack `fix_wrong/fixes`
+collapse (31.3%) and `nagoya_run2 fix95%` 46.92 m. Wide-lane AR
+(`--enable-wide-lane-ar`) was tested as a default and rejected: it cuts
+`fix_ok` to 1,515 and pushes `fix_wrong/fixes` to 41.5% (`tokyo_run2 fix95%`
+17.96 m). Wide-lane AR remains opt-in via `--preset odaiba`.
+
+Reproduction command and per-run table are in
+`_carryover_2026-04-26/output/baseline_comparison.md`. The scoring script is
+`_carryover_2026-04-25/scripts/score_solution_vs_truth.py`.
 
 ## Public Moving-RTK Benchmark Matrix
 
