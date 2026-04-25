@@ -141,8 +141,9 @@ public:
 
         /// Max AR fix position jump from last fixed position in meters.
         /// Applied in addition to the history-based exceedsFixHistoryJump check.
-        /// 0 (default) disables the check — existing behavior preserved.
-        double max_position_jump_m = 0.0;
+        /// Default 5.0m: rejects wrong-FIX with implausible position jumps.
+        /// Set to 0 to disable.
+        double max_position_jump_m = 5.0;
 
         /// Adaptive max AR fix jump from last fixed position.
         /// When max_position_jump_rate_mps > 0, accepted jump is
