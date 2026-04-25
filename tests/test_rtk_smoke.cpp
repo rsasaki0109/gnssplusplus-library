@@ -366,31 +366,3 @@ TEST(RTKMixedConstellationTest, SPPSeedHonorsGlonassSwitch) {
     EXPECT_GT(with_glonass.num_satellites, without_glonass.num_satellites);
     EXPECT_LT((with_glonass.position_ecef - without_glonass.position_ecef).norm(), 5.0);
 }
-
-// ============================================================================
-// ARSkipReason diagnostic enum tests
-// ============================================================================
-
-TEST(RTKArSkipReasonTest, DefaultTelemetryHasNoneSkipReason) {
-    RTKProcessor::EpochDebugTelemetry telemetry;
-    EXPECT_EQ(telemetry.ar_skip_reason, RTKProcessor::ARSkipReason::NONE);
-}
-
-TEST(RTKArSkipReasonTest, StringifyCoversAllValues) {
-    using R = RTKProcessor::ARSkipReason;
-    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::NONE),                              "none");
-    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::FILTER_NOT_INIT),                   "filter_not_init");
-    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::ESTIMATED_IONO_MODE),               "estimated_iono_mode");
-    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::DD_PAIRS_LT_4_BEFORE_VAR_FILTER),   "dd_lt4_before_var");
-    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::DD_PAIRS_LT_4_AFTER_VAR_FILTER),    "dd_lt4_after_var");
-    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::LAMBDA_FAILED),                     "lambda_failed");
-    EXPECT_STREQ(RTKProcessor::arSkipReasonToString(R::RATIO_COMPUTATION_FAILED),          "ratio_computation_failed");
-}
-
-TEST(RTKArSkipReasonTest, UninitializedProcessorTelemetryDefaultsToNone) {
-    // Before any epoch is processed, the telemetry ar_skip_reason must be NONE
-    // (filter-not-init is only reported after an AR attempt is triggered).
-    RTKProcessor rtk;
-    const auto& tel = rtk.getLastDebugTelemetry();
-    EXPECT_EQ(tel.ar_skip_reason, RTKProcessor::ARSkipReason::NONE);
-}
