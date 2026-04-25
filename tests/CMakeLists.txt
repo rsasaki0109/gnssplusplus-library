@@ -27,6 +27,7 @@ if(GTest_FOUND)
         test_rinex_writer.cpp
         test_rtk_legacy.cpp
         test_spp.cpp
+        test_rtk.cpp
         test_rtk_smoke.cpp
         test_ntrip.cpp
         test_rtcm.cpp

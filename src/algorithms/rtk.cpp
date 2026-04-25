@@ -2531,6 +2531,9 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     has_fixed_solution_ = true;
     last_ar_ratio_ = ratio;
     last_num_fixed_ambiguities_ = dd_fixed.size();
+    // Clear any diagnostic-only skip reason set earlier (e.g. DD_PAIRS_LT_4_AFTER_VAR_FILTER
+    // at line 1803, which marks the cause without early-returning so LAMBDA can still try).
+    debug_telemetry_.ar_skip_reason = ARSkipReason::NONE;
     debug_telemetry_.selected_fixed_ambiguities = static_cast<int>(dd_fixed.size());
 
     // Store fix info for hold and validation
