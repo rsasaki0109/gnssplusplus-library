@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <exception>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -68,7 +69,8 @@ enum class RTKTuningPreset {
     NONE,
     SURVEY,
     LOW_COST,
-    MOVING_BASE
+    MOVING_BASE,
+    ODAIBA
 };
 
 struct SolveConfig {
@@ -92,6 +94,12 @@ struct SolveConfig {
     bool has_ar_filter_override = false;
     double ar_filter_margin = 0.25;
     int min_satellites_for_ar = 5;
+    int min_subset_pairs_for_ar = 4;
+    int min_subset_sats_for_ar = 0;
+    int min_subset_systems_for_ar = 0;
+    int min_subset_frequencies_for_ar = 0;
+    int min_subset_dual_frequency_sats_for_ar = 0;
+    double min_full_ratio_for_subset_ar = 0.0;
     int min_hold_count = 5;
     double hold_ratio_threshold = 2.0;
     double elevation_mask_deg = 15.0;
@@ -102,6 +110,7 @@ struct SolveConfig {
     double glonass_icb_l2_m_per_mhz = 0.0;
     int skip_epochs = 0;
     int max_epochs = -1;
+    std::string debug_epoch_log_path;
     bool enable_kinematic_post_filter = true;
     bool enable_nonfix_drift_guard = true;
     double nonfix_drift_guard_max_anchor_gap_s = kDefaultNonFixDriftGuardMaxAnchorGapSeconds;
@@ -129,6 +138,10 @@ struct SolveConfig {
     bool ratio_threshold_set = false;
     bool ar_filter_margin_set = false;
     bool min_satellites_for_ar_set = false;
+    bool min_subset_sats_for_ar_set = false;
+    bool min_subset_systems_for_ar_set = false;
+    bool min_subset_frequencies_for_ar_set = false;
+    bool min_subset_dual_frequency_sats_for_ar_set = false;
     bool min_hold_count_set = false;
     bool hold_ratio_threshold_set = false;
     libgnss::RTKProcessor::RTKConfig::ARPolicy ar_policy =
@@ -147,7 +160,9 @@ struct SolveConfig {
     int max_consecutive_nonfix_for_reset = 0;
     double max_postfix_residual_rms = 0.0;
     bool enable_wide_lane_ar = false;
+    bool wide_lane_ar_set = false;
     double wide_lane_acceptance_threshold = 0.25;
+    bool wide_lane_acceptance_threshold_set = false;
 };
 
 double timeDiffSeconds(const libgnss::GNSSTime& a, const libgnss::GNSSTime& b) {
@@ -423,6 +438,101 @@ std::string outputFormatString(libgnss::io::SolutionWriter::Format format) {
     return "pos";
 }
 
+class EpochDebugWriter {
+public:
+    bool open(const std::string& path) {
+        if (path.empty()) {
+            return true;
+        }
+        file_.open(path);
+        if (!file_.is_open()) {
+            return false;
+        }
+        file_ << "gps_week,tow,status,num_sats,ratio,baseline_m,"
+              << "ar_attempted,input_pair_count,pair_count,max_ambiguity_variance,"
+              << "effective_ratio_threshold,min_subset_pair_count,min_full_ratio_for_subset_ar,"
+              << "subset_candidates_evaluated,subset_candidates_rejected_by_full_ratio,"
+              << "subset_candidates_rejected_by_diversity,wide_lane_total,wide_lane_fixed,"
+              << "wide_lane_rejected,wide_lane_min_distance,wide_lane_max_distance,"
+              << "full_lambda_solved,full_ratio,selected_fixed,selected_ratio,"
+              << "selected_pair_count,selected_distinct_sats,selected_distinct_systems,"
+              << "selected_distinct_frequencies,selected_dual_frequency_sats,"
+              << "selected_fixed_ambiguities,selected_used_subset,"
+              << "used_wlnl_fallback,validation_attempted,validation_passed,"
+              << "postfix_residual_rms,fixed_float_jump_m,post_validation_rejected,"
+              << "final_fixed_applied,reject_reason\n";
+        return true;
+    }
+
+    void write(const libgnss::PositionSolution& solution,
+               const libgnss::RTKProcessor::EpochDebugTelemetry& telemetry) {
+        if (!file_.is_open()) {
+            return;
+        }
+        file_ << solution.time.week << ","
+              << std::fixed << std::setprecision(3) << solution.time.tow << ","
+              << static_cast<int>(solution.status) << ","
+              << solution.num_satellites << ",";
+        writeNumber(solution.ratio);
+        file_ << ",";
+        writeNumber(solution.baseline_length);
+        file_ << ","
+              << telemetry.ar_attempted << ","
+              << telemetry.input_pair_count << ","
+              << telemetry.pair_count << ",";
+        writeNumber(telemetry.max_ambiguity_variance);
+        file_ << ",";
+        writeNumber(telemetry.effective_ratio_threshold);
+        file_ << ","
+              << telemetry.min_subset_pair_count << ","
+              << telemetry.min_full_ratio_for_subset_ar << ","
+              << telemetry.subset_candidates_evaluated << ","
+              << telemetry.subset_candidates_rejected_by_full_ratio << ","
+              << telemetry.subset_candidates_rejected_by_diversity << ","
+              << telemetry.wide_lane_total << ","
+              << telemetry.wide_lane_fixed << ","
+              << telemetry.wide_lane_rejected << ",";
+        writeNumber(telemetry.wide_lane_min_distance);
+        file_ << ",";
+        writeNumber(telemetry.wide_lane_max_distance);
+        file_ << ","
+              << telemetry.full_lambda_solved << ",";
+        writeNumber(telemetry.full_ratio);
+        file_ << ","
+              << telemetry.selected_fixed << ",";
+        writeNumber(telemetry.selected_ratio);
+        file_ << ","
+              << telemetry.selected_pair_count << ","
+              << telemetry.selected_distinct_sats << ","
+              << telemetry.selected_distinct_systems << ","
+              << telemetry.selected_distinct_frequencies << ","
+              << telemetry.selected_dual_frequency_sats << ","
+              << telemetry.selected_fixed_ambiguities << ","
+              << telemetry.selected_used_subset << ","
+              << telemetry.used_wlnl_fallback << ","
+              << telemetry.validation_attempted << ","
+              << telemetry.validation_passed << ",";
+        writeNumber(telemetry.postfix_residual_rms);
+        file_ << ",";
+        writeNumber(telemetry.fixed_float_jump_m);
+        file_ << ","
+              << telemetry.post_validation_rejected << ","
+              << telemetry.final_fixed_applied << ","
+              << telemetry.reject_reason << "\n";
+        file_.flush();
+    }
+
+private:
+    void writeNumber(double value) {
+        if (!std::isfinite(value)) {
+            return;
+        }
+        file_ << std::setprecision(6) << value;
+    }
+
+    std::ofstream file_;
+};
+
 void printUsage(const char* program_name) {
     std::cout
         << "Usage: " << program_name << " [options]\n"
@@ -438,12 +548,26 @@ void printUsage(const char* program_name) {
         << "                             Position mode (default: auto)\n"
         << "  --iono <auto|off|iflc|est> Ionosphere option (default: auto)\n"
         << "  --ratio <value>            Ambiguity ratio threshold (default: 3.0)\n"
-        << "  --preset <survey|low-cost|moving-base>\n"
+        << "  --preset <survey|low-cost|moving-base|odaiba>\n"
         << "                             Apply a named RTK tuning preset\n"
         << "  --arfilter                 Require extra ratio margin for subset AR fixes\n"
         << "  --no-arfilter              Disable subset AR filter margin even if a preset enables it\n"
         << "  --arfilter-margin <v>      Extra ratio margin for --arfilter (default: 0.25)\n"
         << "  --min-ar-sats <n>          Minimum satellites for AR (default: 5)\n"
+        << "  --min-subset-ar-pairs <n>  Minimum DD pairs for subset AR (default: 4)\n"
+        << "  --min-subset-ar-sats <n>   Minimum distinct satellites for subset AR\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --min-subset-ar-systems <n>\n"
+        << "                             Minimum distinct constellations for subset AR\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --min-subset-ar-freqs <n>  Minimum distinct frequencies for subset AR\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --min-subset-ar-dual-freq-sats <n>\n"
+        << "                             Minimum dual-frequency satellites for subset AR\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --min-full-ratio-for-subset-ar <v>\n"
+        << "                             Require full-set LAMBDA ratio before subset AR\n"
+        << "                             (default: 0, disabled)\n"
         << "  --min-hold-count <n>       Consecutive fixes before hold ambiguity is allowed (default: 5)\n"
         << "  --hold-ratio-threshold <v> Ratio threshold used while hold ambiguity is active (default: 2.0)\n"
         << "  --elevation-mask-deg <v>   Elevation mask in degrees (default: 15)\n"
@@ -481,6 +605,7 @@ void printUsage(const char* program_name) {
         << "  --max-postfix-rms <v>      Max L1 post-fix phase residual RMS in meters\n"
         << "                             (default: 0, disabled)\n"
         << "  --enable-wide-lane-ar      Enable MW wide-lane AR pre-step (default: off)\n"
+        << "  --no-wide-lane-ar          Disable MW wide-lane AR, overriding presets\n"
         << "  --wide-lane-threshold <v>  WL float->int threshold in cycles (default: 0.25)\n"
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
@@ -539,6 +664,7 @@ void printUsage(const char* program_name) {
         << "  --base-ecef <x> <y> <z>    Override base ECEF position in meters\n"
         << "  --skip-epochs <n>          Skip the first n rover epochs before solving\n"
         << "  --max-epochs <n>           Stop after n rover epochs\n"
+        << "  --debug-epoch-log <csv>    Write per-epoch AR/debug telemetry CSV\n"
         << "  --no-kinematic-post-filter Disable the kinematic output post-filter\n"
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
         << "  --verbose                  Print per-epoch progress summary\n"
@@ -578,6 +704,7 @@ RTKTuningPreset parseRTKTuningPreset(const std::string& value, const char* progr
     if (value == "survey") return RTKTuningPreset::SURVEY;
     if (value == "low-cost") return RTKTuningPreset::LOW_COST;
     if (value == "moving-base") return RTKTuningPreset::MOVING_BASE;
+    if (value == "odaiba") return RTKTuningPreset::ODAIBA;
     argumentError("unsupported --preset value: " + value, program_name);
 }
 
@@ -608,6 +735,18 @@ void applyRTKTuningPreset(SolveConfig& config) {
             if (!config.min_satellites_for_ar_set) config.min_satellites_for_ar = 6;
             if (!config.min_hold_count_set) config.min_hold_count = 8;
             if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.4;
+            return;
+        case RTKTuningPreset::ODAIBA:
+            if (!config.ratio_threshold_set) config.ratio_threshold = 3.0;
+            if (!config.has_ar_filter_override) config.enable_ar_filter = true;
+            if (!config.ar_filter_margin_set) config.ar_filter_margin = 0.35;
+            if (!config.min_satellites_for_ar_set) config.min_satellites_for_ar = 6;
+            if (!config.min_hold_count_set) config.min_hold_count = 8;
+            if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.5;
+            if (!config.wide_lane_ar_set) config.enable_wide_lane_ar = true;
+            if (!config.wide_lane_acceptance_threshold_set) {
+                config.wide_lane_acceptance_threshold = 0.12;
+            }
             return;
     }
 }
@@ -668,6 +807,22 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         } else if (arg == "--min-ar-sats" && i + 1 < argc) {
             config.min_satellites_for_ar = std::stoi(argv[++i]);
             config.min_satellites_for_ar_set = true;
+        } else if (arg == "--min-subset-ar-pairs" && i + 1 < argc) {
+            config.min_subset_pairs_for_ar = std::stoi(argv[++i]);
+        } else if (arg == "--min-subset-ar-sats" && i + 1 < argc) {
+            config.min_subset_sats_for_ar = std::stoi(argv[++i]);
+            config.min_subset_sats_for_ar_set = true;
+        } else if (arg == "--min-subset-ar-systems" && i + 1 < argc) {
+            config.min_subset_systems_for_ar = std::stoi(argv[++i]);
+            config.min_subset_systems_for_ar_set = true;
+        } else if (arg == "--min-subset-ar-freqs" && i + 1 < argc) {
+            config.min_subset_frequencies_for_ar = std::stoi(argv[++i]);
+            config.min_subset_frequencies_for_ar_set = true;
+        } else if (arg == "--min-subset-ar-dual-freq-sats" && i + 1 < argc) {
+            config.min_subset_dual_frequency_sats_for_ar = std::stoi(argv[++i]);
+            config.min_subset_dual_frequency_sats_for_ar_set = true;
+        } else if (arg == "--min-full-ratio-for-subset-ar" && i + 1 < argc) {
+            config.min_full_ratio_for_subset_ar = std::stod(argv[++i]);
         } else if (arg == "--min-hold-count" && i + 1 < argc) {
             config.min_hold_count = std::stoi(argv[++i]);
             config.min_hold_count_set = true;
@@ -719,8 +874,13 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.max_postfix_residual_rms = std::stod(argv[++i]);
         } else if (arg == "--enable-wide-lane-ar") {
             config.enable_wide_lane_ar = true;
+            config.wide_lane_ar_set = true;
+        } else if (arg == "--no-wide-lane-ar") {
+            config.enable_wide_lane_ar = false;
+            config.wide_lane_ar_set = true;
         } else if (arg == "--wide-lane-threshold" && i + 1 < argc) {
             config.wide_lane_acceptance_threshold = std::stod(argv[++i]);
+            config.wide_lane_acceptance_threshold_set = true;
         } else if (arg == "--max-consec-float-reset" && i + 1 < argc) {
             config.max_consecutive_float_for_reset = std::stoi(argv[++i]);
         } else if (arg == "--max-consec-nonfix-reset" && i + 1 < argc) {
@@ -781,6 +941,8 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.skip_epochs = std::stoi(argv[++i]);
         } else if (arg == "--max-epochs" && i + 1 < argc) {
             config.max_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--debug-epoch-log" && i + 1 < argc) {
+            config.debug_epoch_log_path = argv[++i];
         } else if (arg == "--no-kinematic-post-filter") {
             config.enable_kinematic_post_filter = false;
         } else if (arg == "--no-base-interp") {
@@ -805,6 +967,24 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.min_satellites_for_ar < 4) {
         argumentError("--min-ar-sats must be >= 4", argv[0]);
+    }
+    if (config.min_subset_pairs_for_ar < 4) {
+        argumentError("--min-subset-ar-pairs must be >= 4", argv[0]);
+    }
+    if (config.min_subset_sats_for_ar < 0) {
+        argumentError("--min-subset-ar-sats must be >= 0", argv[0]);
+    }
+    if (config.min_subset_systems_for_ar < 0) {
+        argumentError("--min-subset-ar-systems must be >= 0", argv[0]);
+    }
+    if (config.min_subset_frequencies_for_ar < 0) {
+        argumentError("--min-subset-ar-freqs must be >= 0", argv[0]);
+    }
+    if (config.min_subset_dual_frequency_sats_for_ar < 0) {
+        argumentError("--min-subset-ar-dual-freq-sats must be >= 0", argv[0]);
+    }
+    if (config.min_full_ratio_for_subset_ar < 0.0) {
+        argumentError("--min-full-ratio-for-subset-ar must be >= 0", argv[0]);
     }
     if (config.ar_filter_margin < 0.0) {
         argumentError("--arfilter-margin must be >= 0", argv[0]);
@@ -1014,6 +1194,13 @@ int main(int argc, char* argv[]) {
         rtk_config.enable_ar_filter = config.enable_ar_filter;
         rtk_config.ar_filter_margin = config.ar_filter_margin;
         rtk_config.min_satellites_for_ar = config.min_satellites_for_ar;
+        rtk_config.min_subset_pairs_for_ar = config.min_subset_pairs_for_ar;
+        rtk_config.min_subset_sats_for_ar = config.min_subset_sats_for_ar;
+        rtk_config.min_subset_systems_for_ar = config.min_subset_systems_for_ar;
+        rtk_config.min_subset_frequencies_for_ar = config.min_subset_frequencies_for_ar;
+        rtk_config.min_subset_dual_frequency_sats_for_ar =
+            config.min_subset_dual_frequency_sats_for_ar;
+        rtk_config.min_full_ratio_for_subset_ar = config.min_full_ratio_for_subset_ar;
         rtk_config.min_hold_count = config.min_hold_count;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;
         rtk_config.position_mode = resolvePositionMode(config);
@@ -1054,6 +1241,12 @@ int main(int argc, char* argv[]) {
         spp_config.enable_glonass = config.enable_glonass;
         spp_config.enable_beidou = config.enable_beidou;
         spp_processor.setSPPConfig(spp_config);
+        EpochDebugWriter debug_writer;
+        if (!debug_writer.open(config.debug_epoch_log_path)) {
+            std::cerr << "Error: failed to open debug epoch log: "
+                      << config.debug_epoch_log_path << std::endl;
+            return 1;
+        }
 
         std::cout << "libgnss++ post-process solver" << std::endl;
         std::cout << "  rover: " << config.rover_obs_path << std::endl;
@@ -1309,6 +1502,8 @@ int main(int argc, char* argv[]) {
                     }
                 }
             }
+
+            debug_writer.write(pos_solution, rtk_processor.getLastDebugTelemetry());
 
             if (pos_solution.isValid()) {
                 solution.addSolution(pos_solution);

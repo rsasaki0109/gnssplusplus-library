@@ -547,6 +547,36 @@ TEST(RTKLegacyCompatibilityStandaloneTest, WideLaneArConfigurable) {
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().wide_lane_acceptance_threshold, 0.50);
 }
 
+TEST(RTKLegacyCompatibilityStandaloneTest, SubsetArFullRatioGateDefaultDisabled) {
+    RTKProcessor processor;
+    EXPECT_EQ(processor.getRTKConfig().min_subset_pairs_for_ar, 4);
+    EXPECT_EQ(processor.getRTKConfig().min_subset_sats_for_ar, 0);
+    EXPECT_EQ(processor.getRTKConfig().min_subset_systems_for_ar, 0);
+    EXPECT_EQ(processor.getRTKConfig().min_subset_frequencies_for_ar, 0);
+    EXPECT_EQ(processor.getRTKConfig().min_subset_dual_frequency_sats_for_ar, 0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().min_full_ratio_for_subset_ar, 0.0);
+
+    RTKProcessor::RTKConfig cfg;
+    cfg.min_subset_pairs_for_ar = 6;
+    cfg.min_subset_sats_for_ar = 3;
+    cfg.min_subset_systems_for_ar = 2;
+    cfg.min_subset_frequencies_for_ar = 2;
+    cfg.min_subset_dual_frequency_sats_for_ar = 2;
+    cfg.min_full_ratio_for_subset_ar = 3.0;
+    processor.setRTKConfig(cfg);
+    EXPECT_EQ(processor.getRTKConfig().min_subset_pairs_for_ar, 6);
+    EXPECT_EQ(processor.getRTKConfig().min_subset_sats_for_ar, 3);
+    EXPECT_EQ(processor.getRTKConfig().min_subset_systems_for_ar, 2);
+    EXPECT_EQ(processor.getRTKConfig().min_subset_frequencies_for_ar, 2);
+    EXPECT_EQ(processor.getRTKConfig().min_subset_dual_frequency_sats_for_ar, 2);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().min_full_ratio_for_subset_ar, 3.0);
+
+    RTKProcessor::RTKConfig disabled;
+    disabled.min_full_ratio_for_subset_ar = 0.0;
+    processor.setRTKConfig(disabled);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().min_full_ratio_for_subset_ar, 0.0);
+}
+
 TEST(RTKLegacyCompatibilityStandaloneTest, ArPolicyDemo5ContinuousDisablesHoldFix) {
     // Under DEMO5_CONTINUOUS, the hold-fix fallback code path is gated off.
     // We verify by checking that tryHoldFix returns false when called directly

@@ -10,8 +10,10 @@
 #include "rtk_validation.hpp"
 #include "spp.hpp"
 #include <Eigen/Dense>
+#include <limits>
 #include <mutex>
 #include <set>
+#include <string>
 
 namespace libgnss {
 
@@ -109,6 +111,30 @@ public:
         enum class ARPolicy { EXTENDED, DEMO5_CONTINUOUS };
         ARPolicy ar_policy = ARPolicy::EXTENDED;
 
+        /// Minimum DD ambiguity pairs allowed for subset/partial AR candidates.
+        /// 4 (default) preserves the existing partial AR search behavior.
+        int min_subset_pairs_for_ar = 4;
+
+        /// Minimum distinct non-reference satellites required for subset AR.
+        /// 0 (default) disables the gate and preserves existing subset behavior.
+        int min_subset_sats_for_ar = 0;
+
+        /// Minimum distinct constellations required for subset AR.
+        /// 0 (default) disables the gate and preserves existing subset behavior.
+        int min_subset_systems_for_ar = 0;
+
+        /// Minimum distinct frequencies required for subset AR.
+        /// 0 (default) disables the gate and preserves existing subset behavior.
+        int min_subset_frequencies_for_ar = 0;
+
+        /// Minimum non-reference satellites represented on at least two frequencies.
+        /// 0 (default) disables the gate and preserves existing subset behavior.
+        int min_subset_dual_frequency_sats_for_ar = 0;
+
+        /// Minimum full-set LAMBDA ratio required before accepting subset AR.
+        /// 0 (default) disables the gate and preserves existing subset behavior.
+        double min_full_ratio_for_subset_ar = 0.0;
+
         /// Max hold fix divergence from float baseline in meters.
         /// 0 (default) disables the check — existing behavior preserved.
         double max_hold_divergence_m = 0.0;
@@ -188,6 +214,46 @@ public:
         double wide_lane_acceptance_threshold = 0.25;
     };
 
+    struct EpochDebugTelemetry {
+        bool ar_attempted = false;
+        int input_pair_count = 0;
+        int pair_count = 0;
+        double max_ambiguity_variance = std::numeric_limits<double>::quiet_NaN();
+        double effective_ratio_threshold = std::numeric_limits<double>::quiet_NaN();
+        int min_subset_pair_count = 0;
+        double min_full_ratio_for_subset_ar = std::numeric_limits<double>::quiet_NaN();
+        int subset_candidates_evaluated = 0;
+        int subset_candidates_rejected_by_full_ratio = 0;
+        int subset_candidates_rejected_by_diversity = 0;
+
+        int wide_lane_total = 0;
+        int wide_lane_fixed = 0;
+        int wide_lane_rejected = 0;
+        double wide_lane_min_distance = std::numeric_limits<double>::quiet_NaN();
+        double wide_lane_max_distance = std::numeric_limits<double>::quiet_NaN();
+
+        bool full_lambda_solved = false;
+        double full_ratio = std::numeric_limits<double>::quiet_NaN();
+        bool selected_fixed = false;
+        double selected_ratio = std::numeric_limits<double>::quiet_NaN();
+        int selected_pair_count = 0;
+        int selected_distinct_sats = 0;
+        int selected_distinct_systems = 0;
+        int selected_distinct_frequencies = 0;
+        int selected_dual_frequency_sats = 0;
+        int selected_fixed_ambiguities = 0;
+        bool selected_used_subset = false;
+        bool used_wlnl_fallback = false;
+
+        bool validation_attempted = false;
+        bool validation_passed = false;
+        double postfix_residual_rms = std::numeric_limits<double>::quiet_NaN();
+        double fixed_float_jump_m = std::numeric_limits<double>::quiet_NaN();
+        bool post_validation_rejected = false;
+        bool final_fixed_applied = false;
+        std::string reject_reason;
+    };
+
     RTKProcessor();
     explicit RTKProcessor(const RTKConfig& rtk_config);
     ~RTKProcessor() override = default;
@@ -210,6 +276,7 @@ public:
 
     void setRTKConfig(const RTKConfig& config);
     const RTKConfig& getRTKConfig() const { return rtk_config_; }
+    const EpochDebugTelemetry& getLastDebugTelemetry() const { return debug_telemetry_; }
 
 public:
     bool lambdaMethod(const VectorXd& float_ambiguities,
@@ -223,6 +290,7 @@ public:
 private:
     RTKConfig rtk_config_;
     SPPProcessor spp_processor_;
+    EpochDebugTelemetry debug_telemetry_;
 
     Vector3d base_position_;
     bool base_position_known_ = false;
