@@ -43,7 +43,6 @@ constexpr double kDefaultFixedBridgeBurstGuardMaxAnchorGapSeconds = 30.0;
 constexpr double kDefaultFixedBridgeBurstGuardMinBoundaryGapSeconds = 1.0;
 constexpr double kDefaultFixedBridgeBurstGuardMaxResidualMeters = 20.0;
 constexpr int kDefaultFixedBridgeBurstGuardMaxSegmentEpochs = 12;
-constexpr int kReacquireFixedCount = 5;
 
 enum class ModeChoice {
     AUTO,
@@ -1614,28 +1613,21 @@ int main(int argc, char* argv[]) {
         if (config.enable_kinematic_post_filter &&
             rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
             !solution.isEmpty()) {
+            // Single-epoch drop on height-step jumps. The previous "suppress
+            // until N consecutive FIXED" cascade was removed because, with
+            // PR #34's state-restore in validateFixedSolution and PR #35's
+            // --max-pos-jump=5.0 default, wrong-FIX is already rejected at
+            // the AR layer. A wrong-FIX occasionally still slipped past and
+            // became `last_kept`, after which the cascade silently dropped
+            // many subsequent valid epochs (truth validation: 92.1% -> 47.8%
+            // coverage). Drop only the offending epoch and leave `last_kept`
+            // pointing at the prior trusted anchor.
             libgnss::Solution filtered_solution;
             filtered_solution.solutions.reserve(solution.solutions.size());
-            bool suppress_until_fix_recovery = false;
-            int recovery_fixed_streak = 0;
             bool have_kept_fixed = false;
             const libgnss::PositionSolution* last_kept = nullptr;
             for (const auto& epoch_solution : solution.solutions) {
                 if (!epoch_solution.isValid()) {
-                    continue;
-                }
-                if (suppress_until_fix_recovery) {
-                    if (epoch_solution.isFixed()) {
-                        recovery_fixed_streak++;
-                        if (recovery_fixed_streak >= kReacquireFixedCount) {
-                            filtered_solution.addSolution(epoch_solution);
-                            last_kept = &filtered_solution.solutions.back();
-                            suppress_until_fix_recovery = false;
-                            recovery_fixed_streak = 0;
-                        }
-                    } else {
-                        recovery_fixed_streak = 0;
-                    }
                     continue;
                 }
 
@@ -1650,8 +1642,8 @@ int main(int argc, char* argv[]) {
                     const double max_height_step =
                         std::max(kDefaultVerticalStepGuardMeters, 4.0 * dt);
                     if (height_step > max_height_step) {
-                        suppress_until_fix_recovery = true;
-                        recovery_fixed_streak = epoch_solution.isFixed() ? 1 : 0;
+                        // Drop this single epoch only; do not advance the
+                        // anchor or trigger a multi-epoch suppression.
                         continue;
                     }
                 }
