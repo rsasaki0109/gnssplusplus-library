@@ -460,7 +460,7 @@ public:
               << "selected_fixed_ambiguities,selected_used_subset,"
               << "used_wlnl_fallback,validation_attempted,validation_passed,"
               << "postfix_residual_rms,fixed_float_jump_m,post_validation_rejected,"
-              << "final_fixed_applied,reject_reason\n";
+              << "final_fixed_applied,reject_reason,ar_skip_reason\n";
         return true;
     }
 
@@ -518,7 +518,8 @@ public:
         file_ << ","
               << telemetry.post_validation_rejected << ","
               << telemetry.final_fixed_applied << ","
-              << telemetry.reject_reason << "\n";
+              << telemetry.reject_reason << ","
+              << libgnss::RTKProcessor::arSkipReasonToString(telemetry.ar_skip_reason) << "\n";
         file_.flush();
     }
 
