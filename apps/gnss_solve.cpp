@@ -147,7 +147,7 @@ struct SolveConfig {
     libgnss::RTKProcessor::RTKConfig::ARPolicy ar_policy =
         libgnss::RTKProcessor::RTKConfig::ARPolicy::EXTENDED;
     double max_hold_divergence_m = 0.0;
-    double max_position_jump_m = 0.0;
+    double max_position_jump_m = 5.0;
     double max_position_jump_min_m = 0.0;
     double max_position_jump_rate_mps = 0.0;
     double max_float_spp_divergence_m = 0.0;
@@ -585,7 +585,7 @@ void printUsage(const char* program_name) {
         << "  --max-hold-div <v>         Max hold fix divergence from float in meters\n"
         << "                             (default: 0, disabled)\n"
         << "  --max-pos-jump <v>         Max AR fix jump from last fixed pos in meters\n"
-        << "                             (default: 0, disabled; additional to history check)\n"
+        << "                             (default: 5.0; pass 0 to disable, additional to history check)\n"
         << "  --max-pos-jump-min <v>     Min adaptive AR fix jump in meters (default: 0)\n"
         << "  --max-pos-jump-rate <v>    Max adaptive AR fix jump rate in m/s\n"
         << "                             (default: 0, disabled)\n"
