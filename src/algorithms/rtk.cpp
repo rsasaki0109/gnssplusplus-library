@@ -1574,6 +1574,15 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                         debug_telemetry_.reject_reason = "fixed_validation";
                     }
                     has_fixed_solution_ = false;
+                    // Mirror the post-validation reject branch above: validateFixedSolution
+                    // ran after generateSolution(FIXED) which updated last_trusted_position_
+                    // via rememberSolution; if we don't roll those back, downstream epochs
+                    // see the rejected fix as "trusted" and fail deviatesTooFarFromSPP /
+                    // trusted-jump gates, cascading into fallback_spp and aborting the run.
+                    last_trusted_position_ = saved_last_trusted_position;
+                    has_last_trusted_position_ = saved_has_last_trusted;
+                    last_trusted_time_ = saved_last_trusted_time;
+                    has_last_trusted_time_ = saved_has_last_trusted_time;
                 }
             }
 
@@ -1859,8 +1868,14 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
 // Resolve ambiguities: SD->DD transform + LAMBDA
 // ============================================================
 bool RTKProcessor::resolveAmbiguities() {
-    if (!filter_initialized_) return false;
-    if (usesEstimatedIono(rtk_config_)) return false;
+    if (!filter_initialized_) {
+        debug_telemetry_.ar_skip_reason = ARSkipReason::FILTER_NOT_INIT;
+        return false;
+    }
+    if (usesEstimatedIono(rtk_config_)) {
+        debug_telemetry_.ar_skip_reason = ARSkipReason::ESTIMATED_IONO_MODE;
+        return false;
+    }
 
     const auto& sat_data = current_sat_data_;
 
@@ -1869,8 +1884,14 @@ bool RTKProcessor::resolveAmbiguities() {
 }
 
 bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
-    if (!filter_initialized_) return false;
-    if (usesEstimatedIono(rtk_config_)) return false;
+    if (!filter_initialized_) {
+        debug_telemetry_.ar_skip_reason = ARSkipReason::FILTER_NOT_INIT;
+        return false;
+    }
+    if (usesEstimatedIono(rtk_config_)) {
+        debug_telemetry_.ar_skip_reason = ARSkipReason::ESTIMATED_IONO_MODE;
+        return false;
+    }
 
     const auto& sat_data = current_sat_data_;
     debug_telemetry_.ar_attempted = true;
@@ -1889,6 +1910,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     debug_telemetry_.pair_count = nb;
     if (nb < 4) {
         debug_telemetry_.reject_reason = "too_few_pairs";
+        debug_telemetry_.ar_skip_reason = ARSkipReason::DD_PAIRS_LT_4_BEFORE_VAR_FILTER;
         return false;
     }
 
@@ -1951,6 +1973,13 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             for (int i = 0; i < nb; ++i) max_var = std::max(max_var, Qb(i, i));
             debug_telemetry_.pair_count = nb;
             debug_telemetry_.max_ambiguity_variance = max_var;
+            if (nb < 4) {
+                // Diagnostic-only: mark root cause; do NOT early-return.
+                // Preserve original solver flow so LAMBDA still attempts AR
+                // (and fails the usual way). LAMBDA_FAILED assignment below
+                // is guarded so this more-specific reason is not overwritten.
+                debug_telemetry_.ar_skip_reason = ARSkipReason::DD_PAIRS_LT_4_AFTER_VAR_FILTER;
+            }
         }
     }
 
@@ -2484,6 +2513,11 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         if (debug_telemetry_.reject_reason.empty()) {
             debug_telemetry_.reject_reason = "lambda_not_fixed";
         }
+        // First-cause wins: a more specific skip reason set earlier
+        // (e.g. DD_PAIRS_LT_4_AFTER_VAR_FILTER) should not be overwritten.
+        if (debug_telemetry_.ar_skip_reason == ARSkipReason::NONE) {
+            debug_telemetry_.ar_skip_reason = ARSkipReason::LAMBDA_FAILED;
+        }
         return false;
     }
     debug_telemetry_.selected_fixed = true;
@@ -2497,12 +2531,18 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                                                 fixed_problem.dd_float,
                                                 dd_fixed, xa)) {
         debug_telemetry_.reject_reason = "fixed_head_solve";
+        if (debug_telemetry_.ar_skip_reason == ARSkipReason::NONE) {
+            debug_telemetry_.ar_skip_reason = ARSkipReason::RATIO_COMPUTATION_FAILED;
+        }
         return false;
     }
     fixed_baseline_ = xa.head<3>();
     has_fixed_solution_ = true;
     last_ar_ratio_ = ratio;
     last_num_fixed_ambiguities_ = dd_fixed.size();
+    // Clear any diagnostic-only skip reason set earlier (e.g. DD_PAIRS_LT_4_AFTER_VAR_FILTER
+    // at line 1803, which marks the cause without early-returning so LAMBDA can still try).
+    debug_telemetry_.ar_skip_reason = ARSkipReason::NONE;
     debug_telemetry_.selected_fixed_ambiguities = static_cast<int>(dd_fixed.size());
 
     // Store fix info for hold and validation

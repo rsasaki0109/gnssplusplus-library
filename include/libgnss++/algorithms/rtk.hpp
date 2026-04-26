@@ -214,6 +214,32 @@ public:
         double wide_lane_acceptance_threshold = 0.25;
     };
 
+    /// Reason why AR was silently skipped or failed in resolveAmbiguities().
+    /// NONE means AR either succeeded or is not yet attempted this epoch.
+    enum class ARSkipReason {
+        NONE = 0,
+        FILTER_NOT_INIT,
+        ESTIMATED_IONO_MODE,
+        DD_PAIRS_LT_4_BEFORE_VAR_FILTER,
+        DD_PAIRS_LT_4_AFTER_VAR_FILTER,
+        LAMBDA_FAILED,
+        RATIO_COMPUTATION_FAILED,
+    };
+
+    /// Convert ARSkipReason to a short ASCII string suitable for CSV output.
+    static const char* arSkipReasonToString(ARSkipReason reason) {
+        switch (reason) {
+            case ARSkipReason::NONE:                           return "none";
+            case ARSkipReason::FILTER_NOT_INIT:                return "filter_not_init";
+            case ARSkipReason::ESTIMATED_IONO_MODE:            return "estimated_iono_mode";
+            case ARSkipReason::DD_PAIRS_LT_4_BEFORE_VAR_FILTER: return "dd_lt4_before_var";
+            case ARSkipReason::DD_PAIRS_LT_4_AFTER_VAR_FILTER:  return "dd_lt4_after_var";
+            case ARSkipReason::LAMBDA_FAILED:                  return "lambda_failed";
+            case ARSkipReason::RATIO_COMPUTATION_FAILED:       return "ratio_computation_failed";
+            default:                                           return "unknown";
+        }
+    }
+
     struct EpochDebugTelemetry {
         bool ar_attempted = false;
         int input_pair_count = 0;
@@ -252,6 +278,7 @@ public:
         bool post_validation_rejected = false;
         bool final_fixed_applied = false;
         std::string reject_reason;
+        ARSkipReason ar_skip_reason{ARSkipReason::NONE};
     };
 
     RTKProcessor();
