@@ -66,6 +66,7 @@ import update_ppc_coverage_readme as ppc_coverage_readme  # noqa: E402
 import detect_ci_scope as ci_scope  # noqa: E402
 import run_optional_ppp_products_signoff as ci_ppp_products_signoff  # noqa: E402
 import run_optional_rtk_signoffs as ci_rtk_signoffs  # noqa: E402
+import analyze_ppc_multi_candidate_selector_matrix as ppc_multi_cand_analyzer  # noqa: E402
 import apply_ppc_multi_candidate_selector as ppc_multi_candidate_selector  # noqa: E402
 import run_ppc_multi_candidate_selector_matrix as ppc_multi_selector_matrix  # noqa: E402
 
@@ -5252,6 +5253,179 @@ class PPCMultiCandidateSelectorMatrixTest(unittest.TestCase):
             reparsed = json.loads(json_text)
             self.assertEqual(
                 reparsed["aggregates"]["total_candidate_selected_segments"], 7
+            )
+
+
+class PPCMultiCandidateSelectorAnalyzerTest(unittest.TestCase):
+    """Tests for analyze_ppc_multi_candidate_selector_matrix."""
+
+    # ------------------------------------------------------------------
+    # Synthetic matrix JSON fixture
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _make_matrix_payload() -> dict[str, object]:
+        """Build a minimal matrix-level JSON matching PR B's output schema."""
+
+        def run_entry(
+            city: str,
+            run_name: str,
+            bl_score_m: float,
+            sel_score_m: float,
+            total_m: float,
+            cand_segs: int,
+        ) -> dict[str, object]:
+            key = f"{city}_{run_name}"
+            bl_pct = 100.0 * bl_score_m / total_m
+            sel_pct = 100.0 * sel_score_m / total_m
+            delta_m = sel_score_m - bl_score_m
+            delta_pct = sel_pct - bl_pct
+            return {
+                "key": key,
+                "city": city,
+                "run": run_name,
+                "active_candidates": ["nis5", "jump0p5"],
+                "dropped_candidates": [],
+                "priority_order": ["nis5", "jump0p5"],
+                "baseline": {
+                    "ppc_official_score_pct": bl_pct,
+                    "ppc_official_score_distance_m": bl_score_m,
+                    "ppc_official_total_distance_m": total_m,
+                },
+                "selector": {
+                    "ppc_official_score_pct": sel_pct,
+                    "ppc_official_score_distance_m": sel_score_m,
+                    "ppc_official_total_distance_m": total_m,
+                },
+                "delta_vs_baseline": {
+                    "ppc_official_score_pct": delta_pct,
+                    "ppc_official_score_distance_m": delta_m,
+                },
+                "selection": {
+                    "segments": 5,
+                    "candidate_selected_segments": cand_segs,
+                    "baseline_selected_segments": 5 - cand_segs,
+                    "total_score_delta_distance_m": delta_m,
+                },
+                "per_candidate": {
+                    "nis5": {
+                        "selected_segments": cand_segs,
+                        "score_delta_distance_m": delta_m * 0.6,
+                    },
+                    "jump0p5": {
+                        "selected_segments": 0,
+                        "score_delta_distance_m": 0.0,
+                    },
+                },
+            }
+
+        runs = [
+            run_entry("tokyo", "run1", 100.0, 120.0, 200.0, 2),
+            run_entry("nagoya", "run1", 300.0, 330.0, 600.0, 4),
+        ]
+        total_m = 800.0
+        bl_total = 400.0
+        sel_total = 450.0
+        return {
+            "title": "PPC multi-candidate test",
+            "candidates": ["nis5", "jump0p5"],
+            "aggregates": {
+                "run_count": 2,
+                "official_total_distance_m": total_m,
+                "weighted_baseline_official_score_pct": 100.0 * bl_total / total_m,
+                "weighted_selector_official_score_pct": 100.0 * sel_total / total_m,
+                "selector_official_score_delta_m": sel_total - bl_total,
+                "selector_official_score_delta_pct": (
+                    100.0 * sel_total / total_m - 100.0 * bl_total / total_m
+                ),
+                "min_official_score_delta_m": 20.0,
+                "max_official_score_delta_m": 30.0,
+                "total_candidate_selected_segments": 6,
+                "total_baseline_selected_segments": 4,
+                "total_score_delta_distance_m": 50.0,
+                "dropped_candidates_any_run": [],
+            },
+            "runs": runs,
+        }
+
+    # ------------------------------------------------------------------
+    # Test 1: markdown output
+    # ------------------------------------------------------------------
+
+    def test_analyze_ppc_multi_candidate_selector_matrix_emits_markdown(
+        self,
+    ) -> None:
+        """Analyzer emits markdown with per-run rows and aggregate totals."""
+        payload = self._make_matrix_payload()
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_multi_analyzer_md_") as td:
+            temp_root = Path(td)
+            summary_json = temp_root / "matrix.json"
+            markdown_out = temp_root / "matrix.md"
+
+            summary_json.write_text(json.dumps(payload), encoding="utf-8")
+
+            argv = [
+                "analyze_ppc_multi_candidate_selector_matrix.py",
+                "--summary-json",
+                str(summary_json),
+                "--markdown-output",
+                str(markdown_out),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                exit_code = ppc_multi_cand_analyzer.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(markdown_out.exists())
+            md_text = markdown_out.read_text(encoding="utf-8")
+
+            # Title present
+            self.assertIn("PPC multi-candidate test", md_text)
+            # Per-run rows present — render_markdown uses run_label() so keys
+            # appear as "Nagoya r1" / "Tokyo r1" in the rows.
+            self.assertIn("Nagoya r1", md_text)
+            self.assertIn("Tokyo r1", md_text)
+            # Aggregate score values present
+            self.assertIn("56.25", md_text)  # 450/800*100
+            self.assertIn("50.00", md_text)  # 400/800*100
+            # Section headers
+            self.assertIn("## Aggregate", md_text)
+            self.assertIn("## Runs", md_text)
+
+    # ------------------------------------------------------------------
+    # Test 2: PNG output
+    # ------------------------------------------------------------------
+
+    def test_analyze_ppc_multi_candidate_selector_matrix_writes_png(
+        self,
+    ) -> None:
+        """Analyzer writes a non-trivial PNG scorecard when --scorecard is given."""
+        payload = self._make_matrix_payload()
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_multi_analyzer_png_") as td:
+            temp_root = Path(td)
+            summary_json = temp_root / "matrix.json"
+            scorecard_png = temp_root / "scorecard.png"
+
+            summary_json.write_text(json.dumps(payload), encoding="utf-8")
+
+            argv = [
+                "analyze_ppc_multi_candidate_selector_matrix.py",
+                "--summary-json",
+                str(summary_json),
+                "--scorecard",
+                str(scorecard_png),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch.dict(os.environ, {"MPLBACKEND": "Agg"}, clear=False):
+                    exit_code = ppc_multi_cand_analyzer.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(scorecard_png.exists(), "Scorecard PNG must be created")
+            self.assertGreater(
+                scorecard_png.stat().st_size,
+                1024,
+                "Scorecard PNG must be larger than 1 KB",
             )
 
 
