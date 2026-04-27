@@ -81,8 +81,8 @@ public:
         int kf_iterations = 4;                       // more iterations for position convergence
 
         // Measurement noise
-        double pseudorange_sigma = 0.3;           // m (RTKLIB eratio=100: 100*carrier_phase_sigma)
-        double carrier_phase_sigma = 0.003;       // m (instrument noise)
+        double pseudorange_sigma = 0.3;           // m (eratio = pseudorange_sigma / carrier_phase_sigma = 150)
+        double carrier_phase_sigma = 0.002;       // m (instrument noise)
 
         // Quality control
         bool enable_cycle_slip_detection = true;

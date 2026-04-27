@@ -102,6 +102,14 @@ struct SolveConfig {
     int min_hold_count = 5;
     double hold_ratio_threshold = 2.0;
     double elevation_mask_deg = 15.0;
+    double process_noise_position = 1e-4;
+    double process_noise_ambiguity = 1e-8;
+    double process_noise_iono = 1e-4;
+    double carrier_phase_sigma = 0.002;
+    bool process_noise_position_set = false;
+    bool process_noise_ambiguity_set = false;
+    bool process_noise_iono_set = false;
+    bool carrier_phase_sigma_set = false;
     bool enable_glonass = true;
     bool enable_beidou = true;
     GlonassARChoice glonass_ar = GlonassARChoice::OFF;
@@ -571,6 +579,12 @@ void printUsage(const char* program_name) {
         << "  --min-hold-count <n>       Consecutive fixes before hold ambiguity is allowed (default: 5)\n"
         << "  --hold-ratio-threshold <v> Ratio threshold used while hold ambiguity is active (default: 2.0)\n"
         << "  --elevation-mask-deg <v>   Elevation mask in degrees (default: 15)\n"
+        << "  --process-noise-position <v>\n"
+        << "                             KF process noise for position state, m^2/s (default: 1e-4)\n"
+        << "  --process-noise-ambiguity <v>\n"
+        << "                             KF process noise for DD ambiguity state, cycles^2/s (default: 1e-8)\n"
+        << "  --process-noise-iono <v>   KF process noise for DD ionosphere state, m^2/s (default: 1e-4)\n"
+        << "  --carrier-phase-sigma <v>  Carrier phase observation sigma in m (default: 0.002)\n"
         << "  --no-glonass               Disable GLONASS in RTK carrier processing\n"
         << "  --no-beidou                Disable BeiDou in RTK carrier processing\n"
         << "  --glonass-ar <off|on|autocal> GLONASS ambiguity resolution mode (default: off)\n"
@@ -831,6 +845,18 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.hold_ratio_threshold_set = true;
         } else if (arg == "--elevation-mask-deg" && i + 1 < argc) {
             config.elevation_mask_deg = std::stod(argv[++i]);
+        } else if (arg == "--process-noise-position" && i + 1 < argc) {
+            config.process_noise_position = std::stod(argv[++i]);
+            config.process_noise_position_set = true;
+        } else if (arg == "--process-noise-ambiguity" && i + 1 < argc) {
+            config.process_noise_ambiguity = std::stod(argv[++i]);
+            config.process_noise_ambiguity_set = true;
+        } else if (arg == "--process-noise-iono" && i + 1 < argc) {
+            config.process_noise_iono = std::stod(argv[++i]);
+            config.process_noise_iono_set = true;
+        } else if (arg == "--carrier-phase-sigma" && i + 1 < argc) {
+            config.carrier_phase_sigma = std::stod(argv[++i]);
+            config.carrier_phase_sigma_set = true;
         } else if (arg == "--no-glonass") {
             config.enable_glonass = false;
         } else if (arg == "--no-beidou") {
@@ -1203,6 +1229,18 @@ int main(int argc, char* argv[]) {
         rtk_config.min_full_ratio_for_subset_ar = config.min_full_ratio_for_subset_ar;
         rtk_config.min_hold_count = config.min_hold_count;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;
+        if (config.process_noise_position_set) {
+            rtk_config.process_noise_position = config.process_noise_position;
+        }
+        if (config.process_noise_ambiguity_set) {
+            rtk_config.process_noise_ambiguity = config.process_noise_ambiguity;
+        }
+        if (config.process_noise_iono_set) {
+            rtk_config.process_noise_iono = config.process_noise_iono;
+        }
+        if (config.carrier_phase_sigma_set) {
+            rtk_config.carrier_phase_sigma = config.carrier_phase_sigma;
+        }
         rtk_config.position_mode = resolvePositionMode(config);
         rtk_config.ionoopt = resolveIonoOpt(config, rtk_config.position_mode);
         rtk_config.enable_glonass = config.enable_glonass;
