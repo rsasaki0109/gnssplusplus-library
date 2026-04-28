@@ -69,6 +69,7 @@ import run_optional_rtk_signoffs as ci_rtk_signoffs  # noqa: E402
 import analyze_ppc_multi_candidate_selector_matrix as ppc_multi_cand_analyzer  # noqa: E402
 import apply_ppc_multi_candidate_selector as ppc_multi_candidate_selector  # noqa: E402
 import run_ppc_multi_candidate_selector_matrix as ppc_multi_selector_matrix  # noqa: E402
+import run_ppc_ratio_gating_selector_sweep as ppc_ratio_gating_sweep  # noqa: E402
 
 
 class ScorecardHelpersTest(unittest.TestCase):
@@ -5254,6 +5255,155 @@ class PPCMultiCandidateSelectorMatrixTest(unittest.TestCase):
             self.assertEqual(
                 reparsed["aggregates"]["total_candidate_selected_segments"], 7
             )
+
+
+class PPCRatioGatingSelectorSweepTest(unittest.TestCase):
+    """Tests for run_ppc_ratio_gating_selector_sweep."""
+
+    @staticmethod
+    def _matrix_payload(
+        baseline_pct: float,
+        selector_pct: float,
+        delta_m: float,
+        candidate_segments: int,
+    ) -> dict[str, object]:
+        return {
+            "title": "synthetic matrix",
+            "candidates": ["jump", "olddef"],
+            "aggregates": {
+                "run_count": 2,
+                "official_total_distance_m": 1000.0,
+                "weighted_baseline_official_score_pct": baseline_pct,
+                "weighted_selector_official_score_pct": selector_pct,
+                "selector_official_score_delta_pct": selector_pct - baseline_pct,
+                "selector_official_score_delta_m": delta_m,
+                "min_official_score_delta_m": delta_m / 4.0,
+                "max_official_score_delta_m": delta_m / 2.0,
+                "total_candidate_selected_segments": candidate_segments,
+            },
+            "runs": [],
+        }
+
+    def test_threshold_set_parser_supports_common_wide_and_per_candidate(self) -> None:
+        labels = ["jump", "olddef"]
+
+        wide_name, wide = ppc_ratio_gating_sweep.parse_threshold_set("wide=none", labels)
+        self.assertEqual(wide_name, "wide")
+        self.assertIsNone(wide["jump"])
+        self.assertEqual(
+            ppc_ratio_gating_sweep.threshold_rule("jump", wide["jump"]),
+            "jump=candidate_status_name == FIXED",
+        )
+
+        tight_name, tight = ppc_ratio_gating_sweep.parse_threshold_set(
+            "tight:jump=4,olddef=5", labels
+        )
+        self.assertEqual(tight_name, "tight")
+        self.assertEqual(tight["jump"], 4.0)
+        self.assertEqual(tight["olddef"], 5.0)
+        self.assertEqual(
+            ppc_ratio_gating_sweep.threshold_rule("olddef", tight["olddef"]),
+            "olddef=candidate_status_name == FIXED AND candidate_ratio >= 5",
+        )
+
+    def test_ratio_gating_sweep_invokes_matrix_and_writes_pareto_outputs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_ratio_gating_") as td:
+            temp_root = Path(td)
+            output_dir = temp_root / "sweep"
+            summary_json = temp_root / "summary.json"
+            markdown_output = temp_root / "summary.md"
+
+            captured_calls: list[list[str]] = []
+
+            def fake_run(argv: list[str], check: bool) -> object:  # type: ignore[misc]
+                captured_calls.append(argv)
+                summary_idx = argv.index("--summary-json")
+                matrix_json = Path(argv[summary_idx + 1])
+                matrix_json.parent.mkdir(parents=True, exist_ok=True)
+                payload = (
+                    self._matrix_payload(21.0, 40.0, 900.0, 80)
+                    if "wide" in matrix_json.parts
+                    else self._matrix_payload(21.0, 35.0, 650.0, 50)
+                )
+                matrix_json.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+                markdown_idx = argv.index("--markdown-output")
+                matrix_md = Path(argv[markdown_idx + 1])
+                matrix_md.write_text("# matrix\n", encoding="utf-8")
+
+                class _Result:
+                    returncode = 0
+
+                return _Result()
+
+            argv = [
+                "run_ppc_ratio_gating_selector_sweep.py",
+                "--run",
+                "tokyo/run1",
+                "--dataset-root",
+                str(temp_root / "PPC-Dataset"),
+                "--baseline-pos-template",
+                str(temp_root / "baseline" / "{key}.pos"),
+                "--candidate",
+                "jump=output/jump/{key}.pos",
+                "--candidate",
+                "olddef=output/olddef/{key}.pos",
+                "--priority-order",
+                "jump,olddef",
+                "--threshold-set",
+                "wide=none",
+                "--threshold-set",
+                "tight:jump=4,olddef=5",
+                "--output-dir",
+                str(output_dir),
+                "--summary-json",
+                str(summary_json),
+                "--markdown-output",
+                str(markdown_output),
+            ]
+
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch(
+                    "run_ppc_ratio_gating_selector_sweep.subprocess.run",
+                    side_effect=fake_run,
+                ):
+                    exit_code = ppc_ratio_gating_sweep.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(len(captured_calls), 2)
+            self.assertTrue(summary_json.exists())
+            self.assertTrue(markdown_output.exists())
+
+            wide_call = next(call for call in captured_calls if "wide" in call[call.index("--summary-json") + 1])
+            tight_call = next(call for call in captured_calls if "tight" in call[call.index("--summary-json") + 1])
+            wide_rules = [
+                wide_call[idx + 1]
+                for idx, value in enumerate(wide_call)
+                if value == "--candidate-rule"
+            ]
+            tight_rules = [
+                tight_call[idx + 1]
+                for idx, value in enumerate(tight_call)
+                if value == "--candidate-rule"
+            ]
+            self.assertIn("jump=candidate_status_name == FIXED", wide_rules)
+            self.assertIn(
+                "jump=candidate_status_name == FIXED AND candidate_ratio >= 4",
+                tight_rules,
+            )
+            self.assertIn(
+                "olddef=candidate_status_name == FIXED AND candidate_ratio >= 5",
+                tight_rules,
+            )
+
+            payload = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(payload["sets"][0]["name"], "wide")
+            self.assertEqual(payload["sets"][1]["name"], "tight")
+            self.assertEqual(payload["sets"][0]["selector_official_score_delta_pct"], 19.0)
+            md_text = markdown_output.read_text(encoding="utf-8")
+            self.assertIn("wide", md_text)
+            self.assertIn("tight", md_text)
+            self.assertIn("ratio>=4", md_text)
 
 
 class PPCMultiCandidateSelectorAnalyzerTest(unittest.TestCase):
