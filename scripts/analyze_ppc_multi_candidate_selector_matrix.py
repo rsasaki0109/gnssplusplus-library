@@ -144,6 +144,14 @@ def run_label(key: str) -> str:
     )
 
 
+def short_run_label(key: str) -> str:
+    city, _, run_name = key.partition("_")
+    if not run_name:
+        return key
+    city_prefix = city[:1].upper()
+    return f"{city_prefix} {run_name.replace('run', 'r')}"
+
+
 # ---------------------------------------------------------------------------
 # Candidate ordering
 # ---------------------------------------------------------------------------
@@ -361,7 +369,7 @@ def draw_candidate_distribution(
     import numpy as np
 
     top_candidates = candidate_order[:MAX_BAR_CANDIDATES]
-    labels = [run_label(str(r.get("key", ""))) for r in runs]
+    labels = [short_run_label(str(r.get("key", ""))) for r in runs]
     positions = np.arange(len(labels))
     bar_width = 0.55
 
@@ -456,7 +464,7 @@ def draw_run_table(
     ax.text(
         0.0,
         0.895,
-        "Segment-local multi-candidate selection; positive deltas are better.",
+        "Segment-local selection; positive deltas are better.",
         fontsize=9.2,
         color=MUTED,
         va="top",
