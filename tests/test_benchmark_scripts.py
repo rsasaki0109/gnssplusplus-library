@@ -67,6 +67,7 @@ import detect_ci_scope as ci_scope  # noqa: E402
 import run_optional_ppp_products_signoff as ci_ppp_products_signoff  # noqa: E402
 import run_optional_rtk_signoffs as ci_rtk_signoffs  # noqa: E402
 import apply_ppc_multi_candidate_selector as ppc_multi_candidate_selector  # noqa: E402
+import run_ppc_multi_candidate_selector_matrix as ppc_multi_selector_matrix  # noqa: E402
 
 
 class ScorecardHelpersTest(unittest.TestCase):
@@ -5008,6 +5009,250 @@ class PPCMultiCandidateSelectorTest(unittest.TestCase):
         active_labels = [label for label, _, _ in updated_specs]
         self.assertNotIn("bad_cand", active_labels, "bad_cand must be removed from active specs")
         self.assertIn("good_cand", active_labels, "good_cand must remain in active specs")
+
+
+class PPCMultiCandidateSelectorMatrixTest(unittest.TestCase):
+    """Tests for run_ppc_multi_candidate_selector_matrix."""
+
+    # ------------------------------------------------------------------
+    # Helpers shared by both tests
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _make_run_summary(
+        bl_score_m: float,
+        sel_score_m: float,
+        total_m: float,
+        candidate_selected_segments: int,
+        active_candidates: list[str],
+        dropped_candidates: list[str],
+    ) -> dict[str, object]:
+        """Build a minimal per-run summary JSON matching PR A's output shape."""
+        bl_pct = 100.0 * bl_score_m / total_m if total_m > 0 else 0.0
+        sel_pct = 100.0 * sel_score_m / total_m if total_m > 0 else 0.0
+        delta_m = sel_score_m - bl_score_m
+        delta_pct = sel_pct - bl_pct
+        per_candidate: dict[str, object] = {}
+        for label in active_candidates:
+            per_candidate[label] = {
+                "selected_segments": candidate_selected_segments,
+                "score_delta_distance_m": delta_m / max(len(active_candidates), 1),
+            }
+        return {
+            "active_candidates": active_candidates,
+            "dropped_candidates": dropped_candidates,
+            "priority_order": active_candidates,
+            "baseline": {
+                "ppc_official_score_pct": bl_pct,
+                "ppc_official_score_distance_m": bl_score_m,
+                "ppc_official_total_distance_m": total_m,
+                "positioning_rate_pct": 80.0,
+                "fix_rate_pct": 50.0,
+            },
+            "metrics": {
+                "ppc_official_score_pct": sel_pct,
+                "ppc_official_score_distance_m": sel_score_m,
+                "ppc_official_total_distance_m": total_m,
+                "positioning_rate_pct": 82.0,
+                "fix_rate_pct": 52.0,
+            },
+            "delta_vs_baseline": {
+                "ppc_official_score_pct": delta_pct,
+                "ppc_official_score_distance_m": delta_m,
+                "positioning_rate_pct": 2.0,
+                "fix_rate_pct": 2.0,
+            },
+            "selection": {
+                "segments": 3,
+                "candidate_selected_segments": candidate_selected_segments,
+                "baseline_selected_segments": 3 - candidate_selected_segments,
+                "total_score_delta_distance_m": delta_m,
+                "per_candidate": per_candidate,
+            },
+        }
+
+    # ------------------------------------------------------------------
+    # Test 1: subprocess invocation shape
+    # ------------------------------------------------------------------
+
+    def test_run_ppc_multi_candidate_selector_matrix_invokes_apply_per_run(
+        self,
+    ) -> None:
+        """Matrix driver invokes apply_ppc_multi_candidate_selector.py once per run."""
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_multi_matrix_sub_") as td:
+            temp_root = Path(td)
+            output_json = temp_root / "matrix.json"
+            # Pre-create a dummy summary JSON that invoke_apply_for_run would
+            # normally produce so load_run_summary succeeds.
+            dummy_summary = self._make_run_summary(
+                100.0, 120.0, 200.0, 2, ["nis5"], []
+            )
+
+            captured_calls: list[list[str]] = []
+
+            def fake_run(argv: list[str], check: bool) -> object:  # type: ignore[misc]
+                captured_calls.append(argv)
+                # Write the dummy summary so the driver can load it.
+                # The argv has --summary-json at position -5 (or we search for it).
+                try:
+                    idx = argv.index("--summary-json")
+                    summary_path = Path(argv[idx + 1])
+                    summary_path.parent.mkdir(parents=True, exist_ok=True)
+                    summary_path.write_text(
+                        json.dumps(dummy_summary) + "\n", encoding="utf-8"
+                    )
+                except (ValueError, IndexError):
+                    pass
+
+                class _Result:
+                    returncode = 0
+
+                return _Result()
+
+            dataset_root = temp_root / "PPC-Dataset"
+            baseline_dir = temp_root / "baseline"
+            baseline_dir.mkdir()
+
+            argv = [
+                "run_ppc_multi_candidate_selector_matrix.py",
+                "--run",
+                "tokyo/run1",
+                "--run",
+                "nagoya/run1",
+                "--dataset-root",
+                str(dataset_root),
+                "--baseline-pos-template",
+                str(baseline_dir / "{key}.pos"),
+                "--candidate",
+                "nis5=output/nis5/{key}.pos",
+                "--candidate-rule",
+                "nis5=candidate_status_name == FIXED",
+                "--priority-order",
+                "nis5",
+                "--run-output-template",
+                str(temp_root / "selected" / "{key}.pos"),
+                "--summary-json",
+                str(output_json),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch(
+                    "run_ppc_multi_candidate_selector_matrix.subprocess.run",
+                    side_effect=fake_run,
+                ):
+                    exit_code = ppc_multi_selector_matrix.main()
+
+            self.assertEqual(exit_code, 0)
+            # Two runs → two subprocess calls
+            self.assertEqual(len(captured_calls), 2)
+            run_keys_seen = set()
+            for call_argv in captured_calls:
+                # Must invoke apply_ppc_multi_candidate_selector.py
+                self.assertIn(
+                    "apply_ppc_multi_candidate_selector.py",
+                    call_argv[1],
+                    "Each subprocess call must target apply_ppc_multi_candidate_selector.py",
+                )
+                # Must pass --candidate and --candidate-rule
+                self.assertIn("--candidate", call_argv)
+                self.assertIn("--candidate-rule", call_argv)
+                # Must pass --out-pos and --summary-json
+                self.assertIn("--out-pos", call_argv)
+                self.assertIn("--summary-json", call_argv)
+                # Collect which run keys appeared in --baseline-pos
+                try:
+                    bl_idx = call_argv.index("--baseline-pos")
+                    bl_path = call_argv[bl_idx + 1]
+                    if "tokyo_run1" in bl_path:
+                        run_keys_seen.add("tokyo_run1")
+                    elif "nagoya_run1" in bl_path:
+                        run_keys_seen.add("nagoya_run1")
+                except (ValueError, IndexError):
+                    pass
+            self.assertIn("tokyo_run1", run_keys_seen)
+            self.assertIn("nagoya_run1", run_keys_seen)
+
+    # ------------------------------------------------------------------
+    # Test 2: aggregation correctness
+    # ------------------------------------------------------------------
+
+    def test_run_ppc_multi_candidate_selector_matrix_aggregates_summary(
+        self,
+    ) -> None:
+        """Aggregation over synthetic per-run payloads produces correct JSON+MD."""
+        # tokyo_run1: baseline 100 m, selector 120 m, total 200 m
+        # nagoya_run1: baseline 300 m, selector 330 m, total 600 m
+        run_payloads: list[tuple[str, str, dict[str, object]]] = [
+            (
+                "tokyo",
+                "run1",
+                self._make_run_summary(100.0, 120.0, 200.0, 2, ["nis5"], []),
+            ),
+            (
+                "nagoya",
+                "run1",
+                self._make_run_summary(300.0, 330.0, 600.0, 5, ["nis5"], ["bad"]),
+            ),
+        ]
+
+        payload = ppc_multi_selector_matrix.build_payload(
+            run_payloads, "Multi-candidate test"
+        )
+        aggregates = payload["aggregates"]
+
+        # Weighted: (120+330)/(200+600)*100 = 56.25%
+        self.assertAlmostEqual(
+            aggregates["weighted_selector_official_score_pct"], 56.25, places=4
+        )
+        # Baseline weighted: (100+300)/(200+600)*100 = 50%
+        self.assertAlmostEqual(
+            aggregates["weighted_baseline_official_score_pct"], 50.0, places=4
+        )
+        # Delta: (120+330)-(100+300) = 50 m
+        self.assertAlmostEqual(
+            aggregates["selector_official_score_delta_m"], 50.0, places=4
+        )
+        # Total candidate-selected segments: 2+5=7
+        self.assertEqual(aggregates["total_candidate_selected_segments"], 7)
+        # dropped_candidates_any_run must include "bad"
+        self.assertIn("bad", aggregates["dropped_candidates_any_run"])
+
+        # Runs list
+        runs = payload["runs"]
+        self.assertEqual(len(runs), 2)
+        self.assertEqual(runs[0]["key"], "tokyo_run1")
+        self.assertEqual(runs[1]["key"], "nagoya_run1")
+
+        # Markdown
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_multi_matrix_agg_") as td:
+            summary_json = Path(td) / "matrix.json"
+            markdown_path = Path(td) / "matrix.md"
+
+            argv = [
+                "run_ppc_multi_candidate_selector_matrix.py",
+                "--summary-json",
+                str(summary_json),
+                "--markdown-output",
+                str(markdown_path),
+            ]
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch(
+                    "run_ppc_multi_candidate_selector_matrix.subprocess.run"
+                ):
+                    # We test render_markdown directly, not via main()
+                    pass
+
+            md = ppc_multi_selector_matrix.render_markdown(payload)
+            self.assertIn("Multi-candidate test", md)
+            self.assertIn("tokyo_run1", md)
+            self.assertIn("nagoya_run1", md)
+            self.assertIn("56.25", md)
+
+            # build_payload output is deterministically sorted
+            json_text = json.dumps(payload, indent=2, sort_keys=True)
+            reparsed = json.loads(json_text)
+            self.assertEqual(
+                reparsed["aggregates"]["total_candidate_selected_segments"], 7
+            )
 
 
 if __name__ == "__main__":

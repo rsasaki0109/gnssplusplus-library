@@ -564,6 +564,32 @@ python3 scripts/generate_ppc_tail_cleanup_scorecard.py \
   --output docs/ppc_tail_cleanup_scorecard.png
 ```
 
+### Multi-candidate selector matrix (6-run)
+
+`scripts/run_ppc_multi_candidate_selector_matrix.py` drives
+`apply_ppc_multi_candidate_selector.py` across all six PPC runs and aggregates
+per-run summary JSONs into a weighted matrix table.
+
+```bash
+python3 scripts/run_ppc_multi_candidate_selector_matrix.py \
+  --dataset-root /datasets/PPC-Dataset \
+  --baseline-pos-template output/ppc_coverage_matrix_floatreset10/{key}.pos \
+  --candidate nis5=output/ppc_coverage_matrix_nis_5_v2/{key}.pos \
+  --candidate jump0p5=output/ppc_{key}_rtk_prefit_s5_jump0p5_matrixprofile.pos \
+  --candidate-rule "nis5=candidate_status_name == FIXED" \
+  --candidate-rule "jump0p5=candidate_status_name == FIXED" \
+  --priority-order nis5,jump0p5 \
+  --run-output-template output/ppc_multi_selector/{key}.pos \
+  --summary-json output/ppc_multi_selector_matrix.json \
+  --markdown-output output/ppc_multi_selector_matrix.md
+```
+
+Each `--candidate` value is a `LABEL=PATH_TEMPLATE` where `{key}` expands to
+`{city}_{run}` (e.g. `tokyo_run1`).  `{city}` and `{run}` are also available
+for finer-grained path layout.  `--run tokyo/run1` overrides the default
+six-run set.  Per-run `.pos`, `_summary.json`, and `_segments.csv` are written
+alongside the matrix JSON.
+
 `ppc-rtk-signoff` is the fixed-threshold path for Tokyo/Nagoya quality and
 runtime checks, with optional RTKLIB delta gates. Add `--commercial-pos` with
 a normalized receiver CSV or `.pos` file to summarize a commercial receiver
