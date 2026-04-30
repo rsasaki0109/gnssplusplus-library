@@ -2234,11 +2234,19 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     // Standard LAMBDA path
     if (!fixed) {
         const auto full_problem = build_search_problem(full_subset);
+        libgnss::LambdaSolution full_sol;
         const bool full_solved =
-            lambdaMethod(full_problem.dd_float, full_problem.Qb, dd_fixed, ratio);
+            lambdaMethodExtended(full_problem.dd_float, full_problem.Qb, full_sol);
         debug_telemetry_.full_lambda_solved = full_solved;
         if (full_solved) {
+            dd_fixed = full_sol.best_amb;
+            ratio = full_sol.ratio;
             debug_telemetry_.full_ratio = ratio;
+            debug_telemetry_.full_bootstrap_sr = full_sol.bootstrap_sr;
+            debug_telemetry_.full_top2_l1_distance =
+                (full_sol.best_amb - full_sol.second_amb).cwiseAbs().sum();
+            debug_telemetry_.full_min_cond_var = full_sol.min_cond_var;
+            debug_telemetry_.full_max_cond_var = full_sol.max_cond_var;
             if (ratio >= effective_ratio_threshold) {
                 fixed = true;
 
@@ -3104,58 +3112,64 @@ void RTKProcessor::updateStatistics(SolutionStatus status) const {
 // ============================================================
 // LAMBDA - C++ implementation (ported from RTKLIB lambda.c)
 // ============================================================
-bool RTKProcessor::lambdaMethod(const VectorXd& float_ambiguities, const MatrixXd& covariance,
-    VectorXd& fixed_ambiguities, double& success_rate) {
+// Regularise the ambiguity covariance for LAMBDA: symmetrise, enforce a
+// minimum diagonal, then add a ridge until LLT succeeds. Falls back to an
+// eigen-decomposition shift if the ridge sequence is exhausted. Returns true
+// on success and writes the regularised matrix into `Q_out`.
+static bool regulariseAmbiguityCovariance(const Eigen::MatrixXd& covariance,
+                                          Eigen::MatrixXd& Q_out) {
+    constexpr double MIN_VAR = 1e-6;
+    int n = static_cast<int>(covariance.rows());
+    Q_out = covariance;
+    Q_out = (Q_out + Q_out.transpose()) * 0.5;
+
+    for (int i = 0; i < n; ++i) {
+        if (Q_out(i, i) < MIN_VAR) Q_out(i, i) = MIN_VAR;
+    }
+
+    double ridge = 0.0;
+    Eigen::LLT<Eigen::MatrixXd> llt;
+    for (int attempt = 0; attempt < 5; ++attempt) {
+        Eigen::MatrixXd candidate = Q_out;
+        if (ridge > 0.0) candidate.diagonal().array() += ridge;
+        llt.compute(candidate);
+        if (llt.info() == Eigen::Success) {
+            Q_out.swap(candidate);
+            return true;
+        }
+        ridge = (ridge == 0.0) ? MIN_VAR : ridge * 10.0;
+    }
+
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(Q_out);
+    if (eig.info() != Eigen::Success) return false;
+    const double min_eig = eig.eigenvalues().minCoeff();
+    if (!std::isfinite(min_eig)) return false;
+    if (min_eig < MIN_VAR) Q_out.diagonal().array() += (MIN_VAR - min_eig);
+    return true;
+}
+
+bool RTKProcessor::lambdaMethodExtended(const VectorXd& float_ambiguities,
+                                        const MatrixXd& covariance,
+                                        libgnss::LambdaSolution& solution) {
     int n = float_ambiguities.size();
     if (n == 0 || n > MAXSAT * 2) return false;
 
     if (rtk_config_.ar_policy == RTKConfig::ARPolicy::DEMO5_CONTINUOUS) {
-        // demo5-continuous: pass raw covariance directly to LAMBDA (no regularization)
-        return lambdaSearch(float_ambiguities, covariance, fixed_ambiguities, success_rate);
+        return lambdaSearchExtended(float_ambiguities, covariance, solution);
     }
 
-    // Regularize covariance to ensure positive-definiteness for LAMBDA
-    MatrixXd Q_reg = covariance;
-    Q_reg = (Q_reg + Q_reg.transpose()) * 0.5;
+    MatrixXd Q_reg;
+    if (!regulariseAmbiguityCovariance(covariance, Q_reg)) return false;
+    return lambdaSearchExtended(float_ambiguities, Q_reg, solution);
+}
 
-    // Ensure minimum diagonal values
-    constexpr double MIN_VAR = 1e-6;
-    for (int i = 0; i < n; ++i) {
-        if (Q_reg(i, i) < MIN_VAR) Q_reg(i, i) = MIN_VAR;
-    }
-
-    // Prefer cheap diagonal ridge retries over an eigensolver fallback.
-    double ridge = 0.0;
-    Eigen::LLT<MatrixXd> llt;
-    bool ok = false;
-    for (int attempt = 0; attempt < 5; ++attempt) {
-        MatrixXd candidate = Q_reg;
-        if (ridge > 0.0) {
-            candidate.diagonal().array() += ridge;
-        }
-        llt.compute(candidate);
-        if (llt.info() == Eigen::Success) {
-            Q_reg.swap(candidate);
-            ok = true;
-            break;
-        }
-        ridge = (ridge == 0.0) ? MIN_VAR : ridge * 10.0;
-    }
-    if (!ok) {
-        Eigen::SelfAdjointEigenSolver<MatrixXd> eig(Q_reg);
-        if (eig.info() != Eigen::Success) {
-            return false;
-        }
-        const double min_eig = eig.eigenvalues().minCoeff();
-        if (!std::isfinite(min_eig)) {
-            return false;
-        }
-        if (min_eig < MIN_VAR) {
-            Q_reg.diagonal().array() += (MIN_VAR - min_eig);
-        }
-    }
-
-    return lambdaSearch(float_ambiguities, Q_reg, fixed_ambiguities, success_rate);
+bool RTKProcessor::lambdaMethod(const VectorXd& float_ambiguities, const MatrixXd& covariance,
+    VectorXd& fixed_ambiguities, double& success_rate) {
+    libgnss::LambdaSolution sol;
+    if (!lambdaMethodExtended(float_ambiguities, covariance, sol)) return false;
+    fixed_ambiguities = std::move(sol.best_amb);
+    success_rate = sol.ratio;
+    return true;
 }
 
 // Old updateFilter signature stub

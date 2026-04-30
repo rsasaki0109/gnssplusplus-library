@@ -461,7 +461,8 @@ public:
               << "subset_candidates_evaluated,subset_candidates_rejected_by_full_ratio,"
               << "subset_candidates_rejected_by_diversity,wide_lane_total,wide_lane_fixed,"
               << "wide_lane_rejected,wide_lane_min_distance,wide_lane_max_distance,"
-              << "full_lambda_solved,full_ratio,selected_fixed,selected_ratio,"
+              << "full_lambda_solved,full_ratio,full_bootstrap_sr,full_top2_l1_distance,"
+              << "full_min_cond_var,full_max_cond_var,selected_fixed,selected_ratio,"
               << "selected_pair_count,selected_distinct_sats,selected_distinct_systems,"
               << "selected_distinct_frequencies,selected_dual_frequency_sats,"
               << "selected_fixed_ambiguities,selected_used_subset,"
@@ -505,6 +506,14 @@ public:
         file_ << ","
               << telemetry.full_lambda_solved << ",";
         writeNumber(telemetry.full_ratio);
+        file_ << ",";
+        writeNumber(telemetry.full_bootstrap_sr);
+        file_ << ",";
+        writeNumber(telemetry.full_top2_l1_distance);
+        file_ << ",";
+        writeNumber(telemetry.full_min_cond_var);
+        file_ << ",";
+        writeNumber(telemetry.full_max_cond_var);
         file_ << ","
               << telemetry.selected_fixed << ",";
         writeNumber(telemetry.selected_ratio);

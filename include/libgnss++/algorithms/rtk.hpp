@@ -4,6 +4,7 @@
 #include "../core/observation.hpp"
 #include "../core/navigation.hpp"
 #include "../core/solution.hpp"
+#include "lambda.hpp"
 #include "rtk_measurement.hpp"
 #include "rtk_selection.hpp"
 #include "rtk_slip_detection.hpp"
@@ -261,6 +262,16 @@ public:
 
         bool full_lambda_solved = false;
         double full_ratio = std::numeric_limits<double>::quiet_NaN();
+        // Bootstrap success rate for the full DD ambiguity set (Teunissen 1998).
+        // Independent of the float estimate — reflects ambiguity geometry only.
+        double full_bootstrap_sr = std::numeric_limits<double>::quiet_NaN();
+        // L1 distance (sum of |delta|) between top-1 and top-2 LAMBDA candidates
+        // back-transformed into the original DD ambiguity space. A small value
+        // means the search is ambiguous beyond the ratio test.
+        double full_top2_l1_distance = std::numeric_limits<double>::quiet_NaN();
+        // Min/max LD-decorrelated conditional variances (D[i]).
+        double full_min_cond_var = std::numeric_limits<double>::quiet_NaN();
+        double full_max_cond_var = std::numeric_limits<double>::quiet_NaN();
         bool selected_fixed = false;
         double selected_ratio = std::numeric_limits<double>::quiet_NaN();
         int selected_pair_count = 0;
@@ -311,6 +322,14 @@ public:
                      const MatrixXd& covariance_matrix,
                      VectorXd& fixed_ambiguities,
                      double& success_rate);
+
+    // Same regularisation pipeline as lambdaMethod but returns the extended
+    // LAMBDA solution (top-2 candidates, bootstrap success rate, conditional
+    // variance bounds). Callers that only need the best fix + ratio can keep
+    // using lambdaMethod.
+    bool lambdaMethodExtended(const VectorXd& float_ambiguities,
+                              const MatrixXd& covariance_matrix,
+                              libgnss::LambdaSolution& solution);
 
     static int ambiguityStateIndex(const SatelliteId& sat, int freq) { return IB(sat, freq); }
     static int ionoStateIndex(const SatelliteId& sat) { return II(sat); }

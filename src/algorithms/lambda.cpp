@@ -149,73 +149,110 @@ static int search(int n, int m, const double* L, const double* D,
     return 0;
 }
 
-// Solve Z' * f = e for the best integer candidate only.
-// We only need the first candidate because the second-best solution is used
-// only for the ratio test in z-space (s[1]/s[0]), not for back-transform.
-static int solveBestZt(int n, const double* Z, const double* e, double* f) {
-    // Build Eigen matrices (column-major, matching RTKLIB storage)
+// Back-transform one or both top integer candidates from z-space to original
+// ambiguity space by solving Z' * f = e. Z is unimodular after the
+// Gauss/permutation transforms, so a partial-pivot LU is enough.
+//
+// `e_columns` is the column-major (n x k) buffer produced by `search` (k=1 or 2);
+// each column is back-transformed independently.
+static int solveZt(int n, int k, const double* Z, const double* e_columns,
+                   double* f_columns) {
     Eigen::Map<const Eigen::MatrixXd> Zm(Z, n, n);
     Eigen::MatrixXd Zt = Zm.transpose();
 
-    // Z is unimodular after Gauss/permutation transforms, so a cheaper LU is enough.
     Eigen::PartialPivLU<Eigen::MatrixXd> lu(Zt);
     if (lu.matrixLU().diagonal().cwiseAbs().minCoeff() <= 0.0) return -1;
 
-    const Eigen::Map<const Eigen::VectorXd> rhs(e, n);
-    const Eigen::VectorXd solution = lu.solve(rhs);
-    if (!solution.array().isFinite().all()) return -1;
-    for (int i = 0; i < n; ++i) f[i] = solution(i);
+    for (int col = 0; col < k; ++col) {
+        const Eigen::Map<const Eigen::VectorXd> rhs(e_columns + col * n, n);
+        const Eigen::VectorXd solution = lu.solve(rhs);
+        if (!solution.array().isFinite().all()) return -1;
+        for (int i = 0; i < n; ++i) f_columns[col * n + i] = solution(i);
+    }
     return 0;
 }
 
-bool lambdaSearch(const VectorXd& float_amb, const MatrixXd& Q_amb,
-                  VectorXd& fixed_amb, double& ratio) {
+// Bootstrap success rate from LD-factorisation conditional variances.
+// BSR = prod_i ( 2 * Phi(0.5 / sqrt(D[i])) - 1 ) = prod_i erf(0.5 / sqrt(2*D[i])).
+// Returns 0.0 if any D[i] is non-positive (degenerate factorisation).
+static double bootstrapSuccessRate(int n, const double* D) {
+    double bsr = 1.0;
+    for (int i = 0; i < n; ++i) {
+        if (D[i] <= 0.0) return 0.0;
+        bsr *= std::erf(0.5 / std::sqrt(2.0 * D[i]));
+        if (bsr <= 0.0) return 0.0;
+    }
+    return bsr;
+}
+
+bool lambdaSearchExtended(const VectorXd& float_amb, const MatrixXd& Q_amb,
+                          LambdaSolution& solution) {
     int n = float_amb.size();
     int m = 2;  // find 2 best solutions for ratio test
     if (n <= 0) return false;
 
     // Convert to column-major flat arrays (RTKLIB convention)
     std::vector<double> Q(n * n), L(n * n, 0.0), D(n), Z(n * n, 0.0);
-    std::vector<double> a(n), z(n), E(n * m), F(n), s(m);
+    std::vector<double> a(n), z(n), E(n * m), F(n * m), s(m);
 
-    // Q: column-major
     for (int i = 0; i < n; ++i)
         for (int j = 0; j < n; ++j)
             Q[i + j * n] = Q_amb(i, j);
 
     for (int i = 0; i < n; ++i) a[i] = float_amb(i);
 
-    // Z = identity
     for (int i = 0; i < n; ++i) Z[i + i * n] = 1.0;
 
-    // LD factorization
     int info = ldFactorization(n, Q.data(), L.data(), D.data());
     if (info != 0) return false;
 
-    // Reduction
+    // BSR depends only on the unreduced D[i] (the LAMBDA reduction is a
+    // similarity transform that preserves the integer-rounding success rate).
+    // Compute it on the post-reduction D[] for consistency with the search.
     reduction(n, L.data(), D.data(), Z.data());
 
-    // z = Z' * a
     for (int i = 0; i < n; ++i) {
         z[i] = 0.0;
         for (int j = 0; j < n; ++j) z[i] += Z[j + i * n] * a[j];
     }
 
-    // mlambda search
     info = search(n, m, L.data(), D.data(), z.data(), E.data(), s.data());
     if (info != 0) return false;
 
-    // Only the best integer solution needs back-transform.
-    info = solveBestZt(n, Z.data(), E.data(), F.data());
+    // Back-transform both top candidates so callers can inspect their
+    // separation in original ambiguity space.
+    info = solveZt(n, m, Z.data(), E.data(), F.data());
     if (info != 0) return false;
 
-    // Extract best solution
-    fixed_amb.resize(n);
-    for (int i = 0; i < n; ++i) fixed_amb(i) = F[i];
+    solution.n = n;
+    solution.best_amb.resize(n);
+    solution.second_amb.resize(n);
+    for (int i = 0; i < n; ++i) {
+        solution.best_amb(i) = F[i];
+        solution.second_amb(i) = F[n + i];
+    }
+    solution.best_norm = s[0];
+    solution.second_norm = s[1];
+    solution.ratio = (s[0] > 0.0) ? s[1] / s[0] : 0.0;
+    solution.bootstrap_sr = bootstrapSuccessRate(n, D.data());
 
-    // Ratio test
-    ratio = (s[0] > 0.0) ? s[1] / s[0] : 0.0;
+    double dmin = D[0], dmax = D[0];
+    for (int i = 1; i < n; ++i) {
+        if (D[i] < dmin) dmin = D[i];
+        if (D[i] > dmax) dmax = D[i];
+    }
+    solution.min_cond_var = dmin;
+    solution.max_cond_var = dmax;
 
+    return true;
+}
+
+bool lambdaSearch(const VectorXd& float_amb, const MatrixXd& Q_amb,
+                  VectorXd& fixed_amb, double& ratio) {
+    LambdaSolution sol;
+    if (!lambdaSearchExtended(float_amb, Q_amb, sol)) return false;
+    fixed_amb = std::move(sol.best_amb);
+    ratio = sol.ratio;
     return true;
 }
 
