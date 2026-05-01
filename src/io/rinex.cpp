@@ -610,6 +610,35 @@ bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) 
         const double north = std::stod(line.substr(28, 14));
         header.antenna_delta = Vector3d(east, north, height);
     }
+    else if (label.find("TIME OF FIRST OBS") != std::string::npos) {
+        try {
+            const int year = std::stoi(line.substr(0, 6));
+            const int month = std::stoi(line.substr(6, 6));
+            const int day = std::stoi(line.substr(12, 6));
+            const int hour = std::stoi(line.substr(18, 6));
+            const int minute = std::stoi(line.substr(24, 6));
+            const double second = std::stod(line.substr(30, 13));
+            auto days_from_civil = [](int y, unsigned m, unsigned d) -> int {
+                y -= m <= 2;
+                const int era = (y >= 0 ? y : y - 399) / 400;
+                const unsigned yoe = static_cast<unsigned>(y - era * 400);
+                const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+                const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+                return era * 146097 + static_cast<int>(doe) - 719468;
+            };
+            const int gps_epoch_days = days_from_civil(1980, 1, 6);
+            const int current_days = days_from_civil(
+                year, static_cast<unsigned>(month), static_cast<unsigned>(day));
+            const int days_since_gps = current_days - gps_epoch_days;
+            const int gps_week = days_since_gps / 7;
+            const int day_of_week = days_since_gps % 7;
+            const double tow = day_of_week * 86400.0 + hour * 3600.0
+                + minute * 60.0 + second;
+            header.first_obs = GNSSTime(gps_week, tow);
+        } catch (...) {
+            // Leave first_obs at default if parsing fails.
+        }
+    }
     else if (label.find("# / TYPES OF OBSERV") != std::string::npos) {
         // RINEX 2: Parse number of observation types
         int num_types = std::stoi(line.substr(0, 6));
