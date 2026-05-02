@@ -86,6 +86,10 @@ struct Options {
     bool clas_kinematic_position_reseed_set = false;
     double clas_kinematic_position_reseed_variance = -1.0;
     double clas_kinematic_position_reseed_max_residual_rms_m = -1.0;
+    bool enable_wlnl_par = false;
+    bool enable_wlnl_par_set = false;
+    int  wlnl_par_max_exclusions = -1;
+    double wlnl_par_exclude_frac_threshold = -1.0;
     bool madocalib_bridge = false;
     std::string madocalib_config_path;
     std::vector<std::string> madoca_l6e_paths;
@@ -248,6 +252,12 @@ void printUsage(const char* program_name) {
         << "                          Variance reset on kinematic re-seed (default: 10000.0 = CLASLIB VAR_POS)\n"
         << "  --clas-kinematic-reseed-position-max-residual-rms <m>\n"
         << "                          Skip reseed when SPP residual_rms exceeds this (m); guards against urban-canyon SPP pin-to-bad. <=0 disables (default).\n"
+        << "  --enable-wlnl-par       Enable WLNL Partial AR (greedy worst-|frac| exclusion when ratio fails)\n"
+        << "  --no-wlnl-par           Disable WLNL Partial AR\n"
+        << "  --wlnl-par-max-exclusions <n>\n"
+        << "                          Cap PAR exclusion iterations (default: 4)\n"
+        << "  --wlnl-par-exclude-frac-threshold <cycles>\n"
+        << "                          Skip excluding pairs whose |frac| is below this (default: 0.20)\n"
         << "  --madocalib-bridge      Delegate this run to linked MADOCALIB postpos()\n"
         << "                          (requires CMake -DMADOCALIB_PARITY_LINK=ON)\n"
         << "  --madocalib-l6 <file>   Extra MADOCA L6 input file; repeat for two-channel L6E\n"
@@ -689,6 +699,16 @@ Options parseArguments(int argc, char* argv[]) {
             options.clas_kinematic_position_reseed_variance = std::stod(argv[++i]);
         } else if (arg == "--clas-kinematic-reseed-position-max-residual-rms" && i + 1 < argc) {
             options.clas_kinematic_position_reseed_max_residual_rms_m = std::stod(argv[++i]);
+        } else if (arg == "--enable-wlnl-par") {
+            options.enable_wlnl_par = true;
+            options.enable_wlnl_par_set = true;
+        } else if (arg == "--no-wlnl-par") {
+            options.enable_wlnl_par = false;
+            options.enable_wlnl_par_set = true;
+        } else if (arg == "--wlnl-par-max-exclusions" && i + 1 < argc) {
+            options.wlnl_par_max_exclusions = std::stoi(argv[++i]);
+        } else if (arg == "--wlnl-par-exclude-frac-threshold" && i + 1 < argc) {
+            options.wlnl_par_exclude_frac_threshold = std::stod(argv[++i]);
         } else if (arg == "--madocalib-bridge") {
             options.madocalib_bridge = true;
         } else if (arg == "--madocalib-l6" && i + 1 < argc) {
@@ -1823,6 +1843,16 @@ int main(int argc, char* argv[]) {
         if (options.clas_kinematic_position_reseed_max_residual_rms_m > 0.0) {
             ppp_config.clas_kinematic_position_reseed_max_residual_rms_m =
                 options.clas_kinematic_position_reseed_max_residual_rms_m;
+        }
+        if (options.enable_wlnl_par_set) {
+            ppp_config.enable_wlnl_par = options.enable_wlnl_par;
+        }
+        if (options.wlnl_par_max_exclusions >= 0) {
+            ppp_config.wlnl_par_max_exclusions = options.wlnl_par_max_exclusions;
+        }
+        if (options.wlnl_par_exclude_frac_threshold > 0.0) {
+            ppp_config.wlnl_par_exclude_frac_threshold =
+                options.wlnl_par_exclude_frac_threshold;
         }
         ppp_config.kinematic_mode = options.kinematic_mode;
         ppp_config.kinematic_preconvergence_phase_residual_floor_m =
