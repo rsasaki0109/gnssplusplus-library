@@ -190,6 +190,23 @@ EpochPreparationResult prepareEpochState(
         dt,
         seed_solution.receiver_clock_bias,
         seed_solution.isValid());
+    // CLASLIB-faithful kinematic position re-seed: replace position state with
+    // current SPP solution and reset variance, mirroring `udpos_ppp` in
+    // RTKLIB/src/ppp.c which calls `initx(rtk, rtk->sol.rr[i], VAR_POS, i)`
+    // every kinematic epoch. Required for KF to escape the wrong-ambiguity ⊗
+    // tight-position Nash equilibrium documented in
+    // clas_kf_overconfidence_state_diff_2026_05_02.md.
+    if (config.clas_kinematic_position_reseed && config.kinematic_mode &&
+        seed_solution.isValid()) {
+        const int nx = filter_state.total_states;
+        filter_state.state.segment(0, 3) = seed_solution.position_ecef;
+        filter_state.covariance.block(0, 0, 3, nx).setZero();
+        filter_state.covariance.block(0, 0, nx, 3).setZero();
+        const double v = config.clas_kinematic_position_reseed_variance;
+        filter_state.covariance(0, 0) = v;
+        filter_state.covariance(1, 1) = v;
+        filter_state.covariance(2, 2) = v;
+    }
     markSlipCompensationFromAmbiguities(
         obs, ambiguity_states, dispersion_compensation);
     result.ready = true;

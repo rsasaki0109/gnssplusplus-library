@@ -82,6 +82,9 @@ struct Options {
     std::string clas_residual_sampling = "indexed-or-mean";
     std::string clas_atmos_selection = "grid-first";
     double clas_atmos_stale_after_seconds = 15.0;
+    bool clas_kinematic_position_reseed = false;
+    bool clas_kinematic_position_reseed_set = false;
+    double clas_kinematic_position_reseed_variance = -1.0;
     bool madocalib_bridge = false;
     std::string madocalib_config_path;
     std::vector<std::string> madoca_l6e_paths;
@@ -236,6 +239,12 @@ void printUsage(const char* program_name) {
         << "                          CLAS atmosphere token selection policy (default: grid-first)\n"
         << "  --clas-atmos-stale-after-seconds <seconds>\n"
         << "                          Balanced policy stale threshold (default: 15.0)\n"
+        << "  --clas-kinematic-reseed-position\n"
+        << "                          CLASLIB-faithful: re-init position state from SPP every kinematic epoch (default off)\n"
+        << "  --no-clas-kinematic-reseed-position\n"
+        << "                          Disable CLASLIB-faithful kinematic position re-seed\n"
+        << "  --clas-kinematic-reseed-position-variance <m^2>\n"
+        << "                          Variance reset on kinematic re-seed (default: 10000.0 = CLASLIB VAR_POS)\n"
         << "  --madocalib-bridge      Delegate this run to linked MADOCALIB postpos()\n"
         << "                          (requires CMake -DMADOCALIB_PARITY_LINK=ON)\n"
         << "  --madocalib-l6 <file>   Extra MADOCA L6 input file; repeat for two-channel L6E\n"
@@ -667,6 +676,14 @@ Options parseArguments(int argc, char* argv[]) {
             options.clas_atmos_selection = argv[++i];
         } else if (arg == "--clas-atmos-stale-after-seconds" && i + 1 < argc) {
             options.clas_atmos_stale_after_seconds = std::stod(argv[++i]);
+        } else if (arg == "--clas-kinematic-reseed-position") {
+            options.clas_kinematic_position_reseed = true;
+            options.clas_kinematic_position_reseed_set = true;
+        } else if (arg == "--no-clas-kinematic-reseed-position") {
+            options.clas_kinematic_position_reseed = false;
+            options.clas_kinematic_position_reseed_set = true;
+        } else if (arg == "--clas-kinematic-reseed-position-variance" && i + 1 < argc) {
+            options.clas_kinematic_position_reseed_variance = std::stod(argv[++i]);
         } else if (arg == "--madocalib-bridge") {
             options.madocalib_bridge = true;
         } else if (arg == "--madocalib-l6" && i + 1 < argc) {
@@ -847,6 +864,10 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.clas_atmos_stale_after_seconds <= 0.0) {
         argumentError("--clas-atmos-stale-after-seconds must be positive", argv[0]);
+    }
+    if (options.clas_kinematic_position_reseed_variance <= 0.0 &&
+        options.clas_kinematic_position_reseed_variance != -1.0) {
+        argumentError("--clas-kinematic-reseed-position-variance must be positive", argv[0]);
     }
     if (options.ssr_step_seconds <= 0.0) {
         argumentError("--ssr-step-seconds must be positive", argv[0]);
@@ -1786,6 +1807,14 @@ int main(int argc, char* argv[]) {
             parseClasAtmosSelectionPolicy(options.clas_atmos_selection);
         ppp_config.clas_atmos_stale_after_seconds =
             options.clas_atmos_stale_after_seconds;
+        if (options.clas_kinematic_position_reseed_set) {
+            ppp_config.clas_kinematic_position_reseed =
+                options.clas_kinematic_position_reseed;
+        }
+        if (options.clas_kinematic_position_reseed_variance > 0.0) {
+            ppp_config.clas_kinematic_position_reseed_variance =
+                options.clas_kinematic_position_reseed_variance;
+        }
         ppp_config.kinematic_mode = options.kinematic_mode;
         ppp_config.kinematic_preconvergence_phase_residual_floor_m =
             options.kinematic_preconvergence_phase_residual_floor_m;
