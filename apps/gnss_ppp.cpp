@@ -240,7 +240,7 @@ void printUsage(const char* program_name) {
         << "  --clas-atmos-stale-after-seconds <seconds>\n"
         << "                          Balanced policy stale threshold (default: 15.0)\n"
         << "  --clas-kinematic-reseed-position\n"
-        << "                          CLASLIB-faithful: re-init position state from SPP every kinematic epoch (default off)\n"
+        << "                          CLASLIB-faithful: re-init position state from SPP every kinematic epoch (default on)\n"
         << "  --no-clas-kinematic-reseed-position\n"
         << "                          Disable CLASLIB-faithful kinematic position re-seed\n"
         << "  --clas-kinematic-reseed-position-variance <m^2>\n"
