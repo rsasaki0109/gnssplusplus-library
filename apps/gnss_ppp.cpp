@@ -85,6 +85,7 @@ struct Options {
     bool clas_kinematic_position_reseed = false;
     bool clas_kinematic_position_reseed_set = false;
     double clas_kinematic_position_reseed_variance = -1.0;
+    double clas_kinematic_position_reseed_max_residual_rms_m = -1.0;
     bool madocalib_bridge = false;
     std::string madocalib_config_path;
     std::vector<std::string> madoca_l6e_paths;
@@ -245,6 +246,8 @@ void printUsage(const char* program_name) {
         << "                          Disable CLASLIB-faithful kinematic position re-seed\n"
         << "  --clas-kinematic-reseed-position-variance <m^2>\n"
         << "                          Variance reset on kinematic re-seed (default: 10000.0 = CLASLIB VAR_POS)\n"
+        << "  --clas-kinematic-reseed-position-max-residual-rms <m>\n"
+        << "                          Skip reseed when SPP residual_rms exceeds this (m); guards against urban-canyon SPP pin-to-bad. <=0 disables (default).\n"
         << "  --madocalib-bridge      Delegate this run to linked MADOCALIB postpos()\n"
         << "                          (requires CMake -DMADOCALIB_PARITY_LINK=ON)\n"
         << "  --madocalib-l6 <file>   Extra MADOCA L6 input file; repeat for two-channel L6E\n"
@@ -684,6 +687,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.clas_kinematic_position_reseed_set = true;
         } else if (arg == "--clas-kinematic-reseed-position-variance" && i + 1 < argc) {
             options.clas_kinematic_position_reseed_variance = std::stod(argv[++i]);
+        } else if (arg == "--clas-kinematic-reseed-position-max-residual-rms" && i + 1 < argc) {
+            options.clas_kinematic_position_reseed_max_residual_rms_m = std::stod(argv[++i]);
         } else if (arg == "--madocalib-bridge") {
             options.madocalib_bridge = true;
         } else if (arg == "--madocalib-l6" && i + 1 < argc) {
@@ -1814,6 +1819,10 @@ int main(int argc, char* argv[]) {
         if (options.clas_kinematic_position_reseed_variance > 0.0) {
             ppp_config.clas_kinematic_position_reseed_variance =
                 options.clas_kinematic_position_reseed_variance;
+        }
+        if (options.clas_kinematic_position_reseed_max_residual_rms_m > 0.0) {
+            ppp_config.clas_kinematic_position_reseed_max_residual_rms_m =
+                options.clas_kinematic_position_reseed_max_residual_rms_m;
         }
         ppp_config.kinematic_mode = options.kinematic_mode;
         ppp_config.kinematic_preconvergence_phase_residual_floor_m =
