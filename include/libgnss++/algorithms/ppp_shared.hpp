@@ -211,6 +211,8 @@ struct PPPConfig {
     double clas_anchor_sigma = 5.0;               // SPP anchor constraint sigma (m)
     double clas_outlier_sigma_scale = 50.0;       // Inflate variance when residual > N*sigma
     bool clas_decouple_clock_position = true;      // Zero clock cross-covariance each epoch
+    bool clas_kinematic_position_reseed = false;   // CLASLIB-faithful: re-init position from SPP every kinematic epoch
+    double clas_kinematic_position_reseed_variance = 10000.0; // CLASLIB VAR_POS = 100^2
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
