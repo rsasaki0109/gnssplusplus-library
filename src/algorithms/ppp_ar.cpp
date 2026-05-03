@@ -721,26 +721,97 @@ DdFixAttempt tryDirectDdFix(
         ref_ambiguity.fixed_value = attempt.state.state(ref_state);
     }
 
-    for (int k = 0; k < attempt.nb; ++k) {
-        const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
-        const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
-        const double ref_value_m =
-            attempt.state.state(state_indices[static_cast<size_t>(ri)]);
-        const double scale_si = scales[static_cast<size_t>(si)];
-        const double ref_cycles = ref_value_m / scales[static_cast<size_t>(ri)];
-        const double fixed_sat_cycles = ref_cycles - dd_fixed(k);
-        const double fixed_sat_m = fixed_sat_cycles * scale_si;
+    // Holdamb for DD_IFLC / DD_PER_FREQ / DD_MADOCA_CASCADED: apply tight Kalman
+    // pseudo-observation update on the DD ambiguity constraint instead of zeroing
+    // the per-satellite cross-cov. Preserves amb-pos cross-cov so subsequent
+    // epochs propagate the integer lock through the KF.
+    const bool use_holdamb_iflc =
+        config.enable_ppp_holdamb &&
+        config.ar_method != ppp_shared::PPPConfig::ARMethod::DD_WLNL;
 
-        const int sat_state = state_indices[static_cast<size_t>(si)];
-        attempt.state.state(sat_state) = fixed_sat_m;
-        attempt.state.covariance.row(sat_state).setZero();
-        attempt.state.covariance.col(sat_state).setZero();
-        attempt.state.covariance(sat_state, sat_state) = 1e-6;
+    if (use_holdamb_iflc) {
+        const int nx = filter_state.total_states;
+        constexpr double kHoldSigmaCycles = 1e-3;
+        constexpr double kHoldVar = kHoldSigmaCycles * kHoldSigmaCycles;
+        const double inn_gate_m = config.ppp_holdamb_innovation_gate_m > 0.0
+            ? config.ppp_holdamb_innovation_gate_m
+            : std::numeric_limits<double>::infinity();
+        MatrixXd H = MatrixXd::Zero(attempt.nb, nx);
+        VectorXd v = VectorXd::Zero(attempt.nb);
+        int nv = 0;
+        int gated = 0;
+        for (int k = 0; k < attempt.nb; ++k) {
+            const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
+            const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
+            const int ref_state = state_indices[static_cast<size_t>(ri)];
+            const int sat_state = state_indices[static_cast<size_t>(si)];
+            const double scale_ri = scales[static_cast<size_t>(ri)];
+            const double scale_si = scales[static_cast<size_t>(si)];
+            if (scale_ri <= 0.0 || scale_si <= 0.0) continue;
+            const double current_dd_cyc =
+                attempt.state.state(ref_state) / scale_ri -
+                attempt.state.state(sat_state) / scale_si;
+            const double innovation = dd_fixed(k) - current_dd_cyc;
+            const double inn_m = innovation * 0.5 * (scale_ri + scale_si);
+            if (std::abs(inn_m) > inn_gate_m) { ++gated; continue; }
+            H(nv, ref_state) = 1.0 / scale_ri;
+            H(nv, sat_state) = -1.0 / scale_si;
+            v(nv) = innovation;
+            ++nv;
 
-        auto& ambiguity_state = attempt.ambiguities[satellites[static_cast<size_t>(si)]];
-        ambiguity_state.float_value = fixed_sat_m;
-        ambiguity_state.fixed_value = fixed_sat_m;
-        ambiguity_state.is_fixed = true;
+            auto& sat_amb = attempt.ambiguities[satellites[static_cast<size_t>(si)]];
+            const double ref_cycles = attempt.state.state(ref_state) / scale_ri;
+            const double fixed_sat_cycles = ref_cycles - dd_fixed(k);
+            const double fixed_sat_m = fixed_sat_cycles * scale_si;
+            sat_amb.float_value = fixed_sat_m;
+            sat_amb.fixed_value = fixed_sat_m;
+            sat_amb.is_fixed = true;
+        }
+        if (nv > 0) {
+            const MatrixXd Hcrop = H.topRows(nv);
+            const VectorXd vcrop = v.head(nv);
+            const MatrixXd Rcrop = MatrixXd::Identity(nv, nv) * kHoldVar;
+            const MatrixXd PHt = attempt.state.covariance * Hcrop.transpose();
+            const MatrixXd S = Hcrop * PHt + Rcrop;
+            Eigen::LLT<MatrixXd> llt(S);
+            if (llt.info() == Eigen::Success) {
+                const MatrixXd K = PHt * llt.solve(MatrixXd::Identity(nv, nv));
+                attempt.state.state += K * vcrop;
+                attempt.state.covariance.noalias() -= K * PHt.transpose();
+                attempt.state.covariance =
+                    0.5 * (attempt.state.covariance + attempt.state.covariance.transpose());
+                if (debug_enabled) {
+                    std::cerr << "[PPP-AR-HOLDAMB] DD_IFLC update nv=" << nv
+                              << " gated=" << gated
+                              << " ||v||=" << vcrop.norm()
+                              << " ||K*v||=" << (K * vcrop).norm() << "\n";
+                }
+            } else if (debug_enabled) {
+                std::cerr << "[PPP-AR-HOLDAMB] LLT failure, skipping update\n";
+            }
+        }
+    } else {
+        for (int k = 0; k < attempt.nb; ++k) {
+            const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
+            const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
+            const double ref_value_m =
+                attempt.state.state(state_indices[static_cast<size_t>(ri)]);
+            const double scale_si = scales[static_cast<size_t>(si)];
+            const double ref_cycles = ref_value_m / scales[static_cast<size_t>(ri)];
+            const double fixed_sat_cycles = ref_cycles - dd_fixed(k);
+            const double fixed_sat_m = fixed_sat_cycles * scale_si;
+
+            const int sat_state = state_indices[static_cast<size_t>(si)];
+            attempt.state.state(sat_state) = fixed_sat_m;
+            attempt.state.covariance.row(sat_state).setZero();
+            attempt.state.covariance.col(sat_state).setZero();
+            attempt.state.covariance(sat_state, sat_state) = 1e-6;
+
+            auto& ambiguity_state = attempt.ambiguities[satellites[static_cast<size_t>(si)]];
+            ambiguity_state.float_value = fixed_sat_m;
+            ambiguity_state.fixed_value = fixed_sat_m;
+            ambiguity_state.is_fixed = true;
+        }
     }
 
     attempt.fixed = true;

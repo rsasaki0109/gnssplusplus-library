@@ -111,6 +111,8 @@ struct Options {
     double initial_troposphere_variance = -1.0;
     double code_phase_error_ratio_l1 = -1.0;
     double code_phase_error_ratio_l2 = -1.0;
+    bool enable_ppp_holdamb = false;
+    double ppp_holdamb_innovation_gate_m = 0.0;
     bool quiet = false;
 };
 
@@ -282,6 +284,12 @@ void printUsage(const char* program_name) {
         << "  --disable-ar            Disable PPP ambiguity fixing (default)\n"
         << "  --ar-ratio-threshold <value>\n"
         << "                          Ratio threshold for PPP ambiguity fixing (default: 3.0)\n"
+        << "  --enable-ppp-holdamb     Apply tight Kalman pseudo-obs update for fixed DD ambiguities\n"
+        << "                          on DD_IFLC / DD_PER_FREQ / DD_MADOCA_CASCADED (default: off)\n"
+        << "  --no-ppp-holdamb         Disable PPP holdamb (default)\n"
+        << "  --ppp-holdamb-innovation-gate <m>\n"
+        << "                          Per-pair innovation gate in meters before constraint is dropped\n"
+        << "                          (0 = no gate, default: 0)\n"
         << "  --quiet                  Suppress per-run summary output\n"
         << "  -h, --help               Show this help\n";
 }
@@ -775,6 +783,12 @@ Options parseArguments(int argc, char* argv[]) {
             options.code_phase_error_ratio_l1 = std::stod(argv[++i]);
         } else if (arg == "--code-phase-error-ratio-l2" && i + 1 < argc) {
             options.code_phase_error_ratio_l2 = std::stod(argv[++i]);
+        } else if (arg == "--enable-ppp-holdamb") {
+            options.enable_ppp_holdamb = true;
+        } else if (arg == "--no-ppp-holdamb") {
+            options.enable_ppp_holdamb = false;
+        } else if (arg == "--ppp-holdamb-innovation-gate" && i + 1 < argc) {
+            options.ppp_holdamb_innovation_gate_m = std::stod(argv[++i]);
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -1859,6 +1873,9 @@ int main(int argc, char* argv[]) {
             options.kinematic_preconvergence_phase_residual_floor_m;
         ppp_config.low_dynamics_mode = options.low_dynamics_mode;
         ppp_config.enable_ambiguity_resolution = options.enable_ar;
+        ppp_config.enable_ppp_holdamb = options.enable_ppp_holdamb;
+        ppp_config.ppp_holdamb_innovation_gate_m =
+            options.ppp_holdamb_innovation_gate_m;
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.phase_measurement_min_lock_count =
             options.phase_measurement_min_lock_count;
