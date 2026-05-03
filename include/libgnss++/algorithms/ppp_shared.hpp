@@ -123,6 +123,15 @@ struct PPPConfig {
     enum class ARMethod { DD_IFLC, DD_WLNL, DD_PER_FREQ, DD_MADOCA_CASCADED };
     ARMethod ar_method = ARMethod::DD_IFLC;
     int wl_min_averaging_epochs = 20;
+    // PPP holdamb (experimental, default OFF): when true, fixed DD integer
+    // ambiguities are applied as a tight Kalman pseudo-observation update on
+    // tryDirectDdFix paths (DD_IFLC / DD_PER_FREQ / DD_MADOCA_CASCADED) instead
+    // of the per-pair zero-cross-cov hard pin. Preserves amb-pos cross-cov so
+    // the integer lock propagates through subsequent KF updates.
+    // ppp_holdamb_innovation_gate_m: per-pair max innovation in meters before
+    // the constraint is dropped. 0 = no gate.
+    bool enable_ppp_holdamb = false;
+    double ppp_holdamb_innovation_gate_m = 0.0;
 
     // Motion model
     bool kinematic_mode = false;
