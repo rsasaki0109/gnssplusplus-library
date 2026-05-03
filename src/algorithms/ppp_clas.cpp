@@ -198,14 +198,23 @@ EpochPreparationResult prepareEpochState(
     // clas_kf_overconfidence_state_diff_2026_05_02.md.
     if (config.clas_kinematic_position_reseed && config.kinematic_mode &&
         seed_solution.isValid()) {
-        const int nx = filter_state.total_states;
-        filter_state.state.segment(0, 3) = seed_solution.position_ecef;
-        filter_state.covariance.block(0, 0, 3, nx).setZero();
-        filter_state.covariance.block(0, 0, nx, 3).setZero();
-        const double v = config.clas_kinematic_position_reseed_variance;
-        filter_state.covariance(0, 0) = v;
-        filter_state.covariance(1, 1) = v;
-        filter_state.covariance(2, 2) = v;
+        const double rms_gate = config.clas_kinematic_position_reseed_max_residual_rms_m;
+        const bool seed_quality_ok =
+            rms_gate <= 0.0 || seed_solution.residual_rms <= rms_gate;
+        if (seed_quality_ok) {
+            const int nx = filter_state.total_states;
+            filter_state.state.segment(0, 3) = seed_solution.position_ecef;
+            filter_state.covariance.block(0, 0, 3, nx).setZero();
+            filter_state.covariance.block(0, 0, nx, 3).setZero();
+            const double v = config.clas_kinematic_position_reseed_variance;
+            filter_state.covariance(0, 0) = v;
+            filter_state.covariance(1, 1) = v;
+            filter_state.covariance(2, 2) = v;
+        } else if (ppp_shared::pppDebugEnabled()) {
+            std::cerr << "[CLAS-RESEED-SKIP] residual_rms="
+                      << seed_solution.residual_rms
+                      << " > gate=" << rms_gate << "\n";
+        }
     }
     markSlipCompensationFromAmbiguities(
         obs, ambiguity_states, dispersion_compensation);

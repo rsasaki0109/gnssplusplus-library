@@ -213,6 +213,18 @@ struct PPPConfig {
     bool clas_decouple_clock_position = true;      // Zero clock cross-covariance each epoch
     bool clas_kinematic_position_reseed = true;    // CLASLIB-faithful: re-init position from SPP every kinematic epoch
     double clas_kinematic_position_reseed_variance = 10000.0; // CLASLIB VAR_POS = 100^2
+    // Skip reseed when SPP seed quality is poor; protects against urban-canyon
+    // pin-to-bad-SPP. residual_rms above this threshold (m) bypasses reseed and
+    // keeps the prior KF position state. <=0 disables the gate.
+    double clas_kinematic_position_reseed_max_residual_rms_m = 0.0;
+    // WLNL Partial AR: when initial LAMBDA fails the ratio test, greedily
+    // exclude DD pairs whose |frac| exceeds the threshold (worst first) and
+    // re-run LAMBDA. Caps the number of exclusions and keeps a minimum pair
+    // count. Helps when many sats have wrong NL float values but a clean
+    // sub-set exists.
+    bool enable_wlnl_par = false;
+    int  wlnl_par_max_exclusions = 4;
+    double wlnl_par_exclude_frac_threshold = 0.20;
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;

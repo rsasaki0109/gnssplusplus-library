@@ -943,12 +943,65 @@ WlnlFixAttempt tryWlnlFix(
         return attempt;
     }
 
+    // PAR-aware LAMBDA: greedily exclude DD pairs with worst |frac| when the
+    // initial ratio fails. The excluded vector tracks which pair indices are
+    // dropped; downstream holdamb/fix-marking loops skip them.
+    std::vector<bool> dd_pair_excluded(attempt.nb, false);
     VectorXd dd_nl_fixed = VectorXd::Zero(attempt.nb);
-    if (!lambdaSearch(dd_nl_float, dd_nl_cov, dd_nl_fixed, attempt.ratio)) {
+    int active_nb = attempt.nb;
+
+    auto run_subset_lambda = [&](double& out_ratio) -> bool {
+        std::vector<int> kept;
+        kept.reserve(attempt.nb);
+        for (int k = 0; k < attempt.nb; ++k) {
+            if (!dd_pair_excluded[static_cast<size_t>(k)]) kept.push_back(k);
+        }
+        if (static_cast<int>(kept.size()) < 4) return false;
+        const int sn = static_cast<int>(kept.size());
+        VectorXd sub_float(sn);
+        MatrixXd sub_cov = MatrixXd::Identity(sn, sn);
+        for (int i = 0; i < sn; ++i) sub_float(i) = dd_nl_float(kept[static_cast<size_t>(i)]);
+        VectorXd sub_fixed(sn);
+        if (!lambdaSearch(sub_float, sub_cov, sub_fixed, out_ratio)) return false;
+        for (int i = 0; i < sn; ++i) dd_nl_fixed(kept[static_cast<size_t>(i)]) = sub_fixed(i);
+        active_nb = sn;
+        return true;
+    };
+
+    if (!run_subset_lambda(attempt.ratio)) {
         if (debug_enabled) {
             std::cerr << "[PPP-WLNL] NL lambda search failed, nb=" << attempt.nb << "\n";
         }
         return attempt;
+    }
+    if (config.enable_wlnl_par &&
+        (!std::isfinite(attempt.ratio) || attempt.ratio < config.ar_ratio_threshold)) {
+        const int max_excl = std::max(0, std::min(config.wlnl_par_max_exclusions, attempt.nb - 4));
+        const double frac_thr = config.wlnl_par_exclude_frac_threshold;
+        for (int iter = 0; iter < max_excl; ++iter) {
+            int worst_k = -1;
+            double worst_frac = frac_thr;
+            for (int k = 0; k < attempt.nb; ++k) {
+                if (dd_pair_excluded[static_cast<size_t>(k)]) continue;
+                const double frac = std::abs(dd_nl_float(k) - std::round(dd_nl_float(k)));
+                if (frac > worst_frac) { worst_frac = frac; worst_k = k; }
+            }
+            if (worst_k < 0) break;
+            dd_pair_excluded[static_cast<size_t>(worst_k)] = true;
+            double new_ratio = 0.0;
+            if (!run_subset_lambda(new_ratio)) {
+                dd_pair_excluded[static_cast<size_t>(worst_k)] = false;
+                break;
+            }
+            attempt.ratio = new_ratio;
+            if (debug_enabled) {
+                std::cerr << "[PPP-WLNL-PAR] excluded pair " << worst_k
+                          << " worst_frac=" << worst_frac
+                          << " new_ratio=" << new_ratio
+                          << " active_nb=" << active_nb << "\n";
+            }
+            if (std::isfinite(new_ratio) && new_ratio >= config.ar_ratio_threshold) break;
+        }
     }
     if (!std::isfinite(attempt.ratio) || attempt.ratio < config.ar_ratio_threshold) {
         if (debug_enabled) {
@@ -967,6 +1020,7 @@ WlnlFixAttempt tryWlnlFix(
     MatrixXd R = MatrixXd::Zero(attempt.nb, attempt.nb);
 
     for (int k = 0; k < attempt.nb; ++k) {
+        if (dd_pair_excluded[static_cast<size_t>(k)]) continue;
         const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
         const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
         const int ref_state = state_indices[static_cast<size_t>(ri)];
@@ -1023,6 +1077,7 @@ WlnlFixAttempt tryWlnlFix(
     }
 
     for (int k = 0; k < attempt.nb; ++k) {
+        if (dd_pair_excluded[static_cast<size_t>(k)]) continue;
         const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
         const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
         const auto& ref_ambiguity = ambiguity_states.at(satellites[static_cast<size_t>(ri)]);
@@ -1034,6 +1089,7 @@ WlnlFixAttempt tryWlnlFix(
         sat_ambiguity.nl_is_fixed = true;
         sat_ambiguity.nl_fixed_cycles = ref_ambiguity.nl_fixed_cycles - dd_nl_fixed(k);
     }
+    attempt.nb = active_nb;  // report only the kept pair count
 
     attempt.fixed = true;
     return attempt;
