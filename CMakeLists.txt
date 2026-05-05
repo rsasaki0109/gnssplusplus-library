@@ -107,7 +107,7 @@ if(MADOCALIB_PARITY_LINK)
         ${MADOCALIB_SRC_DIR}/mdccssr.c
         ${MADOCALIB_SRC_DIR}/mdciono.c
     )
-    target_include_directories(madocalib PUBLIC ${MADOCALIB_SRC_DIR})
+    target_include_directories(madocalib PRIVATE ${MADOCALIB_SRC_DIR})
     target_compile_definitions(madocalib
         PRIVATE
             TRACE
@@ -119,9 +119,9 @@ if(MADOCALIB_PARITY_LINK)
             NFREQ=5
             NEXOBS=5
     )
-    target_link_libraries(madocalib PUBLIC m Threads::Threads)
+    target_link_libraries(madocalib PRIVATE m Threads::Threads)
     if(UNIX AND NOT APPLE)
-        target_link_libraries(madocalib PUBLIC rt)
+        target_link_libraries(madocalib PRIVATE rt)
     endif()
 
     target_include_directories(gnss_lib PRIVATE ${MADOCALIB_SRC_DIR})
