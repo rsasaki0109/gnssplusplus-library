@@ -137,6 +137,7 @@ bool ubxSignalIds(const Observation& obs, uint8_t& gnss_id, uint8_t& sig_id) {
             sig_id = 0;
             return true;
         case SignalType::GPS_L2C:
+        case SignalType::GPS_L2P:
             gnss_id = 0;
             sig_id = 3;
             return true;
@@ -281,7 +282,7 @@ ObservationData filterGps1004Epoch(const ObservationData& input) {
         auto& slot = gps_pairs[obs.satellite];
         if (obs.signal == SignalType::GPS_L1CA) {
             slot.first = &obs;
-        } else if (obs.signal == SignalType::GPS_L2C) {
+        } else if (obs.signal == SignalType::GPS_L2C || obs.signal == SignalType::GPS_L2P) {
             slot.second = &obs;
         }
     }

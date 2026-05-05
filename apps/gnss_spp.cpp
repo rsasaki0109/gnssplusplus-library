@@ -13,7 +13,10 @@ struct Options {
     std::string nav_path;
     std::string out_path;
     int max_epochs = 0;
+    double elevation_mask_deg = 15.0;
+    bool ionosphere_free_code = false;
     bool quiet = false;
+    int navsys_mask = 0;  ///< RTKLIB-style mask (0=all, 1=GPS,4=GLO,8=GAL,16=QZS,32=BDS)
 };
 
 void printUsage(const char* program_name) {
@@ -24,6 +27,9 @@ void printUsage(const char* program_name) {
         << "  --nav <nav.rnx>     RINEX navigation file\n"
         << "  --out <solution.pos> Output position file\n"
         << "  --max-epochs <n>    Stop after n epochs\n"
+        << "  --elevation-mask <deg> Elevation mask in degrees (default: 15)\n"
+        << "  --ionosphere-free-code Use dual-frequency ionosphere-free code when available\n"
+        << "  --navsys <mask>     RTKLIB navsys mask (0=all, 1=GPS, 4=GLO, 8=GAL, 16=QZS, 32=BDS; OR-combine)\n"
         << "  --quiet             Suppress run summary\n"
         << "  -h, --help          Show this help\n";
 }
@@ -49,6 +55,12 @@ Options parseArguments(int argc, char* argv[]) {
             options.out_path = argv[++i];
         } else if (arg == "--max-epochs" && i + 1 < argc) {
             options.max_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--elevation-mask" && i + 1 < argc) {
+            options.elevation_mask_deg = std::stod(argv[++i]);
+        } else if (arg == "--ionosphere-free-code") {
+            options.ionosphere_free_code = true;
+        } else if (arg == "--navsys" && i + 1 < argc) {
+            options.navsys_mask = std::stoi(argv[++i]);
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -67,6 +79,12 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.max_epochs < 0) {
         argumentError("--max-epochs must be non-negative", argv[0]);
+    }
+    if (options.elevation_mask_deg < 0.0 || options.elevation_mask_deg >= 90.0) {
+        argumentError("--elevation-mask must be in [0, 90)", argv[0]);
+    }
+    if (options.navsys_mask < 0 || options.navsys_mask > 127) {
+        argumentError("--navsys must be a RTKLIB navsys mask from 0 to 127", argv[0]);
     }
     return options;
 }
@@ -102,9 +120,19 @@ int main(int argc, char* argv[]) {
         libgnss::ProcessorConfig config;
         config.mode = libgnss::PositioningMode::SPP;
         config.snr_mask = 0.0;
-        config.elevation_mask = 15.0;
+        config.elevation_mask = options.elevation_mask_deg;
 
         libgnss::SPPProcessor processor;
+        libgnss::SPPProcessor::SPPConfig spp_config;
+        spp_config.use_ionosphere_free_code = options.ionosphere_free_code;
+        if (options.navsys_mask != 0) {
+            spp_config.enable_gps     = (options.navsys_mask & 1)  != 0;
+            spp_config.enable_glonass = (options.navsys_mask & 4)  != 0;
+            spp_config.enable_galileo = (options.navsys_mask & 8)  != 0;
+            spp_config.enable_qzss    = (options.navsys_mask & 16) != 0;
+            spp_config.enable_beidou  = (options.navsys_mask & 32) != 0;
+        }
+        processor.setSPPConfig(spp_config);
         if (!processor.initialize(config)) {
             std::cerr << "Error: failed to initialize SPP processor\n";
             return 1;

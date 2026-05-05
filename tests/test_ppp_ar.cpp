@@ -2,7 +2,295 @@
 
 #include <libgnss++/algorithms/ppp_ar.hpp>
 
+#include <cmath>
+#include <limits>
+
 using namespace libgnss;
+
+namespace {
+
+ppp_shared::PPPState makeDirectDdState(double dd_float_cycles) {
+    ppp_shared::PPPState state;
+    state.pos_index = 0;
+    state.clock_index = 3;
+    state.amb_index = 4;
+    state.total_states = 6;
+    state.state = VectorXd::Zero(state.total_states);
+    state.covariance = MatrixXd::Identity(state.total_states, state.total_states);
+
+    const SatelliteId ref_sat(GNSSSystem::GPS, 1);
+    const SatelliteId sat(GNSSSystem::GPS, 2);
+    state.ambiguity_indices[ref_sat] = 4;
+    state.ambiguity_indices[sat] = 5;
+    state.state(4) = 0.0;
+    state.state(5) = -dd_float_cycles;
+    return state;
+}
+
+std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo> makeDirectDdAmbiguities() {
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo> ambiguity_states;
+    for (const auto& satellite : {SatelliteId(GNSSSystem::GPS, 1),
+                                  SatelliteId(GNSSSystem::GPS, 2)}) {
+        auto& ambiguity = ambiguity_states[satellite];
+        ambiguity.needs_reinitialization = false;
+        ambiguity.lock_count = 10;
+        ambiguity.ambiguity_scale_m = 1.0;
+    }
+    return ambiguity_states;
+}
+
+struct MadocaDesignFixture {
+    SatelliteId satellite{GNSSSystem::GPS, 2};
+    SatelliteId reference{GNSSSystem::GPS, 1};
+    std::map<std::pair<SatelliteId, int>, int> indices;
+    std::map<std::pair<SatelliteId, int>, double> wavelengths;
+    VectorXd state = VectorXd::Zero(8);
+    MatrixXd covariance = MatrixXd::Zero(8, 8);
+
+    MadocaDesignFixture() {
+        const double lambda0 = 0.19;
+        const double lambda1 = 0.24;
+        const double lambda2 = 0.25;
+        const double lambda3 = 0.21;
+        const double lambda_by_frequency[] = {lambda0, lambda1, lambda2, lambda3};
+        for (int frequency = 0; frequency < 4; ++frequency) {
+            indices[{satellite, frequency}] = frequency;
+            indices[{reference, frequency}] = frequency + 4;
+            wavelengths[{satellite, frequency}] = lambda_by_frequency[frequency];
+            wavelengths[{reference, frequency}] = lambda_by_frequency[frequency];
+        }
+
+        state(0) = 3.0 * lambda0;
+        state(1) = 1.0 * lambda1;
+        state(2) = 5.0 * lambda2;
+        state(3) = 11.0 * lambda3;
+        state(4) = 7.0 * lambda0;
+        state(5) = 2.0 * lambda1;
+        state(6) = 13.0 * lambda2;
+        state(7) = 17.0 * lambda3;
+
+        covariance(0, 0) = 4.0;
+        covariance(4, 4) = 9.0;
+        covariance(0, 4) = 1.5;
+        covariance(4, 0) = 1.5;
+    }
+
+    int stateIndex(const SatelliteId& row_satellite, int frequency_index) const {
+        const auto it = indices.find({row_satellite, frequency_index});
+        return it == indices.end() ? -1 : it->second;
+    }
+
+    double wavelength(const SatelliteId& row_satellite, int frequency_index) const {
+        const auto it = wavelengths.find({row_satellite, frequency_index});
+        return it == wavelengths.end() ? 0.0 : it->second;
+    }
+};
+
+}  // namespace
+
+TEST(PPPArTest, MadocaN1DesignRowMatchesSingleFrequencyDifference) {
+    const MadocaDesignFixture fixture;
+    const auto row = ppp_ar::buildMadocaArDesignRow(
+        fixture.satellite,
+        fixture.reference,
+        0,
+        -1,
+        [&](const SatelliteId& satellite, int frequency_index) {
+            return fixture.stateIndex(satellite, frequency_index);
+        },
+        [&](const SatelliteId& satellite, int frequency_index) {
+            return fixture.wavelength(satellite, frequency_index);
+        });
+
+    ASSERT_TRUE(row.valid);
+    ASSERT_EQ(row.terms.size(), 2u);
+    EXPECT_EQ(row.terms[0].satellite, fixture.satellite);
+    EXPECT_EQ(row.terms[0].frequency_index, 0);
+    EXPECT_EQ(row.terms[0].state_index, 0);
+    EXPECT_NEAR(row.terms[0].coefficient, 1.0 / 0.19, 1e-12);
+    EXPECT_EQ(row.terms[1].satellite, fixture.reference);
+    EXPECT_EQ(row.terms[1].frequency_index, 0);
+    EXPECT_EQ(row.terms[1].state_index, 4);
+    EXPECT_NEAR(row.terms[1].coefficient, -1.0 / 0.19, 1e-12);
+    EXPECT_NEAR(ppp_ar::evaluateMadocaArDesignRow(row, fixture.state), -4.0, 1e-12);
+    EXPECT_NEAR(
+        ppp_ar::madocaArDesignRowVariance(row, fixture.covariance),
+        10.0 / (0.19 * 0.19),
+        1e-12);
+}
+
+TEST(PPPArTest, MadocaWideLaneDesignRowMatchesF1MinusF2Difference) {
+    const MadocaDesignFixture fixture;
+    const auto row = ppp_ar::buildMadocaArDesignRow(
+        fixture.satellite,
+        fixture.reference,
+        0,
+        1,
+        [&](const SatelliteId& satellite, int frequency_index) {
+            return fixture.stateIndex(satellite, frequency_index);
+        },
+        [&](const SatelliteId& satellite, int frequency_index) {
+            return fixture.wavelength(satellite, frequency_index);
+        });
+
+    ASSERT_TRUE(row.valid);
+    ASSERT_EQ(row.terms.size(), 4u);
+    EXPECT_EQ(row.terms[0].state_index, 0);
+    EXPECT_NEAR(row.terms[0].coefficient, 1.0 / 0.19, 1e-12);
+    EXPECT_EQ(row.terms[1].state_index, 1);
+    EXPECT_NEAR(row.terms[1].coefficient, -1.0 / 0.24, 1e-12);
+    EXPECT_EQ(row.terms[2].state_index, 4);
+    EXPECT_NEAR(row.terms[2].coefficient, -1.0 / 0.19, 1e-12);
+    EXPECT_EQ(row.terms[3].state_index, 5);
+    EXPECT_NEAR(row.terms[3].coefficient, 1.0 / 0.24, 1e-12);
+    EXPECT_NEAR(ppp_ar::evaluateMadocaArDesignRow(row, fixture.state), -3.0, 1e-12);
+}
+
+TEST(PPPArTest, MadocaExtraWideLaneDesignRowMatchesF2MinusF3Difference) {
+    const MadocaDesignFixture fixture;
+    const auto row = ppp_ar::buildMadocaArDesignRow(
+        fixture.satellite,
+        fixture.reference,
+        1,
+        2,
+        [&](const SatelliteId& satellite, int frequency_index) {
+            return fixture.stateIndex(satellite, frequency_index);
+        },
+        [&](const SatelliteId& satellite, int frequency_index) {
+            return fixture.wavelength(satellite, frequency_index);
+        });
+
+    ASSERT_TRUE(row.valid);
+    ASSERT_EQ(row.terms.size(), 4u);
+    EXPECT_EQ(row.terms[0].state_index, 1);
+    EXPECT_NEAR(row.terms[0].coefficient, 1.0 / 0.24, 1e-12);
+    EXPECT_EQ(row.terms[1].state_index, 2);
+    EXPECT_NEAR(row.terms[1].coefficient, -1.0 / 0.25, 1e-12);
+    EXPECT_EQ(row.terms[2].state_index, 5);
+    EXPECT_NEAR(row.terms[2].coefficient, -1.0 / 0.24, 1e-12);
+    EXPECT_EQ(row.terms[3].state_index, 6);
+    EXPECT_NEAR(row.terms[3].coefficient, 1.0 / 0.25, 1e-12);
+    EXPECT_NEAR(ppp_ar::evaluateMadocaArDesignRow(row, fixture.state), 7.0, 1e-12);
+}
+
+TEST(PPPArTest, MadocaDesignRowRejectsMissingIndexOrWavelength) {
+    const MadocaDesignFixture fixture;
+    const auto missing_index = ppp_ar::buildMadocaArDesignRow(
+        fixture.satellite,
+        fixture.reference,
+        0,
+        4,
+        [&](const SatelliteId& satellite, int frequency_index) {
+            return fixture.stateIndex(satellite, frequency_index);
+        },
+        [&](const SatelliteId& satellite, int frequency_index) {
+            return fixture.wavelength(satellite, frequency_index);
+        });
+    EXPECT_FALSE(missing_index.valid);
+    EXPECT_TRUE(missing_index.terms.empty());
+
+    const auto missing_wavelength = ppp_ar::buildMadocaArDesignRow(
+        fixture.satellite,
+        fixture.reference,
+        0,
+        -1,
+        [&](const SatelliteId& satellite, int frequency_index) {
+            return fixture.stateIndex(satellite, frequency_index);
+        },
+        [&](const SatelliteId&, int frequency_index) {
+            return frequency_index == 0 ? 0.0 : 1.0;
+        });
+    EXPECT_FALSE(missing_wavelength.valid);
+    EXPECT_TRUE(missing_wavelength.terms.empty());
+}
+
+TEST(PPPArTest, MadocaDesignRowCanUsePppStateFrequencyAmbiguityTable) {
+    const MadocaDesignFixture fixture;
+    ppp_shared::PPPState filter_state;
+    filter_state.total_states = fixture.state.size();
+    filter_state.state = fixture.state;
+    filter_state.covariance = fixture.covariance;
+    for (const auto& [key, state_index] : fixture.indices) {
+        filter_state.frequency_ambiguity_indices[key] = state_index;
+    }
+
+    const auto provider =
+        ppp_ar::makeMadocaFrequencyAmbiguityStateIndexProvider(filter_state);
+    const auto row = ppp_ar::buildMadocaArDesignRow(
+        fixture.satellite,
+        fixture.reference,
+        1,
+        2,
+        provider,
+        [&](const SatelliteId& satellite, int frequency_index) {
+            return fixture.wavelength(satellite, frequency_index);
+        });
+
+    ASSERT_TRUE(row.valid);
+    EXPECT_NEAR(ppp_ar::evaluateMadocaArDesignRow(row, filter_state.state), 7.0, 1e-12);
+    EXPECT_EQ(ppp_ar::madocaFrequencyAmbiguityStateIndex(filter_state, fixture.satellite, 2), 2);
+    EXPECT_EQ(ppp_ar::madocaFrequencyAmbiguityStateIndex(filter_state, fixture.satellite, -1), -1);
+    EXPECT_EQ(ppp_ar::madocaFrequencyAmbiguityStateIndex(
+                  filter_state, SatelliteId(GNSSSystem::GPS, 9), 0),
+              -1);
+}
+
+TEST(PPPArTest, ClaslibRatioThresholdTableMatchesAlpha10Lookup) {
+    EXPECT_TRUE(std::isinf(ppp_ar::claslibRatioThresholdForNb(0)));
+    EXPECT_NEAR(ppp_ar::claslibRatioThresholdForNb(1), 39.86, 1e-12);
+    EXPECT_NEAR(ppp_ar::claslibRatioThresholdForNb(3), 5.39, 1e-12);
+    EXPECT_NEAR(ppp_ar::claslibRatioThresholdForNb(30), 1.61, 1e-12);
+    EXPECT_NEAR(ppp_ar::claslibRatioThresholdForNb(60), 1.40, 1e-12);
+    EXPECT_NEAR(ppp_ar::claslibRatioThresholdForNb(99), 1.40, 1e-12);
+}
+
+TEST(PPPArTest, DirectDdFixUsesClaslibRatioThresholdWhenClasFilterEnabled) {
+    ppp_shared::PPPConfig config;
+    config.min_satellites_for_ar = 1;
+    config.ar_ratio_threshold = 2.0;
+
+    const auto satellites = std::vector<SatelliteId>{
+        SatelliteId(GNSSSystem::GPS, 1),
+        SatelliteId(GNSSSystem::GPS, 2),
+    };
+    const std::vector<int> state_indices = {4, 5};
+    const std::vector<double> scales = {1.0, 1.0};
+    const auto state = makeDirectDdState(0.16);
+    const auto ambiguity_states = makeDirectDdAmbiguities();
+
+    auto loose_config = config;
+    loose_config.use_clas_osr_filter = false;
+    const auto loose_attempt = ppp_ar::tryDirectDdFix(
+        loose_config,
+        state,
+        MatrixXd{},
+        ambiguity_states,
+        satellites,
+        state_indices,
+        scales,
+        {},
+        false);
+    EXPECT_TRUE(loose_attempt.fixed);
+    EXPECT_GT(loose_attempt.ratio, loose_attempt.required_ratio);
+    EXPECT_DOUBLE_EQ(loose_attempt.required_ratio, 2.0);
+
+    auto clas_config = config;
+    clas_config.use_clas_osr_filter = true;
+    const auto clas_attempt = ppp_ar::tryDirectDdFix(
+        clas_config,
+        state,
+        MatrixXd{},
+        ambiguity_states,
+        satellites,
+        state_indices,
+        scales,
+        {},
+        false);
+    EXPECT_FALSE(clas_attempt.fixed);
+    EXPECT_GT(clas_attempt.ratio, clas_config.ar_ratio_threshold);
+    EXPECT_NEAR(clas_attempt.required_ratio, 39.86, 1e-12);
+    EXPECT_LT(clas_attempt.ratio, clas_attempt.required_ratio);
+}
 
 TEST(PPPArTest, WlnlPreparationTracksEligibilitySkipReasons) {
     ppp_shared::PPPConfig config;

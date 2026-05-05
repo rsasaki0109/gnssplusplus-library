@@ -6,7 +6,9 @@
 #include <array>
 #include <cstdlib>
 #include <map>
+#include <set>
 #include <string>
+#include <utility>
 
 namespace libgnss::ppp_shared {
 
@@ -84,10 +86,28 @@ struct PPPConfig {
     std::string orbit_file_path;
     std::string clock_file_path;
     bool use_ssr_corrections = false;
+    bool require_ssr_orbit_clock = false;
+    bool require_ssr_observation_biases = false;
+    bool enforce_ssr_orbit_iode = false;
+    bool enforce_ssr_orbit_iode_admission_only = false;
+    // MADOCA SSR corrections are delivered at the antenna phase center
+    // (EPHOPT_SSRAPC in MADOCALIB), so the satellite PCO must NOT be
+    // re-applied on top of the SSR orbit correction.  Setting this to true
+    // suppresses satellite PCO application regardless of whether ANTEX is
+    // loaded.  The default (false) preserves the RTKLIB/brdc+ssrcom path
+    // that applies satellite PCO to convert CoM -> APC.
+    bool ssr_orbit_reference_is_apc = false;
+    // Skip the admission-only IODE gate for the first N epochs so sparse
+    // stale-CSSR-IODE observations (e.g. BDS at run start) can seed the
+    // filter before the gate activates. 0 applies the gate from epoch 0.
+    int ssr_orbit_iode_admission_gate_warmup_epochs = 0;
+    bool use_rtklib_broadcast_selection = false;
     bool use_clas_osr_filter = false;
     std::string ssr_file_path;
     int l6_gps_week = 0;  // GPS week for L6 binary decode (0 = auto-detect)
     Vector3d approximate_position = Vector3d::Zero();  // RINEX APPROX POS for L6 network selection
+    std::set<GNSSSystem> allowed_systems;  // Empty means all observed systems are accepted.
+    bool allow_future_ssr_corrections = true;
     std::string ionex_file_path;
     std::string dcb_file_path;
     std::string antex_file_path;
@@ -100,9 +120,16 @@ struct PPPConfig {
     bool enable_ambiguity_resolution = false;
     double ar_ratio_threshold = 3.0;
     int min_satellites_for_ar = 6;
-    enum class ARMethod { DD_IFLC, DD_WLNL, DD_PER_FREQ };
+    enum class ARMethod { DD_IFLC, DD_WLNL, DD_PER_FREQ, DD_MADOCA_CASCADED };
     ARMethod ar_method = ARMethod::DD_IFLC;
+    bool clas_auto_wlnl_ar = true;
     int wl_min_averaging_epochs = 20;
+    // PPP holdamb: when true, integer DD NL constraints are projected onto
+    // per-frequency L1/L2 ambiguity states via iono-free combination
+    // (B_IF = alpha*B_L1 - beta*B_L2) and applied as a Kalman pseudo-update.
+    // When false, fixed integers are stored only for solveFixedPosition() WLS.
+    bool enable_ppp_holdamb = false;
+    double ppp_holdamb_innovation_gate_m = 0.0;  // 0 = no gate
 
     // Motion model
     bool kinematic_mode = false;
@@ -110,6 +137,26 @@ struct PPPConfig {
     bool use_dynamics_model = false;
     bool reset_clock_to_spp_each_epoch = true;
     bool reset_kinematic_position_to_spp_each_epoch = true;
+    bool prefer_receiver_position_seed = false;
+
+    // SPP bootstrap used for PPP initial position and per-epoch clock seeding.
+    bool spp_seed_use_zero_initial_position = false;
+    bool spp_seed_use_ionosphere_free_code = false;
+    bool spp_seed_enable_residual_rejection = false;
+    double spp_seed_residual_rejection_threshold = 20.0;
+    int spp_seed_residual_rejection_min_observations = 7;
+    bool spp_seed_use_pntpos_code_weight = false;
+    // Deprecated compatibility aliases for old diagnostic knobs.
+    bool spp_seed_enable_claslib_residual_rejection = false;
+    double spp_seed_claslib_residual_rejection_threshold = 20.0;
+    int spp_seed_claslib_residual_rejection_min_observations = 7;
+    bool spp_seed_use_claslib_code_weight = false;
+    bool spp_seed_enable_gps = true;
+    bool spp_seed_enable_galileo = true;
+    bool spp_seed_enable_qzss = true;
+    bool spp_seed_enable_beidou = true;
+    bool spp_seed_enable_glonass = true;
+    bool spp_seed_preserve_default_clock = false;
 
     // Kalman filter parameters
     double process_noise_position = 0.0;
@@ -131,12 +178,33 @@ struct PPPConfig {
     double code_phase_error_ratio_l2 = 100.0;
     double rtklib_phase_error_m = 0.003;
     double rtklib_phase_error_elevation_m = 0.003;
+    /// Multiplier applied on top of rtklibSystemErrorFactor for a given system.
+    /// Default 1.0 (no extra weighting). Used to de-weight a system whose
+    /// pseudorange exhibits residual systemic bias (e.g. BeiDou on MIZU
+    /// MADOCA day 091; see memory `madoca_bds_e_bias_root_cause_2026_05_01`).
+    double bds_error_multiplier = 1.0;
     int phase_measurement_min_lock_count = 1;
+    bool enable_initial_phase_admission_warm_start = false;
+    bool enable_all_frequency_initial_phase_admission_warm_start = false;
+    std::set<GNSSSystem> initial_phase_admission_warm_start_systems;
+    std::set<SatelliteId> initial_phase_admission_warm_start_satellites;
+    std::set<int> initial_phase_admission_warm_start_frequency_indexes;
+    std::set<std::pair<SatelliteId, int>>
+        initial_phase_admission_warm_start_satellite_frequency_pairs;
+    std::set<std::pair<SatelliteId, int>> phase_admission_excluded_satellite_frequency_pairs;
+    std::map<std::pair<SatelliteId, int>, GNSSTime>
+        phase_admission_excluded_before_by_satellite_frequency_pair;
+    std::map<std::pair<SatelliteId, int>, double>
+        phase_admission_residual_floor_by_satellite_frequency_pair;
+    bool reset_phase_ambiguity_on_before_exclusion = false;
+    double kinematic_preconvergence_phase_residual_floor_m = 200.0;
     bool use_carrier_phase_without_precise_products = true;
 
     // Atmospheric modeling
     bool estimate_troposphere = true;
     bool estimate_ionosphere = false;
+    bool enable_per_frequency_phase_bias_states = false;
+    bool initialize_phase_ambiguity_with_ionosphere_state = false;
     double initial_ionosphere_variance = 100.0;
     double process_noise_ionosphere = 1e-3;
     bool use_ionosphere_free = true;
@@ -170,10 +238,27 @@ struct PPPConfig {
     double clas_initial_position_variance = 100.0; // Position covariance at filter init
     double clas_clock_variance = 1e8;             // Clock state variance (reset each epoch)
     double clas_iono_prior_variance = 0.25;       // Ionosphere pseudo-observation variance
+    double clas_initial_ambiguity_std_cycles = 0.0; // 0 falls back to initial_ambiguity_variance
     double clas_ambiguity_reinit_threshold = 3000.0; // Re-init ambiguity when cov exceeds this
+    bool clas_phase_code_ambiguity_initialization = false; // CLASLIB-style L-P initialization
     double clas_anchor_sigma = 5.0;               // SPP anchor constraint sigma (m)
     double clas_outlier_sigma_scale = 50.0;       // Inflate variance when residual > N*sigma
+    bool clas_validate_fixed_solution = true;     // Extra LibGNSS++ fixed-solution gate
     bool clas_decouple_clock_position = true;      // Zero clock cross-covariance each epoch
+    bool clas_kinematic_position_reseed = false;   // CLASLIB-faithful: re-init position from SPP every kinematic epoch
+    double clas_kinematic_position_reseed_variance = 10000.0; // CLASLIB VAR_POS = 100^2
+    // Skip reseed when SPP seed quality is poor; protects against urban-canyon
+    // pin-to-bad-SPP. residual_rms above this threshold (m) bypasses reseed and
+    // keeps the prior KF position state. <=0 disables the gate.
+    double clas_kinematic_position_reseed_max_residual_rms_m = 0.0;
+    // WLNL Partial AR: when initial LAMBDA fails the ratio test, greedily
+    // exclude DD pairs whose |frac| exceeds the threshold (worst first) and
+    // re-run LAMBDA. Caps the number of exclusions and keeps a minimum pair
+    // count. Helps when many sats have wrong NL float values but a clean
+    // sub-set exists.
+    bool enable_wlnl_par = false;
+    int  wlnl_par_max_exclusions = 4;
+    double wlnl_par_exclude_frac_threshold = 0.20;
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
@@ -192,6 +277,14 @@ struct PPPConfig {
     int filter_iterations = 8;
 };
 
+using FrequencyAmbiguityKey = std::pair<SatelliteId, int>;
+
+inline FrequencyAmbiguityKey frequencyAmbiguityKey(
+    const SatelliteId& satellite,
+    int frequency_index) {
+    return {satellite, frequency_index};
+}
+
 struct PPPState {
     VectorXd state;
     MatrixXd covariance;
@@ -203,12 +296,15 @@ struct PPPState {
     int gal_clock_index = -1;
     int qzs_clock_index = -1;
     int bds_clock_index = -1;
+    int bds2_clock_index = -1;
+    int bds3_clock_index = -1;
     int trop_index = 8;
     int iono_index = 9;
     int amb_index = 9;
 
     std::map<SatelliteId, int> ionosphere_indices;
     std::map<SatelliteId, int> ambiguity_indices;
+    std::map<FrequencyAmbiguityKey, int> frequency_ambiguity_indices;
     int total_states = 9;
 };
 

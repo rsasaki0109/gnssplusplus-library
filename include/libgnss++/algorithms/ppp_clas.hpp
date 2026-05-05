@@ -37,8 +37,12 @@ struct MeasurementRow {
     double residual = 0.0;
     double variance = 0.0;
     SatelliteId satellite;
+    SatelliteId reference_satellite;
+    std::vector<SatelliteId> phase_ambiguities;
     bool is_phase = false;
     int freq_index = 0;
+    int covariance_group = -1;
+    double reference_variance = 0.0;
 };
 
 struct AmbiguityObservation {
@@ -63,9 +67,19 @@ struct AppliedOsrCorrections {
 struct KalmanUpdateStats {
     bool updated = false;
     int nobs = 0;
+    int code_rows = 0;
+    int phase_rows = 0;
+    int ionosphere_constraint_rows = 0;
+    double code_residual_rms_m = 0.0;
+    double code_residual_max_abs_m = 0.0;
+    SatelliteId code_residual_max_sat;
+    double phase_residual_rms_m = 0.0;
+    double phase_residual_max_abs_m = 0.0;
+    SatelliteId phase_residual_max_sat;
     VectorXd dx;
     VectorXd residuals;
     VectorXd variances;
+    std::set<SatelliteId> active_phase_ambiguities;
     MatrixXd pre_anchor_covariance;
 };
 
@@ -146,7 +160,7 @@ void markSlipCompensationFromAmbiguities(
 void ensureAmbiguityStates(
     ppp_shared::PPPState& filter_state,
     const std::vector<OSRCorrection>& osr_corrections,
-    double initial_variance = 3600.0);
+    const ppp_shared::PPPConfig& config);
 
 void applyPendingPhaseBiasStateShifts(
     ppp_shared::PPPState& filter_state,
@@ -171,7 +185,8 @@ KalmanUpdateStats applyMeasurementUpdate(
     ppp_shared::PPPState& filter_state,
     const std::vector<MeasurementRow>& measurements,
     const ppp_shared::PPPConfig& config,
-    const PositionSolution* seed_solution = nullptr);
+    const PositionSolution* seed_solution = nullptr,
+    const GNSSTime* time = nullptr);
 
 EpochUpdateResult runEpochMeasurementUpdate(
     const ObservationData& obs,
@@ -214,6 +229,7 @@ void logUpdateSummary(
 
 PositionSolution finalizeEpochSolution(
     const ppp_shared::PPPState& filter_state,
+    const GNSSTime& time,
     bool fixed,
     double ar_ratio,
     int fixed_ambiguities,

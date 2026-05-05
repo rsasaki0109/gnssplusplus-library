@@ -54,7 +54,8 @@ ODAIBA_DATA_FILES = (
     "data/driving/Tokyo_Data/Odaiba/reference.csv",
 )
 DEFAULT_PPC_DATASET_ROOT = Path("/tmp/PPC-Dataset-data/PPC-Dataset")
-DEFAULT_RTKLIB_BIN = Path("/workspace/ai_coding_ws/rtklib_v2_ws/RTKLIB/rnx2rtkp")
+DEFAULT_RTKLIB_BIN = Path(os.environ.get("RTKLIB_RNX2RTKP", "rnx2rtkp"))
+CLASLIB_ROOT = Path(os.environ.get("CLASLIB_ROOT", ""))
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -834,6 +835,8 @@ def build_qzss_cssr_mask_message(
     iod: int,
     prn: int = 3,
     prns: tuple[int, ...] | None = None,
+    system_id: int = 0,
+    prn_base: int = 1,
     sync: bool = True,
     sigmask: int = 0x8000,
 ) -> tuple[bytes, int]:
@@ -856,11 +859,11 @@ def build_qzss_cssr_mask_message(
     bit += 4
     set_unsigned_bits(payload, bit, 4, 1)
     bit += 4
-    set_unsigned_bits(payload, bit, 4, 0)
+    set_unsigned_bits(payload, bit, 4, system_id)
     bit += 4
     svmask = 0
     for satellite_prn in satellites:
-        svmask |= encode_cssr_satellite_mask(satellite_prn)
+        svmask |= encode_cssr_satellite_mask(satellite_prn, prn_base=prn_base)
     set_unsigned_bits(payload, bit, 40, svmask)
     bit += 40
     set_unsigned_bits(payload, bit, 16, sigmask)
@@ -2841,7 +2844,10 @@ class CLIToolsTest(unittest.TestCase):
         "test_ppp_static_signoff_cli_supports_real_data_ar_signoff",
         "test_clas_ppp_cli_writes_summary_for_named_profile",
         "test_clas_ppp_cli_accepts_compact_sampled_corrections",
+        "test_clas_ppp_cli_accepts_expanded_sampled_corrections",
         "test_clas_ppp_cli_accepts_direct_qzss_l6_corrections",
+        "test_clas_ppp_cli_reuses_qzss_expanded_cache",
+        "test_clas_ppp_cli_rejects_invalid_qzss_cache_options",
         "test_clas_ppp_cli_accepts_direct_qzss_l6_orbit_clock_corrections",
         "test_clas_ppp_cli_accepts_direct_qzss_l6_code_bias_and_ura",
         "test_clas_ppp_cli_accepts_direct_qzss_l6_with_atmos_inventory",
@@ -3173,6 +3179,14 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("Valid solutions:", result.stdout)
             self.assertTrue(output_path.exists())
             self.assertIn("LibGNSS++ Position Solution", output_path.read_text(encoding="ascii"))
+
+    def test_spp_cli_exposes_native_seed_controls(self) -> None:
+        result = self.run_gnss("spp", "--help")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("--elevation-mask", result.stdout)
+        self.assertIn("--ionosphere-free-code", result.stdout)
+        self.assertIn("--navsys", result.stdout)
 
     def test_visibility_cli_writes_csv_and_summary_for_static_data(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_visibility_cli_") as temp_dir:
@@ -3855,6 +3869,331 @@ class CLIToolsTest(unittest.TestCase):
                 + (last_record["z"] - true_position[2]) ** 2
             )
             self.assertLess(error, 1.0)
+
+    def test_ppp_cli_help_lists_per_frequency_phase_bias_option(self) -> None:
+        result = self.run_gnss("ppp", "--help")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("--enable-per-frequency-phase-bias-states", result.stdout)
+        self.assertIn("--disable-per-frequency-phase-bias-states", result.stdout)
+        self.assertIn("--kinematic-preconvergence-phase-residual-floor", result.stdout)
+        self.assertIn("--phase-measurement-min-lock-count", result.stdout)
+        self.assertIn("0 admits immediately", result.stdout)
+        self.assertIn("--enable-initial-phase-admission-warm-start", result.stdout)
+        self.assertIn("--disable-initial-phase-admission-warm-start", result.stdout)
+        self.assertIn("--enable-all-frequency-initial-phase-admission-warm-start", result.stdout)
+        self.assertIn("--disable-all-frequency-initial-phase-admission-warm-start", result.stdout)
+        self.assertIn("--claslib-parity", result.stdout)
+        self.assertIn("--ported-clasnat", result.stdout)
+        self.assertIn("--clas-anchor-sigma", result.stdout)
+        self.assertIn("--clas-code-variance-scale", result.stdout)
+        self.assertIn("--clas-phase-variance", result.stdout)
+        self.assertIn("--clas-outlier-sigma-scale", result.stdout)
+        self.assertIn("--navsys", result.stdout)
+        self.assertIn("--initial-phase-admission-warm-start-navsys", result.stdout)
+        self.assertIn("0=all; default", result.stdout)
+        self.assertIn("--initial-phase-admission-warm-start-sats", result.stdout)
+        self.assertIn("--initial-phase-admission-warm-start-frequency-indexes", result.stdout)
+        self.assertIn("--initial-phase-admission-warm-start-sat-frequency-pairs", result.stdout)
+        self.assertIn("--phase-admission-exclude-sat-frequency-pairs", result.stdout)
+        self.assertIn("--phase-admission-exclude-sat-frequency-pairs-before", result.stdout)
+        self.assertIn("--phase-admission-residual-floor-sat-frequency-pairs", result.stdout)
+        self.assertIn("--exclude-known-bad-madoca-sats", result.stdout)
+        self.assertIn("mizu-2025-04", result.stdout)
+        self.assertIn("--reset-phase-ambiguity-on-before-exclusion", result.stdout)
+        self.assertIn("R09:0,C30:1", result.stdout)
+        self.assertIn("E31:0,C29:1", result.stdout)
+        self.assertIn("E31:0:2360:173610", result.stdout)
+        self.assertIn("C30:1:60", result.stdout)
+        self.assertIn("default all", result.stdout)
+        self.assertIn("--no-ionosphere-free", result.stdout)
+        self.assertIn("--ionosphere-free", result.stdout)
+        self.assertIn("--estimate-ionosphere", result.stdout)
+        self.assertIn("--no-estimate-ionosphere", result.stdout)
+        self.assertIn("--enable-ionosphere-aware-phase-ambiguity-init", result.stdout)
+        self.assertIn("--disable-ionosphere-aware-phase-ambiguity-init", result.stdout)
+        self.assertIn("--disable-ppp-outlier-detection", result.stdout)
+        self.assertIn("--enable-ppp-outlier-detection", result.stdout)
+
+    def test_ppp_cli_rejects_unknown_exclude_known_bad_madoca_sats_preset(self) -> None:
+        result = self.run_gnss(
+            "ppp",
+            "--obs", "/nonexistent.obs",
+            "--nav", "/nonexistent.nav",
+            "--out", "/tmp/unused.pos",
+            "--exclude-known-bad-madoca-sats", "not-a-real-preset",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unknown --exclude-known-bad-madoca-sats preset", result.stderr)
+        self.assertIn("mizu-2025-04", result.stderr)
+
+    def test_ppp_cli_exclude_known_bad_madoca_sats_preset_expands(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_preset_expand_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, _true_position = (
+                build_synthetic_ppp_inputs_with_atmos(temp_root)
+            )
+            out_path = temp_root / "preset_expand.pos"
+            result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs", str(obs_path),
+                "--sp3", str(sp3_path),
+                "--clk", str(clk_path),
+                "--ssr", str(ssr_path),
+                "--exclude-known-bad-madoca-sats", "mizu-2025-04",
+                "--max-epochs", "2",
+                "--convergence-min-epochs", "1",
+                "--out", str(out_path),
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            for pair in (
+                "J02:0",
+                "J02:1",
+                "J03:0",
+                "G26:0",
+                "G26:1",
+                "G16:0",
+                "G16:1",
+            ):
+                self.assertIn(pair, result.stdout, msg=f"preset did not expand {pair}")
+
+    def test_ppp_cli_can_enable_per_frequency_phase_bias_states(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_phase_bias_states_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, _true_position = (
+                build_synthetic_ppp_inputs_with_atmos(temp_root)
+            )
+            out_path = temp_root / "ppp_phase_bias_states.pos"
+            summary_path = temp_root / "ppp_phase_bias_states.json"
+            filter_log_path = temp_root / "ppp_phase_bias_states_filter.csv"
+            residual_log_path = temp_root / "ppp_phase_bias_states_residual.csv"
+            correction_log_path = temp_root / "ppp_phase_bias_states_correction.csv"
+
+            result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--no-ionosphere-free",
+                "--estimate-ionosphere",
+                "--enable-per-frequency-phase-bias-states",
+                "--kinematic-preconvergence-phase-residual-floor",
+                "20",
+                "--phase-measurement-min-lock-count",
+                "0",
+                "--enable-ionosphere-aware-phase-ambiguity-init",
+                "--enable-initial-phase-admission-warm-start",
+                "--initial-phase-admission-warm-start-navsys",
+                "1",
+                "--initial-phase-admission-warm-start-sats",
+                "G01,G02",
+                "--initial-phase-admission-warm-start-frequency-indexes",
+                "1",
+                "--initial-phase-admission-warm-start-sat-frequency-pairs",
+                "G01:1,G02:1",
+                "--phase-admission-exclude-sat-frequency-pairs",
+                "G01:1",
+                "--phase-admission-exclude-sat-frequency-pairs-before",
+                "G02:1:9999:0",
+                "--phase-admission-residual-floor-sat-frequency-pairs",
+                "G02:1:30",
+                "--convergence-min-epochs",
+                "1",
+                "--disable-ppp-outlier-detection",
+                "--no-estimate-troposphere",
+                "--out",
+                str(out_path),
+                "--summary-json",
+                str(summary_path),
+                "--ppp-filter-log",
+                str(filter_log_path),
+                "--ppp-residual-log",
+                str(residual_log_path),
+                "--ppp-correction-log",
+                str(correction_log_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("CLAS OSR filter: off", result.stdout)
+            self.assertIn("ionosphere-free combination: off", result.stdout)
+            self.assertIn("estimate ionosphere: on", result.stdout)
+            self.assertIn("per-frequency phase-bias states: on", result.stdout)
+            self.assertIn("phase measurement min lock count: 0", result.stdout)
+            self.assertIn("initial phase admission warm start: on", result.stdout)
+            self.assertIn("all-frequency initial phase admission warm start: off", result.stdout)
+            self.assertIn("initial phase admission warm-start navsys mask: 1", result.stdout)
+            self.assertIn("initial phase admission warm-start systems: GPS", result.stdout)
+            self.assertIn("initial phase admission warm-start satellites: G01 G02", result.stdout)
+            self.assertIn("initial phase admission warm-start frequency indexes: 1", result.stdout)
+            self.assertIn(
+                "initial phase admission warm-start satellite/frequency pairs: G01:1 G02:1",
+                result.stdout,
+            )
+            self.assertIn(
+                "phase admission excluded satellite/frequency pairs: G01:1",
+                result.stdout,
+            )
+            self.assertIn(
+                "phase admission excluded-before satellite/frequency pairs: G02:1:9999:0",
+                result.stdout,
+            )
+            self.assertIn(
+                "phase admission residual floors: G02:1:30",
+                result.stdout,
+            )
+            self.assertIn("PPP outlier detection: off", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertFalse(payload["use_clas_osr_filter"])
+            self.assertFalse(payload["use_ionosphere_free"])
+            self.assertTrue(payload["estimate_ionosphere"])
+            self.assertTrue(payload["per_frequency_phase_bias_states"])
+            self.assertEqual(payload["kinematic_preconvergence_phase_residual_floor_m"], 20.0)
+            self.assertEqual(payload["phase_measurement_min_lock_count"], 0)
+            self.assertTrue(payload["initial_phase_admission_warm_start"])
+            self.assertFalse(payload["all_frequency_initial_phase_admission_warm_start"])
+            self.assertEqual(payload["initial_phase_admission_warm_start_navsys_mask"], 1)
+            self.assertFalse(payload["initial_phase_admission_warm_start_unrestricted"])
+            self.assertEqual(payload["initial_phase_admission_warm_start_systems"], ["GPS"])
+            self.assertFalse(payload["initial_phase_admission_warm_start_satellites_unrestricted"])
+            self.assertEqual(payload["initial_phase_admission_warm_start_satellites"], ["G01", "G02"])
+            self.assertFalse(payload["initial_phase_admission_warm_start_frequency_indexes_unrestricted"])
+            self.assertEqual(payload["initial_phase_admission_warm_start_frequency_indexes"], [1])
+            self.assertFalse(
+                payload["initial_phase_admission_warm_start_sat_frequency_pairs_unrestricted"]
+            )
+            self.assertEqual(
+                payload["initial_phase_admission_warm_start_sat_frequency_pairs"],
+                ["G01:1", "G02:1"],
+            )
+            self.assertFalse(payload["phase_admission_excluded_sat_frequency_pairs_unrestricted"])
+            self.assertEqual(payload["phase_admission_excluded_sat_frequency_pairs"], ["G01:1"])
+            self.assertFalse(payload["phase_admission_excluded_before_sat_frequency_pairs_unrestricted"])
+            self.assertEqual(
+                payload["phase_admission_excluded_before_sat_frequency_pairs"],
+                ["G02:1:9999:0"],
+            )
+            self.assertFalse(payload["phase_admission_residual_floor_sat_frequency_pairs_unrestricted"])
+            self.assertEqual(payload["phase_admission_residual_floor_sat_frequency_pairs"], ["G02:1:30"])
+            self.assertFalse(payload["reset_phase_ambiguity_on_before_exclusion"])
+            self.assertTrue(payload["ionosphere_aware_phase_ambiguity_init"])
+            self.assertFalse(payload["ppp_outlier_detection_enabled"])
+            self.assertEqual(payload["valid_solutions"], 4)
+            self.assertTrue(out_path.exists())
+            with filter_log_path.open(newline="", encoding="ascii") as stream:
+                filter_rows = list(csv.DictReader(stream))
+            self.assertTrue(filter_rows)
+            self.assertTrue(any(int(row["code_rows"]) == 12 for row in filter_rows))
+            self.assertTrue(any(0 < int(row["phase_rows"]) < 12 for row in filter_rows))
+            self.assertTrue(any(int(row["ionosphere_constraint_rows"]) == 6 for row in filter_rows))
+            with residual_log_path.open(newline="", encoding="ascii") as stream:
+                residual_rows = list(csv.DictReader(stream))
+            self.assertTrue(residual_rows)
+            self.assertTrue(
+                any(
+                    row["sat"] == "G01"
+                    and row["frequency_index"] == "1"
+                    and row["phase_skip_reason"] == "excluded_sat_frequency_pair"
+                    for row in residual_rows
+                )
+            )
+            self.assertTrue(
+                any(
+                    row["sat"] == "G02"
+                    and row["frequency_index"] == "1"
+                    and row["phase_skip_reason"]
+                    == "excluded_sat_frequency_pair_before_time"
+                    for row in residual_rows
+                )
+            )
+            self.assertIn("primary_observation_code", residual_rows[0])
+            self.assertIn("phase_candidate", residual_rows[0])
+            self.assertIn("phase_skip_reason", residual_rows[0])
+            self.assertIn("innovation_variance_m2", residual_rows[0])
+            self.assertIn("innovation_inverse_diagonal_1_per_m2", residual_rows[0])
+            self.assertIn("innovation_covariance_code_coupling_abs_m2", residual_rows[0])
+            self.assertIn("innovation_covariance_phase_coupling_abs_m2", residual_rows[0])
+            self.assertIn(
+                "innovation_covariance_ionosphere_constraint_coupling_abs_m2",
+                residual_rows[0],
+            )
+            self.assertIn("innovation_inverse_code_coupling_abs_1_per_m2", residual_rows[0])
+            self.assertIn("innovation_inverse_phase_coupling_abs_1_per_m2", residual_rows[0])
+            self.assertIn(
+                "innovation_inverse_ionosphere_constraint_coupling_abs_1_per_m2",
+                residual_rows[0],
+            )
+            self.assertIn("position_x_kalman_gain", residual_rows[0])
+            self.assertIn("position_y_kalman_gain", residual_rows[0])
+            self.assertIn("position_z_kalman_gain", residual_rows[0])
+            self.assertIn("position_update_contribution_x_m", residual_rows[0])
+            self.assertIn("position_update_contribution_y_m", residual_rows[0])
+            self.assertIn("position_update_contribution_z_m", residual_rows[0])
+            self.assertIn("position_update_contribution_3d_m", residual_rows[0])
+            self.assertIn("receiver_clock_state_index", residual_rows[0])
+            self.assertIn("receiver_clock_kalman_gain", residual_rows[0])
+            self.assertIn("receiver_clock_update_contribution_m", residual_rows[0])
+            self.assertIn("ionosphere_state_index", residual_rows[0])
+            self.assertIn("ionosphere_kalman_gain", residual_rows[0])
+            self.assertIn("ionosphere_update_contribution_m", residual_rows[0])
+            self.assertIn("ambiguity_design_coeff", residual_rows[0])
+            self.assertIn("ambiguity_kalman_gain", residual_rows[0])
+            self.assertIn("ambiguity_update_contribution_m", residual_rows[0])
+            self.assertTrue(
+                any(
+                    row["row_type"] == "phase"
+                    and row["phase_accepted"] == "1"
+                    and row["primary_observation_code"] == "C2W"
+                    and row["secondary_observation_code"] == ""
+                    and int(row["frequency_index"]) == 1
+                    and int(row["ambiguity_lock_count"]) >= int(row["required_lock_count"])
+                    and float(row["ionosphere_coefficient"]) > 1.0
+                    for row in residual_rows
+                )
+            )
+            self.assertTrue(
+                any(
+                    row["row_type"] == "phase"
+                    and float(row["innovation_variance_m2"]) > 0.0
+                    and float(row["innovation_inverse_diagonal_1_per_m2"]) > 0.0
+                    and row["innovation_inverse_code_coupling_abs_1_per_m2"] != ""
+                    and row["innovation_inverse_phase_coupling_abs_1_per_m2"] != ""
+                    and row["position_x_kalman_gain"] != ""
+                    and row["position_update_contribution_3d_m"] != ""
+                    and int(row["receiver_clock_state_index"]) >= 0
+                    and float(row["receiver_clock_design_coeff"]) == 1.0
+                    and row["receiver_clock_kalman_gain"] != ""
+                    and int(row["ionosphere_state_index"]) >= 0
+                    and float(row["ionosphere_design_coeff"]) < 0.0
+                    and row["ionosphere_kalman_gain"] != ""
+                    and int(row["ambiguity_state_index"]) >= 0
+                    and float(row["ambiguity_design_coeff"]) == 1.0
+                    and row["ambiguity_kalman_gain"] != ""
+                    for row in residual_rows
+                )
+            )
+            with correction_log_path.open(newline="", encoding="ascii") as stream:
+                correction_rows = list(csv.DictReader(stream))
+            self.assertTrue(correction_rows)
+            self.assertIn("has_carrier_phase", correction_rows[0])
+            self.assertTrue(
+                any(
+                    row["primary_observation_code"] == "C2W"
+                    and row["secondary_observation_code"] == ""
+                    and int(row["frequency_index"]) == 1
+                    and row["has_carrier_phase"] == "1"
+                    and float(row["ionosphere_coefficient"]) > 1.0
+                    for row in correction_rows
+                )
+            )
 
     def test_ppp_cli_accepts_ionex_and_dcb_products(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_bias_products_test_") as temp_dir:
@@ -4751,6 +5090,51 @@ class CLIToolsTest(unittest.TestCase):
             corrections_csv = corrections_path.read_text(encoding="ascii")
             self.assertIn("# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m", corrections_csv)
             self.assertIn("1316,518400.000,G,3,0.000000,0.000000,0.000000,0.025600,0.000000", corrections_csv)
+
+    def test_qzss_l6_info_maps_clas_system_id_four_to_qzss(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_clas_qzss_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_qzss.bin"
+            corrections_path = temp_root / "session_qzss_corrections.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(
+                            tow=518400,
+                            iod=3,
+                            prn=1,
+                            system_id=4,
+                            prn_base=1,
+                            sync=True,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            network_id=1,
+                            dclock_m=0.025,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--limit",
+                "5",
+                "--gps-week",
+                "2068",
+                "--extract-compact-corrections",
+                str(corrections_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("detail=systems=J:1", result.stdout)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertIn("2068,518400.000,J,1,0.000000,0.000000,0.000000,0.025600,0.000000", corrections_csv)
+            self.assertNotIn(",S,", corrections_csv)
 
     def test_qzss_l6_info_extracts_separate_orbit_clock_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_orbit_clock_") as temp_dir:
@@ -5926,7 +6310,7 @@ class CLIToolsTest(unittest.TestCase):
             corrections_csv = corrections_path.read_text(encoding="ascii")
             self.assertEqual(
                 corrections_csv.strip(),
-                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
+                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,pdi:<id>=<n>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
             )
 
     def test_qzss_l6_info_compact_flush_policy_can_require_both_orbit_and_clock(self) -> None:
@@ -5976,7 +6360,7 @@ class CLIToolsTest(unittest.TestCase):
             orbit_and_clock_csv = orbit_and_clock_path.read_text(encoding="ascii")
             self.assertEqual(
                 orbit_and_clock_csv.strip(),
-                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
+                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,pdi:<id>=<n>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
             )
 
     def test_qzss_l6_info_compact_atmos_merge_policy_no_carry_drops_stec_coefficients_between_epochs(self) -> None:
@@ -6056,6 +6440,80 @@ class CLIToolsTest(unittest.TestCase):
                 if line.startswith("2200,518430.000")
             )
             self.assertNotIn("atmos_stec_c00_tecu:G03=1.500000", no_carry_second_row)
+
+    def test_qzss_l6_info_compact_atmos_network_rows_carry_gridded_residuals_between_epochs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_network_atmos_carry_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_network_atmos_carry.bin"
+            output_path = temp_root / "compact.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_stec_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            selected_satellites=1,
+                            stec_type=0,
+                            stec_c00_tecu=1.5,
+                        ),
+                        build_qzss_cssr_gridded_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            selected_satellites=1,
+                            stec_residuals_tecu=(0.24,),
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0,
+                            iod=3,
+                            prn=3,
+                            dclock_m=0.025,
+                            sync=False,
+                        ),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518430, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=30,
+                            iod=3,
+                            prn=3,
+                            dclock_m=0.025,
+                            sync=False,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(output_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            second_rows = [
+                line
+                for line in output_path.read_text(encoding="ascii").splitlines()
+                if line.startswith("2200,518430.000")
+            ]
+            self.assertTrue(
+                any(
+                    "atmos_network_id=7" in row
+                    and "atmos_grid_count=1" in row
+                    and "atmos_stec_residuals_tecu:G03=0.240000" in row
+                    for row in second_rows
+                ),
+                msg="\n".join(second_rows),
+            )
 
     def test_qzss_l6_info_compact_atmos_merge_policy_network_locked_resets_carried_stec_coefficients(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_network_locked_") as temp_dir:
@@ -9189,7 +9647,14 @@ class CLIToolsTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertTrue(summary_path.exists())
+            self.assertIn("CLAS OSR filter: off", result.stdout)
+            self.assertIn("ionosphere-free combination: on", result.stdout)
+            self.assertIn("estimate ionosphere: off", result.stdout)
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertFalse(summary["use_clas_osr_filter"])
+            self.assertTrue(summary["use_ionosphere_free"])
+            self.assertFalse(summary["estimate_ionosphere"])
+            self.assertEqual(summary["filter_iterations"], 8)
             self.assertEqual(summary["clas_epoch_policy"], "strict-osr")
             self.assertEqual(summary["clas_osr_application"], "orbit-clock-only")
             self.assertEqual(summary["clas_phase_continuity"], "no-phase-bias")
@@ -9631,6 +10096,7 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["dataset"], "CLAS/MADOCA PPP")
             self.assertEqual(payload["correction_profile"], "madoca")
             self.assertEqual(payload["ssr_transport"], "file")
+            self.assertIsNone(payload["filter_iterations"])
             self.assertEqual(payload["epochs"], 3)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
 
@@ -9687,8 +10153,63 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["correction_profile"], "clas")
             self.assertEqual(payload["ssr_transport"], "file")
             self.assertEqual(payload["correction_encoding"], "compact")
+            self.assertEqual(payload["filter_iterations"], 1)
             self.assertEqual(payload["epochs"], 3)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+
+    def test_clas_ppp_cli_accepts_expanded_sampled_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_expanded_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            expanded_path = temp_root / "corrections.expanded.csv"
+            output_path = temp_root / "clas_ppp_expanded.pos"
+            summary_path = temp_root / "clas_ppp_expanded_summary.json"
+            expanded_path.write_text(
+                "\n".join(
+                    [
+                        "# week,tow,sat,dx,dy,dz,dclock_m",
+                        "1316,518400.000,G03,0.000000,0.000000,0.000000,0.025000",
+                        "1316,518430.000,G03,0.000000,0.000000,0.000000,0.025000",
+                        "1316,518460.000,G03,0.000000,0.000000,0.000000,0.025000",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--expanded-ssr",
+                str(expanded_path),
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+            self.assertIn("Finished CLAS/MADOCA PPP run.", result.stdout)
+            self.assertIn("encoding: expanded", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["correction_profile"], "clas")
+            self.assertEqual(payload["correction_encoding"], "expanded")
+            self.assertEqual(payload["expanded_ssr"], str(expanded_path))
+            self.assertEqual(payload["filter_iterations"], 1)
+            self.assertEqual(payload["epochs"], 3)
 
     def test_clas_ppp_cli_accepts_direct_qzss_l6_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_cli_") as temp_dir:
@@ -9757,8 +10278,114 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["correction_profile"], "clas")
             self.assertEqual(payload["ssr_transport"], "file")
             self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertEqual(payload["navsys_mask"], 25)
+            self.assertFalse(payload["navsys_all_observed"])
+            self.assertFalse(payload["qzss_cache_hit"])
+            self.assertGreater(payload["qzss_rows_written"], 0)
+            self.assertGreaterEqual(payload["qzss_rows_decoded"], payload["qzss_rows_written"])
             self.assertEqual(payload["epochs"], 3)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+
+    def test_clas_ppp_cli_reuses_qzss_expanded_cache(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_cache_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            l6_path = temp_root / "unused_l6.bin"
+            cache_path = temp_root / "qzss_cache.csv"
+            output_path = temp_root / "clas_ppp_l6_cache.pos"
+            summary_path = temp_root / "clas_ppp_l6_cache_summary.json"
+            l6_path.write_bytes(b"")
+            cache_path.write_text(
+                "\n".join(
+                    [
+                        "# week,tow,sat,dx,dy,dz,dclock_m",
+                        "1316,518400.000,G03,0.000000,0.000000,0.000000,0.025000",
+                        "1316,518430.000,G03,0.000000,0.000000,0.000000,0.025000",
+                        "1316,518460.000,G03,0.000000,0.000000,0.000000,0.025000",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--qzss-l6",
+                str(l6_path),
+                "--qzss-gps-week",
+                "1316",
+                "--qzss-expanded-cache",
+                str(cache_path),
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("reusing qzss l6 expanded cache:", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertTrue(payload["qzss_cache_hit"])
+            self.assertIsNone(payload["qzss_rows_written"])
+            self.assertIsNone(payload["qzss_rows_decoded"])
+            self.assertEqual(payload["qzss_expanded_csv"], str(cache_path))
+            self.assertEqual(payload["qzss_expanded_csv_size_bytes"], cache_path.stat().st_size)
+            self.assertEqual(payload["filter_iterations"], 1)
+
+    def test_clas_ppp_cli_rejects_invalid_qzss_cache_options(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_invalid_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            expanded_path = temp_root / "expanded.csv"
+            expanded_path.write_text("# week,tow,sat,dx,dy,dz,dclock_m\n", encoding="ascii")
+
+            negative_margin = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--qzss-l6",
+                str(temp_root / "corrections.l6"),
+                "--qzss-window-margin-seconds",
+                "-1",
+                "--out",
+                str(temp_root / "unused.pos"),
+            )
+            self.assertNotEqual(negative_margin.returncode, 0)
+            self.assertIn("--qzss-window-margin-seconds must be non-negative", negative_margin.stderr)
+
+            cache_without_l6 = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--expanded-ssr",
+                str(expanded_path),
+                "--qzss-expanded-cache",
+                str(temp_root / "cache.csv"),
+                "--out",
+                str(temp_root / "unused.pos"),
+            )
+            self.assertNotEqual(cache_without_l6.returncode, 0)
+            self.assertIn("--qzss-expanded-cache requires --qzss-l6", cache_without_l6.stderr)
 
     def test_clas_ppp_cli_accepts_direct_qzss_l6_orbit_clock_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_oc_cli_") as temp_dir:
@@ -13149,13 +13776,13 @@ class CLIToolsTest(unittest.TestCase):
 
 
     @unittest.skipUnless(
-        os.path.exists("/workspace/ai_coding_ws/gnssplusplus_thesis_ws/data/clas/claslib/data/0627239Q.obs"),
-        "CLAS regression data not available"
+        CLASLIB_ROOT and (CLASLIB_ROOT / "data/0627239Q.obs").exists(),
+        "CLAS regression data not available; set CLASLIB_ROOT"
     )
     def test_clas_ppp_regression_cm_accuracy(self) -> None:
         """Regression test: CLAS PPP must achieve sub-20cm (last100) with 1-hour data."""
         import numpy as np
-        data_dir = "/workspace/ai_coding_ws/gnssplusplus_thesis_ws/data/clas/claslib/data"
+        data_dir = str(CLASLIB_ROOT / "data")
         with tempfile.TemporaryDirectory(prefix="gnss_clas_regression_") as temp_dir:
             temp_root = Path(temp_dir)
             l6_path = f"{data_dir}/2019239Q.l6"

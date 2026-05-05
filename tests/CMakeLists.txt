@@ -25,6 +25,9 @@ if(GTest_FOUND)
         test_gnss_live.cpp
         test_ppp.cpp
         test_rinex_writer.cpp
+        test_madoca_core.cpp
+        test_madoca_parity.cpp
+        test_qzss_l6.cpp
         test_rtk_legacy.cpp
         test_spp.cpp
         test_rtk.cpp
@@ -66,6 +69,26 @@ if(GTest_FOUND)
     add_test(
         NAME python_cli_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_tools.py
+    )
+    add_test(
+        NAME python_ppp_correction_log_analysis_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppp_correction_log_analysis.py
+    )
+    add_test(
+        NAME python_ppp_filter_log_summary_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppp_filter_log_summary.py
+    )
+    add_test(
+        NAME python_ppp_residual_row_set_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppp_residual_row_set_diff.py
+    )
+    add_test(
+        NAME python_madoca_solution_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_solution_diff.py
+    )
+    add_test(
+        NAME python_madoca_satellite_set_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_satellite_set_diff.py
     )
     add_test(
         NAME python_packaging_tests

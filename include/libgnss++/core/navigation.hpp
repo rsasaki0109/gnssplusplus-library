@@ -16,7 +16,7 @@ struct Ephemeris {
                   delta_n(0), idot(0), omega_dot(0), cuc(0), cus(0), crc(0), crs(0),
                   cic(0), cis(0), af0(0), af1(0), af2(0), tgd(0), tgd_secondary(0),
                   glonass_taun(0), glonass_gamn(0), glonass_frequency_channel(0),
-                  week(0), health(0),
+                  week(0), health(0), sv_health(0), sv_accuracy(0),
                   ura(0), iodc(0), iode(0), valid(false) {}
 
     SatelliteId satellite;
@@ -164,6 +164,18 @@ public:
      * @brief Get best ephemeris for satellite at given time
      */
     const Ephemeris* getEphemeris(const SatelliteId& sat, const GNSSTime& time) const;
+
+    /**
+     * @brief Get RTKLIB/MADOCALIB-compatible broadcast ephemeris for satpos()
+     */
+    const Ephemeris* getRtklibEphemeris(const SatelliteId& sat, const GNSSTime& time) const;
+
+    /**
+     * @brief Get best ephemeris matching the broadcast issue of data
+     */
+    const Ephemeris* getEphemerisByIode(const SatelliteId& sat,
+                                        uint16_t iode,
+                                        const GNSSTime& time) const;
     
     /**
      * @brief Get all ephemeris for satellite
@@ -327,8 +339,13 @@ struct SSROrbitClockCorrection {
     Vector3d orbit_correction_ecef = Vector3d::Zero();   ///< Orbit delta in meters (ECEF or RAC per container flag)
     double clock_correction_m = 0.0;                     ///< Clock delta in meters
     double ura_sigma_m = 0.0;                            ///< SSR URA sigma in meters
+    int orbit_iode = -1;                                 ///< Broadcast ephemeris IODE used by orbit correction
     std::map<uint8_t, double> code_bias_m;               ///< SSR code biases keyed by RTCM signal id
     std::map<uint8_t, double> phase_bias_m;              ///< SSR phase biases keyed by RTCM signal id
+    /// MADOCA CSSR phase-discontinuity indicators (2 bits, 0..3) keyed by RTCM signal id.
+    /// When the value for (satellite, signal) changes between consecutive epochs, the
+    /// receiver-side accumulated ambiguity should be reset (PDI change = cycle slip).
+    std::map<uint8_t, uint8_t> phase_discontinuity_indicators;
     int bias_network_id = 0;                             ///< Optional CLAS bias network id (0 when unset)
     int atmos_network_id = 0;                            ///< Optional CLAS atmosphere network id (0 when unset)
     std::map<std::string, std::string> atmos_tokens;     ///< Optional atmospheric metadata tokens
@@ -346,7 +363,7 @@ struct SSROrbitClockCorrection {
  *
  * This stores orbit/clock corrections keyed by satellite and epoch and can
  * linearly interpolate them. The current loader accepts a simple CSV format:
- * `week,tow,sat,dx,dy,dz,dclock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]`
+ * `week,tow,sat,dx,dy,dz,dclock_m[,ura_sigma_m=<m>][,orbit_iode=<n>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]`
  */
 class SSRProducts {
 public:
@@ -365,7 +382,14 @@ public:
                                GNSSTime* atmos_reference_time = nullptr,
                                GNSSTime* phase_bias_reference_time = nullptr,
                                GNSSTime* clock_reference_time = nullptr,
-                               int preferred_network_id = 0) const;
+                               int preferred_network_id = 0,
+                               bool allow_future_corrections = true,
+                               bool require_orbit_clock = false,
+                               int* orbit_iode = nullptr,
+                               std::map<uint8_t, uint8_t>* phase_discontinuity_indicators = nullptr,
+                               int* selected_atmos_network_id = nullptr,
+                               int* selected_code_bias_network_id = nullptr,
+                               int* selected_phase_bias_network_id = nullptr) const;
 
     bool loadCSVFile(const std::string& filename);
 

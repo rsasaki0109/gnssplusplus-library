@@ -139,6 +139,76 @@ int bandPriority(GNSSSystem system, int band, bool primary) {
     return signal_policy::observationPriority(system, "C" + std::to_string(band), primary);
 }
 
+constexpr int kInvalidObservationPriority = 1000;
+
+std::string trackingPriorityChars(GNSSSystem system, int band) {
+    switch (system) {
+        case GNSSSystem::GPS:
+            if (band == 1) return "CPYWMNSL";
+            if (band == 2) return "PYWCMNDLSX";
+            if (band == 5) return "QXI";
+            break;
+        case GNSSSystem::GLONASS:
+            if (band == 1 || band == 2) return "CP";
+            break;
+        case GNSSSystem::Galileo:
+            if (band == 1) return "CABXZ";
+            if (band == 5 || band == 7 || band == 8) return "QXI";
+            if (band == 6) return "CXE";
+            break;
+        case GNSSSystem::BeiDou:
+            if (band == 2 || band == 6) return "IQX";
+            if (band == 7) return "DIQX";
+            if (band == 1 || band == 5 || band == 8) return "PXD";
+            break;
+        case GNSSSystem::QZSS:
+            if (band == 1) return "LXSCE";
+            if (band == 2) return "LXS";
+            if (band == 5) return "QXI";
+            if (band == 6) return "SEZ";
+            break;
+        case GNSSSystem::NavIC:
+            if (band == 5 || band == 9) return "ABCX";
+            break;
+        default:
+            break;
+    }
+    return "";
+}
+
+int trackingCodePriority(GNSSSystem system, const std::string& obs_type) {
+    if (obs_type.size() < 3) {
+        return 0;
+    }
+    const std::string priorities = trackingPriorityChars(system, rinexBand(obs_type));
+    if (priorities.empty()) {
+        return 0;
+    }
+    const size_t pos = priorities.find(obs_type[2]);
+    return pos == std::string::npos ? static_cast<int>(priorities.size()) : static_cast<int>(pos);
+}
+
+int observationSelectionPriority(GNSSSystem system, const std::string& obs_type, bool primary) {
+    const int signal_priority = signal_policy::observationPriority(system, obs_type, primary);
+    if (signal_priority >= 100) {
+        return kInvalidObservationPriority;
+    }
+    return signal_priority * 16 + trackingCodePriority(system, obs_type);
+}
+
+std::string observationSelectionKey(const std::string& obs_type) {
+    return obs_type.size() >= 3 ? obs_type.substr(1, 2) : std::string{};
+}
+
+bool matchesObservationSelection(const std::string& obs_type,
+                                 int selected_band,
+                                 const std::string& selected_key) {
+    if (selected_band < 0 || rinexBand(obs_type) != selected_band) {
+        return false;
+    }
+    return selected_key.empty() || observationSelectionKey(obs_type) == selected_key;
+}
+
 bool isCodeObservationType(const std::string& obs_type) {
     return !obs_type.empty() && (obs_type[0] == 'C' || obs_type[0] == 'P');
 }
@@ -231,6 +301,7 @@ void assignObservationField(Observation& obs,
                             int lli,
                             int signal_strength) {
     if (isCodeObservationType(obs_type)) {
+        obs.observation_code = obs_type;
         obs.pseudorange = value;
         obs.has_pseudorange = true;
     } else if (isCarrierObservationType(obs_type)) {
@@ -253,11 +324,77 @@ void assignObservationField(Observation& obs,
     }
 }
 
+// For a single satellite epoch, emit one additional Observation per band
+// that is neither the primary-selected nor secondary-selected band but
+// still maps to a valid secondary-priority tracking code.  This enables
+// 3rd-frequency ambiguity states (EWL cascade, QZSS/GPS L5, Galileo E5a,
+// BDS B2a) to be populated even though the primary/secondary picker only
+// keeps two bands.  The emitted Observation carries the code, phase,
+// Doppler, and SNR fields for the best tracking code within the band.
+void emitExtraBandObservations(
+    GNSSSystem system,
+    const SatelliteId& sat,
+    const std::vector<std::string>& obs_types,
+    const std::vector<double>& obs_values,
+    const std::vector<int>& lli_flags,
+    const std::vector<int>& signal_strength,
+    int primary_band,
+    int secondary_band,
+    ObservationData& obs_data) {
+    struct BandChoice {
+        int priority = kInvalidObservationPriority;
+        std::string key;
+    };
+    std::map<int, BandChoice> band_choices;
+
+    const size_t obs_count = std::min(obs_types.size(), obs_values.size());
+    for (size_t i = 0; i < obs_count; ++i) {
+        if (obs_values[i] == 0.0) continue;
+        const std::string& obs_type = obs_types[i];
+        if (!isCodeObservationType(obs_type)) continue;
+        const int band = rinexBand(obs_type);
+        if (band < 0 || band == primary_band || band == secondary_band) continue;
+        const int priority = observationSelectionPriority(system, obs_type, false);
+        if (priority >= kInvalidObservationPriority) continue;
+        auto it = band_choices.find(band);
+        if (it == band_choices.end() || priority < it->second.priority) {
+            band_choices[band] = {priority, observationSelectionKey(obs_type)};
+        }
+    }
+
+    for (const auto& [band, choice] : band_choices) {
+        Observation obs_extra;
+        obs_extra.satellite = sat;
+        obs_extra.signal = secondarySignalForSystem(system);
+        obs_extra.valid = true;
+        bool has_data = false;
+
+        for (size_t i = 0; i < obs_count; ++i) {
+            if (obs_values[i] == 0.0) continue;
+            const std::string& obs_type = obs_types[i];
+            if (!matchesObservationSelection(obs_type, band, choice.key)) continue;
+            if (!has_data) {
+                obs_extra.signal = signalForObservationType(system, obs_type, false);
+            }
+            assignObservationField(
+                obs_extra, obs_type, obs_values[i],
+                lli_flags[i], signal_strength[i]);
+            has_data = true;
+        }
+
+        if (has_data) {
+            obs_data.addObservation(obs_extra);
+        }
+    }
+}
+
 }  // namespace
 
 bool RINEXReader::open(const std::string& filename) {
     file_.open(filename);
     current_line_ = 0;
+    rinex3_obs_types_system_ = '\0';
+    rinex3_obs_types_expected_ = 0;
     return file_.is_open();
 }
 
@@ -271,7 +408,10 @@ bool RINEXReader::readHeader(RINEXHeader& header) {
     if (!file_.is_open()) {
         return false;
     }
-    
+
+    rinex3_obs_types_system_ = '\0';
+    rinex3_obs_types_expected_ = 0;
+
     std::string line;
     while (readLine(line)) {
         if (line.find("END OF HEADER") != std::string::npos) {
@@ -624,31 +764,41 @@ bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) 
         }
     }
     else if (label.find("SYS / # / OBS TYPES") != std::string::npos) {
-        // RINEX 3: Per-system observation types
-        // Format: "G    4 C1C L1C C2X L2X" (system char at pos 0, count at pos 3-6, types at pos 7+)
-        char sys_char = line[0];
+        // RINEX 3: Per-system observation types. The list may continue on
+        // following header lines whose system/count fields are blank.
+        const char sys_char = line.empty() ? ' ' : line[0];
         if (sys_char != ' ') {
-            // First line for this system
-            int num_types = std::stoi(line.substr(3, 3));
-            std::vector<std::string> types;
-            // Parse types from this line (up to 13 per line, 4 chars each starting at pos 7)
-            for (int i = 0; i < num_types && i < 13; ++i) {
-                size_t pos = 7 + i * 4;
-                if (pos + 3 <= line.length()) {
-                    std::string obs_type = line.substr(pos, 3);
-                    obs_type.erase(0, obs_type.find_first_not_of(' '));
-                    obs_type.erase(obs_type.find_last_not_of(' ') + 1);
-                    if (!obs_type.empty()) {
-                        types.push_back(obs_type);
-                    }
-                }
-            }
-            header.system_obs_types[sys_char] = types;
+            rinex3_obs_types_system_ = sys_char;
+            rinex3_obs_types_expected_ = std::stoi(line.substr(3, 3));
+            header.system_obs_types[sys_char].clear();
+        } else if (rinex3_obs_types_system_ == '\0') {
+            return true;
+        }
 
-            // Also populate the generic observation_types with GPS types for backward compat
-            if (sys_char == 'G') {
-                header.observation_types = types;
+        auto& types = header.system_obs_types[rinex3_obs_types_system_];
+        const size_t field_length = std::min<size_t>(line.length(), 60);
+        for (int i = 0; i < 13 && static_cast<int>(types.size()) < rinex3_obs_types_expected_; ++i) {
+            const size_t pos = 7 + static_cast<size_t>(i) * 4;
+            if (pos + 3 > field_length) {
+                break;
             }
+            std::string obs_type = line.substr(pos, 3);
+            obs_type.erase(0, obs_type.find_first_not_of(' '));
+            obs_type.erase(obs_type.find_last_not_of(' ') + 1);
+            if (!obs_type.empty()) {
+                types.push_back(obs_type);
+            }
+        }
+
+        // Also populate the generic observation_types with GPS types for backward compatibility.
+        if (rinex3_obs_types_system_ == 'G') {
+            header.observation_types = types;
+        }
+
+        if (rinex3_obs_types_expected_ <= 0 ||
+            static_cast<int>(types.size()) >= rinex3_obs_types_expected_) {
+            rinex3_obs_types_system_ = '\0';
+            rinex3_obs_types_expected_ = 0;
         }
     }
 
@@ -839,39 +989,56 @@ bool RINEXReader::parseObservationEpochV2(const std::string& line, ObservationDa
         obs_primary.signal = primarySignalForSystem(sat.system);
         obs_primary.valid = true;
         bool has_primary_data = false;
-        int primary_priority = 100;
+        int primary_priority = kInvalidObservationPriority;
         int primary_band = -1;
+        std::string primary_key;
 
         Observation obs_secondary;
         obs_secondary.satellite = sat;
         obs_secondary.signal = secondarySignalForSystem(sat.system);
         obs_secondary.valid = true;
         bool has_secondary_data = false;
-        int secondary_priority = 100;
+        int secondary_priority = kInvalidObservationPriority;
         int secondary_band = -1;
+        std::string secondary_key;
 
         for (size_t i = 0; i < header_.observation_types.size() && i < obs_values.size(); ++i) {
             if (obs_values[i] == 0.0) continue;
 
             const std::string& obs_type = header_.observation_types[i];
+            if (!isCodeObservationType(obs_type)) {
+                continue;
+            }
 
             const int band = rinexBand(obs_type);
-            const int primary_candidate = bandPriority(sat.system, band, true);
-            const int secondary_candidate = bandPriority(sat.system, band, false);
-            if (primary_candidate < 100 &&
-                (primary_candidate < primary_priority || band == primary_band)) {
+            const int primary_candidate = observationSelectionPriority(sat.system, obs_type, true);
+            const int secondary_candidate = observationSelectionPriority(sat.system, obs_type, false);
+            if (primary_candidate < primary_priority) {
                 obs_primary.signal = signalForObservationType(sat.system, obs_type, true);
-                assignObservationField(obs_primary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
-                has_primary_data = true;
                 primary_priority = primary_candidate;
                 primary_band = band;
-            } else if (secondary_candidate < 100 &&
-                       (secondary_candidate < secondary_priority || band == secondary_band)) {
+                primary_key = observationSelectionKey(obs_type);
+            }
+            if (secondary_candidate < secondary_priority) {
                 obs_secondary.signal = signalForObservationType(sat.system, obs_type, false);
-                assignObservationField(obs_secondary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
-                has_secondary_data = true;
                 secondary_priority = secondary_candidate;
                 secondary_band = band;
+                secondary_key = observationSelectionKey(obs_type);
+            }
+        }
+
+        for (size_t i = 0; i < header_.observation_types.size() && i < obs_values.size(); ++i) {
+            if (obs_values[i] == 0.0) continue;
+
+            const std::string& obs_type = header_.observation_types[i];
+            if (primary_priority < kInvalidObservationPriority &&
+                matchesObservationSelection(obs_type, primary_band, primary_key)) {
+                assignObservationField(obs_primary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
+                has_primary_data = true;
+            } else if (secondary_priority < kInvalidObservationPriority &&
+                       matchesObservationSelection(obs_type, secondary_band, secondary_key)) {
+                assignObservationField(obs_secondary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
+                has_secondary_data = true;
             }
         }
 
@@ -881,6 +1048,13 @@ bool RINEXReader::parseObservationEpochV2(const std::string& line, ObservationDa
         }
         if (has_secondary_data) {
             obs_data.addObservation(obs_secondary);
+        }
+
+        if (emit_extra_band_observations_) {
+            emitExtraBandObservations(
+                sat.system, sat, header_.observation_types,
+                obs_values, lli_flags, signal_strength,
+                primary_band, secondary_band, obs_data);
         }
     }
 
@@ -992,38 +1166,56 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
             obs_primary.signal = primarySignalForSystem(system);
             obs_primary.valid = true;
             bool has_primary_data = false;
-            int primary_priority = 100;
+            int primary_priority = kInvalidObservationPriority;
             int primary_band = -1;
+            std::string primary_key;
 
             Observation obs_secondary;
             obs_secondary.satellite = sat;
             obs_secondary.signal = secondarySignalForSystem(system);
             obs_secondary.valid = true;
             bool has_secondary_data = false;
-            int secondary_priority = 100;
+            int secondary_priority = kInvalidObservationPriority;
             int secondary_band = -1;
+            std::string secondary_key;
 
             for (size_t i = 0; i < obs_types.size() && i < obs_values.size(); ++i) {
                 if (obs_values[i] == 0.0) continue;
 
                 const std::string& obs_type = obs_types[i];
+                if (!isCodeObservationType(obs_type)) {
+                    continue;
+                }
+
                 const int band = rinexBand(obs_type);
-                const int primary_candidate = bandPriority(system, band, true);
-                const int secondary_candidate = bandPriority(system, band, false);
-                if (primary_candidate < 100 &&
-                    (primary_candidate < primary_priority || band == primary_band)) {
+                const int primary_candidate = observationSelectionPriority(system, obs_type, true);
+                const int secondary_candidate = observationSelectionPriority(system, obs_type, false);
+                if (primary_candidate < primary_priority) {
                     obs_primary.signal = signalForObservationType(system, obs_type, true);
-                    assignObservationField(obs_primary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
-                    has_primary_data = true;
                     primary_priority = primary_candidate;
                     primary_band = band;
-                } else if (secondary_candidate < 100 &&
-                           (secondary_candidate < secondary_priority || band == secondary_band)) {
+                    primary_key = observationSelectionKey(obs_type);
+                }
+                if (secondary_candidate < secondary_priority) {
                     obs_secondary.signal = signalForObservationType(system, obs_type, false);
-                    assignObservationField(obs_secondary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
-                    has_secondary_data = true;
                     secondary_priority = secondary_candidate;
                     secondary_band = band;
+                    secondary_key = observationSelectionKey(obs_type);
+                }
+            }
+
+            for (size_t i = 0; i < obs_types.size() && i < obs_values.size(); ++i) {
+                if (obs_values[i] == 0.0) continue;
+
+                const std::string& obs_type = obs_types[i];
+                if (primary_priority < kInvalidObservationPriority &&
+                    matchesObservationSelection(obs_type, primary_band, primary_key)) {
+                    assignObservationField(obs_primary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
+                    has_primary_data = true;
+                } else if (secondary_priority < kInvalidObservationPriority &&
+                           matchesObservationSelection(obs_type, secondary_band, secondary_key)) {
+                    assignObservationField(obs_secondary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
+                    has_secondary_data = true;
                 }
             }
 
@@ -1032,6 +1224,13 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
             }
             if (has_secondary_data) {
                 obs_data.addObservation(obs_secondary);
+            }
+
+            if (emit_extra_band_observations_) {
+                emitExtraBandObservations(
+                    system, sat, obs_types,
+                    obs_values, lli_flags, signal_strength,
+                    primary_band, secondary_band, obs_data);
             }
         }
 

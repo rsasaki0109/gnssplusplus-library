@@ -7,16 +7,20 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <ctime>
 #include <limits>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace libgnss {
 namespace ppp_atmosphere {
 namespace {
 
 constexpr double kDegreesToRadians = M_PI / 180.0;
+constexpr double kMaxClasGridDistanceM = 120000.0;
+constexpr double kNearestGridThresholdM = 1000.0;
 
 struct ClasGridPoint {
     int network_id;
@@ -26,11 +30,26 @@ struct ClasGridPoint {
     double height_m;
 };
 
+struct ClasGridCandidate {
+    const ClasGridPoint* point = nullptr;
+    double distance_m = std::numeric_limits<double>::infinity();
+    size_t order = 0;
+};
+
 const std::array<ClasGridPoint, 212>& clasGridPoints() {
     static const std::array<ClasGridPoint, 212> kClasGridPoints = {{
 #include "clas_grid_points.inc"
     }};
     return kClasGridPoints;
+}
+
+const ClasGridPoint* clasNetworkPolynomialOrigin(int network_id) {
+    for (const auto& point : clasGridPoints()) {
+        if (point.network_id == network_id && point.grid_no == 1) {
+            return &point;
+        }
+    }
+    return nullptr;
 }
 
 bool tryParseDouble(const std::string& text, double& value) {
@@ -63,6 +82,11 @@ bool useResidualTerms(
            ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy::POLYNOMIAL_ONLY;
 }
 
+bool envFlagEnabled(const char* name) {
+    const char* raw = std::getenv(name);
+    return raw != nullptr && *raw != '\0' && std::string(raw) != "0";
+}
+
 bool useIndexedResidualSampling(
     ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy policy) {
     return policy !=
@@ -84,6 +108,10 @@ bool isSubtype12StecRow(const std::map<std::string, std::string>& atmos_tokens,
                         const SatelliteId& satellite) {
     const auto it = atmos_tokens.find("atmos_stec_source_subtype:" + satellite.toString());
     return it != atmos_tokens.end() && it->second == "12";
+}
+
+bool requireClasIndexedStecResiduals() {
+    return envFlagEnabled("GNSS_PPP_CLAS_REQUIRE_INDEXED_STEC_RESIDUAL");
 }
 
 bool useSubtype12LinearTerms(
@@ -115,6 +143,226 @@ bool sampleAtmosResidualList(const std::map<std::string, std::string>& atmos_tok
         return true;
     }
     return false;
+}
+
+bool hasFiniteIndexedResidual(const std::map<std::string, std::string>& atmos_tokens,
+                              const std::string& key,
+                              size_t residual_index) {
+    double value = 0.0;
+    return parseAtmosListValueAtIndex(atmos_tokens, key, residual_index, value) &&
+           std::isfinite(value);
+}
+
+bool isNonCollinear(const ClasGridPoint& origin,
+                    const ClasGridPoint& a,
+                    const ClasGridPoint& b) {
+    const double ax = (a.latitude_deg - origin.latitude_deg) * kDegreesToRadians;
+    const double ay = (a.longitude_deg - origin.longitude_deg) * kDegreesToRadians;
+    const double bx = (b.latitude_deg - origin.latitude_deg) * kDegreesToRadians;
+    const double by = (b.longitude_deg - origin.longitude_deg) * kDegreesToRadians;
+    const double an = std::hypot(ax, ay);
+    const double bn = std::hypot(bx, by);
+    if (an <= 0.0 || bn <= 0.0) {
+        return false;
+    }
+    const double cos_angle = (ax * bx + ay * by) / (an * bn);
+    return std::abs(cos_angle) < 1.0 - 1e-12;
+}
+
+std::vector<const ClasGridCandidate*> selectClasInterpolationGrids(
+    const std::vector<ClasGridCandidate>& candidates) {
+    std::vector<const ClasGridCandidate*> selected;
+    if (candidates.empty()) {
+        return selected;
+    }
+
+    selected.push_back(&candidates.front());
+    if (candidates.size() < 3 ||
+        candidates.front().point->network_id > 12 ||
+        candidates.front().distance_m <= kNearestGridThresholdM) {
+        return selected;
+    }
+
+    size_t first_index = 0;
+    if (candidates.size() > 2 &&
+        candidates[1].point->network_id == candidates[2].point->network_id &&
+        candidates[0].point->network_id != candidates[1].point->network_id) {
+        first_index = 1;
+    }
+    const ClasGridCandidate* first = &candidates[first_index];
+    selected[0] = first;
+
+    const ClasGridCandidate* second = nullptr;
+    for (size_t i = 1; i < candidates.size(); ++i) {
+        if (i != first_index &&
+            candidates[i].point->network_id == first->point->network_id) {
+            second = &candidates[i];
+            break;
+        }
+    }
+    if (second == nullptr) {
+        return selected;
+    }
+    selected.push_back(second);
+
+    const ClasGridCandidate* third = nullptr;
+    for (size_t i = 1; i < candidates.size(); ++i) {
+        if (i == first_index ||
+            candidates[i].point->grid_no == second->point->grid_no ||
+            candidates[i].point->network_id != first->point->network_id) {
+            continue;
+        }
+        if (isNonCollinear(*first->point, *second->point, *candidates[i].point)) {
+            third = &candidates[i];
+            break;
+        }
+    }
+    if (third == nullptr) {
+        selected.resize(1);
+        return selected;
+    }
+    selected.push_back(third);
+
+    for (size_t i = 1; i < candidates.size(); ++i) {
+        if (i == first_index ||
+            candidates[i].point->grid_no == second->point->grid_no ||
+            candidates[i].point->grid_no == third->point->grid_no ||
+            candidates[i].point->network_id != first->point->network_id) {
+            continue;
+        }
+        const ClasGridPoint& fourth = *candidates[i].point;
+        if (!isNonCollinear(*first->point, *second->point, fourth) ||
+            !isNonCollinear(*first->point, *third->point, fourth)) {
+            continue;
+        }
+        const bool closes_rectangle =
+            (std::abs(second->point->longitude_deg - fourth.longitude_deg) < 0.04 &&
+             std::abs(third->point->latitude_deg - fourth.latitude_deg) < 0.04) ||
+            (std::abs(second->point->latitude_deg - fourth.latitude_deg) < 0.04 &&
+             std::abs(third->point->longitude_deg - fourth.longitude_deg) < 0.04);
+        if (closes_rectangle) {
+            selected.push_back(&candidates[i]);
+            break;
+        }
+    }
+
+    return selected;
+}
+
+void calculateInverseDistanceWeights(
+    const std::vector<const ClasGridCandidate*>& selected,
+    std::array<double, 4>& weights) {
+    weights.fill(0.0);
+    double inverse_distance_sum = 0.0;
+    for (const auto* candidate : selected) {
+        inverse_distance_sum += 1.0 / candidate->distance_m;
+    }
+    if (inverse_distance_sum <= 0.0) {
+        if (!selected.empty()) {
+            weights[0] = 1.0;
+        }
+        return;
+    }
+    for (size_t i = 0; i < selected.size() && i < weights.size(); ++i) {
+        weights[i] = 1.0 / (selected[i]->distance_m * inverse_distance_sum);
+    }
+}
+
+bool calculateThreePointWeights(const std::vector<const ClasGridCandidate*>& selected,
+                                double user_dlat_deg,
+                                double user_dlon_deg,
+                                std::array<double, 4>& weights) {
+    if (selected.size() != 3) {
+        return false;
+    }
+    const double dlat1 =
+        selected[1]->point->latitude_deg - selected[0]->point->latitude_deg;
+    const double dlon1 =
+        selected[1]->point->longitude_deg - selected[0]->point->longitude_deg;
+    const double dlat2 =
+        selected[2]->point->latitude_deg - selected[0]->point->latitude_deg;
+    const double dlon2 =
+        selected[2]->point->longitude_deg - selected[0]->point->longitude_deg;
+    const double determinant = dlat1 * dlon2 - dlat2 * dlon1;
+    if (std::abs(determinant) < 1e-12) {
+        return false;
+    }
+
+    weights.fill(0.0);
+    weights[1] = (user_dlat_deg * dlon2 - dlat2 * user_dlon_deg) / determinant;
+    weights[2] = (dlat1 * user_dlon_deg - user_dlat_deg * dlon1) / determinant;
+    weights[0] = 1.0 - weights[1] - weights[2];
+    return true;
+}
+
+bool solveLinearSystem4(double a[4][5], std::array<double, 4>& x) {
+    for (int col = 0; col < 4; ++col) {
+        int pivot = col;
+        double pivot_abs = std::abs(a[col][col]);
+        for (int row = col + 1; row < 4; ++row) {
+            const double candidate_abs = std::abs(a[row][col]);
+            if (candidate_abs > pivot_abs) {
+                pivot_abs = candidate_abs;
+                pivot = row;
+            }
+        }
+        if (pivot_abs < 1e-12) {
+            return false;
+        }
+        if (pivot != col) {
+            for (int c = col; c < 5; ++c) {
+                std::swap(a[col][c], a[pivot][c]);
+            }
+        }
+        const double divisor = a[col][col];
+        for (int c = col; c < 5; ++c) {
+            a[col][c] /= divisor;
+        }
+        for (int row = 0; row < 4; ++row) {
+            if (row == col) {
+                continue;
+            }
+            const double factor = a[row][col];
+            if (factor == 0.0) {
+                continue;
+            }
+            for (int c = col; c < 5; ++c) {
+                a[row][c] -= factor * a[col][c];
+            }
+        }
+    }
+
+    for (int i = 0; i < 4; ++i) {
+        x[i] = a[i][4];
+    }
+    return true;
+}
+
+bool calculateFourPointWeights(const std::vector<const ClasGridCandidate*>& selected,
+                               double user_dlat_deg,
+                               double user_dlon_deg,
+                               std::array<double, 4>& weights) {
+    if (selected.size() != 4) {
+        return false;
+    }
+    double system[4][5] = {};
+    for (int grid = 0; grid < 4; ++grid) {
+        const double dlat =
+            selected[grid]->point->latitude_deg - selected[0]->point->latitude_deg;
+        const double dlon =
+            selected[grid]->point->longitude_deg - selected[0]->point->longitude_deg;
+        system[0][grid] = dlat;
+        system[1][grid] = dlon;
+        system[2][grid] = dlat * dlon;
+        system[3][grid] = 1.0;
+    }
+    system[0][4] = user_dlat_deg;
+    system[1][4] = user_dlon_deg;
+    system[2][4] = user_dlat_deg * user_dlon_deg;
+    system[3][4] = 1.0;
+
+    weights.fill(0.0);
+    return solveLinearSystem4(system, weights);
 }
 
 }  // namespace
@@ -206,6 +454,8 @@ bool parseAtmosListValueAtIndex(const std::map<std::string, std::string>& atmos_
 bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_tokens,
                               const Vector3d& receiver_position,
                               ClasGridReference& reference) {
+    reference = ClasGridReference{};
+
     int network_id = 0;
     if (!parseAtmosTokenInt(atmos_tokens, "atmos_network_id", network_id) || network_id <= 0) {
         return false;
@@ -225,81 +475,89 @@ bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_to
     const double receiver_lat_deg = receiver_lat_rad / kDegreesToRadians;
     const double receiver_lon_deg = receiver_lon_rad / kDegreesToRadians;
 
-    // Collect candidate grid points for this network
-    struct GridCandidate {
-        const ClasGridPoint* point = nullptr;
-        double distance_sq = 0.0;
-    };
-    std::vector<GridCandidate> candidates;
+    std::vector<ClasGridCandidate> candidates;
+    size_t order = 0;
     for (const auto& point : clasGridPoints()) {
         if (point.network_id != network_id) continue;
         if (grid_count > 0 && point.grid_no > grid_count) continue;
-        const double dlat = receiver_lat_deg - point.latitude_deg;
-        const double dlon = receiver_lon_deg - point.longitude_deg;
-        candidates.push_back({&point, dlat * dlat + dlon * dlon});
+        const double dlat_m =
+            constants::WGS84_A * (receiver_lat_rad - point.latitude_deg * kDegreesToRadians);
+        const double dlon_m =
+            constants::WGS84_A * (receiver_lon_rad - point.longitude_deg * kDegreesToRadians) *
+            std::cos(receiver_lat_rad);
+        const double distance_m = std::max(std::hypot(dlat_m, dlon_m), 1.0);
+        if (distance_m > kMaxClasGridDistanceM) {
+            continue;
+        }
+        candidates.push_back({&point, distance_m, order});
+        ++order;
     }
     if (candidates.empty()) return false;
 
-    // Sort by distance
     std::sort(candidates.begin(), candidates.end(),
-              [](const GridCandidate& a, const GridCandidate& b) {
-                  return a.distance_sq < b.distance_sq;
+              [](const ClasGridCandidate& a, const ClasGridCandidate& b) {
+                  if (a.distance_m != b.distance_m) {
+                      return a.distance_m < b.distance_m;
+                  }
+                  return a.order < b.order;
               });
 
-    const ClasGridPoint* nearest = candidates[0].point;
-
-    // Try to find 4 surrounding grid points for bilinear interpolation
-    // (CLASLIB approach: find grids that form a rectangle around the user)
-    const ClasGridPoint* grid_sw = nullptr;  // south-west (lat<user, lon<user)
-    const ClasGridPoint* grid_se = nullptr;  // south-east (lat<user, lon>user)
-    const ClasGridPoint* grid_nw = nullptr;  // north-west (lat>user, lon<user)
-    const ClasGridPoint* grid_ne = nullptr;  // north-east (lat>user, lon>user)
-    for (const auto& cand : candidates) {
-        const double dlat = cand.point->latitude_deg - receiver_lat_deg;
-        const double dlon = cand.point->longitude_deg - receiver_lon_deg;
-        if (dlat <= 0 && dlon <= 0 && !grid_sw) grid_sw = cand.point;
-        if (dlat <= 0 && dlon > 0 && !grid_se) grid_se = cand.point;
-        if (dlat > 0 && dlon <= 0 && !grid_nw) grid_nw = cand.point;
-        if (dlat > 0 && dlon > 0 && !grid_ne) grid_ne = cand.point;
+    std::vector<const ClasGridCandidate*> selected =
+        selectClasInterpolationGrids(candidates);
+    if (selected.empty()) {
+        return false;
     }
 
-    reference.has_bilinear = false;
-    if (grid_sw && grid_se && grid_nw && grid_ne) {
-        // Bilinear interpolation weights
-        const double lat_range = grid_nw->latitude_deg - grid_sw->latitude_deg;
-        const double lon_range = grid_se->longitude_deg - grid_sw->longitude_deg;
-        // Only use bilinear if the surrounding rectangle is reasonable
-        // (< 1 degree ≈ 100km per side).
-        if (lat_range > 0.01 && lon_range > 0.01 &&
-            lat_range < 0.7 && lon_range < 0.7) {
-            const double t = (receiver_lat_deg - grid_sw->latitude_deg) / lat_range;
-            const double u = (receiver_lon_deg - grid_sw->longitude_deg) / lon_range;
-            reference.bilinear_weights[0] = (1 - t) * (1 - u);  // SW
-            reference.bilinear_weights[1] = (1 - t) * u;        // SE
-            reference.bilinear_weights[2] = t * (1 - u);        // NW
-            reference.bilinear_weights[3] = t * u;              // NE
-            reference.bilinear_grid_indices[0] =
-                static_cast<size_t>(std::max(grid_sw->grid_no - 1, 0));
-            reference.bilinear_grid_indices[1] =
-                static_cast<size_t>(std::max(grid_se->grid_no - 1, 0));
-            reference.bilinear_grid_indices[2] =
-                static_cast<size_t>(std::max(grid_nw->grid_no - 1, 0));
-            reference.bilinear_grid_indices[3] =
-                static_cast<size_t>(std::max(grid_ne->grid_no - 1, 0));
-            // dlat/dlon for polynomial: use SW grid as reference (CLASLIB convention)
-            reference.dlat_deg = receiver_lat_deg - grid_sw->latitude_deg;
-            reference.dlon_deg = receiver_lon_deg - grid_sw->longitude_deg;
-            reference.has_bilinear = true;
+    const double user_dlat_deg =
+        receiver_lat_deg - selected[0]->point->latitude_deg;
+    const double user_dlon_deg =
+        receiver_lon_deg - selected[0]->point->longitude_deg;
+    std::array<double, 4> weights{};
+    if (selected.size() == 4) {
+        if (!calculateFourPointWeights(selected, user_dlat_deg, user_dlon_deg, weights)) {
+            selected.resize(1);
+            weights.fill(0.0);
+            weights[0] = 1.0;
         }
+    } else if (selected.size() == 3) {
+        if (!calculateThreePointWeights(selected, user_dlat_deg, user_dlon_deg, weights)) {
+            calculateInverseDistanceWeights(selected, weights);
+        }
+    } else {
+        calculateInverseDistanceWeights(selected, weights);
     }
 
-    if (!reference.has_bilinear) {
-        reference.dlat_deg = receiver_lat_deg - nearest->latitude_deg;
-        reference.dlon_deg = receiver_lon_deg - nearest->longitude_deg;
+    reference.dlat_deg = user_dlat_deg;
+    reference.dlon_deg = user_dlon_deg;
+    reference.residual_index = static_cast<size_t>(
+        std::max(selected[0]->point->grid_no - 1, 0));
+    reference.network_id = selected[0]->point->network_id;
+    reference.grid_no = selected[0]->point->grid_no;
+    reference.interpolation_grid_count =
+        static_cast<int>(std::min<size_t>(selected.size(), 4));
+    reference.has_bilinear = reference.interpolation_grid_count == 4;
+    const ClasGridPoint* polynomial_origin =
+        clasNetworkPolynomialOrigin(reference.network_id);
+    if (polynomial_origin == nullptr) {
+        polynomial_origin = selected[0]->point;
     }
-    reference.residual_index = static_cast<size_t>(std::max(nearest->grid_no - 1, 0));
-    reference.network_id = nearest->network_id;
-    reference.grid_no = nearest->grid_no;
+
+    for (int i = 0; i < reference.interpolation_grid_count; ++i) {
+        reference.interpolation_weights[i] = weights[i];
+        reference.interpolation_grid_indices[i] = static_cast<size_t>(
+            std::max(selected[i]->point->grid_no - 1, 0));
+        reference.interpolation_grid_dlat_deg[i] =
+            selected[i]->point->latitude_deg - selected[0]->point->latitude_deg;
+        reference.interpolation_grid_dlon_deg[i] =
+            selected[i]->point->longitude_deg - selected[0]->point->longitude_deg;
+        reference.interpolation_poly_dlat_deg[i] =
+            selected[i]->point->latitude_deg - polynomial_origin->latitude_deg;
+        reference.interpolation_poly_dlon_deg[i] =
+            selected[i]->point->longitude_deg - polynomial_origin->longitude_deg;
+        reference.bilinear_weights[i] = reference.interpolation_weights[i];
+        reference.bilinear_grid_indices[i] = reference.interpolation_grid_indices[i];
+    }
+
     return true;
 }
 
@@ -376,18 +634,18 @@ double atmosphericTroposphereCorrectionMeters(
         bool have_grid_trop = false;
         auto sampleTropResidual = [&](const std::string& key) -> double {
             if (!useResidualTerms(value_policy)) return 0.0;
-            if (have_grid_reference && grid_reference.has_bilinear) {
-                double bilinear_val = 0.0;
+            if (have_grid_reference && grid_reference.interpolation_grid_count > 1) {
+                double interpolated_val = 0.0;
                 bool ok = true;
-                for (int g = 0; g < 4; ++g) {
+                for (int g = 0; g < grid_reference.interpolation_grid_count; ++g) {
                     double gv = 0.0;
                     if (sampleAtmosResidualList(atmos_tokens, key, true,
-                            grid_reference.bilinear_grid_indices[g],
+                            grid_reference.interpolation_grid_indices[g],
                             residual_sampling_policy, gv)) {
-                        bilinear_val += grid_reference.bilinear_weights[g] * gv;
+                        interpolated_val += grid_reference.interpolation_weights[g] * gv;
                     } else { ok = false; break; }
                 }
-                if (ok) { have_grid_trop = true; return bilinear_val; }
+                if (ok) { have_grid_trop = true; return interpolated_val; }
             }
             double v = 0.0;
             if (sampleAtmosResidualList(atmos_tokens, key, have_grid_reference,
@@ -423,6 +681,26 @@ double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_token
     const bool subtype12_row = isSubtype12StecRow(atmos_tokens, satellite);
     int stec_type = -1;
     parseAtmosTokenInt(atmos_tokens, "atmos_stec_type" + suffix, stec_type);
+    int grid_count = 0;
+    parseAtmosTokenInt(atmos_tokens, "atmos_grid_count", grid_count);
+    const std::string residual_key = "atmos_stec_residuals_tecu" + suffix;
+    if (requireClasIndexedStecResiduals() && useResidualTerms(value_policy) &&
+        grid_count > 0) {
+        if (!have_grid_reference) {
+            return 0.0;
+        }
+        if (grid_reference.interpolation_grid_count > 1) {
+            for (int g = 0; g < grid_reference.interpolation_grid_count; ++g) {
+                if (!hasFiniteIndexedResidual(
+                        atmos_tokens, residual_key, grid_reference.interpolation_grid_indices[g])) {
+                    return 0.0;
+                }
+            }
+        } else if (!hasFiniteIndexedResidual(
+                       atmos_tokens, residual_key, grid_reference.residual_index)) {
+            return 0.0;
+        }
+    }
 
     // STEC polynomial: c00 + c01*dlat + c10*dlon + c11*dlat*dlon [+ c02*dlat² + c20*dlon²]
     // When 4-grid bilinear is available, evaluate the polynomial at each grid
@@ -451,64 +729,105 @@ double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_token
         return val;
     };
 
-    double value = 0.0;
-    if (usePolynomialTerms(value_policy) &&
-        parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c00_tecu" + suffix, value) &&
-        std::isfinite(value)) {
-        if (have_grid_reference && grid_reference.has_bilinear) {
-            // CLASLIB approach: evaluate polynomial at each of 4 grid points,
-            // add per-grid residual, then bilinear interpolate.
-            // Grid positions relative to nearest (SW) grid:
-            // SW=(0,0), SE=(0,lon_range), NW=(lat_range,0), NE=(lat_range,lon_range)
-            // But polynomial reference is nearest grid, so grid offsets are:
-            const double lat_range = grid_reference.dlat_deg /
-                (grid_reference.bilinear_weights[2] + grid_reference.bilinear_weights[3] > 0.01
-                     ? grid_reference.dlat_deg / (grid_reference.bilinear_weights[2] + grid_reference.bilinear_weights[3])
-                     : 1.0);
-            // Simpler: use the actual grid positions stored in weights
-            // t = dlat/lat_range, u = dlon/lon_range
-            // lat_range = dlat / t, lon_range = dlon / u
-            const double t = grid_reference.bilinear_weights[2] + grid_reference.bilinear_weights[3];
-            const double u = grid_reference.bilinear_weights[1] + grid_reference.bilinear_weights[3];
-            const double total_lat = (t > 0.01) ? grid_reference.dlat_deg / t : grid_reference.dlat_deg;
-            const double total_lon = (u > 0.01) ? grid_reference.dlon_deg / u : grid_reference.dlon_deg;
-            const double grid_dlat[4] = {0, 0, total_lat, total_lat};
-            const double grid_dlon[4] = {0, total_lon, 0, total_lon};
-
-            double bilinear_stec = 0.0;
-            for (int g = 0; g < 4; ++g) {
-                double grid_stec = evaluateStecPoly(grid_dlat[g], grid_dlon[g]);
-                // Add per-grid residual if available
-                double grid_residual = 0.0;
-                if (useResidualTerms(value_policy) &&
-                    sampleAtmosResidualList(atmos_tokens,
-                        "atmos_stec_residuals_tecu" + suffix, true,
-                        grid_reference.bilinear_grid_indices[g],
-                        residual_sampling_policy, grid_residual)) {
-                    grid_stec += grid_residual;
-                }
-                bilinear_stec += grid_reference.bilinear_weights[g] * grid_stec;
-            }
-            stec_tecu = bilinear_stec;
-        } else {
-            stec_tecu = evaluateStecPoly(
-                have_grid_reference ? grid_reference.dlat_deg : 0.0,
-                have_grid_reference ? grid_reference.dlon_deg : 0.0);
+    auto haveStecPolynomialTerms = [&]() -> bool {
+        double term = 0.0;
+        if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c00_tecu" + suffix, term) &&
+            std::isfinite(term)) {
+            return true;
         }
-        have_correction = true;
+        if (stec_type > 0) {
+            if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c01_tecu_per_deg" + suffix, term) &&
+                std::isfinite(term)) {
+                return true;
+            }
+            if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c10_tecu_per_deg" + suffix, term) &&
+                std::isfinite(term)) {
+                return true;
+            }
+        }
+        if (stec_type > 1 &&
+            parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c11_tecu_per_deg2" + suffix, term) &&
+            std::isfinite(term)) {
+            return true;
+        }
+        if (stec_type > 2) {
+            if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c02_tecu_per_deg2" + suffix, term) &&
+                std::isfinite(term)) {
+                return true;
+            }
+            if (parseAtmosTokenDouble(atmos_tokens, "atmos_stec_c20_tecu_per_deg2" + suffix, term) &&
+                std::isfinite(term)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    const bool have_polynomial_terms =
+        usePolynomialTerms(value_policy) && haveStecPolynomialTerms();
+    const bool want_residual_terms = useResidualTerms(value_policy);
+
+    bool used_grid_interpolation = false;
+    if (have_grid_reference && grid_reference.interpolation_grid_count > 1 &&
+        (have_polynomial_terms || want_residual_terms)) {
+        double interpolated_stec = 0.0;
+        bool ok = true;
+        bool any_value = false;
+        for (int g = 0; g < grid_reference.interpolation_grid_count; ++g) {
+            double grid_stec = 0.0;
+            bool have_grid_value = false;
+            if (have_polynomial_terms) {
+                grid_stec += evaluateStecPoly(
+                    grid_reference.interpolation_poly_dlat_deg[g],
+                    grid_reference.interpolation_poly_dlon_deg[g]);
+                have_grid_value = true;
+            }
+            double grid_residual = 0.0;
+            if (want_residual_terms &&
+                sampleAtmosResidualList(atmos_tokens,
+                    residual_key, true,
+                    grid_reference.interpolation_grid_indices[g],
+                    residual_sampling_policy, grid_residual)) {
+                grid_stec += grid_residual;
+                have_grid_value = true;
+            } else if (!have_polynomial_terms) {
+                ok = false;
+                break;
+            }
+            if (!have_grid_value) {
+                ok = false;
+                break;
+            }
+            interpolated_stec += grid_reference.interpolation_weights[g] * grid_stec;
+            any_value = true;
+        }
+        if (ok && any_value) {
+            stec_tecu = interpolated_stec;
+            have_correction = true;
+            used_grid_interpolation = true;
+        }
     }
-    // Residuals: for bilinear mode, residuals are already included in the
-    // per-grid evaluation above.  For nearest-grid mode, add the residual.
-    if (!grid_reference.has_bilinear && useResidualTerms(value_policy) &&
-        sampleAtmosResidualList(
-            atmos_tokens,
-            "atmos_stec_residuals_tecu" + suffix,
-            have_grid_reference,
-            grid_reference.residual_index,
-            residual_sampling_policy,
-            value)) {
-        stec_tecu += value;
-        have_correction = true;
+
+    if (!used_grid_interpolation) {
+        if (have_polynomial_terms) {
+            stec_tecu = evaluateStecPoly(
+                have_grid_reference ? grid_reference.interpolation_poly_dlat_deg[0] : 0.0,
+                have_grid_reference ? grid_reference.interpolation_poly_dlon_deg[0] : 0.0);
+            have_correction = true;
+        }
+
+        double value = 0.0;
+        if (want_residual_terms &&
+            sampleAtmosResidualList(
+                atmos_tokens,
+                residual_key,
+                have_grid_reference,
+                grid_reference.residual_index,
+                residual_sampling_policy,
+                value)) {
+            stec_tecu += value;
+            have_correction = true;
+        }
     }
 
     return have_correction ? stec_tecu : 0.0;
@@ -520,11 +839,13 @@ double ionosphereDelayMetersFromTecu(SignalType signal,
     double frequency_hz = 0.0;
     switch (signal) {
         case SignalType::GPS_L1CA:
+        case SignalType::GPS_L1P:
         case SignalType::QZS_L1CA:
         case SignalType::GAL_E1:
             frequency_hz = constants::GPS_L1_FREQ;
             break;
         case SignalType::GPS_L2C:
+        case SignalType::GPS_L2P:
         case SignalType::QZS_L2C:
             frequency_hz = constants::GPS_L2_FREQ;
             break;

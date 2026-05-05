@@ -259,6 +259,19 @@ For compact-SSR ingestion experiments, the shared decode boundary also exposes:
 - `gnss clas-ppp --compact-bias-row-materialization <overlap-only|selected-satellite-base-extend|all-base-satellite-extend>`
 - `gnss clas-ppp --compact-phase-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`
 - `gnss clas-ppp --compact-phase-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank>`
+- `gnss clas-ppp --expanded-ssr <sampled.csv>`
+- `gnss clas-ppp --qzss-expanded-cache <sampled.csv>`
+- `gnss clas-ppp --qzss-window-margin-seconds <seconds>`
+- `gnss clas-ppp --filter-iterations <n>`
+- `gnss clas-ppp --ppp-filter-log <csv>`
+- `gnss clas-ppp --ppp-residual-log <csv>`
+- `gnss clas-ppp --ppp-state-log <stat>`
+
+For `gnss clas-ppp --profile clas`, the wrapper defaults native PPP filter
+iterations to 1. Direct `gnss ppp` keeps the native default. When `--qzss-l6`
+is used with `--max-epochs`, the wrapper limits expanded SSR rows to the
+observed TOW window plus `--qzss-window-margin-seconds`; `--qzss-expanded-cache`
+reuses an existing expanded CSV when present.
 
 When a suite config is used, the output tree is partitioned by case:
 

@@ -22,11 +22,17 @@ find_package(nav_msgs QUIET)
 find_package(std_msgs QUIET)
 find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs)
 
+option(MADOCALIB_PARITY_LINK "Link external MADOCALIB C sources for opt-in parity oracle tests" OFF)
+set(MADOCALIB_ROOT_DIR
+    "$ENV{MADOCALIB_ROOT_DIR}"
+    CACHE PATH "Path to the MADOCALIB checkout root")
+
 # List source files for the main library
 set(GNSS_SOURCES
     src/gnss.cpp
     src/io/ntrip.cpp
     src/io/rinex.cpp
+    src/io/rinex4.cpp
     src/io/rtcm.cpp
     src/io/rtcm_stream.cpp
     src/io/ubx.cpp
@@ -40,6 +46,10 @@ set(GNSS_SOURCES
     src/algorithms/ppp_osr.cpp
     src/algorithms/ppp_wlnl.cpp
     src/algorithms/ppp_clas_epoch.cpp
+    src/algorithms/madoca_core.cpp
+    src/algorithms/madoca_parity.cpp
+    src/algorithms/madocalib_oracle.cpp
+    src/algorithms/madocalib_bridge.cpp
     src/algorithms/ppp.cpp
 )
 
@@ -66,6 +76,78 @@ target_include_directories(gnss_lib PUBLIC
 )
 target_link_libraries(gnss_lib PUBLIC Eigen3::Eigen)
 
+if(MADOCALIB_PARITY_LINK)
+    set(MADOCALIB_SRC_DIR "${MADOCALIB_ROOT_DIR}/src")
+    if(NOT EXISTS "${MADOCALIB_SRC_DIR}/rtklib.h")
+        message(FATAL_ERROR "MADOCALIB source tree not found: ${MADOCALIB_SRC_DIR}")
+    endif()
+
+    add_library(madocalib STATIC
+        ${MADOCALIB_SRC_DIR}/rtkcmn.c
+        ${MADOCALIB_SRC_DIR}/rinex.c
+        ${MADOCALIB_SRC_DIR}/rtkpos.c
+        ${MADOCALIB_SRC_DIR}/postpos.c
+        ${MADOCALIB_SRC_DIR}/solution.c
+        ${MADOCALIB_SRC_DIR}/lambda.c
+        ${MADOCALIB_SRC_DIR}/geoid.c
+        ${MADOCALIB_SRC_DIR}/sbas.c
+        ${MADOCALIB_SRC_DIR}/preceph.c
+        ${MADOCALIB_SRC_DIR}/pntpos.c
+        ${MADOCALIB_SRC_DIR}/ephemeris.c
+        ${MADOCALIB_SRC_DIR}/options.c
+        ${MADOCALIB_SRC_DIR}/ppp.c
+        ${MADOCALIB_SRC_DIR}/ppp_ar.c
+        ${MADOCALIB_SRC_DIR}/ppp_iono.c
+        ${MADOCALIB_SRC_DIR}/rtcm.c
+        ${MADOCALIB_SRC_DIR}/rtcm2.c
+        ${MADOCALIB_SRC_DIR}/rtcm3.c
+        ${MADOCALIB_SRC_DIR}/rtcm3e.c
+        ${MADOCALIB_SRC_DIR}/ionex.c
+        ${MADOCALIB_SRC_DIR}/tides.c
+        ${MADOCALIB_SRC_DIR}/mdccssr.c
+        ${MADOCALIB_SRC_DIR}/mdciono.c
+    )
+    target_include_directories(madocalib PRIVATE ${MADOCALIB_SRC_DIR})
+    target_compile_definitions(madocalib
+        PRIVATE
+            TRACE
+            ENAGLO
+            ENAQZS
+            ENAGAL
+            ENACMP
+            ENAIRN
+            NFREQ=5
+            NEXOBS=5
+    )
+    target_link_libraries(madocalib PRIVATE m Threads::Threads)
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(madocalib PRIVATE rt)
+    endif()
+
+    target_include_directories(gnss_lib PRIVATE ${MADOCALIB_SRC_DIR})
+    target_compile_definitions(gnss_lib
+        PUBLIC
+            GNSSPP_HAS_MADOCALIB_BRIDGE=1
+            GNSSPP_HAS_MADOCALIB_ORACLE=1
+        PRIVATE
+            TRACE
+            ENAGLO
+            ENAQZS
+            ENAGAL
+            ENACMP
+            ENAIRN
+            NFREQ=5
+            NEXOBS=5
+            "GNSSPP_MADOCALIB_ROOT=\"${MADOCALIB_ROOT_DIR}\""
+    )
+    target_link_libraries(gnss_lib PUBLIC madocalib)
+else()
+    target_compile_definitions(gnss_lib
+        PUBLIC
+            GNSSPP_HAS_MADOCALIB_BRIDGE=0
+            GNSSPP_HAS_MADOCALIB_ORACLE=0)
+endif()
+
 # Create the no-optimization library
 add_library(gnss_lib_noopt STATIC ${GNSS_SOURCES_NO_OPTIMIZATION})
 target_compile_options(gnss_lib_noopt PRIVATE -O0)
@@ -75,8 +157,13 @@ target_include_directories(gnss_lib_noopt PUBLIC
 )
 target_link_libraries(gnss_lib_noopt PUBLIC Eigen3::Eigen)
 
+set(GNSS_INSTALL_TARGETS gnss_lib gnss_lib_noopt)
+if(MADOCALIB_PARITY_LINK)
+    list(APPEND GNSS_INSTALL_TARGETS madocalib)
+endif()
+
 install(
-    TARGETS gnss_lib gnss_lib_noopt
+    TARGETS ${GNSS_INSTALL_TARGETS}
     EXPORT libgnssppTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

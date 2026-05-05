@@ -197,7 +197,7 @@ SdEpochResult runClockFreeSdEpoch(
 
                 // Initialize ambiguity from well-converged position
                 if (state.P(amb_idx, amb_idx) >= kAmbiguityInitialVariance * 0.9) {
-                    state.x(amb_idx) = v / so.osr->wavelengths[f];
+                    state.x(amb_idx) = -v / so.osr->wavelengths[f];
                     state.P(amb_idx, amb_idx) = 100.0;
                 }
 

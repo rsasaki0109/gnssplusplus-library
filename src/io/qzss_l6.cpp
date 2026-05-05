@@ -9,6 +9,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <optional>
 
 namespace libgnss::qzss_l6 {
 
@@ -20,12 +21,14 @@ constexpr int kSubtypeOrbit = 2;
 constexpr int kSubtypeClock = 3;
 constexpr int kSubtypeCodeBias = 4;
 constexpr int kSubtypePhaseBias = 5;
+constexpr int kSubtypeUra = 7;
 
 // GNSS system IDs in CSSR
 constexpr int kGnssGps = 0;
 constexpr int kGnssGlonass = 1;
 constexpr int kGnssGalileo = 2;
 constexpr int kGnssBeidou = 3;
+constexpr int kGnssQzssClas = 4;
 constexpr int kGnssQzss = 5;
 
 // SSR update interval table (IS-QZSS-L6-004, Table 4.2.2-9)
@@ -33,15 +36,23 @@ constexpr double kUdiTable[] = {
     1, 2, 5, 10, 15, 30, 60, 120, 240, 300, 600, 900, 1800, 3600, 7200, 10800
 };
 
-constexpr int kGnssSbas = 4;
+constexpr int kVendorMadoca = 2;
+constexpr int kVendorClas = 5;
+constexpr int kServiceClockEphemeris = 0;
+constexpr int kCssrType = 4073;
 
-GNSSSystem cssrSystemToGnss(int sys_id) {
+GNSSSystem cssrSystemToGnss(int sys_id, bool madoca_l6e_mode) {
+    if (madoca_l6e_mode) {
+        if (sys_id == 4) return GNSSSystem::QZSS;
+        if (sys_id == 7) return GNSSSystem::BeiDou;
+    }
+
     switch (sys_id) {
         case kGnssGps: return GNSSSystem::GPS;
         case kGnssGlonass: return GNSSSystem::GLONASS;
         case kGnssGalileo: return GNSSSystem::Galileo;
         case kGnssBeidou: return GNSSSystem::BeiDou;
-        case kGnssSbas: return GNSSSystem::SBAS;
+        case kGnssQzssClas: return GNSSSystem::QZSS;
         case kGnssQzss: return GNSSSystem::QZSS;
         default: return GNSSSystem::UNKNOWN;
     }
@@ -59,6 +70,122 @@ std::vector<int> signalSlotsFromMask(uint16_t sigmask) {
         if ((sigmask >> i) & 1) slots.push_back(15 - i);
     }
     return slots;
+}
+
+bool isMadocaL6EPrn(int prn) {
+    switch (prn) {
+        case 204:
+        case 205:
+        case 206:
+        case 207:
+        case 209:
+        case 210:
+        case 211:
+            return true;
+        default:
+            return false;
+    }
+}
+
+SatelliteId normalizeQzssObservationId(const SatelliteId& satellite) {
+    if (satellite.system == GNSSSystem::QZSS && satellite.prn >= 193) {
+        return SatelliteId(GNSSSystem::QZSS,
+                           static_cast<uint8_t>(satellite.prn - 192));
+    }
+    if (satellite.system == GNSSSystem::QZSS && satellite.prn >= 120 && satellite.prn <= 158) {
+        return SatelliteId(GNSSSystem::QZSS,
+                           static_cast<uint8_t>(satellite.prn - 119));
+    }
+    return satellite;
+}
+
+int qzssObservationPrn(uint8_t prn) {
+    if (prn >= 120 && prn <= 158) {
+        return static_cast<int>(prn) - 119;
+    }
+    return prn >= 193 ? static_cast<int>(prn) - 192 : static_cast<int>(prn);
+}
+
+int madocaFrameCountForSubtype(int subtype) {
+    static constexpr int kFrameCountBySubtype[16] = {
+        -1, 5, -1, 3, 5, 5, -1, 3,
+        -1, -1, -1, -1, -1, -1, -1, -1,
+    };
+    return subtype >= 0 && subtype < 16 ? kFrameCountBySubtype[subtype] : -1;
+}
+
+double ssrUraSigmaMeters(int ura_index) {
+    if (ura_index <= 0) {
+        return 0.15;
+    }
+    if (ura_index >= 63) {
+        return 5.4665;
+    }
+    return (std::pow(3.0, static_cast<double>((ura_index >> 3) & 0x07)) *
+                (1.0 + static_cast<double>(ura_index & 0x07) / 4.0) -
+            1.0) * 1e-3;
+}
+
+std::map<SatelliteId, std::map<int, double>> composeNetworkPhaseBiases(
+    const std::map<SatelliteId, std::map<int, double>>& base_biases,
+    const std::map<SatelliteId, std::map<int, double>>& network_biases) {
+    auto composed = network_biases;
+    for (const auto& [satellite, base_rows] : base_biases) {
+        const auto network_sat_it = network_biases.find(satellite);
+        if (network_sat_it == network_biases.end()) {
+            continue;
+        }
+        auto& composed_rows = composed[satellite];
+        for (const auto& [slot, base_bias] : base_rows) {
+            auto row_it = composed_rows.find(slot);
+            if (row_it != composed_rows.end()) {
+                row_it->second += base_bias;
+            } else {
+                composed_rows[slot] = base_bias;
+            }
+        }
+    }
+    return composed;
+}
+
+std::map<SatelliteId, std::map<int, uint8_t>> composeNetworkPhaseDiscontinuity(
+    const std::map<SatelliteId, std::map<int, uint8_t>>& base_pdi,
+    const std::map<SatelliteId, std::map<int, uint8_t>>& network_pdi,
+    const std::map<SatelliteId, std::map<int, double>>& network_biases) {
+    auto composed = network_pdi;
+    for (const auto& [satellite, base_rows] : base_pdi) {
+        if (network_biases.find(satellite) == network_biases.end()) {
+            continue;
+        }
+        auto& composed_rows = composed[satellite];
+        for (const auto& [slot, base_value] : base_rows) {
+            if (composed_rows.find(slot) == composed_rows.end()) {
+                composed_rows[slot] = base_value;
+            }
+        }
+    }
+    return composed;
+}
+
+std::optional<double> readScaledSigned(BitReader& reader, int bits, double scale) {
+    const int64_t raw = reader.readS(bits);
+    const int64_t invalid_sentinel = -(int64_t{1} << (bits - 1));
+    if (raw == invalid_sentinel) {
+        return std::nullopt;
+    }
+    return static_cast<double>(raw) * scale;
+}
+
+std::string formatNullableDouble(const std::optional<double>& value) {
+    return value ? std::to_string(*value) : std::string("nan");
+}
+
+void storeScaledTokenIfValid(std::map<std::string, std::string>& tokens,
+                             const std::string& key,
+                             const std::optional<double>& value) {
+    if (value) {
+        tokens[key] = std::to_string(*value);
+    }
 }
 
 // Orbit correction scale factors (IS-QZSS-L6-004, Table 4.2.2-13)
@@ -98,6 +225,14 @@ void L6Decoder::decodeCssrMessage(BitReader& reader, int gps_week) {
     // Let me fix: processSubframe reads msg_type=1, then we peek subtype.
 }
 
+double L6Decoder::computeTow(int epoch_time) const {
+    int adjusted_epoch = epoch_time;
+    if (mask_.ep0 > adjusted_epoch) {
+        adjusted_epoch += 3600;
+    }
+    return mask_.tow0 + adjusted_epoch;
+}
+
 // Re-do: processSubframe should be the main parser
 void L6Decoder::decodeSubtype1(BitReader& reader) {
     // Header for ST1: tow(20) + udi(4) + sync(1) + iod(4) + ngnss(4)
@@ -109,6 +244,7 @@ void L6Decoder::decodeSubtype1(BitReader& reader) {
 
     mask_.iod = iod;
     mask_.tow0 = (tow / 3600) * 3600;
+    mask_.ep0 = tow % 3600;
     mask_.satellites.clear();
 
     for (int g = 0; g < ngnss; ++g) {
@@ -123,9 +259,18 @@ void L6Decoder::decodeSubtype1(BitReader& reader) {
         // PRN base per GNSS system (IS-QZSS-L6-004)
         int prn_base = 1;
         switch (sys_id) {
-            case 4: prn_base = 120; break;  // SBAS
-            case 5: prn_base = 193; break;  // QZSS
-            default: prn_base = 1; break;   // GPS, GLONASS, Galileo, BeiDou
+            case 4:
+                prn_base = madoca_l6e_mode_ ? 193 : 1;
+                break;
+            case 5:
+                prn_base = 193;
+                break;
+            case 7:
+                prn_base = 19;
+                break;
+            default:
+                prn_base = 1;
+                break;
         }
 
         for (int s = 0; s < nsat; ++s) {
@@ -155,7 +300,7 @@ void L6Decoder::decodeSubtype1(BitReader& reader) {
             }
 
             CssrSatellite sat;
-            sat.system = cssrSystemToGnss(sys_id);
+            sat.system = cssrSystemToGnss(sys_id, madoca_l6e_mode_);
             sat.prn = static_cast<uint8_t>(prn);
             sat.signal_slots = sat_signals;
             mask_.satellites.push_back(sat);
@@ -175,22 +320,26 @@ void L6Decoder::decodeSubtype2(BitReader& reader) {
     reader.readU(1);  // sync
     const int iod = static_cast<int>(reader.readU(4));
 
-    // IOD check removed: always decode to maintain bit position
-    const double tow = mask_.tow0 + tow_offset;
-    current_epoch_.tow = tow;
+    const double tow = computeTow(tow_offset);
 
-    current_epoch_.orbits.clear();
+    std::map<SatelliteId, CssrOrbitCorrection> decoded_orbits;
     for (const auto& sat : mask_.satellites) {
-        const SatelliteId sat_id(sat.system, sat.prn);
+        const SatelliteId sat_id = normalizeQzssObservationId(SatelliteId(sat.system, sat.prn));
         // IODE: 10 bits for Galileo, 8 bits for others
         const int iode_bits = (sat.system == GNSSSystem::Galileo) ? 10 : 8;
-        reader.readU(iode_bits);  // skip IODE
         CssrOrbitCorrection corr;
+        corr.iode = static_cast<int>(reader.readU(iode_bits));
         corr.dx = reader.readS(15) * kOrbitRadialScale;   // radial
         corr.dy = reader.readS(13) * kOrbitAlongCrossScale;  // along-track
         corr.dz = reader.readS(13) * kOrbitAlongCrossScale;  // cross-track
-        current_epoch_.orbits[sat_id] = corr;
+        decoded_orbits[sat_id] = corr;
     }
+
+    if (mask_.tow0 < 0 || iod != mask_.iod) {
+        return;
+    }
+    current_epoch_.tow = tow;
+    current_epoch_.orbits = decoded_orbits;
     current_epoch_.has_orbit = true;
 }
 
@@ -200,17 +349,21 @@ void L6Decoder::decodeSubtype3(BitReader& reader) {
     reader.readU(1);
     const int iod = static_cast<int>(reader.readU(4));
 
-    // IOD check removed: always decode to maintain bit position
-    const double tow = mask_.tow0 + tow_offset;
-    current_epoch_.tow = tow;
+    const double tow = computeTow(tow_offset);
 
-    current_epoch_.clocks.clear();
+    std::map<SatelliteId, CssrClockCorrection> decoded_clocks;
     for (const auto& sat : mask_.satellites) {
-        const SatelliteId sat_id(sat.system, sat.prn);
+        const SatelliteId sat_id = normalizeQzssObservationId(SatelliteId(sat.system, sat.prn));
         CssrClockCorrection corr;
         corr.dclock_m = reader.readS(15) * kClockScale;
-        current_epoch_.clocks[sat_id] = corr;
+        decoded_clocks[sat_id] = corr;
     }
+
+    if (mask_.tow0 < 0 || iod != mask_.iod) {
+        return;
+    }
+    current_epoch_.tow = tow;
+    current_epoch_.clocks = decoded_clocks;
     current_epoch_.has_clock = true;
 }
 
@@ -220,22 +373,27 @@ void L6Decoder::decodeSubtype4(BitReader& reader) {
     reader.readU(1);
     const int iod = static_cast<int>(reader.readU(4));
 
-    // IOD check removed: always decode to maintain bit position
-
-    // ST4 sets BASE code biases for all mask satellites
+    std::map<SatelliteId, std::map<int, double>> decoded_biases;
     for (const auto& sat : mask_.satellites) {
-        const SatelliteId sat_id(sat.system, sat.prn);
-        auto& biases = base_code_biases_[sat_id];
+        const SatelliteId sat_id = normalizeQzssObservationId(SatelliteId(sat.system, sat.prn));
+        auto& biases = decoded_biases[sat_id];
         for (const int sig_id : sat.signal_slots) {
             biases[sig_id] = reader.readS(11) * kCodeBiasScale;
         }
     }
-    // Merge base + network for current epoch
+
+    if (mask_.tow0 < 0 || iod != mask_.iod) {
+        return;
+    }
+
+    for (const auto& [sat_id, biases] : decoded_biases) {
+        base_code_biases_[sat_id] = biases;
+    }
     current_epoch_.code_biases = base_code_biases_;
     for (const auto& [sat, nb] : network_code_biases_)
         for (const auto& [sig, val] : nb)
             current_epoch_.code_biases[sat][sig] = val;
-    current_epoch_.has_code_bias = true;
+    current_epoch_.has_code_bias = !current_epoch_.code_biases.empty();
 }
 
 void L6Decoder::decodeSubtype5(BitReader& reader) {
@@ -244,23 +402,56 @@ void L6Decoder::decodeSubtype5(BitReader& reader) {
     reader.readU(1);
     const int iod = static_cast<int>(reader.readU(4));
 
-    // IOD check removed: always decode to maintain bit position
-
-    // ST5 sets BASE phase biases for all mask satellites
+    std::map<SatelliteId, std::map<int, double>> decoded_biases;
+    std::map<SatelliteId, std::map<int, uint8_t>> decoded_pdi;
     for (const auto& sat : mask_.satellites) {
-        const SatelliteId sat_id(sat.system, sat.prn);
-        auto& biases = base_phase_biases_[sat_id];
+        const SatelliteId sat_id = normalizeQzssObservationId(SatelliteId(sat.system, sat.prn));
+        auto& biases = decoded_biases[sat_id];
+        auto& pdi = decoded_pdi[sat_id];
         for (const int sig_id : sat.signal_slots) {
             biases[sig_id] = reader.readS(15) * kPhaseBiasScale;
-            reader.readU(kPhaseDiscBits);
+            pdi[sig_id] = static_cast<uint8_t>(reader.readU(kPhaseDiscBits));
         }
     }
-    // Merge base + network for current epoch
+
+    if (mask_.tow0 < 0 || iod != mask_.iod) {
+        return;
+    }
+
+    for (const auto& [sat_id, biases] : decoded_biases) {
+        base_phase_biases_[sat_id] = biases;
+        base_phase_discontinuity_[sat_id] = decoded_pdi[sat_id];
+    }
     current_epoch_.phase_biases = base_phase_biases_;
+    current_epoch_.phase_discontinuity_indicators = base_phase_discontinuity_;
     for (const auto& [sat, nb] : network_phase_biases_)
         for (const auto& [sig, val] : nb)
             current_epoch_.phase_biases[sat][sig] = val;
-    current_epoch_.has_phase_bias = true;
+    current_epoch_.has_phase_bias = !current_epoch_.phase_biases.empty();
+}
+
+void L6Decoder::decodeSubtype7(BitReader& reader) {
+    const int tow_offset = static_cast<int>(reader.readU(12));
+    reader.readU(4);
+    reader.readU(1);
+    const int iod = static_cast<int>(reader.readU(4));
+
+    std::map<SatelliteId, int> decoded_uras;
+    for (const auto& sat : mask_.satellites) {
+        decoded_uras[normalizeQzssObservationId(SatelliteId(sat.system, sat.prn))] =
+            static_cast<int>(reader.readU(6));
+    }
+
+    if (mask_.tow0 < 0 || iod != mask_.iod) {
+        return;
+    }
+
+    current_epoch_.tow = computeTow(tow_offset);
+    for (const auto& [sat_id, ura_index] : decoded_uras) {
+        base_ura_indices_[sat_id] = ura_index;
+    }
+    current_epoch_.ura_indices = base_ura_indices_;
+    current_epoch_.has_ura = !current_epoch_.ura_indices.empty();
 }
 
 void L6Decoder::decodeSubtype11(BitReader& reader) {
@@ -268,7 +459,6 @@ void L6Decoder::decodeSubtype11(BitReader& reader) {
     reader.readU(4);
     reader.readU(1);
     const int iod = static_cast<int>(reader.readU(4));
-    // IOD check removed: always decode to maintain bit position
 
     const bool flg_orbit = reader.readU(1) != 0;
     const bool flg_clock = reader.readU(1) != 0;
@@ -281,30 +471,42 @@ void L6Decoder::decodeSubtype11(BitReader& reader) {
         selected_mask = reader.readU(nsat);
     }
 
-    const double tow = mask_.tow0 + tow_offset;
-    current_epoch_.tow = tow;
+    const double tow = computeTow(tow_offset);
+    std::map<SatelliteId, CssrOrbitCorrection> decoded_orbits;
+    std::map<SatelliteId, CssrClockCorrection> decoded_clocks;
 
     for (int i = 0; i < nsat; ++i) {
         if (flg_net && ((selected_mask >> (nsat - 1 - i)) & 1) == 0) continue;
         const auto& sat = mask_.satellites[static_cast<size_t>(i)];
-        const SatelliteId sat_id(sat.system, sat.prn);
+        const SatelliteId sat_id = normalizeQzssObservationId(SatelliteId(sat.system, sat.prn));
 
         if (flg_orbit) {
             const int iode_bits = (sat.system == GNSSSystem::Galileo) ? 10 : 8;
-            reader.readU(iode_bits);
             CssrOrbitCorrection corr;
+            corr.iode = static_cast<int>(reader.readU(iode_bits));
             corr.dx = reader.readS(15) * kOrbitRadialScale;
             corr.dy = reader.readS(13) * kOrbitAlongCrossScale;
             corr.dz = reader.readS(13) * kOrbitAlongCrossScale;
-            current_epoch_.orbits[sat_id] = corr;
-            current_epoch_.has_orbit = true;
+            decoded_orbits[sat_id] = corr;
         }
         if (flg_clock) {
             CssrClockCorrection corr;
             corr.dclock_m = reader.readS(15) * kClockScale;
-            current_epoch_.clocks[sat_id] = corr;
-            current_epoch_.has_clock = true;
+            decoded_clocks[sat_id] = corr;
         }
+    }
+
+    if (mask_.tow0 < 0 || iod != mask_.iod) {
+        return;
+    }
+    current_epoch_.tow = tow;
+    if (flg_orbit) {
+        current_epoch_.orbits = decoded_orbits;
+        current_epoch_.has_orbit = !decoded_orbits.empty();
+    }
+    if (flg_clock) {
+        current_epoch_.clocks = decoded_clocks;
+        current_epoch_.has_clock = !decoded_clocks.empty();
     }
 }
 
@@ -329,7 +531,7 @@ void L6Decoder::decodeSubtype6(BitReader& reader) {
     for (int i = 0; i < nsat; ++i) {
         if (((selected_mask >> (nsat - 1 - i)) & 1) == 0) continue;
         const auto& sat = mask_.satellites[static_cast<size_t>(i)];
-        const SatelliteId sat_id(sat.system, sat.prn);
+        const SatelliteId sat_id = normalizeQzssObservationId(SatelliteId(sat.system, sat.prn));
         const int nsig = static_cast<int>(sat.signal_slots.size());
 
         if (flg_code) {
@@ -340,10 +542,13 @@ void L6Decoder::decodeSubtype6(BitReader& reader) {
         if (flg_phase) {
             // ST6 network-specific phase biases: store per-network
             auto& net_biases = current_epoch_.network_phase_biases[network_id][sat_id];
+            auto& net_pdi =
+                current_epoch_.network_phase_discontinuity_indicators[network_id][sat_id];
             for (int s = 0; s < nsig; ++s) {
                 net_biases[sat.signal_slots[static_cast<size_t>(s)]] =
                     reader.readS(15) * kPhaseBiasScale;
-                reader.readU(kPhaseDiscBits);
+                net_pdi[sat.signal_slots[static_cast<size_t>(s)]] =
+                    static_cast<uint8_t>(reader.readU(kPhaseDiscBits));
             }
             // Don't set current_epoch_.phase_biases here.
             // ST6 updates will be picked up at next ST5 or clock emit.
@@ -378,7 +583,10 @@ void L6Decoder::decodeSubtype8(BitReader& reader) {
             case GNSSSystem::BeiDou: sys='C'; break;
             default: break;
         }
-        std::snprintf(buf, sizeof(buf), "%c%02d", sys, s.prn);
+        const int prn = s.system == GNSSSystem::QZSS
+                            ? qzssObservationPrn(s.prn)
+                            : static_cast<int>(s.prn);
+        std::snprintf(buf, sizeof(buf), "%c%02d", sys, prn);
         return std::string(buf);
     };
 
@@ -390,20 +598,35 @@ void L6Decoder::decodeSubtype8(BitReader& reader) {
         ++selected_count;
 
         reader.readU(6); // stec_quality
-        const double c00 = reader.readS(14) * 0.05;
-        tokens["atmos_stec_c00_tecu:" + key] = std::to_string(c00);
+        storeScaledTokenIfValid(
+            tokens, "atmos_stec_c00_tecu:" + key, readScaledSigned(reader, 14, 0.05));
         tokens["atmos_stec_type:" + key] = std::to_string(stec_type);
 
         if (stec_type > 0) {
-            tokens["atmos_stec_c01_tecu_per_deg:" + key] = std::to_string(reader.readS(12) * 0.02);
-            tokens["atmos_stec_c10_tecu_per_deg:" + key] = std::to_string(reader.readS(12) * 0.02);
+            storeScaledTokenIfValid(
+                tokens,
+                "atmos_stec_c01_tecu_per_deg:" + key,
+                readScaledSigned(reader, 12, 0.02));
+            storeScaledTokenIfValid(
+                tokens,
+                "atmos_stec_c10_tecu_per_deg:" + key,
+                readScaledSigned(reader, 12, 0.02));
         }
         if (stec_type > 1) {
-            tokens["atmos_stec_c11_tecu_per_deg2:" + key] = std::to_string(reader.readS(10) * 0.02);
+            storeScaledTokenIfValid(
+                tokens,
+                "atmos_stec_c11_tecu_per_deg2:" + key,
+                readScaledSigned(reader, 10, 0.02));
         }
         if (stec_type > 2) {
-            tokens["atmos_stec_c02_tecu_per_deg2:" + key] = std::to_string(reader.readS(8) * 0.005);
-            tokens["atmos_stec_c20_tecu_per_deg2:" + key] = std::to_string(reader.readS(8) * 0.005);
+            storeScaledTokenIfValid(
+                tokens,
+                "atmos_stec_c02_tecu_per_deg2:" + key,
+                readScaledSigned(reader, 8, 0.005));
+            storeScaledTokenIfValid(
+                tokens,
+                "atmos_stec_c20_tecu_per_deg2:" + key,
+                readScaledSigned(reader, 8, 0.005));
         }
     }
     tokens["atmos_selected_satellites"] = std::to_string(selected_count);
@@ -436,7 +659,10 @@ void L6Decoder::decodeSubtype9(BitReader& reader) {
             case GNSSSystem::QZSS:sys='J';break; case GNSSSystem::GLONASS:sys='R';break;
             case GNSSSystem::BeiDou:sys='C';break; default:break;
         }
-        std::snprintf(buf,sizeof(buf),"%c%02d",sys,s.prn);
+        const int prn = s.system == GNSSSystem::QZSS
+                            ? qzssObservationPrn(s.prn)
+                            : static_cast<int>(s.prn);
+        std::snprintf(buf,sizeof(buf),"%c%02d",sys,prn);
         return std::string(buf);
     };
     for (int i = 0; i < nsat; ++i) {
@@ -450,16 +676,16 @@ void L6Decoder::decodeSubtype9(BitReader& reader) {
     std::string trop_hs, trop_wet;
     std::map<std::string, std::string> stec_residuals;
     for (int g = 0; g < grid_count; ++g) {
-        const double hs = reader.readS(9) * 0.004;
-        const double wet = reader.readS(8) * 0.004;
+        const auto hs = readScaledSigned(reader, 9, 0.004);
+        const auto wet = readScaledSigned(reader, 8, 0.004);
         if (g > 0) { trop_hs += ";"; trop_wet += ";"; }
-        trop_hs += std::to_string(hs);
-        trop_wet += std::to_string(wet);
+        trop_hs += formatNullableDouble(hs);
+        trop_wet += formatNullableDouble(wet);
 
         for (const auto& sat_key : sel_sats) {
-            const double res = reader.readS(stec_bits) * 0.04;
+            const auto res = readScaledSigned(reader, stec_bits, 0.04);
             if (g > 0) stec_residuals[sat_key] += ";";
-            stec_residuals[sat_key] += std::to_string(res);
+            stec_residuals[sat_key] += formatNullableDouble(res);
         }
     }
 
@@ -508,8 +734,10 @@ std::vector<CssrEpoch> L6Decoder::feedFrame(const uint8_t* frame_data, int gps_w
     const int msg_type = frame_data[5];
 
     // message_type encodes: vendor_id(3) | facility_id(2) | reserved(2) | subframe_start(1)
-    const int vendor_id = (msg_type >> 5) & 0x7;
+    int vendor_id = (msg_type >> 5) & 0x7;
     const int facility_id = (msg_type >> 3) & 0x3;
+    const int service_id = (msg_type >> 2) & 0x1;
+    const bool alert = (frame_data[6] & 0x80) == 0x80;
     const bool subframe_start = (msg_type & 0x1) != 0;
 
     // Extract data part (1695 bits starting at bit 49)
@@ -525,7 +753,17 @@ std::vector<CssrEpoch> L6Decoder::feedFrame(const uint8_t* frame_data, int gps_w
         data_part[static_cast<size_t>(dst_byte)] |= static_cast<uint8_t>(bit_val << dst_pos);
     }
 
-    // Only decode CLAS (vendor_id = 0b101 = 5)
+    const bool madoca_l6e = vendor_id == kVendorMadoca &&
+                            service_id == kServiceClockEphemeris &&
+                            isMadocaL6EPrn(prn);
+    if (alert) {
+        return {};
+    }
+    madoca_l6e_mode_ = madoca_l6e;
+    if (madoca_l6e) {
+        vendor_id = kVendorClas;
+    }
+    // Decode CLAS directly; MADOCA L6E is normalized after header validation.
     ++frame_index_;
     if (vendor_id != 5) return {};
 
@@ -534,10 +772,24 @@ std::vector<CssrEpoch> L6Decoder::feedFrame(const uint8_t* frame_data, int gps_w
 
     if (subframe_start || pending.frame_data_parts.empty()) {
         pending.frame_data_parts.clear();
+        pending.expected_frames = kSubframeFrames;
+        if (madoca_l6e) {
+            BitReader first_message(data_part.data(), kDataPartBits);
+            const int cssr_type = static_cast<int>(first_message.readU(12));
+            const int subtype = static_cast<int>(first_message.readU(4));
+            if (cssr_type == kCssrType) {
+                pending.expected_frames = madocaFrameCountForSubtype(subtype);
+            } else {
+                return {};
+            }
+            if (pending.expected_frames < 1) {
+                return {};
+            }
+        }
     }
     pending.frame_data_parts.push_back(data_part);
 
-    if (static_cast<int>(pending.frame_data_parts.size()) < kSubframeFrames) {
+    if (static_cast<int>(pending.frame_data_parts.size()) < pending.expected_frames) {
         return {};
     }
 
@@ -561,8 +813,6 @@ std::vector<CssrEpoch> L6Decoder::feedFrame(const uint8_t* frame_data, int gps_w
     // Decode CSSR messages from subframe
     BitReader sfr(subframe_data.data(), dst_bit);
 
-    constexpr int kCssrType = 4073;  // IS-QZSS-L6-004: message type = 4073
-
     while (sfr.remaining() > 16) {
         const int cssr_type = static_cast<int>(sfr.readU(12));
         if (cssr_type == 0) break;  // padding
@@ -577,11 +827,7 @@ std::vector<CssrEpoch> L6Decoder::feedFrame(const uint8_t* frame_data, int gps_w
             case kSubtypeCodeBias: decodeSubtype4(sfr); break;
             case kSubtypePhaseBias: decodeSubtype5(sfr); break;
             case 6: decodeSubtype6(sfr); break;   // code+phase bias (network)
-            case 7: {  // URA: header + 6 bits per satellite
-                sfr.readU(12); sfr.readU(4); sfr.readU(1); sfr.readU(4);
-                for (size_t s = 0; s < mask_.satellites.size(); ++s) sfr.readU(6);
-                break;
-            }
+            case kSubtypeUra: decodeSubtype7(sfr); break;
             case 8: decodeSubtype8(sfr); break;   // STEC polynomial
             case 9: decodeSubtype9(sfr); break;   // gridded trop + STEC residuals
             case 11: decodeSubtype11(sfr); break;  // combined
@@ -595,7 +841,7 @@ std::vector<CssrEpoch> L6Decoder::feedFrame(const uint8_t* frame_data, int gps_w
         if (sfr.position() <= pos_before) break;
 
         // Emit epoch immediately after clock message (ST3 or ST11).
-        // Bias/atmos from the same subframe go to the NEXT epoch.
+        // Later messages in the same subframe are patched into the emitted row below.
         if (current_epoch_.has_clock && !mask_.satellites.empty()) {
             current_epoch_.week = gps_week;
             current_epoch_.merged_atmos = merged_atmos_;
@@ -604,14 +850,30 @@ std::vector<CssrEpoch> L6Decoder::feedFrame(const uint8_t* frame_data, int gps_w
         }
     }
 
-    // Retroactive atmos update: patch emitted epochs with post-clock ST9.
-    if (!completed_epochs_.empty() && current_epoch_.has_atmos) {
+    // Retroactive updates: MADOCA decodes every message in the assembled subframe
+    // before exposing the resulting SSR row.
+    if (!completed_epochs_.empty()) {
         auto& last = completed_epochs_.back();
-        for (const auto& [net_id, tokens] : current_epoch_.atmos_by_network)
-            last.atmos_by_network[net_id] = tokens;
-        if (current_epoch_.last_gridded_network_id > 0)
-            last.last_gridded_network_id = current_epoch_.last_gridded_network_id;
-        last.has_atmos = true;
+        if (current_epoch_.has_code_bias) {
+            last.code_biases = current_epoch_.code_biases;
+            last.has_code_bias = !last.code_biases.empty();
+        }
+        if (current_epoch_.has_phase_bias) {
+            last.phase_biases = current_epoch_.phase_biases;
+            last.phase_discontinuity_indicators = current_epoch_.phase_discontinuity_indicators;
+            last.has_phase_bias = !last.phase_biases.empty();
+        }
+        if (current_epoch_.has_ura) {
+            last.ura_indices = current_epoch_.ura_indices;
+            last.has_ura = !last.ura_indices.empty();
+        }
+        if (current_epoch_.has_atmos) {
+            for (const auto& [net_id, tokens] : current_epoch_.atmos_by_network)
+                last.atmos_by_network[net_id] = tokens;
+            if (current_epoch_.last_gridded_network_id > 0)
+                last.last_gridded_network_id = current_epoch_.last_gridded_network_id;
+            last.has_atmos = true;
+        }
     }
 
     return completed_epochs_;
@@ -643,19 +905,25 @@ std::vector<CssrEpoch> L6Decoder::decodeFile(const std::string& path, int gps_we
     // Each network's ST6 arrives once per 30-second mask cycle.
     {
         std::map<int, std::map<SatelliteId, std::map<int, double>>> carried_biases;
+        std::map<int, std::map<SatelliteId, std::map<int, uint8_t>>> carried_pdi;
         for (auto& ep : all_epochs) {
             for (const auto& [net_id, sat_biases] : ep.network_phase_biases)
                 carried_biases[net_id] = sat_biases;
+            for (const auto& [net_id, sat_pdi] : ep.network_phase_discontinuity_indicators)
+                carried_pdi[net_id] = sat_pdi;
             ep.network_phase_biases = carried_biases;
+            ep.network_phase_discontinuity_indicators = carried_pdi;
         }
     }
 
     // Post-process: build CSV-style merged corrections.
-    // Emulate Python's pending_atmos/pending_bias accumulation.
-    // Each epoch gets a single flat atmos token set and accumulated biases.
+    // Emulate Python's pending_atmos accumulation while keeping ST5 base phase
+    // biases separate from ST6 network-specific phase biases.  CLASLIB composes
+    // network phase bias rows as ST5 base + ST6 network delta.
     {
         std::map<std::string, std::string> pending_atmos;
-        std::map<SatelliteId, std::map<int, double>> pending_pbias;
+        std::map<SatelliteId, std::map<int, double>> base_pbias;
+        std::map<SatelliteId, std::map<int, uint8_t>> base_pdi;
         for (auto& ep : all_epochs) {
             // Update pending atmos (message-order union, same as Python)
             for (const auto& [net_id, tokens] : ep.atmos_by_network) {
@@ -664,22 +932,41 @@ std::vector<CssrEpoch> L6Decoder::decodeFile(const std::string& path, int gps_we
             }
             ep.merged_atmos = pending_atmos;
 
-            // Update pending phase bias: ST5 base resets, ST6 network updates
+            // Update pending phase bias base from ST5.  ST6 rows are composed
+            // below per network and stay out of the base correction row.
             if (ep.has_phase_bias) {
-                // ST5 arrived: reset pending to base values
-                pending_pbias.clear();
-                for (const auto& [sat, biases] : ep.phase_biases)
-                    for (const auto& [slot, val] : biases)
-                        pending_pbias[sat][slot] = val;
+                base_pbias = ep.phase_biases;
+                base_pdi = ep.phase_discontinuity_indicators;
             }
-            // ST6 network updates: merge into pending
-            for (const auto& [net_id, sat_biases] : ep.network_phase_biases)
-                for (const auto& [sat, biases] : sat_biases)
-                    for (const auto& [slot, val] : biases)
-                        pending_pbias[sat][slot] = val;
-            // Store merged biases in epoch
-            ep.phase_biases = pending_pbias;
-            ep.has_phase_bias = !pending_pbias.empty();
+
+            std::map<int, std::map<SatelliteId, std::map<int, double>>> composed_network_biases;
+            std::map<int, std::map<SatelliteId, std::map<int, uint8_t>>> composed_network_pdi;
+            for (const auto& [net_id, sat_biases] : ep.network_phase_biases) {
+                const auto composed_biases =
+                    composeNetworkPhaseBiases(base_pbias, sat_biases);
+                if (!composed_biases.empty()) {
+                    composed_network_biases[net_id] = composed_biases;
+                }
+
+                static const std::map<SatelliteId, std::map<int, uint8_t>> kEmptyPdi;
+                const auto net_pdi_it =
+                    ep.network_phase_discontinuity_indicators.find(net_id);
+                const auto& network_pdi =
+                    net_pdi_it != ep.network_phase_discontinuity_indicators.end()
+                        ? net_pdi_it->second
+                        : kEmptyPdi;
+                const auto composed_pdi =
+                    composeNetworkPhaseDiscontinuity(base_pdi, network_pdi, sat_biases);
+                if (!composed_pdi.empty()) {
+                    composed_network_pdi[net_id] = composed_pdi;
+                }
+            }
+
+            ep.network_phase_biases = composed_network_biases;
+            ep.network_phase_discontinuity_indicators = composed_network_pdi;
+            ep.phase_biases = base_pbias;
+            ep.phase_discontinuity_indicators = base_pdi;
+            ep.has_phase_bias = !base_pbias.empty();
         }
     }
 
@@ -711,7 +998,7 @@ uint8_t cssrSignalSlotToRtcmId(int gnss_id, int slot) {
             if (slot <= 5) return 22;
             if (slot <= 8) return 14;
             return 0;
-        case 3: // BeiDou: 0-2→B1I(2), 3-5→B3I(8), 6-8→B2I(14)
+        case 3: case 7: // BeiDou: 0-2→B1I(2), 3-5→B3I(8), 6-8→B2I(14)
             if (slot <= 2) return 2;
             if (slot <= 5) return 8;
             if (slot <= 8) return 14;
@@ -749,8 +1036,10 @@ void populateSSRProducts(
         const GNSSTime time{epoch.week, epoch.tow};
 
         for (const auto& [sat_id, clock_corr] : epoch.clocks) {
+            const SatelliteId product_sat_id = normalizeQzssObservationId(sat_id);
+
             libgnss::SSROrbitClockCorrection corr;
-            corr.satellite = sat_id;
+            corr.satellite = product_sat_id;
             corr.time = time;
             corr.clock_correction_m = clock_corr.dclock_m;
             corr.clock_valid = true;
@@ -760,6 +1049,7 @@ void populateSSRProducts(
             if (orbit_it != epoch.orbits.end()) {
                 const auto& o = orbit_it->second;
                 corr.orbit_correction_ecef = Vector3d(o.dx, o.dy, o.dz);
+                corr.orbit_iode = o.iode;
                 corr.orbit_valid = true;
             }
 
@@ -770,34 +1060,45 @@ void populateSSRProducts(
                 for (const auto& [slot, bias_m] : cb_it->second) {
                     const uint8_t rtcm_id = cssrSignalSlotToRtcmId(gnss_id, slot);
                     if (rtcm_id > 0) {
-                        corr.code_bias_m[rtcm_id] = bias_m;
+                        // PPP applies SSR code bias by subtraction.  MADOCALIB's
+                        // MADOCA path applies decoded ST4 code bias by addition.
+                        corr.code_bias_m[rtcm_id] = -bias_m;
                     }
                 }
                 corr.code_bias_valid = !corr.code_bias_m.empty();
             }
 
-            // Phase biases (merged: ST5 base + ST6 network updates)
+            // Phase biases from ST5 base.  ST6 network-specific composed rows
+            // are emitted separately below with a non-zero bias_network_id.
             auto pb_it = epoch.phase_biases.find(sat_id);
             if (pb_it != epoch.phase_biases.end()) {
                 const int gnss_id = gnssSystemToCssrId(sat_id.system);
                 for (const auto& [slot, bias_m] : pb_it->second) {
                     const uint8_t rtcm_id = cssrSignalSlotToRtcmId(gnss_id, slot);
                     if (rtcm_id > 0) {
-                        corr.phase_bias_m[rtcm_id] = bias_m;
+                        // PPP applies SSR phase bias by subtraction.  MADOCALIB's
+                        // MADOCA path applies decoded ST5/ST6 phase bias by addition.
+                        corr.phase_bias_m[rtcm_id] = -bias_m;
                     }
                 }
                 corr.phase_bias_valid = !corr.phase_bias_m.empty();
-            }
-            // Set bias_network_id from the last ST6 that updated this satellite
-            // (0 means base-only from ST5)
-            if (corr.phase_bias_valid) {
-                for (auto rit = epoch.network_phase_biases.rbegin();
-                     rit != epoch.network_phase_biases.rend(); ++rit) {
-                    if (rit->second.count(sat_id)) {
-                        corr.bias_network_id = rit->first;
-                        break;
+
+                // Parallel phase discontinuity indicators keyed on the same RTCM ids.
+                auto pdi_it = epoch.phase_discontinuity_indicators.find(sat_id);
+                if (pdi_it != epoch.phase_discontinuity_indicators.end()) {
+                    for (const auto& [slot, pdi_value] : pdi_it->second) {
+                        const uint8_t rtcm_id = cssrSignalSlotToRtcmId(gnss_id, slot);
+                        if (rtcm_id > 0) {
+                            corr.phase_discontinuity_indicators[rtcm_id] = pdi_value;
+                        }
                     }
                 }
+            }
+
+            auto ura_it = epoch.ura_indices.find(sat_id);
+            if (ura_it != epoch.ura_indices.end()) {
+                corr.ura_sigma_m = ssrUraSigmaMeters(ura_it->second);
+                corr.ura_valid = std::isfinite(corr.ura_sigma_m);
             }
 
             // Use merged_atmos (Python pending_atmos equivalent):
@@ -814,39 +1115,23 @@ void populateSSRProducts(
             }
             products.addCorrection(corr);
 
-            // Emit an extra atmos-only correction for the preferred network
-            // with STEC polynomial only (no trop, no STEC residuals).
-            // This matches CSV pipeline where preferred-network rows have
-            // c00 but no grid data, causing Saastamoinen trop fallback.
-            // selectClasEpochAtmosTokens will pick this correction due to
-            // better grid distance, then preferred_network_id propagates
-            // to bias selection via interpolateCorrection.
+            // Emit an extra atmos-only correction for the preferred network.
+            // Keep the complete network atmosphere bank here: ST8 polynomial
+            // terms plus the latest ST9 trop/STEC residual grid.  CLASLIB's
+            // corrmea gate rejects satellites when the selected gridded STEC
+            // residuals are unavailable; dropping residuals here turns those
+            // rows into polynomial-only corrections and admits extra sats.
             if (preferred_network_id > 0 &&
                 preferred_network_id != corr.atmos_network_id &&
                 epoch.atmos_by_network.count(preferred_network_id)) {
                 libgnss::SSROrbitClockCorrection pref_corr;
-                pref_corr.satellite = sat_id;
+                pref_corr.satellite = product_sat_id;
                 pref_corr.time = time;
                 pref_corr.atmos_network_id = preferred_network_id;
-                // STEC polynomial from preferred network's ST8 data.
-                // No trop, no STEC residuals (matching CSV net7 row format
-                // where polynomial-only is used with Saastamoinen trop).
                 const auto& pt = epoch.atmos_by_network.at(preferred_network_id);
-                for (const auto& [k, v] : pt) {
-                    if (k.find("atmos_stec_c0") != std::string::npos ||
-                        k.find("atmos_stec_c1") != std::string::npos ||
-                        k.find("atmos_stec_c2") != std::string::npos ||
-                        k.find("atmos_stec_type:") != std::string::npos ||
-                        k.find("atmos_stec_quality:") != std::string::npos ||
-                        k == "atmos_stec_avail" ||
-                        k == "atmos_selected_satellites")
-                        pref_corr.atmos_tokens[k] = v;
-                }
+                pref_corr.atmos_tokens = pt;
                 pref_corr.atmos_tokens["atmos_network_id"] =
                     std::to_string(preferred_network_id);
-                auto gc = pt.find("atmos_grid_count");
-                if (gc != pt.end())
-                    pref_corr.atmos_tokens["atmos_grid_count"] = gc->second;
                 pref_corr.atmos_valid = true;
                 products.addCorrection(pref_corr);
             }
@@ -858,13 +1143,31 @@ void populateSSRProducts(
                 auto bias_it = sat_biases.find(sat_id);
                 if (bias_it == sat_biases.end()) continue;
                 libgnss::SSROrbitClockCorrection bias_corr;
-                bias_corr.satellite = sat_id;
+                bias_corr.satellite = product_sat_id;
                 bias_corr.time = time;
                 bias_corr.bias_network_id = net_id;
                 const int gnss_id = gnssSystemToCssrId(sat_id.system);
+                const std::map<int, uint8_t>* sat_pdi = nullptr;
+                const auto net_pdi_it =
+                    epoch.network_phase_discontinuity_indicators.find(net_id);
+                if (net_pdi_it != epoch.network_phase_discontinuity_indicators.end()) {
+                    const auto sat_pdi_it = net_pdi_it->second.find(sat_id);
+                    if (sat_pdi_it != net_pdi_it->second.end()) {
+                        sat_pdi = &sat_pdi_it->second;
+                    }
+                }
                 for (const auto& [slot, bias_m] : bias_it->second) {
                     const uint8_t rtcm_id = cssrSignalSlotToRtcmId(gnss_id, slot);
-                    if (rtcm_id > 0) bias_corr.phase_bias_m[rtcm_id] = bias_m;
+                    if (rtcm_id > 0) {
+                        bias_corr.phase_bias_m[rtcm_id] = -bias_m;
+                        if (sat_pdi != nullptr) {
+                            const auto pdi_it = sat_pdi->find(slot);
+                            if (pdi_it != sat_pdi->end()) {
+                                bias_corr.phase_discontinuity_indicators[rtcm_id] =
+                                    pdi_it->second;
+                            }
+                        }
+                    }
                 }
                 bias_corr.phase_bias_valid = !bias_corr.phase_bias_m.empty();
                 if (bias_corr.phase_bias_valid)

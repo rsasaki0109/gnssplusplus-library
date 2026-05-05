@@ -144,14 +144,14 @@ class ClasCompactHelpersTest(unittest.TestCase):
             self.assertIn("2200,345600.000,G03,0.100000,0.200000,0.300000,0.450000", lines[1])
             self.assertIn("2200,345600.000,J03,0.000000,0.000000,0.000000,0.100000", lines[2])
 
-    def test_expand_compact_ssr_text_preserves_optional_ura_code_and_phase_bias_tokens(self) -> None:
+    def test_expand_compact_ssr_text_preserves_optional_ura_code_phase_bias_and_pdi_tokens(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_compact_meta_") as temp_dir:
             output_csv = Path(temp_dir) / "expanded.csv"
             clas_ppp.expand_compact_ssr_text(
                 "\n".join(
                     [
-                        "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m,ura_sigma_m=<m>,cbias:<id>=<m>,pbias:<id>=<m>",
-                        "2200,345600.0,G,3,0.1,0.2,0.3,0.4,0.05,ura_sigma_m=0.002750,cbias:2=-0.120000,pbias:2=0.015000",
+                        "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m,ura_sigma_m=<m>,cbias:<id>=<m>,pbias:<id>=<m>,pdi:<id>=<n>",
+                        "2200,345600.0,G,3,0.1,0.2,0.3,0.4,0.05,ura_sigma_m=0.002750,cbias:2=-0.120000,pbias:2=0.015000,pdi:2=3",
                     ]
                 ),
                 output_csv,
@@ -161,7 +161,7 @@ class ClasCompactHelpersTest(unittest.TestCase):
             self.assertEqual(lines[0], "# week,tow,sat,dx,dy,dz,dclock_m")
             self.assertEqual(
                 lines[1],
-                "2200,345600.000,G03,0.100000,0.200000,0.300000,0.450000,ura_sigma_m=0.002750,cbias:2=-0.120000,pbias:2=0.015000",
+                "2200,345600.000,G03,0.100000,0.200000,0.300000,0.450000,ura_sigma_m=0.002750,cbias:2=-0.120000,pbias:2=0.015000,pdi:2=3",
             )
 
     def test_expand_compact_ssr_text_preserves_atmos_metadata_tokens(self) -> None:
@@ -200,6 +200,68 @@ class ClasCompactHelpersTest(unittest.TestCase):
         self.assertEqual(parsed["ppp_atmospheric_ionosphere_corrections"], 8)
         self.assertAlmostEqual(float(parsed["ppp_atmospheric_trop_meters"]), 5.5)
         self.assertAlmostEqual(float(parsed["ppp_atmospheric_ionosphere_meters"]), 3.25)
+
+    def test_effective_filter_iterations_defaults_only_clas_profile(self) -> None:
+        self.assertEqual(
+            clas_ppp.effective_filter_iterations(
+                argparse.Namespace(profile="clas", filter_iterations=None)
+            ),
+            1,
+        )
+        self.assertIsNone(
+            clas_ppp.effective_filter_iterations(
+                argparse.Namespace(profile="madoca", filter_iterations=None)
+            )
+        )
+
+    def test_effective_filter_iterations_preserves_explicit_value(self) -> None:
+        self.assertEqual(
+            clas_ppp.effective_filter_iterations(
+                argparse.Namespace(profile="clas", filter_iterations=0)
+            ),
+            0,
+        )
+        self.assertEqual(
+            clas_ppp.effective_filter_iterations(
+                argparse.Namespace(profile="madoca", filter_iterations=3)
+            ),
+            3,
+        )
+
+    def test_expanded_ssr_is_selected_as_direct_sampled_encoding(self) -> None:
+        args = argparse.Namespace(
+            expanded_ssr=Path("/tmp/expanded.csv"),
+            qzss_l6=None,
+            compact_ssr=None,
+            ssr_rtcm=None,
+        )
+        self.assertEqual(clas_ppp.classify_encoding(args), "expanded")
+        self.assertEqual(clas_ppp.selected_correction_source(args), "/tmp/expanded.csv")
+
+    def test_observation_tow_window_uses_first_max_epochs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_obs_window_") as temp_dir:
+            obs_path = Path(temp_dir) / "rover.obs"
+            obs_path.write_text(
+                "\n".join(
+                    [
+                        "     3.04           OBSERVATION DATA    M                   RINEX VERSION / TYPE",
+                        "                                                            END OF HEADER",
+                        "> 2024 07 23 04 04 30.0000000  0 01",
+                        "G01",
+                        "> 2024 07 23 04 04 30.2000000  0 01",
+                        "G01",
+                        "> 2024 07 23 04 04 30.4000000  0 01",
+                        "G01",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            self.assertEqual(
+                clas_ppp.observation_tow_window(obs_path, 2),
+                (2324, 187470.0, 187470.2),
+            )
 
 
 class PPCRTKSignoffHelpersTest(unittest.TestCase):
@@ -2556,7 +2618,12 @@ class OptionalPPPProductsSignoffScriptTest(unittest.TestCase):
             steps = ci_ppp_products_signoff.build_step_plan(
                 ROOT_DIR,
                 temp_root / "output",
-                {"GNSSPP_MALIB_BIN": str(malib_bin)},
+                {
+                    "GNSSPP_MALIB_BIN": str(malib_bin),
+                    "GNSSPP_PPP_PRODUCTS_OBS": str(temp_root / "missing_rover.obs"),
+                    "GNSSPP_PPP_PRODUCTS_BASE": str(temp_root / "missing_base.obs"),
+                    "GNSSPP_PPP_PRODUCTS_NAV": str(temp_root / "missing_nav.nav"),
+                },
             )
 
             self.assertIsNone(steps[0].command)

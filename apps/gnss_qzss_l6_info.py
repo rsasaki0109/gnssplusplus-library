@@ -160,7 +160,9 @@ CSSR_GNSS_LABELS = {
     1: "R",
     2: "E",
     3: "C",
-    4: "S",
+    # QZSS CLAS uses CSSR GNSS id 4 with PRNs in the 120 range.
+    # Normalize to the observation/navigation convention J01...
+    4: "J",
     5: "J",
 }
 CSSR_PRN_BASE = {
@@ -168,7 +170,7 @@ CSSR_PRN_BASE = {
     1: 1,
     2: 1,
     3: 1,
-    4: 120,
+    4: 1,
     5: 193,
 }
 CSSR_SIGNAL_RTCM_IDS = {
@@ -176,6 +178,7 @@ CSSR_SIGNAL_RTCM_IDS = {
     1: {0: 2, 1: 3, 2: 8, 3: 9},
     2: {0: 2, 1: 2, 2: 2, 3: 22, 4: 22, 5: 22, 6: 14, 7: 14, 8: 14},
     3: {0: 2, 1: 2, 2: 2, 3: 8, 4: 8, 5: 8, 6: 14, 7: 14, 8: 14},
+    4: {0: 2, 1: 2, 2: 2, 3: 2, 4: 8, 5: 8, 6: 8, 7: 22, 8: 22, 9: 22},
     5: {0: 2, 1: 2, 2: 2, 3: 2, 4: 8, 5: 8, 6: 8, 7: 22, 8: 22, 9: 22},
 }
 
@@ -393,6 +396,7 @@ class CompactSSRCorrection:
     ura_sigma_m: float | None = None
     code_bias_m: dict[int, float] | None = None
     phase_bias_m: dict[int, float] | None = None
+    phase_discontinuity: dict[int, int] | None = None
     bias_network_id: int | None = None
     atmos_network_id: int | None = None
     atmos_trop_avail: int | None = None
@@ -431,11 +435,14 @@ class CSSRDecoderState:
     base_code_bias_banks: dict[int, dict[str, dict[int, float]]] | None = None
     pending_phase_bias: dict[str, dict[int, float]] | None = None
     pending_phase_bias_source: dict[str, dict[int, int]] | None = None
+    pending_phase_discontinuity: dict[str, dict[int, int]] | None = None
     pending_base_phase_bias: dict[str, dict[int, float]] | None = None
     base_phase_bias_banks: dict[int, dict[str, dict[int, float]]] | None = None
     pending_bias_network_id: int | None = None
     pending_atmos: dict[str, str] | None = None
     pending_atmos_subtypes: set[int] | None = None
+    pending_atmos_by_network: dict[int, dict[str, str]] | None = None
+    pending_atmos_subtypes_by_network: dict[int, set[int]] | None = None
     service_info_chunks: list[tuple[int, bytes, int]] | None = None
     service_packet_index: int = 0
 
@@ -667,6 +674,7 @@ def reset_pending_corrections(state: CSSRDecoderState) -> None:
     state.pending_base_code_bias = None
     state.pending_phase_bias = None
     state.pending_phase_bias_source = None
+    state.pending_phase_discontinuity = None
     state.pending_base_phase_bias = None
     state.pending_bias_network_id = None
     # Preserve STEC polynomial coefficients (c00, c01, c10, etc.) across epochs.
@@ -682,6 +690,15 @@ def reset_pending_corrections(state: CSSRDecoderState) -> None:
     else:
         state.pending_atmos = None
     state.pending_atmos_subtypes = None
+    if state.pending_atmos_by_network is not None:
+        state.pending_atmos_by_network = {
+            network_id: dict(tokens)
+            for network_id, tokens in state.pending_atmos_by_network.items()
+            if tokens
+        } or None
+    else:
+        state.pending_atmos_by_network = None
+    state.pending_atmos_subtypes_by_network = None
 
 
 def carry_forward_atmos_tokens(
@@ -710,8 +727,19 @@ def reset_pending_corrections_with_policy(
     atmos_merge_policy: str,
 ) -> None:
     pending_atmos = state.pending_atmos
+    pending_atmos_by_network = state.pending_atmos_by_network
     reset_pending_corrections(state)
     state.pending_atmos = carry_forward_atmos_tokens(pending_atmos, atmos_merge_policy)
+    if pending_atmos_by_network is None:
+        state.pending_atmos_by_network = None
+    elif atmos_merge_policy == COMPACT_ATMOS_MERGE_POLICY_NO_CARRY:
+        state.pending_atmos_by_network = None
+    else:
+        state.pending_atmos_by_network = {
+            network_id: dict(tokens)
+            for network_id, tokens in pending_atmos_by_network.items()
+            if tokens
+        } or None
 
 
 def phase_bias_bank_anchor_tow(tow: int) -> int:
@@ -1116,6 +1144,8 @@ def apply_network_row_driven_construction(
         state.pending_code_bias.pop(satellite_token, None)
         state.pending_phase_bias.pop(satellite_token, None)
         state.pending_phase_bias_source.pop(satellite_token, None)
+        if state.pending_phase_discontinuity is not None:
+            state.pending_phase_discontinuity.pop(satellite_token, None)
 
 
 def prepare_pending_phase_bias_for_message(
@@ -1138,6 +1168,7 @@ def prepare_pending_phase_bias_for_message(
         if reset_message_scope:
             state.pending_phase_bias = {}
             state.pending_phase_bias_source = {}
+            state.pending_phase_discontinuity = {}
         return
     if selected_satellites is None:
         return
@@ -1150,6 +1181,12 @@ def prepare_pending_phase_bias_for_message(
         state.pending_phase_bias_source = {
             sat_token: sources
             for sat_token, sources in state.pending_phase_bias_source.items()
+            if sat_token in selected_satellites
+        }
+    if state.pending_phase_discontinuity is not None:
+        state.pending_phase_discontinuity = {
+            sat_token: indicators
+            for sat_token, indicators in state.pending_phase_discontinuity.items()
             if sat_token in selected_satellites
         }
 
@@ -1184,19 +1221,23 @@ def store_pending_phase_bias(
     satellite_token: str,
     signal_id: int,
     bias_m: float,
+    phase_discontinuity: int,
     *,
     source_subtype: int,
     source_policy: str,
 ) -> bool:
     assert state.pending_phase_bias is not None
     assert state.pending_phase_bias_source is not None
+    assert state.pending_phase_discontinuity is not None
     satellite_phase_biases = state.pending_phase_bias.setdefault(satellite_token, {})
     satellite_sources = state.pending_phase_bias_source.setdefault(satellite_token, {})
+    satellite_discontinuities = state.pending_phase_discontinuity.setdefault(satellite_token, {})
     existing_source = satellite_sources.get(signal_id)
     if not should_replace_phase_bias_source(existing_source, source_subtype, source_policy):
         return False
     satellite_phase_biases[signal_id] = bias_m
     satellite_sources[signal_id] = source_subtype
+    satellite_discontinuities[signal_id] = phase_discontinuity
     return True
 
 
@@ -1376,6 +1417,65 @@ def merge_pending_atmos(
     pending_subtypes.add(source_subtype)
     state.pending_atmos_subtypes = pending_subtypes
 
+    network_text = atmos_tokens.get("atmos_network_id")
+    try:
+        network_id = int(network_text) if network_text is not None else 0
+    except ValueError:
+        network_id = 0
+    if network_id <= 0:
+        return
+    if state.pending_atmos_by_network is None:
+        state.pending_atmos_by_network = {}
+    if state.pending_atmos_subtypes_by_network is None:
+        state.pending_atmos_subtypes_by_network = {}
+
+    network_tokens = state.pending_atmos_by_network.get(network_id)
+    network_subtypes = set(state.pending_atmos_subtypes_by_network.get(network_id, set()))
+    if (
+        atmos_subtype_merge_policy == COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_COMBINED_PRIORITY
+        and CSSR_SUBTYPE_ATMOS in network_subtypes
+        and source_subtype in {CSSR_SUBTYPE_STEC, CSSR_SUBTYPE_GRIDDED}
+    ):
+        return
+    if network_tokens is not None:
+        if (
+            atmos_subtype_merge_policy == COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_COMBINED_PRIORITY
+            and source_subtype == CSSR_SUBTYPE_ATMOS
+        ):
+            network_tokens = None
+            network_subtypes.clear()
+        elif (
+            source_subtype in {CSSR_SUBTYPE_GRIDDED, CSSR_SUBTYPE_ATMOS}
+            and any(
+                key == "atmos_trop_residuals_m"
+                or key == "atmos_trop_hs_residuals_m"
+                or key == "atmos_trop_wet_residuals_m"
+                or key.startswith("atmos_stec_residuals_tecu:")
+                for key in atmos_tokens
+            )
+        ):
+            keys_to_drop = [
+                key
+                for key in network_tokens
+                if key in {
+                    "atmos_trop_residuals_m",
+                    "atmos_trop_hs_residuals_m",
+                    "atmos_trop_wet_residuals_m",
+                    "atmos_stec_residual_range",
+                }
+                or key.startswith("atmos_stec_residual_size:")
+                or key.startswith("atmos_stec_residuals_tecu:")
+            ]
+            for key in keys_to_drop:
+                network_tokens.pop(key, None)
+    if network_tokens is None:
+        network_tokens = dict(atmos_tokens)
+    else:
+        network_tokens.update(atmos_tokens)
+    network_subtypes.add(source_subtype)
+    state.pending_atmos_by_network[network_id] = network_tokens
+    state.pending_atmos_subtypes_by_network[network_id] = network_subtypes
+
 
 def ensure_pending_epoch(
     state: CSSRDecoderState,
@@ -1401,6 +1501,7 @@ def ensure_pending_epoch(
     state.pending_base_code_bias = {}
     state.pending_phase_bias = {}
     state.pending_phase_bias_source = {}
+    state.pending_phase_discontinuity = {}
     state.pending_base_phase_bias = {}
     # pending_atmos is intentionally NOT reset here — the carry-forward
     # in reset_pending_corrections preserves STEC polynomial coefficients.
@@ -1420,13 +1521,26 @@ def flush_pending_corrections(
     ura_map = state.pending_ura or {}
     code_bias_map = state.pending_code_bias or {}
     phase_bias_map = state.pending_phase_bias or {}
+    phase_discontinuity_map = state.pending_phase_discontinuity or {}
     atmos = state.pending_atmos or {}
+    atmos_by_network = state.pending_atmos_by_network or {}
+    extra_atmos_banks = [
+        network_atmos
+        for _network_id, network_atmos in sorted(atmos_by_network.items())
+        if network_atmos and network_atmos != atmos
+    ]
     sat_index = {satellite.sat: satellite for satellite in satellites}
     rows: list[CompactSSRCorrection] = []
+
+    def atmos_int(atmos_tokens: dict[str, str], key: str) -> int | None:
+        if key not in atmos_tokens:
+            return None
+        return int(atmos_tokens[key])
+
     # Include satellites from atmosphere data that may not have orbit/clock corrections
     atmos_sat_tokens: set[str] = set()
-    if atmos:
-        for key in atmos:
+    for atmos_bank in ([atmos] if atmos else []) + extra_atmos_banks:
+        for key in atmos_bank:
             # atmos keys like "atmos_stec_c00_tecu:G01" contain satellite identifiers after ':'
             if ":" in key:
                 sat_part = key.split(":")[-1]
@@ -1455,6 +1569,7 @@ def flush_pending_corrections(
         dclock_m = clock_map.get(sat_token, 0.0)
         code_bias = code_bias_map.get(sat_token, {})
         phase_bias = phase_bias_map.get(sat_token, {})
+        phase_discontinuity = phase_discontinuity_map.get(sat_token, {})
         rows.append(
             CompactSSRCorrection(
                 week=gps_week,
@@ -1468,19 +1583,41 @@ def flush_pending_corrections(
                 ura_sigma_m=ura_map.get(sat_token),
                 code_bias_m=dict(code_bias) if code_bias else None,
                 phase_bias_m=dict(phase_bias) if phase_bias else None,
+                phase_discontinuity=(
+                    dict(phase_discontinuity) if phase_discontinuity else None
+                ),
                 bias_network_id=state.pending_bias_network_id,
-                atmos_network_id=int(atmos["atmos_network_id"]) if "atmos_network_id" in atmos else None,
-                atmos_trop_avail=int(atmos["atmos_trop_avail"]) if "atmos_trop_avail" in atmos else None,
-                atmos_stec_avail=int(atmos["atmos_stec_avail"]) if "atmos_stec_avail" in atmos else None,
-                atmos_grid_count=int(atmos["atmos_grid_count"]) if "atmos_grid_count" in atmos else None,
+                atmos_network_id=atmos_int(atmos, "atmos_network_id"),
+                atmos_trop_avail=atmos_int(atmos, "atmos_trop_avail"),
+                atmos_stec_avail=atmos_int(atmos, "atmos_stec_avail"),
+                atmos_grid_count=atmos_int(atmos, "atmos_grid_count"),
                 atmos_selected_satellites=(
-                    int(atmos["atmos_selected_satellites"])
-                    if "atmos_selected_satellites" in atmos
-                    else None
+                    atmos_int(atmos, "atmos_selected_satellites")
                 ),
                 atmos_tokens=dict(atmos) if atmos else None,
             )
         )
+        for network_atmos in extra_atmos_banks:
+            rows.append(
+                CompactSSRCorrection(
+                    week=gps_week,
+                    tow=float(state.pending_tow),
+                    system=satellite.system,
+                    prn=satellite.prn,
+                    dx=0.0,
+                    dy=0.0,
+                    dz=0.0,
+                    dclock_m=0.0,
+                    atmos_network_id=atmos_int(network_atmos, "atmos_network_id"),
+                    atmos_trop_avail=atmos_int(network_atmos, "atmos_trop_avail"),
+                    atmos_stec_avail=atmos_int(network_atmos, "atmos_stec_avail"),
+                    atmos_grid_count=atmos_int(network_atmos, "atmos_grid_count"),
+                    atmos_selected_satellites=atmos_int(
+                        network_atmos, "atmos_selected_satellites"
+                    ),
+                    atmos_tokens=dict(network_atmos),
+                )
+            )
     reset_pending_corrections(state)
     return rows
 
@@ -1694,6 +1831,7 @@ def decode_cssr_code_phase_bias_message(
     assert state.pending_base_code_bias is not None
     assert state.pending_phase_bias is not None
     assert state.pending_phase_bias_source is not None
+    assert state.pending_phase_discontinuity is not None
     assert state.pending_base_phase_bias is not None
     state.pending_bias_network_id = network_id if network_bias_correction else None
     selected_satellites = {
@@ -1744,7 +1882,8 @@ def decode_cssr_code_phase_bias_message(
                     mapped_code += 1
             if phase_bias_exists:
                 bias_m, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.001)
-                bit_offset += 2  # phase discontinuity indicator
+                phase_discontinuity = read_bits(payload, bit_offset, 2)
+                bit_offset += 2
                 if signal_id != 0 and math.isfinite(bias_m) and network_bias_correction:
                     bias_m = compose_phase_bias_value(
                         state=state,
@@ -1763,6 +1902,7 @@ def decode_cssr_code_phase_bias_message(
                         satellite.sat,
                         signal_id,
                         bias_m,
+                        phase_discontinuity,
                         source_subtype=CSSR_SUBTYPE_CODE_PHASE_BIAS,
                         source_policy=phase_bias_source_policy,
                     )
@@ -1881,6 +2021,7 @@ def decode_cssr_phase_bias_message(
     )
     assert state.pending_phase_bias is not None
     assert state.pending_phase_bias_source is not None
+    assert state.pending_phase_discontinuity is not None
     assert state.pending_base_phase_bias is not None
     prepare_pending_phase_bias_for_message(
         state,
@@ -1893,7 +2034,8 @@ def decode_cssr_phase_bias_message(
         for signal_slot in satellite.signal_slots:
             signal_id = cssr_signal_slot_to_rtcm_id(satellite.system_id, signal_slot)
             bias_m, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.001)
-            bit_offset += 2  # phase discontinuity indicator
+            phase_discontinuity = read_bits(payload, bit_offset, 2)
+            bit_offset += 2
             if (
                 signal_id != 0
                 and math.isfinite(bias_m)
@@ -1902,6 +2044,7 @@ def decode_cssr_phase_bias_message(
                     satellite.sat,
                     signal_id,
                     bias_m,
+                    phase_discontinuity,
                     source_subtype=CSSR_SUBTYPE_PHASE_BIAS,
                     source_policy=phase_bias_source_policy,
                 )
@@ -2753,7 +2896,7 @@ def write_compact_corrections(path: Path, corrections: list[CompactSSRCorrection
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="ascii", newline="") as handle:
         handle.write(
-            "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]\n"
+            "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,pdi:<id>=<n>...][,bias_network_id=<n>][,atmos_<name>=<value>...]\n"
         )
         writer = csv.writer(handle)
         for correction in corrections:
@@ -2776,6 +2919,9 @@ def write_compact_corrections(path: Path, corrections: list[CompactSSRCorrection
             if correction.phase_bias_m:
                 for signal_id in sorted(correction.phase_bias_m):
                     row.append(f"pbias:{signal_id}={correction.phase_bias_m[signal_id]:.6f}")
+            if correction.phase_discontinuity:
+                for signal_id in sorted(correction.phase_discontinuity):
+                    row.append(f"pdi:{signal_id}={correction.phase_discontinuity[signal_id]}")
             if correction.bias_network_id is not None:
                 row.append(f"bias_network_id={correction.bias_network_id}")
             if correction.atmos_network_id is not None:

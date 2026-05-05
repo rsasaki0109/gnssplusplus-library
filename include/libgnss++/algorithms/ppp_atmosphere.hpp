@@ -18,10 +18,20 @@ struct ClasGridReference {
     size_t residual_index = 0;
     int network_id = 0;
     int grid_no = 0;
-    // 4-grid bilinear interpolation (CLASLIB-style)
+    // CLASLIB-style gridded interpolation.  The first entry is the nearest
+    // grid and is the polynomial origin.
+    int interpolation_grid_count = 0;
+    double interpolation_weights[4] = {};
+    size_t interpolation_grid_indices[4] = {};
+    double interpolation_grid_dlat_deg[4] = {};
+    double interpolation_grid_dlon_deg[4] = {};
+    double interpolation_poly_dlat_deg[4] = {};
+    double interpolation_poly_dlon_deg[4] = {};
+
+    // Backward-compatible aliases used by diagnostics for 4-grid interpolation.
     bool has_bilinear = false;
-    double bilinear_weights[4] = {};       // SW, SE, NW, NE
-    size_t bilinear_grid_indices[4] = {};  // residual indices for 4 grids
+    double bilinear_weights[4] = {};
+    size_t bilinear_grid_indices[4] = {};
 };
 
 bool parseAtmosTokenDouble(const std::map<std::string, std::string>& atmos_tokens,
