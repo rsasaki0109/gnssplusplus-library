@@ -198,6 +198,8 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
     double lambda_nl = 0.0;
     double lambda_wl = 0.0;
     double beta = 0.0;
+    double iflc_alpha = 0.0;
+    double iflc_beta = 0.0;
     double alpha1 = 0.0;
     double alpha2 = 0.0;
     double nl_phase_m = 0.0;
@@ -221,6 +223,9 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
         lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
         beta = f1 * f2 / (f1 * f1 - f2 * f2);
+        const double gamma_if = (f1 * f1) / (f2 * f2);
+        iflc_alpha = gamma_if / (gamma_if - 1.0);
+        iflc_beta = 1.0 / (gamma_if - 1.0);
         // CPC already contains the OSR phase corrections used by fixed-position WLS.
         const double l1_corr_m = l1_obs->carrier_phase * osr.wavelengths[0] - osr.CPC[0];
         const double l2_corr_m = l2_obs->carrier_phase * osr.wavelengths[1] - osr.CPC[1];
@@ -255,6 +260,9 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
         lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
         beta = f1 * f2 / (f1 * f1 - f2 * f2);
+        const double gamma_if = (f1 * f1) / (f2 * f2);
+        iflc_alpha = gamma_if / (gamma_if - 1.0);
+        iflc_beta = 1.0 / (gamma_if - 1.0);
 
         const double l1_m = l1_obs->carrier_phase * lambda1;
         const double l2_m = l2_obs->carrier_phase * lambda2;
@@ -296,6 +304,8 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         lambda_nl,
         lambda_wl,
         beta,
+        iflc_alpha,
+        iflc_beta,
         {sat.system,
          {static_cast<int>(l1_obs->signal), static_cast<int>(l2_obs->signal)}},
         true

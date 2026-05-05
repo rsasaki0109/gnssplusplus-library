@@ -94,7 +94,9 @@ DdFixAttempt tryDirectDdFixWithPar(
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const EligibleAmbiguities& eligible_ambiguities,
     const std::map<SatelliteId, double>& real_satellite_elevations,
-    bool debug_enabled);
+    bool debug_enabled,
+    int dump_time_week = 0,
+    double dump_time_tow = 0.0);
 
 using WlnlGroupKey = std::pair<GNSSSystem, std::pair<int, int>>;
 
@@ -103,6 +105,10 @@ struct WlnlNlInfo {
     double lambda_nl_m = 0.0;
     double lambda_wl_m = 0.0;
     double beta = 0.0;
+    // IFLC projection coefficients: B_IF = iflc_alpha*B_L1 - iflc_beta*B_L2
+    // where iflc_alpha = gamma/(gamma-1), iflc_beta = 1/(gamma-1), gamma = (f1/f2)^2.
+    double iflc_alpha = 0.0;
+    double iflc_beta = 0.0;
     WlnlGroupKey group{};
     bool valid = false;
 };

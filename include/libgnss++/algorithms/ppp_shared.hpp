@@ -122,7 +122,14 @@ struct PPPConfig {
     int min_satellites_for_ar = 6;
     enum class ARMethod { DD_IFLC, DD_WLNL, DD_PER_FREQ, DD_MADOCA_CASCADED };
     ARMethod ar_method = ARMethod::DD_IFLC;
+    bool clas_auto_wlnl_ar = true;
     int wl_min_averaging_epochs = 20;
+    // PPP holdamb: when true, integer DD NL constraints are projected onto
+    // per-frequency L1/L2 ambiguity states via iono-free combination
+    // (B_IF = alpha*B_L1 - beta*B_L2) and applied as a Kalman pseudo-update.
+    // When false, fixed integers are stored only for solveFixedPosition() WLS.
+    bool enable_ppp_holdamb = false;
+    double ppp_holdamb_innovation_gate_m = 0.0;  // 0 = no gate
 
     // Motion model
     bool kinematic_mode = false;
@@ -171,6 +178,11 @@ struct PPPConfig {
     double code_phase_error_ratio_l2 = 100.0;
     double rtklib_phase_error_m = 0.003;
     double rtklib_phase_error_elevation_m = 0.003;
+    /// Multiplier applied on top of rtklibSystemErrorFactor for a given system.
+    /// Default 1.0 (no extra weighting). Used to de-weight a system whose
+    /// pseudorange exhibits residual systemic bias (e.g. BeiDou on MIZU
+    /// MADOCA day 091; see memory `madoca_bds_e_bias_root_cause_2026_05_01`).
+    double bds_error_multiplier = 1.0;
     int phase_measurement_min_lock_count = 1;
     bool enable_initial_phase_admission_warm_start = false;
     bool enable_all_frequency_initial_phase_admission_warm_start = false;
@@ -226,10 +238,27 @@ struct PPPConfig {
     double clas_initial_position_variance = 100.0; // Position covariance at filter init
     double clas_clock_variance = 1e8;             // Clock state variance (reset each epoch)
     double clas_iono_prior_variance = 0.25;       // Ionosphere pseudo-observation variance
+    double clas_initial_ambiguity_std_cycles = 0.0; // 0 falls back to initial_ambiguity_variance
     double clas_ambiguity_reinit_threshold = 3000.0; // Re-init ambiguity when cov exceeds this
+    bool clas_phase_code_ambiguity_initialization = false; // CLASLIB-style L-P initialization
     double clas_anchor_sigma = 5.0;               // SPP anchor constraint sigma (m)
     double clas_outlier_sigma_scale = 50.0;       // Inflate variance when residual > N*sigma
+    bool clas_validate_fixed_solution = true;     // Extra LibGNSS++ fixed-solution gate
     bool clas_decouple_clock_position = true;      // Zero clock cross-covariance each epoch
+    bool clas_kinematic_position_reseed = false;   // CLASLIB-faithful: re-init position from SPP every kinematic epoch
+    double clas_kinematic_position_reseed_variance = 10000.0; // CLASLIB VAR_POS = 100^2
+    // Skip reseed when SPP seed quality is poor; protects against urban-canyon
+    // pin-to-bad-SPP. residual_rms above this threshold (m) bypasses reseed and
+    // keeps the prior KF position state. <=0 disables the gate.
+    double clas_kinematic_position_reseed_max_residual_rms_m = 0.0;
+    // WLNL Partial AR: when initial LAMBDA fails the ratio test, greedily
+    // exclude DD pairs whose |frac| exceeds the threshold (worst first) and
+    // re-run LAMBDA. Caps the number of exclusions and keeps a minimum pair
+    // count. Helps when many sats have wrong NL float values but a clean
+    // sub-set exists.
+    bool enable_wlnl_par = false;
+    int  wlnl_par_max_exclusions = 4;
+    double wlnl_par_exclude_frac_threshold = 0.20;
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
