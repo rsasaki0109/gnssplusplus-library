@@ -207,6 +207,9 @@ public:
         double line_of_sight_x = 0.0;
         double line_of_sight_y = 0.0;
         double line_of_sight_z = 0.0;
+        double modeled_trop_delay_m = 0.0;
+        double modeled_zenith_trop_delay_m = 0.0;
+        double estimated_trop_delay_m = 0.0;
     };
 
     const std::vector<SSRApplicationDiagnostic>& getLastSSRApplicationDiagnostics() const {
