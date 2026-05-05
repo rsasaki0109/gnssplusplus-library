@@ -1248,4 +1248,100 @@ Vector3d geodeticToEcef(const GeodeticCoord& geodetic_pos) {
 
 } // namespace spp_utils
 
+std::pair<PositionSolution, std::vector<SPPProcessor::CorrectedMeasurement>>
+SPPProcessor::preprocessEpoch(const ObservationData& obs, const NavigationData& nav) {
+    // Run normal SPP processing
+    auto solution = processEpoch(obs, nav);
+
+    // Re-run measurement construction to extract corrected pseudoranges
+    std::vector<CorrectedMeasurement> result;
+    auto valid_obs = validateObservations(obs, nav, obs.time);
+    if (valid_obs.empty()) return {solution, result};
+
+    auto sat_states = calculateSatelliteStates(valid_obs, nav, obs.time);
+    Vector3d position = estimated_position_;
+
+    for (const auto& o : valid_obs) {
+        const Observation& code_observation = o.observation;
+        auto it = sat_states.find(code_observation.satellite);
+        if (it == sat_states.end() || !it->second.valid) continue;
+
+        const auto& st = it->second;
+        double sat_clk = st.clock_bias;
+
+        // Signal travel time and Earth rotation correction (Sagnac)
+        double range_approx = (st.position - position).norm();
+        double travel_time = range_approx / constants::SPEED_OF_LIGHT;
+        double angle = constants::OMEGA_E * travel_time;
+        double cos_a = std::cos(angle), sin_a = std::sin(angle);
+        Vector3d corrected_sat_pos(
+            st.position.x() * cos_a + st.position.y() * sin_a,
+           -st.position.x() * sin_a + st.position.y() * cos_a,
+            st.position.z());
+
+        // Geometry
+        auto geom = nav.calculateGeometry(position, corrected_sat_pos);
+        if (geom.elevation < 5.0 * M_PI / 180.0) continue;
+
+        // Receiver LLH for atmospheric models
+        auto rcv_geo = spp_utils::ecefToGeodetic(position);
+        double rcv_lat = rcv_geo.latitude;
+        double rcv_lon = rcv_geo.longitude;
+
+        // Troposphere
+        double trop_delay = 0.0;
+        if (spp_config_.apply_atmospheric_corrections) {
+            trop_delay = models::tropDelaySaastamoinen(position, geom.elevation);
+        }
+
+        // Ionosphere
+        double iono_delay = 0.0;
+        const auto* eph = nav.getEphemeris(code_observation.satellite, obs.time);
+        if (!o.ionosphere_free_code &&
+            spp_config_.apply_atmospheric_corrections &&
+            nav.ionosphere_model.valid) {
+            iono_delay = models::ionoDelayKlobuchar(
+                rcv_lat, rcv_lon, geom.azimuth, geom.elevation,
+                obs.time.tow,
+                nav.ionosphere_model.alpha,
+                nav.ionosphere_model.beta);
+            double signal_frequency = eph ? signalFrequencyHz(code_observation.signal, eph) : 0.0;
+            if (signal_frequency > 0.0) {
+                double freq_scale = constants::GPS_L1_FREQ / signal_frequency;
+                iono_delay *= freq_scale * freq_scale;
+            }
+        }
+
+        double corrected_pr = code_observation.pseudorange
+                              + sat_clk * constants::SPEED_OF_LIGHT
+                              - trop_delay
+                              - iono_delay
+                              - (eph && !o.ionosphere_free_code ?
+                                     groupDelayCorrectionMeters(code_observation, *eph) : 0.0);
+
+        double sin_el = std::sin(geom.elevation);
+        if (sin_el < 0.1) sin_el = 0.1;
+
+        int sys_id = 0;
+        switch (code_observation.satellite.system) {
+            case GNSSSystem::GPS:     sys_id = 0; break;
+            case GNSSSystem::GLONASS: sys_id = 1; break;
+            case GNSSSystem::Galileo: sys_id = 2; break;
+            case GNSSSystem::BeiDou:  sys_id = 3; break;
+            case GNSSSystem::QZSS:    sys_id = 4; break;
+            default: continue;
+        }
+
+        CorrectedMeasurement cm;
+        cm.satellite_ecef = {corrected_sat_pos.x(), corrected_sat_pos.y(), corrected_sat_pos.z()};
+        cm.corrected_pseudorange = corrected_pr;
+        cm.weight = sin_el * sin_el;
+        cm.elevation = geom.elevation;
+        cm.system_id = sys_id;
+        result.push_back(cm);
+    }
+
+    return {solution, result};
+}
+
 } // namespace libgnss

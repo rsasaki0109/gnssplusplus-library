@@ -29,8 +29,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", type=Path, default=None, help="Local SCORPION bag directory or zip path.")
     parser.add_argument(
         "--input-url",
-        default=None,
-        help="Optional SCORPION zip URL. If omitted, a local --input is required.",
+        default=DEFAULT_SCORPION_ZIP_URL,
+        help="Optional SCORPION zip URL. Defaults to the public Zenodo SCORPION bag.",
     )
     parser.add_argument(
         "--download-cache-dir",
@@ -86,7 +86,9 @@ def resolve_output_paths(args: argparse.Namespace) -> dict[str, Path]:
         "rover_ubx": work_dir / "rover.ubx",
         "base_ubx": work_dir / "base.ubx",
         "reference_csv": work_dir / "reference.csv",
+        "commercial_csv": work_dir / "commercial_receiver_solution.csv",
         "matched_csv": work_dir / "scorpion_moving_base_matches.csv",
+        "commercial_matched_csv": work_dir / "commercial_receiver_matches.csv",
         "prepare_summary_json": work_dir / "prepare_summary.json",
         "products_summary_json": work_dir / "products_summary.json",
         "plot_png": work_dir / "scorpion_moving_base.png",
@@ -104,13 +106,24 @@ def ensure_local_input(args: argparse.Namespace) -> tuple[Path, str | None]:
         raise SystemExit("Provide --input or --input-url for scorpion-moving-base-signoff")
 
     args.download_cache_dir.mkdir(parents=True, exist_ok=True)
-    parsed = parse.urlparse(args.input_url)
-    filename = Path(parsed.path).name or "scorpion_moving_base.zip"
+    filename = download_cache_filename(args.input_url)
     destination = args.download_cache_dir / filename
     if not destination.exists():
         with request.urlopen(args.input_url, timeout=60.0) as response, destination.open("wb") as handle:
             handle.write(response.read())
     return destination, args.input_url
+
+
+def download_cache_filename(url: str) -> str:
+    parsed = parse.urlparse(url)
+    path_parts = [parse.unquote(part) for part in parsed.path.split("/") if part]
+    for part in reversed(path_parts):
+        if part.lower().endswith(".zip"):
+            return Path(part).name
+    filename = Path(path_parts[-1]).name if path_parts else ""
+    if filename.lower().endswith(".zip"):
+        return filename
+    return "scorpion_moving_base.zip"
 
 
 def run_json_command(command: list[str]) -> dict[str, object]:
@@ -194,6 +207,15 @@ def build_signoff_command(
         command.extend(["--nav-rinex", str(nav_rinex)])
     if args.log_out is not None:
         command.extend(["--log-out", str(args.log_out)])
+    if paths["commercial_csv"].exists():
+        command.extend(
+            [
+                "--commercial-pos",
+                str(paths["commercial_csv"]),
+                "--commercial-matched-csv",
+                str(paths["commercial_matched_csv"]),
+            ]
+        )
     if args.use_existing_solution:
         command.append("--use-existing-solution")
     if args.solver_wall_time_s is not None:
@@ -240,6 +262,8 @@ def main() -> int:
         str(paths["base_ubx"]),
         "--reference-csv",
         str(paths["reference_csv"]),
+        "--commercial-csv",
+        str(paths["commercial_csv"]),
         "--summary-json",
         str(paths["prepare_summary_json"]),
         "--max-epochs",
@@ -280,6 +304,12 @@ def main() -> int:
         str(paths["products_summary_json"]) if paths["products_summary_json"].exists() else None
     )
     summary_payload["matched_csv"] = str(paths["matched_csv"]) if paths["matched_csv"].exists() else None
+    summary_payload["commercial_receiver_csv"] = (
+        str(paths["commercial_csv"]) if paths["commercial_csv"].exists() else None
+    )
+    summary_payload["commercial_receiver_matched_csv"] = (
+        str(paths["commercial_matched_csv"]) if paths["commercial_matched_csv"].exists() else None
+    )
     summary_payload["plot_png"] = str(paths["plot_png"]) if paths["plot_png"].exists() else None
     summary_payload["prepare_summary"] = prepare_payload
     summary_payload["products_summary"] = products_payload

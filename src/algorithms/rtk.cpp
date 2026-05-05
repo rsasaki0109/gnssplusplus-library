@@ -13,6 +13,8 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <set>
 
 namespace libgnss {
 
@@ -287,6 +289,7 @@ PositionSolution RTKProcessor::processEpoch(const ObservationData& rover_obs, co
 
 void RTKProcessor::reset() {
     filter_initialized_ = false;
+    debug_telemetry_ = EpochDebugTelemetry{};
     filter_state_ = RTKState{};
     filter_state_.next_state_idx = REAL_STATES + IONO_STATES;
     ambiguity_states_.clear();
@@ -294,6 +297,7 @@ void RTKProcessor::reset() {
     lock_count_l2_.clear();
     has_fixed_solution_ = false;
     has_last_fixed_position_ = false;
+    has_last_fixed_time_ = false;
     has_last_solution_position_ = false;
     has_last_trusted_position_ = false;
     has_ref_satellite_ = false;
@@ -307,8 +311,11 @@ void RTKProcessor::reset() {
     code_phase_history_l2_m_.clear();
     consecutive_fix_count_ = 0;
     consecutive_float_count_ = 0;
+    consecutive_nonfix_count_ = 0;
+    consecutive_high_float_residual_count_ = 0;
     last_ar_ratio_ = 0.0;
     last_num_fixed_ambiguities_ = 0;
+    current_update_diagnostics_ = RTKUpdateDiagnostics{};
     std::lock_guard<std::mutex> lock(stats_mutex_);
     total_epochs_processed_ = 0;
     fixed_solutions_ = 0;
@@ -998,7 +1005,18 @@ void RTKProcessor::handleConsecutiveFloatReset(const ObservationData& rover_obs,
         return;
     }
 
-    // Reset ambiguity states but keep held DD integers for hold fix.
+    resetAmbiguityStatesForReacquisition(rover_obs, nav);
+}
+
+void RTKProcessor::resetAmbiguityStatesForReacquisition(const ObservationData& rover_obs,
+                                                        const NavigationData& nav) {
+    if (!filter_initialized_) {
+        consecutive_float_count_ = 0;
+        consecutive_nonfix_count_ = 0;
+        consecutive_high_float_residual_count_ = 0;
+        return;
+    }
+
     for (auto& [sat, idx] : filter_state_.n1_indices) {
         filter_state_.state(idx) = 0.0;
         filter_state_.covariance(idx, idx) = 900.0;
@@ -1012,6 +1030,113 @@ void RTKProcessor::handleConsecutiveFloatReset(const ObservationData& rover_obs,
     // DO NOT clear held DD integers (last_dd_fixed_, last_dd_pairs_,
     // last_best_subset_) — they enable hold fix after reset.
     consecutive_float_count_ = 0;
+    consecutive_nonfix_count_ = 0;
+    consecutive_high_float_residual_count_ = 0;
+}
+
+bool RTKProcessor::floatResidualExceedsReacquisitionGate() const {
+    if (rtk_config_.ar_policy == RTKConfig::ARPolicy::DEMO5_CONTINUOUS) {
+        return false;
+    }
+    const double max_prefit_rms = rtk_config_.max_float_prefit_residual_rms_m;
+    if (std::isfinite(max_prefit_rms) && max_prefit_rms > 0.0 &&
+        std::isfinite(current_update_diagnostics_.prefit_residual_rms_m) &&
+        current_update_diagnostics_.prefit_residual_rms_m > max_prefit_rms) {
+        return true;
+    }
+    const double max_prefit_residual = rtk_config_.max_float_prefit_residual_max_m;
+    if (std::isfinite(max_prefit_residual) && max_prefit_residual > 0.0 &&
+        std::isfinite(current_update_diagnostics_.prefit_residual_max_m) &&
+        current_update_diagnostics_.prefit_residual_max_m > max_prefit_residual) {
+        return true;
+    }
+    return false;
+}
+
+bool RTKProcessor::floatResidualTrustedJumpPassesGate(
+    const PositionSolution& float_solution,
+    const Vector3d& saved_last_trusted_position,
+    bool saved_has_last_trusted,
+    const GNSSTime& saved_last_trusted_time,
+    bool saved_has_last_trusted_time) const {
+    const double min_trusted_jump =
+        rtk_config_.min_float_prefit_residual_trusted_jump_m;
+    if (!std::isfinite(min_trusted_jump) || min_trusted_jump <= 0.0) {
+        return true;
+    }
+    if (!saved_has_last_trusted || !saved_has_last_trusted_time ||
+        !float_solution.position_ecef.allFinite()) {
+        return false;
+    }
+    const double dt = float_solution.time - saved_last_trusted_time;
+    if (!std::isfinite(dt) || dt < 0.0) {
+        return false;
+    }
+    const double trusted_jump =
+        (float_solution.position_ecef - saved_last_trusted_position).norm();
+    return std::isfinite(trusted_jump) && trusted_jump >= min_trusted_jump;
+}
+
+bool RTKProcessor::shouldResetAfterFloatResidualGate(
+    const PositionSolution& float_solution,
+    const Vector3d& saved_last_trusted_position,
+    bool saved_has_last_trusted,
+    const GNSSTime& saved_last_trusted_time,
+    bool saved_has_last_trusted_time) {
+    if (!floatResidualExceedsReacquisitionGate()) {
+        consecutive_high_float_residual_count_ = 0;
+        return false;
+    }
+    if (!floatResidualTrustedJumpPassesGate(float_solution,
+                                            saved_last_trusted_position,
+                                            saved_has_last_trusted,
+                                            saved_last_trusted_time,
+                                            saved_has_last_trusted_time)) {
+        consecutive_high_float_residual_count_ = 0;
+        return false;
+    }
+    consecutive_high_float_residual_count_++;
+    const int reset_streak =
+        std::max(1, rtk_config_.max_float_prefit_residual_reset_streak);
+    if (consecutive_high_float_residual_count_ < reset_streak) {
+        return false;
+    }
+    consecutive_high_float_residual_count_ = 0;
+    return true;
+}
+
+void RTKProcessor::recordFixedEpoch() {
+    consecutive_float_count_ = 0;
+    consecutive_nonfix_count_ = 0;
+    consecutive_high_float_residual_count_ = 0;
+}
+
+void RTKProcessor::recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav) {
+    consecutive_float_count_++;
+    consecutive_nonfix_count_++;
+    if (rtk_config_.max_consecutive_nonfix_for_reset <= 0 ||
+        consecutive_nonfix_count_ < rtk_config_.max_consecutive_nonfix_for_reset ||
+        rtk_config_.ar_policy == RTKConfig::ARPolicy::DEMO5_CONTINUOUS) {
+        return;
+    }
+    resetAmbiguityStatesForReacquisition(rover_obs, nav);
+}
+
+void RTKProcessor::recordFallbackEpoch(const ObservationData& rover_obs, const NavigationData& nav) {
+    consecutive_fix_count_ = 0;
+    consecutive_float_count_ = 0;
+    consecutive_high_float_residual_count_ = 0;
+    if (!filter_initialized_) {
+        consecutive_nonfix_count_ = 0;
+        return;
+    }
+    consecutive_nonfix_count_++;
+    if (rtk_config_.max_consecutive_nonfix_for_reset <= 0 ||
+        consecutive_nonfix_count_ < rtk_config_.max_consecutive_nonfix_for_reset ||
+        rtk_config_.ar_policy == RTKConfig::ARPolicy::DEMO5_CONTINUOUS) {
+        return;
+    }
+    resetAmbiguityStatesForReacquisition(rover_obs, nav);
 }
 
 void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const NavigationData& nav) {
@@ -1072,9 +1197,11 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
 // ============================================================
 PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
     const ObservationData& base_obs, const NavigationData& nav) {
+    debug_telemetry_ = EpochDebugTelemetry{};
     PositionSolution solution;
     solution.time = rover_obs.time;
     solution.status = SolutionStatus::NONE;
+    current_update_diagnostics_ = RTKUpdateDiagnostics{};
 
     try {
         const bool moving_base_mode = isMovingBasePositionMode(rtk_config_);
@@ -1086,6 +1213,8 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             rememberSolution(spp);
             consecutive_fix_count_ = 0;
             consecutive_float_count_ = 0;
+            consecutive_nonfix_count_ = 0;
+            consecutive_high_float_residual_count_ = 0;
             return spp;
         }
 
@@ -1117,8 +1246,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             }
             if (spp.isValid()) spp.status = SolutionStatus::SPP;
             rememberSolution(spp);
-            consecutive_fix_count_ = 0;
-            consecutive_float_count_ = 0;
+            recordFallbackEpoch(rover_obs, nav);
             return spp;
         };
 
@@ -1174,6 +1302,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             const Vector3d baseline_before_iter = filter_state_.state.head<3>();
             filter_ok = updateFilter(sat_data);
             if (!filter_ok) break;
+            current_update_diagnostics_.iterations++;
             if (iter >= 1) {
                 const double baseline_step =
                     (filter_state_.state.head<3>() - baseline_before_iter).norm();
@@ -1197,12 +1326,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             const bool saved_has_last_trusted = has_last_trusted_position_;
             const GNSSTime saved_last_trusted_time = last_trusted_time_;
             const bool saved_has_last_trusted_time = has_last_trusted_time_;
-            last_ar_ratio_ = 0.0;
-            last_num_fixed_ambiguities_ = 0;
-            solution = generateSolution(rover_obs.time, SolutionStatus::FLOAT, n_sats);
-            const PositionSolution float_solution = solution;
-
-            if (!finitePosition(solution) || deviatesTooFarFromSPP(solution, 150.0)) {
+            auto restoreRememberedState = [&]() {
                 last_solution_position_ = saved_last_solution_position;
                 has_last_solution_position_ = saved_has_last_solution;
                 last_epoch_time_ = saved_last_solution_time;
@@ -1211,6 +1335,22 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                 has_last_trusted_position_ = saved_has_last_trusted;
                 last_trusted_time_ = saved_last_trusted_time;
                 has_last_trusted_time_ = saved_has_last_trusted_time;
+                consecutive_high_float_residual_count_ = 0;
+            };
+            last_ar_ratio_ = 0.0;
+            last_num_fixed_ambiguities_ = 0;
+            solution = generateSolution(rover_obs.time, SolutionStatus::FLOAT, n_sats);
+            const PositionSolution float_solution = solution;
+
+            const double max_float_spp_divergence_m = rtk_config_.max_float_spp_divergence_m;
+            const bool float_exceeds_spp_gate =
+                std::isfinite(max_float_spp_divergence_m) &&
+                max_float_spp_divergence_m > 0.0 &&
+                deviatesTooFarFromSPP(solution, max_float_spp_divergence_m);
+            if (!finitePosition(solution) ||
+                deviatesTooFarFromSPP(solution, 150.0) ||
+                float_exceeds_spp_gate) {
+                restoreRememberedState();
                 return fallback_spp();
             }
 
@@ -1219,14 +1359,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                 const double trusted_jump =
                     (solution.position_ecef - saved_last_trusted_position).norm();
                 if (trusted_jump > 25.0) {
-                    last_solution_position_ = saved_last_solution_position;
-                    has_last_solution_position_ = saved_has_last_solution;
-                    last_epoch_time_ = saved_last_solution_time;
-                    has_last_epoch_ = saved_has_last_solution_time;
-                    last_trusted_position_ = saved_last_trusted_position;
-                    has_last_trusted_position_ = saved_has_last_trusted;
-                    last_trusted_time_ = saved_last_trusted_time;
-                    has_last_trusted_time_ = saved_has_last_trusted_time;
+                    restoreRememberedState();
                     return fallback_spp();
                 }
             }
@@ -1241,14 +1374,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                         (solution.position_ecef - saved_last_trusted_position).norm();
                     const double max_trusted_jump = std::max(8.0, 12.0 * dt);
                     if (trusted_jump > max_trusted_jump) {
-                        last_solution_position_ = saved_last_solution_position;
-                        has_last_solution_position_ = saved_has_last_solution;
-                        last_epoch_time_ = saved_last_solution_time;
-                        has_last_epoch_ = saved_has_last_solution_time;
-                        last_trusted_position_ = saved_last_trusted_position;
-                        has_last_trusted_position_ = saved_has_last_trusted;
-                        last_trusted_time_ = saved_last_trusted_time;
-                        has_last_trusted_time_ = saved_has_last_trusted_time;
+                        restoreRememberedState();
                         return fallback_spp();
                     }
                 }
@@ -1261,10 +1387,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                     (solution.position_ecef - saved_last_solution_position).norm();
                 const double max_jump = std::max(120.0, 35.0 * dt);
                 if (n_sats <= 5 && jump > max_jump) {
-                    last_solution_position_ = saved_last_solution_position;
-                    has_last_solution_position_ = saved_has_last_solution;
-                    last_epoch_time_ = saved_last_solution_time;
-                    has_last_epoch_ = saved_has_last_solution_time;
+                    restoreRememberedState();
                     return fallback_spp();
                 }
             }
@@ -1386,13 +1509,17 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
 
             bool applied_fix_solution = false;
             if (have_fix_candidate && has_fixed_solution_) {
-                if (validateFixedSolution(sat_data)) {
+                debug_telemetry_.validation_attempted = true;
+                const bool validation_ok = validateFixedSolution(sat_data, rover_obs.time);
+                debug_telemetry_.validation_passed = validation_ok;
+                if (validation_ok) {
                     Vector3d saved_baseline = filter_state_.state.head<3>();
                     filter_state_.state.head<3>() = fixed_baseline_;
                     solution = generateSolution(rover_obs.time, SolutionStatus::FIXED, n_sats);
                     filter_state_.state.head<3>() = saved_baseline;
                     const double fixed_float_jump =
                         (solution.position_ecef - float_solution.position_ecef).norm();
+                    debug_telemetry_.fixed_float_jump_m = fixed_float_jump;
                     bool exceeds_trusted_jump = false;
                     if (saved_has_last_trusted && saved_has_last_trusted_time) {
                         const double dt = rover_obs.time - saved_last_trusted_time;
@@ -1407,6 +1534,16 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                         deviatesTooFarFromSPP(solution, 150.0) ||
                         fixed_float_jump > 20.0 ||
                         exceeds_trusted_jump) {
+                        debug_telemetry_.post_validation_rejected = true;
+                        if (!finitePosition(solution)) {
+                            debug_telemetry_.reject_reason = "nonfinite_fixed";
+                        } else if (deviatesTooFarFromSPP(solution, 150.0)) {
+                            debug_telemetry_.reject_reason = "fixed_spp_distance";
+                        } else if (fixed_float_jump > 20.0) {
+                            debug_telemetry_.reject_reason = "fixed_float_jump";
+                        } else if (exceeds_trusted_jump) {
+                            debug_telemetry_.reject_reason = "trusted_jump";
+                        }
                         has_fixed_solution_ = false;
                         restoreHoldState(saved_hold_state);
                         last_trusted_position_ = saved_last_trusted_position;
@@ -1417,10 +1554,14 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                         updateStatistics(SolutionStatus::FIXED);
                         consecutive_fix_count_++;
                         consecutive_float_count_ = 0;
+                        recordFixedEpoch();
+                        debug_telemetry_.final_fixed_applied = true;
 
                         // Save fixed position for next epoch's position reset
                         last_fixed_position_ = base_position_ + fixed_baseline_;
                         has_last_fixed_position_ = true;
+                        last_fixed_time_ = rover_obs.time;
+                        has_last_fixed_time_ = true;
 
                         // holdamb: constrain SD ambiguities toward validated DD integers
                         if (consecutive_fix_count_ >= rtk_config_.min_hold_count) {
@@ -1429,7 +1570,19 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                         applied_fix_solution = true;
                     }
                 } else {
+                    if (debug_telemetry_.reject_reason.empty()) {
+                        debug_telemetry_.reject_reason = "fixed_validation";
+                    }
                     has_fixed_solution_ = false;
+                    // Mirror the post-validation reject branch above: validateFixedSolution
+                    // ran after generateSolution(FIXED) which updated last_trusted_position_
+                    // via rememberSolution; if we don't roll those back, downstream epochs
+                    // see the rejected fix as "trusted" and fail deviatesTooFarFromSPP /
+                    // trusted-jump gates, cascading into fallback_spp and aborting the run.
+                    last_trusted_position_ = saved_last_trusted_position;
+                    has_last_trusted_position_ = saved_has_last_trusted;
+                    last_trusted_time_ = saved_last_trusted_time;
+                    has_last_trusted_time_ = saved_has_last_trusted_time;
                 }
             }
 
@@ -1445,6 +1598,8 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                     updateStatistics(SolutionStatus::FIXED);
                     consecutive_fix_count_++;
                     consecutive_float_count_ = 0;
+                    recordFixedEpoch();
+                    debug_telemetry_.final_fixed_applied = true;
                     if (consecutive_fix_count_ >= rtk_config_.min_hold_count) {
                         applyHoldAmbiguity();
                     }
@@ -1454,10 +1609,26 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
 
             if (!applied_fix_solution) {
                 restoreHoldState(saved_hold_state);
-                rememberSolution(float_solution);
+                solution = float_solution;
+                const bool reset_after_high_float =
+                    !moving_base_mode &&
+                    shouldResetAfterFloatResidualGate(float_solution,
+                                                      saved_last_trusted_position,
+                                                      saved_has_last_trusted,
+                                                      saved_last_trusted_time,
+                                                      saved_has_last_trusted_time);
+                if (reset_after_high_float) {
+                    restoreRememberedState();
+                } else {
+                    rememberSolution(float_solution);
+                }
                 updateStatistics(SolutionStatus::FLOAT);
                 consecutive_fix_count_ = 0;
-                consecutive_float_count_++;
+                if (reset_after_high_float) {
+                    resetAmbiguityStatesForReacquisition(rover_obs, nav);
+                } else {
+                    recordFloatEpoch(rover_obs, nav);
+                }
             }
         } else {
             return fallback_spp();
@@ -1468,6 +1639,8 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
         rememberSolution(spp);
         consecutive_fix_count_ = 0;
         consecutive_float_count_ = 0;
+        consecutive_nonfix_count_ = 0;
+        consecutive_high_float_residual_count_ = 0;
         return spp;
     }
     return solution;
@@ -1504,7 +1677,11 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
 
         auto append_frequency_blocks = [&](int freq) {
             rtk_measurement::MeasurementBlock phase_block;
+            phase_block.kind = rtk_measurement::MeasurementKind::PHASE;
+            phase_block.frequency_index = freq;
             rtk_measurement::MeasurementBlock code_block;
+            code_block.kind = rtk_measurement::MeasurementKind::CODE;
+            code_block.frequency_index = freq;
             const auto& ref_indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
             auto ref_state_it = ref_indices.find(ref_sat);
             if (ref_state_it == ref_indices.end()) {
@@ -1653,13 +1830,37 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
 bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_data) {
     if (sat_data.size() < 4) return false;
 
+    const auto blocks = buildMeasurementBlocks(sat_data);
+    const auto measurement_diagnostics = rtk_measurement::summarizeMeasurementBlocks(blocks);
     auto measurement_system = rtk_measurement::assembleMeasurementSystem(
-        buildMeasurementBlocks(sat_data), filter_state_.state.size());
+        blocks, filter_state_.state.size());
     const auto update_result = rtk_update::applyMeasurementUpdate(filter_state_.state,
                                                                   filter_state_.covariance,
                                                                   measurement_system,
                                                                   30.0,
-                                                                  6);
+                                                                  6,
+                                                                  rtk_config_.max_update_nis_per_observation);
+    current_update_diagnostics_.observation_count = update_result.observation_count;
+    current_update_diagnostics_.phase_observation_count =
+        measurement_diagnostics.phase_observation_count;
+    current_update_diagnostics_.code_observation_count =
+        measurement_diagnostics.code_observation_count;
+    current_update_diagnostics_.suppressed_outliers += update_result.suppressed_outliers;
+    current_update_diagnostics_.prefit_residual_rms_m = update_result.prefit_residual_rms_m;
+    current_update_diagnostics_.prefit_residual_max_m =
+        std::max(current_update_diagnostics_.prefit_residual_max_m,
+                 update_result.prefit_residual_max_abs_m);
+    current_update_diagnostics_.post_suppression_residual_rms_m =
+        update_result.post_suppression_residual_rms_m;
+    current_update_diagnostics_.post_suppression_residual_max_m =
+        std::max(current_update_diagnostics_.post_suppression_residual_max_m,
+                 update_result.post_suppression_residual_max_abs_m);
+    current_update_diagnostics_.normalized_innovation_squared =
+        update_result.normalized_innovation_squared;
+    current_update_diagnostics_.normalized_innovation_squared_per_observation =
+        update_result.normalized_innovation_squared_per_observation;
+    current_update_diagnostics_.rejected_by_innovation_gate =
+        update_result.rejected_by_innovation_gate;
     return update_result.ok;
 }
 
@@ -1667,8 +1868,14 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
 // Resolve ambiguities: SD->DD transform + LAMBDA
 // ============================================================
 bool RTKProcessor::resolveAmbiguities() {
-    if (!filter_initialized_) return false;
-    if (usesEstimatedIono(rtk_config_)) return false;
+    if (!filter_initialized_) {
+        debug_telemetry_.ar_skip_reason = ARSkipReason::FILTER_NOT_INIT;
+        return false;
+    }
+    if (usesEstimatedIono(rtk_config_)) {
+        debug_telemetry_.ar_skip_reason = ARSkipReason::ESTIMATED_IONO_MODE;
+        return false;
+    }
 
     const auto& sat_data = current_sat_data_;
 
@@ -1677,10 +1884,18 @@ bool RTKProcessor::resolveAmbiguities() {
 }
 
 bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
-    if (!filter_initialized_) return false;
-    if (usesEstimatedIono(rtk_config_)) return false;
+    if (!filter_initialized_) {
+        debug_telemetry_.ar_skip_reason = ARSkipReason::FILTER_NOT_INIT;
+        return false;
+    }
+    if (usesEstimatedIono(rtk_config_)) {
+        debug_telemetry_.ar_skip_reason = ARSkipReason::ESTIMATED_IONO_MODE;
+        return false;
+    }
 
     const auto& sat_data = current_sat_data_;
+    debug_telemetry_.ar_attempted = true;
+    debug_telemetry_.input_pair_count = static_cast<int>(dd_pairs.size());
 
     const int na = usesGlonassAutocal(rtk_config_) ? REAL_STATES : BASE_STATES;
 
@@ -1692,7 +1907,12 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         dd_pairs.end());
 
     int nb = dd_pairs.size();
-    if (nb < 4) return false;
+    debug_telemetry_.pair_count = nb;
+    if (nb < 4) {
+        debug_telemetry_.reject_reason = "too_few_pairs";
+        debug_telemetry_.ar_skip_reason = ARSkipReason::DD_PAIRS_LT_4_BEFORE_VAR_FILTER;
+        return false;
+    }
 
     std::vector<rtk_measurement::AmbiguityDifference> differences;
     differences.reserve(nb);
@@ -1714,6 +1934,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     // Variance check
     double max_var = 0;
     for (int i = 0; i < nb; ++i) max_var = std::max(max_var, Qb(i, i));
+    debug_telemetry_.max_ambiguity_variance = max_var;
 
     // Exclude DD pairs with outlier variance (relative to median)
     // This removes newly-appearing satellites that haven't converged
@@ -1750,6 +1971,15 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             nb = nb_new;
             max_var = 0;
             for (int i = 0; i < nb; ++i) max_var = std::max(max_var, Qb(i, i));
+            debug_telemetry_.pair_count = nb;
+            debug_telemetry_.max_ambiguity_variance = max_var;
+            if (nb < 4) {
+                // Diagnostic-only: mark root cause; do NOT early-return.
+                // Preserve original solver flow so LAMBDA still attempts AR
+                // (and fails the usual way). LAMBDA_FAILED assignment below
+                // is guarded so this more-specific reason is not overwritten.
+                debug_telemetry_.ar_skip_reason = ARSkipReason::DD_PAIRS_LT_4_AFTER_VAR_FILTER;
+            }
         }
     }
 
@@ -1765,6 +1995,67 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             effective_ratio_threshold = 2.0;
         }
     }
+    debug_telemetry_.effective_ratio_threshold = effective_ratio_threshold;
+    const int min_subset_pairs_for_ar = std::max(4, rtk_config_.min_subset_pairs_for_ar);
+    debug_telemetry_.min_subset_pair_count = min_subset_pairs_for_ar;
+    const double min_full_ratio_for_subset_ar =
+        std::isfinite(rtk_config_.min_full_ratio_for_subset_ar)
+            ? std::max(0.0, rtk_config_.min_full_ratio_for_subset_ar)
+            : 0.0;
+    debug_telemetry_.min_full_ratio_for_subset_ar = min_full_ratio_for_subset_ar;
+
+    struct SubsetDiversity {
+        int distinct_sats = 0;
+        int distinct_systems = 0;
+        int distinct_frequencies = 0;
+        int dual_frequency_sats = 0;
+    };
+    auto compute_subset_diversity = [&](const std::vector<int>& subset) {
+        SubsetDiversity diversity;
+        std::set<SatelliteId> sats;
+        std::set<GNSSSystem> systems;
+        std::set<int> frequencies;
+        std::map<SatelliteId, std::set<int>> frequencies_by_sat;
+        for (int index : subset) {
+            if (index < 0 || index >= static_cast<int>(dd_pairs.size())) {
+                continue;
+            }
+            const auto& pair = dd_pairs[index];
+            sats.insert(pair.sat);
+            systems.insert(pair.sat.system);
+            frequencies.insert(pair.freq);
+            frequencies_by_sat[pair.sat].insert(pair.freq);
+        }
+        for (const auto& [sat, sat_frequencies] : frequencies_by_sat) {
+            (void)sat;
+            if (sat_frequencies.size() >= 2) {
+                diversity.dual_frequency_sats++;
+            }
+        }
+        diversity.distinct_sats = static_cast<int>(sats.size());
+        diversity.distinct_systems = static_cast<int>(systems.size());
+        diversity.distinct_frequencies = static_cast<int>(frequencies.size());
+        return diversity;
+    };
+    auto passes_subset_diversity_gate = [&](const SubsetDiversity& diversity) {
+        if (rtk_config_.min_subset_sats_for_ar > 0 &&
+            diversity.distinct_sats < rtk_config_.min_subset_sats_for_ar) {
+            return false;
+        }
+        if (rtk_config_.min_subset_systems_for_ar > 0 &&
+            diversity.distinct_systems < rtk_config_.min_subset_systems_for_ar) {
+            return false;
+        }
+        if (rtk_config_.min_subset_frequencies_for_ar > 0 &&
+            diversity.distinct_frequencies < rtk_config_.min_subset_frequencies_for_ar) {
+            return false;
+        }
+        if (rtk_config_.min_subset_dual_frequency_sats_for_ar > 0 &&
+            diversity.dual_frequency_sats < rtk_config_.min_subset_dual_frequency_sats_for_ar) {
+            return false;
+        }
+        return true;
+    };
 
     // === Wide-lane AR pre-step (default-off) ===
     // Frozen copies of full-size matrices for use in build_search_problem
@@ -1787,6 +2078,9 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     std::vector<WideLaneConstraint> wide_lane_constraints;
     int wide_lane_total = 0;
     int wide_lane_fixed = 0;
+    int wide_lane_rejected = 0;
+    double wide_lane_min_distance = std::numeric_limits<double>::infinity();
+    double wide_lane_max_distance = 0.0;
 
     auto compute_wide_lane_float = [&](int l1_index, int l2_index, double& wide_lane_float) {
         if (l1_index < 0 || l2_index < 0 ||
@@ -1855,7 +2149,11 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                 continue;
             }
             const double fixed_integer = std::round(wide_lane_float);
-            if (distanceToNearestInteger(wide_lane_float) >= wide_lane_threshold) {
+            const double wl_distance = distanceToNearestInteger(wide_lane_float);
+            wide_lane_min_distance = std::min(wide_lane_min_distance, wl_distance);
+            wide_lane_max_distance = std::max(wide_lane_max_distance, wl_distance);
+            if (wl_distance >= wide_lane_threshold) {
+                wide_lane_rejected++;
                 continue;
             }
 
@@ -1866,6 +2164,13 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             std::clog << "[RTK-AR] WL fixed " << wide_lane_fixed
                       << "/" << wide_lane_total << "\n";
         }
+    }
+    debug_telemetry_.wide_lane_total = wide_lane_total;
+    debug_telemetry_.wide_lane_fixed = wide_lane_fixed;
+    debug_telemetry_.wide_lane_rejected = wide_lane_rejected;
+    if (std::isfinite(wide_lane_min_distance)) {
+        debug_telemetry_.wide_lane_min_distance = wide_lane_min_distance;
+        debug_telemetry_.wide_lane_max_distance = wide_lane_max_distance;
     }
 
     struct SearchProblem {
@@ -1929,7 +2234,11 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     // Standard LAMBDA path
     if (!fixed) {
         const auto full_problem = build_search_problem(full_subset);
-        if (lambdaMethod(full_problem.dd_float, full_problem.Qb, dd_fixed, ratio)) {
+        const bool full_solved =
+            lambdaMethod(full_problem.dd_float, full_problem.Qb, dd_fixed, ratio);
+        debug_telemetry_.full_lambda_solved = full_solved;
+        if (full_solved) {
+            debug_telemetry_.full_ratio = ratio;
             if (ratio >= effective_ratio_threshold) {
                 fixed = true;
 
@@ -2065,6 +2374,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                     dd_fixed = wlnl_fixed;
                     fixed = true;
                     ratio = 999.9;
+                    debug_telemetry_.used_wlnl_fallback = true;
                     last_dd_pairs_ = dd_pairs;
                     last_best_subset_.clear();
                     for (int i = 0; i < nb; ++i) last_best_subset_.push_back(i);
@@ -2094,10 +2404,29 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         rtk_ar_evaluation::shouldSearchDropSubsets(
             fixed, ratio, effective_ratio_threshold, max_var);
 
-    if (nb > 4 && (search_preferred_subsets || search_drop_subsets)) {
+    if (nb > min_subset_pairs_for_ar && (search_preferred_subsets || search_drop_subsets)) {
+        auto passes_full_ratio_gate = [&]() {
+            if (min_full_ratio_for_subset_ar <= 0.0) {
+                return true;
+            }
+            return debug_telemetry_.full_lambda_solved &&
+                std::isfinite(debug_telemetry_.full_ratio) &&
+                debug_telemetry_.full_ratio >= min_full_ratio_for_subset_ar;
+        };
+
         auto try_subset = [&](const std::vector<int>& subset) {
             const int ns = subset.size();
-            if (ns < 4) {
+            if (ns < min_subset_pairs_for_ar) {
+                return false;
+            }
+            const auto subset_diversity = compute_subset_diversity(subset);
+            debug_telemetry_.subset_candidates_evaluated++;
+            if (!passes_subset_diversity_gate(subset_diversity)) {
+                debug_telemetry_.subset_candidates_rejected_by_diversity++;
+                return false;
+            }
+            if (!passes_full_ratio_gate()) {
+                debug_telemetry_.subset_candidates_rejected_by_full_ratio++;
                 return false;
             }
 
@@ -2140,7 +2469,8 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             });
         if (compare_preferred_subsets && search_preferred_subsets) {
             for (const auto& subset : preferred_subsets) {
-                if (subset.size() < 4 || subset.size() >= static_cast<size_t>(nb)) {
+                if (subset.size() < static_cast<size_t>(min_subset_pairs_for_ar) ||
+                    subset.size() >= static_cast<size_t>(nb)) {
                     continue;
                 }
                 try_subset(subset);
@@ -2149,7 +2479,8 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
 
         if (search_drop_subsets) {
             const auto progressive_subsets =
-                rtk_ar_selection::buildProgressiveVarianceDropSubsets(descriptors, 4, 6);
+                rtk_ar_selection::buildProgressiveVarianceDropSubsets(
+                    descriptors, min_subset_pairs_for_ar, 6);
             for (const auto& subset : progressive_subsets) {
                 try_subset(subset);
             }
@@ -2169,7 +2500,27 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         }
     }
 
-    if (!fixed) return false;
+    debug_telemetry_.selected_ratio = ratio;
+    debug_telemetry_.selected_pair_count = static_cast<int>(best_candidate.subset.size());
+    const auto selected_diversity = compute_subset_diversity(best_candidate.subset);
+    debug_telemetry_.selected_distinct_sats = selected_diversity.distinct_sats;
+    debug_telemetry_.selected_distinct_systems = selected_diversity.distinct_systems;
+    debug_telemetry_.selected_distinct_frequencies = selected_diversity.distinct_frequencies;
+    debug_telemetry_.selected_dual_frequency_sats = selected_diversity.dual_frequency_sats;
+    debug_telemetry_.selected_used_subset = best_candidate.subset.size() < static_cast<size_t>(nb);
+    if (!fixed) {
+        debug_telemetry_.selected_fixed = false;
+        if (debug_telemetry_.reject_reason.empty()) {
+            debug_telemetry_.reject_reason = "lambda_not_fixed";
+        }
+        // First-cause wins: a more specific skip reason set earlier
+        // (e.g. DD_PAIRS_LT_4_AFTER_VAR_FILTER) should not be overwritten.
+        if (debug_telemetry_.ar_skip_reason == ARSkipReason::NONE) {
+            debug_telemetry_.ar_skip_reason = ARSkipReason::LAMBDA_FAILED;
+        }
+        return false;
+    }
+    debug_telemetry_.selected_fixed = true;
 
     // Fixed solution: xa = y[:na] - Qab * Qb^{-1} * (dd_float - dd_fixed)
     const auto fixed_problem = build_search_problem(best_candidate.subset);
@@ -2179,12 +2530,20 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                                                 fixed_problem.Qb,
                                                 fixed_problem.dd_float,
                                                 dd_fixed, xa)) {
+        debug_telemetry_.reject_reason = "fixed_head_solve";
+        if (debug_telemetry_.ar_skip_reason == ARSkipReason::NONE) {
+            debug_telemetry_.ar_skip_reason = ARSkipReason::RATIO_COMPUTATION_FAILED;
+        }
         return false;
     }
     fixed_baseline_ = xa.head<3>();
     has_fixed_solution_ = true;
     last_ar_ratio_ = ratio;
     last_num_fixed_ambiguities_ = dd_fixed.size();
+    // Clear any diagnostic-only skip reason set earlier (e.g. DD_PAIRS_LT_4_AFTER_VAR_FILTER
+    // at line 1803, which marks the cause without early-returning so LAMBDA can still try).
+    debug_telemetry_.ar_skip_reason = ARSkipReason::NONE;
+    debug_telemetry_.selected_fixed_ambiguities = static_cast<int>(dd_fixed.size());
 
     // Store fix info for hold and validation
     last_dd_pairs_ = dd_pairs;
@@ -2201,6 +2560,8 @@ RTKProcessor::HoldStateSnapshot RTKProcessor::captureHoldState() const {
     HoldStateSnapshot snapshot;
     snapshot.last_fixed_position = last_fixed_position_;
     snapshot.has_last_fixed_position = has_last_fixed_position_;
+    snapshot.last_fixed_time = last_fixed_time_;
+    snapshot.has_last_fixed_time = has_last_fixed_time_;
     snapshot.dd_pairs = last_dd_pairs_;
     snapshot.best_subset = last_best_subset_;
     snapshot.dd_fixed = last_dd_fixed_;
@@ -2212,6 +2573,8 @@ RTKProcessor::HoldStateSnapshot RTKProcessor::captureHoldState() const {
 void RTKProcessor::restoreHoldState(const HoldStateSnapshot& snapshot) {
     last_fixed_position_ = snapshot.last_fixed_position;
     has_last_fixed_position_ = snapshot.has_last_fixed_position;
+    last_fixed_time_ = snapshot.last_fixed_time;
+    has_last_fixed_time_ = snapshot.has_last_fixed_time;
     last_dd_pairs_ = snapshot.dd_pairs;
     last_best_subset_ = snapshot.best_subset;
     last_dd_fixed_ = snapshot.dd_fixed;
@@ -2219,8 +2582,12 @@ void RTKProcessor::restoreHoldState(const HoldStateSnapshot& snapshot) {
     last_num_fixed_ambiguities_ = snapshot.num_fixed_ambiguities;
 }
 
-bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data) {
-    if (!has_fixed_solution_) return false;
+bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data,
+                                         const GNSSTime& current_time) {
+    if (!has_fixed_solution_) {
+        debug_telemetry_.reject_reason = "no_fixed_solution";
+        return false;
+    }
 
     // Reject fixes that jump too much from the previous fix position
     // This catches wrong integers that pass the ratio test
@@ -2232,6 +2599,7 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
             has_last_fixed_position_,
             rtk_config_.position_mode == RTKConfig::PositionMode::STATIC,
             consecutive_fix_count_)) {
+        debug_telemetry_.reject_reason = "fix_history_jump";
         return false;
     }
     if (!isMovingBasePositionMode(rtk_config_) &&
@@ -2239,11 +2607,25 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         rtk_validation::exceedsAbsoluteJump(
             new_pos, last_fixed_position_, has_last_fixed_position_,
             rtk_config_.max_position_jump_m)) {
+        debug_telemetry_.reject_reason = "max_position_jump";
+        return false;
+    }
+    if (!isMovingBasePositionMode(rtk_config_) &&
+        rtk_config_.max_position_jump_rate_mps > 0.0 &&
+        has_last_fixed_position_ &&
+        has_last_fixed_time_ &&
+        rtk_validation::exceedsAdaptiveJump(
+            new_pos,
+            last_fixed_position_,
+            current_time - last_fixed_time_,
+            rtk_config_.max_position_jump_min_m,
+            rtk_config_.max_position_jump_rate_mps)) {
         return false;
     }
 
     // Sanity check: reject fixes where any component is unreasonably large
     if (fixed_baseline_.norm() > rtk_config_.max_baseline_length) {
+        debug_telemetry_.reject_reason = "max_baseline";
         return false;
     }
 
@@ -2323,6 +2705,7 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
 
         // If more than half of checked satellites have wrong WL, reject the fix
         if (checked_count > 0 && bad_wl_count > checked_count / 2) {
+            debug_telemetry_.reject_reason = "iflc_wl_consistency";
             return false;
         }
     }
@@ -2458,12 +2841,19 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         return std::numeric_limits<double>::infinity();
     };
 
+    const double postfix_residual_rms =
+        (filter_initialized_ && filter_state_.state.size() >= 3)
+            ? computePostFixResidualRms()
+            : std::numeric_limits<double>::infinity();
+    debug_telemetry_.postfix_residual_rms = postfix_residual_rms;
+
     const double max_postfix_residual_rms = rtk_config_.max_postfix_residual_rms;
     if (filter_initialized_ &&
         filter_state_.state.size() >= 3 &&
         std::isfinite(max_postfix_residual_rms) &&
         max_postfix_residual_rms > 0.0 &&
-        computePostFixResidualRms() > max_postfix_residual_rms) {
+        postfix_residual_rms > max_postfix_residual_rms) {
+        debug_telemetry_.reject_reason = "postfix_rms";
         return false;
     }
 
@@ -2620,6 +3010,8 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
     filter_state_.state.head<3>() = saved_baseline;
 
     last_fixed_position_ = base_position_ + fixed_baseline_;
+    last_fixed_time_ = time;
+    has_last_fixed_time_ = true;
 
     return true;
 }
@@ -2646,6 +3038,26 @@ PositionSolution RTKProcessor::generateSolution(const GNSSTime& time, SolutionSt
     if (filter_state_.state.size() >= 3) solution.baseline_length = filter_state_.state.head<3>().norm();
     solution.ratio = last_ar_ratio_;
     solution.num_fixed_ambiguities = last_num_fixed_ambiguities_;
+    solution.iterations = current_update_diagnostics_.iterations;
+    solution.residual_rms = current_update_diagnostics_.post_suppression_residual_rms_m;
+    solution.rtk_update_observations = current_update_diagnostics_.observation_count;
+    solution.rtk_update_phase_observations = current_update_diagnostics_.phase_observation_count;
+    solution.rtk_update_code_observations = current_update_diagnostics_.code_observation_count;
+    solution.rtk_update_suppressed_outliers = current_update_diagnostics_.suppressed_outliers;
+    solution.rtk_update_prefit_residual_rms_m =
+        current_update_diagnostics_.prefit_residual_rms_m;
+    solution.rtk_update_prefit_residual_max_m =
+        current_update_diagnostics_.prefit_residual_max_m;
+    solution.rtk_update_post_suppression_residual_rms_m =
+        current_update_diagnostics_.post_suppression_residual_rms_m;
+    solution.rtk_update_post_suppression_residual_max_m =
+        current_update_diagnostics_.post_suppression_residual_max_m;
+    solution.rtk_update_normalized_innovation_squared =
+        current_update_diagnostics_.normalized_innovation_squared;
+    solution.rtk_update_normalized_innovation_squared_per_observation =
+        current_update_diagnostics_.normalized_innovation_squared_per_observation;
+    solution.rtk_update_rejected_by_innovation_gate =
+        current_update_diagnostics_.rejected_by_innovation_gate ? 1 : 0;
     rememberSolution(solution);
     return solution;
 }
@@ -2979,7 +3391,7 @@ bool RTKProcessor::trySingleEpochAR(const std::map<SatelliteId, SatelliteData>& 
     if (!resolveAmbiguities(buildDoubleDifferencePairs(sat_data, 0))) {
         return false;
     }
-    return has_fixed_solution_ && validateFixedSolution(sat_data);
+    return has_fixed_solution_ && validateFixedSolution(sat_data, last_epoch_time_);
 }
 
 } // namespace libgnss

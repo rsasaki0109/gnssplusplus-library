@@ -2,6 +2,8 @@
 
 #include <libgnss++/algorithms/rtk_measurement.hpp>
 
+#include <cmath>
+
 using namespace libgnss;
 
 TEST(RTKMeasurementTest, BuildsDoubleDifferenceCovariancePerBlock) {
@@ -94,6 +96,26 @@ TEST(RTKMeasurementTest, AssemblesExactSizeMeasurementSystemFromBlocks) {
     EXPECT_DOUBLE_EQ(system.covariance(1, 2), 0.2);
     EXPECT_DOUBLE_EQ(system.covariance(2, 1), 0.3);
     EXPECT_DOUBLE_EQ(system.covariance(0, 1), 0.0);
+}
+
+TEST(RTKMeasurementTest, SummarizesMeasurementBlocksByType) {
+    rtk_measurement::MeasurementBlock phase_block;
+    phase_block.kind = rtk_measurement::MeasurementKind::PHASE;
+    phase_block.rows.push_back(rtk_measurement::MeasurementRow{0.25});
+    phase_block.rows.push_back(rtk_measurement::MeasurementRow{-0.75});
+
+    rtk_measurement::MeasurementBlock code_block;
+    code_block.kind = rtk_measurement::MeasurementKind::CODE;
+    code_block.rows.push_back(rtk_measurement::MeasurementRow{1.5});
+
+    const auto diagnostics =
+        rtk_measurement::summarizeMeasurementBlocks({phase_block, code_block});
+
+    EXPECT_EQ(diagnostics.observation_count, 3);
+    EXPECT_EQ(diagnostics.phase_observation_count, 2);
+    EXPECT_EQ(diagnostics.code_observation_count, 1);
+    EXPECT_NEAR(diagnostics.residual_rms_m, std::sqrt((0.0625 + 0.5625 + 2.25) / 3.0), 1e-12);
+    EXPECT_DOUBLE_EQ(diagnostics.residual_max_abs_m, 1.5);
 }
 
 TEST(RTKMeasurementTest, BuildsAmbiguityTransformWithoutDenseDMatrix) {

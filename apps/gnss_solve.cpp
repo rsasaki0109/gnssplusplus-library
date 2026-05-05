@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <exception>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -10,6 +11,7 @@
 #include <vector>
 
 #include <libgnss++/algorithms/rtk.hpp>
+#include <libgnss++/algorithms/rtk_validation.hpp>
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -24,7 +26,23 @@ constexpr double kExactTimeToleranceSeconds = 1e-6;
 constexpr double kDefaultFloatVsSppGuardMeters = 30.0;
 constexpr double kDefaultNonFixedJumpGuardMeters = 8.0;
 constexpr double kDefaultVerticalStepGuardMeters = 1.0;
-constexpr int kReacquireFixedCount = 5;
+constexpr double kDefaultNonFixDriftGuardMaxAnchorGapSeconds = 120.0;
+constexpr double kDefaultNonFixDriftGuardMaxAnchorSpeedMps = 1.0;
+constexpr double kDefaultNonFixDriftGuardMaxResidualMeters = 30.0;
+constexpr double kDefaultNonFixDriftGuardMinHorizontalResidualMeters = 0.0;
+constexpr int kDefaultNonFixDriftGuardMinSegmentEpochs = 20;
+constexpr int kDefaultNonFixDriftGuardMaxSegmentEpochs = 0;
+constexpr double kDefaultSppHeightStepGuardMinMeters = 30.0;
+constexpr double kDefaultSppHeightStepGuardMaxRateMps = 4.0;
+constexpr double kDefaultFloatBridgeTailGuardMaxAnchorGapSeconds = 120.0;
+constexpr double kDefaultFloatBridgeTailGuardMinAnchorSpeedMps = 0.4;
+constexpr double kDefaultFloatBridgeTailGuardMaxAnchorSpeedMps = 1.0;
+constexpr double kDefaultFloatBridgeTailGuardMaxResidualMeters = 12.0;
+constexpr int kDefaultFloatBridgeTailGuardMinSegmentEpochs = 20;
+constexpr double kDefaultFixedBridgeBurstGuardMaxAnchorGapSeconds = 30.0;
+constexpr double kDefaultFixedBridgeBurstGuardMinBoundaryGapSeconds = 1.0;
+constexpr double kDefaultFixedBridgeBurstGuardMaxResidualMeters = 20.0;
+constexpr int kDefaultFixedBridgeBurstGuardMaxSegmentEpochs = 12;
 
 enum class ModeChoice {
     AUTO,
@@ -50,7 +68,8 @@ enum class RTKTuningPreset {
     NONE,
     SURVEY,
     LOW_COST,
-    MOVING_BASE
+    MOVING_BASE,
+    ODAIBA
 };
 
 struct SolveConfig {
@@ -74,9 +93,23 @@ struct SolveConfig {
     bool has_ar_filter_override = false;
     double ar_filter_margin = 0.25;
     int min_satellites_for_ar = 5;
+    int min_subset_pairs_for_ar = 4;
+    int min_subset_sats_for_ar = 0;
+    int min_subset_systems_for_ar = 0;
+    int min_subset_frequencies_for_ar = 0;
+    int min_subset_dual_frequency_sats_for_ar = 0;
+    double min_full_ratio_for_subset_ar = 0.0;
     int min_hold_count = 5;
     double hold_ratio_threshold = 2.0;
     double elevation_mask_deg = 15.0;
+    double process_noise_position = 1e-4;
+    double process_noise_ambiguity = 1e-8;
+    double process_noise_iono = 1e-4;
+    double carrier_phase_sigma = 0.002;
+    bool process_noise_position_set = false;
+    bool process_noise_ambiguity_set = false;
+    bool process_noise_iono_set = false;
+    bool carrier_phase_sigma_set = false;
     bool enable_glonass = true;
     bool enable_beidou = true;
     GlonassARChoice glonass_ar = GlonassARChoice::OFF;
@@ -84,21 +117,59 @@ struct SolveConfig {
     double glonass_icb_l2_m_per_mhz = 0.0;
     int skip_epochs = 0;
     int max_epochs = -1;
+    std::string debug_epoch_log_path;
     bool enable_kinematic_post_filter = true;
+    bool enable_nonfix_drift_guard = true;
+    double nonfix_drift_guard_max_anchor_gap_s = kDefaultNonFixDriftGuardMaxAnchorGapSeconds;
+    double nonfix_drift_guard_max_anchor_speed_mps = kDefaultNonFixDriftGuardMaxAnchorSpeedMps;
+    double nonfix_drift_guard_max_residual_m = kDefaultNonFixDriftGuardMaxResidualMeters;
+    double nonfix_drift_guard_min_horizontal_residual_m =
+        kDefaultNonFixDriftGuardMinHorizontalResidualMeters;
+    int nonfix_drift_guard_min_segment_epochs = kDefaultNonFixDriftGuardMinSegmentEpochs;
+    int nonfix_drift_guard_max_segment_epochs = kDefaultNonFixDriftGuardMaxSegmentEpochs;
+    bool enable_spp_height_step_guard = true;
+    double spp_height_step_guard_min_m = kDefaultSppHeightStepGuardMinMeters;
+    double spp_height_step_guard_max_rate_mps = kDefaultSppHeightStepGuardMaxRateMps;
+    bool enable_float_bridge_tail_guard = true;
+    double float_bridge_tail_guard_max_anchor_gap_s = kDefaultFloatBridgeTailGuardMaxAnchorGapSeconds;
+    double float_bridge_tail_guard_min_anchor_speed_mps = kDefaultFloatBridgeTailGuardMinAnchorSpeedMps;
+    double float_bridge_tail_guard_max_anchor_speed_mps = kDefaultFloatBridgeTailGuardMaxAnchorSpeedMps;
+    double float_bridge_tail_guard_max_residual_m = kDefaultFloatBridgeTailGuardMaxResidualMeters;
+    int float_bridge_tail_guard_min_segment_epochs = kDefaultFloatBridgeTailGuardMinSegmentEpochs;
+    bool enable_fixed_bridge_burst_guard = false;
+    double fixed_bridge_burst_guard_max_anchor_gap_s = kDefaultFixedBridgeBurstGuardMaxAnchorGapSeconds;
+    double fixed_bridge_burst_guard_min_boundary_gap_s = kDefaultFixedBridgeBurstGuardMinBoundaryGapSeconds;
+    double fixed_bridge_burst_guard_max_residual_m = kDefaultFixedBridgeBurstGuardMaxResidualMeters;
+    int fixed_bridge_burst_guard_max_segment_epochs = kDefaultFixedBridgeBurstGuardMaxSegmentEpochs;
     RTKTuningPreset preset = RTKTuningPreset::NONE;
     bool ratio_threshold_set = false;
     bool ar_filter_margin_set = false;
     bool min_satellites_for_ar_set = false;
+    bool min_subset_sats_for_ar_set = false;
+    bool min_subset_systems_for_ar_set = false;
+    bool min_subset_frequencies_for_ar_set = false;
+    bool min_subset_dual_frequency_sats_for_ar_set = false;
     bool min_hold_count_set = false;
     bool hold_ratio_threshold_set = false;
     libgnss::RTKProcessor::RTKConfig::ARPolicy ar_policy =
         libgnss::RTKProcessor::RTKConfig::ARPolicy::EXTENDED;
     double max_hold_divergence_m = 0.0;
-    double max_position_jump_m = 0.0;
+    double max_position_jump_m = 5.0;
+    double max_position_jump_min_m = 0.0;
+    double max_position_jump_rate_mps = 0.0;
+    double max_float_spp_divergence_m = 0.0;
+    double max_float_prefit_residual_rms_m = 0.0;
+    double max_float_prefit_residual_max_m = 0.0;
+    int max_float_prefit_residual_reset_streak = 3;
+    double min_float_prefit_residual_trusted_jump_m = 0.0;
+    double max_update_nis_per_observation = 0.0;
     int max_consecutive_float_for_reset = 0;
+    int max_consecutive_nonfix_for_reset = 0;
     double max_postfix_residual_rms = 0.0;
     bool enable_wide_lane_ar = false;
+    bool wide_lane_ar_set = false;
     double wide_lane_acceptance_threshold = 0.25;
+    bool wide_lane_acceptance_threshold_set = false;
 };
 
 double timeDiffSeconds(const libgnss::GNSSTime& a, const libgnss::GNSSTime& b) {
@@ -374,6 +445,102 @@ std::string outputFormatString(libgnss::io::SolutionWriter::Format format) {
     return "pos";
 }
 
+class EpochDebugWriter {
+public:
+    bool open(const std::string& path) {
+        if (path.empty()) {
+            return true;
+        }
+        file_.open(path);
+        if (!file_.is_open()) {
+            return false;
+        }
+        file_ << "gps_week,tow,status,num_sats,ratio,baseline_m,"
+              << "ar_attempted,input_pair_count,pair_count,max_ambiguity_variance,"
+              << "effective_ratio_threshold,min_subset_pair_count,min_full_ratio_for_subset_ar,"
+              << "subset_candidates_evaluated,subset_candidates_rejected_by_full_ratio,"
+              << "subset_candidates_rejected_by_diversity,wide_lane_total,wide_lane_fixed,"
+              << "wide_lane_rejected,wide_lane_min_distance,wide_lane_max_distance,"
+              << "full_lambda_solved,full_ratio,selected_fixed,selected_ratio,"
+              << "selected_pair_count,selected_distinct_sats,selected_distinct_systems,"
+              << "selected_distinct_frequencies,selected_dual_frequency_sats,"
+              << "selected_fixed_ambiguities,selected_used_subset,"
+              << "used_wlnl_fallback,validation_attempted,validation_passed,"
+              << "postfix_residual_rms,fixed_float_jump_m,post_validation_rejected,"
+              << "final_fixed_applied,reject_reason,ar_skip_reason\n";
+        return true;
+    }
+
+    void write(const libgnss::PositionSolution& solution,
+               const libgnss::RTKProcessor::EpochDebugTelemetry& telemetry) {
+        if (!file_.is_open()) {
+            return;
+        }
+        file_ << solution.time.week << ","
+              << std::fixed << std::setprecision(3) << solution.time.tow << ","
+              << static_cast<int>(solution.status) << ","
+              << solution.num_satellites << ",";
+        writeNumber(solution.ratio);
+        file_ << ",";
+        writeNumber(solution.baseline_length);
+        file_ << ","
+              << telemetry.ar_attempted << ","
+              << telemetry.input_pair_count << ","
+              << telemetry.pair_count << ",";
+        writeNumber(telemetry.max_ambiguity_variance);
+        file_ << ",";
+        writeNumber(telemetry.effective_ratio_threshold);
+        file_ << ","
+              << telemetry.min_subset_pair_count << ","
+              << telemetry.min_full_ratio_for_subset_ar << ","
+              << telemetry.subset_candidates_evaluated << ","
+              << telemetry.subset_candidates_rejected_by_full_ratio << ","
+              << telemetry.subset_candidates_rejected_by_diversity << ","
+              << telemetry.wide_lane_total << ","
+              << telemetry.wide_lane_fixed << ","
+              << telemetry.wide_lane_rejected << ",";
+        writeNumber(telemetry.wide_lane_min_distance);
+        file_ << ",";
+        writeNumber(telemetry.wide_lane_max_distance);
+        file_ << ","
+              << telemetry.full_lambda_solved << ",";
+        writeNumber(telemetry.full_ratio);
+        file_ << ","
+              << telemetry.selected_fixed << ",";
+        writeNumber(telemetry.selected_ratio);
+        file_ << ","
+              << telemetry.selected_pair_count << ","
+              << telemetry.selected_distinct_sats << ","
+              << telemetry.selected_distinct_systems << ","
+              << telemetry.selected_distinct_frequencies << ","
+              << telemetry.selected_dual_frequency_sats << ","
+              << telemetry.selected_fixed_ambiguities << ","
+              << telemetry.selected_used_subset << ","
+              << telemetry.used_wlnl_fallback << ","
+              << telemetry.validation_attempted << ","
+              << telemetry.validation_passed << ",";
+        writeNumber(telemetry.postfix_residual_rms);
+        file_ << ",";
+        writeNumber(telemetry.fixed_float_jump_m);
+        file_ << ","
+              << telemetry.post_validation_rejected << ","
+              << telemetry.final_fixed_applied << ","
+              << telemetry.reject_reason << ","
+              << libgnss::RTKProcessor::arSkipReasonToString(telemetry.ar_skip_reason) << "\n";
+        file_.flush();
+    }
+
+private:
+    void writeNumber(double value) {
+        if (!std::isfinite(value)) {
+            return;
+        }
+        file_ << std::setprecision(6) << value;
+    }
+
+    std::ofstream file_;
+};
+
 void printUsage(const char* program_name) {
     std::cout
         << "Usage: " << program_name << " [options]\n"
@@ -389,15 +556,35 @@ void printUsage(const char* program_name) {
         << "                             Position mode (default: auto)\n"
         << "  --iono <auto|off|iflc|est> Ionosphere option (default: auto)\n"
         << "  --ratio <value>            Ambiguity ratio threshold (default: 3.0)\n"
-        << "  --preset <survey|low-cost|moving-base>\n"
+        << "  --preset <survey|low-cost|moving-base|odaiba>\n"
         << "                             Apply a named RTK tuning preset\n"
         << "  --arfilter                 Require extra ratio margin for subset AR fixes\n"
         << "  --no-arfilter              Disable subset AR filter margin even if a preset enables it\n"
         << "  --arfilter-margin <v>      Extra ratio margin for --arfilter (default: 0.25)\n"
         << "  --min-ar-sats <n>          Minimum satellites for AR (default: 5)\n"
+        << "  --min-subset-ar-pairs <n>  Minimum DD pairs for subset AR (default: 4)\n"
+        << "  --min-subset-ar-sats <n>   Minimum distinct satellites for subset AR\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --min-subset-ar-systems <n>\n"
+        << "                             Minimum distinct constellations for subset AR\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --min-subset-ar-freqs <n>  Minimum distinct frequencies for subset AR\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --min-subset-ar-dual-freq-sats <n>\n"
+        << "                             Minimum dual-frequency satellites for subset AR\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --min-full-ratio-for-subset-ar <v>\n"
+        << "                             Require full-set LAMBDA ratio before subset AR\n"
+        << "                             (default: 0, disabled)\n"
         << "  --min-hold-count <n>       Consecutive fixes before hold ambiguity is allowed (default: 5)\n"
         << "  --hold-ratio-threshold <v> Ratio threshold used while hold ambiguity is active (default: 2.0)\n"
         << "  --elevation-mask-deg <v>   Elevation mask in degrees (default: 15)\n"
+        << "  --process-noise-position <v>\n"
+        << "                             KF process noise for position state, m^2/s (default: 1e-4)\n"
+        << "  --process-noise-ambiguity <v>\n"
+        << "                             KF process noise for DD ambiguity state, cycles^2/s (default: 1e-8)\n"
+        << "  --process-noise-iono <v>   KF process noise for DD ionosphere state, m^2/s (default: 1e-4)\n"
+        << "  --carrier-phase-sigma <v>  Carrier phase observation sigma in m (default: 0.002)\n"
         << "  --no-glonass               Disable GLONASS in RTK carrier processing\n"
         << "  --no-beidou                Disable BeiDou in RTK carrier processing\n"
         << "  --glonass-ar <off|on|autocal> GLONASS ambiguity resolution mode (default: off)\n"
@@ -411,18 +598,87 @@ void printUsage(const char* program_name) {
         << "  --max-hold-div <v>         Max hold fix divergence from float in meters\n"
         << "                             (default: 0, disabled)\n"
         << "  --max-pos-jump <v>         Max AR fix jump from last fixed pos in meters\n"
-        << "                             (default: 0, disabled; additional to history check)\n"
+        << "                             (default: 5.0; pass 0 to disable, additional to history check)\n"
+        << "  --max-pos-jump-min <v>     Min adaptive AR fix jump in meters (default: 0)\n"
+        << "  --max-pos-jump-rate <v>    Max adaptive AR fix jump rate in m/s\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-float-spp-div <v>    Max FLOAT divergence from same-epoch SPP in meters\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-float-prefit-rms <v> Max FLOAT prefit DD residual RMS before state reset\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-float-prefit-max <v> Max FLOAT prefit DD residual magnitude before state reset\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-float-prefit-reset-streak <n>\n"
+        << "                             Consecutive high-residual FLOAT epochs before reset (default: 3)\n"
+        << "  --min-float-prefit-trusted-jump <v>\n"
+        << "                             Require high-residual FLOAT to be this far from last trusted pos\n"
+        << "                             before reset (default: 0, disabled)\n"
+        << "  --max-update-nis-per-obs <v>\n"
+        << "                             Reject DD Kalman update when NIS/active observation exceeds v\n"
+        << "                             (default: 0, disabled)\n"
         << "  --max-postfix-rms <v>      Max L1 post-fix phase residual RMS in meters\n"
         << "                             (default: 0, disabled)\n"
         << "  --enable-wide-lane-ar      Enable MW wide-lane AR pre-step (default: off)\n"
+        << "  --no-wide-lane-ar          Disable MW wide-lane AR, overriding presets\n"
         << "  --wide-lane-threshold <v>  WL float->int threshold in cycles (default: 0.25)\n"
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
         << "                             (default: 0, disabled; e.g. 10 for aggressive urban reconvergence)\n"
+        << "  --max-consec-nonfix-reset <n>\n"
+        << "                             Reset ambiguity state after n consecutive non-FIX epochs\n"
+        << "                             including FLOAT/SPP/no-solution (default: 0, disabled)\n"
+        << "  --no-nonfix-drift-guard   Disable low-speed non-FIX segment drift rejection\n"
+        << "  --nonfix-drift-max-anchor-gap <s>\n"
+        << "                             Max FIX-to-FIX gap for non-FIX drift guard (default: 120)\n"
+        << "  --nonfix-drift-max-anchor-speed <m/s>\n"
+        << "                             Max FIX-anchor speed treated as stationary (default: 1.0)\n"
+        << "  --nonfix-drift-max-residual <m>\n"
+        << "                             Reject non-FIX epochs farther than this from FIX-anchor bridge\n"
+        << "                             in low-speed segments (default: 30)\n"
+        << "  --nonfix-drift-min-horizontal-residual <m>\n"
+        << "                             Require this horizontal bridge residual before rejecting\n"
+        << "                             a non-FIX epoch (default: 0, disabled)\n"
+        << "  --nonfix-drift-min-segment-epochs <n>\n"
+        << "                             Minimum bounded non-FIX segment length to inspect (default: 20)\n"
+        << "  --nonfix-drift-max-segment-epochs <n>\n"
+        << "                             Maximum bounded non-FIX segment length to inspect\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --no-spp-height-step-guard\n"
+        << "                             Disable SPP vertical spike rejection\n"
+        << "  --spp-height-step-min <m>  Minimum SPP height jump rejected (default: 30)\n"
+        << "  --spp-height-step-rate <m/s>\n"
+        << "                             Rate-scaled SPP height jump limit (default: 4)\n"
+        << "  --float-bridge-tail-guard Enable slow FLOAT bridge-tail rejection (default: on)\n"
+        << "  --no-float-bridge-tail-guard\n"
+        << "                             Disable slow FLOAT bridge-tail rejection\n"
+        << "  --float-bridge-tail-max-anchor-gap <s>\n"
+        << "                             Max FIX-to-FIX gap for FLOAT bridge-tail guard (default: 120)\n"
+        << "  --float-bridge-tail-min-anchor-speed <m/s>\n"
+        << "                             Min horizontal FIX-anchor speed for FLOAT bridge-tail guard (default: 0.4)\n"
+        << "  --float-bridge-tail-max-anchor-speed <m/s>\n"
+        << "                             Max horizontal FIX-anchor speed for FLOAT bridge-tail guard (default: 1.0)\n"
+        << "  --float-bridge-tail-max-residual <m>\n"
+        << "                             Reject FLOAT epochs farther than this from FIX-anchor bridge\n"
+        << "                             in slow bounded segments (default: 12)\n"
+        << "  --float-bridge-tail-min-segment-epochs <n>\n"
+        << "                             Minimum bounded FLOAT-tail segment length to inspect (default: 20)\n"
+        << "  --fixed-bridge-burst-guard\n"
+        << "                             Enable short FIX burst bridge-residual rejection (default: off)\n"
+        << "  --no-fixed-bridge-burst-guard\n"
+        << "                             Disable short FIX burst bridge-residual rejection\n"
+        << "  --fixed-bridge-burst-max-anchor-gap <s>\n"
+        << "                             Max FIX-anchor gap for fixed-burst guard (default: 30)\n"
+        << "  --fixed-bridge-burst-min-boundary-gap <s>\n"
+        << "                             Min gap around a short FIX burst (default: 1)\n"
+        << "  --fixed-bridge-burst-max-residual <m>\n"
+        << "                             Reject burst FIX epochs farther than this from FIX bridge (default: 20)\n"
+        << "  --fixed-bridge-burst-max-segment-epochs <n>\n"
+        << "                             Max short FIX segment length to inspect (default: 12)\n"
         << "  --max-baseline-m <v>       Max baseline length in meters (default: 20000)\n"
         << "  --base-ecef <x> <y> <z>    Override base ECEF position in meters\n"
         << "  --skip-epochs <n>          Skip the first n rover epochs before solving\n"
         << "  --max-epochs <n>           Stop after n rover epochs\n"
+        << "  --debug-epoch-log <csv>    Write per-epoch AR/debug telemetry CSV\n"
         << "  --no-kinematic-post-filter Disable the kinematic output post-filter\n"
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
         << "  --verbose                  Print per-epoch progress summary\n"
@@ -462,6 +718,7 @@ RTKTuningPreset parseRTKTuningPreset(const std::string& value, const char* progr
     if (value == "survey") return RTKTuningPreset::SURVEY;
     if (value == "low-cost") return RTKTuningPreset::LOW_COST;
     if (value == "moving-base") return RTKTuningPreset::MOVING_BASE;
+    if (value == "odaiba") return RTKTuningPreset::ODAIBA;
     argumentError("unsupported --preset value: " + value, program_name);
 }
 
@@ -492,6 +749,18 @@ void applyRTKTuningPreset(SolveConfig& config) {
             if (!config.min_satellites_for_ar_set) config.min_satellites_for_ar = 6;
             if (!config.min_hold_count_set) config.min_hold_count = 8;
             if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.4;
+            return;
+        case RTKTuningPreset::ODAIBA:
+            if (!config.ratio_threshold_set) config.ratio_threshold = 3.0;
+            if (!config.has_ar_filter_override) config.enable_ar_filter = true;
+            if (!config.ar_filter_margin_set) config.ar_filter_margin = 0.35;
+            if (!config.min_satellites_for_ar_set) config.min_satellites_for_ar = 6;
+            if (!config.min_hold_count_set) config.min_hold_count = 8;
+            if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.5;
+            if (!config.wide_lane_ar_set) config.enable_wide_lane_ar = true;
+            if (!config.wide_lane_acceptance_threshold_set) {
+                config.wide_lane_acceptance_threshold = 0.12;
+            }
             return;
     }
 }
@@ -552,6 +821,22 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         } else if (arg == "--min-ar-sats" && i + 1 < argc) {
             config.min_satellites_for_ar = std::stoi(argv[++i]);
             config.min_satellites_for_ar_set = true;
+        } else if (arg == "--min-subset-ar-pairs" && i + 1 < argc) {
+            config.min_subset_pairs_for_ar = std::stoi(argv[++i]);
+        } else if (arg == "--min-subset-ar-sats" && i + 1 < argc) {
+            config.min_subset_sats_for_ar = std::stoi(argv[++i]);
+            config.min_subset_sats_for_ar_set = true;
+        } else if (arg == "--min-subset-ar-systems" && i + 1 < argc) {
+            config.min_subset_systems_for_ar = std::stoi(argv[++i]);
+            config.min_subset_systems_for_ar_set = true;
+        } else if (arg == "--min-subset-ar-freqs" && i + 1 < argc) {
+            config.min_subset_frequencies_for_ar = std::stoi(argv[++i]);
+            config.min_subset_frequencies_for_ar_set = true;
+        } else if (arg == "--min-subset-ar-dual-freq-sats" && i + 1 < argc) {
+            config.min_subset_dual_frequency_sats_for_ar = std::stoi(argv[++i]);
+            config.min_subset_dual_frequency_sats_for_ar_set = true;
+        } else if (arg == "--min-full-ratio-for-subset-ar" && i + 1 < argc) {
+            config.min_full_ratio_for_subset_ar = std::stod(argv[++i]);
         } else if (arg == "--min-hold-count" && i + 1 < argc) {
             config.min_hold_count = std::stoi(argv[++i]);
             config.min_hold_count_set = true;
@@ -560,6 +845,18 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.hold_ratio_threshold_set = true;
         } else if (arg == "--elevation-mask-deg" && i + 1 < argc) {
             config.elevation_mask_deg = std::stod(argv[++i]);
+        } else if (arg == "--process-noise-position" && i + 1 < argc) {
+            config.process_noise_position = std::stod(argv[++i]);
+            config.process_noise_position_set = true;
+        } else if (arg == "--process-noise-ambiguity" && i + 1 < argc) {
+            config.process_noise_ambiguity = std::stod(argv[++i]);
+            config.process_noise_ambiguity_set = true;
+        } else if (arg == "--process-noise-iono" && i + 1 < argc) {
+            config.process_noise_iono = std::stod(argv[++i]);
+            config.process_noise_iono_set = true;
+        } else if (arg == "--carrier-phase-sigma" && i + 1 < argc) {
+            config.carrier_phase_sigma = std::stod(argv[++i]);
+            config.carrier_phase_sigma_set = true;
         } else if (arg == "--no-glonass") {
             config.enable_glonass = false;
         } else if (arg == "--no-beidou") {
@@ -583,14 +880,83 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.max_hold_divergence_m = std::stod(argv[++i]);
         } else if (arg == "--max-pos-jump" && i + 1 < argc) {
             config.max_position_jump_m = std::stod(argv[++i]);
+        } else if (arg == "--max-pos-jump-min" && i + 1 < argc) {
+            config.max_position_jump_min_m = std::stod(argv[++i]);
+        } else if (arg == "--max-pos-jump-rate" && i + 1 < argc) {
+            config.max_position_jump_rate_mps = std::stod(argv[++i]);
+        } else if (arg == "--max-float-spp-div" && i + 1 < argc) {
+            config.max_float_spp_divergence_m = std::stod(argv[++i]);
+        } else if (arg == "--max-float-prefit-rms" && i + 1 < argc) {
+            config.max_float_prefit_residual_rms_m = std::stod(argv[++i]);
+        } else if (arg == "--max-float-prefit-max" && i + 1 < argc) {
+            config.max_float_prefit_residual_max_m = std::stod(argv[++i]);
+        } else if (arg == "--max-float-prefit-reset-streak" && i + 1 < argc) {
+            config.max_float_prefit_residual_reset_streak = std::stoi(argv[++i]);
+        } else if (arg == "--min-float-prefit-trusted-jump" && i + 1 < argc) {
+            config.min_float_prefit_residual_trusted_jump_m = std::stod(argv[++i]);
+        } else if (arg == "--max-update-nis-per-obs" && i + 1 < argc) {
+            config.max_update_nis_per_observation = std::stod(argv[++i]);
         } else if (arg == "--max-postfix-rms" && i + 1 < argc) {
             config.max_postfix_residual_rms = std::stod(argv[++i]);
         } else if (arg == "--enable-wide-lane-ar") {
             config.enable_wide_lane_ar = true;
+            config.wide_lane_ar_set = true;
+        } else if (arg == "--no-wide-lane-ar") {
+            config.enable_wide_lane_ar = false;
+            config.wide_lane_ar_set = true;
         } else if (arg == "--wide-lane-threshold" && i + 1 < argc) {
             config.wide_lane_acceptance_threshold = std::stod(argv[++i]);
+            config.wide_lane_acceptance_threshold_set = true;
         } else if (arg == "--max-consec-float-reset" && i + 1 < argc) {
             config.max_consecutive_float_for_reset = std::stoi(argv[++i]);
+        } else if (arg == "--max-consec-nonfix-reset" && i + 1 < argc) {
+            config.max_consecutive_nonfix_for_reset = std::stoi(argv[++i]);
+        } else if (arg == "--no-nonfix-drift-guard") {
+            config.enable_nonfix_drift_guard = false;
+        } else if (arg == "--nonfix-drift-max-anchor-gap" && i + 1 < argc) {
+            config.nonfix_drift_guard_max_anchor_gap_s = std::stod(argv[++i]);
+        } else if (arg == "--nonfix-drift-max-anchor-speed" && i + 1 < argc) {
+            config.nonfix_drift_guard_max_anchor_speed_mps = std::stod(argv[++i]);
+        } else if (arg == "--nonfix-drift-max-residual" && i + 1 < argc) {
+            config.nonfix_drift_guard_max_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--nonfix-drift-min-horizontal-residual" && i + 1 < argc) {
+            config.nonfix_drift_guard_min_horizontal_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--nonfix-drift-min-segment-epochs" && i + 1 < argc) {
+            config.nonfix_drift_guard_min_segment_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--nonfix-drift-max-segment-epochs" && i + 1 < argc) {
+            config.nonfix_drift_guard_max_segment_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--no-spp-height-step-guard") {
+            config.enable_spp_height_step_guard = false;
+        } else if (arg == "--spp-height-step-min" && i + 1 < argc) {
+            config.spp_height_step_guard_min_m = std::stod(argv[++i]);
+        } else if (arg == "--spp-height-step-rate" && i + 1 < argc) {
+            config.spp_height_step_guard_max_rate_mps = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-guard") {
+            config.enable_float_bridge_tail_guard = true;
+        } else if (arg == "--no-float-bridge-tail-guard") {
+            config.enable_float_bridge_tail_guard = false;
+        } else if (arg == "--float-bridge-tail-max-anchor-gap" && i + 1 < argc) {
+            config.float_bridge_tail_guard_max_anchor_gap_s = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-min-anchor-speed" && i + 1 < argc) {
+            config.float_bridge_tail_guard_min_anchor_speed_mps = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-max-anchor-speed" && i + 1 < argc) {
+            config.float_bridge_tail_guard_max_anchor_speed_mps = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-max-residual" && i + 1 < argc) {
+            config.float_bridge_tail_guard_max_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--float-bridge-tail-min-segment-epochs" && i + 1 < argc) {
+            config.float_bridge_tail_guard_min_segment_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--fixed-bridge-burst-guard") {
+            config.enable_fixed_bridge_burst_guard = true;
+        } else if (arg == "--no-fixed-bridge-burst-guard") {
+            config.enable_fixed_bridge_burst_guard = false;
+        } else if (arg == "--fixed-bridge-burst-max-anchor-gap" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_max_anchor_gap_s = std::stod(argv[++i]);
+        } else if (arg == "--fixed-bridge-burst-min-boundary-gap" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_min_boundary_gap_s = std::stod(argv[++i]);
+        } else if (arg == "--fixed-bridge-burst-max-residual" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_max_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--fixed-bridge-burst-max-segment-epochs" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_max_segment_epochs = std::stoi(argv[++i]);
         } else if (arg == "--max-baseline-m" && i + 1 < argc) {
             config.max_baseline_length_m = std::stod(argv[++i]);
         } else if (arg == "--base-ecef" && i + 3 < argc) {
@@ -601,6 +967,8 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.skip_epochs = std::stoi(argv[++i]);
         } else if (arg == "--max-epochs" && i + 1 < argc) {
             config.max_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--debug-epoch-log" && i + 1 < argc) {
+            config.debug_epoch_log_path = argv[++i];
         } else if (arg == "--no-kinematic-post-filter") {
             config.enable_kinematic_post_filter = false;
         } else if (arg == "--no-base-interp") {
@@ -626,6 +994,24 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.min_satellites_for_ar < 4) {
         argumentError("--min-ar-sats must be >= 4", argv[0]);
     }
+    if (config.min_subset_pairs_for_ar < 4) {
+        argumentError("--min-subset-ar-pairs must be >= 4", argv[0]);
+    }
+    if (config.min_subset_sats_for_ar < 0) {
+        argumentError("--min-subset-ar-sats must be >= 0", argv[0]);
+    }
+    if (config.min_subset_systems_for_ar < 0) {
+        argumentError("--min-subset-ar-systems must be >= 0", argv[0]);
+    }
+    if (config.min_subset_frequencies_for_ar < 0) {
+        argumentError("--min-subset-ar-freqs must be >= 0", argv[0]);
+    }
+    if (config.min_subset_dual_frequency_sats_for_ar < 0) {
+        argumentError("--min-subset-ar-dual-freq-sats must be >= 0", argv[0]);
+    }
+    if (config.min_full_ratio_for_subset_ar < 0.0) {
+        argumentError("--min-full-ratio-for-subset-ar must be >= 0", argv[0]);
+    }
     if (config.ar_filter_margin < 0.0) {
         argumentError("--arfilter-margin must be >= 0", argv[0]);
     }
@@ -640,6 +1026,85 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.max_baseline_length_m <= 0.0) {
         argumentError("--max-baseline-m must be > 0", argv[0]);
+    }
+    if (config.max_position_jump_m < 0.0) {
+        argumentError("--max-pos-jump must be >= 0", argv[0]);
+    }
+    if (config.max_position_jump_min_m < 0.0) {
+        argumentError("--max-pos-jump-min must be >= 0", argv[0]);
+    }
+    if (config.max_position_jump_rate_mps < 0.0) {
+        argumentError("--max-pos-jump-rate must be >= 0", argv[0]);
+    }
+    if (config.max_float_spp_divergence_m < 0.0) {
+        argumentError("--max-float-spp-div must be >= 0", argv[0]);
+    }
+    if (config.max_float_prefit_residual_rms_m < 0.0) {
+        argumentError("--max-float-prefit-rms must be >= 0", argv[0]);
+    }
+    if (config.max_float_prefit_residual_max_m < 0.0) {
+        argumentError("--max-float-prefit-max must be >= 0", argv[0]);
+    }
+    if (config.max_float_prefit_residual_reset_streak < 1) {
+        argumentError("--max-float-prefit-reset-streak must be >= 1", argv[0]);
+    }
+    if (config.min_float_prefit_residual_trusted_jump_m < 0.0) {
+        argumentError("--min-float-prefit-trusted-jump must be >= 0", argv[0]);
+    }
+    if (config.max_update_nis_per_observation < 0.0) {
+        argumentError("--max-update-nis-per-obs must be >= 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_max_anchor_gap_s <= 0.0) {
+        argumentError("--nonfix-drift-max-anchor-gap must be > 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_max_anchor_speed_mps < 0.0) {
+        argumentError("--nonfix-drift-max-anchor-speed must be >= 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_max_residual_m <= 0.0) {
+        argumentError("--nonfix-drift-max-residual must be > 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_min_horizontal_residual_m < 0.0) {
+        argumentError("--nonfix-drift-min-horizontal-residual must be >= 0", argv[0]);
+    }
+    if (config.nonfix_drift_guard_min_segment_epochs < 1) {
+        argumentError("--nonfix-drift-min-segment-epochs must be >= 1", argv[0]);
+    }
+    if (config.nonfix_drift_guard_max_segment_epochs < 0) {
+        argumentError("--nonfix-drift-max-segment-epochs must be >= 0", argv[0]);
+    }
+    if (config.spp_height_step_guard_min_m <= 0.0) {
+        argumentError("--spp-height-step-min must be > 0", argv[0]);
+    }
+    if (config.spp_height_step_guard_max_rate_mps < 0.0) {
+        argumentError("--spp-height-step-rate must be >= 0", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_max_anchor_gap_s <= 0.0) {
+        argumentError("--float-bridge-tail-max-anchor-gap must be > 0", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_min_anchor_speed_mps < 0.0) {
+        argumentError("--float-bridge-tail-min-anchor-speed must be >= 0", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_max_anchor_speed_mps <
+        config.float_bridge_tail_guard_min_anchor_speed_mps) {
+        argumentError("--float-bridge-tail-max-anchor-speed must be >= min anchor speed", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_max_residual_m <= 0.0) {
+        argumentError("--float-bridge-tail-max-residual must be > 0", argv[0]);
+    }
+    if (config.float_bridge_tail_guard_min_segment_epochs < 1) {
+        argumentError("--float-bridge-tail-min-segment-epochs must be >= 1", argv[0]);
+    }
+    if (config.fixed_bridge_burst_guard_max_anchor_gap_s <= 0.0) {
+        argumentError("--fixed-bridge-burst-max-anchor-gap must be > 0", argv[0]);
+    }
+    if (config.fixed_bridge_burst_guard_min_boundary_gap_s < 0.0) {
+        argumentError("--fixed-bridge-burst-min-boundary-gap must be >= 0", argv[0]);
+    }
+    if (config.fixed_bridge_burst_guard_max_residual_m <= 0.0) {
+        argumentError("--fixed-bridge-burst-max-residual must be > 0", argv[0]);
+    }
+    if (config.fixed_bridge_burst_guard_max_segment_epochs < 1) {
+        argumentError("--fixed-bridge-burst-max-segment-epochs must be >= 1", argv[0]);
     }
     if (config.skip_epochs < 0) {
         argumentError("--skip-epochs must be >= 0", argv[0]);
@@ -755,8 +1220,27 @@ int main(int argc, char* argv[]) {
         rtk_config.enable_ar_filter = config.enable_ar_filter;
         rtk_config.ar_filter_margin = config.ar_filter_margin;
         rtk_config.min_satellites_for_ar = config.min_satellites_for_ar;
+        rtk_config.min_subset_pairs_for_ar = config.min_subset_pairs_for_ar;
+        rtk_config.min_subset_sats_for_ar = config.min_subset_sats_for_ar;
+        rtk_config.min_subset_systems_for_ar = config.min_subset_systems_for_ar;
+        rtk_config.min_subset_frequencies_for_ar = config.min_subset_frequencies_for_ar;
+        rtk_config.min_subset_dual_frequency_sats_for_ar =
+            config.min_subset_dual_frequency_sats_for_ar;
+        rtk_config.min_full_ratio_for_subset_ar = config.min_full_ratio_for_subset_ar;
         rtk_config.min_hold_count = config.min_hold_count;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;
+        if (config.process_noise_position_set) {
+            rtk_config.process_noise_position = config.process_noise_position;
+        }
+        if (config.process_noise_ambiguity_set) {
+            rtk_config.process_noise_ambiguity = config.process_noise_ambiguity;
+        }
+        if (config.process_noise_iono_set) {
+            rtk_config.process_noise_iono = config.process_noise_iono;
+        }
+        if (config.carrier_phase_sigma_set) {
+            rtk_config.carrier_phase_sigma = config.carrier_phase_sigma;
+        }
         rtk_config.position_mode = resolvePositionMode(config);
         rtk_config.ionoopt = resolveIonoOpt(config, rtk_config.position_mode);
         rtk_config.enable_glonass = config.enable_glonass;
@@ -772,7 +1256,20 @@ int main(int argc, char* argv[]) {
         rtk_config.ar_policy = config.ar_policy;
         rtk_config.max_hold_divergence_m = config.max_hold_divergence_m;
         rtk_config.max_position_jump_m = config.max_position_jump_m;
+        rtk_config.max_position_jump_min_m = config.max_position_jump_min_m;
+        rtk_config.max_position_jump_rate_mps = config.max_position_jump_rate_mps;
+        rtk_config.max_float_spp_divergence_m = config.max_float_spp_divergence_m;
+        rtk_config.max_float_prefit_residual_rms_m =
+            config.max_float_prefit_residual_rms_m;
+        rtk_config.max_float_prefit_residual_max_m =
+            config.max_float_prefit_residual_max_m;
+        rtk_config.max_float_prefit_residual_reset_streak =
+            config.max_float_prefit_residual_reset_streak;
+        rtk_config.min_float_prefit_residual_trusted_jump_m =
+            config.min_float_prefit_residual_trusted_jump_m;
+        rtk_config.max_update_nis_per_observation = config.max_update_nis_per_observation;
         rtk_config.max_consecutive_float_for_reset = config.max_consecutive_float_for_reset;
+        rtk_config.max_consecutive_nonfix_for_reset = config.max_consecutive_nonfix_for_reset;
         rtk_config.max_postfix_residual_rms = config.max_postfix_residual_rms;
         rtk_config.enable_wide_lane_ar = config.enable_wide_lane_ar;
         rtk_config.wide_lane_acceptance_threshold = config.wide_lane_acceptance_threshold;
@@ -782,6 +1279,12 @@ int main(int argc, char* argv[]) {
         spp_config.enable_glonass = config.enable_glonass;
         spp_config.enable_beidou = config.enable_beidou;
         spp_processor.setSPPConfig(spp_config);
+        EpochDebugWriter debug_writer;
+        if (!debug_writer.open(config.debug_epoch_log_path)) {
+            std::cerr << "Error: failed to open debug epoch log: "
+                      << config.debug_epoch_log_path << std::endl;
+            return 1;
+        }
 
         std::cout << "libgnss++ post-process solver" << std::endl;
         std::cout << "  rover: " << config.rover_obs_path << std::endl;
@@ -903,6 +1406,16 @@ int main(int argc, char* argv[]) {
         int exact_base_epochs = 0;
         int interpolated_base_epochs = 0;
         int skipped_rover_epochs = 0;
+        int nonfix_drift_guard_inspected_segments = 0;
+        int nonfix_drift_guard_rejected_segments = 0;
+        int nonfix_drift_guard_rejected_epochs = 0;
+        int spp_height_step_guard_rejected_epochs = 0;
+        int float_bridge_tail_guard_inspected_segments = 0;
+        int float_bridge_tail_guard_rejected_segments = 0;
+        int float_bridge_tail_guard_rejected_epochs = 0;
+        int fixed_bridge_burst_guard_inspected_segments = 0;
+        int fixed_bridge_burst_guard_rejected_segments = 0;
+        int fixed_bridge_burst_guard_rejected_epochs = 0;
         libgnss::PositionSolution last_fixed_output;
         bool have_last_fixed_output = false;
 
@@ -1028,6 +1541,8 @@ int main(int argc, char* argv[]) {
                 }
             }
 
+            debug_writer.write(pos_solution, rtk_processor.getLastDebugTelemetry());
+
             if (pos_solution.isValid()) {
                 solution.addSolution(pos_solution);
                 valid_solution_count++;
@@ -1062,31 +1577,95 @@ int main(int argc, char* argv[]) {
             processed_rover_epochs++;
         }
 
+        if (config.enable_nonfix_drift_guard &&
+            rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
+            !solution.isEmpty()) {
+            libgnss::rtk_validation::NonFixedDriftGuardConfig guard_config;
+            guard_config.max_anchor_gap_s = config.nonfix_drift_guard_max_anchor_gap_s;
+            guard_config.max_anchor_speed_mps = config.nonfix_drift_guard_max_anchor_speed_mps;
+            guard_config.max_residual_m = config.nonfix_drift_guard_max_residual_m;
+            guard_config.min_horizontal_residual_m =
+                config.nonfix_drift_guard_min_horizontal_residual_m;
+            guard_config.min_segment_epochs = config.nonfix_drift_guard_min_segment_epochs;
+            guard_config.max_segment_epochs = config.nonfix_drift_guard_max_segment_epochs;
+            auto guard_result = libgnss::rtk_validation::filterNonFixedStationaryDrift(
+                solution.solutions,
+                guard_config);
+            nonfix_drift_guard_inspected_segments = guard_result.inspected_segments;
+            nonfix_drift_guard_rejected_segments = guard_result.rejected_segments;
+            nonfix_drift_guard_rejected_epochs = guard_result.rejected_epochs;
+            solution.solutions = std::move(guard_result.solutions);
+        }
+
+        if (config.enable_spp_height_step_guard &&
+            rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
+            !solution.isEmpty()) {
+            libgnss::rtk_validation::SppHeightStepGuardConfig guard_config;
+            guard_config.min_step_m = config.spp_height_step_guard_min_m;
+            guard_config.max_rate_mps = config.spp_height_step_guard_max_rate_mps;
+            auto guard_result = libgnss::rtk_validation::filterSppHeightSteps(
+                solution.solutions,
+                guard_config);
+            spp_height_step_guard_rejected_epochs = guard_result.rejected_epochs;
+            solution.solutions = std::move(guard_result.solutions);
+        }
+
+        if (config.enable_float_bridge_tail_guard &&
+            rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
+            !solution.isEmpty()) {
+            libgnss::rtk_validation::FloatBridgeTailGuardConfig guard_config;
+            guard_config.max_anchor_gap_s = config.float_bridge_tail_guard_max_anchor_gap_s;
+            guard_config.min_anchor_speed_mps =
+                config.float_bridge_tail_guard_min_anchor_speed_mps;
+            guard_config.max_anchor_speed_mps =
+                config.float_bridge_tail_guard_max_anchor_speed_mps;
+            guard_config.max_residual_m = config.float_bridge_tail_guard_max_residual_m;
+            guard_config.min_segment_epochs =
+                config.float_bridge_tail_guard_min_segment_epochs;
+            auto guard_result = libgnss::rtk_validation::filterFloatBridgeTail(
+                solution.solutions,
+                guard_config);
+            float_bridge_tail_guard_inspected_segments = guard_result.inspected_segments;
+            float_bridge_tail_guard_rejected_segments = guard_result.rejected_segments;
+            float_bridge_tail_guard_rejected_epochs = guard_result.rejected_epochs;
+            solution.solutions = std::move(guard_result.solutions);
+        }
+
+        if (config.enable_fixed_bridge_burst_guard &&
+            rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
+            !solution.isEmpty()) {
+            libgnss::rtk_validation::FixedBridgeBurstGuardConfig guard_config;
+            guard_config.max_anchor_gap_s = config.fixed_bridge_burst_guard_max_anchor_gap_s;
+            guard_config.min_boundary_gap_s = config.fixed_bridge_burst_guard_min_boundary_gap_s;
+            guard_config.max_residual_m = config.fixed_bridge_burst_guard_max_residual_m;
+            guard_config.max_segment_epochs = config.fixed_bridge_burst_guard_max_segment_epochs;
+            auto guard_result = libgnss::rtk_validation::filterFixedBridgeBursts(
+                solution.solutions,
+                guard_config);
+            fixed_bridge_burst_guard_inspected_segments = guard_result.inspected_segments;
+            fixed_bridge_burst_guard_rejected_segments = guard_result.rejected_segments;
+            fixed_bridge_burst_guard_rejected_epochs = guard_result.rejected_epochs;
+            solution.solutions = std::move(guard_result.solutions);
+        }
+
         if (config.enable_kinematic_post_filter &&
             rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
             !solution.isEmpty()) {
+            // Single-epoch drop on height-step jumps. The previous "suppress
+            // until N consecutive FIXED" cascade was removed because, with
+            // PR #34's state-restore in validateFixedSolution and PR #35's
+            // --max-pos-jump=5.0 default, wrong-FIX is already rejected at
+            // the AR layer. A wrong-FIX occasionally still slipped past and
+            // became `last_kept`, after which the cascade silently dropped
+            // many subsequent valid epochs (truth validation: 92.1% -> 47.8%
+            // coverage). Drop only the offending epoch and leave `last_kept`
+            // pointing at the prior trusted anchor.
             libgnss::Solution filtered_solution;
             filtered_solution.solutions.reserve(solution.solutions.size());
-            bool suppress_until_fix_recovery = false;
-            int recovery_fixed_streak = 0;
             bool have_kept_fixed = false;
             const libgnss::PositionSolution* last_kept = nullptr;
             for (const auto& epoch_solution : solution.solutions) {
                 if (!epoch_solution.isValid()) {
-                    continue;
-                }
-                if (suppress_until_fix_recovery) {
-                    if (epoch_solution.isFixed()) {
-                        recovery_fixed_streak++;
-                        if (recovery_fixed_streak >= kReacquireFixedCount) {
-                            filtered_solution.addSolution(epoch_solution);
-                            last_kept = &filtered_solution.solutions.back();
-                            suppress_until_fix_recovery = false;
-                            recovery_fixed_streak = 0;
-                        }
-                    } else {
-                        recovery_fixed_streak = 0;
-                    }
                     continue;
                 }
 
@@ -1101,8 +1680,8 @@ int main(int argc, char* argv[]) {
                     const double max_height_step =
                         std::max(kDefaultVerticalStepGuardMeters, 4.0 * dt);
                     if (height_step > max_height_step) {
-                        suppress_until_fix_recovery = true;
-                        recovery_fixed_streak = epoch_solution.isFixed() ? 1 : 0;
+                        // Drop this single epoch only; do not advance the
+                        // anchor or trigger a multi-epoch suppression.
                         continue;
                     }
                 }
@@ -1155,6 +1734,30 @@ int main(int argc, char* argv[]) {
         std::cout << "  exact base epochs: " << exact_base_epochs << std::endl;
         std::cout << "  interpolated base epochs: " << interpolated_base_epochs << std::endl;
         std::cout << "  skipped rover epochs: " << skipped_rover_epochs << std::endl;
+        if (rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC) {
+            std::cout << "  non-FIX drift guard: "
+                      << (config.enable_nonfix_drift_guard ? "enabled" : "disabled")
+                      << " inspected_segments=" << nonfix_drift_guard_inspected_segments
+                      << " rejected_segments=" << nonfix_drift_guard_rejected_segments
+                      << " rejected_epochs=" << nonfix_drift_guard_rejected_epochs
+                      << std::endl;
+            std::cout << "  SPP height-step guard: "
+                      << (config.enable_spp_height_step_guard ? "enabled" : "disabled")
+                      << " rejected_epochs=" << spp_height_step_guard_rejected_epochs
+                      << std::endl;
+            std::cout << "  FLOAT bridge-tail guard: "
+                      << (config.enable_float_bridge_tail_guard ? "enabled" : "disabled")
+                      << " inspected_segments=" << float_bridge_tail_guard_inspected_segments
+                      << " rejected_segments=" << float_bridge_tail_guard_rejected_segments
+                      << " rejected_epochs=" << float_bridge_tail_guard_rejected_epochs
+                      << std::endl;
+            std::cout << "  fixed bridge-burst guard: "
+                      << (config.enable_fixed_bridge_burst_guard ? "enabled" : "disabled")
+                      << " inspected_segments=" << fixed_bridge_burst_guard_inspected_segments
+                      << " rejected_segments=" << fixed_bridge_burst_guard_rejected_segments
+                      << " rejected_epochs=" << fixed_bridge_burst_guard_rejected_epochs
+                      << std::endl;
+        }
         if (rtk_config.position_mode == libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
             rover_header.approximate_position.norm() > 0.0 && mean_count > 0) {
             std::cout << "  header vs mean diff: "

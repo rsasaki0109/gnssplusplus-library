@@ -65,9 +65,9 @@ python3 apps/gnss.py replay \
 | `gnss visibility` | Export azimuth/elevation/SNR visibility rows and summary JSON from rover/nav RINEX |
 | `gnss visibility-plot` | Render a visibility CSV into a polar/elevation PNG quick-look |
 | `gnss moving-base-plot` | Render a moving-base solution/reference pair into a baseline/heading PNG quick-look |
-| `gnss moving-base-prepare` | Extract rover/base UBX plus reference CSV from a ROS2 moving-base bag |
+| `gnss moving-base-prepare` | Extract rover/base UBX, reference CSV, and optional receiver CSV from a ROS2 moving-base bag |
 | `gnss moving-base-signoff` | Validate a real moving-base replay/live dataset against per-epoch base/rover reference coordinates |
-| `gnss scorpion-moving-base-signoff` | One-command prepare + BRDC fetch + replay validation for the public SCORPION bag |
+| `gnss scorpion-moving-base-signoff` | One-command prepare + BRDC fetch + replay validation for the public SCORPION bag with receiver side-by-side output |
 | `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` files from local or remote sources |
 | `gnss ppp-products-signoff` | Run static, kinematic, or PPC PPP sign-off with fetched product presets or templates, plus comparison CSV/PNG artifacts |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
@@ -77,7 +77,8 @@ python3 apps/gnss.py replay \
 | `gnss dcb-info` | Inspect `Bias-SINEX` or auxiliary DCB products |
 | `gnss qzss-l6-info` | Inspect direct QZSS L6 frames and export Compact SSR payloads |
 | `gnss web` | Local browser UI for summary JSON, live/moving-base/PPP-product sign-offs, trajectories, moving-base/visibility plots, receiver status, and artifact links |
-| `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya |
+| `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB/commercial receiver side-by-side output |
+| `gnss ppc-coverage-matrix` | Full six-run PPC Tokyo/Nagoya coverage-profile matrix with JSON/Markdown summaries |
 
 ## Local web UI
 
@@ -87,7 +88,7 @@ python3 apps/gnss.py web \
   --rcv-status output/receiver.status.json
 ```
 
-Open `http://127.0.0.1:8085` to inspect benchmark tables, live/moving-base/PPP-product sign-offs, receiver status, moving-base/visibility plots, moving-base history, and linked artifacts/provenance. PPP-product rows include direct links to fetched products, MALIB `.pos`, comparison CSV/PNG, and dataset reference files.
+Open `http://127.0.0.1:8085` to inspect benchmark tables, live/moving-base/PPP-product sign-offs, receiver status, moving-base/visibility plots, moving-base history, commercial receiver side-by-side metrics, and linked artifacts/provenance. PPC and moving-base rows include receiver comparison deltas when their summaries contain commercial receiver results; PPP-product rows include direct links to fetched products, MALIB `.pos`, comparison CSV/PNG, and dataset reference files.
 
 You can also store the same arguments in `configs/web.example.toml` and run:
 
@@ -113,18 +114,23 @@ python3 apps/gnss.py moving-base-prepare \
   --input /datasets/moving_base/2023-06-14T174658Z.zip \
   --rover-ubx-out output/moving_base_rover.ubx \
   --base-ubx-out output/moving_base_base.ubx \
-  --reference-csv output/moving_base_reference.csv
+  --reference-csv output/moving_base_reference.csv \
+  --commercial-csv output/commercial_receiver_solution.csv
 
 python3 apps/gnss.py fetch-products \
   --date 2023-06-14 \
   --preset brdc-nav
 
 python3 apps/gnss.py scorpion-moving-base-signoff \
-  --input /datasets/moving_base/2023-06-14T174658Z.zip \
   --summary-json output/scorpion_moving_base_summary.json
 
 python3 apps/gnss.py moving-base-signoff \
   --config-toml configs/moving_base_signoff.example.toml
+
+python3 apps/gnss.py moving-base-signoff \
+  --config-toml configs/moving_base_signoff.example.toml \
+  --commercial-pos output/commercial_receiver_solution.csv \
+  --commercial-matched-csv output/commercial_receiver_matches.csv
 
 python3 apps/gnss.py live-signoff \
   --config-toml configs/live_signoff.example.toml

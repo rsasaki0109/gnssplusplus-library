@@ -62,6 +62,19 @@ struct PositionSolution {
     double processing_time_ms = 0.0; ///< Processing time in milliseconds
     int iterations = 0;             ///< Number of iterations
     double residual_rms = 0.0;      ///< RMS of residuals
+
+    // RTK update diagnostics from the latest DD measurement update.
+    int rtk_update_observations = 0;
+    int rtk_update_phase_observations = 0;
+    int rtk_update_code_observations = 0;
+    int rtk_update_suppressed_outliers = 0;
+    double rtk_update_prefit_residual_rms_m = 0.0;
+    double rtk_update_prefit_residual_max_m = 0.0;
+    double rtk_update_post_suppression_residual_rms_m = 0.0;
+    double rtk_update_post_suppression_residual_max_m = 0.0;
+    double rtk_update_normalized_innovation_squared = 0.0;
+    double rtk_update_normalized_innovation_squared_per_observation = 0.0;
+    int rtk_update_rejected_by_innovation_gate = 0;
     
     // Satellite information
     std::vector<SatelliteId> satellites_used;

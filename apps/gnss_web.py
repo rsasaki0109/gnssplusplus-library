@@ -170,6 +170,15 @@ def normalize_artifact_path(root_dir: Path, value: Any) -> str | None:
         return None
 
 
+def normalize_commercial_receiver(root_dir: Path, payload: Any) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+    normalized = dict(payload)
+    for key in ("solution_pos", "matched_csv"):
+        normalized[key] = normalize_artifact_path(root_dir, normalized.get(key))
+    return normalized
+
+
 def resolve_under_root(root_dir: Path, path_text: str) -> Path:
     candidate = Path(path_text)
     if not candidate.is_absolute():
@@ -266,6 +275,18 @@ def classify_ppp_products_status(
     return "warming"
 
 
+def classify_comparison_status(*deltas: Any) -> str | None:
+    numeric = [float(value) for value in deltas if isinstance(value, (int, float))]
+    if not numeric:
+        return None
+    worst = max(numeric)
+    if worst <= 0.0:
+        return "better"
+    if worst <= 0.25:
+        return "close"
+    return "worse"
+
+
 def downsample_points(points: list[dict[str, Any]], limit: int = MAX_RENDER_POINTS) -> list[dict[str, Any]]:
     if len(points) <= limit:
         return points
@@ -353,6 +374,18 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         payload["_path"] = relative_display(path, root_dir)
         payload["runtime_status"] = classify_realtime_status(payload.get("realtime_factor"))
         payload["quality_status"] = classify_accuracy_status(payload.get("p95_h_m"))
+        commercial_receiver = normalize_commercial_receiver(root_dir, payload.get("commercial_receiver"))
+        commercial_delta = payload.get("delta_vs_commercial_receiver")
+        if not isinstance(commercial_delta, dict):
+            commercial_delta = None
+        if commercial_receiver is not None:
+            payload["commercial_receiver"] = commercial_receiver
+            payload["commercial_comparison_status"] = classify_comparison_status(
+                commercial_delta.get("median_h_m") if commercial_delta else None,
+                commercial_delta.get("p95_h_m") if commercial_delta else None,
+                commercial_delta.get("max_h_m") if commercial_delta else None,
+                commercial_delta.get("p95_abs_up_m") if commercial_delta else None,
+            )
         ppc_summaries.append(payload)
 
     live_summaries: list[dict[str, Any]] = []
@@ -424,6 +457,10 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         payload = load_json(path)
         if payload is None:
             continue
+        commercial_receiver = normalize_commercial_receiver(root_dir, payload.get("commercial_receiver"))
+        commercial_delta = payload.get("libgnss_vs_commercial_receiver")
+        if not isinstance(commercial_delta, dict):
+            commercial_delta = None
         moving_base_summaries.append(
             {
                 "_path": relative_display(path, root_dir),
@@ -444,6 +481,22 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
                 "prepare_summary_json": normalize_artifact_path(root_dir, payload.get("prepare_summary_json")),
                 "products_summary_json": normalize_artifact_path(root_dir, payload.get("products_summary_json")),
                 "plot_png": normalize_artifact_path(root_dir, payload.get("plot_png")),
+                "commercial_receiver_csv": normalize_artifact_path(
+                    root_dir,
+                    payload.get("commercial_receiver_csv"),
+                ),
+                "commercial_receiver_matched_csv": normalize_artifact_path(
+                    root_dir,
+                    payload.get("commercial_receiver_matched_csv"),
+                ),
+                "commercial_receiver": commercial_receiver,
+                "libgnss_vs_commercial_receiver": commercial_delta,
+                "commercial_comparison_status": classify_comparison_status(
+                    commercial_delta.get("median_baseline_error_m_delta") if commercial_delta else None,
+                    commercial_delta.get("p95_baseline_error_m_delta") if commercial_delta else None,
+                    commercial_delta.get("max_baseline_error_m_delta") if commercial_delta else None,
+                    commercial_delta.get("p95_heading_error_deg_delta") if commercial_delta else None,
+                ),
                 "signoff_profile": payload.get("signoff_profile"),
                 "nav_rinex": normalize_artifact_path(root_dir, payload.get("nav_rinex")),
                 "input": normalize_artifact_path(root_dir, payload.get("input")),
@@ -765,9 +818,13 @@ def render_html() -> str:
           <tr>
             <th>Path</th>
             <th>Matched</th>
+            <th>Positioning</th>
             <th>Fix rate</th>
+            <th>3D50/ref</th>
             <th>Median H</th>
             <th>P95 H</th>
+            <th>Receiver</th>
+            <th>Δ receiver</th>
             <th>Quality</th>
             <th>Realtime</th>
             <th>Wall</th>
@@ -795,6 +852,8 @@ def render_html() -> str:
                 <th>Fix rate</th>
                 <th>P95 baseline</th>
                 <th>P95 heading</th>
+                <th>Receiver</th>
+                <th>Δ receiver</th>
                 <th>Quality</th>
                 <th>Realtime</th>
                 <th>Rate</th>
@@ -1203,6 +1262,66 @@ def render_html() -> str:
       return `<span class="badge ${className}">${normalized}</span>`;
     }
 
+    function commercialReceiverArtifactLinks(row) {
+      const receiver = row.commercial_receiver || {};
+      const solution = receiver.solution_pos || row.commercial_receiver_csv;
+      const matches = receiver.matched_csv || row.commercial_receiver_matched_csv;
+      return [
+        solution ? artifactLink(solution, "receiver") : null,
+        matches ? artifactLink(matches, "receiver-matches") : null,
+      ].filter(Boolean);
+    }
+
+    function commercialReceiverSummary(row, mode) {
+      const receiver = row.commercial_receiver;
+      if (!receiver) return "n/a";
+      const metric = mode === "moving-base"
+        ? `p95 ${formatMaybeNumber(receiver.p95_baseline_error_m, 3, " m")}`
+        : `p95 H ${formatMaybeNumber(receiver.p95_h_m, 3, " m")}`;
+      const bits = [
+        receiver.label || "receiver",
+        `${receiver.matched_epochs ?? "n/a"} matched`,
+        `fix ${formatMaybeNumber(receiver.fix_rate_pct, 2, "%")}`,
+        metric,
+      ].filter(Boolean);
+      const links = commercialReceiverArtifactLinks(row);
+      return `${bits.join(" / ")}${links.length ? `<br><span class="tiny">${links.join(" / ")}</span>` : ""}`;
+    }
+
+    function commercialDeltaSummary(delta, mode, status) {
+      if (!delta) return "n/a";
+      const bits = [];
+      if (mode === "moving-base") {
+        if (delta.fix_rate_pct_delta !== null && delta.fix_rate_pct_delta !== undefined) {
+          bits.push(`Δfix ${formatMaybeNumber(delta.fix_rate_pct_delta, 2, "%")}`);
+        }
+        if (delta.median_baseline_error_m_delta !== null && delta.median_baseline_error_m_delta !== undefined) {
+          bits.push(`Δmedian ${formatMaybeNumber(delta.median_baseline_error_m_delta, 3, " m")}`);
+        }
+        if (delta.p95_baseline_error_m_delta !== null && delta.p95_baseline_error_m_delta !== undefined) {
+          bits.push(`Δp95 ${formatMaybeNumber(delta.p95_baseline_error_m_delta, 3, " m")}`);
+        }
+        if (delta.p95_heading_error_deg_delta !== null && delta.p95_heading_error_deg_delta !== undefined) {
+          bits.push(`Δhead ${formatMaybeNumber(delta.p95_heading_error_deg_delta, 2, " deg")}`);
+        }
+      } else {
+        if (delta.fix_rate_pct !== null && delta.fix_rate_pct !== undefined) {
+          bits.push(`Δfix ${formatMaybeNumber(delta.fix_rate_pct, 2, "%")}`);
+        }
+        if (delta.median_h_m !== null && delta.median_h_m !== undefined) {
+          bits.push(`Δmedian ${formatMaybeNumber(delta.median_h_m, 3, " m")}`);
+        }
+        if (delta.p95_h_m !== null && delta.p95_h_m !== undefined) {
+          bits.push(`Δp95 ${formatMaybeNumber(delta.p95_h_m, 3, " m")}`);
+        }
+        if (delta.p95_abs_up_m !== null && delta.p95_abs_up_m !== undefined) {
+          bits.push(`Δup95 ${formatMaybeNumber(delta.p95_abs_up_m, 3, " m")}`);
+        }
+      }
+      if (status) bits.push(renderBadge(status));
+      return bits.length ? bits.join(" / ") : "n/a";
+    }
+
     function bundleMetricSummary(bundle) {
       if (!bundle || !bundle.metrics) return "";
       const metrics = bundle.metrics;
@@ -1352,9 +1471,13 @@ def render_html() -> str:
         tr.innerHTML = `
           <td>${row._path || "n/a"}</td>
           <td>${row.matched_epochs ?? "n/a"}</td>
+          <td>${formatMaybeNumber(row.positioning_rate_pct, 2, "%")}</td>
           <td>${formatMaybeNumber(row.fix_rate_pct, 2, "%")}</td>
+          <td>${formatMaybeNumber(row.ppc_score_3d_50cm_ref_pct, 2, "%")}</td>
           <td>${formatMaybeNumber(row.median_h_m, 3, " m")}</td>
           <td>${formatMaybeNumber(row.p95_h_m, 2, " m")}</td>
+          <td>${commercialReceiverSummary(row, "ppc")}</td>
+          <td>${commercialDeltaSummary(row.delta_vs_commercial_receiver, "ppc", row.commercial_comparison_status)}</td>
           <td>${renderBadge(row.quality_status)}</td>
           <td>${renderBadge(row.runtime_status)} ${formatMaybeNumber(row.realtime_factor, 2, "x")}</td>
           <td>${formatMaybeNumber(row.solver_wall_time_s, 2, " s")}</td>
@@ -1374,6 +1497,7 @@ def render_html() -> str:
           row.input ? artifactLink(row.input, "input") : null,
           row.input_url ? smartLink(row.input_url, "source") : null,
           row.plot_png ? artifactLink(row.plot_png, "plot") : null,
+          ...commercialReceiverArtifactLinks(row),
         ].filter(Boolean).join(" / ");
         const tr = document.createElement("tr");
         tr.innerHTML = `
@@ -1382,6 +1506,8 @@ def render_html() -> str:
           <td>${formatMaybeNumber(row.fix_rate_pct, 2, "%")}</td>
           <td>${formatMaybeNumber(row.p95_baseline_error_m, 3, " m")}</td>
           <td>${formatMaybeNumber(row.p95_heading_error_deg, 2, " deg")}</td>
+          <td>${commercialReceiverSummary(row, "moving-base")}</td>
+          <td>${commercialDeltaSummary(row.libgnss_vs_commercial_receiver, "moving-base", row.commercial_comparison_status)}</td>
           <td>${renderBadge(row.quality_status)}</td>
           <td>${renderBadge(row.runtime_status)} ${formatMaybeNumber(row.realtime_factor, 2, "x")}</td>
           <td>${formatMaybeNumber(row.effective_epoch_rate_hz, 2, " Hz")}</td>
@@ -1393,14 +1519,29 @@ def render_html() -> str:
       const movingBaseProvenance = document.getElementById("moving-base-provenance");
       const firstMovingBase = (overview.moving_base_summaries || []).find((row) => row.plot_png);
       if (firstMovingBase) {
-        renderMetricGrid(movingBaseMetrics, [
+        const metricEntries = [
           ["matched", firstMovingBase.matched_epochs ?? "n/a"],
           ["fix rate", formatMaybeNumber(firstMovingBase.fix_rate_pct, 2, "%")],
           ["p95 baseline", formatMaybeNumber(firstMovingBase.p95_baseline_error_m, 3, " m")],
           ["p95 heading", formatMaybeNumber(firstMovingBase.p95_heading_error_deg, 2, " deg")],
           ["realtime", formatMaybeNumber(firstMovingBase.realtime_factor, 2, "x")],
           ["epoch rate", formatMaybeNumber(firstMovingBase.effective_epoch_rate_hz, 2, " Hz")],
-        ]);
+        ];
+        if (firstMovingBase.commercial_receiver) {
+          metricEntries.push(
+            ["receiver fix", formatMaybeNumber(firstMovingBase.commercial_receiver.fix_rate_pct, 2, "%")],
+            ["receiver p95", formatMaybeNumber(firstMovingBase.commercial_receiver.p95_baseline_error_m, 3, " m")]
+          );
+        }
+        if (firstMovingBase.libgnss_vs_commercial_receiver) {
+          metricEntries.push(
+            [
+              "Δ receiver p95",
+              formatMaybeNumber(firstMovingBase.libgnss_vs_commercial_receiver.p95_baseline_error_m_delta, 3, " m"),
+            ]
+          );
+        }
+        renderMetricGrid(movingBaseMetrics, metricEntries);
         movingBaseProvenance.innerHTML = [
           firstMovingBase.summary_path ? artifactLink(firstMovingBase.summary_path, "summary") : null,
           firstMovingBase.prepare_summary_json ? artifactLink(firstMovingBase.prepare_summary_json, "prepare") : null,
@@ -1408,6 +1549,7 @@ def render_html() -> str:
           firstMovingBase.nav_rinex ? artifactLink(firstMovingBase.nav_rinex, "nav") : null,
           firstMovingBase.input ? artifactLink(firstMovingBase.input, "input") : null,
           firstMovingBase.input_url ? smartLink(firstMovingBase.input_url, "source") : null,
+          ...commercialReceiverArtifactLinks(firstMovingBase),
         ].filter(Boolean).join(" / ");
       } else {
         renderMetricGrid(movingBaseMetrics, [["status", "n/a"], ["summary", "unavailable"]]);

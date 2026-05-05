@@ -10,8 +10,10 @@
 #include "rtk_validation.hpp"
 #include "spp.hpp"
 #include <Eigen/Dense>
+#include <limits>
 #include <mutex>
 #include <set>
+#include <string>
 
 namespace libgnss {
 
@@ -79,8 +81,8 @@ public:
         int kf_iterations = 4;                       // more iterations for position convergence
 
         // Measurement noise
-        double pseudorange_sigma = 0.3;           // m (RTKLIB eratio=100: 100*carrier_phase_sigma)
-        double carrier_phase_sigma = 0.003;       // m (instrument noise)
+        double pseudorange_sigma = 0.3;           // m (eratio = pseudorange_sigma / carrier_phase_sigma = 150)
+        double carrier_phase_sigma = 0.002;       // m (instrument noise)
 
         // Quality control
         bool enable_cycle_slip_detection = true;
@@ -109,18 +111,91 @@ public:
         enum class ARPolicy { EXTENDED, DEMO5_CONTINUOUS };
         ARPolicy ar_policy = ARPolicy::EXTENDED;
 
+        /// Minimum DD ambiguity pairs allowed for subset/partial AR candidates.
+        /// 4 (default) preserves the existing partial AR search behavior.
+        int min_subset_pairs_for_ar = 4;
+
+        /// Minimum distinct non-reference satellites required for subset AR.
+        /// 0 (default) disables the gate and preserves existing subset behavior.
+        int min_subset_sats_for_ar = 0;
+
+        /// Minimum distinct constellations required for subset AR.
+        /// 0 (default) disables the gate and preserves existing subset behavior.
+        int min_subset_systems_for_ar = 0;
+
+        /// Minimum distinct frequencies required for subset AR.
+        /// 0 (default) disables the gate and preserves existing subset behavior.
+        int min_subset_frequencies_for_ar = 0;
+
+        /// Minimum non-reference satellites represented on at least two frequencies.
+        /// 0 (default) disables the gate and preserves existing subset behavior.
+        int min_subset_dual_frequency_sats_for_ar = 0;
+
+        /// Minimum full-set LAMBDA ratio required before accepting subset AR.
+        /// 0 (default) disables the gate and preserves existing subset behavior.
+        double min_full_ratio_for_subset_ar = 0.0;
+
         /// Max hold fix divergence from float baseline in meters.
         /// 0 (default) disables the check — existing behavior preserved.
         double max_hold_divergence_m = 0.0;
 
         /// Max AR fix position jump from last fixed position in meters.
         /// Applied in addition to the history-based exceedsFixHistoryJump check.
-        /// 0 (default) disables the check — existing behavior preserved.
-        double max_position_jump_m = 0.0;
+        /// Default 5.0m: rejects wrong-FIX with implausible position jumps.
+        /// Set to 0 to disable.
+        double max_position_jump_m = 5.0;
+
+        /// Adaptive max AR fix jump from last fixed position.
+        /// When max_position_jump_rate_mps > 0, accepted jump is
+        /// max(max_position_jump_min_m, max_position_jump_rate_mps * dt).
+        /// Disabled by default to preserve existing behavior.
+        double max_position_jump_min_m = 0.0;
+        double max_position_jump_rate_mps = 0.0;
+
+        /// Max FLOAT solution divergence from same-epoch SPP in meters.
+        /// When > 0, FLOAT epochs farther than this from the current SPP
+        /// solution fall back to SPP/no-solution. 0 (default) disables the
+        /// diagnostic gate and preserves existing behavior.
+        double max_float_spp_divergence_m = 0.0;
+
+        /// Max accepted FLOAT prefit DD residual RMS in meters.
+        /// When > 0, high-residual FLOAT epochs are still reported as FLOAT,
+        /// but ambiguity states are reset for the next epoch's reacquisition.
+        /// 0 (default) disables the diagnostic gate.
+        double max_float_prefit_residual_rms_m = 0.0;
+
+        /// Max accepted FLOAT prefit DD residual magnitude in meters.
+        /// When > 0, high-residual FLOAT epochs are still reported as FLOAT,
+        /// but ambiguity states are reset for the next epoch's reacquisition.
+        /// 0 (default) disables the diagnostic gate.
+        double max_float_prefit_residual_max_m = 0.0;
+
+        /// Number of consecutive high-residual FLOAT epochs before resetting
+        /// ambiguity states. Used only when a FLOAT prefit residual threshold
+        /// is enabled. Defaults to 3 to avoid reacting to isolated multipath
+        /// residual spikes.
+        int max_float_prefit_residual_reset_streak = 3;
+
+        /// Minimum FLOAT position jump from the last trusted FIX/FLOAT state
+        /// before a high-prefit-residual reset is allowed. 0 (default)
+        /// preserves the residual-only behavior when the residual gate is
+        /// enabled.
+        double min_float_prefit_residual_trusted_jump_m = 0.0;
+
+        /// Reject a whole RTK DD Kalman update when normalized innovation
+        /// squared divided by active observations exceeds this threshold.
+        /// 0 (default) disables the update gate.
+        double max_update_nis_per_observation = 0.0;
 
         /// Reset ambiguity state after N consecutive float epochs (aggressive reconvergence).
         /// 0 (default) disables the check — existing behavior preserved.
         int max_consecutive_float_for_reset = 0;
+
+        /// Reset ambiguity state after N consecutive non-FIX epochs.
+        /// Counts FLOAT, SPP fallback, and no-solution epochs, so urban dropouts
+        /// can force a clean ambiguity reacquisition even when FLOAT streaks are
+        /// broken by fallback epochs. 0 (default) disables the check.
+        int max_consecutive_nonfix_for_reset = 0;
 
         /// Max L1 post-fix phase residual RMS in meters.
         /// Computed after the LAMBDA fix is obtained, using the fixed DD ambiguities.
@@ -138,6 +213,73 @@ public:
         /// |WL_float - round(WL_float)| < threshold → fix. 0.25 is the worktree
         /// default; only referenced when enable_wide_lane_ar = true.
         double wide_lane_acceptance_threshold = 0.25;
+    };
+
+    /// Reason why AR was silently skipped or failed in resolveAmbiguities().
+    /// NONE means AR either succeeded or is not yet attempted this epoch.
+    enum class ARSkipReason {
+        NONE = 0,
+        FILTER_NOT_INIT,
+        ESTIMATED_IONO_MODE,
+        DD_PAIRS_LT_4_BEFORE_VAR_FILTER,
+        DD_PAIRS_LT_4_AFTER_VAR_FILTER,
+        LAMBDA_FAILED,
+        RATIO_COMPUTATION_FAILED,
+    };
+
+    /// Convert ARSkipReason to a short ASCII string suitable for CSV output.
+    static const char* arSkipReasonToString(ARSkipReason reason) {
+        switch (reason) {
+            case ARSkipReason::NONE:                           return "none";
+            case ARSkipReason::FILTER_NOT_INIT:                return "filter_not_init";
+            case ARSkipReason::ESTIMATED_IONO_MODE:            return "estimated_iono_mode";
+            case ARSkipReason::DD_PAIRS_LT_4_BEFORE_VAR_FILTER: return "dd_lt4_before_var";
+            case ARSkipReason::DD_PAIRS_LT_4_AFTER_VAR_FILTER:  return "dd_lt4_after_var";
+            case ARSkipReason::LAMBDA_FAILED:                  return "lambda_failed";
+            case ARSkipReason::RATIO_COMPUTATION_FAILED:       return "ratio_computation_failed";
+            default:                                           return "unknown";
+        }
+    }
+
+    struct EpochDebugTelemetry {
+        bool ar_attempted = false;
+        int input_pair_count = 0;
+        int pair_count = 0;
+        double max_ambiguity_variance = std::numeric_limits<double>::quiet_NaN();
+        double effective_ratio_threshold = std::numeric_limits<double>::quiet_NaN();
+        int min_subset_pair_count = 0;
+        double min_full_ratio_for_subset_ar = std::numeric_limits<double>::quiet_NaN();
+        int subset_candidates_evaluated = 0;
+        int subset_candidates_rejected_by_full_ratio = 0;
+        int subset_candidates_rejected_by_diversity = 0;
+
+        int wide_lane_total = 0;
+        int wide_lane_fixed = 0;
+        int wide_lane_rejected = 0;
+        double wide_lane_min_distance = std::numeric_limits<double>::quiet_NaN();
+        double wide_lane_max_distance = std::numeric_limits<double>::quiet_NaN();
+
+        bool full_lambda_solved = false;
+        double full_ratio = std::numeric_limits<double>::quiet_NaN();
+        bool selected_fixed = false;
+        double selected_ratio = std::numeric_limits<double>::quiet_NaN();
+        int selected_pair_count = 0;
+        int selected_distinct_sats = 0;
+        int selected_distinct_systems = 0;
+        int selected_distinct_frequencies = 0;
+        int selected_dual_frequency_sats = 0;
+        int selected_fixed_ambiguities = 0;
+        bool selected_used_subset = false;
+        bool used_wlnl_fallback = false;
+
+        bool validation_attempted = false;
+        bool validation_passed = false;
+        double postfix_residual_rms = std::numeric_limits<double>::quiet_NaN();
+        double fixed_float_jump_m = std::numeric_limits<double>::quiet_NaN();
+        bool post_validation_rejected = false;
+        bool final_fixed_applied = false;
+        std::string reject_reason;
+        ARSkipReason ar_skip_reason{ARSkipReason::NONE};
     };
 
     RTKProcessor();
@@ -162,6 +304,7 @@ public:
 
     void setRTKConfig(const RTKConfig& config);
     const RTKConfig& getRTKConfig() const { return rtk_config_; }
+    const EpochDebugTelemetry& getLastDebugTelemetry() const { return debug_telemetry_; }
 
 public:
     bool lambdaMethod(const VectorXd& float_ambiguities,
@@ -175,6 +318,7 @@ public:
 private:
     RTKConfig rtk_config_;
     SPPProcessor spp_processor_;
+    EpochDebugTelemetry debug_telemetry_;
 
     Vector3d base_position_;
     bool base_position_known_ = false;
@@ -249,6 +393,8 @@ private:
     // Last validated fixed position (for position reset in next epoch)
     Vector3d last_fixed_position_ = Vector3d::Zero();
     bool has_last_fixed_position_ = false;
+    GNSSTime last_fixed_time_;
+    bool has_last_fixed_time_ = false;
     Vector3d last_solution_position_ = Vector3d::Zero();
     bool has_last_solution_position_ = false;
     Vector3d last_trusted_position_ = Vector3d::Zero();
@@ -259,6 +405,12 @@ private:
 
     // Consecutive float tracking for ambiguity auto-reset gate
     int consecutive_float_count_ = 0;
+
+    // Consecutive non-FIX tracking for ambiguity auto-reset gate
+    int consecutive_nonfix_count_ = 0;
+
+    // Consecutive high-residual FLOAT tracking for residual-aware reacquisition
+    int consecutive_high_float_residual_count_ = 0;
 
     // Last fix data for holdamb
     struct DDPair {
@@ -271,6 +423,8 @@ private:
     struct HoldStateSnapshot {
         Vector3d last_fixed_position = Vector3d::Zero();
         bool has_last_fixed_position = false;
+        GNSSTime last_fixed_time;
+        bool has_last_fixed_time = false;
         std::vector<DDPair> dd_pairs;
         std::vector<int> best_subset;
         VectorXd dd_fixed;
@@ -296,6 +450,22 @@ private:
     size_t total_epochs_processed_ = 0;
     size_t fixed_solutions_ = 0;
     size_t float_solutions_ = 0;
+
+    struct RTKUpdateDiagnostics {
+        int iterations = 0;
+        int observation_count = 0;
+        int phase_observation_count = 0;
+        int code_observation_count = 0;
+        int suppressed_outliers = 0;
+        double prefit_residual_rms_m = 0.0;
+        double prefit_residual_max_m = 0.0;
+        double post_suppression_residual_rms_m = 0.0;
+        double post_suppression_residual_max_m = 0.0;
+        double normalized_innovation_squared = 0.0;
+        double normalized_innovation_squared_per_observation = 0.0;
+        bool rejected_by_innovation_gate = false;
+    };
+    RTKUpdateDiagnostics current_update_diagnostics_;
 
     // Satellite data for current epoch
     struct SatelliteData {
@@ -390,6 +560,24 @@ private:
      */
     void handleConsecutiveFloatReset(const ObservationData& rover_obs,
                                      const NavigationData& nav);
+    void resetAmbiguityStatesForReacquisition(const ObservationData& rover_obs,
+                                              const NavigationData& nav);
+    bool floatResidualExceedsReacquisitionGate() const;
+    bool floatResidualTrustedJumpPassesGate(
+        const PositionSolution& float_solution,
+        const Vector3d& saved_last_trusted_position,
+        bool saved_has_last_trusted,
+        const GNSSTime& saved_last_trusted_time,
+        bool saved_has_last_trusted_time) const;
+    bool shouldResetAfterFloatResidualGate(
+        const PositionSolution& float_solution,
+        const Vector3d& saved_last_trusted_position,
+        bool saved_has_last_trusted,
+        const GNSSTime& saved_last_trusted_time,
+        bool saved_has_last_trusted_time);
+    void recordFixedEpoch();
+    void recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav);
+    void recordFallbackEpoch(const ObservationData& rover_obs, const NavigationData& nav);
 
     /**
      * Full KF update with DD observation model mapping to SD states
@@ -419,7 +607,8 @@ private:
     /**
      * Validate fixed solution with post-fit residual check (RTKLIB valpos)
      */
-    bool validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data);
+    bool validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data,
+                               const GNSSTime& current_time);
 
     /**
      * Hold ambiguities after consecutive fixes (RTKLIB holdamb)
