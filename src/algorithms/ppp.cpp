@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <cmath>
 #include <ctime>
@@ -1753,22 +1754,29 @@ bool PPPProcessor::loadL6Products(const std::string& l6_file) {
     int gps_week = ppp_config_.l6_gps_week > 0 ? ppp_config_.l6_gps_week : last_obs_gps_week_;
     if (gps_week <= 0) gps_week = 2068;
 
-    // Try Python expander first
-    const std::string tmp_csv = "/tmp/gnsspp_l6_expanded_" +
-        std::to_string(std::hash<std::string>{}(l6_file)) + ".csv";
-    const std::string cmd =
-        "python3 -c \""
-        "import sys; sys.path.insert(0, 'apps'); "
-        "from pathlib import Path; "
-        "from gnss_clas_ppp import expand_qzss_l6_source; "
-        "expand_qzss_l6_source('" + l6_file + "', " +
-        std::to_string(gps_week) + ", Path('" + tmp_csv + "'))\" 2>/dev/null";
+    const char* force_native_raw = std::getenv("GNSS_PPP_QZSS_L6_FORCE_NATIVE");
+    const bool force_native =
+        force_native_raw != nullptr && *force_native_raw != '\0' &&
+        std::string(force_native_raw) != "0";
 
-    const int ret = std::system(cmd.c_str());
-    if (ret == 0) {
-        ssr_products_loaded_ = ssr_products_.loadCSVFile(tmp_csv);
-        if (ssr_products_loaded_) {
-            return true;
+    if (!force_native) {
+        // Try Python expander first
+        const std::string tmp_csv = "/tmp/gnsspp_l6_expanded_" +
+            std::to_string(std::hash<std::string>{}(l6_file)) + ".csv";
+        const std::string cmd =
+            "python3 -c \""
+            "import sys; sys.path.insert(0, 'apps'); "
+            "from pathlib import Path; "
+            "from gnss_clas_ppp import expand_qzss_l6_source; "
+            "expand_qzss_l6_source('" + l6_file + "', " +
+            std::to_string(gps_week) + ", Path('" + tmp_csv + "'))\" 2>/dev/null";
+
+        const int ret = std::system(cmd.c_str());
+        if (ret == 0) {
+            ssr_products_loaded_ = ssr_products_.loadCSVFile(tmp_csv);
+            if (ssr_products_loaded_) {
+                return true;
+            }
         }
     }
 
@@ -4169,6 +4177,10 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
         return false;
     }
 
+    const int ar_min_lock = ssr_products_loaded_ ?
+        std::min(ppp_config_.convergence_min_epochs, 10) :
+        ppp_config_.convergence_min_epochs;
+
     if (pppDebugEnabled()) {
         int total_amb = 0, ready_amb = 0;
         for (const auto& [satellite, state_index] : filter_state_.ambiguity_indices) {
@@ -4176,7 +4188,7 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
             const auto amb_it = ambiguity_states_.find(satellite);
             if (amb_it != ambiguity_states_.end()) {
                 const auto& a = amb_it->second;
-                if (!a.needs_reinitialization && a.lock_count >= ppp_config_.convergence_min_epochs &&
+                if (!a.needs_reinitialization && a.lock_count >= ar_min_lock &&
                     std::isfinite(a.ambiguity_scale_m) && a.ambiguity_scale_m > 0.0) {
                     ++ready_amb;
                 }
@@ -4184,7 +4196,7 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
         }
         std::cerr << "[PPP-AR-DBG] total_amb=" << total_amb
                   << " ready=" << ready_amb
-                  << " min_epochs=" << ppp_config_.convergence_min_epochs << "\n";
+                  << " ar_min_lock=" << ar_min_lock << "\n";
     }
 
     if (ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL) {
@@ -4298,9 +4310,6 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
 
     // DD_IFLC / DD_PER_FREQ / DD_MADOCA_CASCADED fall through to DD LAMBDA.
 
-    const int ar_min_lock = ssr_products_loaded_ ?
-        std::min(ppp_config_.convergence_min_epochs, 10) :
-        ppp_config_.convergence_min_epochs;
     const auto eligible_ambiguities = ppp_ar::collectEligibleAmbiguities(
         filter_state_, ambiguity_states_, ar_min_lock);
 
@@ -4386,7 +4395,9 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
         ambiguity_states_,
         eligible_ambiguities,
         real_satellite_elevations,
-        pppDebugEnabled());
+        pppDebugEnabled(),
+        obs.time.week,
+        obs.time.tow);
 
     if (!best_attempt.fixed) {
         if (pppDebugEnabled()) {
