@@ -1327,8 +1327,8 @@ TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens
     std::filesystem::remove(ssr_path);
 
     const std::string ssr_text =
-        "# week,tow,sat,dx,dy,dz,dclock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,atmos_<name>=<value>...]\n"
-        "2414,345600.0,G01,1.0,-2.0,3.0,4.0,ura_sigma_m=0.002750,cbias:2=-0.120000,cbias:8=0.050000,pbias:2=0.015000,atmos_network_id=1,atmos_trop_quality=9\n";
+        "# week,tow,sat,dx,dy,dz,dclock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,pdi:<id>=<n>...][,atmos_<name>=<value>...]\n"
+        "2414,345600.0,G01,1.0,-2.0,3.0,4.0,ura_sigma_m=0.002750,cbias:2=-0.120000,cbias:8=0.050000,pbias:2=0.015000,pdi:2=3,atmos_network_id=1,atmos_trop_quality=9\n";
     writeTextFile(ssr_path, ssr_text);
 
     SSRProducts ssr_products;
@@ -1339,6 +1339,7 @@ TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens
     double ura_sigma_m = 0.0;
     std::map<uint8_t, double> code_bias_m;
     std::map<uint8_t, double> phase_bias_m;
+    std::map<uint8_t, uint8_t> phase_discontinuity_indicators;
     std::map<std::string, std::string> atmos_tokens;
     ASSERT_TRUE(ssr_products.interpolateCorrection(
         SatelliteId(GNSSSystem::GPS, 1),
@@ -1348,7 +1349,15 @@ TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens
         &ura_sigma_m,
         &code_bias_m,
         &phase_bias_m,
-        &atmos_tokens));
+        &atmos_tokens,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        true,
+        false,
+        nullptr,
+        &phase_discontinuity_indicators));
 
     EXPECT_NEAR(ura_sigma_m, 0.00275, 1e-12);
     ASSERT_EQ(code_bias_m.size(), 2U);
@@ -1356,6 +1365,8 @@ TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens
     EXPECT_NEAR(code_bias_m.at(8U), 0.05, 1e-12);
     ASSERT_EQ(phase_bias_m.size(), 1U);
     EXPECT_NEAR(phase_bias_m.at(2U), 0.015, 1e-12);
+    ASSERT_EQ(phase_discontinuity_indicators.size(), 1U);
+    EXPECT_EQ(phase_discontinuity_indicators.at(2U), 3U);
     ASSERT_EQ(atmos_tokens.size(), 2U);
     EXPECT_EQ(atmos_tokens.at("atmos_network_id"), "1");
     EXPECT_EQ(atmos_tokens.at("atmos_trop_quality"), "9");
