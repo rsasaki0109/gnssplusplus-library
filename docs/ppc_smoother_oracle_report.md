@@ -39,6 +39,10 @@ The best-stack 2D trajectories below are colored by GNSS solution status:
 
 ![PPC smoother best-stack 2D trajectory colored by GNSS status](ppc_smoother_status_trajectories.png)
 
+For comparison, the `bsr_demo5_cont` baseline with the same status colors:
+
+![PPC demo5-cont 2D trajectory colored by GNSS status](ppc_smoother_status_trajectories_demo5.png)
+
 ## Mode Checks
 
 The current ceiling depends on the regressor-gated anchor and loss masks. More
