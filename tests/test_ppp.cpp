@@ -1085,6 +1085,83 @@ TEST(PPPTest, SatelliteAntexPcoChangesSyntheticPrecisePppSolutionWithoutBreaking
     std::filesystem::remove(antex_path);
 }
 
+TEST(PPPTest, ApcReferencedSsrSkipsSatelliteAntexPco) {
+    const auto sp3_path = tempFilePath("libgnss_ppp_sat_apc_antex_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_sat_apc_antex_test.clk");
+    const auto antex_path = tempFilePath("libgnss_ppp_sat_apc_antex_test.atx");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(antex_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(8.0, -5.0, 3.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 7, 0, 0.0);
+    const GNSSTime last_precise_time = first_time + 600.0;
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, last_precise_time));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, last_precise_time));
+    writeTextFile(
+        antex_path,
+        buildSimpleSatelliteAntexText(satellites, 250.0, -120.0, 800.0, 180.0, -80.0, 650.0));
+
+    PPPProcessor::PPPConfig base_config;
+    base_config.use_precise_orbits = true;
+    base_config.use_precise_clocks = true;
+    base_config.orbit_file_path = sp3_path.string();
+    base_config.clock_file_path = clk_path.string();
+    base_config.convergence_min_epochs = 5;
+    base_config.convergence_threshold_horizontal = 0.2;
+    base_config.estimate_troposphere = false;
+    base_config.enable_ambiguity_resolution = false;
+    base_config.kinematic_mode = false;
+
+    PPPProcessor::PPPConfig plain_config = base_config;
+    PPPProcessor::PPPConfig apc_config = base_config;
+    apc_config.antex_file_path = antex_path.string();
+    apc_config.ssr_orbit_reference_is_apc = true;
+
+    PPPProcessor plain_processor(plain_config);
+    PPPProcessor apc_processor(apc_config);
+
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(plain_processor.initialize(processor_config));
+    ASSERT_TRUE(apc_processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    PositionSolution plain_solution;
+    PositionSolution apc_solution;
+    for (int i = 0; i < 8; ++i) {
+        const ObservationData epoch = makeSyntheticEpoch(
+            first_time + 30.0 * static_cast<double>(i),
+            true_receiver_position,
+            approximate_receiver_position,
+            satellites);
+        plain_solution = plain_processor.processEpoch(epoch, nav_data);
+        apc_solution = apc_processor.processEpoch(epoch, nav_data);
+    }
+
+    ASSERT_TRUE(plain_solution.isValid());
+    ASSERT_TRUE(apc_solution.isValid());
+    EXPECT_LT((plain_solution.position_ecef - true_receiver_position).norm(), 1.0);
+    EXPECT_LT((apc_solution.position_ecef - true_receiver_position).norm(), 1.0);
+    const double position_delta_m =
+        (plain_solution.position_ecef - apc_solution.position_ecef).norm();
+    EXPECT_LT(position_delta_m, 1e-6);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+    std::filesystem::remove(antex_path);
+}
+
 TEST(PPPTest, OceanLoadingCoefficientsChangeSyntheticPrecisePppSolutionWithoutBreakingIt) {
     const auto sp3_path = tempFilePath("libgnss_ppp_blq_test.sp3");
     const auto clk_path = tempFilePath("libgnss_ppp_blq_test.clk");
