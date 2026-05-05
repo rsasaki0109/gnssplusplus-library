@@ -46,6 +46,7 @@ struct Options {
     int max_epochs = 0;
     double start_tow = -1.0;  // negative disables the gate
     int convergence_min_epochs = 20;
+    bool convergence_min_epochs_set = false;
     int phase_measurement_min_lock_count = 1;
     bool enable_initial_phase_admission_warm_start = false;
     bool enable_all_frequency_initial_phase_admission_warm_start = false;
@@ -63,7 +64,7 @@ struct Options {
     bool enforce_ssr_orbit_iode = false;
     bool enforce_ssr_orbit_iode_admission_only = false;
     int ssr_orbit_iode_admission_gate_warmup_epochs = 0;
-    std::string ar_method_arg;  // "dd-iflc" (default), "dd-wlnl", "dd-per-freq"
+    std::string ar_method_arg;  // Empty means profile default/auto.
     bool estimate_troposphere = true;
     bool estimate_ionosphere = false;
     bool use_ionosphere_free = true;
@@ -85,6 +86,22 @@ struct Options {
     std::string clas_residual_sampling = "indexed-or-mean";
     std::string clas_atmos_selection = "grid-first";
     double clas_atmos_stale_after_seconds = 15.0;
+    double clas_anchor_sigma = -1.0;
+    double clas_code_variance_scale = -1.0;
+    double clas_phase_variance = -1.0;
+    double clas_iono_prior_variance = -1.0;
+    double clas_trop_prior_variance = -1.0;
+    double clas_initial_ambiguity_std_cycles = -1.0;
+    bool clas_initial_ambiguity_std_cycles_set = false;
+    double clas_outlier_sigma_scale = -1.0;
+    bool clas_kinematic_position_reseed = false;
+    bool clas_kinematic_position_reseed_set = false;
+    double clas_kinematic_position_reseed_variance = -1.0;
+    double clas_kinematic_position_reseed_max_residual_rms_m = -1.0;
+    bool enable_wlnl_par = false;
+    bool enable_wlnl_par_set = false;
+    int  wlnl_par_max_exclusions = -1;
+    double wlnl_par_exclude_frac_threshold = -1.0;
     bool madocalib_bridge = false;
     std::string madocalib_config_path;
     std::vector<std::string> madoca_l6e_paths;
@@ -101,12 +118,16 @@ struct Options {
     bool low_dynamics_mode = false;
     bool enable_ar = false;
     double ar_ratio_threshold = 3.0;
+    bool enable_ppp_holdamb = false;
+    double ppp_holdamb_innovation_gate_m = 0.0;  // 0 = no gate
     double kinematic_preconvergence_phase_residual_floor_m = 200.0;
     int filter_iterations = 0;  // 0 keeps PPPConfig default
     double initial_ionosphere_variance = -1.0;  // negative keeps default
     double initial_troposphere_variance = -1.0;
+    double process_noise_ionosphere = -1.0;  // negative keeps default
     double code_phase_error_ratio_l1 = -1.0;
     double code_phase_error_ratio_l2 = -1.0;
+    bool apply_solid_earth_tides = true;
     bool quiet = false;
 };
 
@@ -254,6 +275,34 @@ void printUsage(const char* program_name) {
         << "                          CLAS atmosphere token selection policy (default: grid-first)\n"
         << "  --clas-atmos-stale-after-seconds <seconds>\n"
         << "                          Balanced policy stale threshold (default: 15.0)\n"
+        << "  --clas-anchor-sigma <meters>\n"
+        << "                          CLAS OSR SPP anchor sigma (default: 5.0)\n"
+        << "  --clas-code-variance-scale <scale>\n"
+        << "                          CLAS OSR code variance multiplier (default: 8.0)\n"
+        << "  --clas-phase-variance <m^2>\n"
+        << "                          CLAS OSR carrier-phase base variance (default: 0.01)\n"
+        << "  --clas-iono-prior-variance <m^2>\n"
+        << "                          CLAS OSR residual-ionosphere prior variance (default: 0.25)\n"
+        << "  --clas-trop-prior-variance <m^2>\n"
+        << "                          CLAS OSR troposphere prior variance (default: 0.0001)\n"
+        << "  --clas-initial-ambiguity-std-cycles <cycles>\n"
+        << "                          CLAS ambiguity init std per frequency; 0 uses the PPP default variance\n"
+        << "  --clas-outlier-sigma-scale <scale>\n"
+        << "                          CLAS measurement outlier sigma gate; 0 disables inflation\n"
+        << "  --clas-kinematic-reseed-position\n"
+        << "                          Re-init position state from SPP every kinematic epoch (default off)\n"
+        << "  --no-clas-kinematic-reseed-position\n"
+        << "                          Disable kinematic position re-seed\n"
+        << "  --clas-kinematic-reseed-position-variance <m^2>\n"
+        << "                          Variance reset on kinematic re-seed (default: 10000.0)\n"
+        << "  --clas-kinematic-reseed-position-max-residual-rms <m>\n"
+        << "                          Skip reseed when SPP residual_rms exceeds this (m); guards against urban-canyon SPP pin-to-bad. <=0 disables (default).\n"
+        << "  --enable-wlnl-par       Enable WLNL Partial AR (greedy worst-|frac| exclusion when ratio fails)\n"
+        << "  --no-wlnl-par           Disable WLNL Partial AR\n"
+        << "  --wlnl-par-max-exclusions <n>\n"
+        << "                          Cap PAR exclusion iterations (default: 4)\n"
+        << "  --wlnl-par-exclude-frac-threshold <cycles>\n"
+        << "                          Skip excluding pairs whose |frac| is below this (default: 0.20)\n"
         << "  --madocalib-bridge      Delegate this run to linked MADOCALIB postpos()\n"
         << "                          (requires CMake -DMADOCALIB_PARITY_LINK=ON)\n"
         << "  --madocalib-l6 <file>   Extra MADOCA L6 input file; repeat for two-channel L6E\n"
@@ -275,9 +324,16 @@ void printUsage(const char* program_name) {
         << "  --low-dynamics          Keep kinematic PPP anchored for quasi-static motion\n"
         << "  --no-low-dynamics       Disable quasi-static anchoring (default)\n"
         << "  --enable-ar             Enable PPP ambiguity fixing when supported\n"
+        << "  --enable-ppp-holdamb    Apply iono-aware Kalman update of fixed integer\n"
+        << "                          DD NL constraint onto per-frequency L1/L2 states\n"
+        << "                          (B_IF = alpha*B_L1 - beta*B_L2)\n"
+        << "  --ppp-holdamb-innovation-gate <m>\n"
+        << "                          Gate per-pair innovation magnitude (m); 0 disables\n"
         << "  --disable-ar            Disable PPP ambiguity fixing (default)\n"
         << "  --ar-ratio-threshold <value>\n"
         << "                          Ratio threshold for PPP ambiguity fixing (default: 3.0)\n"
+        << "  --process-noise-ionosphere <m^2/s>\n"
+        << "                          Ionosphere random-walk process noise (default: PPPConfig)\n"
         << "  --quiet                  Suppress per-run summary output\n"
         << "  -h, --help               Show this help\n";
 }
@@ -617,6 +673,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.start_tow = std::stod(argv[++i]);
         } else if (arg == "--convergence-min-epochs" && i + 1 < argc) {
             options.convergence_min_epochs = std::stoi(argv[++i]);
+            options.convergence_min_epochs_set = true;
         } else if (arg == "--phase-measurement-min-lock-count" && i + 1 < argc) {
             options.phase_measurement_min_lock_count = std::stoi(argv[++i]);
         } else if (arg == "--enable-initial-phase-admission-warm-start") {
@@ -700,6 +757,41 @@ Options parseArguments(int argc, char* argv[]) {
             options.clas_atmos_selection = argv[++i];
         } else if (arg == "--clas-atmos-stale-after-seconds" && i + 1 < argc) {
             options.clas_atmos_stale_after_seconds = std::stod(argv[++i]);
+        } else if (arg == "--clas-anchor-sigma" && i + 1 < argc) {
+            options.clas_anchor_sigma = std::stod(argv[++i]);
+        } else if (arg == "--clas-code-variance-scale" && i + 1 < argc) {
+            options.clas_code_variance_scale = std::stod(argv[++i]);
+        } else if (arg == "--clas-phase-variance" && i + 1 < argc) {
+            options.clas_phase_variance = std::stod(argv[++i]);
+        } else if (arg == "--clas-iono-prior-variance" && i + 1 < argc) {
+            options.clas_iono_prior_variance = std::stod(argv[++i]);
+        } else if (arg == "--clas-trop-prior-variance" && i + 1 < argc) {
+            options.clas_trop_prior_variance = std::stod(argv[++i]);
+        } else if (arg == "--clas-initial-ambiguity-std-cycles" && i + 1 < argc) {
+            options.clas_initial_ambiguity_std_cycles = std::stod(argv[++i]);
+            options.clas_initial_ambiguity_std_cycles_set = true;
+        } else if (arg == "--clas-outlier-sigma-scale" && i + 1 < argc) {
+            options.clas_outlier_sigma_scale = std::stod(argv[++i]);
+        } else if (arg == "--clas-kinematic-reseed-position") {
+            options.clas_kinematic_position_reseed = true;
+            options.clas_kinematic_position_reseed_set = true;
+        } else if (arg == "--no-clas-kinematic-reseed-position") {
+            options.clas_kinematic_position_reseed = false;
+            options.clas_kinematic_position_reseed_set = true;
+        } else if (arg == "--clas-kinematic-reseed-position-variance" && i + 1 < argc) {
+            options.clas_kinematic_position_reseed_variance = std::stod(argv[++i]);
+        } else if (arg == "--clas-kinematic-reseed-position-max-residual-rms" && i + 1 < argc) {
+            options.clas_kinematic_position_reseed_max_residual_rms_m = std::stod(argv[++i]);
+        } else if (arg == "--enable-wlnl-par") {
+            options.enable_wlnl_par = true;
+            options.enable_wlnl_par_set = true;
+        } else if (arg == "--no-wlnl-par") {
+            options.enable_wlnl_par = false;
+            options.enable_wlnl_par_set = true;
+        } else if (arg == "--wlnl-par-max-exclusions" && i + 1 < argc) {
+            options.wlnl_par_max_exclusions = std::stoi(argv[++i]);
+        } else if (arg == "--wlnl-par-exclude-frac-threshold" && i + 1 < argc) {
+            options.wlnl_par_exclude_frac_threshold = std::stod(argv[++i]);
         } else if (arg == "--madocalib-bridge") {
             options.madocalib_bridge = true;
         } else if (arg == "--madocalib-l6" && i + 1 < argc) {
@@ -750,6 +842,12 @@ Options parseArguments(int argc, char* argv[]) {
             options.low_dynamics_mode = true;
         } else if (arg == "--no-low-dynamics") {
             options.low_dynamics_mode = false;
+        } else if (arg == "--enable-ppp-holdamb") {
+            options.enable_ppp_holdamb = true;
+        } else if (arg == "--disable-ppp-holdamb") {
+            options.enable_ppp_holdamb = false;
+        } else if (arg == "--ppp-holdamb-innovation-gate" && i + 1 < argc) {
+            options.ppp_holdamb_innovation_gate_m = std::stod(argv[++i]);
         } else if (arg == "--enable-ar") {
             options.enable_ar = true;
         } else if (arg == "--disable-ar") {
@@ -762,6 +860,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.initial_ionosphere_variance = std::stod(argv[++i]);
         } else if (arg == "--initial-troposphere-variance" && i + 1 < argc) {
             options.initial_troposphere_variance = std::stod(argv[++i]);
+        } else if (arg == "--process-noise-ionosphere" && i + 1 < argc) {
+            options.process_noise_ionosphere = std::stod(argv[++i]);
         } else if (arg == "--code-phase-error-ratio-l1" && i + 1 < argc) {
             options.code_phase_error_ratio_l1 = std::stod(argv[++i]);
         } else if (arg == "--code-phase-error-ratio-l2" && i + 1 < argc) {
@@ -873,6 +973,10 @@ Options parseArguments(int argc, char* argv[]) {
         options.initial_troposphere_variance == 0.0) {
         argumentError("--initial-troposphere-variance must be positive", argv[0]);
     }
+    if (options.process_noise_ionosphere >= 0.0 &&
+        options.process_noise_ionosphere == 0.0) {
+        argumentError("--process-noise-ionosphere must be positive", argv[0]);
+    }
     if (options.code_phase_error_ratio_l1 >= 0.0 &&
         options.code_phase_error_ratio_l1 <= 0.0) {
         argumentError("--code-phase-error-ratio-l1 must be positive", argv[0]);
@@ -886,6 +990,34 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.clas_atmos_stale_after_seconds <= 0.0) {
         argumentError("--clas-atmos-stale-after-seconds must be positive", argv[0]);
+    }
+    if (options.clas_anchor_sigma >= 0.0 && options.clas_anchor_sigma == 0.0) {
+        argumentError("--clas-anchor-sigma must be positive", argv[0]);
+    }
+    if (options.clas_code_variance_scale >= 0.0 && options.clas_code_variance_scale == 0.0) {
+        argumentError("--clas-code-variance-scale must be positive", argv[0]);
+    }
+    if (options.clas_phase_variance >= 0.0 && options.clas_phase_variance == 0.0) {
+        argumentError("--clas-phase-variance must be positive", argv[0]);
+    }
+    if (options.clas_iono_prior_variance >= 0.0 && options.clas_iono_prior_variance == 0.0) {
+        argumentError("--clas-iono-prior-variance must be positive", argv[0]);
+    }
+    if (options.clas_trop_prior_variance >= 0.0 && options.clas_trop_prior_variance == 0.0) {
+        argumentError("--clas-trop-prior-variance must be positive", argv[0]);
+    }
+    if (options.clas_initial_ambiguity_std_cycles_set &&
+        options.clas_initial_ambiguity_std_cycles < 0.0) {
+        argumentError("--clas-initial-ambiguity-std-cycles must be non-negative", argv[0]);
+    }
+    if (options.clas_outlier_sigma_scale < -1.0 ||
+        (options.clas_outlier_sigma_scale < 0.0 &&
+         options.clas_outlier_sigma_scale != -1.0)) {
+        argumentError("--clas-outlier-sigma-scale must be non-negative", argv[0]);
+    }
+    if (options.clas_kinematic_position_reseed_variance <= 0.0 &&
+        options.clas_kinematic_position_reseed_variance != -1.0) {
+        argumentError("--clas-kinematic-reseed-position-variance must be positive", argv[0]);
     }
     if (options.ssr_step_seconds <= 0.0) {
         argumentError("--ssr-step-seconds must be positive", argv[0]);
@@ -970,6 +1102,30 @@ Options parseArguments(int argc, char* argv[]) {
         argumentError(
             "--clas-atmos-selection must be one of: grid-first, grid-guarded, balanced, freshness-first",
             argv[0]);
+    }
+    if (options.claslib_parity) {
+        if (options.initial_ionosphere_variance < 0.0) {
+            options.initial_ionosphere_variance = 0.25;
+        }
+        if (options.process_noise_ionosphere < 0.0) {
+            options.process_noise_ionosphere = 1e-5;
+        }
+        if (options.clas_anchor_sigma < 0.0) {
+            options.clas_anchor_sigma = 8.0;
+        }
+        if (options.clas_code_variance_scale < 0.0) {
+            options.clas_code_variance_scale = 4.0;
+        }
+        if (!options.clas_initial_ambiguity_std_cycles_set) {
+            options.clas_initial_ambiguity_std_cycles = 100.0;
+            options.clas_initial_ambiguity_std_cycles_set = true;
+        }
+        if (!options.convergence_min_epochs_set) {
+            // CLASLIB static.conf uses pos2-arlockcnt=5. In this path the
+            // existing convergence_min_epochs field is also the DD-AR lock
+            // gate, and lock_count reaches 6 at the first comparable epoch.
+            options.convergence_min_epochs = 6;
+        }
     }
     return options;
 }
@@ -1871,6 +2027,7 @@ int main(int argc, char* argv[]) {
         ppp_config.ssr_orbit_iode_admission_gate_warmup_epochs =
             options.ssr_orbit_iode_admission_gate_warmup_epochs;
         if (!options.ar_method_arg.empty()) {
+            ppp_config.clas_auto_wlnl_ar = false;
             if (options.ar_method_arg == "dd-iflc") {
                 ppp_config.ar_method = libgnss::PPPProcessor::PPPConfig::ARMethod::DD_IFLC;
             } else if (options.ar_method_arg == "dd-wlnl") {
@@ -1915,15 +2072,24 @@ int main(int argc, char* argv[]) {
         ppp_config.dcb_file_path = options.dcb_path;
         ppp_config.antex_file_path = options.antex_path;
         if (use_madoca_native_l6e) {
-            // Keep the receiver clock white-noise-like via SPP seeding, but
-            // do not replace the kinematic PPP position state every epoch.
+            // Per-epoch kinematic position re-init is disabled here even though
+            // the SPP-side multi-system bug has been fixed (GLONASS health
+            // filter + per-system navsys gate). Enabling reinitializeVectorState
+            // with the corrected SPP regressed MIZU MADOCA tail30 N RMS from
+            // 50mm to ~10m: ambiguity / iono states retain their pre-reinit
+            // values while position is reset, leaving the filter to chase its
+            // own tail. The PPP-layer interaction with reinit is a separate
+            // investigation; clock-only seeding (default) is the safe path.
             ppp_config.reset_kinematic_position_to_spp_each_epoch = false;
             ppp_config.require_ssr_orbit_clock = true;
             ppp_config.use_rtklib_broadcast_selection = true;
             ppp_config.initial_troposphere_variance = 0.12 * 0.12;
-            ppp_config.allowed_systems = madoca_navsys_systems;
+            if (options.madoca_navsys_mask != 0) {
+                ppp_config.allowed_systems = madoca_navsys_systems;
+            }
         }
         ppp_config.ocean_loading_file_path = options.blq_path;
+        ppp_config.apply_solid_earth_tides = options.apply_solid_earth_tides;
         ppp_config.estimate_troposphere = options.estimate_troposphere;
         ppp_config.estimate_ionosphere = options.estimate_ionosphere;
         ppp_config.use_ionosphere_free = options.use_ionosphere_free;
@@ -1947,6 +2113,9 @@ int main(int argc, char* argv[]) {
         }
         if (options.initial_troposphere_variance > 0.0) {
             ppp_config.initial_troposphere_variance = options.initial_troposphere_variance;
+        }
+        if (options.process_noise_ionosphere > 0.0) {
+            ppp_config.process_noise_ionosphere = options.process_noise_ionosphere;
         }
         if (options.code_phase_error_ratio_l1 > 0.0) {
             ppp_config.code_phase_error_ratio_l1 = options.code_phase_error_ratio_l1;
@@ -1977,11 +2146,57 @@ int main(int argc, char* argv[]) {
             parseClasAtmosSelectionPolicy(options.clas_atmos_selection);
         ppp_config.clas_atmos_stale_after_seconds =
             options.clas_atmos_stale_after_seconds;
+        if (options.clas_anchor_sigma > 0.0) {
+            ppp_config.clas_anchor_sigma = options.clas_anchor_sigma;
+        }
+        if (options.clas_code_variance_scale > 0.0) {
+            ppp_config.clas_code_variance_scale = options.clas_code_variance_scale;
+        }
+        if (options.clas_phase_variance > 0.0) {
+            ppp_config.clas_phase_variance = options.clas_phase_variance;
+        }
+        if (options.clas_iono_prior_variance > 0.0) {
+            ppp_config.clas_iono_prior_variance = options.clas_iono_prior_variance;
+        }
+        if (options.clas_trop_prior_variance > 0.0) {
+            ppp_config.clas_trop_prior_variance = options.clas_trop_prior_variance;
+        }
+        if (options.clas_initial_ambiguity_std_cycles_set) {
+            ppp_config.clas_initial_ambiguity_std_cycles =
+                options.clas_initial_ambiguity_std_cycles;
+        }
+        if (options.clas_outlier_sigma_scale >= 0.0) {
+            ppp_config.clas_outlier_sigma_scale = options.clas_outlier_sigma_scale;
+        }
+        if (options.clas_kinematic_position_reseed_set) {
+            ppp_config.clas_kinematic_position_reseed =
+                options.clas_kinematic_position_reseed;
+        }
+        if (options.clas_kinematic_position_reseed_variance > 0.0) {
+            ppp_config.clas_kinematic_position_reseed_variance =
+                options.clas_kinematic_position_reseed_variance;
+        }
+        if (options.clas_kinematic_position_reseed_max_residual_rms_m > 0.0) {
+            ppp_config.clas_kinematic_position_reseed_max_residual_rms_m =
+                options.clas_kinematic_position_reseed_max_residual_rms_m;
+        }
+        if (options.enable_wlnl_par_set) {
+            ppp_config.enable_wlnl_par = options.enable_wlnl_par;
+        }
+        if (options.wlnl_par_max_exclusions >= 0) {
+            ppp_config.wlnl_par_max_exclusions = options.wlnl_par_max_exclusions;
+        }
+        if (options.wlnl_par_exclude_frac_threshold > 0.0) {
+            ppp_config.wlnl_par_exclude_frac_threshold =
+                options.wlnl_par_exclude_frac_threshold;
+        }
         ppp_config.kinematic_mode = options.kinematic_mode;
         ppp_config.kinematic_preconvergence_phase_residual_floor_m =
             options.kinematic_preconvergence_phase_residual_floor_m;
         ppp_config.low_dynamics_mode = options.low_dynamics_mode;
         ppp_config.enable_ambiguity_resolution = options.enable_ar;
+        ppp_config.enable_ppp_holdamb = options.enable_ppp_holdamb;
+        ppp_config.ppp_holdamb_innovation_gate_m = options.ppp_holdamb_innovation_gate_m;
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.phase_measurement_min_lock_count =
             options.phase_measurement_min_lock_count;
@@ -2407,6 +2622,26 @@ int main(int argc, char* argv[]) {
                     << (ppp_config.use_ionosphere_free ? "true" : "false") << ",\n"
                     << "  \"estimate_ionosphere\": "
                     << (ppp_config.estimate_ionosphere ? "true" : "false") << ",\n"
+                    << "  \"initial_ionosphere_variance\": "
+                    << ppp_config.initial_ionosphere_variance << ",\n"
+                    << "  \"process_noise_ionosphere\": "
+                    << ppp_config.process_noise_ionosphere << ",\n"
+                    << "  \"clas_anchor_sigma\": "
+                    << ppp_config.clas_anchor_sigma << ",\n"
+                    << "  \"clas_code_variance_scale\": "
+                    << ppp_config.clas_code_variance_scale << ",\n"
+                    << "  \"clas_phase_variance\": "
+                    << ppp_config.clas_phase_variance << ",\n"
+                    << "  \"clas_initial_ambiguity_std_cycles\": "
+                    << ppp_config.clas_initial_ambiguity_std_cycles << ",\n"
+                    << "  \"clas_outlier_sigma_scale\": "
+                    << ppp_config.clas_outlier_sigma_scale << ",\n"
+                    << "  \"clas_validate_fixed_solution\": "
+                    << (ppp_config.clas_validate_fixed_solution ? "true" : "false") << ",\n"
+                    << "  \"clas_iono_prior_variance\": "
+                    << ppp_config.clas_iono_prior_variance << ",\n"
+                    << "  \"clas_trop_prior_variance\": "
+                    << ppp_config.clas_trop_prior_variance << ",\n"
                     << "  \"kinematic_preconvergence_phase_residual_floor_m\": "
                     << ppp_config.kinematic_preconvergence_phase_residual_floor_m << ",\n"
                     << "  \"phase_measurement_min_lock_count\": "
@@ -2493,6 +2728,11 @@ int main(int argc, char* argv[]) {
                     << "  \"clas_atmos_selection\": \"" << jsonEscape(options.clas_atmos_selection) << "\",\n"
                     << "  \"clas_atmos_stale_after_seconds\": " << options.clas_atmos_stale_after_seconds << ",\n"
                     << "  \"ambiguity_resolution_enabled\": " << (options.enable_ar ? "true" : "false") << ",\n"
+                    << "  \"ar_method\": \""
+                    << jsonEscape(options.ar_method_arg.empty() ? "auto" : options.ar_method_arg)
+                    << "\",\n"
+                    << "  \"clas_auto_wlnl_ar\": "
+                    << (ppp_config.clas_auto_wlnl_ar ? "true" : "false") << ",\n"
                     << "  \"per_frequency_phase_bias_states\": "
                     << (options.enable_per_frequency_phase_bias_states ? "true" : "false") << ",\n"
                     << "  \"ionosphere_aware_phase_ambiguity_init\": "
@@ -2646,6 +2886,10 @@ int main(int argc, char* argv[]) {
                           << clas_hybrid_fallback_epochs << "\n";
             }
             std::cout << "  ambiguity resolution: " << (options.enable_ar ? "on" : "off") << "\n";
+            std::cout << "  AR method: "
+                      << (options.ar_method_arg.empty() ? "auto" : options.ar_method_arg) << "\n";
+            std::cout << "  CLAS auto WL/NL AR: "
+                      << (ppp_config.clas_auto_wlnl_ar ? "on" : "off") << "\n";
             std::cout << "  per-frequency phase-bias states: "
                       << (options.enable_per_frequency_phase_bias_states ? "on" : "off") << "\n";
             std::cout << "  ionosphere-aware phase ambiguity init: "
