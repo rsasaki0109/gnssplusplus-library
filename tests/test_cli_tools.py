@@ -3179,6 +3179,14 @@ class CLIToolsTest(unittest.TestCase):
             self.assertTrue(output_path.exists())
             self.assertIn("LibGNSS++ Position Solution", output_path.read_text(encoding="ascii"))
 
+    def test_spp_cli_exposes_native_seed_controls(self) -> None:
+        result = self.run_gnss("spp", "--help")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("--elevation-mask", result.stdout)
+        self.assertIn("--ionosphere-free-code", result.stdout)
+        self.assertIn("--navsys", result.stdout)
+
     def test_visibility_cli_writes_csv_and_summary_for_static_data(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_visibility_cli_") as temp_dir:
             temp_root = Path(temp_dir)
