@@ -70,6 +70,8 @@ struct Options {
     bool enable_extra_band_observations = false;
     bool initialize_phase_ambiguity_with_ionosphere_state = false;
     bool enable_ppp_outlier_detection = true;
+    bool claslib_parity = false;
+    bool native_pntpos_parity_seed = false;
     bool use_clas_osr_filter = false;
     std::string clas_epoch_policy = "strict-osr";
     std::string clas_osr_application = "full-osr";
@@ -86,6 +88,7 @@ struct Options {
     std::string madocalib_config_path;
     std::vector<std::string> madoca_l6e_paths;
     std::vector<std::string> madoca_l6d_paths;
+    int navsys_mask = 0;
     int madoca_navsys_mask = 0;
     std::vector<std::string> madocalib_l6_paths;
     std::vector<std::string> madocalib_mdciono_paths;
@@ -119,6 +122,8 @@ void printUsage(const char* program_name) {
         << "  --madoca-l6e <file>    Native MADOCA L6E correction file; repeat for multiple channels\n"
         << "  --madoca-l6d <file>    Native MADOCA L6D ionosphere file; repeat for multiple channels\n"
         << "                          Requires --madoca-l6e and an approximate receiver position in RINEX header\n"
+        << "  --navsys <mask>\n"
+        << "                          RTKLIB navsys mask for PPP observation admission (0=all, 25=GPS+Galileo+QZSS)\n"
         << "  --madoca-navsys <mask>\n"
         << "                          Native MADOCA RTKLIB navsys mask (0=all, 29 excludes BDS, 61 includes BDS)\n"
         << "  --ionex <maps.ionex>     Optional IONEX TEC map product\n"
@@ -213,6 +218,16 @@ void printUsage(const char* program_name) {
         << "                          Disable PPP residual outlier rejection for parity experiments\n"
         << "  --enable-ppp-outlier-detection\n"
         << "                          Enable PPP residual outlier rejection (default)\n"
+        << "  --claslib-parity        Use the native CLAS parity profile\n"
+        << "                          (CLAS OSR + per-frequency ionosphere estimation)\n"
+        << "  --ported-clasnat        Alias for --claslib-parity\n"
+        << "  --native-pntpos-parity-seed\n"
+        << "                          Use native SPP settings that mirror pntpos behavior for PPP seed\n"
+        << "  --no-native-pntpos-parity-seed\n"
+        << "                          Use the default PPP SPP seed settings (default)\n"
+        << "  --claslib-pntpos-seed   Deprecated alias for --native-pntpos-parity-seed\n"
+        << "  --no-claslib-pntpos-seed\n"
+        << "                          Deprecated alias for --no-native-pntpos-parity-seed\n"
         << "  --clas-osr              Use the CLAS OSR-based PPP-RTK filter path\n"
         << "  --clas-epoch-policy <strict-osr|hybrid-standard-ppp>\n"
         << "                          CLAS epoch boundary policy (default: strict-osr)\n"
@@ -565,6 +580,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.madoca_l6e_paths.push_back(argv[++i]);
         } else if (arg == "--madoca-l6d" && i + 1 < argc) {
             options.madoca_l6d_paths.push_back(argv[++i]);
+        } else if (arg == "--navsys" && i + 1 < argc) {
+            options.navsys_mask = std::stoi(argv[++i]);
         } else if (arg == "--madoca-navsys" && i + 1 < argc) {
             options.madoca_navsys_mask = std::stoi(argv[++i]);
         } else if (arg == "--ionex" && i + 1 < argc) {
@@ -643,6 +660,17 @@ Options parseArguments(int argc, char* argv[]) {
             options.estimate_troposphere = false;
         } else if (arg == "--estimate-troposphere") {
             options.estimate_troposphere = true;
+        } else if (arg == "--claslib-parity" || arg == "--ported-clasnat") {
+            options.claslib_parity = true;
+            options.use_clas_osr_filter = true;
+            options.use_ionosphere_free = false;
+            options.estimate_ionosphere = true;
+        } else if (arg == "--native-pntpos-parity-seed" ||
+                   arg == "--claslib-pntpos-seed") {
+            options.native_pntpos_parity_seed = true;
+        } else if (arg == "--no-native-pntpos-parity-seed" ||
+                   arg == "--no-claslib-pntpos-seed") {
+            options.native_pntpos_parity_seed = false;
         } else if (arg == "--clas-osr") {
             options.use_clas_osr_filter = true;
         } else if (arg == "--clas-epoch-policy" && i + 1 < argc) {
@@ -793,6 +821,9 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.initial_phase_admission_warm_start_navsys_mask < 0 ||
         options.initial_phase_admission_warm_start_navsys_mask > 127) {
         argumentError("--initial-phase-admission-warm-start-navsys must be a RTKLIB navsys mask from 0 to 127", argv[0]);
+    }
+    if (options.navsys_mask < 0 || options.navsys_mask > 127) {
+        argumentError("--navsys must be a RTKLIB navsys mask from 0 to 127", argv[0]);
     }
     try {
         (void)parseSatelliteIdSet(options.initial_phase_admission_warm_start_satellites_arg);
@@ -1636,6 +1667,8 @@ int main(int argc, char* argv[]) {
         const bool use_madoca_native_l6d = options.madoca_l6d_paths.empty() == false;
         const std::set<libgnss::GNSSSystem> madoca_navsys_systems =
             systemsFromRtklibNavsysMask(options.madoca_navsys_mask);
+        const std::set<libgnss::GNSSSystem> navsys_systems =
+            systemsFromRtklibNavsysMask(options.navsys_mask);
         const std::set<libgnss::GNSSSystem> initial_phase_warm_start_systems =
             systemsFromRtklibNavsysMask(options.initial_phase_admission_warm_start_navsys_mask);
         const std::set<libgnss::SatelliteId> initial_phase_warm_start_satellites =
@@ -1727,6 +1760,19 @@ int main(int argc, char* argv[]) {
             use_madoca_native_l6e;
         ppp_config.prefer_receiver_position_seed =
             use_madoca_native_l6e && obs_header.approximate_position.norm() > 1000.0;
+        if (options.navsys_mask != 0) {
+            ppp_config.allowed_systems = navsys_systems;
+            ppp_config.spp_seed_enable_gps =
+                navsys_systems.count(libgnss::GNSSSystem::GPS) > 0;
+            ppp_config.spp_seed_enable_galileo =
+                navsys_systems.count(libgnss::GNSSSystem::Galileo) > 0;
+            ppp_config.spp_seed_enable_qzss =
+                navsys_systems.count(libgnss::GNSSSystem::QZSS) > 0;
+            ppp_config.spp_seed_enable_glonass =
+                navsys_systems.count(libgnss::GNSSSystem::GLONASS) > 0;
+            ppp_config.spp_seed_enable_beidou =
+                navsys_systems.count(libgnss::GNSSSystem::BeiDou) > 0;
+        }
         ppp_config.ionex_file_path = options.ionex_path;
         ppp_config.dcb_file_path = options.dcb_path;
         ppp_config.antex_file_path = options.antex_path;
@@ -1748,6 +1794,13 @@ int main(int argc, char* argv[]) {
         ppp_config.initialize_phase_ambiguity_with_ionosphere_state =
             options.initialize_phase_ambiguity_with_ionosphere_state;
         ppp_config.enable_outlier_detection = options.enable_ppp_outlier_detection;
+        if (options.native_pntpos_parity_seed) {
+            ppp_config.spp_seed_use_zero_initial_position = true;
+            ppp_config.spp_seed_use_ionosphere_free_code = true;
+            ppp_config.spp_seed_enable_residual_rejection = true;
+            ppp_config.spp_seed_use_pntpos_code_weight = true;
+            ppp_config.spp_seed_preserve_default_clock = true;
+        }
         if (options.filter_iterations > 0) {
             ppp_config.filter_iterations = options.filter_iterations;
         }
@@ -2142,6 +2195,43 @@ int main(int argc, char* argv[]) {
                     << ",\n"
                     << "  \"ppp_residual_log_rows\": " << ppp_residual_log_rows << ",\n"
                     << "  \"mode\": \"" << (options.kinematic_mode ? "kinematic" : "static") << "\",\n"
+                    << "  \"navsys_mask\": " << options.navsys_mask << ",\n"
+                    << "  \"navsys_all_observed\": "
+                    << (options.navsys_mask == 0 ? "true" : "false") << ",\n"
+                    << "  \"filter_iterations\": "
+                    << ppp_config.filter_iterations << ",\n"
+                    << "  \"allowed_systems\": [";
+            bool first_allowed_system = true;
+            for (const auto system : navsys_systems) {
+                if (first_allowed_system == false) {
+                    summary << ", ";
+                }
+                summary << '"' << gnssSystemName(system) << '"';
+                first_allowed_system = false;
+            }
+            summary << "],\n"
+                    << "  \"claslib_parity\": "
+                    << (options.claslib_parity ? "true" : "false") << ",\n"
+                    << "  \"native_pntpos_parity_seed\": "
+                    << (options.native_pntpos_parity_seed ? "true" : "false") << ",\n"
+                    << "  \"spp_seed_use_zero_initial_position\": "
+                    << (ppp_config.spp_seed_use_zero_initial_position ? "true" : "false") << ",\n"
+                    << "  \"spp_seed_use_ionosphere_free_code\": "
+                    << (ppp_config.spp_seed_use_ionosphere_free_code ? "true" : "false") << ",\n"
+                    << "  \"spp_seed_enable_residual_rejection\": "
+                    << (ppp_config.spp_seed_enable_residual_rejection ? "true" : "false") << ",\n"
+                    << "  \"spp_seed_residual_rejection_threshold\": "
+                    << ppp_config.spp_seed_residual_rejection_threshold << ",\n"
+                    << "  \"spp_seed_use_pntpos_code_weight\": "
+                    << (ppp_config.spp_seed_use_pntpos_code_weight ? "true" : "false") << ",\n"
+                    << "  \"spp_seed_enable_claslib_residual_rejection\": "
+                    << (ppp_config.spp_seed_enable_claslib_residual_rejection ? "true" : "false") << ",\n"
+                    << "  \"spp_seed_claslib_residual_rejection_threshold\": "
+                    << ppp_config.spp_seed_claslib_residual_rejection_threshold << ",\n"
+                    << "  \"spp_seed_use_claslib_code_weight\": "
+                    << (ppp_config.spp_seed_use_claslib_code_weight ? "true" : "false") << ",\n"
+                    << "  \"spp_seed_preserve_default_clock\": "
+                    << (ppp_config.spp_seed_preserve_default_clock ? "true" : "false") << ",\n"
                     << "  \"use_clas_osr_filter\": "
                     << (ppp_config.use_clas_osr_filter ? "true" : "false") << ",\n"
                     << "  \"use_ionosphere_free\": "
@@ -2361,6 +2451,16 @@ int main(int argc, char* argv[]) {
             std::cout << "  CLAS subtype-12 values: " << options.clas_subtype12_values << "\n";
             std::cout << "  CLAS residual sampling: " << options.clas_residual_sampling << "\n";
             std::cout << "  mode: " << (options.kinematic_mode ? "kinematic" : "static") << "\n";
+            if (options.navsys_mask == 0) {
+                std::cout << "  navsys: all observed\n";
+            } else {
+                std::cout << "  navsys mask: " << options.navsys_mask << "\n";
+                std::cout << "  allowed systems:";
+                for (const auto system : navsys_systems) {
+                    std::cout << " " << gnssSystemName(system);
+                }
+                std::cout << "\n";
+            }
             std::cout << "  CLAS OSR filter: "
                       << (ppp_config.use_clas_osr_filter ? "on" : "off") << "\n";
             std::cout << "  ionosphere-free combination: "

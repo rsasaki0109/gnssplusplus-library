@@ -57,12 +57,22 @@ public:
     /**
      * @brief Set PPP configuration
      */
-    void setPPPConfig(const PPPConfig& config) { ppp_config_ = config; }
+    void setPPPConfig(const PPPConfig& config) {
+        ppp_config_ = config;
+        configureSPPProcessor();
+    }
     
     /**
      * @brief Get PPP configuration
      */
     const PPPConfig& getPPPConfig() const { return ppp_config_; }
+
+    /**
+     * @brief Get the SPP bootstrap configuration used for PPP seed solutions.
+     */
+    const SPPProcessor::SPPConfig& getSPPSeedConfig() const {
+        return spp_processor_.getSPPConfig();
+    }
     
     /**
      * @brief Load precise products
@@ -332,6 +342,7 @@ public:
 private:
     PPPConfig ppp_config_;
     SPPProcessor spp_processor_;  ///< Fallback SPP processor
+    SPPProcessor spp_default_clock_processor_;
     PreciseProducts precise_products_;
     SSRProducts ssr_products_;
     IONEXProducts ionex_products_;
@@ -414,6 +425,11 @@ private:
     /**
      * @brief Initialize Kalman filter
      */
+    void configureSPPProcessor();
+    void preserveDefaultSPPClockSeed(const ObservationData& obs,
+                                     const NavigationData& nav,
+                                     PositionSolution& seed_solution);
+
     bool initializeFilter(const ObservationData& obs,
                           const NavigationData& nav,
                           const PositionSolution* seed_solution = nullptr);

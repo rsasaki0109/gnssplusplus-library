@@ -1326,12 +1326,69 @@ double PPPProcessor::modeledZenithTroposphereDelayMeters(
 }
 
 PPPProcessor::PPPProcessor() : spp_processor_() {
+    configureSPPProcessor();
     reset();
 }
 
 PPPProcessor::PPPProcessor(const PPPConfig& ppp_config)
     : ppp_config_(ppp_config), spp_processor_() {
+    configureSPPProcessor();
     reset();
+}
+
+void PPPProcessor::configureSPPProcessor() {
+    SPPProcessor::SPPConfig spp_config;
+    spp_config.use_zero_initial_position =
+        ppp_config_.spp_seed_use_zero_initial_position;
+    spp_config.use_ionosphere_free_code =
+        ppp_config_.spp_seed_use_ionosphere_free_code;
+    spp_config.enable_residual_rejection =
+        ppp_config_.spp_seed_enable_residual_rejection;
+    spp_config.residual_rejection_threshold =
+        ppp_config_.spp_seed_residual_rejection_threshold;
+    spp_config.residual_rejection_min_observations =
+        ppp_config_.spp_seed_residual_rejection_min_observations;
+    spp_config.use_pntpos_code_weight =
+        ppp_config_.spp_seed_use_pntpos_code_weight;
+    spp_config.enable_claslib_residual_rejection =
+        ppp_config_.spp_seed_enable_claslib_residual_rejection;
+    spp_config.claslib_residual_rejection_threshold =
+        ppp_config_.spp_seed_claslib_residual_rejection_threshold;
+    spp_config.claslib_residual_rejection_min_observations =
+        ppp_config_.spp_seed_claslib_residual_rejection_min_observations;
+    spp_config.use_claslib_code_weight =
+        ppp_config_.spp_seed_use_claslib_code_weight;
+    spp_config.enable_gps = ppp_config_.spp_seed_enable_gps;
+    spp_config.enable_galileo = ppp_config_.spp_seed_enable_galileo;
+    spp_config.enable_qzss = ppp_config_.spp_seed_enable_qzss;
+    spp_config.enable_beidou = ppp_config_.spp_seed_enable_beidou;
+    spp_config.enable_glonass = ppp_config_.spp_seed_enable_glonass;
+    spp_processor_.setSPPConfig(spp_config);
+
+    SPPProcessor::SPPConfig default_clock_config = spp_config;
+    default_clock_config.use_zero_initial_position = false;
+    default_clock_config.use_ionosphere_free_code = false;
+    default_clock_config.enable_residual_rejection = false;
+    default_clock_config.enable_claslib_residual_rejection = false;
+    default_clock_config.use_pntpos_code_weight = false;
+    default_clock_config.use_claslib_code_weight = false;
+    spp_default_clock_processor_.setSPPConfig(default_clock_config);
+}
+
+void PPPProcessor::preserveDefaultSPPClockSeed(
+    const ObservationData& obs,
+    const NavigationData& nav,
+    PositionSolution& seed_solution) {
+    if (!ppp_config_.spp_seed_preserve_default_clock || !seed_solution.isValid()) {
+        return;
+    }
+    PositionSolution default_clock_seed =
+        spp_default_clock_processor_.processEpoch(obs, nav);
+    if (!default_clock_seed.isValid()) {
+        return;
+    }
+    seed_solution.receiver_clock_bias = default_clock_seed.receiver_clock_bias;
+    seed_solution.receiver_clock_biases_m = default_clock_seed.receiver_clock_biases_m;
 }
 
 bool PPPProcessor::initialize(const ProcessorConfig& config) {
@@ -1345,7 +1402,9 @@ bool PPPProcessor::initialize(const ProcessorConfig& config) {
         ppp_config_.clock_file_path = config.clock_file_path;
     }
 
+    configureSPPProcessor();
     spp_processor_.initialize(config);
+    spp_default_clock_processor_.initialize(config);
     reset();
 
     receiver_antex_offsets_.clear();
@@ -1432,6 +1491,7 @@ PositionSolution PPPProcessor::processEpochStandard(
     try {
         if (need_seed_solution) {
             seed_solution = spp_processor_.processEpoch(obs, nav);
+            preserveDefaultSPPClockSeed(obs, nav, seed_solution);
             if (seed_solution.isValid()) {
                 seed_ptr = &seed_solution;
             }

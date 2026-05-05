@@ -673,6 +673,33 @@ std::string buildSimpleBlqText(const std::string& station_name,
 
 }  // namespace
 
+TEST(PPPTest, SPPSeedConfigMirrorsPPPBootstrapOptions) {
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.spp_seed_use_zero_initial_position = true;
+    ppp_config.spp_seed_use_ionosphere_free_code = true;
+    ppp_config.spp_seed_enable_residual_rejection = true;
+    ppp_config.spp_seed_residual_rejection_threshold = 12.5;
+    ppp_config.spp_seed_residual_rejection_min_observations = 9;
+    ppp_config.spp_seed_use_pntpos_code_weight = true;
+    ppp_config.spp_seed_enable_beidou = false;
+    ppp_config.spp_seed_enable_glonass = false;
+
+    PPPProcessor processor(ppp_config);
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    ASSERT_TRUE(processor.initialize(processor_config));
+
+    const auto& spp_config = processor.getSPPSeedConfig();
+    EXPECT_TRUE(spp_config.use_zero_initial_position);
+    EXPECT_TRUE(spp_config.use_ionosphere_free_code);
+    EXPECT_TRUE(spp_config.enable_residual_rejection);
+    EXPECT_DOUBLE_EQ(spp_config.residual_rejection_threshold, 12.5);
+    EXPECT_EQ(spp_config.residual_rejection_min_observations, 9);
+    EXPECT_TRUE(spp_config.use_pntpos_code_weight);
+    EXPECT_FALSE(spp_config.enable_beidou);
+    EXPECT_FALSE(spp_config.enable_glonass);
+}
+
 TEST(PPPTest, NiellHydrostaticMappingTracksHeightAndSeason) {
     constexpr double latitude_rad = 45.0 * M_PI / 180.0;
     constexpr double elevation_rad = 10.0 * M_PI / 180.0;

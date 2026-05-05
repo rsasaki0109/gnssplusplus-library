@@ -32,11 +32,27 @@ public:
         // Outlier detection
         bool enable_outlier_detection = true;
         double outlier_threshold_sigma = 3.0;         ///< Outlier detection threshold
-        
+        bool use_ionosphere_free_code = false;        ///< Use dual-frequency IFLC code when available
+
         // Clock modeling
         bool model_intersystem_bias = true;           ///< Model inter-system clock biases
+
+        // Native pntpos parity diagnostics
+        bool enable_residual_rejection = false; ///< Reject large code residuals after WLS convergence checks
+        double residual_rejection_threshold = 20.0; ///< Code residual rejection threshold (m)
+        int residual_rejection_min_observations = 7; ///< Minimum rows before rejection
+        bool use_pntpos_code_weight = false; ///< Use pntpos-style code weights
+        // Deprecated compatibility aliases for old diagnostic knobs.
+        bool enable_claslib_residual_rejection = false;
+        double claslib_residual_rejection_threshold = 20.0;
+        int claslib_residual_rejection_min_observations = 7;
+        bool use_claslib_code_weight = false;
+        bool use_zero_initial_position = false; ///< Start least-squares from ECEF origin
         bool enable_beidou = true;                    ///< Enable BeiDou SPP support
         bool enable_glonass = true;                   ///< Enable GLONASS SPP support
+        bool enable_gps = true;                       ///< Enable GPS SPP support
+        bool enable_galileo = true;                   ///< Enable Galileo SPP support
+        bool enable_qzss = true;                      ///< Enable QZSS SPP support
     };
     
     SPPProcessor();
@@ -66,6 +82,21 @@ private:
     Vector3d estimated_position_;           ///< Current position estimate (ECEF)
     double receiver_clock_bias_;            ///< Receiver clock bias in seconds
     std::map<GNSSSystem, double> system_biases_; ///< Inter-system clock biases
+
+    struct SPPCodeObservation {
+        Observation observation;
+        bool ionosphere_free_code = false;
+        SignalType primary_signal = SignalType::SIGNAL_TYPE_COUNT;
+        SignalType secondary_signal = SignalType::SIGNAL_TYPE_COUNT;
+        std::string primary_observation_code;
+        std::string secondary_observation_code;
+        double primary_pseudorange = 0.0;
+        double secondary_pseudorange = 0.0;
+        double primary_frequency_hz = 0.0;
+        double secondary_frequency_hz = 0.0;
+        double iflc_primary_coeff = 0.0;
+        double iflc_secondary_coeff = 0.0;
+    };
     
     // Statistics
     mutable std::mutex stats_mutex_;
@@ -76,14 +107,14 @@ private:
     /**
      * @brief Solve position using weighted least squares
      */
-    PositionSolution solvePosition(const std::vector<Observation>& valid_obs,
+    PositionSolution solvePosition(const std::vector<SPPCodeObservation>& valid_obs,
                                  const NavigationData& nav,
                                  const GNSSTime& time);
 
     /**
      * @brief Native weighted least-squares solver with atmospheric corrections
      */
-    PositionSolution solvePositionLS(const std::vector<Observation>& valid_obs,
+    PositionSolution solvePositionLS(const std::vector<SPPCodeObservation>& valid_obs,
                                     const NavigationData& nav,
                                     const GNSSTime& time);
 
@@ -130,14 +161,14 @@ private:
     /**
      * @brief Validate observations for SPP processing
      */
-    std::vector<Observation> validateObservations(const ObservationData& obs,
-                                                const NavigationData& nav,
-                                                const GNSSTime& time) const;
+    std::vector<SPPCodeObservation> validateObservations(const ObservationData& obs,
+                                                       const NavigationData& nav,
+                                                       const GNSSTime& time) const;
     
     /**
      * @brief Initialize position estimate
      */
-    bool initializePosition(const std::vector<Observation>& observations,
+    bool initializePosition(const std::vector<SPPCodeObservation>& observations,
                           const NavigationData& nav,
                           const GNSSTime& time);
     
@@ -153,7 +184,7 @@ private:
     };
     
     std::map<SatelliteId, SatelliteState> calculateSatelliteStates(
-        const std::vector<Observation>& observations,
+        const std::vector<SPPCodeObservation>& observations,
         const NavigationData& nav,
         const GNSSTime& time) const;
     

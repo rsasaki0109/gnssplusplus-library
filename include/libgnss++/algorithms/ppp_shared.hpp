@@ -132,6 +132,25 @@ struct PPPConfig {
     bool reset_kinematic_position_to_spp_each_epoch = true;
     bool prefer_receiver_position_seed = false;
 
+    // SPP bootstrap used for PPP initial position and per-epoch clock seeding.
+    bool spp_seed_use_zero_initial_position = false;
+    bool spp_seed_use_ionosphere_free_code = false;
+    bool spp_seed_enable_residual_rejection = false;
+    double spp_seed_residual_rejection_threshold = 20.0;
+    int spp_seed_residual_rejection_min_observations = 7;
+    bool spp_seed_use_pntpos_code_weight = false;
+    // Deprecated compatibility aliases for old diagnostic knobs.
+    bool spp_seed_enable_claslib_residual_rejection = false;
+    double spp_seed_claslib_residual_rejection_threshold = 20.0;
+    int spp_seed_claslib_residual_rejection_min_observations = 7;
+    bool spp_seed_use_claslib_code_weight = false;
+    bool spp_seed_enable_gps = true;
+    bool spp_seed_enable_galileo = true;
+    bool spp_seed_enable_qzss = true;
+    bool spp_seed_enable_beidou = true;
+    bool spp_seed_enable_glonass = true;
+    bool spp_seed_preserve_default_clock = false;
+
     // Kalman filter parameters
     double process_noise_position = 0.0;
     double process_noise_velocity = 1e-4;

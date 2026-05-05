@@ -3,9 +3,13 @@
 #include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/io/rinex.hpp>
 
+#include <algorithm>
+#include <cstdlib>
+#include <fstream>
 #include <memory>
 #include <cmath>
 #include <filesystem>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <set>
@@ -20,6 +24,74 @@ std::string sourcePath(const std::string& relative_path) {
 
 bool sourcePathExists(const std::string& relative_path) {
     return std::filesystem::exists(sourcePath(relative_path));
+}
+
+std::vector<std::string> splitCsvLine(const std::string& line) {
+    std::vector<std::string> fields;
+    std::string field;
+    std::istringstream stream(line);
+    while (std::getline(stream, field, ',')) {
+        fields.push_back(field);
+    }
+    return fields;
+}
+
+SatelliteId parseSatelliteId(const std::string& token) {
+    if (token.size() < 2) {
+        return {};
+    }
+    const int prn = std::stoi(token.substr(1));
+    switch (token[0]) {
+        case 'G': return SatelliteId(GNSSSystem::GPS, prn);
+        case 'R': return SatelliteId(GNSSSystem::GLONASS, prn);
+        case 'E': return SatelliteId(GNSSSystem::Galileo, prn);
+        case 'C': return SatelliteId(GNSSSystem::BeiDou, prn);
+        case 'J': return SatelliteId(GNSSSystem::QZSS, prn);
+        case 'I': return SatelliteId(GNSSSystem::NavIC, prn);
+        default: return {};
+    }
+}
+
+double expectedClaslibBroadcastVariance(const Ephemeris& eph) {
+    const double accuracy =
+        std::isfinite(eph.sv_accuracy) && eph.sv_accuracy >= 0.0 ? eph.sv_accuracy : 0.0;
+    if (eph.satellite.system == GNSSSystem::Galileo) {
+        const double sisa_cm = accuracy * 100.0;
+        int index = 255;
+        if (sisa_cm >= 0.0 && sisa_cm < 50.0) {
+            index = static_cast<int>(std::ceil(sisa_cm));
+        } else if (sisa_cm >= 50.0 && sisa_cm < 100.0) {
+            index = static_cast<int>(std::ceil((sisa_cm - 50.0) / 2.0)) + 50;
+        } else if (sisa_cm >= 100.0 && sisa_cm < 200.0) {
+            index = static_cast<int>(std::ceil((sisa_cm - 100.0) / 4.0)) + 75;
+        } else if (sisa_cm >= 200.0 && sisa_cm <= 600.0) {
+            index = static_cast<int>(std::ceil((sisa_cm - 200.0) / 16.0)) + 100;
+        }
+
+        double value_cm = 6144.0 * 100.0;
+        if (index >= 0 && index <= 49) {
+            value_cm = static_cast<double>(index);
+        } else if (index >= 50 && index <= 74) {
+            value_cm = static_cast<double>(index - 50) * 2.0 + 50.0;
+        } else if (index >= 75 && index <= 99) {
+            value_cm = static_cast<double>(index - 75) * 4.0 + 100.0;
+        } else if (index >= 100 && index <= 125) {
+            value_cm = static_cast<double>(index - 100) * 16.0 + 200.0;
+        }
+        const double value_m = value_cm / 100.0;
+        return value_m * value_m;
+    }
+
+    constexpr double kUraValues[] = {
+        2.4, 3.4, 4.85, 6.85, 9.65, 13.65, 24.0, 48.0, 96.0,
+        192.0, 384.0, 768.0, 1536.0, 3072.0, 6144.0
+    };
+    for (const double value : kUraValues) {
+        if (value >= accuracy) {
+            return value * value;
+        }
+    }
+    return 6144.0 * 6144.0;
 }
 
 }  // namespace
@@ -199,6 +271,122 @@ TEST_F(SPPTest, QualityControl) {
         }
     }
     EXPECT_FALSE(found_downgraded);
+}
+
+TEST_F(SPPTest, RespectsConfiguredElevationMask) {
+    ProcessorConfig high_mask_config = processor_config_;
+    high_mask_config.elevation_mask = 89.0;
+
+    SPPProcessor high_mask_processor;
+    ASSERT_TRUE(high_mask_processor.initialize(high_mask_config));
+
+    const auto solution = high_mask_processor.processEpoch(obs_data_, nav_data_);
+
+    EXPECT_FALSE(solution.isValid());
+    EXPECT_EQ(solution.num_satellites, 0);
+}
+
+TEST_F(SPPTest, IonosphereFreeCodeModeProducesSolution) {
+    SPPProcessor::SPPConfig iflc_config;
+    iflc_config.use_ionosphere_free_code = true;
+    SPPProcessor iflc_processor(iflc_config);
+    ASSERT_TRUE(iflc_processor.initialize(processor_config_));
+
+    const auto solution = iflc_processor.processEpoch(obs_data_, nav_data_);
+
+    EXPECT_TRUE(solution.isValid());
+    EXPECT_GE(solution.num_satellites, 4);
+}
+
+TEST_F(SPPTest, ConfiguredZeroInitialPositionBypassesHeaderSeed) {
+    const auto dump_path =
+        std::filesystem::temp_directory_path() / "libgnss_spp_zero_seed_config_test.csv";
+    std::filesystem::remove(dump_path);
+    setenv("GNSS_SPP_ITERATION_DUMP", dump_path.c_str(), 1);
+
+    SPPProcessor::SPPConfig config;
+    config.use_zero_initial_position = true;
+    SPPProcessor processor(config);
+    ASSERT_TRUE(processor.initialize(processor_config_));
+
+    const auto solution = processor.processEpoch(obs_data_, nav_data_);
+    unsetenv("GNSS_SPP_ITERATION_DUMP");
+
+    ASSERT_TRUE(solution.isValid());
+
+    std::ifstream dump(dump_path);
+    ASSERT_TRUE(dump.good());
+    std::string header_line;
+    std::string row_line;
+    ASSERT_TRUE(static_cast<bool>(std::getline(dump, header_line)));
+    ASSERT_TRUE(static_cast<bool>(std::getline(dump, row_line)));
+    std::filesystem::remove(dump_path);
+
+    const auto header = splitCsvLine(header_line);
+    const auto row = splitCsvLine(row_line);
+    ASSERT_EQ(header.size(), row.size());
+
+    const auto pos_x_it = std::find(header.begin(), header.end(), "pos_before_x_m");
+    const auto pos_y_it = std::find(header.begin(), header.end(), "pos_before_y_m");
+    const auto pos_z_it = std::find(header.begin(), header.end(), "pos_before_z_m");
+    ASSERT_NE(pos_x_it, header.end());
+    ASSERT_NE(pos_y_it, header.end());
+    ASSERT_NE(pos_z_it, header.end());
+
+    const auto pos_x_index = static_cast<size_t>(std::distance(header.begin(), pos_x_it));
+    const auto pos_y_index = static_cast<size_t>(std::distance(header.begin(), pos_y_it));
+    const auto pos_z_index = static_cast<size_t>(std::distance(header.begin(), pos_z_it));
+    EXPECT_NEAR(std::stod(row[pos_x_index]), 0.0, 1e-9);
+    EXPECT_NEAR(std::stod(row[pos_y_index]), 0.0, 1e-9);
+    EXPECT_NEAR(std::stod(row[pos_z_index]), 0.0, 1e-9);
+}
+
+TEST_F(SPPTest, PntposCodeWeightIncludesBroadcastEphemerisVariance) {
+    const auto dump_path =
+        std::filesystem::temp_directory_path() / "libgnss_spp_pntpos_weight_test.csv";
+    std::filesystem::remove(dump_path);
+    setenv("GNSS_SPP_ITERATION_DUMP", dump_path.c_str(), 1);
+
+    SPPProcessor::SPPConfig config;
+    config.use_pntpos_code_weight = true;
+    SPPProcessor processor(config);
+    ASSERT_TRUE(processor.initialize(processor_config_));
+
+    const auto solution = processor.processEpoch(obs_data_, nav_data_);
+    unsetenv("GNSS_SPP_ITERATION_DUMP");
+
+    ASSERT_TRUE(solution.isValid());
+
+    std::ifstream dump(dump_path);
+    ASSERT_TRUE(dump.good());
+    std::string header_line;
+    std::string row_line;
+    ASSERT_TRUE(static_cast<bool>(std::getline(dump, header_line)));
+    ASSERT_TRUE(static_cast<bool>(std::getline(dump, row_line)));
+    std::filesystem::remove(dump_path);
+
+    const auto header = splitCsvLine(header_line);
+    const auto row = splitCsvLine(row_line);
+    ASSERT_EQ(header.size(), row.size());
+
+    const auto sat_it = std::find(header.begin(), header.end(), "sat");
+    const auto eph_var_it = std::find(header.begin(), header.end(), "ephemeris_variance_m2");
+    const auto variance_it = std::find(header.begin(), header.end(), "variance_m2");
+    ASSERT_NE(sat_it, header.end());
+    ASSERT_NE(eph_var_it, header.end());
+    ASSERT_NE(variance_it, header.end());
+
+    const auto sat_index = static_cast<size_t>(std::distance(header.begin(), sat_it));
+    const auto eph_var_index = static_cast<size_t>(std::distance(header.begin(), eph_var_it));
+    const auto variance_index = static_cast<size_t>(std::distance(header.begin(), variance_it));
+    const SatelliteId sat = parseSatelliteId(row[sat_index]);
+    const Ephemeris* eph = nav_data_.getEphemeris(sat, obs_data_.time);
+    ASSERT_NE(eph, nullptr);
+
+    const double ephemeris_variance = std::stod(row[eph_var_index]);
+    const double total_variance = std::stod(row[variance_index]);
+    EXPECT_NEAR(ephemeris_variance, expectedClaslibBroadcastVariance(*eph), 1e-9);
+    EXPECT_GT(total_variance, ephemeris_variance);
 }
 
 TEST_F(SPPTest, DOPCalculation) {
