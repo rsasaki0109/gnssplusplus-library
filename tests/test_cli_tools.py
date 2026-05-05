@@ -834,6 +834,8 @@ def build_qzss_cssr_mask_message(
     iod: int,
     prn: int = 3,
     prns: tuple[int, ...] | None = None,
+    system_id: int = 0,
+    prn_base: int = 1,
     sync: bool = True,
     sigmask: int = 0x8000,
 ) -> tuple[bytes, int]:
@@ -856,11 +858,11 @@ def build_qzss_cssr_mask_message(
     bit += 4
     set_unsigned_bits(payload, bit, 4, 1)
     bit += 4
-    set_unsigned_bits(payload, bit, 4, 0)
+    set_unsigned_bits(payload, bit, 4, system_id)
     bit += 4
     svmask = 0
     for satellite_prn in satellites:
-        svmask |= encode_cssr_satellite_mask(satellite_prn)
+        svmask |= encode_cssr_satellite_mask(satellite_prn, prn_base=prn_base)
     set_unsigned_bits(payload, bit, 40, svmask)
     bit += 40
     set_unsigned_bits(payload, bit, 16, sigmask)
@@ -4820,6 +4822,51 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m", corrections_csv)
             self.assertIn("1316,518400.000,G,3,0.000000,0.000000,0.000000,0.025600,0.000000", corrections_csv)
 
+    def test_qzss_l6_info_maps_clas_system_id_four_to_qzss(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_clas_qzss_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_qzss.bin"
+            corrections_path = temp_root / "session_qzss_corrections.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(
+                            tow=518400,
+                            iod=3,
+                            prn=1,
+                            system_id=4,
+                            prn_base=1,
+                            sync=True,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            network_id=1,
+                            dclock_m=0.025,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--limit",
+                "5",
+                "--gps-week",
+                "2068",
+                "--extract-compact-corrections",
+                str(corrections_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("detail=systems=J:1", result.stdout)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertIn("2068,518400.000,J,1,0.000000,0.000000,0.000000,0.025600,0.000000", corrections_csv)
+            self.assertNotIn(",S,", corrections_csv)
+
     def test_qzss_l6_info_extracts_separate_orbit_clock_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_orbit_clock_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -5994,7 +6041,7 @@ class CLIToolsTest(unittest.TestCase):
             corrections_csv = corrections_path.read_text(encoding="ascii")
             self.assertEqual(
                 corrections_csv.strip(),
-                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
+                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,pdi:<id>=<n>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
             )
 
     def test_qzss_l6_info_compact_flush_policy_can_require_both_orbit_and_clock(self) -> None:
@@ -6044,7 +6091,7 @@ class CLIToolsTest(unittest.TestCase):
             orbit_and_clock_csv = orbit_and_clock_path.read_text(encoding="ascii")
             self.assertEqual(
                 orbit_and_clock_csv.strip(),
-                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
+                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,pdi:<id>=<n>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
             )
 
     def test_qzss_l6_info_compact_atmos_merge_policy_no_carry_drops_stec_coefficients_between_epochs(self) -> None:
@@ -6124,6 +6171,80 @@ class CLIToolsTest(unittest.TestCase):
                 if line.startswith("2200,518430.000")
             )
             self.assertNotIn("atmos_stec_c00_tecu:G03=1.500000", no_carry_second_row)
+
+    def test_qzss_l6_info_compact_atmos_network_rows_carry_gridded_residuals_between_epochs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_network_atmos_carry_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_network_atmos_carry.bin"
+            output_path = temp_root / "compact.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_stec_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            selected_satellites=1,
+                            stec_type=0,
+                            stec_c00_tecu=1.5,
+                        ),
+                        build_qzss_cssr_gridded_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=True,
+                            network_id=7,
+                            selected_satellites=1,
+                            stec_residuals_tecu=(0.24,),
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0,
+                            iod=3,
+                            prn=3,
+                            dclock_m=0.025,
+                            sync=False,
+                        ),
+                    ]
+                )
+                + build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518430, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=30,
+                            iod=3,
+                            prn=3,
+                            dclock_m=0.025,
+                            sync=False,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(output_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            second_rows = [
+                line
+                for line in output_path.read_text(encoding="ascii").splitlines()
+                if line.startswith("2200,518430.000")
+            ]
+            self.assertTrue(
+                any(
+                    "atmos_network_id=7" in row
+                    and "atmos_grid_count=1" in row
+                    and "atmos_stec_residuals_tecu:G03=0.240000" in row
+                    for row in second_rows
+                ),
+                msg="\n".join(second_rows),
+            )
 
     def test_qzss_l6_info_compact_atmos_merge_policy_network_locked_resets_carried_stec_coefficients(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_network_locked_") as temp_dir:

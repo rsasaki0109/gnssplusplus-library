@@ -187,6 +187,49 @@ std::vector<std::uint8_t> buildUraMessage(int tow_offset, int iod, int ura_index
     return bits;
 }
 
+std::vector<std::uint8_t> buildStecMessageWithInvalidC00(int tow_offset, int iod) {
+    auto bits = makeSubframeBits(qzss_l6::kSubframeFrames);
+    int offset = 0;
+    appendUnsigned(bits, offset, 12, kCssrType);
+    appendUnsigned(bits, offset, 4, 8);
+    appendUnsigned(bits, offset, 12, static_cast<std::uint64_t>(tow_offset));
+    appendUnsigned(bits, offset, 4, 0);
+    appendUnsigned(bits, offset, 1, 0);
+    appendUnsigned(bits, offset, 4, static_cast<std::uint64_t>(iod));
+    appendUnsigned(bits, offset, 2, 0);  // STEC type
+    appendUnsigned(bits, offset, 5, 7);  // network ID
+    appendUnsigned(bits, offset, 1, 1);  // one selected satellite
+    appendUnsigned(bits, offset, 6, 17);
+    appendSigned(bits, offset, 14, -(1 << 13));
+    return bits;
+}
+
+std::vector<std::uint8_t> buildGriddedMessageWithInvalidResiduals(int tow_offset, int iod) {
+    auto bits = makeSubframeBits(qzss_l6::kSubframeFrames);
+    int offset = 0;
+    appendUnsigned(bits, offset, 12, kCssrType);
+    appendUnsigned(bits, offset, 4, 9);
+    appendUnsigned(bits, offset, 12, static_cast<std::uint64_t>(tow_offset));
+    appendUnsigned(bits, offset, 4, 0);
+    appendUnsigned(bits, offset, 1, 0);
+    appendUnsigned(bits, offset, 4, static_cast<std::uint64_t>(iod));
+    appendUnsigned(bits, offset, 2, 1);  // trop type
+    appendUnsigned(bits, offset, 1, 0);  // 7-bit STEC residuals
+    appendUnsigned(bits, offset, 5, 7);  // network ID
+    appendUnsigned(bits, offset, 1, 1);  // one selected satellite
+    appendUnsigned(bits, offset, 6, 9);  // trop quality
+    appendUnsigned(bits, offset, 6, 2);  // grid count
+
+    appendSigned(bits, offset, 9, -(1 << 8));
+    appendSigned(bits, offset, 8, 0);
+    appendSigned(bits, offset, 7, -(1 << 6));
+
+    appendSigned(bits, offset, 9, 1);
+    appendSigned(bits, offset, 8, -(1 << 7));
+    appendSigned(bits, offset, 7, 1);
+    return bits;
+}
+
 std::array<std::uint8_t, qzss_l6::kFrameBytes> buildFrame(
     const std::vector<std::uint8_t>& subframe_bits,
     int frame_index,
@@ -232,6 +275,26 @@ TEST(QzssL6DecoderTest, ClasVendorStillAssemblesFiveFrameSubframe) {
     ASSERT_EQ(decoder.maskState().satellites.size(), 1U);
     EXPECT_EQ(decoder.maskState().satellites.front().system, GNSSSystem::GPS);
     EXPECT_EQ(decoder.maskState().satellites.front().prn, 5);
+}
+
+TEST(QzssL6DecoderTest, ClasVendorMapsSystemIdFourToQzssObservationPrns) {
+    qzss_l6::L6Decoder decoder;
+    const auto mask_message = buildMaskMessage(
+        345600,
+        6,
+        {MaskSatelliteFixture{4, 1, 1}, MaskSatelliteFixture{4, 1, 3}});
+
+    for (int frame_index = 0; frame_index < qzss_l6::kSubframeFrames; ++frame_index) {
+        const auto frame = buildFrame(mask_message, frame_index, 199, kVendorClas);
+        const auto epochs = decoder.feedFrame(frame.data(), 2400);
+        EXPECT_TRUE(epochs.empty());
+    }
+
+    ASSERT_EQ(decoder.maskState().satellites.size(), 2U);
+    EXPECT_EQ(decoder.maskState().satellites[0].system, GNSSSystem::QZSS);
+    EXPECT_EQ(decoder.maskState().satellites[0].prn, 1);
+    EXPECT_EQ(decoder.maskState().satellites[1].system, GNSSSystem::QZSS);
+    EXPECT_EQ(decoder.maskState().satellites[1].prn, 3);
 }
 
 TEST(QzssL6DecoderTest, MadocaL6EVendorAssemblesFiveFrameMask) {
@@ -429,4 +492,46 @@ TEST(QzssL6DecoderTest, MadocaL6EClockOffsetRollsPastMaskHourBoundary) {
     ASSERT_EQ(epochs.size(), 1U);
     EXPECT_EQ(epochs.front().week, 2360);
     EXPECT_DOUBLE_EQ(epochs.front().tow, 176400.0);
+}
+
+TEST(QzssL6DecoderTest, ClasAtmosInvalidSentinelsMatchPythonTokens) {
+    qzss_l6::L6Decoder decoder;
+    const auto mask_message = buildMaskMessage(345600, 12);
+    for (int frame_index = 0; frame_index < qzss_l6::kSubframeFrames; ++frame_index) {
+        const auto frame = buildFrame(mask_message, frame_index, 199, kVendorClas);
+        EXPECT_TRUE(decoder.feedFrame(frame.data(), 2402).empty());
+    }
+
+    const auto stec_message = buildStecMessageWithInvalidC00(100, 12);
+    for (int frame_index = 0; frame_index < qzss_l6::kSubframeFrames; ++frame_index) {
+        const auto frame = buildFrame(stec_message, frame_index, 199, kVendorClas);
+        EXPECT_TRUE(decoder.feedFrame(frame.data(), 2402).empty());
+    }
+
+    const auto gridded_message = buildGriddedMessageWithInvalidResiduals(100, 12);
+    for (int frame_index = 0; frame_index < qzss_l6::kSubframeFrames; ++frame_index) {
+        const auto frame = buildFrame(gridded_message, frame_index, 199, kVendorClas);
+        EXPECT_TRUE(decoder.feedFrame(frame.data(), 2402).empty());
+    }
+
+    const auto clock_message = buildClockMessage(105, 12, 625);
+    for (int frame_index = 0; frame_index < qzss_l6::kSubframeFrames - 1; ++frame_index) {
+        const auto frame = buildFrame(clock_message, frame_index, 199, kVendorClas);
+        EXPECT_TRUE(decoder.feedFrame(frame.data(), 2402).empty());
+    }
+    const auto final_frame =
+        buildFrame(clock_message, qzss_l6::kSubframeFrames - 1, 199, kVendorClas);
+    const auto epochs = decoder.feedFrame(final_frame.data(), 2402);
+    ASSERT_EQ(epochs.size(), 1U);
+
+    const auto& atmos = epochs.front().merged_atmos;
+    EXPECT_EQ(atmos.count("atmos_stec_c00_tecu:G05"), 0U);
+    ASSERT_EQ(atmos.count("atmos_stec_type:G05"), 1U);
+    EXPECT_EQ(atmos.at("atmos_stec_type:G05"), "0");
+    ASSERT_EQ(atmos.count("atmos_trop_hs_residuals_m"), 1U);
+    EXPECT_EQ(atmos.at("atmos_trop_hs_residuals_m"), "nan;0.004000");
+    ASSERT_EQ(atmos.count("atmos_trop_wet_residuals_m"), 1U);
+    EXPECT_EQ(atmos.at("atmos_trop_wet_residuals_m"), "0.000000;nan");
+    ASSERT_EQ(atmos.count("atmos_stec_residuals_tecu:G05"), 1U);
+    EXPECT_EQ(atmos.at("atmos_stec_residuals_tecu:G05"), "nan;0.040000");
 }

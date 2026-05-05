@@ -9,6 +9,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <optional>
 
 namespace libgnss::qzss_l6 {
 
@@ -27,14 +28,13 @@ constexpr int kGnssGps = 0;
 constexpr int kGnssGlonass = 1;
 constexpr int kGnssGalileo = 2;
 constexpr int kGnssBeidou = 3;
+constexpr int kGnssQzssClas = 4;
 constexpr int kGnssQzss = 5;
 
 // SSR update interval table (IS-QZSS-L6-004, Table 4.2.2-9)
 constexpr double kUdiTable[] = {
     1, 2, 5, 10, 15, 30, 60, 120, 240, 300, 600, 900, 1800, 3600, 7200, 10800
 };
-
-constexpr int kGnssSbas = 4;
 
 constexpr int kVendorMadoca = 2;
 constexpr int kVendorClas = 5;
@@ -52,7 +52,7 @@ GNSSSystem cssrSystemToGnss(int sys_id, bool madoca_l6e_mode) {
         case kGnssGlonass: return GNSSSystem::GLONASS;
         case kGnssGalileo: return GNSSSystem::Galileo;
         case kGnssBeidou: return GNSSSystem::BeiDou;
-        case kGnssSbas: return GNSSSystem::SBAS;
+        case kGnssQzssClas: return GNSSSystem::QZSS;
         case kGnssQzss: return GNSSSystem::QZSS;
         default: return GNSSSystem::UNKNOWN;
     }
@@ -92,10 +92,17 @@ SatelliteId normalizeQzssObservationId(const SatelliteId& satellite) {
         return SatelliteId(GNSSSystem::QZSS,
                            static_cast<uint8_t>(satellite.prn - 192));
     }
+    if (satellite.system == GNSSSystem::QZSS && satellite.prn >= 120 && satellite.prn <= 158) {
+        return SatelliteId(GNSSSystem::QZSS,
+                           static_cast<uint8_t>(satellite.prn - 119));
+    }
     return satellite;
 }
 
 int qzssObservationPrn(uint8_t prn) {
+    if (prn >= 120 && prn <= 158) {
+        return static_cast<int>(prn) - 119;
+    }
     return prn >= 193 ? static_cast<int>(prn) - 192 : static_cast<int>(prn);
 }
 
@@ -117,6 +124,68 @@ double ssrUraSigmaMeters(int ura_index) {
     return (std::pow(3.0, static_cast<double>((ura_index >> 3) & 0x07)) *
                 (1.0 + static_cast<double>(ura_index & 0x07) / 4.0) -
             1.0) * 1e-3;
+}
+
+std::map<SatelliteId, std::map<int, double>> composeNetworkPhaseBiases(
+    const std::map<SatelliteId, std::map<int, double>>& base_biases,
+    const std::map<SatelliteId, std::map<int, double>>& network_biases) {
+    auto composed = network_biases;
+    for (const auto& [satellite, base_rows] : base_biases) {
+        const auto network_sat_it = network_biases.find(satellite);
+        if (network_sat_it == network_biases.end()) {
+            continue;
+        }
+        auto& composed_rows = composed[satellite];
+        for (const auto& [slot, base_bias] : base_rows) {
+            auto row_it = composed_rows.find(slot);
+            if (row_it != composed_rows.end()) {
+                row_it->second += base_bias;
+            } else {
+                composed_rows[slot] = base_bias;
+            }
+        }
+    }
+    return composed;
+}
+
+std::map<SatelliteId, std::map<int, uint8_t>> composeNetworkPhaseDiscontinuity(
+    const std::map<SatelliteId, std::map<int, uint8_t>>& base_pdi,
+    const std::map<SatelliteId, std::map<int, uint8_t>>& network_pdi,
+    const std::map<SatelliteId, std::map<int, double>>& network_biases) {
+    auto composed = network_pdi;
+    for (const auto& [satellite, base_rows] : base_pdi) {
+        if (network_biases.find(satellite) == network_biases.end()) {
+            continue;
+        }
+        auto& composed_rows = composed[satellite];
+        for (const auto& [slot, base_value] : base_rows) {
+            if (composed_rows.find(slot) == composed_rows.end()) {
+                composed_rows[slot] = base_value;
+            }
+        }
+    }
+    return composed;
+}
+
+std::optional<double> readScaledSigned(BitReader& reader, int bits, double scale) {
+    const int64_t raw = reader.readS(bits);
+    const int64_t invalid_sentinel = -(int64_t{1} << (bits - 1));
+    if (raw == invalid_sentinel) {
+        return std::nullopt;
+    }
+    return static_cast<double>(raw) * scale;
+}
+
+std::string formatNullableDouble(const std::optional<double>& value) {
+    return value ? std::to_string(*value) : std::string("nan");
+}
+
+void storeScaledTokenIfValid(std::map<std::string, std::string>& tokens,
+                             const std::string& key,
+                             const std::optional<double>& value) {
+    if (value) {
+        tokens[key] = std::to_string(*value);
+    }
 }
 
 // Orbit correction scale factors (IS-QZSS-L6-004, Table 4.2.2-13)
@@ -191,7 +260,7 @@ void L6Decoder::decodeSubtype1(BitReader& reader) {
         int prn_base = 1;
         switch (sys_id) {
             case 4:
-                prn_base = madoca_l6e_mode_ ? 193 : 120;
+                prn_base = madoca_l6e_mode_ ? 193 : 1;
                 break;
             case 5:
                 prn_base = 193;
@@ -529,20 +598,35 @@ void L6Decoder::decodeSubtype8(BitReader& reader) {
         ++selected_count;
 
         reader.readU(6); // stec_quality
-        const double c00 = reader.readS(14) * 0.05;
-        tokens["atmos_stec_c00_tecu:" + key] = std::to_string(c00);
+        storeScaledTokenIfValid(
+            tokens, "atmos_stec_c00_tecu:" + key, readScaledSigned(reader, 14, 0.05));
         tokens["atmos_stec_type:" + key] = std::to_string(stec_type);
 
         if (stec_type > 0) {
-            tokens["atmos_stec_c01_tecu_per_deg:" + key] = std::to_string(reader.readS(12) * 0.02);
-            tokens["atmos_stec_c10_tecu_per_deg:" + key] = std::to_string(reader.readS(12) * 0.02);
+            storeScaledTokenIfValid(
+                tokens,
+                "atmos_stec_c01_tecu_per_deg:" + key,
+                readScaledSigned(reader, 12, 0.02));
+            storeScaledTokenIfValid(
+                tokens,
+                "atmos_stec_c10_tecu_per_deg:" + key,
+                readScaledSigned(reader, 12, 0.02));
         }
         if (stec_type > 1) {
-            tokens["atmos_stec_c11_tecu_per_deg2:" + key] = std::to_string(reader.readS(10) * 0.02);
+            storeScaledTokenIfValid(
+                tokens,
+                "atmos_stec_c11_tecu_per_deg2:" + key,
+                readScaledSigned(reader, 10, 0.02));
         }
         if (stec_type > 2) {
-            tokens["atmos_stec_c02_tecu_per_deg2:" + key] = std::to_string(reader.readS(8) * 0.005);
-            tokens["atmos_stec_c20_tecu_per_deg2:" + key] = std::to_string(reader.readS(8) * 0.005);
+            storeScaledTokenIfValid(
+                tokens,
+                "atmos_stec_c02_tecu_per_deg2:" + key,
+                readScaledSigned(reader, 8, 0.005));
+            storeScaledTokenIfValid(
+                tokens,
+                "atmos_stec_c20_tecu_per_deg2:" + key,
+                readScaledSigned(reader, 8, 0.005));
         }
     }
     tokens["atmos_selected_satellites"] = std::to_string(selected_count);
@@ -592,16 +676,16 @@ void L6Decoder::decodeSubtype9(BitReader& reader) {
     std::string trop_hs, trop_wet;
     std::map<std::string, std::string> stec_residuals;
     for (int g = 0; g < grid_count; ++g) {
-        const double hs = reader.readS(9) * 0.004;
-        const double wet = reader.readS(8) * 0.004;
+        const auto hs = readScaledSigned(reader, 9, 0.004);
+        const auto wet = readScaledSigned(reader, 8, 0.004);
         if (g > 0) { trop_hs += ";"; trop_wet += ";"; }
-        trop_hs += std::to_string(hs);
-        trop_wet += std::to_string(wet);
+        trop_hs += formatNullableDouble(hs);
+        trop_wet += formatNullableDouble(wet);
 
         for (const auto& sat_key : sel_sats) {
-            const double res = reader.readS(stec_bits) * 0.04;
+            const auto res = readScaledSigned(reader, stec_bits, 0.04);
             if (g > 0) stec_residuals[sat_key] += ";";
-            stec_residuals[sat_key] += std::to_string(res);
+            stec_residuals[sat_key] += formatNullableDouble(res);
         }
     }
 
@@ -833,12 +917,13 @@ std::vector<CssrEpoch> L6Decoder::decodeFile(const std::string& path, int gps_we
     }
 
     // Post-process: build CSV-style merged corrections.
-    // Emulate Python's pending_atmos/pending_bias accumulation.
-    // Each epoch gets a single flat atmos token set and accumulated biases.
+    // Emulate Python's pending_atmos accumulation while keeping ST5 base phase
+    // biases separate from ST6 network-specific phase biases.  CLASLIB composes
+    // network phase bias rows as ST5 base + ST6 network delta.
     {
         std::map<std::string, std::string> pending_atmos;
-        std::map<SatelliteId, std::map<int, double>> pending_pbias;
-        std::map<SatelliteId, std::map<int, uint8_t>> pending_pdi;
+        std::map<SatelliteId, std::map<int, double>> base_pbias;
+        std::map<SatelliteId, std::map<int, uint8_t>> base_pdi;
         for (auto& ep : all_epochs) {
             // Update pending atmos (message-order union, same as Python)
             for (const auto& [net_id, tokens] : ep.atmos_by_network) {
@@ -847,31 +932,41 @@ std::vector<CssrEpoch> L6Decoder::decodeFile(const std::string& path, int gps_we
             }
             ep.merged_atmos = pending_atmos;
 
-            // Update pending phase bias: ST5 base resets, ST6 network updates
+            // Update pending phase bias base from ST5.  ST6 rows are composed
+            // below per network and stay out of the base correction row.
             if (ep.has_phase_bias) {
-                // ST5 arrived: reset pending to base values
-                pending_pbias.clear();
-                pending_pdi.clear();
-                for (const auto& [sat, biases] : ep.phase_biases)
-                    for (const auto& [slot, val] : biases)
-                        pending_pbias[sat][slot] = val;
-                for (const auto& [sat, pdi_map] : ep.phase_discontinuity_indicators)
-                    for (const auto& [slot, val] : pdi_map)
-                        pending_pdi[sat][slot] = val;
+                base_pbias = ep.phase_biases;
+                base_pdi = ep.phase_discontinuity_indicators;
             }
-            // ST6 network updates: merge into pending
-            for (const auto& [net_id, sat_biases] : ep.network_phase_biases)
-                for (const auto& [sat, biases] : sat_biases)
-                    for (const auto& [slot, val] : biases)
-                        pending_pbias[sat][slot] = val;
-            for (const auto& [net_id, sat_pdi] : ep.network_phase_discontinuity_indicators)
-                for (const auto& [sat, pdi_map] : sat_pdi)
-                    for (const auto& [slot, val] : pdi_map)
-                        pending_pdi[sat][slot] = val;
-            // Store merged biases + PDI in epoch
-            ep.phase_biases = pending_pbias;
-            ep.phase_discontinuity_indicators = pending_pdi;
-            ep.has_phase_bias = !pending_pbias.empty();
+
+            std::map<int, std::map<SatelliteId, std::map<int, double>>> composed_network_biases;
+            std::map<int, std::map<SatelliteId, std::map<int, uint8_t>>> composed_network_pdi;
+            for (const auto& [net_id, sat_biases] : ep.network_phase_biases) {
+                const auto composed_biases =
+                    composeNetworkPhaseBiases(base_pbias, sat_biases);
+                if (!composed_biases.empty()) {
+                    composed_network_biases[net_id] = composed_biases;
+                }
+
+                static const std::map<SatelliteId, std::map<int, uint8_t>> kEmptyPdi;
+                const auto net_pdi_it =
+                    ep.network_phase_discontinuity_indicators.find(net_id);
+                const auto& network_pdi =
+                    net_pdi_it != ep.network_phase_discontinuity_indicators.end()
+                        ? net_pdi_it->second
+                        : kEmptyPdi;
+                const auto composed_pdi =
+                    composeNetworkPhaseDiscontinuity(base_pdi, network_pdi, sat_biases);
+                if (!composed_pdi.empty()) {
+                    composed_network_pdi[net_id] = composed_pdi;
+                }
+            }
+
+            ep.network_phase_biases = composed_network_biases;
+            ep.network_phase_discontinuity_indicators = composed_network_pdi;
+            ep.phase_biases = base_pbias;
+            ep.phase_discontinuity_indicators = base_pdi;
+            ep.has_phase_bias = !base_pbias.empty();
         }
     }
 
@@ -973,7 +1068,8 @@ void populateSSRProducts(
                 corr.code_bias_valid = !corr.code_bias_m.empty();
             }
 
-            // Phase biases (merged: ST5 base + ST6 network updates)
+            // Phase biases from ST5 base.  ST6 network-specific composed rows
+            // are emitted separately below with a non-zero bias_network_id.
             auto pb_it = epoch.phase_biases.find(sat_id);
             if (pb_it != epoch.phase_biases.end()) {
                 const int gnss_id = gnssSystemToCssrId(sat_id.system);
@@ -998,17 +1094,6 @@ void populateSSRProducts(
                     }
                 }
             }
-            // Set bias_network_id from the last ST6 that updated this satellite
-            // (0 means base-only from ST5)
-            if (corr.phase_bias_valid) {
-                for (auto rit = epoch.network_phase_biases.rbegin();
-                     rit != epoch.network_phase_biases.rend(); ++rit) {
-                    if (rit->second.count(sat_id)) {
-                        corr.bias_network_id = rit->first;
-                        break;
-                    }
-                }
-            }
 
             auto ura_it = epoch.ura_indices.find(sat_id);
             if (ura_it != epoch.ura_indices.end()) {
@@ -1030,13 +1115,12 @@ void populateSSRProducts(
             }
             products.addCorrection(corr);
 
-            // Emit an extra atmos-only correction for the preferred network
-            // with STEC polynomial only (no trop, no STEC residuals).
-            // This matches CSV pipeline where preferred-network rows have
-            // c00 but no grid data, causing Saastamoinen trop fallback.
-            // selectClasEpochAtmosTokens will pick this correction due to
-            // better grid distance, then preferred_network_id propagates
-            // to bias selection via interpolateCorrection.
+            // Emit an extra atmos-only correction for the preferred network.
+            // Keep the complete network atmosphere bank here: ST8 polynomial
+            // terms plus the latest ST9 trop/STEC residual grid.  CLASLIB's
+            // corrmea gate rejects satellites when the selected gridded STEC
+            // residuals are unavailable; dropping residuals here turns those
+            // rows into polynomial-only corrections and admits extra sats.
             if (preferred_network_id > 0 &&
                 preferred_network_id != corr.atmos_network_id &&
                 epoch.atmos_by_network.count(preferred_network_id)) {
@@ -1044,28 +1128,10 @@ void populateSSRProducts(
                 pref_corr.satellite = product_sat_id;
                 pref_corr.time = time;
                 pref_corr.atmos_network_id = preferred_network_id;
-                // STEC polynomial from preferred network's ST8 data.
-                // No trop, no STEC residuals (matching CSV net7 row format
-                // where polynomial-only is used with Saastamoinen trop).
                 const auto& pt = epoch.atmos_by_network.at(preferred_network_id);
-                for (const auto& [k, v] : pt) {
-                    if (k.find("atmos_stec_c0") != std::string::npos ||
-                        k.find("atmos_stec_c1") != std::string::npos ||
-                        k.find("atmos_stec_c2") != std::string::npos ||
-                        k.find("atmos_stec_type:") != std::string::npos ||
-                        k.find("atmos_stec_quality:") != std::string::npos ||
-                        k.find("atmos_stec_source_subtype:") != std::string::npos ||
-                        k.find("atmos_stec_delay_l1_m:") != std::string::npos ||
-                        k.find("atmos_stec_std_l1_m:") != std::string::npos ||
-                        k == "atmos_stec_avail" ||
-                        k == "atmos_selected_satellites")
-                        pref_corr.atmos_tokens[k] = v;
-                }
+                pref_corr.atmos_tokens = pt;
                 pref_corr.atmos_tokens["atmos_network_id"] =
                     std::to_string(preferred_network_id);
-                auto gc = pt.find("atmos_grid_count");
-                if (gc != pt.end())
-                    pref_corr.atmos_tokens["atmos_grid_count"] = gc->second;
                 pref_corr.atmos_valid = true;
                 products.addCorrection(pref_corr);
             }
@@ -1081,9 +1147,27 @@ void populateSSRProducts(
                 bias_corr.time = time;
                 bias_corr.bias_network_id = net_id;
                 const int gnss_id = gnssSystemToCssrId(sat_id.system);
+                const std::map<int, uint8_t>* sat_pdi = nullptr;
+                const auto net_pdi_it =
+                    epoch.network_phase_discontinuity_indicators.find(net_id);
+                if (net_pdi_it != epoch.network_phase_discontinuity_indicators.end()) {
+                    const auto sat_pdi_it = net_pdi_it->second.find(sat_id);
+                    if (sat_pdi_it != net_pdi_it->second.end()) {
+                        sat_pdi = &sat_pdi_it->second;
+                    }
+                }
                 for (const auto& [slot, bias_m] : bias_it->second) {
                     const uint8_t rtcm_id = cssrSignalSlotToRtcmId(gnss_id, slot);
-                    if (rtcm_id > 0) bias_corr.phase_bias_m[rtcm_id] = -bias_m;
+                    if (rtcm_id > 0) {
+                        bias_corr.phase_bias_m[rtcm_id] = -bias_m;
+                        if (sat_pdi != nullptr) {
+                            const auto pdi_it = sat_pdi->find(slot);
+                            if (pdi_it != sat_pdi->end()) {
+                                bias_corr.phase_discontinuity_indicators[rtcm_id] =
+                                    pdi_it->second;
+                            }
+                        }
+                    }
                 }
                 bias_corr.phase_bias_valid = !bias_corr.phase_bias_m.empty();
                 if (bias_corr.phase_bias_valid)
