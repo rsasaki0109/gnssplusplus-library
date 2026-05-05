@@ -44,6 +44,10 @@ struct OSRCorrection {
     bool has_iono = false;
     bool has_code_bias = false;
     bool has_phase_bias = false;
+    std::map<uint8_t, uint8_t> phase_discontinuity_indicators;
+    int atmos_network_id = 0;
+    int code_bias_network_id = 0;
+    int phase_bias_network_id = 0;
     GNSSTime atmos_reference_time;
     GNSSTime phase_bias_reference_time;
     GNSSTime clock_reference_time;
