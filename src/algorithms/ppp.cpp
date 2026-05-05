@@ -1510,7 +1510,7 @@ PositionSolution PPPProcessor::processEpochStandard(
             detectCycleSlips(obs);
             predictState(dt, seed_ptr);
 
-            bool updated = updateFilter(obs, nav);
+            bool updated = updateFilter(obs, nav, seed_ptr);
             if (!updated && ppp_config_.enable_ambiguity_resolution) {
                 bool had_fixed_ambiguities = false;
                 for (auto& [satellite, ambiguity] : ambiguity_states_) {
@@ -1524,7 +1524,7 @@ PositionSolution PPPProcessor::processEpochStandard(
                     if (pppDebugEnabled()) {
                         std::cerr << "[PPP-AR] retry update after resetting fixed ambiguities\n";
                     }
-                    updated = updateFilter(obs, nav);
+                    updated = updateFilter(obs, nav, seed_ptr);
                 }
             }
 
@@ -2285,7 +2285,9 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     constrainStaticAnchorPosition();
 }
 
-bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData& nav) {
+bool PPPProcessor::updateFilter(const ObservationData& obs,
+                                const NavigationData& nav,
+                                const PositionSolution* seed_solution) {
     last_filter_iteration_diagnostics_.clear();
     last_residual_diagnostics_.clear();
 
@@ -2329,6 +2331,12 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
         PPPFilterIterationDiagnostic iteration_diagnostic;
         iteration_diagnostic.iteration = iteration;
         iteration_diagnostic.rows = measurement_rows;
+        if (seed_solution != nullptr && seed_solution->isValid()) {
+            iteration_diagnostic.seed_position_x_m = seed_solution->position_ecef(0);
+            iteration_diagnostic.seed_position_y_m = seed_solution->position_ecef(1);
+            iteration_diagnostic.seed_position_z_m = seed_solution->position_ecef(2);
+            iteration_diagnostic.seed_clock_m = seed_solution->receiver_clock_bias;
+        }
         double code_residual_sum_sq = 0.0;
         double phase_residual_sum_sq = 0.0;
         double code_residual_max_abs = -1.0;

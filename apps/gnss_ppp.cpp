@@ -41,6 +41,7 @@ struct Options {
     std::string ppp_correction_log_path;
     std::string ppp_filter_log_path;
     std::string ppp_residual_log_path;
+    std::string ppp_state_log_path;
     std::string kml_path;
     int max_epochs = 0;
     double start_tow = -1.0;  // negative disables the gate
@@ -156,6 +157,8 @@ void printUsage(const char* program_name) {
         << "                          Optional per-iteration PPP filter diagnostics CSV\n"
         << "  --ppp-residual-log <log.csv>\n"
         << "                          Optional per-row PPP residual diagnostics CSV\n"
+        << "  --ppp-state-log <log.stat>\n"
+        << "                          Optional per-epoch KF state log in MADOCALIB .stat format\n"
         << "  --kml <solution.kml>     Optional KML output\n"
         << "  --max-epochs <count>     Limit processed epochs (default: all)\n"
         << "  --start-tow <seconds>    Drop observation epochs with TOW < this value\n"
@@ -604,6 +607,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.ppp_filter_log_path = argv[++i];
         } else if (arg == "--ppp-residual-log" && i + 1 < argc) {
             options.ppp_residual_log_path = argv[++i];
+        } else if (arg == "--ppp-state-log" && i + 1 < argc) {
+            options.ppp_state_log_path = argv[++i];
         } else if (arg == "--kml" && i + 1 < argc) {
             options.kml_path = argv[++i];
         } else if (arg == "--max-epochs" && i + 1 < argc) {
@@ -795,6 +800,9 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.madocalib_bridge && !options.ppp_residual_log_path.empty()) {
         argumentError("--ppp-residual-log is only supported by the native PPP path", argv[0]);
+    }
+    if (options.madocalib_bridge && !options.ppp_state_log_path.empty()) {
+        argumentError("--ppp-state-log is only supported by the native PPP path; use --madocalib-stat-level for the bridge", argv[0]);
     }
     if (options.madocalib_bridge && options.madoca_l6e_paths.empty() == false) {
         argumentError(
@@ -1235,7 +1243,8 @@ void writePPPFilterLogHeader(std::ostream& output) {
            "position_z_m,glo_clock_delta_m,gal_clock_delta_m,qzs_clock_delta_m,"
            "bds_clock_delta_m,bds2_clock_delta_m,bds3_clock_delta_m,"
            "glo_clock_state_m,gal_clock_state_m,qzs_clock_state_m,bds_clock_state_m,"
-           "bds2_clock_state_m,bds3_clock_state_m\n";
+           "bds2_clock_state_m,bds3_clock_state_m,seed_position_x_m,"
+           "seed_position_y_m,seed_position_z_m,seed_clock_m\n";
 }
 
 void writePPPFilterLogRow(
@@ -1283,7 +1292,11 @@ void writePPPFilterLogRow(
            << diagnostic.qzs_clock_state_m << ','
            << diagnostic.bds_clock_state_m << ','
            << diagnostic.bds2_clock_state_m << ','
-           << diagnostic.bds3_clock_state_m << '\n';
+           << diagnostic.bds3_clock_state_m << ','
+           << diagnostic.seed_position_x_m << ','
+           << diagnostic.seed_position_y_m << ','
+           << diagnostic.seed_position_z_m << ','
+           << diagnostic.seed_clock_m << '\n';
 }
 
 void writePPPResidualLogHeader(std::ostream& output) {
@@ -1376,6 +1389,131 @@ void writePPPResidualLogRow(
            << diagnostic.ambiguity_lock_count << ','
            << diagnostic.required_lock_count << ','
            << diagnostic.phase_limit_m << '\n';
+}
+
+int mapSolutionStatusToMadocalibSolq(libgnss::SolutionStatus status) {
+    switch (status) {
+        case libgnss::SolutionStatus::PPP_FIXED: return 1;  // SOLQ_FIX (matches MADOCALIB pos2-armode=continuous fixed)
+        case libgnss::SolutionStatus::PPP_FLOAT: return 6;  // SOLQ_PPP (PPP float)
+        case libgnss::SolutionStatus::FIXED:     return 1;
+        case libgnss::SolutionStatus::FLOAT:     return 2;
+        case libgnss::SolutionStatus::DGPS:      return 4;
+        case libgnss::SolutionStatus::SPP:       return 5;
+        default:                                 return 0;
+    }
+}
+
+void writePPPStateLogRow(
+    std::ostream& output,
+    const libgnss::GNSSTime& time,
+    const libgnss::PositionSolution& solution,
+    const libgnss::PPPProcessor& processor) {
+    const auto& s = processor.getFilterState();
+    if (s.state.size() < 9) return;
+    const int stat = mapSolutionStatusToMadocalibSolq(solution.status);
+    if (stat == 0) return;
+
+    const int week = time.week;
+    const double tow = time.tow;
+    const auto& cov = s.covariance;
+    auto std_at = [&](int idx) -> double {
+        if (idx < 0 || idx >= cov.rows()) return 0.0;
+        const double v = cov(idx, idx);
+        return v > 0.0 ? std::sqrt(v) : 0.0;
+    };
+
+    constexpr double kCLight = 299792458.0;
+
+    auto write_kv_line = [&](const char* tag) {
+        output << tag << ',' << week << ','
+               << std::fixed << std::setprecision(3) << tow << ','
+               << stat;
+    };
+
+    // $POS
+    write_kv_line("$POS");
+    output << ',' << std::fixed << std::setprecision(4)
+           << s.state(s.pos_index)     << ','
+           << s.state(s.pos_index + 1) << ','
+           << s.state(s.pos_index + 2) << ','
+           << std_at(s.pos_index)      << ','
+           << std_at(s.pos_index + 1)  << ','
+           << std_at(s.pos_index + 2)  << '\n';
+
+    // $CLK (GPS receiver clock + GLONASS clock, MADOCALIB convention: ns)
+    const double cgps_ns = s.state(s.clock_index) * 1e9 / kCLight;
+    const double cglo_ns = (s.glo_clock_index >= 0 && s.glo_clock_index < s.state.size())
+                               ? s.state(s.glo_clock_index) * 1e9 / kCLight
+                               : 0.0;
+    const double sgps_ns = std_at(s.clock_index) * 1e9 / kCLight;
+    const double sglo_ns = (s.glo_clock_index >= 0)
+                               ? std_at(s.glo_clock_index) * 1e9 / kCLight
+                               : 0.0;
+    write_kv_line("$CLK");
+    output << ",1," << std::fixed << std::setprecision(3)
+           << cgps_ns << ',' << cglo_ns << ',' << sgps_ns << ',' << sglo_ns << '\n';
+
+    // $ISB (extra inter-system bias states, native convention)
+    auto write_isb = [&](const char* sys, int idx) {
+        if (idx < 0 || idx >= s.state.size()) return;
+        write_kv_line("$ISB");
+        output << ',' << sys << ','
+               << std::fixed << std::setprecision(3)
+               << (s.state(idx) * 1e9 / kCLight) << ','
+               << (std_at(idx)  * 1e9 / kCLight) << '\n';
+    };
+    write_isb("GAL",  s.gal_clock_index);
+    write_isb("QZS",  s.qzs_clock_index);
+    write_isb("BDS",  s.bds_clock_index);
+    write_isb("BDS2", s.bds2_clock_index);
+    write_isb("BDS3", s.bds3_clock_index);
+
+    // $TROP (single ZTD state)
+    if (s.trop_index >= 0 && s.trop_index < s.state.size()) {
+        write_kv_line("$TROP");
+        output << ",1," << std::fixed << std::setprecision(4)
+               << s.state(s.trop_index) << ',' << std_at(s.trop_index) << '\n';
+    }
+
+    // Build per-sat highest elevation map from residual diagnostics
+    std::map<libgnss::SatelliteId, double> sat_el;
+    for (const auto& r : processor.getLastPPPResidualDiagnostics()) {
+        auto it = sat_el.find(r.satellite);
+        if (it == sat_el.end() || r.elevation_deg > it->second) {
+            sat_el[r.satellite] = r.elevation_deg;
+        }
+    }
+
+    // $ION per sat
+    for (const auto& [sat, idx] : s.ionosphere_indices) {
+        if (idx < 0 || idx >= s.state.size()) continue;
+        if (s.state(idx) == 0.0) continue;
+        const double el = sat_el.count(sat) ? sat_el[sat] : 0.0;
+        write_kv_line("$ION");
+        output << ',' << sat.toString() << ','
+               << std::fixed << std::setprecision(1) << 0.0 << ',' << el << ','
+               << std::setprecision(4)
+               << s.state(idx) << ',' << std_at(idx) << '\n';
+    }
+
+    // $AMB per sat-freq (or per sat fallback)
+    for (const auto& [key, idx] : s.frequency_ambiguity_indices) {
+        if (idx < 0 || idx >= s.state.size()) continue;
+        if (s.state(idx) == 0.0) continue;
+        write_kv_line("$AMB");
+        output << ',' << key.first.toString() << ','
+               << (key.second + 1) << ','
+               << std::fixed << std::setprecision(4)
+               << s.state(idx) << ',' << std_at(idx) << '\n';
+    }
+    for (const auto& [sat, idx] : s.ambiguity_indices) {
+        if (idx < 0 || idx >= s.state.size()) continue;
+        if (s.state(idx) == 0.0) continue;
+        write_kv_line("$AMB");
+        output << ',' << sat.toString() << ",1,"
+               << std::fixed << std::setprecision(4)
+               << s.state(idx) << ',' << std_at(idx) << '\n';
+    }
 }
 
 }  // namespace
@@ -2001,9 +2139,11 @@ int main(int argc, char* argv[]) {
         int ppp_correction_log_rows = 0;
         int ppp_filter_log_rows = 0;
         int ppp_residual_log_rows = 0;
+        int ppp_state_log_rows = 0;
         std::ofstream ppp_correction_log;
         std::ofstream ppp_filter_log;
         std::ofstream ppp_residual_log;
+        std::ofstream ppp_state_log;
         if (!options.ppp_correction_log_path.empty()) {
             const std::filesystem::path correction_log_path(options.ppp_correction_log_path);
             if (!correction_log_path.parent_path().empty()) {
@@ -2045,6 +2185,18 @@ int main(int argc, char* argv[]) {
             }
             ppp_residual_log << std::setprecision(15);
             writePPPResidualLogHeader(ppp_residual_log);
+        }
+        if (!options.ppp_state_log_path.empty()) {
+            const std::filesystem::path state_log_path(options.ppp_state_log_path);
+            if (!state_log_path.parent_path().empty()) {
+                std::filesystem::create_directories(state_log_path.parent_path());
+            }
+            ppp_state_log.open(state_log_path);
+            if (!ppp_state_log.is_open()) {
+                std::cerr << "Error: failed to write PPP state log: "
+                          << options.ppp_state_log_path << "\n";
+                return 1;
+            }
         }
         while (options.max_epochs == 0 || processed_epochs < options.max_epochs) {
             if (has_preloaded_observation) {
@@ -2108,6 +2260,17 @@ int main(int argc, char* argv[]) {
                         diagnostic,
                         solution.status);
                     ++ppp_residual_log_rows;
+                }
+            }
+            if (ppp_state_log.is_open()) {
+                const std::streampos before = ppp_state_log.tellp();
+                writePPPStateLogRow(
+                    ppp_state_log,
+                    observation_data.time,
+                    solution,
+                    processor);
+                if (ppp_state_log.tellp() > before) {
+                    ++ppp_state_log_rows;
                 }
             }
             processed_epochs++;
@@ -2194,6 +2357,12 @@ int main(int argc, char* argv[]) {
                             ("\"" + jsonEscape(options.ppp_residual_log_path) + "\""))
                     << ",\n"
                     << "  \"ppp_residual_log_rows\": " << ppp_residual_log_rows << ",\n"
+                    << "  \"ppp_state_log\": "
+                    << (options.ppp_state_log_path.empty() ?
+                            "null" :
+                            ("\"" + jsonEscape(options.ppp_state_log_path) + "\""))
+                    << ",\n"
+                    << "  \"ppp_state_log_rows\": " << ppp_state_log_rows << ",\n"
                     << "  \"mode\": \"" << (options.kinematic_mode ? "kinematic" : "static") << "\",\n"
                     << "  \"navsys_mask\": " << options.navsys_mask << ",\n"
                     << "  \"navsys_all_observed\": "

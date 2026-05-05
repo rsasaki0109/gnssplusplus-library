@@ -235,6 +235,10 @@ public:
         double position_x_m = 0.0;
         double position_y_m = 0.0;
         double position_z_m = 0.0;
+        double seed_position_x_m = 0.0;
+        double seed_position_y_m = 0.0;
+        double seed_position_z_m = 0.0;
+        double seed_clock_m = 0.0;
         double clock_state_m = 0.0;
         double glo_clock_state_m = 0.0;
         double gal_clock_state_m = 0.0;
@@ -338,6 +342,8 @@ public:
      * @brief Get convergence time
      */
     double getConvergenceTime() const { return convergence_time_; }
+
+    const PPPState& getFilterState() const { return filter_state_; }
 
 private:
     PPPConfig ppp_config_;
@@ -447,7 +453,9 @@ private:
     /**
      * @brief Update filter with measurements
      */
-    bool updateFilter(const ObservationData& obs, const NavigationData& nav);
+    bool updateFilter(const ObservationData& obs,
+                      const NavigationData& nav,
+                      const PositionSolution* seed_solution = nullptr);
     
     /**
      * @brief Form ionosphere-free combinations
