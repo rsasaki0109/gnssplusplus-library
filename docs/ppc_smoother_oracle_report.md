@@ -35,6 +35,10 @@ The best smoother stack is only +0.065056 pp above `v237_sim`, and only
 
 The largest local oracle movements are `nagoya_run2` and `nagoya_run3`.
 
+The best-stack 2D trajectories below are colored by GNSS solution status:
+
+![PPC smoother best-stack 2D trajectory colored by GNSS status](ppc_smoother_status_trajectories.png)
+
 ## Mode Checks
 
 The current ceiling depends on the regressor-gated anchor and loss masks. More
@@ -97,4 +101,3 @@ The sweep uses these scripts:
 - `scripts/analyze_ppc_segment_selector_loro_blind_pandas.py`
 - `scripts/analyze_ppc_segment_selector_loro_blind_stream.py`
 - `scripts/analyze_ppc_segment_selector_loro_learned.py`
-
