@@ -2841,7 +2841,10 @@ class CLIToolsTest(unittest.TestCase):
         "test_ppp_static_signoff_cli_supports_real_data_ar_signoff",
         "test_clas_ppp_cli_writes_summary_for_named_profile",
         "test_clas_ppp_cli_accepts_compact_sampled_corrections",
+        "test_clas_ppp_cli_accepts_expanded_sampled_corrections",
         "test_clas_ppp_cli_accepts_direct_qzss_l6_corrections",
+        "test_clas_ppp_cli_reuses_qzss_expanded_cache",
+        "test_clas_ppp_cli_rejects_invalid_qzss_cache_options",
         "test_clas_ppp_cli_accepts_direct_qzss_l6_orbit_clock_corrections",
         "test_clas_ppp_cli_accepts_direct_qzss_l6_code_bias_and_ura",
         "test_clas_ppp_cli_accepts_direct_qzss_l6_with_atmos_inventory",
@@ -9530,6 +9533,7 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["dataset"], "CLAS/MADOCA PPP")
             self.assertEqual(payload["correction_profile"], "madoca")
             self.assertEqual(payload["ssr_transport"], "file")
+            self.assertIsNone(payload["filter_iterations"])
             self.assertEqual(payload["epochs"], 3)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
 
@@ -9586,8 +9590,63 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["correction_profile"], "clas")
             self.assertEqual(payload["ssr_transport"], "file")
             self.assertEqual(payload["correction_encoding"], "compact")
+            self.assertEqual(payload["filter_iterations"], 1)
             self.assertEqual(payload["epochs"], 3)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+
+    def test_clas_ppp_cli_accepts_expanded_sampled_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_expanded_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            expanded_path = temp_root / "corrections.expanded.csv"
+            output_path = temp_root / "clas_ppp_expanded.pos"
+            summary_path = temp_root / "clas_ppp_expanded_summary.json"
+            expanded_path.write_text(
+                "\n".join(
+                    [
+                        "# week,tow,sat,dx,dy,dz,dclock_m",
+                        "1316,518400.000,G03,0.000000,0.000000,0.000000,0.025000",
+                        "1316,518430.000,G03,0.000000,0.000000,0.000000,0.025000",
+                        "1316,518460.000,G03,0.000000,0.000000,0.000000,0.025000",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--expanded-ssr",
+                str(expanded_path),
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
+            self.assertIn("Finished CLAS/MADOCA PPP run.", result.stdout)
+            self.assertIn("encoding: expanded", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["correction_profile"], "clas")
+            self.assertEqual(payload["correction_encoding"], "expanded")
+            self.assertEqual(payload["expanded_ssr"], str(expanded_path))
+            self.assertEqual(payload["filter_iterations"], 1)
+            self.assertEqual(payload["epochs"], 3)
 
     def test_clas_ppp_cli_accepts_direct_qzss_l6_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_cli_") as temp_dir:
@@ -9656,8 +9715,114 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["correction_profile"], "clas")
             self.assertEqual(payload["ssr_transport"], "file")
             self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertEqual(payload["navsys_mask"], 25)
+            self.assertFalse(payload["navsys_all_observed"])
+            self.assertFalse(payload["qzss_cache_hit"])
+            self.assertGreater(payload["qzss_rows_written"], 0)
+            self.assertGreaterEqual(payload["qzss_rows_decoded"], payload["qzss_rows_written"])
             self.assertEqual(payload["epochs"], 3)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+
+    def test_clas_ppp_cli_reuses_qzss_expanded_cache(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_cache_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            l6_path = temp_root / "unused_l6.bin"
+            cache_path = temp_root / "qzss_cache.csv"
+            output_path = temp_root / "clas_ppp_l6_cache.pos"
+            summary_path = temp_root / "clas_ppp_l6_cache_summary.json"
+            l6_path.write_bytes(b"")
+            cache_path.write_text(
+                "\n".join(
+                    [
+                        "# week,tow,sat,dx,dy,dz,dclock_m",
+                        "1316,518400.000,G03,0.000000,0.000000,0.000000,0.025000",
+                        "1316,518430.000,G03,0.000000,0.000000,0.000000,0.025000",
+                        "1316,518460.000,G03,0.000000,0.000000,0.000000,0.025000",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            result = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--static",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--qzss-l6",
+                str(l6_path),
+                "--qzss-gps-week",
+                "1316",
+                "--qzss-expanded-cache",
+                str(cache_path),
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "3",
+                "--require-valid-epochs-min",
+                "3",
+                "--require-ppp-solution-rate-min",
+                "100",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("reusing qzss l6 expanded cache:", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["correction_encoding"], "qzss_l6")
+            self.assertTrue(payload["qzss_cache_hit"])
+            self.assertIsNone(payload["qzss_rows_written"])
+            self.assertIsNone(payload["qzss_rows_decoded"])
+            self.assertEqual(payload["qzss_expanded_csv"], str(cache_path))
+            self.assertEqual(payload["qzss_expanded_csv_size_bytes"], cache_path.stat().st_size)
+            self.assertEqual(payload["filter_iterations"], 1)
+
+    def test_clas_ppp_cli_rejects_invalid_qzss_cache_options(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_invalid_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            expanded_path = temp_root / "expanded.csv"
+            expanded_path.write_text("# week,tow,sat,dx,dy,dz,dclock_m\n", encoding="ascii")
+
+            negative_margin = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--qzss-l6",
+                str(temp_root / "corrections.l6"),
+                "--qzss-window-margin-seconds",
+                "-1",
+                "--out",
+                str(temp_root / "unused.pos"),
+            )
+            self.assertNotEqual(negative_margin.returncode, 0)
+            self.assertIn("--qzss-window-margin-seconds must be non-negative", negative_margin.stderr)
+
+            cache_without_l6 = self.run_gnss(
+                "clas-ppp",
+                "--profile",
+                "clas",
+                "--obs",
+                str(ROOT_DIR / "data/rover_static.obs"),
+                "--nav",
+                str(ROOT_DIR / "data/navigation_static.nav"),
+                "--expanded-ssr",
+                str(expanded_path),
+                "--qzss-expanded-cache",
+                str(temp_root / "cache.csv"),
+                "--out",
+                str(temp_root / "unused.pos"),
+            )
+            self.assertNotEqual(cache_without_l6.returncode, 0)
+            self.assertIn("--qzss-expanded-cache requires --qzss-l6", cache_without_l6.stderr)
 
     def test_clas_ppp_cli_accepts_direct_qzss_l6_orbit_clock_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_oc_cli_") as temp_dir:

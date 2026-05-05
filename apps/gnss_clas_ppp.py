@@ -22,10 +22,12 @@ import gnss_qzss_l6_info as qzss_l6_info
 ROOT_DIR = Path(__file__).resolve().parent.parent
 PPP_STATUSES = {5, 6}
 DEFAULT_SERIAL_BAUD = 115200
+DEFAULT_CLAS_FILTER_ITERATIONS = 1
+DEFAULT_QZSS_WINDOW_MARGIN_SECONDS = 90.0
 COMPACT_FILE_COLUMNS = (
     "week,tow,system,prn,dx,dy,dz,dclock_m"
     "[,high_rate_clock_m][,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...]"
-    "[,bias_network_id=<n>][,atmos_<name>=<value>...]"
+    "[,pdi:<id>=<n>...][,bias_network_id=<n>][,atmos_<name>=<value>...]"
 )
 
 
@@ -39,6 +41,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--obs", type=Path, required=True, help="Rover observation RINEX file.")
     parser.add_argument("--nav", type=Path, required=True, help="Broadcast navigation RINEX file.")
+    parser.add_argument(
+        "--navsys",
+        type=int,
+        default=None,
+        help=(
+            "RTKLIB navsys mask passed to PPP observation admission. "
+            "Default for --profile clas is 25 (GPS+Galileo+QZSS); use 0 for all observed systems."
+        ),
+    )
     parser.add_argument(
         "--ssr-rtcm",
         default=None,
@@ -58,10 +69,28 @@ def parse_args() -> argparse.Namespace:
         help="Direct QZSS L6 frame source: local file or serial:// URI.",
     )
     parser.add_argument(
+        "--expanded-ssr",
+        type=Path,
+        default=None,
+        help="Already-expanded sampled SSR CSV passed directly to native PPP.",
+    )
+    parser.add_argument(
         "--qzss-gps-week",
         type=int,
         default=None,
         help="Optional GPS week override used when decoding raw QZSS L6 corrections.",
+    )
+    parser.add_argument(
+        "--qzss-expanded-cache",
+        type=Path,
+        default=None,
+        help="Optional expanded SSR CSV cache path for --qzss-l6; reused when it already exists.",
+    )
+    parser.add_argument(
+        "--qzss-window-margin-seconds",
+        type=float,
+        default=DEFAULT_QZSS_WINDOW_MARGIN_SECONDS,
+        help="Margin around the observation TOW window when expanding raw QZSS L6 for --max-epochs.",
     )
     parser.add_argument(
         "--compact-flush-policy",
@@ -131,6 +160,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--out", type=Path, required=True, help="Output PPP .pos file.")
     parser.add_argument("--summary-json", type=Path, default=None, help="Optional summary JSON path.")
+    parser.add_argument("--ppp-filter-log", type=Path, default=None, help="Optional native PPP filter iteration CSV path.")
+    parser.add_argument("--ppp-residual-log", type=Path, default=None, help="Optional native PPP residual CSV path.")
+    parser.add_argument("--ppp-state-log", type=Path, default=None, help="Optional native PPP state log path.")
     parser.add_argument("--sp3", type=Path, default=None, help="Optional precise SP3 file.")
     parser.add_argument("--clk", type=Path, default=None, help="Optional precise CLK file.")
     parser.add_argument("--kml", type=Path, default=None, help="Optional KML output path.")
@@ -140,6 +172,15 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Minimum epochs before PPP convergence/AR checks.",
+    )
+    parser.add_argument(
+        "--filter-iterations",
+        type=int,
+        default=None,
+        help=(
+            "Override native PPP measurement update iterations per epoch. "
+            "Default for --profile clas is 1; MADOCA leaves native PPP default."
+        ),
     )
     parser.add_argument(
         "--ssr-step-seconds",
@@ -156,6 +197,17 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=3.0,
         help="AR ratio threshold when ambiguity fixing is enabled.",
+    )
+    parser.add_argument(
+        "--native-pntpos-parity-seed",
+        action="store_true",
+        help="Use native SPP settings that mirror pntpos behavior for PPP seed.",
+    )
+    parser.add_argument(
+        "--claslib-pntpos-seed",
+        dest="native_pntpos_parity_seed",
+        action="store_true",
+        help="Deprecated alias for --native-pntpos-parity-seed.",
     )
     parser.add_argument(
         "--no-estimate-troposphere",
@@ -223,15 +275,31 @@ def classify_transport(source: str) -> str:
 
 
 def classify_encoding(args: argparse.Namespace) -> str:
+    if args.expanded_ssr:
+        return "expanded"
     if args.qzss_l6:
         return "qzss_l6"
     return "compact" if args.compact_ssr else "rtcm"
 
 
 def selected_correction_source(args: argparse.Namespace) -> str:
+    if args.expanded_ssr:
+        return str(args.expanded_ssr)
     if args.qzss_l6:
         return args.qzss_l6
     return args.compact_ssr if args.compact_ssr else args.ssr_rtcm
+
+
+def effective_navsys_mask(args: argparse.Namespace) -> int:
+    if args.navsys is not None:
+        return args.navsys
+    return 25 if args.profile == "clas" else 0
+
+
+def effective_filter_iterations(args: argparse.Namespace) -> int | None:
+    if args.filter_iterations is not None:
+        return args.filter_iterations
+    return DEFAULT_CLAS_FILTER_ITERATIONS if args.profile == "clas" else None
 
 
 def parse_serial_path(path: str) -> tuple[str, int]:
@@ -349,6 +417,7 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
             ura_sigma_token = None
             code_bias_tokens: list[str] = []
             phase_bias_tokens: list[str] = []
+            phase_discontinuity_tokens: list[str] = []
             bias_network_tokens: list[str] = []
             atmos_tokens: list[str] = []
             extras = columns[8:]
@@ -364,6 +433,9 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
                     continue
                 if token.startswith("pbias:") and "=" in token:
                     phase_bias_tokens.append(token)
+                    continue
+                if token.startswith("pdi:") and "=" in token:
+                    phase_discontinuity_tokens.append(token)
                     continue
                 if token.startswith("bias_network_id="):
                     bias_network_tokens.append(token)
@@ -391,6 +463,7 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
                 output_tokens.append(ura_sigma_token)
             output_tokens.extend(code_bias_tokens)
             output_tokens.extend(phase_bias_tokens)
+            output_tokens.extend(phase_discontinuity_tokens)
             output_tokens.extend(bias_network_tokens)
             output_tokens.extend(atmos_tokens)
             handle.write(",".join(output_tokens) + "\n")
@@ -404,8 +477,34 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
     }
 
 
-def infer_gps_week_from_obs(obs_path: Path) -> int:
+def gps_week_tow_from_datetime(
+    year: int,
+    month: int,
+    day: int,
+    hour: int,
+    minute: int,
+    second: float,
+) -> tuple[int, float]:
+    whole_seconds = int(second)
+    microseconds = int(round((second - whole_seconds) * 1_000_000))
+    epoch = dt.datetime(
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        whole_seconds,
+        microseconds,
+        tzinfo=dt.timezone.utc,
+    )
     gps_epoch = dt.datetime(1980, 1, 6, tzinfo=dt.timezone.utc)
+    delta_seconds = (epoch - gps_epoch).total_seconds()
+    week = int(delta_seconds // (7 * 24 * 60 * 60))
+    tow = round(delta_seconds - week * 7 * 24 * 60 * 60, 7)
+    return week, tow
+
+
+def infer_gps_week_from_obs(obs_path: Path) -> int:
     with obs_path.open(encoding="ascii", errors="ignore") as handle:
         for line in handle:
             if not line.startswith(">"):
@@ -413,27 +512,129 @@ def infer_gps_week_from_obs(obs_path: Path) -> int:
             parts = line[1:].split()
             if len(parts) < 6:
                 continue
-            year = int(parts[0])
-            month = int(parts[1])
-            day = int(parts[2])
-            hour = int(parts[3])
-            minute = int(parts[4])
-            second = float(parts[5])
-            whole_seconds = int(second)
-            microseconds = int(round((second - whole_seconds) * 1_000_000))
-            epoch = dt.datetime(
-                year,
-                month,
-                day,
-                hour,
-                minute,
-                whole_seconds,
-                microseconds,
-                tzinfo=dt.timezone.utc,
+            week, _tow = gps_week_tow_from_datetime(
+                int(parts[0]),
+                int(parts[1]),
+                int(parts[2]),
+                int(parts[3]),
+                int(parts[4]),
+                float(parts[5]),
             )
-            delta = epoch - gps_epoch
-            return delta.days // 7
+            return week
     raise SystemExit(f"Could not infer GPS week from observation file: {obs_path}")
+
+
+def observation_tow_window(obs_path: Path, max_epochs: int) -> tuple[int, float, float] | None:
+    if max_epochs <= 0:
+        return None
+    epoch_tows: list[tuple[int, float]] = []
+    in_header = True
+    with obs_path.open(encoding="ascii", errors="ignore") as handle:
+        for line in handle:
+            if in_header:
+                if "END OF HEADER" in line:
+                    in_header = False
+                continue
+            if not line.startswith(">"):
+                continue
+            parts = line[1:].split()
+            if len(parts) < 6:
+                continue
+            epoch_tows.append(
+                gps_week_tow_from_datetime(
+                    int(parts[0]),
+                    int(parts[1]),
+                    int(parts[2]),
+                    int(parts[3]),
+                    int(parts[4]),
+                    float(parts[5]),
+                )
+            )
+            if len(epoch_tows) >= max_epochs:
+                break
+    if not epoch_tows:
+        return None
+    weeks = {week for week, _tow in epoch_tows}
+    if len(weeks) != 1:
+        return None
+    week = epoch_tows[0][0]
+    tows = [tow for _week, tow in epoch_tows]
+    return week, min(tows), max(tows)
+
+
+def correction_in_window(
+    correction: qzss_l6_info.CompactSSRCorrection,
+    window: tuple[int, float, float] | None,
+    margin_seconds: float,
+) -> bool:
+    if window is None:
+        return True
+    week, start_tow, end_tow = window
+    return (
+        correction.week == week
+        and correction.tow >= max(0.0, start_tow - margin_seconds)
+        and correction.tow <= min(604800.0, end_tow + margin_seconds)
+    )
+
+
+def expanded_correction_tokens(correction: qzss_l6_info.CompactSSRCorrection) -> list[str]:
+    system = normalize_system_token(correction.system)
+    tokens = [
+        str(correction.week),
+        f"{correction.tow:.3f}",
+        f"{system}{correction.prn:02d}",
+        f"{correction.dx:.6f}",
+        f"{correction.dy:.6f}",
+        f"{correction.dz:.6f}",
+        f"{correction.dclock_m + correction.high_rate_clock_m:.6f}",
+    ]
+    if correction.ura_sigma_m is not None:
+        tokens.append(f"ura_sigma_m={correction.ura_sigma_m:.6f}")
+    code_bias_m = correction.code_bias_m or {}
+    phase_bias_m = correction.phase_bias_m or {}
+    phase_discontinuity = correction.phase_discontinuity or {}
+    for signal_id in sorted(code_bias_m):
+        tokens.append(f"cbias:{signal_id}={code_bias_m[signal_id]:.6f}")
+    for signal_id in sorted(phase_bias_m):
+        tokens.append(f"pbias:{signal_id}={phase_bias_m[signal_id]:.6f}")
+    for signal_id in sorted(phase_discontinuity):
+        tokens.append(f"pdi:{signal_id}={phase_discontinuity[signal_id]}")
+    if correction.bias_network_id is not None:
+        tokens.append(f"bias_network_id={correction.bias_network_id}")
+    if correction.atmos_network_id is not None:
+        tokens.append(f"atmos_network_id={correction.atmos_network_id}")
+    if correction.atmos_trop_avail is not None:
+        tokens.append(f"atmos_trop_avail={correction.atmos_trop_avail}")
+    if correction.atmos_stec_avail is not None:
+        tokens.append(f"atmos_stec_avail={correction.atmos_stec_avail}")
+    if correction.atmos_grid_count is not None:
+        tokens.append(f"atmos_grid_count={correction.atmos_grid_count}")
+    if correction.atmos_selected_satellites is not None:
+        tokens.append(f"atmos_selected_satellites={correction.atmos_selected_satellites}")
+    atmos_tokens = correction.atmos_tokens or {}
+    for key in sorted(atmos_tokens):
+        if key in {
+            "atmos_network_id",
+            "atmos_trop_avail",
+            "atmos_stec_avail",
+            "atmos_grid_count",
+            "atmos_selected_satellites",
+        }:
+            continue
+        tokens.append(f"{key}={atmos_tokens[key]}")
+    return tokens
+
+
+def write_expanded_corrections(
+    path: Path,
+    corrections: list[qzss_l6_info.CompactSSRCorrection],
+) -> int:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="ascii") as handle:
+        handle.write("# week,tow,sat,dx,dy,dz,dclock_m\n")
+        for correction in corrections:
+            handle.write(",".join(expanded_correction_tokens(correction)) + "\n")
+    return len(corrections)
 
 
 def expand_qzss_l6_source(
@@ -441,6 +642,8 @@ def expand_qzss_l6_source(
     gps_week: int,
     output_path: Path,
     *,
+    correction_window: tuple[int, float, float] | None = None,
+    correction_window_margin_seconds: float = DEFAULT_QZSS_WINDOW_MARGIN_SECONDS,
     compact_flush_policy: str = qzss_l6_info.COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
     compact_atmos_merge_policy: str = qzss_l6_info.COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
     compact_atmos_subtype_merge_policy: str = qzss_l6_info.COMPACT_ATMOS_SUBTYPE_MERGE_POLICY_UNION,
@@ -469,9 +672,13 @@ def expand_qzss_l6_source(
         bias_row_materialization_policy=compact_bias_row_materialization,
         row_construction_policy=compact_row_construction_policy,
     )
-    compact_source = output_path.parent / "qzss_l6_compact.csv"
-    qzss_l6_info.write_compact_corrections(compact_source, corrections)
-    expand_compact_ssr_text(compact_source.read_text(encoding="ascii"), output_path)
+    decoded_rows = len(corrections)
+    corrections = [
+        correction
+        for correction in corrections
+        if correction_in_window(correction, correction_window, correction_window_margin_seconds)
+    ]
+    write_expanded_corrections(output_path, corrections)
     atmos_messages = sum(
         1
         for message in messages
@@ -491,10 +698,21 @@ def expand_qzss_l6_source(
         "subframes": len(subframes),
         "messages": len(messages),
         "rows_written": len(corrections),
+        "rows_decoded": decoded_rows,
         "atmos_messages": atmos_messages,
         "atmos_rows": atmos_rows,
-        "compact_csv": str(compact_source),
+        "compact_csv": None,
         "expanded_csv": str(output_path),
+        "correction_window": (
+            None
+            if correction_window is None
+            else {
+                "week": correction_window[0],
+                "start_tow": correction_window[1],
+                "end_tow": correction_window[2],
+                "margin_seconds": correction_window_margin_seconds,
+            }
+        ),
         "compact_atmos_merge_policy": compact_atmos_merge_policy,
         "compact_atmos_subtype_merge_policy": compact_atmos_subtype_merge_policy,
         "compact_phase_bias_merge_policy": compact_phase_bias_merge_policy,
@@ -542,6 +760,12 @@ def rounded(value: float) -> float:
     return round(value, 6)
 
 
+def optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    return int(value)
+
+
 def _parse_ppp_summary_counts(ppp_stdout: str) -> dict[str, int | float]:
     parsed = {
         "ppp_atmospheric_trop_corrections": 0,
@@ -586,11 +810,16 @@ def build_summary_payload(
         "correction_encoding": classify_encoding(args),
         "obs": str(args.obs),
         "nav": str(args.nav),
+        "navsys_mask": effective_navsys_mask(args),
+        "navsys_all_observed": effective_navsys_mask(args) == 0,
+        "filter_iterations": effective_filter_iterations(args),
         "sp3": str(args.sp3) if args.sp3 is not None else None,
         "clk": str(args.clk) if args.clk is not None else None,
         "ssr_rtcm": args.ssr_rtcm,
         "compact_ssr": args.compact_ssr,
         "qzss_l6": args.qzss_l6,
+        "expanded_ssr": str(args.expanded_ssr) if args.expanded_ssr is not None else None,
+        "qzss_expanded_cache": str(args.qzss_expanded_cache) if args.qzss_expanded_cache is not None else None,
         "solution_pos": str(args.out),
         "epochs": len(records),
         "ppp_float_epochs": ppp_float_epochs,
@@ -619,8 +848,20 @@ def build_summary_payload(
         "ppp_atmospheric_ionosphere_meters": 0.0,
     }
     if compact_summary is not None:
-        payload["atmos_messages"] = int(compact_summary.get("atmos_messages", 0))
-        payload["atmos_rows"] = int(compact_summary.get("atmos_rows", 0))
+        if not compact_summary.get("cache_hit", False):
+            payload["atmos_messages"] = int(compact_summary.get("atmos_messages", 0))
+            payload["atmos_rows"] = int(compact_summary.get("atmos_rows", 0))
+        expanded_csv = compact_summary.get("expanded_csv")
+        payload["qzss_expanded_csv"] = str(expanded_csv) if expanded_csv is not None else None
+        payload["qzss_expanded_csv_size_bytes"] = (
+            Path(str(expanded_csv)).stat().st_size
+            if expanded_csv is not None and Path(str(expanded_csv)).exists()
+            else None
+        )
+        payload["qzss_rows_written"] = optional_int(compact_summary.get("rows_written"))
+        payload["qzss_rows_decoded"] = optional_int(compact_summary.get("rows_decoded"))
+        payload["qzss_cache_hit"] = bool(compact_summary.get("cache_hit", False))
+        payload["qzss_correction_window"] = compact_summary.get("correction_window")
     if ppp_summary_counts is not None:
         payload["ppp_atmospheric_trop_corrections"] = int(
             ppp_summary_counts.get("ppp_atmospheric_trop_corrections", 0)
@@ -635,7 +876,6 @@ def build_summary_payload(
             float(ppp_summary_counts.get("ppp_atmospheric_ionosphere_meters", 0.0))
         )
     if args.summary_json is not None:
-        args.summary_json.parent.mkdir(parents=True, exist_ok=True)
         args.summary_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return payload
 
@@ -699,13 +939,28 @@ def main() -> int:
     ensure_exists(args.nav, "navigation file")
     ensure_exists(args.sp3, "SP3 file")
     ensure_exists(args.clk, "CLK file")
-    selected_sources = [bool(args.ssr_rtcm), bool(args.compact_ssr), bool(args.qzss_l6)]
+    ensure_exists(args.expanded_ssr, "expanded SSR CSV")
+    selected_sources = [bool(args.ssr_rtcm), bool(args.compact_ssr), bool(args.qzss_l6), bool(args.expanded_ssr)]
     if sum(1 for selected in selected_sources if selected) != 1:
-        raise SystemExit("Specify exactly one of --ssr-rtcm, --compact-ssr, or --qzss-l6")
+        raise SystemExit("Specify exactly one of --ssr-rtcm, --compact-ssr, --qzss-l6, or --expanded-ssr")
+    navsys_mask = effective_navsys_mask(args)
+    if navsys_mask < 0 or navsys_mask > 127:
+        raise SystemExit("--navsys must be a RTKLIB navsys mask from 0 to 127")
+    filter_iterations = effective_filter_iterations(args)
+    if filter_iterations is not None and filter_iterations < 0:
+        raise SystemExit("--filter-iterations must be non-negative")
+    if args.qzss_window_margin_seconds < 0.0:
+        raise SystemExit("--qzss-window-margin-seconds must be non-negative")
+    if args.qzss_expanded_cache is not None and args.qzss_l6 is None:
+        raise SystemExit("--qzss-expanded-cache requires --qzss-l6")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     if args.summary_json is not None:
         args.summary_json.parent.mkdir(parents=True, exist_ok=True)
+    if args.ppp_residual_log is not None:
+        args.ppp_residual_log.parent.mkdir(parents=True, exist_ok=True)
+    if args.ppp_state_log is not None:
+        args.ppp_state_log.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_") as temp_dir:
         compact_summary: dict[str, object] | None = None
@@ -719,35 +974,64 @@ def main() -> int:
             "--out",
             str(args.out),
         ]
+        if navsys_mask != 0:
+            command.extend(["--navsys", str(navsys_mask)])
         if args.qzss_l6 is not None:
-            compact_csv = Path(temp_dir) / "qzss_l6_expanded.csv"
+            compact_csv = args.qzss_expanded_cache or (Path(temp_dir) / "qzss_l6_expanded.csv")
             gps_week = args.qzss_gps_week if args.qzss_gps_week is not None else infer_gps_week_from_obs(args.obs)
-            compact_summary = expand_qzss_l6_source(
-                args.qzss_l6,
-                gps_week,
-                compact_csv,
-                compact_flush_policy=args.compact_flush_policy,
-                compact_atmos_merge_policy=args.compact_atmos_merge_policy,
-                compact_atmos_subtype_merge_policy=args.compact_atmos_subtype_merge_policy,
-                compact_phase_bias_merge_policy=args.compact_phase_bias_merge_policy,
-                compact_phase_bias_source_policy=args.compact_phase_bias_source_policy,
-                compact_code_bias_composition_policy=args.compact_code_bias_composition_policy,
-                compact_code_bias_bank_policy=args.compact_code_bias_bank_policy,
-                compact_phase_bias_composition_policy=args.compact_phase_bias_composition_policy,
-                compact_phase_bias_bank_policy=args.compact_phase_bias_bank_policy,
-                compact_bias_row_materialization=args.compact_bias_row_materialization,
-                compact_row_construction_policy=args.compact_row_construction_policy,
-            )
-            print(
-                "decoded qzss l6 corrections:",
-                f"frames={compact_summary['frames']}",
-                f"subframes={compact_summary['subframes']}",
-                f"messages={compact_summary['messages']}",
-                f"rows={compact_summary['rows_written']}",
-                f"atmos_messages={compact_summary['atmos_messages']}",
-                f"atmos_rows={compact_summary['atmos_rows']}",
-                f"csv={compact_summary['expanded_csv']}",
-            )
+            correction_window = observation_tow_window(args.obs, args.max_epochs)
+            if args.qzss_expanded_cache is not None and args.qzss_expanded_cache.exists():
+                compact_summary = {
+                    "frames": 0,
+                    "subframes": 0,
+                    "messages": 0,
+                    "rows_written": None,
+                    "rows_decoded": None,
+                    "atmos_messages": None,
+                    "atmos_rows": None,
+                    "expanded_csv": str(args.qzss_expanded_cache),
+                    "correction_window": (
+                        None
+                        if correction_window is None
+                        else {
+                            "week": correction_window[0],
+                            "start_tow": correction_window[1],
+                            "end_tow": correction_window[2],
+                            "margin_seconds": args.qzss_window_margin_seconds,
+                        }
+                    ),
+                    "cache_hit": True,
+                }
+                print("reusing qzss l6 expanded cache:", f"csv={args.qzss_expanded_cache}")
+            else:
+                compact_summary = expand_qzss_l6_source(
+                    args.qzss_l6,
+                    gps_week,
+                    compact_csv,
+                    correction_window=correction_window,
+                    correction_window_margin_seconds=args.qzss_window_margin_seconds,
+                    compact_flush_policy=args.compact_flush_policy,
+                    compact_atmos_merge_policy=args.compact_atmos_merge_policy,
+                    compact_atmos_subtype_merge_policy=args.compact_atmos_subtype_merge_policy,
+                    compact_phase_bias_merge_policy=args.compact_phase_bias_merge_policy,
+                    compact_phase_bias_source_policy=args.compact_phase_bias_source_policy,
+                    compact_code_bias_composition_policy=args.compact_code_bias_composition_policy,
+                    compact_code_bias_bank_policy=args.compact_code_bias_bank_policy,
+                    compact_phase_bias_composition_policy=args.compact_phase_bias_composition_policy,
+                    compact_phase_bias_bank_policy=args.compact_phase_bias_bank_policy,
+                    compact_bias_row_materialization=args.compact_bias_row_materialization,
+                    compact_row_construction_policy=args.compact_row_construction_policy,
+                )
+                print(
+                    "decoded qzss l6 corrections:",
+                    f"frames={compact_summary['frames']}",
+                    f"subframes={compact_summary['subframes']}",
+                    f"messages={compact_summary['messages']}",
+                    f"rows={compact_summary['rows_written']}/{compact_summary['rows_decoded']}",
+                    f"atmos_messages={compact_summary['atmos_messages']}",
+                    f"atmos_rows={compact_summary['atmos_rows']}",
+                    f"csv={compact_summary['expanded_csv']}",
+                )
             command.extend(["--ssr", str(compact_csv)])
         elif args.compact_ssr is not None:
             compact_csv = Path(temp_dir) / "compact_expanded.csv"
@@ -759,6 +1043,8 @@ def main() -> int:
                 f"csv={compact_summary['expanded_csv']}",
             )
             command.extend(["--ssr", str(compact_csv)])
+        elif args.expanded_ssr is not None:
+            command.extend(["--ssr", str(args.expanded_ssr)])
         else:
             command.extend(["--ssr-rtcm", args.ssr_rtcm, "--ssr-step-seconds", str(args.ssr_step_seconds)])
 
@@ -778,6 +1064,16 @@ def main() -> int:
             command.extend(["--max-epochs", str(args.max_epochs)])
         if args.convergence_min_epochs is not None:
             command.extend(["--convergence-min-epochs", str(args.convergence_min_epochs)])
+        if filter_iterations is not None:
+            command.extend(["--filter-iterations", str(filter_iterations)])
+        if args.ppp_filter_log is not None:
+            command.extend(["--ppp-filter-log", str(args.ppp_filter_log)])
+        if args.ppp_residual_log is not None:
+            command.extend(["--ppp-residual-log", str(args.ppp_residual_log)])
+        if args.ppp_state_log is not None:
+            command.extend(["--ppp-state-log", str(args.ppp_state_log)])
+        if args.native_pntpos_parity_seed:
+            command.append("--native-pntpos-parity-seed")
         if args.enable_ar:
             command.extend(["--enable-ar", "--ar-ratio-threshold", str(args.ar_ratio_threshold)])
 
@@ -787,6 +1083,7 @@ def main() -> int:
 
     print("Finished CLAS/MADOCA PPP run.")
     print(f"  profile: {args.profile}")
+    print(f"  navsys: {effective_navsys_mask(args)}")
     print(f"  transport: {payload['ssr_transport']}")
     print(f"  encoding: {payload['correction_encoding']}")
     print(f"  solution: {args.out}")
