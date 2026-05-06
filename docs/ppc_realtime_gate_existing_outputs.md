@@ -46,3 +46,23 @@ are not a six-run claim. They explain why a global gate is risky:
 Nagoya run2. The next deployable path should therefore be a conditional gate
 using real-time diagnostics such as baseline length, ratio, NIS, post residual,
 and possibly speed; a global fixed-update threshold is not enough.
+
+## Narrow baseline-window probe
+
+POS-only analysis suggested that the 8000-8500 m baseline bucket is high-risk,
+especially for Nagoya run2. Direct solver replays show that simply adding this
+window to the low-ratio NIS gate is still too aggressive because early fixed
+candidate rejection feeds back into later ambiguity reacquisition:
+
+| run | profile | official | FIX epochs | Wrong FIX | Wrong/FIX |
+|---|---|---:|---:|---:|---:|
+| nagoya_run2 | baseline | 29.958% | 5431 | 1919 | 35.334% |
+| nagoya_run2 | nis10_ratio6 | 33.240% | 5341 | 621 | 11.627% |
+| nagoya_run2 | nis8_ratio6 | 10.431% | 758 | 30 | 3.958% |
+| nagoya_run2 | nis8_ratio6_bl8000_8500 | 10.431% | 758 | 30 | 3.958% |
+| nagoya_run2 | nis10_ratio6_bl8000_8500 | 10.431% | 758 | 30 | 3.958% |
+
+This rejects the simple baseline-window version. The safer existing result for
+Nagoya run2 remains `nis10_ratio6`: it improves official score and cuts Wrong
+FIX substantially on that run, but the full six-run aggregate still loses
+0.628 pp official score.
