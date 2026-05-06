@@ -66,3 +66,24 @@ This rejects the simple baseline-window version. The safer existing result for
 Nagoya run2 remains `nis10_ratio6`: it improves official score and cuts Wrong
 FIX substantially on that run, but the full six-run aggregate still loses
 0.628 pp official score.
+
+## Status-only demotion probe
+
+The fixed-update reject gates above feed back into ambiguity reacquisition. A
+gentler deployable pattern is to keep the solver trajectory untouched, but
+demote only the emitted status from FIXED to FLOAT when real-time diagnostics
+flag a risky fixed epoch. `scripts/apply_ppc_status_demotion.py` reproduces that
+POS-only status demotion without using reference truth.
+
+On the baseline `sigma_0p001` six-run output, `--max-ratio 6
+--max-nis-per-obs 10` demotes 3185 of 42762 FIXED epochs:
+
+| profile | official | FIX epochs | Wrong FIX | Wrong/FIX |
+|---|---:|---:|---:|---:|
+| baseline_sigma001 | 64.001% | 42762 | 5333 | 12.471% |
+| status_demote_nis10_ratio6 | 64.001% | 39577 | 3273 | 8.270% |
+
+This keeps official score because positions are unchanged, while reducing
+truth-labeled wrong FIX by 2060 epochs. It should be treated as the next
+implementation candidate: move the same real-time status demotion into the
+solver/app output path so the internal fixed-state recovery is not disrupted.
