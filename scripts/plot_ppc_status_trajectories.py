@@ -59,7 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--wrong-fix-threshold-m",
         type=float,
-        default=0.10,
+        default=0.50,
         help="Classify status=FIXED epochs above this 3D truth error as WRONG_FIX.",
     )
     return parser.parse_args()

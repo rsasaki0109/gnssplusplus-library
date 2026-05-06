@@ -67,7 +67,7 @@ of chasing extra fixed epochs. In practice:
 The trajectory plots are useful for reviewing where bridges, gaps, and mis-fixes
 appear, but they are not performance evidence by themselves. Red `WRONG_FIX`
 points are `FIXED` solution epochs whose post-run 3D reference error exceeds
-0.10 m.
+0.50 m.
 
 ![PPC filter 2D trajectory colored by GNSS status and wrong FIX](ppc_filter_status_trajectories.png)
 
