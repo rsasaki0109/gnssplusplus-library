@@ -16,7 +16,8 @@ For the later PPC smoother-stack oracle sweep, see
 [`ppc_smoother_oracle_report.md`](ppc_smoother_oracle_report.md). That report
 records the 91.712675% local full-reference ceiling and the matching blind-review
 caveat: the smoother selector uses `reference.csv`, and truth-blind LOO checks
-did not preserve the local oracle gain.
+did not preserve the local oracle gain. A deployable-only fixed internal
+smoother check also preserved no gain over `v237_sim`.
 
 All runs below use `--mode kinematic --preset low-cost --match-tolerance-s 0.25`.
 The coverage profile additionally uses `--no-arfilter` plus the default

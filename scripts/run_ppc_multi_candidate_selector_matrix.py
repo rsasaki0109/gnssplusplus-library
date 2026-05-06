@@ -98,6 +98,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--selection-mode",
+        choices=("oracle_delta", "priority_first"),
+        default="oracle_delta",
+        help=(
+            "Passed through to apply_ppc_multi_candidate_selector.py. "
+            "Use priority_first for a deployable fixed rule/priority selector."
+        ),
+    )
+    parser.add_argument(
         "--run-output-template",
         default="output/ppc_multi_selector/{key}.pos",
         help="Selected POS output template. Supports {city}, {run}, and {key}.",
@@ -230,6 +239,7 @@ def build_apply_argv(
 
     argv += ["--match-tolerance-s", str(args.match_tolerance_s)]
     argv += ["--threshold-m", str(args.threshold_m)]
+    argv += ["--selection-mode", args.selection_mode]
     argv += ["--out-pos", str(out_pos)]
     argv += ["--summary-json", str(summary_json)]
     argv += ["--segments-csv", str(segments_csv)]
@@ -488,6 +498,11 @@ def build_payload(
                 seen_candidates.append(label)
     return {
         "title": title,
+        "selection_mode": (
+            run_payloads[0][2].get("selection_mode", "oracle_delta")
+            if run_payloads
+            else "oracle_delta"
+        ),
         "candidates": seen_candidates,
         "aggregates": aggregates,
         "runs": run_entries,
@@ -509,6 +524,7 @@ def _fmt_m(value: float) -> str:
 
 def render_markdown(payload: dict[str, object]) -> str:
     title = payload.get("title", "PPC multi-candidate selector")
+    selection_mode = payload.get("selection_mode", "oracle_delta")
     aggregates = payload.get("aggregates", {})
     runs = payload.get("runs", [])
 
@@ -532,6 +548,7 @@ def render_markdown(payload: dict[str, object]) -> str:
         "",
         "| metric | value |",
         "|---|---:|",
+        f"| selection mode | {selection_mode} |",
         f"| baseline weighted official | {baseline_weighted:.6f}% |",
         f"| multi-candidate selector weighted official | {selector_weighted:.6f}% |",
         f"| selector vs baseline | {_fmt_m(delta_m)} / {_fmt_pp(delta_pp)} |",

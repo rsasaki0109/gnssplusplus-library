@@ -4955,6 +4955,80 @@ class PPCMultiCandidateSelectorTest(unittest.TestCase):
                 payload["baseline"]["ppc_official_score_pct"],
             )
 
+    def test_multi_candidate_selector_priority_first_ignores_reference_delta(self) -> None:
+        """Deployable mode uses rule priority, not reference-scored best delta."""
+        reference = [self.reference_epoch(index) for index in range(2)]
+        baseline = [
+            self.solution_epoch(0, 0.0, 4, None),
+            self.solution_epoch(1, 10.0, 4, None),
+        ]
+        high_priority = [
+            self.solution_epoch(0, 0.0, 4, 0.2),
+            self.solution_epoch(1, 10.4, 4, 0.2),
+        ]
+        low_priority = [
+            self.solution_epoch(0, 0.0, 4, 0.1),
+            self.solution_epoch(1, 10.0, 4, 0.1),
+        ]
+        rule = ppc_multi_candidate_selector.parse_rule("candidate_all")
+        candidate_specs = [
+            ("high_priority", high_priority, rule),
+            ("low_priority", low_priority, rule),
+        ]
+        baseline_records = [
+            {
+                "reference_index": 0,
+                "solution_tow_s": 0.0,
+                "start_tow_s": 0.0,
+                "end_tow_s": 1.0,
+                "segment_distance_m": 10.0,
+            }
+        ]
+        candidate_rows = {
+            "high_priority": [
+                {
+                    "reference_index": 0,
+                    "score_delta_distance_m": -5.0,
+                    "candidate_solution_tow_s": 0.0,
+                    "candidate_status_name": "FIXED",
+                }
+            ],
+            "low_priority": [
+                {
+                    "reference_index": 0,
+                    "score_delta_distance_m": 5.0,
+                    "candidate_solution_tow_s": 0.0,
+                    "candidate_status_name": "FIXED",
+                }
+            ],
+        }
+
+        _, oracle_rows = ppc_multi_candidate_selector.select_segments(
+            reference,
+            baseline,
+            candidate_specs,
+            candidate_rows,
+            ["high_priority", "low_priority"],
+            0.25,
+            baseline_records,
+            {},
+            selection_mode="oracle_delta",
+        )
+        _, priority_rows = ppc_multi_candidate_selector.select_segments(
+            reference,
+            baseline,
+            candidate_specs,
+            candidate_rows,
+            ["high_priority", "low_priority"],
+            0.25,
+            baseline_records,
+            {},
+            selection_mode="priority_first",
+        )
+
+        self.assertEqual(oracle_rows[0]["selected_candidate"], "low_priority")
+        self.assertEqual(priority_rows[0]["selected_candidate"], "high_priority")
+
     def test_multi_candidate_selector_drops_negative_candidate(self) -> None:
         """drop_negative_candidates removes any candidate whose selected net < 0.
 
@@ -5131,6 +5205,8 @@ class PPCMultiCandidateSelectorMatrixTest(unittest.TestCase):
                 "nis5=candidate_status_name == FIXED",
                 "--priority-order",
                 "nis5",
+                "--selection-mode",
+                "priority_first",
                 "--run-output-template",
                 str(temp_root / "selected" / "{key}.pos"),
                 "--summary-json",
@@ -5160,6 +5236,8 @@ class PPCMultiCandidateSelectorMatrixTest(unittest.TestCase):
                 # Must pass --out-pos and --summary-json
                 self.assertIn("--out-pos", call_argv)
                 self.assertIn("--summary-json", call_argv)
+                mode_idx = call_argv.index("--selection-mode")
+                self.assertEqual(call_argv[mode_idx + 1], "priority_first")
                 # Collect which run keys appeared in --baseline-pos
                 try:
                     bl_idx = call_argv.index("--baseline-pos")
@@ -5350,6 +5428,8 @@ class PPCRatioGatingSelectorSweepTest(unittest.TestCase):
                 "olddef=output/olddef/{key}.pos",
                 "--priority-order",
                 "jump,olddef",
+                "--selection-mode",
+                "priority_first",
                 "--threshold-set",
                 "wide=none",
                 "--threshold-set",
@@ -5395,6 +5475,8 @@ class PPCRatioGatingSelectorSweepTest(unittest.TestCase):
                 "olddef=candidate_status_name == FIXED AND candidate_ratio >= 5",
                 tight_rules,
             )
+            mode_idx = wide_call.index("--selection-mode")
+            self.assertEqual(wide_call[mode_idx + 1], "priority_first")
 
             payload = json.loads(summary_json.read_text(encoding="utf-8"))
             self.assertEqual(payload["sets"][0]["name"], "wide")

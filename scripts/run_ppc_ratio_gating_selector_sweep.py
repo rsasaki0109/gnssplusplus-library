@@ -74,6 +74,15 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated candidate labels; earlier = higher priority on tie.",
     )
     parser.add_argument(
+        "--selection-mode",
+        choices=("oracle_delta", "priority_first"),
+        default="oracle_delta",
+        help=(
+            "Selector mode passed to the matrix driver. Use priority_first for "
+            "a deployable fixed rule/priority selector."
+        ),
+    )
+    parser.add_argument(
         "--threshold-set",
         dest="threshold_sets",
         action="append",
@@ -248,6 +257,8 @@ def build_matrix_argv(
         str(args.match_tolerance_s),
         "--threshold-m",
         str(args.threshold_m),
+        "--selection-mode",
+        args.selection_mode,
     ]
 
     for run_spec in args.run:

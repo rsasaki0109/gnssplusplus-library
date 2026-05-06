@@ -83,6 +83,30 @@ zero in all six folds. The natural stack was not separately blind-validated; its
 increment over akima is only +0.002038 pp, so the akima blind failure is the
 right caution signal.
 
+## Deployable-Only Check
+
+The selector tooling now supports `--selection-mode priority_first`, which fixes
+selection to candidate rules plus priority order. In that mode, the PPC reference
+is still used to evaluate the final output, but it is not used to choose the
+candidate for a segment, and the reference-scored non-regression gate is skipped.
+
+A fully internal smoother probe on the natural n60/a12/l6 geometry used:
+
+- anchor: `status == FIXED`, `ratio >= 10`, post-suppression RMS `<= 0.05 m`,
+  and at least 8 satellites
+- loss: non-FIX or FIXED with `ratio < 6`
+
+That deployable-only fixed check produced no public-score gain over the fixed
+baseline:
+
+| check | weighted PPC official score |
+|---|---:|
+| `v237_sim` baseline | 91.647619% |
+| deployable internal smoother fixed recipe | 91.647619% |
+
+The distance-weighted aggregate printed by the probe was likewise unchanged:
+91.616709% -> 91.616709% (delta +0.000 m).
+
 ## Takeaway
 
 The smoother stack is a useful local oracle ceiling exercise, but it is saturated
@@ -91,6 +115,8 @@ for practical purposes:
 - `natural` is the best interpolation geometry, but only barely beats `akima`.
 - Switching anchor or loss gates away from the regressor setup lowers the score.
 - Existing truth-blind LOO checks do not preserve the local oracle gains.
+- The deployable-only fixed internal smoother check preserves no gain over
+  `v237_sim`.
 
 Do not treat the 91.712675% number as a PPC private-score estimate. Use it as an
 upper-bound diagnostic for future selector research.
@@ -105,3 +131,4 @@ The sweep uses these scripts:
 - `scripts/analyze_ppc_segment_selector_loro_blind_pandas.py`
 - `scripts/analyze_ppc_segment_selector_loro_blind_stream.py`
 - `scripts/analyze_ppc_segment_selector_loro_learned.py`
+- `scripts/apply_ppc_multi_candidate_selector.py --selection-mode priority_first`
