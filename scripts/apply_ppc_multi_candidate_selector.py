@@ -5,11 +5,11 @@ Algorithm (case B: simultaneous per-segment selection):
 
 1. Load baseline + N candidate POS files; build epoch dicts keyed by (week, tow).
 2. Compute ppc_official_segment_records for each candidate against reference CSV.
-3. For each segment, evaluate all candidates whose rule matches; select the one
-   with the highest score_delta_distance_m.  Tie-break by --priority-order.
-4. Per-run non-regression gate: if any candidate's *net* contribution (sum of
-   score_delta across segments it was selected for) is negative, drop that
-   candidate and retry selection without it.
+3. For each segment, evaluate all candidates whose rule matches.  The default
+   oracle_delta mode selects the one with the highest score_delta_distance_m.
+   The deployable priority_first mode selects only by rule + --priority-order.
+4. In oracle_delta mode only, a per-run non-regression gate drops candidates
+   whose selected reference-scored contribution is negative.
 5. Merge selected epochs into a single POS file and write summary JSON /
    segments CSV.
 """
@@ -110,6 +110,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
     parser.add_argument("--threshold-m", type=float, default=0.50)
+    parser.add_argument(
+        "--selection-mode",
+        choices=("oracle_delta", "priority_first"),
+        default="oracle_delta",
+        help=(
+            "oracle_delta uses reference-scored segment deltas to choose the best "
+            "matching candidate. priority_first is deployable: it uses only "
+            "candidate rules and --priority-order, then evaluates the result."
+        ),
+    )
     parser.add_argument("--out-pos", type=Path, required=True)
     parser.add_argument("--summary-json", type=Path, default=None)
     parser.add_argument("--segments-csv", type=Path, default=None)
@@ -240,6 +250,7 @@ def select_segments(
     match_tolerance_s: float,
     baseline_records: list[dict[str, object]],
     candidate_records_by_label: dict[str, list[dict[str, object]]],
+    selection_mode: str = "oracle_delta",
 ) -> tuple[list[comparison.SolutionEpoch], list[dict[str, object]]]:
     """Select epochs segment-by-segment from all candidates simultaneously.
 
@@ -290,19 +301,28 @@ def select_segments(
                 delta = float(row.get("score_delta_distance_m") or 0.0)
                 matching.append((label, delta))
 
-        # Choose best candidate: max delta, tie-break by priority_order
+        # Choose candidate.  oracle_delta is a local-reference ceiling; it is not
+        # deployable.  priority_first is the deployable mode: rule + priority only.
         selected_label: str | None = None
         selected_delta: float = 0.0  # baseline = 0 reference
 
-        for label, delta in matching:
-            if delta > selected_delta or (
-                delta == selected_delta
-                and selected_label is not None
-                and _priority_index(label, priority_order)
-                < _priority_index(selected_label, priority_order)
-            ):
-                selected_label = label
-                selected_delta = delta
+        if selection_mode == "priority_first":
+            if matching:
+                selected_label, selected_delta = min(
+                    matching, key=lambda item: _priority_index(item[0], priority_order)
+                )
+        elif selection_mode == "oracle_delta":
+            for label, delta in matching:
+                if delta > selected_delta or (
+                    delta == selected_delta
+                    and selected_label is not None
+                    and _priority_index(label, priority_order)
+                    < _priority_index(selected_label, priority_order)
+                ):
+                    selected_label = label
+                    selected_delta = delta
+        else:
+            raise ValueError(f"unknown selection_mode: {selection_mode}")
 
         # Resolve epoch from selected candidate (or baseline)
         if selected_label is not None:
@@ -394,11 +414,26 @@ def run_selection_with_nonneg_constraint(
     match_tolerance_s: float,
     baseline_records: list[dict[str, object]],
     candidate_records_by_label: dict[str, list[dict[str, object]]],
+    selection_mode: str = "oracle_delta",
 ) -> tuple[list[comparison.SolutionEpoch], list[dict[str, object]], list[str]]:
     """Iteratively drop negative-contributing candidates and re-select.
 
     Returns (selected_epochs, result_rows, dropped_labels).
     """
+    if selection_mode == "priority_first":
+        selected_epochs, result_rows = select_segments(
+            reference,
+            baseline_epochs,
+            candidate_specs,
+            candidate_rows_by_label,
+            priority_order,
+            match_tolerance_s,
+            baseline_records,
+            candidate_records_by_label,
+            selection_mode=selection_mode,
+        )
+        return selected_epochs, result_rows, []
+
     active_specs = list(candidate_specs)
     all_dropped: list[str] = []
     max_iterations = len(candidate_specs) + 2
@@ -413,6 +448,7 @@ def run_selection_with_nonneg_constraint(
             match_tolerance_s,
             baseline_records,
             candidate_records_by_label,
+            selection_mode=selection_mode,
         )
         active_specs, any_dropped = drop_negative_candidates(
             active_specs, candidate_rows_by_label, result_rows
@@ -550,6 +586,7 @@ def build_payload(
     dropped_labels: list[str],
     match_tolerance_s: float,
     out_pos: Path,
+    selection_mode: str,
 ) -> dict[str, object]:
     baseline_metrics = ppc_metrics.summarize_solution_epochs(
         reference,
@@ -570,6 +607,7 @@ def build_payload(
     candidate_labels = [label for label, _, _ in candidate_specs]
     return {
         "out_pos": str(out_pos),
+        "selection_mode": selection_mode,
         "priority_order": priority_order,
         "dropped_candidates": dropped_labels,
         "active_candidates": candidate_labels,
@@ -652,6 +690,7 @@ def main() -> None:
         args.match_tolerance_s,
         baseline_records,
         candidate_records_by_label,
+        selection_mode=args.selection_mode,
     )
 
     if not selected_epochs:
@@ -670,6 +709,7 @@ def main() -> None:
         dropped_labels,
         args.match_tolerance_s,
         args.out_pos,
+        args.selection_mode,
     )
 
     if args.summary_json is not None:

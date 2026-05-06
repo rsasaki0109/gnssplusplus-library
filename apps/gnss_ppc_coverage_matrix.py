@@ -152,6 +152,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional RTK DD Kalman update NIS/observation rejection threshold.",
     )
+    parser.add_argument("--carrier-phase-sigma", type=float, default=None)
+    parser.add_argument("--demote-fixed-status-nis-per-obs", type=float, default=None)
+    parser.add_argument("--demote-fixed-status-post-rms", type=float, default=None)
+    parser.add_argument("--demote-fixed-status-gate-ratio", type=float, default=None)
+    parser.add_argument("--min-demote-fixed-status-baseline", type=float, default=None)
+    parser.add_argument("--max-demote-fixed-status-baseline", type=float, default=None)
     parser.add_argument(
         "--max-consec-float-reset",
         type=int,
@@ -218,6 +224,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-official-score-delta-min", type=float, default=None)
     parser.add_argument("--require-score-3d-50cm-ref-delta-min", type=float, default=None)
     parser.add_argument("--require-p95-h-delta-max", type=float, default=None)
+    parser.add_argument(
+        "--require-solver-wall-time-max",
+        type=float,
+        default=None,
+        help="Require each PPC run solver wall time to be at or below this many seconds.",
+    )
+    parser.add_argument(
+        "--require-realtime-factor-min",
+        type=float,
+        default=None,
+        help="Require each PPC run realtime factor to be at or above this value.",
+    )
+    parser.add_argument(
+        "--require-effective-epoch-rate-min",
+        type=float,
+        default=None,
+        help="Require each PPC run effective solved epoch rate to be at or above this Hz value.",
+    )
     return parser.parse_args()
 
 
@@ -307,6 +331,43 @@ def build_ppc_demo_command(
         )
     if getattr(args, "max_update_nis_per_obs", None) is not None:
         command.extend(["--max-update-nis-per-obs", str(args.max_update_nis_per_obs)])
+    if getattr(args, "carrier_phase_sigma", None) is not None:
+        command.extend(["--carrier-phase-sigma", str(args.carrier_phase_sigma)])
+    if getattr(args, "demote_fixed_status_nis_per_obs", None) is not None:
+        command.extend(
+            [
+                "--demote-fixed-status-nis-per-obs",
+                str(args.demote_fixed_status_nis_per_obs),
+            ]
+        )
+    if getattr(args, "demote_fixed_status_post_rms", None) is not None:
+        command.extend(
+            [
+                "--demote-fixed-status-post-rms",
+                str(args.demote_fixed_status_post_rms),
+            ]
+        )
+    if getattr(args, "demote_fixed_status_gate_ratio", None) is not None:
+        command.extend(
+            [
+                "--demote-fixed-status-gate-ratio",
+                str(args.demote_fixed_status_gate_ratio),
+            ]
+        )
+    if getattr(args, "min_demote_fixed_status_baseline", None) is not None:
+        command.extend(
+            [
+                "--min-demote-fixed-status-baseline",
+                str(args.min_demote_fixed_status_baseline),
+            ]
+        )
+    if getattr(args, "max_demote_fixed_status_baseline", None) is not None:
+        command.extend(
+            [
+                "--max-demote-fixed-status-baseline",
+                str(args.max_demote_fixed_status_baseline),
+            ]
+        )
     if getattr(args, "max_consec_float_reset", None) is not None:
         command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
     if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -467,6 +528,7 @@ def load_run_record(
             "max_h_m": payload.get("max_h_m"),
             "solver_wall_time_s": payload.get("solver_wall_time_s"),
             "realtime_factor": payload.get("realtime_factor"),
+            "effective_epoch_rate_hz": payload.get("effective_epoch_rate_hz"),
         },
         "rtklib": payload.get("rtklib"),
         "delta_vs_rtklib": delta_vs_rtklib if isinstance(delta_vs_rtklib, dict) else None,
@@ -508,6 +570,17 @@ def aggregate_runs(runs: list[dict[str, object]]) -> dict[str, object]:
             return None
         return round(100.0 * score_distance_m / total_distance_m, 6)
 
+    def run_metric_values(name: str) -> list[float]:
+        values: list[float] = []
+        for run in runs:
+            metrics = run.get("metrics")
+            if not isinstance(metrics, dict):
+                continue
+            value = metrics.get(name)
+            if isinstance(value, (int, float)):
+                values.append(float(value))
+        return values
+
     bridge_rejected = 0
     bridge_seen = False
     fixed_burst_rejected = 0
@@ -547,6 +620,15 @@ def aggregate_runs(runs: list[dict[str, object]]) -> dict[str, object]:
         "min_positioning_delta_pct": min(delta_values("positioning_rate_pct"), default=None),
         "min_official_score_delta_pct": min(delta_values("ppc_official_score_pct"), default=None),
         "max_p95_h_delta_m": max(delta_values("p95_h_m"), default=None),
+        "avg_solver_wall_time_s": average(run_metric_values("solver_wall_time_s")),
+        "max_solver_wall_time_s": max(run_metric_values("solver_wall_time_s"), default=None),
+        "avg_realtime_factor": average(run_metric_values("realtime_factor")),
+        "min_realtime_factor": min(run_metric_values("realtime_factor"), default=None),
+        "avg_effective_epoch_rate_hz": average(run_metric_values("effective_epoch_rate_hz")),
+        "min_effective_epoch_rate_hz": min(
+            run_metric_values("effective_epoch_rate_hz"),
+            default=None,
+        ),
         "float_bridge_tail_rejected_epochs": bridge_rejected if bridge_seen else None,
         "fixed_bridge_burst_rejected_epochs": fixed_burst_rejected if fixed_burst_seen else None,
     }
@@ -571,6 +653,22 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_float_prefit_reset_streak": getattr(args, "max_float_prefit_reset_streak", None),
         "min_float_prefit_trusted_jump": getattr(args, "min_float_prefit_trusted_jump", None),
         "max_update_nis_per_obs": getattr(args, "max_update_nis_per_obs", None),
+        "carrier_phase_sigma": getattr(args, "carrier_phase_sigma", None),
+        "demote_fixed_status_nis_per_obs": getattr(
+            args, "demote_fixed_status_nis_per_obs", None
+        ),
+        "demote_fixed_status_post_rms": getattr(
+            args, "demote_fixed_status_post_rms", None
+        ),
+        "demote_fixed_status_gate_ratio": getattr(
+            args, "demote_fixed_status_gate_ratio", None
+        ),
+        "min_demote_fixed_status_baseline": getattr(
+            args, "min_demote_fixed_status_baseline", None
+        ),
+        "max_demote_fixed_status_baseline": getattr(
+            args, "max_demote_fixed_status_baseline", None
+        ),
         "max_consec_float_reset": getattr(args, "max_consec_float_reset", None),
         "max_consec_nonfix_reset": getattr(args, "max_consec_nonfix_reset", None),
         "max_postfix_rms": getattr(args, "max_postfix_rms", None),
@@ -601,6 +699,11 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "fixed_bridge_burst_min_boundary_gap": getattr(args, "fixed_bridge_burst_min_boundary_gap", None),
         "fixed_bridge_burst_max_residual": getattr(args, "fixed_bridge_burst_max_residual", None),
         "fixed_bridge_burst_max_segment_epochs": getattr(args, "fixed_bridge_burst_max_segment_epochs", None),
+        "runtime_requirements": {
+            "solver_wall_time_max_s": getattr(args, "require_solver_wall_time_max", None),
+            "realtime_factor_min": getattr(args, "require_realtime_factor_min", None),
+            "effective_epoch_rate_min_hz": getattr(args, "require_effective_epoch_rate_min", None),
+        },
         "coverage_profile": {
             "no_arfilter": True,
             "no_kinematic_post_filter": True,
@@ -620,8 +723,8 @@ def metric(metrics: dict[str, object] | None, name: str) -> float | None:
 
 def render_markdown(payload: dict[str, object]) -> str:
     lines = [
-        "| Run | Positioning | RTKLIB Positioning | Delta | Fix | RTKLIB Fix | PPC official | RTKLIB official | Official delta | P95 H delta | FLOAT bridge-tail rejected | FIX bridge-burst rejected |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Run | Positioning | RTKLIB Positioning | Delta | Fix | RTKLIB Fix | PPC official | RTKLIB official | Official delta | P95 H delta | Wall | Realtime | Epoch rate | FLOAT bridge-tail rejected | FIX bridge-burst rejected |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for run in payload["runs"]:
         assert isinstance(run, dict)
@@ -641,6 +744,12 @@ def render_markdown(payload: dict[str, object]) -> str:
         positioning = metric(metrics if isinstance(metrics, dict) else None, "positioning_rate_pct")
         fix = metric(metrics if isinstance(metrics, dict) else None, "fix_rate_pct")
         official = metric(metrics if isinstance(metrics, dict) else None, "ppc_official_score_pct")
+        solver_wall_time = metric(metrics if isinstance(metrics, dict) else None, "solver_wall_time_s")
+        realtime_factor = metric(metrics if isinstance(metrics, dict) else None, "realtime_factor")
+        effective_epoch_rate = metric(
+            metrics if isinstance(metrics, dict) else None,
+            "effective_epoch_rate_hz",
+        )
         rtklib_positioning = metric(rtklib if isinstance(rtklib, dict) else None, "positioning_rate_pct")
         rtklib_fix = metric(rtklib if isinstance(rtklib, dict) else None, "fix_rate_pct")
         rtklib_official = metric(rtklib if isinstance(rtklib, dict) else None, "ppc_official_score_pct")
@@ -657,11 +766,21 @@ def render_markdown(payload: dict[str, object]) -> str:
         def meters(value: float | None) -> str:
             return "" if value is None else f"{value:+.2f} m"
 
+        def seconds(value: float | None) -> str:
+            return "" if value is None else f"{value:.2f} s"
+
+        def number(value: float | None) -> str:
+            return "" if value is None else f"{value:.2f}"
+
+        def hz(value: float | None) -> str:
+            return "" if value is None else f"{value:.2f} Hz"
+
         lines.append(
             f"| {run['key']} | {pct(positioning)} | {pct(rtklib_positioning)} | "
             f"{pp(positioning_delta)} | {pct(fix)} | {pct(rtklib_fix)} | "
             f"{pct(official)} | {pct(rtklib_official)} | {pp(official_delta)} | "
-            f"{meters(p95_delta)} | {bridge_rejected} | {fixed_burst_rejected} |"
+            f"{meters(p95_delta)} | {seconds(solver_wall_time)} | {number(realtime_factor)} | "
+            f"{hz(effective_epoch_rate)} | {bridge_rejected} | {fixed_burst_rejected} |"
         )
 
     aggregates = payload["aggregates"]
@@ -681,6 +800,9 @@ def render_markdown(payload: dict[str, object]) -> str:
             f"- RTKLIB official weighted score: {aggregate_text('weighted_rtklib_official_score_pct', '%')}",
             f"- PPC official weighted delta: {aggregate_text('weighted_official_score_delta_pct', ' pp')}",
             f"- P95 H delta: {aggregate_text('avg_p95_h_delta_m', ' m')}",
+            f"- Solver wall time: avg {aggregate_text('avg_solver_wall_time_s', ' s')}, max {aggregate_text('max_solver_wall_time_s', ' s')}",
+            f"- Realtime factor: avg {aggregate_text('avg_realtime_factor')}, min {aggregate_text('min_realtime_factor')}",
+            f"- Effective epoch rate: avg {aggregate_text('avg_effective_epoch_rate_hz', ' Hz')}, min {aggregate_text('min_effective_epoch_rate_hz', ' Hz')}",
             f"- FLOAT bridge-tail rejected epochs: {aggregate_text('float_bridge_tail_rejected_epochs')}",
             f"- FIX bridge-burst rejected epochs: {aggregate_text('fixed_bridge_burst_rejected_epochs')}",
             "",
@@ -712,6 +834,29 @@ def enforce_requirements(payload: dict[str, object], args: argparse.Namespace) -
                 failures.append(f"{run['key']}: {name} delta {value:.6g} < {threshold:.6g}")
             if op == "<=" and value > threshold:
                 failures.append(f"{run['key']}: {name} delta {value:.6g} > {threshold:.6g}")
+        metrics = run.get("metrics")
+        if not isinstance(metrics, dict):
+            metrics = {}
+        runtime_requirements = {
+            "solver_wall_time_s": (getattr(args, "require_solver_wall_time_max", None), "<="),
+            "realtime_factor": (getattr(args, "require_realtime_factor_min", None), ">="),
+            "effective_epoch_rate_hz": (
+                getattr(args, "require_effective_epoch_rate_min", None),
+                ">=",
+            ),
+        }
+        for name, (threshold, op) in runtime_requirements.items():
+            if threshold is None:
+                continue
+            value = metrics.get(name)
+            if not isinstance(value, (int, float)):
+                failures.append(f"{run['key']}: missing runtime metric `{name}`")
+                continue
+            numeric_value = float(value)
+            if op == ">=" and numeric_value < threshold:
+                failures.append(f"{run['key']}: {name} {numeric_value:.6g} < {threshold:.6g}")
+            if op == "<=" and numeric_value > threshold:
+                failures.append(f"{run['key']}: {name} {numeric_value:.6g} > {threshold:.6g}")
     if failures:
         raise SystemExit("PPC coverage matrix requirements failed:\n" + "\n".join(failures))
 
