@@ -12,12 +12,11 @@ receiver-engine comparison. Treat the UrbanNav Odaiba snapshot below as a
 Tier-1 public smoke/regression run; the explicit `--preset odaiba` opt-in
 profile beats demo5 on Fix count, rate, Hmed, Hp95, and Vp95 for that scene.
 
-For the later PPC smoother-stack oracle sweep, see
+For the later PPC smoother-stack sanity check, see
 [`ppc_smoother_oracle_report.md`](ppc_smoother_oracle_report.md). That report
-records the 91.712675% local full-reference ceiling and the matching blind-review
-caveat: the smoother selector uses `reference.csv`, and truth-blind LOO checks
-did not preserve the local oracle gain. A deployable-only fixed internal
-smoother check also preserved no gain over `v237_sim`.
+does not add a smoother performance claim: the deployable-only fixed smoother
+check preserved no reference-free gain, so the benchmark claim here remains the
+runtime solver/coverage profile below.
 
 All runs below use `--mode kinematic --preset low-cost --match-tolerance-s 0.25`.
 The coverage profile additionally uses `--no-arfilter` plus the default
