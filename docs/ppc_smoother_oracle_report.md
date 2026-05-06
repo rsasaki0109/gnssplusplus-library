@@ -64,10 +64,14 @@ of chasing extra fixed epochs. In practice:
 
 ## Diagnostic Images
 
-The trajectory plots are useful for reviewing where bridges or gaps appear, but
-they are not performance evidence by themselves:
+The trajectory plots are useful for reviewing where bridges, gaps, and mis-fixes
+appear, but they are not performance evidence by themselves. Red `WRONG_FIX`
+points are `FIXED` solution epochs whose post-run 3D reference error exceeds
+0.10 m.
 
-![PPC smoother best-stack 2D trajectory colored by GNSS status](ppc_smoother_status_trajectories.png)
+![PPC filter 2D trajectory colored by GNSS status and wrong FIX](ppc_filter_status_trajectories.png)
+
+![PPC smoother 2D trajectory colored by GNSS status and wrong FIX](ppc_smoother_status_trajectories.png)
 
 ![PPC demo5-cont 2D trajectory colored by GNSS status](ppc_smoother_status_trajectories_demo5.png)
 
