@@ -1,0 +1,45 @@
+# PPC existing real-time gate outputs
+
+This note compares existing full six-run deployable RTK gate outputs. PPC
+reference truth is used only after the run for scoring and wrong-FIX labeling.
+
+Wrong FIX is `status == FIXED` with post-run 3D reference error above 0.50 m.
+
+## Full six-run outputs
+
+| profile | deployable gate | official | delta vs baseline | FIX epochs | Wrong FIX | Wrong/FIX | decision |
+|---|---|---:|---:|---:|---:|---:|---|
+| baseline_sigma001 | none beyond coverage profile | 64.001% | +0.000 pp | 42762 | 5333 | 12.471% | baseline |
+| fixed_nis10 | `--max-fixed-update-nis-per-obs 10` | 62.512% | -1.489 pp | 38954 | 4758 | 12.214% | rejects fewer wrong FIX but loses too much score |
+| fixed_post6 | `--max-fixed-update-post-rms 6` | 62.606% | -1.395 pp | 42397 | 5739 | 13.536% | reject |
+| nis10_ratio6 | `--max-fixed-update-nis-per-obs 10 --max-fixed-update-gate-ratio 6` | 63.373% | -0.628 pp | 41350 | 4962 | 12.000% | safer but still lower score |
+| snr_nis8_window | SNR weighting plus NIS gate in 7000-9000 m baseline window | 63.929% | -0.071 pp | 44393 | 7214 | 16.250% | reject, more wrong FIX |
+| secondary_window | SNR weighting plus primary/secondary fixed-update windows | 64.326% | +0.325 pp | 44355 | 7106 | 16.021% | reject, more wrong FIX |
+| secondary_window_reset12 | secondary_window plus non-FIX reset12 | 63.315% | -0.685 pp | 45089 | 9491 | 21.049% | reject |
+
+The current no-worse-Wrong-FIX policy rejects every profile that improves
+official score. The least-bad safe existing full output is `nis10_ratio6`, but
+it still gives up 0.628 pp official score.
+
+## Partial post4 / nis20 probes
+
+Only three runs exist locally for the stricter POS-replay candidates, so they
+are not a six-run claim. They explain why a global gate is risky:
+
+| run | profile | official | FIX epochs | Wrong FIX | Wrong/FIX |
+|---|---|---:|---:|---:|---:|
+| tokyo_run1 | baseline | 63.376% | 9018 | 1319 | 14.626% |
+| tokyo_run1 | fixed_post4 | 58.959% | 8544 | 1878 | 21.980% |
+| tokyo_run1 | fixed_nis20 | 60.330% | 8410 | 1877 | 22.319% |
+| nagoya_run2 | baseline | 29.958% | 5431 | 1919 | 35.334% |
+| nagoya_run2 | fixed_post4 | 32.866% | 5142 | 380 | 7.390% |
+| nagoya_run2 | fixed_nis20 | 27.654% | 5071 | 945 | 18.635% |
+| nagoya_run3 | baseline | 40.861% | 2741 | 881 | 32.142% |
+| nagoya_run3 | fixed_post4 | 36.619% | 1978 | 684 | 34.580% |
+| nagoya_run3 | fixed_nis20 | 44.932% | 2275 | 423 | 18.593% |
+
+`post4` is excellent for Nagoya run2 but bad for Tokyo run1 and Nagoya run3.
+`nis20` is good for Nagoya run3 but bad for Tokyo run1 and lower-score on
+Nagoya run2. The next deployable path should therefore be a conditional gate
+using real-time diagnostics such as baseline length, ratio, NIS, post residual,
+and possibly speed; a global fixed-update threshold is not enough.

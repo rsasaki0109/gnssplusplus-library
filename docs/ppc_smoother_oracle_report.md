@@ -75,6 +75,11 @@ the remaining wrong FIX is baseline-selected and does not match a smoother
 selector rule, so the next deployable lever is a real-time fixed-update quality
 gate rather than more reference-selected smoothing.
 
+Existing full real-time gate outputs are summarized in
+[PPC existing real-time gate outputs](ppc_realtime_gate_existing_outputs.md).
+The current full-run candidates do not yet satisfy the no-worse-Wrong-FIX
+policy while improving official score.
+
 ![PPC filter 2D trajectory colored by GNSS status and wrong FIX](ppc_filter_status_trajectories.png)
 
 ![PPC smoother 2D trajectory colored by GNSS status and wrong FIX](ppc_smoother_status_trajectories.png)
