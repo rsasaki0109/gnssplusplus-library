@@ -13,13 +13,16 @@ Wrong FIX is `status == FIXED` with post-run 3D reference error above 0.50 m.
 | fixed_nis10 | `--max-fixed-update-nis-per-obs 10` | 62.512% | -1.489 pp | 38954 | 4758 | 12.214% | rejects fewer wrong FIX but loses too much score |
 | fixed_post6 | `--max-fixed-update-post-rms 6` | 62.606% | -1.395 pp | 42397 | 5739 | 13.536% | reject |
 | nis10_ratio6 | `--max-fixed-update-nis-per-obs 10 --max-fixed-update-gate-ratio 6` | 63.373% | -0.628 pp | 41350 | 4962 | 12.000% | safer but still lower score |
+| nis8_ratio6 | `--max-fixed-update-nis-per-obs 8 --max-fixed-update-gate-ratio 6` | 22.318% | -41.683 pp | 3752 | 33 | 0.880% | reject, collapses FIX/score |
 | snr_nis8_window | SNR weighting plus NIS gate in 7000-9000 m baseline window | 63.929% | -0.071 pp | 44393 | 7214 | 16.250% | reject, more wrong FIX |
 | secondary_window | SNR weighting plus primary/secondary fixed-update windows | 64.326% | +0.325 pp | 44355 | 7106 | 16.021% | reject, more wrong FIX |
 | secondary_window_reset12 | secondary_window plus non-FIX reset12 | 63.315% | -0.685 pp | 45089 | 9491 | 21.049% | reject |
 
 The current no-worse-Wrong-FIX policy rejects every profile that improves
-official score. The least-bad safe existing full output is `nis10_ratio6`, but
-it still gives up 0.628 pp official score.
+official score. The stricter `nis8_ratio6` experiment confirms that lowering the
+NIS threshold can almost eliminate wrong FIX, but it does so by collapsing fixed
+coverage and official score. The least-bad safe existing full output remains
+`nis10_ratio6`, but it still gives up 0.628 pp official score.
 
 ## Partial post4 / nis20 probes
 
