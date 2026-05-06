@@ -25,6 +25,15 @@ guard, with `--ratio 2.4`. The kinematic post-filter cascade was removed in
 PR #36 (single-epoch height-step drop only), so `--no-kinematic-post-filter`
 is no longer required for coverage parity with the default profile.
 
+Real-time work should stay on the causal solver path: no smoother, no
+reference-selected segment switch, and no reference input at runtime. The PPC
+coverage matrix records `solver_wall_time_s`, `realtime_factor`, and
+`effective_epoch_rate_hz` for every run and can now fail the six-run replay with
+`--require-solver-wall-time-max`, `--require-realtime-factor-min`, and
+`--require-effective-epoch-rate-min`. Truth-derived wrong-FIX tables remain
+post-run diagnostics only; they are used to reject risky runtime gates, not to
+choose live output.
+
 ![PPC RTK coverage scorecard](ppc_rtk_demo5_scorecard.png)
 
 ## 2026-04-26 truth-validation baseline

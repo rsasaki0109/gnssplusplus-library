@@ -654,6 +654,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                         "max_h_m": 47.9,
                         "solver_wall_time_s": 1.0,
                         "realtime_factor": 10.0,
+                        "effective_epoch_rate_hz": 50.0,
                         "rtklib": {
                             "positioning_rate_pct": 66.3,
                             "fix_rate_pct": 30.5,
@@ -697,8 +698,17 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertEqual(payload["aggregates"]["weighted_rtklib_official_score_pct"], 21.0)
             self.assertEqual(payload["aggregates"]["weighted_official_score_delta_pct"], 21.0)
             self.assertEqual(payload["aggregates"]["avg_p95_h_delta_m"], -6.97)
+            self.assertEqual(payload["aggregates"]["avg_solver_wall_time_s"], 1.0)
+            self.assertEqual(payload["aggregates"]["max_solver_wall_time_s"], 1.0)
+            self.assertEqual(payload["aggregates"]["avg_realtime_factor"], 10.0)
+            self.assertEqual(payload["aggregates"]["min_realtime_factor"], 10.0)
+            self.assertEqual(payload["aggregates"]["avg_effective_epoch_rate_hz"], 50.0)
+            self.assertEqual(payload["aggregates"]["min_effective_epoch_rate_hz"], 50.0)
             self.assertEqual(payload["aggregates"]["float_bridge_tail_rejected_epochs"], 147)
             self.assertEqual(payload["aggregates"]["fixed_bridge_burst_rejected_epochs"], 12)
+            self.assertEqual(payload["runtime_requirements"]["solver_wall_time_max_s"], None)
+            self.assertEqual(payload["runtime_requirements"]["realtime_factor_min"], None)
+            self.assertEqual(payload["runtime_requirements"]["effective_epoch_rate_min_hz"], None)
             self.assertIsNone(payload["max_pos_jump_min"])
             self.assertIsNone(payload["max_pos_jump_rate"])
             self.assertIsNone(payload["max_float_prefit_rms"])
@@ -715,6 +725,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("+19.9 pp", markdown)
             self.assertIn("42.0%", markdown)
             self.assertIn("PPC official weighted delta: 21.0 pp", markdown)
+            self.assertIn("Realtime factor: avg 10.0, min 10.0", markdown)
+            self.assertIn("50.00 Hz", markdown)
             self.assertIn("147", markdown)
             self.assertIn("12", markdown)
 
@@ -726,6 +738,9 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                     require_official_score_delta_min=0.0,
                     require_score_3d_50cm_ref_delta_min=0.0,
                     require_p95_h_delta_max=0.0,
+                    require_solver_wall_time_max=1.0,
+                    require_realtime_factor_min=10.0,
+                    require_effective_epoch_rate_min=50.0,
                 ),
             )
             with self.assertRaises(SystemExit):
@@ -737,8 +752,29 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                         require_official_score_delta_min=None,
                         require_score_3d_50cm_ref_delta_min=None,
                         require_p95_h_delta_max=None,
+                        require_solver_wall_time_max=None,
+                        require_realtime_factor_min=None,
+                        require_effective_epoch_rate_min=None,
                     ),
                 )
+            with self.assertRaises(SystemExit) as runtime_context:
+                ppc_coverage_matrix.enforce_requirements(
+                    payload,
+                    argparse.Namespace(
+                        require_positioning_delta_min=None,
+                        require_fix_delta_min=None,
+                        require_official_score_delta_min=None,
+                        require_score_3d_50cm_ref_delta_min=None,
+                        require_p95_h_delta_max=None,
+                        require_solver_wall_time_max=0.5,
+                        require_realtime_factor_min=20.0,
+                        require_effective_epoch_rate_min=100.0,
+                    ),
+                )
+            runtime_message = str(runtime_context.exception)
+            self.assertIn("solver_wall_time_s", runtime_message)
+            self.assertIn("realtime_factor", runtime_message)
+            self.assertIn("effective_epoch_rate_hz", runtime_message)
 
 
 class PPCResidualResetSweepAnalysisTest(unittest.TestCase):
