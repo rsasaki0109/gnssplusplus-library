@@ -888,6 +888,7 @@ class PPCRealtimeGuardSweepTest(unittest.TestCase):
                 rtklib_bin=None,
                 rtklib_config=ROOT_DIR / "scripts" / "rtklib_odaiba.conf",
                 use_existing_solutions=True,
+                use_existing_matrices=False,
                 require_positioning_delta_min=0.0,
                 require_official_score_delta_min=0.0,
                 require_p95_h_delta_max=0.0,
@@ -918,6 +919,56 @@ class PPCRealtimeGuardSweepTest(unittest.TestCase):
             self.assertIn("5.0", command)
             self.assertIn("--max-fixed-update-nis-per-obs", command)
             self.assertIn("10", command)
+
+    def test_run_profile_can_load_existing_matrix(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_realtime_existing_") as temp_dir:
+            temp_root = Path(temp_dir)
+            matrix_dir = temp_root / "out" / "coverage"
+            matrix_dir.mkdir(parents=True)
+            matrix_payload = {
+                "runs": [
+                    {
+                        "key": "tokyo_run1",
+                        "metrics": {
+                            "ppc_official_score_distance_m": 1.0,
+                            "ppc_official_total_distance_m": 2.0,
+                        },
+                    }
+                ]
+            }
+            matrix_dir.joinpath("matrix.json").write_text(
+                json.dumps(matrix_payload),
+                encoding="utf-8",
+            )
+            args = argparse.Namespace(
+                dataset_root=temp_root / "PPC-Dataset",
+                output_dir=temp_root / "out",
+                summary_json=temp_root / "summary.json",
+                markdown_output=None,
+                max_epochs=-1,
+                match_tolerance_s=0.25,
+                preset="low-cost",
+                rtklib_root=None,
+                rtklib_bin=None,
+                rtklib_config=ROOT_DIR / "scripts" / "rtklib_odaiba.conf",
+                use_existing_solutions=False,
+                use_existing_matrices=True,
+                require_positioning_delta_min=None,
+                require_official_score_delta_min=None,
+                require_p95_h_delta_max=None,
+                require_solver_wall_time_max=None,
+                require_realtime_factor_min=None,
+                require_effective_epoch_rate_min=None,
+            )
+
+            matrix_json, matrix_md, payload = ppc_realtime_guard_sweep.run_profile(
+                args,
+                ppc_realtime_guard_sweep.GuardProfile("coverage", ("--ratio", "2.4")),
+            )
+
+            self.assertEqual(matrix_json, matrix_dir / "matrix.json")
+            self.assertEqual(matrix_md, matrix_dir / "matrix.md")
+            self.assertEqual(payload["runs"][0]["key"], "tokyo_run1")
 
     def test_payload_ranks_profiles_with_runtime_metrics(self) -> None:
         baseline = ppc_realtime_guard_sweep.GuardProfile("coverage", ("--ratio", "2.4"))
@@ -977,11 +1028,60 @@ class PPCRealtimeGuardSweepTest(unittest.TestCase):
 
         self.assertEqual(payload["baseline_profile"], "coverage")
         self.assertEqual(payload["best_profile"]["name"], "fixed_update_guard")
+        self.assertEqual(payload["best_safe_profile"]["name"], "fixed_update_guard")
         self.assertEqual(payload["profiles"][1]["delta_vs_baseline_score_pct"], 3.0)
         self.assertEqual(payload["profiles"][1]["min_realtime_factor"], 3.5)
+        self.assertFalse(payload["profiles"][1]["truth_diagnostics"]["available"])
         self.assertIn("fixed_update_guard", markdown)
+        self.assertIn("Best no-worse-Wrong-FIX profile", markdown)
         self.assertIn("3.500", markdown)
         self.assertIn("--max-fixed-update-nis-per-obs", markdown)
+
+    def test_truth_diagnostics_classifies_wrong_fixes(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_realtime_truth_") as temp_dir:
+            temp_root = Path(temp_dir)
+            dataset_root = temp_root / "PPC-Dataset"
+            run_dir = dataset_root / "tokyo" / "run1"
+            run_dir.mkdir(parents=True)
+            run_dir.joinpath("reference.csv").write_text(
+                "\n".join(
+                    [
+                        "GPS Week,GPS TOW (s),ECEF X (m),ECEF Y (m),ECEF Z (m)",
+                        "2300,10.000,1000.0,2000.0,3000.0",
+                        "2300,10.200,1001.0,2001.0,3001.0",
+                        "2300,10.400,1002.0,2002.0,3002.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            solution_dir = temp_root / "solution"
+            solution_dir.mkdir()
+            solution_dir.joinpath("tokyo_run1.pos").write_text(
+                "\n".join(
+                    [
+                        "% synthetic",
+                        "2300 10.000 1000.000 2000.000 3000.000 0 0 0 4 12 1.0",
+                        "2300 10.200 1011.000 2001.000 3001.000 0 0 0 4 12 1.0",
+                        "2300 10.400 1002.100 2002.000 3002.000 0 0 0 3 12 1.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            diagnostics = ppc_realtime_guard_sweep.truth_diagnostics(
+                dataset_root,
+                solution_dir,
+                ["tokyo_run1"],
+            )
+
+            self.assertTrue(diagnostics["available"])
+            self.assertEqual(diagnostics["matched"], 3)
+            self.assertEqual(diagnostics["fix_ok"], 1)
+            self.assertEqual(diagnostics["fix_wrong"], 1)
+            self.assertEqual(diagnostics["float_ok"], 1)
+            self.assertEqual(diagnostics["fix_wrong_rate_pct"], 50.0)
 
 
 class PPCProfileSegmentDeltaTest(unittest.TestCase):
