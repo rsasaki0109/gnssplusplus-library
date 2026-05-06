@@ -152,6 +152,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional RTK DD Kalman update NIS/observation rejection threshold.",
     )
+    parser.add_argument("--demote-fixed-status-nis-per-obs", type=float, default=None)
+    parser.add_argument("--demote-fixed-status-post-rms", type=float, default=None)
+    parser.add_argument("--demote-fixed-status-gate-ratio", type=float, default=None)
+    parser.add_argument("--min-demote-fixed-status-baseline", type=float, default=None)
+    parser.add_argument("--max-demote-fixed-status-baseline", type=float, default=None)
     parser.add_argument(
         "--max-consec-float-reset",
         type=int,
@@ -325,6 +330,41 @@ def build_ppc_demo_command(
         )
     if getattr(args, "max_update_nis_per_obs", None) is not None:
         command.extend(["--max-update-nis-per-obs", str(args.max_update_nis_per_obs)])
+    if getattr(args, "demote_fixed_status_nis_per_obs", None) is not None:
+        command.extend(
+            [
+                "--demote-fixed-status-nis-per-obs",
+                str(args.demote_fixed_status_nis_per_obs),
+            ]
+        )
+    if getattr(args, "demote_fixed_status_post_rms", None) is not None:
+        command.extend(
+            [
+                "--demote-fixed-status-post-rms",
+                str(args.demote_fixed_status_post_rms),
+            ]
+        )
+    if getattr(args, "demote_fixed_status_gate_ratio", None) is not None:
+        command.extend(
+            [
+                "--demote-fixed-status-gate-ratio",
+                str(args.demote_fixed_status_gate_ratio),
+            ]
+        )
+    if getattr(args, "min_demote_fixed_status_baseline", None) is not None:
+        command.extend(
+            [
+                "--min-demote-fixed-status-baseline",
+                str(args.min_demote_fixed_status_baseline),
+            ]
+        )
+    if getattr(args, "max_demote_fixed_status_baseline", None) is not None:
+        command.extend(
+            [
+                "--max-demote-fixed-status-baseline",
+                str(args.max_demote_fixed_status_baseline),
+            ]
+        )
     if getattr(args, "max_consec_float_reset", None) is not None:
         command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
     if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -610,6 +650,21 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_float_prefit_reset_streak": getattr(args, "max_float_prefit_reset_streak", None),
         "min_float_prefit_trusted_jump": getattr(args, "min_float_prefit_trusted_jump", None),
         "max_update_nis_per_obs": getattr(args, "max_update_nis_per_obs", None),
+        "demote_fixed_status_nis_per_obs": getattr(
+            args, "demote_fixed_status_nis_per_obs", None
+        ),
+        "demote_fixed_status_post_rms": getattr(
+            args, "demote_fixed_status_post_rms", None
+        ),
+        "demote_fixed_status_gate_ratio": getattr(
+            args, "demote_fixed_status_gate_ratio", None
+        ),
+        "min_demote_fixed_status_baseline": getattr(
+            args, "min_demote_fixed_status_baseline", None
+        ),
+        "max_demote_fixed_status_baseline": getattr(
+            args, "max_demote_fixed_status_baseline", None
+        ),
         "max_consec_float_reset": getattr(args, "max_consec_float_reset", None),
         "max_consec_nonfix_reset": getattr(args, "max_consec_nonfix_reset", None),
         "max_postfix_rms": getattr(args, "max_postfix_rms", None),

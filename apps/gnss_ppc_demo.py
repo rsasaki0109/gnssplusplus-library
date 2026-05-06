@@ -236,6 +236,26 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK DD Kalman update NIS/observation rejection threshold.",
     )
     parser.add_argument(
+        "--demote-fixed-status-nis-per-obs",
+        type=float,
+        default=None,
+        help="Output RTK FIX as FLOAT when update NIS/observation exceeds this value.",
+    )
+    parser.add_argument(
+        "--demote-fixed-status-post-rms",
+        type=float,
+        default=None,
+        help="Output RTK FIX as FLOAT when update post-residual RMS exceeds this value.",
+    )
+    parser.add_argument(
+        "--demote-fixed-status-gate-ratio",
+        type=float,
+        default=None,
+        help="Apply RTK fixed-status demotion only when AR ratio is at or below this value.",
+    )
+    parser.add_argument("--min-demote-fixed-status-baseline", type=float, default=None)
+    parser.add_argument("--max-demote-fixed-status-baseline", type=float, default=None)
+    parser.add_argument(
         "--max-consec-float-reset",
         type=int,
         default=None,
@@ -1002,6 +1022,41 @@ def run_solver(
             )
         if getattr(args, "max_update_nis_per_obs", None) is not None:
             command.extend(["--max-update-nis-per-obs", str(args.max_update_nis_per_obs)])
+        if getattr(args, "demote_fixed_status_nis_per_obs", None) is not None:
+            command.extend(
+                [
+                    "--demote-fixed-status-nis-per-obs",
+                    str(args.demote_fixed_status_nis_per_obs),
+                ]
+            )
+        if getattr(args, "demote_fixed_status_post_rms", None) is not None:
+            command.extend(
+                [
+                    "--demote-fixed-status-post-rms",
+                    str(args.demote_fixed_status_post_rms),
+                ]
+            )
+        if getattr(args, "demote_fixed_status_gate_ratio", None) is not None:
+            command.extend(
+                [
+                    "--demote-fixed-status-gate-ratio",
+                    str(args.demote_fixed_status_gate_ratio),
+                ]
+            )
+        if getattr(args, "min_demote_fixed_status_baseline", None) is not None:
+            command.extend(
+                [
+                    "--min-demote-fixed-status-baseline",
+                    str(args.min_demote_fixed_status_baseline),
+                ]
+            )
+        if getattr(args, "max_demote_fixed_status_baseline", None) is not None:
+            command.extend(
+                [
+                    "--max-demote-fixed-status-baseline",
+                    str(args.max_demote_fixed_status_baseline),
+                ]
+            )
         if getattr(args, "max_consec_float_reset", None) is not None:
             command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
         if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -1203,6 +1258,31 @@ def build_summary_payload(
         ),
         "rtk_max_update_nis_per_observation": (
             getattr(args, "max_update_nis_per_obs", None) if args.solver == "rtk" else None
+        ),
+        "rtk_demote_fixed_status_nis_per_observation": (
+            getattr(args, "demote_fixed_status_nis_per_obs", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_demote_fixed_status_post_residual_rms_m": (
+            getattr(args, "demote_fixed_status_post_rms", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_demote_fixed_status_gate_ratio": (
+            getattr(args, "demote_fixed_status_gate_ratio", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_min_demote_fixed_status_baseline_m": (
+            getattr(args, "min_demote_fixed_status_baseline", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_max_demote_fixed_status_baseline_m": (
+            getattr(args, "max_demote_fixed_status_baseline", None)
+            if args.solver == "rtk"
+            else None
         ),
         "rtk_max_consecutive_float_for_reset": (
             getattr(args, "max_consec_float_reset", None) if args.solver == "rtk" else None
