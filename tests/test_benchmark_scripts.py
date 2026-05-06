@@ -70,6 +70,7 @@ import analyze_ppc_multi_candidate_selector_matrix as ppc_multi_cand_analyzer  #
 import apply_ppc_multi_candidate_selector as ppc_multi_candidate_selector  # noqa: E402
 import run_ppc_multi_candidate_selector_matrix as ppc_multi_selector_matrix  # noqa: E402
 import run_ppc_ratio_gating_selector_sweep as ppc_ratio_gating_sweep  # noqa: E402
+import run_ppc_realtime_guard_sweep as ppc_realtime_guard_sweep  # noqa: E402
 
 
 class ScorecardHelpersTest(unittest.TestCase):
@@ -869,6 +870,118 @@ class PPCResidualResetSweepAnalysisTest(unittest.TestCase):
                 47.0,
             )
             self.assertIn("City Selector", markdown_output.read_text(encoding="utf-8"))
+
+
+class PPCRealtimeGuardSweepTest(unittest.TestCase):
+    def test_profile_command_passes_runtime_requirements(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_realtime_guard_") as temp_dir:
+            temp_root = Path(temp_dir)
+            args = argparse.Namespace(
+                dataset_root=temp_root / "PPC-Dataset",
+                output_dir=temp_root / "out",
+                summary_json=temp_root / "summary.json",
+                markdown_output=temp_root / "summary.md",
+                max_epochs=-1,
+                match_tolerance_s=0.25,
+                preset="low-cost",
+                rtklib_root=temp_root / "rtklib",
+                rtklib_bin=None,
+                rtklib_config=ROOT_DIR / "scripts" / "rtklib_odaiba.conf",
+                use_existing_solutions=True,
+                require_positioning_delta_min=0.0,
+                require_official_score_delta_min=0.0,
+                require_p95_h_delta_max=0.0,
+                require_solver_wall_time_max=10.0,
+                require_realtime_factor_min=1.0,
+                require_effective_epoch_rate_min=5.0,
+            )
+            profile = ppc_realtime_guard_sweep.parse_profile_spec(
+                "fixed=--ratio 2.4 --max-fixed-update-nis-per-obs 10"
+            )
+
+            command, matrix_json, matrix_md = ppc_realtime_guard_sweep.build_matrix_argv(
+                args,
+                profile,
+            )
+
+            self.assertEqual(command[:3], [sys.executable, str(ROOT_DIR / "apps" / "gnss.py"), "ppc-coverage-matrix"])
+            self.assertEqual(matrix_json, temp_root / "out" / "fixed" / "matrix.json")
+            self.assertEqual(matrix_md, temp_root / "out" / "fixed" / "matrix.md")
+            self.assertIn("--use-existing-solutions", command)
+            self.assertIn("--rtklib-root", command)
+            self.assertIn(str(temp_root / "rtklib"), command)
+            self.assertIn("--require-solver-wall-time-max", command)
+            self.assertIn("10.0", command)
+            self.assertIn("--require-realtime-factor-min", command)
+            self.assertIn("1.0", command)
+            self.assertIn("--require-effective-epoch-rate-min", command)
+            self.assertIn("5.0", command)
+            self.assertIn("--max-fixed-update-nis-per-obs", command)
+            self.assertIn("10", command)
+
+    def test_payload_ranks_profiles_with_runtime_metrics(self) -> None:
+        baseline = ppc_realtime_guard_sweep.GuardProfile("coverage", ("--ratio", "2.4"))
+        candidate = ppc_realtime_guard_sweep.GuardProfile(
+            "fixed_update_guard",
+            (
+                "--ratio",
+                "2.4",
+                "--max-fixed-update-nis-per-obs",
+                "10",
+            ),
+        )
+        baseline_payload = {
+            "runs": [
+                {
+                    "key": "tokyo_run1",
+                    "metrics": {
+                        "ppc_official_score_distance_m": 400.0,
+                        "ppc_official_total_distance_m": 1000.0,
+                    },
+                },
+            ],
+            "aggregates": {
+                "avg_positioning_delta_pct": 17.0,
+                "avg_p95_h_delta_m": -10.0,
+                "max_solver_wall_time_s": 2.0,
+                "min_realtime_factor": 4.0,
+                "min_effective_epoch_rate_hz": 20.0,
+            },
+        }
+        candidate_payload = {
+            "runs": [
+                {
+                    "key": "tokyo_run1",
+                    "metrics": {
+                        "ppc_official_score_distance_m": 430.0,
+                        "ppc_official_total_distance_m": 1000.0,
+                    },
+                },
+            ],
+            "aggregates": {
+                "avg_positioning_delta_pct": 16.5,
+                "avg_p95_h_delta_m": -11.0,
+                "max_solver_wall_time_s": 2.5,
+                "min_realtime_factor": 3.5,
+                "min_effective_epoch_rate_hz": 18.0,
+            },
+        }
+
+        payload = ppc_realtime_guard_sweep.build_payload(
+            [
+                (baseline, Path("coverage.json"), Path("coverage.md"), baseline_payload),
+                (candidate, Path("fixed.json"), Path("fixed.md"), candidate_payload),
+            ]
+        )
+        markdown = ppc_realtime_guard_sweep.render_markdown(payload)
+
+        self.assertEqual(payload["baseline_profile"], "coverage")
+        self.assertEqual(payload["best_profile"]["name"], "fixed_update_guard")
+        self.assertEqual(payload["profiles"][1]["delta_vs_baseline_score_pct"], 3.0)
+        self.assertEqual(payload["profiles"][1]["min_realtime_factor"], 3.5)
+        self.assertIn("fixed_update_guard", markdown)
+        self.assertIn("3.500", markdown)
+        self.assertIn("--max-fixed-update-nis-per-obs", markdown)
 
 
 class PPCProfileSegmentDeltaTest(unittest.TestCase):

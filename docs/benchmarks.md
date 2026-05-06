@@ -34,6 +34,11 @@ coverage matrix records `solver_wall_time_s`, `realtime_factor`, and
 post-run diagnostics only; they are used to reject risky runtime gates, not to
 choose live output.
 
+Use `scripts/run_ppc_realtime_guard_sweep.py` to compare deployable guard
+profiles with those runtime gates. The built-in profiles keep the coverage
+baseline, a fixed-update residual/NIS guard, and a non-FIX reset profile in one
+report so candidate gates can be rejected before any smoother work is revisited.
+
 ![PPC RTK coverage scorecard](ppc_rtk_demo5_scorecard.png)
 
 ## 2026-04-26 truth-validation baseline
