@@ -69,6 +69,12 @@ appear, but they are not performance evidence by themselves. Red `WRONG_FIX`
 points are `FIXED` solution epochs whose post-run 3D reference error exceeds
 0.50 m.
 
+Residual red points are broken down in
+[PPC residual wrong-FIX analysis](ppc_wrong_fix_residual_analysis.md). In short,
+the remaining wrong FIX is baseline-selected and does not match a smoother
+selector rule, so the next deployable lever is a real-time fixed-update quality
+gate rather than more reference-selected smoothing.
+
 ![PPC filter 2D trajectory colored by GNSS status and wrong FIX](ppc_filter_status_trajectories.png)
 
 ![PPC smoother 2D trajectory colored by GNSS status and wrong FIX](ppc_smoother_status_trajectories.png)
