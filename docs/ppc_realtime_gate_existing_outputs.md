@@ -101,7 +101,8 @@ Full six-run output:
 |---|---:|---:|---:|---:|---:|---|
 | baseline_sigma001 | 64.001% | 42762 | 5333 | 12.471% | n/a | baseline |
 | pos_status_demote_nis10_ratio6 | 64.001% | 39577 | 3273 | 8.270% | n/a | POS-only diagnostic |
-| runtime_status_demote_nis10_ratio6 | 22.318% | 4137 | 34 | 0.822% | 6.570x | reject, collapses FIX/score |
+| current_build_no_demote | 22.318% | 4195 | 36 | 0.858% | 6.467x | dirty-build control |
+| runtime_status_demote_nis10_ratio6 | 22.318% | 4137 | 34 | 0.822% | 6.570x | neutral vs current control |
 
 Per-run runtime output:
 
@@ -114,8 +115,14 @@ Per-run runtime output:
 | nagoya_run2 | 83.2% | 9.6% | 10.4% |
 | nagoya_run3 | 94.0% | 0.1% | 4.9% |
 
-This closes the status-only path as a performance candidate in its global
-`NIS/obs > 10, ratio <= 6` form. The POS-only replay was useful for isolating
-wrong-FIX labels, but the deployable PPC score depends on the emitted FIX
-status. Demoting too many FIX epochs makes the official score collapse even
-when positions remain available.
+The runtime replay was initially compared against the older `sigma_0p001`
+artifact, but a fair no-demotion control from the same current dirty build also
+lands at 22.318% official with only 4195 FIX epochs. Therefore this run is not a
+valid demotion-vs-baseline rejection; it shows the current dirty build is already
+far from the checked-in `sigma_0p001` artifact. Apples-to-apples, runtime status
+demotion is nearly neutral: it changes 4195 FIX / 36 Wrong FIX to 4137 FIX / 34
+Wrong FIX at the same official score.
+
+The next step is to isolate which uncommitted solver changes make the current
+build diverge from the historical 64.001% coverage baseline before drawing
+performance conclusions from runtime demotion.
