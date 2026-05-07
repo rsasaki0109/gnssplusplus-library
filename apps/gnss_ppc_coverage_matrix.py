@@ -152,6 +152,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional RTK DD Kalman update NIS/observation rejection threshold.",
     )
+    parser.add_argument("--carrier-phase-sigma", type=float, default=None)
     parser.add_argument("--demote-fixed-status-nis-per-obs", type=float, default=None)
     parser.add_argument("--demote-fixed-status-post-rms", type=float, default=None)
     parser.add_argument("--demote-fixed-status-gate-ratio", type=float, default=None)
@@ -330,6 +331,8 @@ def build_ppc_demo_command(
         )
     if getattr(args, "max_update_nis_per_obs", None) is not None:
         command.extend(["--max-update-nis-per-obs", str(args.max_update_nis_per_obs)])
+    if getattr(args, "carrier_phase_sigma", None) is not None:
+        command.extend(["--carrier-phase-sigma", str(args.carrier_phase_sigma)])
     if getattr(args, "demote_fixed_status_nis_per_obs", None) is not None:
         command.extend(
             [
@@ -650,6 +653,7 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_float_prefit_reset_streak": getattr(args, "max_float_prefit_reset_streak", None),
         "min_float_prefit_trusted_jump": getattr(args, "min_float_prefit_trusted_jump", None),
         "max_update_nis_per_obs": getattr(args, "max_update_nis_per_obs", None),
+        "carrier_phase_sigma": getattr(args, "carrier_phase_sigma", None),
         "demote_fixed_status_nis_per_obs": getattr(
             args, "demote_fixed_status_nis_per_obs", None
         ),

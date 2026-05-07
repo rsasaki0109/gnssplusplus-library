@@ -236,6 +236,12 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK DD Kalman update NIS/observation rejection threshold.",
     )
     parser.add_argument(
+        "--carrier-phase-sigma",
+        type=float,
+        default=None,
+        help="Optional RTK carrier-phase observation sigma in meters.",
+    )
+    parser.add_argument(
         "--demote-fixed-status-nis-per-obs",
         type=float,
         default=None,
@@ -1022,6 +1028,8 @@ def run_solver(
             )
         if getattr(args, "max_update_nis_per_obs", None) is not None:
             command.extend(["--max-update-nis-per-obs", str(args.max_update_nis_per_obs)])
+        if getattr(args, "carrier_phase_sigma", None) is not None:
+            command.extend(["--carrier-phase-sigma", str(args.carrier_phase_sigma)])
         if getattr(args, "demote_fixed_status_nis_per_obs", None) is not None:
             command.extend(
                 [
@@ -1258,6 +1266,9 @@ def build_summary_payload(
         ),
         "rtk_max_update_nis_per_observation": (
             getattr(args, "max_update_nis_per_obs", None) if args.solver == "rtk" else None
+        ),
+        "rtk_carrier_phase_sigma_m": (
+            getattr(args, "carrier_phase_sigma", None) if args.solver == "rtk" else None
         ),
         "rtk_demote_fixed_status_nis_per_observation": (
             getattr(args, "demote_fixed_status_nis_per_obs", None)
