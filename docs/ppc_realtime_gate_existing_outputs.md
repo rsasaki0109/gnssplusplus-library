@@ -237,3 +237,34 @@ This is the better headline profile when status correctness matters more than
 maximizing output FIX count. It removes 2098 Wrong FIX epochs versus the
 no-demotion sigma control, and 948 more than the 5% narrowed candidate, at the
 cost of 4542 additional output FIX epochs.
+
+## Ultra-conservative sigma-profile demotion
+
+Pushing Wrong/FIX lower requires dropping the ratio gate entirely and demoting
+every output FIX with `--demote-fixed-status-nis-per-obs 2`. This is the lowest
+Wrong/FIX runtime result in the current deployable sweep, but unlike the milder
+runtime-demotion profiles it gives up a small amount of official score.
+
+Full runtime replay:
+
+| profile | official | FIX epochs | Wrong FIX | Wrong/FIX | FIX drop | Wrong drop | min realtime | decision |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| current_sigma | 64.750% | 41608 | 3078 | 7.398% | 0 | 0 | 6.883x | control |
+| current_sigma_demote_nis3_ratio15 | 64.750% | 35382 | 980 | 2.770% | 6226 | 2098 | 6.274x | sub-1000 Wrong FIX |
+| current_sigma_demote_nis2 | 64.707% | 29705 | 563 | 1.895% | 11903 | 2515 | 7.046x | lowest Wrong/FIX |
+
+Per-run Wrong FIX for `nis2`:
+
+| run | current_sigma | nis3_ratio15 | nis2 |
+|---|---:|---:|---:|
+| tokyo_run1 | 936 | 442 | 271 |
+| tokyo_run2 | 160 | 75 | 65 |
+| tokyo_run3 | 870 | 218 | 123 |
+| nagoya_run1 | 124 | 27 | 6 |
+| nagoya_run2 | 537 | 157 | 69 |
+| nagoya_run3 | 451 | 61 | 29 |
+
+`nis2` is the right headline status profile if the goal is to minimize Wrong/FIX
+as much as possible with deployable real-time fields. It reduces Wrong/FIX to
+1.895%, but the cost is high: 5677 fewer FIX epochs than `nis3_ratio15`, and a
+weighted official score drop of 0.043 pp.

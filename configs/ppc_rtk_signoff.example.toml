@@ -31,8 +31,8 @@ rtklib_bin = "/opt/rtklib/bin/rnx2rtkp"
 # commercial_matched_csv = "output/ppc_tokyo_odaiba_trimble_net_r9_matches.csv"
 preset = "low-cost"
 # Recommended deployable realtime profile from the full PPC six-run matrix.
-# It keeps the sigma-profile official score at 64.750% while reducing 0.50 m
-# Wrong FIX from 3078 to 980 and keeping Wrong/FIX below 3%.
+# It reduces 0.50 m Wrong FIX from 3078 to 563 and keeps Wrong/FIX below 2%.
+# The tradeoff is a small official-score drop from 64.750% to 64.707%.
 # realtime_profile = "sigma-demote"
 # Optional RTK ionosphere sweep mode: "auto", "off", "iflc", or "est".
 # iono = "iflc"
