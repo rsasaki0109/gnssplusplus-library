@@ -65,6 +65,84 @@ std::vector<std::vector<int>> buildPreferredSubsets(const std::vector<PairDescri
     };
 }
 
+std::vector<std::vector<int>> buildBSRGuidedDropSubsets(
+    const std::vector<PairDescriptor>& pairs,
+    const Eigen::MatrixXd& Qb,
+    int minimum_pairs,
+    int max_drop_steps,
+    int worst_axes) {
+    const int n = static_cast<int>(pairs.size());
+    if (n == 0) return {};
+    if (Qb.rows() != n || Qb.cols() != n) return {};
+    if (worst_axes < 1) return {};
+
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(Qb);
+    if (eig.info() != Eigen::Success) return {};
+
+    const Eigen::VectorXd& eigvals = eig.eigenvalues();
+    const Eigen::MatrixXd& eigvecs = eig.eigenvectors();
+    if (eigvals.size() == 0 || eigvals.minCoeff() < -1e-10) {
+        return {};
+    }
+
+    // Identify the K worst axes (largest eigenvalues = least informative).
+    std::vector<std::pair<double, int>> ranked;
+    ranked.reserve(n);
+    for (int k = 0; k < n; ++k) {
+        ranked.emplace_back(eigvals(k), k);
+    }
+    std::sort(ranked.begin(), ranked.end(),
+              [](const auto& a, const auto& b) { return a.first > b.first; });
+
+    const int K = std::min(worst_axes, n);
+    std::vector<int> worst_axis_indices;
+    std::vector<double> worst_axis_eigvals;
+    worst_axis_indices.reserve(K);
+    worst_axis_eigvals.reserve(K);
+    for (int i = 0; i < K; ++i) {
+        worst_axis_indices.push_back(ranked[i].second);
+        worst_axis_eigvals.push_back(std::max(0.0, ranked[i].first));
+    }
+
+    // Per-pair loading on the worst axes.
+    std::vector<double> loading(n, 0.0);
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < K; ++j) {
+            const int k = worst_axis_indices[j];
+            loading[i] += std::abs(eigvecs(i, k)) * worst_axis_eigvals[j];
+        }
+    }
+
+    std::vector<std::vector<int>> subsets;
+    std::vector<int> current_subset;
+    current_subset.reserve(n);
+    for (int i = 0; i < n; ++i) current_subset.push_back(i);
+
+    const int max_steps = std::min(n - minimum_pairs, max_drop_steps);
+    for (int step = 0; step < max_steps; ++step) {
+        int worst_index = -1;
+        double worst_load = -1.0;
+        for (int i : current_subset) {
+            if (loading[i] > worst_load) {
+                worst_load = loading[i];
+                worst_index = i;
+            }
+        }
+        if (worst_index < 0) break;
+
+        std::vector<int> subset;
+        subset.reserve(current_subset.size());
+        for (int i : current_subset) {
+            if (i != worst_index) subset.push_back(i);
+        }
+        if (static_cast<int>(subset.size()) < minimum_pairs) break;
+        subsets.push_back(subset);
+        current_subset = subset;
+        loading[worst_index] = -1.0;  // exclude from future picks
+    }
+    return subsets;
+}
+
 std::vector<std::vector<int>> buildProgressiveVarianceDropSubsets(
     const std::vector<PairDescriptor>& pairs,
     int minimum_pairs,

@@ -94,6 +94,7 @@ struct SolveConfig {
     double ar_filter_margin = 0.25;
     int min_satellites_for_ar = 5;
     int min_subset_pairs_for_ar = 4;
+    int max_subset_drop_steps_for_ar = 6;
     int min_subset_sats_for_ar = 0;
     int min_subset_systems_for_ar = 0;
     int min_subset_frequencies_for_ar = 0;
@@ -106,6 +107,17 @@ struct SolveConfig {
     double process_noise_ambiguity = 1e-8;
     double process_noise_iono = 1e-4;
     double carrier_phase_sigma = 0.002;
+    bool enable_snr_weighting = false;
+    double snr_reference_dbhz = 45.0;
+    double snr_max_variance_scale = 25.0;
+    double snr_min_baseline_m = 0.0;
+    double cycle_slip_threshold = 0.05;
+    double doppler_slip_threshold = 0.20;
+    double code_slip_threshold = 5.0;
+    bool use_dynamic_slip_threshold_floor = true;
+    bool enable_adaptive_dynamic_slip_thresholds = false;
+    int adaptive_dynamic_slip_nonfix_count = 3;
+    int adaptive_dynamic_slip_hold_epochs = 10;
     bool process_noise_position_set = false;
     bool process_noise_ambiguity_set = false;
     bool process_noise_iono_set = false;
@@ -163,8 +175,21 @@ struct SolveConfig {
     int max_float_prefit_residual_reset_streak = 3;
     double min_float_prefit_residual_trusted_jump_m = 0.0;
     double max_update_nis_per_observation = 0.0;
+    double max_fixed_update_nis_per_observation = 0.0;
+    double max_fixed_update_post_residual_rms_m = 0.0;
+    double max_fixed_update_gate_ratio = 0.0;
+    double min_fixed_update_gate_baseline_m = 0.0;
+    double max_fixed_update_gate_baseline_m = 0.0;
+    double min_fixed_update_gate_speed_mps = 0.0;
+    double max_fixed_update_gate_speed_mps = 0.0;
+    double max_fixed_update_secondary_gate_ratio = 0.0;
+    double min_fixed_update_secondary_gate_baseline_m = 0.0;
+    double max_fixed_update_secondary_gate_baseline_m = 0.0;
+    double min_fixed_update_secondary_gate_speed_mps = 0.0;
+    double max_fixed_update_secondary_gate_speed_mps = 0.0;
     double demote_fixed_status_nis_per_observation = 0.0;
     double demote_fixed_status_post_residual_rms_m = 0.0;
+    double demote_fixed_status_max_ratio = 0.0;
     double demote_fixed_status_gate_ratio = 0.0;
     double min_demote_fixed_status_baseline_m = 0.0;
     double max_demote_fixed_status_baseline_m = 0.0;
@@ -175,6 +200,10 @@ struct SolveConfig {
     bool wide_lane_ar_set = false;
     double wide_lane_acceptance_threshold = 0.25;
     bool wide_lane_acceptance_threshold_set = false;
+    bool enable_wlnl_fallback = false;
+    bool enable_bsr_guided_decimation = false;
+    int bsr_guided_worst_axes = 3;
+    int bsr_guided_max_drop_steps = 6;
 };
 
 double timeDiffSeconds(const libgnss::GNSSTime& a, const libgnss::GNSSTime& b) {
@@ -205,6 +234,13 @@ bool shouldDemoteFixedStatus(const SolveConfig& config,
                              const libgnss::PositionSolution& solution) {
     if (!solution.isFixed()) {
         return false;
+    }
+
+    if (std::isfinite(config.demote_fixed_status_max_ratio) &&
+        config.demote_fixed_status_max_ratio > 0.0 &&
+        std::isfinite(solution.ratio) &&
+        solution.ratio <= config.demote_fixed_status_max_ratio) {
+        return true;
     }
 
     const bool nis_enabled =
@@ -510,8 +546,15 @@ public:
               << "ar_attempted,input_pair_count,pair_count,max_ambiguity_variance,"
               << "effective_ratio_threshold,min_subset_pair_count,min_full_ratio_for_subset_ar,"
               << "subset_candidates_evaluated,subset_candidates_rejected_by_full_ratio,"
-              << "subset_candidates_rejected_by_diversity,wide_lane_total,wide_lane_fixed,"
+              << "subset_candidates_rejected_by_diversity,"
+              << "bsr_guided_candidates_evaluated,bsr_guided_candidates_accepted,"
+              << "wide_lane_total,wide_lane_fixed,"
               << "wide_lane_rejected,wide_lane_min_distance,wide_lane_max_distance,"
+              << "gf_slip_count,doppler_slip_l1_count,doppler_slip_l2_count,"
+              << "code_slip_l1_count,code_slip_l2_count,lli_slip_l1_count,"
+              << "lli_slip_l2_count,ambiguity_reset_l1_count,ambiguity_reset_l2_count,"
+              << "adaptive_dynamic_slip_active,consecutive_nonfix_before_bias_update,"
+              << "adaptive_dynamic_slip_hold_remaining,"
               << "full_lambda_solved,full_ratio,selected_fixed,selected_ratio,"
               << "selected_pair_count,selected_distinct_sats,selected_distinct_systems,"
               << "selected_distinct_frequencies,selected_dual_frequency_sats,"
@@ -547,6 +590,8 @@ public:
               << telemetry.subset_candidates_evaluated << ","
               << telemetry.subset_candidates_rejected_by_full_ratio << ","
               << telemetry.subset_candidates_rejected_by_diversity << ","
+              << telemetry.bsr_guided_candidates_evaluated << ","
+              << telemetry.bsr_guided_candidates_accepted << ","
               << telemetry.wide_lane_total << ","
               << telemetry.wide_lane_fixed << ","
               << telemetry.wide_lane_rejected << ",";
@@ -554,6 +599,18 @@ public:
         file_ << ",";
         writeNumber(telemetry.wide_lane_max_distance);
         file_ << ","
+              << telemetry.gf_slip_count << ","
+              << telemetry.doppler_slip_l1_count << ","
+              << telemetry.doppler_slip_l2_count << ","
+              << telemetry.code_slip_l1_count << ","
+              << telemetry.code_slip_l2_count << ","
+              << telemetry.lli_slip_l1_count << ","
+              << telemetry.lli_slip_l2_count << ","
+              << telemetry.ambiguity_reset_l1_count << ","
+              << telemetry.ambiguity_reset_l2_count << ","
+              << telemetry.adaptive_dynamic_slip_active << ","
+              << telemetry.consecutive_nonfix_before_bias_update << ","
+              << telemetry.adaptive_dynamic_slip_hold_remaining << ","
               << telemetry.full_lambda_solved << ",";
         writeNumber(telemetry.full_ratio);
         file_ << ","
@@ -614,6 +671,8 @@ void printUsage(const char* program_name) {
         << "  --arfilter-margin <v>      Extra ratio margin for --arfilter (default: 0.25)\n"
         << "  --min-ar-sats <n>          Minimum satellites for AR (default: 5)\n"
         << "  --min-subset-ar-pairs <n>  Minimum DD pairs for subset AR (default: 4)\n"
+        << "  --max-subset-ar-drop-steps <n>\n"
+        << "                             Max worst-variance DD pairs dropped for subset AR (default: 6)\n"
         << "  --min-subset-ar-sats <n>   Minimum distinct satellites for subset AR\n"
         << "                             (default: 0, disabled)\n"
         << "  --min-subset-ar-systems <n>\n"
@@ -636,6 +695,26 @@ void printUsage(const char* program_name) {
         << "                             KF process noise for DD ambiguity state, cycles^2/s (default: 1e-8)\n"
         << "  --process-noise-iono <v>   KF process noise for DD ionosphere state, m^2/s (default: 1e-4)\n"
         << "  --carrier-phase-sigma <v>  Carrier phase observation sigma in m (default: 0.002)\n"
+        << "  --rtk-snr-weighting        Inflate RTK observation variance for low SNR links (default: off)\n"
+        << "  --rtk-snr-reference-dbhz <v>\n"
+        << "                             SNR with no RTK variance inflation (default: 45)\n"
+        << "  --rtk-snr-max-variance-scale <v>\n"
+        << "                             Max RTK low-SNR variance inflation (default: 25)\n"
+        << "  --rtk-snr-min-baseline <m>\n"
+        << "                             Apply RTK SNR weighting only above this baseline length\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --cycle-slip-threshold <m> Geometry-free L1/L2 slip threshold (default: 0.05)\n"
+        << "  --doppler-slip-threshold <m>\n"
+        << "                             Doppler-predicted phase slip threshold (default: 0.20)\n"
+        << "  --code-slip-threshold <m>  Code-minus-phase slip threshold (default: 5.0)\n"
+        << "  --strict-dynamic-slip-thresholds\n"
+        << "                             Use configured slip thresholds in dynamic RTK without protective floors\n"
+        << "  --adaptive-dynamic-slip-thresholds\n"
+        << "                             Drop dynamic slip floors only after a non-FIX streak\n"
+        << "  --adaptive-dynamic-slip-nonfix-count <n>\n"
+        << "                             Non-FIX epochs before adaptive slip thresholds activate (default: 3)\n"
+        << "  --adaptive-dynamic-slip-hold-epochs <n>\n"
+        << "                             Epochs to keep adaptive slip thresholds after activation (default: 10)\n"
         << "  --no-glonass               Disable GLONASS in RTK carrier processing\n"
         << "  --no-beidou                Disable BeiDou in RTK carrier processing\n"
         << "  --glonass-ar <off|on|autocal> GLONASS ambiguity resolution mode (default: off)\n"
@@ -667,11 +746,50 @@ void printUsage(const char* program_name) {
         << "  --max-update-nis-per-obs <v>\n"
         << "                             Reject DD Kalman update when NIS/active observation exceeds v\n"
         << "                             (default: 0, disabled)\n"
+        << "  --max-fixed-update-nis-per-obs <v>\n"
+        << "                             Reject only FIX candidates when update NIS/active observation exceeds v\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-fixed-update-post-rms <v>\n"
+        << "                             Reject only FIX candidates when update post residual RMS exceeds v\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-fixed-update-gate-ratio <v>\n"
+        << "                             Apply fixed-update gates only when AR ratio <= v\n"
+        << "                             (default: 0, unconditional when gates are enabled)\n"
+        << "  --min-fixed-update-gate-baseline <m>\n"
+        << "                             Apply fixed-update gates only above this baseline length\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-fixed-update-gate-baseline <m>\n"
+        << "                             Apply fixed-update gates only below this baseline length\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --min-fixed-update-gate-speed <m/s>\n"
+        << "                             Apply fixed-update gates only above this candidate speed\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-fixed-update-gate-speed <m/s>\n"
+        << "                             Apply fixed-update gates only below this candidate speed\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-fixed-update-secondary-gate-ratio <v>\n"
+        << "                             Optional second fixed-update gate window AR ratio cap\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --min-fixed-update-secondary-gate-baseline <m>\n"
+        << "                             Optional second fixed-update gate window baseline floor\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-fixed-update-secondary-gate-baseline <m>\n"
+        << "                             Optional second fixed-update gate window baseline ceiling\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --min-fixed-update-secondary-gate-speed <m/s>\n"
+        << "                             Optional second fixed-update gate window speed floor\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-fixed-update-secondary-gate-speed <m/s>\n"
+        << "                             Optional second fixed-update gate window speed ceiling\n"
+        << "                             (default: 0, disabled)\n"
         << "  --demote-fixed-status-nis-per-obs <v>\n"
         << "                             Output FIX as FLOAT when update NIS/active observation exceeds v\n"
         << "                             (default: 0, disabled)\n"
         << "  --demote-fixed-status-post-rms <v>\n"
         << "                             Output FIX as FLOAT when update post residual RMS exceeds v\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --demote-fixed-status-max-ratio <v>\n"
+        << "                             Output FIX as FLOAT when AR ratio is <= v\n"
         << "                             (default: 0, disabled)\n"
         << "  --demote-fixed-status-gate-ratio <v>\n"
         << "                             Apply fixed-status demotion only when AR ratio <= v\n"
@@ -687,6 +805,15 @@ void printUsage(const char* program_name) {
         << "  --enable-wide-lane-ar      Enable MW wide-lane AR pre-step (default: off)\n"
         << "  --no-wide-lane-ar          Disable MW wide-lane AR, overriding presets\n"
         << "  --wide-lane-threshold <v>  WL float->int threshold in cycles (default: 0.25)\n"
+        << "  --enable-wlnl-fallback     Enable MW WL/NL fallback after LAMBDA fails\n"
+        << "  --enable-bsr-decimation    Enable BSR-guided partial AR decimation\n"
+        << "                             (eigendecomposition-driven drop subsets)\n"
+        << "                             alongside the variance-based progressive\n"
+        << "                             drop family. Default: off.\n"
+        << "  --bsr-worst-axes <n>       Number of largest-eigenvalue Qb axes to score\n"
+        << "                             per-pair loadings against (default: 3)\n"
+        << "  --bsr-max-drops <n>        Max pairs to drop progressively in BSR-guided\n"
+        << "                             decimation (default: 6)\n"
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
         << "                             (default: 0, disabled; e.g. 10 for aggressive urban reconvergence)\n"
@@ -889,6 +1016,8 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.min_satellites_for_ar_set = true;
         } else if (arg == "--min-subset-ar-pairs" && i + 1 < argc) {
             config.min_subset_pairs_for_ar = std::stoi(argv[++i]);
+        } else if (arg == "--max-subset-ar-drop-steps" && i + 1 < argc) {
+            config.max_subset_drop_steps_for_ar = std::stoi(argv[++i]);
         } else if (arg == "--min-subset-ar-sats" && i + 1 < argc) {
             config.min_subset_sats_for_ar = std::stoi(argv[++i]);
             config.min_subset_sats_for_ar_set = true;
@@ -923,6 +1052,28 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         } else if (arg == "--carrier-phase-sigma" && i + 1 < argc) {
             config.carrier_phase_sigma = std::stod(argv[++i]);
             config.carrier_phase_sigma_set = true;
+        } else if (arg == "--rtk-snr-weighting") {
+            config.enable_snr_weighting = true;
+        } else if (arg == "--rtk-snr-reference-dbhz" && i + 1 < argc) {
+            config.snr_reference_dbhz = std::stod(argv[++i]);
+        } else if (arg == "--rtk-snr-max-variance-scale" && i + 1 < argc) {
+            config.snr_max_variance_scale = std::stod(argv[++i]);
+        } else if (arg == "--rtk-snr-min-baseline" && i + 1 < argc) {
+            config.snr_min_baseline_m = std::stod(argv[++i]);
+        } else if (arg == "--cycle-slip-threshold" && i + 1 < argc) {
+            config.cycle_slip_threshold = std::stod(argv[++i]);
+        } else if (arg == "--doppler-slip-threshold" && i + 1 < argc) {
+            config.doppler_slip_threshold = std::stod(argv[++i]);
+        } else if (arg == "--code-slip-threshold" && i + 1 < argc) {
+            config.code_slip_threshold = std::stod(argv[++i]);
+        } else if (arg == "--strict-dynamic-slip-thresholds") {
+            config.use_dynamic_slip_threshold_floor = false;
+        } else if (arg == "--adaptive-dynamic-slip-thresholds") {
+            config.enable_adaptive_dynamic_slip_thresholds = true;
+        } else if (arg == "--adaptive-dynamic-slip-nonfix-count" && i + 1 < argc) {
+            config.adaptive_dynamic_slip_nonfix_count = std::stoi(argv[++i]);
+        } else if (arg == "--adaptive-dynamic-slip-hold-epochs" && i + 1 < argc) {
+            config.adaptive_dynamic_slip_hold_epochs = std::stoi(argv[++i]);
         } else if (arg == "--no-glonass") {
             config.enable_glonass = false;
         } else if (arg == "--no-beidou") {
@@ -962,10 +1113,36 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.min_float_prefit_residual_trusted_jump_m = std::stod(argv[++i]);
         } else if (arg == "--max-update-nis-per-obs" && i + 1 < argc) {
             config.max_update_nis_per_observation = std::stod(argv[++i]);
+        } else if (arg == "--max-fixed-update-nis-per-obs" && i + 1 < argc) {
+            config.max_fixed_update_nis_per_observation = std::stod(argv[++i]);
+        } else if (arg == "--max-fixed-update-post-rms" && i + 1 < argc) {
+            config.max_fixed_update_post_residual_rms_m = std::stod(argv[++i]);
+        } else if (arg == "--max-fixed-update-gate-ratio" && i + 1 < argc) {
+            config.max_fixed_update_gate_ratio = std::stod(argv[++i]);
+        } else if (arg == "--min-fixed-update-gate-baseline" && i + 1 < argc) {
+            config.min_fixed_update_gate_baseline_m = std::stod(argv[++i]);
+        } else if (arg == "--max-fixed-update-gate-baseline" && i + 1 < argc) {
+            config.max_fixed_update_gate_baseline_m = std::stod(argv[++i]);
+        } else if (arg == "--min-fixed-update-gate-speed" && i + 1 < argc) {
+            config.min_fixed_update_gate_speed_mps = std::stod(argv[++i]);
+        } else if (arg == "--max-fixed-update-gate-speed" && i + 1 < argc) {
+            config.max_fixed_update_gate_speed_mps = std::stod(argv[++i]);
+        } else if (arg == "--max-fixed-update-secondary-gate-ratio" && i + 1 < argc) {
+            config.max_fixed_update_secondary_gate_ratio = std::stod(argv[++i]);
+        } else if (arg == "--min-fixed-update-secondary-gate-baseline" && i + 1 < argc) {
+            config.min_fixed_update_secondary_gate_baseline_m = std::stod(argv[++i]);
+        } else if (arg == "--max-fixed-update-secondary-gate-baseline" && i + 1 < argc) {
+            config.max_fixed_update_secondary_gate_baseline_m = std::stod(argv[++i]);
+        } else if (arg == "--min-fixed-update-secondary-gate-speed" && i + 1 < argc) {
+            config.min_fixed_update_secondary_gate_speed_mps = std::stod(argv[++i]);
+        } else if (arg == "--max-fixed-update-secondary-gate-speed" && i + 1 < argc) {
+            config.max_fixed_update_secondary_gate_speed_mps = std::stod(argv[++i]);
         } else if (arg == "--demote-fixed-status-nis-per-obs" && i + 1 < argc) {
             config.demote_fixed_status_nis_per_observation = std::stod(argv[++i]);
         } else if (arg == "--demote-fixed-status-post-rms" && i + 1 < argc) {
             config.demote_fixed_status_post_residual_rms_m = std::stod(argv[++i]);
+        } else if (arg == "--demote-fixed-status-max-ratio" && i + 1 < argc) {
+            config.demote_fixed_status_max_ratio = std::stod(argv[++i]);
         } else if (arg == "--demote-fixed-status-gate-ratio" && i + 1 < argc) {
             config.demote_fixed_status_gate_ratio = std::stod(argv[++i]);
         } else if (arg == "--min-demote-fixed-status-baseline" && i + 1 < argc) {
@@ -983,6 +1160,14 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         } else if (arg == "--wide-lane-threshold" && i + 1 < argc) {
             config.wide_lane_acceptance_threshold = std::stod(argv[++i]);
             config.wide_lane_acceptance_threshold_set = true;
+        } else if (arg == "--enable-wlnl-fallback") {
+            config.enable_wlnl_fallback = true;
+        } else if (arg == "--enable-bsr-decimation") {
+            config.enable_bsr_guided_decimation = true;
+        } else if (arg == "--bsr-worst-axes" && i + 1 < argc) {
+            config.bsr_guided_worst_axes = std::stoi(argv[++i]);
+        } else if (arg == "--bsr-max-drops" && i + 1 < argc) {
+            config.bsr_guided_max_drop_steps = std::stoi(argv[++i]);
         } else if (arg == "--max-consec-float-reset" && i + 1 < argc) {
             config.max_consecutive_float_for_reset = std::stoi(argv[++i]);
         } else if (arg == "--max-consec-nonfix-reset" && i + 1 < argc) {
@@ -1073,6 +1258,9 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.min_subset_pairs_for_ar < 4) {
         argumentError("--min-subset-ar-pairs must be >= 4", argv[0]);
     }
+    if (config.max_subset_drop_steps_for_ar < 0) {
+        argumentError("--max-subset-ar-drop-steps must be >= 0", argv[0]);
+    }
     if (config.min_subset_sats_for_ar < 0) {
         argumentError("--min-subset-ar-sats must be >= 0", argv[0]);
     }
@@ -1099,6 +1287,30 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.elevation_mask_deg < 0.0 || config.elevation_mask_deg >= 90.0) {
         argumentError("--elevation-mask-deg must be in [0, 90)", argv[0]);
+    }
+    if (config.snr_reference_dbhz <= 0.0) {
+        argumentError("--rtk-snr-reference-dbhz must be > 0", argv[0]);
+    }
+    if (config.snr_max_variance_scale < 1.0) {
+        argumentError("--rtk-snr-max-variance-scale must be >= 1", argv[0]);
+    }
+    if (config.snr_min_baseline_m < 0.0) {
+        argumentError("--rtk-snr-min-baseline must be >= 0", argv[0]);
+    }
+    if (config.cycle_slip_threshold <= 0.0) {
+        argumentError("--cycle-slip-threshold must be > 0", argv[0]);
+    }
+    if (config.doppler_slip_threshold <= 0.0) {
+        argumentError("--doppler-slip-threshold must be > 0", argv[0]);
+    }
+    if (config.code_slip_threshold <= 0.0) {
+        argumentError("--code-slip-threshold must be > 0", argv[0]);
+    }
+    if (config.adaptive_dynamic_slip_nonfix_count < 1) {
+        argumentError("--adaptive-dynamic-slip-nonfix-count must be >= 1", argv[0]);
+    }
+    if (config.adaptive_dynamic_slip_hold_epochs < 0) {
+        argumentError("--adaptive-dynamic-slip-hold-epochs must be >= 0", argv[0]);
     }
     if (config.max_baseline_length_m <= 0.0) {
         argumentError("--max-baseline-m must be > 0", argv[0]);
@@ -1130,11 +1342,50 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.max_update_nis_per_observation < 0.0) {
         argumentError("--max-update-nis-per-obs must be >= 0", argv[0]);
     }
+    if (config.max_fixed_update_nis_per_observation < 0.0) {
+        argumentError("--max-fixed-update-nis-per-obs must be >= 0", argv[0]);
+    }
+    if (config.max_fixed_update_post_residual_rms_m < 0.0) {
+        argumentError("--max-fixed-update-post-rms must be >= 0", argv[0]);
+    }
+    if (config.max_fixed_update_gate_ratio < 0.0) {
+        argumentError("--max-fixed-update-gate-ratio must be >= 0", argv[0]);
+    }
+    if (config.min_fixed_update_gate_baseline_m < 0.0) {
+        argumentError("--min-fixed-update-gate-baseline must be >= 0", argv[0]);
+    }
+    if (config.max_fixed_update_gate_baseline_m < 0.0) {
+        argumentError("--max-fixed-update-gate-baseline must be >= 0", argv[0]);
+    }
+    if (config.min_fixed_update_gate_speed_mps < 0.0) {
+        argumentError("--min-fixed-update-gate-speed must be >= 0", argv[0]);
+    }
+    if (config.max_fixed_update_gate_speed_mps < 0.0) {
+        argumentError("--max-fixed-update-gate-speed must be >= 0", argv[0]);
+    }
+    if (config.max_fixed_update_secondary_gate_ratio < 0.0) {
+        argumentError("--max-fixed-update-secondary-gate-ratio must be >= 0", argv[0]);
+    }
+    if (config.min_fixed_update_secondary_gate_baseline_m < 0.0) {
+        argumentError("--min-fixed-update-secondary-gate-baseline must be >= 0", argv[0]);
+    }
+    if (config.max_fixed_update_secondary_gate_baseline_m < 0.0) {
+        argumentError("--max-fixed-update-secondary-gate-baseline must be >= 0", argv[0]);
+    }
+    if (config.min_fixed_update_secondary_gate_speed_mps < 0.0) {
+        argumentError("--min-fixed-update-secondary-gate-speed must be >= 0", argv[0]);
+    }
+    if (config.max_fixed_update_secondary_gate_speed_mps < 0.0) {
+        argumentError("--max-fixed-update-secondary-gate-speed must be >= 0", argv[0]);
+    }
     if (config.demote_fixed_status_nis_per_observation < 0.0) {
         argumentError("--demote-fixed-status-nis-per-obs must be >= 0", argv[0]);
     }
     if (config.demote_fixed_status_post_residual_rms_m < 0.0) {
         argumentError("--demote-fixed-status-post-rms must be >= 0", argv[0]);
+    }
+    if (config.demote_fixed_status_max_ratio < 0.0) {
+        argumentError("--demote-fixed-status-max-ratio must be >= 0", argv[0]);
     }
     if (config.demote_fixed_status_gate_ratio < 0.0) {
         argumentError("--demote-fixed-status-gate-ratio must be >= 0", argv[0]);
@@ -1312,6 +1563,7 @@ int main(int argc, char* argv[]) {
         rtk_config.ar_filter_margin = config.ar_filter_margin;
         rtk_config.min_satellites_for_ar = config.min_satellites_for_ar;
         rtk_config.min_subset_pairs_for_ar = config.min_subset_pairs_for_ar;
+        rtk_config.max_subset_drop_steps_for_ar = config.max_subset_drop_steps_for_ar;
         rtk_config.min_subset_sats_for_ar = config.min_subset_sats_for_ar;
         rtk_config.min_subset_systems_for_ar = config.min_subset_systems_for_ar;
         rtk_config.min_subset_frequencies_for_ar = config.min_subset_frequencies_for_ar;
@@ -1332,6 +1584,20 @@ int main(int argc, char* argv[]) {
         if (config.carrier_phase_sigma_set) {
             rtk_config.carrier_phase_sigma = config.carrier_phase_sigma;
         }
+        rtk_config.enable_snr_weighting = config.enable_snr_weighting;
+        rtk_config.snr_reference_dbhz = config.snr_reference_dbhz;
+        rtk_config.snr_max_variance_scale = config.snr_max_variance_scale;
+        rtk_config.snr_min_baseline_m = config.snr_min_baseline_m;
+        rtk_config.cycle_slip_threshold = config.cycle_slip_threshold;
+        rtk_config.doppler_slip_threshold = config.doppler_slip_threshold;
+        rtk_config.code_slip_threshold = config.code_slip_threshold;
+        rtk_config.use_dynamic_slip_threshold_floor = config.use_dynamic_slip_threshold_floor;
+        rtk_config.enable_adaptive_dynamic_slip_thresholds =
+            config.enable_adaptive_dynamic_slip_thresholds;
+        rtk_config.adaptive_dynamic_slip_nonfix_count =
+            config.adaptive_dynamic_slip_nonfix_count;
+        rtk_config.adaptive_dynamic_slip_hold_epochs =
+            config.adaptive_dynamic_slip_hold_epochs;
         rtk_config.position_mode = resolvePositionMode(config);
         rtk_config.ionoopt = resolveIonoOpt(config, rtk_config.position_mode);
         rtk_config.enable_glonass = config.enable_glonass;
@@ -1359,11 +1625,38 @@ int main(int argc, char* argv[]) {
         rtk_config.min_float_prefit_residual_trusted_jump_m =
             config.min_float_prefit_residual_trusted_jump_m;
         rtk_config.max_update_nis_per_observation = config.max_update_nis_per_observation;
+        rtk_config.max_fixed_update_nis_per_observation =
+            config.max_fixed_update_nis_per_observation;
+        rtk_config.max_fixed_update_post_residual_rms_m =
+            config.max_fixed_update_post_residual_rms_m;
+        rtk_config.max_fixed_update_gate_ratio = config.max_fixed_update_gate_ratio;
+        rtk_config.min_fixed_update_gate_baseline_m =
+            config.min_fixed_update_gate_baseline_m;
+        rtk_config.max_fixed_update_gate_baseline_m =
+            config.max_fixed_update_gate_baseline_m;
+        rtk_config.min_fixed_update_gate_speed_mps =
+            config.min_fixed_update_gate_speed_mps;
+        rtk_config.max_fixed_update_gate_speed_mps =
+            config.max_fixed_update_gate_speed_mps;
+        rtk_config.max_fixed_update_secondary_gate_ratio =
+            config.max_fixed_update_secondary_gate_ratio;
+        rtk_config.min_fixed_update_secondary_gate_baseline_m =
+            config.min_fixed_update_secondary_gate_baseline_m;
+        rtk_config.max_fixed_update_secondary_gate_baseline_m =
+            config.max_fixed_update_secondary_gate_baseline_m;
+        rtk_config.min_fixed_update_secondary_gate_speed_mps =
+            config.min_fixed_update_secondary_gate_speed_mps;
+        rtk_config.max_fixed_update_secondary_gate_speed_mps =
+            config.max_fixed_update_secondary_gate_speed_mps;
         rtk_config.max_consecutive_float_for_reset = config.max_consecutive_float_for_reset;
         rtk_config.max_consecutive_nonfix_for_reset = config.max_consecutive_nonfix_for_reset;
         rtk_config.max_postfix_residual_rms = config.max_postfix_residual_rms;
         rtk_config.enable_wide_lane_ar = config.enable_wide_lane_ar;
         rtk_config.wide_lane_acceptance_threshold = config.wide_lane_acceptance_threshold;
+        rtk_config.enable_wlnl_fallback = config.enable_wlnl_fallback;
+        rtk_config.enable_bsr_guided_decimation = config.enable_bsr_guided_decimation;
+        rtk_config.bsr_guided_worst_axes = config.bsr_guided_worst_axes;
+        rtk_config.bsr_guided_max_drop_steps = config.bsr_guided_max_drop_steps;
         rtk_processor.setRTKConfig(rtk_config);
         libgnss::SPPProcessor::SPPConfig spp_config;
         spp_config.use_multi_constellation = true;
