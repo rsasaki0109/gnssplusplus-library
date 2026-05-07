@@ -77,14 +77,15 @@ gate rather than more reference-selected smoothing.
 
 Existing full real-time gate outputs are summarized in
 [PPC existing real-time gate outputs](ppc_realtime_gate_existing_outputs.md).
-The current full-run candidates do not yet satisfy the no-worse-Wrong-FIX
-policy while improving official score.
+The current headline profile is the later deployable `sigma-demote nis2`
+runtime selector in that note. The images below are historical smoother/filter
+diagnostics, not the current PR performance claim.
 
 ![PPC filter 2D trajectory colored by GNSS status and wrong FIX](ppc_filter_status_trajectories.png)
 
 ![PPC smoother 2D trajectory colored by GNSS status and wrong FIX](ppc_smoother_status_trajectories.png)
 
-![PPC demo5-cont 2D trajectory colored by GNSS status](ppc_smoother_status_trajectories_demo5.png)
+![PPC demo5-cont 2D trajectory colored by GNSS status and wrong FIX](ppc_smoother_status_trajectories_demo5.png)
 
 ## Reference-Selected Sweeps
 

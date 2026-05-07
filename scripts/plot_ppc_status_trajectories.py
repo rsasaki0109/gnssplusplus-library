@@ -183,16 +183,16 @@ def scatter_label(ax: plt.Axes, points: list[tuple[float, float]], label: str) -
     xs = [point[0] for point in points]
     ys = [point[1] for point in points]
     marker = "x" if label == "WRONG_FIX" else "."
-    size = 18 if label == "WRONG_FIX" else 8
+    size = 12 if label == "WRONG_FIX" else 8
     ax.scatter(
         xs,
         ys,
         s=size,
         marker=marker,
         c=COLORS.get(label, "#444444"),
-        linewidths=0.8 if label == "WRONG_FIX" else 0.0,
+        linewidths=0.65 if label == "WRONG_FIX" else 0.0,
         label=label,
-        alpha=0.95,
+        alpha=0.78 if label == "WRONG_FIX" else 0.95,
         zorder=4 if label == "WRONG_FIX" else 3,
     )
 
