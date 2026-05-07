@@ -116,6 +116,33 @@ Positioning-rate lead, **+28.1 pp** PPC official-score lead, and
 **-11.96 m** P95 horizontal-error delta versus RTKLIB `demo5`.
 <!-- PPC_COVERAGE_MATRIX:END -->
 
+### PPC realtime status profile (deployable Wrong/FIX sign-off)
+
+The current PPC status-correctness profile is
+`--realtime-profile sigma-demote`. It keeps the benchmark on the same public
+Tokyo/Nagoya rover/base/nav observations and uses PPC `reference.csv` only after
+the run for scoring and Wrong-FIX labeling. The runtime selector itself is
+deployable-only: it uses solver diagnostics such as NIS per observation, ratio,
+residual/jump guards, and emitted status, not reference truth.
+
+On the six public PPC runs, the recommended `nis2` profile reaches **64.707%**
+weighted PPC official score with **7.046x** minimum realtime factor. Its purpose
+is not to maximize the number of emitted FIX epochs; it minimizes the measured
+Wrong/FIX rate while staying realtime:
+
+| Profile | Weighted official | FIX epochs | Wrong FIX | Wrong/FIX | Min realtime |
+|---|---:|---:|---:|---:|---:|
+| sigma profile, no status demotion | 64.750% | 41608 | 3078 | 7.398% | 6.883x |
+| `sigma-demote` (`--demote-fixed-status-nis-per-obs 2`) | 64.707% | 29705 | 563 | 1.895% | 7.046x |
+
+![PPC sigma-demote nis2 status trajectories](docs/ppc_sigma_demote_nis2_status_trajectories.png)
+
+This is a public-run replay result, not a hidden/private PPC leaderboard
+submission. The RTKLIB `demo5` comparison remains the open-observation baseline
+shown above; do not describe this as a proprietary receiver-engine comparison.
+Full rejected candidates and the Wrong-FIX audit are recorded in
+[`docs/ppc_realtime_gate_existing_outputs.md`](docs/ppc_realtime_gate_existing_outputs.md).
+
 Lowering the RTK ambiguity ratio threshold to `2.4` lifts Tokyo run1 Positioning
 to **90.0%** (**+23.7 pp** over RTKLIB), Fix to **54.4%**, and PPC official
 score to **34.9%** (**+34.9 pp** over RTKLIB). This is an explicit coverage and
@@ -164,14 +191,13 @@ tail gain; Nagoya run3 now loses **3.48 pp** Positioning instead of the earlier
 plus 31 fixed-burst epochs, so keep it as evidence for solver recovery work
 rather than the README sign-off table.
 
-For the PPC official-score chase, `--max-consec-float-reset 10` is the first
-large non-IMU lever found so far. Replayed on the same six public runs, it lifts
-the distance-weighted official score from **48.66%** to **58.90%** and the
+Earlier in the PPC official-score chase, `--max-consec-float-reset 10` was the
+first large non-IMU lever. Replayed on the same six public runs, it lifted the
+distance-weighted official score from **48.66%** to **58.90%** and the
 run-average official lead over RTKLIB from **+28.1 pp** to **+37.9 pp**. It is
-still below the PPC2024 second-place Public score of **77.6%** by **18.70 pp**
-(about **8.66 km** of additional scored reference distance), and Tokyo run3 no
-longer beats RTKLIB on Positioning. Treat it as the current official-score
-candidate, not as the coverage sign-off profile.
+now a historical candidate rather than the current sign-off profile: the
+`sigma-demote` runtime status profile above is the current deployable
+Wrong/FIX-focused result.
 
 Follow-up spot checks kept the next knobs experimental: `--max-consec-nonfix-reset
 10` raised Nagoya run2 Positioning/Fix but reduced official score
