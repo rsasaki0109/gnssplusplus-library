@@ -5,6 +5,22 @@ reference truth is used only after the run for scoring and wrong-FIX labeling.
 
 Wrong FIX is `status == FIXED` with post-run 3D reference error above 0.50 m.
 
+## Current recommendation
+
+The final deployable status profile is the sigma-profile replay with
+`--demote-fixed-status-nis-per-obs 2`. It minimizes the measured Wrong/FIX rate
+among the current real-time-only sweep:
+
+| profile | official | FIX epochs | Wrong FIX | Wrong/FIX | min realtime | decision |
+|---|---:|---:|---:|---:|---:|---|
+| current_sigma | 64.750% | 41608 | 3078 | 7.398% | 6.883x | control |
+| current_sigma_demote_nis2 | 64.707% | 29705 | 563 | 1.895% | 7.046x | recommended when minimizing Wrong/FIX |
+
+The tradeoff is explicit: `nis2` drops the weighted official score by 0.043 pp
+and emits 11903 fewer FIX epochs, but reduces Wrong FIX by 2515 epochs. The
+sections below are chronological rejected/diagnostic probes unless explicitly
+marked as the current recommendation.
+
 ## Full six-run outputs
 
 | profile | deployable gate | official | delta vs baseline | FIX epochs | Wrong FIX | Wrong/FIX | decision |
