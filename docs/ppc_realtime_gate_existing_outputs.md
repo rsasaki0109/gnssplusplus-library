@@ -131,3 +131,45 @@ jump guards. Replaying Tokyo run1 with those flags gives 8747 FIX epochs
 (84.08% fix rate) and 67.043% official score, versus 777 FIX epochs and 9.195%
 official from the plain `--ratio 2.4` matrix command. The next full runtime
 demotion check should use the sigma-profile command surface.
+
+## Sigma-profile runtime demotion
+
+The sigma-profile command surface was then replayed through
+`ppc-coverage-matrix` with and without runtime status demotion:
+
+```text
+--ratio 2.8
+--carrier-phase-sigma 0.001
+--max-postfix-rms 0.2
+--max-consec-float-reset 10
+--max-subset-ar-drop-steps 18
+--adaptive-dynamic-slip-thresholds
+--adaptive-dynamic-slip-nonfix-count 25
+--max-pos-jump 5.0
+--max-pos-jump-min 5.0
+--max-pos-jump-rate 25.0
+```
+
+Full six-run current-build comparison:
+
+| profile | official | FIX epochs | Wrong FIX | Wrong/FIX | min realtime | decision |
+|---|---:|---:|---:|---:|---:|---|
+| current_sigma | 64.750% | 41608 | 3078 | 7.398% | 6.883x | control |
+| current_sigma_demote_nis10_ratio6 | 64.750% | 39138 | 1699 | 4.341% | 6.413x | candidate |
+
+Per-run Wrong FIX:
+
+| run | current_sigma | current_sigma_demote |
+|---|---:|---:|
+| tokyo_run1 | 936 | 629 |
+| tokyo_run2 | 160 | 103 |
+| tokyo_run3 | 870 | 385 |
+| nagoya_run1 | 124 | 91 |
+| nagoya_run2 | 537 | 290 |
+| nagoya_run3 | 451 | 201 |
+
+This is the first runtime status-demotion result that satisfies the current
+mis-fix policy on the sigma-profile surface: weighted official score is
+unchanged while 1379 Wrong FIX epochs are removed. FIX output drops by 2470
+epochs, so the next check should decide whether that status conservatism is
+acceptable for the headline profile or should be narrowed.
