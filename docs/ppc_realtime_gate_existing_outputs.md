@@ -87,3 +87,35 @@ This keeps official score because positions are unchanged, while reducing
 truth-labeled wrong FIX by 2060 epochs. It should be treated as the next
 implementation candidate: move the same real-time status demotion into the
 solver/app output path so the internal fixed-state recovery is not disrupted.
+
+## Runtime status-demotion replay
+
+The runtime implementation was replayed with the same deployable rule,
+`--demote-fixed-status-nis-per-obs 10 --demote-fixed-status-gate-ratio 6`.
+It preserves the internal fixed solution for feedback and receiver-position
+seeding, but the emitted status is demoted before PPC scoring.
+
+Full six-run output:
+
+| profile | official | FIX epochs | Wrong FIX | Wrong/FIX | min realtime | decision |
+|---|---:|---:|---:|---:|---:|---|
+| baseline_sigma001 | 64.001% | 42762 | 5333 | 12.471% | n/a | baseline |
+| pos_status_demote_nis10_ratio6 | 64.001% | 39577 | 3273 | 8.270% | n/a | POS-only diagnostic |
+| runtime_status_demote_nis10_ratio6 | 22.318% | 4137 | 34 | 0.822% | 6.570x | reject, collapses FIX/score |
+
+Per-run runtime output:
+
+| run | positioning | FIX | official |
+|---|---:|---:|---:|
+| tokyo_run1 | 89.8% | 7.2% | 9.2% |
+| tokyo_run2 | 94.5% | 9.8% | 21.7% |
+| tokyo_run3 | 96.8% | 7.1% | 38.3% |
+| nagoya_run1 | 86.0% | 10.6% | 20.9% |
+| nagoya_run2 | 83.2% | 9.6% | 10.4% |
+| nagoya_run3 | 94.0% | 0.1% | 4.9% |
+
+This closes the status-only path as a performance candidate in its global
+`NIS/obs > 10, ratio <= 6` form. The POS-only replay was useful for isolating
+wrong-FIX labels, but the deployable PPC score depends on the emitted FIX
+status. Demoting too many FIX epochs makes the official score collapse even
+when positions remain available.
