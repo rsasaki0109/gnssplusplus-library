@@ -13,6 +13,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <set>
 
@@ -83,6 +84,21 @@ bool isEnabledRTKSystem(const RTKProcessor::RTKConfig& config, GNSSSystem system
         return config.enable_beidou;
     }
     return true;
+}
+
+double combinedSnrDbHz(double rover_snr, double base_snr) {
+    const bool rover_valid = std::isfinite(rover_snr) && rover_snr > 0.0;
+    const bool base_valid = std::isfinite(base_snr) && base_snr > 0.0;
+    if (rover_valid && base_valid) {
+        return std::min(rover_snr, base_snr);
+    }
+    if (rover_valid) {
+        return rover_snr;
+    }
+    if (base_valid) {
+        return base_snr;
+    }
+    return 0.0;
 }
 
 bool isPrimaryRTKSignal(GNSSSystem system, SignalType signal) {
@@ -300,6 +316,7 @@ void RTKProcessor::reset() {
     has_last_fixed_time_ = false;
     has_last_solution_position_ = false;
     has_last_trusted_position_ = false;
+    has_fixed_update_gate_previous_solution_ = false;
     has_ref_satellite_ = false;
     has_last_epoch_ = false;
     has_last_trusted_time_ = false;
@@ -313,6 +330,7 @@ void RTKProcessor::reset() {
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
     consecutive_high_float_residual_count_ = 0;
+    adaptive_dynamic_slip_hold_count_ = 0;
     last_ar_ratio_ = 0.0;
     last_num_fixed_ambiguities_ = 0;
     current_update_diagnostics_ = RTKUpdateDiagnostics{};
@@ -332,12 +350,33 @@ ProcessorStats RTKProcessor::getStats() const {
 }
 
 // RTKLIB varerr: SD measurement error variance
-double RTKProcessor::varerr(double elevation, bool is_phase) const {
+double RTKProcessor::varerr(double elevation, bool is_phase, double snr_dbhz) const {
     double sin_el = std::sin(elevation);
     if (sin_el < 0.1) sin_el = 0.1;
     double a = is_phase ? rtk_config_.carrier_phase_sigma : rtk_config_.pseudorange_sigma;
     double b = is_phase ? rtk_config_.carrier_phase_sigma : rtk_config_.pseudorange_sigma;
-    return 2.0 * (a * a + b * b / (sin_el * sin_el));
+    double variance = 2.0 * (a * a + b * b / (sin_el * sin_el));
+    const double snr_min_baseline = rtk_config_.snr_min_baseline_m;
+    const bool baseline_passes_snr_floor =
+        !std::isfinite(snr_min_baseline) ||
+        snr_min_baseline <= 0.0 ||
+        (filter_state_.state.size() >= BASE_STATES &&
+         std::isfinite(filter_state_.state.head<3>().norm()) &&
+         filter_state_.state.head<3>().norm() >= snr_min_baseline);
+    if (rtk_config_.enable_snr_weighting &&
+        baseline_passes_snr_floor &&
+        std::isfinite(snr_dbhz) &&
+        snr_dbhz > 0.0 &&
+        rtk_config_.snr_reference_dbhz > 0.0 &&
+        rtk_config_.snr_max_variance_scale >= 1.0) {
+        const double snr_deficit_db = std::max(0.0, rtk_config_.snr_reference_dbhz - snr_dbhz);
+        const double variance_scale =
+            std::clamp(std::pow(10.0, snr_deficit_db / 10.0),
+                       1.0,
+                       rtk_config_.snr_max_variance_scale);
+        variance *= variance_scale;
+    }
+    return variance;
 }
 
 double RTKProcessor::elevationWeight(double elevation) const {
@@ -547,6 +586,8 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         sd.base_l1_phase = b_obs->carrier_phase; sd.base_l1_code = b_obs->pseudorange;
         sd.rover_l1_doppler = r_obs->doppler;
         sd.base_l1_doppler = b_obs->doppler;
+        sd.rover_l1_snr = r_obs->snr;
+        sd.base_l1_snr = b_obs->snr;
         sd.has_l1 = true; sd.l1_lli = r_obs->lli | b_obs->lli;
         sd.has_l1_doppler = r_obs->has_doppler && b_obs->has_doppler;
         auto r_l2 = rover_l2.find(sat); auto b_l2 = base_l2.find(sat);
@@ -562,6 +603,8 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
                 sd.base_l2_phase = b_l2_obs->carrier_phase; sd.base_l2_code = b_l2_obs->pseudorange;
                 sd.rover_l2_doppler = r_l2_obs->doppler;
                 sd.base_l2_doppler = b_l2_obs->doppler;
+                sd.rover_l2_snr = r_l2_obs->snr;
+                sd.base_l2_snr = b_l2_obs->snr;
                 sd.has_l2 = sd.l2_wavelength > 0.0;
                 sd.l2_lli = r_l2_obs->lli | b_l2_obs->lli;
                 sd.has_l2_doppler = r_l2_obs->has_doppler && b_l2_obs->has_doppler;
@@ -747,10 +790,36 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
         code_phase_history_l2_m_.erase(sat);
     }
 
+    const bool dynamic_slip_floor_candidate =
+        isDynamicPositionMode(rtk_config_) && rtk_config_.use_dynamic_slip_threshold_floor;
+    const int adaptive_nonfix_count =
+        std::max(1, rtk_config_.adaptive_dynamic_slip_nonfix_count);
+    if (dynamic_slip_floor_candidate &&
+        rtk_config_.enable_adaptive_dynamic_slip_thresholds &&
+        consecutive_nonfix_count_ >= adaptive_nonfix_count) {
+        adaptive_dynamic_slip_hold_count_ =
+            std::max(adaptive_dynamic_slip_hold_count_,
+                     std::max(0, rtk_config_.adaptive_dynamic_slip_hold_epochs));
+    }
+    const bool adaptive_dynamic_slip_active =
+        dynamic_slip_floor_candidate &&
+        rtk_config_.enable_adaptive_dynamic_slip_thresholds &&
+        (consecutive_nonfix_count_ >= adaptive_nonfix_count ||
+         adaptive_dynamic_slip_hold_count_ > 0);
+    const bool apply_dynamic_slip_floor =
+        dynamic_slip_floor_candidate && !adaptive_dynamic_slip_active;
+    debug_telemetry_.adaptive_dynamic_slip_active = adaptive_dynamic_slip_active;
+    debug_telemetry_.consecutive_nonfix_before_bias_update = consecutive_nonfix_count_;
+    debug_telemetry_.adaptive_dynamic_slip_hold_remaining =
+        adaptive_dynamic_slip_hold_count_;
+    if (adaptive_dynamic_slip_active && adaptive_dynamic_slip_hold_count_ > 0) {
+        adaptive_dynamic_slip_hold_count_--;
+    }
+
     std::set<SatelliteId> gf_slips;
     if (rtk_config_.enable_cycle_slip_detection) {
         const double gf_slip_threshold =
-            isDynamicPositionMode(rtk_config_)
+            apply_dynamic_slip_floor
                 ? std::max(rtk_config_.cycle_slip_threshold, 0.12)
                 : rtk_config_.cycle_slip_threshold;
         for (const auto& [sat, sd] : sat_data) {
@@ -765,6 +834,7 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
             gf_l1l2_history_[sat] = gf;
         }
     }
+    debug_telemetry_.gf_slip_count = static_cast<int>(gf_slips.size());
 
     std::set<SatelliteId> doppler_slips_l1;
     std::set<SatelliteId> doppler_slips_l2;
@@ -773,7 +843,7 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
         dt_s > 0.0 &&
         dt_s <= 5.0) {
         const double doppler_slip_threshold =
-            isDynamicPositionMode(rtk_config_)
+            apply_dynamic_slip_floor
                 ? std::max(rtk_config_.doppler_slip_threshold, 0.20)
                 : std::max(rtk_config_.doppler_slip_threshold, 0.10);
         for (const auto& [sat, sd] : sat_data) {
@@ -815,12 +885,14 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
             }
         }
     }
+    debug_telemetry_.doppler_slip_l1_count = static_cast<int>(doppler_slips_l1.size());
+    debug_telemetry_.doppler_slip_l2_count = static_cast<int>(doppler_slips_l2.size());
 
     std::set<SatelliteId> code_slips_l1;
     std::set<SatelliteId> code_slips_l2;
     if (rtk_config_.enable_code_slip_detection) {
         const double code_slip_threshold =
-            isDynamicPositionMode(rtk_config_)
+            apply_dynamic_slip_floor
                 ? std::max(rtk_config_.code_slip_threshold, 5.0)
                 : std::max(rtk_config_.code_slip_threshold, 3.0);
         for (const auto& [sat, sd] : sat_data) {
@@ -862,17 +934,25 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
             }
         }
     }
+    debug_telemetry_.code_slip_l1_count = static_cast<int>(code_slips_l1.size());
+    debug_telemetry_.code_slip_l2_count = static_cast<int>(code_slips_l2.size());
 
     for (int freq = 0; freq < 2; ++freq) {
         auto& indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
         auto& lock_counts = (freq == 0) ? lock_count_l1_ : lock_count_l2_;
+        int lli_slip_count = 0;
+        int ambiguity_reset_count = 0;
 
         // Detect cycle slips and reset
         for (const auto& [sat, sd] : sat_data) {
             bool has_freq = (freq == 0) ? sd.has_l1 : sd.has_l2;
             if (!has_freq) continue;
             int lli = (freq == 0) ? sd.l1_lli : sd.l2_lli;
-            bool slip = (lli & 0x01) != 0 ||
+            const bool lli_slip = (lli & 0x01) != 0;
+            if (lli_slip) {
+                lli_slip_count++;
+            }
+            bool slip = lli_slip ||
                         gf_slips.find(sat) != gf_slips.end() ||
                         (freq == 0 ? code_slips_l1.find(sat) != code_slips_l1.end()
                                    : code_slips_l2.find(sat) != code_slips_l2.end()) ||
@@ -880,6 +960,7 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
                                    : doppler_slips_l2.find(sat) != doppler_slips_l2.end());
             auto idx_it = indices.find(sat);
             if (idx_it != indices.end() && slip) {
+                ambiguity_reset_count++;
                 int idx = idx_it->second;
                 filter_state_.state(idx) = 0.0;
                 filter_state_.covariance(idx, idx) = 0.0;
@@ -903,6 +984,13 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
                     }
                 }
             }
+        }
+        if (freq == 0) {
+            debug_telemetry_.lli_slip_l1_count = lli_slip_count;
+            debug_telemetry_.ambiguity_reset_l1_count = ambiguity_reset_count;
+        } else {
+            debug_telemetry_.lli_slip_l2_count = lli_slip_count;
+            debug_telemetry_.ambiguity_reset_l2_count = ambiguity_reset_count;
         }
 
         for (GNSSSystem system : kRTKSupportedSystems) {
@@ -1014,6 +1102,7 @@ void RTKProcessor::resetAmbiguityStatesForReacquisition(const ObservationData& r
         consecutive_float_count_ = 0;
         consecutive_nonfix_count_ = 0;
         consecutive_high_float_residual_count_ = 0;
+        adaptive_dynamic_slip_hold_count_ = 0;
         return;
     }
 
@@ -1215,6 +1304,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             consecutive_float_count_ = 0;
             consecutive_nonfix_count_ = 0;
             consecutive_high_float_residual_count_ = 0;
+            adaptive_dynamic_slip_hold_count_ = 0;
             return spp;
         }
 
@@ -1326,6 +1416,10 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             const bool saved_has_last_trusted = has_last_trusted_position_;
             const GNSSTime saved_last_trusted_time = last_trusted_time_;
             const bool saved_has_last_trusted_time = has_last_trusted_time_;
+            fixed_update_gate_previous_position_ = saved_last_solution_position;
+            fixed_update_gate_previous_time_ = saved_last_solution_time;
+            has_fixed_update_gate_previous_solution_ =
+                saved_has_last_solution && saved_has_last_solution_time;
             auto restoreRememberedState = [&]() {
                 last_solution_position_ = saved_last_solution_position;
                 has_last_solution_position_ = saved_has_last_solution;
@@ -1641,6 +1735,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
         consecutive_float_count_ = 0;
         consecutive_nonfix_count_ = 0;
         consecutive_high_float_residual_count_ = 0;
+        adaptive_dynamic_slip_hold_count_ = 0;
         return spp;
     }
     return solution;
@@ -1674,6 +1769,11 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
         const double br_ref = geodist_range(ref_sd.sat_pos_base, base_position_) +
                               tropModel(base_position_, ref_sd.base_elevation);
         const Vector3d los_ref = (ref_sd.sat_pos - rover_pos).normalized();
+        auto signal_snr_dbhz = [](const SatelliteData& sd, int freq) {
+            return freq == 0
+                ? combinedSnrDbHz(sd.rover_l1_snr, sd.base_l1_snr)
+                : combinedSnrDbHz(sd.rover_l2_snr, sd.base_l2_snr);
+        };
 
         auto append_frequency_blocks = [&](int freq) {
             rtk_measurement::MeasurementBlock phase_block;
@@ -1710,8 +1810,9 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 blocks.push_back(std::move(code_block));
                 return;
             }
-            const double ref_phase_variance = varerr(ref_sd.elevation, true);
-            const double ref_code_variance = varerr(ref_sd.elevation, false);
+            const double ref_snr = signal_snr_dbhz(ref_sd, freq);
+            const double ref_phase_variance = varerr(ref_sd.elevation, true, ref_snr);
+            const double ref_code_variance = varerr(ref_sd.elevation, false, ref_snr);
 
             for (const auto& pair : system_pairs) {
                 if (pair.freq != freq) continue;
@@ -1725,8 +1826,9 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
 
                 const double sat_wavelength = (freq == 0) ? sd.l1_wavelength : sd.l2_wavelength;
                 if (sat_wavelength <= 0.0) continue;
-                const double sat_phase_variance = varerr(sd.elevation, true);
-                const double sat_code_variance = varerr(sd.elevation, false);
+                const double sat_snr = signal_snr_dbhz(sd, freq);
+                const double sat_phase_variance = varerr(sd.elevation, true, sat_snr);
+                const double sat_code_variance = varerr(sd.elevation, false, sat_snr);
                 const int sat_iono_idx = estimate_iono ? II(sat) : -1;
                 const double sat_iono_scale =
                     estimate_iono
@@ -2069,6 +2171,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     for (int i = 0; i < nb; ++i) {
         full_subset[i] = i;
     }
+    std::vector<int> initial_candidate_subset = full_subset;
 
     struct WideLaneConstraint {
         int l1_index = -1;
@@ -2297,11 +2400,20 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         }
     }
 
-    // WL-NL fallback: when LAMBDA fails on long baseline, try WL-NL AR
-    if (!fixed && rtk_config_.ionoopt == RTKConfig::IonoOpt::IFLC && max_var < 1.0) {
+    // WL-NL fallback: when LAMBDA fails on long baseline, try MW wide-lane
+    // followed by a narrow-lane integer check. Historically this path was
+    // tied to IFLC; enable_wlnl_fallback lets iono-off runs test it without
+    // also forcing the wide-lane constraint pre-step.
+    if (!fixed &&
+        (rtk_config_.ionoopt == RTKConfig::IonoOpt::IFLC ||
+         rtk_config_.enable_wlnl_fallback) &&
+        max_var < 1.0) {
         // Only attempt when KF has converged (max_var < 1 = several epochs in)
         VectorXd wlnl_fixed = dd_float;
         int wl_ok = 0, wl_total = 0;
+        std::set<int> wlnl_fixed_indices;
+        const double wlnl_acceptance_threshold =
+            std::max(0.0, rtk_config_.wide_lane_acceptance_threshold);
 
         for (int i = 0; i < nb; ++i) {
             if (dd_pairs[i].freq != 0 || dd_pairs[i].ref_sat.system == GNSSSystem::GLONASS) continue;
@@ -2334,26 +2446,26 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             };
             double dd_mw = mw_sd(rit->second) - mw_sd(sit->second);
             double nw = std::round(dd_mw);
-            if (std::abs(dd_mw - nw) > 0.25) continue;
+            if (std::abs(dd_mw - nw) > wlnl_acceptance_threshold) continue;
 
             // IF → NL
             double if_dd = c1_if * rit->second.l1_wavelength * dd_float(i) +
                            c2_if * rit->second.l2_wavelength * dd_float(l2p);
             double n2f = (if_dd - c1_if * rit->second.l1_wavelength * nw) / lam_nl;
             double n2 = std::round(n2f);
-            if (std::abs(n2f - n2) > 0.25) continue;
+            if (std::abs(n2f - n2) > wlnl_acceptance_threshold) continue;
 
             wlnl_fixed(i) = nw + n2;
             wlnl_fixed(l2p) = n2;
+            wlnl_fixed_indices.insert(i);
+            wlnl_fixed_indices.insert(l2p);
             wl_ok++;
         }
 
         if (wl_ok >= 3) {
             // Use resolved pairs for position
-            std::vector<int> resolved;
-            for (int i = 0; i < nb; ++i) {
-                if (std::abs(wlnl_fixed(i) - dd_float(i)) > 0.01) resolved.push_back(i);
-            }
+            std::vector<int> resolved(
+                wlnl_fixed_indices.begin(), wlnl_fixed_indices.end());
             if ((int)resolved.size() >= 4) {
                 int ns = resolved.size();
                 VectorXd sf(ns), sx(ns);
@@ -2371,13 +2483,16 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                     VectorXd xa = head_state - sQab * slv.solve(sf - sx);
                     fixed_baseline_ = xa.head<3>();
                     has_fixed_solution_ = true;
-                    dd_fixed = wlnl_fixed;
+                    dd_float = sf;
+                    Qb = sQb;
+                    Qab = sQab;
+                    dd_fixed = sx;
                     fixed = true;
                     ratio = 999.9;
                     debug_telemetry_.used_wlnl_fallback = true;
+                    initial_candidate_subset = resolved;
                     last_dd_pairs_ = dd_pairs;
-                    last_best_subset_.clear();
-                    for (int i = 0; i < nb; ++i) last_best_subset_.push_back(i);
+                    last_best_subset_ = resolved;
                     last_dd_fixed_ = dd_fixed;
                 }
             }
@@ -2388,8 +2503,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     rtk_ar_evaluation::CandidateState best_candidate;
     best_candidate.fixed = fixed;
     best_candidate.ratio = ratio;
-    best_candidate.subset.resize(nb);
-    for (int i = 0; i < nb; ++i) best_candidate.subset[i] = i;
+    best_candidate.subset = initial_candidate_subset;
     best_candidate.dd_float = dd_float;
     best_candidate.Qb = Qb;
     best_candidate.Qab = Qab;
@@ -2480,9 +2594,29 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         if (search_drop_subsets) {
             const auto progressive_subsets =
                 rtk_ar_selection::buildProgressiveVarianceDropSubsets(
-                    descriptors, min_subset_pairs_for_ar, 6);
+                    descriptors,
+                    min_subset_pairs_for_ar,
+                    std::max(0, rtk_config_.max_subset_drop_steps_for_ar));
             for (const auto& subset : progressive_subsets) {
                 try_subset(subset);
+            }
+
+            if (rtk_config_.enable_bsr_guided_decimation &&
+                Qb.rows() == nb && Qb.cols() == nb) {
+                const int max_drop = std::max(
+                    0, std::min(rtk_config_.bsr_guided_max_drop_steps,
+                                nb - min_subset_pairs_for_ar));
+                const int worst_axes = std::max(1, rtk_config_.bsr_guided_worst_axes);
+                const auto bsr_subsets =
+                    rtk_ar_selection::buildBSRGuidedDropSubsets(
+                        descriptors, Qb, min_subset_pairs_for_ar,
+                        max_drop, worst_axes);
+                for (const auto& subset : bsr_subsets) {
+                    debug_telemetry_.bsr_guided_candidates_evaluated++;
+                    if (try_subset(subset)) {
+                        debug_telemetry_.bsr_guided_candidates_accepted++;
+                    }
+                }
             }
         }
 
@@ -2589,10 +2723,132 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         return false;
     }
 
+    Vector3d new_pos = base_position_ + fixed_baseline_;
+    const double fixed_candidate_baseline_m = fixed_baseline_.norm();
+    const auto window_enabled = [](double max_ratio,
+                                   double min_baseline,
+                                   double max_baseline,
+                                   double min_speed,
+                                   double max_speed) {
+        return (std::isfinite(max_ratio) && max_ratio > 0.0) ||
+               (std::isfinite(min_baseline) && min_baseline > 0.0) ||
+               (std::isfinite(max_baseline) && max_baseline > 0.0) ||
+               (std::isfinite(min_speed) && min_speed > 0.0) ||
+               (std::isfinite(max_speed) && max_speed > 0.0);
+    };
+    const bool primary_window_enabled = window_enabled(
+        rtk_config_.max_fixed_update_gate_ratio,
+        rtk_config_.min_fixed_update_gate_baseline_m,
+        rtk_config_.max_fixed_update_gate_baseline_m,
+        rtk_config_.min_fixed_update_gate_speed_mps,
+        rtk_config_.max_fixed_update_gate_speed_mps);
+    const bool secondary_window_enabled = window_enabled(
+        rtk_config_.max_fixed_update_secondary_gate_ratio,
+        rtk_config_.min_fixed_update_secondary_gate_baseline_m,
+        rtk_config_.max_fixed_update_secondary_gate_baseline_m,
+        rtk_config_.min_fixed_update_secondary_gate_speed_mps,
+        rtk_config_.max_fixed_update_secondary_gate_speed_mps);
+    const bool any_speed_window_enabled =
+        (std::isfinite(rtk_config_.min_fixed_update_gate_speed_mps) &&
+         rtk_config_.min_fixed_update_gate_speed_mps > 0.0) ||
+        (std::isfinite(rtk_config_.max_fixed_update_gate_speed_mps) &&
+         rtk_config_.max_fixed_update_gate_speed_mps > 0.0) ||
+        (std::isfinite(rtk_config_.min_fixed_update_secondary_gate_speed_mps) &&
+         rtk_config_.min_fixed_update_secondary_gate_speed_mps > 0.0) ||
+        (std::isfinite(rtk_config_.max_fixed_update_secondary_gate_speed_mps) &&
+         rtk_config_.max_fixed_update_secondary_gate_speed_mps > 0.0);
+    double fixed_update_gate_speed_mps = std::numeric_limits<double>::quiet_NaN();
+    if (any_speed_window_enabled &&
+        has_fixed_update_gate_previous_solution_ &&
+        new_pos.allFinite() &&
+        fixed_update_gate_previous_position_.allFinite()) {
+        const double dt = current_time - fixed_update_gate_previous_time_;
+        if (std::isfinite(dt) && dt > 1e-3) {
+            fixed_update_gate_speed_mps =
+                (new_pos - fixed_update_gate_previous_position_).norm() / dt;
+        }
+    }
+    const auto window_passes = [&](double max_ratio,
+                                   double min_baseline,
+                                   double max_baseline,
+                                   double min_speed,
+                                   double max_speed) {
+        const bool ratio_passes =
+            !std::isfinite(max_ratio) ||
+            max_ratio <= 0.0 ||
+            (std::isfinite(last_ar_ratio_) && last_ar_ratio_ <= max_ratio);
+        const bool baseline_passes =
+            std::isfinite(fixed_candidate_baseline_m) &&
+            (!std::isfinite(min_baseline) ||
+             min_baseline <= 0.0 ||
+             fixed_candidate_baseline_m >= min_baseline) &&
+            (!std::isfinite(max_baseline) ||
+             max_baseline <= 0.0 ||
+             fixed_candidate_baseline_m <= max_baseline);
+        const bool speed_window_enabled =
+            (std::isfinite(min_speed) && min_speed > 0.0) ||
+            (std::isfinite(max_speed) && max_speed > 0.0);
+        const bool speed_passes =
+            !speed_window_enabled ||
+            (std::isfinite(fixed_update_gate_speed_mps) &&
+             (!std::isfinite(min_speed) ||
+              min_speed <= 0.0 ||
+              fixed_update_gate_speed_mps >= min_speed) &&
+             (!std::isfinite(max_speed) ||
+              max_speed <= 0.0 ||
+              fixed_update_gate_speed_mps <= max_speed));
+        return ratio_passes && baseline_passes && speed_passes;
+    };
+    const bool fixed_update_gate_window_passes =
+        (!primary_window_enabled && !secondary_window_enabled) ||
+        (primary_window_enabled &&
+         window_passes(rtk_config_.max_fixed_update_gate_ratio,
+                       rtk_config_.min_fixed_update_gate_baseline_m,
+                       rtk_config_.max_fixed_update_gate_baseline_m,
+                       rtk_config_.min_fixed_update_gate_speed_mps,
+                       rtk_config_.max_fixed_update_gate_speed_mps)) ||
+        (secondary_window_enabled &&
+         window_passes(rtk_config_.max_fixed_update_secondary_gate_ratio,
+                       rtk_config_.min_fixed_update_secondary_gate_baseline_m,
+                       rtk_config_.max_fixed_update_secondary_gate_baseline_m,
+                       rtk_config_.min_fixed_update_secondary_gate_speed_mps,
+                       rtk_config_.max_fixed_update_secondary_gate_speed_mps));
+    if (fixed_update_gate_window_passes) {
+        const double max_fixed_update_nis =
+            rtk_config_.max_fixed_update_nis_per_observation;
+        if (std::isfinite(max_fixed_update_nis) &&
+            max_fixed_update_nis > 0.0 &&
+            std::isfinite(
+                current_update_diagnostics_.normalized_innovation_squared_per_observation) &&
+            current_update_diagnostics_.normalized_innovation_squared_per_observation >
+                max_fixed_update_nis) {
+            debug_telemetry_.reject_reason = "fixed_update_nis";
+            return false;
+        }
+        const double max_fixed_update_post_rms =
+            rtk_config_.max_fixed_update_post_residual_rms_m;
+        if (std::isfinite(max_fixed_update_post_rms) &&
+            max_fixed_update_post_rms > 0.0 &&
+            std::isfinite(current_update_diagnostics_.post_suppression_residual_rms_m) &&
+            current_update_diagnostics_.post_suppression_residual_rms_m >
+                max_fixed_update_post_rms) {
+            debug_telemetry_.reject_reason = "fixed_update_post_rms";
+            return false;
+        }
+    }
+
     // Reject fixes that jump too much from the previous fix position
     // This catches wrong integers that pass the ratio test
-    Vector3d new_pos = base_position_ + fixed_baseline_;
+    const bool has_fixed_jump_dt = has_last_fixed_time_ &&
+        std::isfinite(current_time - last_fixed_time_);
+    const double fixed_jump_dt =
+        has_fixed_jump_dt ? current_time - last_fixed_time_ : 0.0;
+    const bool use_adaptive_position_jump =
+        rtk_config_.max_position_jump_rate_mps > 0.0 &&
+        has_last_fixed_position_ &&
+        has_fixed_jump_dt;
     if (!isMovingBasePositionMode(rtk_config_) &&
+        !use_adaptive_position_jump &&
         rtk_validation::exceedsFixHistoryJump(
             new_pos,
             last_fixed_position_,
@@ -2602,25 +2858,22 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         debug_telemetry_.reject_reason = "fix_history_jump";
         return false;
     }
-    if (!isMovingBasePositionMode(rtk_config_) &&
-        rtk_config_.max_position_jump_m > 0.0 &&
-        rtk_validation::exceedsAbsoluteJump(
-            new_pos, last_fixed_position_, has_last_fixed_position_,
-            rtk_config_.max_position_jump_m)) {
-        debug_telemetry_.reject_reason = "max_position_jump";
-        return false;
-    }
-    if (!isMovingBasePositionMode(rtk_config_) &&
-        rtk_config_.max_position_jump_rate_mps > 0.0 &&
-        has_last_fixed_position_ &&
-        has_last_fixed_time_ &&
-        rtk_validation::exceedsAdaptiveJump(
-            new_pos,
-            last_fixed_position_,
-            current_time - last_fixed_time_,
-            rtk_config_.max_position_jump_min_m,
-            rtk_config_.max_position_jump_rate_mps)) {
-        return false;
+    if (!isMovingBasePositionMode(rtk_config_) && has_last_fixed_position_) {
+        double position_jump_limit = rtk_config_.max_position_jump_m;
+        if (use_adaptive_position_jump) {
+            const double adaptive_limit = rtk_validation::adaptiveJumpLimit(
+                fixed_jump_dt,
+                rtk_config_.max_position_jump_min_m,
+                rtk_config_.max_position_jump_rate_mps);
+            position_jump_limit = std::max(position_jump_limit, adaptive_limit);
+        }
+        if (position_jump_limit > 0.0 &&
+            rtk_validation::exceedsAbsoluteJump(
+                new_pos, last_fixed_position_, true, position_jump_limit)) {
+            debug_telemetry_.reject_reason =
+                use_adaptive_position_jump ? "adaptive_position_jump" : "max_position_jump";
+            return false;
+        }
     }
 
     // Sanity check: reject fixes where any component is unreasonably large
@@ -3241,7 +3494,14 @@ std::vector<RTKProcessor::DoubleDifference> RTKProcessor::formDoubleDifferences(
         measurement.unit_vector =
             -(ref_sd.sat_pos - rover_pos).normalized() + (sd.sat_pos - rover_pos).normalized();
         measurement.elevation = std::min(ref_sd.elevation, sd.elevation);
-        measurement.variance = varerr(measurement.elevation, true);
+        const double ref_snr = use_l1
+            ? combinedSnrDbHz(ref_sd.rover_l1_snr, ref_sd.base_l1_snr)
+            : combinedSnrDbHz(ref_sd.rover_l2_snr, ref_sd.base_l2_snr);
+        const double sat_snr = use_l1
+            ? combinedSnrDbHz(sd.rover_l1_snr, sd.base_l1_snr)
+            : combinedSnrDbHz(sd.rover_l2_snr, sd.base_l2_snr);
+        const double dd_snr = combinedSnrDbHz(ref_snr, sat_snr);
+        measurement.variance = varerr(measurement.elevation, true, dd_snr);
         measurement.valid = true;
         measurements.push_back(std::move(measurement));
     }
