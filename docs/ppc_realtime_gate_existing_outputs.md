@@ -173,3 +173,36 @@ mis-fix policy on the sigma-profile surface: weighted official score is
 unchanged while 1379 Wrong FIX epochs are removed. FIX output drops by 2470
 epochs, so the next check should decide whether that status conservatism is
 acceptable for the headline profile or should be narrowed.
+
+## Narrowed sigma-profile demotion
+
+Because runtime demotion is output-only, the no-demotion sigma-profile POS files
+can be replayed offline to narrow the thresholds before another full solver run.
+Among the threshold sweep, `--demote-fixed-status-nis-per-obs 20
+--demote-fixed-status-gate-ratio 6 --max-demote-fixed-status-baseline 9500`
+kept Wrong/FIX below 5% while recovering most of the FIX epochs lost by the
+stricter `nis10_ratio6` candidate.
+
+Full runtime replay:
+
+| profile | official | FIX epochs | Wrong FIX | Wrong/FIX | FIX drop | Wrong drop | min realtime | decision |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| current_sigma | 64.750% | 41608 | 3078 | 7.398% | 0 | 0 | 6.883x | control |
+| current_sigma_demote_nis10_ratio6 | 64.750% | 39138 | 1699 | 4.341% | 2470 | 1379 | 6.413x | safer, more conservative |
+| current_sigma_demote_nis20_ratio6_maxbl9500 | 64.750% | 39924 | 1928 | 4.829% | 1684 | 1150 | 7.259x | narrower candidate |
+
+Per-run Wrong FIX for the narrower candidate:
+
+| run | current_sigma | nis10_ratio6 | nis20_ratio6_maxbl9500 |
+|---|---:|---:|---:|
+| tokyo_run1 | 936 | 629 | 647 |
+| tokyo_run2 | 160 | 103 | 126 |
+| tokyo_run3 | 870 | 385 | 436 |
+| nagoya_run1 | 124 | 91 | 112 |
+| nagoya_run2 | 537 | 290 | 307 |
+| nagoya_run3 | 451 | 201 | 300 |
+
+The narrowed candidate is a better headline tradeoff if the policy target is
+Wrong/FIX below 5% rather than minimizing Wrong FIX at all costs. It recovers 786
+FIX epochs compared with `nis10_ratio6`, keeps the same 64.750% official score,
+and still removes 1150 Wrong FIX epochs versus the no-demotion sigma control.
