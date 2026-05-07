@@ -187,57 +187,17 @@ explicit all-metric demo5-beating profile.
 
 ## Phase 2 opt-in tuning gates
 
-The low-speed non-FIX drift guard is part of the default kinematic output path,
-including the coverage profile. It rejects long FLOAT/SPP fallback drifts only
-when the surrounding FIX anchors indicate near-stationary motion. Use
-`--no-nonfix-drift-guard` to reproduce the raw unguarded fallback stream.
-The SPP height-step guard is also default-on in the kinematic output path; it
-rejects SPP-only vertical spikes above `--spp-height-step-min` /
-`--spp-height-step-rate` while preserving FLOAT and FIXED epochs.
-The FLOAT bridge-tail guard is now default-on after six-run PPC sign-off; it
-rejects FLOAT epochs in slow bounded FIX-to-FIX segments when they diverge from
-the anchor bridge, and uses horizontal FIX-anchor speed for its motion gate.
-Use `--no-float-bridge-tail-guard` to reproduce the pre-bridge-tail coverage
-stream.
+The default RTK pipeline is the benchmark path. Additional gates are default-off
+unless explicitly enabled for diagnostics or dataset-specific profiles such as
+Odaiba.
 
-The default RTK pipeline already dominates demo5 on the PPC production runs
-above. Additional gates ship default-off for situations where you want to
-push further on precision-vs-fix-count tradeoffs, especially on Odaiba-style
-urban multipath stress. All are byte-identical to the default behavior unless
-explicitly enabled.
+Common entry points:
 
-| Flag | Purpose | Default |
-|------|---------|---------|
-| `--ar-policy {extended\|demo5-continuous}` | AR extras gate. `demo5-continuous` disables relaxed-hold-ratio / subset-fallback / hold-fix / Q-regularization for demo5-style continuous ambiguity tracking. | `extended` |
-| `--max-subset-ar-drop-steps <N>` | Extend the progressive subset-AR search by dropping up to N worst-variance DD pairs. Diagnostic only: Nagoya run2 spot checks showed extra candidates are usually rejected by the jump gate unless paired with riskier validation changes. | `6` |
-| `--max-hold-div <m>` | Reject fix if the hold-state diverges from float by more than N meters. | `0` (disabled) |
-| `--max-pos-jump <m>` | Reject fix if the epoch-to-epoch position jump exceeds N meters. Truth-validation against PPC reference (6 runs) showed jumps cluster at <5m (correct fixes) or >10m (wrong-FIX); a 5m gate cuts wrong-FIX `fix_wrong/fixes` 28.9%→19.4% and `fix95%` 0.81→0.19m without losing real fixes. Pass `0` to disable. | `5` (m) |
-| `--max-pos-jump-min <m>` + `--max-pos-jump-rate <m/s>` | Reject fix if the jump from the last fixed position exceeds `max(min, rate * dt)`, so vehicle gaps can be tested without a stale absolute distance clamp. | `0` / `0` (disabled) |
-| `--max-float-spp-div <m>` | Reject FLOAT epochs that diverge from the same-epoch SPP solution by more than N meters, then fall back to SPP/no-solution. Diagnostic gate for PPC FLOAT high-error sweeps. | `0` (disabled) |
-| `--max-float-prefit-rms <m>` + `--max-float-prefit-max <m>` + `--max-float-prefit-reset-streak <N>` | Opt-in residual diagnostic gate. Reset ambiguity states for the next epoch after N consecutive otherwise accepted FLOAT epochs have high DD prefit residual RMS or max residual. The current FLOAT epoch is still reported, avoiding SPP fallback score loss and isolated residual spikes. Full PPC `6` / `30` reaches `58.52%` at streak `3`, `58.80%` at streak `5`, and `58.83%` at streak `8`, below the reset10 baseline `58.90%`, so it is not a default profile. | `0` / `0` (disabled) / `3` |
-| `--min-float-prefit-trusted-jump <m>` | Continuity selector for the residual gate. When > 0, high-residual FLOAT resets are allowed only if the FLOAT position has also diverged by at least N meters from the last trusted FIX/FLOAT position. This keeps the residual gate opt-in while making segment-level sweeps possible. | `0` (disabled) |
-| `--max-update-nis-per-obs <v>` | Reject a whole RTK DD Kalman update before state/covariance mutation when normalized innovation squared divided by active observations exceeds N. Diagnostic gate for covariance-aware GNSS update rejection. | `0` (disabled) |
-| `--max-fixed-update-nis-per-obs <v>` | Reject only FIXED ambiguity candidates when the preceding RTK DD update NIS divided by active observations exceeds N, while retaining the FLOAT solution for that epoch. | `0` (disabled) |
-| `--max-fixed-update-post-rms <m>` | Reject only FIXED ambiguity candidates when the preceding RTK DD update post-suppression residual RMS exceeds N meters, while retaining the FLOAT solution for that epoch. | `0` (disabled) |
-| `--max-fixed-update-gate-ratio <v>` | Apply the fixed-only NIS/post-RMS gates only when the AR ratio is finite and at or below N. This keeps high-ratio FIX candidates from being rejected by diagnostic residual gates during PPC sweeps. | `0` (unconditional when gates are enabled) |
-| `--min-fixed-update-gate-baseline <m>` + `--max-fixed-update-gate-baseline <m>` | Optional baseline-length window for the fixed-only NIS/post-RMS gates. This lets PPC sweeps isolate baseline regimes where residual diagnostics are useful without affecting other runs. | `0` / `0` (disabled) |
-| `--min-fixed-update-gate-speed <m/s>` + `--max-fixed-update-gate-speed <m/s>` | Optional speed window for the fixed-only NIS/post-RMS gates, estimated from the previous accepted solution to the current FIX candidate. | `0` / `0` (disabled) |
-| `--max-fixed-update-secondary-gate-ratio <v>` + `--min-fixed-update-secondary-gate-baseline <m>` + `--max-fixed-update-secondary-gate-baseline <m>` + `--min-fixed-update-secondary-gate-speed <m/s>` + `--max-fixed-update-secondary-gate-speed <m/s>` | Optional second OR-window for the fixed-only NIS/post-RMS gates. This supports combining one residual gate profile for long-baseline runs with a separate short-baseline/speed profile in the same PPC sweep. | `0` for all fields (disabled) |
-| `--rtk-snr-weighting` + `--rtk-snr-reference-dbhz <v>` + `--rtk-snr-max-variance-scale <v>` + `--rtk-snr-min-baseline <m>` | Opt-in low-cost observation model diagnostic. Uses the lower rover/base SNR for each SD link and inflates DD phase/code variance below the reference SNR, capped by the max scale, so low-C/N0 multipath contributes less to the float ambiguity state. The optional baseline floor limits the weighting to long-baseline runs. | `false` / `45` / `25` / `0` |
-| `--cycle-slip-threshold <m>` + `--doppler-slip-threshold <m>` + `--code-slip-threshold <m>` + `--strict-dynamic-slip-thresholds` + `--adaptive-dynamic-slip-thresholds` | Opt-in cycle-slip sensitivity sweep. By default dynamic RTK keeps protective minimum thresholds; `--strict-dynamic-slip-thresholds` uses the configured values directly for all epochs. `--adaptive-dynamic-slip-thresholds` keeps the floors while FIX is stable, then uses the configured values after a non-FIX streak for urban reacquisition experiments. | `0.05` / `0.20` / `5.0` / `false` / `false` |
-| `--adaptive-dynamic-slip-nonfix-count <N>` | Non-FIX epochs before adaptive dynamic slip thresholds activate. | `3` |
-| `--adaptive-dynamic-slip-hold-epochs <N>` | Epochs to keep adaptive dynamic slip thresholds after activation, so reacquisition does not immediately fall back to the protective floors after one FIX. | `10` |
-| `--nonfix-drift-max-residual <m>` + `--nonfix-drift-min-horizontal-residual <m>` | Tighten the default low-speed non-FIX drift guard for tail diagnostics while avoiding vertical-only fallback pruning. The PPC diagnostic profile uses `4` / `6`. | `30` / `0` |
-| `--fixed-bridge-burst-guard` + `--fixed-bridge-burst-max-residual <m>` | Reject isolated short FIX bursts when they diverge from the straight bridge between surrounding FIX anchors. Tokyo run1 removes 12 false-fix-tail epochs with a small Positioning/Fix-rate cost, so it remains opt-in. | `false` / `20` |
-| `--max-consec-float-reset <N>` | Auto-reset ambiguities after N consecutive float epochs. `10` is a historical PPC official-score probe; the current PPC sign-off path is `--realtime-profile sigma-demote`. | `0` (disabled) |
-| `--max-consec-nonfix-reset <N>` | Auto-reset ambiguities after N consecutive FLOAT/SPP/no-solution epochs. Useful as a dropout-reacquisition diagnostic, but `10` hurt Nagoya run2 official score in the first spot check. | `0` (disabled) |
-| `--max-postfix-rms <m>` | Reject fix if the L1 post-fix DD phase residual RMS exceeds N meters. | `0` (disabled) |
-| `--enable-wide-lane-ar` + `--wide-lane-threshold <cycle>` | Pre-compute MW wide-lane integers and inject them as Kalman constraints into the LAMBDA search. Odaiba's opt-in preset uses this to beat demo5 Hmed while still beating demo5 Fix count and tails. | `false` / `0.25` |
-| `--enable-wlnl-fallback` | Allow the experimental MW wide-lane / narrow-lane fallback after ordinary LAMBDA failure in non-IFLC runs. It reuses `--wide-lane-threshold` for both integer checks. | `false` |
-
-These remain opt-in. On PPC Tokyo and Nagoya the defaults already
-win, so leave them off. On Odaiba (or other urban multipath sets),
-use `--preset odaiba` for the explicit demo5-beating tradeoff.
+- Use `--realtime-profile sigma-demote` for the current PPC deployable
+  Wrong/FIX sign-off.
+- Use `--preset odaiba` for the Odaiba all-metric demo5-beating tradeoff.
+- See [RTK tuning gates](docs/rtk_tuning_gates.md) for the full flag table and
+  historical sweep context.
 
 ## Docs
 
@@ -386,40 +346,21 @@ python3 apps/gnss.py sbf-info \
 | `gnss spp` | Batch SPP from rover/nav RINEX |
 | `gnss solve` | Batch RTK from rover/base/nav RINEX |
 | `gnss ppp` | Batch PPP from rover RINEX plus nav or precise products |
-| `gnss visibility` | Export azimuth/elevation/SNR visibility rows and summary JSON from rover/nav RINEX |
-| `gnss visibility-plot` | Render a visibility CSV into a polar/elevation PNG quick-look |
-| `gnss moving-base-plot` | Render a moving-base solution/reference pair into a baseline/heading PNG quick-look |
-| `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` files from local or remote sources |
-| `gnss moving-base-prepare` | Extract rover/base UBX, reference CSV, and optional receiver CSV from a ROS2 moving-base bag |
-| `gnss scorpion-moving-base-signoff` | Prepare and validate the public SCORPION moving-base ROS2 bag through replay with receiver side-by-side output |
+| `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` products |
+| `gnss visibility` | Export azimuth/elevation/SNR visibility rows and summary JSON |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
-| `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
-| `gnss ubx-info` | Inspect `NAV-PVT`, `RAWX`, `SFRBX` from file or serial |
-| `gnss sbf-info` | Inspect Septentrio SBF `PVTGeodetic`, `LBandTrackerStatus`, `P2PPStatus` from file or serial |
-| `gnss novatel-info` | Inspect NovAtel ASCII/Binary `BESTPOS` and `BESTVEL` logs |
-| `gnss nmea-info` | Inspect `GGA` and `RMC` NMEA logs from file or serial |
-| `gnss ionex-info` | Inspect `IONEX` header, map count, grid metadata, and auxiliary DCB blocks |
-| `gnss dcb-info` | Inspect `Bias-SINEX` or auxiliary DCB product contents |
-| `gnss qzss-l6-info` | Inspect direct QZSS L6 frames and export Compact SSR payloads |
-| `gnss social-card` | Regenerate the Odaiba share image |
-| `gnss short-baseline-signoff` | Static RTK sign-off |
-| `gnss rtk-kinematic-signoff` | Kinematic RTK sign-off |
-| `gnss ppp-static-signoff` | Static PPP sign-off |
-| `gnss ppp-kinematic-signoff` | Kinematic PPP sign-off |
-| `gnss ppp-products-signoff` | Static, kinematic, or PPC PPP sign-off with fetched SP3/CLK/IONEX/DCB products, optional MALIB delta gates, and comparison CSV/PNG artifacts |
-| `gnss live-signoff` | Realtime/error-handling sign-off for recorded RTCM/UBX live inputs |
-| `gnss ppc-demo` | External PPC-Dataset RTK/PPP verification against `reference.csv`, with optional RTKLIB/commercial receiver side-by-side summaries |
-| `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB/commercial receiver side-by-side gates |
-| `gnss ppc-coverage-matrix` | Full six-run PPC Tokyo/Nagoya coverage-profile matrix with JSON/Markdown summaries and RTKLIB delta gates |
-| `gnss moving-base-signoff` | Real moving-base replay/live sign-off against per-epoch base/rover reference coordinates |
-| `gnss odaiba-benchmark` | End-to-end Odaiba benchmark pipeline |
+| `gnss ubx-info` / `gnss sbf-info` | Inspect receiver logs |
+| `gnss ppc-rtk-signoff` | PPC Tokyo/Nagoya RTK sign-off profiles |
+| `gnss ppc-coverage-matrix` | Full six-run PPC matrix with JSON/Markdown summaries |
 | `gnss web` | Local browser UI for summary JSON, live/moving-base/PPP-product sign-offs, `.pos` trajectories, moving-base/visibility plots and histories, receiver status, and artifact/provenance links |
 
-See all commands:
+See all commands and options:
 
 ```bash
 python3 apps/gnss.py --help
 ```
+
+More CLI details are in [Interfaces](docs/interfaces.md).
 
 ### Local web UI
 
@@ -445,317 +386,38 @@ docker run --rm -it -p 8085:8085 -v "$PWD:/workspace" \
 
 ### Real moving-base sign-off
 
-`gnss solve`, `gnss replay`, and `gnss live` accept `--mode moving-base`. For real moving-base datasets, use `gnss moving-base-signoff` with a reference CSV carrying per-epoch base/rover ECEF coordinates. The repo does not ship a bundled moving-base dataset, so this command is intended for external real logs.
-
-```bash
-python3 apps/gnss.py moving-base-prepare \
-  --input /datasets/moving_base/2023-06-14T174658Z.zip \
-  --rover-ubx-out output/moving_base_rover.ubx \
-  --base-ubx-out output/moving_base_base.ubx \
-  --reference-csv output/moving_base_reference.csv \
-  --commercial-csv output/commercial_receiver_solution.csv \
-  --summary-json output/moving_base_prepare.json
-
-python3 apps/gnss.py fetch-products \
-  --date 2023-06-14 \
-  --preset brdc-nav \
-  --summary-json output/moving_base_products.json
-
-python3 apps/gnss.py moving-base-signoff \
-  --solver replay \
-  --rover-ubx output/moving_base_rover.ubx \
-  --base-ubx output/moving_base_base.ubx \
-  --nav-rinex ~/.cache/libgnsspp/products/nav/2023/165/BRDC00IGS_R_20231650000_01D_MN.rnx \
-  --reference-csv output/moving_base_reference.csv \
-  --summary-json output/moving_base_summary.json \
-  --require-fix-rate-min 90 \
-  --require-p95-baseline-error-max 1.0 \
-  --require-realtime-factor-min 1.0 \
-  --max-epochs 120
-
-python3 apps/gnss.py scorpion-moving-base-signoff \
-  --summary-json output/scorpion_moving_base_summary.json \
-  --require-matched-epochs-min 100 \
-  --require-fix-rate-min 80
-
-python3 apps/gnss.py moving-base-signoff \
-  --config-toml configs/moving_base_signoff.example.toml
-
-python3 apps/gnss.py live-signoff \
-  --config-toml configs/live_signoff.example.toml
-```
+`gnss solve`, `gnss replay`, and `gnss live` accept `--mode moving-base`. For
+real moving-base datasets, use `gnss moving-base-signoff` with a reference CSV
+carrying per-epoch base/rover ECEF coordinates. Example TOML files live under
+`configs/`; detailed commands are in [Quick Start](docs/quickstart.md).
 
 ### Product-driven PPP
 
-```bash
-python3 apps/gnss.py fetch-products \
-  --date 2024-01-02 \
-  --preset igs-final \
-  --preset ionex \
-  --preset dcb \
-  --summary-json output/products.json
+Use `gnss fetch-products`, `gnss ppp-static-signoff`,
+`gnss ppp-kinematic-signoff`, and `gnss ppp-products-signoff` for SP3/CLK/IONEX
+/ DCB driven runs. See [Quick Start](docs/quickstart.md) and
+`configs/ppp_products_ppc.example.toml` for full examples.
 
-python3 apps/gnss.py ppp-static-signoff \
-  --fetch-products \
-  --product-date 2024-01-02 \
-  --product sp3=https://cddis.nasa.gov/archive/gnss/products/{gps_week}/COD0OPSFIN_{yyyy}{doy}0000_01D_05M_ORB.SP3.gz \
-  --product clk=https://cddis.nasa.gov/archive/gnss/products/{gps_week}/COD0OPSFIN_{yyyy}{doy}0000_01D_30S_CLK.CLK.gz \
-  --product ionex=https://cddis.nasa.gov/archive/gnss/products/ionex/{yyyy}/{doy}/COD0OPSFIN_{yyyy}{doy}0000_01D_01H_GIM.INX.gz \
-  --product dcb=https://cddis.nasa.gov/archive/gnss/products/bias/{yyyy}/CAS0MGXRAP_{yyyy}{doy}0000_01D_01D_DCB.BSX.gz \
-  --summary-json output/ppp_static_summary.json
+## Reproduce Benchmarks
 
-python3 apps/gnss.py ppp-kinematic-signoff \
-  --max-epochs 120 \
-  --require-common-epoch-pairs-min 120 \
-  --require-reference-fix-rate-min 95 \
-  --require-converged \
-  --require-convergence-time-max 300 \
-  --require-mean-error-max 7 \
-  --require-p95-error-max 7 \
-  --require-max-error-max 7 \
-  --require-mean-sats-min 18 \
-  --require-ppp-solution-rate-min 100
-
-python3 apps/gnss.py ppp-products-signoff \
-  --config-toml configs/ppp_products_ppc.example.toml
-
-python3 apps/gnss.py ppc-rtk-signoff \
-  --config-toml configs/ppc_rtk_signoff.example.toml
-```
-
-## Benchmark Snapshot
-
-### UrbanNav Tokyo Odaiba
-
-Dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) (`2018-12-19`, Trimble rover/base, ~`170 m` baseline).
-Comparison baseline: [RTKLIB](https://github.com/tomojitakasu/RTKLIB).
-
-Current checked-in snapshot (kinematic, low-cost preset):
-
-- RTKLIB demo5: Fix `595` / Rate `7.22%` / Hmed `0.707 m` / Hp95 `27.878 m` / Vp95 `45.212 m`
-- libgnss++ default: Fix `1268` (+673) / Rate `36.98%` / Hmed `1.707 m` / Hp95 `19.585 m` / Vp95 `25.495 m`
-- libgnss++ `--preset odaiba`: Fix `735` (+140) / Rate `32.81%` / Hmed `0.698 m` / Hp95 `19.976 m` / Vp95 `26.440 m`
-
-libgnss++ defaults dominate Fix count, Hp95, and Vp95; `--preset odaiba` trades
-some default Fix count for the remaining Hmed win and beats demo5 across the
-full table.
-
-| RTKLIB 2D | libgnss++ 2D |
-|---|---|
-| ![RTKLIB 2D trajectory](docs/driving_odaiba_comparison_rtklib_2d.png) | ![libgnss++ 2D trajectory](docs/driving_odaiba_comparison_libgnss_2d.png) |
-
-More artifacts:
-
-- [Full comparison figure](docs/driving_odaiba_comparison.png)
-- [Scorecard](docs/driving_odaiba_scorecard.png)
-- [Summary JSON](output/odaiba_summary.json)
-- Optional side-by-side PPP benchmark path: [JAXA-SNU/MALIB](https://github.com/JAXA-SNU/MALIB)
-- Additional low-cost GNSS RTK/PPP reference implementation: [rtklibexplorer/RTKLIB](https://github.com/rtklibexplorer/RTKLIB)
-
-### Other checked sign-offs
-
-- Mixed-GNSS short-baseline RTK
-- Mixed-GNSS kinematic RTK
-- Static PPP
-- Kinematic PPP
-- CLAS-style PPP from compact sampled SSR and raw QZSS L6
-
-### External dataset demo
-
-`PPC-Dataset` can be verified directly from an extracted dataset tree:
+`PPC-Dataset` can be verified directly from an extracted dataset tree. The
+current sign-off command is:
 
 ```bash
-python3 apps/gnss.py ppc-demo \
-  --dataset-root /datasets/PPC-Dataset \
-  --city tokyo \
-  --run run1 \
-  --solver rtk \
-  --require-realtime-factor-min 1.0 \
-  --summary-json output/ppc_tokyo_run1_rtk_summary.json
-
 python3 apps/gnss.py ppc-rtk-signoff \
   --dataset-root /datasets/PPC-Dataset \
   --city tokyo \
   --realtime-profile sigma-demote \
   --rtklib-bin /path/to/rnx2rtkp \
   --summary-json output/ppc_tokyo_run1_rtk_signoff.json
-
-python3 apps/gnss.py ppc-coverage-matrix \
-  --dataset-root /datasets/PPC-Dataset \
-  --preset low-cost \
-  --ratio 2.8 \
-  --carrier-phase-sigma 0.001 \
-  --max-postfix-rms 0.2 \
-  --max-consec-float-reset 10 \
-  --max-subset-ar-drop-steps 18 \
-  --adaptive-dynamic-slip-thresholds \
-  --adaptive-dynamic-slip-nonfix-count 25 \
-  --max-pos-jump 5.0 \
-  --max-pos-jump-min 5.0 \
-  --max-pos-jump-rate 25.0 \
-  --demote-fixed-status-nis-per-obs 2 \
-  --output-dir output/ppc_sigma_profile_runtime_demote_nis2 \
-  --summary-json output/ppc_sigma_profile_runtime_demote_nis2/summary.json \
-  --markdown-output output/ppc_sigma_profile_runtime_demote_nis2/table.md
-
-python3 apps/gnss.py ppc-coverage-matrix \
-  --dataset-root /datasets/PPC-Dataset \
-  --rtklib-root output/benchmark \
-  --ratio 2.4 \
-  --summary-json output/ppc_coverage_matrix/summary.json \
-  --markdown-output output/ppc_coverage_matrix/table.md
-
-python3 scripts/update_ppc_coverage_readme.py \
-  --summary-json output/ppc_coverage_matrix/summary.json
-
-python3 apps/gnss.py ppc-coverage-matrix \
-  --dataset-root /datasets/PPC-Dataset \
-  --rtklib-root output/benchmark \
-  --ratio 2.4 \
-  --max-consec-float-reset 10 \
-  --output-dir output/ppc_coverage_matrix_floatreset10 \
-  --summary-json output/ppc_coverage_matrix_floatreset10/summary.json \
-  --markdown-output output/ppc_coverage_matrix_floatreset10/table.md
-
-python3 scripts/analyze_ppc_residual_reset_sweep.py \
-  --baseline-summary-json output/ppc_coverage_matrix_floatreset10/summary.json \
-  --candidate streak3=output/ppc_coverage_matrix_floatreset10_prefit_streak3_6_30/ppc_coverage_matrix_summary.json \
-  --candidate streak5=output/ppc_coverage_matrix_floatreset10_prefit_streak5_6_30/ppc_coverage_matrix_summary.json \
-  --candidate streak8=output/ppc_coverage_matrix_floatreset10_prefit_streak8_6_30/ppc_coverage_matrix_summary.json \
-  --summary-json output/ppc_residual_reset_sweep_selector.json \
-  --markdown-output output/ppc_residual_reset_sweep_selector.md
-
-python3 scripts/analyze_ppc_profile_segment_delta.py \
-  --reference-csv /datasets/PPC-Dataset/tokyo/run1/reference.csv \
-  --baseline-pos output/ppc_coverage_matrix_floatreset10/tokyo_run1.pos \
-  --candidate jump0p5=output/ppc_tokyo_run1_rtk_prefit_s5_jump0p5_matrixprofile.pos \
-  --summary-json output/ppc_tokyo_run1_jump0p5_segment_delta.json \
-  --markdown-output output/ppc_tokyo_run1_jump0p5_segment_delta.md \
-  --segments-csv output/ppc_tokyo_run1_jump0p5_segment_delta.csv
-
-python3 scripts/analyze_ppc_segment_selector_sweep.py \
-  --segment-csv tokyo_run1=output/ppc_tokyo_run1_jump0p5_segment_delta.csv \
-  --segment-csv tokyo_run2=output/ppc_tokyo_run2_jump0p5_segment_delta.csv \
-  --segment-csv tokyo_run3=output/ppc_tokyo_run3_jump0p5_segment_delta.csv \
-  --segment-csv nagoya_run1=output/ppc_nagoya_run1_jump0p5_segment_delta.csv \
-  --segment-csv nagoya_run2=output/ppc_nagoya_run2_jump0p5_segment_delta.csv \
-  --segment-csv nagoya_run3=output/ppc_nagoya_run3_jump0p5_segment_delta.csv \
-  --max-numeric-conditions 3 \
-  --max-thresholds 64 \
-  --numeric-refinement-beam 12 \
-  --numeric-threshold-refinement-beam 32 \
-  --summary-json output/ppc_jump0p5_segment_selector_sweep_6run_refined.json \
-  --markdown-output output/ppc_jump0p5_segment_selector_sweep_6run_refined.md
-
-python3 scripts/run_ppc_dual_profile_selector_matrix.py \
-  --dataset-root /datasets/PPC-Dataset \
-  --run-output-template 'output/ppc_{key}_jump0p5_dual_selector_6run_robust.pos' \
-  --rule 'status_transition == FLOAT->FIXED AND candidate_baseline_m >= 949.004 AND candidate_rtk_update_prefit_residual_rms_m >= 0.2018 AND candidate_rtk_update_suppressed_outliers <= 4' \
-  --matrix-summary-json output/ppc_jump0p5_dual_selector_6run_robust_matrix.json \
-  --matrix-markdown-output output/ppc_jump0p5_dual_selector_6run_robust_matrix.md \
-  --matrix-output-png docs/ppc_jump0p5_dual_selector_robust_scorecard.png \
-  --title 'PPC robust dual-profile selector'
-
-python3 scripts/analyze_ppc_imu_coverage.py \
-  --dataset-root /datasets/PPC-Dataset \
-  --quality-json-template 'output/ppc_quality_floatreset10/{key}.json' \
-  --target-score-pct 77.6 \
-  --summary-json output/ppc_imu_coverage_summary.json \
-  --markdown-output output/ppc_imu_coverage_summary.md \
-  --output-png docs/ppc_imu_fusion_readiness.png \
-  --title 'PPC IMU fusion readiness'
-
-python3 scripts/analyze_ppc_imu_bridge_targets.py \
-  --segment-csv-template 'output/ppc_quality_floatreset10/{key}_official_segments.csv' \
-  --summary-json output/ppc_imu_bridge_targets.json \
-  --markdown-output output/ppc_imu_bridge_targets.md \
-  --output-png docs/ppc_imu_bridge_targets.png \
-  --title 'PPC IMU bridge target upper bound'
-
-python3 scripts/run_ppc_cv_dropout_bridge_matrix.py \
-  --dataset-root /datasets/PPC-Dataset \
-  --run-output-template 'output/ppc_{key}_cv_bridge_gap10_age2.pos' \
-  --run-summary-template 'output/ppc_{key}_cv_bridge_gap10_age2_summary.json' \
-  --max-gap-s 10 \
-  --max-anchor-age-s 2 \
-  --max-velocity-baseline-s 1 \
-  --summary-json output/ppc_cv_bridge_gap10_age2_matrix.json \
-  --markdown-output output/ppc_cv_bridge_gap10_age2_matrix.md \
-  --output-png docs/ppc_cv_bridge_scorecard.png \
-  --title 'PPC causal CV dropout bridge'
-
-python3 scripts/run_ppc_cv_dropout_bridge_matrix.py \
-  --dataset-root /datasets/PPC-Dataset \
-  --run-output-template 'output/ppc_{key}_cv_bridge_tele_fixed.pos' \
-  --max-gap-s 10 \
-  --max-anchor-age-s 2 \
-  --max-velocity-baseline-s 1 \
-  --anchor-mode telemetry \
-  --anchor-statuses FIXED \
-  --summary-json output/ppc_cv_bridge_tele_fixed_matrix.json \
-  --markdown-output output/ppc_cv_bridge_tele_fixed_matrix.md \
-  --output-png docs/ppc_cv_bridge_telemetry_anchor_scorecard.png \
-  --title 'PPC telemetry-anchor CV dropout bridge'
-
-python3 scripts/run_ppc_cv_dropout_bridge_matrix.py \
-  --dataset-root /datasets/PPC-Dataset \
-  --run-output-template 'output/ppc_{key}_cv_bridge_innov_fixed.pos' \
-  --max-gap-s 10 \
-  --max-anchor-age-s 2 \
-  --max-velocity-baseline-s 1 \
-  --anchor-mode innovation \
-  --anchor-statuses FIXED \
-  --anchor-max-innovation-m 0.5 \
-  --summary-json output/ppc_cv_bridge_innov_fixed_matrix.json \
-  --markdown-output output/ppc_cv_bridge_innov_fixed_matrix.md \
-  --output-png docs/ppc_cv_bridge_innovation_anchor_scorecard.png \
-  --title 'PPC innovation-anchor CV dropout bridge'
-
-python3 scripts/run_ppc_imu_dropout_bridge_matrix.py \
-  --dataset-root /datasets/PPC-Dataset \
-  --run-output-template 'output/ppc_{key}_imu_bridge_gap10_age2_xf_yl.pos' \
-  --run-summary-template 'output/ppc_{key}_imu_bridge_gap10_age2_xf_yl_summary.json' \
-  --max-gap-s 10 \
-  --max-anchor-age-s 2 \
-  --max-velocity-baseline-s 1 \
-  --forward-axis x \
-  --lateral-axis y \
-  --forward-sign 1 \
-  --lateral-sign 1 \
-  --summary-json output/ppc_imu_bridge_gap10_age2_xf_yl_matrix.json \
-  --markdown-output output/ppc_imu_bridge_gap10_age2_xf_yl_matrix.md \
-  --output-png docs/ppc_imu_bridge_scorecard.png \
-  --title 'PPC causal IMU dropout bridge'
-
-python3 apps/gnss.py ppc-coverage-matrix \
-  --dataset-root /datasets/PPC-Dataset \
-  --rtklib-root output/benchmark \
-  --ratio 2.4 \
-  --fixed-bridge-burst-guard \
-  --fixed-bridge-burst-max-residual 20 \
-  --nonfix-drift-max-residual 4 \
-  --nonfix-drift-min-horizontal-residual 6 \
-  --output-dir output/ppc_coverage_matrix_tail_hres6 \
-  --summary-json output/ppc_coverage_matrix_tail_hres6/summary.json \
-  --markdown-output output/ppc_coverage_matrix_tail_hres6/table.md
-
-python3 scripts/generate_ppc_tail_cleanup_scorecard.py \
-  --baseline-summary-json output/ppc_coverage_matrix/summary.json \
-  --cleanup-summary-json output/ppc_coverage_matrix_tail_hres6/summary.json \
-  --output docs/ppc_tail_cleanup_scorecard.png
 ```
 
-The PPC summary records `receiver_observation_provenance` for the bundled
-survey-grade rover/base RINEX streams. Proprietary receiver-engine solutions are
-not assumed to be part of the PPC benchmark target. RTK ionosphere sweeps can be
-run reproducibly through `ppc-demo`, `ppc-rtk-signoff`, or
-`ppc-coverage-matrix` with `--iono auto|off|iflc|est`; PPC summaries record the
-requested value as `rtk_iono`. Ambiguity-ratio sweeps use `--ratio <value>`;
-PPC summaries record the requested value as `rtk_ratio_threshold`. Fixed-solution
-validation sweeps can also pass `--max-hold-div`, `--max-pos-jump`,
-`--max-pos-jump-min`, and `--max-pos-jump-rate`.
+Full replay, RTKLIB comparison, and historical diagnostic commands are in
+[PPC reproduction commands](docs/ppc_reproduction.md). Dataset source:
+[taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset).
 
-Dataset source: [taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset)
+Other benchmark artifacts and checked sign-offs are documented in
+[Benchmarks](docs/benchmarks.md) and [Validation](docs/validation.md).
 
 ## Install And Package
 
@@ -765,13 +427,8 @@ cmake --install build --prefix /opt/libgnsspp
 
 Installed layout includes:
 
-- `bin/gnss`
-- native binaries such as `gnss_spp`, `gnss_solve`, `gnss_ppp`, `gnss_stream`
-- Python command wrappers and sign-off scripts
-- `scripts/` asset generators
-- `lib/cmake/libgnsspp/libgnssppConfig.cmake`
-- `lib/pkgconfig/libgnsspp.pc`
-- Python package `libgnsspp`
+- `bin/gnss`, native binaries, Python wrappers, sign-off scripts, asset
+  generators, CMake/pkg-config exports, and the `libgnsspp` Python package.
 
 Examples:
 
@@ -780,28 +437,20 @@ Examples:
 pkg-config --cflags --libs libgnsspp
 
 # source the installed dispatcher
-/opt/libgnsspp/bin/gnss social-card \
-  --lib-pos output/rtk_solution.pos \
-  --rtklib-pos output/driving_rtklib_rtk.pos \
-  --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv \
-  --output docs/driving_odaiba_social_card.png
+/opt/libgnsspp/bin/gnss --help
 ```
 
 ## Python And ROS2
 
 Python bindings expose:
 
-- RINEX header and epoch inspection
-- `.pos` loading and solution statistics
-- coordinate conversion helpers
-- file-based `SPP`, `PPP`, and `RTK` solve helpers
+- RINEX/header inspection, `.pos` statistics, coordinate helpers, and file-based
+  `SPP`, `PPP`, and `RTK` solve helpers.
 
 ROS2 support includes a playback node that publishes `.pos` files as:
 
-- `sensor_msgs/NavSatFix`
-- `geometry_msgs/PoseStamped`
-- `nav_msgs/Path`
-- solution status and satellite-count telemetry
+- `sensor_msgs/NavSatFix`, `geometry_msgs/PoseStamped`, `nav_msgs/Path`, and
+  solution status / satellite-count telemetry.
 
 ## Tests And Dogfooding
 
@@ -813,37 +462,22 @@ ctest --test-dir build --output-on-failure
 
 Important checks already covered in-tree:
 
-- solver/unit tests
-- live realtime/error-handling regression
-- benchmark/image generation tests
-- installed-prefix packaging smoke tests
-- installed `gnss social-card` dogfooding
-- installed feature-overview image generation
-- Python bindings smoke tests
-- ROS2 node smoke tests
+- solver/unit tests, live realtime/error-handling regression, benchmark/image
+  generation tests, installed-prefix packaging smoke tests, Python bindings, and
+  ROS2 node smoke tests.
 
 ## Data
 
-Bundled samples live under:
-
-- `data/`
-- `data/short_baseline/`
-- `data/driving/Tokyo_Data/Odaiba/`
-
-Generated benchmark outputs live under:
-
-- `output/`
-- `docs/`
+Bundled samples live under `data/`; generated benchmark outputs live under
+`output/` and `docs/`.
 
 ## Scope
 
 This repo is intentionally focused on a strong non-GUI GNSS stack.
 
-It already covers:
-
-- native `RTK`, `PPP`, `CLAS`, `RTCM`, `UBX`, `QZSS L6`
-- installed CLI tooling
-- benchmarks, sign-off scripts, and README asset generation
+It already covers native `RTK`, `PPP`, `CLAS`, `RTCM`, `UBX`, `QZSS L6`,
+installed CLI tooling, benchmarks, sign-off scripts, and README asset
+generation.
 
 It is still not marketed as a perfect RTKLIB drop-in replacement. The remaining gaps are about scope breadth, not the core non-GUI workflow shipped here.
 

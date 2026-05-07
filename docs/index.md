@@ -12,6 +12,8 @@ checked benchmark artifacts.
 - [Quick start](quickstart.md)
 - [Validation and sign-off](validation.md)
 - [Interfaces](interfaces.md)
+- [RTK tuning gates](rtk_tuning_gates.md)
+- [PPC reproduction commands](ppc_reproduction.md)
 - [Reference analyses](references/index.md)
 - [Contributing](contributing.md)
 
