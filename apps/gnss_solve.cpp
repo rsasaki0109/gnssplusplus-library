@@ -163,6 +163,11 @@ struct SolveConfig {
     int max_float_prefit_residual_reset_streak = 3;
     double min_float_prefit_residual_trusted_jump_m = 0.0;
     double max_update_nis_per_observation = 0.0;
+    double demote_fixed_status_nis_per_observation = 0.0;
+    double demote_fixed_status_post_residual_rms_m = 0.0;
+    double demote_fixed_status_gate_ratio = 0.0;
+    double min_demote_fixed_status_baseline_m = 0.0;
+    double max_demote_fixed_status_baseline_m = 0.0;
     int max_consecutive_float_for_reset = 0;
     int max_consecutive_nonfix_for_reset = 0;
     double max_postfix_residual_rms = 0.0;
@@ -194,6 +199,52 @@ std::map<ObservationKey, const libgnss::Observation*> indexObservations(
         indexed[{obs.satellite, obs.signal}] = &obs;
     }
     return indexed;
+}
+
+bool shouldDemoteFixedStatus(const SolveConfig& config,
+                             const libgnss::PositionSolution& solution) {
+    if (!solution.isFixed()) {
+        return false;
+    }
+
+    const bool nis_enabled =
+        std::isfinite(config.demote_fixed_status_nis_per_observation) &&
+        config.demote_fixed_status_nis_per_observation > 0.0;
+    const bool post_rms_enabled =
+        std::isfinite(config.demote_fixed_status_post_residual_rms_m) &&
+        config.demote_fixed_status_post_residual_rms_m > 0.0;
+    if (!nis_enabled && !post_rms_enabled) {
+        return false;
+    }
+
+    if (config.demote_fixed_status_gate_ratio > 0.0) {
+        if (!std::isfinite(solution.ratio) ||
+            solution.ratio > config.demote_fixed_status_gate_ratio) {
+            return false;
+        }
+    }
+    if (config.min_demote_fixed_status_baseline_m > 0.0 &&
+        solution.baseline_length < config.min_demote_fixed_status_baseline_m) {
+        return false;
+    }
+    if (config.max_demote_fixed_status_baseline_m > 0.0 &&
+        solution.baseline_length > config.max_demote_fixed_status_baseline_m) {
+        return false;
+    }
+
+    if (nis_enabled &&
+        std::isfinite(solution.rtk_update_normalized_innovation_squared_per_observation) &&
+        solution.rtk_update_normalized_innovation_squared_per_observation >
+            config.demote_fixed_status_nis_per_observation) {
+        return true;
+    }
+    if (post_rms_enabled &&
+        std::isfinite(solution.rtk_update_post_suppression_residual_rms_m) &&
+        solution.rtk_update_post_suppression_residual_rms_m >
+            config.demote_fixed_status_post_residual_rms_m) {
+        return true;
+    }
+    return false;
 }
 
 double signalFrequencyHz(const libgnss::SatelliteId& satellite,
@@ -616,6 +667,21 @@ void printUsage(const char* program_name) {
         << "  --max-update-nis-per-obs <v>\n"
         << "                             Reject DD Kalman update when NIS/active observation exceeds v\n"
         << "                             (default: 0, disabled)\n"
+        << "  --demote-fixed-status-nis-per-obs <v>\n"
+        << "                             Output FIX as FLOAT when update NIS/active observation exceeds v\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --demote-fixed-status-post-rms <v>\n"
+        << "                             Output FIX as FLOAT when update post residual RMS exceeds v\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --demote-fixed-status-gate-ratio <v>\n"
+        << "                             Apply fixed-status demotion only when AR ratio <= v\n"
+        << "                             (default: 0, unconditional when demotion is enabled)\n"
+        << "  --min-demote-fixed-status-baseline <m>\n"
+        << "                             Apply fixed-status demotion only above this baseline length\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-demote-fixed-status-baseline <m>\n"
+        << "                             Apply fixed-status demotion only below this baseline length\n"
+        << "                             (default: 0, disabled)\n"
         << "  --max-postfix-rms <v>      Max L1 post-fix phase residual RMS in meters\n"
         << "                             (default: 0, disabled)\n"
         << "  --enable-wide-lane-ar      Enable MW wide-lane AR pre-step (default: off)\n"
@@ -896,6 +962,16 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.min_float_prefit_residual_trusted_jump_m = std::stod(argv[++i]);
         } else if (arg == "--max-update-nis-per-obs" && i + 1 < argc) {
             config.max_update_nis_per_observation = std::stod(argv[++i]);
+        } else if (arg == "--demote-fixed-status-nis-per-obs" && i + 1 < argc) {
+            config.demote_fixed_status_nis_per_observation = std::stod(argv[++i]);
+        } else if (arg == "--demote-fixed-status-post-rms" && i + 1 < argc) {
+            config.demote_fixed_status_post_residual_rms_m = std::stod(argv[++i]);
+        } else if (arg == "--demote-fixed-status-gate-ratio" && i + 1 < argc) {
+            config.demote_fixed_status_gate_ratio = std::stod(argv[++i]);
+        } else if (arg == "--min-demote-fixed-status-baseline" && i + 1 < argc) {
+            config.min_demote_fixed_status_baseline_m = std::stod(argv[++i]);
+        } else if (arg == "--max-demote-fixed-status-baseline" && i + 1 < argc) {
+            config.max_demote_fixed_status_baseline_m = std::stod(argv[++i]);
         } else if (arg == "--max-postfix-rms" && i + 1 < argc) {
             config.max_postfix_residual_rms = std::stod(argv[++i]);
         } else if (arg == "--enable-wide-lane-ar") {
@@ -1053,6 +1129,21 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.max_update_nis_per_observation < 0.0) {
         argumentError("--max-update-nis-per-obs must be >= 0", argv[0]);
+    }
+    if (config.demote_fixed_status_nis_per_observation < 0.0) {
+        argumentError("--demote-fixed-status-nis-per-obs must be >= 0", argv[0]);
+    }
+    if (config.demote_fixed_status_post_residual_rms_m < 0.0) {
+        argumentError("--demote-fixed-status-post-rms must be >= 0", argv[0]);
+    }
+    if (config.demote_fixed_status_gate_ratio < 0.0) {
+        argumentError("--demote-fixed-status-gate-ratio must be >= 0", argv[0]);
+    }
+    if (config.min_demote_fixed_status_baseline_m < 0.0) {
+        argumentError("--min-demote-fixed-status-baseline must be >= 0", argv[0]);
+    }
+    if (config.max_demote_fixed_status_baseline_m < 0.0) {
+        argumentError("--max-demote-fixed-status-baseline must be >= 0", argv[0]);
     }
     if (config.nonfix_drift_guard_max_anchor_gap_s <= 0.0) {
         argumentError("--nonfix-drift-max-anchor-gap must be > 0", argv[0]);
@@ -1541,6 +1632,11 @@ int main(int argc, char* argv[]) {
                 }
             }
 
+            const auto feedback_solution = pos_solution;
+            if (shouldDemoteFixedStatus(config, pos_solution)) {
+                pos_solution.status = libgnss::SolutionStatus::FLOAT;
+            }
+
             debug_writer.write(pos_solution, rtk_processor.getLastDebugTelemetry());
 
             if (pos_solution.isValid()) {
@@ -1548,7 +1644,9 @@ int main(int argc, char* argv[]) {
                 valid_solution_count++;
                 if (pos_solution.isFixed()) {
                     fixed_solution_count++;
-                    last_fixed_output = pos_solution;
+                }
+                if (feedback_solution.isFixed()) {
+                    last_fixed_output = feedback_solution;
                     have_last_fixed_output = true;
                 }
 
@@ -1568,7 +1666,9 @@ int main(int argc, char* argv[]) {
                 const bool trusted_spp_seed =
                     pos_solution.status == libgnss::SolutionStatus::SPP &&
                     pos_solution.num_satellites >= 7;
-                if (pos_solution.isFixed() || trusted_spp_seed) {
+                if (feedback_solution.isFixed()) {
+                    rover_obs.receiver_position = feedback_solution.position_ecef;
+                } else if (trusted_spp_seed) {
                     rover_obs.receiver_position = pos_solution.position_ecef;
                 } else {
                     rover_obs.receiver_position = saved_rover_pos;

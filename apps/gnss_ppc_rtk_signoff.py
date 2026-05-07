@@ -66,6 +66,25 @@ PROFILE_TUNING_DEFAULTS: dict[str, dict[str, str | float | int | bool]] = {
     },
 }
 
+REALTIME_PROFILE_TUNING: dict[str, dict[str, str | float | int | bool]] = {
+    "sigma-demote": {
+        "preset": "low-cost",
+        "ratio": 2.8,
+        "carrier_phase_sigma": 0.001,
+        "max_subset_ar_drop_steps": 18,
+        "max_pos_jump": 5.0,
+        "max_pos_jump_min": 5.0,
+        "max_pos_jump_rate": 25.0,
+        "adaptive_dynamic_slip_thresholds": True,
+        "adaptive_dynamic_slip_nonfix_count": 25,
+        "max_consec_float_reset": 10,
+        "max_postfix_rms": 0.20,
+        "demote_fixed_status_nis_per_obs": 2.0,
+        "arfilter": False,
+        "no_kinematic_post_filter": True,
+    },
+}
+
 REQUIREMENT_NAMES = (
     "require_valid_epochs_min",
     "require_matched_epochs_min",
@@ -135,9 +154,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--commercial-min-hold-count", type=int, default=None)
     parser.add_argument("--commercial-hold-ratio-threshold", type=float, default=None)
     parser.add_argument("--match-tolerance-s", type=float, default=0.25)
+    parser.add_argument(
+        "--realtime-profile",
+        choices=("city-default", "sigma-demote"),
+        default="city-default",
+        help="Named PPC realtime tuning profile. city-default preserves legacy sign-off tuning.",
+    )
     parser.add_argument("--preset", choices=("survey", "low-cost", "moving-base"), default=None)
     parser.add_argument("--iono", choices=("auto", "off", "iflc", "est"), default=None)
     parser.add_argument("--ratio", type=float, default=None)
+    parser.add_argument("--carrier-phase-sigma", type=float, default=None)
+    parser.add_argument("--max-subset-ar-drop-steps", type=int, default=None)
     parser.add_argument("--max-hold-div", type=float, default=None)
     parser.add_argument("--max-pos-jump", type=float, default=None)
     parser.add_argument("--max-pos-jump-min", type=float, default=None)
@@ -148,11 +175,40 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-float-prefit-reset-streak", type=int, default=None)
     parser.add_argument("--min-float-prefit-trusted-jump", type=float, default=None)
     parser.add_argument("--max-update-nis-per-obs", type=float, default=None)
+    parser.add_argument("--max-fixed-update-nis-per-obs", type=float, default=None)
+    parser.add_argument("--max-fixed-update-post-rms", type=float, default=None)
+    parser.add_argument("--max-fixed-update-gate-ratio", type=float, default=None)
+    parser.add_argument("--min-fixed-update-gate-baseline", type=float, default=None)
+    parser.add_argument("--max-fixed-update-gate-baseline", type=float, default=None)
+    parser.add_argument("--min-fixed-update-gate-speed", type=float, default=None)
+    parser.add_argument("--max-fixed-update-gate-speed", type=float, default=None)
+    parser.add_argument("--max-fixed-update-secondary-gate-ratio", type=float, default=None)
+    parser.add_argument("--min-fixed-update-secondary-gate-baseline", type=float, default=None)
+    parser.add_argument("--max-fixed-update-secondary-gate-baseline", type=float, default=None)
+    parser.add_argument("--min-fixed-update-secondary-gate-speed", type=float, default=None)
+    parser.add_argument("--max-fixed-update-secondary-gate-speed", type=float, default=None)
+    parser.add_argument("--demote-fixed-status-nis-per-obs", type=float, default=None)
+    parser.add_argument("--demote-fixed-status-post-rms", type=float, default=None)
+    parser.add_argument("--demote-fixed-status-gate-ratio", type=float, default=None)
+    parser.add_argument("--min-demote-fixed-status-baseline", type=float, default=None)
+    parser.add_argument("--max-demote-fixed-status-baseline", type=float, default=None)
+    parser.add_argument("--rtk-snr-weighting", action="store_true")
+    parser.add_argument("--rtk-snr-reference-dbhz", type=float, default=None)
+    parser.add_argument("--rtk-snr-max-variance-scale", type=float, default=None)
+    parser.add_argument("--rtk-snr-min-baseline", type=float, default=None)
+    parser.add_argument("--cycle-slip-threshold", type=float, default=None)
+    parser.add_argument("--doppler-slip-threshold", type=float, default=None)
+    parser.add_argument("--code-slip-threshold", type=float, default=None)
+    parser.add_argument("--strict-dynamic-slip-thresholds", action="store_true")
+    parser.add_argument("--adaptive-dynamic-slip-thresholds", action="store_true")
+    parser.add_argument("--adaptive-dynamic-slip-nonfix-count", type=int, default=None)
+    parser.add_argument("--adaptive-dynamic-slip-hold-epochs", type=int, default=None)
     parser.add_argument("--max-consec-float-reset", type=int, default=None)
     parser.add_argument("--max-consec-nonfix-reset", type=int, default=None)
     parser.add_argument("--max-postfix-rms", type=float, default=None)
     parser.add_argument("--enable-wide-lane-ar", action="store_true")
     parser.add_argument("--wide-lane-threshold", type=float, default=None)
+    parser.add_argument("--enable-wlnl-fallback", action="store_true")
     parser.add_argument("--no-nonfix-drift-guard", action="store_true")
     parser.add_argument("--nonfix-drift-max-anchor-gap", type=float, default=None)
     parser.add_argument("--nonfix-drift-max-anchor-speed", type=float, default=None)
@@ -230,13 +286,21 @@ def selected_thresholds(args: argparse.Namespace, city: str, use_rtklib_compare:
 
 
 def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | float | int | bool]:
-    tuning = dict(PROFILE_TUNING_DEFAULTS[city])
+    realtime_profile = getattr(args, "realtime_profile", "city-default")
+    if realtime_profile == "city-default":
+        tuning = dict(PROFILE_TUNING_DEFAULTS[city])
+    else:
+        tuning = dict(REALTIME_PROFILE_TUNING[realtime_profile])
     if args.preset is not None:
         tuning["preset"] = args.preset
     if getattr(args, "iono", None) is not None:
         tuning["iono"] = args.iono
     if getattr(args, "ratio", None) is not None:
         tuning["ratio"] = args.ratio
+    if getattr(args, "carrier_phase_sigma", None) is not None:
+        tuning["carrier_phase_sigma"] = args.carrier_phase_sigma
+    if getattr(args, "max_subset_ar_drop_steps", None) is not None:
+        tuning["max_subset_ar_drop_steps"] = args.max_subset_ar_drop_steps
     if getattr(args, "max_hold_div", None) is not None:
         tuning["max_hold_div"] = args.max_hold_div
     if getattr(args, "max_pos_jump", None) is not None:
@@ -257,6 +321,72 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["min_float_prefit_trusted_jump"] = args.min_float_prefit_trusted_jump
     if getattr(args, "max_update_nis_per_obs", None) is not None:
         tuning["max_update_nis_per_obs"] = args.max_update_nis_per_obs
+    if getattr(args, "max_fixed_update_nis_per_obs", None) is not None:
+        tuning["max_fixed_update_nis_per_obs"] = args.max_fixed_update_nis_per_obs
+    if getattr(args, "max_fixed_update_post_rms", None) is not None:
+        tuning["max_fixed_update_post_rms"] = args.max_fixed_update_post_rms
+    if getattr(args, "max_fixed_update_gate_ratio", None) is not None:
+        tuning["max_fixed_update_gate_ratio"] = args.max_fixed_update_gate_ratio
+    if getattr(args, "min_fixed_update_gate_baseline", None) is not None:
+        tuning["min_fixed_update_gate_baseline"] = args.min_fixed_update_gate_baseline
+    if getattr(args, "max_fixed_update_gate_baseline", None) is not None:
+        tuning["max_fixed_update_gate_baseline"] = args.max_fixed_update_gate_baseline
+    if getattr(args, "min_fixed_update_gate_speed", None) is not None:
+        tuning["min_fixed_update_gate_speed"] = args.min_fixed_update_gate_speed
+    if getattr(args, "max_fixed_update_gate_speed", None) is not None:
+        tuning["max_fixed_update_gate_speed"] = args.max_fixed_update_gate_speed
+    if getattr(args, "max_fixed_update_secondary_gate_ratio", None) is not None:
+        tuning["max_fixed_update_secondary_gate_ratio"] = (
+            args.max_fixed_update_secondary_gate_ratio
+        )
+    if getattr(args, "min_fixed_update_secondary_gate_baseline", None) is not None:
+        tuning["min_fixed_update_secondary_gate_baseline"] = (
+            args.min_fixed_update_secondary_gate_baseline
+        )
+    if getattr(args, "max_fixed_update_secondary_gate_baseline", None) is not None:
+        tuning["max_fixed_update_secondary_gate_baseline"] = (
+            args.max_fixed_update_secondary_gate_baseline
+        )
+    if getattr(args, "min_fixed_update_secondary_gate_speed", None) is not None:
+        tuning["min_fixed_update_secondary_gate_speed"] = (
+            args.min_fixed_update_secondary_gate_speed
+        )
+    if getattr(args, "max_fixed_update_secondary_gate_speed", None) is not None:
+        tuning["max_fixed_update_secondary_gate_speed"] = (
+            args.max_fixed_update_secondary_gate_speed
+        )
+    if getattr(args, "demote_fixed_status_nis_per_obs", None) is not None:
+        tuning["demote_fixed_status_nis_per_obs"] = args.demote_fixed_status_nis_per_obs
+    if getattr(args, "demote_fixed_status_post_rms", None) is not None:
+        tuning["demote_fixed_status_post_rms"] = args.demote_fixed_status_post_rms
+    if getattr(args, "demote_fixed_status_gate_ratio", None) is not None:
+        tuning["demote_fixed_status_gate_ratio"] = args.demote_fixed_status_gate_ratio
+    if getattr(args, "min_demote_fixed_status_baseline", None) is not None:
+        tuning["min_demote_fixed_status_baseline"] = args.min_demote_fixed_status_baseline
+    if getattr(args, "max_demote_fixed_status_baseline", None) is not None:
+        tuning["max_demote_fixed_status_baseline"] = args.max_demote_fixed_status_baseline
+    if getattr(args, "rtk_snr_weighting", False):
+        tuning["rtk_snr_weighting"] = True
+    if getattr(args, "rtk_snr_reference_dbhz", None) is not None:
+        tuning["rtk_snr_reference_dbhz"] = args.rtk_snr_reference_dbhz
+    if getattr(args, "rtk_snr_max_variance_scale", None) is not None:
+        tuning["rtk_snr_max_variance_scale"] = args.rtk_snr_max_variance_scale
+    if getattr(args, "rtk_snr_min_baseline", None) is not None:
+        tuning["rtk_snr_min_baseline"] = args.rtk_snr_min_baseline
+    if getattr(args, "cycle_slip_threshold", None) is not None:
+        tuning["cycle_slip_threshold"] = args.cycle_slip_threshold
+    if getattr(args, "doppler_slip_threshold", None) is not None:
+        tuning["doppler_slip_threshold"] = args.doppler_slip_threshold
+    if getattr(args, "code_slip_threshold", None) is not None:
+        tuning["code_slip_threshold"] = args.code_slip_threshold
+    if getattr(args, "strict_dynamic_slip_thresholds", False):
+        tuning["strict_dynamic_slip_thresholds"] = True
+    if getattr(args, "adaptive_dynamic_slip_thresholds", False):
+        tuning["adaptive_dynamic_slip_thresholds"] = True
+    if getattr(args, "adaptive_dynamic_slip_nonfix_count", None) is not None:
+        tuning["adaptive_dynamic_slip_nonfix_count"] = args.adaptive_dynamic_slip_nonfix_count
+    if getattr(args, "adaptive_dynamic_slip_hold_epochs", None) is not None:
+        tuning["adaptive_dynamic_slip_hold_epochs"] = args.adaptive_dynamic_slip_hold_epochs
     if getattr(args, "max_consec_float_reset", None) is not None:
         tuning["max_consec_float_reset"] = args.max_consec_float_reset
     if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -267,6 +397,8 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["enable_wide_lane_ar"] = True
     if getattr(args, "wide_lane_threshold", None) is not None:
         tuning["wide_lane_threshold"] = args.wide_lane_threshold
+    if getattr(args, "enable_wlnl_fallback", False):
+        tuning["enable_wlnl_fallback"] = True
     if getattr(args, "no_nonfix_drift_guard", False):
         tuning["no_nonfix_drift_guard"] = True
     if getattr(args, "nonfix_drift_max_anchor_gap", None) is not None:
@@ -299,6 +431,8 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["min_hold_count"] = args.min_hold_count
     if args.hold_ratio_threshold is not None:
         tuning["hold_ratio_threshold"] = args.hold_ratio_threshold
+    if getattr(args, "no_kinematic_post_filter", False):
+        tuning["no_kinematic_post_filter"] = True
     return tuning
 
 
@@ -401,6 +535,12 @@ def build_ppc_demo_command(args: argparse.Namespace,
     ratio = tuning.get("ratio")
     if isinstance(ratio, (int, float)):
         command.extend(["--ratio", str(ratio)])
+    carrier_phase_sigma = tuning.get("carrier_phase_sigma")
+    if isinstance(carrier_phase_sigma, (int, float)):
+        command.extend(["--carrier-phase-sigma", str(carrier_phase_sigma)])
+    max_subset_drop_steps = tuning.get("max_subset_ar_drop_steps")
+    if isinstance(max_subset_drop_steps, int):
+        command.extend(["--max-subset-ar-drop-steps", str(max_subset_drop_steps)])
     max_hold_div = tuning.get("max_hold_div")
     if isinstance(max_hold_div, (int, float)):
         command.extend(["--max-hold-div", str(max_hold_div)])
@@ -431,6 +571,155 @@ def build_ppc_demo_command(args: argparse.Namespace,
     max_update_nis_per_obs = tuning.get("max_update_nis_per_obs")
     if isinstance(max_update_nis_per_obs, (int, float)):
         command.extend(["--max-update-nis-per-obs", str(max_update_nis_per_obs)])
+    max_fixed_update_nis_per_obs = tuning.get("max_fixed_update_nis_per_obs")
+    if isinstance(max_fixed_update_nis_per_obs, (int, float)):
+        command.extend(
+            ["--max-fixed-update-nis-per-obs", str(max_fixed_update_nis_per_obs)]
+        )
+    max_fixed_update_post_rms = tuning.get("max_fixed_update_post_rms")
+    if isinstance(max_fixed_update_post_rms, (int, float)):
+        command.extend(["--max-fixed-update-post-rms", str(max_fixed_update_post_rms)])
+    max_fixed_update_gate_ratio = tuning.get("max_fixed_update_gate_ratio")
+    if isinstance(max_fixed_update_gate_ratio, (int, float)):
+        command.extend(["--max-fixed-update-gate-ratio", str(max_fixed_update_gate_ratio)])
+    min_fixed_update_gate_baseline = tuning.get("min_fixed_update_gate_baseline")
+    if isinstance(min_fixed_update_gate_baseline, (int, float)):
+        command.extend(
+            ["--min-fixed-update-gate-baseline", str(min_fixed_update_gate_baseline)]
+        )
+    max_fixed_update_gate_baseline = tuning.get("max_fixed_update_gate_baseline")
+    if isinstance(max_fixed_update_gate_baseline, (int, float)):
+        command.extend(
+            ["--max-fixed-update-gate-baseline", str(max_fixed_update_gate_baseline)]
+        )
+    min_fixed_update_gate_speed = tuning.get("min_fixed_update_gate_speed")
+    if isinstance(min_fixed_update_gate_speed, (int, float)):
+        command.extend(["--min-fixed-update-gate-speed", str(min_fixed_update_gate_speed)])
+    max_fixed_update_gate_speed = tuning.get("max_fixed_update_gate_speed")
+    if isinstance(max_fixed_update_gate_speed, (int, float)):
+        command.extend(["--max-fixed-update-gate-speed", str(max_fixed_update_gate_speed)])
+    max_fixed_update_secondary_gate_ratio = tuning.get(
+        "max_fixed_update_secondary_gate_ratio"
+    )
+    if isinstance(max_fixed_update_secondary_gate_ratio, (int, float)):
+        command.extend(
+            [
+                "--max-fixed-update-secondary-gate-ratio",
+                str(max_fixed_update_secondary_gate_ratio),
+            ]
+        )
+    min_fixed_update_secondary_gate_baseline = tuning.get(
+        "min_fixed_update_secondary_gate_baseline"
+    )
+    if isinstance(min_fixed_update_secondary_gate_baseline, (int, float)):
+        command.extend(
+            [
+                "--min-fixed-update-secondary-gate-baseline",
+                str(min_fixed_update_secondary_gate_baseline),
+            ]
+        )
+    max_fixed_update_secondary_gate_baseline = tuning.get(
+        "max_fixed_update_secondary_gate_baseline"
+    )
+    if isinstance(max_fixed_update_secondary_gate_baseline, (int, float)):
+        command.extend(
+            [
+                "--max-fixed-update-secondary-gate-baseline",
+                str(max_fixed_update_secondary_gate_baseline),
+            ]
+        )
+    min_fixed_update_secondary_gate_speed = tuning.get(
+        "min_fixed_update_secondary_gate_speed"
+    )
+    if isinstance(min_fixed_update_secondary_gate_speed, (int, float)):
+        command.extend(
+            [
+                "--min-fixed-update-secondary-gate-speed",
+                str(min_fixed_update_secondary_gate_speed),
+            ]
+        )
+    max_fixed_update_secondary_gate_speed = tuning.get(
+        "max_fixed_update_secondary_gate_speed"
+    )
+    if isinstance(max_fixed_update_secondary_gate_speed, (int, float)):
+        command.extend(
+            [
+                "--max-fixed-update-secondary-gate-speed",
+                str(max_fixed_update_secondary_gate_speed),
+            ]
+        )
+    demote_fixed_status_nis_per_obs = tuning.get("demote_fixed_status_nis_per_obs")
+    if isinstance(demote_fixed_status_nis_per_obs, (int, float)):
+        command.extend(
+            [
+                "--demote-fixed-status-nis-per-obs",
+                str(demote_fixed_status_nis_per_obs),
+            ]
+        )
+    demote_fixed_status_post_rms = tuning.get("demote_fixed_status_post_rms")
+    if isinstance(demote_fixed_status_post_rms, (int, float)):
+        command.extend(["--demote-fixed-status-post-rms", str(demote_fixed_status_post_rms)])
+    demote_fixed_status_gate_ratio = tuning.get("demote_fixed_status_gate_ratio")
+    if isinstance(demote_fixed_status_gate_ratio, (int, float)):
+        command.extend(
+            ["--demote-fixed-status-gate-ratio", str(demote_fixed_status_gate_ratio)]
+        )
+    min_demote_fixed_status_baseline = tuning.get("min_demote_fixed_status_baseline")
+    if isinstance(min_demote_fixed_status_baseline, (int, float)):
+        command.extend(
+            [
+                "--min-demote-fixed-status-baseline",
+                str(min_demote_fixed_status_baseline),
+            ]
+        )
+    max_demote_fixed_status_baseline = tuning.get("max_demote_fixed_status_baseline")
+    if isinstance(max_demote_fixed_status_baseline, (int, float)):
+        command.extend(
+            [
+                "--max-demote-fixed-status-baseline",
+                str(max_demote_fixed_status_baseline),
+            ]
+        )
+    if tuning.get("rtk_snr_weighting") is True:
+        command.append("--rtk-snr-weighting")
+    rtk_snr_reference_dbhz = tuning.get("rtk_snr_reference_dbhz")
+    if isinstance(rtk_snr_reference_dbhz, (int, float)):
+        command.extend(["--rtk-snr-reference-dbhz", str(rtk_snr_reference_dbhz)])
+    rtk_snr_max_variance_scale = tuning.get("rtk_snr_max_variance_scale")
+    if isinstance(rtk_snr_max_variance_scale, (int, float)):
+        command.extend(["--rtk-snr-max-variance-scale", str(rtk_snr_max_variance_scale)])
+    rtk_snr_min_baseline = tuning.get("rtk_snr_min_baseline")
+    if isinstance(rtk_snr_min_baseline, (int, float)):
+        command.extend(["--rtk-snr-min-baseline", str(rtk_snr_min_baseline)])
+    cycle_slip_threshold = tuning.get("cycle_slip_threshold")
+    if isinstance(cycle_slip_threshold, (int, float)):
+        command.extend(["--cycle-slip-threshold", str(cycle_slip_threshold)])
+    doppler_slip_threshold = tuning.get("doppler_slip_threshold")
+    if isinstance(doppler_slip_threshold, (int, float)):
+        command.extend(["--doppler-slip-threshold", str(doppler_slip_threshold)])
+    code_slip_threshold = tuning.get("code_slip_threshold")
+    if isinstance(code_slip_threshold, (int, float)):
+        command.extend(["--code-slip-threshold", str(code_slip_threshold)])
+    if tuning.get("strict_dynamic_slip_thresholds") is True:
+        command.append("--strict-dynamic-slip-thresholds")
+    if tuning.get("adaptive_dynamic_slip_thresholds") is True:
+        command.append("--adaptive-dynamic-slip-thresholds")
+    adaptive_dynamic_slip_nonfix_count = tuning.get("adaptive_dynamic_slip_nonfix_count")
+    if isinstance(adaptive_dynamic_slip_nonfix_count, int):
+        command.extend(
+            [
+                "--adaptive-dynamic-slip-nonfix-count",
+                str(adaptive_dynamic_slip_nonfix_count),
+            ]
+        )
+    adaptive_dynamic_slip_hold_epochs = tuning.get("adaptive_dynamic_slip_hold_epochs")
+    if isinstance(adaptive_dynamic_slip_hold_epochs, int):
+        command.extend(
+            [
+                "--adaptive-dynamic-slip-hold-epochs",
+                str(adaptive_dynamic_slip_hold_epochs),
+            ]
+        )
     max_consec_float_reset = tuning.get("max_consec_float_reset")
     if isinstance(max_consec_float_reset, int):
         command.extend(["--max-consec-float-reset", str(max_consec_float_reset)])
@@ -445,6 +734,8 @@ def build_ppc_demo_command(args: argparse.Namespace,
     wide_lane_threshold = tuning.get("wide_lane_threshold")
     if isinstance(wide_lane_threshold, (int, float)):
         command.extend(["--wide-lane-threshold", str(wide_lane_threshold)])
+    if tuning.get("enable_wlnl_fallback") is True:
+        command.append("--enable-wlnl-fallback")
     if tuning.get("no_nonfix_drift_guard") is True:
         command.append("--no-nonfix-drift-guard")
     nonfix_max_anchor_gap = tuning.get("nonfix_drift_max_anchor_gap")
@@ -493,7 +784,9 @@ def build_ppc_demo_command(args: argparse.Namespace,
         command.extend(["--min-hold-count", str(tuning["min_hold_count"])])
     if "hold_ratio_threshold" in tuning:
         command.extend(["--hold-ratio-threshold", str(tuning["hold_ratio_threshold"])])
-    if getattr(args, "no_kinematic_post_filter", False):
+    if tuning.get("no_kinematic_post_filter") is True or getattr(
+        args, "no_kinematic_post_filter", False
+    ):
         command.append("--no-kinematic-post-filter")
 
     for name, value in thresholds.items():

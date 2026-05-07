@@ -69,6 +69,8 @@ import run_optional_rtk_signoffs as ci_rtk_signoffs  # noqa: E402
 import analyze_ppc_multi_candidate_selector_matrix as ppc_multi_cand_analyzer  # noqa: E402
 import apply_ppc_multi_candidate_selector as ppc_multi_candidate_selector  # noqa: E402
 import run_ppc_multi_candidate_selector_matrix as ppc_multi_selector_matrix  # noqa: E402
+import run_ppc_ratio_gating_selector_sweep as ppc_ratio_gating_sweep  # noqa: E402
+import run_ppc_realtime_guard_sweep as ppc_realtime_guard_sweep  # noqa: E402
 
 
 class ScorecardHelpersTest(unittest.TestCase):
@@ -256,9 +258,13 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 max_pos_jump_rate=None,
                 max_consec_float_reset=None,
                 max_consec_nonfix_reset=None,
+                max_fixed_update_nis_per_obs=None,
+                max_fixed_update_post_rms=None,
+                max_fixed_update_gate_ratio=None,
                 max_postfix_rms=None,
                 enable_wide_lane_ar=False,
                 wide_lane_threshold=None,
+                enable_wlnl_fallback=False,
                 arfilter=None,
                 arfilter_margin=None,
                 min_hold_count=None,
@@ -276,6 +282,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "preset": "low-cost",
                 "iono": "iflc",
                 "ratio": 2.4,
+                "carrier_phase_sigma": 0.001,
+                "max_subset_ar_drop_steps": 18,
                 "max_hold_div": 5.0,
                 "max_pos_jump": 20.0,
                 "max_pos_jump_min": 20.0,
@@ -286,11 +294,40 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "max_float_prefit_reset_streak": 5,
                 "min_float_prefit_trusted_jump": 8.0,
                 "max_update_nis_per_obs": 12.0,
+                "max_fixed_update_nis_per_obs": 10.0,
+                "max_fixed_update_post_rms": 6.0,
+                "max_fixed_update_gate_ratio": 8.0,
+                "min_fixed_update_gate_baseline": 7000.0,
+                "max_fixed_update_gate_baseline": 8200.0,
+                "min_fixed_update_gate_speed": 5.0,
+                "max_fixed_update_gate_speed": 15.0,
+                "max_fixed_update_secondary_gate_ratio": 4.0,
+                "min_fixed_update_secondary_gate_baseline": 2000.0,
+                "max_fixed_update_secondary_gate_baseline": 2500.0,
+                "min_fixed_update_secondary_gate_speed": 7.0,
+                "max_fixed_update_secondary_gate_speed": 15.0,
+                "demote_fixed_status_nis_per_obs": 20.0,
+                "demote_fixed_status_post_rms": 3.0,
+                "demote_fixed_status_gate_ratio": 6.0,
+                "min_demote_fixed_status_baseline": 500.0,
+                "max_demote_fixed_status_baseline": 9500.0,
+                "rtk_snr_weighting": True,
+                "rtk_snr_reference_dbhz": 44.0,
+                "rtk_snr_max_variance_scale": 16.0,
+                "rtk_snr_min_baseline": 7000.0,
+                "cycle_slip_threshold": 0.08,
+                "doppler_slip_threshold": 0.15,
+                "code_slip_threshold": 4.0,
+                "strict_dynamic_slip_thresholds": True,
+                "adaptive_dynamic_slip_thresholds": True,
+                "adaptive_dynamic_slip_nonfix_count": 2,
+                "adaptive_dynamic_slip_hold_epochs": 8,
                 "max_consec_float_reset": 10,
                 "max_consec_nonfix_reset": 10,
                 "max_postfix_rms": 0.20,
                 "enable_wide_lane_ar": True,
                 "wide_lane_threshold": 0.10,
+                "enable_wlnl_fallback": True,
                 "nonfix_drift_max_anchor_gap": 90.0,
                 "nonfix_drift_max_anchor_speed": 0.75,
                 "nonfix_drift_max_residual": 4.0,
@@ -330,6 +367,10 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("iflc", command)
             self.assertIn("--ratio", command)
             self.assertIn("2.4", command)
+            self.assertIn("--carrier-phase-sigma", command)
+            self.assertIn("0.001", command)
+            self.assertIn("--max-subset-ar-drop-steps", command)
+            self.assertIn("18", command)
             self.assertIn("--max-hold-div", command)
             self.assertIn("5.0", command)
             self.assertIn("--max-pos-jump", command)
@@ -350,6 +391,45 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("8.0", command)
             self.assertIn("--max-update-nis-per-obs", command)
             self.assertIn("12.0", command)
+            self.assertIn("--max-fixed-update-nis-per-obs", command)
+            self.assertIn("10.0", command)
+            self.assertIn("--max-fixed-update-post-rms", command)
+            self.assertIn("6.0", command)
+            self.assertIn("--max-fixed-update-gate-ratio", command)
+            self.assertIn("8.0", command)
+            self.assertIn("--min-fixed-update-gate-baseline", command)
+            self.assertIn("7000.0", command)
+            self.assertIn("--max-fixed-update-gate-baseline", command)
+            self.assertIn("8200.0", command)
+            self.assertIn("--demote-fixed-status-nis-per-obs", command)
+            self.assertIn("20.0", command)
+            self.assertIn("--demote-fixed-status-post-rms", command)
+            self.assertIn("3.0", command)
+            self.assertIn("--demote-fixed-status-gate-ratio", command)
+            self.assertIn("6.0", command)
+            self.assertIn("--min-demote-fixed-status-baseline", command)
+            self.assertIn("500.0", command)
+            self.assertIn("--max-demote-fixed-status-baseline", command)
+            self.assertIn("9500.0", command)
+            self.assertIn("--rtk-snr-weighting", command)
+            self.assertIn("--rtk-snr-reference-dbhz", command)
+            self.assertIn("44.0", command)
+            self.assertIn("--rtk-snr-max-variance-scale", command)
+            self.assertIn("16.0", command)
+            self.assertIn("--rtk-snr-min-baseline", command)
+            self.assertIn("7000.0", command)
+            self.assertIn("--cycle-slip-threshold", command)
+            self.assertIn("0.08", command)
+            self.assertIn("--doppler-slip-threshold", command)
+            self.assertIn("0.15", command)
+            self.assertIn("--code-slip-threshold", command)
+            self.assertIn("4.0", command)
+            self.assertIn("--strict-dynamic-slip-thresholds", command)
+            self.assertIn("--adaptive-dynamic-slip-thresholds", command)
+            self.assertIn("--adaptive-dynamic-slip-nonfix-count", command)
+            self.assertIn("2", command)
+            self.assertIn("--adaptive-dynamic-slip-hold-epochs", command)
+            self.assertIn("8", command)
             self.assertIn("--max-consec-float-reset", command)
             self.assertIn("10", command)
             self.assertIn("--max-consec-nonfix-reset", command)
@@ -358,6 +438,7 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("--enable-wide-lane-ar", command)
             self.assertIn("--wide-lane-threshold", command)
             self.assertIn("0.1", command)
+            self.assertIn("--enable-wlnl-fallback", command)
             self.assertIn("--nonfix-drift-max-anchor-gap", command)
             self.assertIn("90.0", command)
             self.assertIn("--nonfix-drift-max-anchor-speed", command)
@@ -455,6 +536,7 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
 
     def test_selected_tuning_uses_city_specific_defaults(self) -> None:
         args = argparse.Namespace(
+            realtime_profile="city-default",
             preset=None,
             arfilter=None,
             arfilter_margin=None,
@@ -467,6 +549,25 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
         self.assertEqual(tokyo["arfilter"], True)
         self.assertEqual(nagoya["preset"], "low-cost")
         self.assertEqual(nagoya["arfilter"], False)
+
+        realtime_args = argparse.Namespace(
+            realtime_profile="sigma-demote",
+            preset=None,
+            arfilter=None,
+            arfilter_margin=None,
+            min_hold_count=None,
+            hold_ratio_threshold=None,
+            no_kinematic_post_filter=False,
+        )
+        realtime = ppc_rtk_signoff.selected_tuning(realtime_args, "tokyo")
+        self.assertEqual(realtime["preset"], "low-cost")
+        self.assertEqual(realtime["ratio"], 2.8)
+        self.assertEqual(realtime["carrier_phase_sigma"], 0.001)
+        self.assertEqual(realtime["demote_fixed_status_nis_per_obs"], 2.0)
+        self.assertNotIn("demote_fixed_status_gate_ratio", realtime)
+        self.assertNotIn("max_demote_fixed_status_baseline", realtime)
+        self.assertFalse(realtime["arfilter"])
+        self.assertTrue(realtime["no_kinematic_post_filter"])
 
 
 class PPCCoverageMatrixTest(unittest.TestCase):
@@ -496,6 +597,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 preset="low-cost",
                 iono="iflc",
                 ratio=2.4,
+                max_subset_ar_drop_steps=18,
                 max_hold_div=5.0,
                 max_pos_jump=20.0,
                 max_pos_jump_min=20.0,
@@ -506,11 +608,35 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 max_float_prefit_reset_streak=5,
                 min_float_prefit_trusted_jump=8.0,
                 max_update_nis_per_obs=12.0,
+                max_fixed_update_nis_per_obs=10.0,
+                max_fixed_update_post_rms=6.0,
+                max_fixed_update_gate_ratio=8.0,
+                min_fixed_update_gate_baseline=7000.0,
+                max_fixed_update_gate_baseline=8200.0,
+                min_fixed_update_gate_speed=5.0,
+                max_fixed_update_gate_speed=15.0,
+                max_fixed_update_secondary_gate_ratio=4.0,
+                min_fixed_update_secondary_gate_baseline=2000.0,
+                max_fixed_update_secondary_gate_baseline=2500.0,
+                min_fixed_update_secondary_gate_speed=7.0,
+                max_fixed_update_secondary_gate_speed=15.0,
+                rtk_snr_weighting=True,
+                rtk_snr_reference_dbhz=44.0,
+                rtk_snr_max_variance_scale=16.0,
+                rtk_snr_min_baseline=7000.0,
+                cycle_slip_threshold=0.08,
+                doppler_slip_threshold=0.15,
+                code_slip_threshold=4.0,
+                strict_dynamic_slip_thresholds=True,
+                adaptive_dynamic_slip_thresholds=True,
+                adaptive_dynamic_slip_nonfix_count=2,
+                adaptive_dynamic_slip_hold_epochs=8,
                 max_consec_float_reset=10,
                 max_consec_nonfix_reset=10,
                 max_postfix_rms=0.20,
                 enable_wide_lane_ar=True,
                 wide_lane_threshold=0.10,
+                enable_wlnl_fallback=True,
                 fixed_bridge_burst_guard=True,
                 fixed_bridge_burst_max_anchor_gap=30.0,
                 fixed_bridge_burst_min_boundary_gap=1.0,
@@ -550,6 +676,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("iflc", command)
             self.assertIn("--ratio", command)
             self.assertIn("2.4", command)
+            self.assertIn("--max-subset-ar-drop-steps", command)
+            self.assertIn("18", command)
             self.assertIn("--max-hold-div", command)
             self.assertIn("5.0", command)
             self.assertIn("--max-pos-jump", command)
@@ -570,6 +698,49 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("8.0", command)
             self.assertIn("--max-update-nis-per-obs", command)
             self.assertIn("12.0", command)
+            self.assertIn("--max-fixed-update-nis-per-obs", command)
+            self.assertIn("10.0", command)
+            self.assertIn("--max-fixed-update-post-rms", command)
+            self.assertIn("6.0", command)
+            self.assertIn("--max-fixed-update-gate-ratio", command)
+            self.assertIn("8.0", command)
+            self.assertIn("--min-fixed-update-gate-baseline", command)
+            self.assertIn("7000.0", command)
+            self.assertIn("--max-fixed-update-gate-baseline", command)
+            self.assertIn("8200.0", command)
+            self.assertIn("--min-fixed-update-gate-speed", command)
+            self.assertIn("5.0", command)
+            self.assertIn("--max-fixed-update-gate-speed", command)
+            self.assertIn("15.0", command)
+            self.assertIn("--max-fixed-update-secondary-gate-ratio", command)
+            self.assertIn("4.0", command)
+            self.assertIn("--min-fixed-update-secondary-gate-baseline", command)
+            self.assertIn("2000.0", command)
+            self.assertIn("--max-fixed-update-secondary-gate-baseline", command)
+            self.assertIn("2500.0", command)
+            self.assertIn("--min-fixed-update-secondary-gate-speed", command)
+            self.assertIn("7.0", command)
+            self.assertIn("--max-fixed-update-secondary-gate-speed", command)
+            self.assertIn("15.0", command)
+            self.assertIn("--rtk-snr-weighting", command)
+            self.assertIn("--rtk-snr-reference-dbhz", command)
+            self.assertIn("44.0", command)
+            self.assertIn("--rtk-snr-max-variance-scale", command)
+            self.assertIn("16.0", command)
+            self.assertIn("--rtk-snr-min-baseline", command)
+            self.assertIn("7000.0", command)
+            self.assertIn("--cycle-slip-threshold", command)
+            self.assertIn("0.08", command)
+            self.assertIn("--doppler-slip-threshold", command)
+            self.assertIn("0.15", command)
+            self.assertIn("--code-slip-threshold", command)
+            self.assertIn("4.0", command)
+            self.assertIn("--strict-dynamic-slip-thresholds", command)
+            self.assertIn("--adaptive-dynamic-slip-thresholds", command)
+            self.assertIn("--adaptive-dynamic-slip-nonfix-count", command)
+            self.assertIn("2", command)
+            self.assertIn("--adaptive-dynamic-slip-hold-epochs", command)
+            self.assertIn("8", command)
             self.assertIn("--max-consec-float-reset", command)
             self.assertIn("10", command)
             self.assertIn("--max-consec-nonfix-reset", command)
@@ -627,6 +798,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 preset="low-cost",
                 iono=None,
                 ratio=None,
+                max_subset_ar_drop_steps=None,
                 max_hold_div=None,
                 max_pos_jump=None,
                 max_pos_jump_min=None,
@@ -636,6 +808,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 max_postfix_rms=None,
                 enable_wide_lane_ar=False,
                 wide_lane_threshold=None,
+                enable_wlnl_fallback=False,
                 no_float_bridge_tail_guard=False,
             )
             paths = ppc_coverage_matrix.output_paths(args.output_dir, "tokyo", "run1")
@@ -653,6 +826,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                         "max_h_m": 47.9,
                         "solver_wall_time_s": 1.0,
                         "realtime_factor": 10.0,
+                        "effective_epoch_rate_hz": 50.0,
                         "rtklib": {
                             "positioning_rate_pct": 66.3,
                             "fix_rate_pct": 30.5,
@@ -696,10 +870,20 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertEqual(payload["aggregates"]["weighted_rtklib_official_score_pct"], 21.0)
             self.assertEqual(payload["aggregates"]["weighted_official_score_delta_pct"], 21.0)
             self.assertEqual(payload["aggregates"]["avg_p95_h_delta_m"], -6.97)
+            self.assertEqual(payload["aggregates"]["avg_solver_wall_time_s"], 1.0)
+            self.assertEqual(payload["aggregates"]["max_solver_wall_time_s"], 1.0)
+            self.assertEqual(payload["aggregates"]["avg_realtime_factor"], 10.0)
+            self.assertEqual(payload["aggregates"]["min_realtime_factor"], 10.0)
+            self.assertEqual(payload["aggregates"]["avg_effective_epoch_rate_hz"], 50.0)
+            self.assertEqual(payload["aggregates"]["min_effective_epoch_rate_hz"], 50.0)
             self.assertEqual(payload["aggregates"]["float_bridge_tail_rejected_epochs"], 147)
             self.assertEqual(payload["aggregates"]["fixed_bridge_burst_rejected_epochs"], 12)
+            self.assertEqual(payload["runtime_requirements"]["solver_wall_time_max_s"], None)
+            self.assertEqual(payload["runtime_requirements"]["realtime_factor_min"], None)
+            self.assertEqual(payload["runtime_requirements"]["effective_epoch_rate_min_hz"], None)
             self.assertIsNone(payload["max_pos_jump_min"])
             self.assertIsNone(payload["max_pos_jump_rate"])
+            self.assertIsNone(payload["max_subset_ar_drop_steps"])
             self.assertIsNone(payload["max_float_prefit_rms"])
             self.assertIsNone(payload["max_float_prefit_max"])
             self.assertIsNone(payload["max_float_prefit_reset_streak"])
@@ -710,10 +894,13 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIsNone(payload["max_postfix_rms"])
             self.assertFalse(payload["enable_wide_lane_ar"])
             self.assertIsNone(payload["wide_lane_threshold"])
+            self.assertFalse(payload["enable_wlnl_fallback"])
             self.assertIn("tokyo_run1", markdown)
             self.assertIn("+19.9 pp", markdown)
             self.assertIn("42.0%", markdown)
             self.assertIn("PPC official weighted delta: 21.0 pp", markdown)
+            self.assertIn("Realtime factor: avg 10.0, min 10.0", markdown)
+            self.assertIn("50.00 Hz", markdown)
             self.assertIn("147", markdown)
             self.assertIn("12", markdown)
 
@@ -725,6 +912,9 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                     require_official_score_delta_min=0.0,
                     require_score_3d_50cm_ref_delta_min=0.0,
                     require_p95_h_delta_max=0.0,
+                    require_solver_wall_time_max=1.0,
+                    require_realtime_factor_min=10.0,
+                    require_effective_epoch_rate_min=50.0,
                 ),
             )
             with self.assertRaises(SystemExit):
@@ -736,8 +926,29 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                         require_official_score_delta_min=None,
                         require_score_3d_50cm_ref_delta_min=None,
                         require_p95_h_delta_max=None,
+                        require_solver_wall_time_max=None,
+                        require_realtime_factor_min=None,
+                        require_effective_epoch_rate_min=None,
                     ),
                 )
+            with self.assertRaises(SystemExit) as runtime_context:
+                ppc_coverage_matrix.enforce_requirements(
+                    payload,
+                    argparse.Namespace(
+                        require_positioning_delta_min=None,
+                        require_fix_delta_min=None,
+                        require_official_score_delta_min=None,
+                        require_score_3d_50cm_ref_delta_min=None,
+                        require_p95_h_delta_max=None,
+                        require_solver_wall_time_max=0.5,
+                        require_realtime_factor_min=20.0,
+                        require_effective_epoch_rate_min=100.0,
+                    ),
+                )
+            runtime_message = str(runtime_context.exception)
+            self.assertIn("solver_wall_time_s", runtime_message)
+            self.assertIn("realtime_factor", runtime_message)
+            self.assertIn("effective_epoch_rate_hz", runtime_message)
 
 
 class PPCResidualResetSweepAnalysisTest(unittest.TestCase):
@@ -832,6 +1043,218 @@ class PPCResidualResetSweepAnalysisTest(unittest.TestCase):
                 47.0,
             )
             self.assertIn("City Selector", markdown_output.read_text(encoding="utf-8"))
+
+
+class PPCRealtimeGuardSweepTest(unittest.TestCase):
+    def test_profile_command_passes_runtime_requirements(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_realtime_guard_") as temp_dir:
+            temp_root = Path(temp_dir)
+            args = argparse.Namespace(
+                dataset_root=temp_root / "PPC-Dataset",
+                output_dir=temp_root / "out",
+                summary_json=temp_root / "summary.json",
+                markdown_output=temp_root / "summary.md",
+                max_epochs=-1,
+                match_tolerance_s=0.25,
+                preset="low-cost",
+                rtklib_root=temp_root / "rtklib",
+                rtklib_bin=None,
+                rtklib_config=ROOT_DIR / "scripts" / "rtklib_odaiba.conf",
+                use_existing_solutions=True,
+                use_existing_matrices=False,
+                require_positioning_delta_min=0.0,
+                require_official_score_delta_min=0.0,
+                require_p95_h_delta_max=0.0,
+                require_solver_wall_time_max=10.0,
+                require_realtime_factor_min=1.0,
+                require_effective_epoch_rate_min=5.0,
+            )
+            profile = ppc_realtime_guard_sweep.parse_profile_spec(
+                "fixed=--ratio 2.4 --max-fixed-update-nis-per-obs 10"
+            )
+
+            command, matrix_json, matrix_md = ppc_realtime_guard_sweep.build_matrix_argv(
+                args,
+                profile,
+            )
+
+            self.assertEqual(command[:3], [sys.executable, str(ROOT_DIR / "apps" / "gnss.py"), "ppc-coverage-matrix"])
+            self.assertEqual(matrix_json, temp_root / "out" / "fixed" / "matrix.json")
+            self.assertEqual(matrix_md, temp_root / "out" / "fixed" / "matrix.md")
+            self.assertIn("--use-existing-solutions", command)
+            self.assertIn("--rtklib-root", command)
+            self.assertIn(str(temp_root / "rtklib"), command)
+            self.assertIn("--require-solver-wall-time-max", command)
+            self.assertIn("10.0", command)
+            self.assertIn("--require-realtime-factor-min", command)
+            self.assertIn("1.0", command)
+            self.assertIn("--require-effective-epoch-rate-min", command)
+            self.assertIn("5.0", command)
+            self.assertIn("--max-fixed-update-nis-per-obs", command)
+            self.assertIn("10", command)
+
+    def test_run_profile_can_load_existing_matrix(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_realtime_existing_") as temp_dir:
+            temp_root = Path(temp_dir)
+            matrix_dir = temp_root / "out" / "coverage"
+            matrix_dir.mkdir(parents=True)
+            matrix_payload = {
+                "runs": [
+                    {
+                        "key": "tokyo_run1",
+                        "metrics": {
+                            "ppc_official_score_distance_m": 1.0,
+                            "ppc_official_total_distance_m": 2.0,
+                        },
+                    }
+                ]
+            }
+            matrix_dir.joinpath("matrix.json").write_text(
+                json.dumps(matrix_payload),
+                encoding="utf-8",
+            )
+            args = argparse.Namespace(
+                dataset_root=temp_root / "PPC-Dataset",
+                output_dir=temp_root / "out",
+                summary_json=temp_root / "summary.json",
+                markdown_output=None,
+                max_epochs=-1,
+                match_tolerance_s=0.25,
+                preset="low-cost",
+                rtklib_root=None,
+                rtklib_bin=None,
+                rtklib_config=ROOT_DIR / "scripts" / "rtklib_odaiba.conf",
+                use_existing_solutions=False,
+                use_existing_matrices=True,
+                require_positioning_delta_min=None,
+                require_official_score_delta_min=None,
+                require_p95_h_delta_max=None,
+                require_solver_wall_time_max=None,
+                require_realtime_factor_min=None,
+                require_effective_epoch_rate_min=None,
+            )
+
+            matrix_json, matrix_md, payload = ppc_realtime_guard_sweep.run_profile(
+                args,
+                ppc_realtime_guard_sweep.GuardProfile("coverage", ("--ratio", "2.4")),
+            )
+
+            self.assertEqual(matrix_json, matrix_dir / "matrix.json")
+            self.assertEqual(matrix_md, matrix_dir / "matrix.md")
+            self.assertEqual(payload["runs"][0]["key"], "tokyo_run1")
+
+    def test_payload_ranks_profiles_with_runtime_metrics(self) -> None:
+        baseline = ppc_realtime_guard_sweep.GuardProfile("coverage", ("--ratio", "2.4"))
+        candidate = ppc_realtime_guard_sweep.GuardProfile(
+            "fixed_update_guard",
+            (
+                "--ratio",
+                "2.4",
+                "--max-fixed-update-nis-per-obs",
+                "10",
+            ),
+        )
+        baseline_payload = {
+            "runs": [
+                {
+                    "key": "tokyo_run1",
+                    "metrics": {
+                        "ppc_official_score_distance_m": 400.0,
+                        "ppc_official_total_distance_m": 1000.0,
+                    },
+                },
+            ],
+            "aggregates": {
+                "avg_positioning_delta_pct": 17.0,
+                "avg_p95_h_delta_m": -10.0,
+                "max_solver_wall_time_s": 2.0,
+                "min_realtime_factor": 4.0,
+                "min_effective_epoch_rate_hz": 20.0,
+            },
+        }
+        candidate_payload = {
+            "runs": [
+                {
+                    "key": "tokyo_run1",
+                    "metrics": {
+                        "ppc_official_score_distance_m": 430.0,
+                        "ppc_official_total_distance_m": 1000.0,
+                    },
+                },
+            ],
+            "aggregates": {
+                "avg_positioning_delta_pct": 16.5,
+                "avg_p95_h_delta_m": -11.0,
+                "max_solver_wall_time_s": 2.5,
+                "min_realtime_factor": 3.5,
+                "min_effective_epoch_rate_hz": 18.0,
+            },
+        }
+
+        payload = ppc_realtime_guard_sweep.build_payload(
+            [
+                (baseline, Path("coverage.json"), Path("coverage.md"), baseline_payload),
+                (candidate, Path("fixed.json"), Path("fixed.md"), candidate_payload),
+            ]
+        )
+        markdown = ppc_realtime_guard_sweep.render_markdown(payload)
+
+        self.assertEqual(payload["baseline_profile"], "coverage")
+        self.assertEqual(payload["best_profile"]["name"], "fixed_update_guard")
+        self.assertEqual(payload["best_safe_profile"]["name"], "fixed_update_guard")
+        self.assertEqual(payload["profiles"][1]["delta_vs_baseline_score_pct"], 3.0)
+        self.assertEqual(payload["profiles"][1]["min_realtime_factor"], 3.5)
+        self.assertFalse(payload["profiles"][1]["truth_diagnostics"]["available"])
+        self.assertIn("fixed_update_guard", markdown)
+        self.assertIn("Best no-worse-Wrong-FIX profile", markdown)
+        self.assertIn("3.500", markdown)
+        self.assertIn("--max-fixed-update-nis-per-obs", markdown)
+
+    def test_truth_diagnostics_classifies_wrong_fixes(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_realtime_truth_") as temp_dir:
+            temp_root = Path(temp_dir)
+            dataset_root = temp_root / "PPC-Dataset"
+            run_dir = dataset_root / "tokyo" / "run1"
+            run_dir.mkdir(parents=True)
+            run_dir.joinpath("reference.csv").write_text(
+                "\n".join(
+                    [
+                        "GPS Week,GPS TOW (s),ECEF X (m),ECEF Y (m),ECEF Z (m)",
+                        "2300,10.000,1000.0,2000.0,3000.0",
+                        "2300,10.200,1001.0,2001.0,3001.0",
+                        "2300,10.400,1002.0,2002.0,3002.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            solution_dir = temp_root / "solution"
+            solution_dir.mkdir()
+            solution_dir.joinpath("tokyo_run1.pos").write_text(
+                "\n".join(
+                    [
+                        "% synthetic",
+                        "2300 10.000 1000.000 2000.000 3000.000 0 0 0 4 12 1.0",
+                        "2300 10.200 1011.000 2001.000 3001.000 0 0 0 4 12 1.0",
+                        "2300 10.400 1002.100 2002.000 3002.000 0 0 0 3 12 1.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            diagnostics = ppc_realtime_guard_sweep.truth_diagnostics(
+                dataset_root,
+                solution_dir,
+                ["tokyo_run1"],
+            )
+
+            self.assertTrue(diagnostics["available"])
+            self.assertEqual(diagnostics["matched"], 3)
+            self.assertEqual(diagnostics["fix_ok"], 1)
+            self.assertEqual(diagnostics["fix_wrong"], 1)
+            self.assertEqual(diagnostics["float_ok"], 1)
+            self.assertEqual(diagnostics["fix_wrong_rate_pct"], 50.0)
 
 
 class PPCProfileSegmentDeltaTest(unittest.TestCase):
@@ -4389,6 +4812,7 @@ class PPCDemoTest(unittest.TestCase):
             preset="low-cost",
             iono="iflc",
             ratio=2.4,
+            max_subset_ar_drop_steps=18,
             max_hold_div=5.0,
             max_pos_jump=20.0,
             max_pos_jump_min=20.0,
@@ -4399,11 +4823,24 @@ class PPCDemoTest(unittest.TestCase):
             max_float_prefit_reset_streak=5,
             min_float_prefit_trusted_jump=8.0,
             max_update_nis_per_obs=12.0,
+            max_fixed_update_nis_per_obs=10.0,
+            max_fixed_update_post_rms=6.0,
+            max_fixed_update_gate_ratio=8.0,
+            min_fixed_update_gate_baseline=7000.0,
+            max_fixed_update_gate_baseline=8200.0,
+            min_fixed_update_gate_speed=5.0,
+            max_fixed_update_gate_speed=15.0,
+            max_fixed_update_secondary_gate_ratio=4.0,
+            min_fixed_update_secondary_gate_baseline=2000.0,
+            max_fixed_update_secondary_gate_baseline=2500.0,
+            min_fixed_update_secondary_gate_speed=7.0,
+            max_fixed_update_secondary_gate_speed=15.0,
             max_consec_float_reset=10,
             max_consec_nonfix_reset=10,
             max_postfix_rms=0.20,
             enable_wide_lane_ar=True,
             wide_lane_threshold=0.10,
+            enable_wlnl_fallback=True,
             fixed_bridge_burst_guard=True,
             fixed_bridge_burst_max_anchor_gap=30.0,
             fixed_bridge_burst_min_boundary_gap=1.0,
@@ -4449,6 +4886,8 @@ class PPCDemoTest(unittest.TestCase):
         self.assertIn("iflc", commands[0])
         self.assertIn("--ratio", commands[0])
         self.assertIn("2.4", commands[0])
+        self.assertIn("--max-subset-ar-drop-steps", commands[0])
+        self.assertIn("18", commands[0])
         self.assertIn("--max-hold-div", commands[0])
         self.assertIn("5.0", commands[0])
         self.assertIn("--max-pos-jump", commands[0])
@@ -4469,6 +4908,30 @@ class PPCDemoTest(unittest.TestCase):
         self.assertIn("8.0", commands[0])
         self.assertIn("--max-update-nis-per-obs", commands[0])
         self.assertIn("12.0", commands[0])
+        self.assertIn("--max-fixed-update-nis-per-obs", commands[0])
+        self.assertIn("10.0", commands[0])
+        self.assertIn("--max-fixed-update-post-rms", commands[0])
+        self.assertIn("6.0", commands[0])
+        self.assertIn("--max-fixed-update-gate-ratio", commands[0])
+        self.assertIn("8.0", commands[0])
+        self.assertIn("--min-fixed-update-gate-baseline", commands[0])
+        self.assertIn("7000.0", commands[0])
+        self.assertIn("--max-fixed-update-gate-baseline", commands[0])
+        self.assertIn("8200.0", commands[0])
+        self.assertIn("--min-fixed-update-gate-speed", commands[0])
+        self.assertIn("5.0", commands[0])
+        self.assertIn("--max-fixed-update-gate-speed", commands[0])
+        self.assertIn("15.0", commands[0])
+        self.assertIn("--max-fixed-update-secondary-gate-ratio", commands[0])
+        self.assertIn("4.0", commands[0])
+        self.assertIn("--min-fixed-update-secondary-gate-baseline", commands[0])
+        self.assertIn("2000.0", commands[0])
+        self.assertIn("--max-fixed-update-secondary-gate-baseline", commands[0])
+        self.assertIn("2500.0", commands[0])
+        self.assertIn("--min-fixed-update-secondary-gate-speed", commands[0])
+        self.assertIn("7.0", commands[0])
+        self.assertIn("--max-fixed-update-secondary-gate-speed", commands[0])
+        self.assertIn("15.0", commands[0])
         self.assertIn("--max-consec-float-reset", commands[0])
         self.assertIn("10", commands[0])
         self.assertIn("--max-consec-nonfix-reset", commands[0])
@@ -4477,6 +4940,7 @@ class PPCDemoTest(unittest.TestCase):
         self.assertIn("--enable-wide-lane-ar", commands[0])
         self.assertIn("--wide-lane-threshold", commands[0])
         self.assertIn("0.1", commands[0])
+        self.assertIn("--enable-wlnl-fallback", commands[0])
         self.assertIn("--fixed-bridge-burst-guard", commands[0])
         self.assertIn("--fixed-bridge-burst-max-residual", commands[0])
         self.assertIn("20.0", commands[0])
@@ -4576,6 +5040,7 @@ class PPCDemoTest(unittest.TestCase):
                 enable_ar=False,
                 iono="iflc",
                 ratio=2.4,
+                max_subset_ar_drop_steps=18,
                 max_hold_div=5.0,
                 max_pos_jump=20.0,
                 max_pos_jump_min=20.0,
@@ -4586,11 +5051,24 @@ class PPCDemoTest(unittest.TestCase):
                 max_float_prefit_reset_streak=5,
                 min_float_prefit_trusted_jump=8.0,
                 max_update_nis_per_obs=12.0,
+                max_fixed_update_nis_per_obs=10.0,
+                max_fixed_update_post_rms=6.0,
+                max_fixed_update_gate_ratio=8.0,
+                min_fixed_update_gate_baseline=7000.0,
+                max_fixed_update_gate_baseline=8200.0,
+                min_fixed_update_gate_speed=5.0,
+                max_fixed_update_gate_speed=15.0,
+                max_fixed_update_secondary_gate_ratio=4.0,
+                min_fixed_update_secondary_gate_baseline=2000.0,
+                max_fixed_update_secondary_gate_baseline=2500.0,
+                min_fixed_update_secondary_gate_speed=7.0,
+                max_fixed_update_secondary_gate_speed=15.0,
                 max_consec_float_reset=10,
                 max_consec_nonfix_reset=10,
                 max_postfix_rms=0.20,
                 enable_wide_lane_ar=True,
                 wide_lane_threshold=0.10,
+                enable_wlnl_fallback=True,
                 fixed_bridge_burst_guard=True,
                 fixed_bridge_burst_max_anchor_gap=30.0,
                 fixed_bridge_burst_min_boundary_gap=1.0,
@@ -4642,6 +5120,7 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["solver"], "rtk")
             self.assertEqual(payload["rtk_iono"], "iflc")
             self.assertEqual(payload["rtk_ratio_threshold"], 2.4)
+            self.assertEqual(payload["rtk_max_subset_ar_drop_steps"], 18)
             self.assertEqual(payload["rtk_max_hold_divergence_m"], 5.0)
             self.assertEqual(payload["rtk_max_position_jump_m"], 20.0)
             self.assertEqual(payload["rtk_max_position_jump_min_m"], 20.0)
@@ -4652,11 +5131,32 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtk_max_float_prefit_residual_reset_streak"], 5)
             self.assertEqual(payload["rtk_min_float_prefit_residual_trusted_jump_m"], 8.0)
             self.assertEqual(payload["rtk_max_update_nis_per_observation"], 12.0)
+            self.assertEqual(payload["rtk_max_fixed_update_nis_per_observation"], 10.0)
+            self.assertEqual(payload["rtk_max_fixed_update_post_residual_rms_m"], 6.0)
+            self.assertEqual(payload["rtk_max_fixed_update_gate_ratio"], 8.0)
+            self.assertEqual(payload["rtk_min_fixed_update_gate_baseline_m"], 7000.0)
+            self.assertEqual(payload["rtk_max_fixed_update_gate_baseline_m"], 8200.0)
+            self.assertEqual(payload["rtk_min_fixed_update_gate_speed_mps"], 5.0)
+            self.assertEqual(payload["rtk_max_fixed_update_gate_speed_mps"], 15.0)
+            self.assertEqual(payload["rtk_max_fixed_update_secondary_gate_ratio"], 4.0)
+            self.assertEqual(
+                payload["rtk_min_fixed_update_secondary_gate_baseline_m"], 2000.0
+            )
+            self.assertEqual(
+                payload["rtk_max_fixed_update_secondary_gate_baseline_m"], 2500.0
+            )
+            self.assertEqual(
+                payload["rtk_min_fixed_update_secondary_gate_speed_mps"], 7.0
+            )
+            self.assertEqual(
+                payload["rtk_max_fixed_update_secondary_gate_speed_mps"], 15.0
+            )
             self.assertEqual(payload["rtk_max_consecutive_float_for_reset"], 10)
             self.assertEqual(payload["rtk_max_consecutive_nonfix_for_reset"], 10)
             self.assertEqual(payload["rtk_max_postfix_residual_rms_m"], 0.20)
             self.assertTrue(payload["rtk_wide_lane_ar_enabled"])
             self.assertEqual(payload["rtk_wide_lane_threshold"], 0.10)
+            self.assertTrue(payload["rtk_wlnl_fallback_enabled"])
             self.assertTrue(payload["fixed_bridge_burst_guard_enabled"])
             self.assertEqual(payload["fixed_bridge_burst_guard"]["max_anchor_gap_s"], 30.0)
             self.assertEqual(payload["fixed_bridge_burst_guard"]["min_boundary_gap_s"], 1.0)
@@ -4954,6 +5454,80 @@ class PPCMultiCandidateSelectorTest(unittest.TestCase):
                 payload["baseline"]["ppc_official_score_pct"],
             )
 
+    def test_multi_candidate_selector_priority_first_ignores_reference_delta(self) -> None:
+        """Deployable mode uses rule priority, not reference-scored best delta."""
+        reference = [self.reference_epoch(index) for index in range(2)]
+        baseline = [
+            self.solution_epoch(0, 0.0, 4, None),
+            self.solution_epoch(1, 10.0, 4, None),
+        ]
+        high_priority = [
+            self.solution_epoch(0, 0.0, 4, 0.2),
+            self.solution_epoch(1, 10.4, 4, 0.2),
+        ]
+        low_priority = [
+            self.solution_epoch(0, 0.0, 4, 0.1),
+            self.solution_epoch(1, 10.0, 4, 0.1),
+        ]
+        rule = ppc_multi_candidate_selector.parse_rule("candidate_all")
+        candidate_specs = [
+            ("high_priority", high_priority, rule),
+            ("low_priority", low_priority, rule),
+        ]
+        baseline_records = [
+            {
+                "reference_index": 0,
+                "solution_tow_s": 0.0,
+                "start_tow_s": 0.0,
+                "end_tow_s": 1.0,
+                "segment_distance_m": 10.0,
+            }
+        ]
+        candidate_rows = {
+            "high_priority": [
+                {
+                    "reference_index": 0,
+                    "score_delta_distance_m": -5.0,
+                    "candidate_solution_tow_s": 0.0,
+                    "candidate_status_name": "FIXED",
+                }
+            ],
+            "low_priority": [
+                {
+                    "reference_index": 0,
+                    "score_delta_distance_m": 5.0,
+                    "candidate_solution_tow_s": 0.0,
+                    "candidate_status_name": "FIXED",
+                }
+            ],
+        }
+
+        _, oracle_rows = ppc_multi_candidate_selector.select_segments(
+            reference,
+            baseline,
+            candidate_specs,
+            candidate_rows,
+            ["high_priority", "low_priority"],
+            0.25,
+            baseline_records,
+            {},
+            selection_mode="oracle_delta",
+        )
+        _, priority_rows = ppc_multi_candidate_selector.select_segments(
+            reference,
+            baseline,
+            candidate_specs,
+            candidate_rows,
+            ["high_priority", "low_priority"],
+            0.25,
+            baseline_records,
+            {},
+            selection_mode="priority_first",
+        )
+
+        self.assertEqual(oracle_rows[0]["selected_candidate"], "low_priority")
+        self.assertEqual(priority_rows[0]["selected_candidate"], "high_priority")
+
     def test_multi_candidate_selector_drops_negative_candidate(self) -> None:
         """drop_negative_candidates removes any candidate whose selected net < 0.
 
@@ -5130,6 +5704,8 @@ class PPCMultiCandidateSelectorMatrixTest(unittest.TestCase):
                 "nis5=candidate_status_name == FIXED",
                 "--priority-order",
                 "nis5",
+                "--selection-mode",
+                "priority_first",
                 "--run-output-template",
                 str(temp_root / "selected" / "{key}.pos"),
                 "--summary-json",
@@ -5159,6 +5735,8 @@ class PPCMultiCandidateSelectorMatrixTest(unittest.TestCase):
                 # Must pass --out-pos and --summary-json
                 self.assertIn("--out-pos", call_argv)
                 self.assertIn("--summary-json", call_argv)
+                mode_idx = call_argv.index("--selection-mode")
+                self.assertEqual(call_argv[mode_idx + 1], "priority_first")
                 # Collect which run keys appeared in --baseline-pos
                 try:
                     bl_idx = call_argv.index("--baseline-pos")
@@ -5254,6 +5832,159 @@ class PPCMultiCandidateSelectorMatrixTest(unittest.TestCase):
             self.assertEqual(
                 reparsed["aggregates"]["total_candidate_selected_segments"], 7
             )
+
+
+class PPCRatioGatingSelectorSweepTest(unittest.TestCase):
+    """Tests for run_ppc_ratio_gating_selector_sweep."""
+
+    @staticmethod
+    def _matrix_payload(
+        baseline_pct: float,
+        selector_pct: float,
+        delta_m: float,
+        candidate_segments: int,
+    ) -> dict[str, object]:
+        return {
+            "title": "synthetic matrix",
+            "candidates": ["jump", "olddef"],
+            "aggregates": {
+                "run_count": 2,
+                "official_total_distance_m": 1000.0,
+                "weighted_baseline_official_score_pct": baseline_pct,
+                "weighted_selector_official_score_pct": selector_pct,
+                "selector_official_score_delta_pct": selector_pct - baseline_pct,
+                "selector_official_score_delta_m": delta_m,
+                "min_official_score_delta_m": delta_m / 4.0,
+                "max_official_score_delta_m": delta_m / 2.0,
+                "total_candidate_selected_segments": candidate_segments,
+            },
+            "runs": [],
+        }
+
+    def test_threshold_set_parser_supports_common_wide_and_per_candidate(self) -> None:
+        labels = ["jump", "olddef"]
+
+        wide_name, wide = ppc_ratio_gating_sweep.parse_threshold_set("wide=none", labels)
+        self.assertEqual(wide_name, "wide")
+        self.assertIsNone(wide["jump"])
+        self.assertEqual(
+            ppc_ratio_gating_sweep.threshold_rule("jump", wide["jump"]),
+            "jump=candidate_status_name == FIXED",
+        )
+
+        tight_name, tight = ppc_ratio_gating_sweep.parse_threshold_set(
+            "tight:jump=4,olddef=5", labels
+        )
+        self.assertEqual(tight_name, "tight")
+        self.assertEqual(tight["jump"], 4.0)
+        self.assertEqual(tight["olddef"], 5.0)
+        self.assertEqual(
+            ppc_ratio_gating_sweep.threshold_rule("olddef", tight["olddef"]),
+            "olddef=candidate_status_name == FIXED AND candidate_ratio >= 5",
+        )
+
+    def test_ratio_gating_sweep_invokes_matrix_and_writes_pareto_outputs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_ratio_gating_") as td:
+            temp_root = Path(td)
+            output_dir = temp_root / "sweep"
+            summary_json = temp_root / "summary.json"
+            markdown_output = temp_root / "summary.md"
+
+            captured_calls: list[list[str]] = []
+
+            def fake_run(argv: list[str], check: bool) -> object:  # type: ignore[misc]
+                captured_calls.append(argv)
+                summary_idx = argv.index("--summary-json")
+                matrix_json = Path(argv[summary_idx + 1])
+                matrix_json.parent.mkdir(parents=True, exist_ok=True)
+                payload = (
+                    self._matrix_payload(21.0, 40.0, 900.0, 80)
+                    if "wide" in matrix_json.parts
+                    else self._matrix_payload(21.0, 35.0, 650.0, 50)
+                )
+                matrix_json.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+                markdown_idx = argv.index("--markdown-output")
+                matrix_md = Path(argv[markdown_idx + 1])
+                matrix_md.write_text("# matrix\n", encoding="utf-8")
+
+                class _Result:
+                    returncode = 0
+
+                return _Result()
+
+            argv = [
+                "run_ppc_ratio_gating_selector_sweep.py",
+                "--run",
+                "tokyo/run1",
+                "--dataset-root",
+                str(temp_root / "PPC-Dataset"),
+                "--baseline-pos-template",
+                str(temp_root / "baseline" / "{key}.pos"),
+                "--candidate",
+                "jump=output/jump/{key}.pos",
+                "--candidate",
+                "olddef=output/olddef/{key}.pos",
+                "--priority-order",
+                "jump,olddef",
+                "--selection-mode",
+                "priority_first",
+                "--threshold-set",
+                "wide=none",
+                "--threshold-set",
+                "tight:jump=4,olddef=5",
+                "--output-dir",
+                str(output_dir),
+                "--summary-json",
+                str(summary_json),
+                "--markdown-output",
+                str(markdown_output),
+            ]
+
+            with mock.patch.object(sys, "argv", argv):
+                with mock.patch(
+                    "run_ppc_ratio_gating_selector_sweep.subprocess.run",
+                    side_effect=fake_run,
+                ):
+                    exit_code = ppc_ratio_gating_sweep.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(len(captured_calls), 2)
+            self.assertTrue(summary_json.exists())
+            self.assertTrue(markdown_output.exists())
+
+            wide_call = next(call for call in captured_calls if "wide" in call[call.index("--summary-json") + 1])
+            tight_call = next(call for call in captured_calls if "tight" in call[call.index("--summary-json") + 1])
+            wide_rules = [
+                wide_call[idx + 1]
+                for idx, value in enumerate(wide_call)
+                if value == "--candidate-rule"
+            ]
+            tight_rules = [
+                tight_call[idx + 1]
+                for idx, value in enumerate(tight_call)
+                if value == "--candidate-rule"
+            ]
+            self.assertIn("jump=candidate_status_name == FIXED", wide_rules)
+            self.assertIn(
+                "jump=candidate_status_name == FIXED AND candidate_ratio >= 4",
+                tight_rules,
+            )
+            self.assertIn(
+                "olddef=candidate_status_name == FIXED AND candidate_ratio >= 5",
+                tight_rules,
+            )
+            mode_idx = wide_call.index("--selection-mode")
+            self.assertEqual(wide_call[mode_idx + 1], "priority_first")
+
+            payload = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(payload["sets"][0]["name"], "wide")
+            self.assertEqual(payload["sets"][1]["name"], "tight")
+            self.assertEqual(payload["sets"][0]["selector_official_score_delta_pct"], 19.0)
+            md_text = markdown_output.read_text(encoding="utf-8")
+            self.assertIn("wide", md_text)
+            self.assertIn("tight", md_text)
+            self.assertIn("ratio>=4", md_text)
 
 
 class PPCMultiCandidateSelectorAnalyzerTest(unittest.TestCase):

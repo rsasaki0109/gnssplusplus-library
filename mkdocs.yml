@@ -22,6 +22,8 @@ nav:
   - Architecture: architecture.md
   - Quick Start: quickstart.md
   - Benchmarks: benchmarks.md
+  - PPC Reproduction: ppc_reproduction.md
+  - RTK Tuning Gates: rtk_tuning_gates.md
   - Validation: validation.md
   - Interfaces: interfaces.md
   - Experiments: experiments.md

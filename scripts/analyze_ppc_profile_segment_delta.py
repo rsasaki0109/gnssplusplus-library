@@ -171,6 +171,14 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional CSV path for all changed official segments.",
     )
+    parser.add_argument(
+        "--write-all-segments",
+        action="store_true",
+        help=(
+            "When --segments-csv is set, write every official segment instead of only "
+            "segments whose score delta changed."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -478,6 +486,7 @@ def compare_segment_records(
         "top_losses": sorted(loss_rows, key=lambda row: float(row["score_delta_distance_m"]))[
             :top_segments
         ],
+        "_all_rows": rows,
         "_changed_rows": changed_rows,
     }
 
@@ -509,13 +518,19 @@ def public_summary(summary: dict[str, object]) -> dict[str, object]:
     return {key: value for key, value in summary.items() if not key.startswith("_")}
 
 
-def write_segments_csv(path: Path, candidate_summaries: list[dict[str, object]]) -> None:
+def write_segments_csv(
+    path: Path,
+    candidate_summaries: list[dict[str, object]],
+    *,
+    changed_only: bool = True,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=SEGMENT_FIELDNAMES, lineterminator="\n")
         writer.writeheader()
         for summary in candidate_summaries:
-            for row in summary["_changed_rows"]:
+            row_key = "_changed_rows" if changed_only else "_all_rows"
+            for row in summary[row_key]:
                 serialized = dict(row)
                 for key, value in list(serialized.items()):
                     if value is None:
@@ -660,7 +675,11 @@ def main() -> None:
             encoding="utf-8",
         )
     if args.segments_csv:
-        write_segments_csv(args.segments_csv, candidate_summaries)
+        write_segments_csv(
+            args.segments_csv,
+            candidate_summaries,
+            changed_only=not args.write_all_segments,
+        )
 
 
 if __name__ == "__main__":
