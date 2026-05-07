@@ -77,7 +77,7 @@ gate rather than more reference-selected smoothing.
 
 Existing full real-time gate outputs are summarized in
 [PPC existing real-time gate outputs](ppc_realtime_gate_existing_outputs.md).
-The current headline profile is the later deployable `sigma-demote nis2`
+The current headline profile is the later deployable `sigma-demote nis2-ratio4`
 runtime selector in that note. The images below are historical smoother/filter
 diagnostics, not the current PR performance claim.
 

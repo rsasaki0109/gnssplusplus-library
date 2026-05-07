@@ -25,7 +25,7 @@ python3 apps/gnss.py ppc-rtk-signoff \
   --summary-json output/ppc_tokyo_run1_rtk_signoff.json
 ```
 
-Use `ppc-coverage-matrix` to replay the full six-run `sigma-demote nis2`
+Use `ppc-coverage-matrix` to replay the full six-run `sigma-demote nis2-ratio4`
 profile:
 
 ```bash
@@ -43,9 +43,10 @@ python3 apps/gnss.py ppc-coverage-matrix \
   --max-pos-jump-min 5.0 \
   --max-pos-jump-rate 25.0 \
   --demote-fixed-status-nis-per-obs 2 \
-  --output-dir output/ppc_sigma_profile_runtime_demote_nis2 \
-  --summary-json output/ppc_sigma_profile_runtime_demote_nis2/summary.json \
-  --markdown-output output/ppc_sigma_profile_runtime_demote_nis2/table.md
+  --demote-fixed-status-max-ratio 4 \
+  --output-dir output/ppc_sigma_profile_runtime_demote_nis2_ratio4 \
+  --summary-json output/ppc_sigma_profile_runtime_demote_nis2_ratio4/summary.json \
+  --markdown-output output/ppc_sigma_profile_runtime_demote_nis2_ratio4/table.md
 ```
 
 ## Coverage Matrix
