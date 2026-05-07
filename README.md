@@ -508,6 +508,7 @@ explicitly enabled.
 | Flag | Purpose | Default |
 |------|---------|---------|
 | `--ar-policy {extended\|demo5-continuous}` | AR extras gate. `demo5-continuous` disables relaxed-hold-ratio / subset-fallback / hold-fix / Q-regularization for demo5-style continuous ambiguity tracking. | `extended` |
+| `--max-subset-ar-drop-steps <N>` | Extend the progressive subset-AR search by dropping up to N worst-variance DD pairs. Diagnostic only: Nagoya run2 spot checks showed extra candidates are usually rejected by the jump gate unless paired with riskier validation changes. | `6` |
 | `--max-hold-div <m>` | Reject fix if the hold-state diverges from float by more than N meters. | `0` (disabled) |
 | `--max-pos-jump <m>` | Reject fix if the epoch-to-epoch position jump exceeds N meters. Truth-validation against PPC reference (6 runs) showed jumps cluster at <5m (correct fixes) or >10m (wrong-FIX); a 5m gate cuts wrong-FIX `fix_wrong/fixes` 28.9%→19.4% and `fix95%` 0.81→0.19m without losing real fixes. Pass `0` to disable. | `5` (m) |
 | `--max-pos-jump-min <m>` + `--max-pos-jump-rate <m/s>` | Reject fix if the jump from the last fixed position exceeds `max(min, rate * dt)`, so vehicle gaps can be tested without a stale absolute distance clamp. | `0` / `0` (disabled) |
@@ -515,12 +516,23 @@ explicitly enabled.
 | `--max-float-prefit-rms <m>` + `--max-float-prefit-max <m>` + `--max-float-prefit-reset-streak <N>` | Opt-in residual diagnostic gate. Reset ambiguity states for the next epoch after N consecutive otherwise accepted FLOAT epochs have high DD prefit residual RMS or max residual. The current FLOAT epoch is still reported, avoiding SPP fallback score loss and isolated residual spikes. Full PPC `6` / `30` reaches `58.52%` at streak `3`, `58.80%` at streak `5`, and `58.83%` at streak `8`, below the reset10 baseline `58.90%`, so it is not a default profile. | `0` / `0` (disabled) / `3` |
 | `--min-float-prefit-trusted-jump <m>` | Continuity selector for the residual gate. When > 0, high-residual FLOAT resets are allowed only if the FLOAT position has also diverged by at least N meters from the last trusted FIX/FLOAT position. This keeps the residual gate opt-in while making segment-level sweeps possible. | `0` (disabled) |
 | `--max-update-nis-per-obs <v>` | Reject a whole RTK DD Kalman update before state/covariance mutation when normalized innovation squared divided by active observations exceeds N. Diagnostic gate for covariance-aware GNSS update rejection. | `0` (disabled) |
+| `--max-fixed-update-nis-per-obs <v>` | Reject only FIXED ambiguity candidates when the preceding RTK DD update NIS divided by active observations exceeds N, while retaining the FLOAT solution for that epoch. | `0` (disabled) |
+| `--max-fixed-update-post-rms <m>` | Reject only FIXED ambiguity candidates when the preceding RTK DD update post-suppression residual RMS exceeds N meters, while retaining the FLOAT solution for that epoch. | `0` (disabled) |
+| `--max-fixed-update-gate-ratio <v>` | Apply the fixed-only NIS/post-RMS gates only when the AR ratio is finite and at or below N. This keeps high-ratio FIX candidates from being rejected by diagnostic residual gates during PPC sweeps. | `0` (unconditional when gates are enabled) |
+| `--min-fixed-update-gate-baseline <m>` + `--max-fixed-update-gate-baseline <m>` | Optional baseline-length window for the fixed-only NIS/post-RMS gates. This lets PPC sweeps isolate baseline regimes where residual diagnostics are useful without affecting other runs. | `0` / `0` (disabled) |
+| `--min-fixed-update-gate-speed <m/s>` + `--max-fixed-update-gate-speed <m/s>` | Optional speed window for the fixed-only NIS/post-RMS gates, estimated from the previous accepted solution to the current FIX candidate. | `0` / `0` (disabled) |
+| `--max-fixed-update-secondary-gate-ratio <v>` + `--min-fixed-update-secondary-gate-baseline <m>` + `--max-fixed-update-secondary-gate-baseline <m>` + `--min-fixed-update-secondary-gate-speed <m/s>` + `--max-fixed-update-secondary-gate-speed <m/s>` | Optional second OR-window for the fixed-only NIS/post-RMS gates. This supports combining one residual gate profile for long-baseline runs with a separate short-baseline/speed profile in the same PPC sweep. | `0` for all fields (disabled) |
+| `--rtk-snr-weighting` + `--rtk-snr-reference-dbhz <v>` + `--rtk-snr-max-variance-scale <v>` + `--rtk-snr-min-baseline <m>` | Opt-in low-cost observation model diagnostic. Uses the lower rover/base SNR for each SD link and inflates DD phase/code variance below the reference SNR, capped by the max scale, so low-C/N0 multipath contributes less to the float ambiguity state. The optional baseline floor limits the weighting to long-baseline runs. | `false` / `45` / `25` / `0` |
+| `--cycle-slip-threshold <m>` + `--doppler-slip-threshold <m>` + `--code-slip-threshold <m>` + `--strict-dynamic-slip-thresholds` + `--adaptive-dynamic-slip-thresholds` | Opt-in cycle-slip sensitivity sweep. By default dynamic RTK keeps protective minimum thresholds; `--strict-dynamic-slip-thresholds` uses the configured values directly for all epochs. `--adaptive-dynamic-slip-thresholds` keeps the floors while FIX is stable, then uses the configured values after a non-FIX streak for urban reacquisition experiments. | `0.05` / `0.20` / `5.0` / `false` / `false` |
+| `--adaptive-dynamic-slip-nonfix-count <N>` | Non-FIX epochs before adaptive dynamic slip thresholds activate. | `3` |
+| `--adaptive-dynamic-slip-hold-epochs <N>` | Epochs to keep adaptive dynamic slip thresholds after activation, so reacquisition does not immediately fall back to the protective floors after one FIX. | `10` |
 | `--nonfix-drift-max-residual <m>` + `--nonfix-drift-min-horizontal-residual <m>` | Tighten the default low-speed non-FIX drift guard for tail diagnostics while avoiding vertical-only fallback pruning. The PPC diagnostic profile uses `4` / `6`. | `30` / `0` |
 | `--fixed-bridge-burst-guard` + `--fixed-bridge-burst-max-residual <m>` | Reject isolated short FIX bursts when they diverge from the straight bridge between surrounding FIX anchors. Tokyo run1 removes 12 false-fix-tail epochs with a small Positioning/Fix-rate cost, so it remains opt-in. | `false` / `20` |
 | `--max-consec-float-reset <N>` | Auto-reset ambiguities after N consecutive float epochs. `10` is the current PPC official-score candidate, trading Positioning coverage for more FIX recovery. | `0` (disabled) |
 | `--max-consec-nonfix-reset <N>` | Auto-reset ambiguities after N consecutive FLOAT/SPP/no-solution epochs. Useful as a dropout-reacquisition diagnostic, but `10` hurt Nagoya run2 official score in the first spot check. | `0` (disabled) |
 | `--max-postfix-rms <m>` | Reject fix if the L1 post-fix DD phase residual RMS exceeds N meters. | `0` (disabled) |
 | `--enable-wide-lane-ar` + `--wide-lane-threshold <cycle>` | Pre-compute MW wide-lane integers and inject them as Kalman constraints into the LAMBDA search. Odaiba's opt-in preset uses this to beat demo5 Hmed while still beating demo5 Fix count and tails. | `false` / `0.25` |
+| `--enable-wlnl-fallback` | Allow the experimental MW wide-lane / narrow-lane fallback after ordinary LAMBDA failure in non-IFLC runs. It reuses `--wide-lane-threshold` for both integer checks. | `false` |
 
 These remain opt-in. On PPC Tokyo and Nagoya the defaults already
 win, so leave them off. On Odaiba (or other urban multipath sets),
@@ -863,8 +875,29 @@ python3 apps/gnss.py ppc-demo \
 python3 apps/gnss.py ppc-rtk-signoff \
   --dataset-root /datasets/PPC-Dataset \
   --city tokyo \
+  --realtime-profile sigma-demote \
   --rtklib-bin /path/to/rnx2rtkp \
   --summary-json output/ppc_tokyo_run1_rtk_signoff.json
+
+python3 apps/gnss.py ppc-coverage-matrix \
+  --dataset-root /datasets/PPC-Dataset \
+  --preset low-cost \
+  --ratio 2.8 \
+  --carrier-phase-sigma 0.001 \
+  --max-postfix-rms 0.2 \
+  --max-consec-float-reset 10 \
+  --max-subset-ar-drop-steps 18 \
+  --adaptive-dynamic-slip-thresholds \
+  --adaptive-dynamic-slip-nonfix-count 25 \
+  --max-pos-jump 5.0 \
+  --max-pos-jump-min 5.0 \
+  --max-pos-jump-rate 25.0 \
+  --demote-fixed-status-nis-per-obs 20 \
+  --demote-fixed-status-gate-ratio 6 \
+  --max-demote-fixed-status-baseline 9500 \
+  --output-dir output/ppc_sigma_profile_runtime_demote_nis20_ratio6_maxbl9500 \
+  --summary-json output/ppc_sigma_profile_runtime_demote_nis20_ratio6_maxbl9500/summary.json \
+  --markdown-output output/ppc_sigma_profile_runtime_demote_nis20_ratio6_maxbl9500/table.md
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \

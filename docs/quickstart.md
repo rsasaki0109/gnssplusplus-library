@@ -172,6 +172,12 @@ python3 apps/gnss.py ppp-products-signoff \
 
 python3 apps/gnss.py ppc-rtk-signoff \
   --config-toml configs/ppc_rtk_signoff.example.toml
+
+python3 apps/gnss.py ppc-rtk-signoff \
+  --dataset-root /datasets/PPC-Dataset \
+  --city tokyo \
+  --realtime-profile sigma-demote \
+  --summary-json output/ppc_tokyo_run1_sigma_demote_signoff.json
 ```
 
 ## Local docs

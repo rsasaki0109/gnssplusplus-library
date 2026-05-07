@@ -258,9 +258,13 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 max_pos_jump_rate=None,
                 max_consec_float_reset=None,
                 max_consec_nonfix_reset=None,
+                max_fixed_update_nis_per_obs=None,
+                max_fixed_update_post_rms=None,
+                max_fixed_update_gate_ratio=None,
                 max_postfix_rms=None,
                 enable_wide_lane_ar=False,
                 wide_lane_threshold=None,
+                enable_wlnl_fallback=False,
                 arfilter=None,
                 arfilter_margin=None,
                 min_hold_count=None,
@@ -278,6 +282,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "preset": "low-cost",
                 "iono": "iflc",
                 "ratio": 2.4,
+                "carrier_phase_sigma": 0.001,
+                "max_subset_ar_drop_steps": 18,
                 "max_hold_div": 5.0,
                 "max_pos_jump": 20.0,
                 "max_pos_jump_min": 20.0,
@@ -288,11 +294,40 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "max_float_prefit_reset_streak": 5,
                 "min_float_prefit_trusted_jump": 8.0,
                 "max_update_nis_per_obs": 12.0,
+                "max_fixed_update_nis_per_obs": 10.0,
+                "max_fixed_update_post_rms": 6.0,
+                "max_fixed_update_gate_ratio": 8.0,
+                "min_fixed_update_gate_baseline": 7000.0,
+                "max_fixed_update_gate_baseline": 8200.0,
+                "min_fixed_update_gate_speed": 5.0,
+                "max_fixed_update_gate_speed": 15.0,
+                "max_fixed_update_secondary_gate_ratio": 4.0,
+                "min_fixed_update_secondary_gate_baseline": 2000.0,
+                "max_fixed_update_secondary_gate_baseline": 2500.0,
+                "min_fixed_update_secondary_gate_speed": 7.0,
+                "max_fixed_update_secondary_gate_speed": 15.0,
+                "demote_fixed_status_nis_per_obs": 20.0,
+                "demote_fixed_status_post_rms": 3.0,
+                "demote_fixed_status_gate_ratio": 6.0,
+                "min_demote_fixed_status_baseline": 500.0,
+                "max_demote_fixed_status_baseline": 9500.0,
+                "rtk_snr_weighting": True,
+                "rtk_snr_reference_dbhz": 44.0,
+                "rtk_snr_max_variance_scale": 16.0,
+                "rtk_snr_min_baseline": 7000.0,
+                "cycle_slip_threshold": 0.08,
+                "doppler_slip_threshold": 0.15,
+                "code_slip_threshold": 4.0,
+                "strict_dynamic_slip_thresholds": True,
+                "adaptive_dynamic_slip_thresholds": True,
+                "adaptive_dynamic_slip_nonfix_count": 2,
+                "adaptive_dynamic_slip_hold_epochs": 8,
                 "max_consec_float_reset": 10,
                 "max_consec_nonfix_reset": 10,
                 "max_postfix_rms": 0.20,
                 "enable_wide_lane_ar": True,
                 "wide_lane_threshold": 0.10,
+                "enable_wlnl_fallback": True,
                 "nonfix_drift_max_anchor_gap": 90.0,
                 "nonfix_drift_max_anchor_speed": 0.75,
                 "nonfix_drift_max_residual": 4.0,
@@ -332,6 +367,10 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("iflc", command)
             self.assertIn("--ratio", command)
             self.assertIn("2.4", command)
+            self.assertIn("--carrier-phase-sigma", command)
+            self.assertIn("0.001", command)
+            self.assertIn("--max-subset-ar-drop-steps", command)
+            self.assertIn("18", command)
             self.assertIn("--max-hold-div", command)
             self.assertIn("5.0", command)
             self.assertIn("--max-pos-jump", command)
@@ -352,6 +391,45 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("8.0", command)
             self.assertIn("--max-update-nis-per-obs", command)
             self.assertIn("12.0", command)
+            self.assertIn("--max-fixed-update-nis-per-obs", command)
+            self.assertIn("10.0", command)
+            self.assertIn("--max-fixed-update-post-rms", command)
+            self.assertIn("6.0", command)
+            self.assertIn("--max-fixed-update-gate-ratio", command)
+            self.assertIn("8.0", command)
+            self.assertIn("--min-fixed-update-gate-baseline", command)
+            self.assertIn("7000.0", command)
+            self.assertIn("--max-fixed-update-gate-baseline", command)
+            self.assertIn("8200.0", command)
+            self.assertIn("--demote-fixed-status-nis-per-obs", command)
+            self.assertIn("20.0", command)
+            self.assertIn("--demote-fixed-status-post-rms", command)
+            self.assertIn("3.0", command)
+            self.assertIn("--demote-fixed-status-gate-ratio", command)
+            self.assertIn("6.0", command)
+            self.assertIn("--min-demote-fixed-status-baseline", command)
+            self.assertIn("500.0", command)
+            self.assertIn("--max-demote-fixed-status-baseline", command)
+            self.assertIn("9500.0", command)
+            self.assertIn("--rtk-snr-weighting", command)
+            self.assertIn("--rtk-snr-reference-dbhz", command)
+            self.assertIn("44.0", command)
+            self.assertIn("--rtk-snr-max-variance-scale", command)
+            self.assertIn("16.0", command)
+            self.assertIn("--rtk-snr-min-baseline", command)
+            self.assertIn("7000.0", command)
+            self.assertIn("--cycle-slip-threshold", command)
+            self.assertIn("0.08", command)
+            self.assertIn("--doppler-slip-threshold", command)
+            self.assertIn("0.15", command)
+            self.assertIn("--code-slip-threshold", command)
+            self.assertIn("4.0", command)
+            self.assertIn("--strict-dynamic-slip-thresholds", command)
+            self.assertIn("--adaptive-dynamic-slip-thresholds", command)
+            self.assertIn("--adaptive-dynamic-slip-nonfix-count", command)
+            self.assertIn("2", command)
+            self.assertIn("--adaptive-dynamic-slip-hold-epochs", command)
+            self.assertIn("8", command)
             self.assertIn("--max-consec-float-reset", command)
             self.assertIn("10", command)
             self.assertIn("--max-consec-nonfix-reset", command)
@@ -360,6 +438,7 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("--enable-wide-lane-ar", command)
             self.assertIn("--wide-lane-threshold", command)
             self.assertIn("0.1", command)
+            self.assertIn("--enable-wlnl-fallback", command)
             self.assertIn("--nonfix-drift-max-anchor-gap", command)
             self.assertIn("90.0", command)
             self.assertIn("--nonfix-drift-max-anchor-speed", command)
@@ -457,6 +536,7 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
 
     def test_selected_tuning_uses_city_specific_defaults(self) -> None:
         args = argparse.Namespace(
+            realtime_profile="city-default",
             preset=None,
             arfilter=None,
             arfilter_margin=None,
@@ -469,6 +549,25 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
         self.assertEqual(tokyo["arfilter"], True)
         self.assertEqual(nagoya["preset"], "low-cost")
         self.assertEqual(nagoya["arfilter"], False)
+
+        realtime_args = argparse.Namespace(
+            realtime_profile="sigma-demote",
+            preset=None,
+            arfilter=None,
+            arfilter_margin=None,
+            min_hold_count=None,
+            hold_ratio_threshold=None,
+            no_kinematic_post_filter=False,
+        )
+        realtime = ppc_rtk_signoff.selected_tuning(realtime_args, "tokyo")
+        self.assertEqual(realtime["preset"], "low-cost")
+        self.assertEqual(realtime["ratio"], 2.8)
+        self.assertEqual(realtime["carrier_phase_sigma"], 0.001)
+        self.assertEqual(realtime["demote_fixed_status_nis_per_obs"], 20.0)
+        self.assertEqual(realtime["demote_fixed_status_gate_ratio"], 6.0)
+        self.assertEqual(realtime["max_demote_fixed_status_baseline"], 9500.0)
+        self.assertFalse(realtime["arfilter"])
+        self.assertTrue(realtime["no_kinematic_post_filter"])
 
 
 class PPCCoverageMatrixTest(unittest.TestCase):
@@ -498,6 +597,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 preset="low-cost",
                 iono="iflc",
                 ratio=2.4,
+                max_subset_ar_drop_steps=18,
                 max_hold_div=5.0,
                 max_pos_jump=20.0,
                 max_pos_jump_min=20.0,
@@ -508,11 +608,35 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 max_float_prefit_reset_streak=5,
                 min_float_prefit_trusted_jump=8.0,
                 max_update_nis_per_obs=12.0,
+                max_fixed_update_nis_per_obs=10.0,
+                max_fixed_update_post_rms=6.0,
+                max_fixed_update_gate_ratio=8.0,
+                min_fixed_update_gate_baseline=7000.0,
+                max_fixed_update_gate_baseline=8200.0,
+                min_fixed_update_gate_speed=5.0,
+                max_fixed_update_gate_speed=15.0,
+                max_fixed_update_secondary_gate_ratio=4.0,
+                min_fixed_update_secondary_gate_baseline=2000.0,
+                max_fixed_update_secondary_gate_baseline=2500.0,
+                min_fixed_update_secondary_gate_speed=7.0,
+                max_fixed_update_secondary_gate_speed=15.0,
+                rtk_snr_weighting=True,
+                rtk_snr_reference_dbhz=44.0,
+                rtk_snr_max_variance_scale=16.0,
+                rtk_snr_min_baseline=7000.0,
+                cycle_slip_threshold=0.08,
+                doppler_slip_threshold=0.15,
+                code_slip_threshold=4.0,
+                strict_dynamic_slip_thresholds=True,
+                adaptive_dynamic_slip_thresholds=True,
+                adaptive_dynamic_slip_nonfix_count=2,
+                adaptive_dynamic_slip_hold_epochs=8,
                 max_consec_float_reset=10,
                 max_consec_nonfix_reset=10,
                 max_postfix_rms=0.20,
                 enable_wide_lane_ar=True,
                 wide_lane_threshold=0.10,
+                enable_wlnl_fallback=True,
                 fixed_bridge_burst_guard=True,
                 fixed_bridge_burst_max_anchor_gap=30.0,
                 fixed_bridge_burst_min_boundary_gap=1.0,
@@ -552,6 +676,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("iflc", command)
             self.assertIn("--ratio", command)
             self.assertIn("2.4", command)
+            self.assertIn("--max-subset-ar-drop-steps", command)
+            self.assertIn("18", command)
             self.assertIn("--max-hold-div", command)
             self.assertIn("5.0", command)
             self.assertIn("--max-pos-jump", command)
@@ -572,6 +698,49 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("8.0", command)
             self.assertIn("--max-update-nis-per-obs", command)
             self.assertIn("12.0", command)
+            self.assertIn("--max-fixed-update-nis-per-obs", command)
+            self.assertIn("10.0", command)
+            self.assertIn("--max-fixed-update-post-rms", command)
+            self.assertIn("6.0", command)
+            self.assertIn("--max-fixed-update-gate-ratio", command)
+            self.assertIn("8.0", command)
+            self.assertIn("--min-fixed-update-gate-baseline", command)
+            self.assertIn("7000.0", command)
+            self.assertIn("--max-fixed-update-gate-baseline", command)
+            self.assertIn("8200.0", command)
+            self.assertIn("--min-fixed-update-gate-speed", command)
+            self.assertIn("5.0", command)
+            self.assertIn("--max-fixed-update-gate-speed", command)
+            self.assertIn("15.0", command)
+            self.assertIn("--max-fixed-update-secondary-gate-ratio", command)
+            self.assertIn("4.0", command)
+            self.assertIn("--min-fixed-update-secondary-gate-baseline", command)
+            self.assertIn("2000.0", command)
+            self.assertIn("--max-fixed-update-secondary-gate-baseline", command)
+            self.assertIn("2500.0", command)
+            self.assertIn("--min-fixed-update-secondary-gate-speed", command)
+            self.assertIn("7.0", command)
+            self.assertIn("--max-fixed-update-secondary-gate-speed", command)
+            self.assertIn("15.0", command)
+            self.assertIn("--rtk-snr-weighting", command)
+            self.assertIn("--rtk-snr-reference-dbhz", command)
+            self.assertIn("44.0", command)
+            self.assertIn("--rtk-snr-max-variance-scale", command)
+            self.assertIn("16.0", command)
+            self.assertIn("--rtk-snr-min-baseline", command)
+            self.assertIn("7000.0", command)
+            self.assertIn("--cycle-slip-threshold", command)
+            self.assertIn("0.08", command)
+            self.assertIn("--doppler-slip-threshold", command)
+            self.assertIn("0.15", command)
+            self.assertIn("--code-slip-threshold", command)
+            self.assertIn("4.0", command)
+            self.assertIn("--strict-dynamic-slip-thresholds", command)
+            self.assertIn("--adaptive-dynamic-slip-thresholds", command)
+            self.assertIn("--adaptive-dynamic-slip-nonfix-count", command)
+            self.assertIn("2", command)
+            self.assertIn("--adaptive-dynamic-slip-hold-epochs", command)
+            self.assertIn("8", command)
             self.assertIn("--max-consec-float-reset", command)
             self.assertIn("10", command)
             self.assertIn("--max-consec-nonfix-reset", command)
@@ -629,6 +798,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 preset="low-cost",
                 iono=None,
                 ratio=None,
+                max_subset_ar_drop_steps=None,
                 max_hold_div=None,
                 max_pos_jump=None,
                 max_pos_jump_min=None,
@@ -638,6 +808,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 max_postfix_rms=None,
                 enable_wide_lane_ar=False,
                 wide_lane_threshold=None,
+                enable_wlnl_fallback=False,
                 no_float_bridge_tail_guard=False,
             )
             paths = ppc_coverage_matrix.output_paths(args.output_dir, "tokyo", "run1")
@@ -712,6 +883,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertEqual(payload["runtime_requirements"]["effective_epoch_rate_min_hz"], None)
             self.assertIsNone(payload["max_pos_jump_min"])
             self.assertIsNone(payload["max_pos_jump_rate"])
+            self.assertIsNone(payload["max_subset_ar_drop_steps"])
             self.assertIsNone(payload["max_float_prefit_rms"])
             self.assertIsNone(payload["max_float_prefit_max"])
             self.assertIsNone(payload["max_float_prefit_reset_streak"])
@@ -722,6 +894,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIsNone(payload["max_postfix_rms"])
             self.assertFalse(payload["enable_wide_lane_ar"])
             self.assertIsNone(payload["wide_lane_threshold"])
+            self.assertFalse(payload["enable_wlnl_fallback"])
             self.assertIn("tokyo_run1", markdown)
             self.assertIn("+19.9 pp", markdown)
             self.assertIn("42.0%", markdown)
@@ -4639,6 +4812,7 @@ class PPCDemoTest(unittest.TestCase):
             preset="low-cost",
             iono="iflc",
             ratio=2.4,
+            max_subset_ar_drop_steps=18,
             max_hold_div=5.0,
             max_pos_jump=20.0,
             max_pos_jump_min=20.0,
@@ -4649,11 +4823,24 @@ class PPCDemoTest(unittest.TestCase):
             max_float_prefit_reset_streak=5,
             min_float_prefit_trusted_jump=8.0,
             max_update_nis_per_obs=12.0,
+            max_fixed_update_nis_per_obs=10.0,
+            max_fixed_update_post_rms=6.0,
+            max_fixed_update_gate_ratio=8.0,
+            min_fixed_update_gate_baseline=7000.0,
+            max_fixed_update_gate_baseline=8200.0,
+            min_fixed_update_gate_speed=5.0,
+            max_fixed_update_gate_speed=15.0,
+            max_fixed_update_secondary_gate_ratio=4.0,
+            min_fixed_update_secondary_gate_baseline=2000.0,
+            max_fixed_update_secondary_gate_baseline=2500.0,
+            min_fixed_update_secondary_gate_speed=7.0,
+            max_fixed_update_secondary_gate_speed=15.0,
             max_consec_float_reset=10,
             max_consec_nonfix_reset=10,
             max_postfix_rms=0.20,
             enable_wide_lane_ar=True,
             wide_lane_threshold=0.10,
+            enable_wlnl_fallback=True,
             fixed_bridge_burst_guard=True,
             fixed_bridge_burst_max_anchor_gap=30.0,
             fixed_bridge_burst_min_boundary_gap=1.0,
@@ -4699,6 +4886,8 @@ class PPCDemoTest(unittest.TestCase):
         self.assertIn("iflc", commands[0])
         self.assertIn("--ratio", commands[0])
         self.assertIn("2.4", commands[0])
+        self.assertIn("--max-subset-ar-drop-steps", commands[0])
+        self.assertIn("18", commands[0])
         self.assertIn("--max-hold-div", commands[0])
         self.assertIn("5.0", commands[0])
         self.assertIn("--max-pos-jump", commands[0])
@@ -4719,6 +4908,30 @@ class PPCDemoTest(unittest.TestCase):
         self.assertIn("8.0", commands[0])
         self.assertIn("--max-update-nis-per-obs", commands[0])
         self.assertIn("12.0", commands[0])
+        self.assertIn("--max-fixed-update-nis-per-obs", commands[0])
+        self.assertIn("10.0", commands[0])
+        self.assertIn("--max-fixed-update-post-rms", commands[0])
+        self.assertIn("6.0", commands[0])
+        self.assertIn("--max-fixed-update-gate-ratio", commands[0])
+        self.assertIn("8.0", commands[0])
+        self.assertIn("--min-fixed-update-gate-baseline", commands[0])
+        self.assertIn("7000.0", commands[0])
+        self.assertIn("--max-fixed-update-gate-baseline", commands[0])
+        self.assertIn("8200.0", commands[0])
+        self.assertIn("--min-fixed-update-gate-speed", commands[0])
+        self.assertIn("5.0", commands[0])
+        self.assertIn("--max-fixed-update-gate-speed", commands[0])
+        self.assertIn("15.0", commands[0])
+        self.assertIn("--max-fixed-update-secondary-gate-ratio", commands[0])
+        self.assertIn("4.0", commands[0])
+        self.assertIn("--min-fixed-update-secondary-gate-baseline", commands[0])
+        self.assertIn("2000.0", commands[0])
+        self.assertIn("--max-fixed-update-secondary-gate-baseline", commands[0])
+        self.assertIn("2500.0", commands[0])
+        self.assertIn("--min-fixed-update-secondary-gate-speed", commands[0])
+        self.assertIn("7.0", commands[0])
+        self.assertIn("--max-fixed-update-secondary-gate-speed", commands[0])
+        self.assertIn("15.0", commands[0])
         self.assertIn("--max-consec-float-reset", commands[0])
         self.assertIn("10", commands[0])
         self.assertIn("--max-consec-nonfix-reset", commands[0])
@@ -4727,6 +4940,7 @@ class PPCDemoTest(unittest.TestCase):
         self.assertIn("--enable-wide-lane-ar", commands[0])
         self.assertIn("--wide-lane-threshold", commands[0])
         self.assertIn("0.1", commands[0])
+        self.assertIn("--enable-wlnl-fallback", commands[0])
         self.assertIn("--fixed-bridge-burst-guard", commands[0])
         self.assertIn("--fixed-bridge-burst-max-residual", commands[0])
         self.assertIn("20.0", commands[0])
@@ -4826,6 +5040,7 @@ class PPCDemoTest(unittest.TestCase):
                 enable_ar=False,
                 iono="iflc",
                 ratio=2.4,
+                max_subset_ar_drop_steps=18,
                 max_hold_div=5.0,
                 max_pos_jump=20.0,
                 max_pos_jump_min=20.0,
@@ -4836,11 +5051,24 @@ class PPCDemoTest(unittest.TestCase):
                 max_float_prefit_reset_streak=5,
                 min_float_prefit_trusted_jump=8.0,
                 max_update_nis_per_obs=12.0,
+                max_fixed_update_nis_per_obs=10.0,
+                max_fixed_update_post_rms=6.0,
+                max_fixed_update_gate_ratio=8.0,
+                min_fixed_update_gate_baseline=7000.0,
+                max_fixed_update_gate_baseline=8200.0,
+                min_fixed_update_gate_speed=5.0,
+                max_fixed_update_gate_speed=15.0,
+                max_fixed_update_secondary_gate_ratio=4.0,
+                min_fixed_update_secondary_gate_baseline=2000.0,
+                max_fixed_update_secondary_gate_baseline=2500.0,
+                min_fixed_update_secondary_gate_speed=7.0,
+                max_fixed_update_secondary_gate_speed=15.0,
                 max_consec_float_reset=10,
                 max_consec_nonfix_reset=10,
                 max_postfix_rms=0.20,
                 enable_wide_lane_ar=True,
                 wide_lane_threshold=0.10,
+                enable_wlnl_fallback=True,
                 fixed_bridge_burst_guard=True,
                 fixed_bridge_burst_max_anchor_gap=30.0,
                 fixed_bridge_burst_min_boundary_gap=1.0,
@@ -4892,6 +5120,7 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["solver"], "rtk")
             self.assertEqual(payload["rtk_iono"], "iflc")
             self.assertEqual(payload["rtk_ratio_threshold"], 2.4)
+            self.assertEqual(payload["rtk_max_subset_ar_drop_steps"], 18)
             self.assertEqual(payload["rtk_max_hold_divergence_m"], 5.0)
             self.assertEqual(payload["rtk_max_position_jump_m"], 20.0)
             self.assertEqual(payload["rtk_max_position_jump_min_m"], 20.0)
@@ -4902,11 +5131,32 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtk_max_float_prefit_residual_reset_streak"], 5)
             self.assertEqual(payload["rtk_min_float_prefit_residual_trusted_jump_m"], 8.0)
             self.assertEqual(payload["rtk_max_update_nis_per_observation"], 12.0)
+            self.assertEqual(payload["rtk_max_fixed_update_nis_per_observation"], 10.0)
+            self.assertEqual(payload["rtk_max_fixed_update_post_residual_rms_m"], 6.0)
+            self.assertEqual(payload["rtk_max_fixed_update_gate_ratio"], 8.0)
+            self.assertEqual(payload["rtk_min_fixed_update_gate_baseline_m"], 7000.0)
+            self.assertEqual(payload["rtk_max_fixed_update_gate_baseline_m"], 8200.0)
+            self.assertEqual(payload["rtk_min_fixed_update_gate_speed_mps"], 5.0)
+            self.assertEqual(payload["rtk_max_fixed_update_gate_speed_mps"], 15.0)
+            self.assertEqual(payload["rtk_max_fixed_update_secondary_gate_ratio"], 4.0)
+            self.assertEqual(
+                payload["rtk_min_fixed_update_secondary_gate_baseline_m"], 2000.0
+            )
+            self.assertEqual(
+                payload["rtk_max_fixed_update_secondary_gate_baseline_m"], 2500.0
+            )
+            self.assertEqual(
+                payload["rtk_min_fixed_update_secondary_gate_speed_mps"], 7.0
+            )
+            self.assertEqual(
+                payload["rtk_max_fixed_update_secondary_gate_speed_mps"], 15.0
+            )
             self.assertEqual(payload["rtk_max_consecutive_float_for_reset"], 10)
             self.assertEqual(payload["rtk_max_consecutive_nonfix_for_reset"], 10)
             self.assertEqual(payload["rtk_max_postfix_residual_rms_m"], 0.20)
             self.assertTrue(payload["rtk_wide_lane_ar_enabled"])
             self.assertEqual(payload["rtk_wide_lane_threshold"], 0.10)
+            self.assertTrue(payload["rtk_wlnl_fallback_enabled"])
             self.assertTrue(payload["fixed_bridge_burst_guard_enabled"])
             self.assertEqual(payload["fixed_bridge_burst_guard"]["max_anchor_gap_s"], 30.0)
             self.assertEqual(payload["fixed_bridge_burst_guard"]["min_boundary_gap_s"], 1.0)
