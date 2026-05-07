@@ -892,12 +892,11 @@ python3 apps/gnss.py ppc-coverage-matrix \
   --max-pos-jump 5.0 \
   --max-pos-jump-min 5.0 \
   --max-pos-jump-rate 25.0 \
-  --demote-fixed-status-nis-per-obs 20 \
-  --demote-fixed-status-gate-ratio 6 \
-  --max-demote-fixed-status-baseline 9500 \
-  --output-dir output/ppc_sigma_profile_runtime_demote_nis20_ratio6_maxbl9500 \
-  --summary-json output/ppc_sigma_profile_runtime_demote_nis20_ratio6_maxbl9500/summary.json \
-  --markdown-output output/ppc_sigma_profile_runtime_demote_nis20_ratio6_maxbl9500/table.md
+  --demote-fixed-status-nis-per-obs 3 \
+  --demote-fixed-status-gate-ratio 15 \
+  --output-dir output/ppc_sigma_profile_runtime_demote_nis3_ratio15 \
+  --summary-json output/ppc_sigma_profile_runtime_demote_nis3_ratio15/summary.json \
+  --markdown-output output/ppc_sigma_profile_runtime_demote_nis3_ratio15/table.md
 
 python3 apps/gnss.py ppc-coverage-matrix \
   --dataset-root /datasets/PPC-Dataset \

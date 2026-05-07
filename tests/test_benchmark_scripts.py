@@ -563,9 +563,9 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
         self.assertEqual(realtime["preset"], "low-cost")
         self.assertEqual(realtime["ratio"], 2.8)
         self.assertEqual(realtime["carrier_phase_sigma"], 0.001)
-        self.assertEqual(realtime["demote_fixed_status_nis_per_obs"], 20.0)
-        self.assertEqual(realtime["demote_fixed_status_gate_ratio"], 6.0)
-        self.assertEqual(realtime["max_demote_fixed_status_baseline"], 9500.0)
+        self.assertEqual(realtime["demote_fixed_status_nis_per_obs"], 3.0)
+        self.assertEqual(realtime["demote_fixed_status_gate_ratio"], 15.0)
+        self.assertNotIn("max_demote_fixed_status_baseline", realtime)
         self.assertFalse(realtime["arfilter"])
         self.assertTrue(realtime["no_kinematic_post_filter"])
 

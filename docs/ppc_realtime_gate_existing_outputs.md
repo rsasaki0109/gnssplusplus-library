@@ -206,3 +206,34 @@ The narrowed candidate is a better headline tradeoff if the policy target is
 Wrong/FIX below 5% rather than minimizing Wrong FIX at all costs. It recovers 786
 FIX epochs compared with `nis10_ratio6`, keeps the same 64.750% official score,
 and still removes 1150 Wrong FIX epochs versus the no-demotion sigma control.
+
+## Aggressive sigma-profile demotion
+
+The 5% target still leaves too many Wrong FIX epochs. A stricter deployable
+runtime replay with `--demote-fixed-status-nis-per-obs 3
+--demote-fixed-status-gate-ratio 15` pushes the full-matrix Wrong FIX count below
+1000 while keeping the weighted official score unchanged.
+
+Full runtime replay:
+
+| profile | official | FIX epochs | Wrong FIX | Wrong/FIX | FIX drop | Wrong drop | min realtime | decision |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| current_sigma | 64.750% | 41608 | 3078 | 7.398% | 0 | 0 | 6.883x | control |
+| current_sigma_demote_nis20_ratio6_maxbl9500 | 64.750% | 39924 | 1928 | 4.829% | 1684 | 1150 | 7.259x | too many Wrong FIX |
+| current_sigma_demote_nis3_ratio15 | 64.750% | 35382 | 980 | 2.770% | 6226 | 2098 | 6.274x | aggressive candidate |
+
+Per-run Wrong FIX for the aggressive candidate:
+
+| run | current_sigma | nis20_ratio6_maxbl9500 | nis3_ratio15 |
+|---|---:|---:|---:|
+| tokyo_run1 | 936 | 647 | 442 |
+| tokyo_run2 | 160 | 126 | 75 |
+| tokyo_run3 | 870 | 436 | 218 |
+| nagoya_run1 | 124 | 112 | 27 |
+| nagoya_run2 | 537 | 307 | 157 |
+| nagoya_run3 | 451 | 300 | 61 |
+
+This is the better headline profile when status correctness matters more than
+maximizing output FIX count. It removes 2098 Wrong FIX epochs versus the
+no-demotion sigma control, and 948 more than the 5% narrowed candidate, at the
+cost of 4542 additional output FIX epochs.
