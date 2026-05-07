@@ -8,22 +8,27 @@ Wrong FIX is `status == FIXED` with post-run 3D reference error above 0.50 m.
 ## Current recommendation
 
 The final deployable status profile is the sigma-profile replay with
-`--demote-fixed-status-nis-per-obs 2`. It minimizes the measured Wrong/FIX rate
-among the current real-time-only sweep:
+`--demote-fixed-status-nis-per-obs 2 --demote-fixed-status-max-ratio 4`.
+It minimizes the measured Wrong/FIX rate among the current real-time-only sweep
+while keeping the PPC official score effectively unchanged:
 
 | profile | official | FIX epochs | Wrong FIX | Wrong/FIX | min realtime | decision |
 |---|---:|---:|---:|---:|---:|---|
 | current_sigma | 64.750% | 41608 | 3078 | 7.398% | 6.883x | control |
-| current_sigma_demote_nis2 | 64.707% | 29705 | 563 | 1.895% | 7.046x | recommended when minimizing Wrong/FIX |
+| current_sigma_demote_nis2 | 64.707% | 29705 | 563 | 1.895% | 7.046x | previous recommendation |
+| current_sigma_demote_nis2_ratio4 | 64.686% | 27395 | 470 | 1.716% | 6.188x | recommended when minimizing Wrong/FIX |
 
-The tradeoff is explicit: `nis2` drops the weighted official score by 0.043 pp
-and emits 11903 fewer FIX epochs, but reduces Wrong FIX by 2515 epochs. The
-sections below are chronological rejected/diagnostic probes unless explicitly
-marked as the current recommendation.
+The tradeoff is explicit: `nis2-ratio4` drops the weighted official score by
+0.064 pp and emits 14213 fewer FIX epochs versus `current_sigma`, but reduces
+Wrong FIX by 2608 epochs. Relative to the previous `nis2` recommendation, it
+removes 93 additional Wrong FIX labels with a 0.021 pp official-score change.
+The sections below are chronological rejected/diagnostic probes unless
+explicitly marked as the current recommendation.
 
 ![PPC sigma-demote nis2 status trajectories](ppc_sigma_demote_nis2_status_trajectories.png)
 
-The red `WRONG_FIX` markers are post-run diagnostic labels at the 0.50 m 3D
+The checked-in trajectory image is the previous `nis2` diagnostic. The red
+`WRONG_FIX` markers are post-run diagnostic labels at the 0.50 m 3D
 reference-error threshold. The runtime selector itself uses only deployable
 fields and does not read reference truth.
 
@@ -39,6 +44,7 @@ fields and does not read reference truth.
 | snr_nis8_window | SNR weighting plus NIS gate in 7000-9000 m baseline window | 63.929% | -0.071 pp | 44393 | 7214 | 16.250% | reject, more wrong FIX |
 | secondary_window | SNR weighting plus primary/secondary fixed-update windows | 64.326% | +0.325 pp | 44355 | 7106 | 16.021% | reject, more wrong FIX |
 | secondary_window_reset12 | secondary_window plus non-FIX reset12 | 63.315% | -0.685 pp | 45089 | 9491 | 21.049% | reject |
+| current_sigma_demote_nis2_ratio4 | `--demote-fixed-status-nis-per-obs 2 --demote-fixed-status-max-ratio 4` | 64.686% | +0.685 pp | 27395 | 470 | 1.716% | recommended status profile |
 
 The current no-worse-Wrong-FIX policy rejects every profile that improves
 official score. The stricter `nis8_ratio6` experiment confirms that lowering the
@@ -262,10 +268,10 @@ cost of 4542 additional output FIX epochs.
 
 ## Ultra-conservative sigma-profile demotion
 
-Pushing Wrong/FIX lower requires dropping the ratio gate entirely and demoting
-every output FIX with `--demote-fixed-status-nis-per-obs 2`. This is the lowest
-Wrong/FIX runtime result in the current deployable sweep, but unlike the milder
-runtime-demotion profiles it gives up a small amount of official score.
+The earlier ultra-conservative profile demoted every output FIX with
+`--demote-fixed-status-nis-per-obs 2`. The current recommendation keeps that
+NIS demotion and adds `--demote-fixed-status-max-ratio 4`, which removes
+additional low-ratio wrong FIX labels with only a small official-score change.
 
 Full runtime replay:
 
@@ -273,20 +279,21 @@ Full runtime replay:
 |---|---:|---:|---:|---:|---:|---:|---:|---|
 | current_sigma | 64.750% | 41608 | 3078 | 7.398% | 0 | 0 | 6.883x | control |
 | current_sigma_demote_nis3_ratio15 | 64.750% | 35382 | 980 | 2.770% | 6226 | 2098 | 6.274x | sub-1000 Wrong FIX |
-| current_sigma_demote_nis2 | 64.707% | 29705 | 563 | 1.895% | 11903 | 2515 | 7.046x | lowest Wrong/FIX |
+| current_sigma_demote_nis2 | 64.707% | 29705 | 563 | 1.895% | 11903 | 2515 | 7.046x | previous recommendation |
+| current_sigma_demote_nis2_ratio4 | 64.686% | 27395 | 470 | 1.716% | 14213 | 2608 | 6.188x | current recommendation |
 
-Per-run Wrong FIX for `nis2`:
+Per-run Wrong FIX for `nis2-ratio4`:
 
-| run | current_sigma | nis3_ratio15 | nis2 |
-|---|---:|---:|---:|
-| tokyo_run1 | 936 | 442 | 271 |
-| tokyo_run2 | 160 | 75 | 65 |
-| tokyo_run3 | 870 | 218 | 123 |
-| nagoya_run1 | 124 | 27 | 6 |
-| nagoya_run2 | 537 | 157 | 69 |
-| nagoya_run3 | 451 | 61 | 29 |
+| run | current_sigma | nis3_ratio15 | nis2 | nis2-ratio4 |
+|---|---:|---:|---:|---:|
+| tokyo_run1 | 936 | 442 | 271 | 237 |
+| tokyo_run2 | 160 | 75 | 65 | 53 |
+| tokyo_run3 | 870 | 218 | 123 | 103 |
+| nagoya_run1 | 124 | 27 | 6 | 2 |
+| nagoya_run2 | 537 | 157 | 69 | 63 |
+| nagoya_run3 | 451 | 61 | 29 | 12 |
 
-`nis2` is the right headline status profile if the goal is to minimize Wrong/FIX
-as much as possible with deployable real-time fields. It reduces Wrong/FIX to
-1.895%, but the cost is high: 5677 fewer FIX epochs than `nis3_ratio15`, and a
-weighted official score drop of 0.043 pp.
+`nis2-ratio4` is the right headline status profile if the goal is to minimize
+Wrong/FIX as much as possible with deployable real-time fields. It reduces
+Wrong/FIX to 1.716%, at the cost of 7987 fewer FIX epochs than `nis3_ratio15`
+and a weighted official score drop of 0.064 pp from `current_sigma`.

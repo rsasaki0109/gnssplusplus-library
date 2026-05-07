@@ -125,17 +125,16 @@ the run for scoring and Wrong-FIX labeling. The runtime selector itself is
 deployable-only: it uses solver diagnostics such as NIS per observation, ratio,
 residual/jump guards, and emitted status, not reference truth.
 
-On the six public PPC runs, the recommended `nis2` profile reaches **64.707%**
-weighted PPC official score with **7.046x** minimum realtime factor. Its purpose
-is not to maximize the number of emitted FIX epochs; it minimizes the measured
-Wrong/FIX rate while staying realtime:
+On the six public PPC runs, the recommended `nis2-ratio4` profile reaches
+**64.686%** weighted PPC official score with **6.188x** minimum realtime factor.
+Its purpose is not to maximize the number of emitted FIX epochs; it minimizes
+the measured Wrong/FIX rate while staying realtime:
 
 | Profile | Weighted official | FIX epochs | Wrong FIX | Wrong/FIX | Min realtime |
 |---|---:|---:|---:|---:|---:|
 | sigma profile, no status demotion | 64.750% | 41608 | 3078 | 7.398% | 6.883x |
 | `sigma-demote` (`--demote-fixed-status-nis-per-obs 2`) | 64.707% | 29705 | 563 | 1.895% | 7.046x |
-
-![PPC sigma-demote nis2 status trajectories](docs/ppc_sigma_demote_nis2_status_trajectories.png)
+| `sigma-demote` + ratio status demotion (`--demote-fixed-status-max-ratio 4`) | 64.686% | 27395 | 470 | 1.716% | 6.188x |
 
 This is a public-run replay result, not a hidden/private PPC leaderboard
 submission. The RTKLIB `demo5` comparison remains the open-observation baseline
@@ -152,7 +151,7 @@ into focused notes:
   experiments, IMU/dropout bridge diagnostics, scorecards, and reproduction
   commands.
 - [PPC realtime gate outputs](docs/ppc_realtime_gate_existing_outputs.md):
-  accepted `sigma-demote nis2` result plus rejected real-time gate candidates.
+  accepted `sigma-demote nis2-ratio4` result plus rejected real-time gate candidates.
 - [PPC smoother sanity report](docs/ppc_smoother_oracle_report.md): smoother
   and oracle/reference-selected checks kept as diagnostics only.
 

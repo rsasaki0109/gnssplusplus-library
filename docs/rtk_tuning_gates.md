@@ -40,6 +40,7 @@ anchor bridge, and uses horizontal FIX-anchor speed for its motion gate. Use
 | `--min-fixed-update-gate-baseline <m>` + `--max-fixed-update-gate-baseline <m>` | Optional baseline-length window for the fixed-only NIS/post-RMS gates. | `0` / `0` disabled |
 | `--min-fixed-update-gate-speed <m/s>` + `--max-fixed-update-gate-speed <m/s>` | Optional speed window for the fixed-only NIS/post-RMS gates. | `0` / `0` disabled |
 | `--max-fixed-update-secondary-gate-ratio <v>` + baseline/speed secondary window flags | Optional second OR-window for fixed-only NIS/post-RMS gates. | `0` for all fields |
+| `--demote-fixed-status-max-ratio <v>` | Keep the position solution but output FIX as FLOAT when the AR ratio is finite and at or below N. PPC `nis2-ratio4` uses this to reduce measured Wrong/FIX while preserving official-score coverage. | `0` disabled |
 | `--rtk-snr-weighting` + `--rtk-snr-reference-dbhz <v>` + `--rtk-snr-max-variance-scale <v>` + `--rtk-snr-min-baseline <m>` | Low-cost observation model diagnostic. Uses the lower rover/base SNR for each SD link and inflates DD phase/code variance below the reference SNR, capped by the max scale. | `false` / `45` / `25` / `0` |
 | `--cycle-slip-threshold <m>` + `--doppler-slip-threshold <m>` + `--code-slip-threshold <m>` + `--strict-dynamic-slip-thresholds` + `--adaptive-dynamic-slip-thresholds` | Cycle-slip sensitivity sweep. Dynamic RTK keeps protective minimum thresholds by default; strict/adaptive modes are opt-in urban reacquisition experiments. | `0.05` / `0.20` / `5.0` / `false` / `false` |
 | `--adaptive-dynamic-slip-nonfix-count <N>` | Non-FIX epochs before adaptive dynamic slip thresholds activate. | `3` |
@@ -51,6 +52,7 @@ anchor bridge, and uses horizontal FIX-anchor speed for its motion gate. Use
 | `--max-postfix-rms <m>` | Reject fix if the L1 post-fix DD phase residual RMS exceeds N meters. | `0` disabled |
 | `--enable-wide-lane-ar` + `--wide-lane-threshold <cycle>` | Pre-compute MW wide-lane integers and inject them as Kalman constraints into the LAMBDA search. Odaiba's opt-in preset uses this to beat demo5 Hmed while still beating demo5 Fix count and tails. | `false` / `0.25` |
 | `--enable-wlnl-fallback` | Allow the experimental MW wide-lane / narrow-lane fallback after ordinary LAMBDA failure in non-IFLC runs. It reuses `--wide-lane-threshold` for both integer checks. | `false` |
+| `--enable-bsr-decimation` + `--bsr-worst-axes <N>` + `--bsr-max-drops <N>` | Add BSR-guided subset AR decimation candidates alongside the variance-drop subset family. PPC high-wrong probes preserved FIX count but did not reduce Wrong/FIX, so this remains diagnostic. | `false` / `3` / `6` |
 
 On PPC Tokyo and Nagoya, leave these off unless reproducing a specific sweep.
 On Odaiba or other urban multipath datasets, use `--preset odaiba` for the
