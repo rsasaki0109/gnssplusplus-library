@@ -21,6 +21,12 @@ and emits 11903 fewer FIX epochs, but reduces Wrong FIX by 2515 epochs. The
 sections below are chronological rejected/diagnostic probes unless explicitly
 marked as the current recommendation.
 
+![PPC sigma-demote nis2 status trajectories](ppc_sigma_demote_nis2_status_trajectories.png)
+
+The red `WRONG_FIX` markers are post-run diagnostic labels at the 0.50 m 3D
+reference-error threshold. The runtime selector itself uses only deployable
+fields and does not read reference truth.
+
 ## Full six-run outputs
 
 | profile | deployable gate | official | delta vs baseline | FIX epochs | Wrong FIX | Wrong/FIX | decision |
