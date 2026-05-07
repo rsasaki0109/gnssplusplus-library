@@ -83,6 +83,10 @@ public:
         // Measurement noise
         double pseudorange_sigma = 0.3;           // m (eratio = pseudorange_sigma / carrier_phase_sigma = 150)
         double carrier_phase_sigma = 0.002;       // m (instrument noise)
+        bool enable_snr_weighting = false;        // Opt-in C/N0-based variance inflation
+        double snr_reference_dbhz = 45.0;         // No inflation at or above this SNR
+        double snr_max_variance_scale = 25.0;     // Clamp low-SNR variance inflation
+        double snr_min_baseline_m = 0.0;          // Optional baseline-length floor for SNR weighting
 
         // Quality control
         bool enable_cycle_slip_detection = true;
@@ -91,6 +95,10 @@ public:
         double doppler_slip_threshold = 0.20;
         bool enable_code_slip_detection = true;
         double code_slip_threshold = 5.0;
+        bool use_dynamic_slip_threshold_floor = true;
+        bool enable_adaptive_dynamic_slip_thresholds = false;
+        int adaptive_dynamic_slip_nonfix_count = 3;
+        int adaptive_dynamic_slip_hold_epochs = 10;
         bool enable_outlier_detection = true;
         double outlier_threshold = 3.0;
 
@@ -114,6 +122,10 @@ public:
         /// Minimum DD ambiguity pairs allowed for subset/partial AR candidates.
         /// 4 (default) preserves the existing partial AR search behavior.
         int min_subset_pairs_for_ar = 4;
+
+        /// Maximum number of worst-variance DD pairs to drop while searching
+        /// progressive subset AR candidates. 6 preserves existing behavior.
+        int max_subset_drop_steps_for_ar = 6;
 
         /// Minimum distinct non-reference satellites required for subset AR.
         /// 0 (default) disables the gate and preserves existing subset behavior.
@@ -187,6 +199,42 @@ public:
         /// 0 (default) disables the update gate.
         double max_update_nis_per_observation = 0.0;
 
+        /// Reject only FIXED ambiguity candidates when the preceding RTK DD
+        /// update NIS divided by active observations exceeds this threshold.
+        /// FLOAT output is retained; 0 (default) disables the fixed-only gate.
+        double max_fixed_update_nis_per_observation = 0.0;
+
+        /// Reject only FIXED ambiguity candidates when the preceding RTK DD
+        /// update post-suppression residual RMS exceeds this threshold.
+        /// FLOAT output is retained; 0 (default) disables the fixed-only gate.
+        double max_fixed_update_post_residual_rms_m = 0.0;
+
+        /// Apply fixed-update diagnostic gates only to low-ratio FIX candidates.
+        /// When > 0, max_fixed_update_nis_per_observation and
+        /// max_fixed_update_post_residual_rms_m are checked only if the AR ratio
+        /// is finite and <= this threshold. 0 (default) preserves legacy behavior.
+        double max_fixed_update_gate_ratio = 0.0;
+
+        /// Apply fixed-update diagnostic gates only inside an optional baseline
+        /// length window. 0 (default) disables each side of the window.
+        double min_fixed_update_gate_baseline_m = 0.0;
+        double max_fixed_update_gate_baseline_m = 0.0;
+
+        /// Apply fixed-update diagnostic gates only inside an optional speed
+        /// window, estimated from the previous accepted solution to the current
+        /// fixed candidate. 0 (default) disables each side of the window.
+        double min_fixed_update_gate_speed_mps = 0.0;
+        double max_fixed_update_gate_speed_mps = 0.0;
+
+        /// Optional secondary fixed-update gate window. When any secondary
+        /// window field is enabled, fixed-update diagnostic gates apply if
+        /// either the primary window above or this secondary window passes.
+        double max_fixed_update_secondary_gate_ratio = 0.0;
+        double min_fixed_update_secondary_gate_baseline_m = 0.0;
+        double max_fixed_update_secondary_gate_baseline_m = 0.0;
+        double min_fixed_update_secondary_gate_speed_mps = 0.0;
+        double max_fixed_update_secondary_gate_speed_mps = 0.0;
+
         /// Reset ambiguity state after N consecutive float epochs (aggressive reconvergence).
         /// 0 (default) disables the check — existing behavior preserved.
         int max_consecutive_float_for_reset = 0;
@@ -213,6 +261,27 @@ public:
         /// |WL_float - round(WL_float)| < threshold → fix. 0.25 is the worktree
         /// default; only referenced when enable_wide_lane_ar = true.
         double wide_lane_acceptance_threshold = 0.25;
+
+        /// Enable MW wide-lane / narrow-lane fallback after ordinary LAMBDA
+        /// fails for non-IFLC runs. IFLC keeps its historical fallback path.
+        /// This reuses wide_lane_acceptance_threshold for MW and NL acceptance.
+        bool enable_wlnl_fallback = false;
+
+        /// Enable BSR-guided partial AR decimation alongside the existing
+        /// variance-based progressive drop subsets. BSR-guided drops use a
+        /// self-adjoint eigendecomposition of the ambiguity covariance Qb
+        /// to identify pairs loading on the least-informative directions
+        /// (largest eigenvalues, lowest integer-rounding success rate per
+        /// Teunissen 1998), and drops them greedily.
+        /// false (default) preserves existing partial AR behavior.
+        bool enable_bsr_guided_decimation = false;
+
+        /// Number of largest-eigenvalue Qb axes used to score per-pair
+        /// loadings for BSR-guided decimation.
+        int bsr_guided_worst_axes = 3;
+
+        /// Max pairs to drop progressively in BSR-guided decimation.
+        int bsr_guided_max_drop_steps = 6;
     };
 
     /// Reason why AR was silently skipped or failed in resolveAmbiguities().
@@ -252,12 +321,31 @@ public:
         int subset_candidates_evaluated = 0;
         int subset_candidates_rejected_by_full_ratio = 0;
         int subset_candidates_rejected_by_diversity = 0;
+        // Subset of subset_candidates_evaluated that came from the
+        // BSR-guided decimation family (eigendecomposition-driven). The
+        // accepted counter only ticks when this family adopts a candidate
+        // that improves on the variance-based best (preferCandidate true).
+        int bsr_guided_candidates_evaluated = 0;
+        int bsr_guided_candidates_accepted = 0;
 
         int wide_lane_total = 0;
         int wide_lane_fixed = 0;
         int wide_lane_rejected = 0;
         double wide_lane_min_distance = std::numeric_limits<double>::quiet_NaN();
         double wide_lane_max_distance = std::numeric_limits<double>::quiet_NaN();
+
+        int gf_slip_count = 0;
+        int doppler_slip_l1_count = 0;
+        int doppler_slip_l2_count = 0;
+        int code_slip_l1_count = 0;
+        int code_slip_l2_count = 0;
+        int lli_slip_l1_count = 0;
+        int lli_slip_l2_count = 0;
+        int ambiguity_reset_l1_count = 0;
+        int ambiguity_reset_l2_count = 0;
+        bool adaptive_dynamic_slip_active = false;
+        int consecutive_nonfix_before_bias_update = 0;
+        int adaptive_dynamic_slip_hold_remaining = 0;
 
         bool full_lambda_solved = false;
         double full_ratio = std::numeric_limits<double>::quiet_NaN();
@@ -399,6 +487,9 @@ private:
     bool has_last_solution_position_ = false;
     Vector3d last_trusted_position_ = Vector3d::Zero();
     bool has_last_trusted_position_ = false;
+    Vector3d fixed_update_gate_previous_position_ = Vector3d::Zero();
+    GNSSTime fixed_update_gate_previous_time_;
+    bool has_fixed_update_gate_previous_solution_ = false;
 
     // Consecutive fix tracking for holdamb
     int consecutive_fix_count_ = 0;
@@ -411,6 +502,9 @@ private:
 
     // Consecutive high-residual FLOAT tracking for residual-aware reacquisition
     int consecutive_high_float_residual_count_ = 0;
+
+    // Remaining epochs for adaptive dynamic slip thresholds after a non-FIX streak.
+    int adaptive_dynamic_slip_hold_count_ = 0;
 
     // Last fix data for holdamb
     struct DDPair {
@@ -480,9 +574,11 @@ private:
         double rover_l1_phase = 0.0;  // cycles
         double rover_l1_code = 0.0;   // meters
         double rover_l1_doppler = 0.0; // Hz
+        double rover_l1_snr = 0.0;     // dB-Hz
         double base_l1_phase = 0.0;
         double base_l1_code = 0.0;
         double base_l1_doppler = 0.0; // Hz
+        double base_l1_snr = 0.0;     // dB-Hz
         bool has_l1 = false;
         bool has_l1_doppler = false;
         int l1_lli = 0;
@@ -490,9 +586,11 @@ private:
         double rover_l2_phase = 0.0;
         double rover_l2_code = 0.0;
         double rover_l2_doppler = 0.0;
+        double rover_l2_snr = 0.0;     // dB-Hz
         double base_l2_phase = 0.0;
         double base_l2_code = 0.0;
         double base_l2_doppler = 0.0;
+        double base_l2_snr = 0.0;     // dB-Hz
         bool has_l2 = false;
         bool has_l2_doppler = false;
         int l2_lli = 0;
@@ -661,7 +759,7 @@ private:
      * RTKLIB varerr: SD measurement error variance
      * var = 2.0 * (a^2 + b^2/sin^2(el))
      */
-    double varerr(double elevation, bool is_phase) const;
+    double varerr(double elevation, bool is_phase, double snr_dbhz = 0.0) const;
 
     // Legacy stubs kept for interface compatibility
     struct DoubleDifference {

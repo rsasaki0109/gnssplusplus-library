@@ -1157,6 +1157,18 @@ TEST_F(RTKRealDataTest, FloatAmbiguityDiagnostic) {
 TEST(RTKArSkipReasonTest, DefaultTelemetryHasNoneSkipReason) {
     RTKProcessor::EpochDebugTelemetry telemetry;
     EXPECT_EQ(telemetry.ar_skip_reason, RTKProcessor::ARSkipReason::NONE);
+    EXPECT_EQ(telemetry.gf_slip_count, 0);
+    EXPECT_EQ(telemetry.doppler_slip_l1_count, 0);
+    EXPECT_EQ(telemetry.doppler_slip_l2_count, 0);
+    EXPECT_EQ(telemetry.code_slip_l1_count, 0);
+    EXPECT_EQ(telemetry.code_slip_l2_count, 0);
+    EXPECT_EQ(telemetry.lli_slip_l1_count, 0);
+    EXPECT_EQ(telemetry.lli_slip_l2_count, 0);
+    EXPECT_EQ(telemetry.ambiguity_reset_l1_count, 0);
+    EXPECT_EQ(telemetry.ambiguity_reset_l2_count, 0);
+    EXPECT_FALSE(telemetry.adaptive_dynamic_slip_active);
+    EXPECT_EQ(telemetry.consecutive_nonfix_before_bias_update, 0);
+    EXPECT_EQ(telemetry.adaptive_dynamic_slip_hold_remaining, 0);
 }
 
 TEST(RTKArSkipReasonTest, StringifyCoversAllValues) {

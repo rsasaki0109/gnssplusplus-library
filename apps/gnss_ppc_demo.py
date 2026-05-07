@@ -176,6 +176,12 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK ambiguity ratio threshold passed through to gnss solve when --solver rtk.",
     )
     parser.add_argument(
+        "--max-subset-ar-drop-steps",
+        type=int,
+        default=None,
+        help="Optional max worst-variance DD pairs dropped by RTK subset AR.",
+    )
+    parser.add_argument(
         "--max-hold-div",
         type=float,
         default=None,
@@ -242,6 +248,53 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK carrier-phase observation sigma in meters.",
     )
     parser.add_argument(
+        "--max-fixed-update-nis-per-obs",
+        type=float,
+        default=None,
+        help="Optional RTK fixed-candidate NIS/observation rejection threshold.",
+    )
+    parser.add_argument(
+        "--max-fixed-update-post-rms",
+        type=float,
+        default=None,
+        help="Optional RTK fixed-candidate update post-residual RMS rejection threshold.",
+    )
+    parser.add_argument(
+        "--max-fixed-update-gate-ratio",
+        type=float,
+        default=None,
+        help="Apply RTK fixed-candidate update gates only when AR ratio is at or below this value.",
+    )
+    parser.add_argument(
+        "--min-fixed-update-gate-baseline",
+        type=float,
+        default=None,
+        help="Apply RTK fixed-candidate update gates only above this baseline length in meters.",
+    )
+    parser.add_argument(
+        "--max-fixed-update-gate-baseline",
+        type=float,
+        default=None,
+        help="Apply RTK fixed-candidate update gates only below this baseline length in meters.",
+    )
+    parser.add_argument(
+        "--min-fixed-update-gate-speed",
+        type=float,
+        default=None,
+        help="Apply RTK fixed-candidate update gates only above this fixed-candidate speed.",
+    )
+    parser.add_argument(
+        "--max-fixed-update-gate-speed",
+        type=float,
+        default=None,
+        help="Apply RTK fixed-candidate update gates only below this fixed-candidate speed.",
+    )
+    parser.add_argument("--max-fixed-update-secondary-gate-ratio", type=float, default=None)
+    parser.add_argument("--min-fixed-update-secondary-gate-baseline", type=float, default=None)
+    parser.add_argument("--max-fixed-update-secondary-gate-baseline", type=float, default=None)
+    parser.add_argument("--min-fixed-update-secondary-gate-speed", type=float, default=None)
+    parser.add_argument("--max-fixed-update-secondary-gate-speed", type=float, default=None)
+    parser.add_argument(
         "--demote-fixed-status-nis-per-obs",
         type=float,
         default=None,
@@ -254,6 +307,12 @@ def parse_args() -> argparse.Namespace:
         help="Output RTK FIX as FLOAT when update post-residual RMS exceeds this value.",
     )
     parser.add_argument(
+        "--demote-fixed-status-max-ratio",
+        type=float,
+        default=None,
+        help="Output RTK FIX as FLOAT when AR ratio is at or below this value.",
+    )
+    parser.add_argument(
         "--demote-fixed-status-gate-ratio",
         type=float,
         default=None,
@@ -261,6 +320,69 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--min-demote-fixed-status-baseline", type=float, default=None)
     parser.add_argument("--max-demote-fixed-status-baseline", type=float, default=None)
+    parser.add_argument(
+        "--rtk-snr-weighting",
+        action="store_true",
+        help="Enable RTK low-SNR observation variance inflation.",
+    )
+    parser.add_argument(
+        "--rtk-snr-reference-dbhz",
+        type=float,
+        default=None,
+        help="Optional RTK SNR reference in dB-Hz for variance inflation.",
+    )
+    parser.add_argument(
+        "--rtk-snr-max-variance-scale",
+        type=float,
+        default=None,
+        help="Optional max RTK low-SNR variance inflation scale.",
+    )
+    parser.add_argument(
+        "--rtk-snr-min-baseline",
+        type=float,
+        default=None,
+        help="Apply RTK SNR weighting only when baseline length is at least this many meters.",
+    )
+    parser.add_argument(
+        "--cycle-slip-threshold",
+        type=float,
+        default=None,
+        help="Optional RTK geometry-free cycle-slip threshold in meters.",
+    )
+    parser.add_argument(
+        "--doppler-slip-threshold",
+        type=float,
+        default=None,
+        help="Optional RTK Doppler slip threshold in meters.",
+    )
+    parser.add_argument(
+        "--code-slip-threshold",
+        type=float,
+        default=None,
+        help="Optional RTK code-minus-phase slip threshold in meters.",
+    )
+    parser.add_argument(
+        "--strict-dynamic-slip-thresholds",
+        action="store_true",
+        help="Use configured RTK slip thresholds in dynamic mode without protective floors.",
+    )
+    parser.add_argument(
+        "--adaptive-dynamic-slip-thresholds",
+        action="store_true",
+        help="Use configured RTK slip thresholds only after a non-FIX streak in dynamic mode.",
+    )
+    parser.add_argument(
+        "--adaptive-dynamic-slip-nonfix-count",
+        type=int,
+        default=None,
+        help="Non-FIX epochs before adaptive RTK slip thresholds activate.",
+    )
+    parser.add_argument(
+        "--adaptive-dynamic-slip-hold-epochs",
+        type=int,
+        default=None,
+        help="Epochs to keep adaptive RTK slip thresholds after activation.",
+    )
     parser.add_argument(
         "--max-consec-float-reset",
         type=int,
@@ -290,6 +412,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional wide-lane integer acceptance threshold in cycles.",
     )
+    parser.add_argument(
+        "--enable-wlnl-fallback",
+        action="store_true",
+        help="Enable the experimental RTK MW wide-lane / narrow-lane fallback.",
+    )
+    parser.add_argument(
+        "--enable-bsr-decimation",
+        action="store_true",
+        help="Enable BSR-guided RTK subset AR decimation.",
+    )
+    parser.add_argument("--bsr-worst-axes", type=int, default=None)
+    parser.add_argument("--bsr-max-drops", type=int, default=None)
     parser.add_argument("--arfilter", dest="arfilter", action="store_true", help="Enable AR filter for RTK.")
     parser.add_argument("--no-arfilter", dest="arfilter", action="store_false", help="Disable AR filter for RTK.")
     parser.set_defaults(arfilter=None)
@@ -998,6 +1132,10 @@ def run_solver(
             command.extend(["--iono", args.iono])
         if getattr(args, "ratio", None) is not None:
             command.extend(["--ratio", str(args.ratio)])
+        if getattr(args, "max_subset_ar_drop_steps", None) is not None:
+            command.extend(
+                ["--max-subset-ar-drop-steps", str(args.max_subset_ar_drop_steps)]
+            )
         if getattr(args, "max_hold_div", None) is not None:
             command.extend(["--max-hold-div", str(args.max_hold_div)])
         if getattr(args, "max_pos_jump", None) is not None:
@@ -1030,6 +1168,90 @@ def run_solver(
             command.extend(["--max-update-nis-per-obs", str(args.max_update_nis_per_obs)])
         if getattr(args, "carrier_phase_sigma", None) is not None:
             command.extend(["--carrier-phase-sigma", str(args.carrier_phase_sigma)])
+        if getattr(args, "max_fixed_update_nis_per_obs", None) is not None:
+            command.extend(
+                [
+                    "--max-fixed-update-nis-per-obs",
+                    str(args.max_fixed_update_nis_per_obs),
+                ]
+            )
+        if getattr(args, "max_fixed_update_post_rms", None) is not None:
+            command.extend(
+                [
+                    "--max-fixed-update-post-rms",
+                    str(args.max_fixed_update_post_rms),
+                ]
+            )
+        if getattr(args, "max_fixed_update_gate_ratio", None) is not None:
+            command.extend(
+                [
+                    "--max-fixed-update-gate-ratio",
+                    str(args.max_fixed_update_gate_ratio),
+                ]
+            )
+        if getattr(args, "min_fixed_update_gate_baseline", None) is not None:
+            command.extend(
+                [
+                    "--min-fixed-update-gate-baseline",
+                    str(args.min_fixed_update_gate_baseline),
+                ]
+            )
+        if getattr(args, "max_fixed_update_gate_baseline", None) is not None:
+            command.extend(
+                [
+                    "--max-fixed-update-gate-baseline",
+                    str(args.max_fixed_update_gate_baseline),
+                ]
+            )
+        if getattr(args, "min_fixed_update_gate_speed", None) is not None:
+            command.extend(
+                [
+                    "--min-fixed-update-gate-speed",
+                    str(args.min_fixed_update_gate_speed),
+                ]
+            )
+        if getattr(args, "max_fixed_update_gate_speed", None) is not None:
+            command.extend(
+                [
+                    "--max-fixed-update-gate-speed",
+                    str(args.max_fixed_update_gate_speed),
+                ]
+            )
+        if getattr(args, "max_fixed_update_secondary_gate_ratio", None) is not None:
+            command.extend(
+                [
+                    "--max-fixed-update-secondary-gate-ratio",
+                    str(args.max_fixed_update_secondary_gate_ratio),
+                ]
+            )
+        if getattr(args, "min_fixed_update_secondary_gate_baseline", None) is not None:
+            command.extend(
+                [
+                    "--min-fixed-update-secondary-gate-baseline",
+                    str(args.min_fixed_update_secondary_gate_baseline),
+                ]
+            )
+        if getattr(args, "max_fixed_update_secondary_gate_baseline", None) is not None:
+            command.extend(
+                [
+                    "--max-fixed-update-secondary-gate-baseline",
+                    str(args.max_fixed_update_secondary_gate_baseline),
+                ]
+            )
+        if getattr(args, "min_fixed_update_secondary_gate_speed", None) is not None:
+            command.extend(
+                [
+                    "--min-fixed-update-secondary-gate-speed",
+                    str(args.min_fixed_update_secondary_gate_speed),
+                ]
+            )
+        if getattr(args, "max_fixed_update_secondary_gate_speed", None) is not None:
+            command.extend(
+                [
+                    "--max-fixed-update-secondary-gate-speed",
+                    str(args.max_fixed_update_secondary_gate_speed),
+                ]
+            )
         if getattr(args, "demote_fixed_status_nis_per_obs", None) is not None:
             command.extend(
                 [
@@ -1042,6 +1264,13 @@ def run_solver(
                 [
                     "--demote-fixed-status-post-rms",
                     str(args.demote_fixed_status_post_rms),
+                ]
+            )
+        if getattr(args, "demote_fixed_status_max_ratio", None) is not None:
+            command.extend(
+                [
+                    "--demote-fixed-status-max-ratio",
+                    str(args.demote_fixed_status_max_ratio),
                 ]
             )
         if getattr(args, "demote_fixed_status_gate_ratio", None) is not None:
@@ -1065,6 +1294,43 @@ def run_solver(
                     str(args.max_demote_fixed_status_baseline),
                 ]
             )
+        if getattr(args, "rtk_snr_weighting", False):
+            command.append("--rtk-snr-weighting")
+        if getattr(args, "rtk_snr_reference_dbhz", None) is not None:
+            command.extend(["--rtk-snr-reference-dbhz", str(args.rtk_snr_reference_dbhz)])
+        if getattr(args, "rtk_snr_max_variance_scale", None) is not None:
+            command.extend(
+                [
+                    "--rtk-snr-max-variance-scale",
+                    str(args.rtk_snr_max_variance_scale),
+                ]
+            )
+        if getattr(args, "rtk_snr_min_baseline", None) is not None:
+            command.extend(["--rtk-snr-min-baseline", str(args.rtk_snr_min_baseline)])
+        if getattr(args, "cycle_slip_threshold", None) is not None:
+            command.extend(["--cycle-slip-threshold", str(args.cycle_slip_threshold)])
+        if getattr(args, "doppler_slip_threshold", None) is not None:
+            command.extend(["--doppler-slip-threshold", str(args.doppler_slip_threshold)])
+        if getattr(args, "code_slip_threshold", None) is not None:
+            command.extend(["--code-slip-threshold", str(args.code_slip_threshold)])
+        if getattr(args, "strict_dynamic_slip_thresholds", False):
+            command.append("--strict-dynamic-slip-thresholds")
+        if getattr(args, "adaptive_dynamic_slip_thresholds", False):
+            command.append("--adaptive-dynamic-slip-thresholds")
+        if getattr(args, "adaptive_dynamic_slip_nonfix_count", None) is not None:
+            command.extend(
+                [
+                    "--adaptive-dynamic-slip-nonfix-count",
+                    str(args.adaptive_dynamic_slip_nonfix_count),
+                ]
+            )
+        if getattr(args, "adaptive_dynamic_slip_hold_epochs", None) is not None:
+            command.extend(
+                [
+                    "--adaptive-dynamic-slip-hold-epochs",
+                    str(args.adaptive_dynamic_slip_hold_epochs),
+                ]
+            )
         if getattr(args, "max_consec_float_reset", None) is not None:
             command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
         if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -1075,6 +1341,14 @@ def run_solver(
             command.append("--enable-wide-lane-ar")
         if getattr(args, "wide_lane_threshold", None) is not None:
             command.extend(["--wide-lane-threshold", str(args.wide_lane_threshold)])
+        if getattr(args, "enable_wlnl_fallback", False):
+            command.append("--enable-wlnl-fallback")
+        if getattr(args, "enable_bsr_decimation", False):
+            command.append("--enable-bsr-decimation")
+        if getattr(args, "bsr_worst_axes", None) is not None:
+            command.extend(["--bsr-worst-axes", str(args.bsr_worst_axes)])
+        if getattr(args, "bsr_max_drops", None) is not None:
+            command.extend(["--bsr-max-drops", str(args.bsr_max_drops)])
         if args.arfilter is True:
             command.append("--arfilter")
         elif args.arfilter is False:
@@ -1241,6 +1515,11 @@ def build_summary_payload(
         "receiver_observation_provenance": ppc_receiver_observation_provenance(args._dataset_city),
         "rtk_iono": getattr(args, "iono", None) if args.solver == "rtk" else None,
         "rtk_ratio_threshold": getattr(args, "ratio", None) if args.solver == "rtk" else None,
+        "rtk_max_subset_ar_drop_steps": (
+            getattr(args, "max_subset_ar_drop_steps", None)
+            if args.solver == "rtk"
+            else None
+        ),
         "rtk_max_hold_divergence_m": getattr(args, "max_hold_div", None) if args.solver == "rtk" else None,
         "rtk_max_position_jump_m": getattr(args, "max_pos_jump", None) if args.solver == "rtk" else None,
         "rtk_max_position_jump_min_m": (
@@ -1270,6 +1549,52 @@ def build_summary_payload(
         "rtk_carrier_phase_sigma_m": (
             getattr(args, "carrier_phase_sigma", None) if args.solver == "rtk" else None
         ),
+        "rtk_max_fixed_update_nis_per_observation": (
+            getattr(args, "max_fixed_update_nis_per_obs", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_fixed_update_post_residual_rms_m": (
+            getattr(args, "max_fixed_update_post_rms", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_fixed_update_gate_ratio": (
+            getattr(args, "max_fixed_update_gate_ratio", None) if args.solver == "rtk" else None
+        ),
+        "rtk_min_fixed_update_gate_baseline_m": (
+            getattr(args, "min_fixed_update_gate_baseline", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_fixed_update_gate_baseline_m": (
+            getattr(args, "max_fixed_update_gate_baseline", None) if args.solver == "rtk" else None
+        ),
+        "rtk_min_fixed_update_gate_speed_mps": (
+            getattr(args, "min_fixed_update_gate_speed", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_fixed_update_gate_speed_mps": (
+            getattr(args, "max_fixed_update_gate_speed", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_fixed_update_secondary_gate_ratio": (
+            getattr(args, "max_fixed_update_secondary_gate_ratio", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_min_fixed_update_secondary_gate_baseline_m": (
+            getattr(args, "min_fixed_update_secondary_gate_baseline", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_max_fixed_update_secondary_gate_baseline_m": (
+            getattr(args, "max_fixed_update_secondary_gate_baseline", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_min_fixed_update_secondary_gate_speed_mps": (
+            getattr(args, "min_fixed_update_secondary_gate_speed", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_max_fixed_update_secondary_gate_speed_mps": (
+            getattr(args, "max_fixed_update_secondary_gate_speed", None)
+            if args.solver == "rtk"
+            else None
+        ),
         "rtk_demote_fixed_status_nis_per_observation": (
             getattr(args, "demote_fixed_status_nis_per_obs", None)
             if args.solver == "rtk"
@@ -1277,6 +1602,11 @@ def build_summary_payload(
         ),
         "rtk_demote_fixed_status_post_residual_rms_m": (
             getattr(args, "demote_fixed_status_post_rms", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_demote_fixed_status_max_ratio": (
+            getattr(args, "demote_fixed_status_max_ratio", None)
             if args.solver == "rtk"
             else None
         ),
@@ -1295,6 +1625,43 @@ def build_summary_payload(
             if args.solver == "rtk"
             else None
         ),
+        "rtk_snr_weighting_enabled": bool(
+            args.solver == "rtk" and getattr(args, "rtk_snr_weighting", False)
+        ),
+        "rtk_snr_reference_dbhz": (
+            getattr(args, "rtk_snr_reference_dbhz", None) if args.solver == "rtk" else None
+        ),
+        "rtk_snr_max_variance_scale": (
+            getattr(args, "rtk_snr_max_variance_scale", None) if args.solver == "rtk" else None
+        ),
+        "rtk_snr_min_baseline_m": (
+            getattr(args, "rtk_snr_min_baseline", None) if args.solver == "rtk" else None
+        ),
+        "rtk_cycle_slip_threshold_m": (
+            getattr(args, "cycle_slip_threshold", None) if args.solver == "rtk" else None
+        ),
+        "rtk_doppler_slip_threshold_m": (
+            getattr(args, "doppler_slip_threshold", None) if args.solver == "rtk" else None
+        ),
+        "rtk_code_slip_threshold_m": (
+            getattr(args, "code_slip_threshold", None) if args.solver == "rtk" else None
+        ),
+        "rtk_strict_dynamic_slip_thresholds": bool(
+            args.solver == "rtk" and getattr(args, "strict_dynamic_slip_thresholds", False)
+        ),
+        "rtk_adaptive_dynamic_slip_thresholds": bool(
+            args.solver == "rtk" and getattr(args, "adaptive_dynamic_slip_thresholds", False)
+        ),
+        "rtk_adaptive_dynamic_slip_nonfix_count": (
+            getattr(args, "adaptive_dynamic_slip_nonfix_count", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_adaptive_dynamic_slip_hold_epochs": (
+            getattr(args, "adaptive_dynamic_slip_hold_epochs", None)
+            if args.solver == "rtk"
+            else None
+        ),
         "rtk_max_consecutive_float_for_reset": (
             getattr(args, "max_consec_float_reset", None) if args.solver == "rtk" else None
         ),
@@ -1309,6 +1676,18 @@ def build_summary_payload(
         ),
         "rtk_wide_lane_threshold": (
             getattr(args, "wide_lane_threshold", None) if args.solver == "rtk" else None
+        ),
+        "rtk_wlnl_fallback_enabled": bool(
+            args.solver == "rtk" and getattr(args, "enable_wlnl_fallback", False)
+        ),
+        "rtk_bsr_decimation_enabled": bool(
+            args.solver == "rtk" and getattr(args, "enable_bsr_decimation", False)
+        ),
+        "rtk_bsr_worst_axes": (
+            getattr(args, "bsr_worst_axes", None) if args.solver == "rtk" else None
+        ),
+        "rtk_bsr_max_drops": (
+            getattr(args, "bsr_max_drops", None) if args.solver == "rtk" else None
         ),
         "rtk_output_profile": "coverage" if getattr(args, "no_kinematic_post_filter", False) else "precision",
         "kinematic_post_filter_enabled": not getattr(args, "no_kinematic_post_filter", False),

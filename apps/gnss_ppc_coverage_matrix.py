@@ -9,9 +9,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import sys
 import time
-from typing import Any
 
 from gnss_runtime import ensure_input_exists, resolve_gnss_command
 
@@ -93,6 +91,12 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK ambiguity ratio threshold passed to each ppc-demo run.",
     )
     parser.add_argument(
+        "--max-subset-ar-drop-steps",
+        type=int,
+        default=None,
+        help="Optional max worst-variance DD pairs dropped by RTK subset AR.",
+    )
+    parser.add_argument(
         "--max-hold-div",
         type=float,
         default=None,
@@ -153,11 +157,62 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK DD Kalman update NIS/observation rejection threshold.",
     )
     parser.add_argument("--carrier-phase-sigma", type=float, default=None)
+    parser.add_argument(
+        "--max-fixed-update-nis-per-obs",
+        type=float,
+        default=None,
+        help="Optional RTK fixed-candidate NIS/observation rejection threshold.",
+    )
+    parser.add_argument(
+        "--max-fixed-update-post-rms",
+        type=float,
+        default=None,
+        help="Optional RTK fixed-candidate update post-residual RMS rejection threshold.",
+    )
+    parser.add_argument(
+        "--max-fixed-update-gate-ratio",
+        type=float,
+        default=None,
+        help="Apply fixed-candidate update gates only when AR ratio is at or below this value.",
+    )
+    parser.add_argument("--min-fixed-update-gate-baseline", type=float, default=None)
+    parser.add_argument("--max-fixed-update-gate-baseline", type=float, default=None)
+    parser.add_argument("--min-fixed-update-gate-speed", type=float, default=None)
+    parser.add_argument("--max-fixed-update-gate-speed", type=float, default=None)
+    parser.add_argument("--max-fixed-update-secondary-gate-ratio", type=float, default=None)
+    parser.add_argument("--min-fixed-update-secondary-gate-baseline", type=float, default=None)
+    parser.add_argument("--max-fixed-update-secondary-gate-baseline", type=float, default=None)
+    parser.add_argument("--min-fixed-update-secondary-gate-speed", type=float, default=None)
+    parser.add_argument("--max-fixed-update-secondary-gate-speed", type=float, default=None)
     parser.add_argument("--demote-fixed-status-nis-per-obs", type=float, default=None)
     parser.add_argument("--demote-fixed-status-post-rms", type=float, default=None)
+    parser.add_argument("--demote-fixed-status-max-ratio", type=float, default=None)
     parser.add_argument("--demote-fixed-status-gate-ratio", type=float, default=None)
     parser.add_argument("--min-demote-fixed-status-baseline", type=float, default=None)
     parser.add_argument("--max-demote-fixed-status-baseline", type=float, default=None)
+    parser.add_argument(
+        "--rtk-snr-weighting",
+        action="store_true",
+        help="Enable RTK low-SNR observation variance inflation.",
+    )
+    parser.add_argument("--rtk-snr-reference-dbhz", type=float, default=None)
+    parser.add_argument("--rtk-snr-max-variance-scale", type=float, default=None)
+    parser.add_argument("--rtk-snr-min-baseline", type=float, default=None)
+    parser.add_argument("--cycle-slip-threshold", type=float, default=None)
+    parser.add_argument("--doppler-slip-threshold", type=float, default=None)
+    parser.add_argument("--code-slip-threshold", type=float, default=None)
+    parser.add_argument(
+        "--strict-dynamic-slip-thresholds",
+        action="store_true",
+        help="Use configured RTK slip thresholds in dynamic mode without protective floors.",
+    )
+    parser.add_argument(
+        "--adaptive-dynamic-slip-thresholds",
+        action="store_true",
+        help="Use configured RTK slip thresholds only after a non-FIX streak in dynamic mode.",
+    )
+    parser.add_argument("--adaptive-dynamic-slip-nonfix-count", type=int, default=None)
+    parser.add_argument("--adaptive-dynamic-slip-hold-epochs", type=int, default=None)
     parser.add_argument(
         "--max-consec-float-reset",
         type=int,
@@ -173,6 +228,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-postfix-rms", type=float, default=None)
     parser.add_argument("--enable-wide-lane-ar", action="store_true")
     parser.add_argument("--wide-lane-threshold", type=float, default=None)
+    parser.add_argument("--enable-wlnl-fallback", action="store_true")
+    parser.add_argument("--enable-bsr-decimation", action="store_true")
+    parser.add_argument("--bsr-worst-axes", type=int, default=None)
+    parser.add_argument("--bsr-max-drops", type=int, default=None)
     parser.add_argument(
         "--rtklib-root",
         type=Path,
@@ -301,6 +360,8 @@ def build_ppc_demo_command(
         command.extend(["--iono", args.iono])
     if getattr(args, "ratio", None) is not None:
         command.extend(["--ratio", str(args.ratio)])
+    if getattr(args, "max_subset_ar_drop_steps", None) is not None:
+        command.extend(["--max-subset-ar-drop-steps", str(args.max_subset_ar_drop_steps)])
     if getattr(args, "max_hold_div", None) is not None:
         command.extend(["--max-hold-div", str(args.max_hold_div)])
     if getattr(args, "max_pos_jump", None) is not None:
@@ -333,6 +394,90 @@ def build_ppc_demo_command(
         command.extend(["--max-update-nis-per-obs", str(args.max_update_nis_per_obs)])
     if getattr(args, "carrier_phase_sigma", None) is not None:
         command.extend(["--carrier-phase-sigma", str(args.carrier_phase_sigma)])
+    if getattr(args, "max_fixed_update_nis_per_obs", None) is not None:
+        command.extend(
+            [
+                "--max-fixed-update-nis-per-obs",
+                str(args.max_fixed_update_nis_per_obs),
+            ]
+        )
+    if getattr(args, "max_fixed_update_post_rms", None) is not None:
+        command.extend(
+            [
+                "--max-fixed-update-post-rms",
+                str(args.max_fixed_update_post_rms),
+            ]
+        )
+    if getattr(args, "max_fixed_update_gate_ratio", None) is not None:
+        command.extend(
+            [
+                "--max-fixed-update-gate-ratio",
+                str(args.max_fixed_update_gate_ratio),
+            ]
+        )
+    if getattr(args, "min_fixed_update_gate_baseline", None) is not None:
+        command.extend(
+            [
+                "--min-fixed-update-gate-baseline",
+                str(args.min_fixed_update_gate_baseline),
+            ]
+        )
+    if getattr(args, "max_fixed_update_gate_baseline", None) is not None:
+        command.extend(
+            [
+                "--max-fixed-update-gate-baseline",
+                str(args.max_fixed_update_gate_baseline),
+            ]
+        )
+    if getattr(args, "min_fixed_update_gate_speed", None) is not None:
+        command.extend(
+            [
+                "--min-fixed-update-gate-speed",
+                str(args.min_fixed_update_gate_speed),
+            ]
+        )
+    if getattr(args, "max_fixed_update_gate_speed", None) is not None:
+        command.extend(
+            [
+                "--max-fixed-update-gate-speed",
+                str(args.max_fixed_update_gate_speed),
+            ]
+        )
+    if getattr(args, "max_fixed_update_secondary_gate_ratio", None) is not None:
+        command.extend(
+            [
+                "--max-fixed-update-secondary-gate-ratio",
+                str(args.max_fixed_update_secondary_gate_ratio),
+            ]
+        )
+    if getattr(args, "min_fixed_update_secondary_gate_baseline", None) is not None:
+        command.extend(
+            [
+                "--min-fixed-update-secondary-gate-baseline",
+                str(args.min_fixed_update_secondary_gate_baseline),
+            ]
+        )
+    if getattr(args, "max_fixed_update_secondary_gate_baseline", None) is not None:
+        command.extend(
+            [
+                "--max-fixed-update-secondary-gate-baseline",
+                str(args.max_fixed_update_secondary_gate_baseline),
+            ]
+        )
+    if getattr(args, "min_fixed_update_secondary_gate_speed", None) is not None:
+        command.extend(
+            [
+                "--min-fixed-update-secondary-gate-speed",
+                str(args.min_fixed_update_secondary_gate_speed),
+            ]
+        )
+    if getattr(args, "max_fixed_update_secondary_gate_speed", None) is not None:
+        command.extend(
+            [
+                "--max-fixed-update-secondary-gate-speed",
+                str(args.max_fixed_update_secondary_gate_speed),
+            ]
+        )
     if getattr(args, "demote_fixed_status_nis_per_obs", None) is not None:
         command.extend(
             [
@@ -345,6 +490,13 @@ def build_ppc_demo_command(
             [
                 "--demote-fixed-status-post-rms",
                 str(args.demote_fixed_status_post_rms),
+            ]
+        )
+    if getattr(args, "demote_fixed_status_max_ratio", None) is not None:
+        command.extend(
+            [
+                "--demote-fixed-status-max-ratio",
+                str(args.demote_fixed_status_max_ratio),
             ]
         )
     if getattr(args, "demote_fixed_status_gate_ratio", None) is not None:
@@ -368,6 +520,38 @@ def build_ppc_demo_command(
                 str(args.max_demote_fixed_status_baseline),
             ]
         )
+    if getattr(args, "rtk_snr_weighting", False):
+        command.append("--rtk-snr-weighting")
+    if getattr(args, "rtk_snr_reference_dbhz", None) is not None:
+        command.extend(["--rtk-snr-reference-dbhz", str(args.rtk_snr_reference_dbhz)])
+    if getattr(args, "rtk_snr_max_variance_scale", None) is not None:
+        command.extend(["--rtk-snr-max-variance-scale", str(args.rtk_snr_max_variance_scale)])
+    if getattr(args, "rtk_snr_min_baseline", None) is not None:
+        command.extend(["--rtk-snr-min-baseline", str(args.rtk_snr_min_baseline)])
+    if getattr(args, "cycle_slip_threshold", None) is not None:
+        command.extend(["--cycle-slip-threshold", str(args.cycle_slip_threshold)])
+    if getattr(args, "doppler_slip_threshold", None) is not None:
+        command.extend(["--doppler-slip-threshold", str(args.doppler_slip_threshold)])
+    if getattr(args, "code_slip_threshold", None) is not None:
+        command.extend(["--code-slip-threshold", str(args.code_slip_threshold)])
+    if getattr(args, "strict_dynamic_slip_thresholds", False):
+        command.append("--strict-dynamic-slip-thresholds")
+    if getattr(args, "adaptive_dynamic_slip_thresholds", False):
+        command.append("--adaptive-dynamic-slip-thresholds")
+    if getattr(args, "adaptive_dynamic_slip_nonfix_count", None) is not None:
+        command.extend(
+            [
+                "--adaptive-dynamic-slip-nonfix-count",
+                str(args.adaptive_dynamic_slip_nonfix_count),
+            ]
+        )
+    if getattr(args, "adaptive_dynamic_slip_hold_epochs", None) is not None:
+        command.extend(
+            [
+                "--adaptive-dynamic-slip-hold-epochs",
+                str(args.adaptive_dynamic_slip_hold_epochs),
+            ]
+        )
     if getattr(args, "max_consec_float_reset", None) is not None:
         command.extend(["--max-consec-float-reset", str(args.max_consec_float_reset)])
     if getattr(args, "max_consec_nonfix_reset", None) is not None:
@@ -378,6 +562,14 @@ def build_ppc_demo_command(
         command.append("--enable-wide-lane-ar")
     if getattr(args, "wide_lane_threshold", None) is not None:
         command.extend(["--wide-lane-threshold", str(args.wide_lane_threshold)])
+    if getattr(args, "enable_wlnl_fallback", False):
+        command.append("--enable-wlnl-fallback")
+    if getattr(args, "enable_bsr_decimation", False):
+        command.append("--enable-bsr-decimation")
+    if getattr(args, "bsr_worst_axes", None) is not None:
+        command.extend(["--bsr-worst-axes", str(args.bsr_worst_axes)])
+    if getattr(args, "bsr_max_drops", None) is not None:
+        command.extend(["--bsr-max-drops", str(args.bsr_max_drops)])
     if args.use_existing_solutions:
         command.append("--use-existing-solution")
     if getattr(args, "no_nonfix_drift_guard", False):
@@ -643,6 +835,7 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "preset": args.preset,
         "iono": getattr(args, "iono", None),
         "ratio": getattr(args, "ratio", None),
+        "max_subset_ar_drop_steps": getattr(args, "max_subset_ar_drop_steps", None),
         "max_hold_div": getattr(args, "max_hold_div", None),
         "max_pos_jump": getattr(args, "max_pos_jump", None),
         "max_pos_jump_min": getattr(args, "max_pos_jump_min", None),
@@ -654,11 +847,36 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "min_float_prefit_trusted_jump": getattr(args, "min_float_prefit_trusted_jump", None),
         "max_update_nis_per_obs": getattr(args, "max_update_nis_per_obs", None),
         "carrier_phase_sigma": getattr(args, "carrier_phase_sigma", None),
+        "max_fixed_update_nis_per_obs": getattr(args, "max_fixed_update_nis_per_obs", None),
+        "max_fixed_update_post_rms": getattr(args, "max_fixed_update_post_rms", None),
+        "max_fixed_update_gate_ratio": getattr(args, "max_fixed_update_gate_ratio", None),
+        "min_fixed_update_gate_baseline": getattr(args, "min_fixed_update_gate_baseline", None),
+        "max_fixed_update_gate_baseline": getattr(args, "max_fixed_update_gate_baseline", None),
+        "min_fixed_update_gate_speed": getattr(args, "min_fixed_update_gate_speed", None),
+        "max_fixed_update_gate_speed": getattr(args, "max_fixed_update_gate_speed", None),
+        "max_fixed_update_secondary_gate_ratio": getattr(
+            args, "max_fixed_update_secondary_gate_ratio", None
+        ),
+        "min_fixed_update_secondary_gate_baseline": getattr(
+            args, "min_fixed_update_secondary_gate_baseline", None
+        ),
+        "max_fixed_update_secondary_gate_baseline": getattr(
+            args, "max_fixed_update_secondary_gate_baseline", None
+        ),
+        "min_fixed_update_secondary_gate_speed": getattr(
+            args, "min_fixed_update_secondary_gate_speed", None
+        ),
+        "max_fixed_update_secondary_gate_speed": getattr(
+            args, "max_fixed_update_secondary_gate_speed", None
+        ),
         "demote_fixed_status_nis_per_obs": getattr(
             args, "demote_fixed_status_nis_per_obs", None
         ),
         "demote_fixed_status_post_rms": getattr(
             args, "demote_fixed_status_post_rms", None
+        ),
+        "demote_fixed_status_max_ratio": getattr(
+            args, "demote_fixed_status_max_ratio", None
         ),
         "demote_fixed_status_gate_ratio": getattr(
             args, "demote_fixed_status_gate_ratio", None
@@ -669,11 +887,26 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_demote_fixed_status_baseline": getattr(
             args, "max_demote_fixed_status_baseline", None
         ),
+        "rtk_snr_weighting": getattr(args, "rtk_snr_weighting", False),
+        "rtk_snr_reference_dbhz": getattr(args, "rtk_snr_reference_dbhz", None),
+        "rtk_snr_max_variance_scale": getattr(args, "rtk_snr_max_variance_scale", None),
+        "rtk_snr_min_baseline": getattr(args, "rtk_snr_min_baseline", None),
+        "cycle_slip_threshold": getattr(args, "cycle_slip_threshold", None),
+        "doppler_slip_threshold": getattr(args, "doppler_slip_threshold", None),
+        "code_slip_threshold": getattr(args, "code_slip_threshold", None),
+        "strict_dynamic_slip_thresholds": getattr(args, "strict_dynamic_slip_thresholds", False),
+        "adaptive_dynamic_slip_thresholds": getattr(args, "adaptive_dynamic_slip_thresholds", False),
+        "adaptive_dynamic_slip_nonfix_count": getattr(args, "adaptive_dynamic_slip_nonfix_count", None),
+        "adaptive_dynamic_slip_hold_epochs": getattr(args, "adaptive_dynamic_slip_hold_epochs", None),
         "max_consec_float_reset": getattr(args, "max_consec_float_reset", None),
         "max_consec_nonfix_reset": getattr(args, "max_consec_nonfix_reset", None),
         "max_postfix_rms": getattr(args, "max_postfix_rms", None),
         "enable_wide_lane_ar": getattr(args, "enable_wide_lane_ar", False),
         "wide_lane_threshold": getattr(args, "wide_lane_threshold", None),
+        "enable_wlnl_fallback": getattr(args, "enable_wlnl_fallback", False),
+        "enable_bsr_decimation": getattr(args, "enable_bsr_decimation", False),
+        "bsr_worst_axes": getattr(args, "bsr_worst_axes", None),
+        "bsr_max_drops": getattr(args, "bsr_max_drops", None),
         "no_nonfix_drift_guard": getattr(args, "no_nonfix_drift_guard", False),
         "nonfix_drift_max_anchor_gap": getattr(args, "nonfix_drift_max_anchor_gap", None),
         "nonfix_drift_max_anchor_speed": getattr(args, "nonfix_drift_max_anchor_speed", None),
