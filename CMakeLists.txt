@@ -22,6 +22,12 @@ find_package(nav_msgs QUIET)
 find_package(std_msgs QUIET)
 find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs)
 
+# Vendored third-party libraries.
+# These are built as STATIC sub-targets and are NOT yet linked into gnss_lib;
+# linking will be wired up in a follow-up PR once the API surface is exposed
+# through include/iers/.
+add_subdirectory(third_party/sofa)
+
 # List source files for the main library
 set(GNSS_SOURCES
     src/gnss.cpp
