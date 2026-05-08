@@ -23,9 +23,8 @@ find_package(std_msgs QUIET)
 find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs)
 
 # Vendored third-party libraries.
-# These are built as STATIC sub-targets and are NOT yet linked into gnss_lib;
-# linking will be wired up in a follow-up PR once the API surface is exposed
-# through include/iers/.
+# These are built as STATIC sub-targets and consumed by gnss_lib through
+# the libgnss++/iers/ wrapper API (see include/libgnss++/iers/).
 add_subdirectory(third_party/sofa)
 add_subdirectory(third_party/ginan-iers2010)
 
@@ -48,6 +47,8 @@ set(GNSS_SOURCES
     src/algorithms/ppp_wlnl.cpp
     src/algorithms/ppp_clas_epoch.cpp
     src/algorithms/ppp.cpp
+    src/iers/earth_rotation.cpp
+    src/iers/tides.cpp
 )
 
 # List source files for the no-optimization library
@@ -72,6 +73,11 @@ target_include_directories(gnss_lib PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_link_libraries(gnss_lib PUBLIC Eigen3::Eigen)
+# IERS wrappers: SOFA + ginan-iers2010 are PRIVATE so the vendor types
+# (e.g. iauPV vector types, the iers2010:: namespace) do not leak into
+# the public libgnss++ API. Public consumers see only the wrappers in
+# include/libgnss++/iers/.
+target_link_libraries(gnss_lib PRIVATE sofa ginan_iers2010)
 
 # Create the no-optimization library
 add_library(gnss_lib_noopt STATIC ${GNSS_SOURCES_NO_OPTIMIZATION})
@@ -83,7 +89,11 @@ target_include_directories(gnss_lib_noopt PUBLIC
 target_link_libraries(gnss_lib_noopt PUBLIC Eigen3::Eigen)
 
 install(
-    TARGETS gnss_lib gnss_lib_noopt
+    # Note: sofa and ginan_iers2010 are PRIVATE link deps of gnss_lib but
+    # must still appear in the same export set because static archives do
+    # not carry their dependency closure — downstream consumers of an
+    # installed libgnsspp::gnss_lib need the vendor symbols at link time.
+    TARGETS gnss_lib gnss_lib_noopt sofa ginan_iers2010
     EXPORT libgnssppTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
