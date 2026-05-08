@@ -156,7 +156,9 @@ WlnlFixAttempt resolveWlnlFix(
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const EligibleAmbiguities& eligible_ambiguities,
     const WlnlNlInfoProvider& provider,
-    bool debug_enabled);
+    bool debug_enabled,
+    int dump_time_week = 0,
+    double dump_time_tow = 0.0);
 
 WlnlFixAttempt tryWlnlFix(
     const ppp_shared::PPPConfig& config,
@@ -165,7 +167,9 @@ WlnlFixAttempt tryWlnlFix(
     const std::vector<SatelliteId>& satellites,
     const std::vector<int>& state_indices,
     const std::map<SatelliteId, WlnlNlInfo>& nl_info,
-    bool debug_enabled);
+    bool debug_enabled,
+    int dump_time_week = 0,
+    double dump_time_tow = 0.0);
 
 // MADOCALIB-style cascaded-AR wide-lane state constraint.
 // For each pair of WL-fixed satellites (picked in SD form per system group),
@@ -227,6 +231,8 @@ struct FixedNlObservation {
     double lambda_nl_m = 0.0;
     Vector3d sat_pos = Vector3d::Zero();
     double sat_clk = 0.0;
+    GNSSSystem system = GNSSSystem::UNKNOWN;
+    WlnlGroupKey group{};
     bool use_trop_model = true;
 };
 
@@ -250,6 +256,36 @@ bool solveFixedNlPosition(
     const TropMappingFunction& trop_mapping_function,
     Vector3d& fixed_position,
     double* position_shift_norm_m = nullptr);
+
+struct FixedPositionSolutionStats {
+    int observations = 0;
+    int unknowns = 0;
+    bool solved = false;
+    double position_shift_norm_m = 0.0;
+    double clock_update_rms_m = 0.0;
+    double clock_update_max_abs_m = 0.0;
+    double residual_rms_m = 0.0;
+    double residual_max_abs_m = 0.0;
+};
+
+bool solveFixedNlPosition(
+    const std::vector<FixedNlObservation>& fixed_observations,
+    const Vector3d& initial_position,
+    double initial_clock_m,
+    double trop_zenith,
+    const GNSSTime& time,
+    const TropMappingFunction& trop_mapping_function,
+    Vector3d& fixed_position,
+    FixedPositionSolutionStats* stats);
+
+bool solveFixedNlDdPosition(
+    const std::vector<FixedNlObservation>& fixed_observations,
+    const Vector3d& initial_position,
+    double trop_zenith,
+    const GNSSTime& time,
+    const TropMappingFunction& trop_mapping_function,
+    Vector3d& fixed_position,
+    FixedPositionSolutionStats* stats);
 
 struct FixedCarrierObservation {
     Vector3d satellite_position = Vector3d::Zero();

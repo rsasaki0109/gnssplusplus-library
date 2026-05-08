@@ -1,9 +1,15 @@
 #include <gtest/gtest.h>
 
 #include <libgnss++/algorithms/ppp_ar.hpp>
+#include <libgnss++/core/coordinates.hpp>
 
 #include <cmath>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <limits>
+#include <string>
+#include <vector>
 
 using namespace libgnss;
 
@@ -416,6 +422,13 @@ TEST(PPPArTest, WlnlPreparationAppliesWideLaneFixesAndSummarizesCounts) {
     EXPECT_TRUE(ambiguity_states.at(sat2).wl_is_fixed);
     EXPECT_EQ(ambiguity_states.at(sat2).wl_fixed_integer, 12);
     EXPECT_FALSE(ambiguity_states.at(sat3).wl_is_fixed);
+
+    config.wlnl_wl_max_fractional_cycles = 0.05;
+    ambiguity_states.at(sat2).wl_is_fixed = false;
+    const auto strict_preparation = ppp_ar::prepareWlnlCandidates(
+        config, state, ambiguity_states, true, false);
+    EXPECT_EQ(strict_preparation.wl_summary.fixed_count, 1);
+    EXPECT_FALSE(ambiguity_states.at(sat2).wl_is_fixed);
 }
 
 TEST(PPPArTest, BuildWlnlNlInfoMapUsesOnlyWideLaneFixedSatellites) {
@@ -502,6 +515,76 @@ TEST(PPPArTest, ResolveWlnlFixUsesOnlyWideLaneFixedEligibleSatellites) {
     EXPECT_EQ(attempt.nb, 3);
 }
 
+TEST(PPPArTest, WlnlRatioDumpIncludesEpochAndPairDiagnostics) {
+    ppp_shared::PPPConfig config;
+    config.ar_ratio_threshold = 0.0;
+
+    ppp_shared::PPPState state;
+    state.amb_index = 4;
+    state.total_states = 10;
+    state.state = VectorXd::Zero(10);
+    state.covariance = MatrixXd::Identity(10, 10);
+
+    const std::vector<SatelliteId> satellites = {
+        {GNSSSystem::GPS, 1},
+        {GNSSSystem::GPS, 2},
+        {GNSSSystem::GPS, 3},
+        {GNSSSystem::GPS, 4},
+        {GNSSSystem::GPS, 5},
+    };
+    std::vector<int> state_indices;
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo> ambiguity_states;
+    std::map<SatelliteId, ppp_ar::WlnlNlInfo> nl_info;
+    for (size_t i = 0; i < satellites.size(); ++i) {
+        state_indices.push_back(static_cast<int>(4 + i));
+        auto& ambiguity = ambiguity_states[satellites[i]];
+        ambiguity.wl_is_fixed = true;
+        ambiguity.wl_fixed_integer = static_cast<int>(20 + i);
+        ambiguity.mw_mean_cycles = 20.1 + static_cast<double>(i);
+        ambiguity.mw_count = static_cast<int>(5 + i);
+        ambiguity.lock_count = 10;
+
+        auto& info = nl_info[satellites[i]];
+        info.valid = true;
+        info.nl_ambiguity_cycles = 100.0 - static_cast<double>(i);
+        info.lambda_nl_m = 0.14;
+        info.lambda_wl_m = 0.86;
+        info.group = {GNSSSystem::GPS, {static_cast<int>(SignalType::GPS_L1CA),
+                                        static_cast<int>(SignalType::GPS_L2C)}};
+    }
+
+    const auto dump_path =
+        std::filesystem::temp_directory_path() / "libgnss_wlnl_ratio_dump_test.csv";
+    std::filesystem::remove(dump_path);
+    ASSERT_EQ(::setenv("GNSS_PPP_RATIO_DUMP", dump_path.string().c_str(), 1), 0);
+    const auto attempt = ppp_ar::tryWlnlFix(
+        config,
+        state,
+        ambiguity_states,
+        satellites,
+        state_indices,
+        nl_info,
+        false,
+        2324,
+        345678.0);
+    ::unsetenv("GNSS_PPP_RATIO_DUMP");
+
+    EXPECT_TRUE(attempt.fixed);
+
+    std::ifstream input(dump_path);
+    ASSERT_TRUE(input.good());
+    std::string header;
+    std::string first_row;
+    std::getline(input, header);
+    std::getline(input, first_row);
+    EXPECT_NE(header.find("week,tow,ratio,nb,active_nb"), std::string::npos);
+    EXPECT_NE(header.find("dd_nl_fixed"), std::string::npos);
+    EXPECT_NE(header.find("ref_mw_mean"), std::string::npos);
+    EXPECT_NE(first_row.find("2324,345678"), std::string::npos);
+    EXPECT_NE(first_row.find("G01,G02"), std::string::npos);
+    std::filesystem::remove(dump_path);
+}
+
 TEST(PPPArTest, BuildFixedObservationHelpersFilterInvalidProviders) {
     const SatelliteId sat1(GNSSSystem::GPS, 1);
     const SatelliteId sat2(GNSSSystem::GPS, 2);
@@ -546,4 +629,90 @@ TEST(PPPArTest, BuildFixedObservationHelpersFilterInvalidProviders) {
     ASSERT_EQ(carrier_observations.size(), 2u);
     EXPECT_DOUBLE_EQ(carrier_observations[0].carrier_phase_if, 1.0);
     EXPECT_DOUBLE_EQ(carrier_observations[1].carrier_phase_if, 3.0);
+}
+
+TEST(PPPArTest, FixedNlPositionSolvesIndependentSystemClocks) {
+    const Vector3d truth(6378137.0, 10.0, 20.0);
+    const double orbit_radius = 20200000.0;
+    const std::vector<Vector3d> los_vectors = {
+        Vector3d(0.70, 0.20, 0.68).normalized(),
+        Vector3d(0.55, -0.60, 0.58).normalized(),
+        Vector3d(0.62, 0.65, -0.44).normalized(),
+        Vector3d(0.80, -0.10, -0.59).normalized(),
+    };
+
+    std::vector<ppp_ar::FixedNlObservation> observations;
+    const auto append_system = [&](GNSSSystem system, double clock_m) {
+        for (const auto& los : los_vectors) {
+            ppp_ar::FixedNlObservation observation;
+            observation.sat_pos = truth + orbit_radius * los;
+            observation.sat_clk = 0.0;
+            observation.system = system;
+            observation.lambda_nl_m = 0.12;
+            observation.fixed_nl_cycles = 0.0;
+            observation.use_trop_model = false;
+            observation.nl_phase_m =
+                geodist(observation.sat_pos, truth) + clock_m;
+            observations.push_back(observation);
+        }
+    };
+    append_system(GNSSSystem::GPS, 12.0);
+    append_system(GNSSSystem::Galileo, -28.0);
+
+    Vector3d solved = Vector3d::Zero();
+    const bool ok = ppp_ar::solveFixedNlPosition(
+        observations,
+        truth + Vector3d(8.0, -6.0, 4.0),
+        0.0,
+        0.0,
+        GNSSTime{},
+        {},
+        solved);
+
+    ASSERT_TRUE(ok);
+    EXPECT_LT((solved - truth).norm(), 1e-3);
+}
+
+TEST(PPPArTest, FixedNlDdPositionSolvesWithoutReceiverClock) {
+    const Vector3d truth(6378137.0, 10.0, 20.0);
+    const double orbit_radius = 20200000.0;
+    const std::vector<Vector3d> los_vectors = {
+        Vector3d(0.70, 0.20, 0.68).normalized(),
+        Vector3d(0.55, -0.60, 0.58).normalized(),
+        Vector3d(0.62, 0.65, -0.44).normalized(),
+        Vector3d(0.80, -0.10, -0.59).normalized(),
+        Vector3d(0.10, 0.85, 0.52).normalized(),
+    };
+
+    std::vector<ppp_ar::FixedNlObservation> observations;
+    for (const auto& los : los_vectors) {
+        ppp_ar::FixedNlObservation observation;
+        observation.sat_pos = truth + orbit_radius * los;
+        observation.sat_clk = 0.0;
+        observation.system = GNSSSystem::GPS;
+        observation.group = {GNSSSystem::GPS,
+                             {static_cast<int>(SignalType::GPS_L1CA),
+                              static_cast<int>(SignalType::GPS_L2C)}};
+        observation.lambda_nl_m = 0.12;
+        observation.fixed_nl_cycles = 0.0;
+        observation.use_trop_model = false;
+        observation.nl_phase_m = geodist(observation.sat_pos, truth) + 18.0;
+        observations.push_back(observation);
+    }
+
+    ppp_ar::FixedPositionSolutionStats stats;
+    Vector3d solved = Vector3d::Zero();
+    const bool ok = ppp_ar::solveFixedNlDdPosition(
+        observations,
+        truth + Vector3d(8.0, -6.0, 4.0),
+        0.0,
+        GNSSTime{},
+        {},
+        solved,
+        &stats);
+
+    ASSERT_TRUE(ok);
+    EXPECT_TRUE(stats.solved);
+    EXPECT_EQ(stats.unknowns, 3);
+    EXPECT_LT((solved - truth).norm(), 1e-3);
 }

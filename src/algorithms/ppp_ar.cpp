@@ -12,6 +12,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -524,7 +525,12 @@ WlnlWideLaneFixSummary applyWideLaneFixes(
         const double mw_mean = ambiguity.mw_mean_cycles;
         const int wl_int = static_cast<int>(std::round(mw_mean));
         const double frac = mw_mean - wl_int;
-        if (std::abs(frac) >= 0.25) {
+        const double max_frac =
+            std::isfinite(config.wlnl_wl_max_fractional_cycles) &&
+                    config.wlnl_wl_max_fractional_cycles > 0.0 ?
+                config.wlnl_wl_max_fractional_cycles :
+                0.25;
+        if (std::abs(frac) >= max_frac) {
             continue;
         }
 
@@ -1279,7 +1285,9 @@ WlnlFixAttempt tryWlnlFix(
     const std::vector<SatelliteId>& satellites,
     const std::vector<int>& state_indices,
     const std::map<SatelliteId, WlnlNlInfo>& nl_info,
-    bool debug_enabled) {
+    bool debug_enabled,
+    int dump_time_week,
+    double dump_time_tow) {
     WlnlFixAttempt attempt;
 
     struct WlnlDdPair {
@@ -1436,13 +1444,16 @@ WlnlFixAttempt tryWlnlFix(
     // analyze why fix-rate is stuck at 12%.
     const char* ratio_dump_path = std::getenv("GNSS_PPP_RATIO_DUMP");
     if (ratio_dump_path != nullptr && ratio_dump_path[0] != '\0') {
-        static bool ratio_dump_header_written = false;
         std::ofstream rd(ratio_dump_path, std::ios::app);
         if (rd) {
-            if (!ratio_dump_header_written) {
-                rd << "ratio,nb,threshold,passed,ref,sat,dd_nl_float,frac,abs_frac,"
-                      "qdiag_cycles2,wl_dd_int\n";
-                ratio_dump_header_written = true;
+            if (rd.tellp() == std::streampos(0)) {
+                rd << "week,tow,ratio,nb,active_nb,threshold,passed,pair_index,excluded,"
+                      "ref,sat,dd_nl_float,dd_nl_fixed,frac,abs_frac,qdiag_cycles2,"
+                      "wl_dd_int,ref_wl_int,sat_wl_int,ref_nl_float,sat_nl_float,"
+                      "ref_nl_fixed,sat_nl_fixed,ref_mw_mean,sat_mw_mean,"
+                      "ref_mw_count,sat_mw_count,lambda_nl_m,lambda_wl_m,"
+                      "ref_group_system,ref_group_l1,ref_group_l2,"
+                      "sat_group_system,sat_group_l1,sat_group_l2\n";
             }
             const bool passed = std::isfinite(attempt.ratio) &&
                                 attempt.ratio >= config.ar_ratio_threshold;
@@ -1452,18 +1463,62 @@ WlnlFixAttempt tryWlnlFix(
                 const double frac = dd_nl_float(k) - std::round(dd_nl_float(k));
                 const auto ref_it_amb = ambiguity_states.find(satellites[static_cast<size_t>(ri)]);
                 const auto sat_it_amb = ambiguity_states.find(satellites[static_cast<size_t>(si)]);
+                const auto ref_nl_it = nl_info.find(satellites[static_cast<size_t>(ri)]);
+                const auto sat_nl_it = nl_info.find(satellites[static_cast<size_t>(si)]);
                 const int wl_dd_int =
                     (ref_it_amb != ambiguity_states.end() &&
                      sat_it_amb != ambiguity_states.end())
                         ? (ref_it_amb->second.wl_fixed_integer -
                            sat_it_amb->second.wl_fixed_integer)
                         : 0;
-                rd << attempt.ratio << "," << attempt.nb << ","
+                const double ref_nl_float =
+                    ref_nl_it != nl_info.end() ? ref_nl_it->second.nl_ambiguity_cycles : 0.0;
+                const double sat_nl_float =
+                    sat_nl_it != nl_info.end() ? sat_nl_it->second.nl_ambiguity_cycles : 0.0;
+                const double ref_nl_fixed =
+                    ref_it_amb != ambiguity_states.end() && ref_it_amb->second.nl_is_fixed
+                        ? ref_it_amb->second.nl_fixed_cycles
+                        : std::numeric_limits<double>::quiet_NaN();
+                const double sat_nl_fixed =
+                    sat_it_amb != ambiguity_states.end() && sat_it_amb->second.nl_is_fixed
+                        ? sat_it_amb->second.nl_fixed_cycles
+                        : std::numeric_limits<double>::quiet_NaN();
+                const double ref_mw_mean =
+                    ref_it_amb != ambiguity_states.end() ? ref_it_amb->second.mw_mean_cycles : 0.0;
+                const double sat_mw_mean =
+                    sat_it_amb != ambiguity_states.end() ? sat_it_amb->second.mw_mean_cycles : 0.0;
+                const int ref_mw_count =
+                    ref_it_amb != ambiguity_states.end() ? ref_it_amb->second.mw_count : 0;
+                const int sat_mw_count =
+                    sat_it_amb != ambiguity_states.end() ? sat_it_amb->second.mw_count : 0;
+                const double lambda_nl =
+                    sat_nl_it != nl_info.end() ? sat_nl_it->second.lambda_nl_m : 0.0;
+                const double lambda_wl =
+                    sat_nl_it != nl_info.end() ? sat_nl_it->second.lambda_wl_m : 0.0;
+                const auto ref_group =
+                    ref_nl_it != nl_info.end() ? ref_nl_it->second.group : WlnlGroupKey{};
+                const auto sat_group =
+                    sat_nl_it != nl_info.end() ? sat_nl_it->second.group : WlnlGroupKey{};
+                rd << dump_time_week << "," << dump_time_tow << ","
+                   << attempt.ratio << "," << attempt.nb << "," << active_nb << ","
                    << config.ar_ratio_threshold << "," << (passed ? 1 : 0) << ","
+                   << k << "," << (dd_pair_excluded[static_cast<size_t>(k)] ? 1 : 0) << ","
                    << satellites[static_cast<size_t>(ri)].toString() << ","
                    << satellites[static_cast<size_t>(si)].toString() << ","
-                   << dd_nl_float(k) << "," << frac << "," << std::abs(frac) << ","
-                   << dd_nl_cov(k, k) << "," << wl_dd_int << "\n";
+                   << dd_nl_float(k) << "," << dd_nl_fixed(k) << ","
+                   << frac << "," << std::abs(frac) << ","
+                   << dd_nl_cov(k, k) << "," << wl_dd_int << ","
+                   << (ref_it_amb != ambiguity_states.end() ? ref_it_amb->second.wl_fixed_integer : 0) << ","
+                   << (sat_it_amb != ambiguity_states.end() ? sat_it_amb->second.wl_fixed_integer : 0) << ","
+                   << ref_nl_float << "," << sat_nl_float << ","
+                   << ref_nl_fixed << "," << sat_nl_fixed << ","
+                   << ref_mw_mean << "," << sat_mw_mean << ","
+                   << ref_mw_count << "," << sat_mw_count << ","
+                   << lambda_nl << "," << lambda_wl << ","
+                   << static_cast<int>(ref_group.first) << ","
+                   << ref_group.second.first << "," << ref_group.second.second << ","
+                   << static_cast<int>(sat_group.first) << ","
+                   << sat_group.second.first << "," << sat_group.second.second << "\n";
             }
         }
     }
@@ -1730,7 +1785,9 @@ WlnlFixAttempt resolveWlnlFix(
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const EligibleAmbiguities& eligible_ambiguities,
     const WlnlNlInfoProvider& provider,
-    bool debug_enabled) {
+    bool debug_enabled,
+    int dump_time_week,
+    double dump_time_tow) {
     const auto nl_info = buildWlnlNlInfoMap(
         eligible_ambiguities.satellites,
         ambiguity_states,
@@ -1742,7 +1799,9 @@ WlnlFixAttempt resolveWlnlFix(
         eligible_ambiguities.satellites,
         eligible_ambiguities.state_indices,
         nl_info,
-        debug_enabled);
+        debug_enabled,
+        dump_time_week,
+        dump_time_tow);
 }
 
 std::vector<FixedNlObservation> buildFixedNlObservations(
@@ -1786,20 +1845,85 @@ bool solveFixedNlPosition(
     const TropMappingFunction& trop_mapping_function,
     Vector3d& fixed_position,
     double* position_shift_norm_m) {
+    FixedPositionSolutionStats stats;
+    const bool solved = solveFixedNlPosition(
+        fixed_observations,
+        initial_position,
+        initial_clock_m,
+        trop_zenith,
+        time,
+        trop_mapping_function,
+        fixed_position,
+        &stats);
+    if (position_shift_norm_m != nullptr) {
+        *position_shift_norm_m = stats.position_shift_norm_m;
+    }
+    return solved;
+}
+
+bool solveFixedNlPosition(
+    const std::vector<FixedNlObservation>& fixed_observations,
+    const Vector3d& initial_position,
+    double initial_clock_m,
+    double trop_zenith,
+    const GNSSTime& time,
+    const TropMappingFunction& trop_mapping_function,
+    Vector3d& fixed_position,
+    FixedPositionSolutionStats* stats) {
+    if (stats != nullptr) {
+        *stats = FixedPositionSolutionStats{};
+        stats->observations = static_cast<int>(fixed_observations.size());
+    }
     if (fixed_observations.size() < 4) {
         return false;
     }
 
     Vector3d position = initial_position;
-    double clock_m = initial_clock_m;
+    std::vector<GNSSSystem> clock_systems;
+    clock_systems.reserve(fixed_observations.size());
+    for (const auto& observation : fixed_observations) {
+        const GNSSSystem system = observation.system == GNSSSystem::UNKNOWN
+            ? GNSSSystem::GPS
+            : observation.system;
+        if (std::find(clock_systems.begin(), clock_systems.end(), system) ==
+            clock_systems.end()) {
+            clock_systems.push_back(system);
+        }
+    }
+    if (clock_systems.empty()) {
+        clock_systems.push_back(GNSSSystem::GPS);
+    }
 
+    std::map<GNSSSystem, int> clock_column_by_system;
+    std::map<GNSSSystem, double> clock_m_by_system;
+    for (size_t index = 0; index < clock_systems.size(); ++index) {
+        clock_column_by_system[clock_systems[index]] = 3 + static_cast<int>(index);
+        clock_m_by_system[clock_systems[index]] = initial_clock_m;
+    }
+
+    const int unknowns = 3 + static_cast<int>(clock_systems.size());
+    if (stats != nullptr) {
+        stats->unknowns = unknowns;
+    }
+    if (static_cast<int>(fixed_observations.size()) < unknowns) {
+        return false;
+    }
+
+    VectorXd last_residuals;
     for (int iter = 0; iter < 5; ++iter) {
         const int nobs = static_cast<int>(fixed_observations.size());
-        MatrixXd H = MatrixXd::Zero(nobs, 4);
+        MatrixXd H = MatrixXd::Zero(nobs, unknowns);
         VectorXd residuals = VectorXd::Zero(nobs);
 
         for (int i = 0; i < nobs; ++i) {
             const auto& fixed_observation = fixed_observations[static_cast<size_t>(i)];
+            const GNSSSystem system = fixed_observation.system == GNSSSystem::UNKNOWN
+                ? GNSSSystem::GPS
+                : fixed_observation.system;
+            const auto clock_column_it = clock_column_by_system.find(system);
+            if (clock_column_it == clock_column_by_system.end()) {
+                return false;
+            }
             const double geo = geodist(fixed_observation.sat_pos, position);
             const Vector3d los = (fixed_observation.sat_pos - position).normalized();
             const double elevation = std::asin(los.dot(position.normalized()));
@@ -1808,6 +1932,7 @@ bool solveFixedNlPosition(
                     ? trop_mapping_function(position, elevation, time) * trop_zenith
                     : 0.0;
 
+            const double clock_m = clock_m_by_system[system];
             const double predicted = geo + clock_m
                                      - constants::SPEED_OF_LIGHT * fixed_observation.sat_clk
                                      + trop_delay
@@ -1817,7 +1942,7 @@ bool solveFixedNlPosition(
             H(i, 0) = -los.x();
             H(i, 1) = -los.y();
             H(i, 2) = -los.z();
-            H(i, 3) = 1.0;
+            H(i, clock_column_it->second) = 1.0;
         }
 
         const MatrixXd HTH = H.transpose() * H;
@@ -1826,16 +1951,165 @@ bool solveFixedNlPosition(
             return false;
         }
         position += dx.head(3);
-        clock_m += dx(3);
+        for (const auto& [system, column] : clock_column_by_system) {
+            clock_m_by_system[system] += dx(column);
+        }
 
         if (dx.head(3).norm() < 1e-4) {
+            last_residuals = residuals;
+            break;
+        }
+        last_residuals = residuals;
+    }
+
+    fixed_position = position;
+    if (stats != nullptr) {
+        stats->solved = true;
+        stats->position_shift_norm_m = (position - initial_position).norm();
+        double clock_update_sum_sq = 0.0;
+        double clock_update_max_abs = 0.0;
+        for (const auto& [system, clock_m] : clock_m_by_system) {
+            (void)system;
+            const double clock_update = clock_m - initial_clock_m;
+            clock_update_sum_sq += clock_update * clock_update;
+            clock_update_max_abs = std::max(clock_update_max_abs, std::abs(clock_update));
+        }
+        if (!clock_m_by_system.empty()) {
+            stats->clock_update_rms_m =
+                std::sqrt(clock_update_sum_sq / static_cast<double>(clock_m_by_system.size()));
+            stats->clock_update_max_abs_m = clock_update_max_abs;
+        }
+        if (last_residuals.size() > 0) {
+            double sum_sq = 0.0;
+            double max_abs = 0.0;
+            for (int i = 0; i < last_residuals.size(); ++i) {
+                sum_sq += last_residuals(i) * last_residuals(i);
+                max_abs = std::max(max_abs, std::abs(last_residuals(i)));
+            }
+            stats->residual_rms_m =
+                std::sqrt(sum_sq / static_cast<double>(last_residuals.size()));
+            stats->residual_max_abs_m = max_abs;
+        }
+    }
+    return true;
+}
+
+bool solveFixedNlDdPosition(
+    const std::vector<FixedNlObservation>& fixed_observations,
+    const Vector3d& initial_position,
+    double trop_zenith,
+    const GNSSTime& time,
+    const TropMappingFunction& trop_mapping_function,
+    Vector3d& fixed_position,
+    FixedPositionSolutionStats* stats) {
+    if (stats != nullptr) {
+        *stats = FixedPositionSolutionStats{};
+        stats->observations = static_cast<int>(fixed_observations.size());
+        stats->unknowns = 3;
+    }
+
+    std::map<WlnlGroupKey, std::vector<size_t>> by_group;
+    for (size_t index = 0; index < fixed_observations.size(); ++index) {
+        const auto& observation = fixed_observations[index];
+        if (!std::isfinite(observation.nl_phase_m) ||
+            !std::isfinite(observation.lambda_nl_m) ||
+            observation.lambda_nl_m <= 0.0 ||
+            !observation.sat_pos.allFinite()) {
+            continue;
+        }
+        by_group[observation.group].push_back(index);
+    }
+
+    struct DdPair {
+        size_t ref_index = 0;
+        size_t sat_index = 0;
+    };
+    std::vector<DdPair> dd_pairs;
+    for (const auto& [group, indices] : by_group) {
+        (void)group;
+        if (indices.size() < 2) {
+            continue;
+        }
+        const size_t ref_index = indices.front();
+        for (size_t index = 1; index < indices.size(); ++index) {
+            dd_pairs.push_back({ref_index, indices[index]});
+        }
+    }
+
+    if (dd_pairs.size() < 3) {
+        return false;
+    }
+
+    Vector3d position = initial_position;
+    VectorXd last_residuals;
+    for (int iter = 0; iter < 5; ++iter) {
+        const int nobs = static_cast<int>(dd_pairs.size());
+        MatrixXd H = MatrixXd::Zero(nobs, 3);
+        VectorXd residuals = VectorXd::Zero(nobs);
+
+        for (int i = 0; i < nobs; ++i) {
+            const auto& pair = dd_pairs[static_cast<size_t>(i)];
+            const auto& ref = fixed_observations[pair.ref_index];
+            const auto& sat = fixed_observations[pair.sat_index];
+
+            const double ref_geo = geodist(ref.sat_pos, position);
+            const double sat_geo = geodist(sat.sat_pos, position);
+            const Vector3d ref_los = (ref.sat_pos - position).normalized();
+            const Vector3d sat_los = (sat.sat_pos - position).normalized();
+            const double ref_elevation = std::asin(ref_los.dot(position.normalized()));
+            const double sat_elevation = std::asin(sat_los.dot(position.normalized()));
+            const double ref_trop =
+                ref.use_trop_model && trop_mapping_function
+                    ? trop_mapping_function(position, ref_elevation, time) * trop_zenith
+                    : 0.0;
+            const double sat_trop =
+                sat.use_trop_model && trop_mapping_function
+                    ? trop_mapping_function(position, sat_elevation, time) * trop_zenith
+                    : 0.0;
+            const double lambda_nl =
+                std::isfinite(ref.lambda_nl_m) && ref.lambda_nl_m > 0.0
+                    ? ref.lambda_nl_m
+                    : sat.lambda_nl_m;
+            const double fixed_dd_cycles = ref.fixed_nl_cycles - sat.fixed_nl_cycles;
+            const double observed_dd = ref.nl_phase_m - sat.nl_phase_m;
+            const double predicted_dd =
+                ref_geo - sat_geo
+                - constants::SPEED_OF_LIGHT * (ref.sat_clk - sat.sat_clk)
+                + (ref_trop - sat_trop)
+                + fixed_dd_cycles * lambda_nl;
+            residuals(i) = observed_dd - predicted_dd;
+            H(i, 0) = sat_los.x() - ref_los.x();
+            H(i, 1) = sat_los.y() - ref_los.y();
+            H(i, 2) = sat_los.z() - ref_los.z();
+        }
+
+        const MatrixXd HTH = H.transpose() * H;
+        const VectorXd dx = HTH.ldlt().solve(H.transpose() * residuals);
+        if (!dx.allFinite()) {
+            return false;
+        }
+        position += dx;
+        last_residuals = residuals;
+        if (dx.norm() < 1e-4) {
             break;
         }
     }
 
     fixed_position = position;
-    if (position_shift_norm_m != nullptr) {
-        *position_shift_norm_m = (position - initial_position).norm();
+    if (stats != nullptr) {
+        stats->solved = true;
+        stats->position_shift_norm_m = (position - initial_position).norm();
+        if (last_residuals.size() > 0) {
+            double sum_sq = 0.0;
+            double max_abs = 0.0;
+            for (int i = 0; i < last_residuals.size(); ++i) {
+                sum_sq += last_residuals(i) * last_residuals(i);
+                max_abs = std::max(max_abs, std::abs(last_residuals(i)));
+            }
+            stats->residual_rms_m =
+                std::sqrt(sum_sq / static_cast<double>(last_residuals.size()));
+            stats->residual_max_abs_m = max_abs;
+        }
     }
     return true;
 }
