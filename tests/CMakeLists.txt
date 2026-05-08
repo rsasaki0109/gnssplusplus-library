@@ -34,6 +34,7 @@ if(GTest_FOUND)
         test_rtcm_stream.cpp
         test_ubx.cpp
         test_sofa_vendor.cpp
+        test_ginan_iers2010_vendor.cpp
     )
 
     target_compile_options(run_tests PRIVATE -g)
@@ -44,6 +45,7 @@ if(GTest_FOUND)
     target_link_libraries(run_tests
         gnss_lib gnss_lib_noopt
         sofa
+        ginan_iers2010
         GTest::GTest
         GTest::Main
         Threads::Threads
