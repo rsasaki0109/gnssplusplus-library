@@ -66,9 +66,10 @@ Phase C adds, alongside the existing flags:
 /// When true (and apply_solid_earth_tides is also true), use the
 /// IERS Conventions 2010 §7.1.1 (Dehant) Step-1 + Step-2 model from
 /// libgnss::iers::solidEarthTideDisplacement instead of the built-in
-/// simplified Step-1-only approximation. Default off; opt-in for
-/// safe rollout pending truth-bench validation.
-bool use_iers_solid_tide = false;
+/// simplified Step-1-only approximation. Default on after the
+/// IGS-grade bench evidence in §5; pass --no-iers-solid-tide to
+/// revert.
+bool use_iers_solid_tide = true;
 ```
 
 Reading the flag inside the existing dispatcher:
@@ -150,10 +151,12 @@ link without further CMake changes.
 
 Add `tests/test_ppp_iers_solid_tide.cpp` exercising the dispatch:
 
-- With `use_iers_solid_tide = false` (default): displacement
-  matches the existing Step-1 result to 1 µm. Guards against
-  accidental breakage of the legacy path.
-- With `use_iers_solid_tide = true` at the IERS Conventions 2010
+- With `use_iers_solid_tide = false` (legacy path, opt-out via
+  `--no-iers-solid-tide`): displacement matches the existing
+  Step-1 result to 1 µm. Guards against accidental breakage of
+  the legacy path that remains available after Phase C-3.
+- With `use_iers_solid_tide = true` (default after Phase C-3) at
+  the IERS Conventions 2010
   reference epoch (2009-04-13 0h UT), displacement matches the
   published reference (0.077, 0.063, 0.055) m to 1 mm — the same
   bound already validated by `IersEphemeris.SolidEarthTideUsingComputedEphemeris`,
@@ -176,9 +179,9 @@ Phase C-2 introduces a PPP-specific paired-comparison harness at
 dispatcher as `gnss ppp-iers-solid-tide-bench`. Behavior:
 
 1. Run `gnss ppp` twice on the same PPP setup — once with
-   `--no-iers-solid-tide` (the default Step-1-only Love-number
+   `--no-iers-solid-tide` (the legacy Step-1-only Love-number
    path) and once with `--use-iers-solid-tide` (the IERS Step-1
-   + Step-2 Dehant path).
+   + Step-2 Dehant path, default after Phase C-3).
 2. Read both `.pos` outputs, match epochs, compute per-epoch
    ECEF displacement between the two solutions.
 3. Emit a `comparison.json` summary with
@@ -209,23 +212,23 @@ flip-default PR is bench evidence only — no live-system risk.
 
 ## 5. Rollout
 
-1. Land Phase C-1 (the PPP opt-in flag): opt-in, default off.
-2. Land Phase C-2 (the comparison harness
-   `gnss ppp-iers-solid-tide-bench`).
-3. Run the harness on a representative PPP dataset (bundled
-   signoff data, an IGS station, or a public PPP dataset
-   available locally) and attach the resulting
-   `comparison.json` to the flip-default PR for review.
-4. If the bench shows neutral-or-better results, follow up with
-   a small "flip default" PR that flips
-   `use_iers_solid_tide = true` in `PPPConfig`. Rollback path:
-   revert that single-line PR.
-
-This three-step rollout (opt-in, harness, flip-default) is
-preferred over a single big-bang change because the bench result
-is the only honest oracle for "did we improve?" and we want it on
-record before the change becomes the default for downstream
-consumers.
+1. **Phase C-1 (PR #56, merged)**: PPP opt-in flag, default off.
+2. **Phase C-2 (PR #57+#58, merged)**: comparison harness
+   `gnss ppp-iers-solid-tide-bench` with tide-signal diagnostics
+   (first_epoch / median per-component / aggregate-to-first ratio).
+3. **Bench run on IGS-grade products (this PR's evidence)**: TSKB
+   IGS station, 2026-04-15, IGS final SP3+CLK from BKG mirror,
+   600 epochs static. Result: max paired displacement 4.8 cm,
+   median 4.0 cm, per-component median (-0.7, +3.5, +1.5) cm,
+   aggregate_to_first_epoch_ratio 122. The displacement
+   magnitude lies inside the IERS Step-2 ~1-5 cm physical
+   envelope. Compare to broadcast-derived products (max 2808 m,
+   ratio 268,680) to see how dependent the bench is on
+   IGS-grade ephemerides.
+4. **Phase C-3 (this PR)**: flip
+   `PPPConfig::use_iers_solid_tide` and gnss_ppp CLI default to
+   `true`. Rollback path: pass `--no-iers-solid-tide` (preserved)
+   or revert this PR.
 
 ## 6. Risks & mitigations
 

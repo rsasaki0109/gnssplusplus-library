@@ -51,7 +51,7 @@ struct Options {
     bool low_dynamics_mode = false;
     bool enable_ar = false;
     double ar_ratio_threshold = 3.0;
-    bool use_iers_solid_tide = false;
+    bool use_iers_solid_tide = true;
     std::string eop_c04_file;
     bool use_iers_pole_tide = true;
     bool use_iers_sub_daily_eop = true;
@@ -120,10 +120,10 @@ void printUsage(const char* program_name) {
         << "  --ar-ratio-threshold <value>\n"
         << "                          Ratio threshold for PPP ambiguity fixing (default: 3.0)\n"
         << "  --use-iers-solid-tide   Use the IERS Conventions 2010 (Dehant) Step-1+Step-2\n"
-        << "                          solid-earth-tide model instead of the simplified\n"
-        << "                          Step-1-only built-in approximation. Opt-in pending\n"
-        << "                          truth-bench validation. See docs/iers-integration-plan.md\n"
-        << "  --no-iers-solid-tide    Use the built-in Step-1-only solid-earth-tide model (default)\n"
+        << "                          solid-earth-tide model via libgnss::iers (default).\n"
+        << "                          See docs/iers-integration-plan.md\n"
+        << "  --no-iers-solid-tide    Revert to the built-in Step-1-only Love-number\n"
+        << "                          approximation (legacy path)\n"
         << "  --eop-c04 <eop-file>     IERS Earth Orientation Parameter file (daily samples).\n"
         << "                          Format auto-detected: IERS 20 C04 (final values, ~1-week\n"
         << "                          publication lag) or IERS Bulletin A finals2000A.daily\n"
