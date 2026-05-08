@@ -13,6 +13,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 PairKey = Tuple[str, str, int]
 TimePairKey = Tuple[int, str, str, int]
 UdKey = Tuple[int, str, int]
+MeasRowKey = Tuple[int, int]
 
 
 @dataclass(frozen=True)
@@ -113,6 +114,7 @@ class ClaslibRow:
     phase_comp_m: float
     windup_m: float
     pco_pcv_m: float
+    components_are_sd: bool = True
 
     @property
     def noamb_m(self) -> float:
@@ -121,6 +123,20 @@ class ClaslibRow:
     @property
     def time_key(self) -> TimePairKey:
         return (_tow_key(self.tow), self.ref, self.sat, self.freq_group)
+
+
+@dataclass(frozen=True)
+class LegacyMeasRow:
+    tow: float
+    row_index: int
+    ref: str
+    sat: str
+    is_phase: bool
+    freq_group: int
+
+    @property
+    def key(self) -> MeasRowKey:
+        return (_tow_key(self.tow), self.row_index)
 
 
 def _tow_key(tow: float) -> int:
@@ -144,6 +160,29 @@ def _to_float(value: Optional[str]) -> float:
         return float(value)
     except ValueError:
         return math.nan
+
+
+def _to_int(value: Optional[str], default: int = 0) -> int:
+    if value is None:
+        return default
+    try:
+        return int(float(value))
+    except ValueError:
+        return default
+
+
+def _first_float(tokens: Dict[str, str], keys: Sequence[str]) -> float:
+    for key in keys:
+        if key in tokens:
+            return _to_float(tokens[key])
+    return math.nan
+
+
+def _sum_present(tokens: Dict[str, str], keys: Sequence[str]) -> float:
+    values = [_to_float(tokens.get(key)) for key in keys if key in tokens]
+    if not values:
+        return math.nan
+    return sum(values)
 
 
 def parse_libgnss_ddres(
@@ -325,6 +364,104 @@ def parse_claslib_model_comp(
             )
             rows[row.time_key] = row
     return rows, receiver_positions
+
+
+def parse_legacy_measrow_dump(path: Path) -> Dict[MeasRowKey, LegacyMeasRow]:
+    rows: Dict[MeasRowKey, LegacyMeasRow] = {}
+    with path.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line.startswith("tow="):
+                continue
+            tokens = _parse_token_map(line)
+            tow = _to_float(tokens.get("tow"))
+            row_index = _to_int(tokens.get("row"), -1)
+            ref = tokens.get("ref", "")
+            sat = tokens.get("sat", "")
+            if (
+                not math.isfinite(tow)
+                or row_index < 0
+                or not ref
+                or ref == "none"
+                or not sat
+                or sat == "none"
+            ):
+                continue
+            row = LegacyMeasRow(
+                tow=tow,
+                row_index=row_index,
+                ref=ref,
+                sat=sat,
+                is_phase=_to_int(tokens.get("is_phase")) == 1,
+                freq_group=_to_int(tokens.get("freq")),
+            )
+            rows[row.key] = row
+    return rows
+
+
+def parse_claslib_legacy_model_comp(
+    model_comp_path: Path,
+    measrow_path: Path,
+) -> Tuple[Dict[TimePairKey, ClaslibRow], Dict[int, ReceiverPosition]]:
+    meas_rows = parse_legacy_measrow_dump(measrow_path)
+    rows: Dict[TimePairKey, ClaslibRow] = {}
+    row_index_by_tow: Dict[int, int] = {}
+    with model_comp_path.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line.startswith("tow="):
+                continue
+            tokens = _parse_token_map(line)
+            tow = _to_float(tokens.get("tow"))
+            if not math.isfinite(tow):
+                continue
+            tow_key = _tow_key(tow)
+            row_index = _to_int(tokens.get("row"), row_index_by_tow.get(tow_key, 0))
+            row_index_by_tow[tow_key] = row_index + 1
+            meas_row = meas_rows.get((tow_key, row_index))
+            if meas_row is None or not meas_row.is_phase:
+                continue
+            if _to_int(tokens.get("is_phase")) != 1:
+                continue
+            freq_group = _to_int(tokens.get("freq"), meas_row.freq_group)
+            if freq_group != meas_row.freq_group:
+                continue
+            trop_model = _first_float(tokens, ("trop_model",))
+            if not math.isfinite(trop_model):
+                trop_model = _sum_present(tokens, ("trop_d", "trop_w"))
+            pco_pcv = _sum_present(
+                tokens,
+                ("pco_rcv", "pco_sat", "pcv_rcv", "pcv_sat"),
+            )
+            if not math.isfinite(pco_pcv):
+                pco_pcv = _sum_present(tokens, ("pco_r", "pco_s", "pcv_r", "pcv_s"))
+            row = ClaslibRow(
+                tow=tow,
+                ref=meas_row.ref,
+                sat=meas_row.sat,
+                freq_group=freq_group,
+                y_m=_to_float(tokens.get("y")),
+                amb_m=_first_float(tokens, ("amb_m", "amb")),
+                obs_m=_to_float(tokens.get("obs")),
+                rho_m=_to_float(tokens.get("rho")),
+                dts_m=_to_float(tokens.get("dts")),
+                rel_m=_to_float(tokens.get("rel")),
+                sagnac_m=_to_float(tokens.get("sagnac")),
+                trop_model_m=trop_model,
+                iono_grid_m=_to_float(tokens.get("iono_grid")),
+                iono_state_term_m=_first_float(
+                    tokens, ("iono_state_term", "iono_state")
+                ),
+                trop_grid_m=_to_float(tokens.get("trop_grid")),
+                cpc_m=_to_float(tokens.get("cpc")),
+                phase_bias_m=_first_float(tokens, ("phase_bias", "pb")),
+                phase_comp_m=_first_float(tokens, ("phase_comp", "pcomp")),
+                windup_m=_first_float(tokens, ("windup", "wu")),
+                pco_pcv_m=pco_pcv,
+                components_are_sd=True,
+            )
+            rows[row.time_key] = row
+    return rows, {}
 
 
 def parse_libgnss_pos(path: Path) -> Dict[int, ReceiverPosition]:
@@ -513,14 +650,19 @@ def summarize(
             missing_ud += 1
         clas_noamb = sign * clas_row.noamb_m
         clas_y = sign * clas_row.y_m
+        clas_amb = sign * clas_row.amb_m
         delta_noamb = lib_row.sd_noamb_m - clas_noamb
+        delta_amb = lib_row.sd_ambiguity_term_m - clas_amb
         delta_resid = lib_row.sd_residual_m - clas_y
         values = {
             "abs_delta_noamb": abs(delta_noamb),
             "delta_noamb": delta_noamb,
+            "delta_amb": delta_amb,
             "delta_resid": delta_resid,
             "lib_corrected_phase_sd": math.nan,
-            "clas_raw_phase_sd": sign * clas_row.obs_m,
+            "clas_raw_phase_sd": (
+                sign * clas_row.obs_m if clas_row.components_are_sd else math.nan
+            ),
             "clas_corrected_phase_sd": math.nan,
             "delta_raw_phase_sd": math.nan,
             "delta_applied_corr_sd": math.nan,
@@ -546,7 +688,7 @@ def summarize(
             "sign": sign,
             "orientation": orientation,
         }
-        if ref_ud is not None and sat_ud is not None:
+        if ref_ud is not None and sat_ud is not None and clas_row.components_are_sd:
             lib_raw_phase_sd = _sd(ref_ud, sat_ud, "raw_phase_m")
             lib_applied_corr_sd = _sd(ref_ud, sat_ud, "carrier_phase_correction_m")
             lib_corrected_phase_sd = _sd(ref_ud, sat_ud, "l_corr_m")
@@ -635,6 +777,10 @@ def summarize(
     lines: List[str] = []
     lines.append(f"lib_rows={len(lib_rows)}")
     lines.append(f"claslib_phase_rows={len(clas_rows)}")
+    lines.append(
+        "claslib_non_sd_component_rows="
+        f"{sum(1 for row in clas_rows.values() if not row.components_are_sd)}"
+    )
     lines.append(f"matched_rows={len(compared)}")
     lines.append(f"missing_rows={missing}")
     lines.append(f"missing_ud_rows={missing_ud}")
@@ -655,6 +801,7 @@ def summarize(
         lines.append(f"receiver_position_rms_delta_m={_rms(position_deltas):.12g}")
     if compared:
         lines.append(f"sd_noamb_rms_delta_m={_rms([item['delta_noamb'] for item in compared]):.12g}")
+        lines.append(f"sd_ambiguity_rms_delta_m={_rms([item['delta_amb'] for item in compared]):.12g}")
         lines.append(f"sd_residual_rms_delta_m={_rms([item['delta_resid'] for item in compared]):.12g}")
         lines.append(f"raw_phase_sd_rms_delta_m={_rms([item['delta_raw_phase_sd'] for item in compared]):.12g}")
         lines.append(f"applied_corr_sd_rms_delta_m={_rms([item['delta_applied_corr_sd'] for item in compared]):.12g}")
@@ -686,6 +833,7 @@ def summarize(
         compared, key=lambda value: value["abs_delta_noamb"], reverse=True
     )[:top]:
         delta_noamb = item["delta_noamb"]
+        delta_amb = item["delta_amb"]
         delta_resid = item["delta_resid"]
         lib_row = item["lib_row"]
         clas_row = item["clas_row"]
@@ -693,7 +841,7 @@ def summarize(
         orientation = item["orientation"]
         clas_noamb = sign * clas_row.noamb_m
         clas_y = sign * clas_row.y_m
-        clas_obs_sd = sign * clas_row.obs_m
+        clas_obs_sd = item["clas_raw_phase_sd"]
         lines.append(
             f"  tow={lib_row.tow:.3f} {lib_row.ref}->{lib_row.sat}/f{lib_row.freq_group} "
             f"lib_noamb={lib_row.sd_noamb_m:.12f} clas_noamb={clas_noamb:.12f} "
@@ -711,9 +859,11 @@ def summarize(
             f"delta_cpc_no_trop={item['delta_cpc_no_trop_sd']:.12f} "
             f"delta_phase_bias={item['delta_phase_bias_sd']:.12f} "
             f"delta_phase_comp={item['delta_phase_comp_sd']:.12f} "
+            f"lib_amb={lib_row.sd_ambiguity_term_m:.12f} "
+            f"clas_amb={sign * clas_row.amb_m:.12f} "
+            f"delta_amb={delta_amb:.12f} "
             f"lib_resid={lib_row.sd_residual_m:.12f} clas_y={clas_y:.12f} "
             f"delta_resid={delta_resid:.12f} orientation={orientation} "
-            f"clas_amb={sign * clas_row.amb_m:.12f} "
             f"clas_cpc={sign * clas_row.cpc_m:.12f} "
             f"clas_phase_bias={sign * clas_row.phase_bias_m:.12f} "
             f"clas_phase_comp={sign * clas_row.phase_comp_m:.12f} "
@@ -767,8 +917,23 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--libgnss-ddres", type=Path, required=True)
     parser.add_argument("--claslib-model-comp", type=Path, required=True)
+    parser.add_argument(
+        "--claslib-measrow-dump",
+        type=Path,
+        default=None,
+        help=(
+            "GNSS_PPP_MEASROW_DUMP file used to add REF/SAT metadata to legacy "
+            "GNSS_PPP_MODEL_COMPONENTS_DUMP rows."
+        ),
+    )
     parser.add_argument("--libgnss-pos", type=Path, default=None)
     parser.add_argument("--libgnss-spp-pos", type=Path, default=None)
+    parser.add_argument(
+        "--claslib-pos",
+        type=Path,
+        default=None,
+        help="CLASLIB regular .pos solution file.",
+    )
     parser.add_argument("--claslib-pos-stat", type=Path, default=None)
     parser.add_argument("--claslib-state-history", type=Path, default=None)
     parser.add_argument("--pair", action="append", default=[], help="REF,SAT,FREQ or REF:SAT:FREQ")
@@ -789,9 +954,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     lib_receiver_positions = filter_receiver_positions(
         lib_receiver_positions, args.tow_min, args.tow_max
     )
-    clas_rows, clas_receiver_positions = parse_claslib_model_comp(
-        args.claslib_model_comp
-    )
+    if args.claslib_measrow_dump is not None:
+        clas_rows, clas_receiver_positions = parse_claslib_legacy_model_comp(
+            args.claslib_model_comp,
+            args.claslib_measrow_dump,
+        )
+    else:
+        clas_rows, clas_receiver_positions = parse_claslib_model_comp(
+            args.claslib_model_comp
+        )
     clas_receiver_positions = filter_receiver_positions(
         clas_receiver_positions, args.tow_min, args.tow_max
     )
@@ -845,18 +1016,36 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     args.top,
                 )
             )
-    if args.libgnss_pos is not None and args.claslib_pos_stat is not None:
+    if args.libgnss_pos is not None and (
+        args.claslib_pos is not None or args.claslib_pos_stat is not None
+    ):
         lib_solution_positions = filter_receiver_positions(
             parse_libgnss_pos(args.libgnss_pos), args.tow_min, args.tow_max
         )
+        claslib_solution_positions: Dict[int, ReceiverPosition] = {}
+        if args.claslib_pos_stat is not None:
+            claslib_solution_positions.update(
+                parse_claslib_stat_pos(args.claslib_pos_stat)
+            )
+        if args.claslib_pos is not None:
+            claslib_solution_positions.update(parse_libgnss_pos(args.claslib_pos))
         claslib_solution_positions = filter_receiver_positions(
-            parse_claslib_stat_pos(args.claslib_pos_stat),
-            args.tow_min,
-            args.tow_max,
+            claslib_solution_positions, args.tow_min, args.tow_max
         )
+        if claslib_solution_positions:
+            summaries.append(
+                summarize_position_comparison(
+                    "lib prior vs CLASLIB solution:",
+                    "lib_prior",
+                    lib_receiver_positions,
+                    "claslib_solution",
+                    claslib_solution_positions,
+                    args.top,
+                )
+            )
         summaries.append(
             summarize_position_comparison(
-                "lib solution vs CLASLIB $POS solution:",
+                "lib solution vs CLASLIB solution:",
                 "lib_solution",
                 lib_solution_positions,
                 "claslib_solution",

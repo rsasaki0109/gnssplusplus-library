@@ -156,6 +156,35 @@ def parse_claslib_model_comp(path: Path, *, default_week: int = 0) -> List[Resid
     return rows
 
 
+def parse_measrow_dump(path: Path, *, default_week: int = 0) -> List[ResidualRow]:
+    rows: List[ResidualRow] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line.startswith("tow="):
+                continue
+            tokens = parse_token_map(line)
+            if to_int(tokens.get("is_phase")) != 1:
+                continue
+            ref = tokens.get("ref", "")
+            sat = tokens.get("sat", "")
+            if not ref or ref == "none" or not sat or sat == "none":
+                continue
+            rows.append(
+                ResidualRow(
+                    week=to_int(tokens.get("week"), default_week),
+                    tow=to_float(tokens.get("tow")),
+                    ref=ref,
+                    sat=sat,
+                    frequency_index=to_int(tokens.get("freq")),
+                    residual_m=to_float(tokens.get("z")),
+                    variance_m2=to_float(tokens.get("R")),
+                    source_index=to_int(tokens.get("row"), len(rows)),
+                )
+            )
+    return rows
+
+
 def finite_text(value: float) -> str:
     return f"{value:.15g}" if math.isfinite(value) else ""
 
@@ -222,6 +251,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--libgnss-ddres", type=Path)
     source.add_argument("--claslib-model-comp", type=Path)
+    source.add_argument("--measrow-dump", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument(
         "--week",
@@ -241,8 +271,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
     if args.libgnss_ddres is not None:
         rows = parse_libgnss_ddres(args.libgnss_ddres, default_week=args.week)
-    else:
+    elif args.claslib_model_comp is not None:
         rows = parse_claslib_model_comp(args.claslib_model_comp, default_week=args.week)
+    else:
+        rows = parse_measrow_dump(args.measrow_dump, default_week=args.week)
     count = write_residual_csv(
         rows,
         args.out,

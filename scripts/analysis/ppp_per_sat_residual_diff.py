@@ -35,6 +35,12 @@ Row = Dict[str, str]
 MatchKey = Tuple[int, int, int, str, str, int, str, str, str, str]
 GroupKey = Tuple[str, int, str]
 
+# Module-level flag toggled by ``--ignore-signals``: when true, the signal /
+# observation-code columns are blanked out inside ``match_key`` so logs that
+# carry detailed signal metadata (native ``--ppp-residual-log``) match logs
+# that don't (CLASLIB bridge ``$SAT`` converter).
+_IGNORE_SIGNALS: bool = False
+
 
 def tow_to_millis(value: str) -> int:
     try:
@@ -79,6 +85,14 @@ def read_csv(path: Path) -> List[Row]:
 
 
 def match_key(row: Row) -> MatchKey:
+    if _IGNORE_SIGNALS:
+        primary_signal = secondary_signal = ""
+        primary_obs_code = secondary_obs_code = ""
+    else:
+        primary_signal = row.get("primary_signal", "")
+        secondary_signal = row.get("secondary_signal", "")
+        primary_obs_code = row.get("primary_observation_code", "")
+        secondary_obs_code = row.get("secondary_observation_code", "")
     return (
         int(float(row["week"])),
         tow_to_millis(row["tow"]),
@@ -86,10 +100,10 @@ def match_key(row: Row) -> MatchKey:
         row.get("sat", ""),
         row.get("row_type", ""),
         to_int(row.get("frequency_index", "0")),
-        row.get("primary_signal", ""),
-        row.get("secondary_signal", ""),
-        row.get("primary_observation_code", ""),
-        row.get("secondary_observation_code", ""),
+        primary_signal,
+        secondary_signal,
+        primary_obs_code,
+        secondary_obs_code,
     )
 
 
@@ -316,6 +330,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--tow-min", type=float, default=None)
     parser.add_argument("--tow-max", type=float, default=None)
     parser.add_argument("--top", type=int, default=20)
+    parser.add_argument(
+        "--ignore-signals",
+        action="store_true",
+        help=(
+            "Drop primary/secondary signal and observation-code columns from "
+            "the match key. Use when comparing native --ppp-residual-log "
+            "against CLASLIB bridge $SAT-derived CSV that lacks signal info."
+        ),
+    )
     parser.add_argument("--json-out", type=Path)
     parser.add_argument("--groups-csv", type=Path)
     return parser.parse_args(argv)
@@ -323,6 +346,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
+    global _IGNORE_SIGNALS
+    _IGNORE_SIGNALS = bool(args.ignore_signals)
     row_type = None if args.all_row_types else args.row_type
     iteration = None if args.all_iterations else args.iteration
     report = summarize_residual_diff(

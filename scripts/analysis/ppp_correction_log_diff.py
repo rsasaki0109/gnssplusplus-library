@@ -71,6 +71,18 @@ OPTIONAL_COLUMN_DEFAULTS = {
     "madocalib_zenith_hydrostatic_delay_m": "0.0",
     "madocalib_estimated_trop_delay_m": "0.0",
     "madocalib_estimated_trop_delay_diff_m": "0.0",
+    "orbit_projection_m": "0.0",
+    "atmos_network_id": "0",
+    "code_bias_network_id": "0",
+    "phase_bias_network_id": "0",
+    "atmos_reference_week": "0",
+    "atmos_reference_tow": "0.0",
+    "phase_bias_reference_week": "0",
+    "phase_bias_reference_tow": "0.0",
+    "clock_reference_week": "0",
+    "clock_reference_tow": "0.0",
+    "effective_phase_bias_reference_week": "0",
+    "effective_phase_bias_reference_tow": "0.0",
 }
 
 NUMERIC_COLUMNS = [
@@ -112,6 +124,11 @@ NUMERIC_COLUMNS = [
     "madocalib_zenith_hydrostatic_delay_m",
     "madocalib_estimated_trop_delay_m",
     "madocalib_estimated_trop_delay_diff_m",
+    "orbit_projection_m",
+    "atmos_reference_tow",
+    "phase_bias_reference_tow",
+    "clock_reference_tow",
+    "effective_phase_bias_reference_tow",
 ]
 
 BOOL_COLUMNS = [
@@ -124,7 +141,17 @@ BOOL_COLUMNS = [
     "valid_after_corrections",
 ]
 
-COUNT_COLUMNS = ["atmos_token_count", "frequency_index"]
+COUNT_COLUMNS = [
+    "atmos_token_count",
+    "frequency_index",
+    "atmos_network_id",
+    "code_bias_network_id",
+    "phase_bias_network_id",
+    "atmos_reference_week",
+    "phase_bias_reference_week",
+    "clock_reference_week",
+    "effective_phase_bias_reference_week",
+]
 
 ID_COLUMNS = ["ssr_orbit_iode", "broadcast_iode"]
 
