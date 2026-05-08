@@ -405,6 +405,76 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Fail if PPP-applied atmospheric ionosphere corrections are below this count.",
     )
+    parser.add_argument(
+        "--enable-wlnl-par",
+        dest="enable_wlnl_par",
+        action="store_true",
+        default=None,
+        help="Enable WLNL Partial AR (greedy worst-|frac| exclusion).",
+    )
+    parser.add_argument(
+        "--no-enable-wlnl-par",
+        dest="enable_wlnl_par",
+        action="store_false",
+        help="Disable WLNL Partial AR.",
+    )
+    parser.add_argument(
+        "--clas-spp-clock-overwrite",
+        dest="clas_spp_clock_overwrite",
+        action="store_true",
+        default=None,
+        help="Overwrite KF receiver-clock state with SPP every kinematic CLAS-OSR epoch (default on).",
+    )
+    parser.add_argument(
+        "--no-clas-spp-clock-overwrite",
+        dest="clas_spp_clock_overwrite",
+        action="store_false",
+        help="Skip the SPP clock overwrite on the CLAS-OSR path; let the KF track the receiver clock.",
+    )
+    parser.add_argument(
+        "--clas-kf-clock-seed-variance",
+        type=float,
+        default=None,
+        help="Initial KF clock variance when --no-clas-spp-clock-overwrite is set.",
+    )
+    parser.add_argument(
+        "--ppp-process-noise-clock",
+        type=float,
+        default=None,
+        help="Override KF receiver-clock process noise (m^2/s).",
+    )
+    parser.add_argument(
+        "--process-noise-troposphere",
+        type=float,
+        default=None,
+        help="Override troposphere process noise.",
+    )
+    parser.add_argument(
+        "--reset-clock-to-spp",
+        dest="reset_clock_to_spp",
+        action="store_true",
+        default=None,
+        help="Force KF receiver-clock state to SPP every epoch (default on).",
+    )
+    parser.add_argument(
+        "--no-reset-clock-to-spp",
+        dest="reset_clock_to_spp",
+        action="store_false",
+        help="Skip SPP overwrite of KF receiver-clock state on the standard PPP path.",
+    )
+    parser.add_argument(
+        "--spp-seed-iono-free-code",
+        dest="spp_seed_iono_free_code",
+        action="store_true",
+        default=None,
+        help="Use ionosphere-free L1+L2 code combination in the SPP seed.",
+    )
+    parser.add_argument(
+        "--no-spp-seed-iono-free-code",
+        dest="spp_seed_iono_free_code",
+        action="store_false",
+        help="Force single-frequency L1 code in the SPP seed (default).",
+    )
     return parser.parse_args()
 
 
@@ -1332,6 +1402,37 @@ def main() -> int:
                 "--wlnl-wl-max-fractional",
                 str(args.wlnl_wl_max_fractional),
             ])
+        if args.enable_wlnl_par is True:
+            command.append("--enable-wlnl-par")
+        elif args.enable_wlnl_par is False:
+            command.append("--no-wlnl-par")
+        if args.clas_spp_clock_overwrite is True:
+            command.append("--clas-spp-clock-overwrite")
+        elif args.clas_spp_clock_overwrite is False:
+            command.append("--no-clas-spp-clock-overwrite")
+        if args.clas_kf_clock_seed_variance is not None:
+            command.extend([
+                "--clas-kf-clock-seed-variance",
+                str(args.clas_kf_clock_seed_variance),
+            ])
+        if args.ppp_process_noise_clock is not None:
+            command.extend([
+                "--ppp-process-noise-clock",
+                str(args.ppp_process_noise_clock),
+            ])
+        if args.process_noise_troposphere is not None:
+            command.extend([
+                "--process-noise-troposphere",
+                str(args.process_noise_troposphere),
+            ])
+        if args.reset_clock_to_spp is True:
+            command.append("--reset-clock-to-spp")
+        elif args.reset_clock_to_spp is False:
+            command.append("--no-reset-clock-to-spp")
+        if args.spp_seed_iono_free_code is True:
+            command.append("--spp-seed-iono-free-code")
+        elif args.spp_seed_iono_free_code is False:
+            command.append("--no-spp-seed-iono-free-code")
         if args.enable_ar:
             command.extend(["--enable-ar", "--ar-ratio-threshold", str(args.ar_ratio_threshold)])
 
