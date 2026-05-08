@@ -54,7 +54,7 @@ struct Options {
     bool use_iers_solid_tide = false;
     std::string eop_c04_file;
     bool use_iers_pole_tide = true;
-    bool use_iers_sub_daily_eop = false;
+    bool use_iers_sub_daily_eop = true;
     std::string atm_tidal_loading_file;
     bool use_iers_atm_tidal_loading = false;
     bool quiet = false;
@@ -142,12 +142,11 @@ void printUsage(const char* program_name) {
         << "                          0.4 mm at mid-latitudes, well within IERS sub-cm envelope.\n"
         << "  --no-iers-pole-tide      Skip the pole-tide model (escape hatch).\n"
         << "  --use-iers-sub-daily-eop Apply the IERS Conventions 2010 §5.5.1.1 + §8.2 sub-daily\n"
-        << "                          EOP corrections (Phase D-2): libration of CIP (Tables 5.1a/b)\n"
+        << "                          EOP corrections (default): libration of CIP (Tables 5.1a/b)\n"
         << "                          and ocean-tide EOP corrections (Table 8.2, Eanes-Ray model).\n"
-        << "                          Requires --eop-c04 to be set; ut1_utc is used as the input.\n"
-        << "                          Peak amplitudes ~0.5 mas in xp/yp and ~30 µs in UT1; PPP\n"
-        << "                          receiver-position effect is sub-mm.\n"
-        << "  --no-iers-sub-daily-eop  Skip the sub-daily EOP corrections (default)\n"
+        << "                          Requires --eop-c04; deterministic harmonic series with\n"
+        << "                          peak ~0.5 mas xp/yp and ~30 µs UT1, RMS 1.5 µm at receiver.\n"
+        << "  --no-iers-sub-daily-eop  Skip the sub-daily EOP corrections (escape hatch).\n"
         << "  --atm-tidal-loading <file>\n"
         << "                          Per-site S1/S2 atmospheric tidal-loading coefficient file\n"
         << "                          (Phase D-3). Custom format with $$ comment lines + S1 / S2\n"
