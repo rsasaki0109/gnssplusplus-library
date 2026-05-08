@@ -14,6 +14,7 @@
 #include <Eigen/Dense>
 
 #include "libgnss++/core/types.hpp"
+#include "libgnss++/iers/earth_rotation.hpp"
 
 namespace libgnss::iers {
 
@@ -53,5 +54,48 @@ Eigen::Vector3d solidEarthTideDisplacement(
     const Eigen::Vector3d& xsta_itrs,
     const Eigen::Vector3d& xsun_icrs,
     const Eigen::Vector3d& xmon_icrs);
+
+/// @brief Pole-tide station displacement (IERS Conventions 2010 §7.1.4).
+///
+/// The pole tide is the centrifugal effect on the deformable Earth
+/// from the wandering of the rotation axis with respect to its mean
+/// position (m1 = xp - x_mean, m2 = -(yp - y_mean)). Peak amplitude
+/// is sub-cm in the horizontal and ~25 mm radial during large polar
+/// motion excursions.
+///
+/// Mean-pole secular model: this implementation uses the IERS 2018
+/// linear update (an outcome of the 2017 IERS conventions update —
+/// the cubic 1976-2010 polynomial in the original IERS 2010 Technical
+/// Note 36 was replaced because polar motion has actually drifted
+/// linearly post-2010):
+///
+///   x_mean(t) =  55.000 +   1.677 · (t - 2000.0)   mas
+///   y_mean(t) = 320.500 +   3.460 · (t - 2000.0)   mas
+///
+/// where t is the decimal year (Julian-year approximation suffices
+/// for the secular term).
+///
+/// Displacement formula (Sr = -33 mm, Stt = -9 mm, Stl = 9 mm in the
+/// IERS 2010 §7.1.4 conventions):
+///
+///   d_radial = -32 · sin(2θ) · (m1·cosλ + m2·sinλ)  mm
+///   d_north  =  -9 · cos(2θ) · (m1·cosλ + m2·sinλ)  mm
+///   d_east   =  +9 · cos(θ)  · (m1·sinλ - m2·cosλ)  mm
+///
+/// where θ is geocentric colatitude, λ is east longitude, both
+/// derived from `xsta_itrs`.
+///
+/// Returned displacement is in the local ITRS frame (East, North, Up
+/// rotated back into ECEF X/Y/Z) and should be ADDED to the station
+/// nominal ITRS position to obtain the tidally displaced position.
+///
+/// @param mjd_utc    UTC modified Julian date of the epoch.
+/// @param xsta_itrs  Station nominal ITRS / ECEF coordinates [m].
+/// @param eop        Earth orientation parameters at this epoch.
+/// @return Displacement vector [m] in ITRS / ECEF.
+Eigen::Vector3d poleTideDisplacement(
+    double mjd_utc,
+    const Eigen::Vector3d& xsta_itrs,
+    const EarthOrientationParams& eop);
 
 }  // namespace libgnss::iers

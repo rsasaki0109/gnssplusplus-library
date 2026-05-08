@@ -53,6 +53,7 @@ struct Options {
     double ar_ratio_threshold = 3.0;
     bool use_iers_solid_tide = false;
     std::string eop_c04_file;
+    bool use_iers_pole_tide = false;
     bool quiet = false;
 };
 
@@ -125,6 +126,11 @@ void printUsage(const char* program_name) {
         << "                          (pole tide, sub-daily EOP). Phase D-0 scaffolding only — does\n"
         << "                          not change PPP output until D-1+ feature flags are enabled.\n"
         << "                          Source: https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now\n"
+        << "  --use-iers-pole-tide     Apply the IERS Conventions 2010 §7.1.4 pole-tide station\n"
+        << "                          displacement (Phase D-1). Requires --eop-c04 to be set;\n"
+        << "                          otherwise the displacement is silently skipped because\n"
+        << "                          xp/yp are unknown. Opt-in pending truth-bench validation.\n"
+        << "  --no-iers-pole-tide      Skip the pole-tide model (default)\n"
         << "  --quiet                  Suppress per-run summary output\n"
         << "  -h, --help               Show this help\n";
 }
@@ -232,6 +238,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_iers_solid_tide = false;
         } else if (arg == "--eop-c04" && i + 1 < argc) {
             options.eop_c04_file = argv[++i];
+        } else if (arg == "--use-iers-pole-tide") {
+            options.use_iers_pole_tide = true;
+        } else if (arg == "--no-iers-pole-tide") {
+            options.use_iers_pole_tide = false;
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -581,6 +591,7 @@ int main(int argc, char* argv[]) {
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
         ppp_config.use_iers_solid_tide = options.use_iers_solid_tide;
         ppp_config.eop_path = options.eop_c04_file;
+        ppp_config.use_iers_pole_tide = options.use_iers_pole_tide;
         if (options.low_dynamics_mode) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
             ppp_config.reset_kinematic_position_to_spp_each_epoch = false;

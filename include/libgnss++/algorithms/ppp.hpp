@@ -418,6 +418,16 @@ private:
      */
     Vector3d calculateOceanLoading(const Vector3d& position,
                                  const GNSSTime& time) const;
+
+    /**
+     * @brief Calculate IERS pole-tide station displacement (Phase D-1).
+     *
+     * Returns Vector3d::Zero() when no EOP table is loaded, since the
+     * pole tide depends on instantaneous polar motion (xp, yp). Caller
+     * is responsible for gating on `ppp_config_.use_iers_pole_tide`.
+     */
+    Vector3d calculatePoleTide(const Vector3d& position,
+                               const GNSSTime& time) const;
     
     /**
      * @brief Form measurement equations
