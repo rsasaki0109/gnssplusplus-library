@@ -249,6 +249,11 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_ppp_kinematic_signoff.py"),
         "summary": "Run the bundled kinematic PPP sign-off against an RTK reference and emit summary JSON.",
     },
+    "ppp-iers-solid-tide-bench": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_solid_tide_bench.py"),
+        "summary": "Run the same PPP setup with and without --use-iers-solid-tide and summarize the per-epoch displacement (Phase C-1 truth-bench harness).",
+    },
     "ppp-products-signoff": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_ppp_products_signoff.py"),
