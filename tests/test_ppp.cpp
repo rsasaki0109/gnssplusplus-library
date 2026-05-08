@@ -739,6 +739,94 @@ TEST(PPPTest, SolidEarthTidesChangeSyntheticPrecisePppSolutionWithoutBreakingIt)
     std::filesystem::remove(clk_path);
 }
 
+TEST(PPPTest, IersSolidTideOptInDispatchProducesDistinctSolution) {
+    // Phase C-1 dispatch test: with `apply_solid_earth_tides = true`,
+    // toggling `use_iers_solid_tide` between false (legacy Step-1
+    // body-tide approximation) and true (IERS Conventions 2010
+    // Step-1+Step-2 Dehant via libgnss::iers::solidEarthTideDisplacement)
+    // must produce two distinct converged solutions, both close to
+    // the true receiver position. This proves the dispatcher picks
+    // different code paths and that neither path is broken.
+    const auto sp3_path = tempFilePath("libgnss_ppp_iers_tide_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_iers_tide_test.clk");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(8.0, -5.0, 3.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 6, 0, 0.0);
+    const GNSSTime last_precise_time = first_time + 600.0;
+    writeTextFile(sp3_path, buildSp3Text(satellites, first_time, last_precise_time));
+    writeTextFile(clk_path, buildClockText(satellites, first_time, last_precise_time));
+
+    PPPProcessor::PPPConfig base_config;
+    base_config.use_precise_orbits = true;
+    base_config.use_precise_clocks = true;
+    base_config.orbit_file_path = sp3_path.string();
+    base_config.clock_file_path = clk_path.string();
+    base_config.convergence_min_epochs = 5;
+    base_config.convergence_threshold_horizontal = 0.2;
+    base_config.estimate_troposphere = false;
+    base_config.enable_ambiguity_resolution = false;
+    base_config.kinematic_mode = false;
+    base_config.apply_ocean_loading = false;
+    base_config.apply_solid_earth_tides = true;
+
+    PPPProcessor::PPPConfig legacy_config = base_config;
+    legacy_config.use_iers_solid_tide = false;
+    PPPProcessor::PPPConfig iers_config = base_config;
+    iers_config.use_iers_solid_tide = true;
+
+    PPPProcessor legacy_processor(legacy_config);
+    PPPProcessor iers_processor(iers_config);
+
+    ProcessorConfig processor_config;
+    processor_config.mode = PositioningMode::PPP;
+    processor_config.min_satellites = 4;
+    processor_config.use_precise_orbits = true;
+    processor_config.use_precise_clocks = true;
+    processor_config.orbit_file_path = sp3_path.string();
+    processor_config.clock_file_path = clk_path.string();
+    ASSERT_TRUE(legacy_processor.initialize(processor_config));
+    ASSERT_TRUE(iers_processor.initialize(processor_config));
+
+    NavigationData nav_data;
+    PositionSolution legacy_solution;
+    PositionSolution iers_solution;
+    for (int i = 0; i < 8; ++i) {
+        const ObservationData epoch = makeSyntheticEpoch(
+            first_time + 30.0 * static_cast<double>(i),
+            true_receiver_position,
+            approximate_receiver_position,
+            satellites);
+        legacy_solution = legacy_processor.processEpoch(epoch, nav_data);
+        iers_solution   = iers_processor.processEpoch(epoch, nav_data);
+    }
+
+    ASSERT_TRUE(legacy_solution.isValid());
+    ASSERT_TRUE(iers_solution.isValid());
+    // Both paths should converge to within 1 m of truth — neither is
+    // catastrophically wrong.
+    EXPECT_LT((legacy_solution.position_ecef - true_receiver_position).norm(), 1.0);
+    EXPECT_LT((iers_solution.position_ecef - true_receiver_position).norm(), 1.0);
+
+    // The two solutions must differ — if they don't, the dispatch is
+    // not actually picking different code paths. The tide model
+    // difference at any single epoch is a few mm to a few cm; we
+    // require non-zero separation but bound it loosely.
+    const double position_delta_m =
+        (legacy_solution.position_ecef - iers_solution.position_ecef).norm();
+    EXPECT_GT(position_delta_m, 1e-5);
+    EXPECT_LT(position_delta_m, 0.5);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+}
+
 TEST(PPPTest, ReceiverAntexPcoChangesSyntheticPrecisePppSolutionWithoutBreakingIt) {
     const auto sp3_path = tempFilePath("libgnss_ppp_antex_test.sp3");
     const auto clk_path = tempFilePath("libgnss_ppp_antex_test.clk");

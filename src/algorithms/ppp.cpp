@@ -7,6 +7,9 @@
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signals.hpp>
+#include <libgnss++/iers/earth_rotation.hpp>
+#include <libgnss++/iers/ephemeris.hpp>
+#include <libgnss++/iers/tides.hpp>
 #include <libgnss++/io/qzss_l6.hpp>
 #include <libgnss++/io/rtcm.hpp>
 #include <libgnss++/models/troposphere.hpp>
@@ -2679,12 +2682,30 @@ Vector3d PPPProcessor::applyGeophysicalCorrections(const Vector3d& position,
 
 Vector3d PPPProcessor::calculateSolidEarthTides(const Vector3d& position,
                                                 const GNSSTime& time) const {
-    constexpr double kSunGM = 1.32712440018e20;
-    constexpr double kMoonGM = 4.902801e12;
     if (!position.allFinite() || position.norm() < constants::WGS84_A * 0.5) {
         return Vector3d::Zero();
     }
-    const Vector3d sun_position = approximateSunPositionEcef(time);
+
+    if (ppp_config_.use_iers_solid_tide) {
+        // IERS Conventions 2010 §7.1.1 (Dehant) Step-1 + Step-2 model
+        // via the libgnss::iers wrapper. Sun and Moon are supplied in
+        // ICRS — see the FRAME NOTE in libgnss++/iers/tides.hpp for
+        // why this is the correct frame for the IERS routine despite
+        // its public documentation calling it "ECEF".
+        const double mjd_utc = libgnss::iers::gnssTimeToMjdUtc(time);
+        const Vector3d sun_icrs  = libgnss::iers::sunPositionIcrs(mjd_utc);
+        const Vector3d moon_icrs = libgnss::iers::moonPositionIcrs(mjd_utc);
+        return libgnss::iers::solidEarthTideDisplacement(
+            mjd_utc, position, sun_icrs, moon_icrs);
+    }
+
+    // Default path: simplified Step-1-only Love-number body-tide
+    // approximation kept for behavioral compatibility while the
+    // IERS path stays opt-in pending truth-bench validation. See
+    // docs/iers-integration-plan.md.
+    constexpr double kSunGM  = 1.32712440018e20;
+    constexpr double kMoonGM = 4.902801e12;
+    const Vector3d sun_position  = approximateSunPositionEcef(time);
     const Vector3d moon_position = approximateMoonPositionEcef(time);
     return bodyTideDisplacement(position, sun_position, kSunGM) +
            bodyTideDisplacement(position, moon_position, kMoonGM);

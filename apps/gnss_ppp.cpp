@@ -51,6 +51,7 @@ struct Options {
     bool low_dynamics_mode = false;
     bool enable_ar = false;
     double ar_ratio_threshold = 3.0;
+    bool use_iers_solid_tide = false;
     bool quiet = false;
 };
 
@@ -113,6 +114,11 @@ void printUsage(const char* program_name) {
         << "  --disable-ar            Disable PPP ambiguity fixing (default)\n"
         << "  --ar-ratio-threshold <value>\n"
         << "                          Ratio threshold for PPP ambiguity fixing (default: 3.0)\n"
+        << "  --use-iers-solid-tide   Use the IERS Conventions 2010 (Dehant) Step-1+Step-2\n"
+        << "                          solid-earth-tide model instead of the simplified\n"
+        << "                          Step-1-only built-in approximation. Opt-in pending\n"
+        << "                          truth-bench validation. See docs/iers-integration-plan.md\n"
+        << "  --no-iers-solid-tide    Use the built-in Step-1-only solid-earth-tide model (default)\n"
         << "  --quiet                  Suppress per-run summary output\n"
         << "  -h, --help               Show this help\n";
 }
@@ -214,6 +220,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.enable_ar = false;
         } else if (arg == "--ar-ratio-threshold" && i + 1 < argc) {
             options.ar_ratio_threshold = std::stod(argv[++i]);
+        } else if (arg == "--use-iers-solid-tide") {
+            options.use_iers_solid_tide = true;
+        } else if (arg == "--no-iers-solid-tide") {
+            options.use_iers_solid_tide = false;
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -561,6 +571,7 @@ int main(int argc, char* argv[]) {
         ppp_config.enable_ambiguity_resolution = options.enable_ar;
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
+        ppp_config.use_iers_solid_tide = options.use_iers_solid_tide;
         if (options.low_dynamics_mode) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
             ppp_config.reset_kinematic_position_to_spp_each_epoch = false;

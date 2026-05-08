@@ -177,6 +177,13 @@ struct PPPConfig {
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
+    // When true (and apply_solid_earth_tides is also true), use the
+    // IERS Conventions 2010 §7.1.1 (Dehant) Step-1 + Step-2 model
+    // from libgnss::iers::solidEarthTideDisplacement instead of the
+    // built-in simplified Step-1-only Love-number approximation.
+    // Default off; opt-in for safe rollout pending truth-bench
+    // validation. See docs/iers-integration-plan.md.
+    bool use_iers_solid_tide = false;
     bool apply_relativity = true;
 
     // Convergence criteria
