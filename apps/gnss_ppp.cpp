@@ -52,6 +52,7 @@ struct Options {
     bool enable_ar = false;
     double ar_ratio_threshold = 3.0;
     bool use_iers_solid_tide = false;
+    std::string eop_c04_file;
     bool quiet = false;
 };
 
@@ -119,6 +120,11 @@ void printUsage(const char* program_name) {
         << "                          Step-1-only built-in approximation. Opt-in pending\n"
         << "                          truth-bench validation. See docs/iers-integration-plan.md\n"
         << "  --no-iers-solid-tide    Use the built-in Step-1-only solid-earth-tide model (default)\n"
+        << "  --eop-c04 <eopc04.txt>   IERS 20 C04 Earth Orientation Parameter file (daily samples).\n"
+        << "                          Loaded into PPPProcessor for downstream IERS Phase D consumers\n"
+        << "                          (pole tide, sub-daily EOP). Phase D-0 scaffolding only — does\n"
+        << "                          not change PPP output until D-1+ feature flags are enabled.\n"
+        << "                          Source: https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now\n"
         << "  --quiet                  Suppress per-run summary output\n"
         << "  -h, --help               Show this help\n";
 }
@@ -224,6 +230,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_iers_solid_tide = true;
         } else if (arg == "--no-iers-solid-tide") {
             options.use_iers_solid_tide = false;
+        } else if (arg == "--eop-c04" && i + 1 < argc) {
+            options.eop_c04_file = argv[++i];
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -572,6 +580,7 @@ int main(int argc, char* argv[]) {
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
         ppp_config.use_iers_solid_tide = options.use_iers_solid_tide;
+        ppp_config.eop_path = options.eop_c04_file;
         if (options.low_dynamics_mode) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
             ppp_config.reset_kinematic_position_to_spp_each_epoch = false;

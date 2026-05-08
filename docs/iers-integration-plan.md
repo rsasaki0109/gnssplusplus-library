@@ -244,8 +244,22 @@ does not block Phase C:
 - **Phase A-2b**: Vendor or re-implement HARDISP (ocean-tide-loading)
   with native libgnss++ time-type adaptation. Re-uses the BLQ
   parser already present in libgnss++.
-- **Phase D**: Pole tide, sub-daily EOP corrections, atmospheric
-  loading. Smaller cm-level effects.
+- **Phase D-0** *(in progress)*: EOP plumbing scaffolding.
+  Adds `libgnss::iers::EopTable` (IERS 20 C04 daily series with
+  linear interpolation and leap-second snap on UT1-UTC) and a
+  `PPPConfig::eop_path` / `--eop-c04` CLI knob. PPPProcessor
+  loads the table on init and exposes
+  `getEarthOrientationParams(GNSSTime)`. No PPP code path consumes
+  the table yet — D-0 is a strictly additive scaffold for D-1+
+  (pole tide and sub-daily EOP). Output is bit-identical to the
+  no-EOP baseline.
+- **Phase D-1**: Pole tide (IERS Conventions 2010 §7.1.4). Closed-form
+  ~30 LOC, but requires the D-0 scaffold so per-epoch xp/yp/UT1-UTC
+  are available.
+- **Phase D-2**: Sub-daily EOP corrections (IERS §8.2). Shares the
+  D-0 scaffold.
+- **Phase D-3**: Atmospheric loading. Smaller cm-level effect; needs
+  a separate gridded-data ingestion path, independent of EOP.
 - **`icrsToItrs` consumers**: when satellite-side processing
   (LEO orbits, external SP3 ingestion in non-ECEF frames, attitude
   for satellite antenna PCO/PCV) is wired up, the wrapper is

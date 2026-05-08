@@ -18,6 +18,7 @@
 #include <array>
 #include <chrono>
 #include <fstream>
+#include <memory>
 #include <cmath>
 #include <ctime>
 #include <cctype>
@@ -900,6 +901,9 @@ bool PPPProcessor::initialize(const ProcessorConfig& config) {
         !loadDCBProducts(ppp_config_.dcb_file_path)) {
         return false;
     }
+    if (!ppp_config_.eop_path.empty() && !loadEopC04(ppp_config_.eop_path)) {
+        return false;
+    }
     return true;
 }
 
@@ -1239,6 +1243,30 @@ bool PPPProcessor::loadDCBProducts(const std::string& dcb_file) {
     }
     dcb_products_loaded_ = dcb_products_.loadFile(dcb_file);
     return dcb_products_loaded_;
+}
+
+bool PPPProcessor::loadEopC04(const std::string& path) {
+    eop_table_.reset();
+    if (path.empty()) {
+        return false;
+    }
+    try {
+        eop_table_ = std::make_unique<libgnss::iers::EopTable>(
+            libgnss::iers::EopTable::fromC04File(path));
+    } catch (const std::exception&) {
+        eop_table_.reset();
+        return false;
+    }
+    return true;
+}
+
+libgnss::iers::EarthOrientationParams
+PPPProcessor::getEarthOrientationParams(const GNSSTime& time) const {
+    if (!eop_table_) {
+        return libgnss::iers::EarthOrientationParams{};
+    }
+    const double mjd_utc = libgnss::iers::gnssTimeToMjdUtc(time);
+    return eop_table_->interpolateAt(mjd_utc);
 }
 
 bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,

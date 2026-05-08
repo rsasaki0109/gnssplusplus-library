@@ -10,8 +10,10 @@
 #include "ppp_clas_sd.hpp"
 #include "ppp_osr_types.hpp"
 #include "spp.hpp"
+#include "../iers/eop_table.hpp"
 #include <Eigen/Dense>
 #include <array>
+#include <memory>
 #include <mutex>
 #include <string>
 
@@ -69,6 +71,31 @@ public:
      * @brief Load DCB / Bias-SINEX products for future PPP hooks.
      */
     bool loadDCBProducts(const std::string& dcb_file);
+
+    /**
+     * @brief Load an IERS 20 C04 Earth Orientation Parameter file.
+     *
+     * The series is stored in-memory and consumed by per-epoch
+     * earth-rotation / pole-tide / sub-daily-EOP code paths in
+     * subsequent IERS phases. Phase D-0 wires the loader and
+     * lookup; consumers arrive in Phase D-1+.
+     */
+    bool loadEopC04(const std::string& path);
+
+    /**
+     * @brief Whether an EOP series has been loaded successfully.
+     */
+    bool hasEopTable() const { return static_cast<bool>(eop_table_); }
+
+    /**
+     * @brief Look up EOP at a GNSS epoch.
+     *
+     * Returns the zero EarthOrientationParams (i.e. rigid-body
+     * approximation) when no EOP series has been loaded. Throws
+     * std::out_of_range when the requested epoch falls outside the
+     * loaded series — callers should keep their EOP file current.
+     */
+    iers::EarthOrientationParams getEarthOrientationParams(const GNSSTime& time) const;
 
     /**
      * @brief Load RTCM SSR orbit/clock corrections and convert them to sampled PPP corrections.
@@ -188,6 +215,7 @@ private:
     };
     OceanLoadingCoefficients ocean_loading_coefficients_{};
     bool ocean_loading_loaded_ = false;
+    std::unique_ptr<iers::EopTable> eop_table_;
     std::map<std::string, std::map<SignalType, Vector3d>> receiver_antex_offsets_;
     bool receiver_antex_loaded_ = false;
     Vector3d static_anchor_position_ = Vector3d::Zero();
