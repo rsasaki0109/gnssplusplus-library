@@ -383,6 +383,19 @@ does not block Phase C:
   p95 = 0.36 mm, median = 0.17 mm, per-component median dz = −50 µm
   — within the IERS §7.1.5 expected sub-cm envelope at mid-latitudes
   during normal pressure conditions.
+
+  Phase D-3 also includes
+  `apps/gnss_ppp_iers_atm_tidal_loading_multisite_bench.py` (mirroring
+  the pole-tide multi-site driver from PR #69 / #73). The site config
+  schema accepts a per-site `atm_tidal_loading` override on top of
+  the campaign-wide `common.atm_tidal_loading` — real campaigns use
+  per-site TU Wien coefficients, but the synthetic mid-latitude
+  fixture (`data/iers/synth_midlat.atl`) is shared across both
+  bench stations until the real fetch path lands. On TSKB + GRAZ at
+  2026-04-15 (DOY 105, 600-epoch cap, IGS final SP3 + CLK) the
+  multi-site bench reports max = 0.30 / 0.35 mm, median = 0.21 /
+  0.17 mm, median_dz = −83 / −89 µm — sub-mm at both stations,
+  consistent with the IERS §7.1.5 envelope.
 - **`icrsToItrs` consumers**: when satellite-side processing
   (LEO orbits, external SP3 ingestion in non-ECEF frames, attitude
   for satellite antenna PCO/PCV) is wired up, the wrapper is
