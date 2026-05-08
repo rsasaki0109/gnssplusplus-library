@@ -54,6 +54,7 @@ struct Options {
     bool use_iers_solid_tide = false;
     std::string eop_c04_file;
     bool use_iers_pole_tide = false;
+    bool use_iers_sub_daily_eop = false;
     bool quiet = false;
 };
 
@@ -137,6 +138,13 @@ void printUsage(const char* program_name) {
         << "                          otherwise the displacement is silently skipped because\n"
         << "                          xp/yp are unknown. Opt-in pending truth-bench validation.\n"
         << "  --no-iers-pole-tide      Skip the pole-tide model (default)\n"
+        << "  --use-iers-sub-daily-eop Apply the IERS Conventions 2010 §5.5.1.1 + §8.2 sub-daily\n"
+        << "                          EOP corrections (Phase D-2): libration of CIP (Tables 5.1a/b)\n"
+        << "                          and ocean-tide EOP corrections (Table 8.2, Eanes-Ray model).\n"
+        << "                          Requires --eop-c04 to be set; ut1_utc is used as the input.\n"
+        << "                          Peak amplitudes ~0.5 mas in xp/yp and ~30 µs in UT1; PPP\n"
+        << "                          receiver-position effect is sub-mm.\n"
+        << "  --no-iers-sub-daily-eop  Skip the sub-daily EOP corrections (default)\n"
         << "  --quiet                  Suppress per-run summary output\n"
         << "  -h, --help               Show this help\n";
 }
@@ -249,6 +257,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_iers_pole_tide = true;
         } else if (arg == "--no-iers-pole-tide") {
             options.use_iers_pole_tide = false;
+        } else if (arg == "--use-iers-sub-daily-eop") {
+            options.use_iers_sub_daily_eop = true;
+        } else if (arg == "--no-iers-sub-daily-eop") {
+            options.use_iers_sub_daily_eop = false;
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -599,6 +611,7 @@ int main(int argc, char* argv[]) {
         ppp_config.use_iers_solid_tide = options.use_iers_solid_tide;
         ppp_config.eop_path = options.eop_c04_file;
         ppp_config.use_iers_pole_tide = options.use_iers_pole_tide;
+        ppp_config.use_iers_sub_daily_eop = options.use_iers_sub_daily_eop;
         if (options.low_dynamics_mode) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
             ppp_config.reset_kinematic_position_to_spp_each_epoch = false;

@@ -282,8 +282,21 @@ does not block Phase C:
   per-component median dz = −0.21 mm — within the IERS §7.1.4
   expected sub-cm envelope at mid-latitudes during normal polar
   motion.
-- **Phase D-2**: Sub-daily EOP corrections (IERS §8.2). Shares the
-  D-0 scaffold.
+- **Phase D-2** *(in progress)*: Sub-daily EOP corrections opt-in.
+  Adds `libgnss::iers::subDailyEopCorrection(mjd_utc, ut1_utc)` →
+  `{dxp, dyp, dut1, dlod}`, applying the full IERS Conventions 2010
+  set: §5.5.1.1 Tables 5.1a/5.1b libration of CIP and UT1
+  (10 + 11 = 21 terms) plus §8.2 Table 8.2 ocean-tide corrections
+  (Eanes-Ray model, 71 terms). `PPPConfig::use_iers_sub_daily_eop`
+  gates it; when on, `getEarthOrientationParams` adds the deltas
+  to the daily-interpolated value. The pole tide path automatically
+  picks up the higher-frequency CIP wobble when both flags
+  (`--use-iers-pole-tide` and `--use-iers-sub-daily-eop`) are on.
+  At TSKB 2026-04-15 0h UTC the raw delta is dxp ≈ −265 µas,
+  dyp ≈ +255 µas, dut1 ≈ −24 µs; the PPP receiver-position effect
+  on top of the pole tide is RMS 1.5 µm in Z (0.17% relative
+  perturbation, matching the daily-vs-sub-daily xp/yp amplitude
+  ratio). Default off.
 - **Phase D-3**: Atmospheric loading. Smaller cm-level effect; needs
   a separate gridded-data ingestion path, independent of EOP.
 - **`icrsToItrs` consumers**: when satellite-side processing

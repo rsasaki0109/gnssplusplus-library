@@ -198,6 +198,13 @@ struct PPPConfig {
     // pole alone would be biased rather than zero). Default off
     // pending Phase D-1 truth-bench validation.
     bool use_iers_pole_tide = false;
+    // IERS Conventions 2010 §5.5.1.1 + §8.2 sub-daily EOP corrections
+    // (opt-in). When true, getEarthOrientationParams adds the harmonic
+    // libration + ocean-tide deltas to the daily-interpolated xp / yp
+    // / UT1-UTC before returning. Peak amplitudes are sub-mas / few-µs,
+    // so the receiver-position effect on PPP is sub-mm; flipping this
+    // on tightens the modeled CIP location for IERS-conformant work.
+    bool use_iers_sub_daily_eop = false;
     bool apply_relativity = true;
 
     // Convergence criteria

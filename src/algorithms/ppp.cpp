@@ -9,6 +9,7 @@
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/iers/earth_rotation.hpp>
 #include <libgnss++/iers/ephemeris.hpp>
+#include <libgnss++/iers/sub_daily_eop.hpp>
 #include <libgnss++/iers/tides.hpp>
 #include <libgnss++/io/qzss_l6.hpp>
 #include <libgnss++/io/rtcm.hpp>
@@ -1270,7 +1271,15 @@ PPPProcessor::getEarthOrientationParams(const GNSSTime& time) const {
         return libgnss::iers::EarthOrientationParams{};
     }
     const double mjd_utc = libgnss::iers::gnssTimeToMjdUtc(time);
-    return eop_table_->interpolateAt(mjd_utc);
+    auto eop = eop_table_->interpolateAt(mjd_utc);
+    if (ppp_config_.use_iers_sub_daily_eop) {
+        const auto delta = libgnss::iers::subDailyEopCorrection(
+            mjd_utc, eop.ut1_minus_utc_seconds);
+        eop.xp_arcsec               += delta.dxp_arcsec;
+        eop.yp_arcsec               += delta.dyp_arcsec;
+        eop.ut1_minus_utc_seconds   += delta.dut1_seconds;
+    }
+    return eop;
 }
 
 bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
@@ -2791,7 +2800,11 @@ Vector3d PPPProcessor::calculatePoleTide(const Vector3d& position,
     const double mjd_utc = libgnss::iers::gnssTimeToMjdUtc(time);
     libgnss::iers::EarthOrientationParams eop;
     try {
-        eop = eop_table_->interpolateAt(mjd_utc);
+        // getEarthOrientationParams applies the sub-daily correction
+        // when ppp_config_.use_iers_sub_daily_eop is enabled — pole
+        // tide automatically picks up the higher-frequency CIP wobble
+        // when both flags are on.
+        eop = getEarthOrientationParams(time);
     } catch (const std::out_of_range&) {
         return Vector3d::Zero();
     }
