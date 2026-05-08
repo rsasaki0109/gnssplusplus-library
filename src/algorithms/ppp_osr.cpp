@@ -3,6 +3,7 @@
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/models/troposphere.hpp>
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdlib>
 #include <cmath>
@@ -10,6 +11,8 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <map>
+#include <sstream>
 #include <string>
 
 namespace libgnss {
@@ -18,6 +21,212 @@ namespace {
 
 bool pppDebugEnabled() {
     return ppp_shared::pppDebugEnabled();
+}
+
+std::string trimCopy(const std::string& text) {
+    const auto first = std::find_if(
+        text.begin(), text.end(), [](unsigned char ch) { return !std::isspace(ch); });
+    if (first == text.end()) {
+        return "";
+    }
+    const auto last = std::find_if(
+        text.rbegin(), text.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base();
+    return std::string(first, last);
+}
+
+std::string normalizeAntennaType(const std::string& antenna_type) {
+    std::string normalized = trimCopy(antenna_type);
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::toupper(ch));
+    });
+    return normalized;
+}
+
+SignalType antexSignalType(const std::string& code) {
+    const std::string trimmed = trimCopy(code);
+    if (trimmed == "G01") return SignalType::GPS_L1CA;
+    if (trimmed == "G02") return SignalType::GPS_L2C;
+    if (trimmed == "G05") return SignalType::GPS_L5;
+    if (trimmed == "E01") return SignalType::GAL_E1;
+    if (trimmed == "E05") return SignalType::GAL_E5A;
+    if (trimmed == "E07") return SignalType::GAL_E5B;
+    if (trimmed == "J01") return SignalType::QZS_L1CA;
+    if (trimmed == "J02") return SignalType::QZS_L2C;
+    if (trimmed == "J05") return SignalType::QZS_L5;
+    return SignalType::SIGNAL_TYPE_COUNT;
+}
+
+SignalType canonicalAntexSignal(SignalType signal) {
+    switch (signal) {
+        case SignalType::GPS_L1P: return SignalType::GPS_L1CA;
+        case SignalType::GPS_L2P: return SignalType::GPS_L2C;
+        default: return signal;
+    }
+}
+
+std::string extractAntexFrequencyCode(const std::string& line) {
+    for (size_t index = 0; index + 2 < std::min<size_t>(line.size(), 20U); ++index) {
+        if (std::isalpha(static_cast<unsigned char>(line[index])) &&
+            std::isdigit(static_cast<unsigned char>(line[index + 1])) &&
+            std::isdigit(static_cast<unsigned char>(line[index + 2]))) {
+            return line.substr(index, 3);
+        }
+    }
+    return "";
+}
+
+bool parseAntexNoaziValues(const std::string& line, std::array<double, 19>& pcv_m) {
+    pcv_m.fill(0.0);
+    const size_t pos = line.find("NOAZI");
+    if (pos == std::string::npos) {
+        return false;
+    }
+    std::istringstream iss(line.substr(pos + 5));
+    double value_mm = 0.0;
+    int count = 0;
+    while (count < static_cast<int>(pcv_m.size()) && iss >> value_mm) {
+        pcv_m[static_cast<size_t>(count)] = value_mm * 1e-3;
+        ++count;
+    }
+    if (count == 0) {
+        return false;
+    }
+    for (; count < static_cast<int>(pcv_m.size()); ++count) {
+        pcv_m[static_cast<size_t>(count)] = pcv_m[static_cast<size_t>(count - 1)];
+    }
+    return true;
+}
+
+double interpolateNoaziPcv(const std::array<double, 19>& pcv_m, double zenith_angle_deg) {
+    const double clamped = std::clamp(zenith_angle_deg, 0.0, 90.0);
+    const double scaled = clamped / 5.0;
+    const int index = static_cast<int>(std::floor(scaled));
+    if (index <= 0) {
+        return pcv_m.front();
+    }
+    if (index >= static_cast<int>(pcv_m.size()) - 1) {
+        return pcv_m.back();
+    }
+    const double fraction = scaled - static_cast<double>(index);
+    return pcv_m[static_cast<size_t>(index)] * (1.0 - fraction) +
+           pcv_m[static_cast<size_t>(index + 1)] * fraction;
+}
+
+struct ReceiverAntexModel {
+    std::map<SignalType, Vector3d> offsets_enu_m;
+    std::map<SignalType, std::array<double, 19>> noazi_pcv_m;
+};
+
+ReceiverAntexModel loadReceiverAntexModel(const std::string& filename,
+                                           const std::string& antenna_type) {
+    ReceiverAntexModel model;
+    if (filename.empty() || antenna_type.empty()) {
+        return model;
+    }
+    std::ifstream input(filename);
+    if (!input.is_open()) {
+        return model;
+    }
+
+    const std::string target_type = normalizeAntennaType(antenna_type);
+    bool in_antenna = false;
+    bool target_entry = false;
+    SignalType current_signal = SignalType::SIGNAL_TYPE_COUNT;
+    std::string line;
+    while (std::getline(input, line)) {
+        const std::string label = line.size() >= 60 ? trimCopy(line.substr(60)) : "";
+        if (label == "START OF ANTENNA") {
+            in_antenna = true;
+            target_entry = false;
+            current_signal = SignalType::SIGNAL_TYPE_COUNT;
+            continue;
+        }
+        if (!in_antenna) {
+            continue;
+        }
+        if (label == "END OF ANTENNA") {
+            if (target_entry) {
+                return model;
+            }
+            in_antenna = false;
+            continue;
+        }
+        if (label == "TYPE / SERIAL NO") {
+            target_entry = normalizeAntennaType(line.substr(0, 20)) == target_type;
+            continue;
+        }
+        if (!target_entry) {
+            continue;
+        }
+        if (label == "START OF FREQUENCY") {
+            current_signal = antexSignalType(extractAntexFrequencyCode(line));
+            continue;
+        }
+        if (label == "END OF FREQUENCY") {
+            current_signal = SignalType::SIGNAL_TYPE_COUNT;
+            continue;
+        }
+        if (label == "NORTH / EAST / UP" &&
+            current_signal != SignalType::SIGNAL_TYPE_COUNT) {
+            std::istringstream iss(line.substr(0, std::min<size_t>(line.size(), 30U)));
+            double north_mm = 0.0;
+            double east_mm = 0.0;
+            double up_mm = 0.0;
+            if (iss >> north_mm >> east_mm >> up_mm) {
+                model.offsets_enu_m[current_signal] =
+                    Vector3d(east_mm * 1e-3, north_mm * 1e-3, up_mm * 1e-3);
+            }
+            continue;
+        }
+        if (line.find("NOAZI") != std::string::npos &&
+            current_signal != SignalType::SIGNAL_TYPE_COUNT) {
+            std::array<double, 19> pcv_m{};
+            if (parseAntexNoaziValues(line, pcv_m)) {
+                model.noazi_pcv_m[current_signal] = pcv_m;
+            }
+        }
+    }
+
+    return model;
+}
+
+const ReceiverAntexModel& receiverAntexModel(const ppp_shared::PPPConfig& config) {
+    static std::map<std::string, ReceiverAntexModel> cache;
+    const std::string key =
+        config.antex_file_path + "\n" + normalizeAntennaType(config.receiver_antenna_type);
+    const auto it = cache.find(key);
+    if (it != cache.end()) {
+        return it->second;
+    }
+    const auto inserted = cache.emplace(
+        key, loadReceiverAntexModel(config.antex_file_path, config.receiver_antenna_type));
+    return inserted.first->second;
+}
+
+double receiverAntennaCorrectionMeters(const ppp_shared::PPPConfig& config,
+                                       const Vector3d& receiver_pos,
+                                       const Vector3d& los_unit,
+                                       double elevation_rad,
+                                       SignalType signal) {
+    Vector3d offset_enu = config.receiver_antenna_delta_enu;
+    double pcv_m = 0.0;
+    const auto& model = receiverAntexModel(config);
+    const SignalType canonical = canonicalAntexSignal(signal);
+    const auto offset_it = model.offsets_enu_m.find(canonical);
+    if (offset_it != model.offsets_enu_m.end()) {
+        offset_enu += offset_it->second;
+    }
+    const auto pcv_it = model.noazi_pcv_m.find(canonical);
+    if (pcv_it != model.noazi_pcv_m.end() && std::isfinite(elevation_rad)) {
+        pcv_m = interpolateNoaziPcv(pcv_it->second, 90.0 - elevation_rad * 180.0 / M_PI);
+    }
+
+    double lat = 0.0;
+    double lon = 0.0;
+    double h = 0.0;
+    ecef2geodetic(receiver_pos, lat, lon, h);
+    const Vector3d offset_ecef = enu2ecef(offset_enu, lat, lon);
+    return pcv_m - los_unit.dot(offset_ecef);
 }
 
 bool clasOsrSatelliteExcluded(const SatelliteId& sat) {
@@ -909,6 +1118,11 @@ std::vector<OSRCorrection> computeOSR(
             osr.frequencies[1] = signalFrequencyHz(l2_obs->signal, eph);
             osr.wavelengths[1] = constants::SPEED_OF_LIGHT / osr.frequencies[1];
             osr.num_frequencies = 2;
+        }
+        for (int f = 0; f < osr.num_frequencies; ++f) {
+            osr.receiver_antenna_m[f] =
+                receiverAntennaCorrectionMeters(
+                    config, receiver_pos, los, elev, osr.signals[f]);
         }
 
         // --- 4. Troposphere ---

@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <libgnss++/algorithms/ppp_clas.hpp>
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signals.hpp>
@@ -2410,6 +2411,121 @@ TEST(PPPTest, ProcessorAppliesAtmosphericCorrectionsFromSampledSSRWithPrecisePro
     std::filesystem::remove(sp3_path);
     std::filesystem::remove(clk_path);
     std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, ClasOsrMeasurementUpdateReturnsResidualRows) {
+    const Vector3d true_receiver_position =
+        geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 45.0);
+    const Vector3d approximate_receiver_position =
+        true_receiver_position + Vector3d(10.0, -8.0, 4.0);
+    const auto satellites = makeSyntheticSatellites(true_receiver_position);
+
+    const GNSSTime first_time = makeTime(2026, 3, 26, 3, 30, 0.0);
+    ObservationData epoch(first_time);
+    epoch.receiver_position = approximate_receiver_position;
+
+    ppp_shared::PPPState filter_state;
+    filter_state.pos_index = 0;
+    filter_state.clock_index = 3;
+    filter_state.trop_index = -1;
+    filter_state.iono_index = 4;
+    filter_state.amb_index = 4 + static_cast<int>(satellites.size());
+    filter_state.total_states = filter_state.amb_index + static_cast<int>(satellites.size());
+    filter_state.state = VectorXd::Zero(filter_state.total_states);
+    filter_state.state.segment(0, 3) = approximate_receiver_position;
+    filter_state.covariance =
+        MatrixXd::Identity(filter_state.total_states, filter_state.total_states) * 100.0;
+
+    CLASEpochContext epoch_context;
+    epoch_context.receiver_position = approximate_receiver_position;
+    epoch_context.receiver_clock_m = 0.0;
+    epoch_context.trop_zenith_m = 0.0;
+
+    NavigationData geometry_nav;
+    for (size_t i = 0; i < satellites.size(); ++i) {
+        const auto& satellite = satellites[i];
+        const auto geometry =
+            geometry_nav.calculateGeometry(true_receiver_position, satellite.position);
+        const double range_m = geodist(satellite.position, true_receiver_position);
+        const double iono_m = 1.0 + 0.1 * static_cast<double>(i);
+        const int iono_index = filter_state.iono_index + static_cast<int>(i);
+        const int ambiguity_index = filter_state.amb_index + static_cast<int>(i);
+        filter_state.ionosphere_indices[satellite.id] = iono_index;
+        filter_state.ambiguity_indices[satellite.id] = ambiguity_index;
+        filter_state.state(iono_index) = 0.2;
+
+        Observation l1(satellite.id, SignalType::GPS_L1CA);
+        l1.valid = true;
+        l1.has_pseudorange = true;
+        l1.has_carrier_phase = true;
+        l1.pseudorange = range_m + iono_m;
+        l1.carrier_phase = (range_m - iono_m) / constants::GPS_L1_WAVELENGTH;
+        l1.snr = 48.0;
+        l1.observation_code = "C1C";
+        epoch.addObservation(l1);
+
+        OSRCorrection osr;
+        osr.satellite = satellite.id;
+        osr.valid = true;
+        osr.has_iono = true;
+        osr.iono_l1_m = iono_m;
+        osr.num_frequencies = 1;
+        osr.signals[0] = SignalType::GPS_L1CA;
+        osr.wavelengths[0] = constants::GPS_L1_WAVELENGTH;
+        osr.frequencies[0] = constants::GPS_L1_FREQ;
+        osr.satellite_position = satellite.position;
+        osr.elevation = geometry.elevation;
+        epoch_context.osr_corrections.push_back(osr);
+    }
+
+    PPPProcessor::PPPConfig ppp_config;
+    ppp_config.use_clas_osr_filter = true;
+    ppp_config.use_ionosphere_free = false;
+    ppp_config.estimate_ionosphere = true;
+    ppp_config.estimate_troposphere = false;
+    ppp_config.clas_anchor_sigma = 10.0;
+
+    PositionSolution seed;
+    seed.time = first_time;
+    seed.status = SolutionStatus::SPP;
+    seed.position_ecef = approximate_receiver_position;
+    seed.receiver_clock_bias = 0.0;
+    seed.num_satellites = static_cast<int>(satellites.size());
+
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo> ambiguity_states;
+    const auto update = ppp_clas::runEpochMeasurementUpdate(
+        epoch,
+        epoch_context,
+        filter_state,
+        ppp_config,
+        seed,
+        ambiguity_states,
+        [](const Vector3d&, double, const GNSSTime&) {
+            return 0.0;
+        },
+        ppp_clas::AmbiguityResetFunction{},
+        [&](const SatelliteId& satellite) {
+            const auto it = filter_state.ambiguity_indices.find(satellite);
+            return it == filter_state.ambiguity_indices.end() ? -1 : it->second;
+        });
+
+    ASSERT_TRUE(update.updated);
+    ASSERT_FALSE(update.measurements.empty());
+    bool saw_code = false;
+    bool saw_phase = false;
+    bool saw_iono_constraint = false;
+    for (const auto& measurement : update.measurements) {
+        saw_code = saw_code || (!measurement.is_phase && measurement.freq_index >= 0);
+        saw_phase = saw_phase || measurement.is_phase;
+        saw_iono_constraint =
+            saw_iono_constraint ||
+            (!measurement.is_phase && measurement.freq_index < 0 && measurement.satellite.prn != 0);
+        EXPECT_TRUE(std::isfinite(measurement.residual));
+        EXPECT_GT(measurement.variance, 0.0);
+    }
+    EXPECT_TRUE(saw_code);
+    EXPECT_TRUE(saw_phase);
+    EXPECT_TRUE(saw_iono_constraint);
 }
 
 
