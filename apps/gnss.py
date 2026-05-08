@@ -269,6 +269,11 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_ppp_iers_pole_tide_multisite_bench.py"),
         "summary": "Run the Phase D-1 pole-tide bench across an arbitrary list of IGS stations and emit an aggregate per-site distribution summary (gates the use_iers_pole_tide flip-default).",
     },
+    "ppp-iers-ocean-loading-bench": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_ocean_loading_bench.py"),
+        "summary": "Run the same PPP setup with and without --use-iers-ocean-loading and summarize the per-epoch displacement (Phase A-2b HARDISP truth-bench harness).",
+    },
     "ppp-products-signoff": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_ppp_products_signoff.py"),

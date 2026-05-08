@@ -10,10 +10,14 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
+
 #include <Eigen/Dense>
 
 #include "libgnss++/iers/tides.hpp"
 
+using libgnss::iers::OceanLoadingBlq;
+using libgnss::iers::oceanLoadingDisplacement;
 using libgnss::iers::solidEarthTideDisplacement;
 
 TEST(IersTides, SolidEarthTideMatchesIersReference) {
@@ -236,4 +240,87 @@ TEST(IersAtmTidalLoading, AntiPeriodicAtHalfS1) {
     auto a = atmosphericTidalLoadingDisplacement(61145.0,        kTskbEcef, coeffs);
     auto b = atmosphericTidalLoadingDisplacement(61145.0 + 0.5, kTskbEcef, coeffs);
     EXPECT_NEAR((a + b).norm(), 0.0, 1e-12);
+}
+
+// --- Ocean loading via HARDISP (IERS Conventions 2010 §7.1.2) -------
+
+TEST(IersOceanLoading, ZeroBlqProducesZeroDisplacement) {
+    // No tidal forcing -> exact zero. Guards against any glue-side
+    // contribution (e.g. constant offsets in tdfrph or hardisp_impl).
+    const OceanLoadingBlq blq{};  // value-init: all amplitudes / phases 0
+    const Eigen::Vector3d disp = oceanLoadingDisplacement(57023.5, blq);
+    EXPECT_DOUBLE_EQ(disp.x(), 0.0);
+    EXPECT_DOUBLE_EQ(disp.y(), 0.0);
+    EXPECT_DOUBLE_EQ(disp.z(), 0.0);
+}
+
+TEST(IersOceanLoading, BlqAmplitudeBoundsLocalDisplacement) {
+    // Onsala-style amplitude scale (TSKB BLQ has radial M2 ~ 1 cm,
+    // horizontal ~ 0.4 cm): peak per-epoch displacement should be
+    // bounded by sum of amplitudes for each component (worst case all
+    // 11 constituents in phase). Set the radial-M2 amplitude to 0.012 m
+    // and verify the radial component never exceeds (sum of radial
+    // amplitudes).
+    OceanLoadingBlq blq{};
+    blq.radial_amplitudes_m[0] = 0.012;  // M2 only
+    blq.west_amplitudes_m[0]   = 0.004;
+    blq.south_amplitudes_m[0]  = 0.003;
+    // Phases left at 0 deg.
+
+    // Sweep over a tidal cycle (M2 period ~ 12.42 h = 0.5175 day).
+    const double mjd_start = 57023.0;
+    double max_radial = 0.0;
+    double max_west   = 0.0;
+    double max_south  = 0.0;
+    for (int k = 0; k < 32; ++k) {
+        const double mjd = mjd_start + 0.5175 * (static_cast<double>(k) / 32.0);
+        const Eigen::Vector3d disp = oceanLoadingDisplacement(mjd, blq);
+        max_radial = std::max(max_radial, std::abs(disp.x()));
+        max_west   = std::max(max_west,   std::abs(disp.y()));
+        max_south  = std::max(max_south,  std::abs(disp.z()));
+    }
+
+    // HARDISP applies admittance scaling so the achieved peak is
+    // typically a small multiple of the input amplitude — cap at ~5x
+    // the M2 amplitude per component, which is far above what any
+    // reasonable BLQ produces.
+    EXPECT_GT(max_radial, 0.0);
+    EXPECT_LT(max_radial, 5.0 * 0.012);
+    EXPECT_GT(max_west,   0.0);
+    EXPECT_LT(max_west,   5.0 * 0.004);
+    EXPECT_GT(max_south,  0.0);
+    EXPECT_LT(max_south,  5.0 * 0.003);
+}
+
+TEST(IersOceanLoading, ConsecutiveCallsAreDeterministic) {
+    // Two calls at the same epoch with the same BLQ must give
+    // bit-identical results. Guards against the static cache in
+    // tdfrph (`last_mjd_utc`) accidentally polluting state across
+    // calls.
+    OceanLoadingBlq blq{};
+    blq.radial_amplitudes_m[0] = 0.010;
+    blq.west_amplitudes_m[0]   = 0.003;
+    blq.south_amplitudes_m[0]  = 0.002;
+    blq.radial_amplitudes_m[4] = 0.005;  // K1
+    blq.radial_phases_deg[4]   = 45.0;
+
+    const double mjd_a = 57023.5;
+    const double mjd_b = 57023.5 + 1.0 / 24.0;  // +1 hr
+
+    const Eigen::Vector3d a1 = oceanLoadingDisplacement(mjd_a, blq);
+    const Eigen::Vector3d b1 = oceanLoadingDisplacement(mjd_b, blq);
+    const Eigen::Vector3d a2 = oceanLoadingDisplacement(mjd_a, blq);
+    const Eigen::Vector3d b2 = oceanLoadingDisplacement(mjd_b, blq);
+
+    EXPECT_DOUBLE_EQ(a1.x(), a2.x());
+    EXPECT_DOUBLE_EQ(a1.y(), a2.y());
+    EXPECT_DOUBLE_EQ(a1.z(), a2.z());
+    EXPECT_DOUBLE_EQ(b1.x(), b2.x());
+    EXPECT_DOUBLE_EQ(b1.y(), b2.y());
+    EXPECT_DOUBLE_EQ(b1.z(), b2.z());
+
+    // And the two epochs themselves must produce *different* answers
+    // (unless the M2/K1 phase happened to align, which it doesn't at
+    // this MJD).
+    EXPECT_GT((a1 - b1).norm(), 1e-9);
 }
