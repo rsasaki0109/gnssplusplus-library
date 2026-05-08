@@ -2,15 +2,22 @@
 
 // libgnss++/iers/eop_table.hpp
 //
-// In-memory IERS Earth Orientation Parameter (EOP) series, loaded from
-// an IERS 20 C04 file (daily samples at 0h UTC, ITRF2020-consistent).
+// In-memory IERS Earth Orientation Parameter (EOP) series. Two
+// auth-free upstream formats are supported:
 //
-// The canonical auth-free source is the Paris Observatory:
-//   https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now
+//   1. IERS 20 C04 daily series, IAU 2000 / ITRF2020-consistent.
+//      Source: https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now
+//      Final values; published with ~1 week lag relative to the epoch.
 //
-// This is the Phase D-0 scaffolding piece of the IERS Conventions 2010
-// integration: PPP itself does not yet consume the table — that wiring
-// arrives in Phase D-1 (pole tide) and Phase D-2 (sub-daily EOP).
+//   2. IERS Bulletin A (USNO `finals2000A.daily`).
+//      Source: https://maia.usno.navy.mil/ser7/finals2000A.daily
+//      Combined observed (`I` flag) + predicted (`P` flag) rows;
+//      predictions extend ~12 months past the last observed epoch,
+//      filling the C04 publication-lag gap.
+//
+// `EopTable::fromFile()` auto-detects which format is on disk and
+// dispatches to the appropriate parser. Callers that want to be
+// explicit can use the format-specific factories.
 
 #include <cstddef>
 #include <string>
@@ -51,6 +58,27 @@ class EopTable {
 public:
     /// @brief Parse an IERS C04 fixed-width file. Comment lines (`#`) are skipped.
     static EopTable fromC04File(const std::string& path);
+
+    /// @brief Parse an IERS Bulletin A `finals2000A.daily` file.
+    ///
+    /// Per-row format (187-char fixed-width): year, month, day, MJD,
+    /// `I`/`P` flag, polar motion (xp, yp ± errors), `I`/`P` flag,
+    /// UT1-UTC ± error, LOD ± error, nutation flags + dX/dY...
+    /// libgnss::iers consumers only need MJD + xp + yp + UT1-UTC, so
+    /// LOD / dX / dY are dropped at parse time.
+    ///
+    /// Both observed (`I`) and predicted (`P`) rows are kept — the
+    /// prediction extension is the value-add over IERS 20 C04 here.
+    static EopTable fromBulletinAFile(const std::string& path);
+
+    /// @brief Auto-detect format and dispatch.
+    ///
+    /// Detection rule: if the first non-`#` non-empty data row has
+    /// an `I`/`P`/`b` flag character at column 17 (1-indexed), the
+    /// file is treated as Bulletin A; otherwise it is parsed as C04.
+    /// The two formats are unambiguous in practice — C04 has all
+    /// numeric columns where Bulletin A has its flag character.
+    static EopTable fromFile(const std::string& path);
 
     /// @brief Construct directly from a list of records (used by tests).
     /// Records do not need to be pre-sorted.

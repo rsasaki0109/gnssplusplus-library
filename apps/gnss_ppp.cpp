@@ -121,11 +121,17 @@ void printUsage(const char* program_name) {
         << "                          Step-1-only built-in approximation. Opt-in pending\n"
         << "                          truth-bench validation. See docs/iers-integration-plan.md\n"
         << "  --no-iers-solid-tide    Use the built-in Step-1-only solid-earth-tide model (default)\n"
-        << "  --eop-c04 <eopc04.txt>   IERS 20 C04 Earth Orientation Parameter file (daily samples).\n"
-        << "                          Loaded into PPPProcessor for downstream IERS Phase D consumers\n"
-        << "                          (pole tide, sub-daily EOP). Phase D-0 scaffolding only — does\n"
-        << "                          not change PPP output until D-1+ feature flags are enabled.\n"
-        << "                          Source: https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now\n"
+        << "  --eop-c04 <eop-file>     IERS Earth Orientation Parameter file (daily samples).\n"
+        << "                          Format auto-detected: IERS 20 C04 (final values, ~1-week\n"
+        << "                          publication lag) or IERS Bulletin A finals2000A.daily\n"
+        << "                          (combined observed + predicted, extends ~12 months ahead).\n"
+        << "                          Loaded into PPPProcessor for downstream IERS Phase D\n"
+        << "                          consumers (pole tide, sub-daily EOP).\n"
+        << "                          Sources:\n"
+        << "                            C04         https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now\n"
+        << "                            Bulletin A  https://maia.usno.navy.mil/ser7/finals2000A.daily\n"
+        << "  --eop-bulletin-a <file>  Alias for --eop-c04 (the auto-detector accepts both formats\n"
+        << "                          via either flag; this alias clarifies intent at the call site).\n"
         << "  --use-iers-pole-tide     Apply the IERS Conventions 2010 §7.1.4 pole-tide station\n"
         << "                          displacement (Phase D-1). Requires --eop-c04 to be set;\n"
         << "                          otherwise the displacement is silently skipped because\n"
@@ -236,7 +242,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_iers_solid_tide = true;
         } else if (arg == "--no-iers-solid-tide") {
             options.use_iers_solid_tide = false;
-        } else if (arg == "--eop-c04" && i + 1 < argc) {
+        } else if ((arg == "--eop-c04" || arg == "--eop-bulletin-a")
+                   && i + 1 < argc) {
             options.eop_c04_file = argv[++i];
         } else if (arg == "--use-iers-pole-tide") {
             options.use_iers_pole_tide = true;

@@ -1251,8 +1251,12 @@ bool PPPProcessor::loadEopC04(const std::string& path) {
         return false;
     }
     try {
+        // Auto-detect IERS C04 vs Bulletin A. Both formats are
+        // accepted on the same `--eop-c04` CLI knob; the discriminator
+        // is the `I`/`P` flag character at fixed columns in Bulletin
+        // A (C04 has numeric data in those columns).
         eop_table_ = std::make_unique<libgnss::iers::EopTable>(
-            libgnss::iers::EopTable::fromC04File(path));
+            libgnss::iers::EopTable::fromFile(path));
     } catch (const std::exception&) {
         eop_table_.reset();
         return false;
