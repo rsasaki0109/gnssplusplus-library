@@ -124,6 +124,7 @@ struct PPPConfig {
     ARMethod ar_method = ARMethod::DD_IFLC;
     bool clas_auto_wlnl_ar = true;
     int wl_min_averaging_epochs = 20;
+    double wlnl_wl_max_fractional_cycles = 0.25;
     // PPP holdamb: when true, integer DD NL constraints are projected onto
     // per-frequency L1/L2 ambiguity states via iono-free combination
     // (B_IF = alpha*B_L1 - beta*B_L2) and applied as a Kalman pseudo-update.
@@ -243,6 +244,16 @@ struct PPPConfig {
     bool clas_phase_code_ambiguity_initialization = false; // CLASLIB-style L-P initialization
     double clas_anchor_sigma = 5.0;               // SPP anchor constraint sigma (m)
     double clas_outlier_sigma_scale = 50.0;       // Inflate variance when residual > N*sigma
+    double clas_code_outlier_sigma_scale = -1.0;  // <0 follows clas_outlier_sigma_scale; 0 disables
+    double clas_phase_outlier_sigma_scale = -1.0; // <0 follows clas_outlier_sigma_scale; 0 disables
+    double clas_prior_outlier_sigma_scale = -1.0; // <0 follows clas_outlier_sigma_scale; 0 disables
+    double clas_phase_outlier_inflated_variance_m2 = -1.0; // <0 uses the default 1e10 m^2
+    double clas_code_outlier_min_residual_m = 0.0; // Code gate absolute-residual floor; 0 disables
+    double clas_phase_outlier_min_residual_m = 0.0; // Phase gate absolute-residual floor; 0 disables
+    double clas_prior_outlier_min_residual_m = 0.0; // Prior gate absolute-residual floor; 0 disables
+    bool clas_reset_phase_ambiguity_on_outlier_inflation = false;
+    int clas_reset_phase_ambiguity_outlier_min_rows = 1;
+    double clas_reset_phase_ambiguity_outlier_min_residual_m = 0.0;
     bool clas_validate_fixed_solution = true;     // Extra LibGNSS++ fixed-solution gate
     bool clas_decouple_clock_position = true;      // Zero clock cross-covariance each epoch
     bool clas_kinematic_position_reseed = false;   // CLASLIB-faithful: re-init position from SPP every kinematic epoch
@@ -251,6 +262,21 @@ struct PPPConfig {
     // pin-to-bad-SPP. residual_rms above this threshold (m) bypasses reseed and
     // keeps the prior KF position state. <=0 disables the gate.
     double clas_kinematic_position_reseed_max_residual_rms_m = 0.0;
+    // CLAS path historically overwrites the KF receiver-clock state with the
+    // SPP clock estimate every epoch (in `predictFilterState`) AND zeros the
+    // clock variance via `clas_decouple_clock_position` — the combination
+    // makes the KF gain on clock identically zero, so the filter never tracks
+    // the receiver clock and instead pins it to SPP. Per
+    // `clas_per_sat_residual_root_cause_2026_05_08.md` this produces a
+    // sat-uniform ~+11m residual systematic in Tokyo run1 TAIL-200 (the
+    // entire 4.57m → 0.055m gap to bridge). Set this flag to `false` to skip
+    // the SPP overwrite, seed a working clock variance, and let the KF track
+    // clock from carrier-phase / pseudo-range observations.
+    bool clas_spp_clock_overwrite = true;
+    double clas_kf_clock_seed_variance = 10000.0; // used only when clas_spp_clock_overwrite=false
+    // For CLAS WLNL AR, reject the fixed-position WLS replacement when it
+    // jumps too far from the float filter position. <=0 disables this gate.
+    double clas_wlnl_fixed_position_max_shift_m = 0.0;
     // WLNL Partial AR: when initial LAMBDA fails the ratio test, greedily
     // exclude DD pairs whose |frac| exceeds the threshold (worst first) and
     // re-run LAMBDA. Caps the number of exclusions and keeps a minimum pair

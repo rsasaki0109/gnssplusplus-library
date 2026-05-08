@@ -8,6 +8,7 @@
 #include <libgnss++/core/solution.hpp>
 
 #include <functional>
+#include <limits>
 #include <map>
 #include <set>
 #include <string>
@@ -34,13 +35,24 @@ using ValidateFixedSolutionFunction = std::function<FixValidationStats()>;
 
 struct MeasurementRow {
     Eigen::RowVectorXd H;
+    double observation = 0.0;
+    double predicted = 0.0;
     double residual = 0.0;
     double variance = 0.0;
     SatelliteId satellite;
     SatelliteId reference_satellite;
     std::vector<SatelliteId> phase_ambiguities;
+    SignalType primary_signal = SignalType::SIGNAL_TYPE_COUNT;
+    std::string primary_observation_code;
     bool is_phase = false;
     int freq_index = 0;
+    double elevation_rad = std::numeric_limits<double>::quiet_NaN();
+    double ionosphere_coefficient = 1.0;
+    int ionosphere_state_index = -1;
+    double ionosphere_design_coeff = 0.0;
+    double ionosphere_state_m = 0.0;
+    int ambiguity_state_index = -1;
+    double ambiguity_design_coeff = 0.0;
     int covariance_group = -1;
     double reference_variance = 0.0;
 };
@@ -76,9 +88,24 @@ struct KalmanUpdateStats {
     double phase_residual_rms_m = 0.0;
     double phase_residual_max_abs_m = 0.0;
     SatelliteId phase_residual_max_sat;
+    int outlier_inflated_row_count = 0;
+    int code_outlier_inflated_row_count = 0;
+    int phase_outlier_inflated_row_count = 0;
+    int ionosphere_constraint_outlier_inflated_row_count = 0;
+    int prior_outlier_inflated_row_count = 0;
+    double code_outlier_inflated_max_abs_m = 0.0;
+    double phase_outlier_inflated_max_abs_m = 0.0;
+    double ionosphere_constraint_outlier_inflated_max_abs_m = 0.0;
+    double prior_outlier_inflated_max_abs_m = 0.0;
+    double code_outlier_inflated_rms_m = 0.0;
+    double phase_outlier_inflated_rms_m = 0.0;
+    double ionosphere_constraint_outlier_inflated_rms_m = 0.0;
+    double prior_outlier_inflated_rms_m = 0.0;
     VectorXd dx;
     VectorXd residuals;
     VectorXd variances;
+    std::vector<bool> outlier_inflated_rows;
+    std::set<SatelliteId> phase_outlier_inflated_ambiguities;
     std::set<SatelliteId> active_phase_ambiguities;
     MatrixXd pre_anchor_covariance;
 };
@@ -86,6 +113,7 @@ struct KalmanUpdateStats {
 struct EpochUpdateResult {
     bool updated = false;
     KalmanUpdateStats update_stats;
+    std::vector<MeasurementRow> measurements;
 };
 
 struct AmbiguityResolutionResult {
