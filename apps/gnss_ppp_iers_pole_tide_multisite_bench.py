@@ -27,6 +27,23 @@ schema is::
       ]
     }
 
+A site row may also override any of ``nav`` / ``sp3`` / ``clk`` /
+``eop_c04`` from ``common``. This is how multi-day campaigns are
+expressed: each (station, day) becomes its own site row carrying
+the day-specific products::
+
+    {
+      "common": { "eop_c04": "data/iers/finals2000A.daily" },
+      "sites": [
+        { "name": "TSKB-103", "obs": "data/igs_2026103/TSKB.rnx",
+          "nav": "data/igs_2026103/BRDC.rnx",
+          "sp3": "data/igs_2026103/IGS_final.sp3",
+          "clk": "data/igs_2026103/IGS_final.clk" },
+        { "name": "TSKB-105", ... },
+        { "name": "TSKB-107", ... }
+      ]
+    }
+
 The script writes:
     <output-dir>/per_site/<NAME>/legacy.pos     — single-site bench output
     <output-dir>/per_site/<NAME>/iers.pos
@@ -79,20 +96,24 @@ def run_single_site(
     name = site["name"]
     site_dir = output_dir / "per_site" / name
     site_dir.mkdir(parents=True, exist_ok=True)
+    # Per-site values override the campaign-wide `common` block when
+    # present — this is the multi-day extension: each site row can
+    # carry its own nav/sp3/clk if a campaign spans multiple days.
+    nav  = site.get("nav",  common.get("nav"))
+    sp3  = site.get("sp3",  common.get("sp3"))
+    clk  = site.get("clk",  common.get("clk"))
+    eop  = site.get("eop_c04", common.get("eop_c04"))
     cmd = [
         "python3",
         str(ROOT_DIR / "apps" / "gnss_ppp_iers_pole_tide_bench.py"),
         "--obs", str(site["obs"]),
-        "--eop-c04", str(common["eop_c04"]),
+        "--eop-c04", str(eop),
         "--output-dir", str(site_dir),
         "--mode", mode,
     ]
-    if "nav" in common:
-        cmd += ["--nav", str(common["nav"])]
-    if "sp3" in common:
-        cmd += ["--sp3", str(common["sp3"])]
-    if "clk" in common:
-        cmd += ["--clk", str(common["clk"])]
+    if nav is not None: cmd += ["--nav", str(nav)]
+    if sp3 is not None: cmd += ["--sp3", str(sp3)]
+    if clk is not None: cmd += ["--clk", str(clk)]
     if max_epochs > 0:
         cmd += ["--max-epochs", str(max_epochs)]
 

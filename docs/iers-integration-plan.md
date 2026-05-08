@@ -306,6 +306,15 @@ does not block Phase C:
   MIZU show transient max-displacement outliers from PPP convergence
   events that are unrelated to pole tide; the medians and dz values
   remain physical.
+
+  The same multi-site driver supports per-site product overrides
+  (`nav` / `sp3` / `clk` / `eop_c04`), so a campaign can span
+  multiple days. Across 3 days × 2 sites (TSKB and GRAZ on
+  2026-04-13 / 04-15 / 04-17) the median dz tracks the polar-motion
+  drift monotonically: TSKB sees −0.188 / −0.196 / −0.202 mm and
+  GRAZ +0.333 / +0.346 / +0.358 mm. Day-to-day spread is ±5%, in
+  good agreement with the ~5 mas/day xp/yp drift observed in the
+  Bulletin A series for that window.
 - **Phase D-2** *(landed 2026-05-09)*: Sub-daily EOP corrections.
   Adds `libgnss::iers::subDailyEopCorrection(mjd_utc, ut1_utc)` →
   `{dxp, dyp, dut1, dlod}`, applying the full IERS Conventions 2010
