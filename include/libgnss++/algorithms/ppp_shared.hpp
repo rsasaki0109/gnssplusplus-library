@@ -191,13 +191,19 @@ struct PPPConfig {
     // will read it. Empty string = no EOP table (current default).
     // Source: https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now
     std::string eop_path;
-    // IERS Conventions 2010 §7.1.4 pole-tide displacement (opt-in).
+    // IERS Conventions 2010 §7.1.4 pole-tide displacement.
     // Requires an EOP table loaded via eop_path; otherwise the pole
     // tide is silently skipped (instantaneous polar motion is
     // unknown, so any non-zero displacement computed from the mean
-    // pole alone would be biased rather than zero). Default off
-    // pending Phase D-1 truth-bench validation.
-    bool use_iers_pole_tide = false;
+    // pole alone would be biased rather than zero).
+    //
+    // Default true since 2026-05-09 — backed by the multi-site bench
+    // in PR #69 (5 IGS stations, median displacement 0.4 mm at
+    // mid-latitudes, sign reversal across the equator consistent with
+    // the §7.1.4 sin(2θ) modulation, all within the IERS-stated
+    // sub-cm envelope). `--no-iers-pole-tide` is a permanent escape
+    // hatch.
+    bool use_iers_pole_tide = true;
     // IERS Conventions 2010 §5.5.1.1 + §8.2 sub-daily EOP corrections
     // (opt-in). When true, getEarthOrientationParams adds the harmonic
     // libration + ocean-tide deltas to the daily-interpolated xp / yp

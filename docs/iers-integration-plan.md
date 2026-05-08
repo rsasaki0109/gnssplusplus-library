@@ -262,16 +262,25 @@ does not block Phase C:
   observed epoch and filling the C04 publication-lag gap. Bulletin A
   is the recommended source for benches that need fresh real-data
   EOP coverage of the previous month or two.
-- **Phase D-1** *(in progress)*: Pole tide (IERS Conventions 2010
-  §7.1.4) opt-in. Adds `libgnss::iers::poleTideDisplacement` (post-2018
-  IERS linear mean-pole secular drift + Sr/Sθ/Sλ Stokes formulation)
-  and `PPPConfig::use_iers_pole_tide` / `--use-iers-pole-tide` CLI
-  flag. Requires the D-0 EOP scaffold; gracefully degrades to a no-op
-  when no EOP table is loaded or the requested epoch is out of
-  coverage. At TSKB on 2026-04-15 (xp ≈ 0.149", yp ≈ 0.414") the
-  raw displacement is ~1.3 mm; the PPP estimate shifts by ~0.2 mm
-  in Z after the static-mode KF integrates across the arc. Default
-  off pending a real-data truth-bench validation cycle.
+- **Phase D-1** *(landed 2026-05-09)*: Pole tide (IERS Conventions
+  2010 §7.1.4). Adds `libgnss::iers::poleTideDisplacement`
+  (post-2018 IERS linear mean-pole secular drift + Sr/Sθ/Sλ Stokes
+  formulation) and `PPPConfig::use_iers_pole_tide` /
+  `--use-iers-pole-tide` CLI flag. Requires the D-0 EOP scaffold;
+  gracefully degrades to a no-op when no EOP table is loaded or
+  the requested epoch is out of coverage. At TSKB on 2026-04-15
+  (xp ≈ 0.149", yp ≈ 0.414") the raw displacement is ~1.3 mm;
+  the PPP estimate shifts by ~0.2 mm in Z after the static-mode
+  KF integrates across the arc.
+
+  **Default flipped on 2026-05-09**, gated on the multi-site bench
+  (PR #69, 5 IGS stations across mid- and high-latitudes plus
+  PERT southern-hemisphere): median 0.4 mm at mid-latitudes, sign
+  reversal across the equator consistent with §7.1.4 sin(2θ)
+  modulation, all within the IERS-stated sub-cm envelope. The
+  flip is inert by construction — pole tide is a no-op until the
+  user supplies `--eop-c04` / `--eop-bulletin-a`. `--no-iers-pole-tide`
+  is a permanent escape hatch.
 
   Phase D-1 also includes `apps/gnss_ppp_iers_pole_tide_bench.py`
   (mirroring the solid-tide harness from Phase C-1): a paired-PPP
