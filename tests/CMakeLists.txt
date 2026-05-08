@@ -33,6 +33,7 @@ if(GTest_FOUND)
         test_rtcm.cpp
         test_rtcm_stream.cpp
         test_ubx.cpp
+        test_sofa_vendor.cpp
     )
 
     target_compile_options(run_tests PRIVATE -g)
@@ -42,6 +43,7 @@ if(GTest_FOUND)
     )
     target_link_libraries(run_tests
         gnss_lib gnss_lib_noopt
+        sofa
         GTest::GTest
         GTest::Main
         Threads::Threads

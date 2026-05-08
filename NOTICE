@@ -1,0 +1,27 @@
+libgnss++
+=========
+
+This product includes the following third-party software components.
+Each is redistributed under the terms of its own license, summarized
+below and reproduced verbatim in the corresponding directories.
+A consolidated overview is provided in `LICENSE-third-party.md`.
+
+----
+
+IAU SOFA (Standards Of Fundamental Astronomy)
+---------------------------------------------
+
+Location in this repository: `third_party/sofa/`
+
+This product uses computations derived from software provided by the
+International Astronomical Union's SOFA collection.
+See http://www.iausofa.org/
+
+The SOFA software is the property of the IAU SOFA Board and is
+distributed under the SOFA Software License. The SOFA source files
+included in `third_party/sofa/src/` are intact and unchanged from the
+IAU SOFA distribution (issue 2021-05-12). The full license text is
+reproduced in `third_party/sofa/LICENSE`.
+
+This product does not itself constitute software provided by and/or
+endorsed by SOFA.
