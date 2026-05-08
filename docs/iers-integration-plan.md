@@ -162,44 +162,70 @@ Add `tests/test_ppp_iers_solid_tide.cpp` exercising the dispatch:
 - Both paths return zero for invalid receiver positions
   (`!allFinite()`, sub-Earth-radius), preserving existing behavior.
 
-### 4.2 Truth-bench validation (Tokyo / Nagoya 6-run)
+### 4.2 Truth-bench validation
 
-Driver: `apps/gnss_ppc_rtk_signoff.py`. The bench already exercises
-both cities (`PROFILE_DEFAULTS` keyed on `tokyo` / `nagoya`, runs
-`run1` / `run2` / `run3` for each).
+Phase C-1 only affects the PPP code path
+(`PPPProcessor::calculateSolidEarthTides`). The existing PPC
+Tokyo / Nagoya 6-run truth-bench (`apps/gnss_ppc_rtk_signoff.py`)
+operates on the RTK code path and does **not** exercise the PPP
+solid-earth-tide dispatcher; it cannot be used as the validation
+oracle for this change.
 
-Phase C adds a paired comparison harness:
+Phase C-2 introduces a PPP-specific paired-comparison harness at
+`apps/gnss_ppp_iers_solid_tide_bench.py`, registered with the
+dispatcher as `gnss ppp-iers-solid-tide-bench`. Behavior:
 
-1. Run each of the 6 PPC datasets twice — once with the legacy
-   Step-1 model (`use_iers_solid_tide = false`) and once with the
-   IERS Step-1+Step-2 model (`use_iers_solid_tide = true`).
-2. Compare against `reference.csv` ground truth on the headline
-   metrics already used by `gnss_ppc_rtk_signoff.py`:
-   `coverage`, `fix_rate`, `fix95_h_m`, `wrong_fix_rate`, and
-   `median_h_m`.
-3. **Acceptance criterion**: opt-in must not regress any metric
-   beyond noise (defined as ±2× the run-to-run standard deviation
-   measured from the existing v237 baseline ledger). Improvements
-   are expected at the few-mm level on `median_h_m` and `fix95_h_m`
-   during peak-tide epochs but are not required for merge.
+1. Run `gnss ppp` twice on the same PPP setup — once with
+   `--no-iers-solid-tide` (the default Step-1-only Love-number
+   path) and once with `--use-iers-solid-tide` (the IERS Step-1
+   + Step-2 Dehant path).
+2. Read both `.pos` outputs, match epochs, compute per-epoch
+   ECEF displacement between the two solutions.
+3. Emit a `comparison.json` summary with
+   `{min, mean, median, p95, max}` displacement plus
+   matched-epoch counts.
+4. Optional acceptance gate: `--require-max-displacement-m`
+   fails the run if the maximum per-epoch displacement exceeds
+   the supplied bound.
 
-The opt-in flag means even a regression on the IERS path leaves the
-default behavior intact, so the go/no-go for the flip-default
-(below) is bench evidence only — no live-system risk.
+The harness is **data-agnostic**: the user supplies whichever
+PPP dataset they have available — bundled signoff data, a real
+IGS station, a public PPP dataset — and the script wraps the
+paired runs around it. Acceptance criteria are workflow-specific
+and live in CI scripts or local invocations, not in the harness
+itself.
+
+**Acceptance heuristic** for promoting the IERS path to the
+default (the flip-default PR): on a representative PPP dataset,
+the per-epoch displacement between the two paths should be
+millimeters to a few centimeters at most (the IERS Step-2 model
+adds diurnal/semidiurnal corrections that peak at ~1 cm), and
+the IERS solution should not increase any error metric versus a
+known ground truth when one is available.
+
+Because the flag is opt-in, even a regression on the IERS path
+leaves default behavior intact, so the go/no-go for the
+flip-default PR is bench evidence only — no live-system risk.
 
 ## 5. Rollout
 
-1. Land Phase C as drafted: opt-in, default off.
-2. Run truth-bench on the 6 PPC datasets, attach the comparison
-   table to the PR for review.
-3. If the bench shows neutral-or-better results, follow up with a
-   small "flip default" PR that flips `use_iers_solid_tide = true`
-   in `PPPConfig`. Rollback path: revert that single-line PR.
+1. Land Phase C-1 (the PPP opt-in flag): opt-in, default off.
+2. Land Phase C-2 (the comparison harness
+   `gnss ppp-iers-solid-tide-bench`).
+3. Run the harness on a representative PPP dataset (bundled
+   signoff data, an IGS station, or a public PPP dataset
+   available locally) and attach the resulting
+   `comparison.json` to the flip-default PR for review.
+4. If the bench shows neutral-or-better results, follow up with
+   a small "flip default" PR that flips
+   `use_iers_solid_tide = true` in `PPPConfig`. Rollback path:
+   revert that single-line PR.
 
-This two-PR rollout (opt-in, then flip-default) is preferred over a
-single big-bang change because the bench result is the only honest
-oracle for "did we improve?" and we want it on record before the
-change becomes the default for downstream consumers.
+This three-step rollout (opt-in, harness, flip-default) is
+preferred over a single big-bang change because the bench result
+is the only honest oracle for "did we improve?" and we want it on
+record before the change becomes the default for downstream
+consumers.
 
 ## 6. Risks & mitigations
 
