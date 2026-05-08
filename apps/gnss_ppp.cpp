@@ -55,6 +55,8 @@ struct Options {
     std::string eop_c04_file;
     bool use_iers_pole_tide = false;
     bool use_iers_sub_daily_eop = false;
+    std::string atm_tidal_loading_file;
+    bool use_iers_atm_tidal_loading = false;
     bool quiet = false;
 };
 
@@ -145,6 +147,17 @@ void printUsage(const char* program_name) {
         << "                          Peak amplitudes ~0.5 mas in xp/yp and ~30 µs in UT1; PPP\n"
         << "                          receiver-position effect is sub-mm.\n"
         << "  --no-iers-sub-daily-eop  Skip the sub-daily EOP corrections (default)\n"
+        << "  --atm-tidal-loading <file>\n"
+        << "                          Per-site S1/S2 atmospheric tidal-loading coefficient file\n"
+        << "                          (Phase D-3). Custom format with $$ comment lines + S1 / S2\n"
+        << "                          rows of 6 numbers each (radial/west/south amplitudes in m,\n"
+        << "                          radial/west/south phases in deg). Required for the\n"
+        << "                          --use-iers-atm-tidal-loading flag to do anything.\n"
+        << "  --use-iers-atm-tidal-loading\n"
+        << "                          Apply the IERS Conventions 2010 §7.1.5 atmospheric tidal\n"
+        << "                          loading station displacement (S1 + S2). Peak ~1 mm radial.\n"
+        << "  --no-iers-atm-tidal-loading\n"
+        << "                          Skip atmospheric tidal loading (default).\n"
         << "  --quiet                  Suppress per-run summary output\n"
         << "  -h, --help               Show this help\n";
 }
@@ -261,6 +274,12 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_iers_sub_daily_eop = true;
         } else if (arg == "--no-iers-sub-daily-eop") {
             options.use_iers_sub_daily_eop = false;
+        } else if (arg == "--atm-tidal-loading" && i + 1 < argc) {
+            options.atm_tidal_loading_file = argv[++i];
+        } else if (arg == "--use-iers-atm-tidal-loading") {
+            options.use_iers_atm_tidal_loading = true;
+        } else if (arg == "--no-iers-atm-tidal-loading") {
+            options.use_iers_atm_tidal_loading = false;
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -612,6 +631,8 @@ int main(int argc, char* argv[]) {
         ppp_config.eop_path = options.eop_c04_file;
         ppp_config.use_iers_pole_tide = options.use_iers_pole_tide;
         ppp_config.use_iers_sub_daily_eop = options.use_iers_sub_daily_eop;
+        ppp_config.atm_tidal_loading_path = options.atm_tidal_loading_file;
+        ppp_config.use_iers_atm_tidal_loading = options.use_iers_atm_tidal_loading;
         if (options.low_dynamics_mode) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
             ppp_config.reset_kinematic_position_to_spp_each_epoch = false;

@@ -11,6 +11,7 @@
 #include "ppp_osr_types.hpp"
 #include "spp.hpp"
 #include "../iers/eop_table.hpp"
+#include "../iers/tides.hpp"
 #include <Eigen/Dense>
 #include <array>
 #include <memory>
@@ -216,6 +217,8 @@ private:
     OceanLoadingCoefficients ocean_loading_coefficients_{};
     bool ocean_loading_loaded_ = false;
     std::unique_ptr<iers::EopTable> eop_table_;
+    iers::AtmosphericTidalLoadingCoefficients atm_tidal_loading_coefficients_{};
+    bool atm_tidal_loading_loaded_ = false;
     std::map<std::string, std::map<SignalType, Vector3d>> receiver_antex_offsets_;
     bool receiver_antex_loaded_ = false;
     Vector3d static_anchor_position_ = Vector3d::Zero();
@@ -428,6 +431,29 @@ private:
      */
     Vector3d calculatePoleTide(const Vector3d& position,
                                const GNSSTime& time) const;
+
+    /**
+     * @brief Calculate IERS atmospheric tidal loading (Phase D-3).
+     *
+     * Returns Vector3d::Zero() when no atmospheric tidal-loading
+     * coefficient file is loaded. Caller is responsible for gating
+     * on `ppp_config_.use_iers_atm_tidal_loading`.
+     */
+    Vector3d calculateAtmosphericTidalLoading(const Vector3d& position,
+                                              const GNSSTime& time) const;
+
+    /**
+     * @brief Load per-site S1+S2 atmospheric tidal loading coefficients.
+     *
+     * File format: comment lines starting with `$$`; data block of
+     * one site:
+     *   <station_name>
+     *   S1 <radial_amp_m> <west_amp_m> <south_amp_m>
+     *      <radial_phase_deg> <west_phase_deg> <south_phase_deg>
+     *   S2 <radial_amp_m> <west_amp_m> <south_amp_m>
+     *      <radial_phase_deg> <west_phase_deg> <south_phase_deg>
+     */
+    bool loadAtmosphericTidalLoading(const std::string& path);
     
     /**
      * @brief Form measurement equations

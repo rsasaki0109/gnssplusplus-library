@@ -142,4 +142,70 @@ Eigen::Vector3d poleTideDisplacement(
     return d_ecef;
 }
 
+namespace {
+// MJD reference for converting UTC MJD → seconds since Unix epoch.
+// 1970-01-01 00:00:00 UTC = MJD 40587.
+constexpr double kMjdUnixEpoch        = 40587.0;
+constexpr double kSecondsPerDay       = 86400.0;
+constexpr double kAtmDegreesToRadians = M_PI / 180.0;
+}  // namespace
+
+Eigen::Vector3d atmosphericTidalLoadingDisplacement(
+    double mjd_utc,
+    const Eigen::Vector3d& xsta_itrs,
+    const AtmosphericTidalLoadingCoefficients& coeffs) {
+    // Time argument: seconds since Unix epoch (UTC). Mirrors the legacy
+    // ocean-loading dispatcher in PPPProcessor so the two paths share
+    // a single time reference for paired-comparison benches.
+    const double seconds_since_unix =
+        (mjd_utc - kMjdUnixEpoch) * kSecondsPerDay;
+
+    // S1 = 24 h, S2 = 12 h.
+    constexpr std::array<double, 2> kPeriodsSeconds = {
+        kSecondsPerDay,
+        kSecondsPerDay / 2.0,
+    };
+
+    double up_m = 0.0;
+    double west_m = 0.0;
+    double south_m = 0.0;
+    for (std::size_t i = 0; i < kPeriodsSeconds.size(); ++i) {
+        const double angle =
+            2.0 * M_PI * seconds_since_unix / kPeriodsSeconds[i];
+        up_m    += coeffs.radial_amplitudes_m[i] *
+                   std::cos(angle - coeffs.radial_phases_deg[i] *
+                                     kAtmDegreesToRadians);
+        west_m  += coeffs.west_amplitudes_m[i]   *
+                   std::cos(angle - coeffs.west_phases_deg[i] *
+                                     kAtmDegreesToRadians);
+        south_m += coeffs.south_amplitudes_m[i]  *
+                   std::cos(angle - coeffs.south_phases_deg[i] *
+                                     kAtmDegreesToRadians);
+    }
+
+    // Local (E, N, U) → ECEF; geocentric φ is accurate at sub-mm.
+    const double x = xsta_itrs.x();
+    const double y = xsta_itrs.y();
+    const double z = xsta_itrs.z();
+    const double r_xy = std::sqrt(x * x + y * y);
+    const double phi_g = std::atan2(z, r_xy);
+    const double lambda = std::atan2(y, x);
+    const double sin_phi    = std::sin(phi_g);
+    const double cos_phi    = std::cos(phi_g);
+    const double sin_lambda = std::sin(lambda);
+    const double cos_lambda = std::cos(lambda);
+    const double dE =  -west_m;
+    const double dN =  -south_m;
+    const double dU =   up_m;
+
+    Eigen::Vector3d d_ecef;
+    d_ecef.x() = -sin_lambda * dE - sin_phi * cos_lambda * dN +
+                  cos_phi    * cos_lambda * dU;
+    d_ecef.y() =  cos_lambda * dE - sin_phi * sin_lambda * dN +
+                  cos_phi    * sin_lambda * dU;
+    d_ecef.z() =                     cos_phi    * dN +
+                  sin_phi    * dU;
+    return d_ecef;
+}
+
 }  // namespace libgnss::iers
