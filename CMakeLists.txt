@@ -27,6 +27,7 @@ find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs)
 # linking will be wired up in a follow-up PR once the API surface is exposed
 # through include/iers/.
 add_subdirectory(third_party/sofa)
+add_subdirectory(third_party/ginan-iers2010)
 
 # List source files for the main library
 set(GNSS_SOURCES

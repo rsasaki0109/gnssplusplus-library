@@ -12,6 +12,7 @@ modifications.
 | Directory | Upstream | License | Purpose |
 |-----------|----------|---------|---------|
 | `sofa/`   | IAU SOFA (Standards Of Fundamental Astronomy), issue 2021-05-12 | SOFA Software License | Earth rotation, polar motion, time scales, astronomical computations for PPP cm-level positioning |
+| `ginan-iers2010/` | GeoscienceAustralia/ginan (`535ef0a`) — IERS Conventions 2010 wrappers, GTime-independent subset | Apache License 2.0 | Solid-earth-tide displacement (Dehant) and Mendes-Pavlis tropospheric mapping (FCUL) |
 
 ## Conventions
 

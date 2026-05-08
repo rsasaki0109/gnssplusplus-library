@@ -25,3 +25,30 @@ reproduced in `third_party/sofa/LICENSE`.
 
 This product does not itself constitute software provided by and/or
 endorsed by SOFA.
+
+----
+
+ginan-iers2010 (IERS Conventions 2010 routines, subset)
+-------------------------------------------------------
+
+Location in this repository: `third_party/ginan-iers2010/`
+
+This product includes C++ wrappers around IERS Conventions (2010)
+routines, adapted from:
+
+    Geoscience Australia - Ginan
+    https://github.com/GeoscienceAustralia/ginan
+    Copyright 2020 Geoscience Australia
+    Licensed under Apache License, Version 2.0
+
+The wrapper code is itself derived from IERS Conventions 2010 software
+distributed by the International Earth Rotation and Reference Systems
+Service (https://iers-conventions.obspm.fr/).
+
+Modifications made to the upstream ginan sources are documented per
+Apache License 2.0 §4(b) in
+`third_party/ginan-iers2010/README.md` ("Modifications" section).
+Only the GTime-independent subset of ginan's iers2010 wrappers (FCUL
+tropospheric mapping and Dehant solid-earth-tide displacement) is
+included; the HARDISP ocean-tide-loading routines are not vendored
+here and will land in a follow-up integration.
