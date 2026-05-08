@@ -1114,6 +1114,83 @@ TEST(PPPTest, DCBProductsLoadBiasSinexAndLookupEntry) {
     std::filesystem::remove(dcb_path);
 }
 
+TEST(PPPTest, DCBProductsLoadBiasSinexWithSvnAndStationColumns) {
+    // GFZ / GBM emit Bias-SINEX rows with SVN before PRN and an
+    // empty STATION column collapsed by whitespace tokenization:
+    //   DSB G080 G01           C1W  C2W  ...
+    // With the old parser this was rejected (PRN expected at
+    // fields[1] but the SVN landed there) — silently dropping all
+    // GFZ DCB entries and breaking PPP init when --dcb pointed at
+    // a real GBM file. The parser now accepts both layouts.
+    const auto dcb_path = tempFilePath("libgnss_ppp_dcb_svn_test.bsx");
+    std::filesystem::remove(dcb_path);
+
+    const std::string dcb_text =
+        "%=BIA 1.00 GFZ 2026:106:56658 IGS 2026:105:00000 2026:105:89999 R 00000020\n"
+        "+BIAS/SOLUTION\n"
+        "*BIAS SVN_ PRN STATION__ OBS1 OBS2 BEGIN__________ END____________ UNIT VALUE_____ STD_DEV___\n"
+        " DSB  G080 G01           C1W  C2W  2026:105:00000 2026:105:89999 ns   1.234 0.100\n"
+        " OSB  E215 E11           C1C  C5Q  2026:105:00000 2026:105:89999 ns   0.321 0.050\n"
+        "-BIAS/SOLUTION\n";
+    writeTextFile(dcb_path, dcb_text);
+
+    DCBProducts dcb_products;
+    ASSERT_TRUE(dcb_products.loadFile(dcb_path.string()));
+    ASSERT_EQ(dcb_products.entries.size(), 2U);
+
+    double bias = 0.0;
+    double sigma = 0.0;
+    ASSERT_TRUE(dcb_products.getBias(
+        SatelliteId(GNSSSystem::GPS, 1), "DSB", "C1W", "C2W", bias, &sigma));
+    EXPECT_NEAR(bias, 1.234, 1e-12);
+    EXPECT_NEAR(sigma, 0.100, 1e-12);
+    ASSERT_TRUE(dcb_products.getBias(
+        SatelliteId(GNSSSystem::Galileo, 11), "OSB", "C1C", "C5Q", bias, &sigma));
+    EXPECT_NEAR(bias, 0.321, 1e-12);
+    EXPECT_NEAR(sigma, 0.050, 1e-12);
+
+    std::filesystem::remove(dcb_path);
+}
+
+TEST(PPPTest, IONEXProductsLoadFullWidthDataLines) {
+    // Real CODE / IGS final IONEX packs 16 TEC values per 80-char
+    // line (each value 5 chars wide). The previous parser truncated
+    // each line at 60 chars, dropping the trailing 4 values. With a
+    // 73-value-per-row map, the row never reached the expected
+    // value count and was discarded — silently rejecting every
+    // CODE / IGS final IONEX file. This test exercises the
+    // multi-line value collation: 16-value lines must reach the
+    // 19-value-per-row count for a (-180,180,20)-deg sweep.
+    const auto ionex_path = tempFilePath("libgnss_ppp_ionex_wide.inx");
+    std::filesystem::remove(ionex_path);
+
+    // 19 values across 16 + 3, exercising the line-spanning path.
+    const std::string ionex_text =
+        "     1.0           I                   G                   IONEX VERSION / TYPE\n"
+        "  3600                                                      INTERVAL\n"
+        "    -1                                                      EXPONENT\n"
+        "    0.0    0.0   10.0                                       LAT1 / LAT2 / DLAT\n"
+        " -180.0  180.0   20.0                                       LON1 / LON2 / DLON\n"
+        "  450.0  450.0    0.0                                       HGT1 / HGT2 / DHGT\n"
+        "                                                            END OF HEADER\n"
+        "    1                                                      START OF TEC MAP\n"
+        " 2026     4    15     0     0     0                        EPOCH OF CURRENT MAP\n"
+        "    0.0-180.0 180.0  20.0  450.0                            LAT/LON1/LON2/DLON/H\n"
+        "  100  101  102  103  104  105  106  107  108  109  110  111  112  113  114  115\n"
+        "  116  117  118\n"
+        "                                                            END OF TEC MAP\n";
+    writeTextFile(ionex_path, ionex_text);
+
+    IONEXProducts ionex_products;
+    ASSERT_TRUE(ionex_products.loadIONEXFile(ionex_path.string()));
+    ASSERT_EQ(ionex_products.tec_maps.size(), 1U);
+    ASSERT_EQ(ionex_products.tec_maps.front().rows.size(), 1U);
+    EXPECT_EQ(ionex_products.tec_maps.front().rows.front().values_tecu.size(),
+              19U);
+
+    std::filesystem::remove(ionex_path);
+}
+
 TEST(PPPTest, SSRProductsLoadCsvAndInterpolateMidpoint) {
     const auto ssr_path = tempFilePath("libgnss_ppp_ssr_test.csv");
     std::filesystem::remove(ssr_path);
