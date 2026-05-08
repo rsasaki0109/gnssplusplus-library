@@ -37,6 +37,7 @@ if(GTest_FOUND)
         test_ginan_iers2010_vendor.cpp
         test_iers_earth_rotation.cpp
         test_iers_tides.cpp
+        test_iers_ephemeris.cpp
     )
 
     target_compile_options(run_tests PRIVATE -g)

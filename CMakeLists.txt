@@ -49,6 +49,7 @@ set(GNSS_SOURCES
     src/algorithms/ppp.cpp
     src/iers/earth_rotation.cpp
     src/iers/tides.cpp
+    src/iers/ephemeris.cpp
 )
 
 # List source files for the no-optimization library
