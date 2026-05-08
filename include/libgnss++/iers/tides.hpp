@@ -23,23 +23,35 @@ namespace libgnss::iers {
 /// Conventions 2010 §7.1.1 (Dehant et al.) — the standard model for
 /// solid-earth-tide displacement of a ground station due to lunisolar
 /// gravitational forcing. The result is a 3-vector (m) to be ADDED
-/// to the station's nominal ECEF coordinates to obtain the tidally
+/// to the station's nominal ITRS coordinates to obtain the tidally
 /// displaced instantaneous position.
 ///
+/// FRAME NOTE: although the IERS Conventions 2010 routine
+/// documentation describes all inputs as "ECEF", the published
+/// reference test case actually uses ICRS positions for Sun and Moon
+/// while keeping the station in ITRS. The libgnss::iers wrapper
+/// follows the *test-case convention* (which defines the routine's
+/// behavior in practice), so:
+///
+///   - `xsta_itrs` should be the station's ITRS / ECEF position.
+///   - `xsun_icrs` and `xmon_icrs` should be Sun / Moon positions in
+///     the ICRS / GCRS — *not* rotated to ITRS.
+///
+/// `libgnss::iers::sunPositionIcrs` and `moonPositionIcrs` (in
+/// libgnss++/iers/ephemeris.hpp) return values in the correct frame
+/// for direct use here.
+///
 /// @param mjd_utc        UTC modified Julian date of the epoch.
-/// @param xsta_ecef      Station nominal ECEF coordinates [m].
-/// @param xsun_ecef      Sun ECEF coordinates [m] at this epoch.
-///                       Must be supplied by the caller; libgnss++
-///                       does not yet provide a built-in solar
-///                       ephemeris (planned for a follow-up PR).
-/// @param xmon_ecef      Moon ECEF coordinates [m] at this epoch.
-///                       Same caveat as xsun_ecef.
-/// @return Displacement vector [m]; add to xsta_ecef to obtain the
-///         instantaneously displaced station position.
+/// @param xsta_itrs      Station nominal ITRS / ECEF coordinates [m].
+/// @param xsun_icrs      Sun ICRS / GCRS coordinates [m] at this epoch.
+/// @param xmon_icrs      Moon ICRS / GCRS coordinates [m] at this epoch.
+/// @return Displacement vector [m] in the station's ITRS frame; add
+///         to `xsta_itrs` to obtain the instantaneously displaced
+///         station position.
 Eigen::Vector3d solidEarthTideDisplacement(
     double mjd_utc,
-    const Eigen::Vector3d& xsta_ecef,
-    const Eigen::Vector3d& xsun_ecef,
-    const Eigen::Vector3d& xmon_ecef);
+    const Eigen::Vector3d& xsta_itrs,
+    const Eigen::Vector3d& xsun_icrs,
+    const Eigen::Vector3d& xmon_icrs);
 
 }  // namespace libgnss::iers
