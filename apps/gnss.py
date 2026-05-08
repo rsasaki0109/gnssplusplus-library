@@ -284,6 +284,16 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_ppp_iers_sub_daily_eop_multisite_bench.py"),
         "summary": "Run the Phase D-2 sub-daily-EOP bench across an arbitrary list of IGS stations and emit an aggregate per-site distribution summary.",
     },
+    "ppp-iers-truth-bench": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_truth_bench.py"),
+        "summary": "Run an end-to-end PPP truth bench with all IERS defaults ON, comparing the converged static position to the RINEX header's APPROX POSITION XYZ; --ab also runs all-IERS-OFF to report the on/off residual delta.",
+    },
+    "ppp-iers-truth-multisite-bench": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_truth_multisite_bench.py"),
+        "summary": "Run the IERS end-to-end truth bench across an arbitrary list of IGS stations and emit an aggregate per-site residual distribution.",
+    },
     "ppp-iers-ocean-loading-bench": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_ppp_iers_ocean_loading_bench.py"),
