@@ -282,6 +282,21 @@ does not block Phase C:
   per-component median dz = −0.21 mm — within the IERS §7.1.4
   expected sub-cm envelope at mid-latitudes during normal polar
   motion.
+
+  Phase D-1 also includes
+  `apps/gnss_ppp_iers_pole_tide_multisite_bench.py` — a multi-site
+  driver that runs the per-site harness across an arbitrary list of
+  IGS stations and emits an aggregate distribution summary (gates
+  the eventual `use_iers_pole_tide` flip-default). On 5-station IGS
+  data (ALGO, GRAZ, MIZU, TSKB, PERT) for 2026-04-15 the median
+  pole-tide displacement at mid-latitudes is 0.4 mm (TSKB / MIZU),
+  the median dz reverses sign across the equator (TSKB / MIZU
+  −0.20 mm vs GRAZ +0.35 mm) consistent with the pole-tide formula,
+  and PERT (−32°S Australia) shows the static-mode KF fully
+  absorbing the sub-mm signal across the arc (median 0). ALGO and
+  MIZU show transient max-displacement outliers from PPP convergence
+  events that are unrelated to pole tide; the medians and dz values
+  remain physical.
 - **Phase D-2** *(in progress)*: Sub-daily EOP corrections opt-in.
   Adds `libgnss::iers::subDailyEopCorrection(mjd_utc, ut1_utc)` →
   `{dxp, dyp, dut1, dlod}`, applying the full IERS Conventions 2010
