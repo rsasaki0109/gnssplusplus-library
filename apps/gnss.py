@@ -264,6 +264,11 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_ppp_iers_atm_tidal_loading_bench.py"),
         "summary": "Run the same PPP setup with and without --use-iers-atm-tidal-loading and summarize the per-epoch displacement (Phase D-3 truth-bench harness; requires --atm-tidal-loading).",
     },
+    "ppp-iers-pole-tide-multisite-bench": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_pole_tide_multisite_bench.py"),
+        "summary": "Run the Phase D-1 pole-tide bench across an arbitrary list of IGS stations and emit an aggregate per-site distribution summary (gates the use_iers_pole_tide flip-default).",
+    },
     "ppp-products-signoff": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_ppp_products_signoff.py"),
