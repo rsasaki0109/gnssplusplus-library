@@ -92,10 +92,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--require-max-displacement-m", type=float, default=None,
         help="Optional acceptance gate: fail if the maximum per-epoch "
-             "ECEF displacement between the two paths exceeds this many "
-             "meters. The S1 + S2 atmospheric tide is sub-cm radial at "
-             "mid- and low-latitudes, so 0.005-0.05 m is a reasonable "
-             "upper bound for sanity checking.")
+             "ECEF displacement (after the convergence-gate filter is "
+             "applied) exceeds this many meters. The S1 + S2 "
+             "atmospheric tide is sub-cm radial at mid- and "
+             "low-latitudes, so 0.005-0.05 m is a reasonable upper "
+             "bound for sanity checking.")
+    parser.add_argument(
+        "--outlier-threshold-m", type=float, default=0.1,
+        help="Convergence-gate threshold (default 0.1 m). Per-epoch "
+             "displacements above this are dropped from the filtered "
+             "stats — they are dominated by transient PPP convergence "
+             "noise rather than the cm-scale tide signal.")
     return parser.parse_args()
 
 
@@ -170,57 +177,76 @@ def epoch_key(record: dict) -> tuple[int, int]:
     return (int(record["week"]), int(round(float(record["tow"]) * 1e6)))
 
 
-def summarize(legacy_pos: Path, iers_pos: Path) -> dict:
+def _stats_block(displacements_m: list[float],
+                 dx_m: list[float], dy_m: list[float],
+                 dz_m: list[float]) -> dict:
+    """See gnss_ppp_iers_pole_tide_bench._stats_block — same shape."""
+    if not displacements_m:
+        return {"n": 0}
+    sorted_d = sorted(displacements_m)
+    out: dict = {
+        "n": len(displacements_m),
+        "max_displacement_m":     sorted_d[-1],
+        "min_displacement_m":     sorted_d[0],
+        "mean_displacement_m":    statistics.fmean(displacements_m),
+        "median_displacement_m":  statistics.median(displacements_m),
+        "p95_displacement_m":     sorted_d[int(0.95 * (len(sorted_d) - 1))],
+        "first_epoch_displacement_m": displacements_m[0],
+        "median_dx_m":            statistics.median(dx_m),
+        "median_dy_m":            statistics.median(dy_m),
+        "median_dz_m":            statistics.median(dz_m),
+    }
+    if displacements_m[0] > 1e-9:
+        out["aggregate_to_first_epoch_ratio"] = (
+            sorted_d[-1] / displacements_m[0])
+    return out
+
+
+def summarize(legacy_pos: Path, iers_pos: Path,
+              outlier_threshold_m: float = 0.1) -> dict:
+    """Same convergence-gate filter as the pole-tide bench. The
+    transient PPP-instability epochs are dropped (status mismatch
+    OR per-epoch displacement > threshold); the unfiltered
+    distribution is preserved under "unfiltered" for transparency."""
     legacy = {epoch_key(r): r for r in read_pos_records(legacy_pos)}
     iers = {epoch_key(r): r for r in read_pos_records(iers_pos)}
     matched_keys = sorted(set(legacy) & set(iers))
 
-    # Per-epoch ECEF displacement magnitude (legacy -> iers).
-    displacements_m: list[float] = []
-    # Per-component signed deltas. The atmospheric tide signal is
-    # dominated by the S1 (24 h) + S2 (12 h) constituents, so the
-    # *median* per-component displacement averages out the harmonic
-    # signal across a full day and is a useful trend indicator.
-    dx_m: list[float] = []
-    dy_m: list[float] = []
-    dz_m: list[float] = []
+    raw_d, raw_dx, raw_dy, raw_dz = [], [], [], []
+    flt_d, flt_dx, flt_dy, flt_dz = [], [], [], []
+    n_status_mismatch = 0
+    n_threshold_exceeded = 0
     for key in matched_keys:
         l = legacy[key]
         i = iers[key]
         dx = float(i["x"]) - float(l["x"])
         dy = float(i["y"]) - float(l["y"])
         dz = float(i["z"]) - float(l["z"])
-        dx_m.append(dx)
-        dy_m.append(dy)
-        dz_m.append(dz)
-        displacements_m.append(math.sqrt(dx * dx + dy * dy + dz * dz))
+        d = math.sqrt(dx * dx + dy * dy + dz * dz)
+        raw_d.append(d); raw_dx.append(dx); raw_dy.append(dy); raw_dz.append(dz)
 
-    summary = {
+        if int(l["status"]) != int(i["status"]):
+            n_status_mismatch += 1
+            continue
+        if d > outlier_threshold_m:
+            n_threshold_exceeded += 1
+            continue
+        flt_d.append(d); flt_dx.append(dx); flt_dy.append(dy); flt_dz.append(dz)
+
+    summary: dict = {
         "matched_epochs": len(matched_keys),
         "legacy_total_epochs": len(legacy),
         "iers_total_epochs": len(iers),
+        "filter": {
+            "outlier_threshold_m": outlier_threshold_m,
+            "status_mismatch":     n_status_mismatch,
+            "threshold_exceeded":  n_threshold_exceeded,
+            "n_kept":              len(flt_d),
+            "n_dropped":           len(matched_keys) - len(flt_d),
+        },
+        "unfiltered": _stats_block(raw_d, raw_dx, raw_dy, raw_dz),
     }
-    if displacements_m:
-        sorted_d = sorted(displacements_m)
-        summary.update({
-            "max_displacement_m": sorted_d[-1],
-            "min_displacement_m": sorted_d[0],
-            "mean_displacement_m": statistics.fmean(displacements_m),
-            "median_displacement_m": statistics.median(displacements_m),
-            "p95_displacement_m": sorted_d[int(0.95 * (len(sorted_d) - 1))],
-            # First matched epoch is the best estimate of the
-            # ATL-only contribution: the Kalman filter has not yet
-            # had time to integrate any divergence between the two
-            # paths, so the displacement here reflects the immediate
-            # effect of switching ATL on/off at the receiver.
-            "first_epoch_displacement_m": displacements_m[0],
-            "median_dx_m": statistics.median(dx_m),
-            "median_dy_m": statistics.median(dy_m),
-            "median_dz_m": statistics.median(dz_m),
-        })
-        if displacements_m[0] > 1e-9:
-            summary["aggregate_to_first_epoch_ratio"] = (
-                sorted_d[-1] / displacements_m[0])
+    summary.update(_stats_block(flt_d, flt_dx, flt_dy, flt_dz))
     return summary
 
 
@@ -247,7 +273,9 @@ def main() -> int:
     run_ppp(base_command, args, legacy_pos, use_iers=False)
     run_ppp(base_command, args, iers_pos, use_iers=True)
 
-    summary = summarize(legacy_pos, iers_pos)
+    summary = summarize(
+        legacy_pos, iers_pos,
+        outlier_threshold_m=args.outlier_threshold_m)
     summary["legacy_pos"] = str(legacy_pos)
     summary["iers_pos"] = str(iers_pos)
 
