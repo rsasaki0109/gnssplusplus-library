@@ -1981,6 +1981,36 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 sat_velocity,
                 sat_clock_bias,
                 sat_clock_drift);
+            if (have_precise) {
+                // Light-travel-time iteration: the first SP3 sample is taken
+                // at reception time, so re-sample at the implied emission
+                // epoch (rcv − τ) to place sat_position on the orbit when the
+                // photon left the satellite. The downstream geodist() handles
+                // the Sagnac (frame-rotation) term.
+                const double initial_distance =
+                    (sat_position - receiver_position).norm();
+                if (std::isfinite(initial_distance) && initial_distance > 0.0) {
+                    const double travel_time =
+                        initial_distance / constants::SPEED_OF_LIGHT;
+                    const GNSSTime emission_time = time - travel_time;
+                    Vector3d em_position = sat_position;
+                    Vector3d em_velocity = sat_velocity;
+                    double em_clock_bias = sat_clock_bias;
+                    double em_clock_drift = sat_clock_drift;
+                    if (precise_products_.interpolateOrbitClock(
+                            observation.satellite,
+                            emission_time,
+                            em_position,
+                            em_velocity,
+                            em_clock_bias,
+                            em_clock_drift)) {
+                        sat_position = em_position;
+                        sat_velocity = em_velocity;
+                        sat_clock_bias = em_clock_bias;
+                        sat_clock_drift = em_clock_drift;
+                    }
+                }
+            }
         }
 
         if (!have_precise) {

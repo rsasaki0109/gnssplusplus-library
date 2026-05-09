@@ -852,83 +852,90 @@ bool PreciseProducts::interpolateOrbitClock(const SatelliteId& sat,
     }
 
     const auto& entries = sat_it->second;
-    auto upper = std::lower_bound(
-        entries.begin(),
-        entries.end(),
-        time,
-        [](const PreciseOrbitClock& lhs, const GNSSTime& rhs) {
-            return lhs.time < rhs;
-        });
 
-    const PreciseOrbitClock* before = nullptr;
-    const PreciseOrbitClock* after = nullptr;
-    if (upper != entries.end()) {
-        after = &(*upper);
-        if (upper != entries.begin()) {
-            before = &(*(upper - 1));
+    // SP3 (orbit, ~15-min) and CLK (clock, ~30-s) merge into a single sorted
+    // entry list. Position-valid entries live on the SP3 grid only; CLK rows
+    // contribute clock-only entries between them. Search the bracketing
+    // position-valid pair separately from the bracketing clock-valid pair so
+    // an exact-match query at a CLK-only timestamp does not fail when SP3
+    // covers the surrounding 15-minute window.
+    const PreciseOrbitClock* pos_before = nullptr;
+    const PreciseOrbitClock* pos_after = nullptr;
+    const PreciseOrbitClock* clk_before = nullptr;
+    const PreciseOrbitClock* clk_after = nullptr;
+    for (const auto& entry : entries) {
+        if (entry.time <= time) {
+            if (entry.position_valid) {
+                pos_before = &entry;
+            }
+            if (entry.clock_valid) {
+                clk_before = &entry;
+            }
+        } else {
+            if (entry.position_valid && pos_after == nullptr) {
+                pos_after = &entry;
+            }
+            if (entry.clock_valid && clk_after == nullptr) {
+                clk_after = &entry;
+            }
+            if (pos_after != nullptr && clk_after != nullptr) {
+                break;
+            }
         }
-        if (upper->time == time) {
-            before = after;
-        }
-    } else {
-        before = &entries.back();
     }
 
-    if (before == nullptr && after == nullptr) {
-        return false;
-    }
-
-    if (before != nullptr && after != nullptr && before != after) {
-        const double dt_total = after->time - before->time;
-        const double dt_before = time - before->time;
-        if (std::abs(dt_total) < 1e-9 || std::abs(dt_total) > kPreciseInterpolationGapSeconds) {
+    auto interpolatePair = [&time](const PreciseOrbitClock* before,
+                                    const PreciseOrbitClock* after,
+                                    auto&& accessor,
+                                    auto& out_value,
+                                    auto& out_rate) -> bool {
+        if (before != nullptr && after != nullptr && before != after) {
+            const double dt_total = after->time - before->time;
+            if (std::abs(dt_total) < 1e-9 ||
+                std::abs(dt_total) > kPreciseInterpolationGapSeconds) {
+                return false;
+            }
+            const double dt_before = time - before->time;
+            const double alpha = dt_before / dt_total;
+            const auto before_value = accessor(*before);
+            const auto after_value = accessor(*after);
+            out_value = before_value + alpha * (after_value - before_value);
+            out_rate = (after_value - before_value) / dt_total;
+            return true;
+        }
+        const PreciseOrbitClock* sample = before != nullptr ? before : after;
+        if (sample == nullptr) {
             return false;
         }
-        const double alpha = dt_before / dt_total;
-        if ((before->position_valid || after->position_valid) &&
-            before->position_valid && after->position_valid) {
-            position = before->position + alpha * (after->position - before->position);
-            velocity = (after->position - before->position) / dt_total;
-        } else if (before->position_valid) {
-            position = before->position;
-            velocity = before->velocity;
-        } else if (after->position_valid) {
-            position = after->position;
-            velocity = after->velocity;
-        } else {
+        if (std::abs(sample->time - time) > kPreciseInterpolationGapSeconds) {
             return false;
         }
-
-        if (before->clock_valid && after->clock_valid) {
-            clock_bias = before->clock_bias + alpha * (after->clock_bias - before->clock_bias);
-            clock_drift = (after->clock_bias - before->clock_bias) / dt_total;
-        } else if (before->clock_valid) {
-            clock_bias = before->clock_bias;
-            clock_drift = before->clock_drift;
-        } else if (after->clock_valid) {
-            clock_bias = after->clock_bias;
-            clock_drift = after->clock_drift;
-        } else {
-            clock_bias = 0.0;
-            clock_drift = 0.0;
-        }
+        out_value = accessor(*sample);
+        out_rate = std::remove_reference_t<decltype(out_rate)>{};
         return true;
-    }
+    };
 
-    const PreciseOrbitClock* sample = before != nullptr ? before : after;
-    if (sample == nullptr) {
+    Vector3d interpolated_velocity = Vector3d::Zero();
+    if (!interpolatePair(
+            pos_before, pos_after,
+            [](const PreciseOrbitClock& e) { return e.position; },
+            position, interpolated_velocity)) {
         return false;
     }
-    if (std::abs(sample->time - time) > kPreciseInterpolationGapSeconds) {
-        return false;
+    velocity = interpolated_velocity;
+
+    double interpolated_drift = 0.0;
+    if (!interpolatePair(
+            clk_before, clk_after,
+            [](const PreciseOrbitClock& e) { return e.clock_bias; },
+            clock_bias, interpolated_drift)) {
+        // Fall back to a stationary clock if no CLK data is available; orbit
+        // alone is still useful for geometry.
+        clock_bias = 0.0;
+        clock_drift = 0.0;
+    } else {
+        clock_drift = interpolated_drift;
     }
-    if (!sample->position_valid) {
-        return false;
-    }
-    position = sample->position;
-    velocity = sample->velocity;
-    clock_bias = sample->clock_valid ? sample->clock_bias : 0.0;
-    clock_drift = sample->clock_valid ? sample->clock_drift : 0.0;
     return true;
 }
 

@@ -1026,6 +1026,64 @@ TEST(PPPTest, PreciseProductsLoadSp3AndClockAndInterpolateMidpoint) {
     std::filesystem::remove(clk_path);
 }
 
+TEST(PPPTest, PreciseProductsInterpolateAtClockOnlyTimestampUsesSP3Bracket) {
+    // Reproduces the silent SP3+CLK aliasing bug (2026-05-09): when the query
+    // time lands exactly on a CLK-only entry (added at 30 s spacing for IGS
+    // CLK files) that does not coincide with an SP3 epoch (15 min spacing),
+    // the interpolator was short-circuiting to a single-sample lookup whose
+    // position_valid was false, returning false. The PPP precise path then
+    // silently fell back to broadcast ephemeris for ~99% of receiver epochs.
+    const auto sp3_path = tempFilePath("libgnss_ppp_clk_only_query_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_ppp_clk_only_query_test.clk");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+
+    const std::string sp3_text =
+        "*  2026 03 26 00 00 00.00000000\n"
+        "PG01   20200.000000   14000.000000   21700.000000       123.000000\n"
+        "*  2026 03 26 00 15 00.00000000\n"
+        "PG01   20201.500000   14001.500000   21701.500000       223.000000\n";
+    // CLK with samples at 00:00, 00:00:30, and 00:15 (typical IGS 30 s grid).
+    // Query at 00:00:30 is *exactly* a CLK-only entry — pre-fix this returned
+    // false; post-fix it must interpolate the SP3 bracket.
+    const std::string clk_text =
+        "     3.00           C                   RINEX VERSION / TYPE\n"
+        "END OF HEADER\n"
+        "AS G01 2026 03 26 00 00 00.00000000  2  1.230000000000E-04  1.000000000000E-12\n"
+        "AS G01 2026 03 26 00 00 30.00000000  2  1.250000000000E-04  1.000000000000E-12\n"
+        "AS G01 2026 03 26 00 15 00.00000000  2  2.230000000000E-04  1.000000000000E-12\n";
+
+    writeTextFile(sp3_path, sp3_text);
+    writeTextFile(clk_path, clk_text);
+
+    PreciseProducts precise_products;
+    ASSERT_TRUE(precise_products.loadSP3File(sp3_path.string()));
+    ASSERT_TRUE(precise_products.loadClockFile(clk_path.string()));
+
+    Vector3d position = Vector3d::Zero();
+    Vector3d velocity = Vector3d::Zero();
+    double clock_bias = 0.0;
+    double clock_drift = 0.0;
+    const GNSSTime clk_only_query = makeTime(2026, 3, 26, 0, 0, 30.0);
+    ASSERT_TRUE(precise_products.interpolateOrbitClock(
+        SatelliteId(GNSSSystem::GPS, 1), clk_only_query,
+        position, velocity, clock_bias, clock_drift));
+
+    // Position interpolated from SP3 bracket at alpha = 30 / 900.
+    constexpr double kAlpha = 30.0 / 900.0;
+    EXPECT_NEAR(position.x(),
+                20'200'000.0 + kAlpha * 1500.0, 1e-3);
+    EXPECT_NEAR(position.y(),
+                14'000'000.0 + kAlpha * 1500.0, 1e-3);
+    EXPECT_NEAR(position.z(),
+                21'700'000.0 + kAlpha * 1500.0, 1e-3);
+    // Clock bias from the exact CLK sample at 00:00:30.
+    EXPECT_NEAR(clock_bias, 1.25e-4, 1e-12);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+}
+
 TEST(PPPTest, IONEXProductsLoadAndInterpolateTecAndRms) {
     const auto ionex_path = tempFilePath("libgnss_ppp_ionex_test.ionex");
     std::filesystem::remove(ionex_path);
