@@ -184,6 +184,13 @@ struct PPPConfig {
     // Default off; opt-in for safe rollout pending truth-bench
     // validation. See docs/iers-integration-plan.md.
     bool use_iers_solid_tide = false;
+    // Optional IERS 20 C04 EOP file path (Phase D-0 scaffolding).
+    // When set, PPPProcessor loads the series at construction and
+    // exposes per-epoch xp/yp/UT1-UTC via getEarthOrientationParams();
+    // downstream Phase D-1 (pole tide) / D-2 (sub-daily EOP) consumers
+    // will read it. Empty string = no EOP table (current default).
+    // Source: https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now
+    std::string eop_path;
     bool apply_relativity = true;
 
     // Convergence criteria
