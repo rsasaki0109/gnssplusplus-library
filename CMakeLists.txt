@@ -51,6 +51,7 @@ set(GNSS_SOURCES
     src/iers/tides.cpp
     src/iers/ephemeris.cpp
     src/iers/eop_table.cpp
+    src/iers/sub_daily_eop.cpp
 )
 
 # List source files for the no-optimization library

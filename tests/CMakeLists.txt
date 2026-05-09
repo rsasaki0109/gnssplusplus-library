@@ -39,6 +39,7 @@ if(GTest_FOUND)
         test_iers_tides.cpp
         test_iers_ephemeris.cpp
         test_iers_eop.cpp
+        test_iers_sub_daily_eop.cpp
     )
 
     target_compile_options(run_tests PRIVATE -g)
