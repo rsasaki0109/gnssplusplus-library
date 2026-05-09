@@ -139,6 +139,27 @@ inline bool isSecondarySignal(GNSSSystem system, SignalType signal) {
     }
 }
 
+// Phase 18 Step 3: tertiary (L5-class) signal slot.
+// L5 (1176.45 MHz) and equivalents (GAL E5a, BDS B2a, QZS L5, NavIC L5).
+// Distinct from isSecondarySignal so that L5 can be tracked in its own filter slot
+// without competing with L2-class signals.
+inline bool isL5Signal(GNSSSystem system, SignalType signal) {
+    switch (system) {
+        case GNSSSystem::GPS:
+            return signal == SignalType::GPS_L5;
+        case GNSSSystem::Galileo:
+            return signal == SignalType::GAL_E5A;
+        case GNSSSystem::BeiDou:
+            return signal == SignalType::BDS_B2A;
+        case GNSSSystem::QZSS:
+            return signal == SignalType::QZS_L5;
+        case GNSSSystem::NavIC:
+            return signal == SignalType::GPS_L5;
+        default:
+            return false;
+    }
+}
+
 inline int signalPriority(GNSSSystem system, SignalType signal, bool primary) {
     if (primary) {
         switch (system) {
