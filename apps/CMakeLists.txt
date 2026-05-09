@@ -79,6 +79,7 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_iers_solid_tide_bench.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_iers_pole_tide_bench.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_iers_atm_tidal_loading_bench.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_iers_atm_tidal_loading_multisite_bench.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_iers_pole_tide_multisite_bench.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_iers_sub_daily_eop_bench.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_iers_sub_daily_eop_multisite_bench.py
