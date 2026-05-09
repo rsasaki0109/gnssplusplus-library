@@ -3531,6 +3531,9 @@ void PPPProcessor::constrainStaticAnchorPosition() {
         !has_static_anchor_position_) {
         return;
     }
+    if (!ppp_config_.apply_static_anchor_blend) {
+        return;
+    }
     if (precise_products_loaded_ && !ppp_config_.estimate_troposphere) {
         return;
     }
