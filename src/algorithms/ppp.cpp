@@ -109,6 +109,125 @@ std::string extractAntexFrequencyCode(const std::string& line) {
     return "";
 }
 
+GNSSTime parseAntexEpochLine(const std::string& line) {
+    int year = 0, month = 0, day = 0, hour = 0, minute = 0;
+    double second = 0.0;
+    std::istringstream iss(line.substr(0, std::min<size_t>(line.size(), 60U)));
+    if (!(iss >> year >> month >> day >> hour >> minute >> second)) {
+        return GNSSTime{};
+    }
+    std::tm tm{};
+    tm.tm_year = year - 1900;
+    tm.tm_mon = month - 1;
+    tm.tm_mday = day;
+    tm.tm_hour = hour;
+    tm.tm_min = minute;
+    tm.tm_sec = static_cast<int>(second);
+    const std::time_t calendar = timegm(&tm);
+    if (calendar == static_cast<std::time_t>(-1)) {
+        return GNSSTime{};
+    }
+    return GNSSTime::fromSystemTime(
+        std::chrono::system_clock::from_time_t(calendar) +
+        std::chrono::microseconds(static_cast<long>((second - tm.tm_sec) * 1e6)));
+}
+
+bool loadSatelliteAntexOffsets(
+    const std::string& filename,
+    std::vector<SatelliteAntexEntry>& satellite_entries) {
+    satellite_entries.clear();
+    std::ifstream input(filename);
+    if (!input.is_open()) {
+        return false;
+    }
+    SatelliteAntexEntry current;
+    bool in_antenna = false;
+    bool satellite_entry = false;
+    SignalType current_signal = SignalType::SIGNAL_TYPE_COUNT;
+    std::string line;
+    while (std::getline(input, line)) {
+        const std::string label = line.size() >= 60 ? trimCopy(line.substr(60)) : "";
+        if (label == "START OF ANTENNA") {
+            current = SatelliteAntexEntry{};
+            satellite_entry = false;
+            current_signal = SignalType::SIGNAL_TYPE_COUNT;
+            in_antenna = true;
+            continue;
+        }
+        if (!in_antenna) continue;
+        if (label == "END OF ANTENNA") {
+            if (satellite_entry && !current.body_offsets_m.empty()) {
+                satellite_entries.push_back(current);
+            }
+            in_antenna = false;
+            continue;
+        }
+        if (label == "TYPE / SERIAL NO") {
+            // Satellite entries place the PRN at columns 20-22 (3-char
+            // SVS code: G01, R26, E07, ...). Receiver entries put a
+            // free-form serial there.
+            const std::string serial = trimCopy(line.substr(20, 20));
+            satellite_entry =
+                serial.size() == 3 &&
+                std::isalpha(static_cast<unsigned char>(serial[0])) &&
+                std::isdigit(static_cast<unsigned char>(serial[1])) &&
+                std::isdigit(static_cast<unsigned char>(serial[2]));
+            if (satellite_entry) {
+                GNSSSystem system = GNSSSystem::UNKNOWN;
+                switch (serial[0]) {
+                    case 'G': system = GNSSSystem::GPS; break;
+                    case 'R': system = GNSSSystem::GLONASS; break;
+                    case 'E': system = GNSSSystem::Galileo; break;
+                    case 'C': system = GNSSSystem::BeiDou; break;
+                    case 'J': system = GNSSSystem::QZSS; break;
+                    case 'S': system = GNSSSystem::SBAS; break;
+                    case 'I': system = GNSSSystem::NavIC; break;
+                    default: break;
+                }
+                if (system == GNSSSystem::UNKNOWN) {
+                    satellite_entry = false;
+                } else {
+                    try {
+                        current.satellite = SatelliteId(
+                            system,
+                            static_cast<uint8_t>(std::stoi(serial.substr(1))));
+                    } catch (const std::exception&) {
+                        satellite_entry = false;
+                    }
+                }
+            }
+            continue;
+        }
+        if (!satellite_entry) continue;
+        if (label == "VALID FROM") {
+            current.valid_from = parseAntexEpochLine(line);
+            continue;
+        }
+        if (label == "VALID UNTIL") {
+            current.valid_until = parseAntexEpochLine(line);
+            continue;
+        }
+        if (label == "START OF FREQUENCY") {
+            current_signal = antexSignalType(extractAntexFrequencyCode(line));
+            continue;
+        }
+        if (label == "END OF FREQUENCY") {
+            current_signal = SignalType::SIGNAL_TYPE_COUNT;
+            continue;
+        }
+        if (label == "NORTH / EAST / UP" &&
+            current_signal != SignalType::SIGNAL_TYPE_COUNT) {
+            std::istringstream iss(line.substr(0, std::min<size_t>(line.size(), 30U)));
+            double north_mm = 0.0, east_mm = 0.0, up_mm = 0.0;
+            if (iss >> north_mm >> east_mm >> up_mm) {
+                current.body_offsets_m[current_signal] =
+                    Vector3d(north_mm * 1e-3, east_mm * 1e-3, up_mm * 1e-3);
+            }
+        }
+    }
+    return !satellite_entries.empty();
+}
+
 bool loadReceiverAntexOffsets(
     const std::string& filename,
     std::map<std::string, std::map<SignalType, Vector3d>>& receiver_offsets) {
@@ -862,10 +981,16 @@ bool PPPProcessor::initialize(const ProcessorConfig& config) {
 
     receiver_antex_offsets_.clear();
     receiver_antex_loaded_ = false;
+    satellite_antex_offsets_.clear();
+    satellite_antex_loaded_ = false;
     if (!ppp_config_.antex_file_path.empty()) {
         receiver_antex_loaded_ =
             loadReceiverAntexOffsets(ppp_config_.antex_file_path, receiver_antex_offsets_);
-        if (!receiver_antex_loaded_) {
+        // Receiver section may be empty for sat-only ANTEX files; the load
+        // is fatal only if no satellite block also ends up populated.
+        satellite_antex_loaded_ =
+            loadSatelliteAntexOffsets(ppp_config_.antex_file_path, satellite_antex_offsets_);
+        if (!receiver_antex_loaded_ && !satellite_antex_loaded_) {
             return false;
         }
     }
@@ -2184,6 +2309,55 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     ++last_applied_atmos_iono_corrections_;
                     last_applied_atmos_iono_m_ += std::abs(ionosphere_correction_m);
                     applied_ssr_iono = true;
+                }
+            }
+        }
+
+        // Satellite antenna PCO from ANTEX. The IGS final products since
+        // the 2017 convention switch publish SP3 / CLK at the iono-free
+        // combination antenna phase centre (so no shift is needed by
+        // default). For SP3 sources known to report centre of mass,
+        // setting apply_satellite_antenna_pco rotates the body-frame PCO
+        // (constructed via the yaw-steering attitude) into ECEF and
+        // shifts sat_position so geodist() returns the antenna range.
+        if (satellite_antex_loaded_ && ppp_config_.apply_satellite_antenna_pco) {
+            Vector3d pco_body_if = Vector3d::Zero();
+            bool have_pco = false;
+            for (const auto& entry : satellite_antex_offsets_) {
+                if (!(entry.satellite == observation.satellite)) continue;
+                if (entry.valid_from.week != 0 && time < entry.valid_from) continue;
+                if (entry.valid_until.week != 0 && entry.valid_until < time) continue;
+                const auto primary_it = entry.body_offsets_m.find(observation.primary_signal);
+                if (primary_it == entry.body_offsets_m.end()) break;
+                if (ppp_config_.use_ionosphere_free &&
+                    observation.secondary_signal != SignalType::SIGNAL_TYPE_COUNT) {
+                    const auto secondary_it =
+                        entry.body_offsets_m.find(observation.secondary_signal);
+                    if (secondary_it == entry.body_offsets_m.end()) break;
+                    pco_body_if =
+                        observation.primary_code_bias_coeff * primary_it->second +
+                        observation.secondary_code_bias_coeff * secondary_it->second;
+                } else {
+                    pco_body_if = primary_it->second;
+                }
+                have_pco = true;
+                break;
+            }
+            if (have_pco && sat_position.norm() > 1.0) {
+                // Yaw-steering body frame: z toward Earth, y orthogonal to
+                // the spacecraft–Sun plane, x toward the Sun side.
+                const Vector3d e_z_sat = -sat_position.normalized();
+                const Vector3d sun_los = sun_position_ecef - sat_position;
+                if (sun_los.norm() > 1.0) {
+                    Vector3d e_y_sat = e_z_sat.cross(sun_los).normalized();
+                    if (e_y_sat.allFinite() && e_y_sat.norm() > 0.5) {
+                        const Vector3d e_x_sat = e_y_sat.cross(e_z_sat);
+                        const Vector3d pco_ecef =
+                            pco_body_if.x() * e_x_sat +
+                            pco_body_if.y() * e_y_sat +
+                            pco_body_if.z() * e_z_sat;
+                        sat_position += pco_ecef;
+                    }
                 }
             }
         }

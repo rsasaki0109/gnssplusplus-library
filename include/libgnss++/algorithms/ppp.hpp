@@ -20,9 +20,20 @@
 
 namespace libgnss {
 
+/// Per-SVN ANTEX entry used by PPPProcessor to translate satellite
+/// centre-of-mass positions (as delivered by SP3) to the antenna phase
+/// centre. Body frame uses ANTEX semantics: x = north-of-antenna,
+/// y = east-of-antenna, z = up-of-antenna ≡ boresight toward Earth.
+struct SatelliteAntexEntry {
+    SatelliteId satellite;
+    GNSSTime valid_from;
+    GNSSTime valid_until;
+    std::map<SignalType, Vector3d> body_offsets_m;
+};
+
 /**
  * @brief Precise Point Positioning (PPP) processor
- * 
+ *
  * Implements PPP using precise orbits and clocks for decimeter to
  * centimeter level positioning without base stations.
  */
@@ -221,6 +232,8 @@ private:
     bool atm_tidal_loading_loaded_ = false;
     std::map<std::string, std::map<SignalType, Vector3d>> receiver_antex_offsets_;
     bool receiver_antex_loaded_ = false;
+    std::vector<SatelliteAntexEntry> satellite_antex_offsets_;
+    bool satellite_antex_loaded_ = false;
     Vector3d static_anchor_position_ = Vector3d::Zero();
     bool has_static_anchor_position_ = false;
     double last_ar_ratio_ = 0.0;
