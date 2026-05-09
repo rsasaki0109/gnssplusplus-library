@@ -11,6 +11,7 @@ project root `NOTICE` file.
 | Component | Path | Upstream | License | License File |
 |-----------|------|----------|---------|--------------|
 | IAU SOFA  | `third_party/sofa/`  | http://www.iausofa.org/ | SOFA Software License | `third_party/sofa/LICENSE` |
+| ginan-iers2010 | `third_party/ginan-iers2010/` | https://github.com/GeoscienceAustralia/ginan (commit `535ef0a`) | Apache License 2.0 | `third_party/ginan-iers2010/LICENSE` |
 
 ## Compatibility
 
@@ -30,3 +31,11 @@ clauses for downstream users:
   libgnss++'s own symbol naming. Downstream users who modify the SOFA
   copy in `third_party/sofa/` must observe this clause.
 - **Clauses 5–6**: SOFA is provided "as is" with no warranty.
+
+The Apache License 2.0 (used by `third_party/ginan-iers2010/`) is
+OSI-approved and broadly compatible with MIT redistribution. Per Apache
+2.0 §4(b), the modifications libgnss++ has made relative to the
+upstream ginan sources are documented in
+`third_party/ginan-iers2010/README.md`. Per §4(d), upstream
+attribution and the original NOTICE are preserved at
+`third_party/ginan-iers2010/NOTICE`.
