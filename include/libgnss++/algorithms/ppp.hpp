@@ -587,10 +587,17 @@ namespace ppp_utils {
                                        const std::string& antenna_type);
     
     /**
-     * @brief Calculate phase windup correction
+     * @brief Calculate phase windup correction (Wu et al. 1993).
+     *
+     * The satellite body frame is constructed from the sun direction so the
+     * X-axis points away from the spacecraft–Sun plane normal — the geometry
+     * used by IGS/RTKLIB. `sun_position_ecef` may be Vector3d::Zero() to fall
+     * back to a line-of-sight approximation, but precise PPP should always
+     * pass a real sun position.
      */
     double calculatePhaseWindup(const Vector3d& receiver_pos,
                               const Vector3d& satellite_pos,
+                              const Vector3d& sun_position_ecef,
                               double previous_windup);
 }
 

@@ -1958,6 +1958,10 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
     }
     const int preferred_network_id = preferredClasNetworkId(epoch_atmos_tokens);
 
+    // Sun position is needed for the satellite body frame in phase wind-up.
+    // We compute it once per epoch and reuse for every satellite.
+    const Vector3d sun_position_ecef = approximateSunPositionEcef(time);
+
     for (auto& observation : observations) {
         double deferred_variance_pr = 0.0;
         double deferred_variance_cp = 0.0;
@@ -2268,6 +2272,35 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         } else {
             observation.antenna_pco_m = 0.0;
         }
+
+        // Phase wind-up correction (Wu et al. 1993). Same cycle count for L1
+        // and L2 — convert via the IF combination wavelength c/(f1+f2),
+        // which is c1*λ1 + c2*λ2 with the standard IFLC coefficients.
+        if (observation.has_carrier_phase) {
+            const double previous_windup =
+                windup_cache_.count(observation.satellite) ?
+                    windup_cache_[observation.satellite] : 0.0;
+            const double new_windup = ppp_utils::calculatePhaseWindup(
+                receiver_position, sat_position, sun_position_ecef, previous_windup);
+            windup_cache_[observation.satellite] = new_windup;
+
+            double windup_wavelength_m = 0.0;
+            if (ppp_config_.use_ionosphere_free &&
+                observation.secondary_signal != SignalType::SIGNAL_TYPE_COUNT) {
+                const double f1 = signalFrequencyHz(observation.primary_signal, eph);
+                const double f2 = signalFrequencyHz(observation.secondary_signal, eph);
+                if (f1 > 0.0 && f2 > 0.0 && f1 + f2 > 0.0) {
+                    windup_wavelength_m = constants::SPEED_OF_LIGHT / (f1 + f2);
+                }
+            } else {
+                windup_wavelength_m = signalWavelengthMeters(observation.primary_signal, eph);
+            }
+            if (windup_wavelength_m > 0.0 && std::isfinite(new_windup)) {
+                const double windup_correction_m = new_windup * windup_wavelength_m;
+                observation.carrier_phase_if -= windup_correction_m;
+            }
+        }
+
         // In CLAS-PPP mode (estimate_ionosphere), reject satellites without
         // both SSR orbit/clock and ionosphere corrections — matching CLASLIB's
         // corrmeas() which returns 0 when STEC correction fails.
@@ -3565,47 +3598,68 @@ Vector3d calculateReceiverAntennaPCO(const Vector3d& receiver_pos,
 
 double calculatePhaseWindup(const Vector3d& receiver_pos,
                             const Vector3d& satellite_pos,
+                            const Vector3d& sun_position_ecef,
                             double previous_windup) {
-    // Phase wind-up correction based on Wu et al. (1993)
-    // Returns accumulated phase wind-up in cycles.
-    const Vector3d e_sr = (receiver_pos - satellite_pos).normalized();
+    // Phase wind-up (Wu et al. 1993) — accumulated cycles between the
+    // satellite and receiver right-handed dipole frames.
+    const Vector3d los_sr = receiver_pos - satellite_pos;
+    const double los_norm = los_sr.norm();
+    if (los_norm < 1.0) return previous_windup;
+    const Vector3d e_sr = los_sr / los_norm;
 
-    // Satellite frame: use sun direction for yaw steering
-    // Simplified: assume satellite Z points to Earth center, X in sun direction
+    // Satellite body frame using a nominal yaw-steering attitude:
+    //   z = -rs / |rs|              (toward Earth center)
+    //   y = z × (sun - rs) / |...|  (perpendicular to spacecraft–Sun plane)
+    //   x = y × z                   (toward Sun side)
     const Vector3d e_z_sat = -satellite_pos.normalized();
-    // Sun direction (simplified: assume along +X in ECEF for now)
-    // A proper implementation would use solar ephemeris.
-    // Using cross-track direction as approximation:
-    Vector3d e_x_sat = e_sr.cross(e_z_sat);
-    if (e_x_sat.norm() < 1e-10) return previous_windup;
-    e_x_sat.normalize();
-    const Vector3d e_y_sat = e_z_sat.cross(e_x_sat);
+    Vector3d sun_dir;
+    if (sun_position_ecef.norm() > 1.0) {
+        sun_dir = sun_position_ecef - satellite_pos;
+    } else {
+        // Fallback: cross-track approximation (gives wrong magnitude but
+        // keeps the correction bounded when no solar ephemeris is supplied).
+        sun_dir = e_sr.cross(e_z_sat);
+    }
+    const double sun_norm = sun_dir.norm();
+    if (sun_norm < 1e-3) return previous_windup;
+    sun_dir /= sun_norm;
+    Vector3d e_y_sat = e_z_sat.cross(sun_dir);
+    const double y_norm = e_y_sat.norm();
+    if (y_norm < 1e-10) return previous_windup;
+    e_y_sat /= y_norm;
+    const Vector3d e_x_sat = e_y_sat.cross(e_z_sat);
 
-    // Receiver frame: Z = up, X = east, Y = north (approximate)
-    const Vector3d e_z_rcv = receiver_pos.normalized();
-    Vector3d e_x_rcv = Vector3d(-receiver_pos.y(), receiver_pos.x(), 0.0);
-    if (e_x_rcv.norm() < 1e-10) return previous_windup;
-    e_x_rcv.normalize();
-    const Vector3d e_y_rcv = e_z_rcv.cross(e_x_rcv);
+    // Receiver local north-east-up (north, east, up are standard PPP/RTKLIB):
+    //   x_rcv → North, y_rcv → East, z_rcv → Up.
+    double latitude_rad = 0.0;
+    double longitude_rad = 0.0;
+    double height_m = 0.0;
+    ecef2geodetic(receiver_pos, latitude_rad, longitude_rad, height_m);
+    const double sin_lat = std::sin(latitude_rad);
+    const double cos_lat = std::cos(latitude_rad);
+    const double sin_lon = std::sin(longitude_rad);
+    const double cos_lon = std::cos(longitude_rad);
+    // North (X): -sin(lat) cos(lon), -sin(lat) sin(lon), cos(lat)
+    const Vector3d e_x_rcv(-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat);
+    // East  (Y): -sin(lon),                cos(lon),           0
+    const Vector3d e_y_rcv(-sin_lon, cos_lon, 0.0);
 
-    // Effective dipole vectors
+    // Effective dipole vectors (Wu et al. 1993, eq. 7)
     const Vector3d d_sat = e_x_sat - e_sr * (e_sr.dot(e_x_sat))
-                         + e_sr.cross(e_y_sat);
+                         - e_sr.cross(e_y_sat);
     const Vector3d d_rcv = e_x_rcv - e_sr * (e_sr.dot(e_x_rcv))
                          + e_sr.cross(e_y_rcv);
 
-    const double cos_phi = d_sat.dot(d_rcv) / (d_sat.norm() * d_rcv.norm() + 1e-20);
-    const double cross_sign = e_sr.dot(d_sat.cross(d_rcv));
-    double dphi = std::acos(std::clamp(cos_phi, -1.0, 1.0)) / (2.0 * M_PI);
-    if (cross_sign < 0.0) dphi = -dphi;
+    const double d_sat_norm = d_sat.norm();
+    const double d_rcv_norm = d_rcv.norm();
+    if (d_sat_norm < 1e-10 || d_rcv_norm < 1e-10) return previous_windup;
+    const double cos_phi = std::clamp(d_sat.dot(d_rcv) / (d_sat_norm * d_rcv_norm), -1.0, 1.0);
+    double dphi = std::acos(cos_phi) / (2.0 * M_PI);
+    if (e_sr.dot(d_sat.cross(d_rcv)) < 0.0) dphi = -dphi;
 
-    // Accumulate full cycles
-    double windup = previous_windup + dphi;
-    // Remove large jumps (> 0.5 cycle)
-    while (windup - previous_windup > 0.5) windup -= 1.0;
-    while (windup - previous_windup < -0.5) windup += 1.0;
-
-    return windup;
+    // Resolve the 2π ambiguity against the prior cycle count.
+    const double n = std::round(previous_windup - dphi);
+    return dphi + n;
 }
 
 }  // namespace ppp_utils

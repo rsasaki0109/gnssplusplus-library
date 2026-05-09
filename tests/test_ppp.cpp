@@ -1084,6 +1084,44 @@ TEST(PPPTest, PreciseProductsInterpolateAtClockOnlyTimestampUsesSP3Bracket) {
     std::filesystem::remove(clk_path);
 }
 
+TEST(PPPTest, CalculatePhaseWindupResolvesAmbiguityAgainstPriorAccumulator) {
+    using libgnss::ppp_utils::calculatePhaseWindup;
+    using libgnss::Vector3d;
+
+    // Static TSKB-like geometry. Only the prior accumulator changes between calls.
+    const Vector3d receiver(-3957199.240, 3310199.668, 3737711.708);
+    const Vector3d satellite(20'000'000.0, 1'000'000.0, 20'000'000.0);
+    const Vector3d sun(1.495978707e11, 0.0, 0.0);
+
+    const double w0 = calculatePhaseWindup(receiver, satellite, sun, 0.0);
+    EXPECT_TRUE(std::isfinite(w0));
+    EXPECT_LE(std::abs(w0), 0.5);
+
+    // Same geometry, accumulator advanced by 5 cycles → output must track it
+    // within half a cycle (the function rounds to the nearest integer of
+    // (previous − dphi)). This guards against the previous "while-loop"
+    // implementation, which silently lost cycles when |Δ| > 0.5.
+    const double w_after_5 = calculatePhaseWindup(receiver, satellite, sun, 5.0);
+    EXPECT_NEAR(w_after_5, 5.0 + w0, 1e-9);
+
+    // Negative direction.
+    const double w_after_minus_3 = calculatePhaseWindup(receiver, satellite, sun, -3.0);
+    EXPECT_NEAR(w_after_minus_3, -3.0 + w0, 1e-9);
+}
+
+TEST(PPPTest, CalculatePhaseWindupFallsBackWhenSunPositionIsZero) {
+    using libgnss::ppp_utils::calculatePhaseWindup;
+    using libgnss::Vector3d;
+
+    const Vector3d receiver(-3957199.240, 3310199.668, 3737711.708);
+    const Vector3d satellite(20'000'000.0, 1'000'000.0, 20'000'000.0);
+
+    // Zero sun position triggers the cross-track fallback. Should not NaN.
+    const double w_fallback = calculatePhaseWindup(receiver, satellite, Vector3d::Zero(), 0.0);
+    EXPECT_TRUE(std::isfinite(w_fallback));
+    EXPECT_LE(std::abs(w_fallback), 0.5);
+}
+
 TEST(PPPTest, IONEXProductsLoadAndInterpolateTecAndRms) {
     const auto ionex_path = tempFilePath("libgnss_ppp_ionex_test.ionex");
     std::filesystem::remove(ionex_path);
