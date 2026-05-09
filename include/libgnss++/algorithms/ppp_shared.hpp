@@ -177,6 +177,15 @@ struct PPPConfig {
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
+    // Apply satellite antenna PCO (read from ANTEX) by shifting the
+    // SP3-interpolated satellite position to the ionosphere-free
+    // combination phase center. Default off because IGS final products
+    // since the 2017 convention switch publish SP3 / CLK already at the
+    // IF antenna phase center, so the additional shift double-applies
+    // the offset on those products. Enable for SP3 sources known to
+    // report centre of mass (some legacy AC products / GLONASS-only
+    // analyses). The ANTEX loader is unconditional when --antex is set.
+    bool apply_satellite_antenna_pco = false;
     // When true (and apply_solid_earth_tides is also true), use the
     // IERS Conventions 2010 §7.1.1 (Dehant) Step-1 + Step-2 model
     // from libgnss::iers::solidEarthTideDisplacement instead of the
