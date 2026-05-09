@@ -245,14 +245,23 @@ does not block Phase C:
   with native libgnss++ time-type adaptation. Re-uses the BLQ
   parser already present in libgnss++.
 - **Phase D-0** *(in progress)*: EOP plumbing scaffolding.
-  Adds `libgnss::iers::EopTable` (IERS 20 C04 daily series with
-  linear interpolation and leap-second snap on UT1-UTC) and a
-  `PPPConfig::eop_path` / `--eop-c04` CLI knob. PPPProcessor
-  loads the table on init and exposes
-  `getEarthOrientationParams(GNSSTime)`. No PPP code path consumes
-  the table yet — D-0 is a strictly additive scaffold for D-1+
-  (pole tide and sub-daily EOP). Output is bit-identical to the
-  no-EOP baseline.
+  Adds `libgnss::iers::EopTable` (daily series with linear
+  interpolation and leap-second snap on UT1-UTC) and a
+  `PPPConfig::eop_path` / `--eop-c04` CLI knob. PPPProcessor loads
+  the table on init and exposes `getEarthOrientationParams(GNSSTime)`.
+  No PPP code path consumes the table yet — D-0 is a strictly
+  additive scaffold for D-1+ (pole tide and sub-daily EOP). Output
+  is bit-identical to the no-EOP baseline.
+
+  Two upstream formats are supported, auto-detected at load time:
+  (1) **IERS 20 C04** (Paris Observatory `eopc04.1962-now`) — the
+  canonical final-values series, ITRF2020-consistent, ~1-week
+  publication lag. (2) **IERS Bulletin A** (`finals2000A.daily` from
+  USNO maia.usno.navy.mil) — combined observed (`I`) and predicted
+  (`P`) rows, the prediction extending ~12 months past the last
+  observed epoch and filling the C04 publication-lag gap. Bulletin A
+  is the recommended source for benches that need fresh real-data
+  EOP coverage of the previous month or two.
 - **Phase D-1** *(in progress)*: Pole tide (IERS Conventions 2010
   §7.1.4) opt-in. Adds `libgnss::iers::poleTideDisplacement` (post-2018
   IERS linear mean-pole secular drift + Sr/Sθ/Sλ Stokes formulation)

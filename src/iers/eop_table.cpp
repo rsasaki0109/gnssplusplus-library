@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -32,6 +33,58 @@ bool tryParseC04Row(const std::string& line, EopRecord& out) {
     return true;
 }
 
+// Fixed-width column offsets (0-indexed) for IERS Bulletin A
+// `finals2000A.daily`. Lines are 187 chars; the value fields we
+// consume are stable across the IERS-published release history.
+constexpr std::size_t kBulletinAMinLineSize    = 78;
+constexpr std::size_t kBulletinAPoleFlagCol    = 16;
+constexpr std::size_t kBulletinAUt1FlagCol     = 57;
+constexpr std::size_t kBulletinAMjdCol         = 7;
+constexpr std::size_t kBulletinAMjdLen         = 8;
+constexpr std::size_t kBulletinAXpCol          = 18;
+constexpr std::size_t kBulletinAYpCol          = 37;
+constexpr std::size_t kBulletinAUt1Col         = 58;
+constexpr std::size_t kBulletinAFloatLen       = 10;
+
+bool isBulletinAFlag(char c) {
+    return c == 'I' || c == 'P' || c == ' ' || c == 'b';
+}
+
+bool tryParseBulletinARow(const std::string& line, EopRecord& out) {
+    if (line.size() < kBulletinAMinLineSize) {
+        return false;
+    }
+    const char pole_flag = line[kBulletinAPoleFlagCol];
+    const char ut1_flag = line[kBulletinAUt1FlagCol];
+    // Bulletin A uses `I` for IERS observed and `P` for predicted;
+    // a blank/`b` flag indicates a missing value, in which case we
+    // skip the row.
+    if (pole_flag != 'I' && pole_flag != 'P') return false;
+    if (ut1_flag != 'I' && ut1_flag != 'P') return false;
+
+    out.mjd_utc = std::atof(line.substr(kBulletinAMjdCol, kBulletinAMjdLen).c_str());
+    if (out.mjd_utc < 30000.0 || out.mjd_utc > 100000.0) {
+        return false;
+    }
+    out.xp_arcsec  = std::atof(line.substr(kBulletinAXpCol,  kBulletinAFloatLen).c_str());
+    out.yp_arcsec  = std::atof(line.substr(kBulletinAYpCol,  kBulletinAFloatLen).c_str());
+    out.ut1_minus_utc_seconds =
+        std::atof(line.substr(kBulletinAUt1Col, kBulletinAFloatLen).c_str());
+    out.lod_seconds = 0.0;
+    out.dx_arcsec   = 0.0;
+    out.dy_arcsec   = 0.0;
+    return true;
+}
+
+bool looksLikeBulletinA(const std::string& line) {
+    // Bulletin A lines are 187 chars and have an `I`/`P`/blank flag
+    // at column 17 (0-indexed 16). C04 lines are >= 100 chars but
+    // have a digit, sign, or decimal point in that column.
+    if (line.size() < kBulletinAMinLineSize) return false;
+    return isBulletinAFlag(line[kBulletinAPoleFlagCol])
+        && isBulletinAFlag(line[kBulletinAUt1FlagCol]);
+}
+
 }  // namespace
 
 EopTable EopTable::fromC04File(const std::string& path) {
@@ -52,6 +105,45 @@ EopTable EopTable::fromC04File(const std::string& path) {
             "EopTable::fromC04File: no data rows parsed from " + path);
     }
     return EopTable(std::move(records));
+}
+
+EopTable EopTable::fromBulletinAFile(const std::string& path) {
+    std::ifstream in(path);
+    if (!in) {
+        throw std::runtime_error(
+            "EopTable::fromBulletinAFile: cannot open " + path);
+    }
+    std::vector<EopRecord> records;
+    std::string line;
+    while (std::getline(in, line)) {
+        EopRecord rec{};
+        if (tryParseBulletinARow(line, rec)) {
+            records.push_back(rec);
+        }
+    }
+    if (records.empty()) {
+        throw std::runtime_error(
+            "EopTable::fromBulletinAFile: no data rows parsed from " + path);
+    }
+    return EopTable(std::move(records));
+}
+
+EopTable EopTable::fromFile(const std::string& path) {
+    std::ifstream in(path);
+    if (!in) {
+        throw std::runtime_error("EopTable::fromFile: cannot open " + path);
+    }
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        if (looksLikeBulletinA(line)) {
+            return fromBulletinAFile(path);
+        }
+        // First non-comment line did not match Bulletin A — assume C04.
+        return fromC04File(path);
+    }
+    throw std::runtime_error(
+        "EopTable::fromFile: file is empty or contains only comments: " + path);
 }
 
 EopTable::EopTable(std::vector<EopRecord> records) : records_(std::move(records)) {
