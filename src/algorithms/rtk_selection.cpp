@@ -111,6 +111,28 @@ std::vector<SelectionPair> buildDoubleDifferencePairsForSystem(
         }
     }
 
+    // Phase 18 Step 4: emit L5 (freq=2) pairs when ref sat carries an active L5 ambiguity.
+    // Backward-compat: when L5 collection is disabled (Step 3 default), has_l5/n5_active stay
+    // false on every snapshot entry, so this block is a no-op.
+    if (ref_data->has_l5 && ref_data->n5_active) {
+        for (const auto& satellite : satellites) {
+            if (satellite.satellite.system != system || satellite.satellite == ref_sat) {
+                continue;
+            }
+            if (!satellite.has_l5 || !satellite.n5_active) {
+                continue;
+            }
+            if (min_lock_count > 0 && satellite.lock_count_l5 < min_lock_count) {
+                continue;
+            }
+            if (require_matched_carrier_wavelength &&
+                std::abs(satellite.l5_wavelength - ref_data->l5_wavelength) > 1e-6) {
+                continue;
+            }
+            pairs.push_back({ref_sat, satellite.satellite, 2});
+        }
+    }
+
     return pairs;
 }
 

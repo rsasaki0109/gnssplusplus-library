@@ -74,6 +74,14 @@ public:
         };
         PositionMode position_mode = PositionMode::KINEMATIC;
 
+        // Initial-position seed sources (default off preserves legacy SPP-only seed).
+        // When prefer_trusted_position_seed is set, kinematic re-seeds prefer the
+        // most recent trusted/fixed solution (within a 1s window) over an SPP fix.
+        // When prefer_rover_position_seed is set, the rover RINEX header position
+        // (if magnitude > 1e6 m, i.e. real ECEF) is used before SPP.
+        bool prefer_trusted_position_seed = false;
+        bool prefer_rover_position_seed = false;
+
         // Kalman filter parameters
         double process_noise_position = 1e-4;       // m^2/s for static baseline
         double process_noise_ambiguity = 1e-8;    // cycles^2/s (very small - ambiguities are constant)
@@ -110,6 +118,12 @@ public:
         bool enable_beidou = true;
         double glonass_icb_l1_m_per_mhz = 0.0;
         double glonass_icb_l2_m_per_mhz = 0.0;
+
+        // Phase 18 Step 3: enable L5 measurement collection.
+        // When false (default), collectSatelliteData populates only L1/L2 — L5 obs are ignored.
+        // When true, L5-class obs (GPS_L5/QZS_L5/GAL_E5A/BDS_B2A) are populated into
+        // SatelliteData.l5_* fields. Step 4+ will add residual/Jacobian/cycle-slip handling.
+        bool enable_l5 = false;
 
         /// AR policy gate.
         /// EXTENDED (default): all hold/subset/fallback/regularization extras active.
@@ -337,12 +351,17 @@ public:
         int gf_slip_count = 0;
         int doppler_slip_l1_count = 0;
         int doppler_slip_l2_count = 0;
+        int doppler_slip_l5_count = 0;  // Phase 18 Step 5
         int code_slip_l1_count = 0;
         int code_slip_l2_count = 0;
+        int code_slip_l5_count = 0;  // Phase 18 Step 5
         int lli_slip_l1_count = 0;
         int lli_slip_l2_count = 0;
+        int lli_slip_l5_count = 0;  // Phase 18 Step 5
         int ambiguity_reset_l1_count = 0;
         int ambiguity_reset_l2_count = 0;
+        int ambiguity_reset_l5_count = 0;  // Phase 18 Step 5
+        int gf_slip_l1l5_count = 0;       // Phase 18 Step 5: GF combination L1-L5
         bool adaptive_dynamic_slip_active = false;
         int consecutive_nonfix_before_bias_update = 0;
         int adaptive_dynamic_slip_hold_remaining = 0;
@@ -411,7 +430,10 @@ private:
     Vector3d base_position_;
     bool base_position_known_ = false;
 
-    // Fixed-size state: [pos(3), glo_hw_bias(2), iono(MAXSAT), N1(MAXSAT), N2(MAXSAT)]
+    // Fixed-size state: [pos(3), glo_hw_bias(2), iono(MAXSAT), N1(MAXSAT), N2(MAXSAT), N5(MAXSAT)]
+    // Phase 18 Step 2 (2026-05-09): N5 freq slot reserved (IB(sat, freq=2)).
+    // Currently N5 entries stay 0 / unconfirmed; populated by Steps 3+ when L5 enabled.
+    // Existing L1/L2-only path is unchanged: N5 slots default to 0 with zero covariance.
     // Satellite slots are system-aware so G01/E01/Q01 do not collide.
     static constexpr int BASE_STATES = 3;
     static constexpr int GLO_HWBIAS_STATES = 2;
@@ -420,7 +442,8 @@ private:
     static constexpr int MAXSAT = SATS_PER_SYSTEM * SUPPORTED_SYSTEM_BLOCKS;
     static constexpr int REAL_STATES = BASE_STATES + GLO_HWBIAS_STATES;
     static constexpr int IONO_STATES = MAXSAT;
-    static constexpr int NX = REAL_STATES + IONO_STATES + MAXSAT * 2;  // total state size
+    static constexpr int FREQ_SLOTS = 3;  // L1, L2, L5 (Phase 18 Step 2)
+    static constexpr int NX = REAL_STATES + IONO_STATES + MAXSAT * FREQ_SLOTS;  // total state size
 
     static int systemSlotBase(GNSSSystem system) {
         switch (system) {
@@ -460,6 +483,9 @@ private:
         std::map<SatelliteId, int> iono_indices;
         std::map<SatelliteId, int> n1_indices;
         std::map<SatelliteId, int> n2_indices;
+        // Phase 18 Step 2: N5 ambiguity index map (parallel to n1/n2_indices).
+        // Populated only when L5 measurements present (Step 3+); remains empty for L1/L2-only path.
+        std::map<SatelliteId, int> n5_indices;
         int next_state_idx = BASE_STATES;
     };
 
@@ -469,6 +495,8 @@ private:
     // Lock count per satellite per frequency (for AR eligibility)
     std::map<SatelliteId, int> lock_count_l1_;
     std::map<SatelliteId, int> lock_count_l2_;
+    // Phase 18 Step 2: L5 lock count (parallel to L1/L2). Stays empty in L1/L2-only path.
+    std::map<SatelliteId, int> lock_count_l5_;
 
     // Reference satellite tracking
     SatelliteId current_ref_satellite_;
@@ -566,10 +594,13 @@ private:
         SatelliteId satellite;
         SignalType l1_signal = SignalType::GPS_L1CA;
         SignalType l2_signal = SignalType::GPS_L2C;
+        SignalType l5_signal = SignalType::GPS_L5;
         double l1_wavelength = 0.0;
         double l2_wavelength = 0.0;
+        double l5_wavelength = 0.0;
         double l1_frequency_hz = 0.0;
         double l2_frequency_hz = 0.0;
+        double l5_frequency_hz = 0.0;
         // L1
         double rover_l1_phase = 0.0;  // cycles
         double rover_l1_code = 0.0;   // meters
@@ -594,6 +625,18 @@ private:
         bool has_l2 = false;
         bool has_l2_doppler = false;
         int l2_lli = 0;
+        // L5 (Phase 18 — populated when --enable-l5 set; default off, no effect on L1/L2 path)
+        double rover_l5_phase = 0.0;
+        double rover_l5_code = 0.0;
+        double rover_l5_doppler = 0.0;
+        double rover_l5_snr = 0.0;
+        double base_l5_phase = 0.0;
+        double base_l5_code = 0.0;
+        double base_l5_doppler = 0.0;
+        double base_l5_snr = 0.0;
+        bool has_l5 = false;
+        bool has_l5_doppler = false;
+        int l5_lli = 0;
         // Geometry
         Vector3d sat_pos;          // satellite position for rover (RTKLIB satposs from rover PR)
         Vector3d sat_pos_base;     // satellite position for base (RTKLIB satposs from base PR)
@@ -605,10 +648,13 @@ private:
     // Current epoch satellite data (cached for use across functions)
     std::map<SatelliteId, SatelliteData> current_sat_data_;
     std::map<SatelliteId, double> gf_l1l2_history_;
+    std::map<SatelliteId, double> gf_l1l5_history_;  // Phase 18 Step 5: GF L1-L5 combination
     std::map<SatelliteId, double> doppler_phase_history_l1_m_;
     std::map<SatelliteId, double> doppler_phase_history_l2_m_;
+    std::map<SatelliteId, double> doppler_phase_history_l5_m_;  // Phase 18 Step 5
     std::map<SatelliteId, double> code_phase_history_l1_m_;
     std::map<SatelliteId, double> code_phase_history_l2_m_;
+    std::map<SatelliteId, double> code_phase_history_l5_m_;  // Phase 18 Step 5
 
     /**
      * Collect all satellite data for an epoch (L1+L2 for rover and base)
@@ -731,6 +777,7 @@ private:
      */
     int getOrCreateN1Index(const SatelliteId& sat, double initial_value);
     int getOrCreateN2Index(const SatelliteId& sat, double initial_value);
+    int getOrCreateN5Index(const SatelliteId& sat, double initial_value);  // Phase 18 Step 4
     int getOrCreateIonoIndex(const SatelliteId& sat, double initial_value);
 
     bool selectSystemReferenceSatellite(const std::map<SatelliteId, SatelliteData>& sat_data,

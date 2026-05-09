@@ -109,6 +109,11 @@ bool isSecondaryRTKSignal(GNSSSystem system, SignalType signal) {
     return signal_policy::isSecondarySignal(system, signal);
 }
 
+// Phase 18 Step 3: L5-class signal slot, distinct from L2 secondary.
+bool isL5RTKSignal(GNSSSystem system, SignalType signal) {
+    return signal_policy::isL5Signal(system, signal);
+}
+
 int signalSelectionPriority(GNSSSystem system, SignalType signal, bool primary) {
     return signal_policy::signalPriority(system, signal, primary);
 }
@@ -311,6 +316,7 @@ void RTKProcessor::reset() {
     ambiguity_states_.clear();
     lock_count_l1_.clear();
     lock_count_l2_.clear();
+    lock_count_l5_.clear();  // Phase 18 Step 2: clear L5 lock counts on reset
     has_fixed_solution_ = false;
     has_last_fixed_position_ = false;
     has_last_fixed_time_ = false;
@@ -433,6 +439,24 @@ int RTKProcessor::getOrCreateN2Index(const SatelliteId& sat, double initial_valu
     return idx;
 }
 
+// Phase 18 Step 4: parallel to N1/N2 index creators.
+// IB(sat, 2) maps into the L5 slot of the state vector (FREQ_SLOTS=3 reserved by Step 2).
+int RTKProcessor::getOrCreateN5Index(const SatelliteId& sat, double initial_value) {
+    int idx = IB(sat, 2);
+    if (filter_state_.state(idx) != 0.0) {
+        filter_state_.n5_indices[sat] = idx;
+        return idx;
+    }
+    filter_state_.n5_indices[sat] = idx;
+    filter_state_.state(idx) = initial_value;
+    for (int j = 0; j < NX; ++j) {
+        filter_state_.covariance(idx, j) = 0.0;
+        filter_state_.covariance(j, idx) = 0.0;
+    }
+    filter_state_.covariance(idx, idx) = 900.0;
+    return idx;
+}
+
 int RTKProcessor::getOrCreateIonoIndex(const SatelliteId& sat, double initial_value) {
     int idx = II(sat);
     if (filter_state_.covariance(idx, idx) > 0.0) {
@@ -481,6 +505,17 @@ void RTKProcessor::removeSatelliteFromState(const SatelliteId& sat) {
         }
         filter_state_.n2_indices.erase(it2);
     }
+    // Phase 18 Step 2: erase L5 ambiguity slot if present (no-op until Step 3+ populates n5_indices).
+    auto it5 = filter_state_.n5_indices.find(sat);
+    if (it5 != filter_state_.n5_indices.end()) {
+        int idx = it5->second;
+        filter_state_.state(idx) = 0.0;
+        for (int j = 0; j < NX; ++j) {
+            filter_state_.covariance(idx, j) = 0.0;
+            filter_state_.covariance(j, idx) = 0.0;
+        }
+        filter_state_.n5_indices.erase(it5);
+    }
 }
 
 // ============================================================
@@ -490,6 +525,9 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
     const ObservationData& rover_obs, const ObservationData& base_obs, const NavigationData& nav) {
     std::map<SatelliteId, SatelliteData> result;
     std::map<SatelliteId, std::vector<const Observation*>> rover_l1, rover_l2, base_l1, base_l2;
+    // Phase 18 Step 3: L5 collection (only populated when enable_l5=true).
+    std::map<SatelliteId, std::vector<const Observation*>> rover_l5, base_l5;
+    const bool l5_enabled = rtk_config_.enable_l5;
     for (const auto& obs : rover_obs.observations) {
         if (!isEnabledRTKSystem(rtk_config_, obs.satellite.system)) continue;
         if (!isUsableRTKSatellite(obs.satellite)) continue;
@@ -499,7 +537,13 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         }
         if (isSecondaryRTKSignal(obs.satellite.system, obs.signal) &&
             obs.has_carrier_phase && obs.has_pseudorange) {
-            rover_l2[obs.satellite].push_back(&obs);
+            // When L5 enabled, exclude L5-class obs from L2 slot so they don't
+            // displace true L2C signals or pollute the L2 wavelength.
+            if (l5_enabled && isL5RTKSignal(obs.satellite.system, obs.signal)) {
+                rover_l5[obs.satellite].push_back(&obs);
+            } else {
+                rover_l2[obs.satellite].push_back(&obs);
+            }
         }
     }
     for (const auto& obs : base_obs.observations) {
@@ -511,7 +555,11 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         }
         if (isSecondaryRTKSignal(obs.satellite.system, obs.signal) &&
             obs.has_carrier_phase && obs.has_pseudorange) {
-            base_l2[obs.satellite].push_back(&obs);
+            if (l5_enabled && isL5RTKSignal(obs.satellite.system, obs.signal)) {
+                base_l5[obs.satellite].push_back(&obs);
+            } else {
+                base_l2[obs.satellite].push_back(&obs);
+            }
         }
     }
     Vector3d rover_pos_for_clk = rover_obs.receiver_position;
@@ -610,6 +658,36 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
                 sd.has_l2_doppler = r_l2_obs->has_doppler && b_l2_obs->has_doppler;
             }
         }
+        // Phase 18 Step 3: L5 pairing (no-op until rtk_config_.enable_l5 is set).
+        if (l5_enabled) {
+            auto r_l5 = rover_l5.find(sat); auto b_l5 = base_l5.find(sat);
+            if (r_l5 != rover_l5.end() && b_l5 != base_l5.end()) {
+                const Observation* r_l5_obs = nullptr;
+                const Observation* b_l5_obs = nullptr;
+                // Both rover/base L5 candidate lists contain only L5-class signals,
+                // so selectMatchedObservationPair with primary=false picks the highest-
+                // priority L5 variant common to both (e.g. matched GPS_L5 / GAL_E5A).
+                if (selectMatchedObservationPair(
+                        sat.system, r_l5->second, b_l5->second, false, r_l5_obs, b_l5_obs)) {
+                    sd.l5_signal = r_l5_obs->signal;
+                    sd.l5_frequency_hz = signalFrequencyHz(sd.l5_signal, eph);
+                    sd.l5_wavelength = signalWavelengthMeters(sd.l5_signal, eph);
+                    if (sd.l5_wavelength > 0.0) {
+                        sd.rover_l5_phase = r_l5_obs->carrier_phase;
+                        sd.rover_l5_code = r_l5_obs->pseudorange;
+                        sd.base_l5_phase = b_l5_obs->carrier_phase;
+                        sd.base_l5_code = b_l5_obs->pseudorange;
+                        sd.rover_l5_doppler = r_l5_obs->doppler;
+                        sd.base_l5_doppler = b_l5_obs->doppler;
+                        sd.rover_l5_snr = r_l5_obs->snr;
+                        sd.base_l5_snr = b_l5_obs->snr;
+                        sd.has_l5 = true;
+                        sd.l5_lli = r_l5_obs->lli | b_l5_obs->lli;
+                        sd.has_l5_doppler = r_l5_obs->has_doppler && b_l5_obs->has_doppler;
+                    }
+                }
+            }
+        }
         result[sat] = sd;
     }
     return result;
@@ -660,8 +738,10 @@ std::vector<rtk_selection::SatelliteSelectionData> RTKProcessor::buildSelectionS
         item.satellite = sat;
         item.has_l1 = sd.has_l1;
         item.has_l2 = sd.has_l2;
+        item.has_l5 = sd.has_l5;  // Phase 18 Step 4
         item.l1_wavelength = sd.l1_wavelength;
         item.l2_wavelength = sd.l2_wavelength;
+        item.l5_wavelength = sd.l5_wavelength;  // Phase 18 Step 4
         item.elevation = sd.elevation;
         auto n1_it = filter_state_.n1_indices.find(sat);
         item.n1_active = n1_it != filter_state_.n1_indices.end() &&
@@ -669,10 +749,15 @@ std::vector<rtk_selection::SatelliteSelectionData> RTKProcessor::buildSelectionS
         auto n2_it = filter_state_.n2_indices.find(sat);
         item.n2_active = n2_it != filter_state_.n2_indices.end() &&
                          filter_state_.state(n2_it->second) != 0.0;
+        auto n5_it = filter_state_.n5_indices.find(sat);
+        item.n5_active = n5_it != filter_state_.n5_indices.end() &&
+                         filter_state_.state(n5_it->second) != 0.0;
         auto l1_it = lock_count_l1_.find(sat);
         item.lock_count_l1 = l1_it != lock_count_l1_.end() ? l1_it->second : 0;
         auto l2_it = lock_count_l2_.find(sat);
         item.lock_count_l2 = l2_it != lock_count_l2_.end() ? l2_it->second : 0;
+        auto l5_it = lock_count_l5_.find(sat);
+        item.lock_count_l5 = l5_it != lock_count_l5_.end() ? l5_it->second : 0;
         snapshot.push_back(item);
     }
     return snapshot;
@@ -692,21 +777,15 @@ std::vector<RTKProcessor::DDPair> RTKProcessor::buildDoubleDifferencePairs(
             min_lock_count,
             requiresMatchedCarrierWavelength(rtk_config_, system));
         for (const auto& pair : system_pairs) {
-            if (pair.freq == 0) {
-                auto ref_idx = filter_state_.n1_indices.find(pair.ref_sat);
-                auto sat_idx = filter_state_.n1_indices.find(pair.sat);
-                if (ref_idx == filter_state_.n1_indices.end() || sat_idx == filter_state_.n1_indices.end()) {
-                    continue;
-                }
-                dd_pairs.push_back({pair.ref_sat, ref_idx->second, sat_idx->second, pair.sat, pair.freq});
-            } else {
-                auto ref_idx = filter_state_.n2_indices.find(pair.ref_sat);
-                auto sat_idx = filter_state_.n2_indices.find(pair.sat);
-                if (ref_idx == filter_state_.n2_indices.end() || sat_idx == filter_state_.n2_indices.end()) {
-                    continue;
-                }
-                dd_pairs.push_back({pair.ref_sat, ref_idx->second, sat_idx->second, pair.sat, pair.freq});
+            const auto& indices = (pair.freq == 0) ? filter_state_.n1_indices :
+                                  (pair.freq == 1) ? filter_state_.n2_indices :
+                                                     filter_state_.n5_indices;  // Phase 18 Step 4
+            auto ref_idx = indices.find(pair.ref_sat);
+            auto sat_idx = indices.find(pair.sat);
+            if (ref_idx == indices.end() || sat_idx == indices.end()) {
+                continue;
             }
+            dd_pairs.push_back({pair.ref_sat, ref_idx->second, sat_idx->second, pair.sat, pair.freq});
         }
     }
 
@@ -724,11 +803,14 @@ bool RTKProcessor::initializeFilter(const ObservationData& rover_obs,
     filter_state_.iono_indices.clear();
     filter_state_.n1_indices.clear();
     filter_state_.n2_indices.clear();
+    filter_state_.n5_indices.clear();  // Phase 18 Step 2: clear L5 index map on filter init
     filter_state_.next_state_idx = REAL_STATES + IONO_STATES;
 
     auto spp = spp_processor_.processEpoch(rover_obs, nav);
     Vector3d rover_pos;
-    if (spp.isValid()) {
+    if (rtk_config_.prefer_rover_position_seed && rover_obs.receiver_position.norm() > 1e6) {
+        rover_pos = rover_obs.receiver_position;
+    } else if (spp.isValid()) {
         rover_pos = spp.position_ecef;
     } else if (rover_obs.receiver_position.norm() > 1e6) {
         rover_pos = rover_obs.receiver_position;
@@ -783,11 +865,15 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
         removeSatelliteFromState(sat);
         lock_count_l1_.erase(sat);
         lock_count_l2_.erase(sat);
+        lock_count_l5_.erase(sat);  // Phase 18 Step 2: erase L5 lock count when sat dropped
         gf_l1l2_history_.erase(sat);
+        gf_l1l5_history_.erase(sat);  // Phase 18 Step 5
         doppler_phase_history_l1_m_.erase(sat);
         doppler_phase_history_l2_m_.erase(sat);
+        doppler_phase_history_l5_m_.erase(sat);  // Phase 18 Step 5
         code_phase_history_l1_m_.erase(sat);
         code_phase_history_l2_m_.erase(sat);
+        code_phase_history_l5_m_.erase(sat);  // Phase 18 Step 5
     }
 
     const bool dynamic_slip_floor_candidate =
@@ -817,6 +903,7 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
     }
 
     std::set<SatelliteId> gf_slips;
+    std::set<SatelliteId> gf_slips_l1l5;  // Phase 18 Step 5
     if (rtk_config_.enable_cycle_slip_detection) {
         const double gf_slip_threshold =
             apply_dynamic_slip_floor
@@ -833,11 +920,29 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
             }
             gf_l1l2_history_[sat] = gf;
         }
+        if (rtk_config_.enable_l5) {
+            // Phase 18 Step 5: parallel GF L1-L5 detector. Same threshold as L1-L2 since both
+            // are dual-carrier ionosphere-free residuals — slip on either L1 or L5 carrier
+            // appears as a multi-cycle jump in the GF combination.
+            for (const auto& [sat, sd] : sat_data) {
+                if (!sd.has_l1 || !sd.has_l5 || sd.l1_wavelength <= 0.0 || sd.l5_wavelength <= 0.0) continue;
+                double gf15 = (sd.rover_l1_phase - sd.base_l1_phase) * sd.l1_wavelength -
+                              (sd.rover_l5_phase - sd.base_l5_phase) * sd.l5_wavelength;
+                auto prev_it = gf_l1l5_history_.find(sat);
+                if (prev_it != gf_l1l5_history_.end() &&
+                    std::abs(gf15 - prev_it->second) > gf_slip_threshold) {
+                    gf_slips_l1l5.insert(sat);
+                }
+                gf_l1l5_history_[sat] = gf15;
+            }
+        }
     }
     debug_telemetry_.gf_slip_count = static_cast<int>(gf_slips.size());
+    debug_telemetry_.gf_slip_l1l5_count = static_cast<int>(gf_slips_l1l5.size());
 
     std::set<SatelliteId> doppler_slips_l1;
     std::set<SatelliteId> doppler_slips_l2;
+    std::set<SatelliteId> doppler_slips_l5;  // Phase 18 Step 5
     if (rtk_config_.enable_doppler_slip_detection &&
         std::isfinite(dt_s) &&
         dt_s > 0.0 &&
@@ -883,13 +988,35 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
                 }
                 doppler_phase_history_l2_m_[sat] = sd_phase_m;
             }
+            // Phase 18 Step 5: doppler-based slip detection on L5.
+            if (rtk_config_.enable_l5 &&
+                sd.has_l5 && sd.has_l5_doppler && sd.l5_wavelength > 0.0) {
+                const double sd_phase_m =
+                    (sd.rover_l5_phase - sd.base_l5_phase) * sd.l5_wavelength;
+                const double sd_range_rate_mps =
+                    rtk_slip_detection::singleDifferenceRangeRateMps(
+                        sd.rover_l5_doppler, sd.base_l5_doppler, sd.l5_wavelength);
+                auto previous = doppler_phase_history_l5_m_.find(sat);
+                if (previous != doppler_phase_history_l5_m_.end() &&
+                    rtk_slip_detection::detectDopplerSlip(
+                        previous->second,
+                        sd_phase_m,
+                        sd_range_rate_mps,
+                        dt_s,
+                        doppler_slip_threshold)) {
+                    doppler_slips_l5.insert(sat);
+                }
+                doppler_phase_history_l5_m_[sat] = sd_phase_m;
+            }
         }
     }
     debug_telemetry_.doppler_slip_l1_count = static_cast<int>(doppler_slips_l1.size());
     debug_telemetry_.doppler_slip_l2_count = static_cast<int>(doppler_slips_l2.size());
+    debug_telemetry_.doppler_slip_l5_count = static_cast<int>(doppler_slips_l5.size());
 
     std::set<SatelliteId> code_slips_l1;
     std::set<SatelliteId> code_slips_l2;
+    std::set<SatelliteId> code_slips_l5;  // Phase 18 Step 5
     if (rtk_config_.enable_code_slip_detection) {
         const double code_slip_threshold =
             apply_dynamic_slip_floor
@@ -932,32 +1059,88 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
                 }
                 code_phase_history_l2_m_[sat] = code_minus_phase_m;
             }
+            // Phase 18 Step 5: code-minus-phase slip detection on L5.
+            if (rtk_config_.enable_l5 && sd.has_l5 && sd.l5_wavelength > 0.0) {
+                const double code_minus_phase_m =
+                    rtk_slip_detection::singleDifferenceCodeMinusPhaseM(
+                        sd.rover_l5_code,
+                        sd.base_l5_code,
+                        sd.rover_l5_phase,
+                        sd.base_l5_phase,
+                        sd.l5_wavelength);
+                auto previous = code_phase_history_l5_m_.find(sat);
+                if (previous != code_phase_history_l5_m_.end() &&
+                    rtk_slip_detection::detectCodeSlip(
+                        previous->second,
+                        code_minus_phase_m,
+                        code_slip_threshold)) {
+                    code_slips_l5.insert(sat);
+                }
+                code_phase_history_l5_m_[sat] = code_minus_phase_m;
+            }
         }
     }
     debug_telemetry_.code_slip_l1_count = static_cast<int>(code_slips_l1.size());
     debug_telemetry_.code_slip_l2_count = static_cast<int>(code_slips_l2.size());
+    debug_telemetry_.code_slip_l5_count = static_cast<int>(code_slips_l5.size());
 
-    for (int freq = 0; freq < 2; ++freq) {
-        auto& indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
-        auto& lock_counts = (freq == 0) ? lock_count_l1_ : lock_count_l2_;
+    // Phase 18 Step 4: extend freq loop from {L1, L2} to {L1, L2, L5} when enable_l5.
+    // Per-frequency accessors abstract over the SatelliteData layout differences.
+    auto has_freq_signal = [](const SatelliteData& sd, int freq) -> bool {
+        return freq == 0 ? sd.has_l1 : (freq == 1 ? sd.has_l2 : sd.has_l5);
+    };
+    auto freq_lli = [](const SatelliteData& sd, int freq) -> int {
+        return freq == 0 ? sd.l1_lli : (freq == 1 ? sd.l2_lli : sd.l5_lli);
+    };
+    auto freq_wavelength = [](const SatelliteData& sd, int freq) -> double {
+        return freq == 0 ? sd.l1_wavelength : (freq == 1 ? sd.l2_wavelength : sd.l5_wavelength);
+    };
+    auto freq_phase_diff = [](const SatelliteData& sd, int freq) -> double {
+        if (freq == 0) return sd.rover_l1_phase - sd.base_l1_phase;
+        if (freq == 1) return sd.rover_l2_phase - sd.base_l2_phase;
+        return sd.rover_l5_phase - sd.base_l5_phase;
+    };
+    auto freq_code_diff = [](const SatelliteData& sd, int freq) -> double {
+        if (freq == 0) return sd.rover_l1_code - sd.base_l1_code;
+        if (freq == 1) return sd.rover_l2_code - sd.base_l2_code;
+        return sd.rover_l5_code - sd.base_l5_code;
+    };
+    const int max_freq = rtk_config_.enable_l5 ? 3 : 2;
+    for (int freq = 0; freq < max_freq; ++freq) {
+        auto& indices = (freq == 0) ? filter_state_.n1_indices :
+                        (freq == 1) ? filter_state_.n2_indices : filter_state_.n5_indices;
+        auto& lock_counts = (freq == 0) ? lock_count_l1_ :
+                            (freq == 1) ? lock_count_l2_ : lock_count_l5_;
         int lli_slip_count = 0;
         int ambiguity_reset_count = 0;
 
         // Detect cycle slips and reset
         for (const auto& [sat, sd] : sat_data) {
-            bool has_freq = (freq == 0) ? sd.has_l1 : sd.has_l2;
-            if (!has_freq) continue;
-            int lli = (freq == 0) ? sd.l1_lli : sd.l2_lli;
+            if (!has_freq_signal(sd, freq)) continue;
+            int lli = freq_lli(sd, freq);
             const bool lli_slip = (lli & 0x01) != 0;
             if (lli_slip) {
                 lli_slip_count++;
             }
-            bool slip = lli_slip ||
-                        gf_slips.find(sat) != gf_slips.end() ||
-                        (freq == 0 ? code_slips_l1.find(sat) != code_slips_l1.end()
-                                   : code_slips_l2.find(sat) != code_slips_l2.end()) ||
-                        (freq == 0 ? doppler_slips_l1.find(sat) != doppler_slips_l1.end()
-                                   : doppler_slips_l2.find(sat) != doppler_slips_l2.end());
+            // Phase 18 Step 5: L5 now participates in GF (L1-L5) / doppler-L5 / code-L5 slip checks.
+            bool slip = lli_slip;
+            if (freq == 0) {
+                slip = slip ||
+                       gf_slips.find(sat) != gf_slips.end() ||
+                       gf_slips_l1l5.find(sat) != gf_slips_l1l5.end() ||
+                       code_slips_l1.find(sat) != code_slips_l1.end() ||
+                       doppler_slips_l1.find(sat) != doppler_slips_l1.end();
+            } else if (freq == 1) {
+                slip = slip ||
+                       gf_slips.find(sat) != gf_slips.end() ||
+                       code_slips_l2.find(sat) != code_slips_l2.end() ||
+                       doppler_slips_l2.find(sat) != doppler_slips_l2.end();
+            } else {  // freq == 2 (L5)
+                slip = slip ||
+                       gf_slips_l1l5.find(sat) != gf_slips_l1l5.end() ||
+                       code_slips_l5.find(sat) != code_slips_l5.end() ||
+                       doppler_slips_l5.find(sat) != doppler_slips_l5.end();
+            }
             auto idx_it = indices.find(sat);
             if (idx_it != indices.end() && slip) {
                 ambiguity_reset_count++;
@@ -988,9 +1171,12 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
         if (freq == 0) {
             debug_telemetry_.lli_slip_l1_count = lli_slip_count;
             debug_telemetry_.ambiguity_reset_l1_count = ambiguity_reset_count;
-        } else {
+        } else if (freq == 1) {
             debug_telemetry_.lli_slip_l2_count = lli_slip_count;
             debug_telemetry_.ambiguity_reset_l2_count = ambiguity_reset_count;
+        } else {  // freq == 2 (Phase 18 Step 5)
+            debug_telemetry_.lli_slip_l5_count = lli_slip_count;
+            debug_telemetry_.ambiguity_reset_l5_count = ambiguity_reset_count;
         }
 
         for (GNSSSystem system : kRTKSupportedSystems) {
@@ -1001,17 +1187,11 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
 
             for (const auto& [sat, sd] : sat_data) {
                 if (sat.system != system) continue;
-                bool has_freq = (freq == 0) ? sd.has_l1 : sd.has_l2;
-                const double wavelength = (freq == 0) ? sd.l1_wavelength : sd.l2_wavelength;
-                if (!has_freq || wavelength <= 0.0) continue;
-                double cp, pr;
-                if (freq == 0) {
-                    cp = sd.rover_l1_phase - sd.base_l1_phase;
-                    pr = sd.rover_l1_code - sd.base_l1_code;
-                } else {
-                    cp = sd.rover_l2_phase - sd.base_l2_phase;
-                    pr = sd.rover_l2_code - sd.base_l2_code;
-                }
+                if (!has_freq_signal(sd, freq)) continue;
+                const double wavelength = freq_wavelength(sd, freq);
+                if (wavelength <= 0.0) continue;
+                const double cp = freq_phase_diff(sd, freq);
+                const double pr = freq_code_diff(sd, freq);
                 double b = cp - pr / wavelength;
                 bias[sat] = b;
                 auto idx_it = indices.find(sat);
@@ -1034,7 +1214,8 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
                 auto idx_it = indices.find(sat);
                 if (idx_it != indices.end() && filter_state_.state(idx_it->second) != 0.0) continue;
                 if (freq == 0) getOrCreateN1Index(sat, b);
-                else getOrCreateN2Index(sat, b);
+                else if (freq == 1) getOrCreateN2Index(sat, b);
+                else getOrCreateN5Index(sat, b);
                 lock_counts[sat] = 0;
             }
         }
@@ -1077,6 +1258,7 @@ void RTKProcessor::incrementLockCounts(const std::map<SatelliteId, SatelliteData
     for (const auto& [sat, sd] : sat_data) {
         if (sd.has_l1) lock_count_l1_[sat]++;
         if (sd.has_l2) lock_count_l2_[sat]++;
+        if (sd.has_l5) lock_count_l5_[sat]++;  // Phase 18 Step 4: only set when enable_l5 populated has_l5
     }
 }
 
@@ -1111,6 +1293,11 @@ void RTKProcessor::resetAmbiguityStatesForReacquisition(const ObservationData& r
         filter_state_.covariance(idx, idx) = 900.0;
     }
     for (auto& [sat, idx] : filter_state_.n2_indices) {
+        filter_state_.state(idx) = 0.0;
+        filter_state_.covariance(idx, idx) = 900.0;
+    }
+    // Phase 18 Step 2: reset N5 ambiguities (no-op until n5_indices populated).
+    for (auto& [sat, idx] : filter_state_.n5_indices) {
         filter_state_.state(idx) = 0.0;
         filter_state_.covariance(idx, idx) = 900.0;
     }
@@ -1256,16 +1443,31 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
             rover_pos = base_position_;
         }
     } else {
-        if (spp.isValid()) {
-            rover_pos = spp.position_ecef;
-        } else if (has_last_fixed_position_) {
-            rover_pos = last_fixed_position_;
-        } else if (rover_obs.receiver_position.norm() > 1e6) {
-            rover_pos = rover_obs.receiver_position;
-        } else if (has_last_solution_position_) {
-            rover_pos = last_solution_position_;
-        } else {
-            rover_pos = base_position_;
+        bool seeded = false;
+        if (rtk_config_.prefer_trusted_position_seed &&
+            has_last_trusted_position_ && has_last_trusted_time_) {
+            const double dt = rover_obs.time - last_trusted_time_;
+            if (std::isfinite(dt) && dt >= 0.0 && dt <= 1.0) {
+                rover_pos = last_trusted_position_;
+                var_pos = std::max(25.0, std::pow(3.0 * std::max(dt, 0.2), 2.0));
+                seeded = true;
+            }
+        }
+        if (!seeded) {
+            if (rtk_config_.prefer_rover_position_seed &&
+                rover_obs.receiver_position.norm() > 1e6) {
+                rover_pos = rover_obs.receiver_position;
+            } else if (spp.isValid()) {
+                rover_pos = spp.position_ecef;
+            } else if (has_last_fixed_position_) {
+                rover_pos = last_fixed_position_;
+            } else if (rover_obs.receiver_position.norm() > 1e6) {
+                rover_pos = rover_obs.receiver_position;
+            } else if (has_last_solution_position_) {
+                rover_pos = last_solution_position_;
+            } else {
+                rover_pos = base_position_;
+            }
         }
     }
     Vector3d baseline = rover_pos - base_position_;
@@ -1770,9 +1972,30 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                               tropModel(base_position_, ref_sd.base_elevation);
         const Vector3d los_ref = (ref_sd.sat_pos - rover_pos).normalized();
         auto signal_snr_dbhz = [](const SatelliteData& sd, int freq) {
-            return freq == 0
-                ? combinedSnrDbHz(sd.rover_l1_snr, sd.base_l1_snr)
-                : combinedSnrDbHz(sd.rover_l2_snr, sd.base_l2_snr);
+            if (freq == 0) return combinedSnrDbHz(sd.rover_l1_snr, sd.base_l1_snr);
+            if (freq == 1) return combinedSnrDbHz(sd.rover_l2_snr, sd.base_l2_snr);
+            return combinedSnrDbHz(sd.rover_l5_snr, sd.base_l5_snr);  // Phase 18 Step 4
+        };
+        // Phase 18 Step 4: per-frequency accessors (parallel to updateBias). freq=2 returns L5.
+        auto freq_wavelength_local = [](const SatelliteData& sd, int freq) -> double {
+            if (freq == 0) return sd.l1_wavelength;
+            if (freq == 1) return sd.l2_wavelength;
+            return sd.l5_wavelength;
+        };
+        auto freq_frequency_hz_local = [](const SatelliteData& sd, int freq) -> double {
+            if (freq == 0) return sd.l1_frequency_hz;
+            if (freq == 1) return sd.l2_frequency_hz;
+            return sd.l5_frequency_hz;
+        };
+        auto freq_phase_diff_local = [](const SatelliteData& sd, int freq) -> double {
+            if (freq == 0) return sd.rover_l1_phase - sd.base_l1_phase;
+            if (freq == 1) return sd.rover_l2_phase - sd.base_l2_phase;
+            return sd.rover_l5_phase - sd.base_l5_phase;
+        };
+        auto freq_code_diff_local = [](const SatelliteData& sd, int freq) -> double {
+            if (freq == 0) return sd.rover_l1_code - sd.base_l1_code;
+            if (freq == 1) return sd.rover_l2_code - sd.base_l2_code;
+            return sd.rover_l5_code - sd.base_l5_code;
         };
 
         auto append_frequency_blocks = [&](int freq) {
@@ -1782,7 +2005,9 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
             rtk_measurement::MeasurementBlock code_block;
             code_block.kind = rtk_measurement::MeasurementKind::CODE;
             code_block.frequency_index = freq;
-            const auto& ref_indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
+            const auto& ref_indices = (freq == 0) ? filter_state_.n1_indices :
+                                      (freq == 1) ? filter_state_.n2_indices :
+                                                    filter_state_.n5_indices;
             auto ref_state_it = ref_indices.find(ref_sat);
             if (ref_state_it == ref_indices.end()) {
                 blocks.push_back(std::move(phase_block));
@@ -1790,7 +2015,7 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 return;
             }
 
-            const double ref_wavelength = (freq == 0) ? ref_sd.l1_wavelength : ref_sd.l2_wavelength;
+            const double ref_wavelength = freq_wavelength_local(ref_sd, freq);
             if (ref_wavelength <= 0.0) {
                 blocks.push_back(std::move(phase_block));
                 blocks.push_back(std::move(code_block));
@@ -1803,7 +2028,7 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                     ? ionoFrequencyScale(
                           freq,
                           ref_sd.l1_frequency_hz,
-                          (freq == 0) ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz)
+                          freq_frequency_hz_local(ref_sd, freq))
                     : 0.0;
             if (estimate_iono && filter_state_.covariance(ref_iono_idx, ref_iono_idx) <= 0.0) {
                 blocks.push_back(std::move(phase_block));
@@ -1820,11 +2045,13 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 if (sat_it == sat_data.end()) continue;
                 const auto& sat = pair.sat;
                 const auto& sd = sat_it->second;
-                const auto& sat_indices = (freq == 0) ? filter_state_.n1_indices : filter_state_.n2_indices;
+                const auto& sat_indices = (freq == 0) ? filter_state_.n1_indices :
+                                          (freq == 1) ? filter_state_.n2_indices :
+                                                        filter_state_.n5_indices;
                 auto sat_state_it = sat_indices.find(sat);
                 if (sat_state_it == sat_indices.end()) continue;
 
-                const double sat_wavelength = (freq == 0) ? sd.l1_wavelength : sd.l2_wavelength;
+                const double sat_wavelength = freq_wavelength_local(sd, freq);
                 if (sat_wavelength <= 0.0) continue;
                 const double sat_snr = signal_snr_dbhz(sd, freq);
                 const double sat_phase_variance = varerr(sd.elevation, true, sat_snr);
@@ -1835,7 +2062,7 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                         ? ionoFrequencyScale(
                               freq,
                               sd.l1_frequency_hz,
-                              (freq == 0) ? sd.l1_frequency_hz : sd.l2_frequency_hz)
+                              freq_frequency_hz_local(sd, freq))
                         : 0.0;
                 if (estimate_iono &&
                     filter_state_.covariance(sat_iono_idx, sat_iono_idx) <= 0.0) {
@@ -1851,14 +2078,11 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                     estimate_iono ? filter_state_.state(ref_iono_idx) : 0.0;
                 const double sat_iono_state =
                     estimate_iono ? filter_state_.state(sat_iono_idx) : 0.0;
-                const double ref_phase = (freq == 0) ? ref_sd.rover_l1_phase - ref_sd.base_l1_phase
-                                                     : ref_sd.rover_l2_phase - ref_sd.base_l2_phase;
-                const double sat_phase = (freq == 0) ? sd.rover_l1_phase - sd.base_l1_phase
-                                                     : sd.rover_l2_phase - sd.base_l2_phase;
-                const double ref_code = (freq == 0) ? ref_sd.rover_l1_code - ref_sd.base_l1_code
-                                                    : ref_sd.rover_l2_code - ref_sd.base_l2_code;
-                const double sat_code = (freq == 0) ? sd.rover_l1_code - sd.base_l1_code
-                                                    : sd.rover_l2_code - sd.base_l2_code;
+                const double ref_phase = freq_phase_diff_local(ref_sd, freq);
+                const double sat_phase = freq_phase_diff_local(sd, freq);
+                const double ref_code = freq_code_diff_local(ref_sd, freq);
+                const double sat_code = freq_code_diff_local(sd, freq);
+                // Glonass autocal/ICB only meaningful on L1/L2 (no GLO L5 path); freq==2 → false.
                 const bool autocal_glonass =
                     usesGlonassAutocal(rtk_config_) &&
                     ref_sd.satellite.system == GNSSSystem::GLONASS &&
@@ -1866,16 +2090,16 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                     freq < GLO_HWBIAS_STATES;
                 const double df_mhz =
                     autocal_glonass
-                        ? (((freq == 0) ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz) -
-                           ((freq == 0) ? sd.l1_frequency_hz : sd.l2_frequency_hz)) / 1e6
+                        ? (freq_frequency_hz_local(ref_sd, freq) -
+                           freq_frequency_hz_local(sd, freq)) / 1e6
                         : 0.0;
                 const double glonass_icb =
                     glonassInterChannelBiasMeters(
                         rtk_config_,
                         ref_sd.satellite.system,
                         sd.satellite.system,
-                        (freq == 0) ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz,
-                        (freq == 0) ? sd.l1_frequency_hz : sd.l2_frequency_hz,
+                        freq_frequency_hz_local(ref_sd, freq),
+                        freq_frequency_hz_local(sd, freq),
                         freq);
                 const double phase_iono_term =
                     estimate_iono ?
@@ -1924,6 +2148,9 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
 
         append_frequency_blocks(0);
         append_frequency_blocks(1);
+        if (rtk_config_.enable_l5) {
+            append_frequency_blocks(2);  // Phase 18 Step 4: L5 phase + code DD measurement rows
+        }
     }
 
     return blocks;
@@ -1939,7 +2166,9 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
     const auto update_result = rtk_update::applyMeasurementUpdate(filter_state_.state,
                                                                   filter_state_.covariance,
                                                                   measurement_system,
-                                                                  30.0,
+                                                                  rtk_config_.outlier_threshold > 0.0
+                                                                      ? rtk_config_.outlier_threshold
+                                                                      : 30.0,
                                                                   6,
                                                                   rtk_config_.max_update_nis_per_observation);
     current_update_diagnostics_.observation_count = update_result.observation_count;
@@ -2226,6 +2455,48 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         return std::isfinite(wide_lane_float);
     };
 
+    // Phase 18 Step 6: L1-L5 wide-lane Melbourne-Wübbena combination.
+    // Parallel to the L1-L2 path; uses the dd_pairs entry with freq==2 as the L5 leg.
+    auto compute_wide_lane_l5_float = [&](int l1_index, int l5_index, double& wide_lane_float) {
+        if (l1_index < 0 || l5_index < 0 ||
+            l1_index >= nb || l5_index >= nb ||
+            dd_pairs[l1_index].freq != 0 || dd_pairs[l5_index].freq != 2) {
+            return false;
+        }
+        const auto ref_it = sat_data.find(dd_pairs[l1_index].ref_sat);
+        const auto sat_it = sat_data.find(dd_pairs[l1_index].sat);
+        if (ref_it == sat_data.end() || sat_it == sat_data.end()) {
+            return false;
+        }
+        const auto& ref_sd = ref_it->second;
+        const auto& sd = sat_it->second;
+        if (!ref_sd.has_l1 || !ref_sd.has_l5 || !sd.has_l1 || !sd.has_l5) {
+            return false;
+        }
+
+        const double f1 = ref_sd.l1_frequency_hz;
+        const double f5 = ref_sd.l5_frequency_hz;
+        const double lambda_wl_m = wideLaneWavelength(f1, f5);  // ~0.751 m for GPS L1-L5
+        if (f1 <= 0.0 || f5 <= 0.0 || lambda_wl_m <= 0.0) {
+            return false;
+        }
+
+        auto single_difference_wide_lane_l5 = [&](const SatelliteData& data) {
+            const double phi1_m =
+                (data.rover_l1_phase - data.base_l1_phase) * data.l1_wavelength;
+            const double phi5_m =
+                (data.rover_l5_phase - data.base_l5_phase) * data.l5_wavelength;
+            const double code_term =
+                (f1 * (data.rover_l1_code - data.base_l1_code) +
+                 f5 * (data.rover_l5_code - data.base_l5_code)) / (f1 + f5);
+            return ((f1 * phi1_m - f5 * phi5_m) / (f1 - f5) - code_term) / lambda_wl_m;
+        };
+
+        wide_lane_float = single_difference_wide_lane_l5(ref_sd) -
+                          single_difference_wide_lane_l5(sd);
+        return std::isfinite(wide_lane_float);
+    };
+
     if (rtk_config_.enable_wide_lane_ar) {
         const double wide_lane_threshold =
             std::max(0.0, rtk_config_.wide_lane_acceptance_threshold);
@@ -2262,6 +2533,45 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
 
             wide_lane_constraints.push_back({i, l2_pair, fixed_integer});
             wide_lane_fixed++;
+        }
+        // Phase 18 Step 6: parallel L1-L5 wide-lane fixing for sats lacking an L1-L2
+        // pair (or in addition to it). Constraint structure is identical — l2_index
+        // simply now points at a freq=2 dd_pair instead of freq=1.
+        if (rtk_config_.enable_l5) {
+            for (int i = 0; i < nb; ++i) {
+                if (dd_pairs[i].freq != 0 || dd_pairs[i].ref_sat.system == GNSSSystem::GLONASS) {
+                    continue;
+                }
+                int l5_pair = -1;
+                for (int j = 0; j < nb; ++j) {
+                    if (dd_pairs[j].freq == 2 &&
+                        dd_pairs[j].sat == dd_pairs[i].sat &&
+                        dd_pairs[j].ref_sat == dd_pairs[i].ref_sat) {
+                        l5_pair = j;
+                        break;
+                    }
+                }
+                if (l5_pair < 0) {
+                    continue;
+                }
+
+                wide_lane_total++;
+                double wide_lane_float = 0.0;
+                if (!compute_wide_lane_l5_float(i, l5_pair, wide_lane_float)) {
+                    continue;
+                }
+                const double fixed_integer = std::round(wide_lane_float);
+                const double wl_distance = distanceToNearestInteger(wide_lane_float);
+                wide_lane_min_distance = std::min(wide_lane_min_distance, wl_distance);
+                wide_lane_max_distance = std::max(wide_lane_max_distance, wl_distance);
+                if (wl_distance >= wide_lane_threshold) {
+                    wide_lane_rejected++;
+                    continue;
+                }
+
+                wide_lane_constraints.push_back({i, l5_pair, fixed_integer});
+                wide_lane_fixed++;
+            }
         }
         if (wide_lane_total > 0) {
             std::clog << "[RTK-AR] WL fixed " << wide_lane_fixed
