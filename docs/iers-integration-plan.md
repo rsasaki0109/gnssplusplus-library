@@ -239,6 +239,45 @@ flip-default PR is bench evidence only — no live-system risk.
 | The two-iteration leap-second handshake in `gnssTimeToMjdUtc` has a single-iteration approximation that is wrong by up to 30 s on a leap-second day's midnight boundary. | Documented in the wrapper. PPP epochs do not sit on leap-second-midnight boundaries in the truth-bench data; if this becomes a concern (real-time on a leap-second day), promote `gnssTimeToMjdUtc` to a true Newton iteration. |
 | Truth-bench shows regression on a specific run. | Default-off opt-in means no production impact. Investigate bench specifics (which metric, which epochs) before flipping default. |
 
+## 6.1. End-to-end truth bench (Phase A-D rollup)
+
+The per-effect bench harnesses (#57 / #63 / #65 / #66 / #68 / #75
+/ #76) all measure the per-epoch DELTA between an IERS-on and an
+IERS-off arm of `gnss_ppp`. They confirm each model is doing what
+it should (sub-cm pole tide, sub-mas sub-daily-EOP, sub-mm
+atmospheric tidal loading), but they do not say whether the
+INTEGRATED stack actually delivers a better absolute position
+against an external reference.
+
+`apps/gnss_ppp_iers_truth_bench.py` and
+`apps/gnss_ppp_iers_truth_multisite_bench.py` close that loop:
+they run `gnss_ppp` with all IERS defaults ON, take the converged
+static-mode tail of the .pos solution, and compare it to the
+RINEX OBS header's `APPROX POSITION XYZ` (which IGS stations
+keep at the published ITRF coordinate). With `--ab`, a matching
+all-IERS-OFF arm is run and the residual delta reported per site.
+
+On TSKB + GRAZ at 2026-04-15 (DOY 105, 1500-epoch caps,
+`--converged-tail-epochs 600`, IGS final SP3 + CLK from BKG
+mirror, `finals2000A.daily` for EOP):
+
+  - **TSKB**: IERS-on residual 3D = 2.975 m (h = 2.91 m,
+    v = 0.62 m); IERS-off 3D = 2.978 m. Delta off−on = +2.9 mm
+    (IERS-on closer).
+  - **GRAZ**: IERS-on residual 3D = 2.370 m (h = 0.79 m,
+    v = 2.24 m); IERS-off 3D = 2.374 m. Delta off−on = +4.0 mm
+    (IERS-on closer).
+
+IERS-on wins at both sites with mm-level improvement — the same
+order as the per-effect deltas — so the IERS stack is faithful
+end-to-end. The meter-scale absolute residual is a separate
+system finding: with the current `BRDC` + `IGS final` + no
+IONEX / no DCB setup, PPP_FLOAT converges to a position offset
+by ~2-3 m from truth, dominated by orbit / clock / atm modeling
+issues outside the IERS scope. Closing that gap (DCB ingestion,
+PPP-AR, longer convergence, mixed-product handling) is a
+separate workstream.
+
 ## 7. Out-of-band follow-ups (separate scope)
 
 These are tracked here for context but are independent work that
