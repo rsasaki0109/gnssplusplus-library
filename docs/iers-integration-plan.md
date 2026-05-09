@@ -313,6 +313,15 @@ does not block Phase C:
   (S1 = 0.8 mm radial, S2 = 0.4 mm radial), the PPP estimate
   shifts by mean −10.6 µm / RMS 106 µm in Z. Default off pending
   real TU Wien per-site coefficients.
+
+  Phase D-3 also includes `apps/gnss_ppp_iers_atm_tidal_loading_bench.py`
+  (mirroring the pole-tide harness from Phase D-1): a paired-PPP
+  driver that runs `gnss_ppp` with and without the ATL flag and
+  emits per-epoch displacement statistics. On TSKB 2026-04-15 with
+  the synthetic ATL fixture the bench reports max = 0.90 mm,
+  p95 = 0.36 mm, median = 0.17 mm, per-component median dz = −50 µm
+  — within the IERS §7.1.5 expected sub-cm envelope at mid-latitudes
+  during normal pressure conditions.
 - **`icrsToItrs` consumers**: when satellite-side processing
   (LEO orbits, external SP3 ingestion in non-ECEF frames, attitude
   for satellite antenna PCO/PCV) is wired up, the wrapper is
