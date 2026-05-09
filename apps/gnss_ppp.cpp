@@ -53,7 +53,7 @@ struct Options {
     double ar_ratio_threshold = 3.0;
     bool use_iers_solid_tide = false;
     std::string eop_c04_file;
-    bool use_iers_pole_tide = false;
+    bool use_iers_pole_tide = true;
     bool use_iers_sub_daily_eop = false;
     std::string atm_tidal_loading_file;
     bool use_iers_atm_tidal_loading = false;
@@ -136,10 +136,11 @@ void printUsage(const char* program_name) {
         << "  --eop-bulletin-a <file>  Alias for --eop-c04 (the auto-detector accepts both formats\n"
         << "                          via either flag; this alias clarifies intent at the call site).\n"
         << "  --use-iers-pole-tide     Apply the IERS Conventions 2010 §7.1.4 pole-tide station\n"
-        << "                          displacement (Phase D-1). Requires --eop-c04 to be set;\n"
+        << "                          displacement (default). Requires --eop-c04 to be set;\n"
         << "                          otherwise the displacement is silently skipped because\n"
-        << "                          xp/yp are unknown. Opt-in pending truth-bench validation.\n"
-        << "  --no-iers-pole-tide      Skip the pole-tide model (default)\n"
+        << "                          xp/yp are unknown. Multi-site bench (PR #69) shows median\n"
+        << "                          0.4 mm at mid-latitudes, well within IERS sub-cm envelope.\n"
+        << "  --no-iers-pole-tide      Skip the pole-tide model (escape hatch).\n"
         << "  --use-iers-sub-daily-eop Apply the IERS Conventions 2010 §5.5.1.1 + §8.2 sub-daily\n"
         << "                          EOP corrections (Phase D-2): libration of CIP (Tables 5.1a/b)\n"
         << "                          and ocean-tide EOP corrections (Table 8.2, Eanes-Ray model).\n"
