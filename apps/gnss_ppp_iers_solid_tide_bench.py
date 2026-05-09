@@ -170,13 +170,24 @@ def summarize(legacy_pos: Path, iers_pos: Path) -> dict:
     iers = {epoch_key(r): r for r in read_pos_records(iers_pos)}
     matched_keys = sorted(set(legacy) & set(iers))
 
+    # Per-epoch ECEF displacement magnitude (legacy -> iers).
     displacements_m: list[float] = []
+    # Per-component signed deltas. The IERS Step-1+Step-2 model differs
+    # from the legacy Step-1-only model by a slowly-varying tidal bias,
+    # which shows up most clearly as the *median* per-component
+    # displacement (insensitive to per-epoch Kalman noise).
+    dx_m: list[float] = []
+    dy_m: list[float] = []
+    dz_m: list[float] = []
     for key in matched_keys:
         l = legacy[key]
         i = iers[key]
         dx = float(i["x"]) - float(l["x"])
         dy = float(i["y"]) - float(l["y"])
         dz = float(i["z"]) - float(l["z"])
+        dx_m.append(dx)
+        dy_m.append(dy)
+        dz_m.append(dz)
         displacements_m.append(math.sqrt(dx * dx + dy * dy + dz * dz))
 
     summary = {
@@ -192,7 +203,32 @@ def summarize(legacy_pos: Path, iers_pos: Path) -> dict:
             "mean_displacement_m": statistics.fmean(displacements_m),
             "median_displacement_m": statistics.median(displacements_m),
             "p95_displacement_m": sorted_d[int(0.95 * (len(sorted_d) - 1))],
+            # First matched epoch is the best estimate of the
+            # tide-only contribution: the Kalman filter has not yet
+            # had time to integrate any divergence between the two
+            # paths, so the displacement here reflects the immediate
+            # effect of swapping tide models on the receiver position.
+            "first_epoch_displacement_m": displacements_m[0],
+            # Per-component median deltas. The expected solid-earth-
+            # tide bias scale is ~1 cm radial, ~mm horizontal. If the
+            # |median| component values are at this scale and the
+            # aggregate magnitudes (max / p95 above) are much larger,
+            # the run is being dominated by Kalman trajectory noise
+            # rather than the tide model — a sign that the precise
+            # products are not accurate enough or that the dataset
+            # never converged. Use first_epoch_displacement_m and
+            # the medians as the trustworthy signals in that case.
+            "median_dx_m": statistics.median(dx_m),
+            "median_dy_m": statistics.median(dy_m),
+            "median_dz_m": statistics.median(dz_m),
         })
+        # Health flag: an order-of-magnitude gap between
+        # first-epoch and aggregate signals usually means
+        # the trajectory has diverged faster than the tide
+        # signal can be measured.
+        if displacements_m[0] > 1e-9:
+            summary["aggregate_to_first_epoch_ratio"] = (
+                sorted_d[-1] / displacements_m[0])
     return summary
 
 
