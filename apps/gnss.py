@@ -269,6 +269,16 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_ppp_iers_pole_tide_multisite_bench.py"),
         "summary": "Run the Phase D-1 pole-tide bench across an arbitrary list of IGS stations and emit an aggregate per-site distribution summary (gates the use_iers_pole_tide flip-default).",
     },
+    "ppp-iers-sub-daily-eop-bench": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_sub_daily_eop_bench.py"),
+        "summary": "Run the same PPP setup with and without --use-iers-sub-daily-eop (pole-tide ON in both runs) and summarize the per-epoch displacement (Phase D-2 truth-bench harness; requires --eop-c04).",
+    },
+    "ppp-iers-sub-daily-eop-multisite-bench": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_sub_daily_eop_multisite_bench.py"),
+        "summary": "Run the Phase D-2 sub-daily-EOP bench across an arbitrary list of IGS stations and emit an aggregate per-site distribution summary.",
+    },
     "ppp-iers-ocean-loading-bench": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_ppp_iers_ocean_loading_bench.py"),

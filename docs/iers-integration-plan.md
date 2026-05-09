@@ -345,6 +345,19 @@ does not block Phase C:
   produce sub-µm-level RMS effects on the receiver position;
   inert without an EOP table loaded. `--no-iers-sub-daily-eop` is
   a permanent escape hatch.
+
+  Phase D-2 also includes a paired-PPP single-site bench
+  `apps/gnss_ppp_iers_sub_daily_eop_bench.py` and a multi-site
+  driver `apps/gnss_ppp_iers_sub_daily_eop_multisite_bench.py`
+  (mirroring the pole-tide harnesses from Phase D-1). Both keep
+  `--use-iers-pole-tide` enabled in both runs and toggle only
+  `--use-iers-sub-daily-eop`, so the reported displacement is the
+  isolated sub-daily-harmonic contribution on top of the
+  daily-interpolated pole tide. On TSKB and GRAZ at 2026-04-15
+  (DOY 105, 600-epoch caps) the multi-site bench reports max =
+  4.1 / 5.1 µm, median = 2.4 / 2.8 µm, p95 = 3.5 / 5.1 µm — sub-µm
+  to single-µm, matching the documented sub-mas xp/yp wobble at
+  ~1/100-of-pole-tide amplitude.
 - **Phase D-3** *(in progress)*: Atmospheric tidal loading (IERS
   Conventions 2010 §7.1.5) opt-in. Adds
   `libgnss::iers::atmosphericTidalLoadingDisplacement` and the
