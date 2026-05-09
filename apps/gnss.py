@@ -254,6 +254,11 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_ppp_iers_solid_tide_bench.py"),
         "summary": "Run the same PPP setup with and without --use-iers-solid-tide and summarize the per-epoch displacement (Phase C-1 truth-bench harness).",
     },
+    "ppp-iers-pole-tide-bench": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_pole_tide_bench.py"),
+        "summary": "Run the same PPP setup with and without --use-iers-pole-tide and summarize the per-epoch displacement (Phase D-1 truth-bench harness; requires --eop-c04).",
+    },
     "ppp-products-signoff": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_ppp_products_signoff.py"),

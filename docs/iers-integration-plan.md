@@ -263,6 +263,16 @@ does not block Phase C:
   raw displacement is ~1.3 mm; the PPP estimate shifts by ~0.2 mm
   in Z after the static-mode KF integrates across the arc. Default
   off pending a real-data truth-bench validation cycle.
+
+  Phase D-1 also includes `apps/gnss_ppp_iers_pole_tide_bench.py`
+  (mirroring the solid-tide harness from Phase C-1): a paired-PPP
+  driver that runs `gnss_ppp` with and without the pole-tide flag
+  and emits per-epoch displacement statistics (max / p95 / median,
+  per-component medians, aggregate-to-first-epoch ratio). On TSKB
+  2026-04-15 the bench reports max = 0.95 mm, median = 0.41 mm,
+  per-component median dz = −0.21 mm — within the IERS §7.1.4
+  expected sub-cm envelope at mid-latitudes during normal polar
+  motion.
 - **Phase D-2**: Sub-daily EOP corrections (IERS §8.2). Shares the
   D-0 scaffold.
 - **Phase D-3**: Atmospheric loading. Smaller cm-level effect; needs
