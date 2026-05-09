@@ -2705,6 +2705,9 @@ Vector3d PPPProcessor::applyGeophysicalCorrections(const Vector3d& position,
     if (ppp_config_.apply_ocean_loading) {
         corrected += calculateOceanLoading(position, time);
     }
+    if (ppp_config_.use_iers_pole_tide) {
+        corrected += calculatePoleTide(position, time);
+    }
     return corrected;
 }
 
@@ -2773,6 +2776,22 @@ Vector3d PPPProcessor::calculateOceanLoading(const Vector3d& position,
     ecef2geodetic(position, latitude_rad, longitude_rad, height_m);
     const Vector3d enu_offset(-west_m, -south_m, up_m);
     return enu2ecef(enu_offset, latitude_rad, longitude_rad);
+}
+
+Vector3d PPPProcessor::calculatePoleTide(const Vector3d& position,
+                                         const GNSSTime& time) const {
+    if (!eop_table_ || !position.allFinite() ||
+        position.norm() < constants::WGS84_A * 0.5) {
+        return Vector3d::Zero();
+    }
+    const double mjd_utc = libgnss::iers::gnssTimeToMjdUtc(time);
+    libgnss::iers::EarthOrientationParams eop;
+    try {
+        eop = eop_table_->interpolateAt(mjd_utc);
+    } catch (const std::out_of_range&) {
+        return Vector3d::Zero();
+    }
+    return libgnss::iers::poleTideDisplacement(mjd_utc, position, eop);
 }
 
 PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(

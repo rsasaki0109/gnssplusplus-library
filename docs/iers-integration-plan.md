@@ -253,9 +253,16 @@ does not block Phase C:
   the table yet — D-0 is a strictly additive scaffold for D-1+
   (pole tide and sub-daily EOP). Output is bit-identical to the
   no-EOP baseline.
-- **Phase D-1**: Pole tide (IERS Conventions 2010 §7.1.4). Closed-form
-  ~30 LOC, but requires the D-0 scaffold so per-epoch xp/yp/UT1-UTC
-  are available.
+- **Phase D-1** *(in progress)*: Pole tide (IERS Conventions 2010
+  §7.1.4) opt-in. Adds `libgnss::iers::poleTideDisplacement` (post-2018
+  IERS linear mean-pole secular drift + Sr/Sθ/Sλ Stokes formulation)
+  and `PPPConfig::use_iers_pole_tide` / `--use-iers-pole-tide` CLI
+  flag. Requires the D-0 EOP scaffold; gracefully degrades to a no-op
+  when no EOP table is loaded or the requested epoch is out of
+  coverage. At TSKB on 2026-04-15 (xp ≈ 0.149", yp ≈ 0.414") the
+  raw displacement is ~1.3 mm; the PPP estimate shifts by ~0.2 mm
+  in Z after the static-mode KF integrates across the arc. Default
+  off pending a real-data truth-bench validation cycle.
 - **Phase D-2**: Sub-daily EOP corrections (IERS §8.2). Shares the
   D-0 scaffold.
 - **Phase D-3**: Atmospheric loading. Smaller cm-level effect; needs
