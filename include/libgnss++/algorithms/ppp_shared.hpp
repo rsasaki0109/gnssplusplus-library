@@ -205,6 +205,15 @@ struct PPPConfig {
     // so the receiver-position effect on PPP is sub-mm; flipping this
     // on tightens the modeled CIP location for IERS-conformant work.
     bool use_iers_sub_daily_eop = false;
+    // IERS Conventions 2010 §7.1.5 atmospheric tidal loading (S1/S2)
+    // station displacement (opt-in). Reads per-site amplitude / phase
+    // coefficients from `atm_tidal_loading_path` and adds the diurnal
+    // (S1) + semi-diurnal (S2) atmospheric pressure tide displacement
+    // to the receiver position. Peak ~1 mm radial at mid- and
+    // low-latitudes; sub-mm horizontal. Default off; requires the
+    // coefficient file. Without a loaded file, the path is a no-op.
+    bool use_iers_atm_tidal_loading = false;
+    std::string atm_tidal_loading_path;
     bool apply_relativity = true;
 
     // Convergence criteria
