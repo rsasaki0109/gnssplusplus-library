@@ -15,9 +15,20 @@ set(GINAN_IERS2010_SOURCES
     ch9/fcul_a.cpp
     ch9/fcul_zd_hpa.cpp
     dehanttideinel/dehanttide_all.cpp
+    hardisp/admint.cpp
+    hardisp/eval.cpp
+    hardisp/hardisp_impl.cpp
+    hardisp/recurs.cpp
+    hardisp/shells.cpp
+    hardisp/spline.cpp
+    hardisp/tdfrph.cpp
 )
 
 add_library(ginan_iers2010 STATIC ${GINAN_IERS2010_SOURCES})
+
+# HARDISP needs the vendored SOFA target for its UTC->TT conversion
+# (libgnss++ shim replaces ginan's GTime helpers with iauUtctai/iauTaitt).
+target_link_libraries(ginan_iers2010 PRIVATE sofa)
 
 # Public include path: the vendor root, so consumers can write
 #     #include "iers2010.hpp"

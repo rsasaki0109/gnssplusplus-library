@@ -52,6 +52,7 @@ struct Options {
     bool enable_ar = false;
     double ar_ratio_threshold = 3.0;
     bool use_iers_solid_tide = true;
+    bool use_iers_ocean_loading = false;
     std::string eop_c04_file;
     bool use_iers_pole_tide = true;
     bool use_iers_sub_daily_eop = true;
@@ -124,6 +125,13 @@ void printUsage(const char* program_name) {
         << "                          See docs/iers-integration-plan.md\n"
         << "  --no-iers-solid-tide    Revert to the built-in Step-1-only Love-number\n"
         << "                          approximation (legacy path)\n"
+        << "  --use-iers-ocean-loading\n"
+        << "                          Use the IERS Conventions 2010 (HARDISP) ocean-loading\n"
+        << "                          model from libgnss::iers (spline-interpolated 342-harmonic\n"
+        << "                          admittance) instead of the legacy 11-constituent direct\n"
+        << "                          cosine sum. Requires --blq. Opt-in pending truth-bench\n"
+        << "                          validation. See docs/iers-integration-plan.md\n"
+        << "  --no-iers-ocean-loading Use the legacy 11-constituent direct cosine sum (default)\n"
         << "  --eop-c04 <eop-file>     IERS Earth Orientation Parameter file (daily samples).\n"
         << "                          Format auto-detected: IERS 20 C04 (final values, ~1-week\n"
         << "                          publication lag) or IERS Bulletin A finals2000A.daily\n"
@@ -263,6 +271,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_iers_solid_tide = true;
         } else if (arg == "--no-iers-solid-tide") {
             options.use_iers_solid_tide = false;
+        } else if (arg == "--use-iers-ocean-loading") {
+            options.use_iers_ocean_loading = true;
+        } else if (arg == "--no-iers-ocean-loading") {
+            options.use_iers_ocean_loading = false;
         } else if ((arg == "--eop-c04" || arg == "--eop-bulletin-a")
                    && i + 1 < argc) {
             options.eop_c04_file = argv[++i];
@@ -628,6 +640,7 @@ int main(int argc, char* argv[]) {
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
         ppp_config.use_iers_solid_tide = options.use_iers_solid_tide;
+        ppp_config.use_iers_ocean_loading = options.use_iers_ocean_loading;
         ppp_config.eop_path = options.eop_c04_file;
         ppp_config.use_iers_pole_tide = options.use_iers_pole_tide;
         ppp_config.use_iers_sub_daily_eop = options.use_iers_sub_daily_eop;

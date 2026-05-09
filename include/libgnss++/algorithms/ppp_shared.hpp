@@ -187,6 +187,14 @@ struct PPPConfig {
     // docs/iers-integration-plan.md). Pass --no-iers-solid-tide
     // to revert to the legacy Step-1-only path.
     bool use_iers_solid_tide = true;
+    // When true (and apply_ocean_loading is also true), use the IERS
+    // Conventions 2010 §7.1.2 HARDISP model from
+    // libgnss::iers::oceanLoadingDisplacement (spline-interpolated
+    // 342-harmonic admittance) instead of the simplified
+    // 11-constituent direct cosine sum that uses Unix-epoch as the
+    // astronomical phase reference. Default off; opt-in for safe
+    // rollout pending truth-bench validation.
+    bool use_iers_ocean_loading = false;
     // Optional IERS 20 C04 EOP file path (Phase D-0 scaffolding).
     // When set, PPPProcessor loads the series at construction and
     // exposes per-epoch xp/yp/UT1-UTC via getEarthOrientationParams();

@@ -208,4 +208,37 @@ Eigen::Vector3d atmosphericTidalLoadingDisplacement(
     return d_ecef;
 }
 
+Eigen::Vector3d oceanLoadingDisplacement(
+    double mjd_utc,
+    const OceanLoadingBlq& blq) {
+    // hardisp_impl wants amplitude/phase tables in [3][ntin] form,
+    // BLQ row order: vertical (radial-up), west, south.
+    constexpr int ntin = iers2010::hisp::ntin;
+    static_assert(ntin == 11, "BLQ format expects 11 reference harmonics");
+
+    double tamp[3][ntin];
+    double tph[3][ntin];
+    for (int k = 0; k < ntin; ++k) {
+        tamp[0][k] = blq.radial_amplitudes_m[static_cast<std::size_t>(k)];
+        tamp[1][k] = blq.west_amplitudes_m[static_cast<std::size_t>(k)];
+        tamp[2][k] = blq.south_amplitudes_m[static_cast<std::size_t>(k)];
+        // HARDISP convention: phase is "lag" (negative). Upstream
+        // read_hardisp_args negates the phases on read; we replicate
+        // that here so callers can supply Onsala-style positive
+        // phases as published.
+        tph[0][k] = -blq.radial_phases_deg[static_cast<std::size_t>(k)];
+        tph[1][k] = -blq.west_phases_deg[static_cast<std::size_t>(k)];
+        tph[2][k] = -blq.south_phases_deg[static_cast<std::size_t>(k)];
+    }
+
+    double odu = 0.0;
+    double ods = 0.0;
+    double odw = 0.0;
+    iers2010::hisp::hardisp_impl(
+        /*irnt=*/1, /*samp=*/1.0, tamp, tph, mjd_utc, &odu, &ods, &odw);
+
+    // Returned in (radial_up, west, south) — same as BLQ convention.
+    return Eigen::Vector3d(odu, odw, ods);
+}
+
 }  // namespace libgnss::iers
