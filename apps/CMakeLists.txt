@@ -76,6 +76,7 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_rtk_kinematic_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_static_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_kinematic_signoff.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_iers_solid_tide_bench.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_products_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppc_demo.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppc_commercial.py
