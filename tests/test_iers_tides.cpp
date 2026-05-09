@@ -174,3 +174,66 @@ TEST(IersPoleTide, SignReversesWhenPolarMotionFlips) {
 
     EXPECT_NEAR((disp_p + disp_n).norm(), 0.0, 1e-12);
 }
+
+// --- Atmospheric tidal loading (IERS Conventions 2010 §7.1.5) -------
+
+using libgnss::iers::atmosphericTidalLoadingDisplacement;
+using libgnss::iers::AtmosphericTidalLoadingCoefficients;
+
+TEST(IersAtmTidalLoading, ZeroCoefficientsProduceZeroDisplacement) {
+    AtmosphericTidalLoadingCoefficients coeffs{};
+    auto d = atmosphericTidalLoadingDisplacement(61145.0, kTskbEcef, coeffs);
+    EXPECT_DOUBLE_EQ(d.x(), 0.0);
+    EXPECT_DOUBLE_EQ(d.y(), 0.0);
+    EXPECT_DOUBLE_EQ(d.z(), 0.0);
+}
+
+TEST(IersAtmTidalLoading, MagnitudeIsBoundedForTypicalCoefficients) {
+    // Mid-latitude coastal site representative S1/S2 amplitudes,
+    // peak ~1 mm radial / sub-mm horizontal per IERS §7.1.5.
+    AtmosphericTidalLoadingCoefficients coeffs{};
+    coeffs.radial_amplitudes_m = {0.0008, 0.0004};
+    coeffs.west_amplitudes_m   = {0.0002, 0.0001};
+    coeffs.south_amplitudes_m  = {0.0002, 0.0001};
+    coeffs.radial_phases_deg   = {-30.0, 60.0};
+    coeffs.west_phases_deg     = {-90.0, 0.0};
+    coeffs.south_phases_deg    = {30.0, -45.0};
+
+    auto d = atmosphericTidalLoadingDisplacement(61145.0, kTskbEcef, coeffs);
+    EXPECT_LT(d.norm(), 0.005);  // < 5 mm is generous
+    EXPECT_GT(d.norm(), 1e-6);   // > 1 µm — non-trivial
+}
+
+TEST(IersAtmTidalLoading, S1IsDiurnalAtTwentyFourHourStep) {
+    // With ONLY an S1 amplitude, stepping 24 h should reproduce the
+    // signal exactly (24 h is the S1 period). We check |delta(t) -
+    // delta(t + 24h)| is well below the per-epoch amplitude scale.
+    AtmosphericTidalLoadingCoefficients coeffs{};
+    coeffs.radial_amplitudes_m[0] = 0.0010;  // 1 mm S1 only
+    coeffs.radial_phases_deg[0]   = 45.0;
+
+    auto a = atmosphericTidalLoadingDisplacement(61145.0,        kTskbEcef, coeffs);
+    auto b = atmosphericTidalLoadingDisplacement(61145.0 + 1.0, kTskbEcef, coeffs);
+    EXPECT_NEAR((a - b).norm(), 0.0, 1e-12);
+}
+
+TEST(IersAtmTidalLoading, S2IsSemidiurnalAtTwelveHourStep) {
+    AtmosphericTidalLoadingCoefficients coeffs{};
+    coeffs.radial_amplitudes_m[1] = 0.0010;  // 1 mm S2 only
+    coeffs.radial_phases_deg[1]   = -30.0;
+
+    auto a = atmosphericTidalLoadingDisplacement(61145.0,        kTskbEcef, coeffs);
+    auto b = atmosphericTidalLoadingDisplacement(61145.0 + 0.5, kTskbEcef, coeffs);
+    EXPECT_NEAR((a - b).norm(), 0.0, 1e-12);
+}
+
+TEST(IersAtmTidalLoading, AntiPeriodicAtHalfS1) {
+    // S1-only signal flips sign after half a period (12 h).
+    AtmosphericTidalLoadingCoefficients coeffs{};
+    coeffs.radial_amplitudes_m[0] = 0.0010;
+    coeffs.radial_phases_deg[0]   = 0.0;
+
+    auto a = atmosphericTidalLoadingDisplacement(61145.0,        kTskbEcef, coeffs);
+    auto b = atmosphericTidalLoadingDisplacement(61145.0 + 0.5, kTskbEcef, coeffs);
+    EXPECT_NEAR((a + b).norm(), 0.0, 1e-12);
+}

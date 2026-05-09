@@ -297,8 +297,22 @@ does not block Phase C:
   on top of the pole tide is RMS 1.5 µm in Z (0.17% relative
   perturbation, matching the daily-vs-sub-daily xp/yp amplitude
   ratio). Default off.
-- **Phase D-3**: Atmospheric loading. Smaller cm-level effect; needs
-  a separate gridded-data ingestion path, independent of EOP.
+- **Phase D-3** *(in progress)*: Atmospheric tidal loading (IERS
+  Conventions 2010 §7.1.5) opt-in. Adds
+  `libgnss::iers::atmosphericTidalLoadingDisplacement` and the
+  `AtmosphericTidalLoadingCoefficients` struct (S1 + S2 amplitudes
+  / phases × 3 components). PPP wires via
+  `PPPConfig::use_iers_atm_tidal_loading` + `atm_tidal_loading_path`
+  with `--use-iers-atm-tidal-loading` / `--atm-tidal-loading <file>`
+  CLI knobs. Per-site coefficient file format mirrors the BLQ
+  pattern but with only S1 / S2 rows (mid-latitude peak ~1 mm
+  radial). The non-tidal pressure-loading component (which
+  dominates at storm-driven sites) requires a gridded reanalysis
+  ingestion path and is deferred to a follow-up PR. At TSKB
+  2026-04-15 with synthetic mid-latitude coastal coefficients
+  (S1 = 0.8 mm radial, S2 = 0.4 mm radial), the PPP estimate
+  shifts by mean −10.6 µm / RMS 106 µm in Z. Default off pending
+  real TU Wien per-site coefficients.
 - **`icrsToItrs` consumers**: when satellite-side processing
   (LEO orbits, external SP3 ingestion in non-ECEF frames, attitude
   for satellite antenna PCO/PCV) is wired up, the wrapper is

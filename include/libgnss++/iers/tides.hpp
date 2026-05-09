@@ -11,6 +11,8 @@
 // ~30 cm radial, ~10 cm horizontal). Ignoring it sets a hard floor
 // on PPP positioning accuracy.
 
+#include <array>
+
 #include <Eigen/Dense>
 
 #include "libgnss++/core/types.hpp"
@@ -97,5 +99,48 @@ Eigen::Vector3d poleTideDisplacement(
     double mjd_utc,
     const Eigen::Vector3d& xsta_itrs,
     const EarthOrientationParams& eop);
+
+/// @brief Atmospheric tidal loading coefficients for one site (S1+S2).
+///
+/// Per IERS Conventions 2010 §7.1.5: the atmospheric tide loading
+/// signal is dominated by the diurnal S1 (24-h) and semi-diurnal S2
+/// (12-h) constituents. Per-site amplitudes / phase lags can be
+/// pre-computed from a global pressure model + site-specific Green's
+/// function (e.g. by the TU Wien atmospheric loading service).
+///
+/// Convention follows the legacy ocean-loading file format: amplitudes
+/// in metres, phases in degrees with the standard "lag" sign (a
+/// positive phase means the response lags the forcing).
+struct AtmosphericTidalLoadingCoefficients {
+    /// S1 (diurnal) and S2 (semidiurnal) amplitudes / phases.
+    /// Index 0 = S1, 1 = S2.
+    std::array<double, 2> radial_amplitudes_m{};
+    std::array<double, 2> west_amplitudes_m{};
+    std::array<double, 2> south_amplitudes_m{};
+    std::array<double, 2> radial_phases_deg{};
+    std::array<double, 2> west_phases_deg{};
+    std::array<double, 2> south_phases_deg{};
+};
+
+/// @brief Atmospheric tidal-loading station displacement (IERS §7.1.5).
+///
+/// Returns the station displacement due to the diurnal (S1) and
+/// semi-diurnal (S2) atmospheric pressure tide. Peak amplitude at
+/// mid- and low-latitudes is ~1 mm radial; horizontal is sub-mm.
+///
+/// Formula (per component): A_i · cos(2π · t / T_i − φ_i), summed
+/// over i ∈ {S1, S2} where T_S1 = 86400 s and T_S2 = 43200 s. The
+/// `t` argument is GPS-time-derived `seconds since Unix epoch`,
+/// which matches the legacy ocean-loading dispatcher's reference
+/// frame.
+///
+/// @param mjd_utc    UTC modified Julian date of the epoch.
+/// @param xsta_itrs  Station nominal ITRS / ECEF coordinates [m].
+/// @param coeffs     Per-site S1 + S2 amplitudes / phases.
+/// @return Displacement vector [m] in ITRS / ECEF; ADD to xsta_itrs.
+Eigen::Vector3d atmosphericTidalLoadingDisplacement(
+    double mjd_utc,
+    const Eigen::Vector3d& xsta_itrs,
+    const AtmosphericTidalLoadingCoefficients& coeffs);
 
 }  // namespace libgnss::iers

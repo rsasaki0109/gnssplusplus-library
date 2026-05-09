@@ -905,6 +905,12 @@ bool PPPProcessor::initialize(const ProcessorConfig& config) {
     if (!ppp_config_.eop_path.empty() && !loadEopC04(ppp_config_.eop_path)) {
         return false;
     }
+    atm_tidal_loading_loaded_ = false;
+    atm_tidal_loading_coefficients_ = libgnss::iers::AtmosphericTidalLoadingCoefficients{};
+    if (!ppp_config_.atm_tidal_loading_path.empty() &&
+        !loadAtmosphericTidalLoading(ppp_config_.atm_tidal_loading_path)) {
+        return false;
+    }
     return true;
 }
 
@@ -1263,6 +1269,54 @@ bool PPPProcessor::loadEopC04(const std::string& path) {
         return false;
     }
     return true;
+}
+
+bool PPPProcessor::loadAtmosphericTidalLoading(const std::string& path) {
+    atm_tidal_loading_coefficients_ =
+        libgnss::iers::AtmosphericTidalLoadingCoefficients{};
+    atm_tidal_loading_loaded_ = false;
+    if (path.empty()) {
+        return false;
+    }
+    std::ifstream in(path);
+    if (!in) {
+        return false;
+    }
+    bool have_s1 = false;
+    bool have_s2 = false;
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty() || line.front() == '$' || line.front() == '#') {
+            continue;
+        }
+        std::istringstream iss(line);
+        std::string tag;
+        iss >> tag;
+        std::size_t idx = 0;
+        if (tag == "S1") {
+            idx = 0;
+        } else if (tag == "S2") {
+            idx = 1;
+        } else {
+            // Anything that is not a comment and not an S1/S2 tag is
+            // assumed to be the station-name line; ignore.
+            continue;
+        }
+        double r_amp = 0.0, w_amp = 0.0, s_amp = 0.0;
+        double r_pha = 0.0, w_pha = 0.0, s_pha = 0.0;
+        if (!(iss >> r_amp >> w_amp >> s_amp >> r_pha >> w_pha >> s_pha)) {
+            return false;
+        }
+        atm_tidal_loading_coefficients_.radial_amplitudes_m[idx] = r_amp;
+        atm_tidal_loading_coefficients_.west_amplitudes_m[idx]   = w_amp;
+        atm_tidal_loading_coefficients_.south_amplitudes_m[idx]  = s_amp;
+        atm_tidal_loading_coefficients_.radial_phases_deg[idx]   = r_pha;
+        atm_tidal_loading_coefficients_.west_phases_deg[idx]     = w_pha;
+        atm_tidal_loading_coefficients_.south_phases_deg[idx]    = s_pha;
+        if (idx == 0) have_s1 = true; else have_s2 = true;
+    }
+    atm_tidal_loading_loaded_ = have_s1 && have_s2;
+    return atm_tidal_loading_loaded_;
 }
 
 libgnss::iers::EarthOrientationParams
@@ -2721,6 +2775,9 @@ Vector3d PPPProcessor::applyGeophysicalCorrections(const Vector3d& position,
     if (ppp_config_.use_iers_pole_tide) {
         corrected += calculatePoleTide(position, time);
     }
+    if (ppp_config_.use_iers_atm_tidal_loading) {
+        corrected += calculateAtmosphericTidalLoading(position, time);
+    }
     return corrected;
 }
 
@@ -2809,6 +2866,17 @@ Vector3d PPPProcessor::calculatePoleTide(const Vector3d& position,
         return Vector3d::Zero();
     }
     return libgnss::iers::poleTideDisplacement(mjd_utc, position, eop);
+}
+
+Vector3d PPPProcessor::calculateAtmosphericTidalLoading(
+    const Vector3d& position, const GNSSTime& time) const {
+    if (!atm_tidal_loading_loaded_ || !position.allFinite() ||
+        position.norm() < constants::WGS84_A * 0.5) {
+        return Vector3d::Zero();
+    }
+    const double mjd_utc = libgnss::iers::gnssTimeToMjdUtc(time);
+    return libgnss::iers::atmosphericTidalLoadingDisplacement(
+        mjd_utc, position, atm_tidal_loading_coefficients_);
 }
 
 PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
