@@ -35,6 +35,8 @@ if(GTest_FOUND)
         test_ubx.cpp
         test_sofa_vendor.cpp
         test_ginan_iers2010_vendor.cpp
+        test_iers_earth_rotation.cpp
+        test_iers_tides.cpp
     )
 
     target_compile_options(run_tests PRIVATE -g)
