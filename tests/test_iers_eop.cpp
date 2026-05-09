@@ -128,3 +128,99 @@ TEST(IersEopTable, FromC04FileMissingFileThrows) {
         EopTable::fromC04File("/this/path/does/not/exist/eopc04.txt"),
         std::runtime_error);
 }
+
+// --- Bulletin A finals2000A.daily parser ----------------------------
+
+TEST(IersEopTable, ParseBulletinAFixedWidthFixture) {
+    // Two real `finals2000A.daily` rows (USNO format, 187 chars each;
+    // the trailing portion past the UT1-UTC error is truncated for
+    // brevity — the parser only consumes the first ~78 cols).
+    const std::string fixture =
+        "26 2 8 61079.00 I  0.093941 0.000018  0.369169 0.000019  I 0.0671873 0.0000113\n"
+        "26 4 8 61138.00 I  0.137078 0.000086  0.413609 0.000080  I 0.0477569 0.0000158\n";
+    const std::string path = writeTempFile(fixture);
+    ASSERT_FALSE(path.empty());
+
+    auto table = EopTable::fromBulletinAFile(path);
+    std::remove(path.c_str());
+
+    ASSERT_EQ(table.size(), 2u);
+    EXPECT_DOUBLE_EQ(table.firstMjd(), 61079.0);
+    EXPECT_DOUBLE_EQ(table.lastMjd(), 61138.0);
+
+    auto eop_first = table.interpolateAt(61079.0);
+    EXPECT_NEAR(eop_first.xp_arcsec, 0.093941, 1e-9);
+    EXPECT_NEAR(eop_first.yp_arcsec, 0.369169, 1e-9);
+    EXPECT_NEAR(eop_first.ut1_minus_utc_seconds, 0.0671873, 1e-9);
+
+    auto eop_last = table.interpolateAt(61138.0);
+    EXPECT_NEAR(eop_last.xp_arcsec, 0.137078, 1e-9);
+    EXPECT_NEAR(eop_last.yp_arcsec, 0.413609, 1e-9);
+    EXPECT_NEAR(eop_last.ut1_minus_utc_seconds, 0.0477569, 1e-9);
+}
+
+TEST(IersEopTable, BulletinAKeepsObservedAndPredictedRows) {
+    // An `I`-flagged observed row immediately followed by a
+    // `P`-flagged predicted row. Both should make it into the table.
+    const std::string fixture =
+        "26 4 8 61138.00 I  0.137078 0.000086  0.413609 0.000080  I 0.0477569 0.0000158\n"
+        "26 4 9 61139.00 P  0.138900 0.000100  0.413700 0.000100  P 0.0476800 0.0000200\n";
+    const std::string path = writeTempFile(fixture);
+    ASSERT_FALSE(path.empty());
+
+    auto table = EopTable::fromBulletinAFile(path);
+    std::remove(path.c_str());
+
+    ASSERT_EQ(table.size(), 2u);
+    auto eop_pred = table.interpolateAt(61139.0);
+    EXPECT_NEAR(eop_pred.xp_arcsec, 0.138900, 1e-9);
+}
+
+TEST(IersEopTable, BulletinASkipsBlankFlagRows) {
+    // Some Bulletin A trailing lines have a blank flag (no value
+    // available yet). They must not be silently inserted as zeros.
+    const std::string fixture =
+        "26 4 8 61138.00 I  0.137078 0.000086  0.413609 0.000080  I 0.0477569 0.0000158\n"
+        "26 9 1 61285.00                                                                \n"
+        "26 9 2 61286.00 P  0.211000 0.008000  0.350000 0.011000  P 0.0700000 0.0090000\n";
+    const std::string path = writeTempFile(fixture);
+    ASSERT_FALSE(path.empty());
+
+    auto table = EopTable::fromBulletinAFile(path);
+    std::remove(path.c_str());
+    EXPECT_EQ(table.size(), 2u);  // blank-flag row dropped
+}
+
+TEST(IersEopTable, FromFileAutoDetectsBulletinA) {
+    const std::string fixture =
+        "26 4 8 61138.00 I  0.137078 0.000086  0.413609 0.000080  I 0.0477569 0.0000158\n"
+        "26 4 9 61139.00 P  0.138900 0.000100  0.413700 0.000100  P 0.0476800 0.0000200\n";
+    const std::string path = writeTempFile(fixture);
+    ASSERT_FALSE(path.empty());
+
+    auto table = EopTable::fromFile(path);
+    std::remove(path.c_str());
+    ASSERT_EQ(table.size(), 2u);
+    EXPECT_DOUBLE_EQ(table.firstMjd(), 61138.0);
+}
+
+TEST(IersEopTable, FromFileAutoDetectsC04) {
+    const std::string fixture =
+        "# EOP (IERS) 20 C04 TIME SERIES\n"
+        "1962   1   1   0  37665.00   -0.012700    0.213000   0.0326338"
+        "    0.000000    0.000000    0.000000    0.000000   0.0017230"
+        "    0.030000    0.030000   0.0020000    0.004774    0.002000\n";
+    const std::string path = writeTempFile(fixture);
+    ASSERT_FALSE(path.empty());
+
+    auto table = EopTable::fromFile(path);
+    std::remove(path.c_str());
+    ASSERT_EQ(table.size(), 1u);
+    EXPECT_DOUBLE_EQ(table.firstMjd(), 37665.0);
+}
+
+TEST(IersEopTable, FromBulletinAFileMissingFileThrows) {
+    EXPECT_THROW(
+        EopTable::fromBulletinAFile("/nonexistent/finals2000A.daily"),
+        std::runtime_error);
+}
