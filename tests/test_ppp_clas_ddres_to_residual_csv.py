@@ -75,6 +75,32 @@ k=1 ref=G05 sat=G19 freq_index=1 freq_group=1 sd_residual_m=-2.5 variance_m2=9
             self.assertEqual(csv_rows[1]["sat"], "G05>G12")
             self.assertEqual(csv_rows[1]["residual_m"], "-2.5")
 
+    def test_converts_measrow_dump_phase_rows(self) -> None:
+        text = """tow=123.000 row=0 sat=G12 ref=G05 is_phase=1 freq=0 z=1.25 R=4
+tow=123.000 row=1 sat=G12 ref=G05 is_phase=0 freq=0 z=99 R=9
+tow=124.000 row=2 sat=G05 ref=G12 is_phase=1 freq=1 z=-2.5 R=16
+tow=125.000 row=3 sat=G06 ref=none is_phase=1 freq=0 z=3 R=1
+"""
+        with tempfile.TemporaryDirectory(prefix="clas_measrow_convert_test_") as temp_dir:
+            source = Path(temp_dir) / "measrow.dump"
+            out = Path(temp_dir) / "measrow.csv"
+            source.write_text(text, encoding="utf-8")
+
+            rows = converter.parse_measrow_dump(source, default_week=2360)
+            self.assertEqual(len(rows), 2)
+            converter.write_residual_csv(rows, out, canonicalize_pairs=True)
+
+            with out.open(newline="", encoding="utf-8") as handle:
+                csv_rows = list(csv.DictReader(handle))
+            self.assertEqual(csv_rows[0]["week"], "2360")
+            self.assertEqual(csv_rows[0]["tow"], "123.000")
+            self.assertEqual(csv_rows[0]["sat"], "G05>G12")
+            self.assertEqual(csv_rows[0]["frequency_index"], "0")
+            self.assertEqual(csv_rows[0]["residual_m"], "1.25")
+            self.assertEqual(csv_rows[1]["sat"], "G05>G12")
+            self.assertEqual(csv_rows[1]["frequency_index"], "1")
+            self.assertEqual(csv_rows[1]["residual_m"], "2.5")
+
     def test_cli_writes_residual_csv(self) -> None:
         text = """[CLAS-MODEL-COMP] type=phase tow=1.000 ref=G01 sat=G02 freq_group=0 y=0.125
 """

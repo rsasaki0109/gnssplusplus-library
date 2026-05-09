@@ -730,12 +730,19 @@ void predictFilterState(
         }
     }
     filter_state.covariance += Q;
-    if (seed_valid) {
+    // Receiver-clock evolution policy. Default (`clas_spp_clock_overwrite=true`)
+    // pins the KF clock state to SPP every epoch and zeros the variance via
+    // the decouple block below; this is the historical behaviour that
+    // empirically produces the +11m sat-uniform residual systematic
+    // documented in clas_per_sat_residual_root_cause_2026_05_08.md (because
+    // SPP clock and CLASLIB PPP-RTK clock differ by exactly that). Setting
+    // `clas_spp_clock_overwrite=false` lets the KF track clock from
+    // observations: state is left as predicted, and when the decouple block
+    // runs we seed a working variance instead of zeroing it.
+    if (seed_valid && config.clas_spp_clock_overwrite) {
         filter_state.state(filter_state.clock_index) = seed_receiver_clock_bias_m;
         filter_state.state(filter_state.glo_clock_index) = seed_receiver_clock_bias_m;
     }
-    // Decouple clock from position: zero cross-covariance to prevent
-    // code observation noise from leaking into position via KF coupling.
     if (config.clas_decouple_clock_position) {
         const int ci = filter_state.clock_index;
         const int gi = filter_state.glo_clock_index;
@@ -743,8 +750,14 @@ void predictFilterState(
             if (i != ci) { filter_state.covariance(ci, i) = 0; filter_state.covariance(i, ci) = 0; }
             if (i != gi) { filter_state.covariance(gi, i) = 0; filter_state.covariance(i, gi) = 0; }
         }
-        filter_state.covariance(ci, ci) = 0;
-        filter_state.covariance(gi, gi) = 0;
+        if (config.clas_spp_clock_overwrite) {
+            filter_state.covariance(ci, ci) = 0;
+            filter_state.covariance(gi, gi) = 0;
+        } else {
+            const double v = config.clas_kf_clock_seed_variance;
+            filter_state.covariance(ci, ci) = std::max(filter_state.covariance(ci, ci), v);
+            filter_state.covariance(gi, gi) = std::max(filter_state.covariance(gi, gi), v);
+        }
     }
 }
 
@@ -945,6 +958,8 @@ MeasurementBuildResult buildEpochMeasurements(
                     result.observed_iono_states.insert(osr.satellite);
                 }
                 row.residual = residual;
+                row.observation = p_corr;
+                row.predicted = predicted;
                 row.variance =
                     dd_update_mode
                         ? claslibDdUdVariance(
@@ -953,8 +968,15 @@ MeasurementBuildResult buildEpochMeasurements(
                               clasFrequencyGroupForSatellite(osr.satellite, f))
                         : config.clas_code_variance_scale * el_weight;
                 row.satellite = osr.satellite;
+                row.primary_signal = raw->signal;
+                row.primary_observation_code = raw->observation_code;
                 row.is_phase = false;
                 row.freq_index = f;
+                row.elevation_rad = osr.elevation;
+                row.ionosphere_coefficient = iono_scale;
+                row.ionosphere_state_index = iono_state_index;
+                row.ionosphere_design_coeff = use_residual_iono_state ? iono_scale : 0.0;
+                row.ionosphere_state_m = iono_state_m;
                 result.measurements.push_back(row);
             }
 
@@ -1023,11 +1045,22 @@ MeasurementBuildResult buildEpochMeasurements(
                 }
                 row.H(amb_idx) = 1.0;
                 row.residual = residual;
+                row.observation = l_corr;
+                row.predicted = predicted;
                 row.variance = variance_m2;
                 row.satellite = osr.satellite;
                 row.phase_ambiguities.push_back(amb_sat);
+                row.primary_signal = raw->signal;
+                row.primary_observation_code = raw->observation_code;
                 row.is_phase = true;
                 row.freq_index = f;
+                row.elevation_rad = osr.elevation;
+                row.ionosphere_coefficient = iono_scale;
+                row.ionosphere_state_index = iono_state_index;
+                row.ionosphere_design_coeff = use_residual_iono_state ? -iono_scale : 0.0;
+                row.ionosphere_state_m = iono_state_m;
+                row.ambiguity_state_index = amb_idx;
+                row.ambiguity_design_coeff = 1.0;
                 const size_t measurement_index = result.measurements.size();
                 result.measurements.push_back(row);
                 ClasDdresDebugPhaseRow debug_row;
@@ -1097,6 +1130,8 @@ MeasurementBuildResult buildEpochMeasurements(
             row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
             row.H(filter_state.trop_index) = 1.0;
             row.residual = clas_trop_zenith - trop_zenith;
+            row.observation = clas_trop_zenith;
+            row.predicted = trop_zenith;
             row.variance = config.clas_trop_prior_variance;
             row.satellite = SatelliteId{};
             row.is_phase = false;
@@ -1123,10 +1158,15 @@ MeasurementBuildResult buildEpochMeasurements(
             row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
             row.H(iono_state_index) = 1.0;
             row.residual = -filter_state.state(iono_state_index);
+            row.observation = 0.0;
+            row.predicted = filter_state.state(iono_state_index);
             row.variance = config.clas_iono_prior_variance;
             row.satellite = satellite;
             row.is_phase = false;
             row.freq_index = -1;
+            row.ionosphere_state_index = iono_state_index;
+            row.ionosphere_design_coeff = 1.0;
+            row.ionosphere_state_m = filter_state.state(iono_state_index);
             result.measurements.push_back(row);
         }
     }
@@ -1306,10 +1346,14 @@ MeasurementBuildResult buildEpochMeasurements(
                 const auto& sat_row = result.measurements[idx];
                 MeasurementRow sd_row;
                 sd_row.H = ref_row.H - sat_row.H;
+                sd_row.observation = ref_row.observation - sat_row.observation;
+                sd_row.predicted = ref_row.predicted - sat_row.predicted;
                 sd_row.residual = ref_row.residual - sat_row.residual;
                 sd_row.variance = ref_row.variance + sat_row.variance;
                 sd_row.satellite = sat_row.satellite;
                 sd_row.reference_satellite = ref_row.satellite;
+                sd_row.primary_signal = sat_row.primary_signal;
+                sd_row.primary_observation_code = sat_row.primary_observation_code;
                 sd_row.covariance_group = covariance_group;
                 sd_row.reference_variance =
                     covariance_group >= 0 ? ref_row.variance : 0.0;
@@ -1322,6 +1366,15 @@ MeasurementBuildResult buildEpochMeasurements(
                 }
                 sd_row.is_phase = group_key.is_phase;
                 sd_row.freq_index = group_key.freq_index;
+                sd_row.elevation_rad = sat_row.elevation_rad;
+                sd_row.ionosphere_coefficient = sat_row.ionosphere_coefficient;
+                sd_row.ionosphere_state_index = sat_row.ionosphere_state_index;
+                sd_row.ionosphere_design_coeff =
+                    rowCoefficient(sd_row.H, sat_row.ionosphere_state_index);
+                sd_row.ionosphere_state_m = sat_row.ionosphere_state_m;
+                sd_row.ambiguity_state_index = sat_row.ambiguity_state_index;
+                sd_row.ambiguity_design_coeff =
+                    rowCoefficient(sd_row.H, sat_row.ambiguity_state_index);
                 if (ddres_dump && group_key.is_phase) {
                     const auto ref_debug_it =
                         phase_debug_by_measurement_index.find(ref_index);
@@ -1476,16 +1529,111 @@ KalmanUpdateStats applyMeasurementUpdate(
     }
 
     std::vector<bool> row_inflated(static_cast<size_t>(stats.nobs), false);
+    double inflated_code_sum_sq = 0.0;
+    double inflated_phase_sum_sq = 0.0;
+    double inflated_ionosphere_constraint_sum_sq = 0.0;
+    double inflated_prior_sum_sq = 0.0;
     const bool suppress_outlier_inflation =
         clasDdUpdateEnabled() && !clasDdOutlierInflationEnabled();
     for (int i = 0; i < stats.nobs; ++i) {
-        const double sigma = std::sqrt(R(i, i));
-        if (!suppress_outlier_inflation &&
-            config.clas_outlier_sigma_scale > 0.0 &&
-            std::abs(z(i)) > config.clas_outlier_sigma_scale * sigma) {
-            R(i, i) = 1e10;
-            row_inflated[static_cast<size_t>(i)] = true;
+        const auto& measurement = measurements[static_cast<size_t>(i)];
+        double outlier_sigma_scale = config.clas_outlier_sigma_scale;
+        if (measurement.is_phase && config.clas_phase_outlier_sigma_scale >= 0.0) {
+            outlier_sigma_scale = config.clas_phase_outlier_sigma_scale;
+        } else if (!measurement.is_phase &&
+                   measurement.freq_index >= 0 &&
+                   config.clas_code_outlier_sigma_scale >= 0.0) {
+            outlier_sigma_scale = config.clas_code_outlier_sigma_scale;
+        } else if (!measurement.is_phase &&
+                   measurement.freq_index < 0 &&
+                   measurement.satellite.prn == 0 &&
+                   config.clas_prior_outlier_sigma_scale >= 0.0) {
+            outlier_sigma_scale = config.clas_prior_outlier_sigma_scale;
         }
+        const double sigma = std::sqrt(R(i, i));
+        const bool code_row = !measurement.is_phase && measurement.freq_index >= 0;
+        const bool phase_row = measurement.is_phase;
+        const bool prior_row =
+            !measurement.is_phase &&
+            measurement.freq_index < 0 &&
+            measurement.satellite.prn == 0;
+        const bool passes_code_residual_floor =
+            !code_row ||
+            config.clas_code_outlier_min_residual_m <= 0.0 ||
+            std::abs(z(i)) >= config.clas_code_outlier_min_residual_m;
+        const bool passes_phase_residual_floor =
+            !phase_row ||
+            config.clas_phase_outlier_min_residual_m <= 0.0 ||
+            std::abs(z(i)) >= config.clas_phase_outlier_min_residual_m;
+        const bool passes_prior_residual_floor =
+            !prior_row ||
+            config.clas_prior_outlier_min_residual_m <= 0.0 ||
+            std::abs(z(i)) >= config.clas_prior_outlier_min_residual_m;
+        if (!suppress_outlier_inflation &&
+            outlier_sigma_scale > 0.0 &&
+            passes_code_residual_floor &&
+            passes_phase_residual_floor &&
+            passes_prior_residual_floor &&
+            std::abs(z(i)) > outlier_sigma_scale * sigma) {
+            const double abs_residual = std::abs(z(i));
+            R(i, i) =
+                measurement.is_phase &&
+                config.clas_phase_outlier_inflated_variance_m2 > 0.0
+                    ? config.clas_phase_outlier_inflated_variance_m2
+                    : 1e10;
+            row_inflated[static_cast<size_t>(i)] = true;
+            ++stats.outlier_inflated_row_count;
+            if (measurement.is_phase) {
+                ++stats.phase_outlier_inflated_row_count;
+                inflated_phase_sum_sq += abs_residual * abs_residual;
+                stats.phase_outlier_inflated_max_abs_m =
+                    std::max(stats.phase_outlier_inflated_max_abs_m, abs_residual);
+                if (abs_residual >=
+                    config.clas_reset_phase_ambiguity_outlier_min_residual_m) {
+                    stats.phase_outlier_inflated_ambiguities.insert(
+                        measurement.phase_ambiguities.begin(),
+                        measurement.phase_ambiguities.end());
+                }
+            } else if (measurement.freq_index >= 0) {
+                ++stats.code_outlier_inflated_row_count;
+                inflated_code_sum_sq += abs_residual * abs_residual;
+                stats.code_outlier_inflated_max_abs_m =
+                    std::max(stats.code_outlier_inflated_max_abs_m, abs_residual);
+            } else if (measurement.satellite.prn != 0) {
+                ++stats.ionosphere_constraint_outlier_inflated_row_count;
+                inflated_ionosphere_constraint_sum_sq += abs_residual * abs_residual;
+                stats.ionosphere_constraint_outlier_inflated_max_abs_m =
+                    std::max(
+                        stats.ionosphere_constraint_outlier_inflated_max_abs_m,
+                        abs_residual);
+            } else {
+                ++stats.prior_outlier_inflated_row_count;
+                inflated_prior_sum_sq += abs_residual * abs_residual;
+                stats.prior_outlier_inflated_max_abs_m =
+                    std::max(stats.prior_outlier_inflated_max_abs_m, abs_residual);
+            }
+        }
+    }
+    if (stats.code_outlier_inflated_row_count > 0) {
+        stats.code_outlier_inflated_rms_m =
+            std::sqrt(inflated_code_sum_sq /
+                      static_cast<double>(stats.code_outlier_inflated_row_count));
+    }
+    if (stats.phase_outlier_inflated_row_count > 0) {
+        stats.phase_outlier_inflated_rms_m =
+            std::sqrt(inflated_phase_sum_sq /
+                      static_cast<double>(stats.phase_outlier_inflated_row_count));
+    }
+    if (stats.ionosphere_constraint_outlier_inflated_row_count > 0) {
+        stats.ionosphere_constraint_outlier_inflated_rms_m =
+            std::sqrt(
+                inflated_ionosphere_constraint_sum_sq /
+                static_cast<double>(stats.ionosphere_constraint_outlier_inflated_row_count));
+    }
+    if (stats.prior_outlier_inflated_row_count > 0) {
+        stats.prior_outlier_inflated_rms_m =
+            std::sqrt(inflated_prior_sum_sq /
+                      static_cast<double>(stats.prior_outlier_inflated_row_count));
     }
 
     for (int i = 0; i < stats.nobs; ++i) {
@@ -1513,6 +1661,7 @@ KalmanUpdateStats applyMeasurementUpdate(
     stats.dx = dx;
     stats.residuals = z;
     stats.variances = R.diagonal();
+    stats.outlier_inflated_rows = std::move(row_inflated);
     stats.pre_anchor_covariance = filter_state.covariance;
 
     if (seed_solution != nullptr && seed_solution->isValid()) {
@@ -1576,9 +1725,10 @@ EpochUpdateResult runEpochMeasurementUpdate(
     if (measurement_build_result.measurements.size() < 5) {
         return result;
     }
+    result.measurements = measurement_build_result.measurements;
 
     result.update_stats = applyMeasurementUpdate(
-        filter_state, measurement_build_result.measurements, config, &seed_solution, &obs.time);
+        filter_state, result.measurements, config, &seed_solution, &obs.time);
     if (!result.update_stats.updated) {
         return result;
     }
@@ -1589,6 +1739,18 @@ EpochUpdateResult runEpochMeasurementUpdate(
         filter_state,
         ambiguity_states,
         ambiguity_index_function);
+    if (config.clas_reset_phase_ambiguity_on_outlier_inflation &&
+        result.update_stats.phase_outlier_inflated_row_count >=
+            config.clas_reset_phase_ambiguity_outlier_min_rows) {
+        for (const auto& ambiguity_satellite :
+             result.update_stats.phase_outlier_inflated_ambiguities) {
+            if (static_cast<bool>(ambiguity_reset_function)) {
+                ambiguity_reset_function(
+                    ambiguity_satellite,
+                    SignalType::SIGNAL_TYPE_COUNT);
+            }
+        }
+    }
     result.updated = true;
     return result;
 }

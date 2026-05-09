@@ -3885,10 +3885,22 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--disable-all-frequency-initial-phase-admission-warm-start", result.stdout)
         self.assertIn("--claslib-parity", result.stdout)
         self.assertIn("--ported-clasnat", result.stdout)
+        self.assertIn("--clas-ppc-profile", result.stdout)
         self.assertIn("--clas-anchor-sigma", result.stdout)
         self.assertIn("--clas-code-variance-scale", result.stdout)
         self.assertIn("--clas-phase-variance", result.stdout)
         self.assertIn("--clas-outlier-sigma-scale", result.stdout)
+        self.assertIn("--clas-code-outlier-sigma-scale", result.stdout)
+        self.assertIn("--clas-code-outlier-min-residual", result.stdout)
+        self.assertIn("--clas-phase-outlier-sigma-scale", result.stdout)
+        self.assertIn("--clas-phase-outlier-inflated-variance", result.stdout)
+        self.assertIn("--clas-prior-outlier-sigma-scale", result.stdout)
+        self.assertIn("--clas-prior-outlier-min-residual", result.stdout)
+        self.assertIn("--clas-phase-outlier-min-residual", result.stdout)
+        self.assertIn("--clas-reset-phase-ambiguity-on-outlier-inflation", result.stdout)
+        self.assertIn("--clas-reset-phase-ambiguity-outlier-min-rows", result.stdout)
+        self.assertIn("--clas-reset-phase-ambiguity-outlier-min-residual", result.stdout)
+        self.assertIn("--clas-wlnl-fixed-position-max-shift", result.stdout)
         self.assertIn("--navsys", result.stdout)
         self.assertIn("--initial-phase-admission-warm-start-navsys", result.stdout)
         self.assertIn("0=all; default", result.stdout)
@@ -4094,6 +4106,25 @@ class CLIToolsTest(unittest.TestCase):
             self.assertTrue(any(int(row["code_rows"]) == 12 for row in filter_rows))
             self.assertTrue(any(0 < int(row["phase_rows"]) < 12 for row in filter_rows))
             self.assertTrue(any(int(row["ionosphere_constraint_rows"]) == 6 for row in filter_rows))
+            self.assertIn("outlier_inflated_rows", filter_rows[0])
+            self.assertIn("code_outlier_inflated_rows", filter_rows[0])
+            self.assertIn("phase_outlier_inflated_rows", filter_rows[0])
+            self.assertIn("ionosphere_constraint_outlier_inflated_rows", filter_rows[0])
+            self.assertIn("prior_outlier_inflated_rows", filter_rows[0])
+            self.assertIn("phase_outlier_inflated_max_abs_m", filter_rows[0])
+            self.assertIn("prior_outlier_inflated_max_abs_m", filter_rows[0])
+            self.assertIn("phase_outlier_inflated_rms_m", filter_rows[0])
+            self.assertIn("prior_outlier_inflated_rms_m", filter_rows[0])
+            self.assertIn("ar_attempted", filter_rows[0])
+            self.assertIn("ar_eligible_ambiguities", filter_rows[0])
+            self.assertIn("ar_ratio", filter_rows[0])
+            self.assertIn("ar_required_ratio", filter_rows[0])
+            self.assertIn("ar_wl_fixed_count", filter_rows[0])
+            self.assertIn("ar_fixed_position_observations", filter_rows[0])
+            self.assertIn("ar_fixed_position_shift_m", filter_rows[0])
+            self.assertIn("ar_fixed_position_clock_update_rms_m", filter_rows[0])
+            self.assertIn("ar_fixed_position_clock_update_max_abs_m", filter_rows[0])
+            self.assertIn("ar_fixed_position_residual_rms_m", filter_rows[0])
             with residual_log_path.open(newline="", encoding="ascii") as stream:
                 residual_rows = list(csv.DictReader(stream))
             self.assertTrue(residual_rows)
@@ -4115,6 +4146,7 @@ class CLIToolsTest(unittest.TestCase):
                 )
             )
             self.assertIn("primary_observation_code", residual_rows[0])
+            self.assertIn("outlier_inflated", residual_rows[0])
             self.assertIn("phase_candidate", residual_rows[0])
             self.assertIn("phase_skip_reason", residual_rows[0])
             self.assertIn("innovation_variance_m2", residual_rows[0])
@@ -4183,7 +4215,21 @@ class CLIToolsTest(unittest.TestCase):
             with correction_log_path.open(newline="", encoding="ascii") as stream:
                 correction_rows = list(csv.DictReader(stream))
             self.assertTrue(correction_rows)
+            self.assertNotIn(None, correction_rows[0])
             self.assertIn("has_carrier_phase", correction_rows[0])
+            self.assertIn("prc_m", correction_rows[0])
+            self.assertIn("cpc_m", correction_rows[0])
+            self.assertIn("applied_pseudorange_correction_m", correction_rows[0])
+            self.assertIn("applied_carrier_phase_correction_m", correction_rows[0])
+            self.assertIn("modeled_trop_delay_m", correction_rows[0])
+            self.assertIn("modeled_zenith_trop_delay_m", correction_rows[0])
+            self.assertIn("orbit_projection_m", correction_rows[0])
+            self.assertIn("atmos_network_id", correction_rows[0])
+            self.assertIn("code_bias_network_id", correction_rows[0])
+            self.assertIn("phase_bias_network_id", correction_rows[0])
+            self.assertIn("phase_bias_reference_tow", correction_rows[0])
+            self.assertIn("clock_reference_tow", correction_rows[0])
+            self.assertIn("effective_phase_bias_reference_tow", correction_rows[0])
             self.assertTrue(
                 any(
                     row["primary_observation_code"] == "C2W"
@@ -4252,7 +4298,10 @@ class CLIToolsTest(unittest.TestCase):
                 include_antenna_header=True,
             )
             antex_path = temp_root / "receiver.atx"
-            antex_path.write_text(build_synthetic_receiver_antex_text(), encoding="ascii")
+            antex_path.write_text(
+                build_synthetic_receiver_antex_text().replace("\n", "\r\n"),
+                encoding="ascii",
+            )
             base_out_path = temp_root / "ppp_base.pos"
             antex_out_path = temp_root / "ppp_antex.pos"
 
@@ -4322,6 +4371,46 @@ class CLIToolsTest(unittest.TestCase):
             self.assertLess(antex_error, 1.5)
             self.assertGreater(solution_delta, 1e-4)
             self.assertLess(solution_delta, 1.0)
+
+    def test_ppp_cli_accepts_receiver_antenna_type_override(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_receiver_antenna_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, _true_position = build_synthetic_ppp_inputs(
+                temp_root,
+                include_antenna_header=False,
+            )
+            antex_path = temp_root / "receiver.atx"
+            antex_path.write_text(build_synthetic_receiver_antex_text(), encoding="ascii")
+            out_path = temp_root / "ppp_receiver_antenna.pos"
+            summary_path = temp_root / "ppp_receiver_antenna_summary.json"
+
+            result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--antex",
+                str(antex_path),
+                "--receiver-antenna-type",
+                "TEST-ANT",
+                "--no-estimate-troposphere",
+                "--out",
+                str(out_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "2",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(out_path.exists())
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["receiver_antenna_type"], "TEST-ANT")
+            self.assertEqual(payload["valid_solutions"], 2)
 
     def test_ppp_cli_supports_ocean_loading_coefficients(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_blq_test_") as temp_dir:
@@ -9660,6 +9749,183 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(summary["clas_phase_continuity"], "no-phase-bias")
             self.assertEqual(summary["clas_ssr_timing"], "lag-tolerant")
 
+    def test_ppp_cli_writes_clas_ppc_profile_defaults_to_summary_json(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_clas_ppc_profile_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, _ = build_synthetic_ppp_inputs_with_atmos(
+                temp_root
+            )
+            output_path = temp_root / "ppp_clas_ppc_profile.pos"
+            summary_path = temp_root / "ppp_clas_ppc_profile_summary.json"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--clas-ppc-profile",
+                "--clas-epoch-policy",
+                "hybrid-standard-ppp",
+                "--summary-json",
+                str(summary_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertTrue(summary["clas_ppc_profile"])
+            self.assertTrue(summary["use_clas_osr_filter"])
+            self.assertFalse(summary["use_ionosphere_free"])
+            self.assertFalse(summary["estimate_troposphere"])
+            self.assertTrue(summary["estimate_ionosphere"])
+            self.assertEqual(summary["navsys_mask"], 25)
+            self.assertEqual(summary["clas_phase_continuity"], "no-phase-bias")
+            self.assertEqual(summary["clas_anchor_sigma"], 1.0)
+            self.assertEqual(summary["clas_code_variance_scale"], 2.0)
+            self.assertEqual(summary["clas_phase_variance"], 0.0001)
+            self.assertEqual(summary["clas_iono_prior_variance"], 0.25)
+            self.assertEqual(summary["clas_code_outlier_sigma_scale"], 3.0)
+            self.assertEqual(summary["clas_code_outlier_min_residual_m"], 0.0)
+            self.assertEqual(summary["clas_phase_outlier_sigma_scale"], -1.0)
+            self.assertEqual(summary["clas_phase_outlier_inflated_variance_m2"], -1.0)
+            self.assertEqual(summary["clas_prior_outlier_sigma_scale"], -1.0)
+            self.assertEqual(summary["clas_phase_outlier_min_residual_m"], 0.0)
+            self.assertEqual(summary["clas_prior_outlier_min_residual_m"], 0.0)
+            self.assertFalse(summary["clas_reset_phase_ambiguity_on_outlier_inflation"])
+            self.assertEqual(summary["clas_reset_phase_ambiguity_outlier_min_rows"], 1)
+            self.assertEqual(summary["clas_reset_phase_ambiguity_outlier_min_residual_m"], 0.0)
+            self.assertTrue(summary["clas_kinematic_position_reseed"])
+            self.assertTrue(summary["native_pntpos_parity_seed"])
+            self.assertEqual(summary["clas_wlnl_fixed_position_max_shift_m"], 0.1)
+            self.assertTrue(summary["wlnl_par_enabled"])
+
+    def test_ppp_cli_clas_ppc_profile_respects_explicit_pntpos_seed_disable(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_clas_ppc_profile_no_seed_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, _ = build_synthetic_ppp_inputs_with_atmos(
+                temp_root
+            )
+            output_path = temp_root / "ppp_clas_ppc_profile_no_seed.pos"
+            summary_path = temp_root / "ppp_clas_ppc_profile_no_seed_summary.json"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--clas-ppc-profile",
+                "--no-native-pntpos-parity-seed",
+                "--clas-epoch-policy",
+                "hybrid-standard-ppp",
+                "--summary-json",
+                str(summary_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertTrue(summary["clas_ppc_profile"])
+            self.assertFalse(summary["native_pntpos_parity_seed"])
+
+    def test_ppp_cli_claslib_parity_defaults_troposphere_off(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_claslib_parity_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, _ = build_synthetic_ppp_inputs_with_atmos(
+                temp_root
+            )
+            output_path = temp_root / "ppp_claslib_parity.pos"
+            summary_path = temp_root / "ppp_claslib_parity_summary.json"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--claslib-parity",
+                "--clas-epoch-policy",
+                "hybrid-standard-ppp",
+                "--summary-json",
+                str(summary_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertTrue(summary["claslib_parity"])
+            self.assertFalse(summary["estimate_troposphere"])
+            self.assertEqual(summary["ar_method"], "dd-per-freq")
+            self.assertEqual(summary["ar_ratio_threshold"], 1.2)
+            self.assertEqual(summary["clas_phase_continuity"], "full-repair")
+
+    def test_ppp_cli_clas_ppc_profile_respects_explicit_wlnl_par_disable(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_clas_ppc_profile_no_par_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, ssr_path, _ = build_synthetic_ppp_inputs_with_atmos(
+                temp_root
+            )
+            output_path = temp_root / "ppp_clas_ppc_profile_no_par.pos"
+            summary_path = temp_root / "ppp_clas_ppc_profile_no_par_summary.json"
+
+            result = self.run_gnss(
+                "ppp",
+                "--kinematic",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--ssr",
+                str(ssr_path),
+                "--clas-ppc-profile",
+                "--clas-epoch-policy",
+                "hybrid-standard-ppp",
+                "--navsys",
+                "0",
+                "--estimate-troposphere",
+                "--no-wlnl-par",
+                "--summary-json",
+                str(summary_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "4",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertTrue(summary["clas_ppc_profile"])
+            self.assertEqual(summary["navsys_mask"], 0)
+            self.assertTrue(summary["estimate_troposphere"])
+            self.assertFalse(summary["wlnl_par_enabled"])
+
     def test_ppp_cli_writes_intermediate_phase_continuity_mode_to_summary_json(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_clas_phase_mode_cli_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -10100,6 +10366,44 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["epochs"], 3)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
 
+    def test_clas_ppp_profile_defaults_follow_native_ppc_profile(self) -> None:
+        sys_path_backup = sys.path[:]
+        sys.path.insert(0, str(ROOT_DIR / "apps"))
+        try:
+            from gnss_clas_ppp import (
+                effective_estimate_troposphere,
+                effective_native_pntpos_parity_seed,
+                effective_navsys_mask,
+            )
+        finally:
+            sys.path[:] = sys_path_backup
+
+        args = type("Args", (), {})()
+        args.navsys = None
+        args.profile = "madoca"
+        args.clas_ppc_profile = True
+        args.estimate_troposphere = None
+        args.native_pntpos_parity_seed = None
+        self.assertEqual(effective_navsys_mask(args), 25)
+        self.assertFalse(effective_estimate_troposphere(args))
+        self.assertTrue(effective_native_pntpos_parity_seed(args))
+
+        args.navsys = 0
+        args.estimate_troposphere = True
+        args.native_pntpos_parity_seed = False
+        self.assertEqual(effective_navsys_mask(args), 0)
+        self.assertTrue(effective_estimate_troposphere(args))
+        self.assertFalse(effective_native_pntpos_parity_seed(args))
+
+        args.navsys = None
+        args.profile = "clas"
+        args.clas_ppc_profile = False
+        args.estimate_troposphere = None
+        args.native_pntpos_parity_seed = None
+        self.assertEqual(effective_navsys_mask(args), 25)
+        self.assertTrue(effective_estimate_troposphere(args))
+        self.assertFalse(effective_native_pntpos_parity_seed(args))
+
     def test_clas_ppp_cli_accepts_compact_sampled_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_compact_cli_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -10163,6 +10467,7 @@ class CLIToolsTest(unittest.TestCase):
             expanded_path = temp_root / "corrections.expanded.csv"
             output_path = temp_root / "clas_ppp_expanded.pos"
             summary_path = temp_root / "clas_ppp_expanded_summary.json"
+            correction_log_path = temp_root / "clas_ppp_expanded_corrections.csv"
             expanded_path.write_text(
                 "\n".join(
                     [
@@ -10187,10 +10492,49 @@ class CLIToolsTest(unittest.TestCase):
                 str(ROOT_DIR / "data/navigation_static.nav"),
                 "--expanded-ssr",
                 str(expanded_path),
+                "--clas-anchor-sigma",
+                "2.0",
+                "--clas-code-variance-scale",
+                "1.0",
+                "--clas-phase-variance",
+                "0.0001",
+                "--clas-phase-continuity",
+                "repair-only",
+                "--clas-phase-bias-values",
+                "compensation-only",
+                "--clas-phase-bias-reference-time",
+                "clock-reference",
+                "--clas-iono-prior-variance",
+                "1.0",
+                "--clas-code-outlier-sigma-scale",
+                "4.0",
+                "--clas-code-outlier-min-residual",
+                "20.0",
+                "--clas-phase-outlier-sigma-scale",
+                "0",
+                "--clas-phase-outlier-inflated-variance",
+                "100.0",
+                "--clas-prior-outlier-sigma-scale",
+                "0",
+                "--clas-prior-outlier-min-residual",
+                "1.0",
+                "--clas-phase-outlier-min-residual",
+                "8.0",
+                "--clas-reset-phase-ambiguity-on-outlier-inflation",
+                "--clas-reset-phase-ambiguity-outlier-min-rows",
+                "2",
+                "--clas-reset-phase-ambiguity-outlier-min-residual",
+                "10.0",
+                "--clas-wlnl-fixed-position-max-shift",
+                "0.2",
+                "--wlnl-wl-max-fractional",
+                "0.15",
                 "--out",
                 str(output_path),
                 "--summary-json",
                 str(summary_path),
+                "--ppp-correction-log",
+                str(correction_log_path),
                 "--max-epochs",
                 "3",
                 "--require-valid-epochs-min",
@@ -10204,12 +10548,42 @@ class CLIToolsTest(unittest.TestCase):
             self.assertTrue(summary_path.exists())
             self.assertIn("Finished CLAS/MADOCA PPP run.", result.stdout)
             self.assertIn("encoding: expanded", result.stdout)
+            self.assertIn("--clas-anchor-sigma 2.0", result.stdout)
+            self.assertIn("--clas-code-variance-scale 1.0", result.stdout)
+            self.assertIn("--clas-phase-variance 0.0001", result.stdout)
+            self.assertIn("--clas-phase-continuity repair-only", result.stdout)
+            self.assertIn("--clas-phase-bias-values compensation-only", result.stdout)
+            self.assertIn("--clas-phase-bias-reference-time clock-reference", result.stdout)
+            self.assertIn("--clas-iono-prior-variance 1.0", result.stdout)
+            self.assertIn("--clas-code-outlier-sigma-scale 4.0", result.stdout)
+            self.assertIn("--clas-code-outlier-min-residual 20.0", result.stdout)
+            self.assertIn("--clas-phase-outlier-sigma-scale 0", result.stdout)
+            self.assertIn("--clas-phase-outlier-inflated-variance 100.0", result.stdout)
+            self.assertIn("--clas-prior-outlier-sigma-scale 0", result.stdout)
+            self.assertIn("--clas-prior-outlier-min-residual 1.0", result.stdout)
+            self.assertIn("--clas-phase-outlier-min-residual 8.0", result.stdout)
+            self.assertIn("--clas-reset-phase-ambiguity-on-outlier-inflation", result.stdout)
+            self.assertIn("--clas-reset-phase-ambiguity-outlier-min-rows 2", result.stdout)
+            self.assertIn("--clas-reset-phase-ambiguity-outlier-min-residual 10.0", result.stdout)
+            self.assertIn("--clas-wlnl-fixed-position-max-shift 0.2", result.stdout)
+            self.assertIn("--wlnl-wl-max-fractional 0.15", result.stdout)
+            self.assertIn(f"--ppp-correction-log {correction_log_path}", result.stdout)
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["correction_profile"], "clas")
             self.assertEqual(payload["correction_encoding"], "expanded")
             self.assertEqual(payload["expanded_ssr"], str(expanded_path))
+            self.assertEqual(payload["ppp_correction_log"], str(correction_log_path))
             self.assertEqual(payload["filter_iterations"], 1)
             self.assertEqual(payload["epochs"], 3)
+            self.assertEqual(payload["clas_phase_continuity"], "repair-only")
+            self.assertEqual(payload["clas_phase_bias_values"], "compensation-only")
+            self.assertEqual(payload["clas_phase_bias_reference_time"], "clock-reference")
+            self.assertEqual(payload["wlnl_wl_max_fractional"], 0.15)
+            with correction_log_path.open(newline="", encoding="ascii") as stream:
+                correction_reader = csv.DictReader(stream)
+                self.assertIn("orbit_projection_m", correction_reader.fieldnames)
+                self.assertIn("phase_bias_reference_tow", correction_reader.fieldnames)
+                self.assertIn("effective_phase_bias_reference_tow", correction_reader.fieldnames)
 
     def test_clas_ppp_cli_accepts_direct_qzss_l6_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_cli_") as temp_dir:

@@ -47,6 +47,13 @@ double stecTecuFromIonosphereDelayMeters(SignalType signal,
     return delay_m * frequency_hz * frequency_hz / 40.3e16;
 }
 
+double rowCoefficient(const Eigen::RowVectorXd& row, int index) {
+    if (index < 0 || index >= row.size()) {
+        return 0.0;
+    }
+    return row(index);
+}
+
 }  // namespace
 
 PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
@@ -58,6 +65,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     last_clas_hybrid_fallback_reason_.clear();
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+    resetLastArAttemptDiagnostic();
     last_applied_atmos_trop_corrections_ = 0;
     last_applied_atmos_iono_corrections_ = 0;
     last_applied_atmos_trop_m_ = 0.0;
@@ -210,9 +218,22 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             diagnostic.broadcast_iode = eph != nullptr ? static_cast<int>(eph->iode) : -1;
             diagnostic.orbit_clock_applied = true;
             diagnostic.orbit_correction_x_m = osr.orbit_projection_m;
+            diagnostic.orbit_projection_m = osr.orbit_projection_m;
             diagnostic.clock_correction_m = osr.clock_correction_m;
+            diagnostic.prc_m = osr.PRC[f];
+            diagnostic.cpc_m = osr.CPC[f];
+            const auto applied_corrections = ppp_clas::selectAppliedOsrCorrections(
+                osr, f, ppp_config_.clas_correction_application_policy);
+            diagnostic.applied_pseudorange_correction_m =
+                applied_corrections.pseudorange_correction_m;
+            diagnostic.applied_carrier_phase_correction_m =
+                applied_corrections.carrier_phase_correction_m;
+            diagnostic.relativity_correction_m = osr.relativity_correction_m;
+            diagnostic.receiver_antenna_m = osr.receiver_antenna_m[f];
             diagnostic.code_bias_m = osr.code_bias_m[f];
             diagnostic.phase_bias_m = osr.phase_bias_m[f];
+            diagnostic.windup_m = osr.windup_m[f];
+            diagnostic.phase_compensation_m = osr.phase_compensation_m[f];
             diagnostic.trop_correction_m = osr.trop_correction_m;
             diagnostic.stec_tecu = stecTecuFromIonosphereDelayMeters(
                 osr.signals[0], eph, osr.iono_l1_m);
@@ -220,6 +241,25 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                 diagnostic.ionosphere_coefficient * osr.iono_l1_m;
             diagnostic.atmos_token_count = static_cast<int>(epoch_atmos.size());
             diagnostic.preferred_network_id = preferred_network_id;
+            diagnostic.atmos_network_id = osr.atmos_network_id;
+            diagnostic.code_bias_network_id = osr.code_bias_network_id;
+            diagnostic.phase_bias_network_id = osr.phase_bias_network_id;
+            diagnostic.atmos_reference_week = osr.atmos_reference_time.week;
+            diagnostic.atmos_reference_tow = osr.atmos_reference_time.tow;
+            diagnostic.phase_bias_reference_week = osr.phase_bias_reference_time.week;
+            diagnostic.phase_bias_reference_tow = osr.phase_bias_reference_time.tow;
+            diagnostic.clock_reference_week = osr.clock_reference_time.week;
+            diagnostic.clock_reference_tow = osr.clock_reference_time.tow;
+            const GNSSTime effective_phase_bias_reference_time =
+                selectClasPhaseBiasReferenceTime(
+                    ppp_config_.clas_phase_bias_reference_time_policy,
+                    osr.phase_bias_reference_time,
+                    osr.clock_reference_time,
+                    obs.time);
+            diagnostic.effective_phase_bias_reference_week =
+                effective_phase_bias_reference_time.week;
+            diagnostic.effective_phase_bias_reference_tow =
+                effective_phase_bias_reference_time.tow;
             diagnostic.elevation_deg = osr.elevation * 180.0 / M_PI;
             diagnostic.has_carrier_phase = raw != nullptr && raw->has_carrier_phase;
             diagnostic.valid_after_corrections = osr.valid;
@@ -327,6 +367,86 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     }
     const auto& update_stats = epoch_update.update_stats;
     pre_anchor_covariance_ = update_stats.pre_anchor_covariance;
+    last_residual_diagnostics_.reserve(epoch_update.measurements.size());
+    for (size_t row = 0; row < epoch_update.measurements.size(); ++row) {
+        const auto& measurement = epoch_update.measurements[row];
+        PPPResidualDiagnostic residual_diagnostic;
+        residual_diagnostic.iteration = 0;
+        residual_diagnostic.row_index = static_cast<int>(row);
+        residual_diagnostic.satellite = measurement.satellite;
+        residual_diagnostic.primary_signal = measurement.primary_signal;
+        residual_diagnostic.primary_observation_code =
+            measurement.primary_observation_code;
+        residual_diagnostic.frequency_index =
+            measurement.freq_index >= 0 ? measurement.freq_index : 0;
+        residual_diagnostic.ionosphere_coefficient =
+            measurement.ionosphere_coefficient;
+        residual_diagnostic.receiver_clock_state_index =
+            filter_state_.clock_index;
+        residual_diagnostic.receiver_clock_design_coeff =
+            rowCoefficient(measurement.H, filter_state_.clock_index);
+        residual_diagnostic.ionosphere_state_index =
+            measurement.ionosphere_state_index;
+        residual_diagnostic.ionosphere_design_coeff =
+            measurement.ionosphere_design_coeff != 0.0
+                ? measurement.ionosphere_design_coeff
+                : rowCoefficient(measurement.H, measurement.ionosphere_state_index);
+        residual_diagnostic.ambiguity_state_index =
+            measurement.ambiguity_state_index;
+        residual_diagnostic.ambiguity_design_coeff =
+            measurement.ambiguity_design_coeff != 0.0
+                ? measurement.ambiguity_design_coeff
+                : rowCoefficient(measurement.H, measurement.ambiguity_state_index);
+        residual_diagnostic.carrier_phase = measurement.is_phase;
+        residual_diagnostic.ionosphere_constraint =
+            !measurement.is_phase &&
+            measurement.freq_index < 0 &&
+            measurement.satellite.prn != 0;
+        residual_diagnostic.prior_constraint =
+            !measurement.is_phase &&
+            measurement.freq_index < 0 &&
+            measurement.satellite.prn == 0;
+        residual_diagnostic.phase_accepted = measurement.is_phase;
+        residual_diagnostic.phase_ready = measurement.is_phase;
+        residual_diagnostic.ambiguity_lock_count = -1;
+        residual_diagnostic.required_lock_count =
+            measurement.is_phase ? ppp_config_.phase_measurement_min_lock_count : 0;
+        if (measurement.is_phase && !measurement.phase_ambiguities.empty()) {
+            SatelliteId lock_satellite = measurement.phase_ambiguities.front();
+            for (const auto& ambiguity_satellite : measurement.phase_ambiguities) {
+                if (ambiguityStateIndex(ambiguity_satellite) ==
+                    residual_diagnostic.ambiguity_state_index) {
+                    lock_satellite = ambiguity_satellite;
+                    break;
+                }
+            }
+            const auto ambiguity_it = ambiguity_states_.find(lock_satellite);
+            if (ambiguity_it != ambiguity_states_.end()) {
+                residual_diagnostic.ambiguity_lock_count =
+                    ambiguity_it->second.lock_count;
+            }
+        }
+        residual_diagnostic.observation_m = measurement.observation;
+        residual_diagnostic.predicted_m = measurement.predicted;
+        residual_diagnostic.residual_m =
+            row < static_cast<size_t>(update_stats.residuals.size())
+                ? update_stats.residuals(static_cast<int>(row))
+                : measurement.residual;
+        residual_diagnostic.variance_m2 =
+            row < static_cast<size_t>(update_stats.variances.size())
+                ? update_stats.variances(static_cast<int>(row))
+                : measurement.variance;
+        residual_diagnostic.outlier_inflated =
+            row < update_stats.outlier_inflated_rows.size()
+                ? update_stats.outlier_inflated_rows[row]
+                : false;
+        residual_diagnostic.elevation_deg =
+            std::isfinite(measurement.elevation_rad)
+                ? measurement.elevation_rad * 180.0 / M_PI
+                : 0.0;
+        residual_diagnostic.iono_state_m = measurement.ionosphere_state_m;
+        last_residual_diagnostics_.push_back(residual_diagnostic);
+    }
     PPPFilterIterationDiagnostic filter_diagnostic;
     filter_diagnostic.iteration = 0;
     filter_diagnostic.rows = update_stats.nobs;
@@ -334,6 +454,32 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     filter_diagnostic.phase_rows = update_stats.phase_rows;
     filter_diagnostic.ionosphere_constraint_rows =
         update_stats.ionosphere_constraint_rows;
+    filter_diagnostic.outlier_inflated_rows =
+        update_stats.outlier_inflated_row_count;
+    filter_diagnostic.code_outlier_inflated_rows =
+        update_stats.code_outlier_inflated_row_count;
+    filter_diagnostic.phase_outlier_inflated_rows =
+        update_stats.phase_outlier_inflated_row_count;
+    filter_diagnostic.ionosphere_constraint_outlier_inflated_rows =
+        update_stats.ionosphere_constraint_outlier_inflated_row_count;
+    filter_diagnostic.prior_outlier_inflated_rows =
+        update_stats.prior_outlier_inflated_row_count;
+    filter_diagnostic.code_outlier_inflated_max_abs_m =
+        update_stats.code_outlier_inflated_max_abs_m;
+    filter_diagnostic.phase_outlier_inflated_max_abs_m =
+        update_stats.phase_outlier_inflated_max_abs_m;
+    filter_diagnostic.ionosphere_constraint_outlier_inflated_max_abs_m =
+        update_stats.ionosphere_constraint_outlier_inflated_max_abs_m;
+    filter_diagnostic.prior_outlier_inflated_max_abs_m =
+        update_stats.prior_outlier_inflated_max_abs_m;
+    filter_diagnostic.code_outlier_inflated_rms_m =
+        update_stats.code_outlier_inflated_rms_m;
+    filter_diagnostic.phase_outlier_inflated_rms_m =
+        update_stats.phase_outlier_inflated_rms_m;
+    filter_diagnostic.ionosphere_constraint_outlier_inflated_rms_m =
+        update_stats.ionosphere_constraint_outlier_inflated_rms_m;
+    filter_diagnostic.prior_outlier_inflated_rms_m =
+        update_stats.prior_outlier_inflated_rms_m;
     if (seed.isValid()) {
         filter_diagnostic.seed_position_x_m = seed.position_ecef.x();
         filter_diagnostic.seed_position_y_m = seed.position_ecef.y();
@@ -471,8 +617,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             const double p2 = l2_raw->pseudorange - osr.code_bias_m[1];
             const double mw_m = (f1 * l1_m - f2 * l2_m) / (f1 - f2)
                               - (f1 * p1 + f2 * p2) / (f1 + f2);
-            constexpr double lambda_wl_gps = constants::SPEED_OF_LIGHT / (1575.42e6 - 1227.60e6);
-            const double mw_cycles = mw_m / lambda_wl_gps;
+            const double lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
+            if (!std::isfinite(lambda_wl) || lambda_wl <= 0.0) continue;
+            const double mw_cycles = mw_m / lambda_wl;
             auto& amb = ambiguity_states_[osr.satellite];
             const bool mw_slip = l1_raw->loss_of_lock || l2_raw->loss_of_lock;
             if (!mw_slip && amb.mw_count > 0) {
@@ -495,8 +642,10 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     const auto ambiguity_index_for_validation = [&](const SatelliteId& satellite) {
         return ambiguityStateIndex(satellite);
     };
+    const PPPState pre_ar_filter_state = filter_state_;
+    const auto pre_ar_ambiguity_states = ambiguity_states_;
 
-    const auto ambiguity_resolution =
+    auto ambiguity_resolution =
         ppp_clas::resolveAndValidateAmbiguities(
             filter_state_,
             ambiguity_states_,
@@ -515,6 +664,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                   }},
             pppDebugEnabled());
     if (ambiguity_resolution.rejected_after_fix) {
+        markLastArRejectedAfterFix();
         last_ar_ratio_ = 0.0;
         last_fixed_ambiguities_ = 0;
     }
@@ -528,12 +678,47 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     if (ambiguity_resolution.accepted &&
         ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL) {
         wlnl_fixed_position_ok = solveFixedPosition(obs, nav, wlnl_fixed_position);
-        if (pppDebugEnabled() && wlnl_fixed_position_ok) {
-            const double shift = (wlnl_fixed_position -
-                filter_state_.state.segment(filter_state_.pos_index, 3)).norm();
-            std::cerr << "[CLAS-WLNL-FIX] pos_shift=" << shift << "m\n";
+        if (wlnl_fixed_position_ok) {
+            const double shift =
+                (wlnl_fixed_position -
+                 filter_state_.state.segment(filter_state_.pos_index, 3)).norm();
+            if (ppp_config_.clas_wlnl_fixed_position_max_shift_m > 0.0 &&
+                shift > ppp_config_.clas_wlnl_fixed_position_max_shift_m) {
+                last_ar_attempt_diagnostic_.fixed_position_rejected_by_shift = true;
+                wlnl_fixed_position_ok = false;
+                ambiguity_resolution.accepted = false;
+                markLastArRejectedAfterFix();
+                last_ar_ratio_ = 0.0;
+                last_fixed_ambiguities_ = 0;
+                for (auto& [satellite, ambiguity] : ambiguity_states_) {
+                    (void)satellite;
+                    ambiguity.is_fixed = false;
+                    ambiguity.nl_is_fixed = false;
+                    ambiguity.nl_fixed_cycles = 0.0;
+                }
+                if (pppDebugEnabled()) {
+                    std::cerr << "[CLAS-WLNL-FIX] reject pos_shift=" << shift
+                              << "m max="
+                              << ppp_config_.clas_wlnl_fixed_position_max_shift_m
+                              << "m\n";
+                }
+            } else if (pppDebugEnabled()) {
+                std::cerr << "[CLAS-WLNL-FIX] pos_shift=" << shift << "m\n";
+            }
+        } else if (ppp_config_.clas_wlnl_fixed_position_max_shift_m > 0.0) {
+            ambiguity_resolution.accepted = false;
+            markLastArRejectedAfterFix();
+            last_ar_ratio_ = 0.0;
+            last_fixed_ambiguities_ = 0;
+            if (pppDebugEnabled()) {
+                std::cerr << "[CLAS-WLNL-FIX] reject fixed WLS failure\n";
+            }
         }
     }
+    if (ambiguity_resolution.accepted) {
+        last_ar_attempt_diagnostic_.accepted = true;
+    }
+    updateLatestFilterArDiagnostic();
 
     solution = ppp_clas::finalizeEpochSolution(
         filter_state_,
@@ -545,6 +730,10 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
 
     if (wlnl_fixed_position_ok) {
         solution.position_ecef = wlnl_fixed_position;
+    }
+    if (ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL) {
+        filter_state_ = pre_ar_filter_state;
+        ambiguity_states_ = pre_ar_ambiguity_states;
     }
 
     // Multi-epoch SD AR: accumulate DD float ambiguities over epochs,

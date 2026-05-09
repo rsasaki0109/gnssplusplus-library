@@ -34,6 +34,7 @@ struct Options {
     std::string ionex_path;
     std::string dcb_path;
     std::string antex_path;
+    std::string receiver_antenna_type;
     std::string blq_path;
     std::string ocean_loading_station_name;
     std::string out_path;
@@ -66,6 +67,7 @@ struct Options {
     int ssr_orbit_iode_admission_gate_warmup_epochs = 0;
     std::string ar_method_arg;  // Empty means profile default/auto.
     bool estimate_troposphere = true;
+    bool estimate_troposphere_set = false;
     bool estimate_ionosphere = false;
     bool use_ionosphere_free = true;
     bool enable_per_frequency_phase_bias_states = false;
@@ -73,11 +75,14 @@ struct Options {
     bool initialize_phase_ambiguity_with_ionosphere_state = false;
     bool enable_ppp_outlier_detection = true;
     bool claslib_parity = false;
+    bool clas_ppc_profile = false;
     bool native_pntpos_parity_seed = false;
+    bool native_pntpos_parity_seed_set = false;
     bool use_clas_osr_filter = false;
     std::string clas_epoch_policy = "strict-osr";
     std::string clas_osr_application = "full-osr";
     std::string clas_phase_continuity = "full-repair";
+    bool clas_phase_continuity_set = false;
     std::string clas_phase_bias_values = "full";
     std::string clas_phase_bias_reference_time = "phase-bias-reference";
     std::string clas_ssr_timing = "lag-tolerant";
@@ -94,19 +99,57 @@ struct Options {
     double clas_initial_ambiguity_std_cycles = -1.0;
     bool clas_initial_ambiguity_std_cycles_set = false;
     double clas_outlier_sigma_scale = -1.0;
+    double clas_code_outlier_sigma_scale = -1.0;
+    double clas_phase_outlier_sigma_scale = -1.0;
+    double clas_prior_outlier_sigma_scale = -1.0;
+    double clas_phase_outlier_inflated_variance_m2 = -1.0;
+    double clas_code_outlier_min_residual_m = -1.0;
+    double clas_phase_outlier_min_residual_m = -1.0;
+    double clas_prior_outlier_min_residual_m = -1.0;
+    bool clas_reset_phase_ambiguity_on_outlier_inflation = false;
+    bool clas_reset_phase_ambiguity_on_outlier_inflation_set = false;
+    int clas_reset_phase_ambiguity_outlier_min_rows = -1;
+    double clas_reset_phase_ambiguity_outlier_min_residual_m = -1.0;
     bool clas_kinematic_position_reseed = false;
     bool clas_kinematic_position_reseed_set = false;
     double clas_kinematic_position_reseed_variance = -1.0;
     double clas_kinematic_position_reseed_max_residual_rms_m = -1.0;
+    // SPP-clock overwrite policy. Default true preserves historical CLAS
+    // behaviour. Set false (via --no-clas-spp-clock-overwrite) to let KF
+    // track the receiver clock — see clas_per_sat_residual_root_cause_2026_05_08.
+    bool clas_spp_clock_overwrite = true;
+    bool clas_spp_clock_overwrite_set = false;
+    double clas_kf_clock_seed_variance = -1.0;
+    // KF clock process noise override (m^2/s). Default <0 keeps internal
+    // mode-dependent fallback (0 broadcast / 100 SSR). Used to investigate
+    // standard PPP clock-axis residual systematic — see
+    // clas_per_sat_residual_root_cause_2026_05_08.
+    double ppp_process_noise_clock = -1.0;
+    // SPP-clock seed reset gate. ppp_config defaults to true. Set false to
+    // disable per-epoch SPP overwrite of KF clock state — used to investigate
+    // whether the +9m sat-uniform residual systematic comes from KF being
+    // re-anchored to SPP each epoch.
+    bool reset_clock_to_spp_each_epoch = true;
+    bool reset_clock_to_spp_each_epoch_set = false;
+    // Targeted ionosphere-free SPP seed knob. Bypasses
+    // --native-pntpos-parity-seed's other side effects (zero-init position,
+    // preserve-default-clock). Used to test whether single-frequency SPP's
+    // implicit absorption of ionosphere into receiver-clock state explains
+    // the +9m residual systematic.
+    bool spp_seed_iono_free_code = false;
+    bool spp_seed_iono_free_code_set = false;
+    double clas_wlnl_fixed_position_max_shift_m = -1.0;
     bool enable_wlnl_par = false;
     bool enable_wlnl_par_set = false;
     int  wlnl_par_max_exclusions = -1;
     double wlnl_par_exclude_frac_threshold = -1.0;
+    double wlnl_wl_max_fractional_cycles = -1.0;
     bool madocalib_bridge = false;
     std::string madocalib_config_path;
     std::vector<std::string> madoca_l6e_paths;
     std::vector<std::string> madoca_l6d_paths;
     int navsys_mask = 0;
+    bool navsys_mask_set = false;
     int madoca_navsys_mask = 0;
     std::vector<std::string> madocalib_l6_paths;
     std::vector<std::string> madocalib_mdciono_paths;
@@ -118,6 +161,7 @@ struct Options {
     bool low_dynamics_mode = false;
     bool enable_ar = false;
     double ar_ratio_threshold = 3.0;
+    bool ar_ratio_threshold_set = false;
     bool enable_ppp_holdamb = false;
     double ppp_holdamb_innovation_gate_m = 0.0;  // 0 = no gate
     double kinematic_preconvergence_phase_residual_floor_m = 200.0;
@@ -125,6 +169,7 @@ struct Options {
     double initial_ionosphere_variance = -1.0;  // negative keeps default
     double initial_troposphere_variance = -1.0;
     double process_noise_ionosphere = -1.0;  // negative keeps default
+    double process_noise_troposphere = -1.0;  // negative keeps default
     double code_phase_error_ratio_l1 = -1.0;
     double code_phase_error_ratio_l2 = -1.0;
     bool apply_solid_earth_tides = true;
@@ -151,6 +196,8 @@ void printUsage(const char* program_name) {
         << "  --ionex <maps.ionex>     Optional IONEX TEC map product\n"
         << "  --dcb <bias.bsx>         Optional DCB / Bias-SINEX product\n"
         << "  --antex <antennas.atx>   Optional ANTEX file for receiver PCO/PCV and satellite PCO\n"
+        << "  --receiver-antenna-type <type>\n"
+        << "                          Override the RINEX receiver antenna type for ANTEX lookup\n"
         << "  --blq <station.blq>      Optional BLQ ocean loading coefficient file\n"
         << "  --ocean-loading-station <name>\n"
         << "                          Station name to select from the BLQ file\n"
@@ -245,10 +292,14 @@ void printUsage(const char* program_name) {
         << "  --claslib-parity        Use the native CLAS parity profile\n"
         << "                          (CLAS OSR + per-frequency ionosphere estimation)\n"
         << "  --ported-clasnat        Alias for --claslib-parity\n"
+        << "  --clas-ppc-profile      Use the PPC kinematic CLAS profile\n"
+        << "                          (CLAS OSR, residual ionosphere, 1 m anchor,\n"
+        << "                          0.25 m^2 iono prior,\n"
+        << "                          2x code variance, CLASLIB phase variance, kinematic reseed)\n"
         << "  --native-pntpos-parity-seed\n"
         << "                          Use native SPP settings that mirror pntpos behavior for PPP seed\n"
         << "  --no-native-pntpos-parity-seed\n"
-        << "                          Use the default PPP SPP seed settings (default)\n"
+        << "                          Use the default PPP SPP seed settings\n"
         << "  --claslib-pntpos-seed   Deprecated alias for --native-pntpos-parity-seed\n"
         << "  --no-claslib-pntpos-seed\n"
         << "                          Deprecated alias for --no-native-pntpos-parity-seed\n"
@@ -289,6 +340,28 @@ void printUsage(const char* program_name) {
         << "                          CLAS ambiguity init std per frequency; 0 uses the PPP default variance\n"
         << "  --clas-outlier-sigma-scale <scale>\n"
         << "                          CLAS measurement outlier sigma gate; 0 disables inflation\n"
+        << "  --clas-code-outlier-sigma-scale <scale>\n"
+        << "                          CLAS code-only outlier sigma gate; 0 disables, default follows --clas-outlier-sigma-scale\n"
+        << "  --clas-code-outlier-min-residual <m>\n"
+        << "                          CLAS code-only outlier gate absolute residual floor; 0 disables\n"
+        << "  --clas-phase-outlier-sigma-scale <scale>\n"
+        << "                          CLAS phase-only outlier sigma gate; 0 disables, default follows --clas-outlier-sigma-scale\n"
+        << "  --clas-phase-outlier-inflated-variance <m^2>\n"
+        << "                          CLAS phase-only inflated measurement variance; default uses 1e10\n"
+        << "  --clas-prior-outlier-sigma-scale <scale>\n"
+        << "                          CLAS prior-constraint outlier sigma gate; 0 disables, default follows --clas-outlier-sigma-scale\n"
+        << "  --clas-prior-outlier-min-residual <m>\n"
+        << "                          CLAS prior-constraint outlier gate absolute residual floor; 0 disables\n"
+        << "  --clas-phase-outlier-min-residual <m>\n"
+        << "                          CLAS phase-only outlier gate absolute residual floor; 0 disables\n"
+        << "  --clas-reset-phase-ambiguity-on-outlier-inflation\n"
+        << "                          Reset CLAS phase ambiguity states touched by inflated phase rows\n"
+        << "  --no-clas-reset-phase-ambiguity-on-outlier-inflation\n"
+        << "                          Disable reset of inflated CLAS phase ambiguity states (default)\n"
+        << "  --clas-reset-phase-ambiguity-outlier-min-rows <n>\n"
+        << "                          Minimum inflated phase rows in an epoch before reset is applied\n"
+        << "  --clas-reset-phase-ambiguity-outlier-min-residual <m>\n"
+        << "                          Minimum inflated phase residual for ambiguity reset membership\n"
         << "  --clas-kinematic-reseed-position\n"
         << "                          Re-init position state from SPP every kinematic epoch (default off)\n"
         << "  --no-clas-kinematic-reseed-position\n"
@@ -297,12 +370,28 @@ void printUsage(const char* program_name) {
         << "                          Variance reset on kinematic re-seed (default: 10000.0)\n"
         << "  --clas-kinematic-reseed-position-max-residual-rms <m>\n"
         << "                          Skip reseed when SPP residual_rms exceeds this (m); guards against urban-canyon SPP pin-to-bad. <=0 disables (default).\n"
+        << "  --clas-spp-clock-overwrite\n"
+        << "                          Overwrite KF receiver-clock state with SPP every kinematic epoch (default on; historical behaviour).\n"
+        << "  --no-clas-spp-clock-overwrite\n"
+        << "                          Skip the SPP clock overwrite and let the KF track receiver clock. Targets the +11m sat-uniform residual systematic documented in clas_per_sat_residual_root_cause_2026_05_08.\n"
+        << "  --clas-kf-clock-seed-variance <m^2>\n"
+        << "                          Initial KF clock variance when --no-clas-spp-clock-overwrite is set (default: 10000.0). Ignored when SPP overwrite is on.\n"
+        << "  --ppp-process-noise-clock <m^2/s>\n"
+        << "                          Override KF receiver-clock process noise (default: 0 broadcast / 100 SSR). Set >0 to use a single value for both modes — used to investigate the +11m clock-axis residual systematic in standard PPP path.\n"
+        << "  --reset-clock-to-spp     Force KF receiver-clock state to SPP every epoch (default on; historical behaviour for broadcast-rtklib path).\n"
+        << "  --no-reset-clock-to-spp  Skip SPP overwrite of KF receiver-clock state — used to investigate whether the +9m sat-uniform residual systematic comes from per-epoch SPP re-anchoring.\n"
+        << "  --spp-seed-iono-free-code\n"
+        << "                          Use ionosphere-free L1+L2 code combination in the SPP seed. Targeted alternative to --native-pntpos-parity-seed without its zero-init / preserve-default-clock side effects. Used to test whether single-frequency SPP absorbing iono into receiver-clock state explains the +9m residual systematic.\n"
+        << "  --no-spp-seed-iono-free-code\n"
+        << "                          Force single-frequency L1 code in the SPP seed (default).\n"
         << "  --enable-wlnl-par       Enable WLNL Partial AR (greedy worst-|frac| exclusion when ratio fails)\n"
         << "  --no-wlnl-par           Disable WLNL Partial AR\n"
         << "  --wlnl-par-max-exclusions <n>\n"
         << "                          Cap PAR exclusion iterations (default: 4)\n"
         << "  --wlnl-par-exclude-frac-threshold <cycles>\n"
         << "                          Skip excluding pairs whose |frac| is below this (default: 0.20)\n"
+        << "  --wlnl-wl-max-fractional <cycles>\n"
+        << "                          Max MW wide-lane fractional cycle before rejecting WL fix (default: 0.25)\n"
         << "  --madocalib-bridge      Delegate this run to linked MADOCALIB postpos()\n"
         << "                          (requires CMake -DMADOCALIB_PARITY_LINK=ON)\n"
         << "  --madocalib-l6 <file>   Extra MADOCA L6 input file; repeat for two-channel L6E\n"
@@ -332,6 +421,8 @@ void printUsage(const char* program_name) {
         << "  --disable-ar            Disable PPP ambiguity fixing (default)\n"
         << "  --ar-ratio-threshold <value>\n"
         << "                          Ratio threshold for PPP ambiguity fixing (default: 3.0)\n"
+        << "  --clas-wlnl-fixed-position-max-shift <m>\n"
+        << "                          Reject CLAS WLNL fixed WLS if it shifts farther from float; 0 disables\n"
         << "  --process-noise-ionosphere <m^2/s>\n"
         << "                          Ionosphere random-walk process noise (default: PPPConfig)\n"
         << "  --quiet                  Suppress per-run summary output\n"
@@ -641,6 +732,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.madoca_l6d_paths.push_back(argv[++i]);
         } else if (arg == "--navsys" && i + 1 < argc) {
             options.navsys_mask = std::stoi(argv[++i]);
+            options.navsys_mask_set = true;
         } else if (arg == "--madoca-navsys" && i + 1 < argc) {
             options.madoca_navsys_mask = std::stoi(argv[++i]);
         } else if (arg == "--ionex" && i + 1 < argc) {
@@ -649,6 +741,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.dcb_path = argv[++i];
         } else if (arg == "--antex" && i + 1 < argc) {
             options.antex_path = argv[++i];
+        } else if (arg == "--receiver-antenna-type" && i + 1 < argc) {
+            options.receiver_antenna_type = argv[++i];
         } else if (arg == "--blq" && i + 1 < argc) {
             options.blq_path = argv[++i];
         } else if (arg == "--ocean-loading-station" && i + 1 < argc) {
@@ -720,19 +814,28 @@ Options parseArguments(int argc, char* argv[]) {
             options.ar_method_arg = argv[++i];
         } else if (arg == "--no-estimate-troposphere") {
             options.estimate_troposphere = false;
+            options.estimate_troposphere_set = true;
         } else if (arg == "--estimate-troposphere") {
             options.estimate_troposphere = true;
+            options.estimate_troposphere_set = true;
         } else if (arg == "--claslib-parity" || arg == "--ported-clasnat") {
             options.claslib_parity = true;
+            options.use_clas_osr_filter = true;
+            options.use_ionosphere_free = false;
+            options.estimate_ionosphere = true;
+        } else if (arg == "--clas-ppc-profile") {
+            options.clas_ppc_profile = true;
             options.use_clas_osr_filter = true;
             options.use_ionosphere_free = false;
             options.estimate_ionosphere = true;
         } else if (arg == "--native-pntpos-parity-seed" ||
                    arg == "--claslib-pntpos-seed") {
             options.native_pntpos_parity_seed = true;
+            options.native_pntpos_parity_seed_set = true;
         } else if (arg == "--no-native-pntpos-parity-seed" ||
                    arg == "--no-claslib-pntpos-seed") {
             options.native_pntpos_parity_seed = false;
+            options.native_pntpos_parity_seed_set = true;
         } else if (arg == "--clas-osr") {
             options.use_clas_osr_filter = true;
         } else if (arg == "--clas-epoch-policy" && i + 1 < argc) {
@@ -741,6 +844,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.clas_osr_application = argv[++i];
         } else if (arg == "--clas-phase-continuity" && i + 1 < argc) {
             options.clas_phase_continuity = argv[++i];
+            options.clas_phase_continuity_set = true;
         } else if (arg == "--clas-phase-bias-values" && i + 1 < argc) {
             options.clas_phase_bias_values = argv[++i];
         } else if (arg == "--clas-phase-bias-reference-time" && i + 1 < argc) {
@@ -772,6 +876,31 @@ Options parseArguments(int argc, char* argv[]) {
             options.clas_initial_ambiguity_std_cycles_set = true;
         } else if (arg == "--clas-outlier-sigma-scale" && i + 1 < argc) {
             options.clas_outlier_sigma_scale = std::stod(argv[++i]);
+        } else if (arg == "--clas-code-outlier-sigma-scale" && i + 1 < argc) {
+            options.clas_code_outlier_sigma_scale = std::stod(argv[++i]);
+        } else if (arg == "--clas-code-outlier-min-residual" && i + 1 < argc) {
+            options.clas_code_outlier_min_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--clas-phase-outlier-sigma-scale" && i + 1 < argc) {
+            options.clas_phase_outlier_sigma_scale = std::stod(argv[++i]);
+        } else if (arg == "--clas-phase-outlier-inflated-variance" && i + 1 < argc) {
+            options.clas_phase_outlier_inflated_variance_m2 = std::stod(argv[++i]);
+        } else if (arg == "--clas-prior-outlier-sigma-scale" && i + 1 < argc) {
+            options.clas_prior_outlier_sigma_scale = std::stod(argv[++i]);
+        } else if (arg == "--clas-prior-outlier-min-residual" && i + 1 < argc) {
+            options.clas_prior_outlier_min_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--clas-phase-outlier-min-residual" && i + 1 < argc) {
+            options.clas_phase_outlier_min_residual_m = std::stod(argv[++i]);
+        } else if (arg == "--clas-reset-phase-ambiguity-on-outlier-inflation") {
+            options.clas_reset_phase_ambiguity_on_outlier_inflation = true;
+            options.clas_reset_phase_ambiguity_on_outlier_inflation_set = true;
+        } else if (arg == "--no-clas-reset-phase-ambiguity-on-outlier-inflation") {
+            options.clas_reset_phase_ambiguity_on_outlier_inflation = false;
+            options.clas_reset_phase_ambiguity_on_outlier_inflation_set = true;
+        } else if (arg == "--clas-reset-phase-ambiguity-outlier-min-rows" && i + 1 < argc) {
+            options.clas_reset_phase_ambiguity_outlier_min_rows = std::stoi(argv[++i]);
+        } else if (arg == "--clas-reset-phase-ambiguity-outlier-min-residual" && i + 1 < argc) {
+            options.clas_reset_phase_ambiguity_outlier_min_residual_m =
+                std::stod(argv[++i]);
         } else if (arg == "--clas-kinematic-reseed-position") {
             options.clas_kinematic_position_reseed = true;
             options.clas_kinematic_position_reseed_set = true;
@@ -782,6 +911,30 @@ Options parseArguments(int argc, char* argv[]) {
             options.clas_kinematic_position_reseed_variance = std::stod(argv[++i]);
         } else if (arg == "--clas-kinematic-reseed-position-max-residual-rms" && i + 1 < argc) {
             options.clas_kinematic_position_reseed_max_residual_rms_m = std::stod(argv[++i]);
+        } else if (arg == "--clas-spp-clock-overwrite") {
+            options.clas_spp_clock_overwrite = true;
+            options.clas_spp_clock_overwrite_set = true;
+        } else if (arg == "--no-clas-spp-clock-overwrite") {
+            options.clas_spp_clock_overwrite = false;
+            options.clas_spp_clock_overwrite_set = true;
+        } else if (arg == "--clas-kf-clock-seed-variance" && i + 1 < argc) {
+            options.clas_kf_clock_seed_variance = std::stod(argv[++i]);
+        } else if (arg == "--ppp-process-noise-clock" && i + 1 < argc) {
+            options.ppp_process_noise_clock = std::stod(argv[++i]);
+        } else if (arg == "--reset-clock-to-spp") {
+            options.reset_clock_to_spp_each_epoch = true;
+            options.reset_clock_to_spp_each_epoch_set = true;
+        } else if (arg == "--no-reset-clock-to-spp") {
+            options.reset_clock_to_spp_each_epoch = false;
+            options.reset_clock_to_spp_each_epoch_set = true;
+        } else if (arg == "--spp-seed-iono-free-code") {
+            options.spp_seed_iono_free_code = true;
+            options.spp_seed_iono_free_code_set = true;
+        } else if (arg == "--no-spp-seed-iono-free-code") {
+            options.spp_seed_iono_free_code = false;
+            options.spp_seed_iono_free_code_set = true;
+        } else if (arg == "--clas-wlnl-fixed-position-max-shift" && i + 1 < argc) {
+            options.clas_wlnl_fixed_position_max_shift_m = std::stod(argv[++i]);
         } else if (arg == "--enable-wlnl-par") {
             options.enable_wlnl_par = true;
             options.enable_wlnl_par_set = true;
@@ -792,6 +945,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.wlnl_par_max_exclusions = std::stoi(argv[++i]);
         } else if (arg == "--wlnl-par-exclude-frac-threshold" && i + 1 < argc) {
             options.wlnl_par_exclude_frac_threshold = std::stod(argv[++i]);
+        } else if (arg == "--wlnl-wl-max-fractional" && i + 1 < argc) {
+            options.wlnl_wl_max_fractional_cycles = std::stod(argv[++i]);
         } else if (arg == "--madocalib-bridge") {
             options.madocalib_bridge = true;
         } else if (arg == "--madocalib-l6" && i + 1 < argc) {
@@ -854,6 +1009,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.enable_ar = false;
         } else if (arg == "--ar-ratio-threshold" && i + 1 < argc) {
             options.ar_ratio_threshold = std::stod(argv[++i]);
+            options.ar_ratio_threshold_set = true;
         } else if (arg == "--filter-iterations" && i + 1 < argc) {
             options.filter_iterations = std::stoi(argv[++i]);
         } else if (arg == "--initial-ionosphere-variance" && i + 1 < argc) {
@@ -862,6 +1018,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.initial_troposphere_variance = std::stod(argv[++i]);
         } else if (arg == "--process-noise-ionosphere" && i + 1 < argc) {
             options.process_noise_ionosphere = std::stod(argv[++i]);
+        } else if (arg == "--process-noise-troposphere" && i + 1 < argc) {
+            options.process_noise_troposphere = std::stod(argv[++i]);
         } else if (arg == "--code-phase-error-ratio-l1" && i + 1 < argc) {
             options.code_phase_error_ratio_l1 = std::stod(argv[++i]);
         } else if (arg == "--code-phase-error-ratio-l2" && i + 1 < argc) {
@@ -958,6 +1116,10 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.ar_ratio_threshold <= 0.0) {
         argumentError("--ar-ratio-threshold must be positive", argv[0]);
     }
+    if (options.wlnl_wl_max_fractional_cycles <= 0.0 &&
+        options.wlnl_wl_max_fractional_cycles != -1.0) {
+        argumentError("--wlnl-wl-max-fractional must be positive", argv[0]);
+    }
     if (!std::isfinite(options.kinematic_preconvergence_phase_residual_floor_m) ||
         options.kinematic_preconvergence_phase_residual_floor_m <= 0.0) {
         argumentError("--kinematic-preconvergence-phase-residual-floor must be positive", argv[0]);
@@ -976,6 +1138,11 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.process_noise_ionosphere >= 0.0 &&
         options.process_noise_ionosphere == 0.0) {
         argumentError("--process-noise-ionosphere must be positive", argv[0]);
+    }
+    if (options.clas_wlnl_fixed_position_max_shift_m != -1.0 &&
+        (options.clas_wlnl_fixed_position_max_shift_m < 0.0 ||
+         !std::isfinite(options.clas_wlnl_fixed_position_max_shift_m))) {
+        argumentError("--clas-wlnl-fixed-position-max-shift must be non-negative", argv[0]);
     }
     if (options.code_phase_error_ratio_l1 >= 0.0 &&
         options.code_phase_error_ratio_l1 <= 0.0) {
@@ -1015,9 +1182,62 @@ Options parseArguments(int argc, char* argv[]) {
          options.clas_outlier_sigma_scale != -1.0)) {
         argumentError("--clas-outlier-sigma-scale must be non-negative", argv[0]);
     }
+    if (options.clas_code_outlier_sigma_scale < -1.0 ||
+        (options.clas_code_outlier_sigma_scale < 0.0 &&
+         options.clas_code_outlier_sigma_scale != -1.0)) {
+        argumentError("--clas-code-outlier-sigma-scale must be non-negative", argv[0]);
+    }
+    if (options.clas_phase_outlier_sigma_scale < -1.0 ||
+        (options.clas_phase_outlier_sigma_scale < 0.0 &&
+         options.clas_phase_outlier_sigma_scale != -1.0)) {
+        argumentError("--clas-phase-outlier-sigma-scale must be non-negative", argv[0]);
+    }
+    if (options.clas_prior_outlier_sigma_scale < -1.0 ||
+        (options.clas_prior_outlier_sigma_scale < 0.0 &&
+         options.clas_prior_outlier_sigma_scale != -1.0)) {
+        argumentError("--clas-prior-outlier-sigma-scale must be non-negative", argv[0]);
+    }
+    if (options.clas_phase_outlier_inflated_variance_m2 <= 0.0 &&
+        options.clas_phase_outlier_inflated_variance_m2 != -1.0) {
+        argumentError("--clas-phase-outlier-inflated-variance must be positive", argv[0]);
+    }
+    if (options.clas_code_outlier_min_residual_m < -1.0 ||
+        (options.clas_code_outlier_min_residual_m < 0.0 &&
+         options.clas_code_outlier_min_residual_m != -1.0)) {
+        argumentError("--clas-code-outlier-min-residual must be non-negative", argv[0]);
+    }
+    if (options.clas_phase_outlier_min_residual_m < -1.0 ||
+        (options.clas_phase_outlier_min_residual_m < 0.0 &&
+         options.clas_phase_outlier_min_residual_m != -1.0)) {
+        argumentError("--clas-phase-outlier-min-residual must be non-negative", argv[0]);
+    }
+    if (options.clas_prior_outlier_min_residual_m < -1.0 ||
+        (options.clas_prior_outlier_min_residual_m < 0.0 &&
+         options.clas_prior_outlier_min_residual_m != -1.0)) {
+        argumentError("--clas-prior-outlier-min-residual must be non-negative", argv[0]);
+    }
+    if (options.clas_reset_phase_ambiguity_outlier_min_rows < -1 ||
+        options.clas_reset_phase_ambiguity_outlier_min_rows == 0) {
+        argumentError("--clas-reset-phase-ambiguity-outlier-min-rows must be positive", argv[0]);
+    }
+    if (options.clas_reset_phase_ambiguity_outlier_min_residual_m < -1.0 ||
+        (options.clas_reset_phase_ambiguity_outlier_min_residual_m < 0.0 &&
+         options.clas_reset_phase_ambiguity_outlier_min_residual_m != -1.0)) {
+        argumentError(
+            "--clas-reset-phase-ambiguity-outlier-min-residual must be non-negative",
+            argv[0]);
+    }
     if (options.clas_kinematic_position_reseed_variance <= 0.0 &&
         options.clas_kinematic_position_reseed_variance != -1.0) {
         argumentError("--clas-kinematic-reseed-position-variance must be positive", argv[0]);
+    }
+    if (options.clas_kf_clock_seed_variance <= 0.0 &&
+        options.clas_kf_clock_seed_variance != -1.0) {
+        argumentError("--clas-kf-clock-seed-variance must be positive", argv[0]);
+    }
+    if (options.ppp_process_noise_clock < 0.0 &&
+        options.ppp_process_noise_clock != -1.0) {
+        argumentError("--ppp-process-noise-clock must be >= 0", argv[0]);
     }
     if (options.ssr_step_seconds <= 0.0) {
         argumentError("--ssr-step-seconds must be positive", argv[0]);
@@ -1104,6 +1324,17 @@ Options parseArguments(int argc, char* argv[]) {
             argv[0]);
     }
     if (options.claslib_parity) {
+        if (options.ar_method_arg.empty()) {
+            options.ar_method_arg = "dd-per-freq";
+        }
+        if (!options.ar_ratio_threshold_set) {
+            options.ar_ratio_threshold = 1.2;
+            options.ar_ratio_threshold_set = true;
+        }
+        if (!options.estimate_troposphere_set) {
+            options.estimate_troposphere = false;
+            options.estimate_troposphere_set = true;
+        }
         if (options.initial_ionosphere_variance < 0.0) {
             options.initial_ionosphere_variance = 0.25;
         }
@@ -1116,6 +1347,14 @@ Options parseArguments(int argc, char* argv[]) {
         if (options.clas_code_variance_scale < 0.0) {
             options.clas_code_variance_scale = 4.0;
         }
+        if (options.clas_phase_variance < 0.0) {
+            // CLASLIB stats-errphase is 0.010 m; this option stores variance.
+            options.clas_phase_variance = 0.0001;
+        }
+        if (!options.clas_kinematic_position_reseed_set) {
+            options.clas_kinematic_position_reseed = true;
+            options.clas_kinematic_position_reseed_set = true;
+        }
         if (!options.clas_initial_ambiguity_std_cycles_set) {
             options.clas_initial_ambiguity_std_cycles = 100.0;
             options.clas_initial_ambiguity_std_cycles_set = true;
@@ -1125,6 +1364,58 @@ Options parseArguments(int argc, char* argv[]) {
             // existing convergence_min_epochs field is also the DD-AR lock
             // gate, and lock_count reaches 6 at the first comparable epoch.
             options.convergence_min_epochs = 6;
+        }
+    }
+    if (options.clas_ppc_profile) {
+        if (!options.navsys_mask_set) {
+            options.navsys_mask = 25;
+            options.navsys_mask_set = true;
+        }
+        if (!options.estimate_troposphere_set) {
+            options.estimate_troposphere = false;
+            options.estimate_troposphere_set = true;
+        }
+        if (!options.clas_phase_continuity_set) {
+            options.clas_phase_continuity = "no-phase-bias";
+        }
+        if (!options.enable_wlnl_par_set) {
+            options.enable_wlnl_par = true;
+            options.enable_wlnl_par_set = true;
+        }
+        if (options.clas_anchor_sigma < 0.0) {
+            options.clas_anchor_sigma = 1.0;
+        }
+        if (options.clas_phase_variance < 0.0) {
+            options.clas_phase_variance = 0.0001;
+        }
+        if (options.clas_code_variance_scale < 0.0) {
+            options.clas_code_variance_scale = 2.0;
+        }
+        if (options.clas_iono_prior_variance < 0.0) {
+            options.clas_iono_prior_variance = 0.25;
+        }
+        if (options.clas_code_outlier_sigma_scale < 0.0) {
+            options.clas_code_outlier_sigma_scale = 10.0;
+        }
+        if (options.clas_code_outlier_min_residual_m < 0.0) {
+            options.clas_code_outlier_min_residual_m = 0.0;
+        }
+        if (options.clas_phase_outlier_min_residual_m < 0.0) {
+            options.clas_phase_outlier_min_residual_m = 0.0;
+        }
+        if (options.clas_prior_outlier_min_residual_m < 0.0) {
+            options.clas_prior_outlier_min_residual_m = 0.0;
+        }
+        if (!options.clas_kinematic_position_reseed_set) {
+            options.clas_kinematic_position_reseed = true;
+            options.clas_kinematic_position_reseed_set = true;
+        }
+        if (!options.native_pntpos_parity_seed_set) {
+            options.native_pntpos_parity_seed = true;
+            options.native_pntpos_parity_seed_set = true;
+        }
+        if (options.clas_wlnl_fixed_position_max_shift_m < 0.0) {
+            options.clas_wlnl_fixed_position_max_shift_m = 0.1;
         }
     }
     return options;
@@ -1321,13 +1612,24 @@ void writeCorrectionLogHeader(std::ostream& output) {
            "has_carrier_phase,primary_code_bias_coeff,"
            "secondary_code_bias_coeff,ssr_available,ssr_orbit_iode,broadcast_iode,"
            "orbit_clock_applied,orbit_clock_skip_reason,orbit_dx_m,"
-           "orbit_dy_m,orbit_dz_m,clock_m,ura_sigma_m,code_bias_m,phase_bias_m,"
-           "trop_m,stec_tecu,iono_m,ionosphere_estimation_constraint,dcb_applied,"
+           "orbit_dy_m,orbit_dz_m,clock_m,ura_sigma_m,prc_m,cpc_m,"
+           "applied_pseudorange_correction_m,applied_carrier_phase_correction_m,"
+           "relativity_correction_m,receiver_antenna_m,code_bias_m,phase_bias_m,"
+           "windup_m,phase_compensation_m,"
+           "trop_m,modeled_trop_delay_m,modeled_zenith_trop_delay_m,"
+           "estimated_trop_delay_m,stec_tecu,iono_m,"
+           "ionosphere_estimation_constraint,dcb_applied,"
            "dcb_bias_m,ionex_applied,ionex_iono_m,atmos_token_count,"
            "preferred_network_id,elevation_deg,variance_pr,variance_cp,"
            "valid_after_corrections,solution_status,receiver_x_m,receiver_y_m,"
            "receiver_z_m,satellite_x_m,satellite_y_m,satellite_z_m,"
-           "satellite_clock_bias_m,geometric_range_m,los_x,los_y,los_z\n";
+           "satellite_clock_bias_m,geometric_range_m,los_x,los_y,los_z,"
+           "orbit_projection_m,atmos_network_id,code_bias_network_id,"
+           "phase_bias_network_id,atmos_reference_week,atmos_reference_tow,"
+           "phase_bias_reference_week,phase_bias_reference_tow,"
+           "clock_reference_week,clock_reference_tow,"
+           "effective_phase_bias_reference_week,"
+           "effective_phase_bias_reference_tow\n";
 }
 
 void writeCorrectionLogRow(
@@ -1357,9 +1659,20 @@ void writeCorrectionLogRow(
            << diagnostic.orbit_correction_z_m << ','
            << diagnostic.clock_correction_m << ','
            << diagnostic.ura_sigma_m << ','
+           << diagnostic.prc_m << ','
+           << diagnostic.cpc_m << ','
+           << diagnostic.applied_pseudorange_correction_m << ','
+           << diagnostic.applied_carrier_phase_correction_m << ','
+           << diagnostic.relativity_correction_m << ','
+           << diagnostic.receiver_antenna_m << ','
            << diagnostic.code_bias_m << ','
            << diagnostic.phase_bias_m << ','
+           << diagnostic.windup_m << ','
+           << diagnostic.phase_compensation_m << ','
            << diagnostic.trop_correction_m << ','
+           << diagnostic.modeled_trop_delay_m << ','
+           << diagnostic.modeled_zenith_trop_delay_m << ','
+           << diagnostic.estimated_trop_delay_m << ','
            << diagnostic.stec_tecu << ','
            << diagnostic.iono_correction_m << ','
            << csvBool(diagnostic.ionosphere_estimation_constraint) << ','
@@ -1384,12 +1697,33 @@ void writeCorrectionLogRow(
            << diagnostic.geometric_range_m << ','
            << diagnostic.line_of_sight_x << ','
            << diagnostic.line_of_sight_y << ','
-           << diagnostic.line_of_sight_z << '\n';
+           << diagnostic.line_of_sight_z << ','
+           << diagnostic.orbit_projection_m << ','
+           << diagnostic.atmos_network_id << ','
+           << diagnostic.code_bias_network_id << ','
+           << diagnostic.phase_bias_network_id << ','
+           << diagnostic.atmos_reference_week << ','
+           << diagnostic.atmos_reference_tow << ','
+           << diagnostic.phase_bias_reference_week << ','
+           << diagnostic.phase_bias_reference_tow << ','
+           << diagnostic.clock_reference_week << ','
+           << diagnostic.clock_reference_tow << ','
+           << diagnostic.effective_phase_bias_reference_week << ','
+           << diagnostic.effective_phase_bias_reference_tow << '\n';
 }
 
 void writePPPFilterLogHeader(std::ostream& output) {
     output
         << "week,tow,iteration,rows,code_rows,phase_rows,ionosphere_constraint_rows,"
+           "outlier_inflated_rows,code_outlier_inflated_rows,"
+           "phase_outlier_inflated_rows,ionosphere_constraint_outlier_inflated_rows,"
+           "prior_outlier_inflated_rows,"
+           "code_outlier_inflated_max_abs_m,phase_outlier_inflated_max_abs_m,"
+           "ionosphere_constraint_outlier_inflated_max_abs_m,"
+           "prior_outlier_inflated_max_abs_m,"
+           "code_outlier_inflated_rms_m,phase_outlier_inflated_rms_m,"
+           "ionosphere_constraint_outlier_inflated_rms_m,"
+           "prior_outlier_inflated_rms_m,"
            "pos_delta_m,clock_delta_m,trop_delta_m,iono_delta_rms_m,"
            "iono_delta_max_abs_m,clock_state_m,"
            "trop_state_m,iono_state_rms_m,iono_state_max_abs_m,code_residual_rms_m,"
@@ -1400,7 +1734,27 @@ void writePPPFilterLogHeader(std::ostream& output) {
            "bds_clock_delta_m,bds2_clock_delta_m,bds3_clock_delta_m,"
            "glo_clock_state_m,gal_clock_state_m,qzs_clock_state_m,bds_clock_state_m,"
            "bds2_clock_state_m,bds3_clock_state_m,seed_position_x_m,"
-           "seed_position_y_m,seed_position_z_m,seed_clock_m\n";
+           "seed_position_y_m,seed_position_z_m,seed_clock_m,"
+           "ar_enabled,ar_attempted,ar_accepted,ar_rejected_after_fix,"
+           "ar_min_lock_count,ar_min_satellites,ar_total_ambiguities,"
+           "ar_eligible_ambiguities,ar_skipped_reinitialization,"
+           "ar_skipped_lock,ar_skipped_scale,ar_skipped_index,"
+           "ar_wl_fixed_count,ar_wl_max_mw_count,ar_ratio,"
+           "ar_required_ratio,ar_fixed_ambiguities,ar_madoca_ewl_candidates,"
+           "ar_madoca_ewl_applied_constraints,"
+           "ar_madoca_ewl_skipped_large_frac,"
+           "ar_madoca_ewl_skipped_large_sigma,"
+           "ar_madoca_wl_attempted_pairs,"
+           "ar_madoca_wl_applied_constraints,"
+           "ar_madoca_wl_skipped_invalid_row,"
+           "ar_madoca_wl_skipped_no_covariance,"
+           "ar_madoca_wl_skipped_large_innovation,"
+           "ar_fixed_position_observations,ar_fixed_position_unknowns,"
+           "ar_fixed_position_solved,ar_fixed_position_rejected_by_shift,"
+           "ar_fixed_position_shift_m,ar_fixed_position_clock_update_rms_m,"
+           "ar_fixed_position_clock_update_max_abs_m,"
+           "ar_fixed_position_residual_rms_m,"
+           "ar_fixed_position_residual_max_abs_m\n";
 }
 
 void writePPPFilterLogRow(
@@ -1415,6 +1769,19 @@ void writePPPFilterLogRow(
            << diagnostic.code_rows << ','
            << diagnostic.phase_rows << ','
            << diagnostic.ionosphere_constraint_rows << ','
+           << diagnostic.outlier_inflated_rows << ','
+           << diagnostic.code_outlier_inflated_rows << ','
+           << diagnostic.phase_outlier_inflated_rows << ','
+           << diagnostic.ionosphere_constraint_outlier_inflated_rows << ','
+           << diagnostic.prior_outlier_inflated_rows << ','
+           << diagnostic.code_outlier_inflated_max_abs_m << ','
+           << diagnostic.phase_outlier_inflated_max_abs_m << ','
+           << diagnostic.ionosphere_constraint_outlier_inflated_max_abs_m << ','
+           << diagnostic.prior_outlier_inflated_max_abs_m << ','
+           << diagnostic.code_outlier_inflated_rms_m << ','
+           << diagnostic.phase_outlier_inflated_rms_m << ','
+           << diagnostic.ionosphere_constraint_outlier_inflated_rms_m << ','
+           << diagnostic.prior_outlier_inflated_rms_m << ','
            << diagnostic.pos_delta_m << ','
            << diagnostic.clock_delta_m << ','
            << diagnostic.trop_delta_m << ','
@@ -1452,13 +1819,48 @@ void writePPPFilterLogRow(
            << diagnostic.seed_position_x_m << ','
            << diagnostic.seed_position_y_m << ','
            << diagnostic.seed_position_z_m << ','
-           << diagnostic.seed_clock_m << '\n';
+           << diagnostic.seed_clock_m << ','
+           << csvBool(diagnostic.ar_enabled) << ','
+           << csvBool(diagnostic.ar_attempted) << ','
+           << csvBool(diagnostic.ar_accepted) << ','
+           << csvBool(diagnostic.ar_rejected_after_fix) << ','
+           << diagnostic.ar_min_lock_count << ','
+           << diagnostic.ar_min_satellites << ','
+           << diagnostic.ar_total_ambiguities << ','
+           << diagnostic.ar_eligible_ambiguities << ','
+           << diagnostic.ar_skipped_reinitialization << ','
+           << diagnostic.ar_skipped_lock << ','
+           << diagnostic.ar_skipped_scale << ','
+           << diagnostic.ar_skipped_index << ','
+           << diagnostic.ar_wl_fixed_count << ','
+           << diagnostic.ar_wl_max_mw_count << ','
+           << diagnostic.ar_ratio << ','
+           << diagnostic.ar_required_ratio << ','
+           << diagnostic.ar_fixed_ambiguities << ','
+           << diagnostic.ar_madoca_ewl_candidates << ','
+           << diagnostic.ar_madoca_ewl_applied_constraints << ','
+           << diagnostic.ar_madoca_ewl_skipped_large_frac << ','
+           << diagnostic.ar_madoca_ewl_skipped_large_sigma << ','
+           << diagnostic.ar_madoca_wl_attempted_pairs << ','
+           << diagnostic.ar_madoca_wl_applied_constraints << ','
+           << diagnostic.ar_madoca_wl_skipped_invalid_row << ','
+           << diagnostic.ar_madoca_wl_skipped_no_covariance << ','
+           << diagnostic.ar_madoca_wl_skipped_large_innovation << ','
+           << diagnostic.ar_fixed_position_observations << ','
+           << diagnostic.ar_fixed_position_unknowns << ','
+           << csvBool(diagnostic.ar_fixed_position_solved) << ','
+           << csvBool(diagnostic.ar_fixed_position_rejected_by_shift) << ','
+           << diagnostic.ar_fixed_position_shift_m << ','
+           << diagnostic.ar_fixed_position_clock_update_rms_m << ','
+           << diagnostic.ar_fixed_position_clock_update_max_abs_m << ','
+           << diagnostic.ar_fixed_position_residual_rms_m << ','
+           << diagnostic.ar_fixed_position_residual_max_abs_m << '\n';
 }
 
 void writePPPResidualLogHeader(std::ostream& output) {
     output
         << "week,tow,iteration,row_index,sat,row_type,observation_m,predicted_m,"
-           "residual_m,variance_m2,elevation_deg,iono_state_m,solution_status,"
+           "residual_m,variance_m2,outlier_inflated,elevation_deg,iono_state_m,solution_status,"
            "primary_signal,secondary_signal,primary_observation_code,"
            "secondary_observation_code,frequency_index,ionosphere_coefficient,"
            "phase_candidate,phase_accepted,phase_ready,phase_skip_reason,"
@@ -1495,13 +1897,16 @@ void writePPPResidualLogRow(
            << diagnostic.satellite.toString() << ','
            << (diagnostic.ionosphere_constraint
                    ? "iono_constraint"
-                   : (diagnostic.phase_candidate
-                          ? "phase_candidate"
-                          : (diagnostic.carrier_phase ? "phase" : "code"))) << ','
+                   : (diagnostic.prior_constraint
+                          ? "prior_constraint"
+                          : (diagnostic.phase_candidate
+                                 ? "phase_candidate"
+                                 : (diagnostic.carrier_phase ? "phase" : "code")))) << ','
            << diagnostic.observation_m << ','
            << diagnostic.predicted_m << ','
            << diagnostic.residual_m << ','
            << diagnostic.variance_m2 << ','
+           << csvBool(diagnostic.outlier_inflated) << ','
            << diagnostic.elevation_deg << ','
            << diagnostic.iono_state_m << ','
            << static_cast<int>(solution_status) << ','
@@ -2117,11 +2522,24 @@ int main(int argc, char* argv[]) {
         if (options.process_noise_ionosphere > 0.0) {
             ppp_config.process_noise_ionosphere = options.process_noise_ionosphere;
         }
+        if (options.process_noise_troposphere > 0.0) {
+            ppp_config.process_noise_troposphere = options.process_noise_troposphere;
+        }
         if (options.code_phase_error_ratio_l1 > 0.0) {
             ppp_config.code_phase_error_ratio_l1 = options.code_phase_error_ratio_l1;
+        } else if (ppp_config.use_ssr_corrections) {
+            // Default-on for SSR mode: down-weighting code by 10× (100→1000)
+            // suppresses urban-canyon multipath bias on Tokyo (3D 10.16→7.46m)
+            // and confirms on Nagoya (3D 3.44→2.66m). See
+            // clas_per_sat_residual_root_cause_2026_05_08 — Task #20.
+            // Pass --code-phase-error-ratio-l1 100 to opt back into the
+            // historical broadcast-mode ratio.
+            ppp_config.code_phase_error_ratio_l1 = 1000.0;
         }
         if (options.code_phase_error_ratio_l2 > 0.0) {
             ppp_config.code_phase_error_ratio_l2 = options.code_phase_error_ratio_l2;
+        } else if (ppp_config.use_ssr_corrections) {
+            ppp_config.code_phase_error_ratio_l2 = 1000.0;
         }
         ppp_config.use_clas_osr_filter = options.use_clas_osr_filter;
         ppp_config.clas_epoch_policy =
@@ -2168,6 +2586,46 @@ int main(int argc, char* argv[]) {
         if (options.clas_outlier_sigma_scale >= 0.0) {
             ppp_config.clas_outlier_sigma_scale = options.clas_outlier_sigma_scale;
         }
+        if (options.clas_code_outlier_sigma_scale >= 0.0) {
+            ppp_config.clas_code_outlier_sigma_scale =
+                options.clas_code_outlier_sigma_scale;
+        }
+        if (options.clas_code_outlier_min_residual_m >= 0.0) {
+            ppp_config.clas_code_outlier_min_residual_m =
+                options.clas_code_outlier_min_residual_m;
+        }
+        if (options.clas_phase_outlier_sigma_scale >= 0.0) {
+            ppp_config.clas_phase_outlier_sigma_scale =
+                options.clas_phase_outlier_sigma_scale;
+        }
+        if (options.clas_phase_outlier_inflated_variance_m2 > 0.0) {
+            ppp_config.clas_phase_outlier_inflated_variance_m2 =
+                options.clas_phase_outlier_inflated_variance_m2;
+        }
+        if (options.clas_prior_outlier_sigma_scale >= 0.0) {
+            ppp_config.clas_prior_outlier_sigma_scale =
+                options.clas_prior_outlier_sigma_scale;
+        }
+        if (options.clas_phase_outlier_min_residual_m >= 0.0) {
+            ppp_config.clas_phase_outlier_min_residual_m =
+                options.clas_phase_outlier_min_residual_m;
+        }
+        if (options.clas_prior_outlier_min_residual_m >= 0.0) {
+            ppp_config.clas_prior_outlier_min_residual_m =
+                options.clas_prior_outlier_min_residual_m;
+        }
+        if (options.clas_reset_phase_ambiguity_on_outlier_inflation_set) {
+            ppp_config.clas_reset_phase_ambiguity_on_outlier_inflation =
+                options.clas_reset_phase_ambiguity_on_outlier_inflation;
+        }
+        if (options.clas_reset_phase_ambiguity_outlier_min_rows > 0) {
+            ppp_config.clas_reset_phase_ambiguity_outlier_min_rows =
+                options.clas_reset_phase_ambiguity_outlier_min_rows;
+        }
+        if (options.clas_reset_phase_ambiguity_outlier_min_residual_m >= 0.0) {
+            ppp_config.clas_reset_phase_ambiguity_outlier_min_residual_m =
+                options.clas_reset_phase_ambiguity_outlier_min_residual_m;
+        }
         if (options.clas_kinematic_position_reseed_set) {
             ppp_config.clas_kinematic_position_reseed =
                 options.clas_kinematic_position_reseed;
@@ -2180,6 +2638,38 @@ int main(int argc, char* argv[]) {
             ppp_config.clas_kinematic_position_reseed_max_residual_rms_m =
                 options.clas_kinematic_position_reseed_max_residual_rms_m;
         }
+        if (options.clas_spp_clock_overwrite_set) {
+            ppp_config.clas_spp_clock_overwrite =
+                options.clas_spp_clock_overwrite;
+        }
+        if (options.clas_kf_clock_seed_variance > 0.0) {
+            ppp_config.clas_kf_clock_seed_variance =
+                options.clas_kf_clock_seed_variance;
+        }
+        if (options.ppp_process_noise_clock >= 0.0) {
+            ppp_config.process_noise_clock = options.ppp_process_noise_clock;
+        }
+        if (options.reset_clock_to_spp_each_epoch_set) {
+            ppp_config.reset_clock_to_spp_each_epoch =
+                options.reset_clock_to_spp_each_epoch;
+        }
+        if (options.spp_seed_iono_free_code_set) {
+            ppp_config.spp_seed_use_ionosphere_free_code =
+                options.spp_seed_iono_free_code;
+        } else if (ppp_config.use_ssr_corrections) {
+            // Default-on for SSR mode: single-freq SPP absorbs ionosphere
+            // into receiver-clock state which the per-epoch reset re-injects
+            // as a +9-15m sat-uniform pre-fit residual systematic. Confirmed
+            // on Tokyo/Nagoya run1 — see
+            // clas_per_sat_residual_root_cause_2026_05_08. Pass
+            // --no-spp-seed-iono-free-code to opt back into the historical
+            // single-frequency seed.
+            ppp_config.spp_seed_use_ionosphere_free_code = true;
+        }
+        if (options.clas_wlnl_fixed_position_max_shift_m >= 0.0) {
+            ppp_config.clas_wlnl_fixed_position_max_shift_m =
+                options.clas_wlnl_fixed_position_max_shift_m;
+        }
         if (options.enable_wlnl_par_set) {
             ppp_config.enable_wlnl_par = options.enable_wlnl_par;
         }
@@ -2189,6 +2679,10 @@ int main(int argc, char* argv[]) {
         if (options.wlnl_par_exclude_frac_threshold > 0.0) {
             ppp_config.wlnl_par_exclude_frac_threshold =
                 options.wlnl_par_exclude_frac_threshold;
+        }
+        if (options.wlnl_wl_max_fractional_cycles > 0.0) {
+            ppp_config.wlnl_wl_max_fractional_cycles =
+                options.wlnl_wl_max_fractional_cycles;
         }
         ppp_config.kinematic_mode = options.kinematic_mode;
         ppp_config.kinematic_preconvergence_phase_residual_floor_m =
@@ -2233,7 +2727,10 @@ int main(int argc, char* argv[]) {
             ppp_config.l6_gps_week = obs_header.first_obs.week;
         }
         ppp_config.approximate_position = obs_header.approximate_position;
-        ppp_config.receiver_antenna_type = obs_header.antenna_type;
+        ppp_config.receiver_antenna_type =
+            options.receiver_antenna_type.empty() ?
+                obs_header.antenna_type :
+                options.receiver_antenna_type;
         ppp_config.receiver_antenna_delta_enu = obs_header.antenna_delta;
         ppp_config.ocean_loading_station_name =
             options.ocean_loading_station_name.empty() ?
@@ -2596,6 +3093,8 @@ int main(int argc, char* argv[]) {
             summary << "],\n"
                     << "  \"claslib_parity\": "
                     << (options.claslib_parity ? "true" : "false") << ",\n"
+                    << "  \"clas_ppc_profile\": "
+                    << (options.clas_ppc_profile ? "true" : "false") << ",\n"
                     << "  \"native_pntpos_parity_seed\": "
                     << (options.native_pntpos_parity_seed ? "true" : "false") << ",\n"
                     << "  \"spp_seed_use_zero_initial_position\": "
@@ -2620,8 +3119,12 @@ int main(int argc, char* argv[]) {
                     << (ppp_config.use_clas_osr_filter ? "true" : "false") << ",\n"
                     << "  \"use_ionosphere_free\": "
                     << (ppp_config.use_ionosphere_free ? "true" : "false") << ",\n"
+                    << "  \"estimate_troposphere\": "
+                    << (ppp_config.estimate_troposphere ? "true" : "false") << ",\n"
                     << "  \"estimate_ionosphere\": "
                     << (ppp_config.estimate_ionosphere ? "true" : "false") << ",\n"
+                    << "  \"receiver_antenna_type\": \""
+                    << jsonEscape(ppp_config.receiver_antenna_type) << "\",\n"
                     << "  \"initial_ionosphere_variance\": "
                     << ppp_config.initial_ionosphere_variance << ",\n"
                     << "  \"process_noise_ionosphere\": "
@@ -2632,8 +3135,39 @@ int main(int argc, char* argv[]) {
                     << ppp_config.clas_code_variance_scale << ",\n"
                     << "  \"clas_phase_variance\": "
                     << ppp_config.clas_phase_variance << ",\n"
+                    << "  \"clas_outlier_sigma_scale\": "
+                    << ppp_config.clas_outlier_sigma_scale << ",\n"
+                    << "  \"clas_code_outlier_sigma_scale\": "
+                    << ppp_config.clas_code_outlier_sigma_scale << ",\n"
+                    << "  \"clas_code_outlier_min_residual_m\": "
+                    << ppp_config.clas_code_outlier_min_residual_m << ",\n"
+                    << "  \"clas_phase_outlier_sigma_scale\": "
+                    << ppp_config.clas_phase_outlier_sigma_scale << ",\n"
+                    << "  \"clas_phase_outlier_inflated_variance_m2\": "
+                    << ppp_config.clas_phase_outlier_inflated_variance_m2 << ",\n"
+                    << "  \"clas_prior_outlier_sigma_scale\": "
+                    << ppp_config.clas_prior_outlier_sigma_scale << ",\n"
+                    << "  \"clas_phase_outlier_min_residual_m\": "
+                    << ppp_config.clas_phase_outlier_min_residual_m << ",\n"
+                    << "  \"clas_prior_outlier_min_residual_m\": "
+                    << ppp_config.clas_prior_outlier_min_residual_m << ",\n"
+                    << "  \"clas_reset_phase_ambiguity_on_outlier_inflation\": "
+                    << (ppp_config.clas_reset_phase_ambiguity_on_outlier_inflation
+                            ? "true" : "false") << ",\n"
+                    << "  \"clas_reset_phase_ambiguity_outlier_min_rows\": "
+                    << ppp_config.clas_reset_phase_ambiguity_outlier_min_rows << ",\n"
+                    << "  \"clas_reset_phase_ambiguity_outlier_min_residual_m\": "
+                    << ppp_config.clas_reset_phase_ambiguity_outlier_min_residual_m << ",\n"
                     << "  \"clas_initial_ambiguity_std_cycles\": "
                     << ppp_config.clas_initial_ambiguity_std_cycles << ",\n"
+                    << "  \"clas_kinematic_position_reseed\": "
+                    << (ppp_config.clas_kinematic_position_reseed ? "true" : "false") << ",\n"
+                    << "  \"clas_kinematic_position_reseed_variance\": "
+                    << ppp_config.clas_kinematic_position_reseed_variance << ",\n"
+                    << "  \"clas_kinematic_position_reseed_max_residual_rms_m\": "
+                    << ppp_config.clas_kinematic_position_reseed_max_residual_rms_m << ",\n"
+                    << "  \"clas_wlnl_fixed_position_max_shift_m\": "
+                    << ppp_config.clas_wlnl_fixed_position_max_shift_m << ",\n"
                     << "  \"clas_outlier_sigma_scale\": "
                     << ppp_config.clas_outlier_sigma_scale << ",\n"
                     << "  \"clas_validate_fixed_solution\": "
@@ -2733,6 +3267,12 @@ int main(int argc, char* argv[]) {
                     << "\",\n"
                     << "  \"clas_auto_wlnl_ar\": "
                     << (ppp_config.clas_auto_wlnl_ar ? "true" : "false") << ",\n"
+                    << "  \"wlnl_par_enabled\": "
+                    << (ppp_config.enable_wlnl_par ? "true" : "false") << ",\n"
+                    << "  \"wlnl_par_max_exclusions\": "
+                    << ppp_config.wlnl_par_max_exclusions << ",\n"
+                    << "  \"wlnl_par_exclude_frac_threshold\": "
+                    << ppp_config.wlnl_par_exclude_frac_threshold << ",\n"
                     << "  \"per_frequency_phase_bias_states\": "
                     << (options.enable_per_frequency_phase_bias_states ? "true" : "false") << ",\n"
                     << "  \"ionosphere_aware_phase_ambiguity_init\": "
@@ -2740,6 +3280,8 @@ int main(int argc, char* argv[]) {
                     << "  \"ppp_outlier_detection_enabled\": "
                     << (options.enable_ppp_outlier_detection ? "true" : "false") << ",\n"
                     << "  \"ar_ratio_threshold\": " << options.ar_ratio_threshold << ",\n"
+                    << "  \"wlnl_wl_max_fractional_cycles\": "
+                    << ppp_config.wlnl_wl_max_fractional_cycles << ",\n"
                     << "  \"processed_epochs\": " << processed_epochs << ",\n"
                     << "  \"valid_solutions\": " << valid_solutions << ",\n"
                     << "  \"ppp_float_solutions\": " << ppp_float_solutions << ",\n"
@@ -2874,6 +3416,8 @@ int main(int argc, char* argv[]) {
                       << (ppp_config.use_clas_osr_filter ? "on" : "off") << "\n";
             std::cout << "  ionosphere-free combination: "
                       << (ppp_config.use_ionosphere_free ? "on" : "off") << "\n";
+            std::cout << "  estimate troposphere: "
+                      << (ppp_config.estimate_troposphere ? "on" : "off") << "\n";
             std::cout << "  estimate ionosphere: "
                       << (ppp_config.estimate_ionosphere ? "on" : "off") << "\n";
             std::cout << "  kinematic pre-convergence phase residual floor (m): "
@@ -2890,6 +3434,8 @@ int main(int argc, char* argv[]) {
                       << (options.ar_method_arg.empty() ? "auto" : options.ar_method_arg) << "\n";
             std::cout << "  CLAS auto WL/NL AR: "
                       << (ppp_config.clas_auto_wlnl_ar ? "on" : "off") << "\n";
+            std::cout << "  WLNL PAR: "
+                      << (ppp_config.enable_wlnl_par ? "on" : "off") << "\n";
             std::cout << "  per-frequency phase-bias states: "
                       << (options.enable_per_frequency_phase_bias_states ? "on" : "off") << "\n";
             std::cout << "  ionosphere-aware phase ambiguity init: "

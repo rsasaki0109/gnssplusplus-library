@@ -163,8 +163,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ppp-filter-log", type=Path, default=None, help="Optional native PPP filter iteration CSV path.")
     parser.add_argument("--ppp-residual-log", type=Path, default=None, help="Optional native PPP residual CSV path.")
     parser.add_argument("--ppp-state-log", type=Path, default=None, help="Optional native PPP state log path.")
+    parser.add_argument("--ppp-correction-log", type=Path, default=None, help="Optional native PPP correction diagnostic CSV path.")
     parser.add_argument("--sp3", type=Path, default=None, help="Optional precise SP3 file.")
     parser.add_argument("--clk", type=Path, default=None, help="Optional precise CLK file.")
+    parser.add_argument("--antex", type=Path, default=None, help="Optional ANTEX file for PPP.")
+    parser.add_argument(
+        "--receiver-antenna-type",
+        default=None,
+        help="Override the RINEX receiver antenna type for ANTEX lookup.",
+    )
     parser.add_argument("--kml", type=Path, default=None, help="Optional KML output path.")
     parser.add_argument("--max-epochs", type=int, default=0, help="Stop after N epochs.")
     parser.add_argument(
@@ -199,9 +206,149 @@ def parse_args() -> argparse.Namespace:
         help="AR ratio threshold when ambiguity fixing is enabled.",
     )
     parser.add_argument(
+        "--wlnl-wl-max-fractional",
+        type=float,
+        default=None,
+        help="Max MW wide-lane fractional cycle before rejecting WL fix.",
+    )
+    parser.add_argument(
         "--native-pntpos-parity-seed",
+        dest="native_pntpos_parity_seed",
         action="store_true",
+        default=None,
         help="Use native SPP settings that mirror pntpos behavior for PPP seed.",
+    )
+    parser.add_argument(
+        "--no-native-pntpos-parity-seed",
+        dest="native_pntpos_parity_seed",
+        action="store_false",
+        help="Disable native pntpos-parity PPP seeding.",
+    )
+    parser.add_argument(
+        "--clas-ppc-profile",
+        action="store_true",
+        help=(
+            "Use the native PPC kinematic CLAS profile "
+            "(CLAS OSR, residual ionosphere, 1 m anchor, 0.25 m^2 iono prior, "
+            "2x code variance, kinematic reseed, "
+            "pntpos-parity seed)."
+        ),
+    )
+    parser.add_argument(
+        "--clas-anchor-sigma",
+        type=float,
+        default=None,
+        help="Override the native CLAS OSR SPP anchor sigma in meters.",
+    )
+    parser.add_argument(
+        "--clas-code-variance-scale",
+        type=float,
+        default=None,
+        help="Override the native CLAS OSR code variance multiplier.",
+    )
+    parser.add_argument(
+        "--clas-phase-variance",
+        type=float,
+        default=None,
+        help="Override the native CLAS OSR carrier-phase base variance in m^2.",
+    )
+    parser.add_argument(
+        "--clas-phase-continuity",
+        choices=[
+            "full-repair",
+            "sis-continuity-only",
+            "repair-only",
+            "raw-phase-bias",
+            "no-phase-bias",
+        ],
+        default=None,
+        help="Override the native CLAS phase-bias continuity policy.",
+    )
+    parser.add_argument(
+        "--clas-phase-bias-values",
+        choices=["full", "phase-bias-only", "compensation-only"],
+        default=None,
+        help="Override which native CLAS phase-bias correction values are applied.",
+    )
+    parser.add_argument(
+        "--clas-phase-bias-reference-time",
+        choices=["phase-bias-reference", "clock-reference", "observation-epoch"],
+        default=None,
+        help="Override the native CLAS phase-bias continuity reference epoch.",
+    )
+    parser.add_argument(
+        "--clas-iono-prior-variance",
+        type=float,
+        default=None,
+        help="Override the native CLAS residual-ionosphere prior variance in m^2.",
+    )
+    parser.add_argument(
+        "--clas-code-outlier-sigma-scale",
+        type=float,
+        default=None,
+        help="Override the native CLAS code-only outlier sigma gate; 0 disables.",
+    )
+    parser.add_argument(
+        "--clas-code-outlier-min-residual",
+        type=float,
+        default=None,
+        help="Override the native CLAS code-only outlier absolute residual floor in meters.",
+    )
+    parser.add_argument(
+        "--clas-phase-outlier-sigma-scale",
+        type=float,
+        default=None,
+        help="Override the native CLAS phase-only outlier sigma gate; 0 disables.",
+    )
+    parser.add_argument(
+        "--clas-phase-outlier-inflated-variance",
+        type=float,
+        default=None,
+        help="Override native CLAS phase-only inflated measurement variance in m^2.",
+    )
+    parser.add_argument(
+        "--clas-prior-outlier-sigma-scale",
+        type=float,
+        default=None,
+        help="Override the native CLAS prior-constraint outlier sigma gate; 0 disables.",
+    )
+    parser.add_argument(
+        "--clas-prior-outlier-min-residual",
+        type=float,
+        default=None,
+        help="Override the native CLAS prior-constraint outlier absolute residual floor in meters.",
+    )
+    parser.add_argument(
+        "--clas-phase-outlier-min-residual",
+        type=float,
+        default=None,
+        help="Override the native CLAS phase-only outlier absolute residual floor in meters.",
+    )
+    parser.add_argument(
+        "--clas-reset-phase-ambiguity-on-outlier-inflation",
+        action="store_true",
+        help="Reset native CLAS phase ambiguities touched by inflated phase rows.",
+    )
+    parser.add_argument(
+        "--clas-reset-phase-ambiguity-outlier-min-rows",
+        type=int,
+        default=None,
+        help="Minimum inflated CLAS phase rows before ambiguity reset is applied.",
+    )
+    parser.add_argument(
+        "--clas-reset-phase-ambiguity-outlier-min-residual",
+        type=float,
+        default=None,
+        help="Minimum inflated CLAS phase residual for ambiguity reset membership.",
+    )
+    parser.add_argument(
+        "--clas-wlnl-fixed-position-max-shift",
+        type=float,
+        default=None,
+        help=(
+            "Reject native CLAS WLNL fixed-position replacement when it shifts "
+            "farther than this from the float solution; 0 disables."
+        ),
     )
     parser.add_argument(
         "--claslib-pntpos-seed",
@@ -221,7 +368,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Enable zenith troposphere estimation.",
     )
-    parser.set_defaults(estimate_troposphere=True)
+    parser.set_defaults(estimate_troposphere=None)
     parser.add_argument(
         "--require-valid-epochs-min",
         type=int,
@@ -258,6 +405,76 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Fail if PPP-applied atmospheric ionosphere corrections are below this count.",
     )
+    parser.add_argument(
+        "--enable-wlnl-par",
+        dest="enable_wlnl_par",
+        action="store_true",
+        default=None,
+        help="Enable WLNL Partial AR (greedy worst-|frac| exclusion).",
+    )
+    parser.add_argument(
+        "--no-enable-wlnl-par",
+        dest="enable_wlnl_par",
+        action="store_false",
+        help="Disable WLNL Partial AR.",
+    )
+    parser.add_argument(
+        "--clas-spp-clock-overwrite",
+        dest="clas_spp_clock_overwrite",
+        action="store_true",
+        default=None,
+        help="Overwrite KF receiver-clock state with SPP every kinematic CLAS-OSR epoch (default on).",
+    )
+    parser.add_argument(
+        "--no-clas-spp-clock-overwrite",
+        dest="clas_spp_clock_overwrite",
+        action="store_false",
+        help="Skip the SPP clock overwrite on the CLAS-OSR path; let the KF track the receiver clock.",
+    )
+    parser.add_argument(
+        "--clas-kf-clock-seed-variance",
+        type=float,
+        default=None,
+        help="Initial KF clock variance when --no-clas-spp-clock-overwrite is set.",
+    )
+    parser.add_argument(
+        "--ppp-process-noise-clock",
+        type=float,
+        default=None,
+        help="Override KF receiver-clock process noise (m^2/s).",
+    )
+    parser.add_argument(
+        "--process-noise-troposphere",
+        type=float,
+        default=None,
+        help="Override troposphere process noise.",
+    )
+    parser.add_argument(
+        "--reset-clock-to-spp",
+        dest="reset_clock_to_spp",
+        action="store_true",
+        default=None,
+        help="Force KF receiver-clock state to SPP every epoch (default on).",
+    )
+    parser.add_argument(
+        "--no-reset-clock-to-spp",
+        dest="reset_clock_to_spp",
+        action="store_false",
+        help="Skip SPP overwrite of KF receiver-clock state on the standard PPP path.",
+    )
+    parser.add_argument(
+        "--spp-seed-iono-free-code",
+        dest="spp_seed_iono_free_code",
+        action="store_true",
+        default=None,
+        help="Use ionosphere-free L1+L2 code combination in the SPP seed.",
+    )
+    parser.add_argument(
+        "--no-spp-seed-iono-free-code",
+        dest="spp_seed_iono_free_code",
+        action="store_false",
+        help="Force single-frequency L1 code in the SPP seed (default).",
+    )
     return parser.parse_args()
 
 
@@ -293,7 +510,19 @@ def selected_correction_source(args: argparse.Namespace) -> str:
 def effective_navsys_mask(args: argparse.Namespace) -> int:
     if args.navsys is not None:
         return args.navsys
-    return 25 if args.profile == "clas" else 0
+    return 25 if args.profile == "clas" or args.clas_ppc_profile else 0
+
+
+def effective_estimate_troposphere(args: argparse.Namespace) -> bool:
+    if args.estimate_troposphere is not None:
+        return bool(args.estimate_troposphere)
+    return not bool(args.clas_ppc_profile)
+
+
+def effective_native_pntpos_parity_seed(args: argparse.Namespace) -> bool:
+    if args.native_pntpos_parity_seed is not None:
+        return bool(args.native_pntpos_parity_seed)
+    return bool(args.clas_ppc_profile)
 
 
 def effective_filter_iterations(args: argparse.Namespace) -> int | None:
@@ -812,6 +1041,8 @@ def build_summary_payload(
         "nav": str(args.nav),
         "navsys_mask": effective_navsys_mask(args),
         "navsys_all_observed": effective_navsys_mask(args) == 0,
+        "estimate_troposphere": effective_estimate_troposphere(args),
+        "native_pntpos_parity_seed": effective_native_pntpos_parity_seed(args),
         "filter_iterations": effective_filter_iterations(args),
         "sp3": str(args.sp3) if args.sp3 is not None else None,
         "clk": str(args.clk) if args.clk is not None else None,
@@ -821,6 +1052,7 @@ def build_summary_payload(
         "expanded_ssr": str(args.expanded_ssr) if args.expanded_ssr is not None else None,
         "qzss_expanded_cache": str(args.qzss_expanded_cache) if args.qzss_expanded_cache is not None else None,
         "solution_pos": str(args.out),
+        "ppp_correction_log": str(args.ppp_correction_log) if args.ppp_correction_log is not None else None,
         "epochs": len(records),
         "ppp_float_epochs": ppp_float_epochs,
         "ppp_fixed_epochs": ppp_fixed_epochs,
@@ -829,6 +1061,12 @@ def build_summary_payload(
         "mean_satellites": rounded(mean_satellites),
         "ambiguity_resolution_enabled": bool(args.enable_ar),
         "ar_ratio_threshold": rounded(args.ar_ratio_threshold),
+        "clas_phase_continuity": args.clas_phase_continuity,
+        "clas_phase_bias_values": args.clas_phase_bias_values,
+        "clas_phase_bias_reference_time": args.clas_phase_bias_reference_time,
+        "wlnl_wl_max_fractional": rounded(args.wlnl_wl_max_fractional)
+        if args.wlnl_wl_max_fractional is not None
+        else None,
         "mode": "kinematic" if args.kinematic else "static",
         "compact_atmos_merge_policy": args.compact_atmos_merge_policy,
         "compact_atmos_subtype_merge_policy": args.compact_atmos_subtype_merge_policy,
@@ -939,6 +1177,7 @@ def main() -> int:
     ensure_exists(args.nav, "navigation file")
     ensure_exists(args.sp3, "SP3 file")
     ensure_exists(args.clk, "CLK file")
+    ensure_exists(args.antex, "ANTEX file")
     ensure_exists(args.expanded_ssr, "expanded SSR CSV")
     selected_sources = [bool(args.ssr_rtcm), bool(args.compact_ssr), bool(args.qzss_l6), bool(args.expanded_ssr)]
     if sum(1 for selected in selected_sources if selected) != 1:
@@ -1049,7 +1288,12 @@ def main() -> int:
             command.extend(["--ssr-rtcm", args.ssr_rtcm, "--ssr-step-seconds", str(args.ssr_step_seconds)])
 
         command.append("--kinematic" if args.kinematic else "--static")
-        command.append("--estimate-troposphere" if args.estimate_troposphere else "--no-estimate-troposphere")
+        if args.estimate_troposphere is not None:
+            command.append(
+                "--estimate-troposphere"
+                if args.estimate_troposphere
+                else "--no-estimate-troposphere"
+            )
         # When atmospheric corrections are available from CLAS, disable IFLC and
         # enable per-satellite ionosphere estimation with STEC constraints.
         command.append("--no-ionosphere-free")
@@ -1058,6 +1302,10 @@ def main() -> int:
             command.extend(["--sp3", str(args.sp3)])
         if args.clk is not None:
             command.extend(["--clk", str(args.clk)])
+        if args.antex is not None:
+            command.extend(["--antex", str(args.antex)])
+        if args.receiver_antenna_type:
+            command.extend(["--receiver-antenna-type", args.receiver_antenna_type])
         if args.kml is not None:
             command.extend(["--kml", str(args.kml)])
         if args.max_epochs > 0:
@@ -1072,8 +1320,119 @@ def main() -> int:
             command.extend(["--ppp-residual-log", str(args.ppp_residual_log)])
         if args.ppp_state_log is not None:
             command.extend(["--ppp-state-log", str(args.ppp_state_log)])
-        if args.native_pntpos_parity_seed:
+        if args.ppp_correction_log is not None:
+            command.extend(["--ppp-correction-log", str(args.ppp_correction_log)])
+        if effective_native_pntpos_parity_seed(args):
             command.append("--native-pntpos-parity-seed")
+        elif args.native_pntpos_parity_seed is False:
+            command.append("--no-native-pntpos-parity-seed")
+        if args.clas_ppc_profile:
+            command.append("--clas-ppc-profile")
+        if args.clas_anchor_sigma is not None:
+            command.extend(["--clas-anchor-sigma", str(args.clas_anchor_sigma)])
+        if args.clas_code_variance_scale is not None:
+            command.extend(["--clas-code-variance-scale", str(args.clas_code_variance_scale)])
+        if args.clas_phase_variance is not None:
+            command.extend(["--clas-phase-variance", str(args.clas_phase_variance)])
+        if args.clas_phase_continuity is not None:
+            command.extend(["--clas-phase-continuity", args.clas_phase_continuity])
+        if args.clas_phase_bias_values is not None:
+            command.extend(["--clas-phase-bias-values", args.clas_phase_bias_values])
+        if args.clas_phase_bias_reference_time is not None:
+            command.extend([
+                "--clas-phase-bias-reference-time",
+                args.clas_phase_bias_reference_time,
+            ])
+        if args.clas_iono_prior_variance is not None:
+            command.extend(["--clas-iono-prior-variance", str(args.clas_iono_prior_variance)])
+        if args.clas_code_outlier_sigma_scale is not None:
+            command.extend([
+                "--clas-code-outlier-sigma-scale",
+                str(args.clas_code_outlier_sigma_scale),
+            ])
+        if args.clas_code_outlier_min_residual is not None:
+            command.extend([
+                "--clas-code-outlier-min-residual",
+                str(args.clas_code_outlier_min_residual),
+            ])
+        if args.clas_phase_outlier_sigma_scale is not None:
+            command.extend([
+                "--clas-phase-outlier-sigma-scale",
+                str(args.clas_phase_outlier_sigma_scale),
+            ])
+        if args.clas_phase_outlier_inflated_variance is not None:
+            command.extend([
+                "--clas-phase-outlier-inflated-variance",
+                str(args.clas_phase_outlier_inflated_variance),
+            ])
+        if args.clas_prior_outlier_sigma_scale is not None:
+            command.extend([
+                "--clas-prior-outlier-sigma-scale",
+                str(args.clas_prior_outlier_sigma_scale),
+            ])
+        if args.clas_prior_outlier_min_residual is not None:
+            command.extend([
+                "--clas-prior-outlier-min-residual",
+                str(args.clas_prior_outlier_min_residual),
+            ])
+        if args.clas_phase_outlier_min_residual is not None:
+            command.extend([
+                "--clas-phase-outlier-min-residual",
+                str(args.clas_phase_outlier_min_residual),
+            ])
+        if args.clas_reset_phase_ambiguity_on_outlier_inflation:
+            command.append("--clas-reset-phase-ambiguity-on-outlier-inflation")
+        if args.clas_reset_phase_ambiguity_outlier_min_rows is not None:
+            command.extend([
+                "--clas-reset-phase-ambiguity-outlier-min-rows",
+                str(args.clas_reset_phase_ambiguity_outlier_min_rows),
+            ])
+        if args.clas_reset_phase_ambiguity_outlier_min_residual is not None:
+            command.extend([
+                "--clas-reset-phase-ambiguity-outlier-min-residual",
+                str(args.clas_reset_phase_ambiguity_outlier_min_residual),
+            ])
+        if args.clas_wlnl_fixed_position_max_shift is not None:
+            command.extend([
+                "--clas-wlnl-fixed-position-max-shift",
+                str(args.clas_wlnl_fixed_position_max_shift),
+            ])
+        if args.wlnl_wl_max_fractional is not None:
+            command.extend([
+                "--wlnl-wl-max-fractional",
+                str(args.wlnl_wl_max_fractional),
+            ])
+        if args.enable_wlnl_par is True:
+            command.append("--enable-wlnl-par")
+        elif args.enable_wlnl_par is False:
+            command.append("--no-wlnl-par")
+        if args.clas_spp_clock_overwrite is True:
+            command.append("--clas-spp-clock-overwrite")
+        elif args.clas_spp_clock_overwrite is False:
+            command.append("--no-clas-spp-clock-overwrite")
+        if args.clas_kf_clock_seed_variance is not None:
+            command.extend([
+                "--clas-kf-clock-seed-variance",
+                str(args.clas_kf_clock_seed_variance),
+            ])
+        if args.ppp_process_noise_clock is not None:
+            command.extend([
+                "--ppp-process-noise-clock",
+                str(args.ppp_process_noise_clock),
+            ])
+        if args.process_noise_troposphere is not None:
+            command.extend([
+                "--process-noise-troposphere",
+                str(args.process_noise_troposphere),
+            ])
+        if args.reset_clock_to_spp is True:
+            command.append("--reset-clock-to-spp")
+        elif args.reset_clock_to_spp is False:
+            command.append("--no-reset-clock-to-spp")
+        if args.spp_seed_iono_free_code is True:
+            command.append("--spp-seed-iono-free-code")
+        elif args.spp_seed_iono_free_code is False:
+            command.append("--no-spp-seed-iono-free-code")
         if args.enable_ar:
             command.extend(["--enable-ar", "--ar-ratio-threshold", str(args.ar_ratio_threshold)])
 
@@ -1084,6 +1443,10 @@ def main() -> int:
     print("Finished CLAS/MADOCA PPP run.")
     print(f"  profile: {args.profile}")
     print(f"  navsys: {effective_navsys_mask(args)}")
+    print(
+        "  estimate troposphere: "
+        f"{'on' if effective_estimate_troposphere(args) else 'off'}"
+    )
     print(f"  transport: {payload['ssr_transport']}")
     print(f"  encoding: {payload['correction_encoding']}")
     print(f"  solution: {args.out}")

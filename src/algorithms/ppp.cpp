@@ -53,12 +53,15 @@ constexpr std::array<double, 11> kOceanLoadingPeriodsSeconds = {
 };
 
 std::string trimCopy(const std::string& text) {
-    const size_t first = text.find_first_not_of(' ');
-    if (first == std::string::npos) {
+    const auto is_not_space = [](unsigned char ch) {
+        return !std::isspace(ch);
+    };
+    const auto first = std::find_if(text.begin(), text.end(), is_not_space);
+    if (first == text.end()) {
         return "";
     }
-    const size_t last = text.find_last_not_of(' ');
-    return text.substr(first, last - first + 1);
+    const auto last = std::find_if(text.rbegin(), text.rend(), is_not_space).base();
+    return std::string(first, last);
 }
 
 std::string normalizeAntennaType(const std::string& antenna_type) {
@@ -1469,6 +1472,7 @@ PositionSolution PPPProcessor::processEpochStandard(
         clas_hybrid_fallback_reason != nullptr ? clas_hybrid_fallback_reason : "";
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+    resetLastArAttemptDiagnostic();
     last_applied_atmos_trop_corrections_ = 0;
     last_applied_atmos_iono_corrections_ = 0;
     last_applied_atmos_trop_m_ = 0.0;
@@ -1578,11 +1582,13 @@ PositionSolution PPPProcessor::processEpochStandard(
                     }
                 }
                 if (!accepted_fixed_solution && fixed) {
+                    markLastArRejectedAfterFix();
                     solution = float_solution;
                     solution.status = SolutionStatus::PPP_FLOAT;
                     solution.ratio = 0.0;
                     solution.num_fixed_ambiguities = 0;
                 }
+                updateLatestFilterArDiagnostic();
                 if (accepted_fixed_solution) {
                     double latitude = 0.0;
                     double longitude = 0.0;
@@ -1685,6 +1691,7 @@ void PPPProcessor::reset() {
     has_static_anchor_position_ = false;
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+    resetLastArAttemptDiagnostic();
     last_applied_atmos_trop_corrections_ = 0;
     last_applied_atmos_iono_corrections_ = 0;
     last_applied_atmos_trop_m_ = 0.0;
@@ -2190,8 +2197,13 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
         Q.block(filter_state_.vel_index, filter_state_.vel_index, 3, 3) =
             MatrixXd::Identity(3, 3) * 1e-12;
     }
+    // SSR/precise mode historically hardcoded 100.0 m^2/s; user override
+    // (process_noise_clock != 0) wins for both branches so that
+    // --ppp-process-noise-clock can sweep without rebuilding.
     const double clock_process_noise =
-        use_broadcast_rtklib_model ? ppp_config_.process_noise_clock : 100.0;
+        ppp_config_.process_noise_clock > 0.0
+            ? ppp_config_.process_noise_clock
+            : (use_broadcast_rtklib_model ? 0.0 : 100.0);
     Q(filter_state_.clock_index, filter_state_.clock_index) = clock_process_noise * dt;
     Q(filter_state_.glo_clock_index, filter_state_.glo_clock_index) = clock_process_noise * dt;
     // ISB process noise (white noise, re-estimated each epoch)
@@ -4165,9 +4177,90 @@ void PPPProcessor::initializeAmbiguityState(const IonosphereFreeObs& observation
     ambiguity.needs_reinitialization = false;
 }
 
+void PPPProcessor::resetLastArAttemptDiagnostic() {
+    last_ar_attempt_diagnostic_ = ArAttemptDiagnostic{};
+    last_ar_attempt_diagnostic_.enabled = ppp_config_.enable_ambiguity_resolution;
+    last_ar_attempt_diagnostic_.min_satellites = ppp_config_.min_satellites_for_ar;
+}
+
+void PPPProcessor::populateFilterArDiagnostic(
+    PPPFilterIterationDiagnostic& diagnostic) const {
+    diagnostic.ar_enabled = last_ar_attempt_diagnostic_.enabled;
+    diagnostic.ar_attempted = last_ar_attempt_diagnostic_.attempted;
+    diagnostic.ar_accepted = last_ar_attempt_diagnostic_.accepted;
+    diagnostic.ar_rejected_after_fix =
+        last_ar_attempt_diagnostic_.rejected_after_fix;
+    diagnostic.ar_min_lock_count = last_ar_attempt_diagnostic_.min_lock_count;
+    diagnostic.ar_min_satellites = last_ar_attempt_diagnostic_.min_satellites;
+    diagnostic.ar_total_ambiguities =
+        last_ar_attempt_diagnostic_.total_ambiguities;
+    diagnostic.ar_eligible_ambiguities =
+        last_ar_attempt_diagnostic_.eligible_ambiguities;
+    diagnostic.ar_skipped_reinitialization =
+        last_ar_attempt_diagnostic_.skipped_reinitialization;
+    diagnostic.ar_skipped_lock = last_ar_attempt_diagnostic_.skipped_lock;
+    diagnostic.ar_skipped_scale = last_ar_attempt_diagnostic_.skipped_scale;
+    diagnostic.ar_skipped_index = last_ar_attempt_diagnostic_.skipped_index;
+    diagnostic.ar_wl_fixed_count = last_ar_attempt_diagnostic_.wl_fixed_count;
+    diagnostic.ar_wl_max_mw_count = last_ar_attempt_diagnostic_.wl_max_mw_count;
+    diagnostic.ar_ratio = last_ar_attempt_diagnostic_.ratio;
+    diagnostic.ar_required_ratio = last_ar_attempt_diagnostic_.required_ratio;
+    diagnostic.ar_fixed_ambiguities =
+        last_ar_attempt_diagnostic_.fixed_ambiguities;
+    diagnostic.ar_madoca_ewl_candidates =
+        last_ar_attempt_diagnostic_.madoca_ewl_candidates;
+    diagnostic.ar_madoca_ewl_applied_constraints =
+        last_ar_attempt_diagnostic_.madoca_ewl_applied_constraints;
+    diagnostic.ar_madoca_ewl_skipped_large_frac =
+        last_ar_attempt_diagnostic_.madoca_ewl_skipped_large_frac;
+    diagnostic.ar_madoca_ewl_skipped_large_sigma =
+        last_ar_attempt_diagnostic_.madoca_ewl_skipped_large_sigma;
+    diagnostic.ar_madoca_wl_attempted_pairs =
+        last_ar_attempt_diagnostic_.madoca_wl_attempted_pairs;
+    diagnostic.ar_madoca_wl_applied_constraints =
+        last_ar_attempt_diagnostic_.madoca_wl_applied_constraints;
+    diagnostic.ar_madoca_wl_skipped_invalid_row =
+        last_ar_attempt_diagnostic_.madoca_wl_skipped_invalid_row;
+    diagnostic.ar_madoca_wl_skipped_no_covariance =
+        last_ar_attempt_diagnostic_.madoca_wl_skipped_no_covariance;
+    diagnostic.ar_madoca_wl_skipped_large_innovation =
+        last_ar_attempt_diagnostic_.madoca_wl_skipped_large_innovation;
+    diagnostic.ar_fixed_position_observations =
+        last_ar_attempt_diagnostic_.fixed_position_observations;
+    diagnostic.ar_fixed_position_unknowns =
+        last_ar_attempt_diagnostic_.fixed_position_unknowns;
+    diagnostic.ar_fixed_position_solved =
+        last_ar_attempt_diagnostic_.fixed_position_solved;
+    diagnostic.ar_fixed_position_rejected_by_shift =
+        last_ar_attempt_diagnostic_.fixed_position_rejected_by_shift;
+    diagnostic.ar_fixed_position_shift_m =
+        last_ar_attempt_diagnostic_.fixed_position_shift_m;
+    diagnostic.ar_fixed_position_clock_update_rms_m =
+        last_ar_attempt_diagnostic_.fixed_position_clock_update_rms_m;
+    diagnostic.ar_fixed_position_clock_update_max_abs_m =
+        last_ar_attempt_diagnostic_.fixed_position_clock_update_max_abs_m;
+    diagnostic.ar_fixed_position_residual_rms_m =
+        last_ar_attempt_diagnostic_.fixed_position_residual_rms_m;
+    diagnostic.ar_fixed_position_residual_max_abs_m =
+        last_ar_attempt_diagnostic_.fixed_position_residual_max_abs_m;
+}
+
+void PPPProcessor::updateLatestFilterArDiagnostic() {
+    if (last_filter_iteration_diagnostics_.empty()) {
+        return;
+    }
+    populateFilterArDiagnostic(last_filter_iteration_diagnostics_.back());
+}
+
+void PPPProcessor::markLastArRejectedAfterFix() {
+    last_ar_attempt_diagnostic_.rejected_after_fix = true;
+    last_ar_attempt_diagnostic_.accepted = false;
+}
+
 bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const NavigationData& nav) {
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+    resetLastArAttemptDiagnostic();
 
     if (!ppp_config_.enable_ambiguity_resolution || (!precise_products_loaded_ && !ssr_products_loaded_)) {
         if (pppDebugEnabled()) {
@@ -4180,6 +4273,8 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
     const int ar_min_lock = ssr_products_loaded_ ?
         std::min(ppp_config_.convergence_min_epochs, 10) :
         ppp_config_.convergence_min_epochs;
+    last_ar_attempt_diagnostic_.attempted = true;
+    last_ar_attempt_diagnostic_.min_lock_count = ar_min_lock;
 
     if (pppDebugEnabled()) {
         int total_amb = 0, ready_amb = 0;
@@ -4228,6 +4323,8 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
         }
         const auto wl_summary = ppp_ar::applyWideLaneFixes(
             ppp_config_, ambiguity_states_, candidate_satellites, pppDebugEnabled());
+        last_ar_attempt_diagnostic_.wl_fixed_count = wl_summary.fixed_count;
+        last_ar_attempt_diagnostic_.wl_max_mw_count = wl_summary.max_mw_count;
 
         const auto state_index_provider =
             ppp_ar::makeMadocaFrequencyAmbiguityStateIndexProvider(filter_state_);
@@ -4279,6 +4376,14 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
             kMadocaEwlFracGateCycles,
             kMadocaEwlSigmaGateCycles,
             pppDebugEnabled());
+        last_ar_attempt_diagnostic_.madoca_ewl_candidates =
+            ewl_summary.candidates;
+        last_ar_attempt_diagnostic_.madoca_ewl_applied_constraints =
+            ewl_summary.applied_constraints;
+        last_ar_attempt_diagnostic_.madoca_ewl_skipped_large_frac =
+            ewl_summary.skipped_large_frac;
+        last_ar_attempt_diagnostic_.madoca_ewl_skipped_large_sigma =
+            ewl_summary.skipped_large_sigma;
 
         // STEP_WL: inject MW-derived WL integers as pseudo-observations on
         // the (possibly EWL-tightened) state.
@@ -4290,6 +4395,16 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
             wavelength_provider,
             kMadocaWlObsVarianceCyclesSq,
             pppDebugEnabled());
+        last_ar_attempt_diagnostic_.madoca_wl_attempted_pairs =
+            constraint_summary.attempted_pairs;
+        last_ar_attempt_diagnostic_.madoca_wl_applied_constraints =
+            constraint_summary.applied_constraints;
+        last_ar_attempt_diagnostic_.madoca_wl_skipped_invalid_row =
+            constraint_summary.skipped_invalid_row;
+        last_ar_attempt_diagnostic_.madoca_wl_skipped_no_covariance =
+            constraint_summary.skipped_no_covariance;
+        last_ar_attempt_diagnostic_.madoca_wl_skipped_large_innovation =
+            constraint_summary.skipped_large_innovation;
 
         if (pppDebugEnabled()) {
             std::cerr << "[PPP-MADOCA-AR] WL fix=" << wl_summary.fixed_count
@@ -4312,6 +4427,18 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
 
     const auto eligible_ambiguities = ppp_ar::collectEligibleAmbiguities(
         filter_state_, ambiguity_states_, ar_min_lock);
+    last_ar_attempt_diagnostic_.total_ambiguities =
+        eligible_ambiguities.total_ambiguities;
+    last_ar_attempt_diagnostic_.eligible_ambiguities =
+        static_cast<int>(eligible_ambiguities.satellites.size());
+    last_ar_attempt_diagnostic_.skipped_reinitialization =
+        eligible_ambiguities.skipped_reinitialization;
+    last_ar_attempt_diagnostic_.skipped_lock =
+        eligible_ambiguities.skipped_lock;
+    last_ar_attempt_diagnostic_.skipped_scale =
+        eligible_ambiguities.skipped_scale;
+    last_ar_attempt_diagnostic_.skipped_index =
+        eligible_ambiguities.skipped_index;
 
     const auto revert_madoca_cascaded_state = [&]() {
         if (madoca_cascaded_active) {
@@ -4398,6 +4525,9 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
         pppDebugEnabled(),
         obs.time.week,
         obs.time.tow);
+    last_ar_attempt_diagnostic_.ratio = best_attempt.ratio;
+    last_ar_attempt_diagnostic_.required_ratio = best_attempt.required_ratio;
+    last_ar_attempt_diagnostic_.fixed_ambiguities = best_attempt.nb;
 
     if (!best_attempt.fixed) {
         if (pppDebugEnabled()) {
@@ -4410,6 +4540,7 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
 
     last_ar_ratio_ = best_attempt.ratio;
     last_fixed_ambiguities_ = best_attempt.nb;
+    last_ar_attempt_diagnostic_.accepted = true;
     filter_state_ = std::move(best_attempt.state);
     ambiguity_states_ = std::move(best_attempt.ambiguities);
 

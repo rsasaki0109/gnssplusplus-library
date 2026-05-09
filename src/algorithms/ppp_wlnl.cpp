@@ -34,6 +34,10 @@ bool pppDebugEnabled() {
 bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const NavigationData& nav) {
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+    resetLastArAttemptDiagnostic();
+    last_ar_attempt_diagnostic_.attempted =
+        ppp_config_.enable_ambiguity_resolution &&
+        (precise_products_loaded_ || ssr_products_loaded_);
 
     const auto wlnl_preparation = ppp_ar::prepareWlnlCandidates(
         ppp_config_,
@@ -42,6 +46,24 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         ssr_products_loaded_,
         pppDebugEnabled());
     const auto& eligible_ambiguities = wlnl_preparation.eligible_ambiguities;
+    last_ar_attempt_diagnostic_.min_lock_count =
+        wlnl_preparation.min_lock_count;
+    last_ar_attempt_diagnostic_.total_ambiguities =
+        eligible_ambiguities.total_ambiguities;
+    last_ar_attempt_diagnostic_.eligible_ambiguities =
+        static_cast<int>(eligible_ambiguities.satellites.size());
+    last_ar_attempt_diagnostic_.skipped_reinitialization =
+        eligible_ambiguities.skipped_reinitialization;
+    last_ar_attempt_diagnostic_.skipped_lock =
+        eligible_ambiguities.skipped_lock;
+    last_ar_attempt_diagnostic_.skipped_scale =
+        eligible_ambiguities.skipped_scale;
+    last_ar_attempt_diagnostic_.skipped_index =
+        eligible_ambiguities.skipped_index;
+    last_ar_attempt_diagnostic_.wl_fixed_count =
+        wlnl_preparation.wl_summary.fixed_count;
+    last_ar_attempt_diagnostic_.wl_max_mw_count =
+        wlnl_preparation.wl_summary.max_mw_count;
 
     const int n = static_cast<int>(eligible_ambiguities.satellites.size());
     if (n < ppp_config_.min_satellites_for_ar) {
@@ -82,13 +104,19 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
                 obs, nav, receiver_position, clock_bias_m, trop_zenith,
                 osr_by_sat, sat, info);
         },
-        pppDebugEnabled());
+        pppDebugEnabled(),
+        obs.time.week,
+        obs.time.tow);
+    last_ar_attempt_diagnostic_.ratio = attempt.ratio;
+    last_ar_attempt_diagnostic_.required_ratio = ppp_config_.ar_ratio_threshold;
+    last_ar_attempt_diagnostic_.fixed_ambiguities = attempt.nb;
     if (!attempt.fixed) {
         return false;
     }
 
     last_ar_ratio_ = attempt.ratio;
     last_fixed_ambiguities_ = attempt.nb;
+    last_ar_attempt_diagnostic_.accepted = true;
     if (pppDebugEnabled()) {
         std::cerr << "[PPP-WLNL] NL fixed: nb=" << attempt.nb
                   << " ratio=" << attempt.ratio << "\n";
@@ -114,21 +142,53 @@ bool PPPProcessor::solveFixedPosition(const ObservationData& obs,
                 obs, nav, osr_by_sat, satellite, amb, fixed_observation);
     });
 
-    double position_shift_norm_m = 0.0;
-    const bool solved = ppp_ar::solveFixedNlPosition(
+    ppp_ar::FixedPositionSolutionStats fixed_stats;
+    bool solved = ppp_ar::solveFixedNlDdPosition(
         fixed_observations,
         position,
-        clock_m,
         trop_zenith,
         obs.time,
         [&](const Vector3d& receiver_position, double elevation, const GNSSTime& time) {
             return calculateMappingFunction(receiver_position, elevation, time);
         },
         fixed_position,
-        &position_shift_norm_m);
+        &fixed_stats);
+    if (!solved) {
+        solved = ppp_ar::solveFixedNlPosition(
+            fixed_observations,
+            position,
+            clock_m,
+            trop_zenith,
+            obs.time,
+            [&](const Vector3d& receiver_position, double elevation, const GNSSTime& time) {
+                return calculateMappingFunction(receiver_position, elevation, time);
+            },
+            fixed_position,
+            &fixed_stats);
+    }
+    last_ar_attempt_diagnostic_.fixed_position_observations =
+        fixed_stats.observations;
+    last_ar_attempt_diagnostic_.fixed_position_unknowns =
+        fixed_stats.unknowns;
+    last_ar_attempt_diagnostic_.fixed_position_solved = fixed_stats.solved;
+    last_ar_attempt_diagnostic_.fixed_position_shift_m =
+        fixed_stats.position_shift_norm_m;
+    last_ar_attempt_diagnostic_.fixed_position_clock_update_rms_m =
+        fixed_stats.clock_update_rms_m;
+    last_ar_attempt_diagnostic_.fixed_position_clock_update_max_abs_m =
+        fixed_stats.clock_update_max_abs_m;
+    last_ar_attempt_diagnostic_.fixed_position_residual_rms_m =
+        fixed_stats.residual_rms_m;
+    last_ar_attempt_diagnostic_.fixed_position_residual_max_abs_m =
+        fixed_stats.residual_max_abs_m;
     if (pppDebugEnabled() && solved) {
         std::cerr << "[PPP-WLNL] fixedWLS: sats=" << fixed_observations.size()
-                  << " pos_shift=" << position_shift_norm_m << "m\n";
+                  << " pos_shift=" << fixed_stats.position_shift_norm_m
+                  << "m clock_update_rms=" << fixed_stats.clock_update_rms_m
+                  << "m clock_update_max=" << fixed_stats.clock_update_max_abs_m
+                  << "m residual_rms=" << fixed_stats.residual_rms_m
+                  << "m residual_max=" << fixed_stats.residual_max_abs_m
+                  << "m\n";
     }
     return solved;
 }
@@ -326,6 +386,7 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
     Vector3d sat_pos = Vector3d::Zero();
     double sat_clk = 0.0;
     bool use_trop_model = true;
+    ppp_ar::WlnlGroupKey group{satellite.system, {0, 0}};
 
     const auto osr_it = osr_by_sat.find(satellite);
     if (osr_it != osr_by_sat.end()) {
@@ -349,6 +410,8 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
         sat_pos = osr.satellite_position;
         sat_clk = osr.satellite_clock_bias_s;
         use_trop_model = false;
+        group = {satellite.system,
+                 {static_cast<int>(osr.signals[0]), static_cast<int>(osr.signals[1])}};
     } else {
         const Observation* l1 = ppp_utils::findCarrierObservation(
             obs, satellite, {SignalType::GPS_L1CA, SignalType::GAL_E1, SignalType::QZS_L1CA});
@@ -372,6 +435,8 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
         const double alpha2 = f2 / (f1 + f2);
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
         nl_phase_m = alpha1 * l1->carrier_phase * lam1 + alpha2 * l2->carrier_phase * lam2;
+        group = {satellite.system,
+                 {static_cast<int>(l1->signal), static_cast<int>(l2->signal)}};
 
         Vector3d sat_vel;
         double sat_drift = 0.0;
@@ -402,6 +467,8 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
     fixed_observation.lambda_nl_m = lambda_nl;
     fixed_observation.sat_pos = sat_pos;
     fixed_observation.sat_clk = sat_clk;
+    fixed_observation.system = satellite.system;
+    fixed_observation.group = group;
     fixed_observation.use_trop_model = use_trop_model;
     return true;
 }

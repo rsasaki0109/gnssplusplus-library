@@ -179,8 +179,16 @@ public:
         double orbit_correction_z_m = 0.0;
         double clock_correction_m = 0.0;
         double ura_sigma_m = 0.0;
+        double prc_m = 0.0;
+        double cpc_m = 0.0;
+        double applied_pseudorange_correction_m = 0.0;
+        double applied_carrier_phase_correction_m = 0.0;
+        double relativity_correction_m = 0.0;
+        double receiver_antenna_m = 0.0;
         double code_bias_m = 0.0;
         double phase_bias_m = 0.0;
+        double windup_m = 0.0;
+        double phase_compensation_m = 0.0;
         double trop_correction_m = 0.0;
         double stec_tecu = 0.0;
         double iono_correction_m = 0.0;
@@ -210,6 +218,18 @@ public:
         double modeled_trop_delay_m = 0.0;
         double modeled_zenith_trop_delay_m = 0.0;
         double estimated_trop_delay_m = 0.0;
+        double orbit_projection_m = 0.0;
+        int atmos_network_id = 0;
+        int code_bias_network_id = 0;
+        int phase_bias_network_id = 0;
+        int atmos_reference_week = 0;
+        double atmos_reference_tow = 0.0;
+        int phase_bias_reference_week = 0;
+        double phase_bias_reference_tow = 0.0;
+        int clock_reference_week = 0;
+        double clock_reference_tow = 0.0;
+        int effective_phase_bias_reference_week = 0;
+        double effective_phase_bias_reference_tow = 0.0;
     };
 
     const std::vector<SSRApplicationDiagnostic>& getLastSSRApplicationDiagnostics() const {
@@ -221,6 +241,19 @@ public:
         int rows = 0;
         int code_rows = 0;
         int phase_rows = 0;
+        int outlier_inflated_rows = 0;
+        int code_outlier_inflated_rows = 0;
+        int phase_outlier_inflated_rows = 0;
+        int ionosphere_constraint_outlier_inflated_rows = 0;
+        int prior_outlier_inflated_rows = 0;
+        double code_outlier_inflated_max_abs_m = 0.0;
+        double phase_outlier_inflated_max_abs_m = 0.0;
+        double ionosphere_constraint_outlier_inflated_max_abs_m = 0.0;
+        double prior_outlier_inflated_max_abs_m = 0.0;
+        double code_outlier_inflated_rms_m = 0.0;
+        double phase_outlier_inflated_rms_m = 0.0;
+        double ionosphere_constraint_outlier_inflated_rms_m = 0.0;
+        double prior_outlier_inflated_rms_m = 0.0;
         double pos_delta_m = 0.0;
         double pos_delta_x_m = 0.0;
         double pos_delta_y_m = 0.0;
@@ -259,6 +292,41 @@ public:
         double phase_residual_max_abs_m = 0.0;
         SatelliteId phase_residual_max_sat;
         int ionosphere_constraint_rows = 0;
+        bool ar_enabled = false;
+        bool ar_attempted = false;
+        bool ar_accepted = false;
+        bool ar_rejected_after_fix = false;
+        int ar_min_lock_count = 0;
+        int ar_min_satellites = 0;
+        int ar_total_ambiguities = 0;
+        int ar_eligible_ambiguities = 0;
+        int ar_skipped_reinitialization = 0;
+        int ar_skipped_lock = 0;
+        int ar_skipped_scale = 0;
+        int ar_skipped_index = 0;
+        int ar_wl_fixed_count = 0;
+        int ar_wl_max_mw_count = 0;
+        double ar_ratio = 0.0;
+        double ar_required_ratio = 0.0;
+        int ar_fixed_ambiguities = 0;
+        int ar_madoca_ewl_candidates = 0;
+        int ar_madoca_ewl_applied_constraints = 0;
+        int ar_madoca_ewl_skipped_large_frac = 0;
+        int ar_madoca_ewl_skipped_large_sigma = 0;
+        int ar_madoca_wl_attempted_pairs = 0;
+        int ar_madoca_wl_applied_constraints = 0;
+        int ar_madoca_wl_skipped_invalid_row = 0;
+        int ar_madoca_wl_skipped_no_covariance = 0;
+        int ar_madoca_wl_skipped_large_innovation = 0;
+        int ar_fixed_position_observations = 0;
+        int ar_fixed_position_unknowns = 0;
+        bool ar_fixed_position_solved = false;
+        bool ar_fixed_position_rejected_by_shift = false;
+        double ar_fixed_position_shift_m = 0.0;
+        double ar_fixed_position_clock_update_rms_m = 0.0;
+        double ar_fixed_position_clock_update_max_abs_m = 0.0;
+        double ar_fixed_position_residual_rms_m = 0.0;
+        double ar_fixed_position_residual_max_abs_m = 0.0;
     };
 
     struct PPPResidualDiagnostic {
@@ -273,6 +341,7 @@ public:
         double ionosphere_coefficient = 1.0;
         bool carrier_phase = false;
         bool ionosphere_constraint = false;
+        bool prior_constraint = false;
         bool phase_candidate = false;
         bool phase_accepted = false;
         bool phase_ready = false;
@@ -311,6 +380,7 @@ public:
         double predicted_m = 0.0;
         double residual_m = 0.0;
         double variance_m2 = 0.0;
+        bool outlier_inflated = false;
         double elevation_deg = 0.0;
         double iono_state_m = 0.0;
     };
@@ -387,6 +457,44 @@ private:
     bool receiver_antex_loaded_ = false;
     Vector3d static_anchor_position_ = Vector3d::Zero();
     bool has_static_anchor_position_ = false;
+    struct ArAttemptDiagnostic {
+        bool enabled = false;
+        bool attempted = false;
+        bool accepted = false;
+        bool rejected_after_fix = false;
+        int min_lock_count = 0;
+        int min_satellites = 0;
+        int total_ambiguities = 0;
+        int eligible_ambiguities = 0;
+        int skipped_reinitialization = 0;
+        int skipped_lock = 0;
+        int skipped_scale = 0;
+        int skipped_index = 0;
+        int wl_fixed_count = 0;
+        int wl_max_mw_count = 0;
+        double ratio = 0.0;
+        double required_ratio = 0.0;
+        int fixed_ambiguities = 0;
+        int madoca_ewl_candidates = 0;
+        int madoca_ewl_applied_constraints = 0;
+        int madoca_ewl_skipped_large_frac = 0;
+        int madoca_ewl_skipped_large_sigma = 0;
+        int madoca_wl_attempted_pairs = 0;
+        int madoca_wl_applied_constraints = 0;
+        int madoca_wl_skipped_invalid_row = 0;
+        int madoca_wl_skipped_no_covariance = 0;
+        int madoca_wl_skipped_large_innovation = 0;
+        int fixed_position_observations = 0;
+        int fixed_position_unknowns = 0;
+        bool fixed_position_solved = false;
+        bool fixed_position_rejected_by_shift = false;
+        double fixed_position_shift_m = 0.0;
+        double fixed_position_clock_update_rms_m = 0.0;
+        double fixed_position_clock_update_max_abs_m = 0.0;
+        double fixed_position_residual_rms_m = 0.0;
+        double fixed_position_residual_max_abs_m = 0.0;
+    };
+    ArAttemptDiagnostic last_ar_attempt_diagnostic_;
     double last_ar_ratio_ = 0.0;
     int last_fixed_ambiguities_ = 0;
     int last_applied_atmos_trop_corrections_ = 0;
@@ -566,6 +674,10 @@ private:
      */
     bool resolveAmbiguities(const ObservationData& obs, const NavigationData& nav);
     bool resolveAmbiguitiesWLNL(const ObservationData& obs, const NavigationData& nav);
+    void resetLastArAttemptDiagnostic();
+    void populateFilterArDiagnostic(PPPFilterIterationDiagnostic& diagnostic) const;
+    void updateLatestFilterArDiagnostic();
+    void markLastArRejectedAfterFix();
     std::map<SatelliteId, OSRCorrection> computeWlnlOsrCorrections(
         const ObservationData& obs,
         const NavigationData& nav,
