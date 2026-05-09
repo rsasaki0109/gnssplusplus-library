@@ -1322,6 +1322,10 @@ TEST(PPPTest, ProcessorProducesConvergedFloatSolutionWithSyntheticPreciseProduct
     ppp_config.estimate_troposphere = false;
     ppp_config.enable_ambiguity_resolution = false;
     ppp_config.kinematic_mode = false;
+    // The synthetic observations do not model solid-earth-tide displacement,
+    // so disable both tide paths to keep this convergence test independent
+    // of which tide model is the default.
+    ppp_config.apply_solid_earth_tides = false;
 
     PPPProcessor processor(ppp_config);
     ProcessorConfig processor_config;
