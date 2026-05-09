@@ -1824,7 +1824,13 @@ bool IONEXProducts::loadIONEXFile(const std::string& filename) {
                 line.find("LAT/LON1/LON2/DLON/H") != std::string::npos) {
                 break;
             }
-            std::istringstream value_stream(line.substr(0, std::min<size_t>(60U, line.size())));
+            // IONEX data values are 5-char wide (I5 in the spec) and
+            // packed up to 16 values per 80-character line. The
+            // previous 60-char window dropped the last 4 values on
+            // every line, leaving every TEC row 16-values short and
+            // every map empty — silently rejecting CODE / IGS final
+            // IONEX. Use the full line.
+            std::istringstream value_stream(line);
             double raw_value = 0.0;
             while (value_stream >> raw_value) {
                 if (std::abs(raw_value - 9999.0) < 1e-6) {
@@ -1967,8 +1973,31 @@ bool DCBProducts::loadFile(const std::string& filename) {
                 continue;
             }
 
+            // Bias-SINEX rows are `BIAS SVN PRN [STATION] OBS1 OBS2
+            // START END UNIT VALUE STDEV`. Some emitters omit the
+            // optional STATION column entirely; some include it as
+            // a 9-char field that whitespace-tokenization collapses
+            // away. After collapsing, the PRN column may therefore
+            // land at fields[1] (no SVN, e.g. CAS) or fields[2]
+            // (BSX with SVN, e.g. GFZ/GBM). Pick whichever parses
+            // as a valid PRN (3-char `<sys><digit><digit>`); SVNs
+            // are 4 chars (`<sys><digit><digit><digit>`) so
+            // length disambiguates without needing brittle field-
+            // count heuristics.
             SatelliteId satellite;
-            if (!parseSatelliteToken(fields[1], satellite)) {
+            std::size_t obs_offset = 0;
+            if (fields[1].size() == 3U &&
+                parseSatelliteToken(fields[1], satellite)) {
+                obs_offset = 2;
+            } else if (fields[2].size() == 3U &&
+                       parseSatelliteToken(fields[2], satellite)) {
+                obs_offset = 3;
+            } else {
+                continue;
+            }
+            // Required columns (relative to obs_offset): OBS1,
+            // OBS2, START, END, UNIT, VALUE, STDEV — 7 more.
+            if (fields.size() < obs_offset + 7U) {
                 continue;
             }
 
@@ -1976,11 +2005,11 @@ bool DCBProducts::loadFile(const std::string& filename) {
                 DCBEntry entry;
                 entry.bias_type = fields[0];
                 entry.satellite = satellite;
-                entry.observation_1 = fields[2];
-                entry.observation_2 = fields[3];
-                entry.unit = fields[6];
-                entry.bias = std::stod(fields[7]);
-                entry.sigma = std::stod(fields[8]);
+                entry.observation_1 = fields[obs_offset];
+                entry.observation_2 = fields[obs_offset + 1];
+                entry.unit = fields[obs_offset + 4];
+                entry.bias = std::stod(fields[obs_offset + 5]);
+                entry.sigma = std::stod(fields[obs_offset + 6]);
                 entry.valid = std::isfinite(entry.bias);
                 entries.push_back(entry);
                 loaded_any = true;
