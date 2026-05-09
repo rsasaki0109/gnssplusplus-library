@@ -181,9 +181,12 @@ struct PPPConfig {
     // IERS Conventions 2010 §7.1.1 (Dehant) Step-1 + Step-2 model
     // from libgnss::iers::solidEarthTideDisplacement instead of the
     // built-in simplified Step-1-only Love-number approximation.
-    // Default off; opt-in for safe rollout pending truth-bench
-    // validation. See docs/iers-integration-plan.md.
-    bool use_iers_solid_tide = false;
+    // Default on after truth-bench validation against IGS final
+    // products (TSKB 2026-04-15 static, max paired displacement
+    // 4.8 cm matching the IERS Step-2 envelope; see
+    // docs/iers-integration-plan.md). Pass --no-iers-solid-tide
+    // to revert to the legacy Step-1-only path.
+    bool use_iers_solid_tide = true;
     // Optional IERS 20 C04 EOP file path (Phase D-0 scaffolding).
     // When set, PPPProcessor loads the series at construction and
     // exposes per-epoch xp/yp/UT1-UTC via getEarthOrientationParams();
