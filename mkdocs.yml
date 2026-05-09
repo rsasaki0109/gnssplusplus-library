@@ -28,6 +28,7 @@ nav:
   - Interfaces: interfaces.md
   - Experiments: experiments.md
   - Decisions: decisions.md
+  - IERS Integration Plan: iers-integration-plan.md
   - References:
       - Overview: references/index.md
       - MADOCALIB Gap: references/madocalib-gap.md

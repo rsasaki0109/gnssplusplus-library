@@ -19,9 +19,9 @@ constexpr double kJulianCentury  = 36525.0;       // days per Julian century
 
 Eigen::Vector3d solidEarthTideDisplacement(
     double mjd_utc,
-    const Eigen::Vector3d& xsta_ecef,
-    const Eigen::Vector3d& xsun_ecef,
-    const Eigen::Vector3d& xmon_ecef) {
+    const Eigen::Vector3d& xsta_itrs,
+    const Eigen::Vector3d& xsun_icrs,
+    const Eigen::Vector3d& xmon_icrs) {
     // dehanttideinel_impl wants:
     //   julian_centuries_tt — TT in Julian centuries from J2000
     //   fhr_ut              — fractional hour UT of the day
@@ -45,12 +45,12 @@ Eigen::Vector3d solidEarthTideDisplacement(
     // below the model's intrinsic accuracy.
     const double fhr_ut = (mjd_utc - std::floor(mjd_utc)) * 24.0;
 
-    std::vector<Eigen::Vector3d> xsta_vec = { xsta_ecef };
+    std::vector<Eigen::Vector3d> xsta_vec = { xsta_itrs };
     std::vector<Eigen::Vector3d> xcor_vec;
     xcor_vec.reserve(1);
 
     iers2010::dehanttideinel_impl(
-        centuries_tt, fhr_ut, xsun_ecef, xmon_ecef, xsta_vec, xcor_vec);
+        centuries_tt, fhr_ut, xsun_icrs, xmon_icrs, xsta_vec, xcor_vec);
 
     if (xcor_vec.empty()) {
         return Eigen::Vector3d::Zero();
