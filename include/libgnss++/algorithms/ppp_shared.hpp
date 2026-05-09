@@ -191,6 +191,13 @@ struct PPPConfig {
     // will read it. Empty string = no EOP table (current default).
     // Source: https://hpiers.obspm.fr/iers/eop/eopc04/eopc04.1962-now
     std::string eop_path;
+    // IERS Conventions 2010 §7.1.4 pole-tide displacement (opt-in).
+    // Requires an EOP table loaded via eop_path; otherwise the pole
+    // tide is silently skipped (instantaneous polar motion is
+    // unknown, so any non-zero displacement computed from the mean
+    // pole alone would be biased rather than zero). Default off
+    // pending Phase D-1 truth-bench validation.
+    bool use_iers_pole_tide = false;
     bool apply_relativity = true;
 
     // Convergence criteria
