@@ -2211,7 +2211,19 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             }
         }
 
-        if (!applied_ssr_iono && ionex_products_loaded_) {
+        // The dual-frequency ionosphere-free combination already cancels the
+        // first-order ionospheric delay analytically, so subtracting an
+        // IONEX-derived correction on top of an IF observable can only
+        // introduce numerical-precision and TEC-mapping noise (a few cm
+        // routinely observed at TSKB/GRAZ). Skip the subtraction in IF mode
+        // unless the filter is estimating a per-satellite STEC state, in
+        // which case the IONEX value is injected as a tight constraint
+        // earlier in this loop rather than subtracted from observations.
+        const bool ionex_applies_to_observation =
+            !ppp_config_.use_ionosphere_free ||
+            observation.secondary_signal == SignalType::SIGNAL_TYPE_COUNT ||
+            ppp_config_.estimate_ionosphere;
+        if (!applied_ssr_iono && ionex_products_loaded_ && ionex_applies_to_observation) {
             double ipp_lat_deg = 0.0;
             double ipp_lon_deg = 0.0;
             double mapping_factor = 0.0;
