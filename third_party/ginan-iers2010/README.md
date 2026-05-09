@@ -17,20 +17,16 @@ solid-earth-tide displacement and Mendes-Pavlis tropospheric mapping.
 
 ## Scope of this vendoring
 
-Only the **GTime-independent** subset of ginan's iers2010 wrappers is
-vendored here. Specifically:
+The Mendes-Pavlis tropospheric mapping (Chapter 9), the solid-earth-tide
+displacement (Chapter 7 §7.1.1) and the HARDISP ocean-tide-loading
+(Chapter 7 §7.1.2) routines are vendored:
 
 | Routine | File | Purpose |
 |---------|------|---------|
 | `iers2010::fcul_a` | `ch9/fcul_a.cpp` | Mendes-Pavlis FCULa total mapping function (latitude, height, surface temperature, elevation) |
 | `iers2010::fcul_zd_hpa` | `ch9/fcul_zd_hpa.cpp` | Mendes-Pavlis total zenith delay (lat, height, pressure, water-vapor pressure, temperature) |
 | `iers2010::dehanttideinel_impl` | `dehanttideinel/dehanttide_all.cpp` | Solid-earth-tide station displacement (Dehant et al., IERS Conventions 2010 §7.1.1) |
-
-The HARDISP ocean-tide-loading routines (`hardisp/`) are **deliberately
-not included** in this PR because their public APIs depend on ginan's
-internal `GTime` / `MjDateUtc` / `MjDateTT` time types. That subset
-will land in a follow-up PR with native libgnss++ time-type adaptation,
-or via a fresh re-implementation on top of SOFA's Julian Date primitives.
+| `iers2010::hisp::hardisp_impl` and helpers | `hardisp/{admint,eval,hardisp_impl,recurs,shells,spline,tdfrph}.cpp` | HARDISP ocean-tide-loading time-domain displacement (IERS Conventions 2010 §7.1.2). Driven by spline-interpolated tidal admittance over 342 reference harmonics. Time argument is a UTC Modified Julian Date (`double mjd_utc`); the libgnss++ shim replaces ginan's `GTime` / `MjDateUtc` / `MjDateTT` helpers with the IAU SOFA UTC->TAI->TT chain (`iauUtctai`, `iauTaitt`). |
 
 ## Modifications
 
@@ -40,9 +36,10 @@ relative to the upstream ginan sources in
 
 1. **`iers2010.hpp`** — adapted from the upstream header:
    - Removed `#include "common/gTime.hpp"` (no longer required because
-     of (3) below).
-   - Removed the `namespace hisp { ... }` block (HARDISP routines not
-     vendored — see "Scope" above).
+     the HARDISP API now takes `double mjd_utc` rather than ginan's
+     `GTime` — see (4) below).
+   - Replaced the `namespace hisp { ... }` declarations to use
+     `double mjd_utc` arguments instead of `GTime`.
    - Replaced `#include "common/eigenIncluder.hpp"` with a direct
      `#include <Eigen/Dense>` so this public header is self-contained
      and does not depend on the internal `shim/` directory (which is
@@ -53,8 +50,9 @@ relative to the upstream ginan sources in
      readers to this README.
 
 2. **`ch9/fcul_a.cpp`, `ch9/fcul_zd_hpa.cpp`,
-   `dehanttideinel/dehanttide_all.cpp`** — single-line include path
-   adjustment:
+   `dehanttideinel/dehanttide_all.cpp`,
+   `hardisp/{eval,recurs,shells,spline}.cpp`** — single-line include
+   path adjustment:
    - `#include "3rdparty/iers2010/iers2010.hpp"` →
      `#include "iers2010.hpp"`
    - Reason: the libgnss++ vendor layout places this header alongside
@@ -69,5 +67,17 @@ relative to the upstream ginan sources in
    boost/serialization, custom EigenDenseBase plugins, ginan time
    types, etc.). The value is bit-identical to ginan's equivalent.
 
-No algorithmic, numerical, or behavioral modifications were made to any
-of the vendored `.cpp` source files.
+4. **`hardisp/{tdfrph,admint,hardisp_impl}.cpp`** — `GTime epoch`
+   parameter replaced with `double mjd_utc` (UTC Modified Julian Date)
+   throughout. Inside `tdfrph.cpp`, the upstream `MjDateUtc` /
+   `MjDateTT` helpers used to compute "TT centuries since J2000" are
+   replaced with the IAU SOFA UTC->TAI->TT chain
+   (`iauUtctai`+`iauTaitt`); this requires the vendored `sofa` target
+   to be linked into `ginan_iers2010` (handled in this directory's
+   `CMakeLists.txt`). The Doodson argument expansion, Delaunay
+   variable expressions and tidal admittance spline are byte-for-byte
+   identical to upstream.
+
+No algorithmic, numerical, or behavioral modifications were made to the
+vendored science computations themselves; only the time-argument shim
+described in (4) was applied.

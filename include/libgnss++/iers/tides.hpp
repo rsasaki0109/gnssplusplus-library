@@ -20,6 +20,23 @@
 
 namespace libgnss::iers {
 
+/// @brief BLQ "Scherneck" ocean-tide-loading coefficients for one site.
+///
+/// One station's BLQ block is six rows of 11 columns each: the
+/// amplitude (m) and phase (deg) of each of the eleven IERS reference
+/// tidal constituents (M2, S2, N2, K2, K1, O1, P1, Q1, Mf, Mm, Ssa)
+/// projected onto each of the three displacement components (radial,
+/// west, south). The order matches the BLQ format produced by the
+/// Onsala / Bos & Scherneck ocean loading service.
+struct OceanLoadingBlq {
+    std::array<double, 11> radial_amplitudes_m{};
+    std::array<double, 11> west_amplitudes_m{};
+    std::array<double, 11> south_amplitudes_m{};
+    std::array<double, 11> radial_phases_deg{};
+    std::array<double, 11> west_phases_deg{};
+    std::array<double, 11> south_phases_deg{};
+};
+
 /// @brief Solid-earth-tide station displacement.
 ///
 /// Wraps `iers2010::dehanttideinel_impl`, which implements IERS
@@ -142,5 +159,25 @@ Eigen::Vector3d atmosphericTidalLoadingDisplacement(
     double mjd_utc,
     const Eigen::Vector3d& xsta_itrs,
     const AtmosphericTidalLoadingCoefficients& coeffs);
+
+/// @brief HARDISP ocean-tide-loading station displacement at one epoch.
+///
+/// Wraps `iers2010::hisp::hardisp_impl` (IERS Conventions 2010 §7.1.2).
+/// Given the station's BLQ "Scherneck" coefficients and the UTC epoch
+/// of interest, returns the instantaneous local-tangent (radial / west
+/// / south) ocean-loading displacement [m] using the spline-interpolated
+/// admittance over 342 reference harmonics.
+///
+/// The returned vector is in the station's local *(radial, west,
+/// south)* frame — the same convention as the BLQ amplitudes. Callers
+/// are responsible for the local-tangent->ECEF rotation if they need
+/// the displacement in ITRS / ECEF.
+///
+/// @param mjd_utc UTC modified Julian date of the epoch.
+/// @param blq     Per-site BLQ amplitudes (m) and phases (deg).
+/// @return Displacement [m] as `(radial_up, west, south)`.
+Eigen::Vector3d oceanLoadingDisplacement(
+    double mjd_utc,
+    const OceanLoadingBlq& blq);
 
 }  // namespace libgnss::iers

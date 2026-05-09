@@ -2819,25 +2819,59 @@ Vector3d PPPProcessor::calculateOceanLoading(const Vector3d& position,
         return Vector3d::Zero();
     }
 
-    const auto system_time = time.toSystemTime();
-    const double seconds_since_unix =
-        std::chrono::duration<double>(system_time.time_since_epoch()).count();
-
     double up_m = 0.0;
     double west_m = 0.0;
     double south_m = 0.0;
-    for (size_t i = 0; i < kOceanLoadingPeriodsSeconds.size(); ++i) {
-        const double period_seconds = kOceanLoadingPeriodsSeconds[i];
-        if (period_seconds <= 0.0) {
-            continue;
+
+    if (ppp_config_.use_iers_ocean_loading) {
+        // IERS Conventions 2010 §7.1.2 HARDISP path: spline-interpolated
+        // admittance over 342 reference harmonics, with proper
+        // astronomical (Doodson) phase reference. The wrapper takes a
+        // BLQ in the libgnss::iers struct shape; we copy the existing
+        // PPPProcessor cache (same 11-constituent BLQ block) into it.
+        libgnss::iers::OceanLoadingBlq blq;
+        for (std::size_t i = 0; i < blq.radial_amplitudes_m.size(); ++i) {
+            blq.radial_amplitudes_m[i] =
+                ocean_loading_coefficients_.up_amplitudes_m[i];
+            blq.west_amplitudes_m[i] =
+                ocean_loading_coefficients_.west_amplitudes_m[i];
+            blq.south_amplitudes_m[i] =
+                ocean_loading_coefficients_.south_amplitudes_m[i];
+            blq.radial_phases_deg[i] =
+                ocean_loading_coefficients_.up_phases_deg[i];
+            blq.west_phases_deg[i] =
+                ocean_loading_coefficients_.west_phases_deg[i];
+            blq.south_phases_deg[i] =
+                ocean_loading_coefficients_.south_phases_deg[i];
         }
-        const double angle_rad = 2.0 * M_PI * seconds_since_unix / period_seconds;
-        up_m += ocean_loading_coefficients_.up_amplitudes_m[i] *
-            std::cos(angle_rad - ocean_loading_coefficients_.up_phases_deg[i] * kDegreesToRadians);
-        west_m += ocean_loading_coefficients_.west_amplitudes_m[i] *
-            std::cos(angle_rad - ocean_loading_coefficients_.west_phases_deg[i] * kDegreesToRadians);
-        south_m += ocean_loading_coefficients_.south_amplitudes_m[i] *
-            std::cos(angle_rad - ocean_loading_coefficients_.south_phases_deg[i] * kDegreesToRadians);
+        const double mjd_utc = libgnss::iers::gnssTimeToMjdUtc(time);
+        const Vector3d disp_local =
+            libgnss::iers::oceanLoadingDisplacement(mjd_utc, blq);
+        up_m    = disp_local.x();
+        west_m  = disp_local.y();
+        south_m = disp_local.z();
+    } else {
+        // Legacy direct-sum path (kept as the default for now). Note
+        // that this uses Unix epoch as the phase reference rather than
+        // the proper IERS Doodson astronomical argument, so it is best
+        // viewed as a placeholder; the IERS HARDISP path above is the
+        // physically correct routine.
+        const auto system_time = time.toSystemTime();
+        const double seconds_since_unix =
+            std::chrono::duration<double>(system_time.time_since_epoch()).count();
+        for (size_t i = 0; i < kOceanLoadingPeriodsSeconds.size(); ++i) {
+            const double period_seconds = kOceanLoadingPeriodsSeconds[i];
+            if (period_seconds <= 0.0) {
+                continue;
+            }
+            const double angle_rad = 2.0 * M_PI * seconds_since_unix / period_seconds;
+            up_m += ocean_loading_coefficients_.up_amplitudes_m[i] *
+                std::cos(angle_rad - ocean_loading_coefficients_.up_phases_deg[i] * kDegreesToRadians);
+            west_m += ocean_loading_coefficients_.west_amplitudes_m[i] *
+                std::cos(angle_rad - ocean_loading_coefficients_.west_phases_deg[i] * kDegreesToRadians);
+            south_m += ocean_loading_coefficients_.south_amplitudes_m[i] *
+                std::cos(angle_rad - ocean_loading_coefficients_.south_phases_deg[i] * kDegreesToRadians);
+        }
     }
 
     double latitude_rad = 0.0;

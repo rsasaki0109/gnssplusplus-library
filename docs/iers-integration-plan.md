@@ -244,9 +244,15 @@ flip-default PR is bench evidence only — no live-system risk.
 These are tracked here for context but are independent work that
 does not block Phase C:
 
-- **Phase A-2b**: Vendor or re-implement HARDISP (ocean-tide-loading)
-  with native libgnss++ time-type adaptation. Re-uses the BLQ
-  parser already present in libgnss++.
+- **Phase A-2b** (landed alongside this plan's HARDISP follow-up
+  PR): vendor IERS Conventions 2010 §7.1.2 HARDISP under
+  `third_party/ginan-iers2010/hardisp/` with a `double mjd_utc`
+  shim replacing ginan's `GTime` time argument. Wrapper API:
+  `libgnss::iers::oceanLoadingDisplacement(mjd_utc, blq)`.
+  Opt-in flag `PPPConfig::use_iers_ocean_loading` (default off,
+  CLI `--use-iers-ocean-loading` / `--no-iers-ocean-loading`).
+  Bench harness `gnss_ppp_iers_ocean_loading_bench.py`. Reuses the
+  existing BLQ parser in libgnss++; no re-parser required.
 - **Phase D-0** *(in progress)*: EOP plumbing scaffolding.
   Adds `libgnss::iers::EopTable` (daily series with linear
   interpolation and leap-second snap on UT1-UTC) and a
