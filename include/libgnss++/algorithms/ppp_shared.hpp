@@ -204,13 +204,19 @@ struct PPPConfig {
     // sub-cm envelope). `--no-iers-pole-tide` is a permanent escape
     // hatch.
     bool use_iers_pole_tide = true;
-    // IERS Conventions 2010 §5.5.1.1 + §8.2 sub-daily EOP corrections
-    // (opt-in). When true, getEarthOrientationParams adds the harmonic
-    // libration + ocean-tide deltas to the daily-interpolated xp / yp
-    // / UT1-UTC before returning. Peak amplitudes are sub-mas / few-µs,
-    // so the receiver-position effect on PPP is sub-mm; flipping this
-    // on tightens the modeled CIP location for IERS-conformant work.
-    bool use_iers_sub_daily_eop = false;
+    // IERS Conventions 2010 §5.5.1.1 + §8.2 sub-daily EOP corrections.
+    // When true, getEarthOrientationParams adds the harmonic libration
+    // + ocean-tide deltas to the daily-interpolated xp / yp / UT1-UTC
+    // before returning. Peak amplitudes are sub-mas / few-µs.
+    //
+    // Default true since 2026-05-09. The corrections are pure
+    // deterministic harmonic series (no per-site data) and produce
+    // RMS 1.5 µm at the receiver position over a static-mode
+    // pole-tide-on arc — well below the noise floor and within
+    // IERS-conformant cm-class CIP modeling. The flip is inert
+    // without an EOP table loaded (same gate as use_iers_pole_tide).
+    // `--no-iers-sub-daily-eop` is a permanent escape hatch.
+    bool use_iers_sub_daily_eop = true;
     // IERS Conventions 2010 §7.1.5 atmospheric tidal loading (S1/S2)
     // station displacement (opt-in). Reads per-site amplitude / phase
     // coefficients from `atm_tidal_loading_path` and adds the diurnal

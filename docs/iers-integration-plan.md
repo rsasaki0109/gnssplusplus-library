@@ -306,7 +306,7 @@ does not block Phase C:
   MIZU show transient max-displacement outliers from PPP convergence
   events that are unrelated to pole tide; the medians and dz values
   remain physical.
-- **Phase D-2** *(in progress)*: Sub-daily EOP corrections opt-in.
+- **Phase D-2** *(landed 2026-05-09)*: Sub-daily EOP corrections.
   Adds `libgnss::iers::subDailyEopCorrection(mjd_utc, ut1_utc)` →
   `{dxp, dyp, dut1, dlod}`, applying the full IERS Conventions 2010
   set: §5.5.1.1 Tables 5.1a/5.1b libration of CIP and UT1
@@ -320,7 +320,13 @@ does not block Phase C:
   dyp ≈ +255 µas, dut1 ≈ −24 µs; the PPP receiver-position effect
   on top of the pole tide is RMS 1.5 µm in Z (0.17% relative
   perturbation, matching the daily-vs-sub-daily xp/yp amplitude
-  ratio). Default off.
+  ratio).
+
+  **Default flipped on 2026-05-09** alongside D-1. The corrections
+  are pure deterministic harmonic series (no per-site data) and
+  produce sub-µm-level RMS effects on the receiver position;
+  inert without an EOP table loaded. `--no-iers-sub-daily-eop` is
+  a permanent escape hatch.
 - **Phase D-3** *(in progress)*: Atmospheric tidal loading (IERS
   Conventions 2010 §7.1.5) opt-in. Adds
   `libgnss::iers::atmosphericTidalLoadingDisplacement` and the
