@@ -1395,7 +1395,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.clas_iono_prior_variance = 0.25;
         }
         if (options.clas_code_outlier_sigma_scale < 0.0) {
-            options.clas_code_outlier_sigma_scale = 3.0;
+            options.clas_code_outlier_sigma_scale = 10.0;
         }
         if (options.clas_code_outlier_min_residual_m < 0.0) {
             options.clas_code_outlier_min_residual_m = 0.0;
