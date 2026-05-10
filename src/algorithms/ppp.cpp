@@ -2111,33 +2111,24 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 sat_clock_bias,
                 sat_clock_drift);
             if (have_precise) {
-                // Light-travel-time iteration: the first SP3 sample is taken
-                // at reception time, so re-sample at the implied emission
-                // epoch (rcv − τ) to place sat_position on the orbit when the
-                // photon left the satellite. The downstream geodist() handles
-                // the Sagnac (frame-rotation) term.
+                // Light-travel-time correction: the SP3 query above samples
+                // the orbit at reception time, but the signal left the sat at
+                // emission_time = reception − τ. Re-querying the precise
+                // products at emission_time fails at SP3 file boundaries
+                // (extrapolation back across the day boundary falls back to
+                // the single-sample branch and zeros the velocity), so use a
+                // first-order Taylor expansion with the sat_velocity returned
+                // by the bracket: sat_position(em) ≈ sat_position(rcv) −
+                // sat_velocity × τ. For sub-second travel times this is
+                // accurate to mm. The downstream geodist() handles the Sagnac
+                // (frame-rotation) term.
                 const double initial_distance =
                     (sat_position - receiver_position).norm();
                 if (std::isfinite(initial_distance) && initial_distance > 0.0) {
                     const double travel_time =
                         initial_distance / constants::SPEED_OF_LIGHT;
-                    const GNSSTime emission_time = time - travel_time;
-                    Vector3d em_position = sat_position;
-                    Vector3d em_velocity = sat_velocity;
-                    double em_clock_bias = sat_clock_bias;
-                    double em_clock_drift = sat_clock_drift;
-                    if (precise_products_.interpolateOrbitClock(
-                            observation.satellite,
-                            emission_time,
-                            em_position,
-                            em_velocity,
-                            em_clock_bias,
-                            em_clock_drift)) {
-                        sat_position = em_position;
-                        sat_velocity = em_velocity;
-                        sat_clock_bias = em_clock_bias;
-                        sat_clock_drift = em_clock_drift;
-                    }
+                    sat_position -= sat_velocity * travel_time;
+                    sat_clock_bias -= sat_clock_drift * travel_time;
                 }
             }
         }
@@ -3273,10 +3264,16 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
             const int ambiguity_index = ambiguityStateIndex(observation.satellite);
             if (ambiguity_index >= 0 && ambiguity_index < filter_state_.total_states) {
                 const auto ambiguity_it = ambiguity_states_.find(observation.satellite);
+                // Phase observations carry the cm-class signal that drives
+                // PPP convergence; gating them behind convergence_min_epochs
+                // (= 20 = 10 min at 30 s) for the precise-products path lets
+                // the static anchor blend pin the position state to the SPP
+                // floor before phase ever enters the filter, capping the
+                // achievable absolute residual. RTKLIB-style PPP enables phase
+                // from the second epoch (lock_count >= 1) regardless of
+                // product source, so use the same threshold here.
                 const int required_lock_count =
-                    precise_products_loaded_ ?
-                        ppp_config_.convergence_min_epochs :
-                        ppp_config_.phase_measurement_min_lock_count;
+                    ppp_config_.phase_measurement_min_lock_count;
                 const bool phase_ready =
                     ambiguity_it != ambiguity_states_.end() &&
                     !ambiguity_it->second.needs_reinitialization &&
