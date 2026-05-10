@@ -189,17 +189,21 @@ struct PPPConfig {
     // Hard-blend the static-mode position state toward the SPP-derived
     // anchor each epoch (50 % post-convergence with precise products).
     //
-    // The blend caps absolute accuracy at the SPP-anchor floor (TSKB
-    // DOY 105: 2.79 m static residual vs RTKLIB rnx2rtkp 1.12 m on the
-    // same products), but disabling it on the precise-products path
-    // with the current observation-model implementation lets the
-    // receiver-clock and zenith-troposphere states run away —
-    // bench-verified divergence to 30 km within 5 hours at TSKB.
-    // Leave true unless and until the observation-model bias that
-    // drives the underlying divergence (~10–40 m first-epoch
-    // pseudorange residuals) is identified and fixed; then this
-    // becomes the obvious lever to lift the floor.
-    bool apply_static_anchor_blend = true;
+    // The blend was originally needed to prevent receiver-clock and
+    // zenith-troposphere runaway (TSKB anchor=off diverged to 30 km
+    // within 5 h) caused by km-class first-epoch pseudorange residuals
+    // from the linear SP3 interpolator. Once Lagrange (degree-9)
+    // polynomial interpolation replaced linear in
+    // `PreciseProducts::interpolateOrbitClock`, those residuals
+    // collapsed to ~10 m and the anchor is no longer needed for
+    // stability. Worse, the anchor caps absolute accuracy at the
+    // SPP floor: TSKB DOY 105 static residual is 1.29 m with the
+    // anchor disabled (close to RTKLIB rnx2rtkp's 1.12 m) vs 3.73 m
+    // with the anchor enabled on the Lagrange path. Default off; flip
+    // to true only when running with broadcast ephemeris or SSR
+    // products whose orbit accuracy is too poor for the filter to
+    // converge unaided.
+    bool apply_static_anchor_blend = false;
     // When true (and apply_solid_earth_tides is also true), use the
     // IERS Conventions 2010 §7.1.1 (Dehant) Step-1 + Step-2 model
     // from libgnss::iers::solidEarthTideDisplacement instead of the
