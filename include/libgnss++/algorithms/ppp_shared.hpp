@@ -186,6 +186,20 @@ struct PPPConfig {
     // report centre of mass (some legacy AC products / GLONASS-only
     // analyses). The ANTEX loader is unconditional when --antex is set.
     bool apply_satellite_antenna_pco = false;
+    // Hard-blend the static-mode position state toward the SPP-derived
+    // anchor each epoch (50 % post-convergence with precise products).
+    //
+    // The blend caps absolute accuracy at the SPP-anchor floor (TSKB
+    // DOY 105: 2.79 m static residual vs RTKLIB rnx2rtkp 1.12 m on the
+    // same products), but disabling it on the precise-products path
+    // with the current observation-model implementation lets the
+    // receiver-clock and zenith-troposphere states run away —
+    // bench-verified divergence to 30 km within 5 hours at TSKB.
+    // Leave true unless and until the observation-model bias that
+    // drives the underlying divergence (~10–40 m first-epoch
+    // pseudorange residuals) is identified and fixed; then this
+    // becomes the obvious lever to lift the floor.
+    bool apply_static_anchor_blend = true;
     // When true (and apply_solid_earth_tides is also true), use the
     // IERS Conventions 2010 §7.1.1 (Dehant) Step-1 + Step-2 model
     // from libgnss::iers::solidEarthTideDisplacement instead of the
