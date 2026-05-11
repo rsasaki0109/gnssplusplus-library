@@ -40,6 +40,9 @@ import gnss_smartloc_adapter as smartloc_adapter  # noqa: E402
 import gnss_smartloc_signoff as smartloc_signoff  # noqa: E402
 import gnss_ppp_kinematic_signoff as ppp_kinematic_signoff  # noqa: E402
 import gnss_ppp_static_signoff as ppp_static_signoff  # noqa: E402
+import gnss_ppp_iers_atm_tidal_loading_multisite_bench as iers_atl_multisite_bench  # noqa: E402
+import gnss_ppp_iers_pole_tide_multisite_bench as iers_multisite_bench  # noqa: E402
+import gnss_vmf_atl as vmf_atl  # noqa: E402
 import gnss_short_baseline_signoff as short_signoff  # noqa: E402
 import generate_driving_comparison as comparison  # noqa: E402
 import generate_architecture_diagram as architecture_diagram  # noqa: E402
@@ -71,6 +74,195 @@ import apply_ppc_multi_candidate_selector as ppc_multi_candidate_selector  # noq
 import run_ppc_multi_candidate_selector_matrix as ppc_multi_selector_matrix  # noqa: E402
 import run_ppc_ratio_gating_selector_sweep as ppc_ratio_gating_sweep  # noqa: E402
 import run_ppc_realtime_guard_sweep as ppc_realtime_guard_sweep  # noqa: E402
+
+
+class IersMultisiteBenchHelpersTest(unittest.TestCase):
+    def test_resolve_config_path_uses_site_config_directory(self) -> None:
+        config_dir = Path("/tmp/gnsspp/site-config")
+
+        self.assertEqual(
+            iers_multisite_bench.resolve_config_path(
+                "data/igs_2026105/PERT00AUS.rnx", config_dir),
+            config_dir / "data/igs_2026105/PERT00AUS.rnx",
+        )
+        self.assertEqual(
+            iers_multisite_bench.resolve_config_path(
+                "/var/tmp/PERT00AUS.rnx", config_dir),
+            Path("/var/tmp/PERT00AUS.rnx"),
+        )
+
+    def test_resolve_config_path_falls_back_to_parent_relative_path(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnsspp_multisite_config_") as temp_dir:
+            root = Path(temp_dir)
+            config_dir = root / "data" / "igs_2026105"
+            obs = root / "data" / "igs_2026105" / "PERT00AUS.rnx"
+            obs.parent.mkdir(parents=True)
+            obs.touch()
+
+            self.assertEqual(
+                iers_multisite_bench.resolve_config_path(
+                    "data/igs_2026105/PERT00AUS.rnx", config_dir),
+                obs,
+            )
+
+    def test_resolve_config_path_falls_back_to_source_root(self) -> None:
+        self.assertEqual(
+            iers_multisite_bench.resolve_config_path(
+                "test_data/iers/tskb_synth.atl", Path("/tmp")),
+            ROOT_DIR / "test_data" / "iers" / "tskb_synth.atl",
+        )
+
+
+class IersAtmTidalLoadingMultisiteBenchHelpersTest(unittest.TestCase):
+    def test_smoke_example_config_references_tracked_synthetic_atl_fixture(self) -> None:
+        config_path = ROOT_DIR / "configs" / "iers_atl_multisite_smoke.example.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(config["sites"][0]["name"], "TSKB")
+        atl_path = ROOT_DIR / config["sites"][0]["atm_tidal_loading"]
+        self.assertTrue(atl_path.exists())
+        self.assertIn("S1", atl_path.read_text(encoding="ascii"))
+
+    def test_vmf_example_config_references_tracked_real_atl_fixtures(self) -> None:
+        config_path = ROOT_DIR / "configs" / "iers_atl_multisite_vmf.example.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+
+        self.assertEqual([site["name"] for site in config["sites"]], ["PERT", "TSKB"])
+        for site in config["sites"]:
+            atl_path = ROOT_DIR / site["atm_tidal_loading"]
+            text = atl_path.read_text(encoding="ascii")
+            self.assertTrue(atl_path.exists())
+            self.assertIn(site["name"], text)
+            self.assertIn("Source: https://vmf.geo.tuwien.ac.at", text)
+
+    def test_resolve_config_paths_resolves_common_and_site_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnsspp_atl_multisite_") as temp_dir:
+            root = Path(temp_dir)
+            config_dir = root / "configs"
+            config_dir.mkdir()
+            nav = root / "data" / "BRDC.rnx"
+            obs = root / "data" / "PERT00AUS.rnx"
+            atl = root / "data" / "PERT.atl"
+            nav.parent.mkdir()
+            for path in (nav, obs, atl):
+                path.touch()
+            config = {
+                "common": {"nav": "data/BRDC.rnx"},
+                "sites": [
+                    {
+                        "name": "PERT",
+                        "obs": "data/PERT00AUS.rnx",
+                        "atm_tidal_loading": "data/PERT.atl",
+                    }
+                ],
+            }
+
+            iers_atl_multisite_bench.resolve_config_paths(config, config_dir)
+
+            self.assertEqual(config["common"]["nav"], nav)
+            self.assertEqual(config["sites"][0]["obs"], obs)
+            self.assertEqual(config["sites"][0]["atm_tidal_loading"], atl)
+
+    def test_site_value_prefers_site_over_common(self) -> None:
+        site = {"atm_tidal_loading": Path("site.atl")}
+        common = {"atm_tidal_loading": Path("common.atl")}
+
+        self.assertEqual(
+            iers_atl_multisite_bench.site_value(
+                site, common, "atm_tidal_loading"),
+            Path("site.atl"),
+        )
+        self.assertEqual(
+            iers_atl_multisite_bench.site_value(site, common, "nav"),
+            None,
+        )
+
+    def test_resolve_config_path_falls_back_to_source_root(self) -> None:
+        self.assertEqual(
+            iers_atl_multisite_bench.resolve_config_path(
+                "test_data/iers/tskb_synth.atl", Path("/tmp")),
+            ROOT_DIR / "test_data" / "iers" / "tskb_synth.atl",
+        )
+
+
+class VmfAtlHelpersTest(unittest.TestCase):
+    def sample_vmf_text(self) -> str:
+        values = " ".join(str(float(i)) for i in range(1, 19))
+        return f"PERT {values}\n"
+
+    def test_amplitude_phase_matches_cos_sin_form(self) -> None:
+        amplitude_m, phase_deg = vmf_atl.amplitude_phase_m(3.0, 4.0)
+
+        self.assertAlmostEqual(amplitude_m, 0.005)
+        self.assertAlmostEqual(phase_deg, 53.13010235415598)
+
+    def test_convert_row_flips_east_north_to_west_south(self) -> None:
+        # radial S1=(3,4), S2=(0,5); east S1=(1,0), S2=(0,2);
+        # north S1=(0,1), S2=(2,0). All values are VMF mm cos/sin.
+        values = [
+            3.0, 4.0, 0.0, 5.0, 0.0, 0.0,
+            1.0, 0.0, 0.0, 2.0, 0.0, 0.0,
+            0.0, 1.0, 2.0, 0.0, 0.0, 0.0,
+        ]
+
+        text = vmf_atl.convert_row("PERT", values)
+
+        self.assertIn("PERT", text)
+        self.assertIn("S1  0.00500000  0.00100000  0.00100000", text)
+        self.assertIn("S2  0.00500000  0.00200000  0.00200000", text)
+
+    def test_parse_vmf_rows_uppercases_station_names(self) -> None:
+        rows = vmf_atl.parse_vmf_rows("pert " + " ".join(["1"] * 18))
+
+        self.assertIn("PERT", rows)
+        self.assertEqual(len(rows["PERT"]), 18)
+
+    def test_main_writes_local_source_station_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnsspp_vmf_atl_") as temp_dir:
+            temp_root = Path(temp_dir)
+            source = temp_root / "vmf.dat"
+            out_dir = temp_root / "out"
+            source.write_text(self.sample_vmf_text(), encoding="ascii")
+
+            with mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "gnss_vmf_atl.py",
+                    "--source", str(source),
+                    "--station", "pert",
+                    "--output-dir", str(out_dir),
+                    "--suffix", "unit",
+                ],
+            ):
+                rc = vmf_atl.main()
+
+            output = out_dir / "pert_unit.atl"
+            self.assertEqual(rc, 0)
+            self.assertTrue(output.exists())
+            self.assertIn("PERT", output.read_text(encoding="ascii"))
+
+    def test_main_reports_missing_station(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnsspp_vmf_atl_missing_") as temp_dir:
+            temp_root = Path(temp_dir)
+            source = temp_root / "vmf.dat"
+            source.write_text(self.sample_vmf_text(), encoding="ascii")
+
+            with mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "gnss_vmf_atl.py",
+                    "--source", str(source),
+                    "--station", "NOPE",
+                    "--output-dir", str(temp_root / "out"),
+                ],
+            ):
+                rc = vmf_atl.main()
+
+            self.assertEqual(rc, 1)
 
 
 class ScorecardHelpersTest(unittest.TestCase):

@@ -435,6 +435,30 @@ does not block Phase C:
   multi-site bench reports max = 0.30 / 0.35 mm, median = 0.21 /
   0.17 mm, median_dz = −83 / −89 µm — sub-mm at both stations,
   consistent with the IERS §7.1.5 envelope.
+
+  The checked smoke config
+  `configs/iers_atl_multisite_smoke.example.json` uses the small
+  synthetic fixture `test_data/iers/tskb_synth.atl` and reproduces
+  the single-site result exactly (`median = 0.169 mm`, `p95 =
+  0.358 mm`, `max = 0.901 mm`) when the 2026-04-15 TSKB PPP
+  products are available under `data/igs_2026105/`.
+
+  Real site-wise VMF tidal APL coefficients can be generated with
+  `gnss vmf-atl --station PERT --station TSKB`. The converter reads
+  the VMF Data Server GNSS site-wise tidal file
+  (`TIDAL/s1_s2_s3_cm_noib_gnss.dat`), converts the S1/S2 cos/sin
+  millimeter coefficients to libgnss++ amplitude/phase meter ATL
+  files, and flips VMF east/north into the west/south convention used
+  by `AtmosphericTidalLoadingCoefficients`. The checked fixtures
+  `test_data/iers/pert_vmf.atl` and `test_data/iers/tskb_vmf.atl`
+  came from that path.
+
+  On the 2026-04-15 IGS PPP data, the real VMF ATL multi-site smoke
+  for PERT/Australia + TSKB reports:
+  `PERT median = 0.000 mm`, `p95 = 0.007 mm`, `max = 0.022 mm`;
+  `TSKB median = 0.216 mm`, `p95 = 0.402 mm`, `max = 0.643 mm`.
+  PERT again shows the static-mode KF absorbing the sub-mm periodic
+  signal across the arc.
 - **`icrsToItrs` consumers**: when satellite-side processing
   (LEO orbits, external SP3 ingestion in non-ECEF frames, attitude
   for satellite antenna PCO/PCV) is wired up, the wrapper is

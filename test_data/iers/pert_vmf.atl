@@ -1,0 +1,10 @@
+$$ VMF site-wise GNSS tidal atmospheric pressure loading coefficients
+$$ Source: https://vmf.geo.tuwien.ac.at/APL_products/TIDAL/s1_s2_s3_cm_noib_gnss.dat
+$$ Converted from VMF cos/sin mm coefficients to libgnss++
+$$ amplitude/phase meters. East/north are stored as west/south.
+$$ Format:
+$$   <constituent>  radial_amp_m  west_amp_m  south_amp_m  radial_phase_deg  west_phase_deg  south_phase_deg
+PERT
+S1  0.00059577  0.00043607  0.00013818  144.496  -127.921  -7.485
+S2  0.00098268  0.00021678  0.00006021  -131.411  -50.804  78.503
+$$ END

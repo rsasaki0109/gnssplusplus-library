@@ -1,0 +1,14 @@
+$$ Synthetic IERS Conventions 2010 7.1.5 atmospheric tidal-loading
+$$ coefficients (S1 + S2) for a mid-latitude coastal Japan IGS site.
+$$
+$$ This is not an official TSKB product. It is a small deterministic
+$$ fixture for exercising the PPP ATL dispatcher and bench harness when
+$$ real per-site loading coefficients are not available locally.
+$$
+$$ Format per row:
+$$   <constituent>  radial_amp_m  west_amp_m  south_amp_m  radial_phase_deg  west_phase_deg  south_phase_deg
+$$
+TSKB
+S1   0.00080  0.00020  0.00020   -30.0   -90.0    30.0
+S2   0.00040  0.00010  0.00010    60.0     0.0   -45.0
+$$ END
