@@ -70,6 +70,7 @@ python3 apps/gnss.py replay \
 | `gnss scorpion-moving-base-signoff` | One-command prepare + BRDC fetch + replay validation for the public SCORPION bag with receiver side-by-side output |
 | `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` files from local or remote sources |
 | `gnss ppp-products-signoff` | Run static, kinematic, or PPC PPP sign-off with fetched product presets or templates, plus comparison CSV/PNG artifacts |
+| `gnss vmf-atl` | Convert VMF site-wise GNSS tidal APL coefficients into libgnss++ ATL coefficient files |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
 | `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
 | `gnss ubx-info` | Inspect `NAV-PVT`, `RAWX`, `SFRBX` from file or serial |
@@ -179,6 +180,29 @@ python3 apps/gnss.py ppc-rtk-signoff \
   --realtime-profile sigma-demote \
   --summary-json output/ppc_tokyo_run1_sigma_demote_signoff.json
 ```
+
+## IERS PPP Loading Benches
+
+Atmospheric tidal loading (ATL) requires station-specific S1/S2
+coefficients. Convert VMF site-wise GNSS tidal APL coefficients to the
+libgnss++ `.atl` format, then run a paired PPP bench with ATL toggled:
+
+```bash
+python3 apps/gnss.py vmf-atl \
+  --station PERT \
+  --station TSKB \
+  --output-dir test_data/iers
+
+python3 apps/gnss.py ppp-iers-atm-tidal-loading-multisite-bench \
+  --sites configs/iers_atl_multisite_vmf.example.json \
+  --output-dir output/iers_atm_tidal_loading_multisite_bench_vmf
+```
+
+The example config expects the PPP observation/products under
+`data/igs_2026105/` and uses the tracked VMF-derived ATL fixtures for
+PERT and TSKB. Use site-specific real coefficients for production
+validation; `test_data/iers/tskb_synth.atl` is only a deterministic
+smoke fixture.
 
 ## Local docs
 
