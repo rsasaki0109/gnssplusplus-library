@@ -86,6 +86,7 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_iers_sub_daily_eop_bench.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_iers_sub_daily_eop_multisite_bench.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_iers_ocean_loading_bench.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_vmf_atl.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_products_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppc_demo.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppc_commercial.py
@@ -140,6 +141,15 @@ install(FILES
     ${CMAKE_SOURCE_DIR}/configs/ppc_rtk_signoff.example.toml
     ${CMAKE_SOURCE_DIR}/configs/ppp_products_ppc.example.toml
     ${CMAKE_SOURCE_DIR}/configs/moving_base_signoff.example.toml
+    ${CMAKE_SOURCE_DIR}/configs/iers_atl_multisite_smoke.example.json
+    ${CMAKE_SOURCE_DIR}/configs/iers_atl_multisite_vmf.example.json
     ${CMAKE_SOURCE_DIR}/configs/web.example.toml
     DESTINATION configs
+)
+
+install(FILES
+    ${CMAKE_SOURCE_DIR}/test_data/iers/pert_vmf.atl
+    ${CMAKE_SOURCE_DIR}/test_data/iers/tskb_synth.atl
+    ${CMAKE_SOURCE_DIR}/test_data/iers/tskb_vmf.atl
+    DESTINATION test_data/iers
 )
