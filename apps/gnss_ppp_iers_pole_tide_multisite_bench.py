@@ -83,6 +83,18 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def resolve_config_path(value: str | os.PathLike[str], config_dir: Path) -> Path:
+    """Resolve site-config paths relative to the JSON file or its parents."""
+    path = Path(value).expanduser()
+    if path.is_absolute():
+        return path
+    for base in (config_dir, *config_dir.parents, ROOT_DIR):
+        candidate = base / path
+        if candidate.exists():
+            return candidate
+    return config_dir / path
+
+
 def run_single_site(
     config: dict,
     site: dict,
@@ -206,6 +218,13 @@ def main() -> int:
     if not sites:
         print("sites config has no 'sites' list", file=sys.stderr)
         return 1
+    config_dir = args.sites.resolve().parent
+    for key in ("nav", "sp3", "clk", "eop_c04"):
+        if key in common:
+            common[key] = resolve_config_path(common[key], config_dir)
+    for site in sites:
+        if "obs" in site:
+            site["obs"] = resolve_config_path(site["obs"], config_dir)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 

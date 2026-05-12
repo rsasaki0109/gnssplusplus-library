@@ -269,6 +269,11 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_ppp_iers_atm_tidal_loading_multisite_bench.py"),
         "summary": "Run the Phase D-3 atmospheric-tidal-loading bench across an arbitrary list of IGS stations and emit an aggregate per-site distribution summary.",
     },
+    "vmf-atl": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_vmf_atl.py"),
+        "summary": "Fetch or read VMF site-wise GNSS tidal APL coefficients and write libgnss++ ATL coefficient files.",
+    },
     "ppp-iers-pole-tide-multisite-bench": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_ppp_iers_pole_tide_multisite_bench.py"),
