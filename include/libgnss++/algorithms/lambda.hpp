@@ -28,6 +28,15 @@ struct LambdaSolution {
     double bootstrap_sr = 0.0;   // bootstrap success rate, in [0, 1]
     double min_cond_var = 0.0;   // min(D[i]) — most informative decorrelated ambiguity
     double max_cond_var = 0.0;   // max(D[i]) — least informative decorrelated ambiguity
+    // Per-z-coord conditional variances after LAMBDA reduction (length n).
+    // D[i] near 0 → that decorrelated ambiguity is well determined; large D[i]
+    // → low informativeness. BSR-guided partial AR drops original DD pairs
+    // that have high loading on z-coords with the largest D[i].
+    VectorXd cond_var;
+    // Z transform: z = Z' * a (column-major, n x n). Populated alongside
+    // `cond_var` so callers can compute per-original-pair loadings on
+    // decorrelated coordinates.
+    MatrixXd decorrelation;
 };
 
 /**

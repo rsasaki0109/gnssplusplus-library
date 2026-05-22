@@ -170,6 +170,9 @@ struct SolveConfig {
     bool wide_lane_ar_set = false;
     double wide_lane_acceptance_threshold = 0.25;
     bool wide_lane_acceptance_threshold_set = false;
+    bool enable_bsr_guided_decimation = false;
+    int bsr_guided_worst_z_count = 3;
+    int bsr_guided_max_drop_steps = 6;
 };
 
 double timeDiffSeconds(const libgnss::GNSSTime& a, const libgnss::GNSSTime& b) {
@@ -459,7 +462,9 @@ public:
               << "ar_attempted,input_pair_count,pair_count,max_ambiguity_variance,"
               << "effective_ratio_threshold,min_subset_pair_count,min_full_ratio_for_subset_ar,"
               << "subset_candidates_evaluated,subset_candidates_rejected_by_full_ratio,"
-              << "subset_candidates_rejected_by_diversity,wide_lane_total,wide_lane_fixed,"
+              << "subset_candidates_rejected_by_diversity,"
+              << "bsr_guided_candidates_evaluated,bsr_guided_candidates_accepted,"
+              << "wide_lane_total,wide_lane_fixed,"
               << "wide_lane_rejected,wide_lane_min_distance,wide_lane_max_distance,"
               << "full_lambda_solved,full_ratio,full_bootstrap_sr,full_top2_l1_distance,"
               << "full_min_cond_var,full_max_cond_var,selected_fixed,selected_ratio,"
@@ -497,6 +502,8 @@ public:
               << telemetry.subset_candidates_evaluated << ","
               << telemetry.subset_candidates_rejected_by_full_ratio << ","
               << telemetry.subset_candidates_rejected_by_diversity << ","
+              << telemetry.bsr_guided_candidates_evaluated << ","
+              << telemetry.bsr_guided_candidates_accepted << ","
               << telemetry.wide_lane_total << ","
               << telemetry.wide_lane_fixed << ","
               << telemetry.wide_lane_rejected << ",";
@@ -630,6 +637,13 @@ void printUsage(const char* program_name) {
         << "  --enable-wide-lane-ar      Enable MW wide-lane AR pre-step (default: off)\n"
         << "  --no-wide-lane-ar          Disable MW wide-lane AR, overriding presets\n"
         << "  --wide-lane-threshold <v>  WL float->int threshold in cycles (default: 0.25)\n"
+        << "  --enable-bsr-decimation    Enable BSR-guided partial AR decimation alongside\n"
+        << "                             the existing variance-based progressive drop subsets\n"
+        << "                             (default: off)\n"
+        << "  --bsr-worst-z <n>          Number of worst LD-conditional z-coords used for\n"
+        << "                             per-pair loading scores (default: 3)\n"
+        << "  --bsr-max-drops <n>        Max pairs to drop progressively in BSR-guided\n"
+        << "                             decimation (default: 6)\n"
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
         << "                             (default: 0, disabled; e.g. 10 for aggressive urban reconvergence)\n"
@@ -916,6 +930,12 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         } else if (arg == "--wide-lane-threshold" && i + 1 < argc) {
             config.wide_lane_acceptance_threshold = std::stod(argv[++i]);
             config.wide_lane_acceptance_threshold_set = true;
+        } else if (arg == "--enable-bsr-decimation") {
+            config.enable_bsr_guided_decimation = true;
+        } else if (arg == "--bsr-worst-z" && i + 1 < argc) {
+            config.bsr_guided_worst_z_count = std::stoi(argv[++i]);
+        } else if (arg == "--bsr-max-drops" && i + 1 < argc) {
+            config.bsr_guided_max_drop_steps = std::stoi(argv[++i]);
         } else if (arg == "--max-consec-float-reset" && i + 1 < argc) {
             config.max_consecutive_float_for_reset = std::stoi(argv[++i]);
         } else if (arg == "--max-consec-nonfix-reset" && i + 1 < argc) {
@@ -1282,6 +1302,9 @@ int main(int argc, char* argv[]) {
         rtk_config.max_postfix_residual_rms = config.max_postfix_residual_rms;
         rtk_config.enable_wide_lane_ar = config.enable_wide_lane_ar;
         rtk_config.wide_lane_acceptance_threshold = config.wide_lane_acceptance_threshold;
+        rtk_config.enable_bsr_guided_decimation = config.enable_bsr_guided_decimation;
+        rtk_config.bsr_guided_worst_z_count = config.bsr_guided_worst_z_count;
+        rtk_config.bsr_guided_max_drop_steps = config.bsr_guided_max_drop_steps;
         rtk_processor.setRTKConfig(rtk_config);
         libgnss::SPPProcessor::SPPConfig spp_config;
         spp_config.use_multi_constellation = true;

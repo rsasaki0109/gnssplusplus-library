@@ -244,6 +244,14 @@ bool lambdaSearchExtended(const VectorXd& float_amb, const MatrixXd& Q_amb,
     solution.min_cond_var = dmin;
     solution.max_cond_var = dmax;
 
+    solution.cond_var.resize(n);
+    for (int i = 0; i < n; ++i) solution.cond_var(i) = D[i];
+
+    solution.decorrelation.resize(n, n);
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j < n; ++j)
+            solution.decorrelation(i, j) = Z[i + j * n];
+
     return true;
 }
 

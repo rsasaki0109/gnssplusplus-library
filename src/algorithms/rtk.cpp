@@ -2231,12 +2231,16 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         return problem;
     };
 
-    // Standard LAMBDA path
+    // Standard LAMBDA path. `full_sol` is hoisted so the BSR-guided
+    // partial AR loop below can reuse the LD-conditional variances and
+    // decorrelation matrix without re-running the LAMBDA decomposition.
+    libgnss::LambdaSolution full_sol;
+    bool full_lambda_solved_for_decimation = false;
     if (!fixed) {
         const auto full_problem = build_search_problem(full_subset);
-        libgnss::LambdaSolution full_sol;
         const bool full_solved =
             lambdaMethodExtended(full_problem.dd_float, full_problem.Qb, full_sol);
+        full_lambda_solved_for_decimation = full_solved;
         debug_telemetry_.full_lambda_solved = full_solved;
         if (full_solved) {
             dd_fixed = full_sol.best_amb;
@@ -2491,6 +2495,27 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                     descriptors, min_subset_pairs_for_ar, 6);
             for (const auto& subset : progressive_subsets) {
                 try_subset(subset);
+            }
+
+            if (rtk_config_.enable_bsr_guided_decimation &&
+                full_lambda_solved_for_decimation &&
+                full_sol.cond_var.size() == nb &&
+                full_sol.decorrelation.rows() == nb &&
+                full_sol.decorrelation.cols() == nb) {
+                const int max_drop = std::max(
+                    1, std::min(rtk_config_.bsr_guided_max_drop_steps,
+                                nb - min_subset_pairs_for_ar));
+                const int worst_z = std::max(1, rtk_config_.bsr_guided_worst_z_count);
+                const auto bsr_subsets =
+                    rtk_ar_selection::buildBSRGuidedDropSubsets(
+                        descriptors, full_sol.cond_var, full_sol.decorrelation,
+                        min_subset_pairs_for_ar, max_drop, worst_z);
+                for (const auto& subset : bsr_subsets) {
+                    debug_telemetry_.bsr_guided_candidates_evaluated++;
+                    if (try_subset(subset)) {
+                        debug_telemetry_.bsr_guided_candidates_accepted++;
+                    }
+                }
             }
         }
 

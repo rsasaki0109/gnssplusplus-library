@@ -214,6 +214,24 @@ public:
         /// |WL_float - round(WL_float)| < threshold → fix. 0.25 is the worktree
         /// default; only referenced when enable_wide_lane_ar = true.
         double wide_lane_acceptance_threshold = 0.25;
+
+        /// Enable BSR-guided partial AR decimation.
+        /// When true, in addition to the existing variance-based progressive
+        /// drop subsets, also try subsets that drop pairs by their loading on
+        /// the worst (highest D[i]) decorrelated z-coordinates from the LD
+        /// factorisation. The two families run in series; the better-ratio
+        /// candidate wins.
+        /// false (default) preserves existing partial AR behavior.
+        bool enable_bsr_guided_decimation = false;
+
+        /// Number of worst (highest D[i]) z-coordinates considered when
+        /// computing per-pair loading scores for BSR-guided decimation.
+        /// Higher = wider notion of "bad" geometry; lower = drops only the
+        /// pair tied to the single worst direction.
+        int bsr_guided_worst_z_count = 3;
+
+        /// Max number of pairs to drop progressively in BSR-guided decimation.
+        int bsr_guided_max_drop_steps = 6;
     };
 
     /// Reason why AR was silently skipped or failed in resolveAmbiguities().
@@ -253,6 +271,11 @@ public:
         int subset_candidates_evaluated = 0;
         int subset_candidates_rejected_by_full_ratio = 0;
         int subset_candidates_rejected_by_diversity = 0;
+        // Subset candidates that came from BSR-guided decimation (subset of
+        // subset_candidates_evaluated). Useful for measuring how often the
+        // new family contributes vs the existing variance-based family.
+        int bsr_guided_candidates_evaluated = 0;
+        int bsr_guided_candidates_accepted = 0;
 
         int wide_lane_total = 0;
         int wide_lane_fixed = 0;

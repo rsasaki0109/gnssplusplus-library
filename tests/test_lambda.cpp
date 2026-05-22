@@ -114,3 +114,28 @@ TEST(LambdaSearchExtended, RatioMatchesNorms) {
     ASSERT_GT(sol.best_norm, 0.0);
     EXPECT_NEAR(sol.ratio, sol.second_norm / sol.best_norm, 1e-12);
 }
+
+TEST(LambdaSearchExtended, ExposesCondVarAndDecorrelation) {
+    // BSR-guided partial AR consumes per-z conditional variances and the
+    // unimodular Z transform. They must be populated and dimensionally
+    // consistent with min/max bounds.
+    Eigen::VectorXd a(3);
+    a << 3.0, -2.0, 5.0;
+    Eigen::MatrixXd Q = diagonalQ({0.05, 0.10, 1.5});
+
+    LambdaSolution sol;
+    ASSERT_TRUE(lambdaSearchExtended(a, Q, sol));
+    ASSERT_EQ(sol.cond_var.size(), 3);
+    ASSERT_EQ(sol.decorrelation.rows(), 3);
+    ASSERT_EQ(sol.decorrelation.cols(), 3);
+    EXPECT_NEAR(sol.cond_var.minCoeff(), sol.min_cond_var, 1e-15);
+    EXPECT_NEAR(sol.cond_var.maxCoeff(), sol.max_cond_var, 1e-15);
+    // Z must be integer (unimodular) — entries are integers.
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            EXPECT_NEAR(sol.decorrelation(i, j),
+                        std::round(sol.decorrelation(i, j)),
+                        1e-9);
+        }
+    }
+}
