@@ -397,7 +397,7 @@ does not block Phase C:
   4.1 / 5.1 µm, median = 2.4 / 2.8 µm, p95 = 3.5 / 5.1 µm — sub-µm
   to single-µm, matching the documented sub-mas xp/yp wobble at
   ~1/100-of-pole-tide amplitude.
-- **Phase D-3** *(in progress)*: Atmospheric tidal loading (IERS
+- **Phase D-3** *(landed 2026-05-12)*: Atmospheric tidal loading (IERS
   Conventions 2010 §7.1.5) opt-in. Adds
   `libgnss::iers::atmosphericTidalLoadingDisplacement` and the
   `AtmosphericTidalLoadingCoefficients` struct (S1 + S2 amplitudes
@@ -407,8 +407,8 @@ does not block Phase C:
   CLI knobs. Per-site coefficient file format mirrors the BLQ
   pattern but with only S1 / S2 rows (mid-latitude peak ~1 mm
   radial). The non-tidal pressure-loading component (which
-  dominates at storm-driven sites) requires a gridded reanalysis
-  ingestion path and is deferred to a follow-up PR. At TSKB
+  dominates at storm-driven sites) is tracked as Phase D-4 below.
+  At TSKB
   2026-04-15 with synthetic mid-latitude coastal coefficients
   (S1 = 0.8 mm radial, S2 = 0.4 mm radial), the PPP estimate
   shifts by mean −10.6 µm / RMS 106 µm in Z. Default off pending
@@ -459,6 +459,158 @@ does not block Phase C:
   `TSKB median = 0.216 mm`, `p95 = 0.402 mm`, `max = 0.643 mm`.
   PERT again shows the static-mode KF absorbing the sub-mm periodic
   signal across the arc.
+- **Phase D-4** *(pending; plan only as of 2026-05-12)*: Non-tidal
+  atmospheric pressure loading (APL-NT) and real-provider automation.
+  This phase is intentionally left out of the D-3 implementation PR:
+  D-3 proves the PPP plumbing for deterministic S1/S2 atmospheric
+  tides, while D-4 will handle weather-driven, non-periodic surface
+  pressure loading. The expected product source for the first pass is
+  the TU Wien / VMF GNSS non-tidal atmospheric pressure-loading series
+  under `APL_products/GNSS/`, not a locally generated gridded
+  reanalysis. VMF daily files are small enough for bench automation
+  and carry site-wise rows in the practical form:
+
+  ```text
+  ! Data-types: APL-NT-LOAD-IB
+  ! Columns:
+  !  (1) station name
+  !  (2) modified Julian date
+  !  (3) up component (m)
+  !  (4) east component (m)
+  !  (5) north component (m)
+  PERT       61145.00   -0.00054    0.00006    0.00045
+  PERT       61145.25   -0.00020    0.00008    0.00046
+  PERT       61145.50   -0.00013   -0.00002    0.00046
+  PERT       61145.75   -0.00022   -0.00012    0.00049
+  ```
+
+  The first implementation should therefore avoid a full gridded
+  pressure-field model. Use the site-wise VMF GNSS product as the
+  real provider, preserve the provider's displacement values in
+  meters, and linearly interpolate between the 6-hour samples. This
+  keeps the initial PPP integration small and auditable: no pressure
+  units, no Green's functions, no land-sea mask, and no center-of-mass
+  frame conversion inside libgnss++ yet. A later Phase D-5 can revisit
+  gridded ERA5 / NCEP ingestion if we need arbitrary station support
+  beyond VMF's station catalogue.
+
+  Proposed data format for checked fixtures and local bench inputs:
+
+  ```text
+  ! VMF GNSS non-tidal atmospheric pressure loading
+  ! Source: https://vmf.geo.tuwien.ac.at/APL_products/GNSS/daily/2026/2026105.apl_g
+  ! Columns: station mjd_utc up_m east_m north_m
+  TSKB       61145.00    0.00045    0.00045    0.00017
+  TSKB       61145.25    0.00074    0.00052    0.00003
+  TSKB       61145.50    0.00064    0.00041    0.00007
+  TSKB       61145.75    0.00067    0.00031    0.00011
+  ```
+
+  The PPP-facing convention should be ENU in the file because that is
+  what VMF publishes (`up`, `east`, `north`). The existing ATL
+  coefficient file uses radial / west / south because it mirrors BLQ;
+  D-4 should not force VMF APL-NT through that harmonic convention.
+  The loader can rotate ENU to ECEF at the corrected receiver marker
+  position, exactly as the ocean-loading and ATL paths already do for
+  local displacements. Epochs outside file coverage should return zero
+  rather than extrapolating weather-driven load beyond the product
+  span.
+
+  Proposed PPP surface:
+
+  - `PPPConfig::use_iers_atm_non_tidal_loading = false`.
+  - `PPPConfig::atm_non_tidal_loading_path`.
+  - `PPPConfig::atm_non_tidal_loading_station_name`, defaulting from
+    the RINEX marker name when the CLI user does not override it.
+  - `gnss ppp --atm-non-tidal-loading <file>
+    --use-iers-atm-non-tidal-loading`.
+  - `--atm-non-tidal-loading-station <code>` for files that contain
+    multiple station rows.
+
+  Default remains OFF. Non-tidal APL is a real geophysical signal, but
+  it is also product-dependent and time-window-dependent. It should not
+  become a default until we have multi-site truth-bench evidence that
+  the static PPP solution is not being biased by frame/product mixing.
+  The first target is "opt-in, no-op without file, no extrapolation",
+  matching the conservative rollout used for ocean loading and tidal
+  ATL.
+
+  Proposed provider/fetch command:
+
+  - Add `gnss vmf-apl`.
+  - Inputs: `--date YYYY-MM-DD` or `--date YYYYDOY` (repeatable),
+    `--station <CODE>` (repeatable), optional `--sites <config.json>`,
+    optional `--source <path-or-url>` for offline tests.
+  - Default URL template:
+    `https://vmf.geo.tuwien.ac.at/APL_products/GNSS/daily/<year>/<YYYYDOY>.apl_g`.
+  - Output: one per-station `.apl` file under `test_data/iers/` or a
+    user-selected directory, plus an optional manifest recording source
+    URLs, station list, missing stations, and output paths.
+  - Tests: parse one synthetic VMF APL daily file, extract two sites,
+    preserve 6-hour MJD ordering, report missing stations, and read
+    station names from an existing multi-site JSON config.
+
+  Proposed truth-bench integration:
+
+  - Add a paired PPP bench mirroring
+    `gnss_ppp_iers_atm_tidal_loading_bench.py`, but toggling only
+    `--use-iers-atm-non-tidal-loading`. Name candidate:
+    `gnss ppp-iers-atm-non-tidal-loading-bench`.
+  - Add a multi-site driver mirroring the D-3 ATL multi-site harness.
+    Its config schema should accept common and per-site
+    `atm_non_tidal_loading` plus optional
+    `atm_non_tidal_loading_station`.
+  - Extend `gnss_ppp_iers_truth_bench.py` and
+    `gnss_ppp_iers_truth_multisite_bench.py` so the integrated
+    all-IERS-on run can include non-tidal APL when explicitly supplied.
+    The all-IERS-off arm must force `--no-iers-atm-non-tidal-loading`
+    to keep the A/B delta interpretable.
+  - Add example configs instead of requiring checked real products:
+    `configs/iers_atm_non_tidal_loading_multisite_vmf.example.json`
+    and, if useful, `configs/iers_truth_multisite_expanded.example.json`.
+
+  Proposed site expansion for the IERS truth bench:
+
+  - Keep TSKB as the Japan mid-latitude continuity site.
+  - Keep PERT as the southern-hemisphere / Australia site because it
+    was the D-3 ATL motivator and is already present in VMF fixtures.
+  - Add GRAZ for European mid-latitude behavior and continuity with
+    the existing A-D truth-bench evidence.
+  - Add MIZU as a second Japan station with different local geometry.
+  - Add ALGO as a high-latitude North America stress site, but treat
+    convergence outliers separately from geophysical-model deltas in
+    summaries because prior pole-tide runs showed transient PPP
+    convergence max outliers there.
+
+  The truth-bench config should allow per-site product overrides
+  (`obs`, `nav`, `sp3`, `clk`, `ionex`, `dcb`, `antex`, `eop_c04`,
+  `blq`, `atm_tidal_loading`, `atm_non_tidal_loading`,
+  `reference_xyz`). That lets a campaign span several days and several
+  stations without forcing a single product directory layout. The
+  aggregate report should keep the current headline metrics but add
+  explicit bookkeeping for which optional models were actually enabled
+  at each site, so a "missing APL file" bench cannot be mistaken for a
+  successful APL-on run.
+
+  Initial acceptance criteria:
+
+  - Unit tests cover VMF APL parsing, station filtering, missing
+    stations, config-relative path resolution, and interpolation at
+    exact and mid-sample MJDs.
+  - `gnss vmf-apl --date 2026-04-15 --station PERT --station TSKB`
+    can generate local files from the VMF daily provider when network
+    is available.
+  - A smoke multi-site APL-NT paired bench on PERT + TSKB reports
+    millimeter-scale displacements, not centimeters, for normal
+    weather days.
+  - The expanded truth bench reports per-site IERS-on residuals and
+    A/B deltas with explicit model-availability diagnostics.
+  - Default behavior is unchanged unless the user passes both the file
+    and the enable flag.
+
+  This phase remains pending. No D-4 implementation should be assumed
+  present until the CLI, PPP config, fixture generation, benches, docs,
+  and tests all land together in a follow-up PR.
 - **`icrsToItrs` consumers**: when satellite-side processing
   (LEO orbits, external SP3 ingestion in non-ECEF frames, attitude
   for satellite antenna PCO/PCV) is wired up, the wrapper is
