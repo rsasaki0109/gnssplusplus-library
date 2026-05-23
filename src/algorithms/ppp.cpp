@@ -109,6 +109,125 @@ std::string extractAntexFrequencyCode(const std::string& line) {
     return "";
 }
 
+GNSSTime parseAntexEpochLine(const std::string& line) {
+    int year = 0, month = 0, day = 0, hour = 0, minute = 0;
+    double second = 0.0;
+    std::istringstream iss(line.substr(0, std::min<size_t>(line.size(), 60U)));
+    if (!(iss >> year >> month >> day >> hour >> minute >> second)) {
+        return GNSSTime{};
+    }
+    std::tm tm{};
+    tm.tm_year = year - 1900;
+    tm.tm_mon = month - 1;
+    tm.tm_mday = day;
+    tm.tm_hour = hour;
+    tm.tm_min = minute;
+    tm.tm_sec = static_cast<int>(second);
+    const std::time_t calendar = timegm(&tm);
+    if (calendar == static_cast<std::time_t>(-1)) {
+        return GNSSTime{};
+    }
+    return GNSSTime::fromSystemTime(
+        std::chrono::system_clock::from_time_t(calendar) +
+        std::chrono::microseconds(static_cast<long>((second - tm.tm_sec) * 1e6)));
+}
+
+bool loadSatelliteAntexOffsets(
+    const std::string& filename,
+    std::vector<SatelliteAntexEntry>& satellite_entries) {
+    satellite_entries.clear();
+    std::ifstream input(filename);
+    if (!input.is_open()) {
+        return false;
+    }
+    SatelliteAntexEntry current;
+    bool in_antenna = false;
+    bool satellite_entry = false;
+    SignalType current_signal = SignalType::SIGNAL_TYPE_COUNT;
+    std::string line;
+    while (std::getline(input, line)) {
+        const std::string label = line.size() >= 60 ? trimCopy(line.substr(60)) : "";
+        if (label == "START OF ANTENNA") {
+            current = SatelliteAntexEntry{};
+            satellite_entry = false;
+            current_signal = SignalType::SIGNAL_TYPE_COUNT;
+            in_antenna = true;
+            continue;
+        }
+        if (!in_antenna) continue;
+        if (label == "END OF ANTENNA") {
+            if (satellite_entry && !current.body_offsets_m.empty()) {
+                satellite_entries.push_back(current);
+            }
+            in_antenna = false;
+            continue;
+        }
+        if (label == "TYPE / SERIAL NO") {
+            // Satellite entries place the PRN at columns 20-22 (3-char
+            // SVS code: G01, R26, E07, ...). Receiver entries put a
+            // free-form serial there.
+            const std::string serial = trimCopy(line.substr(20, 20));
+            satellite_entry =
+                serial.size() == 3 &&
+                std::isalpha(static_cast<unsigned char>(serial[0])) &&
+                std::isdigit(static_cast<unsigned char>(serial[1])) &&
+                std::isdigit(static_cast<unsigned char>(serial[2]));
+            if (satellite_entry) {
+                GNSSSystem system = GNSSSystem::UNKNOWN;
+                switch (serial[0]) {
+                    case 'G': system = GNSSSystem::GPS; break;
+                    case 'R': system = GNSSSystem::GLONASS; break;
+                    case 'E': system = GNSSSystem::Galileo; break;
+                    case 'C': system = GNSSSystem::BeiDou; break;
+                    case 'J': system = GNSSSystem::QZSS; break;
+                    case 'S': system = GNSSSystem::SBAS; break;
+                    case 'I': system = GNSSSystem::NavIC; break;
+                    default: break;
+                }
+                if (system == GNSSSystem::UNKNOWN) {
+                    satellite_entry = false;
+                } else {
+                    try {
+                        current.satellite = SatelliteId(
+                            system,
+                            static_cast<uint8_t>(std::stoi(serial.substr(1))));
+                    } catch (const std::exception&) {
+                        satellite_entry = false;
+                    }
+                }
+            }
+            continue;
+        }
+        if (!satellite_entry) continue;
+        if (label == "VALID FROM") {
+            current.valid_from = parseAntexEpochLine(line);
+            continue;
+        }
+        if (label == "VALID UNTIL") {
+            current.valid_until = parseAntexEpochLine(line);
+            continue;
+        }
+        if (label == "START OF FREQUENCY") {
+            current_signal = antexSignalType(extractAntexFrequencyCode(line));
+            continue;
+        }
+        if (label == "END OF FREQUENCY") {
+            current_signal = SignalType::SIGNAL_TYPE_COUNT;
+            continue;
+        }
+        if (label == "NORTH / EAST / UP" &&
+            current_signal != SignalType::SIGNAL_TYPE_COUNT) {
+            std::istringstream iss(line.substr(0, std::min<size_t>(line.size(), 30U)));
+            double north_mm = 0.0, east_mm = 0.0, up_mm = 0.0;
+            if (iss >> north_mm >> east_mm >> up_mm) {
+                current.body_offsets_m[current_signal] =
+                    Vector3d(north_mm * 1e-3, east_mm * 1e-3, up_mm * 1e-3);
+            }
+        }
+    }
+    return !satellite_entries.empty();
+}
+
 bool loadReceiverAntexOffsets(
     const std::string& filename,
     std::map<std::string, std::map<SignalType, Vector3d>>& receiver_offsets) {
@@ -862,10 +981,16 @@ bool PPPProcessor::initialize(const ProcessorConfig& config) {
 
     receiver_antex_offsets_.clear();
     receiver_antex_loaded_ = false;
+    satellite_antex_offsets_.clear();
+    satellite_antex_loaded_ = false;
     if (!ppp_config_.antex_file_path.empty()) {
         receiver_antex_loaded_ =
             loadReceiverAntexOffsets(ppp_config_.antex_file_path, receiver_antex_offsets_);
-        if (!receiver_antex_loaded_) {
+        // Receiver section may be empty for sat-only ANTEX files; the load
+        // is fatal only if no satellite block also ends up populated.
+        satellite_antex_loaded_ =
+            loadSatelliteAntexOffsets(ppp_config_.antex_file_path, satellite_antex_offsets_);
+        if (!receiver_antex_loaded_ && !satellite_antex_loaded_) {
             return false;
         }
     }
@@ -1958,6 +2083,10 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
     }
     const int preferred_network_id = preferredClasNetworkId(epoch_atmos_tokens);
 
+    // Sun position is needed for the satellite body frame in phase wind-up.
+    // We compute it once per epoch and reuse for every satellite.
+    const Vector3d sun_position_ecef = approximateSunPositionEcef(time);
+
     for (auto& observation : observations) {
         double deferred_variance_pr = 0.0;
         double deferred_variance_cp = 0.0;
@@ -1982,33 +2111,24 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 sat_clock_bias,
                 sat_clock_drift);
             if (have_precise) {
-                // Light-travel-time iteration: the first SP3 sample is taken
-                // at reception time, so re-sample at the implied emission
-                // epoch (rcv − τ) to place sat_position on the orbit when the
-                // photon left the satellite. The downstream geodist() handles
-                // the Sagnac (frame-rotation) term.
+                // Light-travel-time correction: the SP3 query above samples
+                // the orbit at reception time, but the signal left the sat at
+                // emission_time = reception − τ. Re-querying the precise
+                // products at emission_time fails at SP3 file boundaries
+                // (extrapolation back across the day boundary falls back to
+                // the single-sample branch and zeros the velocity), so use a
+                // first-order Taylor expansion with the sat_velocity returned
+                // by the bracket: sat_position(em) ≈ sat_position(rcv) −
+                // sat_velocity × τ. For sub-second travel times this is
+                // accurate to mm. The downstream geodist() handles the Sagnac
+                // (frame-rotation) term.
                 const double initial_distance =
                     (sat_position - receiver_position).norm();
                 if (std::isfinite(initial_distance) && initial_distance > 0.0) {
                     const double travel_time =
                         initial_distance / constants::SPEED_OF_LIGHT;
-                    const GNSSTime emission_time = time - travel_time;
-                    Vector3d em_position = sat_position;
-                    Vector3d em_velocity = sat_velocity;
-                    double em_clock_bias = sat_clock_bias;
-                    double em_clock_drift = sat_clock_drift;
-                    if (precise_products_.interpolateOrbitClock(
-                            observation.satellite,
-                            emission_time,
-                            em_position,
-                            em_velocity,
-                            em_clock_bias,
-                            em_clock_drift)) {
-                        sat_position = em_position;
-                        sat_velocity = em_velocity;
-                        sat_clock_bias = em_clock_bias;
-                        sat_clock_drift = em_clock_drift;
-                    }
+                    sat_position -= sat_velocity * travel_time;
+                    sat_clock_bias -= sat_clock_drift * travel_time;
                 }
             }
         }
@@ -2184,6 +2304,55 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             }
         }
 
+        // Satellite antenna PCO from ANTEX. The IGS final products since
+        // the 2017 convention switch publish SP3 / CLK at the iono-free
+        // combination antenna phase centre (so no shift is needed by
+        // default). For SP3 sources known to report centre of mass,
+        // setting apply_satellite_antenna_pco rotates the body-frame PCO
+        // (constructed via the yaw-steering attitude) into ECEF and
+        // shifts sat_position so geodist() returns the antenna range.
+        if (satellite_antex_loaded_ && ppp_config_.apply_satellite_antenna_pco) {
+            Vector3d pco_body_if = Vector3d::Zero();
+            bool have_pco = false;
+            for (const auto& entry : satellite_antex_offsets_) {
+                if (!(entry.satellite == observation.satellite)) continue;
+                if (entry.valid_from.week != 0 && time < entry.valid_from) continue;
+                if (entry.valid_until.week != 0 && entry.valid_until < time) continue;
+                const auto primary_it = entry.body_offsets_m.find(observation.primary_signal);
+                if (primary_it == entry.body_offsets_m.end()) break;
+                if (ppp_config_.use_ionosphere_free &&
+                    observation.secondary_signal != SignalType::SIGNAL_TYPE_COUNT) {
+                    const auto secondary_it =
+                        entry.body_offsets_m.find(observation.secondary_signal);
+                    if (secondary_it == entry.body_offsets_m.end()) break;
+                    pco_body_if =
+                        observation.primary_code_bias_coeff * primary_it->second +
+                        observation.secondary_code_bias_coeff * secondary_it->second;
+                } else {
+                    pco_body_if = primary_it->second;
+                }
+                have_pco = true;
+                break;
+            }
+            if (have_pco && sat_position.norm() > 1.0) {
+                // Yaw-steering body frame: z toward Earth, y orthogonal to
+                // the spacecraft–Sun plane, x toward the Sun side.
+                const Vector3d e_z_sat = -sat_position.normalized();
+                const Vector3d sun_los = sun_position_ecef - sat_position;
+                if (sun_los.norm() > 1.0) {
+                    Vector3d e_y_sat = e_z_sat.cross(sun_los).normalized();
+                    if (e_y_sat.allFinite() && e_y_sat.norm() > 0.5) {
+                        const Vector3d e_x_sat = e_y_sat.cross(e_z_sat);
+                        const Vector3d pco_ecef =
+                            pco_body_if.x() * e_x_sat +
+                            pco_body_if.y() * e_y_sat +
+                            pco_body_if.z() * e_z_sat;
+                        sat_position += pco_ecef;
+                    }
+                }
+            }
+        }
+
         const auto geometry = nav.calculateGeometry(receiver_position, sat_position);
         if (!std::isfinite(geometry.distance) || geometry.elevation < elevation_mask) {
             observation.valid = false;
@@ -2207,7 +2376,19 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             }
         }
 
-        if (!applied_ssr_iono && ionex_products_loaded_) {
+        // The dual-frequency ionosphere-free combination already cancels the
+        // first-order ionospheric delay analytically, so subtracting an
+        // IONEX-derived correction on top of an IF observable can only
+        // introduce numerical-precision and TEC-mapping noise (a few cm
+        // routinely observed at TSKB/GRAZ). Skip the subtraction in IF mode
+        // unless the filter is estimating a per-satellite STEC state, in
+        // which case the IONEX value is injected as a tight constraint
+        // earlier in this loop rather than subtracted from observations.
+        const bool ionex_applies_to_observation =
+            !ppp_config_.use_ionosphere_free ||
+            observation.secondary_signal == SignalType::SIGNAL_TYPE_COUNT ||
+            ppp_config_.estimate_ionosphere;
+        if (!applied_ssr_iono && ionex_products_loaded_ && ionex_applies_to_observation) {
             double ipp_lat_deg = 0.0;
             double ipp_lon_deg = 0.0;
             double mapping_factor = 0.0;
@@ -2268,6 +2449,35 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         } else {
             observation.antenna_pco_m = 0.0;
         }
+
+        // Phase wind-up correction (Wu et al. 1993). Same cycle count for L1
+        // and L2 — convert via the IF combination wavelength c/(f1+f2),
+        // which is c1*λ1 + c2*λ2 with the standard IFLC coefficients.
+        if (observation.has_carrier_phase) {
+            const double previous_windup =
+                windup_cache_.count(observation.satellite) ?
+                    windup_cache_[observation.satellite] : 0.0;
+            const double new_windup = ppp_utils::calculatePhaseWindup(
+                receiver_position, sat_position, sun_position_ecef, previous_windup);
+            windup_cache_[observation.satellite] = new_windup;
+
+            double windup_wavelength_m = 0.0;
+            if (ppp_config_.use_ionosphere_free &&
+                observation.secondary_signal != SignalType::SIGNAL_TYPE_COUNT) {
+                const double f1 = signalFrequencyHz(observation.primary_signal, eph);
+                const double f2 = signalFrequencyHz(observation.secondary_signal, eph);
+                if (f1 > 0.0 && f2 > 0.0 && f1 + f2 > 0.0) {
+                    windup_wavelength_m = constants::SPEED_OF_LIGHT / (f1 + f2);
+                }
+            } else {
+                windup_wavelength_m = signalWavelengthMeters(observation.primary_signal, eph);
+            }
+            if (windup_wavelength_m > 0.0 && std::isfinite(new_windup)) {
+                const double windup_correction_m = new_windup * windup_wavelength_m;
+                observation.carrier_phase_if -= windup_correction_m;
+            }
+        }
+
         // In CLAS-PPP mode (estimate_ionosphere), reject satellites without
         // both SSR orbit/clock and ionosphere corrections — matching CLASLIB's
         // corrmeas() which returns 0 when STEC correction fails.
@@ -3054,10 +3264,16 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
             const int ambiguity_index = ambiguityStateIndex(observation.satellite);
             if (ambiguity_index >= 0 && ambiguity_index < filter_state_.total_states) {
                 const auto ambiguity_it = ambiguity_states_.find(observation.satellite);
+                // Phase observations carry the cm-class signal that drives
+                // PPP convergence; gating them behind convergence_min_epochs
+                // (= 20 = 10 min at 30 s) for the precise-products path lets
+                // the static anchor blend pin the position state to the SPP
+                // floor before phase ever enters the filter, capping the
+                // achievable absolute residual. RTKLIB-style PPP enables phase
+                // from the second epoch (lock_count >= 1) regardless of
+                // product source, so use the same threshold here.
                 const int required_lock_count =
-                    precise_products_loaded_ ?
-                        ppp_config_.convergence_min_epochs :
-                        ppp_config_.phase_measurement_min_lock_count;
+                    ppp_config_.phase_measurement_min_lock_count;
                 const bool phase_ready =
                     ambiguity_it != ambiguity_states_.end() &&
                     !ambiguity_it->second.needs_reinitialization &&
@@ -3310,6 +3526,9 @@ void PPPProcessor::constrainStaticVelocityStates() {
 void PPPProcessor::constrainStaticAnchorPosition() {
     if ((ppp_config_.kinematic_mode && !ppp_config_.low_dynamics_mode) ||
         !has_static_anchor_position_) {
+        return;
+    }
+    if (!ppp_config_.apply_static_anchor_blend) {
         return;
     }
     if (precise_products_loaded_ && !ppp_config_.estimate_troposphere) {
@@ -3565,47 +3784,68 @@ Vector3d calculateReceiverAntennaPCO(const Vector3d& receiver_pos,
 
 double calculatePhaseWindup(const Vector3d& receiver_pos,
                             const Vector3d& satellite_pos,
+                            const Vector3d& sun_position_ecef,
                             double previous_windup) {
-    // Phase wind-up correction based on Wu et al. (1993)
-    // Returns accumulated phase wind-up in cycles.
-    const Vector3d e_sr = (receiver_pos - satellite_pos).normalized();
+    // Phase wind-up (Wu et al. 1993) — accumulated cycles between the
+    // satellite and receiver right-handed dipole frames.
+    const Vector3d los_sr = receiver_pos - satellite_pos;
+    const double los_norm = los_sr.norm();
+    if (los_norm < 1.0) return previous_windup;
+    const Vector3d e_sr = los_sr / los_norm;
 
-    // Satellite frame: use sun direction for yaw steering
-    // Simplified: assume satellite Z points to Earth center, X in sun direction
+    // Satellite body frame using a nominal yaw-steering attitude:
+    //   z = -rs / |rs|              (toward Earth center)
+    //   y = z × (sun - rs) / |...|  (perpendicular to spacecraft–Sun plane)
+    //   x = y × z                   (toward Sun side)
     const Vector3d e_z_sat = -satellite_pos.normalized();
-    // Sun direction (simplified: assume along +X in ECEF for now)
-    // A proper implementation would use solar ephemeris.
-    // Using cross-track direction as approximation:
-    Vector3d e_x_sat = e_sr.cross(e_z_sat);
-    if (e_x_sat.norm() < 1e-10) return previous_windup;
-    e_x_sat.normalize();
-    const Vector3d e_y_sat = e_z_sat.cross(e_x_sat);
+    Vector3d sun_dir;
+    if (sun_position_ecef.norm() > 1.0) {
+        sun_dir = sun_position_ecef - satellite_pos;
+    } else {
+        // Fallback: cross-track approximation (gives wrong magnitude but
+        // keeps the correction bounded when no solar ephemeris is supplied).
+        sun_dir = e_sr.cross(e_z_sat);
+    }
+    const double sun_norm = sun_dir.norm();
+    if (sun_norm < 1e-3) return previous_windup;
+    sun_dir /= sun_norm;
+    Vector3d e_y_sat = e_z_sat.cross(sun_dir);
+    const double y_norm = e_y_sat.norm();
+    if (y_norm < 1e-10) return previous_windup;
+    e_y_sat /= y_norm;
+    const Vector3d e_x_sat = e_y_sat.cross(e_z_sat);
 
-    // Receiver frame: Z = up, X = east, Y = north (approximate)
-    const Vector3d e_z_rcv = receiver_pos.normalized();
-    Vector3d e_x_rcv = Vector3d(-receiver_pos.y(), receiver_pos.x(), 0.0);
-    if (e_x_rcv.norm() < 1e-10) return previous_windup;
-    e_x_rcv.normalize();
-    const Vector3d e_y_rcv = e_z_rcv.cross(e_x_rcv);
+    // Receiver local north-east-up (north, east, up are standard PPP/RTKLIB):
+    //   x_rcv → North, y_rcv → East, z_rcv → Up.
+    double latitude_rad = 0.0;
+    double longitude_rad = 0.0;
+    double height_m = 0.0;
+    ecef2geodetic(receiver_pos, latitude_rad, longitude_rad, height_m);
+    const double sin_lat = std::sin(latitude_rad);
+    const double cos_lat = std::cos(latitude_rad);
+    const double sin_lon = std::sin(longitude_rad);
+    const double cos_lon = std::cos(longitude_rad);
+    // North (X): -sin(lat) cos(lon), -sin(lat) sin(lon), cos(lat)
+    const Vector3d e_x_rcv(-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat);
+    // East  (Y): -sin(lon),                cos(lon),           0
+    const Vector3d e_y_rcv(-sin_lon, cos_lon, 0.0);
 
-    // Effective dipole vectors
+    // Effective dipole vectors (Wu et al. 1993, eq. 7)
     const Vector3d d_sat = e_x_sat - e_sr * (e_sr.dot(e_x_sat))
-                         + e_sr.cross(e_y_sat);
+                         - e_sr.cross(e_y_sat);
     const Vector3d d_rcv = e_x_rcv - e_sr * (e_sr.dot(e_x_rcv))
                          + e_sr.cross(e_y_rcv);
 
-    const double cos_phi = d_sat.dot(d_rcv) / (d_sat.norm() * d_rcv.norm() + 1e-20);
-    const double cross_sign = e_sr.dot(d_sat.cross(d_rcv));
-    double dphi = std::acos(std::clamp(cos_phi, -1.0, 1.0)) / (2.0 * M_PI);
-    if (cross_sign < 0.0) dphi = -dphi;
+    const double d_sat_norm = d_sat.norm();
+    const double d_rcv_norm = d_rcv.norm();
+    if (d_sat_norm < 1e-10 || d_rcv_norm < 1e-10) return previous_windup;
+    const double cos_phi = std::clamp(d_sat.dot(d_rcv) / (d_sat_norm * d_rcv_norm), -1.0, 1.0);
+    double dphi = std::acos(cos_phi) / (2.0 * M_PI);
+    if (e_sr.dot(d_sat.cross(d_rcv)) < 0.0) dphi = -dphi;
 
-    // Accumulate full cycles
-    double windup = previous_windup + dphi;
-    // Remove large jumps (> 0.5 cycle)
-    while (windup - previous_windup > 0.5) windup -= 1.0;
-    while (windup - previous_windup < -0.5) windup += 1.0;
-
-    return windup;
+    // Resolve the 2π ambiguity against the prior cycle count.
+    const double n = std::round(previous_windup - dphi);
+    return dphi + n;
 }
 
 }  // namespace ppp_utils

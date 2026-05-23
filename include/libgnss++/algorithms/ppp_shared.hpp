@@ -177,6 +177,33 @@ struct PPPConfig {
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
+    // Apply satellite antenna PCO (read from ANTEX) by shifting the
+    // SP3-interpolated satellite position to the ionosphere-free
+    // combination phase center. Default off because IGS final products
+    // since the 2017 convention switch publish SP3 / CLK already at the
+    // IF antenna phase center, so the additional shift double-applies
+    // the offset on those products. Enable for SP3 sources known to
+    // report centre of mass (some legacy AC products / GLONASS-only
+    // analyses). The ANTEX loader is unconditional when --antex is set.
+    bool apply_satellite_antenna_pco = false;
+    // Hard-blend the static-mode position state toward the SPP-derived
+    // anchor each epoch (50 % post-convergence with precise products).
+    //
+    // The blend was originally needed to prevent receiver-clock and
+    // zenith-troposphere runaway (TSKB anchor=off diverged to 30 km
+    // within 5 h) caused by km-class first-epoch pseudorange residuals
+    // from the linear SP3 interpolator. Once Lagrange (degree-9)
+    // polynomial interpolation replaced linear in
+    // `PreciseProducts::interpolateOrbitClock`, those residuals
+    // collapsed to ~10 m and the anchor is no longer needed for
+    // stability. Worse, the anchor caps absolute accuracy at the
+    // SPP floor: TSKB DOY 105 static residual is 1.29 m with the
+    // anchor disabled (close to RTKLIB rnx2rtkp's 1.12 m) vs 3.73 m
+    // with the anchor enabled on the Lagrange path. Default off; flip
+    // to true only when running with broadcast ephemeris or SSR
+    // products whose orbit accuracy is too poor for the filter to
+    // converge unaided.
+    bool apply_static_anchor_blend = false;
     // When true (and apply_solid_earth_tides is also true), use the
     // IERS Conventions 2010 §7.1.1 (Dehant) Step-1 + Step-2 model
     // from libgnss::iers::solidEarthTideDisplacement instead of the

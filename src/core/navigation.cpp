@@ -840,6 +840,30 @@ void PreciseProducts::addOrbitClock(const PreciseOrbitClock& data) {
     entries.insert(it, data);
 }
 
+namespace {
+
+// RTKLIB-style Neville's algorithm for polynomial interpolation. Returns the
+// interpolated value at t=0 given samples at offsets x[i] with values y[i].
+// y[] is modified in place. Numerically stable for closely-spaced samples.
+double nevillePolynomial(const std::vector<double>& x,
+                         std::vector<double>& y,
+                         int n) {
+    for (int j = 1; j < n; ++j) {
+        for (int i = 0; i < n - j; ++i) {
+            const double denom = x[i + j] - x[i];
+            if (std::abs(denom) < 1e-12) {
+                return y[i];
+            }
+            y[i] = (x[i + j] * y[i] - x[i] * y[i + 1]) / denom;
+        }
+    }
+    return y[0];
+}
+
+constexpr int kLagrangeOrder = 10;  ///< number of SP3 samples (degree 9)
+
+}  // namespace
+
 bool PreciseProducts::interpolateOrbitClock(const SatelliteId& sat,
                                             const GNSSTime& time,
                                             Vector3d& position,
@@ -853,88 +877,123 @@ bool PreciseProducts::interpolateOrbitClock(const SatelliteId& sat,
 
     const auto& entries = sat_it->second;
 
-    // SP3 (orbit, ~15-min) and CLK (clock, ~30-s) merge into a single sorted
-    // entry list. Position-valid entries live on the SP3 grid only; CLK rows
-    // contribute clock-only entries between them. Search the bracketing
-    // position-valid pair separately from the bracketing clock-valid pair so
-    // an exact-match query at a CLK-only timestamp does not fail when SP3
-    // covers the surrounding 15-minute window.
-    const PreciseOrbitClock* pos_before = nullptr;
-    const PreciseOrbitClock* pos_after = nullptr;
-    const PreciseOrbitClock* clk_before = nullptr;
-    const PreciseOrbitClock* clk_after = nullptr;
-    for (const auto& entry : entries) {
-        if (entry.time <= time) {
-            if (entry.position_valid) {
-                pos_before = &entry;
+    // Build position- and clock-sample index vectors so polynomial
+    // interpolation can pick a contiguous window of N samples around the
+    // query time. SP3 (orbit) and CLK rows are stored in the same sorted
+    // list; position_valid and clock_valid flag which records contribute
+    // to each grid.
+    std::vector<int> pos_indices;
+    std::vector<int> clk_indices;
+    int pos_at_or_before = -1;  // last position-valid index with time <= query
+    int clk_at_or_before = -1;
+    pos_indices.reserve(entries.size());
+    clk_indices.reserve(entries.size());
+    for (int i = 0; i < static_cast<int>(entries.size()); ++i) {
+        if (entries[i].position_valid) {
+            pos_indices.push_back(i);
+            if (entries[i].time <= time) {
+                pos_at_or_before = static_cast<int>(pos_indices.size()) - 1;
             }
-            if (entry.clock_valid) {
-                clk_before = &entry;
-            }
-        } else {
-            if (entry.position_valid && pos_after == nullptr) {
-                pos_after = &entry;
-            }
-            if (entry.clock_valid && clk_after == nullptr) {
-                clk_after = &entry;
-            }
-            if (pos_after != nullptr && clk_after != nullptr) {
-                break;
+        }
+        if (entries[i].clock_valid) {
+            clk_indices.push_back(i);
+            if (entries[i].time <= time) {
+                clk_at_or_before = static_cast<int>(clk_indices.size()) - 1;
             }
         }
     }
 
-    auto interpolatePair = [&time](const PreciseOrbitClock* before,
-                                    const PreciseOrbitClock* after,
+    if (pos_indices.empty()) {
+        return false;
+    }
+
+    // Pick an N-sample window centred on the query, clamped to the array
+    // ends so the same code path serves boundary queries with extrapolation
+    // (RTKLIB pephpos does the same).
+    auto interpolateLagrange = [&entries, &time](
+                                    const std::vector<int>& indices,
+                                    int at_or_before,
                                     auto&& accessor,
                                     auto& out_value,
                                     auto& out_rate) -> bool {
-        if (before != nullptr && after != nullptr && before != after) {
-            const double dt_total = after->time - before->time;
-            if (std::abs(dt_total) < 1e-9 ||
-                std::abs(dt_total) > kPreciseInterpolationGapSeconds) {
-                return false;
+        const int n_avail = static_cast<int>(indices.size());
+        if (n_avail == 0) {
+            return false;
+        }
+        const int n_use = std::min(kLagrangeOrder, n_avail);
+        int start = at_or_before - (n_use - 1) / 2;
+        if (start < 0) start = 0;
+        if (start + n_use > n_avail) start = n_avail - n_use;
+        if (start < 0) start = 0;
+
+        // Reference the times relative to the first picked sample to keep
+        // the polynomial coefficients well-scaled (15-min spacing × 9 ≈ 8100 s
+        // dynamic range; relative differences fit cleanly in double).
+        const GNSSTime& t_ref = entries[indices[start]].time;
+        const double dt_query = time - t_ref;
+        if (std::abs(dt_query) > kPreciseInterpolationGapSeconds * n_use) {
+            return false;  // sanity guard: query far outside sample span
+        }
+
+        std::vector<double> xs;
+        xs.reserve(n_use);
+        for (int k = 0; k < n_use; ++k) {
+            xs.push_back(entries[indices[start + k]].time - t_ref - dt_query);
+        }
+
+        // For derivative computation: evaluate the same polynomial at query+h
+        // (i.e. shift the x-axis by -h so the new origin is at original x=h).
+        // dp/dt = (P(h) - P(0))/h.
+        const double h_deriv = 1.0;
+        std::vector<double> xs_deriv = xs;
+        for (auto& x : xs_deriv) x -= h_deriv;
+
+        using value_t = decltype(accessor(entries[indices[0]]));
+        if constexpr (std::is_same_v<value_t, Vector3d>) {
+            for (int axis = 0; axis < 3; ++axis) {
+                std::vector<double> ys_value;
+                std::vector<double> ys_deriv;
+                ys_value.reserve(n_use);
+                ys_deriv.reserve(n_use);
+                for (int k = 0; k < n_use; ++k) {
+                    const double v = accessor(entries[indices[start + k]])(axis);
+                    ys_value.push_back(v);
+                    ys_deriv.push_back(v);
+                }
+                out_value(axis) = nevillePolynomial(xs, ys_value, n_use);
+                const double v_shift = nevillePolynomial(xs_deriv, ys_deriv, n_use);
+                out_rate(axis) = (v_shift - out_value(axis)) / h_deriv;
             }
-            const double dt_before = time - before->time;
-            const double alpha = dt_before / dt_total;
-            const auto before_value = accessor(*before);
-            const auto after_value = accessor(*after);
-            out_value = before_value + alpha * (after_value - before_value);
-            out_rate = (after_value - before_value) / dt_total;
-            return true;
+        } else {
+            std::vector<double> ys_value;
+            std::vector<double> ys_deriv;
+            ys_value.reserve(n_use);
+            ys_deriv.reserve(n_use);
+            for (int k = 0; k < n_use; ++k) {
+                const double v = accessor(entries[indices[start + k]]);
+                ys_value.push_back(v);
+                ys_deriv.push_back(v);
+            }
+            out_value = nevillePolynomial(xs, ys_value, n_use);
+            const double v_shift = nevillePolynomial(xs_deriv, ys_deriv, n_use);
+            out_rate = (v_shift - out_value) / h_deriv;
         }
-        const PreciseOrbitClock* sample = before != nullptr ? before : after;
-        if (sample == nullptr) {
-            return false;
-        }
-        if (std::abs(sample->time - time) > kPreciseInterpolationGapSeconds) {
-            return false;
-        }
-        out_value = accessor(*sample);
-        out_rate = std::remove_reference_t<decltype(out_rate)>{};
         return true;
     };
 
-    Vector3d interpolated_velocity = Vector3d::Zero();
-    if (!interpolatePair(
-            pos_before, pos_after,
-            [](const PreciseOrbitClock& e) { return e.position; },
-            position, interpolated_velocity)) {
+    if (!interpolateLagrange(
+            pos_indices, pos_at_or_before,
+            [](const PreciseOrbitClock& e) -> Vector3d { return e.position; },
+            position, velocity)) {
         return false;
     }
-    velocity = interpolated_velocity;
 
-    double interpolated_drift = 0.0;
-    if (!interpolatePair(
-            clk_before, clk_after,
-            [](const PreciseOrbitClock& e) { return e.clock_bias; },
-            clock_bias, interpolated_drift)) {
-        // Fall back to a stationary clock if no CLK data is available; orbit
-        // alone is still useful for geometry.
+    if (!interpolateLagrange(
+            clk_indices, clk_at_or_before,
+            [](const PreciseOrbitClock& e) -> double { return e.clock_bias; },
+            clock_bias, clock_drift)) {
         clock_bias = 0.0;
         clock_drift = 0.0;
-    } else {
-        clock_drift = interpolated_drift;
     }
     return true;
 }
