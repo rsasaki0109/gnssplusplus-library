@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 
 import gnss_ppc_demo as ppc_demo
+import gnss_ppc_metrics as ppc_metrics
 from gnss_toml_config import parse_args_with_toml
 from gnss_runtime import ensure_input_exists, resolve_gnss_command, run_fetch_products
 
@@ -401,7 +402,7 @@ def augment_ppc_malib_comparison(
     reference = ppc_demo.read_flexible_reference_csv(reference_csv)
     comparison = ppc_demo.comparison
     malib_epochs = comparison.read_rtklib_pos(malib_pos)
-    malib_metrics = ppc_demo.summarize_solution_epochs(
+    malib_metrics = ppc_metrics.summarize_solution_epochs(
         reference,
         malib_epochs,
         ppc_demo.solver_fixed_status("ppp"),

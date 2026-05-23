@@ -31,9 +31,9 @@ class SignoffContext:
     gnss_command: list[str]
     malib_bin: Path | None
     malib_config: Path | None
-    obs: Path
-    base: Path
-    nav: Path
+    obs: Path | None
+    base: Path | None
+    nav: Path | None
 
 
 def repo_root_from_script() -> Path:
@@ -70,17 +70,14 @@ def build_context(
         obs=resolve_optional_path(
             repo_root,
             environ.get("GNSSPP_PPP_PRODUCTS_OBS", ""),
-            repo_root / "data" / "rover_kinematic.obs",
         ),
         base=resolve_optional_path(
             repo_root,
             environ.get("GNSSPP_PPP_PRODUCTS_BASE", ""),
-            repo_root / "data" / "base_kinematic.obs",
         ),
         nav=resolve_optional_path(
             repo_root,
             environ.get("GNSSPP_PPP_PRODUCTS_NAV", ""),
-            repo_root / "data" / "navigation_kinematic.nav",
         ),
     )
 
@@ -120,7 +117,7 @@ def make_step(context: SignoffContext) -> SignoffStep:
             ("base observation", context.base),
             ("navigation", context.nav),
         )
-        if not path.is_file()
+        if path is None or not path.is_file()
     ]
     if missing_inputs:
         missing_text = ", ".join(f"{label}: {path}" for label, path in missing_inputs)

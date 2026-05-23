@@ -49,6 +49,7 @@ struct Options {
     double clas_atmos_stale_after_seconds = 15.0;
     bool kinematic_mode = false;
     bool low_dynamics_mode = false;
+    bool apply_static_anchor_blend = false;
     bool enable_ar = false;
     double ar_ratio_threshold = 3.0;
     bool use_iers_solid_tide = true;
@@ -116,6 +117,10 @@ void printUsage(const char* program_name) {
         << "  --kinematic             Use a kinematic PPP motion model\n"
         << "  --low-dynamics          Keep kinematic PPP anchored for quasi-static motion\n"
         << "  --no-low-dynamics       Disable quasi-static anchoring (default)\n"
+        << "  --apply-static-anchor-blend\n"
+        << "                          Blend static/low-dynamics PPP toward the initial SPP seed\n"
+        << "  --no-static-anchor-blend\n"
+        << "                          Disable static-anchor blending (default)\n"
         << "  --enable-ar             Enable PPP ambiguity fixing when supported\n"
         << "  --disable-ar            Disable PPP ambiguity fixing (default)\n"
         << "  --ar-ratio-threshold <value>\n"
@@ -261,6 +266,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.low_dynamics_mode = true;
         } else if (arg == "--no-low-dynamics") {
             options.low_dynamics_mode = false;
+        } else if (arg == "--apply-static-anchor-blend") {
+            options.apply_static_anchor_blend = true;
+        } else if (arg == "--no-static-anchor-blend") {
+            options.apply_static_anchor_blend = false;
         } else if (arg == "--enable-ar") {
             options.enable_ar = true;
         } else if (arg == "--disable-ar") {
@@ -636,6 +645,7 @@ int main(int argc, char* argv[]) {
             options.clas_atmos_stale_after_seconds;
         ppp_config.kinematic_mode = options.kinematic_mode;
         ppp_config.low_dynamics_mode = options.low_dynamics_mode;
+        ppp_config.apply_static_anchor_blend = options.apply_static_anchor_blend;
         ppp_config.enable_ambiguity_resolution = options.enable_ar;
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
@@ -791,6 +801,7 @@ int main(int argc, char* argv[]) {
                     << "  \"out\": \"" << jsonEscape(options.out_path) << "\",\n"
                     << "  \"mode\": \"" << (options.kinematic_mode ? "kinematic" : "static") << "\",\n"
                     << "  \"low_dynamics\": " << (options.low_dynamics_mode ? "true" : "false") << ",\n"
+                    << "  \"static_anchor_blend\": " << (options.apply_static_anchor_blend ? "true" : "false") << ",\n"
                     << "  \"clas_epoch_policy\": \"" << jsonEscape(options.clas_epoch_policy) << "\",\n"
                     << "  \"clas_osr_application\": \"" << jsonEscape(options.clas_osr_application) << "\",\n"
                     << "  \"clas_phase_continuity\": \"" << jsonEscape(options.clas_phase_continuity) << "\",\n"
@@ -860,6 +871,8 @@ int main(int argc, char* argv[]) {
             std::cout << "  CLAS residual sampling: " << options.clas_residual_sampling << "\n";
             std::cout << "  mode: " << (options.kinematic_mode ? "kinematic" : "static") << "\n";
             std::cout << "  low dynamics: " << (options.low_dynamics_mode ? "on" : "off") << "\n";
+            std::cout << "  static anchor blend: "
+                      << (options.apply_static_anchor_blend ? "on" : "off") << "\n";
             std::cout << "  CLAS atmosphere selection: " << options.clas_atmos_selection << "\n";
             std::cout << "  CLAS stale-after (s): " << options.clas_atmos_stale_after_seconds << "\n";
             if (clas_hybrid_fallback_epochs > 0) {

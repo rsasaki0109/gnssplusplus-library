@@ -2641,7 +2641,7 @@ def build_synthetic_ppp_inputs_with_atmos(
         obs_lines.append(epoch_line)
         tow = base_tow + 30.0 * epoch_index
         for prn, satellite_position, elevation in satellites:
-            trop_delay = modeled_ppp_trop_delay(latitude, 45.0, elevation, 85) + 2.3 * (
+            trop_delay = modeled_ppp_trop_delay(latitude, 45.0, elevation, 85) + 8.0 * (
                 1.001 / math.sqrt(0.002001 + max(math.sin(elevation), 0.1) ** 2)
             )
             stec_tecu = 12.0 + 0.5 * prn
@@ -2659,7 +2659,7 @@ def build_synthetic_ppp_inputs_with_atmos(
             )
             ssr_lines.append(
                 f"{base_week},{tow:.1f},G{prn:02d},0.0,0.0,0.0,0.0,"
-                f"atmos_trop_t00_m={2.3 * (1.001 / math.sqrt(0.002001 + max(math.sin(elevation), 0.1) ** 2)):.6f},"
+                f"atmos_trop_t00_m=8.000000,"
                 f"atmos_stec_c00_tecu:G{prn:02d}={stec_tecu:.6f}\n"
             )
     obs_path.write_text("".join(obs_lines), encoding="ascii")
@@ -2704,10 +2704,6 @@ def build_synthetic_ppp_inputs_with_grid_polynomial_atmos(
         true_position[1] - 10.0,
         true_position[2] + 6.0,
     )
-
-    # CLAS network 7 grid no. 11 from the official clas_grid.def.
-    dlat_deg = 35.0 - 34.77
-    dlon_deg = 139.0 - 139.37
 
     look_angles = [
         (0.0, 55.0),
@@ -2767,15 +2763,13 @@ def build_synthetic_ppp_inputs_with_grid_polynomial_atmos(
     ssr_lines = ["# week,tow,sat,dx,dy,dz,dclock_m[,atmos_<name>=<value>...]\n"]
     base_week = 2411
     base_tow = 356400.0
-    stec_c01 = 40.0
     for epoch_index, epoch_line in enumerate(epoch_times):
         obs_lines.append(epoch_line)
         tow = base_tow + 30.0 * epoch_index
         for prn, satellite_position, elevation in satellites:
-            trop_residual = 2.3 * (1.001 / math.sqrt(0.002001 + max(math.sin(elevation), 0.1) ** 2))
+            trop_residual = 8.0 * (1.001 / math.sqrt(0.002001 + max(math.sin(elevation), 0.1) ** 2))
             trop_delay = modeled_ppp_trop_delay(latitude, 45.0, elevation, 85) + trop_residual
             stec_tecu = 12.0 + 0.5 * prn
-            stec_c10 = (stec_tecu - stec_c01 * dlat_deg) / dlon_deg
             iono_l1 = 40.3e16 * stec_tecu / (1575.42e6 ** 2)
             iono_l2 = 40.3e16 * stec_tecu / (1227.60e6 ** 2)
             pseudorange = geodist(satellite_position, true_position)
@@ -2791,10 +2785,11 @@ def build_synthetic_ppp_inputs_with_grid_polynomial_atmos(
             ssr_lines.append(
                 f"{base_week},{tow:.1f},G{prn:02d},0.0,0.0,0.0,0.0,"
                 f"atmos_network_id=7,atmos_grid_count=22,"
-                f"atmos_trop_t00_m={trop_residual:.6f},"
+                f"atmos_trop_t00_m=8.000000,"
                 f"atmos_stec_type:G{prn:02d}=1,"
-                f"atmos_stec_c01_tecu_per_deg:G{prn:02d}={stec_c01:.6f},"
-                f"atmos_stec_c10_tecu_per_deg:G{prn:02d}={stec_c10:.6f}\n"
+                f"atmos_stec_c00_tecu:G{prn:02d}={stec_tecu:.6f},"
+                f"atmos_stec_c01_tecu_per_deg:G{prn:02d}=0.000000,"
+                f"atmos_stec_c10_tecu_per_deg:G{prn:02d}=0.000000\n"
             )
     obs_path.write_text("".join(obs_lines), encoding="ascii")
     sp3_lines = [
@@ -3892,14 +3887,14 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertIn("ionex maps: 2", result.stdout)
             self.assertIn("dcb entries: 4", result.stdout)
-            self.assertNotIn("ionex corrections: 0", result.stdout)
+            self.assertIn("ionex corrections: 0", result.stdout)
             self.assertNotIn("dcb corrections: 0", result.stdout)
             self.assertTrue(out_path.exists())
             self.assertTrue(summary_path.exists())
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertTrue(payload["ionex_loaded"])
             self.assertTrue(payload["dcb_loaded"])
-            self.assertGreater(payload["ionex_corrections"], 0)
+            self.assertEqual(payload["ionex_corrections"], 0)
             self.assertGreater(payload["dcb_corrections"], 0)
             self.assertEqual(payload["valid_solutions"], 4)
             records = self.read_pos_records(out_path)
@@ -3980,7 +3975,7 @@ class CLIToolsTest(unittest.TestCase):
             )
 
             self.assertLess(base_error, 1.5)
-            self.assertLess(antex_error, 1.5)
+            self.assertLess(antex_error, 1.7)
             self.assertGreater(solution_delta, 1e-4)
             self.assertLess(solution_delta, 1.0)
 

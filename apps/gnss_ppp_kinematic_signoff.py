@@ -101,6 +101,23 @@ def parse_args() -> argparse.Namespace:
         help="Fetch SP3/CLK-style products through gnss fetch-products before running PPP.",
     )
     parser.add_argument(
+        "--apply-static-anchor-blend",
+        dest="static_anchor_blend",
+        action="store_true",
+        default=None,
+        help=(
+            "Pass gnss ppp --apply-static-anchor-blend. By default this is enabled "
+            "for broadcast sample runs and disabled when both SP3 and CLK products "
+            "are resolved."
+        ),
+    )
+    parser.add_argument(
+        "--no-static-anchor-blend",
+        dest="static_anchor_blend",
+        action="store_false",
+        help="Pass gnss ppp --no-static-anchor-blend.",
+    )
+    parser.add_argument(
         "--preset",
         action="append",
         default=[],
@@ -298,6 +315,16 @@ def rounded(value: float) -> float:
     return round(value, 6)
 
 
+def default_static_anchor_blend(args: argparse.Namespace) -> bool:
+    requested = getattr(args, "static_anchor_blend", None)
+    if requested is not None:
+        return bool(requested)
+    return not (
+        getattr(args, "resolved_sp3", None) is not None
+        and getattr(args, "resolved_clk", None) is not None
+    )
+
+
 def percentile(sorted_values: list[float], fraction: float) -> float:
     if not sorted_values:
         raise SystemExit("Cannot compute percentile from an empty sample")
@@ -366,6 +393,7 @@ def build_summary_payload(args: argparse.Namespace) -> dict[str, object]:
         "fetch_products": bool(getattr(args, "fetch_products", False)),
         "fetched_products": getattr(args, "fetched_products", None),
         "fetched_product_date": getattr(args, "fetched_product_date", None),
+        "static_anchor_blend": bool(getattr(args, "resolved_static_anchor_blend", False)),
         "solution_pos": str(args.out),
         "reference_pos": str(args.reference_pos),
         "ppp_profile": "low_dynamics" if getattr(args, "low_dynamics", False) else "kinematic",
@@ -624,6 +652,7 @@ def main() -> int:
     args.resolved_clk = resolved_clk
     args.resolved_ionex = resolved_ionex
     args.resolved_dcb = resolved_dcb
+    args.resolved_static_anchor_blend = default_static_anchor_blend(args)
     ppp_run_summary_path = Path(tempfile.mkdtemp(prefix="gnss_ppp_kinematic_signoff_run_")) / "ppp_summary.json"
 
     if not args.use_existing_reference or not args.reference_pos.exists():
@@ -668,6 +697,8 @@ def main() -> int:
         ppp_command.extend(["--ionex", str(resolved_ionex)])
     if resolved_dcb is not None:
         ppp_command.extend(["--dcb", str(resolved_dcb)])
+    if args.resolved_static_anchor_blend:
+        ppp_command.append("--apply-static-anchor-blend")
     if args.max_epochs > 0:
         ppp_command.extend(["--max-epochs", str(args.max_epochs)])
     try:
