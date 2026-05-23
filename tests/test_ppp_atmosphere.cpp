@@ -133,6 +133,26 @@ TEST(PPPAtmosphereTest, PolynomialOnlyValueConstructionDropsResidualTerms) {
     EXPECT_NEAR(stec_tecu, 2.0, 1e-9);
 }
 
+TEST(PPPAtmosphereTest, StecPolynomialCanUseLinearTermsWithoutC00) {
+    std::map<std::string, std::string> atmos_tokens;
+    atmos_tokens["atmos_network_id"] = "7";
+    atmos_tokens["atmos_grid_count"] = "1";
+
+    const std::string suffix = ":G01";
+    atmos_tokens["atmos_stec_type" + suffix] = "1";
+    atmos_tokens["atmos_stec_c01_tecu_per_deg" + suffix] = "40.0";
+    atmos_tokens["atmos_stec_c10_tecu_per_deg" + suffix] = "-10.0";
+
+    const Vector3d receiver_position = geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 0.0);
+    ppp_atmosphere::ClasGridReference reference;
+    ASSERT_TRUE(ppp_atmosphere::resolveClasGridReference(atmos_tokens, receiver_position, reference));
+
+    const SatelliteId satellite(GNSSSystem::GPS, 1);
+    const double stec_tecu =
+        ppp_atmosphere::atmosphericStecTecu(atmos_tokens, satellite, receiver_position);
+    EXPECT_NEAR(stec_tecu, 40.0 * reference.dlat_deg - 10.0 * reference.dlon_deg, 1e-9);
+}
+
 TEST(PPPAtmosphereTest, IndexedOnlyResidualSamplingUsesGridResidualInsteadOfMean) {
     using ValuePolicy = ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy;
     using Subtype12Policy = ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy;
