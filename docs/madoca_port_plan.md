@@ -292,6 +292,27 @@ MADOCA port, the reference baseline is the generated MADOCALIB bridge
 trajectory itself, starting with this MIZU one-hour PPP window and later adding
 the PPP-AR and L6D ionosphere sample windows.
 
+## MADOCA Solution Diff Tool
+
+Use `scripts/analysis/madoca_solution_diff.py` to compare a MADOCALIB bridge
+`.pos` file against a native LibGNSS++ `.pos` file.  It accepts both the
+MADOCALIB calendar-time rows and the LibGNSS++ GPS-week/TOW rows, matches common
+epochs, reports ENU and 3D deltas, and can write JSON plus per-epoch CSV output.
+
+```sh
+python3 scripts/analysis/madoca_solution_diff.py \
+  /tmp/madocalib_bridge_sample_0000.pos \
+  /tmp/native_madoca_sample_0000.pos \
+  --reference-ecef -3857167.6484 3108694.9138 4004041.6876 \
+  --base-label bridge \
+  --candidate-label native \
+  --json-out /tmp/madoca_solution_diff.json \
+  --match-csv /tmp/madoca_solution_matches.csv
+```
+
+Keep this as an analysis/sign-off helper.  It is not part of the runtime
+solver path.
+
 ## MADOCALIB License Notes
 
 `madocalib/readme.txt` identifies MADOCALIB as a MADOCA-PPP reference/test
