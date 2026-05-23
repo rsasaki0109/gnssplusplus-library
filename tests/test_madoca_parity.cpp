@@ -2,6 +2,7 @@
 
 #include <libgnss++/algorithms/madoca_parity.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/external/madocalib_bridge.hpp>
 #include <libgnss++/external/madocalib_oracle.hpp>
 
 #include <cmath>
@@ -10,6 +11,10 @@
 
 #ifndef GNSSPP_HAS_MADOCALIB_ORACLE
 #define GNSSPP_HAS_MADOCALIB_ORACLE 0
+#endif
+
+#ifndef GNSSPP_HAS_MADOCALIB_BRIDGE
+#define GNSSPP_HAS_MADOCALIB_BRIDGE 0
 #endif
 
 namespace {
@@ -82,6 +87,18 @@ void expectNearArray(const std::string& label,
 
 TEST(MadocaParityConfig, OracleToleranceIsDefined) {
     EXPECT_DOUBLE_EQ(madoca::kOracleTolerance, 1e-6);
+}
+
+TEST(MadocaBridgeConfig, AvailabilityMatchesBuildFlag) {
+#if GNSSPP_HAS_MADOCALIB_BRIDGE
+    EXPECT_TRUE(libgnss::external::madocalib::isAvailable());
+    EXPECT_FALSE(libgnss::external::madocalib::defaultRootDir().empty());
+#else
+    EXPECT_FALSE(libgnss::external::madocalib::isAvailable());
+    std::string error_message;
+    EXPECT_EQ(libgnss::external::madocalib::runPostpos({}, &error_message), -1);
+    EXPECT_NE(error_message.find("MADOCALIB bridge is not linked"), std::string::npos);
+#endif
 }
 
 #if GNSSPP_HAS_MADOCALIB_ORACLE

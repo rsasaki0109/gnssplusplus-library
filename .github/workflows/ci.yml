@@ -346,12 +346,35 @@ jobs:
           -DMADOCALIB_PARITY_LINK=ON \
           -DMADOCALIB_ROOT_DIR="${GITHUB_WORKSPACE}/external/madocalib"
 
-    - name: Build MadocaParity tests
+    - name: Build MadocaParity tests and bridge tool
       run: cmake --build build-madoca-parity --config Release --parallel --target run_tests
 
     - name: Run MadocaParity
       working-directory: build-madoca-parity
-      run: ./tests/run_tests --gtest_filter='*MadocaParity*'
+      run: ./tests/run_tests --gtest_filter='*MadocaParity*:MadocaBridgeConfig.*'
+
+    - name: Run MADOCALIB bridge smoke
+      working-directory: build-madoca-parity
+      run: |
+        ROOT="${GITHUB_WORKSPACE}/external/madocalib"
+        ./apps/gnss_ppp \
+          --madocalib-bridge \
+          --obs "$ROOT/sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx" \
+          --nav "$ROOT/sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx" \
+          --madocalib-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.204.l6" \
+          --madocalib-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.206.l6" \
+          --antex "$ROOT/sample_data/data/igs20.atx" \
+          --madocalib-start "2025/04/01 00:00:00" \
+          --madocalib-end "2025/04/01 00:59:30" \
+          --madocalib-ti 30 \
+          --out madocalib_bridge_smoke.pos \
+          --summary-json madocalib_bridge_smoke.json \
+          --quiet
+        grep -q "MADOCALIB ver.2.1" madocalib_bridge_smoke.pos
+        rows="$(awk '$0 !~ /^%/ && NF > 0 {n++} END {print n+0}' madocalib_bridge_smoke.pos)"
+        test "$rows" -eq 118
+        non_q6="$(awk '$0 !~ /^%/ && NF > 0 && $6 != 6 {n++} END {print n+0}' madocalib_bridge_smoke.pos)"
+        test "$non_q6" -eq 0
 
     - name: Upload MadocaParity diagnostics
       if: failure()
@@ -363,6 +386,8 @@ jobs:
           build-madoca-parity/Testing/Temporary/LastTest.log
           build-madoca-parity/Testing/Temporary/LastTestsFailed.log
           build-madoca-parity/CMakeFiles/CMakeConfigureLog.yaml
+          build-madoca-parity/madocalib_bridge_smoke.pos
+          build-madoca-parity/madocalib_bridge_smoke.json
         if-no-files-found: ignore
 
   static-analysis:
