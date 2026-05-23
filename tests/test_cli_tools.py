@@ -3531,6 +3531,13 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--window-size", result.stdout)
         self.assertIn("--output-csv", result.stdout)
 
+    def test_ppp_help_lists_madocalib_bridge_options(self) -> None:
+        result = self.run_gnss("ppp", "--help")
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("--madocalib-bridge", result.stdout)
+        self.assertIn("--madocalib-l6", result.stdout)
+        self.assertIn("--madocalib-mdciono", result.stdout)
+
     def test_public_rtk_benchmarks_cli_lists_matrix(self) -> None:
         result = self.run_gnss("public-rtk-benchmarks", "--format", "json")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
