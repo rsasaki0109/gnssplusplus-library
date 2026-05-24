@@ -2,6 +2,8 @@
 
 #include <libgnss++/algorithms/madoca_parity.hpp>
 
+#include <cmath>
+
 namespace libgnss::io {
 namespace {
 
@@ -123,6 +125,61 @@ int svmask2list(std::uint64_t mask, int gnssid, int* satlist, int* gidlist) {
     return ns;
 }
 
+// RTKLIB time helpers (rtkcmn.c), ported for the L6E epoch reconstruction.
+constexpr double kGpst0[6] = {1980.0, 1.0, 6.0, 0.0, 0.0, 0.0};
+
+MadocaGtime epoch2time(const double* ep) {
+    static const int doy[] = {1, 32, 60, 91, 121, 152, 182,
+                              213, 244, 274, 305, 335};
+    MadocaGtime time;
+    const int year = static_cast<int>(ep[0]);
+    const int mon = static_cast<int>(ep[1]);
+    const int day = static_cast<int>(ep[2]);
+    if (year < 1970 || 2099 < year || mon < 1 || 12 < mon) {
+        return time;
+    }
+    const int days = (year - 1970) * 365 + (year - 1969) / 4 + doy[mon - 1] +
+                     day - 2 + ((year % 4 == 0 && mon >= 3) ? 1 : 0);
+    const int sec = static_cast<int>(std::floor(ep[5]));
+    time.time = static_cast<std::int64_t>(days) * 86400 +
+                static_cast<int>(ep[3]) * 3600 + static_cast<int>(ep[4]) * 60 + sec;
+    time.sec = ep[5] - sec;
+    return time;
+}
+
+double time2gpst(MadocaGtime t, int* week) {
+    const MadocaGtime t0 = epoch2time(kGpst0);
+    const std::int64_t sec = t.time - t0.time;
+    const int w = static_cast<int>(sec / (86400 * 7));
+    if (week != nullptr) {
+        *week = w;
+    }
+    return static_cast<double>(sec - static_cast<std::int64_t>(w) * 86400 * 7) + t.sec;
+}
+
+MadocaGtime gpst2time(int week, double sec) {
+    MadocaGtime t = epoch2time(kGpst0);
+    if (sec < -1e9 || 1e9 < sec) {
+        sec = 0.0;
+    }
+    t.time += static_cast<std::int64_t>(86400) * 7 * week + static_cast<int>(sec);
+    t.sec = sec - static_cast<int>(sec);
+    return t;
+}
+
+void adjweek(MadocaGtime* gt, double tow) {
+    // gt is seeded with a nonzero reference epoch, so the RTKLIB
+    // "if (gt->time == 0) get cpu time" branch never applies here.
+    int week;
+    const double tow_p = time2gpst(*gt, &week);
+    if (tow < tow_p - 302400.0) {
+        tow += 604800.0;
+    } else if (tow > tow_p + 302400.0) {
+        tow -= 604800.0;
+    }
+    *gt = gpst2time(week, tow);
+}
+
 int sigmask2list(std::uint16_t mask, int gnssid, int* siglist) {
     const std::uint8_t* sigs;
     switch (gnssid) {
@@ -149,6 +206,13 @@ int sigmask2list(std::uint16_t mask, int gnssid, int* siglist) {
 }  // namespace
 
 MadocaL6eDecoder::MadocaL6eDecoder() {
+    const double ep[6] = {2025.0, 4.0, 1.0, 0.0, 0.0, 0.0};
+    seed_ = epoch2time(ep);
+    reset();
+}
+
+void MadocaL6eDecoder::setReferenceEpoch(const double ep[6]) {
+    seed_ = epoch2time(ep);
     reset();
 }
 
@@ -157,6 +221,7 @@ void MadocaL6eDecoder::reset() {
     for (auto& b : msg_buff_) b = 0;
     for (int p = 0; p < kMaxPrn; ++p) {
         channels_[p] = ChannelState{};
+        channels_[p].gt = seed_;  // seed week-number determination
     }
     for (int s = 0; s < kMaxSat; ++s) {
         ssr_[s] = MadocaSsrCorrection{};
@@ -193,6 +258,7 @@ int MadocaL6eDecoder::decodeMask(ChannelState& ch, int i) {
 
     ch.tow0 = ep / 3600 * 3600;
     ch.ep0 = ep % 3600;
+    adjweek(&ch.gt, ep);
     ch.iod = iod;
     ch.ns = 0;
     for (int j = 0; j < kMaxSys; ++j) {
@@ -259,6 +325,8 @@ int MadocaL6eDecoder::decodeOrbit(ChannelState& ch, int i, int apply) {
     if (ch.tow0 < 0) {
         return -1;  // unprocessed mask
     }
+    if (ch.ep0 > ep) ep += 3600;
+    adjweek(&ch.gt, ch.tow0 + ep);
     if (ch.iod != iod) {
         apply = 0;
     }
@@ -279,6 +347,7 @@ int MadocaL6eDecoder::decodeOrbit(ChannelState& ch, int i, int apply) {
         }
         if (apply) {
             MadocaSsrCorrection& s = ssr_[sat - 1];
+            s.t0[0] = ch.gt;
             s.udi[0] = udint;
             s.iod[0] = iod;
             s.iode = iode;
@@ -299,6 +368,8 @@ int MadocaL6eDecoder::decodeClock(ChannelState& ch, int i, int apply) {
     if (ch.tow0 < 0) {
         return -1;  // unprocessed mask
     }
+    if (ch.ep0 > ep) ep += 3600;
+    adjweek(&ch.gt, ch.tow0 + ep);
     if (ch.iod != iod) {
         apply = 0;
     }
@@ -310,6 +381,7 @@ int MadocaL6eDecoder::decodeClock(ChannelState& ch, int i, int apply) {
         if (dclk == kInvalid15Bit) continue;  // invalid value
         if (apply) {
             MadocaSsrCorrection& s = ssr_[sat - 1];
+            s.t0[1] = ch.gt;
             s.udi[1] = udint;
             s.iod[1] = iod;
             s.dclk[0] = dclk * 0.0016;
@@ -328,6 +400,8 @@ int MadocaL6eDecoder::decodeCodeBias(ChannelState& ch, int i, int apply) {
     if (ch.tow0 < 0) {
         return -1;  // unprocessed mask
     }
+    if (ch.ep0 > ep) ep += 3600;
+    adjweek(&ch.gt, ch.tow0 + ep);
     if (ch.iod != iod) {
         apply = 0;
     }
@@ -354,6 +428,7 @@ int MadocaL6eDecoder::decodeCodeBias(ChannelState& ch, int i, int apply) {
         }
         if (apply && sat != 0) {
             MadocaSsrCorrection& s = ssr_[sat - 1];
+            s.t0[4] = ch.gt;
             s.udi[4] = udint;
             s.iod[4] = iod;
             for (int k = 0; k < MadocaSsrCorrection::kMaxCode; ++k) {
@@ -373,6 +448,8 @@ int MadocaL6eDecoder::decodePhaseBias(ChannelState& ch, int i, int apply) {
     if (ch.tow0 < 0) {
         return -1;  // unprocessed mask
     }
+    if (ch.ep0 > ep) ep += 3600;
+    adjweek(&ch.gt, ch.tow0 + ep);
     if (ch.iod != iod) {
         apply = 0;
     }
@@ -403,6 +480,7 @@ int MadocaL6eDecoder::decodePhaseBias(ChannelState& ch, int i, int apply) {
         }
         if (apply && sat != 0) {
             MadocaSsrCorrection& s = ssr_[sat - 1];
+            s.t0[5] = ch.gt;
             s.udi[5] = udint;
             s.iod[5] = iod;
             s.yaw_ang = 0.0;
@@ -425,6 +503,8 @@ int MadocaL6eDecoder::decodeUra(ChannelState& ch, int i, int apply) {
     if (ch.tow0 < 0) {
         return -1;  // unprocessed mask
     }
+    if (ch.ep0 > ep) ep += 3600;
+    adjweek(&ch.gt, ch.tow0 + ep);
     if (ch.iod != iod) {
         apply = 0;
     }
@@ -435,6 +515,7 @@ int MadocaL6eDecoder::decodeUra(ChannelState& ch, int i, int apply) {
         if (sat == 0) continue;  // unsupported sat
         if (apply) {
             MadocaSsrCorrection& s = ssr_[sat - 1];
+            s.t0[3] = ch.gt;
             s.udi[3] = udint;
             s.iod[3] = iod;
             s.ura = ura;
