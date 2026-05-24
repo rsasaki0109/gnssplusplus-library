@@ -68,4 +68,36 @@ double geodist(const double rs[3], const double rr[3], double e[3]) {
 #endif
 }
 
+int mcssrSelBiascode(int sys, int code) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    return ::mcssr_sel_biascode(sys, code);
+#else
+    (void)sys;
+    (void)code;
+    return 0;
+#endif
+}
+
+std::uint32_t getbitu(const std::uint8_t* buff, int pos, int len) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    return ::getbitu(buff, pos, len);
+#else
+    (void)buff;
+    (void)pos;
+    (void)len;
+    return 0;
+#endif
+}
+
+std::int32_t getbits(const std::uint8_t* buff, int pos, int len) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    return ::getbits(buff, pos, len);
+#else
+    (void)buff;
+    (void)pos;
+    (void)len;
+    return 0;
+#endif
+}
+
 }  // namespace libgnss::external::madocalib_oracle

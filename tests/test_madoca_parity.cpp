@@ -188,6 +188,47 @@ TEST_F(MadocaParity, GeodistSagnacRangeAndLos) {
     }
 }
 
+TEST_F(MadocaParity, McssrSelBiascodeApplicableSignals) {
+    ASSERT_TRUE(madoca::mcssrSelBiascodeAvailable());
+    // Exhaustive sweep over every supported system and the full RTKLIB obs-code
+    // range (including codes outside the MADOCA-PPP applicable set, which must
+    // map to CODE_NONE in both implementations).
+    const int systems[] = {
+        madoca::kSysGps, madoca::kSysGlo, madoca::kSysGal,
+        madoca::kSysQzs, madoca::kSysCmp, madoca::kSysSbs,
+        madoca::kSysIrn, madoca::kSysNone,
+    };
+    for (int sys : systems) {
+        for (int code = 0; code <= 70; ++code) {
+            EXPECT_EQ(madoca::mcssrSelBiascode(sys, code),
+                      libgnss::external::madocalib_oracle::mcssrSelBiascode(sys, code))
+                << "sys=" << sys << " code=" << code;
+        }
+    }
+}
+
+TEST_F(MadocaParity, GetbitBitExtraction) {
+    ASSERT_TRUE(madoca::getbituAvailable());
+    ASSERT_TRUE(madoca::getbitsAvailable());
+    // Deterministic byte pattern mixing high/low bits so that sign extension in
+    // getbits is exercised across the position/length sweep.
+    std::vector<std::uint8_t> buff(16);
+    for (size_t i = 0; i < buff.size(); ++i) {
+        buff[i] = static_cast<std::uint8_t>((0x80u >> (i % 4)) | (i * 37u + 5u));
+    }
+    const int total_bits = static_cast<int>(buff.size()) * 8;
+    for (int len = 1; len <= 32; ++len) {
+        for (int pos = 0; pos + len <= total_bits; ++pos) {
+            EXPECT_EQ(madoca::getbitu(buff.data(), pos, len),
+                      libgnss::external::madocalib_oracle::getbitu(buff.data(), pos, len))
+                << "getbitu pos=" << pos << " len=" << len;
+            EXPECT_EQ(madoca::getbits(buff.data(), pos, len),
+                      libgnss::external::madocalib_oracle::getbits(buff.data(), pos, len))
+                << "getbits pos=" << pos << " len=" << len;
+        }
+    }
+}
+
 #else
 
 TEST(MadocaParityDefault, OracleDisabledInDefaultBuild) {
