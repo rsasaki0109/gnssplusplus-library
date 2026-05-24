@@ -1929,6 +1929,23 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         }
 
         const Ephemeris* eph = nav.getEphemeris(sat, obs.time);
+
+        // Drop satellites broadcasting an unhealthy status, mirroring RTKLIB
+        // satexclude(): QZSS masks its LEX (L6) signal-health bit (bit 0); any
+        // other set health bit, or any nonzero health on the remaining systems,
+        // excludes the satellite from the PPP measurement update. The MIZU BRDC
+        // nav carries unhealthy R11/R26/R27, E14/E18 and several BDS GEO/IGSO
+        // whose stale broadcast orbits otherwise drive the filter kilometers off.
+        if (eph != nullptr) {
+            int sv_health = static_cast<int>(eph->health);
+            if (sat.system == GNSSSystem::QZSS) {
+                sv_health &= 0xFE;
+            }
+            if (sv_health != 0) {
+                continue;
+            }
+        }
+
         IonosphereFreeObs entry;
         entry.satellite = sat;
 
