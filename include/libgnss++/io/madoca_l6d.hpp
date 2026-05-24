@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 
 #include <libgnss++/io/madoca_l6.hpp>  // MadocaGtime
 
@@ -64,6 +65,10 @@ public:
     const MadocaIonoRegion& region() const { return re_; }
     int regionId() const { return rid_; }
 
+    // Epoch on the primary (PRN-200) channel, mirroring MADOCALIB _miono[0].gt:
+    // the staleness gate consumed by MadocaIonoStore::getCorr / miono_get_corr.
+    const MadocaGtime& decodeTime() const { return channels_[0].gt; }
+
     // Mirror postpos.c update_qzssl6d() reset of the scratch region between
     // messages: clear rvalid and every area's avalid plus per-sat t0.time.
     void clearRegionAfterUse();
@@ -95,6 +100,52 @@ private:
     ChannelState channels_[kMaxPrn];
     MadocaIonoRegion re_;               // decoded scratch region (mdcl6d.re)
     int rid_ = 0;                       // decoded region ID (mdcl6d.rid)
+};
+
+// Per-satellite materialized L1 ionospheric correction for a receiver position,
+// mirroring RTKLIB pppiono_corr_t plus the selected region/area. Produced by
+// MadocaIonoStore::getCorr.
+struct MadocaIonoCorr {
+    static constexpr int kMaxSat = 221;  // RTKLIB MAXSAT (linked build)
+
+    MadocaGtime t0[kMaxSat];   // per-satellite correction time (time==0: absent)
+    double dly[kMaxSat] = {};  // L1 slant ionospheric delay (m)
+    double std[kMaxSat] = {};  // L1 slant delay standard deviation (m)
+    int rid = -1;              // selected region ID
+    int anum = 0;              // selected area number
+};
+
+// Persistent MADOCA-PPP L6D ionospheric region store plus the area-selection and
+// STEC delay/std applier. Mirrors the RTKLIB pppiono_t region table: update()
+// persists a freshly decoded region (mirroring postpos.c update_qzssl6d), and
+// getCorr() mirrors miono_get_corr() — selecting the nearest valid area for a
+// receiver ECEF position and materializing per-satellite L1 slant delay/std/time.
+// The 256-slot region array is held sparsely (only used region IDs allocate).
+class MadocaIonoStore {
+public:
+    static constexpr int kMaxRid = 256;  // MIONO_MAX_RID
+
+    // Persist a decoded region into slot rid (0..kMaxRid-1). Out-of-range rid is
+    // ignored. Mirrors update_qzssl6d: navs.pppiono.re[rid] = mdcl6d.re.
+    void update(int rid, const MadocaIonoRegion& region);
+
+    // Mirror miono_get_corr(): given receiver ECEF rr and the decoder epoch
+    // (decode_time mirrors _miono[0].gt, the staleness gate), select the nearest
+    // valid area and materialize out. Returns 1 when a correction was produced,
+    // 0 otherwise. The L1 carrier frequency follows RTKLIB sat2freq(sat,CODE_L1C):
+    // 1575.42 MHz for GPS/Galileo/QZSS/BeiDou. GLONASS is FCN-dependent; pass
+    // gloFreqHz[sat-1] (Hz) to supply it, otherwise GLONASS delays are left at 0.
+    int getCorr(const double rr[3], const MadocaGtime& decode_time,
+                MadocaIonoCorr& out, const double* gloFreqHz = nullptr) const;
+
+    // Clear the persistent region store.
+    void reset();
+
+private:
+    const MadocaIonoArea* selectArea(const double rr[3], const double ll[2],
+                                     int* rid, int* anum) const;
+
+    std::map<int, MadocaIonoRegion> re_;  // sparse pppiono.re[MIONO_MAX_RID]
 };
 
 }  // namespace libgnss::io

@@ -268,4 +268,95 @@ void l6dDestroy(void* handle) {
 #endif
 }
 
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+namespace {
+
+// Decoder control struct plus the persistent navigation store. nav_t embeds the
+// 256-slot pppiono region table (~131 MB), so the pair is heap-allocated.
+struct L6dApp {
+    mdcl6d_t mdcl6d{};
+    nav_t nav{};
+};
+
+}  // namespace
+#endif
+
+void* l6dAppCreate(const double ep[6]) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    L6dApp* app = new L6dApp{};
+    app->mdcl6d.nbyte = 0;
+    app->mdcl6d.opt[0] = '\0';
+    clearMdcl6dRegion(&app->mdcl6d);  // mirror init_mdcl6d()
+    double e[6] = {ep[0], ep[1], ep[2], ep[3], ep[4], ep[5]};
+    init_miono(epoch2time(e));  // GPS week determination only
+    return app;
+#else
+    (void)ep;
+    return nullptr;
+#endif
+}
+
+int l6dAppInputByte(void* handle, std::uint8_t data) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    if (handle == nullptr) {
+        return 0;
+    }
+    L6dApp* app = reinterpret_cast<L6dApp*>(handle);
+    const int ret = ::input_qzssl6d(&app->mdcl6d, data);
+    if (ret == 10 && app->mdcl6d.re.rvalid) {
+        // Mirror postpos.c update_qzssl6d: persist the region then reset scratch.
+        app->nav.pppiono.re[app->mdcl6d.rid] = app->mdcl6d.re;
+        app->mdcl6d.re.rvalid = 0;
+        for (int a = 0; a < MIONO_MAX_ANUM; ++a) {
+            app->mdcl6d.re.area[a].avalid = 0;
+            for (int s = 0; s < MAXSAT; ++s) {
+                app->mdcl6d.re.area[a].sat[s].t0.time = 0;
+            }
+        }
+    }
+    return ret;
+#else
+    (void)handle;
+    (void)data;
+    return 0;
+#endif
+}
+
+int l6dAppGetCorr(void* handle, const double rr[3],
+                  libgnss::io::MadocaIonoCorr* out) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    if (handle == nullptr || out == nullptr) {
+        return 0;
+    }
+    L6dApp* app = reinterpret_cast<L6dApp*>(handle);
+    const int ret = ::miono_get_corr(rr, &app->nav);
+    out->rid = app->nav.pppiono.rid;
+    out->anum = app->nav.pppiono.anum;
+    const int n = (MAXSAT < libgnss::io::MadocaIonoCorr::kMaxSat)
+                      ? MAXSAT
+                      : libgnss::io::MadocaIonoCorr::kMaxSat;
+    for (int i = 0; i < n; ++i) {
+        out->t0[i].time =
+            static_cast<std::int64_t>(app->nav.pppiono.corr.t0[i].time);
+        out->t0[i].sec = app->nav.pppiono.corr.t0[i].sec;
+        out->dly[i] = app->nav.pppiono.corr.dly[i];
+        out->std[i] = app->nav.pppiono.corr.std[i];
+    }
+    return ret;
+#else
+    (void)handle;
+    (void)rr;
+    (void)out;
+    return 0;
+#endif
+}
+
+void l6dAppDestroy(void* handle) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    delete reinterpret_cast<L6dApp*>(handle);
+#else
+    (void)handle;
+#endif
+}
+
 }  // namespace libgnss::external::madocalib_oracle
