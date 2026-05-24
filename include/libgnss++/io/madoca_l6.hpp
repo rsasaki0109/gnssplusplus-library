@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace libgnss {
 class SSRProducts;
@@ -129,5 +131,14 @@ std::uint8_t madocaBiasCodeToRtcmSsrId(libgnss::GNSSSystem system, int code);
 // (existing products are kept). Returns the number of satellites added.
 int madocaL6eSnapshotToProducts(const MadocaL6eDecoder& decoder,
                                 libgnss::SSRProducts& products);
+
+// Decode one or more MADOCA L6E files into a time series of SSR products,
+// driving the decoder byte-for-byte and snapshotting each satellite whenever
+// its orbit or clock correction epoch advances. gps_week seeds the decoder's
+// week-rollover (a mid-week reference epoch is used; <=0 falls back to the
+// sample epoch). Orbit deltas are RAC. Returns the number of samples appended.
+int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
+                                   int gps_week,
+                                   libgnss::SSRProducts& products);
 
 }  // namespace libgnss::io

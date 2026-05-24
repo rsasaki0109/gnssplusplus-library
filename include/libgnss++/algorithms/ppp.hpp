@@ -75,6 +75,16 @@ public:
     bool loadL6Products(const std::string& l6_file);
 
     /**
+     * @brief Load native MADOCA L6E SSR products from one or more L6E channel
+     * files (e.g. PRN 204 and 206). Decodes the MADOCA Compact SSR stream into
+     * the SSR product time series (RAC orbit deltas, clock c0, code/phase
+     * biases) for the standard PPP path. The GPS week comes from
+     * @c l6_gps_week or the latest observation. Returns true if corrections
+     * were produced. Distinct from loadL6Products (CLAS-oriented decoder).
+     */
+    bool loadMadocaL6Products(const std::vector<std::string>& l6_files);
+
+    /**
      * @brief Load IONEX ionosphere products for future PPP hooks.
      */
     bool loadIONEXProducts(const std::string& ionex_file);
