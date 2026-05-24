@@ -63,6 +63,7 @@ struct Options {
     bool apply_static_anchor_blend = false;
     bool enable_ar = false;
     double ar_ratio_threshold = 3.0;
+    std::string ar_method = "iflc";
     bool use_iers_solid_tide = true;
     bool use_iers_ocean_loading = false;
     std::string eop_c04_file;
@@ -152,6 +153,7 @@ void printUsage(const char* program_name) {
         << "  --disable-ar            Disable PPP ambiguity fixing (default)\n"
         << "  --ar-ratio-threshold <value>\n"
         << "                          Ratio threshold for PPP ambiguity fixing (default: 3.0)\n"
+        << "  --ar-method <name>      AR method: iflc, wlnl, per-freq (default: iflc)\n"
         << "  --use-iers-solid-tide   Use the IERS Conventions 2010 (Dehant) Step-1+Step-2\n"
         << "                          solid-earth-tide model via libgnss::iers (default).\n"
         << "                          See docs/iers-integration-plan.md\n"
@@ -321,6 +323,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.enable_ar = false;
         } else if (arg == "--ar-ratio-threshold" && i + 1 < argc) {
             options.ar_ratio_threshold = std::stod(argv[++i]);
+        } else if (arg == "--ar-method" && i + 1 < argc) {
+            options.ar_method = argv[++i];
         } else if (arg == "--use-iers-solid-tide") {
             options.use_iers_solid_tide = true;
         } else if (arg == "--no-iers-solid-tide") {
@@ -828,6 +832,16 @@ int main(int argc, char* argv[]) {
         ppp_config.enable_ambiguity_resolution = options.enable_ar;
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
+        using ARMethod = libgnss::PPPProcessor::PPPConfig::ARMethod;
+        if (options.ar_method == "iflc") {
+            ppp_config.ar_method = ARMethod::DD_IFLC;
+        } else if (options.ar_method == "wlnl") {
+            ppp_config.ar_method = ARMethod::DD_WLNL;
+        } else if (options.ar_method == "per-freq") {
+            ppp_config.ar_method = ARMethod::DD_PER_FREQ;
+        } else {
+            argumentError("--ar-method must be one of: iflc, wlnl, per-freq", argv[0]);
+        }
         ppp_config.use_iers_solid_tide = options.use_iers_solid_tide;
         ppp_config.use_iers_ocean_loading = options.use_iers_ocean_loading;
         ppp_config.eop_path = options.eop_c04_file;

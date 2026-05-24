@@ -381,6 +381,11 @@ private:
      */
     bool resolveAmbiguities(const ObservationData& obs, const NavigationData& nav);
     bool resolveAmbiguitiesWLNL(const ObservationData& obs, const NavigationData& nav);
+    // Decoupled ionosphere-free PPP-AR (CNES/Laurichesse-style): recovers the
+    // narrow-lane integer N1 from the IFLC ambiguity state plus the
+    // Melbourne-Wubbena wide-lane integer, then applies the fixed N1 double
+    // differences as a Kalman pseudo-measurement on the IFLC ambiguity states.
+    bool resolveAmbiguitiesDecoupledIf(const ObservationData& obs, const NavigationData& nav);
     std::map<SatelliteId, OSRCorrection> computeWlnlOsrCorrections(
         const ObservationData& obs,
         const NavigationData& nav,

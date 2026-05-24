@@ -111,6 +111,11 @@ WlnlWideLaneFixSummary applyWideLaneFixes(
         const int wl_int = static_cast<int>(std::round(mw_mean));
         const double frac = mw_mean - wl_int;
         if (std::abs(frac) >= 0.25) {
+            if (debug_enabled) {
+                std::cerr << "[PPP-WLREJ] " << satellite.toString()
+                          << " mw_mean=" << mw_mean << " frac=" << frac
+                          << " count=" << ambiguity.mw_count << "\n";
+            }
             continue;
         }
 
