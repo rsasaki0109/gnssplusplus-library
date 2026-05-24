@@ -1,8 +1,11 @@
 #include <libgnss++/io/madoca_l6.hpp>
 
 #include <libgnss++/algorithms/madoca_parity.hpp>
+#include <libgnss++/core/navigation.hpp>
+#include <libgnss++/core/types.hpp>
 
 #include <cmath>
+#include <cstdint>
 
 namespace libgnss::io {
 namespace {
@@ -659,6 +662,144 @@ int MadocaL6eDecoder::inputByte(std::uint8_t data) {
 
     nbyte_ = 0;
     return decodeL6eMessage();
+}
+
+namespace {
+
+namespace mpc = libgnss::algorithms::madoca_parity;
+
+// MADOCA-PPP GNSS system constant (madoca_parity kSys*) to native enum.
+libgnss::GNSSSystem mpSysToGnss(int mpsys) {
+    switch (mpsys) {
+        case mpc::kSysGps: return libgnss::GNSSSystem::GPS;
+        case mpc::kSysGlo: return libgnss::GNSSSystem::GLONASS;
+        case mpc::kSysGal: return libgnss::GNSSSystem::Galileo;
+        case mpc::kSysQzs: return libgnss::GNSSSystem::QZSS;
+        case mpc::kSysCmp: return libgnss::GNSSSystem::BeiDou;
+        default: return libgnss::GNSSSystem::UNKNOWN;
+    }
+}
+
+}  // namespace
+
+std::uint8_t madocaBiasCodeToRtcmSsrId(libgnss::GNSSSystem system, int code) {
+    using libgnss::GNSSSystem;
+    switch (system) {
+        case GNSSSystem::GPS:
+            switch (code) {
+                case mpc::kCodeL1C: return 2;                      // L1 C/A
+                case mpc::kCodeL1P: case mpc::kCodeL1W: return 3;  // L1 P(Y)
+                case mpc::kCodeL2S: case mpc::kCodeL2L:
+                case mpc::kCodeL2X: return 8;                      // L2C
+                case mpc::kCodeL2P: case mpc::kCodeL2W: return 9;  // L2 P(Y)
+                case mpc::kCodeL5I: case mpc::kCodeL5Q:
+                case mpc::kCodeL5X: return 22;                     // L5
+            }
+            break;
+        case GNSSSystem::GLONASS:
+            switch (code) {
+                case mpc::kCodeL1C: return 2;   // G1 C/A
+                case mpc::kCodeL1P: return 3;   // G1 P
+                case mpc::kCodeL2C: return 8;   // G2 C/A
+                case mpc::kCodeL2P: return 9;   // G2 P
+            }
+            break;
+        case GNSSSystem::Galileo:
+            switch (code) {
+                case mpc::kCodeL1C: case mpc::kCodeL1B:
+                case mpc::kCodeL1X: return 2;   // E1
+                case mpc::kCodeL6B: case mpc::kCodeL6C:
+                case mpc::kCodeL6X: return 8;   // E6
+                case mpc::kCodeL7I: case mpc::kCodeL7Q:
+                case mpc::kCodeL7X: return 14;  // E5b
+                case mpc::kCodeL5I: case mpc::kCodeL5Q:
+                case mpc::kCodeL5X: return 22;  // E5a
+            }
+            break;
+        case GNSSSystem::BeiDou:
+            switch (code) {
+                case mpc::kCodeL2I: case mpc::kCodeL2Q:
+                case mpc::kCodeL2X: return 2;   // B1I
+                case mpc::kCodeL6I: case mpc::kCodeL6Q:
+                case mpc::kCodeL6X: return 8;   // B3I
+                case mpc::kCodeL7I: case mpc::kCodeL7Q:
+                case mpc::kCodeL7X: return 14;  // B2I
+            }
+            break;
+        case GNSSSystem::QZSS:
+            switch (code) {
+                case mpc::kCodeL1C: return 2;   // L1 C/A
+                case mpc::kCodeL2S: case mpc::kCodeL2L:
+                case mpc::kCodeL2X: return 8;   // L2C
+                case mpc::kCodeL5I: case mpc::kCodeL5Q:
+                case mpc::kCodeL5X: return 22;  // L5
+            }
+            break;
+        default:
+            break;
+    }
+    return 0;
+}
+
+int madocaL6eSnapshotToProducts(const MadocaL6eDecoder& decoder,
+                                libgnss::SSRProducts& products) {
+    products.setOrbitCorrectionsAreRac(true);
+    int added = 0;
+    for (int sat = 1; sat <= MadocaL6eDecoder::kMaxSat; ++sat) {
+        const MadocaSsrCorrection& c = decoder.correction(sat);
+        const bool has_orbit = c.t0[0].time != 0;  // t0[eph]
+        const bool has_clock = c.t0[1].time != 0;  // t0[clk]
+        if (!has_orbit && !has_clock) {
+            continue;
+        }
+        int prn = 0;
+        const libgnss::GNSSSystem gsys = mpSysToGnss(mpc::satsys(sat, &prn));
+        if (gsys == libgnss::GNSSSystem::UNKNOWN || prn <= 0) {
+            continue;
+        }
+
+        libgnss::SSROrbitClockCorrection corr;
+        corr.satellite =
+            libgnss::SatelliteId(gsys, static_cast<std::uint8_t>(prn));
+
+        // Validity epoch: prefer the clock t0, falling back to the orbit t0.
+        const MadocaGtime& t0 = has_clock ? c.t0[1] : c.t0[0];
+        int week = 0;
+        const double tow = time2gpst(t0, &week);
+        corr.time = libgnss::GNSSTime(week, tow);
+
+        if (has_orbit) {
+            corr.orbit_correction_ecef =
+                libgnss::Vector3d(c.deph[0], c.deph[1], c.deph[2]);  // RAC
+            corr.orbit_valid = true;
+        }
+        if (has_clock) {
+            corr.clock_correction_m = c.dclk[0];  // c0 polynomial term
+            corr.clock_valid = true;
+        }
+
+        for (int k = 0; k < MadocaSsrCorrection::kMaxCode; ++k) {
+            const int code = k + 1;  // cbias/pbias are held by CODE_*-1
+            if (c.vcbias[k]) {
+                const std::uint8_t id = madocaBiasCodeToRtcmSsrId(gsys, code);
+                if (id > 0) {
+                    corr.code_bias_m[id] = c.cbias[k];
+                }
+            }
+            if (c.vpbias[k]) {
+                const std::uint8_t id = madocaBiasCodeToRtcmSsrId(gsys, code);
+                if (id > 0) {
+                    corr.phase_bias_m[id] = c.pbias[k];
+                }
+            }
+        }
+        corr.code_bias_valid = !corr.code_bias_m.empty();
+        corr.phase_bias_valid = !corr.phase_bias_m.empty();
+
+        products.addCorrection(corr);
+        ++added;
+    }
+    return added;
 }
 
 }  // namespace libgnss::io

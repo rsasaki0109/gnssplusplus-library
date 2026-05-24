@@ -2,6 +2,11 @@
 
 #include <cstdint>
 
+namespace libgnss {
+class SSRProducts;
+enum class GNSSSystem : std::uint8_t;
+}  // namespace libgnss
+
 namespace libgnss::io {
 
 // GPST instant in RTKLIB gtime_t form: integer seconds since 1970 plus a
@@ -108,5 +113,21 @@ private:
     ChannelState channels_[kMaxPrn];
     MadocaSsrCorrection ssr_[kMaxSat];
 };
+
+// Map a MADOCA Compact SSR bias code (an RTKLIB CODE_* enum value, i.e. the
+// 1-based index used by MadocaSsrCorrection::cbias/pbias) to the RTCM SSR signal
+// id that keys SSRProducts code/phase biases (see core/signals.hpp
+// rtcmSsrSignalId). Returns 0 when the code has no native RTCM SSR id for the
+// system. Only the per-band representative codes emitted by mcssr_sel_biascode
+// are mapped, so distinct codes never collide on one id.
+std::uint8_t madocaBiasCodeToRtcmSsrId(libgnss::GNSSSystem system, int code);
+
+// Convert the decoder's current per-satellite Compact SSR snapshot into native
+// SSR products: RAC orbit deltas (the products' RAC flag is set), the clock c0
+// term (m), and code/phase biases re-keyed from RTKLIB CODE_* to RTCM SSR ids,
+// each time-stamped from the clock t0 (GPS week/tow). Corrections are appended
+// (existing products are kept). Returns the number of satellites added.
+int madocaL6eSnapshotToProducts(const MadocaL6eDecoder& decoder,
+                                libgnss::SSRProducts& products);
 
 }  // namespace libgnss::io
