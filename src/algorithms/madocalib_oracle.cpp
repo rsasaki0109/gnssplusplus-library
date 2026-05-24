@@ -162,4 +162,110 @@ int decodeQzssL6eFile(const char* path, libgnss::io::MadocaSsrCorrection* out,
 #endif
 }
 
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+namespace {
+
+// Mirror postpos.c init_mdcl6d()/update_qzssl6d() reset of the scratch region.
+void clearMdcl6dRegion(mdcl6d_t* m) {
+    m->re.rvalid = 0;
+    for (int a = 0; a < MIONO_MAX_ANUM; ++a) {
+        m->re.area[a].avalid = 0;
+        for (int s = 0; s < MAXSAT; ++s) {
+            m->re.area[a].sat[s].t0.time = 0;
+        }
+    }
+}
+
+}  // namespace
+#endif
+
+void* l6dCreate(const double ep[6]) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    mdcl6d_t* m = new mdcl6d_t{};
+    m->nbyte = 0;
+    m->opt[0] = '\0';
+    clearMdcl6dRegion(m);  // mirror init_mdcl6d()
+    double e[6] = {ep[0], ep[1], ep[2], ep[3], ep[4], ep[5]};
+    init_miono(epoch2time(e));  // GPS week determination only
+    return m;
+#else
+    (void)ep;
+    return nullptr;
+#endif
+}
+
+int l6dInputByte(void* handle, std::uint8_t data) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    if (handle == nullptr) {
+        return 0;
+    }
+    return ::input_qzssl6d(reinterpret_cast<mdcl6d_t*>(handle), data);
+#else
+    (void)handle;
+    (void)data;
+    return 0;
+#endif
+}
+
+void l6dRegion(void* handle, libgnss::io::MadocaIonoRegion* out, int* rid) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    if (handle == nullptr || out == nullptr) {
+        return;
+    }
+    using Region = libgnss::io::MadocaIonoRegion;
+    using Area = libgnss::io::MadocaIonoArea;
+    const mdcl6d_t* m = reinterpret_cast<const mdcl6d_t*>(handle);
+    const miono_region_t& re = m->re;
+    out->rvalid = re.rvalid;
+    out->ralert = re.ralert;
+    out->narea = re.narea;
+    const int na = (MIONO_MAX_ANUM < Region::kMaxArea) ? MIONO_MAX_ANUM : Region::kMaxArea;
+    for (int a = 0; a < na; ++a) {
+        const miono_area_t& ga = re.area[a];
+        Area& oa = out->area[a];
+        oa.avalid = ga.avalid;
+        oa.sid = ga.sid;
+        oa.type = ga.type;
+        oa.ref[0] = ga.ref[0];
+        oa.ref[1] = ga.ref[1];
+        oa.span[0] = ga.span[0];
+        oa.span[1] = ga.span[1];
+        const int nsat = (MAXSAT < Area::kMaxSat) ? MAXSAT : Area::kMaxSat;
+        for (int s = 0; s < nsat; ++s) {
+            oa.sat[s].t0.time = static_cast<std::int64_t>(ga.sat[s].t0.time);
+            oa.sat[s].t0.sec = ga.sat[s].t0.sec;
+            oa.sat[s].sqi = ga.sat[s].sqi;
+            for (int k = 0; k < 6; ++k) {
+                oa.sat[s].coef[k] = ga.sat[s].coef[k];
+            }
+        }
+    }
+    if (rid != nullptr) {
+        *rid = m->rid;
+    }
+#else
+    (void)handle;
+    (void)out;
+    (void)rid;
+#endif
+}
+
+void l6dClearRegion(void* handle) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    if (handle != nullptr) {
+        clearMdcl6dRegion(reinterpret_cast<mdcl6d_t*>(handle));
+    }
+#else
+    (void)handle;
+#endif
+}
+
+void l6dDestroy(void* handle) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    delete reinterpret_cast<mdcl6d_t*>(handle);
+#else
+    (void)handle;
+#endif
+}
+
 }  // namespace libgnss::external::madocalib_oracle

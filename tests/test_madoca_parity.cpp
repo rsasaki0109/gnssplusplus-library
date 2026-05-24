@@ -5,10 +5,12 @@
 #include <libgnss++/external/madocalib_bridge.hpp>
 #include <libgnss++/external/madocalib_oracle.hpp>
 #include <libgnss++/io/madoca_l6.hpp>
+#include <libgnss++/io/madoca_l6d.hpp>
 
 #include <cmath>
 #include <cstdint>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -275,6 +277,90 @@ TEST_F(MadocaParity, L6eDecodeMatchesOracleSsr) {
         }
     }
     EXPECT_EQ(native_updates, oracle_count) << "satellite update count mismatch";
+}
+
+TEST_F(MadocaParity, L6dDecodeMatchesOracleRegion) {
+    // Decode the public PRN-200 L6D (wide area ionosphere) channel with both the
+    // native decoder and MADOCALIB, stepping byte-for-byte. After every fully
+    // assembled message compare the decoded region: rid, rvalid/ralert/narea,
+    // and per-area shape/reference/span plus per-satellite STEC coefficients,
+    // quality and correction time.
+    const std::string root = libgnss::external::madocalib::defaultRootDir();
+    if (root.empty()) {
+        GTEST_SKIP() << "MADOCALIB root unavailable";
+    }
+    const std::string l6_path =
+        root + "/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.200.l6";
+
+    std::ifstream in(l6_path, std::ios::binary);
+    if (!in) {
+        GTEST_SKIP() << "L6D sample missing: " << l6_path;
+    }
+    const std::vector<std::uint8_t> bytes(
+        (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    ASSERT_FALSE(bytes.empty());
+
+    const double ref_ep[6] = {2025.0, 4.0, 1.0, 0.0, 0.0, 0.0};
+    auto native = std::make_unique<libgnss::io::MadocaL6dDecoder>();
+    native->setReferenceEpoch(ref_ep);  // match the oracle's init_miono seed
+    void* oracle = libgnss::external::madocalib_oracle::l6dCreate(ref_ep);
+    ASSERT_NE(oracle, nullptr);
+    auto oracle_region = std::make_unique<libgnss::io::MadocaIonoRegion>();
+
+    using Region = libgnss::io::MadocaIonoRegion;
+    using Area = libgnss::io::MadocaIonoArea;
+    int messages = 0;
+    int area_checks = 0;
+    for (std::uint8_t b : bytes) {
+        const int rn = native->inputByte(b);
+        const int ro = libgnss::external::madocalib_oracle::l6dInputByte(oracle, b);
+        ASSERT_EQ(rn, ro) << "return code mismatch after message " << messages;
+        if (rn != 10) {
+            continue;
+        }
+        ++messages;
+        int orid = -1;
+        libgnss::external::madocalib_oracle::l6dRegion(oracle, oracle_region.get(), &orid);
+        const Region& n = native->region();
+        const Region& o = *oracle_region;
+        EXPECT_EQ(native->regionId(), orid) << "msg " << messages << " rid";
+        EXPECT_EQ(n.rvalid, o.rvalid) << "msg " << messages << " rvalid";
+        EXPECT_EQ(n.ralert, o.ralert) << "msg " << messages << " ralert";
+        EXPECT_EQ(n.narea, o.narea) << "msg " << messages << " narea";
+        for (int a = 0; a < Region::kMaxArea; ++a) {
+            const Area& na = n.area[a];
+            const Area& oa = o.area[a];
+            EXPECT_EQ(na.avalid, oa.avalid) << "msg " << messages << " area " << a << " avalid";
+            EXPECT_EQ(na.sid, oa.sid) << "msg " << messages << " area " << a << " sid";
+            EXPECT_EQ(na.type, oa.type) << "msg " << messages << " area " << a << " type";
+            for (int k = 0; k < 2; ++k) {
+                EXPECT_DOUBLE_EQ(na.ref[k], oa.ref[k]) << "msg " << messages << " area " << a << " ref[" << k << "]";
+                EXPECT_DOUBLE_EQ(na.span[k], oa.span[k]) << "msg " << messages << " area " << a << " span[" << k << "]";
+            }
+            if (!na.avalid && !oa.avalid) {
+                continue;
+            }
+            ++area_checks;
+            for (int s = 0; s < Area::kMaxSat; ++s) {
+                const auto& ns = na.sat[s];
+                const auto& os = oa.sat[s];
+                EXPECT_EQ(ns.t0.time, os.t0.time) << "msg " << messages << " area " << a << " sat " << (s + 1) << " t0.time";
+                EXPECT_DOUBLE_EQ(ns.t0.sec, os.t0.sec) << "msg " << messages << " area " << a << " sat " << (s + 1) << " t0.sec";
+                if (ns.t0.time == 0 && os.t0.time == 0) {
+                    continue;
+                }
+                EXPECT_EQ(ns.sqi, os.sqi) << "msg " << messages << " area " << a << " sat " << (s + 1) << " sqi";
+                for (int k = 0; k < 6; ++k) {
+                    EXPECT_DOUBLE_EQ(ns.coef[k], os.coef[k]) << "msg " << messages << " area " << a << " sat " << (s + 1) << " coef[" << k << "]";
+                }
+            }
+        }
+        native->clearRegionAfterUse();
+        libgnss::external::madocalib_oracle::l6dClearRegion(oracle);
+    }
+    libgnss::external::madocalib_oracle::l6dDestroy(oracle);
+    EXPECT_GT(messages, 0) << "no L6D messages decoded";
+    EXPECT_GT(area_checks, 0) << "no valid STEC areas decoded";
 }
 
 TEST_F(MadocaParity, GetbitBitExtraction) {
