@@ -625,14 +625,22 @@ bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) 
     }
     else if (label.find("SYS / # / OBS TYPES") != std::string::npos) {
         // RINEX 3: Per-system observation types
-        // Format: "G    4 C1C L1C C2X L2X" (system char at pos 0, count at pos 3-6, types at pos 7+)
+        // Format: "G   22 C1C L1C C2X L2X ..." (system char at pos 0, count at
+        // pos 3-6, types at pos 7+, up to 13 types per line). When a system has
+        // more than 13 types, the remainder continue on following lines whose
+        // system column is blank.
         char sys_char = line[0];
         if (sys_char != ' ') {
-            // First line for this system
-            int num_types = std::stoi(line.substr(3, 3));
-            std::vector<std::string> types;
-            // Parse types from this line (up to 13 per line, 4 chars each starting at pos 7)
-            for (int i = 0; i < num_types && i < 13; ++i) {
+            // First line for this system.
+            obs_type_sys_ = sys_char;
+            obs_type_expected_ = std::stoi(line.substr(3, 3));
+            header.system_obs_types[sys_char] = {};
+        }
+        // Append types from this line (first or continuation) to the system
+        // currently being parsed. Up to 13 types per line, 4 chars each at pos 7.
+        if (obs_type_sys_ != ' ') {
+            std::vector<std::string>& types = header.system_obs_types[obs_type_sys_];
+            for (int i = 0; i < 13 && static_cast<int>(types.size()) < obs_type_expected_; ++i) {
                 size_t pos = 7 + i * 4;
                 if (pos + 3 <= line.length()) {
                     std::string obs_type = line.substr(pos, 3);
@@ -643,11 +651,16 @@ bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) 
                     }
                 }
             }
-            header.system_obs_types[sys_char] = types;
 
-            // Also populate the generic observation_types with GPS types for backward compat
-            if (sys_char == 'G') {
+            // Mirror the GPS type list into the generic observation_types for
+            // backward compatibility, and clear the in-progress marker once the
+            // expected count has been reached.
+            if (obs_type_sys_ == 'G') {
                 header.observation_types = types;
+            }
+            if (static_cast<int>(types.size()) >= obs_type_expected_) {
+                obs_type_sys_ = ' ';
+                obs_type_expected_ = 0;
             }
         }
     }
