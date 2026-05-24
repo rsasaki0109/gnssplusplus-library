@@ -6,6 +6,7 @@
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/iers/earth_rotation.hpp>
 #include <libgnss++/iers/ephemeris.hpp>
@@ -1925,6 +1926,15 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
     for (const auto& sat : obs.getSatellites()) {
         const Observation* primary = findObservationForSignals(obs, sat, primarySignals(sat.system));
         if (primary == nullptr) {
+            continue;
+        }
+
+        // BeiDou GEO satellites (C01-C05, C59-C63) need the special geostationary
+        // orbit propagation the broadcast model does not yet implement; their
+        // computed ranges are off by hundreds of metres to tens of kilometres
+        // (e.g. C59 ~270 km on the MIZU sample), which destabilises the filter.
+        // SPP already gates them (spp.cpp validateObservations); mirror that here.
+        if (signal_policy::isBeiDouGeoSatellite(sat)) {
             continue;
         }
 
