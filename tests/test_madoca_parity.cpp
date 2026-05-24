@@ -4,8 +4,11 @@
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/external/madocalib_bridge.hpp>
 #include <libgnss++/external/madocalib_oracle.hpp>
+#include <libgnss++/io/madoca_l6.hpp>
 
 #include <cmath>
+#include <cstdint>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -205,6 +208,69 @@ TEST_F(MadocaParity, McssrSelBiascodeApplicableSignals) {
                 << "sys=" << sys << " code=" << code;
         }
     }
+}
+
+TEST_F(MadocaParity, L6eDecodeMatchesOracleSsr) {
+    // Decode the public MIZU-scenario L6E channel (PRN 204) with both the
+    // native decoder and MADOCALIB, then compare every per-satellite SSR
+    // correction value field. Epoch-time (t0) parity is out of scope here.
+    const std::string root = libgnss::external::madocalib::defaultRootDir();
+    if (root.empty()) {
+        GTEST_SKIP() << "MADOCALIB root unavailable";
+    }
+    const std::string l6_path =
+        root + "/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.204.l6";
+
+    std::ifstream in(l6_path, std::ios::binary);
+    if (!in) {
+        GTEST_SKIP() << "L6E sample missing: " << l6_path;
+    }
+    const std::vector<std::uint8_t> bytes(
+        (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    ASSERT_FALSE(bytes.empty());
+
+    libgnss::io::MadocaL6eDecoder decoder;
+    int native_updates = 0;
+    for (std::uint8_t b : bytes) {
+        decoder.inputByte(b);
+    }
+
+    constexpr int kMaxSat = libgnss::io::MadocaL6eDecoder::kMaxSat;
+    std::vector<libgnss::io::MadocaSsrCorrection> oracle(kMaxSat);
+    const int oracle_count = libgnss::external::madocalib_oracle::decodeQzssL6eFile(
+        l6_path.c_str(), oracle.data(), kMaxSat);
+    ASSERT_GT(oracle_count, 0) << "oracle produced no SSR corrections";
+
+    using Correction = libgnss::io::MadocaSsrCorrection;
+    for (int sat = 1; sat <= kMaxSat; ++sat) {
+        const Correction& n = decoder.correction(sat);
+        const Correction& o = oracle[sat - 1];
+        if (n.update) {
+            ++native_updates;
+        }
+        EXPECT_EQ(n.update, o.update) << "sat=" << sat << " update";
+        if (n.update == 0 && o.update == 0) {
+            continue;
+        }
+        EXPECT_EQ(n.iode, o.iode) << "sat=" << sat << " iode";
+        EXPECT_EQ(n.ura, o.ura) << "sat=" << sat << " ura";
+        for (int k = 0; k < 6; ++k) {
+            EXPECT_EQ(n.iod[k], o.iod[k]) << "sat=" << sat << " iod[" << k << "]";
+            EXPECT_DOUBLE_EQ(n.udi[k], o.udi[k]) << "sat=" << sat << " udi[" << k << "]";
+        }
+        for (int k = 0; k < 3; ++k) {
+            EXPECT_DOUBLE_EQ(n.deph[k], o.deph[k]) << "sat=" << sat << " deph[" << k << "]";
+            EXPECT_DOUBLE_EQ(n.dclk[k], o.dclk[k]) << "sat=" << sat << " dclk[" << k << "]";
+        }
+        for (int k = 0; k < Correction::kMaxCode; ++k) {
+            EXPECT_FLOAT_EQ(n.cbias[k], o.cbias[k]) << "sat=" << sat << " cbias[" << k << "]";
+            EXPECT_EQ(n.vcbias[k], o.vcbias[k]) << "sat=" << sat << " vcbias[" << k << "]";
+            EXPECT_DOUBLE_EQ(n.pbias[k], o.pbias[k]) << "sat=" << sat << " pbias[" << k << "]";
+            EXPECT_EQ(n.vpbias[k], o.vpbias[k]) << "sat=" << sat << " vpbias[" << k << "]";
+            EXPECT_EQ(n.discnt[k], o.discnt[k]) << "sat=" << sat << " discnt[" << k << "]";
+        }
+    }
+    EXPECT_EQ(native_updates, oracle_count) << "satellite update count mismatch";
 }
 
 TEST_F(MadocaParity, GetbitBitExtraction) {
