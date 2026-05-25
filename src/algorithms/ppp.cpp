@@ -1687,10 +1687,18 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         if (filter_state_.bds_clock_index >= 0) filter_state_.bds_clock_index = isb_start++;
     }
 
-    // Reserve ionosphere states for visible satellites
+    // Reserve ionosphere states for visible satellites.
+    //
+    // In MADOCA per-frequency (est-stec, non-CLAS) mode the ionosphere states
+    // are allocated lazily and pruned, so every per-satellite state lives above
+    // amb_index. Skipping the fixed reservation here keeps the pruning/compaction
+    // re-indexing simple (it only touches indices >= amb_index).
+    const bool madoca_per_freq_est_stec =
+        ppp_config_.estimate_ionosphere && !ppp_config_.use_ionosphere_free &&
+        !ppp_config_.use_clas_osr_filter;
     int n_iono_states = 0;
     filter_state_.ionosphere_indices.clear();
-    if (ppp_config_.estimate_ionosphere) {
+    if (ppp_config_.estimate_ionosphere && !madoca_per_freq_est_stec) {
         filter_state_.iono_index = isb_start;
         for (const auto& sat : obs.getSatellites()) {
             filter_state_.ionosphere_indices[sat] = filter_state_.iono_index + n_iono_states;
@@ -1799,14 +1807,17 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
         Q(filter_state_.bds_clock_index, filter_state_.bds_clock_index) = clock_process_noise * dt;
     Q(filter_state_.trop_index, filter_state_.trop_index) =
         ppp_config_.process_noise_troposphere * dt;
+    // Ambiguity process noise for every appended state. Ionosphere states may
+    // be lazily appended above amb_index (est-stec), so apply the ionosphere
+    // process noise AFTERWARDS to overwrite those indices with the correct value.
+    for (int idx = filter_state_.amb_index; idx < filter_state_.total_states; ++idx) {
+        Q(idx, idx) = ppp_config_.process_noise_ambiguity * dt;
+    }
     // Ionosphere process noise
     if (ppp_config_.estimate_ionosphere) {
         for (const auto& [sat, idx] : filter_state_.ionosphere_indices) {
             Q(idx, idx) = ppp_config_.process_noise_ionosphere * dt;
         }
-    }
-    for (int idx = filter_state_.amb_index; idx < filter_state_.total_states; ++idx) {
-        Q(idx, idx) = ppp_config_.process_noise_ambiguity * dt;
     }
 
     filter_state_.covariance = F * filter_state_.covariance * F.transpose() + Q;
@@ -1847,6 +1858,16 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
 
     applyPreciseCorrections(if_obs, nav, obs.time);
     ensureAmbiguityStates(if_obs);
+    if (!ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
+        !ppp_config_.use_clas_osr_filter) {
+        std::set<SatelliteId> observed_now;
+        for (const auto& entry : if_obs) {
+            if (entry.valid && entry.has_carrier_phase) {
+                observed_now.insert(entry.satellite);
+            }
+        }
+        pruneStaleEstStecStates(observed_now);
+    }
     size_t valid_count = 0;
     for (const auto& entry : if_obs) {
         valid_count += entry.valid ? 1U : 0U;
@@ -1970,12 +1991,22 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             entry.primary_signal = primary->signal;
             entry.primary_code_bias_coeff = 1.0;
             entry.secondary_code_bias_coeff = 0.0;
+            // Per-frequency L1 raw observable (biases applied later in
+            // applyPreciseCorrections).
+            entry.pseudorange_l1 = primary->pseudorange;
+            entry.freq_l1 = signalFrequencyHz(primary->signal, eph);
+            entry.variance_pr_l1 = safeVariance(
+                ppp_config_.pseudorange_sigma * ppp_config_.pseudorange_sigma, 1e-6);
+            entry.variance_cp_l1 = safeVariance(
+                ppp_config_.carrier_phase_sigma * ppp_config_.carrier_phase_sigma, 1e-8);
             if (primary->has_carrier_phase) {
                 const double wavelength = signalWavelengthMeters(primary->signal, eph);
                 if (wavelength > 0.0) {
                     entry.carrier_phase_if = primary->carrier_phase * wavelength;
                     entry.ambiguity_scale_m = wavelength;
                     entry.has_carrier_phase = true;
+                    entry.carrier_phase_l1 = primary->carrier_phase * wavelength;
+                    entry.wavelength_l1 = wavelength;
                 }
             }
             entry.variance_pr = safeVariance(
@@ -1990,17 +2021,52 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         const Observation* secondary =
             findObservationForSignals(obs, sat, secondarySignals(sat.system));
 
-        // Per-frequency mode: skip IFLC formation, keep L1-only entry
-        // SSR corrections (orbit/clock/bias/iono) still applied below
+        // Per-frequency mode: carry BOTH L1 and L2 raw observables.
+        // SSR corrections (orbit/clock/bias/iono) still applied below.
         if (!ppp_config_.use_ionosphere_free) {
             if (secondary != nullptr) {
                 entry.secondary_signal = secondary->signal;
-                // Store secondary observation info for MW combination in AR
                 const double f1 = signalFrequencyHz(primary->signal, eph);
                 const double f2 = signalFrequencyHz(secondary->signal, eph);
                 if (f1 > 0.0 && f2 > 0.0) {
                     entry.primary_code_bias_coeff = 1.0;
                     entry.secondary_code_bias_coeff = 0.0;
+                    entry.freq_l2 = f2;
+                    entry.has_l2 = true;
+                    if (secondary->has_pseudorange &&
+                        std::isfinite(secondary->pseudorange)) {
+                        entry.pseudorange_l2 = secondary->pseudorange;
+                        entry.variance_pr_l2 = safeVariance(
+                            ppp_config_.pseudorange_sigma *
+                                ppp_config_.pseudorange_sigma,
+                            1e-6);
+                        // Geometry-free ionosphere seed in L1-equivalent meters:
+                        // (P1 - P2) / (1 - (f1/f2)^2). Positive STEC -> positive.
+                        if (entry.pseudorange_l1 != 0.0) {
+                            const double ratio = (f1 / f2);
+                            const double denom = 1.0 - ratio * ratio;
+                            if (std::abs(denom) > 1e-6) {
+                                entry.iono_init_m =
+                                    (entry.pseudorange_l1 - entry.pseudorange_l2) /
+                                    denom;
+                                entry.has_iono_init = true;
+                            }
+                        }
+                    }
+                    if (secondary->has_carrier_phase) {
+                        const double lambda2 =
+                            signalWavelengthMeters(secondary->signal, eph);
+                        if (lambda2 > 0.0) {
+                            entry.carrier_phase_l2 =
+                                secondary->carrier_phase * lambda2;
+                            entry.wavelength_l2 = lambda2;
+                            entry.has_carrier_phase_l2 = true;
+                            entry.variance_cp_l2 = safeVariance(
+                                ppp_config_.carrier_phase_sigma *
+                                    ppp_config_.carrier_phase_sigma,
+                                1e-8);
+                        }
+                    }
                 }
             }
             entry.valid = true;
@@ -2267,6 +2333,50 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     observation.carrier_phase_if -= phase_bias;
                     observation.carrier_phase_bias_m = phase_bias;
                 }
+                // Per-frequency (est-stec) biases: apply the L1 and L2 satellite
+                // code/phase biases to their own observables separately so the
+                // per-frequency ambiguities carry the integer-recoverable bias.
+                if (!ppp_config_.use_ionosphere_free) {
+                    const double cb_l1 = observationCodeBiasMeters(
+                        observation.satellite.system, observation.primary_signal,
+                        SignalType::SIGNAL_TYPE_COUNT, false, code_bias_m, 1.0, 0.0);
+                    observation.pseudorange_l1 -= cb_l1;
+                    observation.code_bias_l1_m = cb_l1;
+                    if (observation.has_l2) {
+                        const double cb_l2 = observationCodeBiasMeters(
+                            observation.satellite.system, observation.secondary_signal,
+                            SignalType::SIGNAL_TYPE_COUNT, false, code_bias_m, 1.0, 0.0);
+                        observation.pseudorange_l2 -= cb_l2;
+                        observation.code_bias_l2_m = cb_l2;
+                    }
+                    if (!phase_bias_m.empty()) {
+                        if (observation.has_carrier_phase) {
+                            const double pb_l1 = observationPhaseBiasMeters(
+                                observation.satellite.system, observation.primary_signal,
+                                SignalType::SIGNAL_TYPE_COUNT, false, phase_bias_m, 1.0, 0.0);
+                            observation.carrier_phase_l1 -= pb_l1;
+                            observation.phase_bias_l1_m = pb_l1;
+                        }
+                        if (observation.has_carrier_phase_l2) {
+                            const double pb_l2 = observationPhaseBiasMeters(
+                                observation.satellite.system, observation.secondary_signal,
+                                SignalType::SIGNAL_TYPE_COUNT, false, phase_bias_m, 1.0, 0.0);
+                            observation.carrier_phase_l2 -= pb_l2;
+                            observation.phase_bias_l2_m = pb_l2;
+                        }
+                    }
+                    // Re-derive the ionosphere seed from bias-corrected codes.
+                    if (observation.has_l2 && observation.pseudorange_l1 != 0.0 &&
+                        observation.freq_l1 > 0.0 && observation.freq_l2 > 0.0) {
+                        const double ratio = observation.freq_l1 / observation.freq_l2;
+                        const double denom = 1.0 - ratio * ratio;
+                        if (std::abs(denom) > 1e-6) {
+                            observation.iono_init_m =
+                                (observation.pseudorange_l1 - observation.pseudorange_l2) / denom;
+                            observation.has_iono_init = true;
+                        }
+                    }
+                }
                 if (ura_sigma_m > 0.0 && std::isfinite(ura_sigma_m)) {
                     const double ura_variance = ura_sigma_m * ura_sigma_m;
                     deferred_variance_pr += ura_variance;
@@ -2482,6 +2592,19 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         observation.azimuth = geometry.azimuth;
         observation.trop_mapping =
             calculateMappingFunction(receiver_position, geometry.elevation, time);
+        // Per-frequency (est-stec): also compute the wet mapping and the a priori
+        // zenith hydrostatic delay so the measurement model can map the estimated
+        // wet residual with the correct (wet) mapping instead of hydrostatic.
+        if (!ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
+            !ppp_config_.use_clas_osr_filter) {
+            double lat = 0.0, lon = 0.0, hgt = 0.0;
+            ecef2geodetic(receiver_position, lat, lon, hgt);
+            observation.trop_mapping_wet =
+                models::niellWetMapping(lat, geometry.elevation);
+            observation.trop_zhd_m =
+                models::estimateZenithTroposphereClimatology(lat, hgt, dayOfYearFromTime(time))
+                    .hydrostatic_delay_m;
+        }
         observation.modeled_trop_delay_m =
             modeledTroposphereDelayMeters(receiver_position, geometry.elevation, time);
         if (ppp_config_.use_rtklib_measurement_variance && !precise_products_loaded_) {
@@ -2490,6 +2613,20 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         }
         observation.variance_pr = safeVariance(observation.variance_pr + deferred_variance_pr, 1e-6);
         observation.variance_cp = safeVariance(observation.variance_cp + deferred_variance_cp, 1e-8);
+        // Per-frequency (est-stec) code de-weighting: the uncombined L1/L2 code
+        // carries a systematic (multipath / residual code-bias) error that, when
+        // trusted as tightly as the elevation model implies, biases the converged
+        // position (observed E+0.37 m at MIZU). The IFLC path implicitly de-weights
+        // code via the 3x ionosphere-free noise amplification; mirror that here so
+        // phase drives the converged solution. Env-overridable for tuning.
+        if (!ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
+            !ppp_config_.use_clas_osr_filter) {
+            static const double code_var_scale = []() {
+                const char* s = std::getenv("GNSS_PPP_PF_CODE_VAR_SCALE");
+                return s != nullptr ? std::atof(s) : 9.0;
+            }();
+            observation.variance_pr *= code_var_scale;
+        }
         observation.receiver_position = receiver_position;
         if (geometry.distance > 0.0) {
             const Vector3d los_unit = (sat_position - receiver_position) / geometry.distance;
@@ -2523,6 +2660,16 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             if (windup_wavelength_m > 0.0 && std::isfinite(new_windup)) {
                 const double windup_correction_m = new_windup * windup_wavelength_m;
                 observation.carrier_phase_if -= windup_correction_m;
+            }
+            // Per-frequency windup: the phase windup is geometric (in cycles),
+            // so each frequency's correction scales with its own wavelength.
+            if (!ppp_config_.use_ionosphere_free && std::isfinite(new_windup)) {
+                if (observation.has_carrier_phase && observation.wavelength_l1 > 0.0) {
+                    observation.carrier_phase_l1 -= new_windup * observation.wavelength_l1;
+                }
+                if (observation.has_carrier_phase_l2 && observation.wavelength_l2 > 0.0) {
+                    observation.carrier_phase_l2 -= new_windup * observation.wavelength_l2;
+                }
             }
         }
 
@@ -2727,9 +2874,20 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
 }
 
 void PPPProcessor::ensureAmbiguityStates(const std::vector<IonosphereFreeObs>& observations) {
+    const bool per_freq =
+        !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere;
     for (const auto& observation : observations) {
         if (!observation.valid || !observation.has_carrier_phase) {
             continue;
+        }
+        if (per_freq) {
+            // Ensure the ionosphere state exists, then init L2 BEFORE L1 so the
+            // shared needs_reinitialization flag (cleared by the L1 init) does
+            // not skip the L2 re-init on a cycle slip.
+            getOrCreateIonosphereState(observation);
+            if (observation.has_carrier_phase_l2) {
+                getOrCreateAmbiguityStateL2(observation);
+            }
         }
         getOrCreateAmbiguityState(observation);
     }
@@ -2890,17 +3048,84 @@ void PPPProcessor::initializeAmbiguityState(const IonosphereFreeObs& observation
         (ppp_config_.estimate_troposphere ?
             observation.trop_mapping * zenith_delay :
             observation.modeled_trop_delay_m);
-    filter_state_.state(state_index) = observation.carrier_phase_if - predicted;
-    filter_state_.covariance(state_index, state_index) =
-        precise_products_loaded_ ? 25.0 : ppp_config_.initial_ambiguity_variance;
-
     auto& ambiguity = ambiguity_states_[observation.satellite];
+    if (!ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere) {
+        // Per-frequency L1 ambiguity in meters, seeded geometry-free consistent
+        // with the ionosphere state: bias_1 = L1 - P1 + 2*ion*(f1/f1)^2.
+        // (f1/f1)^2 = 1; this removes the +/-iono on code/phase so the residual
+        // is the integer-recoverable phase bias lambda1*N1.
+        const double ion = observation.has_iono_init ? observation.iono_init_m : 0.0;
+        filter_state_.state(state_index) =
+            observation.carrier_phase_l1 - observation.pseudorange_l1 + 2.0 * ion;
+        filter_state_.covariance(state_index, state_index) =
+            ppp_config_.initial_ambiguity_variance;
+        ambiguity.wavelength_l1 = observation.wavelength_l1;
+        ambiguity.float_value_l1 = filter_state_.state(state_index);
+    } else {
+        filter_state_.state(state_index) = observation.carrier_phase_if - predicted;
+        filter_state_.covariance(state_index, state_index) =
+            precise_products_loaded_ ? 25.0 : ppp_config_.initial_ambiguity_variance;
+    }
     ambiguity.float_value = filter_state_.state(state_index);
     ambiguity.is_fixed = false;
     ambiguity.lock_count = 0;
     ambiguity.quality_indicator = 0.0;
     ambiguity.ambiguity_scale_m = observation.ambiguity_scale_m;
     ambiguity.needs_reinitialization = false;
+}
+
+int PPPProcessor::getOrCreateIonosphereState(const IonosphereFreeObs& observation) {
+    const auto existing =
+        filter_state_.ionosphere_indices.find(observation.satellite);
+    if (existing != filter_state_.ionosphere_indices.end()) {
+        return existing->second;
+    }
+    const int new_index = filter_state_.total_states;
+    filter_state_.total_states += 1;
+    filter_state_.state.conservativeResize(filter_state_.total_states);
+    filter_state_.covariance.conservativeResize(
+        filter_state_.total_states, filter_state_.total_states);
+    filter_state_.covariance.row(new_index).setZero();
+    filter_state_.covariance.col(new_index).setZero();
+    filter_state_.state(new_index) =
+        observation.has_iono_init ? observation.iono_init_m : 0.0;
+    filter_state_.covariance(new_index, new_index) =
+        ppp_config_.initial_ionosphere_variance;
+    filter_state_.ionosphere_indices[observation.satellite] = new_index;
+    return new_index;
+}
+
+int PPPProcessor::getOrCreateAmbiguityStateL2(const IonosphereFreeObs& observation) {
+    auto& ambiguity = ambiguity_states_[observation.satellite];
+    const auto existing =
+        filter_state_.ambiguity_l2_indices.find(observation.satellite);
+    int index = -1;
+    if (existing != filter_state_.ambiguity_l2_indices.end()) {
+        index = existing->second;
+        if (!ambiguity.needs_reinitialization) {
+            return index;
+        }
+    } else {
+        index = filter_state_.total_states;
+        filter_state_.total_states += 1;
+        filter_state_.state.conservativeResize(filter_state_.total_states);
+        filter_state_.covariance.conservativeResize(
+            filter_state_.total_states, filter_state_.total_states);
+        filter_state_.covariance.row(index).setZero();
+        filter_state_.covariance.col(index).setZero();
+        filter_state_.ambiguity_l2_indices[observation.satellite] = index;
+    }
+    // Per-frequency L2 ambiguity in meters: bias_2 = L2 - P2 + 2*ion*(f1/f2)^2.
+    const double ion = observation.has_iono_init ? observation.iono_init_m : 0.0;
+    const double ratio =
+        observation.freq_l2 > 0.0 ? (observation.freq_l1 / observation.freq_l2) : 0.0;
+    filter_state_.state(index) = observation.carrier_phase_l2 -
+                                 observation.pseudorange_l2 +
+                                 2.0 * ion * ratio * ratio;
+    filter_state_.covariance(index, index) = ppp_config_.initial_ambiguity_variance;
+    ambiguity.wavelength_l2 = observation.wavelength_l2;
+    ambiguity.float_value_l2 = filter_state_.state(index);
+    return index;
 }
 
 bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const NavigationData& nav) {
@@ -2945,6 +3170,10 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
         // Per-frequency / CLAS OSR path: NL float values are computed from
         // corrected dual-freq observations.
         return resolveAmbiguitiesWLNL(obs, nav);
+    }
+    if (ppp_config_.ar_method == PPPConfig::ARMethod::DD_PER_FREQ &&
+        !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere) {
+        return resolveAmbiguitiesPerFreq(obs, nav);
     }
     // DD_IFLC and DD_PER_FREQ fall through to existing DD-AR code below
 
@@ -3235,6 +3464,357 @@ bool PPPProcessor::resolveAmbiguitiesDecoupledIf(const ObservationData& obs,
     return true;
 }
 
+void PPPProcessor::pruneStaleEstStecStates(const std::set<SatelliteId>& observed) {
+    if (ppp_config_.use_ionosphere_free || !ppp_config_.estimate_ionosphere ||
+        ppp_config_.use_clas_osr_filter) {
+        return;
+    }
+    constexpr int kMaxOutageEpochs = 5;
+    std::set<SatelliteId> drop;
+    for (const auto& [sat, idx] : filter_state_.ambiguity_indices) {
+        (void)idx;
+        if (observed.count(sat)) {
+            est_stec_outage_[sat] = 0;
+        } else if (++est_stec_outage_[sat] > kMaxOutageEpochs) {
+            drop.insert(sat);
+        }
+    }
+    if (drop.empty()) {
+        return;
+    }
+
+    // Collect the state indices to remove (all >= amb_index in this mode).
+    std::set<int> remove;
+    auto collect = [&](const std::map<SatelliteId, int>& m, const SatelliteId& s) {
+        const auto it = m.find(s);
+        if (it != m.end() && it->second >= filter_state_.amb_index &&
+            it->second < filter_state_.total_states) {
+            remove.insert(it->second);
+        }
+    };
+    for (const auto& sat : drop) {
+        collect(filter_state_.ambiguity_indices, sat);
+        collect(filter_state_.ambiguity_l2_indices, sat);
+        collect(filter_state_.ionosphere_indices, sat);
+    }
+    const int old_n = filter_state_.total_states;
+    std::vector<int> new_index(static_cast<size_t>(old_n), -1);
+    int next = 0;
+    for (int i = 0; i < old_n; ++i) {
+        if (remove.count(i) == 0) {
+            new_index[static_cast<size_t>(i)] = next++;
+        }
+    }
+    const int new_n = next;
+    if (new_n != old_n) {
+        VectorXd new_state(new_n);
+        MatrixXd new_cov = MatrixXd::Zero(new_n, new_n);
+        for (int i = 0; i < old_n; ++i) {
+            const int ni = new_index[static_cast<size_t>(i)];
+            if (ni < 0) {
+                continue;
+            }
+            new_state(ni) = filter_state_.state(i);
+            for (int j = 0; j < old_n; ++j) {
+                const int nj = new_index[static_cast<size_t>(j)];
+                if (nj < 0) {
+                    continue;
+                }
+                new_cov(ni, nj) = filter_state_.covariance(i, j);
+            }
+        }
+        filter_state_.state = new_state;
+        filter_state_.covariance = new_cov;
+        filter_state_.total_states = new_n;
+    }
+    auto reindex = [&](std::map<SatelliteId, int>& m) {
+        for (auto it = m.begin(); it != m.end();) {
+            const int ni = (it->second >= 0 && it->second < old_n)
+                               ? new_index[static_cast<size_t>(it->second)]
+                               : -1;
+            if (ni < 0) {
+                it = m.erase(it);
+            } else {
+                it->second = ni;
+                ++it;
+            }
+        }
+    };
+    reindex(filter_state_.ambiguity_indices);
+    reindex(filter_state_.ambiguity_l2_indices);
+    reindex(filter_state_.ionosphere_indices);
+    for (const auto& sat : drop) {
+        ambiguity_states_.erase(sat);
+        est_stec_outage_.erase(sat);
+    }
+}
+
+bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
+                                             const NavigationData& nav) {
+    (void)nav;
+    last_ar_ratio_ = 0.0;
+    last_fixed_ambiguities_ = 0;
+    static const bool pf_dump = std::getenv("GNSS_PPP_PFDUMP") != nullptr;
+
+    // Only attempt AR once the float has converged: a wide, ill-conditioned
+    // ambiguity covariance makes the LAMBDA integer search explore an enormous
+    // volume (effectively unbounded run time).
+    if (!converged_) {
+        return false;
+    }
+
+    // Restrict AR to satellites observed this epoch (the persistent ambiguity
+    // map accumulates set satellites whose stale states must not enter the DD).
+    std::set<SatelliteId> observed_now;
+    for (const auto& m : obs.observations) {
+        if (m.valid && m.has_carrier_phase) {
+            observed_now.insert(m.satellite);
+        }
+    }
+
+    // 1) Collect satellites that have both per-frequency ambiguity states, an
+    //    ionosphere state, finite wavelengths, and sufficient lock.
+    struct Cand {
+        SatelliteId sat;
+        int l1_index = -1;
+        int l2_index = -1;
+        double lambda1 = 0.0;
+        double lambda2 = 0.0;
+        int wl_int = 0;
+        bool wl_fixed = false;
+    };
+    const int min_lock = ssr_products_loaded_
+        ? std::min(ppp_config_.convergence_min_epochs, 10)
+        : ppp_config_.convergence_min_epochs;
+    std::vector<Cand> cands;
+    for (const auto& [sat, l1_index] : filter_state_.ambiguity_indices) {
+        if (observed_now.count(sat) == 0) {
+            continue;
+        }
+        const auto l2_it = filter_state_.ambiguity_l2_indices.find(sat);
+        if (l2_it == filter_state_.ambiguity_l2_indices.end()) {
+            continue;
+        }
+        const auto amb_it = ambiguity_states_.find(sat);
+        if (amb_it == ambiguity_states_.end() ||
+            amb_it->second.needs_reinitialization ||
+            amb_it->second.lock_count < min_lock) {
+            continue;
+        }
+        const double lam1 = amb_it->second.wavelength_l1;
+        const double lam2 = amb_it->second.wavelength_l2;
+        if (!(lam1 > 0.0) || !(lam2 > 0.0)) {
+            continue;
+        }
+        if (l1_index < 0 || l1_index >= filter_state_.total_states ||
+            l2_it->second < 0 || l2_it->second >= filter_state_.total_states) {
+            continue;
+        }
+        Cand c;
+        c.sat = sat;
+        c.l1_index = l1_index;
+        c.l2_index = l2_it->second;
+        c.lambda1 = lam1;
+        c.lambda2 = lam2;
+        cands.push_back(c);
+    }
+    if (static_cast<int>(cands.size()) < ppp_config_.min_satellites_for_ar) {
+        return false;
+    }
+
+    // 2) Wide-lane integer per satellite, double-differenced against the first
+    //    candidate of each system. WL_s = x[L1]/lambda1 - x[L2]/lambda2 (cycles).
+    std::map<GNSSSystem, int> ref_of_system;
+    for (size_t i = 0; i < cands.size(); ++i) {
+        ref_of_system.emplace(cands[i].sat.system, static_cast<int>(i));
+    }
+    struct DdPair { int ref = -1; int sat = -1; int wl_int = 0; };
+    std::vector<DdPair> wl_pairs;
+    const VectorXd& x = filter_state_.state;
+    const MatrixXd& P = filter_state_.covariance;
+    auto wl_cycles = [&](const Cand& c) {
+        return x(c.l1_index) / c.lambda1 - x(c.l2_index) / c.lambda2;
+    };
+    constexpr double kMaxFracWl = 0.20;
+    constexpr double kMaxStdWl = 1.0;
+    int wl_fix_count = 0;
+    double wl_frac_sum = 0.0;
+    for (size_t i = 0; i < cands.size(); ++i) {
+        const int ref_idx = ref_of_system[cands[i].sat.system];
+        if (ref_idx == static_cast<int>(i)) {
+            continue;
+        }
+        const Cand& ref = cands[static_cast<size_t>(ref_idx)];
+        const Cand& sat = cands[i];
+        const double wl_dd = wl_cycles(ref) - wl_cycles(sat);
+        const double n = std::round(wl_dd);
+        const double frac = std::abs(n - wl_dd);
+        // Variance of the WL DD (cycles^2) from the 4 contributing states.
+        const double cr1 = 1.0 / ref.lambda1, cr2 = -1.0 / ref.lambda2;
+        const double cs1 = -1.0 / sat.lambda1, cs2 = 1.0 / sat.lambda2;
+        const int ir1 = ref.l1_index, ir2 = ref.l2_index;
+        const int is1 = sat.l1_index, is2 = sat.l2_index;
+        double var = cr1 * cr1 * P(ir1, ir1) + cr2 * cr2 * P(ir2, ir2) +
+                     cs1 * cs1 * P(is1, is1) + cs2 * cs2 * P(is2, is2) +
+                     2.0 * (cr1 * cr2 * P(ir1, ir2) + cr1 * cs1 * P(ir1, is1) +
+                            cr1 * cs2 * P(ir1, is2) + cr2 * cs1 * P(ir2, is1) +
+                            cr2 * cs2 * P(ir2, is2) + cs1 * cs2 * P(is1, is2));
+        const double sd = var > 0.0 ? std::sqrt(var) : 9.9;
+        if (pf_dump) {
+            std::cerr << "[PFWL] " << ref.sat.toString() << "-" << sat.sat.toString()
+                      << " wl=" << wl_dd << " frac=" << frac << " std=" << sd << "\n";
+        }
+        if (frac < kMaxFracWl && sd < kMaxStdWl) {
+            wl_pairs.push_back({ref_idx, static_cast<int>(i), static_cast<int>(n)});
+            wl_fix_count++;
+            wl_frac_sum += frac;
+        }
+    }
+    if (pf_dump) {
+        std::cerr << "[PFWL-SUM] cand=" << cands.size() << " wl_fixed=" << wl_fix_count
+                  << " mean_frac=" << (wl_fix_count ? wl_frac_sum / wl_fix_count : 0.0) << "\n";
+    }
+    if (wl_pairs.empty()) {
+        return false;
+    }
+
+    // 3) Apply the fixed wide-lane integers as a batched Kalman pseudo-measurement
+    //    (cycles). Tight but not rigid so a wrong WL does not lock the filter.
+    const int nx = filter_state_.total_states;
+    const int nwl = static_cast<int>(wl_pairs.size());
+    MatrixXd Hwl = MatrixXd::Zero(nwl, nx);
+    VectorXd vwl = VectorXd::Zero(nwl);
+    MatrixXd Rwl = MatrixXd::Zero(nwl, nwl);
+    constexpr double kWlConstraintSigmaCyc = 0.10;
+    for (int k = 0; k < nwl; ++k) {
+        const Cand& ref = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(k)].ref)];
+        const Cand& sat = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(k)].sat)];
+        Hwl(k, ref.l1_index) += 1.0 / ref.lambda1;
+        Hwl(k, ref.l2_index) += -1.0 / ref.lambda2;
+        Hwl(k, sat.l1_index) += -1.0 / sat.lambda1;
+        Hwl(k, sat.l2_index) += 1.0 / sat.lambda2;
+        const double wl_dd_float = wl_cycles(ref) - wl_cycles(sat);
+        vwl(k) = static_cast<double>(wl_pairs[static_cast<size_t>(k)].wl_int) - wl_dd_float;
+        Rwl(k, k) = kWlConstraintSigmaCyc * kWlConstraintSigmaCyc;
+    }
+    // Standard Kalman update written as P -= K (H P) to avoid the O(nx^3)
+    // Joseph form on the large per-frequency state (nx ~ 300). The fix is
+    // reverted to the float state after the solution is generated, so a single
+    // epoch's update is never compounded.
+    const MatrixXd HPwl = Hwl * filter_state_.covariance;  // nwl x nx
+    MatrixXd Swl = HPwl * Hwl.transpose() + Rwl;
+    const MatrixXd Swl_inv = Swl.ldlt().solve(MatrixXd::Identity(nwl, nwl));
+    if (!Swl_inv.allFinite()) {
+        return false;
+    }
+    const MatrixXd Kwl = HPwl.transpose() * Swl_inv;  // nx x nwl (P H^T = (H P)^T)
+    filter_state_.state += Kwl * vwl;
+    filter_state_.covariance -= Kwl * HPwl;
+    filter_state_.covariance =
+        0.5 * (filter_state_.covariance + filter_state_.covariance.transpose());
+
+    // 4) Narrow-lane N1: LAMBDA on the L1 ambiguity double differences for the
+    //    WL-fixed pairs, read from the (now WL-tightened) L1 states. Mirrors the
+    //    oracle gen_sd_matrix_n1 (a = x[IB(s,0)]/lambda1 differenced).
+    //    Partial AR: cap the LAMBDA dimension at the lowest-variance pairs so the
+    //    integer search stays bounded (and only fix high-confidence ambiguities).
+    constexpr int kMaxN1Dim = 12;
+    constexpr double kMaxN1VarCyc2 = 0.25;  // include only pairs with N1 std < 0.5 cycle
+    auto n1_var_of = [&](int k) {
+        const Cand& rk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(k)].ref)];
+        const Cand& sk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(k)].sat)];
+        return filter_state_.covariance(rk.l1_index, rk.l1_index) / (rk.lambda1 * rk.lambda1) +
+               filter_state_.covariance(sk.l1_index, sk.l1_index) / (sk.lambda1 * sk.lambda1);
+    };
+    std::vector<int> n1_sel;
+    n1_sel.reserve(wl_pairs.size());
+    for (int k = 0; k < nwl; ++k) {
+        if (n1_var_of(k) < kMaxN1VarCyc2) {
+            n1_sel.push_back(k);
+        }
+    }
+    // Keep only the lowest-variance pairs so the integer search stays bounded.
+    if (static_cast<int>(n1_sel.size()) > kMaxN1Dim) {
+        std::sort(n1_sel.begin(), n1_sel.end(),
+                  [&](int a, int b) { return n1_var_of(a) < n1_var_of(b); });
+        n1_sel.resize(kMaxN1Dim);
+    }
+    if (static_cast<int>(n1_sel.size()) < ppp_config_.min_satellites_for_ar) {
+        last_fixed_ambiguities_ = nwl;  // wide-lane already applied
+        return true;
+    }
+    const int nb = static_cast<int>(n1_sel.size());
+    VectorXd n1_float = VectorXd::Zero(nb);
+    MatrixXd n1_cov = MatrixXd::Zero(nb, nb);
+    for (int k = 0; k < nb; ++k) {
+        const Cand& rk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].ref)];
+        const Cand& sk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].sat)];
+        n1_float(k) = filter_state_.state(rk.l1_index) / rk.lambda1 -
+                      filter_state_.state(sk.l1_index) / sk.lambda1;
+        for (int l = 0; l < nb; ++l) {
+            const Cand& rl = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(l)])].ref)];
+            const Cand& sl = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(l)])].sat)];
+            n1_cov(k, l) =
+                filter_state_.covariance(rk.l1_index, rl.l1_index) / (rk.lambda1 * rl.lambda1) -
+                filter_state_.covariance(rk.l1_index, sl.l1_index) / (rk.lambda1 * sl.lambda1) -
+                filter_state_.covariance(sk.l1_index, rl.l1_index) / (sk.lambda1 * rl.lambda1) +
+                filter_state_.covariance(sk.l1_index, sl.l1_index) / (sk.lambda1 * sl.lambda1);
+        }
+    }
+    VectorXd n1_fixed = VectorXd::Zero(nb);
+    double ratio = 0.0;
+    if (!lambdaSearch(n1_float, n1_cov, n1_fixed, ratio) || !std::isfinite(ratio)) {
+        last_fixed_ambiguities_ = nwl;  // wide-lane already applied
+        return true;
+    }
+    if (pf_dump) {
+        std::cerr << "[PFN1] nb=" << nb << " ratio=" << ratio
+                  << " threshold=" << ppp_config_.ar_ratio_threshold << "\n";
+    }
+    if (ratio < ppp_config_.ar_ratio_threshold) {
+        last_ar_ratio_ = ratio;
+        last_fixed_ambiguities_ = nwl;
+        return true;
+    }
+
+    // 5) Apply the fixed N1 double differences as a tight Kalman pseudo-obs on
+    //    the L1 ambiguity states (cycles).
+    MatrixXd Hn = MatrixXd::Zero(nb, nx);
+    VectorXd vn = VectorXd::Zero(nb);
+    MatrixXd Rn = MatrixXd::Zero(nb, nb);
+    constexpr double kN1ConstraintSigmaCyc = 0.03;
+    for (int k = 0; k < nb; ++k) {
+        const Cand& rk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].ref)];
+        const Cand& sk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].sat)];
+        Hn(k, rk.l1_index) += 1.0 / rk.lambda1;
+        Hn(k, sk.l1_index) += -1.0 / sk.lambda1;
+        vn(k) = n1_fixed(k) -
+                (filter_state_.state(rk.l1_index) / rk.lambda1 -
+                 filter_state_.state(sk.l1_index) / sk.lambda1);
+        Rn(k, k) = kN1ConstraintSigmaCyc * kN1ConstraintSigmaCyc;
+    }
+    const MatrixXd HPn = Hn * filter_state_.covariance;  // nb x nx
+    MatrixXd Sn = HPn * Hn.transpose() + Rn;
+    const MatrixXd Sn_inv = Sn.ldlt().solve(MatrixXd::Identity(nb, nb));
+    if (!Sn_inv.allFinite()) {
+        last_fixed_ambiguities_ = nwl;
+        return true;
+    }
+    const MatrixXd Kn = HPn.transpose() * Sn_inv;  // nx x nb
+    filter_state_.state += Kn * vn;
+    filter_state_.covariance -= Kn * HPn;
+    filter_state_.covariance =
+        0.5 * (filter_state_.covariance + filter_state_.covariance.transpose());
+
+    for (const auto& p : wl_pairs) {
+        ambiguity_states_[cands[static_cast<size_t>(p.ref)].sat].is_fixed = true;
+        ambiguity_states_[cands[static_cast<size_t>(p.sat)].sat].is_fixed = true;
+    }
+    last_ar_ratio_ = ratio;
+    last_fixed_ambiguities_ = nb;
+    return true;
+}
+
 double PPPProcessor::calculateTroposphericDelay(const Vector3d& receiver_pos,
                                                 const Vector3d& satellite_pos,
                                                 const GNSSTime& time,
@@ -3453,18 +4033,42 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
 
         const double geometric_range = geodist(observation.satellite_position, receiver_position);
         const Vector3d line_of_sight = range_vector / euclidean_range;
-        const double troposphere_delay =
-            ppp_config_.estimate_troposphere ?
-                observation.trop_mapping * zenith_delay :
-                observation.modeled_trop_delay_m;
+        // Troposphere: by default the estimated zenith total delay is mapped with
+        // the hydrostatic function. In per-frequency (est-stec) mode use the
+        // RTKLIB-style split trop = m_h*ZHD + m_w*(ZTD-ZHD) so the estimated wet
+        // residual is mapped with the (steeper, low-elevation) wet function; the
+        // partial w.r.t. the ZTD state is then m_w.
+        // Wet-mapping split is physically correct but relies on an accurate a
+        // priori ZHD; the climatology ZHD is inaccurate at high/dry stations
+        // (helped MIZU 0.42->0.385 m but hurt ALIC 0.34->0.585 m), so it is OFF
+        // by default and opt-in via GNSS_PPP_PF_WET_TROP for experimentation.
+        static const bool wet_trop_enabled =
+            std::getenv("GNSS_PPP_PF_WET_TROP") != nullptr;
+        const bool per_freq_wet_trop =
+            wet_trop_enabled && ppp_config_.estimate_troposphere &&
+            !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
+            !ppp_config_.use_clas_osr_filter && observation.trop_mapping_wet > 0.0;
+        double troposphere_delay;
+        double trop_partial;
+        if (per_freq_wet_trop) {
+            const double zhd = observation.trop_zhd_m;
+            troposphere_delay = observation.trop_mapping * zhd +
+                                observation.trop_mapping_wet * (zenith_delay - zhd);
+            trop_partial = observation.trop_mapping_wet;
+        } else if (ppp_config_.estimate_troposphere) {
+            troposphere_delay = observation.trop_mapping * zenith_delay;
+            trop_partial = observation.trop_mapping;
+        } else {
+            troposphere_delay = observation.modeled_trop_delay_m;
+            trop_partial = 0.0;
+        }
         const int clock_state_index = receiverClockStateIndex(observation.satellite);
         const double clock_bias_m = receiverClockBiasMeters(observation.satellite);
 
         Eigen::RowVectorXd row = Eigen::RowVectorXd::Zero(filter_state_.total_states);
         row.segment(filter_state_.pos_index, 3) = -line_of_sight;
         row(clock_state_index) = 1.0;
-        row(filter_state_.trop_index) =
-            ppp_config_.estimate_troposphere ? observation.trop_mapping : 0.0;
+        row(filter_state_.trop_index) = trop_partial;
         // Per-satellite ionosphere state: pseudorange has +iono contribution
         double iono_state_m = 0.0;
         if (ppp_config_.estimate_ionosphere) {
@@ -3572,7 +4176,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     phase_row.segment(filter_state_.pos_index, 3) = -line_of_sight;
                     phase_row(clock_state_index) = 1.0;
                     phase_row(filter_state_.trop_index) =
-                        ppp_config_.estimate_troposphere ? observation.trop_mapping : 0.0;
+                        trop_partial;
                     // Per-satellite ionosphere: carrier phase has -iono contribution
                     if (ppp_config_.estimate_ionosphere) {
                         const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
@@ -3586,6 +4190,97 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     measured_values.push_back(observation.carrier_phase_if);
                     predicted_values.push_back(predicted_phase);
                     variances.push_back(safeVariance(observation.variance_cp, 1e-8));
+                    row_satellites.push_back(observation.satellite);
+                    row_is_phase.push_back(true);
+                }
+            }
+        }
+
+        // --- Per-frequency (est-stec) L2 code + phase rows ---
+        // The ionosphere state is in L1-equivalent meters; the L2 delay scales
+        // by (f1/f2)^2. Code carries +iono, phase carries -iono (oracle ppp.c).
+        if (!ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
+            observation.has_l2 && observation.freq_l1 > 0.0 && observation.freq_l2 > 0.0) {
+            const double ratio = observation.freq_l1 / observation.freq_l2;
+            const double ratio2 = ratio * ratio;
+            const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
+            const int iono_index =
+                iono_it != filter_state_.ionosphere_indices.end() ? iono_it->second : -1;
+            const double iono_state_l1_m =
+                iono_index >= 0 ? filter_state_.state(iono_index) : 0.0;
+
+            // L2 code row.
+            {
+                Eigen::RowVectorXd l2_code = Eigen::RowVectorXd::Zero(filter_state_.total_states);
+                l2_code.segment(filter_state_.pos_index, 3) = -line_of_sight;
+                l2_code(clock_state_index) = 1.0;
+                l2_code(filter_state_.trop_index) =
+                    trop_partial;
+                if (iono_index >= 0) {
+                    l2_code(iono_index) = ratio2;
+                }
+                const double l2_code_pred = geometric_range + clock_bias_m -
+                    constants::SPEED_OF_LIGHT * observation.satellite_clock_bias +
+                    troposphere_delay + ratio2 * iono_state_l1_m;
+                const double l2_code_resid = observation.pseudorange_l2 - l2_code_pred;
+                // Use the elevation-weighted RTKLIB variance (same satellite, so
+                // identical elevation weighting as L1) rather than the flat seed.
+                const double var_pr_l2 = observation.variance_pr > 0.0
+                    ? observation.variance_pr
+                    : safeVariance(observation.variance_pr_l2, 1e-6);
+                const double code_floor = converged_ ? 500.0 : 20000.0;
+                const double code_limit = std::max(
+                    ppp_config_.outlier_threshold * std::sqrt(var_pr_l2) * 10.0,
+                    code_floor);
+                if (!ppp_config_.enable_outlier_detection ||
+                    std::abs(l2_code_resid) <= code_limit) {
+                    rows.push_back(l2_code);
+                    measured_values.push_back(observation.pseudorange_l2);
+                    predicted_values.push_back(l2_code_pred);
+                    variances.push_back(var_pr_l2);
+                    row_satellites.push_back(observation.satellite);
+                    row_is_phase.push_back(false);
+                }
+            }
+
+            // L2 phase row (requires a ready L2 ambiguity state).
+            const auto amb2_it = filter_state_.ambiguity_l2_indices.find(observation.satellite);
+            const auto amb_it = ambiguity_states_.find(observation.satellite);
+            const bool l2_phase_ready =
+                use_phase_rows && observation.has_carrier_phase_l2 &&
+                amb2_it != filter_state_.ambiguity_l2_indices.end() &&
+                amb_it != ambiguity_states_.end() &&
+                !amb_it->second.needs_reinitialization &&
+                amb_it->second.lock_count >= ppp_config_.phase_measurement_min_lock_count;
+            if (l2_phase_ready) {
+                const int amb2_index = amb2_it->second;
+                Eigen::RowVectorXd l2_phase = Eigen::RowVectorXd::Zero(filter_state_.total_states);
+                l2_phase.segment(filter_state_.pos_index, 3) = -line_of_sight;
+                l2_phase(clock_state_index) = 1.0;
+                l2_phase(filter_state_.trop_index) =
+                    trop_partial;
+                if (iono_index >= 0) {
+                    l2_phase(iono_index) = -ratio2;
+                }
+                l2_phase(amb2_index) = 1.0;
+                const double l2_phase_pred = geometric_range + clock_bias_m -
+                    constants::SPEED_OF_LIGHT * observation.satellite_clock_bias +
+                    troposphere_delay - ratio2 * iono_state_l1_m +
+                    filter_state_.state(amb2_index);
+                const double l2_phase_resid = observation.carrier_phase_l2 - l2_phase_pred;
+                const double var_cp_l2 = observation.variance_cp > 0.0
+                    ? observation.variance_cp
+                    : safeVariance(observation.variance_cp_l2, 1e-8);
+                const double phase_floor = converged_ ? 10.0 : 50.0;
+                const double phase_limit = std::max(
+                    ppp_config_.outlier_threshold * std::sqrt(var_cp_l2) * 10.0,
+                    phase_floor);
+                if (!ppp_config_.enable_outlier_detection ||
+                    std::abs(l2_phase_resid) <= phase_limit) {
+                    rows.push_back(l2_phase);
+                    measured_values.push_back(observation.carrier_phase_l2);
+                    predicted_values.push_back(l2_phase_pred);
+                    variances.push_back(var_cp_l2);
                     row_satellites.push_back(observation.satellite);
                     row_is_phase.push_back(true);
                 }
