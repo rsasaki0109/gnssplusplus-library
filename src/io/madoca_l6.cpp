@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -735,6 +736,27 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
     const libgnss::GNSSSystem gsys = mpSysToGnss(mpc::satsys(sat, &prn));
     if (gsys == libgnss::GNSSSystem::UNKNOWN || prn <= 0) {
         return false;
+    }
+
+    // The parity sat-index layout numbers QZSS PRNs 193-202 (RTKLIB satno
+    // convention) while the RINEX reader keys QZSS observations 1-based
+    // (J02 -> SatelliteId(QZSS, 2)). Without this normalization every QZSS
+    // SSR correction is filed under PRN 193+, the per-epoch lookup keyed by
+    // the 1-based observation PRN never matches, and QZSS silently runs on
+    // uncorrected broadcast orbit/clock/bias (a ~1 m vertical bias at
+    // stations that track QZSS).
+    //
+    // DEFAULT OFF (opt-in via GNSS_PPP_QZSS_SSR_PRN_FIX=1): applying the
+    // (correct) QZSS SSR corrections shifts the MADOCA parity solution because
+    // the estimator was compensating for the missing QZSS correction; on the
+    // current parity datasets it improves ALIC but regresses MIZU, so it is not
+    // yet safe to enable by default. Kept as opt-in until the estimator-layer
+    // bias it exposes is resolved.
+    static const bool kQzssPrnFix =
+        (std::getenv("GNSS_PPP_QZSS_SSR_PRN_FIX") != nullptr);
+    constexpr int kQzssPrnOffset = 192;  // 193 (RTKLIB) -> 1 (RINEX/native)
+    if (kQzssPrnFix && gsys == libgnss::GNSSSystem::QZSS && prn > kQzssPrnOffset) {
+        prn -= kQzssPrnOffset;
     }
 
     out = libgnss::SSROrbitClockCorrection{};
