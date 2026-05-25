@@ -117,7 +117,14 @@ private:
     std::ifstream file_;
     RINEXHeader header_;
     int current_line_ = 0;
-    
+
+    // State for parsing RINEX 3 "SYS / # / OBS TYPES" records that span
+    // continuation lines (systems with more than 13 observation types, e.g.
+    // GPS=22 or QZSS=24). Tracks the system whose type list is still being
+    // filled so that continuation lines (blank system column) append correctly.
+    char obs_type_sys_ = ' ';
+    int obs_type_expected_ = 0;
+
     /**
      * @brief Parse header line
      */
