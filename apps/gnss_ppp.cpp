@@ -23,6 +23,7 @@ struct Options {
     std::string clk_path;
     std::string ssr_path;
     std::string ssr_rtcm_path;
+    std::vector<std::string> madoca_l6_paths;
     std::string ionex_path;
     std::string dcb_path;
     std::string antex_path;
@@ -82,6 +83,8 @@ void printUsage(const char* program_name) {
         << "  --ssr <corrections.csv>  Simple SSR orbit/clock corrections CSV\n"
         << "  --ssr-rtcm <file|ntrip://...|serial://...|tcp://...>\n"
         << "                          RTCM SSR source converted/read for PPP use\n"
+        << "  --madoca-l6 <file>       Native MADOCA L6E SSR channel (repeatable,\n"
+        << "                          e.g. PRN 204 and 206); requires --nav\n"
         << "  --ionex <maps.ionex>     Optional IONEX TEC map product\n"
         << "  --dcb <bias.bsx>         Optional DCB / Bias-SINEX product\n"
         << "  --antex <antennas.atx>   Optional ANTEX file for receiver antenna PCO\n"
@@ -224,6 +227,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.ssr_path = argv[++i];
         } else if (arg == "--ssr-rtcm" && i + 1 < argc) {
             options.ssr_rtcm_path = argv[++i];
+        } else if (arg == "--madoca-l6" && i + 1 < argc) {
+            options.madoca_l6_paths.push_back(argv[++i]);
         } else if (arg == "--ionex" && i + 1 < argc) {
             options.ionex_path = argv[++i];
         } else if (arg == "--dcb" && i + 1 < argc) {
@@ -359,6 +364,9 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (!options.ssr_rtcm_path.empty() && options.nav_path.empty()) {
         argumentError("--ssr-rtcm requires --nav", argv[0]);
+    }
+    if (!options.madoca_l6_paths.empty() && options.nav_path.empty()) {
+        argumentError("--madoca-l6 requires --nav (broadcast ephemeris)", argv[0]);
     }
     if (options.max_epochs < 0) {
         argumentError("--max-epochs must be non-negative", argv[0]);
@@ -782,7 +790,8 @@ int main(int argc, char* argv[]) {
         ppp_config.use_precise_clocks = !options.clk_path.empty();
         ppp_config.ssr_file_path = options.ssr_path;
         ppp_config.use_ssr_corrections =
-            !options.ssr_path.empty() || !options.ssr_rtcm_path.empty();
+            !options.ssr_path.empty() || !options.ssr_rtcm_path.empty() ||
+            !options.madoca_l6_paths.empty();
         ppp_config.ionex_file_path = options.ionex_path;
         ppp_config.dcb_file_path = options.dcb_path;
         ppp_config.antex_file_path = options.antex_path;
@@ -863,6 +872,11 @@ int main(int argc, char* argv[]) {
                 options.ssr_rtcm_path, nav_data, options.ssr_step_seconds)) {
             std::cerr << "Error: failed to load RTCM SSR corrections: "
                       << options.ssr_rtcm_path << "\n";
+            return 1;
+        }
+        if (!options.madoca_l6_paths.empty() &&
+            !processor.loadMadocaL6Products(options.madoca_l6_paths)) {
+            std::cerr << "Error: failed to load MADOCA L6E corrections\n";
             return 1;
         }
 
@@ -993,7 +1007,8 @@ int main(int argc, char* argv[]) {
                     << "  \"clas_hybrid_fallback_epochs\": " << clas_hybrid_fallback_epochs << ",\n"
                     << "  \"ppp_solution_rate_pct\": " << ppp_solution_rate << ",\n"
                     << "  \"ssr_corrections_enabled\": "
-                    << ((!options.ssr_path.empty() || !options.ssr_rtcm_path.empty()) ? "true" : "false") << ",\n"
+                    << ((!options.ssr_path.empty() || !options.ssr_rtcm_path.empty() ||
+                         !options.madoca_l6_paths.empty()) ? "true" : "false") << ",\n"
                     << "  \"atmospheric_trop_corrections\": " << atmospheric_trop_corrections << ",\n"
                     << "  \"atmospheric_trop_meters\": " << atmospheric_trop_meters << ",\n"
                     << "  \"atmospheric_iono_corrections\": " << atmospheric_iono_corrections << ",\n"
@@ -1051,7 +1066,8 @@ int main(int argc, char* argv[]) {
             }
             std::cout << "  ambiguity resolution: " << (options.enable_ar ? "on" : "off") << "\n";
             std::cout << "  SSR corrections: "
-                      << ((options.ssr_path.empty() && options.ssr_rtcm_path.empty()) ? "off" : "on")
+                      << ((options.ssr_path.empty() && options.ssr_rtcm_path.empty() &&
+                           options.madoca_l6_paths.empty()) ? "off" : "on")
                       << "\n";
             if (atmospheric_trop_corrections > 0 || atmospheric_iono_corrections > 0) {
                 std::cout << "  atmospheric trop corrections: "

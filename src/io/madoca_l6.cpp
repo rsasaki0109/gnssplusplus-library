@@ -6,6 +6,9 @@
 
 #include <cmath>
 #include <cstdint>
+#include <fstream>
+#include <string>
+#include <vector>
 
 namespace libgnss::io {
 namespace {
@@ -168,6 +171,41 @@ MadocaGtime gpst2time(int week, double sec) {
     t.time += static_cast<std::int64_t>(86400) * 7 * week + static_cast<int>(sec);
     t.sec = sec - static_cast<int>(sec);
     return t;
+}
+
+// RTKLIB rtkcmn.c time2epoch, ported for the week->reference-epoch seed.
+void time2epoch(MadocaGtime t, double* ep) {
+    static const int mday[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+                               31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+                               31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+                               31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    const int days = static_cast<int>(t.time / 86400);
+    const int sec = static_cast<int>(t.time - static_cast<std::int64_t>(days) * 86400);
+    int day = days % 1461;
+    int mon = 0;
+    for (; mon < 48; ++mon) {
+        if (day >= mday[mon]) {
+            day -= mday[mon];
+        } else {
+            break;
+        }
+    }
+    ep[0] = 1970 + days / 1461 * 4 + mon / 12;
+    ep[1] = mon % 12 + 1;
+    ep[2] = day + 1;
+    ep[3] = sec / 3600;
+    ep[4] = sec % 3600 / 60;
+    ep[5] = sec % 60 + t.sec;
+}
+
+// Reference calendar epoch (mid-week) seeding the decoder's week rollover.
+void referenceEpochForWeek(int week, double ep[6]) {
+    if (week <= 0) {
+        ep[0] = 2025.0; ep[1] = 4.0; ep[2] = 1.0;
+        ep[3] = ep[4] = ep[5] = 0.0;
+        return;
+    }
+    time2epoch(gpst2time(week, 302400.0), ep);  // Wednesday of the GPS week
 }
 
 void adjweek(MadocaGtime* gt, double tow) {
@@ -682,6 +720,63 @@ libgnss::GNSSSystem mpSysToGnss(int mpsys) {
 
 }  // namespace
 
+// Build one native SSR correction from a satellite's decoded Compact SSR state.
+// Returns false when the satellite carries no orbit/clock or maps to no system.
+// The sample is time-stamped at the most recent of the orbit/clock t0 so a live
+// stream of orbit- and clock-paced updates yields a monotonic time series.
+bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
+                              libgnss::SSROrbitClockCorrection& out) {
+    const bool has_orbit = c.t0[0].time != 0;  // t0[eph]
+    const bool has_clock = c.t0[1].time != 0;  // t0[clk]
+    if (!has_orbit && !has_clock) {
+        return false;
+    }
+    int prn = 0;
+    const libgnss::GNSSSystem gsys = mpSysToGnss(mpc::satsys(sat, &prn));
+    if (gsys == libgnss::GNSSSystem::UNKNOWN || prn <= 0) {
+        return false;
+    }
+
+    out = libgnss::SSROrbitClockCorrection{};
+    out.satellite = libgnss::SatelliteId(gsys, static_cast<std::uint8_t>(prn));
+
+    const bool clock_is_later =
+        has_clock && (!has_orbit || c.t0[1].time >= c.t0[0].time);
+    const MadocaGtime& t0 = clock_is_later ? c.t0[1] : c.t0[0];
+    int week = 0;
+    const double tow = time2gpst(t0, &week);
+    out.time = libgnss::GNSSTime(week, tow);
+
+    if (has_orbit) {
+        out.orbit_correction_ecef =
+            libgnss::Vector3d(c.deph[0], c.deph[1], c.deph[2]);  // RAC
+        out.orbit_valid = true;
+    }
+    if (has_clock) {
+        out.clock_correction_m = c.dclk[0];  // c0 polynomial term
+        out.clock_valid = true;
+    }
+
+    for (int k = 0; k < MadocaSsrCorrection::kMaxCode; ++k) {
+        const int code = k + 1;  // cbias/pbias are held by CODE_*-1
+        if (c.vcbias[k]) {
+            const std::uint8_t id = madocaBiasCodeToRtcmSsrId(gsys, code);
+            if (id > 0) {
+                out.code_bias_m[id] = c.cbias[k];
+            }
+        }
+        if (c.vpbias[k]) {
+            const std::uint8_t id = madocaBiasCodeToRtcmSsrId(gsys, code);
+            if (id > 0) {
+                out.phase_bias_m[id] = c.pbias[k];
+            }
+        }
+    }
+    out.code_bias_valid = !out.code_bias_m.empty();
+    out.phase_bias_valid = !out.phase_bias_m.empty();
+    return true;
+}
+
 std::uint8_t madocaBiasCodeToRtcmSsrId(libgnss::GNSSSystem system, int code) {
     using libgnss::GNSSSystem;
     switch (system) {
@@ -746,58 +841,60 @@ int madocaL6eSnapshotToProducts(const MadocaL6eDecoder& decoder,
     products.setOrbitCorrectionsAreRac(true);
     int added = 0;
     for (int sat = 1; sat <= MadocaL6eDecoder::kMaxSat; ++sat) {
-        const MadocaSsrCorrection& c = decoder.correction(sat);
-        const bool has_orbit = c.t0[0].time != 0;  // t0[eph]
-        const bool has_clock = c.t0[1].time != 0;  // t0[clk]
-        if (!has_orbit && !has_clock) {
-            continue;
-        }
-        int prn = 0;
-        const libgnss::GNSSSystem gsys = mpSysToGnss(mpc::satsys(sat, &prn));
-        if (gsys == libgnss::GNSSSystem::UNKNOWN || prn <= 0) {
-            continue;
-        }
-
         libgnss::SSROrbitClockCorrection corr;
-        corr.satellite =
-            libgnss::SatelliteId(gsys, static_cast<std::uint8_t>(prn));
-
-        // Validity epoch: prefer the clock t0, falling back to the orbit t0.
-        const MadocaGtime& t0 = has_clock ? c.t0[1] : c.t0[0];
-        int week = 0;
-        const double tow = time2gpst(t0, &week);
-        corr.time = libgnss::GNSSTime(week, tow);
-
-        if (has_orbit) {
-            corr.orbit_correction_ecef =
-                libgnss::Vector3d(c.deph[0], c.deph[1], c.deph[2]);  // RAC
-            corr.orbit_valid = true;
+        if (buildMadocaSsrCorrection(sat, decoder.correction(sat), corr)) {
+            products.addCorrection(corr);
+            ++added;
         }
-        if (has_clock) {
-            corr.clock_correction_m = c.dclk[0];  // c0 polynomial term
-            corr.clock_valid = true;
-        }
+    }
+    return added;
+}
 
-        for (int k = 0; k < MadocaSsrCorrection::kMaxCode; ++k) {
-            const int code = k + 1;  // cbias/pbias are held by CODE_*-1
-            if (c.vcbias[k]) {
-                const std::uint8_t id = madocaBiasCodeToRtcmSsrId(gsys, code);
-                if (id > 0) {
-                    corr.code_bias_m[id] = c.cbias[k];
+int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
+                                   int gps_week,
+                                   libgnss::SSRProducts& products) {
+    products.setOrbitCorrectionsAreRac(true);
+    double ref_ep[6];
+    referenceEpochForWeek(gps_week, ref_ep);
+
+    MadocaL6eDecoder decoder;
+    decoder.setReferenceEpoch(ref_ep);
+
+    constexpr int kN = MadocaL6eDecoder::kMaxSat;
+    // Per-satellite last-emitted orbit/clock t0 (snapshot only on a change).
+    std::vector<std::int64_t> last_orbit(kN + 1, -1);
+    std::vector<std::int64_t> last_clock(kN + 1, -1);
+
+    int added = 0;
+    for (const std::string& file : files) {
+        std::ifstream in(file, std::ios::binary);
+        if (!in) {
+            continue;
+        }
+        char raw = 0;
+        while (in.get(raw)) {
+            if (decoder.inputByte(static_cast<std::uint8_t>(raw)) != 10) {
+                continue;
+            }
+            for (int sat = 1; sat <= kN; ++sat) {
+                const MadocaSsrCorrection& c = decoder.correction(sat);
+                const std::int64_t ot = c.t0[0].time;
+                const std::int64_t ct = c.t0[1].time;
+                if (ot == 0 && ct == 0) {
+                    continue;
+                }
+                if (ot == last_orbit[sat] && ct == last_clock[sat]) {
+                    continue;  // no orbit/clock change since the last sample
+                }
+                last_orbit[sat] = ot;
+                last_clock[sat] = ct;
+                libgnss::SSROrbitClockCorrection corr;
+                if (buildMadocaSsrCorrection(sat, c, corr)) {
+                    products.addCorrection(corr);
+                    ++added;
                 }
             }
-            if (c.vpbias[k]) {
-                const std::uint8_t id = madocaBiasCodeToRtcmSsrId(gsys, code);
-                if (id > 0) {
-                    corr.phase_bias_m[id] = c.pbias[k];
-                }
-            }
         }
-        corr.code_bias_valid = !corr.code_bias_m.empty();
-        corr.phase_bias_valid = !corr.phase_bias_m.empty();
-
-        products.addCorrection(corr);
-        ++added;
     }
     return added;
 }

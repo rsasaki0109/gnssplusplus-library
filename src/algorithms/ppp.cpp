@@ -11,6 +11,7 @@
 #include <libgnss++/iers/ephemeris.hpp>
 #include <libgnss++/iers/sub_daily_eop.hpp>
 #include <libgnss++/iers/tides.hpp>
+#include <libgnss++/io/madoca_l6.hpp>
 #include <libgnss++/io/qzss_l6.hpp>
 #include <libgnss++/io/rtcm.hpp>
 #include <libgnss++/models/troposphere.hpp>
@@ -1355,6 +1356,20 @@ bool PPPProcessor::loadL6Products(const std::string& l6_file) {
     qzss_l6::populateSSRProducts(epochs, ssr_products_, best_network);
     ssr_products_loaded_ = true;
     return true;
+}
+
+bool PPPProcessor::loadMadocaL6Products(const std::vector<std::string>& l6_files) {
+    ssr_products_.clear();
+    if (l6_files.empty()) {
+        ssr_products_loaded_ = false;
+        return false;
+    }
+    const int gps_week = ppp_config_.l6_gps_week > 0 ? ppp_config_.l6_gps_week
+                                                     : last_obs_gps_week_;
+    const int added =
+        io::decodeMadocaL6eFilesToProducts(l6_files, gps_week, ssr_products_);
+    ssr_products_loaded_ = added > 0;
+    return ssr_products_loaded_;
 }
 
 bool PPPProcessor::loadIONEXProducts(const std::string& ionex_file) {
