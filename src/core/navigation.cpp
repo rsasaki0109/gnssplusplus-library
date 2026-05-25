@@ -535,6 +535,51 @@ void NavigationData::addEphemeris(const Ephemeris& eph) {
               });
 }
 
+namespace {
+// RTKLIB seleph() applies two Galileo-specific selection rules that native
+// otherwise lacks (it picks purely the age-closest valid record):
+//   1. Data-source filter: with the default selection (eph_sel[SYS_GAL]=0) keep
+//      only I/NAV records, recognised by bit 9 of the "data sources" word
+//      (af0-af2/Toc referenced to E5b,E1). BRDM-style merged nav files carry
+//      both I/NAV (513/516/517) and F/NAV (258) per satellite; without this
+//      native lands on F/NAV ~half the time (clock-reference mismatch).
+//   2. No-future rule: skip any record whose toe is at or after the query time
+//      (RTKLIB `timediff(eph->toe,time)>=0.0`), so the most-recent already-in-
+//      effect ephemeris is used rather than the age-closest (which near a 600 s
+//      toe boundary is the next, future record — a ~0.5 m along-track shift).
+// Gated to Galileo so the data-source word — which means other things for
+// GPS/QZSS/BDS — is ignored elsewhere. Env override for A/B (default ON).
+//
+// DEFAULT OFF (opt-in via GNSS_PPP_GAL_INAV=1): although this matches RTKLIB
+// seleph and makes the Galileo clock reference consistent with the bridge
+// (per-sat clk std 0.25 m -> 0.005 m), enabling it REGRESSES position on the
+// MADOCA parity datasets (MIZU 3D 0.315 -> 0.469, ALIC 0.390 -> 1.087): the
+// age-nearest F/NAV-mixing the native estimator currently does happens to
+// compensate for an estimator-layer Galileo bias, so correcting only the input
+// removes the compensation. It also does NOT close the ~0.5 m tangential
+// Galileo orbit gap (the toe rule made no difference), whose root cause is the
+// IODE-match interacting with the I/NAV filter (separate, unsolved, ~5 cm LOS
+// impact). Kept as an opt-in for when the estimator layer is addressed.
+inline bool galileoSkip(const SatelliteId& sat, const Ephemeris& eph,
+                        const GNSSTime& time) {
+    static const bool kEnabled = [] {
+        const char* v = std::getenv("GNSS_PPP_GAL_INAV");
+        return v != nullptr && v[0] != '0';
+    }();
+    if (!kEnabled || sat.system != GNSSSystem::Galileo) {
+        return false;
+    }
+    constexpr int kGalInavClockBit = 1 << 9;
+    if (!(eph.data_source_code & kGalInavClockBit)) {
+        return true;  // not I/NAV
+    }
+    if (eph.toe - time >= 0.0) {
+        return true;  // future ephemeris
+    }
+    return false;
+}
+}  // namespace
+
 const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat, const GNSSTime& time) const {
     auto it = ephemeris_data.find(sat);
     if (it == ephemeris_data.end()) {
@@ -543,8 +588,11 @@ const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat, const GNSS
     
     const Ephemeris* best_eph = nullptr;
     double min_age = 1e9;
-    
+
     for (const auto& eph : it->second) {
+        if (galileoSkip(sat, eph, time)) {
+            continue;
+        }
         if (eph.isValid(time)) {
             double age = eph.getAge(time);
             if (age < min_age) {
@@ -553,7 +601,7 @@ const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat, const GNSS
             }
         }
     }
-    
+
     return best_eph;
 }
 
@@ -574,6 +622,9 @@ const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat,
     const Ephemeris* best_match = nullptr;
     double min_age = 1e9;
     for (const auto& eph : it->second) {
+        if (galileoSkip(sat, eph, time)) {
+            continue;
+        }
         if (static_cast<int>(eph.iode) != desired_iode) {
             continue;
         }

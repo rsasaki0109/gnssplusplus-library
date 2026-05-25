@@ -64,7 +64,8 @@ struct Ephemeris {
     uint8_t ura;            ///< User range accuracy index
     uint16_t iodc;          ///< Issue of data clock
     uint16_t iode;          ///< Issue of data ephemeris
-    
+    int data_source_code = 0;  ///< RINEX nav "data sources" word (Galileo: bit0 I/NAV E1-B, bit1 F/NAV E5a, bit2 I/NAV E5b, bit8 clock E5a/F-NAV, bit9 clock E5b/I-NAV)
+
     bool valid = false;     ///< Ephemeris validity flag
     
     /**
