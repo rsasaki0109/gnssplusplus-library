@@ -31,6 +31,15 @@ struct SatelliteAntexEntry {
     std::map<SignalType, Vector3d> body_offsets_m;
 };
 
+// Receiver antenna phase-centre variation (NOAZI elevation grid) for one
+// signal, used by the est-stec per-frequency path.
+struct ReceiverPcvGrid {
+    double zen1_deg = 0.0;
+    double zen2_deg = 90.0;
+    double dzen_deg = 5.0;
+    std::vector<double> noazi_m;  // PCV at each zenith node (metres)
+};
+
 /**
  * @brief Precise Point Positioning (PPP) processor
  *
@@ -241,6 +250,9 @@ private:
     iers::AtmosphericTidalLoadingCoefficients atm_tidal_loading_coefficients_{};
     bool atm_tidal_loading_loaded_ = false;
     std::map<std::string, std::map<SignalType, Vector3d>> receiver_antex_offsets_;
+    // Receiver PCV (NOAZI elevation grid) per antenna type and signal, used by
+    // the est-stec per-frequency path.
+    std::map<std::string, std::map<SignalType, ReceiverPcvGrid>> receiver_antex_pcv_;
     bool receiver_antex_loaded_ = false;
     std::vector<SatelliteAntexEntry> satellite_antex_offsets_;
     bool satellite_antex_loaded_ = false;
@@ -331,6 +343,13 @@ private:
         double trop_mapping = 0.0;
         double modeled_trop_delay_m = 0.0;
         double antenna_pco_m = 0.0;
+        // Per-frequency receiver antenna corrections for the est-stec path.
+        // The shared receiver_position already carries the L1 PCO via geodist;
+        // these add the L1 PCV and the (L2-L1) PCO delta + L2 PCV so each
+        // frequency's modeled range uses its own antenna phase centre. Zero in
+        // the IFLC path (IF-combined PCO is applied via the position shift).
+        double rx_ant_corr_l1_m = 0.0;
+        double rx_ant_corr_l2_m = 0.0;
         double ambiguity_scale_m = 0.0;
         double atmospheric_trop_correction_m = 0.0;
         double atmospheric_iono_correction_m = 0.0;
@@ -383,7 +402,13 @@ private:
 
     Vector3d calculateReceiverAntennaOffsetEcef(const Vector3d& receiver_marker_position,
                                                 const IonosphereFreeObs& observation) const;
-    
+
+    // Receiver antenna PCV range correction (metres) for a signal at the given
+    // elevation, interpolated from the NOAZI grid. Returns 0 if no grid is
+    // available. Sign matches RTKLIB antmodel(): the value is added to the
+    // modeled range (equivalently subtracted from the observable).
+    double receiverAntennaPcvMeters(SignalType signal, double elevation_rad) const;
+
     /**
      * @brief Detect cycle slips
      */

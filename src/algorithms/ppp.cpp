@@ -233,8 +233,11 @@ bool loadSatelliteAntexOffsets(
 
 bool loadReceiverAntexOffsets(
     const std::string& filename,
-    std::map<std::string, std::map<SignalType, Vector3d>>& receiver_offsets) {
+    std::map<std::string, std::map<SignalType, Vector3d>>& receiver_offsets,
+    std::map<std::string, std::map<SignalType, ReceiverPcvGrid>>&
+        receiver_pcv) {
     receiver_offsets.clear();
+    receiver_pcv.clear();
     std::ifstream input(filename);
     if (!input.is_open()) {
         return false;
@@ -245,6 +248,8 @@ bool loadReceiverAntexOffsets(
     SignalType current_signal = SignalType::SIGNAL_TYPE_COUNT;
     std::string current_type;
     std::map<SignalType, Vector3d> current_offsets;
+    std::map<SignalType, ReceiverPcvGrid> current_pcv;
+    double zen1_deg = 0.0, zen2_deg = 90.0, dzen_deg = 5.0;
     std::string line;
     while (std::getline(input, line)) {
         const std::string label = line.size() >= 60 ? trimCopy(line.substr(60)) : "";
@@ -254,6 +259,10 @@ bool loadReceiverAntexOffsets(
             current_signal = SignalType::SIGNAL_TYPE_COUNT;
             current_type.clear();
             current_offsets.clear();
+            current_pcv.clear();
+            zen1_deg = 0.0;
+            zen2_deg = 90.0;
+            dzen_deg = 5.0;
             continue;
         }
         if (!in_antenna) {
@@ -262,6 +271,9 @@ bool loadReceiverAntexOffsets(
         if (label == "END OF ANTENNA") {
             if (receiver_entry && !current_type.empty() && !current_offsets.empty()) {
                 receiver_offsets[current_type] = current_offsets;
+                if (!current_pcv.empty()) {
+                    receiver_pcv[current_type] = current_pcv;
+                }
             }
             in_antenna = false;
             continue;
@@ -276,6 +288,11 @@ bool loadReceiverAntexOffsets(
             continue;
         }
         if (!receiver_entry) {
+            continue;
+        }
+        if (label == "ZEN1 / ZEN2 / DZEN") {
+            std::istringstream iss(line.substr(0, std::min<size_t>(line.size(), 60U)));
+            iss >> zen1_deg >> zen2_deg >> dzen_deg;
             continue;
         }
         if (label == "START OF FREQUENCY") {
@@ -295,6 +312,27 @@ bool loadReceiverAntexOffsets(
             if (iss >> north_mm >> east_mm >> up_mm) {
                 current_offsets[current_signal] =
                     Vector3d(east_mm * 1e-3, north_mm * 1e-3, up_mm * 1e-3);
+            }
+            continue;
+        }
+        // Elevation-dependent PCV row ("NOAZI" followed by one value per zenith
+        // node). Azimuth-dependent rows (leading numeric azimuth) are ignored;
+        // the NOAZI mean matches MADOCALIB's interpvar() lookup.
+        if (current_signal != SignalType::SIGNAL_TYPE_COUNT) {
+            std::istringstream iss(line);
+            std::string tag;
+            if (iss >> tag && tag == "NOAZI") {
+                ReceiverPcvGrid grid;
+                grid.zen1_deg = zen1_deg;
+                grid.zen2_deg = zen2_deg;
+                grid.dzen_deg = dzen_deg;
+                double v_mm = 0.0;
+                while (iss >> v_mm) {
+                    grid.noazi_m.push_back(v_mm * 1e-3);
+                }
+                if (!grid.noazi_m.empty()) {
+                    current_pcv[current_signal] = std::move(grid);
+                }
             }
         }
     }
@@ -983,12 +1021,14 @@ bool PPPProcessor::initialize(const ProcessorConfig& config) {
     reset();
 
     receiver_antex_offsets_.clear();
+    receiver_antex_pcv_.clear();
     receiver_antex_loaded_ = false;
     satellite_antex_offsets_.clear();
     satellite_antex_loaded_ = false;
     if (!ppp_config_.antex_file_path.empty()) {
         receiver_antex_loaded_ =
-            loadReceiverAntexOffsets(ppp_config_.antex_file_path, receiver_antex_offsets_);
+            loadReceiverAntexOffsets(ppp_config_.antex_file_path, receiver_antex_offsets_,
+                                     receiver_antex_pcv_);
         // Receiver section may be empty for sat-only ANTEX files; the load
         // is fatal only if no satellite block also ends up populated.
         satellite_antex_loaded_ =
@@ -2172,6 +2212,36 @@ Vector3d PPPProcessor::calculateReceiverAntennaOffsetEcef(
     return enu2ecef(offset_enu, latitude_rad, longitude_rad);
 }
 
+double PPPProcessor::receiverAntennaPcvMeters(SignalType signal,
+                                              double elevation_rad) const {
+    if (!receiver_antex_loaded_ || ppp_config_.receiver_antenna_type.empty()) {
+        return 0.0;
+    }
+    const auto ant_it =
+        receiver_antex_pcv_.find(normalizeAntennaType(ppp_config_.receiver_antenna_type));
+    if (ant_it == receiver_antex_pcv_.end()) {
+        return 0.0;
+    }
+    const auto sig_it = ant_it->second.find(signal);
+    if (sig_it == ant_it->second.end()) {
+        return 0.0;
+    }
+    const ReceiverPcvGrid& grid = sig_it->second;
+    if (grid.noazi_m.empty() || grid.dzen_deg <= 0.0) {
+        return 0.0;
+    }
+    // RTKLIB interpvar(): linear interpolation of the NOAZI grid at the zenith
+    // angle, clamped at both ends.
+    const double zenith_deg = 90.0 - elevation_rad / kDegreesToRadians;
+    const double node = (zenith_deg - grid.zen1_deg) / grid.dzen_deg;
+    const int last = static_cast<int>(grid.noazi_m.size()) - 1;
+    if (node <= 0.0) return grid.noazi_m.front();
+    if (node >= last) return grid.noazi_m.back();
+    const int i0 = static_cast<int>(std::floor(node));
+    const double frac = node - i0;
+    return grid.noazi_m[i0] * (1.0 - frac) + grid.noazi_m[i0 + 1] * frac;
+}
+
 void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& observations,
                                            const NavigationData& nav,
                                            const GNSSTime& time) {
@@ -2633,6 +2703,49 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             observation.antenna_pco_m = los_unit.dot(receiver_antenna_offset_ecef);
         } else {
             observation.antenna_pco_m = 0.0;
+        }
+
+        // Per-frequency receiver antenna model (est-stec). MADOCALIB applies a
+        // per-frequency receiver PCO/PCV correction (posopt2=on) but no
+        // satellite PCO/PCV (brdc+ssrapc -> opt=0; satantpcv() is disabled for
+        // madoca-ppp). The shared receiver_position already carries the L1 PCO
+        // via geodist(), so here we add only the residual per-frequency terms:
+        //   L1 row: + PCV_L1(zen)
+        //   L2 row: -los.(PCO_L2 - PCO_L1) + PCV_L2(zen)
+        // Gated to the est-stec path; the IFLC path keeps its IF-combined PCO
+        // position shift bit-identical (corrections stay 0).
+        observation.rx_ant_corr_l1_m = 0.0;
+        observation.rx_ant_corr_l2_m = 0.0;
+        static const bool per_freq_rx_antenna_enabled =
+            std::getenv("GNSS_PPP_PF_RX_ANTENNA") != nullptr;
+        if (per_freq_rx_antenna_enabled && receiver_antex_loaded_ &&
+            !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
+            !ppp_config_.use_clas_osr_filter && geometry.distance > 0.0 &&
+            !ppp_config_.receiver_antenna_type.empty()) {
+            const auto ant_it = receiver_antex_offsets_.find(
+                normalizeAntennaType(ppp_config_.receiver_antenna_type));
+            if (ant_it != receiver_antex_offsets_.end()) {
+                double rx_lat = 0.0, rx_lon = 0.0, rx_h = 0.0;
+                ecef2geodetic(receiver_marker_position, rx_lat, rx_lon, rx_h);
+                const Vector3d los_unit =
+                    (sat_position - receiver_position) / geometry.distance;
+                observation.rx_ant_corr_l1_m =
+                    receiverAntennaPcvMeters(observation.primary_signal, observation.elevation);
+                if (observation.secondary_signal != SignalType::SIGNAL_TYPE_COUNT) {
+                    const auto l1_it = ant_it->second.find(observation.primary_signal);
+                    const auto l2_it = ant_it->second.find(observation.secondary_signal);
+                    double pco_delta_m = 0.0;
+                    if (l1_it != ant_it->second.end() && l2_it != ant_it->second.end()) {
+                        const Vector3d delta_ecef =
+                            enu2ecef(l2_it->second - l1_it->second, rx_lat, rx_lon);
+                        pco_delta_m = -los_unit.dot(delta_ecef);
+                    }
+                    observation.rx_ant_corr_l2_m =
+                        pco_delta_m +
+                        receiverAntennaPcvMeters(observation.secondary_signal,
+                                                 observation.elevation);
+                }
+            }
         }
 
         // Phase wind-up correction (Wu et al. 1993). Same cycle count for L1
@@ -4082,7 +4195,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         const double predicted =
             geometric_range + clock_bias_m -
             constants::SPEED_OF_LIGHT * observation.satellite_clock_bias + troposphere_delay
-            + iono_state_m;
+            + iono_state_m + observation.rx_ant_corr_l1_m;
         const double residual = observation.pseudorange_if - predicted;
 
         if (pppDebugEnabled()) {
@@ -4221,7 +4334,8 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 }
                 const double l2_code_pred = geometric_range + clock_bias_m -
                     constants::SPEED_OF_LIGHT * observation.satellite_clock_bias +
-                    troposphere_delay + ratio2 * iono_state_l1_m;
+                    troposphere_delay + ratio2 * iono_state_l1_m +
+                    observation.rx_ant_corr_l2_m;
                 const double l2_code_resid = observation.pseudorange_l2 - l2_code_pred;
                 // Use the elevation-weighted RTKLIB variance (same satellite, so
                 // identical elevation weighting as L1) rather than the flat seed.
@@ -4266,7 +4380,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 const double l2_phase_pred = geometric_range + clock_bias_m -
                     constants::SPEED_OF_LIGHT * observation.satellite_clock_bias +
                     troposphere_delay - ratio2 * iono_state_l1_m +
-                    filter_state_.state(amb2_index);
+                    filter_state_.state(amb2_index) + observation.rx_ant_corr_l2_m;
                 const double l2_phase_resid = observation.carrier_phase_l2 - l2_phase_pred;
                 const double var_cp_l2 = observation.variance_cp > 0.0
                     ? observation.variance_cp
