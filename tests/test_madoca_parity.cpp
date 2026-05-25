@@ -2,14 +2,18 @@
 
 #include <libgnss++/algorithms/madoca_parity.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/navigation.hpp>
+#include <libgnss++/core/types.hpp>
 #include <libgnss++/external/madocalib_bridge.hpp>
 #include <libgnss++/external/madocalib_oracle.hpp>
 #include <libgnss++/io/madoca_l6.hpp>
 #include <libgnss++/io/madoca_l6d.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -456,6 +460,117 @@ TEST_F(MadocaParity, L6dIonoCorrMatchesOracle) {
     EXPECT_GT(dly_checks, 0) << "no non-GLONASS slant delay compared";
 }
 
+TEST_F(MadocaParity, L6eSnapshotConvertsToSsrProducts) {
+    // Decode the PRN-204 L6E channel, convert the resulting per-satellite
+    // Compact SSR snapshot into native SSRProducts, and confirm every field is
+    // carried faithfully: RAC orbit deltas equal the decoded deph, the clock
+    // equals the c0 term, and each valid bias re-keys to its RTCM SSR id with
+    // the decoded value. This is structural (no oracle): it pins the converter
+    // that wires MADOCA L6E into the native PPP pipeline.
+    namespace mp = libgnss::algorithms::madoca_parity;
+    const std::string root = libgnss::external::madocalib::defaultRootDir();
+    if (root.empty()) {
+        GTEST_SKIP() << "MADOCALIB root unavailable";
+    }
+    const std::string l6_path =
+        root + "/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.204.l6";
+    std::ifstream in(l6_path, std::ios::binary);
+    if (!in) {
+        GTEST_SKIP() << "L6E sample missing: " << l6_path;
+    }
+    const std::vector<std::uint8_t> bytes(
+        (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    ASSERT_FALSE(bytes.empty());
+
+    libgnss::io::MadocaL6eDecoder decoder;
+    const double ref_ep[6] = {2025.0, 4.0, 1.0, 0.0, 0.0, 0.0};
+    decoder.setReferenceEpoch(ref_ep);
+    for (std::uint8_t b : bytes) {
+        decoder.inputByte(b);
+    }
+
+    libgnss::SSRProducts products;
+    const int added = libgnss::io::madocaL6eSnapshotToProducts(decoder, products);
+    EXPECT_GT(added, 0) << "no satellites converted";
+    EXPECT_TRUE(products.orbitCorrectionsAreRac());
+
+    auto sysmap = [](int s) {
+        switch (s) {
+            case mp::kSysGps: return libgnss::GNSSSystem::GPS;
+            case mp::kSysGlo: return libgnss::GNSSSystem::GLONASS;
+            case mp::kSysGal: return libgnss::GNSSSystem::Galileo;
+            case mp::kSysQzs: return libgnss::GNSSSystem::QZSS;
+            case mp::kSysCmp: return libgnss::GNSSSystem::BeiDou;
+            default: return libgnss::GNSSSystem::UNKNOWN;
+        }
+    };
+    int orbit_checks = 0, clock_checks = 0, bias_checks = 0;
+    for (int sat = 1; sat <= libgnss::io::MadocaL6eDecoder::kMaxSat; ++sat) {
+        const auto& c = decoder.correction(sat);
+        if (c.t0[0].time == 0 && c.t0[1].time == 0) {
+            continue;
+        }
+        int prn = 0;
+        const libgnss::GNSSSystem gsys = sysmap(mp::satsys(sat, &prn));
+        if (gsys == libgnss::GNSSSystem::UNKNOWN || prn <= 0) {
+            continue;
+        }
+        const libgnss::SatelliteId id(gsys, static_cast<std::uint8_t>(prn));
+        auto it = products.orbit_clock_corrections.find(id);
+        ASSERT_NE(it, products.orbit_clock_corrections.end())
+            << "sat " << sat << " missing from products";
+        ASSERT_FALSE(it->second.empty());
+        const libgnss::SSROrbitClockCorrection& corr = it->second.front();
+
+        if (c.t0[0].time != 0) {
+            EXPECT_TRUE(corr.orbit_valid);
+            EXPECT_DOUBLE_EQ(corr.orbit_correction_ecef.x(), c.deph[0]);
+            EXPECT_DOUBLE_EQ(corr.orbit_correction_ecef.y(), c.deph[1]);
+            EXPECT_DOUBLE_EQ(corr.orbit_correction_ecef.z(), c.deph[2]);
+            ++orbit_checks;
+        }
+        if (c.t0[1].time != 0) {
+            EXPECT_TRUE(corr.clock_valid);
+            EXPECT_DOUBLE_EQ(corr.clock_correction_m, c.dclk[0]);
+            ++clock_checks;
+        }
+        // Group decoded code biases by target RTCM id, mirroring the converter's
+        // ascending-code last-wins. Most ids have a single source code (exact
+        // value check); a few RTCM ids are coarser than MADOCA tracking codes
+        // (e.g. GPS L5I/L5Q/L5X all map to id 22), so the stored value must be
+        // one of the candidates.
+        std::map<std::uint8_t, std::vector<double>> expected;
+        for (int k = 0; k < libgnss::io::MadocaSsrCorrection::kMaxCode; ++k) {
+            if (!c.vcbias[k]) {
+                continue;
+            }
+            const std::uint8_t rid =
+                libgnss::io::madocaBiasCodeToRtcmSsrId(gsys, k + 1);
+            if (rid != 0) {
+                expected[rid].push_back(c.cbias[k]);
+            }
+        }
+        EXPECT_EQ(corr.code_bias_m.size(), expected.size())
+            << "sat " << sat << " code bias id set mismatch";
+        for (const auto& [rid, vals] : expected) {
+            ASSERT_EQ(corr.code_bias_m.count(rid), 1u)
+                << "sat " << sat << " missing code bias id " << int(rid);
+            const double stored = corr.code_bias_m.at(rid);
+            if (vals.size() == 1) {
+                EXPECT_DOUBLE_EQ(stored, vals.front());
+            } else {
+                EXPECT_NE(std::find(vals.begin(), vals.end(), stored), vals.end())
+                    << "sat " << sat << " id " << int(rid)
+                    << " stored value not among candidates";
+            }
+            ++bias_checks;
+        }
+    }
+    EXPECT_GT(orbit_checks, 0) << "no orbit corrections converted";
+    EXPECT_GT(clock_checks, 0) << "no clock corrections converted";
+    EXPECT_GT(bias_checks, 0) << "no code biases converted";
+}
+
 TEST_F(MadocaParity, GetbitBitExtraction) {
     ASSERT_TRUE(madoca::getbituAvailable());
     ASSERT_TRUE(madoca::getbitsAvailable());
@@ -485,5 +600,42 @@ TEST(MadocaParityDefault, OracleDisabledInDefaultBuild) {
 }
 
 #endif
+
+// Pure mapping check (no oracle / no sample): MADOCA Compact SSR bias codes
+// (RTKLIB CODE_* values) must re-key to the RTCM SSR signal ids that the PPP
+// bias application looks up (core/signals.hpp rtcmSsrSignalId).
+TEST(MadocaSsrConvert, BiasCodeToRtcmSsrId) {
+    using libgnss::GNSSSystem;
+    using libgnss::io::madocaBiasCodeToRtcmSsrId;
+    namespace mp = libgnss::algorithms::madoca_parity;
+    auto id = [](GNSSSystem sys, int code) {
+        return static_cast<int>(madocaBiasCodeToRtcmSsrId(sys, code));
+    };
+    // GPS: L1 C/A->2, L1 P(Y)->3, L2C->8, L2 P(Y)->9, L5->22
+    EXPECT_EQ(id(GNSSSystem::GPS, mp::kCodeL1C), 2);
+    EXPECT_EQ(id(GNSSSystem::GPS, mp::kCodeL1W), 3);
+    EXPECT_EQ(id(GNSSSystem::GPS, mp::kCodeL2X), 8);
+    EXPECT_EQ(id(GNSSSystem::GPS, mp::kCodeL2W), 9);
+    EXPECT_EQ(id(GNSSSystem::GPS, mp::kCodeL5X), 22);
+    // Galileo: E1->2, E6->8, E5b->14, E5a->22
+    EXPECT_EQ(id(GNSSSystem::Galileo, mp::kCodeL1X), 2);
+    EXPECT_EQ(id(GNSSSystem::Galileo, mp::kCodeL6B), 8);
+    EXPECT_EQ(id(GNSSSystem::Galileo, mp::kCodeL7X), 14);
+    EXPECT_EQ(id(GNSSSystem::Galileo, mp::kCodeL5X), 22);
+    // BeiDou: B1I->2, B3I->8, B2I->14
+    EXPECT_EQ(id(GNSSSystem::BeiDou, mp::kCodeL2I), 2);
+    EXPECT_EQ(id(GNSSSystem::BeiDou, mp::kCodeL6I), 8);
+    EXPECT_EQ(id(GNSSSystem::BeiDou, mp::kCodeL7I), 14);
+    // QZSS: L1 C/A->2, L2C->8, L5->22
+    EXPECT_EQ(id(GNSSSystem::QZSS, mp::kCodeL1C), 2);
+    EXPECT_EQ(id(GNSSSystem::QZSS, mp::kCodeL2X), 8);
+    EXPECT_EQ(id(GNSSSystem::QZSS, mp::kCodeL5X), 22);
+    // GLONASS: G1 C/A->2, G2 C/A->8
+    EXPECT_EQ(id(GNSSSystem::GLONASS, mp::kCodeL1C), 2);
+    EXPECT_EQ(id(GNSSSystem::GLONASS, mp::kCodeL2C), 8);
+    // No native RTCM SSR id -> 0
+    EXPECT_EQ(id(GNSSSystem::GPS, mp::kCodeL6X), 0);
+    EXPECT_EQ(id(GNSSSystem::UNKNOWN, mp::kCodeL1C), 0);
+}
 
 }  // namespace
