@@ -485,7 +485,22 @@ std::vector<Observation> SPPProcessor::validateObservations(const ObservationDat
         GNSSTime tx_time = time - travel_time;
 
         // Check if ephemeris is available at the estimated transmission time
-        if (!nav.hasEphemeris(observation.satellite, tx_time)) {
+        const Ephemeris* eph = nav.getEphemeris(observation.satellite, tx_time);
+        if (eph == nullptr) {
+            continue;
+        }
+
+        // Exclude satellites broadcasting an unhealthy status, mirroring RTKLIB
+        // satexclude(). QZSS masks its LEX (L6) signal-health bit (bit 0), which
+        // does not affect L1/L2/L5 positioning; any other set health bit, or any
+        // nonzero health on the remaining systems, excludes the satellite. The
+        // MIZU BRDC nav carries unhealthy R11/R26/R27, E14/E18 and several BDS
+        // GEO/IGSO; including them drove the SPP solution kilometers off.
+        int sv_health = static_cast<int>(eph->health);
+        if (observation.satellite.system == GNSSSystem::QZSS) {
+            sv_health &= 0xFE;
+        }
+        if (sv_health != 0) {
             continue;
         }
 
