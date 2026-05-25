@@ -1,0 +1,96 @@
+#pragma once
+
+#include <cstdint>
+
+namespace libgnss::io {
+
+// Per-satellite MADOCA-PPP SSR correction values decoded from a QZSS L6E
+// Compact SSR stream (IS-QZSS-MDC-004). This mirrors the value fields of the
+// RTKLIB ssr_t struct that the MADOCALIB decoder fills. Epoch-time (t0) parity
+// is intentionally deferred to a later increment; this struct carries the
+// substantive correction quantities (orbit/clock/bias/URA) plus the metadata
+// needed to interpret them.
+struct MadocaSsrCorrection {
+    static constexpr int kMaxCode = 68;  // RTKLIB MAXCODE
+
+    int iode = 0;          // issue of data ephemeris
+    int iod[6] = {};       // iod ssr {eph,clk,hrclk,ura,bias,pbias}
+    double udi[6] = {};    // SSR update interval (s)
+    int ura = 0;           // URA indicator
+    double deph[3] = {};   // delta orbit {radial,along,cross} (m)
+    double ddeph[3] = {};  // dot delta orbit (m/s)
+    double dclk[3] = {};   // delta clock {c0,c1,c2} (m,m/s,m/s^2)
+    float cbias[kMaxCode] = {};   // code biases (m), indexed by CODE-1
+    int vcbias[kMaxCode] = {};    // code-bias valid flag
+    double pbias[kMaxCode] = {};  // phase biases (m), indexed by CODE-1
+    int vpbias[kMaxCode] = {};    // phase-bias valid flag
+    int discnt[kMaxCode] = {};    // phase-bias discontinuity counter
+    double yaw_ang = 0.0;
+    double yaw_rate = 0.0;
+    int update = 0;        // update flag (0:no update,1:update)
+};
+
+// Decoder for the QZSS L6E MADOCA-PPP Compact SSR message stream. Faithfully
+// ports the MADOCALIB mdccssr.c byte synchronizer, sub-frame assembler, and
+// subtype 1/2/3/4/5/7 decoders. Corrections accumulate into a per-satellite
+// table that callers read after each successful decode.
+class MadocaL6eDecoder {
+public:
+    static constexpr int kMaxSat = 221;     // RTKLIB MAXSAT (linked build)
+    static constexpr int kMaxPrn = 7;       // defined MADOCA-PPP L6E channels
+    static constexpr int kMaxSys = 16;      // GNSS ID space
+    static constexpr int kMaxSigMask = 16;  // signal mask width
+
+    MadocaL6eDecoder();
+
+    // Feed one L6E byte. Return value matches MADOCALIB input_qzssl6e():
+    //   -1: error message, 0: no message, 10: SSR messages input this byte.
+    int inputByte(std::uint8_t data);
+
+    // Read the accumulated correction for satellite number sat (1..kMaxSat).
+    // Out-of-range satellites return a static empty correction.
+    const MadocaSsrCorrection& correction(int sat) const;
+
+    // Clear all decoder and correction state.
+    void reset();
+
+private:
+    // Per-channel (per L6E PRN) Compact SSR decode state. Mirrors mcssr_t.
+    struct ChannelState {
+        std::uint8_t buff[1060] = {};  // assembled 5-frame Compact SSR message
+        int ibuff = 0;
+        int satlist[kMaxSat] = {};     // 0:invalid, else satno
+        int gidlist[kMaxSat] = {};     // GNSS ID per listed satellite
+        int cellmask[kMaxSat] = {};
+        int ncell[kMaxSat] = {};
+        int siglist[kMaxSys][kMaxSigMask] = {};  // 0:terminate, else CODE_xxx
+        int nsat[kMaxSys] = {};
+        int nsig[kMaxSys] = {};
+        int ns = 0;
+        int maxframe = 0;
+        int frame = 0;
+        int iod = 0;
+        int tow0 = -1;  // <0 until a mask (ST1) has been processed
+        int ep0 = 0;
+        int prn = -1;
+        int prn_chk_cnt = 0;
+        int mgfid = -1;
+    };
+
+    int decodeL6eMessage();
+    int decodeHead(const ChannelState& ch, int* sync, int* iod, int* ep,
+                   double* udint, int i, int st) const;
+    int decodeMask(ChannelState& ch, int i);
+    int decodeOrbit(ChannelState& ch, int i, int apply);
+    int decodeClock(ChannelState& ch, int i, int apply);
+    int decodeCodeBias(ChannelState& ch, int i, int apply);
+    int decodePhaseBias(ChannelState& ch, int i, int apply);
+    int decodeUra(ChannelState& ch, int i, int apply);
+
+    std::uint8_t msg_buff_[218] = {};  // raw L6 message (L6BYTELEN)
+    int nbyte_ = 0;
+    ChannelState channels_[kMaxPrn];
+    MadocaSsrCorrection ssr_[kMaxSat];
+};
+
+}  // namespace libgnss::io

@@ -42,6 +42,7 @@ set(GNSS_SOURCES
     src/io/rtcm_stream.cpp
     src/io/ubx.cpp
     src/io/qzss_l6.cpp
+    src/io/madoca_l6.cpp
     src/core/solution.cpp
     src/core/types.cpp
     src/algorithms/ppp_ar.cpp

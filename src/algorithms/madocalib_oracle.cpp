@@ -1,5 +1,7 @@
 #include <libgnss++/external/madocalib_oracle.hpp>
 
+#include <cstdio>
+
 #ifndef GNSSPP_HAS_MADOCALIB_ORACLE
 #define GNSSPP_HAS_MADOCALIB_ORACLE 0
 #endif
@@ -97,6 +99,64 @@ std::int32_t getbits(const std::uint8_t* buff, int pos, int len) {
     (void)pos;
     (void)len;
     return 0;
+#endif
+}
+
+int decodeQzssL6eFile(const char* path, libgnss::io::MadocaSsrCorrection* out,
+                      int maxSat) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    using Correction = libgnss::io::MadocaSsrCorrection;
+    FILE* fp = std::fopen(path, "rb");
+    if (fp == nullptr) {
+        return -1;
+    }
+    // rtcm_t is ~126 MB (embeds large obs/nav/ssr arrays); allocate on the heap.
+    rtcm_t* rtcm = new rtcm_t{};
+    init_rtcm(rtcm);
+    double ep[6] = {2025.0, 4.0, 1.0, 0.0, 0.0, 0.0};
+    init_mcssr(epoch2time(ep));  // GPS week determination only
+    while (input_qzssl6ef(rtcm, fp) != -2) {
+        // Corrections accumulate into rtcm->ssr until end of file.
+    }
+    const int n = (maxSat < MAXSAT) ? maxSat : MAXSAT;
+    int count = 0;
+    for (int s = 0; s < n; ++s) {
+        const ssr_t& g = rtcm->ssr[s];
+        Correction& o = out[s];
+        o.iode = g.iode;
+        o.ura = g.ura;
+        for (int k = 0; k < 6; ++k) {
+            o.iod[k] = g.iod[k];
+            o.udi[k] = g.udi[k];
+        }
+        for (int k = 0; k < 3; ++k) {
+            o.deph[k] = g.deph[k];
+            o.ddeph[k] = g.ddeph[k];
+            o.dclk[k] = g.dclk[k];
+        }
+        for (int k = 0; k < Correction::kMaxCode; ++k) {
+            o.cbias[k] = g.cbias[k];
+            o.vcbias[k] = g.vcbias[k];
+            o.pbias[k] = g.pbias[k];
+            o.vpbias[k] = g.vpbias[k];
+            o.discnt[k] = g.discnt[k];
+        }
+        o.yaw_ang = g.yaw_ang;
+        o.yaw_rate = g.yaw_rate;
+        o.update = g.update;
+        if (g.update) {
+            ++count;
+        }
+    }
+    free_rtcm(rtcm);
+    delete rtcm;
+    std::fclose(fp);
+    return count;
+#else
+    (void)path;
+    (void)out;
+    (void)maxSat;
+    return -1;
 #endif
 }
 
