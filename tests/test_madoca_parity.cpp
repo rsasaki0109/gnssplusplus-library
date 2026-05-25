@@ -230,6 +230,8 @@ TEST_F(MadocaParity, L6eDecodeMatchesOracleSsr) {
     ASSERT_FALSE(bytes.empty());
 
     libgnss::io::MadocaL6eDecoder decoder;
+    const double ref_ep[6] = {2025.0, 4.0, 1.0, 0.0, 0.0, 0.0};
+    decoder.setReferenceEpoch(ref_ep);  // match the oracle's init_mcssr seed
     int native_updates = 0;
     for (std::uint8_t b : bytes) {
         decoder.inputByte(b);
@@ -255,6 +257,8 @@ TEST_F(MadocaParity, L6eDecodeMatchesOracleSsr) {
         EXPECT_EQ(n.iode, o.iode) << "sat=" << sat << " iode";
         EXPECT_EQ(n.ura, o.ura) << "sat=" << sat << " ura";
         for (int k = 0; k < 6; ++k) {
+            EXPECT_EQ(n.t0[k].time, o.t0[k].time) << "sat=" << sat << " t0[" << k << "].time";
+            EXPECT_DOUBLE_EQ(n.t0[k].sec, o.t0[k].sec) << "sat=" << sat << " t0[" << k << "].sec";
             EXPECT_EQ(n.iod[k], o.iod[k]) << "sat=" << sat << " iod[" << k << "]";
             EXPECT_DOUBLE_EQ(n.udi[k], o.udi[k]) << "sat=" << sat << " udi[" << k << "]";
         }

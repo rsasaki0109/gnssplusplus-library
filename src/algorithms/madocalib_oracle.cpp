@@ -126,6 +126,8 @@ int decodeQzssL6eFile(const char* path, libgnss::io::MadocaSsrCorrection* out,
         o.iode = g.iode;
         o.ura = g.ura;
         for (int k = 0; k < 6; ++k) {
+            o.t0[k].time = static_cast<long long>(g.t0[k].time);
+            o.t0[k].sec = g.t0[k].sec;
             o.iod[k] = g.iod[k];
             o.udi[k] = g.udi[k];
         }

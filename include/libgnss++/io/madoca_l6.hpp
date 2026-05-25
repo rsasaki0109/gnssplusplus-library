@@ -4,6 +4,13 @@
 
 namespace libgnss::io {
 
+// GPST instant in RTKLIB gtime_t form: integer seconds since 1970 plus a
+// fractional part. Mirrors the layout the MADOCALIB decoder writes into ssr_t.
+struct MadocaGtime {
+    std::int64_t time = 0;  // integer seconds (time_t)
+    double sec = 0.0;       // fraction of second
+};
+
 // Per-satellite MADOCA-PPP SSR correction values decoded from a QZSS L6E
 // Compact SSR stream (IS-QZSS-MDC-004). This mirrors the value fields of the
 // RTKLIB ssr_t struct that the MADOCALIB decoder fills. Epoch-time (t0) parity
@@ -13,6 +20,7 @@ namespace libgnss::io {
 struct MadocaSsrCorrection {
     static constexpr int kMaxCode = 68;  // RTKLIB MAXCODE
 
+    MadocaGtime t0[6];     // epoch time {eph,clk,hrclk,ura,bias,pbias}
     int iode = 0;          // issue of data ephemeris
     int iod[6] = {};       // iod ssr {eph,clk,hrclk,ura,bias,pbias}
     double udi[6] = {};    // SSR update interval (s)
@@ -43,6 +51,12 @@ public:
 
     MadocaL6eDecoder();
 
+    // Seed the GPS week-number determination from a calendar epoch
+    // (ep = {year,mon,day,hour,min,sec}), mirroring MADOCALIB init_mcssr().
+    // Pick an epoch within half a week of the stream's true time. Resets
+    // decode state. Must precede inputByte().
+    void setReferenceEpoch(const double ep[6]);
+
     // Feed one L6E byte. Return value matches MADOCALIB input_qzssl6e():
     //   -1: error message, 0: no message, 10: SSR messages input this byte.
     int inputByte(std::uint8_t data);
@@ -57,6 +71,7 @@ public:
 private:
     // Per-channel (per L6E PRN) Compact SSR decode state. Mirrors mcssr_t.
     struct ChannelState {
+        MadocaGtime gt;                // current epoch (week-rollover adjusted)
         std::uint8_t buff[1060] = {};  // assembled 5-frame Compact SSR message
         int ibuff = 0;
         int satlist[kMaxSat] = {};     // 0:invalid, else satno
@@ -89,6 +104,7 @@ private:
 
     std::uint8_t msg_buff_[218] = {};  // raw L6 message (L6BYTELEN)
     int nbyte_ = 0;
+    MadocaGtime seed_;                 // week-determination reference epoch
     ChannelState channels_[kMaxPrn];
     MadocaSsrCorrection ssr_[kMaxSat];
 };
