@@ -1,5 +1,6 @@
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/algorithms/ppp_ar.hpp>
+#include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/ppp_atmosphere.hpp>
 #include <libgnss++/algorithms/ppp_clas.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
@@ -1142,7 +1143,12 @@ PositionSolution PPPProcessor::processEpochStandard(
                                   << "\n";
                     }
                 }
-                if (fixed && ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL) {
+                if (fixed && ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL &&
+                    !ppp_config_.use_ionosphere_free) {
+                    // Per-frequency WLNL: override position with a clean WLS over
+                    // the fixed narrow-lane observations.  The decoupled IFLC
+                    // path instead applies the fix as a Kalman update, so the
+                    // filter-state position already reflects it.
                     Vector3d fixed_position;
                     if (solveFixedPosition(obs, nav, fixed_position)) {
                         if ((fixed_position - float_solution.position_ecef).norm() <= max_fixed_position_jump_m) {
@@ -2609,6 +2615,7 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
         bool have_mw = false;
         double gf_m = 0.0;
         double mw_m = 0.0;
+        double mw_lambda_wl = 0.0;
 
         const Observation* secondary =
             use_combination_slip_detection ?
@@ -2642,6 +2649,7 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
                         secondary->pseudorange,
                         f1,
                         f2);
+                    mw_lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
                     have_mw = std::isfinite(mw_m);
                     if (have_mw &&
                         ambiguity.has_last_melbourne_wubbena &&
@@ -2694,9 +2702,14 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
         if (have_mw) {
             updated_ambiguity.last_melbourne_wubbena_m = mw_m;
             updated_ambiguity.has_last_melbourne_wubbena = true;
-            // Accumulate MW average for Wide-Lane AR
-            constexpr double lambda_wl_gps = constants::SPEED_OF_LIGHT / (1575.42e6 - 1227.60e6);
-            const double mw_cycles = mw_m / lambda_wl_gps;
+            // Accumulate MW average for Wide-Lane AR.  Use the per-system
+            // wide-lane wavelength (c / |f1 - f2|) rather than a hardcoded GPS
+            // value so Galileo E1-E5a, BeiDou, and QZSS L1-L5 average in the
+            // correct cycle units.
+            const double lambda_wl = mw_lambda_wl > 0.0
+                ? mw_lambda_wl
+                : constants::SPEED_OF_LIGHT / (1575.42e6 - 1227.60e6);
+            const double mw_cycles = mw_m / lambda_wl;
             if (!mw_slip) {
                 updated_ambiguity.mw_sum_cycles += mw_cycles;
                 updated_ambiguity.mw_count += 1;
@@ -2921,9 +2934,16 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
     }
 
     if (ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL) {
-        // WLNL works with IFLC ambiguities (standard PPP) and also with
-        // per-frequency ambiguities when CLAS OSR corrections are loaded
-        // (NL float values are computed from corrected dual-freq observations).
+        // In ionosphere-free mode the filter state holds a single IFLC
+        // ambiguity per satellite, so recover the narrow-lane integer directly
+        // from that state (decoupled CNES/Laurichesse cascade) rather than from
+        // observation-domain narrow-lane phase, which would re-absorb the
+        // current position error and fix to wrong integers.
+        if (ppp_config_.use_ionosphere_free) {
+            return resolveAmbiguitiesDecoupledIf(obs, nav);
+        }
+        // Per-frequency / CLAS OSR path: NL float values are computed from
+        // corrected dual-freq observations.
         return resolveAmbiguitiesWLNL(obs, nav);
     }
     // DD_IFLC and DD_PER_FREQ fall through to existing DD-AR code below
@@ -3009,6 +3029,208 @@ bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const Navigati
         std::cerr << "[PPP-AR] DD fixed: nb=" << best_attempt.nb
                   << " ratio=" << best_attempt.ratio
                   << " threshold=" << best_attempt.required_ratio << "\n";
+    }
+    return true;
+}
+
+bool PPPProcessor::resolveAmbiguitiesDecoupledIf(const ObservationData& obs,
+                                                 const NavigationData& nav) {
+    last_ar_ratio_ = 0.0;
+    last_fixed_ambiguities_ = 0;
+
+    // 1) Collect eligible IFLC ambiguities (locked, finite scale).
+    const int ar_min_lock = ssr_products_loaded_
+        ? std::max(1, ppp_config_.wl_min_averaging_epochs)
+        : ppp_config_.convergence_min_epochs;
+    const auto eligible = ppp_ar::collectEligibleAmbiguities(
+        filter_state_, ambiguity_states_, ar_min_lock);
+
+    // 2) Fix wide-lane integers (N1-N2) from averaged Melbourne-Wubbena.
+    ppp_ar::applyWideLaneFixes(
+        ppp_config_, ambiguity_states_, eligible.satellites, pppDebugEnabled());
+
+    // 3) Build per-satellite narrow-lane geometry from the IFLC signal pair.
+    //    B_IF = lambda_NL * N1 + (c * f2 / (f1^2 - f2^2)) * N_WL, so the
+    //    narrow-lane integer is recovered as
+    //    N1 = (B_IF - if_wl_coeff * N_WL) / lambda_NL.
+    struct NlCandidate {
+        SatelliteId satellite;
+        int state_index = -1;
+        double lambda_nl_m = 0.0;
+        double if_wl_coeff_m = 0.0;
+        int wl_integer = 0;
+    };
+    std::vector<NlCandidate> candidates;
+    candidates.reserve(eligible.satellites.size());
+    for (size_t i = 0; i < eligible.satellites.size(); ++i) {
+        const SatelliteId& sat = eligible.satellites[i];
+        const auto amb_it = ambiguity_states_.find(sat);
+        if (amb_it == ambiguity_states_.end() || !amb_it->second.wl_is_fixed) {
+            continue;
+        }
+        const Observation* primary =
+            findObservationForSignals(obs, sat, primarySignals(sat.system));
+        const Observation* secondary =
+            findObservationForSignals(obs, sat, secondarySignals(sat.system));
+        if (primary == nullptr || secondary == nullptr) {
+            continue;
+        }
+        const Ephemeris* eph = nav.getEphemeris(sat, obs.time);
+        const double f1 = signalFrequencyHz(primary->signal, eph);
+        const double f2 = signalFrequencyHz(secondary->signal, eph);
+        if (f1 <= 0.0 || f2 <= 0.0 || std::abs(f1 - f2) < 1.0) {
+            continue;
+        }
+        NlCandidate candidate;
+        candidate.satellite = sat;
+        candidate.state_index = eligible.state_indices[i];
+        candidate.lambda_nl_m = constants::SPEED_OF_LIGHT / (f1 + f2);
+        candidate.if_wl_coeff_m = constants::SPEED_OF_LIGHT * f2 / (f1 * f1 - f2 * f2);
+        candidate.wl_integer = amb_it->second.wl_fixed_integer;
+        candidates.push_back(candidate);
+    }
+
+    if (pppDebugEnabled()) {
+        std::map<GNSSSystem, int> elig_by_sys;
+        std::map<GNSSSystem, int> wlfix_by_sys;
+        for (const auto& sat : eligible.satellites) {
+            elig_by_sys[sat.system]++;
+            const auto it = ambiguity_states_.find(sat);
+            if (it != ambiguity_states_.end() && it->second.wl_is_fixed) {
+                wlfix_by_sys[sat.system]++;
+            }
+        }
+        std::cerr << "[PPP-IFDEC-DBG] eligible/wlfix:";
+        for (const auto& [sys, n] : elig_by_sys) {
+            std::cerr << " sys" << static_cast<int>(sys) << "=" << n << "/" << wlfix_by_sys[sys];
+        }
+        std::cerr << " cand=" << candidates.size() << "\n";
+    }
+
+    if (static_cast<int>(candidates.size()) < ppp_config_.min_satellites_for_ar) {
+        if (pppDebugEnabled()) {
+            std::cerr << "[PPP-IFDEC] insufficient WL-fixed candidates: "
+                      << candidates.size() << " min=" << ppp_config_.min_satellites_for_ar << "\n";
+        }
+        return false;
+    }
+
+    // 4) Form intra-system double differences against the first satellite of
+    //    each system group.
+    std::map<std::pair<GNSSSystem, int>, int> reference_map;
+    for (size_t i = 0; i < candidates.size(); ++i) {
+        const auto group = ppp_ar::ambiguityDdGroup(candidates[i].satellite);
+        reference_map.emplace(group, static_cast<int>(i));
+    }
+    struct DdPair {
+        int ref_idx = -1;
+        int sat_idx = -1;
+    };
+    std::vector<DdPair> dd_pairs;
+    for (size_t i = 0; i < candidates.size(); ++i) {
+        const auto group = ppp_ar::ambiguityDdGroup(candidates[i].satellite);
+        const int ref_idx = reference_map[group];
+        if (ref_idx == static_cast<int>(i)) {
+            continue;
+        }
+        dd_pairs.push_back({ref_idx, static_cast<int>(i)});
+    }
+
+    const int nb = static_cast<int>(dd_pairs.size());
+    if (nb < ppp_config_.min_satellites_for_ar) {
+        if (pppDebugEnabled()) {
+            std::cerr << "[PPP-IFDEC] insufficient DD pairs: " << nb << "\n";
+        }
+        return false;
+    }
+
+    // 5) Narrow-lane DD float and covariance, all from the filter state.
+    VectorXd n1_float = VectorXd::Zero(nb);
+    MatrixXd n1_cov = MatrixXd::Zero(nb, nb);
+    for (int k = 0; k < nb; ++k) {
+        const NlCandidate& ref = candidates[static_cast<size_t>(dd_pairs[static_cast<size_t>(k)].ref_idx)];
+        const NlCandidate& sat = candidates[static_cast<size_t>(dd_pairs[static_cast<size_t>(k)].sat_idx)];
+        const double state_dd_m =
+            filter_state_.state(ref.state_index) - filter_state_.state(sat.state_index);
+        const double wl_dd = static_cast<double>(ref.wl_integer - sat.wl_integer);
+        n1_float(k) = (state_dd_m - sat.if_wl_coeff_m * wl_dd) / sat.lambda_nl_m;
+
+        for (int l = 0; l < nb; ++l) {
+            const NlCandidate& ref2 =
+                candidates[static_cast<size_t>(dd_pairs[static_cast<size_t>(l)].ref_idx)];
+            const NlCandidate& sat2 =
+                candidates[static_cast<size_t>(dd_pairs[static_cast<size_t>(l)].sat_idx)];
+            const double cov_m2 =
+                filter_state_.covariance(ref.state_index, ref2.state_index) -
+                filter_state_.covariance(ref.state_index, sat2.state_index) -
+                filter_state_.covariance(sat.state_index, ref2.state_index) +
+                filter_state_.covariance(sat.state_index, sat2.state_index);
+            n1_cov(k, l) = cov_m2 / (sat.lambda_nl_m * sat2.lambda_nl_m);
+        }
+    }
+
+    // 6) Integer least squares on the narrow-lane double differences.
+    VectorXd n1_fixed = VectorXd::Zero(nb);
+    double ratio = 0.0;
+    if (!lambdaSearch(n1_float, n1_cov, n1_fixed, ratio)) {
+        if (pppDebugEnabled()) {
+            std::cerr << "[PPP-IFDEC] lambda search failed nb=" << nb << "\n";
+        }
+        return false;
+    }
+    if (!std::isfinite(ratio) || ratio < ppp_config_.ar_ratio_threshold) {
+        if (pppDebugEnabled()) {
+            std::cerr << "[PPP-IFDEC] ratio reject: nb=" << nb << " ratio=" << ratio
+                      << " threshold=" << ppp_config_.ar_ratio_threshold << "\n";
+        }
+        return false;
+    }
+
+    // 7) Apply the fixed narrow-lane integers as a tight Kalman pseudo-measurement
+    //    on the IFLC ambiguity states.  The IFLC state is ionosphere-free, so the
+    //    constraint propagates cleanly to position without poisoning later epochs.
+    const int nx = filter_state_.total_states;
+    MatrixXd design = MatrixXd::Zero(nb, nx);
+    VectorXd innovation = VectorXd::Zero(nb);
+    MatrixXd measurement_cov = MatrixXd::Zero(nb, nb);
+    constexpr double hold_sigma_m = 1.0e-3;  // 1 mm constraint
+    for (int k = 0; k < nb; ++k) {
+        const NlCandidate& ref = candidates[static_cast<size_t>(dd_pairs[static_cast<size_t>(k)].ref_idx)];
+        const NlCandidate& sat = candidates[static_cast<size_t>(dd_pairs[static_cast<size_t>(k)].sat_idx)];
+        const double wl_dd = static_cast<double>(ref.wl_integer - sat.wl_integer);
+        const double fixed_dd_m = sat.lambda_nl_m * n1_fixed(k) + sat.if_wl_coeff_m * wl_dd;
+        const double float_dd_m =
+            filter_state_.state(ref.state_index) - filter_state_.state(sat.state_index);
+        innovation(k) = fixed_dd_m - float_dd_m;
+        design(k, ref.state_index) = 1.0;
+        design(k, sat.state_index) = -1.0;
+        measurement_cov(k, k) = hold_sigma_m * hold_sigma_m;
+    }
+
+    const MatrixXd innovation_cov =
+        design * filter_state_.covariance * design.transpose() + measurement_cov;
+    const MatrixXd innovation_inverse =
+        innovation_cov.ldlt().solve(MatrixXd::Identity(nb, nb));
+    if (!innovation_inverse.allFinite()) {
+        return false;
+    }
+    const MatrixXd gain = filter_state_.covariance * design.transpose() * innovation_inverse;
+    filter_state_.state += gain * innovation;
+    const MatrixXd identity = MatrixXd::Identity(nx, nx);
+    const MatrixXd kh = gain * design;
+    filter_state_.covariance =
+        (identity - kh) * filter_state_.covariance * (identity - kh).transpose() +
+        gain * measurement_cov * gain.transpose();
+
+    for (const auto& candidate : candidates) {
+        ambiguity_states_[candidate.satellite].is_fixed = true;
+        ambiguity_states_[candidate.satellite].nl_is_fixed = true;
+    }
+
+    last_ar_ratio_ = ratio;
+    last_fixed_ambiguities_ = nb;
+    if (pppDebugEnabled()) {
+        std::cerr << "[PPP-IFDEC] NL fixed: nb=" << nb << " ratio=" << ratio << "\n";
     }
     return true;
 }
