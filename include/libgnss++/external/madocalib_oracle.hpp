@@ -38,4 +38,18 @@ void l6dRegion(void* handle, libgnss::io::MadocaIonoRegion* out, int* rid);
 void l6dClearRegion(void* handle);
 void l6dDestroy(void* handle);
 
+// QZSS L6D ionosphere application oracle. l6dAppCreate heap-allocates an
+// mdcl6d_t plus a nav_t (the persistent nav.pppiono region table) and seeds
+// init_miono(). l6dAppInputByte feeds one byte and, on a completed message,
+// persists the decoded region into nav.pppiono (mirroring postpos.c
+// update_qzssl6d). l6dAppGetCorr runs MADOCALIB miono_get_corr for receiver
+// ECEF rr and copies the materialized per-satellite delay/std/time plus the
+// selected region/area into out, returning miono_get_corr's status (0/1).
+// Always pair l6dAppCreate with l6dAppDestroy. Sentinels when oracle is off.
+void* l6dAppCreate(const double ep[6]);
+int l6dAppInputByte(void* handle, std::uint8_t data);
+int l6dAppGetCorr(void* handle, const double rr[3],
+                  libgnss::io::MadocaIonoCorr* out);
+void l6dAppDestroy(void* handle);
+
 }  // namespace libgnss::external::madocalib_oracle

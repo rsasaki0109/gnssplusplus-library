@@ -363,6 +363,99 @@ TEST_F(MadocaParity, L6dDecodeMatchesOracleRegion) {
     EXPECT_GT(area_checks, 0) << "no valid STEC areas decoded";
 }
 
+TEST_F(MadocaParity, L6dIonoCorrMatchesOracle) {
+    // Decode the PRN-200 L6D channel into a persistent region store with both the
+    // native MadocaIonoStore and the MADOCALIB nav->pppiono glue, then materialize
+    // per-satellite L1 slant ionospheric corrections for several receiver
+    // positions and compare the selected region/area, correction time, slant
+    // delay std, and (for non-GLONASS satellites) the slant delay itself.
+    // GLONASS delay parity needs the broadcast FCN and is exercised once nav is
+    // wired in PPP application; here every other field is compared for all sats.
+    namespace mp = libgnss::algorithms::madoca_parity;
+    const std::string root = libgnss::external::madocalib::defaultRootDir();
+    if (root.empty()) {
+        GTEST_SKIP() << "MADOCALIB root unavailable";
+    }
+    const std::string l6_path =
+        root + "/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.200.l6";
+
+    std::ifstream in(l6_path, std::ios::binary);
+    if (!in) {
+        GTEST_SKIP() << "L6D sample missing: " << l6_path;
+    }
+    const std::vector<std::uint8_t> bytes(
+        (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    ASSERT_FALSE(bytes.empty());
+
+    const double ref_ep[6] = {2025.0, 4.0, 1.0, 0.0, 0.0, 0.0};
+    auto native = std::make_unique<libgnss::io::MadocaL6dDecoder>();
+    native->setReferenceEpoch(ref_ep);
+    libgnss::io::MadocaIonoStore store;
+    void* oracle = libgnss::external::madocalib_oracle::l6dAppCreate(ref_ep);
+    ASSERT_NE(oracle, nullptr);
+
+    // Drive both byte-for-byte, persisting each decoded region into the store
+    // (native) / nav.pppiono (oracle, inside l6dAppInputByte).
+    for (std::uint8_t b : bytes) {
+        const int rn = native->inputByte(b);
+        const int ro = libgnss::external::madocalib_oracle::l6dAppInputByte(oracle, b);
+        ASSERT_EQ(rn, ro);
+        if (rn != 10) {
+            continue;
+        }
+        if (native->region().rvalid) {
+            store.update(native->regionId(), native->region());
+        }
+        native->clearRegionAfterUse();
+    }
+
+    // Receiver positions inside this PRN-200 channel's wide-area coverage (it
+    // serves Australia / SE-Asia, not Japan). ECEF centers of areas in three
+    // regions, exercising cross-region selection. Region 3 carries the region
+    // alert flag, so its positions select no area in both implementations -
+    // verifying the ralert-skip parity. The non-alerted regions 4 and 1 produce
+    // real per-satellite corrections; the alerted position is repeated last.
+    const double positions[][3] = {
+        {-3171957.7662, 5196501.0141, 1895122.1358},   // rid 3 (17.4N,121.4E): alerted
+        {-1851755.8575, 6056820.4953, -750176.3609},   // rid 4 (-6.8N,107.0E)
+        {-3576073.4975, 3902599.4083, -3546446.5638},  // rid 1 (-34.0N,132.5E)
+        {-3171957.7662, 5196501.0141, 1895122.1358},   // rid 3 repeat: stateless check
+    };
+
+    int total_updated = 0;
+    int dly_checks = 0;
+    for (const auto& rr : positions) {
+        libgnss::io::MadocaIonoCorr ncorr;
+        libgnss::io::MadocaIonoCorr ocorr;
+        const int nu = store.getCorr(rr, native->decodeTime(), ncorr);
+        const int ou =
+            libgnss::external::madocalib_oracle::l6dAppGetCorr(oracle, rr, &ocorr);
+        ASSERT_EQ(nu, ou) << "updated flag mismatch";
+        if (nu == 0) {
+            continue;
+        }
+        ++total_updated;
+        EXPECT_EQ(ncorr.rid, ocorr.rid) << "selected rid";
+        EXPECT_EQ(ncorr.anum, ocorr.anum) << "selected anum";
+        for (int s = 0; s < libgnss::io::MadocaIonoCorr::kMaxSat; ++s) {
+            EXPECT_EQ(ncorr.t0[s].time, ocorr.t0[s].time) << "sat " << (s + 1) << " t0.time";
+            if (ncorr.t0[s].time == 0 && ocorr.t0[s].time == 0) {
+                continue;
+            }
+            EXPECT_DOUBLE_EQ(ncorr.t0[s].sec, ocorr.t0[s].sec) << "sat " << (s + 1) << " t0.sec";
+            EXPECT_DOUBLE_EQ(ncorr.std[s], ocorr.std[s]) << "sat " << (s + 1) << " std";
+            int prn = 0;
+            if (mp::satsys(s + 1, &prn) != mp::kSysGlo) {
+                EXPECT_DOUBLE_EQ(ncorr.dly[s], ocorr.dly[s]) << "sat " << (s + 1) << " dly";
+                ++dly_checks;
+            }
+        }
+    }
+    libgnss::external::madocalib_oracle::l6dAppDestroy(oracle);
+    EXPECT_GT(total_updated, 0) << "no receiver position produced a correction";
+    EXPECT_GT(dly_checks, 0) << "no non-GLONASS slant delay compared";
+}
+
 TEST_F(MadocaParity, GetbitBitExtraction) {
     ASSERT_TRUE(madoca::getbituAvailable());
     ASSERT_TRUE(madoca::getbitsAvailable());

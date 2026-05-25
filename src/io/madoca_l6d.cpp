@@ -100,6 +100,78 @@ void adjweek(MadocaGtime* gt, double tow) {
     *gt = gpst2time(week, tow);
 }
 
+// RTKLIB geometry (rtkcmn.c), ported bit-for-bit for the L6D area selection and
+// STEC delay so the latitude/longitude differences match MADOCALIB exactly.
+constexpr double kReWgs84 = 6378137.0;            // WGS84 earth semimajor axis (m)
+constexpr double kFeWgs84 = 1.0 / 298.257223563;  // WGS84 flattening
+constexpr double kPi = 3.141592653589793238462643383279502884;
+constexpr double kD2R = kPi / 180.0;
+constexpr double kR2D = 180.0 / kPi;
+
+double norm3(const double* a) {
+    return std::sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+}
+
+void ecef2pos(const double* r, double* pos) {
+    const double e2 = kFeWgs84 * (2.0 - kFeWgs84);
+    const double r2 = r[0] * r[0] + r[1] * r[1];  // dot(r,r,2)
+    double z, zk, v = kReWgs84, sinp = 0.0;
+    for (z = r[2], zk = 0.0; std::fabs(z - zk) >= 1E-4;) {
+        zk = z;
+        sinp = z / std::sqrt(r2 + z * z);
+        v = kReWgs84 / std::sqrt(1.0 - e2 * sinp * sinp);
+        z = r[2] + v * e2 * sinp;
+    }
+    pos[0] = r2 > 1E-12 ? std::atan(z / std::sqrt(r2))
+                        : (r[2] > 0.0 ? kPi / 2.0 : -kPi / 2.0);
+    pos[1] = r2 > 1E-12 ? std::atan2(r[1], r[0]) : 0.0;
+    pos[2] = std::sqrt(r2 + z * z) - v;
+}
+
+void pos2ecef(const double* pos, double* r) {
+    const double sinp = std::sin(pos[0]), cosp = std::cos(pos[0]);
+    const double sinl = std::sin(pos[1]), cosl = std::cos(pos[1]);
+    const double e2 = kFeWgs84 * (2.0 - kFeWgs84);
+    const double v = kReWgs84 / std::sqrt(1.0 - e2 * sinp * sinp);
+    r[0] = (v + pos[2]) * cosp * cosl;
+    r[1] = (v + pos[2]) * cosp * sinl;
+    r[2] = (v * (1.0 - e2) + pos[2]) * sinp;
+}
+
+// STEC URA -> standard deviation (m). Mirrors mdciono.c miono_std_stecura.
+double stecUraStd(int ura) {
+    if (ura <= 0) return 5.4665;   // STEC URA undefined/unknown -> worst case
+    if (ura >= 63) return 5.4665;
+    return (std::pow(3.0, (ura >> 3) & 7) * (1.0 + (ura & 7) / 4.0) - 1.0) * 1E-3;
+}
+
+// L1C carrier frequency (Hz), mirroring RTKLIB sat2freq(sat,CODE_L1C,nav).
+// GPS/Galileo/QZSS/BeiDou map CODE_L1C to 1575.42 MHz; GLONASS is FCN-dependent.
+double l1cFreqHz(int sat, const double* gloFreqHz) {
+    int prn = 0;
+    if (mp::satsys(sat, &prn) == mp::kSysGlo) {
+        return (gloFreqHz != nullptr) ? gloFreqHz[sat - 1] : 0.0;
+    }
+    return 1575.42E6;
+}
+
+// L1 slant ionospheric delay (m) for satellite sat in area a at geodetic ll
+// (deg). Mirrors mdciono.c miono_delay, including its use of coef[2] (C10) for
+// the squared-longitude term in the type>=3 model (faithful to MADOCALIB).
+double ionoDelay(int sat, const MadocaIonoArea& a, const double* ll,
+                 const double* gloFreqHz) {
+    const double* c = a.sat[sat - 1].coef;
+    const double freq = l1cFreqHz(sat, gloFreqHz);
+    const double dlat = ll[0] - a.ref[0];
+    const double dlon = ll[1] - a.ref[1];
+    double stec = c[0];  // STEC poly. {C00,C01,C10,C11,C02,C20}
+    if (a.type >= 1) stec += c[1] * dlat + c[2] * dlon;
+    if (a.type >= 2) stec += c[3] * dlat * dlon;
+    if (a.type >= 3) stec += c[4] * dlat * dlat + c[2] * dlon * dlon;
+    if (freq == 0.0) return 0.0;  // GLONASS without FCN: avoid div-by-zero
+    return (40.31E16 / freq / freq) * stec;
+}
+
 }  // namespace
 
 MadocaL6dDecoder::MadocaL6dDecoder() {
@@ -367,6 +439,94 @@ int MadocaL6dDecoder::inputByte(std::uint8_t data) {
 
     nbyte_ = 0;
     return decodeL6dMessage();
+}
+
+void MadocaIonoStore::update(int rid, const MadocaIonoRegion& region) {
+    if (rid < 0 || rid >= kMaxRid) {
+        return;
+    }
+    re_[rid] = region;  // mirror navs.pppiono.re[rid] = mdcl6d.re
+}
+
+void MadocaIonoStore::reset() {
+    re_.clear();
+}
+
+const MadocaIonoArea* MadocaIonoStore::selectArea(const double rr[3],
+                                                  const double ll[2], int* rid,
+                                                  int* anum) const {
+    // Mirror mdciono.c miono_sel_area: choose the valid, non-alerting area whose
+    // reference point is nearest (in ECEF km) and that contains the receiver.
+    const MadocaIonoArea* best = nullptr;
+    int min_i = -1, min_j = 0;
+    double min_dist = 1E5;
+    for (const auto& [region_id, re] : re_) {  // ascending rid, like for i=0..255
+        if (!re.rvalid) continue;
+        if (re.ralert) continue;
+        for (int j = 0; j < MadocaIonoRegion::kMaxArea; ++j) {
+            const MadocaIonoArea& a = re.area[j];
+            if (!a.avalid) continue;
+            const double ref_llh[3] = {a.ref[0] * kD2R, a.ref[1] * kD2R, 0.0};
+            double ref_ecef[3];
+            pos2ecef(ref_llh, ref_ecef);
+            const double diff[3] = {rr[0] - ref_ecef[0], rr[1] - ref_ecef[1],
+                                    rr[2] - ref_ecef[2]};
+            const double dist = norm3(diff) / 1E3;  // m -> km
+            if (dist > min_dist) continue;
+            if (a.sid == 0) {  // rectangle
+                if (ll[0] < a.ref[0] - a.span[0] || ll[0] > a.ref[0] + a.span[0] ||
+                    ll[1] < a.ref[1] - a.span[1] || ll[1] > a.ref[1] + a.span[1]) {
+                    continue;
+                }
+            } else {  // circle
+                if (dist > a.span[0]) continue;
+            }
+            min_i = region_id;
+            min_j = j;
+            min_dist = dist;
+            best = &a;
+        }
+    }
+    if (min_i == -1) {
+        return nullptr;
+    }
+    *rid = min_i;
+    *anum = min_j;
+    return best;
+}
+
+int MadocaIonoStore::getCorr(const double rr[3], const MadocaGtime& decode_time,
+                             MadocaIonoCorr& out, const double* gloFreqHz) const {
+    // Mirror mdciono.c miono_get_corr.
+    if (decode_time.time == 0) {
+        return 0;  // _miono[0].gt.time gate: nothing decoded yet
+    }
+    if (rr[0] == 0.0 && rr[1] == 0.0 && rr[2] == 0.0) {
+        return 0;
+    }
+
+    double pos[3];
+    ecef2pos(rr, pos);
+    const double latlon[2] = {pos[0] * kR2D, pos[1] * kR2D};
+
+    int rid = -1, anum = 0;
+    const MadocaIonoArea* area = selectArea(rr, latlon, &rid, &anum);
+    if (area == nullptr) {
+        return 0;
+    }
+    out.rid = rid;
+    out.anum = anum;
+
+    for (int i = 0; i < MadocaIonoCorr::kMaxSat; ++i) {
+        if (area->sat[i].t0.time == 0) {
+            out.t0[i].time = 0;  // leave dly/std at default for absent satellites
+            continue;
+        }
+        out.t0[i] = area->sat[i].t0;
+        out.dly[i] = ionoDelay(i + 1, *area, latlon, gloFreqHz);
+        out.std[i] = stecUraStd(area->sat[i].sqi);
+    }
+    return 1;
 }
 
 }  // namespace libgnss::io
