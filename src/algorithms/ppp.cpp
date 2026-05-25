@@ -27,6 +27,8 @@
 #include <ctime>
 #include <cctype>
 #include <iostream>
+#include <iomanip>
+#include <cstdlib>
 #include <limits>
 #include <map>
 #include <sstream>
@@ -2698,6 +2700,24 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         observation.satellite_clock_drift = sat_clock_drift;
         observation.elevation = geometry.elevation;
         observation.azimuth = geometry.azimuth;
+
+        // Env-gated satpos dump for native-vs-bridge orbit/clock parity diff.
+        // Emits the finalized satellite ECEF (broadcast + SSR orbit, evaluated
+        // at emission time, APC frame — matching MADOCALIB satposs rs[]) so an
+        // external script can match by epoch+sat and project the delta onto the
+        // line of sight. clk in metres (sat_clock_bias * c).
+        static const bool kSatposDump = (std::getenv("GNSS_PPP_SATPOS_DUMP") != nullptr);
+        if (kSatposDump) {
+            std::cerr << "[SATPOS] tow=" << std::fixed << std::setprecision(3) << time.tow
+                      << " sat=" << observation.satellite.toString()
+                      << std::setprecision(4)
+                      << " x=" << sat_position.x()
+                      << " y=" << sat_position.y()
+                      << " z=" << sat_position.z()
+                      << " clk=" << (sat_clock_bias * constants::SPEED_OF_LIGHT)
+                      << " el=" << std::setprecision(2) << geometry.elevation
+                      << "\n";
+        }
 
         observation.trop_mapping =
             calculateMappingFunction(receiver_position, geometry.elevation, time);
