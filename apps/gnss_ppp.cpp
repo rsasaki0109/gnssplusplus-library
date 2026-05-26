@@ -64,6 +64,8 @@ struct Options {
     bool enable_ar = false;
     double ar_ratio_threshold = 3.0;
     std::string ar_method = "iflc";
+    double process_noise_iono = 0.0;
+    bool process_noise_iono_set = false;
     bool use_iers_solid_tide = true;
     bool use_iers_ocean_loading = false;
     std::string eop_c04_file;
@@ -154,6 +156,10 @@ void printUsage(const char* program_name) {
         << "  --ar-ratio-threshold <value>\n"
         << "                          Ratio threshold for PPP ambiguity fixing (default: 3.0)\n"
         << "  --ar-method <name>      AR method: iflc, wlnl, per-freq (default: iflc)\n"
+        << "  --process-noise-iono <v>\n"
+        << "                          KF process noise for per-satellite ionosphere states,\n"
+        << "                          m^2/s (default: 1e-4 for MADOCA per-frequency mode,\n"
+        << "                          1e-3 otherwise)\n"
         << "  --use-iers-solid-tide   Use the IERS Conventions 2010 (Dehant) Step-1+Step-2\n"
         << "                          solid-earth-tide model via libgnss::iers (default).\n"
         << "                          See docs/iers-integration-plan.md\n"
@@ -325,6 +331,9 @@ Options parseArguments(int argc, char* argv[]) {
             options.ar_ratio_threshold = std::stod(argv[++i]);
         } else if (arg == "--ar-method" && i + 1 < argc) {
             options.ar_method = argv[++i];
+        } else if (arg == "--process-noise-iono" && i + 1 < argc) {
+            options.process_noise_iono = std::stod(argv[++i]);
+            options.process_noise_iono_set = true;
         } else if (arg == "--use-iers-solid-tide") {
             options.use_iers_solid_tide = true;
         } else if (arg == "--no-iers-solid-tide") {
@@ -849,6 +858,23 @@ int main(int argc, char* argv[]) {
         ppp_config.use_iers_sub_daily_eop = options.use_iers_sub_daily_eop;
         ppp_config.atm_tidal_loading_path = options.atm_tidal_loading_file;
         ppp_config.use_iers_atm_tidal_loading = options.use_iers_atm_tidal_loading;
+        // Per-satellite ionosphere process noise. MADOCA uncombined (per-frequency,
+        // est-stec) PPP has no external STEC constraint, so the per-satellite
+        // ionosphere states are pinned only by the dual-frequency code-phase
+        // combination. The shared 1e-3 m^2/s random walk is too loose for that
+        // regime: the free iono states absorb measurement systematics that then
+        // leak into the height estimate. Tightening to 1e-4 roughly halves the
+        // 3D error on MIZU/ALIC. CLAS (use_clas_osr_filter) brings its own STEC
+        // grid, so it keeps the shared default. An explicit --process-noise-iono
+        // always wins.
+        const bool madoca_per_freq_iono =
+            ppp_config.estimate_ionosphere && !ppp_config.use_ionosphere_free &&
+            !ppp_config.use_clas_osr_filter;
+        if (options.process_noise_iono_set) {
+            ppp_config.process_noise_ionosphere = options.process_noise_iono;
+        } else if (madoca_per_freq_iono) {
+            ppp_config.process_noise_ionosphere = 1e-4;
+        }
         if (options.low_dynamics_mode) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
             ppp_config.reset_kinematic_position_to_spp_each_epoch = false;

@@ -600,6 +600,28 @@ double modeledTroposphereDelayMeters(const Vector3d& receiver_position,
         kDefaultZenithDelayMeters;
 }
 
+// Look up an SSR bias (code or phase) keyed by RTCM SSR signal id.
+// MADOCA transmits a single GPS L2 bias under the C2W code (id 9), but the
+// receiver may track C2L (id 8). Direct .find() then misses on C2L/C2W
+// disagreement and silently returns 0. Mirror RTKLIB's mcssr_sel_biascode():
+// for GPS L2 (id 8/9) fall back to the sibling id so we always pick up the
+// transmitted L2 bias regardless of which L2 signal the receiver tracked.
+inline double ssrBiasLookup(const std::map<uint8_t, double>& m,
+                            GNSSSystem system,
+                            uint8_t id) {
+    const auto it = m.find(id);
+    if (it != m.end()) {
+        return it->second;
+    }
+    if (system == GNSSSystem::GPS && (id == 8U || id == 9U)) {
+        const auto sibling = m.find(id == 8U ? 9U : 8U);
+        if (sibling != m.end()) {
+            return sibling->second;
+        }
+    }
+    return 0.0;
+}
+
 double observationCodeBiasMeters(GNSSSystem system,
                                  SignalType primary_signal,
                                  SignalType secondary_signal,
@@ -611,9 +633,7 @@ double observationCodeBiasMeters(GNSSSystem system,
     if (primary_id == 0U) {
         return 0.0;
     }
-    const auto primary_it = code_bias_m.find(primary_id);
-    const double primary_bias =
-        primary_it != code_bias_m.end() ? primary_it->second : 0.0;
+    const double primary_bias = ssrBiasLookup(code_bias_m, system, primary_id);
     if (!use_ionosphere_free || secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
         return primary_bias;
     }
@@ -622,9 +642,7 @@ double observationCodeBiasMeters(GNSSSystem system,
     if (secondary_id == 0U) {
         return coeff_primary * primary_bias;
     }
-    const auto secondary_it = code_bias_m.find(secondary_id);
-    const double secondary_bias =
-        secondary_it != code_bias_m.end() ? secondary_it->second : 0.0;
+    const double secondary_bias = ssrBiasLookup(code_bias_m, system, secondary_id);
     return coeff_primary * primary_bias + coeff_secondary * secondary_bias;
 }
 
@@ -639,9 +657,7 @@ double observationPhaseBiasMeters(GNSSSystem system,
     if (primary_id == 0U) {
         return 0.0;
     }
-    const auto primary_it = phase_bias_m.find(primary_id);
-    const double primary_bias =
-        primary_it != phase_bias_m.end() ? primary_it->second : 0.0;
+    const double primary_bias = ssrBiasLookup(phase_bias_m, system, primary_id);
     if (!use_ionosphere_free || secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
         return primary_bias;
     }
@@ -650,9 +666,7 @@ double observationPhaseBiasMeters(GNSSSystem system,
     if (secondary_id == 0U) {
         return coeff_primary * primary_bias;
     }
-    const auto secondary_it = phase_bias_m.find(secondary_id);
-    const double secondary_bias =
-        secondary_it != phase_bias_m.end() ? secondary_it->second : 0.0;
+    const double secondary_bias = ssrBiasLookup(phase_bias_m, system, secondary_id);
     return coeff_primary * primary_bias + coeff_secondary * secondary_bias;
 }
 
