@@ -4271,6 +4271,31 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         };
         if (kResDump) dumpRes("L1", "code", residual);
 
+        // Deep state dump: the per-satellite (iono, N1, N2) split that the
+        // est-stec filter settles into. Compared against the bridge ppp_res
+        // dion/bias to find where native admits a wrong-but-self-consistent
+        // (ambiguity, ionosphere) solution that the bridge does not.
+        if (kResDump) {
+            const int n1_idx = ambiguityStateIndex(observation.satellite);
+            const auto n2_it =
+                filter_state_.ambiguity_l2_indices.find(observation.satellite);
+            const double n1 =
+                (n1_idx >= 0 && n1_idx < filter_state_.total_states)
+                    ? filter_state_.state(n1_idx)
+                    : 0.0;
+            const double n2 =
+                (n2_it != filter_state_.ambiguity_l2_indices.end())
+                    ? filter_state_.state(n2_it->second)
+                    : 0.0;
+            std::cerr << "[PPP-STATE] tow=" << std::fixed << std::setprecision(1)
+                      << time.tow << " sat=" << observation.satellite.toString()
+                      << " iono=" << std::setprecision(4) << iono_state_m
+                      << " n1=" << n1 << " n2=" << n2
+                      << " cdtr=" << clock_bias_m
+                      << " el=" << std::setprecision(1)
+                      << (observation.elevation * 57.295779513) << "\n";
+        }
+
         if (pppDebugEnabled()) {
             std::cerr << "[PPP-OBS] " << observation.satellite.toString()
                       << " pr=" << observation.pseudorange_if
