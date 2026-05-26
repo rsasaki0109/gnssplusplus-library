@@ -4651,9 +4651,34 @@ void PPPProcessor::resetAmbiguity(const SatelliteId& satellite, SignalType signa
             precise_products_loaded_ ? 1e6 : ppp_config_.initial_ambiguity_variance;
     }
 
-    const auto sat_it = ambiguity_states_.find(satellite);
-    if (sat_it == ambiguity_states_.end()) {
-        return;
+    // Mirror the reset for the per-frequency (est-stec) L2 ambiguity state.
+    // Without this the L2 bias is left at its pre-slip value with its tight
+    // covariance: initializeAmbiguityState (L1) clears needs_reinitialization
+    // before getOrCreateAmbiguityStateL2 runs, so the L2 re-seed is skipped and
+    // the filter stays anchored to the now-wrong L2 ambiguity — the stuck
+    // ~10 m L2 phase residuals observed on e.g. G04/G11/G31. Zeroing the state
+    // and re-inflating the variance lets the filter re-converge L2 from the
+    // post-slip observations.
+    // DEFAULT OFF (opt-in via GNSS_PPP_L2_RESET_FIX=1): the L1/L2 asymmetry is a
+    // genuine latent bug, but on the MADOCA parity datasets cycle slips are rare
+    // so resetAmbiguity is seldom called and the fix is bit-identical there (the
+    // stuck ~10 m L2 residuals come from frozen wrong initial ambiguities, not
+    // slip resets — process noise 1e-8). Kept opt-in, default behaviour = HEAD.
+    static const bool kL2ResetFix =
+        std::getenv("GNSS_PPP_L2_RESET_FIX") != nullptr &&
+        std::getenv("GNSS_PPP_L2_RESET_FIX")[0] != '0';
+    const auto l2_it = kL2ResetFix
+                           ? filter_state_.ambiguity_l2_indices.find(satellite)
+                           : filter_state_.ambiguity_l2_indices.end();
+    if (l2_it != filter_state_.ambiguity_l2_indices.end()) {
+        const int l2_index = l2_it->second;
+        if (l2_index >= 0 && l2_index < filter_state_.total_states) {
+            filter_state_.state(l2_index) = 0.0;
+            filter_state_.covariance.row(l2_index).setZero();
+            filter_state_.covariance.col(l2_index).setZero();
+            filter_state_.covariance(l2_index, l2_index) =
+                precise_products_loaded_ ? 1e6 : ppp_config_.initial_ambiguity_variance;
+        }
     }
 }
 
