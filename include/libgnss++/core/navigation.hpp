@@ -164,12 +164,23 @@ public:
      * @brief Get best ephemeris for satellite at given time
      */
     const Ephemeris* getEphemeris(const SatelliteId& sat, const GNSSTime& time) const;
-    
+
+    /**
+     * @brief Get best ephemeris matching a desired IODE.
+     *
+     * When desired_iode >= 0, prefer the ephemeris whose IODE equals it (so the
+     * broadcast orbit matches the IODE an SSR orbit correction references, as
+     * RTKLIB's ephpos(...,ssr->iode,...) does). Falls back to the nearest-age
+     * ephemeris when no IODE match exists or desired_iode < 0.
+     */
+    const Ephemeris* getEphemeris(const SatelliteId& sat, const GNSSTime& time,
+                                  int desired_iode) const;
+
     /**
      * @brief Get all ephemeris for satellite
      */
     std::vector<Ephemeris> getEphemeris(const SatelliteId& sat) const;
-    
+
     /**
      * @brief Calculate satellite position and clock
      */
@@ -179,6 +190,17 @@ public:
                                Vector3d& velocity,
                                double& clock_bias,
                                double& clock_drift) const;
+
+    /**
+     * @brief Calculate satellite state using the IODE-matched ephemeris.
+     */
+    bool calculateSatelliteState(const SatelliteId& sat,
+                               const GNSSTime& time,
+                               Vector3d& position,
+                               Vector3d& velocity,
+                               double& clock_bias,
+                               double& clock_drift,
+                               int desired_iode) const;
     
     /**
      * @brief Calculate satellite positions for multiple satellites
@@ -331,6 +353,7 @@ struct SSROrbitClockCorrection {
     std::map<uint8_t, double> phase_bias_m;              ///< SSR phase biases keyed by RTCM signal id
     int bias_network_id = 0;                             ///< Optional CLAS bias network id (0 when unset)
     int atmos_network_id = 0;                            ///< Optional CLAS atmosphere network id (0 when unset)
+    int iode = -1;                                       ///< IODE the orbit correction references (-1 when unset)
     std::map<std::string, std::string> atmos_tokens;     ///< Optional atmospheric metadata tokens
 
     bool orbit_valid = false;
@@ -365,7 +388,8 @@ public:
                                GNSSTime* atmos_reference_time = nullptr,
                                GNSSTime* phase_bias_reference_time = nullptr,
                                GNSSTime* clock_reference_time = nullptr,
-                               int preferred_network_id = 0) const;
+                               int preferred_network_id = 0,
+                               int* orbit_iode = nullptr) const;
 
     bool loadCSVFile(const std::string& filename);
 

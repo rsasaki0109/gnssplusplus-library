@@ -557,6 +557,38 @@ const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat, const GNSS
     return best_eph;
 }
 
+const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat,
+                                              const GNSSTime& time,
+                                              int desired_iode) const {
+    if (desired_iode < 0) {
+        return getEphemeris(sat, time);
+    }
+    auto it = ephemeris_data.find(sat);
+    if (it == ephemeris_data.end()) {
+        return nullptr;
+    }
+    // Prefer a valid ephemeris whose IODE matches the SSR orbit correction's
+    // reference IODE (RTKLIB seleph() behaviour). Among matches pick the
+    // freshest (smallest age). Fall back to the nearest-age ephemeris (the
+    // IODE-agnostic selection) when nothing matches.
+    const Ephemeris* best_match = nullptr;
+    double min_age = 1e9;
+    for (const auto& eph : it->second) {
+        if (static_cast<int>(eph.iode) != desired_iode) {
+            continue;
+        }
+        if (!eph.isValid(time)) {
+            continue;
+        }
+        const double age = eph.getAge(time);
+        if (age < min_age) {
+            min_age = age;
+            best_match = &eph;
+        }
+    }
+    return best_match != nullptr ? best_match : getEphemeris(sat, time);
+}
+
 bool NavigationData::calculateSatelliteState(const SatelliteId& sat,
                                            const GNSSTime& time,
                                            Vector3d& position,
@@ -567,7 +599,21 @@ bool NavigationData::calculateSatelliteState(const SatelliteId& sat,
     if (!eph) {
         return false;
     }
-    
+
+    return eph->calculateSatelliteState(time, position, velocity, clock_bias, clock_drift);
+}
+
+bool NavigationData::calculateSatelliteState(const SatelliteId& sat,
+                                           const GNSSTime& time,
+                                           Vector3d& position,
+                                           Vector3d& velocity,
+                                           double& clock_bias,
+                                           double& clock_drift,
+                                           int desired_iode) const {
+    const Ephemeris* eph = getEphemeris(sat, time, desired_iode);
+    if (!eph) {
+        return false;
+    }
     return eph->calculateSatelliteState(time, position, velocity, clock_bias, clock_drift);
 }
 
@@ -1034,6 +1080,7 @@ void SSRProducts::addCorrection(const SSROrbitClockCorrection& correction) {
         if (correction.orbit_valid) {
             it->orbit_correction_ecef = correction.orbit_correction_ecef;
             it->orbit_valid = true;
+            it->iode = correction.iode;
         }
         if (correction.clock_valid) {
             it->clock_correction_m = correction.clock_correction_m;
@@ -1078,10 +1125,14 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
                                         GNSSTime* atmos_reference_time,
                                         GNSSTime* phase_bias_reference_time,
                                         GNSSTime* clock_reference_time,
-                                        int preferred_network_id) const {
+                                        int preferred_network_id,
+                                        int* orbit_iode) const {
     const auto sat_it = orbit_clock_corrections.find(sat);
     if (sat_it == orbit_clock_corrections.end() || sat_it->second.empty()) {
         return false;
+    }
+    if (orbit_iode != nullptr) {
+        *orbit_iode = -1;
     }
     orbit_correction_ecef.setZero();
     clock_correction_m = 0.0;
@@ -1287,6 +1338,9 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
 
         if (orbit_source != nullptr && orbit_source->orbit_valid) {
             orbit_correction_ecef = orbit_source->orbit_correction_ecef;
+            if (orbit_iode != nullptr) {
+                *orbit_iode = orbit_source->iode;
+            }
         }
         if (clock_source != nullptr && clock_source->clock_valid) {
             clock_correction_m = clock_source->clock_correction_m;

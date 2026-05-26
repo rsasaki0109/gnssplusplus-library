@@ -751,6 +751,7 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
         out.orbit_correction_ecef =
             libgnss::Vector3d(c.deph[0], c.deph[1], c.deph[2]);  // RAC
         out.orbit_valid = true;
+        out.iode = c.iode;  // broadcast eph IODE the orbit delta references
     }
     if (has_clock) {
         out.clock_correction_m = c.dclk[0];  // c0 polynomial term

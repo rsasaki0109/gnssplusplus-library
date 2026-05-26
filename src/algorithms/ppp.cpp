@@ -2318,6 +2318,21 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         }
 
         if (!have_precise) {
+            // Select the broadcast ephemeris whose IODE matches the SSR orbit
+            // correction's reference IODE (RTKLIB ephpos(...,ssr->iode,...)).
+            // Without this, near an IODE transition native picks the nearest-
+            // time ephemeris while the SSR delta references the previous one,
+            // leaving a per-satellite orbit error of ~metres that the filter
+            // absorbs into a constant ~+0.36 m East position bias.
+            int ssr_orbit_iode = -1;
+            if (ssr_products_loaded_) {
+                Vector3d iode_orbit;
+                double iode_clock = 0.0;
+                ssr_products_.interpolateCorrection(
+                    observation.satellite, time, iode_orbit, iode_clock,
+                    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+                    preferred_network_id, &ssr_orbit_iode);
+            }
             // First pass: compute satellite state at reception time
             if (!nav.calculateSatelliteState(
                     observation.satellite,
@@ -2325,21 +2340,30 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     sat_position,
                     sat_velocity,
                     sat_clock_bias,
-                    sat_clock_drift)) {
+                    sat_clock_drift,
+                    ssr_orbit_iode)) {
                 observation.valid = false;
                 continue;
             }
-            // Light travel time correction: re-evaluate at emission time
+            // Light travel time correction: re-evaluate the orbit at the true
+            // GPS emission time. t_obs - pr/c gives the satellite-clock time of
+            // transmission; subtracting the satellite clock bias yields the
+            // true GPS emission time the broadcast orbit is parameterised in
+            // (RTKLIB satposs convention: time = t_obs - pr/c - dts). Using
+            // +dts here evaluated the orbit at t_emit + 2*dts, shifting the
+            // satellite ~v*2*dts along-track and biasing native MADOCA PPP
+            // (both IFLC and est-stec) by ~+0.36 m East.
             if (observation.pseudorange_if > 0.0) {
                 const double travel_time = observation.pseudorange_if / constants::SPEED_OF_LIGHT;
-                const GNSSTime emission_time = time - travel_time + sat_clock_bias;
+                const GNSSTime emission_time = time - travel_time - sat_clock_bias;
                 if (!nav.calculateSatelliteState(
                         observation.satellite,
                         emission_time,
                         sat_position,
                         sat_velocity,
                         sat_clock_bias,
-                        sat_clock_drift)) {
+                        sat_clock_drift,
+                        ssr_orbit_iode)) {
                     observation.valid = false;
                     continue;
                 }
@@ -2660,6 +2684,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         observation.satellite_clock_drift = sat_clock_drift;
         observation.elevation = geometry.elevation;
         observation.azimuth = geometry.azimuth;
+
         observation.trop_mapping =
             calculateMappingFunction(receiver_position, geometry.elevation, time);
         // Per-frequency (est-stec): also compute the wet mapping and the a priori
