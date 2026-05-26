@@ -1230,8 +1230,14 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
         double transmission_time = parseD(lines[7], c0, 19);
         double fit_interval_or_aodc = parseD(lines[7], c1, 19);
 
+        // Galileo broadcasts both I/NAV (E1/E5b) and F/NAV (E5a) ephemerides
+        // for the same satellite, distinguished by this "data sources" word.
+        // Retain it so the selector can prefer I/NAV (RTKLIB seleph default),
+        // otherwise native picks the age-closest record and lands on F/NAV ~half
+        // the time, giving a ~0.5 m along/cross-track orbit error vs the bridge.
+        eph.data_source_code = static_cast<int>(system_codes);
+
         // Suppress unused variable warnings
-        (void)system_codes;
         (void)system_flag;
         (void)transmission_time;
 
