@@ -4257,6 +4257,20 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
             + iono_state_m + observation.rx_ant_corr_l1_m;
         const double residual = observation.pseudorange_if - predicted;
 
+        // Env-gated pre-fit residual dump for native-vs-bridge measurement diff.
+        // Matches the bridge ppp_res (post=0) lines so per-system/per-signal
+        // residual structure can be compared at convergence. el in degrees.
+        static const bool kResDump = (std::getenv("GNSS_PPP_RES_DUMP") != nullptr);
+        auto dumpRes = [&](const char* band, const char* type, double res) {
+            std::cerr << "[PPP-RES] tow=" << std::fixed << std::setprecision(1)
+                      << time.tow << " sat=" << observation.satellite.toString()
+                      << " band=" << band << " type=" << type
+                      << " res=" << std::setprecision(4) << res
+                      << " el=" << std::setprecision(1)
+                      << (observation.elevation * 57.295779513) << "\n";
+        };
+        if (kResDump) dumpRes("L1", "code", residual);
+
         if (pppDebugEnabled()) {
             std::cerr << "[PPP-OBS] " << observation.satellite.toString()
                       << " pr=" << observation.pseudorange_if
@@ -4333,6 +4347,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 const double predicted_phase = predicted + iono_phase_correction
                                                + filter_state_.state(ambiguity_index);
                 const double phase_residual = observation.carrier_phase_if - predicted_phase;
+                if (kResDump) dumpRes("L1", "phase", phase_residual);
                 const double phase_residual_floor =
                     ppp_config_.kinematic_mode
                         ? (converged_ ? 20.0 : 200.0)
@@ -4396,6 +4411,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     troposphere_delay + ratio2 * iono_state_l1_m +
                     observation.rx_ant_corr_l2_m;
                 const double l2_code_resid = observation.pseudorange_l2 - l2_code_pred;
+                if (kResDump) dumpRes("L2", "code", l2_code_resid);
                 // Use the elevation-weighted RTKLIB variance (same satellite, so
                 // identical elevation weighting as L1) rather than the flat seed.
                 const double var_pr_l2 = observation.variance_pr > 0.0
@@ -4441,6 +4457,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     troposphere_delay - ratio2 * iono_state_l1_m +
                     filter_state_.state(amb2_index) + observation.rx_ant_corr_l2_m;
                 const double l2_phase_resid = observation.carrier_phase_l2 - l2_phase_pred;
+                if (kResDump) dumpRes("L2", "phase", l2_phase_resid);
                 const double var_cp_l2 = observation.variance_cp > 0.0
                     ? observation.variance_cp
                     : safeVariance(observation.variance_cp_l2, 1e-8);
