@@ -33,6 +33,23 @@ python3 apps/gnss.py solve \
   --mode static \
   --out output/rtk_solution.pos
 
+python3 apps/gnss.py short-baseline-signoff \
+  --max-epochs 120 \
+  --diagnostics-csv output/short_baseline_diagnostics.csv \
+  --debug-epoch-log output/short_baseline_epoch_debug.csv \
+  --dd-residuals-csv output/short_baseline_dd_residuals.csv \
+  --dd-html-report output/short_baseline_dd_residuals.html \
+  --require-fix-rate-min 95 \
+  --require-mean-baseline-error-max 0.10 \
+  --require-mean-rtk-phase-obs-min 8 \
+  --require-mean-rtk-postfit-rms-max 0.05 \
+  --require-mean-postfix-phase-rms-max 0.05
+
+python3 apps/gnss.py dd-residuals output/short_baseline_dd_residuals.csv \
+  --summary-json output/short_baseline_dd_residuals_summary.json \
+  --top-pairs-csv output/short_baseline_dd_residuals_top_pairs.csv \
+  --html-report output/short_baseline_dd_residuals.html
+
 python3 apps/gnss.py ppp \
   --static \
   --obs data/rover_static.obs \

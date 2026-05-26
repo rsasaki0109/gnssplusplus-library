@@ -7,6 +7,7 @@ import argparse
 import csv
 from datetime import timedelta
 import json
+import math
 import os
 import sys
 import tempfile
@@ -28,6 +29,7 @@ sys.path.insert(0, str(CI_SCRIPTS_DIR))
 
 import gnss_odaiba_benchmark as benchmark  # noqa: E402
 import gnss_clas_ppp as clas_ppp  # noqa: E402
+import gnss_dd_residuals as dd_residuals  # noqa: E402
 import gnss_live_signoff as live_signoff  # noqa: E402
 import gnss_moving_base_signoff as moving_base_signoff  # noqa: E402
 import gnss_ppc_commercial as ppc_commercial  # noqa: E402
@@ -38,6 +40,7 @@ import gnss_ppc_rtk_signoff as ppc_rtk_signoff  # noqa: E402
 import gnss_public_rtk_benchmarks as public_rtk_benchmarks  # noqa: E402
 import gnss_smartloc_adapter as smartloc_adapter  # noqa: E402
 import gnss_smartloc_signoff as smartloc_signoff  # noqa: E402
+import gnss_web  # noqa: E402
 import gnss_ppp_kinematic_signoff as ppp_kinematic_signoff  # noqa: E402
 import gnss_ppp_static_signoff as ppp_static_signoff  # noqa: E402
 import gnss_short_baseline_signoff as short_signoff  # noqa: E402
@@ -71,6 +74,9 @@ import apply_ppc_multi_candidate_selector as ppc_multi_candidate_selector  # noq
 import run_ppc_multi_candidate_selector_matrix as ppc_multi_selector_matrix  # noqa: E402
 import run_ppc_ratio_gating_selector_sweep as ppc_ratio_gating_sweep  # noqa: E402
 import run_ppc_realtime_guard_sweep as ppc_realtime_guard_sweep  # noqa: E402
+import build_ppc_candidate_feature_table as ppc_candidate_features  # noqa: E402
+import eval_ppc_candidate_feature_ranker as ppc_candidate_ranker  # noqa: E402
+import run_ppc_candidate_ranker_matrix as ppc_candidate_ranker_matrix  # noqa: E402
 
 
 class ScorecardHelpersTest(unittest.TestCase):
@@ -4260,6 +4266,490 @@ class SegmentedBenchmarkTest(unittest.TestCase):
         self.assertIn("common-epoch p95_h", message)
 
 
+class DDResidualsSummaryTest(unittest.TestCase):
+    def test_summarize_records_reports_worst_pairs_and_requirements(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_dd_residuals_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_csv = temp_root / "dd_residuals.csv"
+            summary_json = temp_root / "summary.json"
+            top_pairs_csv = temp_root / "top_pairs.csv"
+            html_report = temp_root / "report.html"
+            input_csv.write_text(
+                "\n".join(
+                    [
+                        "epoch_index,gps_week,tow,status,kind,frequency_index,"
+                        "reference_satellite,satellite,residual_m,abs_residual_m,"
+                        "reference_variance_m2,satellite_variance_m2,"
+                        "suppressed_by_outlier_threshold",
+                        "0,2000,0.000,4,phase,0,G01,G02,0.010000,0.010000,0.1,0.2,0",
+                        "1,2000,1.000,4,phase,0,G01,G02,-0.030000,0.030000,0.1,0.2,0",
+                        "1,2000,1.000,4,phase,1,G03,G04,0.500000,0.500000,0.1,0.2,1",
+                        "0,2000,0.000,4,code,0,G01,G02,1.000000,1.000000,4.0,5.0,0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            records = dd_residuals.read_records(input_csv)
+            summary = dd_residuals.summarize_records(records, top_n=2)
+
+            self.assertEqual(summary["rows"], 4)
+            self.assertEqual(summary["overall"]["suppressed_rows"], 1)
+            self.assertEqual(summary["coverage"]["epochs"], 2)
+            self.assertEqual(summary["coverage"]["satellite_pairs"], 2)
+            self.assertEqual(summary["coverage"]["pair_frequency_kind_tracks"], 3)
+            self.assertEqual(len(summary["pair_tracks"]), 3)
+            self.assertEqual(len(summary["top_normalized_pairs"]), 2)
+            self.assertEqual(summary["top_pairs"][0]["satellite"], "G02")
+            self.assertEqual(summary["top_pairs"][0]["kind"], "code")
+            self.assertEqual(summary["top_pairs"][0]["pair"], "G01-G02")
+            self.assertEqual(summary["top_pairs"][0]["frequency_label"], "freq0 primary (L1/E1/B1)")
+            self.assertEqual(summary["top_pairs"][1]["satellite"], "G04")
+            self.assertEqual(len(summary["time_series"]), 2)
+            self.assertEqual(len(summary["residual_points"]), 4)
+            self.assertEqual(summary["residual_points"][0]["pair"], "G01-G02")
+            self.assertAlmostEqual(
+                summary["time_series"][1]["phase_max_abs_residual_m"],
+                0.5,
+                places=6,
+            )
+            self.assertAlmostEqual(
+                summary["by_kind"]["phase"]["max_abs_residual_m"],
+                0.5,
+                places=6,
+            )
+
+            dd_residuals.write_top_pairs_csv(top_pairs_csv, list(summary["top_pairs"]))
+            self.assertTrue(top_pairs_csv.exists())
+            dd_residuals.write_html_report(html_report, summary)
+            self.assertIn("DD Residual Report", html_report.read_text(encoding="utf-8"))
+            self.assertIn("All Carrier Phase DD Residuals", html_report.read_text(encoding="utf-8"))
+            self.assertIn("All Pseudorange DD Residuals", html_report.read_text(encoding="utf-8"))
+            self.assertIn("Carrier Phase Residual Heatmap By Satellite Pair", html_report.read_text(encoding="utf-8"))
+            self.assertIn("Pseudorange Residual Heatmap By Satellite Pair", html_report.read_text(encoding="utf-8"))
+            self.assertIn("freq0 primary (L1/E1/B1)", html_report.read_text(encoding="utf-8"))
+            self.assertIn("Raw Prefit Residual Time Series", html_report.read_text(encoding="utf-8"))
+            self.assertIn("Normalized Prefit Residual Time Series", html_report.read_text(encoding="utf-8"))
+            self.assertIn("Worst Pair Raw P95", html_report.read_text(encoding="utf-8"))
+            self.assertIn("Worst Pair Normalized P95", html_report.read_text(encoding="utf-8"))
+            self.assertIn("Worst Satellite Pairs By Raw Residual", html_report.read_text(encoding="utf-8"))
+            self.assertIn("Worst Satellite Pairs By Normalized Residual", html_report.read_text(encoding="utf-8"))
+            self.assertIn("All Satellite Pair Tracks", html_report.read_text(encoding="utf-8"))
+
+            args = argparse.Namespace(
+                require_phase_p95_max=1.0,
+                require_code_p95_max=2.0,
+                require_max_abs_residual_max=2.0,
+                require_suppressed_rows_max=1,
+            )
+            dd_residuals.enforce_requirements(summary, args)
+
+            failing_args = argparse.Namespace(
+                require_phase_p95_max=0.02,
+                require_code_p95_max=0.5,
+                require_max_abs_residual_max=0.4,
+                require_suppressed_rows_max=0,
+            )
+            with self.assertRaises(SystemExit) as context:
+                dd_residuals.enforce_requirements(summary, failing_args)
+
+            message = str(context.exception)
+            self.assertIn("phase p95 abs residual", message)
+            self.assertIn("code p95 abs residual", message)
+            self.assertIn("max abs residual", message)
+            self.assertIn("suppressed rows", message)
+
+            summary_json.write_text(
+                json.dumps(summary, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            self.assertTrue(summary_json.exists())
+
+
+class WebSummaryDiscoveryTest(unittest.TestCase):
+    def test_build_overview_discovers_dd_residual_summaries(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_web_dd_") as temp_dir:
+            root = Path(temp_dir)
+            output = root / "output"
+            output.mkdir()
+            summary_path = output / "short_baseline_dd_residuals_summary.json"
+            csv_path = output / "short_baseline_dd_residuals.csv"
+            html_path = output / "short_baseline_dd_residuals.html"
+            top_pairs_path = output / "short_baseline_dd_residuals_top_pairs.csv"
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "rows": 4,
+                        "coverage": {
+                            "epochs": 2,
+                            "satellite_pairs": 2,
+                            "pair_frequency_kind_tracks": 3,
+                        },
+                        "overall": {
+                            "rows": 4,
+                            "max_abs_residual_m": 1.0,
+                            "max_abs_normalized_residual": 1.2,
+                            "suppressed_rows": 0,
+                        },
+                        "by_kind": {
+                            "phase": {
+                                "p95_abs_residual_m": 0.01,
+                                "p95_abs_normalized_residual": 0.4,
+                            },
+                            "code": {
+                                "p95_abs_residual_m": 0.5,
+                                "p95_abs_normalized_residual": 0.6,
+                            },
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            csv_path.write_text("epoch_index\n0\n", encoding="ascii")
+            html_path.write_text("<!doctype html><title>DD</title>\n", encoding="utf-8")
+            top_pairs_path.write_text("rank\n1\n", encoding="ascii")
+
+            args = argparse.Namespace(
+                root=root,
+                odaiba_summary=None,
+                lib_pos=None,
+                rtklib_pos=None,
+                artifact_manifest=None,
+                rcv_status=None,
+                ppc_summary_glob="output/ppc_*_summary.json",
+                live_summary_glob="output/live*_summary.json",
+                visibility_summary_glob="output/visibility*_summary.json",
+                moving_base_summary_glob="output/*moving_base_summary.json",
+                ppp_products_summary_glob="output/*ppp*_products*_summary.json",
+                dd_residual_summary_glob="output/*dd_residuals*_summary.json",
+                gnss_gpu_summary_glob="experiments/results/*_summary.csv",
+                gnss_gpu_runs_glob="experiments/results/*_runs.csv",
+                docs_url="",
+            )
+
+            overview = gnss_web.build_overview(args)
+
+            web_html = gnss_web.render_html()
+            self.assertIn("DD residual diagnostics", web_html)
+            self.assertIn("dd-residual-frame", web_html)
+            self.assertIn("dd-residual-metrics", web_html)
+            self.assertEqual(len(overview["dd_residual_summaries"]), 1)
+            row = overview["dd_residual_summaries"][0]
+            self.assertEqual(row["epochs"], 2)
+            self.assertEqual(row["satellite_pairs"], 2)
+            self.assertEqual(row["quality_status"], "excellent")
+            self.assertEqual(row["html_report"], "output/short_baseline_dd_residuals.html")
+            self.assertEqual(row["csv_path"], "output/short_baseline_dd_residuals.csv")
+            self.assertEqual(row["top_pairs_csv"], "output/short_baseline_dd_residuals_top_pairs.csv")
+
+    def test_build_overview_discovers_gnss_gpu_and_libgnss_summary_csvs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_web_gpu_") as temp_dir:
+            root = Path(temp_dir)
+            results = root / "experiments/results"
+            results.mkdir(parents=True)
+            (results / "gpu_run_summary.csv").write_text(
+                "\n".join(
+                    [
+                        "method,ppc_score_pct,ppc_pass_distance_m,ppc_total_distance_m,p50,p95,rms_2d,n_epochs,time_ms_per_epoch",
+                        "ct_pf,58.5,585.0,1000.0,0.4,1.2,0.8,120,3.2",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            (results / "ppc_libgnss_phase10_summary.csv").write_text(
+                "\n".join(
+                    [
+                        "mode,aggregate_ppc_score_pct,pass_m,total_m",
+                        "score,55.0,550.0,1000.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            args = argparse.Namespace(
+                root=root,
+                odaiba_summary=None,
+                lib_pos=None,
+                rtklib_pos=None,
+                artifact_manifest=None,
+                rcv_status=None,
+                ppc_summary_glob="output/ppc_*_summary.json",
+                live_summary_glob="output/live*_summary.json",
+                visibility_summary_glob="output/visibility*_summary.json",
+                moving_base_summary_glob="output/*moving_base_summary.json",
+                ppp_products_summary_glob="output/*ppp*_products*_summary.json",
+                dd_residual_summary_glob="output/*dd_residuals*_summary.json",
+                gnss_gpu_summary_glob="experiments/results/*_summary.csv",
+                gnss_gpu_runs_glob="experiments/results/no_runs.csv",
+                docs_url="",
+            )
+
+            overview = gnss_web.build_overview(args)
+
+            web_html = gnss_web.render_html()
+            self.assertIn("GNSS GPU comparison", web_html)
+            self.assertIn("gnss-gpu-cluster-table", web_html)
+            self.assertIn("gnss-gpu-score-scope-table", web_html)
+            self.assertIn("gnss-gpu-method-compare-table", web_html)
+            self.assertIn("gnss-gpu-loss-table", web_html)
+            self.assertIn("gnss-gpu-epoch-table", web_html)
+            self.assertIn("gnss-gpu-initial-table", web_html)
+            self.assertIn("gnss-gpu-epoch-compare-table", web_html)
+            self.assertIn("gnss-gpu-epoch-error-canvas", web_html)
+            self.assertIn("gnss-gpu-stage-error-canvas", web_html)
+            self.assertIn("gnss-gpu-matched-table", web_html)
+            self.assertIn("gnss-gpu-score-canvas", web_html)
+            summaries = overview["gnss_gpu_summaries"]
+            self.assertEqual(summaries["family_counts"]["gnss_gpu"], 1)
+            self.assertEqual(summaries["family_counts"]["libgnss++"], 1)
+            self.assertEqual(summaries["comparison"]["status"], "better")
+            self.assertAlmostEqual(summaries["comparison"]["score_delta_pct"], 3.5)
+            self.assertEqual(summaries["comparison"]["gnss_gpu"]["label"], "gpu_run:ct_pf")
+            self.assertEqual(summaries["comparison"]["libgnsspp"]["label"], "ppc_libgnss_phase10:score")
+            self.assertEqual(summaries["matched_comparison_count"], 1)
+            matched = summaries["matched_comparisons"][0]
+            self.assertEqual(matched["key_type"], "score_scope")
+            self.assertEqual(matched["key"], "distance:1000.0m")
+            self.assertAlmostEqual(matched["score_delta_pct"], 3.5)
+            self.assertEqual(matched["candidate_counts"]["gnss_gpu"], 1)
+            self.assertEqual(matched["candidate_counts"]["libgnss++"], 1)
+            self.assertEqual(summaries["matched_summary"]["status_counts"]["better"], 1)
+            self.assertEqual(summaries["matched_summary"]["key_type_counts"]["score_scope"], 1)
+            self.assertEqual(summaries["matched_worst_losses"][0]["key"], "distance:1000.0m")
+
+    def test_build_overview_matches_runs_by_dataset_segment(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_web_gpu_runs_") as temp_dir:
+            root = Path(temp_dir)
+            results = root / "experiments/results"
+            results.mkdir(parents=True)
+            (results / "ct_pf_tokyo_runs.csv").write_text(
+                "\n".join(
+                    [
+                        "city,run,start_epoch,segment,method,segment_ppc_pct,segment_pass_m,segment_total_m,honest_ppc_pct,honest_pass_m,honest_total_m,ppc_score_pct,ppc_pass_distance_m,ppc_total_distance_m,p95_2d_m,n_epochs,ms_per_epoch",
+                        "tokyo,run1,1463,tokyo/run1@1463,ct_pf,82.0,344.4,420.0,0.5,2.1,420.0,12.0,50.4,420.0,0.42,200,4.1",
+                        "nagoya,run2,983,nagoya/run2@983,ct_pf,40.0,320.0,800.0,0.2,1.6,800.0,4.0,32.0,800.0,2.50,180,4.2",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            (results / "ppc_libgnss_phase10_runs.csv").write_text(
+                "\n".join(
+                    [
+                        "city,run,start_epoch,segment,profile,ppc_score_pct,ppc_pass_distance_m,ppc_total_distance_m,p95_2d_m,n_solutions",
+                        "tokyo,run1,1463,tokyo/run1@1463,loose,79.5,333.9,420.0,0.55,199",
+                        "nagoya,run2,983,nagoya/run2@983,loose,80.0,640.0,800.0,0.30,179",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            (results / "ppc_scan_nagoya_run2_983_epochs.csv").write_text(
+                "\n".join(
+                    [
+                        "epoch,tow,tdcp_used,dd_pr_anchor_used,height_hold_used,widelane_anchor_used,doppler_update_applied,dd_carrier_update_applied,dd_pr_shift_m,dd_pr_robust_rms_m,tdcp_postfit_rms_m,ppc_segment_distance_m,wls_error_3d_m,fused_error_3d_m,fused_error_2d_m,pf_epoch_start_to_ref_m,pf_epoch_start_err_e_m,pf_epoch_start_err_n_m,pf_epoch_start_err_u_m,pf_epoch_start_spread_m,pf_epoch_start_ess_ratio,predict_source,pr_update_mode,n_sat_raw,n_sat_used_pr,pf_after_pr_to_ref_m,pf_after_doppler_to_ref_m,pf_after_dd_carrier_to_ref_m,pf_epoch_end_to_ref_m,emitted_source,resampled_epoch_end,pf_init_source,pf_init_spread_pos_m,pf_init_to_ref_m,pf_init_err_e_m,pf_init_err_n_m,pf_init_err_u_m,wls_init_to_ref_m,hybrid_init_to_ref_m",
+                        "0,100.0,false,true,true,false,false,false,0.20,0.30,,5.0,0.4,4.0,3.5,0.6,0.2,0.1,0.5,12.0,0.9,process,gaussian,12,8,4.0,4.2,4.1,4.0,pf,true,wls,12.0,0.6,0.2,0.1,0.5,0.6,",
+                        "1,100.2,true,true,true,false,true,false,0.30,0.40,0.10,5.0,0.4,0.7,0.6,0.5,0.2,0.1,0.4,11.0,0.8,process,gaussian,12,8,0.7,0.8,0.7,0.7,pf,false,wls,12.0,0.6,0.2,0.1,0.5,0.6,",
+                        "2,100.4,true,false,false,false,true,true,4.00,0.90,0.12,5.0,0.4,6.0,5.8,0.7,0.3,0.2,0.5,10.0,0.7,process,gaussian,11,7,2.0,5.0,6.2,6.0,candidate,true,wls,12.0,0.6,0.2,0.1,0.5,0.6,",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            (results / "ppc_internal_diag_n2_983_good_internal_epochs.csv").write_text(
+                "\n".join(
+                    [
+                        "epoch,tow,tdcp_used,dd_pr_anchor_used,doppler_update_applied,dd_carrier_update_applied,ppc_segment_distance_m,fused_error_3d_m,pf_epoch_start_to_ref_m,pf_epoch_start_err_e_m,pf_epoch_start_err_n_m,pf_epoch_start_err_u_m,pf_epoch_start_spread_m,pf_epoch_start_ess_ratio,predict_source,pr_update_mode,n_sat_raw,n_sat_used_pr,pf_after_pr_to_ref_m,pf_after_doppler_to_ref_m,pf_after_dd_carrier_to_ref_m,pf_epoch_end_to_ref_m,emitted_source,resampled_epoch_end",
+                        "0,100.0,true,true,true,true,5.0,0.5,0.4,0.1,0.1,0.2,2.0,0.95,process,gaussian,12,8,0.5,0.6,0.5,0.5,pf,false",
+                        "1,100.2,true,true,true,true,5.0,0.6,0.5,0.2,0.1,0.2,2.1,0.95,process,gaussian,12,8,0.6,0.7,0.6,0.6,pf,false",
+                        "2,100.4,true,true,true,true,5.0,0.8,0.6,0.2,0.2,0.3,2.2,0.95,process,gaussian,11,7,0.7,0.8,0.8,0.8,pf,false",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            args = argparse.Namespace(
+                root=root,
+                odaiba_summary=None,
+                lib_pos=None,
+                rtklib_pos=None,
+                artifact_manifest=None,
+                rcv_status=None,
+                ppc_summary_glob="output/ppc_*_summary.json",
+                live_summary_glob="output/live*_summary.json",
+                visibility_summary_glob="output/visibility*_summary.json",
+                moving_base_summary_glob="output/*moving_base_summary.json",
+                ppp_products_summary_glob="output/*ppp*_products*_summary.json",
+                dd_residual_summary_glob="output/*dd_residuals*_summary.json",
+                gnss_gpu_summary_glob="experiments/results/*_summary.csv",
+                gnss_gpu_runs_glob="experiments/results/*_runs.csv",
+                docs_url="",
+            )
+
+            summaries = gnss_web.build_overview(args)["gnss_gpu_summaries"]
+
+            self.assertEqual(summaries["family_counts"]["gnss_gpu"], 2)
+            self.assertEqual(summaries["family_counts"]["libgnss++"], 2)
+            self.assertEqual(summaries["matched_comparison_count"], 4)
+            dataset_match = summaries["matched_comparisons"][0]
+            self.assertEqual(dataset_match["key_type"], "dataset")
+            self.assertEqual(dataset_match["key"], "tokyo_run1_seg1463")
+            self.assertAlmostEqual(dataset_match["score_delta_pct"], 2.5)
+            self.assertEqual(dataset_match["gnss_gpu"]["source_kind"], "runs")
+            self.assertEqual(dataset_match["gnss_gpu"]["method"], "ct_pf")
+            self.assertEqual(dataset_match["gnss_gpu"]["city"], "tokyo")
+            self.assertEqual(dataset_match["gnss_gpu"]["run"], "run1")
+            self.assertEqual(dataset_match["gnss_gpu"]["score_column"], "segment_ppc_pct")
+            self.assertEqual(dataset_match["gnss_gpu"]["score_scope"], "segment")
+            self.assertAlmostEqual(dataset_match["gnss_gpu"]["raw_scores"]["segment_ppc_pct"], 82.0)
+            self.assertAlmostEqual(dataset_match["gnss_gpu"]["raw_scores"]["honest_ppc_pct"], 0.5)
+            self.assertAlmostEqual(dataset_match["gnss_gpu"]["raw_scores"]["ppc_score_pct"], 12.0)
+            self.assertAlmostEqual(dataset_match["gnss_gpu"]["pass_m"], 344.4)
+            self.assertAlmostEqual(dataset_match["gnss_gpu"]["total_m"], 420.0)
+            self.assertEqual(dataset_match["libgnsspp"]["source_kind"], "runs")
+            self.assertEqual(dataset_match["libgnsspp"]["profile"], "loose")
+            scope_summary = summaries["score_scope_summary"]
+            self.assertEqual(scope_summary["scope_counts"]["segment"], 2)
+            self.assertEqual(scope_summary["scope_counts"]["reported"], 2)
+            self.assertEqual(scope_summary["segment_over_honest_trap_count"], 1)
+            self.assertEqual(scope_summary["segment_over_honest_traps"][0]["dataset_key"], "tokyo_run1_seg1463")
+            self.assertAlmostEqual(scope_summary["segment_over_honest_traps"][0]["score_gap_pct"], 81.5)
+            worst_match = summaries["matched_summary"]["dataset_worst_loss"]
+            self.assertEqual(worst_match["key"], "nagoya_run2_seg983")
+            self.assertAlmostEqual(worst_match["score_delta_pct"], -40.0)
+            self.assertEqual(summaries["matched_summary"]["status_counts"]["better"], 2)
+            self.assertEqual(summaries["matched_summary"]["status_counts"]["worse"], 2)
+            clusters = summaries["matched_failure_clusters"]
+            self.assertEqual(clusters[0]["dimension"], "GNSS GPU method")
+            self.assertEqual(clusters[0]["value"], "ct_pf")
+            self.assertEqual(clusters[0]["count"], 1)
+            self.assertAlmostEqual(clusters[0]["avg_delta_pct"], -40.0)
+            self.assertEqual(clusters[0]["worst_key"], "nagoya_run2_seg983")
+            epoch_diags = summaries["matched_epoch_diagnostics"]
+            self.assertEqual(epoch_diags["targets"][0], "nagoya_run2_seg983")
+            self.assertEqual(epoch_diags["top"][0]["dataset_key"], "nagoya_run2_seg983")
+            self.assertEqual(epoch_diags["top"][0]["n_epochs"], 3)
+            self.assertAlmostEqual(epoch_diags["top"][0]["score_pct"], 0.0)
+            self.assertAlmostEqual(epoch_diags["top"][0]["pass_threshold_m"], 0.5)
+            self.assertEqual(epoch_diags["top"][0]["pass_epochs"], 0)
+            self.assertEqual(epoch_diags["top"][0]["fail_epochs_gt05m"], 3)
+            self.assertEqual(epoch_diags["top"][0]["first_ppc_fail_epoch"], 0.0)
+            self.assertEqual(epoch_diags["top"][0]["first_fail_epoch"], 0.0)
+            self.assertEqual(epoch_diags["top"][0]["worst_epoch"], 2.0)
+            self.assertEqual(epoch_diags["top"][0]["points"][0]["error_m"], 4.0)
+            self.assertEqual(epoch_diags["top"][0]["first_ppc_bad_stage"]["label"], "start")
+            self.assertEqual(epoch_diags["top"][0]["first_bad_stage"]["label"], "PR")
+            self.assertEqual(epoch_diags["top"][0]["worst_stage"]["label"], "DD carrier")
+            self.assertEqual(epoch_diags["top"][0]["points"][0]["stage_pr_m"], 4.0)
+            self.assertEqual(epoch_diags["top"][0]["largest_stage_jump"]["from_label"], "start")
+            self.assertEqual(epoch_diags["top"][0]["largest_stage_jump"]["to_label"], "PR")
+            self.assertEqual(epoch_diags["top"][0]["stage_diagnosis"], "stage amplification")
+            self.assertEqual(epoch_diags["top"][0]["initial_state"]["diagnosis"], "initial state near reference")
+            self.assertAlmostEqual(epoch_diags["top"][0]["initial_state"]["epoch0"]["spread_m"], 12.0)
+            self.assertEqual(epoch_diags["top"][0]["initial_state"]["epoch0"]["init_source"], "wls")
+            self.assertAlmostEqual(epoch_diags["top"][0]["initial_state"]["epoch0"]["init_spread_pos_m"], 12.0)
+            self.assertAlmostEqual(epoch_diags["top"][0]["initial_state"]["epoch0"]["wls_init_to_ref_m"], 0.6)
+            self.assertEqual(epoch_diags["top"][0]["initial_state"]["init_source_counts"][0]["value"], "wls")
+            self.assertEqual(epoch_diags["top"][0]["doppler_diagnostics"]["diagnosis"], "doppler drift amplifier")
+            self.assertAlmostEqual(epoch_diags["top"][0]["doppler_diagnostics"]["max_error_delta_m"], 3.0)
+            self.assertEqual(epoch_diags["top"][0]["doppler_diagnostics"]["worst_epoch"], 2.0)
+            comparison = epoch_diags["comparisons"][0]
+            self.assertEqual(comparison["dataset_key"], "nagoya_run2_seg983")
+            self.assertEqual(comparison["candidate_count"], 2)
+            self.assertAlmostEqual(comparison["score_gap_pct"], 33.333333)
+            self.assertEqual(comparison["dominant_stage_gap"]["label"], "DD carrier")
+            self.assertGreater(comparison["start_stage_gap"]["delta_p95_m"], 0.0)
+
+    def test_build_overview_compares_hybrid_and_rtkdiag_methods_by_segment(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_web_gpu_method_") as temp_dir:
+            root = Path(temp_dir)
+            results = root / "experiments/results"
+            results.mkdir(parents=True)
+            (results / "ct_pf_nagoya_runs.csv").write_text(
+                "\n".join(
+                    [
+                        "city,run,start_epoch,segment,method,segment_ppc_pct,segment_pass_m,segment_total_m,p95_2d_m,n_epochs",
+                        "nagoya,run2,983,nagoya/run2@983,RBPF-velKF+DD+gate+hybrid,94.0,28.0,30.0,0.4,100",
+                        "nagoya,run2,983,nagoya/run2@983,RBPF-velKF+DD+gate+hybrid+rtkdiag_pf,70.0,21.0,30.0,2.0,100",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            args = argparse.Namespace(
+                root=root,
+                odaiba_summary=None,
+                lib_pos=None,
+                rtklib_pos=None,
+                artifact_manifest=None,
+                rcv_status=None,
+                ppc_summary_glob="output/ppc_*_summary.json",
+                live_summary_glob="output/live*_summary.json",
+                visibility_summary_glob="output/visibility*_summary.json",
+                moving_base_summary_glob="output/*moving_base_summary.json",
+                ppp_products_summary_glob="output/*ppp*_products*_summary.json",
+                dd_residual_summary_glob="output/*dd_residuals*_summary.json",
+                gnss_gpu_summary_glob="experiments/results/*_summary.csv",
+                gnss_gpu_runs_glob="experiments/results/*_runs.csv",
+                docs_url="",
+            )
+
+            summaries = gnss_web.build_overview(args)["gnss_gpu_summaries"]
+
+            self.assertEqual(len(summaries["method_comparisons"]), 1)
+            comparison = summaries["method_comparisons"][0]
+            self.assertEqual(comparison["dataset_key"], "nagoya_run2_seg983")
+            self.assertEqual(comparison["status"], "worse")
+            self.assertAlmostEqual(comparison["score_delta_pct"], -24.0)
+            self.assertAlmostEqual(comparison["p95_delta_m"], 1.6)
+            self.assertEqual(comparison["hybrid"]["method"], "RBPF-velKF+DD+gate+hybrid")
+            self.assertEqual(comparison["rtkdiag"]["method"], "RBPF-velKF+DD+gate+hybrid+rtkdiag_pf")
+            self.assertEqual(summaries["method_regressions"][0]["dataset_key"], "nagoya_run2_seg983")
+
+    def test_rtklib_analysis_falls_back_to_checked_in_pos_name(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_web_rtklib_") as temp_dir:
+            root = Path(temp_dir)
+            output = root / "output"
+            output.mkdir()
+            rtklib_path = output / "rtklib_rtk_result.pos"
+            rtklib_path.write_text(
+                "\n".join(
+                    [
+                        "% RTKLIB sample",
+                        "2000 10.000 35.000000000 139.000000000 10.0000 1 12 0 0 0 0 0 0 0 5.0",
+                        "2000 11.000 35.000000100 139.000000100 10.0100 1 12 0 0 0 0 0 0 0 8.0",
+                        "2000 12.000 35.000000200 139.000000200 10.0200 2 10 0 0 0 0 0 0 0 3.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            resolved = gnss_web.resolve_rtklib_pos_path(None, root)
+            payload = gnss_web.build_solution_payload("rtklib", resolved, root, "RTKLIB")
+
+            web_html = gnss_web.render_html()
+            self.assertIn("RTKLIB analysis", web_html)
+            self.assertIn("rtklib-status-canvas", web_html)
+            self.assertEqual(resolved, rtklib_path)
+            self.assertTrue(payload["available"])
+            self.assertEqual(payload["path"], "output/rtklib_rtk_result.pos")
+            self.assertEqual(payload["analysis"]["epochs"], 3)
+            self.assertAlmostEqual(payload["analysis"]["fix_rate_pct"], 66.667, places=3)
+            self.assertAlmostEqual(payload["analysis"]["ttff_s"], 0.0, places=6)
+            self.assertEqual(payload["analysis"]["status_transition_count"], 1)
+            self.assertEqual(payload["analysis"]["min_satellites"], 10)
+            self.assertEqual(payload["analysis"]["max_satellites"], 12)
+            self.assertEqual(payload["analysis"]["status_counts"]["FIXED"], 2)
+            self.assertEqual(payload["analysis"]["status_counts"]["FLOAT"], 1)
+
+
 class ShortBaselineSignoffTest(unittest.TestCase):
     def write_rinex_header(self, path: Path, position: tuple[float, float, float]) -> None:
         with path.open("w", encoding="ascii") as handle:
@@ -4280,7 +4770,8 @@ class ShortBaselineSignoffTest(unittest.TestCase):
             for week, tow, position, status, satellites in records:
                 handle.write(
                     f"{week} {tow:.1f} {position[0]:.4f} {position[1]:.4f} {position[2]:.4f} "
-                    f"35.0 139.0 10.0 {status} {satellites} 1.0\n"
+                    f"35.0 139.0 10.0 {status} {satellites} 1.0 3.5 36.2852 "
+                    "2 24 12 12 1 0.1200 0.3000 0.0300 0.0800 18.0 0.7500 0\n"
                 )
 
     def test_build_summary_payload_and_requirements(self) -> None:
@@ -4291,6 +4782,10 @@ class ShortBaselineSignoffTest(unittest.TestCase):
             nav = temp_root / "nav.rnx"
             out = temp_root / "solution.pos"
             summary_json = temp_root / "summary.json"
+            debug_epoch_log = temp_root / "debug_epoch.csv"
+            dd_residuals_csv = temp_root / "dd_residuals.csv"
+            dd_top_pairs_csv = temp_root / "dd_top_pairs.csv"
+            dd_html_report = temp_root / "dd_report.html"
             rover_position = (-3957184.1109, 3310231.7255, 3737703.9594)
             base_position = (-3957199.2400, 3310199.6680, 3737711.7080)
 
@@ -4305,6 +4800,27 @@ class ShortBaselineSignoffTest(unittest.TestCase):
                     (2000, 2.0, (-3957184.2109, 3310231.7255, 3737703.9594), 3, 14),
                 ],
             )
+            debug_epoch_log.write_text(
+                "gps_week,tow,postfix_residual_rms\n"
+                "2000,0.0,0.0100\n"
+                "2000,1.0,0.0200\n"
+                "2000,2.0,nan\n",
+                encoding="ascii",
+            )
+            dd_residuals_csv.write_text(
+                "\n".join(
+                    [
+                        "epoch_index,gps_week,tow,status,kind,frequency_index,"
+                        "reference_satellite,satellite,residual_m,abs_residual_m,"
+                        "reference_variance_m2,satellite_variance_m2,"
+                        "suppressed_by_outlier_threshold",
+                        "0,2000,0.000,4,phase,0,G01,G02,0.010000,0.010000,0.1,0.2,0",
+                        "1,2000,1.000,4,code,0,G01,G02,1.000000,1.000000,4.0,5.0,0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
 
             args = argparse.Namespace(
                 rover=rover,
@@ -4312,10 +4828,23 @@ class ShortBaselineSignoffTest(unittest.TestCase):
                 nav=nav,
                 out=out,
                 summary_json=summary_json,
+                diagnostics_csv=None,
+                debug_epoch_log=debug_epoch_log,
+                dd_residuals_csv=dd_residuals_csv,
+                dd_top_pairs_csv=dd_top_pairs_csv,
+                dd_html_report=dd_html_report,
                 require_fix_rate_min=60.0,
                 require_mean_error_max=0.2,
                 require_max_error_max=0.25,
                 require_mean_sats_min=14.0,
+                require_mean_baseline_error_max=1.0,
+                require_mean_rtk_phase_obs_min=10.0,
+                require_mean_rtk_postfit_rms_max=0.05,
+                require_mean_postfix_phase_rms_max=0.02,
+                require_dd_phase_p95_max=0.05,
+                require_dd_code_p95_max=2.0,
+                require_dd_max_abs_residual_max=2.0,
+                require_dd_suppressed_rows_max=0,
             )
 
             payload = short_signoff.build_summary_payload(args)
@@ -4327,6 +4856,16 @@ class ShortBaselineSignoffTest(unittest.TestCase):
             self.assertAlmostEqual(payload["mean_position_error_m"], 0.066667, places=6)
             self.assertAlmostEqual(payload["max_position_error_m"], 0.1, places=6)
             self.assertAlmostEqual(payload["mean_satellites"], 14.333333, places=5)
+            self.assertAlmostEqual(payload["mean_solution_baseline_m"], 36.2852, places=6)
+            self.assertAlmostEqual(payload["mean_rtk_update_phase_observations"], 12.0, places=6)
+            self.assertAlmostEqual(
+                payload["mean_rtk_update_post_suppression_residual_rms_m"], 0.03, places=6
+            )
+            self.assertAlmostEqual(payload["mean_postfix_phase_residual_rms_m"], 0.015, places=6)
+            self.assertEqual(payload["dd_residual_summary"]["rows"], 2)
+            self.assertEqual(payload["rtk_update_innovation_gate_rejected_epochs"], 0)
+            self.assertTrue(dd_top_pairs_csv.exists())
+            self.assertTrue(dd_html_report.exists())
             self.assertTrue(summary_json.exists())
 
             short_signoff.enforce_summary_requirements(payload, args)
@@ -4336,6 +4875,14 @@ class ShortBaselineSignoffTest(unittest.TestCase):
                 require_mean_error_max=0.05,
                 require_max_error_max=0.05,
                 require_mean_sats_min=15.0,
+                require_mean_baseline_error_max=0.000001,
+                require_mean_rtk_phase_obs_min=20.0,
+                require_mean_rtk_postfit_rms_max=0.01,
+                require_mean_postfix_phase_rms_max=0.01,
+                require_dd_phase_p95_max=0.005,
+                require_dd_code_p95_max=0.5,
+                require_dd_max_abs_residual_max=0.5,
+                require_dd_suppressed_rows_max=0,
             )
             with self.assertRaises(SystemExit) as context:
                 short_signoff.enforce_summary_requirements(payload, failing_args)
@@ -4344,6 +4891,12 @@ class ShortBaselineSignoffTest(unittest.TestCase):
             self.assertIn("fix rate", message)
             self.assertIn("mean position error", message)
             self.assertIn("max position error", message)
+            self.assertIn("mean baseline length error", message)
+            self.assertIn("mean RTK phase observations", message)
+            self.assertIn("mean RTK postfit residual RMS", message)
+            self.assertIn("mean post-fix carrier-phase residual RMS", message)
+            self.assertIn("DD phase p95 abs residual", message)
+            self.assertIn("DD code p95 abs residual", message)
         self.assertIn("mean satellites", message)
 
 
@@ -5320,6 +5873,842 @@ out.write_text(
             self.assertTrue(rtklib_pos.exists())
             contents = rtklib_pos.read_text(encoding="ascii")
             self.assertIn("synthetic rtklib solution", contents)
+
+
+class PPCCandidateFeatureTableTest(unittest.TestCase):
+    @staticmethod
+    def write_reference_csv(path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["tow", "week", "lat", "lon", "height", "ecef_x", "ecef_y", "ecef_z"])
+            for index in range(3):
+                writer.writerow([float(index), 2300, 0.0, 0.0, 0.0, 10.0 * index, 0.0, 0.0])
+
+    @staticmethod
+    def solution_epoch(
+        index: int,
+        ecef_x_m: float,
+        status: int,
+        sats: int,
+        post_rms_m: float,
+    ) -> comparison.SolutionEpoch:
+        return comparison.SolutionEpoch(
+            2300,
+            float(index),
+            0.0,
+            0.0,
+            0.0,
+            np.array([ecef_x_m, 0.0, 0.0]),
+            status,
+            sats,
+            12.0 if status == 4 else 1.0,
+            100.0,
+            2,
+            16,
+            8,
+            8,
+            0,
+            post_rms_m,
+            post_rms_m * 4.0,
+            post_rms_m,
+            post_rms_m * 4.0,
+        )
+
+    def test_build_ppc_candidate_feature_table_scores_libgnss_candidates(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_candidate_features_") as temp_dir:
+            temp_root = Path(temp_dir)
+            reference_csv = temp_root / "reference.csv"
+            base_pos = temp_root / "base.pos"
+            risky_pos = temp_root / "risky.pos"
+            out_csv = temp_root / "features.csv"
+            summary_json = temp_root / "features.summary.json"
+
+            self.write_reference_csv(reference_csv)
+            ppc_dual_profile_selector.write_pos(
+                base_pos,
+                [
+                    self.solution_epoch(0, 0.0, 4, 12, 0.1),
+                    self.solution_epoch(1, 10.1, 4, 12, 0.2),
+                    self.solution_epoch(2, 20.0, 4, 12, 0.1),
+                ],
+            )
+            ppc_dual_profile_selector.write_pos(
+                risky_pos,
+                [
+                    self.solution_epoch(0, 0.0, 4, 12, 0.1),
+                    self.solution_epoch(1, 14.0, 3, 7, 3.0),
+                    self.solution_epoch(2, 20.0, 4, 12, 0.1),
+                ],
+            )
+
+            exit_code = ppc_candidate_features.main(
+                [
+                    "--run-id",
+                    "tokyo_run1",
+                    "--reference-csv",
+                    str(reference_csv),
+                    "--candidate",
+                    f"base={base_pos}",
+                    "--candidate",
+                    f"risky={risky_pos}",
+                    "--out-csv",
+                    str(out_csv),
+                    "--summary-json",
+                    str(summary_json),
+                ]
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(out_csv.exists())
+            self.assertTrue(summary_json.exists())
+            with out_csv.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 6)
+            epoch_one = {row["label"]: row for row in rows if row["tow"] == "1.000000000"}
+            self.assertEqual(epoch_one["base"]["status_name"], "FIXED")
+            self.assertEqual(epoch_one["risky"]["status_name"], "FLOAT")
+            self.assertEqual(epoch_one["base"]["rank_by_rms"], "1")
+            self.assertEqual(epoch_one["risky"]["rank_by_rms"], "2")
+            self.assertEqual(epoch_one["base"]["rank_by_candidate_jump"], "1")
+            self.assertEqual(epoch_one["risky"]["rank_by_candidate_jump"], "2")
+            self.assertEqual(epoch_one["base"]["rank_by_delta_pos_accel"], "1")
+            self.assertEqual(epoch_one["risky"]["rank_by_delta_pos_accel"], "2")
+            self.assertAlmostEqual(
+                float(epoch_one["risky"]["candidate_jump_minus_min_m"]),
+                3.9,
+            )
+            self.assertNotEqual(epoch_one["base"]["dist_to_median_over_jump"], "")
+            self.assertIn("smooth_outlier_score", epoch_one["risky"])
+            self.assertLess(
+                float(epoch_one["base"]["libgnss_urban_risk_score"]),
+                float(epoch_one["risky"]["libgnss_urban_risk_score"]),
+            )
+            self.assertEqual(epoch_one["base"]["is_pass_50cm"], "1")
+            self.assertEqual(epoch_one["risky"]["is_pass_50cm"], "0")
+            self.assertEqual(epoch_one["base"]["n_candidates_in_epoch"], "2")
+
+            summary = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(summary["rows"], 6)
+            self.assertEqual(summary["epochs"], 3)
+            self.assertEqual(summary["matched_reference_rows"], 6)
+            self.assertIn("base", summary["per_label"])
+            self.assertIn("risky", summary["per_label"])
+
+
+class PPCCandidateFeatureRankerTest(unittest.TestCase):
+    @staticmethod
+    def write_reference_csv(path: Path, count: int = 6) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["tow", "week", "lat", "lon", "height", "ecef_x", "ecef_y", "ecef_z"])
+            for index in range(count):
+                writer.writerow([float(index), 2300, 0.0, 0.0, 0.0, 10.0 * index, 0.0, 0.0])
+
+    def test_eval_ppc_candidate_feature_ranker_improves_synthetic_pool(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_candidate_ranker_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_csv = temp_root / "features.csv"
+            out_dir = temp_root / "ranker"
+            out_pos = out_dir / "ranker.pos"
+            reference_csv = temp_root / "reference.csv"
+            self.write_reference_csv(reference_csv)
+
+            fieldnames = [
+                "run_id",
+                "week",
+                "tow",
+                "label",
+                "status",
+                "status_name",
+                "sats",
+                "ratio",
+                "selector_base_score",
+                "rank_by_rms",
+                "n_candidates_in_epoch",
+                "cluster_size_50cm",
+                "dist_to_median_m",
+                "candidate_jump_m",
+                "libgnss_urban_risk_score",
+                "x_m",
+                "y_m",
+                "z_m",
+                "lat_deg",
+                "lon_deg",
+                "height_m",
+                "err_3d_m",
+                "is_pass_50cm",
+                "path_weight_m",
+            ]
+            rows = []
+            for idx in range(6):
+                tow = float(idx)
+                rows.append(
+                    {
+                        "run_id": "tokyo_run1",
+                        "week": 2300,
+                        "tow": tow,
+                        "label": "base_low_score_bad",
+                        "status": 4,
+                        "status_name": "FIXED",
+                        "sats": 12,
+                        "ratio": 12.0,
+                        "selector_base_score": 0.05,
+                        "rank_by_rms": 1,
+                        "n_candidates_in_epoch": 2,
+                        "cluster_size_50cm": 1,
+                        "dist_to_median_m": 4.0,
+                        "candidate_jump_m": 8.0,
+                        "libgnss_urban_risk_score": 0.80,
+                        "x_m": 10.0 * idx + 3.0,
+                        "y_m": 0.0,
+                        "z_m": 0.0,
+                        "lat_deg": 0.0,
+                        "lon_deg": 0.0,
+                        "height_m": 0.0,
+                        "err_3d_m": 3.0,
+                        "is_pass_50cm": 0,
+                        "path_weight_m": 1.0,
+                    }
+                )
+                rows.append(
+                    {
+                        "run_id": "tokyo_run1",
+                        "week": 2300,
+                        "tow": tow,
+                        "label": "robust_higher_score_good",
+                        "status": 4,
+                        "status_name": "FIXED",
+                        "sats": 12,
+                        "ratio": 12.0,
+                        "selector_base_score": 0.40,
+                        "rank_by_rms": 2,
+                        "n_candidates_in_epoch": 2,
+                        "cluster_size_50cm": 2,
+                        "dist_to_median_m": 0.1,
+                        "candidate_jump_m": 0.1,
+                        "libgnss_urban_risk_score": 0.05,
+                        "x_m": 10.0 * idx + 0.1,
+                        "y_m": 0.0,
+                        "z_m": 0.0,
+                        "lat_deg": 0.0,
+                        "lon_deg": 0.0,
+                        "height_m": 0.0,
+                        "err_3d_m": 0.1,
+                        "is_pass_50cm": 1,
+                        "path_weight_m": 1.0,
+                    }
+                )
+            with input_csv.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
+
+            exit_code = ppc_candidate_ranker.main(
+                [
+                    "--input-csv",
+                    str(input_csv),
+                    "--fold-mode",
+                    "time-block",
+                    "--time-blocks",
+                    "2",
+                    "--out-dir",
+                    str(out_dir),
+                    "--out-pos",
+                    str(out_pos),
+                    "--reference-csv",
+                    str(reference_csv),
+                ]
+            )
+
+            self.assertEqual(exit_code, 0)
+            summary_path = out_dir / "ppc_candidate_ranker_summary.json"
+            rows_path = out_dir / "ppc_candidate_ranker_rows.csv"
+            self.assertTrue(summary_path.exists())
+            self.assertTrue(rows_path.exists())
+            self.assertTrue(out_pos.exists())
+            self.assertEqual(len(comparison.read_libgnss_pos(out_pos)), 6)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertLess(
+                summary["ranker"]["mean_err_3d_m"],
+                summary["baseline"]["mean_err_3d_m"],
+            )
+            self.assertEqual(summary["ranker"]["pass_rate"], 1.0)
+            self.assertEqual(summary["selection_changed_epochs"], 6)
+            self.assertIn("pos_metrics", summary)
+            self.assertGreater(
+                summary["pos_metrics"]["ranker"]["ppc_score_3d_50cm_ref_pct"],
+                summary["pos_metrics"]["baseline"]["ppc_score_3d_50cm_ref_pct"],
+            )
+            self.assertEqual(summary["out_pos"], str(out_pos))
+            filtered_rows = ppc_candidate_ranker.exclude_label_rows(
+                ppc_candidate_ranker.read_rows([input_csv]),
+                ["base_low_score_bad"],
+            )
+            self.assertEqual(
+                {row["label"] for row in filtered_rows},
+                {"robust_higher_score_good"},
+            )
+            self.assertEqual(
+                [row["_row_index"] for row in filtered_rows],
+                list(range(len(filtered_rows))),
+            )
+
+    def test_ranker_scores_and_writes_multi_run_selected_pos(self) -> None:
+        def row(run_id: str, index: int, label: str, ecef_offset_m: float) -> dict[str, object]:
+            return {
+                "run_id": run_id,
+                "week": 2300,
+                "tow": float(index),
+                "label": label,
+                "status": 4,
+                "sats": 12,
+                "ratio": 12.0,
+                "baseline_m": 100.0,
+                "rms": 0.1,
+                "abs_max": 0.4,
+                "x_m": 10.0 * index + ecef_offset_m,
+                "y_m": 0.0,
+                "z_m": 0.0,
+                "lat_deg": 0.0,
+                "lon_deg": 0.0,
+                "height_m": 0.0,
+            }
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_candidate_ranker_runs_") as temp_dir:
+            temp_root = Path(temp_dir)
+            references = {
+                "tokyo_run1": temp_root / "tokyo_run1_reference.csv",
+                "nagoya_run1": temp_root / "nagoya_run1_reference.csv",
+            }
+            for path in references.values():
+                self.write_reference_csv(path, count=3)
+
+            selected_rows = {
+                "baseline": [
+                    row(run_id, index, "bad", 3.0)
+                    for run_id in references
+                    for index in range(3)
+                ],
+                "ranker": [
+                    row(run_id, index, "good", 0.1)
+                    for run_id in references
+                    for index in range(3)
+                ],
+                "oracle": [
+                    row(run_id, index, "good", 0.1)
+                    for run_id in references
+                    for index in range(3)
+                ],
+            }
+
+            metrics, by_run, delta = ppc_candidate_ranker.score_selected_pos_by_run(
+                references,
+                selected_rows,
+                0.25,
+            )
+            out_pos_by_run = ppc_candidate_ranker.write_ranker_pos_by_run(
+                temp_root / "pos",
+                selected_rows["ranker"],
+            )
+
+            self.assertEqual(set(by_run), set(references))
+            self.assertEqual(set(out_pos_by_run), set(references))
+            for path in out_pos_by_run.values():
+                self.assertEqual(len(comparison.read_libgnss_pos(Path(path))), 3)
+            self.assertGreater(
+                metrics["ranker"]["ppc_official_score_pct"],
+                metrics["baseline"]["ppc_official_score_pct"],
+            )
+            self.assertGreater(delta["ranker"]["ppc_official_score_pct"], 0.0)
+
+    def test_ranker_target_weight_modes_use_path_and_boundary_focus(self) -> None:
+        row = {"path_weight_m": "4.0", "err_3d_m": "0.8"}
+
+        self.assertEqual(ppc_candidate_ranker.target_weight(row, "uniform"), 1.0)
+        self.assertEqual(ppc_candidate_ranker.target_weight(row, "path"), 4.0)
+        self.assertEqual(ppc_candidate_ranker.target_weight(row, "sqrt-path"), 2.0)
+        self.assertAlmostEqual(
+            ppc_candidate_ranker.target_weight(row, "log-path"),
+            math.log1p(4.0),
+        )
+        self.assertEqual(ppc_candidate_ranker.target_weight(row, "pass-focus"), 12.0)
+        self.assertEqual(
+            ppc_candidate_ranker.target_weight(
+                {"path_weight_m": "4.0", "err_3d_m": "4.0"},
+                "pass-focus",
+            ),
+            4.0,
+        )
+
+    def test_viterbi_selection_penalizes_short_label_flips(self) -> None:
+        rows: list[dict[str, object]] = []
+        predictions: dict[int, float] = {}
+        predicted_by_tow_label = {
+            (0, "stable"): 0.0,
+            (0, "flip"): 1.0,
+            (1, "stable"): 0.4,
+            (1, "flip"): 0.0,
+            (2, "stable"): 0.0,
+            (2, "flip"): 1.0,
+        }
+        for tow in range(3):
+            for label in ("stable", "flip"):
+                row_index = len(rows)
+                rows.append(
+                    {
+                        "_row_index": row_index,
+                        "run_id": "tokyo_run1",
+                        "week": 2300,
+                        "tow": float(tow),
+                        "label": label,
+                        "selector_base_score": 0.0,
+                        "x_m": float(tow),
+                        "y_m": 0.0 if label == "stable" else 1.0,
+                        "z_m": 0.0,
+                        "err_3d_m": 0.0,
+                    }
+                )
+                predictions[row_index] = predicted_by_tow_label[(tow, label)]
+
+        point_args = argparse.Namespace(selection_mode="point")
+        point_selection = ppc_candidate_ranker.ranker_rows_by_epoch(
+            rows,
+            predictions,
+            point_args,
+        )
+        self.assertEqual(
+            [row["label"] for _key, row in sorted(point_selection.items())],
+            ["stable", "flip", "stable"],
+        )
+
+        viterbi_args = argparse.Namespace(
+            selection_mode="viterbi",
+            viterbi_switch_penalty_m=0.6,
+            viterbi_switch_margin_m=0.0,
+            viterbi_jump_excess_penalty_per_m=0.0,
+            viterbi_jump_excess_margin_m=0.0,
+            viterbi_max_gap_s=2.0,
+            viterbi_max_segment_epochs=0,
+        )
+        viterbi_selection = ppc_candidate_ranker.ranker_rows_by_epoch(
+            rows,
+            predictions,
+            viterbi_args,
+        )
+        self.assertEqual(
+            [row["label"] for _key, row in sorted(viterbi_selection.items())],
+            ["stable", "stable", "stable"],
+        )
+
+    def test_viterbi_switch_margin_preserves_confident_flips(self) -> None:
+        rows: list[dict[str, object]] = []
+        predictions: dict[int, float] = {}
+        predicted_by_tow_label = {
+            (0, "stable"): 0.0,
+            (0, "flip"): 1.0,
+            (1, "stable"): 0.7,
+            (1, "flip"): 0.0,
+            (2, "stable"): 0.0,
+            (2, "flip"): 1.0,
+        }
+        for tow in range(3):
+            for label in ("stable", "flip"):
+                row_index = len(rows)
+                rows.append(
+                    {
+                        "_row_index": row_index,
+                        "run_id": "tokyo_run1",
+                        "week": 2300,
+                        "tow": float(tow),
+                        "label": label,
+                        "selector_base_score": 0.0,
+                        "x_m": float(tow),
+                        "y_m": 0.0 if label == "stable" else 1.0,
+                        "z_m": 0.0,
+                        "err_3d_m": 0.0,
+                    }
+                )
+                predictions[row_index] = predicted_by_tow_label[(tow, label)]
+
+        ungated_args = argparse.Namespace(
+            selection_mode="viterbi",
+            viterbi_switch_penalty_m=0.6,
+            viterbi_switch_margin_m=0.0,
+            viterbi_jump_excess_penalty_per_m=0.0,
+            viterbi_jump_excess_margin_m=0.0,
+            viterbi_max_gap_s=2.0,
+            viterbi_max_segment_epochs=0,
+        )
+        ungated_selection = ppc_candidate_ranker.ranker_rows_by_epoch(
+            rows,
+            predictions,
+            ungated_args,
+        )
+        self.assertEqual(
+            [row["label"] for _key, row in sorted(ungated_selection.items())],
+            ["stable", "stable", "stable"],
+        )
+
+        gated_args = argparse.Namespace(
+            selection_mode="viterbi",
+            viterbi_switch_penalty_m=0.6,
+            viterbi_switch_margin_m=0.5,
+            viterbi_jump_excess_penalty_per_m=0.0,
+            viterbi_jump_excess_margin_m=0.0,
+            viterbi_max_gap_s=2.0,
+            viterbi_max_segment_epochs=0,
+        )
+        gated_selection = ppc_candidate_ranker.ranker_rows_by_epoch(
+            rows,
+            predictions,
+            gated_args,
+        )
+        self.assertEqual(
+            [row["label"] for _key, row in sorted(gated_selection.items())],
+            ["stable", "flip", "stable"],
+        )
+
+    def test_viterbi_max_segment_epochs_resets_long_paths(self) -> None:
+        rows: list[dict[str, object]] = []
+        predictions: dict[int, float] = {}
+        predicted_by_tow_label = {
+            (0, "a"): 0.0,
+            (0, "b"): 0.1,
+            (1, "a"): 0.4,
+            (1, "b"): 0.0,
+            (2, "a"): 0.4,
+            (2, "b"): 0.0,
+        }
+        for tow in range(3):
+            for label in ("a", "b"):
+                row_index = len(rows)
+                rows.append(
+                    {
+                        "_row_index": row_index,
+                        "run_id": "tokyo_run1",
+                        "week": 2300,
+                        "tow": float(tow),
+                        "label": label,
+                        "selector_base_score": 0.0,
+                        "x_m": float(tow),
+                        "y_m": 0.0 if label == "a" else 1.0,
+                        "z_m": 0.0,
+                        "err_3d_m": 0.0,
+                    }
+                )
+                predictions[row_index] = predicted_by_tow_label[(tow, label)]
+
+        full_args = argparse.Namespace(
+            selection_mode="viterbi",
+            viterbi_switch_penalty_m=0.6,
+            viterbi_switch_margin_m=0.0,
+            viterbi_jump_excess_penalty_per_m=0.0,
+            viterbi_jump_excess_margin_m=0.0,
+            viterbi_max_gap_s=2.0,
+            viterbi_max_segment_epochs=0,
+        )
+        full_selection = ppc_candidate_ranker.ranker_rows_by_epoch(
+            rows,
+            predictions,
+            full_args,
+        )
+        self.assertEqual(
+            [row["label"] for _key, row in sorted(full_selection.items())],
+            ["b", "b", "b"],
+        )
+
+        reset_args = argparse.Namespace(
+            selection_mode="viterbi",
+            viterbi_switch_penalty_m=0.6,
+            viterbi_switch_margin_m=0.0,
+            viterbi_jump_excess_penalty_per_m=0.0,
+            viterbi_jump_excess_margin_m=0.0,
+            viterbi_max_gap_s=2.0,
+            viterbi_max_segment_epochs=1,
+        )
+        reset_selection = ppc_candidate_ranker.ranker_rows_by_epoch(
+            rows,
+            predictions,
+            reset_args,
+        )
+        self.assertEqual(
+            [row["label"] for _key, row in sorted(reset_selection.items())],
+            ["a", "b", "b"],
+        )
+
+    def test_postselect_override_respects_label_status_and_rank_guards(self) -> None:
+        rows: list[dict[str, object]] = []
+        for tow, selected_label, selected_accel_rank, target_accel_rank in [
+            (0, "risky", 3, 2),
+            (1, "risky", 1, 2),
+            (2, "other", 3, 1),
+        ]:
+            for label, accel_rank in [
+                (selected_label, selected_accel_rank),
+                ("target", target_accel_rank),
+            ]:
+                rows.append(
+                    {
+                        "_row_index": len(rows),
+                        "run_id": "tokyo_run1",
+                        "week": 2300,
+                        "tow": float(tow),
+                        "label": label,
+                        "status_name": "SPP",
+                        "rank_by_delta_pos_accel": accel_rank,
+                        "smooth_outlier_score": 0.2 if tow != 2 else 0.0,
+                        "path_weight_m": 2.0,
+                    }
+                )
+        grouped = ppc_candidate_ranker.grouped_epoch_rows(rows)
+        ranker_by_epoch = {
+            key: next(row for row in items if row["label"] != "target")
+            for key, items in grouped.items()
+        }
+        args = argparse.Namespace(
+            postselect_override_to_label="target",
+            postselect_override_from_label=["risky"],
+            postselect_override_from_status_name=["SPP"],
+            postselect_override_rank_accel_le_selected=True,
+            postselect_override_rank_jump_le_selected=False,
+            postselect_override_min_smooth_outlier_score=0.1,
+        )
+
+        overridden, summary = ppc_candidate_ranker.apply_postselect_overrides(
+            grouped,
+            ranker_by_epoch,
+            args,
+        )
+
+        self.assertEqual(
+            [row["label"] for _key, row in sorted(overridden.items())],
+            ["target", "risky", "other"],
+        )
+        self.assertEqual(summary["epochs"], 1)
+        self.assertEqual(summary["path_weight_m"], 2.0)
+        self.assertEqual(summary["from_labels"], ["risky"])
+
+    def test_postselect_override_rule_supports_min_cluster_guard(self) -> None:
+        rows: list[dict[str, object]] = []
+        for tow, target_cluster_size in [(0, 4), (1, 3)]:
+            for label, cluster_size in [
+                ("selected", 1),
+                ("target", target_cluster_size),
+            ]:
+                rows.append(
+                    {
+                        "_row_index": len(rows),
+                        "run_id": "tokyo_run1",
+                        "week": 2300,
+                        "tow": float(tow),
+                        "label": label,
+                        "cluster_size_50cm": cluster_size,
+                        "path_weight_m": 2.0,
+                    }
+                )
+        grouped = ppc_candidate_ranker.grouped_epoch_rows(rows)
+        ranker_by_epoch = {
+            key: next(row for row in items if row["label"] == "selected")
+            for key, items in grouped.items()
+        }
+        args = argparse.Namespace(
+            postselect_override_rule=[
+                "from=selected,to=target,min_cluster50=4",
+            ],
+        )
+
+        overridden, summary = ppc_candidate_ranker.apply_postselect_overrides(
+            grouped,
+            ranker_by_epoch,
+            args,
+        )
+
+        self.assertEqual(
+            [row["label"] for _key, row in sorted(overridden.items())],
+            ["target", "selected"],
+        )
+        self.assertEqual(summary["epochs"], 1)
+        self.assertEqual(summary["rules"][0]["min_cluster_size_50cm"], 4.0)
+
+
+class PPCCandidateRankerMatrixTest(unittest.TestCase):
+    def test_matrix_driver_builds_features_and_invokes_ranker(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_candidate_ranker_matrix_") as temp_dir:
+            temp_root = Path(temp_dir)
+            dataset_root = temp_root / "PPC-Dataset"
+            summary_json = temp_root / "matrix.json"
+            ranker_dir = temp_root / "ranker"
+            features_dir = temp_root / "features"
+            captured_calls: list[list[str]] = []
+
+            def fake_run(argv: list[str], check: bool) -> object:  # type: ignore[misc]
+                captured_calls.append(argv)
+                if "build_ppc_candidate_feature_table.py" in argv[1]:
+                    out_csv = Path(argv[argv.index("--out-csv") + 1])
+                    out_summary = Path(argv[argv.index("--summary-json") + 1])
+                    out_csv.parent.mkdir(parents=True, exist_ok=True)
+                    out_summary.parent.mkdir(parents=True, exist_ok=True)
+                    out_csv.write_text(
+                        "run_id,week,tow,label,err_3d_m\n"
+                        "tokyo_run1,2300,0.0,base,0.1\n",
+                        encoding="ascii",
+                    )
+                    out_summary.write_text('{"rows": 1, "epochs": 1}\n', encoding="ascii")
+                elif "eval_ppc_candidate_feature_ranker.py" in argv[1]:
+                    out_summary = Path(argv[argv.index("--summary-json") + 1])
+                    out_markdown = Path(argv[argv.index("--markdown-output") + 1])
+                    out_summary.parent.mkdir(parents=True, exist_ok=True)
+                    out_summary.write_text(
+                        json.dumps(
+                            {
+                                "epochs": 2,
+                                "row_count": 4,
+                                "baseline": {"mean_err_3d_m": 2.0},
+                                "ranker": {"mean_err_3d_m": 1.0},
+                                "oracle": {"mean_err_3d_m": 0.5},
+                                "postselect_override": {
+                                    "enabled": True,
+                                    "to_label": "target",
+                                    "epochs": 1,
+                                },
+                                "pos_metrics": {
+                                    "baseline": {
+                                        "ppc_official_score_pct": 50.0,
+                                        "ppc_score_3d_50cm_ref_pct": 50.0,
+                                        "mean_h_m": 2.0,
+                                    },
+                                    "ranker": {
+                                        "ppc_official_score_pct": 60.0,
+                                        "ppc_score_3d_50cm_ref_pct": 60.0,
+                                        "mean_h_m": 1.0,
+                                    },
+                                    "oracle": {
+                                        "ppc_official_score_pct": 70.0,
+                                        "ppc_score_3d_50cm_ref_pct": 70.0,
+                                        "mean_h_m": 0.5,
+                                    },
+                                },
+                                "pos_metric_delta_vs_baseline": {
+                                    "ranker": {"ppc_official_score_pct": 10.0}
+                                },
+                            }
+                        )
+                        + "\n",
+                        encoding="utf-8",
+                    )
+                    out_markdown.write_text("# ranker\n", encoding="ascii")
+
+                class Result:
+                    returncode = 0
+
+                return Result()
+
+            with mock.patch(
+                "run_ppc_candidate_ranker_matrix.subprocess.run",
+                side_effect=fake_run,
+            ):
+                exit_code = ppc_candidate_ranker_matrix.main(
+                    [
+                        "--run",
+                        "tokyo/run1",
+                        "--run",
+                        "nagoya/run1",
+                        "--dataset-root",
+                        str(dataset_root),
+                        "--candidate",
+                        f"base={temp_root}/base/{{key}}.pos",
+                        "--candidate",
+                        f"alt={temp_root}/alt/{{key}}.pos",
+                        "--features-dir",
+                        str(features_dir),
+                        "--ranker-output-dir",
+                        str(ranker_dir),
+                        "--model",
+                        "hist-gradient",
+                        "--no-label-features",
+                        "--exclude-label",
+                        "alt",
+                        "--postselect-override-to-label",
+                        "target",
+                        "--postselect-override-from-label",
+                        "risky",
+                        "--postselect-override-from-status-name",
+                        "SPP",
+                        "--postselect-override-rank-accel-le-selected",
+                        "--postselect-override-min-smooth-outlier-score",
+                        "0.1",
+                        "--postselect-override-rule",
+                        "from=libgnss_v5,to=gici_zeroarm,min_cluster50=4",
+                        "--target-weight-mode",
+                        "pass-focus",
+                        "--selection-mode",
+                        "viterbi",
+                        "--viterbi-switch-penalty-m",
+                        "0.05",
+                        "--viterbi-switch-margin-m",
+                        "0.20",
+                        "--viterbi-jump-excess-penalty-per-m",
+                        "0.01",
+                        "--viterbi-max-segment-epochs",
+                        "25",
+                        "--summary-json",
+                        str(summary_json),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(len(captured_calls), 3)
+            feature_calls = [
+                call for call in captured_calls if "build_ppc_candidate_feature_table.py" in call[1]
+            ]
+            ranker_calls = [
+                call for call in captured_calls if "eval_ppc_candidate_feature_ranker.py" in call[1]
+            ]
+            self.assertEqual(len(feature_calls), 2)
+            self.assertEqual(len(ranker_calls), 1)
+            ranker_argv = ranker_calls[0]
+            self.assertEqual(ranker_argv.count("--input-csv"), 2)
+            self.assertEqual(ranker_argv.count("--reference-map"), 2)
+            self.assertIn("--no-label-features", ranker_argv)
+            exclude_idx = ranker_argv.index("--exclude-label")
+            self.assertEqual(ranker_argv[exclude_idx + 1], "alt")
+            override_idx = ranker_argv.index("--postselect-override-to-label")
+            self.assertEqual(ranker_argv[override_idx + 1], "target")
+            from_label_idx = ranker_argv.index("--postselect-override-from-label")
+            self.assertEqual(ranker_argv[from_label_idx + 1], "risky")
+            from_status_idx = ranker_argv.index("--postselect-override-from-status-name")
+            self.assertEqual(ranker_argv[from_status_idx + 1], "SPP")
+            self.assertIn("--postselect-override-rank-accel-le-selected", ranker_argv)
+            smooth_idx = ranker_argv.index("--postselect-override-min-smooth-outlier-score")
+            self.assertEqual(ranker_argv[smooth_idx + 1], "0.1")
+            rule_idx = ranker_argv.index("--postselect-override-rule")
+            self.assertEqual(
+                ranker_argv[rule_idx + 1],
+                "from=libgnss_v5,to=gici_zeroarm,min_cluster50=4",
+            )
+            model_idx = ranker_argv.index("--model")
+            self.assertEqual(ranker_argv[model_idx + 1], "hist-gradient")
+            weight_idx = ranker_argv.index("--target-weight-mode")
+            self.assertEqual(ranker_argv[weight_idx + 1], "pass-focus")
+            selection_idx = ranker_argv.index("--selection-mode")
+            self.assertEqual(ranker_argv[selection_idx + 1], "viterbi")
+            switch_idx = ranker_argv.index("--viterbi-switch-penalty-m")
+            self.assertEqual(ranker_argv[switch_idx + 1], "0.05")
+            margin_idx = ranker_argv.index("--viterbi-switch-margin-m")
+            self.assertEqual(ranker_argv[margin_idx + 1], "0.2")
+            jump_idx = ranker_argv.index("--viterbi-jump-excess-penalty-per-m")
+            self.assertEqual(ranker_argv[jump_idx + 1], "0.01")
+            segment_idx = ranker_argv.index("--viterbi-max-segment-epochs")
+            self.assertEqual(ranker_argv[segment_idx + 1], "25")
+            payload = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(payload["model"], "hist-gradient")
+            self.assertEqual(payload["target_weight_mode"], "pass-focus")
+            self.assertEqual(payload["selection_mode"], "viterbi")
+            self.assertEqual(payload["postselect_override"]["to_label"], "target")
+            self.assertEqual(payload["ranker"]["pos_metrics"]["ranker"]["ppc_official_score_pct"], 60.0)
+            self.assertTrue((ranker_dir / "ppc_candidate_ranker_matrix.md").exists())
 
 
 class PPCMultiCandidateSelectorTest(unittest.TestCase):

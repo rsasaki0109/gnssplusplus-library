@@ -272,7 +272,7 @@ LIBGNSSPP_IMAGE=ghcr.io/rsasaki0109/gnssplusplus-library:v0.1.0 docker compose u
 - Analysis tooling: `visibility`, `visibility-plot`, and `moving-base-plot` for az/el/SNR exports plus moving-base/visibility PNG quick-looks
 - Moving-base tooling: `moving-base-prepare` plus `moving-base-signoff` for real bag/replay/live validation, including optional commercial receiver side-by-side summaries
 - One CLI entrypoint: `gnss spp`, `solve`, `ppp`, `visibility`, `stream`, `convert`, `live`, `rcv`
-- Local web UI: `gnss web` for benchmark snapshots, live/moving-base/PPP-product sign-offs, 2D trajectories, visibility views, artifact bundles, receiver status, and artifact links
+- Local web UI: `gnss web` for benchmark snapshots, GNSS GPU/libgnss++ summary comparisons, live/moving-base/PPP-product sign-offs, DD residual diagnostics, 2D trajectories, visibility views, artifact bundles, receiver status, and artifact links
 - Built-in sign-off scripts and checked-in benchmark artifacts
 - CMake install/export, Python bindings, and ROS2 playback node
 
@@ -301,6 +301,23 @@ python3 apps/gnss.py solve \
   --nav data/short_baseline/BRDC00IGS_R_20240010000_01D_MN.rnx \
   --mode static \
   --out output/rtk_solution.pos
+
+python3 apps/gnss.py short-baseline-signoff \
+  --max-epochs 120 \
+  --diagnostics-csv output/short_baseline_diagnostics.csv \
+  --debug-epoch-log output/short_baseline_epoch_debug.csv \
+  --dd-residuals-csv output/short_baseline_dd_residuals.csv \
+  --dd-html-report output/short_baseline_dd_residuals.html \
+  --require-fix-rate-min 95 \
+  --require-mean-baseline-error-max 0.10 \
+  --require-mean-rtk-phase-obs-min 8 \
+  --require-mean-rtk-postfit-rms-max 0.05 \
+  --require-mean-postfix-phase-rms-max 0.05
+
+python3 apps/gnss.py dd-residuals output/short_baseline_dd_residuals.csv \
+  --summary-json output/short_baseline_dd_residuals_summary.json \
+  --top-pairs-csv output/short_baseline_dd_residuals_top_pairs.csv \
+  --html-report output/short_baseline_dd_residuals.html
 
 python3 apps/gnss.py ppp \
   --static \
@@ -351,7 +368,7 @@ python3 apps/gnss.py sbf-info \
 | `gnss ubx-info` / `gnss sbf-info` | Inspect receiver logs |
 | `gnss ppc-rtk-signoff` | PPC Tokyo/Nagoya RTK sign-off profiles |
 | `gnss ppc-coverage-matrix` | Full six-run PPC matrix with JSON/Markdown summaries |
-| `gnss web` | Local browser UI for summary JSON, live/moving-base/PPP-product sign-offs, `.pos` trajectories, moving-base/visibility plots and histories, receiver status, and artifact/provenance links |
+| `gnss web` | Local browser UI for summary JSON, GNSS GPU/libgnss++ summary comparisons, live/moving-base/PPP-product sign-offs, DD residual diagnostics, `.pos` trajectories, moving-base/visibility plots and histories, receiver status, and artifact/provenance links |
 
 See all commands and options:
 
@@ -369,7 +386,7 @@ python3 apps/gnss.py web \
   --rcv-status output/receiver.status.json
 ```
 
-Then open `http://127.0.0.1:8085` to inspect Odaiba metrics, live/moving-base/PPP-product sign-offs, 2D trajectories, moving-base and visibility plots, moving-base history, PPC summaries, receiver status, and linked artifact bundles in a browser. The PPP products table links directly to fetched products, MALIB `.pos`, comparison CSV/PNG artifacts, and dataset provenance.
+Then open `http://127.0.0.1:8085` to inspect Odaiba metrics, GNSS GPU/libgnss++ summary comparisons, live/moving-base/PPP-product sign-offs, DD residual diagnostics, 2D trajectories, moving-base and visibility plots, moving-base history, PPC summaries, receiver status, and linked artifact bundles in a browser. The GNSS GPU comparison table auto-discovers `experiments/results/*_summary.csv` and `experiments/results/*_runs.csv` when the artifact root is the parent `gnss_gpu` workspace, then prefers matched `city/run/segment` comparisons before falling back to same-distance score scopes. It also surfaces matched win/loss counts and the worst matched losses first, so full-run regressions and segment failures are visible without sorting raw CSVs by hand. The PPP products table links directly to fetched products, MALIB `.pos`, comparison CSV/PNG artifacts, and dataset provenance.
 
 Long-running dashboard commands can also read TOML config files. See
 `configs/web.example.toml`, `configs/live_signoff.example.toml`,

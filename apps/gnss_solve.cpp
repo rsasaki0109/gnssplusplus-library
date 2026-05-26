@@ -1,4 +1,5 @@
 #include <Eigen/Dense>
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <exception>
@@ -7,6 +8,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -24,9 +26,9 @@
 namespace {
 
 constexpr double kExactTimeToleranceSeconds = 1e-6;
-constexpr double kDefaultFloatVsSppGuardMeters = 30.0;
-constexpr double kDefaultNonFixedJumpGuardMeters = 8.0;
-constexpr double kDefaultVerticalStepGuardMeters = 1.0;
+constexpr double kDefaultFloatVsSppGuardMeters = 10000.0;
+constexpr double kDefaultNonFixedJumpGuardMeters = 10000.0;
+constexpr double kDefaultVerticalStepGuardMeters = 10000.0;
 constexpr double kDefaultNonFixDriftGuardMaxAnchorGapSeconds = 120.0;
 constexpr double kDefaultNonFixDriftGuardMaxAnchorSpeedMps = 1.0;
 constexpr double kDefaultNonFixDriftGuardMaxResidualMeters = 30.0;
@@ -92,6 +94,7 @@ struct SolveConfig {
     bool prefer_trusted_seed = false;
     std::string rover_seed_pos_path;
     std::string diagnostics_csv_path;
+    std::string dd_residuals_csv_path;
     double rtk_update_outlier_threshold = 0.0;
     double ratio_threshold = 3.0;
     bool enable_ar_filter = false;
@@ -116,6 +119,9 @@ struct SolveConfig {
     double snr_reference_dbhz = 45.0;
     double snr_max_variance_scale = 25.0;
     double snr_min_baseline_m = 0.0;
+    std::string rtk_nlos_mask_path;
+    double rtk_nlos_k_weak = 1.0;
+    double rtk_nlos_phase_k_weak = 1.0;
     double cycle_slip_threshold = 0.05;
     double doppler_slip_threshold = 0.20;
     double code_slip_threshold = 5.0;
@@ -732,6 +738,46 @@ void writeDiagnosticsRow(std::ostream& out, const EpochDiagnostics& d) {
         << d.rejection_reason << '\n';
 }
 
+const char* measurementKindString(libgnss::rtk_measurement::MeasurementKind kind) {
+    switch (kind) {
+        case libgnss::rtk_measurement::MeasurementKind::PHASE: return "phase";
+        case libgnss::rtk_measurement::MeasurementKind::CODE: return "code";
+        default: return "unknown";
+    }
+}
+
+void writeDDResidualsHeader(std::ostream& out) {
+    out << "epoch_index,gps_week,tow,status,kind,frequency_index,reference_satellite,"
+        << "satellite,residual_m,abs_residual_m,reference_variance_m2,"
+        << "satellite_variance_m2,suppressed_by_outlier_threshold\n";
+}
+
+void writeDDResidualsRows(
+    std::ostream& out,
+    int epoch_index,
+    const libgnss::PositionSolution& solution,
+    const std::vector<libgnss::RTKProcessor::DDResidualDiagnostic>& diagnostics,
+    double outlier_threshold_m) {
+    const bool threshold_enabled = std::isfinite(outlier_threshold_m) && outlier_threshold_m > 0.0;
+    for (const auto& diagnostic : diagnostics) {
+        const double abs_residual = std::abs(diagnostic.residual_m);
+        out << epoch_index << ','
+            << solution.time.week << ','
+            << std::fixed << std::setprecision(3) << solution.time.tow << ','
+            << static_cast<int>(solution.status) << ','
+            << measurementKindString(diagnostic.kind) << ','
+            << diagnostic.frequency_index << ','
+            << diagnostic.reference_satellite.toString() << ','
+            << diagnostic.satellite.toString() << ','
+            << std::setprecision(6) << diagnostic.residual_m << ','
+            << abs_residual << ','
+            << diagnostic.reference_variance_m2 << ','
+            << diagnostic.satellite_variance_m2 << ','
+            << (threshold_enabled && abs_residual > outlier_threshold_m ? 1 : 0)
+            << '\n';
+    }
+}
+
 class EpochDebugWriter {
 public:
     bool open(const std::string& path) {
@@ -903,6 +949,11 @@ void printUsage(const char* program_name) {
         << "  --rtk-snr-min-baseline <m>\n"
         << "                             Apply RTK SNR weighting only above this baseline length\n"
         << "                             (default: 0, disabled)\n"
+        << "  --rtk-nlos-mask-path <csv> PLATEAU NLOS mask CSV (tow,epoch_idx,prn,is_los)\n"
+        << "                             is_los=0 inflates RTK code variance for that PRN\n"
+        << "  --rtk-nlos-k-weak <v>      NLOS code variance inflation factor (default: 1, off)\n"
+        << "  --rtk-nlos-phase-k-weak <v>\n"
+        << "                             Optional NLOS phase variance inflation (default: 1, off)\n"
         << "  --cycle-slip-threshold <m> Geometry-free L1/L2 slip threshold (default: 0.05)\n"
         << "  --doppler-slip-threshold <m>\n"
         << "                             Doppler-predicted phase slip threshold (default: 0.20)\n"
@@ -1075,6 +1126,7 @@ void printUsage(const char* program_name) {
         << "  --prefer-trusted-seed      Prefer recent trusted/fixed solution as seed\n"
         << "  --rover-seed-pos <file>    Inject ECEF seed positions from .pos file per epoch\n"
         << "  --diagnostics-csv <file>   Write per-epoch RTK candidate diagnostics CSV (PPC pipeline format)\n"
+        << "  --dd-residuals-csv <file>  Write per-DD RTK prefit residual diagnostics CSV\n"
         << "  --rtk-update-outlier-threshold <v>\n"
         << "                             Outlier rejection threshold for RTK measurement update (default: 30.0)\n"
         << "  --no-kinematic-post-filter Disable the kinematic output post-filter\n"
@@ -1265,6 +1317,12 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.snr_max_variance_scale = std::stod(argv[++i]);
         } else if (arg == "--rtk-snr-min-baseline" && i + 1 < argc) {
             config.snr_min_baseline_m = std::stod(argv[++i]);
+        } else if (arg == "--rtk-nlos-mask-path" && i + 1 < argc) {
+            config.rtk_nlos_mask_path = argv[++i];
+        } else if (arg == "--rtk-nlos-k-weak" && i + 1 < argc) {
+            config.rtk_nlos_k_weak = std::stod(argv[++i]);
+        } else if (arg == "--rtk-nlos-phase-k-weak" && i + 1 < argc) {
+            config.rtk_nlos_phase_k_weak = std::stod(argv[++i]);
         } else if (arg == "--cycle-slip-threshold" && i + 1 < argc) {
             config.cycle_slip_threshold = std::stod(argv[++i]);
         } else if (arg == "--doppler-slip-threshold" && i + 1 < argc) {
@@ -1448,6 +1506,8 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.rover_seed_pos_path = argv[++i];
         } else if (arg == "--diagnostics-csv" && i + 1 < argc) {
             config.diagnostics_csv_path = argv[++i];
+        } else if (arg == "--dd-residuals-csv" && i + 1 < argc) {
+            config.dd_residuals_csv_path = argv[++i];
         } else if (arg == "--rtk-update-outlier-threshold" && i + 1 < argc) {
             config.rtk_update_outlier_threshold = std::stod(argv[++i]);
         } else if (arg == "--no-kinematic-post-filter") {
@@ -1769,6 +1829,98 @@ double roundedTowKey(double tow) {
     return std::round(tow * 10.0) / 10.0;
 }
 
+std::string trimField(const std::string& value) {
+    const auto first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) {
+        return "";
+    }
+    const auto last = value.find_last_not_of(" \t\r\n");
+    return value.substr(first, last - first + 1);
+}
+
+std::vector<std::string> splitCsvLine(const std::string& line) {
+    std::vector<std::string> fields;
+    std::stringstream ss(line);
+    std::string field;
+    while (std::getline(ss, field, ',')) {
+        fields.push_back(trimField(field));
+    }
+    return fields;
+}
+
+bool parseMaskSatellite(const std::string& prn, libgnss::SatelliteId& satellite) {
+    const std::string value = trimField(prn);
+    if (value.size() < 2) {
+        return false;
+    }
+    libgnss::GNSSSystem system = libgnss::GNSSSystem::UNKNOWN;
+    switch (value[0]) {
+        case 'G': system = libgnss::GNSSSystem::GPS; break;
+        case 'R': system = libgnss::GNSSSystem::GLONASS; break;
+        case 'E': system = libgnss::GNSSSystem::Galileo; break;
+        case 'C': system = libgnss::GNSSSystem::BeiDou; break;
+        case 'J': system = libgnss::GNSSSystem::QZSS; break;
+        default: return false;
+    }
+    try {
+        const int prn_int = std::stoi(value.substr(1));
+        if (prn_int <= 0 || prn_int > 255) {
+            return false;
+        }
+        satellite = libgnss::SatelliteId(system, static_cast<uint8_t>(prn_int));
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+std::map<double, std::set<libgnss::SatelliteId>> loadNlosMask(const std::string& path) {
+    std::ifstream input(path);
+    if (!input.is_open()) {
+        throw std::runtime_error("failed to open RTK NLOS mask CSV: " + path);
+    }
+    std::string header_line;
+    if (!std::getline(input, header_line)) {
+        throw std::runtime_error("RTK NLOS mask CSV is empty: " + path);
+    }
+    const auto header = splitCsvLine(header_line);
+    std::map<std::string, size_t> col;
+    for (size_t i = 0; i < header.size(); ++i) {
+        col[header[i]] = i;
+    }
+    if (!col.count("tow") || !col.count("prn") || !col.count("is_los")) {
+        throw std::runtime_error("RTK NLOS mask CSV requires tow,prn,is_los columns: " + path);
+    }
+
+    std::map<double, std::set<libgnss::SatelliteId>> out;
+    std::string line;
+    while (std::getline(input, line)) {
+        if (line.empty()) {
+            continue;
+        }
+        const auto fields = splitCsvLine(line);
+        const size_t tow_idx = col["tow"];
+        const size_t prn_idx = col["prn"];
+        const size_t los_idx = col["is_los"];
+        if (fields.size() <= std::max({tow_idx, prn_idx, los_idx})) {
+            continue;
+        }
+        try {
+            if (std::stoi(fields[los_idx]) != 0) {
+                continue;
+            }
+            libgnss::SatelliteId satellite;
+            if (!parseMaskSatellite(fields[prn_idx], satellite)) {
+                continue;
+            }
+            out[roundedTowKey(std::stod(fields[tow_idx]))].insert(satellite);
+        } catch (const std::exception&) {
+            continue;
+        }
+    }
+    return out;
+}
+
 std::map<double, Eigen::Vector3d> loadSeedPositions(const std::string& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -1850,6 +2002,15 @@ int main(int argc, char* argv[]) {
         rtk_config.snr_reference_dbhz = config.snr_reference_dbhz;
         rtk_config.snr_max_variance_scale = config.snr_max_variance_scale;
         rtk_config.snr_min_baseline_m = config.snr_min_baseline_m;
+        if (!config.rtk_nlos_mask_path.empty()) {
+            rtk_config.nlos_mask_by_tow = loadNlosMask(config.rtk_nlos_mask_path);
+            rtk_config.nlos_code_variance_scale = config.rtk_nlos_k_weak;
+            rtk_config.nlos_phase_variance_scale = config.rtk_nlos_phase_k_weak;
+            std::cout << "Loaded RTK NLOS mask: " << config.rtk_nlos_mask_path
+                      << " epochs=" << rtk_config.nlos_mask_by_tow.size()
+                      << " code_k=" << rtk_config.nlos_code_variance_scale
+                      << " phase_k=" << rtk_config.nlos_phase_variance_scale << std::endl;
+        }
         rtk_config.cycle_slip_threshold = config.cycle_slip_threshold;
         rtk_config.doppler_slip_threshold = config.doppler_slip_threshold;
         rtk_config.code_slip_threshold = config.code_slip_threshold;
@@ -1942,6 +2103,16 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             writeDiagnosticsHeader(diagnostics_csv);
+        }
+        std::ofstream dd_residuals_csv;
+        if (!config.dd_residuals_csv_path.empty()) {
+            dd_residuals_csv.open(config.dd_residuals_csv_path);
+            if (!dd_residuals_csv.is_open()) {
+                std::cerr << "Error: failed to open DD residuals CSV: "
+                          << config.dd_residuals_csv_path << std::endl;
+                return 1;
+            }
+            writeDDResidualsHeader(dd_residuals_csv);
         }
 
         std::cout << "libgnss++ post-process solver" << std::endl;
@@ -2234,6 +2405,16 @@ int main(int argc, char* argv[]) {
                     diag.final_update_rows, diag.final_suppressed_outliers);
                 diag.output_added = pos_solution.isValid();
                 writeDiagnosticsRow(diagnostics_csv, diag);
+            }
+
+            if (dd_residuals_csv.is_open()) {
+                writeDDResidualsRows(dd_residuals_csv,
+                                     static_cast<int>(processed_rover_epochs),
+                                     pos_solution,
+                                     rtk_processor.getLastDDResidualDiagnostics(),
+                                     rtk_config.outlier_threshold > 0.0
+                                         ? rtk_config.outlier_threshold
+                                         : 30.0);
             }
 
             if (pos_solution.isValid()) {

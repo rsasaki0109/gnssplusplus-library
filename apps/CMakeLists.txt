@@ -72,6 +72,7 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_visibility_plot.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_odaiba_benchmark.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_odaiba_scan.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_dd_residuals.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_short_baseline_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_rtk_kinematic_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppp_static_signoff.py
@@ -120,6 +121,9 @@ install(PROGRAMS
     ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_profile_segment_delta.py
     ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_residual_reset_sweep.py
     ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_segment_selector_sweep.py
+    ${CMAKE_SOURCE_DIR}/scripts/build_ppc_candidate_feature_table.py
+    ${CMAKE_SOURCE_DIR}/scripts/eval_ppc_candidate_feature_ranker.py
+    ${CMAKE_SOURCE_DIR}/scripts/run_ppc_candidate_ranker_matrix.py
     ${CMAKE_SOURCE_DIR}/scripts/update_ppc_coverage_readme.py
     DESTINATION scripts
 )

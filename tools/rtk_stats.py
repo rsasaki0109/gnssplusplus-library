@@ -8,6 +8,10 @@ posファイルを読み込み、統計情報を表示する。
 import sys
 import os
 import math
+import datetime as dt
+
+
+GPS_EPOCH = dt.datetime(1980, 1, 6)
 
 
 # ---------------------------------------------------------------------------
@@ -61,10 +65,100 @@ def read_libgnss_pos(filepath):
                     "week": int(cols[0]), "tow": float(cols[1]),
                     "lat": float(cols[5]), "lon": float(cols[6]), "hgt": float(cols[7]),
                     "status": int(cols[8]), "nsat": int(cols[9]), "pdop": float(cols[10]),
+                    "ratio": float(cols[11]) if len(cols) > 11 else None,
+                    "format": "libgnss++",
+                    "status_name": libgnss_status_name(int(cols[8])),
                 })
             except (ValueError, IndexError):
                 continue
     return epochs
+
+
+def libgnss_status_name(status):
+    return {
+        4: "FIXED",
+        3: "FLOAT",
+        2: "DGPS",
+        1: "SPP",
+    }.get(status, f"OTHER({status})")
+
+
+def rtklib_status_name(status):
+    return {
+        1: "FIXED",
+        2: "FLOAT",
+        3: "SBAS",
+        4: "DGPS",
+        5: "SPP",
+        6: "PPP",
+    }.get(status, f"OTHER({status})")
+
+
+def parse_rtklib_time(token_a, token_b):
+    if "/" not in token_a:
+        return int(float(token_a)), float(token_b)
+    year, month, day = map(int, token_a.split("/"))
+    hour, minute, second = token_b.split(":")
+    sec_float = float(second)
+    sec_int = int(sec_float)
+    microsecond = int(round((sec_float - sec_int) * 1_000_000))
+    stamp = dt.datetime(year, month, day, int(hour), int(minute), sec_int, microsecond)
+    total = (stamp - GPS_EPOCH).total_seconds()
+    week = int(total // 604800)
+    return week, total - week * 604800
+
+
+def read_rtklib_pos(filepath):
+    epochs = []
+    with open(filepath) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("%"):
+                continue
+            cols = line.split()
+            if len(cols) < 7:
+                continue
+            try:
+                week, tow = parse_rtklib_time(cols[0], cols[1])
+                status = int(cols[5])
+                epochs.append({
+                    "week": week, "tow": tow,
+                    "lat": float(cols[2]), "lon": float(cols[3]), "hgt": float(cols[4]),
+                    "status": status, "nsat": int(cols[6]), "pdop": float("nan"),
+                    "ratio": float(cols[14]) if len(cols) > 14 else None,
+                    "format": "RTKLIB",
+                    "status_name": rtklib_status_name(status),
+                })
+            except (ValueError, IndexError):
+                continue
+    return epochs
+
+
+def detect_pos_format(filepath):
+    with open(filepath) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("%"):
+                continue
+            cols = line.split()
+            if len(cols) < 7:
+                continue
+            try:
+                lat_like = float(cols[2])
+                lon_like = float(cols[3])
+            except ValueError:
+                continue
+            if abs(lat_like) <= 90.0 and abs(lon_like) <= 180.0:
+                return "RTKLIB"
+            return "libgnss++"
+    return "unknown"
+
+
+def read_pos(filepath):
+    fmt = detect_pos_format(filepath)
+    if fmt == "RTKLIB":
+        return read_rtklib_pos(filepath)
+    return read_libgnss_pos(filepath)
 
 
 # ---------------------------------------------------------------------------
@@ -111,16 +205,17 @@ def main():
         print(f"エラー: ファイルが見つかりません: {filepath}")
         sys.exit(1)
 
-    epochs = read_libgnss_pos(filepath)
+    epochs = read_pos(filepath)
     total = len(epochs)
 
     if total == 0:
         print("エポックが0件です。")
         sys.exit(0)
 
-    n_fix = sum(1 for ep in epochs if ep["status"] == 4)
-    n_float = sum(1 for ep in epochs if ep["status"] == 3)
-    n_spp = sum(1 for ep in epochs if ep["status"] == 1)
+    pos_format = epochs[0].get("format", "unknown")
+    n_fix = sum(1 for ep in epochs if ep["status_name"] == "FIXED")
+    n_float = sum(1 for ep in epochs if ep["status_name"] == "FLOAT")
+    n_spp = sum(1 for ep in epochs if ep["status_name"] == "SPP")
 
     # 時間範囲
     tow_min = epochs[0]["tow"]
@@ -131,6 +226,7 @@ def main():
     print(f"  RTK測位統計: {filepath}")
     print("=" * 60)
     print(f"  GPS Week           : {epochs[0]['week']}")
+    print(f"  入力形式           : {pos_format}")
     print(f"  開始 TOW           : {tow_min:.3f} s")
     print(f"  終了 TOW           : {tow_max:.3f} s")
     print(f"  観測時間           : {duration:.1f} s ({duration / 60:.1f} 分)")
@@ -152,7 +248,7 @@ def main():
     if n_fix > 0:
         first_fix_tow = None
         for ep in epochs:
-            if ep["status"] == 4:
+            if ep["status_name"] == "FIXED":
                 first_fix_tow = ep["tow"]
                 break
         ttff = first_fix_tow - tow_min
@@ -163,7 +259,7 @@ def main():
     print()
 
     # --- 基準位置 & ENU ---
-    fix_epochs = [ep for ep in epochs if ep["status"] == 4]
+    fix_epochs = [ep for ep in epochs if ep["status_name"] == "FIXED"]
     if fix_epochs:
         ref_lat = mean([ep["lat"] for ep in fix_epochs])
         ref_lon = mean([ep["lon"] for ep in fix_epochs])
@@ -184,8 +280,8 @@ def main():
     rx, ry, rz = geodetic_to_ecef(ref_lat, ref_lon, ref_hgt)
 
     # ENU計算 (各ステータス別)
-    for label, status_val in [("Fix解", 4), ("Float解", 3), ("全解", None)]:
-        subset = [ep for ep in epochs if (status_val is None or ep["status"] == status_val)]
+    for label, status_name in [("Fix解", "FIXED"), ("Float解", "FLOAT"), ("全解", None)]:
+        subset = [ep for ep in epochs if (status_name is None or ep["status_name"] == status_name)]
         if not subset:
             continue
 
@@ -215,12 +311,20 @@ def main():
     nsats = [ep["nsat"] for ep in epochs]
     pdops = [ep["pdop"] for ep in epochs if ep["pdop"] > 0]
 
-    print("--- 衛星数・PDOP統計 ---")
+    ratios = [
+        ep["ratio"] for ep in epochs
+        if ep.get("ratio") is not None and math.isfinite(float(ep["ratio"]))
+    ]
+
+    print("--- 衛星数・品質指標 ---")
     print(f"  衛星数 平均        : {mean(nsats):.1f}")
     print(f"  衛星数 最小/最大   : {min(nsats)} / {max(nsats)}")
     if pdops:
         print(f"  PDOP   平均        : {mean(pdops):.2f}")
         print(f"  PDOP   最小/最大   : {min(pdops):.2f} / {max(pdops):.2f}")
+    if ratios:
+        print(f"  Ratio  中央/95%    : {percentile(ratios, 50):.2f} / {percentile(ratios, 95):.2f}")
+        print(f"  Ratio  最小/最大   : {min(ratios):.2f} / {max(ratios):.2f}")
     print()
 
     # --- Fix連続性 ---
@@ -229,7 +333,7 @@ def main():
         runs = []
         current_run = 0
         for ep in epochs:
-            if ep["status"] == 4:
+            if ep["status_name"] == "FIXED":
                 current_run += 1
             else:
                 if current_run > 0:

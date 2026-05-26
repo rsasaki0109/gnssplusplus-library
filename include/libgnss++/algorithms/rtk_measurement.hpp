@@ -2,6 +2,8 @@
 
 #include <Eigen/Dense>
 
+#include <libgnss++/core/types.hpp>
+
 #include <vector>
 
 namespace libgnss {
@@ -20,6 +22,8 @@ enum class MeasurementKind {
 
 struct MeasurementRow {
     double residual = 0.0;
+    SatelliteId reference_satellite;
+    SatelliteId satellite;
     Eigen::Vector3d baseline_coefficients = Eigen::Vector3d::Zero();
     std::vector<StateCoefficient> state_coefficients;
     double reference_variance = 0.0;

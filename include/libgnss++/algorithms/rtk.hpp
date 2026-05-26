@@ -11,6 +11,7 @@
 #include "spp.hpp"
 #include <Eigen/Dense>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <set>
 #include <string>
@@ -95,6 +96,9 @@ public:
         double snr_reference_dbhz = 45.0;         // No inflation at or above this SNR
         double snr_max_variance_scale = 25.0;     // Clamp low-SNR variance inflation
         double snr_min_baseline_m = 0.0;          // Optional baseline-length floor for SNR weighting
+        double nlos_code_variance_scale = 1.0;    // Optional PLATEAU NLOS code variance inflation
+        double nlos_phase_variance_scale = 1.0;   // Optional PLATEAU NLOS phase variance inflation
+        std::map<double, std::set<SatelliteId>> nlos_mask_by_tow;
 
         // Quality control
         bool enable_cycle_slip_detection = true;
@@ -389,6 +393,16 @@ public:
         ARSkipReason ar_skip_reason{ARSkipReason::NONE};
     };
 
+    struct DDResidualDiagnostic {
+        rtk_measurement::MeasurementKind kind = rtk_measurement::MeasurementKind::UNKNOWN;
+        int frequency_index = -1;
+        SatelliteId reference_satellite;
+        SatelliteId satellite;
+        double residual_m = std::numeric_limits<double>::quiet_NaN();
+        double reference_variance_m2 = std::numeric_limits<double>::quiet_NaN();
+        double satellite_variance_m2 = std::numeric_limits<double>::quiet_NaN();
+    };
+
     RTKProcessor();
     explicit RTKProcessor(const RTKConfig& rtk_config);
     ~RTKProcessor() override = default;
@@ -412,6 +426,9 @@ public:
     void setRTKConfig(const RTKConfig& config);
     const RTKConfig& getRTKConfig() const { return rtk_config_; }
     const EpochDebugTelemetry& getLastDebugTelemetry() const { return debug_telemetry_; }
+    const std::vector<DDResidualDiagnostic>& getLastDDResidualDiagnostics() const {
+        return last_dd_residual_diagnostics_;
+    }
 
 public:
     bool lambdaMethod(const VectorXd& float_ambiguities,
@@ -426,6 +443,7 @@ private:
     RTKConfig rtk_config_;
     SPPProcessor spp_processor_;
     EpochDebugTelemetry debug_telemetry_;
+    std::vector<DDResidualDiagnostic> last_dd_residual_diagnostics_;
 
     Vector3d base_position_;
     bool base_position_known_ = false;
@@ -518,6 +536,7 @@ private:
     Vector3d fixed_update_gate_previous_position_ = Vector3d::Zero();
     GNSSTime fixed_update_gate_previous_time_;
     bool has_fixed_update_gate_previous_solution_ = false;
+    double current_epoch_tow_key_ = std::numeric_limits<double>::quiet_NaN();
 
     // Consecutive fix tracking for holdamb
     int consecutive_fix_count_ = 0;
@@ -807,6 +826,7 @@ private:
      * var = 2.0 * (a^2 + b^2/sin^2(el))
      */
     double varerr(double elevation, bool is_phase, double snr_dbhz = 0.0) const;
+    double nlosVarianceScale(const SatelliteId& satellite, bool is_phase) const;
 
     // Legacy stubs kept for interface compatibility
     struct DoubleDifference {

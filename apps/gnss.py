@@ -179,6 +179,11 @@ COMMANDS = {
         "target": os.path.join(ROOT_DIR, "tools", "compare_rtklib.py"),
         "summary": "Compare libgnss++ output against RTKLIB output.",
     },
+    "dd-residuals": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_dd_residuals.py"),
+        "summary": "Summarize per-DD RTK prefit residual diagnostics.",
+    },
     "plot": {
         "kind": "python",
         "target": os.path.join(ROOT_DIR, "tools", "plot_rtk.py"),
@@ -232,7 +237,7 @@ COMMANDS = {
     "short-baseline-signoff": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_short_baseline_signoff.py"),
-        "summary": "Run a mixed-GNSS short-baseline static sign-off and emit summary JSON.",
+        "summary": "Run a mixed-GNSS short-baseline static sign-off with baseline and RTK residual diagnostics.",
     },
     "rtk-kinematic-signoff": {
         "kind": "python",
@@ -268,6 +273,21 @@ COMMANDS = {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_ppc_coverage_matrix.py"),
         "summary": "Run all six PPC Tokyo/Nagoya RTK coverage-profile replays and emit JSON/Markdown summaries.",
+    },
+    "ppc-candidate-features": {
+        "kind": "python",
+        "target": os.path.join(ROOT_DIR, "scripts", "build_ppc_candidate_feature_table.py"),
+        "summary": "Build candidate-level PPC selector features from libgnss++ POS files.",
+    },
+    "ppc-candidate-ranker": {
+        "kind": "python",
+        "target": os.path.join(ROOT_DIR, "scripts", "eval_ppc_candidate_feature_ranker.py"),
+        "summary": "Evaluate a ridge ranker over PPC candidate feature CSVs.",
+    },
+    "ppc-candidate-ranker-matrix": {
+        "kind": "python",
+        "target": os.path.join(ROOT_DIR, "scripts", "run_ppc_candidate_ranker_matrix.py"),
+        "summary": "Build PPC candidate features across runs and evaluate the ranker matrix.",
     },
     "public-rtk-benchmarks": {
         "kind": "python",
@@ -373,6 +393,9 @@ def usage() -> str:
             "  python3 apps/gnss.py ppc-demo --dataset-root /datasets/PPC-Dataset --city tokyo --run run1 --solver rtk --require-realtime-factor-min 1.0 --summary-json output/ppc_tokyo_run1_rtk_summary.json",
             "  python3 apps/gnss.py ppc-rtk-signoff --dataset-root /datasets/PPC-Dataset --city tokyo --rtklib-bin /path/to/rnx2rtkp",
             "  python3 apps/gnss.py ppc-coverage-matrix --dataset-root /datasets/PPC-Dataset --rtklib-root output/benchmark --markdown-output output/ppc_coverage_matrix.md",
+            "  python3 apps/gnss.py ppc-candidate-features --run-id tokyo_run1 --reference-csv /datasets/PPC-Dataset/tokyo/run1/reference.csv --candidate base=output/base.pos --candidate cautious=output/cautious.pos --out-csv output/tokyo_run1_candidate_features.csv",
+            "  python3 apps/gnss.py ppc-candidate-ranker --input-csv output/tokyo_run1_candidate_features.csv --out-dir output/tokyo_run1_candidate_ranker",
+            "  python3 apps/gnss.py ppc-candidate-ranker-matrix --dataset-root /datasets/PPC-Dataset --candidate base=output/base/{key}.pos --candidate cautious=output/cautious/{key}.pos --target-weight-mode pass-focus",
             "  python3 apps/gnss.py public-rtk-benchmarks --format markdown",
             "  python3 apps/gnss.py smartloc-adapter --input-url https://www.tu-chemnitz.de/projekt/smartLoc/gnss_dataset/berlin/scenario1/berlin1_potsdamer_platz.zip --reference-csv output/smartloc_reference.csv --receiver-csv output/smartloc_ublox.csv --raw-csv output/smartloc_rawx.csv --obs-rinex output/smartloc_rover.obs",
             "  python3 apps/gnss.py smartloc-signoff --input-url https://www.tu-chemnitz.de/projekt/smartLoc/gnss_dataset/berlin/scenario1/berlin1_potsdamer_platz.zip --output-dir output/smartloc --require-matched-epochs-min 100",

@@ -311,6 +311,7 @@ PositionSolution RTKProcessor::processEpoch(const ObservationData& rover_obs, co
 void RTKProcessor::reset() {
     filter_initialized_ = false;
     debug_telemetry_ = EpochDebugTelemetry{};
+    last_dd_residual_diagnostics_.clear();
     filter_state_ = RTKState{};
     filter_state_.next_state_idx = REAL_STATES + IONO_STATES;
     ambiguity_states_.clear();
@@ -383,6 +384,22 @@ double RTKProcessor::varerr(double elevation, bool is_phase, double snr_dbhz) co
         variance *= variance_scale;
     }
     return variance;
+}
+
+double RTKProcessor::nlosVarianceScale(const SatelliteId& satellite, bool is_phase) const {
+    const double scale = is_phase
+        ? rtk_config_.nlos_phase_variance_scale
+        : rtk_config_.nlos_code_variance_scale;
+    if (!std::isfinite(scale) || scale <= 1.0 ||
+        rtk_config_.nlos_mask_by_tow.empty() ||
+        !std::isfinite(current_epoch_tow_key_)) {
+        return 1.0;
+    }
+    const auto epoch_it = rtk_config_.nlos_mask_by_tow.find(current_epoch_tow_key_);
+    if (epoch_it == rtk_config_.nlos_mask_by_tow.end()) {
+        return 1.0;
+    }
+    return epoch_it->second.count(satellite) > 0 ? scale : 1.0;
 }
 
 double RTKProcessor::elevationWeight(double elevation) const {
@@ -1493,6 +1510,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
     solution.time = rover_obs.time;
     solution.status = SolutionStatus::NONE;
     current_update_diagnostics_ = RTKUpdateDiagnostics{};
+    current_epoch_tow_key_ = std::round(rover_obs.time.tow * 10.0) / 10.0;
 
     try {
         const bool moving_base_mode = isMovingBasePositionMode(rtk_config_);
@@ -1668,7 +1686,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                 if (dt <= 3.0) {
                     const double trusted_jump =
                         (solution.position_ecef - saved_last_trusted_position).norm();
-                    const double max_trusted_jump = std::max(8.0, 12.0 * dt);
+                    const double max_trusted_jump = std::max(1000.0, 1000.0 * dt);
                     if (trusted_jump > max_trusted_jump) {
                         restoreRememberedState();
                         return fallback_spp();
@@ -2036,8 +2054,10 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 return;
             }
             const double ref_snr = signal_snr_dbhz(ref_sd, freq);
-            const double ref_phase_variance = varerr(ref_sd.elevation, true, ref_snr);
-            const double ref_code_variance = varerr(ref_sd.elevation, false, ref_snr);
+            const double ref_phase_variance =
+                varerr(ref_sd.elevation, true, ref_snr) * nlosVarianceScale(ref_sat, true);
+            const double ref_code_variance =
+                varerr(ref_sd.elevation, false, ref_snr) * nlosVarianceScale(ref_sat, false);
 
             for (const auto& pair : system_pairs) {
                 if (pair.freq != freq) continue;
@@ -2054,8 +2074,10 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 const double sat_wavelength = freq_wavelength_local(sd, freq);
                 if (sat_wavelength <= 0.0) continue;
                 const double sat_snr = signal_snr_dbhz(sd, freq);
-                const double sat_phase_variance = varerr(sd.elevation, true, sat_snr);
-                const double sat_code_variance = varerr(sd.elevation, false, sat_snr);
+                const double sat_phase_variance =
+                    varerr(sd.elevation, true, sat_snr) * nlosVarianceScale(sat, true);
+                const double sat_code_variance =
+                    varerr(sd.elevation, false, sat_snr) * nlosVarianceScale(sat, false);
                 const int sat_iono_idx = estimate_iono ? II(sat) : -1;
                 const double sat_iono_scale =
                     estimate_iono
@@ -2111,6 +2133,8 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                         0.0;
 
                 rtk_measurement::MeasurementRow phase_row;
+                phase_row.reference_satellite = ref_sat;
+                phase_row.satellite = sat;
                 const double amb_term =
                     ref_wavelength * filter_state_.state(ref_state_it->second) -
                     sat_wavelength * filter_state_.state(sat_state_it->second);
@@ -2132,6 +2156,8 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 phase_block.rows.push_back(std::move(phase_row));
 
                 rtk_measurement::MeasurementRow code_row;
+                code_row.reference_satellite = ref_sat;
+                code_row.satellite = sat;
                 code_row.residual = (ref_code - sat_code) - geom_dd - code_iono_term;
                 if (estimate_iono) {
                     code_row.state_coefficients.push_back({ref_iono_idx, ref_iono_scale});
@@ -2157,19 +2183,34 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
 }
 
 bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_data) {
+    last_dd_residual_diagnostics_.clear();
     if (sat_data.size() < 4) return false;
 
     const auto blocks = buildMeasurementBlocks(sat_data);
+    const double outlier_threshold = rtk_config_.outlier_threshold > 0.0
+                                         ? rtk_config_.outlier_threshold
+                                         : 30.0;
+    for (const auto& block : blocks) {
+        for (const auto& row : block.rows) {
+            DDResidualDiagnostic diagnostic;
+            diagnostic.kind = block.kind;
+            diagnostic.frequency_index = block.frequency_index;
+            diagnostic.reference_satellite = row.reference_satellite;
+            diagnostic.satellite = row.satellite;
+            diagnostic.residual_m = row.residual;
+            diagnostic.reference_variance_m2 = row.reference_variance;
+            diagnostic.satellite_variance_m2 = row.satellite_variance;
+            last_dd_residual_diagnostics_.push_back(diagnostic);
+        }
+    }
     const auto measurement_diagnostics = rtk_measurement::summarizeMeasurementBlocks(blocks);
     auto measurement_system = rtk_measurement::assembleMeasurementSystem(
         blocks, filter_state_.state.size());
     const auto update_result = rtk_update::applyMeasurementUpdate(filter_state_.state,
                                                                   filter_state_.covariance,
                                                                   measurement_system,
-                                                                  rtk_config_.outlier_threshold > 0.0
-                                                                      ? rtk_config_.outlier_threshold
-                                                                      : 30.0,
-                                                                  6,
+                                                                  outlier_threshold,
+                                                                  4,
                                                                   rtk_config_.max_update_nis_per_observation);
     current_update_diagnostics_.observation_count = update_result.observation_count;
     current_update_diagnostics_.phase_observation_count =
