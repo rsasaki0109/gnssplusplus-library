@@ -296,6 +296,10 @@ struct PPPState {
 
     std::map<SatelliteId, int> ionosphere_indices;
     std::map<SatelliteId, int> ambiguity_indices;
+    // Per-frequency (est-stec) L2 ambiguity states. Empty in IFLC mode, so
+    // amb_index/total_states and the ambiguity_indices layout are byte-identical
+    // to the ionosphere-free path. L1 ambiguities stay in ambiguity_indices.
+    std::map<SatelliteId, int> ambiguity_l2_indices;
     int total_states = 9;
 };
 
@@ -322,6 +326,12 @@ struct PPPAmbiguityInfo {
     bool wl_is_fixed = false;
     double nl_fixed_cycles = 0.0;
     bool nl_is_fixed = false;
+    // Per-frequency (est-stec) float ambiguities in meters, surfaced for WL/N1
+    // AR without re-indexing the state vector. Zero in IFLC mode.
+    double float_value_l1 = 0.0;
+    double float_value_l2 = 0.0;
+    double wavelength_l1 = 0.0;
+    double wavelength_l2 = 0.0;
 };
 
 }  // namespace libgnss::ppp_shared

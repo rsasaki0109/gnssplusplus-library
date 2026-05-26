@@ -272,6 +272,7 @@ private:
     Eigen::MatrixXd pre_anchor_covariance_;
     bool had_fixed_last_epoch_ = false;  ///< AR succeeded in previous epoch
     std::map<SatelliteId, double> windup_cache_;  ///< Phase wind-up cache for OSR
+    std::map<SatelliteId, int> est_stec_outage_;   ///< Epochs since last seen (est-stec pruning)
     std::map<SatelliteId, CLASPhaseBiasRepairInfo> clas_phase_bias_repair_;
     ppp_clas_sd::SdFilterState clas_sd_state_;  ///< Clock-free SD filter
     ppp_clas_sd::DdAmbAccumulator clas_dd_accumulator_;  ///< Multi-epoch DD amb accumulator
@@ -336,6 +337,38 @@ private:
         std::map<std::string, std::string> ssr_atmos_tokens;
         bool has_carrier_phase = false;
         bool valid = false;
+
+        // --- Per-frequency uncombined (est-stec) fields ---
+        // Populated only when use_ionosphere_free == false. Each carries the
+        // raw L1/L2 observable in meters with per-frequency SSR/DCB biases
+        // already removed (NOT an ionosphere-free combination). The IFLC path
+        // leaves these default-zeroed so the state layout is unchanged.
+        double pseudorange_l1 = 0.0;
+        double pseudorange_l2 = 0.0;
+        double carrier_phase_l1 = 0.0;  // meters
+        double carrier_phase_l2 = 0.0;  // meters
+        double wavelength_l1 = 0.0;
+        double wavelength_l2 = 0.0;
+        double freq_l1 = 0.0;
+        double freq_l2 = 0.0;
+        double variance_pr_l1 = 0.0;
+        double variance_pr_l2 = 0.0;
+        double variance_cp_l1 = 0.0;
+        double variance_cp_l2 = 0.0;
+        double code_bias_l1_m = 0.0;
+        double code_bias_l2_m = 0.0;
+        double phase_bias_l1_m = 0.0;
+        double phase_bias_l2_m = 0.0;
+        // Geometry-free ionosphere seed (L1-equivalent meters):
+        // (P1 - P2) / (1 - (f1/f2)^2).
+        double iono_init_m = 0.0;
+        bool has_iono_init = false;
+        bool has_l2 = false;
+        bool has_carrier_phase_l2 = false;
+        // Wet mapping function and a priori zenith hydrostatic delay for the
+        // RTKLIB-style split trop model (est-stec): trop = m_h*ZHD + m_w*(ZTD-ZHD).
+        double trop_mapping_wet = 0.0;
+        double trop_zhd_m = 0.0;
     };
     
     std::vector<IonosphereFreeObs> formIonosphereFree(const ObservationData& obs,
@@ -375,6 +408,18 @@ private:
      * @brief Initialize or reinitialize a phase-bias ambiguity state.
      */
     void initializeAmbiguityState(const IonosphereFreeObs& observation, int state_index);
+
+    /**
+     * @brief Get or create the per-frequency L2 ambiguity state (est-stec only).
+     */
+    int getOrCreateAmbiguityStateL2(const IonosphereFreeObs& observation);
+
+    /**
+     * @brief Get or create the per-satellite ionosphere (STEC) state, seeded
+     * from the geometry-free code combination (est-stec only). Lazily appended
+     * so satellites that rise mid-arc still receive a state.
+     */
+    int getOrCreateIonosphereState(const IonosphereFreeObs& observation);
     
     /**
      * @brief Resolve PPP ambiguities
@@ -386,6 +431,15 @@ private:
     // Melbourne-Wubbena wide-lane integer, then applies the fixed N1 double
     // differences as a Kalman pseudo-measurement on the IFLC ambiguity states.
     bool resolveAmbiguitiesDecoupledIf(const ObservationData& obs, const NavigationData& nav);
+    // Per-frequency (est-stec) PPP-AR mirroring the MADOCALIB oracle: forms the
+    // wide-lane integer from the separate L1/L2 ambiguity states, then resolves
+    // the narrow-lane N1 by LAMBDA on the L1 ambiguity double differences,
+    // applying both as tight Kalman pseudo-measurements.
+    bool resolveAmbiguitiesPerFreq(const ObservationData& obs, const NavigationData& nav);
+    // Remove per-frequency ambiguity/ionosphere states for satellites not seen
+    // for several epochs (est-stec only), compacting the filter state so its
+    // dimension stays bounded by the currently-tracked satellites.
+    void pruneStaleEstStecStates(const std::set<SatelliteId>& observed);
     std::map<SatelliteId, OSRCorrection> computeWlnlOsrCorrections(
         const ObservationData& obs,
         const NavigationData& nav,
