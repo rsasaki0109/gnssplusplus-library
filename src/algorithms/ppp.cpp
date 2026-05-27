@@ -1799,11 +1799,28 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         filter_state_.covariance(filter_state_.qzs_clock_index, filter_state_.qzs_clock_index) = 1e8;
     if (filter_state_.bds_clock_index >= 0)
         filter_state_.covariance(filter_state_.bds_clock_index, filter_state_.bds_clock_index) = 1e8;
-    // Initialize per-satellite ionosphere states
+    // Initialize per-satellite ionosphere states. GNSS_PPP_INIT_IONO_VAR (>0)
+    // overrides the per-satellite initial ionosphere covariance. The est-stec
+    // KF has a rank-deficient gauge in (iono, N1, N2, cdtr) -- a uniform shift
+    // (iono+Δ, λN+Δ, cdtr−Δ) leaves the phase observations invariant -- so
+    // when the constellation membership shifts (e.g. orbit-fix dropping a sat
+    // missing its SSR orbit correction) the null-space anchor moves and the
+    // filter settles to a different common-mode iono level. A tight prior pins
+    // this gauge: on the MADOCA est-stec parity workload, var=1 lets a
+    // low-latitude station (ALIC) stack cleanly with the orbit-fix lever for
+    // bridge-parity float, while the default (100) is correct at mid-latitude
+    // (MIZU); the right value is station-dependent, so this is opt-in.
+    static const double kIonoVarOverride = [] {
+        const char* v = std::getenv("GNSS_PPP_INIT_IONO_VAR");
+        return v != nullptr ? std::atof(v) : 0.0;
+    }();
+    const double iono_init_var = kIonoVarOverride > 0.0
+                                     ? kIonoVarOverride
+                                     : ppp_config_.initial_ionosphere_variance;
     if (ppp_config_.estimate_ionosphere) {
         for (const auto& [sat, idx] : filter_state_.ionosphere_indices) {
             filter_state_.state(idx) = 0.0;  // Initial iono delay = 0 (will be constrained by STEC)
-            filter_state_.covariance(idx, idx) = ppp_config_.initial_ionosphere_variance;
+            filter_state_.covariance(idx, idx) = iono_init_var;
         }
     }
     filter_state_.total_states = n_states;
@@ -3280,8 +3297,16 @@ int PPPProcessor::getOrCreateIonosphereState(const IonosphereFreeObs& observatio
     filter_state_.covariance.col(new_index).setZero();
     filter_state_.state(new_index) =
         observation.has_iono_init ? observation.iono_init_m : 0.0;
+    // Mirror the GNSS_PPP_INIT_IONO_VAR override at the lazy-create site so a
+    // satellite appearing mid-run lands in the same anchored gauge.
+    static const double kIonoVarOverride = [] {
+        const char* v = std::getenv("GNSS_PPP_INIT_IONO_VAR");
+        return v != nullptr ? std::atof(v) : 0.0;
+    }();
     filter_state_.covariance(new_index, new_index) =
-        ppp_config_.initial_ionosphere_variance;
+        kIonoVarOverride > 0.0
+            ? kIonoVarOverride
+            : ppp_config_.initial_ionosphere_variance;
     filter_state_.ionosphere_indices[observation.satellite] = new_index;
     return new_index;
 }
