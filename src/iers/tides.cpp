@@ -45,12 +45,57 @@ Eigen::Vector3d solidEarthTideDisplacement(
     // below the model's intrinsic accuracy.
     const double fhr_ut = (mjd_utc - std::floor(mjd_utc)) * 24.0;
 
+    // The Dehant routine documents inputs in ITRS/ECEF, but the IERS
+    // reference test case passes Sun and Moon in ICRS (Earth-centered
+    // inertial). Following the test case literally — as this wrapper
+    // historically did — works at the test epoch but mis-mixes frames:
+    // the dot products `xsta · xsun` lose the daily rotation of the
+    // station relative to the Sun. The 24-hour mean of the resulting
+    // displacement picks up a systematic offset of ~10 cm in U at
+    // MIZU (39N, observed 2025-04-01 mean U = -125 mm), versus an
+    // expected mean of ~+11 mm permanent tide. Bridge MADOCALIB
+    // applies Step-1 with consistent ITRS sun/moon and shows no such
+    // offset (~+12 mm U residual).
+    //
+    // GNSS_PPP_TIDE_ITRS_SUN_MOON=1 opts in to rotating the ICRS
+    // sun/moon to ITRS before calling the routine. Default OFF to
+    // preserve byte-for-byte parity with prior runs and the published
+    // IERS reference test case. Once benched, default ON is the right
+    // long-term choice (matches the routine's documented contract).
+    Eigen::Vector3d xsun_used = xsun_icrs;
+    Eigen::Vector3d xmon_used = xmon_icrs;
+    static const bool kRotateSunMoonToItrs =
+        (std::getenv("GNSS_PPP_TIDE_ITRS_SUN_MOON") != nullptr);
+    if (kRotateSunMoonToItrs) {
+        // Approximate ICRS -> ITRS rotation via GMST about z. This omits
+        // precession-nutation (~arcsec) and polar motion (~0.3"), both
+        // of which contribute well under 1 mm to the diurnal tide.
+        const double T_ut1 = (mjd_utc - 51544.5) / 36525.0;
+        const double gmst_sec =
+            24110.54841 + 8640184.812866 * T_ut1 +
+            0.093104 * T_ut1 * T_ut1 -
+            6.2e-6 * T_ut1 * T_ut1 * T_ut1 +
+            86400.0 * 1.00273790935 * (mjd_utc - std::floor(mjd_utc));
+        const double gmst_rad =
+            std::fmod(gmst_sec, 86400.0) * 2.0 * M_PI / 86400.0;
+        const double cg = std::cos(gmst_rad);
+        const double sg = std::sin(gmst_rad);
+        xsun_used = Eigen::Vector3d(
+             cg * xsun_icrs.x() + sg * xsun_icrs.y(),
+            -sg * xsun_icrs.x() + cg * xsun_icrs.y(),
+             xsun_icrs.z());
+        xmon_used = Eigen::Vector3d(
+             cg * xmon_icrs.x() + sg * xmon_icrs.y(),
+            -sg * xmon_icrs.x() + cg * xmon_icrs.y(),
+             xmon_icrs.z());
+    }
+
     std::vector<Eigen::Vector3d> xsta_vec = { xsta_itrs };
     std::vector<Eigen::Vector3d> xcor_vec;
     xcor_vec.reserve(1);
 
     iers2010::dehanttideinel_impl(
-        centuries_tt, fhr_ut, xsun_icrs, xmon_icrs, xsta_vec, xcor_vec);
+        centuries_tt, fhr_ut, xsun_used, xmon_used, xsta_vec, xcor_vec);
 
     if (xcor_vec.empty()) {
         return Eigen::Vector3d::Zero();
