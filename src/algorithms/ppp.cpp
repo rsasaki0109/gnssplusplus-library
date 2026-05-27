@@ -4066,7 +4066,14 @@ double PPPProcessor::calculateMappingFunction(const Vector3d& receiver_pos,
 Vector3d PPPProcessor::applyGeophysicalCorrections(const Vector3d& position,
                                                    const GNSSTime& time) const {
     Vector3d corrected = position;
-    if (ppp_config_.apply_solid_earth_tides) {
+    // GNSS_PPP_NO_SOLID_TIDE: opt-in env knob to completely skip solid-earth
+    // tide displacement. Diagnostic only — used to bisect the MADOCA est-stec
+    // MIZU 7.5x gap vs bridge (cm-level systematic differences across the
+    // three solid-tide implementations: legacy Step-1-Love, IERS Step-1+2,
+    // and MADOCALIB Step-1+K1-only). Default OFF (bit-identical).
+    static const bool kNoSolidTide =
+        (std::getenv("GNSS_PPP_NO_SOLID_TIDE") != nullptr);
+    if (ppp_config_.apply_solid_earth_tides && !kNoSolidTide) {
         corrected += calculateSolidEarthTides(position, time);
     }
     if (ppp_config_.apply_ocean_loading) {
