@@ -2519,19 +2519,33 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         observation.pseudorange_l2 -= cb_l2;
                         observation.code_bias_l2_m = cb_l2;
                     }
-                    if (!phase_bias_m.empty()) {
+                    static const bool kNoPhaseBias =
+                        (std::getenv("GNSS_PPP_NO_PHASE_BIAS") != nullptr);
+                    static const bool kPbApplyDump =
+                        (std::getenv("GNSS_PPP_PB_APPLY_DUMP") != nullptr);
+                    // MADOCALIB ppp.c:451 ADDS the SSR phase bias to the carrier
+                    // phase (L[i]+=pb); applying it with the opposite sign pushes
+                    // the per-frequency ambiguity away from its integer. Env-gated
+                    // sign flip while validating the convention fix.
+                    static const double kPbSign =
+                        (std::getenv("GNSS_PPP_PB_ADD") != nullptr) ? +1.0 : -1.0;
+                    if (!phase_bias_m.empty() && !kNoPhaseBias) {
                         if (observation.has_carrier_phase) {
                             const double pb_l1 = observationPhaseBiasMeters(
                                 observation.satellite.system, observation.primary_signal,
                                 SignalType::SIGNAL_TYPE_COUNT, false, phase_bias_m, 1.0, 0.0);
-                            observation.carrier_phase_l1 -= pb_l1;
+                            observation.carrier_phase_l1 += kPbSign * pb_l1;
                             observation.phase_bias_l1_m = pb_l1;
+                            if (kPbApplyDump) {
+                                std::cerr << "[PB-APPLY] " << observation.satellite.toString()
+                                          << " pb_l1=" << pb_l1 << "\n";
+                            }
                         }
                         if (observation.has_carrier_phase_l2) {
                             const double pb_l2 = observationPhaseBiasMeters(
                                 observation.satellite.system, observation.secondary_signal,
                                 SignalType::SIGNAL_TYPE_COUNT, false, phase_bias_m, 1.0, 0.0);
-                            observation.carrier_phase_l2 -= pb_l2;
+                            observation.carrier_phase_l2 += kPbSign * pb_l2;
                             observation.phase_bias_l2_m = pb_l2;
                         }
                     }
@@ -3999,6 +4013,16 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
                 filter_state_.covariance(rk.l1_index, sl.l1_index) / (rk.lambda1 * sl.lambda1) -
                 filter_state_.covariance(sk.l1_index, rl.l1_index) / (sk.lambda1 * rl.lambda1) +
                 filter_state_.covariance(sk.l1_index, sl.l1_index) / (sk.lambda1 * sl.lambda1);
+        }
+    }
+    if (pf_dump) {
+        for (int k = 0; k < nb; ++k) {
+            const Cand& rk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].ref)];
+            const Cand& sk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].sat)];
+            const double frac = n1_float(k) - std::round(n1_float(k));
+            std::cerr << "[PFN1-DD] " << rk.sat.toString() << "-" << sk.sat.toString()
+                      << " n1=" << n1_float(k) << " frac=" << frac
+                      << " sigma=" << std::sqrt(std::max(0.0, n1_cov(k, k))) << "\n";
         }
     }
     VectorXd n1_fixed = VectorXd::Zero(nb);
