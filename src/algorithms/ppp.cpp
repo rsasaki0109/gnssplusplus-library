@@ -2349,6 +2349,25 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
                     preferred_network_id, &ssr_orbit_iode);
             }
+            // Require a valid SSR orbit correction (orbit_iode>=0) when SSR
+            // products are loaded. MADOCA/CLAS SSR augments broadcast orbits; a
+            // satellite missing its orbit delta (e.g. MIZU E12, for which the
+            // MADOCALIB bridge logs "no ssr orbit correction E12" and drops the
+            // satellite outright) would otherwise run on the raw broadcast orbit
+            // -- metres off -- and, because the est-stec (iono, ambiguity) split
+            // freezes within the first few epochs, lock in a constant position
+            // bias that never recovers (E12 alone accounts for MIZU's +0.24 m
+            // East offset versus the bridge). Mirror the bridge by dropping such
+            // satellites upstream. Env-gated: GNSS_PPP_REQUIRE_SSR_ORBIT (unset
+            // or 0 = legacy behaviour, keep the satellite on its broadcast orbit).
+            static const bool kRequireSsrOrbit = [] {
+                const char* v = std::getenv("GNSS_PPP_REQUIRE_SSR_ORBIT");
+                return v != nullptr && v[0] != '0';
+            }();
+            if (kRequireSsrOrbit && ssr_products_loaded_ && ssr_orbit_iode < 0) {
+                observation.valid = false;
+                continue;
+            }
             // First pass: compute satellite state at reception time
             if (!nav.calculateSatelliteState(
                     observation.satellite,
