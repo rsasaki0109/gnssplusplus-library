@@ -1719,16 +1719,31 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     filter_state_.gal_clock_index = -1;
     filter_state_.qzs_clock_index = -1;
     filter_state_.bds_clock_index = -1;
+    // Inter-system bias (ISB) states for non-GPS constellations were disabled in
+    // the b4c956a refactor; without them QZSS/Galileo/BeiDou share the GPS clock
+    // and any receiver inter-system hardware bias leaks into the code residuals
+    // (measured: QZSS code residual ~-2 m at MIZU vs ~0 in the MADOCALIB bridge).
+    // env-gated (default OFF) so the shipped solution stays bit-identical.
+    // Accepts a comma/space-separated system list ("qzs", "gal", "bds", "all")
+    // so the vertical-coupling cost of each constellation's ISB can be isolated.
+    static const std::string kIsbSpec = [] {
+        const char* e = std::getenv("GNSS_PPP_ESTIMATE_ISB");
+        return std::string(e != nullptr ? e : "");
+    }();
+    const bool isb_all = kIsbSpec == "1" || kIsbSpec.find("all") != std::string::npos;
+    const bool isb_gal = isb_all || kIsbSpec.find("gal") != std::string::npos;
+    const bool isb_qzs = isb_all || kIsbSpec.find("qzs") != std::string::npos;
+    const bool isb_bds = isb_all || kIsbSpec.find("bds") != std::string::npos;
     if (ppp_config_.estimate_ionosphere) {
         std::set<GNSSSystem> visible_systems;
         for (const auto& sat : obs.getSatellites()) visible_systems.insert(sat.system);
-        if (false && visible_systems.count(GNSSSystem::Galileo)) {
+        if (isb_gal && visible_systems.count(GNSSSystem::Galileo)) {
             filter_state_.gal_clock_index = base_states++;
         }
-        if (false && visible_systems.count(GNSSSystem::QZSS)) {
+        if (isb_qzs && visible_systems.count(GNSSSystem::QZSS)) {
             filter_state_.qzs_clock_index = base_states++;
         }
-        if (false && visible_systems.count(GNSSSystem::BeiDou)) {
+        if (isb_bds && visible_systems.count(GNSSSystem::BeiDou)) {
             filter_state_.bds_clock_index = base_states++;
         }
     }
@@ -1871,13 +1886,22 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
         use_broadcast_rtklib_model ? ppp_config_.process_noise_clock : 100.0;
     Q(filter_state_.clock_index, filter_state_.clock_index) = clock_process_noise * dt;
     Q(filter_state_.glo_clock_index, filter_state_.glo_clock_index) = clock_process_noise * dt;
-    // ISB process noise (white noise, re-estimated each epoch)
+    // ISB process noise: an inter-system receiver hardware bias is essentially a
+    // constant, so it must be a slow random walk (NOT white noise like the
+    // receiver clock). A white-noise ISB re-estimates a free QZSS/Galileo clock
+    // every epoch, which strips the high-elevation QZSS geometry of its absolute
+    // (vertical) leverage and degrades the solution. Tight Q (override-tunable)
+    // lets the ISB converge to the true bias and then hold.
+    static const double kIsbProcessNoise = [] {
+        const char* e = std::getenv("GNSS_PPP_ISB_PROCESS_NOISE");
+        return e != nullptr ? std::atof(e) : 1e-6;  // m^2/s random walk
+    }();
     if (filter_state_.gal_clock_index >= 0)
-        Q(filter_state_.gal_clock_index, filter_state_.gal_clock_index) = clock_process_noise * dt;
+        Q(filter_state_.gal_clock_index, filter_state_.gal_clock_index) = kIsbProcessNoise * dt;
     if (filter_state_.qzs_clock_index >= 0)
-        Q(filter_state_.qzs_clock_index, filter_state_.qzs_clock_index) = clock_process_noise * dt;
+        Q(filter_state_.qzs_clock_index, filter_state_.qzs_clock_index) = kIsbProcessNoise * dt;
     if (filter_state_.bds_clock_index >= 0)
-        Q(filter_state_.bds_clock_index, filter_state_.bds_clock_index) = clock_process_noise * dt;
+        Q(filter_state_.bds_clock_index, filter_state_.bds_clock_index) = kIsbProcessNoise * dt;
     Q(filter_state_.trop_index, filter_state_.trop_index) =
         ppp_config_.process_noise_troposphere * dt;
     // Ambiguity process noise for every appended state. Ionosphere states may

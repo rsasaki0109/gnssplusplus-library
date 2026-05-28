@@ -780,10 +780,17 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
         out.clock_valid = true;
     }
 
+    static const bool kCbiasDump = (std::getenv("GNSS_PPP_MADOCA_CBIAS_DUMP") != nullptr);
     for (int k = 0; k < MadocaSsrCorrection::kMaxCode; ++k) {
         const int code = k + 1;  // cbias/pbias are held by CODE_*-1
         if (c.vcbias[k]) {
             const std::uint8_t id = madocaBiasCodeToRtcmSsrId(gsys, code);
+            if (kCbiasDump) {
+                std::fprintf(stderr,
+                             "[MADOCA-CBIAS] sys=%d prn=%d code=%d id=%u cbias=%.4f\n",
+                             static_cast<int>(gsys), prn, code,
+                             static_cast<unsigned>(id), c.cbias[k]);
+            }
             if (id > 0) {
                 out.code_bias_m[id] = c.cbias[k];
             }
