@@ -665,6 +665,11 @@ int MadocaL6eDecoder::decodeL6eMessage() {
             if ((ch.mgfid & 0x1) != (static_cast<int>(mgfid) & 0x1)) {
                 apply = 0;
             }
+            static const bool kStDump = (std::getenv("GNSS_PPP_MADOCA_CBIAS_DUMP") != nullptr);
+            if (kStDump) {
+                std::fprintf(stderr, "[MADOCA-ST] st=%d apply=%d mgfid=%d ch.mgfid=%d\n",
+                             st, apply, static_cast<int>(mgfid), ch.mgfid);
+            }
             switch (st) {
                 case kStOc: i = decodeOrbit(ch, i, apply); break;
                 case kStCc: i = decodeClock(ch, i, apply); break;
@@ -797,6 +802,12 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
         }
         if (c.vpbias[k]) {
             const std::uint8_t id = madocaBiasCodeToRtcmSsrId(gsys, code);
+            if (kCbiasDump) {
+                std::fprintf(stderr,
+                             "[MADOCA-PBIAS] sys=%d prn=%d code=%d id=%u pbias=%.4f\n",
+                             static_cast<int>(gsys), prn, code,
+                             static_cast<unsigned>(id), c.pbias[k]);
+            }
             if (id > 0) {
                 out.phase_bias_m[id] = c.pbias[k];
             }

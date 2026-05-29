@@ -232,6 +232,26 @@ DdFixAttempt tryDirectDdFix(
         }
     }
 
+    // Per-pair DD L1 float diagnostic: dumps the float DD ambiguity, its
+    // distance to the nearest integer, and the formal sigma so the
+    // integer-informativeness of the float solution can be measured (a mean
+    // |frac| near 0.25 means the floats are uniformly spread = carry no integer
+    // information). Gated by GNSS_PPP_AR_DDDUMP, default OFF.
+    static const bool kDdDump = (std::getenv("GNSS_PPP_AR_DDDUMP") != nullptr);
+    if (kDdDump && excluded_real_satellites.empty()) {
+        for (int k = 0; k < attempt.nb; ++k) {
+            const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
+            const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
+            const double frac = dd_float(k) - std::round(dd_float(k));
+            std::cerr << "[PPP-AR-DD] ref=" << satellites[static_cast<size_t>(ri)].toString()
+                      << " sat=" << satellites[static_cast<size_t>(si)].toString()
+                      << " dd_float=" << dd_float(k)
+                      << " frac=" << frac
+                      << " sigma=" << std::sqrt(std::max(0.0, dd_cov(k, k)))
+                      << "\n";
+        }
+    }
+
     VectorXd dd_fixed = VectorXd::Zero(attempt.nb);
     if (!lambdaSearch(dd_float, dd_cov, dd_fixed, attempt.ratio)) {
         return attempt;
