@@ -810,6 +810,7 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
             }
             if (id > 0) {
                 out.phase_bias_m[id] = c.pbias[k];
+                out.phase_bias_discnt[id] = c.discnt[k];
             }
         }
     }

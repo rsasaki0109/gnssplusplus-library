@@ -352,6 +352,7 @@ struct SSROrbitClockCorrection {
     double ura_sigma_m = 0.0;                            ///< SSR URA sigma in meters
     std::map<uint8_t, double> code_bias_m;               ///< SSR code biases keyed by RTCM signal id
     std::map<uint8_t, double> phase_bias_m;              ///< SSR phase biases keyed by RTCM signal id
+    std::map<uint8_t, int> phase_bias_discnt;            ///< SSR phase-bias discontinuity counters keyed by RTCM signal id
     int bias_network_id = 0;                             ///< Optional CLAS bias network id (0 when unset)
     int atmos_network_id = 0;                            ///< Optional CLAS atmosphere network id (0 when unset)
     int iode = -1;                                       ///< IODE the orbit correction references (-1 when unset)
@@ -390,7 +391,8 @@ public:
                                GNSSTime* phase_bias_reference_time = nullptr,
                                GNSSTime* clock_reference_time = nullptr,
                                int preferred_network_id = 0,
-                               int* orbit_iode = nullptr) const;
+                               int* orbit_iode = nullptr,
+                               std::map<uint8_t, int>* phase_bias_discnt = nullptr) const;
 
     bool loadCSVFile(const std::string& filename);
 

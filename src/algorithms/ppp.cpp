@@ -2988,6 +2988,37 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
             continue;
         }
 
+        // SSR phase-bias discontinuity slip: when the MADOCA Compact SSR phase
+        // bias discontinuity counter changes, the satellite phase bias has been
+        // re-referenced and the carrier ambiguity consistent with the old bias
+        // is stale (MADOCALIB detslip_cssr, ppp.c:558). env-gated, default OFF.
+        bool discnt_slip = false;
+        static const bool kSsrDiscntSlip =
+            (std::getenv("GNSS_PPP_SSR_DISCNT_SLIP") != nullptr);
+        if (kSsrDiscntSlip && ssr_products_loaded_) {
+            Vector3d disc_orbit;
+            double disc_clock = 0.0;
+            std::map<uint8_t, double> disc_pbias;
+            std::map<uint8_t, int> cur_discnt;
+            ssr_products_.interpolateCorrection(
+                satellite, obs.time, disc_orbit, disc_clock,
+                nullptr, nullptr, &disc_pbias, nullptr, nullptr, nullptr, nullptr,
+                0, nullptr, &cur_discnt);
+            const auto prev_it = prev_phase_bias_discnt_.find(satellite);
+            if (prev_it != prev_phase_bias_discnt_.end()) {
+                for (const auto& [sig, dc] : cur_discnt) {
+                    const auto pf = prev_it->second.find(sig);
+                    if (pf != prev_it->second.end() && pf->second != dc) {
+                        discnt_slip = true;
+                        break;
+                    }
+                }
+            }
+            if (!cur_discnt.empty()) {
+                prev_phase_bias_discnt_[satellite] = std::move(cur_discnt);
+            }
+        }
+
         auto& ambiguity = ambiguity_states_[satellite];
         bool lli_slip = false;
         for (const auto& measurement : obs.observations) {
@@ -3056,7 +3087,7 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
 
         }
 
-        if (lli_slip || gf_slip || mw_slip) {
+        if (lli_slip || gf_slip || mw_slip || discnt_slip) {
             if (pppDebugEnabled()) {
                 std::string reason;
                 if (lli_slip) {
@@ -3073,6 +3104,12 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
                         reason += "+";
                     }
                     reason += "melbourne-wubbena";
+                }
+                if (discnt_slip) {
+                    if (!reason.empty()) {
+                        reason += "+";
+                    }
+                    reason += "ssr-discontinuity";
                 }
                 std::cerr << "[PPP] cycle slip reset " << satellite.toString()
                           << " reason=" << reason;
