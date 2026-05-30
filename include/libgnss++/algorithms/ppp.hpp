@@ -285,6 +285,7 @@ private:
     bool had_fixed_last_epoch_ = false;  ///< AR succeeded in previous epoch
     std::map<SatelliteId, double> windup_cache_;  ///< Phase wind-up cache for OSR
     std::map<SatelliteId, int> est_stec_outage_;   ///< Epochs since last seen (est-stec pruning)
+    std::map<SatelliteId, std::map<uint8_t, int>> prev_phase_bias_discnt_;  ///< Last-seen SSR phase-bias discontinuity counters (GNSS_PPP_SSR_DISCNT_SLIP)
     std::map<SatelliteId, CLASPhaseBiasRepairInfo> clas_phase_bias_repair_;
     ppp_clas_sd::SdFilterState clas_sd_state_;  ///< Clock-free SD filter
     ppp_clas_sd::DdAmbAccumulator clas_dd_accumulator_;  ///< Multi-epoch DD amb accumulator

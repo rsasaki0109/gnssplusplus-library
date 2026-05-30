@@ -1151,6 +1151,9 @@ void SSRProducts::addCorrection(const SSROrbitClockCorrection& correction) {
             for (const auto& [signal_id, bias_m] : correction.phase_bias_m) {
                 it->phase_bias_m[signal_id] = bias_m;
             }
+            for (const auto& [signal_id, discnt] : correction.phase_bias_discnt) {
+                it->phase_bias_discnt[signal_id] = discnt;
+            }
             it->phase_bias_valid = !it->phase_bias_m.empty();
         }
         if (correction.atmos_valid) {
@@ -1177,7 +1180,8 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
                                         GNSSTime* phase_bias_reference_time,
                                         GNSSTime* clock_reference_time,
                                         int preferred_network_id,
-                                        int* orbit_iode) const {
+                                        int* orbit_iode,
+                                        std::map<uint8_t, int>* phase_bias_discnt) const {
     const auto sat_it = orbit_clock_corrections.find(sat);
     if (sat_it == orbit_clock_corrections.end() || sat_it->second.empty()) {
         return false;
@@ -1195,6 +1199,9 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
     }
     if (phase_bias_m != nullptr) {
         phase_bias_m->clear();
+    }
+    if (phase_bias_discnt != nullptr) {
+        phase_bias_discnt->clear();
     }
     if (atmos_tokens != nullptr) {
         atmos_tokens->clear();
@@ -1407,6 +1414,9 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         }
         if (phase_bias_m != nullptr && phase_source != nullptr && phase_source->phase_bias_valid) {
             *phase_bias_m = phase_source->phase_bias_m;
+            if (phase_bias_discnt != nullptr) {
+                *phase_bias_discnt = phase_source->phase_bias_discnt;
+            }
             if (phase_bias_reference_time != nullptr) {
                 *phase_bias_reference_time = phase_source->time;
             }
@@ -1506,21 +1516,22 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             }
         }
         if (phase_bias_m != nullptr) {
+            const SSROrbitClockCorrection* picked = nullptr;
             if (biasScore(*before, true) >= biasScore(*after, true) &&
                 before->phase_bias_valid && !before->phase_bias_m.empty()) {
-                *phase_bias_m = before->phase_bias_m;
-                if (phase_bias_reference_time != nullptr) {
-                    *phase_bias_reference_time = before->time;
-                }
+                picked = before;
             } else if (after->phase_bias_valid && !after->phase_bias_m.empty()) {
-                *phase_bias_m = after->phase_bias_m;
-                if (phase_bias_reference_time != nullptr) {
-                    *phase_bias_reference_time = after->time;
-                }
+                picked = after;
             } else if (const auto* scanned = scanBackwardBias(true)) {
-                *phase_bias_m = scanned->phase_bias_m;
+                picked = scanned;
+            }
+            if (picked != nullptr) {
+                *phase_bias_m = picked->phase_bias_m;
+                if (phase_bias_discnt != nullptr) {
+                    *phase_bias_discnt = picked->phase_bias_discnt;
+                }
                 if (phase_bias_reference_time != nullptr) {
-                    *phase_bias_reference_time = scanned->time;
+                    *phase_bias_reference_time = picked->time;
                 }
             }
         }
