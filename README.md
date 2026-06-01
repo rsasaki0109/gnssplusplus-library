@@ -12,6 +12,22 @@ Contribution and PR workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
 Architecture notes: [docs/architecture.md](docs/architecture.md)
 Documentation index: [docs/index.md](docs/index.md)
 
+## Performance at a glance
+
+How libgnss++ stacks up against the established open reference implementations,
+on the same public observations:
+
+| Reference stack | Benchmark | Result |
+|---|---|---|
+| **RTKLIB demo5** | Public moving-body RTK — PPC Tokyo/Nagoya, 6 runs | **Matches or beats** demo5: Hmed 42–56× tighter and +17 pp positioning rate on the public runs |
+| **CLASLIB** | QZSS CLAS PPP from raw L6, 1-hour static | **Beats** CLASLIB: RMS 3D **3.57 mm vs 7.29 mm** (−51 %), same fix rate, no CLASLIB runtime needed |
+| **MADOCALIB / MALIB** | MADOCA-PPP (QZSS L6E orbit/clock/bias + L6D ionosphere) | **Natively supported** end-to-end (raw L6 decode → PPP-AR); a linked-MADOCALIB oracle bridge ships for parity work. Moving-body accuracy parity is still being validated |
+
+The demo5 and CLASLIB numbers are detailed and reproducible below. MADOCALIB and
+MALIB are open MADOCA-PPP reference stacks (RTKLIB-based); libgnss++ implements
+the same MADOCA-PPP pipeline natively, and the `--madocalib-bridge` oracle is
+provided to benchmark against them directly.
+
 ## CLAS Performance vs CLASLIB
 
 QZSS CLAS (Centimeter-Level Augmentation Service) PPP from raw L6 binary, 2019-08-27 static dataset (TRM59800.80 antenna), 1 hour (3599 epochs):
