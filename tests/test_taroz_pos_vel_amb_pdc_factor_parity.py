@@ -70,7 +70,7 @@ def read_pos_rows(path: Path) -> dict[tuple[int, int], dict[str, float | int]]:
             if not line.strip() or line.startswith("%"):
                 continue
             parts = line.split()
-            if len(parts) < 10:
+            if len(parts) < 14:
                 continue
             key = (int(float(parts[0])), round(float(parts[1])))
             rows[key] = {
@@ -79,6 +79,9 @@ def read_pos_rows(path: Path) -> dict[tuple[int, int], dict[str, float | int]]:
                 "z": float(parts[4]),
                 "status": int(float(parts[8])),
                 "satellites": int(float(parts[9])),
+                "ratio": float(parts[11]),
+                "fixed_ambiguities": int(float(parts[12])),
+                "iterations": int(float(parts[13])),
             }
     return rows
 
@@ -406,6 +409,17 @@ class TarozPosVelAmbPdcFactorParityTest(unittest.TestCase):
         self.assertEqual(len(cpp_fixed_keys), 721)
         self.assertEqual(len(valid_cpp_keys - cpp_fixed_keys), 243)
         self.assertEqual(cpp_fixed_keys, taroz_fixed_valid_keys)
+        for key, row in cpp_rows.items():
+            self.assertEqual(
+                int(row["fixed_ambiguities"]),
+                int(float(taroz_rows[key]["fixed_ambiguity_count"])),
+            )
+            if int(row["status"]) == 0:
+                self.assertEqual(float(row["ratio"]), 0.0)
+                self.assertEqual(int(row["fixed_ambiguities"]), 0)
+            else:
+                taroz_fixed = int(float(taroz_rows[key]["idxfix"])) == 1
+                self.assertEqual(int(row["status"]) == 4, taroz_fixed)
 
         errors = [
             ecef_error_m(cpp_rows[key], taroz_rows[key], "fixed")
@@ -415,6 +429,17 @@ class TarozPosVelAmbPdcFactorParityTest(unittest.TestCase):
         self.assertLessEqual(statistics.median(errors), 0.0002)
         self.assertLessEqual(percentile(errors, 0.95), 0.0012)
         self.assertLessEqual(max(errors), 0.012)
+
+        ratio_diffs = [
+            abs(float(cpp_rows[key]["ratio"]) - float(taroz_rows[key]["ratio"]))
+            for key in well_constrained_keys
+            if finite(taroz_rows[key]["ratio"])
+        ]
+        self.assertEqual(len(ratio_diffs), len(well_constrained_keys))
+        self.assertLessEqual(statistics.mean(ratio_diffs), 0.007)
+        self.assertLessEqual(statistics.median(ratio_diffs), 0.004)
+        self.assertLessEqual(percentile(ratio_diffs, 0.95), 0.025)
+        self.assertLessEqual(max(ratio_diffs), 0.08)
 
     def test_optimized_epoch_debug_tracks_taroz_fixed_output(self) -> None:
         taroz_epoch_path = MATLAB_DIR / "per_epoch_state.csv"
