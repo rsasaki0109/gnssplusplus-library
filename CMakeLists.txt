@@ -21,6 +21,26 @@ find_package(geometry_msgs QUIET)
 find_package(nav_msgs QUIET)
 find_package(std_msgs QUIET)
 find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs)
+find_package(GTSAM QUIET CONFIG PATHS /usr/local/lib/cmake/GTSAM)
+if(GTSAM_FOUND)
+    message(STATUS "GTSAM found; enabling optional FGO GTSAM backend")
+else()
+    message(STATUS "GTSAM not found; optional FGO GTSAM backend disabled")
+endif()
+option(GNSSPP_USE_CHOLMOD "Use CHOLMOD for optional FGO sparse covariance solves" ON)
+if(GNSSPP_USE_CHOLMOD)
+    find_path(CHOLMOD_INCLUDE_DIR
+        NAMES cholmod.h
+        PATH_SUFFIXES suitesparse)
+    find_library(CHOLMOD_LIBRARY NAMES cholmod)
+    if(CHOLMOD_INCLUDE_DIR AND CHOLMOD_LIBRARY)
+        message(STATUS "CHOLMOD found; enabling optional FGO covariance solver")
+    else()
+        message(STATUS "CHOLMOD not found; using Eigen sparse covariance solver")
+    endif()
+else()
+    message(STATUS "CHOLMOD disabled; using Eigen sparse covariance solver")
+endif()
 option(MADOCALIB_PARITY_LINK "Link external MADOCALIB C sources for opt-in parity oracle tests" OFF)
 set(MADOCALIB_ROOT_DIR
     ""
@@ -72,6 +92,7 @@ set(GNSS_SOURCES_NO_OPTIMIZATION
     src/algorithms/rtk_selection.cpp
     src/algorithms/rtk_update.cpp
     src/algorithms/rtk_validation.cpp
+    src/algorithms/fgo.cpp
     src/algorithms/rtk.cpp
     src/algorithms/spp.cpp
     src/algorithms/lambda.cpp
@@ -175,6 +196,11 @@ target_include_directories(gnss_lib_noopt PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_link_libraries(gnss_lib_noopt PUBLIC Eigen3::Eigen)
+if(CHOLMOD_INCLUDE_DIR AND CHOLMOD_LIBRARY)
+    target_include_directories(gnss_lib_noopt PRIVATE ${CHOLMOD_INCLUDE_DIR})
+    target_compile_definitions(gnss_lib_noopt PRIVATE GNSSPP_HAS_CHOLMOD=1)
+    target_link_libraries(gnss_lib_noopt PRIVATE ${CHOLMOD_LIBRARY})
+endif()
 
 set(GNSS_INSTALL_TARGETS gnss_lib gnss_lib_noopt sofa ginan_iers2010)
 if(MADOCALIB_PARITY_LINK)
