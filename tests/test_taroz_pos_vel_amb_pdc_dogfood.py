@@ -163,6 +163,32 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
                 str(temp_root / "matlab_oracle"),
             )
 
+    def test_matlab_dump_env_resolves_relative_output_under_repo(self) -> None:
+        args = gnss_taroz_pos_vel_amb_pdc_dogfood.parse_args(
+            [
+                "--generate-matlab-dump",
+                "--taroz-root",
+                "relative_taroz_root",
+                "--matlab-dir",
+                "relative_matlab_oracle",
+            ]
+        )
+
+        env = gnss_taroz_pos_vel_amb_pdc_dogfood.matlab_dump_env(args)
+
+        self.assertEqual(
+            env["GNSSPP_TAROZ_ROOT"],
+            str(ROOT_DIR / "relative_taroz_root"),
+        )
+        self.assertEqual(
+            env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR"],
+            str(ROOT_DIR / "relative_taroz_root" / "examples"),
+        )
+        self.assertEqual(
+            env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR"],
+            str(ROOT_DIR / "relative_matlab_oracle"),
+        )
+
     def test_native_summary_accepts_canonical_full_run(self) -> None:
         failures = gnss_taroz_pos_vel_amb_pdc_dogfood.verify_native_summary(
             self.canonical_summary()
