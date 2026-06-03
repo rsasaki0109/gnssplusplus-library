@@ -188,6 +188,11 @@ the PPC `amb-pdc` workflow. A complete taroz port still needs broader MATLAB
 dump parity for intermediate seed state, ambiguity candidates, factor residuals,
 solver costs, and final epoch output across more taroz modes.
 
+When `--generate-spp-seed` is used, the PPC harness treats the generated seed as
+part of the sign-off. The native summary must report a seed path,
+`seed_matched_epochs` must equal the optimized epoch count, and
+`seed_interpolated_epochs` must remain zero.
+
 `gnss smartloc-adapter` widens the public matrix beyond UrbanNav by exporting
 smartLoc `NAV-POSLLH.csv` into a `reference.csv` plus a normalized u-blox
 receiver CSV, and by exporting `RXM-RAWX.csv` into a normalized raw observation
