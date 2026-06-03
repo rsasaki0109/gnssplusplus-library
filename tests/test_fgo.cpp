@@ -776,6 +776,69 @@ TEST(FGOTest, DoubleDifferenceOutputGateRequiresEnoughCarrierCandidates) {
               SolutionStatus::FLOAT);
 }
 
+TEST(FGOTest, FloatSeedDivergenceGateRejectsOnlyFloatOutputs) {
+    FGOProcessor::FGOConfig config;
+    config.max_iterations = 12;
+    config.convergence_threshold_m = 1e-8;
+    config.use_motion_factors = false;
+    config.max_float_seed_position_divergence_m = 1.0;
+
+    FGOProcessor gated_processor(config);
+    const auto gated_result =
+        gated_processor.optimizeProblem(makeSyntheticProblem(false, true));
+
+    ASSERT_EQ(gated_result.solution.size(), 2u);
+    EXPECT_EQ(gated_result.solution.solutions[0].status, SolutionStatus::NONE);
+    EXPECT_EQ(gated_result.solution.solutions[1].status, SolutionStatus::NONE);
+    EXPECT_EQ(gated_result.diagnostics.float_rejected_seed_position_divergence,
+              2u);
+
+    config.max_float_seed_position_divergence_m = 100.0;
+    FGOProcessor accepted_processor(config);
+    const auto accepted_result =
+        accepted_processor.optimizeProblem(makeSyntheticProblem(false, true));
+
+    ASSERT_EQ(accepted_result.solution.size(), 2u);
+    EXPECT_EQ(accepted_result.solution.solutions[0].status,
+              SolutionStatus::FLOAT);
+    EXPECT_EQ(accepted_result.solution.solutions[1].status,
+              SolutionStatus::FLOAT);
+    EXPECT_EQ(accepted_result.diagnostics.float_rejected_seed_position_divergence,
+              0u);
+
+    config.max_float_seed_position_divergence_m = 1.0;
+    config.fix_ambiguities = true;
+    config.fixed_ambiguity_sigma_m = 1e-4;
+    config.lambda_ratio_threshold = 1.5;
+    FGOProcessor fixed_processor(config);
+    const auto fixed_result =
+        fixed_processor.optimizeProblem(makeSyntheticProblem(false, true));
+
+    ASSERT_EQ(fixed_result.solution.size(), 2u);
+    EXPECT_EQ(fixed_result.solution.solutions[0].status, SolutionStatus::FIXED);
+    EXPECT_EQ(fixed_result.solution.solutions[1].status, SolutionStatus::FIXED);
+    EXPECT_EQ(fixed_result.diagnostics.float_rejected_seed_position_divergence,
+              0u);
+}
+
+TEST(FGOTest, FloatPositionJumpGateRejectsFloatAfterLargeJump) {
+    FGOProcessor::FGOConfig config;
+    config.max_iterations = 12;
+    config.convergence_threshold_m = 1e-8;
+    config.use_motion_factors = false;
+    config.max_float_position_jump_m = 1.0;
+
+    FGOProcessor processor(config);
+    const auto result =
+        processor.optimizeProblem(makeSyntheticProblem(false, true));
+
+    ASSERT_EQ(result.solution.size(), 2u);
+    EXPECT_EQ(result.solution.solutions[0].status, SolutionStatus::FLOAT);
+    EXPECT_EQ(result.solution.solutions[1].status, SolutionStatus::NONE);
+    EXPECT_EQ(result.diagnostics.float_rejected_position_jump, 1u);
+    EXPECT_EQ(result.diagnostics.float_rejected_seed_position_divergence, 0u);
+}
+
 TEST(FGOTest, DoubleDifferenceInternalsMatchTarozLinearizedFactors) {
     const auto problem = makeSyntheticDoubleDifferenceProblem(true);
     ASSERT_FALSE(problem.double_difference_pseudorange_factors.empty());

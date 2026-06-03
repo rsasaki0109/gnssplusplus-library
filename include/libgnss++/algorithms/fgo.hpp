@@ -34,6 +34,8 @@ public:
         double double_difference_base_min_snr_dbhz = -1.0;
         int min_satellites_per_epoch = 4;
         int min_output_double_difference_carrier_factors_per_epoch = 0;
+        double max_float_seed_position_divergence_m = 0.0;
+        double max_float_position_jump_m = 0.0;
 
         bool use_spp_seed = true;
         bool use_pseudorange_factors = true;
@@ -312,6 +314,8 @@ public:
         std::size_t robust_tdcp_factors = 0;
         std::size_t graph_factors = 0;
         std::size_t graph_values = 0;
+        std::size_t float_rejected_seed_position_divergence = 0;
+        std::size_t float_rejected_position_jump = 0;
         bool fixed_solution = false;
         bool lambda_ambiguity_fix_solved = false;
         bool lambda_ambiguity_fix_used = false;

@@ -87,6 +87,8 @@ struct Options {
     double double_difference_base_min_snr_dbhz = -1.0;
     int min_satellites_per_epoch = 4;
     int min_output_dd_carrier_factors_per_epoch = 0;
+    double max_float_seed_position_divergence_m = 0.0;
+    double max_float_position_jump_m = 0.0;
     int min_fixed_ambiguities = 4;
     int max_lambda_ambiguities = 12;
     bool use_carrier_phase_factors = false;
@@ -187,6 +189,10 @@ void printUsage(const char* program_name) {
         << "                                Minimum usable measurements before keeping epoch (default: 4)\n"
         << "  --min-output-dd-carrier-factors-per-epoch <n>\n"
         << "                                Mark DD-only output epochs NONE below this carrier factor count\n"
+        << "  --max-float-seed-divergence <m>\n"
+        << "                                Mark FLOAT outputs NONE when farther than this from seed; 0 disables\n"
+        << "  --max-float-position-jump <m>\n"
+        << "                                Mark jumping FLOAT outputs NONE until the next FIXED; 0 disables\n"
         << "  --dd-reference-min-snr <dbhz> Rover reference SNR mask for DD (-1 inherits --min-snr)\n"
         << "  --dd-base-min-snr <dbhz>      Base SNR mask for DD factors (-1 inherits --min-snr)\n"
         << "  --carrier-phase-factors       Enable float ambiguity carrier phase factors\n"
@@ -295,6 +301,8 @@ void applyTarozAmbPdcPreset(Options& options) {
     options.backend = "eigen";
     options.min_satellites_per_epoch = 0;
     options.min_output_dd_carrier_factors_per_epoch = 6;
+    options.max_float_seed_position_divergence_m = 100.0;
+    options.max_float_position_jump_m = 100.0;
     options.insert_fixed_interval_gaps = true;
     options.fix_ambiguities = false;
     options.no_motion_factors = true;
@@ -522,6 +530,11 @@ Options parseArguments(int argc, char* argv[]) {
                    i + 1 < argc) {
             options.min_output_dd_carrier_factors_per_epoch =
                 std::stoi(argv[++i]);
+        } else if (arg == "--max-float-seed-divergence" && i + 1 < argc) {
+            options.max_float_seed_position_divergence_m =
+                std::stod(argv[++i]);
+        } else if (arg == "--max-float-position-jump" && i + 1 < argc) {
+            options.max_float_position_jump_m = std::stod(argv[++i]);
         } else if (arg == "--dd-reference-min-snr" && i + 1 < argc) {
             options.double_difference_reference_min_snr_dbhz = std::stod(argv[++i]);
         } else if (arg == "--dd-base-min-snr" && i + 1 < argc) {
@@ -661,6 +674,16 @@ Options parseArguments(int argc, char* argv[]) {
         argumentError(
             "--min-output-dd-carrier-factors-per-epoch must be non-negative",
             argv[0]);
+    }
+    if (!std::isfinite(options.max_float_seed_position_divergence_m) ||
+        options.max_float_seed_position_divergence_m < 0.0) {
+        argumentError("--max-float-seed-divergence must be non-negative",
+                      argv[0]);
+    }
+    if (!std::isfinite(options.max_float_position_jump_m) ||
+        options.max_float_position_jump_m < 0.0) {
+        argumentError("--max-float-position-jump must be non-negative",
+                      argv[0]);
     }
     if (options.max_lambda_ambiguities < 0) {
         argumentError("--max-lambda-ambiguities must be non-negative", argv[0]);
@@ -1113,6 +1136,83 @@ double elevationRad(const libgnss::Vector3d& receiver_position,
     return std::asin(std::max(-1.0, std::min(1.0, enu(2) / range)));
 }
 
+double seedPositionDivergenceMeters(
+    const libgnss::Vector3d& position_ecef,
+    const libgnss::FGOProcessor::EpochSeed& seed) {
+    if (!position_ecef.allFinite() || !seed.position_ecef.allFinite() ||
+        seed.position_ecef.norm() <= 1e6) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    return (position_ecef - seed.position_ecef).norm();
+}
+
+bool applyFloatSeedPositionDivergenceGate(
+    libgnss::PositionSolution& solution,
+    const libgnss::FGOProcessor::FGOProblem& problem,
+    std::size_t epoch_index,
+    double max_divergence_m,
+    std::size_t& rejected_count) {
+    if (solution.status != libgnss::SolutionStatus::FLOAT ||
+        !std::isfinite(max_divergence_m) || max_divergence_m <= 0.0) {
+        return false;
+    }
+    if (!solution.position_ecef.allFinite()) {
+        solution.status = libgnss::SolutionStatus::NONE;
+        ++rejected_count;
+        return true;
+    }
+    if (epoch_index >= problem.epochs.size()) {
+        return false;
+    }
+
+    const double divergence_m =
+        seedPositionDivergenceMeters(solution.position_ecef,
+                                     problem.epochs[epoch_index]);
+    if (std::isfinite(divergence_m) && divergence_m > max_divergence_m) {
+        solution.status = libgnss::SolutionStatus::NONE;
+        ++rejected_count;
+        return true;
+    }
+    return false;
+}
+
+bool applyFloatPositionJumpGate(
+    libgnss::PositionSolution& solution,
+    const libgnss::Vector3d& previous_output_position,
+    bool has_previous_output_position,
+    double max_jump_m,
+    bool& block_float_until_fixed,
+    std::size_t& rejected_count) {
+    if (!std::isfinite(max_jump_m) || max_jump_m <= 0.0) {
+        return false;
+    }
+    if (solution.status == libgnss::SolutionStatus::FIXED) {
+        block_float_until_fixed = false;
+        return false;
+    }
+    if (solution.status != libgnss::SolutionStatus::FLOAT) {
+        return false;
+    }
+
+    bool reject = block_float_until_fixed;
+    if (has_previous_output_position &&
+        solution.position_ecef.allFinite() &&
+        previous_output_position.allFinite()) {
+        const double jump_m =
+            (solution.position_ecef - previous_output_position).norm();
+        if (std::isfinite(jump_m) && jump_m > max_jump_m) {
+            reject = true;
+            block_float_until_fixed = true;
+        }
+    }
+    if (reject) {
+        solution.status = libgnss::SolutionStatus::NONE;
+        ++rejected_count;
+        return true;
+    }
+    return false;
+}
+
 libgnss::FGOProcessor::FGOResult optimizeGtsamPcProblem(
     const libgnss::FGOProcessor::FGOProblem& problem,
     const libgnss::FGOProcessor::FGOConfig& config) {
@@ -1358,6 +1458,9 @@ libgnss::FGOProcessor::FGOResult optimizeGtsamPcProblem(
     result.ambiguity_reference_satellites_by_epoch.resize(problem.epochs.size());
     result.ambiguity_estimate_cycles_by_epoch.resize(problem.epochs.size());
 
+    libgnss::Vector3d previous_output_position = libgnss::Vector3d::Zero();
+    bool has_previous_output_position = false;
+    bool block_float_until_fixed = false;
     for (std::size_t epoch_index = 0; epoch_index < problem.epochs.size();
          ++epoch_index) {
         const gtsam::Vector x =
@@ -1595,7 +1698,22 @@ libgnss::FGOProcessor::FGOResult optimizeGtsamPcProblem(
             solution.satellites_used.assign(dd_satellite_it->second.begin(),
                                             dd_satellite_it->second.end());
         }
+        applyFloatPositionJumpGate(
+            solution,
+            previous_output_position,
+            has_previous_output_position,
+            config.max_float_position_jump_m,
+            block_float_until_fixed,
+            result.diagnostics.float_rejected_position_jump);
+        applyFloatSeedPositionDivergenceGate(
+            solution,
+            problem,
+            epoch_index,
+            config.max_float_seed_position_divergence_m,
+            result.diagnostics.float_rejected_seed_position_divergence);
         result.solution.addSolution(solution);
+        previous_output_position = solution.position_ecef;
+        has_previous_output_position = true;
     }
 
     return result;
@@ -1708,6 +1826,10 @@ void writeSummaryJson(const Options& options,
            << options.min_satellites_per_epoch << ",\n";
     output << "  \"min_output_dd_carrier_factors_per_epoch\": "
            << options.min_output_dd_carrier_factors_per_epoch << ",\n";
+    output << "  \"max_float_seed_position_divergence_m\": "
+           << options.max_float_seed_position_divergence_m << ",\n";
+    output << "  \"max_float_position_jump_m\": "
+           << options.max_float_position_jump_m << ",\n";
     output << "  \"insert_fixed_interval_gaps\": "
            << jsonBool(options.insert_fixed_interval_gaps) << ",\n";
     output << "  \"double_difference_reference_min_snr_dbhz\": "
@@ -1794,6 +1916,10 @@ void writeSummaryJson(const Options& options,
     output << "  \"robust_tdcp_factors\": " << diagnostics.robust_tdcp_factors << ",\n";
     output << "  \"graph_factors\": " << diagnostics.graph_factors << ",\n";
     output << "  \"graph_values\": " << diagnostics.graph_values << ",\n";
+    output << "  \"float_rejected_seed_position_divergence\": "
+           << diagnostics.float_rejected_seed_position_divergence << ",\n";
+    output << "  \"float_rejected_position_jump\": "
+           << diagnostics.float_rejected_position_jump << ",\n";
     output << "  \"iterations\": " << diagnostics.iterations << ",\n";
     output << "  \"converged\": " << jsonBool(diagnostics.converged) << ",\n";
     output << "  \"initial_cost\": " << diagnostics.initial_cost << ",\n";
@@ -2047,6 +2173,7 @@ bool writeEpochDebugCsv(
     output << "epoch_index,gps_week,gps_tow,status,ratio,num_fixed_ambiguities,"
               "ambiguity_candidates,dd_satellites,reference_satellites,"
               "position_x_m,position_y_m,position_z_m,"
+              "seed_position_divergence_m,"
               "velocity_x_mps,velocity_y_mps,velocity_z_mps\n";
     output << std::fixed << std::setprecision(6);
     const auto& solution = result.solution;
@@ -2115,6 +2242,14 @@ bool writeEpochDebugCsv(
                 velocity_mps = velocityBetween(epoch_index - 1, epoch_index);
             }
         }
+        double seed_position_divergence_m =
+            std::numeric_limits<double>::quiet_NaN();
+        if (sol.position_ecef.allFinite() &&
+            epoch.position_ecef.allFinite() &&
+            epoch.position_ecef.norm() > 1e6) {
+            seed_position_divergence_m =
+                (sol.position_ecef - epoch.position_ecef).norm();
+        }
 
         output << epoch_index << ','
                << epoch.time.week << ','
@@ -2130,6 +2265,7 @@ bool writeEpochDebugCsv(
                << sol.position_ecef(0) << ','
                << sol.position_ecef(1) << ','
                << sol.position_ecef(2) << ','
+               << seed_position_divergence_m << ','
                << velocity_mps(0) << ','
                << velocity_mps(1) << ','
                << velocity_mps(2)
@@ -3144,6 +3280,9 @@ int main(int argc, char* argv[]) {
         config.min_satellites_per_epoch = options.min_satellites_per_epoch;
         config.min_output_double_difference_carrier_factors_per_epoch =
             options.min_output_dd_carrier_factors_per_epoch;
+        config.max_float_seed_position_divergence_m =
+            options.max_float_seed_position_divergence_m;
+        config.max_float_position_jump_m = options.max_float_position_jump_m;
         config.double_difference_reference_min_snr_dbhz =
             options.double_difference_reference_min_snr_dbhz;
         config.double_difference_base_min_snr_dbhz =
@@ -3343,6 +3482,11 @@ int main(int argc, char* argv[]) {
                       << result.diagnostics.double_difference_rejected_no_base_epoch << "\n";
             std::cout << "DD rejected no reference: "
                       << result.diagnostics.double_difference_rejected_no_reference << "\n";
+            std::cout << "FLOAT rejected by seed divergence: "
+                      << result.diagnostics.float_rejected_seed_position_divergence
+                      << "\n";
+            std::cout << "FLOAT rejected by position jump: "
+                      << result.diagnostics.float_rejected_position_jump << "\n";
             std::cout << "Motion factors: " << result.diagnostics.motion_factors << "\n";
             std::cout << "Ambiguity between factors: "
                       << result.diagnostics.ambiguity_between_factors << "\n";
