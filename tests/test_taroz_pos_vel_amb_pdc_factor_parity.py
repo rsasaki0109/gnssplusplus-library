@@ -63,6 +63,10 @@ def read_json(path: Path) -> dict[str, object]:
         return json.load(handle)
 
 
+def relative_error(actual: float, expected: float) -> float:
+    return abs(actual - expected) / max(1.0, abs(expected))
+
+
 def read_pos_rows(path: Path) -> dict[tuple[int, int], dict[str, float | int]]:
     rows: dict[tuple[int, int], dict[str, float | int]] = {}
     with path.open() as handle:
@@ -272,6 +276,51 @@ class TarozPosVelAmbPdcFactorParityTest(unittest.TestCase):
                 int(row["ambiguity_candidates"]),
                 int(float(taroz_epoch_rows[key]["candidate_count"])),
             )
+
+    def test_graph_summary_matches_taroz_solver_dump(self) -> None:
+        summary_path = CPP_DIR / "summary.json"
+        taroz_graph_path = MATLAB_DIR / "graph_detail.csv"
+        self.require_dogfood_files(summary_path, taroz_graph_path)
+
+        summary = read_json(summary_path)
+        taroz_graph = read_rows(taroz_graph_path)[0]
+
+        self.assertEqual(summary["preset"], "taroz-amb-pdc")
+        self.assertEqual(summary["backend"], "eigen")
+        self.assertEqual(
+            int(summary["optimized_epochs"]),
+            int(float(taroz_graph["n"])),
+        )
+        self.assertEqual(
+            int(summary["ambiguity_states"]),
+            int(float(taroz_graph["valid_ambiguity_states"])),
+        )
+        self.assertEqual(
+            int(summary["graph_factors"]),
+            int(float(taroz_graph["graph_factors"])),
+        )
+        self.assertEqual(
+            int(summary["graph_values"]),
+            int(float(taroz_graph["graph_values"])),
+        )
+        self.assertEqual(
+            int(summary["iterations"]),
+            int(float(taroz_graph["iterations"])),
+        )
+        self.assertLessEqual(
+            relative_error(
+                float(summary["initial_cost"]),
+                float(taroz_graph["initial_cost"]),
+            ),
+            0.002,
+        )
+        self.assertLessEqual(
+            relative_error(
+                float(summary["final_cost"]),
+                float(taroz_graph["final_cost"]),
+            ),
+            0.01,
+        )
 
     def test_seed_positions_match_taroz_spp_seed_dump(self) -> None:
         cpp_epoch_path = CPP_DIR / "epoch_debug.csv"
