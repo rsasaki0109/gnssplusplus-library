@@ -139,6 +139,10 @@ def build_fgo_command(args: argparse.Namespace, paths: dict[str, Path]) -> list[
         str(paths["sd_factor_debug"]),
         "--lambda-debug-csv",
         str(paths["lambda_debug"]),
+        "--max-float-seed-divergence",
+        "0",
+        "--max-float-position-jump",
+        "0",
         "--quiet",
     ]
     command.extend(args.fgo_extra_arg)
@@ -183,6 +187,10 @@ def selected_native_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "lambda_ambiguity_used_candidates",
         "lambda_ambiguity_attempts",
         "fixed_ambiguities",
+        "max_float_seed_position_divergence_m",
+        "max_float_position_jump_m",
+        "float_rejected_seed_position_divergence",
+        "float_rejected_position_jump",
         "iterations",
         "converged",
         "final_cost",
@@ -252,6 +260,8 @@ def verify_native_summary(summary: dict[str, Any]) -> list[str]:
         "min_snr_dbhz": 35.0,
         "min_satellites_per_epoch": 0,
         "min_output_dd_carrier_factors_per_epoch": 6,
+        "max_float_seed_position_divergence_m": 0.0,
+        "max_float_position_jump_m": 0.0,
     }
     for key, expected in numeric_expectations.items():
         if not _close(summary.get(key), expected):
