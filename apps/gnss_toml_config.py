@@ -6,8 +6,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
-import tomllib
 from typing import Any
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python < 3.11 compatibility.
+    import tomli as tomllib
 
 
 def _extract_config_path(argv: list[str]) -> Path | None:

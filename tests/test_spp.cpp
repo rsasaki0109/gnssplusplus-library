@@ -21,7 +21,118 @@ bool sourcePathExists(const std::string& relative_path) {
     return std::filesystem::exists(sourcePath(relative_path));
 }
 
+double solveKeplerForTest(double mean_anomaly, double eccentricity) {
+    double eccentric_anomaly = mean_anomaly;
+    for (int i = 0; i < 30; ++i) {
+        const double previous = eccentric_anomaly;
+        eccentric_anomaly -=
+            (eccentric_anomaly - eccentricity * std::sin(eccentric_anomaly) -
+             mean_anomaly) /
+            (1.0 - eccentricity * std::cos(eccentric_anomaly));
+        if (std::abs(eccentric_anomaly - previous) < 1e-14) {
+            break;
+        }
+    }
+    return eccentric_anomaly;
+}
+
+Vector3d expectedBeiDouGeoPosition(const Ephemeris& eph,
+                                   const GNSSTime& time,
+                                   bool use_geo_omega) {
+    constexpr double kBeiDouEarthMu = 3.986004418e14;
+    constexpr double kBeiDouEarthRotationRate = 7.292115e-5;
+    constexpr double kSinMinus5Deg = -0.0871557427476582;
+    constexpr double kCosMinus5Deg = 0.9961946980917456;
+
+    const double semi_major_axis = eph.sqrt_a * eph.sqrt_a;
+    const double tk = time - eph.toe;
+    const double n0 = std::sqrt(kBeiDouEarthMu /
+                                (semi_major_axis * semi_major_axis *
+                                 semi_major_axis));
+    const double mean_anomaly = eph.m0 + (n0 + eph.delta_n) * tk;
+    const double eccentric_anomaly = solveKeplerForTest(mean_anomaly, eph.e);
+    const double sin_e = std::sin(eccentric_anomaly);
+    const double cos_e = std::cos(eccentric_anomaly);
+    const double true_anomaly =
+        std::atan2(std::sqrt(1.0 - eph.e * eph.e) * sin_e, cos_e - eph.e);
+    const double phi = true_anomaly + eph.omega;
+    const double two_phi = 2.0 * phi;
+    const double u = phi + eph.cus * std::sin(two_phi) +
+                     eph.cuc * std::cos(two_phi);
+    const double r = semi_major_axis * (1.0 - eph.e * cos_e) +
+                     eph.crs * std::sin(two_phi) +
+                     eph.crc * std::cos(two_phi);
+    const double inclination =
+        eph.i0 + eph.idot * tk +
+        eph.cis * std::sin(two_phi) + eph.cic * std::cos(two_phi);
+    const double toe_seconds = eph.toes != 0.0 ? eph.toes : eph.toe.tow;
+    const double omega =
+        use_geo_omega
+            ? eph.omega0 + eph.omega_dot * tk -
+                  kBeiDouEarthRotationRate * toe_seconds
+            : eph.omega0 + (eph.omega_dot - kBeiDouEarthRotationRate) * tk -
+                  kBeiDouEarthRotationRate * toe_seconds;
+
+    const double x_orb = r * std::cos(u);
+    const double y_orb = r * std::sin(u);
+    const double xg = x_orb * std::cos(omega) -
+                      y_orb * std::cos(inclination) * std::sin(omega);
+    const double yg = x_orb * std::sin(omega) +
+                      y_orb * std::cos(inclination) * std::cos(omega);
+    const double zg = y_orb * std::sin(inclination);
+    const double sin_rot = std::sin(kBeiDouEarthRotationRate * tk);
+    const double cos_rot = std::cos(kBeiDouEarthRotationRate * tk);
+
+    Vector3d position;
+    position(0) = xg * cos_rot + yg * sin_rot * kCosMinus5Deg +
+                  zg * sin_rot * kSinMinus5Deg;
+    position(1) = -xg * sin_rot + yg * cos_rot * kCosMinus5Deg +
+                  zg * cos_rot * kSinMinus5Deg;
+    position(2) = -yg * kSinMinus5Deg + zg * kCosMinus5Deg;
+    return position;
+}
+
 }  // namespace
+
+TEST(NavigationTest, BeiDouGeoBroadcastStateUsesGeoRotationFrame) {
+    Ephemeris eph;
+    eph.satellite = SatelliteId(GNSSSystem::BeiDou, 1);
+    eph.valid = true;
+    eph.week = 2323;
+    eph.toe = GNSSTime(2323, 553800.0);
+    eph.toc = eph.toe;
+    eph.toes = 553800.0;
+    eph.sqrt_a = std::sqrt(42164000.0);
+    eph.e = 0.0012;
+    eph.i0 = 0.08;
+    eph.omega0 = 1.25;
+    eph.omega = 0.61;
+    eph.m0 = 0.42;
+    eph.delta_n = 1.0e-9;
+    eph.idot = -2.0e-10;
+    eph.omega_dot = -2.6e-9;
+    eph.cuc = 1.0e-6;
+    eph.cus = -2.0e-6;
+    eph.crc = 120.0;
+    eph.crs = -30.0;
+    eph.cic = 2.0e-7;
+    eph.cis = -3.0e-7;
+
+    const GNSSTime eval_time = eph.toe + 120.0;
+    Vector3d position;
+    Vector3d velocity;
+    double clock_bias = 0.0;
+    double clock_drift = 0.0;
+    ASSERT_TRUE(eph.calculateSatelliteState(
+        eval_time, position, velocity, clock_bias, clock_drift));
+
+    const Vector3d expected =
+        expectedBeiDouGeoPosition(eph, eval_time, true);
+    const Vector3d non_geo_omega =
+        expectedBeiDouGeoPosition(eph, eval_time, false);
+    EXPECT_LT((position - expected).norm(), 1e-3);
+    EXPECT_GT((position - non_geo_omega).norm(), 100000.0);
+}
 
 class SPPTest : public ::testing::Test {
 protected:

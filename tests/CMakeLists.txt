@@ -19,6 +19,7 @@ if(GTest_FOUND)
         test_rtk_update.cpp
         test_rtk_selection.cpp
         test_rtk_validation.cpp
+        test_fgo.cpp
         test_signal_policy.cpp
         test_types.cpp
         test_observation.cpp
@@ -58,6 +59,7 @@ if(GTest_FOUND)
     )
     add_dependencies(run_tests
         gnss_convert
+        gnss_fgo
         gnss_live
         gnss_ppp
         gnss_replay
@@ -65,6 +67,7 @@ if(GTest_FOUND)
         gnss_solve
         gnss_stream
         gnss_ubx_info
+        gnss_vel_d
     )
 
     # Add test to CTest
@@ -80,6 +83,58 @@ if(GTest_FOUND)
     add_test(
         NAME python_madoca_solution_diff_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_solution_diff.py
+    )
+    add_test(
+        NAME python_mode_compare_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_mode_compare.py
+    )
+    add_test(
+        NAME python_ppc_taroz_amb_pdc_smoke_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppc_taroz_amb_pdc_smoke.py
+    )
+    add_test(
+        NAME python_taroz_pc_internal_parity_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_pc_internal_parity.py
+    )
+    add_test(
+        NAME python_taroz_pc_dogfood_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_pc_dogfood.py
+    )
+    add_test(
+        NAME python_taroz_p_dogfood_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_p_dogfood.py
+    )
+    add_test(
+        NAME python_taroz_p_internal_parity_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_p_internal_parity.py
+    )
+    add_test(
+        NAME python_taroz_d_internal_parity_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_d_internal_parity.py
+    )
+    add_test(
+        NAME python_taroz_pos_pd_internal_parity_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_pos_pd_internal_parity.py
+    )
+    add_test(
+        NAME python_taroz_pos_pdc_internal_parity_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_pos_pdc_internal_parity.py
+    )
+    add_test(
+        NAME python_taroz_pos_vel_pdc_internal_parity_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_pos_vel_pdc_internal_parity.py
+    )
+    add_test(
+        NAME python_taroz_pos_vel_amb_pdc_factor_parity_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_pos_vel_amb_pdc_factor_parity.py
+    )
+    add_test(
+        NAME python_taroz_pos_vel_amb_pdc_dogfood_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_pos_vel_amb_pdc_dogfood.py
+    )
+    add_test(
+        NAME python_taroz_pd_internal_parity_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_pd_internal_parity.py
     )
     add_test(
         NAME python_packaging_tests
@@ -104,6 +159,10 @@ if(GTest_FOUND)
     set_tests_properties(
         python_bindings_tests
         PROPERTIES ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python"
+    )
+    set_tests_properties(
+        python_packaging_tests
+        PROPERTIES ENVIRONMENT "GNSSPP_BINARY_DIR=${CMAKE_BINARY_DIR}"
     )
     if(TARGET gnss_solution_node)
         add_test(
