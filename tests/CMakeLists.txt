@@ -160,6 +160,10 @@ if(GTest_FOUND)
         python_bindings_tests
         PROPERTIES ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python"
     )
+    set_tests_properties(
+        python_packaging_tests
+        PROPERTIES ENVIRONMENT "GNSSPP_BINARY_DIR=${CMAKE_BINARY_DIR}"
+    )
     if(TARGET gnss_solution_node)
         add_test(
             NAME python_ros2_node_tests

@@ -13,8 +13,12 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-import tomllib
 from typing import Any
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python < 3.11 compatibility.
+    import tomli as tomllib
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
