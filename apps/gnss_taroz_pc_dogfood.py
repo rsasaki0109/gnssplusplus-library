@@ -20,12 +20,14 @@ EXE_SUFFIX = ".exe" if os.name == "nt" else ""
 BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 
 DEFAULT_DATA_DIR = Path("/tmp/taroz_gtsam_gnss/examples/data")
+DEFAULT_TAROZ_ROOT = Path("/tmp/taroz_gtsam_gnss")
 DEFAULT_OUT_DIR = ROOT_DIR / "output/dogfood/taroz_pc_dogfood_current"
 DEFAULT_BASELINE_CPP_DIR = (
     ROOT_DIR / "output/dogfood/taroz_pc_full_gtsam_fixed_taroz_nocorr"
 )
 DEFAULT_BASELINE_LAMBDA_DIR = ROOT_DIR / "output/dogfood/taroz_pc_lambda_debug"
 DEFAULT_MATLAB_DIR = ROOT_DIR / "output/dogfood/taroz_matlab_pc_debug"
+DEFAULT_MATLAB_DUMP_SCRIPT = ROOT_DIR / "scripts/dump_taroz_pc_debug.m"
 DEFAULT_PARITY_TEST = ROOT_DIR / "tests/test_taroz_pc_internal_parity.py"
 
 POS_NAME = "fgo_taroz_pc_gtsam_fixed.pos"
@@ -133,6 +135,52 @@ def validate_inputs(args: argparse.Namespace) -> None:
     if missing:
         joined = ", ".join(str(path) for path in missing)
         raise SystemExit(f"missing taroz PC input file(s): {joined}")
+
+
+def _matlab_single_quoted_path(path: Path) -> str:
+    return str(path).replace("'", "''")
+
+
+def repo_relative_path(path: Path) -> Path:
+    return path if path.is_absolute() else ROOT_DIR / path
+
+
+def matlab_example_dir(args: argparse.Namespace) -> Path:
+    return args.taroz_example_dir or (args.taroz_root / "examples")
+
+
+def matlab_output_dir(args: argparse.Namespace) -> Path:
+    return repo_relative_path(args.matlab_dir).resolve()
+
+
+def build_matlab_dump_command(args: argparse.Namespace) -> list[str]:
+    script = _matlab_single_quoted_path(repo_relative_path(args.matlab_dump_script))
+    return [str(args.matlab_bin), "-batch", f"run('{script}')"]
+
+
+def matlab_dump_env(args: argparse.Namespace) -> dict[str, str]:
+    env = os.environ.copy()
+    env["GNSSPP_TAROZ_ROOT"] = str(repo_relative_path(args.taroz_root).resolve())
+    env["GNSSPP_TAROZ_PC_EXAMPLE_DIR"] = str(
+        repo_relative_path(matlab_example_dir(args)).resolve()
+    )
+    env["GNSSPP_TAROZ_PC_OUT_DIR"] = str(matlab_output_dir(args))
+    return env
+
+
+def validate_matlab_dump_inputs(args: argparse.Namespace) -> None:
+    missing = [
+        path
+        for path in (
+            args.matlab_dump_script,
+            args.taroz_root,
+            matlab_example_dir(args),
+        )
+        if not repo_relative_path(path).exists()
+    ]
+    if missing:
+        joined = ", ".join(str(path) for path in missing)
+        raise SystemExit(f"missing taroz PC MATLAB oracle input path(s): {joined}")
 
 
 def run_command(command: list[str], *, env: dict[str, str] | None = None) -> int:
@@ -261,7 +309,7 @@ def run_parity(args: argparse.Namespace, out_dir: Path) -> int:
     env = os.environ.copy()
     env["GNSSPP_TAROZ_PC_CPP_DIR"] = str(out_dir)
     env["GNSSPP_TAROZ_PC_CPP_LAMBDA_DIR"] = str(out_dir)
-    env["GNSSPP_TAROZ_PC_MATLAB_DIR"] = str(args.matlab_dir)
+    env["GNSSPP_TAROZ_PC_MATLAB_DIR"] = str(matlab_output_dir(args))
     return run_command([sys.executable, str(args.parity_test)], env=env)
 
 
@@ -301,6 +349,38 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Extra single argument passed to gnss_fgo. Repeat for multiple tokens.",
     )
     parser.add_argument("--matlab-dir", type=Path, default=DEFAULT_MATLAB_DIR)
+    parser.add_argument(
+        "--generate-matlab-dump",
+        action="store_true",
+        help=(
+            "Run the taroz MATLAB PC dump script before C++ and parity checks, "
+            "so --matlab-dir is regenerated from the reference implementation."
+        ),
+    )
+    parser.add_argument(
+        "--matlab-bin",
+        type=Path,
+        default=Path("matlab"),
+        help="MATLAB executable used with --generate-matlab-dump.",
+    )
+    parser.add_argument(
+        "--taroz-root",
+        type=Path,
+        default=DEFAULT_TAROZ_ROOT,
+        help="Root of the taroz/PPC-Dataset MATLAB checkout.",
+    )
+    parser.add_argument(
+        "--taroz-example-dir",
+        type=Path,
+        default=None,
+        help="Directory containing the taroz MATLAB example (default: <taroz-root>/examples).",
+    )
+    parser.add_argument(
+        "--matlab-dump-script",
+        type=Path,
+        default=DEFAULT_MATLAB_DUMP_SCRIPT,
+        help="MATLAB script that exports the taroz PC oracle CSVs.",
+    )
     parser.add_argument("--parity-test", type=Path, default=DEFAULT_PARITY_TEST)
     parser.add_argument("--skip-parity", action="store_true")
     parser.add_argument("--baseline-cpp-dir", type=Path, default=DEFAULT_BASELINE_CPP_DIR)
@@ -330,6 +410,17 @@ def main(argv: list[str] | None = None) -> int:
         "out_dir": str(out_dir),
         "outputs": {name: str(path) for name, path in paths.items()},
         "harness_summary_json": str(harness_summary),
+        "matlab_dir": str(args.matlab_dir),
+        "matlab_dump": {
+            "enabled": args.generate_matlab_dump,
+            "command": build_matlab_dump_command(args)
+            if args.generate_matlab_dump
+            else None,
+            "dump_script": str(args.matlab_dump_script),
+            "taroz_root": str(args.taroz_root),
+            "example_dir": str(matlab_example_dir(args)),
+            "out_dir": str(matlab_output_dir(args)),
+        },
         "expected": {
             "preset": "taroz-pc",
             "backend": "gtsam-pc",
@@ -344,12 +435,26 @@ def main(argv: list[str] | None = None) -> int:
         payload["status"] = "dry-run"
         write_run_summary(harness_summary, payload)
         print("Dry run. Planned taroz PC dogfood command:")
+        if args.generate_matlab_dump:
+            print(" ".join(payload["matlab_dump"]["command"]))
         print(" ".join(command))
         print(f"Harness summary: {harness_summary}")
         return 0
 
     validate_inputs(args)
+    if args.generate_matlab_dump:
+        validate_matlab_dump_inputs(args)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.generate_matlab_dump:
+        matlab_output_dir(args).mkdir(parents=True, exist_ok=True)
+        matlab_command = build_matlab_dump_command(args)
+        matlab_returncode = run_command(matlab_command, env=matlab_dump_env(args))
+        payload["matlab_dump"]["returncode"] = matlab_returncode
+        if matlab_returncode != 0:
+            payload["status"] = "failed"
+            write_run_summary(harness_summary, payload)
+            return matlab_returncode
 
     fgo_returncode = run_command(command)
     payload["fgo_returncode"] = fgo_returncode
@@ -369,8 +474,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Error: {failure}", file=sys.stderr)
         return 1
 
-    if args.no_byte_compare:
-        payload["byte_comparison"] = {"status": "skipped"}
+    if args.no_byte_compare or args.generate_matlab_dump:
+        reason = (
+            "disabled by --no-byte-compare"
+            if args.no_byte_compare
+            else "generated MATLAB oracle requested"
+        )
+        payload["byte_comparison"] = {"status": "skipped", "reason": reason}
     else:
         byte_comparison = compare_file_pairs(
             out_dir,
