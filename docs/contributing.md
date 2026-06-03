@@ -49,7 +49,9 @@ Keep taroz FGO validation split by cost:
 
 - Light unit coverage belongs in CTest, such as `python_ppc_taroz_amb_pdc_smoke_tests`
   dry-run checks and focused C++ factor tests.
-- Heavy local checks include `python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood`,
+- Heavy local checks include
+  `python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood --generate-matlab-dump`
+  when MATLAB and the taroz checkout are available,
   `python3 apps/gnss.py ppc-taroz-amb-pdc-smoke --max-epochs 200 --generate-spp-seed`,
   and optional MATLAB/taroz parity tests when their external artifacts are present.
 - External PPC-Dataset runs are dataset-gated and should not be required for the

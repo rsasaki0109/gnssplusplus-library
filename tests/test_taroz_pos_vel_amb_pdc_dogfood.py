@@ -73,6 +73,10 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
             obs, base, nav, seed_pos = self.touch_inputs(temp_root)
             summary_json = temp_root / "summary.json"
             out_dir = temp_root / "out"
+            taroz_root = temp_root / "taroz"
+            taroz_example_dir = taroz_root / "examples"
+            matlab_dump_script = temp_root / "dump_taroz.m"
+            matlab_dir = temp_root / "matlab_oracle"
 
             result = gnss_taroz_pos_vel_amb_pdc_dogfood.main(
                 [
@@ -90,6 +94,17 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
                     str(summary_json),
                     "--fgo-bin",
                     str(temp_root / "gnss_fgo"),
+                    "--generate-matlab-dump",
+                    "--matlab-bin",
+                    str(temp_root / "matlab"),
+                    "--taroz-root",
+                    str(taroz_root),
+                    "--taroz-example-dir",
+                    str(taroz_example_dir),
+                    "--matlab-dump-script",
+                    str(matlab_dump_script),
+                    "--matlab-dir",
+                    str(matlab_dir),
                     "--dry-run",
                 ]
             )
@@ -97,7 +112,16 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
             self.assertEqual(result, 0)
             payload = json.loads(summary_json.read_text(encoding="utf-8"))
             command = payload["fgo_command"]
+            matlab_dump = payload["matlab_dump"]
             self.assertEqual(payload["status"], "dry-run")
+            self.assertTrue(matlab_dump["enabled"])
+            self.assertEqual(matlab_dump["dump_script"], str(matlab_dump_script))
+            self.assertEqual(matlab_dump["taroz_root"], str(taroz_root))
+            self.assertEqual(matlab_dump["example_dir"], str(taroz_example_dir))
+            self.assertEqual(matlab_dump["out_dir"], str(matlab_dir))
+            self.assertEqual(matlab_dump["command"][0], str(temp_root / "matlab"))
+            self.assertEqual(matlab_dump["command"][1], "-batch")
+            self.assertIn(str(matlab_dump_script), matlab_dump["command"][2])
             self.assertIn("--preset", command)
             self.assertIn("taroz-amb-pdc", command)
             self.assertIn("--base", command)
@@ -108,6 +132,36 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
             self.assertIn("--max-float-position-jump", command)
             self.assertEqual(payload["expected"]["counts"]["fixed_solutions"], 721)
             self.assertEqual(payload["expected"]["counts"]["float_solutions"], 243)
+
+    def test_matlab_dump_env_uses_requested_oracle_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_taroz_amb_pdc_dogfood_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            args = gnss_taroz_pos_vel_amb_pdc_dogfood.parse_args(
+                [
+                    "--generate-matlab-dump",
+                    "--taroz-root",
+                    str(temp_root / "taroz"),
+                    "--taroz-example-dir",
+                    str(temp_root / "taroz" / "examples"),
+                    "--matlab-dir",
+                    str(temp_root / "matlab_oracle"),
+                ]
+            )
+
+            env = gnss_taroz_pos_vel_amb_pdc_dogfood.matlab_dump_env(args)
+
+            self.assertEqual(
+                env["GNSSPP_TAROZ_ROOT"],
+                str(temp_root / "taroz"),
+            )
+            self.assertEqual(
+                env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR"],
+                str(temp_root / "taroz" / "examples"),
+            )
+            self.assertEqual(
+                env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR"],
+                str(temp_root / "matlab_oracle"),
+            )
 
     def test_native_summary_accepts_canonical_full_run(self) -> None:
         failures = gnss_taroz_pos_vel_amb_pdc_dogfood.verify_native_summary(
