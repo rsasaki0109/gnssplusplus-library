@@ -190,6 +190,16 @@ def epoch_debug_velocity_error_mps(
     return math.sqrt(dx * dx + dy * dy + dz * dz)
 
 
+def seed_position_error_m(
+    cpp_row: dict[str, str],
+    taroz_row: dict[str, str],
+) -> float:
+    dx = float(cpp_row["seed_position_x_m"]) - float(taroz_row["spp_x_m"])
+    dy = float(cpp_row["seed_position_y_m"]) - float(taroz_row["spp_y_m"])
+    dz = float(cpp_row["seed_position_z_m"]) - float(taroz_row["spp_z_m"])
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+
 def lambda_diffs(
     keys: list[tuple[int, int, int, int, str, str]],
     cpp_rows: dict[tuple[int, int, int, int, str, str], dict[str, str]],
@@ -262,6 +272,23 @@ class TarozPosVelAmbPdcFactorParityTest(unittest.TestCase):
                 int(row["ambiguity_candidates"]),
                 int(float(taroz_epoch_rows[key]["candidate_count"])),
             )
+
+    def test_seed_positions_match_taroz_spp_seed_dump(self) -> None:
+        cpp_epoch_path = CPP_DIR / "epoch_debug.csv"
+        taroz_epoch_path = MATLAB_DIR / "per_epoch_state.csv"
+        self.require_dogfood_files(cpp_epoch_path, taroz_epoch_path)
+
+        cpp_rows = keyed_epoch_rows(cpp_epoch_path)
+        taroz_rows = keyed_epoch_rows(taroz_epoch_path)
+        self.assertEqual(set(cpp_rows), set(taroz_rows))
+
+        errors = [
+            seed_position_error_m(cpp_rows[key], taroz_rows[key])
+            for key in sorted(cpp_rows)
+        ]
+        self.assertEqual(len(errors), 1141)
+        self.assertLessEqual(statistics.mean(errors), 1e-6)
+        self.assertLessEqual(max(errors), 1e-6)
 
     def test_raw_dd_factors_match_taroz_dump(self) -> None:
         cpp_factor_path = CPP_DIR / "factor_debug.csv"
