@@ -584,6 +584,38 @@ python3 scripts/generate_ppc_tail_cleanup_scorecard.py \
   --output docs/ppc_tail_cleanup_scorecard.png
 ```
 
+### Taroz Ambiguity PDC FGO Dogfood
+
+The taroz ambiguity PDC FGO port uses a separate PPC harness so public-run
+behavior can be checked without changing the RTK sign-off flow:
+
+```bash
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --max-epochs 20
+
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --max-epochs 200 \
+  --generate-spp-seed \
+  --require-valid-p95-3d-max 2.0 \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_smoke_200/summary.json
+
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --run nagoya/run3 \
+  --skip-epochs 400 \
+  --max-epochs 200 \
+  --generate-spp-seed \
+  --require-valid-p95-3d-max 2.0 \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_shifted/summary.json
+```
+
+The 20-epoch form is intended as a lightweight smoke. The 200-epoch and shifted
+window forms are local dogfood checks for longer behavior, especially runs such
+as `nagoya/run3` where the first 20 epochs can remain FLOAT before later
+fixed-ambiguity epochs appear.
+
 ### Multi-candidate selector matrix (6-run)
 
 `scripts/run_ppc_multi_candidate_selector_matrix.py` drives
