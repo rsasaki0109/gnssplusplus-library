@@ -128,6 +128,7 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
             self.assertIn("--factor-debug-csv", command)
             self.assertIn("--sd-factor-debug-csv", command)
             self.assertIn("--lambda-debug-csv", command)
+            self.assertIn("--cost-trace-csv", command)
             self.assertIn("--max-float-seed-divergence", command)
             self.assertIn("--max-float-position-jump", command)
             self.assertEqual(payload["expected"]["counts"]["fixed_solutions"], 721)

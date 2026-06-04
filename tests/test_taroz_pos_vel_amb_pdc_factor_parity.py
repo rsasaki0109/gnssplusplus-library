@@ -44,6 +44,10 @@ CPP_OPT_LAMBDA_DEBUG = configured_path(
     "GNSSPP_TAROZ_POS_VEL_AMB_PDC_CPP_OPT_LAMBDA_DEBUG",
     "output/dogfood/taroz_pos_vel_amb_pdc_current/lambda_debug.csv",
 )
+CPP_OPT_COST_TRACE = configured_path(
+    "GNSSPP_TAROZ_POS_VEL_AMB_PDC_CPP_OPT_COST_TRACE",
+    "output/dogfood/taroz_pos_vel_amb_pdc_current/cost_trace.csv",
+)
 
 
 def display_path(path: Path) -> str:
@@ -349,6 +353,41 @@ class TarozPosVelAmbPdcFactorParityTest(unittest.TestCase):
                 float(summary["final_cost"]),
                 float(taroz_graph["final_cost"]),
             ),
+            0.30,
+        )
+
+    def test_cost_trace_matches_summary_and_taroz_graph_costs(self) -> None:
+        summary_path = CPP_DIR / "summary.json"
+        taroz_graph_path = MATLAB_DIR / "graph_detail.csv"
+        self.require_dogfood_files(summary_path, CPP_OPT_COST_TRACE, taroz_graph_path)
+
+        summary = read_json(summary_path)
+        rows = read_rows(CPP_OPT_COST_TRACE)
+        taroz_graph = read_rows(taroz_graph_path)[0]
+
+        self.assertGreater(len(rows), 0)
+        self.assertEqual(rows[0]["phase"], "float")
+        self.assertEqual(int(rows[0]["local_iteration"]), 0)
+        self.assertEqual(int(rows[0]["global_iteration"]), 0)
+        self.assertTrue(all(row["phase"] in {"float", "fixed"} for row in rows))
+        self.assertTrue(all(math.isfinite(float(row["cost"])) for row in rows))
+        self.assertTrue(all(float(row["cost"]) >= 0.0 for row in rows))
+
+        global_iterations = [int(row["global_iteration"]) for row in rows]
+        self.assertEqual(global_iterations, sorted(global_iterations))
+        self.assertEqual(len(global_iterations), len(set(global_iterations)))
+        phase_count = len({row["phase"] for row in rows})
+        self.assertLessEqual(len(rows), int(summary["iterations"]) + phase_count)
+
+        self.assertEqual(float(rows[0]["cost"]), float(summary["initial_cost"]))
+        self.assertEqual(float(rows[-1]["cost"]), float(summary["final_cost"]))
+        self.assertLess(float(rows[-1]["cost"]), float(rows[0]["cost"]))
+        self.assertLess(
+            float(taroz_graph["final_cost"]),
+            float(taroz_graph["initial_cost"]),
+        )
+        self.assertLessEqual(
+            relative_error(float(rows[-1]["cost"]), float(taroz_graph["final_cost"])),
             0.30,
         )
 
