@@ -136,6 +136,83 @@ Eigen::MatrixXd pseudoInverse(const Eigen::MatrixXd& matrix, double tolerance = 
     return svd.matrixV() * inverse_values.asDiagonal() * svd.matrixU().transpose();
 }
 
+double seedPositionDivergenceMeters(
+    const Vector3d& position_ecef,
+    const FGOProcessor::EpochSeed& seed) {
+    if (!position_ecef.allFinite() || !seed.position_ecef.allFinite() ||
+        seed.position_ecef.norm() <= 1e6) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    return (position_ecef - seed.position_ecef).norm();
+}
+
+bool applyFloatSeedPositionDivergenceGate(
+    PositionSolution& solution,
+    const FGOProcessor::FGOProblem& problem,
+    std::size_t epoch_index,
+    double max_divergence_m,
+    std::size_t& rejected_count) {
+    if (solution.status != SolutionStatus::FLOAT ||
+        !std::isfinite(max_divergence_m) || max_divergence_m <= 0.0) {
+        return false;
+    }
+    if (!solution.position_ecef.allFinite()) {
+        solution.status = SolutionStatus::NONE;
+        ++rejected_count;
+        return true;
+    }
+    if (epoch_index >= problem.epochs.size()) {
+        return false;
+    }
+
+    const double divergence_m =
+        seedPositionDivergenceMeters(solution.position_ecef,
+                                     problem.epochs[epoch_index]);
+    if (std::isfinite(divergence_m) && divergence_m > max_divergence_m) {
+        solution.status = SolutionStatus::NONE;
+        ++rejected_count;
+        return true;
+    }
+    return false;
+}
+
+bool applyFloatPositionJumpGate(
+    PositionSolution& solution,
+    const Vector3d& previous_output_position,
+    bool has_previous_output_position,
+    double max_jump_m,
+    bool& block_float_until_fixed,
+    std::size_t& rejected_count) {
+    if (!std::isfinite(max_jump_m) || max_jump_m <= 0.0) {
+        return false;
+    }
+    if (solution.status == SolutionStatus::FIXED) {
+        block_float_until_fixed = false;
+        return false;
+    }
+    if (solution.status != SolutionStatus::FLOAT) {
+        return false;
+    }
+
+    bool reject = block_float_until_fixed;
+    if (has_previous_output_position &&
+        solution.position_ecef.allFinite() &&
+        previous_output_position.allFinite()) {
+        const double jump_m =
+            (solution.position_ecef - previous_output_position).norm();
+        if (std::isfinite(jump_m) && jump_m > max_jump_m) {
+            reject = true;
+            block_float_until_fixed = true;
+        }
+    }
+    if (reject) {
+        solution.status = SolutionStatus::NONE;
+        ++rejected_count;
+        return true;
+    }
+    return false;
+}
+
 struct DoubleDifferencePrediction {
     bool valid = false;
     double geometry_m = 0.0;
@@ -3591,6 +3668,9 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         result.epoch_velocities_ecef_mps.resize(static_cast<std::size_t>(num_epochs));
     }
 
+    Vector3d previous_output_position = Vector3d::Zero();
+    bool has_previous_output_position = false;
+    bool block_float_until_fixed = false;
     for (int i = 0; i < num_epochs; ++i) {
         const int epoch_col = epoch_state_col(static_cast<std::size_t>(i));
         PositionSolution solution;
@@ -3710,6 +3790,20 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
             }
         }
 
+        applyFloatPositionJumpGate(
+            solution,
+            previous_output_position,
+            has_previous_output_position,
+            config_.max_float_position_jump_m,
+            block_float_until_fixed,
+            result.diagnostics.float_rejected_position_jump);
+        applyFloatSeedPositionDivergenceGate(
+            solution,
+            problem,
+            static_cast<std::size_t>(i),
+            config_.max_float_seed_position_divergence_m,
+            result.diagnostics.float_rejected_seed_position_divergence);
+
         if (covariance.rows() == state_size) {
             solution.position_covariance =
                 covariance.block<3, 3>(epoch_col, epoch_col) *
@@ -3717,6 +3811,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         }
 
         result.solution.addSolution(solution);
+        previous_output_position = solution.position_ecef;
+        has_previous_output_position = true;
 
         if (use_velocity_states) {
             const int velocity_col = velocity_state_col(static_cast<std::size_t>(i));

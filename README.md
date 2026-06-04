@@ -458,6 +458,12 @@ python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
   --summary-json output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_shifted/summary.json
 ```
 
+The `taroz-amb-pdc` preset keeps FLOAT output guards enabled by default:
+FLOAT epochs more than 100 m from the seed, or jumping more than 100 m from the
+previous raw output, are written as no-solution. The summary reports
+`float_rejected_seed_position_divergence` and
+`float_rejected_position_jump`.
+
 Other benchmark artifacts and checked sign-offs are documented in
 [Benchmarks](docs/benchmarks.md) and [Validation](docs/validation.md).
 
