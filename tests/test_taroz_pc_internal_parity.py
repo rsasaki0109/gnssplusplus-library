@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import csv
+from collections import Counter
 import json
 import math
 import os
 from pathlib import Path
 import unittest
+from typing import Any
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -80,6 +82,42 @@ def read_pos_by_tow(path: Path) -> dict[int, tuple[float, float, float, int]]:
     return rows
 
 
+def read_pos_details_by_tow(path: Path) -> dict[int, dict[str, float | int]]:
+    rows: dict[int, dict[str, float | int]] = {}
+    with path.open(encoding="ascii", errors="ignore") as handle:
+        for line in handle:
+            if not line.strip() or line.startswith("%"):
+                continue
+            parts = line.split()
+            rows[round(float(parts[1]))] = {
+                "gps_week": int(float(parts[0])),
+                "gps_tow": float(parts[1]),
+                "x": float(parts[2]),
+                "y": float(parts[3]),
+                "z": float(parts[4]),
+                "status": int(float(parts[8])),
+                "satellites": int(float(parts[9])),
+                "ratio": float(parts[11]),
+                "fixed_ambiguities": int(float(parts[12])),
+                "iterations": int(float(parts[13])),
+            }
+    return rows
+
+
+def delimited_count(value: str) -> int:
+    return len([part for part in value.split(";") if part])
+
+
+def pos_epoch_debug_ecef_error_m(
+    pos_row: dict[str, float | int],
+    epoch_row: dict[str, str],
+) -> float:
+    dx = float(pos_row["x"]) - float(epoch_row["position_x_m"])
+    dy = float(pos_row["y"]) - float(epoch_row["position_y_m"])
+    dz = float(pos_row["z"]) - float(epoch_row["position_z_m"])
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+
 class TarozPcInternalParityTest(unittest.TestCase):
     def require_dogfood_files(self, *paths: Path) -> None:
         missing = [str(path.relative_to(ROOT_DIR)) for path in paths if not path.exists()]
@@ -132,6 +170,62 @@ class TarozPcInternalParityTest(unittest.TestCase):
         self.assertLessEqual(sum(ratio_diffs) / len(ratio_diffs), 0.004)
         self.assertLessEqual(max(ratio_diffs), 0.07)
         self.assertLessEqual(max(same_status_position_diffs), 0.01)
+
+    def test_final_pos_file_matches_epoch_debug_output_contract(self) -> None:
+        cpp_epoch_path = CPP_DIR / "fgo_taroz_pc_gtsam_fixed_epoch_debug.csv"
+        cpp_pos_path = CPP_DIR / "fgo_taroz_pc_gtsam_fixed.pos"
+        cpp_summary_path = CPP_DIR / "fgo_taroz_pc_gtsam_fixed_summary.json"
+        self.require_dogfood_files(cpp_epoch_path, cpp_pos_path, cpp_summary_path)
+
+        cpp_epochs = read_csv_by_tow(cpp_epoch_path)
+        cpp_positions = read_pos_details_by_tow(cpp_pos_path)
+        with cpp_summary_path.open() as handle:
+            summary: dict[str, Any] = json.load(handle)
+
+        self.assertEqual(set(cpp_positions), set(cpp_epochs))
+        self.assertEqual(len(cpp_positions), int(summary["optimized_epochs"]))
+        self.assertEqual(
+            Counter(int(row["status"]) for row in cpp_positions.values()),
+            Counter(int(row["status"]) for row in cpp_epochs.values()),
+        )
+        self.assertEqual(
+            Counter(int(row["iterations"]) for row in cpp_positions.values()),
+            Counter({int(summary["iterations"]): len(cpp_positions)}),
+        )
+
+        position_errors: list[float] = []
+        ratio_diffs: list[float] = []
+        for tow, pos_row in cpp_positions.items():
+            epoch_row = cpp_epochs[tow]
+            self.assertEqual(int(pos_row["status"]), int(epoch_row["status"]))
+            self.assertGreaterEqual(
+                int(pos_row["satellites"]),
+                delimited_count(epoch_row["dd_satellites"]),
+            )
+            self.assertEqual(
+                int(pos_row["fixed_ambiguities"]),
+                int(epoch_row["num_fixed_ambiguities"]),
+            )
+            if int(pos_row["status"]) == 3:
+                self.assertEqual(int(pos_row["fixed_ambiguities"]), 0)
+            else:
+                self.assertEqual(int(pos_row["status"]), 4)
+                self.assertGreater(int(pos_row["fixed_ambiguities"]), 0)
+
+            if all(
+                column in epoch_row
+                for column in ("position_x_m", "position_y_m", "position_z_m")
+            ):
+                position_errors.append(
+                    pos_epoch_debug_ecef_error_m(pos_row, epoch_row)
+                )
+            ratio_diffs.append(
+                abs(float(pos_row["ratio"]) - float(epoch_row["ratio"]))
+            )
+
+        if position_errors:
+            self.assertLessEqual(max(position_errors), 2e-6)
+        self.assertLessEqual(max(ratio_diffs), 5e-7)
 
     def test_factor_residuals_match_taroz_per_satellite_dump(self) -> None:
         cpp_factor_path = CPP_DIR / "fgo_taroz_pc_gtsam_fixed_factor_debug.csv"
