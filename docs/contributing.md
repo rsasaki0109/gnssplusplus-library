@@ -48,7 +48,11 @@ Docs-only changes keep CI on the lightweight path: hygiene here, plus the separa
 Keep taroz FGO validation split by cost:
 
 - Light unit coverage belongs in CTest, such as `python_ppc_taroz_amb_pdc_smoke_tests`
-  dry-run checks and focused C++ factor tests.
+  dry-run checks, dogfood argument/summary smoke tests, and focused C++ factor
+  tests.
+- Optional artifact parity tests also live in CTest. They must skip cleanly
+  when local `output/dogfood/...` MATLAB-oracle artifacts are absent, and they
+  become strict checks after a developer regenerates those artifacts.
 - Heavy local checks include
   `python3 apps/gnss.py taroz-oracle-suite --native-bin-dir build/apps`
   for the consolidated taroz MATLAB-oracle gate,
@@ -60,6 +64,10 @@ Keep taroz FGO validation split by cost:
   when MATLAB and the taroz checkout are available,
   `python3 apps/gnss.py ppc-taroz-amb-pdc-smoke --max-epochs 200 --generate-spp-seed`,
   and optional MATLAB/taroz parity tests when their external artifacts are present.
+- Taroz final-output contract tests should be updated with every new dogfood
+  output surface. At minimum, tie the final CSV/`.pos` rows to summary counts,
+  graph value counts, optimizer cost fields, GPS week/TOW ordering, and finite
+  state columns.
 - External PPC-Dataset runs are dataset-gated and should not be required for the
   cross-platform CI lane unless a dedicated optional job provides the data.
 

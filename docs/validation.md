@@ -186,12 +186,59 @@ no-solution and counted in the summary JSON as
 
 The beta scope is intentionally narrow. The C++ path covers generated SPP
 seeding, double-difference FGO, FLOAT/FIXED output, and diagnostic summaries for
-the PPC `amb-pdc` workflow. The P, D, position PD/PDC, position/velocity PD/PDC,
-PC, and ambiguity PDC dogfood harnesses can also regenerate taroz MATLAB oracle
-dumps with `--generate-matlab-dump` and run the matching optional parity tests
-locally. A complete taroz port still needs broader MATLAB dump parity for
-intermediate seed state, ambiguity candidates, solver costs, and final epoch
-output across more taroz modes.
+the PPC `amb-pdc` workflow. The MATLAB-oracle dogfood harnesses cover the
+ported taroz modes below. Their final-output contract tests pin the emitted
+epoch count, GPS time sequence, summary/graph counts, optimizer cost fields, and
+finite state columns so output regressions are caught even when full MATLAB
+parity artifacts are not checked into the repository.
+
+| Mode | Dogfood entrypoint | Main output contract |
+|---|---|---|
+| P | `taroz-p-dogfood` | `fgo_taroz_p.pos`, epoch debug CSV, and summary counts |
+| D | `taroz-observable-dogfood --mode d` | `per_epoch_vel.csv`, `graph_detail.csv`, and summary counts/cost |
+| PD | `taroz-pd-dogfood` | `per_epoch_state.csv`, `graph_detail.csv`, and summary counts/cost |
+| position PD | `taroz-observable-dogfood --mode pos-pd` | position/clock `per_epoch_state.csv` and graph/summary counts |
+| position PDC | `taroz-observable-dogfood --mode pos-pdc` | position/clock `per_epoch_state.csv` and graph/summary counts |
+| position/velocity PDC | `taroz-observable-dogfood --mode pos-vel-pdc` | position/velocity/clock `per_epoch_state.csv` and graph/summary counts |
+| PC | `taroz-pc-dogfood` | final `.pos`, epoch debug, factor debug, LAMBDA debug, and summary counts |
+| position/velocity ambiguity PDC | `taroz-pos-vel-amb-pdc-dogfood` | epoch debug, factor debug, SD factor debug, LAMBDA debug, and summary counts |
+
+Use the suite entrypoint for a broad local gate:
+
+```bash
+python3 apps/gnss.py taroz-oracle-suite \
+  --native-bin-dir build/apps \
+  --out-root output/dogfood/taroz_oracle_suite_current
+```
+
+Add `--generate-matlab-dump --taroz-root /path/to/taroz_gtsam_gnss` when
+MATLAB and the taroz checkout are available. The taroz MATLAB example directory
+must have the dependencies expected by taroz itself, including the GTSAM MATLAB
+toolbox and `readobs` path. Use `--taroz-example-dir` when those example files
+do not live under `<taroz-root>/examples`.
+
+Run a focused mode when isolating a regression:
+
+```bash
+python3 apps/gnss.py taroz-p-dogfood --generate-matlab-dump
+python3 apps/gnss.py taroz-pd-dogfood --generate-matlab-dump
+python3 apps/gnss.py taroz-pc-dogfood --generate-matlab-dump
+python3 apps/gnss.py taroz-observable-dogfood --mode pos-pdc --generate-matlab-dump
+python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood --generate-matlab-dump
+```
+
+The matching CTest parity tests are optional-artifact tests: they skip cleanly
+when the local `output/dogfood/...` oracle files are absent and become strict
+regressions after a dogfood run has generated them.
+
+```bash
+ctest --test-dir build-codex -R 'python_taroz_.*(internal_parity|factor_parity)_tests' --output-on-failure
+```
+
+The remaining beta-hardening work is broader than final-output shape: keep
+expanding MATLAB dump parity for intermediate seed state, ambiguity candidate
+selection, solver cost trajectories, and longer PPC-Dataset windows before
+treating the taroz port as complete.
 
 When `--generate-spp-seed` is used, the PPC harness treats the generated seed as
 part of the sign-off. The native summary must report a seed path,
