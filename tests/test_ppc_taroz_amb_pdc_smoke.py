@@ -16,8 +16,21 @@ sys.path.insert(0, str(APPS_DIR))
 
 import gnss_ppc_taroz_amb_pdc_smoke  # noqa: E402
 
+FULL_SEED_SUMMARY = (
+    ROOT_DIR / "output/dogfood/ppc_taroz_amb_pdc_smoke_200_seed_current/summary.json"
+)
+SHIFTED_NAGOYA_RUN3_SEED_SUMMARY = (
+    ROOT_DIR
+    / "output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_shifted_seed_current/summary.json"
+)
+
 
 class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
+    def require_summary(self, path: Path) -> dict[str, object]:
+        if not path.exists():
+            self.skipTest(f"missing optional PPC taroz dogfood summary: {path}")
+        return json.loads(path.read_text(encoding="utf-8"))
+
     def make_run(self, root: Path, spec: str) -> Path:
         site, run_name = spec.split("/")
         run_dir = root / site / run_name
@@ -234,6 +247,77 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
                 "fixed p95_3d_error_m 0.750000 > 0.5",
             ],
         )
+
+    def test_optional_200_epoch_generated_seed_summary_contract(self) -> None:
+        payload = self.require_summary(FULL_SEED_SUMMARY)
+
+        expected_runs = {
+            "nagoya/run1",
+            "nagoya/run2",
+            "nagoya/run3",
+            "tokyo/run1",
+            "tokyo/run2",
+            "tokyo/run3",
+        }
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["failures"], [])
+        self.assertEqual(payload["max_epochs"], 200)
+        self.assertEqual(payload["skip_epochs"], 0)
+        self.assertTrue(payload["generate_spp_seed"])
+        self.assertEqual(set(payload["runs"]), expected_runs)
+
+        for run_name, run_payload in payload["runs"].items():
+            native = run_payload["native_summary"]
+            reference = run_payload["reference_summary"]
+            self.assertEqual(run_payload["status"], "ok", run_name)
+            self.assertEqual(run_payload["failures"], [], run_name)
+            self.assertEqual(native["preset"], "taroz-amb-pdc", run_name)
+            self.assertEqual(native["backend"], "eigen", run_name)
+            self.assertTrue(native["converged"], run_name)
+            self.assertEqual(native["optimized_epochs"], 200, run_name)
+            self.assertEqual(native["valid_solutions"], 200, run_name)
+            self.assertEqual(native["seed_matched_epochs"], 200, run_name)
+            self.assertEqual(native["seed_interpolated_epochs"], 0, run_name)
+            self.assertEqual(native["lambda_ambiguity_attempts"], 200, run_name)
+            self.assertGreater(native["double_difference_carrier_factors"], 0, run_name)
+            self.assertEqual(reference["matched_epochs"], 200, run_name)
+            self.assertLessEqual(reference["p95_3d_error_m"], 2.0, run_name)
+            self.assertLessEqual(reference["max_3d_error_m"], 2.0, run_name)
+
+        nagoya_run3 = payload["runs"]["nagoya/run3"]["native_summary"]
+        self.assertEqual(nagoya_run3["fixed_solutions"], 18)
+        self.assertEqual(nagoya_run3["float_solutions"], 182)
+        self.assertLessEqual(nagoya_run3["fix_rate_percent"], 10.0)
+
+    def test_optional_nagoya_run3_shifted_window_summary_contract(self) -> None:
+        full_payload = self.require_summary(FULL_SEED_SUMMARY)
+        shifted_payload = self.require_summary(SHIFTED_NAGOYA_RUN3_SEED_SUMMARY)
+
+        self.assertEqual(shifted_payload["status"], "ok")
+        self.assertEqual(shifted_payload["failures"], [])
+        self.assertEqual(shifted_payload["max_epochs"], 200)
+        self.assertEqual(shifted_payload["skip_epochs"], 400)
+        self.assertTrue(shifted_payload["generate_spp_seed"])
+        self.assertEqual(set(shifted_payload["runs"]), {"nagoya/run3"})
+
+        initial_native = full_payload["runs"]["nagoya/run3"]["native_summary"]
+        shifted_run = shifted_payload["runs"]["nagoya/run3"]
+        shifted_native = shifted_run["native_summary"]
+        shifted_reference = shifted_run["reference_summary"]
+
+        self.assertEqual(shifted_run["status"], "ok")
+        self.assertEqual(shifted_run["failures"], [])
+        self.assertEqual(shifted_native["optimized_epochs"], 200)
+        self.assertEqual(shifted_native["valid_solutions"], 200)
+        self.assertEqual(shifted_native["seed_matched_epochs"], 200)
+        self.assertEqual(shifted_native["seed_interpolated_epochs"], 0)
+        self.assertEqual(shifted_native["lambda_ambiguity_attempts"], 200)
+        self.assertGreater(shifted_native["fixed_solutions"], initial_native["fixed_solutions"])
+        self.assertGreaterEqual(shifted_native["fixed_solutions"], 160)
+        self.assertLessEqual(shifted_native["float_solutions"], 40)
+        self.assertEqual(shifted_reference["matched_epochs"], 200)
+        self.assertLessEqual(shifted_reference["p95_3d_error_m"], 2.0)
+        self.assertLessEqual(shifted_reference["max_3d_error_m"], 2.0)
 
 
 if __name__ == "__main__":
