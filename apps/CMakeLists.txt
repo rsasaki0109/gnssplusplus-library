@@ -93,6 +93,7 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_taroz_p_dogfood.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_taroz_pd_dogfood.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_taroz_pc_dogfood.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_taroz_observable_dogfood.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_taroz_pos_vel_amb_pdc_dogfood.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_live_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_moving_base_signoff.py
