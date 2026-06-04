@@ -469,9 +469,10 @@ previous raw output, are written as no-solution. The summary reports
 `float_rejected_seed_position_divergence` and
 `float_rejected_position_jump`.
 
-The single-receiver P/PD and ambiguity PDC dogfood harnesses can regenerate the
-taroz MATLAB oracle before running C++ parity. Point `--taroz-root` at a taroz
-checkout with `gtsam` and `readobs` on the MATLAB path:
+The single-receiver P, D, position PD/PDC, position/velocity PD/PDC, and
+ambiguity PDC dogfood harnesses can regenerate the taroz MATLAB oracle before
+running C++ parity. Point `--taroz-root` at a taroz checkout whose `gtsam` and
+`readobs` dependencies are available to MATLAB:
 
 ```bash
 python3 apps/gnss.py taroz-pd-dogfood \
@@ -479,6 +480,13 @@ python3 apps/gnss.py taroz-pd-dogfood \
   --taroz-root /tmp/taroz_gtsam_gnss \
   --out-dir output/dogfood/taroz_pd_dogfood_current \
   --matlab-dir output/dogfood/taroz_matlab_pd_debug
+
+python3 apps/gnss.py taroz-observable-dogfood \
+  --mode pos-pdc \
+  --generate-matlab-dump \
+  --taroz-root /tmp/taroz_gtsam_gnss \
+  --out-dir output/dogfood/taroz_pos_pdc_dogfood_current \
+  --matlab-dir output/dogfood/taroz_matlab_pos_pdc_debug
 ```
 
 The current beta sign-off is:
@@ -488,11 +496,12 @@ The current beta sign-off is:
   generated SPP seeds and `--require-valid-p95-3d-max 2.0`.
 - Shifted-window guard check: `nagoya/run3 --skip-epochs 400 --max-epochs 200`
   with the same generated SPP seed path.
-- Current MATLAB-oracle dogfood: generated P, PD, and ambiguity PDC dumps are
-  compared against C++ diagnostics locally.
-- Remaining parity work: add generated oracle coverage for the PC/PDC variants
-  and broaden intermediate seed state, ambiguity candidates, solver costs, and
-  final epoch-output checks before calling the port complete.
+- Current MATLAB-oracle dogfood: generated P, D, position PD/PDC,
+  position/velocity PD/PDC, and ambiguity PDC dumps are compared against C++
+  diagnostics locally.
+- Remaining parity work: add generated oracle coverage for the PC mode and
+  broaden intermediate seed state, ambiguity candidates, solver costs, and final
+  epoch-output checks before calling the port complete.
 
 Other benchmark artifacts and checked sign-offs are documented in
 [Benchmarks](docs/benchmarks.md) and [Validation](docs/validation.md).

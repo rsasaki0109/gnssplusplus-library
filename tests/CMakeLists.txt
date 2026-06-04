@@ -105,6 +105,14 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_p_dogfood.py
     )
     add_test(
+        NAME python_taroz_pd_dogfood_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_pd_dogfood.py
+    )
+    add_test(
+        NAME python_taroz_observable_dogfood_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_observable_dogfood.py
+    )
+    add_test(
         NAME python_taroz_p_internal_parity_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_p_internal_parity.py
     )
