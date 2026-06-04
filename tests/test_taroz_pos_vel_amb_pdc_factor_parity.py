@@ -105,6 +105,10 @@ def finite(value: str) -> bool:
         return False
 
 
+def relative_error(actual: float, expected: float) -> float:
+    return abs(actual - expected) / max(1.0, abs(expected))
+
+
 def keyed_cpp_rows(path: Path) -> dict[tuple[int, str, str], dict[str, str]]:
     return {
         (round(float(row["gps_tow"])), row["satellite"], row["reference"]): row
@@ -314,10 +318,25 @@ class TarozPosVelAmbPdcFactorParityTest(unittest.TestCase):
         self.assertEqual(int(summary["float_solutions"]), 243)
         self.assertEqual(int(summary["graph_factors"]), 76357)
         self.assertEqual(int(summary["graph_values"]), 21813)
-        self.assertGreater(int(summary["iterations"]), 0)
-        self.assertGreater(int(float(taroz_graph["iterations"])), 0)
+        self.assertLessEqual(
+            abs(int(summary["iterations"]) - int(float(taroz_graph["iterations"]))),
+            2,
+        )
+        self.assertTrue(math.isfinite(float(summary["initial_cost"])))
         self.assertTrue(math.isfinite(float(summary["final_cost"])))
+        self.assertTrue(math.isfinite(float(taroz_graph["initial_cost"])))
         self.assertTrue(math.isfinite(float(taroz_graph["final_cost"])))
+        self.assertLess(
+            float(summary["final_cost"]),
+            float(taroz_graph["initial_cost"]),
+        )
+        self.assertLessEqual(
+            relative_error(
+                float(summary["final_cost"]),
+                float(taroz_graph["final_cost"]),
+            ),
+            0.30,
+        )
 
     def test_seed_positions_match_taroz_spp_seed_dump(self) -> None:
         cpp_epoch_path = CPP_DIR / "epoch_debug.csv"
