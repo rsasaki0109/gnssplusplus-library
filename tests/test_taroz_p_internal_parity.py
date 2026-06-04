@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+from collections import Counter
 import json
 import math
 import os
@@ -60,6 +61,35 @@ def read_pos_by_tow(path: Path) -> dict[int, tuple[float, float, float, int]]:
                 float(parts[4]),
                 int(float(parts[8])),
             )
+    return rows
+
+
+def read_pos_rows(path: Path) -> list[dict[str, str]]:
+    fields = (
+        "gps_week",
+        "gps_tow",
+        "x_m",
+        "y_m",
+        "z_m",
+        "lat_deg",
+        "lon_deg",
+        "height_m",
+        "status",
+        "satellites",
+        "pdop",
+        "ratio",
+        "fixed_ambiguities",
+        "iterations",
+    )
+    rows: list[dict[str, str]] = []
+    with path.open(encoding="ascii", errors="ignore") as handle:
+        for line in handle:
+            if not line.strip() or line.startswith("%"):
+                continue
+            parts = line.split()
+            if len(parts) != len(fields):
+                raise ValueError(f"unexpected taroz P pos row width in {path}: {line.rstrip()}")
+            rows.append(dict(zip(fields, parts)))
     return rows
 
 
@@ -165,6 +195,79 @@ class TarozPInternalParityTest(unittest.TestCase):
         self.assertLessEqual(sum(position_diffs) / len(position_diffs), 10.0)
         max_allowed_diff = 50.0 if len(position_diffs) > 1000 else 35.0
         self.assertLessEqual(max(position_diffs), max_allowed_diff)
+
+    def test_final_position_file_matches_summary_contract(self) -> None:
+        cpp_summary_path = CPP_DIR / "fgo_taroz_p_summary.json"
+        cpp_pos_path = CPP_DIR / "fgo_taroz_p.pos"
+        cpp_epoch_path = CPP_DIR / "fgo_taroz_p_epoch_debug.csv"
+        self.require_dogfood_files(cpp_summary_path, cpp_pos_path, cpp_epoch_path)
+
+        cpp_summary = read_json(cpp_summary_path)
+        pos_rows = read_pos_rows(cpp_pos_path)
+        with cpp_epoch_path.open(newline="") as handle:
+            epoch_rows = list(csv.DictReader(handle))
+
+        optimized_epochs = int(cpp_summary["optimized_epochs"])
+        self.assertEqual(len(pos_rows), optimized_epochs)
+        self.assertEqual(len(epoch_rows), optimized_epochs)
+        self.assertEqual(int(cpp_summary["input_epochs"]), optimized_epochs)
+        self.assertEqual(int(cpp_summary["valid_solutions"]), optimized_epochs)
+        self.assertEqual(int(cpp_summary["seed_matched_epochs"]), optimized_epochs)
+        self.assertEqual(int(cpp_summary["fixed_solutions"]), 0)
+        self.assertEqual(int(cpp_summary["float_solutions"]), 0)
+
+        epoch_indices = [int(float(row["epoch_index"])) for row in epoch_rows]
+        self.assertEqual(epoch_indices, list(range(optimized_epochs)))
+        pos_tows = [round(float(row["gps_tow"])) for row in pos_rows]
+        epoch_tows = [round(float(row["gps_tow"])) for row in epoch_rows]
+        self.assertEqual(pos_tows, epoch_tows)
+        self.assertEqual(len(pos_tows), len(set(pos_tows)))
+        self.assertTrue(
+            all(current < following for current, following in zip(pos_tows, pos_tows[1:]))
+        )
+        if optimized_epochs in {80, 1141}:
+            self.assertEqual(pos_tows[0], 553950)
+            self.assertEqual(pos_tows[-1], 553950 + optimized_epochs - 1)
+            self.assertEqual(
+                Counter(
+                    following - current
+                    for current, following in zip(pos_tows, pos_tows[1:])
+                ),
+                Counter({1: optimized_epochs - 1}),
+            )
+
+        status_counts = Counter(int(float(row["status"])) for row in pos_rows)
+        self.assertEqual(status_counts, Counter({1: optimized_epochs}))
+        finite_pos_columns = ("x_m", "y_m", "z_m", "lat_deg", "lon_deg", "height_m", "pdop")
+        finite_epoch_columns = (
+            "position_x_m",
+            "position_y_m",
+            "position_z_m",
+            "seed_position_x_m",
+            "seed_position_y_m",
+            "seed_position_z_m",
+            "velocity_x_mps",
+            "velocity_y_mps",
+            "velocity_z_mps",
+        )
+        for pos, epoch in zip(pos_rows, epoch_rows):
+            self.assertEqual(int(pos["gps_week"]), 2323)
+            self.assertEqual(int(epoch["gps_week"]), 2323)
+            self.assertEqual(int(float(pos["status"])), int(float(epoch["status"])))
+            self.assertEqual(int(float(pos["fixed_ambiguities"])), int(epoch["num_fixed_ambiguities"]))
+            self.assertEqual(int(float(pos["iterations"])), int(cpp_summary["iterations"]))
+            self.assertGreaterEqual(
+                int(float(pos["satellites"])),
+                int(cpp_summary["min_satellites_per_epoch"]),
+            )
+            self.assertAlmostEqual(float(pos["x_m"]), float(epoch["position_x_m"]), places=6)
+            self.assertAlmostEqual(float(pos["y_m"]), float(epoch["position_y_m"]), places=6)
+            self.assertAlmostEqual(float(pos["z_m"]), float(epoch["position_z_m"]), places=6)
+            self.assertAlmostEqual(float(pos["ratio"]), float(epoch["ratio"]), places=6)
+            for column in finite_pos_columns:
+                self.assertTrue(math.isfinite(float(pos[column])), column)
+            for column in finite_epoch_columns:
+                self.assertTrue(math.isfinite(float(epoch[column])), column)
 
     def test_graph_and_factor_counts_are_consistent(self) -> None:
         cpp_summary_path = CPP_DIR / "fgo_taroz_p_summary.json"
