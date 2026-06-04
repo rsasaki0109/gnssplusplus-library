@@ -188,6 +188,69 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
         self.assertEqual(lambda_candidates, native["lambda_ambiguity_candidates"])
         self.assertEqual(fixed_ambiguities, native["lambda_ambiguity_used_candidates"])
 
+    def assert_lambda_debug_matches_epoch_debug(self, run_payload: dict[str, object]) -> None:
+        outputs = run_payload["outputs"]
+        if "lambda_debug" not in outputs:
+            self.skipTest("missing optional PPC taroz lambda debug output path")
+        epoch_path = Path(outputs["epoch_debug"])
+        lambda_path = Path(outputs["lambda_debug"])
+        if not epoch_path.exists() or not lambda_path.exists():
+            self.skipTest(
+                f"missing optional PPC taroz lambda artifact(s): {epoch_path}, {lambda_path}"
+            )
+
+        with epoch_path.open(newline="") as handle:
+            epoch_rows = list(csv.DictReader(handle))
+        with lambda_path.open(newline="") as handle:
+            lambda_rows = list(csv.DictReader(handle))
+        native = run_payload["native_summary"]
+
+        attempted_epochs: dict[tuple[int, int], dict[str, str]] = {}
+        for row in epoch_rows:
+            candidate_count = int(float(row["ambiguity_candidates"]))
+            if candidate_count > 5:
+                key = (int(float(row["gps_week"])), round(float(row["gps_tow"]) * 1000))
+                attempted_epochs[key] = row
+
+        matrix_rows_by_epoch: dict[tuple[int, int], int] = {}
+        diagonal_by_epoch: dict[tuple[int, int], dict[str, str]] = {}
+        for row in lambda_rows:
+            key = (int(float(row["gps_week"])), round(float(row["gps_tow"]) * 1000))
+            matrix_rows_by_epoch[key] = matrix_rows_by_epoch.get(key, 0) + 1
+            if int(float(row["row"])) == 0 and int(float(row["col"])) == 0:
+                diagonal_by_epoch[key] = row
+
+        self.assertEqual(set(diagonal_by_epoch), set(attempted_epochs))
+        self.assertEqual(len(diagonal_by_epoch), native["lambda_ambiguity_attempts"])
+        self.assertEqual(
+            len(lambda_rows),
+            sum(
+                int(float(row["ambiguity_candidates"])) ** 2
+                for row in attempted_epochs.values()
+            ),
+        )
+
+        lambda_candidates = 0
+        fixed_candidates = 0
+        fixed_epochs = 0
+        for key, epoch_row in attempted_epochs.items():
+            lambda_row = diagonal_by_epoch[key]
+            candidate_count = int(float(epoch_row["ambiguity_candidates"]))
+            fixed_epoch = int(float(lambda_row["fixed_epoch"])) == 1
+            lambda_candidates += candidate_count
+            if fixed_epoch:
+                fixed_epochs += 1
+                fixed_candidates += candidate_count
+
+            self.assertEqual(int(float(lambda_row["candidate_count"])), candidate_count)
+            self.assertEqual(matrix_rows_by_epoch[key], candidate_count * candidate_count)
+            self.assertEqual(fixed_epoch, int(float(epoch_row["status"])) == 4)
+            self.assertAlmostEqual(float(lambda_row["ratio"]), float(epoch_row["ratio"]), places=6)
+
+        self.assertEqual(lambda_candidates, native["lambda_ambiguity_candidates"])
+        self.assertEqual(fixed_candidates, native["lambda_ambiguity_used_candidates"])
+        self.assertEqual(fixed_epochs, native["fixed_solutions"])
+
     def make_run(self, root: Path, spec: str) -> Path:
         site, run_name = spec.split("/")
         run_dir = root / site / run_name
@@ -247,6 +310,7 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
             self.assertIn("--seed-pos", command)
             self.assertIn("--preset", command)
             self.assertIn("taroz-amb-pdc", command)
+            self.assertIn("--lambda-debug-csv", command)
             self.assertIn("--max-epochs", command)
             self.assertIn("20", command)
 
@@ -523,6 +587,11 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
         self.assertLessEqual(reference["float"]["p95_3d_error_m"], 1.2)
         self.assertEqual(reference["no_solution"]["matched_epochs"], 217)
         self.assert_solution_artifacts_match_summary(run_payload)
+
+    def test_optional_nagoya_run3_1000_epoch_lambda_debug_contract(self) -> None:
+        payload = self.require_summary(NAGOYA_RUN3_1000_SEED_SUMMARY)
+
+        self.assert_lambda_debug_matches_epoch_debug(payload["runs"]["nagoya/run3"])
 
 
 if __name__ == "__main__":
