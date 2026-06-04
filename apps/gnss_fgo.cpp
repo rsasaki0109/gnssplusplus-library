@@ -2173,6 +2173,7 @@ bool writeEpochDebugCsv(
     output << "epoch_index,gps_week,gps_tow,status,ratio,num_fixed_ambiguities,"
               "ambiguity_candidates,dd_satellites,reference_satellites,"
               "position_x_m,position_y_m,position_z_m,"
+              "seed_position_x_m,seed_position_y_m,seed_position_z_m,"
               "seed_position_divergence_m,"
               "velocity_x_mps,velocity_y_mps,velocity_z_mps\n";
     output << std::fixed << std::setprecision(6);
@@ -2265,6 +2266,9 @@ bool writeEpochDebugCsv(
                << sol.position_ecef(0) << ','
                << sol.position_ecef(1) << ','
                << sol.position_ecef(2) << ','
+               << epoch.position_ecef(0) << ','
+               << epoch.position_ecef(1) << ','
+               << epoch.position_ecef(2) << ','
                << seed_position_divergence_m << ','
                << velocity_mps(0) << ','
                << velocity_mps(1) << ','
