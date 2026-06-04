@@ -54,6 +54,8 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
             "min_snr_dbhz": 35.0,
             "min_satellites_per_epoch": 0,
             "min_output_dd_carrier_factors_per_epoch": 6,
+            "max_float_seed_position_divergence_m": 0.0,
+            "max_float_position_jump_m": 0.0,
             "lambda_ambiguity_fix_solved": True,
             "lambda_ambiguity_fix_used": True,
             "partial_lambda_ambiguity_fix_used": False,
@@ -102,6 +104,8 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
             self.assertIn("--factor-debug-csv", command)
             self.assertIn("--sd-factor-debug-csv", command)
             self.assertIn("--lambda-debug-csv", command)
+            self.assertIn("--max-float-seed-divergence", command)
+            self.assertIn("--max-float-position-jump", command)
             self.assertEqual(payload["expected"]["counts"]["fixed_solutions"], 721)
             self.assertEqual(payload["expected"]["counts"]["float_solutions"], 243)
 
