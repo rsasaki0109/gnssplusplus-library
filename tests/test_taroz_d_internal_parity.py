@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+from collections import Counter
 import json
 import math
 import os
@@ -131,6 +132,61 @@ class TarozDInternalParityTest(unittest.TestCase):
             max(1.0, abs(float(taroz_graph["final_cost"]))),
             1e-3,
         )
+
+    def test_final_epoch_velocity_file_matches_summary_contract(self) -> None:
+        cpp_summary_path = CPP_DIR / "summary.json"
+        cpp_graph_path = CPP_DIR / "graph_detail.csv"
+        cpp_epoch_path = CPP_DIR / "per_epoch_vel.csv"
+        self.require_dogfood_files(cpp_summary_path, cpp_graph_path, cpp_epoch_path)
+
+        cpp_summary = read_json(cpp_summary_path)
+        with cpp_graph_path.open(newline="") as handle:
+            cpp_graph = next(csv.DictReader(handle))
+        with cpp_epoch_path.open(newline="") as handle:
+            rows = list(csv.DictReader(handle))
+
+        optimized_epochs = int(cpp_summary["optimized_epochs"])
+        self.assertEqual(len(rows), optimized_epochs)
+        self.assertEqual(int(cpp_summary["valid_velocity_epochs"]), optimized_epochs)
+        self.assertEqual(int(cpp_summary["graph_values"]), 2 * optimized_epochs)
+        self.assertEqual(int(float(cpp_graph["graph_values"])), 2 * optimized_epochs)
+        self.assertEqual(int(float(cpp_graph["n"])), optimized_epochs)
+        self.assertEqual(int(float(cpp_graph["valid_velocity_epochs"])), optimized_epochs)
+        self.assertEqual(int(cpp_summary["iterations"]), int(float(cpp_graph["iterations"])))
+        self.assertEqual(float(cpp_summary["final_cost"]), float(cpp_graph["final_cost"]))
+        self.assertEqual(float(cpp_graph["final_cost"]), float(cpp_graph["optimizer_error"]))
+
+        epoch_indices = [int(float(row["epoch"])) for row in rows]
+        self.assertEqual(epoch_indices, list(range(1, optimized_epochs + 1)))
+        gps_tows = [round(float(row["gps_tow"])) for row in rows]
+        self.assertEqual(len(gps_tows), len(set(gps_tows)))
+        self.assertTrue(
+            all(current < following for current, following in zip(gps_tows, gps_tows[1:]))
+        )
+        if optimized_epochs == 1141:
+            self.assertEqual(gps_tows[0], 553950)
+            self.assertEqual(gps_tows[-1], 555090)
+            self.assertEqual(
+                Counter(
+                    following - current
+                    for current, following in zip(gps_tows, gps_tows[1:])
+                ),
+                Counter({1: 1140}),
+            )
+
+        finite_columns = (
+            "spp_x_m",
+            "spp_y_m",
+            "spp_z_m",
+            "fgo_vx_mps",
+            "fgo_vy_mps",
+            "fgo_vz_mps",
+            "fgo_clock_drift_mps",
+        )
+        for row in rows:
+            self.assertEqual(int(row["gps_week"]), 2323)
+            for column in finite_columns:
+                self.assertTrue(math.isfinite(float(row[column])), column)
 
     def test_raw_doppler_factors_match_taroz_d_dump(self) -> None:
         cpp_factor_path = CPP_DIR / "factor_debug.csv"
