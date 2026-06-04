@@ -3039,12 +3039,18 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
 
             self.assertEqual(
                 [step.slug for step in steps],
-                ["ppc_nagoya_run1_rtk", "ppc_tokyo_run1_rtk", "scorpion_moving_base"],
+                [
+                    "ppc_nagoya_run1_rtk",
+                    "ppc_tokyo_run1_rtk",
+                    "ppc_taroz_amb_pdc_nagoya_run3_1000_seed",
+                    "scorpion_moving_base",
+                ],
             )
             self.assertTrue(all(step.command is None for step in steps))
             self.assertEqual(steps[0].skip_reason, "PPC-Dataset root is unavailable.")
             self.assertEqual(steps[1].skip_reason, "PPC-Dataset root is unavailable.")
-            self.assertEqual(steps[2].skip_reason, "SCORPION moving-base input is unavailable.")
+            self.assertEqual(steps[2].skip_reason, "PPC-Dataset root is unavailable.")
+            self.assertEqual(steps[3].skip_reason, "SCORPION moving-base input is unavailable.")
 
     def test_build_step_plan_uses_dataset_rtklib_and_scorpion_url(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_rtk_plan_") as temp_dir:
@@ -3063,15 +3069,27 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
 
             steps = ci_rtk_signoffs.build_step_plan(ROOT_DIR, output_dir, env)
 
-            nagoya, tokyo, scorpion = steps
+            nagoya, tokyo, taroz_long, scorpion = steps
             self.assertIsNotNone(nagoya.command)
             self.assertIn("--dataset-root", nagoya.command)
             self.assertIn(str(dataset_root), nagoya.command)
-            self.assertIn("--debug-epoch-log", nagoya.command)
             self.assertIsNotNone(tokyo.command)
             self.assertIn("--rtklib-bin", tokyo.command)
             self.assertIn(str(rtklib_bin), tokyo.command)
             self.assertIn("--rtklib-pos", tokyo.command)
+            self.assertIsNotNone(taroz_long.command)
+            self.assertIn("ppc-taroz-amb-pdc-smoke", taroz_long.command)
+            self.assertIn("--dataset-root", taroz_long.command)
+            self.assertIn(str(dataset_root), taroz_long.command)
+            self.assertIn("--run", taroz_long.command)
+            self.assertIn("nagoya/run3", taroz_long.command)
+            self.assertIn("--max-epochs", taroz_long.command)
+            self.assertIn("1000", taroz_long.command)
+            self.assertIn("--generate-spp-seed", taroz_long.command)
+            self.assertIn("--require-valid-p95-3d-max", taroz_long.command)
+            self.assertIn("1.1", taroz_long.command)
+            self.assertIn("--require-fixed-p95-3d-max", taroz_long.command)
+            self.assertIn("0.2", taroz_long.command)
             self.assertIsNotNone(scorpion.command)
             self.assertIn("--input-url", scorpion.command)
             self.assertIn("https://example.com/scorpion.ubx", scorpion.command)
@@ -3087,10 +3105,11 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
                 {"GNSSPP_PPC_DATASET_ROOT": str(dataset_root)},
             )
 
-            nagoya, tokyo, _ = steps
+            nagoya, tokyo, taroz_long, _ = steps
             self.assertIsNotNone(nagoya.command)
             self.assertIsNone(tokyo.command)
             self.assertEqual(tokyo.skip_reason, "RTKLIB binary is unavailable.")
+            self.assertIsNotNone(taroz_long.command)
 
     def test_run_step_writes_log_for_skipped_and_passed_steps(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_rtk_exec_") as temp_dir:
