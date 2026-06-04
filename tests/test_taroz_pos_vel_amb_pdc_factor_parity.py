@@ -463,6 +463,15 @@ class TarozPosVelAmbPdcFactorParityTest(unittest.TestCase):
                 int(row["ambiguity_candidates"]),
                 int(float(taroz_rows[key]["candidate_count"])),
             )
+            self.assertEqual(
+                int(row["num_fixed_ambiguities"]),
+                int(float(taroz_rows[key]["fixed_ambiguity_count"])),
+            )
+
+        self.assertEqual(
+            sum(int(row["num_fixed_ambiguities"]) for row in cpp_rows.values()),
+            10737,
+        )
 
         position_errors = [
             epoch_debug_ecef_error_m(cpp_rows[key], taroz_rows[key], "fixed")
