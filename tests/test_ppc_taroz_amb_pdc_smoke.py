@@ -25,6 +25,10 @@ SHIFTED_NAGOYA_RUN3_SEED_SUMMARY = (
     ROOT_DIR
     / "output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_shifted_seed_current/summary.json"
 )
+NAGOYA_RUN3_1000_SEED_SUMMARY = (
+    ROOT_DIR
+    / "output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_1000_seed_current/summary.json"
+)
 
 
 def read_seed_pos_by_tow(path: Path) -> dict[int, dict[str, float]]:
@@ -43,6 +47,33 @@ def read_seed_pos_by_tow(path: Path) -> dict[int, dict[str, float]]:
                 "z_m": float(parts[4]),
             }
     return rows
+
+
+def read_solution_pos_by_tow(path: Path) -> dict[tuple[int, int], dict[str, float | int]]:
+    rows: dict[tuple[int, int], dict[str, float | int]] = {}
+    with path.open(encoding="ascii", errors="ignore") as handle:
+        for line in handle:
+            if not line.strip() or line.startswith("%"):
+                continue
+            parts = line.split()
+            if len(parts) < 14:
+                raise ValueError(f"unexpected solution POS row width in {path}: {line.rstrip()}")
+            key = (int(float(parts[0])), round(float(parts[1]) * 1000))
+            rows[key] = {
+                "x_m": float(parts[2]),
+                "y_m": float(parts[3]),
+                "z_m": float(parts[4]),
+                "status": int(float(parts[8])),
+                "satellites": int(float(parts[9])),
+                "ratio": float(parts[11]),
+                "fixed_ambiguities": int(float(parts[12])),
+                "iterations": int(float(parts[13])),
+            }
+    return rows
+
+
+def delimited_count(value: str) -> int:
+    return len([part for part in value.split(";") if part])
 
 
 class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
@@ -93,6 +124,69 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
                 float(row["seed_position_divergence_m"]),
                 places=5,
             )
+
+    def assert_solution_artifacts_match_summary(self, run_payload: dict[str, object]) -> None:
+        outputs = run_payload["outputs"]
+        epoch_path = Path(outputs["epoch_debug"])
+        pos_path = Path(outputs["pos"])
+        if not epoch_path.exists() or not pos_path.exists():
+            self.skipTest(
+                f"missing optional PPC taroz solution artifact(s): {epoch_path}, {pos_path}"
+            )
+
+        with epoch_path.open(newline="") as handle:
+            epoch_rows = list(csv.DictReader(handle))
+        pos_rows = read_solution_pos_by_tow(pos_path)
+        native = run_payload["native_summary"]
+        reference = run_payload["reference_summary"]
+
+        self.assertEqual(len(epoch_rows), native["optimized_epochs"])
+        self.assertEqual(len(pos_rows), native["optimized_epochs"])
+
+        epoch_status_counts: dict[str, int] = {}
+        pos_status_counts: dict[str, int] = {}
+        for pos in pos_rows.values():
+            status_key = str(pos["status"])
+            pos_status_counts[status_key] = pos_status_counts.get(status_key, 0) + 1
+
+        dd_carrier_candidates = 0
+        lambda_attempts = 0
+        lambda_candidates = 0
+        fixed_ambiguities = 0
+        for row in epoch_rows:
+            key = (int(float(row["gps_week"])), round(float(row["gps_tow"]) * 1000))
+            self.assertIn(key, pos_rows)
+            pos = pos_rows[key]
+            status = int(float(row["status"]))
+            epoch_status_counts[str(status)] = epoch_status_counts.get(str(status), 0) + 1
+            candidate_count = int(float(row["ambiguity_candidates"]))
+            dd_carrier_candidates += candidate_count
+            if candidate_count > 5:
+                lambda_attempts += 1
+                lambda_candidates += candidate_count
+            fixed_ambiguities += int(float(row["num_fixed_ambiguities"]))
+
+            self.assertEqual(status, pos["status"])
+            self.assertEqual(delimited_count(row["dd_satellites"]), pos["satellites"])
+            self.assertAlmostEqual(float(row["position_x_m"]), pos["x_m"], places=6)
+            self.assertAlmostEqual(float(row["position_y_m"]), pos["y_m"], places=6)
+            self.assertAlmostEqual(float(row["position_z_m"]), pos["z_m"], places=6)
+            self.assertAlmostEqual(float(row["ratio"]), pos["ratio"], places=6)
+            self.assertEqual(int(float(row["num_fixed_ambiguities"])), pos["fixed_ambiguities"])
+            self.assertEqual(pos["iterations"], native["iterations"])
+
+        self.assertEqual(epoch_status_counts, reference["position_status_counts"])
+        self.assertEqual(pos_status_counts, reference["position_status_counts"])
+        self.assertEqual(pos_status_counts.get("4", 0), native["fixed_solutions"])
+        self.assertEqual(pos_status_counts.get("3", 0), native["float_solutions"])
+        self.assertEqual(
+            pos_status_counts.get("3", 0) + pos_status_counts.get("4", 0),
+            native["valid_solutions"],
+        )
+        self.assertEqual(dd_carrier_candidates, native["double_difference_carrier_factors"])
+        self.assertEqual(lambda_attempts, native["lambda_ambiguity_attempts"])
+        self.assertEqual(lambda_candidates, native["lambda_ambiguity_candidates"])
+        self.assertEqual(fixed_ambiguities, native["lambda_ambiguity_used_candidates"])
 
     def make_run(self, root: Path, spec: str) -> Path:
         site, run_name = spec.split("/")
@@ -389,6 +483,46 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
         for run_payload in payload["runs"].values():
             self.assert_seed_state_matches_epoch_debug(run_payload)
         self.assert_seed_state_matches_epoch_debug(shifted_payload["runs"]["nagoya/run3"])
+
+    def test_optional_generated_seed_solution_artifacts_match_summary(self) -> None:
+        payload = self.require_summary(FULL_SEED_SUMMARY)
+        shifted_payload = self.require_summary(SHIFTED_NAGOYA_RUN3_SEED_SUMMARY)
+
+        for run_payload in payload["runs"].values():
+            self.assert_solution_artifacts_match_summary(run_payload)
+        self.assert_solution_artifacts_match_summary(shifted_payload["runs"]["nagoya/run3"])
+
+    def test_optional_nagoya_run3_1000_epoch_summary_contract(self) -> None:
+        payload = self.require_summary(NAGOYA_RUN3_1000_SEED_SUMMARY)
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["failures"], [])
+        self.assertEqual(payload["max_epochs"], 1000)
+        self.assertEqual(payload["skip_epochs"], 0)
+        self.assertTrue(payload["generate_spp_seed"])
+        self.assertEqual(set(payload["runs"]), {"nagoya/run3"})
+
+        run_payload = payload["runs"]["nagoya/run3"]
+        native = run_payload["native_summary"]
+        reference = run_payload["reference_summary"]
+        self.assertEqual(run_payload["status"], "ok")
+        self.assertEqual(run_payload["failures"], [])
+        self.assertEqual(native["optimized_epochs"], 1000)
+        self.assertEqual(native["seed_matched_epochs"], 1000)
+        self.assertEqual(native["seed_interpolated_epochs"], 0)
+        self.assertEqual(native["valid_solutions"], 783)
+        self.assertEqual(native["fixed_solutions"], 406)
+        self.assertEqual(native["float_solutions"], 377)
+        self.assertEqual(native["lambda_ambiguity_attempts"], 949)
+        self.assertEqual(native["float_rejected_seed_position_divergence"], 36)
+        self.assertEqual(native["float_rejected_position_jump"], 130)
+        self.assertEqual(reference["position_status_counts"], {"0": 217, "3": 377, "4": 406})
+        self.assertEqual(reference["matched_epochs"], 783)
+        self.assertLessEqual(reference["p95_3d_error_m"], 1.1)
+        self.assertLessEqual(reference["fixed"]["p95_3d_error_m"], 0.2)
+        self.assertLessEqual(reference["float"]["p95_3d_error_m"], 1.2)
+        self.assertEqual(reference["no_solution"]["matched_epochs"], 217)
+        self.assert_solution_artifacts_match_summary(run_payload)
 
 
 if __name__ == "__main__":
