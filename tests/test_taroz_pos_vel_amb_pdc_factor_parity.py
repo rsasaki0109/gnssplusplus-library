@@ -48,6 +48,10 @@ CPP_OPT_COST_TRACE = configured_path(
     "GNSSPP_TAROZ_POS_VEL_AMB_PDC_CPP_OPT_COST_TRACE",
     "output/dogfood/taroz_pos_vel_amb_pdc_current/cost_trace.csv",
 )
+MATLAB_OPTIMIZER_COST_TRACE = configured_path(
+    "GNSSPP_TAROZ_POS_VEL_AMB_PDC_MATLAB_COST_TRACE",
+    "output/dogfood/taroz_matlab_pos_vel_amb_pdc_debug/optimizer_cost_trace.csv",
+)
 
 
 def display_path(path: Path) -> str:
@@ -390,6 +394,54 @@ class TarozPosVelAmbPdcFactorParityTest(unittest.TestCase):
             relative_error(float(rows[-1]["cost"]), float(taroz_graph["final_cost"])),
             0.30,
         )
+
+    def test_matlab_optimizer_cost_trace_matches_taroz_graph_and_cpp_scale(self) -> None:
+        summary_path = CPP_DIR / "summary.json"
+        taroz_graph_path = MATLAB_DIR / "graph_detail.csv"
+        self.require_dogfood_files(
+            summary_path,
+            CPP_OPT_COST_TRACE,
+            taroz_graph_path,
+            MATLAB_OPTIMIZER_COST_TRACE,
+        )
+
+        summary = read_json(summary_path)
+        cpp_rows = read_rows(CPP_OPT_COST_TRACE)
+        matlab_rows = read_rows(MATLAB_OPTIMIZER_COST_TRACE)
+        taroz_graph = read_rows(taroz_graph_path)[0]
+
+        self.assertGreater(len(matlab_rows), 1)
+        self.assertTrue(all(row["phase"] == "gtsam" for row in matlab_rows))
+        self.assertEqual(int(matlab_rows[0]["local_iteration"]), 0)
+        self.assertEqual(int(matlab_rows[0]["global_iteration"]), 0)
+        matlab_iterations = [int(row["global_iteration"]) for row in matlab_rows]
+        self.assertEqual(matlab_iterations, sorted(matlab_iterations))
+        self.assertEqual(len(matlab_iterations), len(set(matlab_iterations)))
+        self.assertEqual(len(matlab_rows), int(float(taroz_graph["iterations"])) + 1)
+        self.assertTrue(all(math.isfinite(float(row["cost"])) for row in matlab_rows))
+        self.assertTrue(all(float(row["cost"]) >= 0.0 for row in matlab_rows))
+        self.assertLess(float(matlab_rows[-1]["cost"]), float(matlab_rows[0]["cost"]))
+        self.assertLess(float(cpp_rows[-1]["cost"]), float(cpp_rows[0]["cost"]))
+
+        self.assertLessEqual(
+            relative_error(
+                float(matlab_rows[0]["cost"]),
+                float(taroz_graph["initial_cost"]),
+            ),
+            1e-9,
+        )
+        self.assertLessEqual(
+            relative_error(
+                float(matlab_rows[-1]["cost"]),
+                float(taroz_graph["final_cost"]),
+            ),
+            1e-9,
+        )
+        self.assertLessEqual(
+            relative_error(float(cpp_rows[-1]["cost"]), float(matlab_rows[-1]["cost"])),
+            0.30,
+        )
+        self.assertEqual(float(cpp_rows[-1]["cost"]), float(summary["final_cost"]))
 
     def test_seed_positions_match_taroz_spp_seed_dump(self) -> None:
         cpp_epoch_path = CPP_DIR / "epoch_debug.csv"

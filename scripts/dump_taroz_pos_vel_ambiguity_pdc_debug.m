@@ -23,6 +23,8 @@ if ~isfolder(out_dir)
     mkdir(out_dir);
 end
 
+configure_matlab_paths(taroz_root, example_dir);
+
 set(0, "DefaultFigureVisible", "off");
 cd(example_dir);
 estimate_pos_vel_ambiguity_PDC;
@@ -57,6 +59,7 @@ graph_table = table(n, nsat, graph_factors, graph_values, initial_cost, ...
                     valid_position_epochs, valid_velocity_epochs, ...
                     valid_ambiguity_states, fixed_epochs);
 writetable(graph_table, fullfile(out_dir, "graph_detail.csv"));
+write_optimizer_cost_trace(out_dir, graph, initials, initial_cost, final_cost, iterations);
 
 epoch = (1:n)';
 gps_week = obs.time.week(:);
@@ -294,6 +297,111 @@ lambda_table = table(lambda_epoch, lambda_gps_week, lambda_gps_tow, ...
 writetable(lambda_table, fullfile(out_dir, "per_lambda_detail.csv"));
 
 fprintf("Wrote taroz position/velocity ambiguity PDC debug CSVs to %s\n", out_dir);
+
+function configure_matlab_paths(taroz_root, example_dir)
+    add_matlab_path_if_folder(example_dir);
+    add_matlab_path_if_folder(fullfile(example_dir, "function"));
+    add_matlab_path_if_folder(fullfile(taroz_root, "examples"));
+    add_matlab_path_if_folder(fullfile(taroz_root, "examples", "function"));
+    add_matlab_path_if_folder(fullfile(taroz_root, "install", "gtsam_gnss", "gtsam_toolbox"));
+    add_matlab_path_if_folder(fullfile(taroz_root, "matlab_local", "gtsam_toolbox"));
+    add_matlab_path_if_folder(fullfile(taroz_root, "..", "matlab_local", "gtsam_toolbox"));
+    add_matlab_path_if_folder(fullfile(taroz_root, "..", "MatRTKLIB"));
+    add_matlab_path_if_folder("/usr/local/gtsam_toolbox");
+    add_matlab_path_list(getenv("GNSSPP_TAROZ_MATLAB_PATHS"));
+    add_matlab_path_list(getenv("GNSSPP_TAROZ_MATLAB_EXTRA_PATHS"));
+end
+
+function add_matlab_path_if_folder(path_value)
+    path_value = string(path_value);
+    if strlength(path_value) > 0 && isfolder(path_value)
+        addpath(char(path_value));
+    end
+end
+
+function add_matlab_path_list(path_list)
+    path_list = string(path_list);
+    if strlength(path_list) == 0
+        return;
+    end
+    paths = split(path_list, pathsep);
+    for i = 1:numel(paths)
+        add_matlab_path_if_folder(strtrim(paths(i)));
+    end
+end
+
+function write_optimizer_cost_trace(out_dir, graph, initials, initial_cost, final_cost, iterations)
+    max_iterations = 0;
+    if isfinite(iterations)
+        max_iterations = max(0, round(iterations));
+    end
+
+    phase = repmat("gtsam", max_iterations + 1, 1);
+    local_iteration = (0:max_iterations)';
+    global_iteration = local_iteration;
+    time_s = NaN(max_iterations + 1, 1);
+    cost = NaN(max_iterations + 1, 1);
+    absolute_decrease = NaN(max_iterations + 1, 1);
+    relative_decrease = NaN(max_iterations + 1, 1);
+    lambda = NaN(max_iterations + 1, 1);
+    actual_rows = 0;
+
+    try
+        trace_params = gtsam.LevenbergMarquardtParams;
+        trace_params.setVerbosity('TERMINATION');
+        trace_params.setMaxIterations(1000);
+        trace_optimizer = gtsam.LevenbergMarquardtOptimizer(graph, initials, trace_params);
+
+        trace_timer = tic;
+        actual_rows = 1;
+        time_s(1) = 0.0;
+        cost(1) = trace_optimizer.error;
+        lambda(1) = trace_optimizer.lambda;
+        for iter = 1:max_iterations
+            trace_optimizer.iterate();
+            actual_rows = iter + 1;
+            time_s(actual_rows) = toc(trace_timer);
+            cost(actual_rows) = trace_optimizer.error;
+            lambda(actual_rows) = trace_optimizer.lambda;
+        end
+    catch trace_error
+        warning("Failed to generate GTSAM optimizer cost trace: %s", trace_error.message);
+    end
+
+    if actual_rows == 0
+        phase = ["gtsam"; "gtsam"];
+        local_iteration = [0; max_iterations];
+        global_iteration = local_iteration;
+        time_s = [0.0; NaN];
+        cost = [initial_cost; final_cost];
+        absolute_decrease = [NaN; initial_cost - final_cost];
+        relative_decrease = [NaN; (initial_cost - final_cost) / max(1.0, initial_cost)];
+        lambda = [NaN; NaN];
+    else
+        phase = phase(1:actual_rows);
+        local_iteration = local_iteration(1:actual_rows);
+        global_iteration = global_iteration(1:actual_rows);
+        time_s = time_s(1:actual_rows);
+        cost = cost(1:actual_rows);
+        lambda = lambda(1:actual_rows);
+        absolute_decrease = absolute_decrease(1:actual_rows);
+        relative_decrease = relative_decrease(1:actual_rows);
+        for row = 2:actual_rows
+            if isfinite(cost(row - 1)) && isfinite(cost(row))
+                absolute_decrease(row) = cost(row - 1) - cost(row);
+                if cost(row - 1) > 0
+                    relative_decrease(row) = absolute_decrease(row) / cost(row - 1);
+                else
+                    relative_decrease(row) = absolute_decrease(row);
+                end
+            end
+        end
+    end
+
+    cost_trace_table = table(phase, local_iteration, global_iteration, time_s, ...
+                             cost, absolute_decrease, relative_decrease, lambda);
+    writetable(cost_trace_table, fullfile(out_dir, "optimizer_cost_trace.csv"));
+end
 
 function value = scalar_or_nan(callback)
     try
