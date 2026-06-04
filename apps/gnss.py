@@ -19,6 +19,66 @@ COMMANDS = {
         "target": "gnss_spp",
         "summary": "Batch SPP post-processing from rover/nav RINEX files.",
     },
+    "fgo": {
+        "kind": "binary",
+        "target": "gnss_fgo",
+        "summary": "Batch factor-graph post-processing from rover/nav RINEX files.",
+    },
+    "vel-d": {
+        "kind": "binary",
+        "target": "gnss_vel_d",
+        "summary": "Taroz-style batch velocity and clock-drift estimation from Doppler.",
+    },
+    "pos-pd": {
+        "kind": "binary",
+        "target": "gnss_pos_pd",
+        "summary": "Taroz-style batch position and clock estimation from pseudorange plus Doppler between epochs.",
+    },
+    "pos-pdc": {
+        "kind": "binary",
+        "target": "gnss_pos_pdc",
+        "summary": "Taroz-style batch position and clock estimation from pseudorange, Doppler, and TDCP.",
+    },
+    "pos-vel-pd": {
+        "kind": "binary",
+        "target": "gnss_pos_vel_pd",
+        "summary": "Taroz-style batch position, velocity, clock, and drift estimation from pseudorange plus Doppler.",
+    },
+    "pos-vel-pdc": {
+        "kind": "binary",
+        "target": "gnss_pos_vel_pdc",
+        "summary": "Taroz-style batch position, velocity, clock, and drift estimation from pseudorange, Doppler, and TDCP.",
+    },
+    "compare-modes": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_mode_compare.py"),
+        "summary": "Run SPP/FGO/RTK on shared RINEX inputs and emit a mode-comparison JSON summary.",
+    },
+    "taroz-pc-dogfood": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_taroz_pc_dogfood.py"),
+        "summary": "Regenerate taroz PC FGO outputs and verify intermediate/final parity.",
+    },
+    "taroz-p-dogfood": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_taroz_p_dogfood.py"),
+        "summary": "Regenerate taroz P FGO smoke outputs and verify raw-pseudorange configuration.",
+    },
+    "taroz-pd-dogfood": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_taroz_pd_dogfood.py"),
+        "summary": "Regenerate taroz position/velocity PD outputs and verify internal parity.",
+    },
+    "taroz-pos-vel-amb-pdc-dogfood": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_taroz_pos_vel_amb_pdc_dogfood.py"),
+        "summary": "Regenerate taroz position/velocity ambiguity PDC FGO outputs and verify parity.",
+    },
+    "ppc-taroz-amb-pdc-smoke": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppc_taroz_amb_pdc_smoke.py"),
+        "summary": "Run taroz ambiguity PDC FGO checks on PPC-Dataset runs.",
+    },
     "solve": {
         "kind": "binary",
         "target": "gnss_solve",
@@ -366,6 +426,20 @@ def usage() -> str:
             "Examples:",
             "  python3 apps/gnss.py solve --data-dir data/driving --out output/rtk_solution.pos",
             "  python3 apps/gnss.py spp --obs data/rover_static.obs --nav data/navigation_static.nav --out output/spp_solution.pos",
+            "  python3 apps/gnss.py fgo --preset real-data-fixed --obs data/rover_static.obs --nav data/navigation_static.nav --out output/fgo_solution.pos --summary-json output/fgo_summary.json",
+            "  python3 apps/gnss.py vel-d --obs data/rover_1Hz.obs --nav data/base.nav --seed-pos data/rover_1Hz_spp.pos --out-csv output/velocity.csv",
+            "  python3 apps/gnss.py pos-pd --obs data/rover_1Hz.obs --nav data/base.nav --seed-pos data/rover_1Hz_spp.pos --out-csv output/pos_pd_state.csv",
+            "  python3 apps/gnss.py pos-pdc --obs data/rover_1Hz.obs --nav data/base.nav --seed-pos data/rover_1Hz_spp.pos --out-csv output/pos_pdc_state.csv",
+            "  python3 apps/gnss.py pos-vel-pd --obs data/rover_1Hz.obs --nav data/base.nav --seed-pos data/rover_1Hz_spp.pos --out-csv output/pd_state.csv",
+            "  python3 apps/gnss.py pos-vel-pdc --obs data/rover_1Hz.obs --nav data/base.nav --seed-pos data/rover_1Hz_spp.pos --out-csv output/pdc_state.csv",
+            "  python3 apps/gnss.py compare-modes --fgo-preset real-data --obs data/rover_kinematic.obs --base data/base_kinematic.obs --nav data/navigation_kinematic.nav --reference-csv data/reference.csv --max-epochs 120",
+            "  python3 apps/gnss.py taroz-p-dogfood --out-dir output/dogfood/taroz_p_dogfood_current",
+            "  python3 apps/gnss.py taroz-pd-dogfood --out-dir output/dogfood/taroz_pd_dogfood_current",
+            "  python3 apps/gnss.py taroz-pc-dogfood --out-dir output/dogfood/taroz_pc_dogfood_current",
+            "  python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood --out-dir output/dogfood/taroz_pos_vel_amb_pdc_dogfood_current",
+            "  python3 apps/gnss.py ppc-taroz-amb-pdc-smoke --dataset-root /datasets/PPC-Dataset --max-epochs 200 --generate-spp-seed",
+            "  python3 apps/gnss.py compare-modes --modes spp,fgo,rtk --spp-pos output/spp.pos --fgo-pos output/fgo.pos --rtk-pos output/rtk.pos",
+            "  python3 apps/gnss.py compare-modes --modes fgo,rtk --fgo-pos output/fgo.pos --rtk-pos output/rtk.pos --require-pair-p95-3d-max fgo:rtk=2.0",
             "  python3 apps/gnss.py visibility --obs data/rover_static.obs --nav data/navigation_static.nav --csv output/visibility.csv --summary-json output/visibility.json --max-epochs 60",
             "  python3 apps/gnss.py visibility-plot output/visibility.csv output/visibility.png",
             "  python3 apps/gnss.py solve --rover data/rover_kinematic.obs --base data/base_kinematic.obs --nav data/navigation_kinematic.nav --iono est --max-epochs 5",
@@ -444,23 +518,35 @@ def usage() -> str:
 
 def find_binary(target_name: str) -> str | None:
     filename = target_name + EXE_SUFFIX
+    build_roots = [
+        path for path in sorted(glob.glob(os.path.join(ROOT_DIR, "build*")))
+        if os.path.isdir(path)
+    ]
+    default_build = os.path.join(ROOT_DIR, "build")
+    if default_build not in build_roots:
+        build_roots.insert(0, default_build)
+
     candidates = [
         os.path.join(APPS_DIR, filename),
-        os.path.join(ROOT_DIR, "build", "apps", filename),
     ]
-    for config in BUILD_CONFIGS:
-        candidates.append(os.path.join(ROOT_DIR, "build", "apps", config, filename))
-        candidates.append(os.path.join(ROOT_DIR, "build", config, "apps", filename))
-        candidates.append(os.path.join(ROOT_DIR, "build", config, filename))
+    for build_root in build_roots:
+        candidates.append(os.path.join(build_root, "apps", filename))
+        for config in BUILD_CONFIGS:
+            candidates.append(os.path.join(build_root, "apps", config, filename))
+            candidates.append(os.path.join(build_root, config, "apps", filename))
+            candidates.append(os.path.join(build_root, config, filename))
 
     for candidate in candidates:
         if os.path.isfile(candidate):
             return candidate
 
-    recursive_hits = sorted(
-        path for path in glob.glob(os.path.join(ROOT_DIR, "build", "**", filename), recursive=True)
-        if os.path.isfile(path)
-    )
+    recursive_hits: list[str] = []
+    for build_root in build_roots:
+        recursive_hits.extend(
+            path for path in glob.glob(os.path.join(build_root, "**", filename), recursive=True)
+            if os.path.isfile(path)
+        )
+    recursive_hits.sort()
     return recursive_hits[0] if recursive_hits else None
 
 

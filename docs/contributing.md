@@ -45,6 +45,16 @@ CI lanes are split as follows:
 
 Docs-only changes keep CI on the lightweight path: hygiene here, plus the separate Docs workflow.
 
+Keep taroz FGO validation split by cost:
+
+- Light unit coverage belongs in CTest, such as `python_ppc_taroz_amb_pdc_smoke_tests`
+  dry-run checks and focused C++ factor tests.
+- Heavy local checks include `python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood`,
+  `python3 apps/gnss.py ppc-taroz-amb-pdc-smoke --max-epochs 200 --generate-spp-seed`,
+  and optional MATLAB/taroz parity tests when their external artifacts are present.
+- External PPC-Dataset runs are dataset-gated and should not be required for the
+  cross-platform CI lane unless a dedicated optional job provides the data.
+
 ## External code references
 
 When taking ideas from external repos:

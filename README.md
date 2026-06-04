@@ -431,6 +431,33 @@ Full replay, RTKLIB comparison, and historical diagnostic commands are in
 [PPC reproduction commands](docs/ppc_reproduction.md). Dataset source:
 [taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset).
 
+The taroz ambiguity PDC FGO port has a separate PPC dogfood harness. Keep the
+20-epoch form for lightweight smoke, and use the longer form locally when
+checking public-run behavior or shifted windows:
+
+```bash
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --max-epochs 20 \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_smoke/summary.json
+
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --max-epochs 200 \
+  --generate-spp-seed \
+  --require-valid-p95-3d-max 2.0 \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_smoke_200/summary.json
+
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --run nagoya/run3 \
+  --skip-epochs 400 \
+  --max-epochs 200 \
+  --generate-spp-seed \
+  --require-valid-p95-3d-max 2.0 \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_shifted/summary.json
+```
+
 Other benchmark artifacts and checked sign-offs are documented in
 [Benchmarks](docs/benchmarks.md) and [Validation](docs/validation.md).
 

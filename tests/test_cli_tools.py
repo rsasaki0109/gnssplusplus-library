@@ -2843,8 +2843,16 @@ class CLIToolsTest(unittest.TestCase):
         "test_clas_ppp_cli_accepts_direct_qzss_l6_with_stec_inventory",
         "test_clas_ppp_cli_accepts_direct_qzss_l6_gridded_corrections",
         "test_clas_ppp_cli_accepts_direct_qzss_l6_code_phase_bias",
+        "test_clas_ppp_cli_accepts_direct_qzss_l6_code_bias_composition_policy",
+        "test_clas_ppp_cli_accepts_direct_qzss_l6_code_bias_bank_policy",
+        "test_clas_ppp_cli_accepts_direct_qzss_l6_bias_row_materialization",
+        "test_clas_ppp_cli_accepts_direct_qzss_l6_row_construction_policy",
         "test_clas_ppp_cli_reports_applied_atmospheric_corrections_for_direct_qzss_l6",
         "test_clas_ppp_cli_uses_nearest_clas_grid_residuals_for_direct_qzss_l6",
+        "test_ppp_products_signoff_cli_runs_static_profile_with_local_templates",
+        "test_ppp_products_signoff_cli_runs_ppc_profile_with_existing_solution",
+        "test_ppp_products_signoff_cli_reads_ppc_config_toml",
+        "test_ppp_products_signoff_cli_runs_ppc_profile_with_malib_bin",
     }
     SHORT_BASELINE_DATA_TESTS = {
         "test_solve_short_baseline_cli_reaches_fixed_solution",
@@ -2856,8 +2864,10 @@ class CLIToolsTest(unittest.TestCase):
         "test_rtk_kinematic_signoff_cli_writes_summary_and_passes_thresholds",
         "test_ppp_kinematic_signoff_cli_writes_summary_and_passes_thresholds",
         "test_ppp_kinematic_signoff_cli_can_fetch_precise_products",
+        "test_ppp_products_signoff_cli_runs_kinematic_profile_with_malib_bin",
         "test_replay_solves_bundled_rinex_sequence",
         "test_replay_supports_moving_base_mode",
+        "test_solve_accepts_low_cost_preset_and_hold_knobs",
     }
     STATIC_DATA_TESTS |= {
         "test_ppp_static_signoff_cli_can_fetch_precise_products",
