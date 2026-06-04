@@ -184,9 +184,12 @@ no-solution and counted in the summary JSON as
 
 The beta scope is intentionally narrow. The C++ path covers generated SPP
 seeding, double-difference FGO, FLOAT/FIXED output, and diagnostic summaries for
-the PPC `amb-pdc` workflow. A complete taroz port still needs broader MATLAB
-dump parity for intermediate seed state, ambiguity candidates, factor residuals,
-solver costs, and final epoch output across more taroz modes.
+the PPC `amb-pdc` workflow. The P, PD, and ambiguity PDC dogfood harnesses can
+also regenerate taroz MATLAB oracle dumps with `--generate-matlab-dump` and run
+the matching optional parity tests locally. A complete taroz port still needs
+generated oracle coverage for the PC/PDC variants and broader MATLAB dump parity
+for intermediate seed state, ambiguity candidates, solver costs, and final epoch
+output across more taroz modes.
 
 When `--generate-spp-seed` is used, the PPC harness treats the generated seed as
 part of the sign-off. The native summary must report a seed path,
