@@ -36,6 +36,7 @@ EPOCH_DEBUG_NAME = "epoch_debug.csv"
 FACTOR_DEBUG_NAME = "factor_debug.csv"
 SD_FACTOR_DEBUG_NAME = "sd_factor_debug.csv"
 LAMBDA_DEBUG_NAME = "lambda_debug.csv"
+COST_TRACE_NAME = "cost_trace.csv"
 
 EXPECTED_FULL_COUNTS = {
     "input_epochs": 1141,
@@ -105,6 +106,7 @@ def output_paths(out_dir: Path) -> dict[str, Path]:
         "factor_debug": out_dir / FACTOR_DEBUG_NAME,
         "sd_factor_debug": out_dir / SD_FACTOR_DEBUG_NAME,
         "lambda_debug": out_dir / LAMBDA_DEBUG_NAME,
+        "cost_trace": out_dir / COST_TRACE_NAME,
     }
 
 
@@ -143,6 +145,8 @@ def build_fgo_command(args: argparse.Namespace, paths: dict[str, Path]) -> list[
         str(paths["sd_factor_debug"]),
         "--lambda-debug-csv",
         str(paths["lambda_debug"]),
+        "--cost-trace-csv",
+        str(paths["cost_trace"]),
         "--max-float-seed-divergence",
         "0",
         "--max-float-position-jump",
@@ -242,7 +246,9 @@ def selected_native_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "float_rejected_seed_position_divergence",
         "float_rejected_position_jump",
         "iterations",
+        "cost_trace_csv",
         "converged",
+        "initial_cost",
         "final_cost",
         "epoch_lambda_processing_time_ms",
         "epoch_lambda_covariance_solve_time_ms",
@@ -353,6 +359,9 @@ def run_parity(args: argparse.Namespace, paths: dict[str, Path], out_dir: Path) 
     )
     env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_CPP_OPT_LAMBDA_DEBUG"] = str(
         paths["lambda_debug"]
+    )
+    env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_CPP_OPT_COST_TRACE"] = str(
+        paths["cost_trace"]
     )
     return run_command([sys.executable, str(args.parity_test)], env=env)
 
