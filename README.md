@@ -218,6 +218,7 @@ Common entry points:
 
 - Public site: <https://rsasaki0109.github.io/gnssplusplus-library/>
 - [Documentation index](docs/index.md)
+- [Taroz FGO beta validation](docs/validation.md#taroz-ambiguity-pdc-fgo-beta-validation)
 - [Architecture notes](docs/architecture.md)
 - [Reference analyses](docs/references/index.md)
 - [Contribution workflow](CONTRIBUTING.md)
