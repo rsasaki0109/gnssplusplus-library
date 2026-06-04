@@ -409,6 +409,20 @@ def validate_native_summary(args: argparse.Namespace, summary: dict[str, Any]) -
         failures.append(
             f"optimized_epochs {summary.get('optimized_epochs')} != {args.max_epochs}"
         )
+    if args.generate_spp_seed:
+        optimized_epochs = summary.get("optimized_epochs")
+        seed_matched_epochs = summary.get("seed_matched_epochs")
+        seed_interpolated_epochs = summary.get("seed_interpolated_epochs")
+        if not summary.get("seed_pos"):
+            failures.append("generated SPP seed path is missing from summary")
+        if isinstance(optimized_epochs, int) and seed_matched_epochs != optimized_epochs:
+            failures.append(
+                f"seed_matched_epochs {seed_matched_epochs} != {optimized_epochs}"
+            )
+        if seed_interpolated_epochs != 0:
+            failures.append(
+                f"seed_interpolated_epochs {seed_interpolated_epochs} != 0"
+            )
     if int(summary.get("valid_solutions", 0)) < args.require_valid_min:
         failures.append(
             f"valid_solutions {summary.get('valid_solutions')} < {args.require_valid_min}"
