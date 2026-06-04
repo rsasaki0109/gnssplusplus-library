@@ -150,6 +150,7 @@ def output_paths(out_dir: Path, run: PpcRun) -> dict[str, Path]:
         "pos": run_dir / "fgo.pos",
         "summary": run_dir / "summary.json",
         "epoch_debug": run_dir / "epoch_debug.csv",
+        "lambda_debug": run_dir / "lambda_debug.csv",
     }
 
 
@@ -215,6 +216,8 @@ def build_fgo_command(
         str(paths["summary"]),
         "--epoch-debug-csv",
         str(paths["epoch_debug"]),
+        "--lambda-debug-csv",
+        str(paths["lambda_debug"]),
         "--quiet",
     ]
     if args.skip_epochs > 0:
