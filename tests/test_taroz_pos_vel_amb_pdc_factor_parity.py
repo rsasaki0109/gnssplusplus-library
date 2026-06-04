@@ -217,6 +217,18 @@ def lambda_diffs(
     ]
 
 
+def epoch_ratio_diffs(
+    keys: list[tuple[int, int]],
+    cpp_rows: dict[tuple[int, int], dict[str, str]],
+    taroz_rows: dict[tuple[int, int], dict[str, str]],
+) -> list[float]:
+    return [
+        abs(float(cpp_rows[key]["ratio"]) - float(taroz_rows[key]["ratio"]))
+        for key in keys
+        if finite(cpp_rows[key]["ratio"]) and finite(taroz_rows[key]["ratio"])
+    ]
+
+
 class TarozPosVelAmbPdcFactorParityTest(unittest.TestCase):
     def require_dogfood_files(self, *paths: Path) -> None:
         missing = [display_path(path) for path in paths if not path.exists()]
@@ -472,6 +484,23 @@ class TarozPosVelAmbPdcFactorParityTest(unittest.TestCase):
             sum(int(row["num_fixed_ambiguities"]) for row in cpp_rows.values()),
             10737,
         )
+
+        ratio_diffs = epoch_ratio_diffs(well_constrained_keys, cpp_rows, taroz_rows)
+        self.assertEqual(len(ratio_diffs), len(well_constrained_keys))
+        self.assertLessEqual(statistics.mean(ratio_diffs), 0.007)
+        self.assertLessEqual(statistics.median(ratio_diffs), 0.004)
+        self.assertLessEqual(percentile(ratio_diffs, 0.95), 0.025)
+        self.assertLessEqual(max(ratio_diffs), 0.08)
+        for key in well_constrained_keys:
+            cpp_fixed = int(cpp_rows[key]["status"]) == 4
+            taroz_fixed = int(float(taroz_rows[key]["idxfix"])) == 1
+            self.assertEqual(cpp_fixed, taroz_fixed)
+            if cpp_fixed:
+                self.assertGreater(float(cpp_rows[key]["ratio"]), 1.5)
+                self.assertGreater(float(taroz_rows[key]["ratio"]), 1.5)
+            else:
+                self.assertLessEqual(float(cpp_rows[key]["ratio"]), 1.5)
+                self.assertLessEqual(float(taroz_rows[key]["ratio"]), 1.5)
 
         position_errors = [
             epoch_debug_ecef_error_m(cpp_rows[key], taroz_rows[key], "fixed")
