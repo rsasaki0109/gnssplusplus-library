@@ -66,26 +66,38 @@ ALLOWED_KEYS = {
 
 def find_binary(target_name: str) -> str | None:
     filename = target_name + EXE_SUFFIX
-    candidates = [
-        APPS_DIR / filename,
-        ROOT_DIR / "build" / "apps" / filename,
+    build_roots = [
+        Path(path)
+        for path in sorted(glob.glob(str(ROOT_DIR / "build*")))
+        if Path(path).is_dir()
     ]
-    for config in BUILD_CONFIGS:
-        candidates.extend(
-            [
-                ROOT_DIR / "build" / "apps" / config / filename,
-                ROOT_DIR / "build" / config / "apps" / filename,
-                ROOT_DIR / "build" / config / filename,
-            ]
-        )
+    default_build = ROOT_DIR / "build"
+    if default_build not in build_roots:
+        build_roots.insert(0, default_build)
+
+    candidates = [APPS_DIR / filename]
+    for build_root in build_roots:
+        candidates.append(build_root / "apps" / filename)
+        for config in BUILD_CONFIGS:
+            candidates.extend(
+                [
+                    build_root / "apps" / config / filename,
+                    build_root / config / "apps" / filename,
+                    build_root / config / filename,
+                ]
+            )
     for candidate in candidates:
         if candidate.is_file():
             return str(candidate)
 
-    hits = sorted(
-        path for path in glob.glob(str(ROOT_DIR / "build" / "**" / filename), recursive=True)
-        if os.path.isfile(path)
-    )
+    hits: list[str] = []
+    for build_root in build_roots:
+        hits.extend(
+            path
+            for path in glob.glob(str(build_root / "**" / filename), recursive=True)
+            if os.path.isfile(path)
+        )
+    hits.sort()
     return hits[0] if hits else None
 
 

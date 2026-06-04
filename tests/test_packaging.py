@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-BUILD_DIR = ROOT_DIR / "build"
+BUILD_DIR = Path(os.environ.get("GNSSPP_BINARY_DIR", ROOT_DIR / "build"))
 
 
 def repo_data_exists(*relative_paths: str) -> bool:
