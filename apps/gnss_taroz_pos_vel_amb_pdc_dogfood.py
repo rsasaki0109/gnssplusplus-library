@@ -20,9 +20,13 @@ EXE_SUFFIX = ".exe" if os.name == "nt" else ""
 BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 
 DEFAULT_DATA_DIR = Path("/tmp/taroz_gtsam_gnss/examples/data")
+DEFAULT_TAROZ_ROOT = Path("/tmp/taroz_gtsam_gnss")
 DEFAULT_OUT_DIR = ROOT_DIR / "output/dogfood/taroz_pos_vel_amb_pdc_current"
 DEFAULT_MATLAB_DIR = (
     ROOT_DIR / "output/dogfood/taroz_matlab_pos_vel_amb_pdc_debug"
+)
+DEFAULT_MATLAB_DUMP_SCRIPT = (
+    ROOT_DIR / "scripts/dump_taroz_pos_vel_ambiguity_pdc_debug.m"
 )
 DEFAULT_PARITY_TEST = ROOT_DIR / "tests/test_taroz_pos_vel_amb_pdc_factor_parity.py"
 
@@ -149,6 +153,27 @@ def build_fgo_command(args: argparse.Namespace, paths: dict[str, Path]) -> list[
     return command
 
 
+def _matlab_single_quoted_path(path: Path) -> str:
+    return str(path).replace("'", "''")
+
+
+def matlab_example_dir(args: argparse.Namespace) -> Path:
+    return args.taroz_example_dir or (args.taroz_root / "examples")
+
+
+def build_matlab_dump_command(args: argparse.Namespace) -> list[str]:
+    script = _matlab_single_quoted_path(args.matlab_dump_script)
+    return [str(args.matlab_bin), "-batch", f"run('{script}')"]
+
+
+def matlab_dump_env(args: argparse.Namespace) -> dict[str, str]:
+    env = os.environ.copy()
+    env["GNSSPP_TAROZ_ROOT"] = str(args.taroz_root)
+    env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR"] = str(matlab_example_dir(args))
+    env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR"] = str(args.matlab_dir)
+    return env
+
+
 def validate_inputs(args: argparse.Namespace) -> None:
     missing = [
         path
@@ -158,6 +183,21 @@ def validate_inputs(args: argparse.Namespace) -> None:
     if missing:
         joined = ", ".join(str(path) for path in missing)
         raise SystemExit(f"missing taroz ambiguity PDC input file(s): {joined}")
+
+
+def validate_matlab_dump_inputs(args: argparse.Namespace) -> None:
+    missing = [
+        path
+        for path in (
+            args.matlab_dump_script,
+            args.taroz_root,
+            matlab_example_dir(args),
+        )
+        if not Path(path).exists()
+    ]
+    if missing:
+        joined = ", ".join(str(path) for path in missing)
+        raise SystemExit(f"missing taroz MATLAB oracle input path(s): {joined}")
 
 
 def run_command(command: list[str], *, env: dict[str, str] | None = None) -> int:
@@ -341,6 +381,41 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Extra single argument passed to gnss_fgo. Repeat for multiple tokens.",
     )
     parser.add_argument("--matlab-dir", type=Path, default=DEFAULT_MATLAB_DIR)
+    parser.add_argument(
+        "--generate-matlab-dump",
+        action="store_true",
+        help=(
+            "Run the taroz MATLAB dump script before C++ and parity checks, so "
+            "--matlab-dir is regenerated from the reference implementation."
+        ),
+    )
+    parser.add_argument(
+        "--matlab-bin",
+        type=Path,
+        default=Path("matlab"),
+        help="MATLAB executable used with --generate-matlab-dump.",
+    )
+    parser.add_argument(
+        "--taroz-root",
+        type=Path,
+        default=DEFAULT_TAROZ_ROOT,
+        help="Root of the taroz/PPC-Dataset MATLAB checkout.",
+    )
+    parser.add_argument(
+        "--taroz-example-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Directory containing estimate_pos_vel_ambiguity_PDC.m "
+            "(default: <taroz-root>/examples)."
+        ),
+    )
+    parser.add_argument(
+        "--matlab-dump-script",
+        type=Path,
+        default=DEFAULT_MATLAB_DUMP_SCRIPT,
+        help="MATLAB script that exports taroz ambiguity PDC oracle CSVs.",
+    )
     parser.add_argument("--parity-test", type=Path, default=DEFAULT_PARITY_TEST)
     parser.add_argument("--skip-parity", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -366,6 +441,16 @@ def main(argv: list[str] | None = None) -> int:
         "outputs": {name: str(path) for name, path in paths.items()},
         "harness_summary_json": str(harness_summary),
         "matlab_dir": str(args.matlab_dir),
+        "matlab_dump": {
+            "enabled": args.generate_matlab_dump,
+            "command": build_matlab_dump_command(args)
+            if args.generate_matlab_dump
+            else None,
+            "dump_script": str(args.matlab_dump_script),
+            "taroz_root": str(args.taroz_root),
+            "example_dir": str(matlab_example_dir(args)),
+            "out_dir": str(args.matlab_dir),
+        },
         "expected": {
             "preset": "taroz-amb-pdc",
             "backend": "eigen",
@@ -380,12 +465,26 @@ def main(argv: list[str] | None = None) -> int:
         payload["status"] = "dry-run"
         write_run_summary(harness_summary, payload)
         print("Dry run. Planned taroz ambiguity PDC dogfood command:")
+        if args.generate_matlab_dump:
+            print(" ".join(payload["matlab_dump"]["command"]))
         print(" ".join(command))
         print(f"Harness summary: {harness_summary}")
         return 0
 
     validate_inputs(args)
+    if args.generate_matlab_dump:
+        validate_matlab_dump_inputs(args)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.generate_matlab_dump:
+        args.matlab_dir.mkdir(parents=True, exist_ok=True)
+        matlab_command = build_matlab_dump_command(args)
+        matlab_returncode = run_command(matlab_command, env=matlab_dump_env(args))
+        payload["matlab_dump"]["returncode"] = matlab_returncode
+        if matlab_returncode != 0:
+            payload["status"] = "failed"
+            write_run_summary(harness_summary, payload)
+            return matlab_returncode
 
     fgo_returncode = run_command(command)
     payload["fgo_returncode"] = fgo_returncode
