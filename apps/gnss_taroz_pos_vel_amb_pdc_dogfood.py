@@ -61,6 +61,58 @@ EXPECTED_FULL_COUNTS = {
 }
 
 
+def _counts_with(**overrides: int) -> dict[str, int]:
+    counts = dict(EXPECTED_FULL_COUNTS)
+    counts.update(overrides)
+    return counts
+
+
+EXPECTATION_PROFILES: dict[str, dict[str, Any]] = {
+    "default": {
+        "counts": EXPECTED_FULL_COUNTS,
+        "lambda_ratio_threshold": 2.0,
+        "use_epoch_lambda_fixed_output": True,
+        "lambda_ambiguity_fix_used": True,
+        "fixed_solution": True,
+    },
+    "no-epoch-lambda-fixed-output": {
+        "counts": _counts_with(
+            fixed_solutions=0,
+            float_solutions=964,
+            lambda_ambiguity_used_candidates=0,
+            fixed_ambiguities=0,
+        ),
+        "lambda_ratio_threshold": 2.0,
+        "use_epoch_lambda_fixed_output": False,
+        "lambda_ambiguity_fix_used": False,
+        "fixed_solution": False,
+    },
+    "strict-lambda-ratio": {
+        "counts": _counts_with(
+            fixed_solutions=0,
+            float_solutions=964,
+            lambda_ambiguity_used_candidates=0,
+            fixed_ambiguities=0,
+        ),
+        "lambda_ratio_threshold": 100.0,
+        "use_epoch_lambda_fixed_output": True,
+        "lambda_ambiguity_fix_used": False,
+        "fixed_solution": False,
+    },
+}
+
+
+def expectation_profile(name: str) -> dict[str, Any]:
+    try:
+        return EXPECTATION_PROFILES[name]
+    except KeyError as exc:
+        valid = ", ".join(sorted(EXPECTATION_PROFILES))
+        raise SystemExit(
+            f"unsupported taroz ambiguity PDC expectation profile {name!r}; "
+            f"expected one of: {valid}"
+        ) from exc
+
+
 def default_path(name: str) -> Path:
     return DEFAULT_DATA_DIR / name
 
@@ -245,6 +297,7 @@ def selected_native_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "max_float_position_jump_m",
         "float_rejected_seed_position_divergence",
         "float_rejected_position_jump",
+        "lambda_ratio_threshold",
         "iterations",
         "cost_trace_csv",
         "converged",
@@ -270,8 +323,12 @@ def _is_finite_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and math.isfinite(float(value))
 
 
-def verify_native_summary(summary: dict[str, Any]) -> list[str]:
+def verify_native_summary(
+    summary: dict[str, Any],
+    profile_name: str = "default",
+) -> list[str]:
     failures: list[str] = []
+    profile = expectation_profile(profile_name)
     if summary.get("preset") != "taroz-amb-pdc":
         failures.append("native summary preset is not taroz-amb-pdc")
     if summary.get("backend") != "eigen":
@@ -294,8 +351,15 @@ def verify_native_summary(summary: dict[str, Any]) -> list[str]:
         failures.append("taroz-amb-pdc must enable ambiguity between factors")
     if summary.get("linearize_double_difference_factors_at_seed") is not True:
         failures.append("taroz-amb-pdc must seed-linearize DD factors")
-    if summary.get("use_epoch_lambda_fixed_output") is not True:
-        failures.append("taroz-amb-pdc must enable epoch LAMBDA fixed output")
+    if (
+        summary.get("use_epoch_lambda_fixed_output")
+        is not profile["use_epoch_lambda_fixed_output"]
+    ):
+        failures.append(
+            "taroz-amb-pdc use_epoch_lambda_fixed_output must be "
+            f"{str(profile['use_epoch_lambda_fixed_output']).lower()} "
+            f"for profile {profile_name}"
+        )
     if summary.get("dd_ambiguity_per_epoch") is not True:
         failures.append("taroz-amb-pdc must use per-epoch DD ambiguity states")
     if summary.get("use_ambiguity_priors") is not False:
@@ -313,6 +377,7 @@ def verify_native_summary(summary: dict[str, Any]) -> list[str]:
         "tdcp_huber_threshold_sigma": 1.234,
         "velocity_motion_sigma_m": 0.01,
         "ambiguity_between_sigma_cycles": 0.001,
+        "lambda_ratio_threshold": profile["lambda_ratio_threshold"],
         "min_snr_dbhz": 35.0,
         "min_satellites_per_epoch": 0,
         "min_output_dd_carrier_factors_per_epoch": 6,
@@ -323,18 +388,32 @@ def verify_native_summary(summary: dict[str, Any]) -> list[str]:
         if not _close(summary.get(key), expected):
             failures.append(f"taroz-amb-pdc {key} must be {expected}")
 
-    for key, expected in EXPECTED_FULL_COUNTS.items():
+    for key, expected in profile["counts"].items():
         if summary.get(key) != expected:
-            failures.append(f"taroz-amb-pdc {key} must be {expected}")
+            failures.append(
+                f"taroz-amb-pdc {key} must be {expected} "
+                f"for profile {profile_name}"
+            )
 
     if summary.get("lambda_ambiguity_fix_solved") is not True:
         failures.append("taroz-amb-pdc LAMBDA must solve")
-    if summary.get("lambda_ambiguity_fix_used") is not True:
-        failures.append("taroz-amb-pdc LAMBDA fixed output must be used")
+    if (
+        summary.get("lambda_ambiguity_fix_used")
+        is not profile["lambda_ambiguity_fix_used"]
+    ):
+        failures.append(
+            "taroz-amb-pdc lambda_ambiguity_fix_used must be "
+            f"{str(profile['lambda_ambiguity_fix_used']).lower()} "
+            f"for profile {profile_name}"
+        )
     if summary.get("partial_lambda_ambiguity_fix_used") is not False:
         failures.append("taroz-amb-pdc must not require partial LAMBDA retry")
-    if summary.get("fixed_solution") is not True:
-        failures.append("taroz-amb-pdc summary must report fixed_solution=true")
+    if summary.get("fixed_solution") is not profile["fixed_solution"]:
+        failures.append(
+            "taroz-amb-pdc fixed_solution must be "
+            f"{str(profile['fixed_solution']).lower()} "
+            f"for profile {profile_name}"
+        )
     if summary.get("converged") is not True:
         failures.append("taroz-amb-pdc optimization must converge")
     if not _is_finite_number(summary.get("final_cost")):
@@ -436,6 +515,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="MATLAB script that exports taroz ambiguity PDC oracle CSVs.",
     )
     parser.add_argument("--parity-test", type=Path, default=DEFAULT_PARITY_TEST)
+    parser.add_argument(
+        "--expectation-profile",
+        choices=sorted(EXPECTATION_PROFILES),
+        default="default",
+        help=(
+            "Native summary contract to enforce. Use non-default profiles with "
+            "matching --fgo-extra-arg overrides."
+        ),
+    )
     parser.add_argument("--skip-parity", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args(argv)
@@ -445,6 +533,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     out_dir = args.out_dir
     paths = output_paths(out_dir)
+    profile = expectation_profile(args.expectation_profile)
     harness_summary = args.summary_json or (
         out_dir / "taroz_pos_vel_amb_pdc_dogfood_summary.json"
     )
@@ -471,9 +560,16 @@ def main(argv: list[str] | None = None) -> int:
             "out_dir": str(matlab_output_dir(args)),
         },
         "expected": {
+            "profile": args.expectation_profile,
             "preset": "taroz-amb-pdc",
             "backend": "eigen",
-            "counts": EXPECTED_FULL_COUNTS,
+            "counts": profile["counts"],
+            "lambda_ratio_threshold": profile["lambda_ratio_threshold"],
+            "use_epoch_lambda_fixed_output": profile[
+                "use_epoch_lambda_fixed_output"
+            ],
+            "lambda_ambiguity_fix_used": profile["lambda_ambiguity_fix_used"],
+            "fixed_solution": profile["fixed_solution"],
         },
     }
 
@@ -514,7 +610,10 @@ def main(argv: list[str] | None = None) -> int:
 
     native_summary = load_native_summary(paths["summary"])
     payload["native_summary"] = selected_native_summary(native_summary)
-    native_failures = verify_native_summary(native_summary)
+    native_failures = verify_native_summary(
+        native_summary,
+        args.expectation_profile,
+    )
     payload["native_summary_failures"] = native_failures
     if native_failures:
         payload["status"] = "failed"

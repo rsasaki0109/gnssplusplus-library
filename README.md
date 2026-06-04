@@ -521,9 +521,12 @@ The current beta sign-off is:
   position/velocity PD/PDC, PC, and ambiguity PDC dumps are compared against
   C++ diagnostics locally; `taroz-oracle-suite` is the consolidated local
   entrypoint for rerunning that gate.
+- Non-default ambiguity PDC option sign-offs: `taroz-pos-vel-amb-pdc-dogfood`
+  can enforce the `no-epoch-lambda-fixed-output` and `strict-lambda-ratio`
+  expectation profiles when those matching FGO flags are supplied.
 - Remaining parity work: broaden seed-state edge cases, solver-cost
-  trajectories across more windows, and non-default option coverage before
-  calling the port complete.
+  trajectories across more windows, and additional non-default option profiles
+  before calling the port complete.
 
 Other benchmark artifacts and checked sign-offs are documented in
 [Benchmarks](docs/benchmarks.md) and [Validation](docs/validation.md).
