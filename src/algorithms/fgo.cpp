@@ -21,6 +21,7 @@
 #include <map>
 #include <numeric>
 #include <set>
+#include <string>
 #include <tuple>
 
 namespace libgnss {
@@ -2046,6 +2047,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         std::size_t robust_double_difference_pseudorange_factors = 0;
         std::size_t robust_double_difference_carrier_factors = 0;
         std::size_t robust_tdcp_factors = 0;
+        std::vector<FGOProcessor::CostTraceEntry> cost_trace_entries;
     };
 
     auto robust_scale = [&](double normalized_residual,
@@ -2062,7 +2064,9 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
 
     auto run_optimizer =
         [&](const Eigen::VectorXd& start_state,
-            const std::vector<FixedAmbiguityConstraint>& fixed_constraints)
+            const std::vector<FixedAmbiguityConstraint>& fixed_constraints,
+            const std::string& phase,
+            int global_iteration_offset)
             -> OptimizationOutput {
         OptimizationOutput output;
         output.state = start_state;
@@ -2734,6 +2738,36 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                 return output;
             }
 
+            auto cost_delta = [&]() -> std::pair<double, double> {
+                if (!std::isfinite(previous_cost) ||
+                    !std::isfinite(weighted_residual_square_sum)) {
+                    return {
+                        std::numeric_limits<double>::quiet_NaN(),
+                        std::numeric_limits<double>::quiet_NaN(),
+                    };
+                }
+                const double absolute_decrease =
+                    previous_cost - weighted_residual_square_sum;
+                const double relative_decrease =
+                    previous_cost > 0.0
+                        ? absolute_decrease / previous_cost
+                        : absolute_decrease;
+                return {absolute_decrease, relative_decrease};
+            };
+            auto record_cost_trace = [&](double update_norm, bool converged) {
+                const auto [absolute_decrease, relative_decrease] = cost_delta();
+                FGOProcessor::CostTraceEntry entry;
+                entry.phase = phase;
+                entry.local_iteration = iter;
+                entry.global_iteration = global_iteration_offset + iter;
+                entry.cost = weighted_residual_square_sum;
+                entry.absolute_decrease = absolute_decrease;
+                entry.relative_decrease = relative_decrease;
+                entry.update_norm = update_norm;
+                entry.converged = converged;
+                output.cost_trace_entries.push_back(std::move(entry));
+            };
+
             Eigen::VectorXd dx;
             bool solved = false;
             Eigen::SparseMatrix<double> current_sparse_normal;
@@ -2784,6 +2818,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                     }
                     output.iterations = iter;
                     output.converged = true;
+                    record_cost_trace(
+                        std::numeric_limits<double>::quiet_NaN(), true);
                     break;
                 }
 
@@ -2815,6 +2851,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                     store_current_linearization();
                     output.iterations = iter;
                     output.converged = true;
+                    record_cost_trace(
+                        std::numeric_limits<double>::quiet_NaN(), true);
                     break;
                 }
                 const double max_diagonal =
@@ -2848,9 +2886,12 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                  config_.use_epoch_lambda_fixed_output)) {
                 output.sparse_normal_matrix = std::move(current_sparse_normal);
             }
+            const bool update_converged =
+                output.last_dx_norm < config_.convergence_threshold_m;
+            record_cost_trace(output.last_dx_norm, update_converged);
             previous_cost = weighted_residual_square_sum;
 
-            if (output.last_dx_norm < config_.convergence_threshold_m) {
+            if (update_converged) {
                 output.converged = true;
                 break;
             }
@@ -2864,7 +2905,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         return output;
     };
 
-    OptimizationOutput optimization = run_optimizer(initial_state, {});
+    OptimizationOutput optimization = run_optimizer(initial_state, {}, "float", 0);
+    result.cost_trace_entries = optimization.cost_trace_entries;
     int total_iterations = optimization.iterations;
     double total_processing_ms = optimization.processing_ms;
     std::vector<FixedAmbiguityConstraint> fixed_constraints;
@@ -3104,10 +3146,21 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
 
         if (static_cast<int>(fixed_constraints.size()) >=
             std::max(1, config_.min_fixed_ambiguities)) {
+            const int fixed_global_iteration_offset =
+                result.cost_trace_entries.empty()
+                    ? total_iterations
+                    : result.cost_trace_entries.back().global_iteration + 1;
             OptimizationOutput fixed_optimization =
-                run_optimizer(optimization.state, fixed_constraints);
+                run_optimizer(optimization.state,
+                              fixed_constraints,
+                              "fixed",
+                              fixed_global_iteration_offset);
             total_iterations += fixed_optimization.iterations;
             total_processing_ms += fixed_optimization.processing_ms;
+            result.cost_trace_entries.insert(
+                result.cost_trace_entries.end(),
+                fixed_optimization.cost_trace_entries.begin(),
+                fixed_optimization.cost_trace_entries.end());
             optimization = std::move(fixed_optimization);
             result.diagnostics.fixed_solution = true;
             result.diagnostics.fixed_ambiguities = fixed_constraints.size();
@@ -3121,6 +3174,9 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
 
     const Eigen::VectorXd& state = optimization.state;
     result.diagnostics.iterations = total_iterations;
+    if (!result.cost_trace_entries.empty()) {
+        result.diagnostics.initial_cost = result.cost_trace_entries.front().cost;
+    }
     result.diagnostics.final_cost = optimization.final_cost;
     result.diagnostics.converged = optimization.converged;
     if (!result.diagnostics.converged &&
