@@ -151,6 +151,7 @@ def output_paths(out_dir: Path, run: PpcRun) -> dict[str, Path]:
         "summary": run_dir / "summary.json",
         "epoch_debug": run_dir / "epoch_debug.csv",
         "lambda_debug": run_dir / "lambda_debug.csv",
+        "cost_trace": run_dir / "cost_trace.csv",
     }
 
 
@@ -218,6 +219,8 @@ def build_fgo_command(
         str(paths["epoch_debug"]),
         "--lambda-debug-csv",
         str(paths["lambda_debug"]),
+        "--cost-trace-csv",
+        str(paths["cost_trace"]),
         "--quiet",
     ]
     if args.skip_epochs > 0:
@@ -395,7 +398,9 @@ def selected_native_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "lambda_ambiguity_candidates",
         "lambda_ambiguity_used_candidates",
         "iterations",
+        "cost_trace_csv",
         "converged",
+        "initial_cost",
         "final_cost",
         "total_processing_time_ms",
     ]

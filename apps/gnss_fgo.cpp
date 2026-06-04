@@ -47,6 +47,7 @@ struct Options {
     std::string factor_debug_csv_path;
     std::string sd_factor_debug_csv_path;
     std::string lambda_debug_csv_path;
+    std::string cost_trace_csv_path;
     std::string seed_pos_path;
     std::string preset = "default";
     std::string backend = "eigen";
@@ -138,6 +139,7 @@ void printUsage(const char* program_name) {
         << "                                Write taroz SD Doppler/TDCP diagnostics\n"
         << "  --lambda-debug-csv <debug.csv>\n"
         << "                                Write per-LAMBDA ambiguity/covariance diagnostics\n"
+        << "  --cost-trace-csv <trace.csv>  Write optimizer cost by iteration\n"
         << "  --debug-problem-only          Build factors and debug outputs without optimizing\n"
         << "  --seed-pos <solution.pos>     Use LibGNSS++/RTKLIB POS rows as epoch initial positions\n"
         << "  --backend <name>              Optimizer backend: eigen, gtsam-pc (if built with GTSAM)\n"
@@ -448,6 +450,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.sd_factor_debug_csv_path = argv[++i];
         } else if (arg == "--lambda-debug-csv" && i + 1 < argc) {
             options.lambda_debug_csv_path = argv[++i];
+        } else if (arg == "--cost-trace-csv" && i + 1 < argc) {
+            options.cost_trace_csv_path = argv[++i];
         } else if (arg == "--seed-pos" && i + 1 < argc) {
             options.seed_pos_path = argv[++i];
         } else if (arg == "--backend" && i + 1 < argc) {
@@ -1741,7 +1745,7 @@ void writeSummaryJson(const Options& options,
     }
 
     const auto& diagnostics = result.diagnostics;
-    output << std::setprecision(10);
+    output << std::setprecision(std::numeric_limits<double>::max_digits10);
     output << "{\n";
     output << "  \"obs\": \"" << jsonEscape(options.obs_path) << "\",\n";
     output << "  \"base\": \"" << jsonEscape(options.base_path) << "\",\n";
@@ -1765,6 +1769,8 @@ void writeSummaryJson(const Options& options,
            << jsonEscape(options.sd_factor_debug_csv_path) << "\",\n";
     output << "  \"lambda_debug_csv\": \""
            << jsonEscape(options.lambda_debug_csv_path) << "\",\n";
+    output << "  \"cost_trace_csv\": \""
+           << jsonEscape(options.cost_trace_csv_path) << "\",\n";
     output << "  \"seed_match_tolerance_s\": "
            << options.seed_match_tolerance_s << ",\n";
     output << "  \"seed_interpolation_max_gap_s\": "
@@ -2324,6 +2330,39 @@ bool writeLambdaDebugCsv(
         output << ',';
         writeCsvDouble(output, entry.position_covariance_z);
         output << '\n';
+    }
+    return true;
+}
+
+bool writeCostTraceCsv(
+    const std::string& path,
+    const std::vector<libgnss::FGOProcessor::CostTraceEntry>& entries) {
+    if (path.empty()) {
+        return true;
+    }
+
+    std::ofstream output(path);
+    if (!output.is_open()) {
+        return false;
+    }
+
+    output << "phase,local_iteration,global_iteration,cost,"
+              "absolute_decrease,relative_decrease,update_norm,converged\n";
+    output << std::fixed << std::setprecision(15);
+    for (const auto& entry : entries) {
+        output << entry.phase << ','
+               << entry.local_iteration << ','
+               << entry.global_iteration << ',';
+        writeCsvDouble(output, entry.cost);
+        output << ',';
+        writeCsvDouble(output, entry.absolute_decrease);
+        output << ',';
+        writeCsvDouble(output, entry.relative_decrease);
+        output << ',';
+        writeCsvDouble(output, entry.update_norm);
+        output << ','
+               << (entry.converged ? 1 : 0)
+               << '\n';
     }
     return true;
 }
@@ -3386,6 +3425,12 @@ int main(int argc, char* argv[]) {
                                  result.lambda_debug_entries)) {
             std::cerr << "Error: failed to write lambda debug CSV: "
                       << options.lambda_debug_csv_path << "\n";
+            return 1;
+        }
+        if (!writeCostTraceCsv(options.cost_trace_csv_path,
+                               result.cost_trace_entries)) {
+            std::cerr << "Error: failed to write cost trace CSV: "
+                      << options.cost_trace_csv_path << "\n";
             return 1;
         }
 

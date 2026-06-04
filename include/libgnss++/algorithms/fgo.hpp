@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <map>
 #include <set>
+#include <string>
 #include <vector>
 
 namespace libgnss {
@@ -379,6 +380,17 @@ public:
         double position_covariance_z = 0.0;
     };
 
+    struct CostTraceEntry {
+        std::string phase;
+        int local_iteration = 0;
+        int global_iteration = 0;
+        double cost = 0.0;
+        double absolute_decrease = 0.0;
+        double relative_decrease = 0.0;
+        double update_norm = 0.0;
+        bool converged = false;
+    };
+
     struct FGOResult {
         Solution solution;
         FGODiagnostics diagnostics;
@@ -388,6 +400,7 @@ public:
         std::vector<std::map<SatelliteId, double>> ambiguity_estimate_cycles_by_epoch;
         std::vector<Vector3d> epoch_velocities_ecef_mps;
         std::vector<LambdaDebugEntry> lambda_debug_entries;
+        std::vector<CostTraceEntry> cost_trace_entries;
     };
 
     FGOProcessor() = default;
