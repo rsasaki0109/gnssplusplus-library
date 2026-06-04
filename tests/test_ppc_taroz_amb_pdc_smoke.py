@@ -82,6 +82,7 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
 
     def test_native_summary_validation_flags_low_candidate_run(self) -> None:
         class Args:
+            generate_spp_seed = False
             max_epochs = 20
             require_valid_min = 1
             require_dd_carrier_min = 1
@@ -109,6 +110,71 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
                 "valid_solutions 0 < 1",
                 "double_difference_carrier_factors 0 < 1",
                 "lambda_ambiguity_attempts 0 < 1",
+            ],
+        )
+
+    def test_native_summary_validation_accepts_generated_seed_match(self) -> None:
+        class Args:
+            generate_spp_seed = True
+            max_epochs = 20
+            require_valid_min = 1
+            require_dd_carrier_min = 1
+            require_lambda_attempts_min = 1
+            require_fix_rate_min = 0.0
+            allow_not_converged = False
+
+        failures = gnss_ppc_taroz_amb_pdc_smoke.validate_native_summary(
+            Args(),
+            {
+                "preset": "taroz-amb-pdc",
+                "backend": "eigen",
+                "optimized_epochs": 20,
+                "seed_pos": "out/run/spp_seed.pos",
+                "seed_matched_epochs": 20,
+                "seed_interpolated_epochs": 0,
+                "valid_solutions": 20,
+                "double_difference_carrier_factors": 120,
+                "lambda_ambiguity_attempts": 20,
+                "fix_rate_percent": 100.0,
+                "converged": True,
+            },
+        )
+
+        self.assertEqual(failures, [])
+
+    def test_native_summary_validation_flags_generated_seed_drift(self) -> None:
+        class Args:
+            generate_spp_seed = True
+            max_epochs = 20
+            require_valid_min = 1
+            require_dd_carrier_min = 1
+            require_lambda_attempts_min = 1
+            require_fix_rate_min = 0.0
+            allow_not_converged = False
+
+        failures = gnss_ppc_taroz_amb_pdc_smoke.validate_native_summary(
+            Args(),
+            {
+                "preset": "taroz-amb-pdc",
+                "backend": "eigen",
+                "optimized_epochs": 20,
+                "seed_pos": "",
+                "seed_matched_epochs": 19,
+                "seed_interpolated_epochs": 1,
+                "valid_solutions": 20,
+                "double_difference_carrier_factors": 120,
+                "lambda_ambiguity_attempts": 20,
+                "fix_rate_percent": 100.0,
+                "converged": True,
+            },
+        )
+
+        self.assertEqual(
+            failures,
+            [
+                "generated SPP seed path is missing from summary",
+                "seed_matched_epochs 19 != 20",
+                "seed_interpolated_epochs 1 != 0",
             ],
         )
 
