@@ -187,6 +187,16 @@ def epoch_debug_ecef_error_m(
     return math.sqrt(dx * dx + dy * dy + dz * dz)
 
 
+def pos_epoch_debug_ecef_error_m(
+    pos_row: dict[str, float | int],
+    epoch_row: dict[str, str],
+) -> float:
+    dx = float(pos_row["x"]) - float(epoch_row["position_x_m"])
+    dy = float(pos_row["y"]) - float(epoch_row["position_y_m"])
+    dz = float(pos_row["z"]) - float(epoch_row["position_z_m"])
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+
 def epoch_debug_velocity_error_mps(
     cpp_row: dict[str, str],
     taroz_row: dict[str, str],
@@ -205,6 +215,10 @@ def seed_position_error_m(
     dy = float(cpp_row["seed_position_y_m"]) - float(taroz_row["spp_y_m"])
     dz = float(cpp_row["seed_position_z_m"]) - float(taroz_row["spp_z_m"])
     return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+
+def delimited_count(value: str) -> int:
+    return len([part for part in value.split(";") if part])
 
 
 def lambda_diffs(
@@ -459,6 +473,51 @@ class TarozPosVelAmbPdcFactorParityTest(unittest.TestCase):
         self.assertLessEqual(statistics.median(ratio_diffs), 0.004)
         self.assertLessEqual(percentile(ratio_diffs, 0.95), 0.025)
         self.assertLessEqual(max(ratio_diffs), 0.08)
+
+    def test_final_pos_file_matches_epoch_debug_output_contract(self) -> None:
+        summary_path = CPP_DIR / "summary.json"
+        self.require_dogfood_files(CPP_OPT_POS, CPP_OPT_EPOCH_DEBUG, summary_path)
+
+        summary = read_json(summary_path)
+        pos_rows = read_pos_rows(CPP_OPT_POS)
+        epoch_rows = keyed_epoch_rows(CPP_OPT_EPOCH_DEBUG)
+        self.assertEqual(set(pos_rows), set(epoch_rows))
+        self.assertEqual(len(pos_rows), 1141)
+
+        expected_iterations = int(summary["iterations"])
+        self.assertEqual(
+            Counter(int(row["iterations"]) for row in pos_rows.values()),
+            Counter({expected_iterations: len(pos_rows)}),
+        )
+        self.assertEqual(
+            Counter(int(row["status"]) for row in pos_rows.values()),
+            Counter(int(row["status"]) for row in epoch_rows.values()),
+        )
+
+        position_errors: list[float] = []
+        ratio_diffs: list[float] = []
+        for key, pos_row in pos_rows.items():
+            epoch_row = epoch_rows[key]
+            self.assertEqual(int(pos_row["status"]), int(epoch_row["status"]))
+            self.assertEqual(
+                int(pos_row["satellites"]),
+                delimited_count(epoch_row["dd_satellites"]),
+            )
+            self.assertEqual(
+                int(pos_row["fixed_ambiguities"]),
+                int(epoch_row["num_fixed_ambiguities"]),
+            )
+            if int(pos_row["status"]) == 0:
+                self.assertEqual(float(pos_row["ratio"]), 0.0)
+                self.assertEqual(int(pos_row["fixed_ambiguities"]), 0)
+
+            position_errors.append(pos_epoch_debug_ecef_error_m(pos_row, epoch_row))
+            ratio_diffs.append(
+                abs(float(pos_row["ratio"]) - float(epoch_row["ratio"]))
+            )
+
+        self.assertLessEqual(max(position_errors), 2e-6)
+        self.assertLessEqual(max(ratio_diffs), 5e-7)
 
     def test_optimized_epoch_debug_tracks_taroz_fixed_output(self) -> None:
         taroz_epoch_path = MATLAB_DIR / "per_epoch_state.csv"
