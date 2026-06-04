@@ -157,20 +157,30 @@ def _matlab_single_quoted_path(path: Path) -> str:
     return str(path).replace("'", "''")
 
 
+def repo_relative_path(path: Path) -> Path:
+    return path if path.is_absolute() else ROOT_DIR / path
+
+
 def matlab_example_dir(args: argparse.Namespace) -> Path:
     return args.taroz_example_dir or (args.taroz_root / "examples")
 
 
+def matlab_output_dir(args: argparse.Namespace) -> Path:
+    return repo_relative_path(args.matlab_dir).resolve()
+
+
 def build_matlab_dump_command(args: argparse.Namespace) -> list[str]:
-    script = _matlab_single_quoted_path(args.matlab_dump_script)
+    script = _matlab_single_quoted_path(repo_relative_path(args.matlab_dump_script))
     return [str(args.matlab_bin), "-batch", f"run('{script}')"]
 
 
 def matlab_dump_env(args: argparse.Namespace) -> dict[str, str]:
     env = os.environ.copy()
-    env["GNSSPP_TAROZ_ROOT"] = str(args.taroz_root)
-    env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR"] = str(matlab_example_dir(args))
-    env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR"] = str(args.matlab_dir)
+    env["GNSSPP_TAROZ_ROOT"] = str(repo_relative_path(args.taroz_root).resolve())
+    env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR"] = str(
+        repo_relative_path(matlab_example_dir(args)).resolve()
+    )
+    env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR"] = str(matlab_output_dir(args))
     return env
 
 
@@ -193,7 +203,7 @@ def validate_matlab_dump_inputs(args: argparse.Namespace) -> None:
             args.taroz_root,
             matlab_example_dir(args),
         )
-        if not Path(path).exists()
+        if not repo_relative_path(path).exists()
     ]
     if missing:
         joined = ", ".join(str(path) for path in missing)
@@ -449,7 +459,7 @@ def main(argv: list[str] | None = None) -> int:
             "dump_script": str(args.matlab_dump_script),
             "taroz_root": str(args.taroz_root),
             "example_dir": str(matlab_example_dir(args)),
-            "out_dir": str(args.matlab_dir),
+            "out_dir": str(matlab_output_dir(args)),
         },
         "expected": {
             "preset": "taroz-amb-pdc",
@@ -477,7 +487,7 @@ def main(argv: list[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.generate_matlab_dump:
-        args.matlab_dir.mkdir(parents=True, exist_ok=True)
+        matlab_output_dir(args).mkdir(parents=True, exist_ok=True)
         matlab_command = build_matlab_dump_command(args)
         matlab_returncode = run_command(matlab_command, env=matlab_dump_env(args))
         payload["matlab_dump"]["returncode"] = matlab_returncode
