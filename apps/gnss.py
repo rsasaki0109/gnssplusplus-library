@@ -79,6 +79,11 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_taroz_observable_dogfood.py"),
         "summary": "Regenerate taroz D/position PD/PDC/position-velocity PDC outputs and verify parity.",
     },
+    "taroz-oracle-suite": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_taroz_oracle_suite.py"),
+        "summary": "Run all taroz MATLAB-oracle dogfood harnesses from one suite entrypoint.",
+    },
     "ppc-taroz-amb-pdc-smoke": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_ppc_taroz_amb_pdc_smoke.py"),
@@ -443,6 +448,7 @@ def usage() -> str:
             "  python3 apps/gnss.py taroz-pc-dogfood --out-dir output/dogfood/taroz_pc_dogfood_current",
             "  python3 apps/gnss.py taroz-observable-dogfood --mode pos-pdc --out-dir output/dogfood/taroz_pos_pdc_dogfood_current",
             "  python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood --out-dir output/dogfood/taroz_pos_vel_amb_pdc_dogfood_current",
+            "  python3 apps/gnss.py taroz-oracle-suite --native-bin-dir build/apps --out-root output/dogfood/taroz_oracle_suite_current",
             "  python3 apps/gnss.py ppc-taroz-amb-pdc-smoke --dataset-root /datasets/PPC-Dataset --max-epochs 200 --generate-spp-seed",
             "  python3 apps/gnss.py compare-modes --modes spp,fgo,rtk --spp-pos output/spp.pos --fgo-pos output/fgo.pos --rtk-pos output/rtk.pos",
             "  python3 apps/gnss.py compare-modes --modes fgo,rtk --fgo-pos output/fgo.pos --rtk-pos output/rtk.pos --require-pair-p95-3d-max fgo:rtk=2.0",

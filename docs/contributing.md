@@ -50,6 +50,8 @@ Keep taroz FGO validation split by cost:
 - Light unit coverage belongs in CTest, such as `python_ppc_taroz_amb_pdc_smoke_tests`
   dry-run checks and focused C++ factor tests.
 - Heavy local checks include
+  `python3 apps/gnss.py taroz-oracle-suite --native-bin-dir build/apps`
+  for the consolidated taroz MATLAB-oracle gate,
   `python3 apps/gnss.py taroz-pc-dogfood --generate-matlab-dump`
   for the PC ambiguity mode,
   `python3 apps/gnss.py taroz-observable-dogfood --mode pos-pdc --generate-matlab-dump`

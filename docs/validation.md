@@ -18,6 +18,7 @@ Main sign-off entrypoints:
 - `gnss ppc-coverage-matrix`
 - `gnss ppc-taroz-amb-pdc-smoke`
 - `gnss taroz-observable-dogfood`
+- `gnss taroz-oracle-suite`
 - `gnss odaiba-benchmark --require-*`
 - `gnss public-rtk-benchmarks`
 - `gnss smartloc-adapter`

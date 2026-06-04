@@ -495,6 +495,18 @@ python3 apps/gnss.py taroz-observable-dogfood \
   --matlab-dir output/dogfood/taroz_matlab_pos_pdc_debug
 ```
 
+Use the suite runner when refreshing the full local taroz oracle gate without
+copying every individual command:
+
+```bash
+python3 apps/gnss.py taroz-oracle-suite \
+  --native-bin-dir build/apps \
+  --out-root output/dogfood/taroz_oracle_suite_current
+```
+
+Add `--generate-matlab-dump --taroz-root /tmp/taroz_gtsam_gnss` to regenerate
+the MATLAB oracles under the suite output root before each parity run.
+
 The current beta sign-off is:
 
 - CI: C++ FGO unit tests plus the lightweight 20-epoch PPC smoke.
@@ -504,7 +516,8 @@ The current beta sign-off is:
   with the same generated SPP seed path.
 - Current MATLAB-oracle dogfood: generated P, D, position PD/PDC,
   position/velocity PD/PDC, PC, and ambiguity PDC dumps are compared against
-  C++ diagnostics locally.
+  C++ diagnostics locally; `taroz-oracle-suite` is the consolidated local
+  entrypoint for rerunning that gate.
 - Remaining parity work: broaden intermediate seed state, ambiguity candidates,
   solver costs, and final epoch-output checks before calling the port complete.
 
