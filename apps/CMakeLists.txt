@@ -1,5 +1,11 @@
 set(GNSS_APP_TARGETS
     gnss_spp
+    gnss_fgo
+    gnss_vel_d
+    gnss_pos_pdc
+    gnss_pos_pd
+    gnss_pos_vel_pdc
+    gnss_pos_vel_pd
     gnss_solve
     gnss_ppp
     gnss_visibility
@@ -14,6 +20,28 @@ set(GNSS_APP_TARGETS
 
 add_executable(gnss_spp gnss_spp.cpp)
 target_link_libraries(gnss_spp PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+
+add_executable(gnss_fgo gnss_fgo.cpp)
+target_link_libraries(gnss_fgo PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+if(GTSAM_FOUND)
+    target_compile_definitions(gnss_fgo PRIVATE GNSS_WITH_GTSAM=1)
+    target_link_libraries(gnss_fgo PRIVATE gtsam)
+endif()
+
+add_executable(gnss_vel_d gnss_vel_d.cpp)
+target_link_libraries(gnss_vel_d PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+
+add_executable(gnss_pos_pdc gnss_pos_pdc.cpp)
+target_link_libraries(gnss_pos_pdc PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+
+add_executable(gnss_pos_pd gnss_pos_pd.cpp)
+target_link_libraries(gnss_pos_pd PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+
+add_executable(gnss_pos_vel_pdc gnss_pos_vel_pdc.cpp)
+target_link_libraries(gnss_pos_vel_pdc PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+
+add_executable(gnss_pos_vel_pd gnss_pos_vel_pd.cpp)
+target_link_libraries(gnss_pos_vel_pd PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
 add_executable(gnss_solve gnss_solve.cpp)
 target_link_libraries(gnss_solve PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
@@ -60,6 +88,12 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_web.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_runtime.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_toml_config.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_mode_compare.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppc_taroz_amb_pdc_smoke.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_taroz_p_dogfood.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_taroz_pd_dogfood.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_taroz_pc_dogfood.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_taroz_pos_vel_amb_pdc_dogfood.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_live_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_moving_base_signoff.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_scorpion_moving_base_signoff.py
@@ -126,6 +160,13 @@ install(PROGRAMS
     ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_rtk_scorecard.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_tail_cleanup_scorecard.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_rtk_trajectory.py
+    ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_p_debug.m
+    ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_d_debug.m
+    ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_pos_pdc_debug.m
+    ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_pos_pd_debug.m
+    ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_pos_vel_pdc_debug.m
+    ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_pos_vel_ambiguity_pdc_debug.m
+    ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_pd_debug.m
     ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_dual_profile_selector_matrix.py
     ${CMAKE_SOURCE_DIR}/scripts/apply_ppc_dual_profile_selector.py
     ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_profile_segment_delta.py

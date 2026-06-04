@@ -318,6 +318,10 @@ double solveKepler(double mean_anomaly, double eccentricity) {
     return E;
 }
 
+bool isBeiDouGeoPrn(uint8_t prn) {
+    return prn <= 5 || (prn >= 59 && prn <= 63);
+}
+
 bool computeBroadcastState(const Ephemeris& eph,
                            const GNSSTime& time,
                            Vector3d& pos,
@@ -354,18 +358,18 @@ bool computeBroadcastState(const Ephemeris& eph,
     const double r = a * (1.0 - eph.e * cos_e) + dr;
     const double inclination = eph.i0 + eph.idot * tk + di;
     const double toe_seconds = eph.toes != 0.0 ? eph.toes : eph.toe.tow;
-    const double omega = eph.omega0 + (eph.omega_dot - earth_rotation) * tk
-        - earth_rotation * toe_seconds;
 
     const double x_orb = r * std::cos(u);
     const double y_orb = r * std::sin(u);
 
-    const double cos_omega = std::cos(omega);
-    const double sin_omega = std::sin(omega);
     const double cos_i = std::cos(inclination);
     const double sin_i = std::sin(inclination);
 
-    if (is_beidou && eph.satellite.prn <= 5) {
+    if (is_beidou && isBeiDouGeoPrn(eph.satellite.prn)) {
+        const double omega_geo =
+            eph.omega0 + eph.omega_dot * tk - earth_rotation * toe_seconds;
+        const double cos_omega = std::cos(omega_geo);
+        const double sin_omega = std::sin(omega_geo);
         const double xg = x_orb * cos_omega - y_orb * cos_i * sin_omega;
         const double yg = x_orb * sin_omega + y_orb * cos_i * cos_omega;
         const double zg = y_orb * sin_i;
@@ -377,6 +381,10 @@ bool computeBroadcastState(const Ephemeris& eph,
                  zg * cos_rot * kBeiDouGeoSin5Deg;
         pos(2) = -yg * kBeiDouGeoSin5Deg + zg * kBeiDouGeoCos5Deg;
     } else {
+        const double omega = eph.omega0 + (eph.omega_dot - earth_rotation) * tk
+            - earth_rotation * toe_seconds;
+        const double cos_omega = std::cos(omega);
+        const double sin_omega = std::sin(omega);
         pos(0) = x_orb * cos_omega - y_orb * cos_i * sin_omega;
         pos(1) = x_orb * sin_omega + y_orb * cos_i * cos_omega;
         pos(2) = y_orb * sin_i;
