@@ -251,6 +251,33 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
         self.assertEqual(fixed_candidates, native["lambda_ambiguity_used_candidates"])
         self.assertEqual(fixed_epochs, native["fixed_solutions"])
 
+    def assert_cost_trace_matches_summary(self, run_payload: dict[str, object]) -> None:
+        outputs = run_payload["outputs"]
+        if "cost_trace" not in outputs:
+            self.skipTest("missing optional PPC taroz cost trace output path")
+        cost_path = Path(outputs["cost_trace"])
+        if not cost_path.exists():
+            self.skipTest(f"missing optional PPC taroz cost trace artifact: {cost_path}")
+
+        with cost_path.open(newline="") as handle:
+            rows = list(csv.DictReader(handle))
+        native = run_payload["native_summary"]
+
+        self.assertGreater(len(rows), 0)
+        self.assertEqual(rows[0]["phase"], "float")
+        self.assertEqual(int(rows[0]["local_iteration"]), 0)
+        self.assertEqual(int(rows[0]["global_iteration"]), 0)
+        self.assertAlmostEqual(float(rows[0]["cost"]), float(native["initial_cost"]), places=5)
+        self.assertAlmostEqual(float(rows[-1]["cost"]), float(native["final_cost"]), places=5)
+        phases = {row["phase"] for row in rows}
+        self.assertTrue(phases <= {"float", "fixed"})
+        self.assertTrue(all(math.isfinite(float(row["cost"])) for row in rows))
+        self.assertTrue(all(float(row["cost"]) >= 0.0 for row in rows))
+        global_iterations = [int(row["global_iteration"]) for row in rows]
+        self.assertEqual(global_iterations, sorted(global_iterations))
+        self.assertEqual(len(global_iterations), len(set(global_iterations)))
+        self.assertLessEqual(len(rows), int(native["iterations"]) + len(phases))
+
     def make_run(self, root: Path, spec: str) -> Path:
         site, run_name = spec.split("/")
         run_dir = root / site / run_name
@@ -311,6 +338,7 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
             self.assertIn("--preset", command)
             self.assertIn("taroz-amb-pdc", command)
             self.assertIn("--lambda-debug-csv", command)
+            self.assertIn("--cost-trace-csv", command)
             self.assertIn("--max-epochs", command)
             self.assertIn("20", command)
 
@@ -592,6 +620,11 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
         payload = self.require_summary(NAGOYA_RUN3_1000_SEED_SUMMARY)
 
         self.assert_lambda_debug_matches_epoch_debug(payload["runs"]["nagoya/run3"])
+
+    def test_optional_nagoya_run3_1000_epoch_cost_trace_contract(self) -> None:
+        payload = self.require_summary(NAGOYA_RUN3_1000_SEED_SUMMARY)
+
+        self.assert_cost_trace_matches_summary(payload["runs"]["nagoya/run3"])
 
 
 if __name__ == "__main__":
