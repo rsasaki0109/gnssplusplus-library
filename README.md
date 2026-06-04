@@ -431,9 +431,14 @@ Full replay, RTKLIB comparison, and historical diagnostic commands are in
 [PPC reproduction commands](docs/ppc_reproduction.md). Dataset source:
 [taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset).
 
-The taroz ambiguity PDC FGO port has a separate PPC dogfood harness. Keep the
-20-epoch form for lightweight smoke, and use the longer form locally when
-checking public-run behavior or shifted windows:
+The taroz ambiguity PDC FGO port is currently a beta port of the PPC
+`amb-pdc` path. The C++ runner builds SPP seeds, runs the double-difference FGO
+pipeline, emits FLOAT/FIXED `.pos` output, and records per-epoch/debug summary
+diagnostics. It is not yet a full bit-for-bit port of every taroz MATLAB mode or
+every internal MATLAB state dump.
+
+Keep the 20-epoch form for lightweight smoke, and use the longer forms locally
+when checking public-run behavior or shifted windows:
 
 ```bash
 python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
@@ -463,6 +468,17 @@ FLOAT epochs more than 100 m from the seed, or jumping more than 100 m from the
 previous raw output, are written as no-solution. The summary reports
 `float_rejected_seed_position_divergence` and
 `float_rejected_position_jump`.
+
+The current beta sign-off is:
+
+- CI: C++ FGO unit tests plus the lightweight 20-epoch PPC smoke.
+- Local dogfood: all six public PPC Tokyo/Nagoya runs at 200 epochs with
+  generated SPP seeds and `--require-valid-p95-3d-max 2.0`.
+- Shifted-window guard check: `nagoya/run3 --skip-epochs 400 --max-epochs 200`
+  with the same generated SPP seed path.
+- Remaining parity work: expand optional taroz MATLAB dumps into internal
+  parity tests for seed state, ambiguity candidates, residuals, and final
+  FLOAT/FIXED output before calling the port complete.
 
 Other benchmark artifacts and checked sign-offs are documented in
 [Benchmarks](docs/benchmarks.md) and [Validation](docs/validation.md).

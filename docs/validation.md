@@ -16,6 +16,7 @@ Main sign-off entrypoints:
 - `gnss moving-base-signoff`
 - `gnss ppc-rtk-signoff`
 - `gnss ppc-coverage-matrix`
+- `gnss ppc-taroz-amb-pdc-smoke`
 - `gnss odaiba-benchmark --require-*`
 - `gnss public-rtk-benchmarks`
 - `gnss smartloc-adapter`
@@ -137,6 +138,55 @@ Use `--max-hold-div`, `--max-pos-jump`, `--max-pos-jump-min`, and
 `--max-pos-jump-rate` for explicit fixed-solution validation sweeps; summaries
 record the jump settings as `rtk_max_position_jump_m`,
 `rtk_max_position_jump_min_m`, and `rtk_max_position_jump_rate_mps`.
+
+## Taroz ambiguity PDC FGO beta validation
+
+`gnss ppc-taroz-amb-pdc-smoke` is the validation harness for the beta C++ port
+of taroz's PPC `amb-pdc` FGO path. It is separate from the production RTK
+sign-off commands above: its job is to dogfood the taroz-style FGO runner on
+PPC-Dataset and to keep the port's intermediate diagnostics inspectable.
+
+Use the short command in CI or quick local checks:
+
+```bash
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --max-epochs 20 \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_smoke/summary.json
+```
+
+Use longer local sign-offs before treating the beta path as healthy:
+
+```bash
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --max-epochs 200 \
+  --generate-spp-seed \
+  --require-valid-p95-3d-max 2.0 \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_smoke_200/summary.json
+
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --run nagoya/run3 \
+  --skip-epochs 400 \
+  --max-epochs 200 \
+  --generate-spp-seed \
+  --require-valid-p95-3d-max 2.0 \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_shifted/summary.json
+```
+
+The `taroz-amb-pdc` preset enables two truth-free FLOAT output guards by
+default: `--max-float-seed-divergence 100` and
+`--max-float-position-jump 100`. Rejected FLOAT epochs are emitted as
+no-solution and counted in the summary JSON as
+`float_rejected_seed_position_divergence` and
+`float_rejected_position_jump`.
+
+The beta scope is intentionally narrow. The C++ path covers generated SPP
+seeding, double-difference FGO, FLOAT/FIXED output, and diagnostic summaries for
+the PPC `amb-pdc` workflow. A complete taroz port still needs broader MATLAB
+dump parity for intermediate seed state, ambiguity candidates, factor residuals,
+solver costs, and final epoch output across more taroz modes.
 
 `gnss smartloc-adapter` widens the public matrix beyond UrbanNav by exporting
 smartLoc `NAV-POSLLH.csv` into a `reference.csv` plus a normalized u-blox
