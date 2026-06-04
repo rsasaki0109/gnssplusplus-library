@@ -1,9 +1,14 @@
 # Build artifacts
 build/
 build_local/
+build-codex/
 bin/
 *.a
 *.o
+
+# ROS 2 generated artifacts
+ros2/install/
+ros2/log/
 
 # Data (large RINEX files)
 data/
