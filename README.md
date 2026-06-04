@@ -522,11 +522,33 @@ The current beta sign-off is:
   C++ diagnostics locally; `taroz-oracle-suite` is the consolidated local
   entrypoint for rerunning that gate.
 - Non-default ambiguity PDC option sign-offs: `taroz-pos-vel-amb-pdc-dogfood`
-  can enforce the `no-epoch-lambda-fixed-output` and `strict-lambda-ratio`
-  expectation profiles when those matching FGO flags are supplied.
-- Remaining parity work: broaden seed-state edge cases, solver-cost
-  trajectories across more windows, and additional non-default option profiles
-  before calling the port complete.
+  enforces `no-epoch-lambda-fixed-output`, `strict-lambda-ratio`,
+  `no-seed-interpolation`, `first-120-window`, `shifted-120-window`, and
+  `first-120-seed-divergence-guard` profiles when the matching FGO flags are
+  supplied.
+
+The parity-pinned ambiguity PDC surface currently includes:
+
+- Default taroz example counts, final `.pos` status/ratio/fixed ambiguity
+  contract, raw DD/SD factor diagnostics, LAMBDA matrix shape/covariance/status
+  contract, and C++ cost trace shape.
+- MATLAB internal comparison for the default taroz example, including graph
+  summary, per-satellite residuals, per-epoch fixed output, optimizer cost
+  trace scale, and seed positions. The default dogfood now pins
+  `seed_matched_epochs=1141` and `seed_interpolated_epochs=34`.
+- Windowed MATLAB internal comparison for the first 120 epochs and the shifted
+  120-epoch ambiguity PDC window, with GPS time sequence, per-epoch fixed/float
+  status, seed/SPP position, ambiguity candidate/fixed counts, ratio
+  differences, fixed/float position, velocity, optimizer cost trace shape, and
+  final-cost scale checked against C++.
+- Public PPC-Dataset smoke and longer local sign-offs, including a shifted
+  `nagoya/run3` window and the optional 1000-epoch generated-seed runner.
+
+It is still a beta port, not a claim of complete taroz equivalence. Remaining
+parity work is to broaden MATLAB internal dumps beyond the default ambiguity
+PDC run, compare solver-cost trajectories across more public windows/runs, add
+more option combinations, and keep extending long PPC-Dataset coverage before
+calling the port complete.
 
 Other benchmark artifacts and checked sign-offs are documented in
 [Benchmarks](docs/benchmarks.md) and [Validation](docs/validation.md).

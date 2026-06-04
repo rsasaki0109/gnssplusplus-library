@@ -242,7 +242,9 @@ python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood --generate-matlab-dump
 
 The ambiguity PDC dogfood also has non-default expectation profiles for
 option-level sign-offs that should not be judged with the default FIX/FLOAT
-counts:
+counts. The harness always checks the native cost trace shape against the
+summary, so these profiles still pin the C++ solver trajectory contract when
+`--skip-parity` is used:
 
 ```bash
 python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
@@ -255,24 +257,104 @@ python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
   --fgo-extra-arg=100 \
   --expectation-profile strict-lambda-ratio \
   --skip-parity
+
+python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
+  --fgo-extra-arg=--seed-interpolation-max-gap \
+  --fgo-extra-arg=0 \
+  --expectation-profile no-seed-interpolation \
+  --skip-parity
+
+python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
+  --fgo-extra-arg=--max-epochs \
+  --fgo-extra-arg=120 \
+  --expectation-profile first-120-window \
+  --skip-parity
+
+python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
+  --fgo-extra-arg=--skip-epochs \
+  --fgo-extra-arg=400 \
+  --fgo-extra-arg=--max-epochs \
+  --fgo-extra-arg=120 \
+  --expectation-profile shifted-120-window \
+  --skip-parity
+
+python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
+  --fgo-extra-arg=--max-epochs \
+  --fgo-extra-arg=120 \
+  --fgo-extra-arg=--max-float-seed-divergence \
+  --fgo-extra-arg=1 \
+  --expectation-profile first-120-seed-divergence-guard \
+  --skip-parity
+```
+
+For windowed MATLAB internal checks on non-default windows, regenerate a
+windowed MATLAB oracle and run the window parity test. The test compares the
+GPS time sequence, per-epoch fixed/float status, ambiguity candidate/fixed
+counts, seed/SPP position, ratio differences, fixed/float position, velocity,
+optimizer cost trace shape, and final-cost scale. The shifted C++ window uses
+`--skip-epochs 400`; the MATLAB dump profile maps that to 412 fixed-interval
+taroz epochs so the GPS time sequence matches C++ exactly.
+
+```bash
+python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
+  --generate-matlab-dump \
+  --taroz-root /tmp/taroz_gtsam_gnss \
+  --expectation-profile first-120-window \
+  --fgo-extra-arg=--max-epochs \
+  --fgo-extra-arg=120 \
+  --out-dir output/dogfood/taroz_pos_vel_amb_pdc_first_120_profile_current \
+  --matlab-dir output/dogfood/taroz_matlab_pos_vel_amb_pdc_first_120_debug \
+  --skip-parity
+
+python3 tests/test_taroz_pos_vel_amb_pdc_window_cost_parity.py -v
+
+python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
+  --generate-matlab-dump \
+  --taroz-root /tmp/taroz_gtsam_gnss \
+  --expectation-profile shifted-120-window \
+  --fgo-extra-arg=--skip-epochs \
+  --fgo-extra-arg=400 \
+  --fgo-extra-arg=--max-epochs \
+  --fgo-extra-arg=120 \
+  --out-dir output/dogfood/taroz_pos_vel_amb_pdc_shifted_120_current \
+  --matlab-dir output/dogfood/taroz_matlab_pos_vel_amb_pdc_shifted_120_debug \
+  --skip-parity
+
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_WINDOW_CPP_DIR=output/dogfood/taroz_pos_vel_amb_pdc_shifted_120_current \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_WINDOW_CPP_SUMMARY=output/dogfood/taroz_pos_vel_amb_pdc_shifted_120_current/summary.json \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_WINDOW_CPP_COST_TRACE=output/dogfood/taroz_pos_vel_amb_pdc_shifted_120_current/cost_trace.csv \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_WINDOW_CPP_EPOCH_DEBUG=output/dogfood/taroz_pos_vel_amb_pdc_shifted_120_current/epoch_debug.csv \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_WINDOW_MATLAB_DIR=output/dogfood/taroz_matlab_pos_vel_amb_pdc_shifted_120_debug \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_WINDOW_MATLAB_GRAPH=output/dogfood/taroz_matlab_pos_vel_amb_pdc_shifted_120_debug/graph_detail.csv \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_WINDOW_MATLAB_COST_TRACE=output/dogfood/taroz_matlab_pos_vel_amb_pdc_shifted_120_debug/optimizer_cost_trace.csv \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_WINDOW_MATLAB_EPOCH_STATE=output/dogfood/taroz_matlab_pos_vel_amb_pdc_shifted_120_debug/per_epoch_state.csv \
+python3 tests/test_taroz_pos_vel_amb_pdc_window_cost_parity.py -v
 ```
 
 The matching CTest parity tests are optional-artifact tests: they skip cleanly
 when the local `output/dogfood/...` oracle files are absent and become strict
-regressions after a dogfood run has generated them.
+regressions after a dogfood run has generated them. The window test pins
+per-epoch fixed status, seed/SPP position, ambiguity counts, ratio, fixed/float
+position, velocity, and cost trace shape against the MATLAB dump.
 For position/velocity ambiguity PDC, the parity gate also checks that the C++
 LAMBDA debug stream forms a complete square candidate matrix per attempted
 epoch, with stable satellite row/column mapping, symmetric covariance, and
-epoch-debug status/ratio consistency.
+epoch-debug status/ratio consistency. Its seed-state check ties
+`seed_matched_epochs` and the 34 interpolated seed epochs to the MATLAB SPP
+per-epoch dump, rather than only checking final `.pos` rows.
 
 ```bash
-ctest --test-dir build-codex -R 'python_taroz_.*(internal_parity|factor_parity)_tests' --output-on-failure
+ctest --test-dir build-codex -R 'python_taroz_.*(internal_parity|factor_parity|window_cost_parity)_tests' --output-on-failure
 ```
 
-The remaining beta-hardening work is broader than final-output shape: keep
-expanding seed-state edge cases, solver-cost trajectories across more windows,
-additional non-default option profiles, and longer PPC-Dataset windows before
-treating the taroz port as complete.
+The remaining beta-hardening work is broader than final-output shape. Current
+parity covers the listed modes, default ambiguity PDC internals, LAMBDA matrix
+contracts, seed interpolation counts, first/shifted window option contracts,
+and first/shifted window per-epoch plus cost-trajectory contracts. It is still
+not a complete bit-for-bit port of every
+taroz MATLAB branch: more PPC-Dataset windows, additional MATLAB internal dumps,
+and broader option combinations are required before calling the taroz port
+complete.
 
 When `--generate-spp-seed` is used, the PPC harness treats the generated seed as
 part of the sign-off. The native summary must report a seed path,
