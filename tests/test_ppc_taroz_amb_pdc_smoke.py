@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import csv
 import json
+import math
 from pathlib import Path
 import sys
 import tempfile
@@ -25,11 +27,72 @@ SHIFTED_NAGOYA_RUN3_SEED_SUMMARY = (
 )
 
 
+def read_seed_pos_by_tow(path: Path) -> dict[int, dict[str, float]]:
+    rows: dict[int, dict[str, float]] = {}
+    with path.open(encoding="ascii", errors="ignore") as handle:
+        for line in handle:
+            if not line.strip() or line.startswith("%"):
+                continue
+            parts = line.split()
+            if len(parts) < 5:
+                raise ValueError(f"unexpected seed POS row width in {path}: {line.rstrip()}")
+            rows[round(float(parts[1]) * 1000)] = {
+                "gps_week": float(parts[0]),
+                "x_m": float(parts[2]),
+                "y_m": float(parts[3]),
+                "z_m": float(parts[4]),
+            }
+    return rows
+
+
 class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
     def require_summary(self, path: Path) -> dict[str, object]:
         if not path.exists():
             self.skipTest(f"missing optional PPC taroz dogfood summary: {path}")
         return json.loads(path.read_text(encoding="utf-8"))
+
+    def assert_seed_state_matches_epoch_debug(self, run_payload: dict[str, object]) -> None:
+        outputs = run_payload["outputs"]
+        epoch_path = Path(outputs["epoch_debug"])
+        seed_path = Path(outputs["seed_pos"])
+        if not epoch_path.exists() or not seed_path.exists():
+            self.skipTest(f"missing optional PPC taroz seed artifact(s): {epoch_path}, {seed_path}")
+
+        with epoch_path.open(newline="") as handle:
+            epoch_rows = list(csv.DictReader(handle))
+        seed_rows = read_seed_pos_by_tow(seed_path)
+        native = run_payload["native_summary"]
+
+        self.assertEqual(len(epoch_rows), native["optimized_epochs"])
+        self.assertEqual(len(epoch_rows), native["seed_matched_epochs"])
+        self.assertEqual(native["seed_interpolated_epochs"], 0)
+
+        tows = [round(float(row["gps_tow"]) * 1000) for row in epoch_rows]
+        self.assertEqual(len(tows), len(set(tows)))
+        self.assertTrue(all(current < following for current, following in zip(tows, tows[1:])))
+        self.assertTrue(set(tows).issubset(seed_rows))
+
+        for row in epoch_rows:
+            seed = seed_rows[round(float(row["gps_tow"]) * 1000)]
+            self.assertEqual(int(seed["gps_week"]), int(row["gps_week"]))
+            self.assertAlmostEqual(seed["x_m"], float(row["seed_position_x_m"]), places=6)
+            self.assertAlmostEqual(seed["y_m"], float(row["seed_position_y_m"]), places=6)
+            self.assertAlmostEqual(seed["z_m"], float(row["seed_position_z_m"]), places=6)
+            position = (
+                float(row["position_x_m"]),
+                float(row["position_y_m"]),
+                float(row["position_z_m"]),
+            )
+            seed_position = (
+                float(row["seed_position_x_m"]),
+                float(row["seed_position_y_m"]),
+                float(row["seed_position_z_m"]),
+            )
+            self.assertAlmostEqual(
+                math.dist(position, seed_position),
+                float(row["seed_position_divergence_m"]),
+                places=5,
+            )
 
     def make_run(self, root: Path, spec: str) -> Path:
         site, run_name = spec.split("/")
@@ -318,6 +381,14 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
         self.assertEqual(shifted_reference["matched_epochs"], 200)
         self.assertLessEqual(shifted_reference["p95_3d_error_m"], 2.0)
         self.assertLessEqual(shifted_reference["max_3d_error_m"], 2.0)
+
+    def test_optional_generated_seed_state_matches_epoch_debug(self) -> None:
+        payload = self.require_summary(FULL_SEED_SUMMARY)
+        shifted_payload = self.require_summary(SHIFTED_NAGOYA_RUN3_SEED_SUMMARY)
+
+        for run_payload in payload["runs"].values():
+            self.assert_seed_state_matches_epoch_debug(run_payload)
+        self.assert_seed_state_matches_epoch_debug(shifted_payload["runs"]["nagoya/run3"])
 
 
 if __name__ == "__main__":
