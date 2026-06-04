@@ -481,6 +481,12 @@ python3 apps/gnss.py taroz-pd-dogfood \
   --out-dir output/dogfood/taroz_pd_dogfood_current \
   --matlab-dir output/dogfood/taroz_matlab_pd_debug
 
+python3 apps/gnss.py taroz-pc-dogfood \
+  --generate-matlab-dump \
+  --taroz-root /tmp/taroz_gtsam_gnss \
+  --out-dir output/dogfood/taroz_pc_dogfood_current \
+  --matlab-dir output/dogfood/taroz_matlab_pc_debug
+
 python3 apps/gnss.py taroz-observable-dogfood \
   --mode pos-pdc \
   --generate-matlab-dump \
@@ -497,11 +503,10 @@ The current beta sign-off is:
 - Shifted-window guard check: `nagoya/run3 --skip-epochs 400 --max-epochs 200`
   with the same generated SPP seed path.
 - Current MATLAB-oracle dogfood: generated P, D, position PD/PDC,
-  position/velocity PD/PDC, and ambiguity PDC dumps are compared against C++
-  diagnostics locally.
-- Remaining parity work: add generated oracle coverage for the PC mode and
-  broaden intermediate seed state, ambiguity candidates, solver costs, and final
-  epoch-output checks before calling the port complete.
+  position/velocity PD/PDC, PC, and ambiguity PDC dumps are compared against
+  C++ diagnostics locally.
+- Remaining parity work: broaden intermediate seed state, ambiguity candidates,
+  solver costs, and final epoch-output checks before calling the port complete.
 
 Other benchmark artifacts and checked sign-offs are documented in
 [Benchmarks](docs/benchmarks.md) and [Validation](docs/validation.md).

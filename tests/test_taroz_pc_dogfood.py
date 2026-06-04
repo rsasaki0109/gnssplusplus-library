@@ -33,6 +33,10 @@ class TarozPcDogfoodTest(unittest.TestCase):
             obs, base, nav, seed_pos = self.touch_inputs(temp_root)
             summary_json = temp_root / "summary.json"
             out_dir = temp_root / "out"
+            taroz_root = temp_root / "taroz"
+            taroz_example_dir = taroz_root / "examples"
+            matlab_dump_script = temp_root / "dump_pc.m"
+            matlab_dir = temp_root / "matlab_oracle"
 
             result = gnss_taroz_pc_dogfood.main(
                 [
@@ -50,6 +54,17 @@ class TarozPcDogfoodTest(unittest.TestCase):
                     str(summary_json),
                     "--fgo-bin",
                     str(temp_root / "gnss_fgo"),
+                    "--generate-matlab-dump",
+                    "--matlab-bin",
+                    str(temp_root / "matlab"),
+                    "--taroz-root",
+                    str(taroz_root),
+                    "--taroz-example-dir",
+                    str(taroz_example_dir),
+                    "--matlab-dump-script",
+                    str(matlab_dump_script),
+                    "--matlab-dir",
+                    str(matlab_dir),
                     "--dry-run",
                 ]
             )
@@ -57,7 +72,16 @@ class TarozPcDogfoodTest(unittest.TestCase):
             self.assertEqual(result, 0)
             payload = json.loads(summary_json.read_text(encoding="utf-8"))
             command = payload["fgo_command"]
+            matlab_dump = payload["matlab_dump"]
             self.assertEqual(payload["status"], "dry-run")
+            self.assertTrue(matlab_dump["enabled"])
+            self.assertEqual(matlab_dump["dump_script"], str(matlab_dump_script))
+            self.assertEqual(matlab_dump["taroz_root"], str(taroz_root))
+            self.assertEqual(matlab_dump["example_dir"], str(taroz_example_dir))
+            self.assertEqual(matlab_dump["out_dir"], str(matlab_dir))
+            self.assertEqual(matlab_dump["command"][0], str(temp_root / "matlab"))
+            self.assertEqual(matlab_dump["command"][1], "-batch")
+            self.assertIn(str(matlab_dump_script), matlab_dump["command"][2])
             self.assertIn("--preset", command)
             self.assertIn("taroz-pc", command)
             self.assertIn("--backend", command)
@@ -65,6 +89,59 @@ class TarozPcDogfoodTest(unittest.TestCase):
             self.assertIn("--lambda-debug-csv", command)
             self.assertNotIn("--no-spp-seed", command)
             self.assertFalse(payload["expected"]["use_spp_seed"])
+
+    def test_matlab_dump_env_resolves_requested_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_taroz_pc_dogfood_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            args = gnss_taroz_pc_dogfood.parse_args(
+                [
+                    "--generate-matlab-dump",
+                    "--taroz-root",
+                    str(temp_root / "taroz"),
+                    "--taroz-example-dir",
+                    str(temp_root / "taroz" / "examples"),
+                    "--matlab-dir",
+                    str(temp_root / "matlab_oracle"),
+                ]
+            )
+
+            env = gnss_taroz_pc_dogfood.matlab_dump_env(args)
+
+            self.assertEqual(env["GNSSPP_TAROZ_ROOT"], str(temp_root / "taroz"))
+            self.assertEqual(
+                env["GNSSPP_TAROZ_PC_EXAMPLE_DIR"],
+                str(temp_root / "taroz" / "examples"),
+            )
+            self.assertEqual(
+                env["GNSSPP_TAROZ_PC_OUT_DIR"],
+                str(temp_root / "matlab_oracle"),
+            )
+
+    def test_matlab_dump_env_resolves_relative_paths_under_repo(self) -> None:
+        args = gnss_taroz_pc_dogfood.parse_args(
+            [
+                "--generate-matlab-dump",
+                "--taroz-root",
+                "relative_taroz_root",
+                "--matlab-dir",
+                "relative_matlab_oracle",
+            ]
+        )
+
+        env = gnss_taroz_pc_dogfood.matlab_dump_env(args)
+
+        self.assertEqual(
+            env["GNSSPP_TAROZ_ROOT"],
+            str(ROOT_DIR / "relative_taroz_root"),
+        )
+        self.assertEqual(
+            env["GNSSPP_TAROZ_PC_EXAMPLE_DIR"],
+            str(ROOT_DIR / "relative_taroz_root" / "examples"),
+        )
+        self.assertEqual(
+            env["GNSSPP_TAROZ_PC_OUT_DIR"],
+            str(ROOT_DIR / "relative_matlab_oracle"),
+        )
 
     def test_byte_compare_reports_matching_artifacts(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_taroz_pc_compare_test_") as temp_dir:
