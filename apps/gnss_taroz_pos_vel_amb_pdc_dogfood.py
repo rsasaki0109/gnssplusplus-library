@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import glob
 import json
 import math
@@ -39,6 +40,10 @@ LAMBDA_DEBUG_NAME = "lambda_debug.csv"
 COST_TRACE_NAME = "cost_trace.csv"
 
 EXPECTED_FULL_COUNTS = {
+    "skip_epochs": 0,
+    "max_epochs": 0,
+    "seed_matched_epochs": 1141,
+    "seed_interpolated_epochs": 34,
     "input_epochs": 1141,
     "optimized_epochs": 1141,
     "valid_solutions": 964,
@@ -57,20 +62,99 @@ EXPECTED_FULL_COUNTS = {
     "ambiguity_between_factors": 13398,
     "graph_factors": 76357,
     "graph_values": 21813,
+    "double_difference_matched_base_epochs": 1116,
+    "double_difference_interpolated_base_epochs": 0,
+    "double_difference_candidate_pairs": 13898,
+    "double_difference_rejected_no_base_epoch": 0,
+    "double_difference_rejected_no_reference": 112,
+    "robust_double_difference_pseudorange_factors": 1198,
+    "robust_double_difference_carrier_factors": 2941,
+    "float_rejected_seed_position_divergence": 0,
+    "float_rejected_position_jump": 0,
     "iterations": 24,
 }
 
 
-def _counts_with(**overrides: int) -> dict[str, int]:
-    counts = dict(EXPECTED_FULL_COUNTS)
+def _counts_with(
+    base: dict[str, int] | None = None,
+    **overrides: int,
+) -> dict[str, int]:
+    counts = dict(EXPECTED_FULL_COUNTS if base is None else base)
     counts.update(overrides)
     return counts
+
+
+EXPECTED_FIRST_120_COUNTS = _counts_with(
+    skip_epochs=0,
+    max_epochs=120,
+    seed_matched_epochs=120,
+    seed_interpolated_epochs=0,
+    input_epochs=120,
+    optimized_epochs=120,
+    valid_solutions=120,
+    fixed_solutions=114,
+    float_solutions=6,
+    single_difference_doppler_factors=2768,
+    single_difference_tdcp_factors=2343,
+    double_difference_pseudorange_factors=2370,
+    double_difference_carrier_factors=2345,
+    ambiguity_states=2345,
+    lambda_ambiguity_candidates=2345,
+    lambda_ambiguity_used_candidates=2223,
+    lambda_ambiguity_attempts=120,
+    fixed_ambiguities=2223,
+    motion_factors=119,
+    ambiguity_between_factors=2298,
+    graph_factors=12363,
+    graph_values=3185,
+    double_difference_matched_base_epochs=120,
+    double_difference_candidate_pairs=2345,
+    double_difference_rejected_no_reference=0,
+    robust_double_difference_pseudorange_factors=76,
+    robust_double_difference_carrier_factors=554,
+    iterations=14,
+)
+
+EXPECTED_SHIFTED_120_COUNTS = _counts_with(
+    skip_epochs=400,
+    max_epochs=120,
+    seed_matched_epochs=120,
+    seed_interpolated_epochs=0,
+    input_epochs=120,
+    optimized_epochs=120,
+    valid_solutions=57,
+    fixed_solutions=26,
+    float_solutions=31,
+    single_difference_doppler_factors=1198,
+    single_difference_tdcp_factors=645,
+    double_difference_pseudorange_factors=869,
+    double_difference_carrier_factors=712,
+    ambiguity_states=712,
+    lambda_ambiguity_candidates=492,
+    lambda_ambiguity_used_candidates=248,
+    lambda_ambiguity_attempts=57,
+    fixed_ambiguities=248,
+    motion_factors=119,
+    ambiguity_between_factors=649,
+    graph_factors=4312,
+    graph_values=1552,
+    double_difference_matched_base_epochs=120,
+    double_difference_candidate_pairs=727,
+    double_difference_rejected_no_reference=17,
+    robust_double_difference_pseudorange_factors=120,
+    robust_double_difference_carrier_factors=187,
+    iterations=18,
+)
 
 
 EXPECTATION_PROFILES: dict[str, dict[str, Any]] = {
     "default": {
         "counts": EXPECTED_FULL_COUNTS,
+        "seed_match_tolerance_s": 0.01,
+        "seed_interpolation_max_gap_s": 30.0,
         "lambda_ratio_threshold": 2.0,
+        "max_float_seed_position_divergence_m": 0.0,
+        "max_float_position_jump_m": 0.0,
         "use_epoch_lambda_fixed_output": True,
         "lambda_ambiguity_fix_used": True,
         "fixed_solution": True,
@@ -82,7 +166,11 @@ EXPECTATION_PROFILES: dict[str, dict[str, Any]] = {
             lambda_ambiguity_used_candidates=0,
             fixed_ambiguities=0,
         ),
+        "seed_match_tolerance_s": 0.01,
+        "seed_interpolation_max_gap_s": 30.0,
         "lambda_ratio_threshold": 2.0,
+        "max_float_seed_position_divergence_m": 0.0,
+        "max_float_position_jump_m": 0.0,
         "use_epoch_lambda_fixed_output": False,
         "lambda_ambiguity_fix_used": False,
         "fixed_solution": False,
@@ -94,10 +182,71 @@ EXPECTATION_PROFILES: dict[str, dict[str, Any]] = {
             lambda_ambiguity_used_candidates=0,
             fixed_ambiguities=0,
         ),
+        "seed_match_tolerance_s": 0.01,
+        "seed_interpolation_max_gap_s": 30.0,
         "lambda_ratio_threshold": 100.0,
+        "max_float_seed_position_divergence_m": 0.0,
+        "max_float_position_jump_m": 0.0,
         "use_epoch_lambda_fixed_output": True,
         "lambda_ambiguity_fix_used": False,
         "fixed_solution": False,
+    },
+    "no-seed-interpolation": {
+        "counts": _counts_with(
+            seed_matched_epochs=1107,
+            seed_interpolated_epochs=0,
+            robust_double_difference_carrier_factors=2940,
+            iterations=25,
+        ),
+        "seed_match_tolerance_s": 0.01,
+        "seed_interpolation_max_gap_s": 0.0,
+        "lambda_ratio_threshold": 2.0,
+        "max_float_seed_position_divergence_m": 0.0,
+        "max_float_position_jump_m": 0.0,
+        "use_epoch_lambda_fixed_output": True,
+        "lambda_ambiguity_fix_used": True,
+        "fixed_solution": True,
+    },
+    "first-120-window": {
+        "counts": EXPECTED_FIRST_120_COUNTS,
+        "seed_match_tolerance_s": 0.01,
+        "seed_interpolation_max_gap_s": 30.0,
+        "lambda_ratio_threshold": 2.0,
+        "max_float_seed_position_divergence_m": 0.0,
+        "max_float_position_jump_m": 0.0,
+        "use_epoch_lambda_fixed_output": True,
+        "lambda_ambiguity_fix_used": True,
+        "fixed_solution": True,
+    },
+    "shifted-120-window": {
+        "counts": EXPECTED_SHIFTED_120_COUNTS,
+        "matlab_skip_epochs": 412,
+        "matlab_max_epochs": 120,
+        "seed_match_tolerance_s": 0.01,
+        "seed_interpolation_max_gap_s": 30.0,
+        "lambda_ratio_threshold": 2.0,
+        "max_float_seed_position_divergence_m": 0.0,
+        "max_float_position_jump_m": 0.0,
+        "use_epoch_lambda_fixed_output": True,
+        "lambda_ambiguity_fix_used": True,
+        "fixed_solution": True,
+    },
+    "first-120-seed-divergence-guard": {
+        "counts": _counts_with(
+            EXPECTED_FIRST_120_COUNTS,
+            valid_solutions=114,
+            fixed_solutions=114,
+            float_solutions=0,
+            float_rejected_seed_position_divergence=6,
+        ),
+        "seed_match_tolerance_s": 0.01,
+        "seed_interpolation_max_gap_s": 30.0,
+        "lambda_ratio_threshold": 2.0,
+        "max_float_seed_position_divergence_m": 1.0,
+        "max_float_position_jump_m": 0.0,
+        "use_epoch_lambda_fixed_output": True,
+        "lambda_ambiguity_fix_used": True,
+        "fixed_solution": True,
     },
 }
 
@@ -225,6 +374,22 @@ def matlab_output_dir(args: argparse.Namespace) -> Path:
     return repo_relative_path(args.matlab_dir).resolve()
 
 
+def matlab_window(args: argparse.Namespace) -> tuple[int, int]:
+    profile = expectation_profile(args.expectation_profile)
+    counts = profile["counts"]
+    skip_epochs = (
+        args.matlab_skip_epochs
+        if args.matlab_skip_epochs is not None
+        else int(profile.get("matlab_skip_epochs", counts.get("skip_epochs", 0)))
+    )
+    max_epochs = (
+        args.matlab_max_epochs
+        if args.matlab_max_epochs is not None
+        else int(profile.get("matlab_max_epochs", counts.get("max_epochs", 0)))
+    )
+    return skip_epochs, max_epochs
+
+
 def build_matlab_dump_command(args: argparse.Namespace) -> list[str]:
     script = _matlab_single_quoted_path(repo_relative_path(args.matlab_dump_script))
     return [str(args.matlab_bin), "-batch", f"run('{script}')"]
@@ -237,6 +402,9 @@ def matlab_dump_env(args: argparse.Namespace) -> dict[str, str]:
         repo_relative_path(matlab_example_dir(args)).resolve()
     )
     env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR"] = str(matlab_output_dir(args))
+    skip_epochs, max_epochs = matlab_window(args)
+    env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_SKIP_EPOCHS"] = str(skip_epochs)
+    env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_MAX_EPOCHS"] = str(max_epochs)
     return env
 
 
@@ -293,10 +461,18 @@ def selected_native_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "lambda_ambiguity_used_candidates",
         "lambda_ambiguity_attempts",
         "fixed_ambiguities",
-        "max_float_seed_position_divergence_m",
-        "max_float_position_jump_m",
+        "seed_matched_epochs",
+        "seed_interpolated_epochs",
+        "double_difference_matched_base_epochs",
+        "double_difference_interpolated_base_epochs",
         "float_rejected_seed_position_divergence",
         "float_rejected_position_jump",
+        "skip_epochs",
+        "max_epochs",
+        "seed_match_tolerance_s",
+        "seed_interpolation_max_gap_s",
+        "max_float_seed_position_divergence_m",
+        "max_float_position_jump_m",
         "lambda_ratio_threshold",
         "iterations",
         "cost_trace_csv",
@@ -377,12 +553,18 @@ def verify_native_summary(
         "tdcp_huber_threshold_sigma": 1.234,
         "velocity_motion_sigma_m": 0.01,
         "ambiguity_between_sigma_cycles": 0.001,
+        "seed_match_tolerance_s": profile["seed_match_tolerance_s"],
+        "seed_interpolation_max_gap_s": profile[
+            "seed_interpolation_max_gap_s"
+        ],
         "lambda_ratio_threshold": profile["lambda_ratio_threshold"],
         "min_snr_dbhz": 35.0,
         "min_satellites_per_epoch": 0,
         "min_output_dd_carrier_factors_per_epoch": 6,
-        "max_float_seed_position_divergence_m": 0.0,
-        "max_float_position_jump_m": 0.0,
+        "max_float_seed_position_divergence_m": profile[
+            "max_float_seed_position_divergence_m"
+        ],
+        "max_float_position_jump_m": profile["max_float_position_jump_m"],
     }
     for key, expected in numeric_expectations.items():
         if not _close(summary.get(key), expected):
@@ -420,6 +602,69 @@ def verify_native_summary(
         failures.append("taroz-amb-pdc final_cost must be finite")
     if not _is_finite_number(summary.get("total_processing_time_ms")):
         failures.append("taroz-amb-pdc total_processing_time_ms must be finite")
+    return failures
+
+
+def verify_cost_trace(path: Path, summary: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+    if not path.exists():
+        return [f"taroz-amb-pdc cost trace is missing: {path}"]
+
+    with path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        return ["taroz-amb-pdc cost trace must not be empty"]
+
+    required_columns = {
+        "phase",
+        "local_iteration",
+        "global_iteration",
+        "cost",
+    }
+    missing_columns = required_columns - set(rows[0])
+    if missing_columns:
+        failures.append(
+            "taroz-amb-pdc cost trace missing columns: "
+            + ", ".join(sorted(missing_columns))
+        )
+        return failures
+
+    if isinstance(summary.get("iterations"), int):
+        expected_rows = int(summary["iterations"]) + 1
+        if len(rows) != expected_rows:
+            failures.append(
+                f"taroz-amb-pdc cost trace rows must be {expected_rows}"
+            )
+
+    global_iterations: list[int] = []
+    costs: list[float] = []
+    for index, row in enumerate(rows):
+        try:
+            global_iterations.append(int(row["global_iteration"]))
+            costs.append(float(row["cost"]))
+        except ValueError:
+            failures.append(f"taroz-amb-pdc cost trace row {index} is not numeric")
+            continue
+        if row["phase"] not in {"float", "fixed"}:
+            failures.append(
+                f"taroz-amb-pdc cost trace row {index} has invalid phase "
+                f"{row['phase']!r}"
+            )
+
+    if global_iterations != sorted(global_iterations):
+        failures.append("taroz-amb-pdc cost trace global iterations must be sorted")
+    if len(global_iterations) != len(set(global_iterations)):
+        failures.append("taroz-amb-pdc cost trace global iterations must be unique")
+    if any(not math.isfinite(cost) or cost < 0.0 for cost in costs):
+        failures.append("taroz-amb-pdc cost trace costs must be finite non-negative")
+    if costs and _is_finite_number(summary.get("initial_cost")):
+        if not _close(costs[0], float(summary["initial_cost"])):
+            failures.append("taroz-amb-pdc cost trace initial cost must match summary")
+    if costs and _is_finite_number(summary.get("final_cost")):
+        if not _close(costs[-1], float(summary["final_cost"])):
+            failures.append("taroz-amb-pdc cost trace final cost must match summary")
+    if len(costs) >= 2 and costs[-1] >= costs[0]:
+        failures.append("taroz-amb-pdc cost trace final cost must decrease")
     return failures
 
 
@@ -514,6 +759,24 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=DEFAULT_MATLAB_DUMP_SCRIPT,
         help="MATLAB script that exports taroz ambiguity PDC oracle CSVs.",
     )
+    parser.add_argument(
+        "--matlab-skip-epochs",
+        type=int,
+        default=None,
+        help=(
+            "Override the generated MATLAB oracle window skip. By default, "
+            "the selected expectation profile controls the MATLAB window."
+        ),
+    )
+    parser.add_argument(
+        "--matlab-max-epochs",
+        type=int,
+        default=None,
+        help=(
+            "Override the generated MATLAB oracle window length. By default, "
+            "the selected expectation profile controls the MATLAB window."
+        ),
+    )
     parser.add_argument("--parity-test", type=Path, default=DEFAULT_PARITY_TEST)
     parser.add_argument(
         "--expectation-profile",
@@ -526,7 +789,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--skip-parity", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.matlab_skip_epochs is not None and args.matlab_skip_epochs < 0:
+        raise SystemExit("--matlab-skip-epochs must be non-negative")
+    if args.matlab_max_epochs is not None and args.matlab_max_epochs < 0:
+        raise SystemExit("--matlab-max-epochs must be non-negative")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -534,6 +802,7 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = args.out_dir
     paths = output_paths(out_dir)
     profile = expectation_profile(args.expectation_profile)
+    matlab_skip_epochs, matlab_max_epochs = matlab_window(args)
     harness_summary = args.summary_json or (
         out_dir / "taroz_pos_vel_amb_pdc_dogfood_summary.json"
     )
@@ -558,6 +827,8 @@ def main(argv: list[str] | None = None) -> int:
             "taroz_root": str(args.taroz_root),
             "example_dir": str(matlab_example_dir(args)),
             "out_dir": str(matlab_output_dir(args)),
+            "skip_epochs": matlab_skip_epochs,
+            "max_epochs": matlab_max_epochs,
         },
         "expected": {
             "profile": args.expectation_profile,
@@ -565,6 +836,14 @@ def main(argv: list[str] | None = None) -> int:
             "backend": "eigen",
             "counts": profile["counts"],
             "lambda_ratio_threshold": profile["lambda_ratio_threshold"],
+            "seed_match_tolerance_s": profile["seed_match_tolerance_s"],
+            "seed_interpolation_max_gap_s": profile[
+                "seed_interpolation_max_gap_s"
+            ],
+            "max_float_seed_position_divergence_m": profile[
+                "max_float_seed_position_divergence_m"
+            ],
+            "max_float_position_jump_m": profile["max_float_position_jump_m"],
             "use_epoch_lambda_fixed_output": profile[
                 "use_epoch_lambda_fixed_output"
             ],
@@ -614,6 +893,9 @@ def main(argv: list[str] | None = None) -> int:
         native_summary,
         args.expectation_profile,
     )
+    cost_trace_failures = verify_cost_trace(paths["cost_trace"], native_summary)
+    payload["cost_trace_failures"] = cost_trace_failures
+    native_failures.extend(cost_trace_failures)
     payload["native_summary_failures"] = native_failures
     if native_failures:
         payload["status"] = "failed"

@@ -454,13 +454,17 @@ class TarozPosVelAmbPdcFactorParityTest(unittest.TestCase):
         self.assertEqual(float(cpp_rows[-1]["cost"]), float(summary["final_cost"]))
 
     def test_seed_positions_match_taroz_spp_seed_dump(self) -> None:
+        summary_path = CPP_DIR / "summary.json"
         cpp_epoch_path = CPP_DIR / "epoch_debug.csv"
         taroz_epoch_path = MATLAB_DIR / "per_epoch_state.csv"
-        self.require_dogfood_files(cpp_epoch_path, taroz_epoch_path)
+        self.require_dogfood_files(summary_path, cpp_epoch_path, taroz_epoch_path)
 
+        summary = read_json(summary_path)
         cpp_rows = keyed_epoch_rows(cpp_epoch_path)
         taroz_rows = keyed_epoch_rows(taroz_epoch_path)
         self.assertEqual(set(cpp_rows), set(taroz_rows))
+        self.assertEqual(int(summary["seed_matched_epochs"]), len(cpp_rows))
+        self.assertEqual(int(summary["seed_interpolated_epochs"]), 34)
 
         errors = [
             seed_position_error_m(cpp_rows[key], taroz_rows[key])
