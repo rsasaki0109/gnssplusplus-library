@@ -2627,7 +2627,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                     const int curr_col =
                         epoch_state_col(static_cast<std::size_t>(i));
                     const double dt = std::max(
-                        1.0,
+                        1e-3,
                         std::abs(problem.epochs[i].time - problem.epochs[i - 1].time));
                     const double pos_weight = 1.0 / (motion_sigma * dt);
                     const bool clock_jump =
