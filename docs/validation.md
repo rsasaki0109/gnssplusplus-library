@@ -175,7 +175,20 @@ python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
   --generate-spp-seed \
   --require-valid-p95-3d-max 2.0 \
   --summary-json output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_shifted/summary.json
+
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --run nagoya/run3 \
+  --max-epochs 1000 \
+  --generate-spp-seed \
+  --require-valid-p95-3d-max 1.1 \
+  --require-fixed-p95-3d-max 0.2 \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_1000_seed_current/summary.json
 ```
+
+The dataset-gated optional CI sign-off runner also includes the
+`nagoya/run3` 1000-epoch generated-seed check when `GNSSPP_PPC_DATASET_ROOT`
+is configured.
 
 The `taroz-amb-pdc` preset enables two truth-free FLOAT output guards by
 default: `--max-float-seed-divergence 100` and

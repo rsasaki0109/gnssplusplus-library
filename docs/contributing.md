@@ -40,7 +40,9 @@ CI lanes are split as follows:
 - `bash scripts/ci/run_core_tests.sh` for the cross-platform gate
 - `bash scripts/ci/run_extended_tests.sh` for Linux-only heavy checks such as web, packaging, and ROS2 surfaces
 - `bash scripts/ci/run_optional_tests.sh` for broader Linux-only integration suites such as the full CLI and benchmark script regressions
-- `bash scripts/ci/run_optional_rtk_signoffs.sh` for dataset-gated RTK sign-offs with JSON/log artifacts under `output/ci_optional_rtk_signoffs*`
+- `bash scripts/ci/run_optional_rtk_signoffs.sh` for dataset-gated RTK,
+  SCORPION, and long PPC taroz FGO sign-offs with JSON/log artifacts under
+  `output/ci_optional_rtk_signoffs*`
 - `bash scripts/ci/generate_dashboard_artifacts.sh` for the dashboard/manifest artifact path used in CI
 
 Docs-only changes keep CI on the lightweight path: hygiene here, plus the separate Docs workflow.
@@ -63,6 +65,7 @@ Keep taroz FGO validation split by cost:
   `python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood --generate-matlab-dump`
   when MATLAB and the taroz checkout are available,
   `python3 apps/gnss.py ppc-taroz-amb-pdc-smoke --max-epochs 200 --generate-spp-seed`,
+  `python3 apps/gnss.py ppc-taroz-amb-pdc-smoke --run nagoya/run3 --max-epochs 1000 --generate-spp-seed`,
   and optional MATLAB/taroz parity tests when their external artifacts are present.
 - Taroz final-output contract tests should be updated with every new dogfood
   output surface. At minimum, tie the final CSV/`.pos` rows to summary counts,
