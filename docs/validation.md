@@ -201,7 +201,7 @@ parity artifacts are not checked into the repository.
 | position PDC | `taroz-observable-dogfood --mode pos-pdc` | position/clock `per_epoch_state.csv` and graph/summary counts |
 | position/velocity PDC | `taroz-observable-dogfood --mode pos-vel-pdc` | position/velocity/clock `per_epoch_state.csv` and graph/summary counts |
 | PC | `taroz-pc-dogfood` | final `.pos`, epoch debug, factor debug, LAMBDA debug, and summary counts |
-| position/velocity ambiguity PDC | `taroz-pos-vel-amb-pdc-dogfood` | epoch debug, factor debug, SD factor debug, LAMBDA debug, and summary counts |
+| position/velocity ambiguity PDC | `taroz-pos-vel-amb-pdc-dogfood` | epoch debug, factor debug, SD factor debug, LAMBDA debug, optimizer cost trace, and summary counts |
 
 Use the suite entrypoint for a broad local gate:
 
@@ -237,8 +237,8 @@ ctest --test-dir build-codex -R 'python_taroz_.*(internal_parity|factor_parity)_
 
 The remaining beta-hardening work is broader than final-output shape: keep
 expanding MATLAB dump parity for intermediate seed state, ambiguity candidate
-selection, solver cost trajectories, and longer PPC-Dataset windows before
-treating the taroz port as complete.
+selection, additional solver-cost trajectories, and longer PPC-Dataset windows
+before treating the taroz port as complete.
 
 When `--generate-spp-seed` is used, the PPC harness treats the generated seed as
 part of the sign-off. The native summary must report a seed path,

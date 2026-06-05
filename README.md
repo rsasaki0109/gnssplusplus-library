@@ -520,7 +520,8 @@ The current beta sign-off is:
   C++ diagnostics locally; `taroz-oracle-suite` is the consolidated local
   entrypoint for rerunning that gate.
 - Remaining parity work: broaden intermediate seed state, ambiguity candidates,
-  solver costs, and final epoch-output checks before calling the port complete.
+  additional solver-cost trajectories, and final epoch-output checks before
+  calling the port complete.
 
 Other benchmark artifacts and checked sign-offs are documented in
 [Benchmarks](docs/benchmarks.md) and [Validation](docs/validation.md).
