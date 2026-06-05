@@ -26,7 +26,7 @@ def configured_path(env_name: str, default_relative_path: str) -> Path:
 
 CPP_DIR = configured_path(
     "GNSSPP_TAROZ_POS_VEL_AMB_PDC_CPP_DIR",
-    "output/dogfood/taroz_pos_vel_amb_pdc_debug_current",
+    "output/dogfood/taroz_pos_vel_amb_pdc_current",
 )
 MATLAB_DIR = configured_path(
     "GNSSPP_TAROZ_POS_VEL_AMB_PDC_MATLAB_DIR",
@@ -157,6 +157,16 @@ def keyed_lambda_rows(
         ): row
         for row in read_rows(path)
     }
+
+
+def grouped_lambda_rows(
+    path: Path,
+) -> dict[tuple[int, int], list[dict[str, str]]]:
+    rows: dict[tuple[int, int], list[dict[str, str]]] = {}
+    for row in read_rows(path):
+        key = (int(float(row["gps_week"])), round(float(row["gps_tow"])))
+        rows.setdefault(key, []).append(row)
+    return rows
 
 
 def abs_diffs(
@@ -746,6 +756,119 @@ class TarozPosVelAmbPdcFactorParityTest(unittest.TestCase):
             self.assertLessEqual(statistics.median(diffs), median_limit)
             self.assertLessEqual(percentile(diffs, 0.95), p95_limit)
             self.assertLessEqual(max(diffs), max_limit)
+
+    def test_lambda_debug_matrix_contract_matches_epoch_debug(self) -> None:
+        summary_path = CPP_DIR / "summary.json"
+        self.require_dogfood_files(
+            summary_path,
+            CPP_OPT_EPOCH_DEBUG,
+            CPP_OPT_LAMBDA_DEBUG,
+        )
+
+        summary = read_json(summary_path)
+        epoch_rows = keyed_epoch_rows(CPP_OPT_EPOCH_DEBUG)
+        lambda_by_epoch = grouped_lambda_rows(CPP_OPT_LAMBDA_DEBUG)
+        min_candidates = int(summary["min_output_dd_carrier_factors_per_epoch"])
+        attempted_epochs = {
+            key: row for key, row in epoch_rows.items()
+            if int(row["ambiguity_candidates"]) >= min_candidates
+        }
+
+        self.assertEqual(set(lambda_by_epoch), set(attempted_epochs))
+        self.assertEqual(
+            len(lambda_by_epoch),
+            int(summary["lambda_ambiguity_attempts"]),
+        )
+
+        lambda_rows = 0
+        lambda_candidates = 0
+        fixed_candidates = 0
+        fixed_epochs = 0
+        covariance_symmetry_diffs: list[float] = []
+        for key, rows in lambda_by_epoch.items():
+            epoch_row = attempted_epochs[key]
+            candidate_count = int(epoch_row["ambiguity_candidates"])
+            lambda_candidates += candidate_count
+            self.assertEqual(len(rows), candidate_count * candidate_count)
+
+            lookup: dict[tuple[int, int], dict[str, str]] = {}
+            row_satellites: dict[int, str] = {}
+            col_satellites: dict[int, str] = {}
+            for row in rows:
+                lambda_rows += 1
+                row_index = int(row["row"])
+                col_index = int(row["col"])
+                self.assertGreaterEqual(row_index, 0)
+                self.assertLess(row_index, candidate_count)
+                self.assertGreaterEqual(col_index, 0)
+                self.assertLess(col_index, candidate_count)
+                self.assertNotIn((row_index, col_index), lookup)
+                lookup[(row_index, col_index)] = row
+
+                self.assertEqual(int(row["solved"]), 1)
+                self.assertEqual(int(row["candidate_count"]), candidate_count)
+                self.assertEqual(int(row["local_index"]), row_index)
+                self.assertEqual(int(row["other_local_index"]), col_index)
+                self.assertAlmostEqual(
+                    float(row["ratio"]),
+                    float(epoch_row["ratio"]),
+                    places=6,
+                )
+
+                previous_row_satellite = row_satellites.setdefault(
+                    row_index,
+                    row["satellite"],
+                )
+                previous_col_satellite = col_satellites.setdefault(
+                    col_index,
+                    row["other_satellite"],
+                )
+                self.assertEqual(previous_row_satellite, row["satellite"])
+                self.assertEqual(previous_col_satellite, row["other_satellite"])
+
+            self.assertEqual(
+                set(lookup),
+                {
+                    (row_index, col_index)
+                    for row_index in range(candidate_count)
+                    for col_index in range(candidate_count)
+                },
+            )
+
+            fixed_epoch = int(lookup[(0, 0)]["fixed_epoch"]) == 1
+            self.assertEqual(fixed_epoch, int(epoch_row["status"]) == 4)
+            if fixed_epoch:
+                fixed_epochs += 1
+                fixed_candidates += candidate_count
+            for index in range(candidate_count):
+                self.assertEqual(row_satellites[index], col_satellites[index])
+                diagonal_row = lookup[(index, index)]
+                self.assertEqual(
+                    diagonal_row["satellite"],
+                    diagonal_row["other_satellite"],
+                )
+                self.assertGreater(float(diagonal_row["covariance"]), 0.0)
+
+            for row in rows:
+                self.assertEqual(int(row["fixed_epoch"]) == 1, fixed_epoch)
+
+            for row_index in range(candidate_count):
+                for col_index in range(candidate_count):
+                    covariance_symmetry_diffs.append(
+                        abs(
+                            float(lookup[(row_index, col_index)]["covariance"])
+                            - float(lookup[(col_index, row_index)]["covariance"])
+                        )
+                    )
+
+        self.assertEqual(lambda_rows, len(read_rows(CPP_OPT_LAMBDA_DEBUG)))
+        self.assertEqual(lambda_candidates, int(summary["lambda_ambiguity_candidates"]))
+        self.assertEqual(
+            fixed_candidates,
+            int(summary["lambda_ambiguity_used_candidates"]),
+        )
+        self.assertEqual(fixed_epochs, int(summary["fixed_solutions"]))
+        self.assertLessEqual(max(covariance_symmetry_diffs), 2e-12)
 
     def test_raw_sd_doppler_tdcp_match_taroz_dump(self) -> None:
         cpp_sd_path = CPP_DIR / "sd_factor_debug.csv"
