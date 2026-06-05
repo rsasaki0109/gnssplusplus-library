@@ -218,6 +218,23 @@ EXPECTATION_PROFILES: dict[str, dict[str, Any]] = {
         "lambda_ambiguity_fix_used": True,
         "fixed_solution": True,
     },
+    "first-120-strict-lambda-ratio": {
+        "counts": _counts_with(
+            EXPECTED_FIRST_120_COUNTS,
+            fixed_solutions=0,
+            float_solutions=120,
+            lambda_ambiguity_used_candidates=0,
+            fixed_ambiguities=0,
+        ),
+        "seed_match_tolerance_s": 0.01,
+        "seed_interpolation_max_gap_s": 30.0,
+        "lambda_ratio_threshold": 100.0,
+        "max_float_seed_position_divergence_m": 0.0,
+        "max_float_position_jump_m": 0.0,
+        "use_epoch_lambda_fixed_output": True,
+        "lambda_ambiguity_fix_used": False,
+        "fixed_solution": False,
+    },
     "shifted-120-window": {
         "counts": EXPECTED_SHIFTED_120_COUNTS,
         "matlab_skip_epochs": 412,
@@ -230,6 +247,25 @@ EXPECTATION_PROFILES: dict[str, dict[str, Any]] = {
         "use_epoch_lambda_fixed_output": True,
         "lambda_ambiguity_fix_used": True,
         "fixed_solution": True,
+    },
+    "shifted-120-strict-lambda-ratio": {
+        "counts": _counts_with(
+            EXPECTED_SHIFTED_120_COUNTS,
+            fixed_solutions=0,
+            float_solutions=57,
+            lambda_ambiguity_used_candidates=0,
+            fixed_ambiguities=0,
+        ),
+        "matlab_skip_epochs": 412,
+        "matlab_max_epochs": 120,
+        "seed_match_tolerance_s": 0.01,
+        "seed_interpolation_max_gap_s": 30.0,
+        "lambda_ratio_threshold": 100.0,
+        "max_float_seed_position_divergence_m": 0.0,
+        "max_float_position_jump_m": 0.0,
+        "use_epoch_lambda_fixed_output": True,
+        "lambda_ambiguity_fix_used": False,
+        "fixed_solution": False,
     },
     "first-120-seed-divergence-guard": {
         "counts": _counts_with(
@@ -401,6 +437,10 @@ def matlab_dump_env(args: argparse.Namespace) -> dict[str, str]:
     env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR"] = str(
         repo_relative_path(matlab_example_dir(args)).resolve()
     )
+    if args.matlab_data_dir is not None:
+        env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_DATA_DIR"] = str(
+            repo_relative_path(args.matlab_data_dir).resolve()
+        )
     env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR"] = str(matlab_output_dir(args))
     skip_epochs, max_epochs = matlab_window(args)
     env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_SKIP_EPOCHS"] = str(skip_epochs)
@@ -758,6 +798,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         type=Path,
         default=DEFAULT_MATLAB_DUMP_SCRIPT,
         help="MATLAB script that exports taroz ambiguity PDC oracle CSVs.",
+    )
+    parser.add_argument(
+        "--matlab-data-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Optional data directory passed to the MATLAB dump script. Use this "
+            "for public PPC-Dataset windows prepared in taroz example format."
+        ),
     )
     parser.add_argument(
         "--matlab-skip-epochs",

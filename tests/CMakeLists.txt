@@ -145,6 +145,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_pos_vel_amb_pdc_window_cost_parity.py
     )
     add_test(
+        NAME python_taroz_pos_vel_amb_pdc_ppc_window_parity_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_pos_vel_amb_pdc_ppc_window_parity.py
+    )
+    add_test(
         NAME python_taroz_pos_vel_amb_pdc_dogfood_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_taroz_pos_vel_amb_pdc_dogfood.py
     )
