@@ -521,8 +521,8 @@ The current beta sign-off is:
   position/velocity PD/PDC, PC, and ambiguity PDC dumps are compared against
   C++ diagnostics locally; `taroz-oracle-suite` is the consolidated local
   entrypoint for rerunning that gate.
-- Remaining parity work: broaden intermediate seed state, ambiguity candidates,
-  additional solver-cost trajectories, and final epoch-output checks before
+- Remaining parity work: broaden seed-state edge cases, solver-cost
+  trajectories across more windows, and non-default option coverage before
   calling the port complete.
 
 Other benchmark artifacts and checked sign-offs are documented in

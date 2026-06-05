@@ -243,15 +243,19 @@ python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood --generate-matlab-dump
 The matching CTest parity tests are optional-artifact tests: they skip cleanly
 when the local `output/dogfood/...` oracle files are absent and become strict
 regressions after a dogfood run has generated them.
+For position/velocity ambiguity PDC, the parity gate also checks that the C++
+LAMBDA debug stream forms a complete square candidate matrix per attempted
+epoch, with stable satellite row/column mapping, symmetric covariance, and
+epoch-debug status/ratio consistency.
 
 ```bash
 ctest --test-dir build-codex -R 'python_taroz_.*(internal_parity|factor_parity)_tests' --output-on-failure
 ```
 
 The remaining beta-hardening work is broader than final-output shape: keep
-expanding MATLAB dump parity for intermediate seed state, ambiguity candidate
-selection, additional solver-cost trajectories, and longer PPC-Dataset windows
-before treating the taroz port as complete.
+expanding seed-state edge cases, solver-cost trajectories across more windows,
+non-default option coverage, and longer PPC-Dataset windows before treating the
+taroz port as complete.
 
 When `--generate-spp-seed` is used, the PPC harness treats the generated seed as
 part of the sign-off. The native summary must report a seed path,
