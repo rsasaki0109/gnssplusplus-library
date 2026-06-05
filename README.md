@@ -468,7 +468,8 @@ The `taroz-amb-pdc` preset keeps FLOAT output guards enabled by default:
 FLOAT epochs more than 100 m from the seed, or jumping more than 100 m from the
 previous raw output, are written as no-solution. The summary reports
 `float_rejected_seed_position_divergence` and
-`float_rejected_position_jump`.
+`float_rejected_position_jump`, plus 3D error tail counts and the worst epoch
+per reference-summary bucket for long PPC dogfood runs.
 
 The single-receiver P, D, position PD/PDC, position/velocity PD/PDC, and
 ambiguity PDC dogfood harnesses can regenerate the taroz MATLAB oracle before
@@ -515,8 +516,10 @@ The current beta sign-off is:
   1000 epochs with generated SPP seed when PPC-Dataset is configured.
 - Local dogfood: all six public PPC Tokyo/Nagoya runs at 200 epochs with
   generated SPP seeds and `--require-valid-p95-3d-max 2.0`.
-- Shifted-window guard check: `nagoya/run3 --skip-epochs 400 --max-epochs 200`
-  with the same generated SPP seed path.
+- Shifted-window guard checks: `nagoya/run3 --skip-epochs 400 --max-epochs
+  200`, plus public MATLAB internal parity windows for all six public
+  Nagoya/Tokyo skip-400 windows at 120 epochs, `nagoya/run3` skip-800, and
+  the `nagoya/run3` first-120 window with the same generated SPP seed path.
 - Current MATLAB-oracle dogfood: generated P, D, position PD/PDC,
   position/velocity PD/PDC, PC, and ambiguity PDC dumps are compared against
   C++ diagnostics locally; `taroz-oracle-suite` is the consolidated local
@@ -525,7 +528,10 @@ The current beta sign-off is:
   enforces `no-epoch-lambda-fixed-output`, `strict-lambda-ratio`,
   `no-seed-interpolation`, `first-120-window`, `shifted-120-window`, and
   `first-120-seed-divergence-guard` profiles when the matching FGO flags are
-  supplied.
+  supplied. It also includes the combined
+  `first-120-strict-lambda-ratio` and
+  `shifted-120-strict-lambda-ratio` profiles so ratio/window interactions are
+  not only tested independently.
 
 The parity-pinned ambiguity PDC surface currently includes:
 
@@ -541,14 +547,33 @@ The parity-pinned ambiguity PDC surface currently includes:
   status, seed/SPP position, ambiguity candidate/fixed counts, ratio
   differences, fixed/float position, velocity, optimizer cost trace shape, and
   final-cost scale checked against C++.
+- Public PPC-Dataset `nagoya/run3` first-120 MATLAB internal comparison, with
+  generated SPP seed export into taroz MATLAB format and optional checks for
+  FLOAT status, seed position, position/velocity drift, ratio scale, ambiguity
+  candidate-count drift, and cost-trace sanity. The RINEX 3 reader keeps
+  code/carrier/Doppler/SNR fields grouped by tracking code, so mixed C1C/S1W
+  observation selection regressions are covered by a unit test and the public
+  first-window candidate-count drift is pinned to at most one candidate.
+- Public PPC-Dataset shifted-120 MATLAB internal comparisons cover all six
+  public Nagoya/Tokyo skip-400 windows with shifted seed exports and the 1 Hz
+  base observations aligned to the 5 Hz rover timeline before slicing each
+  window. They pin Nagoya skip-400 windows (116/120, 39/120, and 112/120 FIX),
+  Tokyo skip-400 windows (108/120, 115/120, and 113/120 FIX), and lower-FIX
+  `nagoya/run3 skip=800` (29/120 FIX), including status, seed positions,
+  candidate counts, ratio scale, fixed/float position, velocity, LAMBDA matrix
+  inputs, and optimizer-cost trajectory scale against C++.
 - Public PPC-Dataset smoke and longer local sign-offs, including a shifted
-  `nagoya/run3` window and the optional 1000-epoch generated-seed runner.
+  `nagoya/run3` window and optional 1000-epoch generated-seed runners for
+  `nagoya/run2`, `nagoya/run3`, and `tokyo/run2`. The long-run optional
+  artifact tests pin fixed/FLOAT/no-solution tail behavior so p95 success does
+  not hide isolated outliers. Generated-seed runs additionally audit seed row coverage,
+  duplicate/non-sorted epochs, and shifted-window seed/epoch time alignment.
 
 It is still a beta port, not a claim of complete taroz equivalence. Remaining
-parity work is to broaden MATLAB internal dumps beyond the default ambiguity
-PDC run, compare solver-cost trajectories across more public windows/runs, add
-more option combinations, and keep extending long PPC-Dataset coverage before
-calling the port complete.
+parity work is to broaden MATLAB internal dumps beyond the current public
+first/shifted ambiguity PDC slices, compare solver-cost trajectories across
+longer windows, add more option combinations, and keep extending full-window
+PPC-Dataset coverage before calling the port complete.
 
 Other benchmark artifacts and checked sign-offs are documented in
 [Benchmarks](docs/benchmarks.md) and [Validation](docs/validation.md).

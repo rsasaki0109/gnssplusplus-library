@@ -184,6 +184,24 @@ python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
   --require-valid-p95-3d-max 1.1 \
   --require-fixed-p95-3d-max 0.2 \
   --summary-json output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_1000_seed_current/summary.json
+
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --run nagoya/run2 \
+  --max-epochs 1000 \
+  --generate-spp-seed \
+  --require-valid-p95-3d-max 0.25 \
+  --require-fixed-p95-3d-max 0.22 \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_nagoya_run2_1000_seed_current/summary.json
+
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --run tokyo/run2 \
+  --max-epochs 1000 \
+  --generate-spp-seed \
+  --require-valid-p95-3d-max 1.6 \
+  --require-fixed-p95-3d-max 0.1 \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_tokyo_run2_1000_seed_current/summary.json
 ```
 
 The dataset-gated optional CI sign-off runner also includes the
@@ -195,7 +213,9 @@ default: `--max-float-seed-divergence 100` and
 `--max-float-position-jump 100`. Rejected FLOAT epochs are emitted as
 no-solution and counted in the summary JSON as
 `float_rejected_seed_position_divergence` and
-`float_rejected_position_jump`.
+`float_rejected_position_jump`. The PPC harness also records 3D error tail
+counts and the worst epoch in each reference-summary bucket, so long runs show
+both p95 behavior and isolated fixed/FLOAT/no-solution outliers.
 
 The beta scope is intentionally narrow. The C++ path covers generated SPP
 seeding, double-difference FGO, FLOAT/FIXED output, and diagnostic summaries for
@@ -244,7 +264,10 @@ The ambiguity PDC dogfood also has non-default expectation profiles for
 option-level sign-offs that should not be judged with the default FIX/FLOAT
 counts. The harness always checks the native cost trace shape against the
 summary, so these profiles still pin the C++ solver trajectory contract when
-`--skip-parity` is used:
+`--skip-parity` is used. The default seed profile expects 1141 matched seed
+epochs with 34 interpolated epochs; the `no-seed-interpolation` profile pins
+the same run with interpolation disabled at 1107 matched seed epochs and zero
+interpolated epochs.
 
 ```bash
 python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
@@ -271,11 +294,29 @@ python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
   --skip-parity
 
 python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
+  --fgo-extra-arg=--max-epochs \
+  --fgo-extra-arg=120 \
+  --fgo-extra-arg=--lambda-ratio-threshold \
+  --fgo-extra-arg=100 \
+  --expectation-profile first-120-strict-lambda-ratio \
+  --skip-parity
+
+python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
   --fgo-extra-arg=--skip-epochs \
   --fgo-extra-arg=400 \
   --fgo-extra-arg=--max-epochs \
   --fgo-extra-arg=120 \
   --expectation-profile shifted-120-window \
+  --skip-parity
+
+python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
+  --fgo-extra-arg=--skip-epochs \
+  --fgo-extra-arg=400 \
+  --fgo-extra-arg=--max-epochs \
+  --fgo-extra-arg=120 \
+  --fgo-extra-arg=--lambda-ratio-threshold \
+  --fgo-extra-arg=100 \
+  --expectation-profile shifted-120-strict-lambda-ratio \
   --skip-parity
 
 python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
@@ -331,6 +372,154 @@ GNSSPP_TAROZ_POS_VEL_AMB_PDC_WINDOW_MATLAB_EPOCH_STATE=output/dogfood/taroz_matl
 python3 tests/test_taroz_pos_vel_amb_pdc_window_cost_parity.py -v
 ```
 
+For public PPC-Dataset MATLAB parity, prepare a taroz-compatible MATLAB data
+directory from the generated SPP seed, regenerate the MATLAB dump with that
+data directory, then run the optional public-window parity test. This first
+public window is intentionally looser than the taroz example window, but the
+RINEX 3 reader now keeps code/carrier/Doppler/SNR fields grouped by tracking
+code and the test pins GPS time sequence, FLOAT status, seed positions,
+position/velocity drift, ratio scale, candidate-count drift, and cost-trace
+sanity:
+
+```bash
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --run nagoya/run3 \
+  --max-epochs 120 \
+  --generate-spp-seed \
+  --taroz-matlab-data-dir output/dogfood/ppc_nagoya_run3_taroz_matlab_data_current \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_first_120_seed_current/summary.json
+
+GNSSPP_TAROZ_ROOT=/path/to/gtsam_gnss \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR=/path/to/gtsam_gnss/examples \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_DATA_DIR=output/dogfood/ppc_nagoya_run3_taroz_matlab_data_current \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR=output/dogfood/taroz_matlab_pos_vel_amb_pdc_ppc_nagoya_run3_first_120_debug \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_MAX_EPOCHS=120 \
+matlab -batch "run('scripts/dump_taroz_pos_vel_ambiguity_pdc_debug.m')"
+
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --run nagoya/run3 \
+  --skip-epochs 400 \
+  --max-epochs 120 \
+  --generate-spp-seed \
+  --taroz-matlab-data-dir output/dogfood/ppc_nagoya_run3_shifted_120_taroz_matlab_data_current \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_shifted_120_seed_current/summary.json
+
+GNSSPP_TAROZ_ROOT=/path/to/gtsam_gnss \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR=/path/to/gtsam_gnss/examples \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_DATA_DIR=output/dogfood/ppc_nagoya_run3_shifted_120_taroz_matlab_data_current \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR=output/dogfood/taroz_matlab_pos_vel_amb_pdc_ppc_nagoya_run3_shifted_120_debug \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_SKIP_EPOCHS=400 \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_MAX_EPOCHS=120 \
+matlab -batch "run('scripts/dump_taroz_pos_vel_ambiguity_pdc_debug.m')"
+
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --run nagoya/run3 \
+  --skip-epochs 800 \
+  --max-epochs 120 \
+  --generate-spp-seed \
+  --taroz-matlab-data-dir output/dogfood/ppc_nagoya_run3_shifted2_120_taroz_matlab_data_current \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_shifted2_120_seed_current/summary.json
+
+GNSSPP_TAROZ_ROOT=/path/to/gtsam_gnss \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR=/path/to/gtsam_gnss/examples \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_DATA_DIR=output/dogfood/ppc_nagoya_run3_shifted2_120_taroz_matlab_data_current \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR=output/dogfood/taroz_matlab_pos_vel_amb_pdc_ppc_nagoya_run3_shifted2_120_debug \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_SKIP_EPOCHS=800 \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_MAX_EPOCHS=120 \
+matlab -batch "run('scripts/dump_taroz_pos_vel_ambiguity_pdc_debug.m')"
+
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --run tokyo/run1 \
+  --skip-epochs 400 \
+  --max-epochs 120 \
+  --generate-spp-seed \
+  --taroz-matlab-data-dir output/dogfood/ppc_tokyo_run1_shifted_120_taroz_matlab_data_current \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_tokyo_run1_shifted_120_seed_current/summary.json
+
+GNSSPP_TAROZ_ROOT=/path/to/gtsam_gnss \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR=/path/to/gtsam_gnss/examples \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_DATA_DIR=output/dogfood/ppc_tokyo_run1_shifted_120_taroz_matlab_data_current \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR=output/dogfood/taroz_matlab_pos_vel_amb_pdc_ppc_tokyo_run1_shifted_120_debug \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_SKIP_EPOCHS=400 \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_MAX_EPOCHS=120 \
+matlab -batch "run('scripts/dump_taroz_pos_vel_ambiguity_pdc_debug.m')"
+
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --run tokyo/run2 \
+  --skip-epochs 400 \
+  --max-epochs 120 \
+  --generate-spp-seed \
+  --taroz-matlab-data-dir output/dogfood/ppc_tokyo_run2_shifted_120_taroz_matlab_data_current \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_tokyo_run2_shifted_120_seed_current/summary.json
+
+GNSSPP_TAROZ_ROOT=/path/to/gtsam_gnss \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR=/path/to/gtsam_gnss/examples \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_DATA_DIR=output/dogfood/ppc_tokyo_run2_shifted_120_taroz_matlab_data_current \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR=output/dogfood/taroz_matlab_pos_vel_amb_pdc_ppc_tokyo_run2_shifted_120_debug \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_SKIP_EPOCHS=400 \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_MAX_EPOCHS=120 \
+matlab -batch "run('scripts/dump_taroz_pos_vel_ambiguity_pdc_debug.m')"
+
+python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
+  --dataset-root /datasets/PPC-Dataset \
+  --run tokyo/run3 \
+  --skip-epochs 400 \
+  --max-epochs 120 \
+  --generate-spp-seed \
+  --taroz-matlab-data-dir output/dogfood/ppc_tokyo_run3_shifted_120_taroz_matlab_data_current \
+  --summary-json output/dogfood/ppc_taroz_amb_pdc_tokyo_run3_shifted_120_seed_current/summary.json
+
+GNSSPP_TAROZ_ROOT=/path/to/gtsam_gnss \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR=/path/to/gtsam_gnss/examples \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_DATA_DIR=output/dogfood/ppc_tokyo_run3_shifted_120_taroz_matlab_data_current \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR=output/dogfood/taroz_matlab_pos_vel_amb_pdc_ppc_tokyo_run3_shifted_120_debug \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_SKIP_EPOCHS=400 \
+GNSSPP_TAROZ_POS_VEL_AMB_PDC_MAX_EPOCHS=120 \
+matlab -batch "run('scripts/dump_taroz_pos_vel_ambiguity_pdc_debug.m')"
+
+python3 tests/test_taroz_pos_vel_amb_pdc_ppc_window_parity.py -v
+```
+
+The same optional public PPC parity test consumes shifted-120 artifacts for all
+three Nagoya runs and all three Tokyo runs at `--skip-epochs 400`; it also
+consumes a second Nagoya run3 window at `--skip-epochs 800`:
+`output/dogfood/ppc_taroz_amb_pdc_nagoya_run1_shifted_120_seed_current` and
+`output/dogfood/taroz_matlab_pos_vel_amb_pdc_ppc_nagoya_run1_shifted_120_debug`,
+`output/dogfood/ppc_taroz_amb_pdc_nagoya_run2_shifted_120_seed_current` and
+`output/dogfood/taroz_matlab_pos_vel_amb_pdc_ppc_nagoya_run2_shifted_120_debug`,
+`output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_shifted_120_seed_current` and
+`output/dogfood/taroz_matlab_pos_vel_amb_pdc_ppc_nagoya_run3_shifted_120_debug`,
+and `output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_shifted2_120_seed_current`
+with
+`output/dogfood/taroz_matlab_pos_vel_amb_pdc_ppc_nagoya_run3_shifted2_120_debug`,
+plus `output/dogfood/ppc_taroz_amb_pdc_tokyo_run1_shifted_120_seed_current`
+with
+`output/dogfood/taroz_matlab_pos_vel_amb_pdc_ppc_tokyo_run1_shifted_120_debug`,
+and `output/dogfood/ppc_taroz_amb_pdc_tokyo_run2_shifted_120_seed_current`
+with
+`output/dogfood/taroz_matlab_pos_vel_amb_pdc_ppc_tokyo_run2_shifted_120_debug`,
+and `output/dogfood/ppc_taroz_amb_pdc_tokyo_run3_shifted_120_seed_current`
+with
+`output/dogfood/taroz_matlab_pos_vel_amb_pdc_ppc_tokyo_run3_shifted_120_debug`.
+Generate `nagoya/run1` and `nagoya/run2` with the same C++ and MATLAB
+skip-400 command shape shown for `nagoya/run3`, replacing the run name and
+output roots with the matching `nagoya_run1` or `nagoya_run2` paths listed
+above.
+For each shifted public window, generate the taroz MATLAB data directory with
+the same `--skip-epochs ... --max-epochs 120` runner settings so the SPP seed
+file covers the skipped epochs. The MATLAB dump aligns the 1 Hz base
+observations to the 5 Hz rover timeline before slicing each shifted window, and
+the parity test pins matching Nagoya skip-400 (116/120, 39/120, and 112/120
+FIX), Tokyo skip-400 (108/120, 115/120, and 113/120 FIX), and lower-FIX
+Nagoya skip-800 (29/120 FIX) status, seeds, candidate counts, ratio scale,
+fixed/float position, velocity, LAMBDA matrix inputs, and optimizer-cost
+trajectory scale.
+
 The matching CTest parity tests are optional-artifact tests: they skip cleanly
 when the local `output/dogfood/...` oracle files are absent and become strict
 regressions after a dogfood run has generated them. The window test pins
@@ -344,7 +533,7 @@ epoch-debug status/ratio consistency. Its seed-state check ties
 per-epoch dump, rather than only checking final `.pos` rows.
 
 ```bash
-ctest --test-dir build-codex -R 'python_taroz_.*(internal_parity|factor_parity|window_cost_parity)_tests' --output-on-failure
+ctest --test-dir build-codex -R 'python_taroz_.*(internal_parity|factor_parity|window_cost_parity|ppc_window_parity)_tests' --output-on-failure
 ```
 
 The remaining beta-hardening work is broader than final-output shape. Current
@@ -352,14 +541,29 @@ parity covers the listed modes, default ambiguity PDC internals, LAMBDA matrix
 contracts, seed interpolation counts, first/shifted window option contracts,
 and first/shifted window per-epoch plus cost-trajectory contracts. It is still
 not a complete bit-for-bit port of every
-taroz MATLAB branch: more PPC-Dataset windows, additional MATLAB internal dumps,
-and broader option combinations are required before calling the taroz port
-complete.
+taroz MATLAB branch: longer PPC-Dataset windows beyond the current public
+first/shifted slices, additional MATLAB internal dumps, and broader option
+combinations are required before calling the taroz port complete.
+
+The current taroz parity gap table is:
+
+| Surface | Current status | Remaining before complete-port claim |
+|---|---|---|
+| Example modes in taroz `examples/*.m` | P, D, PD, position PD/PDC, position/velocity PDC, PC, and position/velocity ambiguity PDC have C++ dogfood entrypoints and artifact contracts | Paper examples and standalone MATLAB helper/demo scripts are not claimed as ported workflows |
+| PPC `amb-pdc` default run | C++ summary, final `.pos`, DD/SD factor debug, LAMBDA debug, seed counts, and cost trace are pinned against generated MATLAB dumps | Broader per-factor numeric parity across more public PPC runs remains local-only |
+| Windowed ambiguity PDC | First 120 and shifted 120 taroz-example windows compare status, position, velocity, ambiguity counts, ratios, seeds, and cost shape against MATLAB; public `nagoya/run3` first 120 pins status, seeds, position, velocity, ratio scale, candidate-count drift, and cost sanity; public shifted 120 windows cover all six Nagoya/Tokyo public runs at skip 400 plus `nagoya/run3` skip 800, pinning status, seeds, candidate counts, ratio, fixed/float position, velocity, LAMBDA matrix inputs, and cost trajectory scale after base-time alignment | Add longer/full windows and tighten public-run factor parity |
+| Public PPC-Dataset dogfood | Six-run 200 epoch generated-seed local gate plus `nagoya/run2`, `nagoya/run3`, and `tokyo/run2` 1000 epoch optional artifact tests; long summaries include tail counts and worst epochs | Full-window PPC runs and more strict tail thresholds are still research gates, not CI defaults |
+| Seed handling | Generated SPP seed path is part of the PPC runner; generated-seed summaries require exact seed match count, zero interpolation, seed-row coverage, and shifted-window seed/epoch sequence alignment | Seed-gap interpolation and intentionally shifted external seed files need more dedicated PPC fixtures |
+| Option profiles | Ratio, epoch lambda output, seed interpolation, shifted/first windows, first/shifted-window strict ratio, and seed divergence guard have expectation profiles | More cross-products of ratio, guards, skip/max, and interpolation should be added only when their counts are stable |
+| Solver trajectory | C++ cost trace shape is always checked; default, taroz-example windows, and public shifted PPC windows compare MATLAB/C++ cost scale where dumps exist | More windows/runs should pin MATLAB/C++ iteration and cost trajectory behavior |
 
 When `--generate-spp-seed` is used, the PPC harness treats the generated seed as
 part of the sign-off. The native summary must report a seed path,
 `seed_matched_epochs` must equal the optimized epoch count, and
-`seed_interpolated_epochs` must remain zero.
+`seed_interpolated_epochs` must remain zero. The generated-seed audit also
+checks the seed row count, missing optimized epochs, duplicate/non-sorted epoch
+keys, and, for shifted windows, that the seed sequence starting at
+`skip_epochs` exactly matches the optimized epoch sequence.
 
 `gnss smartloc-adapter` widens the public matrix beyond UrbanNav by exporting
 smartLoc `NAV-POSLLH.csv` into a `reference.csv` plus a normalized u-blox
