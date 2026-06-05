@@ -1803,6 +1803,8 @@ void writeSummaryJson(const Options& options,
            << options.carrier_phase_huber_threshold_sigma << ",\n";
     output << "  \"tdcp_huber_threshold_sigma\": "
            << options.tdcp_huber_threshold_sigma << ",\n";
+    output << "  \"lambda_ratio_threshold\": "
+           << options.lambda_ratio_threshold << ",\n";
     output << "  \"position_prior_sigma_m\": "
            << options.position_prior_sigma_m << ",\n";
     output << "  \"clock_prior_sigma_m\": "

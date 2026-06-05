@@ -240,6 +240,23 @@ python3 apps/gnss.py taroz-observable-dogfood --mode pos-pdc --generate-matlab-d
 python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood --generate-matlab-dump
 ```
 
+The ambiguity PDC dogfood also has non-default expectation profiles for
+option-level sign-offs that should not be judged with the default FIX/FLOAT
+counts:
+
+```bash
+python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
+  --fgo-extra-arg=--no-epoch-lambda-fixed-output \
+  --expectation-profile no-epoch-lambda-fixed-output \
+  --skip-parity
+
+python3 apps/gnss.py taroz-pos-vel-amb-pdc-dogfood \
+  --fgo-extra-arg=--lambda-ratio-threshold \
+  --fgo-extra-arg=100 \
+  --expectation-profile strict-lambda-ratio \
+  --skip-parity
+```
+
 The matching CTest parity tests are optional-artifact tests: they skip cleanly
 when the local `output/dogfood/...` oracle files are absent and become strict
 regressions after a dogfood run has generated them.
@@ -254,8 +271,8 @@ ctest --test-dir build-codex -R 'python_taroz_.*(internal_parity|factor_parity)_
 
 The remaining beta-hardening work is broader than final-output shape: keep
 expanding seed-state edge cases, solver-cost trajectories across more windows,
-non-default option coverage, and longer PPC-Dataset windows before treating the
-taroz port as complete.
+additional non-default option profiles, and longer PPC-Dataset windows before
+treating the taroz port as complete.
 
 When `--generate-spp-seed` is used, the PPC harness treats the generated seed as
 part of the sign-off. The native summary must report a seed path,

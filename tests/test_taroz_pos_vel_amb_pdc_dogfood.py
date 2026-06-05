@@ -27,7 +27,10 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
             path.write_text("", encoding="ascii")
         return obs, base, nav, seed_pos
 
-    def canonical_summary(self) -> dict[str, object]:
+    def canonical_summary(self, profile_name: str = "default") -> dict[str, object]:
+        profile = gnss_taroz_pos_vel_amb_pdc_dogfood.expectation_profile(
+            profile_name
+        )
         summary: dict[str, object] = {
             "preset": "taroz-amb-pdc",
             "backend": "eigen",
@@ -40,7 +43,9 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
             "use_velocity_motion_factors": True,
             "use_ambiguity_between_factors": True,
             "linearize_double_difference_factors_at_seed": True,
-            "use_epoch_lambda_fixed_output": True,
+            "use_epoch_lambda_fixed_output": profile[
+                "use_epoch_lambda_fixed_output"
+            ],
             "dd_ambiguity_per_epoch": True,
             "use_ambiguity_priors": False,
             "reject_rover_carrier_lli": True,
@@ -49,6 +54,7 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
             "pseudorange_huber_threshold_sigma": 1.234,
             "carrier_phase_huber_threshold_sigma": 1.234,
             "tdcp_huber_threshold_sigma": 1.234,
+            "lambda_ratio_threshold": profile["lambda_ratio_threshold"],
             "velocity_motion_sigma_m": 0.01,
             "ambiguity_between_sigma_cycles": 0.001,
             "min_snr_dbhz": 35.0,
@@ -57,14 +63,14 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
             "max_float_seed_position_divergence_m": 0.0,
             "max_float_position_jump_m": 0.0,
             "lambda_ambiguity_fix_solved": True,
-            "lambda_ambiguity_fix_used": True,
+            "lambda_ambiguity_fix_used": profile["lambda_ambiguity_fix_used"],
             "partial_lambda_ambiguity_fix_used": False,
-            "fixed_solution": True,
+            "fixed_solution": profile["fixed_solution"],
             "converged": True,
             "final_cost": 57158.72726,
             "total_processing_time_ms": 41508.1587,
         }
-        summary.update(gnss_taroz_pos_vel_amb_pdc_dogfood.EXPECTED_FULL_COUNTS)
+        summary.update(profile["counts"])
         return summary
 
     def test_dry_run_writes_full_parity_plan(self) -> None:
@@ -131,8 +137,55 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
             self.assertIn("--cost-trace-csv", command)
             self.assertIn("--max-float-seed-divergence", command)
             self.assertIn("--max-float-position-jump", command)
+            self.assertEqual(payload["expected"]["profile"], "default")
+            self.assertEqual(payload["expected"]["lambda_ratio_threshold"], 2.0)
+            self.assertTrue(payload["expected"]["use_epoch_lambda_fixed_output"])
             self.assertEqual(payload["expected"]["counts"]["fixed_solutions"], 721)
             self.assertEqual(payload["expected"]["counts"]["float_solutions"], 243)
+
+    def test_dry_run_records_nondefault_expectation_profile(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_taroz_amb_pdc_dogfood_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs, base, nav, seed_pos = self.touch_inputs(temp_root)
+            summary_json = temp_root / "summary.json"
+            out_dir = temp_root / "out"
+
+            result = gnss_taroz_pos_vel_amb_pdc_dogfood.main(
+                [
+                    "--obs",
+                    str(obs),
+                    "--base",
+                    str(base),
+                    "--nav",
+                    str(nav),
+                    "--seed-pos",
+                    str(seed_pos),
+                    "--out-dir",
+                    str(out_dir),
+                    "--summary-json",
+                    str(summary_json),
+                    "--fgo-bin",
+                    str(temp_root / "gnss_fgo"),
+                    "--fgo-extra-arg=--lambda-ratio-threshold",
+                    "--fgo-extra-arg=100",
+                    "--expectation-profile",
+                    "strict-lambda-ratio",
+                    "--dry-run",
+                ]
+            )
+
+            self.assertEqual(result, 0)
+            payload = json.loads(summary_json.read_text(encoding="utf-8"))
+            command = payload["fgo_command"]
+            self.assertIn("--lambda-ratio-threshold", command)
+            self.assertIn("100", command)
+            self.assertEqual(payload["expected"]["profile"], "strict-lambda-ratio")
+            self.assertEqual(payload["expected"]["lambda_ratio_threshold"], 100.0)
+            self.assertTrue(payload["expected"]["use_epoch_lambda_fixed_output"])
+            self.assertFalse(payload["expected"]["lambda_ambiguity_fix_used"])
+            self.assertFalse(payload["expected"]["fixed_solution"])
+            self.assertEqual(payload["expected"]["counts"]["fixed_solutions"], 0)
+            self.assertEqual(payload["expected"]["counts"]["float_solutions"], 964)
 
     def test_matlab_dump_env_uses_requested_oracle_paths(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_taroz_amb_pdc_dogfood_test_") as temp_dir:
@@ -197,13 +250,52 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
 
         self.assertEqual(failures, [])
 
+    def test_native_summary_accepts_no_epoch_lambda_output_profile(self) -> None:
+        failures = gnss_taroz_pos_vel_amb_pdc_dogfood.verify_native_summary(
+            self.canonical_summary("no-epoch-lambda-fixed-output"),
+            "no-epoch-lambda-fixed-output",
+        )
+
+        self.assertEqual(failures, [])
+
+    def test_native_summary_accepts_strict_lambda_ratio_profile(self) -> None:
+        failures = gnss_taroz_pos_vel_amb_pdc_dogfood.verify_native_summary(
+            self.canonical_summary("strict-lambda-ratio"),
+            "strict-lambda-ratio",
+        )
+
+        self.assertEqual(failures, [])
+
+    def test_native_summary_rejects_nondefault_profile_as_default(self) -> None:
+        failures = gnss_taroz_pos_vel_amb_pdc_dogfood.verify_native_summary(
+            self.canonical_summary("no-epoch-lambda-fixed-output")
+        )
+
+        self.assertIn(
+            "taroz-amb-pdc use_epoch_lambda_fixed_output must be true "
+            "for profile default",
+            failures,
+        )
+        self.assertIn(
+            "taroz-amb-pdc fixed_solutions must be 721 for profile default",
+            failures,
+        )
+        self.assertIn(
+            "taroz-amb-pdc lambda_ambiguity_fix_used must be true "
+            "for profile default",
+            failures,
+        )
+
     def test_native_summary_flags_count_drift(self) -> None:
         summary = self.canonical_summary()
         summary["fixed_solutions"] = 720
 
         failures = gnss_taroz_pos_vel_amb_pdc_dogfood.verify_native_summary(summary)
 
-        self.assertEqual(failures, ["taroz-amb-pdc fixed_solutions must be 721"])
+        self.assertEqual(
+            failures,
+            ["taroz-amb-pdc fixed_solutions must be 721 for profile default"],
+        )
 
 
 if __name__ == "__main__":
