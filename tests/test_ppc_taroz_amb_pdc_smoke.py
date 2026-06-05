@@ -25,9 +25,17 @@ SHIFTED_NAGOYA_RUN3_SEED_SUMMARY = (
     ROOT_DIR
     / "output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_shifted_seed_current/summary.json"
 )
+NAGOYA_RUN2_1000_SEED_SUMMARY = (
+    ROOT_DIR
+    / "output/dogfood/ppc_taroz_amb_pdc_nagoya_run2_1000_seed_current/summary.json"
+)
 NAGOYA_RUN3_1000_SEED_SUMMARY = (
     ROOT_DIR
     / "output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_1000_seed_current/summary.json"
+)
+TOKYO_RUN2_1000_SEED_SUMMARY = (
+    ROOT_DIR
+    / "output/dogfood/ppc_taroz_amb_pdc_tokyo_run2_1000_seed_current/summary.json"
 )
 
 
@@ -342,6 +350,335 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
             self.assertIn("--max-epochs", command)
             self.assertIn("20", command)
 
+    def test_taroz_matlab_data_dir_requires_generated_seed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_smoke_dry_run_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            dataset_root = temp_root / "PPC-Dataset"
+            self.make_run(dataset_root, "nagoya/run1")
+
+            with self.assertRaises(SystemExit) as raised:
+                gnss_ppc_taroz_amb_pdc_smoke.main(
+                    [
+                        "--dataset-root",
+                        str(dataset_root),
+                        "--run",
+                        "nagoya/run1",
+                        "--taroz-matlab-data-dir",
+                        str(temp_root / "taroz_data"),
+                        "--dry-run",
+                    ]
+                )
+
+            self.assertIn(
+                "--taroz-matlab-data-dir requires --generate-spp-seed",
+                str(raised.exception),
+            )
+
+    def test_prepare_taroz_matlab_data_dir_writes_seed_and_base_position(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_taroz_data_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            run_dir = self.make_run(temp_root / "PPC-Dataset", "nagoya/run1")
+            (run_dir / "base.obs").write_text(
+                "     3.04           OBSERVATION DATA    M                   RINEX VERSION / TYPE\n"
+                " -3817680.7301  3562839.5234  3650159.2418                  APPROX POSITION XYZ\n"
+                "                                                            END OF HEADER\n",
+                encoding="ascii",
+            )
+            seed_pos = temp_root / "seed.pos"
+            seed_pos.write_text(
+                "% seed\n"
+                "2325 553800.000000 -3811467.244148 3566808.551089 "
+                "3652669.169515 0 0 0 1 27 0 0 0 0\n",
+                encoding="ascii",
+            )
+            out_dir = temp_root / "taroz_data"
+            run = gnss_ppc_taroz_amb_pdc_smoke.PpcRun(
+                "nagoya",
+                "run1",
+                run_dir,
+            )
+
+            payload = gnss_ppc_taroz_amb_pdc_smoke.prepare_taroz_matlab_data_dir(
+                run,
+                seed_pos,
+                out_dir,
+            )
+
+            self.assertEqual(payload["seed_rows"], 1)
+            self.assertEqual(payload["base_position_llh_deg_m"][0], 35.13470947)
+            self.assertTrue((out_dir / "rover_1Hz.obs").exists())
+            self.assertTrue((out_dir / "base_position.txt").exists())
+            seed_text = (out_dir / "rover_1Hz_spp.pos").read_text(encoding="ascii")
+            self.assertIn("2024/08/03 09:50:00.000", seed_text)
+            self.assertIn("35.1627", seed_text)
+
+    def test_taroz_matlab_seed_export_must_cover_skipped_window(self) -> None:
+        class Args:
+            taroz_matlab_data_dir = Path("taroz_data")
+            skip_epochs = 400
+            max_epochs = 120
+
+        self.assertEqual(
+            gnss_ppc_taroz_amb_pdc_smoke.validate_taroz_matlab_data(
+                Args(),
+                {"seed_rows": 520},
+            ),
+            [],
+        )
+        self.assertEqual(
+            gnss_ppc_taroz_amb_pdc_smoke.validate_taroz_matlab_data(
+                Args(),
+                {"seed_rows": 120},
+            ),
+            ["taroz MATLAB seed_rows 120 != skip_epochs + max_epochs 520"],
+        )
+
+    def test_taroz_matlab_seed_export_allows_full_run_without_fixed_row_count(self) -> None:
+        class Args:
+            taroz_matlab_data_dir = Path("taroz_data")
+            skip_epochs = 400
+            max_epochs = 0
+
+        self.assertEqual(
+            gnss_ppc_taroz_amb_pdc_smoke.validate_taroz_matlab_data(
+                Args(),
+                {"seed_rows": 120},
+            ),
+            [],
+        )
+
+    def test_generated_seed_audit_accepts_shifted_window_coverage(self) -> None:
+        class Args:
+            generate_spp_seed = True
+            skip_epochs = 2
+            max_epochs = 3
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_seed_audit_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            seed_pos = temp_root / "seed.pos"
+            epoch_debug = temp_root / "epoch_debug.csv"
+            seed_pos.write_text(
+                "% seed\n"
+                "2325 10.000000 1.0 2.0 3.0 0 0 0 1 12\n"
+                "2325 10.200000 2.0 3.0 4.0 0 0 0 1 12\n"
+                "2325 10.400000 3.0 4.0 5.0 0 0 0 1 12\n"
+                "2325 10.600000 4.0 5.0 6.0 0 0 0 1 12\n"
+                "2325 10.800000 5.0 6.0 7.0 0 0 0 1 12\n",
+                encoding="ascii",
+            )
+            epoch_debug.write_text(
+                "gps_week,gps_tow\n"
+                "2325,10.400000\n"
+                "2325,10.600000\n"
+                "2325,10.800000\n",
+                encoding="utf-8",
+            )
+
+            audit, failures = gnss_ppc_taroz_amb_pdc_smoke.audit_generated_seed_artifacts(
+                Args(),
+                seed_pos,
+                epoch_debug,
+            )
+
+            self.assertEqual(failures, [])
+            self.assertEqual(audit["seed_rows"], 5)
+            self.assertEqual(audit["optimized_epoch_rows"], 3)
+            self.assertEqual(audit["expected_seed_rows"], 5)
+            self.assertEqual(audit["missing_optimized_seed_epochs"], 0)
+            self.assertTrue(audit["window_sequence_matches"])
+
+    def test_generated_seed_audit_flags_missing_and_shifted_window_seed(self) -> None:
+        class Args:
+            generate_spp_seed = True
+            skip_epochs = 2
+            max_epochs = 3
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_seed_audit_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            seed_pos = temp_root / "seed.pos"
+            epoch_debug = temp_root / "epoch_debug.csv"
+            seed_pos.write_text(
+                "% seed shifted by one row and missing 10.400\n"
+                "2325 10.000000 1.0 2.0 3.0 0 0 0 1 12\n"
+                "2325 10.200000 2.0 3.0 4.0 0 0 0 1 12\n"
+                "2325 10.600000 4.0 5.0 6.0 0 0 0 1 12\n"
+                "2325 10.800000 5.0 6.0 7.0 0 0 0 1 12\n"
+                "2325 11.000000 6.0 7.0 8.0 0 0 0 1 12\n",
+                encoding="ascii",
+            )
+            epoch_debug.write_text(
+                "gps_week,gps_tow\n"
+                "2325,10.400000\n"
+                "2325,10.600000\n"
+                "2325,10.800000\n",
+                encoding="utf-8",
+            )
+
+            audit, failures = gnss_ppc_taroz_amb_pdc_smoke.audit_generated_seed_artifacts(
+                Args(),
+                seed_pos,
+                epoch_debug,
+            )
+
+            self.assertEqual(audit["missing_optimized_seed_epochs"], 1)
+            self.assertFalse(audit["window_sequence_matches"])
+            self.assertIn(
+                "generated seed POS is missing 1 optimized epoch(s), "
+                "first missing 2325:10.400",
+                failures,
+            )
+            self.assertIn(
+                "generated seed window does not match optimized epoch sequence "
+                "at skip_epochs 2: seed 2325:10.600 != epoch 2325:10.400",
+                failures,
+            )
+
+    def test_generated_seed_audit_flags_row_count_drift(self) -> None:
+        class Args:
+            generate_spp_seed = True
+            skip_epochs = 2
+            max_epochs = 3
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_seed_audit_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            seed_pos = temp_root / "seed.pos"
+            epoch_debug = temp_root / "epoch_debug.csv"
+            seed_pos.write_text(
+                "% seed too short\n"
+                "2325 10.400000 3.0 4.0 5.0 0 0 0 1 12\n"
+                "2325 10.600000 4.0 5.0 6.0 0 0 0 1 12\n"
+                "2325 10.800000 5.0 6.0 7.0 0 0 0 1 12\n",
+                encoding="ascii",
+            )
+            epoch_debug.write_text(
+                "gps_week,gps_tow\n"
+                "2325,10.400000\n"
+                "2325,10.600000\n"
+                "2325,10.800000\n",
+                encoding="utf-8",
+            )
+
+            _, failures = gnss_ppc_taroz_amb_pdc_smoke.audit_generated_seed_artifacts(
+                Args(),
+                seed_pos,
+                epoch_debug,
+            )
+
+            self.assertIn(
+                "generated seed rows 3 != skip_epochs + max_epochs 5",
+                failures,
+            )
+
+    def test_generated_seed_audit_flags_duplicate_epochs(self) -> None:
+        class Args:
+            generate_spp_seed = True
+            skip_epochs = 0
+            max_epochs = 3
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_seed_audit_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            seed_pos = temp_root / "seed.pos"
+            epoch_debug = temp_root / "epoch_debug.csv"
+            seed_pos.write_text(
+                "% seed duplicate\n"
+                "2325 10.000000 1.0 2.0 3.0 0 0 0 1 12\n"
+                "2325 10.200000 2.0 3.0 4.0 0 0 0 1 12\n"
+                "2325 10.200000 9.0 9.0 9.0 0 0 0 1 12\n",
+                encoding="ascii",
+            )
+            epoch_debug.write_text(
+                "gps_week,gps_tow\n"
+                "2325,10.000000\n"
+                "2325,10.200000\n"
+                "2325,10.200000\n",
+                encoding="utf-8",
+            )
+
+            audit, failures = gnss_ppc_taroz_amb_pdc_smoke.audit_generated_seed_artifacts(
+                Args(),
+                seed_pos,
+                epoch_debug,
+            )
+
+            self.assertEqual(audit["missing_optimized_seed_epochs"], 0)
+            self.assertIsNone(audit["window_sequence_matches"])
+            self.assertIn(
+                "generated seed POS has duplicate epoch(s): 2325:10.200",
+                failures,
+            )
+            self.assertIn(
+                "epoch debug CSV has duplicate epoch(s): 2325:10.200",
+                failures,
+            )
+
+    def test_generated_seed_audit_flags_unsorted_epochs(self) -> None:
+        class Args:
+            generate_spp_seed = True
+            skip_epochs = 0
+            max_epochs = 3
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_seed_audit_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            seed_pos = temp_root / "seed.pos"
+            epoch_debug = temp_root / "epoch_debug.csv"
+            seed_pos.write_text(
+                "% seed unsorted\n"
+                "2325 10.200000 2.0 3.0 4.0 0 0 0 1 12\n"
+                "2325 10.000000 1.0 2.0 3.0 0 0 0 1 12\n"
+                "2325 10.400000 3.0 4.0 5.0 0 0 0 1 12\n",
+                encoding="ascii",
+            )
+            epoch_debug.write_text(
+                "gps_week,gps_tow\n"
+                "2325,10.200000\n"
+                "2325,10.000000\n"
+                "2325,10.400000\n",
+                encoding="utf-8",
+            )
+
+            audit, failures = gnss_ppc_taroz_amb_pdc_smoke.audit_generated_seed_artifacts(
+                Args(),
+                seed_pos,
+                epoch_debug,
+            )
+
+            self.assertTrue(audit["window_sequence_matches"])
+            self.assertIn("generated seed POS epochs are not strictly sorted", failures)
+            self.assertIn("epoch debug CSV epochs are not strictly sorted", failures)
+
+    def test_generated_seed_audit_skips_fixed_row_count_for_full_run(self) -> None:
+        class Args:
+            generate_spp_seed = True
+            skip_epochs = 400
+            max_epochs = 0
+
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_seed_audit_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            seed_pos = temp_root / "seed.pos"
+            epoch_debug = temp_root / "epoch_debug.csv"
+            seed_pos.write_text(
+                "% full run seed, no fixed row-count expectation\n"
+                "2325 10.000000 1.0 2.0 3.0 0 0 0 1 12\n"
+                "2325 10.200000 2.0 3.0 4.0 0 0 0 1 12\n",
+                encoding="ascii",
+            )
+            epoch_debug.write_text(
+                "gps_week,gps_tow\n"
+                "2325,10.000000\n"
+                "2325,10.200000\n",
+                encoding="utf-8",
+            )
+
+            audit, failures = gnss_ppc_taroz_amb_pdc_smoke.audit_generated_seed_artifacts(
+                Args(),
+                seed_pos,
+                epoch_debug,
+            )
+
+            self.assertEqual(failures, [])
+            self.assertIsNone(audit["expected_seed_rows"])
+            self.assertIsNone(audit["window_sequence_matches"])
+
     def test_native_summary_validation_flags_low_candidate_run(self) -> None:
         class Args:
             generate_spp_seed = False
@@ -471,8 +808,16 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
 
             self.assertEqual(summary["matched_epochs"], 1)
             self.assertEqual(summary["p95_3d_error_m"], 1.0)
+            self.assertEqual(summary["tail_counts_3d_error_m"]["gt_0_5_m"], 1)
+            self.assertEqual(summary["tail_counts_3d_error_m"]["gt_1_m"], 0)
+            self.assertEqual(summary["worst_epoch"]["status"], 3)
             self.assertEqual(summary["no_solution"]["matched_epochs"], 1)
+            self.assertEqual(
+                summary["no_solution"]["tail_counts_3d_error_m"]["gt_100_m"],
+                1,
+            )
             self.assertEqual(summary["all_output"]["max_3d_error_m"], 1000.0)
+            self.assertEqual(summary["all_output"]["worst_epoch"]["status"], 0)
 
     def test_reference_summary_validation_flags_large_valid_p95(self) -> None:
         class Args:
@@ -534,9 +879,9 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
             self.assertLessEqual(reference["max_3d_error_m"], 2.0, run_name)
 
         nagoya_run3 = payload["runs"]["nagoya/run3"]["native_summary"]
-        self.assertEqual(nagoya_run3["fixed_solutions"], 18)
-        self.assertEqual(nagoya_run3["float_solutions"], 182)
-        self.assertLessEqual(nagoya_run3["fix_rate_percent"], 10.0)
+        self.assertEqual(nagoya_run3["fixed_solutions"], 24)
+        self.assertEqual(nagoya_run3["float_solutions"], 176)
+        self.assertLessEqual(nagoya_run3["fix_rate_percent"], 15.0)
 
     def test_optional_nagoya_run3_shifted_window_summary_contract(self) -> None:
         full_payload = self.require_summary(FULL_SEED_SUMMARY)
@@ -561,12 +906,13 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
         self.assertEqual(shifted_native["seed_matched_epochs"], 200)
         self.assertEqual(shifted_native["seed_interpolated_epochs"], 0)
         self.assertEqual(shifted_native["lambda_ambiguity_attempts"], 200)
+        self.assertEqual(shifted_native["fixed_solutions"], 194)
+        self.assertEqual(shifted_native["float_solutions"], 6)
         self.assertGreater(shifted_native["fixed_solutions"], initial_native["fixed_solutions"])
-        self.assertGreaterEqual(shifted_native["fixed_solutions"], 160)
-        self.assertLessEqual(shifted_native["float_solutions"], 40)
+        self.assertEqual(shifted_reference["position_status_counts"], {"3": 6, "4": 194})
         self.assertEqual(shifted_reference["matched_epochs"], 200)
-        self.assertLessEqual(shifted_reference["p95_3d_error_m"], 2.0)
-        self.assertLessEqual(shifted_reference["max_3d_error_m"], 2.0)
+        self.assertLessEqual(shifted_reference["p95_3d_error_m"], 0.2)
+        self.assertLessEqual(shifted_reference["max_3d_error_m"], 1.3)
 
     def test_optional_generated_seed_state_matches_epoch_debug(self) -> None:
         payload = self.require_summary(FULL_SEED_SUMMARY)
@@ -583,6 +929,68 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
         for run_payload in payload["runs"].values():
             self.assert_solution_artifacts_match_summary(run_payload)
         self.assert_solution_artifacts_match_summary(shifted_payload["runs"]["nagoya/run3"])
+
+    def test_optional_nagoya_run2_1000_epoch_summary_contract(self) -> None:
+        payload = self.require_summary(NAGOYA_RUN2_1000_SEED_SUMMARY)
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["failures"], [])
+        self.assertEqual(payload["max_epochs"], 1000)
+        self.assertEqual(payload["skip_epochs"], 0)
+        self.assertTrue(payload["generate_spp_seed"])
+        self.assertEqual(set(payload["runs"]), {"nagoya/run2"})
+
+        run_payload = payload["runs"]["nagoya/run2"]
+        native = run_payload["native_summary"]
+        reference = run_payload["reference_summary"]
+        audit = run_payload["generated_seed_audit"]
+        self.assertEqual(run_payload["status"], "ok")
+        self.assertEqual(run_payload["failures"], [])
+        self.assertTrue(native["converged"])
+        self.assertEqual(native["optimized_epochs"], 1000)
+        self.assertEqual(native["valid_solutions"], 1000)
+        self.assertEqual(native["fixed_solutions"], 777)
+        self.assertEqual(native["float_solutions"], 223)
+        self.assertEqual(native["seed_matched_epochs"], 1000)
+        self.assertEqual(native["seed_interpolated_epochs"], 0)
+        self.assertEqual(native["lambda_ambiguity_attempts"], 1000)
+        self.assertEqual(native["lambda_ambiguity_candidates"], 18741)
+        self.assertEqual(native["lambda_ambiguity_used_candidates"], 14389)
+        self.assertEqual(native["double_difference_carrier_factors"], 18741)
+        self.assertEqual(native["float_rejected_seed_position_divergence"], 0)
+        self.assertEqual(native["float_rejected_position_jump"], 0)
+        self.assertEqual(reference["position_status_counts"], {"3": 223, "4": 777})
+        self.assertEqual(reference["matched_epochs"], 1000)
+        self.assertLessEqual(reference["p95_3d_error_m"], 0.25)
+        self.assertLessEqual(reference["max_3d_error_m"], 0.33)
+        self.assertEqual(reference["tail_counts_3d_error_m"]["gt_0_5_m"], 0)
+        self.assertEqual(reference["fixed"]["matched_epochs"], 777)
+        self.assertLessEqual(reference["fixed"]["p95_3d_error_m"], 0.22)
+        self.assertLessEqual(reference["fixed"]["max_3d_error_m"], 0.23)
+        self.assertEqual(reference["fixed"]["tail_counts_3d_error_m"]["gt_0_5_m"], 0)
+        self.assertEqual(reference["float"]["matched_epochs"], 223)
+        self.assertLessEqual(reference["float"]["p95_3d_error_m"], 0.27)
+        self.assertLessEqual(reference["float"]["max_3d_error_m"], 0.33)
+        self.assertEqual(reference["float"]["tail_counts_3d_error_m"]["gt_0_5_m"], 0)
+        self.assertEqual(reference["no_solution"]["matched_epochs"], 0)
+        self.assertEqual(reference["all_output"]["matched_epochs"], 1000)
+        self.assertEqual(reference["worst_epoch"]["gps_tow"], 555825.8)
+        self.assertEqual(reference["worst_epoch"]["status"], 3)
+        self.assertEqual(audit["seed_rows"], 1000)
+        self.assertEqual(audit["expected_seed_rows"], 1000)
+        self.assertEqual(audit["missing_optimized_seed_epochs"], 0)
+        self.assertTrue(audit["window_sequence_matches"])
+        self.assert_solution_artifacts_match_summary(run_payload)
+
+    def test_optional_nagoya_run2_1000_epoch_lambda_debug_contract(self) -> None:
+        payload = self.require_summary(NAGOYA_RUN2_1000_SEED_SUMMARY)
+
+        self.assert_lambda_debug_matches_epoch_debug(payload["runs"]["nagoya/run2"])
+
+    def test_optional_nagoya_run2_1000_epoch_cost_trace_contract(self) -> None:
+        payload = self.require_summary(NAGOYA_RUN2_1000_SEED_SUMMARY)
+
+        self.assert_cost_trace_matches_summary(payload["runs"]["nagoya/run2"])
 
     def test_optional_nagoya_run3_1000_epoch_summary_contract(self) -> None:
         payload = self.require_summary(NAGOYA_RUN3_1000_SEED_SUMMARY)
@@ -602,18 +1010,30 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
         self.assertEqual(native["optimized_epochs"], 1000)
         self.assertEqual(native["seed_matched_epochs"], 1000)
         self.assertEqual(native["seed_interpolated_epochs"], 0)
-        self.assertEqual(native["valid_solutions"], 783)
-        self.assertEqual(native["fixed_solutions"], 406)
-        self.assertEqual(native["float_solutions"], 377)
-        self.assertEqual(native["lambda_ambiguity_attempts"], 949)
-        self.assertEqual(native["float_rejected_seed_position_divergence"], 36)
-        self.assertEqual(native["float_rejected_position_jump"], 130)
-        self.assertEqual(reference["position_status_counts"], {"0": 217, "3": 377, "4": 406})
-        self.assertEqual(reference["matched_epochs"], 783)
+        self.assertEqual(native["valid_solutions"], 956)
+        self.assertEqual(native["fixed_solutions"], 582)
+        self.assertEqual(native["float_solutions"], 374)
+        self.assertEqual(native["lambda_ambiguity_attempts"], 956)
+        self.assertEqual(native["float_rejected_seed_position_divergence"], 0)
+        self.assertEqual(native["float_rejected_position_jump"], 0)
+        self.assertEqual(reference["position_status_counts"], {"0": 44, "3": 374, "4": 582})
+        self.assertEqual(reference["matched_epochs"], 956)
         self.assertLessEqual(reference["p95_3d_error_m"], 1.1)
         self.assertLessEqual(reference["fixed"]["p95_3d_error_m"], 0.2)
         self.assertLessEqual(reference["float"]["p95_3d_error_m"], 1.2)
-        self.assertEqual(reference["no_solution"]["matched_epochs"], 217)
+        self.assertEqual(reference["fixed"]["tail_counts_3d_error_m"]["gt_100_m"], 0)
+        self.assertEqual(reference["float"]["tail_counts_3d_error_m"]["gt_2_m"], 0)
+        self.assertEqual(reference["worst_epoch"]["gps_tow"], 553834.4)
+        self.assertEqual(reference["worst_epoch"]["status"], 3)
+        self.assertEqual(reference["no_solution"]["matched_epochs"], 44)
+        self.assertEqual(reference["no_solution"]["tail_counts_3d_error_m"]["gt_100_m"], 0)
+        self.assertEqual(reference["no_solution"]["tail_counts_3d_error_m"]["gt_10_m"], 0)
+        self.assertEqual(reference["no_solution"]["tail_counts_3d_error_m"]["gt_2_m"], 0)
+        self.assertEqual(reference["no_solution"]["tail_counts_3d_error_m"]["gt_1_m"], 7)
+        self.assertEqual(reference["no_solution"]["worst_epoch"]["status"], 0)
+        self.assertEqual(reference["no_solution"]["worst_epoch"]["gps_tow"], 553865.4)
+        self.assertEqual(reference["all_output"]["worst_epoch"]["status"], 0)
+        self.assertEqual(reference["all_output"]["worst_epoch"]["gps_tow"], 553865.4)
         self.assert_solution_artifacts_match_summary(run_payload)
 
     def test_optional_nagoya_run3_1000_epoch_lambda_debug_contract(self) -> None:
@@ -625,6 +1045,66 @@ class PpcTarozAmbPdcSmokeTest(unittest.TestCase):
         payload = self.require_summary(NAGOYA_RUN3_1000_SEED_SUMMARY)
 
         self.assert_cost_trace_matches_summary(payload["runs"]["nagoya/run3"])
+
+    def test_optional_tokyo_run2_1000_epoch_summary_contract(self) -> None:
+        payload = self.require_summary(TOKYO_RUN2_1000_SEED_SUMMARY)
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["failures"], [])
+        self.assertEqual(payload["max_epochs"], 1000)
+        self.assertEqual(payload["skip_epochs"], 0)
+        self.assertTrue(payload["generate_spp_seed"])
+        self.assertEqual(set(payload["runs"]), {"tokyo/run2"})
+
+        run_payload = payload["runs"]["tokyo/run2"]
+        native = run_payload["native_summary"]
+        reference = run_payload["reference_summary"]
+        audit = run_payload["generated_seed_audit"]
+        self.assertEqual(run_payload["status"], "ok")
+        self.assertEqual(run_payload["failures"], [])
+        self.assertTrue(native["converged"])
+        self.assertEqual(native["optimized_epochs"], 1000)
+        self.assertEqual(native["valid_solutions"], 1000)
+        self.assertEqual(native["fixed_solutions"], 868)
+        self.assertEqual(native["float_solutions"], 132)
+        self.assertEqual(native["seed_matched_epochs"], 1000)
+        self.assertEqual(native["seed_interpolated_epochs"], 0)
+        self.assertEqual(native["lambda_ambiguity_attempts"], 1000)
+        self.assertEqual(native["lambda_ambiguity_candidates"], 17675)
+        self.assertEqual(native["lambda_ambiguity_used_candidates"], 15960)
+        self.assertEqual(native["double_difference_carrier_factors"], 17675)
+        self.assertEqual(native["float_rejected_seed_position_divergence"], 0)
+        self.assertEqual(native["float_rejected_position_jump"], 0)
+        self.assertEqual(reference["position_status_counts"], {"3": 132, "4": 868})
+        self.assertEqual(reference["matched_epochs"], 1000)
+        self.assertLessEqual(reference["p95_3d_error_m"], 1.6)
+        self.assertLessEqual(reference["max_3d_error_m"], 1.7)
+        self.assertEqual(reference["fixed"]["matched_epochs"], 868)
+        self.assertLessEqual(reference["fixed"]["p95_3d_error_m"], 0.1)
+        self.assertLessEqual(reference["fixed"]["max_3d_error_m"], 0.18)
+        self.assertEqual(reference["fixed"]["tail_counts_3d_error_m"]["gt_0_5_m"], 0)
+        self.assertEqual(reference["float"]["matched_epochs"], 132)
+        self.assertLessEqual(reference["float"]["p95_3d_error_m"], 1.7)
+        self.assertEqual(reference["float"]["tail_counts_3d_error_m"]["gt_2_m"], 0)
+        self.assertEqual(reference["no_solution"]["matched_epochs"], 0)
+        self.assertEqual(reference["all_output"]["matched_epochs"], 1000)
+        self.assertEqual(reference["worst_epoch"]["gps_tow"], 177121.0)
+        self.assertEqual(reference["worst_epoch"]["status"], 3)
+        self.assertEqual(audit["seed_rows"], 1000)
+        self.assertEqual(audit["expected_seed_rows"], 1000)
+        self.assertEqual(audit["missing_optimized_seed_epochs"], 0)
+        self.assertTrue(audit["window_sequence_matches"])
+        self.assert_solution_artifacts_match_summary(run_payload)
+
+    def test_optional_tokyo_run2_1000_epoch_lambda_debug_contract(self) -> None:
+        payload = self.require_summary(TOKYO_RUN2_1000_SEED_SUMMARY)
+
+        self.assert_lambda_debug_matches_epoch_debug(payload["runs"]["tokyo/run2"])
+
+    def test_optional_tokyo_run2_1000_epoch_cost_trace_contract(self) -> None:
+        payload = self.require_summary(TOKYO_RUN2_1000_SEED_SUMMARY)
+
+        self.assert_cost_trace_matches_summary(payload["runs"]["tokyo/run2"])
 
 
 if __name__ == "__main__":

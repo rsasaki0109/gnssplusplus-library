@@ -7,11 +7,13 @@ import argparse
 import bisect
 import csv
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 import glob
 import json
 import math
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 from typing import Any
@@ -27,6 +29,11 @@ DEFAULT_DATASET_ROOT = Path(
 )
 DEFAULT_OUT_DIR = ROOT_DIR / "output/dogfood/ppc_taroz_amb_pdc_smoke"
 REQUIRED_RUN_FILES = ("rover.obs", "base.obs", "base.nav", "reference.csv")
+ERROR_TAIL_THRESHOLDS_M = (0.5, 1.0, 2.0, 10.0, 100.0, 1000.0)
+GPS_EPOCH = datetime(1980, 1, 6)
+WGS84_A = 6378137.0
+WGS84_F = 1.0 / 298.257223563
+WGS84_E2 = WGS84_F * (2.0 - WGS84_F)
 
 
 @dataclass(frozen=True)
@@ -61,6 +68,14 @@ class ReferenceRecord:
     x: float
     y: float
     z: float
+
+
+@dataclass(frozen=True)
+class ErrorRecord:
+    week: int
+    tow: float
+    status: int
+    error_m: float
 
 
 def find_binary(target_name: str) -> Path | None:
@@ -152,6 +167,112 @@ def output_paths(out_dir: Path, run: PpcRun) -> dict[str, Path]:
         "epoch_debug": run_dir / "epoch_debug.csv",
         "lambda_debug": run_dir / "lambda_debug.csv",
         "cost_trace": run_dir / "cost_trace.csv",
+    }
+
+
+def read_approximate_position_xyz(path: Path) -> tuple[float, float, float]:
+    with path.open(encoding="ascii", errors="ignore") as handle:
+        for raw_line in handle:
+            if "APPROX POSITION XYZ" not in raw_line:
+                continue
+            parts = raw_line[:60].split()
+            if len(parts) >= 3:
+                return (float(parts[0]), float(parts[1]), float(parts[2]))
+    raise ValueError(f"failed to read APPROX POSITION XYZ from {path}")
+
+
+def ecef_to_geodetic_deg(
+    x: float,
+    y: float,
+    z: float,
+) -> tuple[float, float, float]:
+    lon = math.atan2(y, x)
+    p = math.hypot(x, y)
+    lat = math.atan2(z, p * (1.0 - WGS84_E2))
+    for _ in range(12):
+        sin_lat = math.sin(lat)
+        normal = WGS84_A / math.sqrt(1.0 - WGS84_E2 * sin_lat * sin_lat)
+        height = p / math.cos(lat) - normal
+        lat = math.atan2(z, p * (1.0 - WGS84_E2 * normal / (normal + height)))
+    sin_lat = math.sin(lat)
+    normal = WGS84_A / math.sqrt(1.0 - WGS84_E2 * sin_lat * sin_lat)
+    height = p / math.cos(lat) - normal
+    return (math.degrees(lat), math.degrees(lon), height)
+
+
+def link_or_copy(source: Path, destination: Path) -> None:
+    if destination.exists() or destination.is_symlink():
+        destination.unlink()
+    try:
+        destination.symlink_to(source.resolve())
+    except OSError:
+        shutil.copyfile(source, destination)
+
+
+def write_rtklib_seed_pos(input_seed: Path, output_seed: Path) -> int:
+    status_to_rtklib_q = {4: 1, 3: 2, 2: 4, 1: 5, 0: 0}
+    rows = 0
+    with input_seed.open(encoding="ascii", errors="ignore") as src, output_seed.open(
+        "w",
+        encoding="ascii",
+    ) as dst:
+        dst.write("% generated from libgnss++ SPP seed ECEF for taroz MATLAB Gsol\n")
+        dst.write(
+            "%  GPST                  latitude(deg) longitude(deg)  height(m)"
+            "   Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m)"
+            " age(s)  ratio    vn(m/s)    ve(m/s)    vu(m/s)"
+            "      sdvn     sdve     sdvu    sdvne    sdveu    sdvun\n"
+        )
+        for raw_line in src:
+            line = raw_line.strip()
+            if not line or line.startswith("%"):
+                continue
+            parts = line.split()
+            if len(parts) < 10:
+                raise ValueError(f"unexpected seed POS row width in {input_seed}: {line}")
+            week = int(float(parts[0]))
+            tow = float(parts[1])
+            x, y, z = (float(parts[2]), float(parts[3]), float(parts[4]))
+            status = int(float(parts[8]))
+            satellites = int(float(parts[9]))
+            lat_deg, lon_deg, height_m = ecef_to_geodetic_deg(x, y, z)
+            stamp = GPS_EPOCH + timedelta(weeks=week, seconds=tow)
+            dst.write(
+                f"{stamp:%Y/%m/%d} {stamp:%H:%M:%S}.{stamp.microsecond // 1000:03d}"
+                f"   {lat_deg:17.12f} {lon_deg:17.12f} {height_m:14.7f}"
+                f"   {status_to_rtklib_q.get(status, 5):1d} {satellites:3d}"
+                "   2.0   2.0   5.0   0.0   0.0   0.0"
+                "   0.00    0.0    0.0    0.0    0.0"
+                "   0.0   0.0   0.0   0.0   0.0   0.0\n"
+            )
+            rows += 1
+    return rows
+
+
+def prepare_taroz_matlab_data_dir(run: PpcRun, seed_pos: Path, out_dir: Path) -> dict[str, Any]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    link_or_copy(run.path / "rover.obs", out_dir / "rover_1Hz.obs")
+    link_or_copy(run.path / "base.obs", out_dir / "base.obs")
+    link_or_copy(run.path / "base.nav", out_dir / "base.nav")
+    link_or_copy(run.path / "reference.csv", out_dir / "reference.csv")
+
+    x, y, z = read_approximate_position_xyz(run.path / "base.obs")
+    lat_deg, lon_deg, height_m = ecef_to_geodetic_deg(x, y, z)
+    (out_dir / "base_position.txt").write_text(
+        f"{x:.4f} {y:.4f} {z:.4f}\n"
+        f"{lat_deg:.8f} {lon_deg:.8f} {height_m:.3f}\n",
+        encoding="ascii",
+    )
+    seed_rows = write_rtklib_seed_pos(seed_pos, out_dir / "rover_1Hz_spp.pos")
+    return {
+        "path": str(out_dir),
+        "seed_rows": seed_rows,
+        "base_position_ecef_m": [round(x, 4), round(y, 4), round(z, 4)],
+        "base_position_llh_deg_m": [
+            round(lat_deg, 8),
+            round(lon_deg, 8),
+            round(height_m, 3),
+        ],
     }
 
 
@@ -269,6 +390,129 @@ def read_pos(path: Path) -> list[PosRecord]:
     return rows
 
 
+def pos_time_key(record: PosRecord) -> tuple[int, int]:
+    return (record.week, round(record.tow * 1000))
+
+
+def read_epoch_debug_time_keys(path: Path) -> list[tuple[int, int]]:
+    with path.open(newline="", encoding="utf-8") as handle:
+        return [
+            (int(float(row["gps_week"])), round(float(row["gps_tow"]) * 1000))
+            for row in csv.DictReader(handle)
+        ]
+
+
+def time_key_label(key: tuple[int, int]) -> str:
+    week, tow_ms = key
+    return f"{week}:{tow_ms / 1000.0:.3f}"
+
+
+def duplicate_time_keys(keys: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    seen: set[tuple[int, int]] = set()
+    duplicates: list[tuple[int, int]] = []
+    for key in keys:
+        if key in seen and key not in duplicates:
+            duplicates.append(key)
+        seen.add(key)
+    return duplicates
+
+
+def audit_generated_seed_artifacts(
+    args: argparse.Namespace,
+    seed_pos_path: Path,
+    epoch_debug_path: Path,
+) -> tuple[dict[str, Any], list[str]]:
+    audit: dict[str, Any] = {
+        "seed_pos": str(seed_pos_path),
+        "epoch_debug": str(epoch_debug_path),
+        "seed_rows": None,
+        "optimized_epoch_rows": None,
+        "expected_seed_rows": (
+            args.skip_epochs + args.max_epochs if args.max_epochs > 0 else None
+        ),
+        "missing_optimized_seed_epochs": 0,
+        "window_sequence_matches": None,
+    }
+    failures: list[str] = []
+    if not args.generate_spp_seed:
+        return audit, failures
+    if not seed_pos_path.exists():
+        return audit, [f"generated seed POS is missing: {seed_pos_path}"]
+    if not epoch_debug_path.exists():
+        return audit, [f"epoch debug CSV is missing: {epoch_debug_path}"]
+
+    seed_keys = [pos_time_key(record) for record in read_pos(seed_pos_path)]
+    epoch_keys = read_epoch_debug_time_keys(epoch_debug_path)
+    audit["seed_rows"] = len(seed_keys)
+    audit["optimized_epoch_rows"] = len(epoch_keys)
+
+    expected_seed_rows = audit["expected_seed_rows"]
+    if expected_seed_rows is not None and len(seed_keys) != expected_seed_rows:
+        failures.append(
+            f"generated seed rows {len(seed_keys)} != "
+            f"skip_epochs + max_epochs {expected_seed_rows}"
+        )
+
+    duplicate_seed_keys = duplicate_time_keys(seed_keys)
+    if duplicate_seed_keys:
+        failures.append(
+            "generated seed POS has duplicate epoch(s): "
+            + ", ".join(time_key_label(key) for key in duplicate_seed_keys[:3])
+        )
+    duplicate_epoch_keys = duplicate_time_keys(epoch_keys)
+    if duplicate_epoch_keys:
+        failures.append(
+            "epoch debug CSV has duplicate epoch(s): "
+            + ", ".join(time_key_label(key) for key in duplicate_epoch_keys[:3])
+        )
+    if seed_keys != sorted(seed_keys):
+        failures.append("generated seed POS epochs are not strictly sorted")
+    if epoch_keys != sorted(epoch_keys):
+        failures.append("epoch debug CSV epochs are not strictly sorted")
+
+    seed_key_set = set(seed_keys)
+    missing_epoch_keys = [key for key in epoch_keys if key not in seed_key_set]
+    audit["missing_optimized_seed_epochs"] = len(missing_epoch_keys)
+    if missing_epoch_keys:
+        failures.append(
+            f"generated seed POS is missing {len(missing_epoch_keys)} optimized "
+            f"epoch(s), first missing {time_key_label(missing_epoch_keys[0])}"
+        )
+
+    if args.max_epochs > 0 and not duplicate_seed_keys and not duplicate_epoch_keys:
+        start = args.skip_epochs
+        stop = start + len(epoch_keys)
+        seed_window = seed_keys[start:stop]
+        audit["seed_window_start_index"] = start
+        audit["seed_window_rows"] = len(seed_window)
+        audit["window_sequence_matches"] = seed_window == epoch_keys
+        if seed_window != epoch_keys:
+            mismatch_index = next(
+                (
+                    index
+                    for index, pair in enumerate(zip(seed_window, epoch_keys))
+                    if pair[0] != pair[1]
+                ),
+                min(len(seed_window), len(epoch_keys)),
+            )
+            if mismatch_index < len(seed_window) and mismatch_index < len(epoch_keys):
+                detail = (
+                    f"seed {time_key_label(seed_window[mismatch_index])} != "
+                    f"epoch {time_key_label(epoch_keys[mismatch_index])}"
+                )
+            else:
+                detail = (
+                    f"seed window rows {len(seed_window)} != "
+                    f"optimized epoch rows {len(epoch_keys)}"
+                )
+            failures.append(
+                "generated seed window does not match optimized epoch sequence "
+                f"at skip_epochs {args.skip_epochs}: {detail}"
+            )
+
+    return audit, failures
+
+
 def _row_value(row: dict[str, str], column: str) -> str:
     for key, value in row.items():
         if key.strip() == column:
@@ -299,6 +543,31 @@ def percentile(values: list[float], fraction: float) -> float:
     return ordered[int(fraction * (len(ordered) - 1))]
 
 
+def error_tail_key(threshold_m: float) -> str:
+    return f"gt_{threshold_m:g}_m".replace(".", "_")
+
+
+def error_tail_counts(records: list[ErrorRecord]) -> dict[str, int]:
+    return {
+        error_tail_key(threshold_m): sum(
+            1 for record in records if record.error_m > threshold_m
+        )
+        for threshold_m in ERROR_TAIL_THRESHOLDS_M
+    }
+
+
+def worst_error_epoch(records: list[ErrorRecord]) -> dict[str, float | int] | None:
+    if not records:
+        return None
+    worst = max(records, key=lambda record: record.error_m)
+    return {
+        "gps_week": worst.week,
+        "gps_tow": worst.tow,
+        "status": worst.status,
+        "error_3d_m": worst.error_m,
+    }
+
+
 def summarize_reference_errors(
     pos_path: Path,
     reference_csv: Path,
@@ -315,6 +584,11 @@ def summarize_reference_errors(
     fixed_errors: list[float] = []
     float_errors: list[float] = []
     no_solution_errors: list[float] = []
+    valid_records: list[ErrorRecord] = []
+    all_output_records: list[ErrorRecord] = []
+    fixed_records: list[ErrorRecord] = []
+    float_records: list[ErrorRecord] = []
+    no_solution_records: list[ErrorRecord] = []
     status_counts: dict[str, int] = {}
     for pos in pos_records:
         status_counts[str(pos.status)] = status_counts.get(str(pos.status), 0) + 1
@@ -337,36 +611,50 @@ def summarize_reference_errors(
         dy = pos.y - reference.y
         dz = pos.z - reference.z
         error = math.sqrt(dx * dx + dy * dy + dz * dz)
+        error_record = ErrorRecord(pos.week, pos.tow, pos.status, error)
         all_output_errors.append(error)
+        all_output_records.append(error_record)
         if pos.status == 4:
             fixed_errors.append(error)
+            fixed_records.append(error_record)
             valid_errors.append(error)
+            valid_records.append(error_record)
         elif pos.status == 3:
             float_errors.append(error)
+            float_records.append(error_record)
             valid_errors.append(error)
+            valid_records.append(error_record)
         else:
             no_solution_errors.append(error)
+            no_solution_records.append(error_record)
 
-    def stats(values: list[float]) -> dict[str, float | int | None]:
+    def stats(
+        values: list[float],
+        records: list[ErrorRecord],
+    ) -> dict[str, float | int | dict[str, int] | dict[str, float | int] | None]:
         if not values:
             return {
                 "matched_epochs": 0,
                 "mean_3d_error_m": None,
                 "p95_3d_error_m": None,
                 "max_3d_error_m": None,
+                "tail_counts_3d_error_m": error_tail_counts(records),
+                "worst_epoch": None,
             }
         return {
             "matched_epochs": len(values),
             "mean_3d_error_m": sum(values) / len(values),
             "p95_3d_error_m": percentile(values, 0.95),
             "max_3d_error_m": max(values),
+            "tail_counts_3d_error_m": error_tail_counts(records),
+            "worst_epoch": worst_error_epoch(records),
         }
 
-    result = stats(valid_errors)
-    result["fixed"] = stats(fixed_errors)
-    result["float"] = stats(float_errors)
-    result["no_solution"] = stats(no_solution_errors)
-    result["all_output"] = stats(all_output_errors)
+    result = stats(valid_errors, valid_records)
+    result["fixed"] = stats(fixed_errors, fixed_records)
+    result["float"] = stats(float_errors, float_records)
+    result["no_solution"] = stats(no_solution_errors, no_solution_records)
+    result["all_output"] = stats(all_output_errors, all_output_records)
     result["position_status_counts"] = status_counts
     return rounded(result)
 
@@ -454,6 +742,23 @@ def validate_native_summary(args: argparse.Namespace, summary: dict[str, Any]) -
     return failures
 
 
+def validate_taroz_matlab_data(
+    args: argparse.Namespace,
+    data_payload: dict[str, Any],
+) -> list[str]:
+    failures: list[str] = []
+    if args.taroz_matlab_data_dir is None or args.max_epochs <= 0:
+        return failures
+    expected_seed_rows = args.skip_epochs + args.max_epochs
+    seed_rows = data_payload.get("seed_rows")
+    if seed_rows != expected_seed_rows:
+        failures.append(
+            f"taroz MATLAB seed_rows {seed_rows} != "
+            f"skip_epochs + max_epochs {expected_seed_rows}"
+        )
+    return failures
+
+
 def _check_metric_max(
     failures: list[str],
     label: str,
@@ -533,6 +838,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--fgo-bin", type=Path, default=None)
     parser.add_argument("--spp-bin", type=Path, default=None)
     parser.add_argument("--generate-spp-seed", action="store_true")
+    parser.add_argument(
+        "--taroz-matlab-data-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Optional output directory for taroz MATLAB-compatible PPC data. "
+            "Requires --generate-spp-seed."
+        ),
+    )
     parser.add_argument("--skip-epochs", type=int, default=0)
     parser.add_argument("--max-epochs", type=int, default=20)
     parser.add_argument("--reference-match-tolerance-s", type=float, default=0.05)
@@ -568,6 +882,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--require-valid-max-3d-max must be non-negative")
     if args.require_fixed_p95_3d_max < 0:
         raise SystemExit("--require-fixed-p95-3d-max must be non-negative")
+    if args.taroz_matlab_data_dir is not None and not args.generate_spp_seed:
+        raise SystemExit("--taroz-matlab-data-dir requires --generate-spp-seed")
 
     dataset_root = resolve_dataset_root(args.dataset_root)
     runs = selected_runs(discover_runs(dataset_root), args.run)
@@ -582,6 +898,11 @@ def main(argv: list[str] | None = None) -> int:
         "skip_epochs": args.skip_epochs,
         "max_epochs": args.max_epochs,
         "generate_spp_seed": args.generate_spp_seed,
+        "taroz_matlab_data_dir": (
+            str(args.taroz_matlab_data_dir)
+            if args.taroz_matlab_data_dir is not None
+            else None
+        ),
         "runs": {},
     }
 
@@ -604,6 +925,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[{spec} seed] {' '.join(command)}")
         for spec, command in planned.items():
             print(f"[{spec}] {' '.join(command)}")
+        if args.taroz_matlab_data_dir is not None:
+            print(f"Taroz MATLAB data root: {args.taroz_matlab_data_dir}")
         print(f"Summary: {summary_path}")
         return 0
 
@@ -634,6 +957,23 @@ def main(argv: list[str] | None = None) -> int:
                 all_failures.append(failure)
                 payload["runs"][run.spec] = run_payload
                 continue
+            if args.taroz_matlab_data_dir is not None:
+                data_dir = (
+                    args.taroz_matlab_data_dir
+                    if len(runs) == 1
+                    else args.taroz_matlab_data_dir / run.label
+                )
+                run_payload["taroz_matlab_data"] = prepare_taroz_matlab_data_dir(
+                    run,
+                    paths["seed_pos"],
+                    data_dir,
+                )
+                run_payload["taroz_matlab_data_failures"] = (
+                    validate_taroz_matlab_data(
+                        args,
+                        run_payload["taroz_matlab_data"],
+                    )
+                )
 
         command = planned[run.spec]
         returncode, wall_time_s = run_command(command)
@@ -650,6 +990,15 @@ def main(argv: list[str] | None = None) -> int:
 
         native_summary = load_json(paths["summary"])
         failures = validate_native_summary(args, native_summary)
+        if args.generate_spp_seed:
+            seed_audit, seed_audit_failures = audit_generated_seed_artifacts(
+                args,
+                paths["seed_pos"],
+                paths["epoch_debug"],
+            )
+            run_payload["generated_seed_audit"] = seed_audit
+            failures.extend(seed_audit_failures)
+        failures.extend(run_payload.get("taroz_matlab_data_failures", []))
         run_payload["native_summary"] = selected_native_summary(native_summary)
         reference_summary = summarize_reference_errors(
             paths["pos"],
