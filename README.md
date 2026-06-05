@@ -510,7 +510,9 @@ the MATLAB oracles under the suite output root before each parity run.
 
 The current beta sign-off is:
 
-- CI: C++ FGO unit tests plus the lightweight 20-epoch PPC smoke.
+- CI: C++ FGO unit tests plus the lightweight 20-epoch PPC smoke; the
+  dataset-gated optional sign-off runner also exercises `nagoya/run3` for
+  1000 epochs with generated SPP seed when PPC-Dataset is configured.
 - Local dogfood: all six public PPC Tokyo/Nagoya runs at 200 epochs with
   generated SPP seeds and `--require-valid-p95-3d-max 2.0`.
 - Shifted-window guard check: `nagoya/run3 --skip-epochs 400 --max-epochs 200`
