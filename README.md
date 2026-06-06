@@ -14,6 +14,27 @@ handling without an external RTKLIB runtime.
 - Products: `SP3`, `CLK`, `IONEX`, `DCB`
 - Extras: benchmarks, web dashboard, Python bindings, Docker, ROS 2 playback
 
+![Feature overview](docs/libgnsspp_feature_overview.png)
+
+## Results
+
+| Area | Public comparison | Current result |
+|---|---|---|
+| RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` | +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta |
+| CLAS PPP | QZSS CLAS vs CLASLIB | 3.57 mm vs 7.29 mm RMS 3D |
+| Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
+| SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
+
+![PPC RTK coverage scorecard](docs/ppc_rtk_demo5_scorecard.png)
+
+| CLASLIB 2D | libgnss++ 2D |
+|---|---|
+| ![CLASLIB 2D](docs/clas_claslib_2d.png) | ![libgnss++ CLAS 2D](docs/clas_native_2d.png) |
+
+| RTKLIB Odaiba 2D | libgnss++ Odaiba 2D |
+|---|---|
+| ![RTKLIB Odaiba 2D](docs/driving_odaiba_comparison_rtklib_2d.png) | ![libgnss++ Odaiba 2D](docs/driving_odaiba_comparison_libgnss_2d.png) |
+
 ## Quick Start
 
 Build:
@@ -66,9 +87,6 @@ docker run --rm -it -p 8085:8085 -v "$PWD:/workspace" \
 ```
 
 ## Benchmarks
-
-The repo includes PPC, UrbanNav, CLASLIB, and MADOCA/MADOCALIB sign-off tools.
-The long tables and reproduction commands are kept in docs:
 
 - [Benchmarks](docs/benchmarks.md)
 - [Validation](docs/validation.md)
