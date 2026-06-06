@@ -155,6 +155,75 @@ bool isSnrObservationType(const std::string& obs_type) {
     return !obs_type.empty() && obs_type[0] == 'S';
 }
 
+void assignObservationField(Observation& obs,
+                            const std::string& obs_type,
+                            double value,
+                            int lli,
+                            int signal_strength);
+
+char rinexTrackingCode(const std::string& obs_type) {
+    return obs_type.size() >= 3 ? obs_type[2] : '\0';
+}
+
+bool sameTrackingCode(char selected, char candidate) {
+    return selected == '\0' || candidate == '\0' || selected == candidate;
+}
+
+struct ObservationSelection {
+    Observation observation;
+    bool has_data = false;
+    int priority = 100;
+    int band = -1;
+    char tracking_code = '\0';
+};
+
+void maybeAssignSelectedObservation(ObservationSelection& selection,
+                                    const SatelliteId& sat,
+                                    const std::string& obs_type,
+                                    double value,
+                                    int lli,
+                                    int signal_strength,
+                                    bool primary) {
+    if (value == 0.0) {
+        return;
+    }
+
+    const int band = rinexBand(obs_type);
+    const int candidate_priority = bandPriority(sat.system, band, primary);
+    if (candidate_priority >= 100) {
+        return;
+    }
+
+    const char tracking_code = rinexTrackingCode(obs_type);
+    const bool starts_better_track = candidate_priority < selection.priority;
+    const bool continues_current_track =
+        candidate_priority == selection.priority &&
+        band == selection.band &&
+        sameTrackingCode(selection.tracking_code, tracking_code);
+    if (!starts_better_track && !continues_current_track) {
+        return;
+    }
+
+    if (starts_better_track) {
+        selection.observation = Observation();
+        selection.observation.satellite = sat;
+        selection.observation.signal =
+            signalForObservationType(sat.system, obs_type, primary);
+        selection.observation.valid = true;
+        selection.has_data = false;
+        selection.priority = candidate_priority;
+        selection.band = band;
+        selection.tracking_code = tracking_code;
+    }
+
+    assignObservationField(selection.observation,
+                           obs_type,
+                           value,
+                           lli,
+                           signal_strength);
+    selection.has_data = true;
+}
+
 char rinexCharForSystem(GNSSSystem system) {
     switch (system) {
         case GNSSSystem::GPS: return 'G';
@@ -847,53 +916,33 @@ bool RINEXReader::parseObservationEpochV2(const std::string& line, ObservationDa
             }
         }
 
-        Observation obs_primary;
-        obs_primary.satellite = sat;
-        obs_primary.signal = primarySignalForSystem(sat.system);
-        obs_primary.valid = true;
-        bool has_primary_data = false;
-        int primary_priority = 100;
-        int primary_band = -1;
-
-        Observation obs_secondary;
-        obs_secondary.satellite = sat;
-        obs_secondary.signal = secondarySignalForSystem(sat.system);
-        obs_secondary.valid = true;
-        bool has_secondary_data = false;
-        int secondary_priority = 100;
-        int secondary_band = -1;
+        ObservationSelection primary_selection;
+        ObservationSelection secondary_selection;
 
         for (size_t i = 0; i < header_.observation_types.size() && i < obs_values.size(); ++i) {
-            if (obs_values[i] == 0.0) continue;
-
             const std::string& obs_type = header_.observation_types[i];
-
-            const int band = rinexBand(obs_type);
-            const int primary_candidate = bandPriority(sat.system, band, true);
-            const int secondary_candidate = bandPriority(sat.system, band, false);
-            if (primary_candidate < 100 &&
-                (primary_candidate < primary_priority || band == primary_band)) {
-                obs_primary.signal = signalForObservationType(sat.system, obs_type, true);
-                assignObservationField(obs_primary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
-                has_primary_data = true;
-                primary_priority = primary_candidate;
-                primary_band = band;
-            } else if (secondary_candidate < 100 &&
-                       (secondary_candidate < secondary_priority || band == secondary_band)) {
-                obs_secondary.signal = signalForObservationType(sat.system, obs_type, false);
-                assignObservationField(obs_secondary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
-                has_secondary_data = true;
-                secondary_priority = secondary_candidate;
-                secondary_band = band;
-            }
+            maybeAssignSelectedObservation(primary_selection,
+                                           sat,
+                                           obs_type,
+                                           obs_values[i],
+                                           lli_flags[i],
+                                           signal_strength[i],
+                                           true);
+            maybeAssignSelectedObservation(secondary_selection,
+                                           sat,
+                                           obs_type,
+                                           obs_values[i],
+                                           lli_flags[i],
+                                           signal_strength[i],
+                                           false);
         }
 
         // Add observations if they have data
-        if (has_primary_data) {
-            obs_data.addObservation(obs_primary);
+        if (primary_selection.has_data) {
+            obs_data.addObservation(primary_selection.observation);
         }
-        if (has_secondary_data) {
-            obs_data.addObservation(obs_secondary);
+        if (secondary_selection.has_data) {
+            obs_data.addObservation(secondary_selection.observation);
         }
     }
 
@@ -1000,51 +1049,32 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
                 }
             }
 
-            Observation obs_primary;
-            obs_primary.satellite = sat;
-            obs_primary.signal = primarySignalForSystem(system);
-            obs_primary.valid = true;
-            bool has_primary_data = false;
-            int primary_priority = 100;
-            int primary_band = -1;
-
-            Observation obs_secondary;
-            obs_secondary.satellite = sat;
-            obs_secondary.signal = secondarySignalForSystem(system);
-            obs_secondary.valid = true;
-            bool has_secondary_data = false;
-            int secondary_priority = 100;
-            int secondary_band = -1;
+            ObservationSelection primary_selection;
+            ObservationSelection secondary_selection;
 
             for (size_t i = 0; i < obs_types.size() && i < obs_values.size(); ++i) {
-                if (obs_values[i] == 0.0) continue;
-
                 const std::string& obs_type = obs_types[i];
-                const int band = rinexBand(obs_type);
-                const int primary_candidate = bandPriority(system, band, true);
-                const int secondary_candidate = bandPriority(system, band, false);
-                if (primary_candidate < 100 &&
-                    (primary_candidate < primary_priority || band == primary_band)) {
-                    obs_primary.signal = signalForObservationType(system, obs_type, true);
-                    assignObservationField(obs_primary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
-                    has_primary_data = true;
-                    primary_priority = primary_candidate;
-                    primary_band = band;
-                } else if (secondary_candidate < 100 &&
-                           (secondary_candidate < secondary_priority || band == secondary_band)) {
-                    obs_secondary.signal = signalForObservationType(system, obs_type, false);
-                    assignObservationField(obs_secondary, obs_type, obs_values[i], lli_flags[i], signal_strength[i]);
-                    has_secondary_data = true;
-                    secondary_priority = secondary_candidate;
-                    secondary_band = band;
-                }
+                maybeAssignSelectedObservation(primary_selection,
+                                               sat,
+                                               obs_type,
+                                               obs_values[i],
+                                               lli_flags[i],
+                                               signal_strength[i],
+                                               true);
+                maybeAssignSelectedObservation(secondary_selection,
+                                               sat,
+                                               obs_type,
+                                               obs_values[i],
+                                               lli_flags[i],
+                                               signal_strength[i],
+                                               false);
             }
 
-            if (has_primary_data) {
-                obs_data.addObservation(obs_primary);
+            if (primary_selection.has_data) {
+                obs_data.addObservation(primary_selection.observation);
             }
-            if (has_secondary_data) {
-                obs_data.addObservation(obs_secondary);
+            if (secondary_selection.has_data) {
+                obs_data.addObservation(secondary_selection.observation);
             }
         }
 

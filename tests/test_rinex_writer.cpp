@@ -8,6 +8,28 @@ using namespace libgnss;
 
 namespace {
 
+std::string rinexHeaderLine(const std::string& content, const std::string& label) {
+    std::string line = content;
+    if (line.size() < 60) {
+        line.append(60 - line.size(), ' ');
+    }
+    line += label;
+    return line + "\n";
+}
+
+std::string rinexObsField(const std::string& value,
+                          char lli = ' ',
+                          char signal_strength = ' ') {
+    std::string field;
+    if (value.size() < 14) {
+        field.append(14 - value.size(), ' ');
+    }
+    field += value;
+    field += lli;
+    field += signal_strength;
+    return field;
+}
+
 Ephemeris makeGpsEphemeris() {
     Ephemeris eph;
     eph.satellite = SatelliteId(GNSSSystem::GPS, 3);
@@ -343,6 +365,57 @@ TEST(RINEXWriterTest, ReadsObservationAntennaHeaderFields) {
     EXPECT_NEAR(header.antenna_delta.x(), 0.1230, 1e-9);
     EXPECT_NEAR(header.antenna_delta.y(), -0.4560, 1e-9);
     EXPECT_NEAR(header.antenna_delta.z(), 1.2340, 1e-9);
+
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, KeepsRinex3TrackingCodeFieldsTogether) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex_obs_tracking_code_test.obs";
+    std::filesystem::remove(temp_path);
+
+    std::ofstream output(temp_path);
+    ASSERT_TRUE(output.is_open());
+    output << rinexHeaderLine(
+        "     3.04           OBSERVATION DATA    M",
+        "RINEX VERSION / TYPE");
+    output << rinexHeaderLine(
+        "G    6 C1C L1C D1C S1C C1W S1W",
+        "SYS / # / OBS TYPES");
+    output << rinexHeaderLine("", "END OF HEADER");
+    output << "> 2024 08 03 09 51 20.0000000  0  1\n";
+    output << "G24"
+           << rinexObsField("22011162.552", ' ', '6')
+           << rinexObsField("115669443.467", '0', '6')
+           << rinexObsField("-2361.403", ' ', '6')
+           << rinexObsField("41.156")
+           << rinexObsField("22011162.423", ' ', '5')
+           << rinexObsField("31.406")
+           << "\n";
+    output.close();
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+
+    ObservationData epoch;
+    ASSERT_TRUE(reader.readObservationEpoch(epoch));
+
+    const auto* gps_l1 = epoch.getObservation(
+        SatelliteId(GNSSSystem::GPS, 24),
+        SignalType::GPS_L1CA);
+    ASSERT_NE(gps_l1, nullptr);
+    EXPECT_TRUE(gps_l1->has_pseudorange);
+    EXPECT_TRUE(gps_l1->has_carrier_phase);
+    EXPECT_TRUE(gps_l1->has_doppler);
+    EXPECT_NEAR(gps_l1->pseudorange, 22011162.552, 1e-3);
+    EXPECT_NEAR(gps_l1->carrier_phase, 115669443.467, 1e-3);
+    EXPECT_NEAR(gps_l1->doppler, -2361.403, 1e-3);
+    EXPECT_NEAR(gps_l1->snr, 41.156, 1e-3);
+    EXPECT_EQ(gps_l1->lli, 0);
 
     reader.close();
     std::filesystem::remove(temp_path);

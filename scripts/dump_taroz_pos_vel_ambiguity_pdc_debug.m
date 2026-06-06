@@ -3,6 +3,7 @@
 % Environment overrides:
 %   GNSSPP_TAROZ_ROOT                         Root of taroz/PPC-Dataset checkout.
 %   GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR Directory containing estimate_pos_vel_ambiguity_PDC.m.
+%   GNSSPP_TAROZ_POS_VEL_AMB_PDC_DATA_DIR    Data directory for rover/base/nav/reference/seed files.
 %   GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR     Output directory for CSV dumps.
 %   GNSSPP_TAROZ_POS_VEL_AMB_PDC_SKIP_EPOCHS Skip leading fixed-interval epochs before solving.
 %   GNSSPP_TAROZ_POS_VEL_AMB_PDC_MAX_EPOCHS  Limit solved fixed-interval epochs; 0 means all.
@@ -15,6 +16,11 @@ end
 example_dir = getenv("GNSSPP_TAROZ_POS_VEL_AMB_PDC_EXAMPLE_DIR");
 if strlength(example_dir) == 0
     example_dir = fullfile(taroz_root, "examples");
+end
+
+data_dir = getenv("GNSSPP_TAROZ_POS_VEL_AMB_PDC_DATA_DIR");
+if strlength(data_dir) == 0
+    data_dir = fullfile(example_dir, "data");
 end
 
 out_dir = getenv("GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR");
@@ -31,10 +37,11 @@ configure_matlab_paths(taroz_root, example_dir);
 
 set(0, "DefaultFigureVisible", "off");
 cd(example_dir);
-if dump_skip_epochs > 0 || dump_max_epochs > 0
-    window_script = write_windowed_estimator_script(example_dir, out_dir, ...
-                                                    dump_skip_epochs, dump_max_epochs);
-    run(window_script);
+default_data_dir = string(fullfile(example_dir, "data"));
+if dump_skip_epochs > 0 || dump_max_epochs > 0 || string(data_dir) ~= default_data_dir
+    configured_script = write_configured_estimator_script(example_dir, data_dir, out_dir, ...
+                                                          dump_skip_epochs, dump_max_epochs);
+    run(configured_script);
 else
     estimate_pos_vel_ambiguity_PDC;
 end
@@ -323,12 +330,11 @@ function value = read_nonnegative_integer_env(name, default_value)
     end
 end
 
-function window_script = write_windowed_estimator_script(example_dir, out_dir, skip_epochs, max_epochs)
+function configured_script = write_configured_estimator_script(example_dir, data_dir, out_dir, skip_epochs, max_epochs)
     source_script = fullfile(example_dir, "estimate_pos_vel_ambiguity_PDC.m");
     source_text = fileread(source_script);
-    example_dir_text = matlab_single_quoted_path(example_dir);
     function_dir_text = matlab_single_quoted_path(fullfile(example_dir, "function"));
-    data_dir_text = matlab_single_quoted_path(fullfile(example_dir, "data") + filesep);
+    data_dir_text = matlab_single_quoted_path(string(data_dir) + filesep);
     source_text = replace(source_text, "addpath ./function", ...
                           "addpath('" + function_dir_text + "')");
     source_text = replace(source_text, 'datapath = "./data/";', ...
@@ -351,6 +357,9 @@ function window_script = write_windowed_estimator_script(example_dir, out_dir, s
         "if isempty(gnsspp_window_idx)"
         "    error('GNSSPP taroz ambiguity PDC window selected no epochs');"
         "end"
+        "if gnsspp_window_skip_epochs > 0 && (obsb.n ~= obs.n || any(obsb.time.t ~= obs.time.t))"
+        "    obsb = obsb.interp(obs.time);"
+        "end"
         "obs = obs.selectTime(gnsspp_window_idx);"
         "obsb = obsb.selectTime(gnsspp_window_idx);"
     ];
@@ -360,10 +369,10 @@ function window_script = write_windowed_estimator_script(example_dir, out_dir, s
         error("Unable to inject GNSSPP window slice into %s", source_script);
     end
     window_text = replace(source_text, marker, window_code);
-    window_script = fullfile(out_dir, "estimate_pos_vel_ambiguity_PDC_windowed.m");
-    fid = fopen(window_script, "w");
+    configured_script = fullfile(out_dir, "estimate_pos_vel_ambiguity_PDC_configured.m");
+    fid = fopen(configured_script, "w");
     if fid < 0
-        error("Unable to write windowed taroz script: %s", window_script);
+        error("Unable to write configured taroz script: %s", configured_script);
     end
     cleaner = onCleanup(@() fclose(fid));
     fprintf(fid, "%s", window_text);
