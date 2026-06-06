@@ -45,9 +45,10 @@ inline double ionoDelayKlobuchar(double lat, double lon, double az, double el,
 
     double phi_u = lat * SC;    // user geodetic latitude (semi-circles)
     double lam_u = lon * SC;    // user geodetic longitude (semi-circles)
+    double el_sc = el * SC;     // elevation angle (semi-circles)
 
     // Earth-centred angle (semi-circles)
-    double psi = 0.0137 / (el * SC / M_PI + 0.11) - 0.022;
+    double psi = 0.0137 / (el_sc + 0.11) - 0.022;
 
     // Sub-ionospheric latitude (semi-circles)
     double phi_i = phi_u + psi * std::cos(az);
@@ -65,7 +66,7 @@ inline double ionoDelayKlobuchar(double lat, double lon, double az, double el,
     t -= std::floor(t / 86400.0) * 86400.0;
 
     // Obliquity factor
-    double F = 1.0 + 16.0 * std::pow(0.53 - el * SC / M_PI, 3.0);
+    double F = 1.0 + 16.0 * std::pow(0.53 - el_sc, 3.0);
 
     // Period and amplitude
     double PER = b[0] + b[1] * phi_m + b[2] * phi_m * phi_m + b[3] * phi_m * phi_m * phi_m;

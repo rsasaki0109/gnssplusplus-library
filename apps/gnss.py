@@ -89,6 +89,26 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_ppc_taroz_amb_pdc_smoke.py"),
         "summary": "Run taroz ambiguity PDC FGO checks on PPC-Dataset runs.",
     },
+    "ppc-spp-jump-sweep": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppc_spp_jump_sweep.py"),
+        "summary": "Sweep post-hoc SPP position-jump gates against a PPC reference trajectory.",
+    },
+    "ppc-spp-compare": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppc_spp_compare.py"),
+        "summary": "Compare multiple SPP .pos files against a PPC reference and render CSV/PNG artifacts.",
+    },
+    "ppc-spp-policy-report": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppc_spp_policy_report.py"),
+        "summary": "Summarize PPC SPP jump-gate policy sweep JSONs across runs.",
+    },
+    "ppc-spp-policy-suite": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ppc_spp_policy_suite.py"),
+        "summary": "Run PPC SPP jump-gate sweeps, policy reports, and comparisons as one suite.",
+    },
     "solve": {
         "kind": "binary",
         "target": "gnss_solve",

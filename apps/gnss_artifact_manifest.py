@@ -37,6 +37,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--visibility-summary-glob", default="output/visibility*_summary.json")
     parser.add_argument("--moving-base-summary-glob", default="output/*moving_base_summary.json")
     parser.add_argument("--ppp-products-summary-glob", default="output/*ppp*_products*_summary.json")
+    parser.add_argument("--ppc-spp-policy-suite-glob", default="output/**/*_suite_summary.json")
     parser.add_argument("--quiet", action="store_true", help="Suppress non-summary prints.")
     return parser.parse_args()
 
@@ -426,6 +427,156 @@ def build_ppp_products_entries(root_dir: Path, pattern: str) -> list[dict[str, A
     return entries
 
 
+def policy_suite_status(policy_report: dict[str, Any] | None) -> str:
+    checks = policy_report.get("checks") if policy_report else None
+    if not isinstance(checks, dict):
+        return "n/a"
+    return "passed" if checks.get("passed") is True else "failed"
+
+
+def policy_suite_runs(policy_report: dict[str, Any] | None) -> list[dict[str, Any]]:
+    runs = policy_report.get("runs") if policy_report else None
+    if not isinstance(runs, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        rows.append(
+            {
+                "label": run.get("label"),
+                "selected_rate_mps": run.get("selected_rate_mps"),
+                "selected_min_jump_m": run.get("selected_min_jump_m"),
+                "policy_positioning_rate_pct": run.get("policy_positioning_rate_pct"),
+                "positioning_drop_pct": run.get("positioning_drop_pct"),
+                "policy_p95_h_m": run.get("policy_p95_h_m"),
+                "p95_h_delta_m": run.get("p95_h_delta_m"),
+                "jump_gate_rejected_epochs": run.get("jump_gate_rejected_epochs"),
+                "bridge_inserted_epochs": run.get("bridge_inserted_epochs"),
+            }
+        )
+    return rows
+
+
+def numeric_values(rows: list[dict[str, Any]], key: str) -> list[float]:
+    values: list[float] = []
+    for row in rows:
+        value = row.get(key)
+        if isinstance(value, (int, float)):
+            values.append(float(value))
+    return values
+
+
+def normalize_policy_suite_run_artifacts(root_dir: Path, runs: Any) -> list[dict[str, Any]]:
+    if not isinstance(runs, list):
+        return []
+    normalized_runs: list[dict[str, Any]] = []
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        normalized_runs.append(
+            {
+                "label": run.get("label"),
+                "reference": normalize_artifact_path(root_dir, run.get("reference_csv")),
+                "input": normalize_artifact_path(root_dir, run.get("input_pos")),
+                "baseline": normalize_artifact_path(root_dir, run.get("baseline_pos")),
+                "sweep_json": normalize_artifact_path(root_dir, run.get("sweep_json")),
+                "sweep_csv": normalize_artifact_path(root_dir, run.get("sweep_csv")),
+                "filtered_pos": normalize_artifact_path(root_dir, run.get("filtered_pos")),
+                "compare_summary": normalize_artifact_path(root_dir, run.get("compare_summary_json")),
+                "compare_csv": normalize_artifact_path(root_dir, run.get("compare_csv")),
+                "compare_matches": normalize_artifact_path(root_dir, run.get("compare_matched_csv")),
+                "compare_png": normalize_artifact_path(root_dir, run.get("compare_png")),
+            }
+        )
+    return normalized_runs
+
+
+def build_ppc_spp_policy_suite_entries(root_dir: Path, pattern: str) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for path in sorted(root_dir.glob(pattern)):
+        payload = load_json(path)
+        if payload is None:
+            continue
+        if payload.get("dry_run") is True:
+            continue
+        if not payload.get("policy_report_json") or not isinstance(payload.get("runs"), list):
+            continue
+
+        policy_report_path_text = payload.get("policy_report_json")
+        policy_report_path: Path | None = None
+        policy_report: dict[str, Any] | None = None
+        if isinstance(policy_report_path_text, str) and policy_report_path_text:
+            try:
+                policy_report_path = resolve_under_root(root_dir, policy_report_path_text)
+            except ValueError:
+                policy_report_path = Path(policy_report_path_text)
+            policy_report = load_json(policy_report_path)
+
+        policy_runs = policy_suite_runs(policy_report)
+        if not policy_runs and isinstance(payload.get("policy_runs"), list):
+            policy_runs = [
+                run for run in payload["policy_runs"]
+                if isinstance(run, dict)
+            ]
+        p95_deltas = numeric_values(policy_runs, "p95_h_delta_m")
+        positioning_drops = numeric_values(policy_runs, "positioning_drop_pct")
+        worst_p95_delta = payload.get("worst_p95_h_delta_m")
+        if not isinstance(worst_p95_delta, (int, float)):
+            worst_p95_delta = max(p95_deltas) if p95_deltas else None
+        worst_positioning_drop = payload.get("worst_positioning_drop_pct")
+        if not isinstance(worst_positioning_drop, (int, float)):
+            worst_positioning_drop = max(positioning_drops) if positioning_drops else None
+        checks = payload.get("checks")
+        if not isinstance(checks, dict):
+            checks = policy_report.get("checks") if isinstance(policy_report, dict) else None
+        if not isinstance(checks, dict):
+            checks = None
+        if checks is not None:
+            status = "passed" if checks.get("passed") is True else "failed"
+        else:
+            status = policy_suite_status(policy_report)
+        comparison_status = classify_comparison_status(*p95_deltas)
+        label = payload.get("prefix") if isinstance(payload.get("prefix"), str) else path.stem
+
+        entries.append(
+            {
+                "category": "ppc-spp-policy-suite",
+                "label": label,
+                "summary_json": relative_display(path, root_dir),
+                "status": status,
+                "comparison_status": comparison_status,
+                "headline": (
+                    f"{payload.get('run_count', len(policy_runs))} runs / "
+                    f"{status} / worst p95 delta "
+                    f"{worst_p95_delta if worst_p95_delta is not None else 'n/a'} m"
+                ),
+                "artifacts": {
+                    "summary": relative_display(path, root_dir),
+                    "policy_report": normalize_artifact_path(root_dir, payload.get("policy_report_json")),
+                    "policy_csv": normalize_artifact_path(root_dir, payload.get("policy_report_csv")),
+                    "runs": normalize_policy_suite_run_artifacts(root_dir, payload.get("runs")),
+                },
+                "metrics": {
+                    "run_count": payload.get("run_count"),
+                    "prefix": payload.get("prefix"),
+                    "rates_mps": payload.get("rates_mps"),
+                    "min_jumps_m": payload.get("min_jumps_m"),
+                    "bridge_max_gap_s": payload.get("bridge_max_gap_s"),
+                    "bridge_max_anchor_speed_mps": payload.get("bridge_max_anchor_speed_mps"),
+                    "max_positioning_drop_pct": payload.get("max_positioning_drop_pct"),
+                    "min_positioning_rate_pct": payload.get("min_positioning_rate_pct"),
+                    "max_p95_delta_m": payload.get("max_p95_delta_m"),
+                    "checks": checks,
+                    "worst_p95_h_delta_m": worst_p95_delta,
+                    "worst_positioning_drop_pct": worst_positioning_drop,
+                    "runs": policy_runs,
+                },
+            }
+        )
+    return entries
+
+
 def main() -> int:
     args = parse_args()
     root_dir = args.root.resolve()
@@ -438,6 +589,7 @@ def main() -> int:
     bundles.extend(build_visibility_entries(root_dir, args.visibility_summary_glob))
     bundles.extend(build_moving_base_entries(root_dir, args.moving_base_summary_glob))
     bundles.extend(build_ppp_products_entries(root_dir, args.ppp_products_summary_glob))
+    bundles.extend(build_ppc_spp_policy_suite_entries(root_dir, args.ppc_spp_policy_suite_glob))
 
     payload = {
         "root": str(root_dir),

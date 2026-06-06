@@ -1,10 +1,14 @@
 #include <gtest/gtest.h>
 #include <libgnss++/algorithms/spp.hpp>
+#include <libgnss++/core/constants.hpp>
 #include <libgnss++/io/rinex.hpp>
+#include <libgnss++/models/ionosphere.hpp>
 
 #include <memory>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
+#include <limits>
 #include <string>
 #include <vector>
 #include <set>
@@ -19,6 +23,15 @@ std::string sourcePath(const std::string& relative_path) {
 
 bool sourcePathExists(const std::string& relative_path) {
     return std::filesystem::exists(sourcePath(relative_path));
+}
+
+std::filesystem::path tempFilePath(const std::string& name) {
+    return std::filesystem::temp_directory_path() / name;
+}
+
+void writeTextFile(const std::filesystem::path& path, const std::string& contents) {
+    std::ofstream output(path);
+    output << contents;
 }
 
 double solveKeplerForTest(double mean_anomaly, double eccentricity) {
@@ -132,6 +145,225 @@ TEST(NavigationTest, BeiDouGeoBroadcastStateUsesGeoRotationFrame) {
         expectedBeiDouGeoPosition(eph, eval_time, false);
     EXPECT_LT((position - expected).norm(), 1e-3);
     EXPECT_GT((position - non_geo_omega).norm(), 100000.0);
+}
+
+TEST(IonosphereModelTest, KlobucharUsesElevationInSemicircles) {
+    const double latitude = 35.0 * M_PI / 180.0;
+    const double longitude = 139.0 * M_PI / 180.0;
+    const double azimuth = 120.0 * M_PI / 180.0;
+    const double elevation = 30.0 * M_PI / 180.0;
+    const double tow = 16000.0;
+
+    const double delay_m = models::ionoDelayKlobuchar(
+        latitude, longitude, azimuth, elevation, tow, nullptr, nullptr);
+
+    // Standard Klobuchar broadcast-model calculation with elevation expressed
+    // in semicircles. A previous rad/pi/pi conversion inflated this case to
+    // about 12.04 m.
+    EXPECT_NEAR(delay_m, 7.691021650363509, 1e-9);
+}
+
+TEST(SPPUtilsTest, ResidualInlierMaskRejectsLargeSingleOutlier) {
+    const auto mask = spp_utils::calculateResidualInlierMask(
+        {0.2, -0.1, 0.0, 0.3, -0.2, 35.0}, 3.0, 1.0);
+
+    ASSERT_EQ(mask.size(), 6U);
+    EXPECT_TRUE(mask[0]);
+    EXPECT_TRUE(mask[1]);
+    EXPECT_TRUE(mask[2]);
+    EXPECT_TRUE(mask[3]);
+    EXPECT_TRUE(mask[4]);
+    EXPECT_FALSE(mask[5]);
+}
+
+TEST(SPPUtilsTest, ResidualInlierMaskDropsNonFiniteResidualWhenRedundant) {
+    const auto mask = spp_utils::calculateResidualInlierMask(
+        {0.0, 0.2, -0.1, 0.1, -0.2, std::numeric_limits<double>::quiet_NaN()},
+        3.0,
+        1.0);
+
+    ASSERT_EQ(mask.size(), 6U);
+    EXPECT_TRUE(mask[0]);
+    EXPECT_TRUE(mask[1]);
+    EXPECT_TRUE(mask[2]);
+    EXPECT_TRUE(mask[3]);
+    EXPECT_TRUE(mask[4]);
+    EXPECT_FALSE(mask[5]);
+}
+
+TEST(SPPUtilsTest, SelectRaimFdeCandidateRequiresMeaningfulImprovement) {
+    EXPECT_EQ(spp_utils::selectRaimFdeCandidate(
+                  12.0, {11.5, 11.0, 3.0, 10.0}, 0.25, 1.0),
+              2);
+    EXPECT_EQ(spp_utils::selectRaimFdeCandidate(
+                  12.0, {11.5, 11.0, 10.5}, 0.25, 1.0),
+              -1);
+    EXPECT_EQ(spp_utils::selectRaimFdeCandidate(
+                  0.0, {1.0, 2.0}, 0.25, 1.0),
+              -1);
+}
+
+TEST(SPPUtilsTest, PseudorangeVariancePenalizesLowElevationAndWeakSnr) {
+    spp_utils::MeasurementVarianceInputs strong_high;
+    strong_high.elevation_rad = 60.0 * M_PI / 180.0;
+    strong_high.snr_dbhz = 45.0;
+    strong_high.pseudorange_sigma_m = 3.0;
+    strong_high.ionosphere_delay_m = 3.0;
+    strong_high.troposphere_delay_m = 2.3;
+    strong_high.ionosphere_corrected = true;
+    strong_high.troposphere_corrected = true;
+
+    auto weak_low = strong_high;
+    weak_low.elevation_rad = 10.0 * M_PI / 180.0;
+    weak_low.snr_dbhz = 30.0;
+
+    const double high_variance = spp_utils::calculatePseudorangeVariance(strong_high);
+    const double low_variance = spp_utils::calculatePseudorangeVariance(weak_low);
+
+    EXPECT_TRUE(std::isfinite(high_variance));
+    EXPECT_TRUE(std::isfinite(low_variance));
+    EXPECT_GT(low_variance, high_variance);
+}
+
+TEST(SPPUtilsTest, PseudorangeVariancePenalizesUnmodeledAtmosphere) {
+    spp_utils::MeasurementVarianceInputs corrected;
+    corrected.elevation_rad = 45.0 * M_PI / 180.0;
+    corrected.snr_dbhz = 45.0;
+    corrected.pseudorange_sigma_m = 3.0;
+    corrected.ionosphere_delay_m = 2.0;
+    corrected.troposphere_delay_m = 2.3;
+    corrected.ionosphere_corrected = true;
+    corrected.troposphere_corrected = true;
+
+    auto unmodeled = corrected;
+    unmodeled.ionosphere_corrected = false;
+    unmodeled.troposphere_corrected = false;
+
+    EXPECT_GT(spp_utils::calculatePseudorangeVariance(unmodeled),
+              spp_utils::calculatePseudorangeVariance(corrected));
+}
+
+TEST(SPPUtilsTest, IonosphereFreeCoefficientsMatchGpsL1L2) {
+    const auto coefficients = spp_utils::ionosphereFreeCoefficients(
+        constants::GPS_L1_FREQ, constants::GPS_L2_FREQ);
+
+    EXPECT_NEAR(coefficients.first, 2.54572778016316, 1e-12);
+    EXPECT_NEAR(coefficients.second, -1.5457277801631601, 1e-12);
+    EXPECT_NEAR(coefficients.first + coefficients.second, 1.0, 1e-12);
+}
+
+TEST(SPPUtilsTest, IonosphereFreePseudorangeCancelsFirstOrderIonosphere) {
+    const double true_range = 20200000.0;
+    const double ionosphere_l1 = 5.0;
+    const double f1 = constants::GPS_L1_FREQ;
+    const double f2 = constants::GPS_L2_FREQ;
+    const double ionosphere_l2 = ionosphere_l1 * (f1 / f2) * (f1 / f2);
+
+    const double p1 = true_range + ionosphere_l1;
+    const double p2 = true_range + ionosphere_l2;
+    const double iflc = spp_utils::calculateIonosphereFreePseudorange(p1, p2, f1, f2);
+
+    EXPECT_NEAR(iflc, true_range, 1e-8);
+}
+
+TEST(SPPProductTest, ProcessorLoadsIonexAndDcbProducts) {
+    const auto ionex_path = tempFilePath("libgnss_spp_ionex_test.ionex");
+    const auto dcb_path = tempFilePath("libgnss_spp_dcb_test.bsx");
+    std::filesystem::remove(ionex_path);
+    std::filesystem::remove(dcb_path);
+
+    const std::string ionex_text =
+        "     1.0           I                   G                   IONEX VERSION / TYPE\n"
+        "  3600                                                      INTERVAL\n"
+        "    -1                                                      EXPONENT\n"
+        "    0.0    0.0    0.0                                       LAT1 / LAT2 / DLAT\n"
+        "    0.0   10.0   10.0                                       LON1 / LON2 / DLON\n"
+        "  450.0  450.0    0.0                                       HGT1 / HGT2 / DHGT\n"
+        "                                                            END OF HEADER\n"
+        "    1                                                      START OF TEC MAP\n"
+        " 2026     3    26     0     0     0                        EPOCH OF CURRENT MAP\n"
+        "    0.0    0.0   10.0   10.0  450.0                        LAT/LON1/LON2/DLON/H\n"
+        "  100 200\n"
+        "                                                            END OF TEC MAP\n";
+    writeTextFile(ionex_path, ionex_text);
+
+    const std::string dcb_text =
+        "%=BIA 1.00 TEST TEST 2024:002:00000 TEST\n"
+        "+BIAS/SOLUTION\n"
+        "*BIAS SVN PRN STATION OBS1 OBS2 BEGIN END UNIT EST STDDEV\n"
+        " OSB G01 C1C C2W 2024:002:00000 2024:003:00000 ns 0.250 0.050\n"
+        " OSB G01 C2W C1C 2024:002:00000 2024:003:00000 m 0.125 0.020\n"
+        "-BIAS/SOLUTION\n";
+    writeTextFile(dcb_path, dcb_text);
+
+    SPPProcessor processor;
+    EXPECT_FALSE(processor.hasLoadedIONEXProducts());
+    EXPECT_FALSE(processor.hasLoadedDCBProducts());
+
+    ASSERT_TRUE(processor.loadIONEXProducts(ionex_path.string()));
+    ASSERT_TRUE(processor.loadDCBProducts(dcb_path.string()));
+    EXPECT_TRUE(processor.hasLoadedIONEXProducts());
+    EXPECT_TRUE(processor.hasLoadedDCBProducts());
+    EXPECT_EQ(processor.getLoadedIONEXMapCount(), 1U);
+    EXPECT_EQ(processor.getLoadedDCBEntryCount(), 2U);
+    EXPECT_EQ(processor.getLastAppliedIonexCorrections(), 0);
+    EXPECT_EQ(processor.getLastAppliedDcbCorrections(), 0);
+
+    std::filesystem::remove(ionex_path);
+    std::filesystem::remove(dcb_path);
+}
+
+TEST(SPPProductTest, ProcessorLoadsPreciseProducts) {
+    const auto sp3_path = tempFilePath("libgnss_spp_precise_test.sp3");
+    const auto clk_path = tempFilePath("libgnss_spp_precise_test.clk");
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+
+    const std::string sp3_text =
+        "*  2026 03 26 00 00 00.00000000\n"
+        "PG01   20200.000000   14000.000000   21700.000000       123.000000\n"
+        "*  2026 03 26 00 15 00.00000000\n"
+        "PG01   20201.500000   14001.500000   21701.500000       223.000000\n";
+    const std::string clk_text =
+        "     3.00           C                   RINEX VERSION / TYPE\n"
+        "END OF HEADER\n"
+        "AS G01 2026 03 26 00 00 00.00000000  2  1.230000000000E-04  1.000000000000E-12\n"
+        "AS G01 2026 03 26 00 15 00.00000000  2  2.230000000000E-04  1.000000000000E-12\n";
+    writeTextFile(sp3_path, sp3_text);
+    writeTextFile(clk_path, clk_text);
+
+    SPPProcessor processor;
+    EXPECT_FALSE(processor.hasLoadedPreciseProducts());
+
+    ASSERT_TRUE(processor.loadPreciseProducts(sp3_path.string(), clk_path.string()));
+    EXPECT_TRUE(processor.hasLoadedPreciseProducts());
+    EXPECT_EQ(processor.getLoadedPreciseSatelliteCount(), 1U);
+    EXPECT_EQ(processor.getLastAppliedPreciseOrbitClockMeasurements(), 0);
+
+    std::filesystem::remove(sp3_path);
+    std::filesystem::remove(clk_path);
+}
+
+TEST(SPPProductTest, ProcessorLoadsSSRProducts) {
+    const auto ssr_path = tempFilePath("libgnss_spp_ssr_test.csv");
+    std::filesystem::remove(ssr_path);
+
+    const std::string ssr_text =
+        "# week,tow,sat,dx,dy,dz,dclock_m\n"
+        "2414,345600.0,G01,0.10,-0.20,0.30,0.40,cbias:2=-0.12\n"
+        "2414,345660.0,G01,0.20,-0.30,0.40,0.50,cbias:2=-0.13\n";
+    writeTextFile(ssr_path, ssr_text);
+
+    SPPProcessor processor;
+    EXPECT_FALSE(processor.hasLoadedSSRProducts());
+
+    ASSERT_TRUE(processor.loadSSRProducts(ssr_path.string()));
+    EXPECT_TRUE(processor.hasLoadedSSRProducts());
+    EXPECT_EQ(processor.getLoadedSSRSatelliteCount(), 1U);
+    EXPECT_EQ(processor.getLastAppliedSSROrbitClockCorrections(), 0);
+    EXPECT_EQ(processor.getLastAppliedSSRCodeBiasCorrections(), 0);
+
+    std::filesystem::remove(ssr_path);
 }
 
 class SPPTest : public ::testing::Test {
