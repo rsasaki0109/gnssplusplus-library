@@ -245,6 +245,153 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
             self.assertEqual(payload["expected"]["counts"]["max_epochs"], 120)
             self.assertEqual(payload["expected"]["counts"]["valid_solutions"], 57)
 
+    def test_dry_run_records_no_seed_interpolation_profile(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_taroz_amb_pdc_dogfood_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs, base, nav, seed_pos = self.touch_inputs(temp_root)
+            summary_json = temp_root / "summary.json"
+            out_dir = temp_root / "out"
+
+            result = gnss_taroz_pos_vel_amb_pdc_dogfood.main(
+                [
+                    "--obs",
+                    str(obs),
+                    "--base",
+                    str(base),
+                    "--nav",
+                    str(nav),
+                    "--seed-pos",
+                    str(seed_pos),
+                    "--out-dir",
+                    str(out_dir),
+                    "--summary-json",
+                    str(summary_json),
+                    "--fgo-bin",
+                    str(temp_root / "gnss_fgo"),
+                    "--fgo-extra-arg=--seed-interpolation-max-gap",
+                    "--fgo-extra-arg=0",
+                    "--expectation-profile",
+                    "no-seed-interpolation",
+                    "--dry-run",
+                ]
+            )
+
+            self.assertEqual(result, 0)
+            payload = json.loads(summary_json.read_text(encoding="utf-8"))
+            command = payload["fgo_command"]
+            self.assertIn("--seed-interpolation-max-gap", command)
+            self.assertIn("0", command)
+            self.assertEqual(payload["expected"]["profile"], "no-seed-interpolation")
+            self.assertEqual(payload["expected"]["seed_interpolation_max_gap_s"], 0.0)
+            self.assertEqual(payload["expected"]["counts"]["seed_matched_epochs"], 1107)
+            self.assertEqual(payload["expected"]["counts"]["seed_interpolated_epochs"], 0)
+
+    def test_dry_run_records_combined_ratio_window_profile(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_taroz_amb_pdc_dogfood_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs, base, nav, seed_pos = self.touch_inputs(temp_root)
+            summary_json = temp_root / "summary.json"
+            out_dir = temp_root / "out"
+
+            result = gnss_taroz_pos_vel_amb_pdc_dogfood.main(
+                [
+                    "--obs",
+                    str(obs),
+                    "--base",
+                    str(base),
+                    "--nav",
+                    str(nav),
+                    "--seed-pos",
+                    str(seed_pos),
+                    "--out-dir",
+                    str(out_dir),
+                    "--summary-json",
+                    str(summary_json),
+                    "--fgo-bin",
+                    str(temp_root / "gnss_fgo"),
+                    "--fgo-extra-arg=--max-epochs",
+                    "--fgo-extra-arg=120",
+                    "--fgo-extra-arg=--lambda-ratio-threshold",
+                    "--fgo-extra-arg=100",
+                    "--expectation-profile",
+                    "first-120-strict-lambda-ratio",
+                    "--dry-run",
+                ]
+            )
+
+            self.assertEqual(result, 0)
+            payload = json.loads(summary_json.read_text(encoding="utf-8"))
+            command = payload["fgo_command"]
+            self.assertIn("--max-epochs", command)
+            self.assertIn("120", command)
+            self.assertIn("--lambda-ratio-threshold", command)
+            self.assertIn("100", command)
+            self.assertEqual(
+                payload["expected"]["profile"],
+                "first-120-strict-lambda-ratio",
+            )
+            self.assertEqual(payload["expected"]["lambda_ratio_threshold"], 100.0)
+            self.assertEqual(payload["expected"]["counts"]["max_epochs"], 120)
+            self.assertEqual(payload["expected"]["counts"]["fixed_solutions"], 0)
+            self.assertEqual(payload["expected"]["counts"]["float_solutions"], 120)
+            self.assertFalse(payload["expected"]["lambda_ambiguity_fix_used"])
+
+    def test_dry_run_records_combined_shifted_ratio_window_profile(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_taroz_amb_pdc_dogfood_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs, base, nav, seed_pos = self.touch_inputs(temp_root)
+            summary_json = temp_root / "summary.json"
+            out_dir = temp_root / "out"
+
+            result = gnss_taroz_pos_vel_amb_pdc_dogfood.main(
+                [
+                    "--obs",
+                    str(obs),
+                    "--base",
+                    str(base),
+                    "--nav",
+                    str(nav),
+                    "--seed-pos",
+                    str(seed_pos),
+                    "--out-dir",
+                    str(out_dir),
+                    "--summary-json",
+                    str(summary_json),
+                    "--fgo-bin",
+                    str(temp_root / "gnss_fgo"),
+                    "--fgo-extra-arg=--skip-epochs",
+                    "--fgo-extra-arg=400",
+                    "--fgo-extra-arg=--max-epochs",
+                    "--fgo-extra-arg=120",
+                    "--fgo-extra-arg=--lambda-ratio-threshold",
+                    "--fgo-extra-arg=100",
+                    "--expectation-profile",
+                    "shifted-120-strict-lambda-ratio",
+                    "--dry-run",
+                ]
+            )
+
+            self.assertEqual(result, 0)
+            payload = json.loads(summary_json.read_text(encoding="utf-8"))
+            command = payload["fgo_command"]
+            self.assertIn("--skip-epochs", command)
+            self.assertIn("400", command)
+            self.assertIn("--max-epochs", command)
+            self.assertIn("120", command)
+            self.assertIn("--lambda-ratio-threshold", command)
+            self.assertIn("100", command)
+            self.assertEqual(
+                payload["expected"]["profile"],
+                "shifted-120-strict-lambda-ratio",
+            )
+            self.assertEqual(payload["expected"]["lambda_ratio_threshold"], 100.0)
+            self.assertEqual(payload["expected"]["counts"]["skip_epochs"], 400)
+            self.assertEqual(payload["expected"]["counts"]["max_epochs"], 120)
+            self.assertEqual(payload["expected"]["counts"]["valid_solutions"], 57)
+            self.assertEqual(payload["expected"]["counts"]["fixed_solutions"], 0)
+            self.assertEqual(payload["expected"]["counts"]["float_solutions"], 57)
+            self.assertFalse(payload["expected"]["lambda_ambiguity_fix_used"])
+
     def test_matlab_window_follows_selected_expectation_profile(self) -> None:
         args = gnss_taroz_pos_vel_amb_pdc_dogfood.parse_args(
             [
@@ -309,8 +456,29 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
                 env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_OUT_DIR"],
                 str(temp_root / "matlab_oracle"),
             )
+            self.assertNotIn("GNSSPP_TAROZ_POS_VEL_AMB_PDC_DATA_DIR", env)
             self.assertEqual(env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_SKIP_EPOCHS"], "0")
             self.assertEqual(env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_MAX_EPOCHS"], "0")
+
+    def test_matlab_dump_env_uses_requested_data_dir(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_taroz_amb_pdc_dogfood_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            args = gnss_taroz_pos_vel_amb_pdc_dogfood.parse_args(
+                [
+                    "--generate-matlab-dump",
+                    "--taroz-root",
+                    str(temp_root / "taroz"),
+                    "--matlab-data-dir",
+                    str(temp_root / "ppc_data"),
+                ]
+            )
+
+            env = gnss_taroz_pos_vel_amb_pdc_dogfood.matlab_dump_env(args)
+
+            self.assertEqual(
+                env["GNSSPP_TAROZ_POS_VEL_AMB_PDC_DATA_DIR"],
+                str(temp_root / "ppc_data"),
+            )
 
     def test_matlab_dump_env_resolves_relative_output_under_repo(self) -> None:
         args = gnss_taroz_pos_vel_amb_pdc_dogfood.parse_args(
@@ -369,8 +537,31 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
 
         self.assertEqual(failures, [])
 
+    def test_seed_interpolation_profiles_are_distinct(self) -> None:
+        default = gnss_taroz_pos_vel_amb_pdc_dogfood.expectation_profile("default")
+        no_seed_interpolation = gnss_taroz_pos_vel_amb_pdc_dogfood.expectation_profile(
+            "no-seed-interpolation"
+        )
+
+        self.assertEqual(default["seed_interpolation_max_gap_s"], 30.0)
+        self.assertEqual(default["counts"]["seed_matched_epochs"], 1141)
+        self.assertEqual(default["counts"]["seed_interpolated_epochs"], 34)
+        self.assertEqual(no_seed_interpolation["seed_interpolation_max_gap_s"], 0.0)
+        self.assertEqual(no_seed_interpolation["counts"]["seed_matched_epochs"], 1107)
+        self.assertEqual(no_seed_interpolation["counts"]["seed_interpolated_epochs"], 0)
+        self.assertEqual(
+            no_seed_interpolation["counts"]["seed_matched_epochs"],
+            default["counts"]["seed_matched_epochs"]
+            - default["counts"]["seed_interpolated_epochs"],
+        )
+
     def test_native_summary_accepts_window_profiles(self) -> None:
-        for profile_name in ("first-120-window", "shifted-120-window"):
+        for profile_name in (
+            "first-120-window",
+            "first-120-strict-lambda-ratio",
+            "shifted-120-window",
+            "shifted-120-strict-lambda-ratio",
+        ):
             with self.subTest(profile_name=profile_name):
                 failures = gnss_taroz_pos_vel_amb_pdc_dogfood.verify_native_summary(
                     self.canonical_summary(profile_name),
@@ -430,6 +621,24 @@ class TarozPosVelAmbPdcDogfoodTest(unittest.TestCase):
                 "taroz-amb-pdc seed_interpolated_epochs must be 34 "
                 "for profile default"
             ],
+        )
+
+    def test_native_summary_rejects_default_seed_interpolation_as_no_seed_profile(self) -> None:
+        failures = gnss_taroz_pos_vel_amb_pdc_dogfood.verify_native_summary(
+            self.canonical_summary("default"),
+            "no-seed-interpolation",
+        )
+
+        self.assertIn("taroz-amb-pdc seed_interpolation_max_gap_s must be 0.0", failures)
+        self.assertIn(
+            "taroz-amb-pdc seed_matched_epochs must be 1107 "
+            "for profile no-seed-interpolation",
+            failures,
+        )
+        self.assertIn(
+            "taroz-amb-pdc seed_interpolated_epochs must be 0 "
+            "for profile no-seed-interpolation",
+            failures,
         )
 
     def test_cost_trace_accepts_summary_contract(self) -> None:
