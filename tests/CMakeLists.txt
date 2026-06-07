@@ -195,6 +195,46 @@ if(GTest_FOUND)
         )
     endif()
 
+    set(GNSSPP_CORE_TESTS
+        run_tests
+        python_madoca_solution_diff_tests
+        python_mode_compare_tests
+        python_experiment_runner_tests
+    )
+    set(GNSSPP_EXTENDED_TESTS
+        python_packaging_tests
+        python_bindings_tests
+        python_web_ui_tests
+        python_docs_site_tests
+    )
+    set(GNSSPP_OPTIONAL_TESTS
+        python_benchmark_tests
+        python_cli_tests
+        python_ppc_taroz_amb_pdc_smoke_tests
+        python_taroz_pc_internal_parity_tests
+        python_taroz_pc_dogfood_tests
+        python_taroz_p_dogfood_tests
+        python_taroz_pd_dogfood_tests
+        python_taroz_observable_dogfood_tests
+        python_taroz_oracle_suite_tests
+        python_taroz_p_internal_parity_tests
+        python_taroz_d_internal_parity_tests
+        python_taroz_pos_pd_internal_parity_tests
+        python_taroz_pos_pdc_internal_parity_tests
+        python_taroz_pos_vel_pdc_internal_parity_tests
+        python_taroz_pos_vel_amb_pdc_factor_parity_tests
+        python_taroz_pos_vel_amb_pdc_window_cost_parity_tests
+        python_taroz_pos_vel_amb_pdc_ppc_window_parity_tests
+        python_taroz_pos_vel_amb_pdc_dogfood_tests
+        python_taroz_pd_internal_parity_tests
+    )
+    if(TARGET gnss_solution_node)
+        list(APPEND GNSSPP_EXTENDED_TESTS python_ros2_node_tests)
+    endif()
+    set_tests_properties(${GNSSPP_CORE_TESTS} PROPERTIES LABELS core)
+    set_tests_properties(${GNSSPP_EXTENDED_TESTS} PROPERTIES LABELS extended)
+    set_tests_properties(${GNSSPP_OPTIONAL_TESTS} PROPERTIES LABELS optional)
+
 else()
     message(WARNING "Google Test not found. Tests will not be built.")
 endif()
