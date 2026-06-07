@@ -2905,6 +2905,61 @@ class CLIToolsTest(unittest.TestCase):
             check=False,
         )
 
+    def test_doctor_cli_emits_json_readiness_report(self) -> None:
+        result = self.run_gnss("doctor", "--json")
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertIn("checks", payload)
+        self.assertIn("next_commands", payload)
+        check_names = {item["name"] for item in payload["checks"]}
+        self.assertIn("repository root", check_names)
+        self.assertIn("gnss_solve", check_names)
+        self.assertIn("robotics_quickstart.md", check_names)
+
+    def test_ros2_doctor_cli_emits_field_debug_report(self) -> None:
+        result = self.run_gnss(
+            "ros2-doctor",
+            "--json",
+            "--device",
+            "/dev/gnsspp-missing-test-device",
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertIn("checks", payload)
+        self.assertIn("commands", payload)
+        self.assertIn("launch", payload["commands"])
+        self.assertIn("record", payload["commands"])
+        self.assertIn("topic_list", payload["commands"])
+        self.assertIn("device:=/dev/gnsspp-missing-test-device", payload["commands"]["launch"])
+        check_names = {item["name"] for item in payload["checks"]}
+        self.assertIn("serial device", check_names)
+        self.assertIn("driver node binary", check_names)
+        self.assertIn("launch file", check_names)
+
+    def test_robotics_smoke_dry_run_includes_realtime_gates(self) -> None:
+        result = self.run_gnss(
+            "robotics-smoke",
+            "--dry-run",
+            "--max-epochs",
+            "5",
+            "--realtime-factor-min",
+            "1.0",
+            "--effective-epoch-rate-min",
+            "5.0",
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("ppc-rtk-signoff", result.stdout)
+        self.assertIn("--require-realtime-factor-min 1.0", result.stdout)
+        self.assertIn("--require-effective-epoch-rate-min 5.0", result.stdout)
+        self.assertIn("profile: realtime", result.stdout)
+        self.assertIn("max_epochs: 5", result.stdout)
+
+        quick = self.run_gnss("robotics-smoke", "--dry-run", "--profile", "quick")
+        self.assertEqual(quick.returncode, 0, msg=quick.stderr)
+        self.assertIn("profile: quick", quick.stdout)
+        self.assertIn("max_epochs: 50", quick.stdout)
+        self.assertIn("--require-solver-wall-time-max 120.0", quick.stdout)
+
     def read_pos_records(self, path: Path) -> list[dict[str, float | int]]:
         records: list[dict[str, float | int]] = []
         for line in path.read_text(encoding="ascii").splitlines():

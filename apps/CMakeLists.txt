@@ -84,6 +84,9 @@ install(PROGRAMS
 )
 
 install(PROGRAMS
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_doctor.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_robotics_smoke.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ros2_doctor.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_rcv.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_web.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_runtime.py

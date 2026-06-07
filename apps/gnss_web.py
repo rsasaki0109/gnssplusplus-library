@@ -105,6 +105,11 @@ def parse_args() -> argparse.Namespace:
         help="Glob under --root for gnss live-signoff summary JSON files.",
     )
     parser.add_argument(
+        "--robotics-summary-glob",
+        default="output/robotics_smoke*/**/*.json",
+        help="Glob under --root for gnss robotics-smoke summary JSON files.",
+    )
+    parser.add_argument(
         "--visibility-summary-glob",
         default="output/visibility*_summary.json",
         help="Glob under --root for gnss visibility summary JSON files.",
@@ -287,6 +292,40 @@ def classify_comparison_status(*deltas: Any) -> str | None:
     return "worse"
 
 
+def classify_robotics_smoke_status(payload: dict[str, Any]) -> str:
+    explicit_status = payload.get("robotics_smoke_status")
+    if explicit_status in ("passed", "failed"):
+        return str(explicit_status)
+    thresholds = payload.get("robotics_smoke_thresholds")
+    if not isinstance(thresholds, dict):
+        thresholds = payload.get("signoff_thresholds")
+    if not isinstance(thresholds, dict):
+        return "n/a"
+    checks: list[bool] = []
+    realtime_min = thresholds.get("require_realtime_factor_min")
+    if isinstance(realtime_min, (int, float)):
+        realtime_factor = payload.get("realtime_factor")
+        checks.append(isinstance(realtime_factor, (int, float)) and realtime_factor >= realtime_min)
+    rate_min = thresholds.get("require_effective_epoch_rate_min")
+    if isinstance(rate_min, (int, float)):
+        epoch_rate = payload.get("effective_epoch_rate_hz")
+        checks.append(isinstance(epoch_rate, (int, float)) and epoch_rate >= rate_min)
+    wall_max = thresholds.get("require_solver_wall_time_max")
+    if isinstance(wall_max, (int, float)):
+        wall_time = payload.get("solver_wall_time_s")
+        checks.append(isinstance(wall_time, (int, float)) and wall_time <= wall_max)
+    positioning_min = thresholds.get("require_positioning_rate_min")
+    if isinstance(positioning_min, (int, float)) and positioning_min > 0.0:
+        positioning_rate = payload.get("positioning_rate_pct")
+        checks.append(
+            isinstance(positioning_rate, (int, float))
+            and positioning_rate >= positioning_min
+        )
+    if not checks:
+        return "n/a"
+    return "passed" if all(checks) else "failed"
+
+
 def downsample_points(points: list[dict[str, Any]], limit: int = MAX_RENDER_POINTS) -> list[dict[str, Any]]:
     if len(points) <= limit:
         return points
@@ -457,6 +496,61 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
 
+    robotics_summaries: list[dict[str, Any]] = []
+    for path in sorted(root_dir.glob(args.robotics_summary_glob)):
+        payload = load_json(path)
+        if payload is None:
+            continue
+        thresholds = payload.get("robotics_smoke_thresholds")
+        if not isinstance(thresholds, dict):
+            thresholds = payload.get("signoff_thresholds")
+        if not isinstance(thresholds, dict):
+            thresholds = {}
+        tuning = payload.get("tuning_profile")
+        if not isinstance(tuning, dict):
+            tuning = {}
+        failure_reasons = payload.get("robotics_smoke_failure_reasons")
+        if not isinstance(failure_reasons, list):
+            failure_reasons = []
+        command = payload.get("robotics_smoke_command")
+        if not isinstance(command, list):
+            command = []
+        robotics_summaries.append(
+            {
+                "_path": relative_display(path, root_dir),
+                "summary_path": relative_display(path, root_dir),
+                "dataset": payload.get("dataset"),
+                "robotics_smoke_profile": payload.get("robotics_smoke_profile"),
+                "signoff_profile": payload.get("signoff_profile"),
+                "solver": payload.get("solver"),
+                "matched_epochs": payload.get("matched_epochs"),
+                "valid_epochs": payload.get("valid_epochs"),
+                "fixed_epochs": payload.get("fixed_epochs"),
+                "fix_rate_pct": payload.get("fix_rate_pct"),
+                "positioning_rate_pct": payload.get("positioning_rate_pct"),
+                "ppc_score_3d_50cm_ref_pct": payload.get("ppc_score_3d_50cm_ref_pct"),
+                "median_h_m": payload.get("median_h_m"),
+                "p95_h_m": payload.get("p95_h_m"),
+                "solver_wall_time_s": payload.get("solver_wall_time_s"),
+                "solution_span_s": payload.get("solution_span_s"),
+                "realtime_factor": payload.get("realtime_factor"),
+                "effective_epoch_rate_hz": payload.get("effective_epoch_rate_hz"),
+                "solution_pos": normalize_artifact_path(root_dir, payload.get("solution_pos")),
+                "reference_csv": normalize_artifact_path(root_dir, payload.get("reference_csv")),
+                "run_dir": normalize_artifact_path(root_dir, payload.get("run_dir")),
+                "rover": normalize_artifact_path(root_dir, payload.get("rover")),
+                "base": normalize_artifact_path(root_dir, payload.get("base")),
+                "nav": normalize_artifact_path(root_dir, payload.get("nav")),
+                "runtime_status": classify_realtime_status(payload.get("realtime_factor")),
+                "quality_status": classify_accuracy_status(payload.get("p95_h_m")),
+                "smoke_status": classify_robotics_smoke_status(payload),
+                "failure_reasons": failure_reasons,
+                "command": command,
+                "thresholds": thresholds,
+                "tuning_profile": tuning,
+            }
+        )
+
     visibility_summaries: list[dict[str, Any]] = []
     for path in sorted(root_dir.glob(args.visibility_summary_glob)):
         payload = load_json(path)
@@ -622,6 +716,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         "odaiba_summary": load_json(odaiba_summary_path),
         "ppc_summaries": ppc_summaries,
         "live_summaries": live_summaries,
+        "robotics_summaries": robotics_summaries,
         "visibility_summaries": visibility_summaries,
         "moving_base_summaries": moving_base_summaries,
         "ppp_products_summaries": ppp_products_summaries,
@@ -797,6 +892,14 @@ def render_html() -> str:
       color: var(--ink);
     }
     .run-link:hover { border-color: var(--accent); color: var(--accent); }
+    .debug-lines {
+      display: grid;
+      gap: 3px;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.35;
+    }
   </style>
 </head>
 <body>
@@ -865,6 +968,29 @@ def render_html() -> str:
             <th>Realtime</th>
             <th>Epoch rate</th>
             <th>Decoder errors</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card" style="margin-top: 18px;">
+      <div class="section-title">
+        <h2>Robotics realtime smoke</h2>
+        <span class="tiny">auto-discovered from output/robotics_smoke*/**/*.json</span>
+      </div>
+      <div class="metrics" id="robotics-smoke-metrics"></div>
+      <table id="robotics-smoke-table">
+        <thead>
+          <tr>
+            <th>Run</th>
+            <th>Status</th>
+            <th>Epochs</th>
+            <th>Realtime</th>
+            <th>Rate</th>
+            <th>Wall / span</th>
+            <th>Fix / quality</th>
+            <th>Debug</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -1407,6 +1533,41 @@ def render_html() -> str:
       return bits.length ? bits.join(" / ") : "n/a";
     }
 
+    function roboticsThresholdDebug(row) {
+      const thresholds = row.thresholds || {};
+      const tuning = row.tuning_profile || {};
+      const lines = [];
+      if (Array.isArray(row.failure_reasons) && row.failure_reasons.length) {
+        for (const reason of row.failure_reasons) {
+          lines.push(`why: ${reason}`);
+        }
+      }
+      if (thresholds.require_realtime_factor_min !== null && thresholds.require_realtime_factor_min !== undefined) {
+        lines.push(`rtf ${formatMaybeNumber(row.realtime_factor, 3, "x")} / min ${thresholds.require_realtime_factor_min}x`);
+      }
+      if (thresholds.require_effective_epoch_rate_min !== null && thresholds.require_effective_epoch_rate_min !== undefined) {
+        lines.push(`rate ${formatMaybeNumber(row.effective_epoch_rate_hz, 3, " Hz")} / min ${thresholds.require_effective_epoch_rate_min} Hz`);
+      }
+      if (thresholds.require_solver_wall_time_max !== null && thresholds.require_solver_wall_time_max !== undefined) {
+        lines.push(`wall ${formatMaybeNumber(row.solver_wall_time_s, 3, " s")} / max ${thresholds.require_solver_wall_time_max} s`);
+      }
+      if (thresholds.require_positioning_rate_min !== null && thresholds.require_positioning_rate_min !== undefined && thresholds.require_positioning_rate_min > 0) {
+        lines.push(`positioning ${formatMaybeNumber(row.positioning_rate_pct, 3, "%")} / min ${thresholds.require_positioning_rate_min}%`);
+      }
+      const profile = [
+        row.robotics_smoke_profile ? `profile ${row.robotics_smoke_profile}` : null,
+        tuning.preset ? `preset ${tuning.preset}` : null,
+        tuning.ratio !== null && tuning.ratio !== undefined ? `ratio ${tuning.ratio}` : null,
+        tuning.arfilter !== null && tuning.arfilter !== undefined ? `arfilter ${tuning.arfilter}` : null,
+      ].filter(Boolean).join(" / ");
+      if (profile) lines.push(profile);
+      if (Array.isArray(row.command) && row.command.length) {
+        const commandText = row.command.join(" ");
+        lines.push(`cmd: ${commandText.length > 180 ? commandText.slice(0, 180) + " ..." : commandText}`);
+      }
+      return `<span class="debug-lines">${lines.map((line) => `<span>${line}</span>`).join("")}</span>`;
+    }
+
     function bundleMetricSummary(bundle) {
       if (!bundle || !bundle.metrics) return "";
       const metrics = bundle.metrics;
@@ -1603,6 +1764,49 @@ def render_html() -> str:
           <td>${formatMaybeNumber(row.effective_epoch_rate_hz, 2, " Hz")}</td>
           <td>${(row.rover_decoder_errors ?? "n/a")}/${(row.base_decoder_errors ?? "n/a")}</td>`;
         liveBody.appendChild(tr);
+      }
+
+      const roboticsRows = overview.robotics_summaries || [];
+      const roboticsMetrics = document.getElementById("robotics-smoke-metrics");
+      const roboticsPassed = roboticsRows.filter((row) => row.smoke_status === "passed").length;
+      const roboticsBestRtf = roboticsRows
+        .map((row) => row.realtime_factor)
+        .filter((value) => typeof value === "number")
+        .reduce((current, value) => Math.max(current, value), -Infinity);
+      const roboticsMinRate = roboticsRows
+        .map((row) => row.effective_epoch_rate_hz)
+        .filter((value) => typeof value === "number")
+        .reduce((current, value) => Math.min(current, value), Infinity);
+      renderMetricGrid(roboticsMetrics, [
+        ["runs", roboticsRows.length],
+        ["passed", `${roboticsPassed}/${roboticsRows.length}`],
+        ["best realtime", Number.isFinite(roboticsBestRtf) ? formatMaybeNumber(roboticsBestRtf, 3, "x") : "n/a"],
+        ["min epoch rate", Number.isFinite(roboticsMinRate) ? formatMaybeNumber(roboticsMinRate, 3, " Hz") : "n/a"],
+      ]);
+
+      const roboticsBody = document.querySelector("#robotics-smoke-table tbody");
+      roboticsBody.innerHTML = "";
+      for (const row of roboticsRows) {
+        const artifacts = [
+          artifactLink(row.summary_path || row._path, "summary"),
+          row.solution_pos ? artifactLink(row.solution_pos, "pos") : null,
+          row.reference_csv ? artifactLink(row.reference_csv, "reference") : null,
+          row.run_dir ? artifactLink(row.run_dir, "run-dir") : null,
+          row.rover ? artifactLink(row.rover, "rover") : null,
+          row.base ? artifactLink(row.base, "base") : null,
+          row.nav ? artifactLink(row.nav, "nav") : null,
+        ].filter(Boolean).join(" / ");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${row.dataset || row.signoff_profile || "robotics-smoke"}<br><span class="tiny">${artifacts}</span></td>
+          <td>${renderBadge(row.smoke_status)} ${renderBadge(row.runtime_status)}</td>
+          <td>${row.matched_epochs ?? "n/a"} matched<br><span class="tiny">${row.valid_epochs ?? "n/a"} valid / ${row.fixed_epochs ?? "n/a"} fixed</span></td>
+          <td>${formatMaybeNumber(row.realtime_factor, 3, "x")}</td>
+          <td>${formatMaybeNumber(row.effective_epoch_rate_hz, 3, " Hz")}</td>
+          <td>${formatMaybeNumber(row.solver_wall_time_s, 3, " s")} / ${formatMaybeNumber(row.solution_span_s, 3, " s")}</td>
+          <td>fix ${formatMaybeNumber(row.fix_rate_pct, 2, "%")}<br><span class="tiny">p95 H ${formatMaybeNumber(row.p95_h_m, 3, " m")} / ${renderBadge(row.quality_status)}</span></td>
+          <td>${roboticsThresholdDebug(row)}</td>`;
+        roboticsBody.appendChild(tr);
       }
 
       const ppcBody = document.querySelector("#ppc-table tbody");

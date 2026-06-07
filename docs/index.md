@@ -8,6 +8,9 @@ checked benchmark artifacts.
 
 ## Start here
 
+- [Robotics quick start](robotics_quickstart.md)
+- [Research quick start](research_quickstart.md)
+- [Dataset gallery](dataset_gallery.md)
 - [Architecture notes](architecture.md)
 - [Quick start](quickstart.md)
 - [Validation and sign-off](validation.md)

@@ -5,6 +5,7 @@
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
+python3 apps/gnss.py doctor
 ```
 
 ## Docker
@@ -59,6 +60,9 @@ python3 apps/gnss.py replay \
 
 | Command | Purpose |
 |---|---|
+| `gnss doctor` | Check local setup, built tools, dataset/docs readiness, Docker, and ROS2 hints |
+| `gnss ros2-doctor` | Check ROS2 receiver readiness, serial permissions, launch/record commands, and topic debug commands |
+| `gnss robotics-smoke` | Run PPC RTK `quick`, `realtime`, or `full` smoke profiles with runtime gates and debug reasons |
 | `gnss spp` | Batch SPP from rover/nav RINEX |
 | `gnss solve` | Batch RTK from rover/base/nav RINEX |
 | `gnss ppp` | Batch PPP from rover RINEX plus nav or precise products |
@@ -90,6 +94,8 @@ python3 apps/gnss.py web \
 ```
 
 Open `http://127.0.0.1:8085` to inspect benchmark tables, live/moving-base/PPP-product sign-offs, receiver status, moving-base/visibility plots, moving-base history, commercial receiver side-by-side metrics, and linked artifacts/provenance. PPC and moving-base rows include receiver comparison deltas when their summaries contain commercial receiver results; PPP-product rows include direct links to fetched products, MALIB `.pos`, comparison CSV/PNG, and dataset reference files.
+The robotics realtime smoke panel auto-discovers `output/robotics_smoke*/**/*.json`
+and shows pass/fail status, runtime gates, tuning knobs, and direct debug links.
 
 You can also store the same arguments in `configs/web.example.toml` and run:
 
