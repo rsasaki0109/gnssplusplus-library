@@ -357,6 +357,50 @@ def build_solution_payload(name: str, path: Path, root_dir: Path, solver_label: 
     }
 
 
+def build_policy_suite_summaries(artifact_manifest: list[Any]) -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
+    for bundle in artifact_manifest:
+        if not isinstance(bundle, dict) or bundle.get("category") != "ppc-spp-policy-suite":
+            continue
+        metrics = bundle.get("metrics")
+        if not isinstance(metrics, dict):
+            metrics = {}
+        artifacts = bundle.get("artifacts")
+        if not isinstance(artifacts, dict):
+            artifacts = {}
+        runs = metrics.get("runs")
+        if not isinstance(runs, list):
+            runs = []
+        run_artifacts = artifacts.get("runs")
+        if not isinstance(run_artifacts, list):
+            run_artifacts = []
+        summaries.append(
+            {
+                "label": bundle.get("label"),
+                "summary_json": bundle.get("summary_json"),
+                "headline": bundle.get("headline"),
+                "status": bundle.get("status"),
+                "comparison_status": bundle.get("comparison_status"),
+                "policy_report": artifacts.get("policy_report"),
+                "policy_csv": artifacts.get("policy_csv"),
+                "run_count": metrics.get("run_count"),
+                "rates_mps": metrics.get("rates_mps"),
+                "min_jumps_m": metrics.get("min_jumps_m"),
+                "bridge_max_gap_s": metrics.get("bridge_max_gap_s"),
+                "bridge_max_anchor_speed_mps": metrics.get("bridge_max_anchor_speed_mps"),
+                "max_positioning_drop_pct": metrics.get("max_positioning_drop_pct"),
+                "min_positioning_rate_pct": metrics.get("min_positioning_rate_pct"),
+                "max_p95_delta_m": metrics.get("max_p95_delta_m"),
+                "worst_p95_h_delta_m": metrics.get("worst_p95_h_delta_m"),
+                "worst_positioning_drop_pct": metrics.get("worst_positioning_drop_pct"),
+                "checks": metrics.get("checks"),
+                "runs": runs,
+                "run_artifacts": run_artifacts,
+            }
+        )
+    return summaries
+
+
 def build_overview(args: argparse.Namespace) -> dict[str, Any]:
     root_dir = args.root.resolve()
     odaiba_summary_path = resolve_path(args.odaiba_summary, root_dir, "output/odaiba_summary.json")
@@ -562,6 +606,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         bundles = artifact_manifest_payload.get("bundles")
         if isinstance(bundles, list):
             artifact_manifest = bundles
+    ppc_spp_policy_suites = build_policy_suite_summaries(artifact_manifest)
 
     return {
         "title": "libgnss++ web",
@@ -580,6 +625,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         "visibility_summaries": visibility_summaries,
         "moving_base_summaries": moving_base_summaries,
         "ppp_products_summaries": ppp_products_summaries,
+        "ppc_spp_policy_suites": ppc_spp_policy_suites,
         "artifact_manifest": artifact_manifest,
         "receiver_status": rcv_status,
     }
@@ -701,10 +747,15 @@ def render_html() -> str:
       color: #b03a2e;
       border-color: rgba(231, 76, 60, 0.24);
     }
-    .badge.better {
+    .badge.better, .badge.passed {
       background: rgba(46, 204, 113, 0.14);
       color: #0f7a43;
       border-color: rgba(46, 204, 113, 0.28);
+    }
+    .badge.failed {
+      background: rgba(231, 76, 60, 0.12);
+      color: #b03a2e;
+      border-color: rgba(231, 76, 60, 0.24);
     }
     .badge.na {
       background: rgba(107, 114, 128, 0.12);
@@ -734,6 +785,18 @@ def render_html() -> str:
       border-bottom: 1px solid var(--line);
     }
     th { color: var(--muted); font-weight: 600; }
+    .run-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .run-link {
+      display: inline-flex;
+      padding: 2px 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.72);
+      font-size: 0.78rem;
+      text-decoration: none;
+      color: var(--ink);
+    }
+    .run-link:hover { border-color: var(--accent); color: var(--accent); }
   </style>
 </head>
 <body>
@@ -896,6 +959,28 @@ def render_html() -> str:
             <th>Corrections</th>
             <th>Compare</th>
             <th>Status</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card" style="margin-top: 18px;">
+      <div class="section-title">
+        <h2>PPC SPP policy suites</h2>
+        <span class="tiny">from artifact manifest ppc-spp-policy-suite bundles</span>
+      </div>
+      <div class="metrics" id="ppc-policy-suite-metrics"></div>
+      <table id="ppc-policy-suite-table">
+        <thead>
+          <tr>
+            <th>Suite</th>
+            <th>Status</th>
+            <th>Runs</th>
+            <th>Worst p95 Δ</th>
+            <th>Worst drop</th>
+            <th>Policy</th>
+            <th>Selected runs</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -1375,6 +1460,17 @@ def render_html() -> str:
             "/",
             formatMaybeNumber(metrics.p95_position_error_m, 3, " m"),
           ].join(" ");
+        case "ppc-spp-policy-suite":
+          return [
+            metrics.run_count ?? "n/a",
+            "runs",
+            "/",
+            formatMaybeNumber(metrics.worst_p95_h_delta_m, 3, " m"),
+            "worst p95 Δ",
+            "/",
+            formatMaybeNumber(metrics.worst_positioning_drop_pct, 3, "%"),
+            "drop",
+          ].join(" ");
         default:
           return "";
       }
@@ -1391,6 +1487,51 @@ def render_html() -> str:
         return `<a href="${value}" target="_blank" rel="noreferrer">${label || value}</a>`;
       }
       return artifactLink(value, label);
+    }
+
+    function policyRunLinks(runArtifacts) {
+      if (!runArtifacts) return "";
+      const links = [
+        runArtifacts.filtered_pos ? artifactLink(runArtifacts.filtered_pos, "policy-pos") : null,
+        runArtifacts.sweep_csv ? artifactLink(runArtifacts.sweep_csv, "sweep-csv") : null,
+        runArtifacts.sweep_json ? artifactLink(runArtifacts.sweep_json, "sweep-json") : null,
+        runArtifacts.compare_csv ? artifactLink(runArtifacts.compare_csv, "compare-csv") : null,
+        runArtifacts.compare_png ? artifactLink(runArtifacts.compare_png, "compare-png") : null,
+      ].filter(Boolean);
+      return links.length ? `<span class="run-links">${links.map((link) => link.replace("<a ", "<a class=\\"run-link\\" ")).join("")}</span>` : "";
+    }
+
+    function policyRunSummary(run, runArtifacts) {
+      if (!run) return "n/a";
+      const threshold = (
+        run.selected_rate_mps === null || run.selected_rate_mps === undefined
+      )
+        ? "baseline"
+        : `${formatMaybeNumber(run.selected_rate_mps, 0, " m/s")} / ${formatMaybeNumber(run.selected_min_jump_m, 0, " m")}`;
+      const bits = [
+        `${run.label || "run"}: ${threshold}`,
+        `p95 ${formatMaybeNumber(run.policy_p95_h_m, 3, " m")}`,
+        `Δ ${formatMaybeNumber(run.p95_h_delta_m, 3, " m")}`,
+        `drop ${formatMaybeNumber(run.positioning_drop_pct, 3, "%")}`,
+        `reject ${run.jump_gate_rejected_epochs ?? "n/a"}`,
+        `bridge ${run.bridge_inserted_epochs ?? "n/a"}`,
+      ];
+      return `${bits.join(" / ")}${policyRunLinks(runArtifacts)}`;
+    }
+
+    function artifactValueLinks(value, key) {
+      if (!value) return [];
+      if (Array.isArray(value)) {
+        return value.flatMap((item, index) => {
+          if (!item || typeof item !== "object") return [];
+          return Object.entries(item)
+            .filter(([, nestedValue]) => nestedValue && typeof nestedValue === "string")
+            .filter(([nestedKey]) => nestedKey.endsWith("_png") || nestedKey.endsWith("_csv") || nestedKey.endsWith("_json") || nestedKey.endsWith("_pos"))
+            .map(([nestedKey, nestedValue]) => smartLink(nestedValue, `${item.label || key || "item"}:${nestedKey}`));
+        });
+      }
+      if (typeof value === "object") return [];
+      return [smartLink(value, key)];
     }
 
     async function refreshStatus() {
@@ -1642,6 +1783,51 @@ def render_html() -> str:
         pppProductsBody.appendChild(tr);
       }
 
+      const policySuiteMetrics = document.getElementById("ppc-policy-suite-metrics");
+      const policySuites = overview.ppc_spp_policy_suites || [];
+      const worstP95Delta = policySuites
+        .map((suite) => suite.worst_p95_h_delta_m)
+        .filter((value) => typeof value === "number")
+        .reduce((current, value) => Math.max(current, value), -Infinity);
+      const worstDrop = policySuites
+        .map((suite) => suite.worst_positioning_drop_pct)
+        .filter((value) => typeof value === "number")
+        .reduce((current, value) => Math.max(current, value), -Infinity);
+      renderMetricGrid(policySuiteMetrics, [
+        ["suites", policySuites.length],
+        ["runs", policySuites.reduce((total, suite) => total + (suite.run_count || 0), 0)],
+        ["worst p95 Δ", Number.isFinite(worstP95Delta) ? formatMaybeNumber(worstP95Delta, 3, " m") : "n/a"],
+        ["worst drop", Number.isFinite(worstDrop) ? formatMaybeNumber(worstDrop, 3, "%") : "n/a"],
+      ]);
+
+      const policySuiteBody = document.querySelector("#ppc-policy-suite-table tbody");
+      policySuiteBody.innerHTML = "";
+      for (const suite of policySuites) {
+        const runArtifactsByLabel = new Map((suite.run_artifacts || []).map((item) => [item.label, item]));
+        const runSummaries = (suite.runs || []).map((run) => {
+          return policyRunSummary(run, runArtifactsByLabel.get(run.label));
+        });
+        const policyLinks = [
+          suite.policy_report ? artifactLink(suite.policy_report, "report-json") : null,
+          suite.policy_csv ? artifactLink(suite.policy_csv, "report-csv") : null,
+          suite.summary_json ? artifactLink(suite.summary_json, "suite-summary") : null,
+        ].filter(Boolean).join(" / ");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${suite.label || "n/a"}<br><span class="tiny">${suite.headline || ""}</span></td>
+          <td>${renderBadge(suite.status)} ${suite.comparison_status ? renderBadge(suite.comparison_status) : ""}</td>
+          <td>${suite.run_count ?? (suite.runs || []).length}</td>
+          <td>${formatMaybeNumber(suite.worst_p95_h_delta_m, 3, " m")}</td>
+          <td>${formatMaybeNumber(suite.worst_positioning_drop_pct, 3, "%")}</td>
+          <td>${[
+              `drop≤${formatMaybeNumber(suite.max_positioning_drop_pct, 3, "%")}`,
+              `p95Δ≤${formatMaybeNumber(suite.max_p95_delta_m, 3, " m")}`,
+              `bridge ${formatMaybeNumber(suite.bridge_max_gap_s, 1, " s")}/${formatMaybeNumber(suite.bridge_max_anchor_speed_mps, 1, " m/s")}`,
+            ].join(" / ")}<br><span class="tiny">${policyLinks || "n/a"}</span></td>
+          <td>${runSummaries.length ? runSummaries.join("<br>") : "n/a"}</td>`;
+        policySuiteBody.appendChild(tr);
+      }
+
       const visibilityBody = document.querySelector("#visibility-table tbody");
       visibilityBody.innerHTML = "";
       for (const row of overview.visibility_summaries || []) {
@@ -1678,7 +1864,7 @@ def render_html() -> str:
       for (const bundle of overview.artifact_manifest || []) {
         const artifactLinks = Object.entries(bundle.artifacts || {})
           .filter(([, value]) => value)
-          .map(([key, value]) => smartLink(value, key))
+          .flatMap(([key, value]) => artifactValueLinks(value, key))
           .join(" / ");
         const metricSummary = bundleMetricSummary(bundle);
         const statusParts = [];

@@ -3160,6 +3160,7 @@ class CLIToolsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="gnss_spp_cli_") as temp_dir:
             temp_root = Path(temp_dir)
             output_path = temp_root / "spp.pos"
+            summary_path = temp_root / "spp_summary.json"
 
             result = self.run_gnss(
                 "spp",
@@ -3169,6 +3170,24 @@ class CLIToolsTest(unittest.TestCase):
                 str(ROOT_DIR / "data/navigation_static.nav"),
                 "--out",
                 str(output_path),
+                "--summary-json",
+                str(summary_path),
+                "--robust-weighting",
+                "--robust-threshold-sigma",
+                "2.5",
+                "--robust-min-weight",
+                "0.1",
+                "--adaptive-robust-weighting",
+                "--adaptive-robust-activation-threshold-sigma",
+                "3.0",
+                "--adaptive-robust-min-tail-measurements",
+                "2",
+                "--adaptive-robust-min-tail-fraction",
+                "0.08",
+                "--max-position-jump-rate-mps",
+                "50",
+                "--max-position-jump-min-m",
+                "20",
                 "--max-epochs",
                 "10",
             )
@@ -3177,7 +3196,23 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("Processed epochs:", result.stdout)
             self.assertIn("Valid solutions:", result.stdout)
             self.assertTrue(output_path.exists())
+            self.assertTrue(summary_path.exists())
             self.assertIn("LibGNSS++ Position Solution", output_path.read_text(encoding="ascii"))
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertTrue(payload["config"]["robust_weighting"])
+            self.assertEqual(payload["config"]["robust_threshold_sigma"], 2.5)
+            self.assertEqual(payload["config"]["robust_min_weight"], 0.1)
+            self.assertTrue(payload["config"]["adaptive_robust_weighting"])
+            self.assertEqual(payload["config"]["adaptive_robust_activation_threshold_sigma"], 3.0)
+            self.assertEqual(payload["config"]["adaptive_robust_min_tail_measurements"], 2)
+            self.assertEqual(payload["config"]["adaptive_robust_min_tail_fraction"], 0.08)
+            self.assertTrue(payload["config"]["position_jump_gate"])
+            self.assertEqual(payload["config"]["max_position_jump_rate_mps"], 50.0)
+            self.assertEqual(payload["config"]["max_position_jump_min_m"], 20.0)
+            self.assertIn("robust_weighted_measurements", payload["spp_qc"])
+            self.assertIn("adaptive_robust_activations", payload["spp_qc"])
+            self.assertIn("adaptive_robust_tail_measurements", payload["spp_qc"])
+            self.assertIn("position_jump_gate_rejections", payload["spp_qc"])
 
     def test_visibility_cli_writes_csv_and_summary_for_static_data(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_visibility_cli_") as temp_dir:
@@ -8372,6 +8407,635 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("commercial_receiver:", result.stdout)
             self.assertIn("performance: wall=0.5 s, span=0.4 s, rtf=0.8, rate=6.0 Hz", result.stdout)
 
+    def test_ppc_demo_cli_summarizes_existing_spp_solution_against_reference_csv(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_demo_spp_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            run_dir = temp_root / "tokyo" / "run1"
+            run_dir.mkdir(parents=True)
+            solution_path = temp_root / "ppc_demo_spp.pos"
+            summary_path = temp_root / "ppc_demo_spp_summary.json"
+            spp_run_summary = temp_root / "gnss_spp_summary.json"
+            reference_csv = run_dir / "reference.csv"
+
+            reference_csv.write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,lat_deg,lon_deg,height_m",
+                        "2300,1000.000,35.1000000,139.1000000,42.000",
+                        "2300,1000.200,35.1000100,139.1000200,42.200",
+                        "2300,1000.400,35.1000200,139.1000400,42.400",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            with solution_path.open("w", encoding="ascii") as handle:
+                handle.write("% synthetic ppc spp solution\n")
+                for week, tow, lat, lon, height, status, satellites in (
+                    (2300, 1000.0, 35.1000001, 139.1000001, 42.1, 1, 12),
+                    (2300, 1000.2, 35.1000101, 139.1000201, 42.3, 1, 13),
+                    (2300, 1000.4, 35.1000202, 139.1000402, 42.5, 0, 11),
+                ):
+                    ecef = driving_comparison.llh_to_ecef(lat, lon, height)
+                    handle.write(
+                        f"{week} {tow:.3f} {ecef[0]:.6f} {ecef[1]:.6f} {ecef[2]:.6f} "
+                        f"{lat:.9f} {lon:.9f} {height:.4f} {status} {satellites} 1.0\n"
+                    )
+            spp_run_summary.write_text(
+                json.dumps(
+                    {
+                        "availability_rate": 1.0,
+                        "mean_residual_rms_m": 1.25,
+                        "spp_qc": {
+                            "outlier_rejections": 4,
+                            "raim_fde_rejections": 1,
+                            "position_jump_gate_rejections": 3,
+                            "robust_weighted_measurements": 2,
+                            "adaptive_robust_activations": 7,
+                            "adaptive_robust_tail_measurements": 9,
+                            "min_robust_weight_factor": 0.25,
+                            "precise_orbit_clock_measurements": 2,
+                            "ssr_orbit_clock_corrections": 3,
+                            "ssr_code_bias_corrections": 5,
+                            "ionex_corrections": 6,
+                            "ionex_meters": 0.7,
+                            "dcb_corrections": 8,
+                            "dcb_meters": 0.9,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_gnss(
+                "ppc-demo",
+                "--run-dir",
+                str(run_dir),
+                "--solver",
+                "spp",
+                "--use-existing-solution",
+                "--solver-wall-time-s",
+                "0.5",
+                "--out",
+                str(solution_path),
+                "--spp-summary-json",
+                str(spp_run_summary),
+                "--summary-json",
+                str(summary_path),
+                "--require-valid-epochs-min",
+                "3",
+                "--require-matched-epochs-min",
+                "3",
+                "--require-fix-rate-min",
+                "60",
+                "--require-median-h-max",
+                "0.2",
+                "--require-p95-up-max",
+                "0.2",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["solver"], "spp")
+            self.assertEqual(payload["fixed_epochs"], 2)
+            self.assertEqual(payload["spp_solution_rate_pct"], 100.0)
+            self.assertEqual(payload["spp_mean_residual_rms_m"], 1.25)
+            self.assertEqual(payload["spp_outlier_rejections"], 4)
+            self.assertEqual(payload["spp_raim_fde_rejections"], 1)
+            self.assertEqual(payload["spp_position_jump_gate_rejections"], 3)
+            self.assertEqual(payload["spp_robust_weighted_measurements"], 2)
+            self.assertEqual(payload["spp_adaptive_robust_activations"], 7)
+            self.assertEqual(payload["spp_adaptive_robust_tail_measurements"], 9)
+            self.assertEqual(payload["spp_min_robust_weight_factor"], 0.25)
+            self.assertEqual(payload["spp_precise_orbit_clock_measurements"], 2)
+            self.assertEqual(payload["spp_ssr_orbit_clock_corrections"], 3)
+            self.assertEqual(payload["spp_ssr_code_bias_corrections"], 5)
+            self.assertEqual(payload["ionex_corrections"], 6)
+            self.assertEqual(payload["dcb_corrections"], 8)
+
+    def test_ppc_spp_jump_sweep_scores_posthoc_gate_candidates(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_spp_jump_sweep_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            reference_csv = temp_root / "reference.csv"
+            solution_path = temp_root / "spp.pos"
+            summary_path = temp_root / "sweep.json"
+            csv_path = temp_root / "sweep.csv"
+            filtered_path = temp_root / "spp_filtered.pos"
+            policy_summary_path = temp_root / "sweep_policy.json"
+            policy_csv_path = temp_root / "sweep_policy.csv"
+            policy_filtered_path = temp_root / "spp_policy_filtered.pos"
+
+            reference_rows = [
+                (2300, 1000.0, 35.1000000, 139.1000000, 42.0),
+                (2300, 1000.2, 35.1000010, 139.1000010, 42.0),
+                (2300, 1000.4, 35.1000020, 139.1000020, 42.0),
+                (2300, 1000.6, 35.1000030, 139.1000030, 42.0),
+            ]
+            reference_lines = ["gps_week,gps_tow_s,lat_deg,lon_deg,height_m"]
+            for week, tow, lat, lon, height in reference_rows:
+                reference_lines.append(f"{week},{tow:.3f},{lat:.7f},{lon:.7f},{height:.3f}")
+            reference_csv.write_text("\n".join(reference_lines) + "\n", encoding="ascii")
+
+            write_libgnss_pos(
+                solution_path,
+                [
+                    (2300, 1000.0, 35.1000000, 139.1000000, 42.0, 1, 12, 1.0),
+                    (2300, 1000.2, 35.1010000, 139.1010000, 42.0, 1, 12, 1.0),
+                    (2300, 1000.4, 35.1000020, 139.1000020, 42.0, 1, 12, 1.0),
+                    (2300, 1000.6, 35.1000030, 139.1000030, 42.0, 1, 12, 1.0),
+                ],
+            )
+
+            result = self.run_gnss(
+                "ppc-spp-jump-sweep",
+                "--reference-csv",
+                str(reference_csv),
+                "--pos",
+                str(solution_path),
+                "--rates-mps",
+                "50",
+                "--min-jumps-m",
+                "20",
+                "--summary-json",
+                str(summary_path),
+                "--csv",
+                str(csv_path),
+                "--filtered-pos-out",
+                str(filtered_path),
+                "--filtered-rate-mps",
+                "50",
+                "--filtered-min-jump-m",
+                "20",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("PPC SPP jump-gate sweep", result.stdout)
+            self.assertIn("filtered_pos:", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["candidate_count"], 2)
+            gated = [
+                row for row in payload["results"]
+                if row["max_position_jump_rate_mps"] == 50.0
+            ][0]
+            baseline = [
+                row for row in payload["results"]
+                if row["max_position_jump_rate_mps"] is None
+            ][0]
+            self.assertEqual(gated["jump_gate_rejected_epochs"], 1)
+            self.assertEqual(gated["valid_epochs"], 3)
+            self.assertLess(gated["max_h_m"], baseline["max_h_m"])
+            self.assertTrue(csv_path.exists())
+            self.assertEqual(payload["filtered_pos"]["path"], str(filtered_path))
+            filtered_epochs = driving_comparison.read_libgnss_pos(filtered_path)
+            self.assertEqual(len(filtered_epochs), 3)
+            self.assertEqual([epoch.tow for epoch in filtered_epochs], [1000.0, 1000.4, 1000.6])
+
+            policy_result = self.run_gnss(
+                "ppc-spp-jump-sweep",
+                "--reference-csv",
+                str(reference_csv),
+                "--pos",
+                str(solution_path),
+                "--rates-mps",
+                "50",
+                "--min-jumps-m",
+                "20",
+                "--summary-json",
+                str(policy_summary_path),
+                "--csv",
+                str(policy_csv_path),
+                "--max-positioning-drop-pct",
+                "10",
+                "--filtered-pos-out",
+                str(policy_filtered_path),
+            )
+
+            self.assertEqual(policy_result.returncode, 0, msg=policy_result.stderr)
+            self.assertIn("policy_best:", policy_result.stdout)
+            policy_payload = json.loads(policy_summary_path.read_text(encoding="utf-8"))
+            self.assertTrue(policy_payload["policy"]["enabled"])
+            self.assertEqual(policy_payload["policy"]["candidate_count"], 1)
+            self.assertIsNone(
+                policy_payload["policy"]["best_by_p95_h_m"]["max_position_jump_rate_mps"]
+            )
+            self.assertEqual(
+                policy_payload["policy"]["best_by_p95_h_m"]["positioning_drop_pct"],
+                0.0,
+            )
+            policy_filtered_epochs = driving_comparison.read_libgnss_pos(policy_filtered_path)
+            self.assertEqual(len(policy_filtered_epochs), 4)
+
+    def test_ppc_spp_policy_report_summarizes_sweep_jsons(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_spp_policy_report_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            sweep_a_path = temp_root / "sweep_a.json"
+            sweep_b_path = temp_root / "sweep_b.json"
+            summary_path = temp_root / "policy_report.json"
+            csv_path = temp_root / "policy_report.csv"
+            failing_summary_path = temp_root / "policy_report_fail.json"
+            failing_csv_path = temp_root / "policy_report_fail.csv"
+
+            def write_sweep(
+                path: Path,
+                *,
+                baseline_positioning: float,
+                baseline_p95: float,
+                policy_positioning: float,
+                policy_p95: float,
+            ) -> None:
+                baseline = {
+                    "max_position_jump_rate_mps": None,
+                    "max_position_jump_min_m": None,
+                    "valid_epochs": 100,
+                    "matched_epochs": 100,
+                    "positioning_rate_pct": baseline_positioning,
+                    "median_h_m": 2.0,
+                    "p95_h_m": baseline_p95,
+                    "max_h_m": 20.0,
+                    "p95_abs_up_m": 9.0,
+                    "jump_gate_rejected_epochs": 0,
+                    "jump_gate_rejected_groups": 0,
+                    "bridge_inserted_epochs": 0,
+                    "positioning_drop_pct": 0.0,
+                }
+                policy = {
+                    "max_position_jump_rate_mps": 50.0,
+                    "max_position_jump_min_m": 30.0,
+                    "valid_epochs": 99,
+                    "matched_epochs": 99,
+                    "positioning_rate_pct": policy_positioning,
+                    "median_h_m": 1.5,
+                    "p95_h_m": policy_p95,
+                    "max_h_m": 15.0,
+                    "p95_abs_up_m": 7.0,
+                    "jump_gate_rejected_epochs": 5,
+                    "jump_gate_rejected_groups": 2,
+                    "bridge_inserted_epochs": 1,
+                    "positioning_drop_pct": baseline_positioning - policy_positioning,
+                }
+                path.write_text(
+                    json.dumps(
+                        {
+                            "reference_csv": "reference.csv",
+                            "pos": "spp.pos",
+                            "bridge_max_gap_s": 5.0,
+                            "bridge_max_anchor_speed_mps": 10.0,
+                            "results": [baseline, policy],
+                            "policy": {
+                                "enabled": True,
+                                "max_positioning_drop_pct": 1.0,
+                                "min_positioning_rate_pct": None,
+                                "candidate_count": 1,
+                                "best_by_p95_h_m": policy,
+                            },
+                        },
+                        indent=2,
+                    )
+                    + "\n",
+                    encoding="ascii",
+                )
+
+            write_sweep(
+                sweep_a_path,
+                baseline_positioning=100.0,
+                baseline_p95=10.0,
+                policy_positioning=99.0,
+                policy_p95=8.0,
+            )
+            write_sweep(
+                sweep_b_path,
+                baseline_positioning=98.5,
+                baseline_p95=6.0,
+                policy_positioning=98.0,
+                policy_p95=6.0,
+            )
+
+            result = self.run_gnss(
+                "ppc-spp-policy-report",
+                "--sweep",
+                f"run_a={sweep_a_path}",
+                "--sweep",
+                f"run_b={sweep_b_path}",
+                "--summary-json",
+                str(summary_path),
+                "--csv",
+                str(csv_path),
+                "--max-p95-delta-m",
+                "0",
+                "--max-positioning-drop-pct",
+                "1.0",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("PPC SPP policy report", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertTrue(payload["checks"]["passed"])
+            self.assertEqual(payload["sweep_count"], 2)
+            run_a = [row for row in payload["runs"] if row["label"] == "run_a"][0]
+            self.assertEqual(run_a["selected_rate_mps"], 50.0)
+            self.assertEqual(run_a["selected_min_jump_m"], 30.0)
+            self.assertEqual(run_a["valid_epoch_delta"], -1)
+            self.assertEqual(run_a["positioning_drop_pct"], 1.0)
+            self.assertEqual(run_a["p95_h_delta_m"], -2.0)
+            self.assertEqual(run_a["bridge_inserted_epochs"], 1)
+
+            csv_rows = list(csv.DictReader(csv_path.open(encoding="utf-8")))
+            self.assertEqual(len(csv_rows), 2)
+            self.assertEqual(csv_rows[0]["label"], "run_a")
+            self.assertEqual(float(csv_rows[0]["p95_h_delta_m"]), -2.0)
+
+            failing_result = self.run_gnss(
+                "ppc-spp-policy-report",
+                "--sweep",
+                f"run_a={sweep_a_path}",
+                "--summary-json",
+                str(failing_summary_path),
+                "--csv",
+                str(failing_csv_path),
+                "--max-positioning-drop-pct",
+                "0.5",
+            )
+
+            self.assertEqual(failing_result.returncode, 2, msg=failing_result.stderr)
+            self.assertIn("check failures", failing_result.stderr)
+            failing_payload = json.loads(failing_summary_path.read_text(encoding="utf-8"))
+            self.assertFalse(failing_payload["checks"]["passed"])
+
+    def test_ppc_spp_policy_suite_runs_sweeps_report_and_compare(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_spp_policy_suite_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            output_dir = temp_root / "suite"
+            suite_summary_path = output_dir / "synthetic_suite_summary.json"
+
+            run_args: list[str] = []
+            direct_csv_run_arg: str | None = None
+            manifest_runs: list[dict[str, str]] = []
+            for label, lon_offset in (("run_a", 0.0), ("run_b", 0.001)):
+                run_dir = temp_root / label
+                run_dir.mkdir()
+                reference_csv = run_dir / "reference.csv"
+                solution_path = run_dir / "spp.pos"
+                baseline_path = run_dir / "baseline.pos"
+                reference_rows = [
+                    (2300, 1000.0, 35.1000000, 139.1000000 + lon_offset, 42.0),
+                    (2300, 1000.2, 35.1000010, 139.1000010 + lon_offset, 42.0),
+                    (2300, 1000.4, 35.1000020, 139.1000020 + lon_offset, 42.0),
+                    (2300, 1000.6, 35.1000030, 139.1000030 + lon_offset, 42.0),
+                ]
+                reference_lines = ["gps_week,gps_tow_s,lat_deg,lon_deg,height_m"]
+                for week, tow, lat, lon, height in reference_rows:
+                    reference_lines.append(f"{week},{tow:.3f},{lat:.7f},{lon:.7f},{height:.3f}")
+                reference_csv.write_text("\n".join(reference_lines) + "\n", encoding="ascii")
+                if label == "run_a":
+                    named_reference_csv = run_dir / "ppc_reference.csv"
+                    named_reference_csv.write_text(reference_csv.read_text(encoding="ascii"), encoding="ascii")
+                    direct_csv_run_arg = f"run_csv={named_reference_csv},{solution_path},{baseline_path}"
+
+                write_libgnss_pos(
+                    solution_path,
+                    [
+                        (2300, 1000.0, 35.1000000, 139.1000000 + lon_offset, 42.0, 1, 12, 1.0),
+                        (2300, 1000.2, 35.1010000, 139.1010000 + lon_offset, 42.0, 1, 12, 1.0),
+                        (2300, 1000.4, 35.1000020, 139.1000020 + lon_offset, 42.0, 1, 12, 1.0),
+                        (2300, 1000.6, 35.1000030, 139.1000030 + lon_offset, 42.0, 1, 12, 1.0),
+                    ],
+                )
+                write_libgnss_pos(
+                    baseline_path,
+                    [
+                        (2300, 1000.0, 35.1000000, 139.1000000 + lon_offset, 42.0, 1, 12, 1.0),
+                        (2300, 1000.2, 35.1012000, 139.1012000 + lon_offset, 42.0, 1, 12, 1.0),
+                        (2300, 1000.4, 35.1000020, 139.1000020 + lon_offset, 42.0, 1, 12, 1.0),
+                        (2300, 1000.6, 35.1000030, 139.1000030 + lon_offset, 42.0, 1, 12, 1.0),
+                    ],
+                )
+                run_args.extend(
+                    [
+                        "--run",
+                        f"{label}={run_dir},{solution_path},{baseline_path}",
+                    ]
+                )
+                manifest_runs.append(
+                    {
+                        "label": label,
+                        "run_dir": str(run_dir),
+                        "input_pos": str(solution_path),
+                        "baseline_pos": str(baseline_path),
+                    }
+                )
+
+            result = self.run_gnss(
+                "ppc-spp-policy-suite",
+                *run_args,
+                "--output-dir",
+                str(output_dir),
+                "--prefix",
+                "synthetic",
+                "--rates-mps",
+                "50",
+                "--min-jumps-m",
+                "20",
+                "--max-positioning-drop-pct",
+                "30",
+                "--max-p95-delta-m",
+                "0",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("PPC SPP policy suite", result.stdout)
+            payload = json.loads(suite_summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["run_count"], 2)
+            self.assertFalse(payload["dry_run"])
+            self.assertTrue(payload["checks"]["passed"])
+            self.assertEqual(payload["checks"]["dry_run"], False)
+            self.assertLessEqual(payload["worst_p95_h_delta_m"], 0.0)
+            self.assertEqual(payload["worst_positioning_drop_pct"], 25.0)
+            self.assertEqual(len(payload["policy_runs"]), 2)
+            self.assertEqual(payload["policy_runs"][0]["selected_rate_mps"], 50.0)
+            self.assertTrue(Path(payload["policy_report_json"]).exists())
+            policy_payload = json.loads(Path(payload["policy_report_json"]).read_text(encoding="utf-8"))
+            self.assertTrue(policy_payload["checks"]["passed"])
+            self.assertEqual(policy_payload["sweep_count"], 2)
+            for record in payload["runs"]:
+                self.assertTrue(Path(record["sweep_json"]).exists())
+                self.assertTrue(Path(record["sweep_csv"]).exists())
+                self.assertTrue(Path(record["filtered_pos"]).exists())
+                self.assertTrue(Path(record["compare_summary_json"]).exists())
+                self.assertTrue(Path(record["compare_csv"]).exists())
+                self.assertTrue(Path(record["compare_matched_csv"]).exists())
+                compare_png = Path(record["compare_png"])
+                self.assertTrue(compare_png.exists())
+                self.assertGreater(compare_png.stat().st_size, 0)
+
+            self.assertIsNotNone(direct_csv_run_arg)
+            direct_csv_output_dir = temp_root / "direct_csv_suite"
+            direct_csv_result = self.run_gnss(
+                "ppc-spp-policy-suite",
+                "--run",
+                direct_csv_run_arg,
+                "--output-dir",
+                str(direct_csv_output_dir),
+                "--prefix",
+                "direct_csv",
+                "--rates-mps",
+                "50",
+                "--min-jumps-m",
+                "20",
+                "--dry-run",
+            )
+
+            self.assertEqual(direct_csv_result.returncode, 0, msg=direct_csv_result.stderr)
+            direct_csv_payload = json.loads(
+                (direct_csv_output_dir / "direct_csv_suite_summary.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                direct_csv_payload["runs"][0]["reference_csv"],
+                direct_csv_run_arg.split("=", 1)[1].split(",", 1)[0],
+            )
+
+            manifest_output_dir = temp_root / "manifest_suite"
+            manifest_path = temp_root / "policy_suite_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "output_dir": str(manifest_output_dir),
+                        "prefix": "manifested",
+                        "rates_mps": "50",
+                        "min_jumps_m": "20",
+                        "max_positioning_drop_pct": 30.0,
+                        "max_p95_delta_m": 0.0,
+                        "skip_compare": True,
+                        "runs": manifest_runs[:1],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            manifest_result = self.run_gnss(
+                "ppc-spp-policy-suite",
+                "--manifest-json",
+                str(manifest_path),
+            )
+
+            self.assertEqual(manifest_result.returncode, 0, msg=manifest_result.stderr)
+            manifest_summary_path = manifest_output_dir / "manifested_suite_summary.json"
+            manifest_payload = json.loads(manifest_summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest_payload["manifest_json"], str(manifest_path))
+            self.assertEqual(manifest_payload["output_dir"], str(manifest_output_dir))
+            self.assertEqual(manifest_payload["prefix"], "manifested")
+            self.assertEqual(manifest_payload["rates_mps"], "50")
+            self.assertEqual(manifest_payload["min_jumps_m"], "20")
+            self.assertEqual(manifest_payload["max_positioning_drop_pct"], 30.0)
+            self.assertEqual(manifest_payload["max_p95_delta_m"], 0.0)
+            self.assertEqual(manifest_payload["run_count"], 1)
+            self.assertTrue(manifest_payload["checks"]["passed"])
+            self.assertLessEqual(manifest_payload["worst_p95_h_delta_m"], 0.0)
+            self.assertEqual(manifest_payload["worst_positioning_drop_pct"], 25.0)
+            self.assertNotIn("compare_summary_json", manifest_payload["runs"][0])
+            self.assertTrue(Path(manifest_payload["policy_report_json"]).exists())
+
+            dry_run_output_dir = temp_root / "dry_run_suite"
+            dry_run_result = self.run_gnss(
+                "ppc-spp-policy-suite",
+                "--manifest-json",
+                str(manifest_path),
+                "--output-dir",
+                str(dry_run_output_dir),
+                "--prefix",
+                "dry_run",
+                "--dry-run",
+            )
+
+            self.assertEqual(dry_run_result.returncode, 0, msg=dry_run_result.stderr)
+            self.assertIn("dry_run: true", dry_run_result.stdout)
+            dry_run_summary_path = dry_run_output_dir / "dry_run_suite_summary.json"
+            dry_run_payload = json.loads(dry_run_summary_path.read_text(encoding="utf-8"))
+            self.assertTrue(dry_run_payload["dry_run"])
+            self.assertIsNone(dry_run_payload["checks"]["passed"])
+            self.assertTrue(dry_run_payload["checks"]["dry_run"])
+            self.assertIsNone(dry_run_payload["worst_p95_h_delta_m"])
+            self.assertEqual(dry_run_payload["policy_runs"], [])
+            self.assertEqual(dry_run_payload["run_count"], 1)
+            self.assertEqual(len(dry_run_payload["commands"]), 2)
+            self.assertFalse(Path(dry_run_payload["runs"][0]["sweep_json"]).exists())
+            self.assertFalse(Path(dry_run_payload["policy_report_json"]).exists())
+
+    def test_ppc_spp_compare_generates_summary_csv_and_png(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_spp_compare_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            reference_csv = temp_root / "reference.csv"
+            baseline_path = temp_root / "baseline.pos"
+            improved_path = temp_root / "improved.pos"
+            summary_path = temp_root / "compare.json"
+            csv_path = temp_root / "compare.csv"
+            matched_csv = temp_root / "compare_matches.csv"
+            png_path = temp_root / "compare.png"
+
+            reference_rows = [
+                (2300, 1000.0, 35.1000000, 139.1000000, 42.0),
+                (2300, 1000.2, 35.1000010, 139.1000010, 42.0),
+                (2300, 1000.4, 35.1000020, 139.1000020, 42.0),
+                (2300, 1000.6, 35.1000030, 139.1000030, 42.0),
+            ]
+            reference_lines = ["gps_week,gps_tow_s,lat_deg,lon_deg,height_m"]
+            for week, tow, lat, lon, height in reference_rows:
+                reference_lines.append(f"{week},{tow:.3f},{lat:.7f},{lon:.7f},{height:.3f}")
+            reference_csv.write_text("\n".join(reference_lines) + "\n", encoding="ascii")
+
+            write_libgnss_pos(
+                baseline_path,
+                [
+                    (2300, 1000.0, 35.1000000, 139.1000000, 42.0, 1, 12, 1.0),
+                    (2300, 1000.2, 35.1010000, 139.1010000, 42.0, 1, 12, 1.0),
+                    (2300, 1000.4, 35.1000020, 139.1000020, 42.0, 1, 12, 1.0),
+                    (2300, 1000.6, 35.1000030, 139.1000030, 42.0, 1, 12, 1.0),
+                ],
+            )
+            write_libgnss_pos(
+                improved_path,
+                [
+                    (2300, 1000.0, 35.1000000, 139.1000000, 42.0, 1, 12, 1.0),
+                    (2300, 1000.2, 35.1000010, 139.1000010, 42.0, 1, 12, 1.0),
+                    (2300, 1000.4, 35.1000020, 139.1000020, 42.0, 1, 12, 1.0),
+                    (2300, 1000.6, 35.1000030, 139.1000030, 42.0, 1, 12, 1.0),
+                ],
+            )
+
+            result = self.run_gnss(
+                "ppc-spp-compare",
+                "--reference-csv",
+                str(reference_csv),
+                "--solution",
+                f"baseline={baseline_path}",
+                "--solution",
+                f"improved={improved_path}",
+                "--summary-json",
+                str(summary_path),
+                "--csv",
+                str(csv_path),
+                "--matched-csv",
+                str(matched_csv),
+                "--png",
+                str(png_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("PPC SPP comparison", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["baseline_label"], "baseline")
+            self.assertEqual(len(payload["solutions"]), 2)
+            improved = [
+                row for row in payload["solutions"]
+                if row["label"] == "improved"
+            ][0]
+            self.assertLess(improved["delta_vs_baseline"]["p95_h_m"], 0.0)
+            self.assertTrue(csv_path.exists())
+            self.assertTrue(matched_csv.exists())
+            self.assertTrue(png_path.exists())
+            self.assertGreater(png_path.stat().st_size, 0)
+
     def test_ppc_demo_cli_summarizes_commercial_rover_existing_solution(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_demo_commercial_rover_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -12205,6 +12869,83 @@ class CLIToolsTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            policy_suite_dir = temp_root / "output" / "ppc_spp_policy_suite"
+            policy_suite_dir.mkdir()
+            policy_report_path = policy_suite_dir / "adaptive_policy_report.json"
+            policy_csv_path = policy_suite_dir / "adaptive_policy_report.csv"
+            policy_suite_summary = policy_suite_dir / "adaptive_suite_summary.json"
+            policy_report_path.write_text(
+                json.dumps(
+                    {
+                        "sweep_count": 2,
+                        "checks": {
+                            "max_p95_delta_m": 0.0,
+                            "max_positioning_drop_pct": 1.0,
+                            "passed": True,
+                            "failures": [],
+                        },
+                        "runs": [
+                            {
+                                "label": "tokyo_run1",
+                                "selected_rate_mps": 150.0,
+                                "selected_min_jump_m": 50.0,
+                                "policy_positioning_rate_pct": 98.15,
+                                "positioning_drop_pct": 0.97,
+                                "policy_p95_h_m": 18.84,
+                                "p95_h_delta_m": -1.43,
+                                "jump_gate_rejected_epochs": 137,
+                                "bridge_inserted_epochs": 21,
+                            },
+                            {
+                                "label": "nagoya_run1",
+                                "selected_rate_mps": 50.0,
+                                "selected_min_jump_m": 40.0,
+                                "policy_positioning_rate_pct": 97.69,
+                                "positioning_drop_pct": 0.96,
+                                "policy_p95_h_m": 9.89,
+                                "p95_h_delta_m": -0.58,
+                                "jump_gate_rejected_epochs": 86,
+                                "bridge_inserted_epochs": 12,
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            policy_csv_path.write_text("label,p95_h_delta_m\n", encoding="utf-8")
+            policy_suite_summary.write_text(
+                json.dumps(
+                    {
+                        "run_count": 2,
+                        "output_dir": str(policy_suite_dir),
+                        "prefix": "adaptive",
+                        "rates_mps": "25,50,75,100,150,200",
+                        "min_jumps_m": "10,20,30,40,50",
+                        "bridge_max_gap_s": 5.0,
+                        "bridge_max_anchor_speed_mps": 10.0,
+                        "max_positioning_drop_pct": 1.0,
+                        "max_p95_delta_m": 0.0,
+                        "policy_report_json": str(policy_report_path),
+                        "policy_report_csv": str(policy_csv_path),
+                        "runs": [
+                            {
+                                "label": "tokyo_run1",
+                                "reference_csv": str(temp_root / "output" / "tokyo_reference.csv"),
+                                "input_pos": str(temp_root / "output" / "tokyo_input.pos"),
+                                "baseline_pos": str(temp_root / "output" / "tokyo_baseline.pos"),
+                                "sweep_json": str(policy_suite_dir / "tokyo_sweep.json"),
+                                "sweep_csv": str(policy_suite_dir / "tokyo_sweep.csv"),
+                                "filtered_pos": str(policy_suite_dir / "tokyo_policy.pos"),
+                                "compare_summary_json": str(policy_suite_dir / "tokyo_compare.json"),
+                                "compare_csv": str(policy_suite_dir / "tokyo_compare.csv"),
+                                "compare_matched_csv": str(policy_suite_dir / "tokyo_compare_matches.csv"),
+                                "compare_png": str(policy_suite_dir / "tokyo_compare.png"),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             visibility_summary.write_text(
                 json.dumps(
                     {
@@ -12347,18 +13088,40 @@ class CLIToolsTest(unittest.TestCase):
                 self.assertEqual(overview["ppp_products_summaries"][0]["malib_solution_pos"], "output/malib_static.pos")
                 self.assertEqual(overview["ppp_products_summaries"][0]["comparison_csv"], "output/ppp_static_products_comparison.csv")
                 self.assertEqual(overview["ppp_products_summaries"][0]["comparison_png"], "output/ppp_static_products_comparison.png")
+                self.assertEqual(len(overview["ppc_spp_policy_suites"]), 1)
+                policy_suite = overview["ppc_spp_policy_suites"][0]
+                self.assertEqual(policy_suite["label"], "adaptive")
+                self.assertEqual(policy_suite["status"], "passed")
+                self.assertEqual(policy_suite["comparison_status"], "better")
+                self.assertEqual(policy_suite["policy_report"], "output/ppc_spp_policy_suite/adaptive_policy_report.json")
+                self.assertEqual(policy_suite["policy_csv"], "output/ppc_spp_policy_suite/adaptive_policy_report.csv")
+                self.assertEqual(policy_suite["run_count"], 2)
+                self.assertEqual(policy_suite["worst_p95_h_delta_m"], -0.58)
+                self.assertEqual(policy_suite["worst_positioning_drop_pct"], 0.97)
+                self.assertEqual(policy_suite["runs"][0]["selected_rate_mps"], 150.0)
+                self.assertEqual(
+                    policy_suite["run_artifacts"][0]["compare_png"],
+                    "output/ppc_spp_policy_suite/tokyo_compare.png",
+                )
                 self.assertEqual(len(overview["visibility_summaries"]), 1)
                 self.assertEqual(overview["visibility_summaries"][0]["rows_written"], 27)
                 self.assertEqual(overview["visibility_summaries"][0]["unique_satellites"], 9)
                 self.assertEqual(overview["visibility_summaries"][0]["csv_path"], "output/visibility_static.csv")
                 self.assertEqual(overview["visibility_summaries"][0]["png_path"], "output/visibility_static.png")
-                self.assertEqual(len(overview["artifact_manifest"]), 5)
+                self.assertEqual(len(overview["artifact_manifest"]), 6)
                 manifest_categories = {entry["category"] for entry in overview["artifact_manifest"]}
                 self.assertIn("moving-base", manifest_categories)
                 self.assertIn("ppp-products", manifest_categories)
                 self.assertIn("visibility", manifest_categories)
+                self.assertIn("ppc-spp-policy-suite", manifest_categories)
                 ppc_bundle = next(entry for entry in overview["artifact_manifest"] if entry["category"] == "ppc")
                 self.assertEqual(ppc_bundle["artifacts"]["commercial_solution"], "output/ppc_commercial_receiver.csv")
+                policy_suite_bundle = next(
+                    entry for entry in overview["artifact_manifest"]
+                    if entry["category"] == "ppc-spp-policy-suite"
+                )
+                self.assertEqual(policy_suite_bundle["status"], "passed")
+                self.assertEqual(policy_suite_bundle["artifacts"]["policy_csv"], "output/ppc_spp_policy_suite/adaptive_policy_report.csv")
                 moving_base_bundle = next(
                     entry for entry in overview["artifact_manifest"] if entry["category"] == "moving-base"
                 )
@@ -12468,6 +13231,96 @@ class CLIToolsTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            suite_dir = output_dir / "ppc_spp_policy_suite"
+            suite_dir.mkdir()
+            policy_report_path = suite_dir / "adaptive_policy_report.json"
+            policy_csv_path = suite_dir / "adaptive_policy_report.csv"
+            suite_summary_path = suite_dir / "adaptive_suite_summary.json"
+            policy_report_path.write_text(
+                json.dumps(
+                    {
+                        "sweep_count": 2,
+                        "checks": {
+                            "max_p95_delta_m": 0.0,
+                            "max_positioning_drop_pct": 1.0,
+                            "passed": True,
+                            "failures": [],
+                        },
+                        "runs": [
+                            {
+                                "label": "tokyo_run1",
+                                "selected_rate_mps": 150.0,
+                                "selected_min_jump_m": 50.0,
+                                "policy_positioning_rate_pct": 98.15,
+                                "positioning_drop_pct": 0.97,
+                                "policy_p95_h_m": 18.84,
+                                "p95_h_delta_m": -1.43,
+                                "jump_gate_rejected_epochs": 137,
+                                "bridge_inserted_epochs": 21,
+                            },
+                            {
+                                "label": "nagoya_run1",
+                                "selected_rate_mps": 50.0,
+                                "selected_min_jump_m": 40.0,
+                                "policy_positioning_rate_pct": 97.69,
+                                "positioning_drop_pct": 0.96,
+                                "policy_p95_h_m": 9.89,
+                                "p95_h_delta_m": -0.58,
+                                "jump_gate_rejected_epochs": 86,
+                                "bridge_inserted_epochs": 12,
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            policy_csv_path.write_text("label,p95_h_delta_m\n", encoding="utf-8")
+            suite_summary_path.write_text(
+                json.dumps(
+                    {
+                        "dry_run": False,
+                        "run_count": 2,
+                        "output_dir": str(suite_dir),
+                        "prefix": "adaptive",
+                        "rates_mps": "25,50,75,100,150,200",
+                        "min_jumps_m": "10,20,30,40,50",
+                        "bridge_max_gap_s": 5.0,
+                        "bridge_max_anchor_speed_mps": 10.0,
+                        "max_positioning_drop_pct": 1.0,
+                        "max_p95_delta_m": 0.0,
+                        "policy_report_json": str(policy_report_path),
+                        "policy_report_csv": str(policy_csv_path),
+                        "runs": [
+                            {
+                                "label": "tokyo_run1",
+                                "reference_csv": str(output_dir / "tokyo_reference.csv"),
+                                "input_pos": str(output_dir / "tokyo_input.pos"),
+                                "baseline_pos": str(output_dir / "tokyo_baseline.pos"),
+                                "sweep_json": str(suite_dir / "tokyo_sweep.json"),
+                                "sweep_csv": str(suite_dir / "tokyo_sweep.csv"),
+                                "filtered_pos": str(suite_dir / "tokyo_policy.pos"),
+                                "compare_summary_json": str(suite_dir / "tokyo_compare.json"),
+                                "compare_csv": str(suite_dir / "tokyo_compare.csv"),
+                                "compare_matched_csv": str(suite_dir / "tokyo_compare_matches.csv"),
+                                "compare_png": str(suite_dir / "tokyo_compare.png"),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (suite_dir / "adaptive_dry_run_suite_summary.json").write_text(
+                json.dumps(
+                    {
+                        "dry_run": True,
+                        "run_count": 2,
+                        "prefix": "adaptive_dry_run",
+                        "policy_report_json": str(suite_dir / "missing_policy_report.json"),
+                        "runs": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
             result = subprocess.run(
                 [
                     sys.executable,
@@ -12485,9 +13338,9 @@ class CLIToolsTest(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-            self.assertEqual(payload["bundle_count"], 2)
+            self.assertEqual(payload["bundle_count"], 3)
             categories = {entry["category"] for entry in payload["bundles"]}
-            self.assertEqual(categories, {"moving-base", "ppp-products"})
+            self.assertEqual(categories, {"moving-base", "ppp-products", "ppc-spp-policy-suite"})
             moving_base_entry = next(entry for entry in payload["bundles"] if entry["category"] == "moving-base")
             self.assertEqual(moving_base_entry["artifacts"]["input_url"], "https://example.com/scorpion.zip")
             self.assertEqual(moving_base_entry["artifacts"]["matched_csv"], "output/scorpion_moving_base_matches.csv")
@@ -12506,6 +13359,24 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(ppp_entry["artifacts"]["comparison_png"], "output/ppp_static_products_comparison.png")
             self.assertEqual(ppp_entry["metrics"]["common_epoch_pairs"], 42)
             self.assertEqual(ppp_entry["comparison_status"], "better")
+            policy_suite_entry = next(
+                entry for entry in payload["bundles"]
+                if entry["category"] == "ppc-spp-policy-suite"
+            )
+            self.assertEqual(policy_suite_entry["status"], "passed")
+            self.assertEqual(policy_suite_entry["comparison_status"], "better")
+            self.assertEqual(
+                policy_suite_entry["artifacts"]["policy_report"],
+                "output/ppc_spp_policy_suite/adaptive_policy_report.json",
+            )
+            self.assertEqual(
+                policy_suite_entry["artifacts"]["runs"][0]["compare_png"],
+                "output/ppc_spp_policy_suite/tokyo_compare.png",
+            )
+            self.assertEqual(policy_suite_entry["metrics"]["run_count"], 2)
+            self.assertEqual(policy_suite_entry["metrics"]["worst_p95_h_delta_m"], -0.58)
+            self.assertEqual(policy_suite_entry["metrics"]["worst_positioning_drop_pct"], 0.97)
+            self.assertEqual(policy_suite_entry["metrics"]["runs"][0]["selected_rate_mps"], 150.0)
 
     def test_live_reports_missing_rtcm_source_path_clearly(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_live_missing_source_") as temp_dir:

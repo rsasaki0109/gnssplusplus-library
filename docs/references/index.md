@@ -52,6 +52,7 @@ The rule is simple:
 - [PocketSDR notes](pocketsdr-notes.md)
 - [SignalSim notes](signalsim-notes.md)
 - [GSILIB notes](gsilib-notes.md)
+- [SPP accuracy improvement plan](spp-accuracy-improvement.md)
 - [Upstream adoption roadmap](roadmap.md)
 
 ## What "done" means here

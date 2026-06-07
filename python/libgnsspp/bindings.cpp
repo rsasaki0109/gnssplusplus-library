@@ -407,6 +407,36 @@ PYBIND11_MODULE(_libgnsspp, m) {
         .def_property_readonly("num_satellites", [](const libgnss::PositionSolution& solution) {
             return solution.num_satellites;
         })
+        .def_property_readonly("spp_ionosphere_free_measurements", [](const libgnss::PositionSolution& solution) {
+            return solution.spp_ionosphere_free_measurements;
+        })
+        .def_property_readonly("spp_precise_orbit_clock_measurements", [](const libgnss::PositionSolution& solution) {
+            return solution.spp_precise_orbit_clock_measurements;
+        })
+        .def_property_readonly("spp_ssr_orbit_clock_corrections", [](const libgnss::PositionSolution& solution) {
+            return solution.spp_ssr_orbit_clock_corrections;
+        })
+        .def_property_readonly("spp_ssr_code_bias_corrections", [](const libgnss::PositionSolution& solution) {
+            return solution.spp_ssr_code_bias_corrections;
+        })
+        .def_property_readonly("spp_ionex_corrections", [](const libgnss::PositionSolution& solution) {
+            return solution.spp_ionex_corrections;
+        })
+        .def_property_readonly("spp_dcb_corrections", [](const libgnss::PositionSolution& solution) {
+            return solution.spp_dcb_corrections;
+        })
+        .def_property_readonly("spp_robust_weighted_measurements", [](const libgnss::PositionSolution& solution) {
+            return solution.spp_robust_weighted_measurements;
+        })
+        .def_property_readonly("spp_adaptive_robust_activations", [](const libgnss::PositionSolution& solution) {
+            return solution.spp_adaptive_robust_activations;
+        })
+        .def_property_readonly("spp_adaptive_robust_tail_measurements", [](const libgnss::PositionSolution& solution) {
+            return solution.spp_adaptive_robust_tail_measurements;
+        })
+        .def_property_readonly("spp_position_jump_gate_rejections", [](const libgnss::PositionSolution& solution) {
+            return solution.spp_position_jump_gate_rejections;
+        })
         .def_property_readonly("satellites_used", [](const libgnss::PositionSolution& solution) {
             std::vector<std::string> satellites;
             satellites.reserve(solution.satellites_used.size());
@@ -435,6 +465,35 @@ PYBIND11_MODULE(_libgnsspp, m) {
             result["status_name"] = solutionStatusName(solution.status);
             result["position_ecef_m"] = vectorToArray(solution.position_ecef);
             result["num_satellites"] = solution.num_satellites;
+            result["spp_ionosphere_free_measurements"] =
+                solution.spp_ionosphere_free_measurements;
+            result["spp_precise_orbit_clock_measurements"] =
+                solution.spp_precise_orbit_clock_measurements;
+            result["spp_ssr_orbit_clock_corrections"] =
+                solution.spp_ssr_orbit_clock_corrections;
+            result["spp_ssr_code_bias_corrections"] =
+                solution.spp_ssr_code_bias_corrections;
+            result["spp_ssr_orbit_meters"] = solution.spp_ssr_orbit_meters;
+            result["spp_ssr_clock_meters"] = solution.spp_ssr_clock_meters;
+            result["spp_ssr_code_bias_meters"] =
+                solution.spp_ssr_code_bias_meters;
+            result["spp_ionex_corrections"] = solution.spp_ionex_corrections;
+            result["spp_dcb_corrections"] = solution.spp_dcb_corrections;
+            result["spp_ionex_meters"] = solution.spp_ionex_meters;
+            result["spp_dcb_meters"] = solution.spp_dcb_meters;
+            result["spp_robust_weighted_measurements"] =
+                solution.spp_robust_weighted_measurements;
+            result["spp_adaptive_robust_activations"] =
+                solution.spp_adaptive_robust_activations;
+            result["spp_adaptive_robust_tail_measurements"] =
+                solution.spp_adaptive_robust_tail_measurements;
+            result["spp_min_robust_weight_factor"] =
+                solution.spp_min_robust_weight_factor;
+            result["spp_position_jump_gate_rejections"] =
+                solution.spp_position_jump_gate_rejections;
+            result["spp_position_jump_m"] = solution.spp_position_jump_m;
+            result["spp_position_jump_rate_mps"] =
+                solution.spp_position_jump_rate_mps;
             result["ratio"] = solution.ratio;
             result["num_fixed_ambiguities"] = solution.num_fixed_ambiguities;
             return result;
@@ -525,8 +584,11 @@ PYBIND11_MODULE(_libgnsspp, m) {
         .def_readonly("satellite_ecef", &libgnss::SPPProcessor::CorrectedMeasurement::satellite_ecef)
         .def_readonly("corrected_pseudorange", &libgnss::SPPProcessor::CorrectedMeasurement::corrected_pseudorange)
         .def_readonly("weight", &libgnss::SPPProcessor::CorrectedMeasurement::weight)
+        .def_readonly("variance", &libgnss::SPPProcessor::CorrectedMeasurement::variance)
         .def_readonly("elevation", &libgnss::SPPProcessor::CorrectedMeasurement::elevation)
-        .def_readonly("system_id", &libgnss::SPPProcessor::CorrectedMeasurement::system_id);
+        .def_readonly("system_id", &libgnss::SPPProcessor::CorrectedMeasurement::system_id)
+        .def_readonly("ionosphere_free",
+                      &libgnss::SPPProcessor::CorrectedMeasurement::ionosphere_free);
 
     m.def("preprocess_spp_file",
           [](const std::string& obs_path, const std::string& nav_path, size_t max_epochs) {

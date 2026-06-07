@@ -97,7 +97,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--solver",
-        choices=("rtk", "ppp"),
+        choices=("rtk", "spp", "ppp"),
         default="rtk",
         help="libgnss++ solver path to run against the PPC data.",
     )
@@ -145,10 +145,10 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional solver wall time in seconds. If omitted, actual runtime is recorded when the solver is executed.",
     )
-    parser.add_argument("--sp3", type=Path, default=None, help="Optional SP3 precise orbit file for PPP.")
-    parser.add_argument("--clk", type=Path, default=None, help="Optional CLK precise clock file for PPP.")
-    parser.add_argument("--ionex", type=Path, default=None, help="Optional IONEX TEC map file for PPP.")
-    parser.add_argument("--dcb", type=Path, default=None, help="Optional DCB / Bias-SINEX file for PPP.")
+    parser.add_argument("--sp3", type=Path, default=None, help="Optional SP3 precise orbit file for PPP/SPP.")
+    parser.add_argument("--clk", type=Path, default=None, help="Optional CLK precise clock file for PPP/SPP.")
+    parser.add_argument("--ionex", type=Path, default=None, help="Optional IONEX TEC map file for PPP/SPP.")
+    parser.add_argument("--dcb", type=Path, default=None, help="Optional DCB / Bias-SINEX file for PPP/SPP.")
     parser.add_argument("--antex", type=Path, default=None, help="Optional ANTEX file for PPP.")
     parser.add_argument("--blq", type=Path, default=None, help="Optional BLQ loading coefficients for PPP.")
     parser.add_argument(
@@ -156,6 +156,75 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional gnss ppp summary JSON output path when --solver ppp is executed.",
+    )
+    parser.add_argument(
+        "--spp-summary-json",
+        type=Path,
+        default=None,
+        help="Optional gnss spp summary JSON output path when --solver spp is executed.",
+    )
+    parser.add_argument(
+        "--ssr",
+        type=Path,
+        default=None,
+        help="Optional SSR CSV product file for SPP.",
+    )
+    parser.add_argument(
+        "--iflc",
+        action="store_true",
+        help="Pass gnss spp --ionosphere-free when --solver spp.",
+    )
+    parser.add_argument(
+        "--robust-weighting",
+        action="store_true",
+        help="Pass gnss spp --robust-weighting when --solver spp.",
+    )
+    parser.add_argument(
+        "--robust-threshold-sigma",
+        type=float,
+        default=None,
+        help="Pass gnss spp --robust-threshold-sigma when --solver spp.",
+    )
+    parser.add_argument(
+        "--robust-min-weight",
+        type=float,
+        default=None,
+        help="Pass gnss spp --robust-min-weight when --solver spp.",
+    )
+    parser.add_argument(
+        "--adaptive-robust-weighting",
+        action="store_true",
+        help="Pass gnss spp --adaptive-robust-weighting when --solver spp.",
+    )
+    parser.add_argument(
+        "--adaptive-robust-activation-threshold-sigma",
+        type=float,
+        default=None,
+        help="Pass gnss spp --adaptive-robust-activation-threshold-sigma when --solver spp.",
+    )
+    parser.add_argument(
+        "--adaptive-robust-min-tail-measurements",
+        type=int,
+        default=None,
+        help="Pass gnss spp --adaptive-robust-min-tail-measurements when --solver spp.",
+    )
+    parser.add_argument(
+        "--adaptive-robust-min-tail-fraction",
+        type=float,
+        default=None,
+        help="Pass gnss spp --adaptive-robust-min-tail-fraction when --solver spp.",
+    )
+    parser.add_argument(
+        "--max-position-jump-rate-mps",
+        type=float,
+        default=None,
+        help="Pass gnss spp --max-position-jump-rate-mps when --solver spp.",
+    )
+    parser.add_argument(
+        "--max-position-jump-min-m",
+        type=float,
+        default=None,
+        help="Pass gnss spp --max-position-jump-min-m when --solver spp.",
     )
     parser.add_argument(
         "--preset",
@@ -1062,6 +1131,8 @@ def dataset_label(args: argparse.Namespace, run_dir: Path) -> tuple[str, str, st
 
 
 def solver_fixed_status(solver: str) -> int:
+    if solver == "spp":
+        return 1
     if solver == "ppp":
         return 6
     return 4
@@ -1445,6 +1516,64 @@ def run_solver(
                 "--fixed-bridge-burst-max-segment-epochs",
                 str(args.fixed_bridge_burst_max_segment_epochs),
             ])
+    elif args.solver == "spp":
+        command = [
+            *gnss_command,
+            "spp",
+            "--obs",
+            str(rover),
+            "--nav",
+            str(nav),
+            "--out",
+            str(out),
+        ]
+        if args.sp3 is not None:
+            command.extend(["--sp3", str(args.sp3)])
+        if args.clk is not None:
+            command.extend(["--clk", str(args.clk)])
+        if args.ssr is not None:
+            command.extend(["--ssr", str(args.ssr)])
+        if args.ionex is not None:
+            command.extend(["--ionex", str(args.ionex)])
+        if args.dcb is not None:
+            command.extend(["--dcb", str(args.dcb)])
+        if args.iflc:
+            command.append("--ionosphere-free")
+        if args.robust_weighting:
+            command.append("--robust-weighting")
+        if args.robust_threshold_sigma is not None:
+            command.extend(["--robust-threshold-sigma", str(args.robust_threshold_sigma)])
+        if args.robust_min_weight is not None:
+            command.extend(["--robust-min-weight", str(args.robust_min_weight)])
+        if args.adaptive_robust_weighting:
+            command.append("--adaptive-robust-weighting")
+        if args.adaptive_robust_activation_threshold_sigma is not None:
+            command.extend([
+                "--adaptive-robust-activation-threshold-sigma",
+                str(args.adaptive_robust_activation_threshold_sigma),
+            ])
+        if args.adaptive_robust_min_tail_measurements is not None:
+            command.extend([
+                "--adaptive-robust-min-tail-measurements",
+                str(args.adaptive_robust_min_tail_measurements),
+            ])
+        if args.adaptive_robust_min_tail_fraction is not None:
+            command.extend([
+                "--adaptive-robust-min-tail-fraction",
+                str(args.adaptive_robust_min_tail_fraction),
+            ])
+        if args.max_position_jump_rate_mps is not None:
+            command.extend([
+                "--max-position-jump-rate-mps",
+                str(args.max_position_jump_rate_mps),
+            ])
+        if args.max_position_jump_min_m is not None:
+            command.extend([
+                "--max-position-jump-min-m",
+                str(args.max_position_jump_min_m),
+            ])
+        if args.spp_summary_json is not None:
+            command.extend(["--summary-json", str(args.spp_summary_json)])
     else:
         command = [
             *gnss_command,
@@ -1756,6 +1885,78 @@ def build_summary_payload(
                     "dcb_meters": rounded(float(ppp_run_summary.get("dcb_meters", 0.0))),
                 }
             )
+    if args.solver == "spp" and args.spp_summary_json is not None and args.spp_summary_json.exists():
+        spp_run_summary = json.loads(args.spp_summary_json.read_text(encoding="utf-8"))
+        if isinstance(spp_run_summary, dict):
+            payload.update(
+                {
+                    "spp_run_summary": spp_run_summary,
+                    "spp_solution_rate_pct": rounded(
+                        100.0 * float(spp_run_summary.get("availability_rate", 0.0))
+                    ),
+                    "spp_mean_residual_rms_m": rounded(
+                        float(spp_run_summary.get("mean_residual_rms_m", 0.0))
+                    ),
+                    "spp_outlier_rejections": int(
+                        spp_run_summary.get("spp_qc", {}).get("outlier_rejections", 0)
+                    ),
+                    "spp_raim_fde_rejections": int(
+                        spp_run_summary.get("spp_qc", {}).get("raim_fde_rejections", 0)
+                    ),
+                    "spp_position_jump_gate_rejections": int(
+                        spp_run_summary.get("spp_qc", {}).get(
+                            "position_jump_gate_rejections", 0
+                        )
+                    ),
+                    "spp_robust_weighted_measurements": int(
+                        spp_run_summary.get("spp_qc", {}).get(
+                            "robust_weighted_measurements", 0
+                        )
+                    ),
+                    "spp_adaptive_robust_activations": int(
+                        spp_run_summary.get("spp_qc", {}).get(
+                            "adaptive_robust_activations", 0
+                        )
+                    ),
+                    "spp_adaptive_robust_tail_measurements": int(
+                        spp_run_summary.get("spp_qc", {}).get(
+                            "adaptive_robust_tail_measurements", 0
+                        )
+                    ),
+                    "spp_min_robust_weight_factor": rounded(
+                        float(
+                            spp_run_summary.get("spp_qc", {}).get(
+                                "min_robust_weight_factor", 1.0
+                            )
+                        )
+                    ),
+                    "spp_precise_orbit_clock_measurements": int(
+                        spp_run_summary.get("spp_qc", {}).get(
+                            "precise_orbit_clock_measurements", 0
+                        )
+                    ),
+                    "spp_ssr_orbit_clock_corrections": int(
+                        spp_run_summary.get("spp_qc", {}).get(
+                            "ssr_orbit_clock_corrections", 0
+                        )
+                    ),
+                    "spp_ssr_code_bias_corrections": int(
+                        spp_run_summary.get("spp_qc", {}).get("ssr_code_bias_corrections", 0)
+                    ),
+                    "ionex_corrections": int(
+                        spp_run_summary.get("spp_qc", {}).get("ionex_corrections", 0)
+                    ),
+                    "ionex_meters": rounded(
+                        float(spp_run_summary.get("spp_qc", {}).get("ionex_meters", 0.0))
+                    ),
+                    "dcb_corrections": int(
+                        spp_run_summary.get("spp_qc", {}).get("dcb_corrections", 0)
+                    ),
+                    "dcb_meters": rounded(
+                        float(spp_run_summary.get("spp_qc", {}).get("dcb_meters", 0.0))
+                    ),
+                }
+            )
 
     rtklib_pos = getattr(args, "rtklib_pos", None)
     if rtklib_pos is not None and Path(rtklib_pos).exists():
@@ -2031,25 +2232,31 @@ def main() -> int:
         ensure_input_exists(out, "existing solution file", ROOT_DIR)
         if args.solver == "ppp" and args.ppp_summary_json is not None:
             ensure_input_exists(args.ppp_summary_json, "existing PPP summary JSON", ROOT_DIR)
+        if args.solver == "spp" and args.spp_summary_json is not None:
+            ensure_input_exists(args.spp_summary_json, "existing SPP summary JSON", ROOT_DIR)
     else:
         ensure_input_exists(rover, "PPC rover observation file", ROOT_DIR)
         ensure_input_exists(nav, "PPC navigation file", ROOT_DIR)
         if base is not None:
             ensure_input_exists(base, "PPC base observation file", ROOT_DIR)
         if args.sp3 is not None:
-            ensure_input_exists(args.sp3, "PPP SP3 file", ROOT_DIR)
+            ensure_input_exists(args.sp3, "PPP/SPP SP3 file", ROOT_DIR)
         if args.clk is not None:
-            ensure_input_exists(args.clk, "PPP CLK file", ROOT_DIR)
+            ensure_input_exists(args.clk, "PPP/SPP CLK file", ROOT_DIR)
         if args.ionex is not None:
-            ensure_input_exists(args.ionex, "PPP IONEX file", ROOT_DIR)
+            ensure_input_exists(args.ionex, "PPP/SPP IONEX file", ROOT_DIR)
         if args.dcb is not None:
-            ensure_input_exists(args.dcb, "PPP DCB file", ROOT_DIR)
+            ensure_input_exists(args.dcb, "PPP/SPP DCB file", ROOT_DIR)
+        if args.ssr is not None:
+            ensure_input_exists(args.ssr, "SPP SSR file", ROOT_DIR)
         if args.antex is not None:
             ensure_input_exists(args.antex, "PPP ANTEX file", ROOT_DIR)
         if args.blq is not None:
             ensure_input_exists(args.blq, "PPP BLQ file", ROOT_DIR)
         if args.ppp_summary_json is not None:
             args.ppp_summary_json.parent.mkdir(parents=True, exist_ok=True)
+        if args.spp_summary_json is not None:
+            args.spp_summary_json.parent.mkdir(parents=True, exist_ok=True)
 
         out.parent.mkdir(parents=True, exist_ok=True)
         measured_wall_time_s = run_solver(args, rover, base, nav, out)
