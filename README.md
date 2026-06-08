@@ -90,6 +90,7 @@ cmake --build build -j
 python3 apps/gnss.py doctor
 python3 apps/gnss.py ros2-doctor --device /dev/ttyUSB0
 python3 apps/gnss.py ros2-bag-doctor --bag /path/to/rosbag --summary-json output/ros2_bag_doctor_summary.json
+python3 apps/gnss.py field-report --out output/field_report.md
 python3 apps/gnss.py robotics-smoke --profile realtime
 ```
 

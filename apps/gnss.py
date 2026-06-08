@@ -34,6 +34,11 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_ros2_bag_doctor.py"),
         "summary": "Inspect ROS2 GNSS bag topics, rates, gaps, and raw-binary replayability.",
     },
+    "field-report": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_field_report.py"),
+        "summary": "Aggregate setup, ROS2, bag, and robotics smoke diagnostics into Markdown/JSON reports.",
+    },
     "spp": {
         "kind": "binary",
         "target": "gnss_spp",

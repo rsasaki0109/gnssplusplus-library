@@ -148,6 +148,7 @@ def render_text(checks: list[dict[str, str]]) -> str:
             "  python3 apps/gnss.py robotics-smoke --profile realtime",
             "  python3 apps/gnss.py ros2-doctor --device /dev/ttyUSB0",
             "  python3 apps/gnss.py ros2-bag-doctor --bag <bag-directory>",
+            "  python3 apps/gnss.py field-report --out output/field_report.md",
             "  python3 apps/gnss.py web --port 8085 --root .",
             "  python3 -m mkdocs serve",
         ]
@@ -183,6 +184,7 @@ def main() -> int:
             "python3 apps/gnss.py robotics-smoke --profile realtime",
             "python3 apps/gnss.py ros2-doctor --device /dev/ttyUSB0",
             "python3 apps/gnss.py ros2-bag-doctor --bag <bag-directory>",
+            "python3 apps/gnss.py field-report --out output/field_report.md",
             "python3 apps/gnss.py web --port 8085 --root .",
             "python3 -m mkdocs serve",
         ],
