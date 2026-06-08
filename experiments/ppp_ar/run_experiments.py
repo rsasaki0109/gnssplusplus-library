@@ -760,7 +760,12 @@ def render_markdown(
 ) -> str:
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     first_case = suite.cases[0]
-    resolved_strategy_path = strategy_path.resolve()
+    strategy_path_label = strategy_path.as_posix()
+    if strategy_path.is_absolute():
+        try:
+            strategy_path_label = strategy_path.resolve().relative_to(ROOT_DIR).as_posix()
+        except ValueError:
+            strategy_path_label = strategy_path.resolve().as_posix()
     lines = [
         "# PPP-AR Experiments",
         "",
@@ -774,7 +779,7 @@ def render_markdown(
         f"- Suite: `{suite.label}`",
         f"- Cases: `{len(suite.cases)}`",
         f"- Primary mode: `{first_case.mode}`",
-        f"- Shared strategy catalog: `{resolved_strategy_path.relative_to(ROOT_DIR)}`",
+        f"- Shared strategy catalog: `{strategy_path_label}`",
         f"- Shared output schema: `wall_time_s`, `ppp_solution_rate_pct`, `ppp_fixed_solutions`, `fallback_solutions`, `clas_hybrid_fallback_epochs`, `mean_3d_error_m`, `median_3d_error_m`, `p95_3d_error_m`, `max_3d_error_m`, `readability_score`, `extensibility_score`",
         "",
         "## Suite Summary",
