@@ -56,6 +56,7 @@ class WebUISmokeTest(unittest.TestCase):
             robotics_summary = temp_root / "output" / "robotics_smoke" / "tokyo_run1_rtk_realtime.json"
             robotics_failed_summary = temp_root / "output" / "robotics_smoke" / "tokyo_run1_rtk_quick_failed.json"
             robotics_pos = temp_root / "output" / "robotics_smoke" / "tokyo_run1_rtk_realtime.pos"
+            ros2_bag_summary = temp_root / "output" / "ros2_bag_doctor_summary.json"
             ppc_summary = temp_root / "output" / "ppc_tokyo_run1_rtk_summary.json"
             ppc_commercial = temp_root / "output" / "ppc_commercial_receiver.csv"
             ppc_commercial_matches = temp_root / "output" / "ppc_commercial_receiver_matches.csv"
@@ -229,6 +230,65 @@ class WebUISmokeTest(unittest.TestCase):
                             "preset": "low-cost",
                             "ratio": 2.4,
                             "arfilter": True,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            ros2_bag_summary.write_text(
+                json.dumps(
+                    {
+                        "tool": "ros2-bag-doctor",
+                        "bag": str(temp_root / "output" / "field_bag"),
+                        "status": "ready",
+                        "ok": True,
+                        "replayable_raw_binary": True,
+                        "message_count": 9,
+                        "topic_count": 3,
+                        "duration_s": 3.0,
+                        "topic_status": {
+                            "raw_binary": {
+                                "status": "ok",
+                                "topic": "/gnss/raw_binary",
+                                "message_count": 3,
+                                "mean_rate_hz": 5.0,
+                                "gap_count": 0,
+                            },
+                            "raw": {
+                                "status": "ok",
+                                "topic": "/gnss/raw",
+                                "message_count": 3,
+                                "mean_rate_hz": 5.0,
+                                "gap_count": 0,
+                            },
+                            "fix": {
+                                "status": "ok",
+                                "topic": "/gnss/fix",
+                                "message_count": 3,
+                                "mean_rate_hz": 0.667,
+                                "gap_count": 1,
+                            },
+                        },
+                        "topics": [
+                            {
+                                "name": "/gnss/raw_binary",
+                                "type": "std_msgs/msg/UInt8MultiArray",
+                                "message_count": 3,
+                                "mean_rate_hz": 5.0,
+                                "max_gap_s": 0.2,
+                                "gap_count": 0,
+                            },
+                            {
+                                "name": "/gnss/fix",
+                                "type": "sensor_msgs/msg/NavSatFix",
+                                "message_count": 3,
+                                "mean_rate_hz": 0.667,
+                                "max_gap_s": 2.8,
+                                "gap_count": 1,
+                            },
+                        ],
+                        "commands": {
+                            "decode": "ros2 run gnss_raw_driver gnss_bag_processor_node --ros-args -p protocol:=auto",
                         },
                     }
                 ),
@@ -520,6 +580,13 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("why: effective epoch rate 4.900000 Hz < 5.000000 Hz", page.locator("#robotics-smoke-table tbody").text_content())
                     self.assertIn("cmd:", page.locator("#robotics-smoke-table tbody").text_content())
                     self.assertIn("1/2", page.locator("#robotics-smoke-metrics").text_content())
+                    self.assertIn("ROS2 bag doctor", page.locator("body").text_content())
+                    self.assertIn("ros2_bag_doctor_summary.json", page.locator("#ros2-bag-table tbody").text_content())
+                    self.assertIn("/gnss/raw_binary", page.locator("#ros2-bag-table tbody").text_content())
+                    self.assertIn("available", page.locator("#ros2-bag-table tbody").text_content())
+                    self.assertIn("/gnss/fix: 1 gap(s), max 2.800 s", page.locator("#ros2-bag-table tbody").text_content())
+                    self.assertIn("decode:", page.locator("#ros2-bag-table tbody").text_content())
+                    self.assertIn("1/1", page.locator("#ros2-bag-metrics").text_content())
                     self.assertEqual(page.locator("canvas").count(), 5)
                     self.assertIn("FIXED", page.locator("#status-legend").text_content())
                     self.assertIn("ppc_tokyo_run1_rtk_summary.json", page.locator("#ppc-table tbody").text_content())

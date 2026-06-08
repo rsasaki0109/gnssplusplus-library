@@ -110,6 +110,11 @@ def parse_args() -> argparse.Namespace:
         help="Glob under --root for gnss robotics-smoke summary JSON files.",
     )
     parser.add_argument(
+        "--ros2-bag-summary-glob",
+        default="output/ros2_bag*_summary.json",
+        help="Glob under --root for gnss ros2-bag-doctor summary JSON files.",
+    )
+    parser.add_argument(
         "--visibility-summary-glob",
         default="output/visibility*_summary.json",
         help="Glob under --root for gnss visibility summary JSON files.",
@@ -324,6 +329,17 @@ def classify_robotics_smoke_status(payload: dict[str, Any]) -> str:
     if not checks:
         return "n/a"
     return "passed" if all(checks) else "failed"
+
+
+def classify_ros2_bag_status(payload: dict[str, Any]) -> str:
+    status = payload.get("status")
+    if status in ("ready", "partial", "missing"):
+        return str(status)
+    if payload.get("replayable_raw_binary") is True:
+        return "ready"
+    if payload.get("message_count"):
+        return "partial"
+    return "missing"
 
 
 def downsample_points(points: list[dict[str, Any]], limit: int = MAX_RENDER_POINTS) -> list[dict[str, Any]]:
@@ -551,6 +567,41 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
 
+    ros2_bag_summaries: list[dict[str, Any]] = []
+    for path in sorted(root_dir.glob(args.ros2_bag_summary_glob)):
+        payload = load_json(path)
+        if payload is None:
+            continue
+        if payload.get("tool") not in (None, "ros2-bag-doctor"):
+            continue
+        topic_status = payload.get("topic_status")
+        if not isinstance(topic_status, dict):
+            topic_status = {}
+        topics = payload.get("topics")
+        if not isinstance(topics, list):
+            topics = []
+        gap_topics = [
+            topic
+            for topic in topics
+            if isinstance(topic, dict) and isinstance(topic.get("gap_count"), int) and topic["gap_count"] > 0
+        ]
+        ros2_bag_summaries.append(
+            {
+                "_path": relative_display(path, root_dir),
+                "summary_path": relative_display(path, root_dir),
+                "bag": normalize_artifact_path(root_dir, payload.get("bag")),
+                "status": classify_ros2_bag_status(payload),
+                "replayable_raw_binary": payload.get("replayable_raw_binary"),
+                "message_count": payload.get("message_count"),
+                "topic_count": payload.get("topic_count"),
+                "duration_s": payload.get("duration_s"),
+                "topic_status": topic_status,
+                "topics": topics,
+                "gap_topic_count": len(gap_topics),
+                "commands": payload.get("commands") if isinstance(payload.get("commands"), dict) else {},
+            }
+        )
+
     visibility_summaries: list[dict[str, Any]] = []
     for path in sorted(root_dir.glob(args.visibility_summary_glob)):
         payload = load_json(path)
@@ -717,6 +768,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         "ppc_summaries": ppc_summaries,
         "live_summaries": live_summaries,
         "robotics_summaries": robotics_summaries,
+        "ros2_bag_summaries": ros2_bag_summaries,
         "visibility_summaries": visibility_summaries,
         "moving_base_summaries": moving_base_summaries,
         "ppp_products_summaries": ppp_products_summaries,
@@ -847,7 +899,17 @@ def render_html() -> str:
       color: #0f7a43;
       border-color: rgba(46, 204, 113, 0.28);
     }
-    .badge.failed {
+    .badge.ready, .badge.ok {
+      background: rgba(46, 204, 113, 0.14);
+      color: #0f7a43;
+      border-color: rgba(46, 204, 113, 0.28);
+    }
+    .badge.partial, .badge.warn {
+      background: rgba(243, 156, 18, 0.16);
+      color: #9a5f00;
+      border-color: rgba(243, 156, 18, 0.26);
+    }
+    .badge.failed, .badge.missing {
       background: rgba(231, 76, 60, 0.12);
       color: #b03a2e;
       border-color: rgba(231, 76, 60, 0.24);
@@ -990,6 +1052,29 @@ def render_html() -> str:
             <th>Rate</th>
             <th>Wall / span</th>
             <th>Fix / quality</th>
+            <th>Debug</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card" style="margin-top: 18px;">
+      <div class="section-title">
+        <h2>ROS2 bag doctor</h2>
+        <span class="tiny">auto-discovered from output/ros2_bag*_summary.json</span>
+      </div>
+      <div class="metrics" id="ros2-bag-metrics"></div>
+      <table id="ros2-bag-table">
+        <thead>
+          <tr>
+            <th>Bag</th>
+            <th>Status</th>
+            <th>Messages</th>
+            <th>Duration</th>
+            <th>Raw binary</th>
+            <th>Fix</th>
+            <th>Gaps</th>
             <th>Debug</th>
           </tr>
         </thead>
@@ -1568,6 +1653,34 @@ def render_html() -> str:
       return `<span class="debug-lines">${lines.map((line) => `<span>${line}</span>`).join("")}</span>`;
     }
 
+    function ros2BagTopicSummary(topic) {
+      if (!topic) return "missing";
+      const bits = [
+        topic.topic || "n/a",
+        `${topic.message_count ?? 0} msgs`,
+        topic.mean_rate_hz !== null && topic.mean_rate_hz !== undefined ? formatMaybeNumber(topic.mean_rate_hz, 3, " Hz") : null,
+      ].filter(Boolean);
+      return bits.join(" / ");
+    }
+
+    function ros2BagGapDebug(row) {
+      const topics = Array.isArray(row.topics) ? row.topics : [];
+      const gapTopics = topics.filter((topic) => (topic.gap_count || 0) > 0);
+      const lines = [];
+      for (const topic of gapTopics.slice(0, 4)) {
+        lines.push(`${topic.name}: ${topic.gap_count} gap(s), max ${formatMaybeNumber(topic.max_gap_s, 3, " s")}`);
+      }
+      const commands = row.commands || {};
+      if (commands.decode) {
+        const commandText = commands.decode;
+        lines.push(`decode: ${commandText.length > 180 ? commandText.slice(0, 180) + " ..." : commandText}`);
+      }
+      if (!row.replayable_raw_binary) {
+        lines.unshift("why: /gnss/raw_binary is missing or empty");
+      }
+      return `<span class="debug-lines">${lines.map((line) => `<span>${line}</span>`).join("")}</span>`;
+    }
+
     function bundleMetricSummary(bundle) {
       if (!bundle || !bundle.metrics) return "";
       const metrics = bundle.metrics;
@@ -1807,6 +1920,43 @@ def render_html() -> str:
           <td>fix ${formatMaybeNumber(row.fix_rate_pct, 2, "%")}<br><span class="tiny">p95 H ${formatMaybeNumber(row.p95_h_m, 3, " m")} / ${renderBadge(row.quality_status)}</span></td>
           <td>${roboticsThresholdDebug(row)}</td>`;
         roboticsBody.appendChild(tr);
+      }
+
+      const ros2BagRows = overview.ros2_bag_summaries || [];
+      const ros2BagReady = ros2BagRows.filter((row) => row.status === "ready").length;
+      const ros2BagReplayable = ros2BagRows.filter((row) => row.replayable_raw_binary).length;
+      const ros2BagMaxGap = ros2BagRows
+        .flatMap((row) => Array.isArray(row.topics) ? row.topics : [])
+        .map((topic) => topic.max_gap_s)
+        .filter((value) => typeof value === "number")
+        .reduce((current, value) => Math.max(current, value), -Infinity);
+      renderMetricGrid(document.getElementById("ros2-bag-metrics"), [
+        ["bags", ros2BagRows.length],
+        ["ready", `${ros2BagReady}/${ros2BagRows.length}`],
+        ["raw replayable", `${ros2BagReplayable}/${ros2BagRows.length}`],
+        ["max gap", Number.isFinite(ros2BagMaxGap) ? formatMaybeNumber(ros2BagMaxGap, 3, " s") : "n/a"],
+      ]);
+      const ros2BagBody = document.querySelector("#ros2-bag-table tbody");
+      ros2BagBody.innerHTML = "";
+      for (const row of ros2BagRows) {
+        const topicStatus = row.topic_status || {};
+        const rawBinary = topicStatus.raw_binary || {};
+        const fix = topicStatus.fix || {};
+        const artifacts = [
+          artifactLink(row.summary_path || row._path, row._path || "summary"),
+          row.bag ? artifactLink(row.bag, "bag") : null,
+        ].filter(Boolean).join(" / ");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${row.bag || "ros2 bag"}<br><span class="tiny">${artifacts}</span></td>
+          <td>${renderBadge(row.status)} ${renderBadge(row.replayable_raw_binary ? "available" : "missing")}</td>
+          <td>${row.message_count ?? "n/a"}<br><span class="tiny">${row.topic_count ?? "n/a"} topic(s)</span></td>
+          <td>${formatMaybeNumber(row.duration_s, 3, " s")}</td>
+          <td>${renderBadge(rawBinary.status)}<br><span class="tiny">${ros2BagTopicSummary(rawBinary)}</span></td>
+          <td>${renderBadge(fix.status)}<br><span class="tiny">${ros2BagTopicSummary(fix)}</span></td>
+          <td>${row.gap_topic_count ?? 0} topic(s)</td>
+          <td>${ros2BagGapDebug(row)}</td>`;
+        ros2BagBody.appendChild(tr);
       }
 
       const ppcBody = document.querySelector("#ppc-table tbody");

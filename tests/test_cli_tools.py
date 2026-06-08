@@ -17,6 +17,7 @@ import threading
 import time
 import unittest
 import math
+import sqlite3
 import zlib
 import zipfile
 import http.server
@@ -68,6 +69,71 @@ def repo_data_exists(*relative_paths: str) -> bool:
 def ros2_bag_support_available() -> bool:
     required = ("rosbag2_py", "rclpy", "rosidl_runtime_py", "ublox_msgs")
     return all(importlib.util.find_spec(name) is not None for name in required)
+
+
+def build_synthetic_sqlite_rosbag(
+    bag_dir: Path,
+    *,
+    include_raw_binary: bool = True,
+    include_raw: bool = True,
+    include_fix: bool = True,
+) -> None:
+    bag_dir.mkdir(parents=True, exist_ok=True)
+    db_path = bag_dir / "synthetic_0.db3"
+    topic_specs = []
+    if include_raw_binary:
+        topic_specs.append(("/gnss/raw_binary", "std_msgs/msg/UInt8MultiArray", [1_000_000_000, 1_200_000_000, 1_400_000_000]))
+    if include_raw:
+        topic_specs.append(("/gnss/raw", "gnss_raw_driver/msg/GnssRawEpoch", [1_000_000_000, 1_200_000_000, 1_400_000_000]))
+    if include_fix:
+        topic_specs.append(("/gnss/fix", "sensor_msgs/msg/NavSatFix", [1_000_000_000, 1_200_000_000, 4_000_000_000]))
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "CREATE TABLE topics("
+            "id INTEGER PRIMARY KEY, "
+            "name TEXT NOT NULL, "
+            "type TEXT NOT NULL, "
+            "serialization_format TEXT NOT NULL, "
+            "offered_qos_profiles TEXT NOT NULL)"
+        )
+        connection.execute(
+            "CREATE TABLE messages("
+            "id INTEGER PRIMARY KEY, "
+            "topic_id INTEGER NOT NULL, "
+            "timestamp INTEGER NOT NULL, "
+            "data BLOB NOT NULL)"
+        )
+        message_id = 1
+        for topic_id, (name, msg_type, timestamps) in enumerate(topic_specs, start=1):
+            connection.execute(
+                "INSERT INTO topics(id, name, type, serialization_format, offered_qos_profiles) VALUES (?, ?, ?, ?, ?)",
+                (topic_id, name, msg_type, "cdr", ""),
+            )
+            for timestamp in timestamps:
+                connection.execute(
+                    "INSERT INTO messages(id, topic_id, timestamp, data) VALUES (?, ?, ?, ?)",
+                    (message_id, topic_id, timestamp, b"\x00\x01\x02"),
+                )
+                message_id += 1
+        connection.commit()
+
+    bag_dir.joinpath("metadata.yaml").write_text(
+        "\n".join(
+            [
+                "rosbag2_bagfile_information:",
+                "  version: 5",
+                "  storage_identifier: sqlite3",
+                f"  message_count: {message_id - 1}",
+                "  duration:",
+                "    nanoseconds: 3000000000",
+                "  starting_time:",
+                "    nanoseconds_since_epoch: 1000000000",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def write_pty_payload(
@@ -2935,6 +3001,59 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("serial device", check_names)
         self.assertIn("driver node binary", check_names)
         self.assertIn("launch file", check_names)
+
+    def test_ros2_bag_doctor_cli_reports_topics_rates_and_replayability(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ros2_bag_doctor_") as temp_dir:
+            bag_dir = Path(temp_dir) / "bag"
+            summary_json = Path(temp_dir) / "ros2_bag_doctor_summary.json"
+            build_synthetic_sqlite_rosbag(bag_dir)
+
+            result = self.run_gnss(
+                "ros2-bag-doctor",
+                "--bag",
+                str(bag_dir),
+                "--json",
+                "--summary-json",
+                str(summary_json),
+                "--gap-factor",
+                "1.0",
+                "--gap-min-s",
+                "0.5",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status"], "ready")
+            self.assertTrue(payload["replayable_raw_binary"])
+            self.assertEqual(payload["message_count"], 9)
+            self.assertEqual(payload["topic_status"]["raw_binary"]["status"], "ok")
+            self.assertEqual(payload["topic_status"]["raw"]["status"], "ok")
+            self.assertEqual(payload["topic_status"]["fix"]["status"], "ok")
+            self.assertEqual(payload["topic_status"]["fix"]["gap_count"], 1)
+            self.assertIn("decode", payload["commands"])
+            self.assertIn("gnss_bag_processor_node", payload["commands"]["decode"])
+            self.assertTrue(summary_json.exists())
+            written_summary = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(written_summary["topic_count"], 3)
+
+    def test_ros2_bag_doctor_strict_fails_without_raw_binary(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ros2_bag_doctor_missing_") as temp_dir:
+            bag_dir = Path(temp_dir) / "bag"
+            build_synthetic_sqlite_rosbag(bag_dir, include_raw_binary=False)
+
+            result = self.run_gnss(
+                "ros2-bag-doctor",
+                "--bag",
+                str(bag_dir),
+                "--json",
+                "--strict",
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status"], "partial")
+            self.assertFalse(payload["replayable_raw_binary"])
+            self.assertEqual(payload["topic_status"]["raw_binary"]["status"], "missing")
 
     def test_robotics_smoke_dry_run_includes_realtime_gates(self) -> None:
         result = self.run_gnss(
