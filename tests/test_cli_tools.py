@@ -3055,6 +3055,106 @@ class CLIToolsTest(unittest.TestCase):
             self.assertFalse(payload["replayable_raw_binary"])
             self.assertEqual(payload["topic_status"]["raw_binary"]["status"], "missing")
 
+    def test_field_report_aggregates_doctors_bag_and_robotics_summaries(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_field_report_") as temp_dir:
+            temp_root = Path(temp_dir)
+            output_dir = temp_root / "output"
+            bag_summary = output_dir / "ros2_bag_doctor_summary.json"
+            robotics_summary = output_dir / "robotics_smoke" / "realtime.json"
+            report_md = output_dir / "field_report.md"
+            report_json = output_dir / "field_report.json"
+
+            (temp_root / "apps").mkdir(parents=True)
+            (temp_root / "apps" / "gnss.py").write_text("# synthetic dispatcher\n", encoding="utf-8")
+            (temp_root / "CMakeLists.txt").write_text("cmake_minimum_required(VERSION 3.16)\n", encoding="utf-8")
+            (temp_root / "docs").mkdir()
+            for name in ("robotics_quickstart.md", "research_quickstart.md", "dataset_gallery.md"):
+                (temp_root / "docs" / name).write_text("# synthetic\n", encoding="utf-8")
+            (temp_root / "ros2" / "gnss_raw_driver" / "launch").mkdir(parents=True)
+            (temp_root / "ros2" / "gnss_raw_driver" / "launch" / "gnss_raw_driver.launch.py").write_text(
+                "# synthetic launch\n",
+                encoding="utf-8",
+            )
+            (temp_root / "ros2" / "gnss_raw_driver" / "msg").mkdir(parents=True)
+            (temp_root / "ros2" / "gnss_raw_driver" / "msg" / "GnssRawEpoch.msg").write_text(
+                "builtin_interfaces/Time stamp\n",
+                encoding="utf-8",
+            )
+            (temp_root / "ros2" / "gnss_raw_driver" / "msg" / "GnssRawObservation.msg").write_text(
+                "float64 pseudorange_m\n",
+                encoding="utf-8",
+            )
+
+            bag_summary.parent.mkdir(parents=True)
+            bag_summary.write_text(
+                json.dumps(
+                    {
+                        "tool": "ros2-bag-doctor",
+                        "bag": str(temp_root / "field_bag"),
+                        "status": "ready",
+                        "replayable_raw_binary": True,
+                        "message_count": 9,
+                        "topic_count": 3,
+                        "duration_s": 3.0,
+                        "topic_status": {
+                            "raw_binary": {"status": "ok", "message_count": 3},
+                            "fix": {"status": "ok", "message_count": 3},
+                        },
+                        "topics": [
+                            {"name": "/gnss/raw_binary", "message_count": 3, "gap_count": 0},
+                            {"name": "/gnss/fix", "message_count": 3, "gap_count": 1},
+                        ],
+                        "commands": {"decode": "ros2 run gnss_raw_driver gnss_bag_processor_node"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            robotics_summary.parent.mkdir(parents=True)
+            robotics_summary.write_text(
+                json.dumps(
+                    {
+                        "robotics_smoke_status": "passed",
+                        "robotics_smoke_profile": "realtime",
+                        "dataset": "synthetic",
+                        "matched_epochs": 200,
+                        "fix_rate_pct": 98.0,
+                        "positioning_rate_pct": 1.67,
+                        "realtime_factor": 1.25,
+                        "effective_epoch_rate_hz": 6.0,
+                        "solver_wall_time_s": 32.0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_gnss(
+                "field-report",
+                "--root",
+                str(temp_root),
+                "--out",
+                str(report_md),
+                "--json-out",
+                str(report_json),
+                "--device",
+                "/dev/gnsspp-missing-test-device",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(report_md.exists())
+            self.assertTrue(report_json.exists())
+            markdown = report_md.read_text(encoding="utf-8")
+            self.assertIn("libgnss++ Field Report", markdown)
+            self.assertIn("ROS2 Bag Diagnostics", markdown)
+            self.assertIn("Robotics Realtime Smoke", markdown)
+            self.assertIn("ros2_bag_doctor_summary.json", markdown)
+            self.assertIn("robotics_smoke/realtime.json", markdown)
+            payload = json.loads(report_json.read_text(encoding="utf-8"))
+            self.assertEqual(payload["tool"], "field-report")
+            self.assertEqual(len(payload["ros2_bags"]), 1)
+            self.assertEqual(len(payload["robotics_smoke"]), 1)
+            self.assertTrue(payload["ros2_bags"][0]["replayable_raw_binary"])
+            self.assertIn("python3 apps/gnss.py web", "\n".join(payload["next_actions"]))
+
     def test_robotics_smoke_dry_run_includes_realtime_gates(self) -> None:
         result = self.run_gnss(
             "robotics-smoke",

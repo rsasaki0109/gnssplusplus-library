@@ -9,6 +9,7 @@ Examples:
 - `gnss doctor`
 - `gnss ros2-doctor`
 - `gnss ros2-bag-doctor`
+- `gnss field-report`
 - `gnss robotics-smoke`
 - `gnss spp`
 - `gnss solve`

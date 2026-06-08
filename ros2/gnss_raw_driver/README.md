@@ -62,6 +62,15 @@ The bag doctor checks topic presence, message counts, estimated rates,
 timestamp gaps, and whether `/gnss/raw_binary` is present for replayable
 decoder research. The summary JSON is displayed by `gnss web`.
 
+Create a field handoff report:
+
+```bash
+python3 apps/gnss.py field-report --out output/field_report.md
+```
+
+This aggregates setup, ROS2, bag, and realtime-smoke diagnostics into one
+Markdown file plus a JSON report for issue attachments and research handoff.
+
 ## Offline bag processor
 
 Play a bag in one terminal:

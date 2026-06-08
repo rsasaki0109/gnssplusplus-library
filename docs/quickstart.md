@@ -63,6 +63,7 @@ python3 apps/gnss.py replay \
 | `gnss doctor` | Check local setup, built tools, dataset/docs readiness, Docker, and ROS2 hints |
 | `gnss ros2-doctor` | Check ROS2 receiver readiness, serial permissions, launch/record commands, and topic debug commands |
 | `gnss ros2-bag-doctor` | Inspect a ROS2 GNSS bag for required topics, message rates, timestamp gaps, and raw-binary replayability |
+| `gnss field-report` | Aggregate setup, ROS2, bag, and realtime-smoke diagnostics into Markdown and JSON handoff artifacts |
 | `gnss robotics-smoke` | Run PPC RTK `quick`, `realtime`, or `full` smoke profiles with runtime gates and debug reasons |
 | `gnss spp` | Batch SPP from rover/nav RINEX |
 | `gnss solve` | Batch RTK from rover/base/nav RINEX |
@@ -100,6 +101,19 @@ and shows pass/fail status, runtime gates, tuning knobs, and direct debug links.
 The ROS2 bag doctor panel auto-discovers `output/ros2_bag*_summary.json` and
 shows topic presence, message rates, timestamp gaps, and raw-binary replay
 readiness for field bags.
+
+Create a single handoff report after a field run:
+
+```bash
+python3 apps/gnss.py field-report \
+  --out output/field_report.md \
+  --json-out output/field_report.json
+```
+
+The report collects `gnss doctor`, `gnss ros2-doctor`, existing
+`ros2-bag-doctor` summaries, and existing `robotics-smoke` summaries. It is the
+artifact to attach when a field laptop, researcher, and robotics integrator
+need to discuss the same run.
 
 You can also store the same arguments in `configs/web.example.toml` and run:
 

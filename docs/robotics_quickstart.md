@@ -209,6 +209,18 @@ estimated rates, timestamp gaps, and whether `/gnss/raw_binary` is available
 for lossless decoder replay. Missing `/gnss/raw_binary` means researchers can
 still inspect `/gnss/fix`, but cannot replay improved decoders from the bag.
 
+Create a field handoff report:
+
+```bash
+python3 apps/gnss.py field-report \
+  --out output/field_report.md \
+  --json-out output/field_report.json
+```
+
+The report aggregates setup readiness, ROS2 launch/record diagnostics, bag
+doctor summaries, realtime smoke results, and next commands into one Markdown
+file plus a machine-readable JSON artifact.
+
 Decode a recorded raw-binary bag into ROS topics plus file artifacts:
 
 ```bash
