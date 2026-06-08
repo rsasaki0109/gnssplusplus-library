@@ -226,7 +226,8 @@ The report aggregates setup readiness, ROS2 launch/record diagnostics, bag
 doctor summaries, realtime smoke results, and next commands into one Markdown
 file plus a machine-readable JSON artifact.
 `gnss web` auto-discovers `output/field_report*.json`, links the Markdown/JSON
-report, and shows the same next commands in the browser for field debugging.
+report, previews the Markdown, and shows the same next commands in the browser
+for field debugging.
 
 Decode a recorded raw-binary bag into ROS topics plus file artifacts:
 

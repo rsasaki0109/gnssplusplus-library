@@ -355,7 +355,25 @@ class WebUISmokeTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            field_report_md.write_text("# Field report\n", encoding="utf-8")
+            field_report_md.write_text(
+                "\n".join(
+                    [
+                        "# Field report",
+                        "",
+                        "## ROS2 Bag Diagnostics",
+                        "",
+                        "| Source | Status |",
+                        "|---|---|",
+                        "| `ros2_bag_doctor_summary.json` | ready |",
+                        "",
+                        "## Next Commands",
+                        "",
+                        "- `python3 apps/gnss.py ros2-bag-doctor --bag <bag-directory>`",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             field_report_json.write_text(
                 json.dumps(
                     {
@@ -662,6 +680,7 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("Field reports", page.locator("body").text_content())
                     self.assertIn("field_report.json", page.locator("#field-report-table tbody").text_content())
                     self.assertIn("markdown", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("preview", page.locator("#field-report-table tbody").text_content())
                     self.assertIn("warn", page.locator("#field-report-table tbody").text_content())
                     self.assertIn("setup ok 4 / warn 1 / missing 0", page.locator("#field-report-table tbody").text_content())
                     self.assertIn("1/2 ready", page.locator("#field-report-table tbody").text_content())
@@ -670,6 +689,10 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("cmd: python3 apps/gnss.py ros2-bag-doctor --bag <bag-directory>", page.locator("#field-report-table tbody").text_content())
                     self.assertIn("0/1", page.locator("#field-report-metrics").text_content())
                     self.assertIn("2", page.locator("#field-report-metrics").text_content())
+                    self.assertIn("field_report.md", page.locator("#field-report-preview-source").text_content())
+                    self.assertIn("# Field report", page.locator("#field-report-preview").text_content())
+                    self.assertIn("## Next Commands", page.locator("#field-report-preview").text_content())
+                    self.assertIn("python3 apps/gnss.py ros2-bag-doctor --bag <bag-directory>", page.locator("#field-report-preview").text_content())
                     self.assertIn("live_replay_summary.json", page.locator("#live-table tbody").text_content())
                     self.assertIn("completed", page.locator("#live-table tbody").text_content())
                     self.assertIn("3.50x", page.locator("#live-table tbody").text_content())

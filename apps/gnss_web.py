@@ -1053,6 +1053,19 @@ def render_html() -> str:
       font-size: 0.82rem;
       line-height: 1.35;
     }
+    .report-preview {
+      margin-top: 14px;
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #111827;
+      color: #f9fafb;
+      max-height: 360px;
+      overflow: auto;
+      white-space: pre-wrap;
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
   </style>
 </head>
 <body>
@@ -1107,6 +1120,11 @@ def render_html() -> str:
         </thead>
         <tbody></tbody>
       </table>
+      <div class="section-title" style="margin-top: 14px;">
+        <h3>Preview</h3>
+        <span class="tiny" id="field-report-preview-source"></span>
+      </div>
+      <pre class="report-preview" id="field-report-preview">No field report Markdown found.</pre>
     </section>
 
     <section class="card" style="margin-top: 18px;">
@@ -1693,6 +1711,28 @@ def render_html() -> str:
       return `<span class="debug-lines">${lines.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}</span>`;
     }
 
+    async function loadFieldReportPreview(path) {
+      const preview = document.getElementById("field-report-preview");
+      const source = document.getElementById("field-report-preview-source");
+      if (!path) {
+        preview.textContent = "No field report Markdown found.";
+        source.textContent = "";
+        return;
+      }
+      source.textContent = path;
+      preview.textContent = "Loading...";
+      try {
+        const response = await fetch(`/artifact?path=${encodeURIComponent(path)}`);
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({error: response.statusText}));
+          throw new Error(payload.error || response.statusText);
+        }
+        preview.textContent = await response.text();
+      } catch (error) {
+        preview.textContent = `Preview unavailable: ${error}`;
+      }
+    }
+
     function commercialReceiverArtifactLinks(row) {
       const receiver = row.commercial_receiver || {};
       const solution = receiver.solution_pos || row.commercial_receiver_csv;
@@ -2019,9 +2059,13 @@ def render_html() -> str:
       const fieldReportBody = document.querySelector("#field-report-table tbody");
       fieldReportBody.innerHTML = "";
       for (const row of fieldReportRows) {
+        const previewLink = row.markdown_report
+          ? `<a href="/artifact?path=${encodeURIComponent(row.markdown_report)}" class="field-report-preview-link" data-path="${escapeHtml(row.markdown_report)}">preview</a>`
+          : null;
         const artifacts = [
           artifactLink(row.summary_path || row._path, "json"),
           row.markdown_report ? artifactLink(row.markdown_report, "markdown") : null,
+          previewLink,
           row.web_url ? smartLink(row.web_url, "web") : null,
         ].filter(Boolean).join(" / ");
         const tr = document.createElement("tr");
@@ -2034,6 +2078,13 @@ def render_html() -> str:
           <td>${fieldReportActions(row)}</td>`;
         fieldReportBody.appendChild(tr);
       }
+      for (const link of document.querySelectorAll(".field-report-preview-link")) {
+        link.addEventListener("click", async (event) => {
+          event.preventDefault();
+          await loadFieldReportPreview(link.dataset.path);
+        });
+      }
+      await loadFieldReportPreview(fieldReportRows.find((row) => row.markdown_report)?.markdown_report);
 
       const liveBody = document.querySelector("#live-table tbody");
       liveBody.innerHTML = "";
@@ -2562,6 +2613,7 @@ def make_handler(args: argparse.Namespace):
                         ".json": "application/json; charset=utf-8",
                         ".pos": "text/plain; charset=utf-8",
                         ".csv": "text/plain; charset=utf-8",
+                        ".md": "text/markdown; charset=utf-8",
                         ".txt": "text/plain; charset=utf-8",
                     }.get(suffix, "application/octet-stream")
                     self._write(artifact_path.read_bytes(), content_type)
