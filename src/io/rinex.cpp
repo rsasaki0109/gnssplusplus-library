@@ -675,6 +675,13 @@ bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) 
         const double north = std::stod(line.substr(28, 14));
         header.antenna_delta = Vector3d(east, north, height);
     }
+    else if (label.find("TIME OF FIRST OBS") != std::string::npos) {
+        try {
+            header.first_obs = parseTime(line.substr(0, 43), header.version);
+        } catch (...) {
+            // Leave first_obs at its default if the optional header record is malformed.
+        }
+    }
     else if (label.find("# / TYPES OF OBSERV") != std::string::npos) {
         // RINEX 2: Parse number of observation types
         int num_types = std::stoi(line.substr(0, 6));

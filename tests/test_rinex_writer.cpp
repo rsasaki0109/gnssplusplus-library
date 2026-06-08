@@ -164,6 +164,33 @@ Ephemeris makeGalileoEphemeris() {
 
 }  // namespace
 
+TEST(RINEXReaderTest, ParsesTimeOfFirstObsHeader) {
+    const auto temp_path = std::filesystem::temp_directory_path() / "libgnss_rinex_first_obs_test.obs";
+    std::filesystem::remove(temp_path);
+
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine("     3.04           OBSERVATION DATA    G                   ",
+                                "RINEX VERSION / TYPE");
+        file << rinexHeaderLine("  2024    8   22    3   14  15.5000000     GPS         ",
+                                "TIME OF FIRST OBS");
+        file << rinexHeaderLine("", "END OF HEADER");
+    }
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+
+    EXPECT_EQ(header.first_obs.week, 2328);
+    EXPECT_NEAR(header.first_obs.tow, 357255.5, 1e-9);
+
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
 TEST(RINEXWriterTest, WritesGpsNavigationMessageReadableByReader) {
     const auto temp_path = std::filesystem::temp_directory_path() / "libgnss_rinex_writer_test.nav";
     std::filesystem::remove(temp_path);
