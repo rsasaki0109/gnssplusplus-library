@@ -89,6 +89,9 @@ def summarize_ros2_bag(payload: dict[str, Any], source: str) -> dict[str, Any]:
         "_source": source,
         "bag": payload.get("bag"),
         "status": payload.get("status"),
+        "diagnostic_depth": payload.get("diagnostic_depth"),
+        "message_source": payload.get("message_source"),
+        "storage_identifier": payload.get("storage_identifier"),
         "replayable_raw_binary": payload.get("replayable_raw_binary"),
         "message_count": payload.get("message_count"),
         "topic_count": payload.get("topic_count"),
@@ -97,7 +100,7 @@ def summarize_ros2_bag(payload: dict[str, Any], source: str) -> dict[str, Any]:
         "raw_binary_messages": raw_binary.get("message_count"),
         "fix_status": fix.get("status"),
         "fix_messages": fix.get("message_count"),
-        "gap_topic_count": len(gap_topics),
+        "gap_topic_count": None if payload.get("diagnostic_depth") == "metadata" else len(gap_topics),
         "commands": payload.get("commands") if isinstance(payload.get("commands"), dict) else {},
     }
 
@@ -233,13 +236,15 @@ def render_markdown(payload: dict[str, Any]) -> str:
     if ros2_bags:
         lines.extend(
             [
-                "| Source | Status | Raw replay | Messages | Topics | Duration | Gaps |",
-                "|---|---|---:|---:|---:|---:|---:|",
+                "| Source | Status | Depth | Reader | Raw replay | Messages | Topics | Duration | Gaps |",
+                "|---|---|---|---|---:|---:|---:|---:|---:|",
             ]
         )
         for item in ros2_bags:
             lines.append(
                 f"| `{item.get('_source')}` | {markdown_status(item.get('status'))} | "
+                f"{markdown_status(item.get('diagnostic_depth'))} | "
+                f"{markdown_status(item.get('message_source'))} | "
                 f"{item.get('replayable_raw_binary')} | {fmt(item.get('message_count'))} | "
                 f"{fmt(item.get('topic_count'))} | {fmt(item.get('duration_s'), ' s')} | "
                 f"{fmt(item.get('gap_topic_count'))} |"

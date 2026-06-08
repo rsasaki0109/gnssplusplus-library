@@ -204,9 +204,14 @@ python3 apps/gnss.py ros2-bag-doctor \
 ```
 
 The doctor reads `metadata.yaml` plus sqlite storage directly, so it does not
-need ROS2 Python imports. It reports topic types, message counts, duration,
-estimated rates, timestamp gaps, and whether `/gnss/raw_binary` is available
-for lossless decoder replay. Missing `/gnss/raw_binary` means researchers can
+need ROS2 Python imports. For sqlite bags it reports topic types, message
+counts, duration, estimated rates, timestamp gaps, and whether
+`/gnss/raw_binary` is available for lossless decoder replay. For MCAP bags, it
+uses the optional Python `mcap` package when available to measure message-level
+rates and gaps from the `.mcap` file. If that package is not installed, it falls
+back to `metadata.yaml` and reports `partial-metadata`: topic presence, message
+counts, and duration are checked, while message rates and timestamp gaps are
+clearly marked as not measured. Missing `/gnss/raw_binary` means researchers can
 still inspect `/gnss/fix`, but cannot replay improved decoders from the bag.
 
 Create a field handoff report:
