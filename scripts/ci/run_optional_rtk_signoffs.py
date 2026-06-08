@@ -87,6 +87,7 @@ def make_ppc_rtk_step(context: SignoffContext, city: str, *, require_rtklib: boo
     outputs = [
         context.output_dir / f"{slug}_summary.json",
         context.output_dir / f"{slug}.pos",
+        context.output_dir / f"{slug}_events.csv",
     ]
     if require_rtklib:
         outputs.append(context.output_dir / f"{slug}_rtklib.pos")
@@ -107,6 +108,8 @@ def make_ppc_rtk_step(context: SignoffContext, city: str, *, require_rtklib: boo
         "120",
         "--out",
         str(context.output_dir / f"{slug}.pos"),
+        "--debug-epoch-log",
+        str(context.output_dir / f"{slug}_events.csv"),
         "--summary-json",
         str(context.output_dir / f"{slug}_summary.json"),
     ]

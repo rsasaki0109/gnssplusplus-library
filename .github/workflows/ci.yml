@@ -276,8 +276,10 @@ jobs:
           output/ci_optional_rtk_signoffs/*.log
           output/ppc_nagoya_run1_rtk_summary.json
           output/ppc_nagoya_run1_rtk.pos
+          output/ppc_nagoya_run1_rtk_events.csv
           output/ppc_tokyo_run1_rtk_summary.json
           output/ppc_tokyo_run1_rtk.pos
+          output/ppc_tokyo_run1_rtk_events.csv
           output/ppc_tokyo_run1_rtk_rtklib.pos
           output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_1000_seed_current/summary.json
           output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_1000_seed_current/nagoya_run3/summary.json
