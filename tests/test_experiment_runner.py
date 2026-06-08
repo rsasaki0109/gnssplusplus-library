@@ -91,8 +91,9 @@ class PPPArExperimentsTest(unittest.TestCase):
 
             suite = experiments.load_suite_config(suite_path)
 
-            self.assertEqual(suite.cases[0].output_dir, temp_path / "output" / "ppp_ar_experiments" / "first")
-            self.assertEqual(suite.cases[1].output_dir, temp_path / "output" / "ppp_ar_experiments" / "second")
+            expected_root = (temp_path / "output" / "ppp_ar_experiments").resolve()
+            self.assertEqual(suite.cases[0].output_dir, expected_root / "first")
+            self.assertEqual(suite.cases[1].output_dir, expected_root / "second")
 
     def test_load_strategies_exposes_selector_experiment_arms(self) -> None:
         strategies = experiments.load_strategies(EXPERIMENTS_DIR / "strategies.toml")
