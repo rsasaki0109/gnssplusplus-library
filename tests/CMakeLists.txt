@@ -93,6 +93,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_mode_compare.py
     )
     add_test(
+        NAME python_ppp_residual_row_set_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppp_residual_row_set_diff.py
+    )
+    add_test(
         NAME python_ppc_taroz_amb_pdc_smoke_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppc_taroz_amb_pdc_smoke.py
     )
@@ -204,6 +208,7 @@ if(GTest_FOUND)
         python_madoca_solution_diff_tests
         python_madoca_satellite_set_diff_tests
         python_mode_compare_tests
+        python_ppp_residual_row_set_diff_tests
         python_experiment_runner_tests
     )
     set(GNSSPP_EXTENDED_TESTS
