@@ -136,6 +136,102 @@ def build_synthetic_sqlite_rosbag(
     )
 
 
+def build_synthetic_mcap_metadata_rosbag(bag_dir: Path) -> None:
+    bag_dir.mkdir(parents=True, exist_ok=True)
+    bag_dir.joinpath("synthetic_0.mcap").write_bytes(b"\x89MCAP\r\n")
+    bag_dir.joinpath("metadata.yaml").write_text(
+        "\n".join(
+            [
+                "rosbag2_bagfile_information:",
+                "  version: 8",
+                "  storage_identifier: mcap",
+                "  relative_file_paths:",
+                "    - synthetic_0.mcap",
+                "  duration:",
+                "    nanoseconds: 4000000000",
+                "  starting_time:",
+                "    nanoseconds_since_epoch: 1000000000",
+                "  message_count: 7",
+                "  topics_with_message_count:",
+                "    - topic_metadata:",
+                "        name: /gnss/raw_binary",
+                "        type: std_msgs/msg/UInt8MultiArray",
+                "        serialization_format: cdr",
+                "        offered_qos_profiles: \"\"",
+                "      message_count: 2",
+                "    - topic_metadata:",
+                "        name: /gnss/raw",
+                "        type: gnss_raw_driver/msg/GnssRawEpoch",
+                "        serialization_format: cdr",
+                "        offered_qos_profiles: \"\"",
+                "      message_count: 2",
+                "    - topic_metadata:",
+                "        name: /gnss/fix",
+                "        type: sensor_msgs/msg/NavSatFix",
+                "        serialization_format: cdr",
+                "        offered_qos_profiles: \"\"",
+                "      message_count: 3",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def write_fake_mcap_reader_package(package_root: Path) -> None:
+    mcap_dir = package_root / "mcap"
+    mcap_dir.mkdir(parents=True, exist_ok=True)
+    mcap_dir.joinpath("__init__.py").write_text("", encoding="utf-8")
+    mcap_dir.joinpath("reader.py").write_text(
+        "\n".join(
+            [
+                "import json",
+                "from types import SimpleNamespace",
+                "",
+                "class FakeReader:",
+                "    def __init__(self, stream):",
+                "        self._messages = json.loads(stream.read().decode('utf-8'))",
+                "",
+                "    def iter_messages(self, topics=None, start_time=None, end_time=None, log_time_order=True, reverse=False):",
+                "        messages = list(self._messages)",
+                "        if topics is not None:",
+                "            wanted = {topics} if isinstance(topics, str) else set(topics)",
+                "            messages = [item for item in messages if item['topic'] in wanted]",
+                "        if log_time_order:",
+                "            messages.sort(key=lambda item: item['log_time'], reverse=reverse)",
+                "        for item in messages:",
+                "            log_time = item['log_time']",
+                "            if start_time is not None and log_time < start_time:",
+                "                continue",
+                "            if end_time is not None and log_time >= end_time:",
+                "                continue",
+                "            schema = SimpleNamespace(name=item.get('schema')) if item.get('schema') else None",
+                "            channel = SimpleNamespace(topic=item['topic'], message_encoding=item.get('encoding', 'cdr'))",
+                "            message = SimpleNamespace(log_time=log_time, data=b'x' * int(item.get('data_size', 0)))",
+                "            yield schema, channel, message",
+                "",
+                "def make_reader(stream, *args, **kwargs):",
+                "    return FakeReader(stream)",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def write_fake_mcap_messages(bag_dir: Path) -> None:
+    messages = [
+        {"topic": "/gnss/raw_binary", "schema": "std_msgs/msg/UInt8MultiArray", "log_time": 1_000_000_000, "data_size": 12},
+        {"topic": "/gnss/raw", "schema": "gnss_raw_driver/msg/GnssRawEpoch", "log_time": 1_000_000_000, "data_size": 32},
+        {"topic": "/gnss/fix", "schema": "sensor_msgs/msg/NavSatFix", "log_time": 1_000_000_000, "data_size": 48},
+        {"topic": "/gnss/raw_binary", "schema": "std_msgs/msg/UInt8MultiArray", "log_time": 1_200_000_000, "data_size": 12},
+        {"topic": "/gnss/raw", "schema": "gnss_raw_driver/msg/GnssRawEpoch", "log_time": 1_200_000_000, "data_size": 32},
+        {"topic": "/gnss/fix", "schema": "sensor_msgs/msg/NavSatFix", "log_time": 1_200_000_000, "data_size": 48},
+        {"topic": "/gnss/fix", "schema": "sensor_msgs/msg/NavSatFix", "log_time": 4_000_000_000, "data_size": 48},
+    ]
+    bag_dir.joinpath("synthetic_0.mcap").write_text(json.dumps(messages), encoding="utf-8")
+
+
 def write_pty_payload(
     master_fd: int,
     payloads: list[bytes],
@@ -3035,6 +3131,83 @@ class CLIToolsTest(unittest.TestCase):
             self.assertTrue(summary_json.exists())
             written_summary = json.loads(summary_json.read_text(encoding="utf-8"))
             self.assertEqual(written_summary["topic_count"], 3)
+
+    def test_ros2_bag_doctor_reads_mcap_metadata_without_sqlite(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ros2_bag_doctor_mcap_") as temp_dir:
+            bag_dir = Path(temp_dir) / "bag"
+            summary_json = Path(temp_dir) / "ros2_bag_doctor_mcap_summary.json"
+            build_synthetic_mcap_metadata_rosbag(bag_dir)
+
+            result = self.run_gnss(
+                "ros2-bag-doctor",
+                "--bag",
+                str(bag_dir),
+                "--json",
+                "--summary-json",
+                str(summary_json),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status"], "partial-metadata")
+            self.assertEqual(payload["diagnostic_depth"], "metadata")
+            self.assertEqual(payload["storage_identifier"], "mcap")
+            self.assertTrue(payload["replayable_raw_binary"])
+            self.assertEqual(payload["message_count"], 7)
+            self.assertEqual(payload["topic_count"], 3)
+            self.assertEqual(payload["duration_s"], 4.0)
+            self.assertEqual(payload["topic_status"]["raw_binary"]["status"], "ok")
+            self.assertEqual(payload["topic_status"]["raw_binary"]["source"], "metadata")
+            self.assertIsNone(payload["topic_status"]["fix"]["mean_rate_hz"])
+            self.assertIsNone(payload["topic_status"]["fix"]["gap_count"])
+            self.assertIn("mcap reader unavailable", json.dumps(payload["checks"]))
+            self.assertIn("Install the Python `mcap` package", json.dumps(payload["checks"]))
+            self.assertTrue(summary_json.exists())
+
+            strict_result = self.run_gnss(
+                "ros2-bag-doctor",
+                "--bag",
+                str(bag_dir),
+                "--json",
+                "--strict",
+            )
+            self.assertNotEqual(strict_result.returncode, 0)
+            self.assertEqual(json.loads(strict_result.stdout)["status"], "partial-metadata")
+
+    def test_ros2_bag_doctor_reads_mcap_messages_when_reader_available(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ros2_bag_doctor_mcap_reader_") as temp_dir:
+            temp_root = Path(temp_dir)
+            bag_dir = temp_root / "bag"
+            fake_package_root = temp_root / "fake_python"
+            build_synthetic_mcap_metadata_rosbag(bag_dir)
+            write_fake_mcap_messages(bag_dir)
+            write_fake_mcap_reader_package(fake_package_root)
+
+            result = self.run_gnss(
+                "ros2-bag-doctor",
+                "--bag",
+                str(bag_dir),
+                "--json",
+                "--strict",
+                "--gap-factor",
+                "1.0",
+                "--gap-min-s",
+                "0.5",
+                extra_env={"PYTHONPATH": str(fake_package_root)},
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status"], "ready")
+            self.assertEqual(payload["diagnostic_depth"], "message-data")
+            self.assertEqual(payload["message_source"], "mcap")
+            self.assertEqual(payload["storage_identifier"], "mcap")
+            self.assertEqual(payload["message_count"], 7)
+            self.assertEqual(payload["topic_count"], 3)
+            self.assertEqual(payload["duration_s"], 3.0)
+            self.assertEqual(payload["topic_status"]["raw_binary"]["source"], "mcap")
+            self.assertEqual(payload["topic_status"]["fix"]["gap_count"], 1)
+            self.assertIn("rates and timestamp gaps inspected from MCAP messages", json.dumps(payload["checks"]))
 
     def test_ros2_bag_doctor_strict_fails_without_raw_binary(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ros2_bag_doctor_missing_") as temp_dir:

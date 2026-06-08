@@ -94,6 +94,10 @@ python3 apps/gnss.py field-report --out output/field_report.md
 python3 apps/gnss.py robotics-smoke --profile realtime
 ```
 
+`ros2-bag-doctor` reads sqlite ROS2 bags for message-level rates/gaps. For MCAP
+bags it uses the optional Python `mcap` package when available, and otherwise
+falls back to MCAP `metadata.yaml` for topic presence, counts, and duration.
+
 Run a solution:
 
 ```bash

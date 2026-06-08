@@ -62,7 +62,7 @@ python3 apps/gnss.py replay \
 |---|---|
 | `gnss doctor` | Check local setup, built tools, dataset/docs readiness, Docker, and ROS2 hints |
 | `gnss ros2-doctor` | Check ROS2 receiver readiness, serial permissions, launch/record commands, and topic debug commands |
-| `gnss ros2-bag-doctor` | Inspect a ROS2 GNSS bag for required topics, message rates, timestamp gaps, and raw-binary replayability |
+| `gnss ros2-bag-doctor` | Inspect a ROS2 GNSS bag for required topics, message rates, timestamp gaps, raw-binary replayability, and MCAP reader/metadata fallback |
 | `gnss field-report` | Aggregate setup, ROS2, bag, and realtime-smoke diagnostics into Markdown and JSON handoff artifacts |
 | `gnss robotics-smoke` | Run PPC RTK `quick`, `realtime`, or `full` smoke profiles with runtime gates and debug reasons |
 | `gnss spp` | Batch SPP from rover/nav RINEX |

@@ -333,7 +333,7 @@ def classify_robotics_smoke_status(payload: dict[str, Any]) -> str:
 
 def classify_ros2_bag_status(payload: dict[str, Any]) -> str:
     status = payload.get("status")
-    if status in ("ready", "partial", "missing"):
+    if status in ("ready", "partial", "partial-metadata", "missing"):
         return str(status)
     if payload.get("replayable_raw_binary") is True:
         return "ready"
@@ -591,6 +591,9 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
                 "summary_path": relative_display(path, root_dir),
                 "bag": normalize_artifact_path(root_dir, payload.get("bag")),
                 "status": classify_ros2_bag_status(payload),
+                "diagnostic_depth": payload.get("diagnostic_depth"),
+                "message_source": payload.get("message_source"),
+                "storage_identifier": payload.get("storage_identifier"),
                 "replayable_raw_binary": payload.get("replayable_raw_binary"),
                 "message_count": payload.get("message_count"),
                 "topic_count": payload.get("topic_count"),
@@ -904,7 +907,7 @@ def render_html() -> str:
       color: #0f7a43;
       border-color: rgba(46, 204, 113, 0.28);
     }
-    .badge.partial, .badge.warn {
+    .badge.partial, .badge.partial-metadata, .badge.warn {
       background: rgba(243, 156, 18, 0.16);
       color: #9a5f00;
       border-color: rgba(243, 156, 18, 0.26);
@@ -1674,6 +1677,11 @@ def render_html() -> str:
       if (commands.decode) {
         const commandText = commands.decode;
         lines.push(`decode: ${commandText.length > 180 ? commandText.slice(0, 180) + " ..." : commandText}`);
+      }
+      if (row.diagnostic_depth === "metadata") {
+        lines.unshift(`why: ${row.storage_identifier || "metadata"} metadata only; rates/gaps not measured`);
+      } else if (row.message_source) {
+        lines.unshift(`reader: ${row.message_source}`);
       }
       if (!row.replayable_raw_binary) {
         lines.unshift("why: /gnss/raw_binary is missing or empty");
