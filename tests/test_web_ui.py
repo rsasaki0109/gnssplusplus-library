@@ -58,6 +58,8 @@ class WebUISmokeTest(unittest.TestCase):
             robotics_pos = temp_root / "output" / "robotics_smoke" / "tokyo_run1_rtk_realtime.pos"
             ros2_bag_summary = temp_root / "output" / "ros2_bag_doctor_summary.json"
             ros2_bag_mcap_summary = temp_root / "output" / "ros2_bag_doctor_mcap_summary.json"
+            field_report_json = temp_root / "output" / "field_report.json"
+            field_report_md = temp_root / "output" / "field_report.md"
             ppc_summary = temp_root / "output" / "ppc_tokyo_run1_rtk_summary.json"
             ppc_commercial = temp_root / "output" / "ppc_commercial_receiver.csv"
             ppc_commercial_matches = temp_root / "output" / "ppc_commercial_receiver_matches.csv"
@@ -353,6 +355,40 @@ class WebUISmokeTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            field_report_md.write_text("# Field report\n", encoding="utf-8")
+            field_report_json.write_text(
+                json.dumps(
+                    {
+                        "tool": "field-report",
+                        "root": str(temp_root),
+                        "device": "/dev/ttyUSB0",
+                        "web_url": "http://127.0.0.1:8085",
+                        "markdown_report": str(field_report_md),
+                        "json_report": str(field_report_json),
+                        "setup_doctor": {
+                            "status": "warn",
+                            "status_counts": {"ok": 4, "warn": 1, "missing": 0},
+                        },
+                        "ros2_doctor": {
+                            "status": "ok",
+                            "status_counts": {"ok": 5, "warn": 0, "missing": 0},
+                        },
+                        "ros2_bags": [
+                            {"status": "ready", "replayable_raw_binary": True},
+                            {"status": "partial-metadata", "replayable_raw_binary": True},
+                        ],
+                        "robotics_smoke": [
+                            {"status": "passed"},
+                            {"status": "failed"},
+                        ],
+                        "next_actions": [
+                            "python3 apps/gnss.py ros2-bag-doctor --bag <bag-directory>",
+                            "python3 apps/gnss.py robotics-smoke --profile realtime",
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             ppc_summary.write_text(
                 json.dumps(
                     {
@@ -623,6 +659,17 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("11637", page.locator("#odaiba-metrics").text_content())
                     self.assertIn("running", page.locator("#receiver-metrics").text_content())
                     self.assertIn('"restart_count": 2', page.locator("#receiver-json").text_content())
+                    self.assertIn("Field reports", page.locator("body").text_content())
+                    self.assertIn("field_report.json", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("markdown", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("warn", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("setup ok 4 / warn 1 / missing 0", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("1/2 ready", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("1 metadata-only", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("1/2 passed", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("cmd: python3 apps/gnss.py ros2-bag-doctor --bag <bag-directory>", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("0/1", page.locator("#field-report-metrics").text_content())
+                    self.assertIn("2", page.locator("#field-report-metrics").text_content())
                     self.assertIn("live_replay_summary.json", page.locator("#live-table tbody").text_content())
                     self.assertIn("completed", page.locator("#live-table tbody").text_content())
                     self.assertIn("3.50x", page.locator("#live-table tbody").text_content())
