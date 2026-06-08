@@ -1,28 +1,50 @@
 #pragma once
 
+/**
+ * @file gnss.hpp
+ * @brief Main header file for LibGNSS++ library.
+ *
+ * This header provides the complete API for the LibGNSS++ library.
+ * Include this file to access all GNSS processing capabilities.
+ *
+ * Module layout:
+ *   core/        — Fundamental types, constants, coordinates, observation data
+ *   models/      — Atmospheric delay models (troposphere, ionosphere)
+ *   algorithms/  — Positioning engines (SPP, RTK, PPP) and helpers (Kalman, LAMBDA)
+ *   io/          — File I/O (RINEX reader, RTCM, solution writer)
+ */
+
+// Core
+#include "core/constants.hpp"
+#include "core/types.hpp"
+#include "core/coordinates.hpp"
 #include "core/processor.hpp"
 #include "core/solution.hpp"
 #include "core/observation.hpp"
 #include "core/navigation.hpp"
+
+// Models
+#include "models/troposphere.hpp"
+#include "models/ionosphere.hpp"
+
+// Algorithms
 #include "algorithms/spp.hpp"
 #include "algorithms/rtk.hpp"
 #include "algorithms/ppp.hpp"
-#include "io/rinex.hpp"
-#include "io/rtcm.hpp"
 
-/**
- * @file gnss.hpp
- * @brief Main header file for LibGNSS++ library
- * 
- * This header provides the complete API for the LibGNSS++ library.
- * Include this file to access all GNSS processing capabilities.
- */
+// I/O
+#include "io/rinex.hpp"
+#include "io/ntrip.hpp"
+#include "io/rtcm.hpp"
+#include "io/rtcm_stream.hpp"
+#include "io/ubx.hpp"
+#include "io/solution_writer.hpp"
 
 namespace libgnss {
 
 /**
  * @brief Main GNSS processor class
- * 
+ *
  * This class provides a high-level interface for GNSS positioning
  * and navigation processing. It supports multiple positioning modes
  * and can process both real-time and post-processing data.

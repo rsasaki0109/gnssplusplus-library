@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>libgnss++ — Modern C++17 GNSS Positioning Stack</title>
+  <meta name="description" content="Native non-GUI GNSS stack with SPP, RTK, PPP, CLAS/MADOCA. CLI, Python, ROS 2, Web UI.">
+  <style>
+    :root {
+      --bg: #f4f1e8;
+      --paper: #fffdf8;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #d6d0c4;
+      --accent: #0f766e;
+      --accent-light: rgba(15,118,110,0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "IBM Plex Sans", "Inter", "Segoe UI", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 80% 50% at 20% 0%, rgba(15,118,110,0.10), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(15,118,110,0.06), transparent),
+        linear-gradient(180deg, #f8f5ec 0%, var(--bg) 100%);
+      min-height: 100vh;
+    }
+
+    /* --- NAV --- */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,253,248,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav-inner {
+      max-width: 1120px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 24px;
+    }
+    .nav-brand { font-weight: 800; font-size: 1.15rem; color: var(--accent); text-decoration: none; letter-spacing: -0.02em; }
+    .nav-links { display: flex; gap: 20px; }
+    .nav-links a {
+      font-size: 0.92rem; font-weight: 600; color: var(--muted);
+      text-decoration: none; transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--accent); }
+
+    /* --- HERO --- */
+    .hero {
+      max-width: 1120px; margin: 0 auto;
+      padding: 80px 24px 48px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 3.6rem);
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      line-height: 1.1;
+      margin-bottom: 18px;
+    }
+    .hero h1 span { color: var(--accent); }
+    .hero .tagline {
+      font-size: 1.15rem;
+      color: var(--muted);
+      max-width: 640px;
+      margin: 0 auto 36px;
+      line-height: 1.6;
+    }
+    .hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 28px;
+      border-radius: 999px;
+      font-size: 1rem; font-weight: 700;
+      text-decoration: none;
+      transition: all 0.2s;
+      border: 2px solid transparent;
+    }
+    .btn-primary {
+      background: var(--accent); color: #fff;
+      box-shadow: 0 4px 14px rgba(15,118,110,0.25);
+    }
+    .btn-primary:hover {
+      background: #0d6b63;
+      box-shadow: 0 8px 24px rgba(15,118,110,0.35);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: rgba(255,255,255,0.85);
+      border-color: var(--line);
+      color: var(--ink);
+    }
+    .btn-secondary:hover {
+      border-color: var(--accent); color: var(--accent);
+      transform: translateY(-1px);
+    }
+    .btn svg { width: 18px; height: 18px; }
+
+    /* --- STATS BAR --- */
+    .stats {
+      max-width: 1120px; margin: 0 auto;
+      padding: 0 24px 48px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+    }
+    .stat {
+      text-align: center;
+      padding: 20px 16px;
+      background: rgba(255,255,255,0.7);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      backdrop-filter: blur(6px);
+    }
+    .stat .num {
+      font-size: 1.8rem; font-weight: 900; color: var(--accent);
+      letter-spacing: -0.03em;
+    }
+    .stat .label { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
+
+    /* --- FEATURES --- */
+    .features {
+      max-width: 1120px; margin: 0 auto;
+      padding: 0 24px 64px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .feature {
+      background: rgba(255,255,255,0.85);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 28px 24px;
+      backdrop-filter: blur(8px);
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .feature:hover {
+      box-shadow: 0 12px 32px rgba(31,41,55,0.08);
+      transform: translateY(-2px);
+    }
+    .feature-icon {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      background: var(--accent-light);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px;
+      color: var(--accent);
+      font-size: 1.3rem; font-weight: 900;
+    }
+    .feature h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+    .feature p { font-size: 0.92rem; color: var(--muted); line-height: 1.55; }
+
+    /* --- INTERFACES --- */
+    .interfaces {
+      max-width: 1120px; margin: 0 auto;
+      padding: 0 24px 64px;
+    }
+    .interfaces h2 {
+      text-align: center; font-size: 1.8rem; font-weight: 800;
+      letter-spacing: -0.03em; margin-bottom: 32px;
+    }
+    .interface-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .interface-card {
+      background: rgba(255,255,255,0.8);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 22px 20px;
+      text-align: center;
+    }
+    .interface-card h4 { font-size: 1rem; margin-bottom: 6px; }
+    .interface-card p { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+    .interface-card code {
+      display: inline-block;
+      margin-top: 8px;
+      background: #111827;
+      color: #e5e7eb;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+    }
+
+    /* --- BENCHMARK PREVIEW --- */
+    .benchmark-section {
+      max-width: 1120px; margin: 0 auto;
+      padding: 0 24px 64px;
+    }
+    .benchmark-section h2 {
+      text-align: center; font-size: 1.8rem; font-weight: 800;
+      letter-spacing: -0.03em; margin-bottom: 12px;
+    }
+    .benchmark-section .sub {
+      text-align: center; color: var(--muted); margin-bottom: 32px; font-size: 0.95rem;
+    }
+    .benchmark-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .benchmark-card {
+      background: rgba(255,255,255,0.85);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 22px;
+    }
+    .benchmark-card h4 { font-size: 0.92rem; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+    .benchmark-card .value {
+      font-size: 1.6rem; font-weight: 900; color: var(--accent); letter-spacing: -0.02em;
+    }
+    .benchmark-card .detail { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+
+    /* --- FOOTER --- */
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 28px 24px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* responsive */
+    @media (max-width: 640px) {
+      .hero { padding: 48px 16px 32px; }
+      .hero-actions { flex-direction: column; align-items: center; }
+      .btn { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-brand">libgnss++</a>
+      <div class="nav-links">
+        <a href="docs/">Documentation</a>
+        <a href="demo/">Live Demo</a>
+        <a href="https://github.com/rsasaki0109/gnssplusplus-library" target="_blank" rel="noreferrer">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <h1>Modern <span>GNSS</span> Positioning<br>in C++17</h1>
+    <p class="tagline">
+      A native, non-GUI GNSS stack with SPP, RTK, PPP, and CLAS/MADOCA solvers.
+      Protocol-agnostic. Testable. Delivered as CLI, Python, ROS 2, and Web UI.
+    </p>
+    <div class="hero-actions">
+      <a href="demo/" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Interactive Demo
+      </a>
+      <a href="docs/" class="btn btn-secondary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+        Documentation
+      </a>
+      <a href="https://github.com/rsasaki0109/gnssplusplus-library" class="btn btn-secondary" target="_blank" rel="noreferrer">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 00-3.8 23.38c.6.1.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 016.02 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.25 2.88.12 3.18a4.65 4.65 0 011.23 3.22c0 4.61-2.8 5.63-5.48 5.92.43.37.82 1.1.82 2.22l-.01 3.29c0 .31.22.68.83.56A12 12 0 0012 .3"/></svg>
+        GitHub
+      </a>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stat">
+      <div class="num">24K+</div>
+      <div class="label">Lines of C++ Source</div>
+    </div>
+    <div class="stat">
+      <div class="num">38</div>
+      <div class="label">Test Suites</div>
+    </div>
+    <div class="stat">
+      <div class="num">4</div>
+      <div class="label">Interfaces</div>
+    </div>
+    <div class="stat">
+      <div class="num">10+</div>
+      <div class="label">Protocol Parsers</div>
+    </div>
+    <div class="stat">
+      <div class="num">3.7x</div>
+      <div class="label">Better P95 vs RTKLIB</div>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="feature">
+      <div class="feature-icon">S</div>
+      <h3>Multi-Solver Engine</h3>
+      <p>SPP, RTK (integer ambiguity via LAMBDA), PPP, and CLAS/MADOCA-PPP solvers with explicit state management and modular pipelines.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">P</div>
+      <h3>Protocol Agnostic I/O</h3>
+      <p>RINEX, RTCM 2/3 (full SSR), UBX, QZSS L6, SBF, NMEA, NovAtel, and NTRIP. Auto-detection with protocol_detector.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">V</div>
+      <h3>Sign-off Framework</h3>
+      <p>Machine-readable JSON summaries for every validation gate. Reproducible benchmark artifacts with CI-checked regression.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">T</div>
+      <h3>Comprehensive Testing</h3>
+      <p>38 test files covering solvers, I/O protocols, ambiguity resolution, and slip detection. GTest for C++, Playwright for Web UI.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">R</div>
+      <h3>ROS 2 Integration</h3>
+      <p>Native ROS 2 nodes for solution playback and raw GNSS driver. Publishes NavSatFix, PoseStamped, and Path messages.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">D</div>
+      <h3>Docker Ready</h3>
+      <p>Multi-stage Docker builds for CI/CD. Compose-based web UI. Published to ghcr.io with branch and tag-based versioning.</p>
+    </div>
+  </section>
+
+  <section class="benchmark-section">
+    <h2>Odaiba Urban Driving Benchmark</h2>
+    <p class="sub">libgnss++ vs RTKLIB on urban canyon GNSS dataset</p>
+    <div class="benchmark-grid">
+      <div class="benchmark-card">
+        <h4>Epoch Coverage</h4>
+        <div class="value">+41%</div>
+        <div class="detail">More valid epochs than RTKLIB</div>
+      </div>
+      <div class="benchmark-card">
+        <h4>P95 Horizontal Accuracy</h4>
+        <div class="value">3.7x</div>
+        <div class="detail">Better on common epochs</div>
+      </div>
+      <div class="benchmark-card">
+        <h4>RTK Fix Rate</h4>
+        <div class="value">>90%</div>
+        <div class="detail">On Odaiba driving dataset</div>
+      </div>
+      <div class="benchmark-card">
+        <h4>Real-time Factor</h4>
+        <div class="value">>1.0x</div>
+        <div class="detail">Processes faster than real-time</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="interfaces">
+    <h2>Four Ways to Use</h2>
+    <div class="interface-grid">
+      <div class="interface-card">
+        <h4>CLI</h4>
+        <p>11 native binaries + 40 Python CLI wrappers for every workflow.</p>
+        <code>gnss solve --mode rtk data.obs</code>
+      </div>
+      <div class="interface-card">
+        <h4>Python</h4>
+        <p>pybind11 bindings for RINEX inspection, solving, and analysis.</p>
+        <code>import libgnsspp</code>
+      </div>
+      <div class="interface-card">
+        <h4>ROS 2</h4>
+        <p>Solution playback node and raw GNSS driver with custom messages.</p>
+        <code>ros2 launch gnss_raw_driver ...</code>
+      </div>
+      <div class="interface-card">
+        <h4>Web UI</h4>
+        <p>Zero-dependency local dashboard for trajectories, benchmarks, and status.</p>
+        <code>gnss web --port 8085</code>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      libgnss++ &mdash; MIT License &mdash;
+      <a href="https://github.com/rsasaki0109/gnssplusplus-library">Source on GitHub</a> &mdash;
+      <a href="docs/">Documentation</a> &mdash;
+      <a href="demo/">Demo</a>
+    </p>
+  </footer>
+</body>
+</html>

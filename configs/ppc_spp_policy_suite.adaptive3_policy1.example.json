@@ -1,0 +1,38 @@
+{
+  "description": "PPC SPP adaptive-robust plus 1 percentage-point jump-policy benchmark suite.",
+  "output_dir": "output/ppc_spp_adaptive3_policy1_suite",
+  "prefix": "adaptive3_policy1",
+  "rates_mps": "25,50,75,100,150,200",
+  "min_jumps_m": "10,20,30,40,50",
+  "match_tolerance_s": 0.25,
+  "bridge_max_gap_s": 5.0,
+  "bridge_max_anchor_speed_mps": 10.0,
+  "max_positioning_drop_pct": 1.0,
+  "max_p95_delta_m": 0.0,
+  "runs": [
+    {
+      "label": "tokyo_run1",
+      "run_dir": "data/PPC-Dataset/tokyo/run1",
+      "input_pos": "output/ppc_tokyo_run1_spp_adaptive3_robust_t2p0_w0p05_full.pos",
+      "baseline_pos": "output/ppc_tokyo_run1_spp_full.pos"
+    },
+    {
+      "label": "nagoya_run1",
+      "run_dir": "data/PPC-Dataset/nagoya/run1",
+      "input_pos": "output/ppc_nagoya_run1_spp_adaptive3_robust_t2p0_w0p05_full.pos",
+      "baseline_pos": "output/ppc_nagoya_run1_spp_full.pos"
+    },
+    {
+      "label": "nagoya_run2",
+      "run_dir": "data/PPC-Dataset/nagoya/run2",
+      "input_pos": "output/ppc_nagoya_run2_spp_adaptive3_robust_t2p0_w0p05_full.pos",
+      "baseline_pos": "output/ppc_nagoya_run2_spp_full.pos"
+    },
+    {
+      "label": "nagoya_run3",
+      "run_dir": "data/PPC-Dataset/nagoya/run3",
+      "input_pos": "output/ppc_nagoya_run3_spp_adaptive3_robust_t2p0_w0p05_full.pos",
+      "baseline_pos": "output/ppc_nagoya_run3_spp_full.pos"
+    }
+  ]
+}

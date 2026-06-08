@@ -1,0 +1,794 @@
+#!/usr/bin/env python3
+"""Playwright smoke tests for the local gnss web UI."""
+
+from __future__ import annotations
+
+import json
+import base64
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+
+try:
+    from playwright.sync_api import Error as PlaywrightError
+    from playwright.sync_api import sync_playwright
+except ImportError as exc:  # pragma: no cover - exercised through skip path
+    sync_playwright = None
+    PlaywrightError = RuntimeError
+    PLAYWRIGHT_IMPORT_ERROR = exc
+else:
+    PLAYWRIGHT_IMPORT_ERROR = None
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+DISPATCHER = ROOT_DIR / "apps" / "gnss.py"
+
+
+def find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def wait_for_file(path: Path, timeout_s: float = 5.0) -> str:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if path.exists():
+            return path.read_text(encoding="utf-8").strip()
+        time.sleep(0.05)
+    raise TimeoutError(f"timed out waiting for {path}")
+
+
+@unittest.skipIf(sync_playwright is None, f"Playwright import unavailable: {PLAYWRIGHT_IMPORT_ERROR}")
+class WebUISmokeTest(unittest.TestCase):
+    def test_web_ui_renders_overview_status_and_ppc_rows(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_web_ui_") as temp_dir:
+            temp_root = Path(temp_dir)
+            lib_pos = temp_root / "lib.pos"
+            rtklib_pos = temp_root / "rtklib.pos"
+            summary_json = temp_root / "odaiba_summary.json"
+            status_json = temp_root / "receiver.status.json"
+            live_summary = temp_root / "output" / "live_replay_summary.json"
+            robotics_summary = temp_root / "output" / "robotics_smoke" / "tokyo_run1_rtk_realtime.json"
+            robotics_failed_summary = temp_root / "output" / "robotics_smoke" / "tokyo_run1_rtk_quick_failed.json"
+            robotics_pos = temp_root / "output" / "robotics_smoke" / "tokyo_run1_rtk_realtime.pos"
+            ros2_bag_summary = temp_root / "output" / "ros2_bag_doctor_summary.json"
+            ros2_bag_mcap_summary = temp_root / "output" / "ros2_bag_doctor_mcap_summary.json"
+            field_report_json = temp_root / "output" / "field_report.json"
+            field_report_md = temp_root / "output" / "field_report.md"
+            ppc_summary = temp_root / "output" / "ppc_tokyo_run1_rtk_summary.json"
+            ppc_commercial = temp_root / "output" / "ppc_commercial_receiver.csv"
+            ppc_commercial_matches = temp_root / "output" / "ppc_commercial_receiver_matches.csv"
+            moving_base_summary = temp_root / "output" / "scorpion_moving_base_summary.json"
+            moving_base_commercial = temp_root / "output" / "commercial_receiver_solution.csv"
+            moving_base_commercial_matches = temp_root / "output" / "commercial_receiver_matches.csv"
+            ppp_products_summary = temp_root / "output" / "ppp_static_products_summary.json"
+            visibility_summary = temp_root / "output" / "visibility_static_summary.json"
+            visibility_csv = temp_root / "output" / "visibility_static.csv"
+            visibility_png = temp_root / "output" / "visibility_static.png"
+            artifact_manifest = temp_root / "output" / "artifact_manifest.json"
+            port_file = temp_root / "port.txt"
+            config_toml = temp_root / "web.toml"
+            docs_url = "https://example.com/libgnsspp-docs/"
+
+            ppc_summary.parent.mkdir(parents=True, exist_ok=True)
+            lib_pos.write_text(
+                "\n".join(
+                    [
+                        "% synthetic libgnss++",
+                        "2200 100.0 1.0 2.0 3.0 35.000000000 139.000000000 10.0 4 12 3.5",
+                        "2200 101.0 2.0 3.0 4.0 35.000001000 139.000001000 10.1 3 11 2.1",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            rtklib_pos.write_text(
+                "\n".join(
+                    [
+                        "% synthetic rtklib",
+                        "2200 100.0 35.000000000 139.000000000 10.0 1 12",
+                        "2200 101.0 35.000001000 139.000001000 10.1 2 11",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            summary_json.write_text(
+                json.dumps(
+                    {
+                        "all_epochs": {
+                            "libgnsspp": {"epochs": 11637, "fix_rate_pct": 8.11},
+                            "rtklib": {"epochs": 8241, "fix_rate_pct": 7.22},
+                        },
+                        "common_epochs": {
+                            "libgnsspp": {"median_h_m": 0.733387, "p95_h_m": 5.941091},
+                            "rtklib": {"median_h_m": 0.703880, "p95_h_m": 27.673014},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            status_json.write_text(
+                json.dumps(
+                    {
+                        "state": "running",
+                        "pid": 4321,
+                        "pid_running": True,
+                        "uptime_seconds": 18.5,
+                        "restart_count": 2,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            live_summary.write_text(
+                json.dumps(
+                    {
+                        "execution_mode": "live",
+                        "metrics": {
+                            "termination": "completed",
+                            "aligned_epochs": 3,
+                            "written_solutions": 3,
+                            "fixed_solutions": 1,
+                            "realtime_factor": 3.5,
+                            "effective_epoch_rate_hz": 12.0,
+                            "rover_decoder_errors": 0,
+                            "base_decoder_errors": 0,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            robotics_pos.parent.mkdir(parents=True, exist_ok=True)
+            robotics_pos.write_text(
+                "% robotics smoke\n"
+                "2200 100.0 1.0 2.0 3.0 35.0 139.0 10.0 4 12 3.0\n",
+                encoding="ascii",
+            )
+            robotics_summary.write_text(
+                json.dumps(
+                    {
+                        "dataset": "PPC-Dataset tokyo run1",
+                        "signoff_profile": "ppc-rtk-tokyo",
+                        "solver": "rtk",
+                        "matched_epochs": 200,
+                        "valid_epochs": 200,
+                        "fixed_epochs": 196,
+                        "fix_rate_pct": 98.0,
+                        "positioning_rate_pct": 1.6735,
+                        "ppc_score_3d_50cm_ref_pct": 1.6735,
+                        "median_h_m": 0.044547,
+                        "p95_h_m": 0.114157,
+                        "solver_wall_time_s": 35.064062,
+                        "solution_span_s": 39.8,
+                        "realtime_factor": 1.135065,
+                        "effective_epoch_rate_hz": 5.703846,
+                        "solution_pos": str(robotics_pos),
+                        "robotics_smoke_profile": "realtime",
+                        "robotics_smoke_status": "passed",
+                        "robotics_smoke_failure_reasons": [],
+                        "robotics_smoke_command": [
+                            "python3",
+                            "apps/gnss.py",
+                            "ppc-rtk-signoff",
+                            "--dataset-root",
+                            str(temp_root / "output" / "robotics_run"),
+                        ],
+                        "reference_csv": str(temp_root / "output" / "robotics_reference.csv"),
+                        "run_dir": str(temp_root / "output" / "robotics_run"),
+                        "rover": str(temp_root / "output" / "robotics_run" / "rover.obs"),
+                        "base": str(temp_root / "output" / "robotics_run" / "base.obs"),
+                        "nav": str(temp_root / "output" / "robotics_run" / "base.nav"),
+                        "signoff_thresholds": {
+                            "require_realtime_factor_min": 1.0,
+                            "require_effective_epoch_rate_min": 5.0,
+                            "require_solver_wall_time_max": 3600.0,
+                            "require_positioning_rate_min": 0.0,
+                        },
+                        "tuning_profile": {
+                            "preset": "low-cost",
+                            "ratio": 2.4,
+                            "arfilter": True,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            robotics_failed_summary.write_text(
+                json.dumps(
+                    {
+                        "dataset": "PPC-Dataset tokyo run1",
+                        "signoff_profile": "ppc-rtk-tokyo",
+                        "solver": "rtk",
+                        "matched_epochs": 50,
+                        "valid_epochs": 50,
+                        "fixed_epochs": 12,
+                        "fix_rate_pct": 24.0,
+                        "positioning_rate_pct": 0.41,
+                        "median_h_m": 0.20,
+                        "p95_h_m": 2.50,
+                        "solver_wall_time_s": 10.0,
+                        "solution_span_s": 9.8,
+                        "realtime_factor": 0.98,
+                        "effective_epoch_rate_hz": 4.90,
+                        "solution_pos": str(robotics_pos),
+                        "robotics_smoke_profile": "quick",
+                        "robotics_smoke_status": "failed",
+                        "robotics_smoke_failure_reasons": [
+                            "realtime factor 0.980000 < 1.000000",
+                            "effective epoch rate 4.900000 Hz < 5.000000 Hz",
+                        ],
+                        "robotics_smoke_command": ["python3", "apps/gnss.py", "robotics-smoke", "--profile", "quick"],
+                        "robotics_smoke_thresholds": {
+                            "require_realtime_factor_min": 1.0,
+                            "require_effective_epoch_rate_min": 5.0,
+                            "require_solver_wall_time_max": 120.0,
+                            "require_positioning_rate_min": 0.0,
+                        },
+                        "tuning_profile": {
+                            "preset": "low-cost",
+                            "ratio": 2.4,
+                            "arfilter": True,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            ros2_bag_summary.write_text(
+                json.dumps(
+                    {
+                        "tool": "ros2-bag-doctor",
+                        "bag": str(temp_root / "output" / "field_bag"),
+                        "status": "ready",
+                        "ok": True,
+                        "replayable_raw_binary": True,
+                        "message_count": 9,
+                        "topic_count": 3,
+                        "duration_s": 3.0,
+                        "topic_status": {
+                            "raw_binary": {
+                                "status": "ok",
+                                "topic": "/gnss/raw_binary",
+                                "message_count": 3,
+                                "mean_rate_hz": 5.0,
+                                "gap_count": 0,
+                            },
+                            "raw": {
+                                "status": "ok",
+                                "topic": "/gnss/raw",
+                                "message_count": 3,
+                                "mean_rate_hz": 5.0,
+                                "gap_count": 0,
+                            },
+                            "fix": {
+                                "status": "ok",
+                                "topic": "/gnss/fix",
+                                "message_count": 3,
+                                "mean_rate_hz": 0.667,
+                                "gap_count": 1,
+                            },
+                        },
+                        "topics": [
+                            {
+                                "name": "/gnss/raw_binary",
+                                "type": "std_msgs/msg/UInt8MultiArray",
+                                "message_count": 3,
+                                "mean_rate_hz": 5.0,
+                                "max_gap_s": 0.2,
+                                "gap_count": 0,
+                            },
+                            {
+                                "name": "/gnss/fix",
+                                "type": "sensor_msgs/msg/NavSatFix",
+                                "message_count": 3,
+                                "mean_rate_hz": 0.667,
+                                "max_gap_s": 2.8,
+                                "gap_count": 1,
+                            },
+                        ],
+                        "commands": {
+                            "decode": "ros2 run gnss_raw_driver gnss_bag_processor_node --ros-args -p protocol:=auto",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            ros2_bag_mcap_summary.write_text(
+                json.dumps(
+                    {
+                        "tool": "ros2-bag-doctor",
+                        "bag": str(temp_root / "output" / "field_bag_mcap"),
+                        "status": "partial-metadata",
+                        "diagnostic_depth": "metadata",
+                        "storage_identifier": "mcap",
+                        "ok": False,
+                        "replayable_raw_binary": True,
+                        "message_count": 7,
+                        "topic_count": 3,
+                        "duration_s": 4.0,
+                        "topic_status": {
+                            "raw_binary": {
+                                "status": "ok",
+                                "topic": "/gnss/raw_binary",
+                                "message_count": 2,
+                                "mean_rate_hz": None,
+                                "gap_count": None,
+                                "source": "metadata",
+                            },
+                            "fix": {
+                                "status": "ok",
+                                "topic": "/gnss/fix",
+                                "message_count": 3,
+                                "mean_rate_hz": None,
+                                "gap_count": None,
+                                "source": "metadata",
+                            },
+                        },
+                        "topics": [
+                            {
+                                "name": "/gnss/raw_binary",
+                                "type": "std_msgs/msg/UInt8MultiArray",
+                                "message_count": 2,
+                                "mean_rate_hz": None,
+                                "max_gap_s": None,
+                                "gap_count": None,
+                                "source": "metadata",
+                            },
+                            {
+                                "name": "/gnss/fix",
+                                "type": "sensor_msgs/msg/NavSatFix",
+                                "message_count": 3,
+                                "mean_rate_hz": None,
+                                "max_gap_s": None,
+                                "gap_count": None,
+                                "source": "metadata",
+                            },
+                        ],
+                        "commands": {
+                            "decode": "ros2 run gnss_raw_driver gnss_bag_processor_node --ros-args -p protocol:=auto",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            field_report_md.write_text(
+                "\n".join(
+                    [
+                        "# Field report",
+                        "",
+                        "## ROS2 Bag Diagnostics",
+                        "",
+                        "| Source | Status |",
+                        "|---|---|",
+                        "| `ros2_bag_doctor_summary.json` | ready |",
+                        "",
+                        "## Next Commands",
+                        "",
+                        "- `python3 apps/gnss.py ros2-bag-doctor --bag <bag-directory>`",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            field_report_json.write_text(
+                json.dumps(
+                    {
+                        "tool": "field-report",
+                        "root": str(temp_root),
+                        "device": "/dev/ttyUSB0",
+                        "web_url": "http://127.0.0.1:8085",
+                        "markdown_report": str(field_report_md),
+                        "json_report": str(field_report_json),
+                        "setup_doctor": {
+                            "status": "warn",
+                            "status_counts": {"ok": 4, "warn": 1, "missing": 0},
+                        },
+                        "ros2_doctor": {
+                            "status": "ok",
+                            "status_counts": {"ok": 5, "warn": 0, "missing": 0},
+                        },
+                        "ros2_bags": [
+                            {"status": "ready", "replayable_raw_binary": True},
+                            {"status": "partial-metadata", "replayable_raw_binary": True},
+                        ],
+                        "robotics_smoke": [
+                            {"status": "passed"},
+                            {"status": "failed"},
+                        ],
+                        "next_actions": [
+                            "python3 apps/gnss.py ros2-bag-doctor --bag <bag-directory>",
+                            "python3 apps/gnss.py robotics-smoke --profile realtime",
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            ppc_summary.write_text(
+                json.dumps(
+                    {
+                        "matched_epochs": 120,
+                        "fix_rate_pct": 96.67,
+                        "median_h_m": 0.108,
+                        "p95_h_m": 0.110,
+                        "solver_wall_time_s": 12.34,
+                        "realtime_factor": 1.23,
+                        "effective_epoch_rate_hz": 15.67,
+                        "commercial_receiver": {
+                            "label": "survey_receiver",
+                            "solution_pos": str(ppc_commercial),
+                            "format": "csv",
+                            "matched_csv": str(ppc_commercial_matches),
+                            "matched_epochs": 120,
+                            "valid_epochs": 120,
+                            "fixed_epochs": 118,
+                            "fix_rate_pct": 98.33,
+                            "median_h_m": 0.095,
+                            "p95_h_m": 0.105,
+                            "p95_abs_up_m": 0.120,
+                        },
+                        "delta_vs_commercial_receiver": {
+                            "matched_epochs": 0,
+                            "fixed_epochs": -2,
+                            "fix_rate_pct": -1.66,
+                            "median_h_m": 0.013,
+                            "p95_h_m": 0.005,
+                            "p95_abs_up_m": -0.010,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            ppc_commercial.write_text(
+                "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,solution_status,num_satellites\n",
+                encoding="ascii",
+            )
+            ppc_commercial_matches.write_text(
+                "gps_tow_s,traj_east_m,traj_north_m,traj_up_m,east_error_m,north_error_m,up_error_m,horizontal_error_m,status\n",
+                encoding="ascii",
+            )
+            moving_base_summary.write_text(
+                json.dumps(
+                    {
+                        "matched_epochs": 94,
+                        "valid_epochs": 94,
+                        "fix_rate_pct": 95.74,
+                        "median_baseline_error_m": 0.042,
+                        "p95_baseline_error_m": 0.101,
+                        "p95_heading_error_deg": 5.85,
+                        "termination": "completed",
+                        "realtime_factor": 2.17,
+                        "effective_epoch_rate_hz": 10.84,
+                        "solution_pos": str(temp_root / "output" / "scorpion_moving_base.pos"),
+                        "matched_csv": str(temp_root / "output" / "scorpion_moving_base_matches.csv"),
+                        "prepare_summary_json": str(temp_root / "output" / "prepare_summary.json"),
+                        "products_summary_json": str(temp_root / "output" / "products_summary.json"),
+                        "plot_png": str(temp_root / "output" / "scorpion_moving_base.png"),
+                        "nav_rinex": str(temp_root / "output" / "brdc0010.24n"),
+                        "input_url": "https://example.com/scorpion.zip",
+                        "signoff_profile": "scorpion-moving-base",
+                        "commercial_receiver_csv": str(moving_base_commercial),
+                        "commercial_receiver_matched_csv": str(moving_base_commercial_matches),
+                        "commercial_receiver": {
+                            "label": "rover_nav_pvt",
+                            "solution_pos": str(moving_base_commercial),
+                            "format": "csv",
+                            "matched_csv": str(moving_base_commercial_matches),
+                            "matched_epochs": 120,
+                            "valid_epochs": 120,
+                            "fixed_epochs": 120,
+                            "fix_rate_pct": 100.0,
+                            "median_baseline_error_m": 0.102,
+                            "p95_baseline_error_m": 0.133,
+                            "p95_heading_error_deg": 3.80,
+                        },
+                        "libgnss_vs_commercial_receiver": {
+                            "matched_epochs_delta": -26,
+                            "fixed_epochs_delta": -30,
+                            "fix_rate_pct_delta": -4.26,
+                            "median_baseline_error_m_delta": -0.060,
+                            "p95_baseline_error_m_delta": -0.032,
+                            "p95_heading_error_deg_delta": 2.05,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            moving_base_commercial.write_text(
+                "gps_week,gps_tow_s,lat_deg,lon_deg,height_m,solution_status,num_satellites\n",
+                encoding="ascii",
+            )
+            moving_base_commercial_matches.write_text(
+                "gps_week,gps_tow_s,baseline_error_m,baseline_length_m,heading_error_deg,status,satellites\n",
+                encoding="ascii",
+            )
+            (temp_root / "output" / "scorpion_moving_base.png").write_bytes(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+ymsAAAAASUVORK5CYII="
+                )
+            )
+            (temp_root / "output" / "scorpion_moving_base_matches.csv").write_text(
+                "\n".join(
+                    [
+                        "gps_week,gps_tow_s,baseline_error_m,baseline_length_m,heading_error_deg,status,satellites",
+                        "2250,100.000,0.042000,1.500000,4.500000,4,12",
+                        "2250,100.200,0.101000,1.510000,5.850000,4,11",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            ppp_products_summary.write_text(
+                json.dumps(
+                    {
+                        "dataset": "PPC-Dataset tokyo run1",
+                        "run_dir": str(temp_root / "output" / "ppc_tokyo_run1"),
+                        "reference_csv": str(temp_root / "output" / "ppc_tokyo_run1_reference.csv"),
+                        "products_signoff_profile": "static",
+                        "product_presets": ["igs-final", "ionex", "dcb"],
+                        "fetched_product_date": "2024-01-02",
+                        "ppp_solution_rate_pct": 100.0,
+                        "ppp_converged": True,
+                        "ppp_convergence_time_s": 285.0,
+                        "mean_position_error_m": 0.12,
+                        "p95_position_error_m": 0.21,
+                        "max_position_error_m": 0.31,
+                        "ionex_corrections": 18,
+                        "dcb_corrections": 18,
+                        "solution_pos": str(temp_root / "output" / "ppp_static_products.pos"),
+                        "sp3": str(temp_root / "output" / "igs_static.sp3"),
+                        "clk": str(temp_root / "output" / "igs_static.clk"),
+                        "ionex": str(temp_root / "output" / "codg0020.24i"),
+                        "dcb": str(temp_root / "output" / "CAS0MGXRAP_20240020000_01D_01D_DCB.BSX"),
+                        "malib_solution_pos": str(temp_root / "output" / "malib_static.pos"),
+                        "comparison_target": "MALIB",
+                        "comparison_status": "better",
+                        "comparison_csv": str(temp_root / "output" / "ppp_static_products_comparison.csv"),
+                        "comparison_png": str(temp_root / "output" / "ppp_static_products_comparison.png"),
+                        "common_epoch_pairs": 42,
+                        "libgnss_minus_malib_mean_error_m": -0.05,
+                        "libgnss_minus_malib_p95_error_m": -0.08,
+                        "libgnss_minus_malib_max_error_m": -0.12,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (temp_root / "output" / "ppp_static_products_comparison.csv").write_text(
+                "\n".join(
+                    [
+                        "gps_tow_s,lib_h_m,malib_h_m,delta_h_m,lib_status,malib_status,lib_east_m,lib_north_m,lib_up_m,malib_east_m,malib_north_m,malib_up_m",
+                        "1000.000,0.120,0.170,0.050,6,6,0.100,0.050,0.010,0.140,0.090,0.020",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (temp_root / "output" / "ppp_static_products_comparison.png").write_bytes(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+ymsAAAAASUVORK5CYII="
+                )
+            )
+            visibility_summary.write_text(
+                json.dumps(
+                    {
+                        "csv": str(visibility_csv),
+                        "epochs_processed": 5,
+                        "epochs_with_rows": 5,
+                        "rows_written": 27,
+                        "unique_satellites": 9,
+                        "mean_satellites_per_epoch": 5.4,
+                        "max_satellites_per_epoch": 7,
+                        "mean_elevation_deg": 38.2,
+                        "mean_snr_dbhz": 44.7,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            visibility_csv.write_text(
+                "\n".join(
+                    [
+                        "epoch_index,week,tow,satellite,system,signal,azimuth_deg,elevation_deg,snr_dbhz,has_pseudorange,has_carrier_phase,has_doppler",
+                        "1,2200,100.000,G01,GPS,GPS_L1CA,45.0,30.0,42.0,1,1,0",
+                        "1,2200,100.000,G02,GPS,GPS_L1CA,120.0,55.0,47.4,1,1,0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            visibility_png.write_bytes(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+ymsAAAAASUVORK5CYII="
+                )
+            )
+            manifest_result = subprocess.run(
+                [
+                    sys.executable,
+                    str(DISPATCHER),
+                    "artifact-manifest",
+                    "--root",
+                    str(temp_root),
+                    "--output",
+                    str(artifact_manifest),
+                ],
+                cwd=ROOT_DIR,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(manifest_result.returncode, 0, msg=manifest_result.stderr)
+
+            config_toml.write_text(
+                "\n".join(
+                    [
+                        "[web]",
+                        'host = "127.0.0.1"',
+                        "port = 0",
+                        f'port_file = "{port_file}"',
+                        f'root = "{temp_root}"',
+                        f'lib_pos = "{lib_pos}"',
+                        f'rtklib_pos = "{rtklib_pos}"',
+                        f'odaiba_summary = "{summary_json}"',
+                        f'rcv_status = "{status_json}"',
+                        f'artifact_manifest = "{artifact_manifest}"',
+                        f'docs_url = "{docs_url}"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            port = find_free_port()
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    str(DISPATCHER),
+                    "web",
+                    "--config-toml",
+                    str(config_toml),
+                    "--port",
+                    str(port),
+                ],
+                cwd=ROOT_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                bound_port = int(wait_for_file(port_file))
+                with sync_playwright() as playwright:
+                    try:
+                        browser = playwright.chromium.launch(headless=True)
+                    except PlaywrightError as exc:  # pragma: no cover - exercised through skip path
+                        self.skipTest(f"Chromium unavailable for Playwright: {exc}")
+                    page = browser.new_page()
+                    page.goto(f"http://127.0.0.1:{bound_port}/", wait_until="networkidle")
+
+                    self.assertEqual(page.locator("h1").text_content(), "libgnss++ local web UI")
+                    self.assertEqual(page.locator("#docs-link").text_content(), "Open docs site")
+                    self.assertEqual(
+                        page.locator("#docs-link").get_attribute("href"),
+                        docs_url,
+                    )
+                    self.assertIn("artifact_manifest.json", page.locator("#artifact-manifest-link").text_content())
+                    self.assertTrue(page.locator("#artifact-chips").text_content())
+                    self.assertIn("11637", page.locator("#odaiba-metrics").text_content())
+                    self.assertIn("running", page.locator("#receiver-metrics").text_content())
+                    self.assertIn('"restart_count": 2', page.locator("#receiver-json").text_content())
+                    self.assertIn("Field reports", page.locator("body").text_content())
+                    self.assertIn("field_report.json", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("markdown", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("preview", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("warn", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("setup ok 4 / warn 1 / missing 0", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("1/2 ready", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("1 metadata-only", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("1/2 passed", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("cmd: python3 apps/gnss.py ros2-bag-doctor --bag <bag-directory>", page.locator("#field-report-table tbody").text_content())
+                    self.assertIn("0/1", page.locator("#field-report-metrics").text_content())
+                    self.assertIn("2", page.locator("#field-report-metrics").text_content())
+                    self.assertIn("field_report.md", page.locator("#field-report-preview-source").text_content())
+                    self.assertIn("# Field report", page.locator("#field-report-preview").text_content())
+                    self.assertIn("## Next Commands", page.locator("#field-report-preview").text_content())
+                    self.assertIn("python3 apps/gnss.py ros2-bag-doctor --bag <bag-directory>", page.locator("#field-report-preview").text_content())
+                    self.assertIn("live_replay_summary.json", page.locator("#live-table tbody").text_content())
+                    self.assertIn("completed", page.locator("#live-table tbody").text_content())
+                    self.assertIn("3.50x", page.locator("#live-table tbody").text_content())
+                    self.assertIn("realtime", page.locator("#live-table tbody").text_content())
+                    self.assertIn("Robotics realtime smoke", page.locator("body").text_content())
+                    self.assertIn("passed", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("1.135x", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("5.704 Hz", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("summary", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("pos", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("rtf 1.135x / min 1x", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("profile realtime / preset low-cost / ratio 2.4 / arfilter true", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("why: realtime factor 0.980000 < 1.000000", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("why: effective epoch rate 4.900000 Hz < 5.000000 Hz", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("cmd:", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("1/2", page.locator("#robotics-smoke-metrics").text_content())
+                    self.assertIn("ROS2 bag doctor", page.locator("body").text_content())
+                    self.assertIn("ros2_bag_doctor_summary.json", page.locator("#ros2-bag-table tbody").text_content())
+                    self.assertIn("ros2_bag_doctor_mcap_summary.json", page.locator("#ros2-bag-table tbody").text_content())
+                    self.assertIn("partial-metadata", page.locator("#ros2-bag-table tbody").text_content())
+                    self.assertIn("/gnss/raw_binary", page.locator("#ros2-bag-table tbody").text_content())
+                    self.assertIn("available", page.locator("#ros2-bag-table tbody").text_content())
+                    self.assertIn("/gnss/fix: 1 gap(s), max 2.800 s", page.locator("#ros2-bag-table tbody").text_content())
+                    self.assertIn("why: mcap metadata only; rates/gaps not measured", page.locator("#ros2-bag-table tbody").text_content())
+                    self.assertIn("decode:", page.locator("#ros2-bag-table tbody").text_content())
+                    self.assertIn("1/2", page.locator("#ros2-bag-metrics").text_content())
+                    self.assertIn("2/2", page.locator("#ros2-bag-metrics").text_content())
+                    self.assertEqual(page.locator("canvas").count(), 5)
+                    self.assertIn("FIXED", page.locator("#status-legend").text_content())
+                    self.assertIn("ppc_tokyo_run1_rtk_summary.json", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("96.67%", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("survey_receiver", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("Δp95 0.005 m", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("receiver-matches", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("excellent", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("12.34 s", page.locator("#ppc-table tbody").text_content())
+                    self.assertIn("scorpion_moving_base_summary.json", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("95.74%", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("0.101 m", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("rover_nav_pvt", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("Δhead 2.05 deg", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("completed", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("matches", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("prepare", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("products", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("source", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("nav", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn("plot", page.locator("#moving-base-table tbody").text_content())
+                    self.assertIn(
+                        "output%2Fscorpion_moving_base.png",
+                        page.locator("#moving-base-image").get_attribute("src"),
+                    )
+                    self.assertIn("Moving-base history", page.locator("body").text_content())
+                    self.assertIn("Heading history", page.locator("body").text_content())
+                    self.assertIn("summary", page.locator("#moving-base-provenance").text_content())
+                    self.assertIn("prepare", page.locator("#moving-base-provenance").text_content())
+                    self.assertIn("products", page.locator("#moving-base-provenance").text_content())
+                    self.assertIn("receiver", page.locator("#moving-base-provenance").text_content())
+                    self.assertIn("95.74%", page.locator("#moving-base-metrics").text_content())
+                    self.assertIn("0.101 m", page.locator("#moving-base-metrics").text_content())
+                    self.assertIn("-0.032 m", page.locator("#moving-base-metrics").text_content())
+                    self.assertIn("ppp_static_products_summary.json", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("PPC-Dataset tokyo run1", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("2024-01-02", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("285.0 s", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("18 / D 18", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("42 paired", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("Δmean -0.050 m", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("compare-csv", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("compare-png", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("sp3", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("malib", page.locator("#ppp-products-table tbody").text_content())
+                    self.assertIn("visibility_static_summary.json", page.locator("#visibility-table tbody").text_content())
+                    self.assertIn("27", page.locator("#visibility-table tbody").text_content())
+                    self.assertIn("44.70 dB-Hz", page.locator("#visibility-table tbody").text_content())
+                    self.assertIn("Artifact bundles", page.locator("body").text_content())
+                    self.assertIn("94 matched", page.locator("#artifact-manifest-table tbody").text_content())
+                    self.assertIn("commercial_solution", page.locator("#artifact-manifest-table tbody").text_content())
+                    self.assertIn("commercial_matches", page.locator("#artifact-manifest-table tbody").text_content())
+                    self.assertIn("ppp-products", page.locator("#artifact-manifest-table tbody").text_content())
+                    self.assertIn("moving-base", page.locator("#artifact-manifest-table tbody").text_content())
+                    self.assertIn("visibility", page.locator("#artifact-manifest-table tbody").text_content())
+                    self.assertIn("Visibility view", page.locator("body").text_content())
+                    self.assertIn(
+                        "output%2Fvisibility_static.png",
+                        page.locator("#visibility-image").get_attribute("src"),
+                    )
+                    browser.close()
+            finally:
+                process.terminate()
+                try:
+                    process.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.communicate(timeout=5)
+
+
+if __name__ == "__main__":
+    unittest.main()

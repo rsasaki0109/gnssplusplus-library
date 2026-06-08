@@ -1,0 +1,13 @@
+[web]
+root = "."
+host = "127.0.0.1"
+port = 8085
+lib_pos = "output/rtk_solution.pos"
+rtklib_pos = "output/driving_rtklib_rtk.pos"
+odaiba_summary = "output/odaiba_summary.json"
+rcv_status = "output/receiver.status.json"
+robotics_summary_glob = "output/robotics_smoke*/**/*.json"
+ros2_bag_summary_glob = "output/ros2_bag*_summary.json"
+field_report_glob = "output/field_report*.json"
+artifact_manifest = "output/artifact_manifest.json"
+docs_url = "https://rsasaki0109.github.io/gnssplusplus-library/"

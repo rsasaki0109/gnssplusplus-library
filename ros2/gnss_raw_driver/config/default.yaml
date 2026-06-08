@@ -1,0 +1,7 @@
+gnss_raw_driver:
+  ros__parameters:
+    device: "/dev/ttyUSB0"
+    baud_rate: 115200
+    protocol: "auto"      # "ubx", "sbf", or "auto"
+    frame_id: "gnss"
+    publish_raw_binary: true

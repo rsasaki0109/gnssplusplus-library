@@ -51,12 +51,12 @@ Relevant code entrypoints today:
 
 | Gap | Current libgnss++ state | Why it matters |
 |---|---|---|
-| Explicit `arfilter` policy switch | Present as an explicit subset-candidate ratio-margin knob in solver CLI/config, but intentionally narrower than demo5's broader tuning surface | Useful as a practical false-fix guard without collapsing the staged RTK design |
+| Explicit `arfilter` policy switch | Present as an explicit subset-candidate ratio-margin knob in solver CLI/config, and also has `--ar-policy demo5-continuous` (PR #19) as a broader AR extras gate, though intentionally narrower than demo5's full tuning surface | Useful as a practical false-fix guard without collapsing the staged RTK design |
 | Explicit `PAR` implementation | `PARTIAL` exists in config, but there is no separately documented demo5-style partial ambiguity-resolution path | This matters if we want to claim parity with demo5 tuning ideas rather than just naming compatibility |
 | Doppler-aided slip threshold path | A basic Doppler/carrier consistency slip guard now exists in the RTK bias-update path, but it is not yet a broader demo5-style tuning surface with receiver-class-specific knobs | demo5 uses Doppler/carrier disagreement as an additional practical slip signal |
 | Code-based slip path | A basic single-difference code-minus-phase slip guard now exists in the RTK bias-update path, but it is intentionally smaller than a full demo5 tuning surface | This is another low-cost-receiver guard often useful when carrier-only logic is not enough |
 | Receiver-oriented tuning presets | Named CLI presets now exist for `survey`, `low-cost`, and `moving-base`, and PPC RTK sign-off now carries city-specific tuning defaults (`Tokyo`: low-cost + arfilter, `Nagoya`: low-cost + no-arfilter) | demo5 is strong partly because it is operationally easy to tune for receiver classes |
-| Hold tuning knobs such as `varholdamb` / `gainholdamb` | `min_hold_count` and hold-active ratio threshold are now public knobs and are exercised through PPC RTK sign-off tuning profiles, but the broader hold policy remains intentionally simpler than demo5 | Useful when pushing harder on low-cost data without forking the solver |
+| Hold tuning knobs such as `varholdamb` / `gainholdamb` | `min_hold_count` and hold-active ratio threshold are now public knobs and are exercised through PPC RTK sign-off tuning profiles; hold-divergence and post-fix RMS rejection gates (`--max-hold-div`, `--max-postfix-rms`, PR #20/#22) cover most demo5 hold-stability concerns. The underlying `varholdamb`/`gainholdamb` semantics remain the one slice deferred — see `notes/` for rationale. | Useful when pushing harder on low-cost data without forking the solver |
 
 ## Important design difference
 

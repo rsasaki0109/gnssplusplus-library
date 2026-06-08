@@ -3,8 +3,105 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include <utility>
 
 namespace libgnss {
+namespace {
+
+constexpr std::size_t kMandatorySolutionColumns = 11;
+
+std::vector<std::string> parseSolutionColumnsHeader(const std::string& line) {
+    const std::string columns_marker = "% Columns:";
+    std::string column_text;
+
+    if (line.rfind(columns_marker, 0) == 0) {
+        column_text = line.substr(columns_marker.size());
+    } else if (!line.empty() && line[0] == '%') {
+        column_text = line.substr(1);
+        std::istringstream probe(column_text);
+        std::string first_column;
+        probe >> first_column;
+        if (first_column != "GPS_Week") {
+            return {};
+        }
+    } else {
+        return {};
+    }
+
+    std::istringstream column_stream(column_text);
+    std::vector<std::string> columns;
+    std::string column;
+    while (column_stream >> column) {
+        columns.push_back(column);
+    }
+    return columns;
+}
+
+int optionalColumnToInt(double value) {
+    return static_cast<int>(std::lround(value));
+}
+
+void applyOptionalSolutionColumns(PositionSolution& sol,
+                                  const std::vector<std::string>& columns,
+                                  const std::vector<double>& values) {
+    if (values.empty()) {
+        return;
+    }
+
+    if (columns.empty()) {
+        sol.ratio = values[0];
+        if (values.size() > 1) {
+            sol.num_fixed_ambiguities = optionalColumnToInt(values[1]);
+        }
+        if (values.size() > 2) {
+            sol.iterations = optionalColumnToInt(values[2]);
+        }
+        return;
+    }
+
+    for (std::size_t offset = 0; offset < values.size(); ++offset) {
+        const std::size_t column_index = kMandatorySolutionColumns + offset;
+        if (column_index >= columns.size()) {
+            continue;
+        }
+
+        const std::string& name = columns[column_index];
+        const double value = values[offset];
+        if (name == "Ratio") {
+            sol.ratio = value;
+        } else if (name == "FixedAmbiguities") {
+            sol.num_fixed_ambiguities = optionalColumnToInt(value);
+        } else if (name == "Iterations" || name == "RTKIter" || name == "RtkIter") {
+            sol.iterations = optionalColumnToInt(value);
+        } else if (name == "Baseline(m)") {
+            sol.baseline_length = value;
+        } else if (name == "RTKObs" || name == "RtkObs") {
+            sol.rtk_update_observations = optionalColumnToInt(value);
+        } else if (name == "RTKPhaseObs" || name == "RtkPhaseObs") {
+            sol.rtk_update_phase_observations = optionalColumnToInt(value);
+        } else if (name == "RTKCodeObs" || name == "RtkCodeObs") {
+            sol.rtk_update_code_observations = optionalColumnToInt(value);
+        } else if (name == "RTKOutliers" || name == "RtkOutliers") {
+            sol.rtk_update_suppressed_outliers = optionalColumnToInt(value);
+        } else if (name == "RTKPrefitRMS(m)") {
+            sol.rtk_update_prefit_residual_rms_m = value;
+        } else if (name == "RTKPrefitMax(m)") {
+            sol.rtk_update_prefit_residual_max_m = value;
+        } else if (name == "RTKPostSuppressRMS(m)") {
+            sol.rtk_update_post_suppression_residual_rms_m = value;
+        } else if (name == "RTKPostSuppressMax(m)") {
+            sol.rtk_update_post_suppression_residual_max_m = value;
+        } else if (name == "RTKUpdateNIS") {
+            sol.rtk_update_normalized_innovation_squared = value;
+        } else if (name == "RTKUpdateNISPerObs") {
+            sol.rtk_update_normalized_innovation_squared_per_observation = value;
+        } else if (name == "RTKUpdateNISRejected") {
+            sol.rtk_update_rejected_by_innovation_gate = optionalColumnToInt(value);
+        }
+    }
+}
+
+} // namespace
 
 double PositionSolution::getHorizontalAccuracy() const {
     // 95% confidence (2-sigma)
@@ -124,7 +221,7 @@ bool Solution::writeToFile(const std::string& filename, const std::string& forma
     // Write header
     file << "% LibGNSS++ Position Solution\n";
     file << "% Format: " << format << "\n";
-    file << "% Columns: GPS_Week GPS_TOW X(m) Y(m) Z(m) Lat(deg) Lon(deg) Height(m) Status Satellites PDOP\n";
+    file << "% Columns: GPS_Week GPS_TOW X(m) Y(m) Z(m) Lat(deg) Lon(deg) Height(m) Status Satellites PDOP Ratio FixedAmbiguities Iterations\n";
     
     for (const auto& sol : solutions) {
         file << std::fixed << std::setprecision(6);
@@ -135,7 +232,10 @@ bool Solution::writeToFile(const std::string& filename, const std::string& forma
         file << sol.position_geodetic.height << " ";
         file << static_cast<int>(sol.status) << " ";
         file << sol.num_satellites << " ";
-        file << sol.pdop << "\n";
+        file << sol.pdop << " ";
+        file << sol.ratio << " ";
+        file << sol.num_fixed_ambiguities << " ";
+        file << sol.iterations << "\n";
     }
     
     return true;
@@ -187,6 +287,58 @@ bool Solution::writeNMEA(const std::string& filename) const {
     return true;
 }
 
+bool Solution::loadFromFile(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        return false;
+    }
+
+    solutions.clear();
+
+    std::string line;
+    std::vector<std::string> columns;
+    while (std::getline(file, line)) {
+        if (line.empty()) {
+            continue;
+        }
+
+        if (line[0] == '%') {
+            std::vector<std::string> parsed_columns = parseSolutionColumnsHeader(line);
+            if (!parsed_columns.empty()) {
+                columns = std::move(parsed_columns);
+            }
+            continue;
+        }
+
+        std::istringstream iss(line);
+        PositionSolution sol;
+        double lat_deg = 0.0;
+        double lon_deg = 0.0;
+        int status = 0;
+
+        if (!(iss >> sol.time.week >> sol.time.tow
+                  >> sol.position_ecef(0) >> sol.position_ecef(1) >> sol.position_ecef(2)
+                  >> lat_deg >> lon_deg >> sol.position_geodetic.height
+                  >> status >> sol.num_satellites >> sol.pdop)) {
+            continue;
+        }
+
+        std::vector<double> optional_values;
+        double optional_value = 0.0;
+        while (iss >> optional_value) {
+            optional_values.push_back(optional_value);
+        }
+        applyOptionalSolutionColumns(sol, columns, optional_values);
+
+        sol.position_geodetic.latitude = lat_deg * M_PI / 180.0;
+        sol.position_geodetic.longitude = lon_deg * M_PI / 180.0;
+        sol.status = static_cast<SolutionStatus>(status);
+        solutions.push_back(sol);
+    }
+
+    return !solutions.empty();
+}
+
 const PositionSolution* Solution::getSolution(const GNSSTime& time) const {
     for (const auto& sol : solutions) {
         if (sol.time == time) {
@@ -194,6 +346,17 @@ const PositionSolution* Solution::getSolution(const GNSSTime& time) const {
         }
     }
     return nullptr;
+}
+
+std::vector<PositionSolution> Solution::filterByStatus(SolutionStatus status) const {
+    std::vector<PositionSolution> filtered;
+    filtered.reserve(solutions.size());
+    for (const auto& sol : solutions) {
+        if (sol.status == status) {
+            filtered.push_back(sol);
+        }
+    }
+    return filtered;
 }
 
 void Solution::sortByTime() {

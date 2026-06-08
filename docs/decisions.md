@@ -1,17 +1,29 @@
-# Decisions
+# Design Decisions
 
-This page summarizes implementation and operations decisions that affect repository-wide development flow.
+Key architectural and implementation decisions in libgnss++.
 
-## Current themes
+## Explicit State Management
 
-- keep sign-off and benchmark commands reproducible from the CLI
-- prefer small, benchmark-backed changes over broad solver rewrites
-- separate optional dataset-backed checks from fast default CI jobs
+All solvers maintain explicit state structures (`RTKProcessor`, `PPPProcessor`) rather than
+global runtime singletons. This makes testing deterministic and state transitions auditable.
 
-## Decision record expectations
+## Modular RTK Pipeline
 
-- problem statement
-- chosen approach
-- rejected alternatives
-- validation command or benchmark link
-- follow-up issue or rollback condition
+The RTK solver is decomposed into discrete stages: **selection** (reference satellite and DD
+pair construction), **measurement** (residual and covariance assembly), **update** (Kalman
+filter), and **validation** (fix validation with conservative hold policy).
+
+## Centralized Signal Policy
+
+`signal_policy.hpp` provides a single source of truth for band mapping and constellation
+priority, preventing code duplication across solvers and I/O modules.
+
+## Protocol-Agnostic Solver Layer
+
+Solvers accept canonical `ObservationEpoch` and `NavigationProducts` structures, remaining
+independent of the input format (RINEX, RTCM, UBX, QZSS L6).
+
+## Sign-off Framework
+
+Every validation gate produces a machine-readable JSON summary so CI can enforce regression
+thresholds without human inspection.

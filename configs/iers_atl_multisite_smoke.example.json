@@ -1,0 +1,14 @@
+{
+  "common": {
+    "nav": "data/igs_2026105/BRDC.rnx",
+    "sp3": "data/igs_2026105/IGS_final.sp3",
+    "clk": "data/igs_2026105/IGS_final.clk"
+  },
+  "sites": [
+    {
+      "name": "TSKB",
+      "obs": "data/igs_2026105/TSKB.rnx",
+      "atm_tidal_loading": "test_data/iers/tskb_synth.atl"
+    }
+  ]
+}

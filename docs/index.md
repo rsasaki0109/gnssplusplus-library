@@ -8,10 +8,15 @@ checked benchmark artifacts.
 
 ## Start here
 
+- [Robotics quick start](robotics_quickstart.md)
+- [Research quick start](research_quickstart.md)
+- [Dataset gallery](dataset_gallery.md)
 - [Architecture notes](architecture.md)
 - [Quick start](quickstart.md)
 - [Validation and sign-off](validation.md)
 - [Interfaces](interfaces.md)
+- [RTK tuning gates](rtk_tuning_gates.md)
+- [PPC reproduction commands](ppc_reproduction.md)
 - [Reference analyses](references/index.md)
 - [Contributing](contributing.md)
 

@@ -1,0 +1,24 @@
+ginan-iers2010 (libgnss++ vendored subset)
+==========================================
+
+This directory contains C++ wrappers around IERS Conventions (2010)
+routines, adapted from:
+
+    Geoscience Australia - Ginan
+    https://github.com/GeoscienceAustralia/ginan
+    Copyright 2020 Geoscience Australia
+    Licensed under Apache License, Version 2.0
+
+The wrapper code is itself a translation/wrapper of FORTRAN routines
+distributed by the IERS as part of the IERS Conventions 2010 software:
+
+    https://iers-conventions.obspm.fr/
+
+The IERS Conventions 2010 routines are public-domain scientific software
+produced under the auspices of the International Earth Rotation and
+Reference Systems Service. The C++ wrappers in this directory are
+licensed under Apache License, Version 2.0 (see ./LICENSE).
+
+A list of modifications made by libgnss++ to the upstream ginan sources
+is recorded in ./README.md ("Modifications" section), as required by
+Apache License 2.0 §4(b).

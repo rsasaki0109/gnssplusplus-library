@@ -125,6 +125,46 @@ def make_ppc_rtk_step(context: SignoffContext, city: str, *, require_rtklib: boo
     return make_step(step_name, slug, command, outputs)
 
 
+def make_ppc_taroz_amb_pdc_long_step(context: SignoffContext) -> SignoffStep:
+    slug = "ppc_taroz_amb_pdc_nagoya_run3_1000_seed"
+    name = "PPC taroz ambiguity PDC long generated-seed sign-off"
+    out_dir = context.output_dir / "dogfood" / f"{slug}_current"
+    run_dir = out_dir / "nagoya_run3"
+    outputs = [
+        out_dir / "summary.json",
+        run_dir / "spp_seed.pos",
+        run_dir / "fgo.pos",
+        run_dir / "summary.json",
+        run_dir / "epoch_debug.csv",
+        run_dir / "lambda_debug.csv",
+        run_dir / "cost_trace.csv",
+    ]
+
+    if context.dataset_root is None or not context.dataset_root.is_dir():
+        return skip_step(name, slug, outputs, "PPC-Dataset root is unavailable.")
+
+    command = [
+        *context.gnss_command,
+        "ppc-taroz-amb-pdc-smoke",
+        "--dataset-root",
+        str(context.dataset_root),
+        "--run",
+        "nagoya/run3",
+        "--max-epochs",
+        "1000",
+        "--generate-spp-seed",
+        "--require-valid-p95-3d-max",
+        "1.1",
+        "--require-fixed-p95-3d-max",
+        "0.2",
+        "--out-dir",
+        str(out_dir),
+        "--summary-json",
+        str(out_dir / "summary.json"),
+    ]
+    return make_step(name, slug, command, outputs)
+
+
 def make_scorpion_step(context: SignoffContext) -> SignoffStep:
     slug = "scorpion_moving_base"
     name = "SCORPION moving-base sign-off"
@@ -134,6 +174,8 @@ def make_scorpion_step(context: SignoffContext) -> SignoffStep:
         context.output_dir / "scorpion_moving_base" / "products_summary.json",
         context.output_dir / "scorpion_moving_base" / "scorpion_moving_base.pos",
         context.output_dir / "scorpion_moving_base" / "scorpion_moving_base_matches.csv",
+        context.output_dir / "scorpion_moving_base" / "commercial_receiver_solution.csv",
+        context.output_dir / "scorpion_moving_base" / "commercial_receiver_matches.csv",
         context.output_dir / "scorpion_moving_base" / "scorpion_moving_base.png",
         context.output_dir / "scorpion_moving_base" / "reference.csv",
     ]
@@ -184,6 +226,7 @@ def build_step_plan(
     return [
         make_ppc_rtk_step(context, "nagoya", require_rtklib=False),
         make_ppc_rtk_step(context, "tokyo", require_rtklib=True),
+        make_ppc_taroz_amb_pdc_long_step(context),
         make_scorpion_step(context),
     ]
 

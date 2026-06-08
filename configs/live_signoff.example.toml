@@ -1,0 +1,14 @@
+[live_signoff]
+rover_rtcm = "output/rover.rtcm3"
+base_rtcm = "output/base.rtcm3"
+out = "output/live_signoff.pos"
+summary_json = "output/live_signoff_summary.json"
+log_out = "output/live_signoff.log"
+max_epochs = 5
+require_termination = "completed"
+require_written_solutions_min = 5
+require_fixed_solutions_min = 1
+require_rover_decoder_errors_max = 0
+require_base_decoder_errors_max = 0
+require_realtime_factor_min = 1.0
+require_effective_epoch_rate_min = 1.0

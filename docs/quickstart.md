@@ -5,6 +5,7 @@
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
+python3 apps/gnss.py doctor
 ```
 
 ## Docker
@@ -59,17 +60,23 @@ python3 apps/gnss.py replay \
 
 | Command | Purpose |
 |---|---|
+| `gnss doctor` | Check local setup, built tools, dataset/docs readiness, Docker, and ROS2 hints |
+| `gnss ros2-doctor` | Check ROS2 receiver readiness, serial permissions, launch/record commands, and topic debug commands |
+| `gnss ros2-bag-doctor` | Inspect a ROS2 GNSS bag for required topics, message rates, timestamp gaps, raw-binary replayability, and MCAP reader/metadata fallback |
+| `gnss field-report` | Aggregate setup, ROS2, bag, and realtime-smoke diagnostics into Markdown and JSON handoff artifacts |
+| `gnss robotics-smoke` | Run PPC RTK `quick`, `realtime`, or `full` smoke profiles with runtime gates and debug reasons |
 | `gnss spp` | Batch SPP from rover/nav RINEX |
 | `gnss solve` | Batch RTK from rover/base/nav RINEX |
 | `gnss ppp` | Batch PPP from rover RINEX plus nav or precise products |
 | `gnss visibility` | Export azimuth/elevation/SNR visibility rows and summary JSON from rover/nav RINEX |
 | `gnss visibility-plot` | Render a visibility CSV into a polar/elevation PNG quick-look |
 | `gnss moving-base-plot` | Render a moving-base solution/reference pair into a baseline/heading PNG quick-look |
-| `gnss moving-base-prepare` | Extract rover/base UBX plus reference CSV from a ROS2 moving-base bag |
+| `gnss moving-base-prepare` | Extract rover/base UBX, reference CSV, and optional receiver CSV from a ROS2 moving-base bag |
 | `gnss moving-base-signoff` | Validate a real moving-base replay/live dataset against per-epoch base/rover reference coordinates |
-| `gnss scorpion-moving-base-signoff` | One-command prepare + BRDC fetch + replay validation for the public SCORPION bag |
+| `gnss scorpion-moving-base-signoff` | One-command prepare + BRDC fetch + replay validation for the public SCORPION bag with receiver side-by-side output |
 | `gnss fetch-products` | Fetch and cache `SP3`/`CLK`/`IONEX`/`DCB` files from local or remote sources |
 | `gnss ppp-products-signoff` | Run static, kinematic, or PPC PPP sign-off with fetched product presets or templates, plus comparison CSV/PNG artifacts |
+| `gnss vmf-atl` | Convert VMF site-wise GNSS tidal APL coefficients into libgnss++ ATL coefficient files |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
 | `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
 | `gnss ubx-info` | Inspect `NAV-PVT`, `RAWX`, `SFRBX` from file or serial |
@@ -77,7 +84,8 @@ python3 apps/gnss.py replay \
 | `gnss dcb-info` | Inspect `Bias-SINEX` or auxiliary DCB products |
 | `gnss qzss-l6-info` | Inspect direct QZSS L6 frames and export Compact SSR payloads |
 | `gnss web` | Local browser UI for summary JSON, live/moving-base/PPP-product sign-offs, trajectories, moving-base/visibility plots, receiver status, and artifact links |
-| `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya |
+| `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB/commercial receiver side-by-side output |
+| `gnss ppc-coverage-matrix` | Full six-run PPC Tokyo/Nagoya coverage-profile matrix with JSON/Markdown summaries |
 
 ## Local web UI
 
@@ -87,7 +95,29 @@ python3 apps/gnss.py web \
   --rcv-status output/receiver.status.json
 ```
 
-Open `http://127.0.0.1:8085` to inspect benchmark tables, live/moving-base/PPP-product sign-offs, receiver status, moving-base/visibility plots, moving-base history, and linked artifacts/provenance. PPP-product rows include direct links to fetched products, MALIB `.pos`, comparison CSV/PNG, and dataset reference files.
+Open `http://127.0.0.1:8085` to inspect benchmark tables, live/moving-base/PPP-product sign-offs, receiver status, moving-base/visibility plots, moving-base history, commercial receiver side-by-side metrics, and linked artifacts/provenance. PPC and moving-base rows include receiver comparison deltas when their summaries contain commercial receiver results; PPP-product rows include direct links to fetched products, MALIB `.pos`, comparison CSV/PNG, and dataset reference files.
+The robotics realtime smoke panel auto-discovers `output/robotics_smoke*/**/*.json`
+and shows pass/fail status, runtime gates, tuning knobs, and direct debug links.
+The ROS2 bag doctor panel auto-discovers `output/ros2_bag*_summary.json` and
+shows topic presence, message rates, timestamp gaps, and raw-binary replay
+readiness for field bags.
+
+Create a single handoff report after a field run:
+
+```bash
+python3 apps/gnss.py field-report \
+  --out output/field_report.md \
+  --json-out output/field_report.json
+```
+
+The report collects `gnss doctor`, `gnss ros2-doctor`, existing
+`ros2-bag-doctor` summaries, and existing `robotics-smoke` summaries. It is the
+artifact to attach when a field laptop, researcher, and robotics integrator
+need to discuss the same run.
+
+The local web UI auto-discovers `output/field_report*.json` and surfaces the
+report links, Markdown preview, setup/ROS2/bag/smoke status, and next debug
+commands near the top of the dashboard.
 
 You can also store the same arguments in `configs/web.example.toml` and run:
 
@@ -113,18 +143,23 @@ python3 apps/gnss.py moving-base-prepare \
   --input /datasets/moving_base/2023-06-14T174658Z.zip \
   --rover-ubx-out output/moving_base_rover.ubx \
   --base-ubx-out output/moving_base_base.ubx \
-  --reference-csv output/moving_base_reference.csv
+  --reference-csv output/moving_base_reference.csv \
+  --commercial-csv output/commercial_receiver_solution.csv
 
 python3 apps/gnss.py fetch-products \
   --date 2023-06-14 \
   --preset brdc-nav
 
 python3 apps/gnss.py scorpion-moving-base-signoff \
-  --input /datasets/moving_base/2023-06-14T174658Z.zip \
   --summary-json output/scorpion_moving_base_summary.json
 
 python3 apps/gnss.py moving-base-signoff \
   --config-toml configs/moving_base_signoff.example.toml
+
+python3 apps/gnss.py moving-base-signoff \
+  --config-toml configs/moving_base_signoff.example.toml \
+  --commercial-pos output/commercial_receiver_solution.csv \
+  --commercial-matched-csv output/commercial_receiver_matches.csv
 
 python3 apps/gnss.py live-signoff \
   --config-toml configs/live_signoff.example.toml
@@ -166,7 +201,36 @@ python3 apps/gnss.py ppp-products-signoff \
 
 python3 apps/gnss.py ppc-rtk-signoff \
   --config-toml configs/ppc_rtk_signoff.example.toml
+
+python3 apps/gnss.py ppc-rtk-signoff \
+  --dataset-root /datasets/PPC-Dataset \
+  --city tokyo \
+  --realtime-profile sigma-demote \
+  --summary-json output/ppc_tokyo_run1_sigma_demote_signoff.json
 ```
+
+## IERS PPP Loading Benches
+
+Atmospheric tidal loading (ATL) requires station-specific S1/S2
+coefficients. Convert VMF site-wise GNSS tidal APL coefficients to the
+libgnss++ `.atl` format, then run a paired PPP bench with ATL toggled:
+
+```bash
+python3 apps/gnss.py vmf-atl \
+  --station PERT \
+  --station TSKB \
+  --output-dir test_data/iers
+
+python3 apps/gnss.py ppp-iers-atm-tidal-loading-multisite-bench \
+  --sites configs/iers_atl_multisite_vmf.example.json \
+  --output-dir output/iers_atm_tidal_loading_multisite_bench_vmf
+```
+
+The example config expects the PPP observation/products under
+`data/igs_2026105/` and uses the tracked VMF-derived ATL fixtures for
+PERT and TSKB. Use site-specific real coefficients for production
+validation; `test_data/iers/tskb_synth.atl` is only a deterministic
+smoke fixture.
 
 ## Local docs
 

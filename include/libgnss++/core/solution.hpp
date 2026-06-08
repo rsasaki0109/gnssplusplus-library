@@ -48,6 +48,53 @@ struct PositionSolution {
     double processing_time_ms = 0.0; ///< Processing time in milliseconds
     int iterations = 0;             ///< Number of iterations
     double residual_rms = 0.0;      ///< RMS of residuals
+
+    // SPP quality-control diagnostics.
+    int spp_pre_qc_measurements = 0;
+    int spp_outlier_rejections = 0;
+    int spp_raim_fde_attempts = 0;
+    int spp_raim_fde_rejections = 0;
+    int spp_gdop_gate_rejections = 0;
+    int spp_residual_gate_rejections = 0;
+    int spp_chi_square_gate_rejections = 0;
+    int spp_position_jump_gate_rejections = 0;
+    int spp_degrees_of_freedom = 0;
+    int spp_robust_weighted_measurements = 0;
+    int spp_adaptive_robust_activations = 0;
+    int spp_adaptive_robust_tail_measurements = 0;
+    int spp_ionosphere_free_measurements = 0;
+    int spp_precise_orbit_clock_measurements = 0;
+    int spp_ssr_orbit_clock_corrections = 0;
+    int spp_ssr_code_bias_corrections = 0;
+    int spp_ionex_corrections = 0;
+    int spp_dcb_corrections = 0;
+    double spp_pre_qc_residual_rms_m = 0.0;
+    double spp_pre_qc_max_abs_residual_m = 0.0;
+    double spp_max_abs_residual_m = 0.0;
+    double spp_chi_square = 0.0;
+    double spp_chi_square_per_dof = 0.0;
+    double spp_position_jump_m = 0.0;
+    double spp_position_jump_rate_mps = 0.0;
+    double spp_min_robust_weight_factor = 1.0;
+    double spp_ssr_orbit_meters = 0.0;
+    double spp_ssr_clock_meters = 0.0;
+    double spp_ssr_code_bias_meters = 0.0;
+    double spp_ionex_meters = 0.0;
+    double spp_dcb_meters = 0.0;
+    std::vector<SatelliteId> spp_rejected_satellites;
+
+    // RTK update diagnostics from the latest DD measurement update.
+    int rtk_update_observations = 0;
+    int rtk_update_phase_observations = 0;
+    int rtk_update_code_observations = 0;
+    int rtk_update_suppressed_outliers = 0;
+    double rtk_update_prefit_residual_rms_m = 0.0;
+    double rtk_update_prefit_residual_max_m = 0.0;
+    double rtk_update_post_suppression_residual_rms_m = 0.0;
+    double rtk_update_post_suppression_residual_max_m = 0.0;
+    double rtk_update_normalized_innovation_squared = 0.0;
+    double rtk_update_normalized_innovation_squared_per_observation = 0.0;
+    int rtk_update_rejected_by_innovation_gate = 0;
     
     // Satellite information
     std::vector<SatelliteId> satellites_used;

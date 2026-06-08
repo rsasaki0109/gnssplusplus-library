@@ -1,0 +1,22 @@
+[ppp_products_signoff]
+profile = "ppc"
+run_dir = "/datasets/PPC-Dataset/tokyo/run1"
+reference_csv = "/datasets/PPC-Dataset/tokyo/run1/reference.csv"
+out = "output/ppp_ppc_products.pos"
+summary_json = "output/ppp_ppc_products_summary.json"
+ppp_run_summary_json = "output/ppp_ppc_run_summary.json"
+max_epochs = 120
+match_tolerance_s = 0.25
+use_existing_solution = false
+product_date = "2024-01-02"
+preset = ["igs-final", "ionex", "dcb"]
+product_cache_dir = ".cache/products"
+malib_pos = "output/malib_ppc.pos"
+use_existing_malib = true
+require_converged = true
+require_ionex_corrections_min = 1
+require_dcb_corrections_min = 1
+require_valid_epochs_min = 100
+require_matched_epochs_min = 100
+require_common_epoch_pairs_min = 100
+require_ppp_solution_rate_min = 95.0

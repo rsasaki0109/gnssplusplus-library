@@ -13,16 +13,25 @@ namespace libgnss {
 struct Observation {
     SatelliteId satellite;
     SignalType signal;
-    
+
     double pseudorange = 0.0;       ///< Pseudorange in meters
     double carrier_phase = 0.0;     ///< Carrier phase in cycles
     double doppler = 0.0;           ///< Doppler frequency in Hz
     double snr = 0.0;               ///< Signal-to-noise ratio in dB-Hz
-    
+
+    // Data availability flags
+    bool has_pseudorange = false;   ///< Pseudorange data available
+    bool has_carrier_phase = false; ///< Carrier phase data available
+    bool has_doppler = false;       ///< Doppler data available
+
     // Quality indicators
     uint8_t lli = 0;                ///< Loss of lock indicator
     uint8_t code = 0;               ///< Code indicator
     bool valid = true;              ///< Observation validity flag
+    bool loss_of_lock = false;      ///< Loss of lock flag
+    int signal_strength = 0;        ///< Signal strength (0-9)
+    bool has_glonass_frequency_channel = false; ///< GLONASS FCN available
+    int glonass_frequency_channel = 0;          ///< GLONASS frequency channel (-7..+6)
     
     // Corrections
     double ionosphere_delay = 0.0;  ///< Ionospheric delay correction

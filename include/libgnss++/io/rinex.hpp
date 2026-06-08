@@ -50,6 +50,8 @@ public:
         Vector3d approximate_position;
         Vector3d antenna_delta;
         std::vector<std::string> observation_types;
+        // RINEX 3: per-system observation types (key = system char, e.g. "G", "R", "E")
+        std::map<char, std::vector<std::string>> system_obs_types;
         double interval = 0.0;
         GNSSTime first_obs;
         GNSSTime last_obs;
@@ -115,7 +117,14 @@ private:
     std::ifstream file_;
     RINEXHeader header_;
     int current_line_ = 0;
-    
+
+    // State for parsing RINEX 3 "SYS / # / OBS TYPES" records that span
+    // continuation lines (systems with more than 13 observation types, e.g.
+    // GPS=22 or QZSS=24). Tracks the system whose type list is still being
+    // filled so that continuation lines (blank system column) append correctly.
+    char obs_type_sys_ = ' ';
+    int obs_type_expected_ = 0;
+
     /**
      * @brief Parse header line
      */

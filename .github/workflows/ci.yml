@@ -210,9 +210,24 @@ jobs:
     - name: Docker smoke
       run: |
         docker build -t libgnsspp-ci .
+        docker run --rm libgnsspp-ci --help >/dev/null
+        docker run --rm libgnsspp-ci web --help >/dev/null
         docker compose -f compose.yaml config >/dev/null
-        # Container run tests require the gnss CLI binary (not yet on main)
-        # docker run --rm libgnsspp-ci --help >/dev/null
+
+    - name: Generate dashboard artifacts
+      run: bash scripts/ci/generate_dashboard_artifacts.sh
+
+    - name: Upload dashboard artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: dashboard-artifacts-ubuntu
+        path: |
+          output/artifact_manifest.json
+          output/visibility_static_summary.json
+          output/visibility_static.csv
+          output/visibility_static.png
+        if-no-files-found: ignore
 
   linux-optional-signoffs:
     needs: [changes, linux-extended-tests]
@@ -266,6 +281,13 @@ jobs:
           output/ppc_tokyo_run1_rtk.pos
           output/ppc_tokyo_run1_rtk_events.csv
           output/ppc_tokyo_run1_rtk_rtklib.pos
+          output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_1000_seed_current/summary.json
+          output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_1000_seed_current/nagoya_run3/summary.json
+          output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_1000_seed_current/nagoya_run3/spp_seed.pos
+          output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_1000_seed_current/nagoya_run3/fgo.pos
+          output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_1000_seed_current/nagoya_run3/epoch_debug.csv
+          output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_1000_seed_current/nagoya_run3/lambda_debug.csv
+          output/dogfood/ppc_taroz_amb_pdc_nagoya_run3_1000_seed_current/nagoya_run3/cost_trace.csv
           output/scorpion_moving_base_summary.json
           output/scorpion_moving_base/prepare_summary.json
           output/scorpion_moving_base/products_summary.json
@@ -278,22 +300,11 @@ jobs:
     - name: Optional PPP products sign-off with MALIB comparison
       env:
         GNSSPP_MALIB_BIN: ${{ vars.GNSSPP_MALIB_BIN }}
-      run: |
-        if [ -z "${GNSSPP_MALIB_BIN}" ] || [ ! -x "${GNSSPP_MALIB_BIN}" ]; then
-          echo "MALIB binary is unavailable; skipping PPP products comparison sign-off."
-          exit 0
-        fi
-        mkdir -p output
-        python3 apps/gnss.py ppp-products-signoff \
-          --profile kinematic \
-          --obs data/rover_kinematic.obs \
-          --base data/base_kinematic.obs \
-          --nav data/navigation_kinematic.nav \
-          --summary-json output/ppp_kinematic_products_summary.json \
-          --max-epochs 60 \
-          --malib-bin "${GNSSPP_MALIB_BIN}" \
-          --require-common-epoch-pairs-min 20 \
-          --require-ppp-solution-rate-min 100
+        GNSSPP_PPP_PRODUCTS_OBS: ${{ vars.GNSSPP_PPP_PRODUCTS_OBS }}
+        GNSSPP_PPP_PRODUCTS_BASE: ${{ vars.GNSSPP_PPP_PRODUCTS_BASE }}
+        GNSSPP_PPP_PRODUCTS_NAV: ${{ vars.GNSSPP_PPP_PRODUCTS_NAV }}
+        GNSSPP_PPP_PRODUCTS_MALIB_CONFIG: ${{ vars.GNSSPP_PPP_PRODUCTS_MALIB_CONFIG }}
+      run: bash scripts/ci/run_optional_ppp_products_signoff.sh
 
     - name: Upload PPP products comparison artifacts
       if: always()
@@ -301,8 +312,11 @@ jobs:
       with:
         name: ppp-products-ubuntu
         path: |
+          output/ci_optional_ppp_products_summary.json
+          output/ci_optional_ppp_products/*.log
           output/ppp_kinematic_products_summary.json
           output/ppp_kinematic_products_solution.pos
+          output/ppp_kinematic_products_reference.pos
           output/ppp_kinematic_products_comparison.csv
           output/ppp_kinematic_products_comparison.png
           output/malib_ppp_kinematic_solution.pos
@@ -310,6 +324,77 @@ jobs:
           output/ppp_static_products_solution.pos
           output/ppp_static_products_comparison.csv
           output/ppp_static_products_comparison.png
+        if-no-files-found: ignore
+
+  madoca-parity:
+    needs: [changes, hygiene]
+    if: needs.changes.outputs.run_heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Checkout MADOCALIB
+      uses: actions/checkout@v4
+      with:
+        repository: QZSS-Strategy-Office/madocalib
+        ref: 0089f7dc97e8e2ba283a40be2edf4b73a140df6c
+        path: external/madocalib
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libeigen3-dev libgtest-dev cmake build-essential python3-dev pybind11-dev
+
+    - name: Configure CMake with MADOCALIB parity link
+      run: |
+        cmake -B build-madoca-parity \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DMADOCALIB_PARITY_LINK=ON \
+          -DMADOCALIB_ROOT_DIR="${GITHUB_WORKSPACE}/external/madocalib"
+
+    - name: Build MadocaParity tests and bridge tool
+      run: cmake --build build-madoca-parity --config Release --parallel --target run_tests
+
+    - name: Run MadocaParity
+      working-directory: build-madoca-parity
+      run: ./tests/run_tests --gtest_filter='*MadocaParity*:MadocaBridgeConfig.*'
+
+    - name: Run MADOCALIB bridge smoke
+      working-directory: build-madoca-parity
+      run: |
+        ROOT="${GITHUB_WORKSPACE}/external/madocalib"
+        ./apps/gnss_ppp \
+          --madocalib-bridge \
+          --obs "$ROOT/sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx" \
+          --nav "$ROOT/sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx" \
+          --madocalib-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.204.l6" \
+          --madocalib-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.206.l6" \
+          --antex "$ROOT/sample_data/data/igs20.atx" \
+          --madocalib-start "2025/04/01 00:00:00" \
+          --madocalib-end "2025/04/01 00:59:30" \
+          --madocalib-ti 30 \
+          --out madocalib_bridge_smoke.pos \
+          --summary-json madocalib_bridge_smoke.json \
+          --quiet
+        grep -q "MADOCALIB ver.2.1" madocalib_bridge_smoke.pos
+        rows="$(awk '$0 !~ /^%/ && NF > 0 {n++} END {print n+0}' madocalib_bridge_smoke.pos)"
+        test "$rows" -eq 118
+        non_q6="$(awk '$0 !~ /^%/ && NF > 0 && $6 != 6 {n++} END {print n+0}' madocalib_bridge_smoke.pos)"
+        test "$non_q6" -eq 0
+
+    - name: Upload MadocaParity diagnostics
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: madoca-parity-diagnostics
+        path: |
+          build-madoca-parity/CMakeCache.txt
+          build-madoca-parity/Testing/Temporary/LastTest.log
+          build-madoca-parity/Testing/Temporary/LastTestsFailed.log
+          build-madoca-parity/CMakeFiles/CMakeConfigureLog.yaml
+          build-madoca-parity/madocalib_bridge_smoke.pos
+          build-madoca-parity/madocalib_bridge_smoke.json
         if-no-files-found: ignore
 
   static-analysis:

@@ -17,7 +17,7 @@ namespace libgnss {
 struct ProcessorConfig {
     // General settings
     double elevation_mask = 15.0;      ///< Elevation mask in degrees
-    double snr_mask = 35.0;            ///< SNR mask in dB-Hz
+    double snr_mask = 0.0;             ///< SNR mask in dB-Hz (0=disable for RINEX 2)
     int max_satellites = 32;           ///< Maximum number of satellites to use
     
     // Positioning settings

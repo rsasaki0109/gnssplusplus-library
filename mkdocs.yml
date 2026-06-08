@@ -1,6 +1,6 @@
 site_name: libgnss++
 site_description: Modern C++ GNSS/RTK/PPP/CLAS toolkit
-site_url: https://rsasaki0109.github.io/gnssplusplus-library/
+site_url: https://rsasaki0109.github.io/gnssplusplus-library/docs/
 repo_url: https://github.com/rsasaki0109/gnssplusplus-library
 repo_name: rsasaki0109/gnssplusplus-library
 docs_dir: docs
@@ -19,13 +19,19 @@ markdown_extensions:
       permalink: true
 nav:
   - Home: index.md
+  - Robotics Quick Start: robotics_quickstart.md
+  - Research Quick Start: research_quickstart.md
+  - Dataset Gallery: dataset_gallery.md
   - Architecture: architecture.md
   - Quick Start: quickstart.md
   - Benchmarks: benchmarks.md
+  - PPC Reproduction: ppc_reproduction.md
+  - RTK Tuning Gates: rtk_tuning_gates.md
   - Validation: validation.md
   - Interfaces: interfaces.md
   - Experiments: experiments.md
   - Decisions: decisions.md
+  - IERS Integration Plan: iers-integration-plan.md
   - References:
       - Overview: references/index.md
       - MADOCALIB Gap: references/madocalib-gap.md
