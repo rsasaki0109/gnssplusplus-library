@@ -195,6 +195,20 @@ Record the raw stream and the standard fix topic:
 ros2 bag record /gnss/raw_binary /gnss/raw /gnss/fix
 ```
 
+Inspect the bag before you leave the test site:
+
+```bash
+python3 apps/gnss.py ros2-bag-doctor \
+  --bag <bag-directory> \
+  --summary-json output/ros2_bag_doctor_summary.json
+```
+
+The doctor reads `metadata.yaml` plus sqlite storage directly, so it does not
+need ROS2 Python imports. It reports topic types, message counts, duration,
+estimated rates, timestamp gaps, and whether `/gnss/raw_binary` is available
+for lossless decoder replay. Missing `/gnss/raw_binary` means researchers can
+still inspect `/gnss/fix`, but cannot replay improved decoders from the bag.
+
 Decode a recorded raw-binary bag into ROS topics plus file artifacts:
 
 ```bash
@@ -216,6 +230,7 @@ Use this checklist before wiring the output into a robot localization graph:
 | `/gnss/fix.status.status` changes across no-fix, float, fixed states | Downstream filters can gate bad epochs |
 | covariance is present on `/gnss/fix` | EKF/graph weighting is not arbitrary |
 | `/gnss/raw_binary` is recorded | Decoder improvements can be replayed later |
+| `gnss ros2-bag-doctor` summary is archived | Topic gaps and missing replay data are visible after the field test |
 | a `*-signoff` JSON is archived | Performance regressions become comparable |
 
 ## Next steps

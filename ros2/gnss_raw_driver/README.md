@@ -50,6 +50,18 @@ ros2 bag record /gnss/raw_binary /gnss/raw /gnss/fix
 `/gnss/raw_binary` is the lossless stream. Keep it in field bags so decoder and
 solver changes can be replayed without returning to the test site.
 
+Inspect the recorded bag before archiving it:
+
+```bash
+python3 apps/gnss.py ros2-bag-doctor \
+  --bag <bag-directory> \
+  --summary-json output/ros2_bag_doctor_summary.json
+```
+
+The bag doctor checks topic presence, message counts, estimated rates,
+timestamp gaps, and whether `/gnss/raw_binary` is present for replayable
+decoder research. The summary JSON is displayed by `gnss web`.
+
 ## Offline bag processor
 
 Play a bag in one terminal:

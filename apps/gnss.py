@@ -29,6 +29,11 @@ COMMANDS = {
         "target": os.path.join(APPS_DIR, "gnss_ros2_doctor.py"),
         "summary": "Check ROS2 receiver readiness, serial permissions, launch, record, and topic debug commands.",
     },
+    "ros2-bag-doctor": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ros2_bag_doctor.py"),
+        "summary": "Inspect ROS2 GNSS bag topics, rates, gaps, and raw-binary replayability.",
+    },
     "spp": {
         "kind": "binary",
         "target": "gnss_spp",

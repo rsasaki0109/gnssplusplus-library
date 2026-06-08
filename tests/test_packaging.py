@@ -68,6 +68,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_doctor.py",
                 prefix / "bin" / "gnss_robotics_smoke.py",
                 prefix / "bin" / "gnss_ros2_doctor.py",
+                prefix / "bin" / "gnss_ros2_bag_doctor.py",
                 prefix / "bin" / "gnss_spp",
                 prefix / "bin" / "gnss_solve",
                 prefix / "bin" / "gnss_ppp",
