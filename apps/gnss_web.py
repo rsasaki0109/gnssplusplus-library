@@ -115,6 +115,11 @@ def parse_args() -> argparse.Namespace:
         help="Glob under --root for gnss ros2-bag-doctor summary JSON files.",
     )
     parser.add_argument(
+        "--field-report-glob",
+        default="output/field_report*.json",
+        help="Glob under --root for gnss field-report JSON files.",
+    )
+    parser.add_argument(
         "--visibility-summary-glob",
         default="output/visibility*_summary.json",
         help="Glob under --root for gnss visibility summary JSON files.",
@@ -340,6 +345,79 @@ def classify_ros2_bag_status(payload: dict[str, Any]) -> str:
     if payload.get("message_count"):
         return "partial"
     return "missing"
+
+
+def classify_field_report_status(payload: dict[str, Any]) -> str:
+    setup = payload.get("setup_doctor")
+    ros2 = payload.get("ros2_doctor")
+    setup_status = setup.get("status") if isinstance(setup, dict) else None
+    ros2_status = ros2.get("status") if isinstance(ros2, dict) else None
+    if setup_status == "missing" or ros2_status == "missing":
+        return "missing"
+
+    ros2_bags = payload.get("ros2_bags")
+    if not isinstance(ros2_bags, list):
+        ros2_bags = []
+    robotics_smoke = payload.get("robotics_smoke")
+    if not isinstance(robotics_smoke, list):
+        robotics_smoke = []
+    has_bag_attention = any(item.get("status") != "ready" for item in ros2_bags if isinstance(item, dict))
+    has_smoke_attention = any(item.get("status") != "passed" for item in robotics_smoke if isinstance(item, dict))
+    if setup_status == "warn" or ros2_status == "warn" or has_bag_attention or has_smoke_attention:
+        return "warn"
+    if not ros2_bags or not robotics_smoke:
+        return "partial"
+    return "ready"
+
+
+def summarize_field_report(payload: dict[str, Any], path: Path, root_dir: Path) -> dict[str, Any]:
+    setup = payload.get("setup_doctor")
+    if not isinstance(setup, dict):
+        setup = {}
+    ros2 = payload.get("ros2_doctor")
+    if not isinstance(ros2, dict):
+        ros2 = {}
+    ros2_bags = payload.get("ros2_bags")
+    if not isinstance(ros2_bags, list):
+        ros2_bags = []
+    robotics_smoke = payload.get("robotics_smoke")
+    if not isinstance(robotics_smoke, list):
+        robotics_smoke = []
+    next_actions = payload.get("next_actions")
+    if not isinstance(next_actions, list):
+        next_actions = []
+    markdown_report = normalize_artifact_path(root_dir, payload.get("markdown_report"))
+    if markdown_report is None:
+        markdown_candidate = path.with_suffix(".md")
+        if markdown_candidate.exists():
+            markdown_report = relative_display(markdown_candidate, root_dir)
+    return {
+        "_path": relative_display(path, root_dir),
+        "summary_path": relative_display(path, root_dir),
+        "markdown_report": markdown_report,
+        "root": payload.get("root"),
+        "device": payload.get("device"),
+        "web_url": payload.get("web_url"),
+        "status": classify_field_report_status(payload),
+        "setup_status": setup.get("status"),
+        "setup_counts": setup.get("status_counts") if isinstance(setup.get("status_counts"), dict) else {},
+        "ros2_status": ros2.get("status"),
+        "ros2_counts": ros2.get("status_counts") if isinstance(ros2.get("status_counts"), dict) else {},
+        "ros2_bag_count": len(ros2_bags),
+        "ros2_bag_ready": sum(1 for item in ros2_bags if isinstance(item, dict) and item.get("status") == "ready"),
+        "ros2_bag_metadata": sum(
+            1
+            for item in ros2_bags
+            if isinstance(item, dict) and item.get("status") == "partial-metadata"
+        ),
+        "robotics_count": len(robotics_smoke),
+        "robotics_passed": sum(
+            1
+            for item in robotics_smoke
+            if isinstance(item, dict) and item.get("status") == "passed"
+        ),
+        "next_actions": [str(action) for action in next_actions if action],
+    }
 
 
 def downsample_points(points: list[dict[str, Any]], limit: int = MAX_RENDER_POINTS) -> list[dict[str, Any]]:
@@ -748,6 +826,15 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
 
+    field_report_summaries: list[dict[str, Any]] = []
+    for path in sorted(root_dir.glob(args.field_report_glob)):
+        payload = load_json(path)
+        if payload is None:
+            continue
+        if payload.get("tool") not in (None, "field-report"):
+            continue
+        field_report_summaries.append(summarize_field_report(payload, path, root_dir))
+
     artifact_manifest_payload = load_json(artifact_manifest_path)
     artifact_manifest = []
     if artifact_manifest_payload is not None:
@@ -770,6 +857,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         "odaiba_summary": load_json(odaiba_summary_path),
         "ppc_summaries": ppc_summaries,
         "live_summaries": live_summaries,
+        "field_report_summaries": field_report_summaries,
         "robotics_summaries": robotics_summaries,
         "ros2_bag_summaries": ros2_bag_summaries,
         "visibility_summaries": visibility_summaries,
@@ -998,6 +1086,27 @@ def render_html() -> str:
         <div class="metrics" id="receiver-metrics"></div>
         <pre class="status-pre" id="receiver-json">No receiver status configured.</pre>
       </div>
+    </section>
+
+    <section class="card" style="margin-top: 18px;">
+      <div class="section-title">
+        <h2>Field reports</h2>
+        <span class="tiny">auto-discovered from output/field_report*.json</span>
+      </div>
+      <div class="metrics" id="field-report-metrics"></div>
+      <table id="field-report-table">
+        <thead>
+          <tr>
+            <th>Report</th>
+            <th>Status</th>
+            <th>Setup / ROS2</th>
+            <th>Bags</th>
+            <th>Smoke</th>
+            <th>Next actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </section>
 
     <section class="card" style="margin-top: 18px;">
@@ -1555,10 +1664,33 @@ def render_html() -> str:
       return String(value);
     }
 
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      }[char]));
+    }
+
     function renderBadge(status) {
       const normalized = (status || "n/a");
       const className = normalized === "n/a" ? "na" : normalized;
       return `<span class="badge ${className}">${normalized}</span>`;
+    }
+
+    function statusCountSummary(counts) {
+      const safe = counts || {};
+      return `ok ${safe.ok ?? 0} / warn ${safe.warn ?? 0} / missing ${safe.missing ?? 0}`;
+    }
+
+    function fieldReportActions(row) {
+      const actions = Array.isArray(row.next_actions) ? row.next_actions : [];
+      const lines = actions.slice(0, 4).map((action) => `cmd: ${action}`);
+      if (actions.length > 4) lines.push(`${actions.length - 4} more action(s)`);
+      if (!lines.length) lines.push("no queued action");
+      return `<span class="debug-lines">${lines.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}</span>`;
     }
 
     function commercialReceiverArtifactLinks(row) {
@@ -1871,6 +2003,37 @@ def render_html() -> str:
         ["common median H", formatMaybeNumber(odaiba.common_epochs?.libgnsspp?.median_h_m, 3, " m")],
         ["common p95 H", formatMaybeNumber(odaiba.common_epochs?.libgnsspp?.p95_h_m, 2, " m")],
       ]);
+
+      const fieldReportRows = overview.field_report_summaries || [];
+      const fieldReportReady = fieldReportRows.filter((row) => row.status === "ready").length;
+      const fieldReportAttention = fieldReportRows.filter((row) => row.status !== "ready").length;
+      const fieldReportActionCount = fieldReportRows
+        .map((row) => Array.isArray(row.next_actions) ? row.next_actions.length : 0)
+        .reduce((current, value) => current + value, 0);
+      renderMetricGrid(document.getElementById("field-report-metrics"), [
+        ["reports", fieldReportRows.length],
+        ["ready", `${fieldReportReady}/${fieldReportRows.length}`],
+        ["attention", fieldReportAttention],
+        ["next actions", fieldReportActionCount],
+      ]);
+      const fieldReportBody = document.querySelector("#field-report-table tbody");
+      fieldReportBody.innerHTML = "";
+      for (const row of fieldReportRows) {
+        const artifacts = [
+          artifactLink(row.summary_path || row._path, "json"),
+          row.markdown_report ? artifactLink(row.markdown_report, "markdown") : null,
+          row.web_url ? smartLink(row.web_url, "web") : null,
+        ].filter(Boolean).join(" / ");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${row._path || "field-report"}<br><span class="tiny">${artifacts}</span></td>
+          <td>${renderBadge(row.status)}</td>
+          <td>${renderBadge(row.setup_status)} / ${renderBadge(row.ros2_status)}<br><span class="tiny">setup ${statusCountSummary(row.setup_counts)}<br>ros2 ${statusCountSummary(row.ros2_counts)}</span></td>
+          <td>${row.ros2_bag_ready ?? 0}/${row.ros2_bag_count ?? 0} ready<br><span class="tiny">${row.ros2_bag_metadata ?? 0} metadata-only</span></td>
+          <td>${row.robotics_passed ?? 0}/${row.robotics_count ?? 0} passed</td>
+          <td>${fieldReportActions(row)}</td>`;
+        fieldReportBody.appendChild(tr);
+      }
 
       const liveBody = document.querySelector("#live-table tbody");
       liveBody.innerHTML = "";
