@@ -116,8 +116,8 @@ artifact to attach when a field laptop, researcher, and robotics integrator
 need to discuss the same run.
 
 The local web UI auto-discovers `output/field_report*.json` and surfaces the
-report links, setup/ROS2/bag/smoke status, and next debug commands near the top
-of the dashboard.
+report links, Markdown preview, setup/ROS2/bag/smoke status, and next debug
+commands near the top of the dashboard.
 
 You can also store the same arguments in `configs/web.example.toml` and run:
 
