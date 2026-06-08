@@ -6,6 +6,9 @@ The primary interface is the `gnss` dispatcher plus native command binaries.
 
 Examples:
 
+- `gnss doctor`
+- `gnss ros2-doctor`
+- `gnss robotics-smoke`
 - `gnss spp`
 - `gnss solve`
 - `gnss ppp` (`--nav`, `--sp3`, `--clk`, `--ionex`, `--dcb`, `--ssr`, `--ssr-rtcm`)

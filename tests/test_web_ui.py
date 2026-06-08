@@ -53,6 +53,9 @@ class WebUISmokeTest(unittest.TestCase):
             summary_json = temp_root / "odaiba_summary.json"
             status_json = temp_root / "receiver.status.json"
             live_summary = temp_root / "output" / "live_replay_summary.json"
+            robotics_summary = temp_root / "output" / "robotics_smoke" / "tokyo_run1_rtk_realtime.json"
+            robotics_failed_summary = temp_root / "output" / "robotics_smoke" / "tokyo_run1_rtk_quick_failed.json"
+            robotics_pos = temp_root / "output" / "robotics_smoke" / "tokyo_run1_rtk_realtime.pos"
             ppc_summary = temp_root / "output" / "ppc_tokyo_run1_rtk_summary.json"
             ppc_commercial = temp_root / "output" / "ppc_commercial_receiver.csv"
             ppc_commercial_matches = temp_root / "output" / "ppc_commercial_receiver_matches.csv"
@@ -131,6 +134,101 @@ class WebUISmokeTest(unittest.TestCase):
                             "effective_epoch_rate_hz": 12.0,
                             "rover_decoder_errors": 0,
                             "base_decoder_errors": 0,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            robotics_pos.parent.mkdir(parents=True, exist_ok=True)
+            robotics_pos.write_text(
+                "% robotics smoke\n"
+                "2200 100.0 1.0 2.0 3.0 35.0 139.0 10.0 4 12 3.0\n",
+                encoding="ascii",
+            )
+            robotics_summary.write_text(
+                json.dumps(
+                    {
+                        "dataset": "PPC-Dataset tokyo run1",
+                        "signoff_profile": "ppc-rtk-tokyo",
+                        "solver": "rtk",
+                        "matched_epochs": 200,
+                        "valid_epochs": 200,
+                        "fixed_epochs": 196,
+                        "fix_rate_pct": 98.0,
+                        "positioning_rate_pct": 1.6735,
+                        "ppc_score_3d_50cm_ref_pct": 1.6735,
+                        "median_h_m": 0.044547,
+                        "p95_h_m": 0.114157,
+                        "solver_wall_time_s": 35.064062,
+                        "solution_span_s": 39.8,
+                        "realtime_factor": 1.135065,
+                        "effective_epoch_rate_hz": 5.703846,
+                        "solution_pos": str(robotics_pos),
+                        "robotics_smoke_profile": "realtime",
+                        "robotics_smoke_status": "passed",
+                        "robotics_smoke_failure_reasons": [],
+                        "robotics_smoke_command": [
+                            "python3",
+                            "apps/gnss.py",
+                            "ppc-rtk-signoff",
+                            "--dataset-root",
+                            str(temp_root / "output" / "robotics_run"),
+                        ],
+                        "reference_csv": str(temp_root / "output" / "robotics_reference.csv"),
+                        "run_dir": str(temp_root / "output" / "robotics_run"),
+                        "rover": str(temp_root / "output" / "robotics_run" / "rover.obs"),
+                        "base": str(temp_root / "output" / "robotics_run" / "base.obs"),
+                        "nav": str(temp_root / "output" / "robotics_run" / "base.nav"),
+                        "signoff_thresholds": {
+                            "require_realtime_factor_min": 1.0,
+                            "require_effective_epoch_rate_min": 5.0,
+                            "require_solver_wall_time_max": 3600.0,
+                            "require_positioning_rate_min": 0.0,
+                        },
+                        "tuning_profile": {
+                            "preset": "low-cost",
+                            "ratio": 2.4,
+                            "arfilter": True,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            robotics_failed_summary.write_text(
+                json.dumps(
+                    {
+                        "dataset": "PPC-Dataset tokyo run1",
+                        "signoff_profile": "ppc-rtk-tokyo",
+                        "solver": "rtk",
+                        "matched_epochs": 50,
+                        "valid_epochs": 50,
+                        "fixed_epochs": 12,
+                        "fix_rate_pct": 24.0,
+                        "positioning_rate_pct": 0.41,
+                        "median_h_m": 0.20,
+                        "p95_h_m": 2.50,
+                        "solver_wall_time_s": 10.0,
+                        "solution_span_s": 9.8,
+                        "realtime_factor": 0.98,
+                        "effective_epoch_rate_hz": 4.90,
+                        "solution_pos": str(robotics_pos),
+                        "robotics_smoke_profile": "quick",
+                        "robotics_smoke_status": "failed",
+                        "robotics_smoke_failure_reasons": [
+                            "realtime factor 0.980000 < 1.000000",
+                            "effective epoch rate 4.900000 Hz < 5.000000 Hz",
+                        ],
+                        "robotics_smoke_command": ["python3", "apps/gnss.py", "robotics-smoke", "--profile", "quick"],
+                        "robotics_smoke_thresholds": {
+                            "require_realtime_factor_min": 1.0,
+                            "require_effective_epoch_rate_min": 5.0,
+                            "require_solver_wall_time_max": 120.0,
+                            "require_positioning_rate_min": 0.0,
+                        },
+                        "tuning_profile": {
+                            "preset": "low-cost",
+                            "ratio": 2.4,
+                            "arfilter": True,
                         },
                     }
                 ),
@@ -410,6 +508,18 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("completed", page.locator("#live-table tbody").text_content())
                     self.assertIn("3.50x", page.locator("#live-table tbody").text_content())
                     self.assertIn("realtime", page.locator("#live-table tbody").text_content())
+                    self.assertIn("Robotics realtime smoke", page.locator("body").text_content())
+                    self.assertIn("passed", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("1.135x", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("5.704 Hz", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("summary", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("pos", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("rtf 1.135x / min 1x", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("profile realtime / preset low-cost / ratio 2.4 / arfilter true", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("why: realtime factor 0.980000 < 1.000000", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("why: effective epoch rate 4.900000 Hz < 5.000000 Hz", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("cmd:", page.locator("#robotics-smoke-table tbody").text_content())
+                    self.assertIn("1/2", page.locator("#robotics-smoke-metrics").text_content())
                     self.assertEqual(page.locator("canvas").count(), 5)
                     self.assertIn("FIXED", page.locator("#status-legend").text_content())
                     self.assertIn("ppc_tokyo_run1_rtk_summary.json", page.locator("#ppc-table tbody").text_content())

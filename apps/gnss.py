@@ -14,6 +14,21 @@ EXE_SUFFIX = ".exe" if os.name == "nt" else ""
 BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 
 COMMANDS = {
+    "doctor": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_doctor.py"),
+        "summary": "Check local setup, built tools, datasets, docs, Docker, and ROS2 readiness.",
+    },
+    "robotics-smoke": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_robotics_smoke.py"),
+        "summary": "Run a short PPC RTK replay with robotics-friendly realtime gates.",
+    },
+    "ros2-doctor": {
+        "kind": "python",
+        "target": os.path.join(APPS_DIR, "gnss_ros2_doctor.py"),
+        "summary": "Check ROS2 receiver readiness, serial permissions, launch, record, and topic debug commands.",
+    },
     "spp": {
         "kind": "binary",
         "target": "gnss_spp",
@@ -454,6 +469,9 @@ def usage() -> str:
         [
             "",
             "Examples:",
+            "  python3 apps/gnss.py doctor",
+            "  python3 apps/gnss.py robotics-smoke --profile realtime",
+            "  python3 apps/gnss.py ros2-doctor --device /dev/ttyUSB0",
             "  python3 apps/gnss.py solve --data-dir data/driving --out output/rtk_solution.pos",
             "  python3 apps/gnss.py spp --obs data/rover_static.obs --nav data/navigation_static.nav --out output/spp_solution.pos",
             "  python3 apps/gnss.py fgo --preset real-data-fixed --obs data/rover_static.obs --nav data/navigation_static.nav --out output/fgo_solution.pos --summary-json output/fgo_summary.json",

@@ -19,6 +19,9 @@ markdown_extensions:
       permalink: true
 nav:
   - Home: index.md
+  - Robotics Quick Start: robotics_quickstart.md
+  - Research Quick Start: research_quickstart.md
+  - Dataset Gallery: dataset_gallery.md
   - Architecture: architecture.md
   - Quick Start: quickstart.md
   - Benchmarks: benchmarks.md
