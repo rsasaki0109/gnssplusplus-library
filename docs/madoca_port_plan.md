@@ -84,6 +84,8 @@ Already present:
 - Compact sampled correction transport for CLI workflows.
 - `clas-ppp --profile madoca` CLI naming for profile-level runs.
 - Extensive synthetic QZSS L6 tests in `tests/test_cli_tools.py`.
+- Analysis/sign-off helpers for MADOCA solution diffs, satellite-set diffs,
+  PPP residual row-set diffs, and SPP residual dump summaries.
 
 Important caveat:
 
@@ -313,6 +315,166 @@ python3 scripts/analysis/madoca_solution_diff.py \
 Keep this as an analysis/sign-off helper.  It is not part of the runtime
 solver path.
 
+## Split Cleanup Status
+
+The old `feat/rinex4-madoca` branch mixed unrelated RINEX, MADOCA, PPP, SPP,
+and tooling work.  It should remain an archive branch, not a branch to merge
+directly.  The active cleanup path is to use issue `#123` as the tracker and
+move only focused, develop-based slices through review.
+
+Status as of 2026-06-10:
+
+- Draft PR `#49` was closed as superseded by the split tracker.  Its branch is
+  retained as historical context because it still contains useful candidate
+  code, but its direct tree diff includes branch drift and should not be used
+  as a merge plan.
+- PR `#124` landed the RINEX `TIME OF FIRST OBS` parser fix.  This removes a
+  focused RINEX item from the old branch without importing the wider branch.
+- PR `#125` landed `scripts/analysis/madoca_satellite_set_diff.py` plus tests.
+- PR `#126` landed `scripts/analysis/ppp_residual_row_set_diff.py` plus tests.
+- PR `#127` landed `scripts/analysis/spp_residual_dump_summary.py` plus tests.
+- The remaining useful work should be treated as candidate material, restored
+  file-by-file or reimplemented against current `develop`, then validated in a
+  small PR.
+
+When reading `origin/feat/rinex4-madoca`, use this interpretation:
+
+- Pure file additions are the safest candidates for direct restoration.
+- Edits to runtime solver files need a fresh local review against current
+  `develop` before any code is copied.
+- Deletions in a direct branch comparison are usually drift from the stale
+  branch, not intentional removals.
+- RINEX and MADOCA items must stay separated unless a specific test proves a
+  shared interface needs to move in the same PR.
+- Temporary split branches should be deleted after merge; long-lived archive
+  branches should be kept until their candidate content has been exhausted.
+
+## Analysis Helper Ladder
+
+The landed analysis tools now form a staged parity ladder.  They are not solver
+features; they exist so native work can be compared to MADOCALIB, CLAS, or
+existing libgnss++ output before changing runtime behavior.
+
+`madoca_solution_diff.py`:
+
+- Compares full solution `.pos` trajectories.
+- Accepts MADOCALIB calendar-time rows and native GPS-week/TOW rows.
+- Matches common epochs and reports ENU/3D deltas.
+- Belongs late in the flow, after helper, decoder, and residual-level parity
+  are stable enough that trajectory deltas are meaningful.
+
+`madoca_satellite_set_diff.py`:
+
+- Compares satellite participation sets across MADOCALIB `$SAT` rows and native
+  PPP correction logs.
+- Identifies epochs where the two stacks are solving with different satellite
+  membership before investigating residual magnitudes.
+- Belongs before position-delta investigation because a trajectory difference is
+  not actionable if the satellite set is already different.
+
+`ppp_residual_row_set_diff.py`:
+
+- Compares residual row keys without requiring bit-for-bit residual values.
+- Helps separate row selection, rejection, and logging-shape differences from
+  numerical model differences.
+- Belongs before tighter PPP residual value parity because missing or extra rows
+  make value comparisons noisy.
+
+`spp_residual_dump_summary.py`:
+
+- Summarizes final SPP residual dumps by satellite and signal.
+- Gives a low-cost health check for row counts, RMS, mean, min/max, and largest
+  residuals.
+- Belongs in the seed-diagnostic path because SPP quality affects PPP initial
+  conditions and early convergence.
+
+The next helper in the same style should be `spp_iteration_dump_summary.py`.
+It should summarize per-iteration SPP behavior rather than only the final dump,
+so it can show whether a run is failing because of bad initial rows, unstable
+iteration updates, or late residual selection.  Keep it as an analysis tool with
+unit tests first; do not wire it into normal CLI output until the dump format is
+stable.
+
+## Issue And Branch Policy
+
+Use issue `#123` for the remaining work that originated from PR `#49`.  The
+issue should collect links to each focused PR, a short note about the slice, and
+whether the slice was merged, closed, or deferred.
+
+Branch rules:
+
+- Branch from current `develop`.
+- Name split branches by purpose, for example
+  `split/spp-iteration-dump-summary` or `split/madoca-core-foundation`.
+- Keep a branch to one behavioral surface: one analysis tool, one parser
+  feature, one runtime knob family, or one solver behavior change.
+- Commit only files needed for that slice.
+- Do not stage unrelated local artifacts or generated images.
+- Open draft PRs first, wait for CI, then mark ready only when the branch is
+  intended to merge.
+- After merge, prune the remote branch and confirm `develop` is synced.
+
+PR body checklist:
+
+- State the source of the slice: fresh implementation, restored candidate file,
+  or manual rework of archive branch material.
+- List the user-facing or maintainer-facing behavior.
+- List exact tests run locally.
+- Mention whether the slice changes runtime behavior or only adds analysis
+  tooling.
+- Link issue `#123` when the slice is part of the old MADOCA/RINEX branch
+  cleanup.
+
+## Next Slice Queue
+
+Preferred next low-risk slice:
+
+- Add `scripts/analysis/spp_iteration_dump_summary.py`.
+- Add `tests/test_spp_iteration_dump_summary.py`.
+- Register `python_spp_iteration_dump_summary_tests` in `tests/CMakeLists.txt`
+  and label it as `core`.
+- Keep the tool input format close to the existing SPP dump conventions.
+- Output a stable text summary and optional JSON if the candidate implementation
+  already has it.
+- Validate with `python3 -m py_compile`, the direct Python unit test, CMake
+  configure, focused CTest, and `git diff --check`.
+
+Next medium-risk slice:
+
+- Add a native MADOCA core foundation under `madoca_core` or a similarly narrow
+  namespace.
+- Keep it independent from PPP runtime wiring.
+- Start with deterministic types and helpers: system identifiers, signal masks,
+  subtype names, update intervals, URA scaling, and bias-code mapping.
+- Add GoogleTest coverage for each helper group before exposing the module to
+  decoder or solver code.
+- Avoid linking MADOCALIB in the default build.
+
+Next decoder slice:
+
+- Add an L6E frame/subframe assembly test using tiny fixtures or captured bytes.
+- Decode only metadata and subtype dispatch first.
+- Do not map decoded rows to `SSRProducts` until subtype-level tests are
+  stable.
+- Keep L6D ionosphere parsing separate from L6E correction parsing.
+
+Next PPP diagnostics slice:
+
+- Add explicit residual/logging knobs only after the analysis tools define the
+  expected row keys and summaries.
+- Prefer opt-in diagnostics over changing default solver output.
+- Add tests that prove the same run with diagnostics disabled preserves existing
+  output.
+
+Deferred large slices:
+
+- Whole-run native MADOCA PPP parity.
+- PPP-AR parity against MADOCALIB sample windows.
+- L6D ionosphere integration into PPP.
+- Triple/quad-frequency PPP-AR behavior.
+- First-class production MADOCALIB bridge behavior beyond the opt-in oracle
+  path.
+
 ## MADOCALIB License Notes
 
 `madocalib/readme.txt` identifies MADOCALIB as a MADOCA-PPP reference/test
@@ -332,60 +494,137 @@ MADOCALIB into the default build, and keeps the upstream checkout/readme
 available in the workflow workspace so the BSD notice and additional terms are
 retained.
 
-## Roadmap
+## Implementation Roadmap
 
-Phase 0, iter1 foundation:
+Phase 0, documentation and branch cleanup:
 
-- Add docs and compile-time skeleton files only.
-- Do not change PPP behavior.
-- Do not touch CLAS code.
+- Keep the port plan current enough that a new PR can be scoped from it without
+  rereading the stale mega-branch first.
+- Move all remaining branch-derived work through issue `#123`.
+- Land low-risk analysis tools before runtime code.
+- Close or merge old PRs deliberately; do not leave overlapping open PRs that
+  touch the same behavior.
+- Keep archive branches available until their useful additions have been either
+  ported, reworked, or explicitly rejected.
 
-Phase 1, helper parity:
+Phase 1, diagnostics and oracle surface:
 
-- Port pure helpers with stable inputs first:
-  bit extraction expectations, system ID mapping, signal mask to code mapping,
-  update interval selection, and bias-code selection.
-- Add MADOCALIB oracle calls or generated fixture rows.
-- Use `1e-6` tolerance for scaled metric outputs.
+- Finish SPP iteration and residual summaries so PPP seed differences can be
+  explained before comparing whole-run PPP.
+- Keep the MADOCA solution, satellite-set, PPP residual row-set, SPP residual
+  dump, and SPP iteration tools independent and testable.
+- Add fixtures that are small enough to review in PRs.
+- Prefer deterministic parser/summary tests over tests that require large
+  external sample files.
+- Document any external sample command separately from the required CI tests.
 
-Phase 2, L6E decode:
+Phase 2, helper parity:
+
+- Port pure helpers with stable inputs first: bit extraction expectations,
+  system ID mapping, signal mask to code mapping, update interval selection,
+  URA scaling, and bias-code selection.
+- Add MADOCALIB oracle calls or generated fixture rows only behind explicit
+  test/oracle configuration.
+- Use `1e-6` tolerance for scaled metric outputs unless the upstream integer
+  scaling implies an exact comparison.
+- Keep helper tests free of PPP side effects.
+- Treat helper parity failures as blockers for decoder-to-PPP wiring.
+
+Phase 3, L6E decode foundation:
 
 - Implement MADOCA L6E stream/frame assembly.
+- Decode subtype metadata and dispatch before decoding all payload fields.
 - Decode subtypes 1, 2, 3, 4, 5, and 7 into a neutral correction epoch.
 - Compare decoded rows against MADOCALIB `cssr2ssr` or direct oracle output.
-- Only then map to `SSRProducts`.
+- Only then map decoded correction epochs to `SSRProducts`.
+- Keep unsupported or incomplete subtypes explicit; silent partial decode is not
+  acceptable.
 
-Phase 3, L6D ionosphere:
+Phase 4, L6D ionosphere foundation:
 
-- Implement coverage and correction message parsing.
+- Implement coverage and correction message parsing separately from L6E.
 - Implement area selection and STEC delay/std calculation.
-- Add sample-driven tests for PRNs 200/201.
+- Add sample-driven tests for PRNs 200 and 201.
+- Keep PRN 197 only where it is needed for compatibility or fixture coverage.
+- Do not feed L6D products into PPP until decoder-level values match the oracle
+  for selected receiver positions.
 
-Phase 4, PPP application:
+Phase 5, PPP application:
 
-- Wire MADOCA correction products into the existing PPP pipeline.
+- Wire MADOCA correction products into the existing PPP pipeline only after the
+  correction objects are independently testable.
 - Keep CLAS and MADOCA profiles explicit.
+- Add runtime knobs as narrow, documented options, not broad solver rewrites.
 - Compare sample `exec_ppp` and `exec_pppar` windows against MADOCALIB output.
+- Use satellite-set and residual row-set diffs before interpreting final
+  position differences.
 
-Phase 5, PPP-AR and multifrequency:
+Phase 6, PPP-AR and multifrequency:
 
 - Audit MADOCALIB 2.0 triple/quad-frequency PPP-AR behavior.
 - Add fixture-level AR tests before enabling broad CLI behavior.
+- Separate ambiguity search behavior from correction ingestion behavior in PRs.
+- Do not expand default PPP-AR behavior until single-frequency and dual-frequency
+  parity diagnostics are already understandable.
+
+Phase 7, whole-run sign-off:
+
+- Run the MIZU one-hour PPP bridge case as the first whole-run oracle.
+- Add the PPP-AR and L6D ionosphere sample windows only after the PPP-only
+  window is stable.
+- Compare common epochs with `madoca_solution_diff.py`.
+- Record satellite-set, residual row-set, and final trajectory summaries in the
+  PR or follow-up issue.
+- Treat trajectory RMS against approximate RINEX header coordinates only as a
+  smoke signal; parity against MADOCALIB output is the real sign-off target.
 
 ## Acceptance Gates
 
+General gates:
+
 - Existing tests pass without MADOCALIB installed.
+- New analysis scripts have direct unit tests and CTest registrations.
+- Python tools pass `python3 -m py_compile`.
+- C++ additions pass focused GoogleTest or CTest coverage.
+- `git diff --check` is clean before publishing.
+- CI must pass before a split PR is considered done.
+
+Oracle and licensing gates:
+
 - Oracle-linked tests are opt-in and clearly labeled.
-- Helper parity reaches `1e-6` for deterministic scaled values.
-- L6E decoded orbit/clock/bias rows match MADOCALIB for sample frames.
+- Default builds do not require a MADOCALIB checkout.
+- Any direct MADOCALIB-linked path keeps upstream notices available in the
+  workflow workspace.
+- Production code does not vendor MADOCALIB sources.
+
+Helper and decoder gates:
+
+- Helper parity reaches `1e-6` for deterministic scaled values unless exact
+  integer parity is available.
+- L6E decoded orbit, clock, code-bias, phase-bias, mask, and URA rows match the
+  chosen MADOCALIB oracle rows for sample frames.
 - L6D decoded STEC delay/std rows match MADOCALIB for selected receiver
   positions.
+- Unsupported subtypes and systems produce deterministic skip/error behavior.
+
+Solver gates:
+
+- Diagnostic-enabled and diagnostic-disabled runs preserve existing default
+  output unless a PR explicitly changes the contract.
+- Satellite-set differences are understood before residual value differences are
+  judged.
+- Residual row-set differences are understood before whole-solution differences
+  are judged.
 - Whole-run PPP and PPP-AR sample windows are compared only after helper and
   decoder parity are stable.
 
-## Non-Goals For Iter1
+## Current Non-Goals
 
-- No MADOCA decoder implementation.
-- No MADOCALIB linking.
-- No PPP behavior change.
-- No CLAS source changes.
+- Do not merge `feat/rinex4-madoca` directly.
+- Do not combine RINEX parser work with MADOCA runtime solver work.
+- Do not introduce a production dependency on MADOCALIB.
+- Do not wire incomplete L6E/L6D decoders into default PPP behavior.
+- Do not change CLAS behavior while adding MADOCA-only foundations unless a
+  shared helper has explicit CLAS regression coverage.
+- Do not claim whole-run parity from approximate-coordinate RMS alone.
+- Do not make large solver rewrites in analysis-tool PRs.
