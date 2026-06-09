@@ -101,6 +101,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_spp_residual_dump_summary.py
     )
     add_test(
+        NAME python_spp_iteration_dump_summary_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_spp_iteration_dump_summary.py
+    )
+    add_test(
         NAME python_ppc_taroz_amb_pdc_smoke_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppc_taroz_amb_pdc_smoke.py
     )
@@ -214,6 +218,7 @@ if(GTest_FOUND)
         python_mode_compare_tests
         python_ppp_residual_row_set_diff_tests
         python_spp_residual_dump_summary_tests
+        python_spp_iteration_dump_summary_tests
         python_experiment_runner_tests
     )
     set(GNSSPP_EXTENDED_TESTS
