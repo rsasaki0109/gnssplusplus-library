@@ -11,6 +11,9 @@ struct PPPEnvOverrides {
     // GNSS_PPP_MADOCA_ALLOW_PARTIAL_SSR: accept incomplete MADOCA SSR epochs
     // when set exactly to "1". Default false.
     bool madoca_allow_partial_ssr = false;
+    // GNSS_PPP_MADOCA_SSR_REPLAY: select native MADOCA L6 SSR corrections from
+    // per-PRN replay snapshots when set exactly to "1". Default false.
+    bool madoca_ssr_replay = false;
     // GNSS_PPP_REQUIRE_SSR_ORBIT: drop satellites missing SSR orbit
     // corrections when set to a value whose first char is not '0'. Default false.
     bool require_ssr_orbit = false;

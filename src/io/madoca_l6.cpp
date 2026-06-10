@@ -4,6 +4,7 @@
 #include <libgnss++/core/navigation.hpp>
 #include <libgnss++/core/types.hpp>
 
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <fstream>
@@ -729,9 +730,33 @@ libgnss::GNSSSystem mpSysToGnss(int mpsys) {
 // Returns false when the satellite carries no orbit/clock or maps to no system.
 // The sample is time-stamped at the most recent of the orbit/clock t0 so a live
 // stream of orbit- and clock-paced updates yields a monotonic time series.
+bool madocaTimeLess(const MadocaGtime& lhs, const MadocaGtime& rhs) {
+    if (lhs.time != rhs.time) {
+        return lhs.time < rhs.time;
+    }
+    return lhs.sec < rhs.sec;
+}
+
+MadocaGtime latestComponentTime(const MadocaSsrCorrection& c, bool include_bias_times) {
+    MadocaGtime latest = c.t0[0];
+    if (latest.time == 0 || madocaTimeLess(latest, c.t0[1])) {
+        latest = c.t0[1];
+    }
+    if (include_bias_times) {
+        for (int index : {3, 4, 5}) {
+            if (c.t0[index].time != 0 &&
+                (latest.time == 0 || madocaTimeLess(latest, c.t0[index]))) {
+                latest = c.t0[index];
+            }
+        }
+    }
+    return latest;
+}
+
 bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
                               const PPPEnvOverrides& env_overrides,
-                              libgnss::SSROrbitClockCorrection& out) {
+                              libgnss::SSROrbitClockCorrection& out,
+                              bool include_bias_times = false) {
     const bool has_orbit = c.t0[0].time != 0;  // t0[eph]
     const bool has_clock = c.t0[1].time != 0;  // t0[clk]
     if (!has_orbit && !has_clock) {
@@ -763,9 +788,7 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
     out = libgnss::SSROrbitClockCorrection{};
     out.satellite = libgnss::SatelliteId(gsys, static_cast<std::uint8_t>(prn));
 
-    const bool clock_is_later =
-        has_clock && (!has_orbit || c.t0[1].time >= c.t0[0].time);
-    const MadocaGtime& t0 = clock_is_later ? c.t0[1] : c.t0[0];
+    const MadocaGtime t0 = latestComponentTime(c, include_bias_times);
     int week = 0;
     const double tow = time2gpst(t0, &week);
     out.time = libgnss::GNSSTime(week, tow);
@@ -940,6 +963,62 @@ int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
                 last_clock[sat] = ct;
                 libgnss::SSROrbitClockCorrection corr;
                 if (buildMadocaSsrCorrection(sat, c, decoder.envOverrides(), corr)) {
+                    products.addCorrection(corr);
+                    ++added;
+                }
+            }
+        }
+    }
+    return added;
+}
+
+int decodeMadocaL6eFilesToProductsReplay(const std::vector<std::string>& files,
+                                         int gps_week,
+                                         libgnss::SSRProducts& products) {
+    products.setOrbitCorrectionsAreRac(true);
+    double ref_ep[6];
+    referenceEpochForWeek(gps_week, ref_ep);
+
+    constexpr int kN = MadocaL6eDecoder::kMaxSat;
+    int added = 0;
+    for (const std::string& file : files) {
+        std::ifstream in(file, std::ios::binary);
+        if (!in) {
+            continue;
+        }
+
+        MadocaL6eDecoder decoder;
+        decoder.setReferenceEpoch(ref_ep);
+        std::vector<std::array<std::int64_t, 6>> last_t0(kN + 1);
+        for (auto& sat_t0 : last_t0) {
+            sat_t0.fill(-1);
+        }
+
+        char raw = 0;
+        while (in.get(raw)) {
+            if (decoder.inputByte(static_cast<std::uint8_t>(raw)) != 10) {
+                continue;
+            }
+            for (int sat = 1; sat <= kN; ++sat) {
+                const MadocaSsrCorrection& c = decoder.correction(sat);
+                bool changed = false;
+                bool has_any_component = false;
+                for (int index = 0; index < 6; ++index) {
+                    const std::int64_t t0 = c.t0[index].time;
+                    has_any_component = has_any_component || t0 != 0;
+                    if (t0 != last_t0[sat][index]) {
+                        changed = true;
+                    }
+                }
+                if (!has_any_component || !changed) {
+                    continue;
+                }
+                for (int index = 0; index < 6; ++index) {
+                    last_t0[sat][index] = c.t0[index].time;
+                }
+                libgnss::SSROrbitClockCorrection corr;
+                if (buildMadocaSsrCorrection(
+                        sat, c, decoder.envOverrides(), corr, true)) {
                     products.addCorrection(corr);
                     ++added;
                 }
