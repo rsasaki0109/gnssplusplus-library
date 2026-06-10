@@ -779,10 +779,18 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
             libgnss::Vector3d(c.deph[0], c.deph[1], c.deph[2]);  // RAC
         out.orbit_valid = true;
         out.iode = c.iode;  // broadcast eph IODE the orbit delta references
+        out.ssr_orbit_iod = c.iod[0];
+        int orbit_week = 0;
+        const double orbit_tow = time2gpst(c.t0[0], &orbit_week);
+        out.orbit_reference_time = libgnss::GNSSTime(orbit_week, orbit_tow);
     }
     if (has_clock) {
         out.clock_correction_m = c.dclk[0];  // c0 polynomial term
         out.clock_valid = true;
+        out.ssr_clock_iod = c.iod[1];
+        int clock_week = 0;
+        const double clock_tow = time2gpst(c.t0[1], &clock_week);
+        out.clock_reference_time = libgnss::GNSSTime(clock_week, clock_tow);
     }
 
     static const bool kCbiasDump = (std::getenv("GNSS_PPP_MADOCA_CBIAS_DUMP") != nullptr);

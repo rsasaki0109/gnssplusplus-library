@@ -234,6 +234,7 @@ private:
     bool has_last_processed_time_ = false;
     bool precise_products_loaded_ = false;
     bool ssr_products_loaded_ = false;
+    bool require_coherent_ssr_ = false;
     bool ionex_products_loaded_ = false;
     bool dcb_products_loaded_ = false;
     struct OceanLoadingCoefficients {
@@ -318,6 +319,9 @@ private:
      * @brief Update filter with measurements
      */
     bool updateFilter(const ObservationData& obs, const NavigationData& nav);
+
+    bool hasEnoughCoherentSsrObservations(const ObservationData& obs,
+                                          const NavigationData& nav);
     
     /**
      * @brief Form ionosphere-free combinations
