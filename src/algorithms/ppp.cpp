@@ -46,6 +46,7 @@ constexpr double kRtkLibMinElevationRadians = 5.0 * kDegreesToRadians;
 constexpr double kRtkLibGlonassErrorFactor = 1.5;
 constexpr double kRtkLibSbasErrorFactor = 3.0;
 constexpr double kRtkLibGpsL5ErrorFactor = 10.0;
+constexpr double kMadocaSsrMaxAgeSeconds = 60.0;
 constexpr std::array<double, 11> kOceanLoadingPeriodsSeconds = {
     12.4206012 * 3600.0,   // M2
     12.0 * 3600.0,         // S2
@@ -79,6 +80,35 @@ std::string normalizeAntennaType(const std::string& antenna_type) {
 
 std::string normalizeStationName(const std::string& station_name) {
     return normalizeAntennaType(station_name);
+}
+
+bool envFlagOne(const char* name) {
+    const char* value = std::getenv(name);
+    return value != nullptr && value[0] == '1' && value[1] == '\0';
+}
+
+bool madocaSsrReferenceIsCurrent(const GNSSTime& epoch, const GNSSTime& reference) {
+    if (reference.week == 0) {
+        return false;
+    }
+    const double age = epoch - reference;
+    return age >= -1e-6 && age <= kMadocaSsrMaxAgeSeconds;
+}
+
+bool madocaSsrCorrectionIsCoherent(const SSRCorrectionStatus& status,
+                                   const GNSSTime& epoch) {
+    if (!status.orbit_valid || !status.clock_valid) {
+        return false;
+    }
+    if (!madocaSsrReferenceIsCurrent(epoch, status.orbit_reference_time) ||
+        !madocaSsrReferenceIsCurrent(epoch, status.clock_reference_time)) {
+        return false;
+    }
+    if (status.ssr_orbit_iod >= 0 && status.ssr_clock_iod >= 0 &&
+        status.ssr_orbit_iod != status.ssr_clock_iod) {
+        return false;
+    }
+    return true;
 }
 
 SignalType antexSignalType(const std::string& code) {
@@ -672,6 +702,57 @@ double observationPhaseBiasMeters(GNSSSystem system,
     return coeff_primary * primary_bias + coeff_secondary * secondary_bias;
 }
 
+bool ssrBiasPresent(const std::map<uint8_t, double>& bias_m,
+                    GNSSSystem system,
+                    SignalType signal) {
+    const uint8_t id = rtcmSsrSignalId(system, signal);
+    if (id == 0U) {
+        return false;
+    }
+    if (bias_m.find(id) != bias_m.end()) {
+        return true;
+    }
+    if (system == GNSSSystem::GPS && (id == 8U || id == 9U)) {
+        return bias_m.find(id == 8U ? 9U : 8U) != bias_m.end();
+    }
+    return false;
+}
+
+bool madocaSsrMeasurementBiasesAreCoherent(
+    const SatelliteId& satellite,
+    SignalType primary_signal,
+    SignalType secondary_signal,
+    bool has_l2,
+    bool has_carrier_phase,
+    bool has_carrier_phase_l2,
+    const std::map<uint8_t, double>& code_bias_m,
+    const std::map<uint8_t, double>& phase_bias_m,
+    bool use_ionosphere_free) {
+    if (!ssrBiasPresent(code_bias_m, satellite.system, primary_signal)) {
+        return false;
+    }
+    const bool needs_secondary =
+        secondary_signal != SignalType::SIGNAL_TYPE_COUNT &&
+        (use_ionosphere_free || has_l2);
+    if (needs_secondary &&
+        !ssrBiasPresent(code_bias_m, satellite.system, secondary_signal)) {
+        return false;
+    }
+    if (satellite.system == GNSSSystem::GLONASS) {
+        return true;
+    }
+    if (has_carrier_phase &&
+        !ssrBiasPresent(phase_bias_m, satellite.system, primary_signal)) {
+        return false;
+    }
+    if (needs_secondary &&
+        (has_carrier_phase || has_carrier_phase_l2) &&
+        !ssrBiasPresent(phase_bias_m, satellite.system, secondary_signal)) {
+        return false;
+    }
+    return true;
+}
+
 std::string biasObservationCode(SignalType signal) {
     switch (signal) {
         case SignalType::GPS_L1CA: return "C1C";
@@ -1107,6 +1188,17 @@ PositionSolution PPPProcessor::processEpochStandard(
     PositionSolution solution;
     solution.time = obs.time;
     solution.status = SolutionStatus::NONE;
+    auto finalizeSolution = [&](PositionSolution result) {
+        const auto processing_end = std::chrono::steady_clock::now();
+        result.processing_time_ms =
+            std::chrono::duration<double, std::milli>(processing_end - processing_start).count();
+        updateStatistics(result.isValid());
+        {
+            std::lock_guard<std::mutex> lock(stats_mutex_);
+            total_convergence_time_ += result.processing_time_ms;
+        }
+        return result;
+    };
     last_clas_hybrid_fallback_used_ = clas_hybrid_fallback_reason != nullptr;
     last_clas_hybrid_fallback_reason_ =
         clas_hybrid_fallback_reason != nullptr ? clas_hybrid_fallback_reason : "";
@@ -1120,6 +1212,10 @@ PositionSolution PPPProcessor::processEpochStandard(
     last_applied_dcb_corrections_ = 0;
     last_applied_ionex_m_ = 0.0;
     last_applied_dcb_m_ = 0.0;
+    if (require_coherent_ssr_ && ssr_products_loaded_ &&
+        !hasEnoughCoherentSsrObservations(obs, nav)) {
+        return finalizeSolution(solution);
+    }
     PositionSolution seed_solution;
     const bool use_seed_assist = useLowDynamicsBroadcastSeedAssist();
     const bool need_seed_solution =
@@ -1138,7 +1234,9 @@ PositionSolution PPPProcessor::processEpochStandard(
         }
         if (!filter_initialized_) {
             if (!initializeFilter(obs, nav, seed_ptr)) {
-                solution = seed_ptr != nullptr ? seed_solution : spp_processor_.processEpoch(obs, nav);
+                if (!require_coherent_ssr_) {
+                    solution = seed_ptr != nullptr ? seed_solution : spp_processor_.processEpoch(obs, nav);
+                }
             } else {
                 filter_initialized_ = true;
                 convergence_start_time_ = obs.time;
@@ -1252,7 +1350,9 @@ PositionSolution PPPProcessor::processEpochStandard(
                 if (use_seed_assist) {
                     recoverLowDynamicsBroadcastState(obs, seed_ptr);
                 }
-                solution = seed_ptr != nullptr ? seed_solution : spp_processor_.processEpoch(obs, nav);
+                if (!require_coherent_ssr_) {
+                    solution = seed_ptr != nullptr ? seed_solution : spp_processor_.processEpoch(obs, nav);
+                }
             }
         }
     } catch (const std::exception& e) {
@@ -1260,21 +1360,15 @@ PositionSolution PPPProcessor::processEpochStandard(
             std::cerr << "[PPP] exception at week=" << obs.time.week
                       << " tow=" << obs.time.tow << ": " << e.what() << "\n";
         }
-        solution = seed_ptr != nullptr ? seed_solution : spp_processor_.processEpoch(obs, nav);
+        if (!require_coherent_ssr_) {
+            solution = seed_ptr != nullptr ? seed_solution : spp_processor_.processEpoch(obs, nav);
+        }
     }
 
     has_last_processed_time_ = true;
     last_processed_time_ = obs.time;
 
-    const auto processing_end = std::chrono::steady_clock::now();
-    solution.processing_time_ms =
-        std::chrono::duration<double, std::milli>(processing_end - processing_start).count();
-    updateStatistics(solution.isValid());
-    {
-        std::lock_guard<std::mutex> lock(stats_mutex_);
-        total_convergence_time_ += solution.processing_time_ms;
-    }
-    return solution;
+    return finalizeSolution(solution);
 }
 
 PositionSolution PPPProcessor::processEpoch(const ObservationData& obs, const NavigationData& nav) {
@@ -1352,6 +1446,7 @@ bool PPPProcessor::loadPreciseProducts(const std::string& orbit_file, const std:
 
 bool PPPProcessor::loadSSRProducts(const std::string& ssr_file) {
     ssr_products_.clear();
+    require_coherent_ssr_ = false;
     if (ssr_file.empty()) {
         ssr_products_loaded_ = false;
         return false;
@@ -1375,6 +1470,7 @@ bool PPPProcessor::loadSSRProducts(const std::string& ssr_file) {
 }
 
 bool PPPProcessor::loadL6Products(const std::string& l6_file) {
+    require_coherent_ssr_ = false;
     // Strategy: use Python expander to convert L6 → expanded CSV,
     // then load via the battle-tested CSV loader (0.14m accuracy).
     // Falls back to C++ native L6 decoder if Python is unavailable.
@@ -1423,6 +1519,7 @@ bool PPPProcessor::loadL6Products(const std::string& l6_file) {
 
 bool PPPProcessor::loadMadocaL6Products(const std::vector<std::string>& l6_files) {
     ssr_products_.clear();
+    require_coherent_ssr_ = false;
     if (l6_files.empty()) {
         ssr_products_loaded_ = false;
         return false;
@@ -1432,6 +1529,8 @@ bool PPPProcessor::loadMadocaL6Products(const std::vector<std::string>& l6_files
     const int added =
         io::decodeMadocaL6eFilesToProducts(l6_files, gps_week, ssr_products_);
     ssr_products_loaded_ = added > 0;
+    require_coherent_ssr_ =
+        ssr_products_loaded_ && !envFlagOne("GNSS_PPP_MADOCA_ALLOW_PARTIAL_SSR");
     return ssr_products_loaded_;
 }
 
@@ -1543,6 +1642,7 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
                                        const NavigationData& nav,
                                        double sample_step_seconds) {
     ssr_products_.clear();
+    require_coherent_ssr_ = false;
     if (rtcm_file.empty() || sample_step_seconds <= 0.0) {
         ssr_products_loaded_ = false;
         return false;
@@ -1943,6 +2043,57 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     constrainStaticAnchorPosition();
 }
 
+bool PPPProcessor::hasEnoughCoherentSsrObservations(const ObservationData& obs,
+                                                    const NavigationData& nav) {
+    if (!require_coherent_ssr_ || !ssr_products_loaded_) {
+        return true;
+    }
+
+    const auto if_obs = formIonosphereFree(obs, nav);
+    size_t coherent_count = 0;
+    for (const auto& observation : if_obs) {
+        if (!observation.valid) {
+            continue;
+        }
+        Vector3d orbit_correction = Vector3d::Zero();
+        double clock_correction_m = 0.0;
+        std::map<uint8_t, double> code_bias_m;
+        std::map<uint8_t, double> phase_bias_m;
+        SSRCorrectionStatus status;
+        const bool ssr_ok = ssr_products_.interpolateCorrection(
+            observation.satellite,
+            obs.time,
+            orbit_correction,
+            clock_correction_m,
+            nullptr,
+            &code_bias_m,
+            &phase_bias_m,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+            0,
+            nullptr,
+            nullptr,
+            &status,
+            false);
+        if (ssr_ok && madocaSsrCorrectionIsCoherent(status, obs.time) &&
+            madocaSsrMeasurementBiasesAreCoherent(
+                observation.satellite,
+                observation.primary_signal,
+                observation.secondary_signal,
+                observation.has_l2,
+                observation.has_carrier_phase,
+                observation.has_carrier_phase_l2,
+                code_bias_m,
+                phase_bias_m,
+                ppp_config_.use_ionosphere_free)) {
+            ++coherent_count;
+        }
+    }
+    return coherent_count >= static_cast<size_t>(config_.min_satellites);
+}
+
 bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData& nav) {
     auto if_obs = formIonosphereFree(obs, nav);
     if (if_obs.size() < static_cast<size_t>(config_.min_satellites)) {
@@ -2048,6 +2199,13 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
     combined.reserve(obs.getSatellites().size());
 
     for (const auto& sat : obs.getSatellites()) {
+        // Keep the native MADOCA parity path on systems whose L6 SSR handling is
+        // coherent with the MADOCALIB bridge for this loader.
+        if (require_coherent_ssr_ &&
+            (sat.system == GNSSSystem::BeiDou || sat.system == GNSSSystem::GLONASS)) {
+            continue;
+        }
+
         const Observation* primary = findObservationForSignals(obs, sat, primarySignals(sat.system));
         if (primary == nullptr) {
             continue;
@@ -2382,13 +2540,16 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             // leaving a per-satellite orbit error of ~metres that the filter
             // absorbs into a constant ~+0.36 m East position bias.
             int ssr_orbit_iode = -1;
+            SSRCorrectionStatus ssr_status;
+            bool ssr_status_ok = false;
             if (ssr_products_loaded_) {
                 Vector3d iode_orbit;
                 double iode_clock = 0.0;
-                ssr_products_.interpolateCorrection(
+                ssr_status_ok = ssr_products_.interpolateCorrection(
                     observation.satellite, time, iode_orbit, iode_clock,
                     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-                    preferred_network_id, &ssr_orbit_iode);
+                    preferred_network_id, &ssr_orbit_iode, nullptr, &ssr_status,
+                    !require_coherent_ssr_);
             }
             // Require a valid SSR orbit correction (orbit_iode>=0) when SSR
             // products are loaded. MADOCA/CLAS SSR augments broadcast orbits; a
@@ -2405,6 +2566,12 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 const char* v = std::getenv("GNSS_PPP_REQUIRE_SSR_ORBIT");
                 return v != nullptr && v[0] != '0';
             }();
+            if (require_coherent_ssr_ && ssr_products_loaded_ &&
+                (!ssr_status_ok ||
+                 !madocaSsrCorrectionIsCoherent(ssr_status, time))) {
+                observation.valid = false;
+                continue;
+            }
             if (kRequireSsrOrbit && ssr_products_loaded_ && ssr_orbit_iode < 0) {
                 observation.valid = false;
                 continue;
@@ -2453,6 +2620,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             std::map<uint8_t, double> code_bias_m;
             std::map<uint8_t, double> phase_bias_m;
             std::map<std::string, std::string> atmos_tokens;
+            SSRCorrectionStatus ssr_status;
             const bool ssr_ok = ssr_products_.interpolateCorrection(
                     observation.satellite,
                     time,
@@ -2465,11 +2633,31 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     nullptr,
                     nullptr,
                     nullptr,
-                    preferred_network_id);
+                    preferred_network_id,
+                    nullptr,
+                    nullptr,
+                    &ssr_status,
+                    !require_coherent_ssr_);
             // Fall back to epoch-wide atmosphere tokens when per-satellite
             // atmos are empty (CLAS broadcasts network-wide corrections).
             if (atmos_tokens.empty() && !epoch_atmos_tokens.empty()) {
                 atmos_tokens = epoch_atmos_tokens;
+            }
+            if (require_coherent_ssr_ &&
+                (!ssr_ok ||
+                 !madocaSsrCorrectionIsCoherent(ssr_status, time) ||
+                 !madocaSsrMeasurementBiasesAreCoherent(
+                     observation.satellite,
+                     observation.primary_signal,
+                     observation.secondary_signal,
+                     observation.has_l2,
+                     observation.has_carrier_phase,
+                     observation.has_carrier_phase_l2,
+                     code_bias_m,
+                     phase_bias_m,
+                     ppp_config_.use_ionosphere_free))) {
+                observation.valid = false;
+                continue;
             }
             if (ssr_ok) {
                 if (!have_precise) {
@@ -2488,7 +2676,14 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     code_bias_m,
                     observation.primary_code_bias_coeff,
                     observation.secondary_code_bias_coeff);
-                observation.pseudorange_if -= code_bias;
+                // MADOCALIB adds SSR biases to the observables (ppp.c:432-451);
+                // the native convention has subtracted them. Keep the flip
+                // env-gated so the sign parity lands as its own slice.
+                static const bool kMadocaBiasAdd =
+                    (std::getenv("GNSS_PPP_MADOCA_BIAS_ADD") != nullptr);
+                const double ssr_bias_sign =
+                    (require_coherent_ssr_ && kMadocaBiasAdd) ? +1.0 : -1.0;
+                observation.pseudorange_if += ssr_bias_sign * code_bias;
                 observation.pseudorange_code_bias_m = code_bias;
                 applied_ssr_code_bias = std::abs(code_bias) > 0.0;
                 if (observation.has_carrier_phase && !phase_bias_m.empty()) {
@@ -2500,7 +2695,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         phase_bias_m,
                         observation.primary_code_bias_coeff,
                         observation.secondary_code_bias_coeff);
-                    observation.carrier_phase_if -= phase_bias;
+                    observation.carrier_phase_if += ssr_bias_sign * phase_bias;
                     observation.carrier_phase_bias_m = phase_bias;
                 }
                 // Per-frequency (est-stec) biases: apply the L1 and L2 satellite
@@ -2510,13 +2705,13 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     const double cb_l1 = observationCodeBiasMeters(
                         observation.satellite.system, observation.primary_signal,
                         SignalType::SIGNAL_TYPE_COUNT, false, code_bias_m, 1.0, 0.0);
-                    observation.pseudorange_l1 -= cb_l1;
+                    observation.pseudorange_l1 += ssr_bias_sign * cb_l1;
                     observation.code_bias_l1_m = cb_l1;
                     if (observation.has_l2) {
                         const double cb_l2 = observationCodeBiasMeters(
                             observation.satellite.system, observation.secondary_signal,
                             SignalType::SIGNAL_TYPE_COUNT, false, code_bias_m, 1.0, 0.0);
-                        observation.pseudorange_l2 -= cb_l2;
+                        observation.pseudorange_l2 += ssr_bias_sign * cb_l2;
                         observation.code_bias_l2_m = cb_l2;
                     }
                     static const bool kNoPhaseBias =
@@ -2529,12 +2724,14 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     // sign flip while validating the convention fix.
                     static const double kPbSign =
                         (std::getenv("GNSS_PPP_PB_ADD") != nullptr) ? +1.0 : -1.0;
+                    const double phase_bias_sign =
+                        (require_coherent_ssr_ && kMadocaBiasAdd) ? +1.0 : kPbSign;
                     if (!phase_bias_m.empty() && !kNoPhaseBias) {
                         if (observation.has_carrier_phase) {
                             const double pb_l1 = observationPhaseBiasMeters(
                                 observation.satellite.system, observation.primary_signal,
                                 SignalType::SIGNAL_TYPE_COUNT, false, phase_bias_m, 1.0, 0.0);
-                            observation.carrier_phase_l1 += kPbSign * pb_l1;
+                            observation.carrier_phase_l1 += phase_bias_sign * pb_l1;
                             observation.phase_bias_l1_m = pb_l1;
                             if (kPbApplyDump) {
                                 std::cerr << "[PB-APPLY] " << observation.satellite.toString()
@@ -2545,7 +2742,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                             const double pb_l2 = observationPhaseBiasMeters(
                                 observation.satellite.system, observation.secondary_signal,
                                 SignalType::SIGNAL_TYPE_COUNT, false, phase_bias_m, 1.0, 0.0);
-                            observation.carrier_phase_l2 += kPbSign * pb_l2;
+                            observation.carrier_phase_l2 += phase_bias_sign * pb_l2;
                             observation.phase_bias_l2_m = pb_l2;
                         }
                     }

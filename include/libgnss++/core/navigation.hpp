@@ -346,6 +346,8 @@ public:
 struct SSROrbitClockCorrection {
     SatelliteId satellite;
     GNSSTime time;
+    GNSSTime orbit_reference_time;
+    GNSSTime clock_reference_time;
 
     Vector3d orbit_correction_ecef = Vector3d::Zero();   ///< Orbit delta in meters (ECEF or RAC per container flag)
     double clock_correction_m = 0.0;                     ///< Clock delta in meters
@@ -356,6 +358,8 @@ struct SSROrbitClockCorrection {
     int bias_network_id = 0;                             ///< Optional CLAS bias network id (0 when unset)
     int atmos_network_id = 0;                            ///< Optional CLAS atmosphere network id (0 when unset)
     int iode = -1;                                       ///< IODE the orbit correction references (-1 when unset)
+    int ssr_orbit_iod = -1;
+    int ssr_clock_iod = -1;
     std::map<std::string, std::string> atmos_tokens;     ///< Optional atmospheric metadata tokens
 
     bool orbit_valid = false;
@@ -364,6 +368,24 @@ struct SSROrbitClockCorrection {
     bool code_bias_valid = false;
     bool phase_bias_valid = false;
     bool atmos_valid = false;
+};
+
+struct SSRCorrectionStatus {
+    bool orbit_valid = false;
+    bool clock_valid = false;
+    bool ura_valid = false;
+    bool code_bias_valid = false;
+    bool phase_bias_valid = false;
+    bool atmos_valid = false;
+    GNSSTime orbit_reference_time;
+    GNSSTime clock_reference_time;
+    GNSSTime ura_reference_time;
+    GNSSTime code_bias_reference_time;
+    GNSSTime phase_bias_reference_time;
+    GNSSTime atmos_reference_time;
+    int orbit_iode = -1;
+    int ssr_orbit_iod = -1;
+    int ssr_clock_iod = -1;
 };
 
 /**
@@ -392,7 +414,9 @@ public:
                                GNSSTime* clock_reference_time = nullptr,
                                int preferred_network_id = 0,
                                int* orbit_iode = nullptr,
-                               std::map<uint8_t, int>* phase_bias_discnt = nullptr) const;
+                               std::map<uint8_t, int>* phase_bias_discnt = nullptr,
+                               SSRCorrectionStatus* status = nullptr,
+                               bool allow_future_samples = true) const;
 
     bool loadCSVFile(const std::string& filename);
 
