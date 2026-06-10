@@ -78,6 +78,12 @@ set(GNSS_SOURCES
     src/algorithms/madocalib_oracle.cpp
     src/algorithms/madocalib_bridge.cpp
     src/algorithms/ppp.cpp
+    src/algorithms/ppp_ambiguity.cpp
+    src/algorithms/ppp_corrections.cpp
+    src/algorithms/ppp_measurement.cpp
+    src/algorithms/ppp_observations.cpp
+    src/algorithms/ppp_products.cpp
+    src/algorithms/ppp_state.cpp
     src/iers/earth_rotation.cpp
     src/iers/tides.cpp
     src/iers/ephemeris.cpp
