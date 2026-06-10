@@ -82,11 +82,6 @@ std::string normalizeStationName(const std::string& station_name) {
     return normalizeAntennaType(station_name);
 }
 
-bool envFlagOne(const char* name) {
-    const char* value = std::getenv(name);
-    return value != nullptr && value[0] == '1' && value[1] == '\0';
-}
-
 bool madocaSsrReferenceIsCurrent(const GNSSTime& epoch, const GNSSTime& reference) {
     if (reference.week == 0) {
         return false;
@@ -1094,12 +1089,15 @@ double PPPProcessor::modeledZenithTroposphereDelayMeters(
     return modeledZenithTroposphereDelayMetersImpl(receiver_position, time);
 }
 
-PPPProcessor::PPPProcessor() : spp_processor_() {
+PPPProcessor::PPPProcessor()
+    : env_overrides_(PPPEnvOverrides::fromEnvironment()), spp_processor_() {
     reset();
 }
 
 PPPProcessor::PPPProcessor(const PPPConfig& ppp_config)
-    : ppp_config_(ppp_config), spp_processor_() {
+    : ppp_config_(ppp_config),
+      env_overrides_(PPPEnvOverrides::fromEnvironment()),
+      spp_processor_() {
     reset();
 }
 
@@ -1530,7 +1528,7 @@ bool PPPProcessor::loadMadocaL6Products(const std::vector<std::string>& l6_files
         io::decodeMadocaL6eFilesToProducts(l6_files, gps_week, ssr_products_);
     ssr_products_loaded_ = added > 0;
     require_coherent_ssr_ =
-        ssr_products_loaded_ && !envFlagOne("GNSS_PPP_MADOCA_ALLOW_PARTIAL_SSR");
+        ssr_products_loaded_ && !env_overrides_.madoca_allow_partial_ssr;
     return ssr_products_loaded_;
 }
 
@@ -1826,35 +1824,22 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     // systems stay explicit env opt-ins so non-MADOCA paths remain unchanged.
     // Accepts a comma/space-separated system list ("qzs", "gal", "bds", "all")
     // for diagnostics or broader experiments.
-    const std::string isb_spec = [] {
-        const char* e = std::getenv("GNSS_PPP_ESTIMATE_ISB");
-        return std::string(e != nullptr ? e : "");
-    }();
-    const bool isb_all = isb_spec == "1" || isb_spec.find("all") != std::string::npos;
-    const bool isb_gal = isb_all || isb_spec.find("gal") != std::string::npos;
-    const bool isb_qzs = isb_all || isb_spec.find("qzs") != std::string::npos;
-    const bool isb_bds = isb_all || isb_spec.find("bds") != std::string::npos;
-    const char* madoca_qzs_clock = std::getenv("GNSS_PPP_MADOCA_QZSS_CLOCK");
-    const bool madoca_qzs_clock_disabled =
-        madoca_qzs_clock != nullptr &&
-        madoca_qzs_clock[0] == '0' &&
-        madoca_qzs_clock[1] == '\0';
     const bool default_madoca_qzs_clock =
-        require_coherent_ssr_ && !madoca_qzs_clock_disabled;
+        require_coherent_ssr_ && env_overrides_.madoca_qzss_clock;
     std::set<GNSSSystem> visible_systems;
     for (const auto& sat : obs.getSatellites()) {
         visible_systems.insert(sat.system);
     }
     filter_state_.trop_index = 8;  // keep original
     int isb_start = 9;
-    if (isb_gal && visible_systems.count(GNSSSystem::Galileo)) {
+    if (env_overrides_.estimate_isb_gal && visible_systems.count(GNSSSystem::Galileo)) {
         filter_state_.gal_clock_index = isb_start++;
     }
-    if ((isb_qzs || default_madoca_qzs_clock) &&
+    if ((env_overrides_.estimate_isb_qzs || default_madoca_qzs_clock) &&
         visible_systems.count(GNSSSystem::QZSS)) {
         filter_state_.qzs_clock_index = isb_start++;
     }
-    if (isb_bds && visible_systems.count(GNSSSystem::BeiDou)) {
+    if (env_overrides_.estimate_isb_bds && visible_systems.count(GNSSSystem::BeiDou)) {
         filter_state_.bds_clock_index = isb_start++;
     }
 
@@ -1930,12 +1915,8 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     // low-latitude station (ALIC) stack cleanly with the orbit-fix lever for
     // bridge-parity float, while the default (100) is correct at mid-latitude
     // (MIZU); the right value is station-dependent, so this is opt-in.
-    static const double kIonoVarOverride = [] {
-        const char* v = std::getenv("GNSS_PPP_INIT_IONO_VAR");
-        return v != nullptr ? std::atof(v) : 0.0;
-    }();
-    const double iono_init_var = kIonoVarOverride > 0.0
-                                     ? kIonoVarOverride
+    const double iono_init_var = env_overrides_.init_iono_var > 0.0
+                                     ? env_overrides_.init_iono_var
                                      : ppp_config_.initial_ionosphere_variance;
     if (ppp_config_.estimate_ionosphere) {
         for (const auto& [sat, idx] : filter_state_.ionosphere_indices) {
@@ -1997,16 +1978,15 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     // every epoch, which strips the high-elevation QZSS geometry of its absolute
     // (vertical) leverage and degrades the solution. Tight Q (override-tunable)
     // lets the ISB converge to the true bias and then hold.
-    static const double kIsbProcessNoise = [] {
-        const char* e = std::getenv("GNSS_PPP_ISB_PROCESS_NOISE");
-        return e != nullptr ? std::atof(e) : 1e-6;  // m^2/s random walk
-    }();
     if (filter_state_.gal_clock_index >= 0)
-        Q(filter_state_.gal_clock_index, filter_state_.gal_clock_index) = kIsbProcessNoise * dt;
+        Q(filter_state_.gal_clock_index, filter_state_.gal_clock_index) =
+            env_overrides_.isb_process_noise * dt;
     if (filter_state_.qzs_clock_index >= 0)
-        Q(filter_state_.qzs_clock_index, filter_state_.qzs_clock_index) = kIsbProcessNoise * dt;
+        Q(filter_state_.qzs_clock_index, filter_state_.qzs_clock_index) =
+            env_overrides_.isb_process_noise * dt;
     if (filter_state_.bds_clock_index >= 0)
-        Q(filter_state_.bds_clock_index, filter_state_.bds_clock_index) = kIsbProcessNoise * dt;
+        Q(filter_state_.bds_clock_index, filter_state_.bds_clock_index) =
+            env_overrides_.isb_process_noise * dt;
     Q(filter_state_.trop_index, filter_state_.trop_index) =
         ppp_config_.process_noise_troposphere * dt;
     // Ambiguity process noise for every appended state. Ionosphere states may
@@ -2582,17 +2562,14 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             // East offset versus the bridge). Mirror the bridge by dropping such
             // satellites upstream. Env-gated: GNSS_PPP_REQUIRE_SSR_ORBIT (unset
             // or 0 = legacy behaviour, keep the satellite on its broadcast orbit).
-            static const bool kRequireSsrOrbit = [] {
-                const char* v = std::getenv("GNSS_PPP_REQUIRE_SSR_ORBIT");
-                return v != nullptr && v[0] != '0';
-            }();
             if (require_coherent_ssr_ && ssr_products_loaded_ &&
                 (!ssr_status_ok ||
                  !madocaSsrCorrectionIsCoherent(ssr_status, time))) {
                 observation.valid = false;
                 continue;
             }
-            if (kRequireSsrOrbit && ssr_products_loaded_ && ssr_orbit_iode < 0) {
+            if (env_overrides_.require_ssr_orbit &&
+                ssr_products_loaded_ && ssr_orbit_iode < 0) {
                 observation.valid = false;
                 continue;
             }
@@ -2700,10 +2677,10 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 // The MADOCA L6 path follows that convention by default;
                 // GNSS_PPP_MADOCA_BIAS_SUBTRACT restores the legacy subtraction
                 // for diagnostics. Non-MADOCA SSR paths keep subtracting.
-                static const bool kMadocaBiasSubtract =
-                    (std::getenv("GNSS_PPP_MADOCA_BIAS_SUBTRACT") != nullptr);
                 const double ssr_bias_sign =
-                    (require_coherent_ssr_ && !kMadocaBiasSubtract) ? +1.0 : -1.0;
+                    (require_coherent_ssr_ && !env_overrides_.madoca_bias_subtract)
+                        ? +1.0
+                        : -1.0;
                 observation.pseudorange_if += ssr_bias_sign * code_bias;
                 observation.pseudorange_code_bias_m = code_bias;
                 applied_ssr_code_bias = std::abs(code_bias) > 0.0;
@@ -2735,27 +2712,24 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         observation.pseudorange_l2 += ssr_bias_sign * cb_l2;
                         observation.code_bias_l2_m = cb_l2;
                     }
-                    static const bool kNoPhaseBias =
-                        (std::getenv("GNSS_PPP_NO_PHASE_BIAS") != nullptr);
-                    static const bool kPbApplyDump =
-                        (std::getenv("GNSS_PPP_PB_APPLY_DUMP") != nullptr);
                     // MADOCALIB ppp.c:451 ADDS the SSR phase bias to the carrier
                     // phase (L[i]+=pb); applying it with the opposite sign pushes
                     // the per-frequency ambiguity away from its integer. Non-MADOCA
                     // paths keep the legacy subtraction unless GNSS_PPP_PB_ADD is
                     // set while their convention is validated.
-                    static const double kPbSign =
-                        (std::getenv("GNSS_PPP_PB_ADD") != nullptr) ? +1.0 : -1.0;
+                    const double pb_sign = env_overrides_.pb_add ? +1.0 : -1.0;
                     const double phase_bias_sign =
-                        (require_coherent_ssr_ && !kMadocaBiasSubtract) ? +1.0 : kPbSign;
-                    if (!phase_bias_m.empty() && !kNoPhaseBias) {
+                        (require_coherent_ssr_ && !env_overrides_.madoca_bias_subtract)
+                            ? +1.0
+                            : pb_sign;
+                    if (!phase_bias_m.empty() && !env_overrides_.no_phase_bias) {
                         if (observation.has_carrier_phase) {
                             const double pb_l1 = observationPhaseBiasMeters(
                                 observation.satellite.system, observation.primary_signal,
                                 SignalType::SIGNAL_TYPE_COUNT, false, phase_bias_m, 1.0, 0.0);
                             observation.carrier_phase_l1 += phase_bias_sign * pb_l1;
                             observation.phase_bias_l1_m = pb_l1;
-                            if (kPbApplyDump) {
+                            if (env_overrides_.pb_apply_dump) {
                                 std::cerr << "[PB-APPLY] " << observation.satellite.toString()
                                           << " pb_l1=" << pb_l1 << "\n";
                             }
@@ -2999,8 +2973,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         // at emission time, APC frame — matching MADOCALIB satposs rs[]) so an
         // external script can match by epoch+sat and project the delta onto the
         // line of sight. clk in metres (sat_clock_bias * c).
-        static const bool kSatposDump = (std::getenv("GNSS_PPP_SATPOS_DUMP") != nullptr);
-        if (kSatposDump) {
+        if (env_overrides_.satpos_dump) {
             std::cerr << "[SATPOS] tow=" << std::fixed << std::setprecision(3) << time.tow
                       << " sat=" << observation.satellite.toString()
                       << std::setprecision(4)
@@ -3043,11 +3016,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         // phase drives the converged solution. Env-overridable for tuning.
         if (!ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
             !ppp_config_.use_clas_osr_filter) {
-            static const double code_var_scale = []() {
-                const char* s = std::getenv("GNSS_PPP_PF_CODE_VAR_SCALE");
-                return s != nullptr ? std::atof(s) : 9.0;
-            }();
-            observation.variance_pr *= code_var_scale;
+            observation.variance_pr *= env_overrides_.pf_code_var_scale;
         }
         observation.receiver_position = receiver_position;
         if (geometry.distance > 0.0) {
@@ -3068,9 +3037,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         // position shift bit-identical (corrections stay 0).
         observation.rx_ant_corr_l1_m = 0.0;
         observation.rx_ant_corr_l2_m = 0.0;
-        static const bool per_freq_rx_antenna_enabled =
-            std::getenv("GNSS_PPP_PF_RX_ANTENNA") != nullptr;
-        if (per_freq_rx_antenna_enabled && receiver_antex_loaded_ &&
+        if (env_overrides_.pf_rx_antenna && receiver_antex_loaded_ &&
             !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
             !ppp_config_.use_clas_osr_filter && geometry.distance > 0.0 &&
             !ppp_config_.receiver_antenna_type.empty()) {
@@ -3212,9 +3179,7 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
         // re-referenced and the carrier ambiguity consistent with the old bias
         // is stale (MADOCALIB detslip_cssr, ppp.c:558). env-gated, default OFF.
         bool discnt_slip = false;
-        static const bool kSsrDiscntSlip =
-            (std::getenv("GNSS_PPP_SSR_DISCNT_SLIP") != nullptr);
-        if (kSsrDiscntSlip && ssr_products_loaded_) {
+        if (env_overrides_.ssr_discnt_slip && ssr_products_loaded_) {
             Vector3d disc_orbit;
             double disc_clock = 0.0;
             std::map<uint8_t, double> disc_pbias;
@@ -3608,13 +3573,9 @@ int PPPProcessor::getOrCreateIonosphereState(const IonosphereFreeObs& observatio
         observation.has_iono_init ? observation.iono_init_m : 0.0;
     // Mirror the GNSS_PPP_INIT_IONO_VAR override at the lazy-create site so a
     // satellite appearing mid-run lands in the same anchored gauge.
-    static const double kIonoVarOverride = [] {
-        const char* v = std::getenv("GNSS_PPP_INIT_IONO_VAR");
-        return v != nullptr ? std::atof(v) : 0.0;
-    }();
     filter_state_.covariance(new_index, new_index) =
-        kIonoVarOverride > 0.0
-            ? kIonoVarOverride
+        env_overrides_.init_iono_var > 0.0
+            ? env_overrides_.init_iono_var
             : ppp_config_.initial_ionosphere_variance;
     filter_state_.ionosphere_indices[observation.satellite] = new_index;
     return new_index;
@@ -4079,8 +4040,6 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     (void)nav;
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
-    static const bool pf_dump = std::getenv("GNSS_PPP_PFDUMP") != nullptr;
-
     // Only attempt AR once the float has converged: a wide, ill-conditioned
     // ambiguity covariance makes the LAMBDA integer search explore an enormous
     // volume (effectively unbounded run time).
@@ -4185,7 +4144,7 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
                             cr1 * cs2 * P(ir1, is2) + cr2 * cs1 * P(ir2, is1) +
                             cr2 * cs2 * P(ir2, is2) + cs1 * cs2 * P(is1, is2));
         const double sd = var > 0.0 ? std::sqrt(var) : 9.9;
-        if (pf_dump) {
+        if (env_overrides_.pfdump) {
             std::cerr << "[PFWL] " << ref.sat.toString() << "-" << sat.sat.toString()
                       << " wl=" << wl_dd << " frac=" << frac << " std=" << sd << "\n";
         }
@@ -4195,7 +4154,7 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
             wl_frac_sum += frac;
         }
     }
-    if (pf_dump) {
+    if (env_overrides_.pfdump) {
         std::cerr << "[PFWL-SUM] cand=" << cands.size() << " wl_fixed=" << wl_fix_count
                   << " mean_frac=" << (wl_fix_count ? wl_frac_sum / wl_fix_count : 0.0) << "\n";
     }
@@ -4286,7 +4245,7 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
                 filter_state_.covariance(sk.l1_index, sl.l1_index) / (sk.lambda1 * sl.lambda1);
         }
     }
-    if (pf_dump) {
+    if (env_overrides_.pfdump) {
         for (int k = 0; k < nb; ++k) {
             const Cand& rk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].ref)];
             const Cand& sk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].sat)];
@@ -4302,7 +4261,7 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         last_fixed_ambiguities_ = nwl;  // wide-lane already applied
         return true;
     }
-    if (pf_dump) {
+    if (env_overrides_.pfdump) {
         std::cerr << "[PFN1] nb=" << nb << " ratio=" << ratio
                   << " threshold=" << ppp_config_.ar_ratio_threshold << "\n";
     }
@@ -4390,9 +4349,7 @@ Vector3d PPPProcessor::applyGeophysicalCorrections(const Vector3d& position,
     // MIZU 7.5x gap vs bridge (cm-level systematic differences across the
     // three solid-tide implementations: legacy Step-1-Love, IERS Step-1+2,
     // and MADOCALIB Step-1+K1-only). Default OFF (bit-identical).
-    static const bool kNoSolidTide =
-        (std::getenv("GNSS_PPP_NO_SOLID_TIDE") != nullptr);
-    if (ppp_config_.apply_solid_earth_tides && !kNoSolidTide) {
+    if (ppp_config_.apply_solid_earth_tides && !env_overrides_.no_solid_tide) {
         corrected += calculateSolidEarthTides(position, time);
     }
     if (ppp_config_.apply_ocean_loading) {
@@ -4584,10 +4541,8 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         // priori ZHD; the climatology ZHD is inaccurate at high/dry stations
         // (helped MIZU 0.42->0.385 m but hurt ALIC 0.34->0.585 m), so it is OFF
         // by default and opt-in via GNSS_PPP_PF_WET_TROP for experimentation.
-        static const bool wet_trop_enabled =
-            std::getenv("GNSS_PPP_PF_WET_TROP") != nullptr;
         const bool per_freq_wet_trop =
-            wet_trop_enabled && ppp_config_.estimate_troposphere &&
+            env_overrides_.pf_wet_trop && ppp_config_.estimate_troposphere &&
             !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
             !ppp_config_.use_clas_osr_filter && observation.trop_mapping_wet > 0.0;
         double troposphere_delay;
@@ -4630,7 +4585,6 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         // Env-gated pre-fit residual dump for native-vs-bridge measurement diff.
         // Matches the bridge ppp_res (post=0) lines so per-system/per-signal
         // residual structure can be compared at convergence. el in degrees.
-        static const bool kResDump = (std::getenv("GNSS_PPP_RES_DUMP") != nullptr);
         auto dumpRes = [&](const char* band, const char* type, double res) {
             std::cerr << "[PPP-RES] tow=" << std::fixed << std::setprecision(1)
                       << time.tow << " sat=" << observation.satellite.toString()
@@ -4639,13 +4593,13 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                       << " el=" << std::setprecision(1)
                       << (observation.elevation * 57.295779513) << "\n";
         };
-        if (kResDump) dumpRes("L1", "code", residual);
+        if (env_overrides_.res_dump) dumpRes("L1", "code", residual);
 
         // Deep state dump: the per-satellite (iono, N1, N2) split that the
         // est-stec filter settles into. Compared against the bridge ppp_res
         // dion/bias to find where native admits a wrong-but-self-consistent
         // (ambiguity, ionosphere) solution that the bridge does not.
-        if (kResDump) {
+        if (env_overrides_.res_dump) {
             const int n1_idx = ambiguityStateIndex(observation.satellite);
             const auto n2_it =
                 filter_state_.ambiguity_l2_indices.find(observation.satellite);
@@ -4709,15 +4663,9 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         row_satellites.push_back(observation.satellite);
         row_is_phase.push_back(false);
 
-        static const bool kExplicitQzssCodeOnly = [] {
-            const char* e = std::getenv("GNSS_PPP_QZSS_CODE_ONLY");
-            return e != nullptr && e[0] != '0';
-        }();
-        static const bool kMadocaQzssPhase =
-            envFlagOne("GNSS_PPP_MADOCA_QZSS_PHASE");
         const bool qzss_code_only =
-            kExplicitQzssCodeOnly ||
-            (require_coherent_ssr_ && !kMadocaQzssPhase);
+            env_overrides_.qzss_code_only ||
+            (require_coherent_ssr_ && !env_overrides_.madoca_qzss_phase);
         const bool use_observation_phase =
             use_phase_rows &&
             observation.has_carrier_phase &&
@@ -4755,7 +4703,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 const double predicted_phase = predicted + iono_phase_correction
                                                + filter_state_.state(ambiguity_index);
                 const double phase_residual = observation.carrier_phase_if - predicted_phase;
-                if (kResDump) dumpRes("L1", "phase", phase_residual);
+                if (env_overrides_.res_dump) dumpRes("L1", "phase", phase_residual);
                 const double phase_residual_floor =
                     ppp_config_.kinematic_mode
                         ? (converged_ ? 20.0 : 200.0)
@@ -4819,7 +4767,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     troposphere_delay + ratio2 * iono_state_l1_m +
                     observation.rx_ant_corr_l2_m;
                 const double l2_code_resid = observation.pseudorange_l2 - l2_code_pred;
-                if (kResDump) dumpRes("L2", "code", l2_code_resid);
+                if (env_overrides_.res_dump) dumpRes("L2", "code", l2_code_resid);
                 // Use the elevation-weighted RTKLIB variance (same satellite, so
                 // identical elevation weighting as L1) rather than the flat seed.
                 const double var_pr_l2 = observation.variance_pr > 0.0
@@ -4865,7 +4813,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     troposphere_delay - ratio2 * iono_state_l1_m +
                     filter_state_.state(amb2_index) + observation.rx_ant_corr_l2_m;
                 const double l2_phase_resid = observation.carrier_phase_l2 - l2_phase_pred;
-                if (kResDump) dumpRes("L2", "phase", l2_phase_resid);
+                if (env_overrides_.res_dump) dumpRes("L2", "phase", l2_phase_resid);
                 const double var_cp_l2 = observation.variance_cp > 0.0
                     ? observation.variance_cp
                     : safeVariance(observation.variance_cp_l2, 1e-8);
@@ -5072,10 +5020,7 @@ void PPPProcessor::resetAmbiguity(const SatelliteId& satellite, SignalType signa
     // so resetAmbiguity is seldom called and the fix is bit-identical there (the
     // stuck ~10 m L2 residuals come from frozen wrong initial ambiguities, not
     // slip resets — process noise 1e-8). Kept opt-in, default behaviour = HEAD.
-    static const bool kL2ResetFix =
-        std::getenv("GNSS_PPP_L2_RESET_FIX") != nullptr &&
-        std::getenv("GNSS_PPP_L2_RESET_FIX")[0] != '0';
-    const auto l2_it = kL2ResetFix
+    const auto l2_it = env_overrides_.l2_reset_fix
                            ? filter_state_.ambiguity_l2_indices.find(satellite)
                            : filter_state_.ambiguity_l2_indices.end();
     if (l2_it != filter_state_.ambiguity_l2_indices.end()) {
@@ -5112,7 +5057,7 @@ void PPPProcessor::constrainStaticAnchorPosition() {
     }
     const bool madoca_static_anchor_blend =
         require_coherent_ssr_ &&
-        !envFlagOne("GNSS_PPP_DISABLE_MADOCA_STATIC_ANCHOR");
+        !env_overrides_.disable_madoca_static_anchor;
     if (!ppp_config_.apply_static_anchor_blend && !madoca_static_anchor_blend) {
         return;
     }
@@ -5134,13 +5079,7 @@ void PPPProcessor::constrainStaticAnchorPosition() {
                       : (ssr_products_loaded_
                              ? (converged_ ? 0.5 : 0.7)
                              : 1.0)));
-    const double configured_anchor_blend = [] {
-        const char* e = std::getenv("GNSS_PPP_STATIC_ANCHOR_BLEND");
-        if (e == nullptr) {
-            return -1.0;
-        }
-        return std::atof(e);
-    }();
+    const double configured_anchor_blend = env_overrides_.static_anchor_blend;
     const double anchor_blend =
         configured_anchor_blend >= 0.0 && configured_anchor_blend <= 1.0
             ? configured_anchor_blend

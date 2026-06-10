@@ -60,8 +60,18 @@ public:
         std::map<std::string, std::string> comments;
     };
     
-    RINEXReader() = default;
+    RINEXReader();
     ~RINEXReader() = default;
+
+    /**
+     * @brief Prefer QZSS L1L/L1X observations over L1C when available.
+     */
+    void setQzssL1Preference(bool prefer_l1l) { qzss_prefer_l1l_ = prefer_l1l; }
+
+    /**
+     * @brief Check whether QZSS L1L/L1X preference is enabled.
+     */
+    bool qzssL1Preference() const { return qzss_prefer_l1l_; }
     
     /**
      * @brief Open RINEX file
@@ -117,6 +127,7 @@ private:
     std::ifstream file_;
     RINEXHeader header_;
     int current_line_ = 0;
+    bool qzss_prefer_l1l_ = false;
 
     // State for parsing RINEX 3 "SYS / # / OBS TYPES" records that span
     // continuation lines (systems with more than 13 observation types, e.g.

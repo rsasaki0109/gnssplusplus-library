@@ -1,10 +1,10 @@
 #include <libgnss++/core/navigation.hpp>
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <algorithm>
 #include <cmath>
 #include <cctype>
 #include <ctime>
 #include <iostream>
-#include <cstdlib>
 #include <fstream>
 #include <limits>
 #include <sstream>
@@ -580,11 +580,7 @@ namespace {
 // impact). Kept as an opt-in for when the estimator layer is addressed.
 inline bool galileoSkip(const SatelliteId& sat, const Ephemeris& eph,
                         const GNSSTime& time) {
-    static const bool kEnabled = [] {
-        const char* v = std::getenv("GNSS_PPP_GAL_INAV");
-        return v != nullptr && v[0] != '0';
-    }();
-    if (!kEnabled || sat.system != GNSSSystem::Galileo) {
+    if (!pppEnvOverrides().gal_inav || sat.system != GNSSSystem::Galileo) {
         return false;
     }
     constexpr int kGalInavClockBit = 1 << 9;
@@ -1992,7 +1988,7 @@ bool SSRProducts::loadCSVFile(const std::string& filename) {
     }
 
     // Debug: count atmos entries after loading
-    if (std::getenv("GNSS_PPP_DEBUG") != nullptr) {
+    if (pppEnvOverrides().debug) {
         size_t atmos_entries = 0;
         size_t total_entries = 0;
         for (const auto& [sat, entries] : orbit_clock_corrections) {
