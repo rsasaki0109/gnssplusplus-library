@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <iostream>
 #include <cmath>
+#include <cstdlib>
 
 namespace libgnss {
 namespace io {
@@ -189,12 +190,25 @@ void maybeAssignSelectedObservation(ObservationSelection& selection,
     }
 
     const int band = rinexBand(obs_type);
-    const int candidate_priority = bandPriority(sat.system, band, primary);
+    int candidate_priority = bandPriority(sat.system, band, primary);
     if (candidate_priority >= 100) {
         return;
     }
 
     const char tracking_code = rinexTrackingCode(obs_type);
+    const char* qzss_prefer_l1l_env = std::getenv("GNSS_PPP_QZSS_PREFER_L1L");
+    const bool prefer_qzss_l1l =
+        qzss_prefer_l1l_env != nullptr && qzss_prefer_l1l_env[0] != '0';
+    // Native MADOCA-PPP sets GNSS_PPP_QZSS_PREFER_L1L so QZSS L1 tracks the
+    // L1L/L1X correction chain used by MADOCALIB. RINEX files often list
+    // C1C/L1C before C1L/L1L; prefer L only when that mode is enabled.
+    if (prefer_qzss_l1l && sat.system == GNSSSystem::QZSS && primary && band == 1) {
+        if (tracking_code == 'L') {
+            candidate_priority -= 2;
+        } else if (tracking_code != 'C') {
+            candidate_priority += 1;
+        }
+    }
     const bool starts_better_track = candidate_priority < selection.priority;
     const bool continues_current_track =
         candidate_priority == selection.priority &&

@@ -764,6 +764,11 @@ int main(int argc, char* argv[]) {
             return 0;
         }
 
+        if (!options.madoca_l6_paths.empty() &&
+            std::getenv("GNSS_PPP_QZSS_PREFER_L1L") == nullptr) {
+            setenv("GNSS_PPP_QZSS_PREFER_L1L", "1", 0);
+        }
+
         libgnss::io::RINEXReader obs_reader;
         if (!obs_reader.open(options.obs_path)) {
             std::cerr << "Error: failed to open observation file: " << options.obs_path << "\n";

@@ -751,14 +751,17 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
     // uncorrected broadcast orbit/clock/bias (a ~1 m vertical bias at
     // stations that track QZSS).
     //
-    // DEFAULT OFF (opt-in via GNSS_PPP_QZSS_SSR_PRN_FIX=1): applying the
-    // (correct) QZSS SSR corrections shifts the MADOCA parity solution because
-    // the estimator was compensating for the missing QZSS correction; on the
-    // current parity datasets it improves ALIC but regresses MIZU, so it is not
-    // yet safe to enable by default. Kept as opt-in until the estimator-layer
-    // bias it exposes is resolved.
-    static const bool kQzssPrnFix =
-        (std::getenv("GNSS_PPP_QZSS_SSR_PRN_FIX") != nullptr);
+    // Enabled by default for native MADOCA parity. GNSS_PPP_QZSS_SSR_PRN_FIX=0
+    // or GNSS_PPP_DISABLE_QZSS_SSR_PRN_FIX=1 restores the old keying for
+    // diagnostics.
+    static const bool kQzssPrnFix = [] {
+        const char* legacy = std::getenv("GNSS_PPP_QZSS_SSR_PRN_FIX");
+        if (legacy != nullptr && legacy[0] == '0' && legacy[1] == '\0') {
+            return false;
+        }
+        const char* disable = std::getenv("GNSS_PPP_DISABLE_QZSS_SSR_PRN_FIX");
+        return !(disable != nullptr && disable[0] == '1' && disable[1] == '\0');
+    }();
     constexpr int kQzssPrnOffset = 192;  // 193 (RTKLIB) -> 1 (RINEX/native)
     if (kQzssPrnFix && gsys == libgnss::GNSSSystem::QZSS && prn > kQzssPrnOffset) {
         prn -= kQzssPrnOffset;
@@ -873,7 +876,11 @@ std::uint8_t madocaBiasCodeToRtcmSsrId(libgnss::GNSSSystem system, int code) {
             break;
         case GNSSSystem::QZSS:
             switch (code) {
-                case mpc::kCodeL1C: return 2;   // L1 C/A
+                case mpc::kCodeL1C:
+                case mpc::kCodeL1S:
+                case mpc::kCodeL1L:
+                case mpc::kCodeL1X:
+                    return 2;                    // L1 C/A/L1C(D+P)
                 case mpc::kCodeL2S: case mpc::kCodeL2L:
                 case mpc::kCodeL2X: return 8;   // L2C
                 case mpc::kCodeL5I: case mpc::kCodeL5Q:
