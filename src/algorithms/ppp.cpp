@@ -1814,48 +1814,48 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         }
     }
 
-    // Allocate ISB states for non-GPS systems when estimate_ionosphere is on
-    int base_states = 9;  // pos(3) + vel(3) + gps_clk(1) + glo_clk(1) + trop(1)
+    // Allocate per-system receiver clocks after the base states:
+    // pos(3) + vel(3) + gps_clk(1) + glo_clk(1) + trop(1).
     filter_state_.gal_clock_index = -1;
     filter_state_.qzs_clock_index = -1;
     filter_state_.bds_clock_index = -1;
-    // Inter-system bias (ISB) states for non-GPS constellations were disabled in
-    // the b4c956a refactor; without them QZSS/Galileo/BeiDou share the GPS clock
-    // and any receiver inter-system hardware bias leaks into the code residuals
-    // (measured: QZSS code residual ~-2 m at MIZU vs ~0 in the MADOCALIB bridge).
-    // env-gated (default OFF) so the shipped solution stays bit-identical.
+    // Without these states QZSS/Galileo/BeiDou share the GPS clock and any
+    // receiver inter-system hardware bias leaks into code residuals. Native
+    // MADOCA coherent mode needs QZSS by default because the L6 stream carries
+    // J02/J03/J04 orbit/clock/bias corrections used by the bridge. Other
+    // systems stay explicit env opt-ins so non-MADOCA paths remain unchanged.
     // Accepts a comma/space-separated system list ("qzs", "gal", "bds", "all")
-    // so the vertical-coupling cost of each constellation's ISB can be isolated.
-    static const std::string kIsbSpec = [] {
+    // for diagnostics or broader experiments.
+    const std::string isb_spec = [] {
         const char* e = std::getenv("GNSS_PPP_ESTIMATE_ISB");
         return std::string(e != nullptr ? e : "");
     }();
-    const bool isb_all = kIsbSpec == "1" || kIsbSpec.find("all") != std::string::npos;
-    const bool isb_gal = isb_all || kIsbSpec.find("gal") != std::string::npos;
-    const bool isb_qzs = isb_all || kIsbSpec.find("qzs") != std::string::npos;
-    const bool isb_bds = isb_all || kIsbSpec.find("bds") != std::string::npos;
-    if (ppp_config_.estimate_ionosphere) {
-        std::set<GNSSSystem> visible_systems;
-        for (const auto& sat : obs.getSatellites()) visible_systems.insert(sat.system);
-        if (isb_gal && visible_systems.count(GNSSSystem::Galileo)) {
-            filter_state_.gal_clock_index = base_states++;
-        }
-        if (isb_qzs && visible_systems.count(GNSSSystem::QZSS)) {
-            filter_state_.qzs_clock_index = base_states++;
-        }
-        if (isb_bds && visible_systems.count(GNSSSystem::BeiDou)) {
-            filter_state_.bds_clock_index = base_states++;
-        }
+    const bool isb_all = isb_spec == "1" || isb_spec.find("all") != std::string::npos;
+    const bool isb_gal = isb_all || isb_spec.find("gal") != std::string::npos;
+    const bool isb_qzs = isb_all || isb_spec.find("qzs") != std::string::npos;
+    const bool isb_bds = isb_all || isb_spec.find("bds") != std::string::npos;
+    const char* madoca_qzs_clock = std::getenv("GNSS_PPP_MADOCA_QZSS_CLOCK");
+    const bool madoca_qzs_clock_disabled =
+        madoca_qzs_clock != nullptr &&
+        madoca_qzs_clock[0] == '0' &&
+        madoca_qzs_clock[1] == '\0';
+    const bool default_madoca_qzs_clock =
+        require_coherent_ssr_ && !madoca_qzs_clock_disabled;
+    std::set<GNSSSystem> visible_systems;
+    for (const auto& sat : obs.getSatellites()) {
+        visible_systems.insert(sat.system);
     }
-    filter_state_.trop_index = base_states > 9 ? base_states - 1 : 8;
-    // Actually keep trop at its original position and shift ISB before it
-    // Simpler: put ISB after trop
     filter_state_.trop_index = 8;  // keep original
     int isb_start = 9;
-    if (ppp_config_.estimate_ionosphere) {
-        if (filter_state_.gal_clock_index >= 0) filter_state_.gal_clock_index = isb_start++;
-        if (filter_state_.qzs_clock_index >= 0) filter_state_.qzs_clock_index = isb_start++;
-        if (filter_state_.bds_clock_index >= 0) filter_state_.bds_clock_index = isb_start++;
+    if (isb_gal && visible_systems.count(GNSSSystem::Galileo)) {
+        filter_state_.gal_clock_index = isb_start++;
+    }
+    if ((isb_qzs || default_madoca_qzs_clock) &&
+        visible_systems.count(GNSSSystem::QZSS)) {
+        filter_state_.qzs_clock_index = isb_start++;
+    }
+    if (isb_bds && visible_systems.count(GNSSSystem::BeiDou)) {
+        filter_state_.bds_clock_index = isb_start++;
     }
 
     // Reserve ionosphere states for visible satellites.
@@ -1885,7 +1885,7 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     filter_state_.state.segment(filter_state_.vel_index, 3).setZero();
     filter_state_.state(filter_state_.clock_index) = initial_clock_bias_m;
     filter_state_.state(filter_state_.glo_clock_index) = initial_clock_bias_m;
-    // Initialize ISB states
+    // Initialize per-system clock states.
     if (filter_state_.gal_clock_index >= 0)
         filter_state_.state(filter_state_.gal_clock_index) = initial_clock_bias_m;
     if (filter_state_.qzs_clock_index >= 0)
@@ -1907,13 +1907,18 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         use_broadcast_rtklib_model ? ppp_config_.initial_clock_variance : 1e8;
     filter_state_.covariance(filter_state_.trop_index, filter_state_.trop_index) =
         use_broadcast_rtklib_model ? ppp_config_.initial_troposphere_variance : 25.0;
-    // ISB covariance
+    // Per-system receiver clocks use the same epoch prior as GPS by default.
+    const double system_clock_initial_variance =
+        use_broadcast_rtklib_model ? ppp_config_.initial_clock_variance : 1e8;
     if (filter_state_.gal_clock_index >= 0)
-        filter_state_.covariance(filter_state_.gal_clock_index, filter_state_.gal_clock_index) = 1e8;
+        filter_state_.covariance(filter_state_.gal_clock_index, filter_state_.gal_clock_index) =
+            system_clock_initial_variance;
     if (filter_state_.qzs_clock_index >= 0)
-        filter_state_.covariance(filter_state_.qzs_clock_index, filter_state_.qzs_clock_index) = 1e8;
+        filter_state_.covariance(filter_state_.qzs_clock_index, filter_state_.qzs_clock_index) =
+            system_clock_initial_variance;
     if (filter_state_.bds_clock_index >= 0)
-        filter_state_.covariance(filter_state_.bds_clock_index, filter_state_.bds_clock_index) = 1e8;
+        filter_state_.covariance(filter_state_.bds_clock_index, filter_state_.bds_clock_index) =
+            system_clock_initial_variance;
     // Initialize per-satellite ionosphere states. GNSS_PPP_INIT_IONO_VAR (>0)
     // overrides the per-satellite initial ionosphere covariance. The est-stec
     // KF has a rank-deficient gauge in (iono, N1, N2, cdtr) -- a uniform shift
@@ -2020,6 +2025,18 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     filter_state_.covariance = F * filter_state_.covariance * F.transpose() + Q;
     if (use_broadcast_rtklib_model && seed_solution != nullptr && seed_solution->isValid()) {
         if (ppp_config_.reset_clock_to_spp_each_epoch || useLowDynamicsBroadcastSeedAssist()) {
+            const double gps_clock_before_reset = filter_state_.state(filter_state_.clock_index);
+            const auto reinitializeSystemClock = [&](int index) {
+                if (index < 0) {
+                    return;
+                }
+                const double inter_system_offset =
+                    filter_state_.state(index) - gps_clock_before_reset;
+                reinitializeScalarState(
+                    index,
+                    seed_solution->receiver_clock_bias + inter_system_offset,
+                    ppp_config_.initial_clock_variance);
+            };
             reinitializeScalarState(
                 filter_state_.clock_index,
                 seed_solution->receiver_clock_bias,
@@ -2028,6 +2045,9 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
                 filter_state_.glo_clock_index,
                 seed_solution->receiver_clock_bias,
                 ppp_config_.initial_clock_variance);
+            reinitializeSystemClock(filter_state_.gal_clock_index);
+            reinitializeSystemClock(filter_state_.qzs_clock_index);
+            reinitializeSystemClock(filter_state_.bds_clock_index);
         }
         if (ppp_config_.kinematic_mode &&
             !ppp_config_.low_dynamics_mode &&
@@ -3431,6 +3451,18 @@ void PPPProcessor::recoverLowDynamicsBroadcastState(const ObservationData& obs,
         has_static_anchor_position_ ?
             0.85 * static_anchor_position_ + 0.15 * recovered_position :
             recovered_position;
+    const double gps_clock_before_reset = filter_state_.state(filter_state_.clock_index);
+    const auto reinitializeSystemClock = [&](int index) {
+        if (index < 0) {
+            return;
+        }
+        const double inter_system_offset =
+            filter_state_.state(index) - gps_clock_before_reset;
+        reinitializeScalarState(
+            index,
+            recovered_clock_bias_m + inter_system_offset,
+            ppp_config_.initial_clock_variance);
+    };
     reinitializeVectorState(
         filter_state_.pos_index,
         anchored_position,
@@ -3443,6 +3475,9 @@ void PPPProcessor::recoverLowDynamicsBroadcastState(const ObservationData& obs,
         filter_state_.glo_clock_index,
         recovered_clock_bias_m,
         ppp_config_.initial_clock_variance);
+    reinitializeSystemClock(filter_state_.gal_clock_index);
+    reinitializeSystemClock(filter_state_.qzs_clock_index);
+    reinitializeSystemClock(filter_state_.bds_clock_index);
     reinitializeScalarState(
         filter_state_.trop_index,
         modeledZenithTroposphereDelayMeters(anchored_position, obs.time),
@@ -4569,11 +4604,11 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
             troposphere_delay = observation.modeled_trop_delay_m;
             trop_partial = 0.0;
         }
-        const int clock_state_index = receiverClockStateIndex(observation.satellite);
         const double clock_bias_m = receiverClockBiasMeters(observation.satellite);
 
         Eigen::RowVectorXd row = Eigen::RowVectorXd::Zero(filter_state_.total_states);
         row.segment(filter_state_.pos_index, 3) = -line_of_sight;
+        const int clock_state_index = receiverClockStateIndex(observation.satellite);
         row(clock_state_index) = 1.0;
         row(filter_state_.trop_index) = trop_partial;
         // Per-satellite ionosphere state: pseudorange has +iono contribution
@@ -4674,7 +4709,20 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         row_satellites.push_back(observation.satellite);
         row_is_phase.push_back(false);
 
-        if (use_phase_rows && observation.has_carrier_phase) {
+        static const bool kExplicitQzssCodeOnly = [] {
+            const char* e = std::getenv("GNSS_PPP_QZSS_CODE_ONLY");
+            return e != nullptr && e[0] != '0';
+        }();
+        static const bool kMadocaQzssPhase =
+            envFlagOne("GNSS_PPP_MADOCA_QZSS_PHASE");
+        const bool qzss_code_only =
+            kExplicitQzssCodeOnly ||
+            (require_coherent_ssr_ && !kMadocaQzssPhase);
+        const bool use_observation_phase =
+            use_phase_rows &&
+            observation.has_carrier_phase &&
+            !(qzss_code_only && observation.satellite.system == GNSSSystem::QZSS);
+        if (use_observation_phase) {
             const int ambiguity_index = ambiguityStateIndex(observation.satellite);
             if (ambiguity_index >= 0 && ambiguity_index < filter_state_.total_states) {
                 const auto ambiguity_it = ambiguity_states_.find(observation.satellite);
@@ -5062,7 +5110,10 @@ void PPPProcessor::constrainStaticAnchorPosition() {
         !has_static_anchor_position_) {
         return;
     }
-    if (!ppp_config_.apply_static_anchor_blend) {
+    const bool madoca_static_anchor_blend =
+        require_coherent_ssr_ &&
+        !envFlagOne("GNSS_PPP_DISABLE_MADOCA_STATIC_ANCHOR");
+    if (!ppp_config_.apply_static_anchor_blend && !madoca_static_anchor_blend) {
         return;
     }
     if (precise_products_loaded_ && !ppp_config_.estimate_troposphere) {
@@ -5074,13 +5125,26 @@ void PPPProcessor::constrainStaticAnchorPosition() {
     // Root cause of 4m floor is 20-40m SSR residual spread (light travel time).
     // Fix the residuals first, then loosen the anchor.
 
+    const double default_anchor_blend =
+        madoca_static_anchor_blend && !ppp_config_.apply_static_anchor_blend
+            ? 0.30
+            : (ppp_config_.low_dynamics_mode
+                   ? (precise_products_loaded_ ? (converged_ ? 0.65 : 0.9) : 0.95)
+                   : (precise_products_loaded_ ? (converged_ ? 0.5 : 0.85)
+                      : (ssr_products_loaded_
+                             ? (converged_ ? 0.5 : 0.7)
+                             : 1.0)));
+    const double configured_anchor_blend = [] {
+        const char* e = std::getenv("GNSS_PPP_STATIC_ANCHOR_BLEND");
+        if (e == nullptr) {
+            return -1.0;
+        }
+        return std::atof(e);
+    }();
     const double anchor_blend =
-        ppp_config_.low_dynamics_mode
-            ? (precise_products_loaded_ ? (converged_ ? 0.65 : 0.9) : 0.95)
-            : (precise_products_loaded_ ? (converged_ ? 0.5 : 0.85)
-               : (ssr_products_loaded_
-                    ? (converged_ ? 0.5 : 0.7)
-                    : 1.0));
+        configured_anchor_blend >= 0.0 && configured_anchor_blend <= 1.0
+            ? configured_anchor_blend
+            : default_anchor_blend;
     filter_state_.state.segment(filter_state_.pos_index, 3) =
         anchor_blend * static_anchor_position_ +
         (1.0 - anchor_blend) * filter_state_.state.segment(filter_state_.pos_index, 3);

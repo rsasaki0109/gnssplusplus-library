@@ -515,6 +515,9 @@ TEST_F(MadocaParity, L6eSnapshotConvertsToSsrProducts) {
         if (gsys == libgnss::GNSSSystem::UNKNOWN || prn <= 0) {
             continue;
         }
+        if (gsys == libgnss::GNSSSystem::QZSS && prn > 192) {
+            prn -= 192;
+        }
         const libgnss::SatelliteId id(gsys, static_cast<std::uint8_t>(prn));
         auto it = products.orbit_clock_corrections.find(id);
         ASSERT_NE(it, products.orbit_clock_corrections.end())
@@ -626,8 +629,10 @@ TEST(MadocaSsrConvert, BiasCodeToRtcmSsrId) {
     EXPECT_EQ(id(GNSSSystem::BeiDou, mp::kCodeL2I), 2);
     EXPECT_EQ(id(GNSSSystem::BeiDou, mp::kCodeL6I), 8);
     EXPECT_EQ(id(GNSSSystem::BeiDou, mp::kCodeL7I), 14);
-    // QZSS: L1 C/A->2, L2C->8, L5->22
+    // QZSS: L1 C/A/L1C(D+P)->2, L2C->8, L5->22
     EXPECT_EQ(id(GNSSSystem::QZSS, mp::kCodeL1C), 2);
+    EXPECT_EQ(id(GNSSSystem::QZSS, mp::kCodeL1L), 2);
+    EXPECT_EQ(id(GNSSSystem::QZSS, mp::kCodeL1X), 2);
     EXPECT_EQ(id(GNSSSystem::QZSS, mp::kCodeL2X), 8);
     EXPECT_EQ(id(GNSSSystem::QZSS, mp::kCodeL5X), 22);
     // GLONASS: G1 C/A->2, G2 C/A->8
