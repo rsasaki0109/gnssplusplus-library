@@ -6,7 +6,6 @@
 
 #include <cmath>
 #include <cstdint>
-#include <cstdlib>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -247,7 +246,8 @@ int sigmask2list(std::uint16_t mask, int gnssid, int* siglist) {
 
 }  // namespace
 
-MadocaL6eDecoder::MadocaL6eDecoder() {
+MadocaL6eDecoder::MadocaL6eDecoder()
+    : env_overrides_(PPPEnvOverrides::fromEnvironment()) {
     const double ep[6] = {2025.0, 4.0, 1.0, 0.0, 0.0, 0.0};
     seed_ = epoch2time(ep);
     reset();
@@ -665,8 +665,7 @@ int MadocaL6eDecoder::decodeL6eMessage() {
             if ((ch.mgfid & 0x1) != (static_cast<int>(mgfid) & 0x1)) {
                 apply = 0;
             }
-            static const bool kStDump = (std::getenv("GNSS_PPP_MADOCA_CBIAS_DUMP") != nullptr);
-            if (kStDump) {
+            if (env_overrides_.madoca_cbias_dump) {
                 std::fprintf(stderr, "[MADOCA-ST] st=%d apply=%d mgfid=%d ch.mgfid=%d\n",
                              st, apply, static_cast<int>(mgfid), ch.mgfid);
             }
@@ -731,6 +730,7 @@ libgnss::GNSSSystem mpSysToGnss(int mpsys) {
 // The sample is time-stamped at the most recent of the orbit/clock t0 so a live
 // stream of orbit- and clock-paced updates yields a monotonic time series.
 bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
+                              const PPPEnvOverrides& env_overrides,
                               libgnss::SSROrbitClockCorrection& out) {
     const bool has_orbit = c.t0[0].time != 0;  // t0[eph]
     const bool has_clock = c.t0[1].time != 0;  // t0[clk]
@@ -754,16 +754,9 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
     // Enabled by default for native MADOCA parity. GNSS_PPP_QZSS_SSR_PRN_FIX=0
     // or GNSS_PPP_DISABLE_QZSS_SSR_PRN_FIX=1 restores the old keying for
     // diagnostics.
-    static const bool kQzssPrnFix = [] {
-        const char* legacy = std::getenv("GNSS_PPP_QZSS_SSR_PRN_FIX");
-        if (legacy != nullptr && legacy[0] == '0' && legacy[1] == '\0') {
-            return false;
-        }
-        const char* disable = std::getenv("GNSS_PPP_DISABLE_QZSS_SSR_PRN_FIX");
-        return !(disable != nullptr && disable[0] == '1' && disable[1] == '\0');
-    }();
     constexpr int kQzssPrnOffset = 192;  // 193 (RTKLIB) -> 1 (RINEX/native)
-    if (kQzssPrnFix && gsys == libgnss::GNSSSystem::QZSS && prn > kQzssPrnOffset) {
+    if (env_overrides.qzss_ssr_prn_fix &&
+        gsys == libgnss::GNSSSystem::QZSS && prn > kQzssPrnOffset) {
         prn -= kQzssPrnOffset;
     }
 
@@ -796,12 +789,11 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
         out.clock_reference_time = libgnss::GNSSTime(clock_week, clock_tow);
     }
 
-    static const bool kCbiasDump = (std::getenv("GNSS_PPP_MADOCA_CBIAS_DUMP") != nullptr);
     for (int k = 0; k < MadocaSsrCorrection::kMaxCode; ++k) {
         const int code = k + 1;  // cbias/pbias are held by CODE_*-1
         if (c.vcbias[k]) {
             const std::uint8_t id = madocaBiasCodeToRtcmSsrId(gsys, code);
-            if (kCbiasDump) {
+            if (env_overrides.madoca_cbias_dump) {
                 std::fprintf(stderr,
                              "[MADOCA-CBIAS] sys=%d prn=%d code=%d id=%u cbias=%.4f\n",
                              static_cast<int>(gsys), prn, code,
@@ -813,7 +805,7 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
         }
         if (c.vpbias[k]) {
             const std::uint8_t id = madocaBiasCodeToRtcmSsrId(gsys, code);
-            if (kCbiasDump) {
+            if (env_overrides.madoca_cbias_dump) {
                 std::fprintf(stderr,
                              "[MADOCA-PBIAS] sys=%d prn=%d code=%d id=%u pbias=%.4f\n",
                              static_cast<int>(gsys), prn, code,
@@ -899,7 +891,8 @@ int madocaL6eSnapshotToProducts(const MadocaL6eDecoder& decoder,
     int added = 0;
     for (int sat = 1; sat <= MadocaL6eDecoder::kMaxSat; ++sat) {
         libgnss::SSROrbitClockCorrection corr;
-        if (buildMadocaSsrCorrection(sat, decoder.correction(sat), corr)) {
+        if (buildMadocaSsrCorrection(
+                sat, decoder.correction(sat), decoder.envOverrides(), corr)) {
             products.addCorrection(corr);
             ++added;
         }
@@ -946,7 +939,7 @@ int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
                 last_orbit[sat] = ot;
                 last_clock[sat] = ct;
                 libgnss::SSROrbitClockCorrection corr;
-                if (buildMadocaSsrCorrection(sat, c, corr)) {
+                if (buildMadocaSsrCorrection(sat, c, decoder.envOverrides(), corr)) {
                     products.addCorrection(corr);
                     ++added;
                 }

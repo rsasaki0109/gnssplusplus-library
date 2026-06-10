@@ -1,4 +1,5 @@
 #include <libgnss++/io/rinex.hpp>
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/signal_policy.hpp>
 #include <algorithm>
 #include <fstream>
@@ -6,7 +7,6 @@
 #include <iomanip>
 #include <iostream>
 #include <cmath>
-#include <cstdlib>
 
 namespace libgnss {
 namespace io {
@@ -184,6 +184,7 @@ void maybeAssignSelectedObservation(ObservationSelection& selection,
                                     double value,
                                     int lli,
                                     int signal_strength,
+                                    bool prefer_qzss_l1l,
                                     bool primary) {
     if (value == 0.0) {
         return;
@@ -196,9 +197,6 @@ void maybeAssignSelectedObservation(ObservationSelection& selection,
     }
 
     const char tracking_code = rinexTrackingCode(obs_type);
-    const char* qzss_prefer_l1l_env = std::getenv("GNSS_PPP_QZSS_PREFER_L1L");
-    const bool prefer_qzss_l1l =
-        qzss_prefer_l1l_env != nullptr && qzss_prefer_l1l_env[0] != '0';
     // Native MADOCA-PPP sets GNSS_PPP_QZSS_PREFER_L1L so QZSS L1 tracks the
     // L1L/L1X correction chain used by MADOCALIB. RINEX files often list
     // C1C/L1C before C1L/L1L; prefer L only when that mode is enabled.
@@ -337,6 +335,9 @@ void assignObservationField(Observation& obs,
 }
 
 }  // namespace
+
+RINEXReader::RINEXReader()
+    : qzss_prefer_l1l_(PPPEnvOverrides::fromEnvironment().qzss_prefer_l1l) {}
 
 bool RINEXReader::open(const std::string& filename) {
     file_.open(filename);
@@ -948,6 +949,7 @@ bool RINEXReader::parseObservationEpochV2(const std::string& line, ObservationDa
                                            obs_values[i],
                                            lli_flags[i],
                                            signal_strength[i],
+                                           qzss_prefer_l1l_,
                                            true);
             maybeAssignSelectedObservation(secondary_selection,
                                            sat,
@@ -955,6 +957,7 @@ bool RINEXReader::parseObservationEpochV2(const std::string& line, ObservationDa
                                            obs_values[i],
                                            lli_flags[i],
                                            signal_strength[i],
+                                           qzss_prefer_l1l_,
                                            false);
         }
 
@@ -1081,6 +1084,7 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
                                                obs_values[i],
                                                lli_flags[i],
                                                signal_strength[i],
+                                               qzss_prefer_l1l_,
                                                true);
                 maybeAssignSelectedObservation(secondary_selection,
                                                sat,
@@ -1088,6 +1092,7 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
                                                obs_values[i],
                                                lli_flags[i],
                                                signal_strength[i],
+                                               qzss_prefer_l1l_,
                                                false);
             }
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -72,6 +74,8 @@ public:
     // Out-of-range satellites return a static empty correction.
     const MadocaSsrCorrection& correction(int sat) const;
 
+    const PPPEnvOverrides& envOverrides() const { return env_overrides_; }
+
     // Clear all decoder and correction state.
     void reset();
 
@@ -114,6 +118,7 @@ private:
     MadocaGtime seed_;                 // week-determination reference epoch
     ChannelState channels_[kMaxPrn];
     MadocaSsrCorrection ssr_[kMaxSat];
+    PPPEnvOverrides env_overrides_;
 };
 
 // Map a MADOCA Compact SSR bias code (an RTKLIB CODE_* enum value, i.e. the

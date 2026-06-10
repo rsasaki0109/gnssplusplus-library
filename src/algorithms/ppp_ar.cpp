@@ -1,6 +1,7 @@
 #include <libgnss++/algorithms/ppp_ar.hpp>
 
 #include <libgnss++/algorithms/lambda.hpp>
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/coordinates.hpp>
 
 #include <algorithm>
@@ -237,8 +238,7 @@ DdFixAttempt tryDirectDdFix(
     // integer-informativeness of the float solution can be measured (a mean
     // |frac| near 0.25 means the floats are uniformly spread = carry no integer
     // information). Gated by GNSS_PPP_AR_DDDUMP, default OFF.
-    static const bool kDdDump = (std::getenv("GNSS_PPP_AR_DDDUMP") != nullptr);
-    if (kDdDump && excluded_real_satellites.empty()) {
+    if (pppEnvOverrides().ar_dddump && excluded_real_satellites.empty()) {
         for (int k = 0; k < attempt.nb; ++k) {
             const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
             const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
