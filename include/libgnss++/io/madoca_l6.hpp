@@ -146,4 +146,12 @@ int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
                                    int gps_week,
                                    libgnss::SSRProducts& products);
 
+// Decode MADOCA L6E files as independent PRN streams and emit full per-stream
+// snapshots whenever any SSR component timestamp changes. This mirrors
+// MADOCALIB's per-epoch update_qzssl6e() replay more closely than the legacy
+// whole-file orbit/clock snapshot loader.
+int decodeMadocaL6eFilesToProductsReplay(const std::vector<std::string>& files,
+                                         int gps_week,
+                                         libgnss::SSRProducts& products);
+
 }  // namespace libgnss::io

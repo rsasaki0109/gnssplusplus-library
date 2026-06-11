@@ -40,6 +40,7 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
 
     overrides.madoca_bias_subtract = envPresent("GNSS_PPP_MADOCA_BIAS_SUBTRACT");
     overrides.madoca_allow_partial_ssr = envExactOne("GNSS_PPP_MADOCA_ALLOW_PARTIAL_SSR");
+    overrides.madoca_ssr_replay = envExactOne("GNSS_PPP_MADOCA_SSR_REPLAY");
     overrides.require_ssr_orbit = envFirstCharNotZero("GNSS_PPP_REQUIRE_SSR_ORBIT");
     overrides.disable_madoca_static_anchor =
         envExactOne("GNSS_PPP_DISABLE_MADOCA_STATIC_ANCHOR");
