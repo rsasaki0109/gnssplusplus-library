@@ -906,6 +906,9 @@ int main(int argc, char* argv[]) {
         processor_config.use_precise_clocks = ppp_config.use_precise_clocks;
         processor_config.orbit_file_path = options.sp3_path;
         processor_config.clock_file_path = options.clk_path;
+        if (!options.madoca_l6_paths.empty() && ppp_env_overrides.madoca_low_elev) {
+            processor_config.elevation_mask = 10.0;
+        }
 
         libgnss::PPPProcessor processor(ppp_config);
         if (!processor.initialize(processor_config)) {
