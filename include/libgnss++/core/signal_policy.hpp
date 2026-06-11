@@ -55,9 +55,18 @@ inline bool trySignalForObservationType(GNSSSystem system,
             if (band == 5) { signal = SignalType::GPS_L5; return true; }
             break;
         case GNSSSystem::GLONASS:
-            if (band == 1) { signal = SignalType::GLO_L1CA; return true; }
-            if (band == 2) { signal = SignalType::GLO_L2CA; return true; }
-            if (band == 3) { signal = SignalType::GLO_L2P; return true; }
+            if (band == 1) {
+                signal = obs_type.size() >= 3 && obs_type[2] == 'P'
+                             ? SignalType::GLO_L1P
+                             : SignalType::GLO_L1CA;
+                return true;
+            }
+            if (band == 2) {
+                signal = obs_type.size() >= 3 && obs_type[2] == 'P'
+                             ? SignalType::GLO_L2P
+                             : SignalType::GLO_L2CA;
+                return true;
+            }
             break;
         case GNSSSystem::Galileo:
             if (band == 1) { signal = SignalType::GAL_E1; return true; }

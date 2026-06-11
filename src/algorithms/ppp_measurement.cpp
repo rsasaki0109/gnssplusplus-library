@@ -184,10 +184,12 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         const bool qzss_code_only =
             env_overrides_.qzss_code_only ||
             (require_coherent_ssr_ && !env_overrides_.madoca_qzss_phase);
-        // GLONASS FDMA phase rows need an inter-channel phase-bias treatment
-        // that native does not yet model; code rows improve MADOCA bridge parity.
+        // GLONASS FDMA phase rows remain preview-only in coherent MADOCA:
+        // full-row enablement exposes a time-varying relative phase residual,
+        // while code rows improve bridge parity.
         const bool glonass_code_only =
             require_coherent_ssr_ && env_overrides_.madoca_glonass &&
+            !env_overrides_.madoca_glonass_phase &&
             observation.satellite.system == GNSSSystem::GLONASS;
         const bool use_observation_phase =
             use_phase_rows &&

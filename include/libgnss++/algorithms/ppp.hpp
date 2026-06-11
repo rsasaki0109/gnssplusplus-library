@@ -418,7 +418,7 @@ private:
     /**
      * @brief Detect cycle slips
      */
-    void detectCycleSlips(const ObservationData& obs);
+    void detectCycleSlips(const ObservationData& obs, const NavigationData& nav);
 
     /**
      * @brief Ensure ambiguity states exist for valid carrier-phase observations.

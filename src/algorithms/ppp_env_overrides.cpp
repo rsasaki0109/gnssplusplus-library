@@ -68,6 +68,7 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
     overrides.madoca_qzss_clock = !envExactZero("GNSS_PPP_MADOCA_QZSS_CLOCK");
     overrides.madoca_qzss_phase = envExactOne("GNSS_PPP_MADOCA_QZSS_PHASE");
     overrides.madoca_glonass = !envExactZero("GNSS_PPP_MADOCA_GLONASS");
+    overrides.madoca_glonass_phase = envExactOne("GNSS_PPP_MADOCA_GLONASS_PHASE");
     overrides.pb_add = envPresent("GNSS_PPP_PB_ADD");
     overrides.no_phase_bias = envPresent("GNSS_PPP_NO_PHASE_BIAS");
     overrides.l2_reset_fix = envFirstCharNotZero("GNSS_PPP_L2_RESET_FIX");
