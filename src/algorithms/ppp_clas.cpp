@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <sstream>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -89,6 +90,57 @@ std::ofstream* ambDatumDumpStream() {
         }
     }
     return stream ? &stream : nullptr;
+}
+
+std::ofstream* clasGeometryDumpStream() {
+    const auto& path = pppEnvOverrides().clas_geom_dump_path;
+    if (path.empty()) {
+        return nullptr;
+    }
+
+    static std::ofstream stream;
+    static bool initialized = false;
+    if (!initialized) {
+        initialized = true;
+        stream.open(path, std::ios::out | std::ios::trunc);
+        if (stream) {
+            stream << "record,week,tow,tx_tow,sat,freq,signal,"
+                   << "rx_state_x_m,rx_state_y_m,rx_state_z_m,"
+                   << "rx_row_x_m,rx_row_y_m,rx_row_z_m,"
+                   << "rx_forced_x_m,rx_forced_y_m,rx_forced_z_m,"
+                   << "tide_x_m,tide_y_m,tide_z_m,"
+                   << "sat_x_m,sat_y_m,sat_z_m,sat_vx_mps,sat_vy_mps,sat_vz_mps,"
+                   << "sat_clk_m,euclidean_m,sagnac_m,rho_m,az_rad,el_rad,"
+                   << "cpc_m,model_phase_m\n";
+        }
+    }
+    return stream ? &stream : nullptr;
+}
+
+bool selectedClasGeometryDumpTow(double tow) {
+    constexpr std::array<double, 3> kTargets{230572.0, 232034.0, 234018.0};
+    for (double target : kTargets) {
+        if (std::abs(tow - target) < 0.01) {
+            return true;
+        }
+    }
+    return false;
+}
+
+Vector3d clasGeometryDumpReceiverPosition(const Vector3d& fallback) {
+    const auto& spec = pppEnvOverrides().clas_geom_dump_rx_xyz;
+    if (spec.empty()) {
+        return fallback;
+    }
+
+    std::string normalized = spec;
+    std::replace(normalized.begin(), normalized.end(), ',', ' ');
+    std::istringstream input(normalized);
+    Vector3d parsed = fallback;
+    if (input >> parsed.x() >> parsed.y() >> parsed.z()) {
+        return parsed;
+    }
+    return fallback;
 }
 
 }  // namespace
@@ -535,6 +587,67 @@ MeasurementBuildResult buildEpochMeasurements(
                 const double l_m = raw->carrier_phase * osr.wavelengths[f];
                 const double l_corr =
                     l_m - applied_corrections.carrier_phase_correction_m;
+                if (auto* dump = clasGeometryDumpStream();
+                    dump != nullptr && selectedClasGeometryDumpTow(obs.time.tow)) {
+                    const Vector3d forced_receiver_position =
+                        clasGeometryDumpReceiverPosition(receiver_position);
+                    const double forced_rho =
+                        geodist(osr.satellite_position, forced_receiver_position);
+                    const double euclidean =
+                        (osr.satellite_position - forced_receiver_position).norm();
+                    const double forced_sagnac = forced_rho - euclidean;
+                    const double forced_sat_clk_m =
+                        constants::SPEED_OF_LIGHT * osr.satellite_clock_bias_s;
+                    double forced_lat = 0.0;
+                    double forced_lon = 0.0;
+                    double forced_h = 0.0;
+                    ecef2geodetic(
+                        forced_receiver_position, forced_lat, forced_lon, forced_h);
+                    const Vector3d forced_los_enu = ecef2enu(
+                        osr.satellite_position - forced_receiver_position,
+                        forced_lat,
+                        forced_lon);
+                    const double forced_el = std::atan2(
+                        forced_los_enu.z(),
+                        std::hypot(forced_los_enu.x(), forced_los_enu.y()));
+                    const double forced_az =
+                        std::atan2(forced_los_enu.x(), forced_los_enu.y());
+                    *dump << std::setprecision(17)
+                          << "GEOM,"
+                          << obs.time.week << ','
+                          << obs.time.tow << ','
+                          << osr.signal_transmit_time.tow << ','
+                          << osr.satellite.toString() << ','
+                          << f << ','
+                          << static_cast<int>(raw->signal) << ','
+                          << receiver_position.x() << ','
+                          << receiver_position.y() << ','
+                          << receiver_position.z() << ','
+                          << receiver_position.x() << ','
+                          << receiver_position.y() << ','
+                          << receiver_position.z() << ','
+                          << forced_receiver_position.x() << ','
+                          << forced_receiver_position.y() << ','
+                          << forced_receiver_position.z() << ','
+                          << 0.0 << ','
+                          << 0.0 << ','
+                          << 0.0 << ','
+                          << osr.satellite_position.x() << ','
+                          << osr.satellite_position.y() << ','
+                          << osr.satellite_position.z() << ','
+                          << osr.satellite_velocity.x() << ','
+                          << osr.satellite_velocity.y() << ','
+                          << osr.satellite_velocity.z() << ','
+                          << forced_sat_clk_m << ','
+                          << euclidean << ','
+                          << forced_sagnac << ','
+                          << forced_rho << ','
+                          << forced_az << ','
+                          << forced_el << ','
+                          << osr.CPC[f] << ','
+                          << forced_rho - forced_sat_clk_m + osr.CPC[f]
+                          << '\n';
+                }
                 const bool claslib_amb_datum_phase =
                     pppEnvOverrides().clas_amb_datum &&
                     config.clas_correction_application_policy ==

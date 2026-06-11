@@ -634,11 +634,32 @@ std::vector<OSRCorrection> computeOSR(
         // this, CLAS per-frequency residuals stay at the 20-40 m level.
         if (l1_obs->pseudorange > 0.0) {
             const double travel_time = l1_obs->pseudorange / constants::SPEED_OF_LIGHT;
-            const GNSSTime emission_time = obs.time - travel_time + sat_clk;
+            GNSSTime emission_time;
+            if (pppEnvOverrides().clas_tx_time_sign_fix) {
+                const GNSSTime approximate_transmit_time = obs.time - travel_time;
+                if (!nav.calculateSatelliteState(
+                        sat,
+                        approximate_transmit_time,
+                        sat_pos,
+                        sat_vel,
+                        sat_clk,
+                        sat_drift)) {
+                    continue;
+                }
+                emission_time = approximate_transmit_time - sat_clk;
+            } else {
+                emission_time = obs.time - travel_time + sat_clk;
+            }
             if (!nav.calculateSatelliteState(
-                    sat, emission_time, sat_pos, sat_vel, sat_clk, sat_drift)) {
+                    sat,
+                    emission_time,
+                    sat_pos,
+                    sat_vel,
+                    sat_clk,
+                    sat_drift)) {
                 continue;
             }
+            osr.signal_transmit_time = emission_time;
         }
 
         // Apply SSR orbit/clock corrections
