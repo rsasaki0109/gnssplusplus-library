@@ -20,8 +20,11 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
     for (const auto& sat : obs.getSatellites()) {
         // Keep the native MADOCA parity path on systems whose L6 SSR handling is
         // coherent with the MADOCALIB bridge for this loader.
-        if (require_coherent_ssr_ &&
-            (sat.system == GNSSSystem::BeiDou || sat.system == GNSSSystem::GLONASS)) {
+        if (require_coherent_ssr_ && sat.system == GNSSSystem::BeiDou) {
+            continue;
+        }
+        if (require_coherent_ssr_ && sat.system == GNSSSystem::GLONASS &&
+            !env_overrides_.madoca_glonass) {
             continue;
         }
 

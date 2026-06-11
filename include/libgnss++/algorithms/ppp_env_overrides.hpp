@@ -51,6 +51,9 @@ struct PPPEnvOverrides {
     // GNSS_PPP_MADOCA_QZSS_PHASE: allow QZSS phase rows in MADOCA when set
     // exactly to "1". Default false.
     bool madoca_qzss_phase = false;
+    // GNSS_PPP_MADOCA_GLONASS: include GLONASS in coherent MADOCA unless set
+    // exactly to "0". Default true.
+    bool madoca_glonass = true;
     // GNSS_PPP_PB_ADD: add non-MADOCA SSR phase biases instead of subtracting.
     // Default false.
     bool pb_add = false;

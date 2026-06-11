@@ -184,10 +184,16 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         const bool qzss_code_only =
             env_overrides_.qzss_code_only ||
             (require_coherent_ssr_ && !env_overrides_.madoca_qzss_phase);
+        // GLONASS FDMA phase rows need an inter-channel phase-bias treatment
+        // that native does not yet model; code rows improve MADOCA bridge parity.
+        const bool glonass_code_only =
+            require_coherent_ssr_ && env_overrides_.madoca_glonass &&
+            observation.satellite.system == GNSSSystem::GLONASS;
         const bool use_observation_phase =
             use_phase_rows &&
             observation.has_carrier_phase &&
-            !(qzss_code_only && observation.satellite.system == GNSSSystem::QZSS);
+            !(qzss_code_only && observation.satellite.system == GNSSSystem::QZSS) &&
+            !glonass_code_only;
         if (use_observation_phase) {
             const int ambiguity_index = ambiguityStateIndex(observation.satellite);
             if (ambiguity_index >= 0 && ambiguity_index < filter_state_.total_states) {
