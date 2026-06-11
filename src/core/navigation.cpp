@@ -654,6 +654,35 @@ const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat,
     return best_match != nullptr ? best_match : getEphemeris(sat, time);
 }
 
+bool NavigationData::hasMadocaGalileoEphemeris(const SatelliteId& sat,
+                                               const GNSSTime& time,
+                                               int desired_iode) const {
+    if (sat.system != GNSSSystem::Galileo) {
+        return true;
+    }
+    auto it = ephemeris_data.find(sat);
+    if (it == ephemeris_data.end()) {
+        return false;
+    }
+    constexpr int kGalInavClockBit = 1 << 9;
+    for (const auto& eph : it->second) {
+        if (desired_iode >= 0 && static_cast<int>(eph.iode) != desired_iode) {
+            continue;
+        }
+        if (!(eph.data_source_code & kGalInavClockBit)) {
+            continue;
+        }
+        if (eph.toe - time >= 0.0) {
+            continue;
+        }
+        if (!eph.isValid(time)) {
+            continue;
+        }
+        return true;
+    }
+    return false;
+}
+
 bool NavigationData::calculateSatelliteState(const SatelliteId& sat,
                                            const GNSSTime& time,
                                            Vector3d& position,
