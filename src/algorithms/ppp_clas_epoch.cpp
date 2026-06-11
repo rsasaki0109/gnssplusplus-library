@@ -95,7 +95,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     };
 
     PositionSolution seed = spp_processor_.processEpoch(obs, nav);
-    detectCycleSlips(obs);
+    detectCycleSlips(obs, nav);
     const auto epoch_preparation = ppp_clas::prepareEpochState(
         obs,
         seed,
