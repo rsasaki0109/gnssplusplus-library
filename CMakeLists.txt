@@ -73,6 +73,7 @@ set(GNSS_SOURCES
     src/algorithms/ppp_osr.cpp
     src/algorithms/ppp_wlnl.cpp
     src/algorithms/ppp_clas_epoch.cpp
+    src/algorithms/ppp_env_overrides.cpp
     src/algorithms/madoca_parity.cpp
     src/algorithms/madocalib_oracle.cpp
     src/algorithms/madocalib_bridge.cpp
@@ -93,6 +94,7 @@ set(GNSS_SOURCES_NO_OPTIMIZATION
     src/algorithms/rtk_update.cpp
     src/algorithms/rtk_validation.cpp
     src/algorithms/fgo.cpp
+    src/algorithms/ppp_env_overrides.cpp
     src/algorithms/rtk.cpp
     src/algorithms/spp.cpp
     src/algorithms/lambda.cpp

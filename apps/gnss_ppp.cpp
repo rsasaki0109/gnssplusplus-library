@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -10,6 +9,7 @@
 #include <vector>
 
 #include <libgnss++/algorithms/ppp.hpp>
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/solution.hpp>
 #include <libgnss++/external/madocalib_bridge.hpp>
 #include <libgnss++/io/rinex.hpp>
@@ -764,12 +764,12 @@ int main(int argc, char* argv[]) {
             return 0;
         }
 
-        if (!options.madoca_l6_paths.empty() &&
-            std::getenv("GNSS_PPP_QZSS_PREFER_L1L") == nullptr) {
-            setenv("GNSS_PPP_QZSS_PREFER_L1L", "1", 0);
-        }
-
         libgnss::io::RINEXReader obs_reader;
+        const auto& ppp_env_overrides = libgnss::pppEnvOverrides();
+        if (!options.madoca_l6_paths.empty() &&
+            !ppp_env_overrides.qzss_prefer_l1l_present) {
+            obs_reader.setQzssL1Preference(true);
+        }
         if (!obs_reader.open(options.obs_path)) {
             std::cerr << "Error: failed to open observation file: " << options.obs_path << "\n";
             return 1;

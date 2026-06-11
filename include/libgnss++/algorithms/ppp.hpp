@@ -216,6 +216,7 @@ public:
 
 private:
     PPPConfig ppp_config_;
+    PPPEnvOverrides env_overrides_;
     SPPProcessor spp_processor_;  ///< Fallback SPP processor
     PreciseProducts precise_products_;
     SSRProducts ssr_products_;
