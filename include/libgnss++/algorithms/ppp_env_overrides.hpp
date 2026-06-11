@@ -71,6 +71,10 @@ struct PPPEnvOverrides {
     // or when GNSS_PPP_MADOCA_EARLY_WINDOW is enabled. Default follows
     // GNSS_PPP_MADOCA_EARLY_WINDOW.
     bool madoca_galileo_gate = false;
+    // GNSS_PPP_MADOCA_BIAS_IDENTITY: preserve MADOCA SSR code/phase-bias
+    // signal identity instead of collapsed RTCM band ids when set exactly to
+    // "1". Default false while the parity impact is measured.
+    bool madoca_bias_identity = false;
     // GNSS_PPP_PB_ADD: add non-MADOCA SSR phase biases instead of subtracting.
     // Default false.
     bool pb_add = false;
