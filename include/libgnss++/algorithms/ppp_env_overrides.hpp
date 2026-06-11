@@ -63,6 +63,10 @@ struct PPPEnvOverrides {
     // GNSS_PPP_MADOCA_LOW_ELEV: admit coherent MADOCA observations down to the
     // MADOCALIB 10 degree mask unless set exactly to "0". Default true.
     bool madoca_low_elev = true;
+    // GNSS_PPP_MADOCA_GALILEO_GATE: apply MADOCALIB Galileo broadcast
+    // ephemeris admission semantics in coherent MADOCA when set exactly to "1".
+    // Default false.
+    bool madoca_galileo_gate = false;
     // GNSS_PPP_PB_ADD: add non-MADOCA SSR phase biases instead of subtracting.
     // Default false.
     bool pb_add = false;
