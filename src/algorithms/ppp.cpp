@@ -510,10 +510,30 @@ PositionSolution PPPProcessor::processEpochStandard(
         use_seed_assist ||
         !filter_initialized_;
     const PositionSolution* seed_ptr = nullptr;
+    const auto runSeedSpp = [&]() {
+        const SPPProcessor::SPPConfig original_spp_config = spp_processor_.getSPPConfig();
+        if (ssr_products_loaded_ && original_spp_config.enable_raim_fde) {
+            SPPProcessor::SPPConfig seed_spp_config = original_spp_config;
+            // The internal seed solve only initializes/resets the PPP clock.
+            // Full leave-one-out SPP FDE can dominate long SSR runs, while
+            // fallback SPP output still uses the normal processor settings.
+            seed_spp_config.enable_raim_fde = false;
+            spp_processor_.setSPPConfig(seed_spp_config);
+            try {
+                PositionSolution seed = spp_processor_.processEpoch(obs, nav);
+                spp_processor_.setSPPConfig(original_spp_config);
+                return seed;
+            } catch (...) {
+                spp_processor_.setSPPConfig(original_spp_config);
+                throw;
+            }
+        }
+        return spp_processor_.processEpoch(obs, nav);
+    };
 
     try {
         if (need_seed_solution) {
-            seed_solution = spp_processor_.processEpoch(obs, nav);
+            seed_solution = runSeedSpp();
             if (seed_solution.isValid()) {
                 seed_ptr = &seed_solution;
             }

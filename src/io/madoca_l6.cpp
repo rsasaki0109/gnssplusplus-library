@@ -956,6 +956,7 @@ int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
     // Per-satellite last-emitted orbit/clock t0 (snapshot only on a change).
     std::vector<std::int64_t> last_orbit(kN + 1, -1);
     std::vector<std::int64_t> last_clock(kN + 1, -1);
+    std::vector<libgnss::SSROrbitClockCorrection> corrections;
 
     int added = 0;
     for (const std::string& file : files) {
@@ -982,12 +983,13 @@ int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
                 last_clock[sat] = ct;
                 libgnss::SSROrbitClockCorrection corr;
                 if (buildMadocaSsrCorrection(sat, c, decoder.envOverrides(), corr)) {
-                    products.addCorrection(corr);
+                    corrections.push_back(corr);
                     ++added;
                 }
             }
         }
     }
+    products.addCorrections(corrections);
     return added;
 }
 
@@ -999,6 +1001,7 @@ int decodeMadocaL6eFilesToProductsReplay(const std::vector<std::string>& files,
     referenceEpochForWeek(gps_week, ref_ep);
 
     constexpr int kN = MadocaL6eDecoder::kMaxSat;
+    std::vector<libgnss::SSROrbitClockCorrection> corrections;
     int added = 0;
     for (const std::string& file : files) {
         std::ifstream in(file, std::ios::binary);
@@ -1038,12 +1041,13 @@ int decodeMadocaL6eFilesToProductsReplay(const std::vector<std::string>& files,
                 libgnss::SSROrbitClockCorrection corr;
                 if (buildMadocaSsrCorrection(
                         sat, c, decoder.envOverrides(), corr, true)) {
-                    products.addCorrection(corr);
+                    corrections.push_back(corr);
                     ++added;
                 }
             }
         }
     }
+    products.addCorrections(corrections);
     return added;
 }
 
