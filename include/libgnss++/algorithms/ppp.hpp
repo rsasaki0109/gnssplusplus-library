@@ -331,6 +331,8 @@ private:
         SatelliteId satellite;
         SignalType primary_signal = SignalType::SIGNAL_TYPE_COUNT;
         SignalType secondary_signal = SignalType::SIGNAL_TYPE_COUNT;
+        std::string primary_observation_type;
+        std::string secondary_observation_type;
         double primary_code_bias_coeff = 1.0;
         double secondary_code_bias_coeff = 0.0;
         double pseudorange_if = 0.0;

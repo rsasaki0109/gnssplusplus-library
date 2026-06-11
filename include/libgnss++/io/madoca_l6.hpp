@@ -121,12 +121,12 @@ private:
     PPPEnvOverrides env_overrides_;
 };
 
-// Map a MADOCA Compact SSR bias code (an RTKLIB CODE_* enum value, i.e. the
-// 1-based index used by MadocaSsrCorrection::cbias/pbias) to the RTCM SSR signal
-// id that keys SSRProducts code/phase biases (see core/signals.hpp
+// Legacy map from a MADOCA Compact SSR bias code (an RTKLIB CODE_* enum value,
+// i.e. the 1-based index used by MadocaSsrCorrection::cbias/pbias) to the RTCM
+// SSR signal id that keys SSRProducts code/phase biases (see core/signals.hpp
 // rtcmSsrSignalId). Returns 0 when the code has no native RTCM SSR id for the
-// system. Only the per-band representative codes emitted by mcssr_sel_biascode
-// are mapped, so distinct codes never collide on one id.
+// system. Several MADOCA tracking-mode identities intentionally collapse to one
+// RTCM band id on this legacy path.
 std::uint8_t madocaBiasCodeToRtcmSsrId(libgnss::GNSSSystem system, int code);
 
 // Convert the decoder's current per-satellite Compact SSR snapshot into native

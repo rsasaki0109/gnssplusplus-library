@@ -327,9 +327,11 @@ void assignObservationField(Observation& obs,
     if (isCodeObservationType(obs_type)) {
         obs.pseudorange = value;
         obs.has_pseudorange = true;
+        obs.pseudorange_observation_type = obs_type;
     } else if (isCarrierObservationType(obs_type)) {
         obs.carrier_phase = value;
         obs.has_carrier_phase = true;
+        obs.carrier_phase_observation_type = obs_type;
         obs.lli = static_cast<uint8_t>(lli);
         obs.loss_of_lock = (lli & 0x01) != 0;
     } else if (isDopplerObservationType(obs_type)) {
