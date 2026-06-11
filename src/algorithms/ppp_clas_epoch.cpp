@@ -346,7 +346,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     const bool use_constrained_fixed_state =
         ambiguity_resolution.accepted &&
         ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL &&
-        env_overrides_.clas_constrained_fix &&
+        env_overrides_.clas_resamb &&
         last_clas_constrained_fixed_state_valid_;
     const PPPState& solution_filter_state =
         use_constrained_fixed_state ? last_clas_constrained_fixed_state_ : filter_state_;

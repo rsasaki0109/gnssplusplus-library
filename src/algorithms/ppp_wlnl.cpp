@@ -173,6 +173,36 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     if (attempt.has_constrained_state) {
         last_clas_constrained_fixed_state_ = attempt.constrained_state;
         last_clas_constrained_fixed_state_valid_ = true;
+        if (auto* debug = clasFixDebugStream(); debug != nullptr) {
+            const Vector3d initial_position =
+                filter_state_.state.segment(filter_state_.pos_index, 3);
+            const Vector3d fixed_position =
+                attempt.constrained_state.state.segment(filter_state_.pos_index, 3);
+            *debug << std::setprecision(17)
+                   << "RESAMB,"
+                   << obs.time.week << ','
+                   << obs.time.tow << ','
+                   << ','
+                   << ','
+                   << attempt.state_dd_count << ','
+                   << -1 << ','
+                   << "state_dd,"
+                   << attempt.state_lambda_ratio << ','
+                   << initial_position.x() << ','
+                   << initial_position.y() << ','
+                   << initial_position.z() << ','
+                   << fixed_position.x() << ','
+                   << fixed_position.y() << ','
+                   << fixed_position.z() << ','
+                   << attempt.state_position_shift_m << ','
+                   << attempt.constrained_state.state(filter_state_.clock_index) << ','
+                   << attempt.state_dd_residual_norm << ','
+                   << attempt.state_wlnl_max_abs_delta_cycles;
+            for (int i = 0; i < 38; ++i) {
+                *debug << ",0";
+            }
+            *debug << '\n';
+        }
     }
     if (pppDebugEnabled()) {
         std::cerr << "[PPP-WLNL] NL fixed: nb=" << attempt.nb
