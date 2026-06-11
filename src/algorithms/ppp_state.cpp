@@ -7,10 +7,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <map>
 #include <set>
+#include <string>
 #include <vector>
 
 namespace libgnss {
@@ -21,7 +24,181 @@ namespace {
 
 constexpr double kMadocaStaticSpikeGuardPositionDeltaM = 100.0;
 constexpr double kMadocaBoundaryGuardPositionJumpM = 10.0;
-constexpr double kMadocaPostfitRejectSigma = 4.0;
+constexpr double kMadocaPostfitEpochRejectScore = 0.90;
+constexpr double kRadiansToDegrees = 57.29577951308232;
+
+struct MadocaPostfitEpochStats {
+    int row_count = 0;
+    int normalized_row_count = 0;
+    double chi_square = 0.0;
+    double rms_normalized = 0.0;
+    double max_normalized = 0.0;
+};
+
+const char* gnssSystemName(GNSSSystem system) {
+    switch (system) {
+        case GNSSSystem::GPS: return "GPS";
+        case GNSSSystem::GLONASS: return "GLO";
+        case GNSSSystem::Galileo: return "GAL";
+        case GNSSSystem::BeiDou: return "BDS";
+        case GNSSSystem::QZSS: return "QZS";
+        case GNSSSystem::SBAS: return "SBS";
+        case GNSSSystem::NavIC: return "IRN";
+        default: return "UNK";
+    }
+}
+
+template <typename MeasurementEquationT>
+MadocaPostfitEpochStats computeMadocaPostfitEpochStats(
+    const MeasurementEquationT& postfit_eq) {
+    MadocaPostfitEpochStats stats;
+    stats.row_count = static_cast<int>(postfit_eq.residuals.size());
+    for (int row = 0; row < postfit_eq.residuals.size(); ++row) {
+        const double residual_m = postfit_eq.residuals(row);
+        const double variance_m2 = postfit_eq.weight_matrix(row, row);
+        if (!std::isfinite(residual_m) ||
+            !std::isfinite(variance_m2) ||
+            variance_m2 <= 0.0) {
+            continue;
+        }
+        const double normalized = std::abs(residual_m) / std::sqrt(variance_m2);
+        if (!std::isfinite(normalized)) {
+            continue;
+        }
+        stats.chi_square += normalized * normalized;
+        stats.max_normalized = std::max(stats.max_normalized, normalized);
+        ++stats.normalized_row_count;
+    }
+    if (stats.normalized_row_count > 0) {
+        stats.rms_normalized =
+            std::sqrt(stats.chi_square / static_cast<double>(stats.normalized_row_count));
+    }
+    return stats;
+}
+
+class MadocaPostfitShadowSink {
+public:
+    bool open(const std::string& path) {
+        if (path.empty()) {
+            return false;
+        }
+        if (path != path_ || !out_.is_open()) {
+            out_.close();
+            path_ = path;
+            header_written_ = false;
+            out_.open(path_, std::ios::out | std::ios::trunc);
+        }
+        if (!out_) {
+            return false;
+        }
+        if (!header_written_) {
+            out_ << "record,week,tow,iteration_count,row,row_count,"
+                    "sat,system,signal_type,signal_band,obs_type,"
+                    "residual_m,variance_m2,sigma_m,abs_norm,elevation_deg,"
+                    "chi_square,normalized_row_count,rms_norm,max_norm,"
+                    "position_update_norm_m,converged,anchor_active\n";
+            header_written_ = true;
+        }
+        return true;
+    }
+
+    std::ofstream& stream() { return out_; }
+
+private:
+    std::string path_;
+    std::ofstream out_;
+    bool header_written_ = false;
+};
+
+MadocaPostfitShadowSink& madocaPostfitShadowSink() {
+    static MadocaPostfitShadowSink sink;
+    return sink;
+}
+
+template <typename MeasurementEquationT>
+void writeMadocaPostfitShadow(const std::string& path,
+                              const GNSSTime& time,
+                              int iteration_count,
+                              const MeasurementEquationT& postfit_eq,
+                              const MadocaPostfitEpochStats& stats,
+                              double position_update_norm_m,
+                              bool converged,
+                              bool anchor_active) {
+    MadocaPostfitShadowSink& sink = madocaPostfitShadowSink();
+    if (!sink.open(path)) {
+        return;
+    }
+    std::ofstream& out = sink.stream();
+    out << std::setprecision(17);
+    const auto writeCommonPrefix = [&](const char* record, int row) {
+        out << record << ','
+            << time.week << ','
+            << time.tow << ','
+            << iteration_count << ','
+            << row << ','
+            << stats.row_count << ',';
+    };
+    const auto writeAggregateSuffix = [&]() {
+        out << ','
+            << stats.chi_square << ','
+            << stats.normalized_row_count << ','
+            << stats.rms_normalized << ','
+            << stats.max_normalized << ','
+            << position_update_norm_m << ','
+            << (converged ? 1 : 0) << ','
+            << (anchor_active ? 1 : 0)
+            << '\n';
+    };
+
+    writeCommonPrefix("epoch", -1);
+    out << ",,,,,,,,,";
+    writeAggregateSuffix();
+
+    for (int row = 0; row < postfit_eq.residuals.size(); ++row) {
+        const size_t row_index = static_cast<size_t>(row);
+        const SatelliteId sat =
+            row_index < postfit_eq.row_satellites.size()
+                ? postfit_eq.row_satellites[row_index]
+                : SatelliteId();
+        const bool is_phase =
+            row_index < postfit_eq.row_is_phase.size() &&
+            postfit_eq.row_is_phase[row_index];
+        const SignalType signal =
+            row_index < postfit_eq.row_signals.size()
+                ? postfit_eq.row_signals[row_index]
+                : SignalType::SIGNAL_TYPE_COUNT;
+        const std::string signal_band =
+            row_index < postfit_eq.row_signal_bands.size()
+                ? postfit_eq.row_signal_bands[row_index]
+                : std::string();
+        const double elevation_rad =
+            row_index < postfit_eq.row_elevations.size()
+                ? postfit_eq.row_elevations[row_index]
+                : std::numeric_limits<double>::quiet_NaN();
+        const double residual_m = postfit_eq.residuals(row);
+        const double variance_m2 = postfit_eq.weight_matrix(row, row);
+        const double sigma_m =
+            variance_m2 > 0.0 && std::isfinite(variance_m2)
+                ? std::sqrt(variance_m2)
+                : std::numeric_limits<double>::quiet_NaN();
+        const double abs_norm =
+            sigma_m > 0.0 && std::isfinite(sigma_m) && std::isfinite(residual_m)
+                ? std::abs(residual_m) / sigma_m
+                : std::numeric_limits<double>::quiet_NaN();
+        writeCommonPrefix("row", row);
+        out << sat.toString() << ','
+            << gnssSystemName(sat.system) << ','
+            << static_cast<int>(signal) << ','
+            << signal_band << ','
+            << (is_phase ? "phase" : "code") << ','
+            << residual_m << ','
+            << variance_m2 << ','
+            << sigma_m << ','
+            << abs_norm << ','
+            << (elevation_rad * kRadiansToDegrees);
+        writeAggregateSuffix();
+    }
+}
 
 bool validReceiverSeed(const Vector3d& receiver_position) {
     return std::isfinite(receiver_position.x()) &&
@@ -348,6 +525,7 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
         filter_state_ = pre_update_state;
         pre_anchor_covariance_ = filter_state_.covariance;
     };
+    int completed_filter_iterations = 0;
     for (int iteration = 0; iteration < filter_iterations; ++iteration) {
         MeasurementEquation meas_eq = formMeasurementEquations(if_obs, nav, obs.time);
 
@@ -411,6 +589,7 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
         filter_state_.covariance =
             (identity - kh) * filter_state_.covariance * (identity - kh).transpose() +
             gain * meas_eq.weight_matrix * gain.transpose();
+        completed_filter_iterations = iteration + 1;
 
         if (delta_state.segment(filter_state_.pos_index, 3).norm() < 1e-4 &&
             std::abs(delta_state(filter_state_.clock_index)) < 1e-3 &&
@@ -419,9 +598,45 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
         }
     }
 
+    const bool madoca_postfit_shadow =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        !env_overrides_.madoca_postfit_shadow_path.empty();
+    MeasurementEquation cached_postfit_eq;
+    bool have_cached_postfit_eq = false;
+    const auto getPostfitEquation = [&]() -> const MeasurementEquation& {
+        if (!have_cached_postfit_eq) {
+            cached_postfit_eq = formMeasurementEquations(if_obs, nav, obs.time, false);
+            have_cached_postfit_eq = true;
+        }
+        return cached_postfit_eq;
+    };
+    const double epoch_position_update_norm_m =
+        (filter_state_.state.segment(filter_state_.pos_index, 3) -
+         pre_update_state.state.segment(pre_update_state.pos_index, 3)).norm();
+    const bool madoca_static_anchor_blend =
+        require_coherent_ssr_ && !env_overrides_.disable_madoca_static_anchor;
+    const bool anchor_active =
+        (!ppp_config_.kinematic_mode || ppp_config_.low_dynamics_mode) &&
+        has_static_anchor_position_ &&
+        (ppp_config_.apply_static_anchor_blend || madoca_static_anchor_blend) &&
+        !(precise_products_loaded_ && !ppp_config_.estimate_troposphere);
+    if (madoca_postfit_shadow) {
+        const MeasurementEquation& postfit_eq = getPostfitEquation();
+        const MadocaPostfitEpochStats postfit_stats =
+            computeMadocaPostfitEpochStats(postfit_eq);
+        writeMadocaPostfitShadow(
+            env_overrides_.madoca_postfit_shadow_path,
+            obs.time,
+            completed_filter_iterations,
+            postfit_eq,
+            postfit_stats,
+            epoch_position_update_norm_m,
+            converged_,
+            anchor_active);
+    }
+
     if (madoca_postfit_commit) {
-        const MeasurementEquation postfit_eq =
-            formMeasurementEquations(if_obs, nav, obs.time, false);
+        const MeasurementEquation& postfit_eq = getPostfitEquation();
         if (postfit_eq.observations.size() < config_.min_satellites) {
             if (pppDebugEnabled()) {
                 std::cerr << "[PPP] MADOCA postfit commit rejected epoch at week="
@@ -435,61 +650,35 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
             return false;
         }
 
-        int failing_rows = 0;
-        int worst_row = -1;
-        double worst_abs_residual_m = 0.0;
-        double worst_residual_m = 0.0;
-        double worst_sigma_m = 0.0;
-        for (int row = 0; row < postfit_eq.residuals.size(); ++row) {
-            const bool is_phase =
-                static_cast<size_t>(row) < postfit_eq.row_is_phase.size() &&
-                postfit_eq.row_is_phase[static_cast<size_t>(row)];
-            const double variance_floor = is_phase ? 1e-8 : 1e-6;
-            const double sigma_m =
-                std::sqrt(std::max(postfit_eq.weight_matrix(row, row), variance_floor));
-            const double residual_m = postfit_eq.residuals(row);
-            if (!std::isfinite(residual_m) || !std::isfinite(sigma_m) ||
-                sigma_m <= 0.0) {
-                continue;
-            }
-            const double abs_residual_m = std::abs(residual_m);
-            if (abs_residual_m <= sigma_m * kMadocaPostfitRejectSigma) {
-                continue;
-            }
-            ++failing_rows;
-            if (abs_residual_m > worst_abs_residual_m) {
-                worst_abs_residual_m = abs_residual_m;
-                worst_residual_m = residual_m;
-                worst_sigma_m = sigma_m;
-                worst_row = row;
-            }
-        }
-        if (failing_rows > 0) {
+        const MadocaPostfitEpochStats postfit_stats =
+            computeMadocaPostfitEpochStats(postfit_eq);
+        const double chi_square_per_row =
+            postfit_stats.normalized_row_count > 0
+                ? postfit_stats.chi_square /
+                      static_cast<double>(postfit_stats.normalized_row_count)
+                : 0.0;
+        const double postfit_epoch_score =
+            converged_ && chi_square_per_row > 0.0
+                ? epoch_position_update_norm_m / std::log1p(chi_square_per_row)
+                : 0.0;
+        const bool postfit_epoch_reject =
+            converged_ &&
+            postfit_stats.normalized_row_count > 0 &&
+            std::isfinite(postfit_epoch_score) &&
+            postfit_epoch_score >= kMadocaPostfitEpochRejectScore;
+        if (postfit_epoch_reject) {
             if (pppDebugEnabled()) {
                 std::cerr << "[PPP] MADOCA postfit commit rejected epoch at week="
                           << obs.time.week
                           << " tow=" << obs.time.tow
                           << " rows=" << postfit_eq.observations.size()
-                          << " failing_rows=" << failing_rows;
-                if (worst_row >= 0) {
-                    const size_t row_index = static_cast<size_t>(worst_row);
-                    std::cerr << " worst_sat="
-                              << (row_index < postfit_eq.row_satellites.size()
-                                      ? postfit_eq.row_satellites[row_index].toString()
-                                      : std::string("unknown"))
-                              << " type="
-                              << (row_index < postfit_eq.row_is_phase.size() &&
-                                          postfit_eq.row_is_phase[row_index]
-                                      ? "phase"
-                                      : "code")
-                              << " residual=" << worst_residual_m
-                              << " sigma=" << worst_sigma_m
-                              << " normalized="
-                              << (worst_sigma_m > 0.0
-                                      ? worst_abs_residual_m / worst_sigma_m
-                                      : 0.0);
-                }
-                std::cerr << "\n";
+                          << " chi_square_per_row=" << chi_square_per_row
+                          << " rms_norm=" << postfit_stats.rms_normalized
+                          << " max_norm=" << postfit_stats.max_normalized
+                          << " pos_update=" << epoch_position_update_norm_m
+                          << " score=" << postfit_epoch_score
+                          << " threshold=" << kMadocaPostfitEpochRejectScore
+                          << "\n";
             }
             restorePostfitFailedEpoch();
             return false;
@@ -497,9 +686,7 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
     }
 
     if (madoca_boundary_guard) {
-        const double epoch_position_jump_m =
-            (filter_state_.state.segment(filter_state_.pos_index, 3) -
-             pre_update_state.state.segment(pre_update_state.pos_index, 3)).norm();
+        const double epoch_position_jump_m = epoch_position_update_norm_m;
         if (std::isfinite(epoch_position_jump_m) &&
             epoch_position_jump_m > kMadocaBoundaryGuardPositionJumpM) {
             if (pppDebugEnabled()) {
