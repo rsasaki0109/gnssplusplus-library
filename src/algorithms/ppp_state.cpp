@@ -19,6 +19,8 @@ using namespace ppp_internal;
 
 namespace {
 
+constexpr double kMadocaStaticSpikeGuardPositionDeltaM = 100.0;
+
 bool validReceiverSeed(const Vector3d& receiver_position) {
     return std::isfinite(receiver_position.x()) &&
            std::isfinite(receiver_position.y()) &&
@@ -326,6 +328,12 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
     }
 
     const int filter_iterations = precise_products_loaded_ ? 3 : ppp_config_.filter_iterations;
+    const PPPState pre_update_state = filter_state_;
+    const bool madoca_static_spike_guard =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        env_overrides_.madoca_spike_guard &&
+        converged_ &&
+        (!ppp_config_.kinematic_mode || ppp_config_.low_dynamics_mode);
     for (int iteration = 0; iteration < filter_iterations; ++iteration) {
         MeasurementEquation meas_eq = formMeasurementEquations(if_obs, nav, obs.time);
 
@@ -346,11 +354,32 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
         const MatrixXd gain =
             filter_state_.covariance * meas_eq.design_matrix.transpose() * innovation_inverse;
         const VectorXd delta_state = gain * meas_eq.residuals;
+        const double position_delta_norm =
+            delta_state.segment(filter_state_.pos_index, 3).norm();
+
+        if (madoca_static_spike_guard &&
+            std::isfinite(position_delta_norm) &&
+            position_delta_norm > kMadocaStaticSpikeGuardPositionDeltaM) {
+            if (pppDebugEnabled()) {
+                std::cerr << "[PPP] MADOCA spike guard rejected update at week="
+                          << obs.time.week
+                          << " tow=" << obs.time.tow
+                          << " iter=" << iteration
+                          << " rows=" << meas_eq.observations.size()
+                          << " pos_delta=" << position_delta_norm
+                          << " clock_delta=" << delta_state(filter_state_.clock_index)
+                          << " trop_delta=" << delta_state(filter_state_.trop_index)
+                          << "\n";
+            }
+            filter_state_ = pre_update_state;
+            pre_anchor_covariance_ = filter_state_.covariance;
+            return true;
+        }
 
         if (pppDebugEnabled()) {
             std::cerr << "[PPP] iter=" << iteration
                       << " rows=" << meas_eq.observations.size()
-                      << " pos_delta=" << delta_state.segment(filter_state_.pos_index, 3).norm()
+                      << " pos_delta=" << position_delta_norm
                       << " clock_delta=" << delta_state(filter_state_.clock_index)
                       << " trop_delta=" << delta_state(filter_state_.trop_index)
                       << "\n";

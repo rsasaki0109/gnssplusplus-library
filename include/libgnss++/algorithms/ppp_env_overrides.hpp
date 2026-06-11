@@ -26,6 +26,9 @@ struct PPPEnvOverrides {
     // GNSS_PPP_MADOCA_EARLY_WINDOW: enable coherent MADOCA bridge-convergence
     // parity defaults unless set exactly to "0". Default true.
     bool madoca_early_window = true;
+    // GNSS_PPP_MADOCA_SPIKE_GUARD: reject implausible converged static update
+    // jumps in coherent MADOCA unless set exactly to "0". Default true.
+    bool madoca_spike_guard = true;
     // GNSS_PPP_ESTIMATE_ISB: comma/space-style spec parsed by substring
     // checks for "gal", "qzs", "bds", "all", or exact "1". Defaults false.
     bool estimate_isb_all = false;
