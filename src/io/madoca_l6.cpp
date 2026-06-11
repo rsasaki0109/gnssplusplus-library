@@ -753,6 +753,9 @@ MadocaGtime latestComponentTime(const MadocaSsrCorrection& c, bool include_bias_
     return latest;
 }
 
+bool useMadocaBiasIdentityKey(libgnss::GNSSSystem system,
+                              const PPPEnvOverrides& env_overrides);
+
 bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
                               const PPPEnvOverrides& env_overrides,
                               libgnss::SSROrbitClockCorrection& out,
@@ -815,7 +818,10 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
     for (int k = 0; k < MadocaSsrCorrection::kMaxCode; ++k) {
         const int code = k + 1;  // cbias/pbias are held by CODE_*-1
         if (c.vcbias[k]) {
-            const std::uint8_t id = madocaBiasCodeToRtcmSsrId(gsys, code);
+            const std::uint8_t id =
+                useMadocaBiasIdentityKey(gsys, env_overrides)
+                    ? static_cast<std::uint8_t>(code)
+                    : madocaBiasCodeToRtcmSsrId(gsys, code);
             if (env_overrides.madoca_cbias_dump) {
                 std::fprintf(stderr,
                              "[MADOCA-CBIAS] sys=%d prn=%d code=%d id=%u cbias=%.4f\n",
@@ -827,7 +833,10 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
             }
         }
         if (c.vpbias[k]) {
-            const std::uint8_t id = madocaBiasCodeToRtcmSsrId(gsys, code);
+            const std::uint8_t id =
+                useMadocaBiasIdentityKey(gsys, env_overrides)
+                    ? static_cast<std::uint8_t>(code)
+                    : madocaBiasCodeToRtcmSsrId(gsys, code);
             if (env_overrides.madoca_cbias_dump) {
                 std::fprintf(stderr,
                              "[MADOCA-PBIAS] sys=%d prn=%d code=%d id=%u pbias=%.4f\n",
@@ -906,6 +915,16 @@ std::uint8_t madocaBiasCodeToRtcmSsrId(libgnss::GNSSSystem system, int code) {
             break;
     }
     return 0;
+}
+
+bool useMadocaBiasIdentityKey(libgnss::GNSSSystem system,
+                              const libgnss::PPPEnvOverrides& env_overrides) {
+    if (!env_overrides.madoca_bias_identity) {
+        return false;
+    }
+    return system == libgnss::GNSSSystem::GPS ||
+           system == libgnss::GNSSSystem::Galileo ||
+           system == libgnss::GNSSSystem::QZSS;
 }
 
 int madocaL6eSnapshotToProducts(const MadocaL6eDecoder& decoder,

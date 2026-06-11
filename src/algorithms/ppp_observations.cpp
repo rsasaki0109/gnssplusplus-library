@@ -11,6 +11,16 @@ namespace libgnss {
 
 using namespace ppp_internal;
 
+namespace {
+
+std::string biasObservationType(const Observation& observation) {
+    return !observation.pseudorange_observation_type.empty()
+               ? observation.pseudorange_observation_type
+               : observation.carrier_phase_observation_type;
+}
+
+}  // namespace
+
 std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
     const ObservationData& obs,
     const NavigationData& nav) {
@@ -66,6 +76,7 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         if (!ppp_config_.use_ionosphere_free) {
             entry.pseudorange_if = primary->pseudorange;
             entry.primary_signal = primary->signal;
+            entry.primary_observation_type = biasObservationType(*primary);
             entry.primary_code_bias_coeff = 1.0;
             entry.secondary_code_bias_coeff = 0.0;
             // Per-frequency L1 raw observable (biases applied later in
@@ -103,6 +114,7 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         if (!ppp_config_.use_ionosphere_free) {
             if (secondary != nullptr) {
                 entry.secondary_signal = secondary->signal;
+                entry.secondary_observation_type = biasObservationType(*secondary);
                 const double f1 = signalFrequencyHz(primary->signal, eph);
                 const double f2 = signalFrequencyHz(secondary->signal, eph);
                 if (f1 > 0.0 && f2 > 0.0) {
@@ -154,6 +166,7 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         if (secondary == nullptr) {
             entry.pseudorange_if = primary->pseudorange;
             entry.primary_signal = primary->signal;
+            entry.primary_observation_type = biasObservationType(*primary);
             entry.primary_code_bias_coeff = 1.0;
             entry.secondary_code_bias_coeff = 0.0;
             if (primary->has_carrier_phase) {
@@ -184,6 +197,8 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             coefficients.first * primary->pseudorange + coefficients.second * secondary->pseudorange;
         entry.primary_signal = primary->signal;
         entry.secondary_signal = secondary->signal;
+        entry.primary_observation_type = biasObservationType(*primary);
+        entry.secondary_observation_type = biasObservationType(*secondary);
         entry.primary_code_bias_coeff = coefficients.first;
         entry.secondary_code_bias_coeff = coefficients.second;
         entry.pseudorange_code_bias_m = 0.0;
