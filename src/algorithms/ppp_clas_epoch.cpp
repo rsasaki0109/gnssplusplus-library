@@ -109,6 +109,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     last_clas_hybrid_fallback_reason_.clear();
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+    last_clas_constrained_fixed_state_valid_ = false;
     // CLAS per-frequency mode uses WL-NL AR: MW averaging resolves WL integers,
     // then NL integers are extracted from OSR-corrected dual-freq observations.
     if (ppp_config_.enable_ambiguity_resolution && !ppp_config_.use_ionosphere_free) {
@@ -342,14 +343,24 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         }
     }
 
+    const bool use_constrained_fixed_state =
+        ambiguity_resolution.accepted &&
+        ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL &&
+        env_overrides_.clas_constrained_fix &&
+        last_clas_constrained_fixed_state_valid_;
+    const PPPState& solution_filter_state =
+        use_constrained_fixed_state ? last_clas_constrained_fixed_state_ : filter_state_;
+
     solution = ppp_clas::finalizeEpochSolution(
-        filter_state_,
+        solution_filter_state,
         ambiguity_resolution.accepted,
         last_ar_ratio_,
         last_fixed_ambiguities_,
         static_cast<int>(osr_corrections.size()));
 
-    if (wlnl_fixed_position_ok && !env_overrides_.clas_fixed_state_output) {
+    if (wlnl_fixed_position_ok &&
+        !env_overrides_.clas_fixed_state_output &&
+        !use_constrained_fixed_state) {
         solution.position_ecef = wlnl_fixed_position;
     }
 
