@@ -111,6 +111,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envStringOrEmpty("GNSS_PPP_CLAS_NL_DEBUG");
     overrides.clas_fix_debug_path =
         envStringOrEmpty("GNSS_PPP_CLAS_FIX_DEBUG");
+    overrides.clas_fix_require_osr =
+        envExactOne("GNSS_PPP_CLAS_FIX_REQUIRE_OSR");
     overrides.clas_vertical_fix =
         !envExactZero("GNSS_PPP_CLAS_VERTICAL_FIX");
     const std::string clas_nl_datum_fix =
