@@ -156,6 +156,19 @@ bool isSnrObservationType(const std::string& obs_type) {
     return !obs_type.empty() && obs_type[0] == 'S';
 }
 
+void annotateGlonassFrequencyChannel(Observation& observation,
+                                     const std::map<SatelliteId, int>& channels) {
+    if (observation.satellite.system != GNSSSystem::GLONASS) {
+        return;
+    }
+    const auto it = channels.find(observation.satellite);
+    if (it == channels.end()) {
+        return;
+    }
+    observation.has_glonass_frequency_channel = true;
+    observation.glonass_frequency_channel = it->second;
+}
+
 void assignObservationField(Observation& obs,
                             const std::string& obs_type,
                             double value,
@@ -755,6 +768,28 @@ bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) 
             }
         }
     }
+    else if (label.find("GLONASS SLOT / FRQ #") != std::string::npos) {
+        for (int i = 0; i < 8; ++i) {
+            const size_t pos = 4 + static_cast<size_t>(i) * 7;
+            if (pos + 6 > line.size()) {
+                break;
+            }
+            if (line[pos] != 'R') {
+                continue;
+            }
+            const std::string prn_text = trimCopy(line.substr(pos + 1, 2));
+            const std::string channel_text = trimCopy(line.substr(pos + 4, 3));
+            if (prn_text.empty() || channel_text.empty()) {
+                continue;
+            }
+            try {
+                const int prn = std::stoi(prn_text);
+                const int channel = std::stoi(channel_text);
+                header.glonass_frequency_channels[SatelliteId(GNSSSystem::GLONASS, prn)] = channel;
+            } catch (...) {
+            }
+        }
+    }
 
     return true;
 }
@@ -963,9 +998,13 @@ bool RINEXReader::parseObservationEpochV2(const std::string& line, ObservationDa
 
         // Add observations if they have data
         if (primary_selection.has_data) {
+            annotateGlonassFrequencyChannel(primary_selection.observation,
+                                            header_.glonass_frequency_channels);
             obs_data.addObservation(primary_selection.observation);
         }
         if (secondary_selection.has_data) {
+            annotateGlonassFrequencyChannel(secondary_selection.observation,
+                                            header_.glonass_frequency_channels);
             obs_data.addObservation(secondary_selection.observation);
         }
     }
@@ -1097,9 +1136,13 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
             }
 
             if (primary_selection.has_data) {
+                annotateGlonassFrequencyChannel(primary_selection.observation,
+                                                header_.glonass_frequency_channels);
                 obs_data.addObservation(primary_selection.observation);
             }
             if (secondary_selection.has_data) {
+                annotateGlonassFrequencyChannel(secondary_selection.observation,
+                                                header_.glonass_frequency_channels);
                 obs_data.addObservation(secondary_selection.observation);
             }
         }
