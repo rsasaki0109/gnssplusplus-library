@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <string>
 #include <vector>
 
 namespace libgnss {
@@ -28,6 +29,9 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
     std::vector<double> variances;
     std::vector<SatelliteId> row_satellites;
     std::vector<bool> row_is_phase;
+    std::vector<double> row_elevations;
+    std::vector<SignalType> row_signals;
+    std::vector<std::string> row_signal_bands;
 
     const double zenith_delay = filter_state_.state(filter_state_.trop_index);
     const bool use_phase_rows =
@@ -181,6 +185,9 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         variances.push_back(safeVariance(observation.variance_pr, 1e-6));
         row_satellites.push_back(observation.satellite);
         row_is_phase.push_back(false);
+        row_elevations.push_back(observation.elevation);
+        row_signals.push_back(observation.primary_signal);
+        row_signal_bands.push_back(ppp_config_.use_ionosphere_free ? "IF" : "L1");
 
         const bool qzss_code_only =
             env_overrides_.qzss_code_only ||
@@ -263,6 +270,9 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     variances.push_back(safeVariance(observation.variance_cp, 1e-8));
                     row_satellites.push_back(observation.satellite);
                     row_is_phase.push_back(true);
+                    row_elevations.push_back(observation.elevation);
+                    row_signals.push_back(observation.primary_signal);
+                    row_signal_bands.push_back(ppp_config_.use_ionosphere_free ? "IF" : "L1");
                 }
             }
         }
@@ -314,6 +324,9 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     variances.push_back(var_pr_l2);
                     row_satellites.push_back(observation.satellite);
                     row_is_phase.push_back(false);
+                    row_elevations.push_back(observation.elevation);
+                    row_signals.push_back(observation.secondary_signal);
+                    row_signal_bands.push_back("L2");
                 }
             }
 
@@ -359,6 +372,9 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     variances.push_back(var_cp_l2);
                     row_satellites.push_back(observation.satellite);
                     row_is_phase.push_back(true);
+                    row_elevations.push_back(observation.elevation);
+                    row_signals.push_back(observation.secondary_signal);
+                    row_signal_bands.push_back("L2");
                 }
             }
         }
@@ -382,6 +398,9 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
     }
     equation.row_satellites = row_satellites;
     equation.row_is_phase = row_is_phase;
+    equation.row_elevations = row_elevations;
+    equation.row_signals = row_signals;
+    equation.row_signal_bands = row_signal_bands;
     return equation;
 }
 
