@@ -579,6 +579,12 @@ bool PPPProcessor::hasEnoughCoherentSsrObservations(const ObservationData& obs,
             nullptr,
             &status,
             false);
+        if (env_overrides_.madoca_galileo_gate &&
+            observation.satellite.system == GNSSSystem::Galileo &&
+            !nav.hasMadocaGalileoEphemeris(
+                observation.satellite, obs.time, status.orbit_iode)) {
+            continue;
+        }
         if (ssr_ok && madocaSsrCorrectionIsCoherent(status, obs.time) &&
             madocaSsrMeasurementBiasesAreCoherent(
                 observation.satellite,
@@ -766,6 +772,14 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             if (require_coherent_ssr_ && ssr_products_loaded_ &&
                 (!ssr_status_ok ||
                  !madocaSsrCorrectionIsCoherent(ssr_status, time))) {
+                observation.valid = false;
+                continue;
+            }
+            if (env_overrides_.madoca_galileo_gate &&
+                require_coherent_ssr_ &&
+                observation.satellite.system == GNSSSystem::Galileo &&
+                !nav.hasMadocaGalileoEphemeris(
+                    observation.satellite, time, ssr_status.orbit_iode)) {
                 observation.valid = false;
                 continue;
             }

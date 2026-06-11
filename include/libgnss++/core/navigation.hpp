@@ -178,6 +178,14 @@ public:
                                   int desired_iode) const;
 
     /**
+     * @brief True when MADOCALIB seleph() would admit a Galileo broadcast
+     * ephemeris for MADOCA SSR at this epoch.
+     */
+    bool hasMadocaGalileoEphemeris(const SatelliteId& sat,
+                                   const GNSSTime& time,
+                                   int desired_iode) const;
+
+    /**
      * @brief Get all ephemeris for satellite
      */
     std::vector<Ephemeris> getEphemeris(const SatelliteId& sat) const;
