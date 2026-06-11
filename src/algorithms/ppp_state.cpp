@@ -21,6 +21,7 @@ namespace {
 
 constexpr double kMadocaStaticSpikeGuardPositionDeltaM = 100.0;
 constexpr double kMadocaBoundaryGuardPositionJumpM = 10.0;
+constexpr double kMadocaPostfitRejectSigma = 4.0;
 
 bool validReceiverSeed(const Vector3d& receiver_position) {
     return std::isfinite(receiver_position.x()) &&
@@ -340,6 +341,13 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
         env_overrides_.madoca_boundary_guard &&
         converged_ &&
         (!ppp_config_.kinematic_mode || ppp_config_.low_dynamics_mode);
+    const bool madoca_postfit_commit =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        env_overrides_.madoca_postfit_commit;
+    const auto restorePostfitFailedEpoch = [&]() {
+        filter_state_ = pre_update_state;
+        pre_anchor_covariance_ = filter_state_.covariance;
+    };
     for (int iteration = 0; iteration < filter_iterations; ++iteration) {
         MeasurementEquation meas_eq = formMeasurementEquations(if_obs, nav, obs.time);
 
@@ -347,6 +355,9 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
             if (pppDebugEnabled()) {
                 std::cerr << "[PPP] insufficient measurement rows: " << meas_eq.observations.size()
                           << " < " << config_.min_satellites << "\n";
+            }
+            if (madoca_postfit_commit) {
+                restorePostfitFailedEpoch();
             }
             return false;
         }
@@ -405,6 +416,83 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
             std::abs(delta_state(filter_state_.clock_index)) < 1e-3 &&
             std::abs(delta_state(filter_state_.trop_index)) < 1e-3) {
             break;
+        }
+    }
+
+    if (madoca_postfit_commit) {
+        const MeasurementEquation postfit_eq =
+            formMeasurementEquations(if_obs, nav, obs.time, false);
+        if (postfit_eq.observations.size() < config_.min_satellites) {
+            if (pppDebugEnabled()) {
+                std::cerr << "[PPP] MADOCA postfit commit rejected epoch at week="
+                          << obs.time.week
+                          << " tow=" << obs.time.tow
+                          << " rows=" << postfit_eq.observations.size()
+                          << " min_rows=" << config_.min_satellites
+                          << "\n";
+            }
+            restorePostfitFailedEpoch();
+            return false;
+        }
+
+        int failing_rows = 0;
+        int worst_row = -1;
+        double worst_abs_residual_m = 0.0;
+        double worst_residual_m = 0.0;
+        double worst_sigma_m = 0.0;
+        for (int row = 0; row < postfit_eq.residuals.size(); ++row) {
+            const bool is_phase =
+                static_cast<size_t>(row) < postfit_eq.row_is_phase.size() &&
+                postfit_eq.row_is_phase[static_cast<size_t>(row)];
+            const double variance_floor = is_phase ? 1e-8 : 1e-6;
+            const double sigma_m =
+                std::sqrt(std::max(postfit_eq.weight_matrix(row, row), variance_floor));
+            const double residual_m = postfit_eq.residuals(row);
+            if (!std::isfinite(residual_m) || !std::isfinite(sigma_m) ||
+                sigma_m <= 0.0) {
+                continue;
+            }
+            const double abs_residual_m = std::abs(residual_m);
+            if (abs_residual_m <= sigma_m * kMadocaPostfitRejectSigma) {
+                continue;
+            }
+            ++failing_rows;
+            if (abs_residual_m > worst_abs_residual_m) {
+                worst_abs_residual_m = abs_residual_m;
+                worst_residual_m = residual_m;
+                worst_sigma_m = sigma_m;
+                worst_row = row;
+            }
+        }
+        if (failing_rows > 0) {
+            if (pppDebugEnabled()) {
+                std::cerr << "[PPP] MADOCA postfit commit rejected epoch at week="
+                          << obs.time.week
+                          << " tow=" << obs.time.tow
+                          << " rows=" << postfit_eq.observations.size()
+                          << " failing_rows=" << failing_rows;
+                if (worst_row >= 0) {
+                    const size_t row_index = static_cast<size_t>(worst_row);
+                    std::cerr << " worst_sat="
+                              << (row_index < postfit_eq.row_satellites.size()
+                                      ? postfit_eq.row_satellites[row_index].toString()
+                                      : std::string("unknown"))
+                              << " type="
+                              << (row_index < postfit_eq.row_is_phase.size() &&
+                                          postfit_eq.row_is_phase[row_index]
+                                      ? "phase"
+                                      : "code")
+                              << " residual=" << worst_residual_m
+                              << " sigma=" << worst_sigma_m
+                              << " normalized="
+                              << (worst_sigma_m > 0.0
+                                      ? worst_abs_residual_m / worst_sigma_m
+                                      : 0.0);
+                }
+                std::cerr << "\n";
+            }
+            restorePostfitFailedEpoch();
+            return false;
         }
     }
 

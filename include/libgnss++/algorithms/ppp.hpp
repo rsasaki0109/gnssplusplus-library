@@ -586,7 +586,8 @@ private:
     MeasurementEquation formMeasurementEquations(
         const std::vector<IonosphereFreeObs>& observations,
         const NavigationData& nav,
-        const GNSSTime& time);
+        const GNSSTime& time,
+        bool apply_outlier_detection = true);
     
     /**
      * @brief Check convergence
