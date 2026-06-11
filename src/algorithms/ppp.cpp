@@ -531,7 +531,7 @@ PositionSolution PPPProcessor::processEpochStandard(
 
         if (filter_initialized_) {
             const double dt = has_last_processed_time_ ? clampDt(obs.time - last_processed_time_) : 1.0;
-            detectCycleSlips(obs);
+            detectCycleSlips(obs, nav);
             predictState(dt, seed_ptr);
 
             bool updated = updateFilter(obs, nav);

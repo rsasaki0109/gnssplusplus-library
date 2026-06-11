@@ -389,7 +389,7 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
     return true;
 }
 
-void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
+void PPPProcessor::detectCycleSlips(const ObservationData& obs, const NavigationData& nav) {
     if (!ppp_config_.enable_cycle_slip_detection) {
         return;
     }
@@ -483,8 +483,13 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs) {
                 findCarrierObservationForSignals(obs, satellite, secondary_candidates) :
                 nullptr;
         if (secondary != nullptr) {
-            const double lambda1 = signalWavelengthMeters(*primary);
-            const double lambda2 = signalWavelengthMeters(*secondary);
+            const Ephemeris* eph = nav.getEphemeris(satellite, obs.time);
+            const double lambda1 =
+                eph != nullptr ? signalWavelengthMeters(primary->signal, eph)
+                               : signalWavelengthMeters(*primary);
+            const double lambda2 =
+                eph != nullptr ? signalWavelengthMeters(secondary->signal, eph)
+                               : signalWavelengthMeters(*secondary);
             if (lambda1 > 0.0 && lambda2 > 0.0) {
                 gf_m = primary->carrier_phase * lambda1 - secondary->carrier_phase * lambda2;
                 have_gf = std::isfinite(gf_m);
