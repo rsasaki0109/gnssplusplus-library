@@ -104,6 +104,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
     overrides.pb_apply_dump = envPresent("GNSS_PPP_PB_APPLY_DUMP");
     overrides.madoca_cbias_dump = envPresent("GNSS_PPP_MADOCA_CBIAS_DUMP");
     overrides.ar_dddump = envPresent("GNSS_PPP_AR_DDDUMP");
+    overrides.clas_nl_debug_path =
+        envStringOrEmpty("GNSS_PPP_CLAS_NL_DEBUG");
     overrides.debug = envPresent("GNSS_PPP_DEBUG");
 
     return overrides;
