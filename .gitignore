@@ -2,6 +2,7 @@
 build/
 build_local/
 build-codex/
+build-madoca-parity/
 bin/
 *.a
 *.o
@@ -50,3 +51,6 @@ __pycache__/
 PLAN.md
 notes/
 CLAUDE.md
+
+# External reference checkouts (e.g. MADOCALIB oracle)
+/external/
