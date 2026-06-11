@@ -1,18 +1,18 @@
 #pragma once
 
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/types.hpp>
 
 #include <array>
-#include <cstdlib>
 #include <map>
 #include <string>
 
 namespace libgnss::ppp_shared {
 
-/// Check if PPP debug output is enabled via GNSS_PPP_DEBUG environment variable.
+/// Check if PPP debug output is enabled via GNSS_PPP_DEBUG.
 inline bool pppDebugEnabled() {
-    return std::getenv("GNSS_PPP_DEBUG") != nullptr;
+    return pppEnvOverrides().debug;
 }
 
 struct PPPConfig {
