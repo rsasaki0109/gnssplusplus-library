@@ -74,7 +74,18 @@ struct WlnlNlInfo {
 struct WlnlFixAttempt {
     bool fixed = false;
     bool has_constrained_state = false;
+    bool state_lambda_solved = false;
+    bool state_lambda_used = false;
     double ratio = 0.0;
+    double state_lambda_ratio = 0.0;
+    double state_required_ratio = 0.0;
+    double state_dd_residual_norm = 0.0;
+    double state_position_shift_m = 0.0;
+    double state_wlnl_max_abs_delta_cycles = 0.0;
+    double state_wlnl_max_fractional_cycles = 0.0;
+    int state_dd_count = 0;
+    int state_wlnl_mismatch_count = 0;
+    int state_wlnl_noninteger_count = 0;
     int nb = 0;
     ppp_shared::PPPState constrained_state;
 };
