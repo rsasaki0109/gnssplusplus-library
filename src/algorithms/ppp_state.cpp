@@ -1077,9 +1077,11 @@ void PPPProcessor::constrainStaticAnchorPosition() {
     // Root cause of 4m floor is 20-40m SSR residual spread (light travel time).
     // Fix the residuals first, then loosen the anchor.
 
+    const double default_madoca_anchor_blend =
+        env_overrides_.madoca_early_window ? 0.26 : 0.30;
     const double default_anchor_blend =
         madoca_static_anchor_blend && !ppp_config_.apply_static_anchor_blend
-            ? 0.30
+            ? default_madoca_anchor_blend
             : (ppp_config_.low_dynamics_mode
                    ? (precise_products_loaded_ ? (converged_ ? 0.65 : 0.9) : 0.95)
                    : (precise_products_loaded_ ? (converged_ ? 0.5 : 0.85)
