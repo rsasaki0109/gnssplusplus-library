@@ -19,6 +19,14 @@ std::string biasObservationType(const Observation& observation) {
                : observation.carrier_phase_observation_type;
 }
 
+std::vector<SignalType> secondarySignalsForObservation(const SatelliteId& sat,
+                                                       bool prefer_qzss_l5) {
+    if (prefer_qzss_l5 && sat.system == GNSSSystem::QZSS) {
+        return {SignalType::QZS_L5, SignalType::QZS_L2C};
+    }
+    return secondarySignals(sat.system);
+}
+
 }  // namespace
 
 std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
@@ -106,8 +114,10 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             // But skip IFLC formation — keep L1-only entry.
         }
 
-        const Observation* secondary =
-            findObservationForSignals(obs, sat, secondarySignals(sat.system));
+        const bool prefer_qzss_l5 =
+            require_coherent_ssr_ && env_overrides_.madoca_qzss_l5;
+        const Observation* secondary = findObservationForSignals(
+            obs, sat, secondarySignalsForObservation(sat, prefer_qzss_l5));
 
         // Per-frequency mode: carry BOTH L1 and L2 raw observables.
         // SSR corrections (orbit/clock/bias/iono) still applied below.
