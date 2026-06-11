@@ -2676,13 +2676,14 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     code_bias_m,
                     observation.primary_code_bias_coeff,
                     observation.secondary_code_bias_coeff);
-                // MADOCALIB adds SSR biases to the observables (ppp.c:432-451);
-                // the native convention has subtracted them. Keep the flip
-                // env-gated so the sign parity lands as its own slice.
-                static const bool kMadocaBiasAdd =
-                    (std::getenv("GNSS_PPP_MADOCA_BIAS_ADD") != nullptr);
+                // MADOCALIB adds SSR biases to the observables (ppp.c:432-451).
+                // The MADOCA L6 path follows that convention by default;
+                // GNSS_PPP_MADOCA_BIAS_SUBTRACT restores the legacy subtraction
+                // for diagnostics. Non-MADOCA SSR paths keep subtracting.
+                static const bool kMadocaBiasSubtract =
+                    (std::getenv("GNSS_PPP_MADOCA_BIAS_SUBTRACT") != nullptr);
                 const double ssr_bias_sign =
-                    (require_coherent_ssr_ && kMadocaBiasAdd) ? +1.0 : -1.0;
+                    (require_coherent_ssr_ && !kMadocaBiasSubtract) ? +1.0 : -1.0;
                 observation.pseudorange_if += ssr_bias_sign * code_bias;
                 observation.pseudorange_code_bias_m = code_bias;
                 applied_ssr_code_bias = std::abs(code_bias) > 0.0;
@@ -2720,12 +2721,13 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         (std::getenv("GNSS_PPP_PB_APPLY_DUMP") != nullptr);
                     // MADOCALIB ppp.c:451 ADDS the SSR phase bias to the carrier
                     // phase (L[i]+=pb); applying it with the opposite sign pushes
-                    // the per-frequency ambiguity away from its integer. Env-gated
-                    // sign flip while validating the convention fix.
+                    // the per-frequency ambiguity away from its integer. Non-MADOCA
+                    // paths keep the legacy subtraction unless GNSS_PPP_PB_ADD is
+                    // set while their convention is validated.
                     static const double kPbSign =
                         (std::getenv("GNSS_PPP_PB_ADD") != nullptr) ? +1.0 : -1.0;
                     const double phase_bias_sign =
-                        (require_coherent_ssr_ && kMadocaBiasAdd) ? +1.0 : kPbSign;
+                        (require_coherent_ssr_ && !kMadocaBiasSubtract) ? +1.0 : kPbSign;
                     if (!phase_bias_m.empty() && !kNoPhaseBias) {
                         if (observation.has_carrier_phase) {
                             const double pb_l1 = observationPhaseBiasMeters(
