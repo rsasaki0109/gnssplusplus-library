@@ -3,6 +3,7 @@
 
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/algorithms/ppp_ar.hpp>
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/core/constants.hpp>
@@ -10,7 +11,10 @@
 #include <libgnss++/core/signals.hpp>
 
 #include <cmath>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <limits>
 
 namespace libgnss {
 
@@ -21,6 +25,46 @@ namespace {
 
 bool pppDebugEnabled() {
     return ppp_shared::pppDebugEnabled();
+}
+
+double quietNaN() {
+    return std::numeric_limits<double>::quiet_NaN();
+}
+
+std::ofstream* clasNlDebugStream() {
+    const auto& path = pppEnvOverrides().clas_nl_debug_path;
+    if (path.empty()) {
+        return nullptr;
+    }
+
+    static std::ofstream stream;
+    static bool initialized = false;
+    if (!initialized) {
+        initialized = true;
+        stream.open(path, std::ios::out | std::ios::trunc);
+        if (stream) {
+            stream << "record,week,tow,sat,signal1,signal2,"
+                   << "lambda1_m,lambda2_m,lambda_nl_m,lambda_wl_m,"
+                   << "alpha1,alpha2,beta,"
+                   << "phase1_cycles,phase2_cycles,phase1_m,phase2_m,"
+                   << "raw_nl_m,applied_cpc_minus_windup_comp_m,full_cpc_m,"
+                   << "current_nl_phase_m,full_cpc_nl_phase_m,"
+                   << "geo_m,receiver_clock_m,satellite_clock_m,trop_pred_m,nl_iono_pred_m,predicted_m,"
+                   << "obs_total_cycles,obs_full_cpc_total_cycles,"
+                   << "state_l1_m,state_l2_m,state_l1_cycles,state_l2_cycles,"
+                   << "state_sum_cycles,state_l1_wl_cycles,state_l2_wl_cycles,state_beta_wl_cycles,"
+                   << "delta_state_sum_cycles,delta_l1_wl_cycles,delta_l2_wl_cycles,delta_beta_wl_cycles,"
+                   << "wl_fixed,wl_integer,mw_mean_cycles,mw_minus_wl_cycles,mw_count,lock_count,"
+                   << "cpc1_m,cpc2_m,phase_bias1_m,phase_bias2_m,"
+                   << "windup1_m,windup2_m,phase_comp1_m,phase_comp2_m,"
+                   << "receiver_ant1_m,receiver_ant2_m,relativity_m,"
+                   << "iono_l1_m,iono_cpc1_m,iono_cpc2_m,trop_correction_m,"
+                   << "current_minus_full_cpc_cycles,phase_bias_nl_cycles,"
+                   << "windup_nl_cycles,phase_comp_nl_cycles,receiver_ant_nl_cycles,"
+                   << "relativity_nl_cycles,iono_cpc_nl_cycles,trop_correction_cycles\n";
+        }
+    }
+    return stream ? &stream : nullptr;
 }
 
 }  // namespace
@@ -202,6 +246,35 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
     double alpha2 = 0.0;
     double nl_phase_m = 0.0;
     double predicted_m = 0.0;
+    double f1_hz = 0.0;
+    double f2_hz = 0.0;
+    double lambda1_m = 0.0;
+    double lambda2_m = 0.0;
+    double phase1_m = quietNaN();
+    double phase2_m = quietNaN();
+    double raw_nl_m = quietNaN();
+    double applied_cpc_minus_windup_comp_m = quietNaN();
+    double full_cpc_m = quietNaN();
+    double full_cpc_nl_phase_m = quietNaN();
+    double geo_m = quietNaN();
+    double sat_clk_m = quietNaN();
+    double trop_pred_m = quietNaN();
+    double nl_iono_m = quietNaN();
+    double cpc1_m = quietNaN();
+    double cpc2_m = quietNaN();
+    double phase_bias1_m = quietNaN();
+    double phase_bias2_m = quietNaN();
+    double windup1_m = quietNaN();
+    double windup2_m = quietNaN();
+    double phase_comp1_m = quietNaN();
+    double phase_comp2_m = quietNaN();
+    double receiver_ant1_m = quietNaN();
+    double receiver_ant2_m = quietNaN();
+    double relativity_m = quietNaN();
+    double iono_l1_m = quietNaN();
+    double iono_cpc1_m = quietNaN();
+    double iono_cpc2_m = quietNaN();
+    double trop_correction_m = quietNaN();
 
     const auto osr_it = osr_by_sat.find(sat);
     if (osr_it != osr_by_sat.end()) {
@@ -216,22 +289,58 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
             f1 <= 0.0 || f2 <= 0.0 || std::abs(f1 - f2) < 1.0) {
             return false;
         }
+        f1_hz = f1;
+        f2_hz = f2;
+        lambda1_m = osr.wavelengths[0];
+        lambda2_m = osr.wavelengths[1];
         alpha1 = f1 / (f1 + f2);
         alpha2 = f2 / (f1 + f2);
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
         lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
         beta = f1 * f2 / (f1 * f1 - f2 * f2);
-        const double l1_corr_m = l1_obs->carrier_phase * osr.wavelengths[0]
+        phase1_m = l1_obs->carrier_phase * osr.wavelengths[0];
+        phase2_m = l2_obs->carrier_phase * osr.wavelengths[1];
+        cpc1_m = osr.CPC[0];
+        cpc2_m = osr.CPC[1];
+        phase_bias1_m = osr.phase_bias_m[0];
+        phase_bias2_m = osr.phase_bias_m[1];
+        windup1_m = osr.windup_m[0];
+        windup2_m = osr.windup_m[1];
+        phase_comp1_m = osr.phase_compensation_m[0];
+        phase_comp2_m = osr.phase_compensation_m[1];
+        receiver_ant1_m = osr.receiver_antenna_m[0];
+        receiver_ant2_m = osr.receiver_antenna_m[1];
+        relativity_m = osr.relativity_correction_m;
+        iono_l1_m = osr.iono_l1_m;
+        trop_correction_m = osr.trop_correction_m;
+        const double iono_scale1 =
+            (osr.frequencies[0] > 0.0 && osr.wavelengths[0] > 0.0)
+                ? std::pow(osr.wavelengths[0] / osr.wavelengths[0], 2)
+                : 1.0;
+        const double iono_scale2 =
+            (osr.frequencies[1] > 0.0 && osr.wavelengths[0] > 0.0)
+                ? std::pow(osr.wavelengths[1] / osr.wavelengths[0], 2)
+                : 1.0;
+        iono_cpc1_m = -iono_scale1 * osr.iono_l1_m;
+        iono_cpc2_m = -iono_scale2 * osr.iono_l1_m;
+        raw_nl_m = alpha1 * phase1_m + alpha2 * phase2_m;
+        applied_cpc_minus_windup_comp_m =
+            alpha1 * (osr.CPC[0] - osr.windup_m[0] - osr.phase_compensation_m[0]) +
+            alpha2 * (osr.CPC[1] - osr.windup_m[1] - osr.phase_compensation_m[1]);
+        full_cpc_m = alpha1 * osr.CPC[0] + alpha2 * osr.CPC[1];
+        const double l1_corr_m = phase1_m
                                 - (osr.CPC[0] - osr.windup_m[0] - osr.phase_compensation_m[0]);
-        const double l2_corr_m = l2_obs->carrier_phase * osr.wavelengths[1]
+        const double l2_corr_m = phase2_m
                                 - (osr.CPC[1] - osr.windup_m[1] - osr.phase_compensation_m[1]);
         nl_phase_m = alpha1 * l1_corr_m + alpha2 * l2_corr_m;
+        full_cpc_nl_phase_m = raw_nl_m - full_cpc_m;
         sat_pos = osr.satellite_position;
         sat_clk = osr.satellite_clock_bias_s;
-        const double nl_iono_m = osr.has_iono ? osr.iono_l1_m * f1 / f2 : 0.0;
-        predicted_m = geodist(sat_pos, receiver_position) + clock_bias_m
-                    - constants::SPEED_OF_LIGHT * sat_clk
-                    + osr.trop_correction_m + nl_iono_m;
+        nl_iono_m = osr.has_iono ? osr.iono_l1_m * f1 / f2 : 0.0;
+        geo_m = geodist(sat_pos, receiver_position);
+        sat_clk_m = constants::SPEED_OF_LIGHT * sat_clk;
+        trop_pred_m = osr.trop_correction_m;
+        predicted_m = geo_m + clock_bias_m - sat_clk_m + trop_pred_m + nl_iono_m;
     } else {
         l1_obs = ppp_utils::findCarrierObservation(
             obs, sat, {SignalType::GPS_L1CA, SignalType::GPS_L1P,
@@ -253,6 +362,10 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
             return false;
         }
 
+        f1_hz = f1;
+        f2_hz = f2;
+        lambda1_m = lambda1;
+        lambda2_m = lambda2;
         alpha1 = f1 / (f1 + f2);
         alpha2 = f2 / (f1 + f2);
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
@@ -261,7 +374,11 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
 
         const double l1_m = l1_obs->carrier_phase * lambda1;
         const double l2_m = l2_obs->carrier_phase * lambda2;
-        nl_phase_m = alpha1 * l1_m + alpha2 * l2_m;
+        phase1_m = l1_m;
+        phase2_m = l2_m;
+        raw_nl_m = alpha1 * l1_m + alpha2 * l2_m;
+        nl_phase_m = raw_nl_m;
+        full_cpc_nl_phase_m = raw_nl_m;
 
         Vector3d sat_vel;
         double sat_drift = 0.0;
@@ -285,8 +402,11 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
             (sat_pos - receiver_position).normalized().dot(receiver_position.normalized()));
         const double trop_delay =
             calculateMappingFunction(receiver_position, elevation, obs.time) * trop_zenith;
-        predicted_m = geo_range + clock_bias_m
-                    - constants::SPEED_OF_LIGHT * sat_clk + trop_delay;
+        geo_m = geo_range;
+        sat_clk_m = constants::SPEED_OF_LIGHT * sat_clk;
+        trop_pred_m = trop_delay;
+        nl_iono_m = 0.0;
+        predicted_m = geo_range + clock_bias_m - sat_clk_m + trop_delay;
     }
 
     if (lambda_nl <= 0.0 || !std::isfinite(nl_phase_m) || !std::isfinite(predicted_m)) {
@@ -294,6 +414,186 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
     }
 
     const double nl_amb_cycles = (nl_phase_m - predicted_m) / lambda_nl;
+    if (auto* debug = clasNlDebugStream(); debug != nullptr) {
+        const SatelliteId l2_satellite(
+            sat.system,
+            static_cast<uint8_t>(std::min(255, static_cast<int>(sat.prn) + 100)));
+        const auto l1_state_it = filter_state_.ambiguity_indices.find(sat);
+        const auto l2_state_it = filter_state_.ambiguity_indices.find(l2_satellite);
+        const auto l1_amb_it = ambiguity_states_.find(sat);
+        const auto l2_amb_it = ambiguity_states_.find(l2_satellite);
+
+        const bool has_l1_state =
+            l1_state_it != filter_state_.ambiguity_indices.end() &&
+            l1_state_it->second >= 0 &&
+            l1_state_it->second < filter_state_.total_states &&
+            lambda1_m > 0.0;
+        const bool has_l2_state =
+            l2_state_it != filter_state_.ambiguity_indices.end() &&
+            l2_state_it->second >= 0 &&
+            l2_state_it->second < filter_state_.total_states &&
+            lambda2_m > 0.0;
+
+        const double state_l1_m = has_l1_state
+            ? filter_state_.state(l1_state_it->second)
+            : quietNaN();
+        const double state_l2_m = has_l2_state
+            ? filter_state_.state(l2_state_it->second)
+            : quietNaN();
+        const double state_l1_cycles =
+            has_l1_state ? state_l1_m / lambda1_m : quietNaN();
+        const double state_l2_cycles =
+            has_l2_state ? state_l2_m / lambda2_m : quietNaN();
+        const bool wl_fixed =
+            l1_amb_it != ambiguity_states_.end() && l1_amb_it->second.wl_is_fixed;
+        const int wl_integer = wl_fixed ? l1_amb_it->second.wl_fixed_integer : 0;
+        const double state_sum_cycles =
+            has_l1_state && has_l2_state
+                ? state_l1_cycles + state_l2_cycles
+                : quietNaN();
+        const double state_l1_wl_cycles =
+            has_l1_state && wl_fixed
+                ? 2.0 * state_l1_cycles - static_cast<double>(wl_integer)
+                : quietNaN();
+        const double state_l2_wl_cycles =
+            has_l2_state && wl_fixed
+                ? 2.0 * state_l2_cycles + static_cast<double>(wl_integer)
+                : quietNaN();
+        const double state_beta_wl_cycles =
+            has_l1_state && wl_fixed
+                ? (state_l1_m -
+                   static_cast<double>(wl_integer) * beta * lambda_wl) / lambda_nl
+                : quietNaN();
+        const double obs_full_cpc_total_cycles =
+            std::isfinite(full_cpc_nl_phase_m)
+                ? (full_cpc_nl_phase_m - predicted_m) / lambda_nl
+                : quietNaN();
+        const double current_minus_full_cpc_cycles =
+            std::isfinite(full_cpc_nl_phase_m)
+                ? (nl_phase_m - full_cpc_nl_phase_m) / lambda_nl
+                : quietNaN();
+        const auto weighted_cycles = [&](double v1, double v2) {
+            return (std::isfinite(v1) && std::isfinite(v2) && lambda_nl > 0.0)
+                ? (alpha1 * v1 + alpha2 * v2) / lambda_nl
+                : quietNaN();
+        };
+        const double phase_bias_nl_cycles =
+            weighted_cycles(phase_bias1_m, phase_bias2_m);
+        const double windup_nl_cycles =
+            weighted_cycles(windup1_m, windup2_m);
+        const double phase_comp_nl_cycles =
+            weighted_cycles(phase_comp1_m, phase_comp2_m);
+        const double receiver_ant_nl_cycles =
+            weighted_cycles(receiver_ant1_m, receiver_ant2_m);
+        const double relativity_nl_cycles =
+            std::isfinite(relativity_m) && lambda_nl > 0.0
+                ? relativity_m / lambda_nl
+                : quietNaN();
+        const double iono_cpc_nl_cycles =
+            weighted_cycles(iono_cpc1_m, iono_cpc2_m);
+        const double trop_correction_cycles =
+            std::isfinite(trop_correction_m) && lambda_nl > 0.0
+                ? trop_correction_m / lambda_nl
+                : quietNaN();
+        const double mw_mean =
+            l1_amb_it != ambiguity_states_.end()
+                ? l1_amb_it->second.mw_mean_cycles
+                : quietNaN();
+        const double mw_minus_wl =
+            std::isfinite(mw_mean) && wl_fixed
+                ? mw_mean - static_cast<double>(wl_integer)
+                : quietNaN();
+        const int mw_count =
+            l1_amb_it != ambiguity_states_.end()
+                ? l1_amb_it->second.mw_count
+                : 0;
+        const int lock_count =
+            l1_amb_it != ambiguity_states_.end()
+                ? l1_amb_it->second.lock_count
+                : 0;
+
+        *debug << std::setprecision(17)
+               << "SAT,"
+               << obs.time.week << ','
+               << obs.time.tow << ','
+               << sat.toString() << ','
+               << static_cast<int>(l1_obs->signal) << ','
+               << static_cast<int>(l2_obs->signal) << ','
+               << lambda1_m << ','
+               << lambda2_m << ','
+               << lambda_nl << ','
+               << lambda_wl << ','
+               << alpha1 << ','
+               << alpha2 << ','
+               << beta << ','
+               << l1_obs->carrier_phase << ','
+               << l2_obs->carrier_phase << ','
+               << phase1_m << ','
+               << phase2_m << ','
+               << raw_nl_m << ','
+               << applied_cpc_minus_windup_comp_m << ','
+               << full_cpc_m << ','
+               << nl_phase_m << ','
+               << full_cpc_nl_phase_m << ','
+               << geo_m << ','
+               << clock_bias_m << ','
+               << sat_clk_m << ','
+               << trop_pred_m << ','
+               << nl_iono_m << ','
+               << predicted_m << ','
+               << nl_amb_cycles << ','
+               << obs_full_cpc_total_cycles << ','
+               << state_l1_m << ','
+               << state_l2_m << ','
+               << state_l1_cycles << ','
+               << state_l2_cycles << ','
+               << state_sum_cycles << ','
+               << state_l1_wl_cycles << ','
+               << state_l2_wl_cycles << ','
+               << state_beta_wl_cycles << ','
+               << (std::isfinite(state_sum_cycles)
+                       ? nl_amb_cycles - state_sum_cycles
+                       : quietNaN()) << ','
+               << (std::isfinite(state_l1_wl_cycles)
+                       ? nl_amb_cycles - state_l1_wl_cycles
+                       : quietNaN()) << ','
+               << (std::isfinite(state_l2_wl_cycles)
+                       ? nl_amb_cycles - state_l2_wl_cycles
+                       : quietNaN()) << ','
+               << (std::isfinite(state_beta_wl_cycles)
+                       ? nl_amb_cycles - state_beta_wl_cycles
+                       : quietNaN()) << ','
+               << (wl_fixed ? 1 : 0) << ','
+               << wl_integer << ','
+               << mw_mean << ','
+               << mw_minus_wl << ','
+               << mw_count << ','
+               << lock_count << ','
+               << cpc1_m << ','
+               << cpc2_m << ','
+               << phase_bias1_m << ','
+               << phase_bias2_m << ','
+               << windup1_m << ','
+               << windup2_m << ','
+               << phase_comp1_m << ','
+               << phase_comp2_m << ','
+               << receiver_ant1_m << ','
+               << receiver_ant2_m << ','
+               << relativity_m << ','
+               << iono_l1_m << ','
+               << iono_cpc1_m << ','
+               << iono_cpc2_m << ','
+               << trop_correction_m << ','
+               << current_minus_full_cpc_cycles << ','
+               << phase_bias_nl_cycles << ','
+               << windup_nl_cycles << ','
+               << phase_comp_nl_cycles << ','
+               << receiver_ant_nl_cycles << ','
+               << relativity_nl_cycles << ','
+               << iono_cpc_nl_cycles << ','
+               << trop_correction_cycles
+               << '\n';
+    }
     info = {
         nl_amb_cycles,
         lambda_nl,

@@ -136,6 +136,9 @@ struct PPPEnvOverrides {
     bool madoca_cbias_dump = false;
     // GNSS_PPP_AR_DDDUMP: double-difference AR diagnostic dump. Default false.
     bool ar_dddump = false;
+    // GNSS_PPP_CLAS_NL_DEBUG: path for CLAS DD-WLNL narrow-lane component
+    // diagnostic CSV. Empty disables it.
+    std::string clas_nl_debug_path;
     // GNSS_PPP_DEBUG: general PPP debug logging. Default false.
     bool debug = false;
 
