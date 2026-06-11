@@ -117,6 +117,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         !envExactZero("GNSS_PPP_CLAS_VERTICAL_FIX");
     overrides.clas_fixed_state_output =
         !envExactZero("GNSS_PPP_CLAS_FIXED_STATE_OUTPUT");
+    overrides.clas_constrained_fix =
+        envExactOne("GNSS_PPP_CLAS_CONSTRAINED_FIX");
     const std::string clas_nl_datum_fix =
         envStringOrEmpty("GNSS_PPP_CLAS_NL_DATUM_FIX");
     std::string clas_nl_datum_fix_lower = clas_nl_datum_fix;
