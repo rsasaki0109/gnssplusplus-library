@@ -82,13 +82,21 @@ std::ofstream* clasFixDebugStream() {
         stream.open(path, std::ios::out | std::ios::trunc);
         if (stream) {
             stream << "record,week,tow,sat,ref_sat,nobs,"
+                   << "row_index,row_type,weight,"
                    << "initial_x_m,initial_y_m,initial_z_m,"
                    << "fixed_x_m,fixed_y_m,fixed_z_m,position_shift_m,"
                    << "final_clock_m,residual_m,dd_residual_m,"
-                   << "geo_m,satellite_clock_m,trop_applied_m,extra_prediction_m,"
+                   << "sat_x_m,sat_y_m,sat_z_m,satellite_clock_s,satellite_clock_m,"
+                   << "geo_m,trop_applied_m,extra_prediction_m,"
                    << "fixed_nl_m,nl_phase_m,cpc_nl_m,"
                    << "osr_trop_correction_m,osr_nl_iono_m,receiver_ant_nl_m,"
-                   << "lambda_nl_m,fixed_nl_cycles,use_trop_model\n";
+                   << "lambda_nl_m,fixed_nl_cycles,use_trop_model,"
+                   << "signal1,signal2,frequency1_hz,frequency2_hz,"
+                   << "raw_phase1_m,raw_phase2_m,corrected_phase1_m,corrected_phase2_m,"
+                   << "raw_code1_m,raw_code2_m,corrected_code1_m,corrected_code2_m,"
+                   << "cpc1_m,cpc2_m,prc1_m,prc2_m,"
+                   << "receiver_ant1_m,receiver_ant2_m,"
+                   << "tide_x_m,tide_y_m,tide_z_m\n";
         }
     }
     return stream ? &stream : nullptr;
@@ -242,7 +250,8 @@ bool PPPProcessor::solveFixedPosition(const ObservationData& obs,
                 }
             }
 
-            for (const auto& record : residual_records) {
+            for (size_t row_index = 0; row_index < residual_records.size(); ++row_index) {
+                const auto& record = residual_records[row_index];
                 const auto& fixed_observation = *record.observation;
                 const auto ref_it =
                     reference_by_system.find(fixed_observation.satellite.system);
@@ -259,6 +268,9 @@ bool PPPProcessor::solveFixedPosition(const ObservationData& obs,
                        << fixed_observation.satellite.toString() << ','
                        << ref_record->observation->satellite.toString() << ','
                        << fixed_observations.size() << ','
+                       << row_index << ','
+                       << "nl_phase,"
+                       << 1.0 << ','
                        << position.x() << ','
                        << position.y() << ','
                        << position.z() << ','
@@ -269,8 +281,12 @@ bool PPPProcessor::solveFixedPosition(const ObservationData& obs,
                        << fixed_clock_m << ','
                        << record.residual_m << ','
                        << dd_residual << ','
-                       << record.geo_m << ','
+                       << fixed_observation.sat_pos.x() << ','
+                       << fixed_observation.sat_pos.y() << ','
+                       << fixed_observation.sat_pos.z() << ','
+                       << fixed_observation.sat_clk << ','
                        << constants::SPEED_OF_LIGHT * fixed_observation.sat_clk << ','
+                       << record.geo_m << ','
                        << record.trop_applied_m << ','
                        << fixed_observation.extra_prediction_m << ','
                        << fixed_observation.fixed_nl_cycles *
@@ -282,7 +298,28 @@ bool PPPProcessor::solveFixedPosition(const ObservationData& obs,
                        << fixed_observation.receiver_ant_nl_m << ','
                        << fixed_observation.lambda_nl_m << ','
                        << fixed_observation.fixed_nl_cycles << ','
-                       << (fixed_observation.use_trop_model ? 1 : 0)
+                       << (fixed_observation.use_trop_model ? 1 : 0) << ','
+                       << static_cast<int>(fixed_observation.signal1) << ','
+                       << static_cast<int>(fixed_observation.signal2) << ','
+                       << fixed_observation.frequency1_hz << ','
+                       << fixed_observation.frequency2_hz << ','
+                       << fixed_observation.raw_phase1_m << ','
+                       << fixed_observation.raw_phase2_m << ','
+                       << fixed_observation.corrected_phase1_m << ','
+                       << fixed_observation.corrected_phase2_m << ','
+                       << fixed_observation.raw_code1_m << ','
+                       << fixed_observation.raw_code2_m << ','
+                       << fixed_observation.corrected_code1_m << ','
+                       << fixed_observation.corrected_code2_m << ','
+                       << fixed_observation.cpc1_m << ','
+                       << fixed_observation.cpc2_m << ','
+                       << fixed_observation.prc1_m << ','
+                       << fixed_observation.prc2_m << ','
+                       << fixed_observation.receiver_ant1_m << ','
+                       << fixed_observation.receiver_ant2_m << ','
+                       << 0.0 << ','
+                       << 0.0 << ','
+                       << 0.0
                        << '\n';
             }
         }
@@ -767,6 +804,28 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
         sat_pos = osr.satellite_position;
         sat_clk = osr.satellite_clock_bias_s;
         use_trop_model = false;
+        fixed_observation.signal1 = l1->signal;
+        fixed_observation.signal2 = l2->signal;
+        fixed_observation.frequency1_hz = f1;
+        fixed_observation.frequency2_hz = f2;
+        fixed_observation.raw_phase1_m = l1->carrier_phase * osr.wavelengths[0];
+        fixed_observation.raw_phase2_m = l2->carrier_phase * osr.wavelengths[1];
+        fixed_observation.corrected_phase1_m = l1_corr_m;
+        fixed_observation.corrected_phase2_m = l2_corr_m;
+        fixed_observation.raw_code1_m =
+            l1->has_pseudorange ? l1->pseudorange : quietNaN();
+        fixed_observation.raw_code2_m =
+            l2->has_pseudorange ? l2->pseudorange : quietNaN();
+        fixed_observation.corrected_code1_m =
+            l1->has_pseudorange ? l1->pseudorange - osr.PRC[0] : quietNaN();
+        fixed_observation.corrected_code2_m =
+            l2->has_pseudorange ? l2->pseudorange - osr.PRC[1] : quietNaN();
+        fixed_observation.cpc1_m = osr.CPC[0];
+        fixed_observation.cpc2_m = osr.CPC[1];
+        fixed_observation.prc1_m = osr.PRC[0];
+        fixed_observation.prc2_m = osr.PRC[1];
+        fixed_observation.receiver_ant1_m = osr.receiver_antenna_m[0];
+        fixed_observation.receiver_ant2_m = osr.receiver_antenna_m[1];
         fixed_observation.cpc_nl_m = cpc_nl_m;
         fixed_observation.osr_trop_correction_m = osr.trop_correction_m;
         fixed_observation.osr_nl_iono_m = osr.has_iono ? osr.iono_l1_m * f1 / f2 : 0.0;
@@ -803,6 +862,20 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
         const double alpha2 = f2 / (f1 + f2);
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
         nl_phase_m = alpha1 * l1->carrier_phase * lam1 + alpha2 * l2->carrier_phase * lam2;
+        fixed_observation.signal1 = l1->signal;
+        fixed_observation.signal2 = l2->signal;
+        fixed_observation.frequency1_hz = f1;
+        fixed_observation.frequency2_hz = f2;
+        fixed_observation.raw_phase1_m = l1->carrier_phase * lam1;
+        fixed_observation.raw_phase2_m = l2->carrier_phase * lam2;
+        fixed_observation.corrected_phase1_m = fixed_observation.raw_phase1_m;
+        fixed_observation.corrected_phase2_m = fixed_observation.raw_phase2_m;
+        fixed_observation.raw_code1_m =
+            l1->has_pseudorange ? l1->pseudorange : quietNaN();
+        fixed_observation.raw_code2_m =
+            l2->has_pseudorange ? l2->pseudorange : quietNaN();
+        fixed_observation.corrected_code1_m = fixed_observation.raw_code1_m;
+        fixed_observation.corrected_code2_m = fixed_observation.raw_code2_m;
 
         Vector3d sat_vel;
         double sat_drift = 0.0;
