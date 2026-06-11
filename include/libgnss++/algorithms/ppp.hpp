@@ -335,6 +335,9 @@ private:
         std::string secondary_observation_type;
         double primary_code_bias_coeff = 1.0;
         double secondary_code_bias_coeff = 0.0;
+        double primary_frequency_hz = 0.0;
+        double secondary_frequency_hz = 0.0;
+        int glonass_frequency_channel = -99;
         double pseudorange_if = 0.0;
         double carrier_phase_if = 0.0;
         double pseudorange_code_bias_m = 0.0;
@@ -361,6 +364,11 @@ private:
         double ambiguity_scale_m = 0.0;
         double atmospheric_trop_correction_m = 0.0;
         double atmospheric_iono_correction_m = 0.0;
+        double ssr_orbit_age_s = -1.0;
+        double ssr_clock_age_s = -1.0;
+        int ssr_orbit_iod = -1;
+        int ssr_clock_iod = -1;
+        int ssr_orbit_iode = -1;
         std::map<std::string, std::string> ssr_atmos_tokens;
         bool has_carrier_phase = false;
         bool valid = false;
@@ -582,8 +590,19 @@ private:
         std::vector<SatelliteId> row_satellites;  ///< Satellite for each row
         std::vector<bool> row_is_phase;           ///< true=carrier phase, false=code
         std::vector<double> row_elevations;        ///< Elevation angle in radians
+        std::vector<double> row_azimuths;          ///< Azimuth angle in radians
         std::vector<SignalType> row_signals;       ///< Signal identity for each row
         std::vector<std::string> row_signal_bands; ///< IF/L1/L2 label for each row
+        std::vector<int> row_glonass_frequency_channels;
+        std::vector<double> row_primary_frequencies_hz;
+        std::vector<double> row_secondary_frequencies_hz;
+        std::vector<double> row_primary_if_coefficients;
+        std::vector<double> row_secondary_if_coefficients;
+        std::vector<double> row_ssr_orbit_ages_s;
+        std::vector<double> row_ssr_clock_ages_s;
+        std::vector<int> row_ssr_orbit_iods;
+        std::vector<int> row_ssr_clock_iods;
+        std::vector<int> row_ssr_orbit_iodes;
     };
     
     MeasurementEquation formMeasurementEquations(

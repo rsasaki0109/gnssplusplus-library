@@ -811,6 +811,8 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
     const int preferred_network_id = preferredClasNetworkId(epoch_atmos_tokens);
     const bool madoca_bias_identity =
         require_coherent_ssr_ && env_overrides_.madoca_bias_identity;
+    const bool capture_shadow_metadata =
+        !env_overrides_.madoca_postfit_shadow_path.empty();
 
     // Sun position is needed for the satellite body frame in phase wind-up.
     // We compute it once per epoch and reuse for every satellite.
@@ -973,6 +975,19 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     nullptr,
                     &ssr_status,
                     !require_coherent_ssr_);
+            if (ssr_ok && capture_shadow_metadata) {
+                if (ssr_status.orbit_reference_time.week != 0) {
+                    observation.ssr_orbit_age_s =
+                        time - ssr_status.orbit_reference_time;
+                }
+                if (ssr_status.clock_reference_time.week != 0) {
+                    observation.ssr_clock_age_s =
+                        time - ssr_status.clock_reference_time;
+                }
+                observation.ssr_orbit_iod = ssr_status.ssr_orbit_iod;
+                observation.ssr_clock_iod = ssr_status.ssr_clock_iod;
+                observation.ssr_orbit_iode = ssr_status.orbit_iode;
+            }
             // Fall back to epoch-wide atmosphere tokens when per-satellite
             // atmos are empty (CLAS broadcasts network-wide corrections).
             if (atmos_tokens.empty() && !epoch_atmos_tokens.empty()) {

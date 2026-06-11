@@ -34,6 +34,8 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
     const NavigationData& nav) {
     std::vector<IonosphereFreeObs> combined;
     combined.reserve(obs.getSatellites().size());
+    const bool capture_shadow_metadata =
+        !env_overrides_.madoca_postfit_shadow_path.empty();
 
     for (const auto& sat : obs.getSatellites()) {
         // Keep the native MADOCA parity path on systems whose L6 SSR handling is
@@ -80,17 +82,25 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
 
         IonosphereFreeObs entry;
         entry.satellite = sat;
+        if (capture_shadow_metadata && eph != nullptr &&
+            sat.system == GNSSSystem::GLONASS) {
+            entry.glonass_frequency_channel = eph->glonass_frequency_channel;
+        }
 
         if (!ppp_config_.use_ionosphere_free) {
+            const double primary_frequency_hz = signalFrequencyHz(primary->signal, eph);
             entry.pseudorange_if = primary->pseudorange;
             entry.primary_signal = primary->signal;
             entry.primary_observation_type = biasObservationType(*primary);
             entry.primary_code_bias_coeff = 1.0;
             entry.secondary_code_bias_coeff = 0.0;
+            if (capture_shadow_metadata) {
+                entry.primary_frequency_hz = primary_frequency_hz;
+            }
             // Per-frequency L1 raw observable (biases applied later in
             // applyPreciseCorrections).
             entry.pseudorange_l1 = primary->pseudorange;
-            entry.freq_l1 = signalFrequencyHz(primary->signal, eph);
+            entry.freq_l1 = primary_frequency_hz;
             entry.variance_pr_l1 = safeVariance(
                 ppp_config_.pseudorange_sigma * ppp_config_.pseudorange_sigma, 1e-6);
             entry.variance_cp_l1 = safeVariance(
@@ -127,6 +137,10 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
                 entry.secondary_observation_type = biasObservationType(*secondary);
                 const double f1 = signalFrequencyHz(primary->signal, eph);
                 const double f2 = signalFrequencyHz(secondary->signal, eph);
+                if (capture_shadow_metadata) {
+                    entry.primary_frequency_hz = f1;
+                    entry.secondary_frequency_hz = f2;
+                }
                 if (f1 > 0.0 && f2 > 0.0) {
                     entry.primary_code_bias_coeff = 1.0;
                     entry.secondary_code_bias_coeff = 0.0;
@@ -179,6 +193,9 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             entry.primary_observation_type = biasObservationType(*primary);
             entry.primary_code_bias_coeff = 1.0;
             entry.secondary_code_bias_coeff = 0.0;
+            if (capture_shadow_metadata) {
+                entry.primary_frequency_hz = signalFrequencyHz(primary->signal, eph);
+            }
             if (primary->has_carrier_phase) {
                 const double wavelength = signalWavelengthMeters(primary->signal, eph);
                 if (wavelength > 0.0) {
@@ -211,6 +228,10 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         entry.secondary_observation_type = biasObservationType(*secondary);
         entry.primary_code_bias_coeff = coefficients.first;
         entry.secondary_code_bias_coeff = coefficients.second;
+        if (capture_shadow_metadata) {
+            entry.primary_frequency_hz = f1;
+            entry.secondary_frequency_hz = f2;
+        }
         entry.pseudorange_code_bias_m = 0.0;
         entry.variance_pr = safeVariance(
             (coefficients.first * coefficients.first +
