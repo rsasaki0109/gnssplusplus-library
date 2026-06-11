@@ -95,6 +95,10 @@ public:
             out_ << "record,week,tow,iteration_count,row,row_count,"
                     "sat,system,signal_type,signal_band,obs_type,"
                     "residual_m,variance_m2,sigma_m,abs_norm,elevation_deg,"
+                    "azimuth_deg,glonass_fcn,primary_frequency_hz,"
+                    "secondary_frequency_hz,primary_if_coeff,secondary_if_coeff,"
+                    "ssr_orbit_age_s,ssr_clock_age_s,ssr_orbit_iod,"
+                    "ssr_clock_iod,ssr_orbit_iode,"
                     "chi_square,normalized_row_count,rms_norm,max_norm,"
                     "position_update_norm_m,converged,anchor_active\n";
             header_written_ = true;
@@ -151,8 +155,22 @@ void writeMadocaPostfitShadow(const std::string& path,
     };
 
     writeCommonPrefix("epoch", -1);
-    out << ",,,,,,,,,";
+    constexpr int kRowSpecificShadowColumns = 21;
+    for (int column = 1; column < kRowSpecificShadowColumns; ++column) {
+        out << ',';
+    }
     writeAggregateSuffix();
+
+    const auto rowDouble = [](const std::vector<double>& values,
+                              size_t row_index,
+                              double fallback) {
+        return row_index < values.size() ? values[row_index] : fallback;
+    };
+    const auto rowInt = [](const std::vector<int>& values,
+                           size_t row_index,
+                           int fallback) {
+        return row_index < values.size() ? values[row_index] : fallback;
+    };
 
     for (int row = 0; row < postfit_eq.residuals.size(); ++row) {
         const size_t row_index = static_cast<size_t>(row);
@@ -175,6 +193,10 @@ void writeMadocaPostfitShadow(const std::string& path,
             row_index < postfit_eq.row_elevations.size()
                 ? postfit_eq.row_elevations[row_index]
                 : std::numeric_limits<double>::quiet_NaN();
+        const double azimuth_rad = rowDouble(
+            postfit_eq.row_azimuths,
+            row_index,
+            std::numeric_limits<double>::quiet_NaN());
         const double residual_m = postfit_eq.residuals(row);
         const double variance_m2 = postfit_eq.weight_matrix(row, row);
         const double sigma_m =
@@ -195,7 +217,18 @@ void writeMadocaPostfitShadow(const std::string& path,
             << variance_m2 << ','
             << sigma_m << ','
             << abs_norm << ','
-            << (elevation_rad * kRadiansToDegrees);
+            << (elevation_rad * kRadiansToDegrees) << ','
+            << (azimuth_rad * kRadiansToDegrees) << ','
+            << rowInt(postfit_eq.row_glonass_frequency_channels, row_index, -99) << ','
+            << rowDouble(postfit_eq.row_primary_frequencies_hz, row_index, 0.0) << ','
+            << rowDouble(postfit_eq.row_secondary_frequencies_hz, row_index, 0.0) << ','
+            << rowDouble(postfit_eq.row_primary_if_coefficients, row_index, 0.0) << ','
+            << rowDouble(postfit_eq.row_secondary_if_coefficients, row_index, 0.0) << ','
+            << rowDouble(postfit_eq.row_ssr_orbit_ages_s, row_index, -1.0) << ','
+            << rowDouble(postfit_eq.row_ssr_clock_ages_s, row_index, -1.0) << ','
+            << rowInt(postfit_eq.row_ssr_orbit_iods, row_index, -1) << ','
+            << rowInt(postfit_eq.row_ssr_clock_iods, row_index, -1) << ','
+            << rowInt(postfit_eq.row_ssr_orbit_iodes, row_index, -1);
         writeAggregateSuffix();
     }
 }
