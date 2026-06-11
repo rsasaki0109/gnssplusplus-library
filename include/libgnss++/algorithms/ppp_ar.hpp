@@ -123,12 +123,18 @@ WlnlFixAttempt tryWlnlFix(
     bool debug_enabled);
 
 struct FixedNlObservation {
+    SatelliteId satellite;
     double nl_phase_m = 0.0;
     double fixed_nl_cycles = 0.0;
     double lambda_nl_m = 0.0;
     Vector3d sat_pos = Vector3d::Zero();
     double sat_clk = 0.0;
     bool use_trop_model = true;
+    double extra_prediction_m = 0.0;
+    double cpc_nl_m = 0.0;
+    double osr_trop_correction_m = 0.0;
+    double osr_nl_iono_m = 0.0;
+    double receiver_ant_nl_m = 0.0;
 };
 
 using FixedNlObservationProvider = std::function<bool(
@@ -150,7 +156,8 @@ bool solveFixedNlPosition(
     const GNSSTime& time,
     const TropMappingFunction& trop_mapping_function,
     Vector3d& fixed_position,
-    double* position_shift_norm_m = nullptr);
+    double* position_shift_norm_m = nullptr,
+    double* final_clock_m = nullptr);
 
 struct FixedCarrierObservation {
     Vector3d satellite_position = Vector3d::Zero();
