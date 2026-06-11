@@ -349,7 +349,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         last_fixed_ambiguities_,
         static_cast<int>(osr_corrections.size()));
 
-    if (wlnl_fixed_position_ok) {
+    if (wlnl_fixed_position_ok && !env_overrides_.clas_fixed_state_output) {
         solution.position_ecef = wlnl_fixed_position;
     }
 

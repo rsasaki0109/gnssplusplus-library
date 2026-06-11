@@ -156,6 +156,10 @@ struct PPPEnvOverrides {
     // disable both for bit-exact opt-out.
     bool clas_nl_datum_reset = true;
     bool clas_nl_cpc_unified = true;
+    // GNSS_PPP_CLAS_FIXED_STATE_OUTPUT: keep the accepted CLAS filter-state
+    // position instead of replacing it with the standalone DD-WLNL fixed-WLS
+    // position. Default true; set exactly "0" for bit-exact opt-out.
+    bool clas_fixed_state_output = true;
     // GNSS_PPP_DEBUG: general PPP debug logging. Default false.
     bool debug = false;
 
