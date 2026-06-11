@@ -3,6 +3,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <string>
 #include "types.hpp"
 
 namespace libgnss {
@@ -18,6 +19,8 @@ struct Observation {
     double carrier_phase = 0.0;     ///< Carrier phase in cycles
     double doppler = 0.0;           ///< Doppler frequency in Hz
     double snr = 0.0;               ///< Signal-to-noise ratio in dB-Hz
+    std::string pseudorange_observation_type;   ///< RINEX code observation type, e.g. C1C
+    std::string carrier_phase_observation_type; ///< RINEX carrier observation type, e.g. L1C
 
     // Data availability flags
     bool has_pseudorange = false;   ///< Pseudorange data available
