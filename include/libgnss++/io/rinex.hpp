@@ -73,6 +73,18 @@ public:
      * @brief Check whether QZSS L1L/L1X preference is enabled.
      */
     bool qzssL1Preference() const { return qzss_prefer_l1l_; }
+
+    /**
+     * @brief Prefer QZSS L5Q/L5X observations over L2L for the secondary PPP signal.
+     */
+    void setQzssSecondaryL5Preference(bool prefer_l5) {
+        qzss_prefer_l5_secondary_ = prefer_l5;
+    }
+
+    /**
+     * @brief Check whether QZSS secondary L5 preference is enabled.
+     */
+    bool qzssSecondaryL5Preference() const { return qzss_prefer_l5_secondary_; }
     
     /**
      * @brief Open RINEX file
@@ -129,6 +141,7 @@ private:
     RINEXHeader header_;
     int current_line_ = 0;
     bool qzss_prefer_l1l_ = false;
+    bool qzss_prefer_l5_secondary_ = false;
 
     // State for parsing RINEX 3 "SYS / # / OBS TYPES" records that span
     // continuation lines (systems with more than 13 observation types, e.g.

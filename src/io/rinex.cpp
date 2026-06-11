@@ -183,6 +183,15 @@ bool sameTrackingCode(char selected, char candidate) {
     return selected == '\0' || candidate == '\0' || selected == candidate;
 }
 
+int qzssL5TrackingPriority(char tracking_code) {
+    switch (tracking_code) {
+        case 'Q': return 0;
+        case 'X': return 1;
+        case 'I': return 2;
+        default: return 100;
+    }
+}
+
 struct ObservationSelection {
     Observation observation;
     bool has_data = false;
@@ -198,6 +207,7 @@ void maybeAssignSelectedObservation(ObservationSelection& selection,
                                     int lli,
                                     int signal_strength,
                                     bool prefer_qzss_l1l,
+                                    bool prefer_qzss_l5_secondary,
                                     bool primary) {
     if (value == 0.0) {
         return;
@@ -218,6 +228,14 @@ void maybeAssignSelectedObservation(ObservationSelection& selection,
             candidate_priority -= 2;
         } else if (tracking_code != 'C') {
             candidate_priority += 1;
+        }
+    }
+    if (prefer_qzss_l5_secondary && sat.system == GNSSSystem::QZSS && !primary &&
+        band == 5) {
+        const int tracking_priority = qzssL5TrackingPriority(tracking_code);
+        if (tracking_priority < 100) {
+            candidate_priority -= 4;
+            candidate_priority += tracking_priority;
         }
     }
     const bool starts_better_track = candidate_priority < selection.priority;
@@ -987,6 +1005,7 @@ bool RINEXReader::parseObservationEpochV2(const std::string& line, ObservationDa
                                            lli_flags[i],
                                            signal_strength[i],
                                            qzss_prefer_l1l_,
+                                           qzss_prefer_l5_secondary_,
                                            true);
             maybeAssignSelectedObservation(secondary_selection,
                                            sat,
@@ -995,6 +1014,7 @@ bool RINEXReader::parseObservationEpochV2(const std::string& line, ObservationDa
                                            lli_flags[i],
                                            signal_strength[i],
                                            qzss_prefer_l1l_,
+                                           qzss_prefer_l5_secondary_,
                                            false);
         }
 
@@ -1126,6 +1146,7 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
                                                lli_flags[i],
                                                signal_strength[i],
                                                qzss_prefer_l1l_,
+                                               qzss_prefer_l5_secondary_,
                                                true);
                 maybeAssignSelectedObservation(secondary_selection,
                                                sat,
@@ -1134,6 +1155,7 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
                                                lli_flags[i],
                                                signal_strength[i],
                                                qzss_prefer_l1l_,
+                                               qzss_prefer_l5_secondary_,
                                                false);
             }
 

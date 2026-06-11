@@ -770,6 +770,10 @@ int main(int argc, char* argv[]) {
             !ppp_env_overrides.qzss_prefer_l1l_present) {
             obs_reader.setQzssL1Preference(true);
         }
+        if (!options.madoca_l6_paths.empty() &&
+            ppp_env_overrides.madoca_qzss_l5) {
+            obs_reader.setQzssSecondaryL5Preference(true);
+        }
         if (!obs_reader.open(options.obs_path)) {
             std::cerr << "Error: failed to open observation file: " << options.obs_path << "\n";
             return 1;
