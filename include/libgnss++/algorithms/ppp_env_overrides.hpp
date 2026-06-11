@@ -23,6 +23,9 @@ struct PPPEnvOverrides {
     // GNSS_PPP_STATIC_ANCHOR_BLEND: override static anchor blend fraction;
     // values outside [0,1] are ignored at use sites. Default -1.0 (inactive).
     double static_anchor_blend = -1.0;
+    // GNSS_PPP_MADOCA_EARLY_WINDOW: enable coherent MADOCA bridge-convergence
+    // parity defaults unless set exactly to "0". Default true.
+    bool madoca_early_window = true;
     // GNSS_PPP_ESTIMATE_ISB: comma/space-style spec parsed by substring
     // checks for "gal", "qzs", "bds", "all", or exact "1". Defaults false.
     bool estimate_isb_all = false;
@@ -64,8 +67,9 @@ struct PPPEnvOverrides {
     // MADOCALIB 10 degree mask unless set exactly to "0". Default true.
     bool madoca_low_elev = true;
     // GNSS_PPP_MADOCA_GALILEO_GATE: apply MADOCALIB Galileo broadcast
-    // ephemeris admission semantics in coherent MADOCA when set exactly to "1".
-    // Default false.
+    // ephemeris admission semantics in coherent MADOCA when set exactly to "1",
+    // or when GNSS_PPP_MADOCA_EARLY_WINDOW is enabled. Default follows
+    // GNSS_PPP_MADOCA_EARLY_WINDOW.
     bool madoca_galileo_gate = false;
     // GNSS_PPP_PB_ADD: add non-MADOCA SSR phase biases instead of subtracting.
     // Default false.

@@ -843,6 +843,11 @@ int main(int argc, char* argv[]) {
         ppp_config.kinematic_mode = options.kinematic_mode;
         ppp_config.low_dynamics_mode = options.low_dynamics_mode;
         ppp_config.apply_static_anchor_blend = options.apply_static_anchor_blend;
+        if (!options.madoca_l6_paths.empty() &&
+            ppp_env_overrides.madoca_early_window) {
+            ppp_config.code_phase_error_ratio_l1 = 300.0;
+            ppp_config.code_phase_error_ratio_l2 = 300.0;
+        }
         ppp_config.enable_ambiguity_resolution = options.enable_ar;
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
