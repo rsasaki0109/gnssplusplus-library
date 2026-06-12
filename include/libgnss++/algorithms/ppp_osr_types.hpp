@@ -32,6 +32,7 @@ struct OSRCorrection {
     Vector3d satellite_position = Vector3d::Zero();
     Vector3d satellite_velocity = Vector3d::Zero();
     double satellite_clock_bias_s = 0.0;
+    GNSSTime signal_transmit_time;
     double elevation = 0.0;
     double azimuth = 0.0;
 
