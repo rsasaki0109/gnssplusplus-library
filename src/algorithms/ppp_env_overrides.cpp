@@ -46,6 +46,7 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envExactOne("GNSS_PPP_DISABLE_MADOCA_STATIC_ANCHOR");
     overrides.static_anchor_blend = envDoubleOr("GNSS_PPP_STATIC_ANCHOR_BLEND", -1.0);
     overrides.madoca_early_window = !envExactZero("GNSS_PPP_MADOCA_EARLY_WINDOW");
+    overrides.madoca_spike_guard = !envExactZero("GNSS_PPP_MADOCA_SPIKE_GUARD");
 
     const char* isb = envValue("GNSS_PPP_ESTIMATE_ISB");
     const std::string isb_spec = isb != nullptr ? std::string(isb) : std::string();
