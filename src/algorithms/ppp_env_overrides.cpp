@@ -143,6 +143,12 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envBoolOr("GNSS_PPP_CLAS_AMB_DATUM", false);
     overrides.clas_amb_datum_dump_path =
         envStringOrEmpty("GNSS_PPP_CLAS_AMB_DATUM_DUMP");
+    overrides.clas_tx_time_sign_fix =
+        envExactOne("GNSS_PPP_CLAS_TX_TIME_SIGN_FIX");
+    overrides.clas_geom_dump_path =
+        envStringOrEmpty("GNSS_PPP_CLAS_GEOM_DUMP");
+    overrides.clas_geom_dump_rx_xyz =
+        envStringOrEmpty("GNSS_PPP_CLAS_GEOM_DUMP_RX_XYZ");
     const std::string clas_nl_datum_fix =
         envStringOrEmpty("GNSS_PPP_CLAS_NL_DATUM_FIX");
     std::string clas_nl_datum_fix_lower = clas_nl_datum_fix;
