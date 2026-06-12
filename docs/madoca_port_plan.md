@@ -87,8 +87,10 @@ Proposed phases (each one slice, oracle-diffed, gated, reversible):
   layout (position, receiver clock per system, troposphere, per-sat iono `II`,
   DD ambiguities), process noise, and reset semantics with code refs.  Add the
   gated DD-filter skeleton that reproduces the float position of the current
-  path within noise when the integer step is disabled.  Reuse the lifecycle
-  atmosphere (#165) as the iono input.
+  path within noise when the integer step is disabled.  The A0 gate is
+  `GNSS_PPP_CLAS_DD_FILTER=1`; unset or exact `0` preserves the default
+  CLAS/MADOCA paths bit-exactly.  Reuse the lifecycle atmosphere (#165) as the
+  iono input.
 - **A1 — DD measurement update.** Form DD phase+code rows with reference-sat
   selection and elevation `varerr` weights matching `ddres()`; estimate the iono
   residual states under the `est-adaptive` process model rather than free

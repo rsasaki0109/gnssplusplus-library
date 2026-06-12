@@ -85,6 +85,7 @@ struct PPPConfig {
     std::string clock_file_path;
     bool use_ssr_corrections = false;
     bool use_clas_osr_filter = false;
+    bool use_clas_dd_filter = false;
     std::string ssr_file_path;
     int l6_gps_week = 0;  // GPS week for L6 binary decode (0 = auto-detect)
     Vector3d approximate_position = Vector3d::Zero();  // RINEX APPROX POS for L6 network selection

@@ -170,6 +170,10 @@ struct PPPEnvOverrides {
     // CLASLIB-style filter-state DD ambiguity conditioning copy when set
     // exactly to "1". Default false while measured.
     bool clas_resamb = false;
+    // GNSS_PPP_CLAS_DD_FILTER: enable the experimental CLAS DD PPP-RTK filter
+    // scaffold when set exactly to "1". Default false; exact "0" and unset are
+    // no-ops for bit-exact legacy CLAS/MADOCA output.
+    bool clas_dd_filter = false;
     // GNSS_PPP_CLAS_AMB_DATUM: align CLAS OSR carrier phase ambiguity states
     // with CLASLIB by subtracting the full CPC before ambiguity estimation.
     // Default follows the residual-phase-trop surface; explicit boolean values
