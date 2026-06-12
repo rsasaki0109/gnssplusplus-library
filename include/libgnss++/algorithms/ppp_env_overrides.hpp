@@ -142,6 +142,10 @@ struct PPPEnvOverrides {
     // GNSS_PPP_CLAS_FIX_DEBUG: path for CLAS DD-WLNL fixed-position WLS
     // diagnostic CSV. Empty disables it.
     std::string clas_fix_debug_path;
+    // GNSS_PPP_CLAS_FIX_REQUIRE_OSR: require a current CLAS OSR correction for
+    // every DD-WLNL fixed-position observation when set exactly to "1".
+    // Default false while measured.
+    bool clas_fix_require_osr = false;
     // GNSS_PPP_CLAS_VERTICAL_FIX: make CLAS DD-WLNL NL prediction consistent
     // with full-CPC-corrected phase before fixed-position WLS. Default true;
     // set exactly "0" for bit-exact opt-out.
