@@ -10,6 +10,7 @@
 #include <libgnss++/core/signals.hpp>
 
 #include <algorithm>
+#include <cstdlib>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -152,6 +153,25 @@ void dumpClasFloatPosition(
           << dx.z() << '\n';
 }
 
+bool readClasAtmosNetworkId(
+    const std::map<std::string, std::string>& epoch_atmos,
+    int& network_id) {
+    const auto network_it = epoch_atmos.find("atmos_network_id");
+    if (network_it == epoch_atmos.end()) {
+        return false;
+    }
+    network_id = std::atoi(network_it->second.c_str());
+    return true;
+}
+
+void resetClasIonosphereStateValues(PPPState& filter_state) {
+    for (const auto& [_, state_index] : filter_state.ionosphere_indices) {
+        if (state_index >= 0 && state_index < filter_state.total_states) {
+            filter_state.state(state_index) = 0.0;
+        }
+    }
+}
+
 }  // namespace
 
 PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
@@ -187,6 +207,8 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         std::map<SatelliteId, CLASPhaseBiasRepairInfo> phase_bias_repair;
         bool has_last_processed_time = false;
         GNSSTime last_processed_time;
+        int last_clas_atmos_network_id = -1;
+        bool has_last_clas_atmos_network_id = false;
     };
     const ClasFallbackSnapshot fallback_snapshot{
         filter_state_,
@@ -201,6 +223,8 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         clas_phase_bias_repair_,
         has_last_processed_time_,
         last_processed_time_,
+        last_clas_atmos_network_id_,
+        has_last_clas_atmos_network_id_,
     };
     const auto restore_clas_snapshot = [&]() {
         filter_state_ = fallback_snapshot.filter_state;
@@ -215,6 +239,10 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         clas_phase_bias_repair_ = fallback_snapshot.phase_bias_repair;
         has_last_processed_time_ = fallback_snapshot.has_last_processed_time;
         last_processed_time_ = fallback_snapshot.last_processed_time;
+        last_clas_atmos_network_id_ =
+            fallback_snapshot.last_clas_atmos_network_id;
+        has_last_clas_atmos_network_id_ =
+            fallback_snapshot.has_last_clas_atmos_network_id;
     };
     const bool allow_hybrid_fallback =
         ppp_config_.clas_epoch_policy ==
@@ -264,6 +292,20 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         clas_phase_bias_repair_);
     const auto& epoch_atmos = epoch_context.epoch_atmos_tokens;
     const auto& osr_corrections = epoch_context.osr_corrections;
+
+    if (pppEnvOverrides().clas_stec_constraint &&
+        ppp_config_.estimate_ionosphere &&
+        ppp_config_.use_clas_osr_filter) {
+        int network_id = -1;
+        if (readClasAtmosNetworkId(epoch_atmos, network_id)) {
+            if (has_last_clas_atmos_network_id_ &&
+                network_id != last_clas_atmos_network_id_) {
+                resetClasIonosphereStateValues(filter_state_);
+            }
+            last_clas_atmos_network_id_ = network_id;
+            has_last_clas_atmos_network_id_ = true;
+        }
+    }
 
     if (osr_corrections.size() < 4) {
         if (allow_hybrid_fallback) {

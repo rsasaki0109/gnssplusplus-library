@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <sstream>
 #include <fstream>
 #include <iomanip>
@@ -67,6 +68,65 @@ struct PhasePairInfo {
 double elevationWeight(double elevation_rad) {
     const double s = std::sin(elevation_rad);
     return 1.0 / (s * s);
+}
+
+bool usesClasStecConstraint(const ppp_shared::PPPConfig& config) {
+    return pppEnvOverrides().clas_stec_constraint &&
+           config.estimate_ionosphere &&
+           config.use_clas_osr_filter;
+}
+
+double cssrStecQualityStdTecu(int quality) {
+    const int cls = (quality >> 3) & 0x7;
+    const int val = quality & 0x7;
+    if ((cls == 0 && val == 0) || (cls == 7 && val == 7)) {
+        return std::numeric_limits<double>::infinity();
+    }
+    return (1.0 + 0.25 * static_cast<double>(val)) *
+               std::pow(3.0, static_cast<double>(cls)) -
+           1.0;
+}
+
+double tecuStdToDelayVarianceM2(double sigma_tecu, double frequency_hz) {
+    if (!std::isfinite(sigma_tecu) || sigma_tecu < 0.0 || frequency_hz <= 0.0) {
+        return std::numeric_limits<double>::infinity();
+    }
+    constexpr double kTecuToElectrons = 1e16;
+    const double sigma_m =
+        40.3 * kTecuToElectrons * sigma_tecu / (frequency_hz * frequency_hz);
+    return sigma_m * sigma_m;
+}
+
+double clasStecConstraintVariance(
+    const std::map<std::string, std::string>& epoch_atmos,
+    const OSRCorrection& osr,
+    const ppp_shared::PPPConfig& config) {
+    constexpr double kClaslibStdIonoM = 0.010;
+    constexpr double kClaslibMinVarianceM2 = kClaslibStdIonoM * kClaslibStdIonoM;
+    const std::string key = "atmos_stec_quality:" + osr.satellite.toString();
+    const auto quality_it = epoch_atmos.find(key);
+    if (quality_it != epoch_atmos.end()) {
+        const int quality = std::atoi(quality_it->second.c_str());
+        const double quality_variance =
+            tecuStdToDelayVarianceM2(
+                cssrStecQualityStdTecu(quality),
+                osr.frequencies[0]);
+        if (std::isfinite(quality_variance) && quality_variance > 0.0) {
+            return std::max(kClaslibMinVarianceM2, quality_variance);
+        }
+    }
+    if (config.clas_iono_prior_variance > 0.0) {
+        return std::min(config.clas_iono_prior_variance, kClaslibMinVarianceM2);
+    }
+    return kClaslibMinVarianceM2;
+}
+
+double effectiveClasIonoProcessNoise(const ppp_shared::PPPConfig& config) {
+    if (usesClasStecConstraint(config)) {
+        constexpr double kClaslibPrnIonoStdM = 0.001;
+        return kClaslibPrnIonoStdM * kClaslibPrnIonoStdM;
+    }
+    return config.process_noise_ionosphere;
 }
 
 std::ofstream* ambDatumDumpStream() {
@@ -554,9 +614,11 @@ void predictFilterState(
     Q(filter_state.trop_index, filter_state.trop_index) =
         effectiveClasTropProcessNoise(config) * dt;
     if (config.estimate_ionosphere) {
+        const double iono_process_noise =
+            effectiveClasIonoProcessNoise(config);
         for (const auto& [_, state_index] : filter_state.ionosphere_indices) {
             if (state_index >= 0 && state_index < nx) {
-                Q(state_index, state_index) = config.process_noise_ionosphere * dt;
+                Q(state_index, state_index) = iono_process_noise * dt;
             }
         }
     }
@@ -694,6 +756,9 @@ MeasurementBuildResult buildEpochMeasurements(
     const AmbiguityResetFunction& ambiguity_reset_function,
     bool debug_enabled) {
     MeasurementBuildResult result;
+    const bool stec_constraint = usesClasStecConstraint(config);
+    std::map<SatelliteId, double> iono_state_targets_m;
+    std::map<SatelliteId, double> iono_state_variances_m2;
 
     for (const auto& osr : osr_corrections) {
         if (!osr.valid) {
@@ -728,12 +793,21 @@ MeasurementBuildResult buildEpochMeasurements(
             if (!raw || !raw->valid) {
                 continue;
             }
-            const auto applied_corrections = selectAppliedOsrCorrections(
-                osr, f, config.clas_correction_application_policy);
             const double iono_scale =
                 (osr.frequencies[f] > 0.0 && osr.wavelengths[0] > 0.0)
                     ? std::pow(osr.wavelengths[f] / osr.wavelengths[0], 2)
                     : 1.0;
+            auto applied_corrections = selectAppliedOsrCorrections(
+                osr, f, config.clas_correction_application_policy);
+            if (stec_constraint && use_residual_iono_state &&
+                osr.has_iono && std::isfinite(osr.iono_l1_m)) {
+                const double iono_scaled = iono_scale * osr.iono_l1_m;
+                applied_corrections.pseudorange_correction_m -= iono_scaled;
+                applied_corrections.carrier_phase_correction_m += iono_scaled;
+                iono_state_targets_m[osr.satellite] = osr.iono_l1_m;
+                iono_state_variances_m2[osr.satellite] =
+                    clasStecConstraintVariance(epoch_atmos, osr, config);
+            }
             const double iono_state_m =
                 use_residual_iono_state ? filter_state.state(iono_state_index) : 0.0;
 
@@ -972,8 +1046,14 @@ MeasurementBuildResult buildEpochMeasurements(
             MeasurementRow row;
             row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
             row.H(iono_state_index) = 1.0;
-            row.residual = -filter_state.state(iono_state_index);
-            row.variance = config.clas_iono_prior_variance;
+            const auto target_it = iono_state_targets_m.find(satellite);
+            const double target_m =
+                target_it != iono_state_targets_m.end() ? target_it->second : 0.0;
+            row.residual = target_m - filter_state.state(iono_state_index);
+            const auto variance_it = iono_state_variances_m2.find(satellite);
+            row.variance = variance_it != iono_state_variances_m2.end()
+                ? variance_it->second
+                : config.clas_iono_prior_variance;
             row.satellite = satellite;
             row.is_phase = false;
             row.freq_index = -1;
