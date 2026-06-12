@@ -444,11 +444,13 @@ DdFixAttempt tryDirectDdFixWithPar(
 WlnlFixAttempt tryWlnlFix(
     const ppp_shared::PPPConfig& config,
     ppp_shared::PPPState& filter_state,
+    const MatrixXd& constraint_covariance,
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const std::vector<SatelliteId>& satellites,
     const std::vector<int>& state_indices,
     const std::map<SatelliteId, WlnlNlInfo>& nl_info,
     bool debug_enabled) {
+    (void)state_indices;
     WlnlFixAttempt attempt;
 
     struct WlnlDdPair {
@@ -563,12 +565,48 @@ WlnlFixAttempt tryWlnlFix(
     VectorXd v = VectorXd::Zero(attempt.nb);
     MatrixXd R = MatrixXd::Zero(attempt.nb, attempt.nb);
 
+    auto addVirtualNlState = [&](const SatelliteId& satellite,
+                                 const WlnlNlInfo& info,
+                                 double sign,
+                                 Eigen::RowVectorXd& row,
+                                 double& value_m) {
+        const auto l1_state_it = filter_state.ambiguity_indices.find(satellite);
+        const SatelliteId l2_satellite(
+            satellite.system,
+            static_cast<uint8_t>(std::min(255, static_cast<int>(satellite.prn) + 100)));
+        const auto l2_state_it = filter_state.ambiguity_indices.find(l2_satellite);
+        if (l1_state_it == filter_state.ambiguity_indices.end() ||
+            l2_state_it == filter_state.ambiguity_indices.end()) {
+            return false;
+        }
+        const int l1_state = l1_state_it->second;
+        const int l2_state = l2_state_it->second;
+        if (l1_state < 0 || l1_state >= nx ||
+            l2_state < 0 || l2_state >= nx) {
+            return false;
+        }
+
+        value_m += sign * (
+            info.alpha1 * filter_state.state(l1_state) +
+            info.alpha2 * filter_state.state(l2_state));
+        row(l1_state) += sign * info.alpha1;
+        row(l2_state) += sign * info.alpha2;
+
+        const auto iono_it = filter_state.ionosphere_indices.find(satellite);
+        if (iono_it != filter_state.ionosphere_indices.end()) {
+            const int iono_state = iono_it->second;
+            if (iono_state >= 0 && iono_state < nx) {
+                value_m -= sign * info.iono_state_scale *
+                           filter_state.state(iono_state);
+                row(iono_state) -= sign * info.iono_state_scale;
+            }
+        }
+        return true;
+    };
+
     for (int k = 0; k < attempt.nb; ++k) {
         const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
         const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
-        const int ref_state = state_indices[static_cast<size_t>(ri)];
-        const int sat_state = state_indices[static_cast<size_t>(si)];
-        const double float_dd_m = filter_state.state(ref_state) - filter_state.state(sat_state);
 
         const auto ref_nl_it = nl_info.find(satellites[static_cast<size_t>(ri)]);
         const auto sat_nl_it = nl_info.find(satellites[static_cast<size_t>(si)]);
@@ -576,16 +614,21 @@ WlnlFixAttempt tryWlnlFix(
             !ref_nl_it->second.valid || !sat_nl_it->second.valid) {
             continue;
         }
-        const auto& ref_amb = ambiguity_states.at(satellites[static_cast<size_t>(ri)]);
-        const auto& sat_amb = ambiguity_states.at(satellites[static_cast<size_t>(si)]);
-        const double fixed_dd_m =
-            dd_nl_fixed(k) * sat_nl_it->second.lambda_nl_m +
-            (ref_amb.wl_fixed_integer - sat_amb.wl_fixed_integer) *
-                sat_nl_it->second.beta * sat_nl_it->second.lambda_wl_m;
+        double float_dd_m = 0.0;
+        Eigen::RowVectorXd row = Eigen::RowVectorXd::Zero(nx);
+        if (!addVirtualNlState(
+                satellites[static_cast<size_t>(ri)], ref_nl_it->second,
+                1.0, row, float_dd_m) ||
+            !addVirtualNlState(
+                satellites[static_cast<size_t>(si)], sat_nl_it->second,
+                -1.0, row, float_dd_m)) {
+            continue;
+        }
+
+        const double fixed_dd_m = dd_nl_fixed(k) * sat_nl_it->second.lambda_nl_m;
 
         v(nv) = fixed_dd_m - float_dd_m;
-        H(nv, ref_state) = 1.0;
-        H(nv, sat_state) = -1.0;
+        H.row(nv) = row;
         R(nv, nv) = hold_variance;
         ++nv;
 
@@ -597,15 +640,49 @@ WlnlFixAttempt tryWlnlFix(
         }
     }
 
-    // Do NOT apply holdamb KF update.  The NL integer constraints are
-    // iono-free but the L1 ambiguity states are per-frequency (include
-    // iono residual).  Applying holdamb would corrupt the filter.
-    // Instead, fixed integers are stored in ambiguity_states and used
-    // by solveFixedPosition() for a clean WLS fixed solution.
-    (void)H;
-    (void)v;
-    (void)R;
-    (void)nv;
+    // Keep the live float filter untouched.  CLASLIB publishes a constrained
+    // fixed-state copy (xa) after AR; this mirrors that output path without
+    // feeding fixed ambiguities back into the next epoch.
+    if (nv > 0) {
+        const MatrixXd H_used = H.topRows(nv);
+        const VectorXd v_used = v.head(nv);
+        const MatrixXd R_used = R.topLeftCorner(nv, nv);
+        const bool has_constraint_covariance =
+            constraint_covariance.rows() == nx &&
+            constraint_covariance.cols() == nx;
+        const MatrixXd& P_constraint =
+            has_constraint_covariance ? constraint_covariance
+                                      : filter_state.covariance;
+        const MatrixXd S =
+            H_used * P_constraint * H_used.transpose() + R_used;
+        Eigen::LDLT<MatrixXd> ldlt(S);
+        if (ldlt.info() == Eigen::Success) {
+            const MatrixXd PHt = P_constraint * H_used.transpose();
+            const MatrixXd K = ldlt.solve(PHt.transpose()).transpose();
+            const VectorXd dx = K * v_used;
+            if (dx.allFinite()) {
+                attempt.constrained_state = filter_state;
+                attempt.constrained_state.state += dx;
+                const MatrixXd I_KH =
+                    MatrixXd::Identity(nx, nx) - K * H_used;
+                attempt.constrained_state.covariance =
+                    I_KH * P_constraint * I_KH.transpose() +
+                    K * R_used * K.transpose();
+                attempt.constrained_state.covariance =
+                    (attempt.constrained_state.covariance +
+                     attempt.constrained_state.covariance.transpose()) *
+                    0.5;
+                attempt.has_constrained_state = true;
+
+                if (debug_enabled) {
+                    std::cerr << "[PPP-WLNL] constrained state: rows=" << nv
+                              << " dx_pos="
+                              << dx.segment(filter_state.pos_index, 3).norm()
+                              << " dx_all=" << dx.norm() << "\n";
+                }
+            }
+        }
+    }
 
     for (const auto& [group, ref_idx] : system_ref_map) {
         (void)group;
@@ -658,6 +735,7 @@ std::map<SatelliteId, WlnlNlInfo> buildWlnlNlInfoMap(
 WlnlFixAttempt resolveWlnlFix(
     const ppp_shared::PPPConfig& config,
     ppp_shared::PPPState& filter_state,
+    const MatrixXd& constraint_covariance,
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const EligibleAmbiguities& eligible_ambiguities,
     const WlnlNlInfoProvider& provider,
@@ -669,10 +747,28 @@ WlnlFixAttempt resolveWlnlFix(
     return tryWlnlFix(
         config,
         filter_state,
+        constraint_covariance,
         ambiguity_states,
         eligible_ambiguities.satellites,
         eligible_ambiguities.state_indices,
         nl_info,
+        debug_enabled);
+}
+
+WlnlFixAttempt resolveWlnlFix(
+    const ppp_shared::PPPConfig& config,
+    ppp_shared::PPPState& filter_state,
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const EligibleAmbiguities& eligible_ambiguities,
+    const WlnlNlInfoProvider& provider,
+    bool debug_enabled) {
+    return resolveWlnlFix(
+        config,
+        filter_state,
+        MatrixXd{},
+        ambiguity_states,
+        eligible_ambiguities,
+        provider,
         debug_enabled);
 }
 
