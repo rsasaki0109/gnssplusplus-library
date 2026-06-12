@@ -1,4 +1,5 @@
 #include <libgnss++/algorithms/ppp_osr.hpp>
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/models/troposphere.hpp>
@@ -13,6 +14,24 @@ namespace {
 
 bool pppDebugEnabled() {
     return ppp_shared::pppDebugEnabled();
+}
+
+double clasOsrCodeBiasLookup(const std::map<uint8_t, double>& bias_m,
+                             GNSSSystem system,
+                             uint8_t signal_id,
+                             bool l2_class_fallback) {
+    const auto it = bias_m.find(signal_id);
+    if (it != bias_m.end()) {
+        return it->second;
+    }
+    if (l2_class_fallback && system == GNSSSystem::GPS &&
+        (signal_id == 8U || signal_id == 9U)) {
+        const auto sibling = bias_m.find(signal_id == 8U ? 9U : 8U);
+        if (sibling != bias_m.end()) {
+            return sibling->second;
+        }
+    }
+    return 0.0;
 }
 
 const char* clasAtmosSelectionPolicyName(
@@ -844,10 +863,13 @@ std::vector<OSRCorrection> computeOSR(
         }
 
         // --- 7. Code/Phase bias ---
+        const bool code_bias_l2_class =
+            pppEnvOverrides().clas_code_row_bias_identity;
         for (int f = 0; f < osr.num_frequencies; ++f) {
             const uint8_t sid = rtcmSsrSignalId(sat.system, osr.signals[f]);
-            auto cb_it = ssr_cbias.find(sid);
-            osr.code_bias_m[f] = (cb_it != ssr_cbias.end()) ? cb_it->second : 0.0;
+            osr.code_bias_m[f] =
+                clasOsrCodeBiasLookup(
+                    ssr_cbias, sat.system, sid, code_bias_l2_class);
             auto pb_it = ssr_pbias.find(sid);
             osr.phase_bias_m[f] = (pb_it != ssr_pbias.end()) ? pb_it->second : 0.0;
         }
