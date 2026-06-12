@@ -20,6 +20,7 @@ using namespace ppp_internal;
 namespace {
 
 constexpr double kMadocaStaticSpikeGuardPositionDeltaM = 100.0;
+constexpr double kMadocaBoundaryGuardPositionJumpM = 10.0;
 
 bool validReceiverSeed(const Vector3d& receiver_position) {
     return std::isfinite(receiver_position.x()) &&
@@ -334,6 +335,11 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
         env_overrides_.madoca_spike_guard &&
         converged_ &&
         (!ppp_config_.kinematic_mode || ppp_config_.low_dynamics_mode);
+    const bool madoca_boundary_guard =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        env_overrides_.madoca_boundary_guard &&
+        converged_ &&
+        (!ppp_config_.kinematic_mode || ppp_config_.low_dynamics_mode);
     for (int iteration = 0; iteration < filter_iterations; ++iteration) {
         MeasurementEquation meas_eq = formMeasurementEquations(if_obs, nav, obs.time);
 
@@ -399,6 +405,25 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
             std::abs(delta_state(filter_state_.clock_index)) < 1e-3 &&
             std::abs(delta_state(filter_state_.trop_index)) < 1e-3) {
             break;
+        }
+    }
+
+    if (madoca_boundary_guard) {
+        const double epoch_position_jump_m =
+            (filter_state_.state.segment(filter_state_.pos_index, 3) -
+             pre_update_state.state.segment(pre_update_state.pos_index, 3)).norm();
+        if (std::isfinite(epoch_position_jump_m) &&
+            epoch_position_jump_m > kMadocaBoundaryGuardPositionJumpM) {
+            if (pppDebugEnabled()) {
+                std::cerr << "[PPP] MADOCA boundary guard rejected update at week="
+                          << obs.time.week
+                          << " tow=" << obs.time.tow
+                          << " pos_jump=" << epoch_position_jump_m
+                          << "\n";
+            }
+            filter_state_ = pre_update_state;
+            pre_anchor_covariance_ = filter_state_.covariance;
+            return true;
         }
     }
 
