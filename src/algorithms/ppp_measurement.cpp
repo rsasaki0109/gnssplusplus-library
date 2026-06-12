@@ -30,8 +30,37 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
     std::vector<SatelliteId> row_satellites;
     std::vector<bool> row_is_phase;
     std::vector<double> row_elevations;
+    std::vector<double> row_azimuths;
     std::vector<SignalType> row_signals;
     std::vector<std::string> row_signal_bands;
+    std::vector<int> row_glonass_frequency_channels;
+    std::vector<double> row_primary_frequencies_hz;
+    std::vector<double> row_secondary_frequencies_hz;
+    std::vector<double> row_primary_if_coefficients;
+    std::vector<double> row_secondary_if_coefficients;
+    std::vector<double> row_ssr_orbit_ages_s;
+    std::vector<double> row_ssr_clock_ages_s;
+    std::vector<int> row_ssr_orbit_iods;
+    std::vector<int> row_ssr_clock_iods;
+    std::vector<int> row_ssr_orbit_iodes;
+    const bool capture_shadow_metadata =
+        !env_overrides_.madoca_postfit_shadow_path.empty();
+    const auto appendShadowMetadata = [&](const IonosphereFreeObs& observation) {
+        if (!capture_shadow_metadata) {
+            return;
+        }
+        row_azimuths.push_back(observation.azimuth);
+        row_glonass_frequency_channels.push_back(observation.glonass_frequency_channel);
+        row_primary_frequencies_hz.push_back(observation.primary_frequency_hz);
+        row_secondary_frequencies_hz.push_back(observation.secondary_frequency_hz);
+        row_primary_if_coefficients.push_back(observation.primary_code_bias_coeff);
+        row_secondary_if_coefficients.push_back(observation.secondary_code_bias_coeff);
+        row_ssr_orbit_ages_s.push_back(observation.ssr_orbit_age_s);
+        row_ssr_clock_ages_s.push_back(observation.ssr_clock_age_s);
+        row_ssr_orbit_iods.push_back(observation.ssr_orbit_iod);
+        row_ssr_clock_iods.push_back(observation.ssr_clock_iod);
+        row_ssr_orbit_iodes.push_back(observation.ssr_orbit_iode);
+    };
 
     const double zenith_delay = filter_state_.state(filter_state_.trop_index);
     const bool use_phase_rows =
@@ -188,6 +217,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         row_elevations.push_back(observation.elevation);
         row_signals.push_back(observation.primary_signal);
         row_signal_bands.push_back(ppp_config_.use_ionosphere_free ? "IF" : "L1");
+        appendShadowMetadata(observation);
 
         const bool qzss_code_only =
             env_overrides_.qzss_code_only ||
@@ -273,6 +303,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     row_elevations.push_back(observation.elevation);
                     row_signals.push_back(observation.primary_signal);
                     row_signal_bands.push_back(ppp_config_.use_ionosphere_free ? "IF" : "L1");
+                    appendShadowMetadata(observation);
                 }
             }
         }
@@ -327,6 +358,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     row_elevations.push_back(observation.elevation);
                     row_signals.push_back(observation.secondary_signal);
                     row_signal_bands.push_back("L2");
+                    appendShadowMetadata(observation);
                 }
             }
 
@@ -375,6 +407,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     row_elevations.push_back(observation.elevation);
                     row_signals.push_back(observation.secondary_signal);
                     row_signal_bands.push_back("L2");
+                    appendShadowMetadata(observation);
                 }
             }
         }
@@ -399,8 +432,19 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
     equation.row_satellites = row_satellites;
     equation.row_is_phase = row_is_phase;
     equation.row_elevations = row_elevations;
+    equation.row_azimuths = row_azimuths;
     equation.row_signals = row_signals;
     equation.row_signal_bands = row_signal_bands;
+    equation.row_glonass_frequency_channels = row_glonass_frequency_channels;
+    equation.row_primary_frequencies_hz = row_primary_frequencies_hz;
+    equation.row_secondary_frequencies_hz = row_secondary_frequencies_hz;
+    equation.row_primary_if_coefficients = row_primary_if_coefficients;
+    equation.row_secondary_if_coefficients = row_secondary_if_coefficients;
+    equation.row_ssr_orbit_ages_s = row_ssr_orbit_ages_s;
+    equation.row_ssr_clock_ages_s = row_ssr_clock_ages_s;
+    equation.row_ssr_orbit_iods = row_ssr_orbit_iods;
+    equation.row_ssr_clock_iods = row_ssr_clock_iods;
+    equation.row_ssr_orbit_iodes = row_ssr_orbit_iodes;
     return equation;
 }
 
