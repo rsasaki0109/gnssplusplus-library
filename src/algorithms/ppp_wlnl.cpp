@@ -324,14 +324,21 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         iono_cpc1_m = -iono_scale1 * osr.iono_l1_m;
         iono_cpc2_m = -iono_scale2 * osr.iono_l1_m;
         raw_nl_m = alpha1 * phase1_m + alpha2 * phase2_m;
+        const bool use_full_cpc_for_nl =
+            pppEnvOverrides().clas_nl_cpc_unified &&
+            ppp_config_.use_clas_osr_filter;
         applied_cpc_minus_windup_comp_m =
             alpha1 * (osr.CPC[0] - osr.windup_m[0] - osr.phase_compensation_m[0]) +
             alpha2 * (osr.CPC[1] - osr.windup_m[1] - osr.phase_compensation_m[1]);
         full_cpc_m = alpha1 * osr.CPC[0] + alpha2 * osr.CPC[1];
-        const double l1_corr_m = phase1_m
-                                - (osr.CPC[0] - osr.windup_m[0] - osr.phase_compensation_m[0]);
-        const double l2_corr_m = phase2_m
-                                - (osr.CPC[1] - osr.windup_m[1] - osr.phase_compensation_m[1]);
+        const double l1_nl_cpc_m = use_full_cpc_for_nl
+            ? osr.CPC[0]
+            : (osr.CPC[0] - osr.windup_m[0] - osr.phase_compensation_m[0]);
+        const double l2_nl_cpc_m = use_full_cpc_for_nl
+            ? osr.CPC[1]
+            : (osr.CPC[1] - osr.windup_m[1] - osr.phase_compensation_m[1]);
+        const double l1_corr_m = phase1_m - l1_nl_cpc_m;
+        const double l2_corr_m = phase2_m - l2_nl_cpc_m;
         nl_phase_m = alpha1 * l1_corr_m + alpha2 * l2_corr_m;
         full_cpc_nl_phase_m = raw_nl_m - full_cpc_m;
         sat_pos = osr.satellite_position;
