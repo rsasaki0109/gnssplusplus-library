@@ -441,6 +441,302 @@ DdFixAttempt tryDirectDdFixWithPar(
     return best_attempt;
 }
 
+struct WlnlDdPair {
+    int ref_idx = -1;
+    int sat_idx = -1;
+};
+
+struct StateDdRow {
+    SatelliteId ref_satellite;
+    SatelliteId sat_satellite;
+    int ref_state = -1;
+    int sat_state = -1;
+    double ref_scale_m = 0.0;
+    double sat_scale_m = 0.0;
+    double wlnl_fixed_cycles = 0.0;
+    const char* band = "";
+};
+
+double ambiguityWavelengthL1(const ppp_shared::PPPAmbiguityInfo& ambiguity) {
+    return ambiguity.wavelength_l1 > 0.0 ? ambiguity.wavelength_l1
+                                         : ambiguity.ambiguity_scale_m;
+}
+
+bool validStateDdEndpoint(int state_index, double scale_m, int total_states) {
+    return state_index >= 0 &&
+           state_index < total_states &&
+           std::isfinite(scale_m) &&
+           scale_m > 0.0;
+}
+
+bool conditionWlnlFilterStateDd(
+    const ppp_shared::PPPConfig& config,
+    const ppp_shared::PPPState& filter_state,
+    const MatrixXd& constraint_covariance,
+    const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const std::vector<SatelliteId>& satellites,
+    const std::vector<int>& state_indices,
+    const std::vector<WlnlDdPair>& dd_pairs,
+    const VectorXd& dd_nl_fixed,
+    WlnlFixAttempt& attempt,
+    bool debug_enabled) {
+    std::vector<StateDdRow> rows;
+    rows.reserve(dd_pairs.size() * 2U);
+
+    for (int k = 0; k < static_cast<int>(dd_pairs.size()); ++k) {
+        const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
+        const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
+        if (ri < 0 || si < 0 ||
+            ri >= static_cast<int>(satellites.size()) ||
+            si >= static_cast<int>(satellites.size()) ||
+            ri >= static_cast<int>(state_indices.size()) ||
+            si >= static_cast<int>(state_indices.size())) {
+            continue;
+        }
+
+        const SatelliteId& ref_sat = satellites[static_cast<size_t>(ri)];
+        const SatelliteId& sat = satellites[static_cast<size_t>(si)];
+        const auto ref_amb_it = ambiguity_states.find(ref_sat);
+        const auto sat_amb_it = ambiguity_states.find(sat);
+        if (ref_amb_it == ambiguity_states.end() ||
+            sat_amb_it == ambiguity_states.end() ||
+            !ref_amb_it->second.wl_is_fixed ||
+            !sat_amb_it->second.wl_is_fixed) {
+            continue;
+        }
+
+        const double dd_nl_cycles = std::round(dd_nl_fixed(k));
+        const double dd_wl_cycles =
+            static_cast<double>(ref_amb_it->second.wl_fixed_integer -
+                                sat_amb_it->second.wl_fixed_integer);
+        const double l1_fixed_cycles = 0.5 * (dd_nl_cycles + dd_wl_cycles);
+        const double l2_fixed_cycles = 0.5 * (dd_nl_cycles - dd_wl_cycles);
+
+        const double ref_l1_scale = ambiguityWavelengthL1(ref_amb_it->second);
+        const double sat_l1_scale = ambiguityWavelengthL1(sat_amb_it->second);
+        if (validStateDdEndpoint(
+                state_indices[static_cast<size_t>(ri)],
+                ref_l1_scale,
+                filter_state.total_states) &&
+            validStateDdEndpoint(
+                state_indices[static_cast<size_t>(si)],
+                sat_l1_scale,
+                filter_state.total_states)) {
+            rows.push_back({
+                ref_sat,
+                sat,
+                state_indices[static_cast<size_t>(ri)],
+                state_indices[static_cast<size_t>(si)],
+                ref_l1_scale,
+                sat_l1_scale,
+                l1_fixed_cycles,
+                "L1",
+            });
+        }
+
+        const auto ref_l2_state_it = filter_state.ambiguity_l2_indices.find(ref_sat);
+        const auto sat_l2_state_it = filter_state.ambiguity_l2_indices.find(sat);
+        const double ref_l2_scale = ref_amb_it->second.wavelength_l2;
+        const double sat_l2_scale = sat_amb_it->second.wavelength_l2;
+        if (ref_l2_state_it != filter_state.ambiguity_l2_indices.end() &&
+            sat_l2_state_it != filter_state.ambiguity_l2_indices.end() &&
+            validStateDdEndpoint(
+                ref_l2_state_it->second,
+                ref_l2_scale,
+                filter_state.total_states) &&
+            validStateDdEndpoint(
+                sat_l2_state_it->second,
+                sat_l2_scale,
+                filter_state.total_states)) {
+            rows.push_back({
+                ref_sat,
+                sat,
+                ref_l2_state_it->second,
+                sat_l2_state_it->second,
+                ref_l2_scale,
+                sat_l2_scale,
+                l2_fixed_cycles,
+                "L2",
+            });
+        }
+    }
+
+    const int nb = static_cast<int>(rows.size());
+    attempt.state_dd_count = nb;
+    if (nb < 4) {
+        if (debug_enabled) {
+            std::cerr << "[PPP-WLNL-RESAMB] insufficient state DD rows: "
+                      << nb << "\n";
+        }
+        return false;
+    }
+
+    const MatrixXd& P_constraint =
+        constraint_covariance.rows() == filter_state.total_states &&
+                constraint_covariance.cols() == filter_state.total_states
+            ? constraint_covariance
+            : filter_state.covariance;
+
+    VectorXd dd_float = VectorXd::Zero(nb);
+    MatrixXd dd_cov = MatrixXd::Zero(nb, nb);
+    MatrixXd Qab = MatrixXd::Zero(filter_state.amb_index, nb);
+    for (int row = 0; row < nb; ++row) {
+        const auto& row_entry = rows[static_cast<size_t>(row)];
+        const double ref_cycles =
+            filter_state.state(row_entry.ref_state) / row_entry.ref_scale_m;
+        const double sat_cycles =
+            filter_state.state(row_entry.sat_state) / row_entry.sat_scale_m;
+        dd_float(row) = ref_cycles - sat_cycles;
+
+        for (int col = 0; col < nb; ++col) {
+            const auto& col_entry = rows[static_cast<size_t>(col)];
+            dd_cov(row, col) =
+                P_constraint(row_entry.ref_state, col_entry.ref_state) /
+                    (row_entry.ref_scale_m * col_entry.ref_scale_m) -
+                P_constraint(row_entry.ref_state, col_entry.sat_state) /
+                    (row_entry.ref_scale_m * col_entry.sat_scale_m) -
+                P_constraint(row_entry.sat_state, col_entry.ref_state) /
+                    (row_entry.sat_scale_m * col_entry.ref_scale_m) +
+                P_constraint(row_entry.sat_state, col_entry.sat_state) /
+                    (row_entry.sat_scale_m * col_entry.sat_scale_m);
+        }
+
+        for (int head = 0; head < filter_state.amb_index; ++head) {
+            Qab(head, row) =
+                P_constraint(head, row_entry.ref_state) / row_entry.ref_scale_m -
+                P_constraint(head, row_entry.sat_state) / row_entry.sat_scale_m;
+        }
+    }
+
+    dd_cov = 0.5 * (dd_cov + dd_cov.transpose());
+    if (!dd_float.allFinite() || !dd_cov.allFinite() || !Qab.allFinite()) {
+        if (debug_enabled) {
+            std::cerr << "[PPP-WLNL-RESAMB] non-finite state DD system\n";
+        }
+        return false;
+    }
+
+    VectorXd state_lambda_fixed = VectorXd::Zero(nb);
+    VectorXd wlnl_fixed = VectorXd::Zero(nb);
+    for (int row = 0; row < nb; ++row) {
+        wlnl_fixed(row) = rows[static_cast<size_t>(row)].wlnl_fixed_cycles;
+        const double fractional =
+            std::abs(wlnl_fixed(row) - std::round(wlnl_fixed(row)));
+        attempt.state_wlnl_max_fractional_cycles =
+            std::max(attempt.state_wlnl_max_fractional_cycles, fractional);
+        if (fractional > 1e-6) {
+            ++attempt.state_wlnl_noninteger_count;
+        }
+    }
+
+    double state_ratio = 0.0;
+    if (!lambdaSearch(dd_float, dd_cov, state_lambda_fixed, state_ratio)) {
+        if (debug_enabled) {
+            std::cerr << "[PPP-WLNL-RESAMB] state lambda failed: nb="
+                      << nb << "\n";
+        }
+        return false;
+    }
+    attempt.state_lambda_solved = true;
+    attempt.state_lambda_ratio = state_ratio;
+    attempt.state_required_ratio = config.ar_ratio_threshold;
+    if (config.use_clas_osr_filter) {
+        attempt.state_required_ratio =
+            std::max(attempt.state_required_ratio, claslibRatioThresholdForNb(nb));
+    }
+
+    VectorXd dd_fixed = VectorXd::Zero(nb);
+    int mismatch_count = 0;
+    double max_abs_delta = 0.0;
+    for (int row = 0; row < nb; ++row) {
+        dd_fixed(row) = std::round(state_lambda_fixed(row));
+        const double delta = dd_fixed(row) - wlnl_fixed(row);
+        max_abs_delta = std::max(max_abs_delta, std::abs(delta));
+        if (std::abs(delta) > 0.25) {
+            ++mismatch_count;
+        }
+        state_lambda_fixed(row) = dd_fixed(row);
+    }
+    attempt.state_wlnl_mismatch_count = mismatch_count;
+    attempt.state_wlnl_max_abs_delta_cycles = max_abs_delta;
+
+    Eigen::LDLT<MatrixXd> ldlt(dd_cov);
+    if (ldlt.info() != Eigen::Success) {
+        return false;
+    }
+    const VectorXd dd_residual = dd_float - dd_fixed;
+    const VectorXd solved_residual = ldlt.solve(dd_residual);
+    if (ldlt.info() != Eigen::Success || !solved_residual.allFinite()) {
+        return false;
+    }
+
+    attempt.constrained_state = filter_state;
+    const VectorXd delta = Qab * solved_residual;
+    attempt.constrained_state.state.head(filter_state.amb_index) -= delta;
+    attempt.state_dd_residual_norm = dd_residual.norm();
+    attempt.state_position_shift_m =
+        delta.segment(filter_state.pos_index, 3).norm();
+
+    const MatrixXd qbi =
+        ldlt.solve(MatrixXd::Identity(nb, nb));
+    if (ldlt.info() == Eigen::Success && qbi.allFinite()) {
+        MatrixXd head_cov =
+            P_constraint.topLeftCorner(filter_state.amb_index,
+                                       filter_state.amb_index) -
+            Qab * qbi * Qab.transpose();
+        head_cov = 0.5 * (head_cov + head_cov.transpose());
+        attempt.constrained_state.covariance
+            .topLeftCorner(filter_state.amb_index, filter_state.amb_index) =
+            head_cov;
+    }
+
+    for (int row = 0; row < nb; ++row) {
+        const auto& entry = rows[static_cast<size_t>(row)];
+        const double ref_cycles =
+            attempt.constrained_state.state(entry.ref_state) / entry.ref_scale_m;
+        const double fixed_sat_cycles = ref_cycles - dd_fixed(row);
+        attempt.constrained_state.state(entry.sat_state) =
+            fixed_sat_cycles * entry.sat_scale_m;
+    }
+
+    attempt.has_constrained_state = true;
+    attempt.state_lambda_used = true;
+    attempt.nb = nb;
+
+    if (debug_enabled) {
+        std::cerr << "[PPP-WLNL-RESAMB] state fixed: nb=" << nb
+                  << " ratio=" << state_ratio
+                  << " threshold=" << attempt.state_required_ratio
+                  << " dd_resid=" << attempt.state_dd_residual_norm
+                  << " pos_shift=" << attempt.state_position_shift_m
+                  << " wlnl_mismatch=" << attempt.state_wlnl_mismatch_count
+                  << " wlnl_max_delta="
+                  << attempt.state_wlnl_max_abs_delta_cycles
+                  << " wlnl_noninteger="
+                  << attempt.state_wlnl_noninteger_count
+                  << " wlnl_max_frac="
+                  << attempt.state_wlnl_max_fractional_cycles << "\n";
+        for (int row = 0; row < std::min(nb, 6); ++row) {
+            const auto& entry = rows[static_cast<size_t>(row)];
+            std::cerr << "[PPP-WLNL-RESAMB] row " << row
+                      << " " << entry.band
+                      << " ref=" << entry.ref_satellite.toString()
+                      << " sat=" << entry.sat_satellite.toString()
+                      << " float=" << dd_float(row)
+                      << " fixed=" << dd_fixed(row)
+                      << " state_lambda="
+                      << (attempt.state_lambda_solved
+                              ? state_lambda_fixed(row)
+                              : std::numeric_limits<double>::quiet_NaN())
+                      << " sigma="
+                      << std::sqrt(std::max(0.0, dd_cov(row, row)))
+                      << "\n";
+        }
+    }
+
+    return true;
+}
+
 WlnlFixAttempt tryWlnlFix(
     const ppp_shared::PPPConfig& config,
     ppp_shared::PPPState& filter_state,
@@ -450,13 +746,7 @@ WlnlFixAttempt tryWlnlFix(
     const std::vector<int>& state_indices,
     const std::map<SatelliteId, WlnlNlInfo>& nl_info,
     bool debug_enabled) {
-    (void)state_indices;
     WlnlFixAttempt attempt;
-
-    struct WlnlDdPair {
-        int ref_idx = -1;
-        int sat_idx = -1;
-    };
 
     std::vector<int> wl_fixed_indices;
     wl_fixed_indices.reserve(satellites.size());
@@ -500,19 +790,21 @@ WlnlFixAttempt tryWlnlFix(
         dd_pairs.push_back({ref_it->second, idx});
     }
 
-    attempt.nb = static_cast<int>(dd_pairs.size());
-    if (attempt.nb < 4) {
+    const int dd_pair_count = static_cast<int>(dd_pairs.size());
+    attempt.nb = dd_pair_count;
+    if (dd_pair_count < 4) {
         if (debug_enabled) {
-            std::cerr << "[PPP-WLNL] insufficient DD NL pairs: " << attempt.nb << "\n";
+            std::cerr << "[PPP-WLNL] insufficient DD NL pairs: "
+                      << dd_pair_count << "\n";
         }
         return attempt;
     }
 
-    VectorXd dd_nl_float = VectorXd::Zero(attempt.nb);
-    MatrixXd dd_nl_cov = MatrixXd::Identity(attempt.nb, attempt.nb) * 1.0;
+    VectorXd dd_nl_float = VectorXd::Zero(dd_pair_count);
+    MatrixXd dd_nl_cov = MatrixXd::Identity(dd_pair_count, dd_pair_count) * 1.0;
 
     int valid_dd = 0;
-    for (int k = 0; k < attempt.nb; ++k) {
+    for (int k = 0; k < dd_pair_count; ++k) {
         const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
         const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
         const auto ref_it = nl_info.find(satellites[static_cast<size_t>(ri)]);
@@ -542,146 +834,36 @@ WlnlFixAttempt tryWlnlFix(
         return attempt;
     }
 
-    VectorXd dd_nl_fixed = VectorXd::Zero(attempt.nb);
+    VectorXd dd_nl_fixed = VectorXd::Zero(dd_pair_count);
     if (!lambdaSearch(dd_nl_float, dd_nl_cov, dd_nl_fixed, attempt.ratio)) {
         if (debug_enabled) {
-            std::cerr << "[PPP-WLNL] NL lambda search failed, nb=" << attempt.nb << "\n";
+            std::cerr << "[PPP-WLNL] NL lambda search failed, nb="
+                      << dd_pair_count << "\n";
         }
         return attempt;
     }
     if (!std::isfinite(attempt.ratio) || attempt.ratio < config.ar_ratio_threshold) {
         if (debug_enabled) {
-            std::cerr << "[PPP-WLNL] NL ratio reject: nb=" << attempt.nb
+            std::cerr << "[PPP-WLNL] NL ratio reject: nb=" << dd_pair_count
                       << " ratio=" << attempt.ratio
                       << " threshold=" << config.ar_ratio_threshold << "\n";
         }
         return attempt;
     }
 
-    constexpr double hold_variance = 0.001 * 0.001;
-    const int nx = filter_state.total_states;
-    int nv = 0;
-    MatrixXd H = MatrixXd::Zero(attempt.nb, nx);
-    VectorXd v = VectorXd::Zero(attempt.nb);
-    MatrixXd R = MatrixXd::Zero(attempt.nb, attempt.nb);
-
-    auto addVirtualNlState = [&](const SatelliteId& satellite,
-                                 const WlnlNlInfo& info,
-                                 double sign,
-                                 Eigen::RowVectorXd& row,
-                                 double& value_m) {
-        const auto l1_state_it = filter_state.ambiguity_indices.find(satellite);
-        const SatelliteId l2_satellite(
-            satellite.system,
-            static_cast<uint8_t>(std::min(255, static_cast<int>(satellite.prn) + 100)));
-        const auto l2_state_it = filter_state.ambiguity_indices.find(l2_satellite);
-        if (l1_state_it == filter_state.ambiguity_indices.end() ||
-            l2_state_it == filter_state.ambiguity_indices.end()) {
-            return false;
-        }
-        const int l1_state = l1_state_it->second;
-        const int l2_state = l2_state_it->second;
-        if (l1_state < 0 || l1_state >= nx ||
-            l2_state < 0 || l2_state >= nx) {
-            return false;
-        }
-
-        value_m += sign * (
-            info.alpha1 * filter_state.state(l1_state) +
-            info.alpha2 * filter_state.state(l2_state));
-        row(l1_state) += sign * info.alpha1;
-        row(l2_state) += sign * info.alpha2;
-
-        const auto iono_it = filter_state.ionosphere_indices.find(satellite);
-        if (iono_it != filter_state.ionosphere_indices.end()) {
-            const int iono_state = iono_it->second;
-            if (iono_state >= 0 && iono_state < nx) {
-                value_m -= sign * info.iono_state_scale *
-                           filter_state.state(iono_state);
-                row(iono_state) -= sign * info.iono_state_scale;
-            }
-        }
-        return true;
-    };
-
-    for (int k = 0; k < attempt.nb; ++k) {
-        const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
-        const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
-
-        const auto ref_nl_it = nl_info.find(satellites[static_cast<size_t>(ri)]);
-        const auto sat_nl_it = nl_info.find(satellites[static_cast<size_t>(si)]);
-        if (ref_nl_it == nl_info.end() || sat_nl_it == nl_info.end() ||
-            !ref_nl_it->second.valid || !sat_nl_it->second.valid) {
-            continue;
-        }
-        double float_dd_m = 0.0;
-        Eigen::RowVectorXd row = Eigen::RowVectorXd::Zero(nx);
-        if (!addVirtualNlState(
-                satellites[static_cast<size_t>(ri)], ref_nl_it->second,
-                1.0, row, float_dd_m) ||
-            !addVirtualNlState(
-                satellites[static_cast<size_t>(si)], sat_nl_it->second,
-                -1.0, row, float_dd_m)) {
-            continue;
-        }
-
-        const double fixed_dd_m = dd_nl_fixed(k) * sat_nl_it->second.lambda_nl_m;
-
-        v(nv) = fixed_dd_m - float_dd_m;
-        H.row(nv) = row;
-        R(nv, nv) = hold_variance;
-        ++nv;
-
-        if (debug_enabled && k < 3) {
-            std::cerr << "[PPP-WLNL] hold " << k
-                      << " float_dd=" << float_dd_m
-                      << " fixed_dd=" << fixed_dd_m
-                      << " v=" << v(nv - 1) << "\n";
-        }
-    }
-
-    // Keep the live float filter untouched.  CLASLIB publishes a constrained
-    // fixed-state copy (xa) after AR; this mirrors that output path without
-    // feeding fixed ambiguities back into the next epoch.
-    if (nv > 0) {
-        const MatrixXd H_used = H.topRows(nv);
-        const VectorXd v_used = v.head(nv);
-        const MatrixXd R_used = R.topLeftCorner(nv, nv);
-        const bool has_constraint_covariance =
-            constraint_covariance.rows() == nx &&
-            constraint_covariance.cols() == nx;
-        const MatrixXd& P_constraint =
-            has_constraint_covariance ? constraint_covariance
-                                      : filter_state.covariance;
-        const MatrixXd S =
-            H_used * P_constraint * H_used.transpose() + R_used;
-        Eigen::LDLT<MatrixXd> ldlt(S);
-        if (ldlt.info() == Eigen::Success) {
-            const MatrixXd PHt = P_constraint * H_used.transpose();
-            const MatrixXd K = ldlt.solve(PHt.transpose()).transpose();
-            const VectorXd dx = K * v_used;
-            if (dx.allFinite()) {
-                attempt.constrained_state = filter_state;
-                attempt.constrained_state.state += dx;
-                const MatrixXd I_KH =
-                    MatrixXd::Identity(nx, nx) - K * H_used;
-                attempt.constrained_state.covariance =
-                    I_KH * P_constraint * I_KH.transpose() +
-                    K * R_used * K.transpose();
-                attempt.constrained_state.covariance =
-                    (attempt.constrained_state.covariance +
-                     attempt.constrained_state.covariance.transpose()) *
-                    0.5;
-                attempt.has_constrained_state = true;
-
-                if (debug_enabled) {
-                    std::cerr << "[PPP-WLNL] constrained state: rows=" << nv
-                              << " dx_pos="
-                              << dx.segment(filter_state.pos_index, 3).norm()
-                              << " dx_all=" << dx.norm() << "\n";
-                }
-            }
-        }
+    if (pppEnvOverrides().clas_resamb &&
+        !conditionWlnlFilterStateDd(
+            config,
+            filter_state,
+            constraint_covariance,
+            ambiguity_states,
+            satellites,
+            state_indices,
+            dd_pairs,
+            dd_nl_fixed,
+            attempt,
+            debug_enabled)) {
+        return WlnlFixAttempt{};
     }
 
     for (const auto& [group, ref_idx] : system_ref_map) {
@@ -696,7 +878,7 @@ WlnlFixAttempt tryWlnlFix(
         ambiguity.nl_fixed_cycles = std::round(ref_nl_it->second.nl_ambiguity_cycles);
     }
 
-    for (int k = 0; k < attempt.nb; ++k) {
+    for (int k = 0; k < dd_pair_count; ++k) {
         const int ri = dd_pairs[static_cast<size_t>(k)].ref_idx;
         const int si = dd_pairs[static_cast<size_t>(k)].sat_idx;
         const auto& ref_ambiguity = ambiguity_states.at(satellites[static_cast<size_t>(ri)]);
