@@ -1,12 +1,15 @@
 #include <libgnss++/algorithms/ppp_clas.hpp>
 
 #include <libgnss++/algorithms/ppp_ar.hpp>
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -65,6 +68,29 @@ double elevationWeight(double elevation_rad) {
     return 1.0 / (s * s);
 }
 
+std::ofstream* ambDatumDumpStream() {
+    const auto& path = pppEnvOverrides().clas_amb_datum_dump_path;
+    if (path.empty()) {
+        return nullptr;
+    }
+
+    static std::ofstream stream;
+    static bool initialized = false;
+    if (!initialized) {
+        initialized = true;
+        stream.open(path, std::ios::out | std::ios::trunc);
+        if (stream) {
+            stream << "record,week,tow,sat,freq,signal,lambda_m,"
+                   << "raw_phase_cycles,raw_phase_m,carrier_correction_m,"
+                   << "cpc_m,cpc_minus_trop_m,trop_correction_m,relativity_m,"
+                   << "receiver_antenna_m,iono_cpc_m,phase_bias_m,windup_m,"
+                   << "phase_compensation_m,l_corr_m,predicted_no_amb_m,"
+                   << "amb_state_m,amb_state_cycles,residual_m\n";
+        }
+    }
+    return stream ? &stream : nullptr;
+}
+
 }  // namespace
 
 AppliedOsrCorrections selectAppliedOsrCorrections(
@@ -88,7 +114,9 @@ AppliedOsrCorrections selectAppliedOsrCorrections(
         corrections.pseudorange_correction_m =
             osr.PRC[freq_index] - osr.trop_correction_m;
         corrections.carrier_phase_correction_m =
-            osr.CPC[freq_index] - osr.trop_correction_m;
+            pppEnvOverrides().clas_amb_datum
+                ? osr.CPC[freq_index]
+                : osr.CPC[freq_index] - osr.trop_correction_m;
         break;
     case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::ORBIT_CLOCK_BIAS:
         corrections.pseudorange_correction_m =
@@ -507,6 +535,14 @@ MeasurementBuildResult buildEpochMeasurements(
                 const double l_m = raw->carrier_phase * osr.wavelengths[f];
                 const double l_corr =
                     l_m - applied_corrections.carrier_phase_correction_m;
+                const bool claslib_amb_datum_phase =
+                    pppEnvOverrides().clas_amb_datum &&
+                    config.clas_correction_application_policy ==
+                        ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR;
+                const double phase_trop_modeled =
+                    claslib_amb_datum_phase ? 0.0 : trop_modeled;
+                const double phase_trop_partial =
+                    claslib_amb_datum_phase ? 0.0 : trop_mapping;
 
                 const uint8_t amb_prn = f == 0 ? osr.satellite.prn
                     : static_cast<uint8_t>(std::min(255, osr.satellite.prn + 100));
@@ -523,13 +559,15 @@ MeasurementBuildResult buildEpochMeasurements(
 
                 if (filter_state.covariance(amb_idx, amb_idx) >= config.clas_ambiguity_reinit_threshold) {
                     filter_state.state(amb_idx) =
-                        l_corr - (geo - sat_clk_m + receiver_clock_m + trop_modeled
+                        l_corr - (geo - sat_clk_m + receiver_clock_m + phase_trop_modeled
                                   - iono_scale * iono_state_m);
                 }
 
+                const double predicted_no_amb =
+                    geo - sat_clk_m + receiver_clock_m + phase_trop_modeled
+                    - iono_scale * iono_state_m;
                 const double predicted =
-                    geo - sat_clk_m + receiver_clock_m + trop_modeled
-                    - iono_scale * iono_state_m + filter_state.state(amb_idx);
+                    predicted_no_amb + filter_state.state(amb_idx);
                 const double residual = l_corr - predicted;
 
                 const double el_weight = elevationWeight(osr.elevation);
@@ -538,7 +576,7 @@ MeasurementBuildResult buildEpochMeasurements(
                 row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
                 row.H.segment(0, 3) = -los.transpose();
                 row.H(filter_state.clock_index) = 1.0;
-                row.H(filter_state.trop_index) = trop_mapping;
+                row.H(filter_state.trop_index) = phase_trop_partial;
                 if (use_residual_iono_state) {
                     row.H(iono_state_index) = -iono_scale;
                     result.observed_iono_states.insert(osr.satellite);
@@ -552,6 +590,39 @@ MeasurementBuildResult buildEpochMeasurements(
                 result.measurements.push_back(row);
                 result.observed_ambiguities.push_back(
                     {amb_sat, raw->signal, osr.wavelengths[f], raw->carrier_phase, raw->snr});
+                if (auto* dump = ambDatumDumpStream(); dump != nullptr) {
+                    const double ambiguity_state_m = filter_state.state(amb_idx);
+                    const double ambiguity_state_cycles =
+                        osr.wavelengths[f] > 0.0
+                            ? ambiguity_state_m / osr.wavelengths[f]
+                            : 0.0;
+                    const double iono_cpc_m = -iono_scale * osr.iono_l1_m;
+                    *dump << std::setprecision(17)
+                          << "PHASE,"
+                          << obs.time.week << ','
+                          << obs.time.tow << ','
+                          << osr.satellite.toString() << ','
+                          << f << ','
+                          << static_cast<int>(raw->signal) << ','
+                          << osr.wavelengths[f] << ','
+                          << raw->carrier_phase << ','
+                          << l_m << ','
+                          << applied_corrections.carrier_phase_correction_m << ','
+                          << osr.CPC[f] << ','
+                          << (osr.CPC[f] - osr.trop_correction_m) << ','
+                          << osr.trop_correction_m << ','
+                          << osr.relativity_correction_m << ','
+                          << osr.receiver_antenna_m[f] << ','
+                          << iono_cpc_m << ','
+                          << osr.phase_bias_m[f] << ','
+                          << osr.windup_m[f] << ','
+                          << osr.phase_compensation_m[f] << ','
+                          << l_corr << ','
+                          << predicted_no_amb << ','
+                          << ambiguity_state_m << ','
+                          << ambiguity_state_cycles << ','
+                          << residual << '\n';
+                }
             }
         }
     }
