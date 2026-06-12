@@ -141,16 +141,20 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         !envExactZero("GNSS_PPP_CLAS_FIXED_STATE_OUTPUT");
     overrides.clas_resamb =
         envExactOne("GNSS_PPP_CLAS_RESAMB");
+    overrides.clas_amb_datum_residual_phase_trop =
+        !envExactZero("GNSS_PPP_CLAS_AMB_DATUM_RESIDUAL_PHASE_TROP");
     overrides.clas_amb_datum =
-        envBoolOr("GNSS_PPP_CLAS_AMB_DATUM", false);
+        envBoolOr(
+            "GNSS_PPP_CLAS_AMB_DATUM",
+            overrides.clas_amb_datum_residual_phase_trop);
     overrides.clas_amb_datum_dump_path =
         envStringOrEmpty("GNSS_PPP_CLAS_AMB_DATUM_DUMP");
-    overrides.clas_amb_datum_residual_phase_trop =
-        envExactOne("GNSS_PPP_CLAS_AMB_DATUM_RESIDUAL_PHASE_TROP");
     overrides.clas_trop_prior_variance =
         envDoubleOr("GNSS_PPP_CLAS_TROP_PRIOR_VARIANCE", 0.0);
     overrides.clas_trop_initial_variance =
-        envDoubleOr("GNSS_PPP_CLAS_TROP_INITIAL_VARIANCE", 0.0);
+        envDoubleOr(
+            "GNSS_PPP_CLAS_TROP_INITIAL_VARIANCE",
+            overrides.clas_amb_datum_residual_phase_trop ? 1e-4 : 0.0);
     overrides.clas_trop_process_noise =
         envDoubleOr("GNSS_PPP_CLAS_TROP_PROCESS_NOISE", 0.0);
     overrides.clas_tx_time_sign_fix =
