@@ -168,6 +168,12 @@ Vector3d clasGeometryDumpReceiverPosition(const Vector3d& fallback) {
     return fallback;
 }
 
+bool usesClaslibCodePrcRows(const ppp_shared::PPPConfig& config) {
+    return pppEnvOverrides().clas_code_row_full_prc &&
+           config.clas_correction_application_policy ==
+               ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR;
+}
+
 void dumpClasCodeRows(
     const char* stage,
     const ObservationData& obs,
@@ -209,6 +215,8 @@ void dumpClasCodeRows(
         const double trop_mapping =
             trop_mapping_function(receiver_position, osr.elevation, obs.time);
         const double trop_model = trop_mapping * trop_zenith;
+        const bool claslib_code_prc = usesClaslibCodePrcRows(config);
+        const double code_trop_model = claslib_code_prc ? 0.0 : trop_model;
         const auto iono_state_it = filter_state.ionosphere_indices.find(osr.satellite);
         const bool have_iono_state =
             config.estimate_ionosphere &&
@@ -234,7 +242,7 @@ void dumpClasCodeRows(
                     : 1.0;
             const double iono_scaled = iono_scale * osr.iono_l1_m;
             const double predicted =
-                geo - sat_clk_m + receiver_clock_m + trop_model +
+                geo - sat_clk_m + receiver_clock_m + code_trop_model +
                 iono_scale * iono_state_l1_m;
             const double residual = corrected_p - predicted;
             const double variance =
@@ -262,7 +270,7 @@ void dumpClasCodeRows(
                   << geo << ','
                   << sat_clk_m << ','
                   << receiver_clock_m << ','
-                  << trop_model << ','
+                  << code_trop_model << ','
                   << iono_state_l1_m << ','
                   << iono_scale << ','
                   << predicted << ','
@@ -301,7 +309,9 @@ AppliedOsrCorrections selectAppliedOsrCorrections(
     switch (policy) {
     case ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR:
         corrections.pseudorange_correction_m =
-            osr.PRC[freq_index] - osr.trop_correction_m;
+            pppEnvOverrides().clas_code_row_full_prc ?
+                osr.PRC[freq_index] :
+                osr.PRC[freq_index] - osr.trop_correction_m;
         corrections.carrier_phase_correction_m =
             pppEnvOverrides().clas_amb_datum
                 ? osr.CPC[freq_index]
@@ -728,10 +738,15 @@ MeasurementBuildResult buildEpochMeasurements(
                 use_residual_iono_state ? filter_state.state(iono_state_index) : 0.0;
 
             if (raw->has_pseudorange && std::isfinite(raw->pseudorange)) {
+                const bool claslib_code_prc = usesClaslibCodePrcRows(config);
+                const double code_trop_modeled =
+                    claslib_code_prc ? 0.0 : trop_modeled;
+                const double code_trop_mapping =
+                    claslib_code_prc ? 0.0 : trop_mapping;
                 const double p_corr =
                     raw->pseudorange - applied_corrections.pseudorange_correction_m;
                 const double predicted =
-                    geo - sat_clk_m + receiver_clock_m + trop_modeled +
+                    geo - sat_clk_m + receiver_clock_m + code_trop_modeled +
                     iono_scale * iono_state_m;
                 const double residual = p_corr - predicted;
 
@@ -741,7 +756,7 @@ MeasurementBuildResult buildEpochMeasurements(
                 row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
                 row.H.segment(0, 3) = -los.transpose();
                 row.H(filter_state.clock_index) = 1.0;
-                row.H(filter_state.trop_index) = trop_mapping;
+                row.H(filter_state.trop_index) = code_trop_mapping;
                 if (use_residual_iono_state) {
                     row.H(iono_state_index) = iono_scale;
                     result.observed_iono_states.insert(osr.satellite);
@@ -1252,13 +1267,18 @@ FixValidationStats validateFixedSolution(
                 iono_scale > 0.0 ? filter_state.state(iono_it->second) : 0.0;
 
             const double el_weight = elevationWeight(osr.elevation);
-            const double predicted =
+            const double phase_predicted =
                 geo - sat_clk_m + receiver_clock_m + trop_modeled;
 
             if (raw->has_pseudorange && std::isfinite(raw->pseudorange)) {
+                const bool claslib_code_prc = usesClaslibCodePrcRows(config);
+                const double code_trop_modeled =
+                    claslib_code_prc ? 0.0 : trop_modeled;
+                const double code_predicted =
+                    geo - sat_clk_m + receiver_clock_m + code_trop_modeled;
                 const double residual =
                     (raw->pseudorange - applied_corrections.pseudorange_correction_m) -
-                    (predicted + iono_scale * iono_state_m);
+                    (code_predicted + iono_scale * iono_state_m);
                 code_sum_sq += residual * residual;
                 ++stats.code_rows;
             }
@@ -1278,7 +1298,7 @@ FixValidationStats validateFixedSolution(
             const double carrier_phase_m = raw->carrier_phase * osr.wavelengths[f];
             const double residual =
                 (carrier_phase_m - applied_corrections.carrier_phase_correction_m) -
-                (predicted - iono_scale * iono_state_m +
+                (phase_predicted - iono_scale * iono_state_m +
                  filter_state.state(ambiguity_index));
             const double variance = config.clas_phase_variance * el_weight;
             phase_residuals.push_back({

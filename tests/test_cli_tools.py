@@ -998,6 +998,8 @@ def build_qzss_cssr_mask_message(
     prns: tuple[int, ...] | None = None,
     sync: bool = True,
     sigmask: int = 0x8000,
+    system_id: int = 0,
+    prn_base: int = 1,
 ) -> tuple[bytes, int]:
     satellites = prns if prns is not None else (prn,)
     signal_slots = [index for index in range(16) if ((sigmask >> (15 - index)) & 1) != 0]
@@ -1018,11 +1020,11 @@ def build_qzss_cssr_mask_message(
     bit += 4
     set_unsigned_bits(payload, bit, 4, 1)
     bit += 4
-    set_unsigned_bits(payload, bit, 4, 0)
+    set_unsigned_bits(payload, bit, 4, system_id)
     bit += 4
     svmask = 0
     for satellite_prn in satellites:
-        svmask |= encode_cssr_satellite_mask(satellite_prn)
+        svmask |= encode_cssr_satellite_mask(satellite_prn, prn_base)
     set_unsigned_bits(payload, bit, 40, svmask)
     bit += 40
     set_unsigned_bits(payload, bit, 16, sigmask)
@@ -5336,6 +5338,56 @@ class CLIToolsTest(unittest.TestCase):
             corrections_csv = corrections_path.read_text(encoding="ascii")
             self.assertIn("ura_sigma_m=0.002750", corrections_csv)
             self.assertIn("cbias:2=-0.120000", corrections_csv)
+
+    def test_qzss_l6_info_extracts_legacy_s_system_code_bias_corrections(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_s_cbias_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_s_cbias.bin"
+            corrections_path = temp_root / "session_s_cbias_corrections.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(
+                            tow=518400,
+                            iod=3,
+                            prn=120,
+                            sync=True,
+                            sigmask=0x0800,
+                            system_id=4,
+                            prn_base=120,
+                        ),
+                        build_qzss_cssr_code_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            bias_m=-0.12,
+                            sync=True,
+                        ),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=0,
+                            iod=3,
+                            dclock_m=0.0256,
+                            sync=False,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--limit",
+                "5",
+                "--gps-week",
+                "1316",
+                "--extract-compact-corrections",
+                str(corrections_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertIn("1316,518400.000,S,120", corrections_csv)
+            self.assertIn("cbias:8=-0.120000", corrections_csv)
 
     def test_qzss_l6_info_compact_code_bias_composition_policy_base_plus_network_adds_base_row(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_code_bias_comp_add_") as temp_dir:
