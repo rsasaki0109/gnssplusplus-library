@@ -124,6 +124,24 @@ WlnlFixAttempt tryWlnlFix(
 
 struct FixedNlObservation {
     SatelliteId satellite;
+    SignalType signal1 = SignalType::SIGNAL_TYPE_COUNT;
+    SignalType signal2 = SignalType::SIGNAL_TYPE_COUNT;
+    double frequency1_hz = 0.0;
+    double frequency2_hz = 0.0;
+    double raw_phase1_m = 0.0;
+    double raw_phase2_m = 0.0;
+    double corrected_phase1_m = 0.0;
+    double corrected_phase2_m = 0.0;
+    double raw_code1_m = 0.0;
+    double raw_code2_m = 0.0;
+    double corrected_code1_m = 0.0;
+    double corrected_code2_m = 0.0;
+    double cpc1_m = 0.0;
+    double cpc2_m = 0.0;
+    double prc1_m = 0.0;
+    double prc2_m = 0.0;
+    double receiver_ant1_m = 0.0;
+    double receiver_ant2_m = 0.0;
     double nl_phase_m = 0.0;
     double fixed_nl_cycles = 0.0;
     double lambda_nl_m = 0.0;
