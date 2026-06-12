@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <initializer_list>
+#include <sstream>
 #include <string>
 
 namespace libgnss {
@@ -59,6 +61,53 @@ double envDoubleOr(const char* name, double fallback) {
 std::string envStringOrEmpty(const char* name) {
     const char* value = envValue(name);
     return value != nullptr ? std::string(value) : std::string();
+}
+
+std::string normalizedTokenSpec(const std::string& value) {
+    std::string normalized = value;
+    std::transform(
+        normalized.begin(),
+        normalized.end(),
+        normalized.begin(),
+        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    for (char& ch : normalized) {
+        if (ch == '_') {
+            ch = '-';
+        } else if (ch == ',' || ch == ';' || ch == ':' || ch == '+' || ch == '|') {
+            ch = ' ';
+        }
+    }
+    return normalized;
+}
+
+bool tokenSpecContains(const std::string& normalized_spec, const std::string& token) {
+    std::string spaced = normalized_spec;
+    for (char& ch : spaced) {
+        if (ch == '-') {
+            continue;
+        }
+        if (!std::isalnum(static_cast<unsigned char>(ch))) {
+            ch = ' ';
+        }
+    }
+    std::istringstream input(spaced);
+    std::string candidate;
+    while (input >> candidate) {
+        if (candidate == token) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool tokenSpecHasAny(const std::string& normalized_spec,
+                     std::initializer_list<const char*> tokens) {
+    for (const char* token : tokens) {
+        if (tokenSpecContains(normalized_spec, token)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 }  // namespace
@@ -167,10 +216,38 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envStringOrEmpty("GNSS_PPP_CLAS_CODE_DUMP");
     overrides.clas_float_dump_path =
         envStringOrEmpty("GNSS_PPP_CLAS_FLOAT_DUMP");
+    const std::string clas_code_row_parity =
+        normalizedTokenSpec(envStringOrEmpty("GNSS_PPP_CLAS_CODE_ROW_PARITY"));
+    const bool clas_code_row_all =
+        tokenSpecHasAny(
+            clas_code_row_parity,
+            {"1", "true", "on", "yes", "all", "both", "claslib", "parity"});
+    const bool clas_code_row_off =
+        tokenSpecHasAny(
+            clas_code_row_parity,
+            {"0", "false", "off", "no", "none"});
+    if (!clas_code_row_off) {
+        overrides.clas_code_row_full_prc =
+            clas_code_row_all ||
+            tokenSpecHasAny(clas_code_row_parity, {"full-prc", "code-prc", "prc"});
+        overrides.clas_code_row_sd =
+            clas_code_row_all ||
+            tokenSpecHasAny(clas_code_row_parity, {"sd", "code-sd", "single-diff"});
+        overrides.clas_code_row_bias_identity =
+            clas_code_row_all ||
+            tokenSpecHasAny(
+                clas_code_row_parity,
+                {"bias", "bias-id", "bias-identity", "l2-bias", "l2"});
+        overrides.clas_code_row_qzss =
+            clas_code_row_all ||
+            tokenSpecHasAny(clas_code_row_parity, {"qzss", "qzs", "j01", "qzss-prn"});
+    }
     overrides.clas_code_sd =
-        envExactOne("GNSS_PPP_CLAS_CODE_SD");
+        envExactOne("GNSS_PPP_CLAS_CODE_SD") ||
+        overrides.clas_code_row_sd;
     overrides.clas_qzss_s_prn_fix =
-        envExactOne("GNSS_PPP_CLAS_QZSS_S_PRN_FIX");
+        envExactOne("GNSS_PPP_CLAS_QZSS_S_PRN_FIX") ||
+        overrides.clas_code_row_qzss;
     const std::string clas_nl_datum_fix =
         envStringOrEmpty("GNSS_PPP_CLAS_NL_DATUM_FIX");
     if (clas_nl_datum_fix.empty()) {
