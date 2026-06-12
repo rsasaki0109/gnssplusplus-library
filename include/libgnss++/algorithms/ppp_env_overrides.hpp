@@ -213,6 +213,13 @@ struct PPPEnvOverrides {
     // single differences when set exactly to "1". Default false while
     // float-datum parity is measured.
     bool clas_code_sd = false;
+    // GNSS_PPP_CLAS_CODE_ROW_PARITY: comma/space separated preview gate for
+    // CLASLIB-style float code rows. Tokens: full-prc, sd, bias, qzss, or
+    // all/claslib. Default empty preserves legacy behavior.
+    bool clas_code_row_full_prc = false;
+    bool clas_code_row_sd = false;
+    bool clas_code_row_bias_identity = false;
+    bool clas_code_row_qzss = false;
     // GNSS_PPP_CLAS_QZSS_S_PRN_FIX: map compact CLAS legacy S120..S122
     // correction labels to QZSS J01..J03 when set exactly to "1".
     // Default false while row-set parity is measured.
