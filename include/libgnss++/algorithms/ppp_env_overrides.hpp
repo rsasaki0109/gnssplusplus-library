@@ -160,10 +160,10 @@ struct PPPEnvOverrides {
     // position instead of replacing it with the standalone DD-WLNL fixed-WLS
     // position. Default true; set exactly "0" for bit-exact opt-out.
     bool clas_fixed_state_output = true;
-    // GNSS_PPP_CLAS_CONSTRAINED_FIX: publish the accepted CLAS DD-WLNL
-    // ambiguity-constrained state copy instead of the float filter state when
-    // set exactly to "1". Default false while measured.
-    bool clas_constrained_fix = false;
+    // GNSS_PPP_CLAS_RESAMB: publish the CLAS DD-WLNL fixed output from a
+    // CLASLIB-style filter-state DD ambiguity conditioning copy when set
+    // exactly to "1". Default false while measured.
+    bool clas_resamb = false;
     // GNSS_PPP_DEBUG: general PPP debug logging. Default false.
     bool debug = false;
 
