@@ -778,6 +778,9 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
         fixed_observation.receiver_ant_nl_m =
             alpha1 * osr.receiver_antenna_m[0] + alpha2 * osr.receiver_antenna_m[1];
     } else {
+        if (ppp_config_.use_clas_osr_filter && env_overrides_.clas_fix_require_osr) {
+            return false;
+        }
         const Observation* l1 = ppp_utils::findCarrierObservation(
             obs, satellite, {SignalType::GPS_L1CA, SignalType::GAL_E1, SignalType::QZS_L1CA});
         const Observation* l2 = ppp_utils::findCarrierObservation(
