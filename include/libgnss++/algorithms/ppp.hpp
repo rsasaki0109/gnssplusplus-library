@@ -233,6 +233,8 @@ private:
     std::vector<Vector3d> recent_positions_;
     GNSSTime last_processed_time_;
     bool has_last_processed_time_ = false;
+    int last_clas_atmos_network_id_ = -1;
+    bool has_last_clas_atmos_network_id_ = false;
     bool precise_products_loaded_ = false;
     bool ssr_products_loaded_ = false;
     bool require_coherent_ssr_ = false;
