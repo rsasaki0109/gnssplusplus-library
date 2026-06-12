@@ -15,6 +15,8 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <map>
+#include <vector>
 
 namespace libgnss {
 
@@ -62,6 +64,31 @@ std::ofstream* clasNlDebugStream() {
                    << "current_minus_full_cpc_cycles,phase_bias_nl_cycles,"
                    << "windup_nl_cycles,phase_comp_nl_cycles,receiver_ant_nl_cycles,"
                    << "relativity_nl_cycles,iono_cpc_nl_cycles,trop_correction_cycles\n";
+        }
+    }
+    return stream ? &stream : nullptr;
+}
+
+std::ofstream* clasFixDebugStream() {
+    const auto& path = pppEnvOverrides().clas_fix_debug_path;
+    if (path.empty()) {
+        return nullptr;
+    }
+
+    static std::ofstream stream;
+    static bool initialized = false;
+    if (!initialized) {
+        initialized = true;
+        stream.open(path, std::ios::out | std::ios::trunc);
+        if (stream) {
+            stream << "record,week,tow,sat,ref_sat,nobs,"
+                   << "initial_x_m,initial_y_m,initial_z_m,"
+                   << "fixed_x_m,fixed_y_m,fixed_z_m,position_shift_m,"
+                   << "final_clock_m,residual_m,dd_residual_m,"
+                   << "geo_m,satellite_clock_m,trop_applied_m,extra_prediction_m,"
+                   << "fixed_nl_m,nl_phase_m,cpc_nl_m,"
+                   << "osr_trop_correction_m,osr_nl_iono_m,receiver_ant_nl_m,"
+                   << "lambda_nl_m,fixed_nl_cycles,use_trop_model\n";
         }
     }
     return stream ? &stream : nullptr;
@@ -159,6 +186,7 @@ bool PPPProcessor::solveFixedPosition(const ObservationData& obs,
     });
 
     double position_shift_norm_m = 0.0;
+    double fixed_clock_m = clock_m;
     const bool solved = ppp_ar::solveFixedNlPosition(
         fixed_observations,
         position,
@@ -169,7 +197,96 @@ bool PPPProcessor::solveFixedPosition(const ObservationData& obs,
             return calculateMappingFunction(receiver_position, elevation, time);
         },
         fixed_position,
-        &position_shift_norm_m);
+        &position_shift_norm_m,
+        &fixed_clock_m);
+    if (solved) {
+        if (auto* debug = clasFixDebugStream(); debug != nullptr) {
+            struct ResidualRecord {
+                const ppp_ar::FixedNlObservation* observation = nullptr;
+                double residual_m = 0.0;
+                double geo_m = 0.0;
+                double trop_applied_m = 0.0;
+            };
+            std::vector<ResidualRecord> residual_records;
+            residual_records.reserve(fixed_observations.size());
+            for (const auto& fixed_observation : fixed_observations) {
+                const double geo = geodist(fixed_observation.sat_pos, fixed_position);
+                const Vector3d los =
+                    (fixed_observation.sat_pos - fixed_position).normalized();
+                const double elevation = std::asin(los.dot(fixed_position.normalized()));
+                const double trop_applied =
+                    fixed_observation.use_trop_model
+                        ? calculateMappingFunction(fixed_position, elevation, obs.time) *
+                              trop_zenith
+                        : 0.0;
+                const double predicted =
+                    geo + fixed_clock_m -
+                    constants::SPEED_OF_LIGHT * fixed_observation.sat_clk +
+                    trop_applied +
+                    fixed_observation.extra_prediction_m +
+                    fixed_observation.fixed_nl_cycles *
+                        fixed_observation.lambda_nl_m;
+                residual_records.push_back({
+                    &fixed_observation,
+                    fixed_observation.nl_phase_m - predicted,
+                    geo,
+                    trop_applied,
+                });
+            }
+
+            std::map<GNSSSystem, size_t> reference_by_system;
+            for (size_t index = 0; index < residual_records.size(); ++index) {
+                const auto system = residual_records[index].observation->satellite.system;
+                if (reference_by_system.find(system) == reference_by_system.end()) {
+                    reference_by_system[system] = index;
+                }
+            }
+
+            for (const auto& record : residual_records) {
+                const auto& fixed_observation = *record.observation;
+                const auto ref_it =
+                    reference_by_system.find(fixed_observation.satellite.system);
+                const ResidualRecord* ref_record =
+                    ref_it != reference_by_system.end()
+                        ? &residual_records[ref_it->second]
+                        : &record;
+                const double dd_residual =
+                    ref_record->residual_m - record.residual_m;
+                *debug << std::setprecision(17)
+                       << "SAT,"
+                       << obs.time.week << ','
+                       << obs.time.tow << ','
+                       << fixed_observation.satellite.toString() << ','
+                       << ref_record->observation->satellite.toString() << ','
+                       << fixed_observations.size() << ','
+                       << position.x() << ','
+                       << position.y() << ','
+                       << position.z() << ','
+                       << fixed_position.x() << ','
+                       << fixed_position.y() << ','
+                       << fixed_position.z() << ','
+                       << position_shift_norm_m << ','
+                       << fixed_clock_m << ','
+                       << record.residual_m << ','
+                       << dd_residual << ','
+                       << record.geo_m << ','
+                       << constants::SPEED_OF_LIGHT * fixed_observation.sat_clk << ','
+                       << record.trop_applied_m << ','
+                       << fixed_observation.extra_prediction_m << ','
+                       << fixed_observation.fixed_nl_cycles *
+                              fixed_observation.lambda_nl_m << ','
+                       << fixed_observation.nl_phase_m << ','
+                       << fixed_observation.cpc_nl_m << ','
+                       << fixed_observation.osr_trop_correction_m << ','
+                       << fixed_observation.osr_nl_iono_m << ','
+                       << fixed_observation.receiver_ant_nl_m << ','
+                       << fixed_observation.lambda_nl_m << ','
+                       << fixed_observation.fixed_nl_cycles << ','
+                       << (fixed_observation.use_trop_model ? 1 : 0)
+                       << '\n';
+            }
+        }
+    }
     if (pppDebugEnabled() && solved) {
         std::cerr << "[PPP-WLNL] fixedWLS: sats=" << fixed_observations.size()
                   << " pos_shift=" << position_shift_norm_m << "m\n";
@@ -643,12 +760,23 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
         const double alpha1 = f1 / (f1 + f2);
         const double alpha2 = f2 / (f1 + f2);
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
+        const double cpc_nl_m = alpha1 * osr.CPC[0] + alpha2 * osr.CPC[1];
         const double l1_corr_m = l1->carrier_phase * osr.wavelengths[0] - osr.CPC[0];
         const double l2_corr_m = l2->carrier_phase * osr.wavelengths[1] - osr.CPC[1];
         nl_phase_m = alpha1 * l1_corr_m + alpha2 * l2_corr_m;
         sat_pos = osr.satellite_position;
         sat_clk = osr.satellite_clock_bias_s;
         use_trop_model = false;
+        fixed_observation.cpc_nl_m = cpc_nl_m;
+        fixed_observation.osr_trop_correction_m = osr.trop_correction_m;
+        fixed_observation.osr_nl_iono_m = osr.has_iono ? osr.iono_l1_m * f1 / f2 : 0.0;
+        fixed_observation.extra_prediction_m =
+            pppEnvOverrides().clas_vertical_fix && ppp_config_.use_clas_osr_filter
+                ? fixed_observation.osr_trop_correction_m +
+                      fixed_observation.osr_nl_iono_m
+                : 0.0;
+        fixed_observation.receiver_ant_nl_m =
+            alpha1 * osr.receiver_antenna_m[0] + alpha2 * osr.receiver_antenna_m[1];
     } else {
         const Observation* l1 = ppp_utils::findCarrierObservation(
             obs, satellite, {SignalType::GPS_L1CA, SignalType::GAL_E1, SignalType::QZS_L1CA});
@@ -697,6 +825,7 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
         return false;
     }
 
+    fixed_observation.satellite = satellite;
     fixed_observation.nl_phase_m = nl_phase_m;
     fixed_observation.fixed_nl_cycles = fixed_nl;
     fixed_observation.lambda_nl_m = lambda_nl;

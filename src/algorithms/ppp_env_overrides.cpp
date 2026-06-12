@@ -109,6 +109,10 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
     overrides.ar_dddump = envPresent("GNSS_PPP_AR_DDDUMP");
     overrides.clas_nl_debug_path =
         envStringOrEmpty("GNSS_PPP_CLAS_NL_DEBUG");
+    overrides.clas_fix_debug_path =
+        envStringOrEmpty("GNSS_PPP_CLAS_FIX_DEBUG");
+    overrides.clas_vertical_fix =
+        !envExactZero("GNSS_PPP_CLAS_VERTICAL_FIX");
     const std::string clas_nl_datum_fix =
         envStringOrEmpty("GNSS_PPP_CLAS_NL_DATUM_FIX");
     std::string clas_nl_datum_fix_lower = clas_nl_datum_fix;
