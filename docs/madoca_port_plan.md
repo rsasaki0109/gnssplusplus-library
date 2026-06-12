@@ -4,6 +4,126 @@ This plan scopes a MADOCA foundation pass.  The goal is to capture what should
 be ported from MADOCALIB, what should be shared with the existing CLAS work,
 and how to build oracle parity without dragging reference code into production.
 
+> The sections from "Reference Inputs" onward are the original foundation plan
+> (through the iter4 MADOCALIB bridge baseline, 2026-06-10).  They are kept as
+> reference.  For the current state of native parity and the next architecture
+> step, read "Status (2026-06-13)" immediately below first.
+
+## Status (2026-06-13) — Native Parity Achieved, AR/Filter Architecture Is The Wall
+
+The foundation, decode, and PPP-application phases below are done.  Native
+MADOCA-PPP and native CLAS PPP-RTK both run end to end and are now compared
+slice-by-slice against the MADOCALIB / CLASLIB oracles.  The remaining gap on
+both fronts has been narrowed to a single structural difference: the native
+float-PPP + WLNL-AR architecture versus the reference double-differenced
+PPP-RTK filter.
+
+### MADOCA-PPP native vs MADOCALIB bridge (MIZU, tracker issue #148)
+
+Delta RMS 3D vs the bridge on the MIZU 2025/04/01 window moved from 69.2 m to
+1.820 m all-epoch / 1.196 m tail over slices #130–#147, then the full-day path
+was unblocked (#143) and 24 h parity reached 1.316 m default / 1.206 m with the
+post-fit commit gate, with a converged-filter guard chain (#144 spike guard,
+#145 boundary guard, #146/#147 commit-on-success + shadow validation).  GLONASS
+phase, QZSS L5, SSR-replay, bias-identity, and pair-selection hypotheses were
+each measured and closed (default-off knobs kept where they were preview-only).
+The repro harness and per-slice history live in the memory note
+`madoca-ppp-frontier` and in issue #148.
+
+Open MADOCA levers (all measured, none yet a default win): GLONASS phase
+residual is geometry-shaped (windup / antenna phase-center, #149); PPP-AR
+parity (`exec_pppar` window); QZSS atmosphere row-set.
+
+### CLAS PPP-RTK native vs CLASLIB (2019-08-27 case, tracker issue #9)
+
+Issues #6 (per-satellite NL datum diagnosis) and #7 (datum alignment
+implementation) are **closed**.  Issue #8 (post-fix accuracy) moved the
+same-epoch CLASLIB oracle on fixed epochs from RMS 3D ~18.12 m to **0.935 m**
+(fixed count 247 → 301) across PRs #150–#161, then a long diagnostic chain
+(#162–#166) localized the remainder precisely:
+
+- The fixed-WLS chain is exonerated end to end — output convention (#154),
+  conditioning algebra (#156), clock/common datum (projects to 0 ENU after DD),
+  tide/antenna/trop scalars, and final row algebra all measured small or zero.
+- The remaining ~0.87 m horizontal common datum **exists in the float solution
+  from epoch 1**, driven by STEC/iono content (#162/#163).
+- STEC content parity was then made **exact**: `GNSS_PPP_CLAS_ATMOS_LIFECYCLE`
+  (#165) materializes CLASLIB-style latest-bank atmosphere so applied iono is
+  CLASLIB-identical (diff RMS 0.000000 m).
+- **The paradox that defines the next step:** with exact iono applied, position
+  *regresses* (#165), and a CLASLIB-style absolute-STEC state constraint does
+  not recover it (#166).  The blocker is no longer correction content; it is the
+  **AR / filter equilibrium** itself.
+
+### Why the remaining gap is architectural
+
+Native CLAS runs `--estimate-ionosphere` PPP with an undifferenced float filter,
+then resolves ambiguities with a DD-WLNL search and publishes the accepted
+filter-state position.  CLASLIB runs a double-differenced PPP-RTK filter
+(`pos1-ionoopt=est-adaptive`) in which the DD geometry, the iono-state process
+model, and the LAMBDA conditioning are one coupled system, and it publishes the
+constrained fixed state `xa`.  Feeding native's float datum and undifferenced
+ambiguity vector through CLASLIB-style conditioning is not state-compatible
+(#155, #156, #166): the integers, covariances, and datums belong to different
+parameterizations.  Closing the last ~0.87 m requires matching the *filter
+architecture*, not another correction-chain term.
+
+## Option A — CLAS DD PPP-RTK AR/Filter Re-Architecture (proposed)
+
+Goal: bring native CLAS fixed-epoch parity from 0.935 m toward CLASLIB's ~0.06 m
+by reworking the CLAS float/AR filter to the reference DD PPP-RTK design, behind
+a typed env (`GNSS_PPP_CLAS_DD_FILTER`) so the current default path stays
+bit-exact until the new path measurably wins under the standing decision rule.
+
+Standing decision rule (recalibrated in #161, use for every phase):
+`fixed count >= baseline AND fixed-oracle 3D and V improve AND all-epoch-oracle
+3D does not regress by > 0.01 m`.  The static-ECEF anchor is retired (it sits
+~5.8 m from CLASLIB's own static solution); the gate is the same-epoch CLASLIB
+trajectory.  MADOCA paths must stay bit-exact at every step.
+
+Proposed phases (each one slice, oracle-diffed, gated, reversible):
+
+- **A0 — DD state model audit and skeleton.** Document CLASLIB `ppprtk.c` state
+  layout (position, receiver clock per system, troposphere, per-sat iono `II`,
+  DD ambiguities), process noise, and reset semantics with code refs.  Add the
+  gated DD-filter skeleton that reproduces the float position of the current
+  path within noise when the integer step is disabled.  Reuse the lifecycle
+  atmosphere (#165) as the iono input.
+- **A1 — DD measurement update.** Form DD phase+code rows with reference-sat
+  selection and elevation `varerr` weights matching `ddres()`; estimate the iono
+  residual states under the `est-adaptive` process model rather than free
+  estimation.  Verify the float-only oracle drops below the current 1.003 m.
+- **A2 — `resamb_LAMBDA` conditioning.** Build `Qb`/`Qab` from the DD-filter
+  covariance, run LAMBDA on the native DD ambiguity vector, and publish the
+  conditioned `xa` (the #156 algebra is correct; it failed only because the old
+  ambiguity vector was a different datum — here it is native to the DD filter).
+- **A3 — hold and validation.** Add `holdamb`-style fix-and-hold feedback gated
+  by the post-fit residual / ratio / pdop checks, matching CLASLIB's acceptance
+  so the fixed set stabilizes instead of churning (the #160/#166 failure mode).
+- **A4 — QZSS row-set parity.** Fold in the QZSS J01–J03 admission once the DD
+  filter consumes their corrections correctly (bias rows already preserved in
+  #163; atmosphere content via #165), since the DD geometry needs the full
+  constellation to match CLASLIB's float datum.
+- **A5 — default flip + cleanup.** When the coherent A1–A4 stack passes the
+  standing rule on the 2019-08-27 case (and does not regress the CLAS smoke
+  gate), fold `DD_FILTER` + `ATMOS_LIFECYCLE` + `ATMOS_GRID_MATRIX` into one
+  default-on switch with a bit-exact opt-out, and retire the now-subsumed
+  preview knobs (#155 constrained-fix, #166 STEC-constraint) and the converged-
+  output guards that the DD filter makes unnecessary.
+
+Risks and notes:
+
+- This is a genuine solver change, not a knob.  Keep it entirely behind
+  `GNSS_PPP_CLAS_DD_FILTER` until A5; the existing CLAS default (0.935 m) is the
+  fallback and must remain reachable bit-exactly via the opt-out.
+- The reference-satellite choice and per-system DD differencing are where datum
+  bugs hide; oracle-diff the float position after A1 before trusting any fixed
+  result.
+- Do not import MADOCALIB/CLASLIB sources into production; the disposable
+  `/tmp/s22_claslib_build` row-dump harness (S24/S28 patches) stays test-only.
+- Track Option A as its own issue, linked from #8 and #9; keep #8 open until A5
+  lands or Option A is explicitly abandoned.
+
 ## Reference Inputs
 
 Local MADOCALIB copy inspected for iter1:
