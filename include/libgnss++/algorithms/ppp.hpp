@@ -581,6 +581,9 @@ private:
         VectorXd residuals;
         std::vector<SatelliteId> row_satellites;  ///< Satellite for each row
         std::vector<bool> row_is_phase;           ///< true=carrier phase, false=code
+        std::vector<double> row_elevations;        ///< Elevation angle in radians
+        std::vector<SignalType> row_signals;       ///< Signal identity for each row
+        std::vector<std::string> row_signal_bands; ///< IF/L1/L2 label for each row
     };
     
     MeasurementEquation formMeasurementEquations(

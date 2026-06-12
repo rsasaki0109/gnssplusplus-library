@@ -36,6 +36,9 @@ struct PPPEnvOverrides {
     // postfit validation with commit-on-success semantics for coherent MADOCA
     // when set exactly to "1". Default false.
     bool madoca_postfit_commit = false;
+    // GNSS_PPP_MADOCA_POSTFIT_SHADOW: path for native MADOCA postfit
+    // residual/statistic shadow dump. Empty disables it.
+    std::string madoca_postfit_shadow_path;
     // GNSS_PPP_ESTIMATE_ISB: comma/space-style spec parsed by substring
     // checks for "gal", "qzs", "bds", "all", or exact "1". Defaults false.
     bool estimate_isb_all = false;
