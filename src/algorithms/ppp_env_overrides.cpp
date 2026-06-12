@@ -31,6 +31,26 @@ bool envExactZero(const char* name) {
     return value != nullptr && value[0] == '0' && value[1] == '\0';
 }
 
+bool envBoolOr(const char* name, bool fallback) {
+    const char* value = envValue(name);
+    if (value == nullptr) {
+        return fallback;
+    }
+    std::string text(value);
+    std::transform(
+        text.begin(),
+        text.end(),
+        text.begin(),
+        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    if (text == "1" || text == "true" || text == "on" || text == "yes") {
+        return true;
+    }
+    if (text == "0" || text == "false" || text == "off" || text == "no") {
+        return false;
+    }
+    return fallback;
+}
+
 double envDoubleOr(const char* name, double fallback) {
     const char* value = envValue(name);
     return value != nullptr ? std::atof(value) : fallback;
@@ -119,6 +139,10 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         !envExactZero("GNSS_PPP_CLAS_FIXED_STATE_OUTPUT");
     overrides.clas_resamb =
         envExactOne("GNSS_PPP_CLAS_RESAMB");
+    overrides.clas_amb_datum =
+        envBoolOr("GNSS_PPP_CLAS_AMB_DATUM", false);
+    overrides.clas_amb_datum_dump_path =
+        envStringOrEmpty("GNSS_PPP_CLAS_AMB_DATUM_DUMP");
     const std::string clas_nl_datum_fix =
         envStringOrEmpty("GNSS_PPP_CLAS_NL_DATUM_FIX");
     std::string clas_nl_datum_fix_lower = clas_nl_datum_fix;

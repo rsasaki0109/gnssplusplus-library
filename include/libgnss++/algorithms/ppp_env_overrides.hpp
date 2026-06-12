@@ -164,6 +164,13 @@ struct PPPEnvOverrides {
     // CLASLIB-style filter-state DD ambiguity conditioning copy when set
     // exactly to "1". Default false while measured.
     bool clas_resamb = false;
+    // GNSS_PPP_CLAS_AMB_DATUM: align CLAS OSR carrier phase ambiguity states
+    // with CLASLIB by subtracting the full CPC before ambiguity estimation.
+    // Default false while measured; set exactly "1"/"true"/"on" to preview.
+    bool clas_amb_datum = false;
+    // GNSS_PPP_CLAS_AMB_DATUM_DUMP: path for native CLAS phase-row ambiguity
+    // convention diagnostics. Empty disables it.
+    std::string clas_amb_datum_dump_path;
     // GNSS_PPP_DEBUG: general PPP debug logging. Default false.
     bool debug = false;
 
