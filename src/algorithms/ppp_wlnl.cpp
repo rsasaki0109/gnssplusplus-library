@@ -113,6 +113,7 @@ std::ofstream* clasFixDebugStream() {
 bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const NavigationData& nav) {
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+    last_clas_constrained_fixed_state_valid_ = false;
 
     const auto wlnl_preparation = ppp_ar::prepareWlnlCandidates(
         ppp_config_,
@@ -154,6 +155,7 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     const ppp_ar::WlnlFixAttempt attempt = ppp_ar::resolveWlnlFix(
         ppp_config_,
         filter_state_,
+        pre_anchor_covariance_,
         ambiguity_states_,
         eligible_ambiguities,
         [&](const SatelliteId& sat, ppp_ar::WlnlNlInfo& info) {
@@ -168,6 +170,10 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
 
     last_ar_ratio_ = attempt.ratio;
     last_fixed_ambiguities_ = attempt.nb;
+    if (attempt.has_constrained_state) {
+        last_clas_constrained_fixed_state_ = attempt.constrained_state;
+        last_clas_constrained_fixed_state_valid_ = true;
+    }
     if (pppDebugEnabled()) {
         std::cerr << "[PPP-WLNL] NL fixed: nb=" << attempt.nb
                   << " ratio=" << attempt.ratio << "\n";
@@ -398,6 +404,7 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
     double beta = 0.0;
     double alpha1 = 0.0;
     double alpha2 = 0.0;
+    double iono_state_scale = 0.0;
     double nl_phase_m = 0.0;
     double predicted_m = 0.0;
     double f1_hz = 0.0;
@@ -475,6 +482,7 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
             (osr.frequencies[1] > 0.0 && osr.wavelengths[0] > 0.0)
                 ? std::pow(osr.wavelengths[1] / osr.wavelengths[0], 2)
                 : 1.0;
+        iono_state_scale = alpha1 * iono_scale1 + alpha2 * iono_scale2;
         iono_cpc1_m = -iono_scale1 * osr.iono_l1_m;
         iono_cpc2_m = -iono_scale2 * osr.iono_l1_m;
         raw_nl_m = alpha1 * phase1_m + alpha2 * phase2_m;
@@ -532,6 +540,8 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
         lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
         beta = f1 * f2 / (f1 * f1 - f2 * f2);
+        iono_state_scale =
+            alpha1 + alpha2 * std::pow(lambda2 / lambda1, 2);
 
         const double l1_m = l1_obs->carrier_phase * lambda1;
         const double l2_m = l2_obs->carrier_phase * lambda2;
@@ -760,6 +770,9 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         lambda_nl,
         lambda_wl,
         beta,
+        alpha1,
+        alpha2,
+        iono_state_scale,
         {sat.system,
          {static_cast<int>(l1_obs->signal), static_cast<int>(l2_obs->signal)}},
         true

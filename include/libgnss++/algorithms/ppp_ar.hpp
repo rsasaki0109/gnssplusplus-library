@@ -64,14 +64,19 @@ struct WlnlNlInfo {
     double lambda_nl_m = 0.0;
     double lambda_wl_m = 0.0;
     double beta = 0.0;
+    double alpha1 = 0.0;
+    double alpha2 = 0.0;
+    double iono_state_scale = 0.0;
     WlnlGroupKey group{};
     bool valid = false;
 };
 
 struct WlnlFixAttempt {
     bool fixed = false;
+    bool has_constrained_state = false;
     double ratio = 0.0;
     int nb = 0;
+    ppp_shared::PPPState constrained_state;
 };
 
 struct WlnlWideLaneFixSummary {
@@ -108,6 +113,15 @@ std::map<SatelliteId, WlnlNlInfo> buildWlnlNlInfoMap(
 WlnlFixAttempt resolveWlnlFix(
     const ppp_shared::PPPConfig& config,
     ppp_shared::PPPState& filter_state,
+    const MatrixXd& constraint_covariance,
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const EligibleAmbiguities& eligible_ambiguities,
+    const WlnlNlInfoProvider& provider,
+    bool debug_enabled);
+
+WlnlFixAttempt resolveWlnlFix(
+    const ppp_shared::PPPConfig& config,
+    ppp_shared::PPPState& filter_state,
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const EligibleAmbiguities& eligible_ambiguities,
     const WlnlNlInfoProvider& provider,
@@ -116,6 +130,7 @@ WlnlFixAttempt resolveWlnlFix(
 WlnlFixAttempt tryWlnlFix(
     const ppp_shared::PPPConfig& config,
     ppp_shared::PPPState& filter_state,
+    const MatrixXd& constraint_covariance,
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const std::vector<SatelliteId>& satellites,
     const std::vector<int>& state_indices,
