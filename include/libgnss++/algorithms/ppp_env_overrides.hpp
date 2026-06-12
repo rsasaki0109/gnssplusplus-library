@@ -203,6 +203,20 @@ struct PPPEnvOverrides {
     // GNSS_PPP_CLAS_GEOM_DUMP_RX_XYZ: optional forced receiver ECEF
     // "x,y,z" for GNSS_PPP_CLAS_GEOM_DUMP.
     std::string clas_geom_dump_rx_xyz;
+    // GNSS_PPP_CLAS_CODE_DUMP: path for CLAS float code-row diagnostics.
+    // Empty disables it.
+    std::string clas_code_dump_path;
+    // GNSS_PPP_CLAS_FLOAT_DUMP: path for CLAS float-position diagnostics.
+    // Empty disables it.
+    std::string clas_float_dump_path;
+    // GNSS_PPP_CLAS_CODE_SD: form CLAS OSR code rows as same-system
+    // single differences when set exactly to "1". Default false while
+    // float-datum parity is measured.
+    bool clas_code_sd = false;
+    // GNSS_PPP_CLAS_QZSS_S_PRN_FIX: map compact CLAS legacy S120..S122
+    // correction labels to QZSS J01..J03 when set exactly to "1".
+    // Default false while row-set parity is measured.
+    bool clas_qzss_s_prn_fix = false;
     // GNSS_PPP_DEBUG: general PPP debug logging. Default false.
     bool debug = false;
 

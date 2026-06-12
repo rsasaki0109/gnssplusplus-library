@@ -621,12 +621,22 @@ std::vector<OSRCorrection> computeOSR(
 
         const Observation* l1_obs = findSignal(l1_cands);
         const Observation* l2_obs = findSignal(l2_cands);
-        if (!l1_obs) continue;
+        if (!l1_obs) {
+            if (pppDebugEnabled() && sat.system == GNSSSystem::QZSS) {
+                std::cerr << "[OSR-QZSS-SKIP] " << sat.toString()
+                          << " reason=no_l1_code_phase\n";
+            }
+            continue;
+        }
 
         // --- 2. Satellite position/clock from broadcast + SSR ---
         Vector3d sat_pos, sat_vel;
         double sat_clk = 0.0, sat_drift = 0.0;
         if (!nav.calculateSatelliteState(sat, obs.time, sat_pos, sat_vel, sat_clk, sat_drift)) {
+            if (pppDebugEnabled() && sat.system == GNSSSystem::QZSS) {
+                std::cerr << "[OSR-QZSS-SKIP] " << sat.toString()
+                          << " reason=no_broadcast_state\n";
+            }
             continue;
         }
 
@@ -644,6 +654,10 @@ std::vector<OSRCorrection> computeOSR(
                         sat_vel,
                         sat_clk,
                         sat_drift)) {
+                    if (pppDebugEnabled() && sat.system == GNSSSystem::QZSS) {
+                        std::cerr << "[OSR-QZSS-SKIP] " << sat.toString()
+                                  << " reason=no_tx_broadcast_state_approx\n";
+                    }
                     continue;
                 }
                 emission_time = approximate_transmit_time - sat_clk;
@@ -657,6 +671,10 @@ std::vector<OSRCorrection> computeOSR(
                     sat_vel,
                     sat_clk,
                     sat_drift)) {
+                if (pppDebugEnabled() && sat.system == GNSSSystem::QZSS) {
+                    std::cerr << "[OSR-QZSS-SKIP] " << sat.toString()
+                              << " reason=no_tx_broadcast_state\n";
+                }
                 continue;
             }
             osr.signal_transmit_time = emission_time;
@@ -721,6 +739,10 @@ std::vector<OSRCorrection> computeOSR(
             osr.clock_reference_time = clock_reference_time;
             osr.clock_correction_m = clock_corr;
         } else {
+            if (pppDebugEnabled() && sat.system == GNSSSystem::QZSS) {
+                std::cerr << "[OSR-QZSS-SKIP] " << sat.toString()
+                          << " reason=no_ssr_correction\n";
+            }
             continue;
         }
 

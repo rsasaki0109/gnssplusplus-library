@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 
@@ -27,6 +29,25 @@ bool pppDebugEnabled() {
 }
 
 constexpr double kClasNlDatumJumpThresholdCycles = 0.5;
+
+std::ofstream* clasFloatDumpStream() {
+    const auto& path = pppEnvOverrides().clas_float_dump_path;
+    if (path.empty()) {
+        return nullptr;
+    }
+
+    static std::ofstream stream;
+    static bool initialized = false;
+    if (!initialized) {
+        initialized = true;
+        stream.open(path, std::ios::out | std::ios::trunc);
+        if (stream) {
+            stream << "record,week,tow,x_m,y_m,z_m,clock_m,trop_z_m,"
+                   << "num_osr,num_rows,dx_m,dx_y_m,dx_z_m\n";
+        }
+    }
+    return stream ? &stream : nullptr;
+}
 
 double clasNlPhaseBiasDatumCycles(const OSRCorrection& osr) {
     if (osr.num_frequencies < 2 ||
@@ -96,6 +117,39 @@ void applyClasNlDatumReset(
         ambiguity.clas_nl_phase_bias_datum_cycles = datum_cycles;
         ambiguity.has_clas_nl_phase_bias_datum = true;
     }
+}
+
+void dumpClasFloatPosition(
+    const GNSSTime& time,
+    const PPPState& filter_state,
+    const ppp_clas::EpochUpdateResult& epoch_update,
+    size_t num_osr) {
+    auto* dump = clasFloatDumpStream();
+    if (dump == nullptr || !epoch_update.update_stats.updated ||
+        filter_state.state.size() < filter_state.total_states ||
+        filter_state.total_states <= filter_state.trop_index) {
+        return;
+    }
+    const Vector3d position =
+        filter_state.state.segment(filter_state.pos_index, 3);
+    Vector3d dx = Vector3d::Zero();
+    if (epoch_update.update_stats.dx.size() >= filter_state.pos_index + 3) {
+        dx = epoch_update.update_stats.dx.segment(filter_state.pos_index, 3);
+    }
+    *dump << std::setprecision(17)
+          << "FLOAT,"
+          << time.week << ','
+          << time.tow << ','
+          << position.x() << ','
+          << position.y() << ','
+          << position.z() << ','
+          << filter_state.state(filter_state.clock_index) << ','
+          << filter_state.state(filter_state.trop_index) << ','
+          << num_osr << ','
+          << epoch_update.update_stats.nobs << ','
+          << dx.x() << ','
+          << dx.y() << ','
+          << dx.z() << '\n';
 }
 
 }  // namespace
@@ -256,6 +310,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         solution = seed;
         return solution;
     }
+    dumpClasFloatPosition(obs.time, filter_state_, epoch_update, osr_corrections.size());
     const auto& update_stats = epoch_update.update_stats;
     pre_anchor_covariance_ = update_stats.pre_anchor_covariance;
 
