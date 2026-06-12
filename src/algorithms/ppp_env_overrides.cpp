@@ -135,6 +135,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envExactOne("GNSS_PPP_CLAS_FIX_REQUIRE_OSR");
     overrides.clas_vertical_fix =
         !envExactZero("GNSS_PPP_CLAS_VERTICAL_FIX");
+    overrides.clas_bridge_convention =
+        !envExactZero("GNSS_PPP_CLAS_BRIDGE_CONVENTION");
     overrides.clas_fixed_state_output =
         !envExactZero("GNSS_PPP_CLAS_FIXED_STATE_OUTPUT");
     overrides.clas_resamb =
@@ -151,6 +153,10 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envStringOrEmpty("GNSS_PPP_CLAS_GEOM_DUMP_RX_XYZ");
     const std::string clas_nl_datum_fix =
         envStringOrEmpty("GNSS_PPP_CLAS_NL_DATUM_FIX");
+    if (clas_nl_datum_fix.empty()) {
+        overrides.clas_nl_datum_reset = true;
+        overrides.clas_nl_cpc_unified = !overrides.clas_bridge_convention;
+    }
     std::string clas_nl_datum_fix_lower = clas_nl_datum_fix;
     std::transform(
         clas_nl_datum_fix_lower.begin(),
