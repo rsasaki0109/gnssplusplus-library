@@ -10,6 +10,7 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace libgnss::ppp_clas_dd {
@@ -86,15 +87,27 @@ struct DdRow {
     SatelliteId target_satellite;
     bool is_phase = false;
     int frequency_index = 0;
+    int system_group = -1;
     double residual_m = 0.0;
+    double reference_elevation_rad = 0.0;
+    double target_elevation_rad = 0.0;
     Vector3d position_coefficients = Vector3d::Zero();
     std::vector<rtk_measurement::StateCoefficient> state_coefficients;
     double reference_variance_m2 = 0.0;
     double target_variance_m2 = 0.0;
 };
 
+struct DdReferenceGroup {
+    int system_group = -1;
+    int frequency_index = 0;
+    bool is_phase = false;
+    SatelliteId reference_satellite;
+    double reference_elevation_rad = 0.0;
+};
+
 struct DdMeasurementBuildResult {
     std::vector<DdRow> rows;
+    std::vector<DdReferenceGroup> reference_groups_detail;
     rtk_measurement::MeasurementSystem measurement_system;
     int phase_rows = 0;
     int code_rows = 0;
@@ -109,6 +122,23 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
     const ppp_shared::PPPConfig& config,
     const TropMappingFunction& trop_mapping_function);
 
+struct DdPostfitValidationResult {
+    bool accepted = false;
+    std::string reject_reason;
+    int row_count = 0;
+    int phase_row_count = 0;
+    double residual_rms_m = 0.0;
+    double residual_max_abs_m = 0.0;
+    double phase_residual_rms_m = 0.0;
+    double phase_residual_max_abs_m = 0.0;
+    double chi_square_ratio = 0.0;
+};
+
+DdPostfitValidationResult validateDdPostfitResiduals(
+    const DdMeasurementBuildResult& postfit_build,
+    const StateLayout& layout,
+    const MatrixXd& covariance);
+
 struct DdUpdateDiagnostics {
     bool updated = false;
     std::string fallback_reason;
@@ -122,6 +152,16 @@ struct DdUpdateDiagnostics {
     double lambda_ratio = 0.0;
     double lambda_required_ratio = 0.0;
     std::string lambda_reject_reason;
+    bool fixed_postfit_accepted = false;
+    std::string fixed_reject_reason;
+    DdPostfitValidationResult fixed_postfit;
+    double ar_pdop = 0.0;
+    double hold_pdop = 0.0;
+    int reference_change_groups = 0;
+    int consecutive_fix_count = 0;
+    bool hold_applied = false;
+    int hold_rows = 0;
+    std::string hold_reject_reason;
     rtk_update::FilterUpdateResult filter_update;
 };
 
@@ -152,6 +192,12 @@ public:
     int totalFallbackEpochs() const { return total_fallback_epochs_; }
     int totalLambdaAcceptedEpochs() const { return total_lambda_accepted_epochs_; }
     int totalLambdaRejectedEpochs() const { return total_lambda_rejected_epochs_; }
+    int totalFixedRejectedByRatio() const { return fixed_reject_ratio_epochs_; }
+    int totalFixedRejectedByPostfit() const { return fixed_reject_postfit_epochs_; }
+    int totalFixedRejectedByPdop() const { return fixed_reject_pdop_epochs_; }
+    int totalFixedRejectedByMinFix() const { return fixed_reject_minfix_epochs_; }
+    int totalFixedRejectedByReferenceChange() const { return fixed_reject_refchange_epochs_; }
+    int totalHoldAppliedEpochs() const { return total_hold_applied_epochs_; }
     double meanLambdaRatio() const {
         return lambda_ratio_count_ > 0
             ? lambda_ratio_sum_ / static_cast<double>(lambda_ratio_count_)
@@ -191,19 +237,41 @@ private:
         const StateSnapshot& source_snapshot,
         bool fixed) const;
     bool conditionFixedSnapshot(
+        const ObservationData& obs,
+        const std::vector<OSRCorrection>& osr_corrections,
         const std::vector<DdRow>& rows,
-        const ppp_shared::PPPConfig& config);
+        const ppp_shared::PPPConfig& config,
+        const TropMappingFunction& trop_mapping_function,
+        int reference_change_groups,
+        double ar_pdop);
+    int countReferenceChanges(const DdMeasurementBuildResult& build) const;
+    void rememberReferenceGroups(const DdMeasurementBuildResult& build);
+    void updateAmbiguityLockCounts(const std::vector<DdRow>& rows);
+    double computePdop(const std::vector<DdRow>& rows, double min_elevation_rad) const;
+    bool applyHoldAmbiguity(const std::vector<DdRow>& rows);
+    void appendDiagnosticsCsv(const GNSSTime& time, bool fixed) const;
 
     StateSnapshot snapshot_;
     StateSnapshot fixed_snapshot_;
     std::map<int, int> ionosphere_outage_by_satno_;
     std::map<int, double> ionosphere_process_noise_by_satno_;
     std::map<std::pair<int, int>, int> ambiguity_outage_by_satno_freq_;
+    std::map<std::pair<int, int>, int> ambiguity_lock_by_satno_freq_;
+    std::map<std::tuple<int, int, bool>, SatelliteId> reference_by_group_;
+    std::vector<rtk_measurement::AmbiguityDifference> validated_hold_differences_;
+    VectorXd validated_hold_ambiguities_;
     DdUpdateDiagnostics last_diagnostics_;
     int total_updated_epochs_ = 0;
     int total_fallback_epochs_ = 0;
     int total_lambda_accepted_epochs_ = 0;
     int total_lambda_rejected_epochs_ = 0;
+    int fixed_reject_ratio_epochs_ = 0;
+    int fixed_reject_postfit_epochs_ = 0;
+    int fixed_reject_pdop_epochs_ = 0;
+    int fixed_reject_minfix_epochs_ = 0;
+    int fixed_reject_refchange_epochs_ = 0;
+    int total_hold_applied_epochs_ = 0;
+    int consecutive_validated_fixes_ = 0;
     double lambda_ratio_sum_ = 0.0;
     int lambda_ratio_count_ = 0;
     bool has_snapshot_ = false;
