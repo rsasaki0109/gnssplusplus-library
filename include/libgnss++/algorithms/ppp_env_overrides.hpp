@@ -177,6 +177,18 @@ struct PPPEnvOverrides {
     // GNSS_PPP_CLAS_AMB_DATUM_DUMP: path for native CLAS phase-row ambiguity
     // convention diagnostics. Empty disables it.
     std::string clas_amb_datum_dump_path;
+    // GNSS_PPP_CLAS_AMB_DATUM_RESIDUAL_PHASE_TROP: with AMB_DATUM full-CPC
+    // phase rows, keep only the residual trop model
+    // (native mapped ZTD - CLAS CPC trop) and its Jacobian. Default false
+    // while measured.
+    bool clas_amb_datum_residual_phase_trop = false;
+    // GNSS_PPP_CLAS_TROP_PRIOR_VARIANCE /
+    // GNSS_PPP_CLAS_TROP_INITIAL_VARIANCE /
+    // GNSS_PPP_CLAS_TROP_PROCESS_NOISE: CLAS trop state tuning overrides.
+    // Values <= 0 leave PPPConfig defaults.
+    double clas_trop_prior_variance = 0.0;
+    double clas_trop_initial_variance = 0.0;
+    double clas_trop_process_noise = 0.0;
     // GNSS_PPP_CLAS_TX_TIME_SIGN_FIX: preview RTKLIB/CLASLIB transmit-time
     // iteration for CLAS SSR satellite positions. Default false; set exactly
     // "1" to enable. The default and exact "0" preserve legacy bit-exact

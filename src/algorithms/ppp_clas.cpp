@@ -193,6 +193,39 @@ bool usesClasTropospherePrior(
            ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR;
 }
 
+bool suppressesClasAmbDatumPhaseTrop(
+    ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy policy) {
+    const auto& env = pppEnvOverrides();
+    return env.clas_amb_datum &&
+           !env.clas_amb_datum_residual_phase_trop &&
+           policy ==
+               ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR;
+}
+
+bool usesResidualClasAmbDatumPhaseTrop(
+    ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy policy) {
+    const auto& env = pppEnvOverrides();
+    return env.clas_amb_datum &&
+           env.clas_amb_datum_residual_phase_trop &&
+           policy ==
+               ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR;
+}
+
+double effectiveClasTropPriorVariance(const ppp_shared::PPPConfig& config) {
+    const double value = pppEnvOverrides().clas_trop_prior_variance;
+    return value > 0.0 ? value : config.clas_trop_prior_variance;
+}
+
+double effectiveClasTropInitialVariance(const ppp_shared::PPPConfig& config) {
+    const double value = pppEnvOverrides().clas_trop_initial_variance;
+    return value > 0.0 ? value : config.clas_trop_initial_variance;
+}
+
+double effectiveClasTropProcessNoise(const ppp_shared::PPPConfig& config) {
+    const double value = pppEnvOverrides().clas_trop_process_noise;
+    return value > 0.0 ? value : config.clas_trop_process_noise;
+}
+
 std::vector<SatelliteId> collectResidualIonoSatellites(
     const ObservationData& obs,
     const SSRProducts& ssr_products) {
@@ -294,7 +327,7 @@ void initializeFilterState(
     filter_state.covariance.block(0, 0, 3, 3) *= config.clas_initial_position_variance;
     filter_state.covariance(6, 6) = config.clas_clock_variance;
     filter_state.covariance(7, 7) = config.clas_clock_variance;
-    filter_state.covariance(8, 8) = config.clas_trop_initial_variance;
+    filter_state.covariance(8, 8) = effectiveClasTropInitialVariance(config);
     filter_state.iono_index = 9;
     for (size_t index = 0; index < iono_satellites.size(); ++index) {
         const int state_index = filter_state.iono_index + static_cast<int>(index);
@@ -371,7 +404,8 @@ void predictFilterState(
     MatrixXd Q = MatrixXd::Zero(nx, nx);
     Q(filter_state.clock_index, filter_state.clock_index) = config.clas_clock_variance;
     Q(filter_state.glo_clock_index, filter_state.glo_clock_index) = config.clas_clock_variance;
-    Q(filter_state.trop_index, filter_state.trop_index) = config.clas_trop_process_noise * dt;
+    Q(filter_state.trop_index, filter_state.trop_index) =
+        effectiveClasTropProcessNoise(config) * dt;
     if (config.estimate_ionosphere) {
         for (const auto& [_, state_index] : filter_state.ionosphere_indices) {
             if (state_index >= 0 && state_index < nx) {
@@ -649,11 +683,16 @@ MeasurementBuildResult buildEpochMeasurements(
                           << '\n';
                 }
                 const bool claslib_amb_datum_phase =
-                    pppEnvOverrides().clas_amb_datum &&
-                    config.clas_correction_application_policy ==
-                        ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR;
-                const double phase_trop_modeled =
-                    claslib_amb_datum_phase ? 0.0 : trop_modeled;
+                    suppressesClasAmbDatumPhaseTrop(
+                        config.clas_correction_application_policy);
+                const bool residual_amb_datum_phase_trop =
+                    usesResidualClasAmbDatumPhaseTrop(
+                        config.clas_correction_application_policy);
+                const double phase_trop_modeled = claslib_amb_datum_phase
+                    ? 0.0
+                    : (residual_amb_datum_phase_trop
+                          ? trop_modeled - osr.trop_correction_m
+                          : trop_modeled);
                 const double phase_trop_partial =
                     claslib_amb_datum_phase ? 0.0 : trop_mapping;
 
@@ -756,7 +795,7 @@ MeasurementBuildResult buildEpochMeasurements(
             row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
             row.H(filter_state.trop_index) = 1.0;
             row.residual = clas_trop_zenith - trop_zenith;
-            row.variance = config.clas_trop_prior_variance;
+            row.variance = effectiveClasTropPriorVariance(config);
             row.satellite = SatelliteId{};
             row.is_phase = false;
             row.freq_index = -1;
