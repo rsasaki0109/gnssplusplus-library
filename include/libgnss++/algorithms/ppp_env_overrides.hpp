@@ -171,6 +171,17 @@ struct PPPEnvOverrides {
     // GNSS_PPP_CLAS_AMB_DATUM_DUMP: path for native CLAS phase-row ambiguity
     // convention diagnostics. Empty disables it.
     std::string clas_amb_datum_dump_path;
+    // GNSS_PPP_CLAS_TX_TIME_SIGN_FIX: preview RTKLIB/CLASLIB transmit-time
+    // iteration for CLAS SSR satellite positions. Default false; set exactly
+    // "1" to enable. The default and exact "0" preserve legacy bit-exact
+    // behavior because the S28 rollout rule rejected this term as default-on.
+    bool clas_tx_time_sign_fix = false;
+    // GNSS_PPP_CLAS_GEOM_DUMP: path for CLAS geometry-row forensic dump.
+    // Empty disables it.
+    std::string clas_geom_dump_path;
+    // GNSS_PPP_CLAS_GEOM_DUMP_RX_XYZ: optional forced receiver ECEF
+    // "x,y,z" for GNSS_PPP_CLAS_GEOM_DUMP.
+    std::string clas_geom_dump_rx_xyz;
     // GNSS_PPP_DEBUG: general PPP debug logging. Default false.
     bool debug = false;
 
