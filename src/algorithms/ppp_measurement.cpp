@@ -17,7 +17,8 @@ using namespace ppp_internal;
 PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
     const std::vector<IonosphereFreeObs>& observations,
     const NavigationData& nav,
-    const GNSSTime& time) {
+    const GNSSTime& time,
+    bool apply_outlier_detection) {
     (void)nav;
     (void)time;
 
@@ -150,7 +151,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                       << "\n";
         }
 
-        if (ppp_config_.enable_outlier_detection) {
+        if (apply_outlier_detection && ppp_config_.enable_outlier_detection) {
             const double sigma = std::sqrt(std::max(
                 safeVariance(observation.variance_pr, 1e-6),
                 (row * filter_state_.covariance * row.transpose())(0, 0)));
@@ -239,7 +240,8 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                         ppp_config_.outlier_threshold *
                             std::sqrt(safeVariance(observation.variance_cp, 1e-8)) * 10.0,
                         phase_residual_floor);
-                if (!ppp_config_.enable_outlier_detection ||
+                if (!apply_outlier_detection ||
+                    !ppp_config_.enable_outlier_detection ||
                     std::abs(phase_residual) <= phase_limit) {
                     Eigen::RowVectorXd phase_row = Eigen::RowVectorXd::Zero(filter_state_.total_states);
                     phase_row.segment(filter_state_.pos_index, 3) = -line_of_sight;
@@ -303,7 +305,8 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 const double code_limit = std::max(
                     ppp_config_.outlier_threshold * std::sqrt(var_pr_l2) * 10.0,
                     code_floor);
-                if (!ppp_config_.enable_outlier_detection ||
+                if (!apply_outlier_detection ||
+                    !ppp_config_.enable_outlier_detection ||
                     std::abs(l2_code_resid) <= code_limit) {
                     rows.push_back(l2_code);
                     measured_values.push_back(observation.pseudorange_l2);
@@ -347,7 +350,8 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 const double phase_limit = std::max(
                     ppp_config_.outlier_threshold * std::sqrt(var_cp_l2) * 10.0,
                     phase_floor);
-                if (!ppp_config_.enable_outlier_detection ||
+                if (!apply_outlier_detection ||
+                    !ppp_config_.enable_outlier_detection ||
                     std::abs(l2_phase_resid) <= phase_limit) {
                     rows.push_back(l2_phase);
                     measured_values.push_back(observation.carrier_phase_l2);

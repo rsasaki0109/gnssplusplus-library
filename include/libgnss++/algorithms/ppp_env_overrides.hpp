@@ -32,6 +32,10 @@ struct PPPEnvOverrides {
     // GNSS_PPP_MADOCA_BOUNDARY_GUARD: reject smaller coherent-MADOCA
     // file-boundary update jumps unless set exactly to "0". Default true.
     bool madoca_boundary_guard = true;
+    // GNSS_PPP_MADOCA_POSTFIT_COMMIT: preview RTKLIB/MADOCALIB-style
+    // postfit validation with commit-on-success semantics for coherent MADOCA
+    // when set exactly to "1". Default false.
+    bool madoca_postfit_commit = false;
     // GNSS_PPP_ESTIMATE_ISB: comma/space-style spec parsed by substring
     // checks for "gal", "qzs", "bds", "all", or exact "1". Defaults false.
     bool estimate_isb_all = false;
