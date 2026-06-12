@@ -2218,7 +2218,8 @@ bool SSRProducts::loadCSVFile(const std::string& filename) {
                 last_atmos = entry.atmos_tokens;
                 last_atmos_network_id = entry.atmos_network_id;
                 has_last_atmos = true;
-            } else if (has_last_atmos && !entry.atmos_valid && entry.clock_valid) {
+            } else if (has_last_atmos && !entry.atmos_valid && entry.clock_valid &&
+                       last_atmos.find("atmos_lifecycle") == last_atmos.end()) {
                 entry.atmos_tokens = last_atmos;
                 entry.atmos_network_id = last_atmos_network_id;
                 entry.atmos_valid = true;
