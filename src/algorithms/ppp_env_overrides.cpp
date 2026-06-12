@@ -33,6 +33,11 @@ double envDoubleOr(const char* name, double fallback) {
     return value != nullptr ? std::atof(value) : fallback;
 }
 
+std::string envStringOrEmpty(const char* name) {
+    const char* value = envValue(name);
+    return value != nullptr ? std::string(value) : std::string();
+}
+
 }  // namespace
 
 PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
@@ -50,6 +55,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
     overrides.madoca_boundary_guard = !envExactZero("GNSS_PPP_MADOCA_BOUNDARY_GUARD");
     overrides.madoca_postfit_commit =
         envExactOne("GNSS_PPP_MADOCA_POSTFIT_COMMIT");
+    overrides.madoca_postfit_shadow_path =
+        envStringOrEmpty("GNSS_PPP_MADOCA_POSTFIT_SHADOW");
 
     const char* isb = envValue("GNSS_PPP_ESTIMATE_ISB");
     const std::string isb_spec = isb != nullptr ? std::string(isb) : std::string();
