@@ -1,9 +1,12 @@
 #include <libgnss++/external/madocalib_bridge.hpp>
 
 #include <cstdarg>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <map>
+#include <set>
 #include <sstream>
 #include <vector>
 
@@ -74,6 +77,90 @@ bool requireRegularFiles(const std::vector<std::string>& paths,
         }
     }
     return true;
+}
+
+struct L6ePatternInfo {
+    bool matched = false;
+    std::string pattern;
+};
+
+L6ePatternInfo hourlyL6ePattern(const std::string& input_path) {
+    const std::filesystem::path path(input_path);
+    const std::string filename = path.filename().string();
+    const auto dot_l6 = filename.rfind('.');
+    if (dot_l6 == std::string::npos) {
+        return {};
+    }
+    const std::string extension = filename.substr(dot_l6);
+    if (extension != ".l6" && extension != ".L6") {
+        return {};
+    }
+    const auto dot_prn = filename.rfind('.', dot_l6 - 1);
+    if (dot_prn == std::string::npos || dot_l6 <= dot_prn + 1) {
+        return {};
+    }
+    const std::string prn = filename.substr(dot_prn + 1, dot_l6 - dot_prn - 1);
+    if (prn.size() != 3 || prn == "200" || prn == "201") {
+        return {};
+    }
+    const std::string stem = filename.substr(0, dot_prn);
+    if (stem.size() != 8) {
+        return {};
+    }
+    for (size_t i = 0; i < 7; ++i) {
+        if (!std::isdigit(static_cast<unsigned char>(stem[i]))) {
+            return {};
+        }
+    }
+    const char hour_code = stem[7];
+    if (!((hour_code >= 'A' && hour_code <= 'X') ||
+          (hour_code >= 'a' && hour_code <= 'x'))) {
+        return {};
+    }
+
+    const std::string year = stem.substr(0, 4);
+    const std::string doy = stem.substr(4, 3);
+    const std::filesystem::path day_dir = path.parent_path();
+    const std::filesystem::path year_dir = day_dir.parent_path();
+    const std::string pattern_name = "%Y%n%HU." + prn + extension;
+    std::filesystem::path pattern_path;
+    if (day_dir.filename() == doy && year_dir.filename() == year) {
+        pattern_path = year_dir.parent_path() / "%Y" / "%n" / pattern_name;
+    } else {
+        pattern_path = day_dir / pattern_name;
+    }
+    return {true, pattern_path.string()};
+}
+
+std::vector<std::string> condenseHourlyL6eInputs(
+    const std::vector<std::string>& inputs) {
+    constexpr size_t kMadocalibL6eStreamSlots = 7;
+    std::map<std::string, size_t> pattern_counts;
+    std::vector<L6ePatternInfo> infos;
+    infos.reserve(inputs.size());
+    for (const std::string& input : inputs) {
+        L6ePatternInfo info = hourlyL6ePattern(input);
+        if (info.matched) {
+            ++pattern_counts[info.pattern];
+        }
+        infos.push_back(std::move(info));
+    }
+
+    std::vector<std::string> condensed;
+    condensed.reserve(inputs.size());
+    std::set<std::string> emitted_patterns;
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        const L6ePatternInfo& info = infos[i];
+        if (!info.matched ||
+            pattern_counts[info.pattern] <= kMadocalibL6eStreamSlots) {
+            condensed.push_back(inputs[i]);
+            continue;
+        }
+        if (emitted_patterns.insert(info.pattern).second) {
+            condensed.push_back(info.pattern);
+        }
+    }
+    return condensed;
 }
 
 #if GNSSPP_HAS_MADOCALIB_BRIDGE
@@ -310,12 +397,15 @@ int runPostpos(const PostposOptions& options, std::string* error_message) {
     }
     solopt.trace = options.trace_level;
 
+    const std::vector<std::string> auxiliary_input_paths =
+        condenseHourlyL6eInputs(options.auxiliary_input_paths);
+
     std::vector<std::string> input_storage;
     input_storage.push_back(options.obs_path);
     if (!options.nav_path.empty()) {
         input_storage.push_back(options.nav_path);
     }
-    for (const std::string& input : options.auxiliary_input_paths) {
+    for (const std::string& input : auxiliary_input_paths) {
         if (!input.empty()) {
             input_storage.push_back(input);
         }

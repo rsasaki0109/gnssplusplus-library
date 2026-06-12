@@ -9,6 +9,7 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace libgnss {
@@ -89,6 +90,50 @@ bool sameCorrectionVariant(const SSROrbitClockCorrection& lhs,
                            const SSROrbitClockCorrection& rhs) {
     return lhs.atmos_network_id == rhs.atmos_network_id &&
            lhs.bias_network_id == rhs.bias_network_id;
+}
+
+void mergeCorrectionFields(SSROrbitClockCorrection& target,
+                           const SSROrbitClockCorrection& correction) {
+    if (correction.orbit_valid) {
+        target.orbit_correction_ecef = correction.orbit_correction_ecef;
+        target.orbit_valid = true;
+        target.orbit_reference_time = correction.orbit_reference_time.week != 0 ?
+            correction.orbit_reference_time : correction.time;
+        target.iode = correction.iode;
+        target.ssr_orbit_iod = correction.ssr_orbit_iod;
+    }
+    if (correction.clock_valid) {
+        target.clock_correction_m = correction.clock_correction_m;
+        target.clock_valid = true;
+        target.clock_reference_time = correction.clock_reference_time.week != 0 ?
+            correction.clock_reference_time : correction.time;
+        target.ssr_clock_iod = correction.ssr_clock_iod;
+    }
+    if (correction.ura_valid) {
+        target.ura_sigma_m = correction.ura_sigma_m;
+        target.ura_valid = true;
+    }
+    if (correction.code_bias_valid) {
+        for (const auto& [signal_id, bias_m] : correction.code_bias_m) {
+            target.code_bias_m[signal_id] = bias_m;
+        }
+        target.code_bias_valid = !target.code_bias_m.empty();
+    }
+    if (correction.phase_bias_valid) {
+        for (const auto& [signal_id, bias_m] : correction.phase_bias_m) {
+            target.phase_bias_m[signal_id] = bias_m;
+        }
+        for (const auto& [signal_id, discnt] : correction.phase_bias_discnt) {
+            target.phase_bias_discnt[signal_id] = discnt;
+        }
+        target.phase_bias_valid = !target.phase_bias_m.empty();
+    }
+    if (correction.atmos_valid) {
+        for (const auto& [token, value] : correction.atmos_tokens) {
+            target.atmos_tokens[token] = value;
+        }
+        target.atmos_valid = !target.atmos_tokens.empty();
+    }
 }
 
 GNSSTime orbitReferenceTime(const SSROrbitClockCorrection& correction) {
@@ -544,6 +589,7 @@ double Ephemeris::getAge(const GNSSTime& time) const {
 
 void NavigationData::addEphemeris(const Ephemeris& eph) {
     ephemeris_data[eph.satellite].push_back(eph);
+    satellite_state_cache_.clear();
     
     // Sort by time of ephemeris
     auto& eph_list = ephemeris_data[eph.satellite];
@@ -689,12 +735,34 @@ bool NavigationData::calculateSatelliteState(const SatelliteId& sat,
                                            Vector3d& velocity,
                                            double& clock_bias,
                                            double& clock_drift) const {
-    const Ephemeris* eph = getEphemeris(sat, time);
-    if (!eph) {
-        return false;
+    const SatelliteStateCacheKey cache_key{sat, time, -1};
+    const auto cache_it = satellite_state_cache_.find(cache_key);
+    if (cache_it != satellite_state_cache_.end()) {
+        const SatelliteStateCacheValue& cached = cache_it->second;
+        position = cached.position;
+        velocity = cached.velocity;
+        clock_bias = cached.clock_bias;
+        clock_drift = cached.clock_drift;
+        return cached.valid;
     }
 
-    return eph->calculateSatelliteState(time, position, velocity, clock_bias, clock_drift);
+    SatelliteStateCacheValue computed;
+    const Ephemeris* eph = getEphemeris(sat, time);
+    if (eph) {
+        computed.valid =
+            eph->calculateSatelliteState(
+                time,
+                computed.position,
+                computed.velocity,
+                computed.clock_bias,
+                computed.clock_drift);
+    }
+    satellite_state_cache_.emplace(cache_key, computed);
+    position = computed.position;
+    velocity = computed.velocity;
+    clock_bias = computed.clock_bias;
+    clock_drift = computed.clock_drift;
+    return computed.valid;
 }
 
 bool NavigationData::calculateSatelliteState(const SatelliteId& sat,
@@ -704,23 +772,44 @@ bool NavigationData::calculateSatelliteState(const SatelliteId& sat,
                                            double& clock_bias,
                                            double& clock_drift,
                                            int desired_iode) const {
-    const Ephemeris* eph = getEphemeris(sat, time, desired_iode);
-    if (!eph) {
-        return false;
+    const SatelliteStateCacheKey cache_key{sat, time, desired_iode};
+    const auto cache_it = satellite_state_cache_.find(cache_key);
+    if (cache_it != satellite_state_cache_.end()) {
+        const SatelliteStateCacheValue& cached = cache_it->second;
+        position = cached.position;
+        velocity = cached.velocity;
+        clock_bias = cached.clock_bias;
+        clock_drift = cached.clock_drift;
+        return cached.valid;
     }
-    return eph->calculateSatelliteState(time, position, velocity, clock_bias, clock_drift);
+
+    SatelliteStateCacheValue computed;
+    const Ephemeris* eph = getEphemeris(sat, time, desired_iode);
+    if (eph) {
+        computed.valid =
+            eph->calculateSatelliteState(
+                time,
+                computed.position,
+                computed.velocity,
+                computed.clock_bias,
+                computed.clock_drift);
+    }
+    satellite_state_cache_.emplace(cache_key, computed);
+    position = computed.position;
+    velocity = computed.velocity;
+    clock_bias = computed.clock_bias;
+    clock_drift = computed.clock_drift;
+    return computed.valid;
 }
 
 std::map<SatelliteId, Vector3d> NavigationData::calculateSatellitePositions(
     const std::vector<SatelliteId>& satellites,
     const GNSSTime& time) const {
-    
     std::map<SatelliteId, Vector3d> positions;
     
     for (const auto& sat : satellites) {
         Vector3d pos, vel;
         double clock_bias, clock_drift;
-        
         if (calculateSatelliteState(sat, time, pos, vel, clock_bias, clock_drift)) {
             positions[sat] = pos;
         }
@@ -732,7 +821,6 @@ std::map<SatelliteId, Vector3d> NavigationData::calculateSatellitePositions(
 NavigationData::SatelliteGeometry NavigationData::calculateGeometry(
     const Vector3d& receiver_pos,
     const Vector3d& satellite_pos) const {
-    
     SatelliteGeometry geom;
     
     Vector3d los = satellite_pos - receiver_pos;
@@ -786,6 +874,7 @@ NavigationData::NavigationData() {
 
 void NavigationData::clear() {
     ephemeris_data.clear();
+    satellite_state_cache_.clear();
 }
 
 bool NavigationData::isEmpty() const {
@@ -1171,50 +1260,80 @@ void SSRProducts::addCorrection(const SSROrbitClockCorrection& correction) {
         if (!sameCorrectionVariant(*it, correction)) {
             continue;
         }
-        if (correction.orbit_valid) {
-            it->orbit_correction_ecef = correction.orbit_correction_ecef;
-            it->orbit_valid = true;
-            it->orbit_reference_time = correction.orbit_reference_time.week != 0 ?
-                correction.orbit_reference_time : correction.time;
-            it->iode = correction.iode;
-            it->ssr_orbit_iod = correction.ssr_orbit_iod;
-        }
-        if (correction.clock_valid) {
-            it->clock_correction_m = correction.clock_correction_m;
-            it->clock_valid = true;
-            it->clock_reference_time = correction.clock_reference_time.week != 0 ?
-                correction.clock_reference_time : correction.time;
-            it->ssr_clock_iod = correction.ssr_clock_iod;
-        }
-        if (correction.ura_valid) {
-            it->ura_sigma_m = correction.ura_sigma_m;
-            it->ura_valid = true;
-        }
-        if (correction.code_bias_valid) {
-            for (const auto& [signal_id, bias_m] : correction.code_bias_m) {
-                it->code_bias_m[signal_id] = bias_m;
-            }
-            it->code_bias_valid = !it->code_bias_m.empty();
-        }
-        if (correction.phase_bias_valid) {
-            for (const auto& [signal_id, bias_m] : correction.phase_bias_m) {
-                it->phase_bias_m[signal_id] = bias_m;
-            }
-            for (const auto& [signal_id, discnt] : correction.phase_bias_discnt) {
-                it->phase_bias_discnt[signal_id] = discnt;
-            }
-            it->phase_bias_valid = !it->phase_bias_m.empty();
-        }
-        if (correction.atmos_valid) {
-            for (const auto& [token, value] : correction.atmos_tokens) {
-                it->atmos_tokens[token] = value;
-            }
-            it->atmos_valid = !it->atmos_tokens.empty();
-        }
+        mergeCorrectionFields(*it, correction);
         return;
     }
 
     entries.insert(upper, correction);
+}
+
+void SSRProducts::addCorrections(const std::vector<SSROrbitClockCorrection>& corrections) {
+    if (corrections.empty()) {
+        return;
+    }
+
+    struct CorrectionKey {
+        GNSSTime time;
+        int atmos_network_id = 0;
+        int bias_network_id = 0;
+
+        bool operator<(const CorrectionKey& other) const {
+            if (time < other.time) {
+                return true;
+            }
+            if (other.time < time) {
+                return false;
+            }
+            if (atmos_network_id != other.atmos_network_id) {
+                return atmos_network_id < other.atmos_network_id;
+            }
+            return bias_network_id < other.bias_network_id;
+        }
+    };
+
+    struct PendingSatelliteCorrections {
+        std::vector<SSROrbitClockCorrection> entries;
+        std::map<CorrectionKey, size_t> index_by_key;
+    };
+
+    std::map<SatelliteId, PendingSatelliteCorrections> pending;
+    for (const auto& [satellite, entries] : orbit_clock_corrections) {
+        PendingSatelliteCorrections& sat_pending = pending[satellite];
+        sat_pending.entries = entries;
+        for (size_t index = 0; index < sat_pending.entries.size(); ++index) {
+            const SSROrbitClockCorrection& entry = sat_pending.entries[index];
+            const CorrectionKey key{entry.time, entry.atmos_network_id, entry.bias_network_id};
+            sat_pending.index_by_key.emplace(key, index);
+        }
+    }
+
+    for (const SSROrbitClockCorrection& correction : corrections) {
+        PendingSatelliteCorrections& sat_pending = pending[correction.satellite];
+        const CorrectionKey key{
+            correction.time,
+            correction.atmos_network_id,
+            correction.bias_network_id,
+        };
+        const auto index_it = sat_pending.index_by_key.find(key);
+        if (index_it != sat_pending.index_by_key.end()) {
+            mergeCorrectionFields(sat_pending.entries[index_it->second], correction);
+            continue;
+        }
+        sat_pending.index_by_key.emplace(key, sat_pending.entries.size());
+        sat_pending.entries.push_back(correction);
+    }
+
+    orbit_clock_corrections.clear();
+    for (auto& [satellite, sat_pending] : pending) {
+        std::stable_sort(
+            sat_pending.entries.begin(),
+            sat_pending.entries.end(),
+            [](const SSROrbitClockCorrection& lhs,
+               const SSROrbitClockCorrection& rhs) {
+                return lhs.time < rhs.time;
+            });
+        orbit_clock_corrections.emplace(satellite, std::move(sat_pending.entries));
+    }
 }
 
 bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
