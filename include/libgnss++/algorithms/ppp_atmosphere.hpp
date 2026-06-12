@@ -18,6 +18,7 @@ struct ClasGridReference {
     size_t residual_index = 0;
     int network_id = 0;
     int grid_no = 0;
+    double nearest_grid_distance_m = 0.0;
     // Historical 4-grid fields kept for diagnostics. With the CLASLIB matrix
     // policy enabled these hold the effective matrix weights in selected-grid
     // order, not quadrant bilinear SW/SE/NW/NE order.

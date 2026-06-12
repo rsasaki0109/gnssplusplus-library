@@ -224,6 +224,11 @@ struct PPPEnvOverrides {
     // and matrix interpolation path for expanded CLAS atmosphere rows when
     // set exactly to "1". Default false while issue #8 parity is measured.
     bool clas_atmos_grid_matrix = false;
+    // GNSS_PPP_CLAS_ATMOS_LIFECYCLE: consume regenerated CLAS atmosphere
+    // lifecycle grid-bank tokens and pair them with CLASLIB matrix grid
+    // selection when set exactly to "1". Default false while issue #8 parity
+    // is measured; exact "0" preserves legacy CSV artifact semantics.
+    bool clas_atmos_lifecycle = false;
     // GNSS_PPP_CLAS_QZSS_S_PRN_FIX: map compact CLAS legacy S120..S122
     // correction labels to QZSS J01..J03 when set exactly to "1".
     // Default false while row-set parity is measured.

@@ -244,6 +244,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
     }
     overrides.clas_atmos_grid_matrix =
         envExactOne("GNSS_PPP_CLAS_ATMOS_GRID_MATRIX");
+    overrides.clas_atmos_lifecycle =
+        envExactOne("GNSS_PPP_CLAS_ATMOS_LIFECYCLE");
     overrides.clas_code_sd =
         envExactOne("GNSS_PPP_CLAS_CODE_SD") ||
         overrides.clas_code_row_sd;
