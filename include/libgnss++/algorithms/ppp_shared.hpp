@@ -326,6 +326,8 @@ struct PPPAmbiguityInfo {
     bool wl_is_fixed = false;
     double nl_fixed_cycles = 0.0;
     bool nl_is_fixed = false;
+    double clas_nl_phase_bias_datum_cycles = 0.0;
+    bool has_clas_nl_phase_bias_datum = false;
     // Per-frequency (est-stec) float ambiguities in meters, surfaced for WL/N1
     // AR without re-indexing the state vector. Zero in IFLC mode.
     double float_value_l1 = 0.0;

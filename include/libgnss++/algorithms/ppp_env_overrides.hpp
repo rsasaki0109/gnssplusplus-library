@@ -139,6 +139,12 @@ struct PPPEnvOverrides {
     // GNSS_PPP_CLAS_NL_DEBUG: path for CLAS DD-WLNL narrow-lane component
     // diagnostic CSV. Empty disables it.
     std::string clas_nl_debug_path;
+    // GNSS_PPP_CLAS_NL_DATUM_FIX: CLAS DD-WLNL NL datum preview.
+    // Default enables datum reset + CPC unification. Values "datum" or
+    // "cpc" enable one component for diagnostics; "0", "false", or "off"
+    // disable both for bit-exact opt-out.
+    bool clas_nl_datum_reset = true;
+    bool clas_nl_cpc_unified = true;
     // GNSS_PPP_DEBUG: general PPP debug logging. Default false.
     bool debug = false;
 

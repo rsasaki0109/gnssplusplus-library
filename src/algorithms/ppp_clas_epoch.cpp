@@ -4,12 +4,15 @@
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/algorithms/ppp_ar.hpp>
 #include <libgnss++/algorithms/ppp_clas.hpp>
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/signals.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <limits>
 
 namespace libgnss {
 
@@ -21,6 +24,78 @@ namespace {
 
 bool pppDebugEnabled() {
     return ppp_shared::pppDebugEnabled();
+}
+
+constexpr double kClasNlDatumJumpThresholdCycles = 0.5;
+
+double clasNlPhaseBiasDatumCycles(const OSRCorrection& osr) {
+    if (osr.num_frequencies < 2 ||
+        osr.frequencies[0] <= 0.0 ||
+        osr.frequencies[1] <= 0.0 ||
+        std::abs(osr.frequencies[0] - osr.frequencies[1]) < 1.0) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double f1 = osr.frequencies[0];
+    const double f2 = osr.frequencies[1];
+    const double lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
+    const double alpha1 = f1 / (f1 + f2);
+    const double alpha2 = f2 / (f1 + f2);
+    return (alpha1 * osr.phase_bias_m[0] + alpha2 * osr.phase_bias_m[1]) /
+           lambda_nl;
+}
+
+void clearClasWlnlFixedDatumState(PPPAmbiguityInfo& ambiguity) {
+    ambiguity.is_fixed = false;
+    ambiguity.fixed_value = 0.0;
+    ambiguity.wl_is_fixed = false;
+    ambiguity.wl_fixed_integer = 0;
+    ambiguity.nl_is_fixed = false;
+    ambiguity.nl_fixed_cycles = 0.0;
+    ambiguity.mw_sum_cycles = 0.0;
+    ambiguity.mw_count = 0;
+    ambiguity.mw_mean_cycles = 0.0;
+}
+
+void applyClasNlDatumReset(
+    const GNSSTime& time,
+    const std::vector<OSRCorrection>& osr_corrections,
+    std::map<SatelliteId, PPPAmbiguityInfo>& ambiguity_states,
+    bool debug_enabled) {
+    for (const auto& osr : osr_corrections) {
+        if (!osr.valid || osr.num_frequencies < 2) {
+            continue;
+        }
+        const double datum_cycles = clasNlPhaseBiasDatumCycles(osr);
+        if (!std::isfinite(datum_cycles)) {
+            continue;
+        }
+
+        auto& ambiguity = ambiguity_states[osr.satellite];
+        if (ambiguity.has_clas_nl_phase_bias_datum) {
+            const double step_cycles =
+                datum_cycles - ambiguity.clas_nl_phase_bias_datum_cycles;
+            if (std::abs(step_cycles) > kClasNlDatumJumpThresholdCycles) {
+                clearClasWlnlFixedDatumState(ambiguity);
+                const SatelliteId l2_satellite(
+                    osr.satellite.system,
+                    static_cast<uint8_t>(std::min(255, osr.satellite.prn + 100)));
+                const auto l2_it = ambiguity_states.find(l2_satellite);
+                if (l2_it != ambiguity_states.end()) {
+                    clearClasWlnlFixedDatumState(l2_it->second);
+                }
+                if (debug_enabled) {
+                    std::cerr << "[CLAS-NL-DATUM] reset "
+                              << osr.satellite.toString()
+                              << " tow=" << time.tow
+                              << " step_cycles=" << step_cycles
+                              << " datum_cycles=" << datum_cycles
+                              << "\n";
+                }
+            }
+        }
+        ambiguity.clas_nl_phase_bias_datum_cycles = datum_cycles;
+        ambiguity.has_clas_nl_phase_bias_datum = true;
+    }
 }
 
 }  // namespace
@@ -144,6 +219,15 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     }
 
     ppp_clas::ensureAmbiguityStates(filter_state_, osr_corrections);
+    if (pppEnvOverrides().clas_nl_datum_reset &&
+        ppp_config_.enable_ambiguity_resolution &&
+        ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL &&
+        ppp_config_.use_clas_osr_filter &&
+        !ppp_config_.use_ionosphere_free &&
+        ppp_config_.estimate_ionosphere) {
+        applyClasNlDatumReset(
+            obs.time, osr_corrections, ambiguity_states_, pppDebugEnabled());
+    }
     ppp_clas::applyPendingPhaseBiasStateShifts(
         filter_state_, osr_corrections, clas_phase_bias_repair_, pppDebugEnabled());
 

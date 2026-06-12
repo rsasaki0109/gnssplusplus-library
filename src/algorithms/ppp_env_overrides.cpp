@@ -1,6 +1,9 @@
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
+#include <string>
 
 namespace libgnss {
 namespace {
@@ -106,6 +109,35 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
     overrides.ar_dddump = envPresent("GNSS_PPP_AR_DDDUMP");
     overrides.clas_nl_debug_path =
         envStringOrEmpty("GNSS_PPP_CLAS_NL_DEBUG");
+    const std::string clas_nl_datum_fix =
+        envStringOrEmpty("GNSS_PPP_CLAS_NL_DATUM_FIX");
+    std::string clas_nl_datum_fix_lower = clas_nl_datum_fix;
+    std::transform(
+        clas_nl_datum_fix_lower.begin(),
+        clas_nl_datum_fix_lower.end(),
+        clas_nl_datum_fix_lower.begin(),
+        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    if (clas_nl_datum_fix_lower == "0" ||
+        clas_nl_datum_fix_lower == "false" ||
+        clas_nl_datum_fix_lower == "off" ||
+        clas_nl_datum_fix_lower == "none") {
+        overrides.clas_nl_datum_reset = false;
+        overrides.clas_nl_cpc_unified = false;
+    } else if (clas_nl_datum_fix_lower == "1" ||
+        clas_nl_datum_fix_lower == "both" ||
+        clas_nl_datum_fix_lower == "all" ||
+        clas_nl_datum_fix_lower == "true" ||
+        clas_nl_datum_fix_lower == "on") {
+        overrides.clas_nl_datum_reset = true;
+        overrides.clas_nl_cpc_unified = true;
+    } else if (clas_nl_datum_fix_lower == "datum" ||
+               clas_nl_datum_fix_lower == "reset") {
+        overrides.clas_nl_datum_reset = true;
+        overrides.clas_nl_cpc_unified = false;
+    } else if (clas_nl_datum_fix_lower == "cpc") {
+        overrides.clas_nl_datum_reset = false;
+        overrides.clas_nl_cpc_unified = true;
+    }
     overrides.debug = envPresent("GNSS_PPP_DEBUG");
 
     return overrides;
