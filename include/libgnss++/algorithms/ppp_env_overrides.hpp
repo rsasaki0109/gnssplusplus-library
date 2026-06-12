@@ -150,10 +150,16 @@ struct PPPEnvOverrides {
     // with full-CPC-corrected phase before fixed-position WLS. Default true;
     // set exactly "0" for bit-exact opt-out.
     bool clas_vertical_fix = true;
+    // GNSS_PPP_CLAS_BRIDGE_CONVENTION: enable the coherent CLAS bridge
+    // convention set unless set exactly to "0". Default true; the opt-out
+    // restores current develop behavior for comparison.
+    bool clas_bridge_convention = true;
     // GNSS_PPP_CLAS_NL_DATUM_FIX: CLAS DD-WLNL NL datum preview.
-    // Default enables datum reset + CPC unification. Values "datum" or
-    // "cpc" enable one component for diagnostics; "0", "false", or "off"
-    // disable both for bit-exact opt-out.
+    // Under GNSS_PPP_CLAS_BRIDGE_CONVENTION default, datum reset is enabled
+    // without CPC unification. With GNSS_PPP_CLAS_BRIDGE_CONVENTION=0, the
+    // default restores the current develop datum reset + CPC unification
+    // behavior. Values "datum" or "cpc" enable one component for diagnostics;
+    // "0", "false", or "off" disable both.
     bool clas_nl_datum_reset = true;
     bool clas_nl_cpc_unified = true;
     // GNSS_PPP_CLAS_FIXED_STATE_OUTPUT: keep the accepted CLAS filter-state
