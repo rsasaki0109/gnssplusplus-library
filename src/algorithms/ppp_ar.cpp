@@ -716,7 +716,8 @@ bool solveFixedNlPosition(
     const GNSSTime& time,
     const TropMappingFunction& trop_mapping_function,
     Vector3d& fixed_position,
-    double* position_shift_norm_m) {
+    double* position_shift_norm_m,
+    double* final_clock_m) {
     if (fixed_observations.size() < 4) {
         return false;
     }
@@ -742,6 +743,7 @@ bool solveFixedNlPosition(
             const double predicted = geo + clock_m
                                      - constants::SPEED_OF_LIGHT * fixed_observation.sat_clk
                                      + trop_delay
+                                     + fixed_observation.extra_prediction_m
                                      + fixed_observation.fixed_nl_cycles *
                                            fixed_observation.lambda_nl_m;
             residuals(i) = fixed_observation.nl_phase_m - predicted;
@@ -767,6 +769,9 @@ bool solveFixedNlPosition(
     fixed_position = position;
     if (position_shift_norm_m != nullptr) {
         *position_shift_norm_m = (position - initial_position).norm();
+    }
+    if (final_clock_m != nullptr) {
+        *final_clock_m = clock_m;
     }
     return true;
 }
