@@ -72,6 +72,43 @@ bool parseSatelliteToken(const std::string& token, SatelliteId& satellite) {
     }
 }
 
+bool parseCompactSsrSatelliteToken(const std::string& token, SatelliteId& satellite) {
+    if (pppEnvOverrides().clas_qzss_s_prn_fix &&
+        token.size() >= 2 &&
+        token[0] == 'S') {
+        try {
+            const int prn = std::stoi(token.substr(1));
+            if (prn >= 120 && prn <= 122) {
+                satellite = SatelliteId(
+                    GNSSSystem::QZSS,
+                    static_cast<uint8_t>(1 + (prn - 120)));
+                return true;
+            }
+        } catch (const std::exception&) {
+        }
+    }
+    return parseSatelliteToken(token, satellite);
+}
+
+std::string remapCompactSsrAtmosKey(std::string key) {
+    if (!pppEnvOverrides().clas_qzss_s_prn_fix) {
+        return key;
+    }
+    const std::pair<const char*, const char*> remaps[] = {
+        {":S120", ":J01"},
+        {":S121", ":J02"},
+        {":S122", ":J03"},
+    };
+    for (const auto& [from, to] : remaps) {
+        size_t pos = 0;
+        while ((pos = key.find(from, pos)) != std::string::npos) {
+            key.replace(pos, std::string(from).size(), to);
+            pos += std::string(to).size();
+        }
+    }
+    return key;
+}
+
 int parsePositiveIntToken(const std::map<std::string, std::string>& tokens,
                           const std::string& key) {
     const auto it = tokens.find(key);
@@ -2041,7 +2078,7 @@ bool SSRProducts::loadCSVFile(const std::string& filename) {
         }
 
         SatelliteId satellite;
-        if (!parseSatelliteToken(sat_token, satellite)) {
+        if (!parseCompactSsrSatelliteToken(sat_token, satellite)) {
             continue;
         }
 
@@ -2110,7 +2147,8 @@ bool SSRProducts::loadCSVFile(const std::string& filename) {
                 if (equal_pos == std::string::npos || equal_pos <= 6) {
                     continue;
                 }
-                const std::string key = extra.substr(0, equal_pos);
+                const std::string key =
+                    remapCompactSsrAtmosKey(extra.substr(0, equal_pos));
                 const std::string value = extra.substr(equal_pos + 1);
                 correction.atmos_tokens[key] = value;
                 if (key == "atmos_network_id") {

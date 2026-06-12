@@ -117,6 +117,31 @@ std::ofstream* clasGeometryDumpStream() {
     return stream ? &stream : nullptr;
 }
 
+std::ofstream* clasCodeDumpStream() {
+    const auto& path = pppEnvOverrides().clas_code_dump_path;
+    if (path.empty()) {
+        return nullptr;
+    }
+
+    static std::ofstream stream;
+    static bool initialized = false;
+    if (!initialized) {
+        initialized = true;
+        stream.open(path, std::ios::out | std::ios::trunc);
+        if (stream) {
+            stream << "record,stage,week,tow,sat,freq,signal,"
+                   << "raw_p_m,corrected_p_m,applied_pr_corr_m,prc_m,"
+                   << "prc_minus_trop_m,trop_correction_m,iono_l1_m,"
+                   << "iono_scaled_m,code_bias_m,receiver_ant_m,relativity_m,"
+                   << "geo_m,sat_clk_m,receiver_clock_m,trop_model_m,"
+                   << "iono_state_m,iono_scale,predicted_m,residual_m,"
+                   << "variance_m2,los_e_m,los_n_m,los_u_m,az_rad,el_rad,"
+                   << "rx_x_m,rx_y_m,rx_z_m\n";
+        }
+    }
+    return stream ? &stream : nullptr;
+}
+
 bool selectedClasGeometryDumpTow(double tow) {
     constexpr std::array<double, 3> kTargets{230572.0, 232034.0, 234018.0};
     for (double target : kTargets) {
@@ -141,6 +166,118 @@ Vector3d clasGeometryDumpReceiverPosition(const Vector3d& fallback) {
         return parsed;
     }
     return fallback;
+}
+
+void dumpClasCodeRows(
+    const char* stage,
+    const ObservationData& obs,
+    const std::vector<OSRCorrection>& osr_corrections,
+    const ppp_shared::PPPState& filter_state,
+    const ppp_shared::PPPConfig& config,
+    const TropMappingFunction& trop_mapping_function) {
+    auto* dump = clasCodeDumpStream();
+    if (dump == nullptr) {
+        return;
+    }
+    if (filter_state.total_states <= filter_state.trop_index ||
+        filter_state.state.size() < filter_state.total_states) {
+        return;
+    }
+
+    const Vector3d receiver_position =
+        filter_state.state.segment(filter_state.pos_index, 3);
+    const double receiver_clock_m = filter_state.state(filter_state.clock_index);
+    const double trop_zenith = filter_state.state(filter_state.trop_index);
+    double rx_lat = 0.0;
+    double rx_lon = 0.0;
+    double rx_h = 0.0;
+    ecef2geodetic(receiver_position, rx_lat, rx_lon, rx_h);
+
+    for (const auto& osr : osr_corrections) {
+        if (!osr.valid) {
+            continue;
+        }
+        const double geo = geodist(osr.satellite_position, receiver_position);
+        const Vector3d range_vector = osr.satellite_position - receiver_position;
+        if (!std::isfinite(geo) || range_vector.norm() <= 0.0) {
+            continue;
+        }
+        const Vector3d los = range_vector.normalized();
+        const Vector3d los_enu = ecef2enu(los, rx_lat, rx_lon);
+        const double sat_clk_m =
+            constants::SPEED_OF_LIGHT * osr.satellite_clock_bias_s;
+        const double trop_mapping =
+            trop_mapping_function(receiver_position, osr.elevation, obs.time);
+        const double trop_model = trop_mapping * trop_zenith;
+        const auto iono_state_it = filter_state.ionosphere_indices.find(osr.satellite);
+        const bool have_iono_state =
+            config.estimate_ionosphere &&
+            iono_state_it != filter_state.ionosphere_indices.end() &&
+            iono_state_it->second >= 0 &&
+            iono_state_it->second < filter_state.total_states;
+        const double iono_state_l1_m =
+            have_iono_state ? filter_state.state(iono_state_it->second) : 0.0;
+
+        for (int f = 0; f < osr.num_frequencies; ++f) {
+            const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
+            if (raw == nullptr || !raw->valid || !raw->has_pseudorange ||
+                !std::isfinite(raw->pseudorange)) {
+                continue;
+            }
+            const auto applied = selectAppliedOsrCorrections(
+                osr, f, config.clas_correction_application_policy);
+            const double corrected_p =
+                raw->pseudorange - applied.pseudorange_correction_m;
+            const double iono_scale =
+                (osr.frequencies[f] > 0.0 && osr.wavelengths[0] > 0.0)
+                    ? std::pow(osr.wavelengths[f] / osr.wavelengths[0], 2)
+                    : 1.0;
+            const double iono_scaled = iono_scale * osr.iono_l1_m;
+            const double predicted =
+                geo - sat_clk_m + receiver_clock_m + trop_model +
+                iono_scale * iono_state_l1_m;
+            const double residual = corrected_p - predicted;
+            const double variance =
+                config.clas_code_variance_scale * elevationWeight(osr.elevation);
+
+            *dump << std::setprecision(17)
+                  << "CODE,"
+                  << stage << ','
+                  << obs.time.week << ','
+                  << obs.time.tow << ','
+                  << osr.satellite.toString() << ','
+                  << f << ','
+                  << static_cast<int>(raw->signal) << ','
+                  << raw->pseudorange << ','
+                  << corrected_p << ','
+                  << applied.pseudorange_correction_m << ','
+                  << osr.PRC[f] << ','
+                  << (osr.PRC[f] - osr.trop_correction_m) << ','
+                  << osr.trop_correction_m << ','
+                  << osr.iono_l1_m << ','
+                  << iono_scaled << ','
+                  << osr.code_bias_m[f] << ','
+                  << osr.receiver_antenna_m[f] << ','
+                  << osr.relativity_correction_m << ','
+                  << geo << ','
+                  << sat_clk_m << ','
+                  << receiver_clock_m << ','
+                  << trop_model << ','
+                  << iono_state_l1_m << ','
+                  << iono_scale << ','
+                  << predicted << ','
+                  << residual << ','
+                  << variance << ','
+                  << los_enu.x() << ','
+                  << los_enu.y() << ','
+                  << los_enu.z() << ','
+                  << osr.azimuth << ','
+                  << osr.elevation << ','
+                  << receiver_position.x() << ','
+                  << receiver_position.y() << ','
+                  << receiver_position.z() << '\n';
+        }
+    }
 }
 
 }  // namespace
@@ -842,7 +979,9 @@ MeasurementBuildResult buildEpochMeasurements(
             }
         }
 
-        // Group phase measurements by GNSS system and frequency
+        // Group same-system measurements by signal. CLASLIB's ddres()
+        // single-differences both phase and code; keep native's historical
+        // undifferenced code path unless the parity gate is explicitly set.
         struct SdGroupKey {
             GNSSSystem system;
             int freq_index;
@@ -853,24 +992,27 @@ MeasurementBuildResult buildEpochMeasurements(
                 return is_phase < rhs.is_phase;
             }
         };
-        std::map<SdGroupKey, std::vector<size_t>> phase_groups;
+        const bool code_sd = pppEnvOverrides().clas_code_sd;
+        std::map<SdGroupKey, std::vector<size_t>> sd_groups;
         for (size_t i = 0; i < result.measurements.size(); ++i) {
             const auto& m = result.measurements[i];
-            if (m.freq_index < 0 || !m.is_phase) continue;
-            phase_groups[{m.satellite.system, m.freq_index, m.is_phase}].push_back(i);
+            if (m.freq_index < 0) continue;
+            if (!m.is_phase && !code_sd) continue;
+            sd_groups[{m.satellite.system, m.freq_index, m.is_phase}].push_back(i);
         }
 
-        // Start with undifferenced code measurements and prior constraints
+        // Start with prior constraints, plus undifferenced code rows on the
+        // default path. The gated path lets code rows be rebuilt as SD below.
         std::vector<MeasurementRow> sd_measurements;
         for (size_t i = 0; i < result.measurements.size(); ++i) {
             const auto& m = result.measurements[i];
-            if (!m.is_phase || m.freq_index < 0) {
+            if (m.freq_index < 0 || (!m.is_phase && !code_sd)) {
                 sd_measurements.push_back(m);
             }
         }
 
-        // Form SD for each phase group
-        for (auto& [group_key, member_indices] : phase_groups) {
+        // Form SD for each selected group.
+        for (auto& [group_key, member_indices] : sd_groups) {
             if (member_indices.size() < 2) continue;
 
             // Select reference satellite: highest elevation
@@ -894,7 +1036,7 @@ MeasurementBuildResult buildEpochMeasurements(
                 sd_row.residual = ref_row.residual - sat_row.residual;
                 sd_row.variance = ref_row.variance + sat_row.variance;
                 sd_row.satellite = sat_row.satellite;
-                sd_row.is_phase = true;
+                sd_row.is_phase = group_key.is_phase;
                 sd_row.freq_index = group_key.freq_index;
                 sd_measurements.push_back(sd_row);
             }
@@ -1001,6 +1143,13 @@ EpochUpdateResult runEpochMeasurementUpdate(
     if (!result.update_stats.updated) {
         return result;
     }
+    dumpClasCodeRows(
+        "post",
+        obs,
+        epoch_context.osr_corrections,
+        filter_state,
+        config,
+        trop_mapping_function);
 
     updateObservedAmbiguities(
         obs.time,
