@@ -283,6 +283,40 @@ public:
     };
     
     NavigationStats getStats(const GNSSTime& current_time) const;
+
+private:
+    struct SatelliteStateCacheKey {
+        SatelliteId satellite;
+        GNSSTime time;
+        int desired_iode = -1;
+
+        bool operator<(const SatelliteStateCacheKey& other) const {
+            if (satellite < other.satellite) {
+                return true;
+            }
+            if (other.satellite < satellite) {
+                return false;
+            }
+            if (time < other.time) {
+                return true;
+            }
+            if (other.time < time) {
+                return false;
+            }
+            return desired_iode < other.desired_iode;
+        }
+    };
+
+    struct SatelliteStateCacheValue {
+        Vector3d position = Vector3d::Zero();
+        Vector3d velocity = Vector3d::Zero();
+        double clock_bias = 0.0;
+        double clock_drift = 0.0;
+        bool valid = false;
+    };
+
+    mutable std::map<SatelliteStateCacheKey, SatelliteStateCacheValue>
+        satellite_state_cache_;
 };
 
 /**
@@ -408,6 +442,7 @@ public:
     std::map<SatelliteId, std::vector<SSROrbitClockCorrection>> orbit_clock_corrections;
 
     void addCorrection(const SSROrbitClockCorrection& correction);
+    void addCorrections(const std::vector<SSROrbitClockCorrection>& corrections);
 
     bool interpolateCorrection(const SatelliteId& sat,
                                const GNSSTime& time,
