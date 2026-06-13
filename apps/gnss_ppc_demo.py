@@ -1197,6 +1197,12 @@ def run_solver(
             "kinematic",
             "--no-kml",
         ]
+        _dbg_log = os.environ.get("PPC_DEBUG_EPOCH_LOG")
+        if _dbg_log:
+            command.extend(["--debug-epoch-log", _dbg_log])
+        _extra = os.environ.get("PPC_EXTRA_SOLVER_ARGS")
+        if _extra:
+            command.extend(_extra.split())
         if args.preset is not None:
             command.extend(["--preset", args.preset])
         if getattr(args, "iono", None) is not None:
