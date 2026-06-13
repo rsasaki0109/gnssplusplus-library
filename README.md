@@ -1,6 +1,6 @@
 # libgnss++
 
-Modern C++17 GNSS toolkit for non-GUI positioning.
+Modern C++20 GNSS toolkit for non-GUI positioning.
 
 Native `SPP`, `RTK`, `PPP`, `CLAS/MADOCA`, `RTCM`, `UBX`, and direct `QZSS L6`
 handling without an external RTKLIB runtime.
