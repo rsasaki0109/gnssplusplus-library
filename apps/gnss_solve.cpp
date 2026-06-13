@@ -163,6 +163,9 @@ struct SolveConfig {
     bool min_subset_dual_frequency_sats_for_ar_set = false;
     bool min_hold_count_set = false;
     bool hold_ratio_threshold_set = false;
+    bool max_position_jump_min_m_set = false;
+    bool max_position_jump_rate_mps_set = false;
+    bool min_full_ratio_for_subset_ar_set = false;
     libgnss::RTKProcessor::RTKConfig::ARPolicy ar_policy =
         libgnss::RTKProcessor::RTKConfig::ARPolicy::EXTENDED;
     double max_hold_divergence_m = 0.0;
@@ -934,6 +937,21 @@ void applyRTKTuningPreset(SolveConfig& config) {
             if (!config.min_satellites_for_ar_set) config.min_satellites_for_ar = 6;
             if (!config.min_hold_count_set) config.min_hold_count = 8;
             if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.5;
+            // Motion-aware fixed-position jump gate for kinematic rovers. The
+            // static 5 m jump-from-last-fix limit starves fixes once the rover
+            // drives away from the last accepted fix (the limit never grows, so
+            // every correct fix past ~5 m of travel is rejected and the
+            // last-fixed anchor freezes). Use a velocity-scaled limit instead.
+            if (!config.max_position_jump_rate_mps_set)
+                config.max_position_jump_rate_mps = 30.0;
+            if (!config.max_position_jump_min_m_set)
+                config.max_position_jump_min_m = 5.0;
+            // Require the full-constellation LAMBDA ratio to be non-degenerate
+            // before admitting a subset-AR fix; subset blunders show full_ratio
+            // ~1 (the rest of the constellation disagrees) yet pass the subset
+            // ratio locally.
+            if (!config.min_full_ratio_for_subset_ar_set)
+                config.min_full_ratio_for_subset_ar = 1.5;
             return;
         case RTKTuningPreset::MOVING_BASE:
             if (!config.ratio_threshold_set) config.ratio_threshold = 2.8;
@@ -1032,6 +1050,7 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.min_subset_dual_frequency_sats_for_ar_set = true;
         } else if (arg == "--min-full-ratio-for-subset-ar" && i + 1 < argc) {
             config.min_full_ratio_for_subset_ar = std::stod(argv[++i]);
+            config.min_full_ratio_for_subset_ar_set = true;
         } else if (arg == "--min-hold-count" && i + 1 < argc) {
             config.min_hold_count = std::stoi(argv[++i]);
             config.min_hold_count_set = true;
@@ -1099,8 +1118,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.max_position_jump_m = std::stod(argv[++i]);
         } else if (arg == "--max-pos-jump-min" && i + 1 < argc) {
             config.max_position_jump_min_m = std::stod(argv[++i]);
+            config.max_position_jump_min_m_set = true;
         } else if (arg == "--max-pos-jump-rate" && i + 1 < argc) {
             config.max_position_jump_rate_mps = std::stod(argv[++i]);
+            config.max_position_jump_rate_mps_set = true;
         } else if (arg == "--max-float-spp-div" && i + 1 < argc) {
             config.max_float_spp_divergence_m = std::stod(argv[++i]);
         } else if (arg == "--max-float-prefit-rms" && i + 1 < argc) {
