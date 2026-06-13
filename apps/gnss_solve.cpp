@@ -176,6 +176,9 @@ struct SolveConfig {
     double max_float_prefit_residual_rms_m = 0.0;
     double max_float_prefit_residual_max_m = 0.0;
     int max_float_prefit_residual_reset_streak = 3;
+    bool max_float_prefit_residual_rms_m_set = false;
+    bool max_float_prefit_residual_max_m_set = false;
+    bool max_float_prefit_residual_reset_streak_set = false;
     double min_float_prefit_residual_trusted_jump_m = 0.0;
     double max_update_nis_per_observation = 0.0;
     double max_fixed_update_nis_per_observation = 0.0;
@@ -952,6 +955,20 @@ void applyRTKTuningPreset(SolveConfig& config) {
             // ratio locally.
             if (!config.min_full_ratio_for_subset_ar_set)
                 config.min_full_ratio_for_subset_ar = 1.5;
+            // Float-divergence recovery: in urban canyons the float filter loses
+            // lock and coasts tens of metres for minutes (almost half of float
+            // epochs end up >10 m off). Reset the ambiguity state and re-seed
+            // from SPP once the prefit DD residual stays large for several
+            // epochs. Thresholds are deliberately loose (gross divergence only)
+            // so good tracking is never reset — tighter values regress the
+            // already-converged runs while looser ones still recover the bad
+            // windows.
+            if (!config.max_float_prefit_residual_rms_m_set)
+                config.max_float_prefit_residual_rms_m = 4.0;
+            if (!config.max_float_prefit_residual_max_m_set)
+                config.max_float_prefit_residual_max_m = 10.0;
+            if (!config.max_float_prefit_residual_reset_streak_set)
+                config.max_float_prefit_residual_reset_streak = 5;
             return;
         case RTKTuningPreset::MOVING_BASE:
             if (!config.ratio_threshold_set) config.ratio_threshold = 2.8;
@@ -1126,10 +1143,13 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.max_float_spp_divergence_m = std::stod(argv[++i]);
         } else if (arg == "--max-float-prefit-rms" && i + 1 < argc) {
             config.max_float_prefit_residual_rms_m = std::stod(argv[++i]);
+            config.max_float_prefit_residual_rms_m_set = true;
         } else if (arg == "--max-float-prefit-max" && i + 1 < argc) {
             config.max_float_prefit_residual_max_m = std::stod(argv[++i]);
+            config.max_float_prefit_residual_max_m_set = true;
         } else if (arg == "--max-float-prefit-reset-streak" && i + 1 < argc) {
             config.max_float_prefit_residual_reset_streak = std::stoi(argv[++i]);
+            config.max_float_prefit_residual_reset_streak_set = true;
         } else if (arg == "--min-float-prefit-trusted-jump" && i + 1 < argc) {
             config.min_float_prefit_residual_trusted_jump_m = std::stod(argv[++i]);
         } else if (arg == "--max-update-nis-per-obs" && i + 1 < argc) {
