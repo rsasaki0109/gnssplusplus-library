@@ -379,6 +379,7 @@ double clampDt(double dt) {
 
 PPPProcessor::PPPProcessor()
     : env_overrides_(PPPEnvOverrides::fromEnvironment()), spp_processor_() {
+    applyEnvironmentOverridesToPPPConfig();
     reset();
 }
 
@@ -386,7 +387,14 @@ PPPProcessor::PPPProcessor(const PPPConfig& ppp_config)
     : ppp_config_(ppp_config),
       env_overrides_(PPPEnvOverrides::fromEnvironment()),
       spp_processor_() {
+    applyEnvironmentOverridesToPPPConfig();
     reset();
+}
+
+void PPPProcessor::applyEnvironmentOverridesToPPPConfig() {
+    if (env_overrides_.clas_dd_filter) {
+        ppp_config_.use_clas_dd_filter = true;
+    }
 }
 
 bool PPPProcessor::initialize(const ProcessorConfig& config) {
@@ -708,6 +716,7 @@ void PPPProcessor::reset() {
     clas_dispersion_compensation_.clear();
     clas_sis_continuity_.clear();
     clas_phase_bias_repair_.clear();
+    clas_dd_filter_.reset();
     recent_positions_.clear();
     has_last_processed_time_ = false;
     last_processed_time_ = GNSSTime();
