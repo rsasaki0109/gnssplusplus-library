@@ -116,6 +116,12 @@ struct DdUpdateDiagnostics {
     int phase_rows = 0;
     int code_rows = 0;
     int reference_groups = 0;
+    bool lambda_attempted = false;
+    bool lambda_accepted = false;
+    int lambda_ambiguities = 0;
+    double lambda_ratio = 0.0;
+    double lambda_required_ratio = 0.0;
+    std::string lambda_reject_reason;
     rtk_update::FilterUpdateResult filter_update;
 };
 
@@ -138,10 +144,19 @@ public:
         const std::map<std::string, std::string>& epoch_atmos);
 
     const StateSnapshot& snapshot() const { return snapshot_; }
+    const StateSnapshot& fixedSnapshot() const { return fixed_snapshot_; }
     bool hasSnapshot() const { return has_snapshot_; }
+    bool hasFixedSnapshot() const { return has_fixed_snapshot_; }
     const DdUpdateDiagnostics& lastDiagnostics() const { return last_diagnostics_; }
     int totalUpdatedEpochs() const { return total_updated_epochs_; }
     int totalFallbackEpochs() const { return total_fallback_epochs_; }
+    int totalLambdaAcceptedEpochs() const { return total_lambda_accepted_epochs_; }
+    int totalLambdaRejectedEpochs() const { return total_lambda_rejected_epochs_; }
+    double meanLambdaRatio() const {
+        return lambda_ratio_count_ > 0
+            ? lambda_ratio_sum_ / static_cast<double>(lambda_ratio_count_)
+            : 0.0;
+    }
     void reset();
 
 private:
@@ -172,18 +187,27 @@ private:
     PositionSolution publishSolution(
         const PositionSolution& native_float_solution,
         const rtk_measurement::MeasurementDiagnostics& measurement_diagnostics,
-        int observed_satellites) const;
+        int observed_satellites,
+        const StateSnapshot& source_snapshot,
+        bool fixed) const;
+    bool conditionFixedSnapshot(
+        const std::vector<DdRow>& rows,
+        const ppp_shared::PPPConfig& config);
 
     StateSnapshot snapshot_;
+    StateSnapshot fixed_snapshot_;
     std::map<int, int> ionosphere_outage_by_satno_;
     std::map<int, double> ionosphere_process_noise_by_satno_;
     std::map<std::pair<int, int>, int> ambiguity_outage_by_satno_freq_;
     DdUpdateDiagnostics last_diagnostics_;
-    Vector3d static_anchor_position_ = Vector3d::Zero();
     int total_updated_epochs_ = 0;
     int total_fallback_epochs_ = 0;
+    int total_lambda_accepted_epochs_ = 0;
+    int total_lambda_rejected_epochs_ = 0;
+    double lambda_ratio_sum_ = 0.0;
+    int lambda_ratio_count_ = 0;
     bool has_snapshot_ = false;
-    bool has_static_anchor_ = false;
+    bool has_fixed_snapshot_ = false;
 };
 
 }  // namespace libgnss::ppp_clas_dd

@@ -9,6 +9,7 @@
 #include <tuple>
 #include <utility>
 
+#include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 
@@ -39,7 +40,7 @@ constexpr int kMinPrnSbas = 120;
 constexpr int kMaxPrnSbas = 158;
 constexpr int kNsatNavic = 14;
 
-constexpr double kDdStaticInitialPositionVariance = 1.0;
+constexpr double kDdInitialPositionVarianceM2 = 0.003;
 constexpr double kClaslibInitialZwdM = 0.001;
 constexpr double kClaslibStdBiasCycles = 100.0;
 constexpr double kClaslibStdIonoM = 0.01;
@@ -52,8 +53,6 @@ constexpr double kClaslibForgetIono = 0.5;
 constexpr double kClaslibAfGainIono = 1.0;
 constexpr int kClaslibMaxOutage = 5;
 constexpr double kGpsL2VarianceScale = (2.55 / 1.55) * (2.55 / 1.55);
-constexpr double kDdStaticAnchorVarianceM2 = 0.003;
-constexpr double kDdStaticPositionCovarianceFloorM2 = 1.0;
 constexpr double kDdPostfitResidualRmsLimitM = 5.0;
 constexpr double kDdPostfitResidualMaxLimitM = 20.0;
 
@@ -82,6 +81,11 @@ struct DdGroupKey {
         return std::tie(system_group, frequency_index, is_phase) <
                std::tie(rhs.system_group, rhs.frequency_index, rhs.is_phase);
     }
+};
+
+struct DdAmbiguityCandidate {
+    rtk_measurement::AmbiguityDifference difference;
+    int frequency_index = 0;
 };
 
 int qzssPrnForClaslib(int prn) {
@@ -254,33 +258,45 @@ bool postfitRowsAccepted(const DdMeasurementBuildResult& postfit_build) {
            rowResidualMaxAbs(postfit_build.rows) <= kDdPostfitResidualMaxLimitM;
 }
 
-void appendStaticPositionAnchor(rtk_measurement::MeasurementSystem& system,
-                                const Vector3d& state_position,
-                                const Vector3d& anchor_position) {
-    const int old_rows = static_cast<int>(system.residuals.size());
-    const int n_states = static_cast<int>(system.design_matrix.cols());
-    if (n_states < 3 || system.design_matrix.rows() != old_rows ||
-        system.covariance.rows() != old_rows ||
-        system.covariance.cols() != old_rows) {
-        return;
+std::vector<DdAmbiguityCandidate> collectDdAmbiguityCandidates(
+    const std::vector<DdRow>& rows,
+    const StateLayout& layout,
+    const VectorXd& state,
+    const MatrixXd& covariance) {
+    std::vector<DdAmbiguityCandidate> candidates;
+    std::set<std::tuple<int, int, int>> seen;
+    for (const auto& row : rows) {
+        if (!row.is_phase) {
+            continue;
+        }
+        const int ref_satno = claslibSatelliteNumber(row.reference_satellite);
+        const int target_satno = claslibSatelliteNumber(row.target_satellite);
+        const int ref_index =
+            layout.ambiguityIndex(ref_satno, row.frequency_index);
+        const int target_index =
+            layout.ambiguityIndex(target_satno, row.frequency_index);
+        if (ref_index < 0 || target_index < 0 ||
+            ref_index >= state.size() || target_index >= state.size() ||
+            ref_index >= covariance.rows() || target_index >= covariance.rows() ||
+            ref_index >= covariance.cols() || target_index >= covariance.cols()) {
+            continue;
+        }
+        if (!std::isfinite(state(ref_index)) || !std::isfinite(state(target_index)) ||
+            !std::isfinite(covariance(ref_index, ref_index)) ||
+            !std::isfinite(covariance(target_index, target_index)) ||
+            covariance(ref_index, ref_index) <= 0.0 ||
+            covariance(target_index, target_index) <= 0.0) {
+            continue;
+        }
+        const auto key = std::make_tuple(
+            row.frequency_index, ref_index, target_index);
+        if (!seen.insert(key).second) {
+            continue;
+        }
+        candidates.push_back(
+            {{ref_index, target_index}, row.frequency_index});
     }
-
-    MatrixXd design = MatrixXd::Zero(old_rows + 3, n_states);
-    VectorXd residuals = VectorXd::Zero(old_rows + 3);
-    MatrixXd covariance = MatrixXd::Zero(old_rows + 3, old_rows + 3);
-    if (old_rows > 0) {
-        design.topRows(old_rows) = system.design_matrix;
-        residuals.head(old_rows) = system.residuals;
-        covariance.topLeftCorner(old_rows, old_rows) = system.covariance;
-    }
-    for (int axis = 0; axis < 3; ++axis) {
-        design(old_rows + axis, axis) = 1.0;
-        residuals(old_rows + axis) = anchor_position(axis) - state_position(axis);
-        covariance(old_rows + axis, old_rows + axis) = kDdStaticAnchorVarianceM2;
-    }
-    system.design_matrix = std::move(design);
-    system.residuals = std::move(residuals);
-    system.covariance = std::move(covariance);
+    return candidates;
 }
 
 }  // namespace
@@ -649,12 +665,8 @@ void DdFilterScaffold::initializeFromNativeFloat(
         native_float_solution.position_ecef.allFinite()
             ? native_float_solution.position_ecef
             : native_state.state.segment(native_state.pos_index, 3);
-    if (!has_static_anchor_) {
-        static_anchor_position_ = seed_position;
-        has_static_anchor_ = true;
-    }
     for (int axis = 0; axis < 3 && axis < layout.np(); ++axis) {
-        resetStateElement(axis, seed_position(axis), kDdStaticInitialPositionVariance);
+        resetStateElement(axis, seed_position(axis), kDdInitialPositionVarianceM2);
     }
 
     if (layout.options.dynamics && native_state.state.size() >= native_state.pos_index + 9) {
@@ -900,15 +912,20 @@ PositionSolution DdFilterScaffold::fallbackSolution(
 PositionSolution DdFilterScaffold::publishSolution(
     const PositionSolution& native_float_solution,
     const rtk_measurement::MeasurementDiagnostics& measurement_diagnostics,
-    int observed_satellites) const {
+    int observed_satellites,
+    const StateSnapshot& source_snapshot,
+    bool fixed) const {
     PositionSolution solution = native_float_solution;
-    solution.position_ecef = snapshot_.state.segment(0, 3);
-    if (snapshot_.covariance.rows() >= 3 && snapshot_.covariance.cols() >= 3) {
-        solution.position_covariance = snapshot_.covariance.block<3, 3>(0, 0);
+    solution.position_ecef = source_snapshot.state.segment(0, 3);
+    if (source_snapshot.covariance.rows() >= 3 &&
+        source_snapshot.covariance.cols() >= 3) {
+        solution.position_covariance =
+            source_snapshot.covariance.block<3, 3>(0, 0);
     }
-    solution.status = SolutionStatus::PPP_FLOAT;
-    solution.ratio = 0.0;
-    solution.num_fixed_ambiguities = 0;
+    solution.status = fixed ? SolutionStatus::PPP_FIXED : SolutionStatus::PPP_FLOAT;
+    solution.ratio = last_diagnostics_.lambda_ratio;
+    solution.num_fixed_ambiguities =
+        fixed ? last_diagnostics_.lambda_ambiguities : 0;
     solution.num_satellites = observed_satellites;
     solution.iterations = 1;
     solution.residual_rms = measurement_diagnostics.residual_rms_m;
@@ -934,6 +951,210 @@ PositionSolution DdFilterScaffold::publishSolution(
     solution.rtk_update_rejected_by_innovation_gate =
         last_diagnostics_.filter_update.rejected_by_innovation_gate ? 1 : 0;
     return solution;
+}
+
+bool DdFilterScaffold::conditionFixedSnapshot(
+    const std::vector<DdRow>& rows,
+    const ppp_shared::PPPConfig& config) {
+    struct LambdaAttempt {
+        bool attempted = false;
+        bool lambda_success = false;
+        bool accepted = false;
+        int nb = 0;
+        double ratio = 0.0;
+        std::string reject_reason;
+        std::vector<rtk_measurement::AmbiguityDifference> differences;
+        rtk_measurement::AmbiguityTransform transform;
+        MatrixXd q_amb;
+        VectorXd fixed_ambiguities;
+    };
+
+    has_fixed_snapshot_ = false;
+    last_diagnostics_.lambda_attempted = false;
+    last_diagnostics_.lambda_accepted = false;
+    last_diagnostics_.lambda_ambiguities = 0;
+    last_diagnostics_.lambda_ratio = 0.0;
+    last_diagnostics_.lambda_required_ratio = config.ar_ratio_threshold;
+    last_diagnostics_.lambda_reject_reason.clear();
+
+    const StateLayout& layout = snapshot_.layout;
+    const int na = layout.nr();
+    if (!config.enable_ambiguity_resolution) {
+        last_diagnostics_.lambda_reject_reason = "ar_disabled";
+        return false;
+    }
+    if (snapshot_.state.size() != layout.nx() ||
+        snapshot_.covariance.rows() != layout.nx() ||
+        snapshot_.covariance.cols() != layout.nx() ||
+        na <= 0 || na > layout.nx()) {
+        last_diagnostics_.lambda_reject_reason = "invalid_snapshot";
+        return false;
+    }
+
+    const auto candidates = collectDdAmbiguityCandidates(
+        rows, layout, snapshot_.state, snapshot_.covariance);
+    last_diagnostics_.lambda_ambiguities = static_cast<int>(candidates.size());
+    const int min_ambiguities = std::max(2, config.min_satellites_for_ar);
+
+    auto evaluate = [&](const std::vector<int>& indices) {
+        LambdaAttempt attempt;
+        attempt.nb = static_cast<int>(indices.size());
+        if (attempt.nb < min_ambiguities) {
+            attempt.reject_reason = "insufficient_ambiguities";
+            return attempt;
+        }
+
+        attempt.differences.reserve(indices.size());
+        for (const int index : indices) {
+            if (index < 0 || index >= static_cast<int>(candidates.size())) {
+                continue;
+            }
+            attempt.differences.push_back(
+                candidates[static_cast<size_t>(index)].difference);
+        }
+        attempt.nb = static_cast<int>(attempt.differences.size());
+        if (attempt.nb < min_ambiguities) {
+            attempt.reject_reason = "insufficient_ambiguities";
+            return attempt;
+        }
+
+        attempt.transform = rtk_measurement::buildAmbiguityTransform(
+            snapshot_.state, snapshot_.covariance, na, attempt.differences);
+        attempt.q_amb = 0.5 *
+            (attempt.transform.ambiguity_covariance +
+             attempt.transform.ambiguity_covariance.transpose());
+        if (!attempt.transform.dd_float.allFinite() ||
+            !attempt.q_amb.allFinite()) {
+            attempt.reject_reason = "nonfinite_ambiguity_system";
+            return attempt;
+        }
+
+        attempt.attempted = true;
+        if (!lambdaSearch(
+                attempt.transform.dd_float,
+                attempt.q_amb,
+                attempt.fixed_ambiguities,
+                attempt.ratio)) {
+            attempt.reject_reason = "lambda_search";
+            return attempt;
+        }
+        attempt.lambda_success = true;
+        if (std::isfinite(attempt.ratio)) {
+            attempt.ratio = std::min(attempt.ratio, 999.9);
+        } else {
+            attempt.ratio = 0.0;
+        }
+        if (attempt.ratio < config.ar_ratio_threshold) {
+            attempt.reject_reason = "ratio";
+            return attempt;
+        }
+        attempt.accepted = true;
+        return attempt;
+    };
+
+    std::vector<int> full_indices;
+    full_indices.reserve(candidates.size());
+    std::map<int, std::vector<int>> indices_by_frequency;
+    for (int i = 0; i < static_cast<int>(candidates.size()); ++i) {
+        full_indices.push_back(i);
+        indices_by_frequency[candidates[static_cast<size_t>(i)].frequency_index]
+            .push_back(i);
+    }
+
+    LambdaAttempt best_attempt;
+    auto remember = [&](LambdaAttempt&& attempt) {
+        if (!attempt.attempted) {
+            if (best_attempt.reject_reason.empty()) {
+                best_attempt.reject_reason = attempt.reject_reason;
+                best_attempt.nb = std::max(best_attempt.nb, attempt.nb);
+            }
+            return;
+        }
+        if (!best_attempt.attempted ||
+            (attempt.accepted && !best_attempt.accepted) ||
+            (attempt.accepted && best_attempt.accepted &&
+             std::tie(attempt.nb, attempt.ratio) >
+                 std::tie(best_attempt.nb, best_attempt.ratio)) ||
+            (!attempt.accepted && !best_attempt.accepted &&
+             attempt.ratio > best_attempt.ratio)) {
+            best_attempt = std::move(attempt);
+        }
+    };
+
+    remember(evaluate(full_indices));
+    if (!best_attempt.accepted && !indices_by_frequency.empty()) {
+        remember(evaluate(indices_by_frequency.rbegin()->second));
+    }
+
+    last_diagnostics_.lambda_attempted = best_attempt.attempted;
+    last_diagnostics_.lambda_ambiguities = best_attempt.nb;
+    last_diagnostics_.lambda_ratio = best_attempt.ratio;
+    last_diagnostics_.lambda_reject_reason = best_attempt.reject_reason;
+
+    if (!best_attempt.attempted) {
+        last_diagnostics_.lambda_reject_reason = "insufficient_ambiguities";
+        return false;
+    }
+    lambda_ratio_sum_ += best_attempt.ratio;
+    ++lambda_ratio_count_;
+    if (!best_attempt.accepted) {
+        ++total_lambda_rejected_epochs_;
+        return false;
+    }
+
+    Eigen::LDLT<MatrixXd> ldlt(best_attempt.q_amb);
+    if (ldlt.info() != Eigen::Success) {
+        ++total_lambda_rejected_epochs_;
+        last_diagnostics_.lambda_reject_reason = "q_amb_ldlt";
+        return false;
+    }
+
+    const VectorXd dd_residual =
+        best_attempt.transform.dd_float - best_attempt.fixed_ambiguities;
+    const VectorXd db = ldlt.solve(dd_residual);
+    if (!db.allFinite()) {
+        ++total_lambda_rejected_epochs_;
+        last_diagnostics_.lambda_reject_reason = "q_amb_solve";
+        return false;
+    }
+
+    fixed_snapshot_ = snapshot_;
+    fixed_snapshot_.state.head(na) -=
+        best_attempt.transform.head_ambiguity_covariance * db;
+
+    const MatrixXd q_ab_solved =
+        ldlt.solve(
+            best_attempt.transform.head_ambiguity_covariance.transpose());
+    MatrixXd fixed_head_cov =
+        snapshot_.covariance.topLeftCorner(na, na) -
+        best_attempt.transform.head_ambiguity_covariance * q_ab_solved;
+    fixed_head_cov = 0.5 * (fixed_head_cov + fixed_head_cov.transpose());
+    fixed_snapshot_.covariance.topLeftCorner(na, na) = fixed_head_cov;
+    fixed_snapshot_.covariance.topRightCorner(na, layout.nx() - na).setZero();
+    fixed_snapshot_.covariance.bottomLeftCorner(layout.nx() - na, na).setZero();
+
+    for (int k = 0; k < best_attempt.nb; ++k) {
+        const int ref_index =
+            best_attempt.differences[static_cast<size_t>(k)].reference_state_index;
+        const int target_index =
+            best_attempt.differences[static_cast<size_t>(k)].satellite_state_index;
+        if (ref_index < 0 || target_index < 0 ||
+            ref_index >= fixed_snapshot_.state.size() ||
+            target_index >= fixed_snapshot_.state.size()) {
+            continue;
+        }
+        fixed_snapshot_.state(target_index) =
+            fixed_snapshot_.state(ref_index) - best_attempt.fixed_ambiguities(k);
+        fixed_snapshot_.covariance.row(target_index).setZero();
+        fixed_snapshot_.covariance.col(target_index).setZero();
+        fixed_snapshot_.covariance(target_index, target_index) = 1e-6;
+    }
+
+    has_fixed_snapshot_ = true;
+    last_diagnostics_.lambda_accepted = true;
+    last_diagnostics_.lambda_reject_reason.clear();
+    ++total_lambda_accepted_epochs_;
+    return true;
 }
 
 PositionSolution DdFilterScaffold::processFloatUpdate(
@@ -1047,19 +1268,9 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
         return solution;
     }
 
+    std::vector<DdRow> accepted_rows;
     auto apply_update = [&](DdMeasurementBuildResult& build) {
         auto measurement_system = build.measurement_system;
-        if (!snapshot_.layout.options.dynamics && has_static_anchor_) {
-            for (int axis = 0; axis < 3; ++axis) {
-                snapshot_.covariance(axis, axis) = std::max(
-                    snapshot_.covariance(axis, axis),
-                    kDdStaticPositionCovarianceFloorM2);
-            }
-            appendStaticPositionAnchor(
-                measurement_system,
-                snapshot_.state.segment(0, 3),
-                static_anchor_position_);
-        }
         last_diagnostics_.filter_update = rtk_update::applyMeasurementUpdate(
             snapshot_.state,
             snapshot_.covariance,
@@ -1079,10 +1290,7 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
         if (!postfitRowsAccepted(postfit_build)) {
             return false;
         }
-        if (!snapshot_.layout.options.dynamics && has_static_anchor_ &&
-            (snapshot_.state.segment(0, 3) - static_anchor_position_).norm() > 8.0) {
-            return false;
-        }
+        accepted_rows = build.rows;
         return true;
     };
 
@@ -1149,8 +1357,16 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
 
     ++total_updated_epochs_;
     last_diagnostics_.updated = true;
+    const bool fixed = conditionFixedSnapshot(accepted_rows, config);
+    if (fixed) {
+        snapshot_ = fixed_snapshot_;
+    }
     PositionSolution solution = publishSolution(
-        native_float_solution, measurement_diagnostics, observed_satellites);
+        native_float_solution,
+        measurement_diagnostics,
+        observed_satellites,
+        fixed ? fixed_snapshot_ : snapshot_,
+        fixed);
     solution.time = obs.time;
     return solution;
 }
@@ -1227,15 +1443,19 @@ PositionSolution DdFilterScaffold::processFloatPassthrough(
 
 void DdFilterScaffold::reset() {
     snapshot_ = StateSnapshot{};
+    fixed_snapshot_ = StateSnapshot{};
     ionosphere_outage_by_satno_.clear();
     ionosphere_process_noise_by_satno_.clear();
     ambiguity_outage_by_satno_freq_.clear();
     last_diagnostics_ = DdUpdateDiagnostics{};
-    static_anchor_position_ = Vector3d::Zero();
     total_updated_epochs_ = 0;
     total_fallback_epochs_ = 0;
+    total_lambda_accepted_epochs_ = 0;
+    total_lambda_rejected_epochs_ = 0;
+    lambda_ratio_sum_ = 0.0;
+    lambda_ratio_count_ = 0;
     has_snapshot_ = false;
-    has_static_anchor_ = false;
+    has_fixed_snapshot_ = false;
 }
 
 }  // namespace libgnss::ppp_clas_dd

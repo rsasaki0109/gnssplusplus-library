@@ -2,6 +2,7 @@
 
 #include <libgnss++/algorithms/ppp_clas.hpp>
 #include <libgnss++/algorithms/ppp_clas_dd.hpp>
+#include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 
@@ -168,4 +169,54 @@ TEST(PPPClasDdTest, RowBuilderSelectsHighestElevationReferenceAndFormsResidual) 
             EXPECT_TRUE(row.state_coefficients.empty());
         }
     }
+}
+
+TEST(PPPClasDdTest, LambdaConditioningFixesDdNativeAmbiguities) {
+    VectorXd state(5);
+    state << 10.0, -3.0, 5.02, 4.00, 7.01;
+
+    MatrixXd covariance = MatrixXd::Zero(5, 5);
+    covariance.diagonal() << 0.5, 0.4, 0.0004, 0.0004, 0.0004;
+    covariance(0, 2) = covariance(2, 0) = 0.020;
+    covariance(0, 3) = covariance(3, 0) = 0.006;
+    covariance(0, 4) = covariance(4, 0) = -0.004;
+    covariance(1, 2) = covariance(2, 1) = -0.010;
+    covariance(1, 3) = covariance(3, 1) = 0.003;
+    covariance(1, 4) = covariance(4, 1) = 0.002;
+
+    const std::vector<rtk_measurement::AmbiguityDifference> differences = {
+        {2, 3},
+        {2, 4},
+    };
+    const auto transform =
+        rtk_measurement::buildAmbiguityTransform(state, covariance, 2, differences);
+
+    VectorXd fixed_ambiguities;
+    double ratio = 0.0;
+    ASSERT_TRUE(lambdaSearch(
+        transform.dd_float,
+        transform.ambiguity_covariance,
+        fixed_ambiguities,
+        ratio));
+    ASSERT_GT(ratio, 2.0);
+    ASSERT_EQ(fixed_ambiguities.size(), 2);
+    EXPECT_NEAR(fixed_ambiguities(0), 1.0, 1e-12);
+    EXPECT_NEAR(fixed_ambiguities(1), -2.0, 1e-12);
+
+    Eigen::LDLT<MatrixXd> ldlt(transform.ambiguity_covariance);
+    ASSERT_EQ(ldlt.info(), Eigen::Success);
+    const VectorXd dd_residual = transform.dd_float - fixed_ambiguities;
+    const VectorXd conditioned_head =
+        transform.head_state -
+        transform.head_ambiguity_covariance * ldlt.solve(dd_residual);
+    const MatrixXd conditioned_covariance =
+        covariance.topLeftCorner(2, 2) -
+        transform.head_ambiguity_covariance *
+            ldlt.solve(transform.head_ambiguity_covariance.transpose());
+
+    EXPECT_LT((conditioned_head - transform.head_state).norm(), 1.0);
+    EXPECT_TRUE(conditioned_covariance.isApprox(
+        conditioned_covariance.transpose(), 1e-14));
+    EXPECT_LT(conditioned_covariance(0, 0), covariance(0, 0));
+    EXPECT_LT(conditioned_covariance(1, 1), covariance(1, 1));
 }
