@@ -171,6 +171,35 @@ TEST(PPPClasDdTest, RowBuilderSelectsHighestElevationReferenceAndFormsResidual) 
     }
 }
 
+TEST(PPPClasDdTest, PostfitValidationRejectsLargePhaseRms) {
+    ppp_clas_dd::StateLayoutOptions options;
+    options.frequencies = 1;
+    options.ionosphere_mode = ppp_clas_dd::IonosphereMode::Off;
+    options.troposphere_mode = ppp_clas_dd::TroposphereMode::Off;
+    const ppp_clas_dd::StateLayout layout{options};
+
+    ppp_clas_dd::DdMeasurementBuildResult build;
+    build.rows.resize(4);
+    build.measurement_system.design_matrix = MatrixXd::Zero(4, layout.nx());
+    build.measurement_system.residuals = VectorXd::Zero(4);
+    build.measurement_system.covariance = MatrixXd::Identity(4, 4) * 0.01;
+    for (int row = 0; row < 4; ++row) {
+        build.rows[static_cast<size_t>(row)].is_phase = true;
+        build.rows[static_cast<size_t>(row)].frequency_index = 0;
+        build.rows[static_cast<size_t>(row)].residual_m = 1.0;
+        build.measurement_system.residuals(row) = 1.0;
+    }
+
+    const auto validation = ppp_clas_dd::validateDdPostfitResiduals(
+        build,
+        layout,
+        MatrixXd::Identity(layout.nx(), layout.nx()));
+
+    EXPECT_FALSE(validation.accepted);
+    EXPECT_EQ(validation.reject_reason, "postfit_rms");
+    EXPECT_GT(validation.phase_residual_rms_m, 0.75);
+}
+
 TEST(PPPClasDdTest, LambdaConditioningFixesDdNativeAmbiguities) {
     VectorXd state(5);
     state << 10.0, -3.0, 5.02, 4.00, 7.01;
