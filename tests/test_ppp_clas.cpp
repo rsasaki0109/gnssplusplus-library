@@ -7,6 +7,8 @@
 #include <libgnss++/core/coordinates.hpp>
 
 #include <cmath>
+#include <set>
+#include <tuple>
 
 using namespace libgnss;
 
@@ -168,6 +170,136 @@ TEST(PPPClasDdTest, RowBuilderSelectsHighestElevationReferenceAndFormsResidual) 
             EXPECT_NEAR(row.residual_m, 2.5, 1e-6);
             EXPECT_TRUE(row.state_coefficients.empty());
         }
+    }
+}
+
+TEST(PPPClasDdTest, RowBuilderAdmitsQzssRowsWithDedicatedReferenceGroup) {
+    ObservationData obs(GNSSTime(2068, 230602.0));
+    const Vector3d receiver(constants::WGS84_A, 0.0, 0.0);
+    const double l1_wavelength = constants::GPS_L1_WAVELENGTH;
+    const double l2_wavelength = constants::GPS_L2_WAVELENGTH;
+
+    auto make_qzss_osr = [&](uint8_t prn,
+                             const Vector3d& satellite_position,
+                             double code_l1_residual,
+                             double phase_l1_residual,
+                             double code_l2_residual,
+                             double phase_l2_residual) {
+        OSRCorrection osr;
+        osr.satellite = SatelliteId(GNSSSystem::QZSS, prn);
+        osr.valid = true;
+        osr.num_frequencies = 2;
+        osr.signals[0] = SignalType::QZS_L1CA;
+        osr.signals[1] = SignalType::QZS_L2C;
+        osr.frequencies[0] = constants::GPS_L1_FREQ;
+        osr.frequencies[1] = constants::GPS_L2_FREQ;
+        osr.wavelengths[0] = l1_wavelength;
+        osr.wavelengths[1] = l2_wavelength;
+        osr.satellite_position = satellite_position;
+        osr.PRC[0] = 0.2 + 0.1 * prn;
+        osr.PRC[1] = 0.4 + 0.1 * prn;
+        osr.CPC[0] = -0.3 + 0.1 * prn;
+        osr.CPC[1] = -0.5 + 0.1 * prn;
+
+        double lat = 0.0;
+        double lon = 0.0;
+        double h = 0.0;
+        ecef2geodetic(receiver, lat, lon, h);
+        const Vector3d enu = ecef2enu(satellite_position - receiver, lat, lon);
+        osr.elevation = std::atan2(enu.z(), std::hypot(enu.x(), enu.y()));
+
+        const double geo = geodist(satellite_position, receiver);
+        auto add_observation = [&](SignalType signal,
+                                   int frequency_index,
+                                   double wavelength,
+                                   double code_residual,
+                                   double phase_residual) {
+            Observation raw(osr.satellite, signal);
+            raw.valid = true;
+            raw.has_pseudorange = true;
+            raw.has_carrier_phase = true;
+            raw.pseudorange = geo + osr.PRC[frequency_index] + code_residual;
+            raw.carrier_phase =
+                (geo + osr.CPC[frequency_index] + phase_residual) /
+                wavelength;
+            obs.addObservation(raw);
+        };
+        add_observation(
+            SignalType::QZS_L1CA, 0, l1_wavelength, code_l1_residual,
+            phase_l1_residual);
+        add_observation(
+            SignalType::QZS_L2C, 1, l2_wavelength, code_l2_residual,
+            phase_l2_residual);
+        return osr;
+    };
+
+    const OSRCorrection j01 = make_qzss_osr(
+        1,
+        receiver + Vector3d(16000000.0, 15000000.0, 0.0),
+        1.0,
+        0.10,
+        1.5,
+        0.15);
+    const OSRCorrection j02 = make_qzss_osr(
+        2,
+        receiver + Vector3d(22000000.0, 1000000.0, 0.0),
+        4.0,
+        0.40,
+        4.5,
+        0.45);
+    const OSRCorrection j03 = make_qzss_osr(
+        3,
+        receiver + Vector3d(17000000.0, -10000000.0, 1000000.0),
+        2.0,
+        0.20,
+        2.5,
+        0.25);
+
+    ppp_clas_dd::StateLayoutOptions options;
+    options.frequencies = 2;
+    options.ionosphere_mode = ppp_clas_dd::IonosphereMode::Off;
+    options.troposphere_mode = ppp_clas_dd::TroposphereMode::Off;
+    const ppp_clas_dd::StateLayout layout{options};
+    VectorXd state = VectorXd::Zero(layout.nx());
+    state.segment(0, 3) = receiver;
+
+    ppp_shared::PPPConfig config;
+    config.estimate_ionosphere = false;
+    config.estimate_troposphere = false;
+    config.use_ionosphere_free = false;
+
+    const auto build = ppp_clas_dd::buildDdMeasurementSystem(
+        obs,
+        {j01, j03, j02},
+        layout,
+        state,
+        config,
+        [](const Vector3d&, double, const GNSSTime&) { return 0.0; });
+
+    ASSERT_EQ(build.rows.size(), 8u);
+    EXPECT_EQ(build.phase_rows, 4);
+    EXPECT_EQ(build.code_rows, 4);
+    EXPECT_EQ(build.reference_groups, 4);
+
+    std::set<std::tuple<int, int, bool>> reference_keys;
+    for (const auto& group : build.reference_groups_detail) {
+        EXPECT_EQ(group.system_group, 4);
+        EXPECT_EQ(group.reference_satellite, j02.satellite);
+        reference_keys.insert(
+            {group.system_group, group.frequency_index, group.is_phase});
+    }
+    EXPECT_EQ(reference_keys.size(), 4u);
+    EXPECT_TRUE(reference_keys.count({4, 0, true}));
+    EXPECT_TRUE(reference_keys.count({4, 0, false}));
+    EXPECT_TRUE(reference_keys.count({4, 1, true}));
+    EXPECT_TRUE(reference_keys.count({4, 1, false}));
+
+    for (const auto& row : build.rows) {
+        EXPECT_EQ(row.system_group, 4);
+        EXPECT_EQ(row.reference_satellite, j02.satellite);
+        EXPECT_NE(row.target_satellite, j02.satellite);
+        EXPECT_TRUE(row.target_satellite == j01.satellite ||
+                    row.target_satellite == j03.satellite);
     }
 }
 
