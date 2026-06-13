@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/algorithms/ppp_ar.hpp>
 #include <libgnss++/algorithms/ppp_clas.hpp>
+#include <libgnss++/algorithms/ppp_clas_dd.hpp>
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/core/constants.hpp>
@@ -355,6 +356,29 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     dumpClasFloatPosition(obs.time, filter_state_, epoch_update, osr_corrections.size());
     const auto& update_stats = epoch_update.update_stats;
     pre_anchor_covariance_ = update_stats.pre_anchor_covariance;
+
+    if (ppp_config_.use_clas_dd_filter) {
+        if (!clas_dd_filter_) {
+            clas_dd_filter_ = std::make_unique<ppp_clas_dd::DdFilterScaffold>();
+        }
+        const PositionSolution native_float_solution = ppp_clas::finalizeEpochSolution(
+            filter_state_,
+            false,
+            0.0,
+            0,
+            static_cast<int>(osr_corrections.size()));
+        solution = clas_dd_filter_->processFloatPassthrough(
+            obs.time,
+            filter_state_,
+            native_float_solution,
+            ppp_config_,
+            osr_corrections,
+            epoch_atmos);
+        has_last_processed_time_ = true;
+        last_processed_time_ = obs.time;
+        ++total_epochs_processed_;
+        return solution;
+    }
 
     // Accumulate Melbourne-Wübbena for WL-NL AR in CLAS per-frequency mode.
     if (ppp_config_.enable_ambiguity_resolution &&

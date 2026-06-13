@@ -6,6 +6,7 @@
 #include "../core/solution.hpp"
 #include "lambda.hpp"
 #include "ppp_ar.hpp"
+#include "ppp_clas_dd.hpp"
 #include "ppp_shared.hpp"
 #include "ppp_clas_sd.hpp"
 #include "ppp_osr_types.hpp"
@@ -65,7 +66,10 @@ public:
     /**
      * @brief Set PPP configuration
      */
-    void setPPPConfig(const PPPConfig& config) { ppp_config_ = config; }
+    void setPPPConfig(const PPPConfig& config) {
+        ppp_config_ = config;
+        applyEnvironmentOverridesToPPPConfig();
+    }
     
     /**
      * @brief Get PPP configuration
@@ -215,6 +219,8 @@ public:
     double getConvergenceTime() const { return convergence_time_; }
 
 private:
+    void applyEnvironmentOverridesToPPPConfig();
+
     PPPConfig ppp_config_;
     PPPEnvOverrides env_overrides_;
     SPPProcessor spp_processor_;  ///< Fallback SPP processor
@@ -293,6 +299,7 @@ private:
     std::map<SatelliteId, CLASPhaseBiasRepairInfo> clas_phase_bias_repair_;
     ppp_clas_sd::SdFilterState clas_sd_state_;  ///< Clock-free SD filter
     ppp_clas_sd::DdAmbAccumulator clas_dd_accumulator_;  ///< Multi-epoch DD amb accumulator
+    std::unique_ptr<ppp_clas_dd::DdFilterScaffold> clas_dd_filter_;
     PPPState last_clas_constrained_fixed_state_;
     bool last_clas_constrained_fixed_state_valid_ = false;
     int last_obs_gps_week_ = 0;  ///< GPS week from latest observation (for L6 decode)
