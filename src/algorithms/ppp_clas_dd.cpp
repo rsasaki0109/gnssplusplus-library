@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <limits>
 #include <set>
 #include <tuple>
@@ -55,6 +56,18 @@ constexpr int kClaslibMaxOutage = 5;
 constexpr double kGpsL2VarianceScale = (2.55 / 1.55) * (2.55 / 1.55);
 constexpr double kDdPostfitResidualRmsLimitM = 5.0;
 constexpr double kDdPostfitResidualMaxLimitM = 20.0;
+constexpr int kClaslibMinLockCount = 5;
+constexpr int kClaslibMinFixCount = 0;
+constexpr double kClaslibArElevationMaskRad = 20.0 * M_PI / 180.0;
+constexpr double kClaslibHoldElevationMaskRad = 30.0 * M_PI / 180.0;
+constexpr double kClaslibMaxPdopAr = 50.0;
+constexpr double kClaslibMaxPdopHold = 50.0;
+constexpr double kClaslibVarHoldAmbCycles2 = 0.001;
+constexpr double kClaslibResidualSigmaGate = 1.0e9;
+constexpr double kClaslibFixedChiSquareGate = 500.0;
+constexpr double kClaslibHoldChiSquareGate = kClaslibFixedChiSquareGate;
+constexpr double kDdFixedPostfitPhaseRmsLimitM = 0.75;
+constexpr double kDdFixedPostfitPhaseMaxLimitM = 1.80;
 
 struct ZeroDiffMeasurement {
     SatelliteId satellite;
@@ -262,7 +275,8 @@ std::vector<DdAmbiguityCandidate> collectDdAmbiguityCandidates(
     const std::vector<DdRow>& rows,
     const StateLayout& layout,
     const VectorXd& state,
-    const MatrixXd& covariance) {
+    const MatrixXd& covariance,
+    const std::map<std::pair<int, int>, int>& lock_by_satno_freq) {
     std::vector<DdAmbiguityCandidate> candidates;
     std::set<std::tuple<int, int, int>> seen;
     for (const auto& row : rows) {
@@ -281,6 +295,18 @@ std::vector<DdAmbiguityCandidate> collectDdAmbiguityCandidates(
             ref_index >= covariance.cols() || target_index >= covariance.cols()) {
             continue;
         }
+        const auto ref_lock_it =
+            lock_by_satno_freq.find({ref_satno, row.frequency_index});
+        const auto target_lock_it =
+            lock_by_satno_freq.find({target_satno, row.frequency_index});
+        if (ref_lock_it == lock_by_satno_freq.end() ||
+            target_lock_it == lock_by_satno_freq.end() ||
+            ref_lock_it->second <= 0 ||
+            target_lock_it->second <= 0 ||
+            row.reference_elevation_rad < kClaslibArElevationMaskRad ||
+            row.target_elevation_rad < kClaslibArElevationMaskRad) {
+            continue;
+        }
         if (!std::isfinite(state(ref_index)) || !std::isfinite(state(target_index)) ||
             !std::isfinite(covariance(ref_index, ref_index)) ||
             !std::isfinite(covariance(target_index, target_index)) ||
@@ -297,6 +323,10 @@ std::vector<DdAmbiguityCandidate> collectDdAmbiguityCandidates(
             {{ref_index, target_index}, row.frequency_index});
     }
     return candidates;
+}
+
+const char* clasDdDiagnosticsPath() {
+    return std::getenv("GNSS_PPP_CLAS_DD_DIAG");
 }
 
 }  // namespace
@@ -552,6 +582,12 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
         }
         ++result.reference_groups;
         const ZeroDiffMeasurement& ref = *ref_it;
+        result.reference_groups_detail.push_back(
+            {key.system_group,
+             key.frequency_index,
+             key.is_phase,
+             ref.satellite,
+             ref.elevation_rad});
 
         for (const auto& sat : measurements) {
             if (sat.satellite == ref.satellite) {
@@ -563,7 +599,10 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
             row.target_satellite = sat.satellite;
             row.is_phase = key.is_phase;
             row.frequency_index = key.frequency_index;
+            row.system_group = key.system_group;
             row.residual_m = ref.residual_m - sat.residual_m;
+            row.reference_elevation_rad = ref.elevation_rad;
+            row.target_elevation_rad = sat.elevation_rad;
             row.position_coefficients = -ref.los + sat.los;
             row.reference_variance_m2 = ref.variance_m2;
             row.target_variance_m2 = sat.variance_m2;
@@ -616,6 +655,105 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
     result.measurement_system =
         rtk_measurement::assembleMeasurementSystem(blocks, nx);
     return result;
+}
+
+DdPostfitValidationResult validateDdPostfitResiduals(
+    const DdMeasurementBuildResult& postfit_build,
+    const StateLayout& layout,
+    const MatrixXd& covariance) {
+    DdPostfitValidationResult validation;
+    validation.row_count = static_cast<int>(postfit_build.rows.size());
+    if (postfit_build.rows.empty()) {
+        validation.reject_reason = "postfit_no_rows";
+        return validation;
+    }
+
+    double all_sum_sq = 0.0;
+    double phase_sum_sq = 0.0;
+    for (const auto& row : postfit_build.rows) {
+        const double abs_residual = std::abs(row.residual_m);
+        all_sum_sq += row.residual_m * row.residual_m;
+        validation.residual_max_abs_m =
+            std::max(validation.residual_max_abs_m, abs_residual);
+        if (row.is_phase) {
+            ++validation.phase_row_count;
+            phase_sum_sq += row.residual_m * row.residual_m;
+            validation.phase_residual_max_abs_m =
+                std::max(validation.phase_residual_max_abs_m, abs_residual);
+        }
+    }
+    validation.residual_rms_m =
+        std::sqrt(all_sum_sq / static_cast<double>(validation.row_count));
+    if (validation.phase_row_count > 0) {
+        validation.phase_residual_rms_m =
+            std::sqrt(phase_sum_sq /
+                      static_cast<double>(validation.phase_row_count));
+    }
+
+    if (validation.phase_row_count < std::max(2, layout.np())) {
+        validation.reject_reason = "postfit_min_rows";
+        return validation;
+    }
+    if (validation.phase_residual_rms_m > kDdFixedPostfitPhaseRmsLimitM) {
+        validation.reject_reason = "postfit_rms";
+        return validation;
+    }
+    if (validation.phase_residual_max_abs_m > kDdFixedPostfitPhaseMaxLimitM) {
+        validation.reject_reason = "postfit_max";
+        return validation;
+    }
+
+    const auto& system = postfit_build.measurement_system;
+    if (system.residuals.size() != validation.row_count ||
+        system.design_matrix.rows() != validation.row_count ||
+        system.covariance.rows() != validation.row_count ||
+        system.covariance.cols() != validation.row_count ||
+        covariance.rows() != layout.nx() ||
+        covariance.cols() != layout.nx()) {
+        validation.reject_reason = "postfit_invalid_system";
+        return validation;
+    }
+
+    const MatrixXd innovation_covariance =
+        system.design_matrix * covariance * system.design_matrix.transpose() +
+        system.covariance;
+
+    double weighted_phase_sum = 0.0;
+    int accepted_phase_rows = 0;
+    for (int row_index = 0; row_index < validation.row_count; ++row_index) {
+        if (!postfit_build.rows[static_cast<size_t>(row_index)].is_phase) {
+            continue;
+        }
+        const double sigma2 = innovation_covariance(row_index, row_index);
+        if (!std::isfinite(sigma2) || sigma2 <= 0.0) {
+            validation.reject_reason = "postfit_nonfinite_sigma";
+            return validation;
+        }
+        const double residual = system.residuals(row_index);
+        const double sigma = std::sqrt(sigma2);
+        if (std::abs(residual) > kClaslibResidualSigmaGate * sigma) {
+            validation.reject_reason = "postfit_sigma";
+            return validation;
+        }
+        weighted_phase_sum += residual * residual / sigma2;
+        ++accepted_phase_rows;
+    }
+
+    const int dof = accepted_phase_rows - layout.np();
+    if (dof <= 0) {
+        validation.reject_reason = "postfit_dof";
+        return validation;
+    }
+    validation.chi_square_ratio =
+        weighted_phase_sum / static_cast<double>(dof);
+    if (!std::isfinite(validation.chi_square_ratio) ||
+        validation.chi_square_ratio > kClaslibFixedChiSquareGate) {
+        validation.reject_reason = "postfit_chi2";
+        return validation;
+    }
+
+    validation.accepted = true;
+    return validation;
 }
 
 void DdFilterScaffold::ensureSnapshotStorage(
@@ -800,6 +938,10 @@ void DdFilterScaffold::updateObservedStateBookkeeping(
             }
             const auto key = std::make_pair(satno, f);
             ambiguity_outage_by_satno_freq_[key] = 0;
+            if (ambiguity_lock_by_satno_freq_.find(key) ==
+                ambiguity_lock_by_satno_freq_.end()) {
+                ambiguity_lock_by_satno_freq_[key] = -kClaslibMinLockCount;
+            }
 
             const int ambiguity_index = layout.ambiguityIndex(satno, f);
             if (ambiguity_index < 0) {
@@ -807,6 +949,7 @@ void DdFilterScaffold::updateObservedStateBookkeeping(
             }
             if (raw->loss_of_lock) {
                 resetStateElement(ambiguity_index, 0.0, 0.0);
+                ambiguity_lock_by_satno_freq_[key] = -kClaslibMinLockCount;
             } else if (snapshot_.covariance(ambiguity_index, ambiguity_index) > 0.0 &&
                        dt > 0.0) {
                 snapshot_.covariance(ambiguity_index, ambiguity_index) +=
@@ -837,6 +980,7 @@ void DdFilterScaffold::updateObservedStateBookkeeping(
         const int ambiguity_index = layout.ambiguityIndex(key.first, key.second);
         if (ambiguity_index >= 0) {
             resetStateElement(ambiguity_index, 0.0, 0.0);
+            ambiguity_lock_by_satno_freq_[key] = -kClaslibMinLockCount;
         }
     }
 
@@ -889,6 +1033,14 @@ void DdFilterScaffold::updateObservedStateBookkeeping(
                 ambiguity_index,
                 cycles,
                 kClaslibStdBiasCycles * kClaslibStdBiasCycles);
+            for (const auto& osr : osr_corrections) {
+                const int satno = claslibSatelliteNumber(osr.satellite);
+                if (layout.ambiguityIndex(satno, frequency) == ambiguity_index) {
+                    ambiguity_lock_by_satno_freq_[{satno, frequency}] =
+                        -kClaslibMinLockCount;
+                    break;
+                }
+            }
         }
     }
 }
@@ -953,9 +1105,243 @@ PositionSolution DdFilterScaffold::publishSolution(
     return solution;
 }
 
-bool DdFilterScaffold::conditionFixedSnapshot(
+int DdFilterScaffold::countReferenceChanges(
+    const DdMeasurementBuildResult& build) const {
+    int changes = 0;
+    for (const auto& group : build.reference_groups_detail) {
+        if (!group.is_phase) {
+            continue;
+        }
+        const auto key = std::make_tuple(
+            group.system_group, group.frequency_index, group.is_phase);
+        const auto it = reference_by_group_.find(key);
+        if (it != reference_by_group_.end() &&
+            !(it->second == group.reference_satellite)) {
+            ++changes;
+        }
+    }
+    return changes;
+}
+
+void DdFilterScaffold::rememberReferenceGroups(
+    const DdMeasurementBuildResult& build) {
+    for (const auto& group : build.reference_groups_detail) {
+        if (!group.is_phase) {
+            continue;
+        }
+        reference_by_group_[std::make_tuple(
+            group.system_group, group.frequency_index, group.is_phase)] =
+            group.reference_satellite;
+    }
+}
+
+void DdFilterScaffold::updateAmbiguityLockCounts(
+    const std::vector<DdRow>& rows) {
+    std::set<std::pair<int, int>> valid_phase_states;
+    for (const auto& row : rows) {
+        if (!row.is_phase) {
+            continue;
+        }
+        const int ref_satno = claslibSatelliteNumber(row.reference_satellite);
+        const int target_satno = claslibSatelliteNumber(row.target_satellite);
+        if (snapshot_.layout.validSatelliteNumber(ref_satno)) {
+            valid_phase_states.insert({ref_satno, row.frequency_index});
+        }
+        if (snapshot_.layout.validSatelliteNumber(target_satno)) {
+            valid_phase_states.insert({target_satno, row.frequency_index});
+        }
+    }
+    for (const auto& key : valid_phase_states) {
+        auto& lock = ambiguity_lock_by_satno_freq_[key];
+        if (lock < 0) {
+            ++lock;
+        } else {
+            ++lock;
+        }
+    }
+}
+
+double DdFilterScaffold::computePdop(
     const std::vector<DdRow>& rows,
-    const ppp_shared::PPPConfig& config) {
+    double min_elevation_rad) const {
+    std::vector<Vector3d> geometry_rows;
+    auto collect = [&](bool phase_rows) {
+        geometry_rows.clear();
+        std::set<std::tuple<int, int, int>> seen;
+        for (const auto& row : rows) {
+            if (row.is_phase != phase_rows ||
+                row.frequency_index != 0 ||
+                row.reference_elevation_rad < min_elevation_rad ||
+                row.target_elevation_rad < min_elevation_rad) {
+                continue;
+            }
+            const int ref_satno = claslibSatelliteNumber(row.reference_satellite);
+            const int target_satno = claslibSatelliteNumber(row.target_satellite);
+            const auto key = std::make_tuple(row.system_group, ref_satno, target_satno);
+            if (!seen.insert(key).second) {
+                continue;
+            }
+            geometry_rows.push_back(row.position_coefficients);
+        }
+    };
+
+    collect(false);
+    if (geometry_rows.size() < 3) {
+        collect(true);
+    }
+    if (geometry_rows.size() < 3) {
+        return 1000.0;
+    }
+
+    MatrixXd h = MatrixXd::Zero(static_cast<int>(geometry_rows.size()), 3);
+    for (int row = 0; row < static_cast<int>(geometry_rows.size()); ++row) {
+        h.row(row) = geometry_rows[static_cast<size_t>(row)].transpose();
+    }
+    const Matrix3d normal = h.transpose() * h;
+    Eigen::LDLT<Matrix3d> ldlt(normal);
+    if (ldlt.info() != Eigen::Success) {
+        return 1000.0;
+    }
+    const Matrix3d q = ldlt.solve(Matrix3d::Identity());
+    if (!q.allFinite()) {
+        return 1000.0;
+    }
+    return std::sqrt(std::max(0.0, q.trace()));
+}
+
+bool DdFilterScaffold::applyHoldAmbiguity(const std::vector<DdRow>& rows) {
+    last_diagnostics_.hold_applied = false;
+    last_diagnostics_.hold_rows = 0;
+    last_diagnostics_.hold_reject_reason.clear();
+    if (validated_hold_differences_.empty() ||
+        validated_hold_ambiguities_.size() !=
+            static_cast<int>(validated_hold_differences_.size())) {
+        last_diagnostics_.hold_reject_reason = "hold_no_validated_ambiguities";
+        return false;
+    }
+
+    const int nx = snapshot_.layout.nx();
+    std::vector<int> selected;
+    selected.reserve(validated_hold_differences_.size());
+    for (int i = 0; i < static_cast<int>(validated_hold_differences_.size()); ++i) {
+        const auto& difference = validated_hold_differences_[static_cast<size_t>(i)];
+        const auto row_it = std::find_if(
+            rows.begin(),
+            rows.end(),
+            [&](const DdRow& row) {
+                if (!row.is_phase ||
+                    row.reference_elevation_rad < kClaslibHoldElevationMaskRad ||
+                    row.target_elevation_rad < kClaslibHoldElevationMaskRad) {
+                    return false;
+                }
+                const int ref_satno = claslibSatelliteNumber(row.reference_satellite);
+                const int target_satno = claslibSatelliteNumber(row.target_satellite);
+                return snapshot_.layout.ambiguityIndex(ref_satno, row.frequency_index) ==
+                           difference.reference_state_index &&
+                       snapshot_.layout.ambiguityIndex(target_satno, row.frequency_index) ==
+                           difference.satellite_state_index;
+            });
+        if (row_it != rows.end()) {
+            selected.push_back(i);
+        }
+    }
+
+    if (selected.empty()) {
+        last_diagnostics_.hold_reject_reason = "hold_no_rows";
+        return false;
+    }
+
+    rtk_measurement::MeasurementSystem system;
+    system.design_matrix = MatrixXd::Zero(static_cast<int>(selected.size()), nx);
+    system.residuals = VectorXd::Zero(static_cast<int>(selected.size()));
+    system.covariance = MatrixXd::Zero(
+        static_cast<int>(selected.size()), static_cast<int>(selected.size()));
+
+    for (int row = 0; row < static_cast<int>(selected.size()); ++row) {
+        const int source_index = selected[static_cast<size_t>(row)];
+        const auto& difference =
+            validated_hold_differences_[static_cast<size_t>(source_index)];
+        const double fixed_dd = validated_hold_ambiguities_(source_index);
+        const double float_dd =
+            snapshot_.state(difference.reference_state_index) -
+            snapshot_.state(difference.satellite_state_index);
+        system.residuals(row) = fixed_dd - float_dd;
+        system.design_matrix(row, difference.reference_state_index) = 1.0;
+        system.design_matrix(row, difference.satellite_state_index) = -1.0;
+        system.covariance(row, row) = kClaslibVarHoldAmbCycles2;
+    }
+
+    auto hold_update = rtk_update::applyMeasurementUpdate(
+        snapshot_.state,
+        snapshot_.covariance,
+        system,
+        std::numeric_limits<double>::infinity(),
+        1);
+    if (!hold_update.ok) {
+        last_diagnostics_.hold_reject_reason = "hold_update";
+        return false;
+    }
+
+    last_diagnostics_.hold_applied = true;
+    last_diagnostics_.hold_rows = static_cast<int>(selected.size());
+    ++total_hold_applied_epochs_;
+    return true;
+}
+
+void DdFilterScaffold::appendDiagnosticsCsv(
+    const GNSSTime& time,
+    bool fixed) const {
+    const char* path = clasDdDiagnosticsPath();
+    if (path == nullptr || path[0] == '\0') {
+        return;
+    }
+    const bool needs_header = !std::ifstream(path).good();
+    std::ofstream output(path, std::ios::app);
+    if (!output.is_open()) {
+        return;
+    }
+    if (needs_header) {
+        output
+            << "week,tow,updated,fixed,lambda_attempted,lambda_accepted,"
+            << "lambda_ambiguities,lambda_ratio,reject_reason,postfit_rms_m,"
+            << "postfit_max_m,postfit_phase_rms_m,postfit_phase_max_m,"
+            << "postfit_chi_ratio,ar_pdop,hold_pdop,reference_change_groups,"
+            << "consecutive_fix_count,hold_applied,hold_rows,hold_reject_reason\n";
+    }
+    const std::string reject_reason =
+        !last_diagnostics_.fixed_reject_reason.empty()
+            ? last_diagnostics_.fixed_reject_reason
+            : last_diagnostics_.lambda_reject_reason;
+    output << time.week << ',' << time.tow << ','
+           << (last_diagnostics_.updated ? 1 : 0) << ','
+           << (fixed ? 1 : 0) << ','
+           << (last_diagnostics_.lambda_attempted ? 1 : 0) << ','
+           << (last_diagnostics_.lambda_accepted ? 1 : 0) << ','
+           << last_diagnostics_.lambda_ambiguities << ','
+           << last_diagnostics_.lambda_ratio << ','
+           << reject_reason << ','
+           << last_diagnostics_.fixed_postfit.residual_rms_m << ','
+           << last_diagnostics_.fixed_postfit.residual_max_abs_m << ','
+           << last_diagnostics_.fixed_postfit.phase_residual_rms_m << ','
+           << last_diagnostics_.fixed_postfit.phase_residual_max_abs_m << ','
+           << last_diagnostics_.fixed_postfit.chi_square_ratio << ','
+           << last_diagnostics_.ar_pdop << ','
+           << last_diagnostics_.hold_pdop << ','
+           << last_diagnostics_.reference_change_groups << ','
+           << last_diagnostics_.consecutive_fix_count << ','
+           << (last_diagnostics_.hold_applied ? 1 : 0) << ','
+           << last_diagnostics_.hold_rows << ','
+           << last_diagnostics_.hold_reject_reason << '\n';
+}
+
+bool DdFilterScaffold::conditionFixedSnapshot(
+    const ObservationData& obs,
+    const std::vector<OSRCorrection>& osr_corrections,
+    const std::vector<DdRow>& rows,
+    const ppp_shared::PPPConfig& config,
+    const TropMappingFunction& trop_mapping_function,
+    int reference_change_groups,
+    double ar_pdop) {
     struct LambdaAttempt {
         bool attempted = false;
         bool lambda_success = false;
@@ -976,6 +1362,10 @@ bool DdFilterScaffold::conditionFixedSnapshot(
     last_diagnostics_.lambda_ratio = 0.0;
     last_diagnostics_.lambda_required_ratio = config.ar_ratio_threshold;
     last_diagnostics_.lambda_reject_reason.clear();
+    last_diagnostics_.fixed_postfit_accepted = false;
+    last_diagnostics_.fixed_reject_reason.clear();
+    last_diagnostics_.ar_pdop = ar_pdop;
+    last_diagnostics_.reference_change_groups = reference_change_groups;
 
     const StateLayout& layout = snapshot_.layout;
     const int na = layout.nr();
@@ -992,7 +1382,11 @@ bool DdFilterScaffold::conditionFixedSnapshot(
     }
 
     const auto candidates = collectDdAmbiguityCandidates(
-        rows, layout, snapshot_.state, snapshot_.covariance);
+        rows,
+        layout,
+        snapshot_.state,
+        snapshot_.covariance,
+        ambiguity_lock_by_satno_freq_);
     last_diagnostics_.lambda_ambiguities = static_cast<int>(candidates.size());
     const int min_ambiguities = std::max(2, config.min_satellites_for_ar);
 
@@ -1099,13 +1493,49 @@ bool DdFilterScaffold::conditionFixedSnapshot(
     ++lambda_ratio_count_;
     if (!best_attempt.accepted) {
         ++total_lambda_rejected_epochs_;
+        if (best_attempt.reject_reason == "ratio") {
+            ++fixed_reject_ratio_epochs_;
+        }
+        consecutive_validated_fixes_ = 0;
+        last_diagnostics_.consecutive_fix_count = 0;
         return false;
+    }
+
+    auto reject_fixed = [&](const std::string& reason) {
+        last_diagnostics_.lambda_accepted = false;
+        last_diagnostics_.fixed_reject_reason = reason;
+        last_diagnostics_.lambda_reject_reason = reason;
+        ++total_lambda_rejected_epochs_;
+        consecutive_validated_fixes_ = 0;
+        last_diagnostics_.consecutive_fix_count = 0;
+        if (reason == "pdop") {
+            ++fixed_reject_pdop_epochs_;
+        } else if (reason == "min_fix") {
+            ++fixed_reject_minfix_epochs_;
+        } else if (reason == "ref_change") {
+            ++fixed_reject_refchange_epochs_;
+        } else {
+            ++fixed_reject_postfit_epochs_;
+        }
+        validated_hold_differences_.clear();
+        validated_hold_ambiguities_.resize(0);
+        has_fixed_snapshot_ = false;
+        return false;
+    };
+
+    if (!std::isfinite(ar_pdop) || ar_pdop > kClaslibMaxPdopAr) {
+        return reject_fixed("pdop");
+    }
+    if (reference_change_groups > 0) {
+        return reject_fixed("ref_change");
     }
 
     Eigen::LDLT<MatrixXd> ldlt(best_attempt.q_amb);
     if (ldlt.info() != Eigen::Success) {
         ++total_lambda_rejected_epochs_;
         last_diagnostics_.lambda_reject_reason = "q_amb_ldlt";
+        consecutive_validated_fixes_ = 0;
+        last_diagnostics_.consecutive_fix_count = 0;
         return false;
     }
 
@@ -1115,6 +1545,8 @@ bool DdFilterScaffold::conditionFixedSnapshot(
     if (!db.allFinite()) {
         ++total_lambda_rejected_epochs_;
         last_diagnostics_.lambda_reject_reason = "q_amb_solve";
+        consecutive_validated_fixes_ = 0;
+        last_diagnostics_.consecutive_fix_count = 0;
         return false;
     }
 
@@ -1150,9 +1582,36 @@ bool DdFilterScaffold::conditionFixedSnapshot(
         fixed_snapshot_.covariance(target_index, target_index) = 1e-6;
     }
 
+    const auto fixed_postfit_build = buildDdMeasurementSystem(
+        obs,
+        osr_corrections,
+        fixed_snapshot_.layout,
+        fixed_snapshot_.state,
+        config,
+        trop_mapping_function);
+    last_diagnostics_.fixed_postfit =
+        validateDdPostfitResiduals(
+            fixed_postfit_build,
+            fixed_snapshot_.layout,
+            fixed_snapshot_.covariance);
+    if (!last_diagnostics_.fixed_postfit.accepted) {
+        return reject_fixed(last_diagnostics_.fixed_postfit.reject_reason);
+    }
+
+    const int next_fix_count = consecutive_validated_fixes_ + 1;
+    if (next_fix_count < kClaslibMinFixCount) {
+        return reject_fixed("min_fix");
+    }
+
     has_fixed_snapshot_ = true;
+    last_diagnostics_.fixed_postfit_accepted = true;
     last_diagnostics_.lambda_accepted = true;
     last_diagnostics_.lambda_reject_reason.clear();
+    last_diagnostics_.fixed_reject_reason.clear();
+    validated_hold_differences_ = best_attempt.differences;
+    validated_hold_ambiguities_ = best_attempt.fixed_ambiguities;
+    consecutive_validated_fixes_ = next_fix_count;
+    last_diagnostics_.consecutive_fix_count = consecutive_validated_fixes_;
     ++total_lambda_accepted_epochs_;
     return true;
 }
@@ -1265,10 +1724,12 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
         PositionSolution solution = fallbackSolution(
             native_float_solution, "insufficient_dd_rows", observed_satellites);
         solution.time = obs.time;
+        appendDiagnosticsCsv(obs.time, false);
         return solution;
     }
 
     std::vector<DdRow> accepted_rows;
+    int accepted_reference_changes = 0;
     auto apply_update = [&](DdMeasurementBuildResult& build) {
         auto measurement_system = build.measurement_system;
         last_diagnostics_.filter_update = rtk_update::applyMeasurementUpdate(
@@ -1291,6 +1752,13 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
             return false;
         }
         accepted_rows = build.rows;
+        accepted_reference_changes = countReferenceChanges(build);
+        last_diagnostics_.reference_change_groups = accepted_reference_changes;
+        last_diagnostics_.ar_pdop = computePdop(
+            accepted_rows, kClaslibArElevationMaskRad);
+        last_diagnostics_.hold_pdop = computePdop(
+            accepted_rows, kClaslibHoldElevationMaskRad);
+        rememberReferenceGroups(build);
         return true;
     };
 
@@ -1331,6 +1799,7 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
                     : "kalman_update",
                 observed_satellites);
             solution.time = obs.time;
+            appendDiagnosticsCsv(obs.time, false);
             return solution;
         }
     }
@@ -1357,9 +1826,33 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
 
     ++total_updated_epochs_;
     last_diagnostics_.updated = true;
-    const bool fixed = conditionFixedSnapshot(accepted_rows, config);
+    updateAmbiguityLockCounts(accepted_rows);
+    if (accepted_reference_changes > 0) {
+        validated_hold_differences_.clear();
+        validated_hold_ambiguities_.resize(0);
+    }
+    const bool fixed = conditionFixedSnapshot(
+        obs,
+        osr_corrections,
+        accepted_rows,
+        config,
+        trop_mapping_function,
+        accepted_reference_changes,
+        last_diagnostics_.ar_pdop);
     if (fixed) {
-        snapshot_ = fixed_snapshot_;
+        const bool hold_postfit_ok =
+            last_diagnostics_.fixed_postfit.chi_square_ratio <
+            kClaslibHoldChiSquareGate;
+        if (!hold_postfit_ok) {
+            last_diagnostics_.hold_reject_reason = "hold_postfit";
+        } else if (!std::isfinite(last_diagnostics_.hold_pdop) ||
+                   last_diagnostics_.hold_pdop > kClaslibMaxPdopHold) {
+            last_diagnostics_.hold_reject_reason = "hold_pdop";
+        } else if (consecutive_validated_fixes_ < kClaslibMinFixCount) {
+            last_diagnostics_.hold_reject_reason = "hold_min_fix";
+        } else {
+            applyHoldAmbiguity(accepted_rows);
+        }
     }
     PositionSolution solution = publishSolution(
         native_float_solution,
@@ -1368,6 +1861,7 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
         fixed ? fixed_snapshot_ : snapshot_,
         fixed);
     solution.time = obs.time;
+    appendDiagnosticsCsv(obs.time, fixed);
     return solution;
 }
 
@@ -1447,11 +1941,22 @@ void DdFilterScaffold::reset() {
     ionosphere_outage_by_satno_.clear();
     ionosphere_process_noise_by_satno_.clear();
     ambiguity_outage_by_satno_freq_.clear();
+    ambiguity_lock_by_satno_freq_.clear();
+    reference_by_group_.clear();
+    validated_hold_differences_.clear();
+    validated_hold_ambiguities_.resize(0);
     last_diagnostics_ = DdUpdateDiagnostics{};
     total_updated_epochs_ = 0;
     total_fallback_epochs_ = 0;
     total_lambda_accepted_epochs_ = 0;
     total_lambda_rejected_epochs_ = 0;
+    fixed_reject_ratio_epochs_ = 0;
+    fixed_reject_postfit_epochs_ = 0;
+    fixed_reject_pdop_epochs_ = 0;
+    fixed_reject_minfix_epochs_ = 0;
+    fixed_reject_refchange_epochs_ = 0;
+    total_hold_applied_epochs_ = 0;
+    consecutive_validated_fixes_ = 0;
     lambda_ratio_sum_ = 0.0;
     lambda_ratio_count_ = 0;
     has_snapshot_ = false;
