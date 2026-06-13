@@ -18,10 +18,20 @@ struct ClasGridReference {
     size_t residual_index = 0;
     int network_id = 0;
     int grid_no = 0;
-    // 4-grid bilinear interpolation (CLASLIB-style)
+    // Historical 4-grid fields kept for diagnostics. With the CLASLIB matrix
+    // policy enabled these hold the effective matrix weights in selected-grid
+    // order, not quadrant bilinear SW/SE/NW/NE order.
     bool has_bilinear = false;
-    double bilinear_weights[4] = {};       // SW, SE, NW, NE
-    size_t bilinear_grid_indices[4] = {};  // residual indices for 4 grids
+    double bilinear_weights[4] = {};
+    size_t bilinear_grid_indices[4] = {};
+    int interpolation_grid_count = 0;
+    double interpolation_weights[4] = {};
+    size_t interpolation_grid_indices[4] = {};
+    // STEC/trop polynomial offsets for the selected grids. In the CLASLIB
+    // matrix policy these are relative to grid 1 of the network, matching the
+    // decoded grid-value materialization in cssr.c.
+    double interpolation_grid_dlat_deg[4] = {};
+    double interpolation_grid_dlon_deg[4] = {};
 };
 
 bool parseAtmosTokenDouble(const std::map<std::string, std::string>& atmos_tokens,

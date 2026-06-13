@@ -242,6 +242,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
             clas_code_row_all ||
             tokenSpecHasAny(clas_code_row_parity, {"qzss", "qzs", "j01", "qzss-prn"});
     }
+    overrides.clas_atmos_grid_matrix =
+        envExactOne("GNSS_PPP_CLAS_ATMOS_GRID_MATRIX");
     overrides.clas_code_sd =
         envExactOne("GNSS_PPP_CLAS_CODE_SD") ||
         overrides.clas_code_row_sd;
