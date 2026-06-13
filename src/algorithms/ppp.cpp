@@ -711,6 +711,8 @@ void PPPProcessor::reset() {
     recent_positions_.clear();
     has_last_processed_time_ = false;
     last_processed_time_ = GNSSTime();
+    last_clas_atmos_network_id_ = -1;
+    has_last_clas_atmos_network_id_ = false;
     precise_products_loaded_ = !precise_products_.orbit_clock_data.empty();
     ssr_products_loaded_ = !ssr_products_.orbit_clock_corrections.empty();
     ionex_products_loaded_ = !ionex_products_.tec_maps.empty();
