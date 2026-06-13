@@ -7,6 +7,7 @@
 #include <fstream>
 #include <limits>
 #include <set>
+#include <sstream>
 #include <tuple>
 #include <utility>
 
@@ -127,9 +128,11 @@ bool readAtmosphereNetworkId(
     return true;
 }
 
-int systemGroup(const SatelliteId& satellite) {
+int systemGroup(const SatelliteId& satellite, SignalType signal) {
+    (void)signal;
     switch (satellite.system) {
         case GNSSSystem::GPS:
+            return 0;
         case GNSSSystem::SBAS:
             return 0;
         case GNSSSystem::GLONASS:
@@ -143,6 +146,75 @@ int systemGroup(const SatelliteId& satellite) {
         default:
             return -1;
     }
+}
+
+std::string groupFrequencyModeLabel(
+    int system_group,
+    int frequency_index,
+    bool is_phase) {
+    std::ostringstream label;
+    label << 'm' << system_group
+          << 'f' << frequency_index
+          << (is_phase ? 'P' : 'C');
+    return label.str();
+}
+
+std::string summarizeRowsByGroupFrequency(const std::vector<DdRow>& rows) {
+    std::map<std::tuple<int, int, bool>, int> counts;
+    for (const auto& row : rows) {
+        ++counts[{row.system_group, row.frequency_index, row.is_phase}];
+    }
+    std::ostringstream summary;
+    bool first = true;
+    for (const auto& [key, count] : counts) {
+        if (!first) {
+            summary << ';';
+        }
+        first = false;
+        const auto [system_group, frequency_index, is_phase] = key;
+        summary << groupFrequencyModeLabel(system_group, frequency_index, is_phase)
+                << '=' << count;
+    }
+    return summary.str();
+}
+
+std::string summarizeReferenceGroups(
+    const std::vector<DdReferenceGroup>& reference_groups) {
+    std::ostringstream summary;
+    bool first = true;
+    for (const auto& group : reference_groups) {
+        if (!first) {
+            summary << ';';
+        }
+        first = false;
+        summary << groupFrequencyModeLabel(
+                       group.system_group,
+                       group.frequency_index,
+                       group.is_phase)
+                << '=' << group.reference_satellite.toString();
+    }
+    return summary.str();
+}
+
+int claslibFrequencyIndex(
+    const SatelliteId& satellite,
+    SignalType signal,
+    int osr_frequency_index) {
+    (void)satellite;
+    (void)signal;
+    return osr_frequency_index;
+}
+
+double osrWavelengthForClaslibFrequency(
+    const OSRCorrection& osr,
+    int claslib_frequency_index) {
+    for (int f = 0; f < osr.num_frequencies; ++f) {
+        if (claslibFrequencyIndex(osr.satellite, osr.signals[f], f) ==
+            claslib_frequency_index) {
+            return osr.wavelengths[f];
+        }
+    }
+    return 0.0;
 }
 
 double systemErrorFactor(GNSSSystem system) {
@@ -454,6 +526,11 @@ StateLayoutOptions layoutOptionsFromConfig(
     for (const auto& osr : osr_corrections) {
         if (osr.valid) {
             frequencies = std::max(frequencies, osr.num_frequencies);
+            for (int f = 0; f < osr.num_frequencies && f < OSR_MAX_FREQ; ++f) {
+                frequencies = std::max(
+                    frequencies,
+                    claslibFrequencyIndex(osr.satellite, osr.signals[f], f) + 1);
+            }
         }
     }
     options.frequencies = std::max(1, frequencies);
@@ -489,8 +566,7 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
             continue;
         }
         const int satno = claslibSatelliteNumber(osr.satellite);
-        const int group = systemGroup(osr.satellite);
-        if (!layout.validSatelliteNumber(satno) || group < 0) {
+        if (!layout.validSatelliteNumber(satno)) {
             continue;
         }
         const Vector3d range_vector = osr.satellite_position - receiver_position;
@@ -515,20 +591,35 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
             if (osr.wavelengths[f] <= 0.0 || osr.wavelengths[0] <= 0.0) {
                 continue;
             }
+            const int frequency_index =
+                claslibFrequencyIndex(osr.satellite, osr.signals[f], f);
+            if (frequency_index < 0 || frequency_index >= layout.nf()) {
+                continue;
+            }
+            const int group = systemGroup(osr.satellite, osr.signals[f]);
+            if (group < 0) {
+                continue;
+            }
             const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
             if (raw == nullptr || !raw->valid) {
                 continue;
             }
+            const bool phase_observable =
+                raw->has_carrier_phase &&
+                std::isfinite(raw->carrier_phase);
+            const bool code_observable =
+                raw->has_pseudorange &&
+                std::isfinite(raw->pseudorange);
             const double ion_scale =
                 std::pow(osr.wavelengths[f] / osr.wavelengths[0], 2);
 
-            if (raw->has_carrier_phase && std::isfinite(raw->carrier_phase)) {
+            if (phase_observable) {
                 ZeroDiffMeasurement zd;
                 zd.satellite = osr.satellite;
                 zd.satno = satno;
                 zd.system_group = group;
                 zd.is_phase = true;
-                zd.frequency_index = f;
+                zd.frequency_index = frequency_index;
                 zd.residual_m =
                     raw->carrier_phase * osr.wavelengths[f] -
                     (geo - sat_clock_m + osr.CPC[f]);
@@ -539,17 +630,18 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
                 zd.wavelength_m = osr.wavelengths[f];
                 zd.ionosphere_scale = ion_scale;
                 zd.variance_m2 =
-                    claslibVarerr(osr.satellite.system, elevation, true, f);
-                groups[{group, f, true}].push_back(zd);
+                    claslibVarerr(
+                        osr.satellite.system, elevation, true, frequency_index);
+                groups[{group, frequency_index, true}].push_back(zd);
             }
 
-            if (raw->has_pseudorange && std::isfinite(raw->pseudorange)) {
+            if (code_observable) {
                 ZeroDiffMeasurement zd;
                 zd.satellite = osr.satellite;
                 zd.satno = satno;
                 zd.system_group = group;
                 zd.is_phase = false;
-                zd.frequency_index = f;
+                zd.frequency_index = frequency_index;
                 zd.residual_m =
                     raw->pseudorange - (geo - sat_clock_m + osr.PRC[f]);
                 zd.los = los;
@@ -559,8 +651,9 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
                 zd.wavelength_m = osr.wavelengths[f];
                 zd.ionosphere_scale = ion_scale;
                 zd.variance_m2 =
-                    claslibVarerr(osr.satellite.system, elevation, false, f);
-                groups[{group, f, false}].push_back(zd);
+                    claslibVarerr(
+                        osr.satellite.system, elevation, false, frequency_index);
+                groups[{group, frequency_index, false}].push_back(zd);
             }
         }
     }
@@ -680,6 +773,14 @@ DdPostfitValidationResult validateDdPostfitResiduals(
             phase_sum_sq += row.residual_m * row.residual_m;
             validation.phase_residual_max_abs_m =
                 std::max(validation.phase_residual_max_abs_m, abs_residual);
+            if (abs_residual >= std::abs(validation.worst_phase_residual_m)) {
+                validation.worst_phase_residual_m = row.residual_m;
+                validation.worst_phase_system_group = row.system_group;
+                validation.worst_phase_frequency_index = row.frequency_index;
+                validation.worst_phase_pair =
+                    row.reference_satellite.toString() + ">" +
+                    row.target_satellite.toString();
+            }
         }
     }
     validation.residual_rms_m =
@@ -930,20 +1031,25 @@ void DdFilterScaffold::updateObservedStateBookkeeping(
             if (osr.wavelengths[f] <= 0.0) {
                 continue;
             }
+            const int frequency_index =
+                claslibFrequencyIndex(osr.satellite, osr.signals[f], f);
+            if (frequency_index < 0 || frequency_index >= layout.nf()) {
+                continue;
+            }
             const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
             if (raw == nullptr || !raw->valid || !raw->has_carrier_phase ||
                 !raw->has_pseudorange || !std::isfinite(raw->carrier_phase) ||
                 !std::isfinite(raw->pseudorange)) {
                 continue;
             }
-            const auto key = std::make_pair(satno, f);
+            const auto key = std::make_pair(satno, frequency_index);
             ambiguity_outage_by_satno_freq_[key] = 0;
             if (ambiguity_lock_by_satno_freq_.find(key) ==
                 ambiguity_lock_by_satno_freq_.end()) {
                 ambiguity_lock_by_satno_freq_[key] = -kClaslibMinLockCount;
             }
 
-            const int ambiguity_index = layout.ambiguityIndex(satno, f);
+            const int ambiguity_index = layout.ambiguityIndex(satno, frequency_index);
             if (ambiguity_index < 0) {
                 continue;
             }
@@ -959,7 +1065,8 @@ void DdFilterScaffold::updateObservedStateBookkeeping(
             const double bias_m =
                 raw->carrier_phase * osr.wavelengths[f] - raw->pseudorange;
             if (std::isfinite(bias_m)) {
-                ambiguity_biases_m[f].push_back({ambiguity_index, bias_m});
+                ambiguity_biases_m[frequency_index].push_back(
+                    {ambiguity_index, bias_m});
             }
         }
     }
@@ -993,9 +1100,9 @@ void DdFilterScaffold::updateObservedStateBookkeeping(
                 double wavelength = 0.0;
                 for (const auto& osr : osr_corrections) {
                     const int satno = claslibSatelliteNumber(osr.satellite);
-                    if (layout.ambiguityIndex(satno, frequency) == ambiguity_index &&
-                        frequency < osr.num_frequencies) {
-                        wavelength = osr.wavelengths[frequency];
+                    if (layout.ambiguityIndex(satno, frequency) == ambiguity_index) {
+                        wavelength =
+                            osrWavelengthForClaslibFrequency(osr, frequency);
                         break;
                     }
                 }
@@ -1016,9 +1123,9 @@ void DdFilterScaffold::updateObservedStateBookkeeping(
             double wavelength = 0.0;
             for (const auto& osr : osr_corrections) {
                 const int satno = claslibSatelliteNumber(osr.satellite);
-                if (layout.ambiguityIndex(satno, frequency) == ambiguity_index &&
-                    frequency < osr.num_frequencies) {
-                    wavelength = osr.wavelengths[frequency];
+                if (layout.ambiguityIndex(satno, frequency) == ambiguity_index) {
+                    wavelength =
+                        osrWavelengthForClaslibFrequency(osr, frequency);
                     break;
                 }
             }
@@ -1306,12 +1413,17 @@ void DdFilterScaffold::appendDiagnosticsCsv(
             << "lambda_ambiguities,lambda_ratio,reject_reason,postfit_rms_m,"
             << "postfit_max_m,postfit_phase_rms_m,postfit_phase_max_m,"
             << "postfit_chi_ratio,ar_pdop,hold_pdop,reference_change_groups,"
-            << "consecutive_fix_count,hold_applied,hold_rows,hold_reject_reason\n";
+            << "consecutive_fix_count,hold_applied,hold_rows,hold_reject_reason,"
+            << "row_summary,reference_summary,postfit_worst_group,"
+            << "postfit_worst_frequency,postfit_worst_pair,"
+            << "postfit_worst_phase_residual_m\n";
     }
     const std::string reject_reason =
         !last_diagnostics_.fixed_reject_reason.empty()
             ? last_diagnostics_.fixed_reject_reason
-            : last_diagnostics_.lambda_reject_reason;
+            : (!last_diagnostics_.lambda_reject_reason.empty()
+                   ? last_diagnostics_.lambda_reject_reason
+                   : last_diagnostics_.fallback_reason);
     output << time.week << ',' << time.tow << ','
            << (last_diagnostics_.updated ? 1 : 0) << ','
            << (fixed ? 1 : 0) << ','
@@ -1331,7 +1443,13 @@ void DdFilterScaffold::appendDiagnosticsCsv(
            << last_diagnostics_.consecutive_fix_count << ','
            << (last_diagnostics_.hold_applied ? 1 : 0) << ','
            << last_diagnostics_.hold_rows << ','
-           << last_diagnostics_.hold_reject_reason << '\n';
+           << last_diagnostics_.hold_reject_reason << ','
+           << last_diagnostics_.row_summary << ','
+           << last_diagnostics_.reference_summary << ','
+           << last_diagnostics_.fixed_postfit.worst_phase_system_group << ','
+           << last_diagnostics_.fixed_postfit.worst_phase_frequency_index << ','
+           << last_diagnostics_.fixed_postfit.worst_phase_pair << ','
+           << last_diagnostics_.fixed_postfit.worst_phase_residual_m << '\n';
 }
 
 bool DdFilterScaffold::conditionFixedSnapshot(
@@ -1477,7 +1595,9 @@ bool DdFilterScaffold::conditionFixedSnapshot(
 
     remember(evaluate(full_indices));
     if (!best_attempt.accepted && !indices_by_frequency.empty()) {
-        remember(evaluate(indices_by_frequency.rbegin()->second));
+        for (const auto& [_, indices] : indices_by_frequency) {
+            remember(evaluate(indices));
+        }
     }
 
     last_diagnostics_.lambda_attempted = best_attempt.attempted;
@@ -1702,6 +1822,10 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
     last_diagnostics_.phase_rows = measurement_build.phase_rows;
     last_diagnostics_.code_rows = measurement_build.code_rows;
     last_diagnostics_.reference_groups = measurement_build.reference_groups;
+    last_diagnostics_.row_summary =
+        summarizeRowsByGroupFrequency(measurement_build.rows);
+    last_diagnostics_.reference_summary =
+        summarizeReferenceGroups(measurement_build.reference_groups_detail);
 
     rtk_measurement::MeasurementDiagnostics measurement_diagnostics;
     measurement_diagnostics.observation_count =
@@ -1791,6 +1915,10 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
         last_diagnostics_.phase_rows = retry_build.phase_rows;
         last_diagnostics_.code_rows = retry_build.code_rows;
         last_diagnostics_.reference_groups = retry_build.reference_groups;
+        last_diagnostics_.row_summary =
+            summarizeRowsByGroupFrequency(retry_build.rows);
+        last_diagnostics_.reference_summary =
+            summarizeReferenceGroups(retry_build.reference_groups_detail);
         if (retry_build.rows.size() < 4 || !apply_update(retry_build)) {
             PositionSolution solution = fallbackSolution(
                 native_float_solution,

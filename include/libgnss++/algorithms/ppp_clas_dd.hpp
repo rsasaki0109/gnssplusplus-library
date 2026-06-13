@@ -132,6 +132,10 @@ struct DdPostfitValidationResult {
     double phase_residual_rms_m = 0.0;
     double phase_residual_max_abs_m = 0.0;
     double chi_square_ratio = 0.0;
+    int worst_phase_system_group = -1;
+    int worst_phase_frequency_index = -1;
+    double worst_phase_residual_m = 0.0;
+    std::string worst_phase_pair;
 };
 
 DdPostfitValidationResult validateDdPostfitResiduals(
@@ -162,6 +166,8 @@ struct DdUpdateDiagnostics {
     bool hold_applied = false;
     int hold_rows = 0;
     std::string hold_reject_reason;
+    std::string row_summary;
+    std::string reference_summary;
     rtk_update::FilterUpdateResult filter_update;
 };
 

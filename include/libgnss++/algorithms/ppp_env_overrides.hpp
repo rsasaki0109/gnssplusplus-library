@@ -239,7 +239,7 @@ struct PPPEnvOverrides {
     bool clas_stec_constraint = false;
     // GNSS_PPP_CLAS_QZSS_S_PRN_FIX: map compact CLAS legacy S120..S122
     // correction labels to QZSS J01..J03 when set exactly to "1".
-    // Default false while row-set parity is measured.
+    // Default false while QZSS residual parity is measured.
     bool clas_qzss_s_prn_fix = false;
     // GNSS_PPP_DEBUG: general PPP debug logging. Default false.
     bool debug = false;
