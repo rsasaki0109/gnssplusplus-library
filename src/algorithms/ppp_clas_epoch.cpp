@@ -367,13 +367,15 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             0.0,
             0,
             static_cast<int>(osr_corrections.size()));
-        solution = clas_dd_filter_->processFloatPassthrough(
-            obs.time,
+        solution = clas_dd_filter_->processFloatUpdate(
+            obs,
+            epoch_context,
             filter_state_,
             native_float_solution,
             ppp_config_,
-            osr_corrections,
-            epoch_atmos);
+            [&](const Vector3d& receiver_pos, double elevation, const GNSSTime& time) {
+                return calculateMappingFunction(receiver_pos, elevation, time);
+            });
         has_last_processed_time_ = true;
         last_processed_time_ = obs.time;
         ++total_epochs_processed_;

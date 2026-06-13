@@ -1,6 +1,11 @@
 #include <gtest/gtest.h>
 
 #include <libgnss++/algorithms/ppp_clas.hpp>
+#include <libgnss++/algorithms/ppp_clas_dd.hpp>
+#include <libgnss++/core/constants.hpp>
+#include <libgnss++/core/coordinates.hpp>
+
+#include <cmath>
 
 using namespace libgnss;
 
@@ -69,4 +74,98 @@ TEST(PPPClasTest, OrbitClockOnlyModeDropsBiasAndPhaseCompensationTerms) {
     EXPECT_DOUBLE_EQ(applied.carrier_phase_correction_m, 1.15);
     EXPECT_FALSE(ppp_clas::usesClasTropospherePrior(
         ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::ORBIT_CLOCK_ONLY));
+}
+
+TEST(PPPClasDdTest, RowBuilderSelectsHighestElevationReferenceAndFormsResidual) {
+    ObservationData obs(GNSSTime(2068, 230572.0));
+    const Vector3d receiver(constants::WGS84_A, 0.0, 0.0);
+    const double wavelength = constants::GPS_L1_WAVELENGTH;
+
+    auto make_osr = [&](uint8_t prn,
+                        const Vector3d& satellite_position,
+                        double code_residual,
+                        double phase_residual) {
+        OSRCorrection osr;
+        osr.satellite = SatelliteId(GNSSSystem::GPS, prn);
+        osr.valid = true;
+        osr.num_frequencies = 1;
+        osr.signals[0] = SignalType::GPS_L1CA;
+        osr.frequencies[0] = constants::GPS_L1_FREQ;
+        osr.wavelengths[0] = wavelength;
+        osr.satellite_position = satellite_position;
+        osr.satellite_clock_bias_s = 0.0;
+        osr.PRC[0] = 1.25 + prn;
+        osr.CPC[0] = -0.75 + prn;
+
+        double lat = 0.0;
+        double lon = 0.0;
+        double h = 0.0;
+        ecef2geodetic(receiver, lat, lon, h);
+        const Vector3d enu = ecef2enu(satellite_position - receiver, lat, lon);
+        osr.elevation = std::atan2(enu.z(), std::hypot(enu.x(), enu.y()));
+
+        const double geo = geodist(satellite_position, receiver);
+        Observation raw(osr.satellite, SignalType::GPS_L1CA);
+        raw.valid = true;
+        raw.has_pseudorange = true;
+        raw.has_carrier_phase = true;
+        raw.pseudorange = geo + osr.PRC[0] + code_residual;
+        raw.carrier_phase = (geo + osr.CPC[0] + phase_residual) / wavelength;
+        obs.addObservation(raw);
+        return osr;
+    };
+
+    const OSRCorrection high = make_osr(
+        1,
+        receiver + Vector3d(20200000.0, 0.0, 1000000.0),
+        4.0,
+        0.4);
+    const OSRCorrection low = make_osr(
+        2,
+        receiver + Vector3d(15000000.0, 15000000.0, 0.0),
+        1.5,
+        -0.2);
+
+    ppp_clas_dd::StateLayoutOptions options;
+    options.frequencies = 1;
+    options.ionosphere_mode = ppp_clas_dd::IonosphereMode::Off;
+    options.troposphere_mode = ppp_clas_dd::TroposphereMode::Off;
+    const ppp_clas_dd::StateLayout layout{options};
+    VectorXd state = VectorXd::Zero(layout.nx());
+    state.segment(0, 3) = receiver;
+
+    ppp_shared::PPPConfig config;
+    config.estimate_ionosphere = false;
+    config.estimate_troposphere = false;
+    config.use_ionosphere_free = false;
+
+    const auto build = ppp_clas_dd::buildDdMeasurementSystem(
+        obs,
+        {low, high},
+        layout,
+        state,
+        config,
+        [](const Vector3d&, double, const GNSSTime&) { return 0.0; });
+
+    ASSERT_EQ(build.rows.size(), 2u);
+    ASSERT_EQ(build.phase_rows, 1);
+    ASSERT_EQ(build.code_rows, 1);
+    for (const auto& row : build.rows) {
+        EXPECT_EQ(row.reference_satellite, high.satellite);
+        EXPECT_EQ(row.target_satellite, low.satellite);
+        if (row.is_phase) {
+            EXPECT_NEAR(row.residual_m, 0.6, 1e-6);
+            EXPECT_NEAR(
+                row.state_coefficients.at(0).coefficient,
+                wavelength,
+                1e-12);
+            EXPECT_NEAR(
+                row.state_coefficients.at(1).coefficient,
+                -wavelength,
+                1e-12);
+        } else {
+            EXPECT_NEAR(row.residual_m, 2.5, 1e-6);
+            EXPECT_TRUE(row.state_coefficients.empty());
+        }
+    }
 }
