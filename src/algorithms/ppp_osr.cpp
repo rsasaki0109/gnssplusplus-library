@@ -499,6 +499,10 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
             if (!correction.atmos_valid || correction.atmos_tokens.empty()) {
                 continue;
             }
+            if (pppEnvOverrides().clas_atmos_lifecycle &&
+                correction.time > time + 1e-9) {
+                continue;
+            }
             const double time_gap = std::abs(correction.time - time);
             if (time_gap > kAtmosSelectionGapSeconds) {
                 continue;
@@ -509,8 +513,11 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
                 correction.atmos_tokens, receiver_position, grid_reference);
             const double grid_distance_sq =
                 has_grid
-                    ? (grid_reference.dlat_deg * grid_reference.dlat_deg +
-                       grid_reference.dlon_deg * grid_reference.dlon_deg)
+                    ? (pppEnvOverrides().clas_atmos_lifecycle
+                           ? grid_reference.nearest_grid_distance_m *
+                                 grid_reference.nearest_grid_distance_m
+                           : grid_reference.dlat_deg * grid_reference.dlat_deg +
+                                 grid_reference.dlon_deg * grid_reference.dlon_deg)
                     : std::numeric_limits<double>::infinity();
             const ClasAtmosCandidate candidate{
                 correction.atmos_tokens,
@@ -591,7 +598,7 @@ std::vector<OSRCorrection> computeOSR(
     const ObservationData& obs,
     const NavigationData& nav,
     const SSRProducts& ssr,
-    const std::map<std::string, std::string>& atmos_tokens,
+    const std::map<std::string, std::string>& epoch_atmos_tokens,
     const Vector3d& receiver_pos,
     double receiver_clk,
     double trop_zenith,
@@ -604,7 +611,7 @@ std::vector<OSRCorrection> computeOSR(
     std::vector<OSRCorrection> corrections;
     int preferred_network_id = 0;
     ppp_atmosphere::parseAtmosTokenInt(
-        atmos_tokens, "atmos_network_id", preferred_network_id);
+        epoch_atmos_tokens, "atmos_network_id", preferred_network_id);
 
     for (const auto& sat : obs.getSatellites()) {
         OSRCorrection osr;
@@ -764,6 +771,17 @@ std::vector<OSRCorrection> computeOSR(
             }
             continue;
         }
+        if (pppEnvOverrides().clas_atmos_lifecycle &&
+            !epoch_atmos_tokens.empty()) {
+            atmos_tokens = epoch_atmos_tokens;
+            int lifecycle_tow = 0;
+            if (ppp_atmosphere::parseAtmosTokenInt(
+                    atmos_tokens, "atmos_lifecycle_tow", lifecycle_tow)) {
+                osr.atmos_reference_time = GNSSTime(obs.time.week, lifecycle_tow);
+            } else {
+                osr.atmos_reference_time = obs.time;
+            }
+        }
 
         const auto ssr_timing_policy = config.clas_ssr_timing_policy;
         const bool clock_ref_valid = gnsstimeIsSet(osr.clock_reference_time);
@@ -780,8 +798,15 @@ std::vector<OSRCorrection> computeOSR(
             clock_ref_valid &&
             atmos_ref_valid &&
             osr.atmos_reference_time != osr.clock_reference_time) {
-            atmos_tokens.clear();
-            osr.atmos_reference_time = GNSSTime();
+            const bool lifecycle_atmos =
+                pppEnvOverrides().clas_atmos_lifecycle &&
+                atmos_tokens.find("atmos_lifecycle") != atmos_tokens.end();
+            const double atmos_clock_gap =
+                std::abs(osr.atmos_reference_time - osr.clock_reference_time);
+            if (!lifecycle_atmos || atmos_clock_gap > 30.0) {
+                atmos_tokens.clear();
+                osr.atmos_reference_time = GNSSTime();
+            }
         }
 
         osr.satellite_position = sat_pos;

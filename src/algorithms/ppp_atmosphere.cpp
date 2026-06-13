@@ -10,6 +10,7 @@
 #include <cmath>
 #include <ctime>
 #include <limits>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -120,6 +121,34 @@ bool sampleAtmosResidualList(const std::map<std::string, std::string>& atmos_tok
         return true;
     }
     return false;
+}
+
+std::set<int> parseAtmosValidGridNumbers(
+    const std::map<std::string, std::string>& atmos_tokens) {
+    std::set<int> valid_grids;
+    const auto it = atmos_tokens.find("atmos_valid_grids");
+    if (it == atmos_tokens.end() || it->second.empty()) {
+        return valid_grids;
+    }
+    size_t start = 0;
+    while (start <= it->second.size()) {
+        const size_t delimiter = it->second.find(';', start);
+        const std::string token =
+            delimiter == std::string::npos ? it->second.substr(start)
+                                           : it->second.substr(start, delimiter - start);
+        try {
+            const int grid_no = std::stoi(token);
+            if (grid_no > 0) {
+                valid_grids.insert(grid_no);
+            }
+        } catch (...) {
+        }
+        if (delimiter == std::string::npos) {
+            break;
+        }
+        start = delimiter + 1;
+    }
+    return valid_grids;
 }
 
 struct GridCandidate {
@@ -348,6 +377,7 @@ void fillGridReference(const std::array<const GridCandidate*, 4>& selected,
         static_cast<size_t>(std::max(selected[0]->point->grid_no - 1, 0));
     reference.network_id = selected[0]->point->network_id;
     reference.grid_no = selected[0]->point->grid_no;
+    reference.nearest_grid_distance_m = selected[0]->distance_m;
     reference.interpolation_grid_count = count;
     reference.has_bilinear = count == 4;
     for (int i = 0; i < 4; ++i) {
@@ -471,6 +501,19 @@ bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_to
 
     int grid_count = 0;
     parseAtmosTokenInt(atmos_tokens, "atmos_grid_count", grid_count);
+    const bool lifecycle_enabled = pppEnvOverrides().clas_atmos_lifecycle;
+    if (lifecycle_enabled && grid_count <= 0) {
+        return false;
+    }
+    const std::set<int> valid_grid_numbers =
+        lifecycle_enabled ? parseAtmosValidGridNumbers(atmos_tokens) : std::set<int>{};
+    if (lifecycle_enabled && valid_grid_numbers.empty()) {
+        return false;
+    }
+    const auto gridAllowed = [&](const ClasGridPoint& point) {
+        return !lifecycle_enabled ||
+               valid_grid_numbers.find(point.grid_no) != valid_grid_numbers.end();
+    };
 
     double receiver_lat_rad = 0.0;
     double receiver_lon_rad = 0.0;
@@ -483,7 +526,8 @@ bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_to
     const double receiver_lat_deg = receiver_lat_rad / kDegreesToRadians;
     const double receiver_lon_deg = receiver_lon_rad / kDegreesToRadians;
 
-    if (!pppEnvOverrides().clas_atmos_grid_matrix) {
+    const bool use_grid_matrix = pppEnvOverrides().clas_atmos_grid_matrix;
+    if (!use_grid_matrix) {
         struct LegacyGridCandidate {
             const ClasGridPoint* point = nullptr;
             double distance_sq = 0.0;
@@ -492,6 +536,7 @@ bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_to
         for (const auto& point : clasGridPoints()) {
             if (point.network_id != network_id) continue;
             if (grid_count > 0 && point.grid_no > grid_count) continue;
+            if (!gridAllowed(point)) continue;
             const double dlat = receiver_lat_deg - point.latitude_deg;
             const double dlon = receiver_lon_deg - point.longitude_deg;
             candidates.push_back({&point, dlat * dlat + dlon * dlon});
@@ -551,6 +596,8 @@ bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_to
         reference.residual_index = static_cast<size_t>(std::max(nearest->grid_no - 1, 0));
         reference.network_id = nearest->network_id;
         reference.grid_no = nearest->grid_no;
+        reference.nearest_grid_distance_m =
+            std::sqrt(candidates[0].distance_sq) * kDegreesToRadians * constants::WGS84_A;
         return true;
     }
 
@@ -563,6 +610,7 @@ bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_to
         }
         if (grid_count > 0 && point.grid_no > grid_count) continue;
         if (std::fabs(point.height_m) > 0.0001) continue;
+        if (!gridAllowed(point)) continue;
         const double distance_m =
             clasGridMetricDistanceMeters(receiver_lat_rad, receiver_lon_rad, point);
         if (distance_m > kClasMaxGridDistanceM) {
@@ -765,6 +813,57 @@ double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_token
     const bool subtype12_row = isSubtype12StecRow(atmos_tokens, satellite);
     int stec_type = -1;
     parseAtmosTokenInt(atmos_tokens, "atmos_stec_type" + suffix, stec_type);
+
+    const std::string materialized_grid_key =
+        "atmos_stec_grid_tecu" + suffix;
+    if (have_grid_reference &&
+        atmos_tokens.find(materialized_grid_key) != atmos_tokens.end()) {
+        auto sampleMaterializedGrid = [&](size_t grid_index, double& grid_value) {
+            return parseAtmosListValueAtIndex(
+                atmos_tokens, materialized_grid_key, grid_index, grid_value) &&
+                   std::isfinite(grid_value);
+        };
+        double materialized_stec = 0.0;
+        bool have_materialized = false;
+        if (grid_reference.interpolation_grid_count > 1) {
+            bool ok = true;
+            for (int g = 0; g < grid_reference.interpolation_grid_count; ++g) {
+                double grid_value = 0.0;
+                if (!sampleMaterializedGrid(
+                        grid_reference.interpolation_grid_indices[g],
+                        grid_value)) {
+                    ok = false;
+                    break;
+                }
+                materialized_stec +=
+                    grid_reference.interpolation_weights[g] * grid_value;
+            }
+            have_materialized = ok;
+        } else if (grid_reference.has_bilinear) {
+            bool ok = true;
+            for (int g = 0; g < 4; ++g) {
+                double grid_value = 0.0;
+                if (!sampleMaterializedGrid(
+                        grid_reference.bilinear_grid_indices[g],
+                        grid_value)) {
+                    ok = false;
+                    break;
+                }
+                materialized_stec +=
+                    grid_reference.bilinear_weights[g] * grid_value;
+            }
+            have_materialized = ok;
+        } else {
+            have_materialized =
+                sampleMaterializedGrid(grid_reference.residual_index, materialized_stec);
+        }
+        if (have_materialized) {
+            return materialized_stec;
+        }
+    }
+    if (pppEnvOverrides().clas_atmos_lifecycle) {
+        return 0.0;
+    }
 
     // STEC polynomial: c00 + c01*dlat + c10*dlon + c11*dlat*dlon [+ c02*dlat² + c20*dlon²]
     // When 4-grid bilinear is available, evaluate the polynomial at each grid

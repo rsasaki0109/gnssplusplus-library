@@ -8,7 +8,7 @@ import csv
 import errno
 import math
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 if os.name != "nt":
@@ -36,6 +36,8 @@ CSSR_SUBTYPE_GRIDDED = 9
 CSSR_SUBTYPE_SERVICE_INFO = 10
 CSSR_SUBTYPE_COMBINED = 11
 CSSR_SUBTYPE_ATMOS = 12
+CLAS_ATMOS_BANK_VALID_SECONDS = 30.0
+CLAS_ATMOS_LATEST_VALID_SECONDS = 3600.0
 
 COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT = "lag-tolerant-union"
 COMPACT_SSR_FLUSH_POLICY_ORBIT_OR_CLOCK_ONLY = "orbit-or-clock-only"
@@ -418,6 +420,18 @@ class CSSRServiceInfoPacket:
 
 
 @dataclass
+class AtmosLifecycleCoeff:
+    stec_type: int = 0
+    quality: str | None = None
+    c00: float = 0.0
+    c01: float = 0.0
+    c10: float = 0.0
+    c11: float = 0.0
+    c02: float = 0.0
+    c20: float = 0.0
+
+
+@dataclass
 class CSSRDecoderState:
     mask: CSSRMaskState | None = None
     message_index: int = 0
@@ -437,6 +451,13 @@ class CSSRDecoderState:
     pending_bias_network_id: int | None = None
     pending_atmos: dict[str, str] | None = None
     pending_atmos_subtypes: set[int] | None = None
+    atmos_lifecycle_coeffs: dict[int, dict[str, AtmosLifecycleCoeff]] = field(default_factory=dict)
+    atmos_lifecycle_stec_values: dict[int, dict[str, list[float]]] = field(default_factory=dict)
+    atmos_lifecycle_stec_times: dict[int, dict[str, list[int]]] = field(default_factory=dict)
+    atmos_lifecycle_trop_tokens: dict[int, dict[str, str]] = field(default_factory=dict)
+    atmos_lifecycle_trop_time: dict[int, int] = field(default_factory=dict)
+    atmos_lifecycle_grid_count: dict[int, int] = field(default_factory=dict)
+    atmos_lifecycle_pending_emits: set[tuple[int, int]] = field(default_factory=set)
     service_info_chunks: list[tuple[int, bytes, int]] | None = None
     service_packet_index: int = 0
 
@@ -657,6 +678,339 @@ def require_mask_state(state: CSSRDecoderState, subtype: int) -> CSSRMaskState:
     return state.mask
 
 
+def compact_atmos_lifecycle_enabled() -> bool:
+    value = os.environ.get("GNSS_PPP_CLAS_ATMOS_LIFECYCLE")
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "on", "yes"}
+
+
+def _try_float(text: str | None) -> float:
+    if text is None:
+        return math.nan
+    try:
+        value = float(text)
+    except (TypeError, ValueError):
+        return math.nan
+    return value if math.isfinite(value) else math.nan
+
+
+def _try_int(text: str | None, default: int = 0) -> int:
+    if text is None:
+        return default
+    try:
+        return int(text)
+    except (TypeError, ValueError):
+        return default
+
+
+def _format_optional_float(value: float) -> str:
+    return "nan" if not math.isfinite(value) else f"{value:.6f}"
+
+
+def _parse_float_list(text: str | None) -> list[float]:
+    if not text:
+        return []
+    return [_try_float(token) for token in text.split(";")]
+
+
+def _stec_satellites_in_tokens(atmos_tokens: dict[str, str]) -> set[str]:
+    satellites: set[str] = set()
+    for key in atmos_tokens:
+        if key.startswith("atmos_stec_") and ":" in key:
+            satellites.add(key.split(":", 1)[1])
+    return satellites
+
+
+def _clas_grid_points_by_network() -> dict[int, list[tuple[int, float, float, float]]]:
+    cache = getattr(_clas_grid_points_by_network, "_cache", None)
+    if cache is not None:
+        return cache
+    grid_path = Path(__file__).resolve().parent.parent / "src" / "algorithms" / "clas_grid_points.inc"
+    networks: dict[int, list[tuple[int, float, float, float]]] = {}
+    if grid_path.exists():
+        for raw_line in grid_path.read_text(encoding="ascii").splitlines():
+            line = raw_line.strip()
+            if not line.startswith("{"):
+                continue
+            line = line.strip("{},")
+            parts = [part.strip() for part in line.split(",")]
+            if len(parts) < 5:
+                continue
+            try:
+                network_id = int(parts[0])
+                grid_no = int(parts[1])
+                lat_deg = float(parts[2])
+                lon_deg = float(parts[3])
+                height_m = float(parts[4])
+            except ValueError:
+                continue
+            networks.setdefault(network_id, []).append((grid_no, lat_deg, lon_deg, height_m))
+    for points in networks.values():
+        points.sort(key=lambda item: item[0])
+    setattr(_clas_grid_points_by_network, "_cache", networks)
+    return networks
+
+
+def _grid_offsets_for_network(network_id: int, grid_count: int) -> list[tuple[float, float]]:
+    points = _clas_grid_points_by_network().get(network_id, [])
+    if not points or grid_count <= 0:
+        return [(0.0, 0.0) for _ in range(max(grid_count, 0))]
+    selected = points[:grid_count]
+    if not selected:
+        return [(0.0, 0.0) for _ in range(grid_count)]
+    origin_lat = selected[0][1]
+    origin_lon = selected[0][2]
+    offsets = [(lat - origin_lat, lon - origin_lon) for _grid, lat, lon, _height in selected]
+    while len(offsets) < grid_count:
+        offsets.append((0.0, 0.0))
+    return offsets
+
+
+def _update_lifecycle_coeffs(
+    state: CSSRDecoderState,
+    tow: int,
+    network_id: int,
+    atmos_tokens: dict[str, str],
+) -> None:
+    del tow  # Coefficients persist until replaced, matching CLASLIB ssr_ion state.
+    coeff_bank = state.atmos_lifecycle_coeffs.setdefault(network_id, {})
+    for sat_key in _stec_satellites_in_tokens(atmos_tokens):
+        has_coeff = any(
+            f"atmos_stec_{name}:{sat_key}" in atmos_tokens
+            for name in (
+                "type",
+                "c00_tecu",
+                "c01_tecu_per_deg",
+                "c10_tecu_per_deg",
+                "c11_tecu_per_deg2",
+                "c02_tecu_per_deg2",
+                "c20_tecu_per_deg2",
+            )
+        )
+        if not has_coeff:
+            continue
+        coeff = AtmosLifecycleCoeff()
+        coeff.stec_type = _try_int(atmos_tokens.get(f"atmos_stec_type:{sat_key}"), 0)
+        coeff.quality = atmos_tokens.get(f"atmos_stec_quality:{sat_key}")
+        coeff.c00 = _try_float(atmos_tokens.get(f"atmos_stec_c00_tecu:{sat_key}"))
+        coeff.c01 = _try_float(atmos_tokens.get(f"atmos_stec_c01_tecu_per_deg:{sat_key}"))
+        coeff.c10 = _try_float(atmos_tokens.get(f"atmos_stec_c10_tecu_per_deg:{sat_key}"))
+        coeff.c11 = _try_float(atmos_tokens.get(f"atmos_stec_c11_tecu_per_deg2:{sat_key}"))
+        coeff.c02 = _try_float(atmos_tokens.get(f"atmos_stec_c02_tecu_per_deg2:{sat_key}"))
+        coeff.c20 = _try_float(atmos_tokens.get(f"atmos_stec_c20_tecu_per_deg2:{sat_key}"))
+        for attr in ("c00", "c01", "c10", "c11", "c02", "c20"):
+            if not math.isfinite(getattr(coeff, attr)):
+                setattr(coeff, attr, 0.0)
+        coeff_bank[sat_key] = coeff
+
+
+def _evaluate_lifecycle_stec_coeff(coeff: AtmosLifecycleCoeff | None, dlat: float, dlon: float) -> float:
+    if coeff is None:
+        return 0.0
+    value = coeff.c00
+    if coeff.stec_type > 0:
+        value += coeff.c01 * dlat + coeff.c10 * dlon
+    if coeff.stec_type > 1:
+        value += coeff.c11 * dlat * dlon
+    if coeff.stec_type > 2:
+        value += coeff.c02 * dlat * dlat + coeff.c20 * dlon * dlon
+    return value
+
+
+def _tokens_have_trop_grid(atmos_tokens: dict[str, str]) -> bool:
+    return (
+        "atmos_trop_hs_residuals_m" in atmos_tokens
+        and "atmos_trop_wet_residuals_m" in atmos_tokens
+    ) or "atmos_trop_residuals_m" in atmos_tokens
+
+
+def _update_lifecycle_trop(
+    state: CSSRDecoderState,
+    tow: int,
+    network_id: int,
+    atmos_tokens: dict[str, str],
+) -> None:
+    if not _tokens_have_trop_grid(atmos_tokens):
+        return
+    trop_tokens = {
+        key: value
+        for key, value in atmos_tokens.items()
+        if key.startswith("atmos_trop_")
+        or key in {"atmos_trop_avail", "atmos_grid_count"}
+    }
+    state.atmos_lifecycle_trop_tokens[network_id] = trop_tokens
+    state.atmos_lifecycle_trop_time[network_id] = tow
+
+
+def _grid_has_valid_trop(trop_tokens: dict[str, str], index: int) -> bool:
+    hs = _parse_float_list(trop_tokens.get("atmos_trop_hs_residuals_m"))
+    wet = _parse_float_list(trop_tokens.get("atmos_trop_wet_residuals_m"))
+    if index < len(hs) and index < len(wet):
+        return math.isfinite(hs[index]) and math.isfinite(wet[index])
+    residual = _parse_float_list(trop_tokens.get("atmos_trop_residuals_m"))
+    if index < len(residual):
+        return math.isfinite(residual[index])
+    return False
+
+
+def _materialize_lifecycle_stec(
+    state: CSSRDecoderState,
+    tow: int,
+    network_id: int,
+    atmos_tokens: dict[str, str],
+    source_subtype: int,
+) -> None:
+    grid_count = _try_int(atmos_tokens.get("atmos_grid_count"), 0)
+    if grid_count <= 0:
+        return
+    state.atmos_lifecycle_grid_count[network_id] = grid_count
+    offsets = _grid_offsets_for_network(network_id, grid_count)
+    value_bank = state.atmos_lifecycle_stec_values.setdefault(network_id, {})
+    time_bank = state.atmos_lifecycle_stec_times.setdefault(network_id, {})
+    residual_sats = {
+        key.split(":", 1)[1]
+        for key in atmos_tokens
+        if key.startswith("atmos_stec_residuals_tecu:")
+    }
+    coeff_sats = {
+        key.split(":", 1)[1]
+        for key in atmos_tokens
+        if key.startswith("atmos_stec_c00_tecu:") or key.startswith("atmos_stec_type:")
+    }
+    # Subtype 12 can carry polynomial-only gridded STEC. Subtype 8 cannot,
+    # because it has no grid payload and only updates the coefficient state.
+    sats_to_update = set(residual_sats)
+    if source_subtype == CSSR_SUBTYPE_ATMOS and not residual_sats:
+        sats_to_update.update(coeff_sats)
+    coeff_bank = state.atmos_lifecycle_coeffs.get(network_id, {})
+    for sat_key in sats_to_update:
+        values = value_bank.setdefault(sat_key, [math.nan] * grid_count)
+        times = time_bank.setdefault(sat_key, [-10**9] * grid_count)
+        if len(values) != grid_count:
+            values[:] = (values + [math.nan] * grid_count)[:grid_count]
+            times[:] = (times + [-10**9] * grid_count)[:grid_count]
+        residuals = _parse_float_list(atmos_tokens.get(f"atmos_stec_residuals_tecu:{sat_key}"))
+        coeff = coeff_bank.get(sat_key)
+        for index, (dlat, dlon) in enumerate(offsets):
+            stec0 = _evaluate_lifecycle_stec_coeff(coeff, dlat, dlon)
+            if residuals:
+                if index >= len(residuals) or not math.isfinite(residuals[index]):
+                    continue
+                value = stec0 + residuals[index]
+            else:
+                value = stec0
+            values[index] = value
+            times[index] = tow
+
+
+def _lifecycle_tokens_for_network(
+    state: CSSRDecoderState,
+    tow: int,
+    network_id: int,
+) -> dict[str, str] | None:
+    grid_count = state.atmos_lifecycle_grid_count.get(network_id, 0)
+    if grid_count <= 0:
+        return None
+    trop_tokens = state.atmos_lifecycle_trop_tokens.get(network_id)
+    trop_time = state.atmos_lifecycle_trop_time.get(network_id)
+    if (
+        trop_tokens is None
+        or trop_time is None
+        or tow - trop_time < -1e-9
+        or tow - trop_time > CLAS_ATMOS_BANK_VALID_SECONDS + 1e-9
+    ):
+        return None
+    value_bank = state.atmos_lifecycle_stec_values.get(network_id, {})
+    time_bank = state.atmos_lifecycle_stec_times.get(network_id, {})
+    valid_grids: list[int] = []
+    for index in range(grid_count):
+        valid_stec = 0
+        for sat_key, values in value_bank.items():
+            times = time_bank.get(sat_key, [])
+            if (
+                index < len(values)
+                and index < len(times)
+                and math.isfinite(values[index])
+                and 0.0 <= tow - times[index] <= CLAS_ATMOS_LATEST_VALID_SECONDS
+            ):
+                valid_stec += 1
+        if _grid_has_valid_trop(trop_tokens, index) and valid_stec >= 8:
+            valid_grids.append(index + 1)
+    if not valid_grids:
+        return None
+    selected_sats = 0
+    tokens: dict[str, str] = {
+        "atmos_lifecycle": "1",
+        "atmos_lifecycle_tow": str(trop_time),
+        "atmos_network_id": str(network_id),
+        "atmos_grid_count": str(grid_count),
+        "atmos_valid_grids": ";".join(str(grid_no) for grid_no in valid_grids),
+        "atmos_trop_avail": trop_tokens.get("atmos_trop_avail", "1"),
+        "atmos_stec_avail": "2",
+    }
+    tokens.update(trop_tokens)
+    valid_grid_indexes = {grid_no - 1 for grid_no in valid_grids}
+    for sat_key in sorted(value_bank):
+        values = value_bank[sat_key]
+        times = time_bank.get(sat_key, [])
+        encoded: list[str] = []
+        sat_has_value = False
+        for index in range(grid_count):
+            valid = (
+                index in valid_grid_indexes
+                and index < len(values)
+                and index < len(times)
+                and math.isfinite(values[index])
+                and 0.0 <= tow - times[index] <= CLAS_ATMOS_LATEST_VALID_SECONDS
+            )
+            if valid:
+                sat_has_value = True
+                encoded.append(f"{values[index]:.6f}")
+            else:
+                encoded.append("nan")
+        if sat_has_value:
+            tokens[f"atmos_stec_grid_tecu:{sat_key}"] = ";".join(encoded)
+            selected_sats += 1
+    if selected_sats == 0:
+        return None
+    tokens["atmos_selected_satellites"] = str(selected_sats)
+    return tokens
+
+
+def _set_pending_lifecycle_atmos(
+    state: CSSRDecoderState,
+    tokens: dict[str, str] | None,
+    source_subtype: int,
+) -> None:
+    if tokens:
+        state.pending_atmos = dict(tokens)
+        state.pending_atmos_subtypes = {source_subtype}
+    else:
+        state.pending_atmos = None
+        state.pending_atmos_subtypes = None
+
+
+def update_pending_lifecycle_atmos(
+    state: CSSRDecoderState,
+    tow: int,
+    network_id: int,
+    atmos_tokens: dict[str, str],
+    source_subtype: int,
+) -> None:
+    _update_lifecycle_coeffs(state, tow, network_id, atmos_tokens)
+    _update_lifecycle_trop(state, tow, network_id, atmos_tokens)
+    if source_subtype in {CSSR_SUBTYPE_GRIDDED, CSSR_SUBTYPE_ATMOS}:
+        _materialize_lifecycle_stec(state, tow, network_id, atmos_tokens, source_subtype)
+    if _lifecycle_tokens_for_network(state, tow, network_id):
+        state.atmos_lifecycle_pending_emits.add((network_id, tow))
+    _set_pending_lifecycle_atmos(
+        state,
+        _lifecycle_tokens_for_network(state, tow, network_id),
+        source_subtype,
+    )
+
+
 def reset_pending_corrections(state: CSSRDecoderState) -> None:
     state.pending_orbit = None
     state.pending_clock = None
@@ -670,6 +1024,11 @@ def reset_pending_corrections(state: CSSRDecoderState) -> None:
     state.pending_phase_bias_source = None
     state.pending_base_phase_bias = None
     state.pending_bias_network_id = None
+    if compact_atmos_lifecycle_enabled():
+        state.pending_atmos = None
+        state.pending_atmos_subtypes = None
+        return
+
     # Preserve STEC polynomial coefficients (c00, c01, c10, etc.) across epochs.
     # These arrive from subtype 8 at ~30s intervals, while gridded residuals
     # (subtype 9) arrive every second.  Without carry-forward the c00 terms
@@ -690,6 +1049,10 @@ def carry_forward_atmos_tokens(
     merge_policy: str,
 ) -> dict[str, str] | None:
     if merge_policy == COMPACT_ATMOS_MERGE_POLICY_NO_CARRY or atmos_tokens is None:
+        return None
+    if compact_atmos_lifecycle_enabled():
+        if atmos_tokens.get("atmos_lifecycle") == "1":
+            return dict(atmos_tokens)
         return None
     if merge_policy not in COMPACT_ATMOS_MERGE_POLICIES:
         raise ValueError(f"unsupported Compact SSR atmos merge policy: {merge_policy}")
@@ -1422,6 +1785,19 @@ def flush_pending_corrections(
     code_bias_map = state.pending_code_bias or {}
     phase_bias_map = state.pending_phase_bias or {}
     atmos = state.pending_atmos or {}
+    lifecycle_atmos_rows: list[dict[str, str]] = []
+    if compact_atmos_lifecycle_enabled():
+        atmos = {}
+        emitted: set[tuple[int, int]] = set()
+        expired: set[tuple[int, int]] = set()
+        for network_id, bank_tow in sorted(state.atmos_lifecycle_pending_emits):
+            tokens = _lifecycle_tokens_for_network(state, bank_tow, network_id)
+            if tokens:
+                lifecycle_atmos_rows.append(tokens)
+                emitted.add((network_id, bank_tow))
+            elif int(state.pending_tow) - bank_tow > CLAS_ATMOS_BANK_VALID_SECONDS:
+                expired.add((network_id, bank_tow))
+        state.atmos_lifecycle_pending_emits.difference_update(emitted | expired)
     sat_index = {satellite.sat: satellite for satellite in satellites}
     rows: list[CompactSSRCorrection] = []
     # Include satellites from atmosphere data that may not have orbit/clock corrections
@@ -1482,6 +1858,54 @@ def flush_pending_corrections(
                 atmos_tokens=dict(atmos) if atmos else None,
             )
         )
+    for atmos_tokens in lifecycle_atmos_rows:
+        atmos_sat_tokens = {
+            key.split(":", 1)[1]
+            for key in atmos_tokens
+            if key.startswith("atmos_stec_grid_tecu:")
+        }
+        for sat_token in sorted(atmos_sat_tokens):
+            satellite = sat_index.get(sat_token)
+            if satellite is None:
+                continue
+            rows.append(
+                CompactSSRCorrection(
+                    week=gps_week,
+                    tow=float(_try_int(atmos_tokens.get("atmos_lifecycle_tow"), int(state.pending_tow))),
+                    system=satellite.system,
+                    prn=satellite.prn,
+                    dx=0.0,
+                    dy=0.0,
+                    dz=0.0,
+                    dclock_m=0.0,
+                    atmos_network_id=(
+                        int(atmos_tokens["atmos_network_id"])
+                        if "atmos_network_id" in atmos_tokens
+                        else None
+                    ),
+                    atmos_trop_avail=(
+                        int(atmos_tokens["atmos_trop_avail"])
+                        if "atmos_trop_avail" in atmos_tokens
+                        else None
+                    ),
+                    atmos_stec_avail=(
+                        int(atmos_tokens["atmos_stec_avail"])
+                        if "atmos_stec_avail" in atmos_tokens
+                        else None
+                    ),
+                    atmos_grid_count=(
+                        int(atmos_tokens["atmos_grid_count"])
+                        if "atmos_grid_count" in atmos_tokens
+                        else None
+                    ),
+                    atmos_selected_satellites=(
+                        int(atmos_tokens["atmos_selected_satellites"])
+                        if "atmos_selected_satellites" in atmos_tokens
+                        else None
+                    ),
+                    atmos_tokens=dict(atmos_tokens),
+                )
+            )
     reset_pending_corrections(state)
     return rows
 
@@ -2071,13 +2495,22 @@ def decode_cssr_stec_message(
         atmos_merge_policy,
     )
     atmos_tokens["atmos_selected_satellites"] = str(selected_satellites)
-    merge_pending_atmos(
-        state,
-        atmos_tokens,
-        atmos_merge_policy,
-        atmos_subtype_merge_policy,
-        CSSR_SUBTYPE_STEC,
-    )
+    if compact_atmos_lifecycle_enabled():
+        update_pending_lifecycle_atmos(
+            state,
+            int(header["tow"]),
+            network_id,
+            atmos_tokens,
+            CSSR_SUBTYPE_STEC,
+        )
+    else:
+        merge_pending_atmos(
+            state,
+            atmos_tokens,
+            atmos_merge_policy,
+            atmos_subtype_merge_policy,
+            CSSR_SUBTYPE_STEC,
+        )
 
     state.message_index += 1
     return (
@@ -2178,13 +2611,22 @@ def decode_cssr_gridded_message(
         float(header["udi_seconds"]),
         atmos_merge_policy,
     )
-    merge_pending_atmos(
-        state,
-        atmos_tokens,
-        atmos_merge_policy,
-        atmos_subtype_merge_policy,
-        CSSR_SUBTYPE_GRIDDED,
-    )
+    if compact_atmos_lifecycle_enabled():
+        update_pending_lifecycle_atmos(
+            state,
+            int(header["tow"]),
+            network_id,
+            atmos_tokens,
+            CSSR_SUBTYPE_GRIDDED,
+        )
+    else:
+        merge_pending_atmos(
+            state,
+            atmos_tokens,
+            atmos_merge_policy,
+            atmos_subtype_merge_policy,
+            CSSR_SUBTYPE_GRIDDED,
+        )
 
     state.message_index += 1
     return (
@@ -2503,13 +2945,22 @@ def decode_cssr_atmos_message(
         atmos_merge_policy,
     )
     atmos_tokens["atmos_selected_satellites"] = str(selected_satellites)
-    merge_pending_atmos(
-        state,
-        atmos_tokens,
-        atmos_merge_policy,
-        atmos_subtype_merge_policy,
-        CSSR_SUBTYPE_ATMOS,
-    )
+    if compact_atmos_lifecycle_enabled():
+        update_pending_lifecycle_atmos(
+            state,
+            int(header["tow"]),
+            network_id,
+            atmos_tokens,
+            CSSR_SUBTYPE_ATMOS,
+        )
+    else:
+        merge_pending_atmos(
+            state,
+            atmos_tokens,
+            atmos_merge_policy,
+            atmos_subtype_merge_policy,
+            CSSR_SUBTYPE_ATMOS,
+        )
 
     state.message_index += 1
     return (
