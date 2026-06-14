@@ -12829,6 +12829,10 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--arfilter-margin", result.stdout)
         self.assertIn("--min-hold-count", result.stdout)
         self.assertIn("--hold-ratio-threshold", result.stdout)
+        # Motion-aware kinematic gates (PR #177/#178) now reach the live runtime.
+        self.assertIn("--min-full-ratio-for-subset-ar", result.stdout)
+        self.assertIn("--max-pos-jump-rate", result.stdout)
+        self.assertIn("--max-float-prefit-rms", result.stdout)
 
     def test_replay_command_help_mentions_arfilter(self) -> None:
         result = self.run_gnss("replay", "--help")
@@ -12840,6 +12844,10 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--min-hold-count", result.stdout)
         self.assertIn("--hold-ratio-threshold", result.stdout)
         self.assertIn("--base-ubx", result.stdout)
+        # Motion-aware kinematic gates (PR #177/#178) now reach the replay runtime.
+        self.assertIn("--min-full-ratio-for-subset-ar", result.stdout)
+        self.assertIn("--max-pos-jump-rate", result.stdout)
+        self.assertIn("--max-float-prefit-rms", result.stdout)
 
     def test_solve_accepts_low_cost_preset_and_hold_knobs(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_solve_preset_") as temp_dir:
