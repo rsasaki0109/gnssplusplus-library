@@ -124,9 +124,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
     overrides.static_anchor_blend = envDoubleOr("GNSS_PPP_STATIC_ANCHOR_BLEND", -1.0);
     overrides.madoca_early_window = !envExactZero("GNSS_PPP_MADOCA_EARLY_WINDOW");
     overrides.madoca_spike_guard = !envExactZero("GNSS_PPP_MADOCA_SPIKE_GUARD");
-    overrides.madoca_boundary_guard = !envExactZero("GNSS_PPP_MADOCA_BOUNDARY_GUARD");
     overrides.madoca_postfit_commit =
-        envExactOne("GNSS_PPP_MADOCA_POSTFIT_COMMIT");
+        !envExactZero("GNSS_PPP_MADOCA_POSTFIT_COMMIT");
     overrides.madoca_postfit_shadow_path =
         envStringOrEmpty("GNSS_PPP_MADOCA_POSTFIT_SHADOW");
 
