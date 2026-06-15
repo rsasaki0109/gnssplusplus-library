@@ -76,6 +76,12 @@ struct LiveConfig {
     int min_satellites_for_ar = 5;
     int min_hold_count = 5;
     double hold_ratio_threshold = 2.0;
+    double min_full_ratio_for_subset_ar = 0.0;
+    double max_position_jump_min_m = 0.0;
+    double max_position_jump_rate_mps = 0.0;
+    double max_float_prefit_residual_rms_m = 0.0;
+    double max_float_prefit_residual_max_m = 0.0;
+    int max_float_prefit_residual_reset_streak = 3;
     double elevation_mask_deg = 15.0;
     bool enable_glonass = true;
     bool enable_beidou = true;
@@ -88,6 +94,12 @@ struct LiveConfig {
     bool min_satellites_for_ar_set = false;
     bool min_hold_count_set = false;
     bool hold_ratio_threshold_set = false;
+    bool min_full_ratio_for_subset_ar_set = false;
+    bool max_position_jump_min_m_set = false;
+    bool max_position_jump_rate_mps_set = false;
+    bool max_float_prefit_residual_rms_m_set = false;
+    bool max_float_prefit_residual_max_m_set = false;
+    bool max_float_prefit_residual_reset_streak_set = false;
 };
 
 struct SourceState {
@@ -587,6 +599,12 @@ void printUsage(const char* argv0) {
         << "  --min-ar-sats <n>          Minimum satellites for AR (default: 5)\n"
         << "  --min-hold-count <n>       Consecutive fixes before hold ambiguity is allowed (default: 5)\n"
         << "  --hold-ratio-threshold <v> Ratio threshold used while hold ambiguity is active (default: 2.0)\n"
+        << "  --min-full-ratio-for-subset-ar <v> Min full-constellation LAMBDA ratio to accept a subset-AR fix (0=off)\n"
+        << "  --max-pos-jump-min <m>     Floor of the motion-aware fixed-jump gate [m] (0=static gate)\n"
+        << "  --max-pos-jump-rate <m/s>  Per-second growth of the fixed-jump gate; needed for a moving rover (0=off)\n"
+        << "  --max-float-prefit-rms <m> Float prefit DD residual RMS that triggers divergence reset (0=off)\n"
+        << "  --max-float-prefit-max <m> Float prefit DD residual max that triggers divergence reset (0=off)\n"
+        << "  --max-float-prefit-reset-streak <n> Consecutive high-residual epochs before reset (default: 3)\n"
         << "  --elevation-mask-deg <v>   Elevation mask in degrees (default: 15)\n"
         << "  --no-glonass               Disable GLONASS carrier processing\n"
         << "  --no-beidou                Disable BeiDou carrier processing\n"
@@ -635,6 +653,15 @@ void applyRTKTuningPreset(LiveConfig& config) {
             if (!config.min_satellites_for_ar_set) config.min_satellites_for_ar = 6;
             if (!config.min_hold_count_set) config.min_hold_count = 8;
             if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.5;
+            // Motion-aware kinematic gates (PR #177/#178): a moving low-cost rover
+            // outruns the static 5 m jump gate, starving fixes; loose prefit-residual
+            // reset recovers diverged floats. Mirrors gnss_solve LOW_COST defaults.
+            if (!config.max_position_jump_rate_mps_set) config.max_position_jump_rate_mps = 30.0;
+            if (!config.max_position_jump_min_m_set) config.max_position_jump_min_m = 5.0;
+            if (!config.min_full_ratio_for_subset_ar_set) config.min_full_ratio_for_subset_ar = 1.5;
+            if (!config.max_float_prefit_residual_rms_m_set) config.max_float_prefit_residual_rms_m = 4.0;
+            if (!config.max_float_prefit_residual_max_m_set) config.max_float_prefit_residual_max_m = 10.0;
+            if (!config.max_float_prefit_residual_reset_streak_set) config.max_float_prefit_residual_reset_streak = 5;
             return;
         case RTKTuningPreset::MOVING_BASE:
             if (!config.ratio_threshold_set) config.ratio_threshold = 2.8;
@@ -730,6 +757,24 @@ LiveConfig parseArguments(int argc, char** argv) {
         } else if (arg == "--hold-ratio-threshold" && i + 1 < argc) {
             config.hold_ratio_threshold = std::stod(argv[++i]);
             config.hold_ratio_threshold_set = true;
+        } else if (arg == "--min-full-ratio-for-subset-ar" && i + 1 < argc) {
+            config.min_full_ratio_for_subset_ar = std::stod(argv[++i]);
+            config.min_full_ratio_for_subset_ar_set = true;
+        } else if (arg == "--max-pos-jump-min" && i + 1 < argc) {
+            config.max_position_jump_min_m = std::stod(argv[++i]);
+            config.max_position_jump_min_m_set = true;
+        } else if (arg == "--max-pos-jump-rate" && i + 1 < argc) {
+            config.max_position_jump_rate_mps = std::stod(argv[++i]);
+            config.max_position_jump_rate_mps_set = true;
+        } else if (arg == "--max-float-prefit-rms" && i + 1 < argc) {
+            config.max_float_prefit_residual_rms_m = std::stod(argv[++i]);
+            config.max_float_prefit_residual_rms_m_set = true;
+        } else if (arg == "--max-float-prefit-max" && i + 1 < argc) {
+            config.max_float_prefit_residual_max_m = std::stod(argv[++i]);
+            config.max_float_prefit_residual_max_m_set = true;
+        } else if (arg == "--max-float-prefit-reset-streak" && i + 1 < argc) {
+            config.max_float_prefit_residual_reset_streak = std::stoi(argv[++i]);
+            config.max_float_prefit_residual_reset_streak_set = true;
         } else if (arg == "--elevation-mask-deg" && i + 1 < argc) {
             config.elevation_mask_deg = std::stod(argv[++i]);
         } else if (arg == "--no-glonass") {
@@ -771,6 +816,21 @@ LiveConfig parseArguments(int argc, char** argv) {
     }
     if (config.hold_ratio_threshold <= 0.0) {
         argumentError("--hold-ratio-threshold must be > 0", argv[0]);
+    }
+    if (config.max_position_jump_min_m < 0.0) {
+        argumentError("--max-pos-jump-min must be >= 0", argv[0]);
+    }
+    if (config.max_position_jump_rate_mps < 0.0) {
+        argumentError("--max-pos-jump-rate must be >= 0", argv[0]);
+    }
+    if (config.max_float_prefit_residual_rms_m < 0.0) {
+        argumentError("--max-float-prefit-rms must be >= 0", argv[0]);
+    }
+    if (config.max_float_prefit_residual_max_m < 0.0) {
+        argumentError("--max-float-prefit-max must be >= 0", argv[0]);
+    }
+    if (config.max_float_prefit_residual_reset_streak < 1) {
+        argumentError("--max-float-prefit-reset-streak must be >= 1", argv[0]);
     }
     if (config.base_hold_seconds < 0.0) {
         argumentError("--base-hold-seconds must be >= 0", argv[0]);
@@ -1045,6 +1105,13 @@ int main(int argc, char** argv) {
         rtk_config.ar_filter_margin = config.ar_filter_margin;
         rtk_config.min_satellites_for_ar = config.min_satellites_for_ar;
         rtk_config.min_hold_count = config.min_hold_count;
+        rtk_config.min_full_ratio_for_subset_ar = config.min_full_ratio_for_subset_ar;
+        rtk_config.max_position_jump_min_m = config.max_position_jump_min_m;
+        rtk_config.max_position_jump_rate_mps = config.max_position_jump_rate_mps;
+        rtk_config.max_float_prefit_residual_rms_m = config.max_float_prefit_residual_rms_m;
+        rtk_config.max_float_prefit_residual_max_m = config.max_float_prefit_residual_max_m;
+        rtk_config.max_float_prefit_residual_reset_streak =
+            config.max_float_prefit_residual_reset_streak;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;
         rtk_config.enable_glonass = config.enable_glonass;
         rtk_config.enable_beidou = config.enable_beidou;
