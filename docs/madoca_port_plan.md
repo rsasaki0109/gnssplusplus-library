@@ -22,17 +22,29 @@ PPP-RTK filter.
 
 Delta RMS 3D vs the bridge on the MIZU 2025/04/01 window moved from 69.2 m to
 1.820 m all-epoch / 1.196 m tail over slices #130–#147, then the full-day path
-was unblocked (#143) and 24 h parity reached 1.316 m default / 1.206 m with the
-post-fit commit gate, with a converged-filter guard chain (#144 spike guard,
-#145 boundary guard, #146/#147 commit-on-success + shadow validation).  GLONASS
+was unblocked (#143) and 24 h parity reached 1.206 m once the RTKLIB/MADOCALIB
+post-fit commit-on-success gate (#146/#147) was promoted to the default
+(`GNSS_PPP_MADOCA_POSTFIT_COMMIT` now default-on, `=0` opt-out): 24 h all-epoch
+1.316 → 1.206 m, max 5.26 → 4.46 m, validated across MIZU (1 h/6 h/24 h) and a
+second station (ALIC, neutral) with 1 h/6 h staying byte-exact.  The interim
+#145 boundary guard was retired (commit-on-success subsumes it; guard on/off was
+byte-identical under commit); the #144 spike guard (100 m) is kept as the
+opt-out-path safety net.  GLONASS
 phase, QZSS L5, SSR-replay, bias-identity, and pair-selection hypotheses were
 each measured and closed (default-off knobs kept where they were preview-only).
 The repro harness and per-slice history live in the memory note
 `madoca-ppp-frontier` and in issue #148.
 
-Open MADOCA levers (all measured, none yet a default win): GLONASS phase
-residual is geometry-shaped (windup / antenna phase-center, #149); PPP-AR
-parity (`exec_pppar` window); QZSS atmosphere row-set.
+GLONASS phase was re-diagnosed and closed as a parity lever: the per-satellite
+~1.5 m residual is not an unabsorbed constant but a covariance-collapse plus
+within-pass-varying (elevation-arched) phase error — the float ambiguity
+variance collapses to ~0.03 within ~38 epochs and can no longer track the drift,
+and GLONASS code carries large FDMA inter-frequency biases too.  MADOCA SSR
+provides no GLONASS phase-bias product, so default GLONASS-phase-off is correct
+(matches MADOCALIB excluding GLO from the precise phase/AR solution).
+
+Open MADOCA levers (measured, none yet a default win): PPP-AR parity
+(`exec_pppar` window); QZSS atmosphere row-set.
 
 ### CLAS PPP-RTK native vs CLASLIB (2019-08-27 case, tracker issue #9)
 

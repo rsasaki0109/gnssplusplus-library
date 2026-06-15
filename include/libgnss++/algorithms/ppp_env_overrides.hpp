@@ -27,15 +27,16 @@ struct PPPEnvOverrides {
     // parity defaults unless set exactly to "0". Default true.
     bool madoca_early_window = true;
     // GNSS_PPP_MADOCA_SPIKE_GUARD: reject implausible converged static update
-    // jumps in coherent MADOCA unless set exactly to "0". Default true.
+    // jumps in coherent MADOCA unless set exactly to "0". Default true. Retained
+    // as the safety-net backstop after the #145 boundary guard was retired in
+    // favor of default-on POSTFIT_COMMIT.
     bool madoca_spike_guard = true;
-    // GNSS_PPP_MADOCA_BOUNDARY_GUARD: reject smaller coherent-MADOCA
-    // file-boundary update jumps unless set exactly to "0". Default true.
-    bool madoca_boundary_guard = true;
-    // GNSS_PPP_MADOCA_POSTFIT_COMMIT: preview RTKLIB/MADOCALIB-style
-    // postfit validation with commit-on-success semantics for coherent MADOCA
-    // when set exactly to "1". Default false.
-    bool madoca_postfit_commit = false;
+    // GNSS_PPP_MADOCA_POSTFIT_COMMIT: RTKLIB/MADOCALIB-style postfit validation
+    // with commit-on-success semantics for coherent MADOCA. Default true; set
+    // exactly to "0" to opt out (raw accumulate-iterations behavior, retained
+    // for bit-exact debugging — note the retired #145 boundary guard no longer
+    // backstops the opt-out path, only the #144 spike guard remains).
+    bool madoca_postfit_commit = true;
     // GNSS_PPP_MADOCA_POSTFIT_SHADOW: path for native MADOCA postfit
     // residual/statistic shadow dump. Empty disables it.
     std::string madoca_postfit_shadow_path;
