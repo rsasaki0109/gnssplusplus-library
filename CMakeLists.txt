@@ -75,6 +75,7 @@ set(GNSS_SOURCES
     src/algorithms/ppp_wlnl.cpp
     src/algorithms/ppp_clas_epoch.cpp
     src/algorithms/ppp_env_overrides.cpp
+    src/algorithms/madoca_core.cpp
     src/algorithms/madoca_parity.cpp
     src/algorithms/madocalib_oracle.cpp
     src/algorithms/madocalib_bridge.cpp

@@ -561,7 +561,7 @@ PR body checklist:
 
 ## Next Slice Queue
 
-Preferred next low-risk slice:
+Completed low-risk helper slice:
 
 - Add `scripts/analysis/spp_iteration_dump_summary.py`.
 - Add `tests/test_spp_iteration_dump_summary.py`.
@@ -573,7 +573,7 @@ Preferred next low-risk slice:
 - Validate with `python3 -m py_compile`, the direct Python unit test, CMake
   configure, focused CTest, and `git diff --check`.
 
-Next medium-risk slice:
+Completed native core foundation slice:
 
 - Add a native MADOCA core foundation under `madoca_core` or a similarly narrow
   namespace.
