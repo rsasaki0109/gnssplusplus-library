@@ -125,6 +125,45 @@ def make_ppc_rtk_step(context: SignoffContext, city: str, *, require_rtklib: boo
     return make_step(step_name, slug, command, outputs)
 
 
+def make_ppc_coverage_matrix_smoke_step(context: SignoffContext) -> SignoffStep:
+    slug = "ppc_coverage_matrix_schema_smoke"
+    name = "PPC coverage matrix schema smoke"
+    out_dir = context.output_dir / slug
+    outputs = [
+        out_dir / "summary.json",
+        out_dir / "table.md",
+        *(out_dir / f"{city}_{run_name}_summary.json" for city, run_name in (
+            ("tokyo", "run1"),
+            ("tokyo", "run2"),
+            ("tokyo", "run3"),
+            ("nagoya", "run1"),
+            ("nagoya", "run2"),
+            ("nagoya", "run3"),
+        )),
+    ]
+
+    if context.dataset_root is None or not context.dataset_root.is_dir():
+        return skip_step(name, slug, outputs, "PPC-Dataset root is unavailable.")
+
+    command = [
+        *context.gnss_command,
+        "ppc-coverage-matrix",
+        "--config-toml",
+        str(context.repo_root / "configs" / "ppc_sigma_demote_nis2_ratio4.toml"),
+        "--dataset-root",
+        str(context.dataset_root),
+        "--max-epochs",
+        "2",
+        "--output-dir",
+        str(out_dir),
+        "--summary-json",
+        str(out_dir / "summary.json"),
+        "--markdown-output",
+        str(out_dir / "table.md"),
+    ]
+    return make_step(name, slug, command, outputs)
+
+
 def make_ppc_taroz_amb_pdc_long_step(context: SignoffContext) -> SignoffStep:
     slug = "ppc_taroz_amb_pdc_nagoya_run3_1000_seed"
     name = "PPC taroz ambiguity PDC long generated-seed sign-off"
@@ -224,6 +263,7 @@ def build_step_plan(
         python_executable=python_executable,
     )
     return [
+        make_ppc_coverage_matrix_smoke_step(context),
         make_ppc_rtk_step(context, "nagoya", require_rtklib=False),
         make_ppc_rtk_step(context, "tokyo", require_rtklib=True),
         make_ppc_taroz_amb_pdc_long_step(context),

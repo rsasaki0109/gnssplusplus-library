@@ -65,8 +65,10 @@ python3 apps/gnss.py ppp-products-signoff \
 For the `ppc` profile with `--malib-pos` or `--malib-bin`, the command also emits paired comparison artifacts (`comparison_csv`, `comparison_png`) and `common_epoch_pairs`, so `gnss web` and CI artifact bundles can show the same side-by-side error slices.
 
 `gnss live-signoff`, `gnss ppp-products-signoff`, `gnss moving-base-signoff`,
-`gnss scorpion-moving-base-signoff`, and `gnss ppc-rtk-signoff`
-also accept `--config-toml`, so you can pin long threshold sets and artifact paths in a file instead of repeating them on the command line.
+`gnss scorpion-moving-base-signoff`, `gnss ppc-rtk-signoff`, and
+`gnss ppc-coverage-matrix`
+also accept `--config-toml`, so you can pin long threshold sets and artifact
+paths in a file instead of repeating them on the command line.
 
 For public benchmark rows that can be expressed as rover/base/nav plus an
 independent `reference.csv`, `gnss ppc-demo` and `gnss ppc-rtk-signoff` also
@@ -114,14 +116,22 @@ Use `--nonfix-drift-max-residual 4 --nonfix-drift-min-horizontal-residual 6`
 only for an explicit P95-cleanup profile: combined with the fixed-burst guard it
 rejects 226 non-FIX drift epochs on Tokyo run1, improves P95H from 34.53 m to
 30.61 m, and keeps PPC official nearly flat, but costs 1.47 pp Positioning rate.
-`ppc-coverage-matrix` accepts these non-FIX, SPP height-step, FLOAT bridge-tail,
-and fixed-burst tuning flags so the same profile can be swept across all six PPC
-runs. The full six-run sweep keeps a +15.7 pp average Positioning lead over
+`ppc-coverage-matrix` also accepts `--config-toml`; the deployable
+`sigma-demote nis2-ratio4` profile is pinned in
+`configs/ppc_sigma_demote_nis2_ratio4.toml`. It accepts these non-FIX, SPP
+height-step, FLOAT bridge-tail, and fixed-burst tuning flags so the same profile
+can be swept across all six PPC runs. The full six-run sweep keeps a +15.7 pp
+average Positioning lead over
 RTKLIB and a +28.1 pp PPC official lead, but costs 1.33 pp average Positioning
 versus the coverage profile and only improves P95H on 3/6 runs; the horizontal
 residual floor reduces Nagoya run3 over-pruning from 13.90 pp to 3.48 pp
 Positioning cost. Treat the profile as a tail-diagnostic lens, not as the
 Positioning-rate sign-off.
+The matrix summary declares `summary_schema: ppc_coverage_matrix.v1` and is
+validated before writing. Each run must carry the KPI fields used by CI, docs,
+Python, and web artifact readers, including `positioning_rate_pct`,
+`fix_rate_pct`, `ppc_official_score_pct`, `p95_h_m`, `solver_wall_time_s`,
+`realtime_factor`, and `effective_epoch_rate_hz`.
 Use `scripts/analyze_ppc_coverage_quality.py` with the PPC solution, RTKLIB
 solution, and `reference.csv` when a coverage run improves Positioning rate but
 regresses P95 horizontal error; the report separates FIXED/FLOAT/SPP quality and
@@ -205,8 +215,8 @@ python3 apps/gnss.py ppc-taroz-amb-pdc-smoke \
 ```
 
 The dataset-gated optional CI sign-off runner also includes the
-`nagoya/run3` 1000-epoch generated-seed check when `GNSSPP_PPC_DATASET_ROOT`
-is configured.
+`ppc-coverage-matrix --max-epochs 2` schema smoke and the `nagoya/run3`
+1000-epoch generated-seed check when `GNSSPP_PPC_DATASET_ROOT` is configured.
 
 The `taroz-amb-pdc` preset enables two truth-free FLOAT output guards by
 default: `--max-float-seed-divergence 100` and

@@ -763,6 +763,104 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
 
 
 class PPCCoverageMatrixTest(unittest.TestCase):
+    def test_parse_args_loads_config_toml_profile_and_allows_cli_overrides(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_coverage_config_") as temp_dir:
+            temp_root = Path(temp_dir)
+            dataset_root = temp_root / "PPC-Dataset"
+            config_toml = temp_root / "coverage.toml"
+            config_toml.write_text(
+                "\n".join(
+                    [
+                        "[ppc_coverage_matrix]",
+                        f'dataset_root = "{dataset_root}"',
+                        'output_dir = "output/ppc_sigma_profile_runtime_demote_nis2_ratio4"',
+                        'summary_json = "output/ppc_sigma_profile_runtime_demote_nis2_ratio4/summary.json"',
+                        'markdown_output = "output/ppc_sigma_profile_runtime_demote_nis2_ratio4/table.md"',
+                        "max_epochs = -1",
+                        'preset = "low-cost"',
+                        "ratio = 2.8",
+                        "carrier_phase_sigma = 0.001",
+                        "max_postfix_rms = 0.20",
+                        "max_consec_float_reset = 10",
+                        "max_subset_ar_drop_steps = 18",
+                        "adaptive_dynamic_slip_thresholds = true",
+                        "adaptive_dynamic_slip_nonfix_count = 25",
+                        "max_pos_jump = 5.0",
+                        "max_pos_jump_min = 5.0",
+                        "max_pos_jump_rate = 25.0",
+                        "demote_fixed_status_nis_per_obs = 2.0",
+                        "demote_fixed_status_max_ratio = 4.0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "gnss_ppc_coverage_matrix.py",
+                    "--config-toml",
+                    str(config_toml),
+                    "--max-epochs",
+                    "20",
+                ],
+            ):
+                args = ppc_coverage_matrix.parse_args()
+
+            self.assertEqual(args.dataset_root, dataset_root)
+            self.assertEqual(
+                args.output_dir,
+                Path("output/ppc_sigma_profile_runtime_demote_nis2_ratio4"),
+            )
+            self.assertEqual(
+                args.summary_json,
+                Path("output/ppc_sigma_profile_runtime_demote_nis2_ratio4/summary.json"),
+            )
+            self.assertEqual(
+                args.markdown_output,
+                Path("output/ppc_sigma_profile_runtime_demote_nis2_ratio4/table.md"),
+            )
+            self.assertEqual(args.max_epochs, 20)
+            self.assertEqual(args.preset, "low-cost")
+            self.assertEqual(args.ratio, 2.8)
+            self.assertEqual(args.carrier_phase_sigma, 0.001)
+            self.assertEqual(args.max_postfix_rms, 0.20)
+            self.assertEqual(args.max_consec_float_reset, 10)
+            self.assertEqual(args.max_subset_ar_drop_steps, 18)
+            self.assertTrue(args.adaptive_dynamic_slip_thresholds)
+            self.assertEqual(args.adaptive_dynamic_slip_nonfix_count, 25)
+            self.assertEqual(args.max_pos_jump, 5.0)
+            self.assertEqual(args.max_pos_jump_min, 5.0)
+            self.assertEqual(args.max_pos_jump_rate, 25.0)
+            self.assertEqual(args.demote_fixed_status_nis_per_obs, 2.0)
+            self.assertEqual(args.demote_fixed_status_max_ratio, 4.0)
+
+    def test_tracked_sigma_demote_profile_config_parses(self) -> None:
+        config_toml = ROOT_DIR / "configs" / "ppc_sigma_demote_nis2_ratio4.toml"
+
+        with mock.patch.object(
+            sys,
+            "argv",
+            [
+                "gnss_ppc_coverage_matrix.py",
+                "--config-toml",
+                str(config_toml),
+            ],
+        ):
+            args = ppc_coverage_matrix.parse_args()
+
+        self.assertEqual(args.dataset_root, Path("data/PPC-Dataset"))
+        self.assertEqual(args.ratio, 2.8)
+        self.assertEqual(args.carrier_phase_sigma, 0.001)
+        self.assertEqual(args.demote_fixed_status_nis_per_obs, 2.0)
+        self.assertEqual(args.demote_fixed_status_max_ratio, 4.0)
+        self.assertEqual(
+            args.summary_json,
+            Path("output/ppc_sigma_profile_runtime_demote_nis2_ratio4/summary.json"),
+        )
+
     def test_validate_inputs_rejects_invalid_epoch_limit(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_coverage_validate_") as temp_dir:
             dataset_root = Path(temp_dir) / "PPC-Dataset"
@@ -1025,6 +1123,12 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                             "ppc_official_score_pct": 21.0,
                             "ppc_official_score_distance_m": 210.0,
                             "ppc_official_total_distance_m": 1000.0,
+                            "ppc_score_3d_50cm_ref_pct": 0.0,
+                            "p95_h_m": 31.13,
+                            "max_h_m": 52.0,
+                            "solver_wall_time_s": 0.5,
+                            "realtime_factor": 20.0,
+                            "effective_epoch_rate_hz": 100.0,
                         },
                         "delta_vs_rtklib": {
                             "positioning_rate_pct": 19.9,
@@ -1056,6 +1160,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             payload = ppc_coverage_matrix.build_matrix_payload(args, [run])
             markdown = ppc_coverage_matrix.render_markdown(payload)
 
+            self.assertEqual(payload["summary_schema"], ppc_coverage_matrix.SUMMARY_SCHEMA)
+            ppc_coverage_matrix.validate_matrix_payload_schema(payload)
             self.assertEqual(payload["aggregates"]["avg_positioning_delta_pct"], 19.9)
             self.assertEqual(payload["aggregates"]["avg_official_score_delta_pct"], 21.0)
             self.assertEqual(payload["aggregates"]["weighted_official_score_pct"], 42.0)
@@ -1141,6 +1247,12 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("solver_wall_time_s", runtime_message)
             self.assertIn("realtime_factor", runtime_message)
             self.assertIn("effective_epoch_rate_hz", runtime_message)
+
+            invalid_payload = json.loads(json.dumps(payload))
+            del invalid_payload["runs"][0]["metrics"]["p95_h_m"]
+            with self.assertRaises(SystemExit) as schema_context:
+                ppc_coverage_matrix.validate_matrix_payload_schema(invalid_payload)
+            self.assertIn("metrics: missing `p95_h_m`", str(schema_context.exception))
 
 
 class PPCResidualResetSweepAnalysisTest(unittest.TestCase):
@@ -3040,6 +3152,7 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
             self.assertEqual(
                 [step.slug for step in steps],
                 [
+                    "ppc_coverage_matrix_schema_smoke",
                     "ppc_nagoya_run1_rtk",
                     "ppc_tokyo_run1_rtk",
                     "ppc_taroz_amb_pdc_nagoya_run3_1000_seed",
@@ -3050,7 +3163,8 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
             self.assertEqual(steps[0].skip_reason, "PPC-Dataset root is unavailable.")
             self.assertEqual(steps[1].skip_reason, "PPC-Dataset root is unavailable.")
             self.assertEqual(steps[2].skip_reason, "PPC-Dataset root is unavailable.")
-            self.assertEqual(steps[3].skip_reason, "SCORPION moving-base input is unavailable.")
+            self.assertEqual(steps[3].skip_reason, "PPC-Dataset root is unavailable.")
+            self.assertEqual(steps[4].skip_reason, "SCORPION moving-base input is unavailable.")
 
     def test_build_step_plan_uses_dataset_rtklib_and_scorpion_url(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_rtk_plan_") as temp_dir:
@@ -3069,7 +3183,14 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
 
             steps = ci_rtk_signoffs.build_step_plan(ROOT_DIR, output_dir, env)
 
-            nagoya, tokyo, taroz_long, scorpion = steps
+            coverage, nagoya, tokyo, taroz_long, scorpion = steps
+            self.assertIsNotNone(coverage.command)
+            self.assertIn("ppc-coverage-matrix", coverage.command)
+            self.assertIn("--config-toml", coverage.command)
+            self.assertIn("--max-epochs", coverage.command)
+            self.assertIn("2", coverage.command)
+            self.assertIn("--summary-json", coverage.command)
+            self.assertIn(str(output_dir / "ppc_coverage_matrix_schema_smoke" / "summary.json"), coverage.command)
             self.assertIsNotNone(nagoya.command)
             self.assertIn("--dataset-root", nagoya.command)
             self.assertIn(str(dataset_root), nagoya.command)
@@ -3105,7 +3226,8 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
                 {"GNSSPP_PPC_DATASET_ROOT": str(dataset_root)},
             )
 
-            nagoya, tokyo, taroz_long, _ = steps
+            coverage, nagoya, tokyo, taroz_long, _ = steps
+            self.assertIsNotNone(coverage.command)
             self.assertIsNotNone(nagoya.command)
             self.assertIsNone(tokyo.command)
             self.assertEqual(tokyo.skip_reason, "RTKLIB binary is unavailable.")

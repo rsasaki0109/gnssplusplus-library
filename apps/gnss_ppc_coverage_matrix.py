@@ -11,6 +11,7 @@ import re
 import subprocess
 import time
 
+from gnss_toml_config import parse_args_with_toml
 from gnss_runtime import ensure_input_exists, resolve_gnss_command
 
 
@@ -22,6 +23,56 @@ PPC_RUNS: tuple[tuple[str, str], ...] = (
     ("nagoya", "run1"),
     ("nagoya", "run2"),
     ("nagoya", "run3"),
+)
+SUMMARY_SCHEMA = "ppc_coverage_matrix.v1"
+RUN_METRIC_FIELDS = (
+    "positioning_rate_pct",
+    "fix_rate_pct",
+    "ppc_official_score_pct",
+    "ppc_official_score_distance_m",
+    "ppc_official_total_distance_m",
+    "ppc_score_3d_50cm_ref_pct",
+    "p95_h_m",
+    "max_h_m",
+    "solver_wall_time_s",
+    "realtime_factor",
+    "effective_epoch_rate_hz",
+)
+DELTA_METRIC_FIELDS = (
+    "positioning_rate_pct",
+    "fix_rate_pct",
+    "ppc_official_score_pct",
+    "ppc_score_3d_50cm_ref_pct",
+    "p95_h_m",
+)
+AGGREGATE_FIELDS = (
+    "run_count",
+    "rtklib_comparison_run_count",
+    "weighted_official_score_pct",
+    "weighted_rtklib_official_score_pct",
+    "weighted_official_score_delta_pct",
+    "avg_positioning_delta_pct",
+    "avg_fix_delta_pct",
+    "avg_official_score_delta_pct",
+    "avg_score_3d_50cm_ref_delta_pct",
+    "avg_p95_h_delta_m",
+    "min_positioning_delta_pct",
+    "min_official_score_delta_pct",
+    "max_p95_h_delta_m",
+    "avg_solver_wall_time_s",
+    "max_solver_wall_time_s",
+    "avg_realtime_factor",
+    "min_realtime_factor",
+    "avg_effective_epoch_rate_hz",
+    "min_effective_epoch_rate_hz",
+    "float_bridge_tail_rejected_epochs",
+    "fixed_bridge_burst_rejected_epochs",
+)
+GUARD_FIELDS = (
+    "nonfix_drift_guard",
+    "spp_height_step_guard",
+    "float_bridge_tail_guard",
+    "fixed_bridge_burst_guard",
 )
 GUARD_PATTERNS = {
     "nonfix_drift_guard": re.compile(
@@ -51,6 +102,12 @@ GUARD_PATTERNS = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
+    parser.add_argument(
+        "--config-toml",
+        type=Path,
+        default=None,
+        help="Optional TOML config. Uses [ppc_coverage_matrix] or top-level keys.",
+    )
     parser.add_argument("--dataset-root", type=Path, required=True)
     parser.add_argument(
         "--output-dir",
@@ -301,7 +358,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Require each PPC run effective solved epoch rate to be at or above this Hz value.",
     )
-    return parser.parse_args()
+    return parse_args_with_toml(parser, "ppc_coverage_matrix")
 
 
 def run_key(city: str, run_name: str) -> str:
@@ -828,6 +885,7 @@ def aggregate_runs(runs: list[dict[str, object]]) -> dict[str, object]:
 
 def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]) -> dict[str, object]:
     return {
+        "summary_schema": SUMMARY_SCHEMA,
         "dataset_root": str(args.dataset_root),
         "output_dir": str(args.output_dir),
         "max_epochs": args.max_epochs,
@@ -945,6 +1003,199 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "runs": runs,
         "aggregates": aggregate_runs(runs),
     }
+
+
+def is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def require_keys(
+    section: dict[str, object],
+    keys: tuple[str, ...],
+    label: str,
+    failures: list[str],
+) -> None:
+    for key in keys:
+        if key not in section:
+            failures.append(f"{label}: missing `{key}`")
+
+
+def require_nullable_number_fields(
+    section: dict[str, object],
+    keys: tuple[str, ...],
+    label: str,
+    failures: list[str],
+) -> None:
+    require_keys(section, keys, label, failures)
+    for key in keys:
+        value = section.get(key)
+        if value is not None and not is_number(value):
+            failures.append(f"{label}.{key}: expected number or null")
+
+
+def validate_matrix_payload_schema(payload: dict[str, object]) -> None:
+    """Keep the PPC matrix summary stable for CI, docs, Python, and web readers."""
+    failures: list[str] = []
+    require_keys(
+        payload,
+        (
+            "summary_schema",
+            "dataset_root",
+            "output_dir",
+            "max_epochs",
+            "match_tolerance_s",
+            "preset",
+            "coverage_profile",
+            "runtime_requirements",
+            "runs",
+            "aggregates",
+        ),
+        "summary",
+        failures,
+    )
+    if payload.get("summary_schema") != SUMMARY_SCHEMA:
+        failures.append(
+            f"summary.summary_schema: expected {SUMMARY_SCHEMA!r}, got {payload.get('summary_schema')!r}"
+        )
+    for key in ("dataset_root", "output_dir", "preset"):
+        if not isinstance(payload.get(key), str):
+            failures.append(f"summary.{key}: expected string")
+    if not isinstance(payload.get("max_epochs"), int):
+        failures.append("summary.max_epochs: expected integer")
+    if not is_number(payload.get("match_tolerance_s")):
+        failures.append("summary.match_tolerance_s: expected number")
+
+    coverage_profile = payload.get("coverage_profile")
+    if not isinstance(coverage_profile, dict):
+        failures.append("summary.coverage_profile: expected object")
+    else:
+        require_keys(
+            coverage_profile,
+            ("no_arfilter", "no_kinematic_post_filter", "float_bridge_tail_guard_enabled"),
+            "summary.coverage_profile",
+            failures,
+        )
+        for key in ("no_arfilter", "no_kinematic_post_filter", "float_bridge_tail_guard_enabled"):
+            if not isinstance(coverage_profile.get(key), bool):
+                failures.append(f"summary.coverage_profile.{key}: expected bool")
+
+    runtime_requirements = payload.get("runtime_requirements")
+    if not isinstance(runtime_requirements, dict):
+        failures.append("summary.runtime_requirements: expected object")
+    else:
+        require_nullable_number_fields(
+            runtime_requirements,
+            (
+                "solver_wall_time_max_s",
+                "realtime_factor_min",
+                "effective_epoch_rate_min_hz",
+            ),
+            "summary.runtime_requirements",
+            failures,
+        )
+
+    aggregates = payload.get("aggregates")
+    if not isinstance(aggregates, dict):
+        failures.append("summary.aggregates: expected object")
+    else:
+        require_nullable_number_fields(aggregates, AGGREGATE_FIELDS, "summary.aggregates", failures)
+        for key in ("run_count", "rtklib_comparison_run_count"):
+            value = aggregates.get(key)
+            if not isinstance(value, int) or isinstance(value, bool):
+                failures.append(f"summary.aggregates.{key}: expected integer")
+
+    runs = payload.get("runs")
+    if not isinstance(runs, list):
+        failures.append("summary.runs: expected array")
+    else:
+        for index, run in enumerate(runs):
+            label = f"summary.runs[{index}]"
+            if not isinstance(run, dict):
+                failures.append(f"{label}: expected object")
+                continue
+            require_keys(
+                run,
+                (
+                    "city",
+                    "run",
+                    "key",
+                    "command",
+                    "solution_pos",
+                    "summary_json",
+                    "log_path",
+                    "elapsed_s",
+                    "metrics",
+                    "rtklib",
+                    "delta_vs_rtklib",
+                    "guards",
+                ),
+                label,
+                failures,
+            )
+            for key in ("city", "run", "key", "solution_pos", "summary_json", "log_path"):
+                if not isinstance(run.get(key), str):
+                    failures.append(f"{label}.{key}: expected string")
+            command = run.get("command")
+            if not isinstance(command, list) or not all(isinstance(item, str) for item in command):
+                failures.append(f"{label}.command: expected string array")
+            if not is_number(run.get("elapsed_s")):
+                failures.append(f"{label}.elapsed_s: expected number")
+
+            metrics = run.get("metrics")
+            if not isinstance(metrics, dict):
+                failures.append(f"{label}.metrics: expected object")
+            else:
+                require_nullable_number_fields(metrics, RUN_METRIC_FIELDS, f"{label}.metrics", failures)
+
+            rtklib = run.get("rtklib")
+            if rtklib is not None:
+                if not isinstance(rtklib, dict):
+                    failures.append(f"{label}.rtklib: expected object or null")
+                else:
+                    require_nullable_number_fields(rtklib, RUN_METRIC_FIELDS, f"{label}.rtklib", failures)
+
+            delta = run.get("delta_vs_rtklib")
+            if delta is not None:
+                if not isinstance(delta, dict):
+                    failures.append(f"{label}.delta_vs_rtklib: expected object or null")
+                else:
+                    require_nullable_number_fields(
+                        delta,
+                        DELTA_METRIC_FIELDS,
+                        f"{label}.delta_vs_rtklib",
+                        failures,
+                    )
+
+            guards = run.get("guards")
+            if not isinstance(guards, dict):
+                failures.append(f"{label}.guards: expected object")
+            else:
+                require_keys(guards, GUARD_FIELDS, f"{label}.guards", failures)
+                for guard_name in GUARD_FIELDS:
+                    guard = guards.get(guard_name)
+                    guard_label = f"{label}.guards.{guard_name}"
+                    if guard is None:
+                        continue
+                    if not isinstance(guard, dict):
+                        failures.append(f"{guard_label}: expected object or null")
+                        continue
+                    require_keys(
+                        guard,
+                        ("enabled", "inspected_segments", "rejected_segments", "rejected_epochs"),
+                        guard_label,
+                        failures,
+                    )
+                    if not isinstance(guard.get("enabled"), bool):
+                        failures.append(f"{guard_label}.enabled: expected bool")
+                    for key in ("inspected_segments", "rejected_segments", "rejected_epochs"):
+                        value = guard.get(key)
+                        if not isinstance(value, int) or isinstance(value, bool):
+                            failures.append(f"{guard_label}.{key}: expected integer")
+
+    if failures:
+        raise SystemExit(
+            "PPC coverage matrix summary schema failed:\n" + "\n".join(failures)
+        )
 
 
 def metric(metrics: dict[str, object] | None, name: str) -> float | None:
@@ -1140,6 +1391,7 @@ def main() -> int:
 
     payload = build_matrix_payload(args, runs)
     enforce_requirements(payload, args)
+    validate_matrix_payload_schema(payload)
     summary_json.parent.mkdir(parents=True, exist_ok=True)
     summary_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     markdown = render_markdown(payload)
