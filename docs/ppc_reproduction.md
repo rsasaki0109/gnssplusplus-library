@@ -30,24 +30,34 @@ profile:
 
 ```bash
 python3 apps/gnss.py ppc-coverage-matrix \
-  --dataset-root /datasets/PPC-Dataset \
-  --preset low-cost \
-  --ratio 2.8 \
-  --carrier-phase-sigma 0.001 \
-  --max-postfix-rms 0.2 \
-  --max-consec-float-reset 10 \
-  --max-subset-ar-drop-steps 18 \
-  --adaptive-dynamic-slip-thresholds \
-  --adaptive-dynamic-slip-nonfix-count 25 \
-  --max-pos-jump 5.0 \
-  --max-pos-jump-min 5.0 \
-  --max-pos-jump-rate 25.0 \
-  --demote-fixed-status-nis-per-obs 2 \
-  --demote-fixed-status-max-ratio 4 \
-  --output-dir output/ppc_sigma_profile_runtime_demote_nis2_ratio4 \
-  --summary-json output/ppc_sigma_profile_runtime_demote_nis2_ratio4/summary.json \
-  --markdown-output output/ppc_sigma_profile_runtime_demote_nis2_ratio4/table.md
+  --config-toml configs/ppc_sigma_demote_nis2_ratio4.toml
 ```
+
+Override `--dataset-root` after `--config-toml` when your PPC checkout is not
+under `data/PPC-Dataset`.
+
+## Local MADOCALIB RTKLIB Smoke
+
+If a standard RTKLIB `rnx2rtkp` is not installed but `external/madocalib` is
+available locally, build its console app and use the PPC RTK config for the
+fork-specific option enum:
+
+```bash
+make -C external/madocalib/app/consapp/rnx2rtkp/gcc
+
+python3 apps/gnss.py ppc-coverage-matrix \
+  --config-toml configs/ppc_sigma_demote_nis2_ratio4.toml \
+  --max-epochs 20 \
+  --rtklib-bin external/madocalib/app/consapp/rnx2rtkp/gcc/rnx2rtkp \
+  --rtklib-config scripts/madocalib_ppc_rtk.conf \
+  --output-dir output/ppc_rtklib_baseline_smoke \
+  --summary-json output/ppc_rtklib_baseline_smoke/summary.json \
+  --markdown-output output/ppc_rtklib_baseline_smoke/table.md
+```
+
+`ppc-demo` passes `-p 2` to `rnx2rtkp` for RTK comparisons. The MADOCALIB
+config intentionally omits `pos1-posmode` because that fork's config enum does
+not accept relative `kinematic`, while the CLI option does.
 
 ## Coverage Matrix
 
