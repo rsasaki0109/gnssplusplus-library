@@ -109,6 +109,55 @@ class PythonBindingsSmokeTest(unittest.TestCase):
             "PPP_FLOAT",
         )
 
+    def test_read_only_artifact_api_loads_summary_and_pos_stats(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_python_artifacts_") as temp_dir:
+            temp_root = Path(temp_dir)
+            summary_path = temp_root / "summary.json"
+            lib_pos_path = temp_root / "lib.pos"
+            rtklib_pos_path = temp_root / "rtklib.pos"
+
+            summary_path.write_text(
+                '{"summary_schema": "ppc_coverage_matrix.v1", "runs": []}\n',
+                encoding="ascii",
+            )
+            lib_pos_path.write_text(
+                "% synthetic libgnss++ solution\n"
+                "1316 518400.0 -3978242.0 3382841.0 3649903.0 35.0 139.0 10.0 4 9 1.0 2.5\n"
+                "1316 518430.0 -3978243.0 3382840.0 3649902.0 35.1 139.1 10.2 3 8 1.0 1.5\n",
+                encoding="ascii",
+            )
+            rtklib_pos_path.write_text(
+                "% synthetic rtklib solution\n"
+                "2024/02/18 00:16:22.000 35.100000000 139.100000000 42.0000 1 10 0 0 0 0\n"
+                "2024/02/18 00:16:22.200 35.100010000 139.100020000 42.2000 2 9 0 0 0 0\n",
+                encoding="ascii",
+            )
+
+            payload = libgnsspp.artifacts.load_summary(summary_path)
+            self.assertEqual(
+                libgnsspp.artifacts.summary_schema(payload),
+                "ppc_coverage_matrix.v1",
+            )
+
+            lib_records = libgnsspp.artifacts.load_pos(lib_pos_path)
+            self.assertEqual(len(lib_records), 2)
+            self.assertEqual(lib_records[0].source_format, "libgnss")
+            self.assertEqual(lib_records[0].status, 4)
+            self.assertAlmostEqual(lib_records[0].ratio or 0.0, 2.5)
+            lib_stats = libgnsspp.artifacts.pos_stats(lib_records)
+            self.assertEqual(lib_stats["fixed_epochs"], 1)
+            self.assertEqual(lib_stats["float_epochs"], 1)
+            self.assertEqual(lib_stats["status_counts"], {"FIXED": 1, "FLOAT": 1})
+            self.assertAlmostEqual(lib_stats["solution_span_s"], 30.0)
+
+            rtklib_records = libgnsspp.artifacts.load_pos(rtklib_pos_path)
+            self.assertEqual(rtklib_records[0].source_format, "rtklib")
+            self.assertEqual(rtklib_records[0].week, 2302)
+            rtklib_stats = libgnsspp.artifacts.pos_stats(rtklib_records)
+            self.assertEqual(rtklib_stats["fixed_epochs"], 1)
+            self.assertEqual(rtklib_stats["float_epochs"], 1)
+            self.assertEqual(rtklib_stats["status_counts"], {"FIX": 1, "FLOAT": 1})
+
     def test_solve_spp_file_returns_valid_solution_records(self) -> None:
         solution = libgnsspp.solve_spp_file(
             str(ROOT_DIR / "data" / "rover_static.obs"),
