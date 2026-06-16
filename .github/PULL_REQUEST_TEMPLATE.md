@@ -5,15 +5,24 @@
 
 ## Scope
 
-- [ ] Single feature / single user-visible value
+- [ ] Single feature / single operational improvement / single user-visible value
+- [ ] Adds or tightens one regression, sign-off, dogfood, or artifact-schema check
 - [ ] No unrelated refactor mixed in
 - [ ] No docs-only noise mixed into solver/protocol work
+- [ ] Protocol ingest, parser work, runtime knobs, solver behavior, and docs are split unless this PR explicitly needs the boundary crossing
 
 ## External Reference
 
 - Source repo used for comparison, if any:
 - What was adopted here:
 - What was intentionally not adopted:
+
+## Behavior Boundary
+
+- Runtime default changed? yes/no:
+- Env-gated or config-gated? yes/no, name:
+- Artifact/schema changed? yes/no, version or field:
+- Dataset or credentials required? yes/no, skip behavior:
 
 ## Validation
 
@@ -32,11 +41,14 @@ Focused checks run:
 
 ## Sign-off / Benchmark Impact
 
-- Added or updated sign-off:
+- Added or updated regression/sign-off:
 - Affected dataset(s):
 - Expected metric impact:
+- Regression budget or threshold:
+- Artifact(s) produced:
 
 ## Notes
 
 - Risk:
 - Follow-up PRs:
+- Explicit non-goals:

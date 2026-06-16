@@ -1,0 +1,66 @@
+name: Development slice
+description: Plan one scoped implementation, analysis, or sign-off slice.
+title: "[slice] "
+labels: ["needs-triage"]
+body:
+  - type: dropdown
+    id: slice_type
+    attributes:
+      label: Slice type
+      options:
+        - analysis tool
+        - parser or protocol feature
+        - runtime knob or profile
+        - solver behavior change
+        - sign-off or CI improvement
+        - docs or release readiness
+    validations:
+      required: true
+  - type: textarea
+    id: user_value
+    attributes:
+      label: User-visible value
+      description: State the one value this issue should deliver.
+      placeholder: "Example: Reproduce the PPC sigma-demote runtime profile from a named TOML config."
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Regression or sign-off improvement
+      description: Name the one test, sign-off, schema check, or artifact gate this slice will add or tighten.
+      placeholder: "Example: ppc-coverage-matrix schema smoke emits summary.json and table.md."
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope boundary
+      description: List modules or files expected to change, and what must stay out.
+      placeholder: "Touch configs/, apps/gnss_ppc_coverage_matrix.py, and docs/ppc_reproduction.md. Do not change solver behavior."
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: Explicitly name related work that should be separate.
+      placeholder: "Do not merge stale mixed branches. Do not make CLAS DD default-on."
+    validations:
+      required: true
+  - type: textarea
+    id: datasets
+    attributes:
+      label: Dataset and credential needs
+      description: State required local datasets, optional CI secrets, and expected skip behavior.
+      placeholder: "Needs PPC-Dataset at GNSSPP_PPC_DATASET_ROOT; CI skips with a clear reason when absent."
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Concrete merge gate, including metric thresholds or artifact names when applicable.
+      placeholder: "Focused unit test passes; summary_schema remains ppc_coverage_matrix.v1; no runtime default change."
+    validations:
+      required: true

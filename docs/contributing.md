@@ -17,6 +17,11 @@
 - 1 PR = 1 clear benchmark/sign-off/test story
 - Do not mix protocol ingestion, solver tuning, and docs-only cleanup in the
   same PR
+- Use the `Development slice` issue template before starting larger work. It
+  should state the one user-visible value, the one regression/sign-off
+  improvement, scope boundaries, and explicit non-goals.
+- Fill the PR template's behavior-boundary fields when runtime defaults,
+  env/config gates, artifact schemas, datasets, or credentials are involved.
 
 ## Required checks
 

@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a reproducible regression or unexpected solver/tool behavior.
+title: "[bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: What happened, including command output or summary fields.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened and which benchmark or sign-off defines it.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction command
+      description: Include exact command, config TOML, env vars, and dataset paths or skip condition.
+      render: bash
+    validations:
+      required: true
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Artifacts
+      description: Link or paste paths for summary JSON, .pos, logs, matched CSV, plots, or provenance.
+      placeholder: "output/.../summary.json"
+    validations:
+      required: false
+  - type: textarea
+    id: regression_gate
+    attributes:
+      label: Regression gate
+      description: Which test or sign-off should fail once this is captured?
+      placeholder: "Example: gnss ppc-coverage-matrix --config-toml ... --require-p95-h-delta-max ..."
+    validations:
+      required: false
