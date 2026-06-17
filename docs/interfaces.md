@@ -34,7 +34,8 @@ Examples:
 
 For longer workflows, `gnss web`, `gnss live-signoff`,
 `gnss moving-base-signoff`, `gnss scorpion-moving-base-signoff`,
-`gnss ppc-rtk-signoff`, and `gnss ppp-products-signoff`
+`gnss ppc-rtk-signoff`, `gnss ppc-coverage-matrix`, and
+`gnss ppp-products-signoff`
 also accept `--config-toml <file>`. Example templates live in `configs/`.
 
 For CLAS-oriented PPP experiments, `gnss ppp` also exposes the boundary and

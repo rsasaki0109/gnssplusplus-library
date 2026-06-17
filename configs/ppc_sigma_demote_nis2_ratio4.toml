@@ -1,0 +1,30 @@
+[ppc_coverage_matrix]
+dataset_root = "data/PPC-Dataset"
+max_epochs = -1
+match_tolerance_s = 0.25
+
+# Deployable PPC six-run runtime profile. This is the long
+# sigma-demote/nis2-ratio4 command from docs/ppc_reproduction.md pinned as data.
+preset = "low-cost"
+ratio = 2.8
+carrier_phase_sigma = 0.001
+max_postfix_rms = 0.20
+max_consec_float_reset = 10
+max_subset_ar_drop_steps = 18
+adaptive_dynamic_slip_thresholds = true
+adaptive_dynamic_slip_nonfix_count = 25
+max_pos_jump = 5.0
+max_pos_jump_min = 5.0
+max_pos_jump_rate = 25.0
+demote_fixed_status_nis_per_obs = 2.0
+demote_fixed_status_max_ratio = 4.0
+
+output_dir = "output/ppc_sigma_profile_runtime_demote_nis2_ratio4"
+summary_json = "output/ppc_sigma_profile_runtime_demote_nis2_ratio4/summary.json"
+markdown_output = "output/ppc_sigma_profile_runtime_demote_nis2_ratio4/table.md"
+
+# Uncomment when comparing against prepared RTKLIB demo5 outputs:
+# rtklib_root = "output/benchmark"
+# require_positioning_delta_min = 0.0
+# require_official_score_delta_min = 0.0
+# require_p95_h_delta_max = 0.0

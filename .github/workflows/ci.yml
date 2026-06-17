@@ -274,6 +274,9 @@ jobs:
         path: |
           output/ci_optional_rtk_signoffs_summary.json
           output/ci_optional_rtk_signoffs/*.log
+          output/ppc_coverage_matrix_schema_smoke/summary.json
+          output/ppc_coverage_matrix_schema_smoke/table.md
+          output/ppc_coverage_matrix_schema_smoke/*_summary.json
           output/ppc_nagoya_run1_rtk_summary.json
           output/ppc_nagoya_run1_rtk.pos
           output/ppc_nagoya_run1_rtk_events.csv
