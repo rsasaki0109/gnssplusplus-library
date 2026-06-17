@@ -1098,7 +1098,7 @@ def run_rtklib_solver(
         temp_dir_path = Path(temp_dir)
         config_path = temp_dir_path / "ppc_rtklib.conf"
         config_path.write_text(rtklib_config_text(Path(args.rtklib_config), args.solver), encoding="utf-8")
-        command.extend(["-k", str(config_path), "-o", str(rtklib_pos)])
+        command.extend(["-k", str(config_path), "-p", "2", "-o", str(rtklib_pos)])
         window_reference = reference
         if args.max_epochs > 0:
             window_reference = reference[:args.max_epochs]

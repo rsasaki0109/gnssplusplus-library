@@ -5622,6 +5622,7 @@ from pathlib import Path
 
 args = sys.argv[1:]
 out = Path(args[args.index("-o") + 1])
+out.with_suffix(".args").write_text(" ".join(args), encoding="ascii")
 out.write_text(
     "% synthetic rtklib solution\\n"
     "2024/02/18 00:16:22.000 35.100000000 139.100000000 42.0000 1 0 0 0 0 0 0\\n"
@@ -5653,6 +5654,21 @@ out.write_text(
             self.assertTrue(rtklib_pos.exists())
             contents = rtklib_pos.read_text(encoding="ascii")
             self.assertIn("synthetic rtklib solution", contents)
+            args_text = rtklib_pos.with_suffix(".args").read_text(encoding="ascii")
+            self.assertIn("-p 2", args_text)
+
+    def test_madocalib_ppc_rtk_config_omits_unsupported_posmode(self) -> None:
+        config_path = ROOT_DIR / "scripts" / "madocalib_ppc_rtk.conf"
+
+        text = ppc_demo.rtklib_config_text(config_path, "rtk")
+        config_lines = [
+            line.strip()
+            for line in text.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+
+        self.assertIn("pos1-frequency     =l1+2", text)
+        self.assertFalse(any(line.startswith("pos1-posmode") for line in config_lines))
 
 
 class PPCMultiCandidateSelectorTest(unittest.TestCase):
