@@ -77,6 +77,8 @@ Python bindings expose:
 - `.pos` loading and solution statistics
 - coordinate conversion helpers
 - file-based `SPP`, `PPP`, and `RTK` solve helpers
+- read-only artifact helpers under `libgnsspp.artifacts`:
+  `load_summary()`, `summary_schema()`, `load_pos()`, and `pos_stats()`
 
 ## ROS2
 

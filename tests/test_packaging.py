@@ -139,6 +139,10 @@ class PackagingSmokeTest(unittest.TestCase):
             python_package_dir = python_packages[0].parent
             extension_modules = list(python_package_dir.glob("_libgnsspp*.so"))
             self.assertTrue(extension_modules, "missing installed Python extension module")
+            self.assertTrue(
+                (python_package_dir / "artifacts.py").exists(),
+                "missing installed Python artifact helpers",
+            )
 
             env = dict(os.environ)
             env["PATH"] = str(prefix / "bin") + os.pathsep + env.get("PATH", "")
