@@ -44,7 +44,7 @@ COMPONENT_ALIASES: dict[str, tuple[str, ...]] = {
 
 Row = dict[str, str]
 ComponentMap = dict[str, float]
-Key = tuple[int, int, str, str, int]
+Key = tuple[int, int, str, str, int, str]
 
 
 @dataclass(frozen=True)
@@ -185,7 +185,8 @@ def normalize_rows(
         tow_millis = tow_to_millis(row["tow"])
         sat = row["sat"]
         freq = detect_frequency(row)
-        key = (week, tow_millis, row_type, sat, freq)
+        signal = observation_identity(row, row_type)
+        key = (week, tow_millis, row_type, sat, freq, signal)
         normalized.append(
             ComponentRow(
                 key=key,
@@ -195,7 +196,7 @@ def normalize_rows(
                 tow=tow_millis / 1000.0,
                 sat=sat,
                 freq=freq,
-                signal=observation_identity(row, row_type),
+                signal=signal,
                 source_row=index,
                 components=components,
             )
@@ -214,13 +215,14 @@ def rows_by_key(rows: Sequence[ComponentRow]) -> tuple[dict[Key, ComponentRow], 
 
 
 def key_to_dict(key: Key) -> dict[str, Any]:
-    week, tow_millis, row_type, sat, freq = key
+    week, tow_millis, row_type, sat, freq, signal = key
     return {
         "week": week,
         "tow": tow_millis / 1000.0,
         "row_type": row_type,
         "sat": sat,
         "freq": freq,
+        "rinex_code": signal,
     }
 
 
@@ -312,6 +314,7 @@ def build_report(
             item["row_type"],
             item["sat"],
             item["freq"],
+            item["rinex_code"],
             item["component"],
         )
     )
@@ -355,6 +358,7 @@ def write_details_csv(path: Path, report: dict[str, Any]) -> None:
         "row_type",
         "sat",
         "freq",
+        "rinex_code",
         "component",
         "base_value_m",
         "candidate_value_m",

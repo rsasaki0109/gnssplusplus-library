@@ -123,7 +123,7 @@ def group_from_row(row: Row) -> Group:
 def identity_from_row(row: Row) -> Identity:
     return (
         row.get("sat", ""),
-        first_present(row, ("primary_signal", "signal", "band"), ""),
+        first_present(row, ("primary_signal", "signal_family", "signal", "band"), ""),
         first_present(row, ("secondary_signal",), ""),
         first_present(
             row,
@@ -133,6 +133,7 @@ def identity_from_row(row: Row) -> Identity:
                 "pseudorange_rinex_code",
                 "obs_code",
                 "rinex_code",
+                "rtklib_code",
                 "code",
             ),
         ),
@@ -142,6 +143,7 @@ def identity_from_row(row: Row) -> Identity:
                 "secondary_observation_code",
                 "secondary_rinex_code",
                 "carrier_rinex_code",
+                "secondary_rtklib_code",
             ),
         ),
         to_int(first_present(row, ("frequency_index", "freq", "frequency", "f"), "0")),

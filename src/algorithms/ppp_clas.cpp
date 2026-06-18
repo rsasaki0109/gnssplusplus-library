@@ -1,9 +1,12 @@
 #include <libgnss++/algorithms/ppp_clas.hpp>
 
 #include <libgnss++/algorithms/ppp_ar.hpp>
+#include <libgnss++/algorithms/ppp_bias_identity.hpp>
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+
+#include "ppp_internal.hpp"
 
 #include <algorithm>
 #include <array>
@@ -142,6 +145,7 @@ std::ofstream* ambDatumDumpStream() {
         stream.open(path, std::ios::out | std::ios::trunc);
         if (stream) {
             stream << "record,week,tow,sat,freq,signal,carrier_rinex_code,"
+                   << "carrier_rtklib_code,signal_family,"
                    << "phase_bias_signal_id,lambda_m,"
                    << "raw_phase_cycles,raw_phase_m,carrier_correction_m,"
                    << "cpc_m,cpc_minus_trop_m,trop_correction_m,relativity_m,"
@@ -192,6 +196,7 @@ std::ofstream* clasCodeDumpStream() {
         if (stream) {
             stream << "record,stage,week,tow,sat,freq,signal,"
                    << "pseudorange_rinex_code,carrier_rinex_code,"
+                   << "pseudorange_rtklib_code,carrier_rtklib_code,signal_family,"
                    << "code_bias_signal_id,phase_bias_signal_id,"
                    << "raw_p_m,corrected_p_m,applied_pr_corr_m,prc_m,"
                    << "prc_minus_trop_m,trop_correction_m,iono_l1_m,"
@@ -321,6 +326,11 @@ void dumpClasCodeRows(
                   << static_cast<int>(raw->signal) << ','
                   << raw->pseudorange_observation_type << ','
                   << raw->carrier_phase_observation_type << ','
+                  << algorithms::ppp_bias_identity::rtklibCodeForObservationType(
+                         raw->pseudorange_observation_type) << ','
+                  << algorithms::ppp_bias_identity::rtklibCodeForObservationType(
+                         raw->carrier_phase_observation_type) << ','
+                  << ppp_internal::signalFamilyName(raw->signal) << ','
                   << static_cast<int>(osr.code_bias_signal_ids[f]) << ','
                   << static_cast<int>(osr.phase_bias_signal_ids[f]) << ','
                   << raw->pseudorange << ','
@@ -990,6 +1000,9 @@ MeasurementBuildResult buildEpochMeasurements(
                           << f << ','
                           << static_cast<int>(raw->signal) << ','
                           << raw->carrier_phase_observation_type << ','
+                          << algorithms::ppp_bias_identity::rtklibCodeForObservationType(
+                                 raw->carrier_phase_observation_type) << ','
+                          << ppp_internal::signalFamilyName(raw->signal) << ','
                           << static_cast<int>(osr.phase_bias_signal_ids[f]) << ','
                           << osr.wavelengths[f] << ','
                           << raw->carrier_phase << ','

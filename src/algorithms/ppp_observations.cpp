@@ -1,5 +1,6 @@
 #include "ppp_internal.hpp"
 
+#include <libgnss++/algorithms/ppp_bias_identity.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/core/signals.hpp>
@@ -30,6 +31,34 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
     combined.reserve(obs.getSatellites().size());
     const bool capture_shadow_metadata =
         !env_overrides_.madoca_postfit_shadow_path.empty();
+    const auto captureObservationIdentity =
+        [](IonosphereFreeObs& entry, const Observation& observation, bool primary) {
+            const int pseudorange_code =
+                algorithms::ppp_bias_identity::rtklibCodeForObservationType(
+                    observation.pseudorange_observation_type);
+            const int carrier_phase_code =
+                algorithms::ppp_bias_identity::rtklibCodeForObservationType(
+                    observation.carrier_phase_observation_type);
+            if (primary) {
+                entry.primary_signal = observation.signal;
+                entry.primary_observation_type = observation.exactBiasObservationType();
+                entry.primary_pseudorange_observation_type =
+                    observation.pseudorange_observation_type;
+                entry.primary_carrier_phase_observation_type =
+                    observation.carrier_phase_observation_type;
+                entry.primary_pseudorange_rtklib_code = pseudorange_code;
+                entry.primary_carrier_phase_rtklib_code = carrier_phase_code;
+            } else {
+                entry.secondary_signal = observation.signal;
+                entry.secondary_observation_type = observation.exactBiasObservationType();
+                entry.secondary_pseudorange_observation_type =
+                    observation.pseudorange_observation_type;
+                entry.secondary_carrier_phase_observation_type =
+                    observation.carrier_phase_observation_type;
+                entry.secondary_pseudorange_rtklib_code = pseudorange_code;
+                entry.secondary_carrier_phase_rtklib_code = carrier_phase_code;
+            }
+        };
 
     for (const auto& sat : obs.getSatellites()) {
         // Keep the native MADOCA parity path on systems whose L6 SSR handling is
@@ -84,8 +113,7 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         if (!ppp_config_.use_ionosphere_free) {
             const double primary_frequency_hz = signalFrequencyHz(primary->signal, eph);
             entry.pseudorange_if = primary->pseudorange;
-            entry.primary_signal = primary->signal;
-            entry.primary_observation_type = primary->exactBiasObservationType();
+            captureObservationIdentity(entry, *primary, true);
             entry.primary_code_bias_coeff = 1.0;
             entry.secondary_code_bias_coeff = 0.0;
             if (capture_shadow_metadata) {
@@ -127,8 +155,7 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         // SSR corrections (orbit/clock/bias/iono) still applied below.
         if (!ppp_config_.use_ionosphere_free) {
             if (secondary != nullptr) {
-                entry.secondary_signal = secondary->signal;
-                entry.secondary_observation_type = secondary->exactBiasObservationType();
+                captureObservationIdentity(entry, *secondary, false);
                 const double f1 = signalFrequencyHz(primary->signal, eph);
                 const double f2 = signalFrequencyHz(secondary->signal, eph);
                 if (capture_shadow_metadata) {
@@ -183,8 +210,7 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
 
         if (secondary == nullptr) {
             entry.pseudorange_if = primary->pseudorange;
-            entry.primary_signal = primary->signal;
-            entry.primary_observation_type = primary->exactBiasObservationType();
+            captureObservationIdentity(entry, *primary, true);
             entry.primary_code_bias_coeff = 1.0;
             entry.secondary_code_bias_coeff = 0.0;
             if (capture_shadow_metadata) {
@@ -216,10 +242,8 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         const auto coefficients = ppp_utils::getIonosphereFreeCoefficients(f1, f2);
         entry.pseudorange_if =
             coefficients.first * primary->pseudorange + coefficients.second * secondary->pseudorange;
-        entry.primary_signal = primary->signal;
-        entry.secondary_signal = secondary->signal;
-        entry.primary_observation_type = primary->exactBiasObservationType();
-        entry.secondary_observation_type = secondary->exactBiasObservationType();
+        captureObservationIdentity(entry, *primary, true);
+        captureObservationIdentity(entry, *secondary, false);
         entry.primary_code_bias_coeff = coefficients.first;
         entry.secondary_code_bias_coeff = coefficients.second;
         if (capture_shadow_metadata) {
