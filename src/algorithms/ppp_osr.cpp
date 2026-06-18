@@ -1,4 +1,5 @@
 #include <libgnss++/algorithms/ppp_osr.hpp>
+#include <libgnss++/algorithms/ppp_bias_identity.hpp>
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signals.hpp>
@@ -19,12 +20,12 @@ bool pppDebugEnabled() {
 double clasOsrCodeBiasLookup(const std::map<uint8_t, double>& bias_m,
                              GNSSSystem system,
                              uint8_t signal_id,
-                             bool l2_class_fallback) {
+                             bool enable_l2_class_fallback) {
     const auto it = bias_m.find(signal_id);
     if (it != bias_m.end()) {
         return it->second;
     }
-    if (l2_class_fallback && system == GNSSSystem::GPS &&
+    if (enable_l2_class_fallback && system == GNSSSystem::GPS &&
         (signal_id == 8U || signal_id == 9U)) {
         const auto sibling = bias_m.find(signal_id == 8U ? 9U : 8U);
         if (sibling != bias_m.end()) {
@@ -32,6 +33,18 @@ double clasOsrCodeBiasLookup(const std::map<uint8_t, double>& bias_m,
         }
     }
     return 0.0;
+}
+
+bool gpsL2ExactBiasIdentityEnabled(const Observation* observation) {
+    if (observation == nullptr || observation->satellite.system != GNSSSystem::GPS) {
+        return false;
+    }
+    if (observation->signal != SignalType::GPS_L2C &&
+        observation->signal != SignalType::GPS_L2P) {
+        return false;
+    }
+    return pppEnvOverrides().clas_dd_filter &&
+           pppEnvOverrides().clas_code_row_bias_identity;
 }
 
 const char* clasAtmosSelectionPolicyName(
@@ -830,11 +843,15 @@ std::vector<OSRCorrection> computeOSR(
 
         const Ephemeris* eph = nav.getEphemeris(sat, obs.time);
         osr.signals[0] = l1_obs->signal;
+        osr.pseudorange_rinex_codes[0] = l1_obs->pseudorange_observation_type;
+        osr.carrier_rinex_codes[0] = l1_obs->carrier_phase_observation_type;
         osr.frequencies[0] = signalFrequencyHz(l1_obs->signal, eph);
         osr.wavelengths[0] = constants::SPEED_OF_LIGHT / osr.frequencies[0];
         osr.num_frequencies = 1;
         if (l2_obs) {
             osr.signals[1] = l2_obs->signal;
+            osr.pseudorange_rinex_codes[1] = l2_obs->pseudorange_observation_type;
+            osr.carrier_rinex_codes[1] = l2_obs->carrier_phase_observation_type;
             osr.frequencies[1] = signalFrequencyHz(l2_obs->signal, eph);
             osr.wavelengths[1] = constants::SPEED_OF_LIGHT / osr.frequencies[1];
             osr.num_frequencies = 2;
@@ -888,14 +905,31 @@ std::vector<OSRCorrection> computeOSR(
         }
 
         // --- 7. Code/Phase bias ---
-        const bool code_bias_l2_class =
-            pppEnvOverrides().clas_code_row_bias_identity;
+        const Observation* freq_observations[2] = {l1_obs, l2_obs};
         for (int f = 0; f < osr.num_frequencies; ++f) {
-            const uint8_t sid = rtcmSsrSignalId(sat.system, osr.signals[f]);
+            const Observation* freq_obs = freq_observations[f];
+            const bool exact_bias_identity = gpsL2ExactBiasIdentityEnabled(freq_obs);
+            const uint8_t code_sid =
+                algorithms::ppp_bias_identity::rtcmSsrSignalIdForObservation(
+                    sat.system,
+                    osr.signals[f],
+                    freq_obs != nullptr ? freq_obs->pseudorange_observation_type : "",
+                    exact_bias_identity);
+            const uint8_t phase_sid =
+                algorithms::ppp_bias_identity::rtcmSsrSignalIdForObservation(
+                    sat.system,
+                    osr.signals[f],
+                    freq_obs != nullptr ? freq_obs->carrier_phase_observation_type : "",
+                    exact_bias_identity);
+            osr.code_bias_signal_ids[f] = code_sid;
+            osr.phase_bias_signal_ids[f] = phase_sid;
             osr.code_bias_m[f] =
                 clasOsrCodeBiasLookup(
-                    ssr_cbias, sat.system, sid, code_bias_l2_class);
-            auto pb_it = ssr_pbias.find(sid);
+                    ssr_cbias,
+                    sat.system,
+                    code_sid,
+                    pppEnvOverrides().clas_code_row_bias_identity && !exact_bias_identity);
+            auto pb_it = ssr_pbias.find(phase_sid);
             osr.phase_bias_m[f] = (pb_it != ssr_pbias.end()) ? pb_it->second : 0.0;
         }
 

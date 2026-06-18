@@ -1,6 +1,6 @@
 #include "ppp_internal.hpp"
 
-#include <libgnss++/algorithms/madoca_parity.hpp>
+#include <libgnss++/algorithms/ppp_bias_identity.hpp>
 #include <libgnss++/algorithms/ppp_atmosphere.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
@@ -52,81 +52,6 @@ constexpr std::array<double, 11> kOceanLoadingPeriodsSeconds = {
     661.3111655 * 3600.0,  // Mm
     4382.905 * 3600.0      // Ssa
 };
-
-namespace mp = libgnss::algorithms::madoca_parity;
-
-struct MadocaObservationCodeMapEntry {
-    const char* observation_type;
-    int rtklib_code;
-};
-
-constexpr MadocaObservationCodeMapEntry kMadocaObservationCodeMap[] = {
-    {"C1C", mp::kCodeL1C}, {"L1C", mp::kCodeL1C},
-    {"C1P", mp::kCodeL1P}, {"L1P", mp::kCodeL1P},
-    {"C1W", mp::kCodeL1W}, {"L1W", mp::kCodeL1W},
-    {"C1S", mp::kCodeL1S}, {"L1S", mp::kCodeL1S},
-    {"C1L", mp::kCodeL1L}, {"L1L", mp::kCodeL1L},
-    {"C1E", mp::kCodeL1E}, {"L1E", mp::kCodeL1E},
-    {"C1B", mp::kCodeL1B}, {"L1B", mp::kCodeL1B},
-    {"C1X", mp::kCodeL1X}, {"L1X", mp::kCodeL1X},
-    {"C2C", mp::kCodeL2C}, {"L2C", mp::kCodeL2C},
-    {"C2S", mp::kCodeL2S}, {"L2S", mp::kCodeL2S},
-    {"C2L", mp::kCodeL2L}, {"L2L", mp::kCodeL2L},
-    {"C2X", mp::kCodeL2X}, {"L2X", mp::kCodeL2X},
-    {"C2P", mp::kCodeL2P}, {"L2P", mp::kCodeL2P},
-    {"C2W", mp::kCodeL2W}, {"L2W", mp::kCodeL2W},
-    {"C5I", mp::kCodeL5I}, {"L5I", mp::kCodeL5I},
-    {"C5Q", mp::kCodeL5Q}, {"L5Q", mp::kCodeL5Q},
-    {"C5X", mp::kCodeL5X}, {"L5X", mp::kCodeL5X},
-    {"C5D", mp::kCodeL5D}, {"L5D", mp::kCodeL5D},
-    {"C5P", mp::kCodeL5P}, {"L5P", mp::kCodeL5P},
-    {"C6B", mp::kCodeL6B}, {"L6B", mp::kCodeL6B},
-    {"C6C", mp::kCodeL6C}, {"L6C", mp::kCodeL6C},
-    {"C6X", mp::kCodeL6X}, {"L6X", mp::kCodeL6X},
-    {"C6I", mp::kCodeL6I}, {"L6I", mp::kCodeL6I},
-    {"C6Q", mp::kCodeL6Q}, {"L6Q", mp::kCodeL6Q},
-    {"C7I", mp::kCodeL7I}, {"L7I", mp::kCodeL7I},
-    {"C7Q", mp::kCodeL7Q}, {"L7Q", mp::kCodeL7Q},
-    {"C7X", mp::kCodeL7X}, {"L7X", mp::kCodeL7X},
-    {"C7D", mp::kCodeL7D}, {"L7D", mp::kCodeL7D},
-};
-
-int madocaSystemId(GNSSSystem system) {
-    switch (system) {
-        case GNSSSystem::GPS: return mp::kSysGps;
-        case GNSSSystem::Galileo: return mp::kSysGal;
-        case GNSSSystem::QZSS: return mp::kSysQzs;
-        default: return mp::kSysNone;
-    }
-}
-
-int madocaRtklibCodeForObservationType(const std::string& observation_type) {
-    for (const auto& entry : kMadocaObservationCodeMap) {
-        if (observation_type == entry.observation_type) {
-            return entry.rtklib_code;
-        }
-    }
-    return mp::kCodeNone;
-}
-
-uint8_t ssrBiasIdentityId(GNSSSystem system,
-                          SignalType signal,
-                          const std::string& observation_type,
-                          bool madoca_bias_identity) {
-    if (!madoca_bias_identity) {
-        return rtcmSsrSignalId(system, signal);
-    }
-    const int madoca_sys = madocaSystemId(system);
-    if (madoca_sys == mp::kSysNone) {
-        return rtcmSsrSignalId(system, signal);
-    }
-    const int rtklib_code = madocaRtklibCodeForObservationType(observation_type);
-    const int bias_code = mp::mcssrSelBiascode(madoca_sys, rtklib_code);
-    if (bias_code <= 0 || bias_code > 255) {
-        return 0U;
-    }
-    return static_cast<uint8_t>(bias_code);
-}
 
 bool madocaSsrReferenceIsCurrent(const GNSSTime& epoch, const GNSSTime& reference) {
     if (reference.week == 0) {
@@ -360,7 +285,7 @@ double observationCodeBiasMeters(GNSSSystem system,
                                  const std::string& primary_observation_type,
                                  const std::string& secondary_observation_type,
                                  bool madoca_bias_identity) {
-    const uint8_t primary_id = ssrBiasIdentityId(
+    const uint8_t primary_id = algorithms::ppp_bias_identity::madocaBiasIdentityIdForObservation(
         system, primary_signal, primary_observation_type, madoca_bias_identity);
     if (primary_id == 0U) {
         return 0.0;
@@ -371,7 +296,7 @@ double observationCodeBiasMeters(GNSSSystem system,
         return primary_bias;
     }
 
-    const uint8_t secondary_id = ssrBiasIdentityId(
+    const uint8_t secondary_id = algorithms::ppp_bias_identity::madocaBiasIdentityIdForObservation(
         system, secondary_signal, secondary_observation_type, madoca_bias_identity);
     if (secondary_id == 0U) {
         return coeff_primary * primary_bias;
@@ -391,7 +316,7 @@ double observationPhaseBiasMeters(GNSSSystem system,
                                   const std::string& primary_observation_type,
                                   const std::string& secondary_observation_type,
                                   bool madoca_bias_identity) {
-    const uint8_t primary_id = ssrBiasIdentityId(
+    const uint8_t primary_id = algorithms::ppp_bias_identity::madocaBiasIdentityIdForObservation(
         system, primary_signal, primary_observation_type, madoca_bias_identity);
     if (primary_id == 0U) {
         return 0.0;
@@ -402,7 +327,7 @@ double observationPhaseBiasMeters(GNSSSystem system,
         return primary_bias;
     }
 
-    const uint8_t secondary_id = ssrBiasIdentityId(
+    const uint8_t secondary_id = algorithms::ppp_bias_identity::madocaBiasIdentityIdForObservation(
         system, secondary_signal, secondary_observation_type, madoca_bias_identity);
     if (secondary_id == 0U) {
         return coeff_primary * primary_bias;
@@ -417,7 +342,8 @@ bool ssrBiasPresent(const std::map<uint8_t, double>& bias_m,
                     SignalType signal,
                     const std::string& observation_type,
                     bool madoca_bias_identity) {
-    const uint8_t id = ssrBiasIdentityId(system, signal, observation_type, madoca_bias_identity);
+    const uint8_t id = algorithms::ppp_bias_identity::madocaBiasIdentityIdForObservation(
+        system, signal, observation_type, madoca_bias_identity);
     if (id == 0U) {
         return false;
     }
