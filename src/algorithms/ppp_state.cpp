@@ -154,7 +154,7 @@ void writeMadocaPostfitShadow(const std::string& path,
     };
 
     writeCommonPrefix("epoch", -1);
-    constexpr int kRowSpecificShadowColumns = 21;
+    constexpr int kRowSpecificShadowColumns = 24;
     for (int column = 1; column < kRowSpecificShadowColumns; ++column) {
         out << ',';
     }
@@ -169,6 +169,10 @@ void writeMadocaPostfitShadow(const std::string& path,
                            size_t row_index,
                            int fallback) {
         return row_index < values.size() ? values[row_index] : fallback;
+    };
+    const auto rowString = [](const std::vector<std::string>& values,
+                              size_t row_index) -> std::string {
+        return row_index < values.size() ? values[row_index] : std::string();
     };
 
     for (int row = 0; row < postfit_eq.residuals.size(); ++row) {
@@ -211,6 +215,9 @@ void writeMadocaPostfitShadow(const std::string& path,
             << gnssSystemName(sat.system) << ','
             << static_cast<int>(signal) << ','
             << signal_band << ','
+            << rowString(postfit_eq.row_signal_families, row_index) << ','
+            << rowString(postfit_eq.row_rinex_codes, row_index) << ','
+            << rowInt(postfit_eq.row_rtklib_codes, row_index, 0) << ','
             << (is_phase ? "phase" : "code") << ','
             << residual_m << ','
             << variance_m2 << ','

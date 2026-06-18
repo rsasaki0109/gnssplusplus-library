@@ -193,10 +193,13 @@ Optional filters are `GNSSPP_CLAS_ZD_COMPONENTS`, `GNSSPP_CLAS_ZD_STAGE`,
 `GNSSPP_CLAS_ZD_ROW_TYPE`, `GNSSPP_CLAS_ZD_THRESHOLD_M`, and
 `GNSSPP_CLAS_ZD_FAIL_ON_DIFF`.
 
-Native RINEX observations now expose exact `pseudorange_rinex_code` and
-`carrier_rinex_code` columns in the CLAS code/phase diagnostic dumps.  This lets
-the GPS L2W investigation distinguish `C2W/L2W` from other GPS L2 tracking codes
-even though both still use the current `SignalType::GPS_L2C` runtime family.
+Native RINEX observations now expose exact `pseudorange_rinex_code`,
+`carrier_rinex_code`, RTKLIB code id, and `signal_family` columns in the CLAS
+code/phase diagnostic dumps.  This lets the GPS L2W investigation distinguish
+`C2W/L2W` from other GPS L2 tracking codes even though both still use the
+current `SignalType::GPS_L2C` runtime family.  The CLAS ZD component diff keys
+rows by the exact row-specific RINEX code so alias mismatches show up as row-set
+differences before component deltas are computed.
 When both `GNSS_PPP_CLAS_DD_FILTER=1` and
 `GNSS_PPP_CLAS_CODE_ROW_PARITY=bias` are set, the CLAS OSR materializer uses
 that exact GPS L2 RINEX identity to choose the code/phase SSR bias signal id.

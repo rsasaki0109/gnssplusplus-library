@@ -344,6 +344,14 @@ private:
         SignalType secondary_signal = SignalType::SIGNAL_TYPE_COUNT;
         std::string primary_observation_type;
         std::string secondary_observation_type;
+        std::string primary_pseudorange_observation_type;
+        std::string primary_carrier_phase_observation_type;
+        std::string secondary_pseudorange_observation_type;
+        std::string secondary_carrier_phase_observation_type;
+        int primary_pseudorange_rtklib_code = 0;
+        int primary_carrier_phase_rtklib_code = 0;
+        int secondary_pseudorange_rtklib_code = 0;
+        int secondary_carrier_phase_rtklib_code = 0;
         double primary_code_bias_coeff = 1.0;
         double secondary_code_bias_coeff = 0.0;
         double primary_frequency_hz = 0.0;
@@ -604,6 +612,9 @@ private:
         std::vector<double> row_azimuths;          ///< Azimuth angle in radians
         std::vector<SignalType> row_signals;       ///< Signal identity for each row
         std::vector<std::string> row_signal_bands; ///< IF/L1/L2 label for each row
+        std::vector<std::string> row_rinex_codes;
+        std::vector<int> row_rtklib_codes;
+        std::vector<std::string> row_signal_families;
         std::vector<int> row_glonass_frequency_channels;
         std::vector<double> row_primary_frequencies_hz;
         std::vector<double> row_secondary_frequencies_hz;

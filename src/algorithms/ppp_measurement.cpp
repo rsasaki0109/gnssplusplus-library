@@ -33,6 +33,9 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
     std::vector<double> row_azimuths;
     std::vector<SignalType> row_signals;
     std::vector<std::string> row_signal_bands;
+    std::vector<std::string> row_rinex_codes;
+    std::vector<int> row_rtklib_codes;
+    std::vector<std::string> row_signal_families;
     std::vector<int> row_glonass_frequency_channels;
     std::vector<double> row_primary_frequencies_hz;
     std::vector<double> row_secondary_frequencies_hz;
@@ -45,10 +48,29 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
     std::vector<int> row_ssr_orbit_iodes;
     const bool capture_shadow_metadata =
         !env_overrides_.madoca_postfit_shadow_path.empty();
-    const auto appendShadowMetadata = [&](const IonosphereFreeObs& observation) {
+    const auto appendShadowMetadata = [&](const IonosphereFreeObs& observation,
+                                          bool secondary,
+                                          bool phase) {
         if (!capture_shadow_metadata) {
             return;
         }
+        const std::string& rinex_code =
+            secondary
+                ? (phase ? observation.secondary_carrier_phase_observation_type
+                         : observation.secondary_pseudorange_observation_type)
+                : (phase ? observation.primary_carrier_phase_observation_type
+                         : observation.primary_pseudorange_observation_type);
+        const int rtklib_code =
+            secondary
+                ? (phase ? observation.secondary_carrier_phase_rtklib_code
+                         : observation.secondary_pseudorange_rtklib_code)
+                : (phase ? observation.primary_carrier_phase_rtklib_code
+                         : observation.primary_pseudorange_rtklib_code);
+        const SignalType signal =
+            secondary ? observation.secondary_signal : observation.primary_signal;
+        row_rinex_codes.push_back(rinex_code);
+        row_rtklib_codes.push_back(rtklib_code);
+        row_signal_families.push_back(signalFamilyName(signal));
         row_azimuths.push_back(observation.azimuth);
         row_glonass_frequency_channels.push_back(observation.glonass_frequency_channel);
         row_primary_frequencies_hz.push_back(observation.primary_frequency_hz);
@@ -217,7 +239,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         row_elevations.push_back(observation.elevation);
         row_signals.push_back(observation.primary_signal);
         row_signal_bands.push_back(ppp_config_.use_ionosphere_free ? "IF" : "L1");
-        appendShadowMetadata(observation);
+        appendShadowMetadata(observation, false, false);
 
         const bool qzss_code_only =
             env_overrides_.qzss_code_only ||
@@ -303,7 +325,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     row_elevations.push_back(observation.elevation);
                     row_signals.push_back(observation.primary_signal);
                     row_signal_bands.push_back(ppp_config_.use_ionosphere_free ? "IF" : "L1");
-                    appendShadowMetadata(observation);
+                    appendShadowMetadata(observation, false, true);
                 }
             }
         }
@@ -358,7 +380,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     row_elevations.push_back(observation.elevation);
                     row_signals.push_back(observation.secondary_signal);
                     row_signal_bands.push_back("L2");
-                    appendShadowMetadata(observation);
+                    appendShadowMetadata(observation, true, false);
                 }
             }
 
@@ -407,7 +429,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     row_elevations.push_back(observation.elevation);
                     row_signals.push_back(observation.secondary_signal);
                     row_signal_bands.push_back("L2");
-                    appendShadowMetadata(observation);
+                    appendShadowMetadata(observation, true, true);
                 }
             }
         }
@@ -435,6 +457,9 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
     equation.row_azimuths = row_azimuths;
     equation.row_signals = row_signals;
     equation.row_signal_bands = row_signal_bands;
+    equation.row_rinex_codes = row_rinex_codes;
+    equation.row_rtklib_codes = row_rtklib_codes;
+    equation.row_signal_families = row_signal_families;
     equation.row_glonass_frequency_channels = row_glonass_frequency_channels;
     equation.row_primary_frequencies_hz = row_primary_frequencies_hz;
     equation.row_secondary_frequencies_hz = row_secondary_frequencies_hz;

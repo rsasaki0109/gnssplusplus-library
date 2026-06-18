@@ -33,6 +33,9 @@ FIELDNAMES = [
     "signal",
     "pseudorange_rinex_code",
     "carrier_rinex_code",
+    "pseudorange_rtklib_code",
+    "carrier_rtklib_code",
+    "signal_family",
     "prc_m",
     "PRC",
     "cpc_m",
@@ -64,6 +67,9 @@ def code_row(
     signal: str = "",
     pseudorange_rinex_code: str = "",
     carrier_rinex_code: str = "",
+    pseudorange_rtklib_code: str = "",
+    carrier_rtklib_code: str = "",
+    signal_family: str = "",
 ) -> dict[str, str]:
     return {
         "record": record,
@@ -75,6 +81,9 @@ def code_row(
         "signal": signal,
         "pseudorange_rinex_code": pseudorange_rinex_code,
         "carrier_rinex_code": carrier_rinex_code,
+        "pseudorange_rtklib_code": pseudorange_rtklib_code,
+        "carrier_rtklib_code": carrier_rtklib_code,
+        "signal_family": signal_family,
         "prc_m": prc,
         "PRC": "",
         "cpc_m": "",
@@ -114,9 +123,64 @@ class ClasZdComponentDiffTest(unittest.TestCase):
             "L2W",
         )
 
+    def test_exact_observation_code_is_part_of_row_key(self) -> None:
+        base = component_diff.normalize_rows(
+            [
+                code_row(
+                    sat="G14",
+                    freq="1",
+                    prc="0.50",
+                    code_bias="0.10",
+                    receiver_ant="-0.02",
+                    pseudorange_rinex_code="C2W",
+                )
+            ],
+            component_names=["prc_m"],
+            stage_filter=None,
+            row_type_filter="code",
+        )
+        candidate = component_diff.normalize_rows(
+            [
+                code_row(
+                    sat="G14",
+                    freq="1",
+                    prc="0.50",
+                    code_bias="0.10",
+                    receiver_ant="-0.02",
+                    pseudorange_rinex_code="C2X",
+                )
+            ],
+            component_names=["prc_m"],
+            stage_filter=None,
+            row_type_filter="code",
+        )
+
+        report = component_diff.build_report(
+            base,
+            candidate,
+            base_label="claslib",
+            candidate_label="native",
+            threshold_m=None,
+            top_deltas=10,
+            top_unmatched=10,
+        )
+
+        self.assertEqual(report["common_rows"], 0)
+        self.assertEqual(report["base_only_rows"], 1)
+        self.assertEqual(report["candidate_only_rows"], 1)
+        self.assertEqual(report["top_base_only"][0]["rinex_code"], "C2W")
+        self.assertEqual(report["top_candidate_only"][0]["rinex_code"], "C2X")
+
     def test_compares_common_component_rows_and_reports_unmatched(self) -> None:
         base_rows = [
-            code_row(sat="G14", freq="1", prc="0.50", code_bias="0.10", receiver_ant="-0.02"),
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="0.50",
+                code_bias="0.10",
+                receiver_ant="-0.02",
+                pseudorange_rinex_code="C2W",
+            ),
             code_row(sat="J01", freq="0", prc="3.75", code_bias="0.00", receiver_ant="-0.05"),
         ]
         candidate_rows = [
@@ -185,7 +249,16 @@ class ClasZdComponentDiffTest(unittest.TestCase):
             details_path = root / "details.csv"
             write_csv(
                 base_csv,
-                [code_row(sat="G14", freq="1", prc="0.50", code_bias="0.10", receiver_ant="-0.02")],
+                [
+                    code_row(
+                        sat="G14",
+                        freq="1",
+                        prc="0.50",
+                        code_bias="0.10",
+                        receiver_ant="-0.02",
+                        pseudorange_rinex_code="C2W",
+                    )
+                ],
             )
             write_csv(
                 candidate_csv,
@@ -241,6 +314,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                 rows = list(csv.DictReader(details_file))
             self.assertEqual(rows[0]["component"], "prc_m")
             self.assertEqual(rows[0]["sat"], "G14")
+            self.assertEqual(rows[0]["rinex_code"], "C2W")
             self.assertEqual(rows[0]["candidate_signal"], "C2W")
             self.assertEqual(float(rows[0]["delta_m"]), 0.25)
 
