@@ -146,7 +146,9 @@ std::ofstream* ambDatumDumpStream() {
         if (stream) {
             stream << "record,week,tow,sat,freq,signal,carrier_rinex_code,"
                    << "carrier_rtklib_code,signal_family,"
-                   << "phase_bias_signal_id,lambda_m,"
+                   << "phase_bias_signal_id,bias_exact_identity,"
+                   << "phase_bias_source_signal_id,phase_bias_present,"
+                   << "phase_bias_fallback,lambda_m,"
                    << "raw_phase_cycles,raw_phase_m,carrier_correction_m,"
                    << "cpc_m,cpc_minus_trop_m,trop_correction_m,relativity_m,"
                    << "receiver_antenna_m,iono_cpc_m,phase_bias_m,windup_m,"
@@ -198,6 +200,9 @@ std::ofstream* clasCodeDumpStream() {
                    << "pseudorange_rinex_code,carrier_rinex_code,"
                    << "pseudorange_rtklib_code,carrier_rtklib_code,signal_family,"
                    << "code_bias_signal_id,phase_bias_signal_id,"
+                   << "bias_exact_identity,code_bias_source_signal_id,"
+                   << "phase_bias_source_signal_id,code_bias_present,"
+                   << "phase_bias_present,code_bias_fallback,phase_bias_fallback,"
                    << "raw_p_m,corrected_p_m,applied_pr_corr_m,prc_m,"
                    << "prc_minus_trop_m,trop_correction_m,iono_l1_m,"
                    << "iono_scaled_m,code_bias_m,receiver_ant_m,relativity_m,"
@@ -333,6 +338,13 @@ void dumpClasCodeRows(
                   << ppp_internal::signalFamilyName(raw->signal) << ','
                   << static_cast<int>(osr.code_bias_signal_ids[f]) << ','
                   << static_cast<int>(osr.phase_bias_signal_ids[f]) << ','
+                  << (osr.bias_exact_identity[f] ? 1 : 0) << ','
+                  << static_cast<int>(osr.code_bias_source_signal_ids[f]) << ','
+                  << static_cast<int>(osr.phase_bias_source_signal_ids[f]) << ','
+                  << (osr.code_bias_present[f] ? 1 : 0) << ','
+                  << (osr.phase_bias_present[f] ? 1 : 0) << ','
+                  << (osr.code_bias_fallback[f] ? 1 : 0) << ','
+                  << (osr.phase_bias_fallback[f] ? 1 : 0) << ','
                   << raw->pseudorange << ','
                   << corrected_p << ','
                   << applied.pseudorange_correction_m << ','
@@ -1004,6 +1016,10 @@ MeasurementBuildResult buildEpochMeasurements(
                                  raw->carrier_phase_observation_type) << ','
                           << ppp_internal::signalFamilyName(raw->signal) << ','
                           << static_cast<int>(osr.phase_bias_signal_ids[f]) << ','
+                          << (osr.bias_exact_identity[f] ? 1 : 0) << ','
+                          << static_cast<int>(osr.phase_bias_source_signal_ids[f]) << ','
+                          << (osr.phase_bias_present[f] ? 1 : 0) << ','
+                          << (osr.phase_bias_fallback[f] ? 1 : 0) << ','
                           << osr.wavelengths[f] << ','
                           << raw->carrier_phase << ','
                           << l_m << ','
