@@ -147,6 +147,10 @@ std::ofstream* ambDatumDumpStream() {
         if (stream) {
             stream << "record,week,tow,sat,freq,signal,carrier_rinex_code,"
                    << "carrier_rtklib_code,signal_family,"
+                   << "requested_pseudorange_rinex_code,"
+                   << "requested_carrier_rinex_code,"
+                   << "observation_exact_identity_requested,"
+                   << "observation_exact_match,observation_family_fallback,"
                    << "phase_bias_signal_id,bias_exact_identity,"
                    << "phase_bias_source_signal_id,phase_bias_present,"
                    << "phase_bias_fallback,lambda_m,"
@@ -200,6 +204,10 @@ std::ofstream* clasCodeDumpStream() {
             stream << "record,stage,week,tow,sat,freq,signal,"
                    << "pseudorange_rinex_code,carrier_rinex_code,"
                    << "pseudorange_rtklib_code,carrier_rtklib_code,signal_family,"
+                   << "requested_pseudorange_rinex_code,"
+                   << "requested_carrier_rinex_code,"
+                   << "observation_exact_identity_requested,"
+                   << "observation_exact_match,observation_family_fallback,"
                    << "code_bias_signal_id,phase_bias_signal_id,"
                    << "bias_exact_identity,code_bias_source_signal_id,"
                    << "phase_bias_source_signal_id,code_bias_present,"
@@ -301,7 +309,8 @@ void dumpClasCodeRows(
             have_iono_state ? filter_state.state(iono_state_it->second) : 0.0;
 
         for (int f = 0; f < osr.num_frequencies; ++f) {
-            const Observation* raw = findOsrFrequencyObservation(obs, osr, f);
+            const auto lookup = findOsrFrequencyObservationWithProvenance(obs, osr, f);
+            const Observation* raw = lookup.observation;
             if (raw == nullptr || !raw->valid || !raw->has_pseudorange ||
                 !std::isfinite(raw->pseudorange)) {
                 continue;
@@ -337,6 +346,11 @@ void dumpClasCodeRows(
                   << algorithms::ppp_bias_identity::rtklibCodeForObservationType(
                          raw->carrier_phase_observation_type) << ','
                   << ppp_internal::signalFamilyName(raw->signal) << ','
+                  << osr.pseudorange_rinex_codes[f] << ','
+                  << osr.carrier_rinex_codes[f] << ','
+                  << (lookup.exact_identity_requested ? 1 : 0) << ','
+                  << (lookup.exact_identity_matched ? 1 : 0) << ','
+                  << (lookup.family_fallback ? 1 : 0) << ','
                   << static_cast<int>(osr.code_bias_signal_ids[f]) << ','
                   << static_cast<int>(osr.phase_bias_signal_ids[f]) << ','
                   << (osr.bias_exact_identity[f] ? 1 : 0) << ','
@@ -999,6 +1013,8 @@ MeasurementBuildResult buildEpochMeasurements(
                 result.observed_ambiguities.push_back(
                     {amb_sat, raw->signal, osr.wavelengths[f], raw->carrier_phase, raw->snr});
                 if (auto* dump = ambDatumDumpStream(); dump != nullptr) {
+                    const auto lookup =
+                        findOsrFrequencyObservationWithProvenance(obs, osr, f);
                     const double ambiguity_state_m = filter_state.state(amb_idx);
                     const double ambiguity_state_cycles =
                         osr.wavelengths[f] > 0.0
@@ -1016,6 +1032,11 @@ MeasurementBuildResult buildEpochMeasurements(
                           << algorithms::ppp_bias_identity::rtklibCodeForObservationType(
                                  raw->carrier_phase_observation_type) << ','
                           << ppp_internal::signalFamilyName(raw->signal) << ','
+                          << osr.pseudorange_rinex_codes[f] << ','
+                          << osr.carrier_rinex_codes[f] << ','
+                          << (lookup.exact_identity_requested ? 1 : 0) << ','
+                          << (lookup.exact_identity_matched ? 1 : 0) << ','
+                          << (lookup.family_fallback ? 1 : 0) << ','
                           << static_cast<int>(osr.phase_bias_signal_ids[f]) << ','
                           << (osr.bias_exact_identity[f] ? 1 : 0) << ','
                           << static_cast<int>(osr.phase_bias_source_signal_ids[f]) << ','

@@ -153,6 +153,12 @@ TEST(PPPOSRTest, ExactOsrFrequencyLookupUsesStoredRinexIdentity) {
     EXPECT_EQ(selected->pseudorange_observation_type, "C2W");
     EXPECT_EQ(selected->carrier_phase_observation_type, "L2W");
     EXPECT_DOUBLE_EQ(selected->pseudorange, 200.0);
+
+    const auto lookup = findOsrFrequencyObservationWithProvenance(obs, osr, 0);
+    ASSERT_EQ(lookup.observation, selected);
+    EXPECT_TRUE(lookup.exact_identity_requested);
+    EXPECT_TRUE(lookup.exact_identity_matched);
+    EXPECT_FALSE(lookup.family_fallback);
 }
 
 TEST(PPPOSRTest, ExactOsrFrequencyLookupSkipsInvalidStoredRinexIdentity) {
@@ -176,6 +182,12 @@ TEST(PPPOSRTest, ExactOsrFrequencyLookupSkipsInvalidStoredRinexIdentity) {
     EXPECT_EQ(selected->pseudorange_observation_type, "C2X");
     EXPECT_EQ(selected->carrier_phase_observation_type, "L2X");
     EXPECT_DOUBLE_EQ(selected->pseudorange, 100.0);
+
+    const auto lookup = findOsrFrequencyObservationWithProvenance(obs, osr, 0);
+    ASSERT_EQ(lookup.observation, selected);
+    EXPECT_TRUE(lookup.exact_identity_requested);
+    EXPECT_FALSE(lookup.exact_identity_matched);
+    EXPECT_TRUE(lookup.family_fallback);
 }
 
 TEST(PPPOSRTest, OsrFrequencyLookupPreservesSignalTypeFallbackWhenExactGateIsOff) {
@@ -196,6 +208,12 @@ TEST(PPPOSRTest, OsrFrequencyLookupPreservesSignalTypeFallbackWhenExactGateIsOff
     EXPECT_EQ(selected->pseudorange_observation_type, "C2X");
     EXPECT_EQ(selected->carrier_phase_observation_type, "L2X");
     EXPECT_DOUBLE_EQ(selected->pseudorange, 100.0);
+
+    const auto lookup = findOsrFrequencyObservationWithProvenance(obs, osr, 0);
+    ASSERT_EQ(lookup.observation, selected);
+    EXPECT_FALSE(lookup.exact_identity_requested);
+    EXPECT_FALSE(lookup.exact_identity_matched);
+    EXPECT_FALSE(lookup.family_fallback);
 }
 
 TEST(PPPOSRTest, BalancedPrefersFreshNetworkWhenNearestGridIsStale) {

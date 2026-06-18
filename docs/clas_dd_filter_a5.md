@@ -211,4 +211,7 @@ diagnostic dumps include the selected `code_bias_signal_id` /
 `phase_bias_signal_id` for oracle comparison.  They also expose the bias lookup
 source ids, present flags, fallback flags, and exact-identity gate state so GPS
 L2 rows that were satisfied through the legacy L2 class fallback can be separated
-from exact `C2W/L2W` matches.
+from exact `C2W/L2W` matches.  The native dumps also carry the requested
+`C2W/L2W` identity plus `observation_exact_match` and
+`observation_family_fallback` flags, separating a bias lookup fallback from a raw
+observation lookup fallback before the A4b GPS L2W correction model changes.
