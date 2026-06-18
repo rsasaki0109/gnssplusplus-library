@@ -187,3 +187,9 @@ Native RINEX observations now expose exact `pseudorange_rinex_code` and
 `carrier_rinex_code` columns in the CLAS code/phase diagnostic dumps.  This lets
 the GPS L2W investigation distinguish `C2W/L2W` from other GPS L2 tracking codes
 even though both still use the current `SignalType::GPS_L2C` runtime family.
+When both `GNSS_PPP_CLAS_DD_FILTER=1` and
+`GNSS_PPP_CLAS_CODE_ROW_PARITY=bias` are set, the CLAS OSR materializer uses
+that exact GPS L2 RINEX identity to choose the code/phase SSR bias signal id.
+Gate-off behavior still uses the existing `SignalType` family id path, and the
+diagnostic dumps include the selected `code_bias_signal_id` /
+`phase_bias_signal_id` for oracle comparison.

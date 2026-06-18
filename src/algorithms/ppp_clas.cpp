@@ -141,7 +141,8 @@ std::ofstream* ambDatumDumpStream() {
         initialized = true;
         stream.open(path, std::ios::out | std::ios::trunc);
         if (stream) {
-            stream << "record,week,tow,sat,freq,signal,carrier_rinex_code,lambda_m,"
+            stream << "record,week,tow,sat,freq,signal,carrier_rinex_code,"
+                   << "phase_bias_signal_id,lambda_m,"
                    << "raw_phase_cycles,raw_phase_m,carrier_correction_m,"
                    << "cpc_m,cpc_minus_trop_m,trop_correction_m,relativity_m,"
                    << "receiver_antenna_m,iono_cpc_m,phase_bias_m,windup_m,"
@@ -191,6 +192,7 @@ std::ofstream* clasCodeDumpStream() {
         if (stream) {
             stream << "record,stage,week,tow,sat,freq,signal,"
                    << "pseudorange_rinex_code,carrier_rinex_code,"
+                   << "code_bias_signal_id,phase_bias_signal_id,"
                    << "raw_p_m,corrected_p_m,applied_pr_corr_m,prc_m,"
                    << "prc_minus_trop_m,trop_correction_m,iono_l1_m,"
                    << "iono_scaled_m,code_bias_m,receiver_ant_m,relativity_m,"
@@ -319,6 +321,8 @@ void dumpClasCodeRows(
                   << static_cast<int>(raw->signal) << ','
                   << raw->pseudorange_observation_type << ','
                   << raw->carrier_phase_observation_type << ','
+                  << static_cast<int>(osr.code_bias_signal_ids[f]) << ','
+                  << static_cast<int>(osr.phase_bias_signal_ids[f]) << ','
                   << raw->pseudorange << ','
                   << corrected_p << ','
                   << applied.pseudorange_correction_m << ','
@@ -986,6 +990,7 @@ MeasurementBuildResult buildEpochMeasurements(
                           << f << ','
                           << static_cast<int>(raw->signal) << ','
                           << raw->carrier_phase_observation_type << ','
+                          << static_cast<int>(osr.phase_bias_signal_ids[f]) << ','
                           << osr.wavelengths[f] << ','
                           << raw->carrier_phase << ','
                           << l_m << ','

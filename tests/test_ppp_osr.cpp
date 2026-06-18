@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <libgnss++/algorithms/madoca_parity.hpp>
+#include <libgnss++/algorithms/ppp_bias_identity.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/core/coordinates.hpp>
 
@@ -69,6 +71,44 @@ TEST(PPPOSRTest, GridFirstPrefersNearestGridEvenWhenStale) {
         receiverPositionNearClasNetwork9(),
         config);
     EXPECT_EQ(preferredClasNetworkId(selected), 9);
+}
+
+TEST(PPPOSRTest, ExactObservationIdentitySelectsGpsL2wBiasId) {
+    namespace bias = libgnss::algorithms::ppp_bias_identity;
+    namespace mp = libgnss::algorithms::madoca_parity;
+
+    EXPECT_EQ(bias::rtklibCodeForObservationType("C2W"), mp::kCodeL2W);
+    EXPECT_EQ(bias::rtklibCodeForObservationType("L2W"), mp::kCodeL2W);
+    EXPECT_EQ(bias::rtklibCodeForObservationType("C2X"), mp::kCodeL2X);
+
+    EXPECT_EQ(
+        static_cast<int>(bias::madocaBiasIdentityIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2W", true)),
+        mp::kCodeL2W);
+    EXPECT_EQ(
+        static_cast<int>(bias::madocaBiasIdentityIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "L2W", true)),
+        mp::kCodeL2W);
+    EXPECT_EQ(
+        static_cast<int>(bias::madocaBiasIdentityIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2X", true)),
+        mp::kCodeL2X);
+    EXPECT_EQ(
+        static_cast<int>(bias::madocaBiasIdentityIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2W", false)),
+        8);
+    EXPECT_EQ(
+        static_cast<int>(bias::rtcmSsrSignalIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2W", true)),
+        9);
+    EXPECT_EQ(
+        static_cast<int>(bias::rtcmSsrSignalIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "L2W", true)),
+        9);
+    EXPECT_EQ(
+        static_cast<int>(bias::rtcmSsrSignalIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2X", true)),
+        8);
 }
 
 TEST(PPPOSRTest, BalancedPrefersFreshNetworkWhenNearestGridIsStale) {

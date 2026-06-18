@@ -3,6 +3,7 @@
 #include <libgnss++/core/types.hpp>
 
 #include <array>
+#include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
@@ -37,6 +38,10 @@ struct OSRCorrection {
     double azimuth = 0.0;
 
     SignalType signals[OSR_MAX_FREQ] = {};
+    std::string pseudorange_rinex_codes[OSR_MAX_FREQ];
+    std::string carrier_rinex_codes[OSR_MAX_FREQ];
+    std::uint8_t code_bias_signal_ids[OSR_MAX_FREQ] = {};
+    std::uint8_t phase_bias_signal_ids[OSR_MAX_FREQ] = {};
     double wavelengths[OSR_MAX_FREQ] = {};
     double frequencies[OSR_MAX_FREQ] = {};
     int num_frequencies = 0;
