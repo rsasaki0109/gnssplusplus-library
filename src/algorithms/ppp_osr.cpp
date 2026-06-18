@@ -88,6 +88,14 @@ const Observation* findExactGpsL2wObservation(
     return nullptr;
 }
 
+bool hasUsableCodeAndPhase(const Observation& observation) {
+    return observation.valid &&
+           observation.has_pseudorange &&
+           observation.has_carrier_phase &&
+           std::isfinite(observation.pseudorange) &&
+           std::isfinite(observation.carrier_phase);
+}
+
 const char* clasAtmosSelectionPolicyName(
     ppp_shared::PPPConfig::ClasAtmosSelectionPolicy policy) {
     switch (policy) {
@@ -552,6 +560,9 @@ const Observation* findOsrFrequencyObservation(
     const auto& carrier_code = osr.carrier_rinex_codes[freq_index];
     for (const auto& candidate : obs.observations) {
         if (candidate.satellite != osr.satellite || candidate.signal != signal) {
+            continue;
+        }
+        if (!hasUsableCodeAndPhase(candidate)) {
             continue;
         }
         const bool pseudorange_matches =

@@ -155,6 +155,29 @@ TEST(PPPOSRTest, ExactOsrFrequencyLookupUsesStoredRinexIdentity) {
     EXPECT_DOUBLE_EQ(selected->pseudorange, 200.0);
 }
 
+TEST(PPPOSRTest, ExactOsrFrequencyLookupSkipsInvalidStoredRinexIdentity) {
+    const SatelliteId sat(GNSSSystem::GPS, 14);
+    ObservationData obs(GNSSTime(2068, 230425.0));
+    obs.addObservation(makeGpsL2Observation(sat, "C2X", "L2X", 100.0, 10.0));
+    Observation invalid_exact = makeGpsL2Observation(sat, "C2W", "L2W", 200.0, 20.0);
+    invalid_exact.valid = false;
+    obs.addObservation(invalid_exact);
+
+    OSRCorrection osr;
+    osr.satellite = sat;
+    osr.num_frequencies = 1;
+    osr.signals[0] = SignalType::GPS_L2C;
+    osr.pseudorange_rinex_codes[0] = "C2W";
+    osr.carrier_rinex_codes[0] = "L2W";
+    osr.bias_exact_identity[0] = true;
+
+    const Observation* selected = findOsrFrequencyObservation(obs, osr, 0);
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->pseudorange_observation_type, "C2X");
+    EXPECT_EQ(selected->carrier_phase_observation_type, "L2X");
+    EXPECT_DOUBLE_EQ(selected->pseudorange, 100.0);
+}
+
 TEST(PPPOSRTest, OsrFrequencyLookupPreservesSignalTypeFallbackWhenExactGateIsOff) {
     const SatelliteId sat(GNSSSystem::GPS, 14);
     ObservationData obs(GNSSTime(2068, 230425.0));
