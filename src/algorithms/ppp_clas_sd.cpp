@@ -10,6 +10,7 @@
 
 #include <libgnss++/algorithms/ppp_clas_sd.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
+#include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/algorithms/ppp_shared.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -69,7 +70,7 @@ SdEpochResult runClockFreeSdEpoch(
         const double sat_clk_m = constants::SPEED_OF_LIGHT * osr.satellite_clock_bias_s;
 
         for (int f = 0; f < std::min(osr.num_frequencies, 2); ++f) {
-            const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
+            const Observation* raw = findOsrFrequencyObservation(obs, osr, f);
             if (!raw || !raw->valid) continue;
             if (raw->has_pseudorange && std::isfinite(raw->pseudorange)) {
                 so.y_code[f] = raw->pseudorange - geo + sat_clk_m - osr.PRC[f];
@@ -295,7 +296,7 @@ std::map<SatelliteId, SdSatObs> buildSdZdres(
         so.los = (osr.satellite_position - position).normalized();
         const double sat_clk_m = constants::SPEED_OF_LIGHT * osr.satellite_clock_bias_s;
         for (int f = 0; f < std::min(osr.num_frequencies, 2); ++f) {
-            const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
+            const Observation* raw = findOsrFrequencyObservation(obs, osr, f);
             if (!raw || !raw->valid) continue;
             if (raw->has_pseudorange && std::isfinite(raw->pseudorange)) {
                 so.y_code[f] = raw->pseudorange - geo + sat_clk_m - osr.PRC[f];
@@ -541,7 +542,7 @@ SdEpochResult solveSingleEpochSdAr(
         const double sat_clk_m = constants::SPEED_OF_LIGHT * osr.satellite_clock_bias_s;
 
         for (int f = 0; f < std::min(osr.num_frequencies, 2); ++f) {
-            const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
+            const Observation* raw = findOsrFrequencyObservation(obs, osr, f);
             if (!raw || !raw->valid) continue;
             if (raw->has_pseudorange && std::isfinite(raw->pseudorange)) {
                 so.y_code[f] = raw->pseudorange - geo + sat_clk_m - osr.PRC[f];
@@ -636,7 +637,7 @@ SdEpochResult solveSingleEpochSdAr(
         so.los = (so.osr->satellite_position - refined_pos).normalized();
         const double sat_clk_m = constants::SPEED_OF_LIGHT * so.osr->satellite_clock_bias_s;
         for (int f = 0; f < std::min(so.osr->num_frequencies, 2); ++f) {
-            const Observation* raw = obs.getObservation(so.osr->satellite, so.osr->signals[f]);
+            const Observation* raw = findOsrFrequencyObservation(obs, *so.osr, f);
             if (!raw || !raw->valid) continue;
             if (raw->has_pseudorange && std::isfinite(raw->pseudorange))
                 so.y_code[f] = raw->pseudorange - geo + sat_clk_m - so.osr->PRC[f];

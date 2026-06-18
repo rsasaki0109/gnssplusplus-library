@@ -62,6 +62,32 @@ bool gpsL2ExactBiasIdentityEnabled(const Observation* observation) {
            pppEnvOverrides().clas_code_row_bias_identity;
 }
 
+bool clasGpsL2wIdentityGateEnabled() {
+    return pppEnvOverrides().clas_dd_filter &&
+           pppEnvOverrides().clas_code_row_bias_identity;
+}
+
+const Observation* findExactGpsL2wObservation(
+    const ObservationData& obs,
+    const SatelliteId& sat) {
+    for (const auto& candidate : obs.observations) {
+        if (!candidate.valid || candidate.satellite != sat) {
+            continue;
+        }
+        if (!candidate.has_carrier_phase || !candidate.has_pseudorange) {
+            continue;
+        }
+        if (algorithms::ppp_bias_identity::isGpsL2wObservation(
+                candidate.satellite.system,
+                candidate.signal,
+                candidate.pseudorange_observation_type,
+                candidate.carrier_phase_observation_type)) {
+            return &candidate;
+        }
+    }
+    return nullptr;
+}
+
 const char* clasAtmosSelectionPolicyName(
     ppp_shared::PPPConfig::ClasAtmosSelectionPolicy policy) {
     switch (policy) {
@@ -508,6 +534,39 @@ int preferredClasNetworkId(const std::map<std::string, std::string>& atmos_token
     return std::max(network_id, 0);
 }
 
+const Observation* findOsrFrequencyObservation(
+    const ObservationData& obs,
+    const OSRCorrection& osr,
+    int freq_index) {
+    if (freq_index < 0 || freq_index >= osr.num_frequencies ||
+        freq_index >= OSR_MAX_FREQ) {
+        return nullptr;
+    }
+    const SignalType signal = osr.signals[freq_index];
+    const Observation* fallback = obs.getObservation(osr.satellite, signal);
+    if (!osr.bias_exact_identity[freq_index]) {
+        return fallback;
+    }
+
+    const auto& pseudorange_code = osr.pseudorange_rinex_codes[freq_index];
+    const auto& carrier_code = osr.carrier_rinex_codes[freq_index];
+    for (const auto& candidate : obs.observations) {
+        if (candidate.satellite != osr.satellite || candidate.signal != signal) {
+            continue;
+        }
+        const bool pseudorange_matches =
+            pseudorange_code.empty() ||
+            candidate.pseudorange_observation_type == pseudorange_code;
+        const bool carrier_matches =
+            carrier_code.empty() ||
+            candidate.carrier_phase_observation_type == carrier_code;
+        if (pseudorange_matches && carrier_matches) {
+            return &candidate;
+        }
+    }
+    return fallback;
+}
+
 std::map<std::string, std::string> selectClasEpochAtmosTokens(
     const SSRProducts& ssr_products,
     const std::vector<SatelliteId>& satellites,
@@ -675,6 +734,12 @@ std::vector<OSRCorrection> computeOSR(
 
         const Observation* l1_obs = findSignal(l1_cands);
         const Observation* l2_obs = findSignal(l2_cands);
+        if (sat.system == GNSSSystem::GPS && clasGpsL2wIdentityGateEnabled()) {
+            if (const Observation* exact_l2w = findExactGpsL2wObservation(obs, sat);
+                exact_l2w != nullptr) {
+                l2_obs = exact_l2w;
+            }
+        }
         if (!l1_obs) {
             if (pppDebugEnabled() && sat.system == GNSSSystem::QZSS) {
                 std::cerr << "[OSR-QZSS-SKIP] " << sat.toString()

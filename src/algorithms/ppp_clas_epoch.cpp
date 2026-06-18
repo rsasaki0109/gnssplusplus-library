@@ -387,8 +387,8 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL) {
         for (const auto& osr : osr_corrections) {
             if (!osr.valid || osr.num_frequencies < 2) continue;
-            const Observation* l1_raw = obs.getObservation(osr.satellite, osr.signals[0]);
-            const Observation* l2_raw = obs.getObservation(osr.satellite, osr.signals[1]);
+            const Observation* l1_raw = findOsrFrequencyObservation(obs, osr, 0);
+            const Observation* l2_raw = findOsrFrequencyObservation(obs, osr, 1);
             if (!l1_raw || !l2_raw || !l1_raw->valid || !l2_raw->valid) continue;
             if (!l1_raw->has_carrier_phase || !l2_raw->has_carrier_phase) continue;
             if (!l1_raw->has_pseudorange || !l2_raw->has_pseudorange) continue;
