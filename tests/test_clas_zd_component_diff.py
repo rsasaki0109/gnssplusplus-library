@@ -31,6 +31,8 @@ FIELDNAMES = [
     "sat",
     "freq",
     "signal",
+    "pseudorange_rinex_code",
+    "carrier_rinex_code",
     "prc_m",
     "PRC",
     "cpc_m",
@@ -60,6 +62,8 @@ def code_row(
     record: str = "CODE",
     stage: str = "",
     signal: str = "",
+    pseudorange_rinex_code: str = "",
+    carrier_rinex_code: str = "",
 ) -> dict[str, str]:
     return {
         "record": record,
@@ -69,6 +73,8 @@ def code_row(
         "sat": sat,
         "freq": freq,
         "signal": signal,
+        "pseudorange_rinex_code": pseudorange_rinex_code,
+        "carrier_rinex_code": carrier_rinex_code,
         "prc_m": prc,
         "PRC": "",
         "cpc_m": "",
@@ -82,6 +88,32 @@ def code_row(
 
 
 class ClasZdComponentDiffTest(unittest.TestCase):
+    def test_observation_identity_prefers_row_type_specific_rinex_code(self) -> None:
+        self.assertEqual(
+            component_diff.observation_identity(
+                {
+                    "record": "CODE",
+                    "signal": "3",
+                    "pseudorange_rinex_code": "C2W",
+                    "carrier_rinex_code": "L2W",
+                },
+                "code",
+            ),
+            "C2W",
+        )
+        self.assertEqual(
+            component_diff.observation_identity(
+                {
+                    "record": "PHASE",
+                    "signal": "3",
+                    "pseudorange_rinex_code": "C2W",
+                    "carrier_rinex_code": "L2W",
+                },
+                "phase",
+            ),
+            "L2W",
+        )
+
     def test_compares_common_component_rows_and_reports_unmatched(self) -> None:
         base_rows = [
             code_row(sat="G14", freq="1", prc="0.50", code_bias="0.10", receiver_ant="-0.02"),
@@ -96,6 +128,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                 receiver_ant="0.00",
                 stage="accepted",
                 signal="3",
+                pseudorange_rinex_code="C2W",
             ),
             code_row(
                 sat="J02",
@@ -141,6 +174,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
         self.assertEqual(report["top_candidate_only"][0]["sat"], "J02")
         self.assertEqual(report["top_component_deltas"][0]["component"], "prc_m")
         self.assertAlmostEqual(report["top_component_deltas"][0]["delta_m"], 0.25)
+        self.assertEqual(report["top_component_deltas"][0]["candidate_signal"], "C2W")
 
     def test_cli_writes_schema_json_and_details_csv(self) -> None:
         with tempfile.TemporaryDirectory(prefix="clas_zd_component_diff_test_") as temp_dir:
@@ -163,6 +197,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                         code_bias="0.10",
                         receiver_ant="0.00",
                         signal="3",
+                        pseudorange_rinex_code="C2W",
                     )
                 ],
             )
@@ -206,6 +241,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                 rows = list(csv.DictReader(details_file))
             self.assertEqual(rows[0]["component"], "prc_m")
             self.assertEqual(rows[0]["sat"], "G14")
+            self.assertEqual(rows[0]["candidate_signal"], "C2W")
             self.assertEqual(float(rows[0]["delta_m"]), 0.25)
 
 

@@ -45,6 +45,12 @@ struct Observation {
     Observation() = default;
     Observation(const SatelliteId& sat, SignalType sig) 
         : satellite(sat), signal(sig) {}
+
+    const std::string& exactBiasObservationType() const {
+        return !pseudorange_observation_type.empty()
+                   ? pseudorange_observation_type
+                   : carrier_phase_observation_type;
+    }
 };
 
 /**

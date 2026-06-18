@@ -113,6 +113,34 @@ def detect_frequency(row: Row) -> int:
     return to_int(first_present(row, ("freq", "frequency_index", "frequency", "f"), "0"))
 
 
+def observation_identity(row: Row, row_type: str) -> str:
+    if row_type == "code":
+        return first_present(
+            row,
+            (
+                "pseudorange_rinex_code",
+                "pseudorange_observation_type",
+                "obs_code",
+                "rinex_code",
+                "code",
+                "signal",
+            ),
+        )
+    if row_type == "phase":
+        return first_present(
+            row,
+            (
+                "carrier_rinex_code",
+                "carrier_phase_observation_type",
+                "obs_code",
+                "rinex_code",
+                "code",
+                "signal",
+            ),
+        )
+    return first_present(row, ("obs_code", "rinex_code", "code", "signal"), "")
+
+
 def extract_components(row: Row, component_names: Sequence[str]) -> ComponentMap:
     components: ComponentMap = {}
     for component in component_names:
@@ -167,7 +195,7 @@ def normalize_rows(
                 tow=tow_millis / 1000.0,
                 sat=sat,
                 freq=freq,
-                signal=first_present(row, ("signal", "code", "obs_code", "rinex_code"), ""),
+                signal=observation_identity(row, row_type),
                 source_row=index,
                 components=components,
             )
