@@ -46,6 +46,17 @@ provides no GLONASS phase-bias product, so default GLONASS-phase-off is correct
 Open MADOCA levers (measured, none yet a default win): PPP-AR parity
 (`exec_pppar` window); QZSS atmosphere row-set.
 
+Residual-component parity artifact: use
+`scripts/analysis/madoca_residual_component_diff.py` after satellite-set and
+row-set parity are understood.  It compares only common residual rows, keyed by
+epoch, iteration, row type, satellite, exact observation-code identity,
+frequency slot, ionosphere coefficient, and duplicate occurrence index.  The
+schema is `madoca_residual_component_diff.v1`; unmatched rows remain explicit
+`base_only` / `candidate_only` failures instead of being folded into RMS.  This
+tool is meant for bounded MIZU/ALIC windows and stays analysis-only: it does not
+link MADOCALIB into production targets and does not change native PPP runtime
+behavior.
+
 ### CLAS PPP-RTK native vs CLASLIB (2019-08-27 case, tracker issue #9)
 
 Issues #6 (per-satellite NL datum diagnosis) and #7 (datum alignment
