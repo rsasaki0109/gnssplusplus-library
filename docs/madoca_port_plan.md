@@ -57,6 +57,18 @@ tool is meant for bounded MIZU/ALIC windows and stays analysis-only: it does not
 link MADOCALIB into production targets and does not change native PPP runtime
 behavior.
 
+The optional CI wrapper
+`scripts/ci/run_optional_madoca_residual_component_diff.py` runs the same diff
+when `GNSSPP_MADOCA_RESIDUAL_BASE_CSV` and
+`GNSSPP_MADOCA_RESIDUAL_CANDIDATE_CSV` point at generated oracle/native CSV
+dumps.  It writes `ci_optional_madoca_residual_component_summary.json`, a log,
+and the `madoca_residual_component_diff.{json,csv}` artifacts; when those inputs
+are absent the CI step records an explicit skip instead of silently omitting the
+artifact.  Optional filters are
+`GNSSPP_MADOCA_RESIDUAL_COMPONENTS`, `GNSSPP_MADOCA_RESIDUAL_ROW_TYPE`,
+`GNSSPP_MADOCA_RESIDUAL_ITERATION`, `GNSSPP_MADOCA_RESIDUAL_THRESHOLD`, and
+`GNSSPP_MADOCA_RESIDUAL_FAIL_ON_DIFF`.
+
 ### CLAS PPP-RTK native vs CLASLIB (2019-08-27 case, tracker issue #9)
 
 Issues #6 (per-satellite NL datum diagnosis) and #7 (datum alignment
