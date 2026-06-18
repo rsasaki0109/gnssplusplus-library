@@ -173,3 +173,12 @@ Next phase should start outside the DD translation unit:
    matches CLASLIB before remap is considered automatic.
 3. Build a CLASLIB-valid Galileo ZD admission source, then re-test the `f2`
    frequency-slot parity with the all-epoch oracle.
+
+The first diagnostic artifact for that phase is
+`scripts/analysis/clas_zd_component_diff.py`.  It compares native CLAS
+zero-difference component CSV dumps, such as `GNSS_PPP_CLAS_CODE_DUMP`, against a
+CLASLIB-side component dump and writes a `clas_zd_component_diff.v1` JSON report
+plus optional component-delta CSV.  The tool intentionally changes no solver
+model; it is the gate for classifying PRC, CPC, ionosphere, bias, antenna,
+wind-up, and related component deltas before any GPS L2W, QZSS, or Galileo model
+change is attempted.

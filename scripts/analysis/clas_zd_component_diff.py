@@ -1,0 +1,461 @@
+#!/usr/bin/env python3
+"""Compare CLAS zero-difference correction component CSV dumps."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import math
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from pathlib import Path
+from typing import Any, DefaultDict, Iterable, Optional, Sequence
+
+
+SCHEMA = "clas_zd_component_diff.v1"
+
+KEY_REQUIRED_COLUMNS = ["week", "tow", "sat"]
+
+COMPONENT_ALIASES: dict[str, tuple[str, ...]] = {
+    "applied_pr_corr_m": ("applied_pr_corr_m", "pseudorange_correction_m"),
+    "carrier_correction_m": ("carrier_correction_m", "carrier_phase_correction_m"),
+    "prc_m": ("prc_m", "PRC", "PRC_m"),
+    "cpc_m": ("cpc_m", "CPC", "CPC_m"),
+    "prc_minus_trop_m": ("prc_minus_trop_m",),
+    "cpc_minus_trop_m": ("cpc_minus_trop_m",),
+    "trop_correction_m": ("trop_correction_m", "trop_m"),
+    "iono_l1_m": ("iono_l1_m", "l1_iono_m"),
+    "iono_scaled_m": ("iono_scaled_m",),
+    "iono_cpc_m": ("iono_cpc_m",),
+    "code_bias_m": ("code_bias_m", "code_bias"),
+    "phase_bias_m": ("phase_bias_m", "phase_bias"),
+    "receiver_antenna_m": ("receiver_antenna_m", "receiver_ant_m", "receiver_ant"),
+    "relativity_m": ("relativity_m", "relativity_correction_m"),
+    "windup_m": ("windup_m",),
+    "phase_compensation_m": ("phase_compensation_m",),
+    "orbit_projection_m": ("orbit_projection_m",),
+    "clock_correction_m": ("clock_correction_m",),
+    "residual_m": ("residual_m",),
+    "variance_m2": ("variance_m2",),
+}
+
+
+Row = dict[str, str]
+ComponentMap = dict[str, float]
+Key = tuple[int, int, str, str, int]
+
+
+@dataclass(frozen=True)
+class ComponentRow:
+    key: Key
+    stage: str
+    row_type: str
+    week: int
+    tow: float
+    sat: str
+    freq: int
+    signal: str
+    source_row: int
+    components: ComponentMap
+
+
+def tow_to_millis(value: str) -> int:
+    try:
+        tow = Decimal(str(value))
+    except InvalidOperation as exc:
+        raise ValueError(f"invalid tow value: {value}") from exc
+    return int((tow * Decimal("1000")).to_integral_value(rounding=ROUND_HALF_UP))
+
+
+def to_int(value: str, default: int = 0) -> int:
+    if value == "":
+        return default
+    try:
+        return int(float(value))
+    except ValueError:
+        return default
+
+
+def to_float(value: str) -> Optional[float]:
+    if value == "":
+        return None
+    try:
+        parsed = float(value)
+    except ValueError:
+        return None
+    return parsed if math.isfinite(parsed) else None
+
+
+def first_present(row: Row, names: Iterable[str], default: str = "") -> str:
+    for name in names:
+        if name in row and row[name] != "":
+            return row[name]
+    return default
+
+
+def detect_row_type(row: Row) -> str:
+    value = first_present(row, ("row_type", "kind", "type", "record"), "")
+    normalized = value.strip().lower()
+    if normalized in {"code", "pseudorange", "pr"}:
+        return "code"
+    if normalized in {"phase", "carrier", "carrier_phase", "amb", "ambiguity"}:
+        return "phase"
+    if normalized.startswith("code"):
+        return "code"
+    if normalized.startswith("phase") or normalized.startswith("carrier"):
+        return "phase"
+    return normalized
+
+
+def detect_frequency(row: Row) -> int:
+    return to_int(first_present(row, ("freq", "frequency_index", "frequency", "f"), "0"))
+
+
+def extract_components(row: Row, component_names: Sequence[str]) -> ComponentMap:
+    components: ComponentMap = {}
+    for component in component_names:
+        aliases = COMPONENT_ALIASES.get(component, (component,))
+        raw_value = first_present(row, aliases)
+        parsed = to_float(raw_value)
+        if parsed is not None:
+            components[component] = parsed
+    return components
+
+
+def read_csv_rows(path: Path) -> list[Row]:
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValueError(f"{path}: missing CSV header")
+        missing = [column for column in KEY_REQUIRED_COLUMNS if column not in reader.fieldnames]
+        if missing:
+            raise ValueError(f"{path}: missing required columns: {', '.join(missing)}")
+        return [dict(row) for row in reader]
+
+
+def normalize_rows(
+    rows: Sequence[Row],
+    *,
+    component_names: Sequence[str],
+    stage_filter: Optional[str],
+    row_type_filter: Optional[str],
+) -> list[ComponentRow]:
+    normalized: list[ComponentRow] = []
+    for index, row in enumerate(rows, start=2):
+        stage = first_present(row, ("stage",), "")
+        if stage_filter is not None and stage != stage_filter:
+            continue
+        row_type = detect_row_type(row)
+        if row_type_filter is not None and row_type != row_type_filter:
+            continue
+        components = extract_components(row, component_names)
+        if not components:
+            continue
+        week = to_int(row["week"])
+        tow_millis = tow_to_millis(row["tow"])
+        sat = row["sat"]
+        freq = detect_frequency(row)
+        key = (week, tow_millis, row_type, sat, freq)
+        normalized.append(
+            ComponentRow(
+                key=key,
+                stage=stage,
+                row_type=row_type,
+                week=week,
+                tow=tow_millis / 1000.0,
+                sat=sat,
+                freq=freq,
+                signal=first_present(row, ("signal", "code", "obs_code", "rinex_code"), ""),
+                source_row=index,
+                components=components,
+            )
+        )
+    return normalized
+
+
+def rows_by_key(rows: Sequence[ComponentRow]) -> tuple[dict[Key, ComponentRow], Counter[Key]]:
+    grouped: dict[Key, ComponentRow] = {}
+    duplicate_counts: Counter[Key] = Counter()
+    for row in rows:
+        if row.key in grouped:
+            duplicate_counts[row.key] += 1
+        grouped[row.key] = row
+    return grouped, duplicate_counts
+
+
+def key_to_dict(key: Key) -> dict[str, Any]:
+    week, tow_millis, row_type, sat, freq = key
+    return {
+        "week": week,
+        "tow": tow_millis / 1000.0,
+        "row_type": row_type,
+        "sat": sat,
+        "freq": freq,
+    }
+
+
+def component_stats(values: Sequence[float]) -> dict[str, Any]:
+    if not values:
+        return {
+            "rows": 0,
+            "mean_abs_delta_m": 0.0,
+            "rms_delta_m": 0.0,
+            "max_abs_delta_m": 0.0,
+        }
+    abs_values = [abs(value) for value in values]
+    return {
+        "rows": len(values),
+        "mean_abs_delta_m": sum(abs_values) / len(abs_values),
+        "rms_delta_m": math.sqrt(sum(value * value for value in values) / len(values)),
+        "max_abs_delta_m": max(abs_values),
+    }
+
+
+def row_summary(row: ComponentRow) -> dict[str, Any]:
+    return {
+        **key_to_dict(row.key),
+        "stage": row.stage,
+        "signal": row.signal,
+        "source_row": row.source_row,
+        "components": sorted(row.components),
+    }
+
+
+def build_report(
+    base_rows: Sequence[ComponentRow],
+    candidate_rows: Sequence[ComponentRow],
+    *,
+    base_label: str,
+    candidate_label: str,
+    threshold_m: Optional[float],
+    top_deltas: int,
+    top_unmatched: int,
+) -> dict[str, Any]:
+    base_by_key, base_duplicates = rows_by_key(base_rows)
+    candidate_by_key, candidate_duplicates = rows_by_key(candidate_rows)
+    base_keys = set(base_by_key)
+    candidate_keys = set(candidate_by_key)
+    common_keys = sorted(base_keys & candidate_keys)
+    base_only_keys = sorted(base_keys - candidate_keys)
+    candidate_only_keys = sorted(candidate_keys - base_keys)
+
+    component_deltas: DefaultDict[str, list[float]] = defaultdict(list)
+    details: list[dict[str, Any]] = []
+    missing_components: Counter[str] = Counter()
+    threshold_exceedances = 0
+
+    for key in common_keys:
+        base_row = base_by_key[key]
+        candidate_row = candidate_by_key[key]
+        components = sorted(set(base_row.components) | set(candidate_row.components))
+        for component in components:
+            base_value = base_row.components.get(component)
+            candidate_value = candidate_row.components.get(component)
+            if base_value is None or candidate_value is None:
+                missing_components[component] += 1
+                continue
+            delta = candidate_value - base_value
+            component_deltas[component].append(delta)
+            abs_delta = abs(delta)
+            if threshold_m is not None and abs_delta > threshold_m:
+                threshold_exceedances += 1
+            details.append(
+                {
+                    **key_to_dict(key),
+                    "component": component,
+                    "base_value_m": base_value,
+                    "candidate_value_m": candidate_value,
+                    "delta_m": delta,
+                    "abs_delta_m": abs_delta,
+                    "base_signal": base_row.signal,
+                    "candidate_signal": candidate_row.signal,
+                    "base_source_row": base_row.source_row,
+                    "candidate_source_row": candidate_row.source_row,
+                }
+            )
+
+    details.sort(
+        key=lambda item: (
+            -item["abs_delta_m"],
+            item["week"],
+            item["tow"],
+            item["row_type"],
+            item["sat"],
+            item["freq"],
+            item["component"],
+        )
+    )
+    per_component = [
+        {"component": component, **component_stats(values)}
+        for component, values in sorted(component_deltas.items())
+    ]
+    per_component.sort(key=lambda item: (-item["max_abs_delta_m"], item["component"]))
+
+    return {
+        "schema": SCHEMA,
+        "base_label": base_label,
+        "candidate_label": candidate_label,
+        "base_rows": len(base_rows),
+        "candidate_rows": len(candidate_rows),
+        "common_rows": len(common_keys),
+        "base_only_rows": len(base_only_keys),
+        "candidate_only_rows": len(candidate_only_keys),
+        "base_duplicate_keys": sum(base_duplicates.values()),
+        "candidate_duplicate_keys": sum(candidate_duplicates.values()),
+        "components_compared": sum(item["rows"] for item in per_component),
+        "component_threshold_m": threshold_m,
+        "threshold_exceedances": threshold_exceedances,
+        "missing_component_counts": [
+            {"component": component, "rows": rows}
+            for component, rows in missing_components.most_common()
+        ],
+        "per_component": per_component,
+        "top_component_deltas": details[:top_deltas],
+        "top_base_only": [row_summary(base_by_key[key]) for key in base_only_keys[:top_unmatched]],
+        "top_candidate_only": [
+            row_summary(candidate_by_key[key]) for key in candidate_only_keys[:top_unmatched]
+        ],
+    }
+
+
+def write_details_csv(path: Path, report: dict[str, Any]) -> None:
+    fieldnames = [
+        "week",
+        "tow",
+        "row_type",
+        "sat",
+        "freq",
+        "component",
+        "base_value_m",
+        "candidate_value_m",
+        "delta_m",
+        "abs_delta_m",
+        "base_signal",
+        "candidate_signal",
+        "base_source_row",
+        "candidate_source_row",
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(report.get("top_component_deltas", []))
+
+
+def print_summary(report: dict[str, Any]) -> None:
+    print("clas_zd_component_diff:")
+    for key in [
+        "schema",
+        "base_label",
+        "candidate_label",
+        "base_rows",
+        "candidate_rows",
+        "common_rows",
+        "base_only_rows",
+        "candidate_only_rows",
+        "components_compared",
+        "threshold_exceedances",
+    ]:
+        print(f"  {key}: {report[key]}")
+    print("  per_component:")
+    for item in report["per_component"]:
+        print(
+            "    "
+            f"{item['component']}: rows={item['rows']} "
+            f"mean_abs={item['mean_abs_delta_m']:.6g} "
+            f"rms={item['rms_delta_m']:.6g} "
+            f"max_abs={item['max_abs_delta_m']:.6g}"
+        )
+    if report["top_component_deltas"]:
+        top = report["top_component_deltas"][0]
+        print(
+            "  max_delta: "
+            f"{top['week']}:{top['tow']:.3f} {top['row_type']} "
+            f"{top['sat']} f{top['freq']} {top['component']} "
+            f"delta={top['delta_m']:.6g}"
+        )
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Compare CLAS zero-difference correction component CSV dumps."
+    )
+    parser.add_argument("base_csv", type=Path)
+    parser.add_argument("candidate_csv", type=Path)
+    parser.add_argument("--base-label", default="oracle")
+    parser.add_argument("--candidate-label", default="native")
+    parser.add_argument("--stage", help="compare only rows with this native/bridge stage")
+    parser.add_argument("--row-type", choices=["code", "phase"], help="compare only one row type")
+    parser.add_argument(
+        "--component",
+        dest="components",
+        action="append",
+        help="component name to compare; may be repeated. Defaults to the v1 component set.",
+    )
+    parser.add_argument("--component-threshold-m", type=float)
+    parser.add_argument("--top-deltas", type=int, default=20)
+    parser.add_argument("--top-unmatched", type=int, default=20)
+    parser.add_argument("--json-out", type=Path)
+    parser.add_argument("--details-csv", type=Path)
+    parser.add_argument(
+        "--fail-on-diff",
+        action="store_true",
+        help="return non-zero when rows are unmatched or a threshold is exceeded",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    args = parse_args(argv)
+    component_names = args.components or sorted(COMPONENT_ALIASES)
+    base_rows = normalize_rows(
+        read_csv_rows(args.base_csv),
+        component_names=component_names,
+        stage_filter=args.stage,
+        row_type_filter=args.row_type,
+    )
+    candidate_rows = normalize_rows(
+        read_csv_rows(args.candidate_csv),
+        component_names=component_names,
+        stage_filter=args.stage,
+        row_type_filter=args.row_type,
+    )
+    report = build_report(
+        base_rows,
+        candidate_rows,
+        base_label=args.base_label,
+        candidate_label=args.candidate_label,
+        threshold_m=args.component_threshold_m,
+        top_deltas=args.top_deltas,
+        top_unmatched=args.top_unmatched,
+    )
+    report["base_csv"] = str(args.base_csv)
+    report["candidate_csv"] = str(args.candidate_csv)
+    report["stage_filter"] = args.stage
+    report["row_type_filter"] = args.row_type
+    report["component_names"] = component_names
+    print_summary(report)
+    if args.json_out is not None:
+        args.json_out.parent.mkdir(parents=True, exist_ok=True)
+        args.json_out.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    if args.details_csv is not None:
+        write_details_csv(args.details_csv, report)
+    if args.fail_on_diff and (
+        report["base_only_rows"] > 0
+        or report["candidate_only_rows"] > 0
+        or report["threshold_exceedances"] > 0
+    ):
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except BrokenPipeError:
+        raise SystemExit(1)
