@@ -42,6 +42,13 @@ struct OSRCorrection {
     std::string carrier_rinex_codes[OSR_MAX_FREQ];
     std::uint8_t code_bias_signal_ids[OSR_MAX_FREQ] = {};
     std::uint8_t phase_bias_signal_ids[OSR_MAX_FREQ] = {};
+    std::uint8_t code_bias_source_signal_ids[OSR_MAX_FREQ] = {};
+    std::uint8_t phase_bias_source_signal_ids[OSR_MAX_FREQ] = {};
+    bool bias_exact_identity[OSR_MAX_FREQ] = {};
+    bool code_bias_present[OSR_MAX_FREQ] = {};
+    bool phase_bias_present[OSR_MAX_FREQ] = {};
+    bool code_bias_fallback[OSR_MAX_FREQ] = {};
+    bool phase_bias_fallback[OSR_MAX_FREQ] = {};
     double wavelengths[OSR_MAX_FREQ] = {};
     double frequencies[OSR_MAX_FREQ] = {};
     int num_frequencies = 0;

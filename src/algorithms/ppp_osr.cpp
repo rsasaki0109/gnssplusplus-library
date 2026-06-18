@@ -17,22 +17,37 @@ bool pppDebugEnabled() {
     return ppp_shared::pppDebugEnabled();
 }
 
-double clasOsrCodeBiasLookup(const std::map<uint8_t, double>& bias_m,
-                             GNSSSystem system,
-                             uint8_t signal_id,
-                             bool enable_l2_class_fallback) {
+struct ClasOsrBiasLookup {
+    double value_m = 0.0;
+    std::uint8_t source_signal_id = 0;
+    bool present = false;
+    bool fallback = false;
+};
+
+ClasOsrBiasLookup clasOsrBiasLookup(const std::map<uint8_t, double>& bias_m,
+                                    GNSSSystem system,
+                                    uint8_t signal_id,
+                                    bool enable_l2_class_fallback) {
+    ClasOsrBiasLookup result;
     const auto it = bias_m.find(signal_id);
     if (it != bias_m.end()) {
-        return it->second;
+        result.value_m = it->second;
+        result.source_signal_id = signal_id;
+        result.present = true;
+        return result;
     }
     if (enable_l2_class_fallback && system == GNSSSystem::GPS &&
         (signal_id == 8U || signal_id == 9U)) {
         const auto sibling = bias_m.find(signal_id == 8U ? 9U : 8U);
         if (sibling != bias_m.end()) {
-            return sibling->second;
+            result.value_m = sibling->second;
+            result.source_signal_id = sibling->first;
+            result.present = true;
+            result.fallback = true;
+            return result;
         }
     }
-    return 0.0;
+    return result;
 }
 
 bool gpsL2ExactBiasIdentityEnabled(const Observation* observation) {
@@ -923,14 +938,23 @@ std::vector<OSRCorrection> computeOSR(
                     exact_bias_identity);
             osr.code_bias_signal_ids[f] = code_sid;
             osr.phase_bias_signal_ids[f] = phase_sid;
-            osr.code_bias_m[f] =
-                clasOsrCodeBiasLookup(
+            osr.bias_exact_identity[f] = exact_bias_identity;
+            const auto code_bias =
+                clasOsrBiasLookup(
                     ssr_cbias,
                     sat.system,
                     code_sid,
                     pppEnvOverrides().clas_code_row_bias_identity && !exact_bias_identity);
+            osr.code_bias_m[f] = code_bias.value_m;
+            osr.code_bias_source_signal_ids[f] = code_bias.source_signal_id;
+            osr.code_bias_present[f] = code_bias.present;
+            osr.code_bias_fallback[f] = code_bias.fallback;
             auto pb_it = ssr_pbias.find(phase_sid);
-            osr.phase_bias_m[f] = (pb_it != ssr_pbias.end()) ? pb_it->second : 0.0;
+            if (pb_it != ssr_pbias.end()) {
+                osr.phase_bias_m[f] = pb_it->second;
+                osr.phase_bias_source_signal_ids[f] = phase_sid;
+                osr.phase_bias_present[f] = true;
+            }
         }
 
         if (osr.num_frequencies >= 2) {

@@ -36,6 +36,13 @@ FIELDNAMES = [
     "pseudorange_rtklib_code",
     "carrier_rtklib_code",
     "signal_family",
+    "bias_exact_identity",
+    "code_bias_source_signal_id",
+    "phase_bias_source_signal_id",
+    "code_bias_present",
+    "phase_bias_present",
+    "code_bias_fallback",
+    "phase_bias_fallback",
     "prc_m",
     "PRC",
     "cpc_m",
@@ -70,6 +77,13 @@ def code_row(
     pseudorange_rtklib_code: str = "",
     carrier_rtklib_code: str = "",
     signal_family: str = "",
+    bias_exact_identity: str = "",
+    code_bias_source_signal_id: str = "",
+    phase_bias_source_signal_id: str = "",
+    code_bias_present: str = "",
+    phase_bias_present: str = "",
+    code_bias_fallback: str = "",
+    phase_bias_fallback: str = "",
 ) -> dict[str, str]:
     return {
         "record": record,
@@ -84,6 +98,13 @@ def code_row(
         "pseudorange_rtklib_code": pseudorange_rtklib_code,
         "carrier_rtklib_code": carrier_rtklib_code,
         "signal_family": signal_family,
+        "bias_exact_identity": bias_exact_identity,
+        "code_bias_source_signal_id": code_bias_source_signal_id,
+        "phase_bias_source_signal_id": phase_bias_source_signal_id,
+        "code_bias_present": code_bias_present,
+        "phase_bias_present": phase_bias_present,
+        "code_bias_fallback": code_bias_fallback,
+        "phase_bias_fallback": phase_bias_fallback,
         "prc_m": prc,
         "PRC": "",
         "cpc_m": "",
@@ -121,6 +142,46 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                 "phase",
             ),
             "L2W",
+        )
+
+    def test_lookup_provenance_columns_can_be_compared(self) -> None:
+        components = component_diff.extract_components(
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="0.50",
+                code_bias="0.10",
+                receiver_ant="-0.02",
+                bias_exact_identity="1",
+                code_bias_source_signal_id="9",
+                phase_bias_source_signal_id="9",
+                code_bias_present="1",
+                phase_bias_present="1",
+                code_bias_fallback="0",
+                phase_bias_fallback="0",
+            ),
+            [
+                "bias_exact_identity",
+                "code_bias_source_signal_id",
+                "phase_bias_source_signal_id",
+                "code_bias_present",
+                "phase_bias_present",
+                "code_bias_fallback",
+                "phase_bias_fallback",
+            ],
+        )
+
+        self.assertEqual(
+            components,
+            {
+                "bias_exact_identity": 1.0,
+                "code_bias_source_signal_id": 9.0,
+                "phase_bias_source_signal_id": 9.0,
+                "code_bias_present": 1.0,
+                "phase_bias_present": 1.0,
+                "code_bias_fallback": 0.0,
+                "phase_bias_fallback": 0.0,
+            },
         )
 
     def test_exact_observation_code_is_part_of_row_key(self) -> None:
