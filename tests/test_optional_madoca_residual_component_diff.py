@@ -137,6 +137,27 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
             self.assertEqual(metrics["components_compared"], 1)
             self.assertAlmostEqual(metrics["max_abs_delta"], 0.05)
 
+    def test_run_step_fails_when_declared_outputs_are_missing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_residual_missing_") as temp_dir:
+            root = Path(temp_dir)
+            output_dir = root / "output"
+            log_dir = output_dir / "logs"
+            log_dir.mkdir(parents=True)
+            missing_json = output_dir / "madoca_residual_component_diff.json"
+            step = runner.DiffStep(
+                name="MADOCA residual-component diff",
+                slug="madoca_residual_component_diff",
+                command=[sys.executable, "-c", "print('no artifacts')"],
+                outputs=[str(missing_json)],
+                summary_json=str(output_dir / "madoca_residual_component_diff_summary.json"),
+            )
+
+            result = runner.run_step(step, ROOT_DIR, log_dir)
+
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["returncode"], 0)
+            self.assertEqual(result["missing_outputs"], [str(missing_json)])
+
     def test_render_markdown_summary_reports_status_table_and_metrics(self) -> None:
         markdown = runner.render_markdown_summary(
             [
@@ -163,12 +184,18 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
                     "status": "failed",
                     "log_path": "/tmp/madoca.log",
                 },
+                {
+                    "name": "MADOCA residual-component diff",
+                    "status": "failed",
+                    "missing_outputs": ["/tmp/missing.json"],
+                    "log_path": "/tmp/ignored.log",
+                },
             ]
         )
 
         self.assertIn("## Optional MADOCA Residual-Component Diff", markdown)
         self.assertIn("`passed`: `1`", markdown)
-        self.assertIn("`failed`: `1`", markdown)
+        self.assertIn("`failed`: `2`", markdown)
         self.assertIn("`skipped`: `1`", markdown)
         self.assertIn("common rows `12`", markdown)
         self.assertIn("unmatched `1/2`", markdown)
@@ -176,6 +203,7 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
         self.assertIn("max |delta| 0.125", markdown)
         self.assertIn("threshold exceedances `3`", markdown)
         self.assertIn("see `/tmp/madoca.log`", markdown)
+        self.assertIn("missing `/tmp/missing.json`", markdown)
 
     def test_write_summary_declares_schema(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_residual_summary_") as temp_dir:

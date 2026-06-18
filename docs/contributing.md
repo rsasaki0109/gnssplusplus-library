@@ -50,6 +50,11 @@ CI lanes are split as follows:
   with JSON/log artifacts under `output/ci_optional_rtk_signoffs*`; the summary
   uses `summary_schema: ci_optional_rtk_signoffs.v1` and a passed step fails the
   lane if any declared output artifact is missing
+- `bash scripts/ci/run_optional_clas_zd_component_diff.sh` and
+  `bash scripts/ci/run_optional_madoca_residual_component_diff.sh` for
+  oracle/native diff artifacts; both skip explicitly when their CSV inputs are
+  unavailable, and both fail a passed diff command if the declared JSON/CSV
+  artifacts are missing
 - `bash scripts/ci/generate_dashboard_artifacts.sh` for the dashboard/manifest artifact path used in CI
 
 Docs-only changes keep CI on the lightweight path: hygiene here, plus the separate Docs workflow.

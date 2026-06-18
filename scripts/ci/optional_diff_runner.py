@@ -144,7 +144,7 @@ def make_step(config: DiffRunnerConfig, context: DiffContext) -> DiffStep:
     report_json = context.output_dir / f"{config.slug}.json"
     details_csv = context.output_dir / f"{config.slug}.csv"
     summary_json = context.output_dir / f"{config.slug}_summary.json"
-    outputs = [report_json, details_csv, summary_json]
+    outputs = [report_json, details_csv]
 
     missing = [
         (label, path)
@@ -288,8 +288,17 @@ def run_step(config: DiffRunnerConfig, step: DiffStep, repo_root: Path, log_dir:
     if metrics:
         record["metrics"] = metrics
     if completed.returncode == 0:
-        record["status"] = "passed"
-        print(f"Passed {step.name} in {elapsed:.2f}s")
+        missing_outputs = [output for output in step.outputs if not Path(output).exists()]
+        record["missing_outputs"] = missing_outputs
+        if missing_outputs:
+            record["status"] = "failed"
+            print(
+                f"Failed {step.name} in {elapsed:.2f}s; "
+                f"missing expected outputs: {', '.join(missing_outputs)}"
+            )
+        else:
+            record["status"] = "passed"
+            print(f"Passed {step.name} in {elapsed:.2f}s")
     else:
         record["status"] = "failed"
         lines = combined_log.splitlines()
@@ -311,6 +320,9 @@ def render_result_detail(result: dict[str, object]) -> str:
     if status == "skipped":
         return str(result.get("skip_reason", ""))
     if status == "failed":
+        missing_outputs = result.get("missing_outputs")
+        if isinstance(missing_outputs, list) and missing_outputs:
+            return "missing " + ", ".join(f"`{output}`" for output in missing_outputs)
         log_path = result.get("log_path")
         return f"see `{log_path}`" if log_path else "failed"
 
