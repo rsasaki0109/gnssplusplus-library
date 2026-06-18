@@ -49,6 +49,23 @@ Vector3d receiverPositionNearClasNetwork9() {
     return geodetic2ecef(39.98056 * M_PI / 180.0, 141.22509 * M_PI / 180.0, 0.0);
 }
 
+Observation makeGpsL2Observation(
+    const SatelliteId& satellite,
+    const char* pseudorange_code,
+    const char* carrier_code,
+    double pseudorange,
+    double carrier_phase) {
+    Observation obs(satellite, SignalType::GPS_L2C);
+    obs.valid = true;
+    obs.has_pseudorange = true;
+    obs.has_carrier_phase = true;
+    obs.pseudorange_observation_type = pseudorange_code;
+    obs.carrier_phase_observation_type = carrier_code;
+    obs.pseudorange = pseudorange;
+    obs.carrier_phase = carrier_phase;
+    return obs;
+}
+
 }  // namespace
 
 TEST(PPPOSRTest, GridFirstPrefersNearestGridEvenWhenStale) {
@@ -109,6 +126,53 @@ TEST(PPPOSRTest, ExactObservationIdentitySelectsGpsL2wBiasId) {
         static_cast<int>(bias::rtcmSsrSignalIdForObservation(
             GNSSSystem::GPS, SignalType::GPS_L2C, "C2X", true)),
         8);
+    EXPECT_TRUE(
+        bias::isGpsL2wObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2W", "L2W"));
+    EXPECT_FALSE(
+        bias::isGpsL2wObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2X", "L2X"));
+}
+
+TEST(PPPOSRTest, ExactOsrFrequencyLookupUsesStoredRinexIdentity) {
+    const SatelliteId sat(GNSSSystem::GPS, 14);
+    ObservationData obs(GNSSTime(2068, 230425.0));
+    obs.addObservation(makeGpsL2Observation(sat, "C2X", "L2X", 100.0, 10.0));
+    obs.addObservation(makeGpsL2Observation(sat, "C2W", "L2W", 200.0, 20.0));
+
+    OSRCorrection osr;
+    osr.satellite = sat;
+    osr.num_frequencies = 1;
+    osr.signals[0] = SignalType::GPS_L2C;
+    osr.pseudorange_rinex_codes[0] = "C2W";
+    osr.carrier_rinex_codes[0] = "L2W";
+    osr.bias_exact_identity[0] = true;
+
+    const Observation* selected = findOsrFrequencyObservation(obs, osr, 0);
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->pseudorange_observation_type, "C2W");
+    EXPECT_EQ(selected->carrier_phase_observation_type, "L2W");
+    EXPECT_DOUBLE_EQ(selected->pseudorange, 200.0);
+}
+
+TEST(PPPOSRTest, OsrFrequencyLookupPreservesSignalTypeFallbackWhenExactGateIsOff) {
+    const SatelliteId sat(GNSSSystem::GPS, 14);
+    ObservationData obs(GNSSTime(2068, 230425.0));
+    obs.addObservation(makeGpsL2Observation(sat, "C2X", "L2X", 100.0, 10.0));
+    obs.addObservation(makeGpsL2Observation(sat, "C2W", "L2W", 200.0, 20.0));
+
+    OSRCorrection osr;
+    osr.satellite = sat;
+    osr.num_frequencies = 1;
+    osr.signals[0] = SignalType::GPS_L2C;
+    osr.pseudorange_rinex_codes[0] = "C2W";
+    osr.carrier_rinex_codes[0] = "L2W";
+
+    const Observation* selected = findOsrFrequencyObservation(obs, osr, 0);
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->pseudorange_observation_type, "C2X");
+    EXPECT_EQ(selected->carrier_phase_observation_type, "L2X");
+    EXPECT_DOUBLE_EQ(selected->pseudorange, 100.0);
 }
 
 TEST(PPPOSRTest, BalancedPrefersFreshNetworkWhenNearestGridIsStale) {

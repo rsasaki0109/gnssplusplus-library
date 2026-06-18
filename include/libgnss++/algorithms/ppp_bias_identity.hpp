@@ -62,6 +62,24 @@ inline int rtklibCodeForObservationType(std::string_view observation_type) {
     return madoca_parity::kCodeNone;
 }
 
+inline bool isGpsL2wObservationType(std::string_view observation_type) {
+    return rtklibCodeForObservationType(observation_type) == madoca_parity::kCodeL2W;
+}
+
+inline bool isGpsL2wObservation(GNSSSystem system,
+                                SignalType signal,
+                                std::string_view pseudorange_observation_type,
+                                std::string_view carrier_phase_observation_type) {
+    if (system != GNSSSystem::GPS) {
+        return false;
+    }
+    if (signal != SignalType::GPS_L2C && signal != SignalType::GPS_L2P) {
+        return false;
+    }
+    return isGpsL2wObservationType(pseudorange_observation_type) ||
+           isGpsL2wObservationType(carrier_phase_observation_type);
+}
+
 inline std::uint8_t madocaBiasIdentityIdForObservation(GNSSSystem system,
                                                        SignalType signal,
                                                        std::string_view observation_type,

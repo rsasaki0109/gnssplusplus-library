@@ -3,6 +3,7 @@
 #include <libgnss++/algorithms/ppp_ar.hpp>
 #include <libgnss++/algorithms/ppp_bias_identity.hpp>
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
+#include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 
@@ -300,7 +301,7 @@ void dumpClasCodeRows(
             have_iono_state ? filter_state.state(iono_state_it->second) : 0.0;
 
         for (int f = 0; f < osr.num_frequencies; ++f) {
-            const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
+            const Observation* raw = findOsrFrequencyObservation(obs, osr, f);
             if (raw == nullptr || !raw->valid || !raw->has_pseudorange ||
                 !std::isfinite(raw->pseudorange)) {
                 continue;
@@ -814,7 +815,7 @@ MeasurementBuildResult buildEpochMeasurements(
             iono_state_index < filter_state.total_states;
         for (int f = 0; f < osr.num_frequencies; ++f) {
             raw_observations[static_cast<size_t>(f)] =
-                obs.getObservation(osr.satellite, osr.signals[f]);
+                findOsrFrequencyObservation(obs, osr, f);
         }
 
         for (int f = 0; f < osr.num_frequencies; ++f) {
@@ -1360,7 +1361,7 @@ FixValidationStats validateFixedSolution(
         std::array<const Observation*, OSR_MAX_FREQ> raw_observations{};
         for (int f = 0; f < osr.num_frequencies; ++f) {
             raw_observations[static_cast<size_t>(f)] =
-                obs.getObservation(osr.satellite, osr.signals[f]);
+                findOsrFrequencyObservation(obs, osr, f);
         }
 
         for (int f = 0; f < osr.num_frequencies; ++f) {

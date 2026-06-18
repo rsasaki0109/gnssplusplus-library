@@ -470,8 +470,8 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
     const auto osr_it = osr_by_sat.find(sat);
     if (osr_it != osr_by_sat.end()) {
         const auto& osr = osr_it->second;
-        l1_obs = obs.getObservation(sat, osr.signals[0]);
-        l2_obs = obs.getObservation(sat, osr.signals[1]);
+        l1_obs = findOsrFrequencyObservation(obs, osr, 0);
+        l2_obs = findOsrFrequencyObservation(obs, osr, 1);
         const double f1 = osr.frequencies[0];
         const double f2 = osr.frequencies[1];
         if (l1_obs == nullptr || l2_obs == nullptr ||
@@ -827,8 +827,8 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
     const auto osr_it = osr_by_sat.find(satellite);
     if (osr_it != osr_by_sat.end()) {
         const auto& osr = osr_it->second;
-        const Observation* l1 = obs.getObservation(satellite, osr.signals[0]);
-        const Observation* l2 = obs.getObservation(satellite, osr.signals[1]);
+        const Observation* l1 = findOsrFrequencyObservation(obs, osr, 0);
+        const Observation* l2 = findOsrFrequencyObservation(obs, osr, 1);
         const double f1 = osr.frequencies[0];
         const double f2 = osr.frequencies[1];
         if (l1 == nullptr || l2 == nullptr ||

@@ -203,6 +203,9 @@ differences before component deltas are computed.
 When both `GNSS_PPP_CLAS_DD_FILTER=1` and
 `GNSS_PPP_CLAS_CODE_ROW_PARITY=bias` are set, the CLAS OSR materializer uses
 that exact GPS L2 RINEX identity to choose the code/phase SSR bias signal id.
+The same stored identity now drives CLAS float/DD/SD/WLNL raw observation lookup,
+so a `C2W/L2W` OSR row consumes the matching `C2W/L2W` measurement instead of the
+first collapsed GPS L2 family row.
 Gate-off behavior still uses the existing `SignalType` family id path, and the
 diagnostic dumps include the selected `code_bias_signal_id` /
 `phase_bias_signal_id` for oracle comparison.  They also expose the bias lookup

@@ -69,6 +69,11 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
     const Vector3d& receiver_position,
     const ppp_shared::PPPConfig& config);
 
+const Observation* findOsrFrequencyObservation(
+    const ObservationData& obs,
+    const OSRCorrection& osr,
+    int freq_index);
+
 CLASEpochContext prepareClasEpochContext(
     const ObservationData& obs,
     const NavigationData& nav,

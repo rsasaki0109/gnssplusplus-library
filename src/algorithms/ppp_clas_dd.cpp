@@ -12,6 +12,7 @@
 #include <utility>
 
 #include <libgnss++/algorithms/lambda.hpp>
+#include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 
@@ -600,7 +601,7 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
             if (group < 0) {
                 continue;
             }
-            const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
+            const Observation* raw = findOsrFrequencyObservation(obs, osr, f);
             if (raw == nullptr || !raw->valid) {
                 continue;
             }
@@ -1036,7 +1037,7 @@ void DdFilterScaffold::updateObservedStateBookkeeping(
             if (frequency_index < 0 || frequency_index >= layout.nf()) {
                 continue;
             }
-            const Observation* raw = obs.getObservation(osr.satellite, osr.signals[f]);
+            const Observation* raw = findOsrFrequencyObservation(obs, osr, f);
             if (raw == nullptr || !raw->valid || !raw->has_carrier_phase ||
                 !raw->has_pseudorange || !std::isfinite(raw->carrier_phase) ||
                 !std::isfinite(raw->pseudorange)) {
