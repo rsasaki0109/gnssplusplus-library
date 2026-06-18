@@ -14,6 +14,9 @@ import time
 from typing import Mapping
 
 
+SUMMARY_SCHEMA = "ci_optional_rtk_signoffs.v1"
+
+
 @dataclass(frozen=True)
 class SignoffStep:
     name: str
@@ -308,8 +311,17 @@ def run_step(step: SignoffStep, repo_root: Path, log_dir: Path) -> dict[str, obj
     record["elapsed_s"] = elapsed
     record["returncode"] = completed.returncode
     if completed.returncode == 0:
-        record["status"] = "passed"
-        print(f"Passed {step.name} in {elapsed:.2f}s")
+        missing_outputs = [output for output in step.outputs if not Path(output).exists()]
+        record["missing_outputs"] = missing_outputs
+        if missing_outputs:
+            record["status"] = "failed"
+            print(
+                f"Failed {step.name} in {elapsed:.2f}s; "
+                f"missing expected outputs: {', '.join(missing_outputs)}"
+            )
+        else:
+            record["status"] = "passed"
+            print(f"Passed {step.name} in {elapsed:.2f}s")
     else:
         record["status"] = "failed"
         lines = combined_log.splitlines()
@@ -343,8 +355,12 @@ def render_markdown_summary(results: list[dict[str, object]]) -> str:
             elapsed = result.get("elapsed_s")
             detail = f"{elapsed:.2f}s" if isinstance(elapsed, (float, int)) else ""
         elif status == "failed":
-            log_path = result.get("log_path")
-            detail = f"see `{log_path}`" if log_path else "failed"
+            missing_outputs = result.get("missing_outputs")
+            if isinstance(missing_outputs, list) and missing_outputs:
+                detail = "missing " + ", ".join(f"`{output}`" for output in missing_outputs)
+            else:
+                log_path = result.get("log_path")
+                detail = f"see `{log_path}`" if log_path else "failed"
         lines.append(f"| {result['name']} | `{status}` | {detail} |")
     lines.append("")
     return "\n".join(lines)
@@ -353,6 +369,7 @@ def render_markdown_summary(results: list[dict[str, object]]) -> str:
 def write_summary(summary_path: Path, steps: list[SignoffStep], results: list[dict[str, object]]) -> None:
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
+        "summary_schema": SUMMARY_SCHEMA,
         "steps": [asdict(step) for step in steps],
         "results": results,
         "counts": {

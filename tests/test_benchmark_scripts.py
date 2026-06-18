@@ -3259,7 +3259,53 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
             passed_result = ci_rtk_signoffs.run_step(passed, ROOT_DIR, log_dir)
             self.assertEqual(passed_result["status"], "passed")
             self.assertEqual(passed_result["returncode"], 0)
+            self.assertEqual(passed_result["missing_outputs"], [])
             self.assertIn("ok", (log_dir / "pass_example.log").read_text(encoding="utf-8"))
+
+            missing_output = ci_rtk_signoffs.SignoffStep(
+                name="Missing output example",
+                slug="missing_output_example",
+                command=[sys.executable, "-c", "print('ok')"],
+                outputs=[str(temp_root / "missing.json")],
+            )
+            missing_result = ci_rtk_signoffs.run_step(missing_output, ROOT_DIR, log_dir)
+            self.assertEqual(missing_result["status"], "failed")
+            self.assertEqual(missing_result["returncode"], 0)
+            self.assertEqual(
+                missing_result["missing_outputs"],
+                [str(temp_root / "missing.json")],
+            )
+
+    def test_write_summary_records_schema_and_counts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_rtk_summary_") as temp_dir:
+            temp_root = Path(temp_dir)
+            summary_path = temp_root / "summary.json"
+            steps = [
+                ci_rtk_signoffs.SignoffStep(
+                    name="PPC coverage matrix schema smoke",
+                    slug="ppc_coverage_matrix_schema_smoke",
+                    command=None,
+                    outputs=[],
+                    skip_reason="PPC-Dataset root is unavailable.",
+                )
+            ]
+            results = [
+                {
+                    "name": steps[0].name,
+                    "slug": steps[0].slug,
+                    "status": "skipped",
+                    "skip_reason": steps[0].skip_reason,
+                    "outputs": [],
+                    "log_path": str(temp_root / "ppc_coverage_matrix_schema_smoke.log"),
+                }
+            ]
+
+            ci_rtk_signoffs.write_summary(summary_path, steps, results)
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["summary_schema"], ci_rtk_signoffs.SUMMARY_SCHEMA)
+            self.assertEqual(payload["counts"], {"passed": 0, "failed": 0, "skipped": 1})
+            self.assertEqual(payload["steps"][0]["slug"], "ppc_coverage_matrix_schema_smoke")
 
     def test_render_markdown_summary_reports_status_table(self) -> None:
         markdown = ci_rtk_signoffs.render_markdown_summary(
@@ -3281,16 +3327,23 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
                     "status": "failed",
                     "log_path": "/tmp/c.log",
                 },
+                {
+                    "name": "PPC coverage matrix schema smoke",
+                    "status": "failed",
+                    "missing_outputs": ["/tmp/summary.json"],
+                    "log_path": "/tmp/d.log",
+                },
             ]
         )
 
         self.assertIn("## Optional RTK Sign-offs", markdown)
         self.assertIn("`passed`: `1`", markdown)
-        self.assertIn("`failed`: `1`", markdown)
+        self.assertIn("`failed`: `2`", markdown)
         self.assertIn("`skipped`: `1`", markdown)
         self.assertIn("| PPC Nagoya RTK sign-off | `passed` | 1.25s |", markdown)
         self.assertIn("RTKLIB binary is unavailable.", markdown)
         self.assertIn("see `/tmp/c.log`", markdown)
+        self.assertIn("missing `/tmp/summary.json`", markdown)
 
 class OptionalPPPProductsSignoffScriptTest(unittest.TestCase):
     def test_build_step_plan_skips_when_malib_is_missing(self) -> None:
