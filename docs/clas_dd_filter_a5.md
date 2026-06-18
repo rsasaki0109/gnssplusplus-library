@@ -183,6 +183,16 @@ model; it is the gate for classifying PRC, CPC, ionosphere, bias, antenna,
 wind-up, and related component deltas before any GPS L2W, QZSS, or Galileo model
 change is attempted.
 
+The optional CI wrapper `scripts/ci/run_optional_clas_zd_component_diff.py`
+runs that comparison when `GNSSPP_CLAS_ZD_BASE_CSV` and
+`GNSSPP_CLAS_ZD_CANDIDATE_CSV` point at generated CLASLIB/native component
+dumps.  It writes `ci_optional_clas_zd_component_summary.json`, a log, and the
+`clas_zd_component_diff.{json,csv}` artifacts.  When those inputs are absent,
+the CI step records an explicit skip instead of silently omitting the artifact.
+Optional filters are `GNSSPP_CLAS_ZD_COMPONENTS`, `GNSSPP_CLAS_ZD_STAGE`,
+`GNSSPP_CLAS_ZD_ROW_TYPE`, `GNSSPP_CLAS_ZD_THRESHOLD_M`, and
+`GNSSPP_CLAS_ZD_FAIL_ON_DIFF`.
+
 Native RINEX observations now expose exact `pseudorange_rinex_code` and
 `carrier_rinex_code` columns in the CLAS code/phase diagnostic dumps.  This lets
 the GPS L2W investigation distinguish `C2W/L2W` from other GPS L2 tracking codes
