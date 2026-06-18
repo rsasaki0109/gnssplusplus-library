@@ -43,6 +43,17 @@ TEST_F(ObservationTest, BasicObservationData) {
     EXPECT_FALSE(obs_data_.isEmpty());
 }
 
+TEST_F(ObservationTest, ExactBiasObservationTypePrefersCodeType) {
+    Observation code_and_phase(SatelliteId(GNSSSystem::GPS, 24), SignalType::GPS_L2C);
+    code_and_phase.pseudorange_observation_type = "C2W";
+    code_and_phase.carrier_phase_observation_type = "L2W";
+    EXPECT_EQ(code_and_phase.exactBiasObservationType(), "C2W");
+
+    Observation phase_only(SatelliteId(GNSSSystem::GPS, 24), SignalType::GPS_L2C);
+    phase_only.carrier_phase_observation_type = "L2W";
+    EXPECT_EQ(phase_only.exactBiasObservationType(), "L2W");
+}
+
 TEST_F(ObservationTest, GetObservationsBySatellite) {
     SatelliteId gps1(GNSSSystem::GPS, 1);
     auto gps1_obs = obs_data_.getObservations(gps1);

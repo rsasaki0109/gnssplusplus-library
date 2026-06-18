@@ -182,3 +182,8 @@ plus optional component-delta CSV.  The tool intentionally changes no solver
 model; it is the gate for classifying PRC, CPC, ionosphere, bias, antenna,
 wind-up, and related component deltas before any GPS L2W, QZSS, or Galileo model
 change is attempted.
+
+Native RINEX observations now expose exact `pseudorange_rinex_code` and
+`carrier_rinex_code` columns in the CLAS code/phase diagnostic dumps.  This lets
+the GPS L2W investigation distinguish `C2W/L2W` from other GPS L2 tracking codes
+even though both still use the current `SignalType::GPS_L2C` runtime family.

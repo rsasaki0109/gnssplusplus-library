@@ -13,12 +13,6 @@ using namespace ppp_internal;
 
 namespace {
 
-std::string biasObservationType(const Observation& observation) {
-    return !observation.pseudorange_observation_type.empty()
-               ? observation.pseudorange_observation_type
-               : observation.carrier_phase_observation_type;
-}
-
 std::vector<SignalType> secondarySignalsForObservation(const SatelliteId& sat,
                                                        bool prefer_qzss_l5) {
     if (prefer_qzss_l5 && sat.system == GNSSSystem::QZSS) {
@@ -91,7 +85,7 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             const double primary_frequency_hz = signalFrequencyHz(primary->signal, eph);
             entry.pseudorange_if = primary->pseudorange;
             entry.primary_signal = primary->signal;
-            entry.primary_observation_type = biasObservationType(*primary);
+            entry.primary_observation_type = primary->exactBiasObservationType();
             entry.primary_code_bias_coeff = 1.0;
             entry.secondary_code_bias_coeff = 0.0;
             if (capture_shadow_metadata) {
@@ -134,7 +128,7 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         if (!ppp_config_.use_ionosphere_free) {
             if (secondary != nullptr) {
                 entry.secondary_signal = secondary->signal;
-                entry.secondary_observation_type = biasObservationType(*secondary);
+                entry.secondary_observation_type = secondary->exactBiasObservationType();
                 const double f1 = signalFrequencyHz(primary->signal, eph);
                 const double f2 = signalFrequencyHz(secondary->signal, eph);
                 if (capture_shadow_metadata) {
@@ -190,7 +184,7 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         if (secondary == nullptr) {
             entry.pseudorange_if = primary->pseudorange;
             entry.primary_signal = primary->signal;
-            entry.primary_observation_type = biasObservationType(*primary);
+            entry.primary_observation_type = primary->exactBiasObservationType();
             entry.primary_code_bias_coeff = 1.0;
             entry.secondary_code_bias_coeff = 0.0;
             if (capture_shadow_metadata) {
@@ -224,8 +218,8 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             coefficients.first * primary->pseudorange + coefficients.second * secondary->pseudorange;
         entry.primary_signal = primary->signal;
         entry.secondary_signal = secondary->signal;
-        entry.primary_observation_type = biasObservationType(*primary);
-        entry.secondary_observation_type = biasObservationType(*secondary);
+        entry.primary_observation_type = primary->exactBiasObservationType();
+        entry.secondary_observation_type = secondary->exactBiasObservationType();
         entry.primary_code_bias_coeff = coefficients.first;
         entry.secondary_code_bias_coeff = coefficients.second;
         if (capture_shadow_metadata) {
