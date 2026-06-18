@@ -546,15 +546,26 @@ const Observation* findOsrFrequencyObservation(
     const ObservationData& obs,
     const OSRCorrection& osr,
     int freq_index) {
+    return findOsrFrequencyObservationWithProvenance(obs, osr, freq_index)
+        .observation;
+}
+
+OsrFrequencyObservationLookup findOsrFrequencyObservationWithProvenance(
+    const ObservationData& obs,
+    const OSRCorrection& osr,
+    int freq_index) {
+    OsrFrequencyObservationLookup result;
     if (freq_index < 0 || freq_index >= osr.num_frequencies ||
         freq_index >= OSR_MAX_FREQ) {
-        return nullptr;
+        return result;
     }
     const SignalType signal = osr.signals[freq_index];
     const Observation* fallback = obs.getObservation(osr.satellite, signal);
+    result.observation = fallback;
     if (!osr.bias_exact_identity[freq_index]) {
-        return fallback;
+        return result;
     }
+    result.exact_identity_requested = true;
 
     const auto& pseudorange_code = osr.pseudorange_rinex_codes[freq_index];
     const auto& carrier_code = osr.carrier_rinex_codes[freq_index];
@@ -572,10 +583,14 @@ const Observation* findOsrFrequencyObservation(
             carrier_code.empty() ||
             candidate.carrier_phase_observation_type == carrier_code;
         if (pseudorange_matches && carrier_matches) {
-            return &candidate;
+            result.observation = &candidate;
+            result.exact_identity_matched = true;
+            result.family_fallback = false;
+            return result;
         }
     }
-    return fallback;
+    result.family_fallback = fallback != nullptr;
+    return result;
 }
 
 std::map<std::string, std::string> selectClasEpochAtmosTokens(

@@ -74,6 +74,18 @@ const Observation* findOsrFrequencyObservation(
     const OSRCorrection& osr,
     int freq_index);
 
+struct OsrFrequencyObservationLookup {
+    const Observation* observation = nullptr;
+    bool exact_identity_requested = false;
+    bool exact_identity_matched = false;
+    bool family_fallback = false;
+};
+
+OsrFrequencyObservationLookup findOsrFrequencyObservationWithProvenance(
+    const ObservationData& obs,
+    const OSRCorrection& osr,
+    int freq_index);
+
 CLASEpochContext prepareClasEpochContext(
     const ObservationData& obs,
     const NavigationData& nav,
