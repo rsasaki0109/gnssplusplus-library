@@ -243,6 +243,9 @@ def load_diff_metrics(config: DiffRunnerConfig, report_json: Path) -> dict[str, 
         "components_compared",
         "threshold_exceedances",
         "row_set_complete",
+        "sat_filter",
+        "freq_filter",
+        "rinex_code_filter",
     ]:
         if key in payload:
             metrics[key] = payload[key]

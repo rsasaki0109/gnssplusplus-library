@@ -40,6 +40,9 @@ CONFIG = runner.DiffRunnerConfig(
     extra_options=(
         runner.EnvOption(("GNSSPP_CLAS_ZD_STAGE",), "--stage"),
         runner.EnvOption(("GNSSPP_CLAS_ZD_ROW_TYPE",), "--row-type"),
+        runner.EnvOption(("GNSSPP_CLAS_ZD_SAT",), "--sat"),
+        runner.EnvOption(("GNSSPP_CLAS_ZD_FREQ",), "--freq"),
+        runner.EnvOption(("GNSSPP_CLAS_ZD_RINEX_CODE",), "--rinex-code"),
         runner.EnvOption(
             ("GNSSPP_CLAS_ZD_THRESHOLD_M", "GNSSPP_CLAS_ZD_THRESHOLD"),
             "--component-threshold-m",

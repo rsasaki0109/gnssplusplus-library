@@ -256,6 +256,57 @@ class ClasZdComponentDiffTest(unittest.TestCase):
         self.assertEqual(report["top_base_only"][0]["rinex_code"], "C2W")
         self.assertEqual(report["top_candidate_only"][0]["rinex_code"], "C2X")
 
+    def test_slice_filters_apply_after_row_identity_normalization(self) -> None:
+        rows = [
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="0.50",
+                code_bias="0.10",
+                receiver_ant="-0.02",
+                pseudorange_rinex_code="C2W",
+            ),
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="0.60",
+                code_bias="0.10",
+                receiver_ant="-0.02",
+                pseudorange_rinex_code="C2X",
+            ),
+            code_row(
+                sat="G25",
+                freq="1",
+                prc="0.70",
+                code_bias="0.10",
+                receiver_ant="-0.02",
+                pseudorange_rinex_code="C2W",
+            ),
+            code_row(
+                sat="G14",
+                freq="0",
+                prc="0.80",
+                code_bias="0.10",
+                receiver_ant="-0.02",
+                pseudorange_rinex_code="C1C",
+            ),
+        ]
+
+        filtered = component_diff.normalize_rows(
+            rows,
+            component_names=["prc_m"],
+            stage_filter=None,
+            row_type_filter="code",
+            sat_filter={"G14"},
+            freq_filter={1},
+            rinex_code_filter={"C2W"},
+        )
+
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0].sat, "G14")
+        self.assertEqual(filtered[0].freq, 1)
+        self.assertEqual(filtered[0].signal, "C2W")
+
     def test_compares_common_component_rows_and_reports_unmatched(self) -> None:
         base_rows = [
             code_row(
@@ -480,6 +531,12 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                     "native",
                     "--row-type",
                     "code",
+                    "--sat",
+                    "G14",
+                    "--freq",
+                    "1",
+                    "--rinex-code",
+                    "C2W",
                     "--component",
                     "prc_m",
                     "--component",
@@ -503,6 +560,9 @@ class ClasZdComponentDiffTest(unittest.TestCase):
             self.assertEqual(report["schema"], "clas_zd_component_diff.v1")
             self.assertEqual(report["threshold_exceedances"], 1)
             self.assertEqual(report["component_names"], ["prc_m", "receiver_antenna_m"])
+            self.assertEqual(report["sat_filter"], ["G14"])
+            self.assertEqual(report["freq_filter"], [1])
+            self.assertEqual(report["rinex_code_filter"], ["C2W"])
             with details_path.open(newline="", encoding="utf-8") as details_file:
                 rows = list(csv.DictReader(details_file))
             self.assertEqual(rows[0]["component"], "prc_m")

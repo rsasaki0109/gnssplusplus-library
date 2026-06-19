@@ -190,6 +190,9 @@ def normalize_rows(
     component_names: Sequence[str],
     stage_filter: Optional[str],
     row_type_filter: Optional[str],
+    sat_filter: Optional[set[str]] = None,
+    freq_filter: Optional[set[int]] = None,
+    rinex_code_filter: Optional[set[str]] = None,
 ) -> list[ComponentRow]:
     normalized: list[ComponentRow] = []
     for index, row in enumerate(rows, start=2):
@@ -199,14 +202,20 @@ def normalize_rows(
         row_type = detect_row_type(row)
         if row_type_filter is not None and row_type != row_type_filter:
             continue
-        components = extract_components(row, component_names)
-        if not components:
-            continue
         week = to_int(row["week"])
         tow_millis = tow_to_millis(row["tow"])
         sat = row["sat"]
         freq = detect_frequency(row)
         signal = observation_identity(row, row_type)
+        if sat_filter is not None and sat not in sat_filter:
+            continue
+        if freq_filter is not None and freq not in freq_filter:
+            continue
+        if rinex_code_filter is not None and signal not in rinex_code_filter:
+            continue
+        components = extract_components(row, component_names)
+        if not components:
+            continue
         key = (week, tow_millis, row_type, sat, freq, signal)
         normalized.append(
             ComponentRow(
@@ -223,6 +232,25 @@ def normalize_rows(
             )
         )
     return normalized
+
+
+def normalize_filter_values(values: Optional[Sequence[str]]) -> Optional[set[str]]:
+    if not values:
+        return None
+    normalized: set[str] = set()
+    for value in values:
+        for item in value.replace(";", ",").split(","):
+            text = item.strip()
+            if text:
+                normalized.add(text)
+    return normalized or None
+
+
+def normalize_freq_filter(values: Optional[Sequence[str]]) -> Optional[set[int]]:
+    text_values = normalize_filter_values(values)
+    if text_values is None:
+        return None
+    return {to_int(value) for value in text_values}
 
 
 def rows_by_key(rows: Sequence[ComponentRow]) -> tuple[dict[Key, ComponentRow], Counter[Key]]:
@@ -481,6 +509,21 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--stage", help="compare only rows with this native/bridge stage")
     parser.add_argument("--row-type", choices=["code", "phase"], help="compare only one row type")
     parser.add_argument(
+        "--sat",
+        action="append",
+        help="compare only one satellite label, such as G14; may be repeated or comma-separated",
+    )
+    parser.add_argument(
+        "--freq",
+        action="append",
+        help="compare only one frequency index; may be repeated or comma-separated",
+    )
+    parser.add_argument(
+        "--rinex-code",
+        action="append",
+        help="compare only one row-specific RINEX observation code, such as C2W or L2W",
+    )
+    parser.add_argument(
         "--component",
         dest="components",
         action="append",
@@ -502,17 +545,26 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
     component_names = args.components or sorted(COMPONENT_ALIASES)
+    sat_filter = normalize_filter_values(args.sat)
+    freq_filter = normalize_freq_filter(args.freq)
+    rinex_code_filter = normalize_filter_values(args.rinex_code)
     base_rows = normalize_rows(
         read_csv_rows(args.base_csv),
         component_names=component_names,
         stage_filter=args.stage,
         row_type_filter=args.row_type,
+        sat_filter=sat_filter,
+        freq_filter=freq_filter,
+        rinex_code_filter=rinex_code_filter,
     )
     candidate_rows = normalize_rows(
         read_csv_rows(args.candidate_csv),
         component_names=component_names,
         stage_filter=args.stage,
         row_type_filter=args.row_type,
+        sat_filter=sat_filter,
+        freq_filter=freq_filter,
+        rinex_code_filter=rinex_code_filter,
     )
     report = build_report(
         base_rows,
@@ -527,6 +579,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     report["candidate_csv"] = str(args.candidate_csv)
     report["stage_filter"] = args.stage
     report["row_type_filter"] = args.row_type
+    report["sat_filter"] = sorted(sat_filter) if sat_filter is not None else None
+    report["freq_filter"] = sorted(freq_filter) if freq_filter is not None else None
+    report["rinex_code_filter"] = (
+        sorted(rinex_code_filter) if rinex_code_filter is not None else None
+    )
     report["component_names"] = component_names
     print_summary(report)
     if args.json_out is not None:
