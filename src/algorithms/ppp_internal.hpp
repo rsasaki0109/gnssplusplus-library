@@ -15,12 +15,15 @@ namespace libgnss::ppp_internal {
 inline constexpr double kDefaultZenithDelayMeters = 2.3;
 
 inline std::string trimCopy(const std::string& text) {
-    const size_t first = text.find_first_not_of(' ');
-    if (first == std::string::npos) {
+    const auto is_not_space = [](unsigned char ch) {
+        return !std::isspace(ch);
+    };
+    const auto first_it = std::find_if(text.begin(), text.end(), is_not_space);
+    if (first_it == text.end()) {
         return "";
     }
-    const size_t last = text.find_last_not_of(' ');
-    return text.substr(first, last - first + 1);
+    const auto last_it = std::find_if(text.rbegin(), text.rend(), is_not_space).base();
+    return std::string(first_it, last_it);
 }
 
 inline std::string normalizeAntennaType(const std::string& antenna_type) {

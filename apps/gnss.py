@@ -503,7 +503,7 @@ def usage() -> str:
             "  python3 apps/gnss.py visibility --obs data/rover_static.obs --nav data/navigation_static.nav --csv output/visibility.csv --summary-json output/visibility.json --max-epochs 60",
             "  python3 apps/gnss.py visibility-plot output/visibility.csv output/visibility.png",
             "  python3 apps/gnss.py solve --rover data/rover_kinematic.obs --base data/base_kinematic.obs --nav data/navigation_kinematic.nav --iono est --max-epochs 5",
-            "  python3 apps/gnss.py ppp --static --obs data/rover_static.obs --nav data/navigation_static.nav --sp3 precise.sp3 --clk precise.clk --antex igs20.atx --blq station.blq --out output/ppp_solution.pos",
+            "  python3 apps/gnss.py ppp --static --obs data/rover_static.obs --nav data/navigation_static.nav --sp3 precise.sp3 --clk precise.clk --antex igs20.atx --receiver-antenna-type \"TRM59800.80     NONE\" --blq station.blq --out output/ppp_solution.pos",
             "  python3 apps/gnss.py ppp --kinematic --enable-ar --convergence-min-epochs 4 --ar-ratio-threshold 2.0 --obs rover.obs --sp3 precise.sp3 --clk precise.clk --out output/ppp_ar.pos",
             "  python3 apps/gnss.py nav-products --obs data/rover_static.obs --nav data/navigation_static.nav --sp3-out output/static_products.sp3 --clk-out output/static_products.clk --max-epochs 60",
             "  python3 apps/gnss.py fetch-products --date 2024-01-02 --product sp3=https://example.net/{yyyy}{doy}.sp3.gz --product clk=file:///data/{yyyy}{doy}.clk.gz --summary-json output/products.json",

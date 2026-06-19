@@ -134,6 +134,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sp3", type=Path, default=None, help="Optional precise SP3 file.")
     parser.add_argument("--clk", type=Path, default=None, help="Optional precise CLK file.")
     parser.add_argument("--antex", type=Path, default=None, help="Optional ANTEX file forwarded to PPP.")
+    parser.add_argument(
+        "--receiver-antenna-type",
+        default=None,
+        help="Optional receiver antenna type override forwarded to PPP with --antex.",
+    )
     parser.add_argument("--kml", type=Path, default=None, help="Optional KML output path.")
     parser.add_argument("--max-epochs", type=int, default=0, help="Stop after N epochs.")
     parser.add_argument(
@@ -590,6 +595,7 @@ def build_summary_payload(
         "sp3": str(args.sp3) if args.sp3 is not None else None,
         "clk": str(args.clk) if args.clk is not None else None,
         "antex": str(args.antex) if args.antex is not None else None,
+        "receiver_antenna_type": args.receiver_antenna_type,
         "ssr_rtcm": args.ssr_rtcm,
         "compact_ssr": args.compact_ssr,
         "qzss_l6": args.qzss_l6,
@@ -780,6 +786,8 @@ def main() -> int:
             command.extend(["--clk", str(args.clk)])
         if args.antex is not None:
             command.extend(["--antex", str(args.antex)])
+        if args.receiver_antenna_type is not None:
+            command.extend(["--receiver-antenna-type", args.receiver_antenna_type])
         if args.kml is not None:
             command.extend(["--kml", str(args.kml)])
         if args.max_epochs > 0:
