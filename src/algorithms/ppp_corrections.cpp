@@ -711,6 +711,53 @@ double PPPProcessor::receiverAntennaPcvMeters(SignalType signal,
     return grid.noazi_m[i0] * (1.0 - frac) + grid.noazi_m[i0 + 1] * frac;
 }
 
+double PPPProcessor::clasReceiverAntennaRangeCorrectionMeters(
+    SignalType signal,
+    double azimuth_rad,
+    double elevation_rad) const {
+    if (!receiver_antex_loaded_ || ppp_config_.receiver_antenna_type.empty() ||
+        signal == SignalType::SIGNAL_TYPE_COUNT) {
+        return 0.0;
+    }
+    const auto ant_it =
+        receiver_antex_offsets_.find(normalizeAntennaType(ppp_config_.receiver_antenna_type));
+    if (ant_it == receiver_antex_offsets_.end()) {
+        return 0.0;
+    }
+    Vector3d antenna_offset_neu = Vector3d::Zero();
+    const auto sig_it = ant_it->second.find(signal);
+    if (sig_it != ant_it->second.end()) {
+        antenna_offset_neu = sig_it->second;
+    }
+    return clasReceiverAntennaCorrectionMeters(
+        ppp_config_.receiver_antenna_delta_enu,
+        antenna_offset_neu,
+        receiverAntennaPcvMeters(signal, elevation_rad),
+        azimuth_rad,
+        elevation_rad);
+}
+
+void PPPProcessor::materializeClasReceiverAntennaCorrections(
+    std::vector<OSRCorrection>& osr_corrections) const {
+    if (!env_overrides_.clas_rx_antenna || !receiver_antex_loaded_ ||
+        ppp_config_.receiver_antenna_type.empty()) {
+        return;
+    }
+    for (auto& osr : osr_corrections) {
+        if (!osr.valid) {
+            continue;
+        }
+        const int frequency_count = std::min(osr.num_frequencies, OSR_MAX_FREQ);
+        for (int f = 0; f < frequency_count; ++f) {
+            osr.receiver_antenna_m[f] =
+                clasReceiverAntennaRangeCorrectionMeters(
+                    osr.signals[f],
+                    osr.azimuth,
+                    osr.elevation);
+        }
+    }
+}
+
 void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& observations,
                                            const NavigationData& nav,
                                            const GNSSTime& time) {

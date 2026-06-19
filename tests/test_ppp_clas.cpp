@@ -2,6 +2,7 @@
 
 #include <libgnss++/algorithms/ppp_clas.hpp>
 #include <libgnss++/algorithms/ppp_clas_dd.hpp>
+#include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -77,6 +78,35 @@ TEST(PPPClasTest, OrbitClockOnlyModeDropsBiasAndPhaseCompensationTerms) {
     EXPECT_DOUBLE_EQ(applied.carrier_phase_correction_m, 1.15);
     EXPECT_FALSE(ppp_clas::usesClasTropospherePrior(
         ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::ORBIT_CLOCK_ONLY));
+}
+
+TEST(PPPClasOsrTest, ReceiverAntennaCorrectionUsesRtkLibEnuConvention) {
+    const Vector3d receiver_delta_enu(0.10, -0.20, 1.00);
+    const Vector3d antenna_offset_neu(0.02, -0.03, 0.12);
+    const double pcv_m = 0.004;
+    const double azimuth_rad = 35.0 * M_PI / 180.0;
+    const double elevation_rad = 40.0 * M_PI / 180.0;
+
+    const double cosel = std::cos(elevation_rad);
+    const Vector3d los_enu(
+        std::sin(azimuth_rad) * cosel,
+        std::cos(azimuth_rad) * cosel,
+        std::sin(elevation_rad));
+    const Vector3d expected_offset_enu(
+        receiver_delta_enu.x() + antenna_offset_neu.y(),
+        receiver_delta_enu.y() + antenna_offset_neu.x(),
+        receiver_delta_enu.z() + antenna_offset_neu.z());
+    const double expected = -expected_offset_enu.dot(los_enu) + pcv_m;
+
+    EXPECT_NEAR(
+        clasReceiverAntennaCorrectionMeters(
+            receiver_delta_enu,
+            antenna_offset_neu,
+            pcv_m,
+            azimuth_rad,
+            elevation_rad),
+        expected,
+        1e-12);
 }
 
 TEST(PPPClasDdTest, RowBuilderSelectsHighestElevationReferenceAndFormsResidual) {

@@ -209,6 +209,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envDoubleOr("GNSS_PPP_CLAS_TROP_PROCESS_NOISE", 0.0);
     overrides.clas_tx_time_sign_fix =
         envExactOne("GNSS_PPP_CLAS_TX_TIME_SIGN_FIX");
+    overrides.clas_rx_antenna =
+        envExactOne("GNSS_PPP_CLAS_RX_ANTENNA");
     overrides.clas_geom_dump_path =
         envStringOrEmpty("GNSS_PPP_CLAS_GEOM_DUMP");
     overrides.clas_geom_dump_rx_xyz =

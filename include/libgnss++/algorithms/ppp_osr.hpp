@@ -111,6 +111,13 @@ ClasOsrBiasMaterialization materializeClasOsrBiases(
     bool exact_bias_identity,
     bool enable_l2_class_fallback);
 
+double clasReceiverAntennaCorrectionMeters(
+    const Vector3d& receiver_delta_enu,
+    const Vector3d& antenna_offset_neu,
+    double pcv_m,
+    double azimuth_rad,
+    double elevation_rad);
+
 CLASEpochContext prepareClasEpochContext(
     const ObservationData& obs,
     const NavigationData& nav,
