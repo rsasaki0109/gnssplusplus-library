@@ -123,6 +123,23 @@ TEST(PPPClasOsrTest, ReceiverAntennaMaterializationUpdatesAggregateCorrections) 
     EXPECT_DOUBLE_EQ(osr.CPC[1], 20.25);
 }
 
+TEST(PPPClasOsrTest, ReceiverAntennaLookupUsesL1SlotForExactGpsL2w) {
+    OSRCorrection osr;
+    osr.satellite = SatelliteId(GNSSSystem::GPS, 14);
+    osr.num_frequencies = 2;
+    osr.signals[0] = SignalType::GPS_L2C;
+    osr.pseudorange_rinex_codes[0] = "C2W";
+    osr.carrier_rinex_codes[0] = "L2W";
+    osr.bias_exact_identity[0] = true;
+    osr.signals[1] = SignalType::GPS_L2C;
+    osr.pseudorange_rinex_codes[1] = "C2X";
+    osr.carrier_rinex_codes[1] = "L2X";
+    osr.bias_exact_identity[1] = true;
+
+    EXPECT_EQ(clasReceiverAntennaLookupSignal(osr, 0), SignalType::GPS_L1CA);
+    EXPECT_EQ(clasReceiverAntennaLookupSignal(osr, 1), SignalType::GPS_L2C);
+}
+
 TEST(PPPClasDdTest, RowBuilderSelectsHighestElevationReferenceAndFormsResidual) {
     ObservationData obs(GNSSTime(2068, 230572.0));
     const Vector3d receiver(constants::WGS84_A, 0.0, 0.0);

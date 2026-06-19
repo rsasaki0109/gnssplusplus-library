@@ -123,6 +123,10 @@ void setClasOsrReceiverAntennaCorrection(
     int freq_index,
     double receiver_antenna_m);
 
+SignalType clasReceiverAntennaLookupSignal(
+    const OSRCorrection& osr,
+    int freq_index);
+
 CLASEpochContext prepareClasEpochContext(
     const ObservationData& obs,
     const NavigationData& nav,
