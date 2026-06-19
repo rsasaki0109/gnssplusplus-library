@@ -1,10 +1,12 @@
 # CLAS Public Validation Datasets
 
-> **Implementation status on `develop`**: the native CLASNAT path that produced
-> these numbers is fully implemented on branch
-> [`codex/ship-of-theseus-20260418`](https://github.com/rsasaki0109/gnssplusplus-library/tree/codex/ship-of-theseus-20260418).
-> That branch has no common ancestor with `develop` and needs an
-> "Allow unrelated histories" merge or an incremental re-port.
+> **Current `develop` status (2026-06-19)**: the current CLI no longer exposes
+> the historical `--claslib-parity` entry point. Native CLAS runs use
+> `gnss ppp --clas-osr` directly, or `gnss clas-ppp --profile clas`, which
+> forwards `--clas-osr` after expanding QZSS L6/Compact SSR inputs. The iter55
+> millimetre-level table below is retained as historical reference; the active
+> default-flip decision remains the A5 STOP described in
+> [clas_dd_filter_a5.md](clas_dd_filter_a5.md).
 
 This page records the public CLAS datasets used for the native CLASNAT parity
 checks.  It separates accepted regression gates from public exploratory runs
@@ -36,10 +38,10 @@ The files below are from that repository's `data/` directory.
 
 | Case | Public files | Window | Native mode | Acceptance status |
 | --- | --- | --- | --- | --- |
-| 2019-08-27, QZSS CLAS sample | `0627239Q.obs`, `sept_2019239.nav`, `2019239Q.l6` | 2019-08-27, 16:00 GPST window | `gnss_ppp --claslib-parity` default native CLASNAT path | Accepted gate. Iter55 measured `0.00556 m` RMS 3D against the CLASLIB trajectory over the last 100 epochs of a 2000-epoch run, and `0.01014 m` RMS 3D over the last 100 epochs of a 300-epoch smoke window. |
+| 2019-08-27, QZSS CLAS sample | `0627239Q.obs`, `sept_2019239.nav`, `2019239Q.l6` | 2019-08-27, 16:00 GPST window | Historical iter55 `--claslib-parity` native CLASNAT path | Historical accepted gate. Iter55 measured `0.00556 m` RMS 3D against the CLASLIB trajectory over the last 100 epochs of a 2000-epoch run, and `0.01014 m` RMS 3D over the last 100 epochs of a 300-epoch smoke window. |
 
-This is the dataset behind the current `--claslib-parity` mm-level regression.
-It is public because the input files are shipped in the public
+This is the dataset behind the historical `--claslib-parity` mm-level
+regression. It is public because the input files are shipped in the public
 `QZSS-Strategy-Office/claslib` repository, not because they are private local
 capture files.
 
@@ -59,7 +61,7 @@ in iter55.  Those probes are still useful because they confirm that the
 additional samples are public and reproducible, and they expose the next
 robustness gaps without weakening the accepted 2019-08-27 gate.
 
-## Reproduce The Main Public Gate
+## Reproduce The Current Native CLAS Run
 
 Clone CLASLIB and point the commands at its public `data/` directory:
 
@@ -68,38 +70,83 @@ git clone https://github.com/QZSS-Strategy-Office/claslib.git /tmp/claslib
 DATA=/tmp/claslib/data
 ```
 
-Build with CLASLIB linked when you want the oracle-backed unit tests and bridge
-available:
+Build the current native PPP binary:
 
 ```bash
-cmake -S . -B build \
-  -DCLASLIB_PARITY_LINK=ON \
-  -DCLASLIB_ROOT_DIR=/tmp/claslib
+cmake -S . -B build
 cmake --build build --target gnss_ppp -j4
-cmake --build build --target run_tests -j4
 ```
 
-Run the native CLASNAT parity path:
+Run the current CLAS wrapper. `--profile clas` expands the raw QZSS L6 file and
+forwards the resulting sampled corrections to `gnss ppp --clas-osr`:
 
 ```bash
-./build/apps/gnss_ppp \
-  --claslib-parity \
+python3 apps/gnss.py clas-ppp \
+  --profile clas \
   --obs "$DATA/0627239Q.obs" \
   --nav "$DATA/sept_2019239.nav" \
-  --ssr "$DATA/2019239Q.l6" \
+  --qzss-l6 "$DATA/2019239Q.l6" \
+  --qzss-gps-week 2068 \
   --out /tmp/gnsspp_2019239.pos \
   --summary-json /tmp/gnsspp_2019239_summary.json \
-  --ref-x -3957235.3717 \
-  --ref-y 3310368.2257 \
-  --ref-z 3737529.7179 \
-  --max-epochs 300 \
-  --quiet
+  --max-epochs 300
 ```
 
-Run the oracle helper parity tests:
+For the A4b GPS L2W identity probe, enable the diagnostic gates and write a
+native zero-difference code component dump:
 
 ```bash
-./build/tests/run_tests --gtest_filter='*ClasnatParity*'
+GNSS_PPP_CLAS_DD_FILTER=1 \
+GNSS_PPP_CLAS_CODE_ROW_PARITY=bias \
+GNSS_PPP_CLAS_CODE_DUMP=/tmp/clas_a4b_native_code_dump.csv \
+python3 apps/gnss.py clas-ppp \
+  --profile clas \
+  --obs "$DATA/0627239Q.obs" \
+  --nav "$DATA/sept_2019239.nav" \
+  --qzss-l6 "$DATA/2019239Q.l6" \
+  --qzss-gps-week 2068 \
+  --out /tmp/gnsspp_clas_a4b_native.pos \
+  --summary-json /tmp/gnsspp_clas_a4b_native_summary.json \
+  --max-epochs 300
+```
+
+Self-diff the dump to inspect identity provenance before comparing against a
+CLASLIB-side component dump:
+
+```bash
+python3 scripts/analysis/clas_zd_component_diff.py \
+  /tmp/clas_a4b_native_code_dump.csv \
+  /tmp/clas_a4b_native_code_dump.csv \
+  --base-label native \
+  --candidate-label native \
+  --row-type code \
+  --json-out /tmp/clas_a4b_native_code_selfdiff.json \
+  --details-csv /tmp/clas_a4b_native_code_selfdiff.csv
+
+python3 - <<'PY'
+import json
+payload = json.load(open("/tmp/clas_a4b_native_code_selfdiff.json"))
+print(json.dumps(payload["identity_provenance"], indent=2, sort_keys=True))
+PY
+```
+
+On the 300-epoch 2019 sample smoke, current `develop` produces 5,400 native code
+rows. The GPS L2W slice has 300 rows, all with exact bias identity and exact
+observation matches, and zero observation-family or code-bias fallback rows.
+
+Build with CLASLIB linked only when you need oracle-backed unit tests:
+
+```bash
+cmake -S . -B build-claslib \
+  -DCLASLIB_PARITY_LINK=ON \
+  -DCLASLIB_ROOT_DIR=/tmp/claslib
+cmake --build build-claslib --target run_tests -j4
+```
+
+Run the oracle helper parity tests when that optional build is available:
+
+```bash
+./build-claslib/tests/run_tests --gtest_filter='*ClasnatParity*'
 ```
 
 Expected helper coverage after iter55 is 17 tests, including `filter`,

@@ -600,6 +600,7 @@ def build_summary_payload(
         "mean_satellites": rounded(mean_satellites),
         "ambiguity_resolution_enabled": bool(args.enable_ar),
         "ar_ratio_threshold": rounded(args.ar_ratio_threshold),
+        "clas_osr_filter_enabled": args.profile == "clas",
         "mode": "kinematic" if args.kinematic else "static",
         "compact_atmos_merge_policy": args.compact_atmos_merge_policy,
         "compact_atmos_subtype_merge_policy": args.compact_atmos_subtype_merge_policy,
@@ -768,6 +769,8 @@ def main() -> int:
         # enable per-satellite ionosphere estimation with STEC constraints.
         command.append("--no-ionosphere-free")
         command.append("--estimate-ionosphere")
+        if args.profile == "clas":
+            command.append("--clas-osr")
         if args.sp3 is not None:
             command.extend(["--sp3", str(args.sp3)])
         if args.clk is not None:

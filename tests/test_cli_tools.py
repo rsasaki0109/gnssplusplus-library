@@ -10808,6 +10808,8 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["ssr_transport"], "file")
             self.assertEqual(payload["epochs"], 3)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+            self.assertFalse(payload["clas_osr_filter_enabled"])
+            self.assertNotIn("--clas-osr", result.stdout)
 
     def test_clas_ppp_cli_accepts_compact_sampled_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_compact_cli_") as temp_dir:
@@ -10864,6 +10866,8 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["correction_encoding"], "compact")
             self.assertEqual(payload["epochs"], 3)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+            self.assertTrue(payload["clas_osr_filter_enabled"])
+            self.assertIn("--clas-osr", result.stdout)
 
     def test_clas_ppp_cli_accepts_direct_qzss_l6_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_cli_") as temp_dir:
@@ -10934,6 +10938,8 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["correction_encoding"], "qzss_l6")
             self.assertEqual(payload["epochs"], 3)
             self.assertEqual(payload["ppp_solution_rate_pct"], 100.0)
+            self.assertTrue(payload["clas_osr_filter_enabled"])
+            self.assertIn("--clas-osr", result.stdout)
 
     def test_clas_ppp_cli_accepts_direct_qzss_l6_orbit_clock_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_ppp_qzss_l6_oc_cli_") as temp_dir:
