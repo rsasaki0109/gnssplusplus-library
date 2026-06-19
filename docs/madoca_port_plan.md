@@ -46,6 +46,18 @@ provides no GLONASS phase-bias product, so default GLONASS-phase-off is correct
 Open MADOCA levers (measured, none yet a default win): PPP-AR parity
 (`exec_pppar` window); QZSS atmosphere row-set.
 
+Correction-materialization snapshot: use
+`gnss ppp --madoca-l6 <file> --madoca-materialization-dump <csv>` to record the
+native SSRProducts view before PPP processing.  The CSV schema is
+`madoca_materialization_snapshot.v1` and records satellite key, system/PRN,
+correction epoch, orbit/clock reference epochs, IODE/SSR IOD, RAC orbit,
+clock, code-bias ids/values, phase-bias ids/values, and discontinuity counters.
+This is the M3 boundary between decoded L6E content and solver row construction:
+use it before residual or state/covariance tuning so decoder-vs-materializer
+identity/time/IOD mistakes are visible as artifacts.  The option changes no
+solver behavior when omitted and does not link MADOCALIB into production
+targets.
+
 Residual-component parity artifact: use
 `scripts/analysis/madoca_residual_component_diff.py` after satellite-set and
 row-set parity are understood.  It compares only common residual rows, keyed by
