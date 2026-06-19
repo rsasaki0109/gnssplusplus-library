@@ -206,6 +206,26 @@ component deltas for the same ZD key. Use that field to decide whether the next
 GPS L2W A4b slice is dominated by `receiver_antenna_m`, `prc_m`, atmosphere, or
 another component before changing the gated correction model.
 
+CI can regenerate the native side of this A4b probe without a pre-staged native
+CSV:
+
+```bash
+python3 scripts/ci/run_clas_a4b_native_selfdiff.py
+```
+
+The wrapper sparse-checks out the public CLASLIB `data/` directory at the pinned
+`GNSSPP_CLAS_A4B_CLASLIB_REF`, runs the native command above, and self-diffs the
+`G14/C2W` code rows. It emits
+`ci_clas_a4b_native_selfdiff_summary.json`, `native_code_dump.csv`,
+`native_summary.json`, and `selfdiff.{json,csv}`. The summary uses
+`status: passed` only when the native run reaches the configured epoch count,
+the GPS L2W rows preserve exact observation/bias identity, fallback counts are
+zero, and the self-diff has no unmatched rows or component deltas. Set
+`GNSSPP_CLAS_A4B_DATA_ROOT` to use a pre-existing CLASLIB data checkout, or
+`GNSSPP_CLAS_A4B_AUTO_FETCH=0` to record `blocked_infrastructure` instead of
+fetching public data. CI treats that blocked state as a failure by default; set
+`GNSSPP_CLAS_A4B_FAIL_ON_BLOCKED=0` only for diagnostic-only local runs.
+
 Build with CLASLIB linked only when you need oracle-backed unit tests:
 
 ```bash

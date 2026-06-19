@@ -114,6 +114,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_optional_clas_zd_component_diff.py
     )
     add_test(
+        NAME python_clas_a4b_native_selfdiff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_clas_a4b_native_selfdiff.py
+    )
+    add_test(
         NAME python_madoca_satellite_set_diff_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_satellite_set_diff.py
     )
@@ -247,6 +251,7 @@ if(GTest_FOUND)
     set(GNSSPP_CORE_TESTS
         run_tests
         python_artifact_manifest_ux_tests
+        python_clas_a4b_native_selfdiff_tests
         python_clas_zd_component_diff_tests
         python_claslib_zd_component_export_tests
         python_cli_ux_tests

@@ -208,6 +208,14 @@ numeric CLASLIB `sys`/`prn`/RTKLIB `code` fields into the native row-key space
 linking CLASLIB into the production binaries.  Use the normalized CSV as
 `GNSSPP_CLAS_ZD_BASE_CSV` for optional oracle-backed CI.
 
+The native side of the A4b `G14/C2W` slice is generated in CI by
+`scripts/ci/run_clas_a4b_native_selfdiff.py`.  That wrapper sparse-checks out
+the public CLASLIB data fixture, runs the gated native CLAS command with
+`GNSS_PPP_CLAS_CODE_DUMP`, and self-diffs the resulting code dump before any
+oracle comparison.  This is not a replacement for CLASLIB ZD parity; it removes
+the manually staged native CSV from the next oracle-backed PR and guards exact
+observation-code identity and fallback counts on remote CI.
+
 Native RINEX observations now expose exact `pseudorange_rinex_code`,
 `carrier_rinex_code`, RTKLIB code id, and `signal_family` columns in the CLAS
 code/phase diagnostic dumps.  This lets the GPS L2W investigation distinguish
