@@ -59,7 +59,7 @@ def write_residual_csv(path: Path, *, residual_m: str = "0.1") -> None:
 
 
 class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
-    def test_build_step_plan_skips_when_inputs_are_missing(self) -> None:
+    def test_build_step_plan_blocks_when_inputs_are_missing(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_residual_skip_") as temp_dir:
             output_dir = Path(temp_dir) / "output"
 
@@ -69,6 +69,25 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
             self.assertIsNone(steps[0].command)
             self.assertIsNotNone(steps[0].skip_reason)
             self.assertIn("MADOCA residual-component input is unavailable", steps[0].skip_reason)
+
+    def test_run_step_records_blocked_infrastructure_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_residual_blocked_") as temp_dir:
+            output_dir = Path(temp_dir) / "output"
+            log_dir = output_dir / "logs"
+            log_dir.mkdir(parents=True)
+            step = runner.build_step_plan(ROOT_DIR, output_dir, {})[0]
+
+            result = runner.run_step(step, ROOT_DIR, log_dir)
+
+            self.assertEqual(result["status"], "blocked_infrastructure")
+            self.assertIn("MADOCA residual-component input is unavailable", result["block_reason"])
+            artifacts = result["artifacts"]
+            log_artifact = artifacts[0]
+            self.assertEqual(log_artifact["role"], "log")
+            self.assertTrue(log_artifact["required"])
+            self.assertTrue(log_artifact["exists"])
+            self.assertGreater(log_artifact["bytes"], 0)
+            self.assertTrue(str(log_artifact["sha256"]))
 
     def test_build_step_plan_uses_configured_inputs_and_filters(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_residual_plan_") as temp_dir:
@@ -176,8 +195,8 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
                 },
                 {
                     "name": "MADOCA residual-component diff",
-                    "status": "skipped",
-                    "skip_reason": "MADOCA residual-component input is unavailable.",
+                    "status": "blocked_infrastructure",
+                    "block_reason": "MADOCA residual-component input is unavailable.",
                 },
                 {
                     "name": "MADOCA residual-component diff",
@@ -196,7 +215,7 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
         self.assertIn("## Optional MADOCA Residual-Component Diff", markdown)
         self.assertIn("`passed`: `1`", markdown)
         self.assertIn("`failed`: `2`", markdown)
-        self.assertIn("`skipped`: `1`", markdown)
+        self.assertIn("`blocked_infrastructure`: `1`", markdown)
         self.assertIn("common rows `12`", markdown)
         self.assertIn("unmatched `1/2`", markdown)
         self.assertIn("components `24`", markdown)
@@ -213,8 +232,8 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
                 {
                     "name": steps[0].name,
                     "slug": steps[0].slug,
-                    "status": "skipped",
-                    "skip_reason": steps[0].skip_reason,
+                    "status": "blocked_infrastructure",
+                    "block_reason": steps[0].skip_reason,
                     "outputs": steps[0].outputs,
                     "summary_json": steps[0].summary_json,
                     "log_path": str(Path(temp_dir) / "madoca_residual_component_diff.log"),
@@ -225,7 +244,13 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
 
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary_schema"], runner.SUMMARY_SCHEMA)
-            self.assertEqual(payload["counts"], {"passed": 0, "failed": 0, "skipped": 1})
+            self.assertEqual(payload["contract"], "optional_diff_artifact_contract.v1")
+            self.assertEqual(payload["status"], "blocked_infrastructure")
+            self.assertIn("missing evidence", payload["next_actions"][1])
+            self.assertEqual(payload["counts"]["passed"], 0)
+            self.assertEqual(payload["counts"]["failed"], 0)
+            self.assertEqual(payload["counts"]["blocked_infrastructure"], 1)
+            self.assertEqual(payload["counts"]["skipped"], 0)
 
 
 if __name__ == "__main__":

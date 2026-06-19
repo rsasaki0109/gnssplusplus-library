@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, dataclass
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -74,6 +75,8 @@ IDENTITY_PROVENANCE_METRIC_KEYS = (
     "gps_l2w_code_bias_fallback_rows",
 )
 
+STATUS_ORDER = ("passed", "failed", "blocked_infrastructure", "not_applicable", "skipped")
+
 
 def repo_root_from_script() -> Path:
     return Path(__file__).resolve().parents[2]
@@ -117,6 +120,30 @@ def parse_option_value(option: EnvOption, environ: Mapping[str, str]) -> str | N
 
 def truthy(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def file_sha256(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def artifact_record(path: Path, *, role: str, required: bool) -> dict[str, object]:
+    exists = path.is_file()
+    record: dict[str, object] = {
+        "role": role,
+        "path": str(path),
+        "required": required,
+        "exists": exists,
+    }
+    if exists:
+        record["bytes"] = path.stat().st_size
+        record["sha256"] = file_sha256(path)
+    return record
 
 
 def metric_label(value: object) -> str:
@@ -297,10 +324,18 @@ def run_step(config: DiffRunnerConfig, step: DiffStep, repo_root: Path, log_dir:
         "log_path": str(log_path),
     }
     if step.skip_reason is not None:
-        record["status"] = "skipped"
+        record["status"] = "blocked_infrastructure"
+        record["block_reason"] = step.skip_reason
         record["skip_reason"] = step.skip_reason
         log_path.write_text(step.skip_reason + "\n", encoding="utf-8")
-        print(f"Skipping {step.name}: {step.skip_reason}")
+        record["artifacts"] = [
+            artifact_record(log_path, role="log", required=True),
+            *[
+                artifact_record(Path(output), role="declared_output", required=False)
+                for output in step.outputs
+            ],
+        ]
+        print(f"Blocked {step.name}: {step.skip_reason}")
         return record
 
     assert step.command is not None
@@ -346,6 +381,13 @@ def run_step(config: DiffRunnerConfig, step: DiffStep, repo_root: Path, log_dir:
         if tail:
             print(tail)
         print(f"Failed {step.name} in {elapsed:.2f}s; see {log_path}")
+    record["artifacts"] = [
+        artifact_record(log_path, role="log", required=True),
+        *[
+            artifact_record(Path(output), role="declared_output", required=completed.returncode == 0)
+            for output in step.outputs
+        ],
+    ]
     return record
 
 
@@ -357,8 +399,8 @@ def format_metric(value: object) -> str:
 
 def render_result_detail(result: dict[str, object]) -> str:
     status = str(result["status"])
-    if status == "skipped":
-        return str(result.get("skip_reason", ""))
+    if status in {"blocked_infrastructure", "not_applicable", "skipped"}:
+        return str(result.get("block_reason") or result.get("skip_reason", ""))
     if status == "failed":
         missing_outputs = result.get("missing_outputs")
         if isinstance(missing_outputs, list) and missing_outputs:
@@ -408,15 +450,11 @@ def render_result_detail(result: dict[str, object]) -> str:
 
 
 def render_markdown_summary(config: DiffRunnerConfig, results: list[dict[str, object]]) -> str:
-    passed = sum(1 for result in results if result["status"] == "passed")
-    failed = sum(1 for result in results if result["status"] == "failed")
-    skipped = sum(1 for result in results if result["status"] == "skipped")
+    counts = status_counts(results)
     lines = [
         f"## {config.markdown_title}",
         "",
-        f"- `passed`: `{passed}`",
-        f"- `failed`: `{failed}`",
-        f"- `skipped`: `{skipped}`",
+        *[f"- `{status}`: `{count}`" for status, count in counts.items()],
         "",
         "| Step | Status | Detail |",
         "| --- | --- | --- |",
@@ -425,6 +463,36 @@ def render_markdown_summary(config: DiffRunnerConfig, results: list[dict[str, ob
         lines.append(f"| {result['name']} | `{result['status']}` | {render_result_detail(result)} |")
     lines.append("")
     return "\n".join(lines)
+
+
+def status_counts(results: list[dict[str, object]]) -> dict[str, int]:
+    counts = {status: 0 for status in STATUS_ORDER}
+    for result in results:
+        status = str(result["status"])
+        counts.setdefault(status, 0)
+        counts[status] += 1
+    return counts
+
+
+def aggregate_status(results: list[dict[str, object]]) -> str:
+    if any(result["status"] == "failed" for result in results):
+        return "failed"
+    if any(result["status"] == "blocked_infrastructure" for result in results):
+        return "blocked_infrastructure"
+    if any(result["status"] == "passed" for result in results):
+        return "passed"
+    return "not_applicable"
+
+
+def next_actions(results: list[dict[str, object]]) -> list[str]:
+    if any(result["status"] == "blocked_infrastructure" for result in results):
+        return [
+            "Provide the configured base and candidate CSV inputs, then rerun the optional diff.",
+            "Treat blocked_infrastructure as missing evidence, not as a passing oracle sign-off.",
+        ]
+    if any(result["status"] == "failed" for result in results):
+        return ["Inspect the per-step log and declared output artifacts before changing solver behavior."]
+    return []
 
 
 def write_summary(
@@ -436,13 +504,12 @@ def write_summary(
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "summary_schema": config.summary_schema,
+        "contract": "optional_diff_artifact_contract.v1",
+        "status": aggregate_status(results),
+        "next_actions": next_actions(results),
         "steps": [asdict(step) for step in steps],
         "results": results,
-        "counts": {
-            "passed": sum(1 for result in results if result["status"] == "passed"),
-            "failed": sum(1 for result in results if result["status"] == "failed"),
-            "skipped": sum(1 for result in results if result["status"] == "skipped"),
-        },
+        "counts": status_counts(results),
     }
     summary_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 

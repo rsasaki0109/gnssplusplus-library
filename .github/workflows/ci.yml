@@ -333,7 +333,7 @@ jobs:
           output/ci_optional_clas_zd_component/*.log
           output/clas_zd_component_diff.json
           output/clas_zd_component_diff.csv
-        if-no-files-found: ignore
+        if-no-files-found: error
 
     - name: Optional MADOCA residual-component diff
       env:
@@ -356,7 +356,7 @@ jobs:
           output/ci_optional_madoca_residual_component/*.log
           output/madoca_residual_component_diff.json
           output/madoca_residual_component_diff.csv
-        if-no-files-found: ignore
+        if-no-files-found: error
 
     - name: Upload PPP products comparison artifacts
       if: always()

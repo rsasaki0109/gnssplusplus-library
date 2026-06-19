@@ -188,7 +188,9 @@ runs that comparison when `GNSSPP_CLAS_ZD_BASE_CSV` and
 `GNSSPP_CLAS_ZD_CANDIDATE_CSV` point at generated CLASLIB/native component
 dumps.  It writes `ci_optional_clas_zd_component_summary.json`, a log, and the
 `clas_zd_component_diff.{json,csv}` artifacts.  When those inputs are absent,
-the CI step records an explicit skip instead of silently omitting the artifact.
+the CI step records `status: blocked_infrastructure` with next actions instead
+of silently treating the missing oracle/native evidence as a passing sign-off.
+The workflow upload treats the summary/log bundle as required evidence.
 Optional filters are `GNSSPP_CLAS_ZD_COMPONENTS`, `GNSSPP_CLAS_ZD_STAGE`,
 `GNSSPP_CLAS_ZD_ROW_TYPE`, `GNSSPP_CLAS_ZD_THRESHOLD_M`, and
 `GNSSPP_CLAS_ZD_FAIL_ON_DIFF`.  GPS L2W A4b probes can also narrow the row set
