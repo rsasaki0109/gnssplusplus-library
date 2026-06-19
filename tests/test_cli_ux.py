@@ -154,6 +154,32 @@ class CliUxTest(unittest.TestCase):
         self.assertGreaterEqual(len(payload["checks"]), 3)
         self.assertIn("next_commands", payload)
 
+    def test_doctor_text_output_stays_actionable_for_first_run(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_cli_ux_doctor_text_") as temp_dir:
+            missing_root = Path(temp_dir) / "missing-root"
+            result = self.run_gnss("doctor", "--root", str(missing_root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stderr, "")
+        self.assertIn("libgnss++ doctor", result.stdout)
+        self.assertIn("[missing] repository root:", result.stdout)
+        self.assertIn("Recommended next commands:", result.stdout)
+
+        known_commands = self.dispatcher_commands()
+        next_command_lines = [
+            line.strip()
+            for line in result.stdout.splitlines()
+            if line.strip().startswith("python3 apps/gnss.py ")
+        ]
+        self.assertGreaterEqual(len(next_command_lines), 4)
+        stale_commands: list[str] = []
+        for command_line in next_command_lines:
+            tokens = shlex.split(command_line)
+            if len(tokens) < 3 or tokens[2] not in known_commands:
+                stale_commands.append(command_line)
+        self.assertEqual(stale_commands, [])
+
     def test_dispatcher_registry_keeps_python_targets_runnable(self) -> None:
         dispatcher = self.dispatcher_module()
         failures: list[str] = []
