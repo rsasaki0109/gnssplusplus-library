@@ -593,6 +593,43 @@ OsrFrequencyObservationLookup findOsrFrequencyObservationWithProvenance(
     return result;
 }
 
+ClasOsrBiasMaterialization materializeClasOsrBiases(
+    GNSSSystem system,
+    SignalType signal,
+    std::string_view pseudorange_observation_type,
+    std::string_view carrier_phase_observation_type,
+    const std::map<std::uint8_t, double>& code_biases_m,
+    const std::map<std::uint8_t, double>& phase_biases_m,
+    bool exact_bias_identity,
+    bool enable_l2_class_fallback) {
+    ClasOsrBiasMaterialization result;
+    result.code_signal_id =
+        algorithms::ppp_bias_identity::rtcmSsrSignalIdForObservation(
+            system, signal, pseudorange_observation_type, exact_bias_identity);
+    result.phase_signal_id =
+        algorithms::ppp_bias_identity::rtcmSsrSignalIdForObservation(
+            system, signal, carrier_phase_observation_type, exact_bias_identity);
+    result.exact_identity = exact_bias_identity;
+
+    const auto code_bias = clasOsrBiasLookup(
+        code_biases_m,
+        system,
+        result.code_signal_id,
+        enable_l2_class_fallback && !exact_bias_identity);
+    result.code_bias_m = code_bias.value_m;
+    result.code_source_signal_id = code_bias.source_signal_id;
+    result.code_present = code_bias.present;
+    result.code_fallback = code_bias.fallback;
+
+    const auto phase_bias = phase_biases_m.find(result.phase_signal_id);
+    if (phase_bias != phase_biases_m.end()) {
+        result.phase_bias_m = phase_bias->second;
+        result.phase_source_signal_id = result.phase_signal_id;
+        result.phase_present = true;
+    }
+    return result;
+}
+
 std::map<std::string, std::string> selectClasEpochAtmosTokens(
     const SSRProducts& ssr_products,
     const std::vector<SatelliteId>& satellites,
@@ -1015,37 +1052,26 @@ std::vector<OSRCorrection> computeOSR(
         for (int f = 0; f < osr.num_frequencies; ++f) {
             const Observation* freq_obs = freq_observations[f];
             const bool exact_bias_identity = gpsL2ExactBiasIdentityEnabled(freq_obs);
-            const uint8_t code_sid =
-                algorithms::ppp_bias_identity::rtcmSsrSignalIdForObservation(
-                    sat.system,
-                    osr.signals[f],
-                    freq_obs != nullptr ? freq_obs->pseudorange_observation_type : "",
-                    exact_bias_identity);
-            const uint8_t phase_sid =
-                algorithms::ppp_bias_identity::rtcmSsrSignalIdForObservation(
-                    sat.system,
-                    osr.signals[f],
-                    freq_obs != nullptr ? freq_obs->carrier_phase_observation_type : "",
-                    exact_bias_identity);
-            osr.code_bias_signal_ids[f] = code_sid;
-            osr.phase_bias_signal_ids[f] = phase_sid;
-            osr.bias_exact_identity[f] = exact_bias_identity;
-            const auto code_bias =
-                clasOsrBiasLookup(
-                    ssr_cbias,
-                    sat.system,
-                    code_sid,
-                    pppEnvOverrides().clas_code_row_bias_identity && !exact_bias_identity);
-            osr.code_bias_m[f] = code_bias.value_m;
-            osr.code_bias_source_signal_ids[f] = code_bias.source_signal_id;
-            osr.code_bias_present[f] = code_bias.present;
-            osr.code_bias_fallback[f] = code_bias.fallback;
-            auto pb_it = ssr_pbias.find(phase_sid);
-            if (pb_it != ssr_pbias.end()) {
-                osr.phase_bias_m[f] = pb_it->second;
-                osr.phase_bias_source_signal_ids[f] = phase_sid;
-                osr.phase_bias_present[f] = true;
-            }
+            const auto bias = materializeClasOsrBiases(
+                sat.system,
+                osr.signals[f],
+                freq_obs != nullptr ? freq_obs->pseudorange_observation_type : "",
+                freq_obs != nullptr ? freq_obs->carrier_phase_observation_type : "",
+                ssr_cbias,
+                ssr_pbias,
+                exact_bias_identity,
+                pppEnvOverrides().clas_code_row_bias_identity && !exact_bias_identity);
+            osr.code_bias_signal_ids[f] = bias.code_signal_id;
+            osr.phase_bias_signal_ids[f] = bias.phase_signal_id;
+            osr.bias_exact_identity[f] = bias.exact_identity;
+            osr.code_bias_m[f] = bias.code_bias_m;
+            osr.phase_bias_m[f] = bias.phase_bias_m;
+            osr.code_bias_source_signal_ids[f] = bias.code_source_signal_id;
+            osr.phase_bias_source_signal_ids[f] = bias.phase_source_signal_id;
+            osr.code_bias_present[f] = bias.code_present;
+            osr.phase_bias_present[f] = bias.phase_present;
+            osr.code_bias_fallback[f] = bias.code_fallback;
+            osr.phase_bias_fallback[f] = bias.phase_fallback;
         }
 
         if (osr.num_frequencies >= 2) {
