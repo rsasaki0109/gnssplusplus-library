@@ -143,6 +143,26 @@ class CliUxTest(unittest.TestCase):
                 for snippet in snippets:
                     self.assertIn(snippet, result.stdout)
 
+    def test_help_command_dispatches_to_subcommand_help(self) -> None:
+        expectations = {
+            "doctor": ("usage: gnss doctor", "--strict"),
+            "qzss-l6-info": (
+                "usage: gnss qzss-l6-info",
+                "--compact-bias-row-materialization",
+            ),
+            "web": ("usage: gnss web", "--artifact-manifest"),
+        }
+
+        for command, snippets in expectations.items():
+            with self.subTest(command=command):
+                result = self.run_gnss("help", command)
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                self.assert_no_traceback(result)
+                self.assertEqual(result.stderr, "")
+                self.assertNotIn("Usage: gnss <command> [args...]", result.stdout)
+                for snippet in snippets:
+                    self.assertIn(snippet, result.stdout)
+
     def test_user_input_errors_are_actionable_not_tracebacks(self) -> None:
         cases = [
             (
@@ -191,6 +211,16 @@ class CliUxTest(unittest.TestCase):
                 self.assertIn("Did you mean", result.stderr)
                 self.assertIn(expected_command, result.stderr)
                 self.assertIn("Commands:", result.stderr)
+
+    def test_help_command_unknown_target_uses_command_suggestions(self) -> None:
+        result = self.run_gnss("help", "clas_ppp")
+
+        self.assertEqual(result.returncode, 1)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("Error: unknown command `clas_ppp`.", result.stderr)
+        self.assertIn("Did you mean `clas-ppp`?", result.stderr)
+        self.assertIn("Commands:", result.stderr)
 
     def test_doctor_json_stays_machine_readable_for_setup_tools(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_cli_ux_doctor_") as temp_dir:
