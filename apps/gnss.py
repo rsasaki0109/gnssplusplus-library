@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import difflib
 import glob
 import os
 import sys
@@ -575,6 +576,40 @@ def usage() -> str:
     return "\n".join(lines)
 
 
+def suggest_commands(command_name: str, *, limit: int = 3) -> list[str]:
+    suggestions: list[str] = []
+    normalized = command_name.replace("_", "-")
+    if normalized in COMMANDS:
+        suggestions.append(normalized)
+
+    for match in difflib.get_close_matches(
+        normalized,
+        sorted(COMMANDS),
+        n=limit,
+        cutoff=0.55,
+    ):
+        if match not in suggestions:
+            suggestions.append(match)
+        if len(suggestions) >= limit:
+            break
+    return suggestions
+
+
+def unknown_command_message(command_name: str) -> str:
+    lines = [f"Error: unknown command `{command_name}`."]
+    suggestions = suggest_commands(command_name)
+    if suggestions:
+        lines.append("")
+        if len(suggestions) == 1:
+            lines.append(f"Did you mean `{suggestions[0]}`?")
+        else:
+            lines.append("Did you mean one of these?")
+            for name in suggestions:
+                lines.append(f"  {name:<22} {COMMANDS[name]['summary']}")
+    lines.extend(["", usage()])
+    return "\n".join(lines)
+
+
 def find_binary(target_name: str) -> str | None:
     filename = target_name + EXE_SUFFIX
     build_roots = [
@@ -643,8 +678,7 @@ def main() -> int:
     command_name = sys.argv[1]
     command = COMMANDS.get(command_name)
     if command is None:
-        print(f"Error: unknown command `{command_name}`.\n", file=sys.stderr)
-        print(usage(), file=sys.stderr)
+        print(unknown_command_message(command_name), file=sys.stderr)
         return 1
 
     args = sys.argv[2:]
