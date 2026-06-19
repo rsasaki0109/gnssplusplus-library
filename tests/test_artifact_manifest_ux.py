@@ -102,6 +102,8 @@ class ArtifactManifestUxTest(unittest.TestCase):
             self.assertEqual(result.stderr, "")
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
 
+        self.assertEqual(payload["schema_version"], 1)
+        self.assertEqual(payload["contract"], "artifact_manifest.v1")
         self.assertEqual(payload["bundle_count"], 2)
         self.assertEqual(payload["root"], str(root.resolve()))
         bundles = {bundle["category"]: bundle for bundle in payload["bundles"]}
