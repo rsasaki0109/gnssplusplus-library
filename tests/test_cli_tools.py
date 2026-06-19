@@ -5937,6 +5937,92 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("cbias:2=0.040000", extend_row)
             self.assertIn("cbias:3=-0.080000", extend_row)
 
+    def test_qzss_l6_info_compact_bias_row_materialization_extends_phase_only_network_code_bias_rows(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_phase_only_code_bias_row_extend_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_phase_only_code_bias_row_extend.bin"
+            strict_path = temp_root / "strict.csv"
+            extend_path = temp_root / "selected_satellite_extend.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(
+                            tow=518400,
+                            iod=3,
+                            prn=3,
+                            sync=True,
+                            sigmask=0x8000,
+                        ),
+                        build_qzss_cssr_code_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            bias_m=-0.12,
+                            sync=False,
+                        ),
+                        build_qzss_cssr_mask_message(
+                            tow=518412,
+                            iod=3,
+                            prn=3,
+                            sync=True,
+                            sigmask=0x8000,
+                        ),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            network_bias=True,
+                            code_bias_exists=False,
+                            phase_bias_exists=True,
+                            selected_mask=0b1,
+                            phase_bias_m=0.045,
+                            entries_per_selected_satellite=1,
+                        ),
+                    ]
+                )
+            )
+
+            strict_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(strict_path),
+                "--gps-week",
+                "2200",
+                "--compact-code-bias-bank-policy",
+                "same-30s-bank",
+            )
+            self.assertEqual(strict_result.returncode, 0, msg=strict_result.stderr)
+            strict_row = next(
+                line
+                for line in strict_path.read_text(encoding="ascii").splitlines()
+                if line.startswith("2200,518400.000") and "bias_network_id=1" in line
+            )
+            self.assertIn("pbias:2=0.045000", strict_row)
+            self.assertNotIn("cbias:2=", strict_row)
+
+            extend_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(extend_path),
+                "--gps-week",
+                "2200",
+                "--compact-code-bias-bank-policy",
+                "same-30s-bank",
+                "--compact-bias-row-materialization",
+                "selected-satellite-base-extend",
+            )
+            self.assertEqual(extend_result.returncode, 0, msg=extend_result.stderr)
+            extend_row = next(
+                line
+                for line in extend_path.read_text(encoding="ascii").splitlines()
+                if line.startswith("2200,518400.000") and "bias_network_id=1" in line
+            )
+            self.assertIn("pbias:2=0.045000", extend_row)
+            self.assertIn("cbias:2=-0.120000", extend_row)
+
     def test_qzss_l6_info_compact_bias_row_materialization_all_base_satellite_extends_unselected_code_bias_rows(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_code_bias_mask_extend_") as temp_dir:
             temp_root = Path(temp_dir)
