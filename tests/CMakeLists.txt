@@ -82,6 +82,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_tools.py
     )
     add_test(
+        NAME python_cli_ux_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_ux.py
+    )
+    add_test(
         NAME python_madoca_solution_diff_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_solution_diff.py
     )
@@ -236,6 +240,7 @@ if(GTest_FOUND)
         run_tests
         python_clas_zd_component_diff_tests
         python_claslib_zd_component_export_tests
+        python_cli_ux_tests
         python_optional_clas_zd_component_diff_tests
         python_madoca_residual_component_diff_tests
         python_madoca_solution_diff_tests
