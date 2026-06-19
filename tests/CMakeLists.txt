@@ -86,6 +86,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_ux.py
     )
     add_test(
+        NAME python_cli_json_contract_validator_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_json_contract_validator.py
+    )
+    add_test(
         NAME python_artifact_manifest_ux_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_artifact_manifest_ux.py
     )
@@ -254,6 +258,7 @@ if(GTest_FOUND)
         python_clas_a4b_native_selfdiff_tests
         python_clas_zd_component_diff_tests
         python_claslib_zd_component_export_tests
+        python_cli_json_contract_validator_tests
         python_cli_ux_tests
         python_optional_clas_zd_component_diff_tests
         python_madoca_residual_component_diff_tests
