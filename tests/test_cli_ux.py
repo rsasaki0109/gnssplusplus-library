@@ -19,13 +19,17 @@ GNSS_CLI = ROOT_DIR / "apps" / "gnss.py"
 
 class CliUxTest(unittest.TestCase):
     @classmethod
-    def dispatcher_commands(cls) -> set[str]:
+    def dispatcher_module(cls):
         spec = importlib.util.spec_from_file_location("gnss_dispatcher", GNSS_CLI)
         if spec is None or spec.loader is None:
             raise RuntimeError(f"failed to load dispatcher module from {GNSS_CLI}")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        return set(module.COMMANDS)
+        return module
+
+    @classmethod
+    def dispatcher_commands(cls) -> set[str]:
+        return set(cls.dispatcher_module().COMMANDS)
 
     def run_gnss(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -149,6 +153,37 @@ class CliUxTest(unittest.TestCase):
         self.assertIsInstance(payload["checks"], list)
         self.assertGreaterEqual(len(payload["checks"]), 3)
         self.assertIn("next_commands", payload)
+
+    def test_dispatcher_registry_keeps_python_targets_runnable(self) -> None:
+        dispatcher = self.dispatcher_module()
+        failures: list[str] = []
+        repo_root = ROOT_DIR.resolve()
+
+        for command, metadata in sorted(dispatcher.COMMANDS.items()):
+            kind = metadata.get("kind")
+            target = metadata.get("target")
+            summary = metadata.get("summary")
+
+            if kind not in {"python", "binary"}:
+                failures.append(f"{command}: unsupported kind {kind!r}")
+            if not isinstance(target, str) or not target:
+                failures.append(f"{command}: missing target")
+                continue
+            if not isinstance(summary, str) or not summary.strip():
+                failures.append(f"{command}: missing summary")
+
+            if kind != "python":
+                continue
+            target_path = Path(target)
+            if not target_path.exists():
+                failures.append(f"{command}: python target missing: {target}")
+                continue
+            try:
+                target_path.resolve().relative_to(repo_root)
+            except ValueError:
+                failures.append(f"{command}: python target escapes repo root: {target}")
+
+        self.assertEqual(failures, [])
 
 
 if __name__ == "__main__":
