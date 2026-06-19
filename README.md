@@ -16,12 +16,12 @@ handling without an external RTKLIB runtime.
 
 ![Feature overview](docs/libgnsspp_feature_overview.png)
 
-## Results
+## Results And Validation Status
 
-| Area | Public comparison | Current result |
+| Area | Public comparison | Evidence / status |
 |---|---|---|
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` | +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta |
-| CLAS PPP | QZSS CLAS vs CLASLIB | 3.57 mm vs 7.29 mm RMS 3D |
+| CLAS PPP | QZSS CLAS vs CLASLIB | Historical `--claslib-parity` result: 3.57 mm vs 7.29 mm RMS 3D. Current native DD filter remains default-off at A5 STOP. |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
 
@@ -47,12 +47,19 @@ Positioning-rate lead, **+28.1 pp** PPC official-score lead, and
 
 ![PPC RTK coverage scorecard](docs/ppc_rtk_demo5_scorecard.png)
 
-### CLAS PPP vs CLASLIB
+### Historical CLAS PPP vs CLASLIB
+
+This is the historical iter55 `--claslib-parity` result, not the current default
+CLAS capability. Current `develop` no longer exposes `--claslib-parity`; active
+native CLAS work is gated by A4b component-diff evidence, and the DD filter
+default flip remains stopped at A5. See
+[CLAS validation datasets](docs/clas_validated_datasets.md) and
+[A5 closure](docs/clas_dd_filter_a5.md).
 
 QZSS CLAS PPP from raw L6 binary, 2019-08-27 static dataset, 1 hour
 (`3599` epochs):
 
-| Metric | libgnss++ `--claslib-parity` | CLASLIB |
+| Metric | libgnss++ historical `--claslib-parity` | CLASLIB |
 |---|---:|---:|
 | Matched fixed epochs | **3594 / 3599 (99.86%)** | 3594 / 3599 (99.86%) |
 | RMS 3D fixed-only | **3.57 mm** | 7.29 mm |
