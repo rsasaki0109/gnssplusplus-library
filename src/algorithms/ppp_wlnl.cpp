@@ -404,11 +404,13 @@ std::map<SatelliteId, OSRCorrection> PPPProcessor::computeWlnlOsrCorrections(
     auto phase_bias_repair = clas_phase_bias_repair_;
     const auto epoch_atmos = selectClasEpochAtmosTokens(
         ssr_products_, obs.getSatellites(), obs.time, receiver_position, ppp_config_);
-    for (const auto& osr : computeOSR(obs, nav, ssr_products_, epoch_atmos,
+    auto osr_corrections = computeOSR(obs, nav, ssr_products_, epoch_atmos,
                                       receiver_position, clock_bias_m, trop_zenith,
                                       ppp_config_,
                                       windup_cache, dispersion_compensation,
-                                      sis_continuity, phase_bias_repair)) {
+                                      sis_continuity, phase_bias_repair);
+    materializeClasReceiverAntennaCorrections(osr_corrections);
+    for (const auto& osr : osr_corrections) {
         if (osr.valid && osr.num_frequencies >= 2) {
             osr_by_sat[osr.satellite] = osr;
         }

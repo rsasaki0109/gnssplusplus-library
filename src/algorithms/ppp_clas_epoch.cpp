@@ -279,7 +279,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         return solution;
     }
 
-    const auto epoch_context = prepareClasEpochContext(
+    auto epoch_context = prepareClasEpochContext(
         obs,
         nav,
         ssr_products_,
@@ -291,6 +291,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         clas_dispersion_compensation_,
         clas_sis_continuity_,
         clas_phase_bias_repair_);
+    materializeClasReceiverAntennaCorrections(epoch_context.osr_corrections);
     const auto& epoch_atmos = epoch_context.epoch_atmos_tokens;
     const auto& osr_corrections = epoch_context.osr_corrections;
 

@@ -202,6 +202,10 @@ struct PPPEnvOverrides {
     // "1" to enable. The default and exact "0" preserve legacy bit-exact
     // behavior because the S28 rollout rule rejected this term as default-on.
     bool clas_tx_time_sign_fix = false;
+    // GNSS_PPP_CLAS_RX_ANTENNA: materialize CLAS OSR receiver antenna terms
+    // from the loaded ANTEX receiver entry when set exactly to "1". Default
+    // false while GPS L2W ZD parity is measured.
+    bool clas_rx_antenna = false;
     // GNSS_PPP_CLAS_GEOM_DUMP: path for CLAS geometry-row forensic dump.
     // Empty disables it.
     std::string clas_geom_dump_path;

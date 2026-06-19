@@ -99,9 +99,9 @@ not declare a receiver antenna type, so A4b receiver-antenna probes should pass
 the native ANTEX antenna key explicitly, for example
 `--receiver-antenna-type "TRM59800.80     NONE"`. The CLASLIB ANTEX file uses
 CRLF line endings, so the native ANTEX loader trims trailing carriage returns
-before matching labels. This fixes ANTEX file/type provenance; wiring those
-receiver terms into the CLAS OSR `receiver_antenna_m` component remains a
-separate A4b materialization step.
+before matching labels. Set `GNSS_PPP_CLAS_RX_ANTENNA=1` to materialize those
+receiver terms into the CLAS OSR `receiver_antenna_m` component. The default
+path leaves the component unchanged while A4b parity is measured.
 
 For the A4b GPS L2W identity probe, enable the diagnostic gates and write a
 native zero-difference code component dump:
@@ -109,6 +109,7 @@ native zero-difference code component dump:
 ```bash
 GNSS_PPP_CLAS_DD_FILTER=1 \
 GNSS_PPP_CLAS_CODE_ROW_PARITY=bias \
+GNSS_PPP_CLAS_RX_ANTENNA=1 \
 GNSS_PPP_CLAS_CODE_DUMP=/tmp/clas_a4b_native_code_dump.csv \
 python3 apps/gnss.py clas-ppp \
   --profile clas \

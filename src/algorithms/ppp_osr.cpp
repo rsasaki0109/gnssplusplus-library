@@ -630,6 +630,25 @@ ClasOsrBiasMaterialization materializeClasOsrBiases(
     return result;
 }
 
+double clasReceiverAntennaCorrectionMeters(
+    const Vector3d& receiver_delta_enu,
+    const Vector3d& antenna_offset_neu,
+    double pcv_m,
+    double azimuth_rad,
+    double elevation_rad) {
+    const Vector3d antenna_offset_enu(
+        antenna_offset_neu.y(),
+        antenna_offset_neu.x(),
+        antenna_offset_neu.z());
+    const Vector3d offset_enu = receiver_delta_enu + antenna_offset_enu;
+    const double cosel = std::cos(elevation_rad);
+    const Vector3d los_enu(
+        std::sin(azimuth_rad) * cosel,
+        std::cos(azimuth_rad) * cosel,
+        std::sin(elevation_rad));
+    return -offset_enu.dot(los_enu) + pcv_m;
+}
+
 std::map<std::string, std::string> selectClasEpochAtmosTokens(
     const SSRProducts& ssr_products,
     const std::vector<SatelliteId>& satellites,
