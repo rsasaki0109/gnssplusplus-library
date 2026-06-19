@@ -6,7 +6,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -16,6 +15,9 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 GNSS_CLI = ROOT_DIR / "apps" / "gnss.py"
+GNSS_EXAMPLE_COMMAND_RE = re.compile(
+    r"python3\s+apps/gnss\.py(?:\s+([^\s\\`),'\"),]+))?"
+)
 
 
 class CliUxTest(unittest.TestCase):
@@ -46,6 +48,45 @@ class CliUxTest(unittest.TestCase):
         self.assertNotIn("Traceback (most recent call last)", combined)
         self.assertNotIn("ModuleNotFoundError", combined)
 
+    def commands_from_gnss_example(self, text: str) -> list[str]:
+        commands: list[str] = []
+        for match in GNSS_EXAMPLE_COMMAND_RE.finditer(text):
+            command = match.group(1)
+            if command is None or command.startswith("-"):
+                continue
+            commands.append(command)
+        return commands
+
+    def stale_gnss_example_commands_in_lines(
+        self,
+        lines: list[tuple[str, str]],
+    ) -> tuple[int, list[str]]:
+        known_commands = self.dispatcher_commands()
+        seen_examples = 0
+        stale_examples: list[str] = []
+
+        for label, line in lines:
+            for command in self.commands_from_gnss_example(line):
+                seen_examples += 1
+                if command not in known_commands:
+                    stale_examples.append(f"{label}: {command}")
+
+        return seen_examples, stale_examples
+
+    def stale_gnss_example_commands_in_files(
+        self,
+        paths: list[Path],
+    ) -> tuple[int, list[str]]:
+        lines: list[tuple[str, str]] = []
+        for path in paths:
+            relative_path = path.relative_to(ROOT_DIR)
+            for line_number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(),
+                1,
+            ):
+                lines.append((f"{relative_path}:{line_number}", line))
+        return self.stale_gnss_example_commands_in_lines(lines)
+
     def test_top_level_help_keeps_primary_workflows_discoverable(self) -> None:
         result = self.run_gnss("--help")
 
@@ -73,16 +114,10 @@ class CliUxTest(unittest.TestCase):
         duplicates = sorted({line for line in examples if examples.count(line) > 1})
         self.assertEqual(duplicates, [])
 
-        known_commands = self.dispatcher_commands()
-        stale_examples: list[str] = []
-        for example in examples:
-            tokens = shlex.split(example)
-            if len(tokens) < 3:
-                stale_examples.append(example)
-                continue
-            command = tokens[2]
-            if command not in known_commands:
-                stale_examples.append(example)
+        seen_examples, stale_examples = self.stale_gnss_example_commands_in_lines(
+            [(line, line) for line in examples]
+        )
+        self.assertGreaterEqual(seen_examples, 1)
         self.assertEqual(stale_examples, [])
 
     def test_representative_subcommand_help_uses_dispatcher_names(self) -> None:
@@ -190,19 +225,16 @@ class CliUxTest(unittest.TestCase):
         self.assertIn("[missing] repository root:", result.stdout)
         self.assertIn("Recommended next commands:", result.stdout)
 
-        known_commands = self.dispatcher_commands()
         next_command_lines = [
             line.strip()
             for line in result.stdout.splitlines()
             if line.strip().startswith("python3 apps/gnss.py ")
         ]
-        self.assertGreaterEqual(len(next_command_lines), 4)
-        stale_commands: list[str] = []
-        for command_line in next_command_lines:
-            tokens = shlex.split(command_line)
-            if len(tokens) < 3 or tokens[2] not in known_commands:
-                stale_commands.append(command_line)
-        self.assertEqual(stale_commands, [])
+        seen_examples, stale_examples = self.stale_gnss_example_commands_in_lines(
+            [(line, line) for line in next_command_lines]
+        )
+        self.assertGreaterEqual(seen_examples, 4)
+        self.assertEqual(stale_examples, [])
 
     def test_dispatcher_registry_keeps_python_targets_runnable(self) -> None:
         dispatcher = self.dispatcher_module()
@@ -237,44 +269,14 @@ class CliUxTest(unittest.TestCase):
 
     def test_markdown_gnss_examples_use_registered_dispatcher_commands(self) -> None:
         markdown_files = [ROOT_DIR / "README.md", *sorted((ROOT_DIR / "docs").rglob("*.md"))]
-        command_pattern = re.compile(r"python3\s+apps/gnss\.py(?:\s+([^\s\\`),]+))?")
-        known_commands = self.dispatcher_commands()
-        seen_examples = 0
-        stale_examples: list[str] = []
-
-        for path in markdown_files:
-            for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-                for match in command_pattern.finditer(line):
-                    command = match.group(1)
-                    if command is None or command.startswith("-"):
-                        continue
-                    seen_examples += 1
-                    if command not in known_commands:
-                        relative_path = path.relative_to(ROOT_DIR)
-                        stale_examples.append(f"{relative_path}:{line_number}: {command}")
+        seen_examples, stale_examples = self.stale_gnss_example_commands_in_files(markdown_files)
 
         self.assertGreaterEqual(seen_examples, 20)
         self.assertEqual(stale_examples, [])
 
     def test_app_generated_gnss_examples_use_registered_dispatcher_commands(self) -> None:
         app_files = sorted((ROOT_DIR / "apps").glob("*.py"))
-        command_pattern = re.compile(
-            r"python3\s+apps/gnss\.py(?:\s+([^\s\\`),'\"),]+))?"
-        )
-        known_commands = self.dispatcher_commands()
-        seen_examples = 0
-        stale_examples: list[str] = []
-
-        for path in app_files:
-            for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-                for match in command_pattern.finditer(line):
-                    command = match.group(1)
-                    if command is None or command.startswith("-"):
-                        continue
-                    seen_examples += 1
-                    if command not in known_commands:
-                        relative_path = path.relative_to(ROOT_DIR)
-                        stale_examples.append(f"{relative_path}:{line_number}: {command}")
+        seen_examples, stale_examples = self.stale_gnss_example_commands_in_files(app_files)
 
         self.assertGreaterEqual(seen_examples, 20)
         self.assertEqual(stale_examples, [])
