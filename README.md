@@ -131,7 +131,8 @@ Then open `http://127.0.0.1:8085`.
 List commands:
 
 ```bash
-python3 apps/gnss.py --help
+python3 apps/gnss.py commands
+python3 apps/gnss.py commands --json
 ```
 
 ## Docker

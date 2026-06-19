@@ -145,6 +145,7 @@ class CliUxTest(unittest.TestCase):
 
     def test_help_command_dispatches_to_subcommand_help(self) -> None:
         expectations = {
+            "commands": ("Usage: gnss commands", "--json"),
             "doctor": ("usage: gnss doctor", "--strict"),
             "qzss-l6-info": (
                 "usage: gnss qzss-l6-info",
@@ -162,6 +163,62 @@ class CliUxTest(unittest.TestCase):
                 self.assertNotIn("Usage: gnss <command> [args...]", result.stdout)
                 for snippet in snippets:
                     self.assertIn(snippet, result.stdout)
+
+    def test_commands_text_output_lists_dispatcher_registry(self) -> None:
+        result = self.run_gnss("commands")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stderr, "")
+        self.assertIn("Commands:", result.stdout)
+        self.assertIn("  commands", result.stdout)
+        self.assertIn("  doctor", result.stdout)
+        self.assertIn("  clas-ppp", result.stdout)
+        self.assertIn("Run `gnss help <command>`", result.stdout)
+        self.assertNotIn("Examples:", result.stdout)
+
+    def test_commands_json_output_is_stable_for_tooling(self) -> None:
+        result = self.run_gnss("commands", "--json")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stderr, "")
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["schema_version"], 1)
+        self.assertEqual(payload["filters"], {"kind": None})
+        self.assertEqual(payload["count"], len(payload["commands"]))
+
+        names = [item["name"] for item in payload["commands"]]
+        self.assertEqual(names, sorted(names))
+        self.assertIn("commands", names)
+        self.assertIn("help", names)
+        self.assertIn("doctor", names)
+
+        for item in payload["commands"]:
+            self.assertEqual(set(item), {"kind", "name", "summary"})
+            self.assertIn(item["kind"], {"binary", "builtin", "python"})
+            self.assertIsInstance(item["summary"], str)
+            self.assertTrue(item["summary"].strip())
+
+    def test_commands_kind_filter_and_errors_are_actionable(self) -> None:
+        builtin_result = self.run_gnss("commands", "--kind", "builtin", "--json")
+
+        self.assertEqual(builtin_result.returncode, 0, msg=builtin_result.stderr)
+        self.assert_no_traceback(builtin_result)
+        self.assertEqual(builtin_result.stderr, "")
+        payload = json.loads(builtin_result.stdout)
+        self.assertEqual(payload["filters"], {"kind": "builtin"})
+        self.assertEqual(
+            [item["name"] for item in payload["commands"]],
+            ["commands", "help"],
+        )
+
+        invalid_result = self.run_gnss("commands", "--kind", "solver")
+        self.assertEqual(invalid_result.returncode, 2)
+        self.assert_no_traceback(invalid_result)
+        self.assertEqual(invalid_result.stdout, "")
+        self.assertIn("Error: unknown command kind `solver`.", invalid_result.stderr)
+        self.assertIn("Usage: gnss commands", invalid_result.stderr)
 
     def test_user_input_errors_are_actionable_not_tracebacks(self) -> None:
         cases = [
@@ -294,13 +351,19 @@ class CliUxTest(unittest.TestCase):
             target = metadata.get("target")
             summary = metadata.get("summary")
 
-            if kind not in {"python", "binary"}:
+            if kind not in {"python", "binary", "builtin"}:
                 failures.append(f"{command}: unsupported kind {kind!r}")
+            if not isinstance(summary, str) or not summary.strip():
+                failures.append(f"{command}: missing summary")
+
+            if kind == "builtin":
+                if target:
+                    failures.append(f"{command}: builtin should not declare target")
+                continue
+
             if not isinstance(target, str) or not target:
                 failures.append(f"{command}: missing target")
                 continue
-            if not isinstance(summary, str) or not summary.strip():
-                failures.append(f"{command}: missing summary")
 
             if kind != "python":
                 continue

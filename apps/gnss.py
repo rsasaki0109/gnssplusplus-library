@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import difflib
 import glob
+import json
 import os
 import sys
 
@@ -15,6 +16,14 @@ EXE_SUFFIX = ".exe" if os.name == "nt" else ""
 BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 
 COMMANDS = {
+    "commands": {
+        "kind": "builtin",
+        "summary": "List registered dispatcher commands as text or JSON for users, docs, and tooling.",
+    },
+    "help": {
+        "kind": "builtin",
+        "summary": "Show top-level help or dispatch to a command's own --help output.",
+    },
     "doctor": {
         "kind": "python",
         "target": os.path.join(APPS_DIR, "gnss_doctor.py"),
@@ -468,18 +477,48 @@ COMMANDS = {
 }
 
 
+def command_kinds() -> list[str]:
+    return sorted({metadata["kind"] for metadata in COMMANDS.values()})
+
+
+def command_records(kind_filter: str | None = None) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    for name, metadata in sorted(COMMANDS.items()):
+        kind = metadata["kind"]
+        if kind_filter is not None and kind != kind_filter:
+            continue
+        records.append(
+            {
+                "name": name,
+                "kind": kind,
+                "summary": metadata["summary"],
+            }
+        )
+    return records
+
+
+def format_command_records(records: list[dict[str, str]]) -> str:
+    width = max((len(record["name"]) for record in records), default=7)
+    lines = ["Commands:"]
+    for record in records:
+        lines.append(f"  {record['name']:<{width}}  {record['summary']}")
+    lines.extend(["", "Run `gnss help <command>` for command-specific options."])
+    return "\n".join(lines)
+
+
 def usage() -> str:
     lines = [
         "Usage: gnss <command> [args...]",
         "",
-        "Commands:",
+        format_command_records(command_records()),
     ]
-    for name in sorted(COMMANDS):
-        lines.append(f"  {name:<10} {COMMANDS[name]['summary']}")
     lines.extend(
         [
             "",
             "Examples:",
+            "  python3 apps/gnss.py commands",
+            "  python3 apps/gnss.py commands --json",
+            "  python3 apps/gnss.py help doctor",
             "  python3 apps/gnss.py doctor",
             "  python3 apps/gnss.py robotics-smoke --profile realtime",
             "  python3 apps/gnss.py ros2-doctor --device /dev/ttyUSB0",
@@ -610,6 +649,135 @@ def unknown_command_message(command_name: str) -> str:
     return "\n".join(lines)
 
 
+def help_usage() -> str:
+    return "\n".join(
+        [
+            "Usage: gnss help [command]",
+            "",
+            "Show top-level help, or show the named command's own --help output.",
+            "",
+            "Examples:",
+            "  python3 apps/gnss.py help",
+            "  python3 apps/gnss.py help doctor",
+            "  python3 apps/gnss.py help clas-ppp",
+        ]
+    )
+
+
+def commands_usage() -> str:
+    return "\n".join(
+        [
+            "Usage: gnss commands [--json] [--kind KIND]",
+            "",
+            "List registered dispatcher commands without invoking solver binaries.",
+            "",
+            "Options:",
+            "  --json       Emit a machine-readable command registry.",
+            f"  --kind KIND  Filter by command kind: {', '.join(command_kinds())}.",
+            "",
+            "Examples:",
+            "  python3 apps/gnss.py commands",
+            "  python3 apps/gnss.py commands --json",
+            "  python3 apps/gnss.py commands --kind python",
+        ]
+    )
+
+
+def run_help(args: list[str]) -> int:
+    if not args:
+        print(usage())
+        return 0
+    if args == ["-h"] or args == ["--help"]:
+        print(help_usage())
+        return 0
+    if len(args) > 1:
+        print(
+            f"Error: gnss help accepts at most one command, got {len(args)}.",
+            "",
+            help_usage(),
+            sep="\n",
+            file=sys.stderr,
+        )
+        return 2
+    return dispatch_command(args[0], ["--help"])
+
+
+def run_commands(args: list[str]) -> int:
+    emit_json = False
+    kind_filter: str | None = None
+    index = 0
+    valid_kinds = set(command_kinds())
+
+    while index < len(args):
+        arg = args[index]
+        if arg in ("-h", "--help"):
+            print(commands_usage())
+            return 0
+        if arg == "--json":
+            emit_json = True
+            index += 1
+            continue
+        if arg == "--kind":
+            if index + 1 >= len(args):
+                print(
+                    "Error: --kind requires one of: "
+                    + ", ".join(sorted(valid_kinds))
+                    + ".",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
+            kind_filter = args[index + 1]
+            index += 2
+        elif arg.startswith("--kind="):
+            kind_filter = arg.split("=", 1)[1]
+            index += 1
+        else:
+            print(
+                f"Error: unknown option for gnss commands: `{arg}`.",
+                "",
+                commands_usage(),
+                sep="\n",
+                file=sys.stderr,
+            )
+            return 2
+
+        if kind_filter is not None and kind_filter not in valid_kinds:
+            print(
+                f"Error: unknown command kind `{kind_filter}`. "
+                f"Expected one of: {', '.join(sorted(valid_kinds))}.",
+                "",
+                commands_usage(),
+                sep="\n",
+                file=sys.stderr,
+            )
+            return 2
+
+    records = command_records(kind_filter)
+    if emit_json:
+        payload = {
+            "schema_version": 1,
+            "filters": {"kind": kind_filter},
+            "count": len(records),
+            "commands": records,
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print(format_command_records(records))
+    return 0
+
+
+def run_builtin(command_name: str, args: list[str]) -> int:
+    if command_name == "help":
+        return run_help(args)
+    if command_name == "commands":
+        return run_commands(args)
+    print(f"Error: unsupported builtin command `{command_name}`.", file=sys.stderr)
+    return 1
+
+
 def find_binary(target_name: str) -> str | None:
     filename = target_name + EXE_SUFFIX
     build_roots = [
@@ -676,6 +844,8 @@ def dispatch_command(command_name: str, args: list[str]) -> int:
         print(unknown_command_message(command_name), file=sys.stderr)
         return 1
 
+    if command["kind"] == "builtin":
+        return run_builtin(command_name, args)
     if command["kind"] == "python":
         return run_python(command["target"], command_name, args)
     return run_binary(command["target"], args)
@@ -690,14 +860,7 @@ def main() -> int:
         print(usage())
         return 0
 
-    command_name = sys.argv[1]
-    if command_name == "help":
-        if len(sys.argv) < 3:
-            print(usage())
-            return 0
-        return dispatch_command(sys.argv[2], ["--help"])
-
-    return dispatch_command(command_name, sys.argv[2:])
+    return dispatch_command(sys.argv[1], sys.argv[2:])
 
 
 if __name__ == "__main__":
