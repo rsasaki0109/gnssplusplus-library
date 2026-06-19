@@ -66,6 +66,15 @@ class DiffContext:
     fail_on_diff: bool
 
 
+IDENTITY_PROVENANCE_METRIC_KEYS = (
+    "gps_l2w_rows",
+    "gps_l2w_bias_exact_identity_rows",
+    "gps_l2w_observation_exact_match_rows",
+    "gps_l2w_observation_family_fallback_rows",
+    "gps_l2w_code_bias_fallback_rows",
+)
+
+
 def repo_root_from_script() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -108,6 +117,11 @@ def parse_option_value(option: EnvOption, environ: Mapping[str, str]) -> str | N
 
 def truthy(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def metric_label(value: object) -> str:
+    text = str(value).strip().lower()
+    return "".join(character if character.isalnum() else "_" for character in text).strip("_")
 
 
 def build_context(
@@ -242,6 +256,18 @@ def load_diff_metrics(config: DiffRunnerConfig, report_json: Path) -> dict[str, 
             if isinstance(value, (int, float)):
                 max_abs_delta = max(max_abs_delta, float(value))
         metrics["max_abs_delta"] = max_abs_delta
+    identity_provenance = payload.get("identity_provenance")
+    if isinstance(identity_provenance, dict):
+        for label, summary in identity_provenance.items():
+            if not isinstance(summary, dict):
+                continue
+            normalized_label = metric_label(label)
+            if not normalized_label:
+                continue
+            for key in IDENTITY_PROVENANCE_METRIC_KEYS:
+                value = summary.get(key)
+                if isinstance(value, (int, float)):
+                    metrics[f"identity_{normalized_label}_{key}"] = int(value)
     return metrics
 
 
@@ -348,6 +374,19 @@ def render_result_detail(result: dict[str, object]) -> str:
         threshold_exceedances = metrics.get("threshold_exceedances")
         if threshold_exceedances is not None:
             detail_parts.append(f"threshold exceedances `{threshold_exceedances}`")
+        native_l2w_rows = metrics.get("identity_native_gps_l2w_rows")
+        if native_l2w_rows is not None:
+            detail_parts.append(f"native L2W `{native_l2w_rows}`")
+            exact_bias = metrics.get("identity_native_gps_l2w_bias_exact_identity_rows")
+            exact_match = metrics.get("identity_native_gps_l2w_observation_exact_match_rows")
+            if exact_bias is not None or exact_match is not None:
+                detail_parts.append(f"native L2W exact bias/match `{exact_bias}/{exact_match}`")
+            obs_fallback = metrics.get(
+                "identity_native_gps_l2w_observation_family_fallback_rows"
+            )
+            code_fallback = metrics.get("identity_native_gps_l2w_code_bias_fallback_rows")
+            if obs_fallback is not None or code_fallback is not None:
+                detail_parts.append(f"native L2W fallback obs/code `{obs_fallback}/{code_fallback}`")
     return ", ".join(detail_parts)
 
 

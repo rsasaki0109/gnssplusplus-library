@@ -31,12 +31,26 @@ FIELDNAMES = [
     "freq",
     "pseudorange_rinex_code",
     "carrier_rinex_code",
+    "bias_exact_identity",
+    "observation_exact_identity_requested",
+    "observation_exact_match",
+    "observation_family_fallback",
+    "code_bias_fallback",
     "prc_m",
     "code_bias_m",
 ]
 
 
-def write_zd_component_csv(path: Path, *, prc_m: str = "0.1") -> None:
+def write_zd_component_csv(
+    path: Path,
+    *,
+    prc_m: str = "0.1",
+    bias_exact_identity: str = "",
+    observation_exact_identity_requested: str = "",
+    observation_exact_match: str = "",
+    observation_family_fallback: str = "",
+    code_bias_fallback: str = "",
+) -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)
         writer.writeheader()
@@ -50,6 +64,11 @@ def write_zd_component_csv(path: Path, *, prc_m: str = "0.1") -> None:
                 "freq": "1",
                 "pseudorange_rinex_code": "C2W",
                 "carrier_rinex_code": "",
+                "bias_exact_identity": bias_exact_identity,
+                "observation_exact_identity_requested": observation_exact_identity_requested,
+                "observation_exact_match": observation_exact_match,
+                "observation_family_fallback": observation_family_fallback,
+                "code_bias_fallback": code_bias_fallback,
                 "prc_m": prc_m,
                 "code_bias_m": "0.5",
             }
@@ -135,6 +154,41 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertEqual(metrics["components_compared"], 1)
             self.assertAlmostEqual(metrics["max_abs_delta"], 0.05)
 
+    def test_run_step_collects_identity_provenance_metrics(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_identity_") as temp_dir:
+            root = Path(temp_dir)
+            base_csv = root / "claslib.csv"
+            candidate_csv = root / "native.csv"
+            write_zd_component_csv(base_csv)
+            write_zd_component_csv(
+                candidate_csv,
+                bias_exact_identity="1",
+                observation_exact_identity_requested="1",
+                observation_exact_match="1",
+                observation_family_fallback="0",
+                code_bias_fallback="0",
+            )
+            output_dir = root / "output"
+            log_dir = output_dir / "logs"
+            log_dir.mkdir(parents=True)
+            env = {
+                "GNSSPP_CLAS_ZD_BASE_CSV": str(base_csv),
+                "GNSSPP_CLAS_ZD_CANDIDATE_CSV": str(candidate_csv),
+                "GNSSPP_CLAS_ZD_STAGE": "accepted",
+                "GNSSPP_CLAS_ZD_ROW_TYPE": "code",
+            }
+            step = runner.build_step_plan(ROOT_DIR, output_dir, env)[0]
+
+            result = runner.run_step(step, ROOT_DIR, log_dir)
+
+            self.assertEqual(result["status"], "passed")
+            metrics = result["metrics"]
+            self.assertEqual(metrics["identity_native_gps_l2w_rows"], 1)
+            self.assertEqual(metrics["identity_native_gps_l2w_bias_exact_identity_rows"], 1)
+            self.assertEqual(metrics["identity_native_gps_l2w_observation_exact_match_rows"], 1)
+            self.assertEqual(metrics["identity_native_gps_l2w_observation_family_fallback_rows"], 0)
+            self.assertEqual(metrics["identity_native_gps_l2w_code_bias_fallback_rows"], 0)
+
     def test_render_markdown_summary_reports_status_table_and_metrics(self) -> None:
         markdown = runner.render_markdown_summary(
             [
@@ -149,6 +203,11 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                         "components_compared": 24,
                         "max_abs_delta": 0.125,
                         "threshold_exceedances": 3,
+                        "identity_native_gps_l2w_rows": 2,
+                        "identity_native_gps_l2w_bias_exact_identity_rows": 1,
+                        "identity_native_gps_l2w_observation_exact_match_rows": 1,
+                        "identity_native_gps_l2w_observation_family_fallback_rows": 0,
+                        "identity_native_gps_l2w_code_bias_fallback_rows": 1,
                     },
                 },
                 {
@@ -173,6 +232,9 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
         self.assertIn("components `24`", markdown)
         self.assertIn("max |delta| 0.125", markdown)
         self.assertIn("threshold exceedances `3`", markdown)
+        self.assertIn("native L2W `2`", markdown)
+        self.assertIn("native L2W exact bias/match `1/1`", markdown)
+        self.assertIn("native L2W fallback obs/code `0/1`", markdown)
         self.assertIn("see `/tmp/clas.log`", markdown)
 
     def test_write_summary_declares_schema(self) -> None:
