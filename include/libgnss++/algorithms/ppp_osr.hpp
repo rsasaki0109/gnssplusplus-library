@@ -118,6 +118,11 @@ double clasReceiverAntennaCorrectionMeters(
     double azimuth_rad,
     double elevation_rad);
 
+void setClasOsrReceiverAntennaCorrection(
+    OSRCorrection& osr,
+    int freq_index,
+    double receiver_antenna_m);
+
 CLASEpochContext prepareClasEpochContext(
     const ObservationData& obs,
     const NavigationData& nav,

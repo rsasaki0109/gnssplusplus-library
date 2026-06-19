@@ -100,8 +100,9 @@ the native ANTEX antenna key explicitly, for example
 `--receiver-antenna-type "TRM59800.80     NONE"`. The CLASLIB ANTEX file uses
 CRLF line endings, so the native ANTEX loader trims trailing carriage returns
 before matching labels. Set `GNSS_PPP_CLAS_RX_ANTENNA=1` to materialize those
-receiver terms into the CLAS OSR `receiver_antenna_m` component. The default
-path leaves the component unchanged while A4b parity is measured.
+receiver terms into the CLAS OSR `receiver_antenna_m` component and the
+aggregate `PRC`/`CPC` terms. The default path leaves them unchanged while A4b
+parity is measured.
 
 For the A4b GPS L2W identity probe, enable the diagnostic gates and write a
 native zero-difference code component dump:

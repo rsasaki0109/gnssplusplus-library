@@ -649,6 +649,20 @@ double clasReceiverAntennaCorrectionMeters(
     return -offset_enu.dot(los_enu) + pcv_m;
 }
 
+void setClasOsrReceiverAntennaCorrection(
+    OSRCorrection& osr,
+    int freq_index,
+    double receiver_antenna_m) {
+    if (freq_index < 0 || freq_index >= OSR_MAX_FREQ ||
+        freq_index >= osr.num_frequencies) {
+        return;
+    }
+    const double delta_m = receiver_antenna_m - osr.receiver_antenna_m[freq_index];
+    osr.receiver_antenna_m[freq_index] = receiver_antenna_m;
+    osr.PRC[freq_index] += delta_m;
+    osr.CPC[freq_index] += delta_m;
+}
+
 std::map<std::string, std::string> selectClasEpochAtmosTokens(
     const SSRProducts& ssr_products,
     const std::vector<SatelliteId>& satellites,
