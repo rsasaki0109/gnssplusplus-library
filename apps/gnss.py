@@ -517,7 +517,6 @@ def usage() -> str:
             "  python3 apps/gnss.py ubx-info --input serial:///dev/ttyACM0?baud=115200 --limit 10",
             "  python3 apps/gnss.py ionex-info --input products/codg0020.24i --summary-json output/ionex.json",
             "  python3 apps/gnss.py dcb-info --input products/CAS0MGXRAP_20240020000_01D_01D_DCB.BSX --summary-json output/dcb.json",
-            "  python3 apps/gnss.py nmea-info --input logs/session.nmea --decode-gga --decode-rmc",
             "  python3 apps/gnss.py nmea-info --input serial:///dev/ttyUSB0?baud=9600 --limit 10",
             "  python3 apps/gnss.py novatel-info --input logs/novatel.log --decode-bestpos --decode-bestvel",
             "  python3 apps/gnss.py novatel-info --input serial:///dev/ttyUSB0?baud=115200 --limit 10",

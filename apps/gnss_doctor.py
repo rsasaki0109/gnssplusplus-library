@@ -158,6 +158,7 @@ def render_text(checks: list[dict[str, str]]) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
+        prog=os.environ.get("GNSS_CLI_NAME"),
         description="Check local libgnss++ setup and print first useful commands."
     )
     parser.add_argument("--root", type=Path, default=ROOT_DIR, help="Repository root to inspect.")
