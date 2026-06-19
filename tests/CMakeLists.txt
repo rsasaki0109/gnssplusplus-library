@@ -214,6 +214,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_web_ui.py
     )
     add_test(
+        NAME python_web_http_ux_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_web_http_ux.py
+    )
+    add_test(
         NAME python_docs_site_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_docs_site.py
     )
@@ -255,6 +259,7 @@ if(GTest_FOUND)
         python_ppp_residual_row_set_diff_tests
         python_spp_residual_dump_summary_tests
         python_spp_iteration_dump_summary_tests
+        python_web_http_ux_tests
         python_experiment_runner_tests
     )
     set(GNSSPP_EXTENDED_TESTS
