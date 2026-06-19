@@ -193,6 +193,13 @@ Optional filters are `GNSSPP_CLAS_ZD_COMPONENTS`, `GNSSPP_CLAS_ZD_STAGE`,
 `GNSSPP_CLAS_ZD_ROW_TYPE`, `GNSSPP_CLAS_ZD_THRESHOLD_M`, and
 `GNSSPP_CLAS_ZD_FAIL_ON_DIFF`.
 
+CLASLIB-side disposable dumps must first be normalized with
+`scripts/analysis/claslib_zd_component_export.py`.  That export step converts
+numeric CLASLIB `sys`/`prn`/RTKLIB `code` fields into the native row-key space
+(`G14`, `J01`, `E07`, `C2W`, `L2W`, and related exact RINEX identities) without
+linking CLASLIB into the production binaries.  Use the normalized CSV as
+`GNSSPP_CLAS_ZD_BASE_CSV` for optional oracle-backed CI.
+
 Native RINEX observations now expose exact `pseudorange_rinex_code`,
 `carrier_rinex_code`, RTKLIB code id, and `signal_family` columns in the CLAS
 code/phase diagnostic dumps.  This lets the GPS L2W investigation distinguish
