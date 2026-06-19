@@ -130,6 +130,27 @@ print(json.dumps(payload["identity_provenance"], indent=2, sort_keys=True))
 PY
 ```
 
+Disposable CLASLIB dumps usually use numeric `sys`/`prn`/RTKLIB `code` fields
+instead of native `G14`/`C2W`-style row keys. Normalize those dumps before using
+them as the oracle side of the component diff:
+
+```bash
+python3 scripts/analysis/claslib_zd_component_export.py \
+  /tmp/claslib_zd_dump.csv \
+  --output /tmp/claslib_zd_dump.normalized.csv \
+  --stage-label post
+
+python3 scripts/analysis/clas_zd_component_diff.py \
+  /tmp/claslib_zd_dump.normalized.csv \
+  /tmp/clas_a4b_native_code_dump.csv \
+  --base-label claslib \
+  --candidate-label native \
+  --stage post \
+  --row-type code \
+  --json-out /tmp/clas_a4b_native_vs_claslib_code.json \
+  --details-csv /tmp/clas_a4b_native_vs_claslib_code.csv
+```
+
 On the 300-epoch 2019 sample smoke, current `develop` produces 5,400 native code
 rows. The GPS L2W slice has 300 rows, all with exact bias identity and exact
 observation matches, and zero observation-family or code-bias fallback rows.
