@@ -670,21 +670,34 @@ def run_binary(target_name: str, args: list[str]) -> int:
         return 1
 
 
-def main() -> int:
-    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
-        print(usage())
-        return 0 if len(sys.argv) >= 2 else 1
-
-    command_name = sys.argv[1]
+def dispatch_command(command_name: str, args: list[str]) -> int:
     command = COMMANDS.get(command_name)
     if command is None:
         print(unknown_command_message(command_name), file=sys.stderr)
         return 1
 
-    args = sys.argv[2:]
     if command["kind"] == "python":
         return run_python(command["target"], command_name, args)
     return run_binary(command["target"], args)
+
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        print(usage())
+        return 1
+
+    if sys.argv[1] in ("-h", "--help"):
+        print(usage())
+        return 0
+
+    command_name = sys.argv[1]
+    if command_name == "help":
+        if len(sys.argv) < 3:
+            print(usage())
+            return 0
+        return dispatch_command(sys.argv[2], ["--help"])
+
+    return dispatch_command(command_name, sys.argv[2:])
 
 
 if __name__ == "__main__":
