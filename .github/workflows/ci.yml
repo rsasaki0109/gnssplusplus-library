@@ -212,6 +212,7 @@ jobs:
         docker build -t libgnsspp-ci .
         docker run --rm libgnsspp-ci --help >/dev/null
         docker run --rm libgnsspp-ci commands --json >/dev/null
+        docker run --rm libgnsspp-ci commands --query ppp --limit 3 --json >/dev/null
         docker run --rm libgnsspp-ci help web >/dev/null
         docker run --rm libgnsspp-ci web --help >/dev/null
         docker compose -f compose.yaml config >/dev/null

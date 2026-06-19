@@ -60,7 +60,7 @@ python3 apps/gnss.py replay \
 
 | Command | Purpose |
 |---|---|
-| `gnss commands` | List registered dispatcher commands as text or JSON |
+| `gnss commands` | List or search registered dispatcher commands as text or JSON |
 | `gnss help <command>` | Show focused help for one command |
 | `gnss doctor` | Check local setup, built tools, dataset/docs readiness, Docker, and ROS2 hints |
 | `gnss ros2-doctor` | Check ROS2 receiver readiness, serial permissions, launch/record commands, and topic debug commands |

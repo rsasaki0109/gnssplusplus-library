@@ -22,6 +22,7 @@ Confirm the dispatcher can see the command set:
 ```bash
 python3 apps/gnss.py commands
 python3 apps/gnss.py commands --json
+python3 apps/gnss.py commands --query ppc --limit 10
 ```
 
 ## Reproduce a bounded RTK run
