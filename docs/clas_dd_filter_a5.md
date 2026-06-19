@@ -191,7 +191,10 @@ dumps.  It writes `ci_optional_clas_zd_component_summary.json`, a log, and the
 the CI step records an explicit skip instead of silently omitting the artifact.
 Optional filters are `GNSSPP_CLAS_ZD_COMPONENTS`, `GNSSPP_CLAS_ZD_STAGE`,
 `GNSSPP_CLAS_ZD_ROW_TYPE`, `GNSSPP_CLAS_ZD_THRESHOLD_M`, and
-`GNSSPP_CLAS_ZD_FAIL_ON_DIFF`.
+`GNSSPP_CLAS_ZD_FAIL_ON_DIFF`.  GPS L2W A4b probes can also narrow the row set
+with `GNSSPP_CLAS_ZD_SAT`, `GNSSPP_CLAS_ZD_FREQ`, and
+`GNSSPP_CLAS_ZD_RINEX_CODE`, matching the analysis script's `--sat`, `--freq`,
+and `--rinex-code` filters.
 
 CLASLIB-side disposable dumps must first be normalized with
 `scripts/analysis/claslib_zd_component_export.py`.  That export step converts

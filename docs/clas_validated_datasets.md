@@ -147,6 +147,9 @@ python3 scripts/analysis/clas_zd_component_diff.py \
   --candidate-label native \
   --stage post \
   --row-type code \
+  --sat G14 \
+  --freq 1 \
+  --rinex-code C2W \
   --json-out /tmp/clas_a4b_native_vs_claslib_code.json \
   --details-csv /tmp/clas_a4b_native_vs_claslib_code.csv
 ```

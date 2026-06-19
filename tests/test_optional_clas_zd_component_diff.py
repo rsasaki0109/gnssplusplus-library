@@ -101,6 +101,9 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                 "GNSSPP_CLAS_ZD_COMPONENTS": "prc_m,code_bias_m",
                 "GNSSPP_CLAS_ZD_STAGE": "accepted",
                 "GNSSPP_CLAS_ZD_ROW_TYPE": "code",
+                "GNSSPP_CLAS_ZD_SAT": "G01",
+                "GNSSPP_CLAS_ZD_FREQ": "1",
+                "GNSSPP_CLAS_ZD_RINEX_CODE": "C2W",
                 "GNSSPP_CLAS_ZD_THRESHOLD_M": "0.25",
                 "GNSSPP_CLAS_ZD_FAIL_ON_DIFF": "1",
             }
@@ -120,6 +123,12 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertIn("accepted", command)
             self.assertIn("--row-type", command)
             self.assertIn("code", command)
+            self.assertIn("--sat", command)
+            self.assertIn("G01", command)
+            self.assertIn("--freq", command)
+            self.assertIn("1", command)
+            self.assertIn("--rinex-code", command)
+            self.assertIn("C2W", command)
             self.assertIn("--component-threshold-m", command)
             self.assertIn("0.25", command)
             self.assertIn("--fail-on-diff", command)
@@ -141,6 +150,9 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                 "GNSSPP_CLAS_ZD_COMPONENTS": "prc_m",
                 "GNSSPP_CLAS_ZD_STAGE": "accepted",
                 "GNSSPP_CLAS_ZD_ROW_TYPE": "code",
+                "GNSSPP_CLAS_ZD_SAT": "G01",
+                "GNSSPP_CLAS_ZD_FREQ": "1",
+                "GNSSPP_CLAS_ZD_RINEX_CODE": "C2W",
             }
             step = runner.build_step_plan(ROOT_DIR, output_dir, env)[0]
 
@@ -152,6 +164,9 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertEqual(metrics["schema"], "clas_zd_component_diff.v1")
             self.assertEqual(metrics["common_rows"], 1)
             self.assertEqual(metrics["components_compared"], 1)
+            self.assertEqual(metrics["sat_filter"], ["G01"])
+            self.assertEqual(metrics["freq_filter"], [1])
+            self.assertEqual(metrics["rinex_code_filter"], ["C2W"])
             self.assertAlmostEqual(metrics["max_abs_delta"], 0.05)
 
     def test_run_step_collects_identity_provenance_metrics(self) -> None:
