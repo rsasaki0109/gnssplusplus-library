@@ -8,6 +8,7 @@
 #include <libgnss++/algorithms/ppp_atmosphere.hpp>
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace libgnss {
@@ -85,6 +86,30 @@ OsrFrequencyObservationLookup findOsrFrequencyObservationWithProvenance(
     const ObservationData& obs,
     const OSRCorrection& osr,
     int freq_index);
+
+struct ClasOsrBiasMaterialization {
+    std::uint8_t code_signal_id = 0;
+    std::uint8_t phase_signal_id = 0;
+    double code_bias_m = 0.0;
+    double phase_bias_m = 0.0;
+    std::uint8_t code_source_signal_id = 0;
+    std::uint8_t phase_source_signal_id = 0;
+    bool code_present = false;
+    bool phase_present = false;
+    bool code_fallback = false;
+    bool phase_fallback = false;
+    bool exact_identity = false;
+};
+
+ClasOsrBiasMaterialization materializeClasOsrBiases(
+    GNSSSystem system,
+    SignalType signal,
+    std::string_view pseudorange_observation_type,
+    std::string_view carrier_phase_observation_type,
+    const std::map<std::uint8_t, double>& code_biases_m,
+    const std::map<std::uint8_t, double>& phase_biases_m,
+    bool exact_bias_identity,
+    bool enable_l2_class_fallback);
 
 CLASEpochContext prepareClasEpochContext(
     const ObservationData& obs,

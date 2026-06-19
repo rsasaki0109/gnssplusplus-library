@@ -134,6 +134,99 @@ TEST(PPPOSRTest, ExactObservationIdentitySelectsGpsL2wBiasId) {
             GNSSSystem::GPS, SignalType::GPS_L2C, "C2X", "L2X"));
 }
 
+TEST(PPPOSRTest, ClasOsrBiasMaterializationUsesExactGpsL2wIdentity) {
+    const std::map<std::uint8_t, double> code_biases = {
+        {8U, 0.08},
+        {9U, 0.09},
+    };
+    const std::map<std::uint8_t, double> phase_biases = {
+        {8U, 0.18},
+        {9U, 0.19},
+    };
+
+    const auto bias = materializeClasOsrBiases(
+        GNSSSystem::GPS,
+        SignalType::GPS_L2C,
+        "C2W",
+        "L2W",
+        code_biases,
+        phase_biases,
+        true,
+        false);
+
+    EXPECT_TRUE(bias.exact_identity);
+    EXPECT_EQ(static_cast<int>(bias.code_signal_id), 9);
+    EXPECT_EQ(static_cast<int>(bias.phase_signal_id), 9);
+    EXPECT_EQ(static_cast<int>(bias.code_source_signal_id), 9);
+    EXPECT_EQ(static_cast<int>(bias.phase_source_signal_id), 9);
+    EXPECT_TRUE(bias.code_present);
+    EXPECT_TRUE(bias.phase_present);
+    EXPECT_FALSE(bias.code_fallback);
+    EXPECT_FALSE(bias.phase_fallback);
+    EXPECT_DOUBLE_EQ(bias.code_bias_m, 0.09);
+    EXPECT_DOUBLE_EQ(bias.phase_bias_m, 0.19);
+}
+
+TEST(PPPOSRTest, ClasOsrBiasMaterializationTracksLegacyGpsL2Fallback) {
+    const std::map<std::uint8_t, double> code_biases = {
+        {9U, 0.09},
+    };
+    const std::map<std::uint8_t, double> phase_biases = {
+        {9U, 0.19},
+    };
+
+    const auto bias = materializeClasOsrBiases(
+        GNSSSystem::GPS,
+        SignalType::GPS_L2C,
+        "C2W",
+        "L2W",
+        code_biases,
+        phase_biases,
+        false,
+        true);
+
+    EXPECT_FALSE(bias.exact_identity);
+    EXPECT_EQ(static_cast<int>(bias.code_signal_id), 8);
+    EXPECT_EQ(static_cast<int>(bias.phase_signal_id), 8);
+    EXPECT_EQ(static_cast<int>(bias.code_source_signal_id), 9);
+    EXPECT_EQ(static_cast<int>(bias.phase_source_signal_id), 0);
+    EXPECT_TRUE(bias.code_present);
+    EXPECT_FALSE(bias.phase_present);
+    EXPECT_TRUE(bias.code_fallback);
+    EXPECT_FALSE(bias.phase_fallback);
+    EXPECT_DOUBLE_EQ(bias.code_bias_m, 0.09);
+    EXPECT_DOUBLE_EQ(bias.phase_bias_m, 0.0);
+}
+
+TEST(PPPOSRTest, ClasOsrBiasMaterializationDoesNotFallbackInExactMode) {
+    const std::map<std::uint8_t, double> code_biases = {
+        {8U, 0.08},
+    };
+    const std::map<std::uint8_t, double> phase_biases = {
+        {8U, 0.18},
+    };
+
+    const auto bias = materializeClasOsrBiases(
+        GNSSSystem::GPS,
+        SignalType::GPS_L2C,
+        "C2W",
+        "L2W",
+        code_biases,
+        phase_biases,
+        true,
+        true);
+
+    EXPECT_TRUE(bias.exact_identity);
+    EXPECT_EQ(static_cast<int>(bias.code_signal_id), 9);
+    EXPECT_EQ(static_cast<int>(bias.phase_signal_id), 9);
+    EXPECT_FALSE(bias.code_present);
+    EXPECT_FALSE(bias.phase_present);
+    EXPECT_FALSE(bias.code_fallback);
+    EXPECT_FALSE(bias.phase_fallback);
+    EXPECT_DOUBLE_EQ(bias.code_bias_m, 0.0);
+    EXPECT_DOUBLE_EQ(bias.phase_bias_m, 0.0);
+}
+
 TEST(PPPOSRTest, ExactOsrFrequencyLookupUsesStoredRinexIdentity) {
     const SatelliteId sat(GNSSSystem::GPS, 14);
     ObservationData obs(GNSSTime(2068, 230425.0));
