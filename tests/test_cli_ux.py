@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -233,6 +234,27 @@ class CliUxTest(unittest.TestCase):
                 failures.append(f"{command}: python target escapes repo root: {target}")
 
         self.assertEqual(failures, [])
+
+    def test_markdown_gnss_examples_use_registered_dispatcher_commands(self) -> None:
+        markdown_files = [ROOT_DIR / "README.md", *sorted((ROOT_DIR / "docs").rglob("*.md"))]
+        command_pattern = re.compile(r"python3\s+apps/gnss\.py(?:\s+([^\s\\`),]+))?")
+        known_commands = self.dispatcher_commands()
+        seen_examples = 0
+        stale_examples: list[str] = []
+
+        for path in markdown_files:
+            for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                for match in command_pattern.finditer(line):
+                    command = match.group(1)
+                    if command is None or command.startswith("-"):
+                        continue
+                    seen_examples += 1
+                    if command not in known_commands:
+                        relative_path = path.relative_to(ROOT_DIR)
+                        stale_examples.append(f"{relative_path}:{line_number}: {command}")
+
+        self.assertGreaterEqual(seen_examples, 20)
+        self.assertEqual(stale_examples, [])
 
 
 if __name__ == "__main__":
