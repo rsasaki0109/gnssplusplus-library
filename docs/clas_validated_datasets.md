@@ -105,6 +105,8 @@ python3 apps/gnss.py clas-ppp \
   --nav "$DATA/sept_2019239.nav" \
   --qzss-l6 "$DATA/2019239Q.l6" \
   --qzss-gps-week 2068 \
+  --compact-code-bias-composition-policy base-only-if-present \
+  --compact-code-bias-bank-policy latest-preceding-bank \
   --out /tmp/gnsspp_clas_a4b_native.pos \
   --summary-json /tmp/gnsspp_clas_a4b_native_summary.json \
   --max-epochs 300
@@ -158,10 +160,21 @@ python3 scripts/analysis/clas_zd_component_diff.py \
 On the 300-epoch 2019 sample smoke, current `develop` produces 5,400 native code
 rows. The GPS L2W slice has 300 rows, all with exact bias identity and exact
 observation matches, and zero observation-family or code-bias fallback rows.
+Use `base-only-if-present` with the latest preceding base bank for this A4b
+probe: the subtype-6 network code-bias rows are replacement rows for the
+subtype-4 base values, not additive deltas. On the same 300-epoch window, the
+direct network policy produced periodic G14/C2W `code_bias_m` outliers such as
+`-0.70 m` where CLASLIB reports `+0.76 m`. The A4b policy above restores those
+rows to the base value and reduces the G14/C2W `code_bias_m` diff from
+`mean_abs=0.1795 m, rms=0.4000 m, max_abs=1.4600 m` to
+`mean_abs=0.1319 m, rms=0.3029 m, max_abs=0.7800 m`. The remaining top-row
+deltas are then dominated by residual/PRC, receiver antenna, and atmosphere
+terms rather than the 30-second code-bias sign flip.
+
 The diff JSON also includes `top_row_component_breakdowns`, which groups all
 component deltas for the same ZD key. Use that field to decide whether the next
-GPS L2W A4b slice is dominated by `code_bias_m`, `receiver_antenna_m`, `prc_m`,
-or another component before changing the gated correction model.
+GPS L2W A4b slice is dominated by `receiver_antenna_m`, `prc_m`, atmosphere, or
+another component before changing the gated correction model.
 
 Build with CLASLIB linked only when you need oracle-backed unit tests:
 
