@@ -150,6 +150,7 @@ python3 scripts/analysis/clas_zd_component_diff.py \
   --sat G14 \
   --freq 1 \
   --rinex-code C2W \
+  --duplicate-policy mean \
   --json-out /tmp/clas_a4b_native_vs_claslib_code.json \
   --details-csv /tmp/clas_a4b_native_vs_claslib_code.csv
 ```

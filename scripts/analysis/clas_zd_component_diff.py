@@ -7,6 +7,7 @@ import argparse
 import csv
 import json
 import math
+import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -55,6 +56,7 @@ COMPONENT_ALIASES: dict[str, tuple[str, ...]] = {
 Row = dict[str, str]
 ComponentMap = dict[str, float]
 Key = tuple[int, int, str, str, int, str]
+DuplicatePolicy = str
 GPS_L2W_RINEX_CODES = {"C2W", "L2W"}
 IDENTITY_PROVENANCE_COMPONENTS = (
     "bias_exact_identity",
@@ -253,13 +255,63 @@ def normalize_freq_filter(values: Optional[Sequence[str]]) -> Optional[set[int]]
     return {to_int(value) for value in text_values}
 
 
-def rows_by_key(rows: Sequence[ComponentRow]) -> tuple[dict[Key, ComponentRow], Counter[Key]]:
+def merge_duplicate_rows(rows: Sequence[ComponentRow]) -> ComponentRow:
+    if not rows:
+        raise ValueError("cannot merge an empty duplicate group")
+    template = rows[0]
+    component_values: DefaultDict[str, list[float]] = defaultdict(list)
+    for row in rows:
+        for component, value in row.components.items():
+            component_values[component].append(value)
+    return ComponentRow(
+        key=template.key,
+        stage=template.stage,
+        row_type=template.row_type,
+        week=template.week,
+        tow=template.tow,
+        sat=template.sat,
+        freq=template.freq,
+        signal=template.signal,
+        source_row=template.source_row,
+        components={
+            component: sum(values) / len(values)
+            for component, values in component_values.items()
+        },
+    )
+
+
+def rows_by_key(
+    rows: Sequence[ComponentRow],
+    *,
+    duplicate_policy: DuplicatePolicy = "last",
+) -> tuple[dict[Key, ComponentRow], Counter[Key]]:
+    if duplicate_policy not in {"first", "last", "mean", "fail"}:
+        raise ValueError(f"unsupported duplicate policy: {duplicate_policy}")
     grouped: dict[Key, ComponentRow] = {}
     duplicate_counts: Counter[Key] = Counter()
+    if duplicate_policy == "mean":
+        duplicates: DefaultDict[Key, list[ComponentRow]] = defaultdict(list)
+        for row in rows:
+            duplicates[row.key].append(row)
+        for key, group in duplicates.items():
+            if len(group) > 1:
+                duplicate_counts[key] = len(group) - 1
+            grouped[key] = merge_duplicate_rows(group)
+        return grouped, duplicate_counts
+
     for row in rows:
         if row.key in grouped:
             duplicate_counts[row.key] += 1
+            if duplicate_policy == "first":
+                continue
         grouped[row.key] = row
+    if duplicate_policy == "fail" and duplicate_counts:
+        first_key, count = duplicate_counts.most_common(1)[0]
+        raise ValueError(
+            "duplicate row keys are present "
+            f"(first duplicate {key_to_dict(first_key)}, extra_rows={count}); "
+            "choose --duplicate-policy first, last, or mean to continue"
+        )
     return grouped, duplicate_counts
 
 
@@ -336,9 +388,16 @@ def build_report(
     threshold_m: Optional[float],
     top_deltas: int,
     top_unmatched: int,
+    duplicate_policy: DuplicatePolicy = "last",
 ) -> dict[str, Any]:
-    base_by_key, base_duplicates = rows_by_key(base_rows)
-    candidate_by_key, candidate_duplicates = rows_by_key(candidate_rows)
+    base_by_key, base_duplicates = rows_by_key(
+        base_rows,
+        duplicate_policy=duplicate_policy,
+    )
+    candidate_by_key, candidate_duplicates = rows_by_key(
+        candidate_rows,
+        duplicate_policy=duplicate_policy,
+    )
     base_keys = set(base_by_key)
     candidate_keys = set(candidate_by_key)
     common_keys = sorted(base_keys & candidate_keys)
@@ -409,6 +468,7 @@ def build_report(
         "candidate_only_rows": len(candidate_only_keys),
         "base_duplicate_keys": sum(base_duplicates.values()),
         "candidate_duplicate_keys": sum(candidate_duplicates.values()),
+        "duplicate_policy": duplicate_policy,
         "components_compared": sum(item["rows"] for item in per_component),
         "component_threshold_m": threshold_m,
         "threshold_exceedances": threshold_exceedances,
@@ -524,6 +584,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="compare only one row-specific RINEX observation code, such as C2W or L2W",
     )
     parser.add_argument(
+        "--duplicate-policy",
+        choices=["first", "last", "mean", "fail"],
+        default="last",
+        help=(
+            "how to handle multiple rows with the same comparison key. "
+            "Default last preserves the historical behavior."
+        ),
+    )
+    parser.add_argument(
         "--component",
         dest="components",
         action="append",
@@ -566,15 +635,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         freq_filter=freq_filter,
         rinex_code_filter=rinex_code_filter,
     )
-    report = build_report(
-        base_rows,
-        candidate_rows,
-        base_label=args.base_label,
-        candidate_label=args.candidate_label,
-        threshold_m=args.component_threshold_m,
-        top_deltas=args.top_deltas,
-        top_unmatched=args.top_unmatched,
-    )
+    try:
+        report = build_report(
+            base_rows,
+            candidate_rows,
+            base_label=args.base_label,
+            candidate_label=args.candidate_label,
+            threshold_m=args.component_threshold_m,
+            top_deltas=args.top_deltas,
+            top_unmatched=args.top_unmatched,
+            duplicate_policy=args.duplicate_policy,
+        )
+    except ValueError as exc:
+        print(f"clas_zd_component_diff: {exc}", file=sys.stderr)
+        return 2
     report["base_csv"] = str(args.base_csv)
     report["candidate_csv"] = str(args.candidate_csv)
     report["stage_filter"] = args.stage
