@@ -109,6 +109,20 @@ TEST(PPPClasOsrTest, ReceiverAntennaCorrectionUsesRtkLibEnuConvention) {
         1e-12);
 }
 
+TEST(PPPClasOsrTest, ReceiverAntennaMaterializationUpdatesAggregateCorrections) {
+    OSRCorrection osr;
+    osr.num_frequencies = 2;
+    osr.receiver_antenna_m[1] = 0.20;
+    osr.PRC[1] = 10.0;
+    osr.CPC[1] = 20.0;
+
+    setClasOsrReceiverAntennaCorrection(osr, 1, 0.45);
+
+    EXPECT_DOUBLE_EQ(osr.receiver_antenna_m[1], 0.45);
+    EXPECT_DOUBLE_EQ(osr.PRC[1], 10.25);
+    EXPECT_DOUBLE_EQ(osr.CPC[1], 20.25);
+}
+
 TEST(PPPClasDdTest, RowBuilderSelectsHighestElevationReferenceAndFormsResidual) {
     ObservationData obs(GNSSTime(2068, 230572.0));
     const Vector3d receiver(constants::WGS84_A, 0.0, 0.0);

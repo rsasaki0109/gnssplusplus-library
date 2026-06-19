@@ -749,11 +749,13 @@ void PPPProcessor::materializeClasReceiverAntennaCorrections(
         }
         const int frequency_count = std::min(osr.num_frequencies, OSR_MAX_FREQ);
         for (int f = 0; f < frequency_count; ++f) {
-            osr.receiver_antenna_m[f] =
+            setClasOsrReceiverAntennaCorrection(
+                osr,
+                f,
                 clasReceiverAntennaRangeCorrectionMeters(
                     osr.signals[f],
                     osr.azimuth,
-                    osr.elevation);
+                    osr.elevation));
         }
     }
 }
