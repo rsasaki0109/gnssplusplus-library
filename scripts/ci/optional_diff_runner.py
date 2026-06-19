@@ -260,6 +260,16 @@ def load_diff_metrics(config: DiffRunnerConfig, report_json: Path) -> dict[str, 
             if isinstance(value, (int, float)):
                 max_abs_delta = max(max_abs_delta, float(value))
         metrics["max_abs_delta"] = max_abs_delta
+    top_row_breakdowns = payload.get("top_row_component_breakdowns")
+    if isinstance(top_row_breakdowns, list) and top_row_breakdowns:
+        first_row = top_row_breakdowns[0]
+        if isinstance(first_row, dict):
+            sum_abs_delta = first_row.get("sum_abs_delta_m")
+            max_abs_delta = first_row.get("max_abs_delta_m")
+            if isinstance(sum_abs_delta, (int, float)):
+                metrics["top_row_sum_abs_delta"] = float(sum_abs_delta)
+            if isinstance(max_abs_delta, (int, float)):
+                metrics["top_row_max_abs_delta"] = float(max_abs_delta)
     identity_provenance = payload.get("identity_provenance")
     if isinstance(identity_provenance, dict):
         for label, summary in identity_provenance.items():
@@ -375,6 +385,9 @@ def render_result_detail(result: dict[str, object]) -> str:
         max_abs_delta = metrics.get("max_abs_delta")
         if max_abs_delta is not None:
             detail_parts.append(f"max |delta| {format_metric(max_abs_delta)}")
+        top_row_sum = metrics.get("top_row_sum_abs_delta")
+        if top_row_sum is not None:
+            detail_parts.append(f"top row sum |delta| {format_metric(top_row_sum)}")
         threshold_exceedances = metrics.get("threshold_exceedances")
         if threshold_exceedances is not None:
             detail_parts.append(f"threshold exceedances `{threshold_exceedances}`")

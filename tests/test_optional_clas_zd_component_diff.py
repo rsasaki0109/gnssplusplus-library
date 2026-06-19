@@ -173,6 +173,8 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertEqual(metrics["rinex_code_filter"], ["C2W"])
             self.assertEqual(metrics["duplicate_policy"], "mean")
             self.assertAlmostEqual(metrics["max_abs_delta"], 0.05)
+            self.assertAlmostEqual(metrics["top_row_sum_abs_delta"], 0.05)
+            self.assertAlmostEqual(metrics["top_row_max_abs_delta"], 0.05)
 
     def test_run_step_collects_identity_provenance_metrics(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_identity_") as temp_dir:
@@ -222,6 +224,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                         "candidate_only_rows": 2,
                         "components_compared": 24,
                         "max_abs_delta": 0.125,
+                        "top_row_sum_abs_delta": 0.375,
                         "threshold_exceedances": 3,
                         "identity_native_gps_l2w_rows": 2,
                         "identity_native_gps_l2w_bias_exact_identity_rows": 1,
@@ -251,6 +254,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
         self.assertIn("unmatched `1/2`", markdown)
         self.assertIn("components `24`", markdown)
         self.assertIn("max |delta| 0.125", markdown)
+        self.assertIn("top row sum |delta| 0.375", markdown)
         self.assertIn("threshold exceedances `3`", markdown)
         self.assertIn("native L2W `2`", markdown)
         self.assertIn("native L2W exact bias/match `1/1`", markdown)

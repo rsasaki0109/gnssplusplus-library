@@ -454,6 +454,16 @@ class ClasZdComponentDiffTest(unittest.TestCase):
         self.assertEqual(report["top_component_deltas"][0]["component"], "prc_m")
         self.assertAlmostEqual(report["top_component_deltas"][0]["delta_m"], 0.25)
         self.assertEqual(report["top_component_deltas"][0]["candidate_signal"], "C2W")
+        row_breakdown = report["top_row_component_breakdowns"][0]
+        self.assertEqual(row_breakdown["sat"], "G14")
+        self.assertEqual(row_breakdown["rinex_code"], "C2W")
+        self.assertEqual(row_breakdown["component_count"], 3)
+        self.assertAlmostEqual(row_breakdown["sum_abs_delta_m"], 0.27)
+        self.assertEqual(
+            [item["component"] for item in row_breakdown["components"]],
+            ["prc_m", "receiver_antenna_m", "code_bias_m"],
+        )
+        self.assertAlmostEqual(row_breakdown["components"][0]["delta_m"], 0.25)
 
     def test_report_summarizes_gps_l2w_identity_provenance(self) -> None:
         base = component_diff.normalize_rows(
@@ -637,6 +647,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 2, msg=result.stderr)
             self.assertIn("clas_zd_component_diff:", result.stdout)
+            self.assertIn("max_row_delta:", result.stdout)
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(report["schema"], "clas_zd_component_diff.v1")
             self.assertEqual(report["threshold_exceedances"], 1)
@@ -645,6 +656,11 @@ class ClasZdComponentDiffTest(unittest.TestCase):
             self.assertEqual(report["freq_filter"], [1])
             self.assertEqual(report["rinex_code_filter"], ["C2W"])
             self.assertEqual(report["duplicate_policy"], "mean")
+            self.assertEqual(report["top_row_component_breakdowns"][0]["sat"], "G14")
+            self.assertEqual(
+                report["top_row_component_breakdowns"][0]["components"][0]["component"],
+                "prc_m",
+            )
             with details_path.open(newline="", encoding="utf-8") as details_file:
                 rows = list(csv.DictReader(details_file))
             self.assertEqual(rows[0]["component"], "prc_m")
