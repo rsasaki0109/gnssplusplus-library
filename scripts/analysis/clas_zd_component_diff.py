@@ -55,6 +55,17 @@ COMPONENT_ALIASES: dict[str, tuple[str, ...]] = {
 Row = dict[str, str]
 ComponentMap = dict[str, float]
 Key = tuple[int, int, str, str, int, str]
+GPS_L2W_RINEX_CODES = {"C2W", "L2W"}
+IDENTITY_PROVENANCE_COMPONENTS = (
+    "bias_exact_identity",
+    "observation_exact_identity_requested",
+    "observation_exact_match",
+    "observation_family_fallback",
+    "code_bias_present",
+    "phase_bias_present",
+    "code_bias_fallback",
+    "phase_bias_fallback",
+)
 
 
 @dataclass(frozen=True)
@@ -253,6 +264,31 @@ def component_stats(values: Sequence[float]) -> dict[str, Any]:
     }
 
 
+def is_component_true(row: ComponentRow, component: str) -> bool:
+    value = row.components.get(component)
+    return value is not None and value > 0.5
+
+
+def is_gps_l2w_row(row: ComponentRow) -> bool:
+    return row.sat.startswith("G") and row.signal in GPS_L2W_RINEX_CODES
+
+
+def identity_provenance_summary(rows: Sequence[ComponentRow]) -> dict[str, Any]:
+    gps_l2w_rows = [row for row in rows if is_gps_l2w_row(row)]
+    summary: dict[str, Any] = {
+        "rows": len(rows),
+        "gps_l2w_rows": len(gps_l2w_rows),
+    }
+    for component in IDENTITY_PROVENANCE_COMPONENTS:
+        summary[f"{component}_rows"] = sum(
+            1 for row in rows if is_component_true(row, component)
+        )
+        summary[f"gps_l2w_{component}_rows"] = sum(
+            1 for row in gps_l2w_rows if is_component_true(row, component)
+        )
+    return summary
+
+
 def row_summary(row: ComponentRow) -> dict[str, Any]:
     return {
         **key_to_dict(row.key),
@@ -352,6 +388,10 @@ def build_report(
             {"component": component, "rows": rows}
             for component, rows in missing_components.most_common()
         ],
+        "identity_provenance": {
+            base_label: identity_provenance_summary(base_rows),
+            candidate_label: identity_provenance_summary(candidate_rows),
+        },
         "per_component": per_component,
         "top_component_deltas": details[:top_deltas],
         "top_base_only": [row_summary(base_by_key[key]) for key in base_only_keys[:top_unmatched]],
@@ -409,6 +449,16 @@ def print_summary(report: dict[str, Any]) -> None:
             f"mean_abs={item['mean_abs_delta_m']:.6g} "
             f"rms={item['rms_delta_m']:.6g} "
             f"max_abs={item['max_abs_delta_m']:.6g}"
+        )
+    print("  identity_provenance:")
+    for label, summary in report["identity_provenance"].items():
+        print(
+            f"    {label}: gps_l2w_rows={summary['gps_l2w_rows']} "
+            f"gps_l2w_bias_exact_identity={summary['gps_l2w_bias_exact_identity_rows']} "
+            f"gps_l2w_observation_exact_match={summary['gps_l2w_observation_exact_match_rows']} "
+            f"gps_l2w_observation_family_fallback="
+            f"{summary['gps_l2w_observation_family_fallback_rows']} "
+            f"gps_l2w_code_bias_fallback={summary['gps_l2w_code_bias_fallback_rows']}"
         )
     if report["top_component_deltas"]:
         top = report["top_component_deltas"][0]

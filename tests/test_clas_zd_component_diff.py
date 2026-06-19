@@ -325,6 +325,114 @@ class ClasZdComponentDiffTest(unittest.TestCase):
         self.assertAlmostEqual(report["top_component_deltas"][0]["delta_m"], 0.25)
         self.assertEqual(report["top_component_deltas"][0]["candidate_signal"], "C2W")
 
+    def test_report_summarizes_gps_l2w_identity_provenance(self) -> None:
+        base = component_diff.normalize_rows(
+            [
+                code_row(
+                    sat="G14",
+                    freq="1",
+                    prc="0.50",
+                    code_bias="0.10",
+                    receiver_ant="-0.02",
+                    pseudorange_rinex_code="C2W",
+                )
+            ],
+            component_names=[
+                "bias_exact_identity",
+                "observation_exact_identity_requested",
+                "observation_exact_match",
+                "observation_family_fallback",
+                "code_bias_present",
+                "phase_bias_present",
+                "code_bias_fallback",
+                "phase_bias_fallback",
+            ],
+            stage_filter=None,
+            row_type_filter="code",
+        )
+        candidate = component_diff.normalize_rows(
+            [
+                code_row(
+                    sat="G14",
+                    freq="1",
+                    prc="0.50",
+                    code_bias="0.10",
+                    receiver_ant="-0.02",
+                    pseudorange_rinex_code="C2W",
+                    bias_exact_identity="1",
+                    observation_exact_identity_requested="1",
+                    observation_exact_match="1",
+                    observation_family_fallback="0",
+                    code_bias_present="1",
+                    phase_bias_present="1",
+                    code_bias_fallback="0",
+                    phase_bias_fallback="0",
+                ),
+                code_row(
+                    sat="G25",
+                    freq="1",
+                    prc="0.75",
+                    code_bias="0.09",
+                    receiver_ant="-0.02",
+                    pseudorange_rinex_code="C2W",
+                    bias_exact_identity="0",
+                    observation_exact_identity_requested="1",
+                    observation_exact_match="0",
+                    observation_family_fallback="1",
+                    code_bias_present="1",
+                    phase_bias_present="0",
+                    code_bias_fallback="1",
+                    phase_bias_fallback="0",
+                ),
+                code_row(
+                    sat="J01",
+                    freq="1",
+                    prc="0.30",
+                    code_bias="0.00",
+                    receiver_ant="-0.02",
+                    pseudorange_rinex_code="C2X",
+                    bias_exact_identity="1",
+                    observation_exact_identity_requested="1",
+                    observation_exact_match="1",
+                    code_bias_present="1",
+                ),
+            ],
+            component_names=[
+                "bias_exact_identity",
+                "observation_exact_identity_requested",
+                "observation_exact_match",
+                "observation_family_fallback",
+                "code_bias_present",
+                "phase_bias_present",
+                "code_bias_fallback",
+                "phase_bias_fallback",
+            ],
+            stage_filter=None,
+            row_type_filter="code",
+        )
+
+        report = component_diff.build_report(
+            base,
+            candidate,
+            base_label="claslib",
+            candidate_label="native",
+            threshold_m=None,
+            top_deltas=10,
+            top_unmatched=10,
+        )
+
+        native = report["identity_provenance"]["native"]
+        self.assertEqual(native["rows"], 3)
+        self.assertEqual(native["gps_l2w_rows"], 2)
+        self.assertEqual(native["gps_l2w_bias_exact_identity_rows"], 1)
+        self.assertEqual(native["gps_l2w_observation_exact_identity_requested_rows"], 2)
+        self.assertEqual(native["gps_l2w_observation_exact_match_rows"], 1)
+        self.assertEqual(native["gps_l2w_observation_family_fallback_rows"], 1)
+        self.assertEqual(native["gps_l2w_code_bias_present_rows"], 2)
+        self.assertEqual(native["gps_l2w_phase_bias_present_rows"], 1)
+        self.assertEqual(native["gps_l2w_code_bias_fallback_rows"], 1)
+        self.assertEqual(native["bias_exact_identity_rows"], 2)
+
     def test_cli_writes_schema_json_and_details_csv(self) -> None:
         with tempfile.TemporaryDirectory(prefix="clas_zd_component_diff_test_") as temp_dir:
             root = Path(temp_dir)
