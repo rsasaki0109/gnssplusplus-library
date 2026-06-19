@@ -154,6 +154,29 @@ class CliUxTest(unittest.TestCase):
         self.assertGreaterEqual(len(payload["checks"]), 3)
         self.assertIn("next_commands", payload)
 
+    def test_doctor_strict_json_failure_stays_machine_readable(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_cli_ux_doctor_strict_") as temp_dir:
+            missing_root = Path(temp_dir) / "missing-root"
+            expected_root = str(missing_root.resolve())
+            result = self.run_gnss(
+                "doctor",
+                "--root",
+                str(missing_root),
+                "--json",
+                "--strict",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stderr, "")
+        payload = json.loads(result.stdout)
+        self.assertIs(payload["ok"], False)
+        self.assertEqual(payload["root"], expected_root)
+        missing_checks = [
+            item for item in payload["checks"] if item["status"] == "missing"
+        ]
+        self.assertGreaterEqual(len(missing_checks), 1)
+
     def test_doctor_text_output_stays_actionable_for_first_run(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_cli_ux_doctor_text_") as temp_dir:
             missing_root = Path(temp_dir) / "missing-root"
