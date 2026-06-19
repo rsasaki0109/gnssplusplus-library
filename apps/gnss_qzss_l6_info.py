@@ -2205,7 +2205,7 @@ def decode_cssr_code_phase_bias_message(
                         )
                     mapped_phase += 1
 
-    if network_bias_correction and code_bias_exists:
+    if network_bias_correction and (code_bias_exists or phase_bias_exists):
         materialize_missing_code_bias_rows(
             state,
             int(header["tow"]),
