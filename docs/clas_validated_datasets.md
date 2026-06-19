@@ -92,6 +92,12 @@ python3 apps/gnss.py clas-ppp \
   --max-epochs 300
 ```
 
+`gnss clas-ppp` also forwards `--antex <antennas.atx>` to the underlying
+`gnss ppp` run for receiver/satellite antenna parity probes. The public
+`0627239Q.obs` header does not declare a receiver antenna type, so passing the
+CLASLIB ANTEX file alone does not close the `receiver_antenna_m` delta; the
+remaining A4b work still needs explicit receiver antenna identity provenance.
+
 For the A4b GPS L2W identity probe, enable the diagnostic gates and write a
 native zero-difference code component dump:
 

@@ -416,6 +416,7 @@ class ClasCompactHelpersTest(unittest.TestCase):
                 "nav": Path("nav.rnx"),
                 "sp3": None,
                 "clk": None,
+                "antex": None,
                 "ssr_rtcm": None,
                 "compact_ssr": "corrections.compact.csv",
                 "qzss_l6": None,
@@ -445,6 +446,73 @@ class ClasCompactHelpersTest(unittest.TestCase):
 
             self.assertTrue(clas_payload["clas_osr_filter_enabled"])
             self.assertFalse(madoca_payload["clas_osr_filter_enabled"])
+            self.assertIsNone(clas_payload["antex"])
+            self.assertIsNone(madoca_payload["antex"])
+
+    def test_main_forwards_antex_to_ppp_and_records_summary(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_antex_forward_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path = temp_root / "rover.obs"
+            nav_path = temp_root / "nav.rnx"
+            compact_path = temp_root / "corrections.compact.csv"
+            antex_path = temp_root / "receiver.atx"
+            output_path = temp_root / "solution.pos"
+            summary_path = temp_root / "summary.json"
+            obs_path.write_text("synthetic obs placeholder\n", encoding="ascii")
+            nav_path.write_text("synthetic nav placeholder\n", encoding="ascii")
+            compact_path.write_text(
+                "\n".join(
+                    [
+                        "# week,tow,system,prn,dx,dy,dz,dclock_m",
+                        "2200,345600.0,G,3,0.0,0.0,0.0,0.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            antex_path.write_text("synthetic antex placeholder\n", encoding="ascii")
+            commands: list[list[str]] = []
+
+            def fake_run_command(command: list[str]) -> mock.Mock:
+                commands.append(command)
+                output_path.write_text(
+                    "% synthetic solution\n"
+                    "2200 345600.000 1.0 2.0 3.0 0.0 0.0 0.0 5 8\n",
+                    encoding="ascii",
+                )
+                return mock.Mock(stdout="PPP summary:\n  valid solutions: 1\n")
+
+            argv = [
+                "gnss_clas_ppp.py",
+                "--profile",
+                "clas",
+                "--obs",
+                str(obs_path),
+                "--nav",
+                str(nav_path),
+                "--compact-ssr",
+                str(compact_path),
+                "--antex",
+                str(antex_path),
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+            ]
+            with (
+                mock.patch.object(sys, "argv", argv),
+                mock.patch.object(clas_ppp, "resolve_gnss_command", return_value=["gnss"]),
+                mock.patch.object(clas_ppp, "run_command", side_effect=fake_run_command),
+            ):
+                self.assertEqual(clas_ppp.main(), 0)
+
+            self.assertEqual(len(commands), 1)
+            command = commands[0]
+            self.assertIn("--antex", command)
+            self.assertEqual(command[command.index("--antex") + 1], str(antex_path))
+            self.assertIn("--clas-osr", command)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["antex"], str(antex_path))
 
 
 class PPCRTKSignoffHelpersTest(unittest.TestCase):

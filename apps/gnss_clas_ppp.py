@@ -133,6 +133,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--summary-json", type=Path, default=None, help="Optional summary JSON path.")
     parser.add_argument("--sp3", type=Path, default=None, help="Optional precise SP3 file.")
     parser.add_argument("--clk", type=Path, default=None, help="Optional precise CLK file.")
+    parser.add_argument("--antex", type=Path, default=None, help="Optional ANTEX file forwarded to PPP.")
     parser.add_argument("--kml", type=Path, default=None, help="Optional KML output path.")
     parser.add_argument("--max-epochs", type=int, default=0, help="Stop after N epochs.")
     parser.add_argument(
@@ -588,6 +589,7 @@ def build_summary_payload(
         "nav": str(args.nav),
         "sp3": str(args.sp3) if args.sp3 is not None else None,
         "clk": str(args.clk) if args.clk is not None else None,
+        "antex": str(args.antex) if args.antex is not None else None,
         "ssr_rtcm": args.ssr_rtcm,
         "compact_ssr": args.compact_ssr,
         "qzss_l6": args.qzss_l6,
@@ -700,6 +702,7 @@ def main() -> int:
     ensure_exists(args.nav, "navigation file")
     ensure_exists(args.sp3, "SP3 file")
     ensure_exists(args.clk, "CLK file")
+    ensure_exists(args.antex, "ANTEX file")
     selected_sources = [bool(args.ssr_rtcm), bool(args.compact_ssr), bool(args.qzss_l6)]
     if sum(1 for selected in selected_sources if selected) != 1:
         raise SystemExit("Specify exactly one of --ssr-rtcm, --compact-ssr, or --qzss-l6")
@@ -775,6 +778,8 @@ def main() -> int:
             command.extend(["--sp3", str(args.sp3)])
         if args.clk is not None:
             command.extend(["--clk", str(args.clk)])
+        if args.antex is not None:
+            command.extend(["--antex", str(args.antex)])
         if args.kml is not None:
             command.extend(["--kml", str(args.kml)])
         if args.max_epochs > 0:
