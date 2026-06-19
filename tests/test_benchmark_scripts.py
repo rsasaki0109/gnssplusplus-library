@@ -417,6 +417,7 @@ class ClasCompactHelpersTest(unittest.TestCase):
                 "sp3": None,
                 "clk": None,
                 "antex": None,
+                "receiver_antenna_type": None,
                 "ssr_rtcm": None,
                 "compact_ssr": "corrections.compact.csv",
                 "qzss_l6": None,
@@ -448,6 +449,8 @@ class ClasCompactHelpersTest(unittest.TestCase):
             self.assertFalse(madoca_payload["clas_osr_filter_enabled"])
             self.assertIsNone(clas_payload["antex"])
             self.assertIsNone(madoca_payload["antex"])
+            self.assertIsNone(clas_payload["receiver_antenna_type"])
+            self.assertIsNone(madoca_payload["receiver_antenna_type"])
 
     def test_main_forwards_antex_to_ppp_and_records_summary(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_antex_forward_") as temp_dir:
@@ -494,6 +497,8 @@ class ClasCompactHelpersTest(unittest.TestCase):
                 str(compact_path),
                 "--antex",
                 str(antex_path),
+                "--receiver-antenna-type",
+                "TEST-ANT",
                 "--out",
                 str(output_path),
                 "--summary-json",
@@ -510,9 +515,12 @@ class ClasCompactHelpersTest(unittest.TestCase):
             command = commands[0]
             self.assertIn("--antex", command)
             self.assertEqual(command[command.index("--antex") + 1], str(antex_path))
+            self.assertIn("--receiver-antenna-type", command)
+            self.assertEqual(command[command.index("--receiver-antenna-type") + 1], "TEST-ANT")
             self.assertIn("--clas-osr", command)
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["antex"], str(antex_path))
+            self.assertEqual(payload["receiver_antenna_type"], "TEST-ANT")
 
 
 class PPCRTKSignoffHelpersTest(unittest.TestCase):

@@ -92,11 +92,16 @@ python3 apps/gnss.py clas-ppp \
   --max-epochs 300
 ```
 
-`gnss clas-ppp` also forwards `--antex <antennas.atx>` to the underlying
-`gnss ppp` run for receiver/satellite antenna parity probes. The public
-`0627239Q.obs` header does not declare a receiver antenna type, so passing the
-CLASLIB ANTEX file alone does not close the `receiver_antenna_m` delta; the
-remaining A4b work still needs explicit receiver antenna identity provenance.
+`gnss clas-ppp` also forwards `--antex <antennas.atx>` and
+`--receiver-antenna-type <type>` to the underlying `gnss ppp` run for
+receiver/satellite antenna parity probes. The public `0627239Q.obs` header does
+not declare a receiver antenna type, so A4b receiver-antenna probes should pass
+the native ANTEX antenna key explicitly, for example
+`--receiver-antenna-type "TRM59800.80     NONE"`. The CLASLIB ANTEX file uses
+CRLF line endings, so the native ANTEX loader trims trailing carriage returns
+before matching labels. This fixes ANTEX file/type provenance; wiring those
+receiver terms into the CLAS OSR `receiver_antenna_m` component remains a
+separate A4b materialization step.
 
 For the A4b GPS L2W identity probe, enable the diagnostic gates and write a
 native zero-difference code component dump:
@@ -111,6 +116,8 @@ python3 apps/gnss.py clas-ppp \
   --nav "$DATA/sept_2019239.nav" \
   --qzss-l6 "$DATA/2019239Q.l6" \
   --qzss-gps-week 2068 \
+  --antex "$DATA/igs14_L5copy.atx" \
+  --receiver-antenna-type "TRM59800.80     NONE" \
   --compact-code-bias-composition-policy base-only-if-present \
   --compact-code-bias-bank-policy latest-preceding-bank \
   --out /tmp/gnsspp_clas_a4b_native.pos \

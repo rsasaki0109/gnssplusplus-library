@@ -4480,6 +4480,85 @@ class CLIToolsTest(unittest.TestCase):
             self.assertGreater(solution_delta, 1e-4)
             self.assertLess(solution_delta, 1.0)
 
+    def test_ppp_cli_supports_receiver_antex_type_override(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_antex_override_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, true_position = build_synthetic_ppp_inputs(temp_root)
+            antex_path = temp_root / "receiver.atx"
+            antex_path.write_text(
+                build_synthetic_receiver_antex_text().replace("\n", "\r\n"),
+                encoding="ascii",
+            )
+            base_out_path = temp_root / "ppp_base.pos"
+            antex_out_path = temp_root / "ppp_antex_override.pos"
+            summary_path = temp_root / "ppp_antex_override_summary.json"
+
+            base_result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--no-estimate-troposphere",
+                "--out",
+                str(base_out_path),
+                "--max-epochs",
+                "8",
+            )
+            antex_result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--clk",
+                str(clk_path),
+                "--antex",
+                str(antex_path),
+                "--receiver-antenna-type",
+                "TEST-ANT",
+                "--no-estimate-troposphere",
+                "--out",
+                str(antex_out_path),
+                "--summary-json",
+                str(summary_path),
+                "--max-epochs",
+                "8",
+            )
+
+            self.assertEqual(base_result.returncode, 0, msg=base_result.stderr)
+            self.assertEqual(antex_result.returncode, 0, msg=antex_result.stderr)
+            self.assertIn("PPP float solutions: 8", antex_result.stdout)
+
+            base_records = self.read_pos_records(base_out_path)
+            antex_records = self.read_pos_records(antex_out_path)
+            self.assertEqual(len(base_records), 8)
+            self.assertEqual(len(antex_records), 8)
+            base_last = base_records[-1]
+            antex_last = antex_records[-1]
+            antex_error = math.sqrt(
+                (antex_last["x"] - true_position[0]) ** 2
+                + (antex_last["y"] - true_position[1]) ** 2
+                + (antex_last["z"] - true_position[2]) ** 2
+            )
+            solution_delta = math.sqrt(
+                (antex_last["x"] - base_last["x"]) ** 2
+                + (antex_last["y"] - base_last["y"]) ** 2
+                + (antex_last["z"] - base_last["z"]) ** 2
+            )
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+
+            self.assertLess(antex_error, 1.7)
+            self.assertGreater(solution_delta, 1e-4)
+            self.assertLess(solution_delta, 1.0)
+            self.assertEqual(payload["receiver_antenna_type"], "TEST-ANT")
+            self.assertEqual(payload["receiver_antenna_type_source"], "cli")
+            self.assertEqual(payload["antex"], str(antex_path))
+
     def test_ppp_cli_supports_ocean_loading_coefficients(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_blq_test_") as temp_dir:
             temp_root = Path(temp_dir)

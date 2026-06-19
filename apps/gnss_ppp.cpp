@@ -27,6 +27,7 @@ struct Options {
     std::string ionex_path;
     std::string dcb_path;
     std::string antex_path;
+    std::string receiver_antenna_type;
     std::string blq_path;
     std::string ocean_loading_station_name;
     std::string out_path;
@@ -91,6 +92,8 @@ void printUsage(const char* program_name) {
         << "  --ionex <maps.ionex>     Optional IONEX TEC map product\n"
         << "  --dcb <bias.bsx>         Optional DCB / Bias-SINEX product\n"
         << "  --antex <antennas.atx>   Optional ANTEX file for receiver antenna PCO\n"
+        << "  --receiver-antenna-type <type>\n"
+        << "                          Override the RINEX receiver antenna type used with --antex\n"
         << "  --blq <station.blq>      Optional BLQ ocean loading coefficient file\n"
         << "  --ocean-loading-station <name>\n"
         << "                          Station name to select from the BLQ file\n"
@@ -243,6 +246,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.dcb_path = argv[++i];
         } else if (arg == "--antex" && i + 1 < argc) {
             options.antex_path = argv[++i];
+        } else if (arg == "--receiver-antenna-type" && i + 1 < argc) {
+            options.receiver_antenna_type = argv[++i];
         } else if (arg == "--blq" && i + 1 < argc) {
             options.blq_path = argv[++i];
         } else if (arg == "--ocean-loading-station" && i + 1 < argc) {
@@ -901,7 +906,10 @@ int main(int argc, char* argv[]) {
             ppp_config.l6_gps_week = obs_header.first_obs.week;
         }
         ppp_config.approximate_position = obs_header.approximate_position;
-        ppp_config.receiver_antenna_type = obs_header.antenna_type;
+        ppp_config.receiver_antenna_type =
+            options.receiver_antenna_type.empty() ?
+                obs_header.antenna_type :
+                options.receiver_antenna_type;
         ppp_config.receiver_antenna_delta_enu = obs_header.antenna_delta;
         ppp_config.ocean_loading_station_name =
             options.ocean_loading_station_name.empty() ?
@@ -1039,6 +1047,17 @@ int main(int argc, char* argv[]) {
                     << "  \"dcb\": "
                     << (options.dcb_path.empty() ? "null" : ("\"" + jsonEscape(options.dcb_path) + "\""))
                     << ",\n"
+                    << "  \"antex\": "
+                    << (options.antex_path.empty() ? "null" : ("\"" + jsonEscape(options.antex_path) + "\""))
+                    << ",\n"
+                    << "  \"receiver_antenna_type\": "
+                    << (ppp_config.receiver_antenna_type.empty() ?
+                            "null" :
+                            ("\"" + jsonEscape(ppp_config.receiver_antenna_type) + "\""))
+                    << ",\n"
+                    << "  \"receiver_antenna_type_source\": \""
+                    << (options.receiver_antenna_type.empty() ? "rinex-header" : "cli")
+                    << "\",\n"
                     << "  \"out\": \"" << jsonEscape(options.out_path) << "\",\n"
                     << "  \"mode\": \"" << (options.kinematic_mode ? "kinematic" : "static") << "\",\n"
                     << "  \"low_dynamics\": " << (options.low_dynamics_mode ? "true" : "false") << ",\n"
