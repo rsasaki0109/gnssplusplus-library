@@ -753,7 +753,7 @@ void PPPProcessor::materializeClasReceiverAntennaCorrections(
                 osr,
                 f,
                 clasReceiverAntennaRangeCorrectionMeters(
-                    osr.signals[f],
+                    clasReceiverAntennaLookupSignal(osr, f),
                     osr.azimuth,
                     osr.elevation));
         }

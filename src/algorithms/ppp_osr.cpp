@@ -663,6 +663,25 @@ void setClasOsrReceiverAntennaCorrection(
     osr.CPC[freq_index] += delta_m;
 }
 
+SignalType clasReceiverAntennaLookupSignal(
+    const OSRCorrection& osr,
+    int freq_index) {
+    if (freq_index < 0 || freq_index >= OSR_MAX_FREQ ||
+        freq_index >= osr.num_frequencies) {
+        return SignalType::SIGNAL_TYPE_COUNT;
+    }
+    const SignalType signal = osr.signals[freq_index];
+    if (osr.bias_exact_identity[freq_index] &&
+        algorithms::ppp_bias_identity::isGpsL2wObservation(
+            osr.satellite.system,
+            signal,
+            osr.pseudorange_rinex_codes[freq_index],
+            osr.carrier_rinex_codes[freq_index])) {
+        return SignalType::GPS_L1CA;
+    }
+    return signal;
+}
+
 std::map<std::string, std::string> selectClasEpochAtmosTokens(
     const SSRProducts& ssr_products,
     const std::vector<SatelliteId>& satellites,
