@@ -174,6 +174,24 @@ class CliUxTest(unittest.TestCase):
                 for snippet in snippets:
                     self.assertIn(snippet, combined)
 
+    def test_unknown_command_suggests_registered_dispatcher_names(self) -> None:
+        cases = [
+            ("clas_ppp", "clas-ppp"),
+            ("ppc-rtk-signof", "ppc-rtk-signoff"),
+            ("qzss-l6-inf", "qzss-l6-info"),
+        ]
+
+        for typo, expected_command in cases:
+            with self.subTest(typo=typo):
+                result = self.run_gnss(typo)
+                self.assertEqual(result.returncode, 1)
+                self.assert_no_traceback(result)
+                self.assertEqual(result.stdout, "")
+                self.assertIn(f"Error: unknown command `{typo}`.", result.stderr)
+                self.assertIn("Did you mean", result.stderr)
+                self.assertIn(expected_command, result.stderr)
+                self.assertIn("Commands:", result.stderr)
+
     def test_doctor_json_stays_machine_readable_for_setup_tools(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_cli_ux_doctor_") as temp_dir:
             missing_root = Path(temp_dir) / "missing-root"
