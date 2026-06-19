@@ -592,6 +592,8 @@ def main() -> int:
     bundles.extend(build_ppc_spp_policy_suite_entries(root_dir, args.ppc_spp_policy_suite_glob))
 
     payload = {
+        "schema_version": 1,
+        "contract": "artifact_manifest.v1",
         "root": str(root_dir),
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "bundle_count": len(bundles),

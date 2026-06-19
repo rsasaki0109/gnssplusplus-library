@@ -219,6 +219,9 @@ jobs:
     - name: Generate dashboard artifacts
       run: bash scripts/ci/generate_dashboard_artifacts.sh
 
+    - name: Validate dashboard artifact contract
+      run: python3 scripts/ci/validate_artifact_manifest_contract.py output/artifact_manifest.json
+
     - name: Upload dashboard artifacts
       if: always()
       uses: actions/upload-artifact@v4
@@ -229,7 +232,7 @@ jobs:
           output/visibility_static_summary.json
           output/visibility_static.csv
           output/visibility_static.png
-        if-no-files-found: ignore
+        if-no-files-found: error
 
   linux-optional-signoffs:
     needs: [changes, linux-extended-tests]
