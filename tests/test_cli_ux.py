@@ -444,6 +444,40 @@ class CliUxTest(unittest.TestCase):
         self.assertGreaterEqual(seen_examples, 20)
         self.assertEqual(stale_examples, [])
 
+    def test_readme_clas_maturity_claim_is_explicit(self) -> None:
+        readme = (ROOT_DIR / "README.md").read_text(encoding="utf-8")
+
+        self.assertNotIn("| Area | Public comparison | Current result |", readme)
+        self.assertIn("| Area | Public comparison | Evidence / status |", readme)
+
+        clas_rows = [
+            line for line in readme.splitlines()
+            if line.startswith("| CLAS PPP |")
+        ]
+        self.assertEqual(len(clas_rows), 1)
+        clas_row = clas_rows[0]
+        for snippet in (
+            "Historical `--claslib-parity` result",
+            "Current native DD filter",
+            "default-off",
+            "A5 STOP",
+        ):
+            self.assertIn(snippet, clas_row)
+
+        section_heading = "### Historical CLAS PPP vs CLASLIB"
+        self.assertIn(section_heading, readme)
+        section_start = readme.index(section_heading)
+        section_end = readme.find("\n### ", section_start + len(section_heading))
+        clas_section = readme[section_start:] if section_end == -1 else readme[section_start:section_end]
+        normalized_section = re.sub(r"\s+", " ", clas_section)
+        for snippet in (
+            "not the current default CLAS capability",
+            "no longer exposes `--claslib-parity`",
+            "A4b component-diff evidence",
+            "DD filter default flip remains stopped at A5",
+        ):
+            self.assertIn(snippet, normalized_section)
+
     def test_app_generated_gnss_examples_use_registered_dispatcher_commands(self) -> None:
         app_files = sorted((ROOT_DIR / "apps").glob("*.py"))
         seen_examples, stale_examples = self.stale_gnss_example_commands_in_files(app_files)
