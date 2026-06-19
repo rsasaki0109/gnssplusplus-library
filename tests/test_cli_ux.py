@@ -256,6 +256,29 @@ class CliUxTest(unittest.TestCase):
         self.assertGreaterEqual(seen_examples, 20)
         self.assertEqual(stale_examples, [])
 
+    def test_app_generated_gnss_examples_use_registered_dispatcher_commands(self) -> None:
+        app_files = sorted((ROOT_DIR / "apps").glob("*.py"))
+        command_pattern = re.compile(
+            r"python3\s+apps/gnss\.py(?:\s+([^\s\\`),'\"),]+))?"
+        )
+        known_commands = self.dispatcher_commands()
+        seen_examples = 0
+        stale_examples: list[str] = []
+
+        for path in app_files:
+            for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                for match in command_pattern.finditer(line):
+                    command = match.group(1)
+                    if command is None or command.startswith("-"):
+                        continue
+                    seen_examples += 1
+                    if command not in known_commands:
+                        relative_path = path.relative_to(ROOT_DIR)
+                        stale_examples.append(f"{relative_path}:{line_number}: {command}")
+
+        self.assertGreaterEqual(seen_examples, 20)
+        self.assertEqual(stale_examples, [])
+
 
 if __name__ == "__main__":
     unittest.main()
