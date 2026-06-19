@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optional_diff_runner as runner  # noqa: E402
 
 
-SUMMARY_SCHEMA = "ci_optional_clas_zd_component_diff.v1"
+SUMMARY_SCHEMA = "ci_optional_clas_zd_component_diff.v2"
 
 CONFIG = runner.DiffRunnerConfig(
     summary_schema=SUMMARY_SCHEMA,
