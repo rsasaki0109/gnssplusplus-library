@@ -59,6 +59,7 @@ class RunConfig:
     output_dir: Path
     data_root: Path | None
     auto_fetch: bool
+    fail_on_blocked: bool
     claslib_repo: str
     claslib_ref: str
     max_epochs: int
@@ -109,6 +110,7 @@ def parse_config(args: argparse.Namespace, environ: Mapping[str, str]) -> RunCon
         output_dir=output_dir,
         data_root=resolve_optional_path(repo_root, environ.get("GNSSPP_CLAS_A4B_DATA_ROOT", "")),
         auto_fetch=truthy(env_or(environ, "GNSSPP_CLAS_A4B_AUTO_FETCH", "1")),
+        fail_on_blocked=truthy(env_or(environ, "GNSSPP_CLAS_A4B_FAIL_ON_BLOCKED", "1")),
         claslib_repo=env_or(environ, "GNSSPP_CLAS_A4B_CLASLIB_REPO", DEFAULT_CLASLIB_REPO),
         claslib_ref=env_or(environ, "GNSSPP_CLAS_A4B_CLASLIB_REF", DEFAULT_CLASLIB_REF),
         max_epochs=max_epochs,
@@ -384,6 +386,8 @@ def build_payload(
     if status == "blocked_infrastructure":
         next_actions.append("Provide CLAS public data with GNSSPP_CLAS_A4B_DATA_ROOT or allow sparse auto-fetch.")
         next_actions.append("Treat blocked_infrastructure as missing native A4b evidence, not as a passing sign-off.")
+        if config.fail_on_blocked:
+            next_actions.append("Set GNSSPP_CLAS_A4B_FAIL_ON_BLOCKED=0 only for diagnostic-only local runs.")
     elif status == "failed":
         next_actions.append("Inspect the native run log, self-diff JSON, and component dump before changing CLAS model behavior.")
     return {
@@ -401,6 +405,7 @@ def build_payload(
         },
         "configuration": {
             "max_epochs": config.max_epochs,
+            "fail_on_blocked": config.fail_on_blocked,
             "receiver_antenna_type": config.receiver_antenna_type,
             "env_overrides": {**ENV_OVERRIDES, "GNSS_PPP_CLAS_CODE_DUMP": str(paths.native_code_dump)},
             "selfdiff_filter": {"sat": "G14", "freq": 1, "rinex_code": "C2W", "row_type": "code"},
@@ -439,7 +444,7 @@ def main(argv: Sequence[str] | None = None, environ: Mapping[str, str] | None = 
         write_summary(paths, payload)
         print(f"CLAS A4b native self-diff blocked: {block_reason}")
         print(f"  summary: {paths.summary_json}")
-        return 0
+        return 1 if config.fail_on_blocked else 0
 
     native_command, native_env = build_native_command(config, paths, data_root)
     native_result = run_logged(native_command, cwd=config.repo_root, log_path=paths.log_path, env=native_env)

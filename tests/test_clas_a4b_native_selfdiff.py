@@ -38,6 +38,7 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             )
 
             self.assertTrue(config.auto_fetch)
+            self.assertTrue(config.fail_on_blocked)
             self.assertEqual(config.claslib_repo, runner.DEFAULT_CLASLIB_REPO)
             self.assertEqual(config.claslib_ref, runner.DEFAULT_CLASLIB_REF)
             self.assertEqual(config.max_epochs, runner.DEFAULT_MAX_EPOCHS)
@@ -66,6 +67,7 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
                 output_dir=output_dir,
                 data_root=data_root,
                 auto_fetch=False,
+                fail_on_blocked=True,
                 claslib_repo=runner.DEFAULT_CLASLIB_REPO,
                 claslib_ref=runner.DEFAULT_CLASLIB_REF,
                 max_epochs=30,
@@ -97,6 +99,7 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             output_dir=ROOT_DIR / "output",
             data_root=None,
             auto_fetch=True,
+            fail_on_blocked=True,
             claslib_repo=runner.DEFAULT_CLASLIB_REPO,
             claslib_ref=runner.DEFAULT_CLASLIB_REF,
             max_epochs=30,
@@ -136,6 +139,7 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             output_dir=ROOT_DIR / "output",
             data_root=None,
             auto_fetch=True,
+            fail_on_blocked=True,
             claslib_repo=runner.DEFAULT_CLASLIB_REPO,
             claslib_ref=runner.DEFAULT_CLASLIB_REF,
             max_epochs=30,
@@ -178,6 +182,7 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
                 output_dir=output_dir,
                 data_root=None,
                 auto_fetch=False,
+                fail_on_blocked=False,
                 claslib_repo=runner.DEFAULT_CLASLIB_REPO,
                 claslib_ref=runner.DEFAULT_CLASLIB_REF,
                 max_epochs=30,
@@ -200,6 +205,7 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
         self.assertEqual(written["contract"], runner.CONTRACT)
         self.assertEqual(written["status"], "blocked_infrastructure")
         self.assertIn("missing native A4b evidence", written["next_actions"][1])
+        self.assertFalse(written["configuration"]["fail_on_blocked"])
         self.assertEqual(written["configuration"]["selfdiff_filter"]["rinex_code"], "C2W")
 
 

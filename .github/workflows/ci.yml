@@ -342,6 +342,7 @@ jobs:
         GNSSPP_CLAS_A4B_CLASLIB_REPO: ${{ vars.GNSSPP_CLAS_A4B_CLASLIB_REPO }}
         GNSSPP_CLAS_A4B_CLASLIB_REF: ${{ vars.GNSSPP_CLAS_A4B_CLASLIB_REF }}
         GNSSPP_CLAS_A4B_MAX_EPOCHS: ${{ vars.GNSSPP_CLAS_A4B_MAX_EPOCHS }}
+        GNSSPP_CLAS_A4B_FAIL_ON_BLOCKED: ${{ vars.GNSSPP_CLAS_A4B_FAIL_ON_BLOCKED }}
       run: python3 scripts/ci/run_clas_a4b_native_selfdiff.py
 
     - name: Upload CLAS A4b native self-diff artifacts

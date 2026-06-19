@@ -223,7 +223,8 @@ the GPS L2W rows preserve exact observation/bias identity, fallback counts are
 zero, and the self-diff has no unmatched rows or component deltas. Set
 `GNSSPP_CLAS_A4B_DATA_ROOT` to use a pre-existing CLASLIB data checkout, or
 `GNSSPP_CLAS_A4B_AUTO_FETCH=0` to record `blocked_infrastructure` instead of
-fetching public data.
+fetching public data. CI treats that blocked state as a failure by default; set
+`GNSSPP_CLAS_A4B_FAIL_ON_BLOCKED=0` only for diagnostic-only local runs.
 
 Build with CLASLIB linked only when you need oracle-backed unit tests:
 
