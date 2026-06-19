@@ -335,6 +335,30 @@ jobs:
           output/clas_zd_component_diff.csv
         if-no-files-found: error
 
+    - name: CLAS A4b native self-diff
+      env:
+        GNSSPP_CLAS_A4B_DATA_ROOT: ${{ vars.GNSSPP_CLAS_A4B_DATA_ROOT }}
+        GNSSPP_CLAS_A4B_AUTO_FETCH: ${{ vars.GNSSPP_CLAS_A4B_AUTO_FETCH }}
+        GNSSPP_CLAS_A4B_CLASLIB_REPO: ${{ vars.GNSSPP_CLAS_A4B_CLASLIB_REPO }}
+        GNSSPP_CLAS_A4B_CLASLIB_REF: ${{ vars.GNSSPP_CLAS_A4B_CLASLIB_REF }}
+        GNSSPP_CLAS_A4B_MAX_EPOCHS: ${{ vars.GNSSPP_CLAS_A4B_MAX_EPOCHS }}
+      run: python3 scripts/ci/run_clas_a4b_native_selfdiff.py
+
+    - name: Upload CLAS A4b native self-diff artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: clas-a4b-native-selfdiff-ubuntu
+        path: |
+          output/ci_clas_a4b_native_selfdiff_summary.json
+          output/ci_clas_a4b_native_selfdiff/*.log
+          output/clas_a4b_native_selfdiff/native.pos
+          output/clas_a4b_native_selfdiff/native_summary.json
+          output/clas_a4b_native_selfdiff/native_code_dump.csv
+          output/clas_a4b_native_selfdiff/selfdiff.json
+          output/clas_a4b_native_selfdiff/selfdiff.csv
+        if-no-files-found: error
+
     - name: Optional MADOCA residual-component diff
       env:
         GNSSPP_MADOCA_RESIDUAL_BASE_CSV: ${{ vars.GNSSPP_MADOCA_RESIDUAL_BASE_CSV }}

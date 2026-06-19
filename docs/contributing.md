@@ -56,6 +56,10 @@ CI lanes are split as follows:
   next actions when their CSV inputs are unavailable, require a summary/log
   artifact in CI, and fail a passed diff command if the declared JSON/CSV
   artifacts are missing
+- `python3 scripts/ci/run_clas_a4b_native_selfdiff.py` for the public CLAS A4b
+  native-side evidence bundle; it sparse-fetches CLASLIB public data unless
+  `GNSSPP_CLAS_A4B_DATA_ROOT` is supplied, generates the native code dump, and
+  self-diffs the `G14/C2W` rows before any oracle-backed model change
 - `bash scripts/ci/generate_dashboard_artifacts.sh` for the dashboard/manifest artifact path used in CI
 
 Docs-only changes keep CI on the lightweight path: hygiene here, plus the separate Docs workflow.
