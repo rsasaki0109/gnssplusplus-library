@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -16,6 +18,15 @@ GNSS_CLI = ROOT_DIR / "apps" / "gnss.py"
 
 
 class CliUxTest(unittest.TestCase):
+    @classmethod
+    def dispatcher_commands(cls) -> set[str]:
+        spec = importlib.util.spec_from_file_location("gnss_dispatcher", GNSS_CLI)
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"failed to load dispatcher module from {GNSS_CLI}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return set(module.COMMANDS)
+
     def run_gnss(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(GNSS_CLI), *args],
@@ -56,6 +67,18 @@ class CliUxTest(unittest.TestCase):
         ]
         duplicates = sorted({line for line in examples if examples.count(line) > 1})
         self.assertEqual(duplicates, [])
+
+        known_commands = self.dispatcher_commands()
+        stale_examples: list[str] = []
+        for example in examples:
+            tokens = shlex.split(example)
+            if len(tokens) < 3:
+                stale_examples.append(example)
+                continue
+            command = tokens[2]
+            if command not in known_commands:
+                stale_examples.append(example)
+        self.assertEqual(stale_examples, [])
 
     def test_representative_subcommand_help_uses_dispatcher_names(self) -> None:
         expectations = {
