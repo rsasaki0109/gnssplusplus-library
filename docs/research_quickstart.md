@@ -20,7 +20,8 @@ cmake --build build -j
 Confirm the dispatcher can see the command set:
 
 ```bash
-python3 apps/gnss.py --help
+python3 apps/gnss.py commands
+python3 apps/gnss.py commands --json
 ```
 
 ## Reproduce a bounded RTK run
