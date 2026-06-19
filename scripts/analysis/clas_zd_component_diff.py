@@ -379,6 +379,46 @@ def row_summary(row: ComponentRow) -> dict[str, Any]:
     }
 
 
+def row_component_breakdown(
+    key: Key,
+    base_row: ComponentRow,
+    candidate_row: ComponentRow,
+) -> dict[str, Any]:
+    components: list[dict[str, Any]] = []
+    for component in sorted(set(base_row.components) | set(candidate_row.components)):
+        base_value = base_row.components.get(component)
+        candidate_value = candidate_row.components.get(component)
+        if base_value is None or candidate_value is None:
+            continue
+        delta = candidate_value - base_value
+        components.append(
+            {
+                "component": component,
+                "base_value_m": base_value,
+                "candidate_value_m": candidate_value,
+                "delta_m": delta,
+                "abs_delta_m": abs(delta),
+            }
+        )
+    components.sort(key=lambda item: (-item["abs_delta_m"], item["component"]))
+    return {
+        **key_to_dict(key),
+        "base_stage": base_row.stage,
+        "candidate_stage": candidate_row.stage,
+        "base_signal": base_row.signal,
+        "candidate_signal": candidate_row.signal,
+        "base_source_row": base_row.source_row,
+        "candidate_source_row": candidate_row.source_row,
+        "component_count": len(components),
+        "max_abs_delta_m": max(
+            (item["abs_delta_m"] for item in components),
+            default=0.0,
+        ),
+        "sum_abs_delta_m": sum(item["abs_delta_m"] for item in components),
+        "components": components,
+    }
+
+
 def build_report(
     base_rows: Sequence[ComponentRow],
     candidate_rows: Sequence[ComponentRow],
@@ -406,12 +446,16 @@ def build_report(
 
     component_deltas: DefaultDict[str, list[float]] = defaultdict(list)
     details: list[dict[str, Any]] = []
+    row_breakdowns: list[dict[str, Any]] = []
     missing_components: Counter[str] = Counter()
     threshold_exceedances = 0
 
     for key in common_keys:
         base_row = base_by_key[key]
         candidate_row = candidate_by_key[key]
+        row_breakdown = row_component_breakdown(key, base_row, candidate_row)
+        if row_breakdown["component_count"] > 0:
+            row_breakdowns.append(row_breakdown)
         components = sorted(set(base_row.components) | set(candidate_row.components))
         for component in components:
             base_value = base_row.components.get(component)
@@ -451,6 +495,18 @@ def build_report(
             item["component"],
         )
     )
+    row_breakdowns.sort(
+        key=lambda item: (
+            -item["sum_abs_delta_m"],
+            -item["max_abs_delta_m"],
+            item["week"],
+            item["tow"],
+            item["row_type"],
+            item["sat"],
+            item["freq"],
+            item["rinex_code"],
+        )
+    )
     per_component = [
         {"component": component, **component_stats(values)}
         for component, values in sorted(component_deltas.items())
@@ -482,6 +538,7 @@ def build_report(
         },
         "per_component": per_component,
         "top_component_deltas": details[:top_deltas],
+        "top_row_component_breakdowns": row_breakdowns[:top_deltas],
         "top_base_only": [row_summary(base_by_key[key]) for key in base_only_keys[:top_unmatched]],
         "top_candidate_only": [
             row_summary(candidate_by_key[key]) for key in candidate_only_keys[:top_unmatched]
@@ -555,6 +612,19 @@ def print_summary(report: dict[str, Any]) -> None:
             f"{top['week']}:{top['tow']:.3f} {top['row_type']} "
             f"{top['sat']} f{top['freq']} {top['component']} "
             f"delta={top['delta_m']:.6g}"
+        )
+    if report["top_row_component_breakdowns"]:
+        top = report["top_row_component_breakdowns"][0]
+        top_components = ", ".join(
+            f"{item['component']}={item['delta_m']:.6g}"
+            for item in top["components"][:5]
+        )
+        print(
+            "  max_row_delta: "
+            f"{top['week']}:{top['tow']:.3f} {top['row_type']} "
+            f"{top['sat']} f{top['freq']} {top['rinex_code']} "
+            f"sum_abs={top['sum_abs_delta_m']:.6g} "
+            f"components=[{top_components}]"
         )
 
 

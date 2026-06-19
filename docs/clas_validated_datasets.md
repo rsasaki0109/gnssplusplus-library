@@ -158,6 +158,10 @@ python3 scripts/analysis/clas_zd_component_diff.py \
 On the 300-epoch 2019 sample smoke, current `develop` produces 5,400 native code
 rows. The GPS L2W slice has 300 rows, all with exact bias identity and exact
 observation matches, and zero observation-family or code-bias fallback rows.
+The diff JSON also includes `top_row_component_breakdowns`, which groups all
+component deltas for the same ZD key. Use that field to decide whether the next
+GPS L2W A4b slice is dominated by `code_bias_m`, `receiver_antenna_m`, `prc_m`,
+or another component before changing the gated correction model.
 
 Build with CLASLIB linked only when you need oracle-backed unit tests:
 
