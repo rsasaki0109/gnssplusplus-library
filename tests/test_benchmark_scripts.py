@@ -395,6 +395,57 @@ class ClasCompactHelpersTest(unittest.TestCase):
         self.assertAlmostEqual(float(parsed["ppp_atmospheric_trop_meters"]), 5.5)
         self.assertAlmostEqual(float(parsed["ppp_atmospheric_ionosphere_meters"]), 3.25)
 
+    def test_build_summary_payload_marks_clas_osr_profile(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_summary_") as temp_dir:
+            temp_root = Path(temp_dir)
+            pos_path = temp_root / "solution.pos"
+            pos_path.write_text(
+                "\n".join(
+                    [
+                        "% synthetic solution",
+                        "2200 345600.000 1.0 2.0 3.0 0.0 0.0 0.0 5 8",
+                        "2200 345630.000 1.0 2.0 3.0 0.0 0.0 0.0 6 9",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            common_args = {
+                "obs": Path("rover.obs"),
+                "nav": Path("nav.rnx"),
+                "sp3": None,
+                "clk": None,
+                "ssr_rtcm": None,
+                "compact_ssr": "corrections.compact.csv",
+                "qzss_l6": None,
+                "out": pos_path,
+                "summary_json": None,
+                "enable_ar": False,
+                "ar_ratio_threshold": 3.0,
+                "kinematic": False,
+                "compact_atmos_merge_policy": "stec-coeff-carry",
+                "compact_atmos_subtype_merge_policy": "union",
+                "compact_phase_bias_merge_policy": "latest-union",
+                "compact_phase_bias_source_policy": "arrival-order",
+                "compact_code_bias_composition_policy": "direct-values",
+                "compact_code_bias_bank_policy": "pending-epoch",
+                "compact_phase_bias_composition_policy": "direct-values",
+                "compact_phase_bias_bank_policy": "pending-epoch",
+                "compact_bias_row_materialization": "overlap-only",
+                "compact_row_construction_policy": "independent",
+            }
+
+            clas_payload = clas_ppp.build_summary_payload(
+                argparse.Namespace(profile="clas", **common_args)
+            )
+            madoca_payload = clas_ppp.build_summary_payload(
+                argparse.Namespace(profile="madoca", **common_args)
+            )
+
+            self.assertTrue(clas_payload["clas_osr_filter_enabled"])
+            self.assertFalse(madoca_payload["clas_osr_filter_enabled"])
+
 
 class PPCRTKSignoffHelpersTest(unittest.TestCase):
     def test_selected_thresholds_keep_rtklib_gates_only_when_enabled(self) -> None:
