@@ -228,3 +228,11 @@ from exact `C2W/L2W` matches.  The native dumps also carry the requested
 `C2W/L2W` identity plus `observation_exact_match` and
 `observation_family_fallback` flags, separating a bias lookup fallback from a raw
 observation lookup fallback before the A4b GPS L2W correction model changes.
+For the GPS L2W A4b correction-materialization probe, run the raw CLAS L6
+expansion with `--compact-code-bias-composition-policy base-only-if-present` and
+`--compact-code-bias-bank-policy latest-preceding-bank`. The 2019 G14/C2W
+network code-bias rows behave as subtype-4 base-value replacements: using direct
+subtype-6 values leaves periodic `-0.70 m` native rows against `+0.76 m`
+CLASLIB rows, while adding base plus network leaves the same rows near
+`+0.06 m`. The base-only policy removes that 30-second sign flip without
+changing default CLAS behavior.

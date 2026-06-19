@@ -5631,6 +5631,81 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(preceding_result.returncode, 0, msg=preceding_result.stderr)
             self.assertIn("cbias:2=-0.080000", preceding_path.read_text(encoding="ascii"))
 
+    def test_qzss_l6_info_compact_code_bias_base_only_uses_prior_anchor(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_code_bias_base_only_prev_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_code_bias_base_only_prev.bin"
+            direct_path = temp_root / "direct.csv"
+            base_only_path = temp_root / "base_only.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518370, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            bias_m=-0.12,
+                            sync=False,
+                        ),
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            sync=False,
+                            network_bias=True,
+                            code_bias_exists=True,
+                            phase_bias_exists=False,
+                            selected_mask=0b1,
+                            code_bias_m=0.04,
+                        ),
+                    ]
+                )
+            )
+
+            direct_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(direct_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(direct_result.returncode, 0, msg=direct_result.stderr)
+            direct_csv = direct_path.read_text(encoding="ascii")
+            direct_network_rows = [
+                line
+                for line in direct_csv.splitlines()
+                if line.startswith("2200,518400.000,G,3")
+            ]
+            self.assertEqual(len(direct_network_rows), 1)
+            self.assertIn("cbias:2=0.040000", direct_network_rows[0])
+            self.assertNotIn("cbias:2=-0.120000", direct_network_rows[0])
+
+            base_only_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(base_only_path),
+                "--gps-week",
+                "2200",
+                "--compact-code-bias-composition-policy",
+                "base-only-if-present",
+                "--compact-code-bias-bank-policy",
+                "latest-preceding-bank",
+            )
+            self.assertEqual(base_only_result.returncode, 0, msg=base_only_result.stderr)
+            base_only_csv = base_only_path.read_text(encoding="ascii")
+            base_only_network_rows = [
+                line
+                for line in base_only_csv.splitlines()
+                if line.startswith("2200,518400.000,G,3")
+            ]
+            self.assertEqual(len(base_only_network_rows), 1)
+            self.assertIn("cbias:2=-0.120000", base_only_network_rows[0])
+            self.assertNotIn("cbias:2=0.040000", base_only_network_rows[0])
+
     def test_qzss_l6_info_compact_code_bias_bank_policy_close_30s_bank_rejects_older_anchor(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_code_bias_bank_close30_") as temp_dir:
             temp_root = Path(temp_dir)
