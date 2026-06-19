@@ -481,25 +481,52 @@ def command_kinds() -> list[str]:
     return sorted({metadata["kind"] for metadata in COMMANDS.values()})
 
 
-def command_records(kind_filter: str | None = None) -> list[dict[str, str]]:
+def command_matches_query(record: dict[str, str], query: str) -> bool:
+    query_words = query.lower().replace("_", "-").split()
+    haystack = " ".join(
+        [
+            record["name"],
+            record["kind"],
+            record["summary"],
+        ]
+    ).lower()
+    return all(word in haystack for word in query_words)
+
+
+def command_records(
+    kind_filter: str | None = None,
+    query: str | None = None,
+    limit: int | None = None,
+) -> list[dict[str, str]]:
     records: list[dict[str, str]] = []
     for name, metadata in sorted(COMMANDS.items()):
         kind = metadata["kind"]
         if kind_filter is not None and kind != kind_filter:
             continue
-        records.append(
-            {
-                "name": name,
-                "kind": kind,
-                "summary": metadata["summary"],
-            }
-        )
+        record = {
+            "name": name,
+            "kind": kind,
+            "summary": metadata["summary"],
+        }
+        if query is not None and not command_matches_query(record, query):
+            continue
+        records.append(record)
+        if limit is not None and len(records) >= limit:
+            break
     return records
 
 
-def format_command_records(records: list[dict[str, str]]) -> str:
+def format_command_records(
+    records: list[dict[str, str]],
+    *,
+    query: str | None = None,
+) -> str:
     width = max((len(record["name"]) for record in records), default=7)
-    lines = ["Commands:"]
+    lines = [f"Commands matching `{query}`:" if query is not None else "Commands:"]
+    if not records:
+        lines.append("  (none)")
+        lines.extend(["", "Run `gnss commands` to list all registered commands."])
+        return "\n".join(lines)
     for record in records:
         lines.append(f"  {record['name']:<{width}}  {record['summary']}")
     lines.extend(["", "Run `gnss help <command>` for command-specific options."])
@@ -667,18 +694,21 @@ def help_usage() -> str:
 def commands_usage() -> str:
     return "\n".join(
         [
-            "Usage: gnss commands [--json] [--kind KIND]",
+            "Usage: gnss commands [--json] [--kind KIND] [--query TEXT] [--limit N]",
             "",
             "List registered dispatcher commands without invoking solver binaries.",
             "",
             "Options:",
             "  --json       Emit a machine-readable command registry.",
             f"  --kind KIND  Filter by command kind: {', '.join(command_kinds())}.",
+            "  --query TEXT Search command names, kinds, and summaries.",
+            "  --limit N    Return at most N commands after filtering.",
             "",
             "Examples:",
             "  python3 apps/gnss.py commands",
             "  python3 apps/gnss.py commands --json",
             "  python3 apps/gnss.py commands --kind python",
+            "  python3 apps/gnss.py commands --query ppp --limit 10",
         ]
     )
 
@@ -705,6 +735,8 @@ def run_help(args: list[str]) -> int:
 def run_commands(args: list[str]) -> int:
     emit_json = False
     kind_filter: str | None = None
+    query: str | None = None
+    limit: int | None = None
     index = 0
     valid_kinds = set(command_kinds())
 
@@ -716,6 +748,81 @@ def run_commands(args: list[str]) -> int:
         if arg == "--json":
             emit_json = True
             index += 1
+            continue
+        if arg == "--query":
+            if index + 1 >= len(args):
+                print(
+                    "Error: --query requires a non-empty search string.",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
+            query = args[index + 1].strip()
+            if not query:
+                print(
+                    "Error: --query requires a non-empty search string.",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
+            index += 2
+            continue
+        if arg.startswith("--query="):
+            query = arg.split("=", 1)[1].strip()
+            if not query:
+                print(
+                    "Error: --query requires a non-empty search string.",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
+            index += 1
+            continue
+        if arg == "--limit":
+            if index + 1 >= len(args):
+                print(
+                    "Error: --limit requires a positive integer.",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
+            raw_limit = args[index + 1]
+            index += 2
+        elif arg.startswith("--limit="):
+            raw_limit = arg.split("=", 1)[1]
+            index += 1
+        else:
+            raw_limit = None
+
+        if raw_limit is not None:
+            try:
+                limit = int(raw_limit)
+            except ValueError:
+                print(
+                    f"Error: invalid --limit value `{raw_limit}`; expected a positive integer.",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
+            if limit < 1:
+                print(
+                    f"Error: invalid --limit value `{raw_limit}`; expected a positive integer.",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
             continue
         if arg == "--kind":
             if index + 1 >= len(args):
@@ -755,17 +862,22 @@ def run_commands(args: list[str]) -> int:
             )
             return 2
 
-    records = command_records(kind_filter)
+    records = command_records(kind_filter, query, limit)
     if emit_json:
+        filters = {"kind": kind_filter}
+        if query is not None:
+            filters["query"] = query
+        if limit is not None:
+            filters["limit"] = limit
         payload = {
             "schema_version": 1,
-            "filters": {"kind": kind_filter},
+            "filters": filters,
             "count": len(records),
             "commands": records,
         }
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:
-        print(format_command_records(records))
+        print(format_command_records(records, query=query))
     return 0
 
 

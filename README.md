@@ -133,6 +133,7 @@ List commands:
 ```bash
 python3 apps/gnss.py commands
 python3 apps/gnss.py commands --json
+python3 apps/gnss.py commands --query ppp --limit 10
 ```
 
 ## Docker

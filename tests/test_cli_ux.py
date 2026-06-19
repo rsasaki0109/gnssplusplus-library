@@ -145,7 +145,7 @@ class CliUxTest(unittest.TestCase):
 
     def test_help_command_dispatches_to_subcommand_help(self) -> None:
         expectations = {
-            "commands": ("Usage: gnss commands", "--json"),
+            "commands": ("Usage: gnss commands", "--json", "--query"),
             "doctor": ("usage: gnss doctor", "--strict"),
             "qzss-l6-info": (
                 "usage: gnss qzss-l6-info",
@@ -177,6 +177,23 @@ class CliUxTest(unittest.TestCase):
         self.assertIn("Run `gnss help <command>`", result.stdout)
         self.assertNotIn("Examples:", result.stdout)
 
+    def test_commands_query_text_output_filters_registry(self) -> None:
+        result = self.run_gnss("commands", "--query", "clas")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stderr, "")
+        self.assertIn("Commands matching `clas`:", result.stdout)
+        self.assertIn("  clas-ppp", result.stdout)
+        self.assertNotIn("  doctor", result.stdout)
+
+        no_match = self.run_gnss("commands", "--query", "definitely-not-a-command")
+        self.assertEqual(no_match.returncode, 0, msg=no_match.stderr)
+        self.assert_no_traceback(no_match)
+        self.assertIn("Commands matching `definitely-not-a-command`:", no_match.stdout)
+        self.assertIn("  (none)", no_match.stdout)
+        self.assertIn("Run `gnss commands`", no_match.stdout)
+
     def test_commands_json_output_is_stable_for_tooling(self) -> None:
         result = self.run_gnss("commands", "--json")
 
@@ -200,6 +217,36 @@ class CliUxTest(unittest.TestCase):
             self.assertIsInstance(item["summary"], str)
             self.assertTrue(item["summary"].strip())
 
+    def test_commands_query_json_output_is_stable_for_tooling(self) -> None:
+        result = self.run_gnss(
+            "commands",
+            "--kind",
+            "python",
+            "--query",
+            "ppp",
+            "--limit",
+            "3",
+            "--json",
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stderr, "")
+        payload = json.loads(result.stdout)
+        self.assertEqual(
+            payload["filters"],
+            {"kind": "python", "query": "ppp", "limit": 3},
+        )
+        self.assertLessEqual(payload["count"], 3)
+        self.assertEqual(payload["count"], len(payload["commands"]))
+        self.assertGreater(payload["count"], 0)
+        for item in payload["commands"]:
+            self.assertEqual(item["kind"], "python")
+            self.assertIn(
+                "ppp",
+                f"{item['name']} {item['summary']}".lower(),
+            )
+
     def test_commands_kind_filter_and_errors_are_actionable(self) -> None:
         builtin_result = self.run_gnss("commands", "--kind", "builtin", "--json")
 
@@ -219,6 +266,18 @@ class CliUxTest(unittest.TestCase):
         self.assertEqual(invalid_result.stdout, "")
         self.assertIn("Error: unknown command kind `solver`.", invalid_result.stderr)
         self.assertIn("Usage: gnss commands", invalid_result.stderr)
+
+        bad_limit = self.run_gnss("commands", "--limit", "0")
+        self.assertEqual(bad_limit.returncode, 2)
+        self.assert_no_traceback(bad_limit)
+        self.assertEqual(bad_limit.stdout, "")
+        self.assertIn("Error: invalid --limit value `0`", bad_limit.stderr)
+
+        missing_query = self.run_gnss("commands", "--query")
+        self.assertEqual(missing_query.returncode, 2)
+        self.assert_no_traceback(missing_query)
+        self.assertEqual(missing_query.stdout, "")
+        self.assertIn("Error: --query requires a non-empty search string.", missing_query.stderr)
 
     def test_user_input_errors_are_actionable_not_tracebacks(self) -> None:
         cases = [
