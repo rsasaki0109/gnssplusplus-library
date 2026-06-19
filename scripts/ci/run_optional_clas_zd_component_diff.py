@@ -43,6 +43,7 @@ CONFIG = runner.DiffRunnerConfig(
         runner.EnvOption(("GNSSPP_CLAS_ZD_SAT",), "--sat"),
         runner.EnvOption(("GNSSPP_CLAS_ZD_FREQ",), "--freq"),
         runner.EnvOption(("GNSSPP_CLAS_ZD_RINEX_CODE",), "--rinex-code"),
+        runner.EnvOption(("GNSSPP_CLAS_ZD_DUPLICATE_POLICY",), "--duplicate-policy"),
         runner.EnvOption(
             ("GNSSPP_CLAS_ZD_THRESHOLD_M", "GNSSPP_CLAS_ZD_THRESHOLD"),
             "--component-threshold-m",

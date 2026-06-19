@@ -104,6 +104,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                 "GNSSPP_CLAS_ZD_SAT": "G01",
                 "GNSSPP_CLAS_ZD_FREQ": "1",
                 "GNSSPP_CLAS_ZD_RINEX_CODE": "C2W",
+                "GNSSPP_CLAS_ZD_DUPLICATE_POLICY": "mean",
                 "GNSSPP_CLAS_ZD_THRESHOLD_M": "0.25",
                 "GNSSPP_CLAS_ZD_FAIL_ON_DIFF": "1",
             }
@@ -129,6 +130,8 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertIn("1", command)
             self.assertIn("--rinex-code", command)
             self.assertIn("C2W", command)
+            self.assertIn("--duplicate-policy", command)
+            self.assertIn("mean", command)
             self.assertIn("--component-threshold-m", command)
             self.assertIn("0.25", command)
             self.assertIn("--fail-on-diff", command)
@@ -153,6 +156,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                 "GNSSPP_CLAS_ZD_SAT": "G01",
                 "GNSSPP_CLAS_ZD_FREQ": "1",
                 "GNSSPP_CLAS_ZD_RINEX_CODE": "C2W",
+                "GNSSPP_CLAS_ZD_DUPLICATE_POLICY": "mean",
             }
             step = runner.build_step_plan(ROOT_DIR, output_dir, env)[0]
 
@@ -167,6 +171,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertEqual(metrics["sat_filter"], ["G01"])
             self.assertEqual(metrics["freq_filter"], [1])
             self.assertEqual(metrics["rinex_code_filter"], ["C2W"])
+            self.assertEqual(metrics["duplicate_policy"], "mean")
             self.assertAlmostEqual(metrics["max_abs_delta"], 0.05)
 
     def test_run_step_collects_identity_provenance_metrics(self) -> None:

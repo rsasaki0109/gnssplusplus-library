@@ -194,7 +194,10 @@ Optional filters are `GNSSPP_CLAS_ZD_COMPONENTS`, `GNSSPP_CLAS_ZD_STAGE`,
 `GNSSPP_CLAS_ZD_FAIL_ON_DIFF`.  GPS L2W A4b probes can also narrow the row set
 with `GNSSPP_CLAS_ZD_SAT`, `GNSSPP_CLAS_ZD_FREQ`, and
 `GNSSPP_CLAS_ZD_RINEX_CODE`, matching the analysis script's `--sat`, `--freq`,
-and `--rinex-code` filters.
+and `--rinex-code` filters.  CLASLIB dumps can contain repeated rows for the
+same ZD key, so `GNSSPP_CLAS_ZD_DUPLICATE_POLICY` maps to
+`--duplicate-policy`; use `mean` for A4b slice summaries and `fail` when a
+sign-off must reject ambiguous row keys.
 
 CLASLIB-side disposable dumps must first be normalized with
 `scripts/analysis/claslib_zd_component_export.py`.  That export step converts

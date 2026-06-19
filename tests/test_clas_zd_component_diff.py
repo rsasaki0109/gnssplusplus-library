@@ -307,6 +307,85 @@ class ClasZdComponentDiffTest(unittest.TestCase):
         self.assertEqual(filtered[0].freq, 1)
         self.assertEqual(filtered[0].signal, "C2W")
 
+    def test_duplicate_policy_controls_repeated_row_keys(self) -> None:
+        base = component_diff.normalize_rows(
+            [
+                code_row(
+                    sat="G14",
+                    freq="1",
+                    prc="0.50",
+                    code_bias="0.10",
+                    receiver_ant="-0.02",
+                    pseudorange_rinex_code="C2W",
+                ),
+                code_row(
+                    sat="G14",
+                    freq="1",
+                    prc="0.70",
+                    code_bias="0.10",
+                    receiver_ant="-0.02",
+                    pseudorange_rinex_code="C2W",
+                ),
+            ],
+            component_names=["prc_m"],
+            stage_filter=None,
+            row_type_filter="code",
+        )
+        candidate = component_diff.normalize_rows(
+            [
+                code_row(
+                    sat="G14",
+                    freq="1",
+                    prc="1.00",
+                    code_bias="0.10",
+                    receiver_ant="-0.02",
+                    pseudorange_rinex_code="C2W",
+                )
+            ],
+            component_names=["prc_m"],
+            stage_filter=None,
+            row_type_filter="code",
+        )
+
+        last_report = component_diff.build_report(
+            base,
+            candidate,
+            base_label="claslib",
+            candidate_label="native",
+            threshold_m=None,
+            top_deltas=10,
+            top_unmatched=10,
+        )
+        self.assertEqual(last_report["duplicate_policy"], "last")
+        self.assertEqual(last_report["base_duplicate_keys"], 1)
+        self.assertAlmostEqual(last_report["top_component_deltas"][0]["delta_m"], 0.30)
+
+        mean_report = component_diff.build_report(
+            base,
+            candidate,
+            base_label="claslib",
+            candidate_label="native",
+            threshold_m=None,
+            top_deltas=10,
+            top_unmatched=10,
+            duplicate_policy="mean",
+        )
+        self.assertEqual(mean_report["duplicate_policy"], "mean")
+        self.assertEqual(mean_report["base_duplicate_keys"], 1)
+        self.assertAlmostEqual(mean_report["top_component_deltas"][0]["delta_m"], 0.40)
+
+        with self.assertRaisesRegex(ValueError, "duplicate row keys are present"):
+            component_diff.build_report(
+                base,
+                candidate,
+                base_label="claslib",
+                candidate_label="native",
+                threshold_m=None,
+                top_deltas=10,
+                top_unmatched=10,
+                duplicate_policy="fail",
+            )
+
     def test_compares_common_component_rows_and_reports_unmatched(self) -> None:
         base_rows = [
             code_row(
@@ -537,6 +616,8 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                     "1",
                     "--rinex-code",
                     "C2W",
+                    "--duplicate-policy",
+                    "mean",
                     "--component",
                     "prc_m",
                     "--component",
@@ -563,6 +644,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
             self.assertEqual(report["sat_filter"], ["G14"])
             self.assertEqual(report["freq_filter"], [1])
             self.assertEqual(report["rinex_code_filter"], ["C2W"])
+            self.assertEqual(report["duplicate_policy"], "mean")
             with details_path.open(newline="", encoding="utf-8") as details_file:
                 rows = list(csv.DictReader(details_file))
             self.assertEqual(rows[0]["component"], "prc_m")
