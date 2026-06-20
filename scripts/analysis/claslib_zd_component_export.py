@@ -143,6 +143,12 @@ CLASLIB_OSR_GPS_SLOTS = (
     (2, "5", 26),  # GPS L5X
 )
 
+GPS_IONO_SCALE_BY_SUFFIX = {
+    "1": 1.0,
+    "2": (1575.42 / 1227.60) ** 2,
+    "5": (1575.42 / 1176.45) ** 2,
+}
+
 
 class ExportError(ValueError):
     """Raised for unsupported CLASLIB dump content."""
@@ -195,6 +201,46 @@ def is_invalid_osr_value(value: str) -> bool:
     except ValueError:
         return True
     return abs(parsed + 10000.0) < 0.0005
+
+
+def parse_osr_float(value: str) -> Optional[float]:
+    if is_invalid_osr_value(value):
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def format_component(value: Optional[float]) -> str:
+    if value is None:
+        return ""
+    return f"{value:.15g}"
+
+
+def prc_iono_scaled_from_osrres(row: dict[str, str], suffix: str) -> Optional[float]:
+    prc = parse_osr_float(first_present(row, (f"PRC{suffix}",)))
+    trop = parse_osr_float(first_present(row, ("trop", "trop_m")))
+    cbias = parse_osr_float(first_present(row, (f"cbias{suffix}",)))
+    antr = parse_osr_float(first_present(row, (f"antr{suffix}",)))
+    relativity = parse_osr_float(
+        first_present(row, ("relatv", "relativity_m", "relativity_correction_m"))
+    )
+    if prc is None or trop is None or cbias is None or antr is None or relativity is None:
+        return None
+    return prc - (trop + antr + relativity + cbias)
+
+
+def prc_iono_l1_from_osrres(row: dict[str, str]) -> str:
+    l1_scaled = prc_iono_scaled_from_osrres(row, "1")
+    if l1_scaled is not None:
+        return format_component(l1_scaled)
+    for suffix in ("2", "5"):
+        scaled = prc_iono_scaled_from_osrres(row, suffix)
+        scale = GPS_IONO_SCALE_BY_SUFFIX.get(suffix, 0.0)
+        if scaled is not None and scale > 0.0:
+            return format_component(scaled / scale)
+    return first_present(row, ("iono", "iono_l1_m", "l1_iono_m"))
 
 
 def detect_row_type(row: dict[str, str]) -> str:
@@ -303,10 +349,12 @@ def normalize_osrres_rows(
     stage = row.get("stage", "") or (stage_label or "")
     week = osr_week(row, gps_week=gps_week, input_path=input_path, row_number=row_number)
     sat = sat_label(sys_id, prn)
+    effective_iono_l1_m = prc_iono_l1_from_osrres(row)
     output_rows: list[dict[str, str]] = []
 
     for freq_index, suffix, rtklib_code in CLASLIB_OSR_GPS_SLOTS:
         pseudorange_code, carrier_code = rinex_pair(rtklib_code)
+        effective_iono_scaled_m = format_component(prc_iono_scaled_from_osrres(row, suffix))
         common = {
             "stage": stage,
             "week": week,
@@ -322,7 +370,8 @@ def normalize_osrres_rows(
             "source_satno": first_present(row, ("sat", "satno")),
             "source_rtklib_code": str(rtklib_code),
             "trop_correction_m": first_present(row, ("trop", "trop_m")),
-            "iono_l1_m": first_present(row, ("iono", "iono_l1_m", "l1_iono_m")),
+            "iono_l1_m": effective_iono_l1_m,
+            "iono_scaled_m": effective_iono_scaled_m,
             "receiver_antenna_m": first_present(row, (f"antr{suffix}",)),
             "relativity_m": first_present(row, ("relatv", "relativity_m", "relativity_correction_m")),
             "windup_m": first_present(row, (f"wup{suffix}",)),
