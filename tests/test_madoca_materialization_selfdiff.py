@@ -59,12 +59,17 @@ class MadocaMaterializationSelfdiffTest(unittest.TestCase):
             data_root = Path(temp_dir) / "madocalib"
 
             dump_command = selfdiff.build_dump_command(config, paths, data_root)
+            summary_command = selfdiff.build_materialization_summary_command(config, paths)
             selfdiff_command = selfdiff.build_selfdiff_command(config, paths)
 
             self.assertIn("--madoca-materialization-dump-only", dump_command)
             self.assertIn("--madoca-materialization-dump", dump_command)
             self.assertIn(str(paths.native_dump), dump_command)
             self.assertNotIn("--out", dump_command)
+            self.assertIn(str(ROOT_DIR / "scripts" / "analysis" / "madoca_materialization_summary.py"), summary_command)
+            self.assertIn(str(paths.native_dump), summary_command)
+            self.assertIn(str(paths.native_materialization_summary_json), summary_command)
+            self.assertIn("--fail-on-issue", summary_command)
             self.assertIn(str(ROOT_DIR / "scripts" / "analysis" / "madoca_materialization_diff.py"), selfdiff_command)
             self.assertIn(str(paths.native_dump), selfdiff_command)
             self.assertIn(str(paths.selfdiff_json), selfdiff_command)
@@ -82,6 +87,14 @@ class MadocaMaterializationSelfdiffTest(unittest.TestCase):
                 config=config,
                 paths=paths,
                 dump_summary={"madoca_materialization_rows": 2},
+                materialization_summary={
+                    "schema": "madoca_materialization_summary.v1",
+                    "status": "passed",
+                    "rows": 2,
+                    "systems": {"GPS": 2},
+                    "row_key": {"groups": 2, "duplicate_groups": 0, "max_duplicate_occurrences": 1},
+                    "bias_identity": {"code_bias_ids": {"2": 2}},
+                },
                 selfdiff_report={
                     "schema": "madoca_materialization_diff.v1",
                     "base_only_rows": 0,
@@ -112,6 +125,14 @@ class MadocaMaterializationSelfdiffTest(unittest.TestCase):
                 config=config,
                 paths=paths,
                 dump_summary={"madoca_materialization_rows": 1},
+                materialization_summary={
+                    "schema": "madoca_materialization_summary.v1",
+                    "status": "failed",
+                    "rows": 0,
+                    "systems": {},
+                    "row_key": {},
+                    "bias_identity": {},
+                },
                 selfdiff_report={
                     "schema": "madoca_materialization_diff.v1",
                     "base_only_rows": 1,
