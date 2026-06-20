@@ -43,6 +43,7 @@ class DiffRunnerConfig:
     log_dir_name: str
     per_component_max_key: str
     extra_options: tuple[EnvOption, ...] = ()
+    component_flag: str | None = "--component"
 
 
 @dataclass(frozen=True)
@@ -222,8 +223,9 @@ def make_step(config: DiffRunnerConfig, context: DiffContext) -> DiffStep:
         "--details-csv",
         str(details_csv),
     ]
-    for component in context.components:
-        command.extend(["--component", component])
+    if config.component_flag is not None:
+        for component in context.components:
+            command.extend([config.component_flag, component])
     for flag, value in context.option_values.items():
         command.extend([flag, value])
     if context.fail_on_diff:
@@ -267,8 +269,13 @@ def load_diff_metrics(config: DiffRunnerConfig, report_json: Path) -> dict[str, 
         "common_rows",
         "base_only_rows",
         "candidate_only_rows",
+        "base_duplicate_keys",
+        "candidate_duplicate_keys",
         "components_compared",
+        "numeric_components_compared",
+        "discrete_mismatches",
         "threshold_exceedances",
+        "numeric_threshold_exceedances",
         "row_set_complete",
         "sat_filter",
         "freq_filter",
@@ -277,7 +284,13 @@ def load_diff_metrics(config: DiffRunnerConfig, report_json: Path) -> dict[str, 
     ]:
         if key in payload:
             metrics[key] = payload[key]
+    if "components_compared" not in metrics and "numeric_components_compared" in payload:
+        metrics["components_compared"] = payload["numeric_components_compared"]
+    if "threshold_exceedances" not in metrics and "numeric_threshold_exceedances" in payload:
+        metrics["threshold_exceedances"] = payload["numeric_threshold_exceedances"]
     per_component = payload.get("per_component")
+    if not isinstance(per_component, list):
+        per_component = payload.get("per_numeric_component")
     if isinstance(per_component, list):
         max_abs_delta = 0.0
         for item in per_component:
@@ -433,6 +446,13 @@ def render_result_detail(result: dict[str, object]) -> str:
         threshold_exceedances = metrics.get("threshold_exceedances")
         if threshold_exceedances is not None:
             detail_parts.append(f"threshold exceedances `{threshold_exceedances}`")
+        discrete_mismatches = metrics.get("discrete_mismatches")
+        if discrete_mismatches is not None:
+            detail_parts.append(f"discrete mismatches `{discrete_mismatches}`")
+        base_duplicates = metrics.get("base_duplicate_keys")
+        candidate_duplicates = metrics.get("candidate_duplicate_keys")
+        if base_duplicates is not None or candidate_duplicates is not None:
+            detail_parts.append(f"duplicate keys `{base_duplicates}/{candidate_duplicates}`")
         native_l2w_rows = metrics.get("identity_native_gps_l2w_rows")
         if native_l2w_rows is not None:
             detail_parts.append(f"native L2W `{native_l2w_rows}`")

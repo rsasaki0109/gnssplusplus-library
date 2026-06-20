@@ -50,9 +50,10 @@ CI lanes are split as follows:
   with JSON/log artifacts under `output/ci_optional_rtk_signoffs*`; the summary
   uses `summary_schema: ci_optional_rtk_signoffs.v1` and a passed step fails the
   lane if any declared output artifact is missing
-- `bash scripts/ci/run_optional_clas_zd_component_diff.sh` and
+- `bash scripts/ci/run_optional_clas_zd_component_diff.sh`,
+  `bash scripts/ci/run_optional_madoca_materialization_diff.sh`, and
   `bash scripts/ci/run_optional_madoca_residual_component_diff.sh` for
-  oracle/native diff artifacts; both report `blocked_infrastructure` with
+  oracle/native diff artifacts; they report `blocked_infrastructure` with
   next actions when their CSV inputs are unavailable, require a summary/log
   artifact in CI, and fail a passed diff command if the declared JSON/CSV
   artifacts are missing
