@@ -173,6 +173,20 @@ python3 scripts/analysis/clas_zd_component_diff.py \
   --details-csv /tmp/clas_a4b_native_vs_claslib_code.csv
 ```
 
+Unmodified CLASLIB `rnx2rtkp` can also write an `.osr` file when run with its
+OSR output option. That file carries `OSRRES(ch*)` rows with `tow`, `sys`,
+`prn`, and L1/L2/L5 component columns, but no GPS week or exact observation
+code. For the current A4b GPS L2W probe, the exporter maps GPS slot 2 to
+`C2W`/`L2W`; provide the GPS week explicitly so the diff key is not ambiguous:
+
+```bash
+python3 scripts/analysis/claslib_zd_component_export.py \
+  /tmp/claslib_solution.osr \
+  --output /tmp/claslib_solution.osr.normalized.csv \
+  --stage-label post \
+  --gps-week 2068
+```
+
 On the 300-epoch 2019 sample smoke, current `develop` produces 5,400 native code
 rows. The GPS L2W slice has 300 rows, all with exact bias identity and exact
 observation matches, and zero observation-family or code-bias fallback rows.

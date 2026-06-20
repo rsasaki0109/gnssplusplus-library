@@ -68,6 +68,43 @@ RAW_FIELDNAMES = [
     "rx_z_m",
 ]
 
+OSR_FIELDNAMES = [
+    "msg",
+    "tow",
+    "sys",
+    "prn",
+    "pbias1",
+    "pbias2",
+    "pbias5",
+    "cbias1",
+    "cbias2",
+    "cbias5",
+    "trop",
+    "iono",
+    "antr1",
+    "antr2",
+    "antr5",
+    "relatv",
+    "wup1",
+    "wup2",
+    "wup5",
+    "compI1",
+    "compI2",
+    "compI5",
+    "compN",
+    "CPC1",
+    "CPC2",
+    "CPC5",
+    "PRC1",
+    "PRC2",
+    "PRC5",
+    "orb",
+    "clk",
+    "lat",
+    "lon",
+    "alt",
+]
+
 
 def write_csv(path: Path, rows: list[dict[str, str]], fieldnames: list[str]) -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -128,6 +165,105 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             self.assertEqual(row["receiver_antenna_m"], "-0.02")
             self.assertEqual(row["trop_correction_m"], "2.4")
             self.assertEqual(row["residual_m"], "-0.5")
+
+    def test_normalizes_claslib_osrres_gps_l2w_rows(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="claslib_zd_export_test_") as temp_dir:
+            input_path = Path(temp_dir) / "claslib.osr"
+            output_path = Path(temp_dir) / "normalized.csv"
+            write_csv(
+                input_path,
+                [
+                    {
+                        "msg": "OSRRES(ch0)",
+                        "tow": "230420.0",
+                        "sys": "1",
+                        "prn": "14",
+                        "pbias1": "0.101",
+                        "pbias2": "0.202",
+                        "pbias5": "0.505",
+                        "cbias1": "0.011",
+                        "cbias2": "0.022",
+                        "cbias5": "0.055",
+                        "trop": "2.345",
+                        "iono": "1.234",
+                        "antr1": "-0.010",
+                        "antr2": "-0.020",
+                        "antr5": "-0.050",
+                        "relatv": "0.003",
+                        "wup1": "0.100",
+                        "wup2": "0.200",
+                        "wup5": "0.500",
+                        "compI1": "0.001",
+                        "compI2": "0.002",
+                        "compI5": "0.005",
+                        "compN": "0.000",
+                        "CPC1": "3.101",
+                        "CPC2": "3.202",
+                        "CPC5": "3.505",
+                        "PRC1": "4.101",
+                        "PRC2": "4.202",
+                        "PRC5": "4.505",
+                        "orb": "-0.321",
+                        "clk": "0.654",
+                        "lat": "35.0",
+                        "lon": "139.0",
+                        "alt": "10.0",
+                    }
+                ],
+                OSR_FIELDNAMES,
+            )
+
+            rows_written = export.export_csv(input_path, output_path, stage_label="post", gps_week=2068)
+            self.assertEqual(rows_written, 6)
+            rows = read_csv(output_path)
+            code_l2w = next(row for row in rows if row["row_type"] == "code" and row["signal"] == "C2W")
+            phase_l2w = next(row for row in rows if row["row_type"] == "phase" and row["signal"] == "L2W")
+            self.assertEqual(code_l2w["stage"], "post")
+            self.assertEqual(code_l2w["week"], "2068")
+            self.assertEqual(code_l2w["tow"], "230420.0")
+            self.assertEqual(code_l2w["sat"], "G14")
+            self.assertEqual(code_l2w["freq"], "1")
+            self.assertEqual(code_l2w["pseudorange_rtklib_code"], "20")
+            self.assertEqual(code_l2w["carrier_rtklib_code"], "20")
+            self.assertEqual(code_l2w["applied_pr_corr_m"], "4.202")
+            self.assertEqual(code_l2w["prc_m"], "4.202")
+            self.assertEqual(code_l2w["code_bias_m"], "0.022")
+            self.assertEqual(code_l2w["trop_correction_m"], "2.345")
+            self.assertEqual(code_l2w["iono_l1_m"], "1.234")
+            self.assertEqual(code_l2w["receiver_antenna_m"], "-0.020")
+            self.assertEqual(code_l2w["orbit_projection_m"], "-0.321")
+            self.assertEqual(code_l2w["clock_correction_m"], "0.654")
+            self.assertEqual(phase_l2w["week"], "2068")
+            self.assertEqual(phase_l2w["freq"], "1")
+            self.assertEqual(phase_l2w["carrier_correction_m"], "3.202")
+            self.assertEqual(phase_l2w["cpc_m"], "3.202")
+            self.assertEqual(phase_l2w["phase_bias_m"], "0.202")
+            self.assertEqual(phase_l2w["phase_compensation_m"], "0.002")
+            self.assertEqual(phase_l2w["windup_m"], "0.200")
+
+    def test_claslib_osrres_requires_gps_week(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="claslib_zd_export_test_") as temp_dir:
+            input_path = Path(temp_dir) / "claslib.osr"
+            output_path = Path(temp_dir) / "normalized.csv"
+            write_csv(
+                input_path,
+                [
+                    {
+                        "msg": "OSRRES(ch0)",
+                        "tow": "230420.0",
+                        "sys": "1",
+                        "prn": "14",
+                        "pbias2": "0.202",
+                        "cbias2": "0.022",
+                        "CPC2": "3.202",
+                        "PRC2": "4.202",
+                    }
+                ],
+                OSR_FIELDNAMES,
+            )
+
+            with self.assertRaisesRegex(export.ExportError, "pass --gps-week"):
+                export.export_csv(input_path, output_path, stage_label="post")
 
     def test_normalizes_qzss_phase_and_galileo_code_rows(self) -> None:
         with tempfile.TemporaryDirectory(prefix="claslib_zd_export_test_") as temp_dir:

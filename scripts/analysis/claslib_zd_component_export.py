@@ -104,6 +104,7 @@ FIELDNAMES = [
     "receiver_antenna_m",
     "relativity_m",
     "windup_m",
+    "phase_compensation_m",
     "orbit_projection_m",
     "clock_correction_m",
     "residual_m",
@@ -116,6 +117,31 @@ FIELDNAMES = [
     "rx_y_m",
     "rx_z_m",
 ]
+
+CLASLIB_OSR_REQUIRED_COLUMNS = {
+    "msg",
+    "tow",
+    "sys",
+    "prn",
+    "pbias1",
+    "pbias2",
+    "pbias5",
+    "cbias1",
+    "cbias2",
+    "cbias5",
+    "CPC1",
+    "CPC2",
+    "CPC5",
+    "PRC1",
+    "PRC2",
+    "PRC5",
+}
+
+CLASLIB_OSR_GPS_SLOTS = (
+    (0, "1", 1),   # GPS L1C
+    (1, "2", 20),  # GPS L2W, the current CLAS A4b target
+    (2, "5", 26),  # GPS L5X
+)
 
 
 class ExportError(ValueError):
@@ -155,6 +181,20 @@ def rinex_pair(rtklib_code: int) -> tuple[str, str]:
     if suffix is None:
         raise ExportError(f"unsupported RTKLIB observation code: {rtklib_code}")
     return f"C{suffix}", f"L{suffix}"
+
+
+def is_claslib_osr_header(fieldnames: Iterable[str]) -> bool:
+    return CLASLIB_OSR_REQUIRED_COLUMNS.issubset(set(fieldnames))
+
+
+def is_invalid_osr_value(value: str) -> bool:
+    if value == "":
+        return True
+    try:
+        parsed = float(value)
+    except ValueError:
+        return True
+    return abs(parsed + 10000.0) < 0.0005
 
 
 def detect_row_type(row: dict[str, str]) -> str:
@@ -219,6 +259,7 @@ def normalize_row(
             "receiver_antenna_m": first_present(row, ("receiver_antenna_m", "receiver_ant_m", "receiver_ant")),
             "relativity_m": first_present(row, ("relativity_m", "relativity_correction_m")),
             "windup_m": first_present(row, ("windup_m",)),
+            "phase_compensation_m": first_present(row, ("phase_compensation_m", "comp_m")),
             "orbit_projection_m": first_present(row, ("orbit_projection_m", "orb_m")),
             "clock_correction_m": first_present(row, ("clock_correction_m", "clk_m")),
             "residual_m": first_present(row, ("residual_m", "zd_residual_m")),
@@ -235,15 +276,126 @@ def normalize_row(
     return output
 
 
-def export_csv(input_path: Path, output_path: Path, *, stage_label: Optional[str]) -> int:
+def osr_week(row: dict[str, str], *, gps_week: Optional[int], input_path: Path, row_number: int) -> str:
+    week = first_present(row, ("week",))
+    if week:
+        return week
+    if gps_week is None:
+        raise ExportError(
+            f"{input_path}: CLASLIB OSR row {row_number} has no GPS week; pass --gps-week"
+        )
+    return str(gps_week)
+
+
+def normalize_osrres_rows(
+    row: dict[str, str],
+    *,
+    row_number: int,
+    stage_label: Optional[str],
+    gps_week: Optional[int],
+    input_path: Path,
+) -> list[dict[str, str]]:
+    sys_id = parse_int(first_present(row, ("sys", "system")), field=f"row {row_number} sys")
+    prn = parse_int(first_present(row, ("prn",)), field=f"row {row_number} prn")
+    if sys_id != 1:
+        return []
+
+    stage = row.get("stage", "") or (stage_label or "")
+    week = osr_week(row, gps_week=gps_week, input_path=input_path, row_number=row_number)
+    sat = sat_label(sys_id, prn)
+    output_rows: list[dict[str, str]] = []
+
+    for freq_index, suffix, rtklib_code in CLASLIB_OSR_GPS_SLOTS:
+        pseudorange_code, carrier_code = rinex_pair(rtklib_code)
+        common = {
+            "stage": stage,
+            "week": week,
+            "tow": first_present(row, ("tow",)),
+            "sat": sat,
+            "freq": str(freq_index),
+            "pseudorange_rinex_code": pseudorange_code,
+            "carrier_rinex_code": carrier_code,
+            "pseudorange_rtklib_code": str(rtklib_code),
+            "carrier_rtklib_code": str(rtklib_code),
+            "source_sys": str(sys_id),
+            "source_prn": str(prn),
+            "source_satno": first_present(row, ("sat", "satno")),
+            "source_rtklib_code": str(rtklib_code),
+            "trop_correction_m": first_present(row, ("trop", "trop_m")),
+            "iono_l1_m": first_present(row, ("iono", "iono_l1_m", "l1_iono_m")),
+            "receiver_antenna_m": first_present(row, (f"antr{suffix}",)),
+            "relativity_m": first_present(row, ("relatv", "relativity_m", "relativity_correction_m")),
+            "windup_m": first_present(row, (f"wup{suffix}",)),
+            "phase_compensation_m": first_present(row, (f"compI{suffix}",)),
+            "orbit_projection_m": first_present(row, ("orb", "orb_m")),
+            "clock_correction_m": first_present(row, ("clk", "clk_m")),
+        }
+
+        prc = first_present(row, (f"PRC{suffix}",))
+        cbias = first_present(row, (f"cbias{suffix}",))
+        if not is_invalid_osr_value(prc) and not is_invalid_osr_value(cbias):
+            code_row = {field: "" for field in FIELDNAMES}
+            code_row.update(
+                {
+                    **common,
+                    "record": "CODE",
+                    "row_type": "code",
+                    "signal": pseudorange_code,
+                    "applied_pr_corr_m": prc,
+                    "prc_m": prc,
+                    "code_bias_m": cbias,
+                }
+            )
+            output_rows.append(code_row)
+
+        cpc = first_present(row, (f"CPC{suffix}",))
+        pbias = first_present(row, (f"pbias{suffix}",))
+        if not is_invalid_osr_value(cpc) and not is_invalid_osr_value(pbias):
+            phase_row = {field: "" for field in FIELDNAMES}
+            phase_row.update(
+                {
+                    **common,
+                    "record": "PHASE",
+                    "row_type": "phase",
+                    "signal": carrier_code,
+                    "carrier_correction_m": cpc,
+                    "cpc_m": cpc,
+                    "phase_bias_m": pbias,
+                }
+            )
+            output_rows.append(phase_row)
+
+    return output_rows
+
+
+def export_csv(
+    input_path: Path,
+    output_path: Path,
+    *,
+    stage_label: Optional[str],
+    gps_week: Optional[int] = None,
+) -> int:
     with input_path.open(newline="", encoding="utf-8") as input_handle:
         reader = csv.DictReader(input_handle)
         if reader.fieldnames is None:
             raise ExportError(f"{input_path}: missing CSV header")
-        rows = [
-            normalize_row(row, row_number=index, stage_label=stage_label)
-            for index, row in enumerate(reader, start=2)
-        ]
+        if is_claslib_osr_header(reader.fieldnames):
+            rows = []
+            for index, row in enumerate(reader, start=2):
+                rows.extend(
+                    normalize_osrres_rows(
+                        row,
+                        row_number=index,
+                        stage_label=stage_label,
+                        gps_week=gps_week,
+                        input_path=input_path,
+                    )
+                )
+        else:
+            rows = [
+                normalize_row(row, row_number=index, stage_label=stage_label)
+                for index, row in enumerate(reader, start=2)
+            ]
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", newline="", encoding="utf-8") as output_handle:
@@ -267,13 +419,24 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         default=None,
         help="Stage label to use only for input rows that do not already have a stage column",
     )
+    parser.add_argument(
+        "--gps-week",
+        type=int,
+        default=None,
+        help="GPS week to attach to CLASLIB .osr/OSRRES rows, which carry TOW only",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
     try:
-        rows_written = export_csv(args.input_csv, args.output, stage_label=args.stage_label)
+        rows_written = export_csv(
+            args.input_csv,
+            args.output,
+            stage_label=args.stage_label,
+            gps_week=args.gps_week,
+        )
     except ExportError as exc:
         print(f"claslib_zd_component_export: {exc}", file=sys.stderr)
         return 2
