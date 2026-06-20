@@ -49,6 +49,7 @@ class DiffRunnerConfig:
     input_summary_fail_on_issue: bool = False
     input_summary_extra_options: tuple[EnvOption, ...] = ()
     input_summary_require_components: bool = False
+    highlight_components: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -574,7 +575,7 @@ def format_metric(value: object) -> str:
     return str(value)
 
 
-def render_result_detail(result: dict[str, object]) -> str:
+def render_result_detail(config: DiffRunnerConfig, result: dict[str, object]) -> str:
     status = str(result["status"])
     if status in {"blocked_infrastructure", "not_applicable", "skipped"}:
         return str(result.get("block_reason") or result.get("skip_reason", ""))
@@ -604,6 +605,12 @@ def render_result_detail(result: dict[str, object]) -> str:
         max_abs_delta = metrics.get("max_abs_delta")
         if max_abs_delta is not None:
             detail_parts.append(f"max |delta| {format_metric(max_abs_delta)}")
+        per_component = metrics.get("per_component_max_abs_delta")
+        if isinstance(per_component, dict):
+            for component in config.highlight_components:
+                value = per_component.get(component)
+                if isinstance(value, (int, float)):
+                    detail_parts.append(f"`{component}` |delta| {format_metric(value)}")
         top_delta_component = metrics.get("top_delta_component")
         top_delta_component_abs = metrics.get("top_delta_abs_delta")
         if top_delta_component is not None:
@@ -680,7 +687,9 @@ def render_markdown_summary(config: DiffRunnerConfig, results: list[dict[str, ob
         "| --- | --- | --- |",
     ]
     for result in results:
-        lines.append(f"| {result['name']} | `{result['status']}` | {render_result_detail(result)} |")
+        lines.append(
+            f"| {result['name']} | `{result['status']}` | {render_result_detail(config, result)} |"
+        )
     lines.append("")
     return "\n".join(lines)
 

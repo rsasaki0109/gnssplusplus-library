@@ -327,6 +327,12 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                         "candidate_only_rows": 2,
                         "components_compared": 24,
                         "max_abs_delta": 0.125,
+                        "per_component_max_abs_delta": {
+                            "iono_l1_from_stec_m": 0.031,
+                            "iono_l1_stec_closure_residual_m": 1e-15,
+                            "iono_scaled_closure_residual_m": 2e-15,
+                            "prc_closure_residual_m": 3e-15,
+                        },
                         "top_delta_component": "prc_m",
                         "top_delta_abs_delta": 0.25,
                         "top_row_sum_abs_delta": 0.375,
@@ -361,6 +367,10 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
         self.assertIn("unmatched `1/2`", markdown)
         self.assertIn("components `24`", markdown)
         self.assertIn("max |delta| 0.125", markdown)
+        self.assertIn("`iono_l1_from_stec_m` |delta| 0.031", markdown)
+        self.assertIn("`iono_l1_stec_closure_residual_m` |delta| 1e-15", markdown)
+        self.assertIn("`iono_scaled_closure_residual_m` |delta| 2e-15", markdown)
+        self.assertIn("`prc_closure_residual_m` |delta| 3e-15", markdown)
         self.assertIn("top delta `prc_m` |delta| 0.25", markdown)
         self.assertIn("top row sum |delta| 0.375", markdown)
         self.assertIn("top component `prc_m` |delta| 0.25", markdown)
