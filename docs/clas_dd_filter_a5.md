@@ -203,7 +203,7 @@ evidence.  The `ci_optional_clas_zd_component_diff.v7` and later summaries surfa
 the global largest component delta, the top ZD row's dominant component, and a
 per-component max-delta map, so the next A4b model PR can be scoped to one
 correction component instead of tuning final solution RMS.  The
-`ci_optional_clas_zd_component_diff.v11` summary also carries top-row values for
+`ci_optional_clas_zd_component_diff.v11` and later summaries also carry top-row values for
 highlighted components. Present-on-both components, such as `stec_tecu`,
 `iono_l1_m`, `iono_scaled_m`, `code_bias_m`, and `trop_correction_m`, include
 CLASLIB/native/delta values; present-on-one-side components still expose native
@@ -212,6 +212,9 @@ comparable reference-epoch columns. Native code dumps also include selected
 CLAS atmosphere network/grid provenance (`atmos_network_id`, `atmos_grid_no`,
 `atmos_grid*_no`, and `atmos_grid*_weight`) so A4b STEC differences can be
 separated into correction-value versus grid-weight selection issues.
+`ci_optional_clas_zd_component_diff.v12` extends the highlighted evidence to
+those grid provenance columns when the CLASLIB-side normalized dump provides
+them.
 Optional filters are `GNSSPP_CLAS_ZD_COMPONENTS`, `GNSSPP_CLAS_ZD_STAGE`,
 `GNSSPP_CLAS_ZD_ROW_TYPE`, `GNSSPP_CLAS_ZD_THRESHOLD_M`, and
 `GNSSPP_CLAS_ZD_FAIL_ON_DIFF`.  GPS L2W A4b probes can also narrow the row set
@@ -235,7 +238,9 @@ raw display `iono` column, so the diff compares the ionosphere term that was
 actually applied to `PRC1/PRC2/PRC5`.  `iono_l1_m` is the L1-equivalent of that
 same frequency-slot-specific closure value; it is not copied from the L1 slot.
 The normalized `stec_tecu` field is derived from that L1-equivalent delay with
-the GPS L1 TECU-to-meter factor.
+the GPS L1 TECU-to-meter factor.  The CI wrapper passes `clas_grid.def` to the
+normalizer so `.osr` rows also carry test-only CLASLIB-side grid provenance
+derived from the row receiver latitude/longitude.
 The `.osr` path maps only GPS L1/L2/L5 slots where the exact row identity is
 deterministic; QZSS and Galileo still need explicit disposable dumps until
 their ZD materialization and admission sources are fixed.
@@ -243,7 +248,8 @@ their ZD materialization and admission sources are fixed.
 In CI, `scripts/ci/run_claslib_osr_zd_export.py` now performs that CLASLIB-side
 step from public data: it checks out pinned CLASLIB as a test-only source tree,
 builds `rnx2rtkp`, runs `-s` on the A4b window, normalizes the emitted `.osr`,
-and validates the normalized dump with `clas_zd_component_summary.v2`.  If
+validates the normalized dump with `clas_zd_component_summary.v2`, and fails the
+contract when GPS L2W rows lack CLASLIB-side grid provenance.  If
 `GNSSPP_CLAS_ZD_BASE_CSV` is unset, the optional CLAS ZD diff uses this generated
 normalized dump as the CLASLIB base side.
 

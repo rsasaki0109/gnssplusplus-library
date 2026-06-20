@@ -126,6 +126,17 @@ def read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+def write_grid_def(path: Path) -> None:
+    path.write_text(
+        "Compact Network ID    GRID No.  Latitude     Longitude   Ellipsoidal height\n"
+        "                 1           1      0.00          0.00                0.00\n"
+        "                 1           2      0.00          1.00                0.00\n"
+        "                 1           3      1.00          0.00                0.00\n"
+        "                 1           4      1.00          1.00                0.00\n",
+        encoding="ascii",
+    )
+
+
 class ClaslibZdComponentExportTest(unittest.TestCase):
     def test_normalizes_gps_l2w_code_row(self) -> None:
         with tempfile.TemporaryDirectory(prefix="claslib_zd_export_test_") as temp_dir:
@@ -187,6 +198,8 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="claslib_zd_export_test_") as temp_dir:
             input_path = Path(temp_dir) / "claslib.osr"
             output_path = Path(temp_dir) / "normalized.csv"
+            grid_def = Path(temp_dir) / "clas_grid.def"
+            write_grid_def(grid_def)
             write_csv(
                 input_path,
                 [
@@ -222,15 +235,21 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
                         "PRC5": "4.505",
                         "orb": "-0.321",
                         "clk": "0.654",
-                        "lat": "35.0",
-                        "lon": "139.0",
+                        "lat": "0.25",
+                        "lon": "0.25",
                         "alt": "10.0",
                     }
                 ],
                 OSR_FIELDNAMES,
             )
 
-            rows_written = export.export_csv(input_path, output_path, stage_label="post", gps_week=2068)
+            rows_written = export.export_csv(
+                input_path,
+                output_path,
+                stage_label="post",
+                gps_week=2068,
+                clas_grid_def=grid_def,
+            )
             self.assertEqual(rows_written, 6)
             rows = read_csv(output_path)
             code_l1c = next(row for row in rows if row["row_type"] == "code" and row["signal"] == "C1C")
@@ -266,6 +285,13 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             self.assertEqual(code_l2w["receiver_antenna_m"], "-0.020")
             self.assertEqual(code_l2w["orbit_projection_m"], "-0.321")
             self.assertEqual(code_l2w["clock_correction_m"], "0.654")
+            self.assertEqual(code_l2w["atmos_network_id"], "1")
+            self.assertEqual(code_l2w["atmos_grid_no"], "1")
+            self.assertEqual(code_l2w["atmos_grid_count"], "4")
+            self.assertEqual(code_l2w["atmos_grid1_no"], "1")
+            self.assertEqual(code_l2w["atmos_grid4_no"], "4")
+            self.assertAlmostEqual(float(code_l2w["atmos_grid1_weight"]), 0.5625)
+            self.assertAlmostEqual(float(code_l2w["atmos_grid4_weight"]), 0.0625)
             self.assertEqual(phase_l2w["week"], "2068")
             self.assertEqual(phase_l2w["freq"], "1")
             self.assertEqual(phase_l2w["carrier_correction_m"], "3.202")
