@@ -4032,6 +4032,28 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--madocalib-l6", result.stdout)
         self.assertIn("--madocalib-mdciono", result.stdout)
         self.assertIn("--madoca-materialization-dump", result.stdout)
+        self.assertIn("--madoca-materialization-dump-only", result.stdout)
+
+    def test_ppp_cli_rejects_madoca_materialization_dump_only_without_dump_path(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_madoca_materialization_dump_only_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, _, _ = build_synthetic_ppp_inputs(temp_root)
+
+            result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--madoca-materialization-dump-only",
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "--madoca-materialization-dump-only requires --madoca-materialization-dump",
+                result.stderr,
+            )
 
     def test_public_rtk_benchmarks_cli_lists_matrix(self) -> None:
         result = self.run_gnss("public-rtk-benchmarks", "--format", "json")
