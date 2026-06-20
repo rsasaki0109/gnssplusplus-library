@@ -183,9 +183,11 @@ OSR output option. That file carries `OSRRES(ch*)` rows with `tow`, `sys`,
 `prn`, and L1/L2/L5 component columns, but no GPS week or exact observation
 code. For the current A4b GPS L2W probe, the exporter maps GPS slot 2 to
 `C2W`/`L2W`; provide the GPS week explicitly so the diff key is not ambiguous.
-The normalized `iono_l1_m`/`iono_scaled_m` fields are reconstructed from the
-CLASLIB `PRC` closure instead of the raw `.osr` `iono` display column, so they
-match the correction actually applied in `PRC1/PRC2/PRC5`:
+The normalized `iono_scaled_m` field is reconstructed from the CLASLIB `PRC`
+closure instead of the raw `.osr` `iono` display column, so it matches the
+correction actually applied in `PRC1/PRC2/PRC5`.  `iono_l1_m` is the
+frequency-slot-specific L1-equivalent of that reconstructed value, not a copy
+of the L1 slot's display or closure value:
 
 ```bash
 python3 scripts/analysis/claslib_zd_component_export.py \

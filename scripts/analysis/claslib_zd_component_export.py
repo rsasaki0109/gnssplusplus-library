@@ -231,15 +231,11 @@ def prc_iono_scaled_from_osrres(row: dict[str, str], suffix: str) -> Optional[fl
     return prc - (trop + antr + relativity + cbias)
 
 
-def prc_iono_l1_from_osrres(row: dict[str, str]) -> str:
-    l1_scaled = prc_iono_scaled_from_osrres(row, "1")
-    if l1_scaled is not None:
-        return format_component(l1_scaled)
-    for suffix in ("2", "5"):
-        scaled = prc_iono_scaled_from_osrres(row, suffix)
-        scale = GPS_IONO_SCALE_BY_SUFFIX.get(suffix, 0.0)
-        if scaled is not None and scale > 0.0:
-            return format_component(scaled / scale)
+def prc_iono_l1_from_osrres(row: dict[str, str], suffix: str) -> str:
+    scaled = prc_iono_scaled_from_osrres(row, suffix)
+    scale = GPS_IONO_SCALE_BY_SUFFIX.get(suffix, 0.0)
+    if scaled is not None and scale > 0.0:
+        return format_component(scaled / scale)
     return first_present(row, ("iono", "iono_l1_m", "l1_iono_m"))
 
 
@@ -349,11 +345,11 @@ def normalize_osrres_rows(
     stage = row.get("stage", "") or (stage_label or "")
     week = osr_week(row, gps_week=gps_week, input_path=input_path, row_number=row_number)
     sat = sat_label(sys_id, prn)
-    effective_iono_l1_m = prc_iono_l1_from_osrres(row)
     output_rows: list[dict[str, str]] = []
 
     for freq_index, suffix, rtklib_code in CLASLIB_OSR_GPS_SLOTS:
         pseudorange_code, carrier_code = rinex_pair(rtklib_code)
+        effective_iono_l1_m = prc_iono_l1_from_osrres(row, suffix)
         effective_iono_scaled_m = format_component(prc_iono_scaled_from_osrres(row, suffix))
         common = {
             "stage": stage,

@@ -216,8 +216,10 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             rows_written = export.export_csv(input_path, output_path, stage_label="post", gps_week=2068)
             self.assertEqual(rows_written, 6)
             rows = read_csv(output_path)
+            code_l1c = next(row for row in rows if row["row_type"] == "code" and row["signal"] == "C1C")
             code_l2w = next(row for row in rows if row["row_type"] == "code" and row["signal"] == "C2W")
             phase_l2w = next(row for row in rows if row["row_type"] == "phase" and row["signal"] == "L2W")
+            l2w_iono_l1 = (4.202 - (2.345 - 0.020 + 0.003 + 0.022)) / export.GPS_IONO_SCALE_BY_SUFFIX["2"]
             self.assertEqual(code_l2w["stage"], "post")
             self.assertEqual(code_l2w["week"], "2068")
             self.assertEqual(code_l2w["tow"], "230420.0")
@@ -229,8 +231,13 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             self.assertEqual(code_l2w["prc_m"], "4.202")
             self.assertEqual(code_l2w["code_bias_m"], "0.022")
             self.assertEqual(code_l2w["trop_correction_m"], "2.345")
-            self.assertAlmostEqual(float(code_l2w["iono_l1_m"]), 1.752)
+            self.assertAlmostEqual(float(code_l1c["iono_l1_m"]), 1.752)
+            self.assertAlmostEqual(float(code_l2w["iono_l1_m"]), l2w_iono_l1)
             self.assertAlmostEqual(float(code_l2w["iono_scaled_m"]), 1.852)
+            self.assertAlmostEqual(
+                float(code_l2w["iono_l1_m"]) * export.GPS_IONO_SCALE_BY_SUFFIX["2"],
+                float(code_l2w["iono_scaled_m"]),
+            )
             self.assertEqual(code_l2w["receiver_antenna_m"], "-0.020")
             self.assertEqual(code_l2w["orbit_projection_m"], "-0.321")
             self.assertEqual(code_l2w["clock_correction_m"], "0.654")
