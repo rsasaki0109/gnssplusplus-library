@@ -106,6 +106,9 @@ parity is measured. The A4b probe also enables
 `GNSS_PPP_CLAS_ATMOS_GRID_MATRIX=1` and
 `GNSS_PPP_CLAS_ATMOS_LIFECYCLE=1` so native STEC/trop materialization follows
 the CLASLIB-style grid selection and regenerated atmosphere-token lifecycle.
+It also sets `GNSS_PPP_CLAS_TROP_CLIMATOLOGY=1`, which limits the CLAS grid-trop
+hydro/wet zenith-baseline change to this A4b parity lane while default CLAS
+output keeps the legacy constants.
 
 For the A4b GPS L2W identity probe, enable the diagnostic gates and write a
 native zero-difference code component dump:
@@ -116,6 +119,7 @@ GNSS_PPP_CLAS_CODE_ROW_PARITY=bias,full-prc \
 GNSS_PPP_CLAS_RX_ANTENNA=1 \
 GNSS_PPP_CLAS_ATMOS_GRID_MATRIX=1 \
 GNSS_PPP_CLAS_ATMOS_LIFECYCLE=1 \
+GNSS_PPP_CLAS_TROP_CLIMATOLOGY=1 \
 GNSS_PPP_CLAS_CODE_DUMP=/tmp/clas_a4b_native_code_dump.csv \
 python3 apps/gnss.py clas-ppp \
   --profile clas \
@@ -223,9 +227,15 @@ max_abs=0.7819 m` to `mean_abs=0.0243 m, rms=0.0266 m, max_abs=0.0419 m`. The
 gated receiver-antenna materialization keeps the exact GPS L2W row on CLASLIB's
 receiver-antenna slot; on the same 300-epoch G14/C2W slice this reduces
 `receiver_antenna_m` from `mean_abs=0.0249 m` to `mean_abs=0.0021 m`. The
-remaining top-row deltas are then dominated by residual and atmosphere terms
-rather than the 30-second code-bias sign flip, phase-only code-bias gaps, or
-receiver-antenna slot mismatch.
+gated trop-climatology baseline then reduces `trop_correction_m` from
+`mean_abs=0.0283 m, rms=0.0284 m, max_abs=0.0289 m` to
+`mean_abs=0.0011 m, rms=0.0012 m, max_abs=0.0017 m`. Aggregate `PRC` mean/RMS
+also improves from `mean_abs=0.0292 m, rms=0.0324 m` to
+`mean_abs=0.0146 m, rms=0.0212 m`; the remaining `max_abs=0.0695 m` is an
+iono/code-bias dominated row, not a trop regression. The remaining top-row
+deltas are therefore dominated by ionosphere and residual code-bias lifecycle
+terms rather than the 30-second code-bias sign flip, phase-only code-bias gaps,
+receiver-antenna slot mismatch, or fixed trop zenith constants.
 
 The diff JSON also includes `top_component_deltas`, the largest individual
 component deltas across all matched rows, and `top_row_component_breakdowns`,

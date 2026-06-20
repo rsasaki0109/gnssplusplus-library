@@ -83,6 +83,7 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             self.assertEqual(env["GNSS_PPP_CLAS_RX_ANTENNA"], "1")
             self.assertEqual(env["GNSS_PPP_CLAS_ATMOS_GRID_MATRIX"], "1")
             self.assertEqual(env["GNSS_PPP_CLAS_ATMOS_LIFECYCLE"], "1")
+            self.assertEqual(env["GNSS_PPP_CLAS_TROP_CLIMATOLOGY"], "1")
             self.assertEqual(env["GNSS_PPP_CLAS_CODE_DUMP"], str(paths.native_code_dump))
             self.assertIn("clas-ppp", command)
             self.assertIn("--compact-code-bias-composition-policy", command)
