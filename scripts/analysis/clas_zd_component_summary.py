@@ -86,6 +86,7 @@ def summarize_rows(rows: Sequence[dict[str, str]], *, top_limit: int = 20) -> di
     frequencies: Counter[str] = Counter()
     rinex_codes: Counter[str] = Counter()
     component_rows: Counter[str] = Counter()
+    component_values: dict[str, list[float]] = {}
     key_counts: Counter[zd_diff.Key] = Counter()
     issue_counts: Counter[str] = Counter()
     issue_examples: dict[str, list[dict[str, object]]] = {}
@@ -139,6 +140,7 @@ def summarize_rows(rows: Sequence[dict[str, str]], *, top_limit: int = 20) -> di
             record_issue("missing_numeric_component", row_number, "")
         for component in components:
             component_rows[component] += 1
+            component_values.setdefault(component, []).append(components[component])
 
         gps_l2w = sat.startswith("G") and signal in zd_diff.GPS_L2W_RINEX_CODES
         for component in zd_diff.IDENTITY_PROVENANCE_COMPONENTS:
@@ -185,6 +187,16 @@ def summarize_rows(rows: Sequence[dict[str, str]], *, top_limit: int = 20) -> di
         "component_presence": {
             "rows_with_component": _format_counter(component_rows),
             "known_components": component_names,
+        },
+        "component_numeric_stats": {
+            component: {
+                "rows": len(values),
+                "min": min(values),
+                "max": max(values),
+                "max_abs": max(abs(value) for value in values),
+            }
+            for component, values in sorted(component_values.items())
+            if values
         },
         "bias_identity": {
             "rows_with_code_bias": sum(1 for row in rows if _has_component(row, "code_bias_m")),

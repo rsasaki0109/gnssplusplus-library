@@ -326,6 +326,7 @@ def load_diff_metrics(config: DiffRunnerConfig, report_json: Path) -> dict[str, 
         "freq_filter",
         "rinex_code_filter",
         "duplicate_policy",
+        "missing_component_counts",
     ]:
         if key in payload:
             metrics[key] = payload[key]
@@ -611,6 +612,20 @@ def render_result_detail(config: DiffRunnerConfig, result: dict[str, object]) ->
                 value = per_component.get(component)
                 if isinstance(value, (int, float)):
                     detail_parts.append(f"`{component}` |delta| {format_metric(value)}")
+        missing_components = metrics.get("missing_component_counts")
+        if isinstance(missing_components, list):
+            missing_by_component: dict[str, object] = {}
+            for item in missing_components:
+                if not isinstance(item, dict):
+                    continue
+                component = item.get("component")
+                rows = item.get("rows")
+                if isinstance(component, str):
+                    missing_by_component[component] = rows
+            for component in config.highlight_components:
+                rows = missing_by_component.get(component)
+                if rows is not None:
+                    detail_parts.append(f"`{component}` missing `{rows}`")
         top_delta_component = metrics.get("top_delta_component")
         top_delta_component_abs = metrics.get("top_delta_abs_delta")
         if top_delta_component is not None:

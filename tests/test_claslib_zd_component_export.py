@@ -55,6 +55,11 @@ RAW_FIELDNAMES = [
     "pbias_m",
     "receiver_ant_m",
     "relativity_m",
+    "atmos_ref_week",
+    "atmos_ref_tow",
+    "clock_ref_week",
+    "clock_ref_tow",
+    "atmos_clock_gap_s",
     "windup_m",
     "orb_m",
     "clk_m",
@@ -146,6 +151,11 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
                         "receiver_ant_m": "-0.02",
                         "trop_m": "2.4",
                         "zd_residual_m": "-0.5",
+                        "atmos_ref_week": "2068",
+                        "atmos_ref_tow": "230430.0",
+                        "clock_ref_week": "2068",
+                        "clock_ref_tow": "230420.0",
+                        "atmos_clock_gap_s": "10.0",
                     }
                 ],
                 RAW_FIELDNAMES,
@@ -167,6 +177,11 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             self.assertEqual(row["receiver_antenna_m"], "-0.02")
             self.assertEqual(row["trop_correction_m"], "2.4")
             self.assertEqual(row["residual_m"], "-0.5")
+            self.assertEqual(row["atmos_ref_week"], "2068")
+            self.assertEqual(row["atmos_ref_tow"], "230430.0")
+            self.assertEqual(row["clock_ref_week"], "2068")
+            self.assertEqual(row["clock_ref_tow"], "230420.0")
+            self.assertEqual(row["atmos_clock_gap_s"], "10.0")
 
     def test_normalizes_claslib_osrres_gps_l2w_rows(self) -> None:
         with tempfile.TemporaryDirectory(prefix="claslib_zd_export_test_") as temp_dir:

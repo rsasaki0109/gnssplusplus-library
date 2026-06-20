@@ -199,7 +199,7 @@ and component presence before any deltas are compared.  When those inputs are
 absent, the CI step records `status: blocked_infrastructure` with next actions
 instead of silently treating the missing oracle/native evidence as a passing
 sign-off.  The workflow upload treats the summary/log bundle as required
-evidence.  The `ci_optional_clas_zd_component_diff.v7` summary also surfaces
+evidence.  The `ci_optional_clas_zd_component_diff.v7` and later summaries surface
 the global largest component delta, the top ZD row's dominant component, and a
 per-component max-delta map, so the next A4b model PR can be scoped to one
 correction component instead of tuning final solution RMS.
@@ -262,7 +262,8 @@ component-level `prc_m`, `prc_component_sum_m`, `prc_closure_residual_m`,
 `iono_l1_m`, `iono_l1_from_stec_m`,
 `iono_l1_stec_closure_residual_m`, `iono_scaled_m`, `iono_scale`,
 `iono_scaled_closure_residual_m`, `trop_correction_m`, `code_bias_m`,
-`receiver_antenna_m`, and `relativity_m` fields rather than using the aggregate
+`receiver_antenna_m`, `relativity_m`, `atmos_ref_tow`, `clock_ref_tow`, and
+`atmos_clock_gap_s` fields rather than using the aggregate
 `applied_pr_corr_m` to select the dominant row component.  The raw `stec_tecu`
 column remains available for explicit diagnostic runs, but it is not part of
 the default component list because the diff summary reports component deltas in
@@ -273,10 +274,14 @@ closure residual is derived as `iono_scaled_m - iono_scale * iono_l1_m`.
 Together these make the remote artifact show whether the remaining GPS L2W PRC
 gap is explained by component deltas, TECU/L1 conversion, frequency scaling, or
 a PRC convention/rounding mismatch.
-The GitHub step summary highlights the L1-from-STEC, L1-STEC closure,
-scaled-ionosphere closure, and PRC closure components from the per-component
-max-delta map, keeping the primary review evidence in the CI summary while the
-full row breakdown remains in the JSON artifact.
+The native code-row dump also carries the atmosphere reference TOW, clock
+reference TOW, and atmosphere-clock gap used for each OSR row.  The
+`clas_zd_component_summary.v2` snapshot summary reports numeric min/max stats
+for those fields, so lifecycle or epoch-selection mismatches can be diagnosed
+before changing the STEC model.  The GitHub step summary highlights the
+L1-from-STEC, L1-STEC closure, scaled-ionosphere closure, PRC closure, and
+atmosphere-reference components, keeping the primary review evidence in the CI
+summary while the full row breakdown remains in the JSON artifact.
 When `GNSS_PPP_CLAS_DD_FILTER=1` and
 `GNSS_PPP_CLAS_CODE_ROW_PARITY=bias,full-prc` are set, the CLAS OSR
 materializer uses that exact GPS L2 RINEX identity to choose the code/phase SSR
