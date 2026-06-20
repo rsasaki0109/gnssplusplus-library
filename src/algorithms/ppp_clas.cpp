@@ -214,7 +214,7 @@ std::ofstream* clasCodeDumpStream() {
                    << "phase_bias_present,code_bias_fallback,phase_bias_fallback,"
                    << "raw_p_m,corrected_p_m,applied_pr_corr_m,prc_m,"
                    << "prc_minus_trop_m,trop_correction_m,iono_l1_m,"
-                   << "iono_scaled_m,code_bias_m,receiver_ant_m,relativity_m,"
+                   << "stec_tecu,iono_scaled_m,code_bias_m,receiver_ant_m,relativity_m,"
                    << "geo_m,sat_clk_m,receiver_clock_m,trop_model_m,"
                    << "iono_state_m,iono_scale,predicted_m,residual_m,"
                    << "variance_m2,los_e_m,los_n_m,los_u_m,az_rad,el_rad,"
@@ -367,6 +367,7 @@ void dumpClasCodeRows(
                   << (osr.PRC[f] - osr.trop_correction_m) << ','
                   << osr.trop_correction_m << ','
                   << osr.iono_l1_m << ','
+                  << osr.stec_tecu << ','
                   << iono_scaled << ','
                   << osr.code_bias_m[f] << ','
                   << osr.receiver_antenna_m[f] << ','

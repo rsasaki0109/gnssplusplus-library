@@ -187,7 +187,9 @@ The normalized `iono_scaled_m` field is reconstructed from the CLASLIB `PRC`
 closure instead of the raw `.osr` `iono` display column, so it matches the
 correction actually applied in `PRC1/PRC2/PRC5`.  `iono_l1_m` is the
 frequency-slot-specific L1-equivalent of that reconstructed value, not a copy
-of the L1 slot's display or closure value:
+of the L1 slot's display or closure value.  The normalized `stec_tecu` field is
+derived from that L1-equivalent delay with the GPS L1 TECU-to-meter factor, so
+the diff can separate TECU materialization drift from frequency-scaling drift:
 
 ```bash
 python3 scripts/analysis/claslib_zd_component_export.py \
@@ -278,15 +280,21 @@ side and defaults the optional diff filter to `post`/`code`/`G14`/`f1`/`C2W`;
 explicit workflow variables still override those defaults.
 When `GNSSPP_CLAS_ZD_COMPONENTS` is unset, the remote diff compares the
 component-level fields `prc_m`, `prc_component_sum_m`,
-`prc_closure_residual_m`, `iono_l1_m`, `iono_scaled_m`, `iono_scale`,
+`prc_closure_residual_m`, `iono_l1_m`, `iono_l1_from_stec_m`,
+`iono_l1_stec_closure_residual_m`, `iono_scaled_m`, `iono_scale`,
 `iono_scaled_closure_residual_m`, `trop_correction_m`, `code_bias_m`,
-`receiver_antenna_m`, and `relativity_m`.  The derived `prc_closure_residual_m`
-value is computed by the diff tool as `PRC - (trop + relativity + receiver
-antenna + scaled iono + code bias)`, so it diagnoses PRC convention/rounding
-gaps without changing either input CSV schema.  The derived
+`receiver_antenna_m`, and `relativity_m`.  The raw `stec_tecu` column remains
+available for explicit diagnostic runs, but it is not part of the default
+component list because the diff summary reports component deltas in meters.
+The derived `prc_closure_residual_m` value is computed by the diff tool as
+`PRC - (trop + relativity + receiver antenna + scaled iono + code bias)`, so it
+diagnoses PRC convention/rounding gaps without changing either input CSV schema.
+The derived `iono_l1_stec_closure_residual_m` is
+`iono_l1_m - stec_tecu * GPS_L1_TECU_TO_METERS`, which separates TECU-to-meter
+unit mistakes from upstream STEC materialization mismatches.  The derived
 `iono_scaled_closure_residual_m` is `iono_scaled_m - iono_scale * iono_l1_m`,
 which separates frequency-scaling mistakes from upstream STEC/L1-delay
-mismatches. The aggregate `applied_pr_corr_m` remains available for
+mismatches.  The aggregate `applied_pr_corr_m` remains available for
 explicit diagnostic runs, but the default sign-off points the top-row evidence
 at the underlying ZD correction component.
 If either generated side is missing, the optional diff reports

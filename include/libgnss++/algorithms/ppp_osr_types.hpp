@@ -19,6 +19,7 @@ struct OSRCorrection {
     double relativity_correction_m = 0.0;
     double receiver_antenna_m[OSR_MAX_FREQ] = {};
     double iono_l1_m = 0.0;
+    double stec_tecu = 0.0;
     double code_bias_m[OSR_MAX_FREQ] = {};
     double phase_bias_m[OSR_MAX_FREQ] = {};
     double windup_cycles = 0.0;

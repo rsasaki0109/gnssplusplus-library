@@ -98,6 +98,7 @@ FIELDNAMES = [
     "cpc_m",
     "trop_correction_m",
     "iono_l1_m",
+    "stec_tecu",
     "iono_scaled_m",
     "iono_scale",
     "code_bias_m",
@@ -149,6 +150,7 @@ GPS_IONO_SCALE_BY_SUFFIX = {
     "2": (1575.42 / 1227.60) ** 2,
     "5": (1575.42 / 1176.45) ** 2,
 }
+GPS_L1_TECU_TO_METERS = 40.3e16 / ((1575.42 * 1e6) ** 2)
 
 
 class ExportError(ValueError):
@@ -240,6 +242,13 @@ def prc_iono_l1_from_osrres(row: dict[str, str], suffix: str) -> str:
     return first_present(row, ("iono", "iono_l1_m", "l1_iono_m"))
 
 
+def stec_tecu_from_iono_l1_m(value: str) -> str:
+    iono_l1_m = parse_osr_float(value)
+    if iono_l1_m is None or GPS_L1_TECU_TO_METERS <= 0.0:
+        return ""
+    return format_component(iono_l1_m / GPS_L1_TECU_TO_METERS)
+
+
 def detect_row_type(row: dict[str, str]) -> str:
     value = first_present(row, ("row_type", "record", "type", "kind"), "").strip().lower()
     if value in {"code", "pseudorange", "pr"} or value.startswith("code"):
@@ -296,6 +305,7 @@ def normalize_row(
             "cpc_m": first_present(row, ("cpc_m", "CPC", "CPC_m")),
             "trop_correction_m": first_present(row, ("trop_correction_m", "trop_m")),
             "iono_l1_m": first_present(row, ("iono_l1_m", "l1_iono_m")),
+            "stec_tecu": first_present(row, ("stec_tecu",)),
             "iono_scaled_m": first_present(row, ("iono_scaled_m",)),
             "iono_scale": first_present(row, ("iono_scale",)),
             "code_bias_m": first_present(row, ("code_bias_m", "code_bias", "cbias_m")),
@@ -369,6 +379,7 @@ def normalize_osrres_rows(
             "source_rtklib_code": str(rtklib_code),
             "trop_correction_m": first_present(row, ("trop", "trop_m")),
             "iono_l1_m": effective_iono_l1_m,
+            "stec_tecu": stec_tecu_from_iono_l1_m(effective_iono_l1_m),
             "iono_scaled_m": effective_iono_scaled_m,
             "iono_scale": format_component(GPS_IONO_SCALE_BY_SUFFIX[suffix]),
             "receiver_antenna_m": first_present(row, (f"antr{suffix}",)),
