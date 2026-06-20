@@ -199,7 +199,7 @@ and component presence before any deltas are compared.  When those inputs are
 absent, the CI step records `status: blocked_infrastructure` with next actions
 instead of silently treating the missing oracle/native evidence as a passing
 sign-off.  The workflow upload treats the summary/log bundle as required
-evidence.  The `ci_optional_clas_zd_component_diff.v6` summary also surfaces
+evidence.  The `ci_optional_clas_zd_component_diff.v7` summary also surfaces
 the global largest component delta, the top ZD row's dominant component, and a
 per-component max-delta map, so the next A4b model PR can be scoped to one
 correction component instead of tuning final solution RMS.
@@ -257,11 +257,14 @@ rows by the exact row-specific RINEX code so alias mismatches show up as row-set
 differences before component deltas are computed.
 When `GNSSPP_CLAS_ZD_COMPONENTS` is unset, the optional CI diff compares the
 component-level `prc_m`, `prc_component_sum_m`, `prc_closure_residual_m`,
-`iono_l1_m`, `iono_scaled_m`, `trop_correction_m`, `code_bias_m`,
+`iono_l1_m`, `iono_scaled_m`, `iono_scale`,
+`iono_scaled_closure_residual_m`, `trop_correction_m`, `code_bias_m`,
 `receiver_antenna_m`, and `relativity_m` fields rather than using the aggregate
-`applied_pr_corr_m` to select the dominant row component.  The closure residual
-is derived at diff time from the PRC component inputs, which makes the remote
-artifact show whether the remaining GPS L2W PRC gap is explained by component
+`applied_pr_corr_m` to select the dominant row component.  The PRC closure
+residual is derived at diff time from the PRC component inputs, and the
+ionosphere closure residual is derived as `iono_scaled_m - iono_scale * iono_l1_m`.
+Together these make the remote artifact show whether the remaining GPS L2W PRC
+gap is explained by component
 deltas or by a PRC convention/rounding mismatch.
 When `GNSS_PPP_CLAS_DD_FILTER=1` and
 `GNSS_PPP_CLAS_CODE_ROW_PARITY=bias,full-prc` are set, the CLAS OSR

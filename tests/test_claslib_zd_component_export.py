@@ -49,6 +49,7 @@ RAW_FIELDNAMES = [
     "trop_m",
     "iono_l1_m",
     "iono_scaled_m",
+    "iono_scale",
     "cbias_m",
     "pbias_m",
     "receiver_ant_m",
@@ -234,6 +235,10 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             self.assertAlmostEqual(float(code_l1c["iono_l1_m"]), 1.752)
             self.assertAlmostEqual(float(code_l2w["iono_l1_m"]), l2w_iono_l1)
             self.assertAlmostEqual(float(code_l2w["iono_scaled_m"]), 1.852)
+            self.assertAlmostEqual(
+                float(code_l2w["iono_scale"]),
+                export.GPS_IONO_SCALE_BY_SUFFIX["2"],
+            )
             self.assertAlmostEqual(
                 float(code_l2w["iono_l1_m"]) * export.GPS_IONO_SCALE_BY_SUFFIX["2"],
                 float(code_l2w["iono_scaled_m"]),

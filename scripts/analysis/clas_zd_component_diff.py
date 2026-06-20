@@ -31,6 +31,8 @@ COMPONENT_ALIASES: dict[str, tuple[str, ...]] = {
     "trop_correction_m": ("trop_correction_m", "trop_m"),
     "iono_l1_m": ("iono_l1_m", "l1_iono_m"),
     "iono_scaled_m": ("iono_scaled_m",),
+    "iono_scale": ("iono_scale",),
+    "iono_scaled_closure_residual_m": ("iono_scaled_closure_residual_m",),
     "iono_cpc_m": ("iono_cpc_m",),
     "code_bias_m": ("code_bias_m", "code_bias"),
     "phase_bias_m": ("phase_bias_m", "phase_bias"),
@@ -77,6 +79,11 @@ PRC_COMPONENT_SUM_INPUTS = (
     "iono_scaled_m",
     "code_bias_m",
 )
+GPS_IONO_SCALE_BY_BAND = {
+    "1": 1.0,
+    "2": (1575.42 / 1227.60) ** 2,
+    "5": (1575.42 / 1176.45) ** 2,
+}
 
 
 @dataclass(frozen=True)
@@ -132,7 +139,30 @@ def row_component_value(row: Row, component: str) -> Optional[float]:
     return to_float(first_present(row, aliases))
 
 
+def row_iono_scale(row: Row) -> Optional[float]:
+    parsed = row_component_value(row, "iono_scale")
+    if parsed is not None:
+        return parsed
+    row_type = detect_row_type(row)
+    signal = observation_identity(row, row_type)
+    sat = first_present(row, ("sat",))
+    if not sat.startswith("G") or len(signal) < 2:
+        return None
+    return GPS_IONO_SCALE_BY_BAND.get(signal[1])
+
+
 def derived_component_value(row: Row, component: str) -> Optional[float]:
+    if component == "iono_scale":
+        return row_iono_scale(row)
+
+    if component == "iono_scaled_closure_residual_m":
+        iono_scaled = row_component_value(row, "iono_scaled_m")
+        iono_l1 = row_component_value(row, "iono_l1_m")
+        iono_scale = row_iono_scale(row)
+        if iono_scaled is None or iono_l1 is None or iono_scale is None:
+            return None
+        return iono_scaled - iono_scale * iono_l1
+
     if component not in {"prc_component_sum_m", "prc_closure_residual_m"}:
         return None
 
