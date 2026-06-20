@@ -109,7 +109,7 @@ native zero-difference code component dump:
 
 ```bash
 GNSS_PPP_CLAS_DD_FILTER=1 \
-GNSS_PPP_CLAS_CODE_ROW_PARITY=bias \
+GNSS_PPP_CLAS_CODE_ROW_PARITY=bias,full-prc \
 GNSS_PPP_CLAS_RX_ANTENNA=1 \
 GNSS_PPP_CLAS_CODE_DUMP=/tmp/clas_a4b_native_code_dump.csv \
 python3 apps/gnss.py clas-ppp \
@@ -264,6 +264,11 @@ so the generated public-data native dump becomes the candidate side. When
 `output/claslib_osr_zd_export/claslib_osr.normalized.csv` as the CLASLIB base
 side and defaults the optional diff filter to `post`/`code`/`G14`/`f1`/`C2W`;
 explicit workflow variables still override those defaults.
+When `GNSSPP_CLAS_ZD_COMPONENTS` is unset, the remote diff compares the
+component-level fields `prc_m`, `iono_l1_m`, `trop_correction_m`, `code_bias_m`,
+`receiver_antenna_m`, and `relativity_m`. The aggregate `applied_pr_corr_m`
+remains available for explicit diagnostic runs, but the default sign-off points
+the top-row evidence at the underlying ZD correction component.
 If either generated side is missing, the optional diff reports
 `blocked_infrastructure`, not a passing sign-off.
 
