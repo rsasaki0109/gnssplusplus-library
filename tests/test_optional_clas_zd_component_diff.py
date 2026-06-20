@@ -226,6 +226,12 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertEqual(metrics["rinex_code_filter"], ["C2W"])
             self.assertEqual(metrics["duplicate_policy"], "mean")
             self.assertAlmostEqual(metrics["max_abs_delta"], 0.05)
+            self.assertEqual(metrics["top_delta_component"], "prc_m")
+            self.assertAlmostEqual(metrics["top_delta_delta"], 0.05)
+            self.assertAlmostEqual(metrics["top_delta_abs_delta"], 0.05)
+            self.assertEqual(metrics["top_delta_key"], "2360/172800.0/code/G01/1/C2W")
+            self.assertEqual(metrics["top_delta_sat"], "G01")
+            self.assertEqual(metrics["top_delta_rinex_code"], "C2W")
             self.assertAlmostEqual(metrics["top_row_sum_abs_delta"], 0.05)
             self.assertAlmostEqual(metrics["top_row_max_abs_delta"], 0.05)
             self.assertEqual(metrics["top_row_sat"], "G01")
@@ -319,6 +325,8 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                         "candidate_only_rows": 2,
                         "components_compared": 24,
                         "max_abs_delta": 0.125,
+                        "top_delta_component": "prc_m",
+                        "top_delta_abs_delta": 0.25,
                         "top_row_sum_abs_delta": 0.375,
                         "top_row_dominant_component": "prc_m",
                         "top_row_dominant_abs_delta": 0.25,
@@ -351,6 +359,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
         self.assertIn("unmatched `1/2`", markdown)
         self.assertIn("components `24`", markdown)
         self.assertIn("max |delta| 0.125", markdown)
+        self.assertIn("top delta `prc_m` |delta| 0.25", markdown)
         self.assertIn("top row sum |delta| 0.375", markdown)
         self.assertIn("top component `prc_m` |delta| 0.25", markdown)
         self.assertIn("threshold exceedances `3`", markdown)
@@ -379,7 +388,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
 
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary_schema"], runner.SUMMARY_SCHEMA)
-            self.assertEqual(payload["summary_schema"], "ci_optional_clas_zd_component_diff.v4")
+            self.assertEqual(payload["summary_schema"], "ci_optional_clas_zd_component_diff.v5")
             self.assertEqual(payload["contract"], "optional_diff_artifact_contract.v1")
             self.assertEqual(payload["status"], "blocked_infrastructure")
             self.assertIn("missing evidence", payload["next_actions"][1])

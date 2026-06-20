@@ -192,6 +192,12 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
             self.assertEqual(metrics["common_rows"], 1)
             self.assertEqual(metrics["components_compared"], 1)
             self.assertAlmostEqual(metrics["max_abs_delta"], 0.05)
+            self.assertEqual(metrics["top_delta_component"], "residual_m")
+            self.assertAlmostEqual(metrics["top_delta_delta"], 0.05)
+            self.assertAlmostEqual(metrics["top_delta_abs_delta"], 0.05)
+            self.assertEqual(metrics["top_delta_key"], "2360/172800.0/1/code/G01")
+            self.assertEqual(metrics["top_delta_iteration"], 1)
+            self.assertEqual(metrics["top_delta_sat"], "G01")
             self.assertEqual(metrics["madocalib_snapshot_schema"], "madoca_residual_component_summary.v2")
             self.assertEqual(metrics["native_snapshot_schema"], "madoca_residual_component_summary.v2")
             self.assertEqual(metrics["madocalib_snapshot_status"], "passed")
@@ -269,6 +275,8 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
                         "candidate_only_rows": 2,
                         "components_compared": 24,
                         "max_abs_delta": 0.125,
+                        "top_delta_component": "residual_m",
+                        "top_delta_abs_delta": 0.25,
                         "threshold_exceedances": 3,
                     },
                 },
@@ -299,6 +307,7 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
         self.assertIn("unmatched `1/2`", markdown)
         self.assertIn("components `24`", markdown)
         self.assertIn("max |delta| 0.125", markdown)
+        self.assertIn("top delta `residual_m` |delta| 0.25", markdown)
         self.assertIn("threshold exceedances `3`", markdown)
         self.assertIn("see `/tmp/madoca.log`", markdown)
         self.assertIn("missing `/tmp/missing.json`", markdown)
@@ -337,7 +346,7 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
 
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary_schema"], runner.SUMMARY_SCHEMA)
-            self.assertEqual(payload["summary_schema"], "ci_optional_madoca_residual_component_diff.v4")
+            self.assertEqual(payload["summary_schema"], "ci_optional_madoca_residual_component_diff.v5")
             self.assertEqual(payload["contract"], "optional_diff_artifact_contract.v1")
             self.assertEqual(payload["status"], "blocked_infrastructure")
             self.assertIn("missing evidence", payload["next_actions"][1])
