@@ -113,6 +113,10 @@ class ClaslibOsrZdExportTest(unittest.TestCase):
             self.assertIn(str(source_root / "data" / "0627239Q.obs"), command)
             self.assertIn(str(source_root / "data" / "2019239Q.l6"), command)
 
+            normalize_command = runner.build_normalize_command(config, paths, source_root)
+            self.assertIn("--clas-grid-def", normalize_command)
+            self.assertIn(str(source_root / "data" / "clas_grid.def"), normalize_command)
+
     def test_evaluate_accepts_normalized_osr_summary(self) -> None:
         config = runner.RunConfig(
             repo_root=ROOT_DIR,
@@ -136,12 +140,14 @@ class ClaslibOsrZdExportTest(unittest.TestCase):
             "identity_provenance": {"gps_l2w_rows": 40},
         }
 
-        metrics, thresholds, failures = runner.evaluate(config, summary, 100)
+        metrics, thresholds, failures = runner.evaluate(config, summary, 100, 40)
 
         self.assertEqual(failures, [])
         self.assertEqual(metrics["normalized_rows"], 100)
         self.assertEqual(metrics["gps_l2w_rows"], 40)
+        self.assertEqual(metrics["gps_l2w_grid_provenance_rows"], 40)
         self.assertEqual(thresholds["gps_l2w_rows_min"], 30)
+        self.assertEqual(thresholds["gps_l2w_grid_provenance_rows_min"], 30)
 
     def test_evaluate_rejects_bad_normalized_summary(self) -> None:
         config = runner.RunConfig(
@@ -166,11 +172,12 @@ class ClaslibOsrZdExportTest(unittest.TestCase):
             "identity_provenance": {"gps_l2w_rows": 20},
         }
 
-        _metrics, _thresholds, failures = runner.evaluate(config, summary, 100)
+        _metrics, _thresholds, failures = runner.evaluate(config, summary, 100, 10)
 
         self.assertIn("normalized summary status failed != passed", failures)
         self.assertIn("normalized summary rows 99 != normalized rows 100", failures)
         self.assertIn("GPS L2W rows 20 < 30", failures)
+        self.assertIn("GPS L2W grid provenance rows 10 < 30", failures)
 
     def test_blocked_summary_contract_has_next_action(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_claslib_osr_summary_") as temp_dir:
@@ -204,8 +211,8 @@ class ClaslibOsrZdExportTest(unittest.TestCase):
             runner.write_summary(paths, payload)
             written = json.loads(paths.summary_json.read_text(encoding="utf-8"))
 
-        self.assertEqual(written["summary_schema"], runner.SUMMARY_SCHEMA)
-        self.assertEqual(written["contract"], runner.CONTRACT)
+        self.assertEqual(written["summary_schema"], "ci_claslib_osr_zd_export.v2")
+        self.assertEqual(written["contract"], "claslib_osr_zd_export.v2")
         self.assertEqual(written["status"], "blocked_infrastructure")
         self.assertIn("missing CLASLIB OSR oracle evidence", written["next_actions"][1])
         self.assertEqual(written["configuration"]["zd_filter"]["rinex_code"], "C2W")

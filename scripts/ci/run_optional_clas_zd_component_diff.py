@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optional_diff_runner as runner  # noqa: E402
 
 
-SUMMARY_SCHEMA = "ci_optional_clas_zd_component_diff.v11"
+SUMMARY_SCHEMA = "ci_optional_clas_zd_component_diff.v12"
 
 CONFIG = runner.DiffRunnerConfig(
     summary_schema=SUMMARY_SCHEMA,
@@ -53,6 +53,17 @@ CONFIG = runner.DiffRunnerConfig(
         "atmos_ref_tow",
         "clock_ref_tow",
         "atmos_clock_gap_s",
+        "atmos_network_id",
+        "atmos_grid_no",
+        "atmos_grid_count",
+        "atmos_grid1_no",
+        "atmos_grid1_weight",
+        "atmos_grid2_no",
+        "atmos_grid2_weight",
+        "atmos_grid3_no",
+        "atmos_grid3_weight",
+        "atmos_grid4_no",
+        "atmos_grid4_weight",
     ),
     extra_options=(
         runner.EnvOption(("GNSSPP_CLAS_ZD_STAGE",), "--stage"),

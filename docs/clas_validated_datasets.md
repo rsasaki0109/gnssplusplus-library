@@ -252,7 +252,9 @@ for highlighted components. Present-on-both components, such as `stec_tecu`,
 `iono_l1_m`, `iono_scaled_m`, `code_bias_m`, and `trop_correction_m`, carry
 CLASLIB/native/delta values in the CI summary; present-on-one-side components
 still expose the native atmosphere/clock reference epochs when the CLASLIB
-export cannot provide comparable fields.
+export cannot provide comparable fields. Schema
+`ci_optional_clas_zd_component_diff.v12` also highlights CLAS atmosphere
+network/grid provenance when both normalized sides provide those columns.
 
 CI can regenerate the native side of this A4b probe without a pre-staged native
 CSV:
@@ -294,7 +296,10 @@ so the generated public-data native dump becomes the candidate side. When
 `GNSSPP_CLAS_ZD_BASE_CSV` is unset, the workflow uses
 `output/claslib_osr_zd_export/claslib_osr.normalized.csv` as the CLASLIB base
 side and defaults the optional diff filter to `post`/`code`/`G14`/`f1`/`C2W`;
-explicit workflow variables still override those defaults.
+explicit workflow variables still override those defaults. The normalized
+CLASLIB CSV includes test-only grid provenance derived from `clas_grid.def` and
+the CLASLIB `.osr` receiver latitude/longitude, and the runner fails if GPS L2W
+rows are missing those provenance columns.
 When `GNSSPP_CLAS_ZD_COMPONENTS` is unset, the remote diff compares the
 component-level fields `prc_m`, `prc_component_sum_m`,
 `prc_closure_residual_m`, `iono_l1_m`, `iono_l1_from_stec_m`,

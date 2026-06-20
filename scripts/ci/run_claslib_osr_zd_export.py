@@ -20,8 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from optional_diff_runner import artifact_record, truthy  # noqa: E402
 
 
-SUMMARY_SCHEMA = "ci_claslib_osr_zd_export.v1"
-CONTRACT = "claslib_osr_zd_export.v1"
+SUMMARY_SCHEMA = "ci_claslib_osr_zd_export.v2"
+CONTRACT = "claslib_osr_zd_export.v2"
 DEFAULT_CLASLIB_REPO = "https://github.com/QZSS-Strategy-Office/claslib.git"
 DEFAULT_CLASLIB_REF = "23cfd363a2db6d8d8144e292c82e9d97ca2d3015"
 DEFAULT_GPS_WEEK = 2068
@@ -243,7 +243,7 @@ def build_rnx2rtkp_command(config: RunConfig, paths: RunPaths, source_root: Path
     ]
 
 
-def build_normalize_command(config: RunConfig, paths: RunPaths) -> list[str]:
+def build_normalize_command(config: RunConfig, paths: RunPaths, source_root: Path) -> list[str]:
     return [
         config.python_executable,
         str(config.repo_root / "scripts" / "analysis" / "claslib_zd_component_export.py"),
@@ -254,6 +254,8 @@ def build_normalize_command(config: RunConfig, paths: RunPaths) -> list[str]:
         "post",
         "--gps-week",
         str(config.gps_week),
+        "--clas-grid-def",
+        str(source_root / "data" / "clas_grid.def"),
     ]
 
 
@@ -292,10 +294,29 @@ def count_csv_data_rows(path: Path) -> int:
         return max(sum(1 for _line in handle) - 1, 0)
 
 
+def count_gps_l2w_grid_provenance_rows(path: Path) -> int:
+    if not path.is_file():
+        return 0
+    import csv
+
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        count = 0
+        for row in reader:
+            row_type = row.get("row_type", "").strip().lower()
+            signal = row.get("signal", "") or row.get("pseudorange_rinex_code", "")
+            if row_type != "code" or signal != "C2W":
+                continue
+            if row.get("atmos_network_id", "") and row.get("atmos_grid_no", ""):
+                count += 1
+        return count
+
+
 def evaluate(
     config: RunConfig,
     normalized_summary: Mapping[str, object],
     normalized_rows: int,
+    grid_provenance_rows: int,
 ) -> tuple[dict[str, object], dict[str, object], list[str]]:
     identity = normalized_summary.get("identity_provenance")
     if not isinstance(identity, dict):
@@ -307,10 +328,12 @@ def evaluate(
         "normalized_summary_status": normalized_summary.get("status"),
         "normalized_summary_rows": normalized_summary.get("rows"),
         "gps_l2w_rows": gps_l2w_rows,
+        "gps_l2w_grid_provenance_rows": grid_provenance_rows,
     }
     thresholds = {
         "normalized_rows_min": 1,
         "gps_l2w_rows_min": config.gps_l2w_rows_min,
+        "gps_l2w_grid_provenance_rows_min": config.gps_l2w_rows_min,
     }
     failures: list[str] = []
     if normalized_rows <= 0:
@@ -327,6 +350,10 @@ def evaluate(
         )
     if gps_l2w_rows < config.gps_l2w_rows_min:
         failures.append(f"GPS L2W rows {gps_l2w_rows} < {config.gps_l2w_rows_min}")
+    if grid_provenance_rows < config.gps_l2w_rows_min:
+        failures.append(
+            f"GPS L2W grid provenance rows {grid_provenance_rows} < {config.gps_l2w_rows_min}"
+        )
     return metrics, thresholds, failures
 
 
@@ -451,7 +478,11 @@ def main(argv: Sequence[str] | None = None, environ: Mapping[str, str] | None = 
         print(f"CLASLIB OSR run failed; see {paths.log_path}")
         return 1
 
-    normalize_result = run_logged(build_normalize_command(config, paths), cwd=config.repo_root, log_path=paths.log_path)
+    normalize_result = run_logged(
+        build_normalize_command(config, paths, source_root),
+        cwd=config.repo_root,
+        log_path=paths.log_path,
+    )
     if normalize_result.returncode != 0:
         payload = build_payload(
             config=config,
@@ -482,6 +513,7 @@ def main(argv: Sequence[str] | None = None, environ: Mapping[str, str] | None = 
         config,
         normalized_summary,
         count_csv_data_rows(paths.normalized_csv),
+        count_gps_l2w_grid_provenance_rows(paths.normalized_csv),
     )
     status = "failed" if failures else "passed"
     payload = build_payload(

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+from dataclasses import dataclass
+import math
 import sys
 from pathlib import Path
 from typing import Iterable, Optional
@@ -110,6 +112,18 @@ FIELDNAMES = [
     "clock_ref_week",
     "clock_ref_tow",
     "atmos_clock_gap_s",
+    "atmos_network_id",
+    "atmos_grid_no",
+    "atmos_grid_distance_m",
+    "atmos_grid_count",
+    "atmos_grid1_no",
+    "atmos_grid1_weight",
+    "atmos_grid2_no",
+    "atmos_grid2_weight",
+    "atmos_grid3_no",
+    "atmos_grid3_weight",
+    "atmos_grid4_no",
+    "atmos_grid4_weight",
     "windup_m",
     "phase_compensation_m",
     "orbit_projection_m",
@@ -156,10 +170,30 @@ GPS_IONO_SCALE_BY_SUFFIX = {
     "5": (1575.42 / 1176.45) ** 2,
 }
 GPS_L1_TECU_TO_METERS = 40.3e16 / ((1575.42 * 1e6) ** 2)
+WGS84_A = 6378137.0
+DEGREES_TO_RADIANS = math.pi / 180.0
+CLAS_MAX_GRID_DISTANCE_M = 120000.0
+CLAS_NEAREST_GRID_THRESHOLD_M = 1000.0
+CLAS_MULTI_GRID_NETWORK_MAX = 12
 
 
 class ExportError(ValueError):
     """Raised for unsupported CLASLIB dump content."""
+
+
+@dataclass(frozen=True)
+class ClasGridPoint:
+    network_id: int
+    grid_no: int
+    latitude_deg: float
+    longitude_deg: float
+    height_m: float
+
+
+@dataclass(frozen=True)
+class GridCandidate:
+    point: ClasGridPoint
+    distance_m: float
 
 
 def first_present(row: dict[str, str], names: Iterable[str], default: str = "") -> str:
@@ -226,6 +260,247 @@ def format_component(value: Optional[float]) -> str:
     return f"{value:.15g}"
 
 
+def load_clas_grid_def(path: Path) -> list[ClasGridPoint]:
+    if not path.is_file():
+        raise ExportError(f"CLAS grid definition is missing: {path}")
+    points: list[ClasGridPoint] = []
+    with path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            parts = line.split()
+            if len(parts) < 5:
+                continue
+            try:
+                points.append(
+                    ClasGridPoint(
+                        network_id=int(parts[0]),
+                        grid_no=int(parts[1]),
+                        latitude_deg=float(parts[2]),
+                        longitude_deg=float(parts[3]),
+                        height_m=float(parts[4]),
+                    )
+                )
+            except ValueError:
+                if line_number == 1:
+                    continue
+                raise ExportError(f"{path}: invalid CLAS grid row {line_number}: {line.strip()!r}")
+    if not points:
+        raise ExportError(f"{path}: no CLAS grid points found")
+    return points
+
+
+def clas_grid_metric_distance_m(lat_deg: float, lon_deg: float, point: ClasGridPoint) -> float:
+    receiver_lat_rad = lat_deg * DEGREES_TO_RADIANS
+    grid_lat_rad = point.latitude_deg * DEGREES_TO_RADIANS
+    grid_lon_rad = point.longitude_deg * DEGREES_TO_RADIANS
+    dlat_m = WGS84_A * (receiver_lat_rad - grid_lat_rad)
+    dlon_m = WGS84_A * (lon_deg * DEGREES_TO_RADIANS - grid_lon_rad) * math.cos(receiver_lat_rad)
+    return max(math.hypot(dlat_m, dlon_m), 1.0)
+
+
+def non_collinear_2d(ax: float, ay: float, bx: float, by: float) -> bool:
+    norm_product = math.hypot(ax, ay) * math.hypot(bx, by)
+    if norm_product <= 0.0:
+        return False
+    return abs((ax * bx + ay * by) / norm_product) < 1.0
+
+
+def select_claslib_surrounding_grids(candidates: list[GridCandidate]) -> list[GridCandidate]:
+    if not candidates:
+        return []
+    n = len(candidates)
+    first_index = (
+        1
+        if n > 2
+        and candidates[1].point.network_id == candidates[2].point.network_id
+        and candidates[0].point.network_id != candidates[1].point.network_id
+        else 0
+    )
+    selected = [candidates[first_index]]
+    grid2: GridCandidate | None = None
+    grid3: GridCandidate | None = None
+    dd12_lat = dd12_lon = dd13_lat = dd13_lon = 0.0
+
+    for index, candidate in enumerate(candidates):
+        if index == first_index or candidate.point.network_id != selected[0].point.network_id:
+            continue
+        grid2 = candidate
+        selected.append(candidate)
+        dd12_lat = candidate.point.latitude_deg - selected[0].point.latitude_deg
+        dd12_lon = candidate.point.longitude_deg - selected[0].point.longitude_deg
+        break
+    if grid2 is None:
+        return selected[:1]
+
+    for index, candidate in enumerate(candidates):
+        if (
+            index == first_index
+            or candidate is grid2
+            or candidate.point.network_id != selected[0].point.network_id
+        ):
+            continue
+        dlat = candidate.point.latitude_deg - selected[0].point.latitude_deg
+        dlon = candidate.point.longitude_deg - selected[0].point.longitude_deg
+        if non_collinear_2d(dd12_lat, dd12_lon, dlat, dlon):
+            grid3 = candidate
+            selected.append(candidate)
+            dd13_lat = dlat
+            dd13_lon = dlon
+            break
+    if grid3 is None:
+        return selected[:1]
+
+    for index, candidate in enumerate(candidates):
+        if (
+            index == first_index
+            or candidate is grid2
+            or candidate is grid3
+            or candidate.point.network_id != selected[0].point.network_id
+        ):
+            continue
+        dlat = candidate.point.latitude_deg - selected[0].point.latitude_deg
+        dlon = candidate.point.longitude_deg - selected[0].point.longitude_deg
+        rectangular = (
+            abs(grid2.point.longitude_deg - candidate.point.longitude_deg) < 0.04
+            and abs(grid3.point.latitude_deg - candidate.point.latitude_deg) < 0.04
+        ) or (
+            abs(grid2.point.latitude_deg - candidate.point.latitude_deg) < 0.04
+            and abs(grid3.point.longitude_deg - candidate.point.longitude_deg) < 0.04
+        )
+        if (
+            non_collinear_2d(dd12_lat, dd12_lon, dlat, dlon)
+            and non_collinear_2d(dd13_lat, dd13_lon, dlat, dlon)
+            and rectangular
+        ):
+            selected.append(candidate)
+            return selected[:4]
+    return selected[:3]
+
+
+def solve_linear_4x4(matrix: list[list[float]]) -> Optional[list[float]]:
+    for col in range(4):
+        pivot = max(range(col, 4), key=lambda row: abs(matrix[row][col]))
+        if abs(matrix[pivot][col]) <= 1e-14:
+            return None
+        if pivot != col:
+            matrix[col], matrix[pivot] = matrix[pivot], matrix[col]
+        scale = matrix[col][col]
+        for c in range(col, 5):
+            matrix[col][c] /= scale
+        for row in range(4):
+            if row == col:
+                continue
+            factor = matrix[row][col]
+            for c in range(col, 5):
+                matrix[row][c] -= factor * matrix[col][c]
+    return [matrix[row][4] for row in range(4)]
+
+
+def four_grid_weights(selected: list[GridCandidate], user_dlat_deg: float, user_dlon_deg: float) -> Optional[list[float]]:
+    matrix = [[0.0 for _ in range(5)] for _ in range(4)]
+    for grid, candidate in enumerate(selected[:4]):
+        dlat = candidate.point.latitude_deg - selected[0].point.latitude_deg
+        dlon = candidate.point.longitude_deg - selected[0].point.longitude_deg
+        matrix[0][grid] = dlat
+        matrix[1][grid] = dlon
+        matrix[2][grid] = dlat * dlon
+        matrix[3][grid] = 1.0
+    matrix[0][4] = user_dlat_deg
+    matrix[1][4] = user_dlon_deg
+    matrix[2][4] = user_dlat_deg * user_dlon_deg
+    matrix[3][4] = 1.0
+    return solve_linear_4x4(matrix)
+
+
+def three_grid_weights(selected: list[GridCandidate], user_dlat_deg: float, user_dlon_deg: float) -> Optional[list[float]]:
+    a00 = selected[1].point.latitude_deg - selected[0].point.latitude_deg
+    a01 = selected[2].point.latitude_deg - selected[0].point.latitude_deg
+    a10 = selected[1].point.longitude_deg - selected[0].point.longitude_deg
+    a11 = selected[2].point.longitude_deg - selected[0].point.longitude_deg
+    det = a00 * a11 - a01 * a10
+    if abs(det) <= 1e-14:
+        return None
+    w1 = (a11 * user_dlat_deg - a01 * user_dlon_deg) / det
+    w2 = (-a10 * user_dlat_deg + a00 * user_dlon_deg) / det
+    return [1.0 - w1 - w2, w1, w2, 0.0]
+
+
+def inverse_distance_weights(selected: list[GridCandidate]) -> list[float]:
+    inverse_sum = sum(1.0 / candidate.distance_m for candidate in selected)
+    weights = [(1.0 / candidate.distance_m) / inverse_sum for candidate in selected]
+    return weights + [0.0] * (4 - len(weights))
+
+
+def claslib_grid_provenance(
+    grid_points: Optional[list[ClasGridPoint]],
+    lat_text: str,
+    lon_text: str,
+) -> dict[str, str]:
+    if grid_points is None or lat_text == "" or lon_text == "":
+        return {}
+    try:
+        lat_deg = float(lat_text)
+        lon_deg = float(lon_text)
+    except ValueError:
+        return {}
+    candidates = [
+        GridCandidate(point, clas_grid_metric_distance_m(lat_deg, lon_deg, point))
+        for point in grid_points
+        if abs(point.height_m) <= 0.0001
+    ]
+    candidates = [
+        candidate
+        for candidate in candidates
+        if candidate.distance_m <= CLAS_MAX_GRID_DISTANCE_M
+    ]
+    candidates.sort(key=lambda candidate: candidate.distance_m)
+    if not candidates:
+        return {}
+
+    selected = [candidates[0]]
+    weights = [1.0, 0.0, 0.0, 0.0]
+    if (
+        len(candidates) >= 3
+        and candidates[0].point.network_id <= CLAS_MULTI_GRID_NETWORK_MAX
+        and candidates[0].distance_m > CLAS_NEAREST_GRID_THRESHOLD_M
+    ):
+        selected = select_claslib_surrounding_grids(candidates)
+        if len(selected) == 4:
+            user_dlat = lat_deg - selected[0].point.latitude_deg
+            user_dlon = lon_deg - selected[0].point.longitude_deg
+            computed = four_grid_weights(selected, user_dlat, user_dlon)
+            if computed is None:
+                selected = [candidates[0]]
+            else:
+                weights = computed
+        elif len(selected) == 3:
+            user_dlat = lat_deg - selected[0].point.latitude_deg
+            user_dlon = lon_deg - selected[0].point.longitude_deg
+            computed = three_grid_weights(selected, user_dlat, user_dlon)
+            if computed is None:
+                selected = [candidates[0]]
+            else:
+                weights = computed
+        elif len(selected) > 1:
+            weights = inverse_distance_weights(selected)
+
+    if len(selected) == 1:
+        weights = [1.0, 0.0, 0.0, 0.0]
+    fields = {
+        "atmos_network_id": str(selected[0].point.network_id),
+        "atmos_grid_no": str(selected[0].point.grid_no),
+        "atmos_grid_distance_m": format_component(selected[0].distance_m),
+        "atmos_grid_count": str(len(selected)),
+    }
+    for index in range(4):
+        if index < len(selected):
+            fields[f"atmos_grid{index + 1}_no"] = str(selected[index].point.grid_no)
+            fields[f"atmos_grid{index + 1}_weight"] = format_component(weights[index])
+        else:
+            fields[f"atmos_grid{index + 1}_no"] = ""
+            fields[f"atmos_grid{index + 1}_weight"] = ""
+    return fields
+
+
 def prc_iono_scaled_from_osrres(row: dict[str, str], suffix: str) -> Optional[float]:
     prc = parse_osr_float(first_present(row, (f"PRC{suffix}",)))
     trop = parse_osr_float(first_present(row, ("trop", "trop_m")))
@@ -272,6 +547,7 @@ def normalize_row(
     *,
     row_number: int,
     stage_label: Optional[str],
+    grid_points: Optional[list[ClasGridPoint]] = None,
 ) -> dict[str, str]:
     sys_id = parse_int(first_present(row, ("sys", "system")), field=f"row {row_number} sys")
     prn = parse_int(first_present(row, ("prn",)), field=f"row {row_number} prn")
@@ -322,6 +598,18 @@ def normalize_row(
             "clock_ref_week": first_present(row, ("clock_ref_week", "clock_reference_week")),
             "clock_ref_tow": first_present(row, ("clock_ref_tow", "clock_reference_tow")),
             "atmos_clock_gap_s": first_present(row, ("atmos_clock_gap_s", "atmos_clock_dt_s")),
+            "atmos_network_id": first_present(row, ("atmos_network_id",)),
+            "atmos_grid_no": first_present(row, ("atmos_grid_no",)),
+            "atmos_grid_distance_m": first_present(row, ("atmos_grid_distance_m",)),
+            "atmos_grid_count": first_present(row, ("atmos_grid_count",)),
+            "atmos_grid1_no": first_present(row, ("atmos_grid1_no",)),
+            "atmos_grid1_weight": first_present(row, ("atmos_grid1_weight",)),
+            "atmos_grid2_no": first_present(row, ("atmos_grid2_no",)),
+            "atmos_grid2_weight": first_present(row, ("atmos_grid2_weight",)),
+            "atmos_grid3_no": first_present(row, ("atmos_grid3_no",)),
+            "atmos_grid3_weight": first_present(row, ("atmos_grid3_weight",)),
+            "atmos_grid4_no": first_present(row, ("atmos_grid4_no",)),
+            "atmos_grid4_weight": first_present(row, ("atmos_grid4_weight",)),
             "windup_m": first_present(row, ("windup_m",)),
             "phase_compensation_m": first_present(row, ("phase_compensation_m", "comp_m")),
             "orbit_projection_m": first_present(row, ("orbit_projection_m", "orb_m")),
@@ -337,6 +625,8 @@ def normalize_row(
             "rx_z_m": first_present(row, ("rx_z_m",)),
         }
     )
+    if output["atmos_network_id"] == "":
+        output.update(claslib_grid_provenance(grid_points, first_present(row, ("lat",)), first_present(row, ("lon",))))
     return output
 
 
@@ -358,6 +648,7 @@ def normalize_osrres_rows(
     stage_label: Optional[str],
     gps_week: Optional[int],
     input_path: Path,
+    grid_points: Optional[list[ClasGridPoint]] = None,
 ) -> list[dict[str, str]]:
     sys_id = parse_int(first_present(row, ("sys", "system")), field=f"row {row_number} sys")
     prn = parse_int(first_present(row, ("prn",)), field=f"row {row_number} prn")
@@ -368,6 +659,11 @@ def normalize_osrres_rows(
     week = osr_week(row, gps_week=gps_week, input_path=input_path, row_number=row_number)
     sat = sat_label(sys_id, prn)
     output_rows: list[dict[str, str]] = []
+    grid_provenance = claslib_grid_provenance(
+        grid_points,
+        first_present(row, ("lat", "receiver_lat_deg")),
+        first_present(row, ("lon", "receiver_lon_deg")),
+    )
 
     for freq_index, suffix, rtklib_code in CLASLIB_OSR_GPS_SLOTS:
         pseudorange_code, carrier_code = rinex_pair(rtklib_code)
@@ -398,6 +694,7 @@ def normalize_osrres_rows(
             "phase_compensation_m": first_present(row, (f"compI{suffix}",)),
             "orbit_projection_m": first_present(row, ("orb", "orb_m")),
             "clock_correction_m": first_present(row, ("clk", "clk_m")),
+            **grid_provenance,
         }
 
         prc = first_present(row, (f"PRC{suffix}",))
@@ -443,7 +740,9 @@ def export_csv(
     *,
     stage_label: Optional[str],
     gps_week: Optional[int] = None,
+    clas_grid_def: Optional[Path] = None,
 ) -> int:
+    grid_points = load_clas_grid_def(clas_grid_def) if clas_grid_def is not None else None
     with input_path.open(newline="", encoding="utf-8") as input_handle:
         reader = csv.DictReader(input_handle)
         if reader.fieldnames is None:
@@ -458,11 +757,12 @@ def export_csv(
                         stage_label=stage_label,
                         gps_week=gps_week,
                         input_path=input_path,
+                        grid_points=grid_points,
                     )
                 )
         else:
             rows = [
-                normalize_row(row, row_number=index, stage_label=stage_label)
+                normalize_row(row, row_number=index, stage_label=stage_label, grid_points=grid_points)
                 for index, row in enumerate(reader, start=2)
             ]
 
@@ -494,6 +794,12 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         default=None,
         help="GPS week to attach to CLASLIB .osr/OSRRES rows, which carry TOW only",
     )
+    parser.add_argument(
+        "--clas-grid-def",
+        type=Path,
+        default=None,
+        help="Optional CLAS grid definition used to add CLASLIB-side grid provenance for .osr rows",
+    )
     return parser.parse_args(argv)
 
 
@@ -505,6 +811,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             args.output,
             stage_label=args.stage_label,
             gps_week=args.gps_week,
+            clas_grid_def=args.clas_grid_def,
         )
     except ExportError as exc:
         print(f"claslib_zd_component_export: {exc}", file=sys.stderr)
