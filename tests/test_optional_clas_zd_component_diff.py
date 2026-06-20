@@ -333,6 +333,11 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                             "iono_scaled_closure_residual_m": 2e-15,
                             "prc_closure_residual_m": 3e-15,
                         },
+                        "missing_component_counts": [
+                            {"component": "atmos_ref_tow", "rows": 12},
+                            {"component": "clock_ref_tow", "rows": 12},
+                            {"component": "atmos_clock_gap_s", "rows": 12},
+                        ],
                         "top_delta_component": "prc_m",
                         "top_delta_abs_delta": 0.25,
                         "top_row_sum_abs_delta": 0.375,
@@ -371,6 +376,9 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
         self.assertIn("`iono_l1_stec_closure_residual_m` |delta| 1e-15", markdown)
         self.assertIn("`iono_scaled_closure_residual_m` |delta| 2e-15", markdown)
         self.assertIn("`prc_closure_residual_m` |delta| 3e-15", markdown)
+        self.assertIn("`atmos_ref_tow` missing `12`", markdown)
+        self.assertIn("`clock_ref_tow` missing `12`", markdown)
+        self.assertIn("`atmos_clock_gap_s` missing `12`", markdown)
         self.assertIn("top delta `prc_m` |delta| 0.25", markdown)
         self.assertIn("top row sum |delta| 0.375", markdown)
         self.assertIn("top component `prc_m` |delta| 0.25", markdown)
@@ -400,7 +408,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
 
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary_schema"], runner.SUMMARY_SCHEMA)
-            self.assertEqual(payload["summary_schema"], "ci_optional_clas_zd_component_diff.v8")
+            self.assertEqual(payload["summary_schema"], "ci_optional_clas_zd_component_diff.v9")
             self.assertEqual(payload["contract"], "optional_diff_artifact_contract.v1")
             self.assertEqual(payload["status"], "blocked_infrastructure")
             self.assertIn("missing evidence", payload["next_actions"][1])

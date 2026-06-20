@@ -19,6 +19,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <string>
 #include <vector>
 
 namespace libgnss::ppp_clas {
@@ -215,6 +216,8 @@ std::ofstream* clasCodeDumpStream() {
                    << "raw_p_m,corrected_p_m,applied_pr_corr_m,prc_m,"
                    << "prc_minus_trop_m,trop_correction_m,iono_l1_m,"
                    << "stec_tecu,iono_scaled_m,code_bias_m,receiver_ant_m,relativity_m,"
+                   << "atmos_ref_week,atmos_ref_tow,clock_ref_week,clock_ref_tow,"
+                   << "atmos_clock_gap_s,"
                    << "geo_m,sat_clk_m,receiver_clock_m,trop_model_m,"
                    << "iono_state_m,iono_scale,predicted_m,residual_m,"
                    << "variance_m2,los_e_m,los_n_m,los_u_m,az_rad,el_rad,"
@@ -330,6 +333,35 @@ void dumpClasCodeRows(
             const double residual = corrected_p - predicted;
             const double variance =
                 config.clas_code_variance_scale * elevationWeight(osr.elevation);
+            const bool have_atmos_ref =
+                osr.atmos_reference_time.week != 0 ||
+                std::abs(osr.atmos_reference_time.tow) > 0.0;
+            const bool have_clock_ref =
+                osr.clock_reference_time.week != 0 ||
+                std::abs(osr.clock_reference_time.tow) > 0.0;
+            const double atmos_clock_gap_s =
+                (have_atmos_ref && have_clock_ref)
+                    ? osr.atmos_reference_time - osr.clock_reference_time
+                    : 0.0;
+            auto timeWeekField = [](const GNSSTime& time, bool have_time) {
+                return have_time ? std::to_string(time.week) : std::string();
+            };
+            auto timeTowField = [](const GNSSTime& time, bool have_time) {
+                if (!have_time) {
+                    return std::string();
+                }
+                std::ostringstream stream;
+                stream << std::setprecision(17) << time.tow;
+                return stream.str();
+            };
+            auto secondsField = [](double value, bool have_value) {
+                if (!have_value) {
+                    return std::string();
+                }
+                std::ostringstream stream;
+                stream << std::setprecision(17) << value;
+                return stream.str();
+            };
 
             *dump << std::setprecision(17)
                   << "CODE,"
@@ -372,6 +404,11 @@ void dumpClasCodeRows(
                   << osr.code_bias_m[f] << ','
                   << osr.receiver_antenna_m[f] << ','
                   << osr.relativity_correction_m << ','
+                  << timeWeekField(osr.atmos_reference_time, have_atmos_ref) << ','
+                  << timeTowField(osr.atmos_reference_time, have_atmos_ref) << ','
+                  << timeWeekField(osr.clock_reference_time, have_clock_ref) << ','
+                  << timeTowField(osr.clock_reference_time, have_clock_ref) << ','
+                  << secondsField(atmos_clock_gap_s, have_atmos_ref && have_clock_ref) << ','
                   << geo << ','
                   << sat_clk_m << ','
                   << receiver_clock_m << ','

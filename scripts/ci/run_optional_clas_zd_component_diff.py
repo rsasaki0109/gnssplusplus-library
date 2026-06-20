@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optional_diff_runner as runner  # noqa: E402
 
 
-SUMMARY_SCHEMA = "ci_optional_clas_zd_component_diff.v8"
+SUMMARY_SCHEMA = "ci_optional_clas_zd_component_diff.v9"
 
 CONFIG = runner.DiffRunnerConfig(
     summary_schema=SUMMARY_SCHEMA,
@@ -45,6 +45,9 @@ CONFIG = runner.DiffRunnerConfig(
         "iono_l1_stec_closure_residual_m",
         "iono_scaled_closure_residual_m",
         "prc_closure_residual_m",
+        "atmos_ref_tow",
+        "clock_ref_tow",
+        "atmos_clock_gap_s",
     ),
     extra_options=(
         runner.EnvOption(("GNSSPP_CLAS_ZD_STAGE",), "--stage"),

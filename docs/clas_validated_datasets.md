@@ -232,7 +232,7 @@ component deltas across all matched rows, and `top_row_component_breakdowns`,
 which groups all component deltas for the same ZD key. Use those fields to
 distinguish the global largest component from the most unbalanced row before
 changing the gated correction model. The optional CI summary schema
-`ci_optional_clas_zd_component_diff.v7` lifts both the global top delta, the
+`ci_optional_clas_zd_component_diff.v7` and later summaries lift both the global top delta, the
 leading row-breakdown component, and a per-component max-delta map into summary
 metrics, so release artifacts show the next single-component target without
 manually opening the full diff JSON.
@@ -283,7 +283,8 @@ component-level fields `prc_m`, `prc_component_sum_m`,
 `prc_closure_residual_m`, `iono_l1_m`, `iono_l1_from_stec_m`,
 `iono_l1_stec_closure_residual_m`, `iono_scaled_m`, `iono_scale`,
 `iono_scaled_closure_residual_m`, `trop_correction_m`, `code_bias_m`,
-`receiver_antenna_m`, and `relativity_m`.  The raw `stec_tecu` column remains
+`receiver_antenna_m`, `relativity_m`, `atmos_ref_tow`, `clock_ref_tow`, and
+`atmos_clock_gap_s`.  The raw `stec_tecu` column remains
 available for explicit diagnostic runs, but it is not part of the default
 component list because the diff summary reports component deltas in meters.
 The derived `prc_closure_residual_m` value is computed by the diff tool as
@@ -299,8 +300,12 @@ explicit diagnostic runs, but the default sign-off points the top-row evidence
 at the underlying ZD correction component.
 The GitHub step summary highlights `iono_l1_from_stec_m`,
 `iono_l1_stec_closure_residual_m`, `iono_scaled_closure_residual_m`, and
-`prc_closure_residual_m` from the per-component max-delta map so reviewers can
-see which ladder stage is closed without opening the raw JSON artifact.
+`prc_closure_residual_m` from the per-component max-delta map, and reports
+missing counts for highlighted atmosphere-reference fields when CLASLIB cannot
+provide a comparable value.  The native `clas_zd_component_summary.v2` snapshot
+also reports numeric min/max stats for `atmos_ref_tow`, `clock_ref_tow`, and
+`atmos_clock_gap_s`, so reviewers can see which lifecycle stage is selected
+without opening the raw CSV.
 If either generated side is missing, the optional diff reports
 `blocked_infrastructure`, not a passing sign-off.
 

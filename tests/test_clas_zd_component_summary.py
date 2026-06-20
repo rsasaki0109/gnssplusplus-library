@@ -42,6 +42,11 @@ FIELDNAMES = [
     "cpc_m",
     "code_bias_m",
     "phase_bias_m",
+    "atmos_ref_week",
+    "atmos_ref_tow",
+    "clock_ref_week",
+    "clock_ref_tow",
+    "atmos_clock_gap_s",
 ]
 
 
@@ -64,6 +69,11 @@ def zd_row(
     cpc_m: str = "",
     code_bias_m: str = "0.020",
     phase_bias_m: str = "",
+    atmos_ref_week: str = "",
+    atmos_ref_tow: str = "",
+    clock_ref_week: str = "",
+    clock_ref_tow: str = "",
+    atmos_clock_gap_s: str = "",
 ) -> dict[str, str]:
     return {
         "week": "2360",
@@ -84,6 +94,11 @@ def zd_row(
         "cpc_m": cpc_m,
         "code_bias_m": code_bias_m,
         "phase_bias_m": phase_bias_m,
+        "atmos_ref_week": atmos_ref_week,
+        "atmos_ref_tow": atmos_ref_tow,
+        "clock_ref_week": clock_ref_week,
+        "clock_ref_tow": clock_ref_tow,
+        "atmos_clock_gap_s": atmos_clock_gap_s,
     }
 
 
@@ -97,7 +112,16 @@ def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
 class ClasZdComponentSummaryTest(unittest.TestCase):
     def test_summary_reports_identity_and_components(self) -> None:
         rows = [
-            zd_row(sat="G14", row_type="code", pseudorange_code="C2W"),
+            zd_row(
+                sat="G14",
+                row_type="code",
+                pseudorange_code="C2W",
+                atmos_ref_week="2068",
+                atmos_ref_tow="230430.0",
+                clock_ref_week="2068",
+                clock_ref_tow="230420.0",
+                atmos_clock_gap_s="10.0",
+            ),
             zd_row(
                 sat="J01",
                 row_type="phase",
@@ -128,6 +152,13 @@ class ClasZdComponentSummaryTest(unittest.TestCase):
         self.assertEqual(observation_identity["frequency_indices"]["2"], 1)
         self.assertEqual(summary["component_presence"]["rows_with_component"]["prc_m"], 1)
         self.assertEqual(summary["component_presence"]["rows_with_component"]["phase_bias_m"], 1)
+        self.assertEqual(summary["component_presence"]["rows_with_component"]["atmos_ref_tow"], 1)
+        self.assertEqual(summary["component_presence"]["rows_with_component"]["clock_ref_tow"], 1)
+        self.assertEqual(summary["component_presence"]["rows_with_component"]["atmos_clock_gap_s"], 1)
+        self.assertEqual(summary["component_numeric_stats"]["atmos_ref_tow"]["min"], 230430.0)
+        self.assertEqual(summary["component_numeric_stats"]["atmos_ref_tow"]["max"], 230430.0)
+        self.assertEqual(summary["component_numeric_stats"]["clock_ref_tow"]["max"], 230420.0)
+        self.assertEqual(summary["component_numeric_stats"]["atmos_clock_gap_s"]["max_abs"], 10.0)
         self.assertEqual(summary["bias_identity"]["rows_with_code_bias"], 1)
         self.assertEqual(summary["bias_identity"]["rows_with_phase_bias"], 1)
         self.assertEqual(summary["identity_provenance"]["gps_l2w_rows"], 1)

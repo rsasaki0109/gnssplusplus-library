@@ -62,6 +62,11 @@ FIELDNAMES = [
     "iono_scaled_m",
     "iono_scale",
     "relativity_m",
+    "atmos_ref_week",
+    "atmos_ref_tow",
+    "clock_ref_week",
+    "clock_ref_tow",
+    "atmos_clock_gap_s",
 ]
 
 
@@ -85,6 +90,11 @@ def code_row(
     iono_scaled: str = "0.0",
     iono_scale: str = "",
     relativity: str = "0.0",
+    atmos_ref_week: str = "",
+    atmos_ref_tow: str = "",
+    clock_ref_week: str = "",
+    clock_ref_tow: str = "",
+    atmos_clock_gap_s: str = "",
     record: str = "CODE",
     stage: str = "",
     signal: str = "",
@@ -145,6 +155,11 @@ def code_row(
         "iono_scaled_m": iono_scaled,
         "iono_scale": iono_scale,
         "relativity_m": relativity,
+        "atmos_ref_week": atmos_ref_week,
+        "atmos_ref_tow": atmos_ref_tow,
+        "clock_ref_week": clock_ref_week,
+        "clock_ref_tow": clock_ref_tow,
+        "atmos_clock_gap_s": atmos_clock_gap_s,
     }
 
 
@@ -166,6 +181,35 @@ class ClasZdComponentDiffTest(unittest.TestCase):
 
         self.assertAlmostEqual(components["prc_component_sum_m"], 2.92)
         self.assertAlmostEqual(components["prc_closure_residual_m"], 0.08)
+
+    def test_extracts_atmosphere_reference_components(self) -> None:
+        components = component_diff.extract_components(
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="3.0",
+                code_bias="0.5",
+                receiver_ant="0.1",
+                atmos_ref_week="2068",
+                atmos_ref_tow="230430.0",
+                clock_ref_week="2068",
+                clock_ref_tow="230420.0",
+                atmos_clock_gap_s="10.0",
+            ),
+            [
+                "atmos_ref_week",
+                "atmos_ref_tow",
+                "clock_ref_week",
+                "clock_ref_tow",
+                "atmos_clock_gap_s",
+            ],
+        )
+
+        self.assertEqual(components["atmos_ref_week"], 2068.0)
+        self.assertEqual(components["atmos_ref_tow"], 230430.0)
+        self.assertEqual(components["clock_ref_week"], 2068.0)
+        self.assertEqual(components["clock_ref_tow"], 230420.0)
+        self.assertEqual(components["atmos_clock_gap_s"], 10.0)
 
     def test_skips_prc_closure_when_required_component_is_missing(self) -> None:
         components = component_diff.extract_components(
