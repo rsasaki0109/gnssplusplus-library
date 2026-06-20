@@ -251,9 +251,16 @@ code/phase diagnostic dumps.  This lets the GPS L2W investigation distinguish
 current `SignalType::GPS_L2C` runtime family.  The CLAS ZD component diff keys
 rows by the exact row-specific RINEX code so alias mismatches show up as row-set
 differences before component deltas are computed.
-When both `GNSS_PPP_CLAS_DD_FILTER=1` and
-`GNSS_PPP_CLAS_CODE_ROW_PARITY=bias` are set, the CLAS OSR materializer uses
-that exact GPS L2 RINEX identity to choose the code/phase SSR bias signal id.
+When `GNSSPP_CLAS_ZD_COMPONENTS` is unset, the optional CI diff compares the
+component-level `prc_m`, `iono_l1_m`, `trop_correction_m`, `code_bias_m`,
+`receiver_antenna_m`, and `relativity_m` fields rather than using the aggregate
+`applied_pr_corr_m` to select the dominant row component.
+When `GNSS_PPP_CLAS_DD_FILTER=1` and
+`GNSS_PPP_CLAS_CODE_ROW_PARITY=bias,full-prc` are set, the CLAS OSR
+materializer uses that exact GPS L2 RINEX identity to choose the code/phase SSR
+bias signal id, and the native code-row dump reports the full PRC convention
+used by CLASLIB `.osr` rows instead of the solver-internal `PRC - trop` code-row
+application convention.
 The same stored identity now drives CLAS float/DD/SD/WLNL raw observation lookup,
 so a `C2W/L2W` OSR row consumes the matching `C2W/L2W` measurement instead of the
 first collapsed GPS L2 family row.
