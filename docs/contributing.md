@@ -59,7 +59,10 @@ CI lanes are split as follows:
   artifacts are missing.  The MADOCA materialization diff additionally emits
   `madoca_materialization_summary.v1` JSON for both input snapshots and fails
   before the diff when either snapshot has count, discontinuity, or duplicate-key
-  contract issues.
+  contract issues.  The MADOCA residual-component diff follows the same pattern
+  with `madoca_residual_component_summary.v1` JSON for both input snapshots,
+  failing before residual deltas are compared when row identity or component
+  presence is malformed.
 - `python3 scripts/ci/run_clas_a4b_native_selfdiff.py` for the public CLAS A4b
   native-side evidence bundle; it sparse-fetches CLASLIB public data unless
   `GNSSPP_CLAS_A4B_DATA_ROOT` is supplied, generates the native code dump, and

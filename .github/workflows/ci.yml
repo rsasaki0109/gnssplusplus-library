@@ -431,6 +431,8 @@ jobs:
           output/ci_optional_madoca_residual_component/*.log
           output/madoca_residual_component_diff.json
           output/madoca_residual_component_diff.csv
+          output/madoca_residual_component_diff_madocalib_snapshot_summary.json
+          output/madoca_residual_component_diff_native_snapshot_summary.json
         if-no-files-found: error
 
     - name: Upload PPP products comparison artifacts

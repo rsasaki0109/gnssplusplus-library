@@ -122,11 +122,15 @@ The optional CI wrapper
 when `GNSSPP_MADOCA_RESIDUAL_BASE_CSV` and
 `GNSSPP_MADOCA_RESIDUAL_CANDIDATE_CSV` point at generated oracle/native CSV
 dumps.  It writes `ci_optional_madoca_residual_component_summary.json`, a log,
-and the `madoca_residual_component_diff.{json,csv}` artifacts; when those inputs
-are absent the CI step records `status: blocked_infrastructure` with next
-actions instead of silently treating the missing oracle/native evidence as a
-passing sign-off.  The workflow upload treats the summary/log bundle as
-required evidence.  Optional filters are
+the `madoca_residual_component_diff.{json,csv}` artifacts, and one
+`madoca_residual_component_summary.v1` JSON for each oracle/native input
+snapshot.  The wrapper runs those snapshot summaries with `--fail-on-issue`
+before the diff, so malformed row keys, missing row identity, or rows without
+numeric residual components fail as input-contract issues.  When inputs are
+absent the CI step records `status: blocked_infrastructure` with next actions
+instead of silently treating the missing oracle/native evidence as a passing
+sign-off.  The workflow upload treats the summary/log bundle as required
+evidence.  Optional filters are
 `GNSSPP_MADOCA_RESIDUAL_COMPONENTS`, `GNSSPP_MADOCA_RESIDUAL_ROW_TYPE`,
 `GNSSPP_MADOCA_RESIDUAL_ITERATION`, `GNSSPP_MADOCA_RESIDUAL_THRESHOLD`, and
 `GNSSPP_MADOCA_RESIDUAL_FAIL_ON_DIFF`.
