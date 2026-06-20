@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from optional_diff_runner import artifact_record, truthy  # noqa: E402
 
 
-SUMMARY_SCHEMA = "ci_clas_a4b_native_selfdiff.v2"
+SUMMARY_SCHEMA = "ci_clas_a4b_native_selfdiff.v3"
 CONTRACT = "clas_a4b_native_selfdiff.v1"
 DEFAULT_CLASLIB_REPO = "https://github.com/QZSS-Strategy-Office/claslib.git"
 DEFAULT_CLASLIB_REF = "23cfd363a2db6d8d8144e292c82e9d97ca2d3015"
@@ -274,12 +274,22 @@ def build_code_dump_summary_command(config: RunConfig, paths: RunPaths) -> list[
         "--json-out",
         str(paths.native_code_dump_summary_json),
         "--fail-on-issue",
+        "--require-system",
+        "GPS",
         "--require-row-type",
         "code",
         "--require-rinex-code",
         "C2W",
         "--require-component",
         "prc_m",
+        "--require-gps-l2w-rows-min",
+        str(config.gps_l2w_rows_min),
+        "--require-gps-l2w-exact-bias",
+        "--require-gps-l2w-observation-exact-match",
+        "--require-gps-l2w-no-observation-family-fallback",
+        "--require-gps-l2w-no-code-bias-fallback",
+        "--require-gps-l2w-no-phase-bias-fallback",
+        "--require-no-duplicate-keys",
     ]
 
 
@@ -367,10 +377,10 @@ def evaluate(
     failures: list[str] = []
     if metrics["native_epochs"] < config.max_epochs:
         failures.append(f"native epochs {metrics['native_epochs']} < {config.max_epochs}")
-    if metrics["native_code_dump_summary_schema"] != "clas_zd_component_summary.v1":
+    if metrics["native_code_dump_summary_schema"] != "clas_zd_component_summary.v2":
         failures.append(
             f"native code dump summary schema {metrics['native_code_dump_summary_schema']} "
-            "!= clas_zd_component_summary.v1"
+            "!= clas_zd_component_summary.v2"
         )
     if metrics["native_code_dump_summary_status"] != "passed":
         failures.append(

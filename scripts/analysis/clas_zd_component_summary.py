@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import clas_zd_component_diff as zd_diff  # noqa: E402
 
 
-SCHEMA = "clas_zd_component_summary.v1"
+SCHEMA = "clas_zd_component_summary.v2"
 
 
 def _format_counter(counter: Counter[str]) -> dict[str, int]:
@@ -28,6 +28,13 @@ def _format_top(counter: Counter[str], limit: int) -> list[dict[str, object]]:
         {"key": key, "count": count}
         for key, count in sorted(counter.items(), key=lambda item: (-item[1], item[0]))[:limit]
     ]
+
+
+def _positive_count(counter: Mapping[str, Any], key: str) -> bool:
+    try:
+        return int(counter.get(str(key), 0)) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 def _sat_system(sat: str) -> str:
@@ -215,21 +222,21 @@ def requirement_failures(summary: Mapping[str, Any], args: argparse.Namespace) -
     if not isinstance(systems, dict):
         systems = {}
     for system in args.require_system:
-        if int(systems.get(str(system), 0)) <= 0:
+        if not _positive_count(systems, system):
             failures.append(f"required system {system} is absent")
 
     stages = summary.get("stages", {})
     if not isinstance(stages, dict):
         stages = {}
     for stage in args.require_stage:
-        if int(stages.get(str(stage), 0)) <= 0:
+        if not _positive_count(stages, stage):
             failures.append(f"required stage {stage} is absent")
 
     row_types = summary.get("row_types", {})
     if not isinstance(row_types, dict):
         row_types = {}
     for row_type in args.require_row_type:
-        if int(row_types.get(str(row_type), 0)) <= 0:
+        if not _positive_count(row_types, row_type):
             failures.append(f"required row type {row_type} is absent")
 
     observation_identity = summary.get("observation_identity", {})
@@ -239,7 +246,7 @@ def requirement_failures(summary: Mapping[str, Any], args: argparse.Namespace) -
     if not isinstance(rinex_codes, dict):
         rinex_codes = {}
     for rinex_code in args.require_rinex_code:
-        if int(rinex_codes.get(str(rinex_code), 0)) <= 0:
+        if not _positive_count(rinex_codes, rinex_code):
             failures.append(f"required RINEX code {rinex_code} is absent")
 
     component_presence = summary.get("component_presence", {})
@@ -249,8 +256,65 @@ def requirement_failures(summary: Mapping[str, Any], args: argparse.Namespace) -
     if not isinstance(rows_with_component, dict):
         rows_with_component = {}
     for component in args.require_component:
-        if int(rows_with_component.get(str(component), 0)) <= 0:
+        if not _positive_count(rows_with_component, component):
             failures.append(f"required component {component} is absent")
+
+    identity_provenance = summary.get("identity_provenance", {})
+    if not isinstance(identity_provenance, dict):
+        identity_provenance = {}
+    gps_l2w_rows = int(identity_provenance.get("gps_l2w_rows", 0) or 0)
+    if gps_l2w_rows < args.require_gps_l2w_rows_min:
+        failures.append(
+            f"GPS L2W rows {gps_l2w_rows} < required minimum {args.require_gps_l2w_rows_min}"
+        )
+    identity_components = identity_provenance.get("components", {})
+    if not isinstance(identity_components, dict):
+        identity_components = {}
+
+    def gps_l2w_true_rows(component: str) -> int:
+        component_summary = identity_components.get(component, {})
+        if not isinstance(component_summary, dict):
+            return 0
+        return int(component_summary.get("gps_l2w_true_rows", 0) or 0)
+
+    exact_requirements = (
+        ("bias_exact_identity", args.require_gps_l2w_exact_bias, "GPS L2W exact-bias rows"),
+        (
+            "observation_exact_match",
+            args.require_gps_l2w_observation_exact_match,
+            "GPS L2W observation exact-match rows",
+        ),
+    )
+    for component, enabled, label in exact_requirements:
+        if enabled:
+            rows = gps_l2w_true_rows(component)
+            if gps_l2w_rows <= 0:
+                failures.append(f"{label} cannot be checked with zero GPS L2W rows")
+            elif rows != gps_l2w_rows:
+                failures.append(f"{label} {rows} != GPS L2W rows {gps_l2w_rows}")
+
+    zero_requirements = (
+        (
+            "observation_family_fallback",
+            args.require_gps_l2w_no_observation_family_fallback,
+            "GPS L2W observation-family fallback rows",
+        ),
+        (
+            "code_bias_fallback",
+            args.require_gps_l2w_no_code_bias_fallback,
+            "GPS L2W code-bias fallback rows",
+        ),
+        (
+            "phase_bias_fallback",
+            args.require_gps_l2w_no_phase_bias_fallback,
+            "GPS L2W phase-bias fallback rows",
+        ),
+    )
+    for component, enabled, label in zero_requirements:
+        if enabled:
+            rows = gps_l2w_true_rows(component)
+            if rows != 0:
+                failures.append(f"{label} {rows} != 0")
 
     row_key = summary.get("row_key", {})
     if not isinstance(row_key, dict):
@@ -274,6 +338,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--require-row-type", action="append", default=[])
     parser.add_argument("--require-rinex-code", action="append", default=[])
     parser.add_argument("--require-component", action="append", default=[])
+    parser.add_argument("--require-gps-l2w-rows-min", type=int, default=0)
+    parser.add_argument("--require-gps-l2w-exact-bias", action="store_true")
+    parser.add_argument("--require-gps-l2w-observation-exact-match", action="store_true")
+    parser.add_argument("--require-gps-l2w-no-observation-family-fallback", action="store_true")
+    parser.add_argument("--require-gps-l2w-no-code-bias-fallback", action="store_true")
+    parser.add_argument("--require-gps-l2w-no-phase-bias-fallback", action="store_true")
     parser.add_argument("--require-no-duplicate-keys", action="store_true")
     parser.add_argument("--fail-on-issue", action="store_true")
     return parser.parse_args(argv)
