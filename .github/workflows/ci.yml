@@ -402,6 +402,7 @@ jobs:
           output/ci_madoca_materialization_selfdiff/*.log
           output/madoca_materialization_selfdiff/native_materialization.csv
           output/madoca_materialization_selfdiff/native_summary.json
+          output/madoca_materialization_selfdiff/native_materialization_summary.json
           output/madoca_materialization_selfdiff/selfdiff.json
           output/madoca_materialization_selfdiff/selfdiff.csv
         if-no-files-found: error

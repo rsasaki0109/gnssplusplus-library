@@ -89,10 +89,18 @@ MADOCALIB sample BRDM/L6 files unless
 materialization dump with `--madoca-materialization-dump-only`, and compares that
 CSV against itself.  It writes
 `ci_madoca_materialization_selfdiff_summary.json`, a log, the native dump,
-native dump-only summary, and `selfdiff.{json,csv}`.  This is not oracle parity;
-it is a remote-CI evidence contract that proves the native M3 dump can be
-regenerated from public data before model-change PRs start consuming oracle
-materialization rows.
+native dump-only summary, a `native_materialization_summary.json`, and
+`selfdiff.{json,csv}`.  This is not oracle parity; it is a remote-CI evidence
+contract that proves the native M3 dump can be regenerated from public data
+before model-change PRs start consuming oracle materialization rows.
+
+Materialization summary: use
+`scripts/analysis/madoca_materialization_summary.py <snapshot.csv> --json-out
+<summary.json>` to validate and summarize a single M3 snapshot.  The summary
+schema is `madoca_materialization_summary.v1`; it records rows, systems,
+time range, validity counts, code/phase bias ids, duplicate row-key counts, and
+count/discontinuity consistency issues.  Run it before a materialization diff so
+oracle/native CSVs fail early when they do not satisfy the snapshot contract.
 
 Residual-component parity artifact: use
 `scripts/analysis/madoca_residual_component_diff.py` after satellite-set and

@@ -47,6 +47,7 @@ class RunPaths:
     tiny_obs: Path
     native_dump: Path
     native_summary_json: Path
+    native_materialization_summary_json: Path
     selfdiff_json: Path
     selfdiff_csv: Path
 
@@ -86,6 +87,7 @@ def default_paths(output_dir: Path) -> RunPaths:
         tiny_obs=work_dir / "tiny.obs",
         native_dump=work_dir / "native_materialization.csv",
         native_summary_json=work_dir / "native_summary.json",
+        native_materialization_summary_json=work_dir / "native_materialization_summary.json",
         selfdiff_json=work_dir / "selfdiff.json",
         selfdiff_csv=work_dir / "selfdiff.csv",
     )
@@ -244,6 +246,19 @@ def build_selfdiff_command(config: RunConfig, paths: RunPaths) -> list[str]:
     ]
 
 
+def build_materialization_summary_command(config: RunConfig, paths: RunPaths) -> list[str]:
+    return [
+        config.python_executable,
+        str(config.repo_root / "scripts" / "analysis" / "madoca_materialization_summary.py"),
+        str(paths.native_dump),
+        "--json-out",
+        str(paths.native_materialization_summary_json),
+        "--require-rows-min",
+        str(config.min_rows),
+        "--fail-on-issue",
+    ]
+
+
 def load_json(path: Path) -> dict[str, object]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -263,6 +278,7 @@ def evaluate(
     config: RunConfig,
     paths: RunPaths,
     dump_summary: dict[str, object],
+    materialization_summary: dict[str, object],
     selfdiff_report: dict[str, object],
 ) -> Evaluation:
     failures: list[str] = []
@@ -275,6 +291,14 @@ def evaluate(
         failures.append(f"CSV rows {csv_rows} != summary rows {summary_rows}")
     if summary_rows < config.min_rows:
         failures.append(f"materialization rows {summary_rows} < minimum {config.min_rows}")
+    if materialization_summary.get("schema") != "madoca_materialization_summary.v1":
+        failures.append("materialization summary schema mismatch")
+    if materialization_summary.get("status") != "passed":
+        failures.append(f"materialization summary status {materialization_summary.get('status')} != passed")
+    if materialization_summary.get("rows") != summary_rows:
+        failures.append(
+            f"materialization summary rows {materialization_summary.get('rows')} != summary rows {summary_rows}"
+        )
     if selfdiff_report.get("schema") != "madoca_materialization_diff.v1":
         failures.append("self-diff schema mismatch")
     for key in ("base_only_rows", "candidate_only_rows", "discrete_mismatches", "numeric_threshold_exceedances"):
@@ -293,6 +317,9 @@ def evaluate(
     metrics = {
         "materialization_rows": summary_rows,
         "csv_rows": csv_rows,
+        "materialization_systems": materialization_summary.get("systems"),
+        "materialization_row_key": materialization_summary.get("row_key"),
+        "materialization_bias_identity": materialization_summary.get("bias_identity"),
         "selfdiff_common_rows": selfdiff_report.get("common_rows"),
         "selfdiff_numeric_components_compared": selfdiff_report.get("numeric_components_compared"),
         "selfdiff_max_abs_delta": max_delta,
@@ -305,6 +332,11 @@ def artifact_records(paths: RunPaths, *, blocked: bool = False) -> list[dict[str
         artifact_record(paths.log_path, role="log", required=True),
         artifact_record(paths.native_dump, role="native_materialization_csv", required=not blocked),
         artifact_record(paths.native_summary_json, role="native_summary_json", required=not blocked),
+        artifact_record(
+            paths.native_materialization_summary_json,
+            role="native_materialization_summary_json",
+            required=not blocked,
+        ),
         artifact_record(paths.selfdiff_json, role="selfdiff_json", required=not blocked),
         artifact_record(paths.selfdiff_csv, role="selfdiff_csv", required=not blocked),
     ]
@@ -386,6 +418,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"MADOCA materialization dump failed; see {paths.log_path}")
         return 1
 
+    materialization_summary_result = run_logged(
+        build_materialization_summary_command(config, paths),
+        cwd=config.repo_root,
+        log_path=paths.log_path,
+    )
+    if materialization_summary_result.returncode != 0:
+        write_summary(
+            paths,
+            config=config,
+            status="failed",
+            failures=["native MADOCA materialization summary validation failed"],
+        )
+        print(f"MADOCA materialization summary validation failed; see {paths.log_path}")
+        return 1
+
     selfdiff_result = run_logged(build_selfdiff_command(config, paths), cwd=config.repo_root, log_path=paths.log_path)
     if selfdiff_result.returncode != 0:
         write_summary(
@@ -401,6 +448,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         config=config,
         paths=paths,
         dump_summary=load_json(paths.native_summary_json),
+        materialization_summary=load_json(paths.native_materialization_summary_json),
         selfdiff_report=load_json(paths.selfdiff_json),
     )
     write_summary(
