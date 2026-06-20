@@ -203,8 +203,10 @@ evidence.  The `ci_optional_clas_zd_component_diff.v7` and later summaries surfa
 the global largest component delta, the top ZD row's dominant component, and a
 per-component max-delta map, so the next A4b model PR can be scoped to one
 correction component instead of tuning final solution RMS.  The
-`ci_optional_clas_zd_component_diff.v10` summary also carries top-row values for
-highlighted components that exist on only one side, such as native
+`ci_optional_clas_zd_component_diff.v11` summary also carries top-row values for
+highlighted components. Present-on-both components, such as `stec_tecu`,
+`iono_l1_m`, `iono_scaled_m`, `code_bias_m`, and `trop_correction_m`, include
+CLASLIB/native/delta values; present-on-one-side components still expose native
 `atmos_ref_tow`, `clock_ref_tow`, and `atmos_clock_gap_s` when CLASLIB has no
 comparable reference-epoch columns.
 Optional filters are `GNSSPP_CLAS_ZD_COMPONENTS`, `GNSSPP_CLAS_ZD_STAGE`,
@@ -282,10 +284,11 @@ The native code-row dump also carries the atmosphere reference TOW, clock
 reference TOW, and atmosphere-clock gap used for each OSR row.  The
 `clas_zd_component_summary.v2` snapshot summary reports numeric min/max stats
 for those fields, so lifecycle or epoch-selection mismatches can be diagnosed
-before changing the STEC model.  The GitHub step summary highlights the
-L1-from-STEC, L1-STEC closure, scaled-ionosphere closure, PRC closure, and
-atmosphere-reference components, keeping the primary review evidence in the CI
-summary while the full row breakdown remains in the JSON artifact.
+before changing the STEC model.  The GitHub step summary highlights raw STEC,
+L1 ionosphere, scaled ionosphere, code-bias, trop, L1-from-STEC, L1-STEC
+closure, scaled-ionosphere closure, PRC closure, and atmosphere-reference
+components, keeping the primary review evidence in the CI summary while the
+full row breakdown remains in the JSON artifact.
 When `GNSS_PPP_CLAS_DD_FILTER=1` and
 `GNSS_PPP_CLAS_CODE_ROW_PARITY=bias,full-prc` are set, the CLAS OSR
 materializer uses that exact GPS L2 RINEX identity to choose the code/phase SSR

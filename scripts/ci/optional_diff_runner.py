@@ -409,6 +409,27 @@ def load_diff_metrics(config: DiffRunnerConfig, report_json: Path) -> dict[str, 
                         metrics["top_row_dominant_delta"] = float(delta)
                     if isinstance(abs_delta, (int, float)):
                         metrics["top_row_dominant_abs_delta"] = float(abs_delta)
+                highlighted_components: list[dict[str, object]] = []
+                highlight_set = set(config.highlight_components)
+                for item in components:
+                    if not isinstance(item, dict):
+                        continue
+                    component = item.get("component")
+                    if not isinstance(component, str) or component not in highlight_set:
+                        continue
+                    normalized: dict[str, object] = {"component": component}
+                    for source_key, target_key in (
+                        ("base_value_m", "base_value"),
+                        ("candidate_value_m", "candidate_value"),
+                        ("delta_m", "delta"),
+                        ("abs_delta_m", "abs_delta"),
+                    ):
+                        value = item.get(source_key)
+                        if isinstance(value, (int, float)):
+                            normalized[target_key] = float(value)
+                    highlighted_components.append(normalized)
+                if highlighted_components:
+                    metrics["top_row_highlight_components"] = highlighted_components
             missing_components = first_row.get("missing_components")
             if isinstance(missing_components, list) and missing_components:
                 normalized_missing: list[dict[str, object]] = []
@@ -670,6 +691,36 @@ def render_result_detail(config: DiffRunnerConfig, result: dict[str, object]) ->
                         f"{config.candidate_label} "
                         f"{format_metric(item.get('candidate_value'))}"
                     )
+                if value_parts:
+                    detail_parts.append(f"top row `{component}` " + "/".join(value_parts))
+        top_row_highlight_components = metrics.get("top_row_highlight_components")
+        if isinstance(top_row_highlight_components, list):
+            top_row_highlight_by_component: dict[str, dict[str, object]] = {}
+            for item in top_row_highlight_components:
+                if not isinstance(item, dict):
+                    continue
+                component = item.get("component")
+                if isinstance(component, str):
+                    top_row_highlight_by_component[component] = item
+            for component in config.highlight_components:
+                item = top_row_highlight_by_component.get(component)
+                if item is None:
+                    continue
+                abs_delta = item.get("abs_delta")
+                if isinstance(abs_delta, (int, float)) and abs(float(abs_delta)) <= 1e-12:
+                    continue
+                value_parts: list[str] = []
+                if "base_value" in item:
+                    value_parts.append(
+                        f"{config.base_label} {format_metric(item.get('base_value'))}"
+                    )
+                if "candidate_value" in item:
+                    value_parts.append(
+                        f"{config.candidate_label} "
+                        f"{format_metric(item.get('candidate_value'))}"
+                    )
+                if "delta" in item:
+                    value_parts.append(f"delta {format_metric(item.get('delta'))}")
                 if value_parts:
                     detail_parts.append(f"top row `{component}` " + "/".join(value_parts))
         top_delta_component = metrics.get("top_delta_component")

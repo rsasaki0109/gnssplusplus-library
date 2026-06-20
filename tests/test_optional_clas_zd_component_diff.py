@@ -38,6 +38,10 @@ FIELDNAMES = [
     "code_bias_fallback",
     "prc_m",
     "code_bias_m",
+    "trop_correction_m",
+    "iono_l1_m",
+    "stec_tecu",
+    "iono_scaled_m",
 ]
 
 
@@ -54,6 +58,11 @@ def write_zd_component_csv(
     observation_exact_match: str = "",
     observation_family_fallback: str = "",
     code_bias_fallback: str = "",
+    code_bias_m: str = "0.5",
+    trop_correction_m: str = "2.7",
+    iono_l1_m: str = "-0.3",
+    stec_tecu: str = "-1.9",
+    iono_scaled_m: str = "-0.5",
 ) -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)
@@ -74,7 +83,11 @@ def write_zd_component_csv(
                 "observation_family_fallback": observation_family_fallback,
                 "code_bias_fallback": code_bias_fallback,
                 "prc_m": prc_m,
-                "code_bias_m": "0.5",
+                "code_bias_m": code_bias_m,
+                "trop_correction_m": trop_correction_m,
+                "iono_l1_m": iono_l1_m,
+                "stec_tecu": stec_tecu,
+                "iono_scaled_m": iono_scaled_m,
             }
         )
 
@@ -309,6 +322,76 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                 ],
             )
 
+    def test_load_diff_metrics_keeps_top_row_highlight_component_values(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_highlight_") as temp_dir:
+            report_path = Path(temp_dir) / "clas_zd_component_diff.json"
+            report_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "clas_zd_component_diff.v1",
+                        "top_row_component_breakdowns": [
+                            {
+                                "week": 2360,
+                                "tow": 172800.0,
+                                "row_type": "code",
+                                "sat": "G14",
+                                "freq": 1,
+                                "rinex_code": "C2W",
+                                "sum_abs_delta_m": 0.25,
+                                "max_abs_delta_m": 0.2,
+                                "components": [
+                                    {
+                                        "component": "iono_scaled_m",
+                                        "base_value_m": -0.625,
+                                        "candidate_value_m": -0.677,
+                                        "delta_m": -0.052,
+                                        "abs_delta_m": 0.052,
+                                    },
+                                    {
+                                        "component": "stec_tecu",
+                                        "base_value_m": -2.3,
+                                        "candidate_value_m": -2.49,
+                                        "delta_m": -0.19,
+                                        "abs_delta_m": 0.19,
+                                    },
+                                    {
+                                        "component": "unhighlighted_m",
+                                        "base_value_m": 1.0,
+                                        "candidate_value_m": 2.0,
+                                        "delta_m": 1.0,
+                                        "abs_delta_m": 1.0,
+                                    },
+                                ],
+                                "missing_components": [],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            metrics = runner.runner.load_diff_metrics(runner.CONFIG, report_path)
+
+            self.assertEqual(
+                metrics["top_row_highlight_components"],
+                [
+                    {
+                        "component": "iono_scaled_m",
+                        "base_value": -0.625,
+                        "candidate_value": -0.677,
+                        "delta": -0.052,
+                        "abs_delta": 0.052,
+                    },
+                    {
+                        "component": "stec_tecu",
+                        "base_value": -2.3,
+                        "candidate_value": -2.49,
+                        "delta": -0.19,
+                        "abs_delta": 0.19,
+                    },
+                ],
+            )
+
     def test_run_step_fails_when_snapshot_summary_fails(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_input_summary_") as temp_dir:
             root = Path(temp_dir)
@@ -399,6 +482,22 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                         "top_row_sum_abs_delta": 0.375,
                         "top_row_dominant_component": "prc_m",
                         "top_row_dominant_abs_delta": 0.25,
+                        "top_row_highlight_components": [
+                            {
+                                "component": "stec_tecu",
+                                "base_value": -2.3,
+                                "candidate_value": -2.49,
+                                "delta": -0.19,
+                                "abs_delta": 0.19,
+                            },
+                            {
+                                "component": "iono_scaled_m",
+                                "base_value": -0.625,
+                                "candidate_value": -0.677,
+                                "delta": -0.052,
+                                "abs_delta": 0.052,
+                            },
+                        ],
                         "top_row_missing_components": [
                             {
                                 "component": "atmos_ref_tow",
@@ -461,6 +560,11 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
         self.assertIn("top row `atmos_ref_tow` native 230430", markdown)
         self.assertIn("top row `clock_ref_tow` native 230420", markdown)
         self.assertIn("top row `atmos_clock_gap_s` native 10", markdown)
+        self.assertIn("top row `stec_tecu` claslib -2.3/native -2.49/delta -0.19", markdown)
+        self.assertIn(
+            "top row `iono_scaled_m` claslib -0.625/native -0.677/delta -0.052",
+            markdown,
+        )
         self.assertIn("top delta `prc_m` |delta| 0.25", markdown)
         self.assertIn("top row sum |delta| 0.375", markdown)
         self.assertIn("top component `prc_m` |delta| 0.25", markdown)
@@ -490,7 +594,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
 
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary_schema"], runner.SUMMARY_SCHEMA)
-            self.assertEqual(payload["summary_schema"], "ci_optional_clas_zd_component_diff.v10")
+            self.assertEqual(payload["summary_schema"], "ci_optional_clas_zd_component_diff.v11")
             self.assertEqual(payload["contract"], "optional_diff_artifact_contract.v1")
             self.assertEqual(payload["status"], "blocked_infrastructure")
             self.assertIn("missing evidence", payload["next_actions"][1])
