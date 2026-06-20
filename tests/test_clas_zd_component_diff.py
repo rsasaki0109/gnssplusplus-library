@@ -57,6 +57,8 @@ FIELDNAMES = [
     "receiver_ant_m",
     "receiver_antenna_m",
     "trop_correction_m",
+    "iono_scaled_m",
+    "relativity_m",
 ]
 
 
@@ -74,6 +76,9 @@ def code_row(
     prc: str,
     code_bias: str,
     receiver_ant: str,
+    trop: str = "2.0",
+    iono_scaled: str = "0.0",
+    relativity: str = "0.0",
     record: str = "CODE",
     stage: str = "",
     signal: str = "",
@@ -128,11 +133,49 @@ def code_row(
         "phase_bias_m": "",
         "receiver_ant_m": receiver_ant,
         "receiver_antenna_m": "",
-        "trop_correction_m": "2.0",
+        "trop_correction_m": trop,
+        "iono_scaled_m": iono_scaled,
+        "relativity_m": relativity,
     }
 
 
 class ClasZdComponentDiffTest(unittest.TestCase):
+    def test_derives_prc_closure_components_from_existing_fields(self) -> None:
+        components = component_diff.extract_components(
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="3.0",
+                code_bias="0.5",
+                receiver_ant="0.1",
+                trop="2.0",
+                iono_scaled="0.3",
+                relativity="0.02",
+            ),
+            ["prc_component_sum_m", "prc_closure_residual_m"],
+        )
+
+        self.assertAlmostEqual(components["prc_component_sum_m"], 2.92)
+        self.assertAlmostEqual(components["prc_closure_residual_m"], 0.08)
+
+    def test_skips_prc_closure_when_required_component_is_missing(self) -> None:
+        components = component_diff.extract_components(
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="3.0",
+                code_bias="",
+                receiver_ant="0.1",
+                trop="2.0",
+                iono_scaled="0.3",
+                relativity="0.02",
+            ),
+            ["prc_component_sum_m", "prc_closure_residual_m"],
+        )
+
+        self.assertNotIn("prc_component_sum_m", components)
+        self.assertNotIn("prc_closure_residual_m", components)
+
     def test_observation_identity_prefers_row_type_specific_rinex_code(self) -> None:
         self.assertEqual(
             component_diff.observation_identity(

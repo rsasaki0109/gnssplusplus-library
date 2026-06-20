@@ -23,6 +23,8 @@ COMPONENT_ALIASES: dict[str, tuple[str, ...]] = {
     "applied_pr_corr_m": ("applied_pr_corr_m", "pseudorange_correction_m"),
     "carrier_correction_m": ("carrier_correction_m", "carrier_phase_correction_m"),
     "prc_m": ("prc_m", "PRC", "PRC_m"),
+    "prc_component_sum_m": ("prc_component_sum_m",),
+    "prc_closure_residual_m": ("prc_closure_residual_m",),
     "cpc_m": ("cpc_m", "CPC", "CPC_m"),
     "prc_minus_trop_m": ("prc_minus_trop_m",),
     "cpc_minus_trop_m": ("cpc_minus_trop_m",),
@@ -67,6 +69,13 @@ IDENTITY_PROVENANCE_COMPONENTS = (
     "phase_bias_present",
     "code_bias_fallback",
     "phase_bias_fallback",
+)
+PRC_COMPONENT_SUM_INPUTS = (
+    "trop_correction_m",
+    "relativity_m",
+    "receiver_antenna_m",
+    "iono_scaled_m",
+    "code_bias_m",
 )
 
 
@@ -118,6 +127,28 @@ def first_present(row: Row, names: Iterable[str], default: str = "") -> str:
     return default
 
 
+def row_component_value(row: Row, component: str) -> Optional[float]:
+    aliases = COMPONENT_ALIASES.get(component, (component,))
+    return to_float(first_present(row, aliases))
+
+
+def derived_component_value(row: Row, component: str) -> Optional[float]:
+    if component not in {"prc_component_sum_m", "prc_closure_residual_m"}:
+        return None
+
+    inputs = [row_component_value(row, name) for name in PRC_COMPONENT_SUM_INPUTS]
+    if any(value is None for value in inputs):
+        return None
+    component_sum = sum(float(value) for value in inputs if value is not None)
+    if component == "prc_component_sum_m":
+        return component_sum
+
+    prc = row_component_value(row, "prc_m")
+    if prc is None:
+        return None
+    return prc - component_sum
+
+
 def detect_row_type(row: Row) -> str:
     value = first_present(row, ("row_type", "kind", "type", "record"), "")
     normalized = value.strip().lower()
@@ -167,9 +198,9 @@ def observation_identity(row: Row, row_type: str) -> str:
 def extract_components(row: Row, component_names: Sequence[str]) -> ComponentMap:
     components: ComponentMap = {}
     for component in component_names:
-        aliases = COMPONENT_ALIASES.get(component, (component,))
-        raw_value = first_present(row, aliases)
-        parsed = to_float(raw_value)
+        parsed = row_component_value(row, component)
+        if parsed is None:
+            parsed = derived_component_value(row, component)
         if parsed is not None:
             components[component] = parsed
     return components

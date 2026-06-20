@@ -337,13 +337,20 @@ def load_diff_metrics(config: DiffRunnerConfig, report_json: Path) -> dict[str, 
         per_component = payload.get("per_numeric_component")
     if isinstance(per_component, list):
         max_abs_delta = 0.0
+        per_component_max_abs_delta: dict[str, float] = {}
         for item in per_component:
             if not isinstance(item, dict):
                 continue
+            component = item.get("component")
             value = item.get(config.per_component_max_key)
             if isinstance(value, (int, float)):
-                max_abs_delta = max(max_abs_delta, float(value))
+                parsed_value = float(value)
+                max_abs_delta = max(max_abs_delta, parsed_value)
+                if isinstance(component, str) and component:
+                    per_component_max_abs_delta[component] = parsed_value
         metrics["max_abs_delta"] = max_abs_delta
+        if per_component_max_abs_delta:
+            metrics["per_component_max_abs_delta"] = per_component_max_abs_delta
     top_component_deltas = payload.get("top_component_deltas")
     if isinstance(top_component_deltas, list) and top_component_deltas:
         first_delta = top_component_deltas[0]
