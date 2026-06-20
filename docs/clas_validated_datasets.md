@@ -128,6 +128,7 @@ python3 apps/gnss.py clas-ppp \
   --qzss-l6 "$DATA/2019239Q.l6" \
   --qzss-gps-week 2068 \
   --antex "$DATA/igs14_L5copy.atx" \
+  --clas-atmos-selection freshness-first \
   --receiver-antenna-type "TRM59800.80     NONE" \
   --compact-code-bias-composition-policy base-only-if-present \
   --compact-code-bias-bank-policy latest-preceding-bank \

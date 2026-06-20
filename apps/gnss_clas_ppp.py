@@ -129,6 +129,18 @@ def parse_args() -> argparse.Namespace:
         default=qzss_l6_info.COMPACT_ROW_CONSTRUCTION_POLICY_INDEPENDENT,
         help="Compact SSR row construction policy controlling how subtype-4/subtype-6 row and value construction interact.",
     )
+    parser.add_argument(
+        "--clas-atmos-selection",
+        choices=("grid-first", "grid-guarded", "balanced", "freshness-first"),
+        default="grid-first",
+        help="CLAS atmosphere network selection policy forwarded to PPP.",
+    )
+    parser.add_argument(
+        "--clas-atmos-stale-after-seconds",
+        type=float,
+        default=15.0,
+        help="Freshness threshold for CLAS atmosphere selection forwarded to PPP.",
+    )
     parser.add_argument("--out", type=Path, required=True, help="Output PPP .pos file.")
     parser.add_argument("--summary-json", type=Path, default=None, help="Optional summary JSON path.")
     parser.add_argument("--sp3", type=Path, default=None, help="Optional precise SP3 file.")
@@ -778,6 +790,11 @@ def main() -> int:
         # enable per-satellite ionosphere estimation with STEC constraints.
         command.append("--no-ionosphere-free")
         command.append("--estimate-ionosphere")
+        command.extend(["--clas-atmos-selection", args.clas_atmos_selection])
+        command.extend([
+            "--clas-atmos-stale-after-seconds",
+            str(args.clas_atmos_stale_after_seconds),
+        ])
         if args.profile == "clas":
             command.append("--clas-osr")
         if args.sp3 is not None:

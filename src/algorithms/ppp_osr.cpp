@@ -1058,6 +1058,43 @@ std::vector<OSRCorrection> computeOSR(
 
         // CLAS troposphere grid correction (if available)
         if (!atmos_tokens.empty()) {
+            ppp_atmosphere::ClasGridReference grid_reference;
+            if (ppp_atmosphere::resolveClasGridReference(
+                    atmos_tokens,
+                    receiver_pos,
+                    grid_reference)) {
+                osr.atmos_network_id = grid_reference.network_id;
+                osr.atmos_grid_no = grid_reference.grid_no;
+                osr.atmos_nearest_grid_distance_m =
+                    grid_reference.nearest_grid_distance_m;
+                if (grid_reference.interpolation_grid_count > 0) {
+                    osr.atmos_interpolation_grid_count =
+                        grid_reference.interpolation_grid_count;
+                    for (int grid = 0;
+                         grid < grid_reference.interpolation_grid_count &&
+                         grid < static_cast<int>(osr.atmos_interpolation_grid_no.size());
+                         ++grid) {
+                        osr.atmos_interpolation_grid_no[grid] =
+                            static_cast<int>(
+                                grid_reference.interpolation_grid_indices[grid]) + 1;
+                        osr.atmos_interpolation_weights[grid] =
+                            grid_reference.interpolation_weights[grid];
+                    }
+                } else if (grid_reference.has_bilinear) {
+                    osr.atmos_interpolation_grid_count = 4;
+                    for (int grid = 0; grid < 4; ++grid) {
+                        osr.atmos_interpolation_grid_no[grid] =
+                            static_cast<int>(
+                                grid_reference.bilinear_grid_indices[grid]) + 1;
+                        osr.atmos_interpolation_weights[grid] =
+                            grid_reference.bilinear_weights[grid];
+                    }
+                } else if (grid_reference.grid_no > 0) {
+                    osr.atmos_interpolation_grid_count = 1;
+                    osr.atmos_interpolation_grid_no[0] = grid_reference.grid_no;
+                    osr.atmos_interpolation_weights[0] = 1.0;
+                }
+            }
             const double clas_trop = ppp_atmosphere::atmosphericTroposphereCorrectionMeters(
                 atmos_tokens,
                 receiver_pos,

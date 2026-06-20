@@ -499,6 +499,10 @@ class ClasCompactHelpersTest(unittest.TestCase):
                 str(antex_path),
                 "--receiver-antenna-type",
                 "TEST-ANT",
+                "--clas-atmos-selection",
+                "freshness-first",
+                "--clas-atmos-stale-after-seconds",
+                "12.5",
                 "--out",
                 str(output_path),
                 "--summary-json",
@@ -517,6 +521,10 @@ class ClasCompactHelpersTest(unittest.TestCase):
             self.assertEqual(command[command.index("--antex") + 1], str(antex_path))
             self.assertIn("--receiver-antenna-type", command)
             self.assertEqual(command[command.index("--receiver-antenna-type") + 1], "TEST-ANT")
+            self.assertIn("--clas-atmos-selection", command)
+            self.assertEqual(command[command.index("--clas-atmos-selection") + 1], "freshness-first")
+            self.assertIn("--clas-atmos-stale-after-seconds", command)
+            self.assertEqual(command[command.index("--clas-atmos-stale-after-seconds") + 1], "12.5")
             self.assertIn("--clas-osr", command)
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["antex"], str(antex_path))

@@ -217,7 +217,12 @@ std::ofstream* clasCodeDumpStream() {
                    << "prc_minus_trop_m,trop_correction_m,iono_l1_m,"
                    << "stec_tecu,iono_scaled_m,code_bias_m,receiver_ant_m,relativity_m,"
                    << "atmos_ref_week,atmos_ref_tow,clock_ref_week,clock_ref_tow,"
-                   << "atmos_clock_gap_s,"
+                   << "atmos_clock_gap_s,atmos_network_id,atmos_grid_no,"
+                   << "atmos_grid_distance_m,atmos_grid_count,"
+                   << "atmos_grid1_no,atmos_grid1_weight,"
+                   << "atmos_grid2_no,atmos_grid2_weight,"
+                   << "atmos_grid3_no,atmos_grid3_weight,"
+                   << "atmos_grid4_no,atmos_grid4_weight,"
                    << "geo_m,sat_clk_m,receiver_clock_m,trop_model_m,"
                    << "iono_state_m,iono_scale,predicted_m,residual_m,"
                    << "variance_m2,los_e_m,los_n_m,los_u_m,az_rad,el_rad,"
@@ -409,6 +414,18 @@ void dumpClasCodeRows(
                   << timeWeekField(osr.clock_reference_time, have_clock_ref) << ','
                   << timeTowField(osr.clock_reference_time, have_clock_ref) << ','
                   << secondsField(atmos_clock_gap_s, have_atmos_ref && have_clock_ref) << ','
+                  << osr.atmos_network_id << ','
+                  << osr.atmos_grid_no << ','
+                  << osr.atmos_nearest_grid_distance_m << ','
+                  << osr.atmos_interpolation_grid_count << ','
+                  << osr.atmos_interpolation_grid_no[0] << ','
+                  << osr.atmos_interpolation_weights[0] << ','
+                  << osr.atmos_interpolation_grid_no[1] << ','
+                  << osr.atmos_interpolation_weights[1] << ','
+                  << osr.atmos_interpolation_grid_no[2] << ','
+                  << osr.atmos_interpolation_weights[2] << ','
+                  << osr.atmos_interpolation_grid_no[3] << ','
+                  << osr.atmos_interpolation_weights[3] << ','
                   << geo << ','
                   << sat_clk_m << ','
                   << receiver_clock_m << ','
