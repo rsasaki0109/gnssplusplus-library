@@ -226,6 +226,8 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertEqual(metrics["rinex_code_filter"], ["C2W"])
             self.assertEqual(metrics["duplicate_policy"], "mean")
             self.assertAlmostEqual(metrics["max_abs_delta"], 0.05)
+            self.assertEqual(set(metrics["per_component_max_abs_delta"]), {"prc_m"})
+            self.assertAlmostEqual(metrics["per_component_max_abs_delta"]["prc_m"], 0.05)
             self.assertEqual(metrics["top_delta_component"], "prc_m")
             self.assertAlmostEqual(metrics["top_delta_delta"], 0.05)
             self.assertAlmostEqual(metrics["top_delta_abs_delta"], 0.05)
@@ -388,7 +390,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
 
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary_schema"], runner.SUMMARY_SCHEMA)
-            self.assertEqual(payload["summary_schema"], "ci_optional_clas_zd_component_diff.v5")
+            self.assertEqual(payload["summary_schema"], "ci_optional_clas_zd_component_diff.v6")
             self.assertEqual(payload["contract"], "optional_diff_artifact_contract.v1")
             self.assertEqual(payload["status"], "blocked_infrastructure")
             self.assertIn("missing evidence", payload["next_actions"][1])
