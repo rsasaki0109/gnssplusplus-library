@@ -103,6 +103,11 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
                 "GNSSPP_MADOCA_RESIDUAL_COMPONENTS": "residual_m,iono_state_m",
                 "GNSSPP_MADOCA_RESIDUAL_ROW_TYPE": "code",
                 "GNSSPP_MADOCA_RESIDUAL_ITERATION": "1",
+                "GNSSPP_MADOCA_RESIDUAL_REQUIRED_SYSTEMS": "GPS,Galileo",
+                "GNSSPP_MADOCA_RESIDUAL_REQUIRED_PRIMARY_CODES": "C1C,C5Q",
+                "GNSSPP_MADOCA_RESIDUAL_REQUIRED_SECONDARY_CODES": "C2W",
+                "GNSSPP_MADOCA_RESIDUAL_REQUIRED_FREQUENCY_INDICES": "0,1",
+                "GNSSPP_MADOCA_RESIDUAL_REQUIRED_IONOSPHERE_COEFFICIENTS": "1",
                 "GNSSPP_MADOCA_RESIDUAL_THRESHOLD": "0.25",
                 "GNSSPP_MADOCA_RESIDUAL_FAIL_ON_DIFF": "1",
             }
@@ -139,6 +144,25 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
                 str(output_dir / "madoca_residual_component_diff_native_snapshot_summary.json"),
                 steps[0].outputs,
             )
+            base_summary_command = list(steps[0].pre_commands[0])
+            self.assertIn("--require-component", base_summary_command)
+            self.assertIn("residual_m", base_summary_command)
+            self.assertIn("iono_state_m", base_summary_command)
+            self.assertIn("--require-row-type", base_summary_command)
+            self.assertIn("code", base_summary_command)
+            self.assertIn("--require-iteration", base_summary_command)
+            self.assertIn("1", base_summary_command)
+            self.assertIn("--require-system", base_summary_command)
+            self.assertIn("GPS", base_summary_command)
+            self.assertIn("Galileo", base_summary_command)
+            self.assertIn("--require-primary-observation-code", base_summary_command)
+            self.assertIn("C1C", base_summary_command)
+            self.assertIn("C5Q", base_summary_command)
+            self.assertIn("--require-secondary-observation-code", base_summary_command)
+            self.assertIn("C2W", base_summary_command)
+            self.assertIn("--require-frequency-index", base_summary_command)
+            self.assertIn("0", base_summary_command)
+            self.assertIn("--require-ionosphere-coefficient", base_summary_command)
 
     def test_run_step_collects_metrics_from_diff_report(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_residual_exec_") as temp_dir:
@@ -168,8 +192,8 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
             self.assertEqual(metrics["common_rows"], 1)
             self.assertEqual(metrics["components_compared"], 1)
             self.assertAlmostEqual(metrics["max_abs_delta"], 0.05)
-            self.assertEqual(metrics["madocalib_snapshot_schema"], "madoca_residual_component_summary.v1")
-            self.assertEqual(metrics["native_snapshot_schema"], "madoca_residual_component_summary.v1")
+            self.assertEqual(metrics["madocalib_snapshot_schema"], "madoca_residual_component_summary.v2")
+            self.assertEqual(metrics["native_snapshot_schema"], "madoca_residual_component_summary.v2")
             self.assertEqual(metrics["madocalib_snapshot_status"], "passed")
             self.assertEqual(metrics["native_snapshot_status"], "passed")
             self.assertEqual(metrics["madocalib_snapshot_rows"], 1)
@@ -313,7 +337,7 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
 
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary_schema"], runner.SUMMARY_SCHEMA)
-            self.assertEqual(payload["summary_schema"], "ci_optional_madoca_residual_component_diff.v3")
+            self.assertEqual(payload["summary_schema"], "ci_optional_madoca_residual_component_diff.v4")
             self.assertEqual(payload["contract"], "optional_diff_artifact_contract.v1")
             self.assertEqual(payload["status"], "blocked_infrastructure")
             self.assertIn("missing evidence", payload["next_actions"][1])

@@ -94,7 +94,7 @@ class MadocaResidualComponentSummaryTest(unittest.TestCase):
 
         summary = summary_script.summarize_rows(rows)
 
-        self.assertEqual(summary["schema"], "madoca_residual_component_summary.v1")
+        self.assertEqual(summary["schema"], "madoca_residual_component_summary.v2")
         self.assertEqual(summary["status"], "passed")
         self.assertEqual(summary["rows"], 2)
         self.assertEqual(summary["systems"], {"Galileo": 1, "GPS": 1})
@@ -156,7 +156,7 @@ class MadocaResidualComponentSummaryTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1)
             payload = json.loads(summary_json.read_text(encoding="utf-8"))
-            self.assertEqual(payload["schema"], "madoca_residual_component_summary.v1")
+            self.assertEqual(payload["schema"], "madoca_residual_component_summary.v2")
             self.assertEqual(payload["status"], "failed")
             self.assertIn("rows 1 < required minimum 2", payload["failures"])
             self.assertIn("required row type phase is absent", payload["failures"])
@@ -179,6 +179,16 @@ class MadocaResidualComponentSummaryTest(unittest.TestCase):
                     "--fail-on-issue",
                     "--require-row-type",
                     "code",
+                    "--require-system",
+                    "GPS",
+                    "--require-primary-observation-code",
+                    "C1C",
+                    "--require-secondary-observation-code",
+                    "C2W",
+                    "--require-frequency-index",
+                    "0",
+                    "--require-ionosphere-coefficient",
+                    "1",
                     "--require-component",
                     "residual_m",
                 ],
@@ -191,6 +201,48 @@ class MadocaResidualComponentSummaryTest(unittest.TestCase):
             payload = json.loads(summary_json.read_text(encoding="utf-8"))
             self.assertEqual(payload["status"], "passed")
             self.assertEqual(payload["failures"], [])
+
+    def test_cli_rejects_missing_identity_requirements(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="madoca_residual_component_summary_identity_") as temp_dir:
+            root = Path(temp_dir)
+            snapshot = root / "residual.csv"
+            summary_json = root / "summary.json"
+            write_csv(snapshot, [residual_row(row_type="code")])
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT_PATH),
+                    str(snapshot),
+                    "--json-out",
+                    str(summary_json),
+                    "--require-system",
+                    "Galileo",
+                    "--require-primary-observation-code",
+                    "C5Q",
+                    "--require-secondary-observation-code",
+                    "L5Q",
+                    "--require-frequency-index",
+                    "2",
+                    "--require-ionosphere-coefficient",
+                    "1.64694444444444",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            payload = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(payload["status"], "failed")
+            self.assertIn("required system Galileo is absent", payload["failures"])
+            self.assertIn("required primary observation code C5Q is absent", payload["failures"])
+            self.assertIn("required secondary observation code L5Q is absent", payload["failures"])
+            self.assertIn("required frequency index 2 is absent", payload["failures"])
+            self.assertIn(
+                "required ionosphere coefficient 1.64694444444444 is absent",
+                payload["failures"],
+            )
 
 
 if __name__ == "__main__":

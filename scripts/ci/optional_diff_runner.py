@@ -47,6 +47,8 @@ class DiffRunnerConfig:
     input_summary_script: str | None = None
     input_summary_schema: str | None = None
     input_summary_fail_on_issue: bool = False
+    input_summary_extra_options: tuple[EnvOption, ...] = ()
+    input_summary_require_components: bool = False
 
 
 @dataclass(frozen=True)
@@ -68,7 +70,8 @@ class DiffContext:
     base_csv: Path | None
     candidate_csv: Path | None
     components: list[str]
-    option_values: dict[str, str]
+    option_values: tuple[tuple[str, str], ...]
+    input_summary_option_values: tuple[tuple[str, str], ...]
     fail_on_diff: bool
 
 
@@ -110,17 +113,23 @@ def optional_env(environ: Mapping[str, str], names: Sequence[str]) -> str:
     return ""
 
 
-def parse_option_value(option: EnvOption, environ: Mapping[str, str]) -> str | None:
+def parse_option_values(option: EnvOption, environ: Mapping[str, str]) -> list[tuple[str, str]]:
     value = optional_env(environ, option.env_names)
     if not value:
-        return None
+        return []
+    if option.value_type == "csv":
+        return [(option.flag, item) for item in parse_components(value)]
+    if option.value_type == "int_csv":
+        return [(option.flag, str(int(item))) for item in parse_components(value)]
+    if option.value_type == "float_csv":
+        return [(option.flag, str(float(item))) for item in parse_components(value)]
     if option.value_type == "int":
-        return str(int(value))
+        return [(option.flag, str(int(value)))]
     if option.value_type == "float":
-        return str(float(value))
+        return [(option.flag, str(float(value)))]
     if option.value_type != "str":
         raise ValueError(f"unsupported option value type: {option.value_type}")
-    return value
+    return [(option.flag, value)]
 
 
 def truthy(value: str) -> bool:
@@ -177,11 +186,16 @@ def build_context(
             optional_env(environ, config.candidate_envs),
         ),
         components=components,
-        option_values={
-            option.flag: value
+        option_values=tuple(
+            pair
             for option in config.extra_options
-            if (value := parse_option_value(option, environ)) is not None
-        },
+            for pair in parse_option_values(option, environ)
+        ),
+        input_summary_option_values=tuple(
+            pair
+            for option in config.input_summary_extra_options
+            for pair in parse_option_values(option, environ)
+        ),
         fail_on_diff=truthy(environ.get(config.fail_on_diff_env, "")),
     )
 
@@ -231,6 +245,11 @@ def make_step(config: DiffRunnerConfig, context: DiffContext) -> DiffStep:
             ]
             if config.input_summary_fail_on_issue:
                 command.append("--fail-on-issue")
+            for flag, value in context.input_summary_option_values:
+                command.extend([flag, value])
+            if config.input_summary_require_components:
+                for component in context.components:
+                    command.extend(["--require-component", component])
             pre_commands.append(tuple(command))
 
     command = [
@@ -250,7 +269,7 @@ def make_step(config: DiffRunnerConfig, context: DiffContext) -> DiffStep:
     if config.component_flag is not None:
         for component in context.components:
             command.extend([config.component_flag, component])
-    for flag, value in context.option_values.items():
+    for flag, value in context.option_values:
         command.extend([flag, value])
     if context.fail_on_diff:
         command.append("--fail-on-diff")
