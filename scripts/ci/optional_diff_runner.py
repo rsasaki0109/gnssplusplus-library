@@ -44,6 +44,9 @@ class DiffRunnerConfig:
     per_component_max_key: str
     extra_options: tuple[EnvOption, ...] = ()
     component_flag: str | None = "--component"
+    input_summary_script: str | None = None
+    input_summary_schema: str | None = None
+    input_summary_fail_on_issue: bool = False
 
 
 @dataclass(frozen=True)
@@ -54,6 +57,7 @@ class DiffStep:
     outputs: list[str]
     summary_json: str
     skip_reason: str | None = None
+    pre_commands: tuple[tuple[str, ...], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -187,6 +191,7 @@ def make_step(config: DiffRunnerConfig, context: DiffContext) -> DiffStep:
     details_csv = context.output_dir / f"{config.slug}.csv"
     summary_json = context.output_dir / f"{config.slug}_summary.json"
     outputs = [report_json, details_csv]
+    pre_commands: list[tuple[str, ...]] = []
 
     missing = [
         (label, path)
@@ -209,6 +214,25 @@ def make_step(config: DiffRunnerConfig, context: DiffContext) -> DiffStep:
 
     assert context.base_csv is not None
     assert context.candidate_csv is not None
+    if config.input_summary_script is not None:
+        for label, snapshot_csv in (
+            (config.base_label, context.base_csv),
+            (config.candidate_label, context.candidate_csv),
+        ):
+            normalized_label = metric_label(label) or label
+            snapshot_summary = context.output_dir / f"{config.slug}_{normalized_label}_snapshot_summary.json"
+            outputs.append(snapshot_summary)
+            command = [
+                context.python_executable,
+                str(context.repo_root / "scripts" / "analysis" / config.input_summary_script),
+                str(snapshot_csv),
+                "--json-out",
+                str(snapshot_summary),
+            ]
+            if config.input_summary_fail_on_issue:
+                command.append("--fail-on-issue")
+            pre_commands.append(tuple(command))
+
     command = [
         context.python_executable,
         str(context.repo_root / "scripts" / "analysis" / config.analysis_script),
@@ -237,6 +261,7 @@ def make_step(config: DiffRunnerConfig, context: DiffContext) -> DiffStep:
         command=command,
         outputs=[str(path) for path in outputs],
         summary_json=str(summary_json),
+        pre_commands=tuple(pre_commands),
     )
 
 
@@ -325,6 +350,52 @@ def load_diff_metrics(config: DiffRunnerConfig, report_json: Path) -> dict[str, 
     return metrics
 
 
+def load_input_summary_metrics(config: DiffRunnerConfig, outputs: Sequence[str]) -> dict[str, object]:
+    if config.input_summary_schema is None:
+        return {}
+    metrics: dict[str, object] = {}
+    for label in (config.base_label, config.candidate_label):
+        normalized_label = metric_label(label)
+        if not normalized_label:
+            continue
+        suffix = f"{config.slug}_{normalized_label}_snapshot_summary.json"
+        summary_path = next((Path(output) for output in outputs if output.endswith(suffix)), None)
+        if summary_path is None or not summary_path.is_file():
+            continue
+        try:
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        metrics[f"{normalized_label}_snapshot_schema"] = payload.get("schema")
+        metrics[f"{normalized_label}_snapshot_status"] = payload.get("status")
+        rows = payload.get("rows")
+        if isinstance(rows, int):
+            metrics[f"{normalized_label}_snapshot_rows"] = rows
+        systems = payload.get("systems")
+        if isinstance(systems, dict):
+            metrics[f"{normalized_label}_snapshot_systems"] = systems
+        row_key = payload.get("row_key")
+        if isinstance(row_key, dict):
+            duplicate_groups = row_key.get("duplicate_groups")
+            if isinstance(duplicate_groups, int):
+                metrics[f"{normalized_label}_snapshot_duplicate_groups"] = duplicate_groups
+            max_duplicate_occurrences = row_key.get("max_duplicate_occurrences")
+            if isinstance(max_duplicate_occurrences, int):
+                metrics[f"{normalized_label}_snapshot_max_duplicate_occurrences"] = max_duplicate_occurrences
+        bias_identity = payload.get("bias_identity")
+        if isinstance(bias_identity, dict):
+            for key in ("rows_with_code_bias", "rows_with_phase_bias"):
+                value = bias_identity.get(key)
+                if isinstance(value, int):
+                    metrics[f"{normalized_label}_snapshot_{key}"] = value
+        issue_counts = payload.get("issue_counts")
+        if isinstance(issue_counts, dict):
+            metrics[f"{normalized_label}_snapshot_issue_counts"] = issue_counts
+    return metrics
+
+
 def run_step(config: DiffRunnerConfig, step: DiffStep, repo_root: Path, log_dir: Path) -> dict[str, object]:
     log_path = log_dir / f"{step.slug}.log"
     summary_json = Path(step.summary_json)
@@ -352,30 +423,50 @@ def run_step(config: DiffRunnerConfig, step: DiffStep, repo_root: Path, log_dir:
         return record
 
     assert step.command is not None
-    command_display = " ".join(step.command)
-    print(f"+ {command_display}")
+    commands = [list(command) for command in step.pre_commands]
+    commands.append(step.command)
+    command_display = " && ".join(" ".join(command) for command in commands)
+    for command in commands:
+        print("+ " + " ".join(command))
     started = time.monotonic()
-    completed = subprocess.run(
-        step.command,
-        cwd=repo_root,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    elapsed = time.monotonic() - started
-    combined_log = completed.stdout
-    if completed.stderr:
+    combined_log = ""
+    returncode = 0
+    failed_command: list[str] | None = None
+    for command in commands:
+        single_display = " ".join(command)
+        completed = subprocess.run(
+            command,
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
         if combined_log and not combined_log.endswith("\n"):
             combined_log += "\n"
-        combined_log += completed.stderr
-    log_path.write_text(f"$ {command_display}\n\n{combined_log}", encoding="utf-8")
+        combined_log += f"$ {single_display}\n\n"
+        combined_log += completed.stdout
+        if completed.stderr:
+            if combined_log and not combined_log.endswith("\n"):
+                combined_log += "\n"
+            combined_log += completed.stderr
+        if completed.returncode != 0:
+            returncode = completed.returncode
+            failed_command = command
+            break
+    elapsed = time.monotonic() - started
+    log_path.write_text(combined_log, encoding="utf-8")
     record["command"] = step.command
+    if step.pre_commands:
+        record["pre_commands"] = [list(command) for command in step.pre_commands]
     record["elapsed_s"] = elapsed
-    record["returncode"] = completed.returncode
+    record["returncode"] = returncode
+    if failed_command is not None:
+        record["failed_command"] = failed_command
     metrics = load_diff_metrics(config, report_json)
+    metrics.update(load_input_summary_metrics(config, step.outputs))
     if metrics:
         record["metrics"] = metrics
-    if completed.returncode == 0:
+    if returncode == 0:
         missing_outputs = [output for output in step.outputs if not Path(output).exists()]
         record["missing_outputs"] = missing_outputs
         if missing_outputs:
@@ -393,11 +484,12 @@ def run_step(config: DiffRunnerConfig, step: DiffStep, repo_root: Path, log_dir:
         tail = "\n".join(lines[-20:])
         if tail:
             print(tail)
-        print(f"Failed {step.name} in {elapsed:.2f}s; see {log_path}")
+        failed_display = " ".join(failed_command) if failed_command is not None else command_display
+        print(f"Failed {step.name} in {elapsed:.2f}s during `{failed_display}`; see {log_path}")
     record["artifacts"] = [
         artifact_record(log_path, role="log", required=True),
         *[
-            artifact_record(Path(output), role="declared_output", required=completed.returncode == 0)
+            artifact_record(Path(output), role="declared_output", required=returncode == 0)
             for output in step.outputs
         ],
     ]
@@ -453,6 +545,22 @@ def render_result_detail(result: dict[str, object]) -> str:
         candidate_duplicates = metrics.get("candidate_duplicate_keys")
         if base_duplicates is not None or candidate_duplicates is not None:
             detail_parts.append(f"duplicate keys `{base_duplicates}/{candidate_duplicates}`")
+        snapshot_rows = [
+            (str(key).removesuffix("_snapshot_rows"), value)
+            for key, value in metrics.items()
+            if str(key).endswith("_snapshot_rows")
+        ]
+        if snapshot_rows:
+            preferred_order = {"madocalib": 0, "claslib": 0, "native": 1}
+            ordered = sorted(
+                snapshot_rows,
+                key=lambda item: (preferred_order.get(item[0], 10), item[0]),
+            )
+            detail_parts.append(
+                "snapshot rows `"
+                + "/".join(str(value) for _, value in ordered[:2])
+                + "`"
+            )
         native_l2w_rows = metrics.get("identity_native_gps_l2w_rows")
         if native_l2w_rows is not None:
             detail_parts.append(f"native L2W `{native_l2w_rows}`")

@@ -53,7 +53,12 @@ FIELDNAMES = [
 ]
 
 
-def materialization_row(*, clock_m: str = "0.200", iode: str = "7") -> dict[str, str]:
+def materialization_row(
+    *,
+    clock_m: str = "0.200",
+    iode: str = "7",
+    code_bias_count: str = "1",
+) -> dict[str, str]:
     return {
         "schema_version": "madoca_materialization_snapshot.v1",
         "sat": "G14",
@@ -77,7 +82,7 @@ def materialization_row(*, clock_m: str = "0.200", iode: str = "7") -> dict[str,
         "orbit_along_m": "-0.300",
         "orbit_cross_m": "0.400",
         "clock_m": clock_m,
-        "code_bias_count": "1",
+        "code_bias_count": code_bias_count,
         "code_biases_m": "3:0.250",
         "phase_bias_count": "1",
         "phase_biases_m": "3:-0.125",
@@ -85,11 +90,23 @@ def materialization_row(*, clock_m: str = "0.200", iode: str = "7") -> dict[str,
     }
 
 
-def write_materialization_csv(path: Path, *, clock_m: str = "0.200", iode: str = "7") -> None:
+def write_materialization_csv(
+    path: Path,
+    *,
+    clock_m: str = "0.200",
+    iode: str = "7",
+    code_bias_count: str = "1",
+) -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)
         writer.writeheader()
-        writer.writerow(materialization_row(clock_m=clock_m, iode=iode))
+        writer.writerow(
+            materialization_row(
+                clock_m=clock_m,
+                iode=iode,
+                code_bias_count=code_bias_count,
+            )
+        )
 
 
 class OptionalMadocaMaterializationDiffTest(unittest.TestCase):
@@ -152,6 +169,13 @@ class OptionalMadocaMaterializationDiffTest(unittest.TestCase):
             self.assertIn("--fail-on-diff", command)
             self.assertNotIn("--component", command)
             self.assertIn(str(output_dir / "madoca_materialization_diff.json"), command)
+            self.assertEqual(len(steps[0].pre_commands), 2)
+            self.assertIn(
+                str(SCRIPT_PATH.parent.parent / "analysis" / "madoca_materialization_summary.py"),
+                steps[0].pre_commands[0],
+            )
+            self.assertIn(str(output_dir / "madoca_materialization_diff_madocalib_snapshot_summary.json"), steps[0].outputs)
+            self.assertIn(str(output_dir / "madoca_materialization_diff_native_snapshot_summary.json"), steps[0].outputs)
 
     def test_run_step_collects_materialization_metrics(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_materialization_exec_") as temp_dir:
@@ -180,6 +204,43 @@ class OptionalMadocaMaterializationDiffTest(unittest.TestCase):
             self.assertEqual(metrics["threshold_exceedances"], 0)
             self.assertEqual(metrics["discrete_mismatches"], 0)
             self.assertAlmostEqual(metrics["max_abs_delta"], 0.075)
+            self.assertEqual(metrics["madocalib_snapshot_schema"], "madoca_materialization_summary.v1")
+            self.assertEqual(metrics["native_snapshot_schema"], "madoca_materialization_summary.v1")
+            self.assertEqual(metrics["madocalib_snapshot_status"], "passed")
+            self.assertEqual(metrics["native_snapshot_status"], "passed")
+            self.assertEqual(metrics["madocalib_snapshot_rows"], 1)
+            self.assertEqual(metrics["native_snapshot_rows"], 1)
+            self.assertEqual(metrics["madocalib_snapshot_duplicate_groups"], 0)
+            self.assertEqual(metrics["native_snapshot_duplicate_groups"], 0)
+            artifact_paths = {artifact["path"] for artifact in result["artifacts"]}
+            self.assertIn(str(output_dir / "madoca_materialization_diff_madocalib_snapshot_summary.json"), artifact_paths)
+            self.assertIn(str(output_dir / "madoca_materialization_diff_native_snapshot_summary.json"), artifact_paths)
+
+    def test_run_step_fails_when_snapshot_summary_fails(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_materialization_input_summary_") as temp_dir:
+            root = Path(temp_dir)
+            base_csv = root / "madocalib.csv"
+            candidate_csv = root / "native.csv"
+            write_materialization_csv(base_csv)
+            write_materialization_csv(candidate_csv, code_bias_count="2")
+            output_dir = root / "output"
+            log_dir = output_dir / "logs"
+            log_dir.mkdir(parents=True)
+            env = {
+                "GNSSPP_MADOCA_MATERIALIZATION_BASE_CSV": str(base_csv),
+                "GNSSPP_MADOCA_MATERIALIZATION_CANDIDATE_CSV": str(candidate_csv),
+            }
+            step = runner.build_step_plan(ROOT_DIR, output_dir, env)[0]
+
+            result = runner.run_step(step, ROOT_DIR, log_dir)
+
+            self.assertEqual(result["status"], "failed")
+            self.assertNotEqual(result["returncode"], 0)
+            self.assertIn("madoca_materialization_summary.py", " ".join(result["failed_command"]))
+            metrics = result["metrics"]
+            self.assertEqual(metrics["madocalib_snapshot_status"], "passed")
+            self.assertEqual(metrics["native_snapshot_status"], "failed")
+            self.assertEqual(metrics["native_snapshot_rows"], 1)
 
     def test_run_step_reports_discrete_mismatches(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_materialization_discrete_") as temp_dir:
@@ -261,6 +322,20 @@ class OptionalMadocaMaterializationDiffTest(unittest.TestCase):
         self.assertIn("discrete mismatches `4`", markdown)
         self.assertIn("duplicate keys `0/1`", markdown)
 
+        snapshot_markdown = runner.render_markdown_summary(
+            [
+                {
+                    "name": "MADOCA materialization diff",
+                    "status": "passed",
+                    "metrics": {
+                        "madocalib_snapshot_rows": 12,
+                        "native_snapshot_rows": 13,
+                    },
+                }
+            ]
+        )
+        self.assertIn("snapshot rows `12/13`", snapshot_markdown)
+
     def test_write_summary_declares_schema(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_materialization_summary_") as temp_dir:
             summary_path = Path(temp_dir) / "summary.json"
@@ -281,6 +356,7 @@ class OptionalMadocaMaterializationDiffTest(unittest.TestCase):
 
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary_schema"], runner.SUMMARY_SCHEMA)
+            self.assertEqual(payload["summary_schema"], "ci_optional_madoca_materialization_diff.v2")
             self.assertEqual(payload["contract"], "optional_diff_artifact_contract.v1")
             self.assertEqual(payload["status"], "blocked_infrastructure")
             self.assertIn("missing evidence", payload["next_actions"][1])

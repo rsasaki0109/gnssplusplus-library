@@ -56,7 +56,10 @@ CI lanes are split as follows:
   oracle/native diff artifacts; they report `blocked_infrastructure` with
   next actions when their CSV inputs are unavailable, require a summary/log
   artifact in CI, and fail a passed diff command if the declared JSON/CSV
-  artifacts are missing
+  artifacts are missing.  The MADOCA materialization diff additionally emits
+  `madoca_materialization_summary.v1` JSON for both input snapshots and fails
+  before the diff when either snapshot has count, discontinuity, or duplicate-key
+  contract issues.
 - `python3 scripts/ci/run_clas_a4b_native_selfdiff.py` for the public CLAS A4b
   native-side evidence bundle; it sparse-fetches CLASLIB public data unless
   `GNSSPP_CLAS_A4B_DATA_ROOT` is supplied, generates the native code dump, and
