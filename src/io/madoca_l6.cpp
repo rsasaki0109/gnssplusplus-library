@@ -8,6 +8,10 @@
 #include <cmath>
 #include <cstdint>
 #include <fstream>
+#include <iomanip>
+#include <map>
+#include <ostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -927,6 +931,38 @@ bool useMadocaBiasIdentityKey(libgnss::GNSSSystem system,
            system == libgnss::GNSSSystem::QZSS;
 }
 
+const char* gnssSystemName(libgnss::GNSSSystem system) {
+    switch (system) {
+        case libgnss::GNSSSystem::GPS: return "GPS";
+        case libgnss::GNSSSystem::GLONASS: return "GLONASS";
+        case libgnss::GNSSSystem::Galileo: return "Galileo";
+        case libgnss::GNSSSystem::BeiDou: return "BeiDou";
+        case libgnss::GNSSSystem::QZSS: return "QZSS";
+        case libgnss::GNSSSystem::SBAS: return "SBAS";
+        case libgnss::GNSSSystem::NavIC: return "NavIC";
+        default: return "UNKNOWN";
+    }
+}
+
+template <typename Value>
+std::string joinSignalMapValues(const std::map<std::uint8_t, Value>& values) {
+    std::ostringstream out;
+    out << std::setprecision(17);
+    bool first = true;
+    for (const auto& [id, value] : values) {
+        if (!first) {
+            out << ';';
+        }
+        out << static_cast<unsigned>(id) << ':' << value;
+        first = false;
+    }
+    return out.str();
+}
+
+std::string csvBool(bool value) {
+    return value ? "1" : "0";
+}
+
 int madocaL6eSnapshotToProducts(const MadocaL6eDecoder& decoder,
                                 libgnss::SSRProducts& products) {
     products.setOrbitCorrectionsAreRac(true);
@@ -1049,6 +1085,74 @@ int decodeMadocaL6eFilesToProductsReplay(const std::vector<std::string>& files,
     }
     products.addCorrections(corrections);
     return added;
+}
+
+int writeMadocaMaterializationCsv(const libgnss::SSRProducts& products,
+                                  std::ostream& output) {
+    output
+        << "schema_version,sat,system,prn,week,tow,orbit_frame,"
+        << "orbit_valid,clock_valid,code_bias_valid,phase_bias_valid,"
+        << "orbit_week,orbit_tow,clock_week,clock_tow,"
+        << "iode,ssr_orbit_iod,ssr_clock_iod,"
+        << "orbit_radial_m,orbit_along_m,orbit_cross_m,clock_m,"
+        << "code_bias_count,code_biases_m,"
+        << "phase_bias_count,phase_biases_m,phase_bias_discnt\n";
+
+    output << std::setprecision(17);
+    int rows = 0;
+    const char* orbit_frame = products.orbitCorrectionsAreRac() ? "rac" : "ecef";
+    for (const auto& [satellite, corrections] : products.orbit_clock_corrections) {
+        for (const auto& correction : corrections) {
+            output
+                << "madoca_materialization_snapshot.v1,"
+                << satellite.toString() << ','
+                << gnssSystemName(satellite.system) << ','
+                << static_cast<unsigned>(satellite.prn) << ','
+                << correction.time.week << ','
+                << correction.time.tow << ','
+                << orbit_frame << ','
+                << csvBool(correction.orbit_valid) << ','
+                << csvBool(correction.clock_valid) << ','
+                << csvBool(correction.code_bias_valid) << ','
+                << csvBool(correction.phase_bias_valid) << ','
+                << correction.orbit_reference_time.week << ','
+                << correction.orbit_reference_time.tow << ','
+                << correction.clock_reference_time.week << ','
+                << correction.clock_reference_time.tow << ','
+                << correction.iode << ','
+                << correction.ssr_orbit_iod << ','
+                << correction.ssr_clock_iod << ','
+                << correction.orbit_correction_ecef.x() << ','
+                << correction.orbit_correction_ecef.y() << ','
+                << correction.orbit_correction_ecef.z() << ','
+                << correction.clock_correction_m << ','
+                << correction.code_bias_m.size() << ','
+                << joinSignalMapValues(correction.code_bias_m) << ','
+                << correction.phase_bias_m.size() << ','
+                << joinSignalMapValues(correction.phase_bias_m) << ','
+                << joinSignalMapValues(correction.phase_bias_discnt) << '\n';
+            ++rows;
+        }
+    }
+    return rows;
+}
+
+int writeMadocaL6eMaterializationCsv(const std::vector<std::string>& files,
+                                     int gps_week,
+                                     const std::string& output_path,
+                                     bool replay_mode) {
+    libgnss::SSRProducts products;
+    if (replay_mode) {
+        decodeMadocaL6eFilesToProductsReplay(files, gps_week, products);
+    } else {
+        decodeMadocaL6eFilesToProducts(files, gps_week, products);
+    }
+
+    std::ofstream output(output_path);
+    if (!output.is_open()) {
+        return -1;
+    }
+    return writeMadocaMaterializationCsv(products, output);
 }
 
 }  // namespace libgnss::io

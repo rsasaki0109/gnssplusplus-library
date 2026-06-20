@@ -3,6 +3,7 @@
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 
 #include <cstdint>
+#include <iosfwd>
 #include <string>
 #include <vector>
 
@@ -153,5 +154,21 @@ int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
 int decodeMadocaL6eFilesToProductsReplay(const std::vector<std::string>& files,
                                          int gps_week,
                                          libgnss::SSRProducts& products);
+
+// Write the materialized native SSRProducts view used by MADOCA PPP. This is a
+// diagnostic boundary dump: it records the satellite key, correction epoch,
+// component reference times, IODs, orbit/clock values, and code/phase bias
+// identities after decoder output has been converted into native products.
+// Returns the number of correction rows written.
+int writeMadocaMaterializationCsv(const libgnss::SSRProducts& products,
+                                  std::ostream& output);
+
+// Decode MADOCA L6E files through the native converter and write the same
+// materialization CSV without running PPP. Returns the number of rows written;
+// <0 means the output file could not be opened.
+int writeMadocaL6eMaterializationCsv(const std::vector<std::string>& files,
+                                     int gps_week,
+                                     const std::string& output_path,
+                                     bool replay_mode);
 
 }  // namespace libgnss::io

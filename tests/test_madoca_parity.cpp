@@ -15,6 +15,7 @@
 #include <fstream>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -108,6 +109,44 @@ TEST(MadocaBridgeConfig, AvailabilityMatchesBuildFlag) {
     EXPECT_EQ(libgnss::external::madocalib::runPostpos({}, &error_message), -1);
     EXPECT_NE(error_message.find("MADOCALIB bridge is not linked"), std::string::npos);
 #endif
+}
+
+TEST(MadocaMaterializationDump, WritesStableCsvContract) {
+    libgnss::SSRProducts products;
+    products.setOrbitCorrectionsAreRac(true);
+
+    libgnss::SSROrbitClockCorrection correction;
+    correction.satellite = libgnss::SatelliteId(libgnss::GNSSSystem::GPS, 14);
+    correction.time = libgnss::GNSSTime(2299, 123.5);
+    correction.orbit_reference_time = libgnss::GNSSTime(2299, 120.0);
+    correction.clock_reference_time = libgnss::GNSSTime(2299, 121.0);
+    correction.orbit_valid = true;
+    correction.clock_valid = true;
+    correction.code_bias_valid = true;
+    correction.phase_bias_valid = true;
+    correction.iode = 7;
+    correction.ssr_orbit_iod = 8;
+    correction.ssr_clock_iod = 9;
+    correction.orbit_correction_ecef = libgnss::Vector3d(1.0, 2.0, 3.0);
+    correction.clock_correction_m = 0.25;
+    correction.code_bias_m[9] = 0.125;
+    correction.phase_bias_m[9] = -0.5;
+    correction.phase_bias_discnt[9] = 4;
+    products.addCorrection(correction);
+
+    std::ostringstream csv;
+    const int rows = libgnss::io::writeMadocaMaterializationCsv(products, csv);
+
+    EXPECT_EQ(rows, 1);
+    const std::string text = csv.str();
+    EXPECT_NE(text.find(
+        "schema_version,sat,system,prn,week,tow,orbit_frame,"
+        "orbit_valid,clock_valid,code_bias_valid,phase_bias_valid"),
+        std::string::npos);
+    EXPECT_NE(text.find(
+        "madoca_materialization_snapshot.v1,G14,GPS,14,2299,123.5,rac,"
+        "1,1,1,1,2299,120,2299,121,7,8,9,1,2,3,0.25,1,9:0.125,1,9:-0.5,9:4"),
+        std::string::npos);
 }
 
 #if GNSSPP_HAS_MADOCALIB_ORACLE
@@ -493,6 +532,11 @@ TEST_F(MadocaParity, L6eSnapshotConvertsToSsrProducts) {
     const int added = libgnss::io::madocaL6eSnapshotToProducts(decoder, products);
     EXPECT_GT(added, 0) << "no satellites converted";
     EXPECT_TRUE(products.orbitCorrectionsAreRac());
+    std::ostringstream materialization_csv;
+    EXPECT_GT(libgnss::io::writeMadocaMaterializationCsv(products, materialization_csv), 0);
+    EXPECT_NE(materialization_csv.str().find("madoca_materialization_snapshot.v1"),
+              std::string::npos);
+    EXPECT_NE(materialization_csv.str().find(",rac,"), std::string::npos);
 
     auto sysmap = [](int s) {
         switch (s) {

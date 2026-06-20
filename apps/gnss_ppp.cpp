@@ -12,6 +12,7 @@
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/solution.hpp>
 #include <libgnss++/external/madocalib_bridge.hpp>
+#include <libgnss++/io/madoca_l6.hpp>
 #include <libgnss++/io/rinex.hpp>
 
 namespace {
@@ -24,6 +25,7 @@ struct Options {
     std::string ssr_path;
     std::string ssr_rtcm_path;
     std::vector<std::string> madoca_l6_paths;
+    std::string madoca_materialization_dump_path;
     std::string ionex_path;
     std::string dcb_path;
     std::string antex_path;
@@ -89,6 +91,9 @@ void printUsage(const char* program_name) {
         << "                          RTCM SSR source converted/read for PPP use\n"
         << "  --madoca-l6 <file>       Native MADOCA L6E SSR channel (repeatable,\n"
         << "                          e.g. PRN 204 and 206); requires --nav\n"
+        << "  --madoca-materialization-dump <csv>\n"
+        << "                          Dump native MADOCA L6E SSRProducts materialization\n"
+        << "                          rows before PPP processing\n"
         << "  --ionex <maps.ionex>     Optional IONEX TEC map product\n"
         << "  --dcb <bias.bsx>         Optional DCB / Bias-SINEX product\n"
         << "  --antex <antennas.atx>   Optional ANTEX file for receiver antenna PCO\n"
@@ -240,6 +245,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.ssr_rtcm_path = argv[++i];
         } else if (arg == "--madoca-l6" && i + 1 < argc) {
             options.madoca_l6_paths.push_back(argv[++i]);
+        } else if (arg == "--madoca-materialization-dump" && i + 1 < argc) {
+            options.madoca_materialization_dump_path = argv[++i];
         } else if (arg == "--ionex" && i + 1 < argc) {
             options.ionex_path = argv[++i];
         } else if (arg == "--dcb" && i + 1 < argc) {
@@ -905,6 +912,30 @@ int main(int argc, char* argv[]) {
         if (obs_header.first_obs.week > 0) {
             ppp_config.l6_gps_week = obs_header.first_obs.week;
         }
+        if (!options.madoca_materialization_dump_path.empty()) {
+            if (options.madoca_l6_paths.empty()) {
+                std::cerr << "Error: --madoca-materialization-dump requires --madoca-l6\n";
+                return 1;
+            }
+            const std::filesystem::path dump_path(options.madoca_materialization_dump_path);
+            if (!dump_path.parent_path().empty()) {
+                std::filesystem::create_directories(dump_path.parent_path());
+            }
+            const int rows = libgnss::io::writeMadocaL6eMaterializationCsv(
+                options.madoca_l6_paths,
+                ppp_config.l6_gps_week,
+                options.madoca_materialization_dump_path,
+                ppp_env_overrides.madoca_ssr_replay);
+            if (rows < 0) {
+                std::cerr << "Error: failed to write MADOCA materialization dump: "
+                          << options.madoca_materialization_dump_path << "\n";
+                return 1;
+            }
+            if (rows == 0) {
+                std::cerr << "Error: MADOCA materialization dump produced no rows\n";
+                return 1;
+            }
+        }
         ppp_config.approximate_position = obs_header.approximate_position;
         ppp_config.receiver_antenna_type =
             options.receiver_antenna_type.empty() ?
@@ -1058,6 +1089,11 @@ int main(int argc, char* argv[]) {
                     << "  \"receiver_antenna_type_source\": \""
                     << (options.receiver_antenna_type.empty() ? "rinex-header" : "cli")
                     << "\",\n"
+                    << "  \"madoca_materialization_dump\": "
+                    << (options.madoca_materialization_dump_path.empty() ?
+                            "null" :
+                            ("\"" + jsonEscape(options.madoca_materialization_dump_path) + "\""))
+                    << ",\n"
                     << "  \"out\": \"" << jsonEscape(options.out_path) << "\",\n"
                     << "  \"mode\": \"" << (options.kinematic_mode ? "kinematic" : "static") << "\",\n"
                     << "  \"low_dynamics\": " << (options.low_dynamics_mode ? "true" : "false") << ",\n"
@@ -1145,6 +1181,10 @@ int main(int argc, char* argv[]) {
                       << ((options.ssr_path.empty() && options.ssr_rtcm_path.empty() &&
                            options.madoca_l6_paths.empty()) ? "off" : "on")
                       << "\n";
+            if (!options.madoca_materialization_dump_path.empty()) {
+                std::cout << "  MADOCA materialization dump: "
+                          << options.madoca_materialization_dump_path << "\n";
+            }
             if (atmospheric_trop_corrections > 0 || atmospheric_iono_corrections > 0) {
                 std::cout << "  atmospheric trop corrections: "
                           << atmospheric_trop_corrections << "\n";

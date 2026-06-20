@@ -4031,6 +4031,7 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--madocalib-bridge", result.stdout)
         self.assertIn("--madocalib-l6", result.stdout)
         self.assertIn("--madocalib-mdciono", result.stdout)
+        self.assertIn("--madoca-materialization-dump", result.stdout)
 
     def test_public_rtk_benchmarks_cli_lists_matrix(self) -> None:
         result = self.run_gnss("public-rtk-benchmarks", "--format", "json")
@@ -10489,6 +10490,32 @@ class CLIToolsTest(unittest.TestCase):
             self.assertTrue(output_path.exists())
             self.assertIn("SSR corrections: on", result.stdout)
             self.assertIn("valid solutions: 3", result.stdout)
+
+    def test_ppp_cli_rejects_madoca_materialization_dump_without_l6(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_madoca_materialization_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, _, _ = build_synthetic_ppp_inputs(temp_root)
+            output_path = temp_root / "ppp.pos"
+            dump_path = temp_root / "madoca_materialization.csv"
+
+            result = self.run_gnss(
+                "ppp",
+                "--static",
+                "--obs",
+                str(obs_path),
+                "--sp3",
+                str(sp3_path),
+                "--madoca-materialization-dump",
+                str(dump_path),
+                "--out",
+                str(output_path),
+                "--max-epochs",
+                "1",
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("--madoca-materialization-dump requires --madoca-l6", result.stderr)
+            self.assertFalse(dump_path.exists())
 
     def test_ppp_cli_reports_applied_atmospheric_corrections_from_sampled_ssr(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_ssr_atmos_cli_") as temp_dir:
