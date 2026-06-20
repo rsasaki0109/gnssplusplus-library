@@ -230,7 +230,7 @@ component deltas across all matched rows, and `top_row_component_breakdowns`,
 which groups all component deltas for the same ZD key. Use those fields to
 distinguish the global largest component from the most unbalanced row before
 changing the gated correction model. The optional CI summary schema
-`ci_optional_clas_zd_component_diff.v6` lifts both the global top delta, the
+`ci_optional_clas_zd_component_diff.v7` lifts both the global top delta, the
 leading row-breakdown component, and a per-component max-delta map into summary
 metrics, so release artifacts show the next single-component target without
 manually opening the full diff JSON.
@@ -278,12 +278,15 @@ side and defaults the optional diff filter to `post`/`code`/`G14`/`f1`/`C2W`;
 explicit workflow variables still override those defaults.
 When `GNSSPP_CLAS_ZD_COMPONENTS` is unset, the remote diff compares the
 component-level fields `prc_m`, `prc_component_sum_m`,
-`prc_closure_residual_m`, `iono_l1_m`, `iono_scaled_m`,
-`trop_correction_m`, `code_bias_m`, `receiver_antenna_m`, and
-`relativity_m`.  The derived `prc_closure_residual_m` value is computed by the
-diff tool as `PRC - (trop + relativity + receiver antenna + scaled iono + code
-bias)`, so it diagnoses PRC convention/rounding gaps without changing either
-input CSV schema. The aggregate `applied_pr_corr_m` remains available for
+`prc_closure_residual_m`, `iono_l1_m`, `iono_scaled_m`, `iono_scale`,
+`iono_scaled_closure_residual_m`, `trop_correction_m`, `code_bias_m`,
+`receiver_antenna_m`, and `relativity_m`.  The derived `prc_closure_residual_m`
+value is computed by the diff tool as `PRC - (trop + relativity + receiver
+antenna + scaled iono + code bias)`, so it diagnoses PRC convention/rounding
+gaps without changing either input CSV schema.  The derived
+`iono_scaled_closure_residual_m` is `iono_scaled_m - iono_scale * iono_l1_m`,
+which separates frequency-scaling mistakes from upstream STEC/L1-delay
+mismatches. The aggregate `applied_pr_corr_m` remains available for
 explicit diagnostic runs, but the default sign-off points the top-row evidence
 at the underlying ZD correction component.
 If either generated side is missing, the optional diff reports

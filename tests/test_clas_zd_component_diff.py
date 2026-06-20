@@ -57,7 +57,9 @@ FIELDNAMES = [
     "receiver_ant_m",
     "receiver_antenna_m",
     "trop_correction_m",
+    "iono_l1_m",
     "iono_scaled_m",
+    "iono_scale",
     "relativity_m",
 ]
 
@@ -77,7 +79,9 @@ def code_row(
     code_bias: str,
     receiver_ant: str,
     trop: str = "2.0",
+    iono_l1: str = "0.0",
     iono_scaled: str = "0.0",
+    iono_scale: str = "",
     relativity: str = "0.0",
     record: str = "CODE",
     stage: str = "",
@@ -134,7 +138,9 @@ def code_row(
         "receiver_ant_m": receiver_ant,
         "receiver_antenna_m": "",
         "trop_correction_m": trop,
+        "iono_l1_m": iono_l1,
         "iono_scaled_m": iono_scaled,
+        "iono_scale": iono_scale,
         "relativity_m": relativity,
     }
 
@@ -175,6 +181,58 @@ class ClasZdComponentDiffTest(unittest.TestCase):
 
         self.assertNotIn("prc_component_sum_m", components)
         self.assertNotIn("prc_closure_residual_m", components)
+
+    def test_derives_iono_scale_from_gps_rinex_band(self) -> None:
+        components = component_diff.extract_components(
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="3.0",
+                code_bias="0.5",
+                receiver_ant="0.1",
+                pseudorange_rinex_code="C2W",
+            ),
+            ["iono_scale"],
+        )
+
+        self.assertAlmostEqual(
+            components["iono_scale"],
+            component_diff.GPS_IONO_SCALE_BY_BAND["2"],
+        )
+
+    def test_raw_iono_scale_overrides_rinex_band(self) -> None:
+        components = component_diff.extract_components(
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="3.0",
+                code_bias="0.5",
+                receiver_ant="0.1",
+                pseudorange_rinex_code="C2W",
+                iono_scale="1.25",
+            ),
+            ["iono_scale"],
+        )
+
+        self.assertAlmostEqual(components["iono_scale"], 1.25)
+
+    def test_derives_iono_scaled_closure_residual(self) -> None:
+        scale = component_diff.GPS_IONO_SCALE_BY_BAND["2"]
+        components = component_diff.extract_components(
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="3.0",
+                code_bias="0.5",
+                receiver_ant="0.1",
+                pseudorange_rinex_code="C2W",
+                iono_l1="0.25",
+                iono_scaled=str(scale * 0.25 + 0.01),
+            ),
+            ["iono_scaled_closure_residual_m"],
+        )
+
+        self.assertAlmostEqual(components["iono_scaled_closure_residual_m"], 0.01)
 
     def test_observation_identity_prefers_row_type_specific_rinex_code(self) -> None:
         self.assertEqual(

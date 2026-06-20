@@ -397,7 +397,7 @@ jobs:
         export GNSSPP_CLAS_ZD_FREQ="${GNSSPP_CLAS_ZD_FREQ:-1}"
         export GNSSPP_CLAS_ZD_RINEX_CODE="${GNSSPP_CLAS_ZD_RINEX_CODE:-C2W}"
         export GNSSPP_CLAS_ZD_DUPLICATE_POLICY="${GNSSPP_CLAS_ZD_DUPLICATE_POLICY:-mean}"
-        export GNSSPP_CLAS_ZD_COMPONENTS="${GNSSPP_CLAS_ZD_COMPONENTS:-prc_m,prc_component_sum_m,prc_closure_residual_m,iono_l1_m,iono_scaled_m,trop_correction_m,code_bias_m,receiver_antenna_m,relativity_m}"
+        export GNSSPP_CLAS_ZD_COMPONENTS="${GNSSPP_CLAS_ZD_COMPONENTS:-prc_m,prc_component_sum_m,prc_closure_residual_m,iono_l1_m,iono_scaled_m,iono_scale,iono_scaled_closure_residual_m,trop_correction_m,code_bias_m,receiver_antenna_m,relativity_m}"
         bash scripts/ci/run_optional_clas_zd_component_diff.sh
 
     - name: Upload CLAS ZD component diff artifacts
