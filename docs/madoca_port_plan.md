@@ -67,6 +67,18 @@ row key, reports reference-time/IOD/bias-identity differences as discrete
 mismatches, and reports orbit/clock/code-bias/phase-bias value differences as
 numeric deltas.
 
+The optional CI wrapper
+`scripts/ci/run_optional_madoca_materialization_diff.py` runs that diff when
+`GNSSPP_MADOCA_MATERIALIZATION_BASE_CSV` and
+`GNSSPP_MADOCA_MATERIALIZATION_CANDIDATE_CSV` point at generated oracle/native
+materialization snapshots.  It writes
+`ci_optional_madoca_materialization_summary.json`, a log, and
+`madoca_materialization_diff.{json,csv}` artifacts; absent inputs are reported as
+`status: blocked_infrastructure` rather than a passing sign-off.  Use
+`GNSSPP_MADOCA_MATERIALIZATION_NUMERIC_THRESHOLD` to set a numeric tolerance and
+`GNSSPP_MADOCA_MATERIALIZATION_FAIL_ON_DIFF=1` when the configured window should
+act as a hard oracle gate.
+
 Residual-component parity artifact: use
 `scripts/analysis/madoca_residual_component_diff.py` after satellite-set and
 row-set parity are understood.  It compares only common residual rows, keyed by
