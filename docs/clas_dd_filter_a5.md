@@ -208,7 +208,10 @@ highlighted components. Present-on-both components, such as `stec_tecu`,
 `iono_l1_m`, `iono_scaled_m`, `code_bias_m`, and `trop_correction_m`, include
 CLASLIB/native/delta values; present-on-one-side components still expose native
 `atmos_ref_tow`, `clock_ref_tow`, and `atmos_clock_gap_s` when CLASLIB has no
-comparable reference-epoch columns.
+comparable reference-epoch columns. Native code dumps also include selected
+CLAS atmosphere network/grid provenance (`atmos_network_id`, `atmos_grid_no`,
+`atmos_grid*_no`, and `atmos_grid*_weight`) so A4b STEC differences can be
+separated into correction-value versus grid-weight selection issues.
 Optional filters are `GNSSPP_CLAS_ZD_COMPONENTS`, `GNSSPP_CLAS_ZD_STAGE`,
 `GNSSPP_CLAS_ZD_ROW_TYPE`, `GNSSPP_CLAS_ZD_THRESHOLD_M`, and
 `GNSSPP_CLAS_ZD_FAIL_ON_DIFF`.  GPS L2W A4b probes can also narrow the row set

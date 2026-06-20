@@ -228,6 +228,8 @@ def build_native_command(
         "latest-preceding-bank",
         "--compact-bias-row-materialization",
         "selected-satellite-base-extend",
+        "--clas-atmos-selection",
+        "freshness-first",
         "--out",
         str(paths.native_pos),
         "--summary-json",

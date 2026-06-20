@@ -92,6 +92,8 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             self.assertIn("latest-preceding-bank", command)
             self.assertIn("--compact-bias-row-materialization", command)
             self.assertIn("selected-satellite-base-extend", command)
+            self.assertIn("--clas-atmos-selection", command)
+            self.assertEqual(command[command.index("--clas-atmos-selection") + 1], "freshness-first")
             self.assertIn("--receiver-antenna-type", command)
             self.assertIn("TEST ANT", command)
             self.assertEqual(command[-2:], ["--max-epochs", "30"])
