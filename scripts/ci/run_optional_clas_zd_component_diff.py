@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optional_diff_runner as runner  # noqa: E402
 
 
-SUMMARY_SCHEMA = "ci_optional_clas_zd_component_diff.v10"
+SUMMARY_SCHEMA = "ci_optional_clas_zd_component_diff.v11"
 
 CONFIG = runner.DiffRunnerConfig(
     summary_schema=SUMMARY_SCHEMA,
@@ -41,9 +41,14 @@ CONFIG = runner.DiffRunnerConfig(
     input_summary_schema="clas_zd_component_summary.v2",
     input_summary_fail_on_issue=True,
     highlight_components=(
+        "stec_tecu",
+        "iono_l1_m",
+        "iono_scaled_m",
         "iono_l1_from_stec_m",
         "iono_l1_stec_closure_residual_m",
         "iono_scaled_closure_residual_m",
+        "code_bias_m",
+        "trop_correction_m",
         "prc_closure_residual_m",
         "atmos_ref_tow",
         "clock_ref_tow",
