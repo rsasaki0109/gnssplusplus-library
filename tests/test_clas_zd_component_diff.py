@@ -591,6 +591,9 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                 stage="accepted",
                 signal="3",
                 pseudorange_rinex_code="C2W",
+                atmos_ref_tow="230430.0",
+                clock_ref_tow="230420.0",
+                atmos_clock_gap_s="10.0",
             ),
             code_row(
                 sat="J02",
@@ -605,13 +608,27 @@ class ClasZdComponentDiffTest(unittest.TestCase):
 
         base = component_diff.normalize_rows(
             base_rows,
-            component_names=["prc_m", "code_bias_m", "receiver_antenna_m"],
+            component_names=[
+                "prc_m",
+                "code_bias_m",
+                "receiver_antenna_m",
+                "atmos_ref_tow",
+                "clock_ref_tow",
+                "atmos_clock_gap_s",
+            ],
             stage_filter=None,
             row_type_filter="code",
         )
         candidate = component_diff.normalize_rows(
             candidate_rows,
-            component_names=["prc_m", "code_bias_m", "receiver_antenna_m"],
+            component_names=[
+                "prc_m",
+                "code_bias_m",
+                "receiver_antenna_m",
+                "atmos_ref_tow",
+                "clock_ref_tow",
+                "atmos_clock_gap_s",
+            ],
             stage_filter=None,
             row_type_filter="code",
         )
@@ -641,12 +658,21 @@ class ClasZdComponentDiffTest(unittest.TestCase):
         self.assertEqual(row_breakdown["sat"], "G14")
         self.assertEqual(row_breakdown["rinex_code"], "C2W")
         self.assertEqual(row_breakdown["component_count"], 3)
+        self.assertEqual(row_breakdown["missing_component_count"], 3)
         self.assertAlmostEqual(row_breakdown["sum_abs_delta_m"], 0.27)
         self.assertEqual(
             [item["component"] for item in row_breakdown["components"]],
             ["prc_m", "receiver_antenna_m", "code_bias_m"],
         )
         self.assertAlmostEqual(row_breakdown["components"][0]["delta_m"], 0.25)
+        missing_by_component = {
+            item["component"]: item for item in row_breakdown["missing_components"]
+        }
+        self.assertFalse(missing_by_component["atmos_ref_tow"]["base_present"])
+        self.assertTrue(missing_by_component["atmos_ref_tow"]["candidate_present"])
+        self.assertEqual(missing_by_component["atmos_ref_tow"]["candidate_value"], 230430.0)
+        self.assertEqual(missing_by_component["clock_ref_tow"]["candidate_value"], 230420.0)
+        self.assertEqual(missing_by_component["atmos_clock_gap_s"]["candidate_value"], 10.0)
 
     def test_report_summarizes_gps_l2w_identity_provenance(self) -> None:
         base = component_diff.normalize_rows(

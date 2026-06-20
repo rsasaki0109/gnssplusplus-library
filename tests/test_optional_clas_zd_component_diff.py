@@ -253,6 +253,62 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertIn(str(output_dir / "clas_zd_component_diff_claslib_snapshot_summary.json"), artifact_paths)
             self.assertIn(str(output_dir / "clas_zd_component_diff_native_snapshot_summary.json"), artifact_paths)
 
+    def test_load_diff_metrics_keeps_top_row_missing_component_context(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_metrics_") as temp_dir:
+            report_path = Path(temp_dir) / "clas_zd_component_diff.json"
+            report_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "clas_zd_component_diff.v1",
+                        "top_row_component_breakdowns": [
+                            {
+                                "week": 2360,
+                                "tow": 172800.0,
+                                "row_type": "code",
+                                "sat": "G14",
+                                "freq": 1,
+                                "rinex_code": "C2W",
+                                "sum_abs_delta_m": 0.25,
+                                "max_abs_delta_m": 0.2,
+                                "components": [
+                                    {
+                                        "component": "prc_m",
+                                        "delta_m": 0.2,
+                                        "abs_delta_m": 0.2,
+                                    }
+                                ],
+                                "missing_components": [
+                                    {
+                                        "component": "atmos_ref_tow",
+                                        "base_present": False,
+                                        "candidate_present": True,
+                                        "base_value": None,
+                                        "candidate_value": 230430.0,
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            metrics = runner.runner.load_diff_metrics(runner.CONFIG, report_path)
+
+            self.assertEqual(metrics["top_row_key"], "2360/172800.0/code/G14/1/C2W")
+            self.assertEqual(
+                metrics["top_row_missing_components"],
+                [
+                    {
+                        "component": "atmos_ref_tow",
+                        "base_present": False,
+                        "candidate_present": True,
+                        "base_value": None,
+                        "candidate_value": 230430.0,
+                    }
+                ],
+            )
+
     def test_run_step_fails_when_snapshot_summary_fails(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_input_summary_") as temp_dir:
             root = Path(temp_dir)
@@ -343,6 +399,29 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                         "top_row_sum_abs_delta": 0.375,
                         "top_row_dominant_component": "prc_m",
                         "top_row_dominant_abs_delta": 0.25,
+                        "top_row_missing_components": [
+                            {
+                                "component": "atmos_ref_tow",
+                                "base_present": False,
+                                "candidate_present": True,
+                                "base_value": None,
+                                "candidate_value": 230430.0,
+                            },
+                            {
+                                "component": "clock_ref_tow",
+                                "base_present": False,
+                                "candidate_present": True,
+                                "base_value": None,
+                                "candidate_value": 230420.0,
+                            },
+                            {
+                                "component": "atmos_clock_gap_s",
+                                "base_present": False,
+                                "candidate_present": True,
+                                "base_value": None,
+                                "candidate_value": 10.0,
+                            },
+                        ],
                         "threshold_exceedances": 3,
                         "identity_native_gps_l2w_rows": 2,
                         "identity_native_gps_l2w_bias_exact_identity_rows": 1,
@@ -379,6 +458,9 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
         self.assertIn("`atmos_ref_tow` missing `12`", markdown)
         self.assertIn("`clock_ref_tow` missing `12`", markdown)
         self.assertIn("`atmos_clock_gap_s` missing `12`", markdown)
+        self.assertIn("top row `atmos_ref_tow` native 230430", markdown)
+        self.assertIn("top row `clock_ref_tow` native 230420", markdown)
+        self.assertIn("top row `atmos_clock_gap_s` native 10", markdown)
         self.assertIn("top delta `prc_m` |delta| 0.25", markdown)
         self.assertIn("top row sum |delta| 0.375", markdown)
         self.assertIn("top component `prc_m` |delta| 0.25", markdown)
@@ -408,7 +490,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
 
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary_schema"], runner.SUMMARY_SCHEMA)
-            self.assertEqual(payload["summary_schema"], "ci_optional_clas_zd_component_diff.v9")
+            self.assertEqual(payload["summary_schema"], "ci_optional_clas_zd_component_diff.v10")
             self.assertEqual(payload["contract"], "optional_diff_artifact_contract.v1")
             self.assertEqual(payload["status"], "blocked_infrastructure")
             self.assertIn("missing evidence", payload["next_actions"][1])

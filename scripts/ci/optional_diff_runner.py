@@ -409,6 +409,27 @@ def load_diff_metrics(config: DiffRunnerConfig, report_json: Path) -> dict[str, 
                         metrics["top_row_dominant_delta"] = float(delta)
                     if isinstance(abs_delta, (int, float)):
                         metrics["top_row_dominant_abs_delta"] = float(abs_delta)
+            missing_components = first_row.get("missing_components")
+            if isinstance(missing_components, list) and missing_components:
+                normalized_missing: list[dict[str, object]] = []
+                for item in missing_components:
+                    if not isinstance(item, dict):
+                        continue
+                    component = item.get("component")
+                    if not isinstance(component, str) or not component:
+                        continue
+                    normalized: dict[str, object] = {"component": component}
+                    for key in (
+                        "base_present",
+                        "candidate_present",
+                        "base_value",
+                        "candidate_value",
+                    ):
+                        if key in item:
+                            normalized[key] = item[key]
+                    normalized_missing.append(normalized)
+                if normalized_missing:
+                    metrics["top_row_missing_components"] = normalized_missing
     identity_provenance = payload.get("identity_provenance")
     if isinstance(identity_provenance, dict):
         for label, summary in identity_provenance.items():
@@ -626,6 +647,31 @@ def render_result_detail(config: DiffRunnerConfig, result: dict[str, object]) ->
                 rows = missing_by_component.get(component)
                 if rows is not None:
                     detail_parts.append(f"`{component}` missing `{rows}`")
+        top_row_missing_components = metrics.get("top_row_missing_components")
+        if isinstance(top_row_missing_components, list):
+            top_row_missing_by_component: dict[str, dict[str, object]] = {}
+            for item in top_row_missing_components:
+                if not isinstance(item, dict):
+                    continue
+                component = item.get("component")
+                if isinstance(component, str):
+                    top_row_missing_by_component[component] = item
+            for component in config.highlight_components:
+                item = top_row_missing_by_component.get(component)
+                if item is None:
+                    continue
+                value_parts: list[str] = []
+                if item.get("base_present") is True:
+                    value_parts.append(
+                        f"{config.base_label} {format_metric(item.get('base_value'))}"
+                    )
+                if item.get("candidate_present") is True:
+                    value_parts.append(
+                        f"{config.candidate_label} "
+                        f"{format_metric(item.get('candidate_value'))}"
+                    )
+                if value_parts:
+                    detail_parts.append(f"top row `{component}` " + "/".join(value_parts))
         top_delta_component = metrics.get("top_delta_component")
         top_delta_component_abs = metrics.get("top_delta_abs_delta")
         if top_delta_component is not None:
