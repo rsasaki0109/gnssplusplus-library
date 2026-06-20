@@ -297,6 +297,10 @@ which separates frequency-scaling mistakes from upstream STEC/L1-delay
 mismatches.  The aggregate `applied_pr_corr_m` remains available for
 explicit diagnostic runs, but the default sign-off points the top-row evidence
 at the underlying ZD correction component.
+The GitHub step summary highlights `iono_l1_from_stec_m`,
+`iono_l1_stec_closure_residual_m`, `iono_scaled_closure_residual_m`, and
+`prc_closure_residual_m` from the per-component max-delta map so reviewers can
+see which ladder stage is closed without opening the raw JSON artifact.
 If either generated side is missing, the optional diff reports
 `blocked_infrastructure`, not a passing sign-off.
 

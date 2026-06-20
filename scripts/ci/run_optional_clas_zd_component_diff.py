@@ -40,6 +40,12 @@ CONFIG = runner.DiffRunnerConfig(
     input_summary_script="clas_zd_component_summary.py",
     input_summary_schema="clas_zd_component_summary.v2",
     input_summary_fail_on_issue=True,
+    highlight_components=(
+        "iono_l1_from_stec_m",
+        "iono_l1_stec_closure_residual_m",
+        "iono_scaled_closure_residual_m",
+        "prc_closure_residual_m",
+    ),
     extra_options=(
         runner.EnvOption(("GNSSPP_CLAS_ZD_STAGE",), "--stage"),
         runner.EnvOption(("GNSSPP_CLAS_ZD_ROW_TYPE",), "--row-type"),

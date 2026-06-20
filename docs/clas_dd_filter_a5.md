@@ -273,6 +273,10 @@ closure residual is derived as `iono_scaled_m - iono_scale * iono_l1_m`.
 Together these make the remote artifact show whether the remaining GPS L2W PRC
 gap is explained by component deltas, TECU/L1 conversion, frequency scaling, or
 a PRC convention/rounding mismatch.
+The GitHub step summary highlights the L1-from-STEC, L1-STEC closure,
+scaled-ionosphere closure, and PRC closure components from the per-component
+max-delta map, keeping the primary review evidence in the CI summary while the
+full row breakdown remains in the JSON artifact.
 When `GNSS_PPP_CLAS_DD_FILTER=1` and
 `GNSS_PPP_CLAS_CODE_ROW_PARITY=bias,full-prc` are set, the CLAS OSR
 materializer uses that exact GPS L2 RINEX identity to choose the code/phase SSR
