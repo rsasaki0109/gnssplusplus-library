@@ -217,8 +217,13 @@ CLASLIB-side disposable dumps must first be normalized with
 `scripts/analysis/claslib_zd_component_export.py`.  That export step converts
 numeric CLASLIB `sys`/`prn`/RTKLIB `code` fields into the native row-key space
 (`G14`, `J01`, `E07`, `C2W`, `L2W`, and related exact RINEX identities) without
-linking CLASLIB into the production binaries.  Use the normalized CSV as
-`GNSSPP_CLAS_ZD_BASE_CSV` for optional oracle-backed CI.
+linking CLASLIB into the production binaries.  Unmodified CLASLIB `.osr`
+`OSRRES(ch*)` output is also accepted for the current A4b GPS L2W probe: pass
+`--gps-week` because the `.osr` row carries TOW but not week, and use the
+resulting normalized CSV as `GNSSPP_CLAS_ZD_BASE_CSV`.  The `.osr` path maps
+only GPS L1/L2/L5 slots where the exact row identity is deterministic; QZSS and
+Galileo still need explicit disposable dumps until their ZD materialization and
+admission sources are fixed.
 
 The native side of the A4b `G14/C2W` slice is generated in CI by
 `scripts/ci/run_clas_a4b_native_selfdiff.py`.  That wrapper sparse-checks out
