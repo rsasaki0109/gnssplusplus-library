@@ -340,6 +340,40 @@ jobs:
           output/clas_a4b_native_selfdiff/selfdiff.csv
         if-no-files-found: error
 
+    - name: Install CLASLIB LAPACK dependencies
+      run: |
+        set -euo pipefail
+        sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+          libblas-dev \
+          liblapack-dev
+
+    - name: CLASLIB OSR ZD export
+      env:
+        GNSSPP_CLASLIB_OSR_SOURCE_ROOT: ${{ vars.GNSSPP_CLASLIB_OSR_SOURCE_ROOT }}
+        GNSSPP_CLASLIB_OSR_AUTO_FETCH: ${{ vars.GNSSPP_CLASLIB_OSR_AUTO_FETCH }}
+        GNSSPP_CLASLIB_OSR_REPO: ${{ vars.GNSSPP_CLASLIB_OSR_REPO }}
+        GNSSPP_CLASLIB_OSR_REF: ${{ vars.GNSSPP_CLASLIB_OSR_REF }}
+        GNSSPP_CLASLIB_OSR_GPS_WEEK: ${{ vars.GNSSPP_CLASLIB_OSR_GPS_WEEK }}
+        GNSSPP_CLASLIB_OSR_MAX_EPOCHS: ${{ vars.GNSSPP_CLASLIB_OSR_MAX_EPOCHS }}
+        GNSSPP_CLASLIB_OSR_GPS_L2W_ROWS_MIN: ${{ vars.GNSSPP_CLASLIB_OSR_GPS_L2W_ROWS_MIN }}
+        GNSSPP_CLASLIB_OSR_FAIL_ON_BLOCKED: ${{ vars.GNSSPP_CLASLIB_OSR_FAIL_ON_BLOCKED }}
+      run: python3 scripts/ci/run_claslib_osr_zd_export.py
+
+    - name: Upload CLASLIB OSR ZD export artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: claslib-osr-zd-export-ubuntu
+        path: |
+          output/ci_claslib_osr_zd_export_summary.json
+          output/ci_claslib_osr_zd_export/*.log
+          output/claslib_osr_zd_export/static_linux.conf
+          output/claslib_osr_zd_export/claslib.nmea
+          output/claslib_osr_zd_export/claslib.nmea.osr
+          output/claslib_osr_zd_export/claslib_osr.normalized.csv
+          output/claslib_osr_zd_export/claslib_osr_summary.json
+        if-no-files-found: error
+
     - name: Optional CLAS ZD component diff
       env:
         GNSSPP_CLAS_ZD_BASE_CSV: ${{ vars.GNSSPP_CLAS_ZD_BASE_CSV }}
@@ -354,10 +388,19 @@ jobs:
         GNSSPP_CLAS_ZD_DUPLICATE_POLICY: ${{ vars.GNSSPP_CLAS_ZD_DUPLICATE_POLICY }}
         GNSSPP_CLAS_ZD_THRESHOLD_M: ${{ vars.GNSSPP_CLAS_ZD_THRESHOLD_M }}
         GNSSPP_CLAS_ZD_FAIL_ON_DIFF: ${{ vars.GNSSPP_CLAS_ZD_FAIL_ON_DIFF }}
-      run: bash scripts/ci/run_optional_clas_zd_component_diff.sh
+      run: |
+        set -euo pipefail
+        export GNSSPP_CLAS_ZD_BASE_CSV="${GNSSPP_CLAS_ZD_BASE_CSV:-output/claslib_osr_zd_export/claslib_osr.normalized.csv}"
+        export GNSSPP_CLAS_ZD_STAGE="${GNSSPP_CLAS_ZD_STAGE:-post}"
+        export GNSSPP_CLAS_ZD_ROW_TYPE="${GNSSPP_CLAS_ZD_ROW_TYPE:-code}"
+        export GNSSPP_CLAS_ZD_SAT="${GNSSPP_CLAS_ZD_SAT:-G14}"
+        export GNSSPP_CLAS_ZD_FREQ="${GNSSPP_CLAS_ZD_FREQ:-1}"
+        export GNSSPP_CLAS_ZD_RINEX_CODE="${GNSSPP_CLAS_ZD_RINEX_CODE:-C2W}"
+        export GNSSPP_CLAS_ZD_DUPLICATE_POLICY="${GNSSPP_CLAS_ZD_DUPLICATE_POLICY:-mean}"
+        bash scripts/ci/run_optional_clas_zd_component_diff.sh
 
     - name: Upload CLAS ZD component diff artifacts
-      if: always()
+      if: always() && hashFiles('output/ci_optional_clas_zd_component_summary.json') != ''
       uses: actions/upload-artifact@v4
       with:
         name: clas-zd-component-diff-ubuntu
@@ -380,7 +423,7 @@ jobs:
       run: bash scripts/ci/run_optional_madoca_materialization_diff.sh
 
     - name: Upload MADOCA materialization diff artifacts
-      if: always()
+      if: always() && hashFiles('output/ci_optional_madoca_materialization_summary.json') != ''
       uses: actions/upload-artifact@v4
       with:
         name: madoca-materialization-diff-ubuntu
@@ -407,7 +450,7 @@ jobs:
       run: python3 scripts/ci/run_madoca_materialization_selfdiff.py
 
     - name: Upload MADOCA materialization native self-diff artifacts
-      if: always()
+      if: always() && hashFiles('output/ci_madoca_materialization_selfdiff_summary.json') != ''
       uses: actions/upload-artifact@v4
       with:
         name: madoca-materialization-selfdiff-ubuntu
@@ -438,7 +481,7 @@ jobs:
       run: bash scripts/ci/run_optional_madoca_residual_component_diff.sh
 
     - name: Upload MADOCA residual-component diff artifacts
-      if: always()
+      if: always() && hashFiles('output/ci_optional_madoca_residual_component_summary.json') != ''
       uses: actions/upload-artifact@v4
       with:
         name: madoca-residual-component-diff-ubuntu

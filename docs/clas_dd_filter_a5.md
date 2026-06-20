@@ -225,6 +225,13 @@ only GPS L1/L2/L5 slots where the exact row identity is deterministic; QZSS and
 Galileo still need explicit disposable dumps until their ZD materialization and
 admission sources are fixed.
 
+In CI, `scripts/ci/run_claslib_osr_zd_export.py` now performs that CLASLIB-side
+step from public data: it checks out pinned CLASLIB as a test-only source tree,
+builds `rnx2rtkp`, runs `-s` on the A4b window, normalizes the emitted `.osr`,
+and validates the normalized dump with `clas_zd_component_summary.v2`.  If
+`GNSSPP_CLAS_ZD_BASE_CSV` is unset, the optional CLAS ZD diff uses this generated
+normalized dump as the CLASLIB base side.
+
 The native side of the A4b `G14/C2W` slice is generated in CI by
 `scripts/ci/run_clas_a4b_native_selfdiff.py`.  That wrapper sparse-checks out
 the public CLASLIB data fixture, runs the gated native CLAS command with
