@@ -58,6 +58,15 @@ identity/time/IOD mistakes are visible as artifacts.  The option changes no
 solver behavior when omitted and does not link MADOCALIB into production
 targets.
 
+Materialization diff: use
+`scripts/analysis/madoca_materialization_diff.py <oracle.csv> <native.csv>
+--json-out <report.json> --details-csv <details.csv>` to compare two
+materialization snapshots before row-set or residual tuning.  The report schema
+is `madoca_materialization_diff.v1`; it treats satellite/correction epoch as the
+row key, reports reference-time/IOD/bias-identity differences as discrete
+mismatches, and reports orbit/clock/code-bias/phase-bias value differences as
+numeric deltas.
+
 Residual-component parity artifact: use
 `scripts/analysis/madoca_residual_component_diff.py` after satellite-set and
 row-set parity are understood.  It compares only common residual rows, keyed by
