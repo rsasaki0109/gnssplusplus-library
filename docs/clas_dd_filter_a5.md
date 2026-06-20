@@ -274,16 +274,17 @@ rows by the exact row-specific RINEX code so alias mismatches show up as row-set
 differences before component deltas are computed.
 When `GNSSPP_CLAS_ZD_COMPONENTS` is unset, the optional CI diff compares the
 component-level `prc_m`, `prc_component_sum_m`, `prc_closure_residual_m`,
-`iono_l1_m`, `iono_l1_from_stec_m`,
+`stec_tecu`, `iono_l1_m`, `iono_l1_from_stec_m`,
 `iono_l1_stec_closure_residual_m`, `iono_scaled_m`, `iono_scale`,
 `iono_scaled_closure_residual_m`, `trop_correction_m`, `code_bias_m`,
 `receiver_antenna_m`, `relativity_m`, `atmos_ref_tow`, `clock_ref_tow`, and
-`atmos_clock_gap_s` fields rather than using the aggregate
-`applied_pr_corr_m` to select the dominant row component.  The raw `stec_tecu`
-column remains available for explicit diagnostic runs, but it is not part of
-the default component list because the diff summary reports component deltas in
-meters.  The PRC closure residual is derived at diff time from the PRC
-component inputs, the L1-STEC closure residual is derived as
+`atmos_clock_gap_s` fields, plus CLAS grid id/count/weight provenance, rather
+than using the aggregate `applied_pr_corr_m` to select the dominant row
+component.  `atmos_grid_distance_m` remains an explicit diagnostic component
+because receiver-coordinate differences can otherwise dominate the top-row
+summary without representing a correction-value regression.  The PRC closure
+residual is derived at diff time from the PRC component inputs, the L1-STEC
+closure residual is derived as
 `iono_l1_m - stec_tecu * GPS_L1_TECU_TO_METERS`, and the ionosphere scale
 closure residual is derived as `iono_scaled_m - iono_scale * iono_l1_m`.
 Together these make the remote artifact show whether the remaining GPS L2W PRC

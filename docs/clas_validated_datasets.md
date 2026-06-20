@@ -302,13 +302,15 @@ the CLASLIB `.osr` receiver latitude/longitude, and the runner fails if GPS L2W
 rows are missing those provenance columns.
 When `GNSSPP_CLAS_ZD_COMPONENTS` is unset, the remote diff compares the
 component-level fields `prc_m`, `prc_component_sum_m`,
-`prc_closure_residual_m`, `iono_l1_m`, `iono_l1_from_stec_m`,
+`prc_closure_residual_m`, `stec_tecu`, `iono_l1_m`, `iono_l1_from_stec_m`,
 `iono_l1_stec_closure_residual_m`, `iono_scaled_m`, `iono_scale`,
 `iono_scaled_closure_residual_m`, `trop_correction_m`, `code_bias_m`,
 `receiver_antenna_m`, `relativity_m`, `atmos_ref_tow`, `clock_ref_tow`, and
-`atmos_clock_gap_s`.  The raw `stec_tecu` column remains
-available for explicit diagnostic runs, but it is not part of the default
-component list because the diff summary reports component deltas in meters.
+`atmos_clock_gap_s`, plus CLAS grid id/count/weight provenance.
+`atmos_grid_distance_m` remains available for explicit diagnostic runs, but it
+is not part of the default component list because receiver-coordinate
+differences can otherwise dominate the top-row summary without representing a
+correction-value regression.
 The derived `prc_closure_residual_m` value is computed by the diff tool as
 `PRC - (trop + relativity + receiver antenna + scaled iono + code bias)`, so it
 diagnoses PRC convention/rounding gaps without changing either input CSV schema.
