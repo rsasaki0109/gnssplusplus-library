@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optional_diff_runner as runner  # noqa: E402
 
 
-SUMMARY_SCHEMA = "ci_optional_madoca_materialization_diff.v1"
+SUMMARY_SCHEMA = "ci_optional_madoca_materialization_diff.v2"
 
 CONFIG = runner.DiffRunnerConfig(
     summary_schema=SUMMARY_SCHEMA,
@@ -48,6 +48,9 @@ CONFIG = runner.DiffRunnerConfig(
             "float",
         ),
     ),
+    input_summary_script="madoca_materialization_summary.py",
+    input_summary_schema="madoca_materialization_summary.v1",
+    input_summary_fail_on_issue=True,
 )
 
 
