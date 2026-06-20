@@ -468,10 +468,20 @@ def row_component_breakdown(
     candidate_row: ComponentRow,
 ) -> dict[str, Any]:
     components: list[dict[str, Any]] = []
+    missing_components: list[dict[str, Any]] = []
     for component in sorted(set(base_row.components) | set(candidate_row.components)):
         base_value = base_row.components.get(component)
         candidate_value = candidate_row.components.get(component)
         if base_value is None or candidate_value is None:
+            missing_components.append(
+                {
+                    "component": component,
+                    "base_present": base_value is not None,
+                    "candidate_present": candidate_value is not None,
+                    "base_value": base_value,
+                    "candidate_value": candidate_value,
+                }
+            )
             continue
         delta = candidate_value - base_value
         components.append(
@@ -493,12 +503,14 @@ def row_component_breakdown(
         "base_source_row": base_row.source_row,
         "candidate_source_row": candidate_row.source_row,
         "component_count": len(components),
+        "missing_component_count": len(missing_components),
         "max_abs_delta_m": max(
             (item["abs_delta_m"] for item in components),
             default=0.0,
         ),
         "sum_abs_delta_m": sum(item["abs_delta_m"] for item in components),
         "components": components,
+        "missing_components": missing_components,
     }
 
 

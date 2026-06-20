@@ -235,7 +235,11 @@ changing the gated correction model. The optional CI summary schema
 `ci_optional_clas_zd_component_diff.v7` and later summaries lift both the global top delta, the
 leading row-breakdown component, and a per-component max-delta map into summary
 metrics, so release artifacts show the next single-component target without
-manually opening the full diff JSON.
+manually opening the full diff JSON.  Schema
+`ci_optional_clas_zd_component_diff.v10` additionally surfaces top-row values
+for highlighted components that are present on only one side, so native
+atmosphere/clock reference epochs remain visible even when the CLASLIB export
+cannot provide comparable fields.
 
 CI can regenerate the native side of this A4b probe without a pre-staged native
 CSV:
@@ -305,7 +309,9 @@ missing counts for highlighted atmosphere-reference fields when CLASLIB cannot
 provide a comparable value.  The native `clas_zd_component_summary.v2` snapshot
 also reports numeric min/max stats for `atmos_ref_tow`, `clock_ref_tow`, and
 `atmos_clock_gap_s`, so reviewers can see which lifecycle stage is selected
-without opening the raw CSV.
+without opening the raw CSV.  For the leading row-breakdown, v10 summaries also
+include the native value of each highlighted missing field, which ties the
+largest PRC/iono/trop delta back to the selected reference epoch.
 If either generated side is missing, the optional diff reports
 `blocked_infrastructure`, not a passing sign-off.
 

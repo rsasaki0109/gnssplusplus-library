@@ -202,7 +202,11 @@ sign-off.  The workflow upload treats the summary/log bundle as required
 evidence.  The `ci_optional_clas_zd_component_diff.v7` and later summaries surface
 the global largest component delta, the top ZD row's dominant component, and a
 per-component max-delta map, so the next A4b model PR can be scoped to one
-correction component instead of tuning final solution RMS.
+correction component instead of tuning final solution RMS.  The
+`ci_optional_clas_zd_component_diff.v10` summary also carries top-row values for
+highlighted components that exist on only one side, such as native
+`atmos_ref_tow`, `clock_ref_tow`, and `atmos_clock_gap_s` when CLASLIB has no
+comparable reference-epoch columns.
 Optional filters are `GNSSPP_CLAS_ZD_COMPONENTS`, `GNSSPP_CLAS_ZD_STAGE`,
 `GNSSPP_CLAS_ZD_ROW_TYPE`, `GNSSPP_CLAS_ZD_THRESHOLD_M`, and
 `GNSSPP_CLAS_ZD_FAIL_ON_DIFF`.  GPS L2W A4b probes can also narrow the row set
