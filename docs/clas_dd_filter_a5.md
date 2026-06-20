@@ -221,12 +221,13 @@ linking CLASLIB into the production binaries.  Unmodified CLASLIB `.osr`
 `OSRRES(ch*)` output is also accepted for the current A4b GPS L2W probe: pass
 `--gps-week` because the `.osr` row carries TOW but not week, and use the
 resulting normalized CSV as `GNSSPP_CLAS_ZD_BASE_CSV`.  For `.osr` input,
-`iono_l1_m` and `iono_scaled_m` are reconstructed from the CLASLIB `PRC`
-closure, not from the raw display `iono` column, so the diff compares the
-ionosphere term that was actually applied to `PRC1/PRC2/PRC5`.  The `.osr` path
-maps only GPS L1/L2/L5 slots where the exact row identity is deterministic;
-QZSS and Galileo still need explicit disposable dumps until their ZD
-materialization and admission sources are fixed.
+`iono_scaled_m` is reconstructed from the CLASLIB `PRC` closure, not from the
+raw display `iono` column, so the diff compares the ionosphere term that was
+actually applied to `PRC1/PRC2/PRC5`.  `iono_l1_m` is the L1-equivalent of that
+same frequency-slot-specific closure value; it is not copied from the L1 slot.
+The `.osr` path maps only GPS L1/L2/L5 slots where the exact row identity is
+deterministic; QZSS and Galileo still need explicit disposable dumps until
+their ZD materialization and admission sources are fixed.
 
 In CI, `scripts/ci/run_claslib_osr_zd_export.py` now performs that CLASLIB-side
 step from public data: it checks out pinned CLASLIB as a test-only source tree,
