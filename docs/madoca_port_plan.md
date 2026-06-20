@@ -129,9 +129,19 @@ when `GNSSPP_MADOCA_RESIDUAL_BASE_CSV` and
 `GNSSPP_MADOCA_RESIDUAL_CANDIDATE_CSV` point at generated oracle/native CSV
 dumps.  It writes `ci_optional_madoca_residual_component_summary.json`, a log,
 the `madoca_residual_component_diff.{json,csv}` artifacts, and one
-`madoca_residual_component_summary.v1` JSON for each oracle/native input
-snapshot.  The wrapper runs those snapshot summaries with `--fail-on-issue`
-before the diff, so malformed row keys, missing row identity, or rows without
+`madoca_residual_component_summary.v2` JSON for each oracle/native input
+snapshot.  The wrapper runs those snapshot summaries with `--fail-on-issue`,
+requires every configured diff component to be present in each snapshot, and
+passes the configured row type / iteration filters into the input summary before
+the diff.  Optional identity guards
+`GNSSPP_MADOCA_RESIDUAL_REQUIRED_SYSTEMS`,
+`GNSSPP_MADOCA_RESIDUAL_REQUIRED_PRIMARY_CODES`,
+`GNSSPP_MADOCA_RESIDUAL_REQUIRED_SECONDARY_CODES`,
+`GNSSPP_MADOCA_RESIDUAL_REQUIRED_FREQUENCY_INDICES`, and
+`GNSSPP_MADOCA_RESIDUAL_REQUIRED_IONOSPHERE_COEFFICIENTS` can require the
+oracle/native residual snapshots to contain the same expected system and exact
+observation-code coverage before residual deltas are compared.  Malformed row
+keys, missing row identity, absent configured identity coverage, or rows without
 numeric residual components fail as input-contract issues.  When inputs are
 absent the CI step records `status: blocked_infrastructure` with next actions
 instead of silently treating the missing oracle/native evidence as a passing

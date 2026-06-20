@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import madoca_residual_component_diff as residual_diff  # noqa: E402
 
 
-SCHEMA = "madoca_residual_component_summary.v1"
+SCHEMA = "madoca_residual_component_summary.v2"
 
 
 def _format_counter(counter: Counter[str]) -> dict[str, int]:
@@ -28,6 +28,13 @@ def _format_top(counter: Counter[str], limit: int) -> list[dict[str, object]]:
         {"key": key, "count": count}
         for key, count in sorted(counter.items(), key=lambda item: (-item[1], item[0]))[:limit]
     ]
+
+
+def _positive_count(counter: Mapping[str, Any], key: str) -> bool:
+    try:
+        return int(counter.get(str(key), 0)) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 def _sat_system(sat: str) -> str:
@@ -163,19 +170,54 @@ def requirement_failures(summary: Mapping[str, Any], args: argparse.Namespace) -
     elif rows < args.require_rows_min:
         failures.append(f"rows {rows} < required minimum {args.require_rows_min}")
 
+    systems = summary.get("systems", {})
+    if not isinstance(systems, dict):
+        systems = {}
+    for system in args.require_system:
+        if not _positive_count(systems, system):
+            failures.append(f"required system {system} is absent")
+
     row_types = summary.get("row_types", {})
     if not isinstance(row_types, dict):
         row_types = {}
     for row_type in args.require_row_type:
-        if int(row_types.get(str(row_type), 0)) <= 0:
+        if not _positive_count(row_types, row_type):
             failures.append(f"required row type {row_type} is absent")
 
     iterations = summary.get("iterations", {})
     if not isinstance(iterations, dict):
         iterations = {}
     for iteration in args.require_iteration:
-        if int(iterations.get(str(iteration), 0)) <= 0:
+        if not _positive_count(iterations, iteration):
             failures.append(f"required iteration {iteration} is absent")
+
+    observation_identity = summary.get("observation_identity", {})
+    if not isinstance(observation_identity, dict):
+        observation_identity = {}
+    primary_codes = observation_identity.get("primary_observation_codes", {})
+    if not isinstance(primary_codes, dict):
+        primary_codes = {}
+    secondary_codes = observation_identity.get("secondary_observation_codes", {})
+    if not isinstance(secondary_codes, dict):
+        secondary_codes = {}
+    frequency_indices = observation_identity.get("frequency_indices", {})
+    if not isinstance(frequency_indices, dict):
+        frequency_indices = {}
+    ionosphere_coefficients = observation_identity.get("ionosphere_coefficients", {})
+    if not isinstance(ionosphere_coefficients, dict):
+        ionosphere_coefficients = {}
+    for code in args.require_primary_observation_code:
+        if not _positive_count(primary_codes, code):
+            failures.append(f"required primary observation code {code} is absent")
+    for code in args.require_secondary_observation_code:
+        if not _positive_count(secondary_codes, code):
+            failures.append(f"required secondary observation code {code} is absent")
+    for frequency_index in args.require_frequency_index:
+        if not _positive_count(frequency_indices, frequency_index):
+            failures.append(f"required frequency index {frequency_index} is absent")
+    for coefficient in args.require_ionosphere_coefficient:
+        if not _positive_count(ionosphere_coefficients, coefficient):
+            failures.append(f"required ionosphere coefficient {coefficient} is absent")
 
     component_presence = summary.get("component_presence", {})
     if not isinstance(component_presence, dict):
@@ -184,7 +226,7 @@ def requirement_failures(summary: Mapping[str, Any], args: argparse.Namespace) -
     if not isinstance(rows_with_component, dict):
         rows_with_component = {}
     for component in args.require_component:
-        if int(rows_with_component.get(str(component), 0)) <= 0:
+        if not _positive_count(rows_with_component, component):
             failures.append(f"required component {component} is absent")
 
     row_key = summary.get("row_key", {})
@@ -204,8 +246,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("snapshot_csv", type=Path)
     parser.add_argument("--json-out", type=Path)
     parser.add_argument("--require-rows-min", type=int, default=0)
+    parser.add_argument("--require-system", action="append", default=[])
     parser.add_argument("--require-row-type", action="append", default=[])
     parser.add_argument("--require-iteration", action="append", default=[])
+    parser.add_argument("--require-primary-observation-code", action="append", default=[])
+    parser.add_argument("--require-secondary-observation-code", action="append", default=[])
+    parser.add_argument("--require-frequency-index", action="append", default=[])
+    parser.add_argument("--require-ionosphere-coefficient", action="append", default=[])
     parser.add_argument("--require-component", action="append", default=[])
     parser.add_argument("--require-no-duplicate-keys", action="store_true")
     parser.add_argument("--fail-on-issue", action="store_true")
