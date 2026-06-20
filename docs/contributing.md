@@ -57,7 +57,7 @@ CI lanes are split as follows:
   next actions when their CSV inputs are unavailable, require a summary/log
   artifact in CI, and fail a passed diff command if the declared JSON/CSV
   artifacts are missing.  The CLAS ZD component diff additionally emits
-  `clas_zd_component_summary.v1` JSON for both input snapshots and fails before
+  `clas_zd_component_summary.v2` JSON for both input snapshots and fails before
   the component diff when row keys, observation identity, or component presence
   is malformed.  The MADOCA materialization diff additionally emits
   `madoca_materialization_summary.v1` JSON for both input snapshots and fails
@@ -70,9 +70,10 @@ CI lanes are split as follows:
 - `python3 scripts/ci/run_clas_a4b_native_selfdiff.py` for the public CLAS A4b
   native-side evidence bundle; it sparse-fetches CLASLIB public data unless
   `GNSSPP_CLAS_A4B_DATA_ROOT` is supplied, generates the native code dump, and
-  writes `clas_zd_component_summary.v1` for that dump before self-diffing the
-  `G14/C2W` rows; this native-side evidence must pass before any oracle-backed
-  model change
+  writes `clas_zd_component_summary.v2` for that dump before self-diffing the
+  `G14/C2W` rows.  The dump summary itself requires GPS L2W exact bias and
+  observation identity, zero fallback rows, and no duplicate row keys; this
+  native-side evidence must pass before any oracle-backed model change
 - `python3 scripts/ci/run_madoca_materialization_selfdiff.py` for the public
   MADOCA materialization evidence bundle; it sparse-fetches pinned MADOCALIB
   BRDM/L6 sample files unless `GNSSPP_MADOCA_MATERIALIZATION_DATA_ROOT` is

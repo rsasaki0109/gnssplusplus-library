@@ -188,7 +188,7 @@ runs that comparison when `GNSSPP_CLAS_ZD_BASE_CSV` and
 `GNSSPP_CLAS_ZD_CANDIDATE_CSV` point at generated CLASLIB/native component
 dumps.  It writes `ci_optional_clas_zd_component_summary.json`, a log, and the
 `clas_zd_component_diff.{json,csv}` artifacts, plus
-`clas_zd_component_summary.v1` JSON for both CLASLIB and native input snapshots.
+`clas_zd_component_summary.v2` JSON for both CLASLIB and native input snapshots.
 The input summaries validate row keys, observation identity, duplicate groups,
 and component presence before any deltas are compared.  When those inputs are
 absent, the CI step records `status: blocked_infrastructure` with next actions
@@ -215,10 +215,11 @@ linking CLASLIB into the production binaries.  Use the normalized CSV as
 The native side of the A4b `G14/C2W` slice is generated in CI by
 `scripts/ci/run_clas_a4b_native_selfdiff.py`.  That wrapper sparse-checks out
 the public CLASLIB data fixture, runs the gated native CLAS command with
-`GNSS_PPP_CLAS_CODE_DUMP`, writes `clas_zd_component_summary.v1` for the
+`GNSS_PPP_CLAS_CODE_DUMP`, writes `clas_zd_component_summary.v2` for the
 resulting native dump, and self-diffs it before any oracle comparison.  The
-summary step catches malformed row keys, missing observation identity, and
-missing component values before the self-diff can pass.  This is not a
+summary step catches malformed row keys, missing observation identity, missing
+component values, GPS L2W exact-identity loss, fallback rows, and duplicate row
+keys before the self-diff can pass.  This is not a
 replacement for CLASLIB ZD parity; it removes the manually staged native CSV
 from the next oracle-backed PR and guards exact observation-code identity and
 fallback counts on remote CI.

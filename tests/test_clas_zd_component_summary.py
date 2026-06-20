@@ -114,7 +114,7 @@ class ClasZdComponentSummaryTest(unittest.TestCase):
 
         summary = summary_script.summarize_rows(rows)
 
-        self.assertEqual(summary["schema"], "clas_zd_component_summary.v1")
+        self.assertEqual(summary["schema"], "clas_zd_component_summary.v2")
         self.assertEqual(summary["status"], "passed")
         self.assertEqual(summary["rows"], 2)
         self.assertEqual(summary["systems"], {"GPS": 1, "QZSS": 1})
@@ -201,7 +201,7 @@ class ClasZdComponentSummaryTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1)
             payload = json.loads(summary_json.read_text(encoding="utf-8"))
-            self.assertEqual(payload["schema"], "clas_zd_component_summary.v1")
+            self.assertEqual(payload["schema"], "clas_zd_component_summary.v2")
             self.assertEqual(payload["status"], "failed")
             self.assertIn("rows 1 < required minimum 2", payload["failures"])
             self.assertIn("required system QZSS is absent", payload["failures"])
@@ -228,6 +228,13 @@ class ClasZdComponentSummaryTest(unittest.TestCase):
                     "C2W",
                     "--require-component",
                     "prc_m",
+                    "--require-gps-l2w-rows-min",
+                    "1",
+                    "--require-gps-l2w-exact-bias",
+                    "--require-gps-l2w-observation-exact-match",
+                    "--require-gps-l2w-no-observation-family-fallback",
+                    "--require-gps-l2w-no-code-bias-fallback",
+                    "--require-gps-l2w-no-phase-bias-fallback",
                 ],
                 check=False,
                 capture_output=True,
@@ -238,6 +245,58 @@ class ClasZdComponentSummaryTest(unittest.TestCase):
             payload = json.loads(summary_json.read_text(encoding="utf-8"))
             self.assertEqual(payload["status"], "passed")
             self.assertEqual(payload["failures"], [])
+
+    def test_cli_rejects_gps_l2w_identity_contract_violations(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="clas_zd_component_summary_identity_") as temp_dir:
+            root = Path(temp_dir)
+            snapshot = root / "clas_zd.csv"
+            summary_json = root / "summary.json"
+            write_csv(
+                snapshot,
+                [
+                    zd_row(
+                        row_type="code",
+                        bias_exact_identity="0",
+                        observation_exact_match="0",
+                        observation_family_fallback="1",
+                        code_bias_fallback="1",
+                        phase_bias_fallback="1",
+                    )
+                ],
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT_PATH),
+                    str(snapshot),
+                    "--json-out",
+                    str(summary_json),
+                    "--require-gps-l2w-rows-min",
+                    "2",
+                    "--require-gps-l2w-exact-bias",
+                    "--require-gps-l2w-observation-exact-match",
+                    "--require-gps-l2w-no-observation-family-fallback",
+                    "--require-gps-l2w-no-code-bias-fallback",
+                    "--require-gps-l2w-no-phase-bias-fallback",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            payload = json.loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(payload["status"], "failed")
+            self.assertIn("GPS L2W rows 1 < required minimum 2", payload["failures"])
+            self.assertIn("GPS L2W exact-bias rows 0 != GPS L2W rows 1", payload["failures"])
+            self.assertIn(
+                "GPS L2W observation exact-match rows 0 != GPS L2W rows 1",
+                payload["failures"],
+            )
+            self.assertIn("GPS L2W observation-family fallback rows 1 != 0", payload["failures"])
+            self.assertIn("GPS L2W code-bias fallback rows 1 != 0", payload["failures"])
+            self.assertIn("GPS L2W phase-bias fallback rows 1 != 0", payload["failures"])
 
 
 if __name__ == "__main__":

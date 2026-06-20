@@ -117,10 +117,20 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             self.assertIn(str(paths.native_code_dump), command)
             self.assertIn(str(paths.native_code_dump_summary_json), command)
             self.assertIn("--fail-on-issue", command)
+            self.assertIn("--require-system", command)
+            self.assertIn("GPS", command)
             self.assertIn("--require-row-type", command)
             self.assertIn("code", command)
             self.assertIn("--require-rinex-code", command)
             self.assertIn("C2W", command)
+            self.assertIn("--require-gps-l2w-rows-min", command)
+            self.assertIn("30", command)
+            self.assertIn("--require-gps-l2w-exact-bias", command)
+            self.assertIn("--require-gps-l2w-observation-exact-match", command)
+            self.assertIn("--require-gps-l2w-no-observation-family-fallback", command)
+            self.assertIn("--require-gps-l2w-no-code-bias-fallback", command)
+            self.assertIn("--require-gps-l2w-no-phase-bias-fallback", command)
+            self.assertIn("--require-no-duplicate-keys", command)
 
     def test_evaluate_accepts_exact_native_l2w_selfdiff(self) -> None:
         config = runner.RunConfig(
@@ -138,7 +148,7 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
         )
         native_summary = {"epochs": 30, "ppp_solution_rate_pct": 100.0}
         code_dump_summary = {
-            "schema": "clas_zd_component_summary.v1",
+            "schema": "clas_zd_component_summary.v2",
             "status": "passed",
             "rows": 540,
             "row_key": {"duplicate_groups": 0},
@@ -172,7 +182,7 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
         self.assertEqual(failures, [])
         self.assertEqual(metrics["gps_l2w_rows"], 30)
         self.assertEqual(metrics["native_code_dump_rows"], 540)
-        self.assertEqual(metrics["native_code_dump_summary_schema"], "clas_zd_component_summary.v1")
+        self.assertEqual(metrics["native_code_dump_summary_schema"], "clas_zd_component_summary.v2")
         self.assertEqual(metrics["native_code_dump_summary_status"], "passed")
         self.assertEqual(metrics["native_code_dump_summary_rows"], 540)
         self.assertEqual(metrics["native_code_dump_summary_duplicate_groups"], 0)
@@ -194,7 +204,7 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
         )
         native_summary = {"epochs": 30, "ppp_solution_rate_pct": 100.0}
         code_dump_summary = {
-            "schema": "clas_zd_component_summary.v1",
+            "schema": "clas_zd_component_summary.v2",
             "status": "passed",
             "rows": 540,
             "row_key": {"duplicate_groups": 0},
@@ -244,7 +254,7 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
         )
         native_summary = {"epochs": 30, "ppp_solution_rate_pct": 100.0}
         code_dump_summary = {
-            "schema": "clas_zd_component_summary.v1",
+            "schema": "clas_zd_component_summary.v2",
             "status": "failed",
             "rows": 539,
             "row_key": {"duplicate_groups": 1},
