@@ -20,11 +20,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from optional_diff_runner import artifact_record, truthy  # noqa: E402
 
 
-SUMMARY_SCHEMA = "ci_madoca_materialization_selfdiff.v1"
+SUMMARY_SCHEMA = "ci_madoca_materialization_selfdiff.v2"
 CONTRACT = "madoca_materialization_selfdiff.v1"
 DEFAULT_MADOCALIB_REPO = "https://github.com/QZSS-Strategy-Office/madocalib.git"
 DEFAULT_MADOCALIB_REF = "0089f7dc97e8e2ba283a40be2edf4b73a140df6c"
 DEFAULT_MIN_ROWS = 1000
+DEFAULT_REQUIRED_SYSTEMS = ("GPS", "GLONASS", "Galileo", "QZSS", "BeiDou")
+DEFAULT_REQUIRED_BIAS_IDS = ("2", "8", "9", "14", "22")
 REQUIRED_DATA_FILES = (
     "sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx",
     "sample_data/data/l6/2025/091/2025091A.204.l6",
@@ -62,6 +64,9 @@ class RunConfig:
     madocalib_repo: str
     madocalib_ref: str
     min_rows: int
+    required_systems: tuple[str, ...]
+    required_code_bias_ids: tuple[str, ...]
+    required_phase_bias_ids: tuple[str, ...]
     python_executable: str
 
 
@@ -106,6 +111,10 @@ def env_or(environ: Mapping[str, str], name: str, default: str) -> str:
     return value if value else default
 
 
+def parse_csv_list(text: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in text.split(",") if item.strip())
+
+
 def parse_config(args: argparse.Namespace, environ: Mapping[str, str]) -> RunConfig:
     repo_root = args.repo_root.resolve()
     output_dir = (args.output_dir if args.output_dir is not None else repo_root / "output").resolve()
@@ -129,6 +138,27 @@ def parse_config(args: argparse.Namespace, environ: Mapping[str, str]) -> RunCon
             DEFAULT_MADOCALIB_REF,
         ),
         min_rows=int(env_or(environ, "GNSSPP_MADOCA_MATERIALIZATION_ROWS_MIN", str(DEFAULT_MIN_ROWS))),
+        required_systems=parse_csv_list(
+            env_or(
+                environ,
+                "GNSSPP_MADOCA_MATERIALIZATION_REQUIRED_SYSTEMS",
+                ",".join(DEFAULT_REQUIRED_SYSTEMS),
+            )
+        ),
+        required_code_bias_ids=parse_csv_list(
+            env_or(
+                environ,
+                "GNSSPP_MADOCA_MATERIALIZATION_REQUIRED_CODE_BIAS_IDS",
+                ",".join(DEFAULT_REQUIRED_BIAS_IDS),
+            )
+        ),
+        required_phase_bias_ids=parse_csv_list(
+            env_or(
+                environ,
+                "GNSSPP_MADOCA_MATERIALIZATION_REQUIRED_PHASE_BIAS_IDS",
+                ",".join(DEFAULT_REQUIRED_BIAS_IDS),
+            )
+        ),
         python_executable=sys.executable,
     )
 
@@ -247,7 +277,7 @@ def build_selfdiff_command(config: RunConfig, paths: RunPaths) -> list[str]:
 
 
 def build_materialization_summary_command(config: RunConfig, paths: RunPaths) -> list[str]:
-    return [
+    command = [
         config.python_executable,
         str(config.repo_root / "scripts" / "analysis" / "madoca_materialization_summary.py"),
         str(paths.native_dump),
@@ -255,8 +285,16 @@ def build_materialization_summary_command(config: RunConfig, paths: RunPaths) ->
         str(paths.native_materialization_summary_json),
         "--require-rows-min",
         str(config.min_rows),
+        "--require-no-duplicate-keys",
         "--fail-on-issue",
     ]
+    for system in config.required_systems:
+        command.extend(["--require-system", system])
+    for signal_id in config.required_code_bias_ids:
+        command.extend(["--require-code-bias-id", signal_id])
+    for signal_id in config.required_phase_bias_ids:
+        command.extend(["--require-phase-bias-id", signal_id])
+    return command
 
 
 def load_json(path: Path) -> dict[str, object]:
@@ -271,6 +309,13 @@ def count_csv_data_rows(path: Path) -> int:
         return 0
     with path.open(encoding="utf-8") as handle:
         return max(sum(1 for _line in handle) - 1, 0)
+
+
+def positive_count(mapping: Mapping[object, object], key: str) -> bool:
+    try:
+        return int(mapping.get(key, 0)) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 def evaluate(
@@ -299,6 +344,38 @@ def evaluate(
         failures.append(
             f"materialization summary rows {materialization_summary.get('rows')} != summary rows {summary_rows}"
         )
+    systems = materialization_summary.get("systems")
+    if not isinstance(systems, dict):
+        systems = {}
+        failures.append("materialization summary systems is not an object")
+    for system in config.required_systems:
+        if not positive_count(systems, system):
+            failures.append(f"materialization summary missing required system {system}")
+    row_key = materialization_summary.get("row_key")
+    if not isinstance(row_key, dict):
+        row_key = {}
+        failures.append("materialization summary row_key is not an object")
+    duplicate_groups = row_key.get("duplicate_groups")
+    if duplicate_groups != 0:
+        failures.append(f"materialization summary duplicate groups {duplicate_groups} != 0")
+    bias_identity = materialization_summary.get("bias_identity")
+    if not isinstance(bias_identity, dict):
+        bias_identity = {}
+        failures.append("materialization summary bias_identity is not an object")
+    code_bias_ids = bias_identity.get("code_bias_ids")
+    if not isinstance(code_bias_ids, dict):
+        code_bias_ids = {}
+        failures.append("materialization summary code_bias_ids is not an object")
+    phase_bias_ids = bias_identity.get("phase_bias_ids")
+    if not isinstance(phase_bias_ids, dict):
+        phase_bias_ids = {}
+        failures.append("materialization summary phase_bias_ids is not an object")
+    for signal_id in config.required_code_bias_ids:
+        if not positive_count(code_bias_ids, signal_id):
+            failures.append(f"materialization summary missing required code bias id {signal_id}")
+    for signal_id in config.required_phase_bias_ids:
+        if not positive_count(phase_bias_ids, signal_id):
+            failures.append(f"materialization summary missing required phase bias id {signal_id}")
     if selfdiff_report.get("schema") != "madoca_materialization_diff.v1":
         failures.append("self-diff schema mismatch")
     for key in ("base_only_rows", "candidate_only_rows", "discrete_mismatches", "numeric_threshold_exceedances"):
@@ -359,6 +436,9 @@ def write_summary(
             "madocalib_repo": config.madocalib_repo,
             "madocalib_ref": config.madocalib_ref,
             "min_rows": config.min_rows,
+            "required_systems": list(config.required_systems),
+            "required_code_bias_ids": list(config.required_code_bias_ids),
+            "required_phase_bias_ids": list(config.required_phase_bias_ids),
             "auto_fetch": config.auto_fetch,
             "data_root": str(config.data_root) if config.data_root is not None else None,
         },

@@ -96,7 +96,13 @@ CSV against itself.  It writes
 native dump-only summary, a `native_materialization_summary.json`, and
 `selfdiff.{json,csv}`.  This is not oracle parity; it is a remote-CI evidence
 contract that proves the native M3 dump can be regenerated from public data
-before model-change PRs start consuming oracle materialization rows.
+before model-change PRs start consuming oracle materialization rows.  The CI
+summary schema is `ci_madoca_materialization_selfdiff.v2`; with the pinned
+public fixture it requires GPS, GLONASS, Galileo, QZSS, and BeiDou rows,
+code/phase bias ids `2`, `8`, `9`, `14`, and `22`, zero duplicate row keys,
+zero self-diff deltas, and matching native summary/CSV row counts.  Override the
+required systems or bias ids only when intentionally changing the fixture
+contract.
 
 Materialization summary: use
 `scripts/analysis/madoca_materialization_summary.py <snapshot.csv> --json-out
