@@ -134,6 +134,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_clas_zd_component_diff.py
     )
     add_test(
+        NAME python_clas_zd_component_summary_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_clas_zd_component_summary.py
+    )
+    add_test(
         NAME python_claslib_zd_component_export_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_claslib_zd_component_export.py
     )
@@ -282,6 +286,7 @@ if(GTest_FOUND)
         python_artifact_manifest_ux_tests
         python_clas_a4b_native_selfdiff_tests
         python_clas_zd_component_diff_tests
+        python_clas_zd_component_summary_tests
         python_claslib_zd_component_export_tests
         python_cli_json_contract_validator_tests
         python_cli_ux_tests

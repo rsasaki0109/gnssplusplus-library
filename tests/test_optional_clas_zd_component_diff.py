@@ -44,6 +44,10 @@ FIELDNAMES = [
 def write_zd_component_csv(
     path: Path,
     *,
+    sat: str = "G01",
+    tow: str = "172800.000",
+    row_type: str = "code",
+    pseudorange_code: str = "C2W",
     prc_m: str = "0.1",
     bias_exact_identity: str = "",
     observation_exact_identity_requested: str = "",
@@ -57,12 +61,12 @@ def write_zd_component_csv(
         writer.writerow(
             {
                 "week": "2360",
-                "tow": "172800.000",
+                "tow": tow,
                 "stage": "accepted",
-                "sat": "G01",
-                "row_type": "code",
+                "sat": sat,
+                "row_type": row_type,
                 "freq": "1",
-                "pseudorange_rinex_code": "C2W",
+                "pseudorange_rinex_code": pseudorange_code,
                 "carrier_rinex_code": "",
                 "bias_exact_identity": bias_exact_identity,
                 "observation_exact_identity_requested": observation_exact_identity_requested,
@@ -155,6 +159,13 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertIn("0.25", command)
             self.assertIn("--fail-on-diff", command)
             self.assertIn(str(output_dir / "clas_zd_component_diff.json"), command)
+            self.assertEqual(len(steps[0].pre_commands), 2)
+            self.assertIn(
+                str(SCRIPT_PATH.parent.parent / "analysis" / "clas_zd_component_summary.py"),
+                steps[0].pre_commands[0],
+            )
+            self.assertIn(str(output_dir / "clas_zd_component_diff_claslib_snapshot_summary.json"), steps[0].outputs)
+            self.assertIn(str(output_dir / "clas_zd_component_diff_native_snapshot_summary.json"), steps[0].outputs)
 
     def test_run_step_collects_metrics_from_diff_report(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_exec_") as temp_dir:
@@ -194,6 +205,43 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertAlmostEqual(metrics["max_abs_delta"], 0.05)
             self.assertAlmostEqual(metrics["top_row_sum_abs_delta"], 0.05)
             self.assertAlmostEqual(metrics["top_row_max_abs_delta"], 0.05)
+            self.assertEqual(metrics["claslib_snapshot_schema"], "clas_zd_component_summary.v1")
+            self.assertEqual(metrics["native_snapshot_schema"], "clas_zd_component_summary.v1")
+            self.assertEqual(metrics["claslib_snapshot_status"], "passed")
+            self.assertEqual(metrics["native_snapshot_status"], "passed")
+            self.assertEqual(metrics["claslib_snapshot_rows"], 1)
+            self.assertEqual(metrics["native_snapshot_rows"], 1)
+            self.assertEqual(metrics["claslib_snapshot_duplicate_groups"], 0)
+            self.assertEqual(metrics["native_snapshot_duplicate_groups"], 0)
+            artifact_paths = {artifact["path"] for artifact in result["artifacts"]}
+            self.assertIn(str(output_dir / "clas_zd_component_diff_claslib_snapshot_summary.json"), artifact_paths)
+            self.assertIn(str(output_dir / "clas_zd_component_diff_native_snapshot_summary.json"), artifact_paths)
+
+    def test_run_step_fails_when_snapshot_summary_fails(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_input_summary_") as temp_dir:
+            root = Path(temp_dir)
+            base_csv = root / "claslib.csv"
+            candidate_csv = root / "native.csv"
+            write_zd_component_csv(base_csv)
+            write_zd_component_csv(candidate_csv, sat="", pseudorange_code="")
+            output_dir = root / "output"
+            log_dir = output_dir / "logs"
+            log_dir.mkdir(parents=True)
+            env = {
+                "GNSSPP_CLAS_ZD_BASE_CSV": str(base_csv),
+                "GNSSPP_CLAS_ZD_CANDIDATE_CSV": str(candidate_csv),
+            }
+            step = runner.build_step_plan(ROOT_DIR, output_dir, env)[0]
+
+            result = runner.run_step(step, ROOT_DIR, log_dir)
+
+            self.assertEqual(result["status"], "failed")
+            self.assertNotEqual(result["returncode"], 0)
+            self.assertIn("clas_zd_component_summary.py", " ".join(result["failed_command"]))
+            metrics = result["metrics"]
+            self.assertEqual(metrics["claslib_snapshot_status"], "passed")
+            self.assertEqual(metrics["native_snapshot_status"], "failed")
+            self.assertEqual(metrics["native_snapshot_issue_counts"]["missing_satellite"], 1)
 
     def test_run_step_collects_identity_provenance_metrics(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_identity_") as temp_dir:
