@@ -354,6 +354,27 @@ def load_diff_metrics(config: DiffRunnerConfig, report_json: Path) -> dict[str, 
                 metrics["top_row_sum_abs_delta"] = float(sum_abs_delta)
             if isinstance(max_abs_delta, (int, float)):
                 metrics["top_row_max_abs_delta"] = float(max_abs_delta)
+            key_parts = []
+            for key in ("week", "tow", "row_type", "sat", "freq", "rinex_code"):
+                value = first_row.get(key)
+                if value is not None:
+                    metrics[f"top_row_{key}"] = value
+                    key_parts.append(str(value))
+            if key_parts:
+                metrics["top_row_key"] = "/".join(key_parts)
+            components = first_row.get("components")
+            if isinstance(components, list) and components:
+                first_component = components[0]
+                if isinstance(first_component, dict):
+                    component = first_component.get("component")
+                    delta = first_component.get("delta_m")
+                    abs_delta = first_component.get("abs_delta_m")
+                    if isinstance(component, str) and component:
+                        metrics["top_row_dominant_component"] = component
+                    if isinstance(delta, (int, float)):
+                        metrics["top_row_dominant_delta"] = float(delta)
+                    if isinstance(abs_delta, (int, float)):
+                        metrics["top_row_dominant_abs_delta"] = float(abs_delta)
     identity_provenance = payload.get("identity_provenance")
     if isinstance(identity_provenance, dict):
         for label, summary in identity_provenance.items():
@@ -554,6 +575,16 @@ def render_result_detail(result: dict[str, object]) -> str:
         top_row_sum = metrics.get("top_row_sum_abs_delta")
         if top_row_sum is not None:
             detail_parts.append(f"top row sum |delta| {format_metric(top_row_sum)}")
+        top_row_component = metrics.get("top_row_dominant_component")
+        top_row_component_abs = metrics.get("top_row_dominant_abs_delta")
+        if top_row_component is not None:
+            if top_row_component_abs is not None:
+                detail_parts.append(
+                    "top component "
+                    f"`{top_row_component}` |delta| {format_metric(top_row_component_abs)}"
+                )
+            else:
+                detail_parts.append(f"top component `{top_row_component}`")
         threshold_exceedances = metrics.get("threshold_exceedances")
         if threshold_exceedances is not None:
             detail_parts.append(f"threshold exceedances `{threshold_exceedances}`")

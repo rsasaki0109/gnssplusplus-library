@@ -205,6 +205,11 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertAlmostEqual(metrics["max_abs_delta"], 0.05)
             self.assertAlmostEqual(metrics["top_row_sum_abs_delta"], 0.05)
             self.assertAlmostEqual(metrics["top_row_max_abs_delta"], 0.05)
+            self.assertEqual(metrics["top_row_sat"], "G01")
+            self.assertEqual(metrics["top_row_rinex_code"], "C2W")
+            self.assertEqual(metrics["top_row_dominant_component"], "prc_m")
+            self.assertAlmostEqual(metrics["top_row_dominant_delta"], 0.05)
+            self.assertAlmostEqual(metrics["top_row_dominant_abs_delta"], 0.05)
             self.assertEqual(metrics["claslib_snapshot_schema"], "clas_zd_component_summary.v2")
             self.assertEqual(metrics["native_snapshot_schema"], "clas_zd_component_summary.v2")
             self.assertEqual(metrics["claslib_snapshot_status"], "passed")
@@ -292,6 +297,8 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                         "components_compared": 24,
                         "max_abs_delta": 0.125,
                         "top_row_sum_abs_delta": 0.375,
+                        "top_row_dominant_component": "prc_m",
+                        "top_row_dominant_abs_delta": 0.25,
                         "threshold_exceedances": 3,
                         "identity_native_gps_l2w_rows": 2,
                         "identity_native_gps_l2w_bias_exact_identity_rows": 1,
@@ -322,6 +329,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
         self.assertIn("components `24`", markdown)
         self.assertIn("max |delta| 0.125", markdown)
         self.assertIn("top row sum |delta| 0.375", markdown)
+        self.assertIn("top component `prc_m` |delta| 0.25", markdown)
         self.assertIn("threshold exceedances `3`", markdown)
         self.assertIn("native L2W `2`", markdown)
         self.assertIn("native L2W exact bias/match `1/1`", markdown)
@@ -348,6 +356,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
 
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary_schema"], runner.SUMMARY_SCHEMA)
+            self.assertEqual(payload["summary_schema"], "ci_optional_clas_zd_component_diff.v4")
             self.assertEqual(payload["contract"], "optional_diff_artifact_contract.v1")
             self.assertEqual(payload["status"], "blocked_infrastructure")
             self.assertIn("missing evidence", payload["next_actions"][1])
