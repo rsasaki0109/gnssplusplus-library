@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from optional_diff_runner import artifact_record, truthy  # noqa: E402
 
 
-SUMMARY_SCHEMA = "ci_clas_a4b_native_selfdiff.v1"
+SUMMARY_SCHEMA = "ci_clas_a4b_native_selfdiff.v2"
 CONTRACT = "clas_a4b_native_selfdiff.v1"
 DEFAULT_CLASLIB_REPO = "https://github.com/QZSS-Strategy-Office/claslib.git"
 DEFAULT_CLASLIB_REF = "23cfd363a2db6d8d8144e292c82e9d97ca2d3015"
@@ -49,6 +49,7 @@ class RunPaths:
     native_pos: Path
     native_summary_json: Path
     native_code_dump: Path
+    native_code_dump_summary_json: Path
     selfdiff_json: Path
     selfdiff_csv: Path
 
@@ -83,6 +84,7 @@ def default_paths(output_dir: Path) -> RunPaths:
         native_pos=work_dir / "native.pos",
         native_summary_json=work_dir / "native_summary.json",
         native_code_dump=work_dir / "native_code_dump.csv",
+        native_code_dump_summary_json=work_dir / "native_code_dump_summary.json",
         selfdiff_json=work_dir / "selfdiff.json",
         selfdiff_csv=work_dir / "selfdiff.csv",
     )
@@ -264,6 +266,23 @@ def build_selfdiff_command(config: RunConfig, paths: RunPaths) -> list[str]:
     ]
 
 
+def build_code_dump_summary_command(config: RunConfig, paths: RunPaths) -> list[str]:
+    return [
+        config.python_executable,
+        str(config.repo_root / "scripts" / "analysis" / "clas_zd_component_summary.py"),
+        str(paths.native_code_dump),
+        "--json-out",
+        str(paths.native_code_dump_summary_json),
+        "--fail-on-issue",
+        "--require-row-type",
+        "code",
+        "--require-rinex-code",
+        "C2W",
+        "--require-component",
+        "prc_m",
+    ]
+
+
 def load_json(path: Path) -> dict[str, object]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -299,7 +318,13 @@ def native_identity(report: Mapping[str, object]) -> dict[str, object]:
     return summary if isinstance(summary, dict) else {}
 
 
-def evaluate(config: RunConfig, native_summary: Mapping[str, object], report: Mapping[str, object], dump_rows: int) -> tuple[dict[str, object], dict[str, object], list[str]]:
+def evaluate(
+    config: RunConfig,
+    native_summary: Mapping[str, object],
+    code_dump_summary: Mapping[str, object],
+    report: Mapping[str, object],
+    dump_rows: int,
+) -> tuple[dict[str, object], dict[str, object], list[str]]:
     identity = native_identity(report)
     gps_l2w_rows = int(identity.get("gps_l2w_rows", 0))
     exact_bias_rows = int(identity.get("gps_l2w_bias_exact_identity_rows", 0))
@@ -311,6 +336,14 @@ def evaluate(config: RunConfig, native_summary: Mapping[str, object], report: Ma
         "native_epochs": int(native_summary.get("epochs", 0)),
         "native_ppp_solution_rate_pct": native_summary.get("ppp_solution_rate_pct"),
         "native_code_dump_rows": dump_rows,
+        "native_code_dump_summary_schema": code_dump_summary.get("schema"),
+        "native_code_dump_summary_status": code_dump_summary.get("status"),
+        "native_code_dump_summary_rows": code_dump_summary.get("rows"),
+        "native_code_dump_summary_duplicate_groups": (
+            code_dump_summary.get("row_key", {}).get("duplicate_groups")
+            if isinstance(code_dump_summary.get("row_key"), dict)
+            else None
+        ),
         "common_rows": int(report.get("common_rows", 0)),
         "base_only_rows": int(report.get("base_only_rows", 0)),
         "candidate_only_rows": int(report.get("candidate_only_rows", 0)),
@@ -334,6 +367,19 @@ def evaluate(config: RunConfig, native_summary: Mapping[str, object], report: Ma
     failures: list[str] = []
     if metrics["native_epochs"] < config.max_epochs:
         failures.append(f"native epochs {metrics['native_epochs']} < {config.max_epochs}")
+    if metrics["native_code_dump_summary_schema"] != "clas_zd_component_summary.v1":
+        failures.append(
+            f"native code dump summary schema {metrics['native_code_dump_summary_schema']} "
+            "!= clas_zd_component_summary.v1"
+        )
+    if metrics["native_code_dump_summary_status"] != "passed":
+        failures.append(
+            f"native code dump summary status {metrics['native_code_dump_summary_status']} != passed"
+        )
+    if metrics["native_code_dump_summary_rows"] != dump_rows:
+        failures.append(
+            f"native code dump summary rows {metrics['native_code_dump_summary_rows']} != dump rows {dump_rows}"
+        )
     if gps_l2w_rows < config.gps_l2w_rows_min:
         failures.append(f"GPS L2W rows {gps_l2w_rows} < {config.gps_l2w_rows_min}")
     if exact_bias_rows != gps_l2w_rows:
@@ -361,6 +407,7 @@ def summarize_artifacts(paths: RunPaths) -> list[dict[str, object]]:
         artifact_record(paths.native_pos, role="native_solution", required=True),
         artifact_record(paths.native_summary_json, role="native_summary", required=True),
         artifact_record(paths.native_code_dump, role="native_zd_component_dump", required=True),
+        artifact_record(paths.native_code_dump_summary_json, role="native_zd_component_summary", required=True),
         artifact_record(paths.selfdiff_json, role="selfdiff_json", required=True),
         artifact_record(paths.selfdiff_csv, role="selfdiff_csv", required=True),
     ]
@@ -460,6 +507,24 @@ def main(argv: Sequence[str] | None = None, environ: Mapping[str, str] | None = 
         print(f"CLAS A4b native run failed; see {paths.log_path}")
         return 1
 
+    code_dump_summary_command = build_code_dump_summary_command(config, paths)
+    code_dump_summary_result = run_logged(
+        code_dump_summary_command,
+        cwd=config.repo_root,
+        log_path=paths.log_path,
+    )
+    if code_dump_summary_result.returncode != 0:
+        payload = build_payload(
+            config=config,
+            paths=paths,
+            status="failed",
+            data_root=data_root,
+            failures=["native CLAS A4b code dump summary failed"],
+        )
+        write_summary(paths, payload)
+        print(f"CLAS A4b native code dump summary failed; see {paths.log_path}")
+        return 1
+
     selfdiff_command = build_selfdiff_command(config, paths)
     selfdiff_result = run_logged(selfdiff_command, cwd=config.repo_root, log_path=paths.log_path)
     if selfdiff_result.returncode != 0:
@@ -475,10 +540,12 @@ def main(argv: Sequence[str] | None = None, environ: Mapping[str, str] | None = 
         return 1
 
     native_summary = load_json(paths.native_summary_json)
+    code_dump_summary = load_json(paths.native_code_dump_summary_json)
     selfdiff_report = load_json(paths.selfdiff_json)
     metrics, thresholds, failures = evaluate(
         config,
         native_summary,
+        code_dump_summary,
         selfdiff_report,
         count_csv_data_rows(paths.native_code_dump),
     )

@@ -69,7 +69,9 @@ CI lanes are split as follows:
 - `python3 scripts/ci/run_clas_a4b_native_selfdiff.py` for the public CLAS A4b
   native-side evidence bundle; it sparse-fetches CLASLIB public data unless
   `GNSSPP_CLAS_A4B_DATA_ROOT` is supplied, generates the native code dump, and
-  self-diffs the `G14/C2W` rows before any oracle-backed model change
+  writes `clas_zd_component_summary.v1` for that dump before self-diffing the
+  `G14/C2W` rows; this native-side evidence must pass before any oracle-backed
+  model change
 - `python3 scripts/ci/run_madoca_materialization_selfdiff.py` for the public
   MADOCA materialization evidence bundle; it sparse-fetches pinned MADOCALIB
   BRDM/L6 sample files unless `GNSSPP_MADOCA_MATERIALIZATION_DATA_ROOT` is

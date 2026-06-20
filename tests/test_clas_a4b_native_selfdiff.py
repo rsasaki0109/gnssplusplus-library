@@ -93,6 +93,35 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             self.assertIn("TEST ANT", command)
             self.assertEqual(command[-2:], ["--max-epochs", "30"])
 
+    def test_build_code_dump_summary_command_validates_native_dump(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_a4b_summary_command_") as temp_dir:
+            output_dir = Path(temp_dir) / "output"
+            paths = runner.default_paths(output_dir)
+            config = runner.RunConfig(
+                repo_root=ROOT_DIR,
+                output_dir=output_dir,
+                data_root=None,
+                auto_fetch=True,
+                fail_on_blocked=True,
+                claslib_repo=runner.DEFAULT_CLASLIB_REPO,
+                claslib_ref=runner.DEFAULT_CLASLIB_REF,
+                max_epochs=30,
+                gps_l2w_rows_min=30,
+                receiver_antenna_type=runner.DEFAULT_RECEIVER_ANTENNA_TYPE,
+                python_executable=sys.executable,
+            )
+
+            command = runner.build_code_dump_summary_command(config, paths)
+
+            self.assertIn(str(ROOT_DIR / "scripts" / "analysis" / "clas_zd_component_summary.py"), command)
+            self.assertIn(str(paths.native_code_dump), command)
+            self.assertIn(str(paths.native_code_dump_summary_json), command)
+            self.assertIn("--fail-on-issue", command)
+            self.assertIn("--require-row-type", command)
+            self.assertIn("code", command)
+            self.assertIn("--require-rinex-code", command)
+            self.assertIn("C2W", command)
+
     def test_evaluate_accepts_exact_native_l2w_selfdiff(self) -> None:
         config = runner.RunConfig(
             repo_root=ROOT_DIR,
@@ -108,6 +137,12 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             python_executable=sys.executable,
         )
         native_summary = {"epochs": 30, "ppp_solution_rate_pct": 100.0}
+        code_dump_summary = {
+            "schema": "clas_zd_component_summary.v1",
+            "status": "passed",
+            "rows": 540,
+            "row_key": {"duplicate_groups": 0},
+        }
         report = {
             "common_rows": 30,
             "base_only_rows": 0,
@@ -126,11 +161,21 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             },
         }
 
-        metrics, thresholds, failures = runner.evaluate(config, native_summary, report, 540)
+        metrics, thresholds, failures = runner.evaluate(
+            config,
+            native_summary,
+            code_dump_summary,
+            report,
+            540,
+        )
 
         self.assertEqual(failures, [])
         self.assertEqual(metrics["gps_l2w_rows"], 30)
         self.assertEqual(metrics["native_code_dump_rows"], 540)
+        self.assertEqual(metrics["native_code_dump_summary_schema"], "clas_zd_component_summary.v1")
+        self.assertEqual(metrics["native_code_dump_summary_status"], "passed")
+        self.assertEqual(metrics["native_code_dump_summary_rows"], 540)
+        self.assertEqual(metrics["native_code_dump_summary_duplicate_groups"], 0)
         self.assertEqual(thresholds["gps_l2w_rows_min"], 30)
 
     def test_evaluate_rejects_identity_fallback(self) -> None:
@@ -148,6 +193,12 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             python_executable=sys.executable,
         )
         native_summary = {"epochs": 30, "ppp_solution_rate_pct": 100.0}
+        code_dump_summary = {
+            "schema": "clas_zd_component_summary.v1",
+            "status": "passed",
+            "rows": 540,
+            "row_key": {"duplicate_groups": 0},
+        }
         report = {
             "common_rows": 30,
             "base_only_rows": 0,
@@ -166,10 +217,66 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             },
         }
 
-        _metrics, _thresholds, failures = runner.evaluate(config, native_summary, report, 540)
+        _metrics, _thresholds, failures = runner.evaluate(
+            config,
+            native_summary,
+            code_dump_summary,
+            report,
+            540,
+        )
 
         self.assertIn("exact bias rows 29 != GPS L2W rows 30", failures)
         self.assertIn("observation-family fallback rows 1 != 0", failures)
+
+    def test_evaluate_rejects_bad_code_dump_summary(self) -> None:
+        config = runner.RunConfig(
+            repo_root=ROOT_DIR,
+            output_dir=ROOT_DIR / "output",
+            data_root=None,
+            auto_fetch=True,
+            fail_on_blocked=True,
+            claslib_repo=runner.DEFAULT_CLASLIB_REPO,
+            claslib_ref=runner.DEFAULT_CLASLIB_REF,
+            max_epochs=30,
+            gps_l2w_rows_min=30,
+            receiver_antenna_type=runner.DEFAULT_RECEIVER_ANTENNA_TYPE,
+            python_executable=sys.executable,
+        )
+        native_summary = {"epochs": 30, "ppp_solution_rate_pct": 100.0}
+        code_dump_summary = {
+            "schema": "clas_zd_component_summary.v1",
+            "status": "failed",
+            "rows": 539,
+            "row_key": {"duplicate_groups": 1},
+        }
+        report = {
+            "common_rows": 30,
+            "base_only_rows": 0,
+            "candidate_only_rows": 0,
+            "components_compared": 630,
+            "threshold_exceedances": 0,
+            "per_component": [{"component": "prc_m", "max_abs_delta_m": 0.0}],
+            "identity_provenance": {
+                "native": {
+                    "gps_l2w_rows": 30,
+                    "gps_l2w_bias_exact_identity_rows": 30,
+                    "gps_l2w_observation_exact_match_rows": 30,
+                    "gps_l2w_observation_family_fallback_rows": 0,
+                    "gps_l2w_code_bias_fallback_rows": 0,
+                }
+            },
+        }
+
+        _metrics, _thresholds, failures = runner.evaluate(
+            config,
+            native_summary,
+            code_dump_summary,
+            report,
+            540,
+        )
+
+        self.assertIn("native code dump summary status failed != passed", failures)
+        self.assertIn("native code dump summary rows 539 != dump rows 540", failures)
 
     def test_blocked_summary_contract_has_next_action(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_a4b_summary_") as temp_dir:
@@ -207,6 +314,17 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
         self.assertIn("missing native A4b evidence", written["next_actions"][1])
         self.assertFalse(written["configuration"]["fail_on_blocked"])
         self.assertEqual(written["configuration"]["selfdiff_filter"]["rinex_code"], "C2W")
+
+    def test_artifacts_include_code_dump_summary(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_a4b_artifacts_") as temp_dir:
+            paths = runner.default_paths(Path(temp_dir) / "output")
+            artifacts = runner.summarize_artifacts(paths)
+
+        roles = {artifact["role"]: artifact["path"] for artifact in artifacts}
+        self.assertEqual(
+            roles["native_zd_component_summary"],
+            str(paths.native_code_dump_summary_json),
+        )
 
 
 if __name__ == "__main__":

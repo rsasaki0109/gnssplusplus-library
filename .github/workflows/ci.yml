@@ -360,6 +360,7 @@ jobs:
           output/clas_a4b_native_selfdiff/native.pos
           output/clas_a4b_native_selfdiff/native_summary.json
           output/clas_a4b_native_selfdiff/native_code_dump.csv
+          output/clas_a4b_native_selfdiff/native_code_dump_summary.json
           output/clas_a4b_native_selfdiff/selfdiff.json
           output/clas_a4b_native_selfdiff/selfdiff.csv
         if-no-files-found: error

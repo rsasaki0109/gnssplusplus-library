@@ -217,10 +217,14 @@ The wrapper sparse-checks out the public CLASLIB `data/` directory at the pinned
 `GNSSPP_CLAS_A4B_CLASLIB_REF`, runs the native command above, and self-diffs the
 `G14/C2W` code rows. It emits
 `ci_clas_a4b_native_selfdiff_summary.json`, `native_code_dump.csv`,
-`native_summary.json`, and `selfdiff.{json,csv}`. The summary uses
-`status: passed` only when the native run reaches the configured epoch count,
-the GPS L2W rows preserve exact observation/bias identity, fallback counts are
-zero, and the self-diff has no unmatched rows or component deltas. Set
+`native_code_dump_summary.json`, `native_summary.json`, and
+`selfdiff.{json,csv}`. The wrapper first validates the native dump with
+`clas_zd_component_summary.v1`; the CI summary schema is
+`ci_clas_a4b_native_selfdiff.v2`. The summary uses `status: passed` only when
+the native run reaches the configured epoch count, the native dump summary
+passes and covers the dump rows, the GPS L2W rows preserve exact
+observation/bias identity, fallback counts are zero, and the self-diff has no
+unmatched rows or component deltas. Set
 `GNSSPP_CLAS_A4B_DATA_ROOT` to use a pre-existing CLASLIB data checkout, or
 `GNSSPP_CLAS_A4B_AUTO_FETCH=0` to record `blocked_infrastructure` instead of
 fetching public data. CI treats that blocked state as a failure by default; set
