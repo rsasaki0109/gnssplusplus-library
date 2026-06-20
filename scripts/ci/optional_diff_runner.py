@@ -665,7 +665,7 @@ def aggregate_status(results: list[dict[str, object]]) -> str:
 def next_actions(results: list[dict[str, object]]) -> list[str]:
     if any(result["status"] == "blocked_infrastructure" for result in results):
         return [
-            "Provide the configured base and candidate CSV inputs, then rerun the optional diff.",
+            "Provide the missing configured CSV inputs, then rerun the optional diff.",
             "Treat blocked_infrastructure as missing evidence, not as a passing oracle sign-off.",
         ]
     if any(result["status"] == "failed" for result in results):

@@ -189,6 +189,11 @@ runs that comparison when `GNSSPP_CLAS_ZD_BASE_CSV` and
 dumps.  It writes `ci_optional_clas_zd_component_summary.json`, a log, and the
 `clas_zd_component_diff.{json,csv}` artifacts, plus
 `clas_zd_component_summary.v2` JSON for both CLASLIB and native input snapshots.
+In GitHub Actions, the CLAS A4b native self-diff step runs first and exposes its
+public-data `native_code_dump.csv` as `GNSSPP_CLAS_ZD_NATIVE_CSV`; if
+`GNSSPP_CLAS_ZD_CANDIDATE_CSV` is unset, the optional ZD diff uses that generated
+native dump as the candidate side.  The CLASLIB-side normalized base CSV remains
+an explicit input until the CLASLIB oracle dump itself is generated in CI.
 The input summaries validate row keys, observation identity, duplicate groups,
 and component presence before any deltas are compared.  When those inputs are
 absent, the CI step records `status: blocked_infrastructure` with next actions
