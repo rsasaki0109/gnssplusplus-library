@@ -204,7 +204,10 @@ receiver-antenna slot mismatch.
 The diff JSON also includes `top_row_component_breakdowns`, which groups all
 component deltas for the same ZD key. Use that field to decide whether the next
 GPS L2W A4b slice is dominated by `receiver_antenna_m`, `prc_m`, atmosphere, or
-another component before changing the gated correction model.
+another component before changing the gated correction model. The optional CI
+summary schema `ci_optional_clas_zd_component_diff.v4` lifts the leading
+breakdown component into summary metrics so release artifacts show the next
+single-component target without manually opening the full diff JSON.
 
 CI can regenerate the native side of this A4b probe without a pre-staged native
 CSV:
