@@ -382,6 +382,30 @@ jobs:
           output/madoca_materialization_diff.csv
         if-no-files-found: error
 
+    - name: MADOCA materialization native self-diff
+      env:
+        GNSSPP_MADOCA_MATERIALIZATION_DATA_ROOT: ${{ vars.GNSSPP_MADOCA_MATERIALIZATION_DATA_ROOT }}
+        GNSSPP_MADOCA_MATERIALIZATION_AUTO_FETCH: ${{ vars.GNSSPP_MADOCA_MATERIALIZATION_AUTO_FETCH }}
+        GNSSPP_MADOCA_MATERIALIZATION_MADOCALIB_REPO: ${{ vars.GNSSPP_MADOCA_MATERIALIZATION_MADOCALIB_REPO }}
+        GNSSPP_MADOCA_MATERIALIZATION_MADOCALIB_REF: ${{ vars.GNSSPP_MADOCA_MATERIALIZATION_MADOCALIB_REF }}
+        GNSSPP_MADOCA_MATERIALIZATION_ROWS_MIN: ${{ vars.GNSSPP_MADOCA_MATERIALIZATION_ROWS_MIN }}
+        GNSSPP_MADOCA_MATERIALIZATION_FAIL_ON_BLOCKED: ${{ vars.GNSSPP_MADOCA_MATERIALIZATION_FAIL_ON_BLOCKED }}
+      run: python3 scripts/ci/run_madoca_materialization_selfdiff.py
+
+    - name: Upload MADOCA materialization native self-diff artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: madoca-materialization-selfdiff-ubuntu
+        path: |
+          output/ci_madoca_materialization_selfdiff_summary.json
+          output/ci_madoca_materialization_selfdiff/*.log
+          output/madoca_materialization_selfdiff/native_materialization.csv
+          output/madoca_materialization_selfdiff/native_summary.json
+          output/madoca_materialization_selfdiff/selfdiff.json
+          output/madoca_materialization_selfdiff/selfdiff.csv
+        if-no-files-found: error
+
     - name: Optional MADOCA residual-component diff
       env:
         GNSSPP_MADOCA_RESIDUAL_BASE_CSV: ${{ vars.GNSSPP_MADOCA_RESIDUAL_BASE_CSV }}

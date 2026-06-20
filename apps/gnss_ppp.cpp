@@ -26,6 +26,7 @@ struct Options {
     std::string ssr_rtcm_path;
     std::vector<std::string> madoca_l6_paths;
     std::string madoca_materialization_dump_path;
+    bool madoca_materialization_dump_only = false;
     std::string ionex_path;
     std::string dcb_path;
     std::string antex_path;
@@ -94,6 +95,9 @@ void printUsage(const char* program_name) {
         << "  --madoca-materialization-dump <csv>\n"
         << "                          Dump native MADOCA L6E SSRProducts materialization\n"
         << "                          rows before PPP processing\n"
+        << "  --madoca-materialization-dump-only\n"
+        << "                          Exit after writing --madoca-materialization-dump;\n"
+        << "                          useful for correction-materialization sign-off\n"
         << "  --ionex <maps.ionex>     Optional IONEX TEC map product\n"
         << "  --dcb <bias.bsx>         Optional DCB / Bias-SINEX product\n"
         << "  --antex <antennas.atx>   Optional ANTEX file for receiver antenna PCO\n"
@@ -247,6 +251,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.madoca_l6_paths.push_back(argv[++i]);
         } else if (arg == "--madoca-materialization-dump" && i + 1 < argc) {
             options.madoca_materialization_dump_path = argv[++i];
+        } else if (arg == "--madoca-materialization-dump-only") {
+            options.madoca_materialization_dump_only = true;
         } else if (arg == "--ionex" && i + 1 < argc) {
             options.ionex_path = argv[++i];
         } else if (arg == "--dcb" && i + 1 < argc) {
@@ -381,8 +387,14 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.obs_path.empty()) {
         argumentError("--obs is required", argv[0]);
     }
-    if (options.out_path.empty()) {
+    if (options.out_path.empty() && !options.madoca_materialization_dump_only) {
         argumentError("--out is required", argv[0]);
+    }
+    if (options.madoca_materialization_dump_only &&
+        options.madoca_materialization_dump_path.empty()) {
+        argumentError(
+            "--madoca-materialization-dump-only requires --madoca-materialization-dump",
+            argv[0]);
     }
     if (options.nav_path.empty() && options.sp3_path.empty()) {
         argumentError("provide at least one of --nav or --sp3", argv[0]);
@@ -934,6 +946,44 @@ int main(int argc, char* argv[]) {
             if (rows == 0) {
                 std::cerr << "Error: MADOCA materialization dump produced no rows\n";
                 return 1;
+            }
+            if (options.madoca_materialization_dump_only) {
+                if (!options.summary_json_path.empty()) {
+                    const std::filesystem::path summary_path(options.summary_json_path);
+                    if (!summary_path.parent_path().empty()) {
+                        std::filesystem::create_directories(summary_path.parent_path());
+                    }
+                    std::ofstream summary(summary_path);
+                    if (!summary.is_open()) {
+                        std::cerr << "Error: failed to write summary JSON: "
+                                  << options.summary_json_path << "\n";
+                        return 1;
+                    }
+                    summary << "{\n"
+                            << "  \"obs\": \"" << jsonEscape(options.obs_path) << "\",\n"
+                            << "  \"nav\": \"" << jsonEscape(options.nav_path) << "\",\n"
+                            << "  \"madoca_materialization_dump\": \""
+                            << jsonEscape(options.madoca_materialization_dump_path) << "\",\n"
+                            << "  \"madoca_materialization_dump_only\": true,\n"
+                            << "  \"madoca_materialization_rows\": " << rows << ",\n"
+                            << "  \"madoca_l6_inputs\": [";
+                    bool first_l6 = true;
+                    for (const std::string& l6_path : options.madoca_l6_paths) {
+                        if (!first_l6) {
+                            summary << ", ";
+                        }
+                        summary << "\"" << jsonEscape(l6_path) << "\"";
+                        first_l6 = false;
+                    }
+                    summary << "]\n"
+                            << "}\n";
+                }
+                if (!options.quiet) {
+                    std::cout << "MADOCA materialization dump written.\n";
+                    std::cout << "  rows: " << rows << "\n";
+                    std::cout << "  output: " << options.madoca_materialization_dump_path << "\n";
+                }
+                return 0;
             }
         }
         ppp_config.approximate_position = obs_header.approximate_position;

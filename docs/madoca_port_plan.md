@@ -48,7 +48,10 @@ Open MADOCA levers (measured, none yet a default win): PPP-AR parity
 
 Correction-materialization snapshot: use
 `gnss ppp --madoca-l6 <file> --madoca-materialization-dump <csv>` to record the
-native SSRProducts view before PPP processing.  The CSV schema is
+native SSRProducts view before PPP processing.  Add
+`--madoca-materialization-dump-only` when the sign-off should stop after the
+snapshot instead of requiring a valid PPP solution from the bounded fixture.  The
+CSV schema is
 `madoca_materialization_snapshot.v1` and records satellite key, system/PRN,
 correction epoch, orbit/clock reference epochs, IODE/SSR IOD, RAC orbit,
 clock, code-bias ids/values, phase-bias ids/values, and discontinuity counters.
@@ -78,6 +81,18 @@ materialization snapshots.  It writes
 `GNSSPP_MADOCA_MATERIALIZATION_NUMERIC_THRESHOLD` to set a numeric tolerance and
 `GNSSPP_MADOCA_MATERIALIZATION_FAIL_ON_DIFF=1` when the configured window should
 act as a hard oracle gate.
+
+The public native self-diff runner
+`scripts/ci/run_madoca_materialization_selfdiff.py` sparse-fetches pinned
+MADOCALIB sample BRDM/L6 files unless
+`GNSSPP_MADOCA_MATERIALIZATION_DATA_ROOT` is supplied, generates a native
+materialization dump with `--madoca-materialization-dump-only`, and compares that
+CSV against itself.  It writes
+`ci_madoca_materialization_selfdiff_summary.json`, a log, the native dump,
+native dump-only summary, and `selfdiff.{json,csv}`.  This is not oracle parity;
+it is a remote-CI evidence contract that proves the native M3 dump can be
+regenerated from public data before model-change PRs start consuming oracle
+materialization rows.
 
 Residual-component parity artifact: use
 `scripts/analysis/madoca_residual_component_diff.py` after satellite-set and

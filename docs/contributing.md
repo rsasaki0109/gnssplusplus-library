@@ -61,6 +61,11 @@ CI lanes are split as follows:
   native-side evidence bundle; it sparse-fetches CLASLIB public data unless
   `GNSSPP_CLAS_A4B_DATA_ROOT` is supplied, generates the native code dump, and
   self-diffs the `G14/C2W` rows before any oracle-backed model change
+- `python3 scripts/ci/run_madoca_materialization_selfdiff.py` for the public
+  MADOCA materialization evidence bundle; it sparse-fetches pinned MADOCALIB
+  BRDM/L6 sample files unless `GNSSPP_MADOCA_MATERIALIZATION_DATA_ROOT` is
+  supplied, runs `gnss_ppp --madoca-materialization-dump-only`, and self-diffs
+  the native M3 materialization CSV before residual/state/AR changes
 - `bash scripts/ci/generate_dashboard_artifacts.sh` plus
   `python3 scripts/ci/validate_artifact_manifest_contract.py output/artifact_manifest.json`
   for the dashboard/manifest artifact path used in CI; the validator requires
