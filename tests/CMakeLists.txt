@@ -106,6 +106,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_residual_component_diff.py
     )
     add_test(
+        NAME python_madoca_residual_component_summary_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_residual_component_summary.py
+    )
+    add_test(
         NAME python_madoca_materialization_diff_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_materialization_diff.py
     )
@@ -286,6 +290,7 @@ if(GTest_FOUND)
         python_madoca_materialization_selfdiff_tests
         python_madoca_materialization_summary_tests
         python_madoca_residual_component_diff_tests
+        python_madoca_residual_component_summary_tests
         python_madoca_solution_diff_tests
         python_madoca_satellite_set_diff_tests
         python_mode_compare_tests

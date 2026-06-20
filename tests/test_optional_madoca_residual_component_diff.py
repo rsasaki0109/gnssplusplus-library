@@ -37,7 +37,7 @@ FIELDNAMES = [
 ]
 
 
-def write_residual_csv(path: Path, *, residual_m: str = "0.1") -> None:
+def write_residual_csv(path: Path, *, residual_m: str = "0.1", sat: str = "G01") -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)
         writer.writeheader()
@@ -46,7 +46,7 @@ def write_residual_csv(path: Path, *, residual_m: str = "0.1") -> None:
                 "week": "2360",
                 "tow": "172800.000",
                 "iteration": "1",
-                "sat": "G01",
+                "sat": sat,
                 "row_type": "code",
                 "residual_m": residual_m,
                 "iono_state_m": "0.5",
@@ -126,6 +126,19 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
             self.assertIn("0.25", command)
             self.assertIn("--fail-on-diff", command)
             self.assertIn(str(output_dir / "madoca_residual_component_diff.json"), command)
+            self.assertEqual(len(steps[0].pre_commands), 2)
+            self.assertIn(
+                str(SCRIPT_PATH.parent.parent / "analysis" / "madoca_residual_component_summary.py"),
+                steps[0].pre_commands[0],
+            )
+            self.assertIn(
+                str(output_dir / "madoca_residual_component_diff_madocalib_snapshot_summary.json"),
+                steps[0].outputs,
+            )
+            self.assertIn(
+                str(output_dir / "madoca_residual_component_diff_native_snapshot_summary.json"),
+                steps[0].outputs,
+            )
 
     def test_run_step_collects_metrics_from_diff_report(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_residual_exec_") as temp_dir:
@@ -155,6 +168,48 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
             self.assertEqual(metrics["common_rows"], 1)
             self.assertEqual(metrics["components_compared"], 1)
             self.assertAlmostEqual(metrics["max_abs_delta"], 0.05)
+            self.assertEqual(metrics["madocalib_snapshot_schema"], "madoca_residual_component_summary.v1")
+            self.assertEqual(metrics["native_snapshot_schema"], "madoca_residual_component_summary.v1")
+            self.assertEqual(metrics["madocalib_snapshot_status"], "passed")
+            self.assertEqual(metrics["native_snapshot_status"], "passed")
+            self.assertEqual(metrics["madocalib_snapshot_rows"], 1)
+            self.assertEqual(metrics["native_snapshot_rows"], 1)
+            artifact_paths = {artifact["path"] for artifact in result["artifacts"]}
+            self.assertIn(
+                str(output_dir / "madoca_residual_component_diff_madocalib_snapshot_summary.json"),
+                artifact_paths,
+            )
+            self.assertIn(
+                str(output_dir / "madoca_residual_component_diff_native_snapshot_summary.json"),
+                artifact_paths,
+            )
+
+    def test_run_step_fails_when_snapshot_summary_fails(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_residual_input_summary_") as temp_dir:
+            root = Path(temp_dir)
+            base_csv = root / "madocalib.csv"
+            candidate_csv = root / "native.csv"
+            write_residual_csv(base_csv, residual_m="0.10")
+            write_residual_csv(candidate_csv, residual_m="0.15", sat="")
+            output_dir = root / "output"
+            log_dir = output_dir / "logs"
+            log_dir.mkdir(parents=True)
+            env = {
+                "GNSSPP_MADOCA_RESIDUAL_BASE_CSV": str(base_csv),
+                "GNSSPP_MADOCA_RESIDUAL_CANDIDATE_CSV": str(candidate_csv),
+                "GNSSPP_MADOCA_RESIDUAL_COMPONENTS": "residual_m",
+            }
+            step = runner.build_step_plan(ROOT_DIR, output_dir, env)[0]
+
+            result = runner.run_step(step, ROOT_DIR, log_dir)
+
+            self.assertEqual(result["status"], "failed")
+            self.assertNotEqual(result["returncode"], 0)
+            self.assertIn("madoca_residual_component_summary.py", " ".join(result["failed_command"]))
+            metrics = result["metrics"]
+            self.assertEqual(metrics["madocalib_snapshot_status"], "passed")
+            self.assertEqual(metrics["native_snapshot_status"], "failed")
+            self.assertEqual(metrics["native_snapshot_rows"], 1)
 
     def test_run_step_fails_when_declared_outputs_are_missing(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_residual_missing_") as temp_dir:
@@ -224,6 +279,20 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
         self.assertIn("see `/tmp/madoca.log`", markdown)
         self.assertIn("missing `/tmp/missing.json`", markdown)
 
+        snapshot_markdown = runner.render_markdown_summary(
+            [
+                {
+                    "name": "MADOCA residual-component diff",
+                    "status": "passed",
+                    "metrics": {
+                        "madocalib_snapshot_rows": 12,
+                        "native_snapshot_rows": 13,
+                    },
+                }
+            ]
+        )
+        self.assertIn("snapshot rows `12/13`", snapshot_markdown)
+
     def test_write_summary_declares_schema(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_madoca_residual_summary_") as temp_dir:
             summary_path = Path(temp_dir) / "summary.json"
@@ -244,6 +313,7 @@ class OptionalMadocaResidualComponentDiffTest(unittest.TestCase):
 
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary_schema"], runner.SUMMARY_SCHEMA)
+            self.assertEqual(payload["summary_schema"], "ci_optional_madoca_residual_component_diff.v3")
             self.assertEqual(payload["contract"], "optional_diff_artifact_contract.v1")
             self.assertEqual(payload["status"], "blocked_infrastructure")
             self.assertIn("missing evidence", payload["next_actions"][1])

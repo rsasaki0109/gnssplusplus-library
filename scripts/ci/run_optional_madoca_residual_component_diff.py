@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optional_diff_runner as runner  # noqa: E402
 
 
-SUMMARY_SCHEMA = "ci_optional_madoca_residual_component_diff.v2"
+SUMMARY_SCHEMA = "ci_optional_madoca_residual_component_diff.v3"
 
 CONFIG = runner.DiffRunnerConfig(
     summary_schema=SUMMARY_SCHEMA,
@@ -42,6 +42,9 @@ CONFIG = runner.DiffRunnerConfig(
         runner.EnvOption(("GNSSPP_MADOCA_RESIDUAL_ITERATION",), "--iteration", "int"),
         runner.EnvOption(("GNSSPP_MADOCA_RESIDUAL_THRESHOLD",), "--component-threshold", "float"),
     ),
+    input_summary_script="madoca_residual_component_summary.py",
+    input_summary_schema="madoca_residual_component_summary.v1",
+    input_summary_fail_on_issue=True,
 )
 
 
