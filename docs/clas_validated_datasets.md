@@ -102,7 +102,10 @@ CRLF line endings, so the native ANTEX loader trims trailing carriage returns
 before matching labels. Set `GNSS_PPP_CLAS_RX_ANTENNA=1` to materialize those
 receiver terms into the CLAS OSR `receiver_antenna_m` component and the
 aggregate `PRC`/`CPC` terms. The default path leaves them unchanged while A4b
-parity is measured.
+parity is measured. The A4b probe also enables
+`GNSS_PPP_CLAS_ATMOS_GRID_MATRIX=1` and
+`GNSS_PPP_CLAS_ATMOS_LIFECYCLE=1` so native STEC/trop materialization follows
+the CLASLIB-style grid selection and regenerated atmosphere-token lifecycle.
 
 For the A4b GPS L2W identity probe, enable the diagnostic gates and write a
 native zero-difference code component dump:
@@ -111,6 +114,8 @@ native zero-difference code component dump:
 GNSS_PPP_CLAS_DD_FILTER=1 \
 GNSS_PPP_CLAS_CODE_ROW_PARITY=bias,full-prc \
 GNSS_PPP_CLAS_RX_ANTENNA=1 \
+GNSS_PPP_CLAS_ATMOS_GRID_MATRIX=1 \
+GNSS_PPP_CLAS_ATMOS_LIFECYCLE=1 \
 GNSS_PPP_CLAS_CODE_DUMP=/tmp/clas_a4b_native_code_dump.csv \
 python3 apps/gnss.py clas-ppp \
   --profile clas \

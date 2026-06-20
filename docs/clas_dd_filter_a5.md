@@ -260,7 +260,11 @@ When `GNSS_PPP_CLAS_DD_FILTER=1` and
 materializer uses that exact GPS L2 RINEX identity to choose the code/phase SSR
 bias signal id, and the native code-row dump reports the full PRC convention
 used by CLASLIB `.osr` rows instead of the solver-internal `PRC - trop` code-row
-application convention.
+application convention. The A4b sign-off runner also enables
+`GNSS_PPP_CLAS_ATMOS_GRID_MATRIX=1` and
+`GNSS_PPP_CLAS_ATMOS_LIFECYCLE=1` so the GPS L2W PRC diff measures the remaining
+component gap after CLASLIB-style atmosphere grid selection and lifecycle
+materialization.
 The same stored identity now drives CLAS float/DD/SD/WLNL raw observation lookup,
 so a `C2W/L2W` OSR row consumes the matching `C2W/L2W` measurement instead of the
 first collapsed GPS L2 family row.
