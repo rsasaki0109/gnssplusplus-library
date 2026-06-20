@@ -77,9 +77,10 @@ CI lanes are split as follows:
   BRDM/L6 sample files unless `GNSSPP_MADOCA_MATERIALIZATION_DATA_ROOT` is
   supplied, runs `gnss_ppp --madoca-materialization-dump-only`, and self-diffs
   the native M3 materialization CSV before residual/state/AR changes; the bundle
-  also includes `madoca_materialization_summary.v1` output so row counts,
-  systems, validity flags, bias ids, and duplicate keys are checked before any
-  oracle/native diff is trusted
+  also includes `madoca_materialization_summary.v1` output and
+  `ci_madoca_materialization_selfdiff.v2` metrics so row counts, the pinned
+  public fixture's systems, code/phase bias ids, validity flags, and duplicate
+  keys are checked before any oracle/native diff is trusted
 - `bash scripts/ci/generate_dashboard_artifacts.sh` plus
   `python3 scripts/ci/validate_artifact_manifest_contract.py output/artifact_manifest.json`
   for the dashboard/manifest artifact path used in CI; the validator requires
