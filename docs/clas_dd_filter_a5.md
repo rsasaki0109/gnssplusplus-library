@@ -225,6 +225,8 @@ resulting normalized CSV as `GNSSPP_CLAS_ZD_BASE_CSV`.  For `.osr` input,
 raw display `iono` column, so the diff compares the ionosphere term that was
 actually applied to `PRC1/PRC2/PRC5`.  `iono_l1_m` is the L1-equivalent of that
 same frequency-slot-specific closure value; it is not copied from the L1 slot.
+The normalized `stec_tecu` field is derived from that L1-equivalent delay with
+the GPS L1 TECU-to-meter factor.
 The `.osr` path maps only GPS L1/L2/L5 slots where the exact row identity is
 deterministic; QZSS and Galileo still need explicit disposable dumps until
 their ZD materialization and admission sources are fixed.
@@ -257,15 +259,20 @@ rows by the exact row-specific RINEX code so alias mismatches show up as row-set
 differences before component deltas are computed.
 When `GNSSPP_CLAS_ZD_COMPONENTS` is unset, the optional CI diff compares the
 component-level `prc_m`, `prc_component_sum_m`, `prc_closure_residual_m`,
-`iono_l1_m`, `iono_scaled_m`, `iono_scale`,
+`iono_l1_m`, `iono_l1_from_stec_m`,
+`iono_l1_stec_closure_residual_m`, `iono_scaled_m`, `iono_scale`,
 `iono_scaled_closure_residual_m`, `trop_correction_m`, `code_bias_m`,
 `receiver_antenna_m`, and `relativity_m` fields rather than using the aggregate
-`applied_pr_corr_m` to select the dominant row component.  The PRC closure
-residual is derived at diff time from the PRC component inputs, and the
-ionosphere closure residual is derived as `iono_scaled_m - iono_scale * iono_l1_m`.
+`applied_pr_corr_m` to select the dominant row component.  The raw `stec_tecu`
+column remains available for explicit diagnostic runs, but it is not part of
+the default component list because the diff summary reports component deltas in
+meters.  The PRC closure residual is derived at diff time from the PRC
+component inputs, the L1-STEC closure residual is derived as
+`iono_l1_m - stec_tecu * GPS_L1_TECU_TO_METERS`, and the ionosphere scale
+closure residual is derived as `iono_scaled_m - iono_scale * iono_l1_m`.
 Together these make the remote artifact show whether the remaining GPS L2W PRC
-gap is explained by component
-deltas or by a PRC convention/rounding mismatch.
+gap is explained by component deltas, TECU/L1 conversion, frequency scaling, or
+a PRC convention/rounding mismatch.
 When `GNSS_PPP_CLAS_DD_FILTER=1` and
 `GNSS_PPP_CLAS_CODE_ROW_PARITY=bias,full-prc` are set, the CLAS OSR
 materializer uses that exact GPS L2 RINEX identity to choose the code/phase SSR

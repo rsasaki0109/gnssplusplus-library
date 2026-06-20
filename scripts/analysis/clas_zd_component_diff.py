@@ -30,6 +30,9 @@ COMPONENT_ALIASES: dict[str, tuple[str, ...]] = {
     "cpc_minus_trop_m": ("cpc_minus_trop_m",),
     "trop_correction_m": ("trop_correction_m", "trop_m"),
     "iono_l1_m": ("iono_l1_m", "l1_iono_m"),
+    "stec_tecu": ("stec_tecu",),
+    "iono_l1_from_stec_m": ("iono_l1_from_stec_m",),
+    "iono_l1_stec_closure_residual_m": ("iono_l1_stec_closure_residual_m",),
     "iono_scaled_m": ("iono_scaled_m",),
     "iono_scale": ("iono_scale",),
     "iono_scaled_closure_residual_m": ("iono_scaled_closure_residual_m",),
@@ -84,6 +87,7 @@ GPS_IONO_SCALE_BY_BAND = {
     "2": (1575.42 / 1227.60) ** 2,
     "5": (1575.42 / 1176.45) ** 2,
 }
+GPS_L1_TECU_TO_METERS = 40.3e16 / ((1575.42 * 1e6) ** 2)
 
 
 @dataclass(frozen=True)
@@ -154,6 +158,19 @@ def row_iono_scale(row: Row) -> Optional[float]:
 def derived_component_value(row: Row, component: str) -> Optional[float]:
     if component == "iono_scale":
         return row_iono_scale(row)
+
+    if component == "iono_l1_from_stec_m":
+        stec_tecu = row_component_value(row, "stec_tecu")
+        if stec_tecu is None:
+            return None
+        return stec_tecu * GPS_L1_TECU_TO_METERS
+
+    if component == "iono_l1_stec_closure_residual_m":
+        iono_l1 = row_component_value(row, "iono_l1_m")
+        stec_tecu = row_component_value(row, "stec_tecu")
+        if iono_l1 is None or stec_tecu is None:
+            return None
+        return iono_l1 - stec_tecu * GPS_L1_TECU_TO_METERS
 
     if component == "iono_scaled_closure_residual_m":
         iono_scaled = row_component_value(row, "iono_scaled_m")

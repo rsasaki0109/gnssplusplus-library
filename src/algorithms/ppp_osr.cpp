@@ -1090,6 +1090,7 @@ std::vector<OSRCorrection> computeOSR(
                 config.clas_subtype12_value_construction_policy,
                 config.clas_expanded_residual_sampling_policy);
             if (std::isfinite(stec_tecu) && std::abs(stec_tecu) > 0.001) {
+                osr.stec_tecu = stec_tecu;
                 osr.iono_l1_m = ppp_atmosphere::ionosphereDelayMetersFromTecu(
                     l1_obs->signal, eph, stec_tecu);
                 osr.has_iono = true;

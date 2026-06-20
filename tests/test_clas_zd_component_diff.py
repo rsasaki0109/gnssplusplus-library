@@ -58,6 +58,7 @@ FIELDNAMES = [
     "receiver_antenna_m",
     "trop_correction_m",
     "iono_l1_m",
+    "stec_tecu",
     "iono_scaled_m",
     "iono_scale",
     "relativity_m",
@@ -80,6 +81,7 @@ def code_row(
     receiver_ant: str,
     trop: str = "2.0",
     iono_l1: str = "0.0",
+    stec_tecu: str = "",
     iono_scaled: str = "0.0",
     iono_scale: str = "",
     relativity: str = "0.0",
@@ -139,6 +141,7 @@ def code_row(
         "receiver_antenna_m": "",
         "trop_correction_m": trop,
         "iono_l1_m": iono_l1,
+        "stec_tecu": stec_tecu,
         "iono_scaled_m": iono_scaled,
         "iono_scale": iono_scale,
         "relativity_m": relativity,
@@ -233,6 +236,41 @@ class ClasZdComponentDiffTest(unittest.TestCase):
         )
 
         self.assertAlmostEqual(components["iono_scaled_closure_residual_m"], 0.01)
+
+    def test_derives_iono_l1_from_stec_tecu(self) -> None:
+        components = component_diff.extract_components(
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="3.0",
+                code_bias="0.5",
+                receiver_ant="0.1",
+                stec_tecu="2.0",
+            ),
+            ["iono_l1_from_stec_m"],
+        )
+
+        self.assertAlmostEqual(
+            components["iono_l1_from_stec_m"],
+            2.0 * component_diff.GPS_L1_TECU_TO_METERS,
+        )
+
+    def test_derives_iono_l1_stec_closure_residual(self) -> None:
+        iono_l1_from_stec = 2.0 * component_diff.GPS_L1_TECU_TO_METERS
+        components = component_diff.extract_components(
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="3.0",
+                code_bias="0.5",
+                receiver_ant="0.1",
+                iono_l1=str(iono_l1_from_stec + 0.02),
+                stec_tecu="2.0",
+            ),
+            ["iono_l1_stec_closure_residual_m"],
+        )
+
+        self.assertAlmostEqual(components["iono_l1_stec_closure_residual_m"], 0.02)
 
     def test_observation_identity_prefers_row_type_specific_rinex_code(self) -> None:
         self.assertEqual(
