@@ -167,6 +167,29 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertIn(str(output_dir / "clas_zd_component_diff_claslib_snapshot_summary.json"), steps[0].outputs)
             self.assertIn(str(output_dir / "clas_zd_component_diff_native_snapshot_summary.json"), steps[0].outputs)
 
+    def test_build_step_plan_falls_back_to_a4b_native_candidate(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_native_fallback_") as temp_dir:
+            root = Path(temp_dir)
+            base_csv = root / "claslib.csv"
+            native_csv = root / "output" / "clas_a4b_native_selfdiff" / "native_code_dump.csv"
+            write_zd_component_csv(base_csv)
+            native_csv.parent.mkdir(parents=True)
+            write_zd_component_csv(native_csv)
+            output_dir = root / "output"
+            env = {
+                "GNSSPP_CLAS_ZD_BASE_CSV": str(base_csv),
+                "GNSSPP_CLAS_ZD_NATIVE_CSV": str(native_csv),
+            }
+
+            steps = runner.build_step_plan(ROOT_DIR, output_dir, env)
+
+            command = steps[0].command
+            self.assertIsNotNone(command)
+            assert command is not None
+            self.assertIn(str(base_csv), command)
+            self.assertIn(str(native_csv), command)
+            self.assertNotIn("CLAS ZD component input is unavailable", steps[0].skip_reason or "")
+
     def test_run_step_collects_metrics_from_diff_report(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_exec_") as temp_dir:
             root = Path(temp_dir)

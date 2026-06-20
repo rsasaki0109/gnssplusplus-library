@@ -314,31 +314,6 @@ jobs:
         GNSSPP_PPP_PRODUCTS_MALIB_CONFIG: ${{ vars.GNSSPP_PPP_PRODUCTS_MALIB_CONFIG }}
       run: bash scripts/ci/run_optional_ppp_products_signoff.sh
 
-    - name: Optional CLAS ZD component diff
-      env:
-        GNSSPP_CLAS_ZD_BASE_CSV: ${{ vars.GNSSPP_CLAS_ZD_BASE_CSV }}
-        GNSSPP_CLAS_ZD_CANDIDATE_CSV: ${{ vars.GNSSPP_CLAS_ZD_CANDIDATE_CSV }}
-        GNSSPP_CLAS_ZD_COMPONENTS: ${{ vars.GNSSPP_CLAS_ZD_COMPONENTS }}
-        GNSSPP_CLAS_ZD_STAGE: ${{ vars.GNSSPP_CLAS_ZD_STAGE }}
-        GNSSPP_CLAS_ZD_ROW_TYPE: ${{ vars.GNSSPP_CLAS_ZD_ROW_TYPE }}
-        GNSSPP_CLAS_ZD_THRESHOLD_M: ${{ vars.GNSSPP_CLAS_ZD_THRESHOLD_M }}
-        GNSSPP_CLAS_ZD_FAIL_ON_DIFF: ${{ vars.GNSSPP_CLAS_ZD_FAIL_ON_DIFF }}
-      run: bash scripts/ci/run_optional_clas_zd_component_diff.sh
-
-    - name: Upload CLAS ZD component diff artifacts
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: clas-zd-component-diff-ubuntu
-        path: |
-          output/ci_optional_clas_zd_component_summary.json
-          output/ci_optional_clas_zd_component/*.log
-          output/clas_zd_component_diff.json
-          output/clas_zd_component_diff.csv
-          output/clas_zd_component_diff_claslib_snapshot_summary.json
-          output/clas_zd_component_diff_native_snapshot_summary.json
-        if-no-files-found: error
-
     - name: CLAS A4b native self-diff
       env:
         GNSSPP_CLAS_A4B_DATA_ROOT: ${{ vars.GNSSPP_CLAS_A4B_DATA_ROOT }}
@@ -363,6 +338,36 @@ jobs:
           output/clas_a4b_native_selfdiff/native_code_dump_summary.json
           output/clas_a4b_native_selfdiff/selfdiff.json
           output/clas_a4b_native_selfdiff/selfdiff.csv
+        if-no-files-found: error
+
+    - name: Optional CLAS ZD component diff
+      env:
+        GNSSPP_CLAS_ZD_BASE_CSV: ${{ vars.GNSSPP_CLAS_ZD_BASE_CSV }}
+        GNSSPP_CLAS_ZD_CANDIDATE_CSV: ${{ vars.GNSSPP_CLAS_ZD_CANDIDATE_CSV }}
+        GNSSPP_CLAS_ZD_NATIVE_CSV: output/clas_a4b_native_selfdiff/native_code_dump.csv
+        GNSSPP_CLAS_ZD_COMPONENTS: ${{ vars.GNSSPP_CLAS_ZD_COMPONENTS }}
+        GNSSPP_CLAS_ZD_STAGE: ${{ vars.GNSSPP_CLAS_ZD_STAGE }}
+        GNSSPP_CLAS_ZD_ROW_TYPE: ${{ vars.GNSSPP_CLAS_ZD_ROW_TYPE }}
+        GNSSPP_CLAS_ZD_SAT: ${{ vars.GNSSPP_CLAS_ZD_SAT }}
+        GNSSPP_CLAS_ZD_FREQ: ${{ vars.GNSSPP_CLAS_ZD_FREQ }}
+        GNSSPP_CLAS_ZD_RINEX_CODE: ${{ vars.GNSSPP_CLAS_ZD_RINEX_CODE }}
+        GNSSPP_CLAS_ZD_DUPLICATE_POLICY: ${{ vars.GNSSPP_CLAS_ZD_DUPLICATE_POLICY }}
+        GNSSPP_CLAS_ZD_THRESHOLD_M: ${{ vars.GNSSPP_CLAS_ZD_THRESHOLD_M }}
+        GNSSPP_CLAS_ZD_FAIL_ON_DIFF: ${{ vars.GNSSPP_CLAS_ZD_FAIL_ON_DIFF }}
+      run: bash scripts/ci/run_optional_clas_zd_component_diff.sh
+
+    - name: Upload CLAS ZD component diff artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: clas-zd-component-diff-ubuntu
+        path: |
+          output/ci_optional_clas_zd_component_summary.json
+          output/ci_optional_clas_zd_component/*.log
+          output/clas_zd_component_diff.json
+          output/clas_zd_component_diff.csv
+          output/clas_zd_component_diff_claslib_snapshot_summary.json
+          output/clas_zd_component_diff_native_snapshot_summary.json
         if-no-files-found: error
 
     - name: Optional MADOCA materialization diff

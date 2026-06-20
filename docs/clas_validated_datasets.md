@@ -233,6 +233,14 @@ unmatched rows or component deltas. Set
 fetching public data. CI treats that blocked state as a failure by default; set
 `GNSSPP_CLAS_A4B_FAIL_ON_BLOCKED=0` only for diagnostic-only local runs.
 
+The optional CLAS ZD oracle/native diff runs after this native self-diff in CI.
+When `GNSSPP_CLAS_ZD_CANDIDATE_CSV` is unset, the workflow sets
+`GNSSPP_CLAS_ZD_NATIVE_CSV=output/clas_a4b_native_selfdiff/native_code_dump.csv`
+so the generated public-data native dump becomes the candidate side. That still
+leaves `GNSSPP_CLAS_ZD_BASE_CSV` as an explicit normalized CLASLIB dump input;
+until CLASLIB-side dump generation is also automated, a missing base CSV is
+reported as `blocked_infrastructure`, not as a passing sign-off.
+
 Build with CLASLIB linked only when you need oracle-backed unit tests:
 
 ```bash
