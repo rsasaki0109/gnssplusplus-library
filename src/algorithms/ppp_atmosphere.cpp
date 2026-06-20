@@ -790,7 +790,19 @@ double atmosphericTroposphereCorrectionMeters(
         hydro_delta_m = sampleTropResidual("atmos_trop_hs_residuals_m");
         wet_delta_m = sampleTropResidual("atmos_trop_wet_residuals_m");
         if (have_grid_trop) {
-            correction_m += hydro_mapping * (2.3 + hydro_delta_m) + wet_mapping * (0.252 + wet_delta_m);
+            double hydro_zenith_m = 2.3;
+            double wet_zenith_m = 0.252;
+            if (pppEnvOverrides().clas_trop_climatology) {
+                const auto zenith =
+                    models::estimateZenithTroposphereClimatology(
+                        latitude_rad,
+                        height_m,
+                        dayOfYearFromTime(time));
+                hydro_zenith_m = zenith.hydrostatic_delay_m;
+                wet_zenith_m = zenith.wet_delay_m;
+            }
+            correction_m += hydro_mapping * (hydro_zenith_m + hydro_delta_m) +
+                wet_mapping * (wet_zenith_m + wet_delta_m);
             have_correction = true;
         }
     }

@@ -238,6 +238,10 @@ struct PPPEnvOverrides {
     // selection when set exactly to "1". Default false while issue #8 parity
     // is measured; exact "0" preserves legacy CSV artifact semantics.
     bool clas_atmos_lifecycle = false;
+    // GNSS_PPP_CLAS_TROP_CLIMATOLOGY: replace the legacy fixed CLAS zenith
+    // hydro/wet trop constants with the in-tree seasonal climatology when set
+    // exactly to "1". Default false while A4b GPS L2W trop parity is measured.
+    bool clas_trop_climatology = false;
     // GNSS_PPP_CLAS_STEC_CONSTRAINT: preview CLASLIB-style STEC constraints
     // on estimated CLAS ionosphere states when set exactly to "1". Default
     // false while issue #8 filter-side parity is measured.

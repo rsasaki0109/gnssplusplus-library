@@ -295,7 +295,9 @@ application convention. The A4b sign-off runner also enables
 `GNSS_PPP_CLAS_ATMOS_GRID_MATRIX=1` and
 `GNSS_PPP_CLAS_ATMOS_LIFECYCLE=1` so the GPS L2W PRC diff measures the remaining
 component gap after CLASLIB-style atmosphere grid selection and lifecycle
-materialization.
+materialization. It also sets `GNSS_PPP_CLAS_TROP_CLIMATOLOGY=1`, limiting the
+hydro/wet zenith-baseline change to the A4b trop-parity lane while default CLAS
+output keeps the legacy constants.
 The same stored identity now drives CLAS float/DD/SD/WLNL raw observation lookup,
 so a `C2W/L2W` OSR row consumes the matching `C2W/L2W` measurement instead of the
 first collapsed GPS L2 family row.
