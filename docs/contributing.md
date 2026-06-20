@@ -56,7 +56,10 @@ CI lanes are split as follows:
   oracle/native diff artifacts; they report `blocked_infrastructure` with
   next actions when their CSV inputs are unavailable, require a summary/log
   artifact in CI, and fail a passed diff command if the declared JSON/CSV
-  artifacts are missing.  The MADOCA materialization diff additionally emits
+  artifacts are missing.  The CLAS ZD component diff additionally emits
+  `clas_zd_component_summary.v1` JSON for both input snapshots and fails before
+  the component diff when row keys, observation identity, or component presence
+  is malformed.  The MADOCA materialization diff additionally emits
   `madoca_materialization_summary.v1` JSON for both input snapshots and fails
   before the diff when either snapshot has count, discontinuity, or duplicate-key
   contract issues.  The MADOCA residual-component diff follows the same pattern

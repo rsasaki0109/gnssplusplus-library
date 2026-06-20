@@ -335,6 +335,8 @@ jobs:
           output/ci_optional_clas_zd_component/*.log
           output/clas_zd_component_diff.json
           output/clas_zd_component_diff.csv
+          output/clas_zd_component_diff_claslib_snapshot_summary.json
+          output/clas_zd_component_diff_native_snapshot_summary.json
         if-no-files-found: error
 
     - name: CLAS A4b native self-diff

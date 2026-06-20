@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optional_diff_runner as runner  # noqa: E402
 
 
-SUMMARY_SCHEMA = "ci_optional_clas_zd_component_diff.v2"
+SUMMARY_SCHEMA = "ci_optional_clas_zd_component_diff.v3"
 
 CONFIG = runner.DiffRunnerConfig(
     summary_schema=SUMMARY_SCHEMA,
@@ -37,6 +37,9 @@ CONFIG = runner.DiffRunnerConfig(
     summary_filename="ci_optional_clas_zd_component_summary.json",
     log_dir_name="ci_optional_clas_zd_component",
     per_component_max_key="max_abs_delta_m",
+    input_summary_script="clas_zd_component_summary.py",
+    input_summary_schema="clas_zd_component_summary.v1",
+    input_summary_fail_on_issue=True,
     extra_options=(
         runner.EnvOption(("GNSSPP_CLAS_ZD_STAGE",), "--stage"),
         runner.EnvOption(("GNSSPP_CLAS_ZD_ROW_TYPE",), "--row-type"),
