@@ -344,6 +344,31 @@ def load_diff_metrics(config: DiffRunnerConfig, report_json: Path) -> dict[str, 
             if isinstance(value, (int, float)):
                 max_abs_delta = max(max_abs_delta, float(value))
         metrics["max_abs_delta"] = max_abs_delta
+    top_component_deltas = payload.get("top_component_deltas")
+    if isinstance(top_component_deltas, list) and top_component_deltas:
+        first_delta = top_component_deltas[0]
+        if isinstance(first_delta, dict):
+            component = first_delta.get("component")
+            delta = first_delta.get("delta_m")
+            if not isinstance(delta, (int, float)):
+                delta = first_delta.get("delta")
+            abs_delta = first_delta.get("abs_delta_m")
+            if not isinstance(abs_delta, (int, float)):
+                abs_delta = first_delta.get("abs_delta")
+            if isinstance(component, str) and component:
+                metrics["top_delta_component"] = component
+            if isinstance(delta, (int, float)):
+                metrics["top_delta_delta"] = float(delta)
+            if isinstance(abs_delta, (int, float)):
+                metrics["top_delta_abs_delta"] = float(abs_delta)
+            key_parts = []
+            for key in ("week", "tow", "iteration", "stage", "row_type", "sat", "freq", "rinex_code"):
+                value = first_delta.get(key)
+                if value is not None:
+                    metrics[f"top_delta_{key}"] = value
+                    key_parts.append(str(value))
+            if key_parts:
+                metrics["top_delta_key"] = "/".join(key_parts)
     top_row_breakdowns = payload.get("top_row_component_breakdowns")
     if isinstance(top_row_breakdowns, list) and top_row_breakdowns:
         first_row = top_row_breakdowns[0]
@@ -572,6 +597,16 @@ def render_result_detail(result: dict[str, object]) -> str:
         max_abs_delta = metrics.get("max_abs_delta")
         if max_abs_delta is not None:
             detail_parts.append(f"max |delta| {format_metric(max_abs_delta)}")
+        top_delta_component = metrics.get("top_delta_component")
+        top_delta_component_abs = metrics.get("top_delta_abs_delta")
+        if top_delta_component is not None:
+            if top_delta_component_abs is not None:
+                detail_parts.append(
+                    "top delta "
+                    f"`{top_delta_component}` |delta| {format_metric(top_delta_component_abs)}"
+                )
+            else:
+                detail_parts.append(f"top delta `{top_delta_component}`")
         top_row_sum = metrics.get("top_row_sum_abs_delta")
         if top_row_sum is not None:
             detail_parts.append(f"top row sum |delta| {format_metric(top_row_sum)}")

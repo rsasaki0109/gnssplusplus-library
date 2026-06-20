@@ -199,10 +199,10 @@ and component presence before any deltas are compared.  When those inputs are
 absent, the CI step records `status: blocked_infrastructure` with next actions
 instead of silently treating the missing oracle/native evidence as a passing
 sign-off.  The workflow upload treats the summary/log bundle as required
-evidence.  The `ci_optional_clas_zd_component_diff.v4` summary also surfaces the
-top ZD row's dominant component and its absolute delta, so the next A4b model
-PR can be scoped to one correction component instead of tuning final solution
-RMS.
+evidence.  The `ci_optional_clas_zd_component_diff.v5` summary also surfaces
+the global largest component delta and the top ZD row's dominant component, so
+the next A4b model PR can be scoped to one correction component instead of
+tuning final solution RMS.
 Optional filters are `GNSSPP_CLAS_ZD_COMPONENTS`, `GNSSPP_CLAS_ZD_STAGE`,
 `GNSSPP_CLAS_ZD_ROW_TYPE`, `GNSSPP_CLAS_ZD_THRESHOLD_M`, and
 `GNSSPP_CLAS_ZD_FAIL_ON_DIFF`.  GPS L2W A4b probes can also narrow the row set
