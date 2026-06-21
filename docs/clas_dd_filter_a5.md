@@ -291,14 +291,16 @@ Together these make the remote artifact show whether the remaining GPS L2W PRC
 gap is explained by component deltas, TECU/L1 conversion, frequency scaling, or
 a PRC convention/rounding mismatch.
 The native code-row dump also carries the atmosphere reference TOW, clock
-reference TOW, and atmosphere-clock gap used for each OSR row.  The
-`clas_zd_component_summary.v2` snapshot summary reports numeric min/max stats
-for those fields, so lifecycle or epoch-selection mismatches can be diagnosed
-before changing the STEC model.  The GitHub step summary highlights raw STEC,
-L1 ionosphere, scaled ionosphere, code-bias, trop, L1-from-STEC, L1-STEC
-closure, scaled-ionosphere closure, PRC closure, and atmosphere-reference
-components, keeping the primary review evidence in the CI summary while the
-full row breakdown remains in the JSON artifact.
+reference TOW, atmosphere-clock gap, lifecycle TOW, selected-satellite count,
+valid-grid count, materialized STEC grid-value count, and selected-grid STEC
+value count used for each OSR row.  The `clas_zd_component_summary.v2`
+snapshot summary reports numeric min/max stats for those fields, so lifecycle
+or epoch-selection mismatches can be diagnosed before changing the STEC model.
+The GitHub step summary highlights raw STEC, L1 ionosphere, scaled ionosphere,
+code-bias, trop, L1-from-STEC, L1-STEC closure, scaled-ionosphere closure, PRC
+closure, and atmosphere-reference components, keeping the primary review
+evidence in the CI summary while the full row breakdown remains in the JSON
+artifact.
 When `GNSS_PPP_CLAS_DD_FILTER=1` and
 `GNSS_PPP_CLAS_CODE_ROW_PARITY=bias,full-prc` are set, the CLAS OSR
 materializer uses that exact GPS L2 RINEX identity to choose the code/phase SSR

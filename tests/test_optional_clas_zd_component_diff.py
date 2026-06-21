@@ -231,6 +231,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertIn("atmos_grid1_weight", component_values)
             self.assertIn("atmos_grid4_no", component_values)
             self.assertNotIn("atmos_grid_distance_m", component_values)
+            self.assertNotIn("atmos_lifecycle_tow", component_values)
 
     def test_run_step_collects_metrics_from_diff_report(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_exec_") as temp_dir:

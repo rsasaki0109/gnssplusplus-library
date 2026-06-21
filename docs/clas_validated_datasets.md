@@ -329,9 +329,12 @@ The GitHub step summary highlights `stec_tecu`, `iono_l1_m`,
 per-component max-delta map, and reports missing counts for highlighted
 atmosphere-reference fields when CLASLIB cannot provide a comparable value.
 The native `clas_zd_component_summary.v2` snapshot also reports numeric
-min/max stats for `atmos_ref_tow`, `clock_ref_tow`, and `atmos_clock_gap_s`,
-so reviewers can see which lifecycle stage is selected without opening the raw
-CSV.  For the leading row-breakdown, v11 summaries also include
+min/max stats for `atmos_ref_tow`, `clock_ref_tow`, `atmos_clock_gap_s`,
+`atmos_lifecycle_tow`, `atmos_selected_satellite_count`,
+`atmos_valid_grid_count`, `atmos_stec_grid_value_count`, and
+`atmos_selected_grid_stec_value_count`, so reviewers can see which lifecycle
+bank was materialized before opening the raw CSV.  For the leading
+row-breakdown, v11 summaries also include
 CLASLIB/native/delta values for highlighted present components and the native
 value of each highlighted missing field, which ties the largest PRC/iono/trop
 delta back to the selected reference epoch.
