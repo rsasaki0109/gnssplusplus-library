@@ -203,6 +203,35 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             self.assertIn(str(native_csv), command)
             self.assertNotIn("CLAS ZD component input is unavailable", steps[0].skip_reason or "")
 
+    def test_build_step_plan_uses_default_component_contract(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_default_components_") as temp_dir:
+            root = Path(temp_dir)
+            base_csv = root / "claslib.csv"
+            candidate_csv = root / "native.csv"
+            write_zd_component_csv(base_csv)
+            write_zd_component_csv(candidate_csv)
+            output_dir = root / "output"
+            env = {
+                "GNSSPP_CLAS_ZD_BASE_CSV": str(base_csv),
+                "GNSSPP_CLAS_ZD_CANDIDATE_CSV": str(candidate_csv),
+            }
+
+            steps = runner.build_step_plan(ROOT_DIR, output_dir, env)
+
+            command = steps[0].command
+            self.assertIsNotNone(command)
+            assert command is not None
+            component_values = [
+                command[index + 1]
+                for index, value in enumerate(command[:-1])
+                if value == "--component"
+            ]
+            self.assertIn("prc_m", component_values)
+            self.assertIn("stec_tecu", component_values)
+            self.assertIn("atmos_grid1_weight", component_values)
+            self.assertIn("atmos_grid4_no", component_values)
+            self.assertNotIn("atmos_grid_distance_m", component_values)
+
     def test_run_step_collects_metrics_from_diff_report(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_clas_zd_exec_") as temp_dir:
             root = Path(temp_dir)
