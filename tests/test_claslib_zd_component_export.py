@@ -189,6 +189,7 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             self.assertEqual(row["pseudorange_rtklib_code"], "20")
             self.assertEqual(row["carrier_rtklib_code"], "20")
             self.assertEqual(row["code_bias_m"], "0.125")
+            self.assertEqual(row["network_compensation_m"], "")
             self.assertEqual(row["receiver_antenna_m"], "-0.02")
             self.assertEqual(row["trop_correction_m"], "2.4")
             self.assertEqual(row["residual_m"], "-0.5")
@@ -272,6 +273,7 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             self.assertEqual(code_l2w["applied_pr_corr_m"], "4.202")
             self.assertEqual(code_l2w["prc_m"], "4.202")
             self.assertEqual(code_l2w["code_bias_m"], "0.022")
+            self.assertEqual(code_l2w["network_compensation_m"], "0")
             self.assertEqual(code_l2w["trop_correction_m"], "2.345")
             self.assertAlmostEqual(float(code_l1c["iono_l1_m"]), 1.752)
             self.assertAlmostEqual(float(code_l2w["iono_l1_m"]), l2w_iono_l1)
@@ -318,8 +320,77 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             self.assertEqual(phase_l2w["carrier_correction_m"], "3.202")
             self.assertEqual(phase_l2w["cpc_m"], "3.202")
             self.assertEqual(phase_l2w["phase_bias_m"], "0.202")
+            self.assertEqual(phase_l2w["network_compensation_m"], "0")
             self.assertEqual(phase_l2w["phase_compensation_m"], "0.002")
             self.assertEqual(phase_l2w["windup_m"], "0.200")
+
+    def test_claslib_osrres_exposes_network_compensation(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="claslib_zd_export_test_") as temp_dir:
+            input_path = Path(temp_dir) / "claslib.osr"
+            output_path = Path(temp_dir) / "normalized.csv"
+            write_csv(
+                input_path,
+                [
+                    {
+                        "msg": "OSRRES(ch0)",
+                        "tow": "230430.0",
+                        "sys": "1",
+                        "prn": "14",
+                        "pbias1": "0.000",
+                        "pbias2": "0.000",
+                        "pbias5": "-10000.000",
+                        "cbias1": "0.000",
+                        "cbias2": "0.760",
+                        "cbias5": "-10000.000",
+                        "trop": "2.769",
+                        "iono": "-0.527",
+                        "antr1": "-0.086",
+                        "antr2": "-0.090",
+                        "antr5": "-0.124",
+                        "relatv": "0.013",
+                        "wup1": "0.000",
+                        "wup2": "0.000",
+                        "wup5": "0.000",
+                        "compI1": "0.000",
+                        "compI2": "0.000",
+                        "compI5": "0.000",
+                        "compN": "-0.052",
+                        "CPC1": "0.000",
+                        "CPC2": "0.000",
+                        "CPC5": "0.000",
+                        "PRC1": "2.337",
+                        "PRC2": "2.827",
+                        "PRC5": "0.000",
+                        "orb": "0.000",
+                        "clk": "0.000",
+                    }
+                ],
+                OSR_FIELDNAMES,
+            )
+
+            rows_written = export.export_csv(
+                input_path,
+                output_path,
+                stage_label="post",
+                gps_week=2068,
+            )
+
+            self.assertEqual(rows_written, 4)
+            rows = read_csv(output_path)
+            code_l1c = next(
+                row for row in rows if row["row_type"] == "code" and row["signal"] == "C1C"
+            )
+            code_l2w = next(
+                row for row in rows if row["row_type"] == "code" and row["signal"] == "C2W"
+            )
+            self.assertEqual(code_l1c["network_compensation_m"], "-0.052")
+            self.assertEqual(code_l2w["network_compensation_m"], "-0.052")
+            self.assertAlmostEqual(float(code_l1c["iono_scaled_m"]), -0.359)
+            self.assertAlmostEqual(float(code_l2w["iono_scaled_m"]), -0.625)
+            self.assertAlmostEqual(
+                float(code_l2w["iono_l1_m"]),
+                -0.625 / export.GPS_IONO_SCALE_BY_SUFFIX["2"],
+            )
 
     def test_claslib_osrres_requires_gps_week(self) -> None:
         with tempfile.TemporaryDirectory(prefix="claslib_zd_export_test_") as temp_dir:

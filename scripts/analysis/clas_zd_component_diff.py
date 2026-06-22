@@ -41,6 +41,7 @@ COMPONENT_ALIASES: dict[str, tuple[str, ...]] = {
     "iono_cpc_m": ("iono_cpc_m",),
     "code_bias_m": ("code_bias_m", "code_bias"),
     "phase_bias_m": ("phase_bias_m", "phase_bias"),
+    "network_compensation_m": ("network_compensation_m",),
     "bias_exact_identity": ("bias_exact_identity",),
     "observation_exact_identity_requested": ("observation_exact_identity_requested",),
     "observation_exact_match": ("observation_exact_match",),

@@ -108,6 +108,7 @@ FIELDNAMES = [
     "claslib_raw_stec_tecu",
     "code_bias_m",
     "phase_bias_m",
+    "network_compensation_m",
     "receiver_antenna_m",
     "relativity_m",
     "atmos_ref_week",
@@ -519,6 +520,13 @@ def prc_iono_scaled_from_osrres(row: dict[str, str], suffix: str) -> Optional[fl
     return prc - (trop + antr + relativity + cbias)
 
 
+def osrres_network_compensation(row: dict[str, str]) -> Optional[float]:
+    comp_n = parse_osr_float(first_present(row, ("compN", "network_compensation_m")))
+    if comp_n is None:
+        return None
+    return comp_n
+
+
 def prc_iono_l1_from_osrres(row: dict[str, str], suffix: str) -> str:
     scaled = prc_iono_scaled_from_osrres(row, suffix)
     scale = GPS_IONO_SCALE_BY_SUFFIX.get(suffix, 0.0)
@@ -599,6 +607,7 @@ def normalize_row(
             "claslib_raw_stec_tecu": first_present(row, ("claslib_raw_stec_tecu", "raw_stec_tecu")),
             "code_bias_m": first_present(row, ("code_bias_m", "code_bias", "cbias_m")),
             "phase_bias_m": first_present(row, ("phase_bias_m", "phase_bias", "pbias_m", "comp_m")),
+            "network_compensation_m": first_present(row, ("network_compensation_m",)),
             "receiver_antenna_m": first_present(row, ("receiver_antenna_m", "receiver_ant_m", "receiver_ant")),
             "relativity_m": first_present(row, ("relativity_m", "relativity_correction_m")),
             "atmos_ref_week": first_present(row, ("atmos_ref_week", "atmos_reference_week")),
@@ -702,6 +711,7 @@ def normalize_osrres_rows(
             "claslib_iono_source": "prc_closure",
             "claslib_raw_iono_l1_m": raw_iono_l1_m,
             "claslib_raw_stec_tecu": stec_tecu_from_iono_l1_m(raw_iono_l1_m),
+            "network_compensation_m": format_component(osrres_network_compensation(row)),
             "receiver_antenna_m": first_present(row, (f"antr{suffix}",)),
             "relativity_m": first_present(row, ("relatv", "relativity_m", "relativity_correction_m")),
             "windup_m": first_present(row, (f"wup{suffix}",)),

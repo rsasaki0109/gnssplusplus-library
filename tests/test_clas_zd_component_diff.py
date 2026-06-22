@@ -54,6 +54,7 @@ FIELDNAMES = [
     "code_bias_m",
     "code_bias",
     "phase_bias_m",
+    "network_compensation_m",
     "receiver_ant_m",
     "receiver_antenna_m",
     "trop_correction_m",
@@ -98,6 +99,7 @@ def code_row(
     iono_scaled: str = "0.0",
     iono_scale: str = "",
     relativity: str = "0.0",
+    network_compensation: str = "0.0",
     atmos_ref_week: str = "",
     atmos_ref_tow: str = "",
     clock_ref_week: str = "",
@@ -163,6 +165,7 @@ def code_row(
         "code_bias_m": code_bias,
         "code_bias": "",
         "phase_bias_m": "",
+        "network_compensation_m": network_compensation,
         "receiver_ant_m": receiver_ant,
         "receiver_antenna_m": "",
         "trop_correction_m": trop,
@@ -203,6 +206,26 @@ class ClasZdComponentDiffTest(unittest.TestCase):
             ["prc_component_sum_m", "prc_closure_residual_m"],
         )
 
+        self.assertAlmostEqual(components["prc_component_sum_m"], 2.92)
+        self.assertAlmostEqual(components["prc_closure_residual_m"], 0.08)
+
+    def test_extracts_network_compensation_as_independent_component(self) -> None:
+        components = component_diff.extract_components(
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="3.0",
+                code_bias="0.5",
+                receiver_ant="0.1",
+                trop="2.0",
+                iono_scaled="0.3",
+                relativity="0.02",
+                network_compensation="0.05",
+            ),
+            ["network_compensation_m", "prc_component_sum_m", "prc_closure_residual_m"],
+        )
+
+        self.assertAlmostEqual(components["network_compensation_m"], 0.05)
         self.assertAlmostEqual(components["prc_component_sum_m"], 2.92)
         self.assertAlmostEqual(components["prc_closure_residual_m"], 0.08)
 
