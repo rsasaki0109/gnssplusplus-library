@@ -47,6 +47,12 @@ FIELDNAMES = [
     "clock_ref_week",
     "clock_ref_tow",
     "atmos_clock_gap_s",
+    "atmos_lifecycle",
+    "atmos_lifecycle_tow",
+    "atmos_selected_satellite_count",
+    "atmos_valid_grid_count",
+    "atmos_stec_grid_value_count",
+    "atmos_selected_grid_stec_value_count",
 ]
 
 
@@ -74,6 +80,12 @@ def zd_row(
     clock_ref_week: str = "",
     clock_ref_tow: str = "",
     atmos_clock_gap_s: str = "",
+    atmos_lifecycle: str = "",
+    atmos_lifecycle_tow: str = "",
+    atmos_selected_satellite_count: str = "",
+    atmos_valid_grid_count: str = "",
+    atmos_stec_grid_value_count: str = "",
+    atmos_selected_grid_stec_value_count: str = "",
 ) -> dict[str, str]:
     return {
         "week": "2360",
@@ -99,6 +111,12 @@ def zd_row(
         "clock_ref_week": clock_ref_week,
         "clock_ref_tow": clock_ref_tow,
         "atmos_clock_gap_s": atmos_clock_gap_s,
+        "atmos_lifecycle": atmos_lifecycle,
+        "atmos_lifecycle_tow": atmos_lifecycle_tow,
+        "atmos_selected_satellite_count": atmos_selected_satellite_count,
+        "atmos_valid_grid_count": atmos_valid_grid_count,
+        "atmos_stec_grid_value_count": atmos_stec_grid_value_count,
+        "atmos_selected_grid_stec_value_count": atmos_selected_grid_stec_value_count,
     }
 
 
@@ -121,6 +139,12 @@ class ClasZdComponentSummaryTest(unittest.TestCase):
                 clock_ref_week="2068",
                 clock_ref_tow="230420.0",
                 atmos_clock_gap_s="10.0",
+                atmos_lifecycle="1",
+                atmos_lifecycle_tow="230430",
+                atmos_selected_satellite_count="14",
+                atmos_valid_grid_count="4",
+                atmos_stec_grid_value_count="22",
+                atmos_selected_grid_stec_value_count="4",
             ),
             zd_row(
                 sat="J01",
@@ -155,10 +179,27 @@ class ClasZdComponentSummaryTest(unittest.TestCase):
         self.assertEqual(summary["component_presence"]["rows_with_component"]["atmos_ref_tow"], 1)
         self.assertEqual(summary["component_presence"]["rows_with_component"]["clock_ref_tow"], 1)
         self.assertEqual(summary["component_presence"]["rows_with_component"]["atmos_clock_gap_s"], 1)
+        self.assertEqual(summary["component_presence"]["rows_with_component"]["atmos_lifecycle"], 1)
+        self.assertEqual(summary["component_presence"]["rows_with_component"]["atmos_lifecycle_tow"], 1)
+        self.assertEqual(
+            summary["component_presence"]["rows_with_component"]["atmos_selected_satellite_count"],
+            1,
+        )
+        self.assertEqual(summary["component_presence"]["rows_with_component"]["atmos_valid_grid_count"], 1)
+        self.assertEqual(
+            summary["component_presence"]["rows_with_component"]["atmos_stec_grid_value_count"],
+            1,
+        )
+        self.assertEqual(
+            summary["component_presence"]["rows_with_component"]["atmos_selected_grid_stec_value_count"],
+            1,
+        )
         self.assertEqual(summary["component_numeric_stats"]["atmos_ref_tow"]["min"], 230430.0)
         self.assertEqual(summary["component_numeric_stats"]["atmos_ref_tow"]["max"], 230430.0)
         self.assertEqual(summary["component_numeric_stats"]["clock_ref_tow"]["max"], 230420.0)
         self.assertEqual(summary["component_numeric_stats"]["atmos_clock_gap_s"]["max_abs"], 10.0)
+        self.assertEqual(summary["component_numeric_stats"]["atmos_lifecycle_tow"]["max"], 230430.0)
+        self.assertEqual(summary["component_numeric_stats"]["atmos_stec_grid_value_count"]["max"], 22.0)
         self.assertEqual(summary["bias_identity"]["rows_with_code_bias"], 1)
         self.assertEqual(summary["bias_identity"]["rows_with_phase_bias"], 1)
         self.assertEqual(summary["identity_provenance"]["gps_l2w_rows"], 1)

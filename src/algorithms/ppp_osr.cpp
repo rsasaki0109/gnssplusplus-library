@@ -8,6 +8,7 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <sstream>
 
 namespace libgnss {
 
@@ -253,6 +254,89 @@ double phaseWindup(const Vector3d& sat_pos, const Vector3d& rcv_pos, double prev
 
 bool gnsstimeIsSet(const GNSSTime& time) {
     return time.week != 0 || std::abs(time.tow) > 0.0;
+}
+
+std::vector<std::string> splitSemicolonList(const std::string& text) {
+    std::vector<std::string> values;
+    std::istringstream stream(text);
+    std::string value;
+    while (std::getline(stream, value, ';')) {
+        if (!value.empty()) {
+            values.push_back(value);
+        }
+    }
+    return values;
+}
+
+int countSemicolonListValues(const std::map<std::string, std::string>& tokens,
+                             const std::string& key) {
+    const auto it = tokens.find(key);
+    if (it == tokens.end()) {
+        return 0;
+    }
+    return static_cast<int>(splitSemicolonList(it->second).size());
+}
+
+int countFiniteSemicolonListValues(const std::map<std::string, std::string>& tokens,
+                                   const std::string& key) {
+    const auto it = tokens.find(key);
+    if (it == tokens.end()) {
+        return 0;
+    }
+    int count = 0;
+    for (const auto& value : splitSemicolonList(it->second)) {
+        try {
+            size_t parsed = 0;
+            const double number = std::stod(value, &parsed);
+            if (parsed == value.size() && std::isfinite(number)) {
+                ++count;
+            }
+        } catch (...) {
+        }
+    }
+    return count;
+}
+
+int countSelectedGridStecValues(const std::map<std::string, std::string>& tokens,
+                                const std::string& key,
+                                const OSRCorrection& osr) {
+    int count = 0;
+    for (int grid = 0;
+         grid < osr.atmos_interpolation_grid_count &&
+         grid < static_cast<int>(osr.atmos_interpolation_grid_no.size());
+         ++grid) {
+        const int grid_no = osr.atmos_interpolation_grid_no[grid];
+        if (grid_no <= 0) {
+            continue;
+        }
+        double value = 0.0;
+        if (ppp_atmosphere::parseAtmosListValueAtIndex(
+                tokens, key, static_cast<size_t>(grid_no - 1), value) &&
+            std::isfinite(value)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+void setAtmosLifecycleProvenance(OSRCorrection& osr,
+                                 const std::map<std::string, std::string>& tokens,
+                                 const SatelliteId& satellite) {
+    osr.atmos_lifecycle = tokens.find("atmos_lifecycle") != tokens.end();
+    int lifecycle_tow = 0;
+    osr.has_atmos_lifecycle_tow =
+        ppp_atmosphere::parseAtmosTokenInt(tokens, "atmos_lifecycle_tow", lifecycle_tow);
+    osr.atmos_lifecycle_tow =
+        osr.has_atmos_lifecycle_tow ? static_cast<double>(lifecycle_tow) : 0.0;
+    ppp_atmosphere::parseAtmosTokenInt(
+        tokens, "atmos_selected_satellites", osr.atmos_selected_satellite_count);
+    osr.atmos_valid_grid_count = countSemicolonListValues(tokens, "atmos_valid_grids");
+    const std::string stec_grid_key =
+        "atmos_stec_grid_tecu:" + satellite.toString();
+    osr.atmos_stec_grid_value_count =
+        countFiniteSemicolonListValues(tokens, stec_grid_key);
+    osr.atmos_selected_grid_stec_value_count =
+        countSelectedGridStecValues(tokens, stec_grid_key, osr);
 }
 
 void updateDispersionCompensation(
@@ -1095,6 +1179,7 @@ std::vector<OSRCorrection> computeOSR(
                     osr.atmos_interpolation_weights[0] = 1.0;
                 }
             }
+            setAtmosLifecycleProvenance(osr, atmos_tokens, sat);
             const double clas_trop = ppp_atmosphere::atmosphericTroposphereCorrectionMeters(
                 atmos_tokens,
                 receiver_pos,

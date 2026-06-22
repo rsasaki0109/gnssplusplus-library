@@ -128,6 +128,18 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             self.assertIn("code", command)
             self.assertIn("--require-rinex-code", command)
             self.assertIn("C2W", command)
+            required_components = [
+                command[index + 1]
+                for index, value in enumerate(command[:-1])
+                if value == "--require-component"
+            ]
+            self.assertIn("prc_m", required_components)
+            self.assertIn("atmos_lifecycle", required_components)
+            self.assertIn("atmos_lifecycle_tow", required_components)
+            self.assertIn("atmos_selected_satellite_count", required_components)
+            self.assertIn("atmos_valid_grid_count", required_components)
+            self.assertIn("atmos_stec_grid_value_count", required_components)
+            self.assertIn("atmos_selected_grid_stec_value_count", required_components)
             self.assertIn("--require-gps-l2w-rows-min", command)
             self.assertIn("30", command)
             self.assertIn("--require-gps-l2w-exact-bias", command)

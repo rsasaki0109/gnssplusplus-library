@@ -67,6 +67,12 @@ FIELDNAMES = [
     "clock_ref_week",
     "clock_ref_tow",
     "atmos_clock_gap_s",
+    "atmos_lifecycle",
+    "atmos_lifecycle_tow",
+    "atmos_selected_satellite_count",
+    "atmos_valid_grid_count",
+    "atmos_stec_grid_value_count",
+    "atmos_selected_grid_stec_value_count",
 ]
 
 
@@ -95,6 +101,12 @@ def code_row(
     clock_ref_week: str = "",
     clock_ref_tow: str = "",
     atmos_clock_gap_s: str = "",
+    atmos_lifecycle: str = "",
+    atmos_lifecycle_tow: str = "",
+    atmos_selected_satellite_count: str = "",
+    atmos_valid_grid_count: str = "",
+    atmos_stec_grid_value_count: str = "",
+    atmos_selected_grid_stec_value_count: str = "",
     record: str = "CODE",
     stage: str = "",
     signal: str = "",
@@ -160,6 +172,12 @@ def code_row(
         "clock_ref_week": clock_ref_week,
         "clock_ref_tow": clock_ref_tow,
         "atmos_clock_gap_s": atmos_clock_gap_s,
+        "atmos_lifecycle": atmos_lifecycle,
+        "atmos_lifecycle_tow": atmos_lifecycle_tow,
+        "atmos_selected_satellite_count": atmos_selected_satellite_count,
+        "atmos_valid_grid_count": atmos_valid_grid_count,
+        "atmos_stec_grid_value_count": atmos_stec_grid_value_count,
+        "atmos_selected_grid_stec_value_count": atmos_selected_grid_stec_value_count,
     }
 
 
@@ -388,6 +406,43 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                 "phase_bias_present": 1.0,
                 "code_bias_fallback": 0.0,
                 "phase_bias_fallback": 0.0,
+            },
+        )
+
+    def test_native_lifecycle_provenance_columns_can_be_summarized(self) -> None:
+        components = component_diff.extract_components(
+            code_row(
+                sat="G14",
+                freq="1",
+                prc="0.50",
+                code_bias="0.10",
+                receiver_ant="-0.02",
+                atmos_lifecycle="1",
+                atmos_lifecycle_tow="230430",
+                atmos_selected_satellite_count="14",
+                atmos_valid_grid_count="4",
+                atmos_stec_grid_value_count="22",
+                atmos_selected_grid_stec_value_count="4",
+            ),
+            [
+                "atmos_lifecycle",
+                "atmos_lifecycle_tow",
+                "atmos_selected_satellite_count",
+                "atmos_valid_grid_count",
+                "atmos_stec_grid_value_count",
+                "atmos_selected_grid_stec_value_count",
+            ],
+        )
+
+        self.assertEqual(
+            components,
+            {
+                "atmos_lifecycle": 1.0,
+                "atmos_lifecycle_tow": 230430.0,
+                "atmos_selected_satellite_count": 14.0,
+                "atmos_valid_grid_count": 4.0,
+                "atmos_stec_grid_value_count": 22.0,
+                "atmos_selected_grid_stec_value_count": 4.0,
             },
         )
 

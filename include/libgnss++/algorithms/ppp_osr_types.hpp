@@ -65,6 +65,13 @@ struct OSRCorrection {
     std::array<int, 4> atmos_interpolation_grid_no{{0, 0, 0, 0}};
     std::array<double, 4> atmos_interpolation_weights{{0.0, 0.0, 0.0, 0.0}};
     double atmos_nearest_grid_distance_m = 0.0;
+    bool atmos_lifecycle = false;
+    double atmos_lifecycle_tow = 0.0;
+    bool has_atmos_lifecycle_tow = false;
+    int atmos_selected_satellite_count = 0;
+    int atmos_valid_grid_count = 0;
+    int atmos_stec_grid_value_count = 0;
+    int atmos_selected_grid_stec_value_count = 0;
     GNSSTime phase_bias_reference_time;
     GNSSTime clock_reference_time;
 };

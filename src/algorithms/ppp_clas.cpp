@@ -223,6 +223,10 @@ std::ofstream* clasCodeDumpStream() {
                    << "atmos_grid2_no,atmos_grid2_weight,"
                    << "atmos_grid3_no,atmos_grid3_weight,"
                    << "atmos_grid4_no,atmos_grid4_weight,"
+                   << "atmos_lifecycle,atmos_lifecycle_tow,"
+                   << "atmos_selected_satellite_count,"
+                   << "atmos_valid_grid_count,atmos_stec_grid_value_count,"
+                   << "atmos_selected_grid_stec_value_count,"
                    << "geo_m,sat_clk_m,receiver_clock_m,trop_model_m,"
                    << "iono_state_m,iono_scale,predicted_m,residual_m,"
                    << "variance_m2,los_e_m,los_n_m,los_u_m,az_rad,el_rad,"
@@ -367,6 +371,14 @@ void dumpClasCodeRows(
                 stream << std::setprecision(17) << value;
                 return stream.str();
             };
+            auto doubleField = [](double value, bool have_value) {
+                if (!have_value) {
+                    return std::string();
+                }
+                std::ostringstream stream;
+                stream << std::setprecision(17) << value;
+                return stream.str();
+            };
 
             *dump << std::setprecision(17)
                   << "CODE,"
@@ -426,6 +438,14 @@ void dumpClasCodeRows(
                   << osr.atmos_interpolation_weights[2] << ','
                   << osr.atmos_interpolation_grid_no[3] << ','
                   << osr.atmos_interpolation_weights[3] << ','
+                  << (osr.atmos_lifecycle ? 1 : 0) << ','
+                  << doubleField(
+                         osr.atmos_lifecycle_tow,
+                         osr.has_atmos_lifecycle_tow) << ','
+                  << osr.atmos_selected_satellite_count << ','
+                  << osr.atmos_valid_grid_count << ','
+                  << osr.atmos_stec_grid_value_count << ','
+                  << osr.atmos_selected_grid_stec_value_count << ','
                   << geo << ','
                   << sat_clk_m << ','
                   << receiver_clock_m << ','
