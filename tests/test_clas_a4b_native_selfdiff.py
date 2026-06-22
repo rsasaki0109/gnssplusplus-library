@@ -89,7 +89,7 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             self.assertIn("--compact-code-bias-composition-policy", command)
             self.assertIn("base-only-if-present", command)
             self.assertIn("--compact-code-bias-bank-policy", command)
-            self.assertIn("latest-preceding-bank", command)
+            self.assertIn("delayed-15s-bank", command)
             self.assertIn("--compact-bias-row-materialization", command)
             self.assertIn("selected-satellite-base-extend", command)
             self.assertIn("--clas-atmos-selection", command)

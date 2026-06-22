@@ -225,7 +225,7 @@ def build_native_command(
         "--compact-code-bias-composition-policy",
         "base-only-if-present",
         "--compact-code-bias-bank-policy",
-        "latest-preceding-bank",
+        "delayed-15s-bank",
         "--compact-bias-row-materialization",
         "selected-satellite-base-extend",
         "--clas-atmos-selection",

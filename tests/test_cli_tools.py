@@ -5733,6 +5733,75 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(preceding_result.returncode, 0, msg=preceding_result.stderr)
             self.assertIn("cbias:2=-0.080000", preceding_path.read_text(encoding="ascii"))
 
+    def test_qzss_l6_info_compact_code_bias_bank_policy_delayed_15s_uses_half_window_boundary(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_code_bias_bank_delay15_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_code_bias_bank_delay15.bin"
+            delayed_path = temp_root / "delayed_15s.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            bias_m=-0.12,
+                            sync=True,
+                        ),
+                        build_qzss_cssr_code_bias_message(
+                            tow_delta=30,
+                            iod=3,
+                            bias_m=0.06,
+                            sync=True,
+                        ),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=44,
+                            iod=3,
+                            sync=False,
+                            network_bias=True,
+                            code_bias_exists=True,
+                            phase_bias_exists=False,
+                            selected_mask=0b1,
+                            code_bias_m=0.04,
+                        ),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=45,
+                            iod=3,
+                            sync=False,
+                            network_bias=True,
+                            code_bias_exists=True,
+                            phase_bias_exists=False,
+                            selected_mask=0b1,
+                            code_bias_m=0.04,
+                        ),
+                    ]
+                )
+            )
+
+            delayed_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(delayed_path),
+                "--gps-week",
+                "2200",
+                "--compact-code-bias-composition-policy",
+                "base-plus-network",
+                "--compact-code-bias-bank-policy",
+                "delayed-15s-bank",
+            )
+            self.assertEqual(delayed_result.returncode, 0, msg=delayed_result.stderr)
+            delayed_rows = delayed_path.read_text(encoding="ascii").splitlines()
+            row_14s = [line for line in delayed_rows if line.startswith("2200,518444.000,G,3")]
+            row_15s = [line for line in delayed_rows if line.startswith("2200,518445.000,G,3")]
+            self.assertEqual(len(row_14s), 1)
+            self.assertEqual(len(row_15s), 1)
+            self.assertIn("cbias:2=-0.080000", row_14s[0])
+            self.assertNotIn("cbias:2=0.100000", row_14s[0])
+            self.assertIn("cbias:2=0.100000", row_15s[0])
+            self.assertNotIn("cbias:2=-0.080000", row_15s[0])
+
     def test_qzss_l6_info_compact_code_bias_base_only_uses_prior_anchor(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_code_bias_base_only_prev_") as temp_dir:
             temp_root = Path(temp_dir)

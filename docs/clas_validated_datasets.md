@@ -131,7 +131,7 @@ python3 apps/gnss.py clas-ppp \
   --clas-atmos-selection freshness-first \
   --receiver-antenna-type "TRM59800.80     NONE" \
   --compact-code-bias-composition-policy base-only-if-present \
-  --compact-code-bias-bank-policy latest-preceding-bank \
+  --compact-code-bias-bank-policy delayed-15s-bank \
   --compact-bias-row-materialization selected-satellite-base-extend \
   --out /tmp/gnsspp_clas_a4b_native.pos \
   --summary-json /tmp/gnsspp_clas_a4b_native_summary.json \
@@ -345,15 +345,19 @@ highlighted present components and the native value of each highlighted missing
 field, which ties the largest PRC/iono/trop delta back to the selected
 reference epoch.
 
-For the G14/C2W code-bias timing issue, native SSR interpolation now forbids
-future code-bias samples and therefore no longer applies the `230430`
-code-bias bank to TOW `230426..230429`.  This reduces G14/C2W `code_bias_m`
-mismatches against the CLASLIB `.osr` slice from 156/280 common rows to
-120/280.  The remaining gap is the CLASLIB effective-bank delay: CLASLIB
-switches each 30-second bank at the half-window boundary, for example keeping
-`0.760 m` through `230444` and switching to `0.740 m` at `230445`.
-The CLASLIB `.osr` snapshot summaries
-also include `claslib_raw_iono_l1_m` and `claslib_raw_stec_tecu` numeric stats
+For the G14/C2W code-bias timing issue, native SSR interpolation forbids future
+code-bias samples and the A4b L6 expansion uses `delayed-15s-bank` so base-bank
+lookup uses the latest bank effective at `tow - 15 s`.  Native therefore no
+longer applies the `230430` bank to TOW `230426..230429`, and it holds the
+previous bank through the first half of each 30-second bank.  On the CLASLIB
+`.osr` slice this moves G14/C2W `code_bias_m` from `mean_abs=0.00857 m,
+rms=0.01309 m` to `mean_abs=0.00800 m, rms=0.01265 m`, with mismatch count
+moving from 120/280 to 112/280 common rows.  The remaining code-bias mismatch is
+not a future-sample read: selected network replacement rows still keep `0.760 m`
+through TOW `230454` while CLASLIB switches to `0.740 m` at `230445`.  Treat
+that as the next correction-materialization target.  The CLASLIB `.osr`
+snapshot summaries also include `claslib_raw_iono_l1_m` and
+`claslib_raw_stec_tecu` numeric stats
 as explicit diagnostics; they are intentionally outside the default native diff
 component set.
 If either generated side is missing, the optional diff reports
