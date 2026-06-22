@@ -207,14 +207,17 @@ correction component instead of tuning final solution RMS.  The
 highlighted components. Present-on-both components, such as `stec_tecu`,
 `iono_l1_m`, `iono_scaled_m`, `code_bias_m`, and `trop_correction_m`, include
 CLASLIB/native/delta values; present-on-one-side components still expose native
-`atmos_ref_tow`, `clock_ref_tow`, and `atmos_clock_gap_s` when CLASLIB has no
-comparable reference-epoch columns. Native code dumps also include selected
+`atmos_ref_tow`, `clock_ref_tow`, `code_bias_ref_tow`, and
+`atmos_clock_gap_s` when CLASLIB has no comparable reference-epoch columns.
+Native code dumps also include selected
 CLAS atmosphere network/grid provenance (`atmos_network_id`, `atmos_grid_no`,
 `atmos_grid*_no`, and `atmos_grid*_weight`) so A4b STEC differences can be
 separated into correction-value versus grid-weight selection issues.
 `ci_optional_clas_zd_component_diff.v12` extends the highlighted evidence to
 those grid provenance columns when the CLASLIB-side normalized dump provides
-them.
+them. `ci_optional_clas_zd_component_diff.v13` adds native code-bias reference
+TOW so GPS L2W code-bias bank timing can be diagnosed independently from the
+clock reference epoch.
 Optional filters are `GNSSPP_CLAS_ZD_COMPONENTS`, `GNSSPP_CLAS_ZD_STAGE`,
 `GNSSPP_CLAS_ZD_ROW_TYPE`, `GNSSPP_CLAS_ZD_THRESHOLD_M`, and
 `GNSSPP_CLAS_ZD_FAIL_ON_DIFF`.  GPS L2W A4b probes can also narrow the row set
@@ -280,10 +283,11 @@ component-level `prc_m`, `prc_component_sum_m`, `prc_closure_residual_m`,
 `stec_tecu`, `iono_l1_m`, `iono_l1_from_stec_m`,
 `iono_l1_stec_closure_residual_m`, `iono_scaled_m`, `iono_scale`,
 `iono_scaled_closure_residual_m`, `trop_correction_m`, `code_bias_m`,
-`receiver_antenna_m`, `relativity_m`, `atmos_ref_tow`, `clock_ref_tow`, and
-`atmos_clock_gap_s` fields, plus CLAS grid id/count/weight provenance, rather
-than using the aggregate `applied_pr_corr_m` to select the dominant row
-component.  `atmos_grid_distance_m` remains an explicit diagnostic component
+`receiver_antenna_m`, `relativity_m`, `atmos_ref_tow`, `clock_ref_tow`,
+`code_bias_ref_tow`, and `atmos_clock_gap_s` fields, plus CLAS grid
+id/count/weight provenance, rather than using the aggregate `applied_pr_corr_m`
+to select the dominant row component.  `atmos_grid_distance_m` remains an
+explicit diagnostic component
 because receiver-coordinate differences can otherwise dominate the top-row
 summary without representing a correction-value regression.  The PRC closure
 residual is derived at diff time from the PRC component inputs, the L1-STEC
@@ -294,11 +298,12 @@ Together these make the remote artifact show whether the remaining GPS L2W PRC
 gap is explained by component deltas, TECU/L1 conversion, frequency scaling, or
 a PRC convention/rounding mismatch.
 The native code-row dump also carries the atmosphere reference TOW, clock
-reference TOW, atmosphere-clock gap, lifecycle TOW, selected-satellite count,
-valid-grid count, materialized STEC grid-value count, and selected-grid STEC
-value count used for each OSR row.  The `clas_zd_component_summary.v2`
-snapshot summary reports numeric min/max stats for those fields, so lifecycle
-or epoch-selection mismatches can be diagnosed before changing the STEC model.
+reference TOW, code-bias reference TOW, atmosphere-clock gap, lifecycle TOW,
+selected-satellite count, valid-grid count, materialized STEC grid-value count,
+and selected-grid STEC value count used for each OSR row.  The
+`clas_zd_component_summary.v2` snapshot summary reports numeric min/max stats
+for those fields, so lifecycle or epoch-selection mismatches can be diagnosed
+before changing the STEC model.
 CLASLIB `.osr` summaries also report numeric stats for
 `claslib_raw_iono_l1_m` and `claslib_raw_stec_tecu`; those raw display fields
 remain explicit diagnostics and are not part of the default native diff.

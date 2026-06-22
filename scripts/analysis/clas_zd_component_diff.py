@@ -57,6 +57,8 @@ COMPONENT_ALIASES: dict[str, tuple[str, ...]] = {
     "atmos_ref_tow": ("atmos_ref_tow", "atmos_reference_tow"),
     "clock_ref_week": ("clock_ref_week", "clock_reference_week"),
     "clock_ref_tow": ("clock_ref_tow", "clock_reference_tow"),
+    "code_bias_ref_week": ("code_bias_ref_week", "code_bias_reference_week"),
+    "code_bias_ref_tow": ("code_bias_ref_tow", "code_bias_reference_tow"),
     "atmos_clock_gap_s": ("atmos_clock_gap_s", "atmos_clock_dt_s"),
     "atmos_network_id": ("atmos_network_id",),
     "atmos_grid_no": ("atmos_grid_no",),

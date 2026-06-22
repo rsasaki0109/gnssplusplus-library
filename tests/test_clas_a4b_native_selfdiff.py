@@ -134,6 +134,7 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
                 if value == "--require-component"
             ]
             self.assertIn("prc_m", required_components)
+            self.assertIn("code_bias_ref_tow", required_components)
             self.assertIn("atmos_lifecycle", required_components)
             self.assertIn("atmos_lifecycle_tow", required_components)
             self.assertIn("atmos_selected_satellite_count", required_components)

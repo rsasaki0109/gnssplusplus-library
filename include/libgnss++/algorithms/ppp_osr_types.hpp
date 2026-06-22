@@ -73,6 +73,7 @@ struct OSRCorrection {
     int atmos_stec_grid_value_count = 0;
     int atmos_selected_grid_stec_value_count = 0;
     GNSSTime phase_bias_reference_time;
+    GNSSTime code_bias_reference_time;
     GNSSTime clock_reference_time;
 };
 
