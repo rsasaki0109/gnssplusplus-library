@@ -5796,11 +5796,126 @@ class CLIToolsTest(unittest.TestCase):
             row_14s = [line for line in delayed_rows if line.startswith("2200,518444.000,G,3")]
             row_15s = [line for line in delayed_rows if line.startswith("2200,518445.000,G,3")]
             self.assertEqual(len(row_14s), 1)
-            self.assertEqual(len(row_15s), 1)
+            self.assertEqual(len(row_15s), 2)
             self.assertIn("cbias:2=-0.080000", row_14s[0])
             self.assertNotIn("cbias:2=0.100000", row_14s[0])
-            self.assertIn("cbias:2=0.100000", row_15s[0])
-            self.assertNotIn("cbias:2=-0.080000", row_15s[0])
+            row_15s_base = [line for line in row_15s if "bias_network_id=" not in line]
+            row_15s_network = [line for line in row_15s if "bias_network_id=" in line]
+            self.assertEqual(len(row_15s_base), 1)
+            self.assertEqual(len(row_15s_network), 1)
+            self.assertIn("cbias:2=0.060000", row_15s_base[0])
+            self.assertIn("cbias:2=0.100000", row_15s_network[0])
+            self.assertNotIn("cbias:2=-0.080000", row_15s_network[0])
+
+    def test_qzss_l6_info_delayed_15s_code_bias_bank_emits_base_refresh_row(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_code_bias_bank_refresh_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_code_bias_bank_refresh.bin"
+            default_path = temp_root / "pending_epoch.csv"
+            delayed_path = temp_root / "delayed_15s.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_bias_message(
+                            tow_delta=30,
+                            iod=3,
+                            bias_m=0.06,
+                            sync=True,
+                        ),
+                    ]
+                )
+            )
+
+            default_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(default_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(default_result.returncode, 0, msg=default_result.stderr)
+            self.assertNotIn("518445.000", default_path.read_text(encoding="ascii"))
+
+            delayed_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(delayed_path),
+                "--gps-week",
+                "2200",
+                "--compact-code-bias-bank-policy",
+                "delayed-15s-bank",
+            )
+            self.assertEqual(delayed_result.returncode, 0, msg=delayed_result.stderr)
+            delayed_rows = delayed_path.read_text(encoding="ascii").splitlines()
+            refresh_rows = [line for line in delayed_rows if line.startswith("2200,518445.000,G,3")]
+            self.assertEqual(len(refresh_rows), 1)
+            self.assertIn("cbias:2=0.060000", refresh_rows[0])
+            self.assertNotIn("bias_network_id=", refresh_rows[0])
+
+    def test_qzss_l6_info_delayed_15s_code_bias_bank_refreshes_network_rows(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_code_bias_network_refresh_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_code_bias_network_refresh.bin"
+            delayed_path = temp_root / "delayed_15s.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_code_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            bias_m=-0.12,
+                            sync=True,
+                        ),
+                        build_qzss_cssr_code_bias_message(
+                            tow_delta=30,
+                            iod=3,
+                            bias_m=0.06,
+                            sync=True,
+                        ),
+                        build_qzss_cssr_code_phase_bias_message(
+                            tow_delta=30,
+                            iod=3,
+                            sync=False,
+                            network_bias=True,
+                            code_bias_exists=False,
+                            phase_bias_exists=True,
+                            selected_mask=0b1,
+                            phase_bias_m=0.02,
+                        ),
+                    ]
+                )
+            )
+
+            delayed_result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(delayed_path),
+                "--gps-week",
+                "2200",
+                "--compact-code-bias-composition-policy",
+                "base-only-if-present",
+                "--compact-code-bias-bank-policy",
+                "delayed-15s-bank",
+                "--compact-bias-row-materialization",
+                "selected-satellite-base-extend",
+            )
+            self.assertEqual(delayed_result.returncode, 0, msg=delayed_result.stderr)
+            delayed_rows = delayed_path.read_text(encoding="ascii").splitlines()
+            network_rows = [
+                line
+                for line in delayed_rows
+                if line.startswith("2200,518445.000,G,3") and "bias_network_id=1" in line
+            ]
+            self.assertEqual(len(network_rows), 1)
+            self.assertIn("cbias:2=0.060000", network_rows[0])
 
     def test_qzss_l6_info_compact_code_bias_base_only_uses_prior_anchor(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_code_bias_base_only_prev_") as temp_dir:
