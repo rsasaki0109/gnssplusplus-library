@@ -255,10 +255,11 @@ manually opening the full diff JSON.  Schema
 for highlighted components. Present-on-both components, such as `stec_tecu`,
 `iono_l1_m`, `iono_scaled_m`, `code_bias_m`, and `trop_correction_m`, carry
 CLASLIB/native/delta values in the CI summary; present-on-one-side components
-still expose the native atmosphere/clock reference epochs when the CLASLIB
-export cannot provide comparable fields. Schema
+still expose the native atmosphere, clock, and code-bias reference epochs when
+the CLASLIB export cannot provide comparable fields. Schema
 `ci_optional_clas_zd_component_diff.v12` also highlights CLAS atmosphere
-network/grid provenance when both normalized sides provide those columns.
+network/grid provenance when both normalized sides provide those columns;
+`ci_optional_clas_zd_component_diff.v13` adds native code-bias reference TOW.
 
 CI can regenerate the native side of this A4b probe without a pre-staged native
 CSV:
@@ -309,8 +310,9 @@ component-level fields `prc_m`, `prc_component_sum_m`,
 `prc_closure_residual_m`, `stec_tecu`, `iono_l1_m`, `iono_l1_from_stec_m`,
 `iono_l1_stec_closure_residual_m`, `iono_scaled_m`, `iono_scale`,
 `iono_scaled_closure_residual_m`, `trop_correction_m`, `code_bias_m`,
-`receiver_antenna_m`, `relativity_m`, `atmos_ref_tow`, `clock_ref_tow`, and
-`atmos_clock_gap_s`, plus CLAS grid id/count/weight provenance.
+`receiver_antenna_m`, `relativity_m`, `atmos_ref_tow`, `clock_ref_tow`,
+`code_bias_ref_tow`, and `atmos_clock_gap_s`, plus CLAS grid id/count/weight
+provenance.
 `atmos_grid_distance_m` remains available for explicit diagnostic runs, but it
 is not part of the default component list because receiver-coordinate
 differences can otherwise dominate the top-row summary without representing a
@@ -333,8 +335,8 @@ The GitHub step summary highlights `stec_tecu`, `iono_l1_m`,
 per-component max-delta map, and reports missing counts for highlighted
 atmosphere-reference fields when CLASLIB cannot provide a comparable value.
 The native `clas_zd_component_summary.v2` snapshot also reports numeric
-min/max stats for `atmos_ref_tow`, `clock_ref_tow`, `atmos_clock_gap_s`,
-`atmos_lifecycle_tow`, `atmos_selected_satellite_count`,
+min/max stats for `atmos_ref_tow`, `clock_ref_tow`, `code_bias_ref_tow`,
+`atmos_clock_gap_s`, `atmos_lifecycle_tow`, `atmos_selected_satellite_count`,
 `atmos_valid_grid_count`, `atmos_stec_grid_value_count`, and
 `atmos_selected_grid_stec_value_count`, so reviewers can see which lifecycle
 bank was materialized before opening the raw CSV.  For the leading

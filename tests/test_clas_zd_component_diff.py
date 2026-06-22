@@ -66,6 +66,8 @@ FIELDNAMES = [
     "atmos_ref_tow",
     "clock_ref_week",
     "clock_ref_tow",
+    "code_bias_ref_week",
+    "code_bias_ref_tow",
     "atmos_clock_gap_s",
     "atmos_lifecycle",
     "atmos_lifecycle_tow",
@@ -100,6 +102,8 @@ def code_row(
     atmos_ref_tow: str = "",
     clock_ref_week: str = "",
     clock_ref_tow: str = "",
+    code_bias_ref_week: str = "",
+    code_bias_ref_tow: str = "",
     atmos_clock_gap_s: str = "",
     atmos_lifecycle: str = "",
     atmos_lifecycle_tow: str = "",
@@ -171,6 +175,8 @@ def code_row(
         "atmos_ref_tow": atmos_ref_tow,
         "clock_ref_week": clock_ref_week,
         "clock_ref_tow": clock_ref_tow,
+        "code_bias_ref_week": code_bias_ref_week,
+        "code_bias_ref_tow": code_bias_ref_tow,
         "atmos_clock_gap_s": atmos_clock_gap_s,
         "atmos_lifecycle": atmos_lifecycle,
         "atmos_lifecycle_tow": atmos_lifecycle_tow,
@@ -212,6 +218,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                 atmos_ref_tow="230430.0",
                 clock_ref_week="2068",
                 clock_ref_tow="230420.0",
+                code_bias_ref_tow="230445.0",
                 atmos_clock_gap_s="10.0",
             ),
             [
@@ -219,6 +226,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                 "atmos_ref_tow",
                 "clock_ref_week",
                 "clock_ref_tow",
+                "code_bias_ref_tow",
                 "atmos_clock_gap_s",
             ],
         )
@@ -648,6 +656,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                 pseudorange_rinex_code="C2W",
                 atmos_ref_tow="230430.0",
                 clock_ref_tow="230420.0",
+                code_bias_ref_tow="230445.0",
                 atmos_clock_gap_s="10.0",
             ),
             code_row(
@@ -669,6 +678,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                 "receiver_antenna_m",
                 "atmos_ref_tow",
                 "clock_ref_tow",
+                "code_bias_ref_tow",
                 "atmos_clock_gap_s",
             ],
             stage_filter=None,
@@ -682,6 +692,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                 "receiver_antenna_m",
                 "atmos_ref_tow",
                 "clock_ref_tow",
+                "code_bias_ref_tow",
                 "atmos_clock_gap_s",
             ],
             stage_filter=None,
@@ -713,7 +724,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
         self.assertEqual(row_breakdown["sat"], "G14")
         self.assertEqual(row_breakdown["rinex_code"], "C2W")
         self.assertEqual(row_breakdown["component_count"], 3)
-        self.assertEqual(row_breakdown["missing_component_count"], 3)
+        self.assertEqual(row_breakdown["missing_component_count"], 4)
         self.assertAlmostEqual(row_breakdown["sum_abs_delta_m"], 0.27)
         self.assertEqual(
             [item["component"] for item in row_breakdown["components"]],
@@ -727,6 +738,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
         self.assertTrue(missing_by_component["atmos_ref_tow"]["candidate_present"])
         self.assertEqual(missing_by_component["atmos_ref_tow"]["candidate_value"], 230430.0)
         self.assertEqual(missing_by_component["clock_ref_tow"]["candidate_value"], 230420.0)
+        self.assertEqual(missing_by_component["code_bias_ref_tow"]["candidate_value"], 230445.0)
         self.assertEqual(missing_by_component["atmos_clock_gap_s"]["candidate_value"], 10.0)
 
     def test_report_summarizes_gps_l2w_identity_provenance(self) -> None:

@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import optional_diff_runner as runner  # noqa: E402
 
 
-SUMMARY_SCHEMA = "ci_optional_clas_zd_component_diff.v12"
+SUMMARY_SCHEMA = "ci_optional_clas_zd_component_diff.v13"
 
 DEFAULT_COMPONENTS = (
     "prc_m",
@@ -40,6 +40,7 @@ DEFAULT_COMPONENTS = (
     "phase_bias_fallback",
     "atmos_ref_tow",
     "clock_ref_tow",
+    "code_bias_ref_tow",
     "atmos_clock_gap_s",
     "atmos_network_id",
     "atmos_grid_no",
@@ -91,6 +92,7 @@ CONFIG = runner.DiffRunnerConfig(
         "prc_closure_residual_m",
         "atmos_ref_tow",
         "clock_ref_tow",
+        "code_bias_ref_tow",
         "atmos_clock_gap_s",
         "atmos_network_id",
         "atmos_grid_no",

@@ -59,6 +59,8 @@ RAW_FIELDNAMES = [
     "atmos_ref_tow",
     "clock_ref_week",
     "clock_ref_tow",
+    "code_bias_ref_week",
+    "code_bias_ref_tow",
     "atmos_clock_gap_s",
     "windup_m",
     "orb_m",
@@ -166,6 +168,8 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
                         "atmos_ref_tow": "230430.0",
                         "clock_ref_week": "2068",
                         "clock_ref_tow": "230420.0",
+                        "code_bias_ref_week": "2068",
+                        "code_bias_ref_tow": "230445.0",
                         "atmos_clock_gap_s": "10.0",
                     }
                 ],
@@ -192,6 +196,8 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             self.assertEqual(row["atmos_ref_tow"], "230430.0")
             self.assertEqual(row["clock_ref_week"], "2068")
             self.assertEqual(row["clock_ref_tow"], "230420.0")
+            self.assertEqual(row["code_bias_ref_week"], "2068")
+            self.assertEqual(row["code_bias_ref_tow"], "230445.0")
             self.assertEqual(row["atmos_clock_gap_s"], "10.0")
 
     def test_normalizes_claslib_osrres_gps_l2w_rows(self) -> None:

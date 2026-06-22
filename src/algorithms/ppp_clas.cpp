@@ -217,6 +217,7 @@ std::ofstream* clasCodeDumpStream() {
                    << "prc_minus_trop_m,trop_correction_m,iono_l1_m,"
                    << "stec_tecu,iono_scaled_m,code_bias_m,receiver_ant_m,relativity_m,"
                    << "atmos_ref_week,atmos_ref_tow,clock_ref_week,clock_ref_tow,"
+                   << "code_bias_ref_week,code_bias_ref_tow,"
                    << "atmos_clock_gap_s,atmos_network_id,atmos_grid_no,"
                    << "atmos_grid_distance_m,atmos_grid_count,"
                    << "atmos_grid1_no,atmos_grid1_weight,"
@@ -348,6 +349,9 @@ void dumpClasCodeRows(
             const bool have_clock_ref =
                 osr.clock_reference_time.week != 0 ||
                 std::abs(osr.clock_reference_time.tow) > 0.0;
+            const bool have_code_bias_ref =
+                osr.code_bias_reference_time.week != 0 ||
+                std::abs(osr.code_bias_reference_time.tow) > 0.0;
             const double atmos_clock_gap_s =
                 (have_atmos_ref && have_clock_ref)
                     ? osr.atmos_reference_time - osr.clock_reference_time
@@ -425,6 +429,8 @@ void dumpClasCodeRows(
                   << timeTowField(osr.atmos_reference_time, have_atmos_ref) << ','
                   << timeWeekField(osr.clock_reference_time, have_clock_ref) << ','
                   << timeTowField(osr.clock_reference_time, have_clock_ref) << ','
+                  << timeWeekField(osr.code_bias_reference_time, have_code_bias_ref) << ','
+                  << timeTowField(osr.code_bias_reference_time, have_code_bias_ref) << ','
                   << secondsField(atmos_clock_gap_s, have_atmos_ref && have_clock_ref) << ','
                   << osr.atmos_network_id << ','
                   << osr.atmos_grid_no << ','

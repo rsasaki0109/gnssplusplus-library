@@ -288,6 +288,8 @@ def build_code_dump_summary_command(config: RunConfig, paths: RunPaths) -> list[
         "--require-component",
         "prc_m",
         "--require-component",
+        "code_bias_ref_tow",
+        "--require-component",
         "atmos_lifecycle",
         "--require-component",
         "atmos_lifecycle_tow",

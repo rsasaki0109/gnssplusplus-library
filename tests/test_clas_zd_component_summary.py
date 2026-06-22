@@ -46,6 +46,8 @@ FIELDNAMES = [
     "atmos_ref_tow",
     "clock_ref_week",
     "clock_ref_tow",
+    "code_bias_ref_week",
+    "code_bias_ref_tow",
     "atmos_clock_gap_s",
     "atmos_lifecycle",
     "atmos_lifecycle_tow",
@@ -79,6 +81,8 @@ def zd_row(
     atmos_ref_tow: str = "",
     clock_ref_week: str = "",
     clock_ref_tow: str = "",
+    code_bias_ref_week: str = "",
+    code_bias_ref_tow: str = "",
     atmos_clock_gap_s: str = "",
     atmos_lifecycle: str = "",
     atmos_lifecycle_tow: str = "",
@@ -110,6 +114,8 @@ def zd_row(
         "atmos_ref_tow": atmos_ref_tow,
         "clock_ref_week": clock_ref_week,
         "clock_ref_tow": clock_ref_tow,
+        "code_bias_ref_week": code_bias_ref_week,
+        "code_bias_ref_tow": code_bias_ref_tow,
         "atmos_clock_gap_s": atmos_clock_gap_s,
         "atmos_lifecycle": atmos_lifecycle,
         "atmos_lifecycle_tow": atmos_lifecycle_tow,
@@ -138,6 +144,8 @@ class ClasZdComponentSummaryTest(unittest.TestCase):
                 atmos_ref_tow="230430.0",
                 clock_ref_week="2068",
                 clock_ref_tow="230420.0",
+                code_bias_ref_week="2068",
+                code_bias_ref_tow="230445.0",
                 atmos_clock_gap_s="10.0",
                 atmos_lifecycle="1",
                 atmos_lifecycle_tow="230430",
@@ -178,6 +186,7 @@ class ClasZdComponentSummaryTest(unittest.TestCase):
         self.assertEqual(summary["component_presence"]["rows_with_component"]["phase_bias_m"], 1)
         self.assertEqual(summary["component_presence"]["rows_with_component"]["atmos_ref_tow"], 1)
         self.assertEqual(summary["component_presence"]["rows_with_component"]["clock_ref_tow"], 1)
+        self.assertEqual(summary["component_presence"]["rows_with_component"]["code_bias_ref_tow"], 1)
         self.assertEqual(summary["component_presence"]["rows_with_component"]["atmos_clock_gap_s"], 1)
         self.assertEqual(summary["component_presence"]["rows_with_component"]["atmos_lifecycle"], 1)
         self.assertEqual(summary["component_presence"]["rows_with_component"]["atmos_lifecycle_tow"], 1)
@@ -197,6 +206,7 @@ class ClasZdComponentSummaryTest(unittest.TestCase):
         self.assertEqual(summary["component_numeric_stats"]["atmos_ref_tow"]["min"], 230430.0)
         self.assertEqual(summary["component_numeric_stats"]["atmos_ref_tow"]["max"], 230430.0)
         self.assertEqual(summary["component_numeric_stats"]["clock_ref_tow"]["max"], 230420.0)
+        self.assertEqual(summary["component_numeric_stats"]["code_bias_ref_tow"]["max"], 230445.0)
         self.assertEqual(summary["component_numeric_stats"]["atmos_clock_gap_s"]["max_abs"], 10.0)
         self.assertEqual(summary["component_numeric_stats"]["atmos_lifecycle_tow"]["max"], 230430.0)
         self.assertEqual(summary["component_numeric_stats"]["atmos_stec_grid_value_count"]["max"], 22.0)

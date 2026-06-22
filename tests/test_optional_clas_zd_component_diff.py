@@ -228,6 +228,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
             ]
             self.assertIn("prc_m", component_values)
             self.assertIn("stec_tecu", component_values)
+            self.assertIn("code_bias_ref_tow", component_values)
             self.assertIn("atmos_grid1_weight", component_values)
             self.assertIn("atmos_grid4_no", component_values)
             self.assertNotIn("atmos_grid_distance_m", component_values)
@@ -505,6 +506,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                         "missing_component_counts": [
                             {"component": "atmos_ref_tow", "rows": 12},
                             {"component": "clock_ref_tow", "rows": 12},
+                            {"component": "code_bias_ref_tow", "rows": 12},
                             {"component": "atmos_clock_gap_s", "rows": 12},
                         ],
                         "top_delta_component": "prc_m",
@@ -542,6 +544,13 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
                                 "candidate_present": True,
                                 "base_value": None,
                                 "candidate_value": 230420.0,
+                            },
+                            {
+                                "component": "code_bias_ref_tow",
+                                "base_present": False,
+                                "candidate_present": True,
+                                "base_value": None,
+                                "candidate_value": 230445.0,
                             },
                             {
                                 "component": "atmos_clock_gap_s",
@@ -586,9 +595,11 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
         self.assertIn("`prc_closure_residual_m` |delta| 3e-15", markdown)
         self.assertIn("`atmos_ref_tow` missing `12`", markdown)
         self.assertIn("`clock_ref_tow` missing `12`", markdown)
+        self.assertIn("`code_bias_ref_tow` missing `12`", markdown)
         self.assertIn("`atmos_clock_gap_s` missing `12`", markdown)
         self.assertIn("top row `atmos_ref_tow` native 230430", markdown)
         self.assertIn("top row `clock_ref_tow` native 230420", markdown)
+        self.assertIn("top row `code_bias_ref_tow` native 230445", markdown)
         self.assertIn("top row `atmos_clock_gap_s` native 10", markdown)
         self.assertIn("top row `stec_tecu` claslib -2.3/native -2.49/delta -0.19", markdown)
         self.assertIn(
@@ -624,7 +635,7 @@ class OptionalClasZdComponentDiffTest(unittest.TestCase):
 
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary_schema"], runner.SUMMARY_SCHEMA)
-            self.assertEqual(payload["summary_schema"], "ci_optional_clas_zd_component_diff.v12")
+            self.assertEqual(payload["summary_schema"], "ci_optional_clas_zd_component_diff.v13")
             self.assertEqual(payload["contract"], "optional_diff_artifact_contract.v1")
             self.assertEqual(payload["status"], "blocked_infrastructure")
             self.assertIn("missing evidence", payload["next_actions"][1])

@@ -1007,13 +1007,17 @@ std::vector<OSRCorrection> computeOSR(
         GNSSTime atmos_reference_time;
         GNSSTime phase_bias_reference_time;
         GNSSTime clock_reference_time;
+        SSRCorrectionStatus ssr_status;
         if (ssr.interpolateCorrection(sat, obs.time, orbit_corr, clock_corr,
                                        &ura_sigma, &ssr_cbias, &ssr_pbias,
                                        &atmos_tokens,
                                        &atmos_reference_time,
                                        &phase_bias_reference_time,
                                        &clock_reference_time,
-                                       preferred_network_id)) {
+                                       preferred_network_id,
+                                       nullptr,
+                                       nullptr,
+                                       &ssr_status)) {
             // CSV-expanded CLAS corrections carry orbit deltas in RAC, while
             // sampled RTCM SSR products are already stored in ECEF.
             // RAC frame follows RTCM-10403.1 / CLASLIB convention:
@@ -1054,6 +1058,7 @@ std::vector<OSRCorrection> computeOSR(
             osr.has_phase_bias = !ssr_pbias.empty();
             osr.atmos_reference_time = atmos_reference_time;
             osr.phase_bias_reference_time = phase_bias_reference_time;
+            osr.code_bias_reference_time = ssr_status.code_bias_reference_time;
             osr.clock_reference_time = clock_reference_time;
             osr.clock_correction_m = clock_corr;
         } else {
