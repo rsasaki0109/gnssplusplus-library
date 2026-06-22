@@ -1801,24 +1801,21 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             return best;
         };
         if (code_bias_m != nullptr) {
-            if (biasScore(*before, false) >= biasScore(*after, false) &&
-                before->code_bias_valid && !before->code_bias_m.empty()) {
-                *code_bias_m = before->code_bias_m;
-                if (status != nullptr) {
-                    status->code_bias_valid = true;
-                    status->code_bias_reference_time = before->time;
-                }
-            } else if (after->code_bias_valid && !after->code_bias_m.empty()) {
-                *code_bias_m = after->code_bias_m;
-                if (status != nullptr) {
-                    status->code_bias_valid = true;
-                    status->code_bias_reference_time = after->time;
-                }
+            // Code biases are stepwise corrections.  Do not consume a future
+            // bias row just because the next clock interpolation neighbour has
+            // one; CLAS holds the last received code-bias bank until a new
+            // bank is causally available.
+            const SSROrbitClockCorrection* picked = nullptr;
+            if (before->code_bias_valid && !before->code_bias_m.empty()) {
+                picked = before;
             } else if (const auto* scanned = scanBackwardBias(false)) {
-                *code_bias_m = scanned->code_bias_m;
+                picked = scanned;
+            }
+            if (picked != nullptr) {
+                *code_bias_m = picked->code_bias_m;
                 if (status != nullptr) {
                     status->code_bias_valid = true;
-                    status->code_bias_reference_time = scanned->time;
+                    status->code_bias_reference_time = picked->time;
                 }
             }
         }
