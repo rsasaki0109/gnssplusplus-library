@@ -339,11 +339,20 @@ min/max stats for `atmos_ref_tow`, `clock_ref_tow`, `code_bias_ref_tow`,
 `atmos_clock_gap_s`, `atmos_lifecycle_tow`, `atmos_selected_satellite_count`,
 `atmos_valid_grid_count`, `atmos_stec_grid_value_count`, and
 `atmos_selected_grid_stec_value_count`, so reviewers can see which lifecycle
-bank was materialized before opening the raw CSV.  For the leading
-row-breakdown, v11 summaries also include
-CLASLIB/native/delta values for highlighted present components and the native
-value of each highlighted missing field, which ties the largest PRC/iono/trop
-delta back to the selected reference epoch.  CLASLIB `.osr` snapshot summaries
+bank was materialized before opening the raw CSV.  For the leading-row
+breakdown, v11 summaries also include CLASLIB/native/delta values for
+highlighted present components and the native value of each highlighted missing
+field, which ties the largest PRC/iono/trop delta back to the selected
+reference epoch.
+
+For the G14/C2W code-bias timing issue, native SSR interpolation now forbids
+future code-bias samples and therefore no longer applies the `230430`
+code-bias bank to TOW `230426..230429`.  This reduces G14/C2W `code_bias_m`
+mismatches against the CLASLIB `.osr` slice from 156/280 common rows to
+120/280.  The remaining gap is the CLASLIB effective-bank delay: CLASLIB
+switches each 30-second bank at the half-window boundary, for example keeping
+`0.760 m` through `230444` and switching to `0.740 m` at `230445`.
+The CLASLIB `.osr` snapshot summaries
 also include `claslib_raw_iono_l1_m` and `claslib_raw_stec_tecu` numeric stats
 as explicit diagnostics; they are intentionally outside the default native diff
 component set.

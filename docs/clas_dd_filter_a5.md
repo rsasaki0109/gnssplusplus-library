@@ -307,6 +307,20 @@ before changing the STEC model.
 CLASLIB `.osr` summaries also report numeric stats for
 `claslib_raw_iono_l1_m` and `claslib_raw_stec_tecu`; those raw display fields
 remain explicit diagnostics and are not part of the default native diff.
+
+Native SSR interpolation must not consume a future code-bias sample merely
+because the next clock neighbour carries one.  The A4b G14/C2W slice exposed
+this as an early bank switch: native selected the `230430` code-bias row at
+TOW `230426` before the row was causally available.  The core SSRProducts
+contract now forward-fills code bias only from current or older rows.  On the
+same CLASLIB/native G14/C2W comparison this reduces `code_bias_m` mismatches
+from 156/280 common rows to 120/280, with `mean_abs` moving from `0.01114 m`
+to `0.00857 m` and `rms` from `0.01493 m` to `0.01309 m`.  The remaining
+120-row mismatch is the CLASLIB effective-bank delay: CLASLIB keeps the
+previous bank through the first 15 seconds of each 30-second code-bias bank
+(`230430` native versus `230445` CLASLIB for the first visible transition).
+Treat that as the next A4b correction-materialization target rather than
+tuning residual variance or AR.
 The GitHub step summary highlights raw STEC, L1 ionosphere, scaled ionosphere,
 code-bias, trop, L1-from-STEC, L1-STEC closure, scaled-ionosphere closure, PRC
 closure, and atmosphere-reference components, keeping the primary review
