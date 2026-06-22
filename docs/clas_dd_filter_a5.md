@@ -238,9 +238,12 @@ raw display `iono` column, so the diff compares the ionosphere term that was
 actually applied to `PRC1/PRC2/PRC5`.  `iono_l1_m` is the L1-equivalent of that
 same frequency-slot-specific closure value; it is not copied from the L1 slot.
 The normalized `stec_tecu` field is derived from that L1-equivalent delay with
-the GPS L1 TECU-to-meter factor.  The CI wrapper passes `clas_grid.def` to the
-normalizer so `.osr` rows also carry test-only CLASLIB-side grid provenance
-derived from the row receiver latitude/longitude.
+the GPS L1 TECU-to-meter factor.  The exporter also writes
+`claslib_iono_source=prc_closure`, `claslib_raw_iono_l1_m`, and
+`claslib_raw_stec_tecu`, so the raw `.osr` display ionosphere is visible
+without changing the default effective-PRC component diff.  The CI wrapper
+passes `clas_grid.def` to the normalizer so `.osr` rows also carry test-only
+CLASLIB-side grid provenance derived from the row receiver latitude/longitude.
 The `.osr` path maps only GPS L1/L2/L5 slots where the exact row identity is
 deterministic; QZSS and Galileo still need explicit disposable dumps until
 their ZD materialization and admission sources are fixed.
@@ -296,6 +299,9 @@ valid-grid count, materialized STEC grid-value count, and selected-grid STEC
 value count used for each OSR row.  The `clas_zd_component_summary.v2`
 snapshot summary reports numeric min/max stats for those fields, so lifecycle
 or epoch-selection mismatches can be diagnosed before changing the STEC model.
+CLASLIB `.osr` summaries also report numeric stats for
+`claslib_raw_iono_l1_m` and `claslib_raw_stec_tecu`; those raw display fields
+remain explicit diagnostics and are not part of the default native diff.
 The GitHub step summary highlights raw STEC, L1 ionosphere, scaled ionosphere,
 code-bias, trop, L1-from-STEC, L1-STEC closure, scaled-ionosphere closure, PRC
 closure, and atmosphere-reference components, keeping the primary review

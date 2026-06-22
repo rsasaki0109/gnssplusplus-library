@@ -103,6 +103,9 @@ FIELDNAMES = [
     "stec_tecu",
     "iono_scaled_m",
     "iono_scale",
+    "claslib_iono_source",
+    "claslib_raw_iono_l1_m",
+    "claslib_raw_stec_tecu",
     "code_bias_m",
     "phase_bias_m",
     "receiver_antenna_m",
@@ -589,6 +592,9 @@ def normalize_row(
             "stec_tecu": first_present(row, ("stec_tecu",)),
             "iono_scaled_m": first_present(row, ("iono_scaled_m",)),
             "iono_scale": first_present(row, ("iono_scale",)),
+            "claslib_iono_source": first_present(row, ("claslib_iono_source", "iono_source")),
+            "claslib_raw_iono_l1_m": first_present(row, ("claslib_raw_iono_l1_m", "raw_iono_l1_m")),
+            "claslib_raw_stec_tecu": first_present(row, ("claslib_raw_stec_tecu", "raw_stec_tecu")),
             "code_bias_m": first_present(row, ("code_bias_m", "code_bias", "cbias_m")),
             "phase_bias_m": first_present(row, ("phase_bias_m", "phase_bias", "pbias_m", "comp_m")),
             "receiver_antenna_m": first_present(row, ("receiver_antenna_m", "receiver_ant_m", "receiver_ant")),
@@ -669,6 +675,7 @@ def normalize_osrres_rows(
         pseudorange_code, carrier_code = rinex_pair(rtklib_code)
         effective_iono_l1_m = prc_iono_l1_from_osrres(row, suffix)
         effective_iono_scaled_m = format_component(prc_iono_scaled_from_osrres(row, suffix))
+        raw_iono_l1_m = format_component(parse_osr_float(first_present(row, ("iono", "iono_l1_m", "l1_iono_m"))))
         common = {
             "stage": stage,
             "week": week,
@@ -688,6 +695,9 @@ def normalize_osrres_rows(
             "stec_tecu": stec_tecu_from_iono_l1_m(effective_iono_l1_m),
             "iono_scaled_m": effective_iono_scaled_m,
             "iono_scale": format_component(GPS_IONO_SCALE_BY_SUFFIX[suffix]),
+            "claslib_iono_source": "prc_closure",
+            "claslib_raw_iono_l1_m": raw_iono_l1_m,
+            "claslib_raw_stec_tecu": stec_tecu_from_iono_l1_m(raw_iono_l1_m),
             "receiver_antenna_m": first_present(row, (f"antr{suffix}",)),
             "relativity_m": first_present(row, ("relatv", "relativity_m", "relativity_correction_m")),
             "windup_m": first_present(row, (f"wup{suffix}",)),
