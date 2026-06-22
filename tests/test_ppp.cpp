@@ -1402,6 +1402,97 @@ TEST(PPPTest, SSRProductsDoesNotUseFutureCodeBiasBetweenClockRows) {
     std::filesystem::remove(ssr_path);
 }
 
+TEST(PPPTest, SSRProductsUsesNearestCodeBiasGroupBeforeOlderLargerBank) {
+    const auto ssr_path = tempFilePath("libgnss_ppp_ssr_code_bias_nearest_group_test.csv");
+    std::filesystem::remove(ssr_path);
+
+    const std::string ssr_text =
+        "# week,tow,sat,dx,dy,dz,dclock_m[,cbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]\n"
+        "2414,345570.0,G01,0.0,0.0,0.0,0.5,cbias:2=-0.120000,cbias:8=0.050000,bias_network_id=7\n"
+        "2414,345590.0,G01,0.0,0.0,0.0,0.6,cbias:2=0.040000,bias_network_id=7\n"
+        "2414,345590.0,G01,0.0,0.0,0.0,0.6,atmos_network_id=7,atmos_trop_quality=9\n"
+        "2414,345595.0,G01,0.0,0.0,0.0,0.7\n";
+    writeTextFile(ssr_path, ssr_text);
+
+    SSRProducts ssr_products;
+    ASSERT_TRUE(ssr_products.loadCSVFile(ssr_path.string()));
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    std::map<uint8_t, double> code_bias_m;
+    SSRCorrectionStatus status;
+    ASSERT_TRUE(ssr_products.interpolateCorrection(
+        SatelliteId(GNSSSystem::GPS, 1),
+        GNSSTime(2414, 345592.0),
+        orbit_correction,
+        clock_correction_m,
+        nullptr,
+        &code_bias_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        7,
+        nullptr,
+        nullptr,
+        &status));
+
+    ASSERT_EQ(code_bias_m.size(), 1U);
+    EXPECT_NEAR(code_bias_m.at(2U), 0.04, 1e-12);
+    EXPECT_TRUE(status.code_bias_valid);
+    EXPECT_EQ(status.code_bias_reference_time.week, 2414);
+    EXPECT_NEAR(status.code_bias_reference_time.tow, 345590.0, 1e-12);
+
+    std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, SSRProductsUsesExactCodeBiasNetworkRefreshAtBoundary) {
+    const auto ssr_path = tempFilePath("libgnss_ppp_ssr_code_bias_exact_boundary_test.csv");
+    std::filesystem::remove(ssr_path);
+
+    const std::string ssr_text =
+        "# week,tow,sat,dx,dy,dz,dclock_m[,cbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]\n"
+        "2068,230430.000,G14,0.0,0.0,0.0,0.2,cbias:2=0.000000,cbias:9=0.760000,bias_network_id=7\n"
+        "2068,230445.000,G14,0.0,0.0,0.0,0.0,cbias:2=0.000000,cbias:9=0.740000\n"
+        "2068,230445.000,G14,0.0,0.0,0.0,0.0,cbias:2=0.000000,cbias:9=0.740000,bias_network_id=7\n"
+        "2068,230445.000,G14,0.0,0.0,0.0,0.0,atmos_network_id=7,atmos_trop_quality=9\n"
+        "2068,230445.000,G14,0.0,0.0,0.0,0.2\n";
+    writeTextFile(ssr_path, ssr_text);
+
+    SSRProducts ssr_products;
+    ASSERT_TRUE(ssr_products.loadCSVFile(ssr_path.string()));
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    std::map<uint8_t, double> code_bias_m;
+    SSRCorrectionStatus status;
+    ASSERT_TRUE(ssr_products.interpolateCorrection(
+        SatelliteId(GNSSSystem::GPS, 14),
+        GNSSTime(2068, 230445.0),
+        orbit_correction,
+        clock_correction_m,
+        nullptr,
+        &code_bias_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        7,
+        nullptr,
+        nullptr,
+        &status));
+
+    ASSERT_EQ(code_bias_m.size(), 2U);
+    EXPECT_NEAR(code_bias_m.at(9U), 0.74, 1e-12);
+    EXPECT_TRUE(status.code_bias_valid);
+    EXPECT_EQ(status.code_bias_reference_time.week, 2068);
+    EXPECT_NEAR(status.code_bias_reference_time.tow, 230445.0, 1e-12);
+
+    std::filesystem::remove(ssr_path);
+}
+
 TEST(PPPTest, ProcessorLoadsRtcmSsrCorrectionsFromFile) {
     const auto rtcm_path = tempFilePath("libgnss_ppp_ssr_rtcm_test.rtcm3");
     std::filesystem::remove(rtcm_path);
