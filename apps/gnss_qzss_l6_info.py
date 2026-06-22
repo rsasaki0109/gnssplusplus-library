@@ -91,12 +91,15 @@ COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH = "pending-epoch"
 COMPACT_CODE_BIAS_BANK_POLICY_SAME_30S_BANK = "same-30s-bank"
 COMPACT_CODE_BIAS_BANK_POLICY_CLOSE_30S_BANK = "close-30s-bank"
 COMPACT_CODE_BIAS_BANK_POLICY_LATEST_PRECEDING_BANK = "latest-preceding-bank"
+COMPACT_CODE_BIAS_BANK_POLICY_DELAYED_15S_BANK = "delayed-15s-bank"
 COMPACT_CODE_BIAS_BANK_POLICIES = (
     COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH,
     COMPACT_CODE_BIAS_BANK_POLICY_SAME_30S_BANK,
     COMPACT_CODE_BIAS_BANK_POLICY_CLOSE_30S_BANK,
     COMPACT_CODE_BIAS_BANK_POLICY_LATEST_PRECEDING_BANK,
+    COMPACT_CODE_BIAS_BANK_POLICY_DELAYED_15S_BANK,
 )
+CODE_BIAS_BANK_EFFECTIVE_DELAY_SECONDS = 15
 COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_OVERLAP_ONLY = "overlap-only"
 COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_SELECTED_SATELLITE_BASE_EXTEND = (
     "selected-satellite-base-extend"
@@ -1135,6 +1138,14 @@ def lookup_base_code_bias_bank_entry(
             if anchor <= tow and (current_anchor - anchor) <= PHASE_BIAS_BANK_BUCKET_SECONDS
         ]
         anchors.sort(reverse=True)
+    elif bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_DELAYED_15S_BANK:
+        effective_tow = tow - CODE_BIAS_BANK_EFFECTIVE_DELAY_SECONDS
+        anchors = [
+            anchor
+            for anchor in state.base_code_bias_banks
+            if anchor <= effective_tow
+        ]
+        anchors.sort(reverse=True)
     else:
         anchors = [
             anchor
@@ -1176,6 +1187,14 @@ def lookup_base_code_bias_bank_rows(
             anchor
             for anchor in state.base_code_bias_banks
             if anchor <= tow and (current_anchor - anchor) <= PHASE_BIAS_BANK_BUCKET_SECONDS
+        ]
+        anchors.sort(reverse=True)
+    elif bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_DELAYED_15S_BANK:
+        effective_tow = tow - CODE_BIAS_BANK_EFFECTIVE_DELAY_SECONDS
+        anchors = [
+            anchor
+            for anchor in state.base_code_bias_banks
+            if anchor <= effective_tow
         ]
         anchors.sort(reverse=True)
     else:

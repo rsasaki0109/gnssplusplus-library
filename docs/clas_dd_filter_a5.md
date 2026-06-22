@@ -315,12 +315,15 @@ TOW `230426` before the row was causally available.  The core SSRProducts
 contract now forward-fills code bias only from current or older rows.  On the
 same CLASLIB/native G14/C2W comparison this reduces `code_bias_m` mismatches
 from 156/280 common rows to 120/280, with `mean_abs` moving from `0.01114 m`
-to `0.00857 m` and `rms` from `0.01493 m` to `0.01309 m`.  The remaining
-120-row mismatch is the CLASLIB effective-bank delay: CLASLIB keeps the
-previous bank through the first 15 seconds of each 30-second code-bias bank
-(`230430` native versus `230445` CLASLIB for the first visible transition).
-Treat that as the next A4b correction-materialization target rather than
-tuning residual variance or AR.
+to `0.00857 m` and `rms` from `0.01493 m` to `0.01309 m`.  The A4b expansion
+then applies `--compact-code-bias-bank-policy delayed-15s-bank` so code-bias
+base-bank lookup uses the latest bank effective at `tow - 15 s`.  This moves
+the same slice to 112/280 `code_bias_m` mismatches with `mean_abs=0.00800 m`
+and `rms=0.01265 m`.  The remaining code-bias gap is selected network
+replacement materialization: native still keeps `0.760 m` through TOW `230454`
+while CLASLIB switches to `0.740 m` at `230445`.  Treat remaining PRC imbalance
+as an ionosphere/materialization issue rather than tuning residual variance or
+AR.
 The GitHub step summary highlights raw STEC, L1 ionosphere, scaled ionosphere,
 code-bias, trop, L1-from-STEC, L1-STEC closure, scaled-ionosphere closure, PRC
 closure, and atmosphere-reference components, keeping the primary review
@@ -352,9 +355,10 @@ from exact `C2W/L2W` matches.  The native dumps also carry the requested
 observation lookup fallback before the A4b GPS L2W correction model changes.
 For the GPS L2W A4b correction-materialization probe, run the raw CLAS L6
 expansion with `--compact-code-bias-composition-policy base-only-if-present` and
-`--compact-code-bias-bank-policy latest-preceding-bank`. The 2019 G14/C2W
+`--compact-code-bias-bank-policy delayed-15s-bank`. The 2019 G14/C2W
 network code-bias rows behave as subtype-4 base-value replacements: using direct
 subtype-6 values leaves periodic `-0.70 m` native rows against `+0.76 m`
 CLASLIB rows, while adding base plus network leaves the same rows near
 `+0.06 m`. The base-only policy removes that 30-second sign flip without
-changing default CLAS behavior.
+changing default CLAS behavior, and the delayed bank policy matches CLASLIB's
+first-half hold before the next selected-network replacement rows are handled.
