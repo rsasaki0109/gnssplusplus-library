@@ -278,6 +278,21 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
                 float(code_l2w["iono_scale"]),
                 export.GPS_IONO_SCALE_BY_SUFFIX["2"],
             )
+            self.assertEqual(code_l2w["claslib_iono_source"], "prc_closure")
+            self.assertAlmostEqual(float(code_l2w["claslib_raw_iono_l1_m"]), 1.234)
+            self.assertAlmostEqual(
+                float(code_l2w["claslib_raw_stec_tecu"]),
+                1.234 / export.GPS_L1_TECU_TO_METERS,
+            )
+            self.assertNotAlmostEqual(
+                float(code_l2w["claslib_raw_iono_l1_m"]),
+                float(code_l2w["iono_l1_m"]),
+            )
+            components = component_diff.extract_components(
+                code_l2w,
+                ("claslib_raw_iono_l1_m", "claslib_raw_stec_tecu"),
+            )
+            self.assertAlmostEqual(components["claslib_raw_iono_l1_m"], 1.234)
             self.assertAlmostEqual(
                 float(code_l2w["iono_l1_m"]) * export.GPS_IONO_SCALE_BY_SUFFIX["2"],
                 float(code_l2w["iono_scaled_m"]),

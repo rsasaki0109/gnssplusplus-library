@@ -36,6 +36,8 @@ COMPONENT_ALIASES: dict[str, tuple[str, ...]] = {
     "iono_scaled_m": ("iono_scaled_m",),
     "iono_scale": ("iono_scale",),
     "iono_scaled_closure_residual_m": ("iono_scaled_closure_residual_m",),
+    "claslib_raw_iono_l1_m": ("claslib_raw_iono_l1_m", "raw_iono_l1_m"),
+    "claslib_raw_stec_tecu": ("claslib_raw_stec_tecu", "raw_stec_tecu"),
     "iono_cpc_m": ("iono_cpc_m",),
     "code_bias_m": ("code_bias_m", "code_bias"),
     "phase_bias_m": ("phase_bias_m", "phase_bias"),

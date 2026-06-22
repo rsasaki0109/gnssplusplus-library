@@ -193,8 +193,12 @@ closure instead of the raw `.osr` `iono` display column, so it matches the
 correction actually applied in `PRC1/PRC2/PRC5`.  `iono_l1_m` is the
 frequency-slot-specific L1-equivalent of that reconstructed value, not a copy
 of the L1 slot's display or closure value.  The normalized `stec_tecu` field is
-derived from that L1-equivalent delay with the GPS L1 TECU-to-meter factor, so
-the diff can separate TECU materialization drift from frequency-scaling drift:
+derived from that L1-equivalent delay with the GPS L1 TECU-to-meter factor.
+The exporter also writes `claslib_iono_source=prc_closure`,
+`claslib_raw_iono_l1_m`, and `claslib_raw_stec_tecu`, so raw CLASLIB `.osr`
+display ionosphere can be inspected separately from the effective
+PRC-closure ionosphere used by the default diff.  This lets the diff separate
+TECU materialization drift from frequency-scaling drift:
 
 ```bash
 python3 scripts/analysis/claslib_zd_component_export.py \
@@ -337,7 +341,10 @@ bank was materialized before opening the raw CSV.  For the leading
 row-breakdown, v11 summaries also include
 CLASLIB/native/delta values for highlighted present components and the native
 value of each highlighted missing field, which ties the largest PRC/iono/trop
-delta back to the selected reference epoch.
+delta back to the selected reference epoch.  CLASLIB `.osr` snapshot summaries
+also include `claslib_raw_iono_l1_m` and `claslib_raw_stec_tecu` numeric stats
+as explicit diagnostics; they are intentionally outside the default native diff
+component set.
 If either generated side is missing, the optional diff reports
 `blocked_infrastructure`, not a passing sign-off.
 
