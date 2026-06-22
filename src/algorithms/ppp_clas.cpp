@@ -215,7 +215,8 @@ std::ofstream* clasCodeDumpStream() {
                    << "phase_bias_present,code_bias_fallback,phase_bias_fallback,"
                    << "raw_p_m,corrected_p_m,applied_pr_corr_m,prc_m,"
                    << "prc_minus_trop_m,trop_correction_m,iono_l1_m,"
-                   << "stec_tecu,iono_scaled_m,code_bias_m,receiver_ant_m,relativity_m,"
+                   << "stec_tecu,iono_scaled_m,code_bias_m,network_compensation_m,"
+                   << "receiver_ant_m,relativity_m,"
                    << "atmos_ref_week,atmos_ref_tow,clock_ref_week,clock_ref_tow,"
                    << "code_bias_ref_week,code_bias_ref_tow,"
                    << "atmos_clock_gap_s,atmos_network_id,atmos_grid_no,"
@@ -423,6 +424,7 @@ void dumpClasCodeRows(
                   << osr.stec_tecu << ','
                   << iono_scaled << ','
                   << osr.code_bias_m[f] << ','
+                  << 0.0 << ','
                   << osr.receiver_antenna_m[f] << ','
                   << osr.relativity_correction_m << ','
                   << timeWeekField(osr.atmos_reference_time, have_atmos_ref) << ','
