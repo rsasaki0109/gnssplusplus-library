@@ -208,7 +208,7 @@ python3 scripts/analysis/claslib_zd_component_export.py \
   --gps-week 2068
 ```
 
-On the 300-epoch 2019 sample smoke, current `develop` produces 5,400 native code
+On the 300-epoch 2019 sample smoke, current `develop` produces 5,350 native code
 rows. The GPS L2W slice has 300 rows, all with exact bias identity and exact
 observation matches, and zero observation-family or code-bias fallback rows.
 Use `base-only-if-present` with the latest preceding base bank for this A4b
@@ -352,10 +352,13 @@ longer applies the `230430` bank to TOW `230426..230429`, and it holds the
 previous bank through the first half of each 30-second bank.  On the CLASLIB
 `.osr` slice this moves G14/C2W `code_bias_m` from `mean_abs=0.00857 m,
 rms=0.01309 m` to `mean_abs=0.00800 m, rms=0.01265 m`, with mismatch count
-moving from 120/280 to 112/280 common rows.  The remaining code-bias mismatch is
-not a future-sample read: selected network replacement rows still keep `0.760 m`
-through TOW `230454` while CLASLIB switches to `0.740 m` at `230445`.  Treat
-that as the next correction-materialization target.  The CLASLIB `.osr`
+moving from 120/280 to 112/280 common rows.  The L6 expansion then emits delayed
+base-bank refresh rows for selected subtype-6 network replacements, moving the
+same G14/C2W slice to 16/280 mismatches with `mean_abs=0.00114 m` and
+`rms=0.00478 m`; aggregate `PRC` moves to `mean_abs=0.00879 m` and
+`rms=0.01481 m`.  The remaining code-bias mismatches are 5-second boundary
+epochs, so the next correction-materialization target is boundary lifecycle
+alignment rather than a broad row or variance change.  The CLASLIB `.osr`
 snapshot summaries also include `claslib_raw_iono_l1_m` and
 `claslib_raw_stec_tecu` numeric stats
 as explicit diagnostics; they are intentionally outside the default native diff

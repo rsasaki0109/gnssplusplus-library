@@ -319,11 +319,14 @@ to `0.00857 m` and `rms` from `0.01493 m` to `0.01309 m`.  The A4b expansion
 then applies `--compact-code-bias-bank-policy delayed-15s-bank` so code-bias
 base-bank lookup uses the latest bank effective at `tow - 15 s`.  This moves
 the same slice to 112/280 `code_bias_m` mismatches with `mean_abs=0.00800 m`
-and `rms=0.01265 m`.  The remaining code-bias gap is selected network
-replacement materialization: native still keeps `0.760 m` through TOW `230454`
-while CLASLIB switches to `0.740 m` at `230445`.  Treat remaining PRC imbalance
-as an ionosphere/materialization issue rather than tuning residual variance or
-AR.
+and `rms=0.01265 m`.  The A4b L6 expansion also materializes delayed base-bank
+refresh rows for selected subtype-6 network replacements, so the preferred
+network lookup can switch at the same half-window boundary.  This moves the
+same G14/C2W slice to 16/280 `code_bias_m` mismatches with
+`mean_abs=0.00114 m` and `rms=0.00478 m`; aggregate `PRC` moves to
+`mean_abs=0.00879 m` and `rms=0.01481 m`.  The remaining code-bias rows are
+5-second boundary epochs, so treat the next step as lifecycle/materialization
+alignment rather than residual variance or AR tuning.
 The GitHub step summary highlights raw STEC, L1 ionosphere, scaled ionosphere,
 code-bias, trop, L1-from-STEC, L1-STEC closure, scaled-ionosphere closure, PRC
 closure, and atmosphere-reference components, keeping the primary review

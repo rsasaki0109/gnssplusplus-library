@@ -1111,6 +1111,116 @@ def store_base_code_bias_bank_entry(
     bank.setdefault(satellite_token, {})[signal_id] = bias_m
 
 
+def materialize_delayed_code_bias_bank_refresh_rows(
+    *,
+    gps_week: int | None,
+    tow: int,
+    mask_satellites: list[CSSRSatellite],
+    base_rows_by_satellite: dict[str, dict[int, float]],
+    code_bias_bank_policy: str,
+) -> list[CompactSSRCorrection]:
+    if (
+        gps_week is None
+        or code_bias_bank_policy != COMPACT_CODE_BIAS_BANK_POLICY_DELAYED_15S_BANK
+        or not base_rows_by_satellite
+    ):
+        return []
+    refresh_tow = tow + CODE_BIAS_BANK_EFFECTIVE_DELAY_SECONDS
+    rows: list[CompactSSRCorrection] = []
+    for satellite in mask_satellites:
+        code_bias = base_rows_by_satellite.get(satellite.sat)
+        if not code_bias:
+            continue
+        rows.append(
+            CompactSSRCorrection(
+                week=gps_week,
+                tow=float(refresh_tow),
+                system=satellite.system,
+                prn=satellite.prn,
+                dx=0.0,
+                dy=0.0,
+                dz=0.0,
+                dclock_m=0.0,
+                code_bias_m=dict(code_bias),
+            )
+        )
+    return rows
+
+
+def materialize_delayed_code_bias_network_refresh_rows(
+    *,
+    gps_week: int | None,
+    tow: int,
+    state: CSSRDecoderState,
+    mask_satellites: list[CSSRSatellite],
+    selected_satellites: set[str],
+    network_id: int | None,
+    code_bias_composition_policy: str,
+    code_bias_bank_policy: str,
+) -> list[CompactSSRCorrection]:
+    if (
+        gps_week is None
+        or network_id is None
+        or code_bias_bank_policy != COMPACT_CODE_BIAS_BANK_POLICY_DELAYED_15S_BANK
+        or code_bias_composition_policy == COMPACT_CODE_BIAS_COMPOSITION_POLICY_DIRECT
+        or not selected_satellites
+        or not state.pending_code_bias
+    ):
+        return []
+    refresh_tow = tow + CODE_BIAS_BANK_EFFECTIVE_DELAY_SECONDS
+    rows: list[CompactSSRCorrection] = []
+    for satellite in mask_satellites:
+        if satellite.sat not in selected_satellites:
+            continue
+        current_rows = state.pending_code_bias.get(satellite.sat, {})
+        if not current_rows:
+            continue
+        refresh_base_rows = resolve_base_code_bias_rows(
+            state,
+            refresh_tow,
+            satellite.sat,
+            code_bias_bank_policy,
+        )
+        if not refresh_base_rows:
+            continue
+        current_base_rows = resolve_base_code_bias_rows(
+            state,
+            tow,
+            satellite.sat,
+            code_bias_bank_policy,
+        )
+        refresh_code_bias: dict[int, float] = {}
+        for signal_id, current_bias_m in current_rows.items():
+            refresh_base_m = refresh_base_rows.get(signal_id)
+            if refresh_base_m is None:
+                continue
+            if (
+                code_bias_composition_policy == COMPACT_CODE_BIAS_COMPOSITION_POLICY_BASE_PLUS_NETWORK
+                and signal_id in current_base_rows
+            ):
+                network_delta_m = current_bias_m - current_base_rows[signal_id]
+                refresh_code_bias[signal_id] = refresh_base_m + network_delta_m
+            else:
+                refresh_code_bias[signal_id] = refresh_base_m
+        if not refresh_code_bias:
+            continue
+        rows.append(
+            CompactSSRCorrection(
+                week=gps_week,
+                tow=float(refresh_tow),
+                system=satellite.system,
+                prn=satellite.prn,
+                dx=0.0,
+                dy=0.0,
+                dz=0.0,
+                dclock_m=0.0,
+                code_bias_m=refresh_code_bias,
+                bias_network_id=network_id,
+            )
+        )
+    return rows
+
+
 def lookup_base_code_bias_bank_entry(
     state: CSSRDecoderState,
     tow: int,
@@ -2033,6 +2143,7 @@ def decode_cssr_code_bias_message(
     flush_policy: str = COMPACT_SSR_FLUSH_POLICY_LAG_TOLERANT,
     atmos_merge_policy: str = COMPACT_ATMOS_MERGE_POLICY_STEC_COEFF_CARRY,
     code_bias_composition_policy: str = COMPACT_CODE_BIAS_COMPOSITION_POLICY_DIRECT,
+    code_bias_bank_policy: str = COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH,
 ) -> tuple[CSSRMessage, list[CompactSSRCorrection], int]:
     mask = require_mask_state(state, CSSR_SUBTYPE_CODE_BIAS)
     header, bit_offset = decode_cssr_header(payload, bit_offset, CSSR_SUBTYPE_CODE_BIAS, state)
@@ -2050,6 +2161,7 @@ def decode_cssr_code_bias_message(
     assert state.pending_code_bias is not None
     assert state.pending_base_code_bias is not None
     mapped_count = 0
+    base_rows_by_satellite: dict[str, dict[int, float]] = {}
     for satellite in mask.satellites:
         satellite_biases = state.pending_code_bias.setdefault(satellite.sat, {})
         for signal_slot in satellite.signal_slots:
@@ -2059,6 +2171,7 @@ def decode_cssr_code_bias_message(
                 continue
             satellite_biases[signal_id] = bias_m
             state.pending_base_code_bias.setdefault(satellite.sat, {})[signal_id] = bias_m
+            base_rows_by_satellite.setdefault(satellite.sat, {})[signal_id] = bias_m
             store_base_code_bias_bank_entry(
                 state,
                 int(header["tow"]),
@@ -2070,6 +2183,15 @@ def decode_cssr_code_bias_message(
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
         corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
+    corrections.extend(
+        materialize_delayed_code_bias_bank_refresh_rows(
+            gps_week=gps_week,
+            tow=int(header["tow"]),
+            mask_satellites=mask.satellites,
+            base_rows_by_satellite=base_rows_by_satellite,
+            code_bias_bank_policy=code_bias_bank_policy,
+        )
+    )
     state.message_index += 1
     return (
         CSSRMessage(
@@ -2270,8 +2392,19 @@ def decode_cssr_code_phase_bias_message(
             )
 
     corrections: list[CompactSSRCorrection] = []
+    network_refresh_rows = materialize_delayed_code_bias_network_refresh_rows(
+        gps_week=gps_week,
+        tow=int(header["tow"]),
+        state=state,
+        mask_satellites=mask.satellites,
+        selected_satellites=selected_satellites,
+        network_id=network_id if network_bias_correction else None,
+        code_bias_composition_policy=code_bias_composition_policy,
+        code_bias_bank_policy=code_bias_bank_policy,
+    )
     if not bool(header["sync"]):
         corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
+    corrections.extend(network_refresh_rows)
     state.message_index += 1
     return (
         CSSRMessage(
@@ -3072,6 +3205,7 @@ def decode_cssr_messages(
                     flush_policy,
                     atmos_merge_policy,
                     code_bias_composition_policy,
+                    code_bias_bank_policy,
                 )
                 corrections.extend(message_corrections)
             elif subtype == CSSR_SUBTYPE_PHASE_BIAS:
