@@ -424,7 +424,7 @@ void dumpClasCodeRows(
                   << osr.stec_tecu << ','
                   << iono_scaled << ','
                   << osr.code_bias_m[f] << ','
-                  << 0.0 << ','
+                  << osr.network_compensation_m << ','
                   << osr.receiver_antenna_m[f] << ','
                   << osr.relativity_correction_m << ','
                   << timeWeekField(osr.atmos_reference_time, have_atmos_ref) << ','

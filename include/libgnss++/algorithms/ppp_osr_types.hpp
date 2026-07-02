@@ -28,6 +28,7 @@ struct OSRCorrection {
     double PRC[OSR_MAX_FREQ] = {};
     double CPC[OSR_MAX_FREQ] = {};
     double phase_compensation_m[OSR_MAX_FREQ] = {};
+    double network_compensation_m = 0.0;
     double orbit_projection_m = 0.0;
     double clock_correction_m = 0.0;
 
