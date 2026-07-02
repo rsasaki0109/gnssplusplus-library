@@ -1318,6 +1318,7 @@ std::vector<OSRCorrection> computeOSR(
                 if (std::abs(pbias_lag - kPhaseBiasLagSeconds) < 0.5) {
                     osr.CPC[f] -= sis_continuity_info.last_delta_m;
                     osr.PRC[f] -= sis_continuity_info.last_delta_m;
+                    osr.network_compensation_m = sis_continuity_info.last_delta_m;
                     if (pppDebugEnabled() && f == 0) {
                         std::cerr << "[OSR-SIS] " << sat.toString()
                                   << " lag_s=" << pbias_lag
