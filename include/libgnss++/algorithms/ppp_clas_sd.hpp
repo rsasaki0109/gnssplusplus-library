@@ -34,6 +34,10 @@ struct SdEpochResult {
     int num_observations = 0;
     double code_rms = 0.0;
     double phase_rms = 0.0;
+    /// LAMBDA ratio when multi-epoch SD AR fixes ambiguities (0 otherwise).
+    double ar_ratio = 0.0;
+    /// Position shift from the seed when SD AR applies a fixed solution.
+    double position_shift_m = 0.0;
 };
 
 /// Accumulated DD ambiguity state for multi-epoch AR.
