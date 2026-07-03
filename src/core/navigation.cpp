@@ -223,8 +223,21 @@ void interpolateBaseClockOutputs(const SSROrbitClockCorrection* before,
                                  double alpha,
                                  double merged_clock_m,
                                  double* base_clock_correction_m,
-                                 bool* base_clock_valid) {
+                                 bool* base_clock_valid,
+                                 SSRClockSelectionPolicy clock_selection_policy =
+                                     SSRClockSelectionPolicy::MergedInterpolate) {
     if (base_clock_correction_m == nullptr || base_clock_valid == nullptr) {
+        return;
+    }
+    if (clock_selection_policy == SSRClockSelectionPolicy::ClaslibBaseHold) {
+        const SSROrbitClockCorrection* sample = before != nullptr ? before : after;
+        if (sample != nullptr) {
+            assignBaseClockOutputs(*sample, merged_clock_m,
+                                   base_clock_correction_m, base_clock_valid);
+        } else {
+            *base_clock_correction_m = merged_clock_m;
+            *base_clock_valid = false;
+        }
         return;
     }
     const bool before_base = before != nullptr && before->base_clock_valid;
@@ -248,6 +261,123 @@ void interpolateBaseClockOutputs(const SSROrbitClockCorrection* before,
     }
     *base_clock_correction_m = merged_clock_m;
     *base_clock_valid = false;
+}
+
+constexpr double kClaslibMaxOrbitAgeFromObsSeconds = 180.0;
+constexpr double kClaslibMaxClockAgeFromObsSeconds = 30.0;
+constexpr double kClaslibMaxClockAgeFromOrbitSeconds = 30.0;
+
+struct ClaslibClockPick {
+    bool valid = false;
+    double clock_correction_m = 0.0;
+    GNSSTime clock_time;
+    GNSSTime clock_reference_time;
+    int ssr_clock_iod = -1;
+};
+
+ClaslibClockPick pickClaslibBaseClock(
+    const std::vector<SSROrbitClockCorrection>& entries,
+    const GNSSTime& obs_time) {
+    const SSROrbitClockCorrection* orbit_ref = nullptr;
+    GNSSTime orbit_ref_time;
+    for (const auto& entry : entries) {
+        if (!entry.orbit_valid) {
+            continue;
+        }
+        const GNSSTime orbit_time = orbitReferenceTime(entry);
+        const double obs_age = obs_time - orbit_time;
+        if (obs_age < 0.0 || obs_age > kClaslibMaxOrbitAgeFromObsSeconds) {
+            continue;
+        }
+        if (orbit_ref == nullptr || orbit_time > orbit_ref_time) {
+            orbit_ref = &entry;
+            orbit_ref_time = orbit_time;
+        }
+    }
+    if (orbit_ref == nullptr) {
+        return {};
+    }
+
+    const SSROrbitClockCorrection* best = nullptr;
+    for (const auto& entry : entries) {
+        if (!entry.base_clock_valid) {
+            continue;
+        }
+
+        const GNSSTime clock_time = entry.time;
+        if (clock_time > obs_time) {
+            continue;
+        }
+        const double obs_age = obs_time - clock_time;
+        if (obs_age < 0.0 || obs_age > kClaslibMaxClockAgeFromObsSeconds) {
+            continue;
+        }
+        const double orbit_age = clock_time - orbit_ref_time;
+        if (orbit_age < 0.0 || orbit_age >= kClaslibMaxClockAgeFromOrbitSeconds) {
+            continue;
+        }
+        if (best == nullptr || clock_time > best->time) {
+            best = &entry;
+        }
+    }
+    if (best == nullptr) {
+        return {};
+    }
+
+    ClaslibClockPick pick;
+    pick.valid = true;
+    pick.clock_correction_m = best->base_clock_correction_m;
+    pick.clock_time = best->time;
+    pick.clock_reference_time = clockReferenceTime(*best);
+    pick.ssr_clock_iod = best->ssr_clock_iod;
+    return pick;
+}
+
+bool applyClaslibClockSelection(
+    SSRClockSelectionPolicy clock_selection_policy,
+    const std::vector<SSROrbitClockCorrection>& entries,
+    const GNSSTime& time,
+    double& clock_correction_m,
+    double* base_clock_correction_m,
+    bool* base_clock_valid,
+    GNSSTime* clock_reference_time,
+    SSRCorrectionStatus* status,
+    bool base_result) {
+    if (clock_selection_policy != SSRClockSelectionPolicy::ClaslibBaseHold) {
+        return base_result;
+    }
+
+    const ClaslibClockPick pick = pickClaslibBaseClock(entries, time);
+    if (!pick.valid) {
+        clock_correction_m = 0.0;
+        if (base_clock_correction_m != nullptr && base_clock_valid != nullptr) {
+            *base_clock_correction_m = 0.0;
+            *base_clock_valid = false;
+        }
+        if (clock_reference_time != nullptr) {
+            *clock_reference_time = GNSSTime();
+        }
+        if (status != nullptr) {
+            status->clock_valid = false;
+        }
+        return false;
+    }
+
+    clock_correction_m = pick.clock_correction_m;
+    if (base_clock_correction_m != nullptr && base_clock_valid != nullptr) {
+        *base_clock_correction_m = pick.clock_correction_m;
+        *base_clock_valid = true;
+    }
+    if (clock_reference_time != nullptr) {
+        *clock_reference_time = pick.clock_time;
+    }
+    if (status != nullptr) {
+        status->clock_valid = true;
+        status->clock_reference_time = pick.clock_reference_time;
+        status->ssr_clock_iod = pick.ssr_clock_iod;
+    }
+    const bool orbit_ok = status == nullptr || status->orbit_valid;
+    return pick.valid && orbit_ok;
 }
 
 bool parseEpochFields(int year,
@@ -1468,7 +1598,8 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
                                         SSRCorrectionStatus* status,
                                         bool allow_future_samples,
                                         double* base_clock_correction_m,
-                                        bool* base_clock_valid) const {
+                                        bool* base_clock_valid,
+                                        SSRClockSelectionPolicy clock_selection_policy) const {
     if (status != nullptr) {
         *status = SSRCorrectionStatus{};
     }
@@ -1746,8 +1877,17 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
                 status->atmos_reference_time = atmos_source->time;
             }
         }
-        return orbit_source != nullptr || clock_source != nullptr || ura_source != nullptr ||
-               code_source != nullptr || phase_source != nullptr || atmos_source != nullptr;
+        return applyClaslibClockSelection(
+            clock_selection_policy,
+            entries,
+            time,
+            clock_correction_m,
+            base_clock_correction_m,
+            base_clock_valid,
+            clock_reference_time,
+            status,
+            orbit_source != nullptr || clock_source != nullptr || ura_source != nullptr ||
+                code_source != nullptr || phase_source != nullptr || atmos_source != nullptr);
     }
 
     const SSROrbitClockCorrection* before = nullptr;
@@ -1843,7 +1983,8 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         }
         if (before != nullptr || after != nullptr) {
             interpolateBaseClockOutputs(before, after, alpha, clock_correction_m,
-                                        base_clock_correction_m, base_clock_valid);
+                                        base_clock_correction_m, base_clock_valid,
+                                        clock_selection_policy);
         }
         if (ura_sigma_m != nullptr) {
             if (before->ura_valid && after->ura_valid) {
@@ -1990,12 +2131,21 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
                 }
             }
         }
-        return before->orbit_valid || after->orbit_valid ||
-               before->clock_valid || after->clock_valid ||
-               before->ura_valid || after->ura_valid ||
-               before->code_bias_valid || after->code_bias_valid ||
-               before->phase_bias_valid || after->phase_bias_valid ||
-               before->atmos_valid || after->atmos_valid;
+        return applyClaslibClockSelection(
+            clock_selection_policy,
+            entries,
+            time,
+            clock_correction_m,
+            base_clock_correction_m,
+            base_clock_valid,
+            clock_reference_time,
+            status,
+            before->orbit_valid || after->orbit_valid ||
+                before->clock_valid || after->clock_valid ||
+                before->ura_valid || after->ura_valid ||
+                before->code_bias_valid || after->code_bias_valid ||
+                before->phase_bias_valid || after->phase_bias_valid ||
+                before->atmos_valid || after->atmos_valid);
     }
 
     const SSROrbitClockCorrection* sample = before != nullptr ? before : after;
@@ -2129,8 +2279,17 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             }
         }
     }
-    return sample->orbit_valid || sample->clock_valid || sample->ura_valid ||
-           sample->code_bias_valid || sample->phase_bias_valid || sample->atmos_valid;
+    return applyClaslibClockSelection(
+        clock_selection_policy,
+        entries,
+        time,
+        clock_correction_m,
+        base_clock_correction_m,
+        base_clock_valid,
+        clock_reference_time,
+        status,
+        sample->orbit_valid || sample->clock_valid || sample->ura_valid ||
+            sample->code_bias_valid || sample->phase_bias_valid || sample->atmos_valid);
 }
 
 bool SSRProducts::loadCSVFile(const std::string& filename) {

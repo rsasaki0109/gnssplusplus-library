@@ -512,3 +512,28 @@ following offset-0 boundary (`tow % 30 == 0`) as `currsis - prevsis`
 (`ephemeris.c` `satpos_ssr_sis`).  This avoids pairing a boundary clock step
 with an orbit sample that `interpolateCorrection` may have advanced early via
 `clock_reference_time`.
+
+## CLAS base-clock parity gate (`GNSS_PPP_CLAS_BASE_CLOCK_PARITY`)
+
+Default-path CLAS OSR positioning still uses merged network-wins clocks with
+linear interpolation between 5 s SSR grid points (State B byte identity).
+Setting `GNSS_PPP_CLAS_BASE_CLOCK_PARITY=1` switches the positioning clock
+branch to CLASLIB-equivalent semantics:
+
+- base bank only (`base_clock_valid` / `clock_network_id == 0`)
+- no future clock samples (`clock.time <= obs.time`)
+- orbit-anchored age (newest `orbit_valid` with `orbit.time <= obs.time` within
+  180 s; clock within `[orbit_ref, orbit_ref + 30 s)` and `<= obs.time`)
+- newest-eligible step-hold (no linear interpolation)
+- failure sets `clock_valid = false` and excludes the satellite
+
+The gated SIS capture path (`captureClasSisBoundary`) is unchanged and
+continues to sample stashed base clocks.  `sameCorrectionVariant` merge
+semantics are unchanged.
+
+Acceptance targets with the gate on:
+
+- `clock_correction_m` RMS vs CLASLIB oracle `< 5 mm` over the 300-epoch A4b
+  selfdiff window
+- gate-OFF `.pos` md5 and A4b selfdiff md5 unchanged (State B identity)
+- `GNSS_PPP_CLAS_SIS_BOUNDARY=1` compN RMS stays `<= 0.001 m`
