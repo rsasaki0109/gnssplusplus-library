@@ -292,18 +292,28 @@ void L6Decoder::decodeSubtype11(BitReader& reader) {
         if (flg_orbit) {
             const int iode_bits = (sat.system == GNSSSystem::Galileo) ? 10 : 8;
             reader.readU(iode_bits);
-            CssrOrbitCorrection corr;
-            corr.dx = reader.readS(15) * kOrbitRadialScale;
-            corr.dy = reader.readS(13) * kOrbitAlongCrossScale;
-            corr.dz = reader.readS(13) * kOrbitAlongCrossScale;
-            current_epoch_.orbits[sat_id] = corr;
-            current_epoch_.has_orbit = true;
+            if (!flg_net) {
+                CssrOrbitCorrection corr;
+                corr.dx = reader.readS(15) * kOrbitRadialScale;
+                corr.dy = reader.readS(13) * kOrbitAlongCrossScale;
+                corr.dz = reader.readS(13) * kOrbitAlongCrossScale;
+                current_epoch_.orbits[sat_id] = corr;
+                current_epoch_.has_orbit = true;
+            } else {
+                reader.readS(15);
+                reader.readS(13);
+                reader.readS(13);
+            }
         }
         if (flg_clock) {
-            CssrClockCorrection corr;
-            corr.dclock_m = reader.readS(15) * kClockScale;
-            current_epoch_.clocks[sat_id] = corr;
-            current_epoch_.has_clock = true;
+            if (!flg_net) {
+                CssrClockCorrection corr;
+                corr.dclock_m = reader.readS(15) * kClockScale;
+                current_epoch_.clocks[sat_id] = corr;
+                current_epoch_.has_clock = true;
+            } else {
+                reader.readS(15);
+            }
         }
     }
 }
