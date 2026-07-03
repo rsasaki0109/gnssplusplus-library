@@ -507,6 +507,23 @@ def claslib_grid_provenance(
     return fields
 
 
+def osrres_network_compensation(row: dict[str, str]) -> Optional[float]:
+    comp_n = parse_osr_float(first_present(row, ("compN", "network_compensation_m")))
+    if comp_n is None:
+        return None
+    return comp_n
+
+
+# CLASLIB's adjust_prc/adjust_cpc (ephemeris.c) subtract the SIS continuity
+# delta directly from PRC/CPC at SSR update boundaries (`prc -= sis`), while
+# dumping the applied delta as compN = +sis (see osrres_network_compensation
+# above and GNSS_PPP_CLAS_SIS_BOUNDARY in src/algorithms/ppp_osr.cpp). The
+# PRC-closure iono reconstruction below must add compN back before backing
+# out trop/antr/relativity/cbias, otherwise the sis residual leaks into the
+# reconstructed iono_l1_m/stec_tecu columns (observed as a ~0.0527m RMS
+# artifact tracking compN almost exactly). Missing compN (older dumps
+# without the column) defaults to 0.0, matching the zero-unless-boundary
+# semantics of the delta itself.
 def prc_iono_scaled_from_osrres(row: dict[str, str], suffix: str) -> Optional[float]:
     prc = parse_osr_float(first_present(row, (f"PRC{suffix}",)))
     trop = parse_osr_float(first_present(row, ("trop", "trop_m")))
@@ -517,14 +534,8 @@ def prc_iono_scaled_from_osrres(row: dict[str, str], suffix: str) -> Optional[fl
     )
     if prc is None or trop is None or cbias is None or antr is None or relativity is None:
         return None
-    return prc - (trop + antr + relativity + cbias)
-
-
-def osrres_network_compensation(row: dict[str, str]) -> Optional[float]:
-    comp_n = parse_osr_float(first_present(row, ("compN", "network_compensation_m")))
-    if comp_n is None:
-        return None
-    return comp_n
+    comp_n = osrres_network_compensation(row) or 0.0
+    return prc - (trop + antr + relativity + cbias) + comp_n
 
 
 def prc_iono_l1_from_osrres(row: dict[str, str], suffix: str) -> str:
