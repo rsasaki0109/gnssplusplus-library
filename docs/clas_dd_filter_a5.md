@@ -403,7 +403,7 @@ segment starts precisely at a `tow % 30 == 0` boundary and runs for exactly
 ... `[230670, 230684]`; the held value equals the SIS delta computed at the
 5s-consecutive clock-reference-time transition that crosses the 30s orbit
 boundary (`current_sis_m(offset0) - previous_sis_m(offset25)`, matching
-`updateSisContinuity()`'s existing formula) and does **not** change again
+`captureClasSisBoundary()`'s observation-epoch pairing) and does **not** change again
 until the next boundary.
 
 Two subtleties surfaced while pinning the rule against the actual native
@@ -479,3 +479,35 @@ max), and all-epoch mean is unchanged (`1.549 m`) with a lower max
 position signal, the default stays off pending the orbit-record-selection
 fix; `GNSS_PPP_CLAS_SIS_BOUNDARY` remains available for further
 investigation.
+
+## ST11 network-orbit suppression in the L6 expander
+
+CSSR subtype 11 (`flg_net=1`) mid-cycle records (`tow % 30 == 25`) carry
+network-scoped orbit deltas that CLASLIB stores in a separate bank and does
+not apply to base-orbit projection.  The Python L6 expander
+(`decode_cssr_combined_message` in `apps/gnss_qzss_l6_info.py`) previously
+wrote those network orbit values into `pending_orbit` unconditionally, so the
+expanded SSR CSV treated them as base-orbit refreshes.  Native
+`interpolateCorrection` then swung `orbit_projection_m` through the outlier
+(e.g. G14 ~0.356→0.221→0.356 m) and inflated the SIS-boundary delta when
+`GNSS_PPP_CLAS_SIS_BOUNDARY=1` was enabled.
+
+The expander now skips `pending_orbit` and `pending_clock` updates when
+`flg_net` is set while still consuming the orbit/clock bits from the
+message.  This restores piecewise-constant base-orbit and base-clock behavior
+across each 30 s cycle, matching CLASLIB's dumped `orbit_projection_m` and
+base-clock bank (flat ~0.356 m for G14 through tow 230420–230434 with the
+ST3 base clock preserved at 230425).  See the ST11-fix measurement report
+for before/after component-diff and #161 tables.
+
+### SIS boundary delta pairing at observation epochs
+
+The gated `captureClasSisBoundary()` path now samples SIS
+(`-clock_correction_m + orbit_projection_m`) at the **observation epoch**
+rather than reusing the 5 s `clock_reference_time` step delta from
+`updateSisContinuity()`.  CLASLIB captures `prevsis` at the mid-cycle
+offset-25 obs epoch (`tow % 30 == 25`) and forms the held compN delta at the
+following offset-0 boundary (`tow % 30 == 0`) as `currsis - prevsis`
+(`ephemeris.c` `satpos_ssr_sis`).  This avoids pairing a boundary clock step
+with an orbit sample that `interpolateCorrection` may have advanced early via
+`clock_reference_time`.
