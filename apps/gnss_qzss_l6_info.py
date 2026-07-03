@@ -2925,8 +2925,14 @@ def decode_cssr_combined_message(
             dclock_m, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.0016)
         else:
             dclock_m = 0.0
-        state.pending_orbit[satellite.sat] = (dx, dy, dz)
-        state.pending_clock[satellite.sat] = dclock_m
+        # CLASLIB keeps network orbit in a separate bank; only base-orbit samples
+        # should refresh pending_orbit for the expanded SSR product.
+        if not flg_net:
+            state.pending_orbit[satellite.sat] = (dx, dy, dz)
+        # CLASLIB keeps network clock in a separate bank; only base-clock samples
+        # should refresh pending_clock for the expanded SSR product.
+        if flg_clock and not flg_net:
+            state.pending_clock[satellite.sat] = dclock_m
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
         corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)

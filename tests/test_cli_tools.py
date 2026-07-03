@@ -5390,6 +5390,63 @@ class CLIToolsTest(unittest.TestCase):
             corrections_csv = corrections_path.read_text(encoding="ascii")
             self.assertIn("1316,518400.000,G,3,0.016000,0.012800,-0.012800,0.025600,0.000000", corrections_csv)
 
+    def test_qzss_l6_info_suppresses_st11_network_orbit_in_pending_orbit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_st11_net_orbit_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_st11_net_orbit.bin"
+            corrections_path = temp_root / "session_st11_net_orbit_corrections.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_orbit_message(
+                            tow_delta=0,
+                            iod=3,
+                            dx=0.016,
+                            dy=0.0128,
+                            dz=-0.0128,
+                            sync=True,
+                        ),
+                        build_qzss_cssr_clock_message(tow_delta=0, iod=3, dclock_m=0.0256, sync=False),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=25,
+                            iod=3,
+                            prn=3,
+                            sync=False,
+                            network_id=1,
+                            dx=-0.2512,
+                            dy=-0.8320,
+                            dz=0.0,
+                            dclock_m=0.0512,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--limit",
+                "6",
+                "--gps-week",
+                "1316",
+                "--extract-compact-corrections",
+                str(corrections_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertIn(
+                "1316,518400.000,G,3,0.016000,0.012800,-0.012800,0.025600,0.000000",
+                corrections_csv,
+            )
+            # Network ST11 must not flush a clock-only row or overwrite base clock.
+            self.assertNotIn("518425.000", corrections_csv)
+            self.assertNotIn("0.051200", corrections_csv)
+            self.assertNotIn("-0.251200", corrections_csv)
+            self.assertNotIn("-0.832000", corrections_csv)
+
     def test_qzss_l6_info_extracts_code_bias_and_ura_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_cbias_ura_") as temp_dir:
             temp_root = Path(temp_dir)
