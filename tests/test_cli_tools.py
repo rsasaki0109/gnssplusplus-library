@@ -5347,8 +5347,8 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("1,1,4073,1,518400,1.0,1,3,", messages_csv)
             self.assertIn("1,2,4073,11,518400,1.0,0,3,", messages_csv)
             corrections_csv = corrections_path.read_text(encoding="ascii")
-            self.assertIn("# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m", corrections_csv)
-            self.assertIn("1316,518400.000,G,3,0.000000,0.000000,0.000000,0.025600,0.000000", corrections_csv)
+            self.assertIn("# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m,clock_network_id", corrections_csv)
+            self.assertIn("1316,518400.000,G,3,0.000000,0.000000,0.000000,0.025600,0.000000,1", corrections_csv)
 
     def test_qzss_l6_info_extracts_separate_orbit_clock_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_orbit_clock_") as temp_dir:
@@ -5438,12 +5438,12 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             corrections_csv = corrections_path.read_text(encoding="ascii")
             self.assertIn(
-                "1316,518400.000,G,3,0.016000,0.012800,-0.012800,0.025600,0.000000",
+                "1316,518400.000,G,3,0.016000,0.012800,-0.012800,0.025600,0.000000,0",
                 corrections_csv,
             )
-            # Network ST11 must not flush a clock-only row or overwrite base clock.
-            self.assertNotIn("518425.000", corrections_csv)
-            self.assertNotIn("0.051200", corrections_csv)
+            # Network ST11 clock is retained and tagged; network orbit stays suppressed.
+            self.assertIn("518425.000", corrections_csv)
+            self.assertIn("0.051200", corrections_csv)
             self.assertNotIn("-0.251200", corrections_csv)
             self.assertNotIn("-0.832000", corrections_csv)
 
@@ -6976,7 +6976,7 @@ class CLIToolsTest(unittest.TestCase):
             corrections_csv = corrections_path.read_text(encoding="ascii")
             self.assertEqual(
                 corrections_csv.strip(),
-                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
+                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m,clock_network_id[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
             )
 
     def test_qzss_l6_info_compact_flush_policy_can_require_both_orbit_and_clock(self) -> None:
@@ -7026,7 +7026,7 @@ class CLIToolsTest(unittest.TestCase):
             orbit_and_clock_csv = orbit_and_clock_path.read_text(encoding="ascii")
             self.assertEqual(
                 orbit_and_clock_csv.strip(),
-                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
+                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m,clock_network_id[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
             )
 
     def test_qzss_l6_info_compact_atmos_merge_policy_no_carry_drops_stec_coefficients_between_epochs(self) -> None:

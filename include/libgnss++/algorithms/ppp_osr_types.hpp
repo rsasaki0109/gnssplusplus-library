@@ -31,6 +31,8 @@ struct OSRCorrection {
     double network_compensation_m = 0.0;
     double orbit_projection_m = 0.0;
     double clock_correction_m = 0.0;
+    double base_clock_correction_m = 0.0;
+    bool base_clock_valid = false;
 
     Vector3d satellite_position = Vector3d::Zero();
     Vector3d satellite_velocity = Vector3d::Zero();

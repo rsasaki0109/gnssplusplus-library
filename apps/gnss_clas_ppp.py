@@ -364,6 +364,7 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
             dz = float(columns[6])
             dclock_m = float(columns[7])
             high_rate_clock_m = 0.0
+            clock_network_id = 0
             ura_sigma_token = None
             code_bias_tokens: list[str] = []
             phase_bias_tokens: list[str] = []
@@ -373,6 +374,13 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
             if extras and "=" not in extras[0] and not extras[0].startswith("cbias:"):
                 high_rate_clock_m = float(extras[0])
                 extras = extras[1:]
+            if extras and "=" not in extras[0] and not extras[0].startswith("cbias:"):
+                try:
+                    clock_network_id = int(extras[0])
+                except ValueError:
+                    pass
+                else:
+                    extras = extras[1:]
             for token in extras:
                 if token.startswith("ura_sigma_m="):
                     ura_sigma_token = token
@@ -407,6 +415,8 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
             ]
             if ura_sigma_token is not None:
                 output_tokens.append(ura_sigma_token)
+            if clock_network_id != 0:
+                output_tokens.append(f"clock_network_id={clock_network_id}")
             output_tokens.extend(code_bias_tokens)
             output_tokens.extend(phase_bias_tokens)
             output_tokens.extend(bias_network_tokens)

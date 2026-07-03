@@ -492,18 +492,19 @@ expanded SSR CSV treated them as base-orbit refreshes.  Native
 (e.g. G14 ~0.356→0.221→0.356 m) and inflated the SIS-boundary delta when
 `GNSS_PPP_CLAS_SIS_BOUNDARY=1` was enabled.
 
-The expander now skips `pending_orbit` and `pending_clock` updates when
-`flg_net` is set while still consuming the orbit/clock bits from the
-message.  This restores piecewise-constant base-orbit and base-clock behavior
-across each 30 s cycle, matching CLASLIB's dumped `orbit_projection_m` and
-base-clock bank (flat ~0.356 m for G14 through tow 230420–230434 with the
-ST3 base clock preserved at 230425).  See the ST11-fix measurement report
-for before/after component-diff and #161 tables.
+The expander now skips `pending_orbit` updates when `flg_net` is set while
+still consuming the orbit bits from the message.  Network ST11 clock samples
+are written to `pending_clock` again and tagged with `clock_network_id=1` in
+the compact CSV; the SSR loader stashes the base clock on merged variants so
+the gated SIS capture path can sample base-only SIS while the default PPP path
+keeps network-wins merged clocks (State B byte identity).
 
 ### SIS boundary delta pairing at observation epochs
 
 The gated `captureClasSisBoundary()` path now samples SIS
-(`-clock_correction_m + orbit_projection_m`) at the **observation epoch**
+(`-base_clock_correction_m + orbit_projection_m` when a stashed base clock
+exists, otherwise `-clock_correction_m + orbit_projection_m`) at the
+**observation epoch**
 rather than reusing the 5 s `clock_reference_time` step delta from
 `updateSisContinuity()`.  CLASLIB captures `prevsis` at the mid-cycle
 offset-25 obs epoch (`tow % 30 == 25`) and forms the held compN delta at the

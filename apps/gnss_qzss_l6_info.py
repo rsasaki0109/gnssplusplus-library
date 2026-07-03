@@ -396,6 +396,7 @@ class CompactSSRCorrection:
     dz: float
     dclock_m: float
     high_rate_clock_m: float = 0.0
+    clock_network_id: int = 0
     ura_sigma_m: float | None = None
     code_bias_m: dict[int, float] | None = None
     phase_bias_m: dict[int, float] | None = None
@@ -440,6 +441,8 @@ class CSSRDecoderState:
     message_index: int = 0
     pending_orbit: dict[str, tuple[float, float, float]] | None = None
     pending_clock: dict[str, float] | None = None
+    pending_base_clock: dict[str, float] | None = None
+    pending_clock_network: dict[str, int] | None = None
     pending_tow: int | None = None
     pending_iod: int | None = None
     pending_udi_seconds: float | None = None
@@ -1017,6 +1020,8 @@ def update_pending_lifecycle_atmos(
 def reset_pending_corrections(state: CSSRDecoderState) -> None:
     state.pending_orbit = None
     state.pending_clock = None
+    state.pending_base_clock = None
+    state.pending_clock_network = None
     state.pending_tow = None
     state.pending_iod = None
     state.pending_udi_seconds = None
@@ -1889,6 +1894,8 @@ def ensure_pending_epoch(
     state.pending_udi_seconds = udi_seconds
     state.pending_orbit = {}
     state.pending_clock = {}
+    state.pending_base_clock = {}
+    state.pending_clock_network = {}
     state.pending_ura = {}
     state.pending_code_bias = {}
     state.pending_base_code_bias = {}
@@ -1910,6 +1917,8 @@ def flush_pending_corrections(
         return []
     orbit_map = state.pending_orbit or {}
     clock_map = state.pending_clock or {}
+    base_clock_map = state.pending_base_clock or {}
+    clock_network_map = state.pending_clock_network or {}
     ura_map = state.pending_ura or {}
     code_bias_map = state.pending_code_bias or {}
     phase_bias_map = state.pending_phase_bias or {}
@@ -1958,33 +1967,68 @@ def flush_pending_corrections(
         if satellite is None:
             continue
         dx, dy, dz = orbit_map.get(sat_token, (0.0, 0.0, 0.0))
-        dclock_m = clock_map.get(sat_token, 0.0)
+        merged_dclock_m = clock_map.get(sat_token, 0.0)
+        base_dclock_m = base_clock_map.get(sat_token)
+        clock_network_id = clock_network_map.get(sat_token, 0)
         code_bias = code_bias_map.get(sat_token, {})
         phase_bias = phase_bias_map.get(sat_token, {})
+        shared_fields = dict(
+            week=gps_week,
+            tow=float(state.pending_tow),
+            system=satellite.system,
+            prn=satellite.prn,
+            ura_sigma_m=ura_map.get(sat_token),
+            code_bias_m=dict(code_bias) if code_bias else None,
+            phase_bias_m=dict(phase_bias) if phase_bias else None,
+            bias_network_id=state.pending_bias_network_id,
+            atmos_network_id=int(atmos["atmos_network_id"]) if "atmos_network_id" in atmos else None,
+            atmos_trop_avail=int(atmos["atmos_trop_avail"]) if "atmos_trop_avail" in atmos else None,
+            atmos_stec_avail=int(atmos["atmos_stec_avail"]) if "atmos_stec_avail" in atmos else None,
+            atmos_grid_count=int(atmos["atmos_grid_count"]) if "atmos_grid_count" in atmos else None,
+            atmos_selected_satellites=(
+                int(atmos["atmos_selected_satellites"])
+                if "atmos_selected_satellites" in atmos
+                else None
+            ),
+            atmos_tokens=dict(atmos) if atmos else None,
+        )
+        if (
+            clock_network_id == 1
+            and base_dclock_m is not None
+            and abs(base_dclock_m - merged_dclock_m) > 1e-12
+        ):
+            rows.append(
+                CompactSSRCorrection(
+                    **shared_fields,
+                    dx=dx,
+                    dy=dy,
+                    dz=dz,
+                    dclock_m=base_dclock_m,
+                    clock_network_id=0,
+                )
+            )
+            rows.append(
+                CompactSSRCorrection(
+                    week=gps_week,
+                    tow=float(state.pending_tow),
+                    system=satellite.system,
+                    prn=satellite.prn,
+                    dx=0.0,
+                    dy=0.0,
+                    dz=0.0,
+                    dclock_m=merged_dclock_m,
+                    clock_network_id=1,
+                )
+            )
+            continue
         rows.append(
             CompactSSRCorrection(
-                week=gps_week,
-                tow=float(state.pending_tow),
-                system=satellite.system,
-                prn=satellite.prn,
+                **shared_fields,
                 dx=dx,
                 dy=dy,
                 dz=dz,
-                dclock_m=dclock_m,
-                ura_sigma_m=ura_map.get(sat_token),
-                code_bias_m=dict(code_bias) if code_bias else None,
-                phase_bias_m=dict(phase_bias) if phase_bias else None,
-                bias_network_id=state.pending_bias_network_id,
-                atmos_network_id=int(atmos["atmos_network_id"]) if "atmos_network_id" in atmos else None,
-                atmos_trop_avail=int(atmos["atmos_trop_avail"]) if "atmos_trop_avail" in atmos else None,
-                atmos_stec_avail=int(atmos["atmos_stec_avail"]) if "atmos_stec_avail" in atmos else None,
-                atmos_grid_count=int(atmos["atmos_grid_count"]) if "atmos_grid_count" in atmos else None,
-                atmos_selected_satellites=(
-                    int(atmos["atmos_selected_satellites"])
-                    if "atmos_selected_satellites" in atmos
-                    else None
-                ),
-                atmos_tokens=dict(atmos) if atmos else None,
+                dclock_m=merged_dclock_m,
+                clock_network_id=clock_network_id,
             )
         )
     for atmos_tokens in lifecycle_atmos_rows:
@@ -2111,6 +2155,8 @@ def decode_cssr_clock_message(
     for satellite in mask.satellites:
         dclock_m, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.0016)
         state.pending_clock[satellite.sat] = dclock_m
+        state.pending_base_clock[satellite.sat] = dclock_m
+        state.pending_clock_network[satellite.sat] = 0
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
         corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
@@ -2929,10 +2975,14 @@ def decode_cssr_combined_message(
         # should refresh pending_orbit for the expanded SSR product.
         if not flg_net:
             state.pending_orbit[satellite.sat] = (dx, dy, dz)
-        # CLASLIB keeps network clock in a separate bank; only base-clock samples
-        # should refresh pending_clock for the expanded SSR product.
-        if flg_clock and not flg_net:
-            state.pending_clock[satellite.sat] = dclock_m
+        if flg_clock:
+            if not flg_net:
+                state.pending_clock[satellite.sat] = dclock_m
+                state.pending_base_clock[satellite.sat] = dclock_m
+                state.pending_clock_network[satellite.sat] = 0
+            else:
+                state.pending_clock[satellite.sat] = dclock_m
+                state.pending_clock_network[satellite.sat] = 1
     corrections: list[CompactSSRCorrection] = []
     if not bool(header["sync"]):
         corrections = flush_pending_corrections(state, gps_week, mask.satellites, flush_policy)
@@ -3364,7 +3414,9 @@ def write_compact_corrections(path: Path, corrections: list[CompactSSRCorrection
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="ascii", newline="") as handle:
         handle.write(
-            "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]\n"
+            "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m,clock_network_id"
+            "[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...]"
+            "[,bias_network_id=<n>][,atmos_<name>=<value>...]\n"
         )
         writer = csv.writer(handle)
         for correction in corrections:
@@ -3378,6 +3430,7 @@ def write_compact_corrections(path: Path, corrections: list[CompactSSRCorrection
                 f"{correction.dz:.6f}",
                 f"{correction.dclock_m:.6f}",
                 f"{correction.high_rate_clock_m:.6f}",
+                correction.clock_network_id,
             ]
             if correction.ura_sigma_m is not None:
                 row.append(f"ura_sigma_m={correction.ura_sigma_m:.6f}")

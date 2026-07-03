@@ -1138,6 +1138,8 @@ std::vector<OSRCorrection> computeOSR(
         GNSSTime phase_bias_reference_time;
         GNSSTime clock_reference_time;
         SSRCorrectionStatus ssr_status;
+        double base_clock_corr = 0.0;
+        bool base_clock_valid = false;
         if (ssr.interpolateCorrection(sat, obs.time, orbit_corr, clock_corr,
                                        &ura_sigma, &ssr_cbias, &ssr_pbias,
                                        &atmos_tokens,
@@ -1147,7 +1149,10 @@ std::vector<OSRCorrection> computeOSR(
                                        preferred_network_id,
                                        nullptr,
                                        nullptr,
-                                       &ssr_status)) {
+                                       &ssr_status,
+                                       true,
+                                       &base_clock_corr,
+                                       &base_clock_valid)) {
             // CSV-expanded CLAS corrections carry orbit deltas in RAC, while
             // sampled RTCM SSR products are already stored in ECEF.
             // RAC frame follows RTCM-10403.1 / CLASLIB convention:
@@ -1191,6 +1196,8 @@ std::vector<OSRCorrection> computeOSR(
             osr.code_bias_reference_time = ssr_status.code_bias_reference_time;
             osr.clock_reference_time = clock_reference_time;
             osr.clock_correction_m = clock_corr;
+            osr.base_clock_correction_m = base_clock_valid ? base_clock_corr : clock_corr;
+            osr.base_clock_valid = base_clock_valid;
         } else {
             if (pppDebugEnabled() && sat.system == GNSSSystem::QZSS) {
                 std::cerr << "[OSR-QZSS-SKIP] " << sat.toString()
@@ -1402,7 +1409,9 @@ std::vector<OSRCorrection> computeOSR(
         const auto phase_continuity_policy =
             config.clas_phase_continuity_policy;
         const bool clock_time_valid = gnsstimeIsSet(osr.clock_reference_time);
-        const double current_sis_m = -osr.clock_correction_m + osr.orbit_projection_m;
+        const double sis_clock_m = osr.base_clock_valid ?
+            osr.base_clock_correction_m : osr.clock_correction_m;
+        const double current_sis_m = -sis_clock_m + osr.orbit_projection_m;
         updateSisContinuity(sis_continuity_info, osr, clock_time_valid);
         if (pppEnvOverrides().clas_sis_boundary) {
             captureClasSisBoundary(sis_continuity_info, obs.time, current_sis_m);
