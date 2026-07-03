@@ -191,6 +191,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envExactOne("GNSS_PPP_CLAS_RESAMB");
     overrides.clas_dd_filter =
         envExactOne("GNSS_PPP_CLAS_DD_FILTER");
+    overrides.clas_sis_boundary =
+        envExactOne("GNSS_PPP_CLAS_SIS_BOUNDARY");
     overrides.clas_amb_datum_residual_phase_trop =
         !envExactZero("GNSS_PPP_CLAS_AMB_DATUM_RESIDUAL_PHASE_TROP");
     overrides.clas_amb_datum =

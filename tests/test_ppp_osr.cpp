@@ -777,3 +777,169 @@ TEST(PPPOSRTest, NetworkCompensationMaterializesOnlyWhenSisContinuityApplied) {
         EXPECT_DOUBLE_EQ(sis_disabled_osr.front().network_compensation_m, 0.0);
     }
 }
+
+TEST(PPPOSRTest, UpdateSisContinuityPreservesBoundaryDeltaAcrossClockInvalidGap) {
+    CLASSisContinuityInfo info;
+    info.has_boundary_delta = true;
+    info.boundary_time = GNSSTime(2068, 230430.0);
+    info.boundary_delta_m = -0.052;
+    // Seed "live" continuity state that SHOULD be wiped by the gap.
+    info.has_current = true;
+    info.has_previous = true;
+    info.has_last_delta = true;
+    info.current_time = GNSSTime(2068, 230435.0);
+    info.previous_time = GNSSTime(2068, 230430.0);
+    info.current_sis_m = 1.0;
+    info.previous_sis_m = 0.5;
+    info.last_delta_m = 0.5;
+
+    OSRCorrection osr;  // orbit/clock fields irrelevant when clock_time_valid=false
+    updateSisContinuity(info, osr, /*clock_time_valid=*/false);
+
+    // The CLASLIB-style boundary-held delta survives a transient
+    // clock-reference-time gap (real CLAS data has these mid-window).
+    EXPECT_TRUE(info.has_boundary_delta);
+    EXPECT_EQ(info.boundary_time, GNSSTime(2068, 230430.0));
+    EXPECT_DOUBLE_EQ(info.boundary_delta_m, -0.052);
+
+    // Everything else resets, matching pre-existing (gate-OFF) behavior.
+    EXPECT_FALSE(info.has_current);
+    EXPECT_FALSE(info.has_previous);
+    EXPECT_FALSE(info.has_last_delta);
+    EXPECT_DOUBLE_EQ(info.last_delta_m, 0.0);
+}
+
+TEST(PPPOSRTest, IsSsrOrbitBoundaryTowMatchesClaslibThirtySecondGrid) {
+    // Boundary instants (tow % 30 == 0) are on the grid.
+    EXPECT_TRUE(isSsrOrbitBoundaryTow(230430.0));
+    EXPECT_TRUE(isSsrOrbitBoundaryTow(230460.0));
+    EXPECT_TRUE(isSsrOrbitBoundaryTow(0.0));
+    // Values within tolerance of the grid still count.
+    EXPECT_TRUE(isSsrOrbitBoundaryTow(230430.2));
+    EXPECT_TRUE(isSsrOrbitBoundaryTow(230429.8));
+    // Mid-cycle clock ticks (5, 10, 15, 20, 25 offset) are off the grid.
+    EXPECT_FALSE(isSsrOrbitBoundaryTow(230435.0));
+    EXPECT_FALSE(isSsrOrbitBoundaryTow(230440.0));
+    EXPECT_FALSE(isSsrOrbitBoundaryTow(230445.0));
+    EXPECT_FALSE(isSsrOrbitBoundaryTow(230450.0));
+    EXPECT_FALSE(isSsrOrbitBoundaryTow(230455.0));
+}
+
+TEST(PPPOSRTest, ClasSisApplyDecisionGateOffReproducesLegacyLagWindowCondition) {
+    const GNSSTime clock_ref(2068, 230430.0);
+
+    CLASSisContinuityInfo info;
+    info.has_last_delta = true;
+    info.last_delta_m = 0.42;
+
+    // Legacy behavior: applies only when clock_reference_time leads
+    // effective_phase_bias_reference_time by exactly ~30s (unreachable on
+    // real CLAS data, but must remain byte-identical for gate-OFF callers).
+    // epoch_time is unused on the gate-OFF path; pass clock_ref for it too.
+    const GNSSTime pbias_ref_30s_lag = clock_ref - 30.0;
+    const auto applied = computeClasSisApplyDecision(
+        info, clock_ref, clock_ref, pbias_ref_30s_lag, /*clock_time_valid=*/true,
+        /*sis_boundary_gate_enabled=*/false);
+    EXPECT_TRUE(applied.applied);
+    EXPECT_DOUBLE_EQ(applied.delta_m, 0.42);
+
+    const GNSSTime pbias_ref_synced = clock_ref;
+    const auto not_applied = computeClasSisApplyDecision(
+        info, clock_ref, clock_ref, pbias_ref_synced, /*clock_time_valid=*/true,
+        /*sis_boundary_gate_enabled=*/false);
+    EXPECT_FALSE(not_applied.applied);
+    EXPECT_DOUBLE_EQ(not_applied.delta_m, 0.0);
+
+    // Boundary-delta state must never leak into the gate-OFF decision, even
+    // when populated (e.g. a caller that also runs the gated code path).
+    info.has_boundary_delta = true;
+    info.boundary_time = clock_ref;
+    info.boundary_delta_m = 99.0;
+    const auto still_legacy = computeClasSisApplyDecision(
+        info, clock_ref, clock_ref, pbias_ref_30s_lag, /*clock_time_valid=*/true,
+        /*sis_boundary_gate_enabled=*/false);
+    EXPECT_TRUE(still_legacy.applied);
+    EXPECT_DOUBLE_EQ(still_legacy.delta_m, 0.42);
+}
+
+TEST(PPPOSRTest, CaptureClasSisBoundaryOnlyFreezesOnObsEpochThirtySecondGrid) {
+    const GNSSTime off_boundary_clock_ref(2068, 230430.0);
+
+    // A transition whose clock_reference_time is NOT on the 30s grid (e.g. a
+    // stray mid-cycle recompute) must never be captured, even if the epoch
+    // happens to be on the grid.
+    CLASSisContinuityInfo info_off_grid;
+    info_off_grid.has_last_delta = true;
+    info_off_grid.last_delta_m = 0.111;
+    info_off_grid.current_time = GNSSTime(2068, 230435.0);  // mid-cycle, not 30-aligned
+    captureClasSisBoundary(info_off_grid, off_boundary_clock_ref);
+    EXPECT_FALSE(info_off_grid.has_boundary_delta);
+
+    // A grid-aligned clock_reference_time delta, observed on an off-grid
+    // epoch (the "early availability" case from real CLAS data, where
+    // clock_reference_time reaches the boundary a few seconds before the
+    // observation epoch tow does): not captured yet.
+    CLASSisContinuityInfo info_early;
+    info_early.has_last_delta = true;
+    info_early.last_delta_m = 0.131951;
+    info_early.current_time = GNSSTime(2068, 230430.0);  // on the grid
+    captureClasSisBoundary(info_early, GNSSTime(2068, 230426.0));  // epoch off-grid
+    EXPECT_FALSE(info_early.has_boundary_delta);
+
+    // Once the observation epoch itself reaches the 30s grid (with the same
+    // still-held clock_reference_time delta), the boundary is captured and
+    // anchored to the epoch time (not the earlier clock_reference_time).
+    captureClasSisBoundary(info_early, GNSSTime(2068, 230430.0));
+    ASSERT_TRUE(info_early.has_boundary_delta);
+    EXPECT_DOUBLE_EQ(info_early.boundary_delta_m, 0.131951);
+    EXPECT_EQ(info_early.boundary_time, GNSSTime(2068, 230430.0));
+
+    // No last_delta_m yet: never captures.
+    CLASSisContinuityInfo info_no_delta;
+    captureClasSisBoundary(info_no_delta, GNSSTime(2068, 230430.0));
+    EXPECT_FALSE(info_no_delta.has_boundary_delta);
+}
+
+TEST(PPPOSRTest, ClasSisApplyDecisionGateOnHoldsBoundaryDeltaForFifteenObsSeconds) {
+    const GNSSTime boundary_time(2068, 230430.0);
+    const GNSSTime phase_bias_ref = boundary_time;  // synced; irrelevant when gated.
+    const GNSSTime clock_ref = boundary_time;  // irrelevant when gated.
+
+    CLASSisContinuityInfo info;
+    info.has_last_delta = true;
+    info.last_delta_m = 0.111;  // stale per-5s value; must NOT be applied when gated.
+    info.has_boundary_delta = true;
+    info.boundary_time = boundary_time;
+    info.boundary_delta_m = -0.052;
+
+    // Observation epoch offsets 0..14s after the boundary: held delta
+    // applies, unchanged (matches the CLASLIB oracle's 15-row window).
+    for (const double offset : {0.0, 5.0, 10.0, 14.0}) {
+        const GNSSTime epoch_time = boundary_time + offset;
+        const auto decision = computeClasSisApplyDecision(
+            info, epoch_time, clock_ref, phase_bias_ref, /*clock_time_valid=*/true,
+            /*sis_boundary_gate_enabled=*/true);
+        EXPECT_TRUE(decision.applied) << "offset=" << offset;
+        EXPECT_DOUBLE_EQ(decision.delta_m, -0.052) << "offset=" << offset;
+    }
+
+    // Observation epoch offsets 15..29s after the boundary: zero (second
+    // half of the 30s orbit cycle), matching the CLASLIB oracle windowing.
+    for (const double offset : {15.0, 20.0, 25.0, 29.0}) {
+        const GNSSTime epoch_time = boundary_time + offset;
+        const auto decision = computeClasSisApplyDecision(
+            info, epoch_time, clock_ref, phase_bias_ref, /*clock_time_valid=*/true,
+            /*sis_boundary_gate_enabled=*/true);
+        EXPECT_FALSE(decision.applied) << "offset=" << offset;
+        EXPECT_DOUBLE_EQ(decision.delta_m, 0.0) << "offset=" << offset;
+    }
+
+    // No boundary captured yet: never applies even inside the window.
+    CLASSisContinuityInfo no_boundary;
+    no_boundary.has_last_delta = true;
+    no_boundary.last_delta_m = 0.111;
+    const auto decision_no_boundary = computeClasSisApplyDecision(
+        no_boundary, boundary_time, clock_ref, phase_bias_ref, /*clock_time_valid=*/true,
+        /*sis_boundary_gate_enabled=*/true);
+    EXPECT_FALSE(decision_no_boundary.applied);
+}

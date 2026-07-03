@@ -48,6 +48,55 @@ GNSSTime selectClasPhaseBiasReferenceTime(
 bool usesClasSisContinuity(
     ppp_shared::PPPConfig::ClasPhaseContinuityPolicy policy);
 
+/// Update SIS (Signal-In-Space) continuity tracking for a satellite: detects
+/// clock reference time transitions and computes `last_delta_m` for SIS
+/// correction. When `clock_time_valid` is false, resets `info` EXCEPT for
+/// the CLASLIB-style boundary-held fields (`boundary_time`,
+/// `boundary_delta_m`, `has_boundary_delta`), which survive transient
+/// per-epoch SSR gaps so a brief gap inside the 15s hold window (observed on
+/// real CLAS data) does not drop an already-captured boundary delta.
+void updateSisContinuity(
+    CLASSisContinuityInfo& info,
+    const OSRCorrection& osr,
+    bool clock_time_valid);
+
+/// True when `tow` sits on (within tolerance of) the 30s CLASLIB SSR orbit
+/// update boundary grid (tow % 30 in [0, 0.5) or (29.5, 30)).
+bool isSsrOrbitBoundaryTow(double tow);
+
+/// Capture the CLASLIB-style SSR-update-boundary SIS delta (gated feature):
+/// when `epoch_time` (the current observation epoch) lands on the 30s
+/// boundary grid and `info` already holds a fresh boundary-aligned
+/// clock-reference-time delta, freeze it into `info.boundary_delta_m` /
+/// `info.boundary_time` for the following 15s of observation epochs. A
+/// no-op otherwise (including when `info` has no delta yet, or the epoch is
+/// off the 30s grid).
+void captureClasSisBoundary(
+    CLASSisContinuityInfo& info,
+    const GNSSTime& epoch_time);
+
+/// Result of deciding whether/how much CLAS SIS continuity delta to apply
+/// to a CPC/PRC row for the current epoch.
+struct ClasSisApplyDecision {
+    bool applied = false;
+    double delta_m = 0.0;
+};
+
+/// Decide whether to apply the CLAS SIS continuity delta this epoch, and
+/// which value to use. When `sis_boundary_gate_enabled` is false, reproduces
+/// the legacy (real-data-unreachable) 30s phase-bias-lag condition
+/// byte-for-byte (using `clock_reference_time`). When true, uses
+/// CLASLIB-style SSR-update-boundary semantics: the delta captured by
+/// captureClasSisBoundary() at the most recent 30s orbit/clock boundary,
+/// held for the following 15s of observation epochs (`epoch_time`).
+ClasSisApplyDecision computeClasSisApplyDecision(
+    const CLASSisContinuityInfo& info,
+    const GNSSTime& epoch_time,
+    const GNSSTime& clock_reference_time,
+    const GNSSTime& effective_phase_bias_reference_time,
+    bool clock_time_valid,
+    bool sis_boundary_gate_enabled);
+
 bool usesClasPhaseBiasRepair(
     ppp_shared::PPPConfig::ClasPhaseContinuityPolicy policy);
 
