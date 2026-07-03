@@ -209,6 +209,7 @@ void L6Decoder::decodeSubtype3(BitReader& reader) {
         const SatelliteId sat_id(sat.system, sat.prn);
         CssrClockCorrection corr;
         corr.dclock_m = reader.readS(15) * kClockScale;
+        corr.clock_network_id = 0;
         current_epoch_.clocks[sat_id] = corr;
     }
     current_epoch_.has_clock = true;
@@ -306,14 +307,11 @@ void L6Decoder::decodeSubtype11(BitReader& reader) {
             }
         }
         if (flg_clock) {
-            if (!flg_net) {
-                CssrClockCorrection corr;
-                corr.dclock_m = reader.readS(15) * kClockScale;
-                current_epoch_.clocks[sat_id] = corr;
-                current_epoch_.has_clock = true;
-            } else {
-                reader.readS(15);
-            }
+            CssrClockCorrection corr;
+            corr.dclock_m = reader.readS(15) * kClockScale;
+            corr.clock_network_id = flg_net ? 1 : 0;
+            current_epoch_.clocks[sat_id] = corr;
+            current_epoch_.has_clock = true;
         }
     }
 }
@@ -764,6 +762,7 @@ void populateSSRProducts(
             corr.time = time;
             corr.clock_correction_m = clock_corr.dclock_m;
             corr.clock_valid = true;
+            corr.clock_network_id = clock_corr.clock_network_id;
 
             // Orbit (may not be present every epoch)
             auto orbit_it = epoch.orbits.find(sat_id);

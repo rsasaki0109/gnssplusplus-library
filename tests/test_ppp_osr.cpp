@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/ppp_bias_identity.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/navigation.hpp>
 
 #include <chrono>
 #include <cmath>
@@ -903,6 +904,76 @@ TEST(PPPOSRTest, CaptureClasSisBoundaryPairsOffset25AndOffset0AtObsEpochs) {
     CLASSisContinuityInfo no_prev;
     captureClasSisBoundary(no_prev, GNSSTime(2068, 230430.0), 0.20);
     EXPECT_FALSE(no_prev.has_boundary_delta);
+}
+
+TEST(PPPOSRTest, ClasSisBoundaryUsesBaseClockWhenNetworkMergedAtOffset25) {
+    SSRProducts products;
+    products.setOrbitCorrectionsAreRac(false);
+
+    const SatelliteId satellite(GNSSSystem::GPS, 14);
+    const GNSSTime offset25(2068, 230425.0);
+
+    SSROrbitClockCorrection base_row;
+    base_row.satellite = satellite;
+    base_row.time = offset25;
+    base_row.orbit_correction_ecef = Vector3d(0.0, 0.0, 0.0);
+    base_row.orbit_valid = true;
+    base_row.clock_correction_m = -0.2192;
+    base_row.clock_valid = true;
+    base_row.clock_network_id = 0;
+    products.addCorrection(base_row);
+
+    SSROrbitClockCorrection network_row;
+    network_row.satellite = satellite;
+    network_row.time = offset25;
+    network_row.clock_correction_m = 0.2064;
+    network_row.clock_valid = true;
+    network_row.clock_network_id = 1;
+    products.addCorrection(network_row);
+
+    Vector3d orbit_corr = Vector3d::Zero();
+    double merged_clock_m = 0.0;
+    double base_clock_m = 0.0;
+    bool base_clock_valid = false;
+    ASSERT_TRUE(products.interpolateCorrection(
+        satellite,
+        offset25,
+        orbit_corr,
+        merged_clock_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        nullptr,
+        nullptr,
+        true,
+        &base_clock_m,
+        &base_clock_valid));
+    EXPECT_DOUBLE_EQ(merged_clock_m, 0.2064);
+    ASSERT_TRUE(base_clock_valid);
+    EXPECT_DOUBLE_EQ(base_clock_m, -0.2192);
+
+    const double orbit_projection_m = 0.356;
+    const double merged_sis_m = -merged_clock_m + orbit_projection_m;
+    const double base_sis_m = -base_clock_m + orbit_projection_m;
+    EXPECT_NEAR(merged_sis_m, 0.1496, 1e-12);
+    EXPECT_NEAR(base_sis_m, 0.5752, 1e-12);
+
+    CLASSisContinuityInfo info;
+    captureClasSisBoundary(info, offset25, base_sis_m);
+    ASSERT_TRUE(info.has_boundary_prev_sis);
+    EXPECT_DOUBLE_EQ(info.boundary_prev_sis_m, base_sis_m);
+
+    const GNSSTime boundary0(2068, 230430.0);
+    const double boundary_sis_m = base_sis_m - 0.058;
+    captureClasSisBoundary(info, boundary0, boundary_sis_m);
+    ASSERT_TRUE(info.has_boundary_delta);
+    EXPECT_NEAR(info.boundary_delta_m, -0.058, 1e-12);
 }
 
 TEST(PPPOSRTest, ClasSisApplyDecisionGateOnHoldsBoundaryDeltaForFifteenObsSeconds) {

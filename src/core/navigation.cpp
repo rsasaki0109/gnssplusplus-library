@@ -140,7 +140,15 @@ void mergeCorrectionFields(SSROrbitClockCorrection& target,
         target.ssr_orbit_iod = correction.ssr_orbit_iod;
     }
     if (correction.clock_valid) {
-        target.clock_correction_m = correction.clock_correction_m;
+        if (correction.clock_network_id == 0) {
+            target.clock_correction_m = correction.clock_correction_m;
+            target.base_clock_correction_m = correction.clock_correction_m;
+            target.base_clock_valid = true;
+            target.base_clock_reference_time = correction.clock_reference_time.week != 0 ?
+                correction.clock_reference_time : correction.time;
+        } else {
+            target.clock_correction_m = correction.clock_correction_m;
+        }
         target.clock_valid = true;
         target.clock_reference_time = correction.clock_reference_time.week != 0 ?
             correction.clock_reference_time : correction.time;
@@ -181,6 +189,65 @@ GNSSTime orbitReferenceTime(const SSROrbitClockCorrection& correction) {
 GNSSTime clockReferenceTime(const SSROrbitClockCorrection& correction) {
     return correction.clock_reference_time.week != 0 ?
         correction.clock_reference_time : correction.time;
+}
+
+double sampleBaseClockM(const SSROrbitClockCorrection& sample, bool& valid) {
+    if (sample.base_clock_valid) {
+        valid = true;
+        return sample.base_clock_correction_m;
+    }
+    valid = sample.clock_valid;
+    return sample.clock_correction_m;
+}
+
+void assignBaseClockOutputs(const SSROrbitClockCorrection& sample,
+                            double merged_clock_m,
+                            double* base_clock_correction_m,
+                            bool* base_clock_valid) {
+    if (base_clock_correction_m == nullptr || base_clock_valid == nullptr) {
+        return;
+    }
+    bool valid = false;
+    const double base_m = sampleBaseClockM(sample, valid);
+    if (valid) {
+        *base_clock_correction_m = base_m;
+        *base_clock_valid = true;
+        return;
+    }
+    *base_clock_correction_m = merged_clock_m;
+    *base_clock_valid = false;
+}
+
+void interpolateBaseClockOutputs(const SSROrbitClockCorrection* before,
+                                 const SSROrbitClockCorrection* after,
+                                 double alpha,
+                                 double merged_clock_m,
+                                 double* base_clock_correction_m,
+                                 bool* base_clock_valid) {
+    if (base_clock_correction_m == nullptr || base_clock_valid == nullptr) {
+        return;
+    }
+    const bool before_base = before != nullptr && before->base_clock_valid;
+    const bool after_base = after != nullptr && after->base_clock_valid;
+    if (before_base && after_base) {
+        *base_clock_correction_m =
+            before->base_clock_correction_m +
+            alpha * (after->base_clock_correction_m - before->base_clock_correction_m);
+        *base_clock_valid = true;
+        return;
+    }
+    if (before_base) {
+        *base_clock_correction_m = before->base_clock_correction_m;
+        *base_clock_valid = true;
+        return;
+    }
+    if (after_base) {
+        *base_clock_correction_m = after->base_clock_correction_m;
+        *base_clock_valid = true;
+        return;
+    }
+    *base_clock_correction_m = merged_clock_m;
+    *base_clock_valid = false;
 }
 
 bool parseEpochFields(int year,
@@ -1305,7 +1372,14 @@ void SSRProducts::addCorrection(const SSROrbitClockCorrection& correction) {
         return;
     }
 
-    entries.insert(upper, correction);
+    SSROrbitClockCorrection to_insert = correction;
+    if (to_insert.clock_valid && to_insert.clock_network_id == 0) {
+        to_insert.base_clock_correction_m = to_insert.clock_correction_m;
+        to_insert.base_clock_valid = true;
+        to_insert.base_clock_reference_time = to_insert.clock_reference_time.week != 0 ?
+            to_insert.clock_reference_time : to_insert.time;
+    }
+    entries.insert(upper, to_insert);
 }
 
 void SSRProducts::addCorrections(const std::vector<SSROrbitClockCorrection>& corrections) {
@@ -1392,7 +1466,9 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
                                         int* orbit_iode,
                                         std::map<uint8_t, int>* phase_bias_discnt,
                                         SSRCorrectionStatus* status,
-                                        bool allow_future_samples) const {
+                                        bool allow_future_samples,
+                                        double* base_clock_correction_m,
+                                        bool* base_clock_valid) const {
     if (status != nullptr) {
         *status = SSRCorrectionStatus{};
     }
@@ -1622,6 +1698,8 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         }
         if (clock_source != nullptr && clock_source->clock_valid) {
             clock_correction_m = clock_source->clock_correction_m;
+            assignBaseClockOutputs(*clock_source, clock_correction_m,
+                                   base_clock_correction_m, base_clock_valid);
             if (clock_reference_time != nullptr) {
                 *clock_reference_time = clock_source->time;
             }
@@ -1762,6 +1840,10 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             }
         } else {
             clock_correction_m = 0.0;
+        }
+        if (before != nullptr || after != nullptr) {
+            interpolateBaseClockOutputs(before, after, alpha, clock_correction_m,
+                                        base_clock_correction_m, base_clock_valid);
         }
         if (ura_sigma_m != nullptr) {
             if (before->ura_valid && after->ura_valid) {
@@ -1946,6 +2028,8 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
     orbit_correction_ecef =
         orbit_source->orbit_valid ? orbit_source->orbit_correction_ecef : Vector3d::Zero();
     clock_correction_m = clock_source->clock_valid ? clock_source->clock_correction_m : 0.0;
+    assignBaseClockOutputs(*clock_source, clock_correction_m,
+                           base_clock_correction_m, base_clock_valid);
     if (orbit_source->orbit_valid) {
         if (orbit_iode != nullptr) {
             *orbit_iode = orbit_source->iode;
@@ -2157,6 +2241,13 @@ bool SSRProducts::loadCSVFile(const std::string& filename) {
                 }
                 continue;
             }
+            if (extra.rfind("clock_network_id=", 0) == 0) {
+                try {
+                    correction.clock_network_id = std::max(0, std::stoi(extra.substr(17)));
+                } catch (const std::exception&) {
+                }
+                continue;
+            }
             if (extra.rfind("atmos_", 0) == 0) {
                 const auto equal_pos = extra.find('=');
                 if (equal_pos == std::string::npos || equal_pos <= 6) {
@@ -2210,6 +2301,9 @@ bool SSRProducts::loadCSVFile(const std::string& filename) {
         (void)sat;
         Vector3d last_orbit = Vector3d::Zero();
         bool has_last_orbit = false;
+        double last_base_clock = 0.0;
+        bool has_last_base_clock = false;
+        GNSSTime last_base_clock_reference_time;
         for (auto& entry : entries) {
             if (entry.orbit_valid) {
                 last_orbit = entry.orbit_correction_ecef;
@@ -2217,6 +2311,16 @@ bool SSRProducts::loadCSVFile(const std::string& filename) {
             } else if (has_last_orbit && entry.clock_valid) {
                 entry.orbit_correction_ecef = last_orbit;
                 entry.orbit_valid = true;
+            }
+            if (entry.base_clock_valid) {
+                last_base_clock = entry.base_clock_correction_m;
+                has_last_base_clock = true;
+                last_base_clock_reference_time = entry.base_clock_reference_time.week != 0 ?
+                    entry.base_clock_reference_time : entry.time;
+            } else if (has_last_base_clock && entry.clock_valid) {
+                entry.base_clock_correction_m = last_base_clock;
+                entry.base_clock_valid = true;
+                entry.base_clock_reference_time = last_base_clock_reference_time;
             }
         }
     }

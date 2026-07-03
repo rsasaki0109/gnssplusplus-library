@@ -393,12 +393,15 @@ struct SSROrbitClockCorrection {
 
     Vector3d orbit_correction_ecef = Vector3d::Zero();   ///< Orbit delta in meters (ECEF or RAC per container flag)
     double clock_correction_m = 0.0;                     ///< Clock delta in meters
+    double base_clock_correction_m = 0.0;                  ///< Base (ST3) clock delta stashed for SIS sampling
+    GNSSTime base_clock_reference_time;                    ///< Reference time for base_clock_correction_m
     double ura_sigma_m = 0.0;                            ///< SSR URA sigma in meters
     std::map<uint8_t, double> code_bias_m;               ///< SSR code biases keyed by RTCM signal id
     std::map<uint8_t, double> phase_bias_m;              ///< SSR phase biases keyed by RTCM signal id
     std::map<uint8_t, int> phase_bias_discnt;            ///< SSR phase-bias discontinuity counters keyed by RTCM signal id
     int bias_network_id = 0;                             ///< Optional CLAS bias network id (0 when unset)
     int atmos_network_id = 0;                            ///< Optional CLAS atmosphere network id (0 when unset)
+    int clock_network_id = 0;                            ///< Clock provenance on ingest (0=base ST3, >0=ST11 network)
     int iode = -1;                                       ///< IODE the orbit correction references (-1 when unset)
     int ssr_orbit_iod = -1;
     int ssr_clock_iod = -1;
@@ -406,6 +409,7 @@ struct SSROrbitClockCorrection {
 
     bool orbit_valid = false;
     bool clock_valid = false;
+    bool base_clock_valid = false;
     bool ura_valid = false;
     bool code_bias_valid = false;
     bool phase_bias_valid = false;
@@ -459,7 +463,9 @@ public:
                                int* orbit_iode = nullptr,
                                std::map<uint8_t, int>* phase_bias_discnt = nullptr,
                                SSRCorrectionStatus* status = nullptr,
-                               bool allow_future_samples = true) const;
+                               bool allow_future_samples = true,
+                               double* base_clock_correction_m = nullptr,
+                               bool* base_clock_valid = nullptr) const;
 
     bool loadCSVFile(const std::string& filename);
 

@@ -82,6 +82,7 @@ struct CssrOrbitCorrection {
 /// Per-satellite clock correction.
 struct CssrClockCorrection {
     double dclock_m = 0.0;
+    int clock_network_id = 0;
 };
 
 /// Decoded CSSR corrections for one epoch.
