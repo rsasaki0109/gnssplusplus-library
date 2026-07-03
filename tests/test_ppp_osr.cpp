@@ -972,6 +972,223 @@ TEST(PPPOSRTest, ClasSisBoundaryUsesBaseClockWhenNetworkMergedAtOffset25) {
     EXPECT_NEAR(info.boundary_delta_m, -0.058, 1e-12);
 }
 
+namespace {
+
+SSROrbitClockCorrection makeClasClockTestOrbitRow(const SatelliteId& satellite,
+                                                    const GNSSTime& time,
+                                                    double clock_m,
+                                                    int clock_network_id) {
+    SSROrbitClockCorrection row;
+    row.satellite = satellite;
+    row.time = time;
+    row.orbit_correction_ecef = Vector3d(0.1, 0.2, 0.3);
+    row.orbit_valid = true;
+    row.orbit_reference_time = time;
+    row.clock_correction_m = clock_m;
+    row.clock_valid = true;
+    row.clock_network_id = clock_network_id;
+    if (clock_network_id == 0) {
+        row.base_clock_correction_m = clock_m;
+        row.base_clock_valid = true;
+    }
+    return row;
+}
+
+}  // namespace
+
+TEST(PPPOSRTest, ClaslibBaseHoldStepHoldsBetweenFiveSecondGridPoints) {
+    SSRProducts products;
+    products.setOrbitCorrectionsAreRac(false);
+
+    const SatelliteId satellite(GNSSSystem::GPS, 14);
+    const GNSSTime orbit_time(2068, 230400.0);
+    const GNSSTime clock_t0(2068, 230420.0);
+    const GNSSTime clock_t1(2068, 230425.0);
+    const GNSSTime obs_between(2068, 230422.0);
+
+    SSROrbitClockCorrection orbit_row;
+    orbit_row.satellite = satellite;
+    orbit_row.time = orbit_time;
+    orbit_row.orbit_correction_ecef = Vector3d(0.1, 0.2, 0.3);
+    orbit_row.orbit_valid = true;
+    orbit_row.orbit_reference_time = orbit_time;
+    products.addCorrection(orbit_row);
+
+    products.addCorrection(
+        makeClasClockTestOrbitRow(satellite, clock_t0, -0.2016, 0));
+    products.addCorrection(
+        makeClasClockTestOrbitRow(satellite, clock_t1, -0.2192, 0));
+
+    Vector3d orbit_corr = Vector3d::Zero();
+    double clock_m = 0.0;
+    ASSERT_TRUE(products.interpolateCorrection(
+        satellite,
+        obs_between,
+        orbit_corr,
+        clock_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        nullptr,
+        nullptr,
+        false,
+        nullptr,
+        nullptr,
+        SSRClockSelectionPolicy::ClaslibBaseHold));
+    EXPECT_DOUBLE_EQ(clock_m, -0.2016);
+}
+
+TEST(PPPOSRTest, ClaslibBaseHoldIgnoresNetworkMergedClock) {
+    SSRProducts products;
+    products.setOrbitCorrectionsAreRac(false);
+
+    const SatelliteId satellite(GNSSSystem::GPS, 14);
+    const GNSSTime orbit_time(2068, 230400.0);
+    const GNSSTime offset25(2068, 230425.0);
+
+    SSROrbitClockCorrection orbit_row;
+    orbit_row.satellite = satellite;
+    orbit_row.time = orbit_time;
+    orbit_row.orbit_correction_ecef = Vector3d(0.1, 0.2, 0.3);
+    orbit_row.orbit_valid = true;
+    orbit_row.orbit_reference_time = orbit_time;
+    products.addCorrection(orbit_row);
+
+    SSROrbitClockCorrection base_row =
+        makeClasClockTestOrbitRow(satellite, offset25, -0.2192, 0);
+    products.addCorrection(base_row);
+
+    SSROrbitClockCorrection network_row;
+    network_row.satellite = satellite;
+    network_row.time = offset25;
+    network_row.clock_correction_m = 0.2064;
+    network_row.clock_valid = true;
+    network_row.clock_network_id = 1;
+    products.addCorrection(network_row);
+
+    Vector3d orbit_corr = Vector3d::Zero();
+    double gated_clock_m = 0.0;
+    ASSERT_TRUE(products.interpolateCorrection(
+        satellite,
+        offset25,
+        orbit_corr,
+        gated_clock_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        nullptr,
+        nullptr,
+        false,
+        nullptr,
+        nullptr,
+        SSRClockSelectionPolicy::ClaslibBaseHold));
+    EXPECT_DOUBLE_EQ(gated_clock_m, -0.2192);
+}
+
+TEST(PPPOSRTest, ClaslibBaseHoldRejectsFutureClockSample) {
+    SSRProducts products;
+    products.setOrbitCorrectionsAreRac(false);
+
+    const SatelliteId satellite(GNSSSystem::GPS, 14);
+    const GNSSTime orbit_time(2068, 230400.0);
+    const GNSSTime obs_time(2068, 230422.0);
+    const GNSSTime future_clock(2068, 230425.0);
+
+    SSROrbitClockCorrection orbit_row;
+    orbit_row.satellite = satellite;
+    orbit_row.time = orbit_time;
+    orbit_row.orbit_correction_ecef = Vector3d(0.1, 0.2, 0.3);
+    orbit_row.orbit_valid = true;
+    orbit_row.orbit_reference_time = orbit_time;
+    products.addCorrection(orbit_row);
+
+    products.addCorrection(
+        makeClasClockTestOrbitRow(satellite, future_clock, -0.2192, 0));
+
+    Vector3d orbit_corr = Vector3d::Zero();
+    double clock_m = 0.0;
+    EXPECT_FALSE(products.interpolateCorrection(
+        satellite,
+        obs_time,
+        orbit_corr,
+        clock_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        nullptr,
+        nullptr,
+        false,
+        nullptr,
+        nullptr,
+        SSRClockSelectionPolicy::ClaslibBaseHold));
+}
+
+TEST(PPPOSRTest, ClaslibBaseHoldFailsWhenNoEligibleClock) {
+    SSRProducts products;
+    products.setOrbitCorrectionsAreRac(false);
+
+    const SatelliteId satellite(GNSSSystem::GPS, 14);
+    const GNSSTime orbit_time(2068, 230400.0);
+    const GNSSTime obs_time(2068, 230422.0);
+
+    SSROrbitClockCorrection orbit_row;
+    orbit_row.satellite = satellite;
+    orbit_row.time = orbit_time;
+    orbit_row.orbit_correction_ecef = Vector3d(0.1, 0.2, 0.3);
+    orbit_row.orbit_valid = true;
+    orbit_row.orbit_reference_time = orbit_time;
+    products.addCorrection(orbit_row);
+
+    SSROrbitClockCorrection network_only;
+    network_only.satellite = satellite;
+    network_only.time = orbit_time;
+    network_only.clock_correction_m = 0.2064;
+    network_only.clock_valid = true;
+    network_only.clock_network_id = 1;
+    products.addCorrection(network_only);
+
+    Vector3d orbit_corr = Vector3d::Zero();
+    double clock_m = 0.0;
+    EXPECT_FALSE(products.interpolateCorrection(
+        satellite,
+        obs_time,
+        orbit_corr,
+        clock_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        nullptr,
+        nullptr,
+        false,
+        nullptr,
+        nullptr,
+        SSRClockSelectionPolicy::ClaslibBaseHold));
+}
+
 TEST(PPPOSRTest, ClasSisApplyDecisionGateOnHoldsBoundaryDeltaForFifteenObsSeconds) {
     const GNSSTime boundary_time(2068, 230430.0);
     const GNSSTime phase_bias_ref = boundary_time;  // synced; irrelevant when gated.

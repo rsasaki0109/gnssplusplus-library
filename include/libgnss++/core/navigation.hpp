@@ -416,6 +416,11 @@ struct SSROrbitClockCorrection {
     bool atmos_valid = false;
 };
 
+enum class SSRClockSelectionPolicy {
+    MergedInterpolate,
+    ClaslibBaseHold,
+};
+
 struct SSRCorrectionStatus {
     bool orbit_valid = false;
     bool clock_valid = false;
@@ -465,7 +470,9 @@ public:
                                SSRCorrectionStatus* status = nullptr,
                                bool allow_future_samples = true,
                                double* base_clock_correction_m = nullptr,
-                               bool* base_clock_valid = nullptr) const;
+                               bool* base_clock_valid = nullptr,
+                               SSRClockSelectionPolicy clock_selection_policy =
+                                   SSRClockSelectionPolicy::MergedInterpolate) const;
 
     bool loadCSVFile(const std::string& filename);
 

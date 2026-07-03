@@ -591,8 +591,18 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         if (ssr_products_loaded_) {
             Vector3d orbit_corr;
             double clock_corr = 0.0;
+            const auto clock_policy = pppEnvOverrides().clas_base_clock_parity
+                ? SSRClockSelectionPolicy::ClaslibBaseHold
+                : SSRClockSelectionPolicy::MergedInterpolate;
+            const bool allow_future_samples =
+                !pppEnvOverrides().clas_base_clock_parity;
             if (ssr_products_.interpolateCorrection(
-                    sat, obs.time, orbit_corr, clock_corr, nullptr, nullptr, nullptr, nullptr)) {
+                    sat, obs.time, orbit_corr, clock_corr,
+                    nullptr, nullptr, nullptr, nullptr,
+                    nullptr, nullptr, nullptr,
+                    0, nullptr, nullptr, nullptr,
+                    allow_future_samples, nullptr, nullptr,
+                    clock_policy)) {
                 if (ssr_products_.orbitCorrectionsAreRac()) {
                     orbit_corr = ppp_utils::ssrRacToEcef(sat_pos, sat_vel, orbit_corr);
                 }
@@ -931,8 +941,18 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
         if (ssr_products_loaded_) {
             Vector3d orbit_corr;
             double clock_corr = 0.0;
+            const auto clock_policy = pppEnvOverrides().clas_base_clock_parity
+                ? SSRClockSelectionPolicy::ClaslibBaseHold
+                : SSRClockSelectionPolicy::MergedInterpolate;
+            const bool allow_future_samples =
+                !pppEnvOverrides().clas_base_clock_parity;
             if (ssr_products_.interpolateCorrection(
-                    satellite, obs.time, orbit_corr, clock_corr, nullptr, nullptr, nullptr, nullptr)) {
+                    satellite, obs.time, orbit_corr, clock_corr,
+                    nullptr, nullptr, nullptr, nullptr,
+                    nullptr, nullptr, nullptr,
+                    0, nullptr, nullptr, nullptr,
+                    allow_future_samples, nullptr, nullptr,
+                    clock_policy)) {
                 if (ssr_products_.orbitCorrectionsAreRac()) {
                     orbit_corr = ppp_utils::ssrRacToEcef(sat_pos, sat_vel, orbit_corr);
                 }
