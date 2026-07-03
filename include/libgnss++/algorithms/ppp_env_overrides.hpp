@@ -175,6 +175,14 @@ struct PPPEnvOverrides {
     // scaffold when set exactly to "1". Default false; exact "0" and unset are
     // no-ops for bit-exact legacy CLAS/MADOCA output.
     bool clas_dd_filter = false;
+    // GNSS_PPP_CLAS_SIS_BOUNDARY: apply the CLAS SIS continuity delta with
+    // CLASLIB-style SSR-update-boundary semantics (hold the delta captured at
+    // a 30s orbit/clock boundary for the following 15s, matching the
+    // CLASLIB adjust_prc/adjust_cpc boundary window) when set exactly to
+    // "1", replacing the (unreachable on real CLAS data) 30s phase-bias-lag
+    // condition for the gated path. Default false; exact "0" and unset are
+    // no-ops for bit-exact legacy CLAS output.
+    bool clas_sis_boundary = false;
     // GNSS_PPP_CLAS_AMB_DATUM: align CLAS OSR carrier phase ambiguity states
     // with CLASLIB by subtracting the full CPC before ambiguity estimation.
     // Default follows the residual-phase-trop surface; explicit boolean values
