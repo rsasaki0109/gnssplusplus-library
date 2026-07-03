@@ -109,6 +109,11 @@ struct CLASSisContinuityInfo {
     GNSSTime boundary_time;
     double boundary_delta_m = 0.0;
     bool has_boundary_delta = false;
+    // Observation-epoch pairing (CLASLIB satcorr[].prevsis/currsis): prevsis
+    // sampled at tow%30==25, delta formed at the following tow%30==0 epoch.
+    GNSSTime boundary_prev_time;
+    double boundary_prev_sis_m = 0.0;
+    bool has_boundary_prev_sis = false;
 };
 
 struct CLASEpochContext {

@@ -64,16 +64,21 @@ void updateSisContinuity(
 /// update boundary grid (tow % 30 in [0, 0.5) or (29.5, 30)).
 bool isSsrOrbitBoundaryTow(double tow);
 
+/// True when `tow` sits on (within tolerance of) the mid-cycle offset-25 grid
+/// (tow % 30 in [24.5, 25.5)), where CLASLIB captures `prevsis`.
+bool isSsrOrbitBoundaryOffset25Tow(double tow);
+
 /// Capture the CLASLIB-style SSR-update-boundary SIS delta (gated feature):
-/// when `epoch_time` (the current observation epoch) lands on the 30s
-/// boundary grid and `info` already holds a fresh boundary-aligned
-/// clock-reference-time delta, freeze it into `info.boundary_delta_m` /
-/// `info.boundary_time` for the following 15s of observation epochs. A
-/// no-op otherwise (including when `info` has no delta yet, or the epoch is
-/// off the 30s grid).
+/// sample `current_sis_m` at the observation epoch.  At tow%30==25 store
+/// `prevsis`; at the following tow%30==0 boundary compute
+/// `currsis = current_sis_m - prevsis` and freeze it into
+/// `info.boundary_delta_m` / `info.boundary_time` for the following 15s of
+/// observation epochs.  A no-op otherwise (including when the epoch is off
+/// the expected grid or no offset-25 sample precedes the boundary).
 void captureClasSisBoundary(
     CLASSisContinuityInfo& info,
-    const GNSSTime& epoch_time);
+    const GNSSTime& epoch_time,
+    double current_sis_m);
 
 /// Result of deciding whether/how much CLAS SIS continuity delta to apply
 /// to a CPC/PRC row for the current epoch.
