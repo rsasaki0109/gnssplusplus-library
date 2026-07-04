@@ -1825,12 +1825,13 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             }
             group_end = group_begin;
         }
-        // CLASLIB holds per-network STEC for STECVALIDAGE (cssr.h:79; cssr.c:947-961).
-        if (held_preferred != nullptr) {
-            return held_preferred;
-        }
+        // Regional compact network 19 must win over epoch-preferred network 1 when both
+        // are held within age (ST9-only epochs still carry net-1 decoy polynomials).
         if (held_net19 != nullptr) {
             return held_net19;
+        }
+        if (held_preferred != nullptr) {
+            return held_preferred;
         }
         if (scan_end_index > 0) {
             const size_t group_last = scan_end_index - 1;
@@ -2612,6 +2613,44 @@ bool SSRProducts::heldQzssPhaseBiasForServiceNetwork(
         *phase_bias_reference_time = picked->time;
     }
     return !phase_bias_m->empty();
+}
+
+bool SSRProducts::heldAtmosTokensForNetwork(int network_id,
+                                            const GNSSTime& time,
+                                            double max_age_seconds,
+                                            std::map<std::string, std::string>& atmos_tokens,
+                                            GNSSTime* atmos_reference_time) const {
+    if (network_id <= 0) {
+        return false;
+    }
+
+    const SSROrbitClockCorrection* best = nullptr;
+    GNSSTime best_time;
+    for (const auto& sat_entry : orbit_clock_corrections) {
+        for (const auto& entry : sat_entry.second) {
+            if (!entry.atmos_valid || entry.atmos_tokens.empty()) {
+                continue;
+            }
+            if (entry.atmos_network_id != network_id) {
+                continue;
+            }
+            if (time - entry.time > max_age_seconds + 1e-9 || entry.time - time > 1e-9) {
+                continue;
+            }
+            if (best == nullptr || entry.time > best_time) {
+                best = &entry;
+                best_time = entry.time;
+            }
+        }
+    }
+    if (best == nullptr) {
+        return false;
+    }
+    atmos_tokens = best->atmos_tokens;
+    if (atmos_reference_time != nullptr) {
+        *atmos_reference_time = best->time;
+    }
+    return true;
 }
 
 bool SSRProducts::loadCSVFile(const std::string& filename) {
