@@ -1370,6 +1370,28 @@ std::vector<OSRCorrection> computeOSR(
             continue;  // CLASLIB rejects satellites without STEC
         }
 
+        if (env.clas_qzss_s_prn_fix && sat.system == GNSSSystem::QZSS) {
+            int service_network_id = osr.atmos_network_id;
+            ppp_atmosphere::ClasGridReference nearest_regional;
+            if (ppp_atmosphere::resolveClasNearestRegionalGridReference(
+                    receiver_pos, nearest_regional) &&
+                nearest_regional.network_id > 0) {
+                service_network_id = nearest_regional.network_id;
+            }
+            std::map<uint8_t, double> repicked_pbias;
+            std::map<uint8_t, int> repicked_discnt;
+            GNSSTime repicked_ref;
+            if (service_network_id > 0 &&
+                ssr.heldQzssPhaseBiasForServiceNetwork(
+                    sat, obs.time, service_network_id,
+                    &repicked_pbias, &repicked_discnt, &repicked_ref)) {
+                ssr_pbias = std::move(repicked_pbias);
+                phase_bias_reference_time = repicked_ref;
+                osr.has_phase_bias = !ssr_pbias.empty();
+                osr.phase_bias_reference_time = repicked_ref;
+            }
+        }
+
         // --- 7. Code/Phase bias ---
         const Observation* freq_observations[2] = {l1_obs, l2_obs};
         for (int f = 0; f < osr.num_frequencies; ++f) {

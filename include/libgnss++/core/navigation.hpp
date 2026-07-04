@@ -474,6 +474,14 @@ public:
                                SSRClockSelectionPolicy clock_selection_policy =
                                    SSRClockSelectionPolicy::MergedInterpolate) const;
 
+    bool heldQzssPhaseBiasForServiceNetwork(
+        const SatelliteId& sat,
+        const GNSSTime& time,
+        int service_network_id,
+        std::map<uint8_t, double>* phase_bias_m,
+        std::map<uint8_t, int>* phase_bias_discnt = nullptr,
+        GNSSTime* phase_bias_reference_time = nullptr) const;
+
     bool loadCSVFile(const std::string& filename);
 
     bool hasData(const SatelliteId& sat, const GNSSTime& time) const;
