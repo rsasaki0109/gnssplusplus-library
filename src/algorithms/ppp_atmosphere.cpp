@@ -659,15 +659,6 @@ bool parseAtmosGridKeyedDouble(const std::map<std::string, std::string>& atmos_t
     return parseAtmosTokenDouble(atmos_tokens, key, value);
 }
 
-bool hasParityTropGridTokens(const std::map<std::string, std::string>& atmos_tokens) {
-    for (const auto& entry : atmos_tokens) {
-        if (entry.first.rfind("atmos_trop_grid_hs_m:", 0) == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
 const ClasGridPoint* findClasGridPoint(int network_id, int grid_no) {
     for (const auto& point : clasGridPoints()) {
         if (point.network_id == network_id && point.grid_no == grid_no) {
@@ -678,6 +669,15 @@ const ClasGridPoint* findClasGridPoint(int network_id, int grid_no) {
 }
 
 }  // namespace
+
+bool hasParityTropGridTokens(const std::map<std::string, std::string>& atmos_tokens) {
+    for (const auto& entry : atmos_tokens) {
+        if (entry.first.rfind("atmos_trop_grid_hs_m:", 0) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
 
 double claslibTropGridCorrectionMeters(
     const std::map<std::string, std::string>& atmos_tokens,
@@ -797,7 +797,9 @@ double claslibTropGridCorrectionMeters(
         double grid_dry_zenith_m = 0.0;
         double grid_wet_zenith_m = 0.0;
         const double grid_lat_rad = grid_point->latitude_deg * kDegreesToRadians;
-        if (!getStTv(day_of_year, grid_lat_rad, 0.0, 0.0,
+        const double grid_lon_rad = grid_point->longitude_deg * kDegreesToRadians;
+        const double grid_geoid_m = geoidHeightMeters(grid_lat_rad, grid_lon_rad);
+        if (!getStTv(day_of_year, grid_lat_rad, 0.0, grid_geoid_m,
                      grid_dry_zenith_m, grid_wet_zenith_m)) {
             continue;
         }
@@ -823,12 +825,14 @@ double claslibTropGridCorrectionMeters(
     double receiver_height_m = 0.0;
     ecef2geodetic(receiver_position, receiver_lat_rad, receiver_lon_rad, receiver_height_m);
 
+    const double receiver_geoid_m =
+        geoidHeightMeters(receiver_lat_rad, receiver_lon_rad);
     return preciseTropMeters(
         day_of_year,
         receiver_lat_rad,
         receiver_lon_rad,
         receiver_height_m,
-        0.0,
+        receiver_geoid_m,
         elevation_rad,
         interpolated_ztd,
         interpolated_zwd);

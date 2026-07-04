@@ -59,6 +59,8 @@ bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_to
 bool resolveClasNearestRegionalGridReference(const Vector3d& receiver_position,
                                                ClasGridReference& reference);
 
+bool hasParityTropGridTokens(const std::map<std::string, std::string>& atmos_tokens);
+
 double claslibTropGridCorrectionMeters(
     const std::map<std::string, std::string>& atmos_tokens,
     const Vector3d& receiver_position,

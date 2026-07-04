@@ -14,6 +14,62 @@ namespace libgnss {
 namespace models {
 namespace claslib {
 
+// RTKLIB embedded EGM96 1x1deg geoid model (geoid.c:29-48, geoid.c:238-261).
+namespace detail {
+
+#include "clas_geoid_embedded.inc"
+
+inline double geoidBilinearInterpolate(const double* y, double a, double b) {
+    return y[0] * (1.0 - a) * (1.0 - b) + y[1] * a * (1.0 - b) +
+           y[2] * (1.0 - a) * b + y[3] * a * b;
+}
+
+}  // namespace detail
+
+inline double geoidHeightMeters(double lat_rad, double lon_rad) {
+    constexpr double kLonWestDeg = 0.0;
+    constexpr double kLonEastDeg = 360.0;
+    constexpr double kLatSouthDeg = -90.0;
+    constexpr double kLatNorthDeg = 90.0;
+    constexpr double kLonStepDeg = 1.0;
+    constexpr double kLatStepDeg = 1.0;
+
+    double lat_deg = lat_rad * 180.0 / M_PI;
+    double lon_deg = lon_rad * 180.0 / M_PI;
+    if (lon_deg < 0.0) {
+        lon_deg += 360.0;
+    }
+    if (lon_deg < 0.0 || lon_deg >= 360.0 - 1e-12 || lat_deg < -90.0 || lat_deg > 90.0) {
+        return 0.0;
+    }
+
+    if (lat_deg < kLatSouthDeg || lat_deg > kLatNorthDeg ||
+        lon_deg < kLonWestDeg || lon_deg > kLonEastDeg) {
+        return 0.0;
+    }
+
+    const double a = (lon_deg - kLonWestDeg) / kLonStepDeg;
+    const double b = (lat_deg - kLatSouthDeg) / kLatStepDeg;
+    const int i1 = static_cast<int>(a);
+    const double a_frac = a - static_cast<double>(i1);
+    const int i2 = i1 < 360 ? i1 + 1 : i1;
+    const int j1 = static_cast<int>(b);
+    const double b_frac = b - static_cast<double>(j1);
+    const int j2 = j1 < 180 ? j1 + 1 : j1;
+
+    const double y[4] = {
+        static_cast<double>(detail::kClasGeoidEmbedded[i1][j1]),
+        static_cast<double>(detail::kClasGeoidEmbedded[i2][j1]),
+        static_cast<double>(detail::kClasGeoidEmbedded[i1][j2]),
+        static_cast<double>(detail::kClasGeoidEmbedded[i2][j2]),
+    };
+    const double height_m = detail::geoidBilinearInterpolate(y, a_frac, b_frac);
+    if (std::fabs(height_m) > 200.0) {
+        return 0.0;
+    }
+    return height_m;
+}
+
 constexpr double kCssrTropHsRefM = 2.3;
 constexpr double kCssrTropWetRefM = 0.252;
 
