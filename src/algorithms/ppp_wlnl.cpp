@@ -152,6 +152,15 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     const auto osr_by_sat = computeWlnlOsrCorrections(
         obs, nav, receiver_position, clock_bias_m, trop_zenith);
 
+    std::map<SatelliteId, double> satellite_elevations_rad;
+    if (pppEnvOverrides().clas_qzss_s_prn_fix) {
+        for (const auto& [satellite, osr] : osr_by_sat) {
+            satellite_elevations_rad[satellite] = osr.elevation;
+        }
+    }
+    const std::map<SatelliteId, double>* elevation_ref_map =
+        satellite_elevations_rad.empty() ? nullptr : &satellite_elevations_rad;
+
     const ppp_ar::WlnlFixAttempt attempt = ppp_ar::resolveWlnlFix(
         ppp_config_,
         filter_state_,
@@ -163,7 +172,8 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
                 obs, nav, receiver_position, clock_bias_m, trop_zenith,
                 osr_by_sat, sat, info);
         },
-        pppDebugEnabled());
+        pppDebugEnabled(),
+        elevation_ref_map);
     if (!attempt.fixed) {
         return false;
     }

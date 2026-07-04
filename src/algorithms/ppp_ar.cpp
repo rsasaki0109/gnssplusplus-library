@@ -745,7 +745,8 @@ WlnlFixAttempt tryWlnlFix(
     const std::vector<SatelliteId>& satellites,
     const std::vector<int>& state_indices,
     const std::map<SatelliteId, WlnlNlInfo>& nl_info,
-    bool debug_enabled) {
+    bool debug_enabled,
+    const std::map<SatelliteId, double>* satellite_elevations_rad) {
     WlnlFixAttempt attempt;
 
     std::vector<int> wl_fixed_indices;
@@ -758,6 +759,10 @@ WlnlFixAttempt tryWlnlFix(
         wl_fixed_indices.push_back(i);
     }
 
+    const bool qzss_wlnl_ref_by_elevation =
+        pppEnvOverrides().clas_qzss_s_prn_fix &&
+        satellite_elevations_rad != nullptr;
+
     std::map<WlnlGroupKey, int> system_ref_map;
     for (const int idx : wl_fixed_indices) {
         const auto nl_it = nl_info.find(satellites[static_cast<size_t>(idx)]);
@@ -767,13 +772,34 @@ WlnlFixAttempt tryWlnlFix(
         const auto& group = nl_it->second.group;
         if (system_ref_map.find(group) == system_ref_map.end()) {
             system_ref_map[group] = idx;
-        } else {
-            const auto& current_ref =
-                ambiguity_states.at(satellites[static_cast<size_t>(system_ref_map[group])]);
-            const auto& candidate = ambiguity_states.at(satellites[static_cast<size_t>(idx)]);
-            if (candidate.lock_count > current_ref.lock_count) {
+            continue;
+        }
+        const int current_idx = system_ref_map[group];
+        const SatelliteId& current_satellite =
+            satellites[static_cast<size_t>(current_idx)];
+        const SatelliteId& candidate_satellite =
+            satellites[static_cast<size_t>(idx)];
+        const bool use_qzss_elevation_ref =
+            qzss_wlnl_ref_by_elevation && group.first == GNSSSystem::QZSS;
+        if (use_qzss_elevation_ref) {
+            const auto current_el_it = satellite_elevations_rad->find(current_satellite);
+            const auto candidate_el_it = satellite_elevations_rad->find(candidate_satellite);
+            const double current_el =
+                current_el_it != satellite_elevations_rad->end() ? current_el_it->second
+                                                                 : -1.0;
+            const double candidate_el =
+                candidate_el_it != satellite_elevations_rad->end() ? candidate_el_it->second
+                                                                   : -1.0;
+            if (candidate_el > current_el) {
                 system_ref_map[group] = idx;
             }
+            continue;
+        }
+        const auto& current_ref =
+            ambiguity_states.at(current_satellite);
+        const auto& candidate = ambiguity_states.at(candidate_satellite);
+        if (candidate.lock_count > current_ref.lock_count) {
+            system_ref_map[group] = idx;
         }
     }
 
@@ -921,7 +947,8 @@ WlnlFixAttempt resolveWlnlFix(
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const EligibleAmbiguities& eligible_ambiguities,
     const WlnlNlInfoProvider& provider,
-    bool debug_enabled) {
+    bool debug_enabled,
+    const std::map<SatelliteId, double>* satellite_elevations_rad) {
     const auto nl_info = buildWlnlNlInfoMap(
         eligible_ambiguities.satellites,
         ambiguity_states,
@@ -934,7 +961,8 @@ WlnlFixAttempt resolveWlnlFix(
         eligible_ambiguities.satellites,
         eligible_ambiguities.state_indices,
         nl_info,
-        debug_enabled);
+        debug_enabled,
+        satellite_elevations_rad);
 }
 
 WlnlFixAttempt resolveWlnlFix(
@@ -943,7 +971,8 @@ WlnlFixAttempt resolveWlnlFix(
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const EligibleAmbiguities& eligible_ambiguities,
     const WlnlNlInfoProvider& provider,
-    bool debug_enabled) {
+    bool debug_enabled,
+    const std::map<SatelliteId, double>* satellite_elevations_rad) {
     return resolveWlnlFix(
         config,
         filter_state,
@@ -951,7 +980,8 @@ WlnlFixAttempt resolveWlnlFix(
         ambiguity_states,
         eligible_ambiguities,
         provider,
-        debug_enabled);
+        debug_enabled,
+        satellite_elevations_rad);
 }
 
 std::vector<FixedNlObservation> buildFixedNlObservations(
