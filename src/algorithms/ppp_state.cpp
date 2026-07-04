@@ -303,7 +303,10 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     if (env_overrides_.estimate_isb_gal && visible_systems.count(GNSSSystem::Galileo)) {
         filter_state_.gal_clock_index = isb_start++;
     }
-    if ((env_overrides_.estimate_isb_qzs || default_madoca_qzs_clock) &&
+    const bool clas_qzs_isb =
+        ppp_config_.use_clas_osr_filter && env_overrides_.clas_qzss_s_prn_fix;
+    if ((env_overrides_.estimate_isb_qzs || default_madoca_qzs_clock ||
+         clas_qzs_isb) &&
         visible_systems.count(GNSSSystem::QZSS)) {
         filter_state_.qzs_clock_index = isb_start++;
     }

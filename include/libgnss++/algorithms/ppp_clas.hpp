@@ -121,7 +121,8 @@ void initializeFilterState(
     const GNSSTime& time,
     const std::vector<SatelliteId>& iono_satellites,
     const ppp_shared::PPPConfig& config,
-    double modeled_zenith_troposphere_delay_m);
+    double modeled_zenith_troposphere_delay_m,
+    bool qzss_visible);
 
 void syncSlipState(
     const ObservationData& obs,
