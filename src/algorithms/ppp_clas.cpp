@@ -190,6 +190,42 @@ std::ofstream* clasGeometryDumpStream() {
     return stream ? &stream : nullptr;
 }
 
+bool clasPhaseRowDumpEnabled() {
+    return pppEnvOverrides().clas_phase_row_dump;
+}
+
+const char* clasCodeDumpPhaseExtensionHeader() {
+    return clasPhaseRowDumpEnabled()
+        ? ",row_type,cpc_m,carrier_correction_m,cpc_minus_trop_m,phase_bias_m,"
+          "windup_m,phase_compensation_m,raw_l_m,corrected_l_m"
+        : "";
+}
+
+void writeClasCodeDumpCodePhaseExtension(std::ostream& out) {
+    if (!clasPhaseRowDumpEnabled()) {
+        return;
+    }
+    out << ",code,,,,,,,,";
+}
+
+void writeClasCodeDumpPhasePhaseExtension(
+    std::ostream& out,
+    double cpc_m,
+    double carrier_correction_m,
+    double cpc_minus_trop_m,
+    double phase_bias_m,
+    double windup_m,
+    double phase_compensation_m,
+    double raw_l_m,
+    double corrected_l_m) {
+    if (!clasPhaseRowDumpEnabled()) {
+        return;
+    }
+    out << ",phase," << cpc_m << ',' << carrier_correction_m << ','
+        << cpc_minus_trop_m << ',' << phase_bias_m << ',' << windup_m << ','
+        << phase_compensation_m << ',' << raw_l_m << ',' << corrected_l_m;
+}
+
 std::ofstream* clasCodeDumpStream() {
     const auto& path = pppEnvOverrides().clas_code_dump_path;
     if (path.empty()) {
@@ -232,7 +268,8 @@ std::ofstream* clasCodeDumpStream() {
                    << "geo_m,sat_clk_m,receiver_clock_m,trop_model_m,"
                    << "iono_state_m,iono_scale,predicted_m,residual_m,"
                    << "variance_m2,los_e_m,los_n_m,los_u_m,az_rad,el_rad,"
-                   << "rx_x_m,rx_y_m,rx_z_m\n";
+                   << "rx_x_m,rx_y_m,rx_z_m"
+                   << clasCodeDumpPhaseExtensionHeader() << '\n';
         }
     }
     return stream ? &stream : nullptr;
@@ -470,7 +507,252 @@ void dumpClasCodeRows(
                   << osr.elevation << ','
                   << receiver_position.x() << ','
                   << receiver_position.y() << ','
-                  << receiver_position.z() << '\n';
+                  << receiver_position.z();
+            writeClasCodeDumpCodePhaseExtension(*dump);
+            *dump << '\n';
+        }
+    }
+}
+
+void dumpClasPhaseRows(
+    const char* stage,
+    const ObservationData& obs,
+    const std::vector<OSRCorrection>& osr_corrections,
+    const ppp_shared::PPPState& filter_state,
+    const ppp_shared::PPPConfig& config,
+    const TropMappingFunction& trop_mapping_function) {
+    if (!clasPhaseRowDumpEnabled()) {
+        return;
+    }
+    auto* dump = clasCodeDumpStream();
+    if (dump == nullptr) {
+        return;
+    }
+    if (filter_state.total_states <= filter_state.trop_index ||
+        filter_state.state.size() < filter_state.total_states) {
+        return;
+    }
+
+    const Vector3d receiver_position =
+        filter_state.state.segment(filter_state.pos_index, 3);
+    const double receiver_clock_m = filter_state.state(filter_state.clock_index);
+    const double trop_zenith = filter_state.state(filter_state.trop_index);
+    double rx_lat = 0.0;
+    double rx_lon = 0.0;
+    double rx_h = 0.0;
+    ecef2geodetic(receiver_position, rx_lat, rx_lon, rx_h);
+
+    for (const auto& osr : osr_corrections) {
+        if (!osr.valid) {
+            continue;
+        }
+        const double geo = geodist(osr.satellite_position, receiver_position);
+        const Vector3d range_vector = osr.satellite_position - receiver_position;
+        if (!std::isfinite(geo) || range_vector.norm() <= 0.0) {
+            continue;
+        }
+        const Vector3d los = range_vector.normalized();
+        const Vector3d los_enu = ecef2enu(los, rx_lat, rx_lon);
+        const double sat_clk_m =
+            constants::SPEED_OF_LIGHT * osr.satellite_clock_bias_s;
+        const double trop_mapping =
+            trop_mapping_function(receiver_position, osr.elevation, obs.time);
+        const double trop_model = trop_mapping * trop_zenith;
+        const auto iono_state_it = filter_state.ionosphere_indices.find(osr.satellite);
+        const bool have_iono_state =
+            config.estimate_ionosphere &&
+            iono_state_it != filter_state.ionosphere_indices.end() &&
+            iono_state_it->second >= 0 &&
+            iono_state_it->second < filter_state.total_states;
+        const double iono_state_l1_m =
+            have_iono_state ? filter_state.state(iono_state_it->second) : 0.0;
+
+        for (int f = 0; f < osr.num_frequencies; ++f) {
+            const auto lookup = findOsrFrequencyObservationWithProvenance(obs, osr, f);
+            const Observation* raw = lookup.observation;
+            if (raw == nullptr || !raw->valid || !raw->has_carrier_phase ||
+                !std::isfinite(raw->carrier_phase)) {
+                continue;
+            }
+            const auto applied = selectAppliedOsrCorrections(
+                osr, f, config.clas_correction_application_policy);
+            const double l_m = raw->carrier_phase * osr.wavelengths[f];
+            const double l_corr = l_m - applied.carrier_phase_correction_m;
+            const double iono_scale =
+                (osr.frequencies[f] > 0.0 && osr.wavelengths[0] > 0.0)
+                    ? std::pow(osr.wavelengths[f] / osr.wavelengths[0], 2)
+                    : 1.0;
+            const double iono_scaled = iono_scale * osr.iono_l1_m;
+            const auto& env = pppEnvOverrides();
+            const bool claslib_amb_datum_phase =
+                env.clas_amb_datum &&
+                !env.clas_amb_datum_residual_phase_trop &&
+                config.clas_correction_application_policy ==
+                    ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR;
+            const bool residual_amb_datum_phase_trop =
+                env.clas_amb_datum &&
+                env.clas_amb_datum_residual_phase_trop &&
+                config.clas_correction_application_policy ==
+                    ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR;
+            const double phase_trop_model = claslib_amb_datum_phase
+                ? 0.0
+                : (residual_amb_datum_phase_trop
+                      ? trop_model - osr.trop_correction_m
+                      : trop_model);
+            const uint8_t amb_prn = f == 0 ? osr.satellite.prn
+                : static_cast<uint8_t>(std::min(255, osr.satellite.prn + 100));
+            const SatelliteId amb_sat(osr.satellite.system, amb_prn);
+            const auto amb_it = filter_state.ambiguity_indices.find(amb_sat);
+            if (amb_it == filter_state.ambiguity_indices.end()) {
+                continue;
+            }
+            const int amb_idx = amb_it->second;
+            const double predicted_no_amb =
+                geo - sat_clk_m + receiver_clock_m + phase_trop_model
+                - iono_scale * iono_state_l1_m;
+            const double predicted =
+                predicted_no_amb + filter_state.state(amb_idx);
+            const double residual = l_corr - predicted;
+            const double variance =
+                config.clas_phase_variance * elevationWeight(osr.elevation);
+            const bool have_atmos_ref =
+                osr.atmos_reference_time.week != 0 ||
+                std::abs(osr.atmos_reference_time.tow) > 0.0;
+            const bool have_clock_ref =
+                osr.clock_reference_time.week != 0 ||
+                std::abs(osr.clock_reference_time.tow) > 0.0;
+            const bool have_code_bias_ref =
+                osr.code_bias_reference_time.week != 0 ||
+                std::abs(osr.code_bias_reference_time.tow) > 0.0;
+            const double atmos_clock_gap_s =
+                (have_atmos_ref && have_clock_ref)
+                    ? osr.atmos_reference_time - osr.clock_reference_time
+                    : 0.0;
+            auto timeWeekField = [](const GNSSTime& time, bool have_time) {
+                return have_time ? std::to_string(time.week) : std::string();
+            };
+            auto timeTowField = [](const GNSSTime& time, bool have_time) {
+                if (!have_time) {
+                    return std::string();
+                }
+                std::ostringstream stream;
+                stream << std::setprecision(17) << time.tow;
+                return stream.str();
+            };
+            auto secondsField = [](double value, bool have_value) {
+                if (!have_value) {
+                    return std::string();
+                }
+                std::ostringstream stream;
+                stream << std::setprecision(17) << value;
+                return stream.str();
+            };
+            auto doubleField = [](double value, bool have_value) {
+                if (!have_value) {
+                    return std::string();
+                }
+                std::ostringstream stream;
+                stream << std::setprecision(17) << value;
+                return stream.str();
+            };
+
+            *dump << std::setprecision(17)
+                  << "PHASE,"
+                  << stage << ','
+                  << obs.time.week << ','
+                  << obs.time.tow << ','
+                  << osr.satellite.toString() << ','
+                  << f << ','
+                  << static_cast<int>(raw->signal) << ','
+                  << raw->pseudorange_observation_type << ','
+                  << raw->carrier_phase_observation_type << ','
+                  << algorithms::ppp_bias_identity::rtklibCodeForObservationType(
+                         raw->pseudorange_observation_type) << ','
+                  << algorithms::ppp_bias_identity::rtklibCodeForObservationType(
+                         raw->carrier_phase_observation_type) << ','
+                  << ppp_internal::signalFamilyName(raw->signal) << ','
+                  << osr.pseudorange_rinex_codes[f] << ','
+                  << osr.carrier_rinex_codes[f] << ','
+                  << (lookup.exact_identity_requested ? 1 : 0) << ','
+                  << (lookup.exact_identity_matched ? 1 : 0) << ','
+                  << (lookup.family_fallback ? 1 : 0) << ','
+                  << static_cast<int>(osr.code_bias_signal_ids[f]) << ','
+                  << static_cast<int>(osr.phase_bias_signal_ids[f]) << ','
+                  << (osr.bias_exact_identity[f] ? 1 : 0) << ','
+                  << static_cast<int>(osr.code_bias_source_signal_ids[f]) << ','
+                  << static_cast<int>(osr.phase_bias_source_signal_ids[f]) << ','
+                  << (osr.code_bias_present[f] ? 1 : 0) << ','
+                  << (osr.phase_bias_present[f] ? 1 : 0) << ','
+                  << (osr.code_bias_fallback[f] ? 1 : 0) << ','
+                  << (osr.phase_bias_fallback[f] ? 1 : 0) << ','
+                  << ','
+                  << ','
+                  << applied.carrier_phase_correction_m << ','
+                  << ','
+                  << ','
+                  << osr.trop_correction_m << ','
+                  << osr.iono_l1_m << ','
+                  << osr.stec_tecu << ','
+                  << iono_scaled << ','
+                  << ','
+                  << osr.network_compensation_m << ','
+                  << osr.receiver_antenna_m[f] << ','
+                  << osr.relativity_correction_m << ','
+                  << timeWeekField(osr.atmos_reference_time, have_atmos_ref) << ','
+                  << timeTowField(osr.atmos_reference_time, have_atmos_ref) << ','
+                  << timeWeekField(osr.clock_reference_time, have_clock_ref) << ','
+                  << timeTowField(osr.clock_reference_time, have_clock_ref) << ','
+                  << timeWeekField(osr.code_bias_reference_time, have_code_bias_ref) << ','
+                  << timeTowField(osr.code_bias_reference_time, have_code_bias_ref) << ','
+                  << secondsField(atmos_clock_gap_s, have_atmos_ref && have_clock_ref) << ','
+                  << osr.atmos_network_id << ','
+                  << osr.atmos_grid_no << ','
+                  << osr.atmos_nearest_grid_distance_m << ','
+                  << osr.atmos_interpolation_grid_count << ','
+                  << osr.atmos_interpolation_grid_no[0] << ','
+                  << osr.atmos_interpolation_weights[0] << ','
+                  << osr.atmos_interpolation_grid_no[1] << ','
+                  << osr.atmos_interpolation_weights[1] << ','
+                  << osr.atmos_interpolation_grid_no[2] << ','
+                  << osr.atmos_interpolation_weights[2] << ','
+                  << osr.atmos_interpolation_grid_no[3] << ','
+                  << osr.atmos_interpolation_weights[3] << ','
+                  << (osr.atmos_lifecycle ? 1 : 0) << ','
+                  << doubleField(
+                         osr.atmos_lifecycle_tow,
+                         osr.has_atmos_lifecycle_tow) << ','
+                  << osr.atmos_selected_satellite_count << ','
+                  << osr.atmos_valid_grid_count << ','
+                  << osr.atmos_stec_grid_value_count << ','
+                  << osr.atmos_selected_grid_stec_value_count << ','
+                  << geo << ','
+                  << sat_clk_m << ','
+                  << receiver_clock_m << ','
+                  << phase_trop_model << ','
+                  << iono_state_l1_m << ','
+                  << iono_scale << ','
+                  << predicted << ','
+                  << residual << ','
+                  << variance << ','
+                  << los_enu.x() << ','
+                  << los_enu.y() << ','
+                  << los_enu.z() << ','
+                  << osr.azimuth << ','
+                  << osr.elevation << ','
+                  << receiver_position.x() << ','
+                  << receiver_position.y() << ','
+                  << receiver_position.z();
+            writeClasCodeDumpPhasePhaseExtension(
+                *dump,
+                osr.CPC[f],
+                applied.carrier_phase_correction_m,
+                osr.CPC[f] - osr.trop_correction_m,
+                osr.phase_bias_m[f],
+                osr.windup_m[f],
+                osr.phase_compensation_m[f],
+                l_m,
+                l_corr);
+            *dump << '\n';
         }
     }
 }
@@ -1382,6 +1664,13 @@ EpochUpdateResult runEpochMeasurementUpdate(
         return result;
     }
     dumpClasCodeRows(
+        "post",
+        obs,
+        epoch_context.osr_corrections,
+        filter_state,
+        config,
+        trop_mapping_function);
+    dumpClasPhaseRows(
         "post",
         obs,
         epoch_context.osr_corrections,
