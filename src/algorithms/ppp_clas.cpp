@@ -75,6 +75,31 @@ double elevationWeight(double elevation_rad) {
     return 1.0 / (s * s);
 }
 
+int receiverClockStateIndex(const ppp_shared::PPPState& filter_state,
+                            const SatelliteId& satellite) {
+    switch (satellite.system) {
+        case GNSSSystem::GLONASS:
+            return filter_state.glo_clock_index;
+        case GNSSSystem::Galileo:
+            return filter_state.gal_clock_index >= 0
+                ? filter_state.gal_clock_index : filter_state.clock_index;
+        case GNSSSystem::QZSS:
+            return filter_state.qzs_clock_index >= 0
+                ? filter_state.qzs_clock_index : filter_state.clock_index;
+        case GNSSSystem::BeiDou:
+            return filter_state.bds_clock_index >= 0
+                ? filter_state.bds_clock_index : filter_state.clock_index;
+        default:
+            return filter_state.clock_index;
+    }
+}
+
+double receiverClockBiasMeters(const ppp_shared::PPPState& filter_state,
+                               const SatelliteId& satellite) {
+    const int clock_index = receiverClockStateIndex(filter_state, satellite);
+    return filter_state.state(clock_index);
+}
+
 bool usesClasStecConstraint(const ppp_shared::PPPConfig& config) {
     return pppEnvOverrides().clas_stec_constraint &&
            config.estimate_ionosphere &&
@@ -325,7 +350,6 @@ void dumpClasCodeRows(
 
     const Vector3d receiver_position =
         filter_state.state.segment(filter_state.pos_index, 3);
-    const double receiver_clock_m = filter_state.state(filter_state.clock_index);
     const double trop_zenith = filter_state.state(filter_state.trop_index);
     double rx_lat = 0.0;
     double rx_lon = 0.0;
@@ -345,6 +369,8 @@ void dumpClasCodeRows(
         const Vector3d los_enu = ecef2enu(los, rx_lat, rx_lon);
         const double sat_clk_m =
             constants::SPEED_OF_LIGHT * osr.satellite_clock_bias_s;
+        const double receiver_clock_m =
+            receiverClockBiasMeters(filter_state, osr.satellite);
         const double trop_mapping =
             trop_mapping_function(receiver_position, osr.elevation, obs.time);
         const double trop_model = trop_mapping * trop_zenith;
@@ -535,7 +561,6 @@ void dumpClasPhaseRows(
 
     const Vector3d receiver_position =
         filter_state.state.segment(filter_state.pos_index, 3);
-    const double receiver_clock_m = filter_state.state(filter_state.clock_index);
     const double trop_zenith = filter_state.state(filter_state.trop_index);
     double rx_lat = 0.0;
     double rx_lon = 0.0;
@@ -555,6 +580,8 @@ void dumpClasPhaseRows(
         const Vector3d los_enu = ecef2enu(los, rx_lat, rx_lon);
         const double sat_clk_m =
             constants::SPEED_OF_LIGHT * osr.satellite_clock_bias_s;
+        const double receiver_clock_m =
+            receiverClockBiasMeters(filter_state, osr.satellite);
         const double trop_mapping =
             trop_mapping_function(receiver_position, osr.elevation, obs.time);
         const double trop_model = trop_mapping * trop_zenith;
@@ -891,13 +918,21 @@ EpochPreparationResult prepareEpochState(
             config.estimate_ionosphere
                 ? collectResidualIonoSatellites(obs, ssr_products)
                 : std::vector<SatelliteId>{};
+        bool qzss_visible = false;
+        for (const auto& satellite : obs.getSatellites()) {
+            if (satellite.system == GNSSSystem::QZSS) {
+                qzss_visible = true;
+                break;
+            }
+        }
         initializeFilterState(
             filter_state,
             seed_solution,
             obs.time,
             iono_satellites,
             config,
-            modeled_zenith_troposphere_delay_m);
+            modeled_zenith_troposphere_delay_m,
+            qzss_visible);
         filter_initialized = true;
         convergence_start_time = obs.time;
         static_anchor_position = seed_solution.position_ecef;
@@ -931,20 +966,40 @@ void initializeFilterState(
     const GNSSTime& /*time*/,
     const std::vector<SatelliteId>& iono_satellites,
     const ppp_shared::PPPConfig& config,
-    double modeled_zenith_troposphere_delay_m) {
-    const int base = 9 + static_cast<int>(iono_satellites.size());
+    double modeled_zenith_troposphere_delay_m,
+    bool qzss_visible) {
+    filter_state.gal_clock_index = -1;
+    filter_state.qzs_clock_index = -1;
+    filter_state.bds_clock_index = -1;
+    int isb_start = 9;
+    if (pppEnvOverrides().clas_qzss_s_prn_fix && config.use_clas_osr_filter &&
+        qzss_visible) {
+        filter_state.qzs_clock_index = isb_start++;
+    }
+    const int n_isb = isb_start - 9;
+    const int n_iono = static_cast<int>(iono_satellites.size());
+    const int base = 9 + n_isb + n_iono;
     filter_state.ionosphere_indices.clear();
     filter_state.state = VectorXd::Zero(base);
     filter_state.covariance = MatrixXd::Identity(base, base);
     filter_state.state.segment(0, 3) = seed_solution.position_ecef;
     filter_state.state(filter_state.clock_index) = seed_solution.receiver_clock_bias;
     filter_state.state(filter_state.glo_clock_index) = seed_solution.receiver_clock_bias;
+    if (filter_state.qzs_clock_index >= 0) {
+        filter_state.state(filter_state.qzs_clock_index) =
+            seed_solution.receiver_clock_bias;
+    }
     filter_state.state(filter_state.trop_index) = modeled_zenith_troposphere_delay_m;
     filter_state.covariance.block(0, 0, 3, 3) *= config.clas_initial_position_variance;
     filter_state.covariance(6, 6) = config.clas_clock_variance;
     filter_state.covariance(7, 7) = config.clas_clock_variance;
     filter_state.covariance(8, 8) = effectiveClasTropInitialVariance(config);
-    filter_state.iono_index = 9;
+    if (filter_state.qzs_clock_index >= 0) {
+        filter_state.covariance(filter_state.qzs_clock_index,
+                                filter_state.qzs_clock_index) =
+            config.clas_clock_variance;
+    }
+    filter_state.iono_index = isb_start;
     for (size_t index = 0; index < iono_satellites.size(); ++index) {
         const int state_index = filter_state.iono_index + static_cast<int>(index);
         filter_state.ionosphere_indices[iono_satellites[index]] = state_index;
@@ -1020,6 +1075,10 @@ void predictFilterState(
     MatrixXd Q = MatrixXd::Zero(nx, nx);
     Q(filter_state.clock_index, filter_state.clock_index) = config.clas_clock_variance;
     Q(filter_state.glo_clock_index, filter_state.glo_clock_index) = config.clas_clock_variance;
+    if (filter_state.qzs_clock_index >= 0) {
+        Q(filter_state.qzs_clock_index, filter_state.qzs_clock_index) =
+            pppEnvOverrides().isb_process_noise * dt;
+    }
     Q(filter_state.trop_index, filter_state.trop_index) =
         effectiveClasTropProcessNoise(config) * dt;
     if (config.estimate_ionosphere) {
@@ -1038,17 +1097,29 @@ void predictFilterState(
     }
     filter_state.covariance += Q;
     if (seed_valid) {
+        const double gps_clock_before = filter_state.state(filter_state.clock_index);
         filter_state.state(filter_state.clock_index) = seed_receiver_clock_bias_m;
         filter_state.state(filter_state.glo_clock_index) = seed_receiver_clock_bias_m;
+        if (filter_state.qzs_clock_index >= 0) {
+            const double isb_offset =
+                filter_state.state(filter_state.qzs_clock_index) - gps_clock_before;
+            filter_state.state(filter_state.qzs_clock_index) =
+                seed_receiver_clock_bias_m + isb_offset;
+        }
     }
     // Decouple clock from position: zero cross-covariance to prevent
     // code observation noise from leaking into position via KF coupling.
     if (config.clas_decouple_clock_position) {
         const int ci = filter_state.clock_index;
         const int gi = filter_state.glo_clock_index;
+        const int qi = filter_state.qzs_clock_index;
         for (int i = 0; i < nx; ++i) {
             if (i != ci) { filter_state.covariance(ci, i) = 0; filter_state.covariance(i, ci) = 0; }
             if (i != gi) { filter_state.covariance(gi, i) = 0; filter_state.covariance(i, gi) = 0; }
+            if (qi >= 0 && i != qi) {
+                filter_state.covariance(qi, i) = 0;
+                filter_state.covariance(i, qi) = 0;
+            }
         }
         filter_state.covariance(ci, ci) = 0;
         filter_state.covariance(gi, gi) = 0;
@@ -1164,6 +1235,7 @@ MeasurementBuildResult buildEpochMeasurements(
     const TropMappingFunction& trop_mapping_function,
     const AmbiguityResetFunction& ambiguity_reset_function,
     bool debug_enabled) {
+    (void)receiver_clock_m;
     MeasurementBuildResult result;
     const bool stec_constraint = usesClasStecConstraint(config);
     std::map<SatelliteId, double> iono_state_targets_m;
@@ -1179,6 +1251,10 @@ MeasurementBuildResult buildEpochMeasurements(
             (osr.satellite_position - receiver_position).normalized();
         const double sat_clk_m =
             constants::SPEED_OF_LIGHT * osr.satellite_clock_bias_s;
+        const double receiver_clock_m =
+            receiverClockBiasMeters(filter_state, osr.satellite);
+        const int receiver_clock_index =
+            receiverClockStateIndex(filter_state, osr.satellite);
         const double trop_mapping =
             trop_mapping_function(receiver_position, osr.elevation, obs.time);
         const double trop_modeled = trop_mapping * trop_zenith;
@@ -1238,7 +1314,7 @@ MeasurementBuildResult buildEpochMeasurements(
                 MeasurementRow row;
                 row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
                 row.H.segment(0, 3) = -los.transpose();
-                row.H(filter_state.clock_index) = 1.0;
+                row.H(receiver_clock_index) = 1.0;
                 row.H(filter_state.trop_index) = code_trop_mapping;
                 if (use_residual_iono_state) {
                     row.H(iono_state_index) = iono_scale;
@@ -1362,7 +1438,7 @@ MeasurementBuildResult buildEpochMeasurements(
                 MeasurementRow row;
                 row.H = Eigen::RowVectorXd::Zero(filter_state.total_states);
                 row.H.segment(0, 3) = -los.transpose();
-                row.H(filter_state.clock_index) = 1.0;
+                row.H(receiver_clock_index) = 1.0;
                 row.H(filter_state.trop_index) = phase_trop_partial;
                 if (use_residual_iono_state) {
                     row.H(iono_state_index) = -iono_scale;
@@ -1737,7 +1813,6 @@ FixValidationStats validateFixedSolution(
 
     const Vector3d receiver_position =
         filter_state.state.segment(filter_state.pos_index, 3);
-    const double receiver_clock_m = filter_state.state(filter_state.clock_index);
     const double trop_zenith = filter_state.state(filter_state.trop_index);
     for (const auto& osr : osr_corrections) {
         if (!osr.valid) {
@@ -1747,6 +1822,8 @@ FixValidationStats validateFixedSolution(
         const double geo = geodist(osr.satellite_position, receiver_position);
         const double sat_clk_m =
             constants::SPEED_OF_LIGHT * osr.satellite_clock_bias_s;
+        const double receiver_clock_m =
+            receiverClockBiasMeters(filter_state, osr.satellite);
         const double trop_mapping =
             trop_mapping_function(receiver_position, osr.elevation, obs.time);
         const double trop_modeled = trop_mapping * trop_zenith;
