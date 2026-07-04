@@ -1792,6 +1792,48 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         return nullptr;
     };
 
+    const auto isQzssDedicatedBiasBank = [&](const SSROrbitClockCorrection& entry, bool phase) -> bool {
+        const bool valid =
+            phase ? (entry.phase_bias_valid && !entry.phase_bias_m.empty())
+                  : (entry.code_bias_valid && !entry.code_bias_m.empty());
+        if (!valid) {
+            return false;
+        }
+        // CLASLIB subtype-6 banks carry orbit/clock updates.  Expander-coupled
+        // cbias/pbias on atmos-only rows (0,0,0,0 clock) are not causal banks.
+        return entry.orbit_valid || entry.clock_valid;
+    };
+
+    const auto findQzssHeldDedicatedBias = [&](bool phase, size_t scan_end_index)
+        -> const SSROrbitClockCorrection* {
+        const SSROrbitClockCorrection* held = nullptr;
+        GNSSTime held_time;
+        size_t group_end = scan_end_index;
+        while (group_end > 0) {
+            const size_t group_last = group_end - 1;
+            const GNSSTime group_time = entries[group_last].time;
+            if (time - group_time > kClasStecValidAgeSeconds + 1e-9) {
+                break;
+            }
+            size_t group_begin = group_last;
+            while (group_begin > 0 && entries[group_begin - 1].time == group_time) {
+                --group_begin;
+            }
+            for (size_t index = group_begin; index < group_end; ++index) {
+                const SSROrbitClockCorrection& entry = entries[index];
+                if (!isQzssDedicatedBiasBank(entry, phase)) {
+                    continue;
+                }
+                if (held == nullptr || entry.time > held_time) {
+                    held = &entry;
+                    held_time = entry.time;
+                }
+            }
+            group_end = group_begin;
+        }
+        return held;
+    };
+
     const auto pickAtmosForTime = [&](const GNSSTime& atmos_time)
         -> const SSROrbitClockCorrection* {
         const double max_age =
@@ -1972,10 +2014,18 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         const SSROrbitClockCorrection* orbit_source = findRecent(pickOrbit, exact_end);
         const SSROrbitClockCorrection* clock_source = findRecent(pickClock, exact_end);
         const SSROrbitClockCorrection* ura_source = findRecent(pickUra, exact_end);
-        const SSROrbitClockCorrection* code_source =
-            code_bias_m != nullptr ? findRecent(pickBias(false), exact_end) : nullptr;
-        const SSROrbitClockCorrection* phase_source =
-            phase_bias_m != nullptr ? findRecent(pickBias(true), exact_end) : nullptr;
+        const SSROrbitClockCorrection* code_source = nullptr;
+        if (code_bias_m != nullptr) {
+            code_source = qzss_atmos_fix
+                ? findQzssHeldDedicatedBias(false, exact_end)
+                : findRecent(pickBias(false), exact_end);
+        }
+        const SSROrbitClockCorrection* phase_source = nullptr;
+        if (phase_bias_m != nullptr) {
+            phase_source = qzss_atmos_fix
+                ? findQzssHeldDedicatedBias(true, exact_end)
+                : findRecent(pickBias(true), exact_end);
+        }
 
         if (orbit_source != nullptr && orbit_source->orbit_valid) {
             orbit_correction_ecef = orbit_source->orbit_correction_ecef;
@@ -2181,7 +2231,10 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             // one; CLAS holds the last received code-bias bank until a new
             // bank is causally available.
             const SSROrbitClockCorrection* picked = nullptr;
-            if (const auto* scanned = scanBackwardBias(false)) {
+            if (qzss_atmos_fix) {
+                const size_t scan_end = static_cast<size_t>(lower - entries.begin());
+                picked = findQzssHeldDedicatedBias(false, scan_end);
+            } else if (const auto* scanned = scanBackwardBias(false)) {
                 picked = scanned;
             } else if (before->code_bias_valid && !before->code_bias_m.empty()) {
                 picked = before;
@@ -2196,8 +2249,11 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         }
         if (phase_bias_m != nullptr) {
             const SSROrbitClockCorrection* picked = nullptr;
-            if (biasScore(*before, true) >= biasScore(*after, true) &&
-                before->phase_bias_valid && !before->phase_bias_m.empty()) {
+            if (qzss_atmos_fix) {
+                const size_t scan_end = static_cast<size_t>(lower - entries.begin());
+                picked = findQzssHeldDedicatedBias(true, scan_end);
+            } else if (biasScore(*before, true) >= biasScore(*after, true) &&
+                       before->phase_bias_valid && !before->phase_bias_m.empty()) {
                 picked = before;
             } else if (after->phase_bias_valid && !after->phase_bias_m.empty()) {
                 picked = after;
@@ -2354,7 +2410,12 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
     }
     if (code_bias_m != nullptr) {
         const SSROrbitClockCorrection* picked = nullptr;
-        if (clock_selection_policy == SSRClockSelectionPolicy::ClaslibBaseHold) {
+        if (qzss_atmos_fix) {
+            const size_t scan_end =
+                lower != entries.end() ? static_cast<size_t>(lower - entries.begin()) + 1
+                                       : entries.size();
+            picked = findQzssHeldDedicatedBias(false, scan_end);
+        } else if (clock_selection_policy == SSRClockSelectionPolicy::ClaslibBaseHold) {
             picked = scanBackwardBias(false);
         }
         if (picked == nullptr && sample->code_bias_valid && !sample->code_bias_m.empty()) {
@@ -2373,7 +2434,12 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
     }
     if (phase_bias_m != nullptr) {
         const SSROrbitClockCorrection* picked = nullptr;
-        if (clock_selection_policy == SSRClockSelectionPolicy::ClaslibBaseHold) {
+        if (qzss_atmos_fix) {
+            const size_t scan_end =
+                lower != entries.end() ? static_cast<size_t>(lower - entries.begin()) + 1
+                                       : entries.size();
+            picked = findQzssHeldDedicatedBias(true, scan_end);
+        } else if (clock_selection_policy == SSRClockSelectionPolicy::ClaslibBaseHold) {
             picked = scanBackwardBias(true);
         }
         if (picked == nullptr && sample->phase_bias_valid && !sample->phase_bias_m.empty()) {
