@@ -490,6 +490,47 @@ bool parseAtmosListValueAtIndex(const std::map<std::string, std::string>& atmos_
     return false;
 }
 
+bool resolveClasNearestRegionalGridReference(const Vector3d& receiver_position,
+                                             ClasGridReference& reference) {
+    reference = ClasGridReference{};
+    double receiver_lat_rad = 0.0;
+    double receiver_lon_rad = 0.0;
+    double receiver_height_m = 0.0;
+    ecef2geodetic(receiver_position, receiver_lat_rad, receiver_lon_rad, receiver_height_m);
+    if (!std::isfinite(receiver_lat_rad) || !std::isfinite(receiver_lon_rad)) {
+        return false;
+    }
+
+    const double receiver_lat_deg = receiver_lat_rad / kDegreesToRadians;
+    const double receiver_lon_deg = receiver_lon_rad / kDegreesToRadians;
+
+    const ClasGridPoint* nearest = nullptr;
+    double nearest_distance_m = std::numeric_limits<double>::infinity();
+    for (const auto& point : clasGridPoints()) {
+        if (std::fabs(point.height_m) > 0.0001) {
+            continue;
+        }
+        const double distance_m =
+            clasGridMetricDistanceMeters(receiver_lat_rad, receiver_lon_rad, point);
+        if (distance_m > kClasMaxGridDistanceM || distance_m >= nearest_distance_m) {
+            continue;
+        }
+        nearest_distance_m = distance_m;
+        nearest = &point;
+    }
+    if (nearest == nullptr) {
+        return false;
+    }
+
+    reference.dlat_deg = receiver_lat_deg - nearest->latitude_deg;
+    reference.dlon_deg = receiver_lon_deg - nearest->longitude_deg;
+    reference.residual_index = static_cast<size_t>(std::max(nearest->grid_no - 1, 0));
+    reference.network_id = nearest->network_id;
+    reference.grid_no = nearest->grid_no;
+    reference.nearest_grid_distance_m = nearest_distance_m;
+    return true;
+}
+
 bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_tokens,
                               const Vector3d& receiver_position,
                               ClasGridReference& reference) {
@@ -820,8 +861,27 @@ double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_token
     double stec_tecu = 0.0;
     bool have_correction = false;
     ClasGridReference grid_reference;
-    const bool have_grid_reference =
+    bool have_grid_reference =
         resolveClasGridReference(atmos_tokens, receiver_position, grid_reference);
+    if (!have_grid_reference &&
+        pppEnvOverrides().clas_qzss_s_prn_fix &&
+        satellite.system == GNSSSystem::QZSS) {
+        int atmos_network_id = 0;
+        if (parseAtmosTokenInt(atmos_tokens, "atmos_network_id", atmos_network_id) &&
+            atmos_network_id > kClasMultiGridNetworkMax) {
+            // Compact regional networks (e.g. 19) have no static grid table entry.
+            // CLASLIB evaluates their STEC polynomials against the local Japan grid
+            // network (7 for the 2019-08-27 dataset), not network 1 (Okinawa).
+            std::map<std::string, std::string> regional_grid_tokens = atmos_tokens;
+            regional_grid_tokens["atmos_network_id"] = "7";
+            have_grid_reference = resolveClasGridReference(
+                regional_grid_tokens, receiver_position, grid_reference);
+            if (!have_grid_reference) {
+                have_grid_reference = resolveClasNearestRegionalGridReference(
+                    receiver_position, grid_reference);
+            }
+        }
+    }
     const bool subtype12_row = isSubtype12StecRow(atmos_tokens, satellite);
     int stec_type = -1;
     parseAtmosTokenInt(atmos_tokens, "atmos_stec_type" + suffix, stec_type);

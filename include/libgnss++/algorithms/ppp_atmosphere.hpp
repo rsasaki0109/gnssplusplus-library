@@ -56,6 +56,9 @@ bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_to
                               const Vector3d& receiver_position,
                               ClasGridReference& reference);
 
+bool resolveClasNearestRegionalGridReference(const Vector3d& receiver_position,
+                                               ClasGridReference& reference);
+
 double atmosphericTroposphereCorrectionMeters(
     const std::map<std::string, std::string>& atmos_tokens,
     const Vector3d& receiver_position,

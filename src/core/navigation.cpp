@@ -1673,6 +1673,9 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         return 100000 + static_cast<int>(signal_count);
     };
 
+    const bool qzss_atmos_fix =
+        pppEnvOverrides().clas_qzss_s_prn_fix && sat.system == GNSSSystem::QZSS;
+
     const auto atmosScore = [&](const SSROrbitClockCorrection& entry) -> int {
         if (!entry.atmos_valid || entry.atmos_tokens.empty()) {
             return -1;
@@ -1687,8 +1690,66 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             } else if (entry.atmos_network_id == 0) {
                 score += 50000;
             }
+            // QZSS regional atmos (e.g. network 19 on S120-S122 rows) is valid near
+            // Japan grids. Network-1 polynomial coeffs for J01-J03 are only meaningful
+            // near network-1 grids (Okinawa); applying them at Chiba pierce points
+            // yields ~30 TECU STEC error.
+            if (qzss_atmos_fix && preferred_network_id == 1 &&
+                entry.atmos_network_id > 1) {
+                score += 300000;
+            }
         }
         return score;
+    };
+
+    const auto pickBestAtmosAmong = [&](size_t begin, size_t end)
+        -> const SSROrbitClockCorrection* {
+        bool have_regional_qzss_atmos = false;
+        if (qzss_atmos_fix) {
+            for (size_t index = begin; index < end; ++index) {
+                if (entries[index].atmos_valid &&
+                    entries[index].atmos_network_id > 1) {
+                    have_regional_qzss_atmos = true;
+                    break;
+                }
+            }
+        }
+        const SSROrbitClockCorrection* best = nullptr;
+        int best_score = -1;
+        for (size_t index = begin; index < end; ++index) {
+            if (!entries[index].atmos_valid || entries[index].atmos_tokens.empty()) {
+                continue;
+            }
+            if (have_regional_qzss_atmos &&
+                entries[index].atmos_network_id <= 1) {
+                continue;
+            }
+            const int score = atmosScore(entries[index]);
+            if (score > best_score) {
+                best_score = score;
+                best = &entries[index];
+            }
+        }
+        return best;
+    };
+
+    const auto pickAtmosForTime = [&](const GNSSTime& atmos_time)
+        -> const SSROrbitClockCorrection* {
+        if (std::abs(atmos_time - time) > kPreciseInterpolationGapSeconds) {
+            return nullptr;
+        }
+        size_t group_begin = entries.size();
+        size_t group_end = 0;
+        for (size_t index = 0; index < entries.size(); ++index) {
+            if (entries[index].time == atmos_time) {
+                group_begin = std::min(group_begin, index);
+                group_end = index + 1;
+            }
+        }
+        if (group_begin >= entries.size()) {
+            return nullptr;
+        }
+        return pickBestAtmosAmong(group_begin, group_end);
     };
 
     const auto scanBackwardBias = [&](bool phase) -> const SSROrbitClockCorrection* {
@@ -1779,6 +1840,9 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             return nullptr;
         };
         const auto pickAtmos = [&](size_t begin, size_t end) -> const SSROrbitClockCorrection* {
+            if (qzss_atmos_fix) {
+                return pickBestAtmosAmong(begin, end);
+            }
             const SSROrbitClockCorrection* best = nullptr;
             int best_score = -1;
             for (size_t index = begin; index < end; ++index) {
@@ -2091,8 +2155,43 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             }
         }
         if (atmos_tokens != nullptr) {
-            if (atmosScore(*before) >= atmosScore(*after) &&
-                before->atmos_valid && !before->atmos_tokens.empty()) {
+            if (qzss_atmos_fix) {
+                const SSROrbitClockCorrection* picked_atmos = pickAtmosForTime(before->time);
+                if (picked_atmos == nullptr) {
+                    picked_atmos = pickAtmosForTime(after->time);
+                }
+                if (picked_atmos != nullptr) {
+                    *atmos_tokens = picked_atmos->atmos_tokens;
+                    if (atmos_reference_time != nullptr) {
+                        *atmos_reference_time = picked_atmos->time;
+                    }
+                    if (status != nullptr) {
+                        status->atmos_valid = true;
+                        status->atmos_reference_time = picked_atmos->time;
+                    }
+                } else {
+                    // Neither interpolation neighbour has atmos — scan backwards.
+                    auto scan = lower;
+                    while (scan != entries.begin()) {
+                        --scan;
+                        if (std::abs(scan->time - time) <= kPreciseInterpolationGapSeconds) {
+                            if (const SSROrbitClockCorrection* picked =
+                                    pickAtmosForTime(scan->time)) {
+                                *atmos_tokens = picked->atmos_tokens;
+                                if (atmos_reference_time != nullptr) {
+                                    *atmos_reference_time = picked->time;
+                                }
+                                if (status != nullptr) {
+                                    status->atmos_valid = true;
+                                    status->atmos_reference_time = picked->time;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            } else if (atmosScore(*before) >= atmosScore(*after) &&
+                       before->atmos_valid && !before->atmos_tokens.empty()) {
                 *atmos_tokens = before->atmos_tokens;
                 if (atmos_reference_time != nullptr) {
                     *atmos_reference_time = before->time;
@@ -2250,7 +2349,54 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         }
     }
     if (atmos_tokens != nullptr) {
-        if (sample->atmos_valid) {
+        if (qzss_atmos_fix) {
+            const SSROrbitClockCorrection* picked_atmos = pickAtmosForTime(sample->time);
+            if (picked_atmos != nullptr) {
+                *atmos_tokens = picked_atmos->atmos_tokens;
+                if (atmos_reference_time != nullptr) {
+                    *atmos_reference_time = picked_atmos->time;
+                }
+                if (status != nullptr) {
+                    status->atmos_valid = true;
+                    status->atmos_reference_time = picked_atmos->time;
+                }
+            } else if (sample->atmos_valid) {
+                *atmos_tokens = sample->atmos_tokens;
+                if (atmos_reference_time != nullptr) {
+                    *atmos_reference_time = sample->time;
+                }
+                if (status != nullptr) {
+                    status->atmos_valid = true;
+                    status->atmos_reference_time = sample->time;
+                }
+            } else {
+                // The exact-match sample has no atmos — scan backwards for the
+                // nearest entry that does.  CLAS atmosphere messages arrive at a
+                // lower cadence than orbit/clock, so a recent neighbour is valid.
+                auto it = std::lower_bound(
+                    entries.begin(), entries.end(), sample->time,
+                    [](const SSROrbitClockCorrection& lhs, const GNSSTime& rhs) {
+                        return lhs.time < rhs;
+                    });
+                while (it != entries.begin()) {
+                    --it;
+                    if (std::abs(it->time - time) <= kPreciseInterpolationGapSeconds) {
+                        if (const SSROrbitClockCorrection* picked =
+                                pickAtmosForTime(it->time)) {
+                            *atmos_tokens = picked->atmos_tokens;
+                            if (atmos_reference_time != nullptr) {
+                                *atmos_reference_time = picked->time;
+                            }
+                            if (status != nullptr) {
+                                status->atmos_valid = true;
+                                status->atmos_reference_time = picked->time;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        } else if (sample->atmos_valid) {
             *atmos_tokens = sample->atmos_tokens;
             if (atmos_reference_time != nullptr) {
                 *atmos_reference_time = sample->time;
