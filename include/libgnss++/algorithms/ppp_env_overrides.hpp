@@ -256,6 +256,11 @@ struct PPPEnvOverrides {
     // hydro/wet trop constants with the in-tree seasonal climatology when set
     // exactly to "1". Default false while A4b GPS L2W trop parity is measured.
     bool clas_trop_climatology = false;
+    // GNSS_PPP_CLAS_TROP_GRID_PARITY: evaluate CLAS OSR trop_correction_m with
+    // CLASLIB grid ztd/zwd composition (get_stTv + NMF mapping) when set
+    // exactly to "1". Default false so gate-off GPS/QZSS outputs stay
+    // byte-identical.
+    bool clas_trop_grid_parity = false;
     // GNSS_PPP_CLAS_STEC_CONSTRAINT: preview CLASLIB-style STEC constraints
     // on estimated CLAS ionosphere states when set exactly to "1". Default
     // false while issue #8 filter-side parity is measured.

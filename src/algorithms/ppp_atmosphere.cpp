@@ -3,6 +3,7 @@
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/models/troposphere.hpp>
+#include <libgnss++/models/clas_trop_rtklib.hpp>
 
 #include <algorithm>
 #include <array>
@@ -571,7 +572,9 @@ bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_to
     const double receiver_lat_deg = receiver_lat_rad / kDegreesToRadians;
     const double receiver_lon_deg = receiver_lon_rad / kDegreesToRadians;
 
-    const bool use_grid_matrix = pppEnvOverrides().clas_atmos_grid_matrix;
+    const bool use_grid_matrix =
+        pppEnvOverrides().clas_atmos_grid_matrix ||
+        pppEnvOverrides().clas_trop_grid_parity;
     if (!use_grid_matrix) {
         struct LegacyGridCandidate {
             const ClasGridPoint* point = nullptr;
@@ -724,6 +727,150 @@ bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_to
     return true;
 }
 
+namespace {
+
+const ClasGridPoint* findClasGridPoint(int network_id, int grid_no) {
+    for (const auto& point : clasGridPoints()) {
+        if (point.network_id == network_id && point.grid_no == grid_no) {
+            return &point;
+        }
+    }
+    return nullptr;
+}
+
+}
+
+double claslibTropGridCorrectionMeters(
+    const std::map<std::string, std::string>& atmos_tokens,
+    const Vector3d& receiver_position,
+    const GNSSTime& time,
+    double elevation_rad,
+    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy) {
+    using namespace models::claslib;
+
+    int trop_type = -1;
+    if (!parseAtmosTokenInt(atmos_tokens, "atmos_trop_type", trop_type) || trop_type != 1) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    if (elevation_rad <= 0.0 || !std::isfinite(elevation_rad)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    ClasGridReference grid_reference;
+    if (!resolveClasGridReference(atmos_tokens, receiver_position, grid_reference)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    int trop_grid_count = 0;
+    parseAtmosTokenInt(atmos_tokens, "atmos_grid_count", trop_grid_count);
+    if (trop_grid_count <= 0) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    const bool use_matrix_weights = grid_reference.interpolation_grid_count > 1;
+    const int selected_count =
+        use_matrix_weights ? grid_reference.interpolation_grid_count : 1;
+    const int sample_count =
+        use_matrix_weights
+            ? selected_count
+            : (grid_reference.has_bilinear ? 4 : 1);
+
+    double interpolated_ztd = 0.0;
+    double interpolated_zwd = 0.0;
+    bool have_grid_trop = false;
+    const int day_of_year = dayOfYearFromTime(time);
+
+    for (int grid = 0; grid < sample_count; ++grid) {
+        const double weight =
+            use_matrix_weights
+                ? grid_reference.interpolation_weights[grid]
+                : (grid_reference.has_bilinear ? grid_reference.bilinear_weights[grid]
+                                               : 1.0);
+        if (!use_matrix_weights && !grid_reference.has_bilinear && grid > 0) {
+            break;
+        }
+        if (weight == 0.0) {
+            continue;
+        }
+
+        // CLASLIB trop_grid_data pairs residual list entry i with selected grid i
+        // (cssr.c decode order), not static grid_no-1 indexing.
+        const size_t residual_index = static_cast<size_t>(grid);
+        if (residual_index >= static_cast<size_t>(trop_grid_count)) {
+            continue;
+        }
+
+        double hs_residual_m = 0.0;
+        double wet_residual_m = 0.0;
+        if (!parseAtmosListValueAtIndex(
+                atmos_tokens, "atmos_trop_hs_residuals_m", residual_index, hs_residual_m) ||
+            !parseAtmosListValueAtIndex(
+                atmos_tokens, "atmos_trop_wet_residuals_m", residual_index, wet_residual_m) ||
+            !std::isfinite(hs_residual_m) || !std::isfinite(wet_residual_m)) {
+            continue;
+        }
+
+        const ClasGridPoint* grid_point = nullptr;
+        if (use_matrix_weights || grid_reference.has_bilinear) {
+            const size_t grid_no_index =
+                use_matrix_weights
+                    ? grid_reference.interpolation_grid_indices[grid]
+                    : grid_reference.bilinear_grid_indices[grid];
+            const int grid_no = static_cast<int>(grid_no_index) + 1;
+            grid_point = findClasGridPoint(grid_reference.network_id, grid_no);
+        } else {
+            grid_point = findClasGridPoint(
+                grid_reference.network_id,
+                grid_reference.grid_no > 0 ? grid_reference.grid_no : 1);
+        }
+        if (grid_point == nullptr) {
+            continue;
+        }
+
+        const double trop_total_m =
+            tropTotalFromResiduals(hs_residual_m, wet_residual_m);
+        const double trop_wet_m = tropWetFromResidual(wet_residual_m);
+
+        double grid_dry_zenith_m = 0.0;
+        double grid_wet_zenith_m = 0.0;
+        const double grid_lat_rad = grid_point->latitude_deg * kDegreesToRadians;
+        if (!getStTv(day_of_year, grid_lat_rad, 0.0, 0.0,
+                     grid_dry_zenith_m, grid_wet_zenith_m)) {
+            continue;
+        }
+
+        const double ztd =
+            grid_dry_zenith_m > 0.0
+                ? (trop_total_m - trop_wet_m) / grid_dry_zenith_m
+                : 0.0;
+        const double zwd =
+            grid_wet_zenith_m > 0.0 ? trop_wet_m / grid_wet_zenith_m : 0.0;
+
+        interpolated_ztd += weight * ztd;
+        interpolated_zwd += weight * zwd;
+        have_grid_trop = true;
+    }
+
+    if (!have_grid_trop) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    double receiver_lat_rad = 0.0;
+    double receiver_lon_rad = 0.0;
+    double receiver_height_m = 0.0;
+    ecef2geodetic(receiver_position, receiver_lat_rad, receiver_lon_rad, receiver_height_m);
+
+    return preciseTropMeters(
+        day_of_year,
+        receiver_lat_rad,
+        receiver_lon_rad,
+        receiver_height_m,
+        0.0,
+        elevation_rad,
+        interpolated_ztd,
+        interpolated_zwd);
+}
+
 double atmosphericTroposphereCorrectionMeters(
     const std::map<std::string, std::string>& atmos_tokens,
     const Vector3d& receiver_position,
@@ -732,6 +879,18 @@ double atmosphericTroposphereCorrectionMeters(
     ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy value_policy,
     ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy,
     ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy) {
+    if (pppEnvOverrides().clas_trop_grid_parity) {
+        const double claslib_trop = claslibTropGridCorrectionMeters(
+            atmos_tokens,
+            receiver_position,
+            time,
+            elevation,
+            residual_sampling_policy);
+        if (std::isfinite(claslib_trop)) {
+            return claslib_trop;
+        }
+    }
+
     double correction_m = 0.0;
     bool have_correction = false;
     ClasGridReference grid_reference;
