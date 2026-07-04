@@ -170,6 +170,17 @@ CLASLIB_OSR_GPS_SLOTS = (
     (2, "5", 26),  # GPS L5X
 )
 
+CLASLIB_OSR_QZSS_SLOTS = (
+    (0, "1", 1),   # QZSS L1C
+    (1, "2", 18),  # QZSS L2X
+    (2, "5", 26),  # QZSS L5X
+)
+
+CLASLIB_OSR_SLOTS_BY_SYS_ID = {
+    1: CLASLIB_OSR_GPS_SLOTS,
+    16: CLASLIB_OSR_QZSS_SLOTS,
+}
+
 GPS_IONO_SCALE_BY_SUFFIX = {
     "1": 1.0,
     "2": (1575.42 / 1227.60) ** 2,
@@ -682,7 +693,8 @@ def normalize_osrres_rows(
 ) -> list[dict[str, str]]:
     sys_id = parse_int(first_present(row, ("sys", "system")), field=f"row {row_number} sys")
     prn = parse_int(first_present(row, ("prn",)), field=f"row {row_number} prn")
-    if sys_id != 1:
+    slots = CLASLIB_OSR_SLOTS_BY_SYS_ID.get(sys_id)
+    if slots is None:
         return []
 
     stage = row.get("stage", "") or (stage_label or "")
@@ -695,7 +707,7 @@ def normalize_osrres_rows(
         first_present(row, ("lon", "receiver_lon_deg")),
     )
 
-    for freq_index, suffix, rtklib_code in CLASLIB_OSR_GPS_SLOTS:
+    for freq_index, suffix, rtklib_code in slots:
         pseudorange_code, carrier_code = rinex_pair(rtklib_code)
         effective_iono_l1_m = prc_iono_l1_from_osrres(row, suffix)
         effective_iono_scaled_m = format_component(prc_iono_scaled_from_osrres(row, suffix))
