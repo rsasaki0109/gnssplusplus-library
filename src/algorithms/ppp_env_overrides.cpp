@@ -255,6 +255,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envExactOne("GNSS_PPP_CLAS_ATMOS_LIFECYCLE");
     overrides.clas_trop_climatology =
         envExactOne("GNSS_PPP_CLAS_TROP_CLIMATOLOGY");
+    overrides.clas_trop_grid_parity =
+        envExactOne("GNSS_PPP_CLAS_TROP_GRID_PARITY");
     overrides.clas_stec_constraint =
         envExactOne("GNSS_PPP_CLAS_STEC_CONSTRAINT");
     overrides.clas_code_sd =

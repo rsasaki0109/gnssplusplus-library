@@ -59,6 +59,14 @@ bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_to
 bool resolveClasNearestRegionalGridReference(const Vector3d& receiver_position,
                                                ClasGridReference& reference);
 
+double claslibTropGridCorrectionMeters(
+    const std::map<std::string, std::string>& atmos_tokens,
+    const Vector3d& receiver_position,
+    const GNSSTime& time,
+    double elevation_rad,
+    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy =
+        ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN);
+
 double atmosphericTroposphereCorrectionMeters(
     const std::map<std::string, std::string>& atmos_tokens,
     const Vector3d& receiver_position,
