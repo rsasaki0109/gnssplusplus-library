@@ -264,6 +264,10 @@ struct PPPEnvOverrides {
     // correction labels to QZSS J01..J03 when set exactly to "1".
     // Default false while QZSS residual parity is measured.
     bool clas_qzss_s_prn_fix = false;
+    // GNSS_PPP_CLAS_PHASE_ROW_DUMP: append phase ZD rows to the
+    // GNSS_PPP_CLAS_CODE_DUMP CSV when set exactly to "1". Default false so
+    // legacy code-only dumps (A4b anchor) stay byte-identical.
+    bool clas_phase_row_dump = false;
     // GNSS_PPP_DEBUG: general PPP debug logging. Default false.
     bool debug = false;
 

@@ -263,6 +263,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
     overrides.clas_qzss_s_prn_fix =
         envExactOne("GNSS_PPP_CLAS_QZSS_S_PRN_FIX") ||
         overrides.clas_code_row_qzss;
+    overrides.clas_phase_row_dump =
+        envExactOne("GNSS_PPP_CLAS_PHASE_ROW_DUMP");
     const std::string clas_nl_datum_fix =
         envStringOrEmpty("GNSS_PPP_CLAS_NL_DATUM_FIX");
     if (clas_nl_datum_fix.empty()) {
