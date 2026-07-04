@@ -237,6 +237,18 @@ def requirement_failures(summary: Mapping[str, Any], args: argparse.Namespace) -
         if not _positive_count(systems, system):
             failures.append(f"required system {system} is absent")
 
+    satellites = summary.get("top_satellites", [])
+    if not isinstance(satellites, list):
+        satellites = []
+    satellite_counts = {
+        str(item.get("key", "")): int(item.get("count", 0) or 0)
+        for item in satellites
+        if isinstance(item, dict)
+    }
+    for sat in args.require_sat:
+        if not _positive_count(satellite_counts, sat):
+            failures.append(f"required satellite {sat} is absent")
+
     stages = summary.get("stages", {})
     if not isinstance(stages, dict):
         stages = {}
@@ -346,6 +358,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--json-out", type=Path)
     parser.add_argument("--require-rows-min", type=int, default=0)
     parser.add_argument("--require-system", action="append", default=[])
+    parser.add_argument("--require-sat", action="append", default=[])
     parser.add_argument("--require-stage", action="append", default=[])
     parser.add_argument("--require-row-type", action="append", default=[])
     parser.add_argument("--require-rinex-code", action="append", default=[])
