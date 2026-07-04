@@ -356,3 +356,13 @@ TEST(PPPAtmosphereTest, Subtype12OffsetOnlyValueConstructionDropsLinearAndQuadra
         SamplingPolicy::INDEXED_OR_MEAN);
     EXPECT_NEAR(stec_offset_only, 1.3, 1e-9);
 }
+
+TEST(PPPAtmosphereTest, NearestRegionalGridReferenceFindsJapanGridNearChiba) {
+    const Vector3d chiba =
+        geodetic2ecef(35.92 * M_PI / 180.0, 140.09 * M_PI / 180.0, 0.0);
+    ppp_atmosphere::ClasGridReference reference;
+    EXPECT_TRUE(
+        ppp_atmosphere::resolveClasNearestRegionalGridReference(chiba, reference));
+    EXPECT_EQ(reference.network_id, 7);
+    EXPECT_LT(reference.nearest_grid_distance_m, 20000.0);
+}
