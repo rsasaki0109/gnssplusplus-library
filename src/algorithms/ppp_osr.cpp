@@ -1328,8 +1328,16 @@ std::vector<OSRCorrection> computeOSR(
                 }
             }
             setAtmosLifecycleProvenance(osr, atmos_tokens, sat);
+            std::map<std::string, std::string> trop_atmos_tokens = atmos_tokens;
+            if (pppEnvOverrides().clas_trop_grid_parity &&
+                !epoch_atmos_tokens.empty() &&
+                ppp_atmosphere::hasParityTropGridTokens(epoch_atmos_tokens)) {
+                // CLASLIB trop_grid_data uses rover grid selection from get_grid_index
+                // (grid.c:300-368), not per-satellite SSR atmos rows.
+                trop_atmos_tokens = epoch_atmos_tokens;
+            }
             const double clas_trop = ppp_atmosphere::atmosphericTroposphereCorrectionMeters(
-                atmos_tokens,
+                trop_atmos_tokens,
                 receiver_pos,
                 obs.time,
                 elev,
