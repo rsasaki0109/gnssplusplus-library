@@ -8,6 +8,7 @@
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/core/constants.hpp>
+#include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signals.hpp>
 
 #include <algorithm>
@@ -176,6 +177,21 @@ void resetClasIonosphereStateValues(PPPState& filter_state) {
             filter_state.state(state_index) = 0.0;
         }
     }
+}
+
+void applyOptionalSolutionEpochMetadata(
+    PositionSolution& solution,
+    const GNSSTime& time,
+    const PPPConfig& config) {
+    if (!config.emit_solution_epoch_time) {
+        return;
+    }
+    solution.time = time;
+    double latitude = 0.0;
+    double longitude = 0.0;
+    double height = 0.0;
+    ecef2geodetic(solution.position_ecef, latitude, longitude, height);
+    solution.position_geodetic = GeodeticCoord(latitude, longitude, height);
 }
 
 }  // namespace
@@ -371,6 +387,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         }
         const PositionSolution native_float_solution = ppp_clas::finalizeEpochSolution(
             filter_state_,
+            obs.time,
             false,
             0.0,
             0,
@@ -384,6 +401,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             [&](const Vector3d& receiver_pos, double elevation, const GNSSTime& time) {
                 return calculateMappingFunction(receiver_pos, elevation, time);
             });
+        applyOptionalSolutionEpochMetadata(solution, obs.time, ppp_config_);
         has_last_processed_time_ = true;
         last_processed_time_ = obs.time;
         ++total_epochs_processed_;
@@ -484,6 +502,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
 
     solution = ppp_clas::finalizeEpochSolution(
         solution_filter_state,
+        obs.time,
         ambiguity_resolution.accepted,
         last_ar_ratio_,
         last_fixed_ambiguities_,
@@ -526,6 +545,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     last_processed_time_ = obs.time;
     ++total_epochs_processed_;
 
+    applyOptionalSolutionEpochMetadata(solution, obs.time, ppp_config_);
     return solution;
 }
 

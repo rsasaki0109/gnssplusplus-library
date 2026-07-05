@@ -136,6 +136,7 @@ void predictFilterState(
     ppp_shared::PPPState& filter_state,
     const ppp_shared::PPPConfig& config,
     double dt,
+    const Vector3d& seed_position_ecef,
     double seed_receiver_clock_bias_m,
     bool seed_valid);
 
@@ -215,6 +216,7 @@ void logUpdateSummary(
 
 PositionSolution finalizeEpochSolution(
     const ppp_shared::PPPState& filter_state,
+    const GNSSTime& time,
     bool fixed,
     double ar_ratio,
     int fixed_ambiguities,

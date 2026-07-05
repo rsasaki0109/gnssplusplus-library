@@ -935,8 +935,10 @@ EpochPreparationResult prepareEpochState(
             qzss_visible);
         filter_initialized = true;
         convergence_start_time = obs.time;
-        static_anchor_position = seed_solution.position_ecef;
-        has_static_anchor_position = true;
+        if (!config.kinematic_mode || config.low_dynamics_mode) {
+            static_anchor_position = seed_solution.position_ecef;
+            has_static_anchor_position = true;
+        }
     }
 
     const double dt =
@@ -952,6 +954,7 @@ EpochPreparationResult prepareEpochState(
         filter_state,
         config,
         dt,
+        seed_solution.position_ecef,
         seed_solution.receiver_clock_bias,
         seed_solution.isValid());
     markSlipCompensationFromAmbiguities(
@@ -1065,13 +1068,55 @@ void syncSlipState(
     }
 }
 
+namespace {
+
+void reinitializePositionState(ppp_shared::PPPState& filter_state,
+                               const Vector3d& position,
+                               double variance) {
+    for (int axis = 0; axis < 3; ++axis) {
+        const int index = filter_state.pos_index + axis;
+        filter_state.state(index) = position(axis);
+        filter_state.covariance.row(index).setZero();
+        filter_state.covariance.col(index).setZero();
+        filter_state.covariance(index, index) = variance;
+    }
+}
+
+}  // namespace
+
 void predictFilterState(
     ppp_shared::PPPState& filter_state,
     const ppp_shared::PPPConfig& config,
     double dt,
+    const Vector3d& seed_position_ecef,
     double seed_receiver_clock_bias_m,
     bool seed_valid) {
     const int nx = filter_state.total_states;
+    const bool kinematic_white_noise =
+        config.kinematic_mode && !config.low_dynamics_mode;
+    const bool use_dynamic_prediction =
+        kinematic_white_noise && config.use_dynamics_model;
+    if (kinematic_white_noise) {
+        if (use_dynamic_prediction) {
+            const double position_q =
+                std::max(0.0, config.process_noise_position) * dt;
+            if (position_q > 0.0) {
+                for (int axis = 0; axis < 3; ++axis) {
+                    filter_state.covariance(axis, axis) += position_q;
+                }
+            }
+        } else if (config.reset_kinematic_position_to_spp_each_epoch && seed_valid) {
+            reinitializePositionState(
+                filter_state,
+                seed_position_ecef,
+                config.initial_position_variance);
+        }
+    } else if (config.process_noise_position > 0.0) {
+        const double position_q = config.process_noise_position * dt;
+        for (int axis = 0; axis < 3; ++axis) {
+            filter_state.covariance(axis, axis) += position_q;
+        }
+    }
     MatrixXd Q = MatrixXd::Zero(nx, nx);
     Q(filter_state.clock_index, filter_state.clock_index) = config.clas_clock_variance;
     Q(filter_state.glo_clock_index, filter_state.glo_clock_index) = config.clas_clock_variance;
@@ -1686,7 +1731,10 @@ KalmanUpdateStats applyMeasurementUpdate(
     stats.variances = R.diagonal();
     stats.pre_anchor_covariance = filter_state.covariance;
 
-    if (seed_solution != nullptr && seed_solution->isValid()) {
+    const bool apply_spp_position_anchor =
+        seed_solution != nullptr && seed_solution->isValid() &&
+        (!config.kinematic_mode || config.low_dynamics_mode);
+    if (apply_spp_position_anchor) {
         const double anchor_sigma = config.clas_anchor_sigma;
         for (int axis = 0; axis < 3; ++axis) {
             const int idx = axis;
@@ -2122,6 +2170,7 @@ void logUpdateSummary(
 
 PositionSolution finalizeEpochSolution(
     const ppp_shared::PPPState& filter_state,
+    const GNSSTime& /*time*/,
     bool fixed,
     double ar_ratio,
     int fixed_ambiguities,

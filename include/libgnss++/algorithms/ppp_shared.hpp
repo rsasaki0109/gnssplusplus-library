@@ -111,6 +111,7 @@ struct PPPConfig {
     bool use_dynamics_model = false;
     bool reset_clock_to_spp_each_epoch = true;
     bool reset_kinematic_position_to_spp_each_epoch = true;
+    bool emit_solution_epoch_time = false;
 
     // Kalman filter parameters
     double process_noise_position = 0.0;

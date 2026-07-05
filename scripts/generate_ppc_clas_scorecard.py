@@ -42,6 +42,7 @@ QZSS_L6_DOWNLOAD = f"{QZSS_ARCHIVE_BASE}/archives/l6"
 PPP_FIXED_STATUS = 6
 MATCH_TOLERANCE_S = 0.25
 LEAD_IN_MINUTES = 30
+LEVER_ARM_BODY_M = np.array([0.593, -0.670, -1.216])  # IMU -> antenna, x fwd / y right / z down
 
 MRTKLIB_TARGETS: dict[str, dict[str, float]] = {
     "nagoya_run1": {"fix_pct": 17.0, "rms2d_m": 1.105, "sigma2d_m": 0.402},
@@ -328,6 +329,7 @@ def build_gnss_ppp_command(
         "--ar-method",
         "wlnl",
         "--clas-osr",
+        "--emit-epoch-time",
         "--out",
         str(out_pos),
     ]
@@ -369,36 +371,105 @@ def run_logged(
     return completed
 
 
-def read_ppp_pos(path: Path) -> list[comparison.SolutionEpoch]:
-    rows = comparison.read_libgnss_pos(path)
-    if not rows:
-        return rows
-    if all(epoch.week == 0 and abs(epoch.tow) < 1e-6 for epoch in rows[: min(5, len(rows))]):
-        return rows
+def enu_to_ecef_delta(enu: np.ndarray, ref_lat_deg: float, ref_lon_deg: float) -> np.ndarray:
+    lat = math.radians(ref_lat_deg)
+    lon = math.radians(ref_lon_deg)
+    sin_lat = math.sin(lat)
+    cos_lat = math.cos(lat)
+    sin_lon = math.sin(lon)
+    cos_lon = math.cos(lon)
+    rot = np.array(
+        [
+            [-sin_lon, cos_lon, 0.0],
+            [-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat],
+            [cos_lat * cos_lon, cos_lat * sin_lon, sin_lat],
+        ]
+    )
+    return rot.T @ enu
+
+
+def body_to_enu_rotation_matrix(roll_deg: float, pitch_deg: float, heading_deg: float) -> np.ndarray:
+    """Rotate vehicle-frame vectors (x fwd, y right, z down) into local ENU."""
+    roll = math.radians(roll_deg)
+    pitch = math.radians(pitch_deg)
+    yaw = math.radians(heading_deg)
+    psi = math.pi / 2.0 - yaw
+    cr, sr = math.cos(roll), math.sin(roll)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    cy, sy = math.cos(psi), math.sin(psi)
+    return np.array(
+        [
+            [cy * cp, sy * cp, -sp],
+            [-sy * cr + cy * sp * sr, cy * cr + sy * sp * sr, cp * sr],
+            [sy * sr + cy * sp * cr, -cy * sr + sy * sp * cr, cp * cr],
+        ]
+    )
+
+
+def parse_rinex_observation_epochs(path: Path) -> list[tuple[int, float]]:
+    epochs: list[tuple[int, float]] = []
+    with path.open(encoding="ascii", errors="replace") as handle:
+        for line in handle:
+            if not line.startswith(">"):
+                continue
+            parts = line[1:].split()
+            if len(parts) < 6:
+                continue
+            stamp = dt.datetime(
+                int(parts[0]),
+                int(parts[1]),
+                int(parts[2]),
+                int(parts[3]),
+                int(parts[4]),
+                int(float(parts[5])),
+            )
+            week, tow = gps_week_tow(utc_to_gps(stamp))
+            epochs.append((week, tow))
+    if not epochs:
+        raise SystemExit(f"Could not parse RINEX epoch headers from {path}")
+    return epochs
+
+
+def read_reference_csv(path: Path, *, apply_lever_arm: bool = True) -> list[comparison.ReferenceEpoch]:
+    rows: list[comparison.ReferenceEpoch] = []
+    with path.open(newline="") as handle:
+        reader = csv.reader(handle)
+        next(reader)
+        for row in reader:
+            tow = float(row[0])
+            week = int(row[1])
+            lat = float(row[2])
+            lon = float(row[3])
+            height = float(row[4])
+            ecef = np.array([float(row[5]), float(row[6]), float(row[7])])
+            if apply_lever_arm and len(row) >= 11:
+                roll = float(row[8])
+                pitch = float(row[9])
+                heading = float(row[10])
+                lever_enu = body_to_enu_rotation_matrix(roll, pitch, heading) @ LEVER_ARM_BODY_M
+                ecef = ecef + enu_to_ecef_delta(lever_enu, lat, lon)
+            rows.append(comparison.ReferenceEpoch(week, tow, lat, lon, height, ecef))
     return rows
 
 
-def stamp_solution_times_from_reference(
+def read_ppp_pos(path: Path) -> list[comparison.SolutionEpoch]:
+    return comparison.read_libgnss_pos(path)
+
+
+def stamp_solution_times(
     solutions: list[comparison.SolutionEpoch],
-    reference: list[comparison.ReferenceEpoch],
+    obs_epochs: list[tuple[int, float]],
 ) -> list[comparison.SolutionEpoch]:
-    """Recover GPS week/TOW when PPP .pos rows were written without timing metadata."""
-    if not solutions or not reference:
+    """Recover GPS week/TOW when .pos rows omitted timing metadata."""
+    if not solutions or not obs_epochs:
         return solutions
     if not all(epoch.week == 0 and abs(epoch.tow) < 1e-6 for epoch in solutions[: min(5, len(solutions))]):
         return solutions
-    if len(solutions) > len(reference):
-        raise SystemExit(
-            f"PPP produced {len(solutions)} epochs but reference only has {len(reference)}; "
-            "cannot align kinematic CLAS solutions"
-        )
-    stamped: list[comparison.SolutionEpoch] = []
-    for index, epoch in enumerate(solutions):
-        ref = reference[index]
-        stamped.append(
+    if len(solutions) == len(obs_epochs):
+        return [
             comparison.SolutionEpoch(
-                week=ref.week,
-                tow=ref.tow,
+                week=week,
+                tow=tow,
                 lat_deg=epoch.lat_deg,
                 lon_deg=epoch.lon_deg,
                 height_m=epoch.height_m,
@@ -420,8 +491,68 @@ def stamp_solution_times_from_reference(
                 rtk_update_normalized_innovation_squared_per_observation=epoch.rtk_update_normalized_innovation_squared_per_observation,
                 rtk_update_rejected_by_innovation_gate=epoch.rtk_update_rejected_by_innovation_gate,
             )
+            for epoch, (week, tow) in zip(solutions, obs_epochs, strict=True)
+        ]
+    raise SystemExit(
+        f"PPP produced {len(solutions)} epochs but rover.obs has {len(obs_epochs)}; "
+        "re-run gnss_ppp so .pos rows carry GPS week/TOW for skipped-epoch alignment"
+    )
+
+
+def trajectory_sanity(
+    solutions: list[comparison.SolutionEpoch],
+    reference: list[comparison.ReferenceEpoch],
+    matched: list[comparison.MatchedEpoch] | None = None,
+) -> dict[str, float]:
+    if not solutions or not reference:
+        return {}
+    if matched is None:
+        matched = comparison.match_to_reference(solutions, reference, MATCH_TOLERANCE_S)
+    if not matched:
+        return {}
+    ref_by_tow = {epoch.tow: epoch for epoch in reference}
+    ref_aligned: list[comparison.ReferenceEpoch] = []
+    sol_aligned: list[comparison.SolutionEpoch] = []
+    sol_by_tow = {epoch.tow: epoch for epoch in solutions}
+    for item in matched:
+        ref = min(
+            reference,
+            key=lambda epoch: abs(epoch.tow - item.tow),
         )
-    return stamped
+        sol = sol_by_tow.get(item.tow)
+        if sol is None:
+            closest = min(solutions, key=lambda epoch: abs(epoch.tow - item.tow))
+            if abs(closest.tow - item.tow) > MATCH_TOLERANCE_S:
+                continue
+            sol = closest
+        ref_aligned.append(ref)
+        sol_aligned.append(sol)
+    if not ref_aligned:
+        return {}
+    origin = ref_aligned[0]
+    truth_traj = comparison.trajectory_enu(ref_aligned, origin)
+    sol_traj = comparison.trajectory_enu(sol_aligned, origin)
+    truth_path_m = float(np.sum(np.linalg.norm(np.diff(truth_traj[:, :2], axis=0), axis=1)))
+    sol_path_m = float(np.sum(np.linalg.norm(np.diff(sol_traj[:, :2], axis=0), axis=1)))
+    truth_closure_m = float(np.linalg.norm(truth_traj[-1, :2] - truth_traj[0, :2]))
+    sol_closure_m = float(np.linalg.norm(sol_traj[-1, :2] - sol_traj[0, :2]))
+    max_lag_m = 0.0
+    truth_tows = [epoch.tow for epoch in reference]
+    for epoch in solutions:
+        idx = bisect.bisect_left(truth_tows, epoch.tow)
+        candidates = [reference[j] for j in (idx - 1, idx, idx + 1) if 0 <= j < len(reference)]
+        if not candidates:
+            continue
+        ref = min(candidates, key=lambda item: abs(item.tow - epoch.tow))
+        lag = float(np.linalg.norm(comparison.ecef_to_enu(epoch.ecef - ref.ecef, ref.lat_deg, ref.lon_deg)[:2]))
+        max_lag_m = max(max_lag_m, lag)
+    return {
+        "truth_path_m": rounded(truth_path_m),
+        "solution_path_m": rounded(sol_path_m),
+        "truth_end_to_start_m": rounded(truth_closure_m),
+        "solution_end_to_start_m": rounded(sol_closure_m),
+        "max_lag_vs_truth_m": rounded(max_lag_m),
+    }
 
 
 def compute_ttff_s(matched: list[comparison.MatchedEpoch], fixed_status: int) -> float | None:
@@ -435,12 +566,17 @@ def compute_ttff_s(matched: list[comparison.MatchedEpoch], fixed_status: int) ->
 def score_run(
     pos_path: Path,
     reference_csv: Path,
+    rover_obs: Path,
     *,
     fixed_status: int = PPP_FIXED_STATUS,
     match_tolerance_s: float = MATCH_TOLERANCE_S,
 ) -> dict[str, Any]:
-    reference = comparison.read_reference_csv(reference_csv)
-    solutions = stamp_solution_times_from_reference(read_ppp_pos(pos_path), reference)
+    reference = read_reference_csv(reference_csv)
+    solutions = read_ppp_pos(pos_path)
+    if solutions and all(
+        epoch.week == 0 and abs(epoch.tow) < 1e-6 for epoch in solutions[: min(5, len(solutions))]
+    ):
+        solutions = stamp_solution_times(solutions, parse_rinex_observation_epochs(rover_obs))
     matched = comparison.match_to_reference(solutions, reference, match_tolerance_s)
     if not matched:
         raise SystemExit(f"No epochs matched reference for {pos_path}")
@@ -468,6 +604,7 @@ def score_run(
         "ttff_s": compute_ttff_s(matched, fixed_status),
         "mean_satellites": rounded(float(np.mean(sat_counts))),
         "status_counts": status_counts,
+        **trajectory_sanity(solutions, reference, matched),
     }
 
 
@@ -552,8 +689,8 @@ def write_report(
     lines.append(f"- L6 cache: `{l6_cache}` (per-run concatenations under `{work_dir}`)")
     lines.append(f"- SSR CSV recipe: {csv_recipe}")
     lines.append("- Observation rate: 5 Hz (0.2 s); SSR expanded rows are time-stamped (1 s class sampling in compact expansion). MW/AR windows in PPP are time-based on receiver epochs, but any epoch-count heuristics in the CLAS path should be checked against 5 Hz density.")
-    lines.append("- Ground truth: `reference.csv` Applanix POS LVX ECEF; horizontal error in local ENU at each reference epoch (no extra lever-arm correction — same convention as the PPC RTK harness).")
-    lines.append("- PPP `.pos` rows currently carry `GPS_Week=0` / `GPS_TOW=0` in kinematic CLAS runs; the harness stamps epoch times from `reference.csv` by index before scoring.")
+    lines.append("- Ground truth: `reference.csv` Applanix POS LVX ECEF with lever arm (0.593, -0.670, -1.216) m body frame → antenna; horizontal error in local ENU at each matched epoch.")
+    lines.append("- PPP `.pos` rows carry GPS week/TOW from the receiver epoch; legacy rows with `GPS_Week=0` fall back to rover.obs `>` header alignment when counts match.")
     lines.append("- Match tolerance: 0.25 s; PPP fixed status = 6.")
     lines.append("")
     lines.append("### gnss_ppp kinematic CLAS invocation")
@@ -765,7 +902,7 @@ def main() -> int:
                 if completed.returncode != 0:
                     raise SystemExit(f"gnss_ppp failed for {run_key}/{config_key}; see {log_path}")
 
-            metrics = score_run(pos_path, paths.reference_csv)
+            metrics = score_run(pos_path, paths.reference_csv, paths.rover_obs)
             metrics["notes"] = gap_notes(run_key, config_key, metrics, MRTKLIB_TARGETS[run_key])
             config_metrics[config_key] = metrics
             print(

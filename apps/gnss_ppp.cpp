@@ -64,6 +64,7 @@ struct Options {
     int madocalib_trace_level = 0;
     bool kinematic_mode = false;
     bool low_dynamics_mode = false;
+    bool emit_epoch_time = false;
     bool apply_static_anchor_blend = false;
     bool enable_ar = false;
     double ar_ratio_threshold = 3.0;
@@ -157,6 +158,7 @@ void printUsage(const char* program_name) {
         << "                          MADOCALIB trace level (default: 0)\n"
         << "  --static                Use a static PPP motion model (default)\n"
         << "  --kinematic             Use a kinematic PPP motion model\n"
+        << "  --emit-epoch-time       Write GPS week/TOW and geodetic columns in .pos output\n"
         << "  --low-dynamics          Keep kinematic PPP anchored for quasi-static motion\n"
         << "  --no-low-dynamics       Disable quasi-static anchoring (default)\n"
         << "  --apply-static-anchor-blend\n"
@@ -333,6 +335,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.kinematic_mode = false;
         } else if (arg == "--kinematic") {
             options.kinematic_mode = true;
+        } else if (arg == "--emit-epoch-time") {
+            options.emit_epoch_time = true;
         } else if (arg == "--low-dynamics") {
             options.low_dynamics_mode = true;
         } else if (arg == "--no-low-dynamics") {
@@ -870,6 +874,7 @@ int main(int argc, char* argv[]) {
             options.clas_atmos_stale_after_seconds;
         ppp_config.kinematic_mode = options.kinematic_mode;
         ppp_config.low_dynamics_mode = options.low_dynamics_mode;
+        ppp_config.emit_solution_epoch_time = options.emit_epoch_time;
         ppp_config.apply_static_anchor_blend = options.apply_static_anchor_blend;
         if (!options.madoca_l6_paths.empty() &&
             ppp_env_overrides.madoca_early_window) {
