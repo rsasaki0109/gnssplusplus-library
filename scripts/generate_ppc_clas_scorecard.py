@@ -43,6 +43,11 @@ PPP_FIXED_STATUS = 6
 MATCH_TOLERANCE_S = 0.25
 LEAD_IN_MINUTES = 30
 LEVER_ARM_BODY_M = np.array([0.593, -0.670, -1.216])  # IMU -> antenna, x fwd / y right / z down
+LEVER_ARM_BY_CITY: dict[str, np.ndarray] = {
+    # PPC README: Tokyo AT1675 mount; Nagoya Zephyr 3 Rover mount.
+    "tokyo": np.array([0.31, 0.0, -0.55]),
+    "nagoya": LEVER_ARM_BODY_M,
+}
 
 MRTKLIB_TARGETS: dict[str, dict[str, float]] = {
     "nagoya_run1": {"fix_pct": 17.0, "rms2d_m": 1.105, "sigma2d_m": 0.402},
@@ -296,11 +301,43 @@ def expand_ssr_csv(
                 continue
             handle.write(line)
             rows_kept += 1
+    if raw_csv.exists():
+        raw_csv.unlink()
     summary["expanded_csv"] = str(output_csv)
     summary["rows_written"] = rows_kept
     summary["tow_window"] = [rounded(tow_min), rounded(tow_max)]
     summary["cached"] = False
     return summary
+
+
+def ssr_csv_tow_range(path: Path) -> tuple[float, float] | None:
+    tow_min: float | None = None
+    tow_max: float | None = None
+    with path.open(encoding="ascii", errors="replace") as handle:
+        for line in handle:
+            if not line.strip() or line.startswith("#"):
+                continue
+            tow = float(line.split(",", 2)[1])
+            tow_min = tow if tow_min is None else min(tow_min, tow)
+            tow_max = tow if tow_max is None else max(tow_max, tow)
+    if tow_min is None or tow_max is None:
+        return None
+    return tow_min, tow_max
+
+
+def ssr_csv_covers_window(
+    path: Path,
+    window: RunWindow,
+    *,
+    lead_in_minutes: int,
+) -> bool:
+    tow_range = ssr_csv_tow_range(path)
+    if tow_range is None:
+        return False
+    tow_min, tow_max = tow_range
+    required_min = window.gps_tow_start - lead_in_minutes * 60.0 - 60.0
+    required_max = window.gps_tow_end + 60.0
+    return tow_min <= required_min + 30.0 and tow_max >= required_max - 30.0
 
 
 def build_gnss_ppp_command(
@@ -430,7 +467,11 @@ def parse_rinex_observation_epochs(path: Path) -> list[tuple[int, float]]:
     return epochs
 
 
-def read_reference_csv(path: Path, *, apply_lever_arm: bool = True) -> list[comparison.ReferenceEpoch]:
+def lever_arm_for_city(city: str) -> np.ndarray:
+    return LEVER_ARM_BY_CITY.get(city, LEVER_ARM_BODY_M)
+
+
+def read_reference_csv(path: Path, *, apply_lever_arm: bool = True, city: str | None = None) -> list[comparison.ReferenceEpoch]:
     rows: list[comparison.ReferenceEpoch] = []
     with path.open(newline="") as handle:
         reader = csv.reader(handle)
@@ -446,7 +487,8 @@ def read_reference_csv(path: Path, *, apply_lever_arm: bool = True) -> list[comp
                 roll = float(row[8])
                 pitch = float(row[9])
                 heading = float(row[10])
-                lever_enu = body_to_enu_rotation_matrix(roll, pitch, heading) @ LEVER_ARM_BODY_M
+                lever_body = lever_arm_for_city(city) if city is not None else LEVER_ARM_BODY_M
+                lever_enu = body_to_enu_rotation_matrix(roll, pitch, heading) @ lever_body
                 ecef = ecef + enu_to_ecef_delta(lever_enu, lat, lon)
             rows.append(comparison.ReferenceEpoch(week, tow, lat, lon, height, ecef))
     return rows
@@ -571,7 +613,7 @@ def score_run(
     fixed_status: int = PPP_FIXED_STATUS,
     match_tolerance_s: float = MATCH_TOLERANCE_S,
 ) -> dict[str, Any]:
-    reference = read_reference_csv(reference_csv)
+    reference = read_reference_csv(reference_csv, city=reference_csv.parent.parent.name)
     solutions = read_ppp_pos(pos_path)
     if solutions and all(
         epoch.week == 0 and abs(epoch.tow) < 1e-6 for epoch in solutions[: min(5, len(solutions))]
@@ -689,7 +731,7 @@ def write_report(
     lines.append(f"- L6 cache: `{l6_cache}` (per-run concatenations under `{work_dir}`)")
     lines.append(f"- SSR CSV recipe: {csv_recipe}")
     lines.append("- Observation rate: 5 Hz (0.2 s); SSR expanded rows are time-stamped (1 s class sampling in compact expansion). MW/AR windows in PPP are time-based on receiver epochs, but any epoch-count heuristics in the CLAS path should be checked against 5 Hz density.")
-    lines.append("- Ground truth: `reference.csv` Applanix POS LVX ECEF with lever arm (0.593, -0.670, -1.216) m body frame → antenna; horizontal error in local ENU at each matched epoch.")
+    lines.append("- Ground truth: `reference.csv` Applanix POS LVX ECEF with city-specific lever arm (Tokyo 0.31/0/−0.55 m, Nagoya 0.593/−0.670/−1.216 m body → antenna); horizontal error in local ENU at each matched epoch.")
     lines.append("- PPP `.pos` rows carry GPS week/TOW from the receiver epoch; legacy rows with `GPS_Week=0` fall back to rover.obs `>` header alignment when counts match.")
     lines.append("- Match tolerance: 0.25 s; PPP fixed status = 6.")
     lines.append("")
@@ -856,13 +898,29 @@ def main() -> int:
                 raise SystemExit(f"Missing cached L6 for {run_key}: {l6_path}")
 
         slots = l6_slots_for_window(window, LEAD_IN_MINUTES)
-        ssr_summary = expand_ssr_csv(
-            paths.l6_concat,
-            window,
-            paths.ssr_csv,
-            lead_in_minutes=LEAD_IN_MINUTES,
-            force=args.force_ssr and not args.skip_l6,
-        ) if not args.skip_l6 or not paths.ssr_csv.exists() else {"rows_written": "cached", "cached": True}
+        force_ssr = args.force_ssr and not args.skip_l6
+        if not args.skip_l6 or not paths.ssr_csv.exists():
+            ssr_summary = expand_ssr_csv(
+                paths.l6_concat,
+                window,
+                paths.ssr_csv,
+                lead_in_minutes=LEAD_IN_MINUTES,
+                force=force_ssr,
+            )
+        elif not ssr_csv_covers_window(paths.ssr_csv, window, lead_in_minutes=LEAD_IN_MINUTES):
+            print(
+                f"=== {run_key}: cached SSR TOW window does not cover run; re-expanding ===",
+                flush=True,
+            )
+            ssr_summary = expand_ssr_csv(
+                paths.l6_concat,
+                window,
+                paths.ssr_csv,
+                lead_in_minutes=LEAD_IN_MINUTES,
+                force=True,
+            )
+        else:
+            ssr_summary = {"rows_written": "cached", "cached": True}
 
         command_template = " ".join(
             build_gnss_ppp_command(
@@ -880,8 +938,9 @@ def main() -> int:
             ("parity", paths.pos_parity, paths.summary_parity),
         ):
             log_path = paths.pos_default.parent / f"{window.key}_{config_key}.log"
-            print(f"=== {run_key}/{config_key}: running gnss_ppp ===", flush=True)
-            if not args.skip_ppp or not pos_path.exists():
+            run_ppp = not args.skip_ppp or not pos_path.exists()
+            if run_ppp:
+                print(f"=== {run_key}/{config_key}: running gnss_ppp ===", flush=True)
                 env = os.environ.copy()
                 if config_key == "parity":
                     env.update(PARITY_ENV)
@@ -901,6 +960,11 @@ def main() -> int:
                 )
                 if completed.returncode != 0:
                     raise SystemExit(f"gnss_ppp failed for {run_key}/{config_key}; see {log_path}")
+            else:
+                print(
+                    f"=== {run_key}/{config_key}: skipping gnss_ppp (reusing {pos_path.name}) ===",
+                    flush=True,
+                )
 
             metrics = score_run(pos_path, paths.reference_csv, paths.rover_obs)
             metrics["notes"] = gap_notes(run_key, config_key, metrics, MRTKLIB_TARGETS[run_key])

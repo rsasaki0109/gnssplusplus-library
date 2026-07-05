@@ -7,6 +7,7 @@
 #include <libgnss++/algorithms/ppp_clas_dd.hpp>
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
+#include <libgnss++/algorithms/rtk_validation.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signals.hpp>
@@ -34,6 +35,50 @@ bool pppDebugEnabled() {
 constexpr double kClasNlDatumJumpThresholdCycles = 0.5;
 // Good WL-NL / SD-MAR fixes stay below ~0.7 m; parity-path blunders were 38–595 m.
 constexpr double kClasBaseClockParitySdMarMaxPositionShiftM = 2.0;
+// Kinematic CLAS: reject fixed positions that jump beyond float prediction.
+// RTK PPC gates (PR #177/#178/#179) use 20 m min / 25 m/s adaptive trusted jump;
+// at 5 Hz urban (~15 m/s) we tighten to max(1 m, 15 m/s·dt) capped at 8 m, and
+// max(1 m, 3σ_float) when covariance is available (ppp.cpp uses 25 m kinematic).
+constexpr double kClasKinematicFixedJumpMinM = 1.0;
+constexpr double kClasKinematicFixedJumpRateMps = 10.0;
+constexpr double kClasKinematicFixedJumpMaxM = 2.0;
+constexpr double kClasKinematicFixedJumpSigmaScale = 3.0;
+constexpr double kClasKinematicWlnlMaxPositionShiftM = 2.0;
+constexpr double kClasKinematicMinFixRatio = 3.0;
+constexpr int kClasKinematicMinFixCount = 1;
+
+double clasKinematicHorizontalPositionSigmaM(const PPPState& filter_state) {
+    if (filter_state.covariance.rows() < 3 ||
+        filter_state.covariance.cols() < 3 ||
+        filter_state.pos_index < 0 ||
+        filter_state.pos_index + 2 >= filter_state.covariance.rows()) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const int base = filter_state.pos_index;
+    const double var_xy =
+        filter_state.covariance(base, base) + filter_state.covariance(base + 1, base + 1);
+    if (!std::isfinite(var_xy) || var_xy <= 0.0) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    return std::sqrt(var_xy);
+}
+
+double clasKinematicMaxFixedFloatJumpM(
+    double dt_seconds,
+    double horizontal_position_sigma_m) {
+    const double adaptive_limit = rtk_validation::adaptiveJumpLimit(
+        dt_seconds,
+        kClasKinematicFixedJumpMinM,
+        kClasKinematicFixedJumpRateMps);
+    double limit = adaptive_limit;
+    if (std::isfinite(horizontal_position_sigma_m) && horizontal_position_sigma_m > 0.0) {
+        limit = std::max(
+            limit,
+            kClasKinematicFixedJumpMinM +
+                kClasKinematicFixedJumpSigmaScale * horizontal_position_sigma_m);
+    }
+    return std::min(kClasKinematicFixedJumpMaxM, limit);
+}
 
 std::ofstream* clasFloatDumpStream() {
     const auto& path = pppEnvOverrides().clas_float_dump_path;
@@ -454,6 +499,13 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         return ambiguityStateIndex(satellite);
     };
 
+    const Vector3d clas_float_position_ecef =
+        filter_state_.state.segment(filter_state_.pos_index, 3);
+    const double clas_float_horizontal_sigma_m =
+        clasKinematicHorizontalPositionSigmaM(filter_state_);
+    const PPPState clas_float_filter_state = filter_state_;
+    const auto clas_float_ambiguity_states = ambiguity_states_;
+
     const auto ambiguity_resolution =
         ppp_clas::resolveAndValidateAmbiguities(
             filter_state_,
@@ -509,6 +561,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         static_cast<int>(osr_corrections.size()));
 
     if (wlnl_fixed_position_ok &&
+        !ppp_config_.kinematic_mode &&
         !env_overrides_.clas_fixed_state_output &&
         !use_constrained_fixed_state) {
         solution.position_ecef = wlnl_fixed_position;
@@ -527,25 +580,113 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             pppDebugEnabled());
         const bool sd_ar_fixed =
             sd_ar_result.valid && sd_ar_result.ar_ratio >= 3.0;
+        const bool apply_sd_mar_shift_gate =
+            ppp_config_.kinematic_mode ||
+            env_overrides_.clas_base_clock_parity;
         const bool sd_ar_position_ok =
-            !env_overrides_.clas_base_clock_parity ||
+            !apply_sd_mar_shift_gate ||
             sd_ar_result.position_shift_m <=
                 kClasBaseClockParitySdMarMaxPositionShiftM;
-        if (sd_ar_fixed && sd_ar_position_ok) {
+        if (sd_ar_fixed && sd_ar_position_ok && !ppp_config_.kinematic_mode) {
             solution.position_ecef = sd_ar_result.position;
             solution.status = SolutionStatus::PPP_FIXED;
         } else if (sd_ar_fixed && pppDebugEnabled()) {
-            std::cerr << "[CLAS-SD-MAR] reject parity pos_shift="
+            std::cerr << "[CLAS-SD-MAR] reject"
+                      << (ppp_config_.kinematic_mode ? " kinematic" : " parity")
+                      << " pos_shift="
                       << sd_ar_result.position_shift_m
                       << " ratio=" << sd_ar_result.ar_ratio << "\n";
         }
     }
+
+    bool clas_kinematic_fix_rejected = false;
+    if (ppp_config_.kinematic_mode &&
+        solution.status == SolutionStatus::PPP_FIXED) {
+        const double dt_seconds =
+            has_last_processed_time_ ? obs.time - last_processed_time_ : 0.2;
+        const double max_fixed_float_jump_m = clasKinematicMaxFixedFloatJumpM(
+            dt_seconds,
+            clas_float_horizontal_sigma_m);
+        const Vector3d post_ar_filter_position =
+            solution_filter_state.state.segment(solution_filter_state.pos_index, 3);
+        double fixed_float_jump_m =
+            (solution.position_ecef - clas_float_position_ecef).norm();
+        if (wlnl_fixed_position_ok) {
+            fixed_float_jump_m = std::max(
+                fixed_float_jump_m,
+                (wlnl_fixed_position - post_ar_filter_position).norm());
+        }
+        const bool wlnl_shift_ok =
+            !wlnl_fixed_position_ok ||
+            (wlnl_fixed_position - post_ar_filter_position).norm() <=
+                kClasKinematicWlnlMaxPositionShiftM;
+        double continuity_jump_m = 0.0;
+        if (has_last_published_solution_position_) {
+            continuity_jump_m = (solution.position_ecef -
+                last_published_solution_position_ecef_).norm();
+        }
+        const bool continuity_ok =
+            !has_last_published_solution_position_ ||
+            continuity_jump_m <= max_fixed_float_jump_m;
+        const bool ratio_ok =
+            solution.ratio <= 0.0 ||
+            solution.ratio >= std::max(
+                kClasKinematicMinFixRatio,
+                ppp_config_.ar_ratio_threshold + 0.5);
+        const bool jump_ok =
+            wlnl_shift_ok &&
+            continuity_ok &&
+            std::isfinite(fixed_float_jump_m) &&
+            fixed_float_jump_m <= max_fixed_float_jump_m &&
+            ratio_ok;
+        if (jump_ok) {
+            ++clas_kinematic_fix_candidate_streak_;
+        } else {
+            clas_kinematic_fix_candidate_streak_ = 0;
+        }
+        const bool minfix_ok =
+            clas_kinematic_fix_candidate_streak_ >= kClasKinematicMinFixCount;
+        if (!jump_ok || !minfix_ok) {
+            clas_kinematic_fix_rejected = true;
+            solution.position_ecef = clas_float_position_ecef;
+            solution.status = SolutionStatus::PPP_FLOAT;
+            solution.ratio = 0.0;
+            solution.num_fixed_ambiguities = 0;
+            filter_state_ = clas_float_filter_state;
+            ambiguity_states_ = clas_float_ambiguity_states;
+            if (!jump_ok) {
+                clas_kinematic_fix_candidate_streak_ = 0;
+            }
+            if (pppDebugEnabled()) {
+                std::cerr << "[CLAS-KIN-FIX] reject"
+                          << (!wlnl_shift_ok ? " wlnl_shift" :
+                              !continuity_ok ? " continuity" :
+                              !ratio_ok ? " ratio" :
+                              !jump_ok ? " float_jump" : " minfix")
+                          << " jump=" << fixed_float_jump_m
+                          << " continuity=" << continuity_jump_m
+                          << " limit=" << max_fixed_float_jump_m
+                          << " ratio=" << solution.ratio
+                          << " streak=" << clas_kinematic_fix_candidate_streak_
+                          << "\n";
+            }
+        }
+    } else if (ppp_config_.kinematic_mode) {
+        clas_kinematic_fix_candidate_streak_ = 0;
+    }
+
+    had_fixed_last_epoch_ =
+        solution.status == SolutionStatus::PPP_FIXED && !clas_kinematic_fix_rejected;
 
     has_last_processed_time_ = true;
     last_processed_time_ = obs.time;
     ++total_epochs_processed_;
 
     applyOptionalSolutionEpochMetadata(solution, obs.time, ppp_config_);
+    if (ppp_config_.kinematic_mode && solution.isValid()) {
+        last_published_solution_position_ecef_ = solution.position_ecef;
+        has_last_published_solution_position_ = true;
+    }
     return solution;
 }
 
