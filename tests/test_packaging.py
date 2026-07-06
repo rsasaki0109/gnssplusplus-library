@@ -14,6 +14,20 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 BUILD_DIR = Path(os.environ.get("GNSSPP_BINARY_DIR", ROOT_DIR / "build"))
 
+# Platform-dependent artifact names (MSVC: gnss_spp.exe / gnss_lib.lib,
+# GNU: gnss_spp / libgnss_lib.a).
+EXE_SUFFIX = ".exe" if os.name == "nt" else ""
+if os.name == "nt":
+    STATIC_LIB_NAMES = {
+        "gnss_lib": "gnss_lib.lib",
+        "gnss_lib_noopt": "gnss_lib_noopt.lib",
+    }
+else:
+    STATIC_LIB_NAMES = {
+        "gnss_lib": "libgnss_lib.a",
+        "gnss_lib_noopt": "libgnss_lib_noopt.a",
+    }
+
 
 def repo_data_exists(*relative_paths: str) -> bool:
     return all((ROOT_DIR / relative_path).exists() for relative_path in relative_paths)
@@ -70,12 +84,12 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_ros2_doctor.py",
                 prefix / "bin" / "gnss_ros2_bag_doctor.py",
                 prefix / "bin" / "gnss_field_report.py",
-                prefix / "bin" / "gnss_spp",
-                prefix / "bin" / "gnss_solve",
-                prefix / "bin" / "gnss_ppp",
-                prefix / "bin" / "gnss_visibility",
+                prefix / "bin" / ("gnss_spp" + EXE_SUFFIX),
+                prefix / "bin" / ("gnss_solve" + EXE_SUFFIX),
+                prefix / "bin" / ("gnss_ppp" + EXE_SUFFIX),
+                prefix / "bin" / ("gnss_visibility" + EXE_SUFFIX),
                 prefix / "bin" / "gnss_visibility_plot.py",
-                prefix / "bin" / "gnss_nav_products",
+                prefix / "bin" / ("gnss_nav_products" + EXE_SUFFIX),
                 prefix / "bin" / "gnss_fetch_products.py",
                 prefix / "bin" / "gnss_artifact_manifest.py",
                 prefix / "bin" / "gnss_ionex_info.py",
@@ -102,8 +116,8 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_binex_info.py",
                 prefix / "bin" / "gnss_qzss_l6_info.py",
                 prefix / "include" / "libgnss++" / "gnss.hpp",
-                prefix / "lib" / "libgnss_lib.a",
-                prefix / "lib" / "libgnss_lib_noopt.a",
+                prefix / "lib" / STATIC_LIB_NAMES["gnss_lib"],
+                prefix / "lib" / STATIC_LIB_NAMES["gnss_lib_noopt"],
                 prefix / "lib" / "cmake" / "libgnsspp" / "libgnssppConfig.cmake",
                 prefix / "lib" / "pkgconfig" / "libgnsspp.pc",
                 prefix / "tools" / "rtk_stats.py",
@@ -137,7 +151,10 @@ class PackagingSmokeTest(unittest.TestCase):
             python_packages = list(prefix.rglob("libgnsspp/__init__.py"))
             self.assertTrue(python_packages, "missing installed Python package libgnsspp")
             python_package_dir = python_packages[0].parent
-            extension_modules = list(python_package_dir.glob("_libgnsspp*.so"))
+            extension_modules = [
+                *python_package_dir.glob("_libgnsspp*.so"),
+                *python_package_dir.glob("_libgnsspp*.pyd"),
+            ]
             self.assertTrue(extension_modules, "missing installed Python extension module")
             self.assertTrue(
                 (python_package_dir / "artifacts.py").exists(),

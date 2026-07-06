@@ -56,7 +56,8 @@ def load_json(path: Path) -> dict[str, Any] | None:
 
 def relative_display(path: Path, root_dir: Path) -> str:
     try:
-        return str(path.resolve().relative_to(root_dir.resolve()))
+        # as_posix() keeps manifest paths portable (forward slashes) on Windows.
+        return path.resolve().relative_to(root_dir.resolve()).as_posix()
     except ValueError:
         return str(path)
 

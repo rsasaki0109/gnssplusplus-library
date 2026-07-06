@@ -81,7 +81,11 @@ int dayOfYearFromTime(const GNSSTime& time) {
     const auto system_time = time.toSystemTime();
     const std::time_t utc_seconds = std::chrono::system_clock::to_time_t(system_time);
     std::tm utc_tm{};
+#if defined(_WIN32)
+    gmtime_s(&utc_tm, &utc_seconds);
+#else
     gmtime_r(&utc_seconds, &utc_tm);
+#endif
     return utc_tm.tm_yday + 1;
 }
 

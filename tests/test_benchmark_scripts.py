@@ -907,7 +907,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 "\n".join(
                     [
                         "[ppc_coverage_matrix]",
-                        f'dataset_root = "{dataset_root}"',
+                        f'dataset_root = "{dataset_root.as_posix()}"',
                         'output_dir = "output/ppc_sigma_profile_runtime_demote_nis2_ratio4"',
                         'summary_json = "output/ppc_sigma_profile_runtime_demote_nis2_ratio4/summary.json"',
                         'markdown_output = "output/ppc_sigma_profile_runtime_demote_nis2_ratio4/table.md"',
@@ -5779,6 +5779,10 @@ class PPCDemoTest(unittest.TestCase):
             self.assertIn("effective epoch rate", message)
             self.assertIn("RTKLIB", message)
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "executes a chmod +x script stub, which Windows cannot exec directly",
+    )
     def test_run_rtklib_solver_executes_binary_path(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_rtklib_bin_") as temp_dir:
             temp_root = Path(temp_dir)

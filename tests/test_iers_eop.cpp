@@ -7,12 +7,28 @@
 #include <stdexcept>
 #include <string>
 
+#if defined(_WIN32)
+#include <atomic>
+#include <filesystem>
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace {
 
 using libgnss::iers::EopRecord;
 using libgnss::iers::EopTable;
 
 std::string writeTempFile(const std::string& contents) {
+#if defined(_WIN32)
+    // mkstemp is POSIX-only; build a unique path under the temp directory.
+    static std::atomic<int> counter{0};
+    const auto path_fs = std::filesystem::temp_directory_path() /
+        ("libgnss_eop_" + std::to_string(::_getpid()) + "_" +
+         std::to_string(counter.fetch_add(1)));
+    const std::string path = path_fs.string();
+#else
     char path_template[] = "/tmp/libgnss_eop_XXXXXX";
     int fd = mkstemp(path_template);
     if (fd < 0) {
@@ -21,6 +37,7 @@ std::string writeTempFile(const std::string& contents) {
     }
     std::string path(path_template);
     close(fd);
+#endif
     std::ofstream out(path);
     out << contents;
     return path;

@@ -24,6 +24,15 @@ set_target_properties(_libgnsspp PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${GNSSPP_PYTHON_PACKAGE_DIR}
     RUNTIME_OUTPUT_DIRECTORY ${GNSSPP_PYTHON_PACKAGE_DIR}
 )
+# Multi-config generators (Visual Studio, Xcode) otherwise append a
+# per-config subdirectory (e.g. Release/), breaking `import libgnsspp`.
+foreach(GNSSPP_CONFIG ${CMAKE_CONFIGURATION_TYPES})
+    string(TOUPPER ${GNSSPP_CONFIG} GNSSPP_CONFIG_UPPER)
+    set_target_properties(_libgnsspp PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY_${GNSSPP_CONFIG_UPPER} ${GNSSPP_PYTHON_PACKAGE_DIR}
+        RUNTIME_OUTPUT_DIRECTORY_${GNSSPP_CONFIG_UPPER} ${GNSSPP_PYTHON_PACKAGE_DIR}
+    )
+endforeach()
 add_custom_command(
     TARGET _libgnsspp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
