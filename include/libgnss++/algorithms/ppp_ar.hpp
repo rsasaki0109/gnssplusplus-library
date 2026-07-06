@@ -152,6 +152,18 @@ WlnlFixAttempt tryWlnlFix(
     const std::vector<int>& state_indices,
     const std::map<SatelliteId, WlnlNlInfo>& nl_info,
     bool debug_enabled,
+    const std::map<SatelliteId, double>* satellite_elevations_rad = nullptr,
+    const std::set<SatelliteId>& excluded_real_satellites = {});
+
+WlnlFixAttempt tryWlnlFixWithPar(
+    const ppp_shared::PPPConfig& config,
+    ppp_shared::PPPState& filter_state,
+    const MatrixXd& constraint_covariance,
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const std::vector<SatelliteId>& satellites,
+    const std::vector<int>& state_indices,
+    const std::map<SatelliteId, WlnlNlInfo>& nl_info,
+    bool debug_enabled,
     const std::map<SatelliteId, double>* satellite_elevations_rad = nullptr);
 
 struct FixedNlObservation {

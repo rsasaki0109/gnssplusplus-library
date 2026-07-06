@@ -154,10 +154,8 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         obs, nav, receiver_position, clock_bias_m, trop_zenith);
 
     std::map<SatelliteId, double> satellite_elevations_rad;
-    if (pppEnvOverrides().clas_qzss_s_prn_fix) {
-        for (const auto& [satellite, osr] : osr_by_sat) {
-            satellite_elevations_rad[satellite] = osr.elevation;
-        }
+    for (const auto& [satellite, osr] : osr_by_sat) {
+        satellite_elevations_rad[satellite] = osr.elevation;
     }
     const std::map<SatelliteId, double>* elevation_ref_map =
         satellite_elevations_rad.empty() ? nullptr : &satellite_elevations_rad;

@@ -755,12 +755,18 @@ WlnlFixAttempt tryWlnlFix(
     const std::vector<int>& state_indices,
     const std::map<SatelliteId, WlnlNlInfo>& nl_info,
     bool debug_enabled,
-    const std::map<SatelliteId, double>* satellite_elevations_rad) {
+    const std::map<SatelliteId, double>* satellite_elevations_rad,
+    const std::set<SatelliteId>& excluded_real_satellites) {
     WlnlFixAttempt attempt;
 
     std::vector<int> wl_fixed_indices;
     wl_fixed_indices.reserve(satellites.size());
     for (int i = 0; i < static_cast<int>(satellites.size()); ++i) {
+        const SatelliteId real_satellite =
+            clasRealSatellite(satellites[static_cast<size_t>(i)]);
+        if (excluded_real_satellites.count(real_satellite) != 0) {
+            continue;
+        }
         const auto ambiguity_it = ambiguity_states.find(satellites[static_cast<size_t>(i)]);
         if (ambiguity_it == ambiguity_states.end() || !ambiguity_it->second.wl_is_fixed) {
             continue;
@@ -930,6 +936,114 @@ WlnlFixAttempt tryWlnlFix(
     return attempt;
 }
 
+WlnlFixAttempt tryWlnlFixWithPar(
+    const ppp_shared::PPPConfig& config,
+    ppp_shared::PPPState& filter_state,
+    const MatrixXd& constraint_covariance,
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const std::vector<SatelliteId>& satellites,
+    const std::vector<int>& state_indices,
+    const std::map<SatelliteId, WlnlNlInfo>& nl_info,
+    bool debug_enabled,
+    const std::map<SatelliteId, double>* satellite_elevations_rad) {
+    auto try_fix = [&](const std::set<SatelliteId>& excluded_real_satellites) {
+        return tryWlnlFix(
+            config,
+            filter_state,
+            constraint_covariance,
+            ambiguity_states,
+            satellites,
+            state_indices,
+            nl_info,
+            debug_enabled,
+            satellite_elevations_rad,
+            excluded_real_satellites);
+    };
+
+    WlnlFixAttempt best_attempt = try_fix({});
+    if (best_attempt.fixed ||
+        !config.use_clas_osr_filter ||
+        !config.kinematic_mode ||
+        satellite_elevations_rad == nullptr ||
+        satellite_elevations_rad->empty()) {
+        return best_attempt;
+    }
+
+    struct ParCandidate {
+        SatelliteId real_satellite;
+        double elevation_rad = -1.0;
+        int mw_count = 0;
+    };
+    std::vector<ParCandidate> par_candidates;
+    par_candidates.reserve(satellite_elevations_rad->size());
+    for (const auto& [real_satellite, elevation_rad] : *satellite_elevations_rad) {
+        par_candidates.push_back({real_satellite, elevation_rad, 0});
+    }
+    for (auto& candidate : par_candidates) {
+        const auto ambiguity_it = ambiguity_states.find(candidate.real_satellite);
+        if (ambiguity_it != ambiguity_states.end()) {
+            candidate.mw_count = ambiguity_it->second.mw_count;
+        }
+    }
+    std::sort(par_candidates.begin(), par_candidates.end(),
+              [](const ParCandidate& lhs, const ParCandidate& rhs) {
+                  if (lhs.elevation_rad != rhs.elevation_rad) {
+                      return lhs.elevation_rad < rhs.elevation_rad;
+                  }
+                  return lhs.mw_count < rhs.mw_count;
+              });
+
+    std::set<SatelliteId> excluded_real_satellites;
+    const int max_exclusions = std::min(
+        4,
+        std::max(0, static_cast<int>(par_candidates.size()) - config.min_satellites_for_ar));
+
+    for (int iteration = 0; iteration < max_exclusions && !best_attempt.fixed; ++iteration) {
+        SatelliteId best_exclusion;
+        bool has_best_exclusion = false;
+        double best_ratio = best_attempt.ratio;
+
+        for (const auto& candidate : par_candidates) {
+            if (excluded_real_satellites.count(candidate.real_satellite) != 0) {
+                continue;
+            }
+
+            auto trial_exclusions = excluded_real_satellites;
+            trial_exclusions.insert(candidate.real_satellite);
+            WlnlFixAttempt trial_attempt = try_fix(trial_exclusions);
+            if (trial_attempt.fixed) {
+                best_attempt = std::move(trial_attempt);
+                if (debug_enabled) {
+                    std::cerr << "[PPP-WLNL] PAR fixed: excluded="
+                              << candidate.real_satellite.toString()
+                              << " nb=" << best_attempt.nb
+                              << " ratio=" << best_attempt.ratio << "\n";
+                }
+                break;
+            }
+
+            if (trial_attempt.ratio > best_ratio) {
+                best_ratio = trial_attempt.ratio;
+                best_exclusion = candidate.real_satellite;
+                has_best_exclusion = true;
+            }
+        }
+
+        if (best_attempt.fixed || !has_best_exclusion) {
+            break;
+        }
+
+        excluded_real_satellites.insert(best_exclusion);
+        if (debug_enabled) {
+            std::cerr << "[PPP-WLNL] PAR exclude candidate: "
+                      << best_exclusion.toString()
+                      << " ratio=" << best_ratio << "\n";
+        }
+    }
+
+    return best_attempt;
+}
+
 std::map<SatelliteId, WlnlNlInfo> buildWlnlNlInfoMap(
     const std::vector<SatelliteId>& satellites,
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
@@ -962,6 +1076,19 @@ WlnlFixAttempt resolveWlnlFix(
         eligible_ambiguities.satellites,
         ambiguity_states,
         provider);
+    if (config.use_clas_osr_filter && config.kinematic_mode &&
+        satellite_elevations_rad != nullptr) {
+        return tryWlnlFixWithPar(
+            config,
+            filter_state,
+            constraint_covariance,
+            ambiguity_states,
+            eligible_ambiguities.satellites,
+            eligible_ambiguities.state_indices,
+            nl_info,
+            debug_enabled,
+            satellite_elevations_rad);
+    }
     return tryWlnlFix(
         config,
         filter_state,
