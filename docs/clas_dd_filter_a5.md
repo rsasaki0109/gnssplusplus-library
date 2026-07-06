@@ -365,3 +365,25 @@ CLASLIB rows, while adding base plus network leaves the same rows near
 `+0.06 m`. The base-only policy removes that 30-second sign flip without
 changing default CLAS behavior, and the delayed bank policy matches CLASLIB's
 first-half hold before the next selected-network replacement rows are handled.
+
+## A4b: network_compensation_m materialization (plumbing) and SIS-window finding
+
+Native now wires the applied SIS continuity delta into the `network_compensation_m`
+dump column, which was a `0.0` stub.  On the reference dataset the column remains
+`0.0` and the dump/`.pos` output stay byte-identical, because instrumentation
+proved the 30-second phase-bias-lag apply window never matches on real data:
+the phase-bias lag cycles `0..25 s` on real CLAS updates, so the `abs(pbias_lag
+- 30) < 0.5` gate is unreachable by construction.  In other words, native
+currently never applies the SIS delta, while CLASLIB applies `compN` at SSR
+update boundaries (G14/C2W: 135/280 nonzero rows, `rms=0.0526 m`,
+`max=0.219 m`).
+
+Because the CLASLIB exporter reconstructs ionosphere from PRC closure,
+CLASLIB's SIS subtraction currently surfaces inside the stec/iono diff columns
+instead of a dedicated component (`stec_tecu rms=0.0527 m` is close to the
+`compN rms=0.0526 m` above), so the residual stec/iono mismatch reported by the
+A4b diff is largely misattributed `compN`.  Closing that gap is deferred to a
+follow-up slice that applies the SIS delta with boundary semantics (lag ≈ 0,
+matching CLASLIB's `adjust_prc`/`adjust_cpc`); that slice changes PRC/solution
+output and requires full #161 sign-off.  This commit only adds the dump
+plumbing it will rely on.
