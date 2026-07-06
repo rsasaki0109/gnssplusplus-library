@@ -33,6 +33,62 @@ constexpr double kWgs84E2 = 6.69437999014e-3;
 constexpr double kBeiDouGeoSin5Deg = -0.0871557427476582;
 constexpr double kBeiDouGeoCos5Deg = 0.9961946980917456;
 constexpr double kPreciseInterpolationGapSeconds = 900.0;
+// CLASLIB STECVALIDAGE (cssr.h:79) — compact regional STEC held across this window.
+constexpr double kClasStecValidAgeSeconds = 3600.0;
+
+bool isQzssDedicatedBiasBankEntry(const SSROrbitClockCorrection& entry, bool phase) {
+    const bool valid =
+        phase ? (entry.phase_bias_valid && !entry.phase_bias_m.empty())
+              : (entry.code_bias_valid && !entry.code_bias_m.empty());
+    if (!valid) {
+        return false;
+    }
+    if (phase) {
+        if (entry.bias_network_id <= 0) {
+            return false;
+        }
+        for (const auto& [signal_id, bias_m] : entry.phase_bias_m) {
+            if (std::abs(bias_m) > 1e-12) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return entry.orbit_valid || entry.clock_valid;
+}
+
+const SSROrbitClockCorrection* findQzssHeldPhaseBiasForServiceNetwork(
+    const std::vector<SSROrbitClockCorrection>& entries,
+    const GNSSTime& time,
+    int service_network_id,
+    size_t scan_end_index) {
+    if (service_network_id <= 0 || scan_end_index == 0) {
+        return nullptr;
+    }
+    size_t group_end = scan_end_index;
+    while (group_end > 0) {
+        const size_t group_last = group_end - 1;
+        const GNSSTime group_time = entries[group_last].time;
+        if (time - group_time > kClasStecValidAgeSeconds + 1e-9) {
+            break;
+        }
+        size_t group_begin = group_last;
+        while (group_begin > 0 && entries[group_begin - 1].time == group_time) {
+            --group_begin;
+        }
+        for (size_t index = group_begin; index < group_end; ++index) {
+            const SSROrbitClockCorrection& entry = entries[index];
+            if (!isQzssDedicatedBiasBankEntry(entry, true)) {
+                continue;
+            }
+            if (entry.bias_network_id == service_network_id) {
+                return &entry;
+            }
+        }
+        group_end = group_begin;
+    }
+    return nullptr;
+}
 
 std::string trimCopy(const std::string& value) {
     const auto begin = value.find_first_not_of(" \t\r\n");
@@ -129,6 +185,10 @@ bool sameCorrectionVariant(const SSROrbitClockCorrection& lhs,
            lhs.bias_network_id == rhs.bias_network_id;
 }
 
+bool clasQzssBaseClockHygieneActive(const SatelliteId& sat);
+bool atmosEmbeddedClockRow(const SSROrbitClockCorrection& entry);
+void promoteClaslibBaseClockFields(SSROrbitClockCorrection& correction);
+
 void mergeCorrectionFields(SSROrbitClockCorrection& target,
                            const SSROrbitClockCorrection& correction) {
     if (correction.orbit_valid) {
@@ -142,12 +202,24 @@ void mergeCorrectionFields(SSROrbitClockCorrection& target,
     if (correction.clock_valid) {
         if (correction.clock_network_id == 0) {
             target.clock_correction_m = correction.clock_correction_m;
-            target.base_clock_correction_m = correction.clock_correction_m;
-            target.base_clock_valid = true;
-            target.base_clock_reference_time = correction.clock_reference_time.week != 0 ?
-                correction.clock_reference_time : correction.time;
+            const bool skip_atmos_base =
+                clasQzssBaseClockHygieneActive(target.satellite) &&
+                atmosEmbeddedClockRow(correction);
+            if (!skip_atmos_base) {
+                target.base_clock_correction_m = correction.clock_correction_m;
+                target.base_clock_valid = true;
+                target.base_clock_reference_time = correction.clock_reference_time.week != 0 ?
+                    correction.clock_reference_time : correction.time;
+            }
         } else {
             target.clock_correction_m = correction.clock_correction_m;
+            if (clasQzssBaseClockHygieneActive(target.satellite) &&
+                !atmosEmbeddedClockRow(correction)) {
+                target.base_clock_correction_m = correction.clock_correction_m;
+                target.base_clock_valid = true;
+                target.base_clock_reference_time = correction.clock_reference_time.week != 0 ?
+                    correction.clock_reference_time : correction.time;
+            }
         }
         target.clock_valid = true;
         target.clock_reference_time = correction.clock_reference_time.week != 0 ?
@@ -267,6 +339,66 @@ constexpr double kClaslibMaxOrbitAgeFromObsSeconds = 180.0;
 constexpr double kClaslibMaxClockAgeFromObsSeconds = 30.0;
 constexpr double kClaslibMaxClockAgeFromOrbitSeconds = 30.0;
 
+bool clasQzssBaseClockHygieneActive(const SatelliteId& sat) {
+    return pppEnvOverrides().clas_base_clock_parity &&
+           pppEnvOverrides().clas_qzss_s_prn_fix &&
+           sat.system == GNSSSystem::QZSS && sat.prn >= 1 && sat.prn <= 3;
+}
+
+bool atmosEmbeddedClockRow(const SSROrbitClockCorrection& entry) {
+    // Network-bank rows (clock_network_id>0) may carry forward-filled atmos
+    // tokens from CSV ingest; only reject atmos-primary embedded dclock rows.
+    return entry.atmos_valid && !entry.atmos_tokens.empty() &&
+           entry.clock_network_id == 0;
+}
+
+bool claslibBaseClockCandidate(const SatelliteId& sat,
+                               const SSROrbitClockCorrection& entry) {
+    if (clasQzssBaseClockHygieneActive(sat) && atmosEmbeddedClockRow(entry)) {
+        return false;
+    }
+    if (entry.base_clock_valid) {
+        return true;
+    }
+    if (clasQzssBaseClockHygieneActive(sat) && entry.clock_valid &&
+        entry.clock_network_id > 0 && !atmosEmbeddedClockRow(entry)) {
+        return true;
+    }
+    return false;
+}
+
+double claslibBaseClockCorrectionM(const SSROrbitClockCorrection& entry) {
+    if (entry.clock_valid && entry.clock_network_id > 0) {
+        return entry.clock_correction_m;
+    }
+    return entry.base_clock_correction_m;
+}
+
+void promoteClaslibBaseClockFields(SSROrbitClockCorrection& correction) {
+    if (!correction.clock_valid) {
+        return;
+    }
+    const bool hygiene = clasQzssBaseClockHygieneActive(correction.satellite);
+    if (hygiene && atmosEmbeddedClockRow(correction)) {
+        return;
+    }
+    if (correction.clock_network_id == 0) {
+        correction.base_clock_correction_m = correction.clock_correction_m;
+        correction.base_clock_valid = true;
+        correction.base_clock_reference_time =
+            correction.clock_reference_time.week != 0 ?
+                correction.clock_reference_time : correction.time;
+        return;
+    }
+    if (hygiene && correction.clock_network_id > 0 && !atmosEmbeddedClockRow(correction)) {
+        correction.base_clock_correction_m = correction.clock_correction_m;
+        correction.base_clock_valid = true;
+        correction.base_clock_reference_time =
+            correction.clock_reference_time.week != 0 ?
+                correction.clock_reference_time : correction.time;
+    }
+}
+
 struct ClaslibClockPick {
     bool valid = false;
     double clock_correction_m = 0.0;
@@ -276,6 +408,7 @@ struct ClaslibClockPick {
 };
 
 ClaslibClockPick pickClaslibBaseClock(
+    const SatelliteId& satellite,
     const std::vector<SSROrbitClockCorrection>& entries,
     const GNSSTime& obs_time) {
     const SSROrbitClockCorrection* orbit_ref = nullptr;
@@ -300,7 +433,7 @@ ClaslibClockPick pickClaslibBaseClock(
 
     const SSROrbitClockCorrection* best = nullptr;
     for (const auto& entry : entries) {
-        if (!entry.base_clock_valid) {
+        if (!claslibBaseClockCandidate(satellite, entry)) {
             continue;
         }
 
@@ -316,7 +449,10 @@ ClaslibClockPick pickClaslibBaseClock(
         if (orbit_age < 0.0 || orbit_age >= kClaslibMaxClockAgeFromOrbitSeconds) {
             continue;
         }
-        if (best == nullptr || clock_time > best->time) {
+        if (best == nullptr || clock_time > best->time ||
+            (clock_time == best->time &&
+             clasQzssBaseClockHygieneActive(satellite) &&
+             entry.clock_network_id > 0 && best->clock_network_id == 0)) {
             best = &entry;
         }
     }
@@ -326,7 +462,7 @@ ClaslibClockPick pickClaslibBaseClock(
 
     ClaslibClockPick pick;
     pick.valid = true;
-    pick.clock_correction_m = best->base_clock_correction_m;
+    pick.clock_correction_m = claslibBaseClockCorrectionM(*best);
     pick.clock_time = best->time;
     pick.clock_reference_time = clockReferenceTime(*best);
     pick.ssr_clock_iod = best->ssr_clock_iod;
@@ -335,6 +471,7 @@ ClaslibClockPick pickClaslibBaseClock(
 
 bool applyClaslibClockSelection(
     SSRClockSelectionPolicy clock_selection_policy,
+    const SatelliteId& satellite,
     const std::vector<SSROrbitClockCorrection>& entries,
     const GNSSTime& time,
     double& clock_correction_m,
@@ -347,8 +484,12 @@ bool applyClaslibClockSelection(
         return base_result;
     }
 
-    const ClaslibClockPick pick = pickClaslibBaseClock(entries, time);
+    const ClaslibClockPick pick = pickClaslibBaseClock(satellite, entries, time);
     if (!pick.valid) {
+        if (clasQzssBaseClockHygieneActive(satellite) && base_result &&
+            (status == nullptr || status->orbit_valid)) {
+            return true;
+        }
         clock_correction_m = 0.0;
         if (base_clock_correction_m != nullptr && base_clock_valid != nullptr) {
             *base_clock_correction_m = 0.0;
@@ -1503,12 +1644,7 @@ void SSRProducts::addCorrection(const SSROrbitClockCorrection& correction) {
     }
 
     SSROrbitClockCorrection to_insert = correction;
-    if (to_insert.clock_valid && to_insert.clock_network_id == 0) {
-        to_insert.base_clock_correction_m = to_insert.clock_correction_m;
-        to_insert.base_clock_valid = true;
-        to_insert.base_clock_reference_time = to_insert.clock_reference_time.week != 0 ?
-            to_insert.clock_reference_time : to_insert.time;
-    }
+    promoteClaslibBaseClockFields(to_insert);
     entries.insert(upper, to_insert);
 }
 
@@ -1677,6 +1813,9 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         return 100000 + static_cast<int>(signal_count);
     };
 
+    const bool qzss_atmos_fix =
+        pppEnvOverrides().clas_qzss_s_prn_fix && sat.system == GNSSSystem::QZSS;
+
     const auto atmosScore = [&](const SSROrbitClockCorrection& entry) -> int {
         if (!entry.atmos_valid || entry.atmos_tokens.empty()) {
             return -1;
@@ -1691,8 +1830,174 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             } else if (entry.atmos_network_id == 0) {
                 score += 50000;
             }
+            // QZSS regional atmos (e.g. network 19 on S120-S122 rows) is valid near
+            // Japan grids. Network-1 polynomial coeffs for J01-J03 are only meaningful
+            // near network-1 grids (Okinawa); applying them at Chiba pierce points
+            // yields ~30 TECU STEC error.
+            if (qzss_atmos_fix && preferred_network_id == 1 &&
+                entry.atmos_network_id > 1) {
+                score += 300000;
+            }
         }
         return score;
+    };
+
+    const auto pickBestAtmosAmong = [&](size_t begin, size_t end)
+        -> const SSROrbitClockCorrection* {
+        bool have_regional_qzss_atmos = false;
+        if (qzss_atmos_fix) {
+            for (size_t index = begin; index < end; ++index) {
+                if (entries[index].atmos_valid &&
+                    entries[index].atmos_network_id > 1) {
+                    have_regional_qzss_atmos = true;
+                    break;
+                }
+            }
+        }
+        const SSROrbitClockCorrection* best = nullptr;
+        int best_score = -1;
+        for (size_t index = begin; index < end; ++index) {
+            if (!entries[index].atmos_valid || entries[index].atmos_tokens.empty()) {
+                continue;
+            }
+            if (have_regional_qzss_atmos &&
+                entries[index].atmos_network_id <= 1) {
+                continue;
+            }
+            const int score = atmosScore(entries[index]);
+            if (score > best_score) {
+                best_score = score;
+                best = &entries[index];
+            }
+        }
+        return best;
+    };
+
+    const auto findQzssHeldCompactAtmos = [&](size_t scan_end_index)
+        -> const SSROrbitClockCorrection* {
+        const SSROrbitClockCorrection* held_preferred = nullptr;
+        const SSROrbitClockCorrection* held_net19 = nullptr;
+        GNSSTime held_preferred_time;
+        GNSSTime held_net19_time;
+        size_t group_end = scan_end_index;
+        while (group_end > 0) {
+            const size_t group_last = group_end - 1;
+            const GNSSTime group_time = entries[group_last].time;
+            if (time - group_time > kClasStecValidAgeSeconds + 1e-9) {
+                break;
+            }
+            size_t group_begin = group_last;
+            while (group_begin > 0 && entries[group_begin - 1].time == group_time) {
+                --group_begin;
+            }
+            for (size_t index = group_begin; index < group_end; ++index) {
+                const SSROrbitClockCorrection& entry = entries[index];
+                if (!entry.atmos_valid || entry.atmos_tokens.empty()) {
+                    continue;
+                }
+                if (preferred_network_id > 0 &&
+                    entry.atmos_network_id == preferred_network_id &&
+                    (held_preferred == nullptr || entry.time > held_preferred_time)) {
+                    held_preferred = &entry;
+                    held_preferred_time = entry.time;
+                }
+                if (entry.atmos_network_id == 19 &&
+                    (held_net19 == nullptr || entry.time > held_net19_time)) {
+                    held_net19 = &entry;
+                    held_net19_time = entry.time;
+                }
+            }
+            group_end = group_begin;
+        }
+        // Regional compact network 19 must win over epoch-preferred network 1 when both
+        // are held within age (ST9-only epochs still carry net-1 decoy polynomials).
+        if (held_net19 != nullptr) {
+            return held_net19;
+        }
+        if (held_preferred != nullptr) {
+            return held_preferred;
+        }
+        if (scan_end_index > 0) {
+            const size_t group_last = scan_end_index - 1;
+            const GNSSTime group_time = entries[group_last].time;
+            if (time - group_time <= kClasStecValidAgeSeconds + 1e-9) {
+                size_t group_begin = group_last;
+                while (group_begin > 0 && entries[group_begin - 1].time == group_time) {
+                    --group_begin;
+                }
+                return pickBestAtmosAmong(group_begin, scan_end_index);
+            }
+        }
+        return nullptr;
+    };
+
+    const auto isQzssDedicatedBiasBank = [&](const SSROrbitClockCorrection& entry, bool phase) -> bool {
+        return isQzssDedicatedBiasBankEntry(entry, phase);
+    };
+
+    const auto findQzssHeldDedicatedBias = [&](bool phase, size_t scan_end_index)
+        -> const SSROrbitClockCorrection* {
+        const SSROrbitClockCorrection* held = nullptr;
+        GNSSTime held_time;
+        size_t group_end = scan_end_index;
+        while (group_end > 0) {
+            const size_t group_last = group_end - 1;
+            const GNSSTime group_time = entries[group_last].time;
+            if (time - group_time > kClasStecValidAgeSeconds + 1e-9) {
+                break;
+            }
+            size_t group_begin = group_last;
+            while (group_begin > 0 && entries[group_begin - 1].time == group_time) {
+                --group_begin;
+            }
+            for (size_t index = group_begin; index < group_end; ++index) {
+                const SSROrbitClockCorrection& entry = entries[index];
+                if (!isQzssDedicatedBiasBank(entry, phase)) {
+                    continue;
+                }
+                if (held == nullptr || entry.time > held_time) {
+                    held = &entry;
+                    held_time = entry.time;
+                }
+            }
+            group_end = group_begin;
+        }
+        return held;
+    };
+
+    const auto findQzssHeldPhaseBiasForNetwork = [&](int service_network_id, size_t scan_end_index)
+        -> const SSROrbitClockCorrection* {
+        return findQzssHeldPhaseBiasForServiceNetwork(
+            entries, time, service_network_id, scan_end_index);
+    };
+
+    const auto pickAtmosForTime = [&](const GNSSTime& atmos_time)
+        -> const SSROrbitClockCorrection* {
+        const double max_age =
+            qzss_atmos_fix ? kClasStecValidAgeSeconds : kPreciseInterpolationGapSeconds;
+        if (time - atmos_time > max_age + 1e-9 || atmos_time - time > 1e-9) {
+            return nullptr;
+        }
+        size_t group_begin = entries.size();
+        size_t group_end = 0;
+        for (size_t index = 0; index < entries.size(); ++index) {
+            if (entries[index].time == atmos_time) {
+                group_begin = std::min(group_begin, index);
+                group_end = index + 1;
+            }
+        }
+        if (group_begin >= entries.size()) {
+            return nullptr;
+        }
+        return pickBestAtmosAmong(group_begin, group_end);
+    };
+
+    const auto pickQzssHeldAtmos = [&]() -> const SSROrbitClockCorrection* {
+        size_t scan_end = entries.size();
+        if (lower != entries.end()) {
+            scan_end = static_cast<size_t>(lower - entries.begin()) + 1;
+        }
+        return findQzssHeldCompactAtmos(scan_end);
     };
 
     const auto scanBackwardBias = [&](bool phase) -> const SSROrbitClockCorrection* {
@@ -1767,12 +2072,21 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             return nullptr;
         };
         const auto pickClock = [&](size_t begin, size_t end) -> const SSROrbitClockCorrection* {
+            const SSROrbitClockCorrection* fallback = nullptr;
             for (size_t index = begin; index < end; ++index) {
-                if (entries[index].clock_valid) {
+                if (!entries[index].clock_valid) {
+                    continue;
+                }
+                if (clasQzssBaseClockHygieneActive(sat) &&
+                    entries[index].clock_network_id > 0 &&
+                    !atmosEmbeddedClockRow(entries[index])) {
                     return &entries[index];
                 }
+                if (fallback == nullptr) {
+                    fallback = &entries[index];
+                }
             }
-            return nullptr;
+            return fallback;
         };
         const auto pickUra = [&](size_t begin, size_t end) -> const SSROrbitClockCorrection* {
             for (size_t index = begin; index < end; ++index) {
@@ -1783,6 +2097,9 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             return nullptr;
         };
         const auto pickAtmos = [&](size_t begin, size_t end) -> const SSROrbitClockCorrection* {
+            if (qzss_atmos_fix) {
+                return pickBestAtmosAmong(begin, end);
+            }
             const SSROrbitClockCorrection* best = nullptr;
             int best_score = -1;
             for (size_t index = begin; index < end; ++index) {
@@ -1795,7 +2112,9 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             return best;
         };
 
-        const SSROrbitClockCorrection* atmos_source = findRecent(pickAtmos, exact_end);
+        const SSROrbitClockCorrection* atmos_source =
+            qzss_atmos_fix ? findQzssHeldCompactAtmos(exact_end)
+                           : findRecent(pickAtmos, exact_end);
         int selected_network_id = preferred_network_id;
         if (selected_network_id <= 0 && atmos_source != nullptr && atmos_source->atmos_network_id > 0) {
             selected_network_id = atmos_source->atmos_network_id;
@@ -1841,10 +2160,16 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         const SSROrbitClockCorrection* orbit_source = findRecent(pickOrbit, exact_end);
         const SSROrbitClockCorrection* clock_source = findRecent(pickClock, exact_end);
         const SSROrbitClockCorrection* ura_source = findRecent(pickUra, exact_end);
-        const SSROrbitClockCorrection* code_source =
-            code_bias_m != nullptr ? findRecent(pickBias(false), exact_end) : nullptr;
-        const SSROrbitClockCorrection* phase_source =
-            phase_bias_m != nullptr ? findRecent(pickBias(true), exact_end) : nullptr;
+        const SSROrbitClockCorrection* code_source = nullptr;
+        if (code_bias_m != nullptr) {
+            code_source = qzss_atmos_fix
+                ? findQzssHeldDedicatedBias(false, exact_end)
+                : findRecent(pickBias(false), exact_end);
+        }
+        const SSROrbitClockCorrection* phase_source = nullptr;
+        if (phase_bias_m != nullptr && !qzss_atmos_fix) {
+            phase_source = findRecent(pickBias(true), exact_end);
+        }
 
         if (orbit_source != nullptr && orbit_source->orbit_valid) {
             orbit_correction_ecef = orbit_source->orbit_correction_ecef;
@@ -1910,6 +2235,7 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         }
         return applyClaslibClockSelection(
             clock_selection_policy,
+            sat,
             entries,
             time,
             clock_correction_m,
@@ -2050,7 +2376,10 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             // one; CLAS holds the last received code-bias bank until a new
             // bank is causally available.
             const SSROrbitClockCorrection* picked = nullptr;
-            if (const auto* scanned = scanBackwardBias(false)) {
+            if (qzss_atmos_fix) {
+                const size_t scan_end = static_cast<size_t>(lower - entries.begin());
+                picked = findQzssHeldDedicatedBias(false, scan_end);
+            } else if (const auto* scanned = scanBackwardBias(false)) {
                 picked = scanned;
             } else if (before->code_bias_valid && !before->code_bias_m.empty()) {
                 picked = before;
@@ -2065,13 +2394,15 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         }
         if (phase_bias_m != nullptr) {
             const SSROrbitClockCorrection* picked = nullptr;
-            if (biasScore(*before, true) >= biasScore(*after, true) &&
-                before->phase_bias_valid && !before->phase_bias_m.empty()) {
-                picked = before;
-            } else if (after->phase_bias_valid && !after->phase_bias_m.empty()) {
-                picked = after;
-            } else if (const auto* scanned = scanBackwardBias(true)) {
-                picked = scanned;
+            if (!qzss_atmos_fix) {
+                if (biasScore(*before, true) >= biasScore(*after, true) &&
+                    before->phase_bias_valid && !before->phase_bias_m.empty()) {
+                    picked = before;
+                } else if (after->phase_bias_valid && !after->phase_bias_m.empty()) {
+                    picked = after;
+                } else if (const auto* scanned = scanBackwardBias(true)) {
+                    picked = scanned;
+                }
             }
             if (picked != nullptr) {
                 *phase_bias_m = picked->phase_bias_m;
@@ -2095,8 +2426,20 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             }
         }
         if (atmos_tokens != nullptr) {
-            if (atmosScore(*before) >= atmosScore(*after) &&
-                before->atmos_valid && !before->atmos_tokens.empty()) {
+            if (qzss_atmos_fix) {
+                const SSROrbitClockCorrection* picked_atmos = pickQzssHeldAtmos();
+                if (picked_atmos != nullptr) {
+                    *atmos_tokens = picked_atmos->atmos_tokens;
+                    if (atmos_reference_time != nullptr) {
+                        *atmos_reference_time = picked_atmos->time;
+                    }
+                    if (status != nullptr) {
+                        status->atmos_valid = true;
+                        status->atmos_reference_time = picked_atmos->time;
+                    }
+                }
+            } else if (atmosScore(*before) >= atmosScore(*after) &&
+                       before->atmos_valid && !before->atmos_tokens.empty()) {
                 *atmos_tokens = before->atmos_tokens;
                 if (atmos_reference_time != nullptr) {
                     *atmos_reference_time = before->time;
@@ -2136,6 +2479,7 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         }
         return applyClaslibClockSelection(
             clock_selection_policy,
+            sat,
             entries,
             time,
             clock_correction_m,
@@ -2211,7 +2555,12 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
     }
     if (code_bias_m != nullptr) {
         const SSROrbitClockCorrection* picked = nullptr;
-        if (clock_selection_policy == SSRClockSelectionPolicy::ClaslibBaseHold) {
+        if (qzss_atmos_fix) {
+            const size_t scan_end =
+                lower != entries.end() ? static_cast<size_t>(lower - entries.begin()) + 1
+                                       : entries.size();
+            picked = findQzssHeldDedicatedBias(false, scan_end);
+        } else if (clock_selection_policy == SSRClockSelectionPolicy::ClaslibBaseHold) {
             picked = scanBackwardBias(false);
         }
         if (picked == nullptr && sample->code_bias_valid && !sample->code_bias_m.empty()) {
@@ -2230,14 +2579,16 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
     }
     if (phase_bias_m != nullptr) {
         const SSROrbitClockCorrection* picked = nullptr;
-        if (clock_selection_policy == SSRClockSelectionPolicy::ClaslibBaseHold) {
-            picked = scanBackwardBias(true);
-        }
-        if (picked == nullptr && sample->phase_bias_valid && !sample->phase_bias_m.empty()) {
-            picked = sample;
-        } else if (picked == nullptr && orbit_source != sample &&
-                   orbit_source->phase_bias_valid && !orbit_source->phase_bias_m.empty()) {
-            picked = orbit_source;
+        if (!qzss_atmos_fix) {
+            if (clock_selection_policy == SSRClockSelectionPolicy::ClaslibBaseHold) {
+                picked = scanBackwardBias(true);
+            }
+            if (picked == nullptr && sample->phase_bias_valid && !sample->phase_bias_m.empty()) {
+                picked = sample;
+            } else if (picked == nullptr && orbit_source != sample &&
+                       orbit_source->phase_bias_valid && !orbit_source->phase_bias_m.empty()) {
+                picked = orbit_source;
+            }
         }
         if (picked != nullptr) {
             *phase_bias_m = picked->phase_bias_m;
@@ -2254,7 +2605,19 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         }
     }
     if (atmos_tokens != nullptr) {
-        if (sample->atmos_valid) {
+        if (qzss_atmos_fix) {
+            const SSROrbitClockCorrection* picked_atmos = pickQzssHeldAtmos();
+            if (picked_atmos != nullptr) {
+                *atmos_tokens = picked_atmos->atmos_tokens;
+                if (atmos_reference_time != nullptr) {
+                    *atmos_reference_time = picked_atmos->time;
+                }
+                if (status != nullptr) {
+                    status->atmos_valid = true;
+                    status->atmos_reference_time = picked_atmos->time;
+                }
+            }
+        } else if (sample->atmos_valid) {
             *atmos_tokens = sample->atmos_tokens;
             if (atmos_reference_time != nullptr) {
                 *atmos_reference_time = sample->time;
@@ -2291,6 +2654,7 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
     }
     return applyClaslibClockSelection(
         clock_selection_policy,
+        sat,
         entries,
         time,
         clock_correction_m,
@@ -2300,6 +2664,89 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         status,
         sample->orbit_valid || sample->clock_valid || sample->ura_valid ||
             sample->code_bias_valid || sample->phase_bias_valid || sample->atmos_valid);
+}
+
+bool SSRProducts::heldQzssPhaseBiasForServiceNetwork(
+    const SatelliteId& sat,
+    const GNSSTime& time,
+    int service_network_id,
+    std::map<uint8_t, double>* phase_bias_m,
+    std::map<uint8_t, int>* phase_bias_discnt,
+    GNSSTime* phase_bias_reference_time) const {
+    if (!pppEnvOverrides().clas_qzss_s_prn_fix || sat.system != GNSSSystem::QZSS ||
+        service_network_id <= 0 || phase_bias_m == nullptr) {
+        return false;
+    }
+
+    const auto sat_it = orbit_clock_corrections.find(sat);
+    if (sat_it == orbit_clock_corrections.end()) {
+        return false;
+    }
+    const auto& entries = sat_it->second;
+    auto lower = std::lower_bound(
+        entries.begin(),
+        entries.end(),
+        time,
+        [](const SSROrbitClockCorrection& lhs, const GNSSTime& rhs) {
+            return lhs.time < rhs;
+        });
+    const size_t scan_end =
+        lower != entries.end() ? static_cast<size_t>(lower - entries.begin()) + 1
+                               : entries.size();
+    const SSROrbitClockCorrection* picked =
+        findQzssHeldPhaseBiasForServiceNetwork(
+            entries, time, service_network_id, scan_end);
+    if (picked == nullptr) {
+        return false;
+    }
+
+    phase_bias_m->clear();
+    *phase_bias_m = picked->phase_bias_m;
+    if (phase_bias_discnt != nullptr) {
+        *phase_bias_discnt = picked->phase_bias_discnt;
+    }
+    if (phase_bias_reference_time != nullptr) {
+        *phase_bias_reference_time = picked->time;
+    }
+    return !phase_bias_m->empty();
+}
+
+bool SSRProducts::heldAtmosTokensForNetwork(int network_id,
+                                            const GNSSTime& time,
+                                            double max_age_seconds,
+                                            std::map<std::string, std::string>& atmos_tokens,
+                                            GNSSTime* atmos_reference_time) const {
+    if (network_id <= 0) {
+        return false;
+    }
+
+    const SSROrbitClockCorrection* best = nullptr;
+    GNSSTime best_time;
+    for (const auto& sat_entry : orbit_clock_corrections) {
+        for (const auto& entry : sat_entry.second) {
+            if (!entry.atmos_valid || entry.atmos_tokens.empty()) {
+                continue;
+            }
+            if (entry.atmos_network_id != network_id) {
+                continue;
+            }
+            if (time - entry.time > max_age_seconds + 1e-9 || entry.time - time > 1e-9) {
+                continue;
+            }
+            if (best == nullptr || entry.time > best_time) {
+                best = &entry;
+                best_time = entry.time;
+            }
+        }
+    }
+    if (best == nullptr) {
+        return false;
+    }
+    atmos_tokens = best->atmos_tokens;
+    if (atmos_reference_time != nullptr) {
+        *atmos_reference_time = best->time;
+    }
+    return true;
 }
 
 bool SSRProducts::loadCSVFile(const std::string& filename) {

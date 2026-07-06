@@ -464,6 +464,8 @@ class CSSRDecoderState:
     atmos_lifecycle_trop_time: dict[int, int] = field(default_factory=dict)
     atmos_lifecycle_grid_count: dict[int, int] = field(default_factory=dict)
     atmos_lifecycle_pending_emits: set[tuple[int, int]] = field(default_factory=set)
+    parity_trop_by_network: dict[int, dict[str, str]] = field(default_factory=dict)
+    parity_trop_time_by_network: dict[int, int] = field(default_factory=dict)
     service_info_chunks: list[tuple[int, bytes, int]] | None = None
     service_packet_index: int = 0
 
@@ -829,6 +831,56 @@ def _tokens_have_trop_grid(atmos_tokens: dict[str, str]) -> bool:
         "atmos_trop_hs_residuals_m" in atmos_tokens
         and "atmos_trop_wet_residuals_m" in atmos_tokens
     ) or "atmos_trop_residuals_m" in atmos_tokens
+
+
+def _update_parity_trop_tokens(
+    state: CSSRDecoderState,
+    tow: int,
+    network_id: int,
+    trop_type: int,
+    grid_count: int,
+    hs_residuals_m: list[str],
+    wet_residuals_m: list[str],
+) -> None:
+    if trop_type == 0 or grid_count <= 0:
+        return
+    points = _clas_grid_points_by_network().get(network_id, [])
+    tokens: dict[str, str] = {
+        "atmos_trop_parity_type": str(trop_type),
+        "atmos_trop_parity_grid_count": str(grid_count),
+    }
+    for index in range(grid_count):
+        grid_no = points[index][0] if index < len(points) else index + 1
+        hs = _try_float(hs_residuals_m[index] if index < len(hs_residuals_m) else None)
+        wet = _try_float(wet_residuals_m[index] if index < len(wet_residuals_m) else None)
+        if math.isfinite(hs):
+            tokens[f"atmos_trop_grid_hs_m:{grid_no}"] = f"{hs:.6f}"
+        if math.isfinite(wet):
+            tokens[f"atmos_trop_grid_wet_m:{grid_no}"] = f"{wet:.6f}"
+        if math.isfinite(hs) and math.isfinite(wet):
+            total_m = (hs + wet) * 0.004 + 0.252 + 2.3
+            wet_total_m = wet * 0.004 + 0.252
+            tokens[f"atmos_trop_grid_total_m:{grid_no}"] = f"{total_m:.6f}"
+            tokens[f"atmos_trop_grid_wet_total_m:{grid_no}"] = f"{wet_total_m:.6f}"
+    state.parity_trop_by_network[network_id] = tokens
+    state.parity_trop_time_by_network[network_id] = tow
+
+
+def _parity_trop_tokens_for_network(
+    state: CSSRDecoderState,
+    network_id: int,
+    tow: int,
+) -> dict[str, str]:
+    tokens = state.parity_trop_by_network.get(network_id)
+    trop_time = state.parity_trop_time_by_network.get(network_id)
+    if tokens is None or trop_time is None:
+        return {}
+    # ST9 gridded trop on this dataset often lands ~15 s after the matching
+    # ST8/STEC bank tow. CLASLIB holds the previous bank for up to 30 s, so
+    # accept parity trop within the same 30 s bank window in either direction.
+    if abs(tow - trop_time) > CLAS_ATMOS_BANK_VALID_SECONDS + 1e-9:
+        return {}
+    return dict(tokens)
 
 
 def _update_lifecycle_trop(
@@ -1923,6 +1975,17 @@ def flush_pending_corrections(
     code_bias_map = state.pending_code_bias or {}
     phase_bias_map = state.pending_phase_bias or {}
     atmos = state.pending_atmos or {}
+    if atmos and "atmos_network_id" in atmos and state.pending_tow is not None:
+        network_id = _try_int(atmos.get("atmos_network_id"), 0)
+        if network_id == 7:
+            parity_tokens = _parity_trop_tokens_for_network(
+                state,
+                network_id,
+                int(state.pending_tow),
+            )
+            if parity_tokens:
+                atmos = dict(atmos)
+                atmos.update(parity_tokens)
     lifecycle_atmos_rows: list[dict[str, str]] = []
     if compact_atmos_lifecycle_enabled():
         atmos = {}
@@ -2797,6 +2860,15 @@ def decode_cssr_gridded_message(
         "atmos_stec_residual_range": str(stec_residual_range),
         "atmos_selected_satellites": str(len(selected_satellites)),
     }
+    _update_parity_trop_tokens(
+        state,
+        int(header["tow"]),
+        network_id,
+        trop_type,
+        grid_count,
+        trop_hs_residuals_m,
+        trop_wet_residuals_m,
+    )
     for satellite in selected_satellites:
         sat_key = satellite.sat
         atmos_tokens[f"atmos_stec_residual_size:{sat_key}"] = str(stec_residual_range)

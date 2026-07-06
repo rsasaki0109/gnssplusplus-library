@@ -152,6 +152,15 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     const auto osr_by_sat = computeWlnlOsrCorrections(
         obs, nav, receiver_position, clock_bias_m, trop_zenith);
 
+    std::map<SatelliteId, double> satellite_elevations_rad;
+    if (pppEnvOverrides().clas_qzss_s_prn_fix) {
+        for (const auto& [satellite, osr] : osr_by_sat) {
+            satellite_elevations_rad[satellite] = osr.elevation;
+        }
+    }
+    const std::map<SatelliteId, double>* elevation_ref_map =
+        satellite_elevations_rad.empty() ? nullptr : &satellite_elevations_rad;
+
     const ppp_ar::WlnlFixAttempt attempt = ppp_ar::resolveWlnlFix(
         ppp_config_,
         filter_state_,
@@ -163,7 +172,8 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
                 obs, nav, receiver_position, clock_bias_m, trop_zenith,
                 osr_by_sat, sat, info);
         },
-        pppDebugEnabled());
+        pppDebugEnabled(),
+        elevation_ref_map);
     if (!attempt.fixed) {
         return false;
     }
@@ -541,7 +551,11 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         geo_m = geodist(sat_pos, receiver_position);
         sat_clk_m = constants::SPEED_OF_LIGHT * sat_clk;
         trop_pred_m = osr.trop_correction_m;
-        predicted_m = geo_m + clock_bias_m - sat_clk_m + trop_pred_m + nl_iono_m;
+        const double rcv_clock_m =
+            pppEnvOverrides().clas_qzss_s_prn_fix
+                ? receiverClockBiasMeters(sat)
+                : clock_bias_m;
+        predicted_m = geo_m + rcv_clock_m - sat_clk_m + trop_pred_m + nl_iono_m;
     } else {
         l1_obs = ppp_utils::findCarrierObservation(
             obs, sat, {SignalType::GPS_L1CA, SignalType::GPS_L1P,
@@ -619,7 +633,11 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         sat_clk_m = constants::SPEED_OF_LIGHT * sat_clk;
         trop_pred_m = trop_delay;
         nl_iono_m = 0.0;
-        predicted_m = geo_range + clock_bias_m - sat_clk_m + trop_delay;
+        const double rcv_clock_m =
+            pppEnvOverrides().clas_qzss_s_prn_fix
+                ? receiverClockBiasMeters(sat)
+                : clock_bias_m;
+        predicted_m = geo_range + rcv_clock_m - sat_clk_m + trop_delay;
     }
 
     if (lambda_nl <= 0.0 || !std::isfinite(nl_phase_m) || !std::isfinite(predicted_m)) {

@@ -356,3 +356,34 @@ TEST(PPPAtmosphereTest, Subtype12OffsetOnlyValueConstructionDropsLinearAndQuadra
         SamplingPolicy::INDEXED_OR_MEAN);
     EXPECT_NEAR(stec_offset_only, 1.3, 1e-9);
 }
+
+TEST(PPPAtmosphereTest, NearestRegionalGridReferenceFindsJapanGridNearChiba) {
+    const Vector3d chiba =
+        geodetic2ecef(35.92 * M_PI / 180.0, 140.09 * M_PI / 180.0, 0.0);
+    ppp_atmosphere::ClasGridReference reference;
+    EXPECT_TRUE(
+        ppp_atmosphere::resolveClasNearestRegionalGridReference(chiba, reference));
+    EXPECT_EQ(reference.network_id, 7);
+    EXPECT_LT(reference.nearest_grid_distance_m, 20000.0);
+}
+
+TEST(PPPAtmosphereTest, ClaslibTropGridCorrectionUsesOrdinalResidualIndexing) {
+    std::map<std::string, std::string> atmos_tokens;
+    atmos_tokens["atmos_network_id"] = "1";
+    atmos_tokens["atmos_grid_count"] = "2";
+    atmos_tokens["atmos_trop_type"] = "1";
+    atmos_tokens["atmos_trop_hs_residuals_m"] = "-1.020000;-1.020000";
+    atmos_tokens["atmos_trop_wet_residuals_m"] = "0.020000;0.008000";
+
+    const Vector3d receiver_position =
+        geodetic2ecef(26.34 * M_PI / 180.0, 127.80 * M_PI / 180.0, 30.0);
+    const GNSSTime time(2068, 230400.0);
+    const double claslib_trop = ppp_atmosphere::claslibTropGridCorrectionMeters(
+        atmos_tokens,
+        receiver_position,
+        time,
+        0.5);
+    EXPECT_TRUE(std::isfinite(claslib_trop));
+    EXPECT_GT(claslib_trop, 2.0);
+    EXPECT_LT(claslib_trop, 8.0);
+}

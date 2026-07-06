@@ -14,6 +14,41 @@ namespace libgnss {
 
 namespace {
 
+constexpr double kClasQzssHeldStecAgeSeconds = 3600.0;
+
+std::map<SatelliteId, std::pair<GNSSTime, double>>& qzssHeldStecBySatellite() {
+    static std::map<SatelliteId, std::pair<GNSSTime, double>> held;
+    return held;
+}
+
+std::vector<std::string> qzssStecTokenSuffixes(const SatelliteId& sat) {
+    std::vector<std::string> suffixes = {sat.toString()};
+    if (sat.system == GNSSSystem::QZSS) {
+        const std::map<std::string, std::string> compact_keys = {
+            {"J01", "S120"},
+            {"J02", "S121"},
+            {"J03", "S122"},
+        };
+        const auto compact_it = compact_keys.find(sat.toString());
+        if (compact_it != compact_keys.end()) {
+            suffixes.push_back(compact_it->second);
+        }
+    }
+    return suffixes;
+}
+
+bool parseQzssBroadcastStecQuality(const std::map<std::string, std::string>& atmos_tokens,
+                                   const SatelliteId& sat,
+                                   int& stec_quality) {
+    for (const std::string& suffix : qzssStecTokenSuffixes(sat)) {
+        if (ppp_atmosphere::parseAtmosTokenInt(
+                atmos_tokens, "atmos_stec_quality:" + suffix, stec_quality)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool pppDebugEnabled() {
     return ppp_shared::pppDebugEnabled();
 }
@@ -1328,8 +1363,16 @@ std::vector<OSRCorrection> computeOSR(
                 }
             }
             setAtmosLifecycleProvenance(osr, atmos_tokens, sat);
+            std::map<std::string, std::string> trop_atmos_tokens = atmos_tokens;
+            if (pppEnvOverrides().clas_trop_grid_parity &&
+                !epoch_atmos_tokens.empty() &&
+                ppp_atmosphere::hasParityTropGridTokens(epoch_atmos_tokens)) {
+                // CLASLIB trop_grid_data uses rover grid selection from get_grid_index
+                // (grid.c:300-368), not per-satellite SSR atmos rows.
+                trop_atmos_tokens = epoch_atmos_tokens;
+            }
             const double clas_trop = ppp_atmosphere::atmosphericTroposphereCorrectionMeters(
-                atmos_tokens,
+                trop_atmos_tokens,
                 receiver_pos,
                 obs.time,
                 elev,
@@ -1352,13 +1395,69 @@ std::vector<OSRCorrection> computeOSR(
 
         // --- 6. Ionosphere (STEC) ---
         if (!atmos_tokens.empty()) {
-            const double stec_tecu = ppp_atmosphere::atmosphericStecTecu(
-                atmos_tokens,
-                sat,
-                receiver_pos,
-                config.clas_expanded_value_construction_policy,
-                config.clas_subtype12_value_construction_policy,
-                config.clas_expanded_residual_sampling_policy);
+            std::map<std::string, std::string> stec_atmos_tokens = atmos_tokens;
+            GNSSTime stec_atmos_reference_time = osr.atmos_reference_time;
+            int broadcast_stec_quality = 0;
+            bool have_broadcast_stec_quality = false;
+            if (env.clas_qzss_s_prn_fix && sat.system == GNSSSystem::QZSS) {
+                have_broadcast_stec_quality =
+                    parseQzssBroadcastStecQuality(atmos_tokens, sat, broadcast_stec_quality);
+                std::map<std::string, std::string> service_atmos_tokens;
+                GNSSTime service_atmos_reference_time;
+                if (ssr.heldAtmosTokensForNetwork(
+                        7,
+                        obs.time,
+                        kClasQzssHeldStecAgeSeconds,
+                        service_atmos_tokens,
+                        &service_atmos_reference_time)) {
+                    // CLASLIB OSR iono uses service-network grid bank (network 7 @ Chiba)
+                    // via stec_grid_data (cssr.c:1299-1304, grid.c:419-466).
+                    stec_atmos_tokens = std::move(service_atmos_tokens);
+                    stec_atmos_reference_time = service_atmos_reference_time;
+                }
+            }
+            const double stec_tecu = [&]() {
+                double value = ppp_atmosphere::atmosphericStecTecu(
+                    stec_atmos_tokens,
+                    sat,
+                    receiver_pos,
+                    config.clas_expanded_value_construction_policy,
+                    config.clas_subtype12_value_construction_policy,
+                    config.clas_expanded_residual_sampling_policy);
+                if (!(env.clas_qzss_s_prn_fix && sat.system == GNSSSystem::QZSS)) {
+                    return value;
+                }
+                auto& held_stec = qzssHeldStecBySatellite();
+                if (have_broadcast_stec_quality && broadcast_stec_quality == 0) {
+                    const auto held_it = held_stec.find(sat);
+                    if (held_it != held_stec.end() &&
+                        obs.time - held_it->second.first <=
+                            kClasQzssHeldStecAgeSeconds + 1e-9) {
+                        // CLASLIB get_cssr_latest_iono when ST9 dstec is invalid
+                        // (cssr.c:1045-1046, cssr.c:947-961).
+                        return held_it->second.second;
+                    }
+                }
+                if (have_broadcast_stec_quality && broadcast_stec_quality != 0) {
+                    held_stec[sat] = {obs.time, value};
+                    return value;
+                }
+                const std::string stec_quality_key = "atmos_stec_quality:" + sat.toString();
+                int stec_quality = 0;
+                bool have_stec_quality =
+                    ppp_atmosphere::parseAtmosTokenInt(
+                        stec_atmos_tokens, stec_quality_key, stec_quality);
+                if (have_stec_quality && stec_quality != 0) {
+                    held_stec[sat] = {obs.time, value};
+                    return value;
+                }
+                const auto held_it = held_stec.find(sat);
+                if (held_it != held_stec.end() &&
+                    obs.time - held_it->second.first <= kClasQzssHeldStecAgeSeconds + 1e-9) {
+                    return held_it->second.second;
+                }
+                return value;
+            }();
             if (std::isfinite(stec_tecu) && std::abs(stec_tecu) > 0.001) {
                 osr.stec_tecu = stec_tecu;
                 osr.iono_l1_m = ppp_atmosphere::ionosphereDelayMetersFromTecu(
@@ -1368,6 +1467,28 @@ std::vector<OSRCorrection> computeOSR(
         }
         if (!osr.has_iono) {
             continue;  // CLASLIB rejects satellites without STEC
+        }
+
+        if (env.clas_qzss_s_prn_fix && sat.system == GNSSSystem::QZSS) {
+            int service_network_id = osr.atmos_network_id;
+            ppp_atmosphere::ClasGridReference nearest_regional;
+            if (ppp_atmosphere::resolveClasNearestRegionalGridReference(
+                    receiver_pos, nearest_regional) &&
+                nearest_regional.network_id > 0) {
+                service_network_id = nearest_regional.network_id;
+            }
+            std::map<uint8_t, double> repicked_pbias;
+            std::map<uint8_t, int> repicked_discnt;
+            GNSSTime repicked_ref;
+            if (service_network_id > 0 &&
+                ssr.heldQzssPhaseBiasForServiceNetwork(
+                    sat, obs.time, service_network_id,
+                    &repicked_pbias, &repicked_discnt, &repicked_ref)) {
+                ssr_pbias = std::move(repicked_pbias);
+                phase_bias_reference_time = repicked_ref;
+                osr.has_phase_bias = !ssr_pbias.empty();
+                osr.phase_bias_reference_time = repicked_ref;
+            }
         }
 
         // --- 7. Code/Phase bias ---

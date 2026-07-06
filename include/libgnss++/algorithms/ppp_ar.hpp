@@ -128,7 +128,8 @@ WlnlFixAttempt resolveWlnlFix(
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const EligibleAmbiguities& eligible_ambiguities,
     const WlnlNlInfoProvider& provider,
-    bool debug_enabled);
+    bool debug_enabled,
+    const std::map<SatelliteId, double>* satellite_elevations_rad = nullptr);
 
 WlnlFixAttempt resolveWlnlFix(
     const ppp_shared::PPPConfig& config,
@@ -136,7 +137,8 @@ WlnlFixAttempt resolveWlnlFix(
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const EligibleAmbiguities& eligible_ambiguities,
     const WlnlNlInfoProvider& provider,
-    bool debug_enabled);
+    bool debug_enabled,
+    const std::map<SatelliteId, double>* satellite_elevations_rad = nullptr);
 
 WlnlFixAttempt tryWlnlFix(
     const ppp_shared::PPPConfig& config,
@@ -146,7 +148,8 @@ WlnlFixAttempt tryWlnlFix(
     const std::vector<SatelliteId>& satellites,
     const std::vector<int>& state_indices,
     const std::map<SatelliteId, WlnlNlInfo>& nl_info,
-    bool debug_enabled);
+    bool debug_enabled,
+    const std::map<SatelliteId, double>* satellite_elevations_rad = nullptr);
 
 struct FixedNlObservation {
     SatelliteId satellite;

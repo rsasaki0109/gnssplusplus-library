@@ -398,6 +398,78 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
                 -0.677 / export.GPS_IONO_SCALE_BY_SUFFIX["2"],
             )
 
+    def test_normalizes_claslib_osrres_qzss_l2x_code_row(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="claslib_zd_export_test_") as temp_dir:
+            input_path = Path(temp_dir) / "claslib.osr"
+            output_path = Path(temp_dir) / "normalized.csv"
+            grid_def = Path(temp_dir) / "clas_grid.def"
+            write_grid_def(grid_def)
+            write_csv(
+                input_path,
+                [
+                    {
+                        "msg": "OSRRES(ch0)",
+                        "tow": "230420.0",
+                        "sys": "16",
+                        "prn": "193",
+                        "pbias1": "-0.426",
+                        "pbias2": "-0.953",
+                        "pbias5": "-0.804",
+                        "cbias1": "0.000",
+                        "cbias2": "2.340",
+                        "cbias5": "4.460",
+                        "trop": "4.835",
+                        "iono": "-1.299",
+                        "antr1": "-0.054",
+                        "antr2": "-0.058",
+                        "antr5": "-0.076",
+                        "relatv": "0.019",
+                        "wup1": "-0.023",
+                        "wup2": "-0.030",
+                        "wup5": "-0.031",
+                        "compI1": "0.000",
+                        "compI2": "0.000",
+                        "compI5": "0.000",
+                        "compN": "0.000",
+                        "CPC1": "5.363",
+                        "CPC2": "5.481",
+                        "CPC5": "0.000",
+                        "PRC1": "3.787",
+                        "PRC2": "5.468",
+                        "PRC5": "0.000",
+                        "orb": "3.979",
+                        "clk": "0.878",
+                        "lat": "36.103642753",
+                        "lon": "140.086340273",
+                        "alt": "70.457",
+                    }
+                ],
+                OSR_FIELDNAMES,
+            )
+
+            rows_written = export.export_csv(
+                input_path,
+                output_path,
+                stage_label="post",
+                gps_week=2068,
+                clas_grid_def=grid_def,
+            )
+            self.assertEqual(rows_written, 6)
+            rows = read_csv(output_path)
+            code_l1c = next(row for row in rows if row["row_type"] == "code" and row["signal"] == "C1C")
+            code_l2x = next(row for row in rows if row["row_type"] == "code" and row["signal"] == "C2X")
+            self.assertEqual(code_l1c["sat"], "J01")
+            self.assertEqual(code_l1c["prc_m"], "3.787")
+            self.assertEqual(code_l1c["code_bias_m"], "0.000")
+            self.assertEqual(code_l1c["receiver_antenna_m"], "-0.054")
+            self.assertAlmostEqual(float(code_l1c["claslib_raw_iono_l1_m"]), -1.299)
+            self.assertEqual(code_l2x["sat"], "J01")
+            self.assertEqual(code_l2x["signal"], "C2X")
+            self.assertEqual(code_l2x["pseudorange_rtklib_code"], "18")
+            self.assertEqual(code_l2x["prc_m"], "5.468")
+            self.assertEqual(code_l2x["code_bias_m"], "2.340")
+            self.assertEqual(code_l2x["receiver_antenna_m"], "-0.058")
+
     def test_claslib_osrres_requires_gps_week(self) -> None:
         with tempfile.TemporaryDirectory(prefix="claslib_zd_export_test_") as temp_dir:
             input_path = Path(temp_dir) / "claslib.osr"
