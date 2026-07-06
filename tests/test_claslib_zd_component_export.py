@@ -385,11 +385,17 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             )
             self.assertEqual(code_l1c["network_compensation_m"], "-0.052")
             self.assertEqual(code_l2w["network_compensation_m"], "-0.052")
-            self.assertAlmostEqual(float(code_l1c["iono_scaled_m"]), -0.359)
-            self.assertAlmostEqual(float(code_l2w["iono_scaled_m"]), -0.625)
+            # CLASLIB's adjust_prc subtracts the SIS continuity delta from PRC
+            # (prc -= sis) while dumping compN = +sis, so the PRC-closure
+            # iono reconstruction must add compN back: -0.359 + (-0.052) and
+            # -0.625 + (-0.052) (see prc_iono_scaled_from_osrres). Without
+            # this the sis residual leaks into iono_scaled_m/iono_l1_m/
+            # stec_tecu.
+            self.assertAlmostEqual(float(code_l1c["iono_scaled_m"]), -0.411)
+            self.assertAlmostEqual(float(code_l2w["iono_scaled_m"]), -0.677)
             self.assertAlmostEqual(
                 float(code_l2w["iono_l1_m"]),
-                -0.625 / export.GPS_IONO_SCALE_BY_SUFFIX["2"],
+                -0.677 / export.GPS_IONO_SCALE_BY_SUFFIX["2"],
             )
 
     def test_claslib_osrres_requires_gps_week(self) -> None:

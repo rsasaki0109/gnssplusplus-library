@@ -407,36 +407,16 @@ constexpr double kPhaseBiasLagSeconds = 30.0;
 constexpr double kPhaseBiasJumpLowerCycles = 95.0;
 constexpr double kPhaseBiasJumpUpperCycles = 105.0;
 constexpr double kPhaseBiasJumpCorrectionCycles = 100.0;
-
-/// Update SIS (Signal-In-Space) continuity tracking for a satellite.
-/// Detects clock epoch transitions and computes delta for SIS correction.
-void updateSisContinuity(
-    CLASSisContinuityInfo& info,
-    const OSRCorrection& osr,
-    bool clock_time_valid) {
-    const double current_sis_m = -osr.clock_correction_m + osr.orbit_projection_m;
-    if (!clock_time_valid) {
-        info = CLASSisContinuityInfo{};
-    } else if (!info.has_current) {
-        info.current_time = osr.clock_reference_time;
-        info.current_sis_m = current_sis_m;
-        info.has_current = true;
-    } else if (info.current_time != osr.clock_reference_time) {
-        const double dt_clock = osr.clock_reference_time - info.current_time;
-        info.previous_time = info.current_time;
-        info.previous_sis_m = info.current_sis_m;
-        info.current_time = osr.clock_reference_time;
-        info.current_sis_m = current_sis_m;
-        info.has_previous = true;
-        if (std::abs(dt_clock - kSsrClockIntervalSeconds) < 0.5) {
-            info.last_delta_m = info.current_sis_m - info.previous_sis_m;
-            info.has_last_delta = true;
-        } else {
-            info.last_delta_m = 0.0;
-            info.has_last_delta = false;
-        }
-    }
-}
+// CLASLIB SSR update boundary cadence: orbit/clock corrections realign on a
+// 30s grid (see ephemeris.c satpos_ssr_sis prevtow/currtow bookkeeping).
+constexpr double kSsrOrbitBoundaryIntervalSeconds = 30.0;
+// Tolerance (seconds) for detecting that a clock reference time sits on the
+// 30s orbit boundary grid.
+constexpr double kSsrOrbitBoundaryToleranceSeconds = 0.5;
+// CLASLIB holds the boundary-captured SIS delta for the first half of the
+// 30s orbit cycle (observed empirically: nonzero for tow%30 in [0,14],
+// zero for tow%30 in [15,29]; see docs/clas_dd_filter_a5.md).
+constexpr double kSsrOrbitBoundaryApplyWindowSeconds = 15.0;
 
 /// Detect phase bias epoch change and update repair tracking state.
 /// Returns {epoch_changed, phase_bias_dt} for use in PRC/CPC aggregation.
@@ -582,6 +562,127 @@ bool usesClasSisContinuity(
                ppp_shared::PPPConfig::ClasPhaseContinuityPolicy::FULL_REPAIR ||
            policy ==
                ppp_shared::PPPConfig::ClasPhaseContinuityPolicy::SIS_CONTINUITY_ONLY;
+}
+
+void updateSisContinuity(
+    CLASSisContinuityInfo& info,
+    const OSRCorrection& osr,
+    bool clock_time_valid) {
+    const double current_sis_m = -osr.clock_correction_m + osr.orbit_projection_m;
+    if (!clock_time_valid) {
+        // Preserve the CLASLIB-style boundary-held delta (gated feature)
+        // across transient clock-reference-time gaps: CLASLIB's satcorr[]
+        // state (currtow/currsis) is keyed to message reception and outlives
+        // a few epochs of missing per-epoch SSR data, so a brief gap inside
+        // the 15s hold window (observed on real CLAS data) must not drop the
+        // already-captured boundary delta. The rest of the continuity state
+        // (current/previous SIS samples, last_delta_m) legitimately resets,
+        // matching pre-existing (gate-OFF) behavior.
+        const GNSSTime preserved_boundary_time = info.boundary_time;
+        const double preserved_boundary_delta_m = info.boundary_delta_m;
+        const bool preserved_has_boundary_delta = info.has_boundary_delta;
+        info = CLASSisContinuityInfo{};
+        info.boundary_time = preserved_boundary_time;
+        info.boundary_delta_m = preserved_boundary_delta_m;
+        info.has_boundary_delta = preserved_has_boundary_delta;
+    } else if (!info.has_current) {
+        info.current_time = osr.clock_reference_time;
+        info.current_sis_m = current_sis_m;
+        info.has_current = true;
+    } else if (info.current_time != osr.clock_reference_time) {
+        const double dt_clock = osr.clock_reference_time - info.current_time;
+        info.previous_time = info.current_time;
+        info.previous_sis_m = info.current_sis_m;
+        info.current_time = osr.clock_reference_time;
+        info.current_sis_m = current_sis_m;
+        info.has_previous = true;
+        if (std::abs(dt_clock - kSsrClockIntervalSeconds) < 0.5) {
+            info.last_delta_m = info.current_sis_m - info.previous_sis_m;
+            info.has_last_delta = true;
+        } else {
+            info.last_delta_m = 0.0;
+            info.has_last_delta = false;
+        }
+    }
+}
+
+bool isSsrOrbitBoundaryTow(double tow) {
+    double remainder = std::fmod(tow, kSsrOrbitBoundaryIntervalSeconds);
+    if (remainder < 0.0) {
+        remainder += kSsrOrbitBoundaryIntervalSeconds;
+    }
+    return remainder < kSsrOrbitBoundaryToleranceSeconds ||
+        remainder > (kSsrOrbitBoundaryIntervalSeconds -
+                      kSsrOrbitBoundaryToleranceSeconds);
+}
+
+void captureClasSisBoundary(
+    CLASSisContinuityInfo& info,
+    const GNSSTime& epoch_time) {
+    // CLASLIB only refreshes its held "currsis" value (satcorr[].currtow /
+    // currsis) at the 30s orbit boundary transition, freezing it until the
+    // next boundary; the CLASLIB oracle's dumped compN window is aligned to
+    // the *observation* epoch tow (tow % 30 == 0), not to the (few-second-
+    // early-available) internal SSR clock reference time. Anchor both the
+    // capture trigger and the held boundary_time on `epoch_time` (the
+    // current observation epoch) so the held window lines up with CLASLIB's
+    // per-obs-epoch dump; the delta VALUE still comes from the
+    // clock-reference-time-driven SIS math in updateSisContinuity().
+    if (!info.has_last_delta || !isSsrOrbitBoundaryTow(epoch_time.tow) ||
+        !isSsrOrbitBoundaryTow(info.current_time.tow)) {
+        return;
+    }
+    info.boundary_time = epoch_time;
+    info.boundary_delta_m = info.last_delta_m;
+    info.has_boundary_delta = true;
+}
+
+ClasSisApplyDecision computeClasSisApplyDecision(
+    const CLASSisContinuityInfo& info,
+    const GNSSTime& epoch_time,
+    const GNSSTime& clock_reference_time,
+    const GNSSTime& effective_phase_bias_reference_time,
+    bool clock_time_valid,
+    bool sis_boundary_gate_enabled) {
+    ClasSisApplyDecision decision;
+    if (sis_boundary_gate_enabled) {
+        // GATED path: CLASLIB-style SSR-update-boundary semantics. The delta
+        // captured at the most recent 30s orbit/clock boundary (see
+        // captureClasSisBoundary()) is held and applied for the following
+        // 15s of observation epochs (empirically pinned against the CLASLIB
+        // oracle; see docs/clas_dd_filter_a5.md), then zeroed until the next
+        // boundary. This replaces the (unreachable on real CLAS data) 30s
+        // phase-bias-lag condition used below when the gate is off.
+        //
+        // Deliberately independent of `clock_time_valid`/`has_last_delta`
+        // for *this* epoch: CLASLIB's held satcorr[] state outlives
+        // transient per-epoch SSR gaps inside the hold window (observed on
+        // real CLAS data), and captureClasSisBoundary()/updateSisContinuity()
+        // already preserve `boundary_delta_m` across such gaps.
+        if (!info.has_boundary_delta) {
+            return decision;
+        }
+        const double dt_since_boundary = epoch_time - info.boundary_time;
+        if (dt_since_boundary > -kSsrOrbitBoundaryToleranceSeconds &&
+            dt_since_boundary <
+                (kSsrOrbitBoundaryApplyWindowSeconds -
+                 kSsrOrbitBoundaryToleranceSeconds)) {
+            decision.applied = true;
+            decision.delta_m = info.boundary_delta_m;
+        }
+        return decision;
+    }
+    if (!clock_time_valid || !gnsstimeIsSet(effective_phase_bias_reference_time) ||
+        !info.has_last_delta) {
+        return decision;
+    }
+    const double pbias_lag =
+        clock_reference_time - effective_phase_bias_reference_time;
+    if (std::abs(pbias_lag - kPhaseBiasLagSeconds) < 0.5) {
+        decision.applied = true;
+        decision.delta_m = info.last_delta_m;
+    }
+    return decision;
 }
 
 bool usesClasPhaseBiasRepair(
@@ -1273,6 +1374,9 @@ std::vector<OSRCorrection> computeOSR(
             config.clas_phase_continuity_policy;
         const bool clock_time_valid = gnsstimeIsSet(osr.clock_reference_time);
         updateSisContinuity(sis_continuity_info, osr, clock_time_valid);
+        if (pppEnvOverrides().clas_sis_boundary) {
+            captureClasSisBoundary(sis_continuity_info, obs.time);
+        }
         const GNSSTime effective_phase_bias_reference_time =
             selectClasPhaseBiasReferenceTime(
                 config.clas_phase_bias_reference_time_policy,
@@ -1310,19 +1414,25 @@ std::vector<OSRCorrection> computeOSR(
                        + phase_bias_term + osr.windup_m[f]
                        + phase_compensation_term;
 
-            if (clock_time_valid && gnsstimeIsSet(effective_phase_bias_reference_time) &&
-                sis_continuity_info.has_last_delta &&
-                usesClasSisContinuity(phase_continuity_policy)) {
-                const double pbias_lag =
-                    osr.clock_reference_time - effective_phase_bias_reference_time;
-                if (std::abs(pbias_lag - kPhaseBiasLagSeconds) < 0.5) {
-                    osr.CPC[f] -= sis_continuity_info.last_delta_m;
-                    osr.PRC[f] -= sis_continuity_info.last_delta_m;
-                    osr.network_compensation_m = sis_continuity_info.last_delta_m;
+            if (usesClasSisContinuity(phase_continuity_policy)) {
+                const bool sis_boundary_gate_enabled =
+                    pppEnvOverrides().clas_sis_boundary;
+                const auto sis_decision = computeClasSisApplyDecision(
+                    sis_continuity_info,
+                    obs.time,
+                    osr.clock_reference_time,
+                    effective_phase_bias_reference_time,
+                    clock_time_valid,
+                    sis_boundary_gate_enabled);
+                if (sis_decision.applied) {
+                    osr.CPC[f] -= sis_decision.delta_m;
+                    osr.PRC[f] -= sis_decision.delta_m;
+                    osr.network_compensation_m = sis_decision.delta_m;
                     if (pppDebugEnabled() && f == 0) {
-                        std::cerr << "[OSR-SIS] " << sat.toString()
-                                  << " lag_s=" << pbias_lag
-                                  << " sis_delta_m=" << sis_continuity_info.last_delta_m
+                        std::cerr << (sis_boundary_gate_enabled ?
+                                          "[OSR-SIS-BOUNDARY] " : "[OSR-SIS] ")
+                                  << sat.toString()
+                                  << " sis_delta_m=" << sis_decision.delta_m
                                   << " ref_policy="
                                   << clasPhaseBiasReferenceTimePolicyName(
                                          config.clas_phase_bias_reference_time_policy)

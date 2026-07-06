@@ -102,6 +102,13 @@ struct CLASSisContinuityInfo {
     bool has_current = false;
     bool has_previous = false;
     bool has_last_delta = false;
+    // SSR-update-boundary (CLASLIB-style) tracking: the SIS delta captured at
+    // the most recent 30s orbit/clock update boundary, held fixed until the
+    // next boundary. Only populated when GNSS_PPP_CLAS_SIS_BOUNDARY is set;
+    // consumed by the gated apply path in ppp_osr.cpp.
+    GNSSTime boundary_time;
+    double boundary_delta_m = 0.0;
+    bool has_boundary_delta = false;
 };
 
 struct CLASEpochContext {

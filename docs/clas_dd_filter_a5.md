@@ -387,3 +387,95 @@ follow-up slice that applies the SIS delta with boundary semantics (lag ≈ 0,
 matching CLASLIB's `adjust_prc`/`adjust_cpc`); that slice changes PRC/solution
 output and requires full #161 sign-off.  This commit only adds the dump
 plumbing it will rely on.
+
+## A4b: SIS-boundary apply behind `GNSS_PPP_CLAS_SIS_BOUNDARY` (gated)
+
+### Pinned boundary rule
+
+Correlating the 135 nonzero `network_compensation_m` (`compN`) rows for the
+G14/C2W probe against `tow` in the CLASLIB oracle CSV shows a clean,
+consistent rule across all 9 SSR update cycles in the 300s reference window:
+`compN` is nonzero and **constant** for observation epochs with
+`tow % 30` in `[0, 14]` (the first half of each 30s SSR update cycle) and
+exactly `0.0` for `tow % 30` in `[15, 29]` (the second half). Every nonzero
+segment starts precisely at a `tow % 30 == 0` boundary and runs for exactly
+15 consecutive 1 Hz epochs, e.g. `[230430, 230444]`, `[230460, 230474]`,
+... `[230670, 230684]`; the held value equals the SIS delta computed at the
+5s-consecutive clock-reference-time transition that crosses the 30s orbit
+boundary (`current_sis_m(offset0) - previous_sis_m(offset25)`, matching
+`updateSisContinuity()`'s existing formula) and does **not** change again
+until the next boundary.
+
+Two subtleties surfaced while pinning the rule against the actual native
+harness (`scripts/ci/run_clas_a4b_native_selfdiff.py`, which decodes CLAS L6
+live rather than reading a pre-expanded CSV):
+
+- Native's `clock_reference_time` reaches a new 30s-aligned value a few
+  seconds *before* the observation epoch with the same `tow` is processed
+  (e.g. `clock_reference_time.tow == 230430` first appears at observation
+  `tow == 230426`). CLASLIB's own dumped `compN` window has no such lead, so
+  the boundary *capture* and the 15s hold window are both anchored to the
+  **observation epoch** (`obs.time`), not to `clock_reference_time` — see
+  `captureClasSisBoundary()` in `src/algorithms/ppp_osr.cpp`.
+- Real CLAS data has brief (multi-epoch) `clock_reference_time` gaps
+  (`clock_time_valid == false`) that can fall *inside* a 15s hold window.
+  CLASLIB's held `satcorr[].currsis` outlives such gaps, so the held
+  `boundary_delta_m` is explicitly preserved across a `clock_time_valid`
+  reset in `updateSisContinuity()`, and `computeClasSisApplyDecision()`'s
+  gated branch no longer requires `clock_time_valid` for the *current*
+  epoch. With both fixes the native gate-ON window position, duration, and
+  held-value-constancy match the CLASLIB oracle exactly for all 9 cycles in
+  the reference window.
+
+### Implementation
+
+`GNSS_PPP_CLAS_SIS_BOUNDARY=1` (exact-`"1"`, `envExactOne`-style, default
+off) switches the apply branch in `ppp_osr.cpp` from the legacy
+(real-data-unreachable) 30s phase-bias-lag condition to the boundary rule
+above: `osr.CPC[f]`/`osr.PRC[f]` are decremented by, and
+`osr.network_compensation_m` is set to, the delta captured by
+`captureClasSisBoundary()`, applied by `computeClasSisApplyDecision()`. The
+decision logic is factored into small, directly gtest-covered pure functions
+(`isSsrOrbitBoundaryTow`, `captureClasSisBoundary`,
+`computeClasSisApplyDecision`, plus the preservation behavior in
+`updateSisContinuity`) because `PPPEnvOverrides` is memoized per-process, so
+toggling `GNSS_PPP_CLAS_SIS_BOUNDARY` mid-gtest-binary is not reliable;
+env-integration itself is exercised through the CLI harness scripts, matching
+the existing convention for other `GNSS_PPP_CLAS_*` gates. Gate-off output
+(dump/`.pos`) is unaffected: the legacy branch is untouched, and the new
+boundary-tracking fields on `CLASSisContinuityInfo` are only written when the
+gate is on.
+
+### Measured effect (gate-ON, not yet default)
+
+Gate-OFF bit-exactness is preserved: the A4b native selfdiff dump md5
+(`61faeccafb63cfebe101357c3cb3163d`) and the standard CLAS `.pos` md5
+(`e63f4d63357abed86fd4fd5b58208f07`) are both unchanged.
+
+With the gate on, the G14/C2W `compN` window now lines up with the
+regenerated CLASLIB oracle exactly (same 9 boundary-aligned 15-row segments),
+but the **held delta magnitude** does not: `network_compensation_m` RMS moves
+from `0.0526 m` (gate-off, native always `0.0`) to `0.132 m` (gate-on) against
+the regenerated oracle — worse, not better. Root cause is a pre-existing,
+separate defect: the raw CLAS-expanded SSR product carries a spurious/
+differently-scoped orbit-correction record at the mid-cycle (`tow % 30 == 25`)
+sample that native's `orbit_projection_m` picks up (e.g. `dx=-0.2512,
+dy=-0.832` versus the neighboring `dx≈-0.31, dy≈+0.70` records), while
+CLASLIB's own `orbit_projection_m` stays flat across the same window. This
+inflates the boundary-crossing SIS delta computed by the existing (unchanged)
+`updateSisContinuity()` formula; it is unrelated to, and predates, the
+boundary-gating logic in this change, which the window-alignment result
+above shows is otherwise correct. Fixing it is out of scope here and is
+deferred to a follow-up slice on the SSR compact-message orbit-record
+selection.
+
+Position-level impact (full 3600-epoch standard CLAS run, `.pos` vs the
+CLASLIB same-epoch oracle, row-index-matched at 1 Hz since this `.pos` format
+does not populate `GPS_TOW`) is roughly neutral: fixed-epoch count drops
+slightly (270 → 259), fixed-only mean/p95/max 3D error each improve slightly
+(`1.584 m` → `1.437 m` mean, `5.018 m` → `4.981 m` p95, `5.028 m` → `4.999 m`
+max), and all-epoch mean is unchanged (`1.549 m`) with a lower max
+(`39.796 m` → `34.318 m`). Given the diagnosed root cause and the mixed
+position signal, the default stays off pending the orbit-record-selection
+fix; `GNSS_PPP_CLAS_SIS_BOUNDARY` remains available for further
+investigation.
