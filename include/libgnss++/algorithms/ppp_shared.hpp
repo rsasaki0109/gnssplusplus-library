@@ -321,6 +321,8 @@ struct PPPAmbiguityInfo {
     bool has_last_geometry_free = false;
     double last_melbourne_wubbena_m = 0.0;
     bool has_last_melbourne_wubbena = false;
+    GNSSTime last_slip_time;
+    bool has_last_slip_time = false;
     double mw_sum_cycles = 0.0;
     int mw_count = 0;
     double mw_mean_cycles = 0.0;

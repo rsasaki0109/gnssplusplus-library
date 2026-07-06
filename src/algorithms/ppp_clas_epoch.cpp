@@ -361,6 +361,30 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     const auto& epoch_atmos = epoch_context.epoch_atmos_tokens;
     const auto& osr_corrections = epoch_context.osr_corrections;
 
+    const double clas_dt_seconds =
+        has_last_processed_time_
+            ? std::max(obs.time - last_processed_time_, 0.001)
+            : 1.0;
+    if (ppp_config_.kinematic_mode && ppp_config_.enable_cycle_slip_detection) {
+        const auto slip_stats = ppp_clas::detectClasCycleSlips(
+            obs,
+            osr_corrections,
+            ppp_config_,
+            clas_dt_seconds,
+            filter_state_,
+            ambiguity_states_,
+            clas_dispersion_compensation_,
+            clas_phase_bias_repair_,
+            [&](const SatelliteId& satellite, SignalType signal) {
+                resetAmbiguity(satellite, signal);
+            },
+            precise_products_loaded_ ? 1e6 : ppp_config_.initial_ambiguity_variance,
+            pppDebugEnabled());
+        if (slip_stats.total_resets > 0) {
+            clas_dd_accumulator_ = {};
+        }
+    }
+
     if (pppEnvOverrides().clas_stec_constraint &&
         ppp_config_.estimate_ionosphere &&
         ppp_config_.use_clas_osr_filter) {
@@ -477,7 +501,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             constexpr double lambda_wl_gps = constants::SPEED_OF_LIGHT / (1575.42e6 - 1227.60e6);
             const double mw_cycles = mw_m / lambda_wl_gps;
             auto& amb = ambiguity_states_[osr.satellite];
-            const bool mw_slip = l1_raw->loss_of_lock || l2_raw->loss_of_lock;
+            const bool mw_slip = amb.needs_reinitialization;
             if (!mw_slip && amb.mw_count > 0) {
                 amb.mw_sum_cycles += mw_cycles;
                 amb.mw_count += 1;

@@ -120,6 +120,7 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         filter_state_,
         ambiguity_states_,
         ssr_products_loaded_,
+        obs.time,
         pppDebugEnabled());
     const auto& eligible_ambiguities = wlnl_preparation.eligible_ambiguities;
 

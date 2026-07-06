@@ -59,7 +59,7 @@ TEST(PPPArTest, WlnlPreparationTracksEligibilitySkipReasons) {
     ambiguity_states[sat5] = bad_index;
 
     const auto preparation = ppp_ar::prepareWlnlCandidates(
-        config, state, ambiguity_states, false, false);
+        config, state, ambiguity_states, false, GNSSTime{}, false);
 
     EXPECT_EQ(preparation.min_lock_count, 3);
     EXPECT_EQ(preparation.eligible_ambiguities.total_ambiguities, 5);
@@ -119,7 +119,7 @@ TEST(PPPArTest, WlnlPreparationAppliesWideLaneFixesAndSummarizesCounts) {
     ambiguity_states[sat3] = rejected;
 
     const auto preparation = ppp_ar::prepareWlnlCandidates(
-        config, state, ambiguity_states, true, false);
+        config, state, ambiguity_states, true, GNSSTime{}, false);
 
     EXPECT_EQ(preparation.min_lock_count, 4);
     EXPECT_EQ(preparation.wl_summary.fixed_count, 2);

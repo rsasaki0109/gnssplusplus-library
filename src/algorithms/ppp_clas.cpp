@@ -1014,6 +1014,208 @@ void initializeFilterState(
     filter_state.total_states = base;
 }
 
+namespace {
+
+constexpr double kClasNominalEpochIntervalS = 0.2;
+constexpr double kClasOutageGapResetS = 2.0;
+constexpr double kMinimumGeometryFreeSlipThresholdMeters = 0.05;
+constexpr double kMinimumMwSlipThresholdCycles = 0.5;
+
+double clasSlipThresholdScale(double dt_seconds) {
+    return std::max(1.0, dt_seconds / kClasNominalEpochIntervalS);
+}
+
+void clearClasWlnlMwState(ppp_shared::PPPAmbiguityInfo& ambiguity) {
+    ambiguity.wl_is_fixed = false;
+    ambiguity.wl_fixed_integer = 0;
+    ambiguity.nl_is_fixed = false;
+    ambiguity.nl_fixed_cycles = 0.0;
+    ambiguity.mw_sum_cycles = 0.0;
+    ambiguity.mw_count = 0;
+    ambiguity.mw_mean_cycles = 0.0;
+}
+
+void resetClasPhaseBiasRepair(CLASPhaseBiasRepairInfo& repair) {
+    repair.reference_time = GNSSTime();
+    repair.last_continuity_m = {0.0, 0.0, 0.0};
+    repair.offset_cycles = {0.0, 0.0, 0.0};
+    repair.pending_state_shift_cycles = {0.0, 0.0, 0.0};
+    repair.has_last = {false, false, false};
+}
+
+}  // namespace
+
+ClasSlipDetectionStats detectClasCycleSlips(
+    const ObservationData& obs,
+    const std::vector<OSRCorrection>& osr_corrections,
+    const ppp_shared::PPPConfig& config,
+    double dt_seconds,
+    ppp_shared::PPPState& filter_state,
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    std::map<SatelliteId, CLASDispersionCompensationInfo>& dispersion_compensation,
+    std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair,
+    const AmbiguityResetFunction& ambiguity_reset_function,
+    double ambiguity_reset_variance,
+    bool debug_enabled) {
+    ClasSlipDetectionStats stats;
+    if (!config.kinematic_mode || !config.enable_cycle_slip_detection) {
+        return stats;
+    }
+
+    const double threshold_scale = clasSlipThresholdScale(dt_seconds);
+    const double gf_threshold_m = std::max(
+        config.cycle_slip_threshold, kMinimumGeometryFreeSlipThresholdMeters) *
+        threshold_scale;
+    const double mw_threshold_cycles = kMinimumMwSlipThresholdCycles * threshold_scale;
+    const bool outage_gap = dt_seconds > kClasOutageGapResetS;
+
+    for (const auto& osr : osr_corrections) {
+        if (!osr.valid || osr.num_frequencies < 2) {
+            continue;
+        }
+        const Observation* l1_raw = findOsrFrequencyObservation(obs, osr, 0);
+        const Observation* l2_raw = findOsrFrequencyObservation(obs, osr, 1);
+        if (!l1_raw || !l2_raw || !l1_raw->valid || !l2_raw->valid) {
+            continue;
+        }
+        if (!l1_raw->has_carrier_phase || !l2_raw->has_carrier_phase) {
+            continue;
+        }
+        if (!l1_raw->has_pseudorange || !l2_raw->has_pseudorange) {
+            continue;
+        }
+        const double f1 = osr.frequencies[0];
+        const double f2 = osr.frequencies[1];
+        if (f1 <= 0.0 || f2 <= 0.0 || std::abs(f1 - f2) < 1e6) {
+            continue;
+        }
+
+        auto& ambiguity = ambiguity_states[osr.satellite];
+        const double l1_m = l1_raw->carrier_phase * osr.wavelengths[0] -
+                              osr.phase_bias_m[0];
+        const double l2_m = l2_raw->carrier_phase * osr.wavelengths[1] -
+                              osr.phase_bias_m[1];
+        const double gf_m = l1_m - l2_m;
+        const double p1 = l1_raw->pseudorange - osr.code_bias_m[0];
+        const double p2 = l2_raw->pseudorange - osr.code_bias_m[1];
+        const double mw_m = (f1 * l1_m - f2 * l2_m) / (f1 - f2) -
+                              (f1 * p1 + f2 * p2) / (f1 + f2);
+        const double lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
+        const double mw_cycles = mw_m / lambda_wl;
+
+        bool lli_slip = l1_raw->loss_of_lock || l2_raw->loss_of_lock;
+        bool gf_slip = false;
+        bool mw_slip = false;
+
+        if (outage_gap) {
+            ++stats.outage_resets;
+            ambiguity.has_last_geometry_free = false;
+            ambiguity.has_last_melbourne_wubbena = false;
+            clearClasWlnlMwState(ambiguity);
+        } else {
+            if (ambiguity.has_last_geometry_free &&
+                std::isfinite(gf_m) &&
+                std::abs(gf_m - ambiguity.last_geometry_free_m) > gf_threshold_m) {
+                gf_slip = true;
+            }
+            if (ambiguity.mw_count >= 3 &&
+                std::isfinite(mw_cycles) &&
+                std::abs(mw_cycles - ambiguity.mw_mean_cycles) > mw_threshold_cycles) {
+                mw_slip = true;
+            } else if (ambiguity.has_last_melbourne_wubbena &&
+                       std::isfinite(mw_cycles) &&
+                       std::abs(mw_m - ambiguity.last_melbourne_wubbena_m) >
+                           std::max(10.0, config.cycle_slip_threshold * 100.0) *
+                               threshold_scale) {
+                mw_slip = true;
+            }
+        }
+
+        if (std::isfinite(gf_m)) {
+            ambiguity.last_geometry_free_m = gf_m;
+            ambiguity.has_last_geometry_free = true;
+        }
+        if (std::isfinite(mw_m)) {
+            ambiguity.last_melbourne_wubbena_m = mw_m;
+            ambiguity.has_last_melbourne_wubbena = true;
+        }
+
+        if (!lli_slip && !gf_slip && !mw_slip) {
+            continue;
+        }
+
+        if (lli_slip) {
+            ++stats.lli_count;
+        }
+        if (gf_slip) {
+            ++stats.gf_count;
+        }
+        if (mw_slip) {
+            ++stats.mw_count;
+        }
+        ++stats.total_resets;
+
+        ambiguity.needs_reinitialization = true;
+        ambiguity.has_last_slip_time = true;
+        ambiguity.last_slip_time = obs.time;
+        clearClasWlnlMwState(ambiguity);
+        ambiguity.has_last_geometry_free = false;
+        ambiguity.has_last_melbourne_wubbena = false;
+
+        dispersion_compensation[osr.satellite].slip = {true, true};
+        auto repair_it = phase_bias_repair.find(osr.satellite);
+        if (repair_it != phase_bias_repair.end()) {
+            resetClasPhaseBiasRepair(repair_it->second);
+        }
+
+        if (ambiguity_reset_function) {
+            const uint8_t l2_prn = static_cast<uint8_t>(
+                std::min(255, static_cast<int>(osr.satellite.prn) + 100));
+            const SatelliteId l2_satellite(osr.satellite.system, l2_prn);
+            ambiguity_reset_function(osr.satellite, l1_raw->signal);
+            ambiguity_reset_function(l2_satellite, l2_raw->signal);
+        }
+
+        if (debug_enabled) {
+            std::string reason;
+            if (lli_slip) {
+                reason += "lli";
+            }
+            if (gf_slip) {
+                if (!reason.empty()) {
+                    reason += "+";
+                }
+                reason += "gf";
+            }
+            if (mw_slip) {
+                if (!reason.empty()) {
+                    reason += "+";
+                }
+                reason += "mw";
+            }
+            std::cerr << "[CLAS-SLIP] " << osr.satellite.toString()
+                      << " tow=" << obs.time.tow
+                      << " reason=" << reason
+                      << " dt=" << dt_seconds
+                      << " gf_m=" << gf_m
+                      << " mw_cyc=" << mw_cycles
+                      << "\n";
+        }
+    }
+
+    if (stats.total_resets > 0) {
+        syncSlipState(
+            obs,
+            filter_state,
+            ambiguity_states,
+            dispersion_compensation,
+            phase_bias_repair,
+            ambiguity_reset_variance);
+    }
+
+    return stats;
+}
+
 void syncSlipState(
     const ObservationData& obs,
     ppp_shared::PPPState& filter_state,

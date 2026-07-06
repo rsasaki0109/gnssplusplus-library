@@ -35,7 +35,9 @@ struct EligibleAmbiguities {
 EligibleAmbiguities collectEligibleAmbiguities(
     const ppp_shared::PPPState& filter_state,
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
-    int min_lock_count);
+    int min_lock_count,
+    const GNSSTime& time = GNSSTime{},
+    double slip_ar_exclusion_seconds = 10.0);
 
 DdFixAttempt tryDirectDdFix(
     const ppp_shared::PPPConfig& config,
@@ -106,6 +108,7 @@ WlnlPreparation prepareWlnlCandidates(
     const ppp_shared::PPPState& filter_state,
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     bool use_ssr_products,
+    const GNSSTime& time,
     bool debug_enabled);
 
 WlnlWideLaneFixSummary applyWideLaneFixes(

@@ -56,7 +56,9 @@ double safeVarianceFloor(double variance, double floor_value) {
 EligibleAmbiguities collectEligibleAmbiguities(
     const ppp_shared::PPPState& filter_state,
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
-    int min_lock_count) {
+    int min_lock_count,
+    const GNSSTime& time,
+    double slip_ar_exclusion_seconds) {
     EligibleAmbiguities eligible;
     for (const auto& [satellite, state_index] : filter_state.ambiguity_indices) {
         ++eligible.total_ambiguities;
@@ -71,6 +73,12 @@ EligibleAmbiguities collectEligibleAmbiguities(
             } else {
                 ++eligible.skipped_lock;
             }
+            continue;
+        }
+        if (time.week > 0 && ambiguity.has_last_slip_time &&
+            slip_ar_exclusion_seconds > 0.0 &&
+            (time - ambiguity.last_slip_time) < slip_ar_exclusion_seconds) {
+            ++eligible.skipped_reinitialization;
             continue;
         }
         if (!std::isfinite(ambiguity.ambiguity_scale_m) || ambiguity.ambiguity_scale_m <= 0.0) {
@@ -140,13 +148,14 @@ WlnlPreparation prepareWlnlCandidates(
     const ppp_shared::PPPState& filter_state,
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     bool use_ssr_products,
+    const GNSSTime& time,
     bool debug_enabled) {
     WlnlPreparation preparation;
     preparation.min_lock_count = use_ssr_products
         ? std::max(1, config.wl_min_averaging_epochs)
         : config.convergence_min_epochs;
     preparation.eligible_ambiguities = collectEligibleAmbiguities(
-        filter_state, ambiguity_states, preparation.min_lock_count);
+        filter_state, ambiguity_states, preparation.min_lock_count, time);
     preparation.wl_summary = applyWideLaneFixes(
         config, ambiguity_states, preparation.eligible_ambiguities.satellites, debug_enabled);
     return preparation;

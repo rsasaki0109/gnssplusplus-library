@@ -85,6 +85,14 @@ struct EpochPreparationResult {
     bool ready = false;
 };
 
+struct ClasSlipDetectionStats {
+    int lli_count = 0;
+    int gf_count = 0;
+    int mw_count = 0;
+    int outage_resets = 0;
+    int total_resets = 0;
+};
+
 AppliedOsrCorrections selectAppliedOsrCorrections(
     const OSRCorrection& osr,
     int freq_index,
@@ -131,6 +139,19 @@ void syncSlipState(
     std::map<SatelliteId, CLASDispersionCompensationInfo>& dispersion_compensation,
     std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair,
     double ambiguity_reset_variance);
+
+ClasSlipDetectionStats detectClasCycleSlips(
+    const ObservationData& obs,
+    const std::vector<OSRCorrection>& osr_corrections,
+    const ppp_shared::PPPConfig& config,
+    double dt_seconds,
+    ppp_shared::PPPState& filter_state,
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    std::map<SatelliteId, CLASDispersionCompensationInfo>& dispersion_compensation,
+    std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair,
+    const AmbiguityResetFunction& ambiguity_reset_function,
+    double ambiguity_reset_variance,
+    bool debug_enabled = false);
 
 void predictFilterState(
     ppp_shared::PPPState& filter_state,
