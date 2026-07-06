@@ -91,7 +91,11 @@ std::string formatEpochLine(const libgnss::GNSSTime& time) {
     const auto tp = time.toSystemTime();
     const std::time_t unix_time = std::chrono::system_clock::to_time_t(tp);
     std::tm utc_tm{};
+#if defined(_WIN32)
+    gmtime_s(&utc_tm, &unix_time);
+#else
     gmtime_r(&unix_time, &utc_tm);
+#endif
     const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(
         tp.time_since_epoch()).count() % 1'000'000;
     char buffer[64];
@@ -112,7 +116,11 @@ std::string formatClockEpochFields(const libgnss::GNSSTime& time) {
     const auto tp = time.toSystemTime();
     const std::time_t unix_time = std::chrono::system_clock::to_time_t(tp);
     std::tm utc_tm{};
+#if defined(_WIN32)
+    gmtime_s(&utc_tm, &unix_time);
+#else
     gmtime_r(&unix_time, &utc_tm);
+#endif
     const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(
         tp.time_since_epoch()).count() % 1'000'000;
     char buffer[64];

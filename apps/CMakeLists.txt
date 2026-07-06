@@ -1,6 +1,7 @@
 set(GNSS_APP_TARGETS
     gnss_spp
     gnss_fgo
+    gnss_fuse
     gnss_vel_d
     gnss_pos_pdc
     gnss_pos_pd
@@ -27,6 +28,9 @@ if(GTSAM_FOUND)
     target_compile_definitions(gnss_fgo PRIVATE GNSS_WITH_GTSAM=1)
     target_link_libraries(gnss_fgo PRIVATE gtsam)
 endif()
+
+add_executable(gnss_fuse gnss_fuse.cpp)
+target_link_libraries(gnss_fuse PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
 add_executable(gnss_vel_d gnss_vel_d.cpp)
 target_link_libraries(gnss_vel_d PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)

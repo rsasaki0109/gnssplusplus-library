@@ -59,6 +59,11 @@ COMMANDS = {
         "target": "gnss_fgo",
         "summary": "Batch factor-graph post-processing from rover/nav RINEX files.",
     },
+    "fuse": {
+        "kind": "binary",
+        "target": "gnss_fuse",
+        "summary": "Loosely-coupled IMU+GNSS fusion over a rover.obs/nav plus imu.csv.",
+    },
     "vel-d": {
         "kind": "binary",
         "target": "gnss_vel_d",
@@ -927,6 +932,15 @@ def find_binary(target_name: str) -> str | None:
 def run_python(target: str, command_name: str, args: list[str]) -> int:
     env = os.environ.copy()
     env["GNSS_CLI_NAME"] = f"gnss {command_name}"
+    if os.name == "nt":
+        # os.exec* on Windows has spawn semantics (the parent console
+        # regains control while the child still runs, and the reported
+        # exit status is unreliable). Use a regular subprocess instead.
+        import subprocess
+
+        return subprocess.run(
+            [sys.executable, target, *args], env=env, check=False
+        ).returncode
     try:
         os.execvpe(sys.executable, [sys.executable, target, *args], env)
     except OSError as exc:
@@ -943,6 +957,10 @@ def run_binary(target_name: str, args: list[str]) -> int:
             file=sys.stderr,
         )
         return 1
+    if os.name == "nt":
+        import subprocess
+
+        return subprocess.run([binary, *args], check=False).returncode
     try:
         os.execv(binary, [binary, *args])
     except OSError as exc:

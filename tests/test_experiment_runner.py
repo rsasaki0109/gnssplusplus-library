@@ -46,8 +46,8 @@ class PPPArExperimentsTest(unittest.TestCase):
                 "\n".join(
                     [
                         "[clas_ppp_experiment]",
-                        f"obs = \"{obs_path}\"",
-                        f"nav = \"{nav_path}\"",
+                        f"obs = \"{obs_path.as_posix()}\"",
+                        f"nav = \"{nav_path.as_posix()}\"",
                         "max_epochs = 10",
                         "strategies = [\"iflc_float_baseline\"]",
                     ]

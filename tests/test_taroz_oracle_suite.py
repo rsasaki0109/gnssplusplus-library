@@ -6,6 +6,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -13,6 +14,7 @@ import unittest
 from unittest import mock
 
 
+EXE_SUFFIX = ".exe" if os.name == "nt" else ""
 ROOT_DIR = Path(__file__).resolve().parents[1]
 APPS_DIR = ROOT_DIR / "apps"
 sys.path.insert(0, str(APPS_DIR))
@@ -59,13 +61,13 @@ class TarozOracleSuiteTest(unittest.TestCase):
             p_command = payload["runs"]["p"]["command"]
             self.assertIn("taroz-p-dogfood", p_command)
             self.assertIn("--fgo-bin", p_command)
-            self.assertIn(str(temp_root / "bin" / "gnss_fgo"), p_command)
+            self.assertIn(str(temp_root / "bin" / ("gnss_fgo" + EXE_SUFFIX)), p_command)
             pos_pdc_command = payload["runs"]["pos-pdc"]["command"]
             self.assertIn("taroz-observable-dogfood", pos_pdc_command)
             self.assertIn("--mode", pos_pdc_command)
             self.assertIn("pos-pdc", pos_pdc_command)
             self.assertIn("--native-bin", pos_pdc_command)
-            self.assertIn(str(temp_root / "bin" / "gnss_pos_pdc"), pos_pdc_command)
+            self.assertIn(str(temp_root / "bin" / ("gnss_pos_pdc" + EXE_SUFFIX)), pos_pdc_command)
             pc_command = payload["runs"]["pc"]["command"]
             self.assertIn("--base", pc_command)
             self.assertIn("--no-byte-compare", pc_command)

@@ -71,7 +71,7 @@ class WebHttpUxTest(unittest.TestCase):
             output = root / "output"
             output.mkdir()
             artifact_path = output / "synthetic.txt"
-            artifact_path.write_text("synthetic artifact\n", encoding="utf-8")
+            artifact_path.write_text("synthetic artifact\n", encoding="utf-8", newline="\n")
             manifest_path = output / "artifact_manifest.json"
             manifest_path.write_text(
                 json.dumps(

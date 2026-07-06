@@ -156,7 +156,8 @@ def resolve_path(explicit: Path | None, root_dir: Path, relative: str) -> Path:
 
 def relative_display(path: Path, root_dir: Path) -> str:
     try:
-        return str(path.resolve().relative_to(root_dir.resolve()))
+        # as_posix() keeps displayed paths portable (forward slashes) on Windows.
+        return path.resolve().relative_to(root_dir.resolve()).as_posix()
     except ValueError:
         return str(path)
 

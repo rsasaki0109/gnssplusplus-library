@@ -74,7 +74,11 @@ GNSSTime parseAntexEpochLine(const std::string& line) {
     tm.tm_hour = hour;
     tm.tm_min = minute;
     tm.tm_sec = static_cast<int>(second);
+#if defined(_WIN32)
+    const std::time_t calendar = _mkgmtime(&tm);
+#else
     const std::time_t calendar = timegm(&tm);
+#endif
     if (calendar == static_cast<std::time_t>(-1)) {
         return GNSSTime{};
     }

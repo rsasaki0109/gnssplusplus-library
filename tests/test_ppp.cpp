@@ -27,7 +27,11 @@ GNSSTime makeTime(int year, int month, int day, int hour, int minute, double sec
     epoch_tm.tm_hour = hour;
     epoch_tm.tm_min = minute;
     epoch_tm.tm_sec = static_cast<int>(std::floor(second));
+#if defined(_WIN32)
+    const time_t unix_seconds = _mkgmtime(&epoch_tm);
+#else
     const time_t unix_seconds = timegm(&epoch_tm);
+#endif
     const auto tp = std::chrono::system_clock::from_time_t(unix_seconds) +
         std::chrono::microseconds(
             static_cast<long long>(std::llround((second - std::floor(second)) * 1e6)));

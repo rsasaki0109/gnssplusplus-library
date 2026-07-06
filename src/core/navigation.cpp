@@ -197,7 +197,11 @@ bool parseEpochFields(int year,
     epoch_tm.tm_hour = hour;
     epoch_tm.tm_min = minute;
     epoch_tm.tm_sec = static_cast<int>(std::floor(second));
+#if defined(_WIN32)
+    const time_t seconds_since_unix = _mkgmtime(&epoch_tm);
+#else
     const time_t seconds_since_unix = timegm(&epoch_tm);
+#endif
     if (seconds_since_unix == static_cast<time_t>(-1)) {
         return false;
     }
