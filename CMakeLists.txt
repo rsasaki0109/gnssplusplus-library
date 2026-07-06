@@ -4,6 +4,11 @@ project(gnss_lib VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    # MSVC portability: expose M_PI etc. from <cmath>, keep <windows.h>
+    # from defining min/max macros that clash with std::min/std::max.
+    add_compile_definitions(_USE_MATH_DEFINES NOMINMAX)
+endif()
 include(CTest)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -55,6 +60,7 @@ add_subdirectory(third_party/ginan-iers2010)
 # List source files for the main library
 set(GNSS_SOURCES
     src/gnss.cpp
+    src/io/imu.cpp
     src/io/ntrip.cpp
     src/io/rinex.cpp
     src/io/rinex4.cpp
@@ -66,6 +72,13 @@ set(GNSS_SOURCES
     src/io/madoca_l6d.cpp
     src/core/solution.cpp
     src/core/types.cpp
+    src/fusion/attitude.cpp
+    src/fusion/mechanization.cpp
+    src/fusion/fusion_process_noise.cpp
+    src/fusion/fusion_measurement.cpp
+    src/fusion/fusion_update.cpp
+    src/fusion/fusion_initialization.cpp
+    src/fusion/fusion_processor.cpp
     src/algorithms/ppp_ar.cpp
     src/algorithms/ppp_atmosphere.cpp
     src/algorithms/ppp_clas.cpp
@@ -105,6 +118,7 @@ set(GNSS_SOURCES_NO_OPTIMIZATION
     src/algorithms/ppp_env_overrides.cpp
     src/algorithms/rtk.cpp
     src/algorithms/spp.cpp
+    src/algorithms/spp_velocity.cpp
     src/algorithms/lambda.cpp
     src/core/navigation.cpp
     src/core/observation.cpp
@@ -200,7 +214,11 @@ endif()
 
 # Create the no-optimization library
 add_library(gnss_lib_noopt STATIC ${GNSS_SOURCES_NO_OPTIMIZATION})
-target_compile_options(gnss_lib_noopt PRIVATE -O0)
+if(MSVC)
+    target_compile_options(gnss_lib_noopt PRIVATE /Od)
+else()
+    target_compile_options(gnss_lib_noopt PRIVATE -O0)
+endif()
 target_include_directories(gnss_lib_noopt PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>

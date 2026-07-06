@@ -1,5 +1,6 @@
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
+#include <libgnss++/algorithms/spp_velocity.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signal_policy.hpp>
@@ -635,6 +636,11 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
     struct MeasurementModel {
         SPPObservation spp_observation;
         Vector3d satellite_position;
+        Vector3d satellite_velocity = Vector3d::Zero();       ///< For Doppler velocity LS (spp_velocity.hpp)
+        double satellite_clock_drift = 0.0;                   ///< s/s, for Doppler velocity LS
+        double doppler_hz = 0.0;                               ///< For Doppler velocity LS
+        double signal_frequency_hz = 0.0;                      ///< For Doppler velocity LS
+        bool has_doppler = false;                              ///< For Doppler velocity LS
         GNSSSystem clock_group = GNSSSystem::UNKNOWN;
         double corrected_pseudorange = 0.0;
         double elevation = 0.0;
@@ -775,6 +781,12 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                              -std::sin(angle),  std::cos(angle), 0.0,
                               0.0,              0.0,             1.0;
             Vector3d corrected_sat_pos = earth_rotation * sat_pos;
+            // Rotate the satellite velocity by the same Earth-rotation frame
+            // correction applied to its position, so the Doppler velocity LS
+            // (spp_velocity::solveVelocity) sees a satellite state consistent
+            // with corrected_sat_pos rather than mixing an uncorrected
+            // velocity vector with a corrected position.
+            Vector3d corrected_sat_vel = earth_rotation * sat_vel;
 
             auto geom = nav.calculateGeometry(current_position, corrected_sat_pos);
             if (geom.elevation < min_elevation_rad) {
@@ -907,6 +919,11 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             MeasurementModel measurement;
             measurement.spp_observation = spp_obs;
             measurement.satellite_position = corrected_sat_pos;
+            measurement.satellite_velocity = corrected_sat_vel;
+            measurement.satellite_clock_drift = sat_clk_drift;
+            measurement.has_doppler = obs.has_doppler && obs.doppler != 0.0;
+            measurement.doppler_hz = obs.doppler;
+            measurement.signal_frequency_hz = signalFrequencyHz(obs.signal, eph);
             measurement.clock_group = clockBiasGroup(obs.satellite.system);
             measurement.corrected_pseudorange = corrected_pr;
             measurement.elevation = geom.elevation;
@@ -1372,6 +1389,41 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
         solution.spp_chi_square_gate_rejections = 1;
         solution.status = SolutionStatus::NONE;
         return solution;
+    }
+
+    // Doppler-derived velocity (docs/design.md task: neither SPP nor RTK
+    // ever populated has_velocity, so the fusion processor's velocity update
+    // and GNSS-course heading alignment never fired). Standard range-rate
+    // least squares (spp_velocity::solveVelocity), reusing the same
+    // satellite position/velocity/clock-drift already computed above for
+    // the position solve -- no extra ephemeris evaluation needed. Guarded so
+    // has_velocity stays false (not a zero-filled false positive) whenever
+    // fewer than 4 satellites carry usable Doppler.
+    {
+        std::vector<spp_velocity::DopplerObservation> doppler_observations;
+        doppler_observations.reserve(final_measurements.size());
+        for (const auto& measurement : final_measurements) {
+            if (!measurement.has_doppler) {
+                continue;
+            }
+            spp_velocity::DopplerObservation doppler_obs;
+            doppler_obs.satellite_position_ecef = measurement.satellite_position;
+            doppler_obs.satellite_velocity_ecef = measurement.satellite_velocity;
+            doppler_obs.satellite_clock_drift = measurement.satellite_clock_drift;
+            doppler_obs.doppler_hz = measurement.doppler_hz;
+            doppler_obs.frequency_hz = measurement.signal_frequency_hz;
+            doppler_obs.elevation_rad = measurement.elevation;
+            doppler_observations.push_back(doppler_obs);
+        }
+
+        const auto velocity_result =
+            spp_velocity::solveVelocity(doppler_observations, position);
+        if (velocity_result.ok) {
+            solution.velocity_ecef = velocity_result.velocity_ecef;
+            solution.velocity_covariance = velocity_result.velocity_covariance;
+            solution.has_velocity = true;
+            solution.receiver_clock_drift = velocity_result.receiver_clock_drift;
+        }
     }
 
     estimated_position_ = position;

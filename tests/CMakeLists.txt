@@ -6,8 +6,22 @@ find_package(GTest REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 if(GTest_FOUND)
-    # Consolidate all tests into a single executable
-    add_executable(run_tests
+    # Consolidate all tests into a single executable.
+    # The target is named gnss_run_tests (not run_tests): with the Visual
+    # Studio generator, CMake emits a per-directory RUN_TESTS utility whose
+    # project file collides case-insensitively with run_tests.vcxproj on
+    # Windows. OUTPUT_NAME keeps the binary named run_tests for scripts/CI.
+    add_executable(gnss_run_tests
+        test_imu_csv.cpp
+        test_attitude.cpp
+        test_mechanization.cpp
+        test_fusion_process_noise.cpp
+        test_fusion_update.cpp
+        test_fusion_measurement.cpp
+        test_fusion_zupt.cpp
+        test_fusion_nhc.cpp
+        test_fusion_initialization.cpp
+        test_fusion_processor_synthetic.cpp
         test_ppp_clas.cpp
         test_ppp_osr.cpp
         test_ppp_ar.cpp
@@ -28,8 +42,8 @@ if(GTest_FOUND)
         test_rinex_writer.cpp
         test_madoca_core.cpp
         test_madoca_parity.cpp
-        test_rtk_legacy.cpp
         test_spp.cpp
+        test_spp_velocity.cpp
         test_rtk.cpp
         test_rtk_smoke.cpp
         test_ntrip.cpp
@@ -45,12 +59,23 @@ if(GTest_FOUND)
         test_iers_sub_daily_eop.cpp
     )
 
-    target_compile_options(run_tests PRIVATE -g)
-    target_compile_definitions(run_tests PRIVATE
+    # test_rtk_legacy.cpp uses "#define private public" before including
+    # rtk.hpp. MSVC encodes member access in mangled names, so the test's
+    # references never link against the library's private symbols; the
+    # trick only works on Itanium-ABI compilers (GCC/Clang).
+    if(NOT MSVC)
+        target_sources(gnss_run_tests PRIVATE test_rtk_legacy.cpp)
+    endif()
+
+    set_target_properties(gnss_run_tests PROPERTIES OUTPUT_NAME run_tests)
+    if(NOT MSVC)
+        target_compile_options(gnss_run_tests PRIVATE -g)
+    endif()
+    target_compile_definitions(gnss_run_tests PRIVATE
         GNSSPP_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
         GNSSPP_BINARY_DIR="${CMAKE_BINARY_DIR}"
     )
-    target_link_libraries(run_tests
+    target_link_libraries(gnss_run_tests
         gnss_lib gnss_lib_noopt
         sofa
         ginan_iers2010
@@ -58,9 +83,10 @@ if(GTest_FOUND)
         GTest::Main
         Threads::Threads
     )
-    add_dependencies(run_tests
+    add_dependencies(gnss_run_tests
         gnss_convert
         gnss_fgo
+        gnss_fuse
         gnss_live
         gnss_ppp
         gnss_replay
@@ -72,7 +98,7 @@ if(GTest_FOUND)
     )
 
     # Add test to CTest
-    add_test(NAME run_tests COMMAND run_tests)
+    add_test(NAME run_tests COMMAND gnss_run_tests)
     add_test(
         NAME python_benchmark_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_benchmark_scripts.py

@@ -5,6 +5,7 @@
 #include <libgnss++/algorithms/rtk_measurement.hpp>
 #include <libgnss++/algorithms/rtk_selection.hpp>
 #include <libgnss++/algorithms/rtk_update.hpp>
+#include <libgnss++/algorithms/spp_velocity.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/signal_policy.hpp>
@@ -1285,6 +1286,32 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
 // Main processing (RTKLIB relpos equivalent)
 // ============================================================
 PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
+    const ObservationData& base_obs, const NavigationData& nav) {
+    PositionSolution solution = processRTKEpochInternal(rover_obs, base_obs, nav);
+
+    // Doppler-derived velocity: SPPProcessor now populates has_velocity on
+    // its own solutions (spp.cpp), so the fallback-to-SPP paths inside
+    // processRTKEpochInternal (fallback_spp()/the catch block) already carry
+    // a velocity through untouched. The DD-RTK float/fixed paths
+    // (generateSolution()) do not compute velocity at all, so run the same
+    // SPP-style Doppler LS directly on the rover observations here -- no
+    // dependency on RTK's DD/ambiguity state, just broadcast ephemeris +
+    // Doppler, per docs/design.md.
+    if (solution.isValid() && !solution.has_velocity) {
+        const auto velocity_result = spp_velocity::solveVelocityFromObservations(
+            rover_obs, nav, solution.position_ecef, doppler_velocity_sigma_mps_);
+        if (velocity_result.ok) {
+            solution.velocity_ecef = velocity_result.velocity_ecef;
+            solution.velocity_covariance = velocity_result.velocity_covariance;
+            solution.has_velocity = true;
+            solution.receiver_clock_drift = velocity_result.receiver_clock_drift;
+        }
+    }
+
+    return solution;
+}
+
+PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& rover_obs,
     const ObservationData& base_obs, const NavigationData& nav) {
     debug_telemetry_ = EpochDebugTelemetry{};
     PositionSolution solution;

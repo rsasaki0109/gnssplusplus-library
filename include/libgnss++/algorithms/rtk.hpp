@@ -385,6 +385,16 @@ public:
                                    const ObservationData& base_obs,
                                    const NavigationData& nav);
 
+    /**
+     * @brief Doppler observation sigma (1-sigma, m/s at zenith) used by the
+     * Doppler-derived velocity least squares (spp_velocity::solveVelocity)
+     * that processRTKEpoch() runs on every valid solution lacking
+     * has_velocity. Exposed so callers can retune it like other RTKConfig
+     * knobs without touching the .cpp.
+     */
+    void setDopplerVelocitySigma(double sigma_mps) { doppler_velocity_sigma_mps_ = sigma_mps; }
+    double getDopplerVelocitySigma() const { return doppler_velocity_sigma_mps_; }
+
     void setBasePosition(const Vector3d& base_position) {
         base_position_ = base_position;
         base_position_known_ = true;
@@ -407,6 +417,20 @@ private:
     RTKConfig rtk_config_;
     SPPProcessor spp_processor_;
     EpochDebugTelemetry debug_telemetry_;
+    double doppler_velocity_sigma_mps_ = 0.5;
+
+    /**
+     * @brief The original processRTKEpoch() body (DD-RTK float/fixed solve).
+     * processRTKEpoch() itself is now a thin wrapper that calls this and
+     * then, if the result is valid but still lacks has_velocity (i.e. the
+     * fallback-to-SPP path didn't already populate it), runs the same
+     * SPP-style Doppler velocity least squares on the rover observations
+     * (see docs/design.md: without this, LooseCouplingProcessor's velocity
+     * update and GNSS-course heading alignment never fire).
+     */
+    PositionSolution processRTKEpochInternal(const ObservationData& rover_obs,
+                                             const ObservationData& base_obs,
+                                             const NavigationData& nav);
 
     Vector3d base_position_;
     bool base_position_known_ = false;
