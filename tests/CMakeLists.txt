@@ -68,6 +68,12 @@ if(GTest_FOUND)
     endif()
 
     set_target_properties(gnss_run_tests PROPERTIES OUTPUT_NAME run_tests)
+    # Backward-compatible alias for CI/scripts that build --target run_tests.
+    # Skipped for Visual Studio generators, where the name collides with
+    # CMake's auto-generated RUN_TESTS utility on a case-insensitive FS.
+    if(NOT CMAKE_GENERATOR MATCHES "Visual Studio")
+        add_custom_target(run_tests DEPENDS gnss_run_tests)
+    endif()
     if(NOT MSVC)
         target_compile_options(gnss_run_tests PRIVATE -g)
     endif()
