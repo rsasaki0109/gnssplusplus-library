@@ -31,6 +31,8 @@ bool pppDebugEnabled() {
 }
 
 constexpr double kClasNlDatumJumpThresholdCycles = 0.5;
+// Good WL-NL / SD-MAR fixes stay below ~0.7 m; parity-path blunders were 38–595 m.
+constexpr double kClasBaseClockParitySdMarMaxPositionShiftM = 2.0;
 
 std::ofstream* clasFloatDumpStream() {
     const auto& path = pppEnvOverrides().clas_float_dump_path;
@@ -79,11 +81,12 @@ void clearClasWlnlFixedDatumState(PPPAmbiguityInfo& ambiguity) {
     ambiguity.mw_mean_cycles = 0.0;
 }
 
-void applyClasNlDatumReset(
+bool applyClasNlDatumReset(
     const GNSSTime& time,
     const std::vector<OSRCorrection>& osr_corrections,
     std::map<SatelliteId, PPPAmbiguityInfo>& ambiguity_states,
     bool debug_enabled) {
+    bool any_reset = false;
     for (const auto& osr : osr_corrections) {
         if (!osr.valid || osr.num_frequencies < 2) {
             continue;
@@ -98,6 +101,7 @@ void applyClasNlDatumReset(
             const double step_cycles =
                 datum_cycles - ambiguity.clas_nl_phase_bias_datum_cycles;
             if (std::abs(step_cycles) > kClasNlDatumJumpThresholdCycles) {
+                any_reset = true;
                 clearClasWlnlFixedDatumState(ambiguity);
                 const SatelliteId l2_satellite(
                     osr.satellite.system,
@@ -119,6 +123,7 @@ void applyClasNlDatumReset(
         ambiguity.clas_nl_phase_bias_datum_cycles = datum_cycles;
         ambiguity.has_clas_nl_phase_bias_datum = true;
     }
+    return any_reset;
 }
 
 void dumpClasFloatPosition(
@@ -324,8 +329,10 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         ppp_config_.use_clas_osr_filter &&
         !ppp_config_.use_ionosphere_free &&
         ppp_config_.estimate_ionosphere) {
-        applyClasNlDatumReset(
-            obs.time, osr_corrections, ambiguity_states_, pppDebugEnabled());
+        if (applyClasNlDatumReset(
+                obs.time, osr_corrections, ambiguity_states_, pppDebugEnabled())) {
+            clas_dd_accumulator_ = {};
+        }
     }
     ppp_clas::applyPendingPhaseBiasStateShifts(
         filter_state_, osr_corrections, clas_phase_bias_repair_, pppDebugEnabled());
@@ -499,9 +506,19 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             3.0,   // AR ratio threshold
             20,    // Min accumulation epochs before attempting LAMBDA
             pppDebugEnabled());
-        if (sd_ar_result.valid && sd_ar_result.code_rms >= 3.0) {
+        const bool sd_ar_fixed =
+            sd_ar_result.valid && sd_ar_result.ar_ratio >= 3.0;
+        const bool sd_ar_position_ok =
+            !env_overrides_.clas_base_clock_parity ||
+            sd_ar_result.position_shift_m <=
+                kClasBaseClockParitySdMarMaxPositionShiftM;
+        if (sd_ar_fixed && sd_ar_position_ok) {
             solution.position_ecef = sd_ar_result.position;
             solution.status = SolutionStatus::PPP_FIXED;
+        } else if (sd_ar_fixed && pppDebugEnabled()) {
+            std::cerr << "[CLAS-SD-MAR] reject parity pos_shift="
+                      << sd_ar_result.position_shift_m
+                      << " ratio=" << sd_ar_result.ar_ratio << "\n";
         }
     }
 

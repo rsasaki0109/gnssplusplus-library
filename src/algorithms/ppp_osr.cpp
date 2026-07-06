@@ -1140,6 +1140,11 @@ std::vector<OSRCorrection> computeOSR(
         SSRCorrectionStatus ssr_status;
         double base_clock_corr = 0.0;
         bool base_clock_valid = false;
+        const auto& env = pppEnvOverrides();
+        const auto clock_policy = env.clas_base_clock_parity
+            ? SSRClockSelectionPolicy::ClaslibBaseHold
+            : SSRClockSelectionPolicy::MergedInterpolate;
+        const bool allow_future_samples = !env.clas_base_clock_parity;
         if (ssr.interpolateCorrection(sat, obs.time, orbit_corr, clock_corr,
                                        &ura_sigma, &ssr_cbias, &ssr_pbias,
                                        &atmos_tokens,
@@ -1150,9 +1155,10 @@ std::vector<OSRCorrection> computeOSR(
                                        nullptr,
                                        nullptr,
                                        &ssr_status,
-                                       true,
+                                       allow_future_samples,
                                        &base_clock_corr,
-                                       &base_clock_valid)) {
+                                       &base_clock_valid,
+                                       clock_policy)) {
             // CSV-expanded CLAS corrections carry orbit deltas in RAC, while
             // sampled RTCM SSR products are already stored in ECEF.
             // RAC frame follows RTCM-10403.1 / CLASLIB convention:

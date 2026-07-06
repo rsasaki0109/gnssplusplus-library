@@ -496,12 +496,14 @@ SdEpochResult solveMultiEpochSdAr(
     result.valid = true;
     result.position = refined + dx;
     result.num_satellites = static_cast<int>(sat_obs.size());
-    result.code_rms = ratio;  // Store ratio
+    result.code_rms = ratio;
+    result.ar_ratio = ratio;
+    result.position_shift_m = dx.norm();
     result.phase_rms = 0.0;
 
     if (debug_enabled) {
         std::cerr << "[CLAS-SD-MAR] FIXED ratio=" << ratio
-                  << " pos_shift=" << dx.norm() << "\n";
+                  << " pos_shift=" << result.position_shift_m << "\n";
     }
 
     return result;

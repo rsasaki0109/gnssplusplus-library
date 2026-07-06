@@ -183,6 +183,12 @@ struct PPPEnvOverrides {
     // condition for the gated path. Default false; exact "0" and unset are
     // no-ops for bit-exact legacy CLAS output.
     bool clas_sis_boundary = false;
+    // GNSS_PPP_CLAS_BASE_CLOCK_PARITY: select CLASLIB-equivalent base-bank
+    // step-hold clocks (orbit-anchored, no future samples, no merged-network
+    // overwrite, no linear interpolation) for CLAS OSR positioning when set
+    // exactly to "1". Default false; exact "0" and unset preserve State B
+    // merged-clock byte identity.
+    bool clas_base_clock_parity = false;
     // GNSS_PPP_CLAS_AMB_DATUM: align CLAS OSR carrier phase ambiguity states
     // with CLASLIB by subtracting the full CPC before ambiguity estimation.
     // Default follows the residual-phase-trop surface; explicit boolean values
