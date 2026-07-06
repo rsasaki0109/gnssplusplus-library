@@ -209,6 +209,7 @@ void L6Decoder::decodeSubtype3(BitReader& reader) {
         const SatelliteId sat_id(sat.system, sat.prn);
         CssrClockCorrection corr;
         corr.dclock_m = reader.readS(15) * kClockScale;
+        corr.clock_network_id = 0;
         current_epoch_.clocks[sat_id] = corr;
     }
     current_epoch_.has_clock = true;
@@ -292,16 +293,23 @@ void L6Decoder::decodeSubtype11(BitReader& reader) {
         if (flg_orbit) {
             const int iode_bits = (sat.system == GNSSSystem::Galileo) ? 10 : 8;
             reader.readU(iode_bits);
-            CssrOrbitCorrection corr;
-            corr.dx = reader.readS(15) * kOrbitRadialScale;
-            corr.dy = reader.readS(13) * kOrbitAlongCrossScale;
-            corr.dz = reader.readS(13) * kOrbitAlongCrossScale;
-            current_epoch_.orbits[sat_id] = corr;
-            current_epoch_.has_orbit = true;
+            if (!flg_net) {
+                CssrOrbitCorrection corr;
+                corr.dx = reader.readS(15) * kOrbitRadialScale;
+                corr.dy = reader.readS(13) * kOrbitAlongCrossScale;
+                corr.dz = reader.readS(13) * kOrbitAlongCrossScale;
+                current_epoch_.orbits[sat_id] = corr;
+                current_epoch_.has_orbit = true;
+            } else {
+                reader.readS(15);
+                reader.readS(13);
+                reader.readS(13);
+            }
         }
         if (flg_clock) {
             CssrClockCorrection corr;
             corr.dclock_m = reader.readS(15) * kClockScale;
+            corr.clock_network_id = flg_net ? 1 : 0;
             current_epoch_.clocks[sat_id] = corr;
             current_epoch_.has_clock = true;
         }
@@ -754,6 +762,7 @@ void populateSSRProducts(
             corr.time = time;
             corr.clock_correction_m = clock_corr.dclock_m;
             corr.clock_valid = true;
+            corr.clock_network_id = clock_corr.clock_network_id;
 
             // Orbit (may not be present every epoch)
             auto orbit_it = epoch.orbits.find(sat_id);

@@ -417,6 +417,11 @@ constexpr double kSsrOrbitBoundaryToleranceSeconds = 0.5;
 // 30s orbit cycle (observed empirically: nonzero for tow%30 in [0,14],
 // zero for tow%30 in [15,29]; see docs/clas_dd_filter_a5.md).
 constexpr double kSsrOrbitBoundaryApplyWindowSeconds = 15.0;
+// Mid-cycle offset where CLASLIB captures prevsis (timediff(clock,orbit)==25).
+constexpr double kSsrOrbitBoundaryOffset25Seconds = 25.0;
+// CLASLIB requires exactly one 5s clock step between prevsis capture and the
+// following 30s boundary (offset-25 obs epoch to offset-0 obs epoch).
+constexpr double kSsrOrbitBoundaryPrevToBoundarySeconds = 5.0;
 
 /// Detect phase bias epoch change and update repair tracking state.
 /// Returns {epoch_changed, phase_bias_dt} for use in PRC/CPC aggregation.
@@ -581,10 +586,16 @@ void updateSisContinuity(
         const GNSSTime preserved_boundary_time = info.boundary_time;
         const double preserved_boundary_delta_m = info.boundary_delta_m;
         const bool preserved_has_boundary_delta = info.has_boundary_delta;
+        const GNSSTime preserved_boundary_prev_time = info.boundary_prev_time;
+        const double preserved_boundary_prev_sis_m = info.boundary_prev_sis_m;
+        const bool preserved_has_boundary_prev_sis = info.has_boundary_prev_sis;
         info = CLASSisContinuityInfo{};
         info.boundary_time = preserved_boundary_time;
         info.boundary_delta_m = preserved_boundary_delta_m;
         info.has_boundary_delta = preserved_has_boundary_delta;
+        info.boundary_prev_time = preserved_boundary_prev_time;
+        info.boundary_prev_sis_m = preserved_boundary_prev_sis_m;
+        info.has_boundary_prev_sis = preserved_has_boundary_prev_sis;
     } else if (!info.has_current) {
         info.current_time = osr.clock_reference_time;
         info.current_sis_m = current_sis_m;
@@ -616,24 +627,42 @@ bool isSsrOrbitBoundaryTow(double tow) {
                       kSsrOrbitBoundaryToleranceSeconds);
 }
 
+bool isSsrOrbitBoundaryOffset25Tow(double tow) {
+    double remainder = std::fmod(tow, kSsrOrbitBoundaryIntervalSeconds);
+    if (remainder < 0.0) {
+        remainder += kSsrOrbitBoundaryIntervalSeconds;
+    }
+    return std::abs(remainder - kSsrOrbitBoundaryOffset25Seconds) <
+        kSsrOrbitBoundaryToleranceSeconds;
+}
+
 void captureClasSisBoundary(
     CLASSisContinuityInfo& info,
-    const GNSSTime& epoch_time) {
-    // CLASLIB only refreshes its held "currsis" value (satcorr[].currtow /
-    // currsis) at the 30s orbit boundary transition, freezing it until the
-    // next boundary; the CLASLIB oracle's dumped compN window is aligned to
-    // the *observation* epoch tow (tow % 30 == 0), not to the (few-second-
-    // early-available) internal SSR clock reference time. Anchor both the
-    // capture trigger and the held boundary_time on `epoch_time` (the
-    // current observation epoch) so the held window lines up with CLASLIB's
-    // per-obs-epoch dump; the delta VALUE still comes from the
-    // clock-reference-time-driven SIS math in updateSisContinuity().
-    if (!info.has_last_delta || !isSsrOrbitBoundaryTow(epoch_time.tow) ||
-        !isSsrOrbitBoundaryTow(info.current_time.tow)) {
+    const GNSSTime& epoch_time,
+    double current_sis_m) {
+    // CLASLIB pairs sis(offset-25 obs epoch) with sis(offset-0 obs epoch):
+    // prevsis is captured at the mid-cycle clock step (tow % 30 == 25) using
+    // the orbit/clock corrections in effect at that observation epoch; the
+    // held compN delta is formed at the following 30s boundary (tow % 30 == 0)
+    // as currsis - prevsis.  This matches ephemeris.c satpos_ssr_sis and
+    // avoids mistiming from clock_reference_time steps that arrive a few
+    // seconds before the observation epoch reaches the boundary grid.
+    if (isSsrOrbitBoundaryOffset25Tow(epoch_time.tow)) {
+        info.boundary_prev_time = epoch_time;
+        info.boundary_prev_sis_m = current_sis_m;
+        info.has_boundary_prev_sis = true;
+        return;
+    }
+    if (!isSsrOrbitBoundaryTow(epoch_time.tow) || !info.has_boundary_prev_sis) {
+        return;
+    }
+    const double dt_prev_to_boundary = epoch_time - info.boundary_prev_time;
+    if (std::abs(dt_prev_to_boundary - kSsrOrbitBoundaryPrevToBoundarySeconds) >
+        kSsrOrbitBoundaryToleranceSeconds) {
         return;
     }
     info.boundary_time = epoch_time;
-    info.boundary_delta_m = info.last_delta_m;
+    info.boundary_delta_m = current_sis_m - info.boundary_prev_sis_m;
     info.has_boundary_delta = true;
 }
 
@@ -1109,6 +1138,8 @@ std::vector<OSRCorrection> computeOSR(
         GNSSTime phase_bias_reference_time;
         GNSSTime clock_reference_time;
         SSRCorrectionStatus ssr_status;
+        double base_clock_corr = 0.0;
+        bool base_clock_valid = false;
         if (ssr.interpolateCorrection(sat, obs.time, orbit_corr, clock_corr,
                                        &ura_sigma, &ssr_cbias, &ssr_pbias,
                                        &atmos_tokens,
@@ -1118,7 +1149,10 @@ std::vector<OSRCorrection> computeOSR(
                                        preferred_network_id,
                                        nullptr,
                                        nullptr,
-                                       &ssr_status)) {
+                                       &ssr_status,
+                                       true,
+                                       &base_clock_corr,
+                                       &base_clock_valid)) {
             // CSV-expanded CLAS corrections carry orbit deltas in RAC, while
             // sampled RTCM SSR products are already stored in ECEF.
             // RAC frame follows RTCM-10403.1 / CLASLIB convention:
@@ -1162,6 +1196,8 @@ std::vector<OSRCorrection> computeOSR(
             osr.code_bias_reference_time = ssr_status.code_bias_reference_time;
             osr.clock_reference_time = clock_reference_time;
             osr.clock_correction_m = clock_corr;
+            osr.base_clock_correction_m = base_clock_valid ? base_clock_corr : clock_corr;
+            osr.base_clock_valid = base_clock_valid;
         } else {
             if (pppDebugEnabled() && sat.system == GNSSSystem::QZSS) {
                 std::cerr << "[OSR-QZSS-SKIP] " << sat.toString()
@@ -1373,9 +1409,12 @@ std::vector<OSRCorrection> computeOSR(
         const auto phase_continuity_policy =
             config.clas_phase_continuity_policy;
         const bool clock_time_valid = gnsstimeIsSet(osr.clock_reference_time);
+        const double sis_clock_m = osr.base_clock_valid ?
+            osr.base_clock_correction_m : osr.clock_correction_m;
+        const double current_sis_m = -sis_clock_m + osr.orbit_projection_m;
         updateSisContinuity(sis_continuity_info, osr, clock_time_valid);
         if (pppEnvOverrides().clas_sis_boundary) {
-            captureClasSisBoundary(sis_continuity_info, obs.time);
+            captureClasSisBoundary(sis_continuity_info, obs.time, current_sis_m);
         }
         const GNSSTime effective_phase_bias_reference_time =
             selectClasPhaseBiasReferenceTime(

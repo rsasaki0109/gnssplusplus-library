@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/ppp_bias_identity.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/navigation.hpp>
 
 #include <chrono>
 #include <cmath>
@@ -866,42 +867,113 @@ TEST(PPPOSRTest, ClasSisApplyDecisionGateOffReproducesLegacyLagWindowCondition) 
     EXPECT_DOUBLE_EQ(still_legacy.delta_m, 0.42);
 }
 
-TEST(PPPOSRTest, CaptureClasSisBoundaryOnlyFreezesOnObsEpochThirtySecondGrid) {
-    const GNSSTime off_boundary_clock_ref(2068, 230430.0);
+TEST(PPPOSRTest, IsSsrOrbitBoundaryOffset25TowMatchesClaslibMidCycleGrid) {
+    EXPECT_TRUE(isSsrOrbitBoundaryOffset25Tow(230425.0));
+    EXPECT_TRUE(isSsrOrbitBoundaryOffset25Tow(230455.0));
+    EXPECT_TRUE(isSsrOrbitBoundaryOffset25Tow(230425.2));
+    EXPECT_FALSE(isSsrOrbitBoundaryOffset25Tow(230430.0));
+    EXPECT_FALSE(isSsrOrbitBoundaryOffset25Tow(230435.0));
+}
 
-    // A transition whose clock_reference_time is NOT on the 30s grid (e.g. a
-    // stray mid-cycle recompute) must never be captured, even if the epoch
-    // happens to be on the grid.
-    CLASSisContinuityInfo info_off_grid;
-    info_off_grid.has_last_delta = true;
-    info_off_grid.last_delta_m = 0.111;
-    info_off_grid.current_time = GNSSTime(2068, 230435.0);  // mid-cycle, not 30-aligned
-    captureClasSisBoundary(info_off_grid, off_boundary_clock_ref);
-    EXPECT_FALSE(info_off_grid.has_boundary_delta);
+TEST(PPPOSRTest, CaptureClasSisBoundaryPairsOffset25AndOffset0AtObsEpochs) {
+    CLASSisContinuityInfo info;
 
-    // A grid-aligned clock_reference_time delta, observed on an off-grid
-    // epoch (the "early availability" case from real CLAS data, where
-    // clock_reference_time reaches the boundary a few seconds before the
-    // observation epoch tow does): not captured yet.
-    CLASSisContinuityInfo info_early;
-    info_early.has_last_delta = true;
-    info_early.last_delta_m = 0.131951;
-    info_early.current_time = GNSSTime(2068, 230430.0);  // on the grid
-    captureClasSisBoundary(info_early, GNSSTime(2068, 230426.0));  // epoch off-grid
-    EXPECT_FALSE(info_early.has_boundary_delta);
+    // Offset-25 obs epoch: capture prevsis only (no boundary delta yet).
+    captureClasSisBoundary(info, GNSSTime(2068, 230425.0), /*current_sis_m=*/0.30);
+    EXPECT_TRUE(info.has_boundary_prev_sis);
+    EXPECT_DOUBLE_EQ(info.boundary_prev_sis_m, 0.30);
+    EXPECT_FALSE(info.has_boundary_delta);
 
-    // Once the observation epoch itself reaches the 30s grid (with the same
-    // still-held clock_reference_time delta), the boundary is captured and
-    // anchored to the epoch time (not the earlier clock_reference_time).
-    captureClasSisBoundary(info_early, GNSSTime(2068, 230430.0));
-    ASSERT_TRUE(info_early.has_boundary_delta);
-    EXPECT_DOUBLE_EQ(info_early.boundary_delta_m, 0.131951);
-    EXPECT_EQ(info_early.boundary_time, GNSSTime(2068, 230430.0));
+    // Off-grid epoch between offset-25 and boundary: no-op.
+    captureClasSisBoundary(info, GNSSTime(2068, 230428.0), /*current_sis_m=*/0.31);
+    EXPECT_FALSE(info.has_boundary_delta);
 
-    // No last_delta_m yet: never captures.
-    CLASSisContinuityInfo info_no_delta;
-    captureClasSisBoundary(info_no_delta, GNSSTime(2068, 230430.0));
-    EXPECT_FALSE(info_no_delta.has_boundary_delta);
+    // Offset-0 boundary 5s after offset-25: delta = currsis - prevsis.
+    captureClasSisBoundary(info, GNSSTime(2068, 230430.0), /*current_sis_m=*/0.248);
+    ASSERT_TRUE(info.has_boundary_delta);
+    EXPECT_DOUBLE_EQ(info.boundary_delta_m, 0.248 - 0.30);
+    EXPECT_EQ(info.boundary_time, GNSSTime(2068, 230430.0));
+
+    // Wrong spacing (not 5s after prevsis): rejected.
+    CLASSisContinuityInfo bad_spacing;
+    captureClasSisBoundary(bad_spacing, GNSSTime(2068, 230420.0), 0.10);
+    captureClasSisBoundary(bad_spacing, GNSSTime(2068, 230430.0), 0.20);
+    EXPECT_FALSE(bad_spacing.has_boundary_delta);
+
+    // Boundary without prior offset-25 sample: rejected.
+    CLASSisContinuityInfo no_prev;
+    captureClasSisBoundary(no_prev, GNSSTime(2068, 230430.0), 0.20);
+    EXPECT_FALSE(no_prev.has_boundary_delta);
+}
+
+TEST(PPPOSRTest, ClasSisBoundaryUsesBaseClockWhenNetworkMergedAtOffset25) {
+    SSRProducts products;
+    products.setOrbitCorrectionsAreRac(false);
+
+    const SatelliteId satellite(GNSSSystem::GPS, 14);
+    const GNSSTime offset25(2068, 230425.0);
+
+    SSROrbitClockCorrection base_row;
+    base_row.satellite = satellite;
+    base_row.time = offset25;
+    base_row.orbit_correction_ecef = Vector3d(0.0, 0.0, 0.0);
+    base_row.orbit_valid = true;
+    base_row.clock_correction_m = -0.2192;
+    base_row.clock_valid = true;
+    base_row.clock_network_id = 0;
+    products.addCorrection(base_row);
+
+    SSROrbitClockCorrection network_row;
+    network_row.satellite = satellite;
+    network_row.time = offset25;
+    network_row.clock_correction_m = 0.2064;
+    network_row.clock_valid = true;
+    network_row.clock_network_id = 1;
+    products.addCorrection(network_row);
+
+    Vector3d orbit_corr = Vector3d::Zero();
+    double merged_clock_m = 0.0;
+    double base_clock_m = 0.0;
+    bool base_clock_valid = false;
+    ASSERT_TRUE(products.interpolateCorrection(
+        satellite,
+        offset25,
+        orbit_corr,
+        merged_clock_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        nullptr,
+        nullptr,
+        true,
+        &base_clock_m,
+        &base_clock_valid));
+    EXPECT_DOUBLE_EQ(merged_clock_m, 0.2064);
+    ASSERT_TRUE(base_clock_valid);
+    EXPECT_DOUBLE_EQ(base_clock_m, -0.2192);
+
+    const double orbit_projection_m = 0.356;
+    const double merged_sis_m = -merged_clock_m + orbit_projection_m;
+    const double base_sis_m = -base_clock_m + orbit_projection_m;
+    EXPECT_NEAR(merged_sis_m, 0.1496, 1e-12);
+    EXPECT_NEAR(base_sis_m, 0.5752, 1e-12);
+
+    CLASSisContinuityInfo info;
+    captureClasSisBoundary(info, offset25, base_sis_m);
+    ASSERT_TRUE(info.has_boundary_prev_sis);
+    EXPECT_DOUBLE_EQ(info.boundary_prev_sis_m, base_sis_m);
+
+    const GNSSTime boundary0(2068, 230430.0);
+    const double boundary_sis_m = base_sis_m - 0.058;
+    captureClasSisBoundary(info, boundary0, boundary_sis_m);
+    ASSERT_TRUE(info.has_boundary_delta);
+    EXPECT_NEAR(info.boundary_delta_m, -0.058, 1e-12);
 }
 
 TEST(PPPOSRTest, ClasSisApplyDecisionGateOnHoldsBoundaryDeltaForFifteenObsSeconds) {
@@ -910,10 +982,8 @@ TEST(PPPOSRTest, ClasSisApplyDecisionGateOnHoldsBoundaryDeltaForFifteenObsSecond
     const GNSSTime clock_ref = boundary_time;  // irrelevant when gated.
 
     CLASSisContinuityInfo info;
-    info.has_last_delta = true;
-    info.last_delta_m = 0.111;  // stale per-5s value; must NOT be applied when gated.
     info.has_boundary_delta = true;
-    info.boundary_time = boundary_time;
+    info.boundary_time = GNSSTime(2068, 230430.0);
     info.boundary_delta_m = -0.052;
 
     // Observation epoch offsets 0..14s after the boundary: held delta

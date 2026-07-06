@@ -31,6 +31,8 @@ struct OSRCorrection {
     double network_compensation_m = 0.0;
     double orbit_projection_m = 0.0;
     double clock_correction_m = 0.0;
+    double base_clock_correction_m = 0.0;
+    bool base_clock_valid = false;
 
     Vector3d satellite_position = Vector3d::Zero();
     Vector3d satellite_velocity = Vector3d::Zero();
@@ -109,6 +111,11 @@ struct CLASSisContinuityInfo {
     GNSSTime boundary_time;
     double boundary_delta_m = 0.0;
     bool has_boundary_delta = false;
+    // Observation-epoch pairing (CLASLIB satcorr[].prevsis/currsis): prevsis
+    // sampled at tow%30==25, delta formed at the following tow%30==0 epoch.
+    GNSSTime boundary_prev_time;
+    double boundary_prev_sis_m = 0.0;
+    bool has_boundary_prev_sis = false;
 };
 
 struct CLASEpochContext {

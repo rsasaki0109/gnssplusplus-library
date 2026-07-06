@@ -5347,8 +5347,8 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("1,1,4073,1,518400,1.0,1,3,", messages_csv)
             self.assertIn("1,2,4073,11,518400,1.0,0,3,", messages_csv)
             corrections_csv = corrections_path.read_text(encoding="ascii")
-            self.assertIn("# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m", corrections_csv)
-            self.assertIn("1316,518400.000,G,3,0.000000,0.000000,0.000000,0.025600,0.000000", corrections_csv)
+            self.assertIn("# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m,clock_network_id", corrections_csv)
+            self.assertIn("1316,518400.000,G,3,0.000000,0.000000,0.000000,0.025600,0.000000,1", corrections_csv)
 
     def test_qzss_l6_info_extracts_separate_orbit_clock_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_orbit_clock_") as temp_dir:
@@ -5389,6 +5389,63 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("cssr_message: subframe=1 index=3 subtype=3 tow=518400", result.stdout)
             corrections_csv = corrections_path.read_text(encoding="ascii")
             self.assertIn("1316,518400.000,G,3,0.016000,0.012800,-0.012800,0.025600,0.000000", corrections_csv)
+
+    def test_qzss_l6_info_suppresses_st11_network_orbit_in_pending_orbit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_st11_net_orbit_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_st11_net_orbit.bin"
+            corrections_path = temp_root / "session_st11_net_orbit_corrections.csv"
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(tow=518400, iod=3, prn=3, sync=True),
+                        build_qzss_cssr_orbit_message(
+                            tow_delta=0,
+                            iod=3,
+                            dx=0.016,
+                            dy=0.0128,
+                            dz=-0.0128,
+                            sync=True,
+                        ),
+                        build_qzss_cssr_clock_message(tow_delta=0, iod=3, dclock_m=0.0256, sync=False),
+                        build_qzss_cssr_combined_message(
+                            tow_delta=25,
+                            iod=3,
+                            prn=3,
+                            sync=False,
+                            network_id=1,
+                            dx=-0.2512,
+                            dy=-0.8320,
+                            dz=0.0,
+                            dclock_m=0.0512,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--limit",
+                "6",
+                "--gps-week",
+                "1316",
+                "--extract-compact-corrections",
+                str(corrections_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            corrections_csv = corrections_path.read_text(encoding="ascii")
+            self.assertIn(
+                "1316,518400.000,G,3,0.016000,0.012800,-0.012800,0.025600,0.000000,0",
+                corrections_csv,
+            )
+            # Network ST11 clock is retained and tagged; network orbit stays suppressed.
+            self.assertIn("518425.000", corrections_csv)
+            self.assertIn("0.051200", corrections_csv)
+            self.assertNotIn("-0.251200", corrections_csv)
+            self.assertNotIn("-0.832000", corrections_csv)
 
     def test_qzss_l6_info_extracts_code_bias_and_ura_corrections(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_cbias_ura_") as temp_dir:
@@ -6919,7 +6976,7 @@ class CLIToolsTest(unittest.TestCase):
             corrections_csv = corrections_path.read_text(encoding="ascii")
             self.assertEqual(
                 corrections_csv.strip(),
-                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
+                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m,clock_network_id[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
             )
 
     def test_qzss_l6_info_compact_flush_policy_can_require_both_orbit_and_clock(self) -> None:
@@ -6969,7 +7026,7 @@ class CLIToolsTest(unittest.TestCase):
             orbit_and_clock_csv = orbit_and_clock_path.read_text(encoding="ascii")
             self.assertEqual(
                 orbit_and_clock_csv.strip(),
-                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
+                "# week,tow,system,prn,dx,dy,dz,dclock_m,high_rate_clock_m,clock_network_id[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]",
             )
 
     def test_qzss_l6_info_compact_atmos_merge_policy_no_carry_drops_stec_coefficients_between_epochs(self) -> None:
