@@ -180,6 +180,9 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     last_ar_ratio_ = attempt.ratio;
     last_fixed_ambiguities_ = attempt.nb;
     if (attempt.has_constrained_state) {
+        // MRTKLIB parity: the constrained fixed state is published as the
+        // solution (sol.rr = xa) but never overwrites the float filter x/P;
+        // only holdamb() constraints nudge the float states.
         last_clas_constrained_fixed_state_ = attempt.constrained_state;
         last_clas_constrained_fixed_state_valid_ = true;
         if (auto* debug = clasFixDebugStream(); debug != nullptr) {

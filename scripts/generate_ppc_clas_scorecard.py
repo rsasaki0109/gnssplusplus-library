@@ -347,8 +347,9 @@ def build_gnss_ppp_command(
     base_nav: Path,
     ssr_csv: Path,
     out_pos: Path,
+    parity: bool = False,
 ) -> list[str]:
-    return [
+    cmd = [
         str(gnss_ppp_bin),
         "--obs",
         str(rover_obs),
@@ -357,12 +358,9 @@ def build_gnss_ppp_command(
         "--ssr",
         str(ssr_csv),
         "--kinematic",
-        "--estimate-troposphere",
         "--no-ionosphere-free",
         "--estimate-ionosphere",
         "--enable-ar",
-        "--ar-ratio-threshold",
-        "2.0",
         "--ar-method",
         "wlnl",
         "--clas-osr",
@@ -370,6 +368,23 @@ def build_gnss_ppp_command(
         "--out",
         str(out_pos),
     ]
+    if parity:
+        cmd.extend(
+            [
+                "--estimate-troposphere",
+                "--ar-ratio-threshold",
+                "3.0",
+            ]
+        )
+    else:
+        cmd.extend(
+            [
+                "--estimate-troposphere",
+                "--ar-ratio-threshold",
+                "2.0",
+            ]
+        )
+    return cmd
 
 
 def run_logged(
@@ -929,6 +944,7 @@ def main() -> int:
                 base_nav=paths.base_nav,
                 ssr_csv=paths.ssr_csv,
                 out_pos=paths.pos_default,
+                parity=False,
             )
         )
 
@@ -954,6 +970,7 @@ def main() -> int:
                         base_nav=paths.base_nav,
                         ssr_csv=paths.ssr_csv,
                         out_pos=pos_path,
+                        parity=(config_key == "parity"),
                     ),
                     env=env,
                     log_path=log_path,

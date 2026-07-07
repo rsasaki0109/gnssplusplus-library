@@ -19,10 +19,20 @@ struct FixValidationStats {
     bool accepted = false;
     int phase_rows = 0;
     int code_rows = 0;
+    int phase_outlier_rows = 0;
     double phase_rms = 0.0;
     double code_rms = 0.0;
     double phase_chisq = 100.0;
     double max_phase_sigma = 0.0;
+};
+
+// MRTKLIB residual_test() semantics (mrtk_ppp_rtk.c:1040-1085): exclude
+// individual DD phase residuals beyond outlier_sigma_gate sigmas from the
+// chi-square sum, and when too few rows remain fall back to
+// chisq = (accepted/total < 0.5) ? 100 : 0 instead of a hard 100.
+struct FixValidationOptions {
+    double outlier_sigma_gate = 0.0;  ///< 0 disables outlier exclusion
+    bool mrtklib_chisq_fallback = false;
 };
 
 using TropMappingFunction =
@@ -222,7 +232,8 @@ FixValidationStats validateFixedSolution(
     const ppp_shared::PPPConfig& config,
     const TropMappingFunction& trop_mapping_function,
     const AmbiguityIndexFunction& ambiguity_index_function,
-    bool debug_enabled = false);
+    bool debug_enabled = false,
+    const FixValidationOptions& options = FixValidationOptions{});
 
 AmbiguityResolutionResult resolveAndValidateAmbiguities(
     ppp_shared::PPPState& filter_state,

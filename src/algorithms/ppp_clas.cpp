@@ -994,6 +994,11 @@ void initializeFilterState(
     }
     filter_state.state(filter_state.trop_index) = modeled_zenith_troposphere_delay_m;
     filter_state.covariance.block(0, 0, 3, 3) *= config.clas_initial_position_variance;
+    if (config.kinematic_mode && config.use_dynamics_model) {
+        filter_state.covariance.block(
+            filter_state.vel_index, filter_state.vel_index, 3, 3) *=
+            config.initial_velocity_variance;
+    }
     filter_state.covariance(6, 6) = config.clas_clock_variance;
     filter_state.covariance(7, 7) = config.clas_clock_variance;
     filter_state.covariance(8, 8) = effectiveClasTropInitialVariance(config);
@@ -1019,7 +1024,10 @@ namespace {
 constexpr double kClasNominalEpochIntervalS = 0.2;
 constexpr double kClasOutageGapResetS = 2.0;
 constexpr double kMinimumGeometryFreeSlipThresholdMeters = 0.05;
-constexpr double kMinimumMwSlipThresholdCycles = 0.5;
+// MRTKLIB uses GF-only slip at 0.05 m; MW-mean is native-only. Raised from 0.5
+// to reduce Galileo burst false slips (see gnss_mrtklib_diff_report.md Q4).
+constexpr double kMinimumMwSlipThresholdCycles = 1.0;
+constexpr double kMwSlipFallbackThresholdMeters = 10.0;
 
 double clasSlipThresholdScale(double dt_seconds) {
     return std::max(1.0, dt_seconds / kClasNominalEpochIntervalS);
@@ -1118,16 +1126,26 @@ ClasSlipDetectionStats detectClasCycleSlips(
                 std::abs(gf_m - ambiguity.last_geometry_free_m) > gf_threshold_m) {
                 gf_slip = true;
             }
-            if (ambiguity.mw_count >= 3 &&
-                std::isfinite(mw_cycles) &&
-                std::abs(mw_cycles - ambiguity.mw_mean_cycles) > mw_threshold_cycles) {
-                mw_slip = true;
-            } else if (ambiguity.has_last_melbourne_wubbena &&
-                       std::isfinite(mw_cycles) &&
-                       std::abs(mw_m - ambiguity.last_melbourne_wubbena_m) >
-                           std::max(10.0, config.cycle_slip_threshold * 100.0) *
-                               threshold_scale) {
-                mw_slip = true;
+            // MW-mean slip: skip when WL is already fixed or the running mean has
+            // converged to an integer (MRTKLIB has no MW-mean detector at all).
+            const bool wl_mean_stable =
+                ambiguity.mw_count >= config.wl_min_averaging_epochs &&
+                std::isfinite(ambiguity.mw_mean_cycles) &&
+                std::abs(ambiguity.mw_mean_cycles -
+                         std::round(ambiguity.mw_mean_cycles)) < 0.25;
+            if (!ambiguity.wl_is_fixed && !wl_mean_stable) {
+                if (ambiguity.mw_count >= 3 &&
+                    std::isfinite(mw_cycles) &&
+                    std::abs(mw_cycles - ambiguity.mw_mean_cycles) >
+                        mw_threshold_cycles) {
+                    mw_slip = true;
+                } else if (ambiguity.mw_count < 3 &&
+                           ambiguity.has_last_melbourne_wubbena &&
+                           std::isfinite(mw_cycles) &&
+                           std::abs(mw_m - ambiguity.last_melbourne_wubbena_m) >
+                               kMwSlipFallbackThresholdMeters * threshold_scale) {
+                    mw_slip = true;
+                }
             }
         }
 
@@ -1298,16 +1316,14 @@ void predictFilterState(
         config.kinematic_mode && !config.low_dynamics_mode;
     const bool use_dynamic_prediction =
         kinematic_white_noise && config.use_dynamics_model;
-    if (kinematic_white_noise) {
-        if (use_dynamic_prediction) {
-            const double position_q =
-                std::max(0.0, config.process_noise_position) * dt;
-            if (position_q > 0.0) {
-                for (int axis = 0; axis < 3; ++axis) {
-                    filter_state.covariance(axis, axis) += position_q;
-                }
-            }
-        } else if (config.reset_kinematic_position_to_spp_each_epoch && seed_valid) {
+
+    MatrixXd F = MatrixXd::Identity(nx, nx);
+    if (use_dynamic_prediction) {
+        F.block(filter_state.pos_index, filter_state.vel_index, 3, 3) =
+            MatrixXd::Identity(3, 3) * dt;
+        filter_state.state = F * filter_state.state;
+    } else if (kinematic_white_noise) {
+        if (config.reset_kinematic_position_to_spp_each_epoch && seed_valid) {
             reinitializePositionState(
                 filter_state,
                 seed_position_ecef,
@@ -1316,10 +1332,24 @@ void predictFilterState(
     } else if (config.process_noise_position > 0.0) {
         const double position_q = config.process_noise_position * dt;
         for (int axis = 0; axis < 3; ++axis) {
-            filter_state.covariance(axis, axis) += position_q;
+            filter_state.covariance(filter_state.pos_index + axis,
+                                    filter_state.pos_index + axis) += position_q;
         }
     }
+
     MatrixXd Q = MatrixXd::Zero(nx, nx);
+    if (use_dynamic_prediction) {
+        const double position_q =
+            std::max(0.0, config.process_noise_position) * dt;
+        const double velocity_q =
+            std::max(0.0, config.process_noise_velocity) * dt;
+        for (int axis = 0; axis < 3; ++axis) {
+            Q(filter_state.pos_index + axis, filter_state.pos_index + axis) =
+                position_q;
+            Q(filter_state.vel_index + axis, filter_state.vel_index + axis) =
+                velocity_q;
+        }
+    }
     Q(filter_state.clock_index, filter_state.clock_index) = config.clas_clock_variance;
     Q(filter_state.glo_clock_index, filter_state.glo_clock_index) = config.clas_clock_variance;
     if (filter_state.qzs_clock_index >= 0) {
@@ -1342,8 +1372,8 @@ void predictFilterState(
             Q(state_index, state_index) = config.process_noise_ambiguity * dt;
         }
     }
-    filter_state.covariance += Q;
-    if (seed_valid) {
+    filter_state.covariance = F * filter_state.covariance * F.transpose() + Q;
+    if (seed_valid && !use_dynamic_prediction) {
         const double gps_clock_before = filter_state.state(filter_state.clock_index);
         filter_state.state(filter_state.clock_index) = seed_receiver_clock_bias_m;
         filter_state.state(filter_state.glo_clock_index) = seed_receiver_clock_bias_m;
@@ -1523,6 +1553,12 @@ MeasurementBuildResult buildEpochMeasurements(
         for (int f = 0; f < osr.num_frequencies; ++f) {
             const Observation* raw = raw_observations[static_cast<size_t>(f)];
             if (!raw || !raw->valid) {
+                continue;
+            }
+            if (config.kinematic_mode &&
+                config.use_clas_osr_filter &&
+                raw->snr > 0.0 &&
+                ppp_ar::clasKinematicSnrMasked(f, osr.elevation, raw->snr)) {
                 continue;
             }
             const double iono_scale =
@@ -2043,7 +2079,8 @@ FixValidationStats validateFixedSolution(
     const ppp_shared::PPPConfig& config,
     const TropMappingFunction& trop_mapping_function,
     const AmbiguityIndexFunction& ambiguity_index_function,
-    bool debug_enabled) {
+    bool debug_enabled,
+    const FixValidationOptions& options) {
     FixValidationStats stats;
     double phase_sum_sq = 0.0;
     double code_sum_sq = 0.0;
@@ -2106,8 +2143,21 @@ FixValidationStats validateFixedSolution(
                 iono_scale > 0.0 ? filter_state.state(iono_it->second) : 0.0;
 
             const double el_weight = elevationWeight(osr.elevation);
+            // Mirror the buildEpochMeasurements() phase model: the applied
+            // troposphere term depends on the correction application policy.
+            const bool claslib_amb_datum_phase =
+                suppressesClasAmbDatumPhaseTrop(
+                    config.clas_correction_application_policy);
+            const bool residual_amb_datum_phase_trop =
+                usesResidualClasAmbDatumPhaseTrop(
+                    config.clas_correction_application_policy);
+            const double phase_trop_modeled = claslib_amb_datum_phase
+                ? 0.0
+                : (residual_amb_datum_phase_trop
+                      ? trop_modeled - osr.trop_correction_m
+                      : trop_modeled);
             const double phase_predicted =
-                geo - sat_clk_m + receiver_clock_m + trop_modeled;
+                geo - sat_clk_m + receiver_clock_m + phase_trop_modeled;
 
             if (raw->has_pseudorange && std::isfinite(raw->pseudorange)) {
                 const bool claslib_code_prc = usesClaslibCodePrcRows(config);
@@ -2177,6 +2227,17 @@ FixValidationStats validateFixedSolution(
             const double dd_residual = reference.residual_m - residual.residual_m;
             const double dd_variance = reference.variance_m2 + residual.variance_m2;
             const double sigma = std::sqrt(std::max(dd_variance, 1e-12));
+
+            // MRTKLIB residual_test() (mrtk_ppp_rtk.c:1040-1058): individual
+            // residuals beyond the rejionno1 sigma gate are excluded from the
+            // chi-square sum instead of failing the whole validation.
+            if (options.outlier_sigma_gate > 0.0 &&
+                dd_residual * dd_residual >
+                    options.outlier_sigma_gate * options.outlier_sigma_gate *
+                        dd_variance) {
+                ++stats.phase_outlier_rows;
+                continue;
+            }
 
             phase_sum_sq += dd_residual * dd_residual;
             phase_chi_sq += dd_residual * dd_residual /
@@ -2261,6 +2322,16 @@ FixValidationStats validateFixedSolution(
         if (chi_square_limit > 0.0) {
             stats.phase_chisq = phase_chi_sq / chi_square_limit;
         }
+    } else if (options.mrtklib_chisq_fallback) {
+        // MRTKLIB residual_test() fallback (mrtk_ppp_rtk.c:1080-1082): with
+        // too few rows for a chi-square test, pass when at least half of the
+        // carrier residuals survived the outlier gate.
+        const int total_rows = stats.phase_rows + stats.phase_outlier_rows;
+        stats.phase_chisq =
+            (total_rows <= 0 ||
+             static_cast<double>(stats.phase_rows) / total_rows < 0.5)
+                ? 100.0
+                : 0.0;
     }
 
     constexpr double kMaxPhaseSigma = 4.0;

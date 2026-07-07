@@ -1,4 +1,6 @@
 #include <libgnss++/algorithms/ppp_ar.hpp>
+#include <libgnss++/algorithms/rtk_measurement.hpp>
+#include <libgnss++/algorithms/rtk_update.hpp>
 
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
@@ -743,6 +745,19 @@ bool conditionWlnlFilterStateDd(
         }
     }
 
+    if (pppEnvOverrides().clas_resamb) {
+        if (!std::isfinite(state_ratio) ||
+            state_ratio < attempt.state_required_ratio) {
+            if (debug_enabled) {
+                std::cerr << "[PPP-WLNL-RESAMB] state ratio reject: ratio="
+                          << state_ratio
+                          << " threshold=" << attempt.state_required_ratio
+                          << "\n";
+            }
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -766,6 +781,15 @@ WlnlFixAttempt tryWlnlFix(
             clasRealSatellite(satellites[static_cast<size_t>(i)]);
         if (excluded_real_satellites.count(real_satellite) != 0) {
             continue;
+        }
+        if (config.use_clas_osr_filter &&
+            config.kinematic_mode &&
+            satellite_elevations_rad != nullptr) {
+            const auto elevation_it = satellite_elevations_rad->find(satellites[static_cast<size_t>(i)]);
+            if (elevation_it == satellite_elevations_rad->end() ||
+                elevation_it->second < kMrtklibArElevationMaskRad) {
+                continue;
+            }
         }
         const auto ambiguity_it = ambiguity_states.find(satellites[static_cast<size_t>(i)]);
         if (ambiguity_it == ambiguity_states.end() || !ambiguity_it->second.wl_is_fixed) {
@@ -875,6 +899,12 @@ WlnlFixAttempt tryWlnlFix(
         return attempt;
     }
 
+    // On the kinematic CLAS path the MRTKLIB-parity fix decision is the
+    // state-DD LAMBDA (resamb_LAMBDA analog) below; the WL/NL ratio test with
+    // its identity DD covariance is too crude to be the gate there.
+    const bool kinematic_clas_state_fix =
+        config.use_clas_osr_filter && config.kinematic_mode;
+
     VectorXd dd_nl_fixed = VectorXd::Zero(dd_pair_count);
     if (!lambdaSearch(dd_nl_float, dd_nl_cov, dd_nl_fixed, attempt.ratio)) {
         if (debug_enabled) {
@@ -883,7 +913,9 @@ WlnlFixAttempt tryWlnlFix(
         }
         return attempt;
     }
-    if (!std::isfinite(attempt.ratio) || attempt.ratio < config.ar_ratio_threshold) {
+    const bool nl_ratio_ok =
+        std::isfinite(attempt.ratio) && attempt.ratio >= config.ar_ratio_threshold;
+    if (!nl_ratio_ok && !kinematic_clas_state_fix) {
         if (debug_enabled) {
             std::cerr << "[PPP-WLNL] NL ratio reject: nb=" << dd_pair_count
                       << " ratio=" << attempt.ratio
@@ -905,6 +937,50 @@ WlnlFixAttempt tryWlnlFix(
             attempt,
             debug_enabled)) {
         return WlnlFixAttempt{};
+    }
+    if (kinematic_clas_state_fix) {
+        // MRTKLIB resamb_LAMBDA parity: the fixed solution xa comes from
+        // LAMBDA on the filter ambiguity-state DDs, gated by the CLASLIB
+        // nb-dependent ratio test. The WL/NL-derived integers are not required
+        // to agree: (NL+WL)/2 can violate integer parity and the two ambiguity
+        // datums differ, so a consistency gate would block xa structurally.
+        WlnlFixAttempt state_attempt;
+        const bool state_fix_ok =
+            conditionWlnlFilterStateDd(
+                config,
+                filter_state,
+                constraint_covariance,
+                ambiguity_states,
+                satellites,
+                state_indices,
+                dd_pairs,
+                dd_nl_fixed,
+                state_attempt,
+                debug_enabled) &&
+            state_attempt.has_constrained_state &&
+            std::isfinite(state_attempt.state_lambda_ratio) &&
+            state_attempt.state_lambda_ratio >=
+                state_attempt.state_required_ratio;
+        if (state_fix_ok) {
+            attempt.constrained_state = state_attempt.constrained_state;
+            attempt.has_constrained_state = true;
+            // The state-DD LAMBDA is the fix decision; publish its ratio/nb
+            // (MRTKLIB sol.ratio comes from the same resamb test).
+            attempt.ratio = state_attempt.state_lambda_ratio;
+            attempt.nb = state_attempt.state_dd_count;
+            attempt.state_lambda_ratio = state_attempt.state_lambda_ratio;
+            attempt.state_position_shift_m = state_attempt.state_position_shift_m;
+            attempt.state_dd_residual_norm = state_attempt.state_dd_residual_norm;
+        } else if (!nl_ratio_ok) {
+            if (debug_enabled) {
+                std::cerr << "[PPP-WLNL] state-DD reject: nl_ratio="
+                          << attempt.ratio
+                          << " state_ratio=" << state_attempt.state_lambda_ratio
+                          << " state_threshold="
+                          << state_attempt.state_required_ratio << "\n";
+            }
+            return WlnlFixAttempt{};
+        }
     }
 
     for (const auto& [group, ref_idx] : system_ref_map) {
@@ -1279,6 +1355,244 @@ bool solveFixedCarrierPosition(
 
     fixed_position = position;
     return true;
+}
+
+namespace {
+
+constexpr double kClaslibSnrMaskDbHz[9] = {
+    10.0, 10.0, 10.0, 10.0, 30.0, 30.0, 30.0, 30.0, 30.0};
+
+double clasSnrMaskThresholdDbHz(int freq_index, double elevation_rad) {
+    if (freq_index < 0 || freq_index >= 3) {
+        return 0.0;
+    }
+    const double elevation_deg = elevation_rad * 180.0 / M_PI;
+    double bin = (elevation_deg + 5.0) / 10.0;
+    int index = static_cast<int>(std::floor(bin));
+    bin -= index;
+    if (index < 1) {
+        return kClaslibSnrMaskDbHz[freq_index];
+    }
+    if (index > 8) {
+        return kClaslibSnrMaskDbHz[8];
+    }
+    return (1.0 - bin) * kClaslibSnrMaskDbHz[index - 1] +
+           bin * kClaslibSnrMaskDbHz[index];
+}
+
+}  // namespace
+
+bool clasKinematicSnrMasked(int freq_index, double elevation_rad, double snr_dbhz) {
+    if (!(snr_dbhz > 0.0)) {
+        return false;
+    }
+    return snr_dbhz < clasSnrMaskThresholdDbHz(freq_index, elevation_rad);
+}
+
+void clearWlnlHoldState(WlnlHoldState& hold) {
+    hold.active = false;
+    hold.consecutive_fix_count = 0;
+    hold.constraints.clear();
+}
+
+bool wlnlHoldStillValid(
+    const WlnlHoldState& hold,
+    const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states) {
+    if (!hold.active || hold.constraints.empty()) {
+        return false;
+    }
+    for (const auto& constraint : hold.constraints) {
+        for (const SatelliteId& satellite :
+             {constraint.ref_satellite, constraint.sat_satellite}) {
+            const auto ambiguity_it = ambiguity_states.find(satellite);
+            if (ambiguity_it == ambiguity_states.end() ||
+                ambiguity_it->second.needs_reinitialization) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool buildWlnlHoldConstraints(
+    const ppp_shared::PPPState& fixed_state,
+    const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const std::map<SatelliteId, double>& satellite_elevations_rad,
+    std::vector<WlnlHoldConstraint>& constraints) {
+    constraints.clear();
+
+    std::vector<SatelliteId> fixed_satellites;
+    fixed_satellites.reserve(ambiguity_states.size());
+    for (const auto& [satellite, ambiguity] : ambiguity_states) {
+        if (!ambiguity.wl_is_fixed || !ambiguity.nl_is_fixed) {
+            continue;
+        }
+        const auto state_it = fixed_state.ambiguity_indices.find(satellite);
+        if (state_it == fixed_state.ambiguity_indices.end()) {
+            continue;
+        }
+        fixed_satellites.push_back(satellite);
+    }
+
+    std::map<std::pair<GNSSSystem, int>, int> group_ref_map;
+    for (int index = 0; index < static_cast<int>(fixed_satellites.size()); ++index) {
+        const SatelliteId& satellite = fixed_satellites[static_cast<size_t>(index)];
+        const auto ambiguity_it = ambiguity_states.find(satellite);
+        if (ambiguity_it == ambiguity_states.end()) {
+            continue;
+        }
+        const auto group = ambiguityDdGroup(satellite);
+        if (group_ref_map.find(group) == group_ref_map.end()) {
+            group_ref_map[group] = index;
+            continue;
+        }
+        const int current_idx = group_ref_map[group];
+        const SatelliteId& current_satellite =
+            fixed_satellites[static_cast<size_t>(current_idx)];
+        const auto current_el_it = satellite_elevations_rad.find(current_satellite);
+        const auto candidate_el_it = satellite_elevations_rad.find(satellite);
+        const double current_el =
+            current_el_it != satellite_elevations_rad.end() ? current_el_it->second : -1.0;
+        const double candidate_el =
+            candidate_el_it != satellite_elevations_rad.end() ? candidate_el_it->second : -1.0;
+        if (candidate_el > current_el) {
+            group_ref_map[group] = index;
+        }
+    }
+
+    auto add_constraint = [&](int ref_index, int sat_index) {
+        const SatelliteId& ref_satellite =
+            fixed_satellites[static_cast<size_t>(ref_index)];
+        const SatelliteId& sat_satellite =
+            fixed_satellites[static_cast<size_t>(sat_index)];
+        const auto ref_amb_it = ambiguity_states.find(ref_satellite);
+        const auto sat_amb_it = ambiguity_states.find(sat_satellite);
+        const auto ref_state_it = fixed_state.ambiguity_indices.find(ref_satellite);
+        const auto sat_state_it = fixed_state.ambiguity_indices.find(sat_satellite);
+        if (ref_amb_it == ambiguity_states.end() ||
+            sat_amb_it == ambiguity_states.end() ||
+            ref_state_it == fixed_state.ambiguity_indices.end() ||
+            sat_state_it == fixed_state.ambiguity_indices.end()) {
+            return;
+        }
+
+        const double ref_l1_scale = ambiguityWavelengthL1(ref_amb_it->second);
+        const double sat_l1_scale = ambiguityWavelengthL1(sat_amb_it->second);
+        if (!validStateDdEndpoint(
+                ref_state_it->second, ref_l1_scale, fixed_state.total_states) ||
+            !validStateDdEndpoint(
+                sat_state_it->second, sat_l1_scale, fixed_state.total_states)) {
+            return;
+        }
+
+        // MRTKLIB holdamb(): the constraint target is the fixed-solution DD
+        // (xa[ref]-xa[i]), i.e. the constrained state's ambiguity DD.
+        const double fixed_dd_m =
+            fixed_state.state(ref_state_it->second) -
+            fixed_state.state(sat_state_it->second);
+
+        WlnlHoldConstraint constraint;
+        constraint.ref_state = ref_state_it->second;
+        constraint.sat_state = sat_state_it->second;
+        constraint.fixed_dd_m = fixed_dd_m;
+        constraint.ambiguity_scale_m = ref_l1_scale;
+        constraint.ref_satellite = ref_satellite;
+        constraint.sat_satellite = sat_satellite;
+        const auto ref_el_it = satellite_elevations_rad.find(ref_satellite);
+        const auto sat_el_it = satellite_elevations_rad.find(sat_satellite);
+        constraint.ref_elevation_rad =
+            ref_el_it != satellite_elevations_rad.end() ? ref_el_it->second : 0.0;
+        constraint.sat_elevation_rad =
+            sat_el_it != satellite_elevations_rad.end() ? sat_el_it->second : 0.0;
+        constraints.push_back(constraint);
+
+        const auto ref_l2_state_it = fixed_state.ambiguity_l2_indices.find(ref_satellite);
+        const auto sat_l2_state_it = fixed_state.ambiguity_l2_indices.find(sat_satellite);
+        const double ref_l2_scale = ref_amb_it->second.wavelength_l2;
+        const double sat_l2_scale = sat_amb_it->second.wavelength_l2;
+        if (ref_l2_state_it != fixed_state.ambiguity_l2_indices.end() &&
+            sat_l2_state_it != fixed_state.ambiguity_l2_indices.end() &&
+            validStateDdEndpoint(
+                ref_l2_state_it->second, ref_l2_scale, fixed_state.total_states) &&
+            validStateDdEndpoint(
+                sat_l2_state_it->second, sat_l2_scale, fixed_state.total_states) &&
+            ref_l2_scale > 0.0 && sat_l2_scale > 0.0) {
+            const double l2_fixed_dd_m =
+                fixed_state.state(ref_l2_state_it->second) -
+                fixed_state.state(sat_l2_state_it->second);
+            WlnlHoldConstraint l2_constraint;
+            l2_constraint.ref_state = ref_l2_state_it->second;
+            l2_constraint.sat_state = sat_l2_state_it->second;
+            l2_constraint.fixed_dd_m = l2_fixed_dd_m;
+            l2_constraint.ambiguity_scale_m = ref_l2_scale;
+            l2_constraint.ref_satellite = ref_satellite;
+            l2_constraint.sat_satellite = sat_satellite;
+            l2_constraint.ref_elevation_rad = constraint.ref_elevation_rad;
+            l2_constraint.sat_elevation_rad = constraint.sat_elevation_rad;
+            constraints.push_back(l2_constraint);
+        }
+    };
+
+    for (int index = 0; index < static_cast<int>(fixed_satellites.size()); ++index) {
+        const SatelliteId& satellite = fixed_satellites[static_cast<size_t>(index)];
+        const auto group = ambiguityDdGroup(satellite);
+        const auto ref_it = group_ref_map.find(group);
+        if (ref_it == group_ref_map.end() || ref_it->second == index) {
+            continue;
+        }
+        add_constraint(ref_it->second, index);
+    }
+
+    return !constraints.empty();
+}
+
+bool applyWlnlHoldAmbiguity(
+    ppp_shared::PPPState& filter_state,
+    const std::vector<WlnlHoldConstraint>& constraints,
+    double hold_variance_cycles2,
+    double hold_elevation_mask_rad) {
+    std::vector<WlnlHoldConstraint> selected;
+    selected.reserve(constraints.size());
+    for (const auto& constraint : constraints) {
+        if (constraint.ref_state < 0 ||
+            constraint.sat_state < 0 ||
+            constraint.ref_elevation_rad < hold_elevation_mask_rad ||
+            constraint.sat_elevation_rad < hold_elevation_mask_rad) {
+            continue;
+        }
+        selected.push_back(constraint);
+    }
+    if (selected.empty()) {
+        return false;
+    }
+
+    rtk_measurement::MeasurementSystem system;
+    system.design_matrix =
+        MatrixXd::Zero(static_cast<int>(selected.size()), filter_state.total_states);
+    system.residuals = VectorXd::Zero(static_cast<int>(selected.size()));
+    system.covariance = MatrixXd::Zero(
+        static_cast<int>(selected.size()), static_cast<int>(selected.size()));
+
+    for (int row = 0; row < static_cast<int>(selected.size()); ++row) {
+        const auto& constraint = selected[static_cast<size_t>(row)];
+        const double float_dd =
+            filter_state.state(constraint.ref_state) -
+            filter_state.state(constraint.sat_state);
+        system.residuals(row) = constraint.fixed_dd_m - float_dd;
+        system.design_matrix(row, constraint.ref_state) = 1.0;
+        system.design_matrix(row, constraint.sat_state) = -1.0;
+        const double scale_m =
+            constraint.ambiguity_scale_m > 0.0 ? constraint.ambiguity_scale_m : 0.19;
+        system.covariance(row, row) = hold_variance_cycles2 * scale_m * scale_m;
+    }
+
+    auto hold_update = rtk_update::applyMeasurementUpdate(
+        filter_state.state,
+        filter_state.covariance,
+        system,
+        std::numeric_limits<double>::infinity(),
+        1);
+    return hold_update.ok;
 }
 
 }  // namespace libgnss::ppp_ar

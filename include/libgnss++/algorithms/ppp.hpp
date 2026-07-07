@@ -294,6 +294,8 @@ private:
     Eigen::MatrixXd pre_anchor_covariance_;
     bool had_fixed_last_epoch_ = false;  ///< AR succeeded in previous epoch
     int clas_kinematic_fix_candidate_streak_ = 0;
+    int clas_kinematic_spp_divergence_count_ = 0;
+    ppp_ar::WlnlHoldState clas_wlnl_hold_;
     Vector3d last_published_solution_position_ecef_ = Vector3d::Zero();
     bool has_last_published_solution_position_ = false;
     std::map<SatelliteId, double> windup_cache_;  ///< Phase wind-up cache for OSR
