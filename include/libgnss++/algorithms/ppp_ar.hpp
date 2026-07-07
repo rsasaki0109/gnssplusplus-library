@@ -2,7 +2,9 @@
 
 #include <libgnss++/algorithms/ppp_shared.hpp>
 
+#include <cmath>
 #include <functional>
+#include <map>
 #include <set>
 #include <vector>
 
@@ -11,6 +13,55 @@ namespace libgnss::ppp_ar {
 SatelliteId clasRealSatellite(const SatelliteId& satellite);
 std::pair<GNSSSystem, int> ambiguityDdGroup(const SatelliteId& satellite);
 double claslibRatioThresholdForNb(int nb);
+
+// MRTKLIB clas.toml / mrtk_ppp_rtk.c holdamb() semantics (ARMODE_FIXHOLD).
+constexpr double kMrtklibVarHoldAmbCycles2 = 0.001;
+constexpr double kMrtklibHoldElevationMaskRad = 30.0 * M_PI / 180.0;
+constexpr double kMrtklibArElevationMaskRad = 20.0 * M_PI / 180.0;
+constexpr int kMrtklibMinFixCount = 0;
+
+struct WlnlHoldConstraint {
+    int ref_state = -1;
+    int sat_state = -1;
+    double fixed_dd_m = 0.0;
+    double ambiguity_scale_m = 0.0;
+    double ref_elevation_rad = 0.0;
+    double sat_elevation_rad = 0.0;
+    SatelliteId ref_satellite;
+    SatelliteId sat_satellite;
+};
+
+// MRTKLIB rtk->nfix bookkeeping: counts consecutive validated fixes and keeps
+// the constraints applied by the most recent holdamb() for slip housekeeping.
+struct WlnlHoldState {
+    bool active = false;
+    int consecutive_fix_count = 0;
+    std::vector<WlnlHoldConstraint> constraints;
+};
+
+// MRTKLIB holdamb() parity: constraints pull the float filter ambiguity DDs
+// toward the values of the constrained fixed solution xa (fixed_state), the
+// same source MRTKLIB uses (v = (xa[ref]-xa[i]) - (x[ref]-x[i])).
+bool buildWlnlHoldConstraints(
+    const ppp_shared::PPPState& fixed_state,
+    const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const std::map<SatelliteId, double>& satellite_elevations_rad,
+    std::vector<WlnlHoldConstraint>& constraints);
+
+bool applyWlnlHoldAmbiguity(
+    ppp_shared::PPPState& filter_state,
+    const std::vector<WlnlHoldConstraint>& constraints,
+    double hold_variance_cycles2 = kMrtklibVarHoldAmbCycles2,
+    double hold_elevation_mask_rad = kMrtklibHoldElevationMaskRad);
+
+bool wlnlHoldStillValid(
+    const WlnlHoldState& hold,
+    const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states);
+
+void clearWlnlHoldState(WlnlHoldState& hold);
+
+// MRTKLIB testsnr() elevation-dependent mask (mrtk_obs.c:228-242, clas.toml L1/L2/L5).
+bool clasKinematicSnrMasked(int freq_index, double elevation_rad, double snr_dbhz);
 
 struct DdFixAttempt {
     bool fixed = false;
@@ -35,7 +86,9 @@ struct EligibleAmbiguities {
 EligibleAmbiguities collectEligibleAmbiguities(
     const ppp_shared::PPPState& filter_state,
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
-    int min_lock_count);
+    int min_lock_count,
+    const GNSSTime& time = GNSSTime{},
+    double slip_ar_exclusion_seconds = 10.0);
 
 DdFixAttempt tryDirectDdFix(
     const ppp_shared::PPPConfig& config,
@@ -106,6 +159,7 @@ WlnlPreparation prepareWlnlCandidates(
     const ppp_shared::PPPState& filter_state,
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     bool use_ssr_products,
+    const GNSSTime& time,
     bool debug_enabled);
 
 WlnlWideLaneFixSummary applyWideLaneFixes(
@@ -141,6 +195,18 @@ WlnlFixAttempt resolveWlnlFix(
     const std::map<SatelliteId, double>* satellite_elevations_rad = nullptr);
 
 WlnlFixAttempt tryWlnlFix(
+    const ppp_shared::PPPConfig& config,
+    ppp_shared::PPPState& filter_state,
+    const MatrixXd& constraint_covariance,
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const std::vector<SatelliteId>& satellites,
+    const std::vector<int>& state_indices,
+    const std::map<SatelliteId, WlnlNlInfo>& nl_info,
+    bool debug_enabled,
+    const std::map<SatelliteId, double>* satellite_elevations_rad = nullptr,
+    const std::set<SatelliteId>& excluded_real_satellites = {});
+
+WlnlFixAttempt tryWlnlFixWithPar(
     const ppp_shared::PPPConfig& config,
     ppp_shared::PPPState& filter_state,
     const MatrixXd& constraint_covariance,

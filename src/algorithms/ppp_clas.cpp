@@ -935,8 +935,10 @@ EpochPreparationResult prepareEpochState(
             qzss_visible);
         filter_initialized = true;
         convergence_start_time = obs.time;
-        static_anchor_position = seed_solution.position_ecef;
-        has_static_anchor_position = true;
+        if (!config.kinematic_mode || config.low_dynamics_mode) {
+            static_anchor_position = seed_solution.position_ecef;
+            has_static_anchor_position = true;
+        }
     }
 
     const double dt =
@@ -952,6 +954,7 @@ EpochPreparationResult prepareEpochState(
         filter_state,
         config,
         dt,
+        seed_solution.position_ecef,
         seed_solution.receiver_clock_bias,
         seed_solution.isValid());
     markSlipCompensationFromAmbiguities(
@@ -991,6 +994,11 @@ void initializeFilterState(
     }
     filter_state.state(filter_state.trop_index) = modeled_zenith_troposphere_delay_m;
     filter_state.covariance.block(0, 0, 3, 3) *= config.clas_initial_position_variance;
+    if (config.kinematic_mode && config.use_dynamics_model) {
+        filter_state.covariance.block(
+            filter_state.vel_index, filter_state.vel_index, 3, 3) *=
+            config.initial_velocity_variance;
+    }
     filter_state.covariance(6, 6) = config.clas_clock_variance;
     filter_state.covariance(7, 7) = config.clas_clock_variance;
     filter_state.covariance(8, 8) = effectiveClasTropInitialVariance(config);
@@ -1009,6 +1017,221 @@ void initializeFilterState(
     }
     filter_state.amb_index = base;
     filter_state.total_states = base;
+}
+
+namespace {
+
+constexpr double kClasNominalEpochIntervalS = 0.2;
+constexpr double kClasOutageGapResetS = 2.0;
+constexpr double kMinimumGeometryFreeSlipThresholdMeters = 0.05;
+// MRTKLIB uses GF-only slip at 0.05 m; MW-mean is native-only. Raised from 0.5
+// to reduce Galileo burst false slips (see gnss_mrtklib_diff_report.md Q4).
+constexpr double kMinimumMwSlipThresholdCycles = 1.0;
+constexpr double kMwSlipFallbackThresholdMeters = 10.0;
+
+double clasSlipThresholdScale(double dt_seconds) {
+    return std::max(1.0, dt_seconds / kClasNominalEpochIntervalS);
+}
+
+void clearClasWlnlMwState(ppp_shared::PPPAmbiguityInfo& ambiguity) {
+    ambiguity.wl_is_fixed = false;
+    ambiguity.wl_fixed_integer = 0;
+    ambiguity.nl_is_fixed = false;
+    ambiguity.nl_fixed_cycles = 0.0;
+    ambiguity.mw_sum_cycles = 0.0;
+    ambiguity.mw_count = 0;
+    ambiguity.mw_mean_cycles = 0.0;
+}
+
+void resetClasPhaseBiasRepair(CLASPhaseBiasRepairInfo& repair) {
+    repair.reference_time = GNSSTime();
+    repair.last_continuity_m = {0.0, 0.0, 0.0};
+    repair.offset_cycles = {0.0, 0.0, 0.0};
+    repair.pending_state_shift_cycles = {0.0, 0.0, 0.0};
+    repair.has_last = {false, false, false};
+}
+
+}  // namespace
+
+ClasSlipDetectionStats detectClasCycleSlips(
+    const ObservationData& obs,
+    const std::vector<OSRCorrection>& osr_corrections,
+    const ppp_shared::PPPConfig& config,
+    double dt_seconds,
+    ppp_shared::PPPState& filter_state,
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    std::map<SatelliteId, CLASDispersionCompensationInfo>& dispersion_compensation,
+    std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair,
+    const AmbiguityResetFunction& ambiguity_reset_function,
+    double ambiguity_reset_variance,
+    bool debug_enabled) {
+    ClasSlipDetectionStats stats;
+    if (!config.kinematic_mode || !config.enable_cycle_slip_detection) {
+        return stats;
+    }
+
+    const double threshold_scale = clasSlipThresholdScale(dt_seconds);
+    const double gf_threshold_m = std::max(
+        config.cycle_slip_threshold, kMinimumGeometryFreeSlipThresholdMeters) *
+        threshold_scale;
+    const double mw_threshold_cycles = kMinimumMwSlipThresholdCycles * threshold_scale;
+    const bool outage_gap = dt_seconds > kClasOutageGapResetS;
+
+    for (const auto& osr : osr_corrections) {
+        if (!osr.valid || osr.num_frequencies < 2) {
+            continue;
+        }
+        const Observation* l1_raw = findOsrFrequencyObservation(obs, osr, 0);
+        const Observation* l2_raw = findOsrFrequencyObservation(obs, osr, 1);
+        if (!l1_raw || !l2_raw || !l1_raw->valid || !l2_raw->valid) {
+            continue;
+        }
+        if (!l1_raw->has_carrier_phase || !l2_raw->has_carrier_phase) {
+            continue;
+        }
+        if (!l1_raw->has_pseudorange || !l2_raw->has_pseudorange) {
+            continue;
+        }
+        const double f1 = osr.frequencies[0];
+        const double f2 = osr.frequencies[1];
+        if (f1 <= 0.0 || f2 <= 0.0 || std::abs(f1 - f2) < 1e6) {
+            continue;
+        }
+
+        auto& ambiguity = ambiguity_states[osr.satellite];
+        const double l1_m = l1_raw->carrier_phase * osr.wavelengths[0] -
+                              osr.phase_bias_m[0];
+        const double l2_m = l2_raw->carrier_phase * osr.wavelengths[1] -
+                              osr.phase_bias_m[1];
+        const double gf_m = l1_m - l2_m;
+        const double p1 = l1_raw->pseudorange - osr.code_bias_m[0];
+        const double p2 = l2_raw->pseudorange - osr.code_bias_m[1];
+        const double mw_m = (f1 * l1_m - f2 * l2_m) / (f1 - f2) -
+                              (f1 * p1 + f2 * p2) / (f1 + f2);
+        const double lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
+        const double mw_cycles = mw_m / lambda_wl;
+
+        bool lli_slip = l1_raw->loss_of_lock || l2_raw->loss_of_lock;
+        bool gf_slip = false;
+        bool mw_slip = false;
+
+        if (outage_gap) {
+            ++stats.outage_resets;
+            ambiguity.has_last_geometry_free = false;
+            ambiguity.has_last_melbourne_wubbena = false;
+            clearClasWlnlMwState(ambiguity);
+        } else {
+            if (ambiguity.has_last_geometry_free &&
+                std::isfinite(gf_m) &&
+                std::abs(gf_m - ambiguity.last_geometry_free_m) > gf_threshold_m) {
+                gf_slip = true;
+            }
+            // MW-mean slip: skip when WL is already fixed or the running mean has
+            // converged to an integer (MRTKLIB has no MW-mean detector at all).
+            const bool wl_mean_stable =
+                ambiguity.mw_count >= config.wl_min_averaging_epochs &&
+                std::isfinite(ambiguity.mw_mean_cycles) &&
+                std::abs(ambiguity.mw_mean_cycles -
+                         std::round(ambiguity.mw_mean_cycles)) < 0.25;
+            if (!ambiguity.wl_is_fixed && !wl_mean_stable) {
+                if (ambiguity.mw_count >= 3 &&
+                    std::isfinite(mw_cycles) &&
+                    std::abs(mw_cycles - ambiguity.mw_mean_cycles) >
+                        mw_threshold_cycles) {
+                    mw_slip = true;
+                } else if (ambiguity.mw_count < 3 &&
+                           ambiguity.has_last_melbourne_wubbena &&
+                           std::isfinite(mw_cycles) &&
+                           std::abs(mw_m - ambiguity.last_melbourne_wubbena_m) >
+                               kMwSlipFallbackThresholdMeters * threshold_scale) {
+                    mw_slip = true;
+                }
+            }
+        }
+
+        if (std::isfinite(gf_m)) {
+            ambiguity.last_geometry_free_m = gf_m;
+            ambiguity.has_last_geometry_free = true;
+        }
+        if (std::isfinite(mw_m)) {
+            ambiguity.last_melbourne_wubbena_m = mw_m;
+            ambiguity.has_last_melbourne_wubbena = true;
+        }
+
+        if (!lli_slip && !gf_slip && !mw_slip) {
+            continue;
+        }
+
+        if (lli_slip) {
+            ++stats.lli_count;
+        }
+        if (gf_slip) {
+            ++stats.gf_count;
+        }
+        if (mw_slip) {
+            ++stats.mw_count;
+        }
+        ++stats.total_resets;
+
+        ambiguity.needs_reinitialization = true;
+        ambiguity.has_last_slip_time = true;
+        ambiguity.last_slip_time = obs.time;
+        clearClasWlnlMwState(ambiguity);
+        ambiguity.has_last_geometry_free = false;
+        ambiguity.has_last_melbourne_wubbena = false;
+
+        dispersion_compensation[osr.satellite].slip = {true, true};
+        auto repair_it = phase_bias_repair.find(osr.satellite);
+        if (repair_it != phase_bias_repair.end()) {
+            resetClasPhaseBiasRepair(repair_it->second);
+        }
+
+        if (ambiguity_reset_function) {
+            const uint8_t l2_prn = static_cast<uint8_t>(
+                std::min(255, static_cast<int>(osr.satellite.prn) + 100));
+            const SatelliteId l2_satellite(osr.satellite.system, l2_prn);
+            ambiguity_reset_function(osr.satellite, l1_raw->signal);
+            ambiguity_reset_function(l2_satellite, l2_raw->signal);
+        }
+
+        if (debug_enabled) {
+            std::string reason;
+            if (lli_slip) {
+                reason += "lli";
+            }
+            if (gf_slip) {
+                if (!reason.empty()) {
+                    reason += "+";
+                }
+                reason += "gf";
+            }
+            if (mw_slip) {
+                if (!reason.empty()) {
+                    reason += "+";
+                }
+                reason += "mw";
+            }
+            std::cerr << "[CLAS-SLIP] " << osr.satellite.toString()
+                      << " tow=" << obs.time.tow
+                      << " reason=" << reason
+                      << " dt=" << dt_seconds
+                      << " gf_m=" << gf_m
+                      << " mw_cyc=" << mw_cycles
+                      << "\n";
+        }
+    }
+
+    if (stats.total_resets > 0) {
+        syncSlipState(
+            obs,
+            filter_state,
+            ambiguity_states,
+            dispersion_compensation,
+            phase_bias_repair,
+            ambiguity_reset_variance);
+    }
+
+    return stats;
 }
 
 void syncSlipState(
@@ -1065,14 +1288,68 @@ void syncSlipState(
     }
 }
 
+namespace {
+
+void reinitializePositionState(ppp_shared::PPPState& filter_state,
+                               const Vector3d& position,
+                               double variance) {
+    for (int axis = 0; axis < 3; ++axis) {
+        const int index = filter_state.pos_index + axis;
+        filter_state.state(index) = position(axis);
+        filter_state.covariance.row(index).setZero();
+        filter_state.covariance.col(index).setZero();
+        filter_state.covariance(index, index) = variance;
+    }
+}
+
+}  // namespace
+
 void predictFilterState(
     ppp_shared::PPPState& filter_state,
     const ppp_shared::PPPConfig& config,
     double dt,
+    const Vector3d& seed_position_ecef,
     double seed_receiver_clock_bias_m,
     bool seed_valid) {
     const int nx = filter_state.total_states;
+    const bool kinematic_white_noise =
+        config.kinematic_mode && !config.low_dynamics_mode;
+    const bool use_dynamic_prediction =
+        kinematic_white_noise && config.use_dynamics_model;
+
+    MatrixXd F = MatrixXd::Identity(nx, nx);
+    if (use_dynamic_prediction) {
+        F.block(filter_state.pos_index, filter_state.vel_index, 3, 3) =
+            MatrixXd::Identity(3, 3) * dt;
+        filter_state.state = F * filter_state.state;
+    } else if (kinematic_white_noise) {
+        if (config.reset_kinematic_position_to_spp_each_epoch && seed_valid) {
+            reinitializePositionState(
+                filter_state,
+                seed_position_ecef,
+                config.initial_position_variance);
+        }
+    } else if (config.process_noise_position > 0.0) {
+        const double position_q = config.process_noise_position * dt;
+        for (int axis = 0; axis < 3; ++axis) {
+            filter_state.covariance(filter_state.pos_index + axis,
+                                    filter_state.pos_index + axis) += position_q;
+        }
+    }
+
     MatrixXd Q = MatrixXd::Zero(nx, nx);
+    if (use_dynamic_prediction) {
+        const double position_q =
+            std::max(0.0, config.process_noise_position) * dt;
+        const double velocity_q =
+            std::max(0.0, config.process_noise_velocity) * dt;
+        for (int axis = 0; axis < 3; ++axis) {
+            Q(filter_state.pos_index + axis, filter_state.pos_index + axis) =
+                position_q;
+            Q(filter_state.vel_index + axis, filter_state.vel_index + axis) =
+                velocity_q;
+        }
+    }
     Q(filter_state.clock_index, filter_state.clock_index) = config.clas_clock_variance;
     Q(filter_state.glo_clock_index, filter_state.glo_clock_index) = config.clas_clock_variance;
     if (filter_state.qzs_clock_index >= 0) {
@@ -1095,8 +1372,8 @@ void predictFilterState(
             Q(state_index, state_index) = config.process_noise_ambiguity * dt;
         }
     }
-    filter_state.covariance += Q;
-    if (seed_valid) {
+    filter_state.covariance = F * filter_state.covariance * F.transpose() + Q;
+    if (seed_valid && !use_dynamic_prediction) {
         const double gps_clock_before = filter_state.state(filter_state.clock_index);
         filter_state.state(filter_state.clock_index) = seed_receiver_clock_bias_m;
         filter_state.state(filter_state.glo_clock_index) = seed_receiver_clock_bias_m;
@@ -1276,6 +1553,12 @@ MeasurementBuildResult buildEpochMeasurements(
         for (int f = 0; f < osr.num_frequencies; ++f) {
             const Observation* raw = raw_observations[static_cast<size_t>(f)];
             if (!raw || !raw->valid) {
+                continue;
+            }
+            if (config.kinematic_mode &&
+                config.use_clas_osr_filter &&
+                raw->snr > 0.0 &&
+                ppp_ar::clasKinematicSnrMasked(f, osr.elevation, raw->snr)) {
                 continue;
             }
             const double iono_scale =
@@ -1686,7 +1969,10 @@ KalmanUpdateStats applyMeasurementUpdate(
     stats.variances = R.diagonal();
     stats.pre_anchor_covariance = filter_state.covariance;
 
-    if (seed_solution != nullptr && seed_solution->isValid()) {
+    const bool apply_spp_position_anchor =
+        seed_solution != nullptr && seed_solution->isValid() &&
+        (!config.kinematic_mode || config.low_dynamics_mode);
+    if (apply_spp_position_anchor) {
         const double anchor_sigma = config.clas_anchor_sigma;
         for (int axis = 0; axis < 3; ++axis) {
             const int idx = axis;
@@ -1793,7 +2079,8 @@ FixValidationStats validateFixedSolution(
     const ppp_shared::PPPConfig& config,
     const TropMappingFunction& trop_mapping_function,
     const AmbiguityIndexFunction& ambiguity_index_function,
-    bool debug_enabled) {
+    bool debug_enabled,
+    const FixValidationOptions& options) {
     FixValidationStats stats;
     double phase_sum_sq = 0.0;
     double code_sum_sq = 0.0;
@@ -1856,8 +2143,21 @@ FixValidationStats validateFixedSolution(
                 iono_scale > 0.0 ? filter_state.state(iono_it->second) : 0.0;
 
             const double el_weight = elevationWeight(osr.elevation);
+            // Mirror the buildEpochMeasurements() phase model: the applied
+            // troposphere term depends on the correction application policy.
+            const bool claslib_amb_datum_phase =
+                suppressesClasAmbDatumPhaseTrop(
+                    config.clas_correction_application_policy);
+            const bool residual_amb_datum_phase_trop =
+                usesResidualClasAmbDatumPhaseTrop(
+                    config.clas_correction_application_policy);
+            const double phase_trop_modeled = claslib_amb_datum_phase
+                ? 0.0
+                : (residual_amb_datum_phase_trop
+                      ? trop_modeled - osr.trop_correction_m
+                      : trop_modeled);
             const double phase_predicted =
-                geo - sat_clk_m + receiver_clock_m + trop_modeled;
+                geo - sat_clk_m + receiver_clock_m + phase_trop_modeled;
 
             if (raw->has_pseudorange && std::isfinite(raw->pseudorange)) {
                 const bool claslib_code_prc = usesClaslibCodePrcRows(config);
@@ -1927,6 +2227,17 @@ FixValidationStats validateFixedSolution(
             const double dd_residual = reference.residual_m - residual.residual_m;
             const double dd_variance = reference.variance_m2 + residual.variance_m2;
             const double sigma = std::sqrt(std::max(dd_variance, 1e-12));
+
+            // MRTKLIB residual_test() (mrtk_ppp_rtk.c:1040-1058): individual
+            // residuals beyond the rejionno1 sigma gate are excluded from the
+            // chi-square sum instead of failing the whole validation.
+            if (options.outlier_sigma_gate > 0.0 &&
+                dd_residual * dd_residual >
+                    options.outlier_sigma_gate * options.outlier_sigma_gate *
+                        dd_variance) {
+                ++stats.phase_outlier_rows;
+                continue;
+            }
 
             phase_sum_sq += dd_residual * dd_residual;
             phase_chi_sq += dd_residual * dd_residual /
@@ -2011,6 +2322,16 @@ FixValidationStats validateFixedSolution(
         if (chi_square_limit > 0.0) {
             stats.phase_chisq = phase_chi_sq / chi_square_limit;
         }
+    } else if (options.mrtklib_chisq_fallback) {
+        // MRTKLIB residual_test() fallback (mrtk_ppp_rtk.c:1080-1082): with
+        // too few rows for a chi-square test, pass when at least half of the
+        // carrier residuals survived the outlier gate.
+        const int total_rows = stats.phase_rows + stats.phase_outlier_rows;
+        stats.phase_chisq =
+            (total_rows <= 0 ||
+             static_cast<double>(stats.phase_rows) / total_rows < 0.5)
+                ? 100.0
+                : 0.0;
     }
 
     constexpr double kMaxPhaseSigma = 4.0;
@@ -2122,6 +2443,7 @@ void logUpdateSummary(
 
 PositionSolution finalizeEpochSolution(
     const ppp_shared::PPPState& filter_state,
+    const GNSSTime& /*time*/,
     bool fixed,
     double ar_ratio,
     int fixed_ambiguities,

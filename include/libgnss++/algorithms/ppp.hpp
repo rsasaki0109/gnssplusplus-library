@@ -293,6 +293,11 @@ private:
     // Pre-anchor covariance saved for DD-AR position correction
     Eigen::MatrixXd pre_anchor_covariance_;
     bool had_fixed_last_epoch_ = false;  ///< AR succeeded in previous epoch
+    int clas_kinematic_fix_candidate_streak_ = 0;
+    int clas_kinematic_spp_divergence_count_ = 0;
+    ppp_ar::WlnlHoldState clas_wlnl_hold_;
+    Vector3d last_published_solution_position_ecef_ = Vector3d::Zero();
+    bool has_last_published_solution_position_ = false;
     std::map<SatelliteId, double> windup_cache_;  ///< Phase wind-up cache for OSR
     std::map<SatelliteId, int> est_stec_outage_;   ///< Epochs since last seen (est-stec pruning)
     std::map<SatelliteId, std::map<uint8_t, int>> prev_phase_bias_discnt_;  ///< Last-seen SSR phase-bias discontinuity counters (GNSS_PPP_SSR_DISCNT_SLIP)

@@ -111,6 +111,7 @@ struct PPPConfig {
     bool use_dynamics_model = false;
     bool reset_clock_to_spp_each_epoch = true;
     bool reset_kinematic_position_to_spp_each_epoch = true;
+    bool emit_solution_epoch_time = false;
 
     // Kalman filter parameters
     double process_noise_position = 0.0;
@@ -320,6 +321,8 @@ struct PPPAmbiguityInfo {
     bool has_last_geometry_free = false;
     double last_melbourne_wubbena_m = 0.0;
     bool has_last_melbourne_wubbena = false;
+    GNSSTime last_slip_time;
+    bool has_last_slip_time = false;
     double mw_sum_cycles = 0.0;
     int mw_count = 0;
     double mw_mean_cycles = 0.0;

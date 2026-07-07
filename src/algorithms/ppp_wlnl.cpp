@@ -120,6 +120,7 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         filter_state_,
         ambiguity_states_,
         ssr_products_loaded_,
+        obs.time,
         pppDebugEnabled());
     const auto& eligible_ambiguities = wlnl_preparation.eligible_ambiguities;
 
@@ -153,10 +154,8 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         obs, nav, receiver_position, clock_bias_m, trop_zenith);
 
     std::map<SatelliteId, double> satellite_elevations_rad;
-    if (pppEnvOverrides().clas_qzss_s_prn_fix) {
-        for (const auto& [satellite, osr] : osr_by_sat) {
-            satellite_elevations_rad[satellite] = osr.elevation;
-        }
+    for (const auto& [satellite, osr] : osr_by_sat) {
+        satellite_elevations_rad[satellite] = osr.elevation;
     }
     const std::map<SatelliteId, double>* elevation_ref_map =
         satellite_elevations_rad.empty() ? nullptr : &satellite_elevations_rad;
@@ -181,6 +180,9 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     last_ar_ratio_ = attempt.ratio;
     last_fixed_ambiguities_ = attempt.nb;
     if (attempt.has_constrained_state) {
+        // MRTKLIB parity: the constrained fixed state is published as the
+        // solution (sol.rr = xa) but never overwrites the float filter x/P;
+        // only holdamb() constraints nudge the float states.
         last_clas_constrained_fixed_state_ = attempt.constrained_state;
         last_clas_constrained_fixed_state_valid_ = true;
         if (auto* debug = clasFixDebugStream(); debug != nullptr) {

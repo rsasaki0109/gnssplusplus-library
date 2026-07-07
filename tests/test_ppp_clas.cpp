@@ -6,6 +6,7 @@
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/observation.hpp>
 
 #include <cmath>
 #include <set>
@@ -441,4 +442,74 @@ TEST(PPPClasDdTest, LambdaConditioningFixesDdNativeAmbiguities) {
         conditioned_covariance.transpose(), 1e-14));
     EXPECT_LT(conditioned_covariance(0, 0), covariance(0, 0));
     EXPECT_LT(conditioned_covariance(1, 1), covariance(1, 1));
+}
+
+TEST(PPPClasTest, DetectClasCycleSlipsFlagsGeometryFreeJump) {
+    ObservationData obs;
+    obs.time = GNSSTime(2324, 177000.0);
+
+    OSRCorrection osr;
+    osr.valid = true;
+    osr.satellite = SatelliteId(GNSSSystem::GPS, 7);
+    osr.num_frequencies = 2;
+    osr.frequencies[0] = 1575.42e6;
+    osr.frequencies[1] = 1227.60e6;
+    osr.wavelengths[0] = constants::SPEED_OF_LIGHT / osr.frequencies[0];
+    osr.wavelengths[1] = constants::SPEED_OF_LIGHT / osr.frequencies[1];
+    osr.phase_bias_m[0] = 0.0;
+    osr.phase_bias_m[1] = 0.0;
+    osr.code_bias_m[0] = 0.0;
+    osr.code_bias_m[1] = 0.0;
+
+    Observation l1;
+    l1.satellite = osr.satellite;
+    l1.signal = SignalType::GPS_L1CA;
+    l1.valid = true;
+    l1.has_carrier_phase = true;
+    l1.has_pseudorange = true;
+    l1.carrier_phase = 1000.0;
+    l1.pseudorange = 2.0e7;
+
+    Observation l2 = l1;
+    l2.signal = SignalType::GPS_L2C;
+    l2.carrier_phase = 780.0;
+    l2.pseudorange = 2.0e7;
+
+    obs.observations.push_back(l1);
+    obs.observations.push_back(l2);
+
+    ppp_shared::PPPConfig config;
+    config.kinematic_mode = true;
+    config.enable_cycle_slip_detection = true;
+
+    ppp_shared::PPPState filter_state;
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo> ambiguity_states;
+    auto& amb = ambiguity_states[osr.satellite];
+    amb.has_last_geometry_free = true;
+    amb.last_geometry_free_m = 0.0;
+    amb.mw_count = 5;
+    amb.mw_mean_cycles = 1.0;
+
+    std::map<SatelliteId, CLASDispersionCompensationInfo> dispersion;
+    std::map<SatelliteId, CLASPhaseBiasRepairInfo> repair;
+    int reset_calls = 0;
+    const auto reset_fn = [&](const SatelliteId&, SignalType) { ++reset_calls; };
+
+    const auto stats = ppp_clas::detectClasCycleSlips(
+        obs,
+        {osr},
+        config,
+        0.2,
+        filter_state,
+        ambiguity_states,
+        dispersion,
+        repair,
+        reset_fn,
+        3600.0,
+        false);
+
+    EXPECT_GE(stats.gf_count, 1);
+    EXPECT_GE(stats.total_resets, 1);
+    EXPECT_GE(reset_calls, 2);
+    EXPECT_TRUE(ambiguity_states[osr.satellite].has_last_slip_time);
 }

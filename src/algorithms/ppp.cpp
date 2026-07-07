@@ -736,6 +736,10 @@ void PPPProcessor::reset() {
     has_static_anchor_position_ = false;
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+    ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
+    last_clas_constrained_fixed_state_valid_ = false;
+    clas_kinematic_fix_candidate_streak_ = 0;
+    clas_kinematic_spp_divergence_count_ = 0;
     last_applied_atmos_trop_corrections_ = 0;
     last_applied_atmos_iono_corrections_ = 0;
     last_applied_atmos_trop_m_ = 0.0;

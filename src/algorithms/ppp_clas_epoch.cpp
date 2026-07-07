@@ -7,7 +7,9 @@
 #include <libgnss++/algorithms/ppp_clas_dd.hpp>
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
+#include <libgnss++/algorithms/rtk_validation.hpp>
 #include <libgnss++/core/constants.hpp>
+#include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signals.hpp>
 
 #include <algorithm>
@@ -33,6 +35,60 @@ bool pppDebugEnabled() {
 constexpr double kClasNlDatumJumpThresholdCycles = 0.5;
 // Good WL-NL / SD-MAR fixes stay below ~0.7 m; parity-path blunders were 38–595 m.
 constexpr double kClasBaseClockParitySdMarMaxPositionShiftM = 2.0;
+// Kinematic CLAS: reject fixed positions that jump beyond float prediction.
+// RTK PPC gates (PR #177/#178/#179) use 20 m min / 25 m/s adaptive trusted jump;
+// at 5 Hz urban (~15 m/s) we tighten to max(1 m, 15 m/s·dt) capped at 8 m, and
+// max(1 m, 3σ_float) when covariance is available (ppp.cpp uses 25 m kinematic).
+constexpr double kClasKinematicFixedJumpMinM = 1.0;
+constexpr double kClasKinematicFixedJumpRateMps = 10.0;
+constexpr double kClasKinematicFixedJumpMaxM = 2.0;
+constexpr double kClasKinematicFixedJumpSigmaScale = 3.0;
+constexpr double kClasKinematicWlnlMaxPositionShiftM = 2.0;
+constexpr double kClasKinematicMinFixRatio = 3.0;
+constexpr int kClasKinematicMinFixCount = 1;
+// MRTKLIB clas.toml rejection.hold_chi_square / fix_chi_square (mrtk_ppp_rtk.c:2312-2315)
+constexpr double kMrtklibHoldChiSquareGate = 0.5;
+constexpr double kMrtklibFixChiSquareGate = 5.0;
+// MRTKLIB clas.toml rejection.l1_l2_residual (pos2-rejionno1) sigma gate used
+// by residual_test() to drop individual outlier carrier residuals.
+constexpr double kMrtklibPhaseResidualSigmaGate = 2.0;
+// MRTKLIB clas.toml rejection.pseudorange_diff / position_error_count
+// (pos2-rejdiffpse -> opt.maxdiffp, pos2-poserrcnt; mrtk_ppp_rtk.c:2333-2352)
+constexpr double kMrtklibMaxSppDivergenceM = 10.0;
+constexpr int kMrtklibMaxSppDivergenceEpochs = 5;
+
+double clasKinematicHorizontalPositionSigmaM(const PPPState& filter_state) {
+    if (filter_state.covariance.rows() < 3 ||
+        filter_state.covariance.cols() < 3 ||
+        filter_state.pos_index < 0 ||
+        filter_state.pos_index + 2 >= filter_state.covariance.rows()) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const int base = filter_state.pos_index;
+    const double var_xy =
+        filter_state.covariance(base, base) + filter_state.covariance(base + 1, base + 1);
+    if (!std::isfinite(var_xy) || var_xy <= 0.0) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    return std::sqrt(var_xy);
+}
+
+double clasKinematicMaxFixedFloatJumpM(
+    double dt_seconds,
+    double horizontal_position_sigma_m) {
+    const double adaptive_limit = rtk_validation::adaptiveJumpLimit(
+        dt_seconds,
+        kClasKinematicFixedJumpMinM,
+        kClasKinematicFixedJumpRateMps);
+    double limit = adaptive_limit;
+    if (std::isfinite(horizontal_position_sigma_m) && horizontal_position_sigma_m > 0.0) {
+        limit = std::max(
+            limit,
+            kClasKinematicFixedJumpMinM +
+                kClasKinematicFixedJumpSigmaScale * horizontal_position_sigma_m);
+    }
+    return std::min(kClasKinematicFixedJumpMaxM, limit);
+}
 
 std::ofstream* clasFloatDumpStream() {
     const auto& path = pppEnvOverrides().clas_float_dump_path;
@@ -178,6 +234,21 @@ void resetClasIonosphereStateValues(PPPState& filter_state) {
     }
 }
 
+void applyOptionalSolutionEpochMetadata(
+    PositionSolution& solution,
+    const GNSSTime& time,
+    const PPPConfig& config) {
+    if (!config.emit_solution_epoch_time) {
+        return;
+    }
+    solution.time = time;
+    double latitude = 0.0;
+    double longitude = 0.0;
+    double height = 0.0;
+    ecef2geodetic(solution.position_ecef, latitude, longitude, height);
+    solution.position_geodetic = GeodeticCoord(latitude, longitude, height);
+}
+
 }  // namespace
 
 PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
@@ -300,6 +371,30 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     const auto& epoch_atmos = epoch_context.epoch_atmos_tokens;
     const auto& osr_corrections = epoch_context.osr_corrections;
 
+    const double clas_dt_seconds =
+        has_last_processed_time_
+            ? std::max(obs.time - last_processed_time_, 0.001)
+            : 1.0;
+    if (ppp_config_.kinematic_mode && ppp_config_.enable_cycle_slip_detection) {
+        const auto slip_stats = ppp_clas::detectClasCycleSlips(
+            obs,
+            osr_corrections,
+            ppp_config_,
+            clas_dt_seconds,
+            filter_state_,
+            ambiguity_states_,
+            clas_dispersion_compensation_,
+            clas_phase_bias_repair_,
+            [&](const SatelliteId& satellite, SignalType signal) {
+                resetAmbiguity(satellite, signal);
+            },
+            precise_products_loaded_ ? 1e6 : ppp_config_.initial_ambiguity_variance,
+            pppDebugEnabled());
+        if (slip_stats.total_resets > 0) {
+            clas_dd_accumulator_ = {};
+        }
+    }
+
     if (pppEnvOverrides().clas_stec_constraint &&
         ppp_config_.estimate_ionosphere &&
         ppp_config_.use_clas_osr_filter) {
@@ -371,6 +466,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         }
         const PositionSolution native_float_solution = ppp_clas::finalizeEpochSolution(
             filter_state_,
+            obs.time,
             false,
             0.0,
             0,
@@ -384,6 +480,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             [&](const Vector3d& receiver_pos, double elevation, const GNSSTime& time) {
                 return calculateMappingFunction(receiver_pos, elevation, time);
             });
+        applyOptionalSolutionEpochMetadata(solution, obs.time, ppp_config_);
         has_last_processed_time_ = true;
         last_processed_time_ = obs.time;
         ++total_epochs_processed_;
@@ -400,6 +497,14 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             if (!l1_raw || !l2_raw || !l1_raw->valid || !l2_raw->valid) continue;
             if (!l1_raw->has_carrier_phase || !l2_raw->has_carrier_phase) continue;
             if (!l1_raw->has_pseudorange || !l2_raw->has_pseudorange) continue;
+            if (ppp_config_.kinematic_mode &&
+                ppp_config_.use_clas_osr_filter &&
+                ((l1_raw->snr > 0.0 &&
+                  ppp_ar::clasKinematicSnrMasked(0, osr.elevation, l1_raw->snr)) ||
+                 (l2_raw->snr > 0.0 &&
+                  ppp_ar::clasKinematicSnrMasked(1, osr.elevation, l2_raw->snr)))) {
+                continue;
+            }
             const double f1 = osr.frequencies[0];
             const double f2 = osr.frequencies[1];
             if (f1 <= 0.0 || f2 <= 0.0 || std::abs(f1 - f2) < 1e6) continue;
@@ -414,7 +519,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             constexpr double lambda_wl_gps = constants::SPEED_OF_LIGHT / (1575.42e6 - 1227.60e6);
             const double mw_cycles = mw_m / lambda_wl_gps;
             auto& amb = ambiguity_states_[osr.satellite];
-            const bool mw_slip = l1_raw->loss_of_lock || l2_raw->loss_of_lock;
+            const bool mw_slip = amb.needs_reinitialization;
             if (!mw_slip && amb.mw_count > 0) {
                 amb.mw_sum_cycles += mw_cycles;
                 amb.mw_count += 1;
@@ -436,6 +541,13 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         return ambiguityStateIndex(satellite);
     };
 
+    const Vector3d clas_float_position_ecef =
+        filter_state_.state.segment(filter_state_.pos_index, 3);
+    const double clas_float_horizontal_sigma_m =
+        clasKinematicHorizontalPositionSigmaM(filter_state_);
+    const PPPState clas_float_filter_state = filter_state_;
+    const auto clas_float_ambiguity_states = ambiguity_states_;
+
     const auto ambiguity_resolution =
         ppp_clas::resolveAndValidateAmbiguities(
             filter_state_,
@@ -453,9 +565,108 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                           ambiguity_index_for_validation, pppDebugEnabled());
                   }},
             pppDebugEnabled());
+
+    // MRTKLIB mrtk_ppp_rtk.c:2296-2330 parity: validate the fixed solution with
+    // the post-fix DD phase chi-square. Publish FIX only when chisq < thres_fix
+    // (5.0) and hold (constrain the float filter toward the fixed DD
+    // ambiguities, holdamb()) only when chisq < thres_hold (0.5). AR-failed
+    // epochs publish FLOAT and reset the nfix counter; there is no hold-driven
+    // FIX publication.
+    const bool kinematic_clas_wlnl_hold_path =
+        ppp_config_.kinematic_mode &&
+        ppp_config_.use_clas_osr_filter &&
+        ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL;
+    bool clas_kinematic_chisq_rejected = false;
+    if (kinematic_clas_wlnl_hold_path &&
+        ppp_config_.enable_ambiguity_resolution) {
+        if (!ppp_ar::wlnlHoldStillValid(clas_wlnl_hold_, ambiguity_states_)) {
+            ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
+        }
+
+        if (ambiguity_resolution.accepted &&
+            !last_clas_constrained_fixed_state_valid_) {
+            // MRTKLIB publishes FIX only from the constrained xa solution
+            // (sol.rr = xa). Without a validated state-DD LAMBDA fix the epoch
+            // stays FLOAT instead of labelling the float state as fixed.
+            clas_kinematic_chisq_rejected = true;
+            if (pppDebugEnabled()) {
+                std::cerr << "[CLAS-KIN-CHISQ] no constrained state, demote"
+                          << " ratio=" << last_ar_ratio_ << "\n";
+            }
+        } else if (ambiguity_resolution.accepted) {
+            const PPPState& fixed_state_for_validation =
+                last_clas_constrained_fixed_state_;
+            ppp_clas::FixValidationOptions fix_validation_options;
+            fix_validation_options.outlier_sigma_gate =
+                kMrtklibPhaseResidualSigmaGate;
+            fix_validation_options.mrtklib_chisq_fallback = true;
+            const auto fix_validation = ppp_clas::validateFixedSolution(
+                obs,
+                osr_corrections,
+                fixed_state_for_validation,
+                ppp_config_,
+                trop_mapping_for_validation,
+                ambiguity_index_for_validation,
+                pppDebugEnabled(),
+                fix_validation_options);
+            const double phase_chisq = fix_validation.phase_chisq;
+            if (pppDebugEnabled()) {
+                std::cerr << "[CLAS-KIN-CHISQ] phase_chisq=" << phase_chisq
+                          << " rows=" << fix_validation.phase_rows
+                          << " outliers=" << fix_validation.phase_outlier_rows
+                          << " ratio=" << last_ar_ratio_ << "\n";
+            }
+            if (!std::isfinite(phase_chisq) ||
+                phase_chisq >= kMrtklibFixChiSquareGate) {
+                clas_kinematic_chisq_rejected = true;
+            } else if (phase_chisq < kMrtklibHoldChiSquareGate) {
+                std::map<SatelliteId, double> clas_satellite_elevations_rad;
+                for (const auto& osr : osr_corrections) {
+                    if (osr.valid) {
+                        clas_satellite_elevations_rad[osr.satellite] =
+                            osr.elevation;
+                    }
+                }
+                ++clas_wlnl_hold_.consecutive_fix_count;
+                std::vector<ppp_ar::WlnlHoldConstraint> hold_constraints;
+                if (clas_wlnl_hold_.consecutive_fix_count >=
+                        ppp_ar::kMrtklibMinFixCount &&
+                    ppp_ar::buildWlnlHoldConstraints(
+                        last_clas_constrained_fixed_state_,
+                        ambiguity_states_,
+                        clas_satellite_elevations_rad,
+                        hold_constraints)) {
+                    clas_wlnl_hold_.constraints = std::move(hold_constraints);
+                    clas_wlnl_hold_.active = true;
+                    ppp_ar::applyWlnlHoldAmbiguity(
+                        filter_state_, clas_wlnl_hold_.constraints);
+                }
+            }
+        } else {
+            // MRTKLIB resets rtk->nfix on every non-FIX epoch
+            // (mrtk_ppp_rtk.c:2371).
+            clas_wlnl_hold_.consecutive_fix_count = 0;
+        }
+    }
+
+    bool ambiguity_fixed_epoch =
+        ambiguity_resolution.accepted && !clas_kinematic_chisq_rejected;
+    if (clas_kinematic_chisq_rejected) {
+        last_ar_ratio_ = 0.0;
+        last_fixed_ambiguities_ = 0;
+        ambiguity_states_ = clas_float_ambiguity_states;
+        ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
+        if (pppDebugEnabled()) {
+            std::cerr << "[CLAS-KIN-CHISQ] reject fix (chisq >= "
+                      << kMrtklibFixChiSquareGate << ")\n";
+        }
+    }
     if (ambiguity_resolution.rejected_after_fix) {
         last_ar_ratio_ = 0.0;
         last_fixed_ambiguities_ = 0;
+        if (ppp_config_.kinematic_mode && ppp_config_.use_clas_osr_filter) {
+            ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
+        }
     }
 
     if (pppDebugEnabled()) {
@@ -464,8 +675,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
 
     bool wlnl_fixed_position_ok = false;
     Vector3d wlnl_fixed_position = Vector3d::Zero();
-    if (ambiguity_resolution.accepted &&
-        ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL) {
+    if (ambiguity_fixed_epoch &&
+        ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL &&
+        !kinematic_clas_wlnl_hold_path) {
         wlnl_fixed_position_ok = solveFixedPosition(obs, nav, wlnl_fixed_position);
         if (pppDebugEnabled() && wlnl_fixed_position_ok) {
             const double shift = (wlnl_fixed_position -
@@ -474,22 +686,27 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         }
     }
 
+    // MRTKLIB publishes the fixed solution from xa/Pa while the float filter
+    // x/P is only nudged by holdamb() (mrtk_ppp_rtk.c:2355-2361).
     const bool use_constrained_fixed_state =
-        ambiguity_resolution.accepted &&
+        ambiguity_fixed_epoch &&
         ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL &&
-        env_overrides_.clas_resamb &&
-        last_clas_constrained_fixed_state_valid_;
+        last_clas_constrained_fixed_state_valid_ &&
+        (env_overrides_.clas_resamb ||
+         (ppp_config_.kinematic_mode && ppp_config_.use_clas_osr_filter));
     const PPPState& solution_filter_state =
         use_constrained_fixed_state ? last_clas_constrained_fixed_state_ : filter_state_;
 
     solution = ppp_clas::finalizeEpochSolution(
         solution_filter_state,
-        ambiguity_resolution.accepted,
+        obs.time,
+        ambiguity_fixed_epoch,
         last_ar_ratio_,
         last_fixed_ambiguities_,
         static_cast<int>(osr_corrections.size()));
 
     if (wlnl_fixed_position_ok &&
+        !ppp_config_.kinematic_mode &&
         !env_overrides_.clas_fixed_state_output &&
         !use_constrained_fixed_state) {
         solution.position_ecef = wlnl_fixed_position;
@@ -508,24 +725,169 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             pppDebugEnabled());
         const bool sd_ar_fixed =
             sd_ar_result.valid && sd_ar_result.ar_ratio >= 3.0;
+        const bool apply_sd_mar_shift_gate =
+            ppp_config_.kinematic_mode ||
+            env_overrides_.clas_base_clock_parity;
         const bool sd_ar_position_ok =
-            !env_overrides_.clas_base_clock_parity ||
+            !apply_sd_mar_shift_gate ||
             sd_ar_result.position_shift_m <=
                 kClasBaseClockParitySdMarMaxPositionShiftM;
-        if (sd_ar_fixed && sd_ar_position_ok) {
+        if (sd_ar_fixed && sd_ar_position_ok && !ppp_config_.kinematic_mode) {
             solution.position_ecef = sd_ar_result.position;
             solution.status = SolutionStatus::PPP_FIXED;
         } else if (sd_ar_fixed && pppDebugEnabled()) {
-            std::cerr << "[CLAS-SD-MAR] reject parity pos_shift="
+            std::cerr << "[CLAS-SD-MAR] reject"
+                      << (ppp_config_.kinematic_mode ? " kinematic" : " parity")
+                      << " pos_shift="
                       << sd_ar_result.position_shift_m
                       << " ratio=" << sd_ar_result.ar_ratio << "\n";
         }
     }
 
+    // On the kinematic CLAS WLNL path the MRTKLIB-parity post-fix chi-square
+    // gate (plus the maxdiffp guard below) already validates every fixed
+    // publication, so the custom float-jump/continuity gates are skipped: the
+    // float filter itself carries meter-level error, and a correct fix
+    // legitimately jumps away from the previously published float position.
+    bool clas_kinematic_fix_rejected = false;
+    if (ppp_config_.kinematic_mode &&
+        solution.status == SolutionStatus::PPP_FIXED &&
+        !(kinematic_clas_wlnl_hold_path && ambiguity_fixed_epoch)) {
+        const double dt_seconds =
+            has_last_processed_time_ ? obs.time - last_processed_time_ : 0.2;
+        const double max_fixed_float_jump_m = clasKinematicMaxFixedFloatJumpM(
+            dt_seconds,
+            clas_float_horizontal_sigma_m);
+        const Vector3d post_ar_filter_position =
+            solution_filter_state.state.segment(solution_filter_state.pos_index, 3);
+        double fixed_float_jump_m =
+            (solution.position_ecef - clas_float_position_ecef).norm();
+        if (wlnl_fixed_position_ok) {
+            fixed_float_jump_m = std::max(
+                fixed_float_jump_m,
+                (wlnl_fixed_position - post_ar_filter_position).norm());
+        }
+        const bool ratio_ok =
+            solution.ratio <= 0.0 ||
+            solution.ratio >= (kinematic_clas_wlnl_hold_path
+                 ? ppp_config_.ar_ratio_threshold
+                 : std::max(
+                       kClasKinematicMinFixRatio,
+                       ppp_config_.ar_ratio_threshold + 0.5));
+        const bool wlnl_shift_ok =
+            !wlnl_fixed_position_ok ||
+            (wlnl_fixed_position - post_ar_filter_position).norm() <=
+                kClasKinematicWlnlMaxPositionShiftM;
+        double continuity_jump_m = 0.0;
+        if (has_last_published_solution_position_) {
+            continuity_jump_m = (solution.position_ecef -
+                last_published_solution_position_ecef_).norm();
+        }
+        const bool continuity_ok =
+            !has_last_published_solution_position_ ||
+            continuity_jump_m <= max_fixed_float_jump_m;
+        const bool float_jump_ok =
+            std::isfinite(fixed_float_jump_m) &&
+            fixed_float_jump_m <= max_fixed_float_jump_m;
+        const bool jump_ok =
+            wlnl_shift_ok &&
+            continuity_ok &&
+            float_jump_ok &&
+            ratio_ok;
+        if (jump_ok) {
+            ++clas_kinematic_fix_candidate_streak_;
+        } else {
+            clas_kinematic_fix_candidate_streak_ = 0;
+        }
+        const bool minfix_ok =
+            clas_kinematic_fix_candidate_streak_ >= kClasKinematicMinFixCount;
+        if (!jump_ok || !minfix_ok) {
+            clas_kinematic_fix_rejected = true;
+            solution.position_ecef = clas_float_position_ecef;
+            solution.status = SolutionStatus::PPP_FLOAT;
+            solution.ratio = 0.0;
+            solution.num_fixed_ambiguities = 0;
+            filter_state_ = clas_float_filter_state;
+            ambiguity_states_ = clas_float_ambiguity_states;
+            ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
+            if (!jump_ok) {
+                clas_kinematic_fix_candidate_streak_ = 0;
+            }
+            if (pppDebugEnabled()) {
+                std::cerr << "[CLAS-KIN-FIX] reject"
+                          << (!wlnl_shift_ok ? " wlnl_shift" :
+                              !continuity_ok ? " continuity" :
+                              !float_jump_ok ? " float_jump" :
+                              !ratio_ok ? " ratio" :
+                              " minfix")
+                          << " jump=" << fixed_float_jump_m
+                          << " continuity=" << continuity_jump_m
+                          << " limit=" << max_fixed_float_jump_m
+                          << " ratio=" << solution.ratio
+                          << " streak=" << clas_kinematic_fix_candidate_streak_
+                          << "\n";
+            }
+        }
+    } else if (ppp_config_.kinematic_mode) {
+        clas_kinematic_fix_candidate_streak_ = 0;
+    }
+
+    // MRTKLIB maxdiffp guard — only when still using per-epoch SPP anchoring.
+    // With continuous dynamics the float filter is not re-seeded each epoch.
+    if (ppp_config_.kinematic_mode &&
+        ppp_config_.use_clas_osr_filter &&
+        !ppp_config_.use_dynamics_model &&
+        seed.isValid()) {
+        const Vector3d float_position =
+            filter_state_.state.segment(filter_state_.pos_index, 3);
+        const double spp_divergence_m =
+            (float_position - seed.position_ecef).norm();
+        if (spp_divergence_m > kMrtklibMaxSppDivergenceM) {
+            ++clas_kinematic_spp_divergence_count_;
+            if (clas_kinematic_spp_divergence_count_ >
+                    kMrtklibMaxSppDivergenceEpochs) {
+                if (pppDebugEnabled()) {
+                    std::cerr << "[CLAS-KIN-MAXDIFFP] reset to SPP dist="
+                              << spp_divergence_m << "\n";
+                }
+                filter_state_.state.segment(filter_state_.pos_index, 3) =
+                    seed.position_ecef;
+                for (int i = 0; i < 3; ++i) {
+                    const int idx = filter_state_.pos_index + i;
+                    filter_state_.covariance.row(idx).setZero();
+                    filter_state_.covariance.col(idx).setZero();
+                    const double spp_variance =
+                        seed.position_covariance(i, i) > 0.0
+                            ? seed.position_covariance(i, i)
+                            : 100.0;
+                    filter_state_.covariance(idx, idx) = spp_variance;
+                }
+                solution.position_ecef = seed.position_ecef;
+                solution.status = SolutionStatus::SPP;
+                solution.ratio = 0.0;
+                solution.num_fixed_ambiguities = 0;
+                clas_kinematic_fix_rejected = false;
+                clas_kinematic_fix_candidate_streak_ = 0;
+                clas_kinematic_spp_divergence_count_ = 0;
+                ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
+            }
+        } else {
+            clas_kinematic_spp_divergence_count_ = 0;
+        }
+    }
+
+    had_fixed_last_epoch_ =
+        solution.status == SolutionStatus::PPP_FIXED && !clas_kinematic_fix_rejected;
+
     has_last_processed_time_ = true;
     last_processed_time_ = obs.time;
     ++total_epochs_processed_;
 
+    applyOptionalSolutionEpochMetadata(solution, obs.time, ppp_config_);
+    if (ppp_config_.kinematic_mode && solution.isValid()) {
+        last_published_solution_position_ecef_ = solution.position_ecef;
+        has_last_published_solution_position_ = true;
+    }
     return solution;
 }
 

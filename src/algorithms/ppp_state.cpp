@@ -746,9 +746,13 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
     constexpr double kMinimumGeometryFreeSlipThresholdMeters = 0.5;
     constexpr double kMinimumMwSlipThresholdMeters = 10.0;
     // Enable combination (GF/MW) slip detection in SSR mode even for static,
-    // because MW averaging is needed for Wide-Lane AR.
+    // because MW averaging is needed for Wide-Lane AR. CLAS kinematic OSR uses
+    // OSR-corrected GF/MW in detectClasCycleSlips instead.
+    const bool clas_kinematic_osr =
+        ppp_config_.use_clas_osr_filter && ppp_config_.kinematic_mode;
     const bool use_combination_slip_detection =
-        ppp_config_.kinematic_mode || (ssr_products_loaded_ && ppp_config_.use_ionosphere_free);
+        (ppp_config_.kinematic_mode && !clas_kinematic_osr) ||
+        (ssr_products_loaded_ && ppp_config_.use_ionosphere_free);
 
     for (const auto& satellite : obs.getSatellites()) {
         const std::vector<SignalType> primary_candidates =
