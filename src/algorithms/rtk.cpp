@@ -326,6 +326,8 @@ void RTKProcessor::reset() {
     has_ref_satellite_ = false;
     has_last_epoch_ = false;
     has_last_trusted_time_ = false;
+    has_prev_trusted_position_ = false;
+    current_epoch_nlos_fraction_ = std::numeric_limits<double>::quiet_NaN();
     current_sat_data_.clear();
     gf_l1l2_history_.clear();
     doppler_phase_history_l1_m_.clear();
@@ -760,6 +762,61 @@ std::vector<rtk_selection::SatelliteSelectionData> RTKProcessor::buildSelectionS
         item.lock_count_l5 = l5_it != lock_count_l5_.end() ? l5_it->second : 0;
         snapshot.push_back(item);
     }
+
+    // WP8: hard NLOS exclusion. Both buildMeasurementBlocks() (float KF)
+    // and buildDoubleDifferencePairs() (AR/LAMBDA candidate set) call this
+    // one shared function to get their satellite candidate list, so
+    // filtering it here applies identically to both consumers. No-op
+    // (bit-identical) unless nlos_weight_mode == EXCLUDE and a weight
+    // table is loaded, exactly mirroring the WP7 sigma-inflation hook's own
+    // absent-flag guard.
+    if (rtk_config_.nlos_weight_mode == nlos_weights::NlosWeightMode::EXCLUDE &&
+        nlos_weight_table_ && !nlos_weight_table_->empty()) {
+        std::set<SatelliteId> excluded;
+        for (const auto& item : snapshot) {
+            const double los_prob = nlos_weights::lookupLosProb(
+                *nlos_weight_table_, current_epoch_time_.tow, item.satellite.toString(),
+                rtk_config_.nlos_tow_tolerance_s);
+            if (nlos_weights::nlosShouldExclude(
+                    los_prob, rtk_config_.nlos_weight_mode, rtk_config_.nlos_exclude_threshold)) {
+                excluded.insert(item.satellite);
+            }
+        }
+        const bool guard_allows = nlos_weights::nlosExclusionGuardAllows(
+            static_cast<int>(snapshot.size()), static_cast<int>(excluded.size()),
+            rtk_config_.nlos_min_sats);
+        if (guard_allows) {
+            // Second guard: never exclude a system's *last* remaining
+            // reference-satellite candidate -- that would zero out the
+            // whole system's DD set rather than just shrinking it, even if
+            // the epoch-wide min-sats floor above was satisfied.
+            for (GNSSSystem system : kRTKSupportedSystems) {
+                SatelliteId full_ref;
+                if (!rtk_selection::selectSystemReferenceSatellite(snapshot, system, 0, full_ref)) {
+                    continue;  // no reference candidate at all pre-exclusion; nothing to protect
+                }
+                if (excluded.count(full_ref) == 0) continue;
+                std::vector<rtk_selection::SatelliteSelectionData> trial;
+                trial.reserve(snapshot.size());
+                for (const auto& item : snapshot) {
+                    if (excluded.count(item.satellite) == 0) trial.push_back(item);
+                }
+                SatelliteId trial_ref;
+                if (!rtk_selection::selectSystemReferenceSatellite(trial, system, 0, trial_ref)) {
+                    excluded.erase(full_ref);
+                }
+            }
+            if (!excluded.empty()) {
+                std::vector<rtk_selection::SatelliteSelectionData> filtered;
+                filtered.reserve(snapshot.size());
+                for (auto& item : snapshot) {
+                    if (excluded.count(item.satellite) == 0) filtered.push_back(std::move(item));
+                }
+                snapshot = std::move(filtered);
+            }
+        }
+    }
+
     return snapshot;
 }
 
@@ -1453,7 +1510,91 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
                 seeded = true;
             }
         }
-        if (!seeded) {
+
+        // WP9: float-trust-policy graceful degradation. Only ever consulted
+        // once trust has lapsed (the previous processed epoch did not
+        // refresh trust) -- on every epoch of a healthy segment this block
+        // is skipped entirely and the pre-WP9 legacy branch below runs
+        // unchanged, matching WP8's finding that the wide reset should only
+        // need softening during an actual trust drought. LEGACY (the
+        // default) never enters this block at all.
+        bool wp9_seeded = false;
+        if (!seeded &&
+            rtk_config_.float_trust_policy != float_trust_policy::FloatTrustPolicy::LEGACY) {
+            const bool trust_refreshed_last_epoch =
+                has_last_trusted_time_ && has_last_epoch_ &&
+                (last_trusted_time_ == last_epoch_time_);
+            const bool trust_lapsed = float_trust_policy::hasTrustLapsed(
+                has_last_trusted_position_ && has_last_trusted_time_,
+                trust_refreshed_last_epoch);
+            if (trust_lapsed) {
+                double dt_epoch = has_last_epoch_ ? (rover_obs.time - last_epoch_time_) : 0.2;
+                if (!std::isfinite(dt_epoch) || dt_epoch <= 0.0) dt_epoch = 0.2;
+
+                if (rtk_config_.float_trust_policy ==
+                        float_trust_policy::FloatTrustPolicy::CV_PREDICT &&
+                    has_last_solution_position_) {
+                    Vector3d velocity = Vector3d::Zero();
+                    if (has_prev_trusted_position_ && has_last_trusted_position_ &&
+                        has_last_trusted_time_) {
+                        velocity = float_trust_policy::estimateVelocityFromTrustedDeltas(
+                            last_trusted_position_, prev_trusted_position_,
+                            last_trusted_time_ - prev_trusted_time_, 10.0);
+                    }
+                    rover_pos = float_trust_policy::predictPositionConstantVelocity(
+                        last_solution_position_, velocity, dt_epoch);
+                    const double previous_var_pos = filter_state_.covariance(0, 0);
+                    var_pos = float_trust_policy::growPositionVarianceCvPredict(
+                        previous_var_pos, rtk_config_.trust_lapse_qpos_m2_per_s, dt_epoch, 900.0);
+                    wp9_seeded = true;
+                } else if (rtk_config_.float_trust_policy ==
+                               float_trust_policy::FloatTrustPolicy::SCALED_RESET &&
+                           spp.isValid()) {
+                    const double dt_since_trust = has_last_trusted_time_
+                        ? std::max(rover_obs.time - last_trusted_time_, 0.0)
+                        : 1.0e6;  // never trusted yet -> effectively at the legacy cap
+                    rover_pos = spp.position_ecef;
+                    var_pos = float_trust_policy::scaledResetPositionVariance(
+                        25.0, rtk_config_.trust_lapse_qpos_m2_per_s, dt_since_trust, 900.0);
+                    wp9_seeded = true;
+                } else if (rtk_config_.float_trust_policy ==
+                               float_trust_policy::FloatTrustPolicy::LAPSE_GATED &&
+                           spp.isValid()) {
+                    // WP10: only switch off the LEGACY path once the
+                    // *continuous* trust lapse exceeds the configured
+                    // gate (or, optionally, on a sufficiently NLOS-heavy
+                    // epoch regardless of lapse length). Below the gate
+                    // (and with the optional NLOS trigger off/unmet),
+                    // wp9_seeded is deliberately left false so this falls
+                    // straight through to the unmodified legacy fallback
+                    // branch below -- bit-identical to LEGACY for short
+                    // lapses by construction, not just numerically close.
+                    const double dt_since_trust = has_last_trusted_time_
+                        ? std::max(rover_obs.time - last_trusted_time_, 0.0)
+                        : 1.0e6;  // never trusted yet -> effectively at the legacy cap
+                    // current_epoch_nlos_fraction_ still holds the *previous*
+                    // epoch's value here (this epoch's own value isn't
+                    // computed until collectSatelliteData() runs, later in
+                    // processRTKEpoch()) -- a one-epoch-lagged proxy, cheap
+                    // and adequate for the multi-second-to-minute NLOS-heavy
+                    // dwells (e.g. the canyon) this trigger targets.
+                    const bool nlos_frac_trigger =
+                        rtk_config_.trust_lapse_gate_nlos_frac >= 0.0 &&
+                        std::isfinite(current_epoch_nlos_fraction_) &&
+                        current_epoch_nlos_fraction_ > rtk_config_.trust_lapse_gate_nlos_frac;
+                    if (float_trust_policy::lapseGateExceeded(
+                            dt_since_trust, rtk_config_.trust_lapse_gate_s) ||
+                        nlos_frac_trigger) {
+                        rover_pos = spp.position_ecef;
+                        var_pos = float_trust_policy::scaledResetPositionVariance(
+                            25.0, rtk_config_.trust_lapse_qpos_m2_per_s, dt_since_trust, 900.0);
+                        wp9_seeded = true;
+                    }
+                }
+            }
+        }
+
+        if (!seeded && !wp9_seeded) {
             if (rtk_config_.prefer_rover_position_seed &&
                 rover_obs.receiver_position.norm() > 1e6) {
                 rover_pos = rover_obs.receiver_position;
@@ -1493,6 +1634,8 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
     solution.time = rover_obs.time;
     solution.status = SolutionStatus::NONE;
     current_update_diagnostics_ = RTKUpdateDiagnostics{};
+    // WP7: record current tow for buildMeasurementBlocks()'s NLOS weight lookup.
+    current_epoch_time_ = rover_obs.time;
 
     try {
         const bool moving_base_mode = isMovingBasePositionMode(rtk_config_);
@@ -1570,6 +1713,31 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
         auto sat_data = collectSatelliteData(rover_obs, base_obs, nav);
         if (sat_data.size() < 4) {
             return fallback_spp();
+        }
+
+        // WP9/WP10: cache this epoch's NLOS fraction (sat_data is only
+        // available locally here) for two downstream readers: WP9's
+        // rememberSolution() jump-gate relax check (same epoch), and
+        // WP10's LAPSE_GATED --trust-lapse-gate-nlos-frac trigger, which
+        // reads it (necessarily one-epoch-lagged) from the *next*
+        // epoch's resetPositionToSPP(), called before this recomputation.
+        // NaN unless one of the two levers is on and a table is loaded --
+        // std::isfinite() at every read site gates this to a strict no-op
+        // otherwise.
+        current_epoch_nlos_fraction_ = std::numeric_limits<double>::quiet_NaN();
+        if ((rtk_config_.trust_gate_nlos_relax ||
+             rtk_config_.trust_lapse_gate_nlos_frac >= 0.0) &&
+            nlos_weight_table_ && !nlos_weight_table_->empty()) {
+            int total = 0;
+            int nlos = 0;
+            for (const auto& kv : sat_data) {
+                ++total;
+                const double los_prob = nlos_weights::lookupLosProb(
+                    *nlos_weight_table_, current_epoch_time_.tow, kv.first.toString(),
+                    rtk_config_.nlos_tow_tolerance_s);
+                if (los_prob < 0.5) ++nlos;
+            }
+            current_epoch_nlos_fraction_ = total > 0 ? static_cast<double>(nlos) / total : 0.0;
         }
 
         double state_dt = 1.0;
@@ -1953,6 +2121,25 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
     const auto selection_snapshot = buildSelectionSnapshot(sat_data);
     std::vector<rtk_measurement::MeasurementBlock> blocks;
 
+    // WP7: NLOS/multipath sigma inflation. Returns 1.0 (no-op) whenever the
+    // feature is off or no table/entry is available, so this is bit-identical
+    // to pre-WP7 behavior by construction when nlos_weight_mode == OFF.
+    const bool nlos_weighting_active =
+        rtk_config_.nlos_weight_mode != nlos_weights::NlosWeightMode::OFF &&
+        nlos_weight_table_ && !nlos_weight_table_->empty();
+    auto nlos_variance_factor = [&](const SatelliteId& sat) -> double {
+        if (!nlos_weighting_active) return 1.0;
+        const double los_prob = nlos_weights::lookupLosProb(
+            *nlos_weight_table_, current_epoch_time_.tow, sat.toString(),
+            rtk_config_.nlos_tow_tolerance_s);
+        return nlos_weights::nlosVarianceInflationFactor(
+            los_prob,
+            rtk_config_.nlos_weight_mode,
+            rtk_config_.nlos_continuous_los_prob_floor,
+            rtk_config_.nlos_two_tier_los_threshold,
+            rtk_config_.nlos_two_tier_sigma_inflation);
+    };
+
     for (GNSSSystem system : kRTKSupportedSystems) {
         if (!isEnabledRTKSystem(rtk_config_, system)) continue;
         SatelliteId ref_sat;
@@ -2036,8 +2223,9 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 return;
             }
             const double ref_snr = signal_snr_dbhz(ref_sd, freq);
-            const double ref_phase_variance = varerr(ref_sd.elevation, true, ref_snr);
-            const double ref_code_variance = varerr(ref_sd.elevation, false, ref_snr);
+            const double ref_nlos_factor = nlos_variance_factor(ref_sat);
+            const double ref_phase_variance = varerr(ref_sd.elevation, true, ref_snr) * ref_nlos_factor;
+            const double ref_code_variance = varerr(ref_sd.elevation, false, ref_snr) * ref_nlos_factor;
 
             for (const auto& pair : system_pairs) {
                 if (pair.freq != freq) continue;
@@ -2054,8 +2242,9 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 const double sat_wavelength = freq_wavelength_local(sd, freq);
                 if (sat_wavelength <= 0.0) continue;
                 const double sat_snr = signal_snr_dbhz(sd, freq);
-                const double sat_phase_variance = varerr(sd.elevation, true, sat_snr);
-                const double sat_code_variance = varerr(sd.elevation, false, sat_snr);
+                const double sat_nlos_factor = nlos_variance_factor(sat);
+                const double sat_phase_variance = varerr(sd.elevation, true, sat_snr) * sat_nlos_factor;
+                const double sat_code_variance = varerr(sd.elevation, false, sat_snr) * sat_nlos_factor;
                 const int sat_iono_idx = estimate_iono ? II(sat) : -1;
                 const double sat_iono_scale =
                     estimate_iono
@@ -2192,6 +2381,22 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
         update_result.normalized_innovation_squared_per_observation;
     current_update_diagnostics_.rejected_by_innovation_gate =
         update_result.rejected_by_innovation_gate;
+
+    // WP8 canyon forensics: mirror into the public per-epoch debug
+    // telemetry (see EpochDebugTelemetry's float_update_* fields).
+    debug_telemetry_.float_update_observation_count = update_result.observation_count;
+    debug_telemetry_.float_update_prefit_residual_rms_m = update_result.prefit_residual_rms_m;
+    debug_telemetry_.float_update_post_suppression_residual_rms_m =
+        update_result.post_suppression_residual_rms_m;
+    debug_telemetry_.float_update_nis_per_observation =
+        update_result.normalized_innovation_squared_per_observation;
+    debug_telemetry_.float_update_suppressed_outliers = update_result.suppressed_outliers;
+    debug_telemetry_.float_position_covariance_trace_m2 =
+        filter_state_.covariance.rows() >= 3 && filter_state_.covariance.cols() >= 3
+            ? filter_state_.covariance(0, 0) + filter_state_.covariance(1, 1) +
+                  filter_state_.covariance(2, 2)
+            : std::numeric_limits<double>::quiet_NaN();
+
     return update_result.ok;
 }
 
@@ -2243,6 +2448,33 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         debug_telemetry_.reject_reason = "too_few_pairs";
         debug_telemetry_.ar_skip_reason = ARSkipReason::DD_PAIRS_LT_4_BEFORE_VAR_FILTER;
         return false;
+    }
+
+    // WP10 (WP8 recommendation 2): --nlos-min-los-sats AR-acceptance gate.
+    // Gates AR only -- it never touches buildSelectionSnapshot()/
+    // buildMeasurementBlocks(), so the float-KF update for this epoch is
+    // completely unaffected either way. No-op unless nlos_min_los_sats > 0
+    // and a weight table is loaded (mirrors WP8 EXCLUDE's own absent-flag
+    // guard style).
+    if (rtk_config_.nlos_min_los_sats > 0 && nlos_weight_table_ &&
+        !nlos_weight_table_->empty()) {
+        std::set<SatelliteId> candidate_sats;
+        for (const auto& pair : dd_pairs) {
+            candidate_sats.insert(pair.ref_sat);
+            candidate_sats.insert(pair.sat);
+        }
+        int los_count = 0;
+        for (const auto& sat : candidate_sats) {
+            const double los_prob = nlos_weights::lookupLosProb(
+                *nlos_weight_table_, current_epoch_time_.tow, sat.toString(),
+                rtk_config_.nlos_tow_tolerance_s);
+            if (los_prob >= 0.5) ++los_count;
+        }
+        if (!nlos_weights::nlosMinLosSatsGateAllows(los_count, rtk_config_.nlos_min_los_sats)) {
+            debug_telemetry_.reject_reason = "too_few_los_sats";
+            debug_telemetry_.ar_skip_reason = ARSkipReason::TOO_FEW_LOS_SATS;
+            return false;
+        }
     }
 
     std::vector<rtk_measurement::AmbiguityDifference> differences;
@@ -2323,7 +2555,15 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     double effective_ratio_threshold = rtk_config_.ambiguity_ratio_threshold;
     if (rtk_config_.ar_policy != RTKConfig::ARPolicy::DEMO5_CONTINUOUS) {
         if (consecutive_fix_count_ >= rtk_config_.min_hold_count && has_last_fixed_position_) {
-            effective_ratio_threshold = 2.0;
+            // WP7 dead-knob fix: honor the configured hold-ambiguity ratio
+            // threshold (--hold-ratio-threshold) instead of a hardcoded 2.0.
+            // Default hold_ambiguity_ratio_threshold is 2.0 (rtk.hpp), so this
+            // is bit-identical unless a caller explicitly overrides the flag.
+            effective_ratio_threshold =
+                std::isfinite(rtk_config_.hold_ambiguity_ratio_threshold) &&
+                rtk_config_.hold_ambiguity_ratio_threshold > 0.0
+                    ? rtk_config_.hold_ambiguity_ratio_threshold
+                    : 2.0;
         }
     }
     debug_telemetry_.effective_ratio_threshold = effective_ratio_threshold;
@@ -2652,7 +2892,13 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         debug_telemetry_.full_lambda_solved = full_solved;
         if (full_solved) {
             debug_telemetry_.full_ratio = ratio;
-            if (ratio >= effective_ratio_threshold) {
+            // WP7 dead-knob fix: passesArFilter is a no-op AND term when
+            // enable_ar_filter is false (its default), so this preserves the
+            // exact base ratio >= threshold gate unless --arfilter is set.
+            if (ratio >= effective_ratio_threshold &&
+                rtk_ar_evaluation::passesArFilter(
+                    rtk_config_.enable_ar_filter, ratio, effective_ratio_threshold,
+                    rtk_config_.ar_filter_margin)) {
                 fixed = true;
 
                 // WL-NL cross-validation: verify LAMBDA integers match WL-NL
@@ -2861,6 +3107,11 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                 return false;
             }
             if (sub_ratio < effective_ratio_threshold) {
+                return false;
+            }
+            if (!rtk_ar_evaluation::passesArFilter(
+                    rtk_config_.enable_ar_filter, sub_ratio, effective_ratio_threshold,
+                    rtk_config_.ar_filter_margin)) {
                 return false;
             }
 
@@ -3646,10 +3897,29 @@ void RTKProcessor::rememberSolution(const PositionSolution& solution) {
             }
             const double trusted_jump =
                 (solution.position_ecef - last_trusted_position_).norm();
-            refresh_trusted = trusted_jump <= std::max(3.0, 6.0 * dt);
+            // WP9 optional lever: relax the jump gate 2x when a majority of
+            // this epoch's tracked satellites are NLOS-flagged (per the
+            // loaded weight table). No-op (multiplier stays 1.0) unless
+            // both --trust-gate-nlos-relax is set and current_epoch_nlos_
+            // fraction_ was actually computed this epoch (finite).
+            double jump_gate_multiplier = 1.0;
+            if (rtk_config_.trust_gate_nlos_relax &&
+                std::isfinite(current_epoch_nlos_fraction_) &&
+                current_epoch_nlos_fraction_ > 0.5) {
+                jump_gate_multiplier = 2.0;
+            }
+            refresh_trusted = trusted_jump <= std::max(3.0, 6.0 * dt) * jump_gate_multiplier;
         }
     }
     if (refresh_trusted) {
+        // WP9: remember the trust sample being replaced so CV_PREDICT can
+        // derive a two-point constant-velocity estimate from the last two
+        // trusted deltas. No effect on any exported solution.
+        if (has_last_trusted_position_ && has_last_trusted_time_) {
+            prev_trusted_position_ = last_trusted_position_;
+            prev_trusted_time_ = last_trusted_time_;
+            has_prev_trusted_position_ = true;
+        }
         last_trusted_position_ = solution.position_ecef;
         has_last_trusted_position_ = true;
         last_trusted_time_ = solution.time;

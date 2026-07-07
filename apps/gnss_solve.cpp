@@ -7,10 +7,13 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include <libgnss++/algorithms/nlos_weights.hpp>
+#include <libgnss++/algorithms/float_trust_policy.hpp>
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/rtk_validation.hpp>
 #include <libgnss++/algorithms/spp.hpp>
@@ -210,6 +213,32 @@ struct SolveConfig {
     bool enable_bsr_guided_decimation = false;
     int bsr_guided_worst_axes = 3;
     int bsr_guided_max_drop_steps = 6;
+    // WP7: NLOS/multipath measurement weighting. Empty path / OFF mode
+    // (both defaults) mean the feature is entirely inert.
+    std::string nlos_weights_csv_path;
+    libgnss::nlos_weights::NlosWeightMode nlos_weight_mode =
+        libgnss::nlos_weights::NlosWeightMode::OFF;
+    double nlos_two_tier_los_threshold = 0.5;
+    double nlos_two_tier_sigma_inflation = 3.0;
+    double nlos_continuous_los_prob_floor = 0.05;
+    double nlos_tow_tolerance_s = 0.05;
+    // WP8: hard exclusion mode threshold/safety-guard. No effect unless
+    // --nlos-weight-mode exclude.
+    double nlos_exclude_threshold = 0.5;
+    int nlos_min_sats = 5;
+    // WP9: float-filter trust/reset policy. LEGACY (default) is
+    // bit-identical to pre-WP9 behavior.
+    libgnss::float_trust_policy::FloatTrustPolicy float_trust_policy =
+        libgnss::float_trust_policy::FloatTrustPolicy::LEGACY;
+    double trust_lapse_qpos_m2_per_s = 10.0;
+    bool trust_gate_nlos_relax = false;
+    // WP10: lapse-gated trust policy + optional NLOS-fraction trigger.
+    // No effect unless --float-trust-policy lapse-gated.
+    double trust_lapse_gate_s = 5.0;
+    double trust_lapse_gate_nlos_frac = -1.0;
+    // WP10 (WP8 rec 2): AR-acceptance-only min-LOS-satellites gate.
+    // <= 0 (default) disables it; requires --nlos-weights.
+    int nlos_min_los_sats = 0;
 };
 
 double timeDiffSeconds(const libgnss::GNSSTime& a, const libgnss::GNSSTime& b) {
@@ -761,7 +790,11 @@ public:
               << "selected_fixed_ambiguities,selected_used_subset,"
               << "used_wlnl_fallback,validation_attempted,validation_passed,"
               << "postfix_residual_rms,fixed_float_jump_m,post_validation_rejected,"
-              << "final_fixed_applied,reject_reason,ar_skip_reason\n";
+              << "final_fixed_applied,reject_reason,ar_skip_reason,"
+              << "float_update_observation_count,float_update_prefit_residual_rms_m,"
+              << "float_update_post_suppression_residual_rms_m,"
+              << "float_update_nis_per_observation,float_update_suppressed_outliers,"
+              << "float_position_covariance_trace_m2\n";
         return true;
     }
 
@@ -834,7 +867,17 @@ public:
               << telemetry.post_validation_rejected << ","
               << telemetry.final_fixed_applied << ","
               << telemetry.reject_reason << ","
-              << libgnss::RTKProcessor::arSkipReasonToString(telemetry.ar_skip_reason) << "\n";
+              << libgnss::RTKProcessor::arSkipReasonToString(telemetry.ar_skip_reason) << ","
+              << telemetry.float_update_observation_count << ",";
+        writeNumber(telemetry.float_update_prefit_residual_rms_m);
+        file_ << ",";
+        writeNumber(telemetry.float_update_post_suppression_residual_rms_m);
+        file_ << ",";
+        writeNumber(telemetry.float_update_nis_per_observation);
+        file_ << ","
+              << telemetry.float_update_suppressed_outliers << ",";
+        writeNumber(telemetry.float_position_covariance_trace_m2);
+        file_ << "\n";
         file_.flush();
     }
 
@@ -1014,6 +1057,78 @@ void printUsage(const char* program_name) {
         << "                             per-pair loadings against (default: 3)\n"
         << "  --bsr-max-drops <n>        Max pairs to drop progressively in BSR-guided\n"
         << "                             decimation (default: 6)\n"
+        << "  --nlos-weights <csv>       WP7: per-epoch per-satellite LOS/NLOS weight CSV\n"
+        << "                             (columns: tow,sat,los_prob; also accepts the\n"
+        << "                             tow,epoch_idx,prn,is_los,... contract emitted by\n"
+        << "                             build_per_epoch_nlos_csv.py). Requires\n"
+        << "                             --nlos-weight-mode to have any effect.\n"
+        << "  --nlos-weight-mode <off|two-tier|continuous|exclude>\n"
+        << "                             Sigma-inflation (or WP8 hard exclusion) mapping for\n"
+        << "                             NLOS satellites (default: off — bit-identical to no\n"
+        << "                             NLOS weighting)\n"
+        << "  --nlos-two-tier-threshold <v>\n"
+        << "                             los_prob below this is treated as NLOS in\n"
+        << "                             two-tier mode (default: 0.5)\n"
+        << "  --nlos-two-tier-inflation <v>\n"
+        << "                             Sigma multiplier for NLOS satellites in two-tier\n"
+        << "                             mode (default: 3.0)\n"
+        << "  --nlos-continuous-floor <v>\n"
+        << "                             Floor on los_prob before the 1/sqrt(...) sigma\n"
+        << "                             mapping in continuous mode (default: 0.05)\n"
+        << "  --nlos-tow-tolerance <s>   Tow-matching tolerance for the NLOS weight CSV\n"
+        << "                             (default: 0.05)\n"
+        << "  --nlos-exclude-threshold <v>\n"
+        << "                             WP8: los_prob below this is dropped from DD\n"
+        << "                             formation entirely in exclude mode (default: 0.5)\n"
+        << "  --nlos-min-sats <n>        WP8: exclude-mode safety guard -- skip exclusion for\n"
+        << "                             an epoch (keep all satellites) if it would leave\n"
+        << "                             fewer than this many in the candidate set (default: 5)\n"
+        << "  --float-trust-policy <legacy|cv-predict|scaled-reset|lapse-gated>\n"
+        << "                             WP9/WP10: policy for resetPositionToSPP() once the\n"
+        << "                             previous epoch failed to refresh position trust.\n"
+        << "                             legacy (default): unconditional wide reset to\n"
+        << "                             900 m^2/axis, reseeded from SPP -- bit-identical to\n"
+        << "                             pre-WP9 behavior. cv-predict: propagate the previous\n"
+        << "                             position with a constant-velocity predict and grow\n"
+        << "                             covariance at --trust-lapse-qpos instead of jumping\n"
+        << "                             to 900. scaled-reset: keep the SPP reseed but scale\n"
+        << "                             the reset variance with time-since-trust instead of\n"
+        << "                             using a flat 900 (from the very first lapsed epoch).\n"
+        << "                             lapse-gated (WP10): scaled-reset's law, but only once\n"
+        << "                             the *continuous* trust lapse exceeds --trust-lapse-\n"
+        << "                             gate-s seconds (or --trust-lapse-gate-nlos-frac\n"
+        << "                             triggers) -- below the gate, behaves exactly like\n"
+        << "                             legacy (bit-identical), fixing scaled-reset's WP9\n"
+        << "                             regression on short/benign lapses. All non-legacy\n"
+        << "                             policies are capped at 900 m^2/axis (converge to\n"
+        << "                             legacy under a long drought)\n"
+        << "  --trust-lapse-qpos <v>     WP9/WP10: process-noise rate (m^2/s) used by\n"
+        << "                             cv-predict (linear growth per second) and\n"
+        << "                             scaled-reset/lapse-gated (quadratic growth in\n"
+        << "                             time-since-trust). No effect when --float-trust-policy\n"
+        << "                             legacy (default: 10.0; WP9/WP10's run1 winner is 0.1)\n"
+        << "  --trust-lapse-gate-s <s>   WP10: seconds of continuous trust lapse required\n"
+        << "                             before --float-trust-policy lapse-gated switches from\n"
+        << "                             legacy to the scaled-reset law (default: 5.0). No\n"
+        << "                             effect unless --float-trust-policy lapse-gated\n"
+        << "  --trust-lapse-gate-nlos-frac <f>\n"
+        << "                             WP10 optional second trigger for lapse-gated: when\n"
+        << "                             set (>= 0) and --nlos-weights is loaded, ALSO switch\n"
+        << "                             to the scaled-reset law (regardless of lapse length)\n"
+        << "                             on epochs whose NLOS-flagged satellite fraction\n"
+        << "                             exceeds this value (one-epoch-lagged; default: off/\n"
+        << "                             disabled). No effect unless --float-trust-policy\n"
+        << "                             lapse-gated\n"
+        << "  --trust-gate-nlos-relax    WP9 optional lever: relax rememberSolution()'s FLOAT\n"
+        << "                             trust-refresh jump gate 2x when >50% of this epoch's\n"
+        << "                             tracked satellites are NLOS-flagged per --nlos-weights\n"
+        << "                             (default: off; also requires --nlos-weights to have\n"
+        << "                             any effect, independent of --nlos-weight-mode)\n"
+        << "  --nlos-min-los-sats <n>    WP10: AR-acceptance-only gate (never touches the\n"
+        << "                             float-KF update) -- require at least n LOS-flagged\n"
+        << "                             satellites (per --nlos-weights) among the AR\n"
+        << "                             candidate set before attempting/accepting a fix\n"
+        << "                             (default: 0, disabled). Requires --nlos-weights\n"
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
         << "                             (default: 0, disabled; e.g. 10 for aggressive urban reconvergence)\n"
@@ -1110,6 +1225,24 @@ GlonassARChoice parseGlonassARChoice(const std::string& value, const char* progr
     if (value == "on") return GlonassARChoice::ON;
     if (value == "autocal") return GlonassARChoice::AUTOCAL;
     argumentError("unsupported --glonass-ar value: " + value, program_name);
+}
+
+libgnss::nlos_weights::NlosWeightMode parseNlosWeightMode(const std::string& value,
+                                                           const char* program_name) {
+    if (value == "off") return libgnss::nlos_weights::NlosWeightMode::OFF;
+    if (value == "two-tier") return libgnss::nlos_weights::NlosWeightMode::TWO_TIER;
+    if (value == "continuous") return libgnss::nlos_weights::NlosWeightMode::CONTINUOUS;
+    if (value == "exclude") return libgnss::nlos_weights::NlosWeightMode::EXCLUDE;
+    argumentError("unsupported --nlos-weight-mode value: " + value, program_name);
+}
+
+libgnss::float_trust_policy::FloatTrustPolicy parseFloatTrustPolicy(const std::string& value,
+                                                                     const char* program_name) {
+    if (value == "legacy") return libgnss::float_trust_policy::FloatTrustPolicy::LEGACY;
+    if (value == "cv-predict") return libgnss::float_trust_policy::FloatTrustPolicy::CV_PREDICT;
+    if (value == "scaled-reset") return libgnss::float_trust_policy::FloatTrustPolicy::SCALED_RESET;
+    if (value == "lapse-gated") return libgnss::float_trust_policy::FloatTrustPolicy::LAPSE_GATED;
+    argumentError("unsupported --float-trust-policy value: " + value, program_name);
 }
 
 RTKTuningPreset parseRTKTuningPreset(const std::string& value, const char* program_name) {
@@ -1380,6 +1513,34 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.bsr_guided_worst_axes = std::stoi(argv[++i]);
         } else if (arg == "--bsr-max-drops" && i + 1 < argc) {
             config.bsr_guided_max_drop_steps = std::stoi(argv[++i]);
+        } else if (arg == "--nlos-weights" && i + 1 < argc) {
+            config.nlos_weights_csv_path = argv[++i];
+        } else if (arg == "--nlos-weight-mode" && i + 1 < argc) {
+            config.nlos_weight_mode = parseNlosWeightMode(argv[++i], argv[0]);
+        } else if (arg == "--nlos-two-tier-threshold" && i + 1 < argc) {
+            config.nlos_two_tier_los_threshold = std::stod(argv[++i]);
+        } else if (arg == "--nlos-two-tier-inflation" && i + 1 < argc) {
+            config.nlos_two_tier_sigma_inflation = std::stod(argv[++i]);
+        } else if (arg == "--nlos-continuous-floor" && i + 1 < argc) {
+            config.nlos_continuous_los_prob_floor = std::stod(argv[++i]);
+        } else if (arg == "--nlos-tow-tolerance" && i + 1 < argc) {
+            config.nlos_tow_tolerance_s = std::stod(argv[++i]);
+        } else if (arg == "--nlos-exclude-threshold" && i + 1 < argc) {
+            config.nlos_exclude_threshold = std::stod(argv[++i]);
+        } else if (arg == "--nlos-min-sats" && i + 1 < argc) {
+            config.nlos_min_sats = std::stoi(argv[++i]);
+        } else if (arg == "--float-trust-policy" && i + 1 < argc) {
+            config.float_trust_policy = parseFloatTrustPolicy(argv[++i], argv[0]);
+        } else if (arg == "--trust-lapse-qpos" && i + 1 < argc) {
+            config.trust_lapse_qpos_m2_per_s = std::stod(argv[++i]);
+        } else if (arg == "--trust-lapse-gate-s" && i + 1 < argc) {
+            config.trust_lapse_gate_s = std::stod(argv[++i]);
+        } else if (arg == "--trust-lapse-gate-nlos-frac" && i + 1 < argc) {
+            config.trust_lapse_gate_nlos_frac = std::stod(argv[++i]);
+        } else if (arg == "--trust-gate-nlos-relax") {
+            config.trust_gate_nlos_relax = true;
+        } else if (arg == "--nlos-min-los-sats" && i + 1 < argc) {
+            config.nlos_min_los_sats = std::stoi(argv[++i]);
         } else if (arg == "--max-consec-float-reset" && i + 1 < argc) {
             config.max_consecutive_float_for_reset = std::stoi(argv[++i]);
         } else if (arg == "--max-consec-nonfix-reset" && i + 1 < argc) {
@@ -1498,6 +1659,40 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.ar_filter_margin < 0.0) {
         argumentError("--arfilter-margin must be >= 0", argv[0]);
+    }
+    if (config.nlos_weight_mode != libgnss::nlos_weights::NlosWeightMode::OFF &&
+        config.nlos_weights_csv_path.empty()) {
+        argumentError("--nlos-weight-mode requires --nlos-weights <csv>", argv[0]);
+    }
+    if (config.nlos_two_tier_los_threshold < 0.0 || config.nlos_two_tier_los_threshold > 1.0) {
+        argumentError("--nlos-two-tier-threshold must be in [0, 1]", argv[0]);
+    }
+    if (config.nlos_two_tier_sigma_inflation < 1.0) {
+        argumentError("--nlos-two-tier-inflation must be >= 1", argv[0]);
+    }
+    if (config.nlos_continuous_los_prob_floor <= 0.0 || config.nlos_continuous_los_prob_floor > 1.0) {
+        argumentError("--nlos-continuous-floor must be in (0, 1]", argv[0]);
+    }
+    if (config.nlos_tow_tolerance_s < 0.0) {
+        argumentError("--nlos-tow-tolerance must be >= 0", argv[0]);
+    }
+    if (config.nlos_exclude_threshold < 0.0 || config.nlos_exclude_threshold > 1.0) {
+        argumentError("--nlos-exclude-threshold must be in [0, 1]", argv[0]);
+    }
+    if (config.nlos_min_sats < 0) {
+        argumentError("--nlos-min-sats must be >= 0", argv[0]);
+    }
+    if (config.trust_lapse_qpos_m2_per_s < 0.0) {
+        argumentError("--trust-lapse-qpos must be >= 0", argv[0]);
+    }
+    if (config.trust_lapse_gate_s < 0.0) {
+        argumentError("--trust-lapse-gate-s must be >= 0", argv[0]);
+    }
+    if (config.trust_lapse_gate_nlos_frac > 1.0) {
+        argumentError("--trust-lapse-gate-nlos-frac must be <= 1 (or negative to disable)", argv[0]);
+    }
+    if (config.nlos_min_los_sats < 0) {
+        argumentError("--nlos-min-los-sats must be >= 0", argv[0]);
     }
     if (config.min_hold_count < 0) {
         argumentError("--min-hold-count must be >= 0", argv[0]);
@@ -1823,6 +2018,19 @@ int main(int argc, char* argv[]) {
         rtk_config.hold_ambiguity_ratio_threshold = config.hold_ratio_threshold;
         rtk_config.enable_ar_filter = config.enable_ar_filter;
         rtk_config.ar_filter_margin = config.ar_filter_margin;
+        rtk_config.nlos_weight_mode = config.nlos_weight_mode;
+        rtk_config.nlos_two_tier_los_threshold = config.nlos_two_tier_los_threshold;
+        rtk_config.nlos_two_tier_sigma_inflation = config.nlos_two_tier_sigma_inflation;
+        rtk_config.nlos_continuous_los_prob_floor = config.nlos_continuous_los_prob_floor;
+        rtk_config.nlos_tow_tolerance_s = config.nlos_tow_tolerance_s;
+        rtk_config.nlos_exclude_threshold = config.nlos_exclude_threshold;
+        rtk_config.nlos_min_sats = config.nlos_min_sats;
+        rtk_config.float_trust_policy = config.float_trust_policy;
+        rtk_config.trust_lapse_qpos_m2_per_s = config.trust_lapse_qpos_m2_per_s;
+        rtk_config.trust_gate_nlos_relax = config.trust_gate_nlos_relax;
+        rtk_config.trust_lapse_gate_s = config.trust_lapse_gate_s;
+        rtk_config.trust_lapse_gate_nlos_frac = config.trust_lapse_gate_nlos_frac;
+        rtk_config.nlos_min_los_sats = config.nlos_min_los_sats;
         rtk_config.min_satellites_for_ar = config.min_satellites_for_ar;
         rtk_config.min_subset_pairs_for_ar = config.min_subset_pairs_for_ar;
         rtk_config.max_subset_drop_steps_for_ar = config.max_subset_drop_steps_for_ar;
@@ -1920,6 +2128,13 @@ int main(int argc, char* argv[]) {
         rtk_config.enable_bsr_guided_decimation = config.enable_bsr_guided_decimation;
         rtk_config.bsr_guided_worst_axes = config.bsr_guided_worst_axes;
         rtk_config.bsr_guided_max_drop_steps = config.bsr_guided_max_drop_steps;
+        if (!config.nlos_weights_csv_path.empty()) {
+            auto table = std::make_shared<libgnss::nlos_weights::NlosWeightTable>(
+                libgnss::nlos_weights::loadNlosWeightsCsv(config.nlos_weights_csv_path));
+            std::cout << "Loaded NLOS weights: " << config.nlos_weights_csv_path
+                      << " (" << table->by_tow.size() << " distinct epochs)" << std::endl;
+            rtk_processor.setNlosWeightTable(std::move(table));
+        }
         rtk_processor.setRTKConfig(rtk_config);
         libgnss::SPPProcessor::SPPConfig spp_config;
         spp_config.use_multi_constellation = true;
