@@ -115,6 +115,8 @@ set(GNSS_SOURCES
 set(GNSS_SOURCES_NO_OPTIMIZATION
     src/algorithms/rtk_ar_selection.cpp
     src/algorithms/rtk_ar_evaluation.cpp
+    src/algorithms/nlos_weights.cpp
+    src/algorithms/float_trust_policy.cpp
     src/algorithms/rtk_measurement.cpp
     src/algorithms/rtk_selection.cpp
     src/algorithms/rtk_update.cpp
