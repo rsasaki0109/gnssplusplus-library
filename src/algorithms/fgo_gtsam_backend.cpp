@@ -62,7 +62,10 @@
 #include <limits>
 #include <map>
 #include <numeric>
+#include <optional>
 #include <set>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 namespace libgnss {
@@ -766,6 +769,118 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     // apply_per_sat_residual_gate keeps them out of the LAMBDA tree).
     std::set<SatelliteId> gate_bad_sats;
 
+    // --- Sat-badness EWMA down-weighting state (FGOConfig::
+    // use_sat_badness_downweight; port of the inuex35 reference's
+    // preprocess/sat_quality.py SatQualityState). See use_sat_badness_
+    // downweight's comment in fgo.hpp for the full behavioural summary and
+    // deviations (cppr substitution, satellite identity, el/snr wiring,
+    // pair-update gating). All maps are no-ops (never populated, never
+    // read) whenever the master switch is off.
+    //
+    // last_ddpr_per_sat: snapshot of this epoch's (pre-FDE) per_sat_res,
+    // taken once per epoch below and read by the NEXT epoch's DD factor
+    // build for the res_s term -- reference tc._last_main_ddpr_per_sat /
+    // _mres_signals.per_sat, which is likewise set from main_ddpr_residuals'
+    // per-sat map and consumed one epoch later at factor-build time.
+    std::map<SatelliteId, double> sb_last_ddpr_per_sat;
+    std::map<SatelliteId, double> sb_obsq_ewma;
+    std::map<SatelliteId, int> sb_obsq_bad_streak;
+    std::map<SatelliteId, double> sb_recent_worst;
+    std::map<SatelliteId, double> sb_recent_cppr;
+    std::map<SatelliteId, double> sb_recent_ref_bad;
+    std::map<std::tuple<SatelliteId, SatelliteId, SignalType>, double> sb_recent_pair_bad;
+    std::map<SatelliteId, double> sb_latest_el_deg;
+    std::map<SatelliteId, double> sb_latest_snr_dbhz;
+    // Deviation (see fgo.hpp): substitute for the reference's unported
+    // CP-vs-PR innovation-consistency reject counter (rejc_cp_pr). Persistent
+    // per-(satellite, signal) count of THIS backend's own FDE carrier
+    // rejections; never reset (no analogue of the reference's unported
+    // cp_pr_rejc_max wipe). Structurally empty/0 whenever use_fde is off.
+    std::map<std::pair<SatelliteId, SignalType>, int> sb_fde_cp_reject_count;
+
+    // Continuous per-(reference, target, signal) badness score (0 when the
+    // master switch is off). `ref_sat` non-null adds the directional-pair
+    // term (only when sat_badness_alpha_recent_pair > 0 -- see fgo.hpp
+    // deviation 5). Mirrors SatQualityState.sat_badness() term-for-term.
+    auto satBadness = [&](SatelliteId sat_id, SignalType freq,
+                          const SatelliteId* ref_sat) -> double {
+        if (!config.use_sat_badness_downweight) return 0.0;
+        const double ddpr_thr = std::max(1e-6, config.sat_badness_ddpr_threshold_m);
+        const int cppr_thr = std::max(1, config.sat_badness_cppr_threshold);
+        const double alpha_ddpr = std::max(0.0, config.sat_badness_alpha_ddpr);
+        const double alpha_cppr = std::max(0.0, config.sat_badness_alpha_cppr);
+        const double alpha_recent_cppr = std::max(0.0, config.sat_badness_alpha_recent_cppr);
+        const double alpha_recent_worst = std::max(0.0, config.sat_badness_alpha_recent_worst);
+        const double alpha_recent_ref = std::max(0.0, config.sat_badness_alpha_recent_ref);
+        const double alpha_recent_pair = std::max(0.0, config.sat_badness_alpha_recent_pair);
+        const double alpha_obsq_ewma = std::max(0.0, config.sat_badness_alpha_obsq_ewma);
+        const double alpha_obsq_streak = std::max(0.0, config.sat_badness_alpha_obsq_streak);
+        const double alpha_el = std::max(0.0, config.sat_badness_alpha_el);
+        const double alpha_snr = std::max(0.0, config.sat_badness_alpha_snr);
+        const double obsq_thr = std::max(1e-6, config.sat_badness_obsq_res_threshold_m);
+        const int obsq_streak_cap = std::max(1, config.sat_badness_obsq_bad_streak_cap);
+        const double el_ref_deg = std::max(1.0, config.sat_badness_el_ref_deg);
+        const double snr_ref_dbhz = config.sat_badness_snr_ref_dbhz;
+        const double snr_span_db = std::max(1.0, config.sat_badness_snr_span_db);
+
+        double score = 0.0;
+        {
+            const auto it = sb_last_ddpr_per_sat.find(sat_id);
+            const double res_s = it != sb_last_ddpr_per_sat.end() ? it->second : 0.0;
+            if (res_s > 0.0) score += alpha_ddpr * (res_s / ddpr_thr);
+        }
+        {
+            const auto it = sb_fde_cp_reject_count.find(std::make_pair(sat_id, freq));
+            const int cppr = it != sb_fde_cp_reject_count.end() ? it->second : 0;
+            if (cppr > 0) score += alpha_cppr * (static_cast<double>(cppr) / cppr_thr);
+        }
+        {
+            const auto it = sb_recent_cppr.find(sat_id);
+            const double q = it != sb_recent_cppr.end() ? it->second : 0.0;
+            if (q > 0.0) score += alpha_recent_cppr * (q / cppr_thr);
+        }
+        {
+            const auto it = sb_recent_worst.find(sat_id);
+            const double q = it != sb_recent_worst.end() ? it->second : 0.0;
+            if (q > 0.0) score += alpha_recent_worst * q;
+        }
+        {
+            const auto it = sb_recent_ref_bad.find(sat_id);
+            const double q = it != sb_recent_ref_bad.end() ? it->second : 0.0;
+            if (q > 0.0) score += alpha_recent_ref * q;
+        }
+        if (ref_sat != nullptr && alpha_recent_pair > 0.0) {
+            const auto it = sb_recent_pair_bad.find(std::make_tuple(*ref_sat, sat_id, freq));
+            const double q = it != sb_recent_pair_bad.end() ? it->second : 0.0;
+            if (q > 0.0) score += alpha_recent_pair * q;
+        }
+        {
+            const auto it = sb_obsq_ewma.find(sat_id);
+            const double q = it != sb_obsq_ewma.end() ? it->second : 0.0;
+            if (q > 0.0) score += alpha_obsq_ewma * (q / obsq_thr);
+        }
+        {
+            const auto it = sb_obsq_bad_streak.find(sat_id);
+            const int streak = std::min(obsq_streak_cap, it != sb_obsq_bad_streak.end() ? it->second : 0);
+            if (streak > 0) {
+                score += alpha_obsq_streak * (static_cast<double>(streak) / obsq_streak_cap);
+            }
+        }
+        if (alpha_el > 0.0) {
+            const auto it = sb_latest_el_deg.find(sat_id);
+            const double el_deg = it != sb_latest_el_deg.end() ? it->second : 90.0;
+            const double penalty = std::max(0.0, std::min(1.0, (el_ref_deg - el_deg) / el_ref_deg));
+            score += alpha_el * penalty;
+        }
+        if (alpha_snr > 0.0) {
+            const auto it = sb_latest_snr_dbhz.find(sat_id);
+            const double snr = it != sb_latest_snr_dbhz.end() ? it->second : snr_ref_dbhz;
+            const double penalty = std::max(0.0, std::min(1.0, (snr_ref_dbhz - snr) / snr_span_db));
+            score += alpha_snr * penalty;
+        }
+        return std::max(0.0, score);
+    };
+
     // --- CP-hold / sanity FSM state (use_cp_hold_recovery) ---
     //
     // Arc-regeneration overlay: our front-end (fgo.cpp) statically assigns one
@@ -1100,6 +1215,15 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 ++result.diagnostics.ambiguity_generation_bumps;
                 live_ambiguity_indices.erase(amb_idx);
                 if (rejected_ambiguity_indices) rejected_ambiguity_indices->insert(amb_idx);
+                // Sat-badness cppr substitute (see fgo.hpp deviation 1): count
+                // this FDE carrier reject against the arc's physical
+                // (satellite, signal) identity. Cheap and harmless when the
+                // master switch is off; only actually consumed by satBadness()
+                // when config.use_sat_badness_downweight is true.
+                if (amb_idx < problem.ambiguity_states.size()) {
+                    const auto& amb = problem.ambiguity_states[amb_idx];
+                    ++sb_fde_cp_reject_count[std::make_pair(amb.satellite, amb.signal)];
+                }
             }
 
             gtsam::FactorIndices remove_indices;
@@ -1341,7 +1465,25 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 Point3(factor.base_satellite_position_ecef),
                 Point3(factor.base_reference_position_ecef),
                 Point3(factor.base_position_ecef)};
-            const auto noise = makeNoise(factor.sigma_m, robust,
+            // Sat-badness sigma inflation (FGOConfig::use_sat_badness_downweight;
+            // port of factors.py's _add_ddpr_factor): bad_pair = max badness of
+            // the pair's two satellites, computed from the PREVIOUS epoch's
+            // quality state (see satBadness()/sb_last_ddpr_per_sat above), then
+            // inflates the base sigma BEFORE robust-loss wrapping -- mirrors the
+            // reference's base noise -> scale -> robust-wrap order exactly.
+            double pr_sigma = factor.sigma_m;
+            if (config.use_sat_badness_downweight) {
+                const double bad_pair = std::max(
+                    satBadness(factor.reference_satellite, factor.signal, nullptr),
+                    satBadness(factor.satellite, factor.signal, &factor.reference_satellite));
+                result.diagnostics.sat_badness_max_score_seen =
+                    std::max(result.diagnostics.sat_badness_max_score_seen, bad_pair);
+                if (config.sat_badness_pseudorange_sigma_scale > 0.0 && bad_pair > 0.0) {
+                    pr_sigma *= (1.0 + config.sat_badness_pseudorange_sigma_scale * bad_pair);
+                    ++result.diagnostics.sat_badness_downweighted_factors;
+                }
+            }
+            const auto noise = makeNoise(pr_sigma, robust,
                                          config.pseudorange_huber_threshold_sigma);
             const std::size_t local_idx = new_factors.size();
             new_factors.emplace_shared<gtsam::DoubleDifferencePseudorangeFactorArm>(
@@ -1431,7 +1573,23 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 Point3(factor.base_satellite_position_ecef),
                 Point3(factor.base_reference_position_ecef),
                 Point3(factor.base_position_ecef)};
-            const auto noise = makeNoise(factor.sigma_m, robust,
+            // Sat-badness sigma inflation (port of factors.py's
+            // _compute_cp_sigma; the ddcp_res_weight_* block further down in
+            // the reference is a separate, unported mechanism -- out of
+            // scope). Same bad_pair formula as the DD PR site above.
+            double cp_sigma = factor.sigma_m;
+            if (config.use_sat_badness_downweight) {
+                const double bad_pair = std::max(
+                    satBadness(factor.reference_satellite, factor.signal, nullptr),
+                    satBadness(factor.satellite, factor.signal, &factor.reference_satellite));
+                result.diagnostics.sat_badness_max_score_seen =
+                    std::max(result.diagnostics.sat_badness_max_score_seen, bad_pair);
+                if (config.sat_badness_carrier_sigma_scale > 0.0 && bad_pair > 0.0) {
+                    cp_sigma *= (1.0 + config.sat_badness_carrier_sigma_scale * bad_pair);
+                    ++result.diagnostics.sat_badness_downweighted_factors;
+                }
+            }
+            const auto noise = makeNoise(cp_sigma, robust,
                                          config.carrier_phase_huber_threshold_sigma);
             const std::size_t cp_local_idx = new_factors.size();
             new_factors.emplace_shared<gtsam::DoubleDifferenceCarrierPhaseFactorArm>(
@@ -1724,11 +1882,18 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         // (use_cp_hold_recovery) below -- the two features are independent
         // knobs but share this one (possibly expensive) residual pass. ---
         const bool need_ddpr_residuals =
-            config.use_epoch_quality_gates || config.use_cp_hold_recovery;
+            config.use_epoch_quality_gates || config.use_cp_hold_recovery ||
+            config.use_sat_badness_downweight;
         int nsat = 0;
         double gdop = std::numeric_limits<double>::infinity();
         double ddpr_rms = 0.0;
         std::map<SatelliteId, double> per_sat_res;
+        // Per-(ref, target, signal) residual rows, only collected when the
+        // sat-badness pair term is actually active (fgo.hpp deviation 5) --
+        // feeds update_pair_quality below.
+        const bool collect_pair_rows =
+            config.use_sat_badness_downweight && config.sat_badness_alpha_recent_pair > 0.0;
+        std::vector<std::tuple<SatelliteId, SatelliteId, SignalType, double>> sb_pair_rows;
         if (need_ddpr_residuals) {
             const Point3 ant_p = antennaOf(pose_i);
             const Vector3d ant(ant_p.x(), ant_p.y(), ant_p.z());
@@ -1778,8 +1943,150 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 worst = std::max(worst, res);
                 double& worst_ref = per_sat_res[fp->reference_satellite];
                 worst_ref = std::max(worst_ref, res);
+                if (collect_pair_rows) {
+                    sb_pair_rows.emplace_back(fp->reference_satellite, fp->satellite,
+                                              fp->signal, res);
+                }
             }
             ddpr_rms = res_n > 0 ? std::sqrt(res_sq_sum / static_cast<double>(res_n)) : 0.0;
+        }
+
+        // --- Sat-badness EWMA down-weighting: per-epoch state update
+        // (FGOConfig::use_sat_badness_downweight; port of the reference's
+        // update_reference_quality / update_observation_quality /
+        // update_pair_quality, called once per epoch directly off THIS
+        // epoch's pre-FDE per_sat_res -- same ordering as the reference's
+        // stage.py _compute_postfit_diagnostics, which calls these BEFORE
+        // apply_fde). ---
+        if (config.use_sat_badness_downweight) {
+            constexpr double kRadToDegSb = 180.0 / 3.14159265358979323846;
+
+            // (a) update_reference_quality: decay/update recent_ref_bad for
+            // every DISTINCT reference satellite backing this epoch's DD
+            // pseudorange factors (the reference selects one ref per
+            // (system, signal) group; only the set of currently-active refs
+            // matters here, not the group key itself).
+            {
+                const double decay = std::min(1.0, std::max(0.0, config.sat_badness_recent_ref_decay));
+                const double thr = std::max(1e-6, config.sat_badness_obsq_res_threshold_m);
+                std::set<SatelliteId> active_refs;
+                for (const auto* fp : pr_by_epoch[i]) active_refs.insert(fp->reference_satellite);
+                for (SatelliteId r : active_refs) {
+                    const double prev = sb_recent_ref_bad.count(r) ? sb_recent_ref_bad[r] : 0.0;
+                    const auto it = per_sat_res.find(r);
+                    const double res = it != per_sat_res.end() ? it->second : 0.0;
+                    const double incr = res > 0.0 ? std::min(2.0, res / thr) : 0.0;
+                    sb_recent_ref_bad[r] = decay * prev + incr;
+                }
+                for (auto& [sid, v] : sb_recent_ref_bad) {
+                    if (!active_refs.count(sid)) v = decay * v;
+                }
+            }
+
+            // (b) update_observation_quality: per-sat EWMA/streak (hard reset
+            // -- not decay -- for sats not seen this epoch), recent_worst /
+            // recent_cppr decay, and latest el/snr snapshot.
+            std::optional<SatelliteId> worst_sat;
+            {
+                const double alpha = std::min(1.0, std::max(0.0, config.sat_badness_obsq_ewma_alpha));
+                const double thr_obsq = config.sat_badness_obsq_bad_streak_threshold_m;
+                const double worst_decay = std::min(1.0, std::max(0.0, config.sat_badness_recent_worst_decay));
+                const double cppr_decay = std::min(1.0, std::max(0.0, config.sat_badness_recent_cppr_decay));
+
+                std::set<SatelliteId> seen;
+                double worst_val = -1.0;
+                for (const auto& [sid, rmax] : per_sat_res) {
+                    seen.insert(sid);
+                    const double prev = sb_obsq_ewma.count(sid) ? sb_obsq_ewma[sid] : 0.0;
+                    sb_obsq_ewma[sid] = prev <= 0.0 ? rmax : ((1.0 - alpha) * prev + alpha * rmax);
+                    if (rmax > thr_obsq) {
+                        sb_obsq_bad_streak[sid] = (sb_obsq_bad_streak.count(sid) ? sb_obsq_bad_streak[sid] : 0) + 1;
+                    } else {
+                        sb_obsq_bad_streak[sid] = 0;
+                    }
+                    if (rmax > worst_val) {
+                        worst_val = rmax;
+                        worst_sat = sid;
+                    }
+                }
+                for (auto& [sid, v] : sb_obsq_ewma) {
+                    if (!seen.count(sid)) v = 0.0;
+                }
+                for (auto& [sid, v] : sb_obsq_bad_streak) {
+                    if (!seen.count(sid)) v = 0;
+                }
+
+                // recent_cppr's "this epoch" input: our FDE-substitute reject
+                // count as of THIS point in the pipeline (i.e. as of the end
+                // of the LAST epoch FDE actually ran -- FDE for THIS epoch
+                // runs later, below), maxed across signal for each satellite
+                // (mirrors gate.py's sat_cppr_sat: max over freq of
+                // rejc_cp_pr). See fgo.hpp deviation 1.
+                std::map<SatelliteId, double> cppr_this_epoch;
+                for (const auto& [key, cnt] : sb_fde_cp_reject_count) {
+                    double& v = cppr_this_epoch[key.first];
+                    v = std::max(v, static_cast<double>(cnt));
+                }
+
+                std::set<SatelliteId> active_sats(seen);
+                if (worst_sat) active_sats.insert(*worst_sat);
+                for (const auto& [sid, v] : cppr_this_epoch) {
+                    (void)v;
+                    active_sats.insert(sid);
+                }
+
+                for (SatelliteId sid : active_sats) {
+                    const double prev_w = sb_recent_worst.count(sid) ? sb_recent_worst[sid] : 0.0;
+                    const double is_worst = (worst_sat && *worst_sat == sid) ? 1.0 : 0.0;
+                    sb_recent_worst[sid] = worst_decay * prev_w + is_worst;
+
+                    const double prev_c = sb_recent_cppr.count(sid) ? sb_recent_cppr[sid] : 0.0;
+                    const double cppr_cur = cppr_this_epoch.count(sid) ? cppr_this_epoch[sid] : 0.0;
+                    sb_recent_cppr[sid] = cppr_decay * prev_c + cppr_cur;
+                }
+                for (auto& [sid, v] : sb_recent_worst) {
+                    if (!active_sats.count(sid)) v = worst_decay * v;
+                }
+                for (auto& [sid, v] : sb_recent_cppr) {
+                    if (!active_sats.count(sid)) v = cppr_decay * v;
+                }
+
+                // Latest elevation/SNR: only entries observed THIS epoch are
+                // updated (reference: latest_el_deg/latest_snr_dbhz retain
+                // their last-seen value for sats absent this epoch).
+                for (const auto* fp : pr_by_epoch[i]) {
+                    sb_latest_el_deg[fp->satellite] = fp->elevation_rad * kRadToDegSb;
+                    sb_latest_el_deg[fp->reference_satellite] =
+                        fp->rover_reference_model.elevation_rad * kRadToDegSb;
+                    sb_latest_snr_dbhz[fp->satellite] = fp->rover_satellite_model.snr_dbhz;
+                    sb_latest_snr_dbhz[fp->reference_satellite] =
+                        fp->rover_reference_model.snr_dbhz;
+                }
+            }
+
+            // (c) update_pair_quality: gated on the alpha itself (fgo.hpp
+            // deviation 5) -- the reference profile ships alpha_recent_pair
+            // at 0.0, contributing nothing.
+            if (collect_pair_rows) {
+                const double decay = std::min(1.0, std::max(0.0, config.sat_badness_recent_pair_decay));
+                const double thr = std::max(1e-6, config.sat_badness_obsq_res_threshold_m);
+                std::set<std::tuple<SatelliteId, SatelliteId, SignalType>> seen_pairs;
+                for (const auto& [ref, sat, freq, res] : sb_pair_rows) {
+                    const auto key = std::make_tuple(ref, sat, freq);
+                    seen_pairs.insert(key);
+                    const double prev = sb_recent_pair_bad.count(key) ? sb_recent_pair_bad[key] : 0.0;
+                    const double incr = res > 0.0 ? std::min(2.0, res / thr) : 0.0;
+                    sb_recent_pair_bad[key] = decay * prev + incr;
+                }
+                for (auto& [key, v] : sb_recent_pair_bad) {
+                    if (!seen_pairs.count(key)) v = decay * v;
+                }
+            }
+
+            // (d) Snapshot THIS epoch's (pre-FDE) per_sat_res as "last epoch"
+            // for the NEXT epoch's res_s term (reference: tc._mres_signals.
+            // per_sat, set from this same pre-FDE per_sat_res pass).
+            sb_last_ddpr_per_sat = per_sat_res;
         }
 
         // --- Per-epoch quality gates (port of the reference's gate.py /

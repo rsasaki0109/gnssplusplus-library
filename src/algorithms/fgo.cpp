@@ -699,6 +699,7 @@ std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservationsForRe
         model_debug.geometric_range_m = corrected_range;
         model_debug.elevation_rad = geometry.elevation;
         model_debug.azimuth_rad = geometry.azimuth;
+        model_debug.snr_dbhz = observation.snr;
 
         const double sin_el = std::max(0.1, std::sin(geometry.elevation));
         PreparedCarrierObservation carrier;
@@ -1140,6 +1141,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             model_debug.geometric_range_m = corrected_range;
             model_debug.elevation_rad = geometry.elevation;
             model_debug.azimuth_rad = geometry.azimuth;
+            model_debug.snr_dbhz = observation.snr;
 
             PreparedCarrierObservation carrier;
             carrier.satellite = observation.satellite;

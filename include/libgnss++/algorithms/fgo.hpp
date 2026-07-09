@@ -628,6 +628,100 @@ public:
         double fde_max_rejected_fraction = 0.5;     ///< reference fde_max_frac
         int fde_max_iterations = 1;                 ///< reference fde_max_iter (1 = single-pass, the reference default)
         bool fde_median_subtraction = false;        ///< reference FDE_MEDIAN_SUB env knob (default off)
+
+        // --- Sat-badness EWMA down-weighting (port of the inuex35 reference's
+        // preprocess/sat_quality.py SatQualityState.sat_badness() score and its
+        // consumption in buildfactor/factors.py's DD sigma inflation
+        // (_add_ddpr_factor / _compute_cp_sigma)). ---
+        //
+        // A continuous per-(reference, target, signal) "badness" score, built
+        // from persistent per-satellite quality memory that the GTSAM backend
+        // now tracks alongside the existing CP-hold/sanity FSM and FDE state
+        // (see fgo_gtsam_backend.cpp's optimizeProblemFixedLag): an EWMA and a
+        // consecutive-bad-epoch streak of last-epoch's post-fit per-sat DDPR
+        // residual, a decayed "was this the worst satellite" indicator, a
+        // decayed "bad while serving as DD reference" indicator, an optional
+        // decayed directional-pair indicator, and (when the data reaches the
+        // backend -- see below) an elevation and SNR penalty. At each DD
+        // factor's build time, bad_pair = max(badness(ref_sat), badness(
+        // target_sat, paired with ref_sat)) inflates that factor's sigma
+        // BEFORE robust-loss wrapping: sigma *= (1 + scale * bad_pair). This
+        // mirrors the reference's timing exactly: the state feeding a given
+        // epoch's bad_pair is always the PREVIOUS epoch's post-fit residuals
+        // (postfit-then-next-epoch-factor-build), never the current epoch's
+        // own not-yet-computed residual.
+        //
+        // Master switch, default OFF (bit-identical baseline without it: the
+        // score is forced to 0.0 and every sigma computation is a no-op
+        // multiply-by-one that is skipped entirely).
+        //
+        // Deliberate deviations from the reference (see the .cpp change-site
+        // comments for the exact mechanics):
+        //  1. cppr / recent_cppr: the reference's direct-and-recent "CP-vs-PR
+        //     innovation consistency" reject terms are fed by a gate
+        //     (factors.py's rejc_cp_pr) this codebase never ported. Both
+        //     terms are instead fed by a persistent per-(satellite, signal)
+        //     count of THIS backend's own FDE carrier rejections
+        //     (use_fde) -- the closest existing analogue (both flag a
+        //     specific arc's carrier observation as inconsistent with the
+        //     rest of the solution). Unlike the reference's gate, this count
+        //     is never reset (no analogue of the reference's unported
+        //     cp_pr_rejc_max-triggered wipe), so it behaves like the
+        //     reference run with that reset gate disabled. Structurally 0
+        //     whenever use_fde is off, matching "reference with the gate
+        //     disabled" behaviour.
+        //  2. Satellite/pair identity: keyed by this backend's SatelliteId
+        //     and SignalType (the AmbiguityState / DoubleDifference*Factor
+        //     structs already carry per-factor satellite/reference_satellite/
+        //     signal identity) instead of the reference's raw integer sat id
+        //     -- a representational substitution only, not a behavioural one.
+        //  3. Elevation is wired: DoubleDifferencePseudorangeFactor already
+        //     carries the target satellite's elevation_rad, and the
+        //     reference satellite's elevation is available via
+        //     rover_reference_model.elevation_rad -- both populated upstream
+        //     in fgo.cpp, so the el penalty term needed no new plumbing.
+        //  4. SNR required a small addition: ObservationModelDebug gained a
+        //     snr_dbhz field (populated from Observation::snr at both
+        //     model_debug construction sites in fgo.cpp) so the backend can
+        //     read rover_satellite_model.snr_dbhz / rover_reference_model.
+        //     snr_dbhz per DD factor. Deemed small enough to do rather than
+        //     skip (per the port's own scoping note); the snr penalty term
+        //     defaults nonzero like the reference profile.
+        //  5. update_pair_quality's per-(ref, target, signal) memory is only
+        //     updated when sat_badness_alpha_recent_pair > 0 (the reference
+        //     profile ships it at 0.0, i.e. contributing nothing); gating the
+        //     UPDATE itself (not just its consumption) on the alpha avoids
+        //     bookkeeping a term that is provably inert at the shipped
+        //     defaults. No behavioural difference at any alpha value.
+        // Sats not observed in a given epoch hard-reset (not decay) their
+        // EWMA/streak entries to 0/0, exactly matching the reference.
+        bool use_sat_badness_downweight = false;
+        double sat_badness_ddpr_threshold_m = 1.0;        ///< reference sat_badness_ddpr_thresh
+        int sat_badness_cppr_threshold = 1;               ///< reference sat_badness_cppr_thresh
+        double sat_badness_alpha_ddpr = 1.0;
+        double sat_badness_alpha_cppr = 1.0;
+        double sat_badness_alpha_recent_cppr = 0.25;
+        double sat_badness_alpha_recent_worst = 0.75;
+        double sat_badness_alpha_recent_ref = 0.5;
+        double sat_badness_alpha_recent_pair = 0.0;       ///< reference profile default: inert (see deviation 5)
+        double sat_badness_alpha_el = 0.05;
+        double sat_badness_alpha_snr = 0.05;
+        double sat_badness_carrier_sigma_scale = 1.5;     ///< reference sigma_scale_cp
+        double sat_badness_pseudorange_sigma_scale = 0.0; ///< reference sigma_scale_pr
+        double sat_badness_el_ref_deg = 30.0;
+        double sat_badness_snr_ref_dbhz = 40.0;
+        double sat_badness_snr_span_db = 10.0;
+        // --- obsq_* (reference SatQualityState/TcConfig dataclass defaults) ---
+        double sat_badness_obsq_res_threshold_m = 2.0;         ///< reference obsq_res_thresh
+        int sat_badness_obsq_bad_streak_cap = 8;               ///< reference obsq_bad_streak_cap
+        double sat_badness_alpha_obsq_ewma = 1.0;
+        double sat_badness_alpha_obsq_streak = 0.5;
+        double sat_badness_obsq_ewma_alpha = 0.2;               ///< reference obsq_ewma_alpha (getattr default)
+        double sat_badness_obsq_bad_streak_threshold_m = 2.0;   ///< reference obsq_bad_streak_thresh
+        double sat_badness_recent_worst_decay = 0.8;            ///< reference obsq_recent_worst_decay
+        double sat_badness_recent_cppr_decay = 0.8;             ///< reference obsq_recent_cppr_decay
+        double sat_badness_recent_ref_decay = 0.85;             ///< reference obsq_recent_ref_decay
+        double sat_badness_recent_pair_decay = 0.85;            ///< reference obsq_recent_pair_decay
     };
 
     struct EpochSeed {
@@ -648,6 +742,12 @@ public:
         double geometric_range_m = 0.0;
         double elevation_rad = 0.0;
         double azimuth_rad = 0.0;
+        // Raw rover-receiver SNR/CN0 [dB-Hz] for this observation (Observation::snr
+        // at the point this model_debug was built). Added for the sat-badness
+        // EWMA down-weighting port's elevation/SNR penalty terms (see
+        // FGOConfig::use_sat_badness_downweight); unused elsewhere. 0.0 when the
+        // source Observation carried no SNR.
+        double snr_dbhz = 0.0;
     };
 
     struct PseudorangeFactor {
@@ -934,6 +1034,9 @@ public:
         std::size_t fde_carrier_rejections = 0;      ///< total DD CP factors removed
         std::size_t fde_safeguard_skips = 0;         ///< epochs where the reject-fraction safeguard aborted FDE
         std::size_t fde_epochs = 0;                  ///< epochs where >=1 factor was actually removed
+        // --- Sat-badness EWMA down-weighting diagnostics (use_sat_badness_downweight) ---
+        std::size_t sat_badness_downweighted_factors = 0;  ///< DD PR/CP factors whose sigma was inflated (bad_pair>0 and its scale>0)
+        double sat_badness_max_score_seen = 0.0;            ///< max bad_pair score observed across the run
         std::size_t float_rejected_seed_position_divergence = 0;
         std::size_t float_rejected_position_jump = 0;
         bool fixed_solution = false;

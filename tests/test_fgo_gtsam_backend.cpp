@@ -1211,4 +1211,209 @@ TEST(FGOFdeTest, SanityTriggerSeesPreFdeResidualNotPostFde) {
            "FDE cleaned the SAME epoch";
 }
 
+// ============================================================================
+// Sat-badness EWMA down-weighting (FGOConfig::use_sat_badness_downweight) --
+// port of the inuex35 reference's preprocess/sat_quality.py SatQualityState.
+// Reuses makeCpHoldFixedLagProblem/makeCpHoldBaseConfig (defined above): its
+// pr_corrupt_epochs/pr_dominant_extra_bias_m knobs inject a per-satellite DD
+// PSEUDORANGE bias (satellite index 1, i.e. PRN 2) while leaving carrier
+// clean, which is exactly the "chronically bad satellite" pattern the
+// backend's post-fit per-sat DDPR residual (per_sat_res) is meant to detect
+// -- without corrupting the carrier data that the CP-sigma-inflation test
+// needs to stay trustworthy.
+// ============================================================================
+namespace {
+
+// Removes every DD PR/CP factor for one (epoch, satellite PRN) pair,
+// simulating that satellite being untracked/absent for that single epoch --
+// used to exercise the reference's "sats not seen this epoch hard-reset
+// their EWMA/streak to 0" semantics.
+void dropSatelliteAtEpoch(FGOProcessor::FGOProblem& problem, std::size_t epoch_index,
+                          uint8_t satellite_prn) {
+    auto& prs = problem.double_difference_pseudorange_factors;
+    prs.erase(std::remove_if(prs.begin(), prs.end(),
+                             [&](const auto& f) {
+                                 return f.epoch_index == epoch_index &&
+                                        f.satellite.prn == satellite_prn;
+                             }),
+             prs.end());
+    auto& cps = problem.double_difference_carrier_factors;
+    cps.erase(std::remove_if(cps.begin(), cps.end(),
+                             [&](const auto& f) {
+                                 return f.epoch_index == epoch_index &&
+                                        f.satellite.prn == satellite_prn;
+                             }),
+             cps.end());
+}
+
+}  // namespace
+
+TEST(FGOSatBadnessTest, DefaultOffIsNoOp) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 25;
+    opt.pr_corrupt_epochs = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
+    opt.pr_dominant_extra_bias_m = 3.0;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+    ASSERT_FALSE(config.use_sat_badness_downweight);
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    EXPECT_EQ(result.diagnostics.sat_badness_downweighted_factors, 0u);
+    EXPECT_EQ(result.diagnostics.sat_badness_max_score_seen, 0.0);
+    EXPECT_EQ(result.solution.solutions.size(), problem.epochs.size());
+    for (const auto& sol : result.solution.solutions) {
+        EXPECT_TRUE(sol.position_ecef.allFinite());
+    }
+}
+
+TEST(FGOSatBadnessTest, ChronicallyBadSatelliteScoresHigherThanCleanRun) {
+    CpHoldTestOptions bad_opt;
+    bad_opt.num_epochs = 25;
+    bad_opt.pr_corrupt_epochs = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
+    bad_opt.pr_dominant_extra_bias_m = 3.0;
+    auto bad_problem = makeCpHoldFixedLagProblem(bad_opt);
+
+    CpHoldTestOptions clean_opt;
+    clean_opt.num_epochs = 25;
+    auto clean_problem = makeCpHoldFixedLagProblem(clean_opt);
+
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+    config.use_sat_badness_downweight = true;
+
+    FGOProcessor bad_processor(config);
+    const auto bad_result = bad_processor.optimizeProblem(bad_problem);
+    FGOProcessor clean_processor(config);
+    const auto clean_result = clean_processor.optimizeProblem(clean_problem);
+
+    EXPECT_GT(bad_result.diagnostics.sat_badness_downweighted_factors, 0u)
+        << "the chronically-bad satellite's DD pairs must get inflated";
+    EXPECT_GT(bad_result.diagnostics.sat_badness_max_score_seen,
+              clean_result.diagnostics.sat_badness_max_score_seen)
+        << "a chronically bad satellite's score must clearly exceed a clean run's "
+           "(bad=" << bad_result.diagnostics.sat_badness_max_score_seen
+        << ", clean=" << clean_result.diagnostics.sat_badness_max_score_seen << ")";
+    for (const auto& sol : bad_result.solution.solutions) {
+        EXPECT_TRUE(sol.position_ecef.allFinite());
+    }
+}
+
+TEST(FGOSatBadnessTest, SigmaInflationAffectsCarrierNotPseudorangeAtDefaults) {
+    // Carrier stays clean/true in this fixture; only the DD pseudorange for
+    // satellite PRN 2 carries a bias. Truth is recoverable primarily through
+    // the (unbiased) tight carrier constraint, so this isolates each sigma
+    // knob's effect on the float position at the corrupted epoch.
+    constexpr std::size_t kCorruptEpoch = 19;
+    const Vector3d true_position(1113194.0, -4841695.0, 3985350.0);
+
+    CpHoldTestOptions opt;
+    opt.num_epochs = 25;
+    for (std::size_t e = 10; e <= kCorruptEpoch; ++e) opt.pr_corrupt_epochs.insert(e);
+    opt.pr_dominant_extra_bias_m = 3.0;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig base_config = makeCpHoldBaseConfig();
+
+    FGOProcessor::FGOConfig off_config = base_config;
+    ASSERT_FALSE(off_config.use_sat_badness_downweight);
+    FGOProcessor off_processor(off_config);
+    const auto off_result = off_processor.optimizeProblem(problem);
+    const double off_err =
+        (off_result.solution.solutions[kCorruptEpoch].position_ecef - true_position).norm();
+
+    // Defaults: carrier_sigma_scale=1.5, pseudorange_sigma_scale=0.0. Carrier
+    // is already far tighter than pseudorange in this fixture (0.02 m vs
+    // 0.5 m), so inflating ONLY its sigma by a realistic factor barely moves
+    // the relative PR/CP weighting -- the float position should stay close
+    // to the badness-off baseline.
+    FGOProcessor::FGOConfig cp_config = base_config;
+    cp_config.use_sat_badness_downweight = true;
+    ASSERT_GT(cp_config.sat_badness_carrier_sigma_scale, 0.0);
+    ASSERT_EQ(cp_config.sat_badness_pseudorange_sigma_scale, 0.0);
+    FGOProcessor cp_processor(cp_config);
+    const auto cp_result = cp_processor.optimizeProblem(problem);
+    const double cp_err =
+        (cp_result.solution.solutions[kCorruptEpoch].position_ecef - true_position).norm();
+    EXPECT_NEAR(cp_err, off_err, std::max(0.05, 0.2 * off_err))
+        << "at defaults (pr_scale=0) the float position should be little-changed by CP-only "
+           "sigma inflation (off_err=" << off_err << " m, cp_err=" << cp_err << " m)";
+
+    // Enabling the pseudorange scale on the SAME bad pair should visibly pull
+    // the float back toward truth (down-weighting the biased PR observation
+    // in favour of the clean carrier).
+    FGOProcessor::FGOConfig pr_config = base_config;
+    pr_config.use_sat_badness_downweight = true;
+    pr_config.sat_badness_carrier_sigma_scale = 0.0;
+    pr_config.sat_badness_pseudorange_sigma_scale = 3.0;
+    FGOProcessor pr_processor(pr_config);
+    const auto pr_result = pr_processor.optimizeProblem(problem);
+    const double pr_err =
+        (pr_result.solution.solutions[kCorruptEpoch].position_ecef - true_position).norm();
+    EXPECT_GT(pr_result.diagnostics.sat_badness_downweighted_factors, 0u);
+    EXPECT_LT(pr_err, off_err)
+        << "down-weighting the biased pseudorange should reduce float error vs the "
+           "badness-off baseline (off_err=" << off_err << " m, pr_err=" << pr_err << " m)";
+}
+
+TEST(FGOSatBadnessTest, NotSeenThisEpochHardResetsBeatsContinuousAccumulation) {
+    // Same 10-epoch chronic corruption (epochs 10..19) on satellite PRN 2 in
+    // both variants; the "dropout" variant additionally removes PRN 2's DD
+    // factors ENTIRELY (as if untracked) for one epoch in the middle of that
+    // run. The reference hard-resets (not decays) a not-seen satellite's
+    // EWMA/streak to 0, so the dropout variant's cumulative score should
+    // fall clearly short of the uninterrupted run's peak.
+    CpHoldTestOptions opt;
+    opt.num_epochs = 25;
+    for (std::size_t e = 10; e <= 19; ++e) opt.pr_corrupt_epochs.insert(e);
+    opt.pr_dominant_extra_bias_m = 3.0;
+
+    auto continuous_problem = makeCpHoldFixedLagProblem(opt);
+    auto dropout_problem = makeCpHoldFixedLagProblem(opt);
+    dropSatelliteAtEpoch(dropout_problem, /*epoch_index=*/15, /*satellite_prn=*/2);
+
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+    config.use_sat_badness_downweight = true;
+
+    FGOProcessor continuous_processor(config);
+    const auto continuous_result = continuous_processor.optimizeProblem(continuous_problem);
+    FGOProcessor dropout_processor(config);
+    const auto dropout_result = dropout_processor.optimizeProblem(dropout_problem);
+
+    EXPECT_GT(continuous_result.diagnostics.sat_badness_max_score_seen,
+              dropout_result.diagnostics.sat_badness_max_score_seen)
+        << "an uninterrupted 10-epoch bad streak must accumulate a higher score than the same "
+           "streak with a one-epoch absence resetting EWMA/streak mid-way (continuous="
+        << continuous_result.diagnostics.sat_badness_max_score_seen
+        << ", dropout=" << dropout_result.diagnostics.sat_badness_max_score_seen << ")";
+}
+
+TEST(FGOSatBadnessTest, RecentPairAlphaGatesPairMemoryContribution) {
+    // alpha_recent_pair defaults to 0.0 (reference profile: the pair term is
+    // provably inert). Raising it on the SAME chronically-bad-pair fixture
+    // must be able to increase the observed score/down-weighting -- i.e. the
+    // term is actually wired, just gated off by default.
+    CpHoldTestOptions opt;
+    opt.num_epochs = 25;
+    for (std::size_t e = 10; e <= 19; ++e) opt.pr_corrupt_epochs.insert(e);
+    opt.pr_dominant_extra_bias_m = 3.0;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig off_config = makeCpHoldBaseConfig();
+    off_config.use_sat_badness_downweight = true;
+    ASSERT_EQ(off_config.sat_badness_alpha_recent_pair, 0.0);
+    FGOProcessor off_processor(off_config);
+    const auto off_result = off_processor.optimizeProblem(problem);
+
+    FGOProcessor::FGOConfig pair_config = off_config;
+    pair_config.sat_badness_alpha_recent_pair = 5.0;
+    FGOProcessor pair_processor(pair_config);
+    const auto pair_result = pair_processor.optimizeProblem(problem);
+
+    EXPECT_GT(pair_result.diagnostics.sat_badness_max_score_seen,
+              off_result.diagnostics.sat_badness_max_score_seen)
+        << "raising alpha_recent_pair from its inert default must raise the observed score";
+}
+
 #endif  // GNSSPP_HAS_GTSAM

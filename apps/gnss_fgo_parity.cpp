@@ -95,6 +95,10 @@ struct Args {
     double fde_cp = -1.0;          // >=0: override fde_carrier_threshold_m
     double fde_frac = -1.0;        // >=0: override fde_max_rejected_fraction
     int fde_iters = 0;             // >0: override fde_max_iterations
+    bool sat_badness = false;          // sat-badness EWMA down-weighting (sat_quality.py port)
+    double sat_badness_cp_scale = -1.0;   // >=0: override sat_badness_carrier_sigma_scale
+    double sat_badness_pr_scale = -1.0;   // >=0: override sat_badness_pseudorange_sigma_scale
+    double sat_badness_ddpr_thresh = -1.0; // >=0: override sat_badness_ddpr_threshold_m
 };
 
 Args parseArgs(int argc, char** argv) {
@@ -223,6 +227,14 @@ Args parseArgs(int argc, char** argv) {
             args.fde_frac = std::stod(argv[++i]);
         } else if (a == "--fde-iters" && i + 1 < argc) {
             args.fde_iters = std::stoi(argv[++i]);
+        } else if (a == "--sat-badness") {
+            args.sat_badness = true;
+        } else if (a == "--sat-badness-cp-scale" && i + 1 < argc) {
+            args.sat_badness_cp_scale = std::stod(argv[++i]);
+        } else if (a == "--sat-badness-pr-scale" && i + 1 < argc) {
+            args.sat_badness_pr_scale = std::stod(argv[++i]);
+        } else if (a == "--sat-badness-ddpr-thresh" && i + 1 < argc) {
+            args.sat_badness_ddpr_thresh = std::stod(argv[++i]);
         } else {
             std::cerr << "Unknown/incomplete arg: " << a << "\n";
             std::exit(2);
@@ -862,6 +874,18 @@ int main(int argc, char** argv) {
     if (args.fde_iters > 0) {
         config.fde_max_iterations = args.fde_iters;
     }
+    if (args.sat_badness) {
+        config.use_sat_badness_downweight = true;
+    }
+    if (args.sat_badness_cp_scale >= 0.0) {
+        config.sat_badness_carrier_sigma_scale = args.sat_badness_cp_scale;
+    }
+    if (args.sat_badness_pr_scale >= 0.0) {
+        config.sat_badness_pseudorange_sigma_scale = args.sat_badness_pr_scale;
+    }
+    if (args.sat_badness_ddpr_thresh >= 0.0) {
+        config.sat_badness_ddpr_threshold_m = args.sat_badness_ddpr_thresh;
+    }
     const libgnss::FGOProcessor builder(config);
     const libgnss::FGOProcessor::FGOProblem problem =
         builder.buildDoubleDifferenceProblem(rover_epochs, base_epochs, nav, base_position);
@@ -1067,6 +1091,10 @@ int main(int argc, char** argv) {
                   << ", cp_rejections=" << fl.diagnostics.fde_carrier_rejections
                   << ", safeguard_skips=" << fl.diagnostics.fde_safeguard_skips
                   << ", fde_epochs=" << fl.diagnostics.fde_epochs
+                  << ")\n"
+                  << "  sat-badness down-weighting: " << (args.sat_badness ? "on" : "off")
+                  << " (downweighted_factors=" << fl.diagnostics.sat_badness_downweighted_factors
+                  << ", max_score_seen=" << fl.diagnostics.sat_badness_max_score_seen
                   << ")\n";
         if (!ref_rows.empty()) {
             std::cout << "  horizontal error vs reference.csv:\n"
