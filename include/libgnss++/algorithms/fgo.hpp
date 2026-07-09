@@ -189,6 +189,21 @@ public:
         double zupt_max_gyro_std = 0.030;        ///< stationary gate: gyro deviation std [rad/s]
         double zupt_max_gyro_median = 0.020;     ///< stationary gate: gyro deviation median [rad/s]
         int zupt_min_samples = 5;                ///< minimum IMU samples in window to test
+
+        // --- Phase 2 milestone 2e: fix-and-hold ambiguity resolution ---
+        // In the fixed-lag path, once an arc's DD ambiguity is validated-fixed
+        // (LAMBDA ratio above ambiguity_hold_ratio_threshold), pin it in the
+        // graph with a tight prior at the integer for the remainder of the arc.
+        // Held ambiguities have ~zero variance, so subsequent per-epoch LAMBDA
+        // over the remaining floats passes far more often (fix-rate lever) and
+        // the held integers stabilize the float. Reset is automatic: a cycle
+        // slip / gap makes the problem builder assign a NEW ambiguity index
+        // (fgo.cpp segments arcs on loss_of_lock), which is not in the held set.
+        // Gated; default OFF.
+        bool use_ambiguity_hold = false;
+        double ambiguity_hold_ratio_threshold = 3.0;  ///< min ratio to hold (stricter than fix)
+        double ambiguity_hold_sigma_cycles = 1e-3;    ///< tight prior sigma at the held integer
+        int ambiguity_hold_min_fixed = 4;             ///< min ambiguities in a passing epoch to hold
     };
 
     struct EpochSeed {
@@ -461,8 +476,11 @@ public:
         std::size_t imu_intervals = 0;  ///< 2b: CombinedImuFactors added between epochs
         std::size_t smoother_max_window_vars = 0;  ///< 2c: peak in-window variable count
         std::size_t smoother_updates = 0;          ///< 2c: number of smoother.update() calls
+        std::size_t smoother_recovery_epochs = 0;  ///< 2e: epochs re-anchored after an indeterminate update
         std::size_t nhc_epochs = 0;   ///< 2d: epochs an NHC factor was applied
         std::size_t zupt_epochs = 0;  ///< 2d: epochs a ZUPT prior was applied
+        std::size_t ambiguity_hold_epochs = 0;  ///< 2e: epochs FIXED via held (not fresh) integers
+        std::size_t ambiguity_hold_arcs = 0;    ///< 2e: distinct arcs pinned at their integer
         std::size_t float_rejected_seed_position_divergence = 0;
         std::size_t float_rejected_position_jump = 0;
         bool fixed_solution = false;

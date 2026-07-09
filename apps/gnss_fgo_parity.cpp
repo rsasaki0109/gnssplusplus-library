@@ -26,6 +26,7 @@
 #include <cstddef>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -46,6 +47,10 @@ struct Args {
     double fixed_lag_s = 0.0;    // milestone 2c: >0 enables the fixed-lag smoother
     bool use_nhc = false;        // milestone 2d
     bool use_zupt = false;       // milestone 2d
+    bool use_hold = false;       // milestone 2e: fix-and-hold
+    double elev_mask_deg = -1.0; // milestone 2e: >0 overrides preset elevation mask
+    double snr_mask_dbhz = -1.0; // milestone 2e: >0 sets an SNR mask
+    bool diag = false;           // milestone 2e: Eigen-vs-GTSAM apples fix-rate + freq analysis
 };
 
 Args parseArgs(int argc, char** argv) {
@@ -78,6 +83,14 @@ Args parseArgs(int argc, char** argv) {
             args.use_nhc = true;
         } else if (a == "--zupt") {
             args.use_zupt = true;
+        } else if (a == "--hold") {
+            args.use_hold = true;
+        } else if (a == "--elev-mask" && i + 1 < argc) {
+            args.elev_mask_deg = std::stod(argv[++i]);
+        } else if (a == "--snr-mask" && i + 1 < argc) {
+            args.snr_mask_dbhz = std::stod(argv[++i]);
+        } else if (a == "--diag") {
+            args.diag = true;
         } else {
             std::cerr << "Unknown/incomplete arg: " << a << "\n";
             std::exit(2);
@@ -230,7 +243,8 @@ libgnss::FGOProcessor::FGOResult run(const libgnss::FGOProcessor::FGOProblem& pr
                                      bool use_imu = false,
                                      double fixed_lag_s = 0.0,
                                      bool use_nhc = false,
-                                     bool use_zupt = false) {
+                                     bool use_zupt = false,
+                                     bool use_hold = false) {
     config.backend = backend;
     config.use_lambda_ambiguity_fix = use_lambda;
     config.fix_ambiguities = use_lambda;
@@ -258,6 +272,8 @@ libgnss::FGOProcessor::FGOResult run(const libgnss::FGOProcessor::FGOProblem& pr
     // Milestone 2d: NHC / ZUPT pseudo-measurements.
     config.use_nhc = use_nhc;
     config.use_zupt = use_zupt;
+    // Milestone 2e: fix-and-hold ambiguity resolution.
+    config.use_ambiguity_hold = use_hold;
     libgnss::FGOProcessor processor(config);
     const auto t0 = std::chrono::high_resolution_clock::now();
     auto result = processor.optimizeProblem(problem);
@@ -571,6 +587,16 @@ int main(int argc, char** argv) {
         // undifferenced-pseudorange modeling differences between backends.
         config.use_pseudorange_factors = false;
     }
+    // Milestone 2e lever 2: elevation / SNR masks on the DD observations
+    // (applied at problem-build time -- attacks deep-urban multipath float).
+    if (args.elev_mask_deg > 0.0) {
+        config.min_elevation_deg = args.elev_mask_deg;
+    }
+    if (args.snr_mask_dbhz > 0.0) {
+        config.min_snr_dbhz = args.snr_mask_dbhz;
+        config.double_difference_reference_min_snr_dbhz = args.snr_mask_dbhz;
+        config.double_difference_base_min_snr_dbhz = args.snr_mask_dbhz;
+    }
     const libgnss::FGOProcessor builder(config);
     const libgnss::FGOProcessor::FGOProblem problem =
         builder.buildDoubleDifferenceProblem(rover_epochs, base_epochs, nav, base_position);
@@ -604,7 +630,7 @@ int main(int argc, char** argv) {
         double t_fl = 0.0;
         const auto fl = run(problem_imu, config, libgnss::FGOBackend::GTSAM, true, t_fl,
                             /*use_pose3=*/true, /*use_imu=*/true, args.fixed_lag_s,
-                            args.use_nhc, args.use_zupt);
+                            args.use_nhc, args.use_zupt, args.use_hold);
         std::size_t nonfinite = 0, none_epochs = 0;
         for (const auto& s : fl.solution.solutions) {
             if (s.status == libgnss::SolutionStatus::NONE) ++none_epochs;
@@ -628,7 +654,10 @@ int main(int argc, char** argv) {
                   << "  NHC/ZUPT: nhc=" << (args.use_nhc ? "on" : "off")
                   << " (applied " << fl.diagnostics.nhc_epochs << " epochs), zupt="
                   << (args.use_zupt ? "on" : "off") << " (applied " << fl.diagnostics.zupt_epochs
-                  << " epochs)\n";
+                  << " epochs)\n"
+                  << "  fix-and-hold: " << (args.use_hold ? "on" : "off")
+                  << " (pinned " << fl.diagnostics.ambiguity_hold_arcs << " arcs, "
+                  << fl.diagnostics.ambiguity_hold_epochs << " epochs FIXED via held integers)\n";
         if (!ref_rows.empty()) {
             std::cout << "  horizontal error vs reference.csv:\n"
                       << "    FLOAT: n=" << he.n_float << " rms=" << he.float_rms
@@ -681,8 +710,75 @@ int main(int argc, char** argv) {
                       << "    batch-float horiz err vs ref:    rms=" << he_batch.float_rms << " m\n"
                       << "    smoother-float horiz err vs ref: rms=" << he_flf.float_rms << " m\n";
         }
-        const bool go_2c = fl.diagnostics.smoother_updates == ne && nonfinite == 0 &&
-                           fl.diagnostics.lambda_ambiguity_attempts > 0;
+        // --- 2e gap-attribution diagnostics (--diag) ---
+        if (args.diag) {
+            // (i) Frequency / signal content of the DD carrier factors: is this
+            // single-frequency (L1/E1/B1 only) or multi-frequency? inuex35 runs
+            // NF=3. This is an upstream (front-end / observation-model) property.
+            std::map<int, std::size_t> signal_counts;
+            auto isSecondFreq = [](libgnss::SignalType s) {
+                switch (s) {
+                    case libgnss::SignalType::GPS_L2P:
+                    case libgnss::SignalType::GPS_L2C:
+                    case libgnss::SignalType::GPS_L5:
+                    case libgnss::SignalType::GLO_L2CA:
+                    case libgnss::SignalType::GLO_L2P:
+                    case libgnss::SignalType::GAL_E5A:
+                    case libgnss::SignalType::GAL_E5B:
+                    case libgnss::SignalType::BDS_B2I:
+                    case libgnss::SignalType::BDS_B2A:
+                    case libgnss::SignalType::QZS_L2C:
+                    case libgnss::SignalType::QZS_L5:
+                        return true;
+                    default:
+                        return false;
+                }
+            };
+            std::size_t second_freq = 0;
+            for (const auto& f : problem_imu.double_difference_carrier_factors) {
+                ++signal_counts[static_cast<int>(f.signal)];
+                if (isSecondFreq(f.signal)) ++second_freq;
+            }
+            std::cout << "\n=== (2e diag) gap attribution on the SAME full-run1 FGOProblem ===\n"
+                      << "  (i) DD-carrier signal content: " << signal_counts.size()
+                      << " distinct signal(s); L2/L5/E5/B2 (2nd-freq) DD factors = " << second_freq
+                      << " / " << problem_imu.double_difference_carrier_factors.size() << "  => "
+                      << (second_freq > 0 ? "MULTI-frequency" : "SINGLE-frequency (L1/E1/B1 only)")
+                      << "\n";
+
+            // (ii) Apples-to-apples per-epoch ratio-gated fix-rate WITHOUT
+            // fix-and-hold: Eigen native backend vs GTSAM fixed-lag. Same
+            // problem, same ratio gate (config.lambda_ratio_threshold).
+            double t_e = 0.0, t_g = 0.0;
+            const auto eigen_fix = run(problem_imu, config, libgnss::FGOBackend::Eigen, true, t_e);
+            const std::size_t eigen_fixed = countFixedEpochs(eigen_fix);
+            const auto gtsam_nohold =
+                run(problem_imu, config, libgnss::FGOBackend::GTSAM, true, t_g,
+                    /*use_pose3=*/true, /*use_imu=*/true, args.fixed_lag_s, args.use_nhc,
+                    args.use_zupt, /*use_hold=*/false);
+            const std::size_t gtsam_nohold_fixed = countFixedEpochs(gtsam_nohold);
+            const HorizError he_eigen = horizontalErrorVsRef(eigen_fix, ref_rows);
+            std::cout << "  (ii) per-epoch ratio-gated fix-rate (NO fix-and-hold), same problem:\n"
+                      << "       Eigen native backend: " << eigen_fixed << "/" << ne << " ("
+                      << (ne > 0 ? 100.0 * double(eigen_fixed) / double(ne) : 0.0)
+                      << "%), FIXED horiz rms=" << he_eigen.fixed_rms << " m (" << t_e << " s)\n"
+                      << "       GTSAM fixed-lag:      " << gtsam_nohold_fixed << "/" << ne << " ("
+                      << (ne > 0 ? 100.0 * double(gtsam_nohold_fixed) / double(ne) : 0.0)
+                      << "%) (" << t_g << " s)\n"
+                      << "       => port-faithfulness: GTSAM-no-hold vs Eigen within "
+                      << std::abs(double(gtsam_nohold_fixed) - double(eigen_fixed)) << " epochs\n";
+
+            // (iii) fix-and-hold before -> after (this run has hold on).
+            std::cout << "  (iii) fix-and-hold effect: " << gtsam_nohold_fixed << "/" << ne << " ("
+                      << (ne > 0 ? 100.0 * double(gtsam_nohold_fixed) / double(ne) : 0.0)
+                      << "%) WITHOUT hold  ->  " << fl_fixed << "/" << ne << " ("
+                      << (ne > 0 ? 100.0 * double(fl_fixed) / double(ne) : 0.0)
+                      << "%) WITH hold\n";
+            std::cout.flush();
+        }
+
+        const bool go_2c = fl.diagnostics.smoother_updates >= ne && nonfinite == 0 &&
+                           none_epochs == 0 && fl.diagnostics.lambda_ambiguity_attempts > 0;
         std::cout << "\nRESULT (milestone 2c): fixed-lag full-scale run "
                   << (go_2c ? "GO" : "NO-GO") << " (epochs=" << ne
                   << ", peak_window_vars=" << fl.diagnostics.smoother_max_window_vars

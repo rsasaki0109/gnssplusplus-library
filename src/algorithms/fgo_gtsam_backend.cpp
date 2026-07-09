@@ -585,6 +585,12 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     std::map<std::size_t, int> amb_fixed_cycles;
     std::map<std::size_t, double> amb_fixed_residual;
 
+    // 2e fix-and-hold: arcs whose DD ambiguity has been validated-fixed and
+    // pinned in the graph at its integer (reset automatically when the arc ends
+    // and the builder issues a fresh ambiguity index).
+    std::set<std::size_t> pinned_ambiguities;
+    std::size_t held_epoch_count = 0;
+
     std::set<std::size_t> ambiguity_created;
     bool dummy_created = false;
     constexpr double kDummyPinSigmaCycles = 1e-3;
@@ -805,6 +811,35 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             }
         }
 
+        // --- Preemptive regularization ---
+        // Weak-geometry urban epochs (few DD sats + near-stationary IMU) can
+        // leave a DOF (typically yaw, or velocity/bias) unobservable, so the
+        // incremental Cholesky throws IndeterminantLinearSystemException. That
+        // is unrecoverable here: iSAM2 partially commits the new values before
+        // throwing, and skipping the epoch orphans X(i)/V(i)/B(i) so every later
+        // IMU factor references a missing key ("invalid map key") and the whole
+        // tail cascades. A very loose per-epoch prior on pose/velocity/bias
+        // (anchored to the seed) regularizes the Hessian so it is always
+        // positive-definite. Sigmas are far looser than the real measurements
+        // (rot 10 rad, trans 1000 m, vel 100 m/s, bias 10), so the effect on
+        // the DD-cm solution is negligible -- they only fill rank in the null
+        // space that would otherwise be unobservable.
+        {
+            // Sigmas loose vs the real measurements (DD ~cm, IMU) but tight
+            // enough to keep the Hessian well-conditioned even when an epoch's
+            // measurement info on some DOF is ~0 (few DD sats / IMU dropout):
+            // rot 1 rad, trans 100 m, vel 10 m/s, bias 1.
+            gtsam::Vector6 reg_pose;
+            reg_pose << 1.0, 1.0, 1.0, 100.0, 100.0, 100.0;
+            new_factors.addPrior(positionKey(i), pose_seed,
+                                 gtsam::noiseModel::Diagonal::Sigmas(reg_pose));
+            const gtsam::Vector3 v_reg = vel_seed;
+            new_factors.addPrior<gtsam::Vector3>(velocityKey(i), v_reg,
+                                                 gtsam::noiseModel::Isotropic::Sigma(3, 10.0));
+            new_factors.addPrior(biasKey(i), prev_bias,
+                                 gtsam::noiseModel::Isotropic::Sigma(6, 1.0));
+        }
+
         // --- Smoother update ---
         bool update_ok = true;
         try {
@@ -813,6 +848,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             std::fprintf(stderr, "[fgo_gtsam_backend] smoother.update() epoch %zu threw: %s\n", i,
                          e.what());
             update_ok = false;
+            ++result.diagnostics.smoother_recovery_epochs;
         }
         ++result.diagnostics.smoother_updates;
         if (!update_ok) {
@@ -947,6 +983,43 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                     }
                                 }
                             }
+
+                            // --- 2e fix-and-hold: pin newly-validated arcs at
+                            // their integer so they persist for the rest of the
+                            // arc. Stricter ratio gate than "mark FIXED". ---
+                            if (config.use_ambiguity_hold &&
+                                ratio > config.ambiguity_hold_ratio_threshold &&
+                                n >= config.ambiguity_hold_min_fixed) {
+                                gtsam::NonlinearFactorGraph hold_factors;
+                                const auto hold_noise = gtsam::noiseModel::Isotropic::Sigma(
+                                    1, config.ambiguity_hold_sigma_cycles);
+                                for (int r = 0; r < n; ++r) {
+                                    const std::size_t idx = epoch_amb_indices[r];
+                                    if (pinned_ambiguities.count(idx)) continue;
+                                    const int fi = static_cast<int>(std::lround(fixed_amb(r)));
+                                    hold_factors.addPrior(ambiguityKey(idx),
+                                                          static_cast<double>(fi), hold_noise);
+                                    pinned_ambiguities.insert(idx);
+                                }
+                                if (hold_factors.size() > 0) {
+                                    try {
+                                        smoother.update(hold_factors, gtsam::Values(),
+                                                        gtsam::FixedLagSmoother::KeyTimestampMap());
+                                        ++result.diagnostics.smoother_updates;
+                                        // Re-read epoch i now that holds pin it.
+                                        pose_i = smoother.calculateEstimate<Pose3>(positionKey(i));
+                                        vel_i = smoother.calculateEstimate<gtsam::Vector3>(
+                                            velocityKey(i));
+                                        prev_nav = gtsam::NavState(pose_i, vel_i);
+                                        epoch_float_position[i] = antennaOf(pose_i);
+                                    } catch (const std::exception& e) {
+                                        std::fprintf(stderr,
+                                                     "[fgo_gtsam_backend] hold update epoch %zu "
+                                                     "threw: %s\n",
+                                                     i, e.what());
+                                    }
+                                }
+                            }
                         }
                     }
                 } else {
@@ -954,7 +1027,35 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 }
             }
         }
+
+        // --- 2e fix-and-hold: an epoch whose arcs are (mostly) already held is
+        // FIXED regardless of the fresh per-epoch LAMBDA -- the integers are
+        // known and the smoother position (with the held priors active) is the
+        // fixed solution. This is the main fix-rate lever. ---
+        if (config.use_ambiguity_hold && !epoch_fixed[i]) {
+            int held_here = 0;
+            for (std::size_t idx : epoch_amb_indices) {
+                if (pinned_ambiguities.count(idx)) ++held_here;
+            }
+            if (held_here >= config.ambiguity_hold_min_fixed) {
+                epoch_fixed[i] = true;
+                epoch_fixed_count[i] = held_here;
+                epoch_has_fixed[i] = true;
+                epoch_fixed_position[i] = antennaOf(pose_i);
+                ++held_epoch_count;
+                for (std::size_t idx : epoch_amb_indices) {
+                    if (pinned_ambiguities.count(idx) && !amb_fixed_cycles.count(idx)) {
+                        // Record the held integer (rounded from the current estimate).
+                        const double v = smoother.calculateEstimate<double>(ambiguityKey(idx));
+                        amb_fixed_cycles[idx] = static_cast<int>(std::lround(v));
+                    }
+                }
+            }
+        }
     }
+    result.diagnostics.partial_lambda_ambiguity_fix_used = held_epoch_count > 0;
+    result.diagnostics.ambiguity_hold_epochs = held_epoch_count;
+    result.diagnostics.ambiguity_hold_arcs = pinned_ambiguities.size();
 
     // --- Diagnostics ---
     result.diagnostics.converged = true;
