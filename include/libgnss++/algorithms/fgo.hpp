@@ -64,6 +64,81 @@ public:
         bool use_tdcp_factors = true;
         bool use_carrier_phase_factors = false;
         bool use_double_difference_factors = false;
+        // When true (default) AND use_double_difference_factors, the DD
+        // problem builder emits DD pseudorange + carrier factors for
+        // secondary-band signals too (GPS L2C/L5, Galileo E5A/E5B/E6, BeiDou
+        // B2I/B3I/B2A, QZSS L2C/L5), not just the primary band (L1CA/E1/B1I).
+        // Each (satellite, signal, arc) still gets its own AmbiguityState /
+        // ambiguity index with its own wavelength (see signals.hpp), and the
+        // reference satellite is selected independently per (system, signal)
+        // group so a band with fewer tracked satellites doesn't starve. This
+        // is the front-end lever for closing the fix-rate gap vs multi-
+        // frequency references (inuex35 runs NF=3): feeding the raw per-
+        // frequency DD carrier factors to the joint LAMBDA search already
+        // exploits the inter-frequency information without needing explicit
+        // widelane/narrowlane combinations. GLONASS is unaffected: its DD
+        // factors are already skipped upstream (FDMA, no shared wavelength).
+        // Ignored when use_multi_constellation is false (single GPS-L1 mode).
+        //
+        // Default OFF: on the tokyo1 low-cost PPC data, adding raw L2/L5 DD
+        // measurements REGRESSES the DD-RTK solution vs single-frequency
+        // (fix-rate 52.5% -> 47%, FLOAT 1.6 m -> 7.8 m, <50cm 58% -> 37% on the
+        // first-2500 good-geometry subset), and neither per-band weighting nor
+        // the LAMBDA-independence lever below recovers it (best multi-freq
+        // fix-rate 43.9% still < 52.5%). The secondary-band DD carries a
+        // systematic bias that degrades the float even when correctly
+        // down-weighted -- most consistent with a rover/base observation-CODE
+        // mismatch per band (RINEX C2W/C2L at the rover vs C2W/C2X at the base
+        // both collapse to GPS_L2C, leaving an uncancelled inter-code/DCB bias
+        // in the DD). The capability is fully wired; enable it only after the
+        // secondary-band measurement hygiene (identical code selection at
+        // rover+base, or DCB correction) lands. A wide-lane combination would
+        // INHERIT the same bias, so it is not the right next step.
+        bool use_multi_frequency_double_difference = false;
+
+        // --- MF hygiene: secondary-band observation-code alignment ---
+        // Port of the cssrlib/inuex35 (RTKLIB-style) signal-selection policy:
+        // each receiver uses exactly ONE RINEX observation code per (system,
+        // band) for the whole file (chosen from its own data by an RTKLIB
+        // code-priority table), so all satellites contribute the same code per
+        // band and the between-satellite difference cancels the receiver-side
+        // inter-code bias. Cures the mixed-code DD bias (rover GPS L2 mixing
+        // C2W/C2L across satellites; base BDS B2I C7D vs rover C7I) diagnosed
+        // as the multi-frequency FLOAT blowup. Secondary bands only; the
+        // primary-band single-frequency path is untouched. No-op when
+        // use_multi_frequency_double_difference is false.
+        bool use_double_difference_secondary_code_alignment = true;
+
+        // --- MF-AR step 1: multi-frequency ambiguity-resolution robustness ---
+        // Per-band DD measurement weighting. Secondary-band (L2C/L5/E5a/E5b/
+        // B2I/B2a/...) DD carrier & pseudorange factors are noisier and more
+        // slip-prone on low-cost receivers; adding them at L1-identical sigma
+        // over-weights them and drags the float (observed: naive multi-freq
+        // blew the FLOAT RMS 1.6 m -> 7.8 m). The per-factor sigma is
+        // multiplied by these scales for secondary-band signals only, on top
+        // of the existing elevation weighting. 1.0 = no de-weighting (the old
+        // behaviour). No-op for single-frequency DD (no secondary factors).
+        double double_difference_secondary_carrier_sigma_scale = 3.0;
+        double double_difference_secondary_pseudorange_sigma_scale = 2.0;
+        // LAMBDA candidate independence. When true, the per-epoch LAMBDA
+        // ratio-test candidate set keeps at most one ambiguity per satellite
+        // (primary band preferred, else the longest-wavelength secondary), so
+        // the integer set spans INDEPENDENT satellites instead of multiple
+        // highly-correlated bands of the same satellite. Multiple bands of one
+        // satellite share the same line-of-sight, so they add little to the DD
+        // geometry but do inflate the all-or-nothing ratio test and lower the
+        // ratio (observed: naive multi-freq dropped fix-rate 52.5% -> 47.0%).
+        // The dropped bands' DD factors still constrain the float; they are
+        // just not forced into the integer ratio test. No-op for single-
+        // frequency DD (one band per satellite already).
+        //
+        // Default OFF: measured net-harmful on tokyo1. Because this pipeline's
+        // fix-rate is dominated by fix-and-hold (pinning many arcs early), a
+        // SMALLER integer candidate set pins fewer arcs and lowers the
+        // sustained fix-rate (observed: enabling it dropped multi-freq fix-rate
+        // from 47% to 29%). Kept as an opt-in knob for a future partial-AR
+        // scheme that fixes independent satellites first, then adds bands.
+        bool double_difference_lambda_one_band_per_satellite = false;
         bool use_single_difference_doppler_factors = false;
         bool use_single_difference_tdcp_factors = false;
         bool use_velocity_states = false;
@@ -204,6 +279,38 @@ public:
         double ambiguity_hold_ratio_threshold = 3.0;  ///< min ratio to hold (stricter than fix)
         double ambiguity_hold_sigma_cycles = 1e-3;    ///< tight prior sigma at the held integer
         int ambiguity_hold_min_fixed = 4;             ///< min ambiguities in a passing epoch to hold
+
+        // --- MF-AR step 2: partial AR in the fixed-lag per-epoch LAMBDA ---
+        // Port of the native Eigen path's use_partial_lambda_ambiguity_fix
+        // semantics into the GTSAM fixed-lag smoother's per-epoch LAMBDA:
+        // rank the epoch's ambiguity candidates best-first by (fractional
+        // cycles from the nearest integer, then float variance), cap the set
+        // at max_lambda_ambiguities, and when the ratio test fails retry on
+        // shrinking best-ranked prefixes down to min_fixed_ambiguities. The
+        // validated subset is marked FIXED (and pinned by fix-and-hold as
+        // usual); dropped candidates simply stay float. This is the
+        // all-or-nothing -> partial upgrade: with multipath-corrupted arcs in
+        // the window (urban), P(the ENTIRE candidate set validates) collapses
+        // as the set grows, which is what capped multi-frequency fix-rates.
+        // Separate knob from use_partial_lambda_ambiguity_fix (which is
+        // default-ON and consumed by the Eigen batch path) so the existing
+        // fixed-lag behaviour stays bit-identical unless opted in.
+        bool use_fixed_lag_partial_lambda = false;
+        // Partial-AR subset floor as a fraction of the (capped) candidate
+        // set. Classic partial AR drops a FEW outliers, never the majority:
+        // in deep urban the ratio test over an arbitrarily shrunken subset of
+        // multipath-corrupted candidates passes by chance and labels wrong
+        // integers FIXED (measured on tokyo1 full-run: FIXED rms 5-11 m when
+        // subsets may shrink to min_fixed_ambiguities). The subset never
+        // shrinks below ceil(min_fraction * candidates) (and never below
+        // min_fixed_ambiguities). 1.0 degenerates to all-or-nothing.
+        double fixed_lag_partial_lambda_min_fraction = 0.7;
+        // Exclude Galileo arcs from the LAMBDA candidate set / fix-and-hold
+        // (their DD factors still constrain the float). On tokyo1 the truth-
+        // trajectory DD residuals show ~50% of Galileo arcs (E1 AND E5a) are
+        // multipath-corrupted (vs ~75-90% integer-consistent for GPS/BDS/QZS),
+        // so Galileo candidates mostly poison the all-or-nothing ratio test.
+        bool exclude_galileo_ambiguity_fixing = false;
     };
 
     struct EpochSeed {

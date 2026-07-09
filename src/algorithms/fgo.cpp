@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/models/ionosphere.hpp>
 #include <libgnss++/models/troposphere.hpp>
@@ -54,6 +55,186 @@ bool isPrimaryFgoSignal(SignalType signal, bool use_multi_constellation) {
         default:
             return false;
     }
+}
+
+// Multi-frequency DD gate: primary-band signals are always eligible (same as
+// isPrimaryFgoSignal above). When use_multi_frequency_double_difference is
+// also enabled (and multi-constellation is on), secondary-band signals
+// (GPS L2C/L5, Galileo E5A/E5B/E6, BeiDou B2I/B3I/B2A, QZSS L2C/L5, ...) are
+// eligible too, keyed by the satellite's system via signal_policy. This is
+// the single choke point that previously restricted buildPseudorangeProblem /
+// buildDoubleDifferenceProblem to L1/E1/B1I-only DD factors.
+bool isEligibleFgoSignal(const SatelliteId& satellite,
+                         SignalType signal,
+                         bool use_multi_constellation,
+                         bool use_multi_frequency_double_difference) {
+    if (isPrimaryFgoSignal(signal, use_multi_constellation)) {
+        return true;
+    }
+    if (!use_multi_constellation || !use_multi_frequency_double_difference) {
+        return false;
+    }
+    return signal_policy::isSecondarySignal(satellite.system, signal);
+}
+
+// --- MF hygiene: per-receiver secondary-band observation-code alignment ---
+//
+// Port of the cssrlib/inuex35 (RTKLIB-style) signal-selection policy
+// (tightly-coupled-gnss-imu-fgo utils/sig_autodetect.py): each RECEIVER uses
+// exactly ONE RINEX observation code per (system, band) for the whole file,
+// so every satellite of a system contributes the same code per band and the
+// between-satellite (single) difference cancels the receiver-side inter-code
+// bias exactly. Without this, the RINEX reader's per-satellite first-nonzero
+// column selection MIXES codes across satellites within one band (observed on
+// tokyo1: rover GPS L2 = C2W for 2527 sat-epochs but C2L for the satellites/
+// epochs where C2W is empty; base BeiDou B2I = C7D vs rover C7I), leaving
+// uncancelled inter-code/DCB and carrier phase-alignment biases in the DD --
+// the measured multi-frequency FLOAT blowup. Satellites whose selected column
+// is a different code simply drop that band (like-vs-like or nothing),
+// exactly like cssrlib decoding only the chosen column.
+//
+// The preferred code per (system, SignalType) is chosen per receiver from the
+// codes actually observed in its data, ordered by an RTKLIB-style tracking-
+// code priority string (rtkcmn.c codepris), ties broken by observation count.
+// Applied to SECONDARY bands only: the primary band (L1/E1/B1I) single-
+// frequency path is measured-good and stays bit-identical.
+
+// RTKLIB-style per-(system, band) tracking-code priority (earlier = higher).
+const char* trackingCodePriorityString(GNSSSystem system, int band) {
+    switch (system) {
+        case GNSSSystem::GPS:
+            switch (band) {
+                case 1: return "CPYWMNSL";
+                case 2: return "PYWCMNDLSX";
+                case 5: return "IQX";
+                default: return "";
+            }
+        case GNSSSystem::GLONASS:
+            switch (band) {
+                case 1: return "PC";
+                case 2: return "PC";
+                case 3: return "IQX";
+                default: return "";
+            }
+        case GNSSSystem::Galileo:
+            switch (band) {
+                case 1: return "CABXZ";
+                case 5: return "IQX";
+                case 6: return "ABCXZ";
+                case 7: return "IQX";
+                case 8: return "IQX";
+                default: return "";
+            }
+        case GNSSSystem::BeiDou:
+            switch (band) {
+                case 1: return "DPX";
+                case 2: return "IQX";
+                case 5: return "DPX";
+                case 6: return "IQX";
+                case 7: return "IQXDZ";
+                case 8: return "DPX";
+                default: return "";
+            }
+        case GNSSSystem::QZSS:
+            switch (band) {
+                case 1: return "CLSXZ";
+                case 2: return "LSX";
+                case 5: return "IQXDPZ";
+                case 6: return "SXZ";
+                default: return "";
+            }
+        case GNSSSystem::NavIC:
+            switch (band) {
+                case 5: return "ABCX";
+                default: return "";
+            }
+        default:
+            return "";
+    }
+}
+
+int trackingCodePriority(GNSSSystem system, const std::string& obs_type) {
+    if (obs_type.size() < 3) {
+        return 100;
+    }
+    const int band = signal_policy::rinexBand(obs_type);
+    const char code = obs_type[2];
+    const char* priorities = trackingCodePriorityString(system, band);
+    for (int i = 0; priorities[i] != '\0'; ++i) {
+        if (priorities[i] == code) {
+            return i;
+        }
+    }
+    return 100;
+}
+
+// One preferred tracking-code char per (system, secondary SignalType),
+// derived from the receiver's own observations (single pre-scan pass).
+using SecondaryCodeTable = std::map<std::pair<GNSSSystem, SignalType>, char>;
+
+SecondaryCodeTable buildSecondaryCodeTable(
+    const std::vector<ObservationData>& epochs) {
+    struct CodeStats {
+        int priority = 100;
+        std::size_t count = 0;
+    };
+    std::map<std::pair<GNSSSystem, SignalType>, std::map<char, CodeStats>> stats;
+    for (const auto& epoch : epochs) {
+        for (const auto& observation : epoch.observations) {
+            if (!observation.valid || !observation.has_pseudorange) {
+                continue;
+            }
+            const GNSSSystem system = observation.satellite.system;
+            if (!signal_policy::isSecondarySignal(system, observation.signal)) {
+                continue;
+            }
+            const std::string& obs_type = observation.exactBiasObservationType();
+            if (obs_type.size() < 3) {
+                continue;
+            }
+            auto& entry = stats[{system, observation.signal}][obs_type[2]];
+            entry.priority = trackingCodePriority(system, obs_type);
+            ++entry.count;
+        }
+    }
+
+    SecondaryCodeTable table;
+    for (const auto& [key, codes] : stats) {
+        char best_code = '\0';
+        int best_priority = 101;
+        std::size_t best_count = 0;
+        for (const auto& [code, s] : codes) {
+            if (s.priority < best_priority ||
+                (s.priority == best_priority && s.count > best_count)) {
+                best_code = code;
+                best_priority = s.priority;
+                best_count = s.count;
+            }
+        }
+        if (best_code != '\0') {
+            table[key] = best_code;
+        }
+    }
+    return table;
+}
+
+// True when the observation either is primary-band (never filtered here) or
+// carries the receiver's preferred tracking code for its (system, signal).
+bool passesSecondaryCodeAlignment(const Observation& observation,
+                                  const SecondaryCodeTable* table) {
+    if (table == nullptr) {
+        return true;
+    }
+    const GNSSSystem system = observation.satellite.system;
+    if (!signal_policy::isSecondarySignal(system, observation.signal)) {
+        return true;
+    }
+    const auto it = table->find({system, observation.signal});
+    if (it == table->end()) {
+        return true;
+    }
+    const std::string& obs_type = observation.exactBiasObservationType();
+    return obs_type.size() >= 3 && obs_type[2] == it->second;
 }
 
 GNSSSystem clockBiasGroup(GNSSSystem system) {
@@ -363,7 +544,8 @@ std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservationsForRe
     const FGOProcessor::FGOConfig& config,
     double min_snr_dbhz,
     bool require_carrier_phase = true,
-    bool apply_elevation_mask = true) {
+    bool apply_elevation_mask = true,
+    const SecondaryCodeTable* secondary_code_table = nullptr) {
     std::map<CarrierKey, PreparedCarrierObservation> carriers;
     if (receiver_position.norm() <= 1e6) {
         return carriers;
@@ -376,7 +558,13 @@ std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservationsForRe
 
     const double min_elevation_rad = config.min_elevation_deg * M_PI / 180.0;
     for (const auto& observation : epoch.observations) {
-        if (!isPrimaryFgoSignal(observation.signal, config.use_multi_constellation)) {
+        if (!isEligibleFgoSignal(observation.satellite,
+                                 observation.signal,
+                                 config.use_multi_constellation,
+                                 config.use_multi_frequency_double_difference)) {
+            continue;
+        }
+        if (!passesSecondaryCodeAlignment(observation, secondary_code_table)) {
             continue;
         }
         const bool has_carrier_phase =
@@ -576,6 +764,18 @@ Observation interpolateObservation(const Observation& lower,
         lower.has_glonass_frequency_channel &&
         upper.has_glonass_frequency_channel &&
         lower.glonass_frequency_channel == upper.glonass_frequency_channel;
+    // MF hygiene: never blend two different observation codes of the same
+    // band across the interpolation boundary (e.g. BDS B2I C7D at t0 and C7I
+    // at t1) -- the blend would carry an inter-code bias under a single code
+    // label. Secondary bands only, so the single-frequency (primary band)
+    // path is bit-identical.
+    if (signal_policy::isSecondarySignal(lower.satellite.system, lower.signal) &&
+        (lower.pseudorange_observation_type !=
+             upper.pseudorange_observation_type ||
+         lower.carrier_phase_observation_type !=
+             upper.carrier_phase_observation_type)) {
+        interpolated.valid = false;
+    }
     return interpolated;
 }
 
@@ -699,6 +899,18 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         return problem;
     }
 
+    // MF hygiene: one observation code per (system, secondary band) for this
+    // receiver (cssrlib/RTKLIB-style). Only meaningful when secondary bands
+    // are ingested at all.
+    SecondaryCodeTable rover_secondary_codes;
+    const SecondaryCodeTable* rover_secondary_codes_ptr = nullptr;
+    if (config_.use_multi_frequency_double_difference &&
+        config_.use_double_difference_secondary_code_alignment &&
+        config_.use_multi_constellation) {
+        rover_secondary_codes = buildSecondaryCodeTable(input_epochs);
+        rover_secondary_codes_ptr = &rover_secondary_codes;
+    }
+
     ProcessorConfig spp_processor_config;
     spp_processor_config.mode = PositioningMode::SPP;
     spp_processor_config.elevation_mask = config_.min_elevation_deg;
@@ -762,7 +974,14 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         ecef2geodetic(seed.position_ecef, receiver_lat, receiver_lon, receiver_height);
 
         for (const auto& observation : epoch.observations) {
-            if (!isPrimaryFgoSignal(observation.signal, config_.use_multi_constellation)) {
+            if (!isEligibleFgoSignal(observation.satellite,
+                                     observation.signal,
+                                     config_.use_multi_constellation,
+                                     config_.use_multi_frequency_double_difference)) {
+                continue;
+            }
+            if (!passesSecondaryCodeAlignment(observation,
+                                              rover_secondary_codes_ptr)) {
                 continue;
             }
             if (!observation.valid || !observation.has_pseudorange ||
@@ -1258,6 +1477,17 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
         }
     }
 
+    // MF hygiene: the base receiver gets its own per-(system, secondary band)
+    // code table, mirroring the rover-side table in buildPseudorangeProblem.
+    SecondaryCodeTable base_secondary_codes;
+    const SecondaryCodeTable* base_secondary_codes_ptr = nullptr;
+    if (config_.use_multi_frequency_double_difference &&
+        config_.use_double_difference_secondary_code_alignment &&
+        config_.use_multi_constellation) {
+        base_secondary_codes = buildSecondaryCodeTable(base_epochs);
+        base_secondary_codes_ptr = &base_secondary_codes;
+    }
+
     std::size_t base_cursor = 0;
     const double match_tolerance = std::max(0.0, config_.base_epoch_match_tolerance_s);
     const double pseudorange_sigma =
@@ -1340,7 +1570,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                 config_,
                 base_min_snr_dbhz,
                 true,
-                false);
+                false,
+                base_secondary_codes_ptr);
         const auto base_pseudorange_observations =
             prepareCarrierObservationsForReceiver(
                 matched_base_epoch,
@@ -1349,7 +1580,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                 config_,
                 base_min_snr_dbhz,
                 false,
-                false);
+                false,
+                base_secondary_codes_ptr);
         const auto base_reference_observations =
             prepareCarrierObservationsForReceiver(
                 matched_base_epoch,
@@ -1358,7 +1590,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                 config_,
                 reference_min_snr_dbhz,
                 false,
-                false);
+                false,
+                base_secondary_codes_ptr);
         if (rover_pseudorange_it != rover_pseudoranges_by_epoch.end()) {
             for (const auto* rover_factor : rover_pseudorange_it->second) {
                 const CarrierKey key{rover_factor->satellite,
@@ -1489,8 +1722,16 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                      base_satellite.corrected_pseudorange_m) -
                     (reference->corrected_pseudorange_m -
                      base_reference.corrected_pseudorange_m);
+                const double pseudorange_band_scale =
+                    signal_policy::isSecondarySignal(satellite->satellite.system,
+                                                     satellite->signal)
+                        ? std::max(1.0,
+                                   config_
+                                       .double_difference_secondary_pseudorange_sigma_scale)
+                        : 1.0;
                 pseudorange_factor.sigma_m =
-                    pseudorange_sigma / satellite_sqrt_sin_el;
+                    pseudorange_band_scale * pseudorange_sigma /
+                    satellite_sqrt_sin_el;
                 pseudorange_factor.elevation_rad = satellite->elevation_rad;
                 pseudorange_factor.rover_satellite_model =
                     satellite->model_debug;
@@ -1576,7 +1817,15 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                      base_satellite.corrected_carrier_m) -
                     (reference->corrected_carrier_m -
                      base_reference.corrected_carrier_m);
-                factor.sigma_m = carrier_sigma / satellite_sqrt_sin_el;
+                const double carrier_band_scale =
+                    signal_policy::isSecondarySignal(satellite->satellite.system,
+                                                     satellite->signal)
+                        ? std::max(1.0,
+                                   config_
+                                       .double_difference_secondary_carrier_sigma_scale)
+                        : 1.0;
+                factor.sigma_m =
+                    carrier_band_scale * carrier_sigma / satellite_sqrt_sin_el;
                 factor.elevation_rad = satellite->elevation_rad;
                 factor.rover_satellite_model = satellite->model_debug;
                 factor.rover_reference_model = reference->model_debug;

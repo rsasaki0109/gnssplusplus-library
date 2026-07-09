@@ -51,6 +51,18 @@ struct Args {
     double elev_mask_deg = -1.0; // milestone 2e: >0 overrides preset elevation mask
     double snr_mask_dbhz = -1.0; // milestone 2e: >0 sets an SNR mask
     bool diag = false;           // milestone 2e: Eigen-vs-GTSAM apples fix-rate + freq analysis
+    bool single_freq = false;    // multi-freq control: force L1/E1/B1-only DD (single-frequency baseline)
+    bool multi_freq = false;     // force multi-frequency DD on (library default is now OFF)
+    bool no_oneband = false;     // MF-AR ablation: disable one-band-per-satellite LAMBDA restriction
+    bool no_band_sigma = false;  // MF-AR ablation: disable per-band (secondary) sigma de-weighting
+    bool no_code_align = false;  // MF hygiene ablation: disable secondary-band code alignment
+    bool dd_resid = false;       // per-signal DD residuals at the reference trajectory (no solve)
+    bool partial_ar = false;     // MF-AR step 2: partial AR in the fixed-lag LAMBDA
+    bool no_gal_ar = false;      // MF-AR step 2: exclude Galileo arcs from LAMBDA / hold
+    double ratio_threshold = 0.0;  // >0: override lambda_ratio_threshold
+    double hold_ratio = 0.0;       // >0: override ambiguity_hold_ratio_threshold
+    int hold_min = 0;              // >0: override ambiguity_hold_min_fixed
+    int min_fixed = 0;             // >0: override min_fixed_ambiguities (partial-AR floor)
 };
 
 Args parseArgs(int argc, char** argv) {
@@ -91,6 +103,30 @@ Args parseArgs(int argc, char** argv) {
             args.snr_mask_dbhz = std::stod(argv[++i]);
         } else if (a == "--diag") {
             args.diag = true;
+        } else if (a == "--single-freq") {
+            args.single_freq = true;
+        } else if (a == "--multi-freq") {
+            args.multi_freq = true;
+        } else if (a == "--no-oneband") {
+            args.no_oneband = true;
+        } else if (a == "--no-band-sigma") {
+            args.no_band_sigma = true;
+        } else if (a == "--no-code-align") {
+            args.no_code_align = true;
+        } else if (a == "--dd-resid") {
+            args.dd_resid = true;
+        } else if (a == "--partial-ar") {
+            args.partial_ar = true;
+        } else if (a == "--no-gal-ar") {
+            args.no_gal_ar = true;
+        } else if (a == "--ratio" && i + 1 < argc) {
+            args.ratio_threshold = std::stod(argv[++i]);
+        } else if (a == "--hold-ratio" && i + 1 < argc) {
+            args.hold_ratio = std::stod(argv[++i]);
+        } else if (a == "--hold-min" && i + 1 < argc) {
+            args.hold_min = std::stoi(argv[++i]);
+        } else if (a == "--min-fixed" && i + 1 < argc) {
+            args.min_fixed = std::stoi(argv[++i]);
         } else {
             std::cerr << "Unknown/incomplete arg: " << a << "\n";
             std::exit(2);
@@ -597,6 +633,43 @@ int main(int argc, char** argv) {
         config.double_difference_reference_min_snr_dbhz = args.snr_mask_dbhz;
         config.double_difference_base_min_snr_dbhz = args.snr_mask_dbhz;
     }
+    // Multi-freq control: --single-freq forces the front-end back to L1/E1/B1I
+    // only (the pre-change behaviour) so the SAME harness invocation yields a
+    // single-frequency baseline for apples-to-apples comparison.
+    if (args.single_freq) {
+        config.use_multi_frequency_double_difference = false;
+    }
+    if (args.multi_freq) {
+        config.use_multi_frequency_double_difference = true;
+    }
+    if (args.no_oneband) {
+        config.double_difference_lambda_one_band_per_satellite = false;
+    }
+    if (args.no_band_sigma) {
+        config.double_difference_secondary_carrier_sigma_scale = 1.0;
+        config.double_difference_secondary_pseudorange_sigma_scale = 1.0;
+    }
+    if (args.no_code_align) {
+        config.use_double_difference_secondary_code_alignment = false;
+    }
+    if (args.partial_ar) {
+        config.use_fixed_lag_partial_lambda = true;
+    }
+    if (args.no_gal_ar) {
+        config.exclude_galileo_ambiguity_fixing = true;
+    }
+    if (args.ratio_threshold > 0.0) {
+        config.lambda_ratio_threshold = args.ratio_threshold;
+    }
+    if (args.hold_ratio > 0.0) {
+        config.ambiguity_hold_ratio_threshold = args.hold_ratio;
+    }
+    if (args.hold_min > 0) {
+        config.ambiguity_hold_min_fixed = args.hold_min;
+    }
+    if (args.min_fixed > 0) {
+        config.min_fixed_ambiguities = args.min_fixed;
+    }
     const libgnss::FGOProcessor builder(config);
     const libgnss::FGOProcessor::FGOProblem problem =
         builder.buildDoubleDifferenceProblem(rover_epochs, base_epochs, nav, base_position);
@@ -606,6 +679,107 @@ int main(int argc, char** argv) {
               << " dd_cp_factors=" << problem.double_difference_carrier_factors.size()
               << " ambiguity_states=" << problem.ambiguity_states.size()
               << " pr_factors=" << problem.pseudorange_factors.size() << "\n";
+
+    // --- MF hygiene diagnostics: per-signal DD residuals at the reference
+    // trajectory (no solver). PR residual mean exposes per-band code/DCB
+    // bias; per-arc carrier residual fractional-cycle offset exposes phase
+    // misalignment / broken integer-ness. ---
+    if (args.dd_resid) {
+        const std::vector<RefRow> ref_rows = loadReference(args.ref_path);
+        if (ref_rows.empty()) {
+            std::cerr << "Error: --dd-resid requires --ref reference.csv\n";
+            return 1;
+        }
+        // Nearest-truth lookup per problem epoch (both time-sorted).
+        std::vector<libgnss::Vector3d> truth(problem.epochs.size(),
+                                             libgnss::Vector3d::Zero());
+        std::vector<bool> has_truth(problem.epochs.size(), false);
+        {
+            std::size_t ri = 0;
+            for (std::size_t i = 0; i < problem.epochs.size(); ++i) {
+                const auto& t = problem.epochs[i].time;
+                while (ri + 1 < ref_rows.size() &&
+                       std::abs(ref_rows[ri + 1].time - t) <
+                           std::abs(ref_rows[ri].time - t)) {
+                    ++ri;
+                }
+                if (std::abs(ref_rows[ri].time - t) <= 0.11) {
+                    truth[i] = ref_rows[ri].ecef;
+                    has_truth[i] = true;
+                }
+            }
+        }
+        auto dd_geom = [](const auto& f, const libgnss::Vector3d& x) {
+            return ((f.rover_satellite_position_ecef - x).norm() -
+                    (f.base_satellite_position_ecef - f.base_position_ecef).norm()) -
+                   ((f.rover_reference_position_ecef - x).norm() -
+                    (f.base_reference_position_ecef - f.base_position_ecef).norm());
+        };
+        struct PrStats {
+            std::size_t n = 0;
+            double sum = 0.0, sq = 0.0;
+        };
+        std::map<int, PrStats> pr_stats;
+        for (const auto& f : problem.double_difference_pseudorange_factors) {
+            if (f.epoch_index >= truth.size() || !has_truth[f.epoch_index]) continue;
+            const double r = f.observed_dd_pseudorange_m - dd_geom(f, truth[f.epoch_index]);
+            auto& s = pr_stats[static_cast<int>(f.signal)];
+            ++s.n;
+            s.sum += r;
+            s.sq += r * r;
+        }
+        // Carrier: per-arc mean residual -> fractional cycles from nearest int.
+        struct ArcAcc {
+            std::size_t n = 0;
+            double sum = 0.0;
+            int signal = 0;
+            double wavelength = 0.0;
+        };
+        std::map<std::size_t, ArcAcc> arcs;
+        for (const auto& f : problem.double_difference_carrier_factors) {
+            if (f.epoch_index >= truth.size() || !has_truth[f.epoch_index]) continue;
+            if (f.ambiguity_index >= problem.ambiguity_states.size()) continue;
+            auto& a = arcs[f.ambiguity_index];
+            ++a.n;
+            a.sum += f.observed_dd_carrier_m - dd_geom(f, truth[f.epoch_index]);
+            a.signal = static_cast<int>(f.signal);
+            a.wavelength = problem.ambiguity_states[f.ambiguity_index].wavelength_m;
+        }
+        struct CarrierStats {
+            std::size_t arcs = 0, tight = 0;
+            std::vector<double> fracs;
+        };
+        std::map<int, CarrierStats> cp_stats;
+        for (const auto& [idx, a] : arcs) {
+            if (a.n < 10 || a.wavelength <= 0.0) continue;
+            const double cycles = (a.sum / double(a.n)) / a.wavelength;
+            const double frac = std::abs(cycles - std::round(cycles));
+            auto& s = cp_stats[a.signal];
+            ++s.arcs;
+            if (frac < 0.15) ++s.tight;
+            s.fracs.push_back(frac);
+        }
+        std::cout << "\n=== --dd-resid: per-signal DD residuals at the reference trajectory ===\n"
+                  << "  DD pseudorange (bias -> code/DCB mismatch):\n";
+        for (auto& [sig, s] : pr_stats) {
+            const double mean = s.sum / double(s.n);
+            const double rms = std::sqrt(s.sq / double(s.n));
+            std::cout << "    signal_enum=" << sig << "  n=" << s.n
+                      << "  mean=" << mean << " m  rms=" << rms << " m\n";
+        }
+        std::cout << "  DD carrier per-arc mean, fractional cycles from nearest integer\n"
+                  << "  (arcs with >=10 epochs; frac<0.15 = integer-consistent):\n";
+        for (auto& [sig, s] : cp_stats) {
+            std::sort(s.fracs.begin(), s.fracs.end());
+            const double med = s.fracs.empty() ? 0.0 : s.fracs[s.fracs.size() / 2];
+            std::cout << "    signal_enum=" << sig << "  arcs=" << s.arcs
+                      << "  median_frac=" << med << "  frac<0.15: "
+                      << (s.arcs > 0 ? 100.0 * double(s.tight) / double(s.arcs) : 0.0)
+                      << "%\n";
+        }
+        std::cout.flush();
+        return 0;
+    }
 
     if (problem.epochs.empty() ||
         (problem.double_difference_carrier_factors.empty() &&
@@ -738,6 +912,10 @@ int main(int argc, char** argv) {
             for (const auto& f : problem_imu.double_difference_carrier_factors) {
                 ++signal_counts[static_cast<int>(f.signal)];
                 if (isSecondFreq(f.signal)) ++second_freq;
+            }
+            std::cout << "\n  (i0) per-signal DD-carrier factor histogram:\n";
+            for (const auto& [sig, cnt] : signal_counts) {
+                std::cout << "       signal_enum=" << sig << "  count=" << cnt << "\n";
             }
             std::cout << "\n=== (2e diag) gap attribution on the SAME full-run1 FGOProblem ===\n"
                       << "  (i) DD-carrier signal content: " << signal_counts.size()

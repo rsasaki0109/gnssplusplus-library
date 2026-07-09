@@ -28,6 +28,8 @@
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/signal_policy.hpp>
+#include <libgnss++/core/signals.hpp>
 
 #include <gtsam/geometry/Point3.h>
 #include <gtsam/geometry/Pose3.h>
@@ -71,6 +73,56 @@ using gtsam::Pose3;
 using gtsam::Rot3;
 using gtsam::Symbol;
 using SharedNoise = gtsam::SharedNoiseModel;
+
+// MF-AR step 1: restrict a per-epoch LAMBDA candidate set to independent
+// satellites -- keep at most one ambiguity per satellite (primary band
+// preferred, else the longest-wavelength secondary; ties broken by index for
+// determinism). Multiple frequency bands of one satellite share the same
+// line-of-sight, so they contribute little to the DD geometry but do inflate
+// the all-or-nothing integer ratio test and lower the ratio. The dropped
+// bands' DD factors remain in the graph and still constrain the float; they
+// are simply not forced into the integer search. No-op for single-frequency
+// DD (each satellite already has a single band). Input indices are assumed
+// unique (one DD carrier factor per (sat,signal) per epoch).
+std::vector<std::size_t> selectOneBandPerSatellite(
+    const std::vector<std::size_t>& indices,
+    const FGOProcessor::FGOProblem& problem) {
+    std::map<SatelliteId, std::size_t> best_by_satellite;
+    for (std::size_t idx : indices) {
+        if (idx >= problem.ambiguity_states.size()) {
+            continue;
+        }
+        const auto& amb = problem.ambiguity_states[idx];
+        const auto it = best_by_satellite.find(amb.satellite);
+        if (it == best_by_satellite.end()) {
+            best_by_satellite.emplace(amb.satellite, idx);
+            continue;
+        }
+        const auto& cur = problem.ambiguity_states[it->second];
+        const bool amb_primary =
+            signal_policy::isPrimarySignal(amb.satellite.system, amb.signal);
+        const bool cur_primary =
+            signal_policy::isPrimarySignal(cur.satellite.system, cur.signal);
+        bool replace = false;
+        if (amb_primary != cur_primary) {
+            replace = amb_primary;  // prefer the primary band
+        } else if (amb.wavelength_m != cur.wavelength_m) {
+            replace = amb.wavelength_m > cur.wavelength_m;  // longer wavelength: easier to fix
+        } else {
+            replace = idx < it->second;  // deterministic
+        }
+        if (replace) {
+            it->second = idx;
+        }
+    }
+    std::vector<std::size_t> selected;
+    selected.reserve(best_by_satellite.size());
+    for (const auto& [sat, idx] : best_by_satellite) {
+        (void)sat;
+        selected.push_back(idx);
+    }
+    return selected;
+}
 
 // Mirror of fgo.cpp's clockBiasGroup(): which receiver-clock group a system
 // belongs to. GPS+QZSS share one clock; every other constellation gets its own
@@ -772,6 +824,26 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         }
         if (dummy_created) ts[dummyAmbiguityKey()] = te;  // dummy persists (re-stamped every epoch)
 
+        // MF-AR step 1: the DD carrier factors for every band stay in the graph
+        // (added above) and constrain the float, but the per-epoch LAMBDA
+        // integer ratio test below is restricted to one band per satellite so
+        // correlated multi-frequency bands don't weaken the all-or-nothing fix.
+        if (config.double_difference_lambda_one_band_per_satellite &&
+            epoch_amb_indices.size() > 1) {
+            epoch_amb_indices = selectOneBandPerSatellite(epoch_amb_indices, problem);
+        }
+        // MF-AR step 2 (gated): keep Galileo arcs out of the integer search /
+        // fix-and-hold entirely -- their DD factors still shape the float.
+        if (config.exclude_galileo_ambiguity_fixing) {
+            epoch_amb_indices.erase(
+                std::remove_if(epoch_amb_indices.begin(), epoch_amb_indices.end(),
+                               [&](std::size_t idx) {
+                                   return problem.ambiguity_states[idx].satellite.system ==
+                                          GNSSSystem::Galileo;
+                               }),
+                epoch_amb_indices.end());
+        }
+
         // --- Milestone 2d: NHC + ZUPT pseudo-measurements (gated per epoch) ---
         const ImuWindowStats wstats =
             (config.use_nhc || config.use_zupt)
@@ -938,12 +1010,68 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                     for (int k = 0; k < n; ++k) {
                         q_amb(k, k) += std::max(1e-12, std::abs(q_amb(k, k)) * 1e-9);
                     }
-                    Eigen::VectorXd fixed_amb;
-                    double ratio = 0.0;
-                    ++lambda_attempts;
-                    ++result.diagnostics.lambda_ambiguity_attempts;
-                    result.diagnostics.lambda_ambiguity_candidates += static_cast<std::size_t>(n);
-                    if (lambdaSearch(float_amb, q_amb, fixed_amb, ratio)) {
+
+                    // --- MF-AR step 2: partial AR (port of the Eigen path's
+                    // use_partial_lambda_ambiguity_fix). Candidate order:
+                    // identity (= the deterministic sat/ref/signal sort above)
+                    // for the legacy all-or-nothing path; best-first by
+                    // (fractional cycles, variance) with a
+                    // max_lambda_ambiguities cap when partial AR is enabled.
+                    // The loop below runs exactly ONCE at full size when
+                    // partial AR is off -- bit-identical legacy behaviour. ---
+                    std::vector<int> order(n);
+                    std::iota(order.begin(), order.end(), 0);
+                    int attempt_n = n;
+                    int min_subset = n;  // all-or-nothing: single attempt
+                    if (config.use_fixed_lag_partial_lambda) {
+                        std::stable_sort(
+                            order.begin(), order.end(), [&](int a, int b) {
+                                const double fa = std::abs(
+                                    float_amb(a) - std::round(float_amb(a)));
+                                const double fb = std::abs(
+                                    float_amb(b) - std::round(float_amb(b)));
+                                if (fa == fb) {
+                                    return q_amb(a, a) < q_amb(b, b);
+                                }
+                                return fa < fb;
+                            });
+                        attempt_n = config.max_lambda_ambiguities > 0
+                                        ? std::min(n, config.max_lambda_ambiguities)
+                                        : n;
+                        min_subset = std::max(1, config.min_fixed_ambiguities);
+                        // Subset floor: drop a few outliers, never the
+                        // majority (see fixed_lag_partial_lambda_min_fraction).
+                        const double fraction = std::min(
+                            1.0, std::max(0.0,
+                                          config.fixed_lag_partial_lambda_min_fraction));
+                        min_subset = std::max(
+                            min_subset,
+                            static_cast<int>(std::ceil(fraction * attempt_n)));
+                    }
+
+                    bool float_cycles_recorded = false;
+                    for (int subset = attempt_n; subset >= min_subset; --subset) {
+                        Eigen::VectorXd sub_float(subset);
+                        Eigen::MatrixXd sub_q(subset, subset);
+                        Eigen::MatrixXd sub_pos(3, subset);
+                        for (int r = 0; r < subset; ++r) {
+                            sub_float(r) = float_amb(order[r]);
+                            sub_pos.col(r) = pos_amb.col(order[r]);
+                            for (int c = 0; c < subset; ++c) {
+                                sub_q(r, c) = q_amb(order[r], order[c]);
+                            }
+                        }
+
+                        Eigen::VectorXd fixed_amb;
+                        double ratio = 0.0;
+                        ++lambda_attempts;
+                        ++result.diagnostics.lambda_ambiguity_attempts;
+                        result.diagnostics.lambda_ambiguity_candidates +=
+                            static_cast<std::size_t>(subset);
+                        if (!lambdaSearch(sub_float, sub_q, fixed_amb, ratio)) {
+                            if (!config.use_fixed_lag_partial_lambda) break;
+                            continue;
+                        }
                         result.diagnostics.lambda_ambiguity_fix_solved = true;
                         best_ratio = std::max(best_ratio, ratio);
                         epoch_ratio[i] = ratio;
@@ -951,76 +1079,95 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             std::isfinite(ratio) &&
                             (config.lambda_ratio_threshold <= 0.0 ||
                              ratio > config.lambda_ratio_threshold) &&
-                            fixed_amb.size() == n;
-                        // Record float ambiguity values for the result mapping.
-                        for (int r = 0; r < n; ++r) {
-                            amb_float_cycles[epoch_amb_indices[r]] = float_amb(r);
-                        }
-                        if (fixed_epoch) {
-                            epoch_fixed[i] = true;
-                            epoch_fixed_count[i] = n;
-                            total_fixed_ambiguities += static_cast<std::size_t>(n);
-                            result.diagnostics.lambda_ambiguity_fix_used = true;
-                            result.diagnostics.lambda_ambiguity_used_candidates +=
-                                static_cast<std::size_t>(n);
+                            fixed_amb.size() == subset;
+                        // Record float ambiguity values for the result mapping
+                        // (full candidate set, once).
+                        if (!float_cycles_recorded) {
                             for (int r = 0; r < n; ++r) {
-                                const int fi = static_cast<int>(std::lround(fixed_amb(r)));
-                                amb_fixed_cycles[epoch_amb_indices[r]] = fi;
-                                amb_fixed_residual[epoch_amb_indices[r]] =
-                                    float_amb(r) - static_cast<double>(fi);
+                                amb_float_cycles[epoch_amb_indices[r]] = float_amb(r);
                             }
-                            if (config.use_epoch_lambda_fixed_output) {
-                                const Eigen::VectorXd delta = float_amb - fixed_amb;
-                                const Eigen::LDLT<Eigen::MatrixXd> ldlt(q_amb);
-                                if (ldlt.info() == Eigen::Success) {
-                                    const Eigen::VectorXd corr = ldlt.solve(delta);
-                                    if (corr.allFinite()) {
-                                        const Eigen::Vector3d pd = pos_amb * corr;
-                                        if (pd.allFinite()) {
-                                            epoch_fixed_position[i] = antennaOf(pose_i) - Point3(pd);
-                                            epoch_has_fixed[i] = true;
-                                        }
-                                    }
-                                }
-                            }
+                            float_cycles_recorded = true;
+                        }
+                        if (!fixed_epoch) {
+                            if (!config.use_fixed_lag_partial_lambda) break;
+                            continue;
+                        }
 
-                            // --- 2e fix-and-hold: pin newly-validated arcs at
-                            // their integer so they persist for the rest of the
-                            // arc. Stricter ratio gate than "mark FIXED". ---
-                            if (config.use_ambiguity_hold &&
-                                ratio > config.ambiguity_hold_ratio_threshold &&
-                                n >= config.ambiguity_hold_min_fixed) {
-                                gtsam::NonlinearFactorGraph hold_factors;
-                                const auto hold_noise = gtsam::noiseModel::Isotropic::Sigma(
-                                    1, config.ambiguity_hold_sigma_cycles);
-                                for (int r = 0; r < n; ++r) {
-                                    const std::size_t idx = epoch_amb_indices[r];
-                                    if (pinned_ambiguities.count(idx)) continue;
-                                    const int fi = static_cast<int>(std::lround(fixed_amb(r)));
-                                    hold_factors.addPrior(ambiguityKey(idx),
-                                                          static_cast<double>(fi), hold_noise);
-                                    pinned_ambiguities.insert(idx);
-                                }
-                                if (hold_factors.size() > 0) {
-                                    try {
-                                        smoother.update(hold_factors, gtsam::Values(),
-                                                        gtsam::FixedLagSmoother::KeyTimestampMap());
-                                        ++result.diagnostics.smoother_updates;
-                                        // Re-read epoch i now that holds pin it.
-                                        pose_i = smoother.calculateEstimate<Pose3>(positionKey(i));
-                                        vel_i = smoother.calculateEstimate<gtsam::Vector3>(
-                                            velocityKey(i));
-                                        prev_nav = gtsam::NavState(pose_i, vel_i);
-                                        epoch_float_position[i] = antennaOf(pose_i);
-                                    } catch (const std::exception& e) {
-                                        std::fprintf(stderr,
-                                                     "[fgo_gtsam_backend] hold update epoch %zu "
-                                                     "threw: %s\n",
-                                                     i, e.what());
+                        epoch_fixed[i] = true;
+                        epoch_fixed_count[i] = subset;
+                        total_fixed_ambiguities += static_cast<std::size_t>(subset);
+                        result.diagnostics.lambda_ambiguity_fix_used = true;
+                        result.diagnostics.lambda_ambiguity_used_candidates +=
+                            static_cast<std::size_t>(subset);
+                        if (subset < attempt_n) {
+                            result.diagnostics.partial_lambda_ambiguity_fix_used = true;
+                        }
+                        for (int r = 0; r < subset; ++r) {
+                            const std::size_t idx = epoch_amb_indices[order[r]];
+                            const int fi = static_cast<int>(std::lround(fixed_amb(r)));
+                            amb_fixed_cycles[idx] = fi;
+                            amb_fixed_residual[idx] =
+                                sub_float(r) - static_cast<double>(fi);
+                        }
+                        if (config.use_epoch_lambda_fixed_output) {
+                            const Eigen::VectorXd delta = sub_float - fixed_amb;
+                            const Eigen::LDLT<Eigen::MatrixXd> ldlt(sub_q);
+                            if (ldlt.info() == Eigen::Success) {
+                                const Eigen::VectorXd corr = ldlt.solve(delta);
+                                if (corr.allFinite()) {
+                                    const Eigen::Vector3d pd = sub_pos * corr;
+                                    if (pd.allFinite()) {
+                                        epoch_fixed_position[i] = antennaOf(pose_i) - Point3(pd);
+                                        epoch_has_fixed[i] = true;
                                     }
                                 }
                             }
                         }
+
+                        // --- 2e fix-and-hold: pin newly-validated arcs at
+                        // their integer so they persist for the rest of the
+                        // arc. Stricter ratio gate than "mark FIXED". With
+                        // partial AR, only a FULL-set validation may hold:
+                        // a shrunken subset that squeaked past the ratio test
+                        // is enough to label this epoch FIXED, but pinning its
+                        // integers would poison the arc for its whole
+                        // remaining lifetime if any are wrong (measured on
+                        // tokyo1 full-run deep urban: FIXED rms 6.2 m). ---
+                        if (config.use_ambiguity_hold &&
+                            subset == attempt_n &&
+                            ratio > config.ambiguity_hold_ratio_threshold &&
+                            subset >= config.ambiguity_hold_min_fixed) {
+                            gtsam::NonlinearFactorGraph hold_factors;
+                            const auto hold_noise = gtsam::noiseModel::Isotropic::Sigma(
+                                1, config.ambiguity_hold_sigma_cycles);
+                            for (int r = 0; r < subset; ++r) {
+                                const std::size_t idx = epoch_amb_indices[order[r]];
+                                if (pinned_ambiguities.count(idx)) continue;
+                                const int fi = static_cast<int>(std::lround(fixed_amb(r)));
+                                hold_factors.addPrior(ambiguityKey(idx),
+                                                      static_cast<double>(fi), hold_noise);
+                                pinned_ambiguities.insert(idx);
+                            }
+                            if (hold_factors.size() > 0) {
+                                try {
+                                    smoother.update(hold_factors, gtsam::Values(),
+                                                    gtsam::FixedLagSmoother::KeyTimestampMap());
+                                    ++result.diagnostics.smoother_updates;
+                                    // Re-read epoch i now that holds pin it.
+                                    pose_i = smoother.calculateEstimate<Pose3>(positionKey(i));
+                                    vel_i = smoother.calculateEstimate<gtsam::Vector3>(
+                                        velocityKey(i));
+                                    prev_nav = gtsam::NavState(pose_i, vel_i);
+                                    epoch_float_position[i] = antennaOf(pose_i);
+                                } catch (const std::exception& e) {
+                                    std::fprintf(stderr,
+                                                 "[fgo_gtsam_backend] hold update epoch %zu "
+                                                 "threw: %s\n",
+                                                 i, e.what());
+                                }
+                            }
+                        }
+                        break;  // validated subset found
                     }
                 } else {
                     ++marginals_failures;
@@ -1738,6 +1885,11 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             // Deterministic candidate order (satellite/reference), matching the
             // native path's sort.
             std::vector<std::size_t> candidates(it->second.begin(), it->second.end());
+            // MF-AR step 1: one band per satellite for the integer ratio test.
+            if (config.double_difference_lambda_one_band_per_satellite &&
+                candidates.size() > 1) {
+                candidates = selectOneBandPerSatellite(candidates, problem);
+            }
             std::sort(candidates.begin(), candidates.end(),
                       [&](std::size_t a, std::size_t b) {
                           const auto& sa = problem.ambiguity_states[a];
