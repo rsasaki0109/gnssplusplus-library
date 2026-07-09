@@ -171,6 +171,18 @@ struct PPPConfig {
     double clas_trop_process_noise = 1e-6;        // Small: CLAS grid trop is stable
     double clas_initial_position_variance = 100.0; // Position covariance at filter init
     double clas_clock_variance = 1e8;             // Clock state variance (reset each epoch)
+    // Dynamics-mode clock random-walk process noise (m^2, added to Q each
+    // predict step, NOT scaled by dt -- mirrors clas_clock_variance's
+    // convention). clas_clock_variance itself is an INITIALIZATION-style
+    // "unknown" variance intended to be immediately superseded by a hard
+    // SPP reseed (white-noise mode); it is far too large (1e8) to reuse as
+    // an ongoing per-epoch process noise once the clock is actually
+    // estimated through the Kalman measurement update (dynamics mode, no
+    // reseed) -- doing so poisons the ambiguity float covariance every
+    // epoch (all states share the same measurement rows as the clock) and
+    // makes LAMBDA/AR search combinatorially slow. This value should be
+    // sized to the expected epoch-to-epoch receiver clock drift instead.
+    double clas_dynamic_clock_process_noise = 25.0;
     double clas_iono_prior_variance = 0.25;       // Ionosphere pseudo-observation variance
     double clas_ambiguity_reinit_threshold = 3000.0; // Re-init ambiguity when cov exceeds this
     double clas_anchor_sigma = 5.0;               // SPP anchor constraint sigma (m)

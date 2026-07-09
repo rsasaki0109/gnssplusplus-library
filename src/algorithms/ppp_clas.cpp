@@ -1350,8 +1350,19 @@ void predictFilterState(
                 velocity_q;
         }
     }
-    Q(filter_state.clock_index, filter_state.clock_index) = config.clas_clock_variance;
-    Q(filter_state.glo_clock_index, filter_state.glo_clock_index) = config.clas_clock_variance;
+    // In dynamics mode the clock is not reseeded from SPP each epoch (see
+    // the `!use_dynamic_prediction` guards above/below), so clas_clock_variance
+    // -- an initialization-style "unknown" variance meant to be immediately
+    // overwritten by a hard reseed -- is the wrong quantity to inject as an
+    // ongoing per-epoch process noise: it is many orders of magnitude too
+    // large and poisons the ambiguity float covariance during measurement
+    // updates. Use the dedicated, appropriately-sized dynamics clock
+    // process noise instead.
+    const double clock_process_noise = use_dynamic_prediction
+        ? config.clas_dynamic_clock_process_noise
+        : config.clas_clock_variance;
+    Q(filter_state.clock_index, filter_state.clock_index) = clock_process_noise;
+    Q(filter_state.glo_clock_index, filter_state.glo_clock_index) = clock_process_noise;
     if (filter_state.qzs_clock_index >= 0) {
         Q(filter_state.qzs_clock_index, filter_state.qzs_clock_index) =
             pppEnvOverrides().isb_process_noise * dt;
@@ -1384,8 +1395,28 @@ void predictFilterState(
                 seed_receiver_clock_bias_m + isb_offset;
         }
     }
-    // Decouple clock from position: zero cross-covariance to prevent
-    // code observation noise from leaking into position via KF coupling.
+    // Decouple clock from position/ambiguities: zero cross-covariance to
+    // prevent code observation noise from leaking into position (and to keep
+    // the ambiguity float covariance well-conditioned for AR/LAMBDA search)
+    // via KF coupling. This cross-term zeroing is safe and desirable in both
+    // modes: any correlation useful for a single measurement update is
+    // re-derived within that same update from the current epoch's H/R, so
+    // zeroing the *carried-forward* cross-covariance each predict step only
+    // discards stale, epoch-old correlation.
+    //
+    // The diagonal (clock's own variance) is a different story. In
+    // white-noise mode the clock state is hard-reseeded from SPP every
+    // epoch (see the `!use_dynamic_prediction` guard above), so treating its
+    // post-reseed variance as exactly 0 is correct: it was just overwritten
+    // with a trusted external value. In dynamics mode the clock is NOT
+    // reseeded, so it can only be estimated through the Kalman measurement
+    // update. Because H has a direct 1.0 entry for the clock column, the
+    // per-state gain K_ci = P(ci,ci)*H(ci)/S only needs P(ci,ci) > 0 (cross
+    // terms are not required for this). Zeroing the diagonal here as well
+    // would permanently drive K_ci to zero, freezing the clock at its
+    // initial value forever while the true receiver clock drifts, forcing
+    // all pseudorange/phase residuals to absorb a growing common-mode bias
+    // that the filter then wrongly attributes to position/velocity.
     if (config.clas_decouple_clock_position) {
         const int ci = filter_state.clock_index;
         const int gi = filter_state.glo_clock_index;
@@ -1398,8 +1429,10 @@ void predictFilterState(
                 filter_state.covariance(i, qi) = 0;
             }
         }
-        filter_state.covariance(ci, ci) = 0;
-        filter_state.covariance(gi, gi) = 0;
+        if (!use_dynamic_prediction) {
+            filter_state.covariance(ci, ci) = 0;
+            filter_state.covariance(gi, gi) = 0;
+        }
     }
 }
 

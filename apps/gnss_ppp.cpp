@@ -884,6 +884,16 @@ int main(int argc, char* argv[]) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
             ppp_config.process_noise_position = 0.04;
             ppp_config.process_noise_velocity = 0.01;
+            // Velocity is unobserved by H (only reached through the F
+            // pos+=vel*dt coupling), so a loose prior here inflates
+            // position uncertainty every predict step via F*P*F' long
+            // before velocity itself converges. The previous default
+            // (100 m^2/s^2, i.e. 10 m/s std) made the startup transient
+            // (before ambiguities/troposphere converge) swing tens to
+            // hundreds of meters in height before settling; 4.0 (2 m/s
+            // std) is still loose enough to capture urban-drive dynamics
+            // but keeps that transient much smaller.
+            ppp_config.initial_velocity_variance = 4.0;
         }
         ppp_config.emit_solution_epoch_time = options.emit_epoch_time;
         ppp_config.apply_static_anchor_blend = options.apply_static_anchor_blend;

@@ -832,11 +832,12 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         clas_kinematic_fix_candidate_streak_ = 0;
     }
 
-    // MRTKLIB maxdiffp guard — only when still using per-epoch SPP anchoring.
-    // With continuous dynamics the float filter is not re-seeded each epoch.
+    // MRTKLIB maxdiffp guard (mrtk_ppp_rtk.c:2333-2352). MRTKLIB applies it
+    // with dynamics on (benchmark clas.toml: dynamics=true + pseudorange_diff);
+    // without it the dynamics filter can enter a rejection spiral and coast
+    // kilometers away on the velocity states.
     if (ppp_config_.kinematic_mode &&
         ppp_config_.use_clas_osr_filter &&
-        !ppp_config_.use_dynamics_model &&
         seed.isValid()) {
         const Vector3d float_position =
             filter_state_.state.segment(filter_state_.pos_index, 3);
@@ -861,6 +862,18 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                             ? seed.position_covariance(i, i)
                             : 100.0;
                     filter_state_.covariance(idx, idx) = spp_variance;
+                }
+                if (ppp_config_.use_dynamics_model &&
+                    filter_state_.vel_index >= 0 &&
+                    filter_state_.vel_index + 2 < filter_state_.covariance.rows()) {
+                    filter_state_.state.segment(filter_state_.vel_index, 3).setZero();
+                    for (int i = 0; i < 3; ++i) {
+                        const int idx = filter_state_.vel_index + i;
+                        filter_state_.covariance.row(idx).setZero();
+                        filter_state_.covariance.col(idx).setZero();
+                        filter_state_.covariance(idx, idx) =
+                            ppp_config_.initial_velocity_variance;
+                    }
                 }
                 solution.position_ecef = seed.position_ecef;
                 solution.status = SolutionStatus::SPP;
