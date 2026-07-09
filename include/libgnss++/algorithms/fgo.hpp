@@ -312,6 +312,49 @@ public:
         // so Galileo candidates mostly poison the all-or-nothing ratio test.
         bool exclude_galileo_ambiguity_fixing = false;
 
+        // --- Code-Minus-Carrier (CMC) multipath screening ---
+        // Port of the inuex35 reference's preprocess/slip_detect.py CMC logic
+        // (single-difference CMC = (PR_rover - PR_base) - (CP_rover -
+        // CP_base) * wavelength, per (satellite, signal), computed only when
+        // the DD builder already has both rover and base pseudorange+carrier
+        // for that pair this epoch). Two independent checks:
+        //  1. Jump check (this port's primary target): |cmc - previous_epoch
+        //     cmc| > code_minus_carrier_jump_threshold_m forces the SAME arc
+        //     break the existing loss-of-lock / gap logic already performs
+        //     (new ambiguity_index at the next DD carrier factor for that
+        //     (satellite, signal)) -- a multipath jump breaks the integer N
+        //     just like a cycle slip does.
+        //  2. Sustained-level check (reference default OFF via level_thresh
+        //     == 0.0, ported for parity but not expected to be the lever):
+        //     maintains a per-(satellite, signal) baseline (seeded by the
+        //     first observation, running-averaged for
+        //     code_minus_carrier_warmup_epochs, then EWMA-updated with
+        //     code_minus_carrier_baseline_alpha in steady state); a
+        //     steady-state baseline deviation beyond
+        //     code_minus_carrier_level_threshold_m excludes THAT (satellite,
+        //     signal) pair's DD pseudorange AND carrier factors for the
+        //     epoch (both, matching the reference's single `continue` before
+        //     either is built) without updating the baseline.
+        //
+        // Deliberate deviation from the reference: whenever the arc for a
+        // (satellite, signal) resets for ANY reason (CMC jump, cycle slip /
+        // loss-of-lock, or outage -- i.e. the rover-side single-receiver
+        // carrier arc restarts and a fresh ambiguity_index is assigned), this
+        // port ALSO resets that (satellite, signal)'s CMC baseline/warmup
+        // count/previous-epoch value. CMC embeds a -wavelength*N term, so a
+        // new ambiguity invalidates any baseline computed under the old one;
+        // the reference does not reset it (state.cmc / cmc_baseline survive
+        // amb_key resets in slip_detect.py), which looks like an oversight --
+        // it is harmless there only because the reference ships the level
+        // check OFF by default.
+        //
+        // Default OFF: bit-identical to the pre-port baseline when false.
+        bool use_code_minus_carrier_screening = false;
+        double code_minus_carrier_jump_threshold_m = 3.0;
+        double code_minus_carrier_level_threshold_m = 0.0;  ///< 0 = level check off (reference default)
+        int code_minus_carrier_warmup_epochs = 5;
+        double code_minus_carrier_baseline_alpha = 0.05;
+
         // --- Per-epoch quality gates (port of the inuex35 reference's
         // preprocess/gate.py + validation/postfit.py policy) ---
         // The reference never lets the integer search run on a corrupt epoch:
@@ -495,6 +538,8 @@ public:
         std::size_t tdcp_rejected_missing_previous = 0;
         std::size_t tdcp_rejected_loss_of_lock = 0;
         std::size_t tdcp_rejected_code_phase_jump = 0;
+        std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
+        std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
     };
 
     // --- Phase 2 milestone 2b: IMU preintegration inputs ---
@@ -609,6 +654,8 @@ public:
         std::size_t ambiguity_hold_epochs = 0;  ///< 2e: epochs FIXED via held (not fresh) integers
         std::size_t ambiguity_hold_arcs = 0;    ///< 2e: distinct arcs pinned at their integer
         std::size_t quality_gated_epochs = 0;   ///< epochs where the quality gates suppressed fixing
+        std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
+        std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
         std::size_t float_rejected_seed_position_divergence = 0;
         std::size_t float_rejected_position_jump = 0;
         bool fixed_solution = false;

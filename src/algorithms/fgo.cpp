@@ -478,6 +478,22 @@ struct FixedAmbiguityConstraint {
 
 using CarrierKey = std::pair<SatelliteId, SignalType>;
 
+// --- Code-Minus-Carrier (CMC) multipath screening state ---
+//
+// Port of inuex35's preprocess/slip_detect.py per-(satellite, signal) CMC
+// tracking (see FGOConfig::use_code_minus_carrier_screening for the full
+// semantics). Kept as function-local state in buildDoubleDifferenceProblem
+// (like active_dd_segments below) rather than a FGOProcessor member: one
+// build call processes one ordered epoch stream, and buildDoubleDifference-
+// Problem is const.
+struct CmcState {
+    bool has_prev = false;
+    double prev_cmc_m = 0.0;
+    bool has_baseline = false;
+    double baseline_m = 0.0;
+    int warmup_count = 0;
+};
+
 struct DoubleDifferenceAmbiguityKey {
     SatelliteId satellite;
     SatelliteId reference_satellite;
@@ -1504,6 +1520,18 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     std::map<SingleDifferenceDefaultReferenceKey, std::map<SatelliteId, std::size_t>>
         sd_default_reference_counts;
 
+    // --- CMC screening state (function-scope, persists across the epoch
+    // loop below; see FGOConfig::use_code_minus_carrier_screening). ---
+    std::map<CarrierKey, CmcState> cmc_states;
+    // Last rover-side (single-receiver) ambiguity_index seen per (satellite,
+    // signal); a change here (cycle slip / loss-of-lock / outage causing the
+    // rover carrier arc in buildPseudorangeProblem to restart) is this port's
+    // signal to also reset the CMC baseline for that key (deviation from the
+    // reference documented on the config knob).
+    std::map<CarrierKey, std::size_t> cmc_last_rover_ambiguity_index;
+    std::size_t cmc_jump_reset_total = 0;
+    std::size_t cmc_level_exclusion_total = 0;
+
     for (std::size_t epoch_index = 0; epoch_index < problem.epochs.size(); ++epoch_index) {
         const auto rover_it = rover_carriers_by_epoch.find(epoch_index);
         const auto rover_pseudorange_it =
@@ -1592,6 +1620,93 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                 false,
                 false,
                 base_secondary_codes_ptr);
+
+        // --- CMC screening pre-pass (this epoch) ---
+        //
+        // Runs once per (satellite, signal) that has usable carrier at BOTH
+        // rover and base this epoch (same requirement as the reference:
+        // pr/cp nonzero on both sides), independent of which satellite ends
+        // up the DD reference for its (system, signal) group below. Results
+        // gate the PR-factor loop (level exclusion, which -- because the CP
+        // loop only builds a factor when a matching PR factor already exists
+        // -- transitively also excludes the CP factor for the same epoch,
+        // matching the reference's single `continue` before either) and the
+        // CP loop's ambiguity-arc bookkeeping (jump forces a new arc).
+        std::set<CarrierKey> cmc_level_exclude_this_epoch;
+        std::set<CarrierKey> cmc_jump_reset_this_epoch;
+        if (config_.use_code_minus_carrier_screening &&
+            rover_it != rover_carriers_by_epoch.end()) {
+            for (const auto* rover_factor : rover_it->second) {
+                const CarrierKey key{rover_factor->satellite, rover_factor->signal};
+                const auto base_it = base_carriers.find(key);
+                if (base_it == base_carriers.end()) {
+                    continue;
+                }
+                const auto& base_carrier = base_it->second;
+                const double pr_rover = rover_factor->model_debug.raw_pseudorange_m;
+                const double cp_rover = rover_factor->model_debug.raw_carrier_m;
+                const double pr_base = base_carrier.model_debug.raw_pseudorange_m;
+                const double cp_base = base_carrier.model_debug.raw_carrier_m;
+                if (pr_rover == 0.0 || cp_rover == 0.0 || pr_base == 0.0 ||
+                    cp_base == 0.0) {
+                    continue;
+                }
+                const double cmc = (pr_rover - pr_base) - (cp_rover - cp_base);
+
+                // Deviation from the reference: any rover-side arc restart
+                // (cycle slip / loss-of-lock / outage -- surfaced here as a
+                // change in the rover carrier's own ambiguity_index) resets
+                // this key's CMC baseline/prev/warmup state, since CMC
+                // embeds a -wavelength*N term that a new ambiguity
+                // invalidates.
+                const auto last_arc_it =
+                    cmc_last_rover_ambiguity_index.find(key);
+                const bool rover_arc_restarted =
+                    last_arc_it == cmc_last_rover_ambiguity_index.end() ||
+                    last_arc_it->second != rover_factor->ambiguity_index;
+                cmc_last_rover_ambiguity_index[key] = rover_factor->ambiguity_index;
+
+                CmcState& state = cmc_states[key];
+                if (rover_arc_restarted) {
+                    state = CmcState{};
+                } else if (state.has_prev &&
+                           std::abs(cmc - state.prev_cmc_m) >
+                               config_.code_minus_carrier_jump_threshold_m) {
+                    cmc_jump_reset_this_epoch.insert(key);
+                    ++cmc_jump_reset_total;
+                    // Same reasoning as above: the jump itself is a fresh
+                    // arc from this epoch on, so the baseline resets too.
+                    state = CmcState{};
+                }
+
+                state.prev_cmc_m = cmc;
+                state.has_prev = true;
+
+                const double level_threshold =
+                    config_.code_minus_carrier_level_threshold_m;
+                if (level_threshold > 0.0) {
+                    if (!state.has_baseline) {
+                        state.baseline_m = cmc;
+                        state.warmup_count = 1;
+                        state.has_baseline = true;
+                    } else if (state.warmup_count <
+                               config_.code_minus_carrier_warmup_epochs) {
+                        state.baseline_m =
+                            (state.baseline_m * state.warmup_count + cmc) /
+                            (state.warmup_count + 1);
+                        ++state.warmup_count;
+                    } else if (std::abs(cmc - state.baseline_m) > level_threshold) {
+                        cmc_level_exclude_this_epoch.insert(key);
+                        ++cmc_level_exclusion_total;
+                    } else {
+                        const double alpha = config_.code_minus_carrier_baseline_alpha;
+                        state.baseline_m =
+                            (1.0 - alpha) * state.baseline_m + alpha * cmc;
+                    }
+                }
+            }
+        }
+
         if (rover_pseudorange_it != rover_pseudoranges_by_epoch.end()) {
             for (const auto* rover_factor : rover_pseudorange_it->second) {
                 const CarrierKey key{rover_factor->satellite,
@@ -1691,6 +1806,15 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     continue;
                 }
                 const CarrierKey satellite_key{satellite->satellite, satellite->signal};
+                if (cmc_level_exclude_this_epoch.count(satellite_key) > 0) {
+                    // Sustained CMC multipath this epoch: skip the DD
+                    // pseudorange factor. The CP loop below only builds a
+                    // carrier factor when it finds a matching entry in
+                    // pseudorange_factors_by_key, so omitting the PR factor
+                    // here transitively excludes the CP factor too (matches
+                    // the reference's single `continue` before either).
+                    continue;
+                }
                 const auto base_satellite_it =
                     base_pseudorange_observations.find(satellite_key);
                 if (base_satellite_it == base_pseudorange_observations.end()) {
@@ -1861,6 +1985,13 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                         (max_segment_gap > 0.0 && dt > max_segment_gap)) {
                         start_new_segment = true;
                     }
+                }
+                if (cmc_jump_reset_this_epoch.count(
+                        CarrierKey{satellite->satellite, satellite->signal}) > 0) {
+                    // CMC jump: force the same arc break the loss-of-lock /
+                    // gap checks above already perform (multipath jump
+                    // breaks the integer ambiguity).
+                    start_new_segment = true;
                 }
 
                 if (start_new_segment) {
@@ -2112,6 +2243,10 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
         }
     }
 
+    problem.diagnostics.code_minus_carrier_jump_resets = cmc_jump_reset_total;
+    problem.diagnostics.code_minus_carrier_level_exclusions =
+        cmc_level_exclusion_total;
+
     return problem;
 }
 
@@ -2167,6 +2302,10 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         problem.diagnostics.double_difference_rejected_no_base_epoch;
     result.diagnostics.double_difference_rejected_no_reference =
         problem.diagnostics.double_difference_rejected_no_reference;
+    result.diagnostics.code_minus_carrier_jump_resets =
+        problem.diagnostics.code_minus_carrier_jump_resets;
+    result.diagnostics.code_minus_carrier_level_exclusions =
+        problem.diagnostics.code_minus_carrier_level_exclusions;
 
     if (problem.epochs.empty() ||
         (problem.pseudorange_factors.empty() &&

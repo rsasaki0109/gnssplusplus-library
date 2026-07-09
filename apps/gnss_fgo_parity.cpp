@@ -67,6 +67,11 @@ struct Args {
     double gate_res = -1.0;        // >=0: override gate_ddpr_res_max_m (0 disables)
     double gate_sat_res = -1.0;    // >=0: override gate_per_sat_res_max_m (0 disables)
     double gate_gdop = 0.0;        // >0: override gate_gdop_max
+    bool cmc = false;              // Code-Minus-Carrier multipath screening (slip_detect.py port)
+    double cmc_jump = -1.0;        // >=0: override code_minus_carrier_jump_threshold_m
+    double cmc_level = -1.0;       // >=0: override code_minus_carrier_level_threshold_m
+    int cmc_warmup = 0;            // >0: override code_minus_carrier_warmup_epochs
+    double cmc_alpha = -1.0;       // >=0: override code_minus_carrier_baseline_alpha
 };
 
 Args parseArgs(int argc, char** argv) {
@@ -139,6 +144,16 @@ Args parseArgs(int argc, char** argv) {
             args.gate_sat_res = std::stod(argv[++i]);
         } else if (a == "--gate-gdop" && i + 1 < argc) {
             args.gate_gdop = std::stod(argv[++i]);
+        } else if (a == "--cmc") {
+            args.cmc = true;
+        } else if (a == "--cmc-jump" && i + 1 < argc) {
+            args.cmc_jump = std::stod(argv[++i]);
+        } else if (a == "--cmc-level" && i + 1 < argc) {
+            args.cmc_level = std::stod(argv[++i]);
+        } else if (a == "--cmc-warmup" && i + 1 < argc) {
+            args.cmc_warmup = std::stoi(argv[++i]);
+        } else if (a == "--cmc-alpha" && i + 1 < argc) {
+            args.cmc_alpha = std::stod(argv[++i]);
         } else {
             std::cerr << "Unknown/incomplete arg: " << a << "\n";
             std::exit(2);
@@ -694,6 +709,21 @@ int main(int argc, char** argv) {
     if (args.gate_gdop > 0.0) {
         config.gate_gdop_max = args.gate_gdop;
     }
+    if (args.cmc) {
+        config.use_code_minus_carrier_screening = true;
+    }
+    if (args.cmc_jump >= 0.0) {
+        config.code_minus_carrier_jump_threshold_m = args.cmc_jump;
+    }
+    if (args.cmc_level >= 0.0) {
+        config.code_minus_carrier_level_threshold_m = args.cmc_level;
+    }
+    if (args.cmc_warmup > 0) {
+        config.code_minus_carrier_warmup_epochs = args.cmc_warmup;
+    }
+    if (args.cmc_alpha >= 0.0) {
+        config.code_minus_carrier_baseline_alpha = args.cmc_alpha;
+    }
     const libgnss::FGOProcessor builder(config);
     const libgnss::FGOProcessor::FGOProblem problem =
         builder.buildDoubleDifferenceProblem(rover_epochs, base_epochs, nav, base_position);
@@ -703,6 +733,14 @@ int main(int argc, char** argv) {
               << " dd_cp_factors=" << problem.double_difference_carrier_factors.size()
               << " ambiguity_states=" << problem.ambiguity_states.size()
               << " pr_factors=" << problem.pseudorange_factors.size() << "\n";
+    std::cout << "  CMC screening: " << (args.cmc ? "on" : "off")
+              << " (jump=" << config.code_minus_carrier_jump_threshold_m
+              << " m, level=" << config.code_minus_carrier_level_threshold_m
+              << " m, warmup=" << config.code_minus_carrier_warmup_epochs
+              << ", alpha=" << config.code_minus_carrier_baseline_alpha << ")"
+              << " -- jump_resets=" << problem.diagnostics.code_minus_carrier_jump_resets
+              << ", level_exclusions=" << problem.diagnostics.code_minus_carrier_level_exclusions
+              << "\n";
 
     // --- MF hygiene diagnostics: per-signal DD residuals at the reference
     // trajectory (no solver). PR residual mean exposes per-band code/DCB
@@ -858,7 +896,11 @@ int main(int argc, char** argv) {
                   << " epochs)\n"
                   << "  fix-and-hold: " << (args.use_hold ? "on" : "off")
                   << " (pinned " << fl.diagnostics.ambiguity_hold_arcs << " arcs, "
-                  << fl.diagnostics.ambiguity_hold_epochs << " epochs FIXED via held integers)\n";
+                  << fl.diagnostics.ambiguity_hold_epochs << " epochs FIXED via held integers)\n"
+                  << "  CMC screening: " << (args.cmc ? "on" : "off")
+                  << " (jump_resets=" << fl.diagnostics.code_minus_carrier_jump_resets
+                  << ", level_exclusions=" << fl.diagnostics.code_minus_carrier_level_exclusions
+                  << ")\n";
         if (!ref_rows.empty()) {
             std::cout << "  horizontal error vs reference.csv:\n"
                       << "    FLOAT: n=" << he.n_float << " rms=" << he.float_rms
