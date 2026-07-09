@@ -659,6 +659,11 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
 
     const bool robust = config.use_robust_loss;
 
+    // Quality gates: satellites whose post-fit DDPR residual exceeded
+    // gate_per_sat_res_max_m LAST epoch (reference: prefit
+    // apply_per_sat_residual_gate keeps them out of the LAMBDA tree).
+    std::set<SatelliteId> gate_bad_sats;
+
     for (std::size_t i = 0; i < num_epochs; ++i) {
         gtsam::NonlinearFactorGraph new_factors;
         gtsam::Values new_values;
@@ -956,8 +961,104 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             epoch_vel_nav[j] = Vector3d(vj);
         }
 
+        // --- Per-epoch quality gates (port of the reference's gate.py /
+        // postfit.py fixing policy; see FGOConfig::use_epoch_quality_gates).
+        // Computed at the smoothed antenna position AFTER the update, so the
+        // DDPR residuals are post-fit like the reference's. Gated epochs keep
+        // their factors but attempt no LAMBDA, add no holds, and are never
+        // labelled FIXED via held integers. ---
+        bool fix_allowed = true;
+        if (config.use_epoch_quality_gates) {
+            const Point3 ant_p = antennaOf(pose_i);
+            const Vector3d ant(ant_p.x(), ant_p.y(), ant_p.z());
+
+            // (a) GDOP / nsat over this epoch's DD satellites.
+            std::map<SatelliteId, Vector3d> sat_positions;
+            for (const auto* fp : pr_by_epoch[i]) {
+                sat_positions.emplace(fp->satellite, fp->rover_satellite_position_ecef);
+                sat_positions.emplace(fp->reference_satellite,
+                                      fp->rover_reference_position_ecef);
+            }
+            const int nsat = static_cast<int>(sat_positions.size());
+            double gdop = std::numeric_limits<double>::infinity();
+            if (nsat >= 4) {
+                Eigen::MatrixXd H(nsat, 4);
+                int row = 0;
+                for (const auto& [sid, sp] : sat_positions) {
+                    (void)sid;
+                    const Vector3d d = sp - ant;
+                    const double rng = d.norm();
+                    if (rng > 0.0) {
+                        H.block<1, 3>(row, 0) = (-d / rng).transpose();
+                    } else {
+                        H.block<1, 3>(row, 0).setZero();
+                    }
+                    H(row, 3) = 1.0;
+                    ++row;
+                }
+                const Eigen::Matrix4d Ninv = (H.transpose() * H).inverse();
+                if (Ninv.allFinite()) {
+                    gdop = std::sqrt(std::max(0.0, Ninv.trace()));
+                }
+            }
+
+            // (b) post-fit DD-pseudorange residuals at the smoothed antenna
+            // (reference: postfit.main_ddpr_residuals -- epoch RMS + per-sat
+            // max, charged to both the target and the reference satellite).
+            double res_sq_sum = 0.0;
+            std::size_t res_n = 0;
+            std::map<SatelliteId, double> per_sat_res;
+            for (const auto* fp : pr_by_epoch[i]) {
+                const double geom =
+                    ((fp->rover_satellite_position_ecef - ant).norm() -
+                     (fp->base_satellite_position_ecef - fp->base_position_ecef).norm()) -
+                    ((fp->rover_reference_position_ecef - ant).norm() -
+                     (fp->base_reference_position_ecef - fp->base_position_ecef).norm());
+                const double res = std::abs(fp->observed_dd_pseudorange_m - geom);
+                res_sq_sum += res * res;
+                ++res_n;
+                double& worst = per_sat_res[fp->satellite];
+                worst = std::max(worst, res);
+                double& worst_ref = per_sat_res[fp->reference_satellite];
+                worst_ref = std::max(worst_ref, res);
+            }
+            const double ddpr_rms =
+                res_n > 0 ? std::sqrt(res_sq_sum / static_cast<double>(res_n)) : 0.0;
+
+            if (nsat < config.gate_min_satellites ||
+                gdop > config.gate_gdop_max ||
+                (config.gate_ddpr_res_max_m > 0.0 &&
+                 ddpr_rms > config.gate_ddpr_res_max_m)) {
+                fix_allowed = false;
+                ++result.diagnostics.quality_gated_epochs;
+            }
+
+            // (c) satellites flagged by LAST epoch's post-fit residuals stay
+            // out of this epoch's LAMBDA candidate set (their factors and
+            // held pins are untouched).
+            if (!gate_bad_sats.empty() && !epoch_amb_indices.empty()) {
+                epoch_amb_indices.erase(
+                    std::remove_if(
+                        epoch_amb_indices.begin(), epoch_amb_indices.end(),
+                        [&](std::size_t idx) {
+                            const auto& amb = problem.ambiguity_states[idx];
+                            return gate_bad_sats.count(amb.satellite) > 0 ||
+                                   gate_bad_sats.count(amb.reference_satellite) > 0;
+                        }),
+                    epoch_amb_indices.end());
+            }
+            gate_bad_sats.clear();
+            if (config.gate_per_sat_res_max_m > 0.0) {
+                for (const auto& [sid, r] : per_sat_res) {
+                    if (r > config.gate_per_sat_res_max_m) {
+                        gate_bad_sats.insert(sid);
+                    }
+                }
+            }
+        }
+
         // --- Per-epoch LAMBDA off the bounded windowed marginals ---
-        if (config.use_lambda_ambiguity_fix && !epoch_amb_indices.empty()) {
+        if (fix_allowed && config.use_lambda_ambiguity_fix && !epoch_amb_indices.empty()) {
             std::sort(epoch_amb_indices.begin(), epoch_amb_indices.end(),
                       [&](std::size_t a, std::size_t b) {
                           const auto& sa = problem.ambiguity_states[a];
@@ -1178,8 +1279,10 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         // --- 2e fix-and-hold: an epoch whose arcs are (mostly) already held is
         // FIXED regardless of the fresh per-epoch LAMBDA -- the integers are
         // known and the smoother position (with the held priors active) is the
-        // fixed solution. This is the main fix-rate lever. ---
-        if (config.use_ambiguity_hold && !epoch_fixed[i]) {
+        // fixed solution. This is the main fix-rate lever. Quality-gated
+        // epochs are never labelled FIXED this way (reference: no fixing on a
+        // corrupt epoch). ---
+        if (fix_allowed && config.use_ambiguity_hold && !epoch_fixed[i]) {
             int held_here = 0;
             for (std::size_t idx : epoch_amb_indices) {
                 if (pinned_ambiguities.count(idx)) ++held_here;

@@ -63,6 +63,10 @@ struct Args {
     double hold_ratio = 0.0;       // >0: override ambiguity_hold_ratio_threshold
     int hold_min = 0;              // >0: override ambiguity_hold_min_fixed
     int min_fixed = 0;             // >0: override min_fixed_ambiguities (partial-AR floor)
+    bool gates = false;            // per-epoch quality gates (reference gate.py/postfit.py port)
+    double gate_res = -1.0;        // >=0: override gate_ddpr_res_max_m (0 disables)
+    double gate_sat_res = -1.0;    // >=0: override gate_per_sat_res_max_m (0 disables)
+    double gate_gdop = 0.0;        // >0: override gate_gdop_max
 };
 
 Args parseArgs(int argc, char** argv) {
@@ -127,6 +131,14 @@ Args parseArgs(int argc, char** argv) {
             args.hold_min = std::stoi(argv[++i]);
         } else if (a == "--min-fixed" && i + 1 < argc) {
             args.min_fixed = std::stoi(argv[++i]);
+        } else if (a == "--gates") {
+            args.gates = true;
+        } else if (a == "--gate-res" && i + 1 < argc) {
+            args.gate_res = std::stod(argv[++i]);
+        } else if (a == "--gate-sat-res" && i + 1 < argc) {
+            args.gate_sat_res = std::stod(argv[++i]);
+        } else if (a == "--gate-gdop" && i + 1 < argc) {
+            args.gate_gdop = std::stod(argv[++i]);
         } else {
             std::cerr << "Unknown/incomplete arg: " << a << "\n";
             std::exit(2);
@@ -670,6 +682,18 @@ int main(int argc, char** argv) {
     if (args.min_fixed > 0) {
         config.min_fixed_ambiguities = args.min_fixed;
     }
+    if (args.gates) {
+        config.use_epoch_quality_gates = true;
+    }
+    if (args.gate_res >= 0.0) {
+        config.gate_ddpr_res_max_m = args.gate_res;
+    }
+    if (args.gate_sat_res >= 0.0) {
+        config.gate_per_sat_res_max_m = args.gate_sat_res;
+    }
+    if (args.gate_gdop > 0.0) {
+        config.gate_gdop_max = args.gate_gdop;
+    }
     const libgnss::FGOProcessor builder(config);
     const libgnss::FGOProcessor::FGOProblem problem =
         builder.buildDoubleDifferenceProblem(rover_epochs, base_epochs, nav, base_position);
@@ -828,6 +852,9 @@ int main(int argc, char** argv) {
                   << "  NHC/ZUPT: nhc=" << (args.use_nhc ? "on" : "off")
                   << " (applied " << fl.diagnostics.nhc_epochs << " epochs), zupt="
                   << (args.use_zupt ? "on" : "off") << " (applied " << fl.diagnostics.zupt_epochs
+                  << " epochs)\n"
+                  << "  quality-gates: " << (args.gates ? "on" : "off")
+                  << " (fixing suppressed on " << fl.diagnostics.quality_gated_epochs
                   << " epochs)\n"
                   << "  fix-and-hold: " << (args.use_hold ? "on" : "off")
                   << " (pinned " << fl.diagnostics.ambiguity_hold_arcs << " arcs, "

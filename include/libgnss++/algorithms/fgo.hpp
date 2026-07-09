@@ -311,6 +311,26 @@ public:
         // multipath-corrupted (vs ~75-90% integer-consistent for GPS/BDS/QZS),
         // so Galileo candidates mostly poison the all-or-nothing ratio test.
         bool exclude_galileo_ambiguity_fixing = false;
+
+        // --- Per-epoch quality gates (port of the inuex35 reference's
+        // preprocess/gate.py + validation/postfit.py policy) ---
+        // The reference never lets the integer search run on a corrupt epoch:
+        // a GDOP/nsat gate skips weak-geometry epochs entirely, per-satellite
+        // post-fit DD-pseudorange residuals drop multipath satellites from
+        // the NEXT epoch's LAMBDA tree, and a main-DDPR-RMS sanity threshold
+        // suppresses carrier fixing while the solution is inconsistent.
+        // This port applies the same three screens to the fixed-lag path as
+        // FIXING gates: DD factors still enter the graph (robust loss handles
+        // them), but a gated epoch attempts no LAMBDA, adds no holds, and is
+        // never labelled FIXED via held integers -- killing the meaningless
+        // deep-urban FIXED labels measured on tokyo1 full-run (FIXED rms 6-11
+        // m). Thresholds default to the reference's config.py values.
+        // Master switch, default OFF (bit-identical baseline without it).
+        bool use_epoch_quality_gates = false;
+        double gate_gdop_max = 10.0;          ///< reference gdop_max
+        int gate_min_satellites = 6;          ///< reference nsat_min
+        double gate_ddpr_res_max_m = 3.0;     ///< reference main_ddpr_res_thresh
+        double gate_per_sat_res_max_m = 3.0;  ///< reference per_sat_res_thresh
     };
 
     struct EpochSeed {
@@ -588,6 +608,7 @@ public:
         std::size_t zupt_epochs = 0;  ///< 2d: epochs a ZUPT prior was applied
         std::size_t ambiguity_hold_epochs = 0;  ///< 2e: epochs FIXED via held (not fresh) integers
         std::size_t ambiguity_hold_arcs = 0;    ///< 2e: distinct arcs pinned at their integer
+        std::size_t quality_gated_epochs = 0;   ///< epochs where the quality gates suppressed fixing
         std::size_t float_rejected_seed_position_divergence = 0;
         std::size_t float_rejected_position_jump = 0;
         bool fixed_solution = false;
