@@ -25,6 +25,17 @@
 #include <tuple>
 
 namespace libgnss {
+
+#ifdef GNSSPP_HAS_GTSAM
+// Implemented in fgo_gtsam_backend.cpp. Kept as a free function (rather than
+// another FGOProcessor member) so all GTSAM includes/types stay confined to
+// that translation unit; fgo.cpp itself never includes any GTSAM header.
+FGOProcessor::FGOResult optimizeProblemWithGtsam(
+    const FGOProcessor::FGOProblem& problem,
+    const FGOProcessor::FGOConfig& config,
+    FGOProcessor::FGOResult result);
+#endif
+
 namespace {
 
 bool isPrimaryFgoSignal(SignalType signal, bool use_multi_constellation) {
@@ -1918,6 +1929,12 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
          problem.single_difference_tdcp_factors.empty())) {
         return result;
     }
+
+#ifdef GNSSPP_HAS_GTSAM
+    if (config_.backend == FGOBackend::GTSAM) {
+        return optimizeProblemWithGtsam(problem, config_, std::move(result));
+    }
+#endif
 
     const int num_epochs = static_cast<int>(problem.epochs.size());
     std::vector<GNSSSystem> bias_groups;

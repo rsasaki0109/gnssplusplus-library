@@ -32,6 +32,11 @@ if(GTSAM_FOUND)
 else()
     message(STATUS "GTSAM not found; optional FGO GTSAM backend disabled")
 endif()
+# GNSSPP_HAS_GTSAM (compile definition, exported PUBLIC below) gates all
+# GTSAM-dependent code (see src/algorithms/fgo_gtsam_backend.cpp and the
+# FGOProcessor::optimizeProblem backend selector in src/algorithms/fgo.cpp).
+# A build without GTSAM_FOUND is unchanged: FGOBackend::GTSAM silently falls
+# back to the native Eigen backend.
 option(GNSSPP_USE_CHOLMOD "Use CHOLMOD for optional FGO sparse covariance solves" ON)
 if(GNSSPP_USE_CHOLMOD)
     find_path(CHOLMOD_INCLUDE_DIR
@@ -228,6 +233,28 @@ if(CHOLMOD_INCLUDE_DIR AND CHOLMOD_LIBRARY)
     target_include_directories(gnss_lib_noopt PRIVATE ${CHOLMOD_INCLUDE_DIR})
     target_compile_definitions(gnss_lib_noopt PRIVATE GNSSPP_HAS_CHOLMOD=1)
     target_link_libraries(gnss_lib_noopt PRIVATE ${CHOLMOD_LIBRARY})
+endif()
+if(GTSAM_FOUND)
+    # fgo.cpp (FGOProcessor::optimizeProblem) lives in gnss_lib_noopt, so the
+    # GTSAM backend TU and the gtsam link dependency must live here too, not
+    # on gnss_lib, otherwise the backend-selector forward declaration in
+    # fgo.cpp would be an unresolved symbol at link time.
+    target_sources(gnss_lib_noopt PRIVATE src/algorithms/fgo_gtsam_backend.cpp)
+    target_link_libraries(gnss_lib_noopt PUBLIC gtsam)
+    target_compile_definitions(gnss_lib_noopt PUBLIC GNSSPP_HAS_GTSAM=1)
+    if(MSVC)
+        # gtsam.dll dllexports a handful of STL template instantiations that back
+        # its Key containers (std::map<uint64,uint64>, std::vector<uint64>, ...).
+        # Those same instantiations also appear as COMDAT symbols in our own
+        # object files (e.g. fgo.obj), so every executable that links both
+        # gnss_lib_noopt and gtsam hits LNK2005 "already defined". /FORCE:MULTIPLE
+        # tells the linker to keep the first definition and drop the duplicates;
+        # this is the standard GTSAM-on-Windows shared-build workaround and is
+        # safe here because the colliding symbols are identical inline STL code.
+        # Propagated as an INTERFACE option so every consumer (apps, tests) that
+        # transitively links gtsam through gnss_lib_noopt inherits it.
+        target_link_options(gnss_lib_noopt INTERFACE /FORCE:MULTIPLE)
+    endif()
 endif()
 
 set(GNSS_INSTALL_TARGETS gnss_lib gnss_lib_noopt sofa ginan_iers2010)

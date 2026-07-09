@@ -4,6 +4,7 @@
 #include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/solution.hpp>
 #include <libgnss++/core/types.hpp>
+#include <libgnss++/io/imu.hpp>
 
 #include <cstddef>
 #include <map>
@@ -12,6 +13,22 @@
 #include <vector>
 
 namespace libgnss {
+
+/**
+ * @brief Selects which numerical backend FGOProcessor::optimizeProblem uses.
+ *
+ * `Eigen` (default) is the native dense/sparse Gauss-Newton-ish solver
+ * implemented directly in fgo.cpp. `GTSAM` delegates to a GTSAM
+ * NonlinearFactorGraph + LevenbergMarquardtOptimizer built in
+ * fgo_gtsam_backend.cpp (only available when the library is built with
+ * GTSAM found, i.e. GNSSPP_HAS_GTSAM is defined). Selecting GTSAM when the
+ * library was built without it is a no-op: optimizeProblem falls back to the
+ * Eigen backend.
+ */
+enum class FGOBackend {
+    Eigen,
+    GTSAM,
+};
 
 /**
  * @brief Batch pseudorange factor-graph optimizer.
@@ -23,6 +40,7 @@ namespace libgnss {
 class FGOProcessor {
 public:
     struct FGOConfig {
+        FGOBackend backend = FGOBackend::Eigen;
         int max_iterations = 8;
         double convergence_threshold_m = 1e-4;
         double relative_cost_convergence_threshold = 0.0;
@@ -95,6 +113,82 @@ public:
         bool use_troposphere_model = true;
         bool use_multi_constellation = true;
         bool collect_lambda_debug = false;
+
+        // --- Phase 2 milestone 2a (docs/gtsam_backend_design.md) ---
+        // When true AND backend == FGOBackend::GTSAM, the GTSAM backend keys
+        // the rover state as a body gtsam::Pose3 (translation + attitude) per
+        // epoch instead of a bare gtsam::Point3, and builds the DD factors
+        // with the lever-arm '...FactorArm' variants (antenna_ecef =
+        // pose.translation() + pose.rotation() * pose3_lever_arm_body_m).
+        // Attitude is unobservable from GNSS DD alone (no IMU until
+        // milestone 2b) and is pinned near its identity seed by a dedicated
+        // rotation-only prior; only the recovered ANTENNA position is a
+        // validated output of this mode. Ignored by the native Eigen backend
+        // and by the GTSAM backend when false (existing Point3 path,
+        // unchanged). Default OFF.
+        bool use_pose3_state = false;
+        // Body-frame (FLU) translation from the body/IMU origin to the GNSS
+        // antenna, used only when use_pose3_state is true. Zero means the
+        // Pose3 state's translation IS the antenna (degenerate lever arm).
+        Vector3d pose3_lever_arm_body_m = Vector3d::Zero();
+
+        // --- Phase 2 milestone 2b: IMU tight coupling ---
+        // When true AND use_pose3_state AND the GTSAM backend AND the problem
+        // carries a valid ImuInput, the GTSAM backend augments each epoch with
+        // a Vector3 velocity node V(i) and an imuBias::ConstantBias node B(i),
+        // links consecutive epochs with a gtsam::CombinedImuFactor built from
+        // PreintegratedCombinedMeasurements, and interprets the per-epoch Pose3
+        // as body-in-nav (local ENU) with the DD '...FactorArm' consuming it
+        // through ecef_T_nav (the same Pose3 is shared with the IMU factor).
+        // Attitude/velocity become observable, so the per-epoch 2a rotation pin
+        // is dropped in favour of first-state priors (attitude/velocity/bias)
+        // for gauge. Ignored unless use_pose3_state is also set. Default OFF.
+        bool use_imu = false;
+
+        // --- Phase 2 milestone 2c: incremental fixed-lag smoother ---
+        // When true AND use_imu (implies use_pose3_state, GTSAM backend), the
+        // GTSAM backend streams the graph through a
+        // gtsam::IncrementalFixedLagSmoother instead of a single batch LM
+        // solve: each epoch's Pose3/Vel/Bias + factors are added incrementally
+        // with key timestamps, and states older than fixed_lag_smoother_lag_s
+        // (relative to the newest epoch) are marginalized. This bounds memory
+        // and makes per-epoch LAMBDA feasible at full-dataset scale (the batch
+        // gtsam::Marginals hit bad_alloc at ~25k vars). Ignored unless use_imu.
+        // Default OFF (batch LM path unchanged).
+        bool use_fixed_lag_smoother = false;
+        // Smoother lag in seconds. States (and ambiguity/clock nodes) whose
+        // last timestamp is older than this window are marginalized out.
+        double fixed_lag_smoother_lag_s = 5.0;
+
+        // --- Phase 2 milestone 2d: NHC + ZUPT pseudo-measurements ---
+        // Applied per-epoch in the IMU-coupled fixed-lag path (gated), mirror
+        // inuex35 buildfactor/nhc.py + zupt.py. Default OFF.
+        //
+        // NHC: a ground vehicle's body-frame lateral (left) and vertical (up)
+        // velocity is ~0. Binary factor on (Pose3(i), Vel(i)) with residual
+        // [v_body.y, v_body.z] = [ (R^T v_nav).y, (R^T v_nav).z ]. Gated to
+        // moving, non-turning epochs so it never fights legitimate lateral
+        // motion.
+        bool use_nhc = false;
+        double nhc_min_speed_mps = 2.0;          ///< only apply NHC above this speed
+        double nhc_max_yaw_rate_radps = 0.20;    ///< skip NHC when |yaw rate| exceeds this (turn)
+        double nhc_sigma_lateral_mps = 0.3;      ///< body-lateral velocity sigma
+        double nhc_sigma_vertical_mps = 0.2;     ///< body-vertical velocity sigma
+        // ZUPT: when the epoch's IMU window is stationary, pin Vel(i) ~ 0 with a
+        // PriorFactor. Stationary detection mirrors the Stage-1 ESKF detector
+        // (accel_std / gyro_std / gyro_median of bias-referenced IMU samples).
+        bool use_zupt = false;
+        double zupt_sigma_mps = 0.05;            ///< zero-velocity prior sigma
+        // Velocity gate (mirrors inuex35): only fire ZUPT when the current
+        // (IMU-predicted) speed is already below this. Without it, a quiet
+        // accelerometer during CONSTANT-VELOCITY cruising is misread as
+        // stationary and ZUPT freezes the vehicle (observed: FLOAT max 94 m).
+        // 0 disables the gate.
+        double zupt_max_speed_mps = 0.5;
+        double zupt_max_accel_std = 0.55;        ///< stationary gate: accel deviation std [m/s^2]
+        double zupt_max_gyro_std = 0.030;        ///< stationary gate: gyro deviation std [rad/s]
+        double zupt_max_gyro_median = 0.020;     ///< stationary gate: gyro deviation median [rad/s]
+        int zupt_min_samples = 5;                ///< minimum IMU samples in window to test
     };
 
     struct EpochSeed {
@@ -261,8 +355,57 @@ public:
         std::size_t tdcp_rejected_code_phase_jump = 0;
     };
 
+    // --- Phase 2 milestone 2b: IMU preintegration inputs ---
+    //
+    // Continuous-time IMU noise densities + bias random-walk for the GTSAM
+    // PreintegrationCombinedParams. Sigmas, not covariances; the backend
+    // squares them. Defaults are a reasonable consumer/industrial MEMS grade
+    // (order of the tokyo low-cost preset) and can be overridden by the caller.
+    // Defaults are the (deliberately conservative) values validated on tokyo1
+    // in milestone 2b; final tuning is deferred to 2c/2e.
+    struct ImuNoiseParams {
+        double accel_noise_sigma = 1.0e-1;      ///< accel white noise [m/s^2/sqrt(Hz)]
+        double gyro_noise_sigma = 1.0e-2;       ///< gyro white noise [rad/s/sqrt(Hz)]
+        double accel_bias_rw_sigma = 1.0e-2;    ///< accel bias random walk [m/s^3/sqrt(Hz)]
+        double gyro_bias_rw_sigma = 1.0e-3;     ///< gyro bias random walk [rad/s^2/sqrt(Hz)]
+        double integration_sigma = 1.0e-2;      ///< integration uncertainty [m/s/sqrt(Hz)]
+        double gravity_mps2 = 9.80665;          ///< local gravity magnitude
+    };
+
+    // Everything the GTSAM backend needs to add IMU factors, computed by the
+    // caller (harness): the local nav (ENU) frame definition, the per-sample
+    // IMU stream already remapped to body FLU with gyro in rad/s, the initial
+    // navigation state (from Stage-1 alignment) and its prior sigmas, and the
+    // preintegration noise. The nav frame is ENU (Z-up); gravity points to -Z.
+    struct ImuInput {
+        bool valid = false;
+        // Local ENU nav-frame origin: pose translations are expressed as the
+        // body/IMU origin in this ENU frame, and ecef_T_nav maps them to ECEF.
+        Vector3d nav_origin_ecef = Vector3d::Zero();
+        double nav_origin_lat_rad = 0.0;
+        double nav_origin_lon_rad = 0.0;
+        // Time-sorted IMU samples, already body-FLU (ImuAxisConvention applied)
+        // with gyro converted to rad/s. The backend preintegrates the samples
+        // falling in each [epoch[i].time, epoch[i+1].time) interval.
+        std::vector<ImuSample> samples_body_flu;
+        // Initial navigation state (first epoch), nav = ENU frame. Attitude is
+        // the body->nav rotation from Stage-1 static leveling + heading align.
+        Matrix3d init_attitude_body_to_nav = Matrix3d::Identity();
+        Vector3d init_velocity_nav = Vector3d::Zero();
+        Vector3d init_accel_bias = Vector3d::Zero();
+        Vector3d init_gyro_bias = Vector3d::Zero();
+        // First-state prior sigmas (gauge/anchor for the IMU chain).
+        double init_attitude_sigma_roll_pitch_rad = 0.02;
+        double init_attitude_sigma_yaw_rad = 0.5;
+        double init_velocity_sigma_mps = 0.5;
+        double init_accel_bias_sigma = 0.05;
+        double init_gyro_bias_sigma = 0.01;
+        ImuNoiseParams noise;
+    };
+
     struct FGOProblem {
         std::vector<EpochSeed> epochs;
+        ImuInput imu;  ///< Milestone 2b IMU inputs (valid only when populated).
         std::vector<bool> clock_jumps;
         std::vector<PseudorangeFactor> pseudorange_factors;
         std::vector<TimeDifferencedCarrierFactor> tdcp_factors;
@@ -315,6 +458,11 @@ public:
         std::size_t robust_tdcp_factors = 0;
         std::size_t graph_factors = 0;
         std::size_t graph_values = 0;
+        std::size_t imu_intervals = 0;  ///< 2b: CombinedImuFactors added between epochs
+        std::size_t smoother_max_window_vars = 0;  ///< 2c: peak in-window variable count
+        std::size_t smoother_updates = 0;          ///< 2c: number of smoother.update() calls
+        std::size_t nhc_epochs = 0;   ///< 2d: epochs an NHC factor was applied
+        std::size_t zupt_epochs = 0;  ///< 2d: epochs a ZUPT prior was applied
         std::size_t float_rejected_seed_position_divergence = 0;
         std::size_t float_rejected_position_jump = 0;
         bool fixed_solution = false;
@@ -401,6 +549,12 @@ public:
         std::vector<Vector3d> epoch_velocities_ecef_mps;
         std::vector<LambdaDebugEntry> lambda_debug_entries;
         std::vector<CostTraceEntry> cost_trace_entries;
+        // Milestone 2b (populated only by the GTSAM IMU-coupled path):
+        // per-epoch estimated attitude as [roll, pitch, heading] in degrees
+        // (body FLU -> nav ENU; heading is clockwise from North) and estimated
+        // velocity in the ENU nav frame [m/s].
+        std::vector<Vector3d> epoch_attitude_rpy_deg;
+        std::vector<Vector3d> epoch_velocity_nav_mps;
     };
 
     FGOProcessor() = default;
