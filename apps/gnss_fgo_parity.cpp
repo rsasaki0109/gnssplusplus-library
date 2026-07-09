@@ -72,6 +72,29 @@ struct Args {
     double cmc_level = -1.0;       // >=0: override code_minus_carrier_level_threshold_m
     int cmc_warmup = 0;            // >0: override code_minus_carrier_warmup_epochs
     double cmc_alpha = -1.0;       // >=0: override code_minus_carrier_baseline_alpha
+    bool cp_hold = false;                  // CP-hold / sanity FSM (validation/postfit.py + recovery.py port)
+    double cp_hold_res = -1.0;             // >=0: override cp_hold_main_residual_threshold_m
+    double cp_hold_catastrophic = -1.0;    // >=0: override cp_hold_catastrophic_threshold_m
+    double cp_hold_fast_worst_sat = -1.0;  // >=0: override cp_hold_fast_worst_satellite_min_m
+    int cp_hold_persist = 0;               // >0: override cp_hold_persist_epochs
+    int cp_hold_epochs_n = 0;              // >0: override cp_hold_epochs
+    double cp_hold_release_res = -1.0;     // >=0: override cp_hold_release_threshold_m
+    int cp_hold_release_n = 0;             // >0: override cp_hold_release_count
+    double cp_hold_pose_replace = -1.0;    // >=0: override cp_hold_pose_replace_threshold_m
+    double cp_hold_gdop = -1.0;            // >=0: override cp_hold_max_gdop
+    bool exc_recovery = false;             // solve-exception recovery (recovery.py handle_solve_exception port)
+    bool ddpr_anchor = false;              // DDPR-LS anchor (ls_solvers.py + anchor stages of postfit/recovery/stage.py)
+    double ddpr_anchor_max_res = -1.0;     // >=0: override ddpr_anchor_max_residual_m
+    double ddpr_anchor_fde = -1.0;         // >=0: override ddpr_anchor_fde_threshold_m
+    int ddpr_anchor_min_n = 0;             // >0: override ddpr_anchor_min_factors
+    int ddpr_anchor_boot_epochs = -1;      // >=0: override ddpr_anchor_bootstrap_epochs
+    double ddpr_anchor_boot_sigma = -1.0;  // >=0: override ddpr_anchor_bootstrap_sigma_m
+    int ddpr_anchor_boot_after_mass = -1;  // 0/1: override cp_hold_bootstrap_after_mass_reset
+    bool fde = false;              // GICI-style FDE (validation/postfit.py apply_fde port)
+    double fde_pr = -1.0;          // >=0: override fde_pseudorange_threshold_m
+    double fde_cp = -1.0;          // >=0: override fde_carrier_threshold_m
+    double fde_frac = -1.0;        // >=0: override fde_max_rejected_fraction
+    int fde_iters = 0;             // >0: override fde_max_iterations
 };
 
 Args parseArgs(int argc, char** argv) {
@@ -154,6 +177,52 @@ Args parseArgs(int argc, char** argv) {
             args.cmc_warmup = std::stoi(argv[++i]);
         } else if (a == "--cmc-alpha" && i + 1 < argc) {
             args.cmc_alpha = std::stod(argv[++i]);
+        } else if (a == "--cp-hold") {
+            args.cp_hold = true;
+        } else if (a == "--cp-hold-res" && i + 1 < argc) {
+            args.cp_hold_res = std::stod(argv[++i]);
+        } else if (a == "--cp-hold-catastrophic" && i + 1 < argc) {
+            args.cp_hold_catastrophic = std::stod(argv[++i]);
+        } else if (a == "--cp-hold-fast-worst-sat" && i + 1 < argc) {
+            args.cp_hold_fast_worst_sat = std::stod(argv[++i]);
+        } else if (a == "--cp-hold-persist" && i + 1 < argc) {
+            args.cp_hold_persist = std::stoi(argv[++i]);
+        } else if (a == "--cp-hold-epochs" && i + 1 < argc) {
+            args.cp_hold_epochs_n = std::stoi(argv[++i]);
+        } else if (a == "--cp-hold-release-res" && i + 1 < argc) {
+            args.cp_hold_release_res = std::stod(argv[++i]);
+        } else if (a == "--cp-hold-release-count" && i + 1 < argc) {
+            args.cp_hold_release_n = std::stoi(argv[++i]);
+        } else if (a == "--cp-hold-pose-replace" && i + 1 < argc) {
+            args.cp_hold_pose_replace = std::stod(argv[++i]);
+        } else if (a == "--cp-hold-gdop" && i + 1 < argc) {
+            args.cp_hold_gdop = std::stod(argv[++i]);
+        } else if (a == "--exc-recovery") {
+            args.exc_recovery = true;
+        } else if (a == "--ddpr-anchor") {
+            args.ddpr_anchor = true;
+        } else if (a == "--ddpr-anchor-max-res" && i + 1 < argc) {
+            args.ddpr_anchor_max_res = std::stod(argv[++i]);
+        } else if (a == "--ddpr-anchor-fde" && i + 1 < argc) {
+            args.ddpr_anchor_fde = std::stod(argv[++i]);
+        } else if (a == "--ddpr-anchor-min-n" && i + 1 < argc) {
+            args.ddpr_anchor_min_n = std::stoi(argv[++i]);
+        } else if (a == "--ddpr-anchor-boot-epochs" && i + 1 < argc) {
+            args.ddpr_anchor_boot_epochs = std::stoi(argv[++i]);
+        } else if (a == "--ddpr-anchor-boot-sigma" && i + 1 < argc) {
+            args.ddpr_anchor_boot_sigma = std::stod(argv[++i]);
+        } else if (a == "--ddpr-anchor-boot-after-mass" && i + 1 < argc) {
+            args.ddpr_anchor_boot_after_mass = std::stoi(argv[++i]);
+        } else if (a == "--fde") {
+            args.fde = true;
+        } else if (a == "--fde-pr" && i + 1 < argc) {
+            args.fde_pr = std::stod(argv[++i]);
+        } else if (a == "--fde-cp" && i + 1 < argc) {
+            args.fde_cp = std::stod(argv[++i]);
+        } else if (a == "--fde-frac" && i + 1 < argc) {
+            args.fde_frac = std::stod(argv[++i]);
+        } else if (a == "--fde-iters" && i + 1 < argc) {
+            args.fde_iters = std::stoi(argv[++i]);
         } else {
             std::cerr << "Unknown/incomplete arg: " << a << "\n";
             std::exit(2);
@@ -724,6 +793,75 @@ int main(int argc, char** argv) {
     if (args.cmc_alpha >= 0.0) {
         config.code_minus_carrier_baseline_alpha = args.cmc_alpha;
     }
+    if (args.cp_hold) {
+        config.use_cp_hold_recovery = true;
+    }
+    if (args.cp_hold_res >= 0.0) {
+        config.cp_hold_main_residual_threshold_m = args.cp_hold_res;
+    }
+    if (args.cp_hold_catastrophic >= 0.0) {
+        config.cp_hold_catastrophic_threshold_m = args.cp_hold_catastrophic;
+    }
+    if (args.cp_hold_fast_worst_sat >= 0.0) {
+        config.cp_hold_fast_worst_satellite_min_m = args.cp_hold_fast_worst_sat;
+    }
+    if (args.cp_hold_persist > 0) {
+        config.cp_hold_persist_epochs = args.cp_hold_persist;
+    }
+    if (args.cp_hold_epochs_n > 0) {
+        config.cp_hold_epochs = args.cp_hold_epochs_n;
+    }
+    if (args.cp_hold_release_res >= 0.0) {
+        config.cp_hold_release_threshold_m = args.cp_hold_release_res;
+    }
+    if (args.cp_hold_release_n > 0) {
+        config.cp_hold_release_count = args.cp_hold_release_n;
+    }
+    if (args.cp_hold_pose_replace >= 0.0) {
+        config.cp_hold_pose_replace_threshold_m = args.cp_hold_pose_replace;
+    }
+    if (args.cp_hold_gdop >= 0.0) {
+        config.cp_hold_max_gdop = args.cp_hold_gdop;
+    }
+    if (args.exc_recovery) {
+        config.use_solve_exception_recovery = true;
+    }
+    if (args.ddpr_anchor) {
+        config.use_ddpr_anchor = true;
+    }
+    if (args.ddpr_anchor_max_res >= 0.0) {
+        config.ddpr_anchor_max_residual_m = args.ddpr_anchor_max_res;
+    }
+    if (args.ddpr_anchor_fde >= 0.0) {
+        config.ddpr_anchor_fde_threshold_m = args.ddpr_anchor_fde;
+    }
+    if (args.ddpr_anchor_min_n > 0) {
+        config.ddpr_anchor_min_factors = args.ddpr_anchor_min_n;
+    }
+    if (args.ddpr_anchor_boot_epochs >= 0) {
+        config.ddpr_anchor_bootstrap_epochs = args.ddpr_anchor_boot_epochs;
+    }
+    if (args.ddpr_anchor_boot_sigma >= 0.0) {
+        config.ddpr_anchor_bootstrap_sigma_m = args.ddpr_anchor_boot_sigma;
+    }
+    if (args.ddpr_anchor_boot_after_mass >= 0) {
+        config.cp_hold_bootstrap_after_mass_reset = (args.ddpr_anchor_boot_after_mass != 0);
+    }
+    if (args.fde) {
+        config.use_fde = true;
+    }
+    if (args.fde_pr >= 0.0) {
+        config.fde_pseudorange_threshold_m = args.fde_pr;
+    }
+    if (args.fde_cp >= 0.0) {
+        config.fde_carrier_threshold_m = args.fde_cp;
+    }
+    if (args.fde_frac >= 0.0) {
+        config.fde_max_rejected_fraction = args.fde_frac;
+    }
+    if (args.fde_iters > 0) {
+        config.fde_max_iterations = args.fde_iters;
+    }
     const libgnss::FGOProcessor builder(config);
     const libgnss::FGOProcessor::FGOProblem problem =
         builder.buildDoubleDifferenceProblem(rover_epochs, base_epochs, nav, base_position);
@@ -900,6 +1038,35 @@ int main(int argc, char** argv) {
                   << "  CMC screening: " << (args.cmc ? "on" : "off")
                   << " (jump_resets=" << fl.diagnostics.code_minus_carrier_jump_resets
                   << ", level_exclusions=" << fl.diagnostics.code_minus_carrier_level_exclusions
+                  << ")\n"
+                  << "  CP-hold/sanity FSM: " << (args.cp_hold ? "on" : "off")
+                  << " (triggers=" << fl.diagnostics.cp_hold_triggers
+                  << ", epochs_held=" << fl.diagnostics.cp_hold_epochs_held
+                  << ", mass_resets=" << fl.diagnostics.sanity_mass_resets
+                  << ", fast_resets=" << fl.diagnostics.sanity_fast_resets
+                  << ", pose_replacements=" << fl.diagnostics.sanity_pose_replacements
+                  << ", multipath_skips=" << fl.diagnostics.sanity_multipath_skips
+                  << ", gdop_skips=" << fl.diagnostics.sanity_gdop_skips
+                  << ", generation_bumps=" << fl.diagnostics.ambiguity_generation_bumps
+                  << ")\n"
+                  << "  exception recovery: " << (args.exc_recovery ? "on" : "off")
+                  << " (smoother_recovery_epochs=" << fl.diagnostics.smoother_recovery_epochs
+                  << ", loose_prior_recoveries=" << fl.diagnostics.solve_exception_recoveries
+                  << ", full_warm_resets=" << fl.diagnostics.solve_exception_warm_resets
+                  << ")\n"
+                  << "  DDPR-LS anchor: " << (args.ddpr_anchor ? "on" : "off")
+                  << " (solves=" << fl.diagnostics.ddpr_anchor_solves
+                  << ", successes=" << fl.diagnostics.ddpr_anchor_successes
+                  << ", gated_resets_skipped=" << fl.diagnostics.ddpr_anchor_gated_resets_skipped
+                  << ", gated_resets_allowed=" << fl.diagnostics.ddpr_anchor_gated_resets_allowed
+                  << ", anchored_warm_resets=" << fl.diagnostics.ddpr_anchored_warm_resets
+                  << ", bootstrap_prior_epochs=" << fl.diagnostics.ddpr_anchor_bootstrap_prior_epochs
+                  << ")\n"
+                  << "  FDE: " << (args.fde ? "on" : "off")
+                  << " (pr_rejections=" << fl.diagnostics.fde_pseudorange_rejections
+                  << ", cp_rejections=" << fl.diagnostics.fde_carrier_rejections
+                  << ", safeguard_skips=" << fl.diagnostics.fde_safeguard_skips
+                  << ", fde_epochs=" << fl.diagnostics.fde_epochs
                   << ")\n";
         if (!ref_rows.empty()) {
             std::cout << "  horizontal error vs reference.csv:\n"

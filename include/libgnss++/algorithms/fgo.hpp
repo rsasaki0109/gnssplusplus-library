@@ -374,6 +374,260 @@ public:
         int gate_min_satellites = 6;          ///< reference nsat_min
         double gate_ddpr_res_max_m = 3.0;     ///< reference main_ddpr_res_thresh
         double gate_per_sat_res_max_m = 3.0;  ///< reference per_sat_res_thresh
+
+        // --- CP-hold / sanity FSM (port of the inuex35 reference's
+        // validation/postfit.py + validation/recovery.py + state.py +
+        // preprocess/gate.py "wrong integer basin" recovery policy) ---
+        //
+        // The quality gates above (use_epoch_quality_gates) stop the pipeline
+        // from FIXING on a corrupt epoch, but do nothing when the graph has
+        // already locked onto a WRONG integer basin (a bad LAMBDA fix earlier
+        // got pinned by fix-and-hold and now poisons every subsequent epoch's
+        // float, since the held priors keep dragging the solution back to the
+        // wrong integers). This FSM detects that condition from post-fit DD
+        // pseudorange residuals (which see the wrong-basin float pose, not the
+        // held carrier terms) and recovers by mass-invalidating every current
+        // ambiguity: bump each arc's "generation" so the next observation gets
+        // a FRESH graph symbol (new prior, no held integer -- see the
+        // per-ambiguity generation-overlay comment beside ambSymbolId() in
+        // fgo_gtsam_backend.cpp), and suspend carrier fixing (CP-hold) for a
+        // configured number of epochs so the float can re-converge on
+        // pseudorange alone before AR is attempted again.
+        //
+        // NOTE: this port originally skipped the DDPR-LS anchor stages
+        // (_ddpr_sanity_fetch_anchor / _anchor_vs_imu in postfit.py). They are
+        // now ported below (FGOConfig::use_ddpr_anchor) -- see that switch's
+        // comment for why the anchor turns out to be diagnostic-only in
+        // THIS particular slot (the reference's own control flow converges
+        // on the same reset regardless of anchor trust) and for where the
+        // anchor position actually changes behaviour (exception recovery +
+        // bootstrap re-seed).
+        //
+        // Master switch, default OFF (bit-identical baseline without it).
+        bool use_cp_hold_recovery = false;
+        double cp_hold_main_residual_threshold_m = 3.0;    ///< reference main_ddpr_res_thresh
+        double cp_hold_catastrophic_threshold_m = 15.0;    ///< reference main_ddpr_res_catastrophic
+        double cp_hold_fast_worst_satellite_min_m = 10.0;  ///< reference ddpr_fast_worst_sat_min (tokyo profile)
+        int cp_hold_persist_epochs = 3;                    ///< reference ddpr_sanity_persist
+        int cp_hold_epochs = 5;                            ///< reference recov_cp_hold
+        double cp_hold_release_threshold_m = 2.0;          ///< reference recov_cp_release_thresh (tokyo profile)
+        int cp_hold_release_count = 5;                     ///< reference recov_cp_release_count (tokyo profile)
+        double cp_hold_pose_replace_threshold_m = 5.0;     ///< reference sanity_pose_replace_thresh
+        double cp_hold_multipath_median_ratio = 5.0;       ///< reference sanity_max_median_ratio
+        int cp_hold_multipath_min_satellites = 6;          ///< reference sanity_max_median_min_sats
+        double cp_hold_max_gdop = 5.0;                     ///< reference sanity_max_gdop (tokyo profile)
+        // Break the IMU preintegration chain at the epoch after a mass/fast
+        // reset (reference sanity_break_pim, default on): the next epoch adds
+        // a loose PriorPose3/PriorVector seeded at the IMU prediction instead
+        // of a CombinedImuFactor linking back to the pre-reset state, so a
+        // wrong pre-reset pose cannot drag the post-reset solution back.
+        bool cp_hold_break_imu_chain = true;
+        // Translation sigma [m] of that loose post-reset pose prior (reference
+        // pim_break_trans_sigma; the tokyo profile widens this from the 1.0 m
+        // dataclass default to 100.0 m -- i.e. barely constrain translation at
+        // all after a wrong-basin reset).
+        double cp_hold_imu_break_translation_sigma_m = 100.0;
+
+        // --- Exception recovery (port of recovery.py's handle_solve_exception)
+        // ---
+        // Independent switch: when the smoother throws (numerical failure,
+        // e.g. IndeterminantLinearSystemException from a rank-deficient
+        // epoch) and use_ddpr_anchor is OFF, retry the epoch with ONLY loose
+        // re-seed priors (pose sigma 1.0 m, vel sigma 1.0 m/s, bias sigma 0.1)
+        // at the IMU-predicted state, discarding that epoch's GNSS/IMU
+        // factors. When use_ddpr_anchor is ON, the reference's actual first
+        // choice (recovery.handle_solve_exception: try_ddpr_reset before the
+        // loose-prior fallback) is tried FIRST instead -- see
+        // use_ddpr_anchor's comment. If THAT retry also
+        // throws, perform a full warm reset: destroy and recreate the
+        // IncrementalFixedLagSmoother from scratch (reference
+        // warm_reset_phase2) with fresh priors at the last good (or
+        // IMU-predicted) pose -- rotation sigma from
+        // cp_hold_warm_reset_rotation_sigma_deg, position sigma [2,2,3] m
+        // (ENU), velocity isotropic 3.0 m/s (seeded to zero), bias isotropic
+        // 0.01 -- bump every tracked ambiguity's generation, and engage
+        // CP-hold. This targets the known IndeterminantLinearSystemException
+        // tail failure on the tokyo run2 dataset (~epoch 6390): the retry lets
+        // a single bad epoch pass without giving up on the whole run, and the
+        // warm reset recovers from a genuinely poisoned linearization point.
+        // Default OFF (bit-identical baseline without it).
+        bool use_solve_exception_recovery = false;
+        double solve_exception_pose_sigma_m = 1.0;
+        double solve_exception_velocity_sigma_mps = 1.0;
+        double solve_exception_bias_sigma = 0.1;
+        double cp_hold_warm_reset_rotation_sigma_deg = 1.0;  ///< reference body_rot_std
+
+        // --- DDPR-LS anchor (port of the inuex35 reference's
+        // utils/ls_solvers.py ddpr_only_position + the anchor stages of
+        // validation/postfit.py/recovery.py/optimize/stage.py that the
+        // CP-hold FSM port above deliberately skipped). ---
+        //
+        // The anchor is a standalone DDPR-only least-squares position solve
+        // (single Pose3 key, THIS epoch's DD pseudorange factors only, no
+        // carrier/IMU/ambiguity coupling) built by reusing the same
+        // DoubleDifferencePseudorangeFactorArm construction the main graph
+        // uses (see solveDdprAnchor() in fgo_gtsam_backend.cpp): a tight-
+        // rotation/loose-translation PriorPose3 around the IMU-predicted
+        // pose, plain (non-robust -- matching the reference's huber_pr=0
+        // default) noise, LevenbergMarquardt (max 10 iterations), then up to
+        // 3 rounds of single-pass FDE (drop factors with raw residual >
+        // ddpr_anchor_fde_threshold_m while >= ddpr_anchor_min_factors
+        // remain, re-solve).
+        //
+        // It is wired into THREE places:
+        //  1. Diagnostics inside the CP-hold FSM's persist (mass-reset) path
+        //     (postfit.py's _ddpr_sanity_fetch_anchor / _anchor_vs_imu).
+        //     IMPORTANT / faithfully-ported reference quirk: in the
+        //     reference, EVERY branch of run_ddpr_sanity past the persist
+        //     gate -- anchor untrusted, anchor disagrees with the IMU
+        //     prediction, or anchor agrees -- converges on the exact same
+        //     _apply_sanity_reset() call with the exact same arguments (the
+        //     anchor ECEF itself is never read by _apply_sanity_reset). So
+        //     this stage does NOT gate whether the mass reset fires here --
+        //     it only records whether the anchor WOULD have been trusted /
+        //     agreed with the IMU (diagnostics: ddpr_anchor_gated_resets_
+        //     skipped/allowed), exactly mirroring the reference's info-dict-
+        //     only behaviour. Requires use_cp_hold_recovery.
+        //  2. Exception recovery (recovery.py's handle_solve_exception /
+        //     try_ddpr_reset): here the anchor's POSITION does matter. When
+        //     the smoother throws, this is now tried FIRST -- warm-reset the
+        //     smoother seeded at (anchor translation, IMU-predicted
+        //     rotation, zero velocity) -- and only when the anchor is
+        //     untrusted (solve failed, too few factors, or res_rms too high)
+        //     does control fall through to the existing loose-prior retry /
+        //     IMU-seeded full warm reset. Requires use_solve_exception_recovery.
+        //  3. Bootstrap re-seed (optimize/stage.py's BOOT_DDPR_EPOCHS /
+        //     tightly_coupled.py's Phase-2-init arming): our primary lever
+        //     against the CP-hold FSM's known FLOAT-degradation cost. Once
+        //     armed (see cp_hold_bootstrap_after_mass_reset below), every
+        //     epoch for ddpr_anchor_bootstrap_epochs epochs gets a
+        //     translation-only PriorPose3 at that epoch's anchor position
+        //     (rotation sigma ~unconstrained, translation sigma
+        //     ddpr_anchor_bootstrap_sigma_m) added alongside the normal
+        //     graph -- a pull-back channel to truth that does not depend on
+        //     carrier/AR recovering first. The countdown decrements every
+        //     armed epoch regardless of whether that epoch's anchor solve
+        //     succeeds (matches the reference: stage.py decrements outside
+        //     the try/except). While armed, effective CP-hold length is
+        //     forced to 0 (bootstrap and CP-hold are mutually exclusive in
+        //     the reference's state.effective_cp_hold_epochs -- bootstrap
+        //     wins) via effectiveCpHoldEpochs() in the .cpp.
+        //
+        // Deliberate deviation from the reference: the reference only arms
+        // the bootstrap countdown once, at Phase-2 initialization (there is
+        // no equivalent "Phase 2 init" moment in this backend -- it runs the
+        // TC graph from epoch 0). This port instead arms it after EVERY full
+        // warm reset (both the anchor-seeded and IMU-seeded paths, since
+        // both destroy and recreate the smoother from scratch) and,
+        // opt-in via cp_hold_bootstrap_after_mass_reset, after the CP-hold
+        // FSM's mass/fast ambiguity resets too (those do NOT recreate the
+        // smoother, but DO invalidate every held integer, which is the same
+        // "float needs a pull-back channel" situation the bootstrap targets).
+        // Shipped default for cp_hold_bootstrap_after_mass_reset: FALSE.
+        // Measured on the tokyo full runs (FSM+anchor, boot-after-mass on,
+        // reference-default sigma 0.5 m / 20 epochs): mass/fast resets fire
+        // hundreds of times per run, concentrated in exactly the deepest-
+        // multipath sections, so arming there injects sub-metre-sigma
+        // anchor priors at the LEAST trustworthy DDPR-LS positions AND (per
+        // the reference's bootstrap-suppresses-CP-hold rule) disables the
+        // FSM's protective carrier suppression in those same sections --
+        // run1 FLOAT RMS 26.9 -> 95.9 m and FIXED RMS 0.80 -> 17.7 m; run2
+        // FLOAT 6.9 -> 26.4 m, FIXED 0.50 -> 4.05 m. The reference's arming
+        // moment (Phase-2 init, right after a window of verified-good fixes
+        // in workable sky) has no analogue at a mid-canyon mass reset. With
+        // this false the bootstrap still arms after full warm resets (rare:
+        // solver-exception recovery), where the smoother has genuinely lost
+        // its history and the anchor is the only absolute-position channel.
+        //
+        // Master switch, default OFF (bit-identical baseline without it;
+        // when true, requires use_cp_hold_recovery and/or
+        // use_solve_exception_recovery to actually do anything -- see above).
+        bool use_ddpr_anchor = false;
+        double ddpr_anchor_max_residual_m = 2.0;       ///< reference ddpr_max_res
+        double ddpr_anchor_fde_threshold_m = 4.0;      ///< reference fde_pr
+        int ddpr_anchor_min_factors = 4;               ///< reference ddpr_only_position's hard floor
+        double ddpr_anchor_imu_max_gap_m = 20.0;       ///< reference anchor_imu_max_gap
+        double ddpr_anchor_imu_hard_max_m = 200.0;     ///< reference anchor_imu_hard_max
+        double ddpr_anchor_clean_residual_m = 1.0;     ///< reference anchor_imu_clean_res / ddpr_clean_res
+        double ddpr_anchor_clean_main_residual_m = 15.0;  ///< reference anchor_imu_clean_main_res
+        int ddpr_anchor_persist_override = 6;          ///< reference ddpr_bad_persist_override
+        int ddpr_anchor_bootstrap_epochs = 20;         ///< reference BOOT_DDPR_EPOCHS
+        double ddpr_anchor_bootstrap_sigma_m = 0.5;    ///< reference BOOT_DDPR_SIGMA
+        bool cp_hold_bootstrap_after_mass_reset = false;  ///< see deviation + validation note above
+
+        // --- FDE: GICI-style Fault Detection and Exclusion (port of the
+        // inuex35 reference's validation/postfit.py apply_fde + its call
+        // site in optimize/stage.py's _compute_postfit_diagnostics). Runs
+        // AFTER this epoch's main iSAM2 solve but BEFORE the per-epoch
+        // LAMBDA / fix-and-hold block (reference: apply_fde is called
+        // right after the shared main_ddpr_residuals diagnostics pass --
+        // which is what feeds BOTH the quality gates and the CP-hold/
+        // sanity FSM trigger -- and strictly before _run_lambda_ar), so
+        // ambiguity resolution sees a float already cleaned of gross
+        // outliers while the sanity FSM's residual INPUT stays pre-FDE
+        // (see fgo_gtsam_backend.cpp's insertion point for the exact
+        // ordering rationale).
+        //
+        // Evaluates each of THIS epoch's just-added DD pseudorange/
+        // carrier factors at the current (post-solve, pre-FDE) estimate via
+        // evaluateError() -- NOT factor->error() -- to get the raw
+        // (unwhitened) residual in meters directly. This is a deliberate
+        // improvement over a literal port of the reference's res_m =
+        // sqrt(2*err)*cfg.sigma_pr*sqrt(2) (which reconstructs the raw
+        // residual from factor->error()'s chi-squared value and the
+        // factor's own sigma): factor->error() runs the noise model's
+        // loss(), which for a Robust/Huber-wrapped factor returns the
+        // DOWN-WEIGHTED loss rather than the raw chi-squared distance,
+        // silently weakening outlier detection for exactly the large
+        // residuals FDE exists to catch. The reference sidesteps this only
+        // in main_ddpr_residuals (its _ddpr_factor_error has a
+        // rebuild_for_robust branch that bypasses error() the same way)
+        // but NOT in apply_fde's own _fde_collect_residuals -- harmless
+        // there only because the reference's DD factors default to
+        // non-robust (huber_pr=0.0). Our use_robust_loss defaults to TRUE,
+        // so evaluateError() is used unconditionally here to stay correct
+        // under both settings.
+        //
+        // SINGLE-PASS (fde_max_iterations<=1, the reference default):
+        // scans ONLY this epoch's own DD PR/CP factors (their live graph
+        // indices, resolved precisely via ISAM2Result::newFactorsIndices
+        // -- strictly more precise than the reference's "last g3.size()
+        // slots of the live factor array" heuristic, which can
+        // mis-attribute a factor when findUnusedFactorSlots recycles an
+        // older, now-unused slot). Rejects every PR entry with res_m >
+        // fde_pseudorange_threshold_m and every CP entry with res_m >
+        // fde_carrier_threshold_m (optional per-group median subtraction,
+        // default off, mirroring the reference's FDE_MEDIAN_SUB env
+        // knob). If the rejected count exceeds
+        // fde_max_rejected_fraction * nv (nv = this epoch's own PR+CP
+        // factor count), FDE is abandoned entirely for the epoch and
+        // (mirroring the reference's trigger_cp_hold(...,
+        // skip_if_active=True)) CP-hold is engaged at full strength
+        // UNLESS it is already active. Deliberate deviation: when
+        // use_cp_hold_recovery is off there is no hold to engage, so the
+        // safeguard then simply skips FDE for the epoch with no other
+        // effect.
+        //
+        // ITERATIVE (fde_max_iterations>1): scans the WHOLE live graph by
+        // factor type (refreshed every iteration, so a removal never
+        // leaves a stale index dangling) and removes only the single
+        // worst |res-median| exceeder per round, re-estimating between
+        // rounds; no safeguard (matching the reference, which only
+        // guards the single-pass branch).
+        //
+        // Every rejected CP factor is treated as a cycle slip (reference
+        // _fde_reset_rejected_amb): release any fix-and-hold pin for that
+        // arc and bump its ambiguity generation so the next observation
+        // gets a fresh graph symbol (see the ambSymbolId overlay). PR
+        // rejects get no ambiguity-side action, matching the reference.
+        //
+        // Master switch, default OFF (bit-identical baseline without it).
+        bool use_fde = false;
+        double fde_pseudorange_threshold_m = 4.0;   ///< reference fde_pr
+        double fde_carrier_threshold_m = 0.5;       ///< reference fde_cp
+        double fde_max_rejected_fraction = 0.5;     ///< reference fde_max_frac
+        int fde_max_iterations = 1;                 ///< reference fde_max_iter (1 = single-pass, the reference default)
+        bool fde_median_subtraction = false;        ///< reference FDE_MEDIAN_SUB env knob (default off)
     };
 
     struct EpochSeed {
@@ -656,6 +910,30 @@ public:
         std::size_t quality_gated_epochs = 0;   ///< epochs where the quality gates suppressed fixing
         std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
         std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
+        // --- CP-hold / sanity FSM diagnostics (use_cp_hold_recovery) ---
+        std::size_t cp_hold_triggers = 0;         ///< times CP-hold was (re)engaged/extended
+        std::size_t cp_hold_epochs_held = 0;      ///< cumulative epochs with carrier suppressed
+        std::size_t sanity_mass_resets = 0;       ///< persist-path (3 consecutive bad) resets
+        std::size_t sanity_fast_resets = 0;       ///< catastrophic fast-path resets
+        std::size_t sanity_pose_replacements = 0; ///< epochs where the reported pose was IMU-predicted
+        std::size_t sanity_multipath_skips = 0;   ///< bad epochs skipped as single-satellite multipath
+        std::size_t sanity_gdop_skips = 0;        ///< persist-eligible resets skipped for weak geometry
+        std::size_t ambiguity_generation_bumps = 0;  ///< total per-arc generation bumps (fresh symbols)
+        // --- Exception recovery diagnostics (use_solve_exception_recovery) ---
+        std::size_t solve_exception_recoveries = 0;   ///< loose-prior retries that succeeded
+        std::size_t solve_exception_warm_resets = 0;  ///< full smoother re-creations
+        // --- DDPR-LS anchor diagnostics (use_ddpr_anchor) ---
+        std::size_t ddpr_anchor_solves = 0;         ///< mini DDPR-LS solve attempts (any of the 3 call sites)
+        std::size_t ddpr_anchor_successes = 0;      ///< of which trusted (n>=min_factors, res_rms<=max)
+        std::size_t ddpr_anchor_gated_resets_skipped = 0;  ///< diagnostic-only: gate would have rejected the reset (persist path; the reset still fires -- see use_ddpr_anchor comment)
+        std::size_t ddpr_anchor_gated_resets_allowed = 0;  ///< diagnostic-only: gate would have accepted the reset
+        std::size_t ddpr_anchored_warm_resets = 0;  ///< exception recoveries that used the DDPR anchor (vs the IMU-seeded fallback)
+        std::size_t ddpr_anchor_bootstrap_prior_epochs = 0;  ///< epochs an anchor bootstrap translation prior was actually added
+        // --- FDE diagnostics (use_fde) ---
+        std::size_t fde_pseudorange_rejections = 0;  ///< total DD PR factors removed
+        std::size_t fde_carrier_rejections = 0;      ///< total DD CP factors removed
+        std::size_t fde_safeguard_skips = 0;         ///< epochs where the reject-fraction safeguard aborted FDE
+        std::size_t fde_epochs = 0;                  ///< epochs where >=1 factor was actually removed
         std::size_t float_rejected_seed_position_divergence = 0;
         std::size_t float_rejected_position_jump = 0;
         bool fixed_solution = false;

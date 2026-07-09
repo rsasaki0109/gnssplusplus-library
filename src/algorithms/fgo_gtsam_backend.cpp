@@ -522,6 +522,20 @@ SharedNoise makeNoise(double sigma_m, bool robust, double huber_threshold_sigma)
     return base;
 }
 
+
+// Result of the mini DDPR-only LS anchor solve (FGOConfig::use_ddpr_anchor;
+// port of the inuex35 reference's utils/ls_solvers.py ddpr_only_position).
+// `pose` is a body-in-nav-ENU Pose3, the SAME convention as the main graph's
+// positionKey(i) -- i.e. translation() is the body position in nav-ENU, NOT
+// the antenna position (apply the caller's antennaOf()/lever-arm convention
+// to get the antenna ECEF, exactly like the main loop does for pose_i).
+struct DdprAnchorResult {
+    bool ok = false;
+    Pose3 pose;
+    int n_active = 0;
+    double res_rms = std::numeric_limits<double>::infinity();
+};
+
 // Cross-checks that gtsam::gnss::DoubleDifferenceData::observed() reproduces
 // libgnss's precomputed observed DD value for the mapping used below. Cheap
 // (a handful of subtractions) so it is left active in all builds rather than
@@ -603,6 +617,94 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         }
     }
 
+    // --- DDPR-LS anchor solve (FGOConfig::use_ddpr_anchor; port of the
+    // reference's ddpr_only_position / _ddpr_build_specs / _ddpr_solve_with_fde).
+    // Reuses the SAME DoubleDifferencePseudorangeFactorArm construction the
+    // main loop uses (see the "DD pseudorange factors at epoch i" block
+    // below) against a dedicated, throwaway Pose3 key ('y', 0) so the mini
+    // solve never touches the smoother's key space. Plain (non-robust) noise
+    // throughout, matching the reference's huber_pr=0 default -- the same
+    // noise model is reused for both the LM solve and the FDE residual
+    // evaluation (the reference rebuilds a second "non-robust" graph for
+    // eval only because ITS default solve pass may be robust; ours already
+    // isn't, so one graph suffices for both).
+    auto solveDdprAnchor = [&](std::size_t epoch_idx, const Pose3& pose_init) -> DdprAnchorResult {
+        DdprAnchorResult out;
+        std::vector<const FGOProcessor::DoubleDifferencePseudorangeFactor*> active(
+            pr_by_epoch[epoch_idx].begin(), pr_by_epoch[epoch_idx].end());
+        if (active.size() < static_cast<std::size_t>(std::max(1, config.ddpr_anchor_min_factors))) {
+            return out;
+        }
+        const gtsam::Key anchor_key = Symbol('y', 0);
+        gtsam::Vector6 prior_sigmas;
+        prior_sigmas << 0.05, 0.05, 0.1, 50.0, 50.0, 50.0;
+        const auto prior_noise = gtsam::noiseModel::Diagonal::Sigmas(prior_sigmas);
+
+        gtsam::Values est;
+        double res_rms = std::numeric_limits<double>::infinity();
+        bool have_est = false;
+
+        for (int fde_iter = 0; fde_iter < 3; ++fde_iter) {
+            gtsam::NonlinearFactorGraph g;
+            gtsam::Values v;
+            v.insert(anchor_key, pose_init);
+            g.addPrior(anchor_key, pose_init, prior_noise);
+            for (const auto* fp : active) {
+                const gtsam::gnss::DoubleDifferenceData dd{
+                    fp->rover_satellite_model.corrected_pseudorange_m,
+                    fp->base_satellite_model.corrected_pseudorange_m,
+                    fp->rover_reference_model.corrected_pseudorange_m,
+                    fp->base_reference_model.corrected_pseudorange_m,
+                    Point3(fp->rover_satellite_position_ecef),
+                    Point3(fp->rover_reference_position_ecef),
+                    Point3(fp->base_satellite_position_ecef),
+                    Point3(fp->base_reference_position_ecef),
+                    Point3(fp->base_position_ecef)};
+                g.emplace_shared<gtsam::DoubleDifferencePseudorangeFactorArm>(
+                    anchor_key, dd.rovRef, dd.baseRef, dd.rovTarget, dd.baseTarget, dd.satRefRov,
+                    dd.satTargetRov, dd.satRefBase, dd.satTargetBase, dd.basePos, lever_arm_body,
+                    ecef_T_nav, makeNoise(fp->sigma_m, /*robust=*/false, 0.0));
+            }
+            gtsam::Values cur_est;
+            try {
+                gtsam::LevenbergMarquardtParams lm_params;
+                lm_params.setMaxIterations(10);
+                cur_est = gtsam::LevenbergMarquardtOptimizer(g, v, lm_params).optimize();
+            } catch (const std::exception&) {
+                return out;  // solve failed -> not ok
+            }
+            est = cur_est;
+            have_est = true;
+
+            std::vector<const FGOProcessor::DoubleDifferencePseudorangeFactor*> kept;
+            kept.reserve(active.size());
+            double sq_sum = 0.0;
+            std::size_t dropped = 0;
+            for (std::size_t k = 0; k < active.size(); ++k) {
+                const double err = g.at(1 + k)->error(est);  // factor 0 is the pose prior
+                const double res_m = std::sqrt(std::max(0.0, err) * 2.0) * active[k]->sigma_m;
+                if (res_m > config.ddpr_anchor_fde_threshold_m &&
+                    (active.size() - dropped) > static_cast<std::size_t>(std::max(1, config.ddpr_anchor_min_factors))) {
+                    ++dropped;
+                    continue;
+                }
+                kept.push_back(active[k]);
+                sq_sum += res_m * res_m;
+            }
+            res_rms = kept.empty() ? 0.0 : std::sqrt(sq_sum / static_cast<double>(kept.size()));
+            active = kept;
+            if (dropped == 0) break;
+        }
+        if (!have_est || active.size() < static_cast<std::size_t>(std::max(1, config.ddpr_anchor_min_factors))) {
+            return out;
+        }
+        out.ok = true;
+        out.pose = est.at<Pose3>(anchor_key);
+        out.n_active = static_cast<int>(active.size());
+        out.res_rms = res_rms;
+        return out;
+    };
+
     // IMU preintegration params (ENU / Z-up; gravity -Z).
     auto imu_params = gtsam::PreintegrationCombinedParams::MakeSharedU(problem.imu.noise.gravity_mps2);
     const auto sq = [](double s) { return s * s; };
@@ -664,6 +766,443 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     // apply_per_sat_residual_gate keeps them out of the LAMBDA tree).
     std::set<SatelliteId> gate_bad_sats;
 
+    // --- CP-hold / sanity FSM state (use_cp_hold_recovery) ---
+    //
+    // Arc-regeneration overlay: our front-end (fgo.cpp) statically assigns one
+    // ambiguity_index per continuous carrier arc for the WHOLE dataset before
+    // this backend ever runs, so it cannot react to a backend-only decision
+    // (bad post-fit residuals) to invalidate an arc mid-stream. `amb_generation`
+    // adds that reactive layer: bumping an index's generation makes
+    // ambSymbolId() mint a brand-new backend-local graph symbol the next time
+    // that ambiguity_index is observed, which the existing "ambiguity_created"
+    // fresh-arc bookkeeping below (seed value + prior, no held integer) then
+    // treats exactly like a genuinely new arc. Generation-0 resolves to the
+    // identity (symbol id == ambiguity_index), so this whole mechanism is a
+    // no-op -- and the backend bit-identical to pre-port -- whenever
+    // use_cp_hold_recovery is false.
+    std::map<std::size_t, int> amb_generation;
+    std::map<std::pair<std::size_t, int>, std::size_t> amb_symbol_id;
+    std::size_t next_free_amb_symbol_id = problem.ambiguity_states.size();
+    // Ambiguity indices with a symbol currently live in the graph (added under
+    // their CURRENT generation); mass reset removes exactly these factors and
+    // then clears the set (see reset_ambiguities_with_cp_hold below).
+    std::set<std::size_t> live_ambiguity_indices;
+    // Reverse of ambSymbolId(): backend graph symbol id -> the caller-facing
+    // ambiguity_index it currently resolves for. Populated on every
+    // ambSymbolId() call (cheap; at most one entry per (index, generation)
+    // ever observed). Used by FDE's iterative mode, which discovers rejected
+    // carrier factors by scanning the live graph rather than iterating
+    // problem.ambiguity_states, so it needs to map a factor's ambiguityKey
+    // symbol back to the ambiguity_index whose hold/generation it must
+    // update.
+    std::map<std::size_t, std::size_t> sym_to_ambiguity_index;
+    auto ambSymbolId = [&](std::size_t idx) -> std::size_t {
+        std::size_t sid = idx;
+        if (config.use_cp_hold_recovery) {
+            const auto git = amb_generation.find(idx);
+            const int gen = (git == amb_generation.end()) ? 0 : git->second;
+            if (gen != 0) {
+                const auto key = std::make_pair(idx, gen);
+                const auto it = amb_symbol_id.find(key);
+                if (it != amb_symbol_id.end()) {
+                    sid = it->second;
+                } else {
+                    sid = next_free_amb_symbol_id++;
+                    amb_symbol_id.emplace(key, sid);
+                }
+            }
+        }
+        sym_to_ambiguity_index[sid] = idx;
+        return sid;
+    };
+
+    int cp_hold_counter = 0;         ///< remaining epochs with carrier suppressed (reference _recov_cp_hold)
+    int cp_hold_release_streak = 0;  ///< consecutive clean epochs while held (reference _recov_cp_release_streak)
+    int ddpr_bad_count = 0;          ///< consecutive bad epochs (reference _ddpr_bad_count)
+    double last_ddpr_rms = 0.0;      ///< previous epoch's post-fit DDPR RMS (reference _last_main_ddpr_res)
+    bool pim_discontinuity = false;  ///< one-shot: break the IMU chain at the NEXT epoch (reference _pim_discontinuity)
+    // DDPR-anchor bootstrap re-seed countdown (use_ddpr_anchor; reference
+    // tc._tc_bootstrap_ddpr_epochs). While > 0, every epoch gets a
+    // translation-only anchor prior (see the bootstrap block in the main
+    // loop) and CP-hold is forced to 0 via effectiveCpHoldEpochs() below
+    // (reference state.effective_cp_hold_epochs: bootstrap wins).
+    int ddpr_bootstrap_epochs_remaining = 0;
+
+    // Reference state.effective_cp_hold_epochs(): the configured CP-hold
+    // length, suppressed to 0 while the DDPR-anchor bootstrap countdown is
+    // active. A no-op (always returns config.cp_hold_epochs) whenever
+    // use_ddpr_anchor is false, so use_cp_hold_recovery's behaviour is
+    // unaffected unless the anchor is also enabled.
+    auto effectiveCpHoldEpochs = [&]() -> int {
+        if (config.use_ddpr_anchor && ddpr_bootstrap_epochs_remaining > 0) return 0;
+        return config.cp_hold_epochs;
+    };
+
+    // Mass reset shared by the persist path and the catastrophic fast path
+    // (reference _apply_sanity_reset / reset_ambiguities_with_cp_hold): collect
+    // every live ambiguity's CURRENT-generation factor indices out of the live
+    // ISAM2 graph, remove them via a smoother update, bump every generation
+    // (forcing fresh arcs), clear the pinned/live bookkeeping, and (re)engage
+    // CP-hold at full strength. Returns the number of factors removed.
+    auto resetAmbiguitiesWithCpHold = [&]() -> std::size_t {
+        gtsam::FactorIndices remove_indices;
+        if (!live_ambiguity_indices.empty()) {
+            std::set<gtsam::Key> live_keys;
+            for (std::size_t idx : live_ambiguity_indices) {
+                live_keys.insert(ambiguityKey(ambSymbolId(idx)));
+            }
+            const auto& factors = smoother.getISAM2().getFactorsUnsafe();
+            for (std::size_t fi = 0; fi < factors.size(); ++fi) {
+                const auto& f = factors[fi];
+                if (!f) continue;
+                for (gtsam::Key k : f->keys()) {
+                    if (live_keys.count(k)) {
+                        remove_indices.push_back(fi);
+                        break;
+                    }
+                }
+            }
+        }
+        for (std::size_t idx : live_ambiguity_indices) {
+            const std::size_t old_sid = ambSymbolId(idx);  // resolve BEFORE bumping
+            ++amb_generation[idx];
+            ++result.diagnostics.ambiguity_generation_bumps;
+            pinned_ambiguities.erase(old_sid);
+        }
+        live_ambiguity_indices.clear();
+        if (!remove_indices.empty()) {
+            try {
+                smoother.update(gtsam::NonlinearFactorGraph(), gtsam::Values(),
+                                gtsam::FixedLagSmoother::KeyTimestampMap(), remove_indices);
+                ++result.diagnostics.smoother_updates;
+            } catch (const std::exception& e) {
+                std::fprintf(stderr,
+                             "[fgo_gtsam_backend] cp-hold factor removal threw: %s\n", e.what());
+            }
+        }
+        // Our adaptation of the reference's bootstrap arming (see
+        // FGOConfig::use_ddpr_anchor's deviation note): opt-in re-seed after
+        // a mass/fast ambiguity reset, not just after a full warm reset.
+        // Armed BEFORE the hold length is computed below, so that -- per the
+        // reference's state.effective_cp_hold_epochs (bootstrap and global
+        // CP-hold are mutually exclusive; bootstrap wins) -- the reset that
+        // arms the bootstrap engages NO carrier hold: the bootstrap needs
+        // the fresh carrier arcs + anchor translation priors flowing
+        // immediately to pull the float back.
+        if (config.use_ddpr_anchor && config.cp_hold_bootstrap_after_mass_reset) {
+            ddpr_bootstrap_epochs_remaining = config.ddpr_anchor_bootstrap_epochs;
+        }
+        cp_hold_counter = effectiveCpHoldEpochs();
+        cp_hold_release_streak = 0;
+        ddpr_bad_count = 0;
+        if (config.cp_hold_break_imu_chain) pim_discontinuity = true;
+        ++result.diagnostics.cp_hold_triggers;
+        return remove_indices.size();
+    };
+
+    // --- FDE (GICI-style Fault Detection and Exclusion; FGOConfig::use_fde).
+    // See use_fde's comment in fgo.hpp for the full design rationale
+    // (ordering vs. the sanity FSM / LAMBDA, residual reconstruction
+    // arithmetic, single-pass vs. iterative). Called from the per-epoch
+    // loop AFTER the shared post-fit DDPR diagnostics pass (so the sanity
+    // FSM below still sees PRE-FDE residuals) but BEFORE per-epoch LAMBDA.
+    //
+    // `local_indices_for_epoch` / `new_indices_for_epoch` identify THIS
+    // epoch's own DD PR/CP factors precisely (local index within the
+    // graph just passed to smoother.update(), and that update's
+    // ISAM2Result::newFactorsIndices to resolve them to live graph
+    // indices) -- used only in single-pass mode. Iterative mode ignores
+    // them and scans the whole live graph by factor type instead.
+    //
+    // On any rejected CP factor, the caller-visible ambiguity_index is
+    // written into `*rejected_ambiguity_indices` so the caller can drop it
+    // from this epoch's still-pending LAMBDA candidate list (the factor
+    // backing that candidate no longer exists in the graph).
+    //
+    // Returns the number of factors actually removed (0 = no-op /
+    // safeguarded / evaluation or removal failed).
+    auto runFde = [&](std::size_t epoch_idx,
+                      const std::vector<std::size_t>& local_indices_for_epoch,
+                      const gtsam::FactorIndices& new_indices_for_epoch,
+                      std::set<std::size_t>* rejected_ambiguity_indices) -> std::size_t {
+        if (!config.use_fde) return 0;
+        const int max_iter = std::max(1, config.fde_max_iterations);
+        const bool iterative = max_iter > 1;
+        std::size_t total_rejected = 0;
+
+        struct FdeEntry {
+            std::size_t graph_idx;
+            bool is_carrier;
+            double res_m;
+        };
+
+        for (int fde_iter = 0; fde_iter < max_iter; ++fde_iter) {
+            const auto& factors = smoother.getISAM2().getFactorsUnsafe();
+            std::vector<std::size_t> candidate_graph_indices;
+            if (iterative) {
+                // Whole live graph, re-scanned fresh every round so a prior
+                // round's removal never leaves a stale index dangling.
+                candidate_graph_indices.reserve(factors.size());
+                for (std::size_t fi = 0; fi < factors.size(); ++fi) {
+                    if (factors[fi]) candidate_graph_indices.push_back(fi);
+                }
+            } else {
+                candidate_graph_indices.reserve(local_indices_for_epoch.size());
+                for (std::size_t li : local_indices_for_epoch) {
+                    if (li < new_indices_for_epoch.size()) {
+                        candidate_graph_indices.push_back(new_indices_for_epoch[li]);
+                    }
+                }
+            }
+            if (candidate_graph_indices.empty()) break;
+
+            gtsam::Values estimate;
+            try {
+                estimate = smoother.calculateEstimate();
+            } catch (const std::exception&) {
+                break;  // cannot evaluate residuals -- abandon FDE, keep current estimate
+            }
+
+            // Residual in meters: evaluateError() directly, NOT factor->error()
+            // (see the design-note above runFde -- error() runs the noise
+            // model's loss(), which for a Robust/Huber-wrapped factor
+            // returns the DOWN-WEIGHTED loss, not the raw chi-squared
+            // distance, silently weakening outlier detection exactly for
+            // the large residuals FDE exists to catch). evaluateError()
+            // bypasses the noise model entirely and returns the 1-D raw
+            // (unwhitened) residual directly in meters, so no sigma
+            // reconstruction is needed at all -- correct whether or not
+            // config.use_robust_loss is set.
+            std::vector<FdeEntry> pr_entries, cp_entries;
+            for (std::size_t gi : candidate_graph_indices) {
+                if (gi >= factors.size() || !factors[gi]) continue;
+                const auto& f = factors[gi];
+                const auto* pr_f =
+                    dynamic_cast<const gtsam::DoubleDifferencePseudorangeFactorArm*>(f.get());
+                const auto* cp_f =
+                    pr_f ? nullptr
+                         : dynamic_cast<const gtsam::DoubleDifferenceCarrierPhaseFactorArm*>(
+                               f.get());
+                if (!pr_f && !cp_f) continue;
+                try {
+                    if (pr_f) {
+                        const Pose3 pose = estimate.at<Pose3>(f->keys()[0]);
+                        const double res_m = std::abs(pr_f->evaluateError(pose)(0));
+                        pr_entries.push_back({gi, false, res_m});
+                    } else {
+                        const Pose3 pose = estimate.at<Pose3>(f->keys()[0]);
+                        const double amb_ref = estimate.at<double>(f->keys()[1]);
+                        const double amb_target = estimate.at<double>(f->keys()[2]);
+                        const double res_m =
+                            std::abs(cp_f->evaluateError(pose, amb_ref, amb_target)(0));
+                        cp_entries.push_back({gi, true, res_m});
+                    }
+                } catch (const std::exception&) {
+                    continue;
+                }
+            }
+
+            double pr_median = 0.0, cp_median = 0.0;
+            if (config.fde_median_subtraction) {
+                auto medianOf = [](const std::vector<FdeEntry>& v) {
+                    if (v.empty()) return 0.0;
+                    std::vector<double> r;
+                    r.reserve(v.size());
+                    for (const auto& e : v) r.push_back(e.res_m);
+                    std::sort(r.begin(), r.end());
+                    return r[r.size() / 2];
+                };
+                pr_median = medianOf(pr_entries);
+                cp_median = medianOf(cp_entries);
+            }
+
+            std::vector<FdeEntry> reject_entries;
+            if (iterative) {
+                // Single worst |res - median| exceeder across PR and CP
+                // combined (reference _fde_pick_rejects_iterative); ties
+                // favor whichever group is scanned first (PR), matching the
+                // reference's strict '>' override in the CP loop.
+                double best_d = 0.0;
+                int best_pr = -1, best_cp = -1;
+                for (std::size_t k = 0; k < pr_entries.size(); ++k) {
+                    const double d = std::abs(pr_entries[k].res_m - pr_median);
+                    if (d > config.fde_pseudorange_threshold_m && d > best_d) {
+                        best_d = d;
+                        best_pr = static_cast<int>(k);
+                        best_cp = -1;
+                    }
+                }
+                for (std::size_t k = 0; k < cp_entries.size(); ++k) {
+                    const double d = std::abs(cp_entries[k].res_m - cp_median);
+                    if (d > config.fde_carrier_threshold_m && d > best_d) {
+                        best_d = d;
+                        best_cp = static_cast<int>(k);
+                        best_pr = -1;
+                    }
+                }
+                if (best_pr < 0 && best_cp < 0) break;  // no outlier this round -- done
+                reject_entries.push_back(best_pr >= 0 ? pr_entries[static_cast<std::size_t>(best_pr)]
+                                                       : cp_entries[static_cast<std::size_t>(best_cp)]);
+            } else {
+                for (const auto& e : pr_entries) {
+                    if (std::abs(e.res_m - pr_median) > config.fde_pseudorange_threshold_m) {
+                        reject_entries.push_back(e);
+                    }
+                }
+                for (const auto& e : cp_entries) {
+                    if (std::abs(e.res_m - cp_median) > config.fde_carrier_threshold_m) {
+                        reject_entries.push_back(e);
+                    }
+                }
+                if (reject_entries.empty()) break;  // no-op: nothing exceeded threshold
+                // Safeguard (single-pass only, matching the reference): a
+                // runaway reject fraction likely means the FLOAT itself is
+                // wrong (not the measurements), so excluding that many
+                // factors would just poison the graph further -- abandon
+                // FDE for the epoch and hand off to CP-hold instead.
+                const std::size_t nv = pr_entries.size() + cp_entries.size();
+                const double frac_limit = config.fde_max_rejected_fraction *
+                                          static_cast<double>(std::max<std::size_t>(1, nv));
+                if (static_cast<double>(reject_entries.size()) > frac_limit) {
+                    ++result.diagnostics.fde_safeguard_skips;
+                    // Reference trigger_cp_hold(..., skip_if_active=True):
+                    // engage the hold at full strength unless already
+                    // active. With use_cp_hold_recovery off there is no
+                    // hold to engage -- FDE simply skips this epoch.
+                    if (config.use_cp_hold_recovery && cp_hold_counter <= 0) {
+                        cp_hold_counter = effectiveCpHoldEpochs();
+                        cp_hold_release_streak = 0;
+                        ++result.diagnostics.cp_hold_triggers;
+                    }
+                    return total_rejected;  // 0: FDE skipped entirely this epoch
+                }
+            }
+
+            // Cycle-slip bookkeeping for rejected CP factors (reference
+            // _fde_reset_rejected_amb): release the fix-and-hold pin and
+            // bump the generation. Applied BEFORE the removal update below
+            // is attempted, mirroring the reference's own ordering (which
+            // does this even though the isam2 removal could still fail).
+            for (const auto& e : reject_entries) {
+                if (!e.is_carrier) continue;
+                const auto& f = factors[e.graph_idx];
+                if (!f || f->keys().size() < 2) continue;
+                // Key 1 is ambRef = ambiguityKey(sym_idx) by construction
+                // (see the DoubleDifferenceCarrierPhaseFactorArm emplace
+                // site above: position, ambRef, ambTarget=dummy).
+                const gtsam::Symbol sym(f->keys()[1]);
+                const std::size_t sym_idx = sym.index();
+                const auto it = sym_to_ambiguity_index.find(sym_idx);
+                if (it == sym_to_ambiguity_index.end()) continue;
+                const std::size_t amb_idx = it->second;
+                pinned_ambiguities.erase(sym_idx);
+                ++amb_generation[amb_idx];
+                ++result.diagnostics.ambiguity_generation_bumps;
+                live_ambiguity_indices.erase(amb_idx);
+                if (rejected_ambiguity_indices) rejected_ambiguity_indices->insert(amb_idx);
+            }
+
+            gtsam::FactorIndices remove_indices;
+            remove_indices.reserve(reject_entries.size());
+            std::size_t pr_rejected = 0, cp_rejected = 0;
+            for (const auto& e : reject_entries) {
+                remove_indices.push_back(e.graph_idx);
+                if (e.is_carrier) {
+                    ++cp_rejected;
+                } else {
+                    ++pr_rejected;
+                }
+            }
+            try {
+                smoother.update(gtsam::NonlinearFactorGraph(), gtsam::Values(),
+                                gtsam::FixedLagSmoother::KeyTimestampMap(), remove_indices);
+                ++result.diagnostics.smoother_updates;
+            } catch (const std::exception& e) {
+                std::fprintf(stderr,
+                             "[fgo_gtsam_backend] FDE factor removal epoch %zu threw: %s\n",
+                             epoch_idx, e.what());
+                break;  // abandon FDE; keep the estimate as it stood before this attempt
+            }
+            result.diagnostics.fde_pseudorange_rejections += pr_rejected;
+            result.diagnostics.fde_carrier_rejections += cp_rejected;
+            total_rejected += reject_entries.size();
+
+            if (!iterative) {
+                return total_rejected;  // single removal batch, done
+            }
+        }
+        return total_rejected;
+    };
+
+    // --- Exception recovery (use_solve_exception_recovery): full warm reset
+    // (reference recovery.warm_reset_phase2), the fallback for REPEATED
+    // smoother.update() failures. Destroys and recreates the smoother from
+    // scratch and re-anchors epoch `epoch_idx` at (seed_pose, zero velocity,
+    // seed_bias) with loose-but-finite priors, matching the reference's
+    // rot/pos/vel/bias sigmas. Unlike the Python reference (which restarts
+    // its own relative epoch counter at 0), this keeps the SAME epoch index
+    // i / key space -- there is nothing special about our key numbering to
+    // reset, so re-anchoring in place is the direct equivalent. Also bumps
+    // every live ambiguity's generation (the fresh smoother has none of
+    // their factors any more) and engages CP-hold. Throws on failure (the
+    // caller decides whether to give up on the epoch).
+    auto performFullWarmReset = [&](std::size_t epoch_idx, const Pose3& seed_pose,
+                                    const gtsam::imuBias::ConstantBias& seed_bias) {
+        smoother = gtsam::IncrementalFixedLagSmoother(config.fixed_lag_smoother_lag_s, isam_params);
+        dummy_created = false;
+        ambiguity_created.clear();
+        pinned_ambiguities.clear();
+        for (std::size_t idx : live_ambiguity_indices) {
+            ++amb_generation[idx];
+            ++result.diagnostics.ambiguity_generation_bumps;
+        }
+        live_ambiguity_indices.clear();
+
+        constexpr double kDegToRad = 3.14159265358979323846 / 180.0;
+        const double rot_sigma = config.cp_hold_warm_reset_rotation_sigma_deg * kDegToRad;
+        gtsam::Vector6 pose_sigmas;
+        pose_sigmas << rot_sigma, rot_sigma, rot_sigma, 2.0, 2.0, 3.0;
+        const gtsam::Vector3 zero_vel = gtsam::Vector3::Zero();
+
+        gtsam::NonlinearFactorGraph reset_factors;
+        gtsam::Values reset_values;
+        gtsam::FixedLagSmoother::KeyTimestampMap reset_ts;
+        reset_values.insert(positionKey(epoch_idx), seed_pose);
+        reset_values.insert(velocityKey(epoch_idx), zero_vel);
+        reset_values.insert(biasKey(epoch_idx), seed_bias);
+        reset_factors.addPrior(positionKey(epoch_idx), seed_pose,
+                               gtsam::noiseModel::Diagonal::Sigmas(pose_sigmas));
+        reset_factors.addPrior<gtsam::Vector3>(
+            velocityKey(epoch_idx), zero_vel, gtsam::noiseModel::Isotropic::Sigma(3, 3.0));
+        reset_factors.addPrior(biasKey(epoch_idx), seed_bias,
+                               gtsam::noiseModel::Isotropic::Sigma(6, 0.01));
+        const double te_reset = stampOf(epoch_idx);
+        reset_ts[positionKey(epoch_idx)] = te_reset;
+        reset_ts[velocityKey(epoch_idx)] = te_reset;
+        reset_ts[biasKey(epoch_idx)] = te_reset;
+        smoother.update(reset_factors, reset_values, reset_ts);
+        ++result.diagnostics.smoother_updates;
+
+        prev_nav = gtsam::NavState(seed_pose, zero_vel);
+        prev_bias = seed_bias;
+        // Bootstrap re-seed: reference arms this once at Phase-2 init; this
+        // port arms it after EVERY full warm reset instead (see
+        // FGOConfig::use_ddpr_anchor's deviation note) -- unconditional
+        // (unlike the mass/fast-reset arming in resetAmbiguitiesWithCpHold,
+        // which is opt-in via cp_hold_bootstrap_after_mass_reset) because a
+        // full warm reset always throws away the smoother's linearization
+        // entirely. Armed BEFORE the hold computation below so the
+        // reference's bootstrap-suppresses-CP-hold rule
+        // (state.effective_cp_hold_epochs) applies to this very reset.
+        if (config.use_ddpr_anchor) {
+            ddpr_bootstrap_epochs_remaining = config.ddpr_anchor_bootstrap_epochs;
+        }
+        if (config.use_cp_hold_recovery) {
+            cp_hold_counter = effectiveCpHoldEpochs();
+            cp_hold_release_streak = 0;
+        }
+    };
+
     for (std::size_t i = 0; i < num_epochs; ++i) {
         gtsam::NonlinearFactorGraph new_factors;
         gtsam::Values new_values;
@@ -719,9 +1258,30 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 const gtsam::NavState pred = pim.predict(prev_nav, prev_bias);
                 pose_seed = pred.pose();
                 vel_seed = pred.velocity();
-                new_factors.emplace_shared<gtsam::CombinedImuFactor>(
-                    positionKey(i - 1), velocityKey(i - 1), positionKey(i), velocityKey(i),
-                    biasKey(i - 1), biasKey(i), pim);
+                // CP-hold / sanity FSM: break the IMU chain the epoch after a
+                // mass/fast reset (reference add_imu_chain's discontinuity
+                // path). The seed is still the IMU prediction (dead-reckoned
+                // from the pre-reset state, same as normal), but NO
+                // CombinedImuFactor links epoch i back to epoch i-1 -- instead
+                // a loose PriorPose3/PriorVector anchors epoch i at the seed so
+                // a wrong pre-reset pose cannot drag the post-reset solution
+                // back through the IMU factor.
+                if (config.use_cp_hold_recovery && pim_discontinuity) {
+                    gtsam::Vector6 break_sigmas;
+                    const double trans_sig = config.cp_hold_imu_break_translation_sigma_m;
+                    break_sigmas << 0.1, 0.1, 0.3, trans_sig, trans_sig, trans_sig;
+                    new_factors.addPrior(positionKey(i), pose_seed,
+                                         gtsam::noiseModel::Diagonal::Sigmas(break_sigmas));
+                    new_factors.addPrior<gtsam::Vector3>(
+                        velocityKey(i), vel_seed, gtsam::noiseModel::Isotropic::Sigma(3, 2.0));
+                    new_factors.addPrior(biasKey(i), prev_bias,
+                                         gtsam::noiseModel::Isotropic::Sigma(6, 0.01));
+                    pim_discontinuity = false;
+                } else {
+                    new_factors.emplace_shared<gtsam::CombinedImuFactor>(
+                        positionKey(i - 1), velocityKey(i - 1), positionKey(i), velocityKey(i),
+                        biasKey(i - 1), biasKey(i), pim);
+                }
             } else {
                 // IMU dropout: hold pose at the DD antenna seed, loose continuity.
                 const Vector3d antenna_nav = navAntenna(problem.epochs[i].position_ecef);
@@ -763,6 +1323,12 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         }
 
         // --- DD pseudorange factors at epoch i ---
+        // fde_local_indices: local index (within new_factors) of every DD
+        // PR/CP factor added THIS epoch, only tracked when FGOConfig::use_fde
+        // is set (see runFde()'s single-pass mode, which resolves these to
+        // live graph indices via this epoch's ISAM2Result::newFactorsIndices
+        // right after the smoother update below).
+        std::vector<std::size_t> fde_local_indices;
         for (const auto* fp : pr_by_epoch[i]) {
             const auto& factor = *fp;
             const gtsam::gnss::DoubleDifferenceData dd{
@@ -777,32 +1343,80 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 Point3(factor.base_position_ecef)};
             const auto noise = makeNoise(factor.sigma_m, robust,
                                          config.pseudorange_huber_threshold_sigma);
+            const std::size_t local_idx = new_factors.size();
             new_factors.emplace_shared<gtsam::DoubleDifferencePseudorangeFactorArm>(
                 positionKey(i), dd.rovRef, dd.baseRef, dd.rovTarget, dd.baseTarget, dd.satRefRov,
                 dd.satTargetRov, dd.satRefBase, dd.satTargetBase, dd.basePos, lever_arm_body,
                 ecef_T_nav, noise);
+            if (config.use_fde) fde_local_indices.push_back(local_idx);
+        }
+
+        // --- CP-hold / sanity FSM: release hysteresis + carrier suppression
+        // decision for epoch i (reference preprocess/gate.py lines ~113-128).
+        // Decided BEFORE building this epoch's DD carrier factors so the
+        // suppression takes effect immediately. last_ddpr_rms is the PREVIOUS
+        // epoch's post-fit DDPR RMS; this epoch's own RMS is computed after
+        // its solve (below) and feeds the FSM trigger for the epoch AFTER.
+        bool skip_cp_now = false;
+        if (config.use_cp_hold_recovery) {
+            skip_cp_now = cp_hold_counter > 0;
+            if (skip_cp_now) {
+                --cp_hold_counter;
+                ++result.diagnostics.cp_hold_epochs_held;
+                const double release_thr = config.cp_hold_release_threshold_m;
+                if (release_thr > 0.0) {
+                    if (last_ddpr_rms > 0.0 && last_ddpr_rms <= release_thr) {
+                        ++cp_hold_release_streak;
+                    } else {
+                        cp_hold_release_streak = 0;
+                    }
+                    // Release hysteresis: don't let the hold counter reach 0
+                    // until residuals have proven clean for
+                    // cp_hold_release_count consecutive epochs -- extend by one
+                    // more epoch at a time otherwise (reference: tc._recov_cp_hold = 1).
+                    if (cp_hold_counter <= 0 && cp_hold_release_streak < config.cp_hold_release_count) {
+                        cp_hold_counter = 1;
+                    }
+                }
+            }
         }
 
         // --- DD carrier factors + ambiguity nodes at epoch i ---
         std::vector<std::size_t> epoch_amb_indices;
         for (const auto* fp : cp_by_epoch[i]) {
             const auto& factor = *fp;
+            if (config.use_cp_hold_recovery && skip_cp_now) {
+                // Carrier suppressed for the duration of the hold: DD
+                // pseudorange keeps flowing (added above, unaffected) but no
+                // carrier factor/symbol is added here, and (mirroring
+                // _carry_prev_amb) the arc's generation bumps every held
+                // epoch so there is no carrier continuity across the hold
+                // once it releases.
+                const std::size_t idx = factor.ambiguity_index;
+                const std::size_t old_sid = ambSymbolId(idx);
+                ++amb_generation[idx];
+                ++result.diagnostics.ambiguity_generation_bumps;
+                pinned_ambiguities.erase(old_sid);
+                live_ambiguity_indices.erase(idx);
+                continue;
+            }
             const auto& ambiguity = problem.ambiguity_states[factor.ambiguity_index];
+            const std::size_t sym_idx = ambSymbolId(factor.ambiguity_index);
             if (!dummy_created) {
                 new_values.insert(dummyAmbiguityKey(), 0.0);
                 new_factors.addPrior(dummyAmbiguityKey(), 0.0,
                                      gtsam::noiseModel::Isotropic::Sigma(1, kDummyPinSigmaCycles));
                 dummy_created = true;
             }
-            if (ambiguity_created.insert(factor.ambiguity_index).second) {
+            if (ambiguity_created.insert(sym_idx).second) {
                 const double seed_cycles = ambiguity.wavelength_m > 0.0
                                                ? ambiguity.initial_ambiguity_m / ambiguity.wavelength_m
                                                : ambiguity.initial_ambiguity_m;
-                new_values.insert(ambiguityKey(factor.ambiguity_index), seed_cycles);
+                new_values.insert(ambiguityKey(sym_idx), seed_cycles);
                 if (config.use_ambiguity_priors && config.ambiguity_prior_sigma_m > 0.0 &&
                     ambiguity.wavelength_m > 0.0) {
                     new_factors.addPrior(
-                        ambiguityKey(factor.ambiguity_index), seed_cycles,
+                        ambiguityKey(sym_idx), seed_cycles,
                         gtsam::noiseModel::Isotropic::Sigma(
                             1, config.ambiguity_prior_sigma_m / ambiguity.wavelength_m));
                 }
@@ -819,15 +1433,54 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 Point3(factor.base_position_ecef)};
             const auto noise = makeNoise(factor.sigma_m, robust,
                                          config.carrier_phase_huber_threshold_sigma);
+            const std::size_t cp_local_idx = new_factors.size();
             new_factors.emplace_shared<gtsam::DoubleDifferenceCarrierPhaseFactorArm>(
-                positionKey(i), ambiguityKey(factor.ambiguity_index), dummyAmbiguityKey(),
+                positionKey(i), ambiguityKey(sym_idx), dummyAmbiguityKey(),
                 dd.rovRef, dd.baseRef, dd.rovTarget, dd.baseTarget, dd.satRefRov, dd.satTargetRov,
                 dd.satRefBase, dd.satTargetBase, dd.basePos, ambiguity.wavelength_m, lever_arm_body,
                 ecef_T_nav, noise);
-            ts[ambiguityKey(factor.ambiguity_index)] = te;  // re-stamp: keep in-window while active
+            if (config.use_fde) fde_local_indices.push_back(cp_local_idx);
+            ts[ambiguityKey(sym_idx)] = te;  // re-stamp: keep in-window while active
             epoch_amb_indices.push_back(factor.ambiguity_index);
+            if (config.use_cp_hold_recovery) live_ambiguity_indices.insert(factor.ambiguity_index);
         }
         if (dummy_created) ts[dummyAmbiguityKey()] = te;  // dummy persists (re-stamped every epoch)
+
+        // --- DDPR-anchor bootstrap re-seed (use_ddpr_anchor; port of
+        // optimize/stage.py's BOOT_DDPR_EPOCHS translation-only re-seed).
+        // While the countdown (armed after a warm/mass reset -- see
+        // resetAmbiguitiesWithCpHold / performFullWarmReset) is running,
+        // every epoch gets an anchor-only translation prior alongside the
+        // normal graph: rotation unconstrained (sigma 1e6, taken from the
+        // IMU-predicted pose so it does not fight attitude), translation
+        // pulled toward THIS epoch's independent DDPR-LS position (sigma
+        // ddpr_anchor_bootstrap_sigma_m). This is the primary lever against
+        // the CP-hold FSM's known FLOAT-degradation cost: a pull-back
+        // channel to truth that does not depend on carrier/AR recovering
+        // first. The countdown decrements every armed epoch regardless of
+        // whether this epoch's anchor solve succeeds (reference: stage.py
+        // decrements outside the try/except).
+        if (config.use_ddpr_anchor && ddpr_bootstrap_epochs_remaining > 0) {
+            ++result.diagnostics.ddpr_anchor_solves;
+            const DdprAnchorResult boot_anchor = solveDdprAnchor(i, pose_seed);
+            if (boot_anchor.ok && boot_anchor.n_active >= config.ddpr_anchor_min_factors) {
+                // "successes" counts TRUSTED solves (res gate included) for
+                // diagnostic consistency with the other two call sites; the
+                // prior itself is added on the reference's weaker condition
+                // (solve ok, n >= 4 -- stage.py has no residual gate here).
+                if (boot_anchor.res_rms <= config.ddpr_anchor_max_residual_m) {
+                    ++result.diagnostics.ddpr_anchor_successes;
+                }
+                gtsam::Vector6 boot_sigmas;
+                const double bs = config.ddpr_anchor_bootstrap_sigma_m;
+                boot_sigmas << 1e6, 1e6, 1e6, bs, bs, bs;
+                const Pose3 boot_pose(pose_seed.rotation(), boot_anchor.pose.translation());
+                new_factors.addPrior(positionKey(i), boot_pose,
+                                     gtsam::noiseModel::Diagonal::Sigmas(boot_sigmas));
+                ++result.diagnostics.ddpr_anchor_bootstrap_prior_epochs;
+            }
+            --ddpr_bootstrap_epochs_remaining;
+        }
 
         // MF-AR step 1: the DD carrier factors for every band stay in the graph
         // (added above) and constrain the float, but the per-epoch LAMBDA
@@ -919,13 +1572,114 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
 
         // --- Smoother update ---
         bool update_ok = true;
+        // FDE (use_fde): resolved only on the PRIMARY (non-exception) path,
+        // since exception recovery below (loose-prior retry / warm reset)
+        // never actually adds this epoch's own DD PR/CP factors to the
+        // graph -- there would be nothing for FDE to evaluate this epoch in
+        // that case (see runFde's call site further down for the gating).
+        gtsam::FactorIndices fde_new_indices;
+        bool fde_indices_valid = false;
         try {
             smoother.update(new_factors, new_values, ts);
+            if (config.use_fde) {
+                fde_new_indices = smoother.getISAM2Result().newFactorsIndices;
+                fde_indices_valid = true;
+            }
         } catch (const std::exception& e) {
             std::fprintf(stderr, "[fgo_gtsam_backend] smoother.update() epoch %zu threw: %s\n", i,
                          e.what());
             update_ok = false;
             ++result.diagnostics.smoother_recovery_epochs;
+            // --- Exception recovery (use_solve_exception_recovery; reference
+            // recovery.handle_solve_exception). Targets the known
+            // IndeterminantLinearSystemException tail failure (tokyo run2,
+            // ~epoch 6390): without this, the epoch is skipped (`continue`
+            // below) and the run keeps going in a degraded state, but a
+            // SECOND failure while the graph is still poisoned would repeat
+            // forever with no recovery. ---
+            if (config.use_solve_exception_recovery) {
+                // Stage 0 (use_ddpr_anchor only; reference
+                // handle_solve_exception's ACTUAL first choice --
+                // try_ddpr_reset before the loose-prior fallback): warm-reset
+                // the smoother seeded at (this epoch's DDPR-LS anchor
+                // translation, IMU-predicted rotation, zero velocity) when
+                // the anchor is trusted. Falls through to stage 1 otherwise.
+                bool anchor_recovered = false;
+                if (config.use_ddpr_anchor) {
+                    ++result.diagnostics.ddpr_anchor_solves;
+                    const DdprAnchorResult anchor = solveDdprAnchor(i, pose_seed);
+                    if (anchor.ok && anchor.n_active >= config.ddpr_anchor_min_factors &&
+                        anchor.res_rms <= config.ddpr_anchor_max_residual_m) {
+                        ++result.diagnostics.ddpr_anchor_successes;
+                        try {
+                            const Pose3 anchor_seed_pose(pose_seed.rotation(),
+                                                         anchor.pose.translation());
+                            performFullWarmReset(i, anchor_seed_pose, prev_bias);
+                            update_ok = true;
+                            anchor_recovered = true;
+                            ++result.diagnostics.ddpr_anchored_warm_resets;
+                        } catch (const std::exception& e_anchor) {
+                            std::fprintf(stderr,
+                                         "[fgo_gtsam_backend] ddpr-anchored warm reset epoch %zu "
+                                         "threw: %s -- falling back\n",
+                                         i, e_anchor.what());
+                        }
+                    }
+                }
+                if (!anchor_recovered) {
+                // Stage 1: retry with ONLY loose re-seed priors at the
+                // IMU-predicted state, discarding this epoch's GNSS/IMU
+                // factors entirely.
+                gtsam::NonlinearFactorGraph retry_factors;
+                gtsam::Values retry_values;
+                gtsam::FixedLagSmoother::KeyTimestampMap retry_ts;
+                retry_values.insert(positionKey(i), pose_seed);
+                retry_values.insert(velocityKey(i), vel_seed);
+                retry_values.insert(biasKey(i), prev_bias);
+                retry_factors.addPrior(
+                    positionKey(i), pose_seed,
+                    gtsam::noiseModel::Isotropic::Sigma(6, config.solve_exception_pose_sigma_m));
+                retry_factors.addPrior<gtsam::Vector3>(
+                    velocityKey(i), vel_seed,
+                    gtsam::noiseModel::Isotropic::Sigma(3, config.solve_exception_velocity_sigma_mps));
+                retry_factors.addPrior(
+                    biasKey(i), prev_bias,
+                    gtsam::noiseModel::Isotropic::Sigma(6, config.solve_exception_bias_sigma));
+                retry_ts[positionKey(i)] = te;
+                retry_ts[velocityKey(i)] = te;
+                retry_ts[biasKey(i)] = te;
+                bool retry_ok = true;
+                try {
+                    smoother.update(retry_factors, retry_values, retry_ts);
+                    ++result.diagnostics.smoother_updates;
+                } catch (const std::exception& e2) {
+                    std::fprintf(stderr,
+                                 "[fgo_gtsam_backend] loose-prior retry epoch %zu ALSO threw: %s "
+                                 "-- performing full warm reset\n",
+                                 i, e2.what());
+                    retry_ok = false;
+                }
+                if (retry_ok) {
+                    update_ok = true;
+                    ++result.diagnostics.solve_exception_recoveries;
+                } else {
+                    // Stage 2: repeated failure -- full warm reset (reference
+                    // warm_reset_phase2), seeded at the IMU prediction (the
+                    // DDPR anchor was untrusted or use_ddpr_anchor is off).
+                    try {
+                        performFullWarmReset(i, pose_seed, prev_bias);
+                        update_ok = true;
+                        ++result.diagnostics.solve_exception_warm_resets;
+                    } catch (const std::exception& e3) {
+                        std::fprintf(stderr,
+                                     "[fgo_gtsam_backend] full warm reset epoch %zu threw: %s -- "
+                                     "epoch skipped\n",
+                                     i, e3.what());
+                        update_ok = false;
+                    }
+                }
+                }  // !anchor_recovered
+            }
         }
         ++result.diagnostics.smoother_updates;
         if (!update_ok) {
@@ -961,14 +1715,21 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             epoch_vel_nav[j] = Vector3d(vj);
         }
 
-        // --- Per-epoch quality gates (port of the reference's gate.py /
-        // postfit.py fixing policy; see FGOConfig::use_epoch_quality_gates).
-        // Computed at the smoothed antenna position AFTER the update, so the
-        // DDPR residuals are post-fit like the reference's. Gated epochs keep
-        // their factors but attempt no LAMBDA, add no holds, and are never
-        // labelled FIXED via held integers. ---
-        bool fix_allowed = true;
-        if (config.use_epoch_quality_gates) {
+        // --- Shared post-fit DDPR residual / GDOP computation (reference:
+        // postfit.main_ddpr_residuals -- epoch RMS + per-sat max, charged to
+        // both the target and the reference satellite -- and gate.py's
+        // GDOP/nsat gate). Computed ONCE at the smoothed antenna position
+        // AFTER the update and reused by BOTH the per-epoch quality gates
+        // (use_epoch_quality_gates) and the CP-hold/sanity FSM
+        // (use_cp_hold_recovery) below -- the two features are independent
+        // knobs but share this one (possibly expensive) residual pass. ---
+        const bool need_ddpr_residuals =
+            config.use_epoch_quality_gates || config.use_cp_hold_recovery;
+        int nsat = 0;
+        double gdop = std::numeric_limits<double>::infinity();
+        double ddpr_rms = 0.0;
+        std::map<SatelliteId, double> per_sat_res;
+        if (need_ddpr_residuals) {
             const Point3 ant_p = antennaOf(pose_i);
             const Vector3d ant(ant_p.x(), ant_p.y(), ant_p.z());
 
@@ -979,8 +1740,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 sat_positions.emplace(fp->reference_satellite,
                                       fp->rover_reference_position_ecef);
             }
-            const int nsat = static_cast<int>(sat_positions.size());
-            double gdop = std::numeric_limits<double>::infinity();
+            nsat = static_cast<int>(sat_positions.size());
             if (nsat >= 4) {
                 Eigen::MatrixXd H(nsat, 4);
                 int row = 0;
@@ -1002,12 +1762,9 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 }
             }
 
-            // (b) post-fit DD-pseudorange residuals at the smoothed antenna
-            // (reference: postfit.main_ddpr_residuals -- epoch RMS + per-sat
-            // max, charged to both the target and the reference satellite).
+            // (b) post-fit DD-pseudorange residuals at the smoothed antenna.
             double res_sq_sum = 0.0;
             std::size_t res_n = 0;
-            std::map<SatelliteId, double> per_sat_res;
             for (const auto* fp : pr_by_epoch[i]) {
                 const double geom =
                     ((fp->rover_satellite_position_ecef - ant).norm() -
@@ -1022,9 +1779,15 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 double& worst_ref = per_sat_res[fp->reference_satellite];
                 worst_ref = std::max(worst_ref, res);
             }
-            const double ddpr_rms =
-                res_n > 0 ? std::sqrt(res_sq_sum / static_cast<double>(res_n)) : 0.0;
+            ddpr_rms = res_n > 0 ? std::sqrt(res_sq_sum / static_cast<double>(res_n)) : 0.0;
+        }
 
+        // --- Per-epoch quality gates (port of the reference's gate.py /
+        // postfit.py fixing policy; see FGOConfig::use_epoch_quality_gates).
+        // Gated epochs keep their factors but attempt no LAMBDA, add no
+        // holds, and are never labelled FIXED via held integers. ---
+        bool fix_allowed = true;
+        if (config.use_epoch_quality_gates) {
             if (nsat < config.gate_min_satellites ||
                 gdop > config.gate_gdop_max ||
                 (config.gate_ddpr_res_max_m > 0.0 &&
@@ -1057,6 +1820,59 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             }
         }
 
+        // --- FDE (use_fde): runs AFTER the shared post-fit DDPR diagnostics
+        // pass above (nsat/gdop/ddpr_rms/per_sat_res, already computed at
+        // the post-solve pre-FDE estimate -- the CP-hold/sanity FSM further
+        // below reuses THOSE pre-FDE numbers unchanged, exactly mirroring
+        // the reference's stage.py ordering: main_ddpr_residuals runs
+        // before apply_fde, so the sanity trigger sees pre-FDE residuals)
+        // but BEFORE per-epoch LAMBDA/fix-and-hold, so ambiguity resolution
+        // sees the float already cleaned of gross outliers. Gated on the
+        // PRIMARY smoother.update having succeeded without exception (see
+        // fde_indices_valid's declaration above).
+        if (config.use_fde && fde_indices_valid) {
+            std::set<std::size_t> fde_rejected_amb;
+            const std::size_t fde_removed =
+                runFde(i, fde_local_indices, fde_new_indices, &fde_rejected_amb);
+            if (fde_removed > 0) {
+                ++result.diagnostics.fde_epochs;
+                // A rejected CP factor's ambiguity_index may still be
+                // sitting in this epoch's still-pending LAMBDA candidate
+                // list (built before FDE ran) -- its factor no longer
+                // exists, so drop it (mirrors the cp-hold suppression
+                // branch above, which never adds a suppressed arc to
+                // epoch_amb_indices in the first place).
+                if (!fde_rejected_amb.empty()) {
+                    epoch_amb_indices.erase(
+                        std::remove_if(epoch_amb_indices.begin(), epoch_amb_indices.end(),
+                                       [&](std::size_t idx) {
+                                           return fde_rejected_amb.count(idx) > 0;
+                                       }),
+                        epoch_amb_indices.end());
+                }
+                // Refresh the post-FDE estimate: downstream LAMBDA/fix-and-
+                // hold and the REPORTED pose for this epoch must see the
+                // cleaned float (reference: the pose snapshot in stage.py's
+                // _compute_postfit_diagnostics happens AFTER apply_fde).
+                pose_i = smoother.calculateEstimate<Pose3>(positionKey(i));
+                vel_i = smoother.calculateEstimate<gtsam::Vector3>(velocityKey(i));
+                prev_bias = smoother.calculateEstimate<gtsam::imuBias::ConstantBias>(biasKey(i));
+                prev_nav = gtsam::NavState(pose_i, vel_i);
+                epoch_float_position[i] = antennaOf(pose_i);
+                const gtsam::Matrix3 R_fde = pose_i.rotation().matrix();
+                const Eigen::Vector3d fwd_fde = R_fde.col(0);
+                const Eigen::Vector3d left_fde = R_fde.col(1);
+                constexpr double kRadToDegFde = 180.0 / 3.14159265358979323846;
+                double heading_fde = std::atan2(fwd_fde.x(), fwd_fde.y()) * kRadToDegFde;
+                if (heading_fde < 0.0) heading_fde += 360.0;
+                const double pitch_fde =
+                    std::asin(std::max(-1.0, std::min(1.0, fwd_fde.z()))) * kRadToDegFde;
+                const double roll_fde = std::atan2(left_fde.z(), R_fde.col(2).z()) * kRadToDegFde;
+                epoch_rpy_deg[i] = Vector3d(roll_fde, pitch_fde, heading_fde);
+                epoch_vel_nav[i] = Vector3d(vel_i);
+            }
+        }
+
         // --- Per-epoch LAMBDA off the bounded windowed marginals ---
         if (fix_allowed && config.use_lambda_ambiguity_fix && !epoch_amb_indices.empty()) {
             std::sort(epoch_amb_indices.begin(), epoch_amb_indices.end(),
@@ -1071,7 +1887,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 gtsam::KeyVector keys;
                 keys.reserve(n + 1);
                 keys.push_back(positionKey(i));
-                for (std::size_t idx : epoch_amb_indices) keys.push_back(ambiguityKey(idx));
+                for (std::size_t idx : epoch_amb_indices) keys.push_back(ambiguityKey(ambSymbolId(idx)));
 
                 Eigen::VectorXd float_amb(n);
                 Eigen::MatrixXd q_amb(n, n);
@@ -1092,7 +1908,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         }
                     }
                     for (int r = 0; r < n && ok; ++r) {
-                        const gtsam::Key rk = ambiguityKey(epoch_amb_indices[r]);
+                        const gtsam::Key rk = ambiguityKey(ambSymbolId(epoch_amb_indices[r]));
                         float_amb(r) = smoother.calculateEstimate<double>(rk);
                         const gtsam::Matrix pr = joint(positionKey(i), rk);  // 6x1
                         const Eigen::Vector3d pr3 = H_antenna_pose * pr;
@@ -1100,7 +1916,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         pos_amb(1, r) = pr3(1);
                         pos_amb(2, r) = pr3(2);
                         for (int c = 0; c < n; ++c) {
-                            q_amb(r, c) = joint(rk, ambiguityKey(epoch_amb_indices[c]))(0, 0);
+                            q_amb(r, c) = joint(rk, ambiguityKey(ambSymbolId(epoch_amb_indices[c])))(0, 0);
                         }
                     }
                 } catch (const std::exception&) {
@@ -1243,11 +2059,12 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                 1, config.ambiguity_hold_sigma_cycles);
                             for (int r = 0; r < subset; ++r) {
                                 const std::size_t idx = epoch_amb_indices[order[r]];
-                                if (pinned_ambiguities.count(idx)) continue;
+                                const std::size_t sym_idx = ambSymbolId(idx);
+                                if (pinned_ambiguities.count(sym_idx)) continue;
                                 const int fi = static_cast<int>(std::lround(fixed_amb(r)));
-                                hold_factors.addPrior(ambiguityKey(idx),
+                                hold_factors.addPrior(ambiguityKey(sym_idx),
                                                       static_cast<double>(fi), hold_noise);
-                                pinned_ambiguities.insert(idx);
+                                pinned_ambiguities.insert(sym_idx);
                             }
                             if (hold_factors.size() > 0) {
                                 try {
@@ -1285,7 +2102,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         if (fix_allowed && config.use_ambiguity_hold && !epoch_fixed[i]) {
             int held_here = 0;
             for (std::size_t idx : epoch_amb_indices) {
-                if (pinned_ambiguities.count(idx)) ++held_here;
+                if (pinned_ambiguities.count(ambSymbolId(idx))) ++held_here;
             }
             if (held_here >= config.ambiguity_hold_min_fixed) {
                 epoch_fixed[i] = true;
@@ -1294,13 +2111,188 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 epoch_fixed_position[i] = antennaOf(pose_i);
                 ++held_epoch_count;
                 for (std::size_t idx : epoch_amb_indices) {
-                    if (pinned_ambiguities.count(idx) && !amb_fixed_cycles.count(idx)) {
+                    const std::size_t sym_idx = ambSymbolId(idx);
+                    if (pinned_ambiguities.count(sym_idx) && !amb_fixed_cycles.count(idx)) {
                         // Record the held integer (rounded from the current estimate).
-                        const double v = smoother.calculateEstimate<double>(ambiguityKey(idx));
+                        const double v = smoother.calculateEstimate<double>(ambiguityKey(sym_idx));
                         amb_fixed_cycles[idx] = static_cast<int>(std::lround(v));
                     }
                 }
             }
+        }
+
+        // --- CP-hold / sanity FSM (use_cp_hold_recovery). Runs LAST, after
+        // this epoch's LAMBDA/fix-and-hold, because the catastrophic fast
+        // path needs "no fixed solution this epoch" (nb == 0) exactly like
+        // the reference's postfit.run_ddpr_sanity(..., nb=...), which the
+        // runner calls from validation/postprocess.py AFTER AR for the
+        // epoch (see validation/postfit.py's trigger -> multipath-skip ->
+        // fast-path -> persist -> gdop-skip -> anchor stages -> apply-reset
+        // pipeline; the DDPR-LS anchor stages are ported inside the persist
+        // path below, gated by FGOConfig::use_ddpr_anchor). ---
+        if (config.use_cp_hold_recovery) {
+            const int nb = epoch_fixed[i] ? epoch_fixed_count[i] : 0;
+            bool did_reset = false;
+            double pred_res = 0.0;
+            if (ddpr_rms > config.cp_hold_main_residual_threshold_m) {
+                // Stage: multipath-dominated skip -- one dominant multipath
+                // satellite is not a wrong basin (reference
+                // _ddpr_multipath_dominated). Bad-count/CP-hold are frozen
+                // (not reset, not incremented) on this path, matching the
+                // reference: the skip returns before _ddpr_sanity_persist.
+                bool multipath_dominated = false;
+                if (config.cp_hold_multipath_median_ratio > 0.0 &&
+                    static_cast<int>(per_sat_res.size()) >= config.cp_hold_multipath_min_satellites) {
+                    std::vector<double> vals;
+                    vals.reserve(per_sat_res.size());
+                    for (const auto& [sid, r] : per_sat_res) {
+                        (void)sid;
+                        vals.push_back(r);
+                    }
+                    std::sort(vals.begin(), vals.end());
+                    const double median = vals[vals.size() / 2];
+                    const double max_v = vals.back();
+                    if (median > 1e-3 && (max_v / median) > config.cp_hold_multipath_median_ratio) {
+                        multipath_dominated = true;
+                        ++result.diagnostics.sanity_multipath_skips;
+                    }
+                }
+                if (!multipath_dominated) {
+                    // DDPR residual evaluated at the IMU-predicted pose
+                    // (pose_seed, this epoch's pre-solve seed) -- reference
+                    // _compute_res_at_pred. Feeds the fast path AND the pose
+                    // replacement decision below.
+                    {
+                        const Point3 pred_ant_p = antennaOf(pose_seed);
+                        const Vector3d pred_ant(pred_ant_p.x(), pred_ant_p.y(), pred_ant_p.z());
+                        double sq_sum = 0.0;
+                        std::size_t n = 0;
+                        for (const auto* fp : pr_by_epoch[i]) {
+                            const double geom =
+                                ((fp->rover_satellite_position_ecef - pred_ant).norm() -
+                                 (fp->base_satellite_position_ecef - fp->base_position_ecef).norm()) -
+                                ((fp->rover_reference_position_ecef - pred_ant).norm() -
+                                 (fp->base_reference_position_ecef - fp->base_position_ecef).norm());
+                            const double res = std::abs(fp->observed_dd_pseudorange_m - geom);
+                            sq_sum += res * res;
+                            ++n;
+                        }
+                        pred_res = n > 0 ? std::sqrt(sq_sum / static_cast<double>(n)) : 0.0;
+                    }
+
+                    // Stage: catastrophic fast path. Fires immediately
+                    // (bypassing persist) when residuals are catastrophic,
+                    // no fixed solution this epoch, and the worst
+                    // per-satellite residual clears the fast-path floor
+                    // (reference _ddpr_sanity_fast_path).
+                    double worst_sat_res = 0.0;
+                    for (const auto& [sid, r] : per_sat_res) {
+                        (void)sid;
+                        worst_sat_res = std::max(worst_sat_res, r);
+                    }
+                    const bool fast_eligible =
+                        ddpr_rms > config.cp_hold_catastrophic_threshold_m && nb == 0 &&
+                        worst_sat_res >= config.cp_hold_fast_worst_satellite_min_m;
+                    if (fast_eligible) {
+                        resetAmbiguitiesWithCpHold();
+                        ++result.diagnostics.sanity_fast_resets;
+                        did_reset = true;
+                    } else {
+                        // Stage: persist. Every bad epoch (re)engages
+                        // CP-hold at full strength; the mass reset itself
+                        // only fires once cp_hold_persist_epochs consecutive
+                        // bad epochs have accumulated (reference
+                        // _ddpr_sanity_persist / trigger_cp_hold).
+                        ++ddpr_bad_count;
+                        cp_hold_counter = std::max(cp_hold_counter, effectiveCpHoldEpochs());
+                        cp_hold_release_streak = 0;
+                        ++result.diagnostics.cp_hold_triggers;
+                        if (ddpr_bad_count >= config.cp_hold_persist_epochs) {
+                            // Stage: GDOP gate -- abort the reset (CP-hold
+                            // stays engaged) when geometry is too weak to
+                            // trust the residual signal (reference
+                            // _ddpr_sanity_gdop_ok).
+                            if (config.cp_hold_max_gdop <= 0.0 || gdop <= config.cp_hold_max_gdop) {
+                                // Stage: DDPR-LS anchor fetch + anchor-vs-IMU
+                                // gap (use_ddpr_anchor; reference
+                                // _ddpr_sanity_fetch_anchor / _anchor_vs_imu).
+                                // DIAGNOSTIC ONLY here: the reference's own
+                                // control flow converges on the exact same
+                                // _apply_sanity_reset() call whether the
+                                // anchor is untrusted, disagrees with the IMU
+                                // prediction, or agrees -- see
+                                // FGOConfig::use_ddpr_anchor's comment. So
+                                // this records whether the gate WOULD have
+                                // skipped/allowed the reset without actually
+                                // gating it, faithfully matching the
+                                // reference.
+                                if (config.use_ddpr_anchor) {
+                                    ++result.diagnostics.ddpr_anchor_solves;
+                                    const DdprAnchorResult anchor = solveDdprAnchor(i, pose_seed);
+                                    const bool anchor_trusted =
+                                        anchor.ok && anchor.n_active >= config.ddpr_anchor_min_factors &&
+                                        anchor.res_rms <= config.ddpr_anchor_max_residual_m;
+                                    if (anchor_trusted) {
+                                        ++result.diagnostics.ddpr_anchor_successes;
+                                        const Point3 anchor_ant = antennaOf(anchor.pose);
+                                        const Point3 pred_ant = antennaOf(pose_seed);
+                                        const double gap = (anchor_ant - pred_ant).norm();
+                                        const bool clean_anchor =
+                                            anchor.res_rms < config.ddpr_anchor_clean_residual_m &&
+                                            ddpr_rms > config.ddpr_anchor_clean_main_residual_m;
+                                        const bool catastrophic_res =
+                                            ddpr_rms > config.cp_hold_catastrophic_threshold_m;
+                                        const bool persistent_bad =
+                                            ddpr_bad_count >= config.ddpr_anchor_persist_override &&
+                                            anchor.res_rms < config.ddpr_anchor_clean_residual_m;
+                                        const bool hard_reject =
+                                            gap > config.ddpr_anchor_imu_hard_max_m && !clean_anchor;
+                                        const bool soft_reject =
+                                            gap > config.ddpr_anchor_imu_max_gap_m &&
+                                            !catastrophic_res && !persistent_bad;
+                                        if (hard_reject || soft_reject) {
+                                            ++result.diagnostics.ddpr_anchor_gated_resets_skipped;
+                                        } else {
+                                            ++result.diagnostics.ddpr_anchor_gated_resets_allowed;
+                                        }
+                                    } else {
+                                        ++result.diagnostics.ddpr_anchor_gated_resets_skipped;
+                                    }
+                                }
+                                resetAmbiguitiesWithCpHold();
+                                ++result.diagnostics.sanity_mass_resets;
+                                did_reset = true;
+                            } else {
+                                ++result.diagnostics.sanity_gdop_skips;
+                            }
+                        }
+                    }
+
+                    // Stage: pose replacement for the REPORTED solution only
+                    // (reference _sanity_report_translation /
+                    // _apply_sanity_reset always reports 'FLT' after a
+                    // reset). The graph values (pose_i, prev_nav, the
+                    // smoother's linearization point) are untouched.
+                    if (did_reset) {
+                        epoch_fixed[i] = false;
+                        const double thr = config.cp_hold_pose_replace_threshold_m;
+                        const Point3 graph_ant_pose = antennaOf(pose_i);
+                        Point3 report_ant = graph_ant_pose;
+                        if (thr > 0.0 && pred_res <= thr) {
+                            const Point3 pred_ant_pose = antennaOf(pose_seed);
+                            const double gap = (graph_ant_pose - pred_ant_pose).norm();
+                            if (gap > thr) {
+                                report_ant = pred_ant_pose;
+                                ++result.diagnostics.sanity_pose_replacements;
+                            }
+                        }
+                        epoch_float_position[i] = report_ant;
+                    }
+                }
+            } else {
+                ddpr_bad_count = 0;
+            }
+            last_ddpr_rms = ddpr_rms;
         }
     }
     result.diagnostics.partial_lambda_ambiguity_fix_used = held_epoch_count > 0;
